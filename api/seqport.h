@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.42 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,24 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.42  2004/04/27 20:09:26  kans
+* StreamCacheGetResidue returns Uint1 because Char might be signed, preventing IS_residue from working
+*
+* Revision 6.41  2004/04/27 18:15:12  kans
+* added StreamCache functions that provide buffered request-driven access to sequence via SeqPortStream
+*
+* Revision 6.40  2004/04/14 12:39:01  kans
+* SeqPortStreamLoc is public function, SeqPortStreamRaw directly uncompresses byte store, avoids any SeqPort calls - still need more efficient way to reverse complement without a big buffer
+*
+* Revision 6.39  2004/04/08 20:19:21  kans
+* SeqPortStreamInt is external
+*
+* Revision 6.38  2004/03/15 19:54:54  kans
+* SeqPortStream takes expandable bit flags parameter
+*
+* Revision 6.37  2004/02/25 19:07:45  kans
+* ProteinFromCdRegionExEx and TransTableTranslateCdRegionEx return alternative start flag
+*
 * Revision 6.36  2003/11/18 17:08:46  kans
 * added MapNa4ByteTo4BitString, use in seqport read and get char
 *
@@ -332,16 +350,80 @@ NLM_EXTERN Uint1 GetGapCode PROTO((Uint1 seqcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpFields PROTO((SeqPortPtr spp, Int4 start, Int4 stop, Uint1 strand, Uint1 newcode));
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpAlphabet PROTO((SeqPortPtr spp, Uint1 curr_code, Uint1 newcode));
 
+/*******************************************************************************
+*	
+*   SeqPortStream (bsp, flags, userdata, proc)
+*   SeqPortStreamInt (bsp, start, stop, strand, flags, userdata, proc)
+*   SeqPortStreamLoc (slp, flags, userdata, proc)
+*       Efficient functions to stream through sequence
+*
+********************************************************************************/
+
 typedef void (LIBCALLBACK *SeqPortStreamProc) (
   CharPtr sequence,
   Pointer userdata
 );
 
+typedef unsigned long StreamFlgType;
+
+#define STREAM_EXPAND_GAPS  1
+
 NLM_EXTERN void SeqPortStream (
   BioseqPtr bsp,
-  Boolean expandGaps,
+  StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc
+);
+
+NLM_EXTERN void SeqPortStreamInt (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+);
+
+NLM_EXTERN void SeqPortStreamLoc (
+  SeqLocPtr slp,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+);
+
+/*******************************************************************************
+*	
+*   StreamCacheSetup (bsp, flags, scp)
+*   StreamCacheGetResidue (scp)
+*   StreamCacheSetPosition (scp, pos)
+*       SeqPort functional replacement implemented on top of SeqPortStreams
+*
+********************************************************************************/
+
+typedef struct streamcache {
+  BioseqPtr     bsp;
+  Char          buf [4004];
+  Int2          ctr;
+  Int2          total;
+  Int4          offset;
+  Int4          length;
+  StreamFlgType flags;
+} StreamCache, PNTR StreamCachePtr;
+
+NLM_EXTERN Boolean StreamCacheSetup (
+  BioseqPtr bsp,
+  StreamFlgType flags,
+  StreamCache PNTR scp
+);
+
+NLM_EXTERN Uint1 StreamCacheGetResidue (
+  StreamCache PNTR scp
+);
+
+NLM_EXTERN Boolean StreamCacheSetPosition (
+  StreamCache PNTR scp,
+  Int4 pos
 );
 
 /*
@@ -432,6 +514,7 @@ NLM_EXTERN Uint4 BioseqHash PROTO((BioseqPtr bsp));
 *****************************************************************************/
 NLM_EXTERN ByteStorePtr ProteinFromCdRegion PROTO(( SeqFeatPtr sfp, Boolean include_stop));
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX));
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP));
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling PROTO((SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, Boolean no_stop_at_end_of_complete_cds));
 
 /*****************************************************************************
@@ -677,6 +760,15 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
   Boolean include_stop,
   Boolean remove_trailingX,
   Boolean no_stop_at_end_of_complete_cds
+);
+
+NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
+  TransTablePtr  PNTR tblptr,
+  SeqFeatPtr cds,
+  Boolean include_stop,
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds,
+  BoolPtr altStartP
 );
 
 NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (

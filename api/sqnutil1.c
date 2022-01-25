@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.288 $
+* $Revision: 6.296 $
 *
 * File Description: 
 *
@@ -1777,6 +1777,10 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
         while (gbq != NULL) {
           nextqual = gbq->next;
           if (StringICmp (gbq->qual, "transcript_id") == 0) {
+            if (StringDoesHaveText (id) && StringDoesHaveText (gbq->val)) {
+              ErrPostEx (SEV_WARNING, ERR_FEATURE_QualWrongThisFeat,
+                         "RNA transcript_id %s replacing %s", gbq->val, id);
+            }
             *(prevqual) = gbq->next;
             gbq->next = NULL;
             StringNCpy_0 (id, gbq->val, sizeof (id));
@@ -1961,6 +1965,10 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                   while (gbq != NULL) {
                     nextqual = gbq->next;
                     if (StringICmp (gbq->qual, "transcript_id") == 0) {
+                      if (StringDoesHaveText (id) && StringDoesHaveText (gbq->val)) {
+                        ErrPostEx (SEV_WARNING, ERR_FEATURE_QualWrongThisFeat,
+                                   "CDS transcript_id %s replacing %s", gbq->val, id);
+                      }
                       *(prevqual) = gbq->next;
                       gbq->next = NULL;
                       StringNCpy_0 (id, gbq->val, sizeof (id));
@@ -1997,8 +2005,10 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                   SeqIdFree (sip);
                   if (mbsp != NULL) {
                     sep = SeqMgrGetSeqEntryForData (mbsp);
+                  /*
                   } else {
                     sep = GetBestTopParentForDataEx (entityID, bsp, TRUE);
+                  */
                   }
                 } else {
                   sep = GetBestTopParentForData (entityID, bsp);
@@ -2011,6 +2021,10 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 while (gbq != NULL) {
                   nextqual = gbq->next;
                   if (StringICmp (gbq->qual, "protein_id") == 0) {
+                    if (StringDoesHaveText (id) && StringDoesHaveText (gbq->val)) {
+                              ErrPostEx (SEV_WARNING, ERR_FEATURE_QualWrongThisFeat,
+                         "CDS protein_id %s replacing %s", gbq->val, id);
+                    }
                     *(prevqual) = gbq->next;
                     gbq->next = NULL;
                     StringNCpy_0 (id, gbq->val, sizeof (id));
@@ -2465,11 +2479,24 @@ static Uint1 GetQualValueAa (CharPtr qval)
 
 	str = StringStr(qval, "aa:");
 	if (str != NULL) {
-   		str += 3;
-   		while (*str == ' ')
-       		++str;
-   		for (eptr = str; *eptr != ')' && *eptr != ' ' && *eptr != '\0';  eptr++) continue;
+	    str += 3;
+	} else {
+        ErrPostEx (SEV_WARNING, ERR_QUALIFIER_InvalidDataFormat,
+                   "bad transl_except %s", qval);
+    	str = StringStr(qval, ",");
+    	if (str != NULL) {
+    	    str = StringStr(str, ":");
+    	    if (str != NULL) {
+              str++;
+    	    }
+    	}
 	}
+
+    if (str == NULL) return (Uint1) 'X';
+
+   	while (*str == ' ')
+       	++str;
+   	for (eptr = str; *eptr != ')' && *eptr != ' ' && *eptr != '\0';  eptr++) continue;
 
     ptr = TextSave(str, eptr-str);
     aa = ValidAminoAcid(ptr);
@@ -2495,8 +2522,113 @@ static CharPtr SimpleValuePos (CharPtr qval)
    return (TextSave(bptr, eptr-bptr));
 }
 
-extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val);
-extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
+extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset);
+extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset)
+
+{
+  Int4       diff;
+  Boolean    locmap;
+  int        num_errs;
+  CharPtr    pos;
+  Boolean    pos_range = FALSE;
+  RnaRefPtr  rrp;
+  SeqIntPtr  sintp;
+  SeqIdPtr   sip;
+  Boolean    sitesmap;
+  SeqLocPtr  slp;
+  SeqPntPtr  spp;
+  Uint1      strand;
+  Int4       temp;
+  tRNAPtr    trp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return FALSE;
+  if (StringHasNoText (val)) return FALSE;
+
+  rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+  if (rrp == NULL || rrp->ext.choice != 2) return FALSE;
+
+  trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+  if (trp == NULL) return FALSE;
+      
+  /* find SeqId to use */
+  sip = SeqLocId (sfp->location);
+  if (sip == NULL) {
+    slp = SeqLocFindNext (sfp->location, NULL);
+    if (slp != NULL) {
+      sip = SeqLocId (slp);
+    }
+  }
+  if (sip == NULL) return FALSE;
+
+  /* parse location */
+  pos = SimpleValuePos (val);
+  if (pos == NULL) {
+    ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+               "anticodon parsing failed, %s, drop the anticodon", val);
+    return FALSE;
+  }
+
+  trp->anticodon = Nlm_gbparseint (pos, &locmap, &sitesmap, &num_errs, sip);
+  if (trp->anticodon == NULL) {
+    ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+               "anticodon parsing failed, %s, drop the anticodon", pos);
+    MemFree (pos);
+    return FALSE;
+  }
+
+  if (trp->anticodon->choice == SEQLOC_PNT) {
+    /* allow a single point */
+    spp = trp->anticodon->data.ptrvalue;
+    if (spp != NULL) {
+      spp->point += offset;
+    }
+  }
+  if (trp->anticodon->choice == SEQLOC_INT) {
+    sintp = trp->anticodon->data.ptrvalue;
+    if (sintp == NULL) {
+      MemFree (pos);
+      return FALSE;
+    }
+    sintp->from += offset;
+    sintp->to += offset;
+    if (sintp->from > sintp->to) {
+      temp = sintp->from;
+      sintp->from = sintp->to;
+      sintp->to = temp;
+    }
+    sintp->strand = SeqLocStrand (sfp->location);
+    strand = sintp->strand;
+    diff = SeqLocStop(trp->anticodon) - SeqLocStart(trp->anticodon); /* SeqLocStop/Start does not do what you think */
+    /*
+    if ((diff != 2 && (strand != Seq_strand_minus)) ||
+        (diff != -2 && (strand == Seq_strand_minus))) {
+      pos_range = TRUE;
+    }
+    */
+    if (diff != 2) {
+      pos_range = TRUE;
+    }
+    if (num_errs > 0 || pos_range) {
+      ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+                 "anticodon range is wrong, %s, drop the anticodon", pos);
+      MemFree (pos);
+      return FALSE;
+    }
+    if (SeqLocCompare (sfp->location, trp->anticodon) != SLC_B_IN_A) {
+      ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+                 "/anticodon not in tRNA: %s", val);
+      MemFree (pos);
+      return FALSE;
+    }
+  }
+
+  MemFree (pos);
+
+  return TRUE;
+}
+
+extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val, Int4 offset);
+extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val, Int4 offset)
 
 {
   CodeBreakPtr  cbp;
@@ -2511,6 +2643,7 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
   SeqIdPtr      sip;
   Boolean       sitesmap;
   SeqLocPtr     slp;
+  SeqPntPtr     spp;
   Uint1         strand;
   Int4          temp;
 
@@ -2536,6 +2669,11 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
 
   /* parse location */
   pos = SimpleValuePos (val);
+  if (pos == NULL) {
+    ErrPostEx (SEV_WARNING, ERR_FEATURE_LocationParsing,
+               "transl_except parsing failed, %s, drop the transl_except", val);
+    return FALSE;
+  }
   cbp->loc = Nlm_gbparseint (pos, &locmap, &sitesmap, &num_errs, sip);
   if (cbp->loc == NULL) {
     CodeBreakFree (cbp);
@@ -2546,6 +2684,10 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
   }
   if (cbp->loc->choice == SEQLOC_PNT) {
     /* allow a single point */
+    spp = cbp->loc->data.ptrvalue;
+    if (spp != NULL) {
+      spp->point += offset;
+    }
   }
   if (cbp->loc->choice == SEQLOC_INT) {
     sintp = cbp->loc->data.ptrvalue;
@@ -2553,6 +2695,8 @@ extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val)
       MemFree (pos);
       return FALSE;
     }
+    sintp->from += offset;
+    sintp->to += offset;
     if (sintp->from > sintp->to) {
       temp = sintp->from;
       sintp->from = sintp->to;
@@ -2952,7 +3096,7 @@ static Boolean HandledGBQualOnCDS (SeqFeatPtr sfp, GBQualPtr gbq, ValNodePtr PNT
   }
 
   if (StringICmp (gbq->qual, "transl_except") == 0) {
-    return ParseCodeBreak (sfp, gbq->val);
+    return ParseCodeBreak (sfp, gbq->val, 0);
   }
 
   if (StringICmp (gbq->qual, "codon_start") == 0) {
@@ -4425,6 +4569,30 @@ static void FixNumericDbxrefs (ValNodePtr vnp)
   }
 }
 
+static void FixOldDbxrefs (ValNodePtr vnp)
+
+{
+  DbtagPtr     dbt;
+
+  while (vnp != NULL) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt != NULL) {
+      if (StringICmp (dbt->db, "SWISS-PROT") == 0 &&
+          StringCmp (dbt->db, "Swiss-Prot") != 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("Swiss-Prot");
+      } else if (StringICmp (dbt->db, "SPTREMBL") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("TrEMBL");
+      } else if (StringICmp (dbt->db, "SUBTILIS") == 0) {
+        dbt->db = MemFree (dbt->db);
+        dbt->db = StringSave ("SubtiList");
+      }
+    }
+    vnp = vnp->next;
+  }
+}
+
 static void CleanupDuplicateDbxrefs (ValNodePtr PNTR prevvnp)
 
 {
@@ -4441,6 +4609,7 @@ static void CleanupDuplicateDbxrefs (ValNodePtr PNTR prevvnp)
   if (prevvnp == NULL) return;
   vnp = *prevvnp;
   FixNumericDbxrefs (vnp);
+  FixOldDbxrefs (vnp);
   while (vnp != NULL) {
     nextvnp = vnp->next;
     dbt = (DbtagPtr) vnp->data.ptrvalue;
@@ -9713,8 +9882,16 @@ NLM_EXTERN Int4 ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
         Message (MSG_FATAL, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
         return index;
       } else {
-        Message (MSG_FATAL, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
-        return index;
+        ret = system ("zcat -h >/dev/null 2>&1");
+        if (ret == 0) {
+          sprintf (cmmd, "zcat %s", inputFile);
+        } else if (ret == -1) {
+          Message (MSG_FATAL, "Unable to fork or exec zcat in ScanBioseqSetRelease");
+          return index;
+        } else {
+          Message (MSG_FATAL, "Unable to find zcat or gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
+          return index;
+        }
       }
     }
     fp = popen (cmmd, /* binary? "rb" : */ "r");

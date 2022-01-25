@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.79 $
+* $Revision: 6.85 $
 *
 * File Description: 
 *
@@ -60,26 +60,36 @@
 #include <tofasta.h>
 #include <simple.h>
 #include <aliparse.h>
+#include <util/creaders/alnread.h>
 
-#define TBL2ASN_APP_VER "2.8"
+#define TBL2ASN_APP_VER "3.0"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
 typedef struct tblargs {
-  Boolean fastaset;
-  Boolean deltaset;
-  Boolean alignset;
-  Boolean genprodset;
-  CharPtr accn;
-  CharPtr organism;
-  CharPtr srcquals;
-  CharPtr comment;
-  Boolean findorf;
-  Boolean altstart;
-  Boolean conflict;
-  Boolean validate;
-  Boolean flatfile;
-  Boolean seqidfromfile;
+  Boolean  fastaset;
+  Int2     whichclass;
+  Boolean  deltaset;
+  Boolean  alignset;
+  Boolean  genprodset;
+  Boolean  gpstonps;
+  Boolean  gnltonote;
+  CharPtr  accn;
+  CharPtr  organism;
+  CharPtr  srcquals;
+  CharPtr  comment;
+  Boolean  findorf;
+  Boolean  altstart;
+  Boolean  conflict;
+  Boolean  validate;
+  Boolean  flatfile;
+  Boolean  seqidfromfile;
+  CharPtr  aln_beginning_gap;
+  CharPtr  aln_end_gap;
+  CharPtr  aln_middle_gap;
+  CharPtr  aln_missing;
+  CharPtr  aln_match;
+  Boolean  aln_is_protein;
 } TblArgs, PNTR TblArgsPtr;
 
 static FILE* OpenOneFile (
@@ -1346,11 +1356,28 @@ static Uint2 ProcessBulkSet (
   Uint2         datatype, entityID;
   SeqEntryPtr   lastsep, sep, topsep;
 
-  if (fp == NULL) return 0;
+  if (fp == NULL || tbl == NULL) return 0;
 
   bssp = BioseqSetNew ();
   if (bssp == NULL) return 0;
-  bssp->_class = BioseqseqSet_class_genbank;
+
+  switch (tbl->whichclass) {
+    case 1 :
+      bssp->_class = BioseqseqSet_class_pop_set;
+      break;
+    case 2 :
+      bssp->_class = BioseqseqSet_class_phy_set;
+      break;
+    case 3 :
+      bssp->_class = BioseqseqSet_class_mut_set;
+      break;
+    case 4 :
+      bssp->_class = BioseqseqSet_class_eco_set;
+      break;
+    default :
+      bssp->_class = BioseqseqSet_class_genbank;
+      break;
+  }
 
   topsep = SeqEntryNew ();
   if (topsep == NULL) return 0;
@@ -1562,37 +1589,161 @@ static Uint2 ProcessDeltaSet (
   return entityID;
 }
 
-static Uint2 ProcessAlignSet (
-  FILE* fp,
-  BioSourcePtr src,
-  TblArgsPtr tbl
-)
-
+static Boolean DoSequenceLengthsMatch (TAlignmentFilePtr afp)
 {
-  AlignFileDataPtr  afdp;
+  int    seq_index;
+  Int4   seq_len;
+
+  if (afp == NULL || afp->sequences == NULL || afp->num_sequences == 0) {
+    return TRUE;
+  }
+  seq_len = StringLen (afp->sequences[0]);
+  for (seq_index = 1; seq_index < afp->num_sequences; seq_index++) {
+    if (StringLen (afp->sequences[seq_index]) != seq_len) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+static void ShowAlignmentNotes 
+(TAlignmentFilePtr afp,
+ TErrorInfoPtr error_list)
+{
+  TErrorInfoPtr eip;
+  Int4         index;
+
+  for (eip = error_list; eip != NULL; eip = eip->next) {
+    printf ("*****\nError category %d\n", eip->category);
+    if (eip->line_num > -1) {
+	  printf ("Line number %d\n", eip->line_num);
+    }
+    if (eip->id != NULL) {
+      printf ("Sequence ID %s\n", eip->id);
+    }
+    if (eip->message != NULL) {
+      printf ("%s\n", eip->message);
+    }
+  }
+  if (afp == NULL) {
+    printf ("Catastrophic failure during reading\n");
+  } else {
+    printf ("Found %d sequences\n", afp->num_sequences);
+    printf ("Found %d organisms\n", afp->num_organisms);
+    for (index = 0; index < afp->num_sequences; index++)
+    {
+      printf ("\t%s\t", afp->ids [index]);
+      if (index < afp->num_organisms) {
+        printf ("%s\n", afp->organisms [index]);
+      } else {
+        printf ("No organism information\n");
+      }
+    }
+    while (index < afp->num_organisms) {
+      printf ("Unclaimed organism: %s\n", afp->organisms [index]);
+      index++;
+    }
+  }
+}
+
+static Uint2 ProcessAlignSet
+(FILE *fp,
+ BioSourcePtr src,
+ TblArgsPtr tbl)
+{
+  TSequenceInfoPtr  sequence_info;
+  TErrorInfoPtr     error_list;
+  ReadBufferData    rbd;
+  TAlignmentFilePtr afp;
+  SeqEntryPtr       sep = NULL;
   BioseqPtr         bsp;
   BioseqSetPtr      bssp;
-  AliConfigInfo     configInfo;
+  Char              ch;
   Uint2             entityID;
-  SeqEntryPtr       sep, tmp;
+  SeqEntryPtr       tmp;
+  Char              nucleotide_alphabet[] = "ABCDGHKMRSTUVWXYabcdghkmrstuvwxy";
+  Char              protein_alphabet[] = "ABCDEFGHIKLMPQRSTUVWXYZabcdefghiklmpqrstuvwxyz";
+  Uint1             moltype = Seq_mol_dna;
 
   if (fp == NULL) return 0;
 
-  MemSet ((Pointer) &configInfo, 0, sizeof (AliConfigInfo));
-  configInfo.gapChar = "-.";
-  Ali_SetConfig (&configInfo, ALI_SET_GAP_CHAR);
-  afdp = Ali_Read (fp);
-  if (afdp == NULL) return 0;
+  sequence_info = SequenceInfoNew ();
+  if (sequence_info == NULL) return 0;
 
-  if (afdp->errors != NULL) {
-  	Message (MSG_OK, "Error reading alignment file");
-    return 0;
+  /* format sequence options based on commandline arguments */
+  /* set sequence alphabet */
+  if (tbl->aln_is_protein) {
+    moltype = Seq_mol_aa;
+    sequence_info->alphabet = StringSave (protein_alphabet);
+  } else {
+    moltype = Seq_mol_dna;
+    sequence_info->alphabet = StringSave (nucleotide_alphabet);
+  }
+  
+  sequence_info->beginning_gap = MemFree (sequence_info->beginning_gap);
+  if (StringHasNoText (tbl->aln_beginning_gap)) {
+    sequence_info->beginning_gap = StringSave (".-?");
+  } else {
+    sequence_info->beginning_gap = StringSave (tbl->aln_beginning_gap);
+  }
+  sequence_info->middle_gap = MemFree (sequence_info->middle_gap);
+  if (StringHasNoText (tbl->aln_middle_gap)) {
+    sequence_info->middle_gap = StringSave ("-");
+  } else {
+    sequence_info->middle_gap = StringSave (tbl->aln_middle_gap);
+  }
+  sequence_info->end_gap = MemFree (sequence_info->end_gap);
+  if (StringHasNoText (tbl->aln_end_gap)) {
+    sequence_info->end_gap = StringSave (".-?");
+  } else {
+    sequence_info->end_gap = StringSave (tbl->aln_end_gap);
+  }
+  sequence_info->missing = MemFree (sequence_info->missing);
+  if (StringHasNoText (tbl->aln_missing)) {
+    sequence_info->missing = StringSave ("Nn?");
+  } else {
+    sequence_info->missing = StringSave (tbl->aln_missing);
+  }
+  sequence_info->match = MemFree (sequence_info->match);
+  if (StringHasNoText (tbl->aln_match)) {
+    sequence_info->match = StringSave (".");
+  } else {
+    sequence_info->match = StringSave (tbl->aln_match);
   }
 
-  sep = ALI_ConvertToNCBIData (afdp);
-  Ali_Free (afdp);
+  error_list = NULL;
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+  afp = ReadAlignmentFile ( AbstractReadFunction,
+                            (Pointer) &rbd,
+                            AbstractReportError,
+                            (Pointer) &error_list,
+                            sequence_info);
+
+  ShowAlignmentNotes (afp, error_list);
+  ErrorInfoFree (error_list);
+  if (afp != NULL) {
+    if (afp->num_organisms == 0 && src == NULL) {
+	  printf ("No organisms supplied!\n");
+    } else if (afp->num_organisms != 0 && afp->num_organisms != afp->num_sequences) {
+      printf ( "Number of organisms must match number of sequences!");
+    } else {
+	  ch = 'y';
+      if (! DoSequenceLengthsMatch (afp)) {
+        printf ("Sequences are not all the same length - are you sure you want to continue?");
+		ch = getchar ();
+      }
+      if (ch == 'y' || ch == 'Y') {
+        sep = MakeSequinDataFromAlignment (afp, moltype);
+      }
+    }
+  }
+  SequenceInfoFree (sequence_info);
+
+  AlignmentFileFree (afp);
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return 0;
+
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
   	entityID = ObjMgrRegister (OBJ_BIOSEQ, (Pointer) bsp);
@@ -1831,11 +1982,39 @@ static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
   BioseqPtr          bsp;
   SeqMgrFeatContext  gcontext;
   SeqFeatPtr         gene, copy, temp;
+  GeneRefPtr         grp, xref;
   Boolean            partial5, partial3;
 
   /* input mrna features are multi-interval on contig */
 
   if (sfp->data.choice != SEQFEAT_RNA) return;
+
+  /* find cdna product of mrna */
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+
+  /* check for gene xref */
+
+  xref = SeqMgrGetGeneXref (sfp);
+  if (xref != NULL) {
+    if (SeqMgrGeneIsSuppressed (xref)) return;
+
+    /* copy gene xref for new gene feature */
+
+    grp = AsnIoMemCopy (xref,
+                        (AsnReadFunc) GeneRefAsnRead,
+                        (AsnWriteFunc) GeneRefAsnWrite);
+    if (grp == NULL) return;
+
+    /* make new gene feature on full-length of cdna */
+
+    copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
+    if (copy == NULL) return;
+
+    copy->data.value.ptrvalue = grp;
+    return;
+  }
 
   /* overlapping gene should be single interval on contig */
 
@@ -1843,11 +2022,6 @@ static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
   if (gene == NULL) return;
 
   CheckSeqLocForPartial (gene->location, &partial5, &partial3);
-
-  /* find cdna product of mrna */
-
-  bsp = BioseqFindFromSeqLoc (sfp->product);
-  if (bsp == NULL) return;
 
   /* copy gene feature fields to paste into new gene feature */
 
@@ -1859,7 +2033,10 @@ static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
   /* make new gene feature on full-length of cdna */
 
   copy = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
-  if (copy == NULL) return;
+  if (copy == NULL) {
+    SeqFeatFree (temp);
+    return;
+  }
 
   /* paste fields from temp copy of original gene */
 
@@ -1879,13 +2056,16 @@ static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
 
   SetSeqLocPartial (copy->location, partial5, partial3);
 
+  SeqLocFree (temp->location);
   MemFree (temp); /* do not SeqFeatFree */
 }
 
 static void ClearRnaProducts (SeqFeatPtr sfp, Pointer userdata)
 
 {
-  if (sfp->data.choice != SEQFEAT_RNA) return;
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_RNA) return;
+  if (sfp->product == NULL) return;
+
   sfp->product = SeqLocFree (sfp->product);
 }
 
@@ -2064,6 +2244,114 @@ static Boolean HasGoTermsInNote (
   return gs.isbad;
 }
 
+static void TakeProteinsFromGPS (BioseqPtr bsp, Pointer userdata)
+
+{
+  SeqEntryPtr PNTR  lastp;
+  SeqEntryPtr       sep;
+
+  if (bsp == NULL || (! ISA_aa (bsp->mol))) return;
+  lastp = (SeqEntryPtr PNTR) userdata;
+  if (lastp == NULL) return;
+
+  /* unlink from existing chain */
+
+  sep = bsp->seqentry;
+  if (sep != NULL) {
+    sep->data.ptrvalue = NULL;
+  }
+
+  /* link after genomic sequence */
+
+  sep = ValNodeAddPointer (lastp, 1, (Pointer) bsp);
+  *lastp = sep;
+}
+
+static void GPStoNPS (
+  SeqEntryPtr top,
+  Uint2 entityID
+)
+
+{
+  BioseqSetPtr  bssp;
+  BioseqSet     dum;
+  SeqEntryPtr   last, sep;
+  Uint2         parenttype;
+  Pointer       parentptr;
+
+  if (top == NULL || top->choice != 2) return;
+  bssp = (BioseqSetPtr) top->data.ptrvalue;
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_gen_prod_set) return;
+
+  GetSeqEntryParent (top, &parentptr, &parenttype);
+
+  sep = bssp->seq_set;
+  if (sep == NULL || sep->choice != 1) return;
+
+  /* unlink nuc-prot sets, etc., from genomic Bioseq */
+
+  MemSet ((Pointer) &dum, 0, sizeof (BioseqSet));
+  dum._class = 1;
+  dum.seq_set = sep->next;
+  sep->next = NULL;
+
+  last = sep;
+  VisitBioseqsInSet (&dum, (Pointer) &last, TakeProteinsFromGPS);
+
+  /* leave dum.seq_set dangling for now */
+
+  bssp->_class = BioseqseqSet_class_nuc_prot;
+
+  SeqMgrLinkSeqEntry (top, parenttype, parentptr);
+
+  SeqMgrClearFeatureIndexes (bssp->idx.entityID, NULL);
+
+  VisitFeaturesInSet (bssp, NULL, ClearRnaProducts);
+
+  move_cds (top);
+}
+
+static void GeneralToNote (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  BioseqPtr  bsp;
+  Char       buf [41];
+  DbtagPtr   dbt;
+  size_t     len;
+  SeqIdPtr   sip;
+  CharPtr    str;
+
+  if (sfp == NULL || sfp->product == NULL) return;
+  if (sfp->data.choice != SEQFEAT_RNA) return;
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice != SEQID_GENERAL) continue;
+    dbt = (DbtagPtr) sip->data.ptrvalue;
+    if (dbt == NULL) continue;
+    if (StringICmp (dbt->db, "TMSMART") == 0) continue;
+
+    SeqIdWrite (sip, buf, PRINTID_REPORT, sizeof (buf) - 1);
+
+    if (sfp->comment == NULL) {
+      sfp->comment = StringSave (buf);
+    } else {
+      len = StringLen (sfp->comment) + StringLen (buf) + 5;
+      str = MemNew (sizeof (Char) * len);
+      StringCpy (str, sfp->comment);
+      StringCat (str, "; ");
+      StringCat (str, buf);
+      sfp->comment = MemFree (sfp->comment);
+      sfp->comment = str;
+    }
+  }
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   PubdescPtr pdp,
@@ -2096,6 +2384,7 @@ static void ProcessOneRecord (
   SeqGraphPtr        lastsgp;
   CharPtr            localname = NULL;
   ErrSev             msev;
+  ObjMgrDataPtr      omdp;
   CharPtr            organism;
   OrgRefPtr          orp;
   CharPtr            ptr;
@@ -2105,6 +2394,7 @@ static void ProcessOneRecord (
   SeqFeatPtr         sfp;
   SeqGraphPtr        sgp;
   SeqIdPtr           sip;
+  SeqSubmitPtr       sub;
   SimpleSeqPtr       ssp;
   CharPtr            str;
 
@@ -2287,8 +2577,30 @@ static void ProcessOneRecord (
 
   /* finish processing */
 
+  if (sbp == NULL) {
+    omdp = ObjMgrGetData (entityID);
+    if (omdp != NULL && omdp->datatype == OBJ_SEQSUB) {
+
+      /* if read a Seq-submit, write out a Seq-submit */
+
+      sub = (SeqSubmitPtr) omdp->dataptr;
+      if (sub != NULL && sub->datatype == 1) {
+        sbp = sub->sub;
+      }
+    }
+  }
+
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
+
+    if (tbl->gnltonote) {
+      VisitFeaturesInSep (sep, NULL, GeneralToNote);
+    }
+
+    if (tbl->gpstonps) {
+      GPStoNPS (sep, entityID);
+    }
+
     if (! tbl->genprodset) {
       VisitFeaturesInSep (sep, NULL, RemoveGBQualIDs);
     }
@@ -2726,19 +3038,28 @@ static Boolean DoSecondSuffix (
 #define x_argSuffix      4
 #define t_argTemplate    5
 #define s_argFastaSet    6
-#define d_argDeltaSet    7
-#define l_argAlignment   8
-#define g_argGenProdSet  9
-#define a_argAccession  10
-#define n_argOrgName    11
-#define j_argSrcQuals   12
-#define y_argComment    13
-#define c_argFindOrf    14
-#define m_argAltStart   15
-#define k_argConflict   16
-#define v_argValidate   17
-#define b_argGenBank    18
-#define q_argFileID     19
+#define w_argWhichClass  7
+#define d_argDeltaSet    8
+#define l_argAlignment   9
+#define g_argGenProdSet 10
+#define a_argAccession  11
+#define n_argOrgName    12
+#define j_argSrcQuals   13
+#define y_argComment    14
+#define c_argFindOrf    15
+#define m_argAltStart   16
+#define k_argConflict   17
+#define v_argValidate   18
+#define b_argGenBank    19
+#define q_argFileID     20
+#define u_argUndoGPS    21
+#define h_argGnlToNote  22
+#define B_argBegGap     23
+#define E_argEndGap     24
+#define G_argMidGap     25
+#define X_argMissing    26
+#define M_argMatch      27
+#define P_argIsProt     28
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
@@ -2755,6 +3076,8 @@ Args myargs [] = {
     TRUE, 't', ARG_FILE_IN, 0.0, 0, NULL},
   {"Read FASTAs as Set", "F", NULL, NULL,
     TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Fasta Set Class (1 Pop, 2 Phy, 3 Mut, 4 Eco)", "0", "0", "4",
+    FALSE, 'w', ARG_INT, 0.0, 0, NULL},
   {"Read FASTAs as Delta", "F", NULL, NULL,
     TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Read FASTA+Gap Alignment", "F", NULL, NULL,
@@ -2781,6 +3104,22 @@ Args myargs [] = {
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Seq ID from file name", "F", NULL, NULL,
     TRUE, 'q', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"GenProdSet to NucProtSet", "F", NULL, NULL,
+    TRUE, 'u', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"General ID to Note", "F", NULL, NULL,
+    TRUE, 'h', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Alignment Beginning Gap Characters",  NULL, NULL, NULL,
+    TRUE, 'B', ARG_STRING, 0.0, 0, NULL},
+  {"Alignment End Gap Characters",  NULL, NULL, NULL,
+    TRUE, 'E', ARG_STRING, 0.0, 0, NULL},
+  {"Alignment Middle Gap Characters",  NULL, NULL, NULL,
+    TRUE, 'G', ARG_STRING, 0.0, 0, NULL},
+  {"Alignment Missing Characters",  NULL, NULL, NULL,
+    TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
+  {"Alignment Match Characters",  NULL, NULL, NULL,
+    TRUE, 'M', ARG_STRING, 0.0, 0, NULL},
+  {"Alignment Is Proteins", "F", NULL, NULL,
+    TRUE, 'P', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -2861,9 +3200,12 @@ Int2 Main (void)
   tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
 
   tbl.fastaset = (Boolean) myargs [s_argFastaSet].intvalue;
+  tbl.whichclass = (Boolean) myargs [w_argWhichClass].intvalue;
   tbl.deltaset = (Boolean) myargs [d_argDeltaSet].intvalue;
   tbl.alignset = (Boolean) myargs [l_argAlignment].intvalue;
   tbl.genprodset = (Boolean) myargs [g_argGenProdSet].intvalue;
+  tbl.gpstonps = (Boolean) myargs [u_argUndoGPS].intvalue;
+  tbl.gnltonote = (Boolean) myargs [h_argGnlToNote].intvalue;
   tbl.accn = (CharPtr) myargs [a_argAccession].strvalue;
   tbl.organism = (CharPtr) myargs [n_argOrgName].strvalue;
   tbl.srcquals = (CharPtr) myargs [j_argSrcQuals].strvalue;
@@ -2874,6 +3216,15 @@ Int2 Main (void)
   tbl.validate = (Boolean) myargs [v_argValidate].intvalue;
   tbl.flatfile = (Boolean) myargs [b_argGenBank].intvalue;
   tbl.seqidfromfile = (Boolean) myargs [q_argFileID].intvalue;
+
+  /* arguments for alignment reading */
+  tbl.aln_beginning_gap = (CharPtr) myargs [B_argBegGap].strvalue;
+  tbl.aln_end_gap = (CharPtr) myargs [E_argEndGap].strvalue;
+  tbl.aln_middle_gap = (CharPtr) myargs [G_argMidGap].strvalue;
+  tbl.aln_missing = (CharPtr) myargs [X_argMissing].strvalue;
+  tbl.aln_match = (CharPtr) myargs [M_argMatch].strvalue;
+  tbl.aln_is_protein = (Boolean) myargs [P_argIsProt].intvalue;
+
 
   if (StringHasNoText (tbl.accn)) {
     tbl.accn = NULL;
@@ -2891,6 +3242,16 @@ Int2 Main (void)
   if (tbl.fastaset && (tbl.deltaset || tbl.alignset || tbl.genprodset)) {
     Message (MSG_FATAL, "-s cannot be used with -d, -g or -l");
     return 1;
+  }
+
+  if (! tbl.alignset && (! StringHasNoText (tbl.aln_beginning_gap)
+	  || ! StringHasNoText (tbl.aln_end_gap)
+	  || ! StringHasNoText (tbl.aln_middle_gap)
+	  || ! StringHasNoText (tbl.aln_missing)
+	  || ! StringHasNoText (tbl.aln_match)
+	  || tbl.aln_is_protein)) {
+    Message (MSG_FATAL, "Alignment options (-B, -E, -G, -X, -M, -P) can only be used with -l");
+	return 1;
   }
 
   if (StringHasNoText (base) && (! StringHasNoText (tbl.accn))) {

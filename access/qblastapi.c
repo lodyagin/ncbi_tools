@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.28 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
@@ -37,6 +37,12 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.30  2004/02/23 15:30:02  lavr
+* New (last) parameter "how" added in CONN_Write() API call
+*
+* Revision 1.29  2004/02/20 17:13:01  madden
+* Doubled some timeouts
+*
 * Revision 1.28  2003/11/14 16:23:08  dondosha
 * If query id not local, append title to id to get defline in BLASTGetQuerySummary
 *
@@ -540,7 +546,8 @@ NLM_EXTERN Boolean QBlastAsynchronousRequest (
   FileClose (fp);
 
   fp = FileOpen (path, "r");
-  CONN_Write (conn, (const void *) str, StringLen (str), &n_written);
+  CONN_Write (conn, (const void *) str, StringLen (str),
+              &n_written, eIO_WritePersist);
   QUERY_CopyFileToQuery (conn, fp);
   FileClose (fp);
 
@@ -645,7 +652,8 @@ NLM_EXTERN Int4 QBlastCheckQueue (
           sprintf (str, "RID=%s&CMD=Get\n", curr->rid);
           conn = QBlastOpenConnection ();
           if (conn != NULL) {
-            CONN_Write (conn, (const void *) str, StringLen (str), &n_written);
+            CONN_Write (conn, (const void *) str, StringLen (str),
+                        &n_written, eIO_WritePersist);
             QUERY_SendQuery (conn);
             QUERY_AddToQueue (&(curr->connqueue), conn, SecondQBlastCallback, (Pointer) curr, TRUE);
           } else {
@@ -662,7 +670,8 @@ NLM_EXTERN Int4 QBlastCheckQueue (
       sprintf (str, "CMD=Get&RID=%s&FORMAT_OBJECT=Alignment&FORMAT_TYPE=ASN.1\n", curr->rid);
       conn = QBlastOpenConnection ();
       if (conn != NULL) {
-        CONN_Write (conn, (const void *) str, StringLen (str), &n_written);
+        CONN_Write (conn, (const void *) str, StringLen (str),
+                    &n_written, eIO_WritePersist);
         QUERY_SendQuery (conn);
         QUERY_AddToQueue (&(curr->connqueue), conn, ThirdQBlastCallback, (Pointer) curr, TRUE);
       } else {
@@ -694,7 +703,8 @@ NLM_EXTERN Boolean QBlastCheckRequest (
   sprintf (str, "RID=%s&CMD=Get\n", rid);
   conn = QBlastOpenConnection ();
   if (conn == NULL) return FALSE;
-  CONN_Write (conn, (const void *) str, StringLen (str), &n_written);
+  CONN_Write (conn, (const void *) str, StringLen (str),
+              &n_written, eIO_WritePersist);
   QUERY_SendQuery (conn);
 
   QBlast_AddToQueue (queue, resultproc, announceproc, userdata, conn, NULL, rid);
@@ -810,7 +820,8 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRIDEx(CharPtr RID,
                                eMIME_WwwForm, eENCOD_Url, 0);
     
     length = StringLen(query_string);
-    status = CONN_Write (conn, query_string, length , &n_written);    
+    status = CONN_Write (conn, query_string, length,
+                         &n_written, eIO_WritePersist);
     QUERY_SendQuery (conn);
     
     aicp = QUERY_AsnIoConnOpen ("r", conn);
@@ -849,11 +860,12 @@ NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRIDEx(CharPtr RID, int query_num)
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
                                "/blast/Blast.cgi", NULL, 
                                "BLASTGetQueryBioseqByRIDEx()", 
-                               30, eMIME_T_Application, 
+                               60, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
 
     length = StringLen(query_string);
-    status = CONN_Write (conn, query_string, length , &n_written);    
+    status = CONN_Write (conn, query_string, length,
+                         &n_written, eIO_WritePersist);
     QUERY_SendQuery (conn);
     
     aicp = QUERY_AsnIoConnOpen ("r", conn);
@@ -917,11 +929,12 @@ NLM_EXTERN CharPtr BLASTGetBOByRIDEx(CharPtr RID,
                                 (host_path == NULL) ? "/blast/Blast.cgi" : host_path,
 				NULL,
                                "BLASTGetBOByRIDEx()", 
-                               30, eMIME_T_Application, 
+                               60, eMIME_T_Application, 
                                eMIME_WwwForm, eENCOD_Url, 0);
 
     length = StringLen(query_string);
-    status = CONN_Write (conn, query_string, length , &n_written);    
+    status = CONN_Write (conn, query_string, length,
+                         &n_written, eIO_WritePersist);
     QUERY_SendQuery (conn);
     
     new_size = 1024;   

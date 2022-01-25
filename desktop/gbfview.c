@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.71 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
@@ -1561,12 +1561,17 @@ static void PopulateAsnOrXML (BioseqViewPtr bvp, CharPtr outmode, Boolean doGbse
       AsnSetXMLmodulePrefix (StringSave (xmlbuf));
     }
     objgbseqAsnLoad ();
+    objinsdseqAsnLoad ();
     MemSet ((Pointer) &xtra, 0, sizeof (XtraBlock));
     MemSet ((Pointer) &gbsq, 0, sizeof (GBSeq));
     xtra.gbseq = &gbsq;
     xtra.aip = aipout;
+    /*
     atp = AsnLinkType (NULL, AsnFind ("GBSet"));
     xtra.atp = AsnLinkType (NULL, AsnFind ("GBSet.E"));
+    */
+    atp = AsnLinkType (NULL, AsnFind ("INSDSet"));
+    xtra.atp = AsnLinkType (NULL, AsnFind ("INSDSet.E"));
     extra = &xtra;
     MemSet ((Pointer) &gbst, 0, sizeof (GBSet));
     AsnOpenStruct (aipout, atp, (Pointer) &gbst);
@@ -2189,7 +2194,7 @@ BioseqPageData xmlPageData = {
 };
 
 BioseqPageData gbseqPageData = {
-  "GBSeq", TRUE, TRUE, TRUE, FALSE, -1,
+  "INSDSeq", TRUE, TRUE, TRUE, FALSE, -1,
   PopulateGBSeq, ShowGBSeq, NULL,
   CopyFlatFileFastaOrAsn, PrintFlatFileFastaOrAsn,
   ExportAsnAfterConfirming, NULL, ResizeFlatFileFastaOrAsn, NULL

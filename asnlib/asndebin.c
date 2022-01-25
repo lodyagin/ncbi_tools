@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -45,6 +45,9 @@
 * 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
 *
 * $Log: asndebin.c,v $
+* Revision 6.7  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.6  2003/12/10 15:41:19  sirotkin
 * As per toolkit RT request 15030485 and Jim Ostell, afety checks after ato2=AsnFindBaseIsa(atp) were added.
 *
@@ -539,7 +542,7 @@ NLM_EXTERN Int4 AsnDeBinScanTag (AsnIoPtr aip)
 *   	returns START_STRUCT
 *               END_STRUCT
 *   			1 if ok
-*   			0 if an error occured
+*   			0 if an error occurred
 *   	if (valueptr == NULL)
 *   		just checks that value is of proper type
 *

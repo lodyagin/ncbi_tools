@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.224 2004/02/03 18:39:41 ucko Exp $
+#	$Id: makeall.unx,v 6.232 2004/04/30 18:15:22 camacho Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -188,7 +188,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c \
-	objent2.c ent2api.c pmfapi.c \
+	objinsdseq.c objent2.c ent2api.c pmfapi.c \
 	qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
@@ -286,10 +286,10 @@ SRC60 = aa_ungapped.c blast_dust.c blast_engine.c blast_extend.c \
     blast_setup.c blast_stat.c blast_traceback.c blast_util.c \
     gapinfo.c greedy_align.c link_hsps.c lookup_wrap.c mb_lookup.c \
     ncbi_math.c ncbi_std.c pattern.c phi_extend.c phi_lookup.c \
-    lookup_util.c
+    lookup_util.c blast_encoding.c blast_psi_priv.c
 
 SRC61 = blast_input.c blast_seq.c blast_seqalign.c seqsrc_readdb.c \
-    blast_format.c
+    blast_format.c multiseq_src.c twoseq_api.c
 
 # objects needed for versions of asntool and entrez
 
@@ -318,7 +318,7 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objres.o objseq.o objblock.o objcode.o objsset.o \
 	objsub.o objprt.o objfdef.o objalignloc.o \
 	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o \
-	objent2.o ent2api.o pmfapi.o \
+	objinsdseq.o objent2.o ent2api.o pmfapi.o \
 	qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
@@ -433,10 +433,10 @@ OBJ60 = aa_ungapped.o blast_dust.o blast_engine.o blast_extend.o \
     blast_setup.o blast_stat.o blast_traceback.o blast_util.o \
     gapinfo.o greedy_align.o link_hsps.o lookup_wrap.o mb_lookup.o \
     ncbi_math.o ncbi_std.o pattern.o phi_extend.o phi_lookup.o \
-    lookup_util.o
+    lookup_util.o blast_encoding.o blast_psi_priv.o
 
 OBJ61 = blast_input.o blast_seq.o blast_seqalign.o seqsrc_readdb.o \
-    blast_format.o
+    blast_format.o multiseq_src.o twoseq_api.o
 
 
 # NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
@@ -736,8 +736,10 @@ copy :
 	$(SRCCOPY) ../network/nsclilib/*.h ../include
 	$(SRCCOPY) ../network/blast3/client/*.h ../include
 	$(SRCCOPY) ../network/id1arch/*.h ../include
+	-$(SRCCOPY) ../network/id2arch/*.h ../include
 	- mkdir -p ../include/algo/blast/core
 	$(SRCCOPY) ../algo/blast/core/*.c .
+	$(SRCCOPY) ../algo/blast/core/*.h .
 	cp -fp ../algo/blast/core/*.h ../include/algo/blast/core
 	- mkdir -p ../include/algo/blast/api
 	$(SRCCOPY) ../algo/blast/api/*.c .

@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.21 2003/11/19 14:34:31 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.23 2004/04/13 19:42:09 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.21 $
+* $Revision: 1.23 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.23  2004/04/13 19:42:09  bauer
+* fix URL for Cn3D launching via cddsrv.cgi
+*
+* Revision 1.22  2004/02/17 18:04:50  bauer
+* prepared for alignment resorting
+*
 * Revision 1.21  2003/11/19 14:34:31  bauer
 * changes to support SeqAnnot export
 *
@@ -388,11 +394,26 @@ Boolean print_score_evalue (FloatHi evalue, FloatHi bit_score, CharPtr buf)
 /* print nicely formatted summary lines for the alignment display            */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+CharPtr WRPSBFixCn3DStr(CharPtr instr)
+{
+  CharPtr outstr;
+  CharPtr tempcopy;
+  
+  tempcopy = StringSave(instr);
+  outstr = MemNew(PATH_MAX * sizeof(Char));
+  StrCpy(outstr, strtok(tempcopy,"?"));
+  StrCat(outstr, "/cddsrv.cn3?");
+  StrCat(outstr, strtok(NULL,"?"));
+  MemFree(tempcopy);
+  return (outstr);
+}
+
 void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
                                     Boolean bAnyPdb, BioseqPtr query_bsp,
 				    CharPtr urlcgi, Int4 querygi)
 {
   Char                 dupstr[PATH_MAX];
+  CharPtr              cn3dstr;
   Char                 cTmp[16];
   CharPtr              part1, part2;
   CharPtr              buf;
@@ -426,7 +447,9 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
     if (bAnyPdb) {
       if (aapThis->bHasStructure) {
         fprintf(table,"<TD><A HREF=\"");
-        fprintf(table,"%s",aapThis->cHtmlLink);
+        cn3dstr = WRPSBFixCn3DStr(aapThis->cHtmlLink);
+        fprintf(table,"%s",cn3dstr);
+	cn3dstr = MemFree(cn3dstr);
         salp4 = aapThis->salp; salp4->next = NULL;
 	dsp = salp4->segs;
 	nsegments = 0;
@@ -1690,6 +1713,120 @@ static CddDescPtr FindDescByPSSMid(CddDescPtr pcdd, Int4 pssmid)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* prioritize curated CDs, enforce database order in displaying results      */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean SeqAlignIsTo(SeqAlignPtr salp, CharPtr template)
+{
+  DenseSegPtr  dsp;
+  SeqIdPtr     sip;
+  DbtagPtr     dbtp;
+  BioseqPtr    bsp;
+  CharPtr      buffer;
+  
+  
+  dsp = salp->segs;
+  sip = dsp->ids->next;
+  bsp = BioseqLockById(sip);
+  if (bsp) {
+    buffer = BioseqGetTitle(bsp);
+    if (Nlm_StrNCmp(buffer,template,2) == 0) return TRUE;
+    BioseqUnlock(bsp);
+  }
+  
+  return FALSE;
+}
+
+static SeqAlignPtr WRPSBCl3SortAlignment(SeqAlignPtr salpin)
+{
+  SeqAlignPtr salpHead, salpTail, salpThis, salp;
+  
+  salpHead = salpTail = NULL;
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"cd")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"sm")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"pf")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"CO")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"KO")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  salpThis = salpin;
+  while (salpThis) {
+    if (SeqAlignIsTo(salpThis,"LO")) {
+      salp = CddSeqAlignDup(salpThis);
+      if (!salpHead) {
+        salpHead = salp;
+      } else {
+        salpTail->next = salp;
+      }
+      salpTail = salp;
+    }
+    salpThis = salpThis->next;
+  } 
+  return(salpHead);
+}
+
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* fill in the Alignment Abstract Data Structure                             */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1753,6 +1890,7 @@ AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr prune,
 /*  if (Nlm_StrCmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE; */
   
   sap = prune->sap;
+/*  sap = WRPSBCl3SortAlignment(prune->sap); */
   while (sap) {
     iCount++;
     aapThis = (AlignmentAbstractPtr)MemNew(sizeof(AlignmentAbstract));

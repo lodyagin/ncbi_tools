@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.4 $
+* $Revision: 1.6 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -881,6 +881,7 @@ static CharPtr reftxt22 = "Features on this sequence have been produced for buil
 static CharPtr reftxt23 = " of the NCBI's genome annotation";
 
 static CharPtr nsAreGapsString = "The strings of n's in this record represent gaps between contigs, and the length of each string corresponds to the length of the gap.";
+static CharPtr nsWGSGapsString = "The strings of n's in this record represent gaps between contigs or uncallable bases.";
 
 static Boolean IsTpa (
   BioseqPtr bsp,
@@ -1321,6 +1322,8 @@ static CharPtr GetEncodeString (
       }
     }
   }
+
+  if (chromosome == NULL || assembly_date == NULL || ncbi_annotation == NULL) return NULL;
 
   if (StringHasNoText (chromosome)) {
     chromosome = "?";
@@ -1988,7 +1991,11 @@ NLM_EXTERN void AddCommentBlock (
           FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
         }
 
-        FFAddOneString (ffstring, nsAreGapsString, TRUE, FALSE, TILDE_EXPAND);
+        if (is_wgs) {
+          FFAddOneString (ffstring, nsWGSGapsString, TRUE, FALSE, TILDE_EXPAND);
+        } else {
+          FFAddOneString (ffstring, nsAreGapsString, TRUE, FALSE, TILDE_EXPAND);
+        }
 
         cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
         FFRecycleString(ajp, ffstring);

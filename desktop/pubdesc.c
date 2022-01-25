@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.32 $
 *
 * File Description:
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: pubdesc.c,v $
+* Revision 6.32  2004/04/29 13:17:22  bollin
+* removed scope control (unused) from pub descriptor and pub feature dialogs.
+*
+* Revision 6.31  2004/04/26 18:48:39  bollin
+* prevent user from changing from submission to non-submission pub descriptor
+*
+* Revision 6.30  2004/04/26 18:25:28  kans
+* always allow Submission to be added, even by non-indexers
+*
 * Revision 6.29  2003/02/24 14:14:10  kans
 * removed unnecessary prototypes
 *
@@ -386,7 +395,7 @@ typedef struct pubinitform {
 
   GrouP         pub_status;
   GrouP         pub_choice;
-  GrouP         pub_reftype;
+  Int2          pub_reftype;
   Int2          pub_choice_init;
   Uint1         reftype;
 } PubinitForm, PNTR PubinitFormPtr;
@@ -3510,7 +3519,7 @@ static void ProcessCitProc (ButtoN b)
     pifp = (PubinitFormPtr) GetObjectExtra (b);
     if (pifp != NULL && pifp->form != NULL)
     {
-      descfeat = GetValue (pifp->pub_reftype);
+      descfeat = pifp->pub_reftype;
       switch (descfeat)
       {
         case 1:                 /* desc */
@@ -3788,7 +3797,6 @@ static void PubdescInitPtrToPubdescInitForm (ForM w, Pointer d)
     {
       SetValue (pifp->pub_status, 1);           /* unpublished for sure */
       Disable (pifp->pub_status);               /* can't switch nuthin */
-      Disable (pifp->pub_reftype);
     }
     if (publication > 0 && publication != PUB_SUB)
     {
@@ -4044,10 +4052,10 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
                          FormActnFunc actproc,
                          PubdescEditProcsPtr pepp)
 {
-  ButtoN                b, b1, b2, b3, b4;
+  ButtoN                b;
   GrouP                 c, c1;
   GrouP                 h1;
-  GrouP                 g1, g2, g3, g4, g5, g7;
+  GrouP                 g1, g2, g4, g5;
   PubdescPtr            pdp;
   PubinitFormPtr        pifp;
   WindoW                w;
@@ -4104,9 +4112,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (g5, "Proceedings");
     RadioButton (g5, "Patent");
     RadioButton (g5, "Online Publication");
-    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
-      RadioButton (g5, "Submission");
-    } else if (pdp != NULL)
+    if (pdp != NULL)
     {
       vnp = pdp->pub;
       while (vnp != NULL)
@@ -4119,58 +4125,40 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
         vnp = vnp->next;
       }
     }
-    Disable (g5);               /* publications disabled */
-    g3 = NormalGroup (h1, -1, 0, "Scope", programFont, NULL);
-    g7 = HiddenGroup (g3, -1, 0, NULL);
-    pifp->pub_reftype = g7;
-    SetObjectExtra (g7, pifp, NULL);
-    b1 = RadioButton (g7, "Refers to the entire sequence");
-    b2 = RadioButton (g7, "Refers to part of the sequence");
-    b3 = RadioButton (g7, "Cites a feature on the sequence");
-
-    b4 = NULL;
-    if (pdp != NULL && pdp->reftype == 1)
+    else
     {
-      b4 = RadioButton (g7, "Citation history lost");
+      RadioButton (g5, "Submission");    	
     }
+
+    Disable (g5);               /* publications disabled */
 
     if (pdp != NULL)
     {
-      /* Disable (g7); */     /* can't switch reftypes of existing pubdescs */
       if (sdp != NULL)  /* seqdesc */
       {
         switch (pdp->reftype) {
           case 0:
-            SetValue (g7, 1);
+		    pifp->pub_reftype = 1;
             break;
           case 1:
-            SetValue (g7, 4);
+		    pifp->pub_reftype = 4;
             break;
           case 2:
-            SetValue (g7, 3);
+		    pifp->pub_reftype = 3;
             break;
           default:
-            SetValue (g7, 1);
+ 		    pifp->pub_reftype = 1;
             break;
         }
-        Disable (b2);
       } else if (sfp != NULL) { /* seqfeat */
-        SetValue (g7, 2);
-        Disable (b1);
-        Disable (b3);
-        Disable (b4);
+  		pifp->pub_reftype = 2;
       } else {
-        SetValue (g7, 1);
-        Disable (g7);
+   		pifp->pub_reftype = 1;
       }
     } else if (itemtype == OBJ_SEQFEAT) {
-      SetValue (g7, 2);
-      Disable (b1);
-      Disable (b3);
-      Disable (b4);
+      pifp->pub_reftype = 2;
     } else {
-      SetValue (g7, 1);
-      Disable (b2);
+      pifp->pub_reftype = 1;
     }
 
     c = HiddenGroup (h1, 2, 0, NULL);
@@ -4198,7 +4186,7 @@ extern ForM CreatePubdescInitForm (Int2 left, Int2 top, CharPtr title,
     AlignObjects (ALIGN_CENTER, (HANDLE) g3,
                     (HANDLE) pifp->pub_reftype, NULL);
     */
-    AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g1, (HANDLE) g3,
+    AlignObjects (ALIGN_CENTER, (HANDLE) g2, (HANDLE) g1,
                     (HANDLE) c, (HANDLE) c1, NULL);
     RealizeWindow (w);
   }

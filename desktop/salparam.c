@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description: 
 *
@@ -1985,10 +1985,12 @@ static SeqAlignPtr ExtendToAllSeq(SeqAlignPtr origsap)
    {
       sip = AlnMgr2GetNthSeqIdPtr(sap, i+1);
       bsp = BioseqLockById(sip);
-      AlnMgr2GetNthSeqRangeInSA(sap, i+1, &start, &stop);
-      pad += start;
-      pad += bsp->length - 1 - stop;
-      BioseqUnlock(bsp);
+      if (bsp != NULL) {
+        AlnMgr2GetNthSeqRangeInSA(sap, i+1, &start, &stop);
+        pad += start;
+        pad += bsp->length - 1 - stop;
+        BioseqUnlock(bsp);
+      }
       SeqIdFree(sip);
    }
    if (pad == 0)

@@ -1,4 +1,4 @@
-/* $Id: blast_dust.h,v 1.8 2003/09/09 14:21:14 coulouri Exp $
+/* $Id: blast_dust.h,v 1.9 2004/04/07 03:06:15 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: DUST filtering functions.
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.8 $
+ * $Revision: 1.9 $
  * */
 #ifndef __BLAST_DUST__
 #define __BLAST_DUST__
@@ -44,7 +44,6 @@ extern "C" {
 #endif
 
 #include <algo/blast/core/blast_def.h>
-#include <algo/blast/core/blast_stat.h>  /* Needed for NCBI4NA_TO_BLASTNA definition only */
 
 Int2 SeqBufferDust (Uint1* sequence, Int4 length, Int4 offset,
                     Int2 level, Int2 window, Int2 minwin, Int2 linker,

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.43 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -220,7 +220,7 @@ typedef struct genbiopage {
   TexT            orgcomment;
   DialoG          subsource;
   TexT            subcomment;
-  ButtoN          add_type_strain_to_subcomment;
+  ButtoN          add_type_strain_to_orgcomment;
   TexT            lineage;
   TexT            gbDiv;
   DialoG          db;
@@ -235,6 +235,8 @@ typedef struct genbiopage {
   CharPtr         origTaxName;
   Boolean         stripOldName;
   EnumFieldAssoc  PNTR genomeAlist;
+  Uint1           orgname_choice;
+  Pointer         orgname_data;
 } GenBioPage, PNTR GenBioPagePtr;
 
 typedef struct genbioform {
@@ -740,6 +742,8 @@ static void AutoScrollTax (GenBioPagePtr gbp, TexT t, Boolean isSciName,
   }
 }
 
+static void FreeGenBioOrgNameData (GenBioPagePtr gbp);
+
 static void TaxNameText (TexT t)
 
 {
@@ -769,6 +773,7 @@ static void TaxNameText (TexT t)
             vnp->next = NULL;
             DbtagFree (dbt);
             ValNodeFree (vnp);
+            FreeGenBioOrgNameData (gbp);
           } else {
             prevvnp = (ValNodePtr PNTR) &(vnp->next);
           }
@@ -841,6 +846,7 @@ static void ReleaseTaxName (DoC d, PoinT pt)
         CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 2);
         SafeSetTitle (gbp->commonName, str);
         Select (gbp->taxName);
+        TaxNameText (gbp->taxName);
         SetCodes (gbp, row, TRUE);
       }
     }
@@ -988,62 +994,96 @@ static CharPtr MergeValNodeStrings (ValNodePtr list)
 static void AddTypeStrainButtonProc (ButtoN b)
 {
   GenBioPagePtr  gbp;
-  CharPtr        old_subcomment;
-  Int4           old_subcomment_len;
+  CharPtr        old_orgcomment;
+  Int4           old_orgcomment_len;
   CharPtr        org_name;
   Int4           org_name_len;
   const CharPtr  ts = "type strain of ";
   const CharPtr  sep = "; ";
-  CharPtr        new_subcomment;
+  CharPtr        new_orgcomment;
 
   gbp = GetObjectExtra(b);
   if (gbp == NULL) return;
-  old_subcomment_len = TextLength (gbp->subcomment) + 1;
-  old_subcomment = MemNew (old_subcomment_len + 1);
-  if (old_subcomment == NULL) return;
+  old_orgcomment_len = TextLength (gbp->orgcomment) + 1;
+  old_orgcomment = MemNew (old_orgcomment_len + 1);
+  if (old_orgcomment == NULL) return;
   org_name_len = TextLength (gbp->taxName) + 1;
   org_name = MemNew (org_name_len + 1);
   if (org_name == NULL) 
   {
-    MemFree (old_subcomment);
+    MemFree (old_orgcomment);
     return;
   }
-  new_subcomment = MemNew (old_subcomment_len
+  new_orgcomment = MemNew (old_orgcomment_len
 			+ StringLen (sep)
 			+ StringLen (ts)
 			+ org_name_len
 			+ 1);
-  if (new_subcomment == NULL)
+  if (new_orgcomment == NULL)
   {
-    MemFree (old_subcomment);
+    MemFree (old_orgcomment);
     MemFree (org_name);
   }
 
-  GetTitle (gbp->subcomment, old_subcomment, old_subcomment_len);
-  TrimSpacesAroundString (old_subcomment);
+  GetTitle (gbp->orgcomment, old_orgcomment, old_orgcomment_len);
+  TrimSpacesAroundString (old_orgcomment);
   GetTitle (gbp->taxName, org_name, org_name_len);
   TrimSpacesAroundString (org_name);
-  if (old_subcomment[0] != 0)
+  if (old_orgcomment[0] != 0)
   {
-    StringCpy(new_subcomment, old_subcomment);
-    StringCat(new_subcomment, sep);
+    StringCpy(new_orgcomment, old_orgcomment);
+    StringCat(new_orgcomment, sep);
   }
   else
   {
-    new_subcomment[0] = 0;
+    new_orgcomment[0] = 0;
   }
     
-  StringCat (new_subcomment, ts);
-  StringCat (new_subcomment, org_name);
-  SetTitle (gbp->subcomment, new_subcomment);
+  StringCat (new_orgcomment, ts);
+  StringCat (new_orgcomment, org_name);
+  SetTitle (gbp->orgcomment, new_orgcomment);
   MemFree (org_name);
-  MemFree (old_subcomment);
-  MemFree (new_subcomment);
+  MemFree (old_orgcomment);
+  MemFree (new_orgcomment);
   Disable (b);
 }
 
 static Char useGenomicText [] = "\
 (Use 'Genomic' for a sequence encoded by a nuclear gene.)\n";
+
+static Pointer MakeOrgNameDataCopy (OrgNamePtr onp)
+{
+  OrgNamePtr onp_copy;
+  Pointer    retval;
+
+  if (onp == NULL) return NULL;
+
+  onp_copy = (OrgNamePtr) AsnIoMemCopy (onp, (AsnReadFunc) OrgNameAsnRead, (AsnWriteFunc) OrgNameAsnWrite);
+  if (onp_copy == NULL) return NULL;
+  retval = onp_copy->data;
+  onp_copy->data = NULL;
+  onp_copy->choice = 0;
+  OrgNameFree (onp_copy);
+  return retval;
+}
+
+static void FreeGenBioOrgNameData (GenBioPagePtr gbp)
+{
+  OrgNamePtr     onp;
+
+  if (gbp != NULL) {
+    if (gbp->orgname_choice != 0) {
+      onp = OrgNameNew ();
+      if (onp != NULL) {
+        onp->choice = gbp->orgname_choice;
+        onp->data = gbp->orgname_data;
+        OrgNameFree (onp);
+        gbp->orgname_choice = 0;
+        gbp->orgname_data = NULL;
+      }
+    }
+  }
+}
 
 static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
 
@@ -1107,6 +1147,10 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         PointerToDialog (gbp->mod, orp->mod);
         onp = orp->orgname;
         if (onp != NULL) {
+          /* store orgname data for unaltered retrieval later */
+          gbp->orgname_choice = onp->choice;
+          gbp->orgname_data = MakeOrgNameDataCopy(onp);
+
           SafeSetTitle (gbp->lineage, onp->lineage);
           PointerToDialog (gbp->orgmod, onp->mod);
           mod = onp->mod;
@@ -1136,12 +1180,15 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
           if (head != NULL) {
             str = MergeValNodeStrings (head);
             SetTitle (gbp->orgcomment, str);
+            if ( StringStr (str, "type strain of ")) {
+              Disable (gbp->add_type_strain_to_orgcomment);
+            }
             MemFree (str);
           }
           ValNodeFree (head);
         }
       }
-      PointerToDialog (gbp->subsource, biop->subtype);
+      PointerToDialog (gbp->subsource, biop->subtype); 
       ssp = biop->subtype;
       head = NULL;
       while (ssp != NULL) {
@@ -1156,10 +1203,6 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       if (head != NULL) {
         str = MergeValNodeStrings (head);
         SetTitle (gbp->subcomment, str);
-        if ( StringStr (str, "type strain of "))
-        {
-          Disable (gbp->add_type_strain_to_subcomment);
-        }
         MemFree (str);
       }
       ValNodeFree (head);
@@ -1211,6 +1254,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     RestorePort (tempPort);
   }
 }
+
 
 static Pointer GenBioPageToBioSourcePtr (DialoG d)
 
@@ -1266,6 +1310,12 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
         onp = OrgNameNew ();
         orp->orgname = onp;
         if (onp != NULL) {
+          /* retrieve unaltered orgname data */
+          onp->choice = gbp->orgname_choice;
+          onp->data = gbp->orgname_data;
+          gbp->orgname_choice = 0;
+          gbp->orgname_data = NULL;
+
           if (gbp->simplecode != NULL) {
             if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
               if (genome == 4 || genome == 5) {
@@ -1507,6 +1557,7 @@ void ReplaceBioSourceGenomePopup (DialoG d, PopuP genome)
   }
 }
 
+
 extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
 
 {
@@ -1568,7 +1619,7 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     SelectFont (programFont);
     height = LineHeight ();
     SelectFont (systemFont);
-    gbp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 5);
+    gbp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 6);
     SetObjectExtra (gbp->orglist, gbp, NULL);
     SetDocAutoAdjust (gbp->orglist, FALSE);
     orgListCol [0].pixWidth = screenRect.right - screenRect.left;
@@ -1969,6 +2020,7 @@ static void CleanupBioSourceDialog (GraphiC g, VoidPtr data)
   gbp = (GenBioPagePtr) data;
   if (gbp != NULL) {
     gbp->origTaxName = MemFree (gbp->origTaxName);
+    FreeGenBioOrgNameData (gbp);
   }
   StdCleanupExtraProc (g, data);
 }
@@ -2012,6 +2064,8 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     gbp->fromdialog = GenBioPageToBioSourcePtr;
     gbp->dialogmessage = BioSourceMessage;
     gbp->testdialog = TestGenBioDialog;
+    gbp->orgname_choice = 0;
+    gbp->orgname_data = NULL;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -2054,7 +2108,7 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     SelectFont (programFont);
     height = LineHeight ();
     SelectFont (systemFont);
-    gbp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 5);
+    gbp->orglist = DocumentPanel (f, stdCharWidth * 25, height * 6);
     SetObjectExtra (gbp->orglist, gbp, NULL);
     SetDocAutoAdjust (gbp->orglist, FALSE);
     orgListCol [0].pixWidth = screenRect.right - screenRect.left;
@@ -2176,10 +2230,7 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     x = MultiLinePrompt (f2, "Additional Source Information", max, programFont);
     gbp->subcomment = ScrollText (f2, 20, 3, programFont, TRUE, NULL);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) gbp->subcomment, NULL);
-    f4 = HiddenGroup (g, 1, 0, NULL);
-    gbp->add_type_strain_to_subcomment = PushButton (f4, "Add type strain to comment", AddTypeStrainButtonProc);
-    SetObjectExtra (gbp->add_type_strain_to_subcomment, gbp, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsource, (HANDLE) f2, (HANDLE) f4, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsource, (HANDLE) f2, NULL);
 
     gbp->modGrp [1] = HiddenGroup (k, -1, 0, NULL);
     SetGroupSpacing (gbp->modGrp [1], 10, 10);
@@ -2196,7 +2247,10 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     x = MultiLinePrompt (f1, "Additional Organism Information", max, programFont);
     gbp->orgcomment = ScrollText (f1, 20, 3, programFont, TRUE, NULL);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) gbp->orgcomment, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->orgmod, (HANDLE) f1, NULL);
+    f4 = HiddenGroup (g, 1, 0, NULL);
+    gbp->add_type_strain_to_orgcomment = PushButton (f4, "Add type strain to comment", AddTypeStrainButtonProc);
+    SetObjectExtra (gbp->add_type_strain_to_orgcomment, gbp, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->orgmod, (HANDLE) f1, (HANDLE) f4, NULL);
 
     Hide (gbp->modGrp [1]);
 

@@ -30,8 +30,12 @@ Author: Karolina Maciag, Aleksandr Morgulis
 Contents: type declarations for query multiplexing code.
 
 ******************************************************************************/
-/* $Revision: 1.1 $ 
+/* $Revision: 1.2 $ 
 *  $Log: blastconcat.h,v $
+*  Revision 1.2  2004/04/20 14:55:47  morgulis
+*  1. Fixed query offsets in results when -B option is used.
+*  2. Fixes for lower case masking handling with -B option.
+*
 *  Revision 1.1  2003/03/24 20:47:28  madden
 *  Utilities for concatenation of blastn/tblastn queries
 *
@@ -67,32 +71,5 @@ typedef Nlm_FloatHi PNTR FloatArray;
 
 struct queries;	/* Forward declaration of Queries type */
 
-/*----------------------------------------------------------------------------*/
-/*
-#define NUM_SPACERS_PROT	20
-#define NUM_SPACERS_NUC		60
-#define NUM_COMPACT_SPACERS_NUC ((NUM_SPACERS_NUC + 1)/2)
-#define LAST_N				15
-#define TWO_N				(LAST_N*16 + LAST_N)
-#define SPACER_MODE			1
-#define SEQ_MODE			2
-#define GET_NEXT_SEQ_MODE	3
-#define SPACER_POS		-1
-*/
-
-
-
-/* the structure for the list of seqaligns by indiv. query */
-/*use an array of SeqAlignArrayPtr's instead of llist so 
-  indices correspond to those in the QueriesPtr */
-/*
-typedef SeqAlignPtr *SeqAlignPtrArray;
-typedef SeqAlignPtrArray *SeqAlignPtrArrayPtr;
-*/
-
-/* array to store the seqannots created */
-/*
-typedef SeqAnnotPtr *SeqAnnotPtrArray;
-*/
-
 #endif 	/* _BLASTCONCAT_ */
+

@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* $Id: entrezcf.c,v 6.2 2003/05/13 16:02:42 coulouri Exp $
+* $Id: entrezcf.c,v 6.3 2004/04/01 13:43:06 lavr Exp $
 *
 * File Name:  entrezcf.c
 *
@@ -64,6 +64,9 @@
 * 1.92  12-23-94  Epstein   Completed network configuration
 *
 * $Log: entrezcf.c,v $
+* Revision 6.3  2004/04/01 13:43:06  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.2  2003/05/13 16:02:42  coulouri
 * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
 *
@@ -123,7 +126,7 @@
 * ==========================================================================
 */
 
-#define REVISION_STR  "$Revision: 6.2 $"
+#define REVISION_STR  "$Revision: 6.3 $"
 
 
 
@@ -2313,7 +2316,7 @@ Page6_Commit (PropPage * p)
 	    if (file_copying_cancelled) {
 		MsgAlert (KEY_OK, SEV_INFO, _program, "Index files copying was cancelled");
 	    } else if (b == FALSE) {
-		MsgAlert (KEY_OK, SEV_ERROR, _program, "An error occured while copying the "
+		MsgAlert (KEY_OK, SEV_ERROR, _program, "An error occurred while copying the "
 			  "index files.  This may mean that you do not have sufficient "
 			  "disk space.  You can still run Entrez, but the program will use "
 			  "the index files on the CD-ROM instead.");

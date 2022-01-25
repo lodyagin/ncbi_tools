@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.25 2003/05/21 17:24:28 bauer Exp $
+/* $Id: cddumper.c,v 1.26 2004/04/01 13:43:05 lavr Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.25 $
+* $Revision: 1.26 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.26  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 1.25  2003/05/21 17:24:28  bauer
 * fixes to Blast DB access
 *
@@ -265,7 +268,7 @@ SeqAlignPtr CddReadSeqAln() {
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/* Check whether a particular gi has occured previously in the CddSum lnklst */
+/* Check whether a particular gi has occurred previously in the CddSum lnklst*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static Boolean UniqueUid(Int4 uid, Boolean bIsPdb, CddSumPtr pcds) {

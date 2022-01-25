@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: spidey.c,v 6.67 2003/12/12 21:25:26 kskatz Exp $";
+static char const rcsid[] = "$Id: spidey.c,v 6.69 2004/04/09 16:05:21 kskatz Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,19 @@ static char const rcsid[] = "$Id: spidey.c,v 6.67 2003/12/12 21:25:26 kskatz Exp
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.67 $
+* $Revision: 6.69 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.69  2004/04/09 16:05:21  kskatz
+* Added sanity check (must be 3 intervals to go through the loop) to SPI_CheckMrnaOrder()
+*
+* Revision 6.68  2004/03/25 21:20:03  kskatz
+* All SPI_is_acceptor_* functions have been corrected: 'N' no longer contributes to nor subtracts from the score, log odds are calculated and the scores added; they are however all antilogged because there are too many places in the code where the score is expected to be between 0 and 1.  Also, corrected sequence frequency determination in SPI_is_acceptor_user and SPI_is_donor_user, as well as correcting for 'N'. Finally, and this all began with, I added matrices for Dictyostelium - command line -r -m
+*
 * Revision 6.67  2003/12/12 21:25:26  kskatz
 * Fixed bug in SPI_CheckForPolyAExon() where multiple SeqAlignPtr's to the same object were not handled carefully: one of the ptr's was being accessed when the object was freed via the other ptr.
 *
@@ -50,7 +56,7 @@ static char const rcsid[] = "$Id: spidey.c,v 6.67 2003/12/12 21:25:26 kskatz Exp
 * fixed typo of SPI_IvalPt to SPI_IvalPtr
 *
 * Revision 6.63  2003/10/21 15:14:19  kskatz
-* Added SPI_CheckMrnaOrder(): Called by GetRegionForSAP() after the ivals for building a region are sorted in genomic order, this function merely checks that the mrna invterals are minimally colinear.
+ * Added SPI_CheckMrnaOrder(): Called by GetRegionForSAP() after the ivals for building a region are sorted in genomic order, this function merely checks that the mrna invterals are minimally colinear.
 *
 * Revision 6.62  2003/10/06 14:11:20  kskatz
 * Changed the 'version' number printed by SPI_PrintResult() to '1.40' since it has been '1.35' for so long - mostly to avoid confusion when users report the version number
@@ -243,6 +249,7 @@ static char const rcsid[] = "$Id: spidey.c,v 6.67 2003/12/12 21:25:26 kskatz Exp
 
 #include <spidey.h>
 
+
 static int LIBCALLBACK SPI_CompareAlnPosForMult(VoidPtr ptr1, VoidPtr ptr2);
 static Boolean spi_overlaps(SeqAlignPtr sap, SPI_BlockPtr sbp);
 static void SPI_BeautifySMP(SPI_RegionInfoPtr srip);
@@ -301,12 +308,14 @@ static void SPI_is_donor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 static void SPI_is_donor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_is_donor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_is_donor_cele (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
+static void SPI_is_donor_dicty (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_GetAcceptorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary, SPI_OptionsPtr spot);
 static void SPI_is_acceptor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, SPI_OptionsPtr spot);
 static void SPI_is_acceptor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_is_acceptor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_is_acceptor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_is_acceptor_cele (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
+static void SPI_is_acceptor_dicty (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score);
 static void SPI_RemoveConflictsAmongPieces(SPI_FragHerdPtr sfhp, Int4 fuzz);
 static void SPI_OrderPieces(SPI_FragHerdPtr sfhp, BioseqPtr bsp_mrna);
 static int LIBCALLBACK SPI_CompareFragInfo(VoidPtr ptr1, VoidPtr ptr2);
@@ -7242,6 +7251,10 @@ static void SPI_GetDonorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary, 
       *spllen = 15;
       *boundary = 11;
    }
+   else if (org == SPI_DICTY){
+       *spllen = 8;
+       *boundary = 7;
+   }
 }
 
 /***************************************************************************
@@ -7262,52 +7275,71 @@ static void SPI_GetDonorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundary, 
 *  sequence specified. P(Sequence) is the probability of this specific
 *  sequence, using the A, T, G, and C frequences specified in the sequence.
 *
+*  N.B. Ken Katz changed this so that they generate log-odd scores:
+*  log[P(X)/F(X)] + log[P(X)/F(X)]....but then generate the antilog
+*  since there are too many places in the code where the expected value
+*  is the antilog. 
+*
 ***************************************************************************/
 NLM_EXTERN void SPI_is_donor (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, Int4 org)
 {
-   if (org == SPI_VERTEBRATE)
-      SPI_is_donor_vert(sequence, seqlen, score);
-   else if (org == SPI_FLY)
-      SPI_is_donor_fly(sequence, seqlen, score);
-   else if (org == SPI_PLANT)
-      SPI_is_donor_plant(sequence, seqlen, score);
-   else if (org == SPI_CELEGANS)
-      SPI_is_donor_cele(sequence, seqlen, score);
+    if (org == SPI_VERTEBRATE){
+        SPI_is_donor_vert(sequence, seqlen, score);
+    }
+    else if (org == SPI_FLY){
+        SPI_is_donor_fly(sequence, seqlen, score);
+    }
+    else if (org == SPI_PLANT){
+        SPI_is_donor_plant(sequence, seqlen, score);
+    }
+    else if (org == SPI_CELEGANS){
+        SPI_is_donor_cele(sequence, seqlen, score);
+    }
+    else if (org == SPI_DICTY){
+         SPI_is_donor_dicty(sequence, seqlen, score);
+    }
 }
 
 static void SPI_is_donor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, SPI_OptionsPtr spot)
 {
-   Int4               acgtn[5] = {0, 0, 0, 0, 0};
+   Int4               acgt[4] = {0, 0, 0, 0};
    Int4               j;
-   FloatHi            prob_seq;
-   FloatHi            prob_seqgsite;
+   FloatHi            prob_seqgsite = 0;
    SPI_SpliceInfoPtr  ssp;
 
-   if (sequence == NULL || score == NULL)
-      return;
-   prob_seqgsite = 1;
-   prob_seq = 1;
+   if (sequence == NULL || score == NULL){
+       return;
+   }
+
+   /* get the frequencies first */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
+   }
+   *score = 0;
    ssp = spot->dssp_head;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      if (sequence[j] == 0)
-         prob_seqgsite *= ssp->a;
-      else if (sequence[j] == 1)
-         prob_seqgsite *= ssp->c;
-      else if (sequence[j] == 2)
-         prob_seqgsite *= ssp->g;
-      else if (sequence[j] == 3)
-         prob_seqgsite *= ssp->t;
-      else
-         prob_seqgsite *= 0.25;
-      ssp = ssp->next;
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] == 0){
+           prob_seqgsite += 
+               log10((ssp->a/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 1){
+           prob_seqgsite +=
+               log10((ssp->c/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 2){
+           prob_seqgsite += 
+               log10((ssp->g/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 3){
+           prob_seqgsite +=
+               log10((ssp->t/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       ssp = ssp->next;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
-   }
-   *score = (prob_seqgsite/prob_seq);
+   *score = pow(10, prob_seqgsite);
 }
 
 /***************************************************************************
@@ -7319,42 +7351,47 @@ static void SPI_is_donor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, 
 ***************************************************************************/
 static void SPI_is_donor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   Int4     acgtn[5] = {0, 0, 0, 0, 0};
-   FloatHi  d[10][5] = {
-               {0.3361, 0.3587, 0.1882, 0.1170, 0.25},
-               {0.5986, 0.1306, 0.1413, 0.1295, 0.25},
-               {0.0867, 0.0321, 0.8034, 0.0778, 0.25},
-               {0, 0, 1.0000, 0, 0.25},
-               {0, 0.01, 0, 1.0000, 0.25},
-               {0.4976, 0.0267, 0.4507, 0.0249, 0.25},
-               {0.7162, 0.0730, 0.1223, 0.0885, 0.25},
-               {0.0677, 0.0517, 0.8331, 0.0475, 0.25},
-               {0.1586, 0.1681, 0.2185, 0.4549, 0.25},
-               {0.2559, 0.2120, 0.3593, 0.1728, 0.25}};
-   Int4     j;
-   FloatHi  prob_seqgsite;
-   FloatHi  prob_seq;
-
-   if (sequence == NULL || score == NULL)
+    Int4     acgt[4] = {0, 0, 0, 0};
+    Int4     j = 0;
+    FloatHi  d[10][4] = {
+        {0.3361, 0.3587, 0.1882, 0.1170},
+        {0.5986, 0.1306, 0.1413, 0.1295},
+        {0.0867, 0.0321, 0.8034, 0.0778},
+        {0.0000, 0.0000, 1.0000, 0.0000},
+        {0.0000, 0.0100, 0.0000, 1.0000},
+        {0.4976, 0.0267, 0.4507, 0.0249},
+        {0.7162, 0.0730, 0.1223, 0.0885},
+        {0.0677, 0.0517, 0.8331, 0.0475},
+        {0.1586, 0.1681, 0.2185, 0.4549},
+        {0.2559, 0.2120, 0.3593, 0.1728}};
+    
+    FloatHi  prob_seqgsite = 0;
+  
+    if (sequence == NULL || score == NULL){
       return;
-   if (seqlen < 10)
-   {
-      *score = 0;
-      return;
-   }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= d[j][sequence[j]];
-   }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
-   }
-   *score = (prob_seqgsite/prob_seq);
+    }
+    *score = 0;
+    if (seqlen < 10){
+        return; 
+    }
+    prob_seqgsite = 0;
+  
+    /* first get the freqs */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            acgt[sequence[j]]++;
+        }
+    }
+    /* now calculate for each base the log, adding values to get the score */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            prob_seqgsite += 
+                log10((d[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+        }
+    }
+    *score = pow(10, prob_seqgsite);
 }
+
 
 /***************************************************************************
 *
@@ -7365,46 +7402,47 @@ static void SPI_is_donor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 ***************************************************************************/
 static void SPI_is_donor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   Int4     acgtn[5] = {0, 0, 0, 0, 0};
-   FloatHi  d[15][5] = {
-               {0.3103, 0.2105, 0.1951, 0.2834, 0.25},
-               {0.3045, 0.2335, 0.2131, 0.2482, 0.25},
-               {0.3512, 0.2905, 0.2028, 0.1548, 0.25},
-               {0.5374, 0.1523, 0.1567, 0.1529, 0.25},
-               {0.1216, 0.0685, 0.6935, 0.1158, 0.25},
-               {0.0001, 0.0000, 0.9936, 0.0000, 0.25},
-               {0.0000, 0.0000, 0.0000, 0.9878, 0.25},
-               {0.5886, 0.0115, 0.3506, 0.0486, 0.25},
-               {0.7639, 0.0505, 0.1004, 0.0845, 0.25},
-               {0.0480, 0.0102, 0.8861, 0.0550, 0.25},
-               {0.1190, 0.1068, 0.0537, 0.7198, 0.25},
-               {0.3455, 0.1388, 0.1849, 0.3301, 0.25},
-               {0.2700, 0.2258, 0.1804, 0.3231, 0.25},
-               {0.3353, 0.2092, 0.1612, 0.2930, 0.25},
-               {0.2873, 0.2278, 0.1727, 0.3116, 0.25}};
+   Int4     acgt[4] = {0, 0, 0, 0};
+   FloatHi  d[15][4] = {
+       {0.3103, 0.2105, 0.1951, 0.2834},
+       {0.3045, 0.2335, 0.2131, 0.2482},
+       {0.3512, 0.2905, 0.2028, 0.1548},
+       {0.5374, 0.1523, 0.1567, 0.1529},
+       {0.1216, 0.0685, 0.6935, 0.1158},
+       {0.0001, 0.0000, 0.9936, 0.0000},
+       {0.0000, 0.0000, 0.0000, 0.9878},
+       {0.5886, 0.0115, 0.3506, 0.0486},
+       {0.7639, 0.0505, 0.1004, 0.0845},
+       {0.0480, 0.0102, 0.8861, 0.0550},
+       {0.1190, 0.1068, 0.0537, 0.7198},
+       {0.3455, 0.1388, 0.1849, 0.3301},
+       {0.2700, 0.2258, 0.1804, 0.3231},
+       {0.3353, 0.2092, 0.1612, 0.2930},
+       {0.2873, 0.2278, 0.1727, 0.3116}};
    Int4     j;
-   FloatHi  prob_seqgsite;
-   FloatHi  prob_seq;
-
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 15)
-   {
-      *score = 0;
+   FloatHi  prob_seqgsite = 0;
+  
+   if (sequence == NULL || score == NULL){
       return;
    }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= d[j][sequence[j]];
+   *score = 0;
+   if (seqlen < 15){
+       return;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
+   /* first get the freqs */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
    }
-   *score = (prob_seqgsite/prob_seq);
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           prob_seqgsite += 
+               log10((d[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+       }
+   }
+   *score = pow(10, prob_seqgsite);
 }
 
 /***************************************************************************
@@ -7416,46 +7454,42 @@ static void SPI_is_donor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 ***************************************************************************/
 static void SPI_is_donor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   Int4     acgtn[5] = {0, 0, 0, 0, 0};
-   FloatHi  d[9][5] = {
-        /*       {0.3155, 0.2180, 0.1591, 0.3072, 0.25},
-               {0.3037, 0.2288, 0.1805, 0.2869, 0.25},*/
-               {0.3563, 0.3526, 0.1840, 0.1068, 0.25},
-               {0.6559, 0.1103, 0.0765, 0.1571, 0.25},
-               {0.0887, 0.0328, 0.7876, 0.0907, 0.25},
-               {0.0001, 0.0000, 0.9930, 0.0000, 0.25},
-               {0.0000, 0.0000, 0.0000, 0.9838, 0.25},
-               {0.6607, 0.0452, 0.1195, 0.1744, 0.25},
-               {0.5407, 0.1394, 0.0546, 0.2650, 0.25},
-               {0.1975, 0.0929, 0.5193, 0.1901, 0.25},
-               {0.2368, 0.1405, 0.1040, 0.5182, 0.25}};
-          /*     {0.3019, 0.1798, 0.1182, 0.3998, 0.25},
-               {0.2711, 0.1962, 0.0950, 0.4374, 0.25},
-               {0.2497, 0.2506, 0.0889, 0.4105, 0.25},
-               {0.2519, 0.2189, 0.1112, 0.4177, 0.25}};*/
+   Int4     acgt[4] = {0, 0, 0, 0};
+   FloatHi  d[9][4] = {
+       {0.3563, 0.3526, 0.1840, 0.1068},
+       {0.6559, 0.1103, 0.0765, 0.1571},
+       {0.0887, 0.0328, 0.7876, 0.0907},
+       {0.0001, 0.0000, 0.9930, 0.0000},
+       {0.0000, 0.0000, 0.0000, 0.9838},
+       {0.6607, 0.0452, 0.1195, 0.1744},
+       {0.5407, 0.1394, 0.0546, 0.2650},
+       {0.1975, 0.0929, 0.5193, 0.1901},
+       {0.2368, 0.1405, 0.1040, 0.5182}};
+        
    Int4     j;
-   FloatHi  prob_seqgsite;
-   FloatHi  prob_seq;
-
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 9)
-   {
-      *score = 0;
-      return;
+   FloatHi  prob_seqgsite = 0;
+ 
+   if (sequence == NULL || score == NULL){
+       return;
    }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= d[j][sequence[j]];
+   *score = 0;
+   if (seqlen < 9){
+       return;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
+   /* first get the freqs */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
    }
-   *score = (prob_seqgsite/prob_seq);
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           prob_seqgsite += 
+               log10((d[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+       }
+   }
+   *score = pow(10, prob_seqgsite);
 }
 
 /***************************************************************************
@@ -7467,47 +7501,89 @@ static void SPI_is_donor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score
 ***************************************************************************/
 static void SPI_is_donor_cele (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   Int4     acgtn[5] = {0, 0, 0, 0, 0};
-   FloatHi  d[15][5] = {
-               {0.3575, 0.1537, 0.1605, 0.3284, 0.25},
-               {0.3541, 0.1838, 0.1662, 0.2959, 0.25},
-               {0.3825, 0.2481, 0.1987, 0.1706, 0.25},
-               {0.5792, 0.1445, 0.0955, 0.1808, 0.25},
-               {0.1828, 0.0609, 0.6046, 0.1517, 0.25},
-               {0.0001, 0.0000, 0.9963, 0.0000, 0.25},
-               {0.0000, 0.0000, 0.0000, 0.9919, 0.25},
-               {0.5904, 0.0146, 0.2400, 0.1550, 0.25},
-               {0.6713, 0.0660, 0.0877, 0.1750, 0.25},
-               {0.0904, 0.0457, 0.7441, 0.1198, 0.25},
-               {0.1896, 0.1077, 0.0850, 0.6178, 0.25},
-               {0.2661, 0.0911, 0.1371, 0.5058, 0.25},
-               {0.2620, 0.0995, 0.1344, 0.5041, 0.25},
-               {0.2840, 0.1141, 0.1039, 0.4980, 0.25},
-               {0.2986, 0.1239, 0.1215, 0.4560, 0.25}};
+   Int4     acgt[4] = {0, 0, 0, 0};
+   FloatHi  d[15][4] = {
+       {0.3575, 0.1537, 0.1605, 0.3284},
+       {0.3541, 0.1838, 0.1662, 0.2959},
+       {0.3825, 0.2481, 0.1987, 0.1706},
+       {0.5792, 0.1445, 0.0955, 0.1808},
+       {0.1828, 0.0609, 0.6046, 0.1517},
+       {0.0001, 0.0000, 0.9963, 0.0000},
+       {0.0000, 0.0000, 0.0000, 0.9919},
+       {0.5904, 0.0146, 0.2400, 0.1550},
+       {0.6713, 0.0660, 0.0877, 0.1750},
+       {0.0904, 0.0457, 0.7441, 0.1198},
+       {0.1896, 0.1077, 0.0850, 0.6178},
+       {0.2661, 0.0911, 0.1371, 0.5058},
+       {0.2620, 0.0995, 0.1344, 0.5041},
+       {0.2840, 0.1141, 0.1039, 0.4980},
+       {0.2986, 0.1239, 0.1215, 0.4560}};
    Int4     j;
-   FloatHi  prob_seqgsite;
-   FloatHi  prob_seq;
-
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 15)
-   {
-      *score = 0;
-      return;
+   FloatHi  prob_seqgsite = 0;
+   
+   if (sequence == NULL || score == NULL){
+       return;
    }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= d[j][sequence[j]];
+   *score = 0;
+   if (seqlen < 15){
+       return;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
+   /* first get the freqs */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
    }
-   *score = (prob_seqgsite/prob_seq);
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           prob_seqgsite += 
+               log10((d[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+       }
+   }
+   *score = pow(10, prob_seqgsite);
 }
+
+/***************************************************************************
+*
+*  See the comment for SPI_is_donor for an explanation of how this
+*  function works. Note that the Dicty info is NOT corrected for current
+*  sequence composition because the log(likehood)matrix is itself corrected
+*  for dicty genome composition. The data were retrieved
+*  from the geneid Dd parameter file and used  with the permission of 
+*  Roderic Guigo. Values were simply translated from log base 2 to log base 10
+*
+***************************************************************************/
+static void SPI_is_donor_dicty (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score){
+    
+    /*  acgt */ 
+    FloatHi  d[8][4] = {
+        {0.1825, -0.2014, -0.0136, -0.1440},
+        {0.0487, -0.3298,  0.0742, -0.0633},
+        {-99999, -99999,   0.6020, -99999},
+        {-99999, -99999,    -99999, 0.6020},
+        {0.4783, -0.9030, -1.0634, -0.9673},
+        {0.3026, -1.4202, -0.7392, -0.0150},
+        {-0.3356, -1.3914, 0.8111, -0.5090},
+        {-0.7937, -1.0333, -0.5721, 0.4315}};
+    Int4 j = 0;
+
+    if (sequence == NULL || score == NULL){
+        return;
+    }
+    *score = 0;
+    if (seqlen < 8){
+        return;
+    }
+    *score = 0;
+    for (j = 0; j < seqlen; j++){
+        if (sequence[j] != 4){
+            *score += d[j][sequence[j]];
+        }
+    }
+    *score = pow(10, *score);
+}
+
 
 /***************************************************************************
 *
@@ -7551,6 +7627,10 @@ static void SPI_GetAcceptorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundar
       *spllen = 18;
       *boundary = 15;
    }
+   else if (org == SPI_DICTY){
+       *spllen = 15;
+       *boundary = 15;
+   }
 }
 
 /***************************************************************************
@@ -7574,49 +7654,62 @@ static void SPI_GetAcceptorSpliceInfo (Int4 org, Int4Ptr spllen, Int4Ptr boundar
 ***************************************************************************/
 NLM_EXTERN void SPI_is_acceptor (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, Int4 org)
 {
-   if (org == SPI_VERTEBRATE)
-      SPI_is_acceptor_vert(sequence, seqlen, score);
-   else if (org == SPI_FLY)
-      SPI_is_acceptor_fly(sequence, seqlen, score);
-   else if (org == SPI_PLANT)
-      SPI_is_acceptor_plant(sequence, seqlen, score);
-   else if (org == SPI_CELEGANS)
-      SPI_is_acceptor_cele(sequence, seqlen, score);
+    if (org == SPI_VERTEBRATE){
+        SPI_is_acceptor_vert(sequence, seqlen, score);
+    }
+    else if (org == SPI_FLY){
+        SPI_is_acceptor_fly(sequence, seqlen, score);
+    }
+    else if (org == SPI_PLANT){
+        SPI_is_acceptor_plant(sequence, seqlen, score);
+    }
+    else if (org == SPI_CELEGANS){
+        SPI_is_acceptor_cele(sequence, seqlen, score);
+    }
+    else if (org == SPI_DICTY){
+        SPI_is_acceptor_dicty(sequence, seqlen, score);
+    }
 }
 
 static void SPI_is_acceptor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score, SPI_OptionsPtr spot)
 {
-   Int4               acgtn[5] = {0, 0, 0, 0, 0};
+   Int4               acgt[4] = {0, 0, 0, 0};
    Int4               j;
-   FloatHi            prob_seq;
-   FloatHi            prob_seqgsite;
+   FloatHi            prob_seqgsite = 0;
    SPI_SpliceInfoPtr  ssp;
 
-   if (sequence == NULL || score == NULL)
-      return;
-   prob_seqgsite = 1;
-   prob_seq = 1;
+   if (sequence == NULL || score == NULL){
+       return;
+   }
+   /* get the frequencies first */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
+   }
+   *score = 0;
    ssp = spot->assp_head;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      if (sequence[j] == 0)
-         prob_seqgsite *= ssp->a;
-      else if (sequence[j] == 1)
-         prob_seqgsite *= ssp->c;
-      else if (sequence[j] == 2)
-         prob_seqgsite *= ssp->g;
-      else if (sequence[j] == 3)
-         prob_seqgsite *= ssp->t;
-      else
-         prob_seqgsite *= 0.25;
-      ssp = ssp->next;
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] == 0){
+           prob_seqgsite += 
+               log10((ssp->a/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 1){
+           prob_seqgsite +=
+               log10((ssp->c/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 2){
+           prob_seqgsite += 
+               log10((ssp->g/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       else if (sequence[j] == 3){
+           prob_seqgsite +=
+               log10((ssp->t/((FloatHi)acgt[sequence[j]])/seqlen));
+       }
+       ssp = ssp->next;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
-   }
-   *score = (prob_seqgsite/prob_seq);
+   *score = pow(10, prob_seqgsite);
 }
 
 /***************************************************************************
@@ -7628,54 +7721,58 @@ static void SPI_is_acceptor_user(Uint1Ptr sequence, Int4 seqlen, FloatHiPtr scor
 ***************************************************************************/
 static void SPI_is_acceptor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   FloatHi  a[21][5] = {
-               {0.1823, 0.3135, 0.1485, 0.3557, 0.25},
-               {0.1568, 0.3319, 0.1681, 0.3432, 0.25},
-               {0.1461, 0.3379, 0.1520, 0.3640, 0.25},
-               {0.1271, 0.3290, 0.1710, 0.3729, 0.25},
-               {0.1342, 0.3593, 0.1366, 0.3700, 0.25},
-               {0.1152, 0.3676, 0.1188, 0.3985, 0.25},
-               {0.0926, 0.3688, 0.1235, 0.4151, 0.25},
-               {0.0879, 0.3426, 0.1205, 0.4489, 0.25},
-               {0.0808, 0.3557, 0.1182, 0.4454, 0.25},
-               {0.0790, 0.3224, 0.1128, 0.4857, 0.25},
-               {0.0748, 0.3581, 0.1075, 0.4596, 0.25},
-               {0.0814, 0.3866, 0.1152, 0.4169, 0.25},
-               {0.0849, 0.4186, 0.1235, 0.3729, 0.25},
-               {0.0867, 0.4240, 0.0849, 0.4044, 0.25},
-               {0.0665, 0.4561, 0.0618, 0.4157, 0.25},
-               {0.0736, 0.3996, 0.0564, 0.4703, 0.25},
-               {0.2251, 0.3409, 0.2126, 0.2215, 0.25},
-               {0.0404, 0.7357, 0.0018, 0.2221, 0.25},
-               {1.0000, 0.001, 0.001, 0.001, 0.25},
-               {0.001, 0.001, 1.0000, 0.001, 0.25},
-               {0.2375, 0.1318, 0.5350, 0.0956, 0.25}};
-   Int4        acgtn[5] = {0, 0, 0, 0, 0};
+   FloatHi  a[21][4] = {
+       {0.1823, 0.3135, 0.1485, 0.3557},
+       {0.1568, 0.3319, 0.1681, 0.3432},
+       {0.1461, 0.3379, 0.1520, 0.3640},
+       {0.1271, 0.3290, 0.1710, 0.3729},
+       {0.1342, 0.3593, 0.1366, 0.3700},
+       {0.1152, 0.3676, 0.1188, 0.3985},
+       {0.0926, 0.3688, 0.1235, 0.4151},
+       {0.0879, 0.3426, 0.1205, 0.4489},
+       {0.0808, 0.3557, 0.1182, 0.4454},
+       {0.0790, 0.3224, 0.1128, 0.4857},
+       {0.0748, 0.3581, 0.1075, 0.4596},
+       {0.0814, 0.3866, 0.1152, 0.4169},
+       {0.0849, 0.4186, 0.1235, 0.3729},
+       {0.0867, 0.4240, 0.0849, 0.4044},
+       {0.0665, 0.4561, 0.0618, 0.4157},
+       {0.0736, 0.3996, 0.0564, 0.4703},
+       {0.2251, 0.3409, 0.2126, 0.2215},
+       {0.0404, 0.7357, 0.0018, 0.2221},
+       {1.0000, 0.0010, 0.0010, 0.0010},
+       {0.0010, 0.0010, 1.0000, 0.0010},
+       {0.2375, 0.1318, 0.5350, 0.0956}};
+   Int4        acgt[4] = {0, 0, 0, 0};
    Int4        j;
-   FloatHi     prob_seqgsite;
-   FloatHi     prob_seq;
+   FloatHi     prob_seqgsite = 0;
+  
 
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 21)
-   {
-      *score = 0;
-      return;
+   if (sequence == NULL || score == NULL){
+       return;
    }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= a[j][sequence[j]];
+   *score = 0;
+   if (seqlen < 21){
+       return;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
+   /* first get the freqs */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
    }
-   *score = (prob_seqgsite/prob_seq);
-   if (sequence[18] == 0 && sequence[19] == 2)
-      *score += 0.5;
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           prob_seqgsite +=
+               log10((a[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+       }
+   }
+   *score = pow(10, prob_seqgsite);
+   /* if (sequence[18] == 0 && sequence[19] == 2){
+     *score += 0.5;
+   }
+   */
 }
 
 /***************************************************************************
@@ -7687,51 +7784,53 @@ static void SPI_is_acceptor_vert (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr sco
 ***************************************************************************/
 static void SPI_is_acceptor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   FloatHi  a[18][5] = {
-               {0.2497, 0.2446, 0.1044, 0.4014, 0.25},
-               {0.2132, 0.2369, 0.1063, 0.4437, 0.25},
-               {0.1946, 0.2196, 0.1082, 0.4776, 0.25},
-               {0.2170, 0.2017, 0.0973, 0.4840, 0.25},
-               {0.1946, 0.2170, 0.0858, 0.5026, 0.25},
-               {0.2004, 0.2433, 0.0858, 0.4706, 0.25},
-               {0.2004, 0.2727, 0.0967, 0.4302, 0.25},
-               {0.2106, 0.2708, 0.0864, 0.4321, 0.25},
-               {0.1876, 0.3035, 0.0608, 0.4481, 0.25},
-               {0.1114, 0.2522, 0.0679, 0.5685, 0.25},
-               {0.1178, 0.2164, 0.0461, 0.6197, 0.25},
-               {0.2830, 0.1639, 0.2913, 0.2618, 0.25},
-               {0.0467, 0.7049, 0.0045, 0.2439, 0.25},
-               {0.9923, 0.0032, 0.0013, 0.0032, 0.25},
-               {0.0032, 0.0038, 0.9910, 0.0019, 0.25},
-               {0.3073, 0.1997, 0.3675, 0.1255, 0.25},
-               {0.2260, 0.1927, 0.1709, 0.4104, 0.25},
-               {0.2574, 0.2855, 0.2279, 0.2292, 0.25}};
-   Int4        acgtn[5] = {0, 0, 0, 0, 0};
-   Int4        j;
-   FloatHi     prob_seqgsite;
-   FloatHi     prob_seq;
-
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 21)
-   {
-      *score = 0;
-      return;
-   }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= a[j][sequence[j]];
-   }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
-   }
-   *score = (prob_seqgsite/prob_seq);
-   if (sequence[12] == 0 && sequence[13] == 2)
-      *score += 0.5;
+    FloatHi  a[18][4] = {
+        {0.2497, 0.2446, 0.1044, 0.4014},
+        {0.2132, 0.2369, 0.1063, 0.4437},
+        {0.1946, 0.2196, 0.1082, 0.4776},
+        {0.2170, 0.2017, 0.0973, 0.4840},
+        {0.1946, 0.2170, 0.0858, 0.5026},
+        {0.2004, 0.2433, 0.0858, 0.4706},
+        {0.2004, 0.2727, 0.0967, 0.4302},
+        {0.2106, 0.2708, 0.0864, 0.4321},
+        {0.1876, 0.3035, 0.0608, 0.4481},
+        {0.1114, 0.2522, 0.0679, 0.5685},
+        {0.1178, 0.2164, 0.0461, 0.6197},
+        {0.2830, 0.1639, 0.2913, 0.2618},
+        {0.0467, 0.7049, 0.0045, 0.2439},
+        {0.9923, 0.0032, 0.0013, 0.0032},
+        {0.0032, 0.0038, 0.9910, 0.0019},
+        {0.3073, 0.1997, 0.3675, 0.1255},
+        {0.2260, 0.1927, 0.1709, 0.4104},
+        {0.2574, 0.2855, 0.2279, 0.2292}};
+    Int4        acgt[4] = {0, 0, 0, 0};
+    Int4        j;
+    FloatHi     prob_seqgsite = 0;
+    
+    if (sequence == NULL || score == NULL){
+        return;
+    }
+    *score = 0;
+    if (seqlen < 18){
+        return;
+    }
+    /* first get the freqs */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            acgt[sequence[j]]++;
+        }
+    }
+    /* now calculate for each base the log, adding values to get the score */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            prob_seqgsite +=
+                log10((a[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+        }
+    }
+    *score = pow(10, prob_seqgsite);
+    /* if (sequence[12] == 0 && sequence[13] == 2)
+       *score += 0.5;
+       */
 }
 
 /***************************************************************************
@@ -7743,73 +7842,75 @@ static void SPI_is_acceptor_fly (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr scor
 ***************************************************************************/
 static void SPI_is_acceptor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   FloatHi  a[40][5] = {
-               {0.2959, 0.1512, 0.1632, 0.3896, 0.25},
-               {0.2845, 0.1490, 0.1648, 0.4017, 0.25},
-               {0.2660, 0.1528, 0.1742, 0.4071, 0.25},
-               {0.2843, 0.1346, 0.1744, 0.4067, 0.25},
-               {0.2714, 0.1512, 0.1624, 0.4150, 0.25},
-               {0.2806, 0.1451, 0.1661, 0.4082, 0.25},
-               {0.2753, 0.1486, 0.1650, 0.4111, 0.25},
-               {0.2753, 0.1460, 0.1532, 0.4255, 0.25},
-               {0.2775, 0.1497, 0.1648, 0.4080, 0.25},
-               {0.2898, 0.1429, 0.1543, 0.4130, 0.25},
-               {0.2793, 0.1486, 0.1545, 0.4174, 0.25},
-               {0.2834, 0.1429, 0.1576, 0.4161, 0.25},
-               {0.2725, 0.1471, 0.1517, 0.4285, 0.25},
-               {0.2614, 0.1521, 0.1519, 0.4347, 0.25},
-               {0.2515, 0.1497, 0.1639, 0.4347, 0.25},
-               {0.2408, 0.1460, 0.1619, 0.4513, 0.25},
-               {0.2266, 0.1431, 0.1652, 0.4650, 0.25},
-               {0.2218, 0.1403, 0.1639, 0.4738, 0.25},
-               {0.2122, 0.1292, 0.1661, 0.4926, 0.25},
-               {0.1886, 0.1460, 0.1694, 0.4961, 0.25},
-               {0.1919, 0.1368, 0.1711, 0.5002, 0.25},
-               {0.1921, 0.1375, 0.1641, 0.5063, 0.25},
-               {0.1838, 0.1331, 0.1558, 0.5273, 0.25},
-               {0.1809, 0.1307, 0.1622, 0.5260, 0.25},
-               {0.1694, 0.1364, 0.1761, 0.5181, 0.25},
-               {0.2177, 0.1357, 0.1864, 0.4602, 0.25},
-               {0.2109, 0.1388, 0.1552, 0.4952, 0.25},
-               {0.2150, 0.1300, 0.1538, 0.5011, 0.25},
-               {0.1989, 0.1252, 0.1766, 0.4993, 0.25},
-               {0.1849, 0.1407, 0.1464, 0.5280, 0.25},
-               {0.1554, 0.0997, 0.1069, 0.6381, 0.25},
-               {0.2664, 0.0846, 0.3851, 0.2640, 0.25},
-               {0.0597, 0.6512, 0.0026, 0.2863, 0.25},
-               {0.9937, 0.0017, 0.0024, 0.0022, 0.25},
-               {0.0022, 0.0042, 0.9921, 0.0015, 0.25},
-               {0.2367, 0.0968, 0.5553, 0.1112, 0.25},
-               {0.2281, 0.1534, 0.1766, 0.4419, 0.25},
-               {0.2957, 0.1438, 0.2218, 0.3387, 0.25},
-               {0.2614, 0.1923, 0.2904, 0.2559, 0.25},
-               {0.2950, 0.1777, 0.2205, 0.3068, 0.25}};
-   Int4        acgtn[5] = {0, 0, 0, 0, 0};
+   FloatHi  a[40][4] = {
+       {0.2959, 0.1512, 0.1632, 0.3896},
+       {0.2845, 0.1490, 0.1648, 0.4017},
+       {0.2660, 0.1528, 0.1742, 0.4071},
+       {0.2843, 0.1346, 0.1744, 0.4067},
+       {0.2714, 0.1512, 0.1624, 0.4150},
+       {0.2806, 0.1451, 0.1661, 0.4082},
+       {0.2753, 0.1486, 0.1650, 0.4111},
+       {0.2753, 0.1460, 0.1532, 0.4255},
+       {0.2775, 0.1497, 0.1648, 0.4080},
+       {0.2898, 0.1429, 0.1543, 0.4130},
+       {0.2793, 0.1486, 0.1545, 0.4174},
+       {0.2834, 0.1429, 0.1576, 0.4161},
+       {0.2725, 0.1471, 0.1517, 0.4285},
+       {0.2614, 0.1521, 0.1519, 0.4347},
+       {0.2515, 0.1497, 0.1639, 0.4347},
+       {0.2408, 0.1460, 0.1619, 0.4513},
+       {0.2266, 0.1431, 0.1652, 0.4650},
+       {0.2218, 0.1403, 0.1639, 0.4738},
+       {0.2122, 0.1292, 0.1661, 0.4926},
+       {0.1886, 0.1460, 0.1694, 0.4961},
+       {0.1919, 0.1368, 0.1711, 0.5002},
+       {0.1921, 0.1375, 0.1641, 0.5063},
+       {0.1838, 0.1331, 0.1558, 0.5273},
+       {0.1809, 0.1307, 0.1622, 0.5260},
+       {0.1694, 0.1364, 0.1761, 0.5181},
+       {0.2177, 0.1357, 0.1864, 0.4602},
+       {0.2109, 0.1388, 0.1552, 0.4952},
+       {0.2150, 0.1300, 0.1538, 0.5011},
+       {0.1989, 0.1252, 0.1766, 0.4993},
+       {0.1849, 0.1407, 0.1464, 0.5280},
+       {0.1554, 0.0997, 0.1069, 0.6381},
+       {0.2664, 0.0846, 0.3851, 0.2640},
+       {0.0597, 0.6512, 0.0026, 0.2863},
+       {0.9937, 0.0017, 0.0024, 0.0022},
+       {0.0022, 0.0042, 0.9921, 0.0015},
+       {0.2367, 0.0968, 0.5553, 0.1112},
+       {0.2281, 0.1534, 0.1766, 0.4419},
+       {0.2957, 0.1438, 0.2218, 0.3387},
+       {0.2614, 0.1923, 0.2904, 0.2559},
+       {0.2950, 0.1777, 0.2205, 0.3068}};
+   Int4        acgt[4] = {0, 0, 0, 0};
    Int4        j;
-   FloatHi     prob_seqgsite;
-   FloatHi     prob_seq;
+   FloatHi     prob_seqgsite = 0;
 
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 40)
-   {
-      *score = 0;
-      return;
+   if (sequence == NULL || score == NULL){
+       return;
    }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= a[j][sequence[j]];
+   *score = 0;
+   if (seqlen < 40){
+       return;
    }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
+   /* first get the freqs */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           acgt[sequence[j]]++;
+       }
    }
-   *score = (prob_seqgsite/prob_seq);
-   if (sequence[33] == 0 && sequence[34] == 2)
-      *score += 0.5;
+   /* now calculate for each base the log, adding values to get the score */
+   for (j=0; j<seqlen; j++){
+       if (sequence[j] != 4){
+           prob_seqgsite += 
+               log10((a[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+       }
+   }
+   *score = pow(10, prob_seqgsite);
+   /* if (sequence[33] == 0 && sequence[34] == 2)
+       *score += 0.5;
+       */
 }
 
 /***************************************************************************
@@ -7821,52 +7922,107 @@ static void SPI_is_acceptor_plant (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr sc
 ***************************************************************************/
 static void SPI_is_acceptor_cele (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score)
 {
-   FloatHi  a[18][5] = {
-               {0.4365, 0.1293, 0.0650, 0.3689, 0.25},
-               {0.3719, 0.1415, 0.0826, 0.4037, 0.25},
-               {0.3550, 0.1374, 0.0883, 0.4190, 0.25},
-               {0.3428, 0.1418, 0.0910, 0.4240, 0.25},
-               {0.3465, 0.1499, 0.0711, 0.4321, 0.25},
-               {0.3594, 0.1492, 0.0707, 0.4203, 0.25},
-               {0.3976, 0.1191, 0.0728, 0.4102, 0.25},
-               {0.4139, 0.0795, 0.0687, 0.4376, 0.25},
-               {0.2812, 0.0799, 0.0690, 0.5695, 0.25},
-               {0.0589, 0.0379, 0.0156, 0.8873, 0.25},
-               {0.0102, 0.0132, 0.0047, 0.9716, 0.25},
-               {0.0975, 0.1391, 0.0917, 0.6714, 0.25},
-               {0.0321, 0.8257, 0.0020, 0.1398, 0.25},
-               {0.9953, 0.0010, 0.0017, 0.0017, 0.25},
-               {0.0020, 0.0020, 0.9946, 0.0010, 0.25},
-               {0.3990, 0.1553, 0.3154, 0.1299, 0.25},
-               {0.2995, 0.1780, 0.1628, 0.3594, 0.25},
-               {0.2975, 0.2288, 0.1878, 0.2856, 0.25}};
-   Int4        acgtn[5] = {0, 0, 0, 0, 0};
-   Int4        j;
-   FloatHi     prob_seqgsite;
-   FloatHi     prob_seq;
-
-   if (sequence == NULL || score == NULL)
-      return;
-   if (seqlen < 18)
-   {
-      *score = 0;
-      return;
-   }
-   prob_seqgsite = 1;
-   prob_seq = 1;
-   for (j=0; j<seqlen; j++)
-   {
-      acgtn[sequence[j]]++;
-      prob_seqgsite *= a[j][sequence[j]];
-   }
-   for (j=0; j<seqlen; j++)
-   {
-      prob_seq *= acgtn[sequence[j]]/(FloatHi)seqlen;
-   }
-   *score = (prob_seqgsite/prob_seq);
-   if (sequence[13] == 0 && sequence[14] == 2)
-      *score += 0.5;
+    FloatHi  a[18][4] = {
+        {0.4365, 0.1293, 0.0650, 0.3689},
+        {0.3719, 0.1415, 0.0826, 0.4037},
+        {0.3550, 0.1374, 0.0883, 0.4190},
+        {0.3428, 0.1418, 0.0910, 0.4240},
+        {0.3465, 0.1499, 0.0711, 0.4321},
+        {0.3594, 0.1492, 0.0707, 0.4203},
+        {0.3976, 0.1191, 0.0728, 0.4102},
+        {0.4139, 0.0795, 0.0687, 0.4376},
+        {0.2812, 0.0799, 0.0690, 0.5695},
+        {0.0589, 0.0379, 0.0156, 0.8873},
+        {0.0102, 0.0132, 0.0047, 0.9716},
+        {0.0975, 0.1391, 0.0917, 0.6714},
+        {0.0321, 0.8257, 0.0020, 0.1398},
+        {0.9953, 0.0010, 0.0017, 0.0017},
+        {0.0020, 0.0020, 0.9946, 0.0010},
+        {0.3990, 0.1553, 0.3154, 0.1299},
+        {0.2995, 0.1780, 0.1628, 0.3594},
+        {0.2975, 0.2288, 0.1878, 0.2856}};
+    Int4        acgt[4] = {0, 0, 0, 0};
+    Int4        j;
+    FloatHi     prob_seqgsite = 0;
+    
+    if (sequence == NULL || score == NULL){
+        return;
+    }
+    *score = 0;
+    if (seqlen < 18){
+        return;
+    }
+    /* first get the freqs */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            acgt[sequence[j]]++;
+        }
+    }
+    /* now calculate for each base the log, adding values to get the score */
+    for (j=0; j<seqlen; j++){
+        if (sequence[j] != 4){
+            prob_seqgsite += 
+                log10((a[j][sequence[j]])/((FloatHi)acgt[sequence[j]]/seqlen));
+        }
+    }
+    *score = pow(10, prob_seqgsite);
+    /* if (sequence[13] == 0 && sequence[14] == 2)
+        *score += 0.5;
+        */
 }
+
+
+/***************************************************************************
+*
+*  See the comment for SPI_is_acceptor for an explanation of how this
+*  function works. Note that the Dicty info is NOT corrected for current
+*  sequence composition because the log(likehood)matrix itself corrected
+*  for dicty genome composition.  The data were retrieved
+*  from the geneid Dd parameter file and used  with the permission of 
+*  Roderic Guigo.Values were simply translated from log base 2 to log base 10
+*
+***************************************************************************/
+static void SPI_is_acceptor_dicty (Uint1Ptr sequence, Int4 seqlen, FloatHiPtr score){
+
+    /*  acgt */ 
+    Int4 j = 0;
+    FloatHi  a[15][4] = {
+        {-0.2171, -0.4463, -0.9154, 0.2974},
+        {-0.0984, -0.3965, -1.3635, 0.2574},
+        {0.0201, -0.5770, -1.5528, 0.3159},
+        {-0.0880, -0.6470, -1.0716, 0.2993},
+        {-0.0483, -0.4077, -0.8955, 0.2326},
+        {0.1091, -0.4041, -0.9030, 0.2262},
+        {0.0672, -0.3973, -1.0649, 0.1682},
+        {0.0592, -0.5731, -1.0634, 0.1480},
+        {0.1707, -0.9122, -1.0757, 0.1658},
+        {0.0343, -0.6659, -1.4012, 0.2365},
+        {0.1407, -0.4903, -1.3757, 0.0521},
+        {0.1901,-0.7647,-0.9314, 0.1395},
+        {-0.2300, -0.7210, -0.9030, 0.4531},
+        {0.6020, -9999, -9999, -9999},
+        {-9999,-9999, 0.6020, -9999}};
+    
+    if (sequence == NULL || score == NULL){
+        return;
+    }
+    *score = 0;
+    if (seqlen < 15){
+        return;
+    }
+    for (j = 0; j < seqlen; j++){
+        if (sequence[j] != 4){
+            *score += a[j][sequence[j]];
+        }
+    }
+    *score = pow(10, *score);
+    /* if (sequence[13] == 0 && sequence[14] == 2){
+      *score += 0.5;
+    }
+    */
+}
+
+
 
 /***************************************************************************
 *
@@ -10701,39 +10857,41 @@ static void SPI_CheckMrnaOrder(SPI_IvalPtr PNTR spi_pp, const int num)
 {
     SPI_IvalPtr  ival = 0, ival2 = 0, ival3 = 0;
     int x = 0;
-  
-    for (x = 0, ival = spi_pp[x], ival2 = spi_pp[x + 1]; 
-         x < num && ival != 0 && ival2 != 0; 
-         ++x, ival = spi_pp[x], 
-             ival2 = (x + 1 < num ? spi_pp[x + 1] : 0)){
-        if (x < num - 2){ /* three to window */
-            ival3 = spi_pp[x + 2];
-            if ((ival->strand == Seq_strand_plus == ival2->strand
-                 && ival3->strand == ival->strand 
-                 && (ival->mstop > ival2->mstart + SPI_FUZZ
-                     && ival->mstop < ival3->mstart + SPI_FUZZ))
-                || (ival->strand == Seq_strand_minus == ival2->strand
-                    && ival3->strand == ival->strand 
-                    && (ival->mstop + SPI_FUZZ < ival2->mstart  
-                        && ival->mstop + SPI_FUZZ > ival3->mstart))){
-                if (ival->score > ival2->score){
-                    ival2->used = -1;
-                }
-                else if (ival2->score > ival->score){
-                    ival->used = -1;
+    
+    if (num >=3){
+        for (x = 0, ival = spi_pp[x], ival2 = spi_pp[x + 1]; 
+             x < num && ival != 0 && ival2 != 0; 
+             ++x, ival = spi_pp[x], 
+                 ival2 = (x + 1 < num ? spi_pp[x + 1] : 0)){
+            if (x < num - 2){ /* three to window */
+                ival3 = spi_pp[x + 2];
+                if ((ival->strand == Seq_strand_plus == ival2->strand
+                     && ival3->strand == ival->strand 
+                     && (ival->mstop > ival2->mstart + SPI_FUZZ
+                         && ival->mstop < ival3->mstart + SPI_FUZZ))
+                    || (ival->strand == Seq_strand_minus == ival2->strand
+                        && ival3->strand == ival->strand 
+                        && (ival->mstop + SPI_FUZZ < ival2->mstart  
+                            && ival->mstop + SPI_FUZZ > ival3->mstart))){
+                    if (ival->score > ival2->score){
+                        ival2->used = -1;
+                    }
+                    else if (ival2->score > ival->score){
+                        ival->used = -1;
+                    }
                 }
             }
-        }
-        else if (x < num - 1){ /* two to window */
-            if ((ival->strand == Seq_strand_plus == ival2->strand
-                 && ival->mstop > ival2->mstart) 
-                || (ival->strand == Seq_strand_plus == ival2->strand
-                    && ival->mstop < ival2->mstart)){
-                if (ival2->score > ival->score){
-                    ival->used = -1;
-                }
-                else if (ival->score > ival2->score){
-                    ival2->used = -1;
+            else if (x < num - 1){ /* two to window */
+                if ((ival->strand == Seq_strand_plus == ival2->strand
+                     && ival->mstop > ival2->mstart) 
+                    || (ival->strand == Seq_strand_plus == ival2->strand
+                        && ival->mstop < ival2->mstart)){
+                    if (ival2->score > ival->score){
+                        ival->used = -1;
+                    }
+                    else if (ival->score > ival2->score){
+                        ival2->used = -1;
+                    }
                 }
             }
         }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.6  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.5  2002/01/08 20:48:22  kans
 * PubLabelUnique internal call to PubLabelUnique (..., unique), not PubLabel
 *
@@ -520,9 +523,9 @@ erret:
 *
 *   PubAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL PubAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -770,9 +773,9 @@ erret:
 *
 *   PubSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL PubSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -962,9 +965,9 @@ erret:
 *
 *   PubEquivAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL PubEquivAsnRead (AsnIoPtr aip, AsnTypePtr orig)

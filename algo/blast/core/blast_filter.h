@@ -1,4 +1,4 @@
-/* $Id: blast_filter.h,v 1.11 2004/01/07 21:17:17 dondosha Exp $
+/* $Id: blast_filter.h,v 1.17 2004/04/29 15:09:27 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: BLAST filtering functions.
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.11 $
+ * $Revision: 1.17 $
  * */
 #ifndef __BLAST_FILTER__
 #define __BLAST_FILTER__
@@ -44,6 +44,7 @@ extern "C" {
 #endif
 
 #include <algo/blast/core/blast_def.h>
+#include <algo/blast/core/blast_message.h>
 
 /** Create and initialize a new sequence interval.
  * @param from Start of the interval [in]
@@ -57,6 +58,13 @@ BlastSeqLoc* BlastSeqLocFree(BlastSeqLoc* loc);
 
 /** Deallocate memory for a list of BlastMaskLoc structures */
 BlastMaskLoc* BlastMaskLocFree(BlastMaskLoc* mask_loc);
+
+/** Allocate memory for a BlastMaskLoc.
+ * @param index which context (i.e., strand) [in]
+ * @param loc_list List of locations on that strand [in]
+ * @return Pointer to the allocated BlastMaskLoc structure.
+*/
+BlastMaskLoc* BlastMaskLocNew(Int4 index, BlastSeqLoc *loc_list);
 
 /** Go through all mask locations in one sequence, 
  * combine any that overlap. Deallocate the memory for the locations that 
@@ -72,16 +80,16 @@ CombineMaskLocations(BlastSeqLoc* mask_loc, BlastSeqLoc* *mask_loc_out,
 
 /** This function takes the list of mask locations (i.e., regions that 
  * should not be searched or not added to lookup table) and makes up a set 
- * of DoubleInt*'s that should be searched (that is, takes the 
- * complement). If the entire sequence is filtered, then a DoubleInt is 
- * created and both of its elements (i1 and i2) are set to -1 to indicate 
+ * of SSeqRange*'s that should be searched (that is, takes the 
+ * complement). If the entire sequence is filtered, then a SSeqRange is 
+ * created and both of its elements (left and right) are set to -1 to indicate 
  * this. 
- * If any of the mask_loc's is NULL, a DoubleInt for full span of the 
+ * If any of the mask_loc's is NULL, a SSeqRange for full span of the 
  * respective query sequence is created.
  * @param program_number Type of BLAST program [in]
  * @param query_info The query information structure [in]
  * @param mask_loc All mask locations [in]
- * @param complement_mask Linked list of DoubleInt*s with offsets. [out]
+ * @param complement_mask Linked list of SSeqRange*s with offsets. [out]
 */
 Int2 
 BLAST_ComplementMaskLocations(Uint1 program_number, 
@@ -101,8 +109,49 @@ BLAST_ComplementMaskLocations(Uint1 program_number,
 */
 Int2
 BlastSetUp_Filter(Uint1 program_number, Uint1* sequence, Int4 length, 
-   Int4 offset, char* instructions, Boolean *mask_at_hash, 
-   BlastSeqLoc* *seqloc_retval);
+   Int4 offset, const char* instructions, Boolean *mask_at_hash, BlastSeqLoc* *seqloc_retval);
+
+
+/** Does preparation for filtering and then calls BlastSetUp_Filter
+ * @param query_blk sequence to be filtered [in]
+ * @param query_info info on sequence to be filtered [in]
+ * @param program_number one of blastn,blastp,blastx,etc. [in]
+ * @param filter_string instructions for filtering [in]
+ * @param filter_out Resulting locations for filtered region. [out]
+ * @param mask_at_hash If TRUE masking is done while making the lookup table
+ *                     only. [out] 
+ * @param blast_message message that needs to be sent back to user.
+*/
+Int2
+BlastSetUp_GetFilteringLocations(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info,
+    Uint1 program_number, const char* filter_string, BlastMaskLoc* *filter_out, Boolean* mask_at_hash,
+    Blast_Message* *blast_message);
+
+/** Masks the letters in buffer.
+ * This is a low-level routine and takes a raw buffer which it assumes
+ * to be in ncbistdaa (protein) or blastna (nucleotide).
+ * @param buffer the sequence to be masked (will be modified). [out]
+ * @param length length of the sequence to be masked . [in]
+ * @param is_na nucleotide if TRUE [in]
+ * @param mask_loc the SeqLoc to use for masking [in] 
+ * @param reverse minus strand if TRUE [in]
+ * @param offset how far along sequence is 1st residuse in buffer [in]
+ *
+*/
+Int2
+Blast_MaskTheResidues(Uint1 * buffer, Int4 length, Boolean is_na, 
+    ListNode * mask_loc, Boolean reverse, Int4 offset);
+
+/** Masks the sequence given a BlastMaskLoc
+ * @param query_blk sequence to be filtered [in]
+ * @param query_info info on sequence to be filtered [in]
+ * @param filter_maskloc Locations to filter [in]
+ * @param program_number one of blastn,blastp,blastx,etc. [in]
+*/
+Int2
+BlastSetUp_MaskQuery(BLAST_SequenceBlk* query_blk, BlastQueryInfo* query_info,
+    BlastMaskLoc *filter_maskloc, Uint1 program_number);
+
 
 #ifdef __cplusplus
 }

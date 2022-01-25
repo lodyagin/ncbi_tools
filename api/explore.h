@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.45 $
+* $Revision: 6.46 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -375,6 +375,19 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeatureByLabel (
   SeqFeatPtr curr,
   Uint1 seqFeatChoice,
   Uint1 featDefChoice,
+  SeqMgrFeatContext PNTR context
+);
+
+/*****************************************************************************
+*
+*   SeqMgrGetNextGeneByLocusTag works like SeqMgrGetNextFeatureByLabel, except
+*     that it returns only genes ordered by locus_tag
+*
+*****************************************************************************/
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextGeneByLocusTag (
+  BioseqPtr bsp,
+  SeqFeatPtr curr,
   SeqMgrFeatContext PNTR context
 );
 

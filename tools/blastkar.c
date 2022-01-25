@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastkar.c,v 6.95 2003/12/12 16:00:34 madden Exp $";
+static char const rcsid[] = "$Id: blastkar.c,v 6.100 2004/04/28 14:36:00 madden Exp $";
 
 /* ===========================================================================
 *
@@ -49,8 +49,48 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.95 $
+ * $Revision: 6.100 $
  * $Log: blastkar.c,v $
+ * Revision 6.100  2004/04/28 14:36:00  madden
+ * Changes from Mike Gertz:
+ * - I created the new routine BlastGapDecayDivisor that computes a
+ *   divisor used to weight the evalue of a collection of distinct
+ *   alignments.
+ * - I removed  BlastGapDecay and BlastGapDecayInverse which had become
+ *   redundant.
+ * - I modified the BlastCutoffs routine so that it uses the value
+ *   returned by BlastGapDecayDivisor to weight evalues.
+ * - I modified BlastSmallGapSumE, BlastLargeGapSumE and
+ *   BlastUnevenGapSumE no longer refer to the gap_prob parameter.
+ *   Replaced the gap_decay_rate parameter of each of these routines with
+ *   a weight_divisor parameter.  Added documentation.
+ *
+ * Revision 6.99  2004/04/23 13:49:43  madden
+ * Cleaned up ifndef in BlastKarlinLHtoK
+ *
+ * Revision 6.98  2004/04/23 13:19:53  madden
+ * Rewrote BlastKarlinLHtoK to do the following and more:
+ * 1. fix a bug whereby the wrong formula was used when high score == 1
+ *    and low score == -1;
+ * 2. fix a methodological error of truncating the first sum
+ *    and trying to make it converge quickly by adding terms
+ *    of a geometric progression, even though the geometric progression
+ *    estimate is not correct in all cases;
+ *    the old adjustment code is left in for historical purposes but
+ *    #ifdef'd out
+ * 3. Eliminate the Boolean bi_modal_score variable.  The old test that
+ *    set the value of bi_modal_score would frequently fail to choose the
+ *    correct value due to rounding error.
+ * 4. changed numerous local variable names to make them more meaningful;
+ * 5. added substantial comments to explain what the procedure
+ *    is doing and what each variable represents
+ *
+ * Revision 6.97  2004/04/01 13:43:08  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
+ * Revision 6.96  2004/03/31 17:58:51  papadopo
+ * Mike Gertz' changes for length adjustment calculations
+ *
  * Revision 6.95  2003/12/12 16:00:34  madden
  * Add gap_decay_rate to BlastCutoffs, remove BlastCutoffs_simple, protection against overflow, removal of defunct _real variables (all from Mike Gertz)
  *
@@ -3208,7 +3248,7 @@ See:  Karlin, S. & Altschul, S.F. "Methods for Assessing the Statistical
 
     A program that calls this routine must provide the value of the lowest
     possible score, the value of the greatest possible score, and a pointer
-    to an array of probabilities for the occurence of all scores between
+    to an array of probabilities for the occurrence of all scores between
     these two extreme scores.  For example, if score -2 occurs with
     probability 0.7, score 0 occurs with probability 0.1, and score 3
     occurs with probability 0.2, then the subroutine must be called with
@@ -3287,151 +3327,223 @@ ErrExit:
 #endif
 	return 1;
 }
-#define DIMOFP0	(iter*range + 1)
+#define DIMOFP0	(iterlimit*range + 1)
 #define DIMOFP0_MAX (BLAST_KARLIN_K_ITER_MAX*BLAST_SCORE_RANGE_MAX+1)
 
 
+#define smallLambdaThreshold 20 /*defines special case in K computation*/
+                                /*threshold is on exp(-Lambda)*/
+
+/*The following procedure computes K. The input includes Lambda, H,
+ *  and an array of probabilities for each score.
+ *  There are distinct closed form for three cases:
+ *  1. high score is 1 low score is -1
+ *  2. high score is 1 low score is not -1
+ *  3. low score is -1, high score is not 1
+ *
+ * Otherwise, in most cases the value is computed as:
+ * -exp(-2.0*outerSum) / ((H/lambda)*(exp(-lambda) - 1)
+ * The last term (exp(-lambda) - 1) can be computed in two different
+ * ways depending on whether lambda is small or not.
+ * outerSum is a sum of the terms
+ * innerSum/j, where j is denoted by iterCounter in the code.
+ * The sum is truncated when the new term innersum/j i sufficiently small.
+ * innerSum is a weighted sum of the probabilities of
+ * of achieving a total score i in a gapless alignment,
+ * which we denote by P(i,j).
+ * of exactly j characters. innerSum(j) has two parts
+ * Sum over i < 0  P(i,j)exp(-i * lambda) +
+ * Sum over i >=0  P(i,j)
+ * The terms P(i,j) are computed by dynamic programming.
+ * An earlier version was flawed in that ignored the special case 1
+ * and tried to replace the tail of the computation of outerSum
+ * by a geometric series, but the base of the geometric series
+ * was not accurately estimated in some cases.
+ */
+
 Nlm_FloatHi
-BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi	lambda, Nlm_FloatHi H)
+BlastKarlinLHtoK(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi    lambda, Nlm_FloatHi H)
 {
-#ifndef BLAST_KARLIN_STACKP
-	Nlm_FloatHi	PNTR P0 = NULL;
-#else
-	Nlm_FloatHi	P0 [DIMOFP0_MAX];
-#endif
-	BLAST_Score	low;	/* Lowest score (must be negative) */
-	BLAST_Score	high;	/* Highest score (must be positive) */
-	Nlm_FloatHi	K;			/* local copy of K */
-	Nlm_FloatHi	ratio;
-	int		i, j;
-	BLAST_Score	range, lo, hi, first, last, d;
-	register Nlm_FloatHi	sum;
-	Nlm_FloatHi	Sum, av, oldsum, oldsum2, score_avg;
-	int		iter;
-	Nlm_FloatHi	sumlimit;
-	Nlm_FloatHi	PNTR p, PNTR ptrP, PNTR ptr1, PNTR ptr2, PNTR ptr1e;
-	Nlm_FloatHi	x;
-        Boolean         bi_modal_score = FALSE;
+    /*The next array stores the probabilities of getting each possible
+      score in an alignment of fixed length; the array is shifted
+      during part of the computation, so that
+      entry 0 is for score 0.  */
+    Nlm_FloatHi     PNTR alignmentScoreProbabilities = NULL;
+    BLAST_Score     low;    /* Lowest score (must be negative) */
+    BLAST_Score     high;   /* Highest score (must be positive) */
+    BLAST_Score     range;  /* range of scores, computed as high - low*/
+    Nlm_FloatHi     K;      /* local copy of K  to return*/
+    Int4            i;   /*loop index*/
+    Int4            iterCounter; /*counter on iterations*/
+    BLAST_Score     divisor; /*candidate divisor of all scores with
+                               non-zero probabilities*/
+    /*highest and lowest possible alignment scores for current length*/
+    BLAST_Score   lowAlignmentScore, highAlignmentScore;
+    BLAST_Score   first, last; /*loop indices for dynamic program*/
+    register Nlm_FloatHi    innerSum;
+    Nlm_FloatHi    oldsum, oldsum2;  /* values of innerSum on previous
+                                        iterations*/
+    Nlm_FloatHi     outerSum;        /* holds sum over j of (innerSum
+                                        for iteration j/j)*/
 
-	if (lambda <= 0. || H <= 0.) {
-		return -1.;
-	}
+    Nlm_FloatHi    score_avg; /*average score*/
+    /*first term to use in the closed form for the case where
+      high == 1 or low == -1, but not both*/
+    Nlm_FloatHi     firstTermClosedForm;  /*usually store H/lambda*/
+    Int4            iterlimit; /*upper limit on iterations*/
+    Nlm_FloatHi     sumlimit; /*lower limit on contributions
+                                to sum over scores*/
 
-	if (sfp->score_avg >= 0.0) {
-		return -1.;
-	}
+    /*array of score probabilities reindexed so that low is at index 0*/
+    Nlm_FloatHi     PNTR probArrayStartLow;
 
-	low = sfp->obs_min;
-	high = sfp->obs_max;
-	range = high - low;
-	p = &sfp->sprob[low];
+    /*pointers used in dynamic program*/
+    Nlm_FloatHi     PNTR ptrP, PNTR ptr1, PNTR ptr2, PNTR ptr1e;
+    Nlm_FloatHi     expMinusLambda; /*e^^(-Lambda) */
 
-        /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
-           Karlin&Altschul (1990) */
-    	for (i = 1, d = -low; i <= range && d > 1; ++i)
-           if (p[i])
-              d = Nlm_Gcd(d, i);
+    if (lambda <= 0. || H <= 0.) {
+        /* Theory dictates that H and lambda must be positive, so
+         * return -1 to indicate an error */
+        return -1.;
+    }
+
+    /*Karlin-Altschul theory works only if the expected score
+      is negative*/
+    if (sfp->score_avg >= 0.0) {
+        return -1.;
+    }
+
+    low   = sfp->obs_min;
+    high  = sfp->obs_max;
+    range = high - low;
+
+    probArrayStartLow = &sfp->sprob[low];
+    /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
+       Karlin&Altschul (1990) */
+    for (i = 1, divisor = -low; i <= range && divisor > 1; ++i) {
+        if (probArrayStartLow[i])
+            divisor = Nlm_Gcd(divisor, i);
+    }
+
+    high   /= divisor;
+    low    /= divisor;
+    lambda *= divisor;
+
+    range = high - low;
+
+    firstTermClosedForm = H/lambda;
+    expMinusLambda      = exp((Nlm_FloatHi) -lambda);
+
+    if (low == -1 && high == 1) {
+        K = (sfp->sprob[low] - sfp->sprob[high]) *
+            (sfp->sprob[low] - sfp->sprob[high]) / sfp->sprob[low];
+        return(K);
+    }
+
+    if (low == -1 || high == 1) {
+        if (high == 1)
+            ;
+        else {
+            score_avg = sfp->score_avg / divisor;
+            firstTermClosedForm
+                = (score_avg * score_avg) / firstTermClosedForm;
+        }
+        return firstTermClosedForm * (1.0 - expMinusLambda);
+    }
+
+    sumlimit  = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
+    iterlimit = BLAST_KARLIN_K_ITER_MAX;
+
+    if (DIMOFP0 > DIMOFP0_MAX) {
+        return -1.;
+    }
+    alignmentScoreProbabilities =
+        (Nlm_FloatHi PNTR)MemNew(DIMOFP0 *
+                                 sizeof(*alignmentScoreProbabilities));
+    if (alignmentScoreProbabilities == NULL)
+        return -1.;
+
+    outerSum = 0.;
+    lowAlignmentScore = highAlignmentScore = 0;
+    alignmentScoreProbabilities[0] = innerSum = oldsum = oldsum2 = 1.;
+
+    for (iterCounter = 0;
+         ((iterCounter < iterlimit) && (innerSum > sumlimit));
+         outerSum += innerSum /= ++iterCounter) {
+        first = last = range;
+        lowAlignmentScore  += low;
+        highAlignmentScore += high;
+        /*dynamic program to compute P(i,j)*/
+        for (ptrP = alignmentScoreProbabilities +
+                 (highAlignmentScore-lowAlignmentScore);
+             ptrP >= alignmentScoreProbabilities;
+             *ptrP-- =innerSum) {
+            ptr1  = ptrP - first;
+            ptr1e = ptrP - last;
+            ptr2  = probArrayStartLow + first;
+            for (innerSum = 0.; ptr1 >= ptr1e; )
+                innerSum += *ptr1--  *  *ptr2++;
+            if (first)
+                --first;
+            if (ptrP - alignmentScoreProbabilities <= range)
+                --last;
+        }
+        /* Horner's rule */
+        innerSum = *++ptrP;
+        for( i = lowAlignmentScore + 1; i < 0; i++ ) {
+            innerSum = *++ptrP + innerSum * expMinusLambda;
+        }
+        innerSum *= expMinusLambda;
+
+        for (; i <= highAlignmentScore; ++i)
+            innerSum += *++ptrP;
+        oldsum2 = oldsum;
+        oldsum  = innerSum;
+    }
+
+#ifdef ADD_GEOMETRIC_TERMS_TO_K
+    /*old code assumed that the later terms in sum were
+      asymptotically comparable to those of a geometric
+      progression, and tried to speed up convergence by
+      guessing the estimated ratio between sucessive terms
+      and using the explicit terms of a geometric progression
+      to speed up convergence. However, the assumption does not
+      always hold, and convergenece of the above code is fast
+      enough in practice*/
+    /* Terms of geometric progression added for correction */
+    {
+        Nlm_FloatHi     ratio;  /* fraction used to generate the
+                                   geometric progression */
         
-        high /= d;
-        low /= d;
-        lambda *= d;
-
-	range = high - low;
-
-	av = H/lambda;
-	x = exp((Nlm_FloatHi) -lambda);
-
-	if (low == -1 || high == 1) {
-           if (high == 1)
-              K = av;
-           else {
-              score_avg = sfp->score_avg / d;
-              K = (score_avg * score_avg) / av;
-           }
-           return K * (1.0 - x);
-	}
-
-	sumlimit = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
-
-	iter = BLAST_KARLIN_K_ITER_MAX;
-
-	if (DIMOFP0 > DIMOFP0_MAX) {
-		return -1.;
-	}
-#ifndef BLAST_KARLIN_STACKP
-	P0 = (Nlm_FloatHi PNTR)MemNew(DIMOFP0 * sizeof(*P0));
-	if (P0 == NULL)
-		return -1.;
-#else
-	Nlm_MemSet((CharPtr)P0, 0, DIMOFP0*sizeof(P0[0]));
+        ratio = oldsum / oldsum2;
+        if (ratio >= (1.0 - sumlimit*0.001)) {
+            K = -1.;
+            if (alignmentScoreProbabilities != NULL)
+                MemFree(alignmentScoreProbabilities);
+            return K;
+        }
+        sumlimit *= 0.01;
+        while (innerSum > sumlimit) {
+            oldsum   *= ratio;
+            outerSum += innerSum = oldsum / ++iterCounter;
+        }
+    }
 #endif
 
-	Sum = 0.;
-	lo = hi = 0;
-	P0[0] = sum = oldsum = oldsum2 = 1.;
+    if (expMinusLambda <  smallLambdaThreshold ) {
+        K = -exp((double)-2.0*outerSum) /
+            (firstTermClosedForm*(expMinusLambda - 1.0));
+    } else {
+        K = -exp((double)-2.0*outerSum) /
+            (firstTermClosedForm*Expm1(-(double)lambda));
+    }
 
-        if (p[0] + p[range*d] == 1.) {
-           /* There are only two scores (e.g. DNA comparison matrix */
-           bi_modal_score = TRUE;
-           sumlimit *= 0.01;
-        }
+    if (alignmentScoreProbabilities != NULL)
+        MemFree(alignmentScoreProbabilities);
 
-        for (j = 0; j < iter && sum > sumlimit; Sum += sum /= ++j) {
-           first = last = range;
-           lo += low;
-           hi += high;
-           for (ptrP = P0+(hi-lo); ptrP >= P0; *ptrP-- =sum) {
-              ptr1 = ptrP - first;
-              ptr1e = ptrP - last;
-              ptr2 = p + first;
-              for (sum = 0.; ptr1 >= ptr1e; )
-                 sum += *ptr1--  *  *ptr2++;
-              if (first)
-                 --first;
-              if (ptrP - P0 <= range)
-                 --last;
-           }
-					 /* Horner's rule */
-					 sum = *++ptrP;
-					 for( i = lo + 1; i < 0; i++ ) {
-						 sum = *++ptrP + sum * x;
-					 }
-					 sum *= x;
-
-           for (; i <= hi; ++i)
-              sum += *++ptrP;
-           oldsum2 = oldsum;
-           oldsum = sum;
-        }
-        
-        if (!bi_modal_score) {
-           /* Terms of geometric progression added for correction */
-           ratio = oldsum / oldsum2;
-           if (ratio >= (1.0 - sumlimit*0.001)) {
-              K = -1.;
-              goto CleanUp;
-           }
-           sumlimit *= 0.01;
-           while (sum > sumlimit) {
-              oldsum *= ratio;
-              Sum += sum = oldsum / ++j;
-           }
-        }
-
-	if (x <  1.0 / 0.05 ) {
-		K = exp((double)-2.0*Sum) / (av*(1.0 - x));
-	} else {
-		K = -exp((double)-2.0*Sum) / (av*Expm1(-(double)lambda));
-	}
-
-CleanUp:
-#ifndef BLAST_KARLIN_K_STACKP
-	if (P0 != NULL)
-		MemFree(P0);
-#endif
-
-	return K;
+    return K;
 }
+
 
 
 /******************* Fast Lambda Calculation Subroutine ************************
@@ -3445,7 +3557,7 @@ CleanUp:
 /**
  * Find positive solution to sum_{i=low}^{high} exp(i lambda) = 1.
  * 
- * @param probs probabilities of a score occuring 
+ * @param probs probabilities of a score occurring 
  * @param d the gcd of the possible scores. This equals 1 if the scores
  * are not a lattice
  * @param low the lowest possible score
@@ -3625,22 +3737,23 @@ impalaKarlinLambdaNR(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda)
 
 
 
-static Nlm_FloatHi
-BlastGapDecayInverse(Nlm_FloatHi pvalue, unsigned nsegs, Nlm_FloatHi decayrate)
+/* Compute a divisor used to weight the evalue of a collection of
+ * "nsegs" distinct alignments.  These divisors are used to compensate
+ * for the effect of choosing the best among multiple collections of
+ * alignments.  See
+ *
+ * Stephen F. Altschul. Evaluating the statitical significance of
+ * multiple distinct local alignments. In Suhai, editior, Theoretical
+ * and Computational Methods in Genome Research, pages 1-14. Plenum
+ * Press, New York, 1997.
+ *
+ * The "decayrate" parameter of this routine is a value in the
+ * interval (0,1). Typical values of decayrate are .1 and .5. */
+
+Nlm_FloatHi LIBCALL
+BlastGapDecayDivisor(Nlm_FloatHi decayrate, unsigned nsegs )
 {
-	if (decayrate <= 0. || decayrate >= 1. || nsegs == 0)
-		return pvalue;
-
-	return pvalue * (1. - decayrate) * Nlm_Powi(decayrate, nsegs - 1);
-}
-
-static Nlm_FloatHi
-BlastGapDecay(Nlm_FloatHi pvalue, unsigned nsegs, Nlm_FloatHi decayrate)
-{
-	if (decayrate <= 0. || decayrate >= 1. || nsegs == 0)
-		return pvalue;
-
-	return pvalue / ((1. - decayrate) * Nlm_Powi(decayrate, nsegs - 1));
+    return (1. - decayrate) * Nlm_Powi(decayrate, nsegs - 1);
 }
 
 /*
@@ -3673,8 +3786,14 @@ BlastCutoffs(BLAST_ScorePtr S, /* cutoff score */
 	esave = e;
 	if (e > 0.) 
 	{
-		if (dodecay)
-			e = BlastGapDecayInverse(e, 1, gap_decay_rate);
+        if (dodecay) {
+            /* Invert the adjustment to the e-value that will be applied
+             * to compensate for the effect of choosing the best among
+             * multiple alignments */
+            if( gap_decay_rate > 0 && gap_decay_rate < 1 ) {
+                e *= BlastGapDecayDivisor(gap_decay_rate, 1);
+            }
+        }
 		es = BlastKarlinEtoS_simple(e, kbp, searchsp);
 	}
 	/*
@@ -3692,8 +3811,14 @@ BlastCutoffs(BLAST_ScorePtr S, /* cutoff score */
 	if (esave <= 0. || !s_changed) 
 	{
 		e = BlastKarlinStoE_simple(s, kbp, searchsp);
-		if (dodecay)
-			e = BlastGapDecay(e, 1, gap_decay_rate);
+        if (dodecay) {
+            /* Weight the e-value to compensate for the effect of
+             * choosing the best of more than one collection of
+             * distinct alignments */
+            if( gap_decay_rate > 0 && gap_decay_rate < 1 ) {
+                e /= BlastGapDecayDivisor(gap_decay_rate, 1);
+            }
+        }
 		*E = e;
 	}
 
@@ -4046,116 +4171,143 @@ f(Nlm_FloatHi	x, Nlm_VoidPtr	vp)
 }
 
 /*
-	Calculates the p-value for alignments with "small" gaps (typically
-	under fifty residues/basepairs) following ideas of Stephen Altschul's.
-	"gap" gives the size of this gap, "gap_prob" is the probability
-	of this model of gapping being correct (it's thought that gap_prob
-	will generally be 0.5).  "num" is the number of HSP's involved, "sum" 
-	is the "raw" sum-score of these HSP's. "subject_len" is the (effective)
-	length of the database sequence, "query_length" is the (effective) 
-	length of the query sequence.  min_length_one specifies whether one
-	or 1/K will be used as the minimum expected length.
-
+    Calculates the e-value for alignments with "small" gaps (typically
+    under fifty residues/basepairs) following ideas of Stephen Altschul's.
 */
 
 Nlm_FloatHi LIBCALL
-BlastSmallGapSumE(BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum, Nlm_FloatHi score_prime, Int4 query_length, Int4 subject_length, Boolean min_length_one)
-
+BlastSmallGapSumE(
+    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
+    Int4 gap,                   /* maximum size of gaps between alignments */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
 {
+    Nlm_FloatHi search_space;   /* The effective size of the search space */
+    Nlm_FloatHi sum_p;          /* The p-value of this set of alignments */
+    Nlm_FloatHi sum_e;          /* The e-value of this set of alignments */
 
-	Nlm_FloatHi sum_p, sum_e;
-		
-	score_prime -= kbp->logK + log((Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length) + (num-1)*(kbp->logK + 2*log((Nlm_FloatHi)gap));
-	score_prime -= LnFactorial((Nlm_FloatHi) num); 
+    search_space = (Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length;
 
-	sum_p = BlastSumP(num, score_prime);
+    score_prime -= kbp->logK +
+        log(search_space) + (num-1)*(kbp->logK + 2*log((Nlm_FloatHi)gap));
+    score_prime -= LnFactorial((Nlm_FloatHi) num);
 
-	sum_e = BlastKarlinPtoE(sum_p);
+    sum_p = BlastSumP(num, score_prime);
 
-	sum_e = sum_e/((1.0-gap_decay_rate)*Nlm_Powi(gap_decay_rate, (num-1)));
+    sum_e = BlastKarlinPtoE(sum_p);
 
-	if (num > 1)
-	{
-		if (gap_prob == 0.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/gap_prob;
-	}
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
 
-	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX;
+    return sum_e;
+}
+
+
+/*
+    Calculates the e-value of a collection multiple distinct
+    alignments with asymmetric gaps between the alignments. The gaps
+    in one (protein) sequence are typically small (like in
+    BlastSmallGapSumE) gap an the gaps in the other (translated DNA)
+    sequence are possibly large (up to 4000 bp.)  This routine is used
+    for linking HSPs representing exons in the DNA sequence that are
+    separated by introns.
+*/
+
+Nlm_FloatHi LIBCALL
+BlastUnevenGapSumE(
+    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
+    Int4 p_gap,                 /* maximum size of gaps between alignments,
+                                 * in one sequence */
+    Int4 n_gap,                 /* maximum size of gaps between alignments,
+                                 * in the other sequence */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
+{
+    Nlm_FloatHi search_space;   /* The effective size of the search space */
+    Nlm_FloatHi sum_p;          /* The p-value of this set of alignments */
+    Nlm_FloatHi sum_e;          /* The e-value of this set of alignments */
+
+    search_space = (Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length;
+
+    score_prime -=
+        kbp->logK + log(search_space) +
+        (num-1)*(kbp->logK + log((Nlm_FloatHi)p_gap) + log((Nlm_FloatHi)n_gap));
+    score_prime -= LnFactorial((Nlm_FloatHi) num);
+
+    sum_p = BlastSumP(num, score_prime);
+
+    sum_e = BlastKarlinPtoE(sum_p);
+
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
+
+    return sum_e;
 }
 
 /*
-	Calculates the p-value for alignments with asymmetric gaps, typically 
-        a small (like in BlastSmallGapSumE) gap for one (protein) sequence and
-        a possibly large (up to 4000 bp) gap in the other (translated DNA) 
-        sequence. Used for linking HSPs representing exons in the DNA sequence
-        that are separated by introns.
+    Calculates the e-value if a collection of distinct alignments with
+    arbitrarily large gaps between the alignments
 */
 
 Nlm_FloatHi LIBCALL
-BlastUnevenGapSumE(BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum, Nlm_FloatHi score_prime, Int4 query_length, Int4 subject_length, Boolean min_length_one)
-
+BlastLargeGapSumE(
+    BLAST_KarlinBlkPtr kbp,     /* statistical parameters */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    Nlm_FloatHi score_prime,    /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    Nlm_FloatHi weight_divisor) /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
 {
+    Nlm_FloatHi sum_p;          /* The p-value of this set of alignments */
+    Nlm_FloatHi sum_e;          /* The e-value of this set of alignments */
 
-	Nlm_FloatHi sum_p, sum_e;
-		
-	score_prime -= kbp->logK + log((Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length) + (num-1)*(kbp->logK + log((Nlm_FloatHi)p_gap) + log((Nlm_FloatHi)n_gap));
-	score_prime -= LnFactorial((Nlm_FloatHi) num); 
-
-	sum_p = BlastSumP(num, score_prime);
-
-	sum_e = BlastKarlinPtoE(sum_p);
-
-	sum_e = sum_e/((1.0-gap_decay_rate)*Nlm_Powi(gap_decay_rate, (num-1)));
-
-	if (num > 1)
-	{
-		if (gap_prob == 0.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/gap_prob;
-	}
-
-	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX; 
-}
-
-/*
-	Calculates the p-values for alignments with "large" gaps (i.e., 
-	infinite) followings an idea of Stephen Altschul's.
-*/
-
-Nlm_FloatHi LIBCALL
-BlastLargeGapSumE(BLAST_KarlinBlkPtr kbp, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum, Nlm_FloatHi score_prime, Int4 query_length, Int4 subject_length, Boolean old_stats)
-
-{
-
-	Nlm_FloatHi sum_p, sum_e;
 /* The next two variables are for compatability with Warren's code. */
-	Nlm_FloatHi lcl_subject_length, lcl_query_length;
+    Nlm_FloatHi lcl_subject_length;     /* query_length as a float */
+    Nlm_FloatHi lcl_query_length;       /* subject_length as a float */
 
-        lcl_query_length = (Nlm_FloatHi) query_length;
-        lcl_subject_length = (Nlm_FloatHi) subject_length;
+    lcl_query_length = (Nlm_FloatHi) query_length;
+    lcl_subject_length = (Nlm_FloatHi) subject_length;
 
-	score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length)) 
-	    - LnFactorial((Nlm_FloatHi) num); 
+    score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length))
+        - LnFactorial((Nlm_FloatHi) num);
 
-	sum_p = BlastSumP(num, score_prime);
+    sum_p = BlastSumP(num, score_prime);
 
-	sum_e = BlastKarlinPtoE(sum_p);
+    sum_e = BlastKarlinPtoE(sum_p);
 
-	sum_e = sum_e/((1.0-gap_decay_rate)*Nlm_Powi(gap_decay_rate, (num-1)));
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
 
-	if (num > 1)
-	{
-		if (gap_prob == 1.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/(1.0 - gap_prob);
-	}
-
-	return (sum_e <= INT4_MAX) ?  sum_e : INT4_MAX; 
+    return sum_e;
 }
+
 
 /********************************************************************
 *
@@ -4327,4 +4479,130 @@ Int4Ptr PNTR LIBCALL TxMatrixDestruct(Int4Ptr PNTR txmatrix)
 
    MemFree(txmatrix);
    return NULL;
+}
+
+
+/** 
+ * Computes the adjustment to the lengths of the query and database sequences
+ * that is used to compensate for edge effects when computing evalues. 
+ *
+ * The length adjustment is an integer-valued approximation to the fixed
+ * point of the function
+ *
+ *    f(ell) = beta + 
+ *               (alpha/lambda) * (log K + log((m - ell)*(n - N ell)))
+ *
+ * where m is the query length n is the length of the database and N is the
+ * number of sequences in the database. The values beta, alpha, lambda and
+ * K are statistical, Karlin-Altschul parameters.
+ * 
+ * The value of the length adjustment computed by this routine, A, 
+ * will always be an integer smaller than the fixed point of
+ * f(ell). Usually, it will be the largest such integer.  However, the
+ * computed length adjustment, A, will also be so small that 
+ *
+ *    K * (m - A) * (n - N * A) > min(m,n).
+ *
+ * Moreover, an iterative method is used to compute A, and under
+ * unusual circumstances the iterative method may not converge. 
+ *
+ * @param K      the statistical parameter K
+ * @param logK   the natural logarithm of K
+ * @param alpha_d_lambda    the ratio of the statistical parameters 
+ *                          alpha and lambda (for ungapped alignments, the
+ *                          value 1/H should be used)
+ * @param beta              the statistical parameter beta (for ungapped
+ *                          alignments, beta == 0)
+ * @param query_length      the length of the query sequence
+ * @param db_length         the length of the database
+ * @param db_num_seq        the number of sequences in the database
+ * @param length_adjustment the computed value of the length adjustment [out]
+ *
+ * @return   0 if length_adjustment is known to be the largest integer less
+ *           than the fixed point of f(ell); 1 otherwise.
+ */
+Int4
+BlastComputeLengthAdjustment(Nlm_FloatHi K,
+                             Nlm_FloatHi logK,
+                             Nlm_FloatHi alpha_d_lambda,
+                             Nlm_FloatHi beta,
+                             Int4 query_length,
+                             Int8 db_length,
+                             Int4 db_num_seqs,
+                             Int4 * length_adjustment)
+{
+    Int4 i;                     /* iteration index */
+    const Int4 maxits = 20;     /* maximum allowed iterations */
+    Nlm_FloatHi m = query_length, n = db_length, N = db_num_seqs;
+
+    Nlm_FloatHi ell;            /* A float value of the length adjustment */
+    Nlm_FloatHi ss;             /* effective size of the search space */
+    Nlm_FloatHi ell_min = 0, ell_max;   /* At each iteration i,
+                                         * ell_min <= ell <= ell_max. */
+    Boolean converged    = FALSE;       /* True if the iteration converged */
+    Nlm_FloatHi ell_next = 0;   /* Value the variable ell takes at iteration
+                                 * i + 1 */
+    /* Choose ell_max to be the largest nonnegative value that satisfies
+     *
+     *    K * (m - ell) * (n - N * ell) > max(m,n)
+     *
+     * Use quadratic formula: 2 c /( - b + sqrt( b*b - 4 * a * c )) */
+    { /* scope of a, mb, and c, the coefficients in the quadratic formula
+       * (the variable mb is -b) */
+        Nlm_FloatHi a  = N;
+        Nlm_FloatHi mb = m * N + n;
+        Nlm_FloatHi c  = n * m - MAX(m, n) / K;
+
+        if(c < 0) {
+            *length_adjustment = 0;
+            return 1;
+        } else {
+            ell_max = 2 * c / (mb + sqrt(mb * mb - 4 * a * c));
+        }
+    } /* end scope of a, mb and c */
+
+    for(i = 1; i <= maxits; i++) {      /* for all iteration indices */
+        Nlm_FloatHi ell_bar;    /* proposed next value of ell */
+        ell      = ell_next;
+        ss       = (m - ell) * (n - N * ell);
+        ell_bar  = alpha_d_lambda * (logK + log(ss)) + beta;
+        if(ell_bar >= ell) { /* ell is no bigger than the true fixed point */
+            ell_min = ell;
+            if(ell_bar - ell_min <= 1.0) {
+                converged = TRUE;
+                break;
+            }
+            if(ell_min == ell_max) { /* There are no more points to check */
+                break;
+            }
+        } else { /* else ell is greater than the true fixed point */
+            ell_max = ell;
+        }
+        if(ell_min <= ell_bar && ell_bar <= ell_max) { 
+          /* ell_bar is in range. Accept it */
+            ell_next = ell_bar;
+        } else { /* else ell_bar is not in range. Reject it */
+            ell_next = (i == 1) ? ell_max : (ell_min + ell_max) / 2;
+        }
+    } /* end for all iteration indices */
+    if(converged) { /* the iteration converged */
+        /* If ell_fixed is the (unknown) true fixed point, then we
+         * wish to set (*length_adjustment) to floor(ell_fixed).  We
+         * assume that floor(ell_min) = floor(ell_fixed) */
+        *length_adjustment = (Int4) ell_min;
+        /* But verify that ceil(ell_min) != floor(ell_fixed) */
+        ell = ceil(ell_min);
+        if( ell <= ell_max ) {
+          ss = (m - ell) * (n - N * ell);
+          if(alpha_d_lambda * (logK + log(ss)) + beta >= ell) {
+            /* ceil(ell_min) == floor(ell_fixed) */
+            *length_adjustment = (Int4) ell;
+          }
+        }
+    } else { /* else the iteration did not converge. */
+        /* Use the best value seen so far */
+        *length_adjustment = (Int4) ell_min;
+    }
+
+    return converged ? 0 : 1;
 }

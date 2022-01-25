@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.145 $
+* $Revision: 6.147 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,13 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.147  2004/04/16 18:14:50  camacho
+* Made division field in DI_Record larger
+*
+* Revision 6.146  2004/02/24 14:06:01  camacho
+* Added support for approximate sequence length calculation for nucleotide
+* sequences.
+*
 * Revision 6.145  2004/02/04 15:35:05  camacho
 * Rollback to fix problems in release 2.2.7
 *
@@ -1128,6 +1135,28 @@ Boolean LIBCALL
 readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr dblen, 
         Int4Ptr nseq, Boolean use_alias, Boolean use_virtual_oidlist));
 
+/* Enumerated type to determine if the database length (number of
+ * bases/residues) should be approximated or calculated exactly by
+ * readdb_get_totals_ex3 */
+typedef enum {
+    eExact,
+    eApproximate
+} EAccountingMode;
+
+/* This function is identical to readdb_get_totals_ex2 but it uses its last
+ * argument to determine if in the case of nucleotide databases the exact
+ * database length is required. If eExact is used, the exact database size is
+ * calculated, if eApproximate is used, an approximation is returned. This is
+ * done to avoid having to touch every last byte of each sequence to determine
+ * the exact length of the database when it is restricted by a virtual oidlist.
+ * The EAccountingMode argument is irrelevant for protein databases, where this
+ * function always return the exact database length. Same assumption about 
+ * BlastProcessGiLists as in readdb_get_totals_ex2 applies.
+ */
+Boolean LIBCALL
+readdb_get_totals_ex3 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr dblen, 
+        Int4Ptr nseq, Boolean use_alias, Boolean use_virtual_oidlist,
+        EAccountingMode acc_mode));
 
 /* 
 Get the sequence with sequence_number and put it in buffer.  No memory
@@ -1181,6 +1210,14 @@ Gets a BioseqPtr containing the sequence in sequence_number.
 */
 BioseqPtr LIBCALL readdb_get_bioseq PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number));
 BioseqPtr LIBCALL readdb_get_bioseq_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Boolean use_objmgr, Boolean insert_ctrlA));
+
+/* 
+   Gets the exact sequence length for protein sequences, but for nucleotide
+   sequences it gets the length of the sequence +/- at most 3 bases (last byte
+   is not examined, therefore the return value is an approximation).
+ */
+Int4 LIBCALL readdb_get_sequence_length_approx PROTO((ReadDBFILEPtr rdfp,
+                                                       Int4 sequence_number));
 
 /*
 Get the length of the sequence.
@@ -1585,7 +1622,7 @@ typedef	struct di_record {
     Int4    gi;
     Int4    taxid;
     Int4    owner;
-    Char    div[3];
+    Char    div[4];
     Int4    len;
     Int4    hash;
     Int4    date;

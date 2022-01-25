@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp $";
+static char const rcsid[] = "$Id: rpsutil.c,v 6.69 2004/03/18 15:09:22 papadopo Exp $";
 
-/* $Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp $
+/* $Id: rpsutil.c,v 6.69 2004/03/18 15:09:22 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp 
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.68 $
+* $Revision: 6.69 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.69  2004/03/18 15:09:22  papadopo
+* use the score as a tiebreaker during final sort of seqaligns in RPS blast
+*
 * Revision 6.68  2003/10/07 15:24:10  kans
 * added FreeCDDAligns
 *
@@ -264,6 +267,7 @@ static char const rcsid[] = "$Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp 
 typedef struct _RPSSap {
     SeqAlignPtr sap;
     Nlm_FloatHi e_value;
+    Int4 score;
 } RPSap, PNTR RPSapPtr;
 
 typedef struct _RPSapSort {
@@ -712,18 +716,21 @@ static void RPSAddSap(RPSapSortPtr ssp, SeqAlignPtr sap)
     
     rpsp->sap = sap;
         
-    /* Extracting e_value from SeqAlignPtr */
+    /* Extracting score and e_value from SeqAlignPtr */
+    rpsp->e_value = 10.0;
+    rpsp->score = 0;
     thisScorePtr = sap->score;
-    while ((thisScorePtr != NULL) &&
-           (StringICmp(thisScorePtr->id->str, "e_value") != 0) &&
-           (StringICmp(thisScorePtr->id->str, "sum_e") != 0)) {
-        thisScorePtr = thisScorePtr->next;
+    while (thisScorePtr != NULL) {
+       if ((StringICmp(thisScorePtr->id->str, "e_value") == 0) ||
+           (StringICmp(thisScorePtr->id->str, "sum_e") == 0)) {
+          rpsp->e_value = (Nlm_FloatHi) (thisScorePtr->value.realvalue);
+       } else {
+          if (StringICmp(thisScorePtr->id->str, "score") == 0) {
+             rpsp->score = thisScorePtr->value.intvalue;
+          }
+       }
+       thisScorePtr = thisScorePtr->next;
     }
-
-    if(NULL == thisScorePtr)
-        rpsp->e_value = 10.0;
-    else
-        rpsp->e_value = (Nlm_FloatHi) (thisScorePtr->value.realvalue);
 
     ssp->rpsap[ssp->count] = rpsp;
     ssp->count++;
@@ -741,6 +748,12 @@ static int LIBCALLBACK RPSortCallback(VoidPtr i, VoidPtr j)
         return (1);
     
     if (rpsp1->e_value < rpsp2->e_value)
+        return (-1);
+    
+    if (rpsp1->score < rpsp2->score)
+        return (1);
+    
+    if (rpsp1->score > rpsp2->score)
         return (-1);
     
     return (0);    

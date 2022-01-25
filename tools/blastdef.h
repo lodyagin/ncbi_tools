@@ -30,8 +30,14 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.155 $ 
+/* $Revision: 6.157 $ 
 * $Log: blastdef.h,v $
+* Revision 6.157  2004/04/30 12:45:45  coulouri
+* bump version to 2.2.9
+*
+* Revision 6.156  2004/04/13 21:02:52  madden
+* Add ignore_gilist Boolean to Options for use in formatting
+*
 * Revision 6.155  2004/02/04 15:35:03  camacho
 * Rollback to fix problems in release 2.2.7
 *
@@ -874,8 +880,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.2.8"
-#define BLAST_RELEASE_DATE "Jan-05-2004"
+#define BLAST_ENGINE_VERSION "2.2.9"
+#define BLAST_RELEASE_DATE "May-01-2004"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -1150,6 +1156,7 @@ typedef struct _blast_optionsblk {
                                      megablast with affine gap scores */ 
         MBDiscWordType mb_disc_type;
 	Int4 NumQueries;		/*--KM for query concatenation in [t]blastn */
+        Boolean ignore_gilist;    /* Used in traceback stage to not lookup gi's */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 

@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.8 2004/02/02 18:49:33 dondosha Exp $
+/* $Id: phi_lookup.c,v 1.12 2004/04/05 16:09:27 camacho Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions for accessing the lookup table for PHI-BLAST
 
 ******************************************************************************
- * $Revision: 1.8 $
+ * $Revision: 1.12 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -41,7 +41,7 @@ Contents: Functions for accessing the lookup table for PHI-BLAST
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_message.h>
 
-static char const rcsid[] = "$Id: phi_lookup.c,v 1.8 2004/02/02 18:49:33 dondosha Exp $";
+static char const rcsid[] = "$Id: phi_lookup.c,v 1.12 2004/04/05 16:09:27 camacho Exp $";
 
 #define seedepsilon 0.00001
 #define allone  ((1 << ALPHABET_SIZE) - 1)
@@ -162,10 +162,10 @@ static void setting_tt(Int4* S, Int4 mask, Int4 mask2, Uint4* prefixPos,
   maskLeftPlusOne = (mask << 1)+1;
   for (i = 0; i < ASCII_SIZE; i++) {
     /*find out the 4 bases packed in integer i*/
-    a1 = READDB_UNPACK_BASE_N(i, 3);
-    a2 = READDB_UNPACK_BASE_N(i, 2);
-    a3 = READDB_UNPACK_BASE_N(i, 1);
-    a4 = READDB_UNPACK_BASE_N(i, 0);
+    a1 = NCBI2NA_UNPACK_BASE(i, 3);
+    a2 = NCBI2NA_UNPACK_BASE(i, 2);
+    a3 = NCBI2NA_UNPACK_BASE(i, 1);
+    a4 = NCBI2NA_UNPACK_BASE(i, 0);
     /*what positions match a prefix of a4 followed by a3*/
     tmp = ((S[a4]>>1) | mask) & S[a3];
     /*what positions match a prefix of a4 followed by a3 followed by a2*/
@@ -416,7 +416,7 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
     Uint4  tj=0; /*temporary copy of j*/
     Int4 tempInputPatternMasked[MaxP]; /*local copy of parts
             of inputPatternMasked*/
-    Uint1 c;  /*character occuring in pattern*/
+    Uint1 c;  /*character occurring in pattern*/
     Uint1 localPattern[MaxP]; /*local variable to hold
                                for each position whether it is
                                last in pattern (1) or not (0) */
@@ -479,7 +479,8 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
               wildcard spaces required */
             patternSearch->inputPatternMasked[j++] = allone; 
             if (j >= MaxP) {
-               Blast_MessageWrite(error_msg, 1, 2, 1, "pattern too long");
+               Blast_MessageWrite(error_msg, BLAST_SEV_WARNING, 2, 1, 
+                                  "pattern too long");
                return(-1);
             }
 	      }
@@ -526,7 +527,9 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
             add its probability to positionProbability*/
 	  while ((c=pattern[++i]) != ']') { /*end of set*/
         if ((c < 'A') || (c > 'Z') || (c == '\0')) {
-           Blast_MessageWrite(error_msg, 1, 2, 1, "pattern description has a non-alphabetic character inside a bracket");
+           Blast_MessageWrite(error_msg, BLAST_SEV_WARNING, 2, 1, 
+                              "pattern description has a non-alphabetic"
+                              "character inside a bracket");
            
            return(-1);
         }
@@ -571,7 +574,8 @@ init_pattern(Uint1 *pattern, Boolean is_dna, BlastScoreBlk* sbp,
          patternSearch->patternProbability *= positionProbability;
       }
       if (j >= MaxP) {
-         Blast_MessageWrite(error_msg, 1, 2, 1, "pattern too long");
+         Blast_MessageWrite(error_msg, BLAST_SEV_WARNING, 2, 1, 
+                            "pattern too long");
       }
     }
     localPattern[j-1] = 1;
@@ -683,8 +687,8 @@ Int4 PHIBlastIndexQuery(PHILookupTable* lookup,
    hitArray = (Int4 *) calloc(2*query->length, sizeof(Int4));
 
    for(loc=location; loc; loc=loc->next) {
-      from = ((DoubleInt*) loc->ptr)->i1;
-      to = ((DoubleInt*) loc->ptr)->i2;
+      from = ((SSeqRange*) loc->ptr)->left;
+      to = ((SSeqRange*) loc->ptr)->right;
       loc_length = to - from + 1;
       sequence = query->sequence + from;
       

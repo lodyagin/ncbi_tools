@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -91,6 +91,7 @@ static char *this_file = __FILE__;
 #include <objmgr.h>
 #include <sequtil.h>
 #include <objgbseq.h>
+#include <objinsdseq.h>
 #include <objtseq.h>
 
 static Boolean SeqDescrAsnWriteExtra (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig,
@@ -567,6 +568,10 @@ NLM_EXTERN Boolean LIBCALL SeqAsnLoad (void)
 		loaded = FALSE;
 		return FALSE;
 	}
+	if (! objinsdseqAsnLoad()) {
+		loaded = FALSE;
+		return FALSE;
+	}
 	if (! objtseqAsnLoad())
 	{
 		loaded = FALSE;
@@ -790,9 +795,9 @@ erret:
 *
 *   BioseqAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN BioseqPtr LIBCALL BioseqAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1613,9 +1618,9 @@ erret:
 *
 *   SeqDescrAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL SeqDescrAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1670,9 +1675,9 @@ erret:
 *
 *   SeqDescAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqDescPtr LIBCALL SeqDescAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1949,9 +1954,9 @@ erret:
 *
 *   NumberingAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN NumberingPtr LIBCALL NumberingAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2102,9 +2107,9 @@ erret:
 *
 *   NumContAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN NumContPtr LIBCALL NumContAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2234,9 +2239,9 @@ erret:
 *
 *   NumEnumAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN NumEnumPtr LIBCALL NumEnumAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2424,9 +2429,9 @@ erret:
 *
 *   NumRealAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN NumRealPtr LIBCALL NumRealAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2598,9 +2603,9 @@ erret:
 *
 *   PubdescAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PubdescPtr LIBCALL PubdescAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2865,9 +2870,9 @@ erret:
 *
 *   SeqAnnotAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -3078,9 +3083,9 @@ erret:
 *
 *   SeqAnnotSetAsnRead(aip, set, element)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotSetAsnRead (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
@@ -3303,9 +3308,9 @@ erret:
 *
 *   SeqHistAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqHistPtr LIBCALL SeqHistAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -3490,9 +3495,9 @@ erret:
 *
 *   MolInfoAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN MolInfoPtr LIBCALL MolInfoAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -3625,9 +3630,9 @@ erret:
 *
 *   SeqLitAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLitPtr LIBCALL SeqLitAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -3758,9 +3763,9 @@ erret:
 *
 *   DeltaSeqAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN DeltaSeqPtr LIBCALL DeltaSeqAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -3864,9 +3869,9 @@ erret:
 *
 *   DeltaSeqSetAsnRead(aip, atp, set, element)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN DeltaSeqPtr LIBCALL DeltaSeqSetAsnRead (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
@@ -4022,9 +4027,9 @@ erret:
 *
 *   AnnotIdAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN AnnotIdPtr LIBCALL AnnotIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -4398,9 +4403,9 @@ erret:
 *
 *   AnnotDescrAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN ValNodePtr LIBCALL AnnotDescrAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -4463,9 +4468,9 @@ erret:
 *
 *   AnnotDescAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN AnnotDescPtr LIBCALL AnnotDescAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -4641,9 +4646,9 @@ erret:
 *
 *   AlignDefAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN AlignDefPtr LIBCALL AlignDefAsnRead (AsnIoPtr aip, AsnTypePtr orig)

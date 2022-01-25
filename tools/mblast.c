@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: mblast.c,v 6.199 2004/01/27 20:46:06 dondosha Exp $";
+static char const rcsid[] = "$Id: mblast.c,v 6.202 2004/03/31 17:58:51 papadopo Exp $";
 
 /* ===========================================================================
 *
@@ -40,9 +40,19 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.199 $
+ * $Revision: 6.202 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.202  2004/03/31 17:58:51  papadopo
+ * Mike Gertz' changes for length adjustment calculations
+ *
+ * Revision 6.201  2004/02/26 15:52:30  papadopo
+ * Mike Gertz' modifications to unify handling of gapped Karlin blocks between protein and nucleotide searches
+ *
+ * Revision 6.200  2004/02/24 14:07:01  camacho
+ * Use approximate sequence length calculation for entrez-limited
+ * nucleotide blast databases.
+ *
  * Revision 6.199  2004/01/27 20:46:06  dondosha
  * Allow values 0, 1, 2 for no_traceback megablast option
  *
@@ -1022,10 +1032,8 @@ MegaBlastSetUpSearchWithReadDbInternal (SeqLocPtr query_slp, BioseqPtr
         * case, we need to recalculate the database length and number of
         * sequences */
        if (search->thr_info->blast_gi_list && !options->use_real_db_size)
-          BlastAdjustDbNumbers(search->rdfp, &(dblen), 
-                               &(search->dbseq_num), NULL, NULL, 
-                               BlastGetVirtualOIDList(search->rdfp), NULL, 0);
-      
+           readdb_get_totals_ex3(search->rdfp, &dblen, &search->dbseq_num,
+                                 FALSE, TRUE, eApproximate);
 
            /* command-line/options trump alias file. */
            if (options->db_length > 0)
@@ -1478,11 +1486,25 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
       length = search->query_context_offsets[index+1] - 
          search->query_context_offsets[index] - 1;
       if (length > 0) {
+         BLAST_KarlinBlk *kbp_gap;
+         BLAST_KarlinBlk *kbp;
+
          if (retval)
             retval = 2;
+
          status = BlastScoreBlkFill(search->sbp, (CharPtr)
                                     search->context[index].query->sequence,
                                     length, index);
+         search->sbp->kbp_gap_std[index] = BlastKarlinBlkCreate();
+         kbp_gap = search->sbp->kbp_gap_std[index];
+         kbp     = search->sbp->kbp_std[index];
+           
+         kbp_gap->Lambda = kbp->Lambda;
+         kbp_gap->K      = kbp->K;
+         kbp_gap->logK   = kbp->logK;
+         kbp_gap->H      = kbp->H;
+         kbp_gap->paramC = kbp->paramC;
+
          if (status==0)
             retval = 0;
          else
@@ -1519,28 +1541,26 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
 
    min_query_length = (Int4) 1/(search->sbp->kbp[context]->K);
    
-   last_length_adjustment = 0;
-   for (index=0; index<5; index++) {
-      length_adjustment = Nlm_Nint(((search->sbp->kbp[context]->logK)+log((Nlm_FloatHi)(length-last_length_adjustment)*(Nlm_FloatHi)(MAX(1, (search->dblen)-(search->dbseq_num*last_length_adjustment)))))/(search->sbp->kbp[context]->H));
-      if (length_adjustment >= length-min_query_length) {
-         length_adjustment = length-min_query_length;
-         break;
-      }
-      
-      if (ABS(last_length_adjustment-length_adjustment) <= 1)
-         break;
-      last_length_adjustment = length_adjustment;
-   }
-   search->length_adjustment = MAX(length_adjustment, 0);
+   BlastComputeLengthAdjustment(search->sbp->kbp[context]->K,
+                                search->sbp->kbp[context]->logK,
+                                1/search->sbp->kbp[context]->H,
+                                0.0, 
+                                length,
+                                search->dblen, search->dbseq_num,
+                                &length_adjustment );
+
+   search->length_adjustment = length_adjustment;
  
-   search->dblen_eff = MAX(1, search->dblen -
-                           search->dbseq_num*search->length_adjustment);
-   for (context=search->first_context;
-        context<=search->last_context; context++) {
-      length = search->query_context_offsets[context+1] - 
-         search->query_context_offsets[context] - 1;
-      effective_query_length = MAX(length - length_adjustment, min_query_length);
-      search->context[context].query->effective_length = effective_query_length;
+   search->dblen_eff =
+     search->dblen - search->dbseq_num*search->length_adjustment;
+   for( context=search->first_context;
+        context<=search->last_context;
+        context++ ) {
+       length = search->query_context_offsets[context+1] -
+           search->query_context_offsets[context] - 1;
+       effective_query_length = length - length_adjustment;
+       search->context[context].query->effective_length =
+           effective_query_length;
    }
    /*if (search->searchsp_eff == 0)
       search->searchsp_eff = ((Nlm_FloatHi) search->dblen_eff) *

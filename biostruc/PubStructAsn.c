@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.35 2001/05/29 17:15:12 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.36 2004/04/01 13:43:05 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.36  2004/04/01 13:43:05  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
  * Revision 6.35  2001/05/29 17:15:12  kimelman
  * bugfix
  *
@@ -454,7 +457,7 @@ pubstruct_parseasn(char *postupdate_cmd, Int4 acc, char* buf, int buflen)
                           mmdb_id,dv.intvalue);
               }
             else
-              ErrPostEx(SEV_ERROR, 0, 0,"PubStruct : second occurance of mmdb_id ");
+              ErrPostEx(SEV_ERROR, 0, 0,"PubStruct : second occurrence of mmdb_id ");
           if(postupdate_cmd==NULL)
             goto exit;
         }

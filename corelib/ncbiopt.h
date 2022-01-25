@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.12 2003/05/05 11:55:22 rsmith Exp $
+/*  $Id: ncbiopt.h,v 6.14 2004/03/25 17:10:57 lebedev Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,12 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.14  2004/03/25 17:10:57  lebedev
+* Include stdint.h for Darwin, so undef will work for UINT8_MAX
+*
+* Revision 6.13  2004/03/11 18:53:48  rsmith
+* turn on long long support on UNIX_DARWIN (Mac)
+*
 * Revision 6.12  2003/05/05 11:55:22  rsmith
 * Codewarrior compiling for Win32 already has definitions for INT8 min and max.
 *
@@ -114,7 +120,7 @@
 Avoid errors when stdint.h tries to 'redefine' standard macros that we've corrupted,
 by including it first.
 */
-#if defined(__MWERKS__)
+#if defined(__MWERKS__) || defined(OS_UNIX_DARWIN)
 #include <stdint.h>
 #endif
 
@@ -142,7 +148,8 @@ by including it first.
 
 #  elif defined(OS_UNIX)
      /* (signed) */
-#    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || defined(OS_UNIX_IRIX) || defined(PROC_HPPA) || defined(OS_UNIX_AIX)
+#    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || \
+    defined(OS_UNIX_IRIX) || defined(PROC_HPPA) || defined(OS_UNIX_AIX) || defined(OS_UNIX_DARWIN)
 #      define Int8 long long
 #    elif defined(PROC_ALPHA)
 #      define Int8 long
@@ -183,7 +190,7 @@ by including it first.
 #	if defined(UINT8_MAX)
 #		undef UINT8_MAX
 #	endif
-
+ 
 #  if  defined(Int8)  ||  defined(Uint8)
 
 #    if !defined(Int8)  ||  !defined(Uint8)

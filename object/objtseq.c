@@ -527,7 +527,7 @@ NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp)
 	seq = MemNew(bsp->length + 1);
 	if (seq != NULL) {
 		tsp->sequence = seq;
-		SeqPortStream (bsp, TRUE, (Pointer) &seq, SaveTseqSequence);
+		SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &seq, SaveTseqSequence);
 	}
 
 	return tsp;
@@ -548,7 +548,7 @@ static void LIBCALLBACK TSeqStreamProc (CharPtr sequence, Pointer userdata)
 static Boolean LIBCALL StreamTSeq (Pointer object, AsnIoPtr aip)
 
 {
-  SeqPortStream ((BioseqPtr) object, TRUE, (Pointer) aip, TSeqStreamProc);
+  SeqPortStream ((BioseqPtr) object, STREAM_EXPAND_GAPS, (Pointer) aip, TSeqStreamProc);
   return TRUE;
 }
 
@@ -639,7 +639,7 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 	seq = MemNew(bsp->length + 1);
 	if (seq != NULL) {
 		tsp->sequence = seq;
-		SeqPortStream (bsp, TRUE, (Pointer) &seq, SaveTseqSequence);
+		SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &seq, SaveTseqSequence);
 	}
 	*/
 

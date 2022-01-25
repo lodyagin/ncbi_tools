@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.19  2004/04/01 13:43:09  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.18  2004/01/20 23:35:38  sinyakov
 * [WIN_MSWIN] implemented menu accelerators
 *
@@ -115,7 +118,7 @@
 *
  * Revision 5.24  1997/04/25  16:13:27  vakatov
  * [WIN_MOTIF,WIN_MSWIN] Catch and render(DoSendFocus) navigation key events
- * occured in PopupList
+ * occurred in PopupList
  *
  * Revision 5.23  1997/04/18  22:17:49  vakatov
  * New way of specifying mnemonics/accelerators in the item(or menu) title:

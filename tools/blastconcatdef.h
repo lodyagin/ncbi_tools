@@ -31,8 +31,12 @@ Contents: type definitions and function prototypes for query
           multiplexing code.
 
 ******************************************************************************/
-/* $Revision: 1.2 $ 
+/* $Revision: 1.3 $ 
 *  $Log: blastconcatdef.h,v $
+*  Revision 1.3  2004/04/20 14:55:47  morgulis
+*  1. Fixed query offsets in results when -B option is used.
+*  2. Fixes for lower case masking handling with -B option.
+*
 *  Revision 1.2  2003/12/29 15:42:46  coulouri
 *  tblastn query concatenation fixes from morgulis
 *
@@ -80,6 +84,7 @@ typedef struct queries {
     Uint1 NumQueries;
     Int8 TotalLength;    /* AM: Total length of the concatenated query. */
     BspArray FakeBsps;   /* contain SeqIdPtr's */
+    SeqLocPtr PNTR LCaseMasks; /* contain lower case masks in queries. */
     IntArray QueryStarts;   /* starts/ends: element for each query */
     IntArray QueryEnds;
     IntArray WhichQuery;    /* "Which" arrays: for each letter in concat seq */
@@ -139,7 +144,8 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options, Se
                                                  QueriesPtr mult_queries, MQ_DivideResultsInfoPtr subjects ));
 BioseqPtr LIBCALL BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint1 num_bsps, Boolean is_na, 
                                                 Uint4 num_spacers)); /* AM: Added num_spacers parameter */
-QueriesPtr LIBCALL BlastMakeMultQueries PROTO((BspArray fbsp_arr, Uint1 num_queries, Boolean is_na, Uint1 num_spacers));
+QueriesPtr LIBCALL BlastMakeMultQueries PROTO((BspArray fbsp_arr, Uint1 num_queries, Boolean is_na, Uint1 num_spacers,
+                                               SeqLocPtr PNTR lcase_mask_arr ));
 QueriesPtr LIBCALL BlastDuplicateMultQueries PROTO(( QueriesPtr source ));
 Uint4 GetQueryNum( QueriesPtr mult_queries, Int4 offset, Int4 end, Int2 frame );
 Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options,
@@ -153,6 +159,7 @@ Int4 LIBCALL ResultIndex PROTO(( Nlm_FloatHi target_e, Int4 target_score, Int4 s
                                  BLASTResultHitlistPtr PNTR results,
 				 Int4 num_elements ));
 void LIBCALL MQ_UpdateResultLists PROTO(( QueriesPtr mult_queries ));
+SeqLocPtr LIBCALL ConcatSeqLoc PROTO(( QueriesPtr mult_queries, SeqLocPtr loc, SeqIdPtr id, Uint4 qnum ));
 
 #endif
 

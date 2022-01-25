@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Seqres
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objres.c,v $
+* Revision 6.5  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.4  1998/12/09 20:37:52  kans
 * changed compl to compr to avoid new c++ symbol collision
 *
@@ -328,9 +331,9 @@ erret:
 *
 *   SeqGraphAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqGraphPtr LIBCALL SeqGraphAsnRead (AsnIoPtr aip, AsnTypePtr orig)

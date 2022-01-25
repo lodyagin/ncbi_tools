@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.56 $
+* $Revision: 6.61 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -740,8 +740,16 @@ static Int2 HandleMultipleRecords (
         Message (MSG_POSTERR, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
         return 1;
       } else {
-        Message (MSG_POSTERR, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
-        return 1;
+        ret = system ("zcat -h >/dev/null 2>&1");
+        if (ret == 0) {
+          sprintf (cmmd, "zcat %s", inputFile);
+        } else if (ret == -1) {
+          Message (MSG_POSTERR, "Unable to fork or exec zcat in ScanBioseqSetRelease");
+          return 1;
+        } else {
+          Message (MSG_POSTERR, "Unable to find zcat or gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
+          return 1;
+        }
       }
     }
     fp = popen (cmmd, /* binary? "rb" : */ "r");
@@ -1031,6 +1039,7 @@ Int2 Main (
   Boolean     compressed = FALSE;
   CstType     custom;
   Boolean     do_gbseq = FALSE;
+  Boolean     do_insdseq = FALSE;
   Boolean     do_tiny_seq = FALSE;
   Boolean     do_fasta_stream = FALSE;
   XtraPtr     extra = NULL;
@@ -1049,7 +1058,7 @@ Int2 Main (
   CharPtr     progname;
   Boolean     propOK = FALSE;
   Int2        rsult = 0;
-  time_t      starttime, stoptime;
+  time_t      runtime, starttime, stoptime;
   CharPtr     str;
   Uint1       strand = Seq_strand_plus;
   StlType     style = NORMAL_STYLE;
@@ -1062,6 +1071,7 @@ Int2 Main (
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
+  ErrSetLogfile ("stderr", ELOG_APPEND);
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
 
@@ -1091,7 +1101,7 @@ Int2 Main (
   if (progname != NULL) {
     progname++;
   } else {
-    progname = "asn2gnbk";
+    progname = "asn2gb";
   }
 
   /* process command line arguments */
@@ -1129,8 +1139,17 @@ Int2 Main (
     format = GENPEPT_FMT;
   } else if (StringICmp (str, "t") == 0) {
     format = FTABLE_FMT;
+  
+  } else if (StringICmp (str, "q") == 0) {
+    do_gbseq = TRUE;
+    format = GENBANK_FMT;
+  } else if (StringICmp (str, "r") == 0) {
+    do_gbseq = TRUE;
+    format = GENPEPT_FMT;
+
   } else if (StringICmp (str, "x") == 0) {
     do_gbseq = TRUE;
+    do_insdseq = TRUE;
     format = GENBANK_FMT;
   } else if (StringCmp (str, "y") == 0) {
     do_tiny_seq = TRUE;
@@ -1140,6 +1159,7 @@ Int2 Main (
     format = GENBANK_FMT;
   } else if (StringICmp (str, "z") == 0) {
     do_gbseq = TRUE;
+    do_insdseq = TRUE;
     format = GENPEPT_FMT;
   } else {
     format = GENBANK_FMT;
@@ -1245,6 +1265,10 @@ Int2 Main (
       Message (MSG_POSTERR, "objgbseqAsnLoad failed");
       return 1;
     }
+    if (! objinsdseqAsnLoad ()) {
+      Message (MSG_POSTERR, "objinsdseqAsnLoad failed");
+      return 1;
+    }
     MemSet ((Pointer) &xtra, 0, sizeof (XtraBlock));
     MemSet ((Pointer) &gbsq, 0, sizeof (GBSeq));
     xtra.gbseq = &gbsq;
@@ -1258,8 +1282,14 @@ Int2 Main (
       return 1;
     }
     xtra.aip = aip;
-    atp = AsnLinkType (NULL, AsnFind ("GBSet"));
-    xtra.atp = AsnLinkType (NULL, AsnFind ("GBSet.E"));
+    if (do_insdseq) {
+      atp = AsnLinkType (NULL, AsnFind ("INSDSet"));
+      xtra.atp = AsnLinkType (NULL, AsnFind ("INSDSet.E"));
+    } else {
+      atp = AsnLinkType (NULL, AsnFind ("GBSet"));
+      xtra.atp = AsnLinkType (NULL, AsnFind ("GBSet.E"));
+      flags |= PRODUCE_OLD_GBSEQ;
+    }
     if (atp == NULL || xtra.atp == NULL) {
       Message (MSG_POSTERR, "AsnLinkType or AsnFind failed");
       return 1;
@@ -1297,6 +1327,8 @@ Int2 Main (
              (long) (stoptime - starttime));
     FileClose (logfp);
   }
+  runtime = stoptime - starttime;
+  Message (MSG_POST, "Ran in %ld seconds", (long) runtime);
 
   if (myargs [r_argRemote].intvalue) {
     LocalSeqFetchDisable ();

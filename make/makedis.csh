@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.95 2004/02/03 20:37:31 ucko Exp $
+# $Id: makedis.csh,v 1.99 2004/05/03 18:12:03 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -92,6 +92,10 @@ case SunOS:
 				if ("$CC" == "gcc") then
 					set platform=solaris-gcc
 				endif
+			else if ("$?SOLARIS_MODE" == 1) then
+				if ("$SOLARIS_MODE" == "64") then
+					set platform=solaris64
+				endif
 			endif
 		endif
 		breaksw
@@ -141,6 +145,8 @@ case OSF1:
 case Linux:
     echo "libs version is:"
 	ls -l /lib/libc.so*
+	echo "the gcc version is:"
+	gcc -v
 	switch (`uname -m`)
 	case "ia64":
 		if (-e `which ecc`) then
@@ -278,6 +284,11 @@ cd ncbi/build
 ln -s ../make/*.unx .
 ln -s ../make/ln-if-absent .
 mv makeall.unx makefile
+
+if ( -r ../demo/.BLAST_VERSION ) then
+	echo BLAST version is `cat ../demo/.BLAST_VERSION`
+endif
+
 
 #  Inherited to this system is the requirement to use:
 #    TO USE VIBRANT

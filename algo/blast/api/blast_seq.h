@@ -1,4 +1,4 @@
-/* $Id: blast_seq.h,v 1.9 2003/12/03 17:30:25 dondosha Exp $
+/* $Id: blast_seq.h,v 1.10 2004/03/12 15:18:53 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,7 +35,7 @@ Contents: Functions converting from SeqLocs to structures used in BLAST and
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.9 $
+ * $Revision: 1.10 $
  * */
 #ifndef __BLAST_SEQ__
 #define __BLAST_SEQ__
@@ -102,6 +102,14 @@ Int2 BLAST_SetUpQuery(Uint1 program_number, SeqLocPtr query_slp,
  */
 Int2 BLAST_SetUpSubject(Uint1 program_number, 
         SeqLocPtr subject_slp, BLAST_SequenceBlk** subject);
+
+/** Find a genetic code string in ncbistdaa encoding, given an integer
+ *  genetic code value.
+ * @param gc genetic code value [in]
+ * @param genetic_code genetic code string [out]
+ */
+
+Int2 BLAST_GeneticCodeFind(Int4 gc, Uint1** genetic_code);
 
 #ifdef __cplusplus
 }

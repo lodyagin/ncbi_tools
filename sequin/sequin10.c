@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.199 $
+* $Revision: 1.213 $
 *
 * File Description: 
 *
@@ -2052,9 +2052,9 @@ static CharPtr GetOrganismDescription (
           if (modifier_text[0] != 0)
             StringCat (modifier_text, " ");
           label_len = StringLen (modifier_text);
-          if (no_semicolon_len > sizeof (modifier_text) - label_len - 1)
+          if (no_semicolon_len > (Int4) sizeof (modifier_text) - label_len - 1)
           {
-            no_semicolon_len = sizeof (modifier_text) - label_len - 1;
+            no_semicolon_len = (Int4) sizeof (modifier_text) - label_len - 1;
           } 
           StringNCat (modifier_text, mod->subname,
                       no_semicolon_len);
@@ -2091,7 +2091,7 @@ static CharPtr GetOrganismDescription (
           cp = StringChr (modifier_text, ':');
           if (cp != NULL) *cp = 0;
         }
-        else if (ssp->name != NULL
+        else if (ssp->name != NULL && ssp->name[0] != 0
           && (ssp->subtype != SUBSRC_plasmid_name
             || StringCmp (ssp->name, "unnamed") != 0))
         {
@@ -2607,6 +2607,7 @@ static CharPtr GetEndogenousVirusSequenceDescription (
 
   if (sfp == NULL) return NULL;
   
+  gbqual = sfp->qual;
   while (gbqual != NULL && StringCmp (gbqual->qual, "endogenous_virus") != 0)
   {
     gbqual = gbqual->next;
@@ -4190,9 +4191,13 @@ static CharPtr GetProductName (
     {
       if ( IstRNA (cds) )
       {
-        protein_name = MemNew ( StringLen (context.label) + 6);
-        if ( protein_name == NULL) return NULL;
-        sprintf (protein_name, "tRNA-%s", context.label);
+        if (StringCmp (context.label, "Xxx") == 0) {
+          protein_name = StringSave ("tRNA-OTHER");
+        } else {
+          protein_name = MemNew ( StringLen (context.label) + 6);
+          if ( protein_name == NULL) return NULL;
+          sprintf (protein_name, "tRNA-%s", context.label);
+        }
         return protein_name;
       }
       else if ((IsCDS(cds) && StringCmp (context.label, "CDS") != 0)
@@ -5444,7 +5449,7 @@ static void RenameMiscFeats (ValNodePtr clause_list, Uint1 biomol)
       }
      
       fcp->interval = MemFree (fcp->interval);
-      fcp->interval = "";
+      fcp->interval = StringSave ("");
     }
   }
 }
@@ -5801,6 +5806,7 @@ static CharPtr organelleByPopup [] = {
   "proplastid",
   NULL
 };
+#define DEFAULT_ORGANELLE_CLAUSE 10
 
 /*---------------------------------------------------------------------*/
 /*                                                                     */
@@ -5813,11 +5819,12 @@ static void AutoDef_AddEnding (
   ValNodePtr   clause_list,
   ValNodePtr PNTR strings,
   BioseqPtr    bsp,
-  Int2         mitochloroflag
+  Int2         mitochloroflag,
+  Boolean      alternate_splice_flag
 )
 {
   Char orgnelle [80];
-  Char str [100];
+  Char str [200];
   BioSourcePtr  biop;
   ValNodePtr last_string;
   Int4 new_data_len;
@@ -5879,11 +5886,9 @@ static void AutoDef_AddEnding (
         StringCat (str, "; micronuclear");
       }
       else if (mitochloroflag > 0) {
-        if (mitochloroflag > 10) {
+        if (mitochloroflag > 9) {
           /* beyond list */
         }
-        else if (mitochloroflag == 10)
-          StringCat (str, "; alternatively spliced");
         else {
           if (num_genes > 1)
           {
@@ -5901,6 +5906,10 @@ static void AutoDef_AddEnding (
       break;
     }
   }
+  if (alternate_splice_flag) {
+    StringCat (str, "; alternatively spliced");
+  }
+
   StringCat (str, ".");
 
   last_string = *strings;
@@ -6034,8 +6043,12 @@ static void ListClauses (
       {
         onebefore_has_typeword_change = TRUE;
       }
-      if (onebefore_has_typeword_change || onebefore_has_interval_change)
-        onebefore_has_detail_change = TRUE;
+      if (onebefore_has_typeword_change || onebefore_has_interval_change
+          || (DisplayAlleleName (onebefore) && StringLen (onebefore->allelename) != 0)
+          || (DisplayAlleleName (thisclause) && StringLen (thisclause->allelename) != 0))
+     {
+        onebefore_has_detail_change = TRUE;  
+      }
     }
     voneafter = clauselist->next;
     while (voneafter != NULL && voneafter->choice != DEFLINE_CLAUSEPLUS)
@@ -6065,7 +6078,9 @@ static void ListClauses (
       {
         oneafter_has_typeword_change = TRUE;
       }
-      if (oneafter_has_typeword_change  || oneafter_has_interval_change)
+      if (oneafter_has_typeword_change  || oneafter_has_interval_change
+          || (DisplayAlleleName (thisclause) && StringLen (thisclause->allelename) != 0)
+          || (DisplayAlleleName (oneafter) && StringLen (oneafter->allelename) != 0))
       {
         oneafter_has_detail_change = TRUE;
       }
@@ -6226,7 +6241,20 @@ static void ListClauses (
       /*         ^ */
       print_comma = TRUE;
     }
-    
+    else if (oneafter != NULL && twoafter != NULL 
+      && ! oneafter_has_interval_change && StringCmp (thisclause->interval, twoafter->interval) == 0
+      && ((DisplayAlleleName (oneafter) && StringLen (oneafter->allelename) > 0)
+        || (DisplayAlleleName (thisclause) && StringLen (thisclause->allelename) > 0)))
+    {
+      print_comma = TRUE;  	
+    }
+    else if (oneafter != NULL && onebefore != NULL
+      && ! oneafter_has_interval_change && ! onebefore_has_interval_change
+      && ((DisplayAlleleName (oneafter) && StringLen (oneafter->allelename) > 0)
+        || (DisplayAlleleName (thisclause) && StringLen (thisclause->allelename) > 0)))
+    {
+      print_comma = TRUE;  	
+    }
 
     if (thisclause->featlist != NULL
       && thisclause->featlist->data.ptrvalue != NULL
@@ -6303,8 +6331,10 @@ static void ListClauses (
     if (DisplayAlleleName (thisclause))
     {
       clause_len += StringLen (thisclause->allelename) + 10;
-      if (StringLen (thisclause->allelename) > 0)
+      if (StringLen (thisclause->allelename) > 0) 
+      {
         clause_len += StringLen (thisclause->allelename) + StringLen ("allele ");
+      }
     }
     
     clause_string = (CharPtr) MemNew (clause_len);
@@ -6348,9 +6378,17 @@ static void ListClauses (
         StringCat (clause_string, " allele");
       }
     }
-    if (print_comma)
-      StringCat (clause_string, ",");
-    ValNodeAddStr (strings, 0, clause_string);
+    if (StringLen (clause_string) > 0 ) 
+    {
+      if (print_comma)
+        StringCat (clause_string, ",");
+      ValNodeAddStr (strings, 0, clause_string);
+    }
+    else 
+    {
+    	MemFree (clause_string);
+    	clause_string = NULL;
+    }
  
     if (oneafter == NULL || oneafter_has_interval_change)
     {
@@ -7740,6 +7778,7 @@ typedef struct segmentdeflinefeatureclausedata {
   Uint1      molecule_type;
   DeflineFeatureRequestList PNTR feature_requests;
   Int2 product_flag;
+  Boolean         alternate_splice_flag;
   ValNodePtr PNTR list;
 } SegmentDefLineFeatureClauseData, PNTR SegmentDefLineFeatureClausePtr;
 
@@ -7765,6 +7804,71 @@ static void DefLineFeatClauseListFree (ValNodePtr vnp)
   ValNodeFree (vnp);
 }
 
+
+static Boolean IntervalIntersectsIvals 
+(Int2    numivals,
+ Int4Ptr ivals,
+ SeqMgrSegmentContextPtr context)
+{
+  Int2 idx;
+  Int4 start, stop;
+
+  if (numivals == 0 || ivals == NULL || context == NULL) return FALSE;
+
+  for (idx = 0; idx < numivals; idx ++) {
+    start = ivals [idx * 2];
+    stop = ivals [idx * 2 + 1];
+    if ( start <= context->cumOffset + context->to - context->from
+         && stop >= context->cumOffset)
+    {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+
+/* if there are no features at all on this segment, select the genes that 
+ * traverse the segment.
+ */
+static ValNodePtr GrabTraversingGenes 
+(ValNodePtr              parent_feature_list,
+ SeqMgrSegmentContextPtr context,
+ BioseqPtr               parent_bsp)
+{
+  FeatureClausePtr  fcp, new_fcp;
+  ValNodePtr        clause;
+  SeqFeatPtr        sfp;
+  ValNodePtr        segment_feature_list;
+  ValNodePtr        vnp;
+
+  segment_feature_list = NULL;
+  for (clause = parent_feature_list;
+       clause != NULL;
+       clause = clause->next)
+  {
+    fcp = clause->data.ptrvalue;
+
+    if (fcp != NULL  &&  fcp->featlist != NULL
+        &&  (sfp = fcp->featlist->data.ptrvalue) != NULL
+        &&  sfp->idx.subtype == FEATDEF_GENE
+        &&  fcp->ivals != NULL && fcp->numivals > 0)
+    {
+      if (IntervalIntersectsIvals (fcp->numivals, fcp->ivals, context)) {
+        new_fcp = NewFeatureClause (fcp->featlist->data.ptrvalue, parent_bsp);
+        if (new_fcp == NULL) return FALSE;
+        vnp = ValNodeNew (segment_feature_list);
+        if (vnp == NULL) return FALSE;
+        vnp->data.ptrvalue = new_fcp;
+        vnp->choice = DEFLINE_CLAUSEPLUS;
+        if (segment_feature_list == NULL) segment_feature_list = vnp;
+      }
+    } 
+  }
+  return segment_feature_list;
+}
+
+
 static CharPtr BuildFeatureClauses (
   BioseqPtr bsp,
   Uint1      molecule_type,
@@ -7773,6 +7877,7 @@ static CharPtr BuildFeatureClauses (
   Boolean     isSegment,
   ValNodePtr  PNTR seg_feature_list,
   Int2 product_flag,
+  Boolean     alternate_splice_flag,
   DeflineFeatureRequestList PNTR feature_requests
 );
 
@@ -7836,7 +7941,11 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
         if (segment_feature_list == NULL) segment_feature_list = vnp;
       }
     } 
+  }
 
+  if (segment_feature_list == NULL) {
+    segment_feature_list = GrabTraversingGenes (sdlp->parent_feature_list,
+                                                context, sdlp->parent_bsp);
   }
 
   entityID = ObjMgrGetEntityIDForPointer (bsp);
@@ -7855,6 +7964,7 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
                             TRUE,
                             &segment_feature_list,
                             sdlp->product_flag,
+							sdlp->alternate_splice_flag,
                             sdlp->feature_requests);
   vnp = ValNodeNew (*(sdlp->list));
   if (vnp == NULL) return TRUE;
@@ -7874,6 +7984,7 @@ static CharPtr BuildFeatureClauses (
   Boolean     isSegment,
   ValNodePtr  PNTR seg_feature_list,
   Int2 product_flag,
+  Boolean     alternate_splice_flag,
   DeflineFeatureRequestList PNTR feature_requests
 )
 {
@@ -7956,7 +8067,7 @@ static CharPtr BuildFeatureClauses (
     ListClauses (clause, &strings, TRUE, FALSE);
 
     AutoDef_AddEnding (clause, &strings, bsp, 
-                       product_flag);
+                       product_flag, alternate_splice_flag);
 
     str = MergeValNodeStrings (strings, FALSE);
 	ValNodeFreeData (strings);
@@ -7976,11 +8087,37 @@ static CharPtr BuildFeatureClauses (
   return str;
 }
 
+/* This function looks at the product names for the CDSs on the Bioseq,
+ * and sets the flag for the "nuclear genes for X products" ending
+ * based on the contents of the CDS products. */
+static Int2 GetProductFlagFromCDSProductNames (BioseqPtr bsp)
+{
+  SeqMgrFeatContext context;
+  SeqFeatPtr        cds = NULL;
+  Int2              product_flag;
+  Int2              i;
+
+  product_flag = 0;
+  for (cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &context); cds != NULL && product_flag == 0; cds = cds->next)
+  {
+	for (i = 1; organelleByPopup[i] != NULL && product_flag == 0; i++)
+	{
+      if (StringStr (context.label, organelleByPopup[i]))
+	  {
+	    product_flag = i;
+	  }
+	}
+  }
+
+  return product_flag;
+}
+
 static void BuildDefLineFeatClauseList (
   SeqEntryPtr sep,
   Uint2 entityID,
   DeflineFeatureRequestList PNTR feature_requests,
   Int2 product_flag,
+  Boolean alternate_splice_flag,
   ValNodePtr PNTR list
 )
 {
@@ -8004,7 +8141,7 @@ static void BuildDefLineFeatClauseList (
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
       {
         BuildDefLineFeatClauseList (sep, entityID, feature_requests,
-                                    product_flag, list);
+                                    product_flag, alternate_splice_flag, list);
       }
       return;
     }
@@ -8018,18 +8155,26 @@ static void BuildDefLineFeatClauseList (
     if (bsp != NULL && bsp->repr == Seq_repr_seg &&
       bsp->seq_ext != NULL && bsp->seq_ext_type == 1) 
     {
+      /* get default product flag if necessary */
+	  if (product_flag == -1 || product_flag == DEFAULT_ORGANELLE_CLAUSE) {
+	    product_flag = GetProductFlagFromCDSProductNames (bsp);
+	  }
+
       sdld.parent_bsp = bsp;
       sdld.molecule_type = GetMoleculeType (bsp, entityID);
       sdld.parent_feature_list = GetFeatureList (bsp);
 
       sdld.feature_requests =  feature_requests;
       sdld.product_flag = product_flag;
+	  sdld.alternate_splice_flag = alternate_splice_flag;
       sdld.list = list;
       SeqMgrExploreSegments (bsp, (Pointer) &sdld, GetFeatureClauseForSeg);
       deflist = (DefLineFeatClausePtr) MemNew (sizeof (DefLineFeatClauseData));
       if (deflist == NULL) return;
       deflist->sep = SeqMgrGetSeqEntryForData (bsp),
       deflist->bsp = bsp;
+
+
       deflist->clauselist = BuildFeatureClauses (bsp,
                             sdld.molecule_type,
                             SeqMgrGetSeqEntryForData (bsp),
@@ -8037,6 +8182,7 @@ static void BuildDefLineFeatClauseList (
                             FALSE,
                             NULL,
                             product_flag,
+							alternate_splice_flag,
                             feature_requests);
       vnp = ValNodeNew (*list);
       if (vnp == NULL) return;
@@ -8057,6 +8203,11 @@ static void BuildDefLineFeatClauseList (
   molecule_type = GetMoleculeType (bsp, entityID);
   head = GetFeatureList (bsp);
 
+  /* get default product flag if necessary */
+  if (product_flag == -1 || product_flag == DEFAULT_ORGANELLE_CLAUSE) {
+    product_flag = GetProductFlagFromCDSProductNames (bsp);
+  }
+
   deflist = (DefLineFeatClausePtr) MemNew (sizeof (DefLineFeatClauseData));
   if (deflist == NULL) return;
   deflist->sep = SeqMgrGetSeqEntryForData (bsp),
@@ -8068,6 +8219,7 @@ static void BuildDefLineFeatClauseList (
                                              FALSE,
                                              NULL,
                                              product_flag,
+											 alternate_splice_flag,
                                              feature_requests);
   vnp = ValNodeNew (*list);
   if (vnp == NULL) return;
@@ -8127,6 +8279,7 @@ typedef struct deflineformdata {
   PopuP     featurePopup;
   GrouP     featureOptsGrp;
   PopuP     misc_feat_parse_rule;
+  ButtoN    alternate_splice_flag;
 } DefLineFormData, PNTR DefLineFormPtr;
 
 static void DefLineFormMessageProc (ForM f, Int2 mssg)
@@ -8205,6 +8358,7 @@ static void DoAutoDefLine (ButtoN b)
   Int2 product_flag, feature_list_type;
   Int4 i;
   ValNodePtr defline_clauses = NULL;
+  Boolean alternate_splice_flag;
 
   dlfp = GetObjectExtra (b);
   if (b == NULL) return;
@@ -8295,6 +8449,7 @@ static void DoAutoDefLine (ButtoN b)
   }
 
   product_flag = GetValue (dlfp->organelle_popup) - 1;
+  alternate_splice_flag = GetStatus (dlfp->alternate_splice_flag);
  
   if (dlfp->target_bsp != NULL && GetStatus (dlfp->modify_only_target))
   {
@@ -8310,7 +8465,7 @@ static void DoAutoDefLine (ButtoN b)
 
   BuildDefLineFeatClauseList (sep, dlfp->input_entityID,
                               &dlfp->feature_requests,
-                              product_flag,
+                              product_flag, alternate_splice_flag,
                               &defline_clauses);
 
   BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, dlfp->modList,
@@ -8573,8 +8728,8 @@ static PopuP CreateDefLineFormOrganellePopup (
   PopupItem (o, "Nuclear gene(s) for apicoplast product(s)");
   PopupItem (o, "Nuclear gene(s) for leucoplast product(s)");
   PopupItem (o, "Nuclear gene(s) for proplastid product(s)");
-  PopupItem (o, "Alternatively Spliced");
-  SetValue (o, 1);
+  PopupItem (o, "Nuclear genes based on CDS product names");
+  SetValue (o, DEFAULT_ORGANELLE_CLAUSE + 1);
   return o;
 }
 
@@ -8631,8 +8786,10 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
 
   dlfp->featureOptsGrp = HiddenGroup (p, -1, 0, NULL);
   dlfp->organelle_popup = CreateDefLineFormOrganellePopup (dlfp->featureOptsGrp);
+  dlfp->alternate_splice_flag = CheckBox (dlfp->featureOptsGrp,
+	                "Append 'alternatively spliced' to end of defline", NULL);
   dlfp->suppress_alt_splice_phrase = CheckBox (dlfp->featureOptsGrp, 
-                    "Suppress alternative splice phrase", NULL);
+                    "Suppress alternative splice phrase for features", NULL);
   SetStatus (dlfp->suppress_alt_splice_phrase, FALSE);
 
   dlfp->remove_subfeatures = CheckBox (dlfp->featureOptsGrp, 
@@ -8664,6 +8821,7 @@ static GrouP CreateDefLineFormFeatureOptionsGroup (
   AlignObjects (ALIGN_CENTER, (HANDLE) q,
                  (HANDLE) dlfp->featureOptsGrp, NULL); 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlfp->organelle_popup,
+                 (HANDLE) dlfp->alternate_splice_flag,
                  (HANDLE) dlfp->suppress_alt_splice_phrase,
                  (HANDLE) dlfp->remove_subfeatures,
                  (HANDLE) g,
@@ -8852,7 +9010,7 @@ extern void AutoDefBaseFormCommon (
     odmp.use_modifiers = use_modifiers;
     ClearProteinTitlesInNucProts (bfp->input_entityID, NULL);
     BuildDefLineFeatClauseList (sep, bfp->input_entityID, &feature_requests,
-                                0, &defline_clauses);
+                                DEFAULT_ORGANELLE_CLAUSE, FALSE, &defline_clauses);
     if ( AreFeatureClausesUnique (defline_clauses))
     {
       m = CreateComboFromModList (modList);
@@ -8956,6 +9114,13 @@ static TableLinePtr MakeTableData (CharPtr line)
         tlp->num_parts ++;
       }
       p_start++;
+      if (*p_start == 0) {
+        if (tlp->num_parts > 0)
+        {
+          ValNodeAddStr (&tlp->parts, 0, StringSave (""));
+          tlp->num_parts ++;
+        }
+      }
       continue;
     }
     if (plen == StringLen (p_start))
@@ -9014,6 +9179,8 @@ typedef struct orgmodloadformdata {
   OrgModLineFormPtr line_forms;
   Int4              num_line_forms;
   Uint2             entityID;
+  Boolean           replace_with_blank;
+  ButtoN            replace_with_blank_btn;
   ButtoN            accept_button;
   
 } OrgModLoadFormData, PNTR OrgModLoadFormPtr;
@@ -9049,7 +9216,7 @@ static void SetFormModsAcceptButton (Handle a)
     }
     else if (GetValue (form_data->line_forms [column_index].action_choice) == 1
       && GetValue (form_data->line_forms [column_index].match_choice) > 0
-      && GetValue (form_data->line_forms [column_index].match_choice) < 5)
+      && GetValue (form_data->line_forms [column_index].match_choice) < 6)
     {
       have_action = TRUE;
     }
@@ -9105,8 +9272,9 @@ static void BuildOrgModLineForm (
   PopupItem (omlfp->match_choice, "Local ID");
   PopupItem (omlfp->match_choice, "Organism Taxonomy Name");
   PopupItem (omlfp->match_choice, "TMSMART ID");
+  PopupItem (omlfp->match_choice, "BankIt ID");
   PopupItem (omlfp->match_choice, "None");
-  SetValue (omlfp->match_choice, 5);
+  SetValue (omlfp->match_choice, 6);
 
   /* list of organism modifiers */
   omlfp->apply_choice = SingleList (g, 5, 8,
@@ -9150,11 +9318,14 @@ static void AddOneQualToOrg (
   orp = biop->org;
   if (orp == NULL) return;
 
-  onp = orp->orgname;
-  if (onp == NULL) return;
-
   if (DefLineModifiers[modifier_index].isOrgMod)
   {
+    onp = orp->orgname;
+    if (onp == NULL) {
+      onp = OrgNameNew ();
+      if (onp == NULL) return;
+      orp->orgname = onp;
+    }
     mod = onp->mod;
     last_mod = NULL;
     while (mod != NULL
@@ -9233,8 +9404,10 @@ static void ApplyQualsToOrg (
     if (GetValue (form_data->line_forms[column_index].action_choice) == 2
       && apply_choice > 0 && apply_choice < NumDefLineModifiers)
     {
-      AddOneQualToOrg (biop, part->data.ptrvalue, 
-        GetValue (form_data->line_forms[column_index].apply_choice) - 1);
+      if (form_data->replace_with_blank || ! StringHasNoText (part->data.ptrvalue)) {
+        AddOneQualToOrg (biop, part->data.ptrvalue, 
+          GetValue (form_data->line_forms[column_index].apply_choice) - 1);
+      }
     }
     part = part->next;
   }
@@ -9299,6 +9472,47 @@ static Boolean HasExtraAccession (
     return FALSE;
 }
 
+static Boolean
+IDIsInTextList 
+(CharPtr id,
+ CharPtr acc_str,
+ Boolean look_for_tmsmart)
+{
+  CharPtr wanted, found;
+  Int4    len;
+
+  if (id == NULL || acc_str == NULL) return FALSE;
+
+  if (StringNCmp (acc_str, "TMSMART:", 8) == 0) {
+    if (look_for_tmsmart) {
+      wanted = acc_str + 8;
+    } else {
+      return FALSE;
+    }
+  } else {
+    if (look_for_tmsmart) {
+      return FALSE;
+    } else {
+      wanted = acc_str;
+    }
+  }
+  len = StringLen (wanted);
+  found = StringStr (id, wanted);
+  if (found == NULL) {
+    return FALSE;
+  } else if (*(found + len) != 0 
+             && *(found + len) != ','
+             && ! isspace ((Int4)*(found + len))) {
+    return FALSE;
+  } else if (found != id
+             && * (found - 1) != ','
+             && ! isspace ((Int4)*(found - 1))) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
 static Boolean IDListHasValue (
   CharPtr id,
   SeqIdPtr list,
@@ -9307,7 +9521,7 @@ static Boolean IDListHasValue (
 {
   SeqIdPtr sip;
   Char     acc_str [256];
-  Int4     match_len;
+  Int4     match_len, match_len2;
 
   for (sip = list; sip != NULL; sip = sip->next)
   {
@@ -9321,10 +9535,14 @@ static Boolean IDListHasValue (
           && StringCmp (id, acc_str + 8) == 0)
         {
           return TRUE;
+        } else if (IDIsInTextList (id, acc_str, TRUE)) {
+          return TRUE;
         }
       } else {
         match_len = StringCSpn (acc_str, ".");
-        if (match_len > 0 && StringNCmp (id, acc_str, match_len) == 0)
+        match_len2 = StringCSpn (id, ".");
+        if (match_len == match_len2
+          && match_len > 0 && StringNCmp (id, acc_str, match_len) == 0)
         {
           return TRUE;
         }
@@ -9403,6 +9621,60 @@ static void ApplyTableModsByAccessionNumber (BioseqPtr bsp, Pointer userdata)
   }
 }
 
+static void ApplyTableModsByBankitID (BioseqPtr bsp, Pointer userdata)
+{
+  OrgModLoadFormPtr form_data;
+  ObjectIdPtr       oip;
+  SeqIdPtr          sip;
+  DbtagPtr          dp;
+  Char              match_str [30];
+  Int4              column_index, part_index;
+  BioSourcePtr      biop;
+  ValNodePtr        line, part;
+  TableLinePtr      tlp;
+  Int4              match_choice;
+  
+  form_data = (OrgModLoadFormPtr) userdata;
+  if (form_data == NULL || bsp == NULL) return;
+
+  biop = GetBiopForBsp (bsp);
+  if (biop == NULL) return;
+
+  match_str [0] = 0;
+  for(sip = bsp->id; sip != NULL; sip = sip->next) {
+    if(sip->choice == SEQID_GENERAL) {
+      dp = (DbtagPtr) sip->data.ptrvalue;
+      if(StringICmp(dp->db, "BankIt") == 0) {
+        oip = dp->tag;
+        sprintf (match_str, "bankit%d", oip->id);
+        break;
+      }
+    }
+  }
+  if (match_str [0] == 0) return;
+
+  for (column_index = 0;
+       column_index < form_data->num_line_forms;
+       column_index ++)
+  {
+    match_choice = GetValue (form_data->line_forms[column_index].match_choice);
+    if (GetValue (form_data->line_forms[column_index].action_choice) == 1 && match_choice == 5) {
+      for (line = form_data->line_list; line != NULL; line = line->next) {
+        tlp = line->data.ptrvalue;
+        if (tlp == NULL) continue;
+        part = tlp->parts;
+        for (part_index = 0; part_index < column_index && part != NULL; part_index ++) {
+          part = part->next;
+        }
+        if (part != NULL && StringCmp (part->data.ptrvalue, match_str) == 0) {
+          ApplyQualsToOrg (biop, tlp->parts, form_data);
+        }
+      }
+    }
+  }
+}
+
+
 static void DoAcceptFormMods (ButtoN b)
 {
   OrgModLoadFormPtr form_data;
@@ -9411,11 +9683,14 @@ static void DoAcceptFormMods (ButtoN b)
   form_data = GetObjectExtra (b);
   if (form_data == NULL) return;
 
+  form_data->replace_with_blank = GetStatus (form_data->replace_with_blank_btn);
+
   sep = GetTopSeqEntryForEntityID (form_data->entityID);
   if (sep == NULL) return;
   
   VisitBioSourcesInSep (sep, form_data, ApplyTableModsByTaxName);
   VisitBioseqsInSep (sep, form_data, ApplyTableModsByAccessionNumber);
+  VisitBioseqsInSep (sep, form_data, ApplyTableModsByBankitID);
   Update ();
   ObjMgrSetDirtyFlag (form_data->entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, form_data->entityID, 0, 0);
@@ -9484,7 +9759,7 @@ extern void LoadOrganismModifierTable (IteM i)
   ValNodePtr    vnp;
   TableLinePtr  tlp;
   WindoW        w;
-  GrouP         h, g, c;
+  GrouP         h, g, k, c;
   OrgModLoadFormPtr form_data;
   Int4          index;
   Int4          max_columns;
@@ -9529,6 +9804,8 @@ extern void LoadOrganismModifierTable (IteM i)
                          form_data->line_forms + index, form_data);
     vnp = vnp->next;
   }
+  k = HiddenGroup (h, 1, 0, NULL);
+  form_data->replace_with_blank_btn = CheckBox (k, "Erase current value when blank found in table", NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
   form_data->accept_button = DefaultButton (c, "Accept", DoAcceptFormMods);
@@ -9536,7 +9813,7 @@ extern void LoadOrganismModifierTable (IteM i)
   Disable (form_data->accept_button);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) k, (HANDLE) c, NULL);
 
   RealizeWindow (w);
   Show (w);
@@ -9569,6 +9846,8 @@ typedef struct featurequalloadformdata {
   Boolean                asked_about_replace;
   Boolean                do_replace;
   Boolean                use_semicolon;
+  ButtoN                 replace_with_blank_btn;
+  Boolean                replace_with_blank;
   ButtoN                 accept_button;
 } FeatureQualLoadFormData, PNTR FeatureQualLoadFormPtr;
  
@@ -10288,6 +10567,10 @@ static void ApplyQualsToFeaturesOnBsp (BioseqPtr bsp,
                           form_data->featlist);
   column_index = GetValue (form_data->apply_column);
   val = GetDataForColumnOffset (parts, column_index);
+  /* if the value to be applied is blank and we're not replacing with blanks, skip */
+  if (! form_data->replace_with_blank && StringHasNoText (val)) {
+    return;
+  }
   qualval = GetQualSelectBySubtype (&(form_data->apply_qual), subtype);
   if (subtype == -1 || val == NULL || column_index < 1 || qualval < 1) {
     /* do nothing */
@@ -10406,6 +10689,8 @@ static void DoAcceptFeatureQuals (ButtoN b)
 
   form_data = GetObjectExtra (b);
   if (form_data == NULL) return;
+
+  form_data->replace_with_blank = GetStatus (form_data->replace_with_blank_btn);
 
   sep = GetTopSeqEntryForEntityID (form_data->entityID);
   if (sep == NULL) return;
@@ -10555,7 +10840,7 @@ extern void LoadFeatureQualifierTable (IteM i)
   ValNodePtr    vnp;
   TableLinePtr  tlp;
   WindoW        w;
-  GrouP         h, c;
+  GrouP         h, g, c;
   FeatureQualLoadFormPtr form_data;
   Int4          max_columns;
 
@@ -10602,6 +10887,8 @@ extern void LoadFeatureQualifierTable (IteM i)
   BuildFeatureApply (h, form_data, tlp->parts);
   ShowQualifierLists (form_data);
 
+  g = HiddenGroup (h, 1, 0, NULL);
+  form_data->replace_with_blank_btn = CheckBox (g, "Erase current value when blank found in table", NULL);
   c = HiddenGroup (h, 4, 0, NULL);
   form_data->accept_button = DefaultButton (c, "Accept", DoAcceptFeatureQuals);
   SetObjectExtra (form_data->accept_button, form_data, NULL);
@@ -10705,6 +10992,7 @@ static void AddPrefixesToOneDefLine (
   SeqMgrDescContext  dcontext;
   Boolean      use_labels;
   Int4         no_semicolon_len;
+  Int4         prefix_len;
 
   if (bsp == NULL || pfp == NULL
     || pfp->popup_list == NULL
@@ -10754,10 +11042,13 @@ static void AddPrefixesToOneDefLine (
           {
             sprintf (modifier_text, "from ");
             if (no_semicolon_len > sizeof (modifier_text) - 6) {
+			  prefix_len = sizeof (modifier_text) - 1;
               no_semicolon_len = sizeof (modifier_text) - 6;
-            }
+			} else {
+			  prefix_len = no_semicolon_len + 5;
+			}
             StringNCpy (modifier_text + 5, mod->subname, no_semicolon_len);
-            modifier_text[sizeof (modifier_text) - 1] = 0;
+            modifier_text[prefix_len] = 0;
           }
           else
           {
@@ -10766,9 +11057,13 @@ static void AddPrefixesToOneDefLine (
               StringCat (modifier_text, " ");
             if (no_semicolon_len > sizeof (modifier_text) - StringLen (modifier_text) - 1) {
               no_semicolon_len = sizeof (modifier_text) - StringLen (modifier_text) - 1;
-            }
+			  prefix_len = sizeof (modifier_text) - 1;
+			} else {
+			  prefix_len = no_semicolon_len + StringLen (modifier_text);
+			}
+
             StringNCat (modifier_text, mod->subname, no_semicolon_len);
-            modifier_text[sizeof (modifier_text) - 1] = 0;
+            modifier_text[prefix_len] = 0;
           }
           ValNodeCopyStr( &strings, 0, modifier_text);
         }
@@ -10788,9 +11083,12 @@ static void AddPrefixesToOneDefLine (
             sprintf (modifier_text, "from ");
             if (no_semicolon_len > sizeof (modifier_text) - 6) {
               no_semicolon_len = sizeof (modifier_text) - 6;
-            }
+			  prefix_len = sizeof(modifier_text);
+			} else {
+			  prefix_len = StringLen (modifier_text) + no_semicolon_len;
+			}
             StringNCpy (modifier_text + 5, ssp->name, no_semicolon_len);
-            modifier_text[sizeof (modifier_text) - 1] = 0;
+            modifier_text[prefix_len] = 0;
             cp = StringChr (modifier_text, ':');
             if (cp != NULL) *cp = 0;
           }
@@ -10802,10 +11100,13 @@ static void AddPrefixesToOneDefLine (
               StringCat (modifier_text, " ");
             if (no_semicolon_len > sizeof (modifier_text) - StringLen (modifier_text) - 1) {
               no_semicolon_len = sizeof (modifier_text) - StringLen (modifier_text) - 1;
-            }
+			  prefix_len = sizeof (modifier_text);
+			} else {
+			  prefix_len = StringLen (modifier_text) + no_semicolon_len;
+			}
  
             StringNCat (modifier_text, ssp->name, no_semicolon_len);
-            modifier_text[sizeof (modifier_text) - 1] = 0;
+            modifier_text[prefix_len] = 0;
           }
           ValNodeCopyStr( &strings, 0, modifier_text);
         }
@@ -10845,8 +11146,7 @@ static void AddPrefixesToDefLines (PrefixFormPtr pfp, SeqEntryPtr sep)
   if (pfp == NULL || sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 ||
-                         (IsPopPhyEtcSet (bssp->_class)))) {
+    if (bssp != NULL) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         AddPrefixesToDefLines (pfp, sep);
       }

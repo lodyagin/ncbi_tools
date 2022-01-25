@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,19 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.28  2004/04/01 13:43:09  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
+* Revision 6.27  2004/02/23 16:36:51  sinyakov
+* Use Int4 instead of Int2 for cursor position and text selection in text boxes
+*
+* Revision 6.26  2004/02/12 20:05:26  bazhin
+* Added callback function "Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)",
+* which allows to copy-paste texts from multiple columns to single string.
+*
+* Revision 6.25  2004/02/05 16:25:06  kans
+* revert to Nlm_GetTextVScrollBar and Nlm_GetTextHScrollBar being static, implement setOffset and getOffset for scroll text, since Windows scroll text has its own scroll bar
+*
 * Revision 6.24  2004/02/04 15:21:02  kans
 * make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
 *
@@ -543,7 +556,7 @@ Nlm_TexT  Nlm_CurrentText PROTO((void));
 
 /* return TRUE and selection range [begin,end] -- if there is a selection
  */
-Nlm_Boolean Nlm_TextSelectionRange PROTO((Nlm_TexT t, Nlm_Int2Ptr begin, Nlm_Int2Ptr end));
+Nlm_Boolean Nlm_TextSelectionRange PROTO((Nlm_TexT t, Nlm_Int4Ptr begin, Nlm_Int4Ptr end));
 
 void      Nlm_CutText PROTO((Nlm_TexT t));
 void      Nlm_CopyText PROTO((Nlm_TexT t));
@@ -551,20 +564,18 @@ void      Nlm_PasteText PROTO((Nlm_TexT t));
 void      Nlm_ClearText PROTO((Nlm_TexT t));
 
 size_t    Nlm_TextLength PROTO((Nlm_TexT t));
-void      Nlm_SelectText PROTO((Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end));
+void      Nlm_SelectText PROTO((Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end));
 void      Nlm_SetTextEditable PROTO((Nlm_TexT t, Nlm_Boolean editable));
 void      Nlm_SetTextCursorBlinkRate PROTO((Nlm_TexT t, Nlm_Int2 msec));
 void      Nlm_SetTextColor PROTO((Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g, Nlm_Uint4 b));
+void      Nlm_SetKeepCrNlTextFieldCallback PROTO((Nlm_TexT t));
 
 /* return the new insertion position in the text(it may differ from "pos"
- * if an error occured or "pos" is out of limits)
+ * if an error occurred or "pos" is out of limits)
  */
-Nlm_Int2  Nlm_SetTextCursorPos PROTO((Nlm_TexT t, Nlm_Int2 pos));
+Nlm_Int4  Nlm_SetTextCursorPos PROTO((Nlm_TexT t, Nlm_Int4 pos));
 
-Nlm_Int2  Nlm_GetTextCursorPos PROTO((Nlm_TexT t));
-
-Nlm_BaR    Nlm_GetTextVScrollBar PROTO((Nlm_TexT t));
-Nlm_BaR    Nlm_GetTextHScrollBar PROTO((Nlm_TexT t));
+Nlm_Int4  Nlm_GetTextCursorPos PROTO((Nlm_TexT t));
 
 
 
@@ -1255,7 +1266,7 @@ typedef enum
 {
   Nlm_IO_READ,    /* file descriptor has data available    */
   Nlm_IO_WRITE,   /* file descriptor available for writing */
-  Nlm_IO_ERROR,   /* I/O error(exception) occured          */
+  Nlm_IO_ERROR,   /* I/O error(exception) occurred         */
   Nlm_IO_CLEANUP  /* when called from UnregisterIO()       */
 } Nlm_IOtype;
 

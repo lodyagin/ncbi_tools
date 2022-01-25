@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.155 $
+* $Revision: 6.168 $
 *
 * File Description: 
 *
@@ -64,6 +64,7 @@
 #include <pmfapi.h>
 #include <explore.h>
 #include <aliparse.h>
+#include <algo/blast/api/twoseq_api.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -756,6 +757,14 @@ typedef struct phylippage {
   DoC          doc;
   GrouP        instructions;
   Char         extension [10];
+  /* new for alignment */
+  TexT  missing;
+  TexT  beginning_gap;
+  TexT  middle_gap;
+  TexT  end_gap;
+  TexT  match;
+  Int4  type;
+  DialoG genbio;
 } PhylipPage, PNTR PhylipPagePtr;
 
 static ParData phParFmt = {FALSE, FALSE, FALSE, FALSE, FALSE, 0, 0};
@@ -1024,243 +1033,175 @@ static CharPtr noSrcInTitleWarning =
 "It is critical to annotate the data file with organism and source information. " \
 "Please quit Sequin and read the Sequin Quick Guide section on preparing the data files before proceeding.";
 
-static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
-
+static void CountTitlesWithoutOrganisms (SeqEntryPtr sep)
 {
-  AlignFileDataPtr  afdp;
-  BioseqSetPtr   bssp;
-  Char           ch;
-  AliConfigInfo  configInfo;
-  ErrInfoPtr     eip;
-  Uint1          format;
+  BioseqSetPtr bssp;
+  SeqEntryPtr  tmp;
+  Int2         seqtitles = 0;
+  Int2         seqtotals = 0;
+  CharPtr      ttl;
+  Char         str [256];
+
+  /* count titles without organisms */
+  if (sep != NULL && IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && (bssp->_class == 7 || (IsPopPhyEtcSet (bssp->_class)))) {
+      for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+        ttl = NULL;
+        SeqEntryExplore (tmp, (Pointer) (&ttl), FindFirstTitle);
+        if (ttl != NULL) {
+          if (bssp->_class == BioseqseqSet_class_phy_set) {
+            if (StringISearch (ttl, "[org=") != NULL || StringISearch (ttl, "[organism=") != NULL) {
+              seqtitles++;
+            }
+          } else if (StringISearch (ttl, "[") != NULL) {
+            seqtitles++;
+          }
+        }
+        seqtotals++;
+      }
+      if (seqtotals != seqtitles) {
+        sprintf (str, "None");
+        if (seqtitles > 0) {
+          sprintf (str, "Only %d", (int) seqtitles);
+        }
+        ArrowCursor ();
+        Update ();
+        Beep ();
+        if (bssp->_class == BioseqseqSet_class_phy_set) {
+          Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleWarning);
+        } else {
+          Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noSrcInTitleWarning);
+        }
+      }
+    }
+  }
+}
+
+static CharPtr  phylipNucMsg = "\
+\nPlease enter information about the nucleotide \
+sequence in the spaces above.  Then click on \
+'Import Nucleotide Alignment' to read a file that \
+contains the sequences.\n\n\
+Beginning Gap: When some of the sequences in an \
+alignment are shorter or longer than others, beginning \
+gap characters are added to the beginning of the sequence \
+to maintain the correct spacing.  These will not appear \
+in your sequence file.\n\
+Middle Gap: These characters are used to maintain the spacing \
+inside an alignment.  These are not nucleotides and will \
+not appear as part of your sequence file.\n\
+End Gap: When some of the sequences in an alignment are shorter \
+or longer than others, end gap characters are added to the end \
+of the sequence to maintain the correct spacing.  These will \
+not appear in your sequence file.\n\
+Missing: These characters are used to represent \
+indeterminate/ambiguous nucleotides.  These will appear in your \
+sequence file as 'n'.\n\
+Match: These characters are used to indicate positions where \
+sequences are identical to the first sequence.  These will be \
+replaced by the actual characters from the first sequence.";
+
+static void SetPhylipDocInstructions (PhylipPagePtr ppp)
+{
+  if (ppp == NULL || ppp->doc == NULL) return;
+  Reset (ppp->doc);
+  AppendText (ppp->doc, phylipNucMsg, &faParFmt, &faColFmt, programFont);
+  UpdateDocument (ppp->doc, 0, 0);
+  Update ();
+}
+
+static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
+{
+  Char           path [PATH_MAX];
+  PhylipPagePtr  ppp;
+  SeqEntryPtr    sep;
+  RecT           r;
   FILE           *fp;
-  ValNodePtr     head;
-  CharPtr        msg;
   ObjMgrDataPtr  omdptop;
   ObjMgrData     omdata;
   Uint2          parenttype;
   Pointer        parentptr;
-  PhylipPagePtr  ppp;
-  Char           path [PATH_MAX];
-  ParsedInfoPtr  pip;
-  CharPtr        ptr;
-  RecT           r;
-  ValNodePtr     sdp;
-  SeqEntryPtr    sep = NULL;
-  Int2           seqtitles;
-  Int2           seqtotals;
-  Char           str [256];
-  SeqEntryPtr    tmp;
-  CharPtr        ttl;
-  ValNodePtr     vnp;
   Char           errStr [PATH_MAX + 64];
+  Char           missing [15];
+  Char           beginning_gap [15];
+  Char           middle_gap [15];
+  Char           end_gap [15];
+  Char           match [15];
+  BioSourcePtr   biop;
+  CharPtr        no_org_err_msg;
+  const CharPtr  pop_no_org_err_msg = "You must supply organism information either "
+                  "in the alignment file or on the organism page.";
+  const CharPtr  phy_no_org_err_msg = "You must supply organism information in the "
+                  "alignment file.";
+
+  if (d == NULL || filename == NULL) return FALSE;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
   ppp = (PhylipPagePtr) GetObjectExtra (d);
-  if (ppp != NULL) {
-    if (path [0] != '\0' || GetInputFileName (path, sizeof (path), ppp->extension, "TEXT")) {
-      WatchCursor ();
-      StringCpy (ppp->path, path);
-      ObjectRect (ppp->doc, &r);
-      InsetRect (&r, 4, 4);
-      faColFmt.pixWidth = r.right - r.left;
-      /*
-      ResetPhylipPage (ppp);
-      */
-      Reset (ppp->doc);
-      Update ();
-      ppp->sep = SeqEntryFree (ppp->sep);
-      head = NULL;
-      fp = FileOpen (path, "r");
-      if (fp != NULL) {
-        if (ppp->format >= SEQ_FMT_CONTIGUOUS && ppp->format <= SEQ_FMT_INTERLEAVE) {
-          while (FileGets (str, sizeof (str), fp) != NULL) {
-            if (str [0] == '>') {
-              ptr = str;
-              ch = *ptr;
-              while (ch != '\0' && ch != '\n' && ch != '\r') {
-                ptr++;
-                ch = *ptr;
-              }
-              *ptr = '\0';
-              ValNodeCopyStr (&head, 1, str + 1);
-            }
-          }
-        }
-        FileClose (fp);
-        format = 0;
-        switch (ppp->format) {
-          case SEQ_FMT_CONTIGUOUS :
-            format = SALSA_CONTIGUOUS;
-            break;
-          case SEQ_FMT_INTERLEAVE :
-            format = SALSA_INTERLEAVE;
-            break;
-          default :
-            format = SALSA_ND;
-            break;
-        }
-        if (format > 0) {
-          sep = NULL;
-          if (newAlignReader) {
-            fp = FileOpen (path, "r");
-            if (fp != NULL) {
-              MemSet ((Pointer) &configInfo, 0, sizeof (AliConfigInfo));
-              configInfo.gapChar = "-.";
-              Ali_SetConfig (&configInfo, ALI_SET_GAP_CHAR);
-              afdp = Ali_Read (fp);
-              FileClose (fp);
-              if (afdp != NULL) {
-                pip = afdp->info;
-                if (pip != NULL) {
-                  if (pip->contigOrInter == ALI_CONTIGUOUS &&
-		      ppp->format == SEQ_FMT_INTERLEAVE) {
-                    AppendText (ppp->doc, "ERROR: Interleaved specified, Contiguous read\n\n", &faParFmt, &faColFmt, programFont);
-                  } else if (pip->contigOrInter == ALI_INTERLEAVED &&
-			     ppp->format == SEQ_FMT_CONTIGUOUS) {
-                    AppendText (ppp->doc, "ERROR: Contiguous specified, Interleaved read\n\n", &faParFmt, &faColFmt, programFont);
-                  }
-                }
-                for (eip = afdp->errors; eip != NULL; eip = eip->next) {
-                  size_t   len;
-                  if (eip->info == NULL) {
-                    AppendText (ppp->doc, "eip->info is NULL\n\n", &faParFmt, &faColFmt, systemFont);
-                    continue;
-                  }
-                  len = StringLen (eip->info) + 60;
-                  msg = MemNew (len);
-                  if (msg == NULL) continue;
-                  if (eip->level == LEVEL_MULTI) {
-                    StringCpy (msg, "MULTIPLE ERRORS:");
-                  } else if (eip->level == LEVEL_ERROR) {
-                    StringCpy (msg, "ERROR:");
-                  } else if (eip->level == LEVEL_WARNING) {
-                    StringCpy (msg, "WARNING:");
-                  } else if (eip->level == LEVEL_INFO) {
-                    StringCpy (msg, "INFO:");
-                  }
-                  if (eip->rowNum != 0) {
-                    sprintf (str, " [Line %ld]", (long) eip->rowNum);
-                    StringCat (msg, str);
-                  }
-                  if (eip->info != NULL) {
-                    StringCat (msg, " ");
-                    StringCat (msg, eip->info);
-                  }
-                  StringCat (msg, "\n\n");
-                  AppendText (ppp->doc, msg, &faParFmt, &faColFmt, programFont);
-                  MemFree (msg);
-                }
-                sep = ALI_ConvertToNCBIData (afdp);
-                Ali_Free (afdp);
-                afdp = NULL;
-              }
-	      else
-		{
-		  sprintf (errStr, "ERROR: Unable to read file %s\n\n", path);
-		  AppendText (ppp->doc, errStr, &faParFmt,
-			      &faColFmt, programFont);
-		}
-            }
-          } else {
-            sep = ReadLocalAlignment (format, path);
-          }
-          if (sep !=NULL) 
-          {
-            ppp->sep = sep;
-            SafeHide (ppp->instructions);
-            Update ();
-            SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
-            GetSeqEntryParent (sep, &parentptr, &parenttype);
-            SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
-            RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
+  if (ppp == NULL) {
+    return FALSE;
+  }
 
-            if (sep != NULL && IS_Bioseq_set (sep) && SeqEntryHasNoTitles (sep)) {
-              bssp = (BioseqSetPtr) sep->data.ptrvalue;
-              if (bssp != NULL && (bssp->_class == 7 ||
-                                   (IsPopPhyEtcSet (bssp->_class)))) {
-                for (tmp = bssp->seq_set, vnp = head;
-                     tmp != NULL && vnp != NULL;
-                     tmp = tmp->next, vnp = vnp->next) {
-                  sdp = CreateNewDescriptor (tmp, Seq_descr_title);
-                  if (sdp != NULL) {
-                    sdp->data.ptrvalue = vnp->data.ptrvalue;
-                    vnp->data.ptrvalue = NULL;
-                  }
-                }
-              }
-            }
-
-            FormatPhylipDoc (ppp);
-            SafeShow (ppp->doc);
-
-            if (sep != NULL && IS_Bioseq_set (sep)) {
-              bssp = (BioseqSetPtr) sep->data.ptrvalue;
-              if (bssp != NULL && (bssp->_class == 7 ||
-                                   (IsPopPhyEtcSet (bssp->_class)))) {
-                seqtitles = 0;
-                seqtotals = 0;
-                for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
-                  /*
-                  ttl = SeqEntryGetTitle (tmp);
-                  */
-                  ttl = NULL;
-                  SeqEntryExplore (tmp, (Pointer) (&ttl), FindFirstTitle);
-                  if (ttl != NULL) {
-                    if (bssp->_class == BioseqseqSet_class_phy_set) {
-                      if (StringISearch (ttl, "[org=") != NULL ||
-                          StringISearch (ttl, "[organism=") != NULL) {
-                        seqtitles++;
-                      }
-                    } else if (StringISearch (ttl, "[") != NULL) {
-                      seqtitles++;
-                    }
-                  }
-                  seqtotals++;
-                }
-                if (seqtotals != seqtitles) {
-                  sprintf (str, "None");
-                  if (seqtitles > 0) {
-                    sprintf (str, "Only %d", (int) seqtitles);
-                  }
-                  ArrowCursor ();
-                  Update ();
-                  Beep ();
-                  if (bssp->_class == BioseqseqSet_class_phy_set) {
-                    Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noOrgInTitleWarning);
-                  } else {
-                    Message (MSG_OK, "%s of %d %s", str, (int) seqtotals, noSrcInTitleWarning);
-                  }
-                }
-              }
-            }
-          } else {
-            SafeHide (ppp->doc);
-            Update ();
-            SafeShow (ppp->instructions);
-          }
+  if (path [0] != '\0' || GetInputFileName (path, sizeof (path), ppp->extension, "TEXT")) {
+    WatchCursor ();
+    StringCpy (ppp->path, path);
+    ObjectRect (ppp->doc, &r);
+    InsetRect (&r, 4, 4);
+    faColFmt.pixWidth = r.right - r.left;
+    Reset (ppp->doc);
+    Update ();
+    ppp->sep = SeqEntryFree (ppp->sep);
+    fp = FileOpen (path, "r");
+    if (fp != NULL) {
+      GetTitle (ppp->missing, missing, sizeof (missing) -1);
+      GetTitle (ppp->beginning_gap, beginning_gap, sizeof (beginning_gap) - 1);
+      GetTitle (ppp->middle_gap, middle_gap, sizeof (middle_gap) - 1);
+      GetTitle (ppp->end_gap, end_gap, sizeof (end_gap) - 1);
+      GetTitle (ppp->match, match, sizeof (match) - 1);
+      if (ppp->type == SEQ_PKG_POPULATION) {
+        biop = (BioSourcePtr) DialogToPointer (ppp->genbio);
+        if (biop == NULL) {
+          no_org_err_msg = pop_no_org_err_msg;
         } else {
-          SafeHide (ppp->doc);
-          Update ();
-          SafeShow (ppp->instructions);
+          no_org_err_msg = NULL;
+          BioSourceFree (biop);
         }
-        ValNodeFreeData (head);
       } else {
+        no_org_err_msg = phy_no_org_err_msg;
+      }
+      ppp->sep = SeqEntryFromAlignmentFile (fp, missing, match, 
+                                            beginning_gap, middle_gap, end_gap,
+                                            "ABCDGHKMRSTUVWXYabcdghkmrstuvwxy",
+                                            Seq_mol_na, no_org_err_msg);
+      sep = ppp->sep;
+      if (sep != NULL) {
+        SaveSeqEntryObjMgrData (ppp->sep, &omdptop, &omdata);
+        GetSeqEntryParent (ppp->sep, &parentptr, &parenttype);
+        SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+        RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
+
+        FormatPhylipDoc (ppp);
+        SafeShow (ppp->doc);
+
+        CountTitlesWithoutOrganisms (sep);
+      } else {
+        SetPhylipDocInstructions (ppp);
+      }
+    } else {
+      SetPhylipDocInstructions (ppp);
+    }
+  } else {
 	sprintf (errStr, "ERROR: Unable to open file %s\n\n", path);
 	AppendText (ppp->doc, errStr, &faParFmt, &faColFmt, programFont);
-	AppendText (ppp->doc, strerror(errno), &faParFmt, &faColFmt,
-		    programFont);
+	AppendText (ppp->doc, strerror(errno), &faParFmt, &faColFmt, programFont);
 	SafeShow (ppp->doc);
-        SafeHide (ppp->instructions);
-        Update ();
-      }
-      ArrowCursor ();
-      Update ();
-      return TRUE;
-    }
+    Update ();
   }
-  return FALSE;
+  ArrowCursor ();
+  Update ();
+  return TRUE;
 }
 
 static void CleanupPhylipDialog (GraphiC g, VoidPtr data)
@@ -1275,20 +1216,10 @@ static void CleanupPhylipDialog (GraphiC g, VoidPtr data)
   MemFree (data);
 }
 
-static CharPtr  phylipNucMsg = "\
-\nPlease enter information about the nucleotide \
-sequence in the spaces above.  Then click on \
-'Import Nucleotide Contiguous' to read a file that \
-contains the sequences.";
-
-static CharPtr  nexusNucMsg = "\
-\nPlease enter information about the nucleotide \
-sequence in the spaces above.  Then click on \
-'Import Nucleotide Interleaved' to read a file that \
-contains the sequences.";
 
 static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
-                                  Uint1 format, CharPtr extension)
+                                  Uint1 format, CharPtr extension,
+                                  Int4 type, DialoG genbio)
 
 {
   PhylipPagePtr  ppp;
@@ -1296,6 +1227,8 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
   GrouP          m;
   GrouP          p;
   GrouP          s;
+  GrouP          a;
+  RecT          r;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -1308,6 +1241,8 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
     ppp->todialog = NULL;
     ppp->fromdialog = NULL;
     ppp->importdialog = ImportPhylipDialog;
+    ppp->type = type;
+    ppp->genbio = genbio;
 
     if (title != NULL && title [0] != '\0') {
       s = NormalGroup (p, 0, -2, title, systemFont, NULL);
@@ -1320,13 +1255,25 @@ static DialoG CreatePhylipDialog (GrouP h, CharPtr title, CharPtr text,
     ppp->path [0] = '\0';
     StringNCpy_0 (ppp->extension, extension, sizeof (ppp->extension));
 
+    /* new for alignment */
+    a = NormalGroup (m, 4, 0, "Sequence Characters", systemFont, NULL);
+    StaticPrompt (a, "Beginning Gap", 0, dialogTextHeight, systemFont, 'c');
+    ppp->beginning_gap = DialogText (a, "-.Nn?", 5, NULL);
+    StaticPrompt (a, "Missing", 0, dialogTextHeight, systemFont, 'c');
+    ppp->missing = DialogText (a, "?Nn", 5, NULL);
+    StaticPrompt (a, "Middle Gap", 0, dialogTextHeight, systemFont, 'c');
+    ppp->middle_gap = DialogText (a, "-.", 5, NULL);
+    StaticPrompt (a, "Match", 0, dialogTextHeight, systemFont, 'c');
+    ppp->match = DialogText (a, ":", 5, NULL);
+    StaticPrompt (a, "End Gap", 0, dialogTextHeight, systemFont, 'c');
+    ppp->end_gap = DialogText (a, "-.Nn?", 5, NULL);
+  
     g = HiddenGroup (m, 0, 0, NULL);
-    ppp->instructions = MultiLinePrompt (g, text, 27 * stdCharWidth, programFont);
     ppp->doc = DocumentPanel (g, stdCharWidth * 27, stdLineHeight * 8);
-    SetDocAutoAdjust (ppp->doc, FALSE);
-    Hide (ppp->doc);
-    AlignObjects (ALIGN_CENTER, (HANDLE) ppp->instructions,
-                  (HANDLE) ppp->doc, NULL);
+    ObjectRect (ppp->doc, &r);
+    InsetRect (&r, 4, 4);
+    faColFmt.pixWidth = r.right - r.left;
+    SetPhylipDocInstructions (ppp);
   }
 
   return (DialoG) p;
@@ -2488,7 +2435,7 @@ extern void ConfirmSequencesFormParsing (ForM f, FormActnFunc putItAllTogether)
         if (fpp != NULL) {
           sqfp->currConfirmSeq = fpp->list;
         }
-      } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
+      } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
         ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
         if (ppp != NULL) {
           sep = ppp->sep;
@@ -4576,11 +4523,8 @@ static void SetOrgNucProtImportExportItems (SequencesFormPtr sqfp)
               SafeSetTitle (importItm, "Import Nucleotide FASTA...");
             }
             break;
-          case SEQ_FMT_CONTIGUOUS :
-            SafeSetTitle (importItm, "Import Nucleotide Contiguous...");
-            break;
-          case SEQ_FMT_INTERLEAVE :
-            SafeSetTitle (importItm, "Import Nucleotide Interleaved...");
+          case SEQ_FMT_ALIGNMENT :
+            SafeSetTitle (importItm, "Import Nucleotide Alignment...");
             break;
           default :
             SafeSetTitle (importItm, "Import Nucleotide FASTA...");
@@ -4733,15 +4677,12 @@ static void SequencesFormDeleteProc (Pointer formDataPtr)
             SafeShow (fpp->instructions);
             Update ();
           }
-        } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
+        } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
           ppp = (PhylipPagePtr) GetObjectExtra (sqfp->dnaseq);
           if (ppp != NULL) {
             ResetPhylipPage (ppp);
             ppp->path [0] = '\0';
-            SafeHide (ppp->doc);
-            Reset (ppp->doc);
-            SafeShow (ppp->instructions);
-            Update ();
+            SetPhylipDocInstructions (ppp);
           }
         }
         break;
@@ -5091,7 +5032,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
     if (sqfp->seqFormat == SEQ_FMT_FASTA) {
       sqfp->fromform = FastaSequencesFormToSeqEntryPtr;
       sqfp->testform = FastaTestSequencesForm;
-    } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
+    } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
       sqfp->fromform = PhylipSequencesFormToSeqEntryPtr;
       sqfp->testform = PhylipTestSequencesForm;
     }
@@ -5137,7 +5078,7 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
       SetGroupSpacing (p, 10, 20);
       if (sqfp->seqFormat == SEQ_FMT_FASTA) {
         mult = MultiLinePrompt (p, phyloOrgFastaMsg, 27 * stdCharWidth, programFont);
-      } else if (sqfp->seqFormat >= SEQ_FMT_CONTIGUOUS && sqfp->seqFormat <= SEQ_FMT_INTERLEAVE) {
+      } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
         mult = MultiLinePrompt (p, phyloOrgPhylipMsg, 27 * stdCharWidth, programFont);
       } else {
         mult = MultiLinePrompt (p, phyloOrgFastaMsg, 27 * stdCharWidth, programFont);
@@ -5239,13 +5180,10 @@ extern ForM CreateInitOrgNucProtForm (Int2 left, Int2 top, CharPtr title,
         b = PushButton (g, "Import Nucleotide FASTA", ImportBtnProc);
       }
       SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_CONTIGUOUS) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", phylipNucMsg, sqfp->seqFormat, "");
-      b = PushButton (g, "Import Nucleotide Contiguous", ImportBtnProc);
-      SetObjectExtra (b, sqfp, NULL);
-    } else if (sqfp->seqFormat == SEQ_FMT_INTERLEAVE) {
-      sqfp->dnaseq = CreatePhylipDialog (k, "", nexusNucMsg, sqfp->seqFormat, "");
-      b = PushButton (g, "Import Nucleotide Interleaved", ImportBtnProc);
+    } else if (sqfp->seqFormat == SEQ_FMT_ALIGNMENT) {
+      sqfp->dnaseq = CreatePhylipDialog (k, "", phylipNucMsg, sqfp->seqFormat, "",
+                                         sqfp->seqPackage, sqfp->genbio);
+      b = PushButton (g, "Import Nucleotide Alignment", ImportBtnProc);
       SetObjectExtra (b, sqfp, NULL);
     }
     if (sqfp->makeAlign != NULL) {
@@ -7647,7 +7585,12 @@ extern ValNodePtr BuildFeatureValNodeList (
     if (key != FEATDEF_BAD && ! skip) {
       
       subtype = curr->featdef_key;
-      if (subtype != FEATDEF_misc_RNA &&
+	  if (subtype == FEATDEF_PUB)
+	  {
+        StringNCpy_0 (str, curr->typelabel, sizeof (str) - 15);
+        StringCat (str, " (Publication)");
+	  }
+	  else if (subtype != FEATDEF_misc_RNA &&
           subtype != FEATDEF_precursor_RNA &&
           subtype != FEATDEF_mat_peptide &&
           subtype != FEATDEF_sig_peptide &&
@@ -7701,7 +7644,7 @@ extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
   ValNodePtr      vnp, next;
   ValNodePtr PNTR prev;
   DbtagPtr        dbt;
-  Boolean         remove_taxrefs;
+  Boolean         remove_taxrefs = FALSE;
 
   if (orp == NULL) return;
 
@@ -7734,4 +7677,362 @@ extern void SetTaxNameAndRemoveTaxRef (OrgRefPtr orp, CharPtr taxname)
     vnp = next;
   }
 }
+
+static Boolean
+FindMatchingProprotein 
+(SeqFeatPtr sfp,
+ SeqMgrFeatContextPtr fcontext,
+ BioseqPtr prot_bsp)
+{
+  SeqFeatPtr        prot_sfp;
+  SeqMgrFeatContext pcontext;
+  CharPtr           start;
+
+  if (prot_bsp == NULL || fcontext == NULL) return FALSE;
+  if (StringNICmp (fcontext->label, "encodes ", 8) == 0) {
+    start = fcontext->label + 8;
+  } else {
+    start = fcontext->label;
+  }
+  prot_sfp = NULL;
+  while ((prot_sfp = SeqMgrGetNextFeature (prot_bsp, prot_sfp, 
+                                           0, 0, &pcontext)) != NULL) {
+    if (StringCmp (pcontext.label, start) == 0) {
+      return TRUE;
+    } 
+  }
+  return FALSE;
+}
+
+
+static void 
+RemoveRedundantProproteinMiscFeatsOnBioseq
+(BioseqPtr bsp,
+ Pointer userdata)
+{
+  SeqFeatPtr        sfp, cds;
+  SeqMgrFeatContext fcontext, cds_context;
+  BioseqPtr         bsp_prot;
+
+  sfp = NULL;
+
+  /* list misc feats */
+  while ((sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext)) != NULL) {
+    if (fcontext.featdeftype == FEATDEF_misc_feature
+        &&  StringStr(fcontext.label, "proprotein") != NULL) {
+      cds = NULL;
+      while ((cds = SeqMgrGetNextFeature (bsp, cds, SEQFEAT_CDREGION, 0, &cds_context)) != NULL) {
+        if (cds_context.left <= fcontext.left
+            &&  cds_context.right >= fcontext.right) {
+          /* Get Protein sequence, look for matching proprotein feat */
+          bsp_prot = BioseqFind (SeqLocId(cds->product));
+          if (FindMatchingProprotein (sfp, &fcontext, bsp_prot)) {
+            sfp->idx.deleteme = TRUE;
+          }
+        }
+      }
+    }
+  }
+
+}
+
+
+extern void RemoveRedundantProproteinMiscFeats (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  /* Visit each bioseq to remove redundant proprotein misc feats */
+  VisitBioseqsInSep (sep, NULL, RemoveRedundantProproteinMiscFeatsOnBioseq);
+
+  DeleteMarkedObjects (bfp->input_entityID, 0, NULL);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+}
+
+static void AddTypeStrainCommentsProc (BioSourcePtr biop, Pointer userdata)
+{
+  SubSourcePtr       ssp, last_ssp;
+  CharPtr            tmp;
+  CharPtr            short_format = "type strain of %s";
+  CharPtr            long_format = "%s; type strain of %s";
+
+  if (biop == NULL || biop->org == NULL || biop->org->taxname == NULL) return;
+
+  ssp = biop->subtype;
+  last_ssp = NULL;
+  while (ssp != NULL && ssp->subtype != 255) {
+    last_ssp = ssp;
+    ssp = ssp->next;
+  }
+  if (ssp != NULL) {
+    if (StringStr (ssp->name, "type strain of") != NULL) return;
+    tmp = (CharPtr) MemNew (StringLen (long_format) + StringLen (ssp->name) 
+                            + StringLen (biop->org->taxname) + 1);
+    if (tmp != NULL) {
+      sprintf (tmp, long_format, ssp->name, biop->org->taxname);
+      MemFree (ssp->name);
+      ssp->name = tmp;
+    }
+  } else {
+    ssp = SubSourceNew ();
+    if (ssp != NULL) {
+      ssp->subtype = 255;
+      tmp = (CharPtr) MemNew (StringLen (short_format)
+                            + StringLen (biop->org->taxname) + 1);
+      if (tmp != NULL) {
+        sprintf (tmp, short_format, biop->org->taxname);
+        ssp->name = tmp;
+      }
+      if (last_ssp == NULL) {
+        biop->subtype = ssp;
+      } else {
+        last_ssp->next = ssp;
+      }
+    }
+  }
+}
+
+extern void AddTypeStrainCommentsToAll (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  /* Visit each bioseq to remove redundant proprotein misc feats */
+  VisitBioSourcesInSep (sep, NULL, AddTypeStrainCommentsProc);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+}
+
+extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp)
+{
+  BLAST_SummaryOptions *options = NULL;
+  Uint1 mol_was;
+
+  if (bsp1 == NULL || bsp2 == NULL || salp == NULL) return;
+
+  *salp = NULL;
+  if (ISA_na (bsp1->mol) != ISA_na (bsp2->mol)) return;
+
+  mol_was = bsp2->mol;
+  bsp2->mol = bsp1->mol;
+  BLAST_SummaryOptionsInit(&options);
+
+  options->filter_string = "F";
+  BLAST_TwoSequencesSearch(options, bsp1, bsp2, salp);
+  bsp2->mol = mol_was;
+  BLAST_SummaryOptionsFree(options);
+  
+}
+
+typedef struct alignmentsequencelist {
+  SeqIdPtr sip;
+  Char     descr[255];
+} AlignmentSequenceListData, PNTR AlignmentSequenceListPtr;
+
+typedef struct removeseqfromaligndata {
+  FORM_MESSAGE_BLOCK
+  LisT        sequence_list_ctrl;
+  ValNodePtr  sequence_list;
+  SeqEntryPtr sep;
+} RemoveSeqFromAlignData, PNTR RemoveSeqFromAlignPtr;
+
+static void RemoveOneSequenceFromAlignment (SeqIdPtr sip, SeqAlignPtr salp)
+{
+  if (FindSeqIdinSeqAlign (salp, sip)) {
+    SeqAlignIDCache (salp, sip);
+  }
+}
+static void RemoveSequenceFromAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  SeqAlignPtr salp;
+  SeqIdPtr    sip;
+
+  if (sap == NULL || sap->type != 2 || userdata == NULL) return;
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  sip = (SeqIdPtr) userdata;
+  RemoveOneSequenceFromAlignment (sip, salp);
+}
+
+static void DoRemoveSequencesFromAlignment (ButtoN b)
+{
+  RemoveSeqFromAlignPtr    rp;
+  ValNodePtr               vnp;
+  Int2                     val;
+  AlignmentSequenceListPtr aslp;
+
+  if (b == NULL) return;
+  rp = (RemoveSeqFromAlignPtr) GetObjectExtra (b);
+  if (rp == NULL) return;
+  val = 1;
+  for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
+    aslp = vnp->data.ptrvalue;
+	if (aslp == NULL) continue;
+	if (GetItemStatus (rp->sequence_list_ctrl, val)) {
+	  VisitAnnotsInSep (rp->sep, (Pointer) aslp->sip, RemoveSequenceFromAlignmentsCallback);
+	}
+	val++;
+  }
+  ObjMgrSetDirtyFlag (rp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, rp->input_entityID, 0, 0);
+  Remove (rp->form);  
+}
+
+static void ListSequencesInAlignmentsCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+  SeqAlignPtr salp;
+  SeqIdPtr    sip_list, sip, bsp_sip;
+  ValNodePtr PNTR list;
+  ValNodePtr  vnp; 
+  AlignmentSequenceListPtr aslp;
+  BioseqPtr                bsp;
+  Int4                     offset;
+
+  if (sap == NULL || sap->type != 2 || userdata == NULL) return;
+  salp = (SeqAlignPtr) sap->data;
+  if (salp == NULL) return;
+  list = (ValNodePtr PNTR)userdata;
+  sip_list = SeqAlignIDList (salp);
+  if (sip_list == NULL) return;
+  for (sip = sip_list; sip != NULL; sip = sip->next) {
+      aslp = (AlignmentSequenceListPtr) MemNew (sizeof (AlignmentSequenceListData));
+	  if (aslp == NULL) return;
+	  aslp->sip = sip;
+	  bsp = BioseqFindCore (sip);
+	  if (bsp != NULL) {
+		  aslp->descr[0] = 0;
+		  aslp->descr[253] = 0;
+		  offset = 0;
+		  for (bsp_sip = bsp->id; bsp_sip != NULL && offset < 250; bsp_sip = bsp_sip->next) {
+			if (aslp->descr[0] != 0) {
+			  aslp->descr[offset] = '\t';
+			  offset ++;
+			}
+		    SeqIdWrite (bsp_sip, aslp->descr + offset, PRINTID_TEXTID_ACCESSION, 254 - offset);
+			offset += StringLen (aslp->descr);
+		  }
+	  } else {
+        SeqIdWrite (sip, aslp->descr, PRINTID_TEXTID_ACCESSION, 254);	    
+	  }
+	  vnp = ValNodeNew (*list);
+	  vnp->data.ptrvalue = aslp;
+	  if (*list == NULL) {
+		  *list = vnp;
+	  }
+  }
+}
+
+static ValNodePtr ListSequencesInAlignments (SeqEntryPtr sep)
+{
+	ValNodePtr list = NULL;
+    VisitAnnotsInSep (sep, (Pointer) &list, ListSequencesInAlignmentsCallback);
+    return list;
+}
+
+static void CleanupRemoveSequencesFromAlignmentForm (
+  GraphiC g,
+  VoidPtr data
+)
+
+{
+  RemoveSeqFromAlignPtr rp;
+
+  rp = (RemoveSeqFromAlignPtr) data;
+  if (rp != NULL) {
+    if (rp->sequence_list != NULL)
+    {
+	  ValNodeFree (rp->sequence_list);
+	  rp->sequence_list = NULL;
+    }
+  }
+  StdCleanupFormProc (g, data);
+}
+
+extern void RemoveSequencesFromAlignment (IteM i)
+{
+  BaseFormPtr              bfp;
+  WindoW                   w;
+  RemoveSeqFromAlignPtr    rp;
+  GrouP                    h, k, c;
+  ButtoN                   b;
+  ValNodePtr               vnp;
+  AlignmentSequenceListPtr aslp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL) return;
+
+  rp = (RemoveSeqFromAlignPtr) MemNew (sizeof (RemoveSeqFromAlignData));
+  if (rp == NULL) return;
+  rp->sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (rp->sep == NULL) {
+	MemFree (rp);
+	return;
+  }
+
+  rp->sequence_list = ListSequencesInAlignments (rp->sep);
+  if (rp->sequence_list == NULL) {
+    Message (MSG_ERROR, "There are no sequences in alignments");
+	MemFree (rp);
+	return;
+  }
+
+  w = FixedWindow (-50, -33, -10, -10, "Remove Sequences From Alignment", StdCloseWindowProc);
+  if (w == NULL) {
+	MemFree (rp);
+	return;
+  }
+  rp->form = (ForM) w;
+  SetObjectExtra (w, rp, CleanupRemoveSequencesFromAlignmentForm);
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  k = HiddenGroup (h, 2, 0, NULL);
+
+  rp->sequence_list_ctrl = MultiList (k, 16, 16, NULL);
+  for (vnp = rp->sequence_list; vnp != NULL; vnp = vnp->next) {
+    aslp = vnp->data.ptrvalue;
+	if (aslp != NULL) {
+      ListItem (rp->sequence_list_ctrl, aslp->descr);
+	}
+  }
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", DoRemoveSequencesFromAlignment);
+  SetObjectExtra (b, rp, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc); 
+  SetObjectExtra (b, rp, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) k, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+}
+
 

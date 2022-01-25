@@ -21,7 +21,7 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.c,v 6.27 2000/11/16 22:13:44 shavirin Exp $
+ * $Id: salpacc.c,v 6.28 2004/04/07 17:36:48 bollin Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
@@ -132,7 +132,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqAlignId (SeqAlignPtr salp, Int2 index)
      sip = SeqIdPtrFromSeqAlign(salp);
      if (sip != NULL)
      {
-        for (j=0; j<index; j++)
+        for (j=0; j<index && sip != NULL; j++)
            sip = sip->next;
      }
   }

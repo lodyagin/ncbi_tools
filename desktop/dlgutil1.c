@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description: 
 *
@@ -132,10 +132,7 @@ ENUM_ALIST(months_alist)
   {"Dec",  12},
 END_ENUM_ALIST
 
-/* Note that this function is a copy of DoDescriptorPropagate () */
-/* in sequin4.c                                                  */
-
-static Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
+extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data)
 
 {
   BioseqPtr         bsp;

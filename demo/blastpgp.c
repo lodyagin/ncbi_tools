@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastpgp.c,v 6.118 2003/09/26 16:01:34 madden Exp $";
+static char const rcsid[] = "$Id: blastpgp.c,v 6.120 2004/04/29 19:56:00 dondosha Exp $";
 
-/* $Id: blastpgp.c,v 6.118 2003/09/26 16:01:34 madden Exp $ */
+/* $Id: blastpgp.c,v 6.120 2004/04/29 19:56:00 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,8 +26,14 @@ static char const rcsid[] = "$Id: blastpgp.c,v 6.118 2003/09/26 16:01:34 madden 
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.118 $ 
+ * $Revision: 6.120 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.120  2004/04/29 19:56:00  dondosha
+ * Mask filtered locations in query sequence lines in XML output
+ *
+ * Revision 6.119  2004/03/31 17:59:32  dondosha
+ * Fix for XML output for multiple queries: append full XML outputs in one file
+ *
  * Revision 6.118  2003/09/26 16:01:34  madden
  * Change threshold to 0.002
  *
@@ -1400,6 +1406,7 @@ Int2 Main (void)
     Boolean  checkReturn = FALSE;
     Boolean  next_query = FALSE;
     Boolean tabular_output;
+    AsnIoPtr aip = NULL;
 
     SeqAlignPtr PNTR lastSeqAligns = NULL; 
                                 /*keeps track of the last SeqAlign in
@@ -1426,6 +1433,11 @@ Int2 Main (void)
     
     bop = PGPReadBlastOptions();
 
+    if(bop->is_xml_output) {
+       if((aip = AsnIoOpen(myargs[6].strvalue, "wx")) == NULL)
+          return 1;
+    }
+    
     /* Here we will start main do/while loop over many query entries in 
        the input file. If there is an option for checkpoint recover or
        Output File for PSI-BLAST Checkpointing all but first entries in
@@ -1439,17 +1451,14 @@ Int2 Main (void)
     
         if (search == NULL)
             return 1;
+
     
         if(bop->is_xml_output) {
-            AsnIoPtr aip;
-            if((aip = AsnIoOpen(myargs[6].strvalue, "wx")) == NULL)
-                return 1;
-        
-            psixp = PSIXmlInit(aip, "blastp", bop->blast_database, 
-                               bop->options, 
-                               bop->fake_bsp, 0);
+           psixp = PSIXmlInit(aip, "blastp", bop->blast_database, 
+                              bop->options, 
+                              bop->fake_bsp, 0);
         }
-    
+
         /*AAS*/
         if ((NULL != myargs[29].strvalue) || (NULL != myargs[39].strvalue)) {
             recoverCheckpoint = TRUE;
@@ -1625,9 +1634,16 @@ Int2 Main (void)
                 search->mask = vnp;
 
                 if (head == NULL) {                
-                    iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, "No hits found");
+                    iterp = BXMLBuildOneIteration(head, other_returns,
+                               bop->options->is_ooframe,
+                               !bop->options->gapped_calculation, thisPassNum,
+                               "No hits found", search->mask);
                 } else {
-                    iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, search->posConverged ? "CONVERGED" : NULL);
+                    iterp = BXMLBuildOneIteration(head, other_returns,
+                               bop->options->is_ooframe,
+                               !bop->options->gapped_calculation, thisPassNum,
+                               (search->posConverged ? "CONVERGED" : NULL), 
+                               search->mask);
                 }
                 
                 IterationAsnWrite(iterp, psixp->aip, psixp->atp);
@@ -1742,6 +1758,10 @@ Int2 Main (void)
         next_query = PGPReadNextQuerySequence(bop);
         if (bop->options->tweak_parameters)
            bop->options->hitlist_size *= 2;   
+
+        if (psixp) {
+           PSIXmlReset(psixp);
+        }
     } while (next_query);       /* End of main do {} while (); loop */
 
     ReadDBBioseqFetchDisable();

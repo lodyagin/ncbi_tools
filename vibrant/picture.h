@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: picture.h,v $
+* Revision 6.15  2004/02/17 19:22:54  johnson
+* make segment ID consistly unsigned
+*
 * Revision 6.14  2003/03/18 17:00:10  kans
 * Nlm_AddSilentSegRect does not absorb clicks, SegRect reverted to absorb clicks, so desktop click responsiveness is maintained
 *
@@ -340,7 +343,7 @@ extern Nlm_SegmenT   Nlm_ResetSegment   PROTO((Nlm_SegmenT segment));
 extern Nlm_SegmenT   Nlm_DeleteSegment  PROTO((Nlm_SegmenT segment));
 
 extern Nlm_SegmenT   Nlm_ParentSegment  PROTO((Nlm_SegmenT segment));
-extern Nlm_Int2      Nlm_SegmentID      PROTO((Nlm_SegmenT segment));
+extern Nlm_Uint2     Nlm_SegmentID      PROTO((Nlm_SegmenT segment));
 extern Nlm_Boolean   Nlm_SegmentVisible PROTO((Nlm_SegmenT segment));
 extern Nlm_Int1      Nlm_SegmentStyle   PROTO((Nlm_SegmenT segment));
 extern void          Nlm_SegmentBox     PROTO((Nlm_SegmenT segment, 

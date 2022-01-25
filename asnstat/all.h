@@ -10,7 +10,7 @@
 #endif
 
 static char * asnfilename = "all.h60";
-static AsnValxNode avnx[588] = {
+static AsnValxNode avnx[607] = {
     {20,"unk" ,0,0.0,&avnx[1] } ,
     {20,"gt" ,1,0.0,&avnx[2] } ,
     {20,"lt" ,2,0.0,&avnx[3] } ,
@@ -597,10 +597,29 @@ static AsnValxNode avnx[588] = {
     {20,"linear" ,1,0.0,&avnx[584] } ,
     {20,"circular" ,2,0.0,NULL } ,
     {3,NULL,1,0.0,NULL } ,
-    {20,"nucleotide" ,1,0.0,&avnx[587] } ,
+    {20,"not-set" ,0,0.0,&avnx[587] } ,
+    {20,"single-stranded" ,1,0.0,&avnx[588] } ,
+    {20,"double-stranded" ,2,0.0,&avnx[589] } ,
+    {20,"mixed-stranded" ,3,0.0,NULL } ,
+    {3,NULL,0,0.0,NULL } ,
+    {20,"nucleic-acid" ,0,0.0,&avnx[592] } ,
+    {20,"dna" ,1,0.0,&avnx[593] } ,
+    {20,"rna" ,2,0.0,&avnx[594] } ,
+    {20,"trna" ,3,0.0,&avnx[595] } ,
+    {20,"rrna" ,4,0.0,&avnx[596] } ,
+    {20,"mrna" ,5,0.0,&avnx[597] } ,
+    {20,"urna" ,6,0.0,&avnx[598] } ,
+    {20,"snrna" ,7,0.0,&avnx[599] } ,
+    {20,"snorna" ,8,0.0,&avnx[600] } ,
+    {20,"peptide" ,9,0.0,NULL } ,
+    {3,NULL,0,0.0,NULL } ,
+    {20,"linear" ,1,0.0,&avnx[603] } ,
+    {20,"circular" ,2,0.0,NULL } ,
+    {3,NULL,1,0.0,NULL } ,
+    {20,"nucleotide" ,1,0.0,&avnx[606] } ,
     {20,"protein" ,2,0.0,NULL } };
 
-static AsnType atx[1522] = {
+static AsnType atx[1592] = {
   {401, "Date" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[15]} ,
   {0, "str" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -2048,7 +2067,7 @@ static AsnType atx[1522] = {
   {0, "null" ,128,6,0,0,0,0,0,0,NULL,&atx[386],NULL,0,NULL} ,
   {402, "PrintTemplateSet" ,1,0,0,0,0,1,0,0,NULL,&atx[66],&atx[1446],0,&atx[1413]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1411],NULL,0,NULL} ,
-  {401, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1448],0,&atx[1461]} ,
+  {401, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1448],0,&atx[1464]} ,
   {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1449]} ,
   {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1450]} ,
   {0, "strandedness" ,128,2,0,0,1,0,0,0,&avnx[571],&atx[6],&avnx[567],0,&atx[1451]} ,
@@ -2057,74 +2076,144 @@ static AsnType atx[1522] = {
   {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1454]} ,
   {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1455]} ,
   {0, "create-date" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1456]} ,
-  {0, "definition" ,128,8,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1457]} ,
-  {0, "primary-accession" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1458]} ,
-  {0, "accession-version" ,128,10,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1459]} ,
-  {0, "other-seqids" ,128,11,0,1,0,0,0,0,NULL,&atx[66],&atx[1460],0,&atx[1462]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1461],NULL,0,NULL} ,
-  {402, "GBSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1464]} ,
-  {0, "secondary-accessions" ,128,12,0,1,0,0,0,0,NULL,&atx[66],&atx[1463],0,&atx[1465]} ,
+  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1457]} ,
+  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1458]} ,
+  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1459]} ,
+  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1460]} ,
+  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1461]} ,
+  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1462]} ,
+  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1463],0,&atx[1465]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1464],NULL,0,NULL} ,
-  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1467]} ,
-  {0, "keywords" ,128,13,0,1,0,0,0,0,NULL,&atx[66],&atx[1466],0,&atx[1468]} ,
+  {402, "GBSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1467]} ,
+  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1466],0,&atx[1468]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1467],NULL,0,NULL} ,
-  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1474]} ,
-  {0, "segment" ,128,14,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1469]} ,
-  {0, "source" ,128,15,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1470]} ,
-  {0, "organism" ,128,16,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1471]} ,
-  {0, "taxonomy" ,128,17,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1472]} ,
-  {0, "references" ,128,18,0,0,0,0,0,0,NULL,&atx[66],&atx[1473],0,&atx[1485]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1474],NULL,0,NULL} ,
-  {405, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1475],0,&atx[1490]} ,
-  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1476]} ,
-  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[66],&atx[1477],0,&atx[1479]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1478],NULL,0,NULL} ,
-  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1495]} ,
-  {0, "consortium" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1480]} ,
-  {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1481]} ,
-  {0, "journal" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1482]} ,
-  {0, "medline" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1483]} ,
-  {0, "pubmed" ,128,6,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1484]} ,
+  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1470]} ,
+  {0, "keywords" ,128,16,0,1,0,0,0,0,NULL,&atx[66],&atx[1469],0,&atx[1471]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1470],NULL,0,NULL} ,
+  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1477]} ,
+  {0, "segment" ,128,17,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1472]} ,
+  {0, "source" ,128,18,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1473]} ,
+  {0, "organism" ,128,19,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1474]} ,
+  {0, "taxonomy" ,128,20,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1475]} ,
+  {0, "references" ,128,21,0,0,0,0,0,0,NULL,&atx[66],&atx[1476],0,&atx[1488]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1477],NULL,0,NULL} ,
+  {405, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1478],0,&atx[1494]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1479]} ,
+  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[66],&atx[1480],0,&atx[1482]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1481],NULL,0,NULL} ,
+  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1499]} ,
+  {0, "consortium" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1483]} ,
+  {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1484]} ,
+  {0, "journal" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1485]} ,
+  {0, "medline" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1486]} ,
+  {0, "pubmed" ,128,6,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1487]} ,
   {0, "remark" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "comment" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1486]} ,
-  {0, "primary" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1487]} ,
-  {0, "source-db" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1488]} ,
-  {0, "feature-table" ,128,22,0,1,0,0,0,0,NULL,&atx[66],&atx[1489],0,&atx[1505]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1490],NULL,0,NULL} ,
-  {406, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1491],0,&atx[1478]} ,
-  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1492]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1493]} ,
-  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1494],0,&atx[1500]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1495],NULL,0,NULL} ,
-  {408, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1496],0,&atx[1502]} ,
-  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1497]} ,
-  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1498]} ,
-  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1499]} ,
+  {0, "comment" ,128,22,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1489]} ,
+  {0, "primary" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1490]} ,
+  {0, "source-db" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1491]} ,
+  {0, "database-reference" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1492]} ,
+  {0, "feature-table" ,128,26,0,1,0,0,0,0,NULL,&atx[66],&atx[1493],0,&atx[1509]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1494],NULL,0,NULL} ,
+  {406, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1495],0,&atx[1481]} ,
+  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1496]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1497]} ,
+  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1498],0,&atx[1504]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1499],NULL,0,NULL} ,
+  {408, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1500],0,&atx[1506]} ,
+  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1501]} ,
+  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1502]} ,
+  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1503]} ,
   {0, "accession" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "quals" ,128,3,0,1,0,0,0,0,NULL,&atx[66],&atx[1501],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1502],NULL,0,NULL} ,
-  {409, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1503],0,&atx[1507]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1504]} ,
+  {0, "quals" ,128,3,0,1,0,0,0,0,NULL,&atx[66],&atx[1505],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1506],NULL,0,NULL} ,
+  {409, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1507],0,&atx[1511]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1508]} ,
   {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "sequence" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1506]} ,
-  {0, "contig" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {410, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1508],0,NULL} ,
+  {0, "sequence" ,128,27,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1510]} ,
+  {0, "contig" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {410, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1512],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1447],NULL,0,NULL} ,
-  {401, "TSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1510],0,&atx[1520]} ,
-  {0, "seqtype" ,128,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[586],0,&atx[1511]} ,
-  {0, "gi" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1512]} ,
-  {0, "accver" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1513]} ,
-  {0, "sid" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1514]} ,
-  {0, "local" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1515]} ,
-  {0, "taxid" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1516]} ,
-  {0, "orgname" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1517]} ,
-  {0, "defline" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1518]} ,
-  {0, "length" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1519]} ,
+  {401, "INSDSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1514],0,&atx[1530]} ,
+  {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1515]} ,
+  {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1516]} ,
+  {0, "strandedness" ,128,2,0,0,1,0,0,0,&avnx[590],&atx[6],&avnx[586],0,&atx[1517]} ,
+  {0, "moltype" ,128,3,0,0,1,0,0,0,&avnx[601],&atx[6],&avnx[591],0,&atx[1518]} ,
+  {0, "topology" ,128,4,0,0,1,0,0,0,&avnx[604],&atx[6],&avnx[602],0,&atx[1519]} ,
+  {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1520]} ,
+  {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1521]} ,
+  {0, "create-date" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1522]} ,
+  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1523]} ,
+  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1524]} ,
+  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1525]} ,
+  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1526]} ,
+  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1527]} ,
+  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1528]} ,
+  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1529],0,&atx[1531]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1530],NULL,0,NULL} ,
+  {402, "INSDSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1533]} ,
+  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1532],0,&atx[1534]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1533],NULL,0,NULL} ,
+  {403, "INSDSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1536]} ,
+  {0, "keywords" ,128,16,0,1,0,0,0,0,NULL,&atx[66],&atx[1535],0,&atx[1537]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1536],NULL,0,NULL} ,
+  {404, "INSDKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1543]} ,
+  {0, "segment" ,128,17,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1538]} ,
+  {0, "source" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1539]} ,
+  {0, "organism" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1540]} ,
+  {0, "taxonomy" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1541]} ,
+  {0, "references" ,128,21,0,1,0,0,0,0,NULL,&atx[66],&atx[1542],0,&atx[1554]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1543],NULL,0,NULL} ,
+  {405, "INSDReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1544],0,&atx[1560]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1545]} ,
+  {0, "authors" ,128,1,0,1,0,0,0,0,NULL,&atx[66],&atx[1546],0,&atx[1548]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1547],NULL,0,NULL} ,
+  {407, "INSDAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1565]} ,
+  {0, "consortium" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1549]} ,
+  {0, "title" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1550]} ,
+  {0, "journal" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1551]} ,
+  {0, "medline" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1552]} ,
+  {0, "pubmed" ,128,6,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1553]} ,
+  {0, "remark" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "comment" ,128,22,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1555]} ,
+  {0, "primary" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1556]} ,
+  {0, "source-db" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1557]} ,
+  {0, "database-reference" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1558]} ,
+  {0, "feature-table" ,128,26,0,1,0,0,0,0,NULL,&atx[66],&atx[1559],0,&atx[1575]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1560],NULL,0,NULL} ,
+  {406, "INSDFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1561],0,&atx[1547]} ,
+  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1562]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1563]} ,
+  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1564],0,&atx[1570]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1565],NULL,0,NULL} ,
+  {408, "INSDInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1566],0,&atx[1572]} ,
+  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1567]} ,
+  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1568]} ,
+  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1569]} ,
+  {0, "accession" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "quals" ,128,3,0,1,0,0,0,0,NULL,&atx[66],&atx[1571],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1572],NULL,0,NULL} ,
+  {409, "INSDQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1573],0,&atx[1577]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1574]} ,
+  {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "sequence" ,128,27,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1576]} ,
+  {0, "contig" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {410, "INSDSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1578],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1513],NULL,0,NULL} ,
+  {401, "TSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1580],0,&atx[1590]} ,
+  {0, "seqtype" ,128,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[605],0,&atx[1581]} ,
+  {0, "gi" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1582]} ,
+  {0, "accver" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1583]} ,
+  {0, "sid" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1584]} ,
+  {0, "local" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1585]} ,
+  {0, "taxid" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1586]} ,
+  {0, "orgname" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1587]} ,
+  {0, "defline" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1588]} ,
+  {0, "length" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1589]} ,
   {0, "sequence" ,128,9,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {402, "TSeqSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1521],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1509],NULL,0,NULL} };
+  {402, "TSeqSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1591],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1579],NULL,0,NULL} };
 
-static AsnModule ampx[35] = {
+static AsnModule ampx[36] = {
   { "NCBI-General" , "all.h60",&atx[0],NULL,&ampx[1],0,0} ,
   { "NCBI-Biblio" , NULL,&atx[77],NULL,&ampx[2],0,0} ,
   { "NCBI-Medline" , NULL,&atx[233],NULL,&ampx[3],0,0} ,
@@ -2159,7 +2248,8 @@ static AsnModule ampx[35] = {
   { "NCBI-Mime" , NULL,&atx[1335],NULL,&ampx[32],0,0} ,
   { "NCBI-ObjPrt" , NULL,&atx[1411],NULL,&ampx[33],0,0} ,
   { "NCBI-GBSeq" , NULL,&atx[1447],NULL,&ampx[34],0,0} ,
-  { "NCBI-TSeq" , NULL,&atx[1509],NULL,NULL,0,0} };
+  { "INSD-INSDSeq" , NULL,&atx[1513],NULL,&ampx[35],0,0} ,
+  { "NCBI-TSeq" , NULL,&atx[1579],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -3948,68 +4038,155 @@ static AsnModulePtr amp = ampx;
 #define GBSEQ_division &at[1453]
 #define GBSEQ_update_date &at[1454]
 #define GBSEQ_create_date &at[1455]
-#define GBSEQ_definition &at[1456]
-#define GBSEQ_primary_accession &at[1457]
-#define GBSEQ_accession_version &at[1458]
-#define GBSEQ_other_seqids &at[1459]
-#define GBSEQ_other_seqids_E &at[1460]
-#define GBSEQ_secondary_accessions &at[1462]
-#define GBSEQ_secondary_accessions_E &at[1463]
-#define GBSEQ_keywords &at[1465]
-#define GBSEQ_keywords_E &at[1466]
-#define GBSEQ_segment &at[1468]
-#define GBSEQ_source &at[1469]
-#define GBSEQ_organism &at[1470]
-#define GBSEQ_taxonomy &at[1471]
-#define GBSEQ_references &at[1472]
-#define GBSEQ_references_E &at[1473]
-#define GBSEQ_comment &at[1485]
-#define GBSEQ_primary &at[1486]
-#define GBSEQ_source_db &at[1487]
-#define GBSEQ_feature_table &at[1488]
-#define GBSEQ_feature_table_E &at[1489]
-#define GBSEQ_sequence &at[1505]
-#define GBSEQ_contig &at[1506]
+#define GBSEQ_update_release &at[1456]
+#define GBSEQ_create_release &at[1457]
+#define GBSEQ_definition &at[1458]
+#define GBSEQ_primary_accession &at[1459]
+#define GBSEQ_entry_version &at[1460]
+#define GBSEQ_accession_version &at[1461]
+#define GBSEQ_other_seqids &at[1462]
+#define GBSEQ_other_seqids_E &at[1463]
+#define GBSEQ_secondary_accessions &at[1465]
+#define GBSEQ_secondary_accessions_E &at[1466]
+#define GBSEQ_keywords &at[1468]
+#define GBSEQ_keywords_E &at[1469]
+#define GBSEQ_segment &at[1471]
+#define GBSEQ_source &at[1472]
+#define GBSEQ_organism &at[1473]
+#define GBSEQ_taxonomy &at[1474]
+#define GBSEQ_references &at[1475]
+#define GBSEQ_references_E &at[1476]
+#define GBSEQ_comment &at[1488]
+#define GBSEQ_primary &at[1489]
+#define GBSEQ_source_db &at[1490]
+#define GBSEQ_database_reference &at[1491]
+#define GBSEQ_feature_table &at[1492]
+#define GBSEQ_feature_table_E &at[1493]
+#define GBSEQ_sequence &at[1509]
+#define GBSEQ_contig &at[1510]
 
-#define GBSEQID &at[1461]
+#define GBSEQID &at[1464]
 
-#define GBSECONDARY_ACCN &at[1464]
+#define GBSECONDARY_ACCN &at[1467]
 
-#define GBKEYWORD &at[1467]
+#define GBKEYWORD &at[1470]
 
-#define GBREFERENCE &at[1474]
-#define GBREFERENCE_reference &at[1475]
-#define GBREFERENCE_authors &at[1476]
-#define GBREFERENCE_authors_E &at[1477]
-#define GBREFERENCE_consortium &at[1479]
-#define GBREFERENCE_title &at[1480]
-#define GBREFERENCE_journal &at[1481]
-#define GBREFERENCE_medline &at[1482]
-#define GBREFERENCE_pubmed &at[1483]
-#define GBREFERENCE_remark &at[1484]
+#define GBREFERENCE &at[1477]
+#define GBREFERENCE_reference &at[1478]
+#define GBREFERENCE_authors &at[1479]
+#define GBREFERENCE_authors_E &at[1480]
+#define GBREFERENCE_consortium &at[1482]
+#define GBREFERENCE_title &at[1483]
+#define GBREFERENCE_journal &at[1484]
+#define GBREFERENCE_medline &at[1485]
+#define GBREFERENCE_pubmed &at[1486]
+#define GBREFERENCE_remark &at[1487]
 
-#define GBFEATURE &at[1490]
-#define GBFEATURE_key &at[1491]
-#define GBFEATURE_location &at[1492]
-#define GBFEATURE_intervals &at[1493]
-#define GBFEATURE_intervals_E &at[1494]
-#define GBFEATURE_quals &at[1500]
-#define GBFEATURE_quals_E &at[1501]
+#define GBFEATURE &at[1494]
+#define GBFEATURE_key &at[1495]
+#define GBFEATURE_location &at[1496]
+#define GBFEATURE_intervals &at[1497]
+#define GBFEATURE_intervals_E &at[1498]
+#define GBFEATURE_quals &at[1504]
+#define GBFEATURE_quals_E &at[1505]
 
-#define GBAUTHOR &at[1478]
+#define GBAUTHOR &at[1481]
 
-#define GBINTERVAL &at[1495]
-#define GBINTERVAL_from &at[1496]
-#define GBINTERVAL_to &at[1497]
-#define GBINTERVAL_point &at[1498]
-#define GBINTERVAL_accession &at[1499]
+#define GBINTERVAL &at[1499]
+#define GBINTERVAL_from &at[1500]
+#define GBINTERVAL_to &at[1501]
+#define GBINTERVAL_point &at[1502]
+#define GBINTERVAL_accession &at[1503]
 
-#define GBQUALIFIER &at[1502]
-#define GBQUALIFIER_name &at[1503]
-#define GBQUALIFIER_value &at[1504]
+#define GBQUALIFIER &at[1506]
+#define GBQUALIFIER_name &at[1507]
+#define GBQUALIFIER_value &at[1508]
 
-#define GBSET &at[1507]
-#define GBSET_E &at[1508]
+#define GBSET &at[1511]
+#define GBSET_E &at[1512]
+
+
+/**************************************************
+*
+*    Defines for Module INSD-INSDSeq
+*
+**************************************************/
+
+#define INSDSEQ &at[1513]
+#define INSDSEQ_locus &at[1514]
+#define INSDSEQ_length &at[1515]
+#define INSDSEQ_strandedness &at[1516]
+#define INSDSEQ_moltype &at[1517]
+#define INSDSEQ_topology &at[1518]
+#define INSDSEQ_division &at[1519]
+#define INSDSEQ_update_date &at[1520]
+#define INSDSEQ_create_date &at[1521]
+#define INSDSEQ_update_release &at[1522]
+#define INSDSEQ_create_release &at[1523]
+#define INSDSEQ_definition &at[1524]
+#define INSDSEQ_primary_accession &at[1525]
+#define INSDSEQ_entry_version &at[1526]
+#define INSDSEQ_accession_version &at[1527]
+#define INSDSEQ_other_seqids &at[1528]
+#define INSDSEQ_other_seqids_E &at[1529]
+#define INSDSEQ_secondary_accessions &at[1531]
+#define INSDSEQ_secondary_accessions_E &at[1532]
+#define INSDSEQ_keywords &at[1534]
+#define INSDSEQ_keywords_E &at[1535]
+#define INSDSEQ_segment &at[1537]
+#define INSDSEQ_source &at[1538]
+#define INSDSEQ_organism &at[1539]
+#define INSDSEQ_taxonomy &at[1540]
+#define INSDSEQ_references &at[1541]
+#define INSDSEQ_references_E &at[1542]
+#define INSDSEQ_comment &at[1554]
+#define INSDSEQ_primary &at[1555]
+#define INSDSEQ_source_db &at[1556]
+#define INSDSEQ_database_reference &at[1557]
+#define INSDSEQ_feature_table &at[1558]
+#define INSDSEQ_feature_table_E &at[1559]
+#define INSDSEQ_sequence &at[1575]
+#define INSDSEQ_contig &at[1576]
+
+#define INSDSEQID &at[1530]
+
+#define INSDSECONDARY_ACCN &at[1533]
+
+#define INSDKEYWORD &at[1536]
+
+#define INSDREFERENCE &at[1543]
+#define INSDREFERENCE_reference &at[1544]
+#define INSDREFERENCE_authors &at[1545]
+#define INSDREFERENCE_authors_E &at[1546]
+#define INSDREFERENCE_consortium &at[1548]
+#define INSDREFERENCE_title &at[1549]
+#define INSDREFERENCE_journal &at[1550]
+#define INSDREFERENCE_medline &at[1551]
+#define INSDREFERENCE_pubmed &at[1552]
+#define INSDREFERENCE_remark &at[1553]
+
+#define INSDFEATURE &at[1560]
+#define INSDFEATURE_key &at[1561]
+#define INSDFEATURE_location &at[1562]
+#define INSDFEATURE_intervals &at[1563]
+#define INSDFEATURE_intervals_E &at[1564]
+#define INSDFEATURE_quals &at[1570]
+#define INSDFEATURE_quals_E &at[1571]
+
+#define INSDAUTHOR &at[1547]
+
+#define INSDINTERVAL &at[1565]
+#define INSDINTERVAL_from &at[1566]
+#define INSDINTERVAL_to &at[1567]
+#define INSDINTERVAL_point &at[1568]
+#define INSDINTERVAL_accession &at[1569]
+
+#define INSDQUALIFIER &at[1572]
+#define INSDQUALIFIER_name &at[1573]
+#define INSDQUALIFIER_value &at[1574]
+
+#define INSDSET &at[1577]
+#define INSDSET_E &at[1578]
 
 
 /**************************************************
@@ -4018,17 +4195,17 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define TSEQ &at[1509]
-#define TSEQ_seqtype &at[1510]
-#define TSEQ_gi &at[1511]
-#define TSEQ_accver &at[1512]
-#define TSEQ_sid &at[1513]
-#define TSEQ_local &at[1514]
-#define TSEQ_taxid &at[1515]
-#define TSEQ_orgname &at[1516]
-#define TSEQ_defline &at[1517]
-#define TSEQ_length &at[1518]
-#define TSEQ_sequence &at[1519]
+#define TSEQ &at[1579]
+#define TSEQ_seqtype &at[1580]
+#define TSEQ_gi &at[1581]
+#define TSEQ_accver &at[1582]
+#define TSEQ_sid &at[1583]
+#define TSEQ_local &at[1584]
+#define TSEQ_taxid &at[1585]
+#define TSEQ_orgname &at[1586]
+#define TSEQ_defline &at[1587]
+#define TSEQ_length &at[1588]
+#define TSEQ_sequence &at[1589]
 
-#define TSEQSET &at[1520]
-#define TSEQSET_E &at[1521]
+#define TSEQSET &at[1590]
+#define TSEQSET_E &at[1591]

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -325,6 +325,7 @@ static Int2 LIBCALLBACK VSMGenericFastaSave (OMProcControlPtr ompcp, Boolean is_
 	ValNode vn;
 	SeqEntryPtr sep = NULL;
 	SeqFeatPtr sfp;
+	SeqLocPtr slp;
 	SeqPortPtr spp;
 	Uint1 code;
 	Char buf[255];
@@ -377,8 +378,12 @@ static Int2 LIBCALLBACK VSMGenericFastaSave (OMProcControlPtr ompcp, Boolean is_
 				code = Seq_code_iupacna;
 			else
 				code = Seq_code_ncbieaa;
-			spp = SeqPortNewByLoc (sfp->location, code);
-			bsp = GetBioseqGivenSeqLoc (sfp->location, ompcp->input_entityID);
+			slp = sfp->location;
+			if (sfp->data.choice == SEQFEAT_CDREGION && (! is_na)) {
+			  slp = sfp->product;
+			}
+			spp = SeqPortNewByLoc (slp, code);
+			bsp = GetBioseqGivenSeqLoc (slp, ompcp->input_entityID);
 			if (spp != NULL && bsp != NULL) {
 				while (FastaSeqLine(spp, buf, 70, is_na))
 					FastaFileFunc(bsp, FASTA_SEQLINE, buf, sizeof (buf), (Pointer)fp);

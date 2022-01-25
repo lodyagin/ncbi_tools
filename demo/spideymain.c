@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: main functions for running Spidey as a standalone 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spideymain.c,v $
+* Revision 6.10  2004/03/25 21:20:03  kskatz
+* All SPI_is_acceptor_* functions have been corrected: 'N' no longer contributes to nor subtracts from the score, log odds are calculated and the scores added; they are however all antilogged because there are too many places in the code where the score is expected to be between 0 and 1.  Also, corrected sequence frequency determination in SPI_is_acceptor_user and SPI_is_donor_user, as well as correcting for 'N'. Finally, and this all began with, I added matrices for Dictyostelium - command line -r -m
+*
 * Revision 6.9  2003/04/04 19:42:56  kskatz
 * Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
 *
@@ -113,7 +116,7 @@ Args myargs[NUMARGS] = {
    {"Output file 2 (alignments)", "spidey.aln", NULL, NULL, TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
    {"Input file is a GI list", "F", NULL, NULL, TRUE, 'G', ARG_BOOLEAN, 0.0, 0, NULL},
    {"Number of gene models", "1", NULL, NULL, TRUE, 'n', ARG_INT, 0.0, 0, NULL},
-   {"Organism (genomic sequence) v=vertebrate,\nd = drosophila, p = plant, c = C. elegans", "v", NULL, NULL, TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
+   {"Organism (genomic sequence) v=vertebrate,\nd = drosophila, p = plant, c = C. elegans, m = Dictyostelium discoideum", "v", NULL, NULL, TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
    {"First-pass e-value", "0.0000000001", NULL, NULL, TRUE, 'e', ARG_FLOAT, 0.0, 0, NULL},
    {"Second-pass e-value", "0.001", NULL, NULL, TRUE, 'f', ARG_FLOAT, 0.0, 0, NULL},
    {"Third-pass e-value", "10", NULL, NULL, TRUE, 'g', ARG_FLOAT, 0.0, 0, NULL},
@@ -431,14 +434,21 @@ Int2 Main()
    spot->bigintron_size = myargs[MYARGXL_SIZE].intvalue;
    spot->repeat_db_file = myargs[MYARGREPDB].strvalue;
    txt = myargs[MYARGORG].strvalue;
-   if (!StringICmp(txt, "d") || !StringICmp(txt, "D"))
-      spot->organism = SPI_FLY;
-   else if (!StringICmp(txt, "p") || !StringICmp(txt, "P"))
-      spot->organism = SPI_PLANT;
-   else if (!StringICmp(txt, "c") || !StringICmp(txt, "C"))
-      spot->organism = SPI_CELEGANS;
-   else
-      spot->organism = SPI_VERTEBRATE;
+   if (!StringICmp(txt, "d") || !StringICmp(txt, "D")){
+       spot->organism = SPI_FLY;
+   }
+   else if (!StringICmp(txt, "p") || !StringICmp(txt, "P")){
+       spot->organism = SPI_PLANT;
+   }
+   else if (!StringICmp(txt, "c") || !StringICmp(txt, "C")){
+       spot->organism = SPI_CELEGANS;
+   }
+   else if (!StringICmp(txt, "m") || !StringICmp(txt, "M")){
+       spot->organism = SPI_DICTY;
+   }
+   else {
+       spot->organism = SPI_VERTEBRATE;
+   }
    sap = NULL;
    if (spot->printasn)
       spot->sap_head = &sap;

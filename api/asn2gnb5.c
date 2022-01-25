@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.3 $
+* $Revision: 1.11 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -90,7 +90,7 @@ NLM_EXTERN Char ev_link [MAX_WWWBUF];
 #define DEF_LINK_EV  "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?"
 
 NLM_EXTERN Char ec_link [MAX_WWWBUF];
-#define DEF_LINK_EC "http://www.expasy.ch/cgi-bin/nicezyme.pl?"
+#define DEF_LINK_EC "http://www.expasy.org/cgi-bin/nicezyme.pl?"
 
 NLM_EXTERN Char link_tax [MAX_WWWBUF];
 #define DEF_LINK_TAX "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"
@@ -120,7 +120,7 @@ static Char link_cog [MAX_WWWBUF];
 #define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/cgi-bin/COG/palox?"
 
 static Char link_sgd [MAX_WWWBUF];
-#define DEF_LINK_SGD "/cgi-bin/Entrez/referer?http://genome-www4.stanford.edu/cgi-bin/SGD/locus.pl?locus="
+#define DEF_LINK_SGD "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="
 
 static Char link_gdb [MAX_WWWBUF];
 #define DEF_LINK_GDB "http://www.gdb.org/gdb-bin/genera/genera/hgd/DBObject/GDB:"
@@ -132,10 +132,10 @@ static Char link_rice [MAX_WWWBUF];
 #define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="
 
 static Char link_sp [MAX_WWWBUF];
-#define DEF_LINK_SP "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/sprot-search-ac%3f"
+#define DEF_LINK_SP "http://www.expasy.org/cgi-bin/sprot-search-ac%3f"
 
 static Char link_pdb [MAX_WWWBUF];
-#define DEF_LINK_PDB "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/get-pdb-entry%3f"
+#define DEF_LINK_PDB "http://www.expasy.org/cgi-bin/get-pdb-entry%3f"
 
 static Char link_UniSTS [MAX_WWWBUF];
 #define DEF_LINK_UniSTS "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="
@@ -153,7 +153,7 @@ static Char link_snp [MAX_WWWBUF];
 #define DEF_LINK_SNP "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="
 
 static Char link_ratmap [MAX_WWWBUF];
-#define DEF_LINK_RATMAP "http://ratmap.gen.gu.se/action.lasso?-database=RATMAPfmPro&-layout=Detail&-response=/RM/Detail+Format.html&-search&-recid="
+#define DEF_LINK_RATMAP "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="
 
 static Char link_rgd [MAX_WWWBUF];
 #define DEF_LINK_RGD "http://rgd.mcw.edu/query/query.cgi?id="
@@ -211,6 +211,12 @@ static Char link_rebase [MAX_WWWBUF];
 
 NLM_EXTERN Char link_encode [MAX_WWWBUF];
 #define DEF_LINK_ENCODE  "http://www.nhgri.nih.gov/10005107"
+
+NLM_EXTERN Char link_pgn [MAX_WWWBUF];
+#define DEF_LINK_PGN  "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="
+
+NLM_EXTERN Char link_subtilist [MAX_WWWBUF];
+#define DEF_LINK_SUBTILIST  "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"
 
 /* www utility functions */
 
@@ -285,6 +291,8 @@ NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ZFIN", DEF_LINK_ZFIN, link_zfin, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_REBASE", DEF_LINK_REBASE, link_rebase, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ENCODE", DEF_LINK_ENCODE, link_encode, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PGN", DEF_LINK_PGN, link_pgn, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SUBTILIST", DEF_LINK_SUBTILIST, link_subtilist, MAX_WWWBUF);
 }
 
 
@@ -541,7 +549,7 @@ static void Do_www_db_xref(
     FF_www_db_xref_std(ffstring, db, identifier, link_zfin);
   } else if ( StringCmp(db , "FANTOM_DB") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_fantom);
-  } else if ( StringCmp(db , "Interpro") == 0) {
+  } else if ( StringCmp(db , "InterPro") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_interpro);
   } else if ( StringCmp(db , "GeneDB") == 0) {
     FF_www_db_xref_std(ffstring, db, identifier, link_genedb);
@@ -569,6 +577,16 @@ static void Do_www_db_xref(
     FF_www_db_xref_gdb(ffstring, db, identifier);
   } else if ( StringCmp(db , "REBASE") == 0) {
     FF_www_db_xref_rebase(ffstring, db, identifier);
+  } else if ( StringCmp(db , "Swiss-Prot") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_sp);
+  /*
+  } else if ( StringCmp(db , "ENCODE") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_encode);
+  */
+  } else if ( StringCmp(db , "PGN") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_pgn);
+  } else if ( StringCmp(db , "SubtiList") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_subtilist);
 
   } else {  
     /* default: no link just the text */

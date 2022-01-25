@@ -1,4 +1,4 @@
-/*  $Id: vibmouse.h,v 6.1 1999/04/06 14:23:26 lewisg Exp $
+/*  $Id: vibmouse.h,v 6.2 2004/04/01 13:43:09 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * ==========================================================================
 * $Log: vibmouse.h,v $
+* Revision 6.2  2004/04/01 13:43:09  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.1  1999/04/06 14:23:26  lewisg
 * add opengl replacement for viewer3d
 *
@@ -219,7 +222,7 @@ extern Nlm_PaneL MA_GetPanel(MAPtr ma);
 
 
 /*---[ MA_UnlinkPanel ]--------------------------------------------------
- * Give away the control over the mouse events occured in the
+ * Give away the control over the mouse events occurred in the
  * panel(if any) presently wrapped by "ma";  disable all mouse handlers
  * previously set for this panel
  */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.57 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *
@@ -933,7 +933,9 @@ extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
          adp->voffset = 0;
          CorrectBarValue (sb, (Int4) 0);
      }
-     if (adp->hoffset+adp->visibleWidth>adp->length && adp->voffset<adp->nlines)
+     if (adp->seqnumber == 1
+         && adp->hoffset+adp->visibleWidth>adp->length
+         && adp->voffset<adp->nlines)
      {
         adp->voffset = adp->nlines;
         CorrectBarValue (sb, (Int4) adp->nlines);
@@ -951,7 +953,10 @@ extern void VscrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval)
      }
      else 
      {
-     	adp->hoffset = adp->visibleWidth * (Int4)((FloatLo)adp->voffset);
+         if (adp->seqnumber > 1)
+     	     adp->hoffset = adp->visibleWidth * (Int4)((FloatLo)adp->voffset / (adp->seqnumber + 2));
+         else
+             adp->hoffset = adp->visibleWidth * (Int4)((FloatLo)adp->voffset); 
      }
      
      /* Use adp->int4value2 to disable line number counting when scrolling */

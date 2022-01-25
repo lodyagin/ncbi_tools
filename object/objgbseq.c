@@ -31,7 +31,7 @@ objgbseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.14 at Jul 19, 2002  2:16 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 9, 2004 11:58 AM
 *
 **************************************************/
 
@@ -72,8 +72,11 @@ GBSeqFree(GBSeqPtr ptr)
    MemFree(ptr -> division);
    MemFree(ptr -> update_date);
    MemFree(ptr -> create_date);
+   MemFree(ptr -> update_release);
+   MemFree(ptr -> create_release);
    MemFree(ptr -> definition);
    MemFree(ptr -> primary_accession);
+   MemFree(ptr -> entry_version);
    MemFree(ptr -> accession_version);
    AsnGenericBaseSeqOfFree(ptr -> other_seqids ,ASNCODE_PTRVAL_SLOT);
    AsnGenericBaseSeqOfFree(ptr -> secondary_accessions ,ASNCODE_PTRVAL_SLOT);
@@ -86,6 +89,7 @@ GBSeqFree(GBSeqPtr ptr)
    MemFree(ptr -> comment);
    MemFree(ptr -> primary);
    MemFree(ptr -> source_db);
+   MemFree(ptr -> database_reference);
    AsnGenericUserSeqOfFree(ptr -> feature_table, (AsnOptFreeFunc) GBFeatureFree);
    MemFree(ptr -> sequence);
    MemFree(ptr -> contig);
@@ -196,6 +200,20 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> create_date = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBSEQ_update_release) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> update_release = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_create_release) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> create_release = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == GBSEQ_definition) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -208,6 +226,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> primary_accession = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_entry_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> entry_version = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_accession_version) {
@@ -292,6 +317,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
       ptr -> source_db = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == GBSEQ_database_reference) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> database_reference = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBSEQ_feature_table) {
@@ -390,6 +422,14 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> create_date;
       retval = AsnWrite(aip, GBSEQ_create_date,  &av);
    }
+   if (ptr -> update_release != NULL) {
+      av.ptrvalue = ptr -> update_release;
+      retval = AsnWrite(aip, GBSEQ_update_release,  &av);
+   }
+   if (ptr -> create_release != NULL) {
+      av.ptrvalue = ptr -> create_release;
+      retval = AsnWrite(aip, GBSEQ_create_release,  &av);
+   }
    if (ptr -> definition != NULL) {
       av.ptrvalue = ptr -> definition;
       retval = AsnWrite(aip, GBSEQ_definition,  &av);
@@ -397,6 +437,10 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> primary_accession != NULL) {
       av.ptrvalue = ptr -> primary_accession;
       retval = AsnWrite(aip, GBSEQ_primary_accession,  &av);
+   }
+   if (ptr -> entry_version != NULL) {
+      av.ptrvalue = ptr -> entry_version;
+      retval = AsnWrite(aip, GBSEQ_entry_version,  &av);
    }
    if (ptr -> accession_version != NULL) {
       av.ptrvalue = ptr -> accession_version;
@@ -433,6 +477,10 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> source_db != NULL) {
       av.ptrvalue = ptr -> source_db;
       retval = AsnWrite(aip, GBSEQ_source_db,  &av);
+   }
+   if (ptr -> database_reference != NULL) {
+      av.ptrvalue = ptr -> database_reference;
+      retval = AsnWrite(aip, GBSEQ_database_reference,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> feature_table, (AsnWriteFunc) GBFeatureAsnWrite, aip, GBSEQ_feature_table, GBSEQ_feature_table_E);
    if (ptr -> sequence != NULL) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.94 $
+* $Revision: 6.96 $
 *
 * File Description: 
 *
@@ -48,6 +48,7 @@
 #include <ncbi.h>
 #include <sequtil.h>
 #include <objpubme.h>
+#include <util/creaders/alnread.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -290,7 +291,7 @@ NLM_EXTERN void LeaveBestCDD (SeqEntryPtr sep);
 
 /* ConvertPubSrcComDescsToFeats is useful when merging records */
 
-NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts);
+NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts, Boolean PNTR asked_about_prop, Boolean PNTR propagate_descriptions, CharPtr findstring);
 
 NLM_EXTERN void DeleteMultipleTitles (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
 
@@ -564,6 +565,26 @@ NLM_EXTERN PubmedEntryPtr LIBCALL GetPubMedForUid (Int4 uid);
 typedef PubmedEntryPtr (LIBCALLBACK * PubMedFetchFunc) (Int4 uid);
 
 NLM_EXTERN void LIBCALL PubMedSetFetchFunc (PubMedFetchFunc func);
+
+extern CharPtr MyFGetLine (FILE *fp, ValNodePtr PNTR current_data);
+
+#if defined (WIN32)
+extern char * __stdcall AbstractReadFunction (Pointer userdata);
+extern void __stdcall AbstractReportError (TErrorInfoPtr err_ptr, Pointer userdata);
+#else
+extern char * AbstractReadFunction (Pointer userdata);
+extern void AbstractReportError (TErrorInfoPtr err_ptr, Pointer userdata);
+#endif
+
+typedef struct readbuffer {
+  FILE *fp;
+  ValNodePtr current_data;
+} ReadBufferData, PNTR ReadBufferPtr;
+
+extern void FreeBufferedReadList (ValNodePtr vnp);
+
+extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 moltype);
+extern SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep);
 
 
 

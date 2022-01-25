@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-SeqCode
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objcode.c,v $
+* Revision 6.10  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.9  2002/09/13 15:07:17  kans
 * restored U Selenocysteine to iupacaa rather than kludge asn2gnbk
 *
@@ -197,9 +200,9 @@ erret:
 *
 *   SeqMapTableAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -442,9 +445,9 @@ erret:
 *
 *   SeqCodeTableAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -708,9 +711,9 @@ erret:
 *
 *   SeqCodeSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqCodeSetPtr LIBCALL SeqCodeSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)

@@ -29,13 +29,19 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: objmgr.c,v $
+* Revision 6.52  2004/04/21 19:40:51  kans
+* ObjMgrReap calculate tempcnt based on temp loaded records, but excluded locked ones - more work still to do in other functions to completely avoid unnecessary thrashing
+*
+* Revision 6.51  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.50  2003/12/22 15:29:28  kans
 * ObjMgrSendMsg calls SeqMgrClearFeatureIndexes on OM_MSG_DEL as well as OM_MSG_UPDATE
 *
@@ -2196,7 +2202,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrWholeEntity (ObjMgrDataPtr omdp, Uint2 itemID, 
 *   	Frees all cached objects of type and subtypes of type
 *   		based on ObjMgrMatch()
 *   	if type == 0, frees all cached objects
-*   	returns TRUE if no errors occured
+*   	returns TRUE if no errors occurred
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
@@ -2614,6 +2620,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 {
 	Uint4 lowest;
 	Int4 num, j;
+	Uint2 tempcnt;
 	ObjMgrDataPtr tmp, ditch, PNTR omdpp;
 	Boolean is_write_locked, did_one = FALSE;
 
@@ -2623,10 +2630,23 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 	if (omp->reaping)   /* protect against recursion caused by ObjMgrSendMsg */
 		return FALSE;
 
-	while (omp->tempcnt > omp->maxtemp)   /* time to reap */
+    tempcnt = 0;
+	num = omp->currobj;
+	omdpp = omp->datalist;
+	for (j = 0; j < num; j++, omdpp++)
+	{
+		tmp = *omdpp;
+		if ((tmp->tempload == TL_LOADED) && (! tmp->lockcnt))
+		{
+			tempcnt++;
+		}
+	}
+
+	while (/* omp-> */ tempcnt > omp->maxtemp)   /* time to reap */
 	{
 		lowest = UINT4_MAX;
-		
+
+        tempcnt = 0;
 		num = omp->currobj;
 		omdpp = omp->datalist;
 		ditch = NULL;
@@ -2635,6 +2655,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 			tmp = *omdpp;
 			if ((tmp->tempload == TL_LOADED) && (! tmp->lockcnt))
 			{
+			    tempcnt++;
 				if (lowest > tmp->touch)
 				{
 					lowest = tmp->touch;
@@ -2649,6 +2670,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 		ditch->tempload = TL_CACHED;
 		ObjMgrSendMsgFunc(omp, ditch, OM_MSG_CACHED, ditch->EntityID, 0, 0, 0, 0, 0, NULL);
 		omp->tempcnt--;
+		tempcnt--;
 		is_write_locked = omp->is_write_locked;
 
 		/* null out feature pointers in seqmgr feature indices via reap function */

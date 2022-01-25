@@ -44,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.12  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.11  2003/11/21 17:58:46  bollin
 * remove tax ref and common name when changing taxonomy name via ASN Find/Replace
 *
@@ -307,7 +310,7 @@ static Boolean FindReplString (
   /* Make a guess of how big a working buffer we'll */
   /* need based on a worst case scenario.           */
   /*                                                */
-  /*   A = Max occurances of find string =          */
+  /*   A = Max occurrences of find string =         */
   /*               searchLen / findLen              */
   /*                                                */
   /*   B = Size increase for each replacement =     */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -2018,6 +2018,8 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr s
   Boolean     delete_before = FALSE;
   Int2    intersalpwidth=0;
   Int2    is_end=0;
+  Int4        num_new_strands;
+  Int4        num_addl_strands;
 
   if (salp == NULL)
      return NULL;
@@ -2080,23 +2082,22 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDeleteByLoc (SeqLocPtr slp, SeqAlignPtr s
      newseg = dsp->numseg+1;
      newstart =(Int4Ptr)MemNew((size_t)((dsp->dim*newseg+4)*sizeof (Int4)));
      newlens  =(Int4Ptr)MemNew((size_t) ((newseg + 2) * sizeof (Int4)));
-     if (dsp->strands!=NULL) 
-        newstrd  =(Uint1Ptr)MemNew((size_t)((dsp->dim*newseg+4)*sizeof(Uint1)));
+     if (dsp->strands!=NULL) {
+        num_new_strands = dsp->dim*newseg+4;
+        newstrd  =(Uint1Ptr)MemNew((size_t)((num_new_strands)*sizeof(Uint1)));
+     } else {
+        num_new_strands = 0;
+     }
      if (newstart!=NULL && newlens!=NULL) 
      {
         if (dsp->strands!=NULL) 
         {
-           strandp = dsp->strands;
-           newstrdp= newstrd;
-           for (tmp=0; tmp<dsp->dim*dsp->numseg; newstrdp++, tmp++) {
-              *newstrdp = *strandp;
-              strandp++;
-           }
-           strandp = dsp->strands;
-           for (tmp=0; tmp<dsp->dim; newstrdp++, tmp++) {
-              *newstrdp = *strandp;
-              strandp++;
-           }
+            MemCpy (newstrd, dsp->strands, dsp->dim * dsp->numseg);
+            num_addl_strands = num_new_strands - dsp->dim * dsp->numseg;
+            if (num_addl_strands > dsp->dim * dsp->numseg) {
+              num_addl_strands = dsp->dim * dsp->numseg;
+            }
+            MemCpy (newstrd + dsp->dim * dsp->numseg, dsp->strands, num_addl_strands);
         }
         dspstart = dsp->starts;
         dsplens = dsp->lens;

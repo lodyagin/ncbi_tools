@@ -36,7 +36,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Jan 15, 2004  1:40 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 28, 2004  4:00 PM
 *
 **************************************************/
 
@@ -1407,6 +1407,197 @@ CddPrefNodesAsnWrite(CddPrefNodesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddProjectNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddProjectPtr LIBCALL
+CddProjectNew(void)
+{
+   CddProjectPtr ptr = MemNew((size_t) sizeof(CddProject));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddProjectFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddProjectPtr LIBCALL
+CddProjectFree(CddProjectPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr -> cds, (AsnOptFreeFunc) CddFree);
+   AsnGenericBaseSeqOfFree(ptr -> cdcolor ,ASNCODE_INTVAL_SLOT);
+   AsnGenericUserSeqOfFree(ptr -> viewers, (AsnOptFreeFunc) CddViewerFree);
+   MemFree(ptr -> log);
+   AsnGenericUserSeqOfFree(ptr -> scripts, (AsnOptFreeFunc) CddScriptFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddProjectAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddProjectPtr LIBCALL
+CddProjectAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddProjectPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddProject ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_PROJECT);
+   } else {
+      atp = AsnLinkType(orig, CDD_PROJECT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddProjectNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_PROJECT_cds) {
+      ptr -> cds = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CddAsnRead, (AsnOptFreeFunc) CddFree);
+      if (isError && ptr -> cds == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PROJECT_cdcolor) {
+      ptr -> cdcolor = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> cdcolor == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PROJECT_viewers) {
+      ptr -> viewers = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CddViewerAsnRead, (AsnOptFreeFunc) CddViewerFree);
+      if (isError && ptr -> viewers == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PROJECT_log) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> log = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_PROJECT_scripts) {
+      ptr -> scripts = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) CddScriptAsnRead, (AsnOptFreeFunc) CddScriptFree);
+      if (isError && ptr -> scripts == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddProjectFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddProjectAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddProjectAsnWrite(CddProjectPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_PROJECT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   AsnGenericUserSeqOfAsnWrite(ptr -> cds, (AsnWriteFunc) CddAsnWrite, aip, CDD_PROJECT_cds, CDD_PROJECT_cds_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> cdcolor ,ASNCODE_INTVAL_SLOT, aip, CDD_PROJECT_cdcolor, CDD_PROJECT_cdcolor_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> viewers, (AsnWriteFunc) CddViewerAsnWrite, aip, CDD_PROJECT_viewers, CDD_PROJECT_viewers_E);
+   if (ptr -> log != NULL) {
+      av.ptrvalue = ptr -> log;
+      retval = AsnWrite(aip, CDD_PROJECT_log,  &av);
+   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> scripts, (AsnWriteFunc) CddScriptAsnWrite, aip, CDD_PROJECT_scripts, CDD_PROJECT_scripts_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -5678,6 +5869,535 @@ NodeAnnotationAsnWrite(NodeAnnotationPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> note != NULL) {
       av.ptrvalue = ptr -> note;
       retval = AsnWrite(aip, NODE_ANNOTATION_note,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddViewerRectNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerRectPtr LIBCALL
+CddViewerRectNew(void)
+{
+   CddViewerRectPtr ptr = MemNew((size_t) sizeof(CddViewerRect));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddViewerRectFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerRectPtr LIBCALL
+CddViewerRectFree(CddViewerRectPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddViewerRectAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerRectPtr LIBCALL
+CddViewerRectAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddViewerRectPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddViewerRect ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_VIEWER_RECT);
+   } else {
+      atp = AsnLinkType(orig, CDD_VIEWER_RECT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddViewerRectNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_VIEWER_RECT_top) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> top = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_VIEWER_RECT_left) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> left = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_VIEWER_RECT_width) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> width = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_VIEWER_RECT_height) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> height = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddViewerRectFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddViewerRectAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddViewerRectAsnWrite(CddViewerRectPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_VIEWER_RECT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> top;
+   retval = AsnWrite(aip, CDD_VIEWER_RECT_top,  &av);
+   av.intvalue = ptr -> left;
+   retval = AsnWrite(aip, CDD_VIEWER_RECT_left,  &av);
+   av.intvalue = ptr -> width;
+   retval = AsnWrite(aip, CDD_VIEWER_RECT_width,  &av);
+   av.intvalue = ptr -> height;
+   retval = AsnWrite(aip, CDD_VIEWER_RECT_height,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddViewerNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerPtr LIBCALL
+CddViewerNew(void)
+{
+   CddViewerPtr ptr = MemNew((size_t) sizeof(CddViewer));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddViewerFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerPtr LIBCALL
+CddViewerFree(CddViewerPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   CddViewerRectFree(ptr -> rect);
+   AsnGenericBaseSeqOfFree(ptr -> accessions ,ASNCODE_PTRVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddViewerAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddViewerPtr LIBCALL
+CddViewerAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddViewerPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddViewer ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_VIEWER);
+   } else {
+      atp = AsnLinkType(orig, CDD_VIEWER);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddViewerNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_VIEWER_ctrl) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> ctrl = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_VIEWER_rect) {
+      ptr -> rect = CddViewerRectAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_VIEWER_accessions) {
+      ptr -> accessions = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> accessions == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddViewerFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddViewerAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddViewerAsnWrite(CddViewerPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_VIEWER);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> ctrl;
+   retval = AsnWrite(aip, CDD_VIEWER_ctrl,  &av);
+   if (ptr -> rect != NULL) {
+      if ( ! CddViewerRectAsnWrite(ptr -> rect, aip, CDD_VIEWER_rect)) {
+         goto erret;
+      }
+   }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> accessions ,ASNCODE_PTRVAL_SLOT, aip, CDD_VIEWER_accessions, CDD_VIEWER_accessions_E);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    CddScriptNew()
+*
+**************************************************/
+NLM_EXTERN 
+CddScriptPtr LIBCALL
+CddScriptNew(void)
+{
+   CddScriptPtr ptr = MemNew((size_t) sizeof(CddScript));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    CddScriptFree()
+*
+**************************************************/
+NLM_EXTERN 
+CddScriptPtr LIBCALL
+CddScriptFree(CddScriptPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   MemFree(ptr -> commands);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    CddScriptAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+CddScriptPtr LIBCALL
+CddScriptAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   CddScriptPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* CddScript ::= (self contained) */
+      atp = AsnReadId(aip, amp, CDD_SCRIPT);
+   } else {
+      atp = AsnLinkType(orig, CDD_SCRIPT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = CddScriptNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == CDD_SCRIPT_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_SCRIPT_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == CDD_SCRIPT_commands) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> commands = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = CddScriptFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    CddScriptAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+CddScriptAsnWrite(CddScriptPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objcddAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, CDD_SCRIPT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, CDD_SCRIPT_type,  &av);
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, CDD_SCRIPT_name,  &av);
+   }
+   if (ptr -> commands != NULL) {
+      av.ptrvalue = ptr -> commands;
+      retval = AsnWrite(aip, CDD_SCRIPT_commands,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

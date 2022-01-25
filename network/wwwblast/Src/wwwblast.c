@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 1.13 2004/01/16 17:35:20 dondosha Exp $
+/* $Id: wwwblast.c,v 1.15 2004/05/03 15:11:46 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 1.15  2004/05/03 15:11:46  dondosha
+* Added support for masking query in XML output
+*
+* Revision 1.14  2004/03/02 16:44:11  dondosha
+* Do not print closing </form> for XML output
+*
 * Revision 1.13  2004/01/16 17:35:20  dondosha
 * Fixed mouseover problems
 *
@@ -287,7 +293,9 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     SeqAlignPtr seqalign = NULL, sap, next_seqalign;
     SeqAnnotPtr seqannot=NULL;
     TxDfDbInfoPtr tx_dbinfo=NULL, tx_dbinfo_head;
-    ValNodePtr mask_loc, mask_loc_start, other_returns, error_returns, vnp, vnp1=NULL;
+    ValNodePtr mask_loc = NULL, mask_loc_start, next_mask_loc = NULL;
+    SeqLocPtr mask_slp = NULL;
+    ValNodePtr other_returns, error_returns, vnp, vnp1=NULL;
     Uint1 align_type;
     Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
     /* Variables for multiple query output */
@@ -332,7 +340,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     
     BlastErrorPrintExtra(error_returns, TRUE, stdout);
     
-    mask_loc = NULL;
+    mask_loc = next_mask_loc = NULL;
     matrix = NULL;
     txmatrix = NULL;
     for (vnp=other_returns; vnp; vnp = vnp->next) {
@@ -365,14 +373,15 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         case SEQLOC_MASKING_MINUS1:
         case SEQLOC_MASKING_MINUS2:
         case SEQLOC_MASKING_MINUS3:
-	    if (!options->is_megablast_search)
-                ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+            ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
 	    break;
         default:
             break;
         }
     }	
     
+    mask_loc_start = mask_loc;
+
     /* If results come as alignment endpoints only from Mega BLAST */
     if (mb_results) {
        MegaBlastHitPtr mb_hit = mb_results->mbhits, next_hit;
@@ -415,23 +424,22 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         if (!options->is_megablast_search)
             next_seqalign = NULL;
         else {
+            SeqIdPtr seqid = TxGetQueryIdFromSeqAlign(seqalign); 
             sap = seqalign;
             while (sap != NULL) { 
                 if (sap->next != NULL) {
-                    dsp = (DenseSegPtr) (sap->segs);
-                    next_dsp = (DenseSegPtr) (sap->next->segs);
-                    
-                    if (SeqIdComp(dsp->ids, next_dsp->ids) != SIC_YES) {
+                    if (SeqIdComp(seqid, TxGetQueryIdFromSeqAlign(sap->next) 
+                                  != SIC_YES)) {
                         next_seqalign = sap->next;
                         sap->next = NULL;
                     }
-                } else
+                } else {
                     next_seqalign = NULL;
+                }
                 sap = sap->next;
             }
-            
-            dsp = (DenseSegPtr) (seqalign->segs);
-            while (tmp_slp && SeqIdComp(dsp->ids, SeqLocId(tmp_slp)) != SIC_YES)
+            /* Find this query's SeqLoc and Bioseq */
+            while (tmp_slp && SeqIdComp(seqid, SeqLocId(tmp_slp)) != SIC_YES)
                 tmp_slp = tmp_slp->next;
             if (tmp_slp == NULL) /* Should never happen */
                 break;
@@ -441,13 +449,28 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
             AcknowledgeBlastQuery(bsp, 70, stdout, FALSE, TRUE);
             free_buff();
             BioseqUnlock(bsp);
+
+            /* Separate the mask locations list for this query. */
+            if (mask_loc) {
+                mask_slp = (SeqLocPtr) mask_loc->data.ptrvalue;
+                while (SeqIdComp(SeqLocId(mask_slp), seqid) != SIC_YES) {
+                    mask_loc = mask_loc->next;
+                    if (!mask_loc)
+                        break;
+                    mask_slp = (SeqLocPtr) mask_loc->data.ptrvalue;
+                }
+                if (mask_loc) {
+                    next_mask_loc = mask_loc->next;
+                    mask_loc->next = NULL;
+                }
+            }
         }
         
         if(theInfo->xml_output) {
             printf("<PRE>");
             BXMLPrintOutput(xml_aip, seqalign, options, 
                             program, database, 
-                            bsp, other_returns, 0, NULL);
+                            bsp, other_returns, 0, NULL, mask_loc);
             AsnIoReset(xml_aip);
             printf("</PRE>");
             
@@ -533,8 +556,16 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
             ObjMgrFreeCache(0);
         } /* If else xml_output */
         
-        if (options->is_megablast_search)
+        if (options->is_megablast_search) {
             tmp_slp = tmp_slp->next;
+
+            /* Reconnect the mask locations */
+            if (next_mask_loc) {
+                mask_loc->next = next_mask_loc;
+                mask_loc = next_mask_loc;
+            } 
+        }
+
         if (seqannot)
             seqannot = SeqAnnotFree(seqannot);
         seqalign = next_seqalign;
@@ -555,7 +586,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
        
        BXMLPrintOutput(xml_aip, NULL, 
                        options, program, database, 
-                       bsp, other_returns, 0, message);
+                       bsp, other_returns, 0, message, NULL);
        
        if (error_returns != NULL) {
           MemFree(error_msg->msg);
@@ -575,10 +606,8 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     if (txmatrix)
         txmatrix = TxMatrixDestruct(txmatrix);
     
-    mask_loc_start = mask_loc;
-    while (mask_loc) {
+    for (mask_loc = mask_loc_start; mask_loc; mask_loc = mask_loc->next) {
         SeqLocSetFree(mask_loc->data.ptrvalue);
-        mask_loc = mask_loc->next;
     }
     ValNodeFree(mask_loc_start);
                
@@ -784,7 +813,9 @@ AppendMegaBlastHit(VoidPtr ptr)
 Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
 {
     SeqAlignPtr  seqalign = NULL;
-    ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
+    ValNodePtr mask_loc = NULL, mask_loc_start, next_mask_loc = NULL;
+    SeqLocPtr mask_slp = NULL;
+    ValNodePtr vnp, other_returns, error_returns;
     TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
     BLAST_MatrixPtr matrix;
@@ -906,8 +937,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             case SEQLOC_MASKING_MINUS1:
             case SEQLOC_MASKING_MINUS2:
             case SEQLOC_MASKING_MINUS3:
-                if (!is_megablast)
-                    ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+                ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
                 break;
             case BlastResponse_mbalign:
                mb_results = (MegaBlastResultsPtr) vnp->data.ptrvalue;
@@ -946,17 +976,35 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         ReadDBBioseqSetDbGeneticCode(theInfo->options->db_genetic_code);
         query_number = 1;
 
+        mask_loc_start = mask_loc;
+
         for (index=0; !done; index++) {
             if (is_megablast)
                 seqalign = seqalignp[index];
             else 
                 done = TRUE;
             if (seqalign) {
+                /* Separate the mask locations list for this query, if there
+                   are multiple queries. */
+                if (mask_loc) {
+                    SeqIdPtr seqid = TxGetQueryIdFromSeqAlign(seqalign);
+                    mask_slp = (SeqLocPtr) mask_loc->data.ptrvalue;
+                    while (SeqIdComp(SeqLocId(mask_slp), seqid) != SIC_YES) {
+                        mask_loc = mask_loc->next;
+                        if (!mask_loc)
+                            break;
+                        mask_slp = (SeqLocPtr) mask_loc->data.ptrvalue;
+                    }
+                    if (mask_loc) {
+                        next_mask_loc = mask_loc->next;
+                        mask_loc->next = NULL;
+                    }
+                }
                 if(theInfo->xml_output) {
                    if (!is_megablast) {
                       BXMLPrintOutput(xml_aip, seqalign, options, 
                          theInfo->program, theInfo->database, 
-                         theInfo->fake_bsp, other_returns, 0, NULL);
+                         theInfo->fake_bsp, other_returns, 0, NULL, mask_loc);
                       AsnIoReset(xml_aip);
                    } else {
                        IterationPtr iterp;
@@ -965,7 +1013,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                        iterp = BXMLBuildOneQueryIteration(seqalign, 
                                   NULL, FALSE, 
                                   !options->gapped_calculation, index, 
-                                  NULL, bsp);
+                                  NULL, bsp, mask_loc);
                        IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
                        AsnIoFlush(mbxp->aip);
                        IterationFree(iterp);
@@ -1084,6 +1132,11 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                     ObjMgrClearHold();
                     ObjMgrFreeCache(0);
                 }
+                /* Reconnect the mask locations, in case of multiple queries */
+                if (next_mask_loc) {
+                    mask_loc->next = next_mask_loc;
+                    mask_loc = next_mask_loc;
+                } 
             } else if (!is_megablast) { /* while(seqalign) */
                 /* seqalign == NULL */
         
@@ -1102,7 +1155,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                                     options, theInfo->program, 
                                     theInfo->database, 
                                     theInfo->fake_bsp, other_returns, 
-                                    0, message);
+                                    0, message, NULL);
                     
                     if (error_returns != NULL) {
                         MemFree(error_msg->msg);
@@ -1121,9 +1174,10 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                 if (!query_slp)
                     done = TRUE;
             }
-            if(!theInfo->xml_output && seqannot != NULL)
+            if(!theInfo->xml_output) {
                 seqannot = SeqAnnotFree(seqannot);
-            fprintf(stdout, "</form>\n");
+                fprintf(stdout, "</form>\n");
+            }
         }
         
         matrix = BLAST_MatrixDestruct(matrix);
@@ -1190,10 +1244,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         MemFree(params_buffer);
         free_buff();
         
-        mask_loc_start = mask_loc;
-        while (mask_loc) {
+        for (mask_loc = mask_loc_start; mask_loc; mask_loc = mask_loc->next) {
             SeqLocSetFree(mask_loc->data.ptrvalue);
-            mask_loc = mask_loc->next;
         }
         ValNodeFree(mask_loc_start);
         

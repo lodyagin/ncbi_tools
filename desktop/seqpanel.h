@@ -1,4 +1,4 @@
-/* $Id: seqpanel.h,v 6.2 2002/11/11 16:14:26 kans Exp $
+/* $Id: seqpanel.h,v 6.3 2004/03/15 19:23:27 bollin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,4 +29,15 @@
 */
 
 extern PaneL CreateSeqViewPanel (GrouP g, Int2 w, Int2 h);
+extern void 
+AlignmentIntervalToString 
+(SeqAlignPtr salp,
+ Int4        row,
+ Int4        start,
+ Int4        stop,
+ Int4        target_row,
+ Boolean     view_whole_entity,
+ Uint1Ptr    seqbuf,
+ Uint1Ptr    alnbuf,
+ Int4 PNTR   alnbuffer_len);
 

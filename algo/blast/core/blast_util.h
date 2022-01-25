@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.36 2004/01/28 02:57:29 ucko Exp $
+/* $Id: blast_util.h,v 1.47 2004/04/21 18:34:55 gorelenk Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: Various auxiliary BLAST utility functions
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.36 $
+ * $Revision: 1.47 $
  * */
 #ifndef __BLAST_UTIL__
 #define __BLAST_UTIL__
@@ -44,6 +44,13 @@ extern "C" {
 #endif
 
 #include <algo/blast/core/blast_def.h>
+
+#ifdef NCBI_DLL_BUILD
+#include <algo/blast/core/blast_export.h>
+#endif
+#ifndef NCBI_XBLAST_EXPORT
+#define NCBI_XBLAST_EXPORT
+#endif
 
 /** Different types of sequence encodings for sequence retrieval from the 
  * BLAST database 
@@ -57,19 +64,12 @@ extern "C" {
 #define IS_residue(x) (x <= 250)
 #endif
 
-#define READDB_UNPACK_BASE_N(x, N) (((x)>>(2*(N))) & 0x03)
+/** Bit mask for obtaining a single base from a byte in ncbi2na format */
+#define NCBI2NA_MASK 0x03
 
-#if 0
-/** Retrieve a sequence from the BLAST database
- * @param db BLAST database [in]
- * @param seq_ptr Pointer to sequence buffer [out]
- * @param oid Ordinal id of the sequence to be retrieved [in]
- * @param encoding In what encoding should the sequence be retrieved? [in]
- */ 
-void
-MakeBlastSequenceBlk(ReadDBFILEPtr db, BLAST_SequenceBlk** seq_ptr,
-                     Int4 oid, Uint1 encoding);
-#endif
+/** Macro to extract base N from a byte x (N >= 0, N < 4) */
+#define NCBI2NA_UNPACK_BASE(x, N) (((x)>>(2*(N))) & NCBI2NA_MASK)
+
 
 /** Deallocate memory only for the sequence in the sequence block */
 Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk);
@@ -77,10 +77,23 @@ Int2 BlastSequenceBlkClean(BLAST_SequenceBlk* seq_blk);
 /** Deallocate memory for a sequence block */
 BLAST_SequenceBlk* BlastSequenceBlkFree(BLAST_SequenceBlk* seq_blk);
 
+/** Copies contents of the source sequence block without copying sequence 
+ * buffers; sets all "field_allocated" booleans to FALSE, to make sure 
+ * fields are not freed on the call to BlastSequenceBlkFree.
+ * @param copy New sequence block [out]
+ * @param src Input sequence block [in]
+ */
+void BlastSequenceBlkCopy(BLAST_SequenceBlk** copy, 
+                          BLAST_SequenceBlk* src);
+
 /** Set number for a given program type.  Return is zero on success.
  * @param program string name of program [in]
  * @param number number of program [out]
 */
+
+
+
+NCBI_XBLAST_EXPORT
 Int2 BlastProgram2Number(const char *program, Uint1 *number);
 
 /** Return string name for program given a number.  Return is zero on success.
@@ -96,9 +109,10 @@ Int2 BlastNumber2Program(Uint1 number, char* *program);
  * @param seq_blk SequenceBlk to be allocated and filled in [out]
  * @param buffer_allocated Is the buffer allocated? If yes, 'sequence_start' is
  *        the start of the sequence, otherwise it is 'sequence'. [in]
+ * @deprecated Use BlastSeqBlkNew and BlastSeqBlkSet* functions instead
 */
 Int2
-BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length, Int2 context,
+BlastSetUp_SeqBlkNew (const Uint1* buffer, Int4 length, Int4 context,
 	BLAST_SequenceBlk* *seq_blk, Boolean buffer_allocated);
 
 /** Allocates a new sequence block structure. 
@@ -193,39 +207,13 @@ Int4 BLAST_TranslateCompressedSequence(Uint1* translation, Int4 length,
 Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length, 
                             Uint1** rev_sequence_ptr);
 
-#if 0
-/** CC: Moved to blast_engine.c as static functions? */
-/** Initialize the thread information structure
- * @param last_oid2search Last ordinal id to examine in a database search.
- */
-BlastThrInfo* BLAST_ThrInfoNew(Int4 last_oid2search);
-
-/** Deallocate the thread information structure */
-void BLAST_ThrInfoFree(BlastThrInfo* thr_info);
-
-/** Gets the next set of sequences from the database to search.
- * @param rdfp The BLAST database(s) being searched [in]
- * @param start The first ordinal id in the chunk [out]
- * @param stop The last ordinal id in the chunk, plus 1 [out]
- * @param id_list List of ordinal ids to search in case of masked 
- *                database(s) [out]
- * @param id_list_number Number of sequences in id_list [out]
- * @param thr_info Keeps track of what sequences of the databases have already
- *                 been searched [in] [out]
- * @return Is this the last chunk of the database? 
-*/
-Boolean 
-BLAST_GetDbChunk(ReadDBFILEPtr rdfp, Int4* start, Int4* stop, 
-                Int4* id_list, Int4* id_list_number, BlastThrInfo* thr_info);
-#endif
-
 /** This function translates the context number of a context into the frame of 
  * the sequence.
  * @param prog_number Integer corresponding to the BLAST program
  * @param context_number Context number 
  * @return Sequence frame (+-1 for nucleotides, -3..3 for translations)
 */
-Int2 BLAST_ContextToFrame(Uint1 prog_number, Int2 context_number);
+Int2 BLAST_ContextToFrame(Uint1 prog_number, Int4 context_number);
 
 /** Find the length of an individual query within a concatenated set of 
  * queries.
@@ -261,14 +249,14 @@ Int2 BLAST_InitDNAPSequence(BLAST_SequenceBlk* query_blk,
  * @param nucl_length Length of the nucleotide sequence [in]
  * @param genetic_code The genetic code to be used for translations,
  *                     in ncbistdaa encoding [in]
- * @param translation_buffer_ptr Buffer to hold all translated frames [out]
+ * @param translation_buffer_ptr Buffer to hold the frames of the translated 
+ *                               sequence. [out]
  * @param frame_offsets_ptr Offsets into the translation buffer for each 
- *                          frame [out]
- * @param mixed_seq_ptr If not NULL, will hold a mixed frame sequence for 
- *                      out-of-frame gapping [out]
+ *                          frame. [out]
+ * @param mixed_seq_ptr Pointer to buffer for the mixed frame sequence [out]
  */
 Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
-        Int4 nucl_length, Uint1* genetic_code, 
+        Int4 nucl_length, const Uint1* genetic_code, 
         Uint1** translation_buffer_ptr, Int4** frame_offsets_ptr,
         Uint1** mixed_seq_ptr);
 
@@ -286,7 +274,7 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, Uint1 encoding,
  *                      not NULL. [out]
  */
 int GetPartialTranslation(const Uint1* nucl_seq,
-        Int4 nucl_length, Int2 frame, Uint1* genetic_code,
+        Int4 nucl_length, Int2 frame, const Uint1* genetic_code,
         Uint1** translation_buffer_ptr, Int4* protein_length, 
         Uint1** mixed_seq_ptr);
 
@@ -294,7 +282,7 @@ int GetPartialTranslation(const Uint1* nucl_seq,
 /** Convert translation frame into a context for the concatenated translation
  * buffer.
  */
-Int2 FrameToContext(Int2 frame);
+Int4 FrameToContext(Int2 frame);
 
 
 /** The following binary search routine assumes that array A is filled. */

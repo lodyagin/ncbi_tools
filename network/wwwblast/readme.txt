@@ -56,6 +56,11 @@ executables are: wwwblast.c, wwwbutl.c, psiblast.c, wblast2.c.
 
       What's new in this revision?
 
+May 10, 2004
+
+    * XML output brought in sync with the text output, masking filtered
+locations in query sequences.
+
 February 2, 2004
 
     * All source code moved to the NCBI C toolkit.

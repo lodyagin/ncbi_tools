@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.250 $
+* $Revision: 6.255 $
 *
 * File Description: 
 *
@@ -977,7 +977,7 @@ static Int2 GeneticCodeFromCrp (CdRegionPtr crp)
   return code;
 }
 
-static void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
+extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
 {
   Uint1          strand;
   SeqLocPtr      slp_to_change, slp_index;
@@ -3118,7 +3118,14 @@ static void DoRemoveAsnObject (ButtoN b)
             if (! DetachDataForProc (&ompc, FALSE)) {
               Message (MSG_POSTERR, "DetachDataForProc failed");
             }
+            SeqMgrDeleteFromBioseqIndex (bsp);
           }
+        }
+        ans = Message (MSG_YN, "Renormalize Nuc-Prot sets?");
+        if (ans == ANS_YES)
+        {
+          RemoveOrphanProteins (rfp->input_entityID, sep);
+          RenormalizeNucProtSets (sep, TRUE);   	
         }
       }
     }
@@ -5196,6 +5203,7 @@ static Boolean CKA_ValidateSeqAlign(SeqAlignPtr sap, CKA_AccPtr acc_head, Int4 b
          Message(MSG_OK, "Primary accessions do not completely cover the bioseq %s:\n %s (the last alignment) goes to %d, bioseq length is %d, but the gap is less than %d and is acceptable", textid, accarray[longest]->accession, accarray[longest]->stop_seq, bioseqlen, CKA_GAPLEN);
       }
       MemFree(accarray);
+      accarray = NULL;
    }
    MemFree(accarray);
    return retval;
@@ -5719,7 +5727,8 @@ static BioseqPtr ReadFromTraceDb (CharPtr number)
                              query, "Sequin", 30, eMIME_T_NcbiData,
                              eMIME_Fasta, eENCOD_None, 0);
   if (conn == NULL) return NULL;
-  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
+  status = CONN_Write (conn, (const void *) query, StringLen (query),
+                       &n_written, eIO_WritePersist);
   if (status != eIO_Success) return NULL;
   QUERY_SendQuery (conn);
 

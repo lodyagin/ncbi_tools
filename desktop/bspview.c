@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.117 $
+* $Revision: 6.119 $
 *
 * File Description: 
 *
@@ -3130,6 +3130,22 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     Hide (bfp->bvd.seqView);
     Hide (bfp->bvd.seqViewParentGrp);
 
+    /* move PubMed button farther over */
+    GetPosition (bfp->bvd.ffCustomBtn, &r2);
+    GetPosition (bfp->pubseq, &r1);
+    delta = r2.right - r1.left + (r2.right - r2.left)/2;
+    if (delta > 0) {
+      OffsetRect (&r1, delta, 0);
+      SetPosition (bfp->pubseq, &r1);
+      AdjustPrnt (bfp->pubseq, &r1, FALSE);
+    }
+    delta = r2.top - r1.top;
+    if (delta > 0) {
+      OffsetRect (&r1, 0, delta);
+      SetPosition (bfp->pubseq, &r1);
+      AdjustPrnt (bfp->pubseq, &r1, FALSE);
+    }
+
     /*
     bfp->bvd.udvParentGrp = HiddenGroup (h, -1, 0, NULL);
     bfp->bvd.udv = AutonomousPanel4 (bfp->bvd.udvParentGrp, pixwidth, pixheight,
@@ -3736,7 +3752,6 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
     SendMessageToForm (bfp->form, VIB_MSG_CHANGE);
   }
   Show (w);
-  Select (w);
   if (bfp != NULL) {
     svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
     if (svpp != NULL && svpp->createToolBar != NULL) {
@@ -3744,6 +3759,7 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
       Show (f);
     }
   }
+  Select (w);
   return OM_MSG_RET_DONE;
 }
 
@@ -3893,7 +3909,6 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
   }
   if (bsp != NULL) {
     Show (w);
-    Select (w);
   }
   if (bfp != NULL) {
     svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
@@ -3902,6 +3917,7 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
       Show (f);
     }
   }
+  Select (w);
   return OM_MSG_RET_DONE;
 }
 

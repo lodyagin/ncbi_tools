@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.33 2004/01/29 16:18:37 ivanov Exp $
+# $Id: install.sh,v 1.36 2004/04/14 17:14:08 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -45,8 +45,8 @@ errdir="$target"/errmsg
 srcdir_a="$target"/altsrc
 dbgdir_a="$target"/dbglib
 libdir_a="$target"/lib
-datdir_a="$target"/../c/data
-errdir_a="$target"/../c/errmsg
+datdir_a="$target"/../../c/data
+errdir_a="$target"/../../c/errmsg
 
 
 # Check
@@ -86,6 +86,7 @@ makedir "$srcdir"/network/id1arch        -p
 makedir "$srcdir"/network/medarch/client -p
 makedir "$srcdir"/network/nsclilib       -p
 makedir "$srcdir"/network/nsdemocl       -p
+makedir "$srcdir"/network/spell/client   -p
 makedir "$srcdir"/network/taxon1/common  -p
 makedir "$srcdir"/network/taxon1/taxon2  -p
 makedir "$srcdir"/network/vibnet         -p
@@ -178,6 +179,8 @@ cp -p "$builddir"/network/blast3/client/*.h     "$incdir"
 cp -p "$builddir"/network/id1arch/*.c           "$srcdir"/network/id1arch
 cp -p "$builddir"/network/id1arch/*.h           "$incdir"
 cp -p "$builddir"/network/nsdemocl/*.[hc]       "$srcdir"/network/nsdemocl
+cp -p "$builddir"/network/spell/client/*.c      "$srcdir"/network/spell/client
+cp -p "$builddir"/network/spell/client/*.h      "$incdir"
 cp -p "$builddir"/demo/*.c                      "$srcdir"/demo
 cp -p "$builddir"/sequin/*.c                    "$srcdir"/sequin
 cp -p "$builddir"/sequin/*.h                    "$incdir"

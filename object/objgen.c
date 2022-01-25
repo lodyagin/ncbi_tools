@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,9 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.11  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.10  2002/07/23 21:47:18  kans
 * label function for pid choice 5 consortium
 *
@@ -514,9 +517,9 @@ erret:
 *
 *   DateAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN NCBI_DatePtr LIBCALL DateAsnRead (AsnIoPtr aip, AsnTypePtr orig)

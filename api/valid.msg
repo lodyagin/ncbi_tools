@@ -269,6 +269,10 @@ BioSource feature.
 $^   RefGeneTrackingWithoutStatus, 25
 The RefGeneTracking user object does not have the required Status field set.
 
+$^   UnwantedCompleteFlag, 26
+The Mol-info.completeness flag should not be set on a genomic sequence unless
+the title also says it is a complete sequence or complete genome.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -628,6 +632,25 @@ be brought to the attention of the source database for possible correction.
 
 $^   LocusTagProblem, 69
 A gene locus_tag should be a single token, with no spaces.
+
+$^   CollidingLocusTags, 70
+Two gene features should not have the same locus_tag, which is supposed to be
+a unique identifer.
+
+$^   AltStartCodon, 71
+An alternative start codon was used. This is rare, and it is expected that
+confirmatory evidence will be cited.
+
+$^   PartialsInconsistent, 72
+There are several places in an entry where a sequence can be described as
+either partial or complete. In this entry, these settings are inconsistent.
+Make sure that the location and product Seq-locs, the Bioseqs, and the
+SeqFeat partial flag all agree in describing this SeqFeat as partial or
+complete.
+
+$^   GenesInconsistent, 73
+The gene on the genomic sequence of a genomic product set should be the
+same as the gene on the cDNA product of the mRNA feature.
 
 $$ SEQ_ALIGN, 6
 

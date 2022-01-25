@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.8  2004/04/01 13:43:06  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.7  2002/11/06 21:22:32  ucko
 * Accept "--help" as a synonym for the less intuitive "-"
 *
@@ -55,7 +58,7 @@
 *
 * Revision 6.1  1997/10/27 22:00:43  vakatov
 * Check for the Bool, Int and Float arg. value validity;  reset all
-* arguments if an error occured
+* arguments if an error occurred
 *
 * Revision 5.1  1997/07/22 19:06:56  vakatov
 * Initial revision: merged GetArgs()'s from former "ncbiargs.msw" and

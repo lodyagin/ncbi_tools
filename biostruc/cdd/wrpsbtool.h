@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.11 2003/11/19 14:34:32 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.13 2004/04/13 19:42:09 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.11 $
+* $Revision: 1.13 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.13  2004/04/13 19:42:09  bauer
+* fix URL for Cn3D launching via cddsrv.cgi
+*
+* Revision 1.12  2004/02/17 18:04:50  bauer
+* prepared for alignment resorting
+*
 * Revision 1.11  2003/11/19 14:34:32  bauer
 * changes to support SeqAnnot export
 *
@@ -130,6 +136,7 @@ static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                print_score_eonly(FloatHi evalue, CharPtr buf);
            Boolean                print_score_sonly(FloatHi bit_score, CharPtr buf);
            Boolean                print_score_evalue (FloatHi evalue, FloatHi bit_score, CharPtr buf);
+           CharPtr                WRPSBFixCn3DStr(CharPtr instr);
            void                   WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table, Boolean bAnyPdb, BioseqPtr query_bsp, CharPtr urlcgi, Int4 querygi);
            Boolean                WRPSBAcknowledgeBlastQuery(BioseqPtr bsp, Int4 line_length, FILE *outfp, Boolean believe_query, Boolean html);
 static     Int4                   WRPSBGetSeqAlignCount(SeqAlignPtr sap);
@@ -158,6 +165,7 @@ static     void                   WRPSBIndentsViaSeqAlign(CddRepeatPtr pcdr,
                                                           AlignmentAbstractPtr aap,
 				                          Int4 iGraphWidth,
 				                          Int4 length);
+static     SeqAlignPtr            WRPSBCl3SortAlignment(SeqAlignPtr salpin);
            AlignmentAbstractPtr   WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr prune,
                                                             BioseqPtr query_bsp,
                                                             Int4 iGraphWidth,

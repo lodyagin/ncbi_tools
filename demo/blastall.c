@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.136 2003/11/05 22:28:06 dondosha Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.142 2004/04/29 19:56:00 dondosha Exp $";
 
-/* $Id: blastall.c,v 6.136 2003/11/05 22:28:06 dondosha Exp $
+/* $Id: blastall.c,v 6.142 2004/04/29 19:56:00 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,25 @@ static char const rcsid[] = "$Id: blastall.c,v 6.136 2003/11/05 22:28:06 dondosh
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.142  2004/04/29 19:56:00  dondosha
+ * Mask filtered locations in query sequence lines in XML output
+ *
+ * Revision 6.141  2004/04/20 14:55:47  morgulis
+ * 1. Fixed query offsets in results when -B option is used.
+ * 2. Fixes for lower case masking handling with -B option.
+ *
+ * Revision 6.140  2004/03/26 21:42:19  coulouri
+ * remove unused variables
+ *
+ * Revision 6.139  2004/03/18 15:14:21  coulouri
+ * do not dereference null seqalignptr
+ *
+ * Revision 6.138  2004/02/27 14:22:47  coulouri
+ * Correct typo
+ *
+ * Revision 6.137  2004/02/10 18:49:06  coulouri
+ * do not allow 1-hit blastn searches
+ *
  * Revision 6.136  2003/11/05 22:28:06  dondosha
  * No need to shift subsequence coordinates in tabular output, since they are already shifted in the seqalign
  *
@@ -672,7 +691,7 @@ static Args myargs[] = {
       "      blastp 11, blastn 0, blastx 12, tblastn 13\n"
       "      tblastx 13, megablast 0",
       "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
-    { "Perfom gapped alignment (not available with tblastx)", /* 16 */
+    { "Perform gapped alignment (not available with tblastx)", /* 16 */
         "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Query Genetic code to use", /* 17 */
       "1", NULL, NULL, FALSE, 'Q', ARG_INT, 0.0, 0, NULL},
@@ -693,7 +712,7 @@ static Args myargs[] = {
       "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
     { "Number of best hits from a region to keep (off by default, if used a value of 100 is recommended)", /* 25 */
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
-    { "0 for multiple hit, 1 for single hit",/* 26 */
+    { "0 for multiple hit, 1 for single hit (does not apply to blastn)",/* 26 */
        "0",  NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the search space (use zero for the real size)", /* 27 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
@@ -710,7 +729,7 @@ static Args myargs[] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
 #endif
     {"Use lower case filtering of FASTA sequence", /* 31 */
-     "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
+     NULL, NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
     { "X dropoff value for ungapped extensions in bits (0.0 invokes default "
       "behavior)\n      blastn 20, megablast 10, all others 7", /* 32 */
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
@@ -828,17 +847,16 @@ Int2 Main (void)
     Boolean done = TRUE;
     int (LIBCALLBACK *handle_results)(VoidPtr srch);       
     Int4 from = 0, to = -1;
-    const char *dummystr;
     Uint1 num_queries;		/*--KM for concatenated queries in blastn, tblastn */
     Uint1 num_iters;
     Uint1 sap_iter;
     SeqAlignPtr curr_seqalign;
     SeqAlignPtrArray sap_array;		/*--KM for separating seqaligns to test concat printing, temporary?*/
-    SeqAlignPtrArrayPtr sap_arr_ptr;
     SeqAnnotPtr curr_seqannot;
     SeqAnnotPtrArray seq_annot_arr;
     Uint1 bsp_iter;
     BspArray fake_bsp_arr;	/*--KM the array of fake_bsps for indiv. queries */ 
+    SeqLocPtr PNTR lcase_mask_arr = NULL;	/* AM: information about lower case masked parts of queries */
     Boolean concat_done, nuc_concat;
     QueriesPtr mult_queries = NULL;	/*--KM, AM: stores information related to 
                                                     query multipolexing, to put in search */
@@ -846,6 +864,7 @@ Int2 Main (void)
 
     /* AM: Support for query multiplexing. */
     Uint4 num_spacers;
+    ValNodePtr orig_mask_loc = NULL;
 
 #ifdef BLAST_CS_API
     BlastNet3Hptr    bl3hp;
@@ -979,28 +998,20 @@ Int2 Main (void)
     if (myargs[9].intvalue != 0)
         options->gap_x_dropoff = myargs[9].intvalue;
 
-	/* Multiple hits does not apply to blastn. The two-pass method is defunct */
-    if (StringICmp("blastn", blast_program)) {
-        if (myargs[26].intvalue == 1) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = FALSE;
-        } else { 
-            /* all other inputs, including the default 0 use 2-hit method */
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = TRUE;
-        }
-    }
+    /* use one-hit if specified or it's a blastn search */
+    if ( (myargs[26].intvalue == 1) || (StringICmp("blastn", blast_program) == 0 ) )
+      {
+        options->two_pass_method  = FALSE;
+        options->multiple_hits_only  = FALSE;
+      }
+    /* otherwise, use two-hit */
     else
-    { /* Reverse these for blastn for now. */
-        if (myargs[26].intvalue == 1) {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = TRUE;
-        } else {
-            options->two_pass_method  = FALSE;
-            options->multiple_hits_only  = FALSE;
-        }
-    }
-
+      { 
+        /* all other inputs, including the default 0 use 2-hit method */
+        options->two_pass_method  = FALSE;
+        options->multiple_hits_only  = TRUE;
+      }
+    
     if(myargs[33].intvalue != 0) 
         options->gap_x_dropoff_final = myargs[33].intvalue;
 
@@ -1274,13 +1285,21 @@ Int2 Main (void)
              break;
           if (num_queries > 0)  {
              fake_bsp_arr = (BspArray) MemNew(sizeof(BioseqPtr)*num_queries); 
+
+	     if( myargs[31].intvalue )
+	       lcase_mask_arr = (SeqLocPtr PNTR)MemNew( sizeof( SeqLocPtr )*num_queries );
           }
           num_iters = (num_queries>0) ? num_queries : 1; 
           for (bsp_iter=0; bsp_iter<num_iters; bsp_iter++) {
 
              if(myargs[31].intvalue) {
-                sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
-             
+	        /* AM: query multiplexing */
+		if( !num_queries )
+                  sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
+                else
+		  sep = FastaToSeqEntryInternalEx( infp, FASTA_FILE_IO, NULL, query_is_na, NULL, believe_query,
+		                                   NULL, NULL, NULL, lcase_mask_arr + bsp_iter );
+                
              } else {
                 sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query);
              }
@@ -1333,7 +1352,8 @@ Int2 Main (void)
                           BlastMakeFakeBspConcat(fake_bsp_arr, num_queries, query_is_na, num_spacers); 
              
              /* construct the MultQueries struct here*/
-             mult_queries = (QueriesPtr) BlastMakeMultQueries(fake_bsp_arr, num_queries, query_is_na, num_spacers);
+             mult_queries = (QueriesPtr) BlastMakeMultQueries(fake_bsp_arr, num_queries, query_is_na, num_spacers,
+	                                                      lcase_mask_arr);
           } else {
              if(believe_query)
                 fake_bsp = query_bsp;
@@ -1344,7 +1364,13 @@ Int2 Main (void)
 	  err_ticket = BlastSetUserErrorString(NULL, query_bsp->id, believe_query);
         
           /* If fake_bsp created mask should be updated to use it's id */
-          BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, fake_bsp->id);
+	  /* AM: query multiplexing */
+	  if( !mult_queries )
+            BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, fake_bsp->id);
+          else for( bsp_iter = 0; bsp_iter < num_iters; ++bsp_iter )
+	         if( mult_queries->LCaseMasks )
+	           BLASTUpdateSeqIdInSeqInt( mult_queries->LCaseMasks[bsp_iter],
+		                             mult_queries->FakeBsps[bsp_iter]->id );
         
           source = BioSourceNew();
           source->org = OrgRefNew();
@@ -1430,7 +1456,7 @@ Int2 Main (void)
                                    NULL, NULL, 0, handle_results);
            seqalign = NULL;
 	   for (index=0; index<num_bsps; index++) { 
-	      if (seqalignp[index]) {
+	      if (seqalignp && seqalignp[index]) {
                  if (seqalign == NULL) 
                     sap = seqalign = seqalignp[index];
                  else
@@ -1522,8 +1548,7 @@ Int2 Main (void)
                 break;
             }
         }	
-        
-        
+
 #ifdef OS_UNIX
         fflush(global_fp);
 #endif
@@ -1643,7 +1668,7 @@ Int2 Main (void)
                     bsp = BioseqLockById(SeqLocId(tmp_slp));
                     BXMLPrintOutput(xml_aip, seqalign, 
                                     options, blast_program, blast_database, 
-                                    bsp, other_returns, 0, NULL);
+                                    bsp, other_returns, 0, NULL, mask_loc);
                     BioseqUnlock(bsp);
                     AsnIoReset(xml_aip);
                     SeqAlignSetFree(seqalign);
@@ -1653,7 +1678,7 @@ Int2 Main (void)
                        curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
                        BXMLPrintOutput(xml_aip, curr_seqalign, 
                                     options, blast_program, blast_database, 
-                                    fake_bsp, other_returns, 0, NULL);
+                                    fake_bsp, other_returns, 0, NULL, mask_loc);
                        AsnIoReset(xml_aip);
                        SeqAlignSetFree(curr_seqalign);
                     } /* for loop over sap-array (concat) */
@@ -1695,6 +1720,14 @@ Int2 Main (void)
                     } /* print deflines, looped if concat */
 
                     for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
+		       /* AM: Query concatenation. */
+		       if( mult_queries && mask_loc )
+		       {
+		         orig_mask_loc = mask_loc;
+			 
+			 if( !mask_loc->data.ptrvalue ) mask_loc = NULL;
+		       }
+
                        curr_seqalign = (num_queries > 0) ? *(sap_array + sap_iter) : seqalign;
                        curr_seqannot = (num_queries > 0) ? *(seq_annot_arr + sap_iter) : seqannot;
 
@@ -1717,6 +1750,13 @@ Int2 Main (void)
                     
                        curr_seqannot->data = curr_seqalign;
                        prune = BlastPruneSapStructDestruct(prune);
+
+                       /* AM: Query concatenation. */
+		       if( mult_queries && orig_mask_loc ) 
+		       {
+		         mask_loc = orig_mask_loc;
+		         mask_loc = mask_loc->next;
+                       }
                     } /* show text align, loop over seqalign/seqannots for concat */
                     ObjMgrClearHold();
                     
@@ -1755,12 +1795,12 @@ Int2 Main (void)
                  bsp = BioseqLockById(SeqLocId(tmp_slp));
                  BXMLPrintOutput(xml_aip, seqalign, 
                                  options, blast_program, blast_database, 
-                                 bsp, other_returns, 0, NULL);
+                                 bsp, other_returns, 0, NULL, mask_loc);
                  BioseqUnlock(bsp);
               } else {
-                 BXMLPrintOutput(xml_aip, NULL, 
-                                 options, blast_program, blast_database, 
-                                 fake_bsp, other_returns, 0, message);
+                 BXMLPrintOutput(xml_aip, NULL, options, blast_program, 
+                                 blast_database, fake_bsp, other_returns, 0, 
+                                 message, mask_loc);
               }
               AsnIoReset(xml_aip);
            } else if (align_view < 8) {

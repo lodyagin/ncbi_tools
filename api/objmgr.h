@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.37  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.36  2002/07/30 14:41:45  kans
 * removed omdp->rearranged
 *
@@ -372,7 +375,7 @@ typedef Int2 (LIBCALLBACK *OMMessageFunc) PROTO((OMMsgStructPtr message));
 
 	/**** defines for message function return values ******/
 
-#define OM_MSG_RET_ERROR   0	  /* an error occured handling this message */
+#define OM_MSG_RET_ERROR   0	  /* an error occurred handling this message */
 #define OM_MSG_RET_OK      1      /* message handled ok */
 #define OM_MSG_RET_DEL     2      /* due to message, remove this handler */
 #define OM_MSG_RET_DONE    3      /* handled, do not send message further */
@@ -1107,7 +1110,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeClipBoard PROTO((void));
 *   	Frees all cached objects of type and subtypes of type
 *   		based on ObjMgrMatch()
 *   	if type == 0, frees all cached objects
-*   	returns TRUE if no errors occured
+*   	returns TRUE if no errors occurred
 *
 *       if ObjMgrSetHold() has been called but not cleared, nothing will
 *         be removed from cache, since it is held, but this function will

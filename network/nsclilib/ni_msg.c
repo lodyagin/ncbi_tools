@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *   This file consists mostly of functions for creating, destroying, reading,
@@ -138,6 +138,9 @@
 *
 * RCS Modification History:
 * $Log: ni_msg.c,v $
+* Revision 6.4  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.3  2002/12/17 23:01:36  kans
 * support for OS_UNIX_DARWIN for Mach-O executables (RGS)
 *
@@ -3914,7 +3917,7 @@ NLM_EXTERN Int2 LIBCALLBACK NI_AsnRead(Pointer p, CharPtr buf, Uint2 len)
  *              It is relatively unlikely that "writing" will block, thus
  *              causing the calling application to block. For "writing" to
  *              block, there would need to be flow control imposed in the
- *              TCP/IP protocol suite, which is an unlikely occurance when
+ *              TCP/IP protocol suite, which is an unlikely occurrence when
  *              passing small quantities of data.
  */
 

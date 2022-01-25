@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/14/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *       Implementation of Suggest server. Here it is only server specific
@@ -47,6 +47,9 @@
 *
 * RCS Modification History:
 * $Log: suggsrv.c,v $
+* Revision 6.1  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.0  1997/08/25 18:40:59  madden
 * Revision changed to 6.0
 *
@@ -188,7 +191,7 @@ main(int argc, char *argv[])
  *      pAsnIoOut       - output file to which 
  *
  * Return:
- *      FALSE if nothing more to process or error occured and farther
+ *      FALSE if nothing more to process or error occurred and farther
  *      processing is not possible, otherwise TRUE.
  *
 \*****************************************************************************/
@@ -204,7 +207,7 @@ ServeClient(AsnIoPtr pAsnIn, AsnIoPtr pAsnOut)
     SuggestResponsePtr  pResp;
     SuggestIntervalsPtr pSIntervals;
 
-    /* Encountering  EOF on reading is a "normal" occurence,
+    /* Encountering  EOF on reading is a "normal" occurrence,
      * and does not merit an error message
      */
     ErrGetOpts(&iErrAct, NULL);

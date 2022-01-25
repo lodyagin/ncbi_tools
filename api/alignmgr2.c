@@ -28,13 +28,26 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.49 $
+* $Revision: 6.53 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.53  2004/04/13 14:43:07  kskatz
+* Final resolution of revisions 6.51 and 6.52: reverted 6.52; then  cleaned up readability of AlnMgr2SeqPortRead() and ensured that it will never call SeqPortRead for a length > AM_SEQPORTSIZE
+*
+* Revision 6.52  2004/04/12 19:52:15  kskatz
+* Revision 6.51 was right neighborhood,wrong off-by-one: It was in AlnMgr2ComputeFreqMatrix() call to AlnMgr2SeqPortRead() when using l+AM_SEQPORTSIZE instead of l+AM_SEQPORTSIZE-1
+*
+* Revision 6.51  2004/04/12 17:00:44  kskatz
+* Fixed off-by-one error in AlnMgr2SeqPortRead() length passed to SeqPortRead(); stop-start+1 changed to stop-start
+*
+* Revision 6.50  2004/03/11 14:15:41  bollin
+* added extra check in AlnMgr2GetNthSeqIdPtr to avoid core dump if there are
+* fewer than N SeqIDs in the alignment.
+*
 * Revision 6.49  2003/10/20 17:54:34  kans
 * AlnMgr2ComputeFreqMatrix protect against dereferencing NULL bsp
 *
@@ -6305,10 +6318,11 @@ NLM_EXTERN SeqIdPtr AlnMgr2GetNthSeqIdPtr(SeqAlignPtr sap, Int4 n)
       if (n > dsp->dim)
          return NULL;
       sip = dsp->ids;
-      for (i=1; i<n; i++)
+      for (i=1; i<n && sip != NULL; i++)
       {
          sip = sip->next;
       }
+      if (sip == NULL) return NULL;
       return (SeqIdDup(sip));
    } else if (sap->saip->indextype == INDEX_PARENT)
    {
@@ -8286,38 +8300,30 @@ NLM_EXTERN Int4 AlnMgr2ComputeScoreForSeqAlign(SeqAlignPtr sap)
 
 static Int4 AlnMgr2SeqPortRead(SeqPortPtr PNTR spp, Uint1Ptr buf, Int4Ptr bufpos, Int4 start, Int4 stop, Uint1 strand, Uint1 code, BioseqPtr bsp)
 {
-   Boolean  found;
-
-   if (*spp == NULL) /* first call */
-   {
-      if (strand == Seq_strand_minus)
-      {
-         *spp = SeqPortNew(bsp, MAX(0, stop-AM_SEQPORTSIZE), stop, strand, code);
-         *bufpos = MAX(0, stop-AM_SEQPORTSIZE);
-      } else
-      {
-         *spp = SeqPortNew(bsp, start, MIN(start+AM_SEQPORTSIZE, bsp->length-1), strand, code);
-         *bufpos = start;
-      }
-   } else /* see if what we need is in current seqport */
-   {
-      if (start >= *bufpos && start <= *bufpos+AM_SEQPORTSIZE && stop >= *bufpos && stop <= *bufpos+AM_SEQPORTSIZE)
-         found = TRUE;
-      else /* make new seqport */
-      {
-         SeqPortFree(*spp);
-         if (strand == Seq_strand_minus)
-         {
+    if (*spp == NULL) /* first call */ {
+        if (strand == Seq_strand_minus){
             *spp = SeqPortNew(bsp, MAX(0, stop-AM_SEQPORTSIZE), stop, strand, code);
             *bufpos = MAX(0, stop-AM_SEQPORTSIZE);
-         } else
-         {
+        } 
+        else {
             *spp = SeqPortNew(bsp, start, MIN(start+AM_SEQPORTSIZE, bsp->length-1), strand, code);
             *bufpos = start;
-         }
-      }
-   }
-   return (SeqPortRead(*spp, buf, stop-start+1));
+        }
+    }
+    /* see if what we need is in current seqport or a new one is needed */ 
+    else if ((start < *bufpos) || (start > *bufpos+AM_SEQPORTSIZE) 
+             || (stop < *bufpos) || (stop > *bufpos+AM_SEQPORTSIZE)) {
+        SeqPortFree(*spp);
+        if (strand == Seq_strand_minus) {         
+            *spp = SeqPortNew(bsp, MAX(0, stop-AM_SEQPORTSIZE), stop, strand, code);
+            *bufpos = MAX(0, stop-AM_SEQPORTSIZE);
+        } 
+        else {
+            *spp = SeqPortNew(bsp, start, MIN(start+AM_SEQPORTSIZE, bsp->length-1), strand, code);
+            *bufpos = start;
+        }
+    }
+    return (SeqPortRead(*spp, buf, (MIN(start+AM_SEQPORTSIZE-1, stop)) - start+1));
 }
 
 /* SECTION 8 */
@@ -8417,7 +8423,7 @@ NLM_EXTERN AMFreqPtr AlnMgr2ComputeFreqMatrix(SeqAlignPtr sap, Int4 from, Int4 t
       amp->to_aln = to_a;
       amp->row_num = i+1;
       j = 0;
-      while (more = AlnMgr2GetNextAlnBit(sap, amp))
+      while ((more = AlnMgr2GetNextAlnBit(sap, amp)))
       {
          if (amp->type == AM_GAP)
          {
@@ -9924,8 +9930,8 @@ NLM_EXTERN Boolean AlnMgr2GetSeqRangeForSipInStdSeg(
             m_strand = SeqLocStrand(loc);
             m_start  = SeqLocStart(loc);
             m_stop   = SeqLocStop(loc);
-            /* Might have to reverse the order of start and stop on minus strands. 
-            /* so that start is less than stop. */
+            /* Might have to reverse the order of start and stop on
+               minus strands so that start is less than stop. */
             if (m_start > m_stop) {
               m_swap  = m_start;
               m_start = m_stop;

@@ -1,4 +1,4 @@
-/* $Id: blast_def.h,v 1.29 2003/12/03 16:31:45 dondosha Exp $
+/* $Id: blast_def.h,v 1.40 2004/04/16 14:12:33 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,15 +34,12 @@ Contents: Definitions of major structures used throughout BLAST
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.29 $
+ * $Revision: 1.40 $
  * */
 #ifndef __BLAST_DEF__
 #define __BLAST_DEF__
 
 #include <algo/blast/core/ncbi_std.h>
-#ifdef THREADS_IMPLEMENTED
-#include <algo/blast/core/ncbithr.h>
-#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,12 +51,16 @@ extern "C" {
 #endif
 void __sfree(void** x); /* implemented in lib/util.c */
 
+/******************** Preprocessor definitions ******************************/
+
+/** Program type */
 #define blast_type_blastn 0
 #define blast_type_blastp 1
 #define blast_type_blastx 2
 #define blast_type_tblastn 3
 #define blast_type_tblastx 4
-#define blast_type_psitblastn 5
+#define blast_type_rpsblast 5
+#define blast_type_rpstblastn 6
 #define blast_type_undefined 255
 
 /** Codons are always of length 3 */
@@ -67,10 +68,17 @@ void __sfree(void** x); /* implemented in lib/util.c */
 #define CODON_LENGTH 3
 #endif
 
-/** Gap character in ncbistdaa */
-#ifndef GAP_CHAR
-#define GAP_CHAR 0
+/** Compression ratio of nucleotide bases (4 bases in 1 byte) */
+#ifndef COMPRESSION_RATIO
+#define COMPRESSION_RATIO 4
 #endif
+
+/** Number of frames to which we translate in translating searches */
+#ifndef NUM_FRAMES
+#define NUM_FRAMES 6
+#endif
+
+/********************* Structure definitions ********************************/
 
 /** Structure for keeping the query masking information */
 typedef struct BlastMaskLoc {
@@ -85,7 +93,7 @@ typedef struct BLAST_SequenceBlk {
    Uint1* sequence_start; /**< Start of sequence, usually one byte before 
                                sequence as that byte is a NULL sentinel byte.*/
    Int4     length;         /**< Length of sequence. */
-   Int2	context; /**< Context of the query, needed for multi-query searches */
+   Int4	context; /**< Context of the query, needed for multi-query searches */
    Int2	frame; /**< Frame of the query, needed for translated searches */
    Int4 oid; /**< The ordinal id of the current sequence */
    Boolean sequence_allocated; /**< TRUE if memory has been allocated for 
@@ -94,16 +102,20 @@ typedef struct BLAST_SequenceBlk {
                                         for sequence_start */
    Uint1* oof_sequence; /**< Mixed-frame protein representation of a
                              nucleotide sequence for out-of-frame alignment */
-   BlastMaskLoc* lcase_mask; /**< Locations to be masked from operations on this 
-                           sequence: lookup table for query; scanning for
-                           subject. */
+   Boolean oof_sequence_allocated; /**< TRUE if memory has been allocated 
+                                        for oof_sequence */
+   BlastMaskLoc* lcase_mask; /**< Locations to be masked from operations on 
+                                this sequence: lookup table for query; 
+                                scanning for subject. */
+   Boolean lcase_mask_allocated; /**< TRUE if memory has been allocated for 
+                                    lcase_mask */
 } BLAST_SequenceBlk;
 
 /** The query related information 
  */
 typedef struct BlastQueryInfo {
-   Int2 first_context; /**< Index of the first element of the context array */
-   Int2 last_context;  /**< Index of the last element of the context array */
+   Int4 first_context; /**< Index of the first element of the context array */
+   Int4 last_context;  /**< Index of the last element of the context array */
    int num_queries;   /**< Number of query sequences */
    Int4* context_offsets; /**< Offsets of the individual queries in the
                                concatenated super-query */
@@ -111,42 +123,23 @@ typedef struct BlastQueryInfo {
    Int8* eff_searchsp_array; /**< Array of effective search spaces for
                                   multiple queries. Dimension = number of 
                                   query sequences. */
+   Uint4 max_length; /**< Length of the longest among the concatenated 
+                        queries */
 } BlastQueryInfo;
 
 /** A structure containing two integers, used e.g. for locations for the 
  * lookup table.
  */
-typedef struct DoubleInt {
-   Int4 i1;
-   Int4 i2;
-} DoubleInt;
+typedef struct SSeqRange {
+   Int4 left;
+   Int4 right;
+} SSeqRange;
 
 /** BlastSeqLoc is a ListNode with choice equal to the sequence local id,
- * and data->ptrvalue pointing to a DoubleInt structure defining the 
+ * and data->ptrvalue pointing to a SSeqRange structure defining the 
  * location interval in the sequence.
  */
 #define BlastSeqLoc ListNode
-
-typedef struct BlastThrInfo {
-#ifdef THREADS_IMPLEMENTED
-    TNlmMutex db_mutex;  /**< Lock for access to database*/
-    TNlmMutex results_mutex; /**< Lock for storing results */
-    TNlmMutex callback_mutex;/**< Lock for issuing update ticks on the screen*/
-    TNlmMutex ambiguities_mutex;/**< Mutex for recalculation of ambiguities */
-#endif
-    Int4 oid_current; /**< Current ordinal id being worked on */
-    Int4 db_chunk_size; /**< Used if the db is smaller than 
-                             BLAST_DB_CHUNK_SIZE */
-    Int4 db_chunk_last; /**< The last db sequence to be assigned. Used only in 
-                             after the acquisition of the "db_mutex". */ 
-    Int4 final_db_seq; /**< The last sequence in the database to be compared 
-                          against */
-    Int4 number_seqs_done;  /**< Number of sequences already tested*/
-    Int4 db_incr;  /**< Size of a database chunk to get*/
-    Int4 last_db_seq; /**< Last database sequence processed so far */
-    Int4 number_of_pos_hits;/**< How many positive hits were found */
-    Boolean realdb_done; /**< Is processing of real database(s) done? */
-} BlastThrInfo;
 
 /** Return statistics from the BLAST search */
 typedef struct BlastReturnStat {
@@ -165,10 +158,8 @@ typedef struct BlastReturnStat {
                        extensions */
    Int4 x_drop_gap_final; /**< Raw value of the x-dropoff for gapped 
                              extensions with traceback */
-   double gap_trigger; /**< Minimal raw score for starting gapped extension */
+   Int4 gap_trigger; /**< Minimal raw score for starting gapped extension */
 } BlastReturnStat;
-
-#define COMPRESSION_RATIO 4
 
 #ifdef __cplusplus
 }

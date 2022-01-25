@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.36  2004/02/11 18:40:00  kans
+* enhanced GetOpSysString to report specific version of MS Windows
+*
 * Revision 6.35  2003/09/19 15:49:20  coulouri
 * NetBSD fixes
 *
@@ -2369,11 +2372,27 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void)
 #endif
 #endif
 
-#ifdef OS_NT
-  str = "NT";
-#endif
 #ifdef OS_MSWIN
+  DWORD  version, lowbyte;
+
   str = "MS WINDOWS";
+  version = GetVersion ();
+  lowbyte = (version & 0x0000FF);
+  if ((version & 0x80000000) == 0) {
+    if (lowbyte == 5) {
+      str = "MS WINDOWS 2000/XP";
+    } else if (lowbyte == 4) {
+      str = "MS WINDOWS NT 4.0";
+    } else if (lowbyte == 3) {
+      str = "MS WINDOWS NT 3.51";
+    }
+  } else {
+    if (lowbyte == 4) {
+      str = "MS WINDOWS 95/98/Me";
+    } else if (lowbyte == 3) {
+      str = "MS WINDOWS 3.1";
+    }
+  }
 #endif
 
   return Nlm_StringSave (str);

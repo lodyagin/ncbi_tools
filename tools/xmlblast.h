@@ -1,4 +1,4 @@
-/* $Id: xmlblast.h,v 6.12 2003/01/06 23:01:40 dondosha Exp $ */
+/* $Id: xmlblast.h,v 6.14 2004/04/29 19:55:35 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,18 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.h,v $
+* Revision 6.14  2004/04/29 19:55:35  dondosha
+* Mask filtered locations in query sequence lines
+*
+* Revision 6.13  2004/03/31 17:58:23  dondosha
+* Added PSIXmlReset function to allow keeping the AsnIoPtr between outputs for multiple queries in blastpgp
+*
 * Revision 6.12  2003/01/06 23:01:40  dondosha
 * Added function to create a multi-query XML output for web megablast
 *
@@ -113,12 +119,12 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
                         BLAST_OptionsBlkPtr options, CharPtr program,
                         CharPtr database, BioseqPtr query, 
                         ValNodePtr other_returns, Int4 option, 
-                        CharPtr message);
+                        CharPtr message, ValNodePtr mask_loc);
 
 Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign, 
            BLAST_OptionsBlkPtr options, CharPtr program, CharPtr database, 
            BioseqSetPtr query_set, ValNodePtr other_returns, Int4 flags,
-           CharPtr message);
+           CharPtr message, ValNodePtr mask_loc);
 
 StatisticsPtr BXMLBuildStatistics(ValNodePtr other_returns, Boolean ungapped);
 BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database, 
@@ -128,24 +134,28 @@ BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database,
 IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign, 
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
-                                   Int4 iter_num, CharPtr message);
+                                   Int4 iter_num, CharPtr message, 
+                                   ValNodePtr mask_loc);
 
 IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign, 
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
                                    Int4 iter_num, CharPtr message, 
-                                   BioseqPtr query);
+                                   BioseqPtr query, ValNodePtr mask_loc);
 
 HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
-                              Boolean is_ooframe);
+                              Boolean is_ooframe, ValNodePtr mask_loc);
 
 HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped, 
-                          Boolean is_ooframe);
+                          Boolean is_ooframe, ValNodePtr mask_loc);
 
 PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database, 
-                     BLAST_OptionsBlkPtr options, 
-                     BioseqPtr query, Int4 flags);
+                     BLAST_OptionsBlkPtr options, BioseqPtr query, Int4 flags);
     
+/* Close printing of this XML output, but only reset the ASN.1 output stream,
+   so it is ready for the next output. */
+void PSIXmlReset(PSIXmlPtr psixp);
+/* Finish printing XML output and close the output stream */
 void PSIXmlClose(PSIXmlPtr psixp);
 void MBXmlClose(PSIXmlPtr mbxp, ValNodePtr other_returns, Boolean ungapped);
 

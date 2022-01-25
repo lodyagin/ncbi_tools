@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.36 2003/11/19 14:34:31 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.38 2004/03/10 14:36:02 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.36 $
+* $Revision: 1.38 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.38  2004/03/10 14:36:02  bauer
+* cosmetic change to no-hits page
+*
+* Revision 1.37  2004/02/17 18:04:35  bauer
+* added citation, prepared for alignment resorting
+*
 * Revision 1.36  2003/11/19 14:34:31  bauer
 * changes to support SeqAnnot export
 *
@@ -146,10 +152,10 @@
 * ==========================================================================
 */
 
-#define  BLASTCLI_BUF_SIZE 255
+#define BLASTCLI_BUF_SIZE 255
 
-#undef   CDSEARCH_TEST  /* use iblast1 instead of public service rpsblast */
-#define  WIN_GIF
+#undef  CDSEARCH_TEST  /* use test-server instead of public rpsblast */
+#define WIN_GIF
 
 #include <ncbi.h>
 #include <ncbimain.h>
@@ -724,12 +730,21 @@ static Boolean WRPSBDrawSearchPage()
   printf("</FORM>\n");
   printf("<hr>\n");
 
+  printf("<b><a href=\"http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=12520028&dopt=Abstract\">Citing CD-Search</a>:</b>\n");
+  printf(" Marchler-Bauer A, Anderson JB, DeWeese-Scott C, Fedorova ND, Geer LY, He S, Hurwitz DI, Jackson JD, Jacobs AR,\n");
+  printf(" Lanczycki CJ, Liebert CA, Liu C, Madej T, Marchler GH, Mazumder R, Nikolskaya AN, Panchenko AR, Rao BS, Shoemaker BA,\n");
+  printf(" Simonyan V, Song JS, Thiessen RA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
+  printf("\"<i>CDD: a curated Entrez database of conserved domain alignments</i>\",\n");
+  printf(" <b>Nucleic Acids Res. 31</b>:383-387.\n");
+ 
+ /* 
+  printf("<br>\n");
   printf("<b><a href=\"http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=9254694&dopt=Abstract\">Reference</a>:</b>\n");
   printf("Altschul, Stephen F., Thomas L. Madden, Alejandro A. Sch&auml;ffer, \n");
   printf("Jinghui Zhang, Zheng Zhang, Webb Miller, and David J. Lipman (1997), \n");
   printf("\"Gapped BLAST and PSI-BLAST: a new generation of protein database search\n");
   printf("programs\",  Nucleic Acids Res. 25:3389-3402.\n");
-
+*/
   WRPSBSearchFoot(FALSE,FALSE);
 }
 
@@ -1255,7 +1270,7 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
     } 
     if (bAnnotOnly) {
       WRPSBCl3SeqAnnot(NULL, table, bSeqAlign, FALSE);
-    } else fprintf(table, "<br><strong>...No hits found!</strong>\n");
+    } else fprintf(table, "<br><strong>...No hits found!</strong><hr>\n");
   } else {
     aap = WRPSBCl3AbstractAlignment(prune,query_bsp,GraphWidth-10,&maxrow,iGraphMode,dbversion, &bAnyPdb, Connection, TRUE,
                                     CDDefault,DATApath,CDDPrefix,CDDPost_C,CDDPost_O,
@@ -1337,6 +1352,15 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
     fclose(table);
     PrintFile(tableName);
     RemoveTempFiles();
+  }
+
+  if (!bAnnotOnly) {
+    printf("<b><a href=\"http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=PubMed&list_uids=12520028&dopt=Abstract\">Citing CD-Search</a>:</b>\n");
+    printf(" Marchler-Bauer A, Anderson JB, DeWeese-Scott C, Fedorova ND, Geer LY, He S, Hurwitz DI, Jackson JD, Jacobs AR,\n");
+    printf(" Lanczycki CJ, Liebert CA, Liu C, Madej T, Marchler GH, Mazumder R, Nikolskaya AN, Panchenko AR, Rao BS, Shoemaker BA,\n");
+    printf(" Simonyan V, Song JS, Thiessen RA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, and Bryant SH (2003), \n");
+    printf("\"<i>CDD: a curated Entrez database of conserved domain alignments</i>\",\n");
+    printf(" <b>Nucleic Acids Res. 31</b>:383-387.\n");
   }
   WRPSBSearchFoot(bAnnotOnly,bNoWrap);
 }

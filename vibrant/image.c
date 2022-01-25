@@ -27,7 +27,7 @@
 *
 * Author:  Alex Smirnov,  Denis Vakatov
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *       Image(pixmap) processing.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: image.c,v $
+* Revision 6.8  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.7  2003/11/17 17:03:29  kans
 * changed C++ style comments to C comments
 *
@@ -443,7 +446,7 @@ Nlm_Image Nlm_LoadImageGIF (Nlm_CharPtr fileName)
     gd_image  = gdImageCreateFromGif( inp_stream );
     if ( !gd_image ) {
       Nlm_DiagPutRecord(DA_ERROR, imageClass, "LoadImageGIF",
-                        "Error occured while reading GIF file");
+                        "Error occurred while reading GIF file");
       FileClose( inp_stream );
       return NULL;
     }

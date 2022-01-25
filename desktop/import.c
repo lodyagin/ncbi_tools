@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -108,7 +108,8 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               subtype != FEATDEF_mutation &&
               subtype != FEATDEF_allele &&
               subtype != FEATDEF_site_ref &&
-              subtype != FEATDEF_gap) {
+              subtype != FEATDEF_gap &&
+              subtype != FEATDEF_misc_RNA) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
                  subtype != FEATDEF_sig_peptide &&
@@ -116,7 +117,11 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               if (allowRnaImpFeats ||
                 (subtype != FEATDEF_misc_RNA &&
                  subtype != FEATDEF_precursor_RNA)) {
-                str = StringSave (curr->typelabel);
+                if (StringCmp (curr->typelabel, "RNA") == 0) {
+                  str = StringSave ("misc_RNA");
+                } else {
+                  str = StringSave (curr->typelabel);
+                }
                 if (*str == '-') {
                   *str = '~';
                 }

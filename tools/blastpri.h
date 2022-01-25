@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.111 $ 
+/* $Revision: 6.112 $ 
 * $Log: blastpri.h,v $
+* Revision 6.112  2004/03/31 17:58:51  papadopo
+* Mike Gertz' changes for length adjustment calculations
+*
 * Revision 6.111  2004/01/16 23:43:43  dondosha
 * No more need for special argument for partial search: it is set in options
 *
@@ -1066,10 +1069,6 @@ SeqLocPtr blastMergeFilterLocs PROTO((SeqLocPtr filter_slp,
         function to calculate effective query length and
         effective db length.
 */
-
-Boolean BlastCalculateEffectiveLengths(BLAST_OptionsBlkPtr options,
-        Int4 dbseq_num, Int8 dblen, Int4 length, BLAST_KarlinBlkPtr kbp,
-        Int4Ptr effective_query_length, Int4Ptr length_adjustment);
 
 /*return query fasta style title(id+title). New memory was allocated for this title*/
 CharPtr getFastaStyleTitle(BioseqPtr bsp);

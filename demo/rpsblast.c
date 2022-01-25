@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: rpsblast.c,v 6.52 2003/05/30 17:31:10 coulouri Exp $";
+static char const rcsid[] = "$Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha Exp $";
 
-/* $Id: rpsblast.c,v 6.52 2003/05/30 17:31:10 coulouri Exp $
+/* $Id: rpsblast.c,v 6.55 2004/04/30 15:33:05 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,21 @@ static char const rcsid[] = "$Id: rpsblast.c,v 6.52 2003/05/30 17:31:10 coulouri
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.52 $
+* $Revision: 6.55 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.55  2004/04/30 15:33:05  dondosha
+* Added argument in call to BXMLPrintOutput
+*
+* Revision 6.54  2004/02/09 23:14:44  camacho
+* Fix to prevent printing multiple Seq-annots in ASN.1 output
+*
+* Revision 6.53  2004/02/06 05:32:36  camacho
+* Properly close ASN.1 stream
+*
 * Revision 6.52  2003/05/30 17:31:10  coulouri
 * add rcsid
 *
@@ -316,6 +325,7 @@ void RPSBlastOptionsFree(RPSBlastOptionsPtr rpsbop)
 {
 
     FileClose(rpsbop->outfp);
+    AsnIoClose(rpsbop->aip);
     BLASTOptionDelete(rpsbop->options);
     readdb_destruct(rpsbop->rdfp);
 
@@ -494,10 +504,7 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     SeqAnnotPtr seqannot;
     BlastPruneSapStructPtr prune;
     Uint1 align_type;
-    CharPtr title;
     ValNodePtr vnp, mask;
-
-
 
     seqannot = SeqAnnotNew();
     seqannot->type = 2;
@@ -505,15 +512,15 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
                                        "blastp" : "blastx");
     AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
     
-    if(rpsbop->aip != NULL) {     
-	seqannot->data = seqalign;
-        SeqAnnotAsnWrite(seqannot, rpsbop->aip, NULL);
-	AsnIoReset(rpsbop->aip);
+    if (rpsbop->aip != NULL) {     
+        CharPtr title = readdb_get_title(rpsbop->rdfp); /* we don't own title */
+        BLASTAddBlastDBTitleToSeqAnnot(seqannot, title);
     }
 
-    if (rpsbop->outfp == NULL)
-	return;
-	
+    if (rpsbop->outfp == NULL) {
+        seqannot = SeqAnnotFree(seqannot);
+        return;
+    }
 
     free_buff();    
     init_buff_ex(128);
@@ -525,6 +532,7 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
                           rpsbop->believe_query, rpsbop->html);
     if(seqalign == NULL) {
         fprintf(rpsbop->outfp, "\nNo hits found for the sequence...\n\n");
+        seqannot = SeqAnnotFree(seqannot);
         return;
     }
     
@@ -533,11 +541,6 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     PrintDefLinesFromSeqAlign(prune->sap, 80, rpsbop->outfp, 
                               rpsbop->print_options, FIRST_PASS, NULL);
 
-    /* Now adding database title from SeqAnnot */
-
-    title = readdb_get_title(rpsbop->rdfp);
-    
-    BLASTAddBlastDBTitleToSeqAnnot(seqannot, title);
     
     /* --------------------------------------- */
     
@@ -545,11 +548,10 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
                                        prune);
     seqannot->data = prune->sap;
 
-    if(rpsbop->aip != NULL) {     
+    /* Write the ASN.1 Seq-annot */
+    if (rpsbop->aip != NULL) {     
         SeqAnnotAsnWrite(seqannot, rpsbop->aip, NULL);
-/*
-	AsnIoReset(rpsbop->aip);
-*/
+        AsnIoReset(rpsbop->aip);
     }
 
     /* ------ Mask needed ----- */
@@ -584,6 +586,7 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     prune = BlastPruneSapStructDestruct(prune);
 
     seqannot->data = NULL;
+    seqannot = SeqAnnotFree(seqannot);
     seqannot = SeqAnnotFree(seqannot);
 
     free_buff();
@@ -711,7 +714,7 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
        BXMLPrintOutput(aip, seqalign, rpsbop->options, 
                        rpsbop->query_is_protein ? 
                        "blastp" : "tblastn", rpsbop->rps_database, 
-                       query_bsp, other_returns, 0, NULL);
+                       query_bsp, other_returns, 0, NULL, NULL);
        AsnIoClose(aip);
     } else if (rpsbop->is_tabular) {
 	if (rpsbop->is_tabular_comments)

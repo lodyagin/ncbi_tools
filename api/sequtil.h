@@ -29,13 +29,16 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.h,v $
+* Revision 6.43  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.42  2003/01/21 16:51:53  kans
 * added PRINTID_FASTA_ALL
 *
@@ -124,7 +127,7 @@
 * Added NLM_EXTERN for FindNuc() and FindProt() proto
 *
 * Revision 6.13  1999/04/01 22:23:23  sicotte
-* Fixed doubly occuring prototype.
+* Fixed doubly occurring prototype.
 *
 * Revision 6.12  1999/04/01 17:41:21  sicotte
 * Added SeqIdInSeqLocList : Check if the Bioseq of SeqId sip is in list: may try to fetch the Bioseq

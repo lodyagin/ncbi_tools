@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: cdromlib.c,v 6.0 1997/08/25 18:13:10 madden Exp $
+ * RCS $Id: cdromlib.c,v 6.1 2004/04/01 13:43:05 lavr Exp $
  *
  * Authors: Greg Schuler, Jim Ostell, Jonathan Kans, Jonathan Epstein
  * 
@@ -49,6 +49,9 @@
  *                      modification comments.
  *
  * Revision $Log: cdromlib.c,v $
+ * Revision Revision 6.1  2004/04/01 13:43:05  lavr
+ * Revision Spell "occurred", "occurrence", and "occurring"
+ * Revision
  * Revision Revision 6.0  1997/08/25 18:13:10  madden
  * Revision Revision changed to 6.0
  * Revision
@@ -65,7 +68,7 @@
  * ==========================================================================
  */
 
-#define REVISION_STR "$Revision: 6.0 $"
+#define REVISION_STR "$Revision: 6.1 $"
 
 #include <cdromlib.h>
 
@@ -996,8 +999,8 @@ Int2    CdTrmLookup (DocType type, DocField field, CharPtr term)
  *      <term>\t<c1>\t<c2>\t<offset>\n
  *
  *      term:       term
- *      c1:         count of 'special' occurances.
- *      c2:         count of total occurances.  ** NOTE **
+ *      c1:         count of 'special' occurrences.
+ *      c2:         count of total occurrences.  ** NOTE **
  *      offset:     offset in postings file of list of document numbers.
  *      \t:         tab character  (?).
  *      \n:         newline character  ('\x0A').

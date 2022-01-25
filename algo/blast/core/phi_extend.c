@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.3 2003/09/29 17:47:39 coulouri Exp $
+/* $Id: phi_extend.c,v 1.4 2004/03/09 22:37:26 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,18 +32,18 @@ Author: Ilya Dondoshansky
 Contents: Word finder functions for PHI-BLAST
 
 ******************************************************************************
- * $Revision: 1.3 $
+ * $Revision: 1.4 $
  * */
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/phi_extend.h>
 
-static char const rcsid[] = "$Id: phi_extend.c,v 1.3 2003/09/29 17:47:39 coulouri Exp $";
+static char const rcsid[] = "$Id: phi_extend.c,v 1.4 2004/03/09 22:37:26 dondosha Exp $";
 
 Int4 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
         BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
-        Int4** matrix, BlastInitialWordParameters* word_params,
+        Int4** matrix, const BlastInitialWordParameters* word_params,
         BLAST_ExtendWord* ewp, Uint4* query_offsets, Uint4* subject_offsets,
         Int4 max_hits, BlastInitHitList* init_hitlist)
 {

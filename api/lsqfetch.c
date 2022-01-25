@@ -37,6 +37,9 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.20  2004/04/13 16:58:32  kans
+* allow alt index to have gi numbers, also test .fsa if .fa fails
+*
 * Revision 6.19  2003/11/13 17:18:02  kans
 * added SearchAltIndex, finished Alt fetch for chimp revision
 *
@@ -96,6 +99,9 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.20  2004/04/13 16:58:32  kans
+* allow alt index to have gi numbers, also test .fsa if .fa fails
+*
 * Revision 6.19  2003/11/13 17:18:02  kans
 * added SearchAltIndex, finished Alt fetch for chimp revision
 *
@@ -1479,7 +1485,7 @@ static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
   sip = (SeqIdPtr) ompcp->input_data;
   if (sip == NULL) return OM_MSG_RET_ERROR;
 
-  if (sip->choice == SEQID_GENBANK) {
+  if (sip->choice == SEQID_GENBANK || sip->choice == SEQID_GI) {
 
     SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
     fip = SearchAltIndex (alfp, id);
@@ -1495,6 +1501,16 @@ static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
       StringNCpy_0 (path, fip->path, sizeof (path));
       FileBuildPath (path, NULL, file);
       fp = FileOpen (path, "r");
+      if (fp == NULL) {
+        tmp = StringStr (file, ".fa");
+        if (tmp != NULL) {
+          *tmp = '\0';
+          StringCat (file, ".fsa");
+          StringNCpy_0 (path, fip->path, sizeof (path));
+          FileBuildPath (path, NULL, file);
+          fp = FileOpen (path, "r");
+        }
+      }
       if (fp == NULL) return OM_MSG_RET_ERROR;
       fseek (fp, offset, SEEK_SET);
       dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,

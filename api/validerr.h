@@ -73,6 +73,7 @@
 #define ERR_SEQ_DESCR_StructuredSourceNote  2,23
 #define ERR_SEQ_DESCR_UnnecessaryBioSourceFocus  2,24
 #define ERR_SEQ_DESCR_RefGeneTrackingWithoutStatus  2,25
+#define ERR_SEQ_DESCR_UnwantedCompleteFlag  2,26
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -166,6 +167,10 @@
 #define ERR_SEQ_FEAT_BadConflictFlag  5,67
 #define ERR_SEQ_FEAT_ConflictFlagSet  5,68
 #define ERR_SEQ_FEAT_LocusTagProblem  5,69
+#define ERR_SEQ_FEAT_CollidingLocusTags  5,70
+#define ERR_SEQ_FEAT_AltStartCodon  5,71
+#define ERR_SEQ_FEAT_PartialsInconsistent  5,72
+#define ERR_SEQ_FEAT_GenesInconsistent  5,73
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

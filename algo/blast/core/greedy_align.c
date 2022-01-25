@@ -1,4 +1,4 @@
-/* $Id: greedy_align.c,v 1.13 2003/10/27 20:48:49 dondosha Exp $
+/* $Id: greedy_align.c,v 1.16 2004/03/29 20:57:57 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,15 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 1.13 $
+* $Revision: 1.16 $
 *
 * File Description: Greedy gapped alignment functions
 */
 
-static char const rcsid[] = "$Id: greedy_align.c,v 1.13 2003/10/27 20:48:49 dondosha Exp $";
+static char const rcsid[] = "$Id: greedy_align.c,v 1.16 2004/03/29 20:57:57 dondosha Exp $";
 
 #include <algo/blast/core/greedy_align.h>
-#include <algo/blast/core/blast_util.h> /* for READDB_UNPACK_BASE macros */
+#include <algo/blast/core/blast_util.h> /* for NCBI2NA_UNPACK_BASE macros */
 
 /* -------- From original file edit.c ------------- */
 
@@ -422,7 +422,7 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
        if (!(rem & 4)) {
           for (row = 0; row < len2 && row < len1 && 
                   (s2[len2-1-row] ==
-                   READDB_UNPACK_BASE_N(s1[(len1-1-row)/4], 
+                   NCBI2NA_UNPACK_BASE(s1[(len1-1-row)/4], 
                                         3-(len1-1-row)%4)); 
                row++)
              /*empty*/ ;
@@ -434,7 +434,7 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
        if (!(rem & 4)) {
           for (row = 0; row < len2 && row < len1 && 
                   (s2[row] == 
-                   READDB_UNPACK_BASE_N(s1[(row+rem)/4], 
+                   NCBI2NA_UNPACK_BASE(s1[(row+rem)/4], 
                                         3-(row+rem)%4)); 
                row++)
              /*empty*/ ;
@@ -451,10 +451,13 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
 	/* hit last row; stop search */
 	return 0;
     }
-    if (S==NULL) 
+    if (S==NULL) {
        space = 0;
-    else 
-       refresh_mb_space(space);
+    } else if (!space) {
+       gamp->space = space = MBSpaceNew();
+    } else { 
+        refresh_mb_space(space);
+    }
     
     max_row = max_row_free + D_diff;
     for (k = 0; k < D_diff; k++)
@@ -493,30 +496,26 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
             if (row > max_len || row < 0) {
                   flower = k+1; nlower = 1;
             } else {
-               /* Slide down the diagonal. Don't do this if reached 
-                  the end point, which has value 0x0f */
+               /* Slide down the diagonal. */
                if (reverse) {
-                  if (s2[len2-row] != 0x0f) {
-                     if (!(rem & 4))
+                  if (!(rem & 4)) {
                      while (row < len2 && col < len1 && s2[len2-1-row] == 
-                            READDB_UNPACK_BASE_N(s1[(len1-1-col)/4],
+                            NCBI2NA_UNPACK_BASE(s1[(len1-1-col)/4],
                                                  3-(len1-1-col)%4)) {
                         ++row;
                         ++col;
                      }
-                     else
-                      while (row < len2 && col < len1 && s2[len2-1-row] == s1[len1-1-col]) {
+                  } else {
+                     while (row < len2 && col < len1 && 
+                            s2[len2-1-row] == s1[len1-1-col]) {
                         ++row;
                         ++col;
                      }
-                  } else {
-                     max_len = row;
-                     flower = k+1; nlower = 1;
                   }
-               } else if (s2[row-1] != 0x0f) { 
+               } else {
                   if (!(rem & 4)) {
                      while (row < len2 && col < len1 && s2[row] == 
-                            READDB_UNPACK_BASE_N(s1[(col+rem)/4],
+                            NCBI2NA_UNPACK_BASE(s1[(col+rem)/4],
                                                  3-(col+rem)%4)) {
                         ++row;
                         ++col;
@@ -527,9 +526,6 @@ Int4 BLAST_GreedyAlign(const Uint1* s1, Int4 len1,
                         ++col;
                      }
                   }
-               } else {
-                  max_len = row;
-                  flower = k+1; nlower = 1;
                }
             }
 	    flast_d[d][k] = row;
@@ -665,7 +661,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
        if (!(rem & 4)) {
           for (row = 0; row < len2 && row < len1 && 
                   (s2[len2-1-row] ==
-                   READDB_UNPACK_BASE_N(s1[(len1-1-row)/4], 
+                   NCBI2NA_UNPACK_BASE(s1[(len1-1-row)/4], 
                                         3-(len1-1-row)%4)); 
                row++)
              /*empty*/ ;
@@ -677,7 +673,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
        if (!(rem & 4)) {
           for (row = 0; row < len2 && row < len1 && 
                   (s2[row] == 
-                   READDB_UNPACK_BASE_N(s1[(row+rem)/4], 
+                   NCBI2NA_UNPACK_BASE(s1[(row+rem)/4], 
                                         3-(row+rem)%4)); 
                row++)
              /*empty*/ ;
@@ -771,29 +767,24 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
             } else {
                /* slide down the diagonal */
                if (reverse) {
-                  if (s2[len2 - row] != 0x0f) {
-                     if (!(rem & 4)) {
-                        while (row < len2 && col < len1 && s2[len2-1-row] == 
-                               READDB_UNPACK_BASE_N(s1[(len1-1-col)/4],
-                                                    3-(len1-1-col)%4)) {
-                           ++row;
-                           ++col;
-                        }
-                     } else {
-                        while (row < len2 && col < len1 && s2[len2-1-row] ==
-                               s1[len1-1-col]) {
-                           ++row;
-                           ++col;
-                        }
+                  if (!(rem & 4)) {
+                     while (row < len2 && col < len1 && s2[len2-1-row] == 
+                            NCBI2NA_UNPACK_BASE(s1[(len1-1-col)/4],
+                                                 3-(len1-1-col)%4)) {
+                        ++row;
+                        ++col;
                      }
                   } else {
-                     max_len = row;
-                     flower = k; nlower = k+1; 
+                     while (row < len2 && col < len1 && s2[len2-1-row] ==
+                            s1[len1-1-col]) {
+                        ++row;
+                        ++col;
+                     }
                   }
-               } else if (s2[row-1] != 0x0f) {
+               } else {
                   if (!(rem & 4)) {
                      while (row < len2 && col < len1 && s2[row] == 
-                            READDB_UNPACK_BASE_N(s1[(col+rem)/4],
+                            NCBI2NA_UNPACK_BASE(s1[(col+rem)/4],
                                                  3-(col+rem)%4)) {
                         ++row;
                         ++col;
@@ -804,22 +795,19 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* s1, Int4 len1,
                         ++col;
                      }
                   }
-               } else {
-                  max_len = row;
-                  flower = k; nlower = k+1;
                }
             }
-	    flast_d[d][k].C = row;
-	    if (row + col > cur_max) {
-		cur_max = row + col;
-		b_diag = k;
-	    }
-	    if (row == len2) {
-		flower = k; nlower = k+1;
-	    }
-	    if (col == len1) {
-		fupper = k; nupper = k-1;
-	    }
+            flast_d[d][k].C = row;
+            if (row + col > cur_max) {
+               cur_max = row + col;
+               b_diag = k;
+            }
+            if (row == len2) {
+               flower = k; nlower = k+1;
+            }
+            if (col == len1) {
+               fupper = k; nupper = k-1;
+            }
 	}
 	k = cur_max*M_half - d * gd;
 	if (max_row[d - 1] < k) {

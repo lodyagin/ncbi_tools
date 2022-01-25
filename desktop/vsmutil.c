@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -987,10 +987,7 @@ extern void CreateValidateWindowEx (ErrNotifyProc notify, CharPtr title,
 
         vep->summary = StaticPrompt (w, "", stdCharWidth * 30, 0, systemFont, 'c');
 
-        b = NULL;
-#ifdef WIN_MOTIF
         b = PushButton (w, "Dismiss", CloseValidButton);
-#endif
 
         AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) vep->doc, (HANDLE) t,
                       (HANDLE) vep->summary, (HANDLE) b, NULL);

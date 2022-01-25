@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,9 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.34  2004/02/04 21:54:53  dondosha
+* Macro correction for 12/18 discontiguous template
+*
 * Revision 6.33  2003/01/10 17:48:01  dondosha
 * Corrections in 2 macros
 *
@@ -399,7 +402,7 @@ static const Uint4 crc_table[256] = {
 #define MASK6_18    0xc0000000
 
 /* 12 of 18 */
-#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_12_18)>>2) | (((n)&MASK4_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6)>>8))
+#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_12_18)>>2) | (((n)&MASK4_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6_18)>>8))
 /* 11 of 18 */
 #define GET_WORD_INDEX_11_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_11_18)>>2) | (((n)&MASK4_18)>>6) | (((n)&MASK5_18)>>8) | (((n)&MASK6_18)>>10))
 

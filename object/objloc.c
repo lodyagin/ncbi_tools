@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.7  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.6  2001/08/06 20:07:26  ostell
 * added SEQID_TPG, TPE, TPD types
 *
@@ -469,9 +472,9 @@ erret:
 *
 *   SeqIdAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -945,9 +948,9 @@ erret:
 *
 *   TextSeqIdAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN TextSeqIdPtr LIBCALL TextSeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1078,9 +1081,9 @@ erret:
 *
 *   PatentSeqIdAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PatentSeqIdPtr LIBCALL PatentSeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1219,9 +1222,9 @@ erret:
 *
 *   GiimAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN GiimPtr LIBCALL GiimAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1372,9 +1375,9 @@ erret:
 *
 *   PDBSeqIdAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PDBSeqIdPtr LIBCALL PDBSeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1600,9 +1603,9 @@ erret:
 *
 *   SeqLocAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1755,9 +1758,9 @@ erret:
 *
 *   SeqLocMixAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocMixAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1822,9 +1825,9 @@ erret:
 *
 *   SeqLocEquivAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocEquivAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1901,9 +1904,9 @@ erret:
 *
 *   SeqLocSetAsnRead(aip, atp, set, element)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL SeqLocSetAsnRead (AsnIoPtr aip, AsnTypePtr set, AsnTypePtr element)
@@ -2069,9 +2072,9 @@ erret:
 *
 *   SeqIntAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqIntPtr LIBCALL SeqIntAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2204,9 +2207,9 @@ erret:
 *
 *   PackSeqIntAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL PackSeqIntAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2346,9 +2349,9 @@ erret:
 *
 *   SeqPntAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqPntPtr LIBCALL SeqPntAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2523,9 +2526,9 @@ erret:
 *
 *   PackSeqPntAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PackSeqPntPtr LIBCALL PackSeqPntAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -2745,9 +2748,9 @@ erret:
 *
 *   SeqBondAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqBondPtr LIBCALL SeqBondAsnRead (AsnIoPtr aip, AsnTypePtr orig)

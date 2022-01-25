@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-ID2Access
-*    Generated using ASNCODE Revision: 6.0 at Dec 15, 2003  5:08 PM
+*    Generated using ASNCODE Revision: 6.0 at May 3, 2004  6:18 PM
 *
 **************************************************/
 
@@ -73,12 +73,11 @@ typedef ValNode Request_request;
 
 #define Request_request_init 1
 #define Request_request_get_packages 2
-#define Request_request_string_to_gi 3
-#define Request_request_seq_id_to_gi 4
-#define Request_request_gi_to_tse_id 5
-#define Request_request_get_tse 6
-#define Request_request_reget_tse 7
-#define Request_request_get_chunks 8
+#define Request_request_get_seq_id 3
+#define Request_request_get_blob_id 4
+#define Request_request_get_blob_info 5
+#define Request_request_reget_blob 6
+#define Request_request_get_chunks 7
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -130,73 +129,74 @@ NLM_EXTERN Boolean LIBCALL ID2RequestGetPackagesAsnWrite PROTO (( ID2RequestGetP
 
 /**************************************************
 *
-*    ID2RequestStringToGi
+*    ID2RequestGetSeqId
 *
 **************************************************/
-typedef struct struct_ID2_Request_String_To_Gi {
-   CharPtr   id;
-} ID2RequestStringToGi, PNTR ID2RequestStringToGiPtr;
-
-
-NLM_EXTERN ID2RequestStringToGiPtr LIBCALL ID2RequestStringToGiFree PROTO ((ID2RequestStringToGiPtr ));
-NLM_EXTERN ID2RequestStringToGiPtr LIBCALL ID2RequestStringToGiNew PROTO (( void ));
-NLM_EXTERN ID2RequestStringToGiPtr LIBCALL ID2RequestStringToGiAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2RequestStringToGiAsnWrite PROTO (( ID2RequestStringToGiPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2RequestSeqIdToGi
-*
-**************************************************/
-typedef struct struct_ID2_Request_Seq_id_To_Gi {
+typedef struct struct_ID2_Request_Get_Seq_id {
    ValNodePtr   seq_id;
-} ID2RequestSeqIdToGi, PNTR ID2RequestSeqIdToGiPtr;
+   Int4   seq_id_type;
+} ID2RequestGetSeqId, PNTR ID2RequestGetSeqIdPtr;
 
 
-NLM_EXTERN ID2RequestSeqIdToGiPtr LIBCALL ID2RequestSeqIdToGiFree PROTO ((ID2RequestSeqIdToGiPtr ));
-NLM_EXTERN ID2RequestSeqIdToGiPtr LIBCALL ID2RequestSeqIdToGiNew PROTO (( void ));
-NLM_EXTERN ID2RequestSeqIdToGiPtr LIBCALL ID2RequestSeqIdToGiAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2RequestSeqIdToGiAsnWrite PROTO (( ID2RequestSeqIdToGiPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2RequestGetSeqIdPtr LIBCALL ID2RequestGetSeqIdFree PROTO ((ID2RequestGetSeqIdPtr ));
+NLM_EXTERN ID2RequestGetSeqIdPtr LIBCALL ID2RequestGetSeqIdNew PROTO (( void ));
+NLM_EXTERN ID2RequestGetSeqIdPtr LIBCALL ID2RequestGetSeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2RequestGetSeqIdAsnWrite PROTO (( ID2RequestGetSeqIdPtr , AsnIoPtr, AsnTypePtr));
 
 
 
 /**************************************************
 *
-*    ID2RequestGiToTSEId
+*    ID2RequestGetBlobId
 *
 **************************************************/
-typedef struct struct_ID2_Request_Gi_To_TSE_Id {
-   ValNodePtr   Gi_gi;
+typedef struct struct_ID2_Request_Get_Blob_Id {
+   struct struct_ID2_Request_Get_Seq_id PNTR   seq_id;
    ValNodePtr   sources;
    Uint1   external;
-   Uint1   current_gis;
-} ID2RequestGiToTSEId, PNTR ID2RequestGiToTSEIdPtr;
+} ID2RequestGetBlobId, PNTR ID2RequestGetBlobIdPtr;
 
 
-NLM_EXTERN ID2RequestGiToTSEIdPtr LIBCALL ID2RequestGiToTSEIdFree PROTO ((ID2RequestGiToTSEIdPtr ));
-NLM_EXTERN ID2RequestGiToTSEIdPtr LIBCALL ID2RequestGiToTSEIdNew PROTO (( void ));
-NLM_EXTERN ID2RequestGiToTSEIdPtr LIBCALL ID2RequestGiToTSEIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2RequestGiToTSEIdAsnWrite PROTO (( ID2RequestGiToTSEIdPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2RequestGetBlobIdPtr LIBCALL ID2RequestGetBlobIdFree PROTO ((ID2RequestGetBlobIdPtr ));
+NLM_EXTERN ID2RequestGetBlobIdPtr LIBCALL ID2RequestGetBlobIdNew PROTO (( void ));
+NLM_EXTERN ID2RequestGetBlobIdPtr LIBCALL ID2RequestGetBlobIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2RequestGetBlobIdAsnWrite PROTO (( ID2RequestGetBlobIdPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2RequestGetBlobInfo
+*
+**************************************************/
+typedef struct struct_ID2_Request_Get_Blob_Info {
+   ValNodePtr   BlobId_blob_id;
+   Uint1   get_seq_ids;
+   struct struct_ID2_Get_Blob_Details PNTR   get_data;
+} ID2RequestGetBlobInfo, PNTR ID2RequestGetBlobInfoPtr;
+
+
+NLM_EXTERN ID2RequestGetBlobInfoPtr LIBCALL ID2RequestGetBlobInfoFree PROTO ((ID2RequestGetBlobInfoPtr ));
+NLM_EXTERN ID2RequestGetBlobInfoPtr LIBCALL ID2RequestGetBlobInfoNew PROTO (( void ));
+NLM_EXTERN ID2RequestGetBlobInfoPtr LIBCALL ID2RequestGetBlobInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2RequestGetBlobInfoAsnWrite PROTO (( ID2RequestGetBlobInfoPtr , AsnIoPtr, AsnTypePtr));
 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-typedef ValNodePtr Gi_giPtr;
-typedef ValNode Gi_gi;
+typedef ValNodePtr BlobId_blob_idPtr;
+typedef ValNode BlobId_blob_id;
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
-#define Gi_gi_gi 1
-#define Gi_gi_string 2
-#define Gi_gi_seq_id 3
+#define BlobId_blob_id_blob_id 1
+#define BlobId_blob_id_BlobId_Resolve 2
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-static Gi_giPtr LIBCALL Gi_giFree PROTO ((Gi_giPtr ));
-static Gi_giPtr LIBCALL Gi_giAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-static Boolean LIBCALL Gi_giAsnWrite PROTO (( Gi_giPtr , AsnIoPtr, AsnTypePtr));
+static BlobId_blob_idPtr LIBCALL BlobId_blob_idFree PROTO ((BlobId_blob_idPtr ));
+static BlobId_blob_idPtr LIBCALL BlobId_blob_idAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL BlobId_blob_idAsnWrite PROTO (( BlobId_blob_idPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
@@ -204,36 +204,24 @@ static Boolean LIBCALL Gi_giAsnWrite PROTO (( Gi_giPtr , AsnIoPtr, AsnTypePtr));
 
 /**************************************************
 *
-*    ID2RequestGetTSE
+*    BlobId_resolve
 *
 **************************************************/
-typedef struct struct_ID2_Request_Get_TSE {
-   ValNodePtr   TseId_tse_id;
-   struct struct_ID2_Get_TSE_Details PNTR   details;
-} ID2RequestGetTSE, PNTR ID2RequestGetTSEPtr;
-
-
-NLM_EXTERN ID2RequestGetTSEPtr LIBCALL ID2RequestGetTSEFree PROTO ((ID2RequestGetTSEPtr ));
-NLM_EXTERN ID2RequestGetTSEPtr LIBCALL ID2RequestGetTSENew PROTO (( void ));
-NLM_EXTERN ID2RequestGetTSEPtr LIBCALL ID2RequestGetTSEAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2RequestGetTSEAsnWrite PROTO (( ID2RequestGetTSEPtr , AsnIoPtr, AsnTypePtr));
-
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-typedef ValNodePtr TseId_tse_idPtr;
-typedef ValNode TseId_tse_id;
-
+typedef struct struct_BlobId_Resolve {
+   struct struct_ID2_Request_Get_Blob_Id PNTR   request;
+   struct struct_ID2_Blob_Id PNTR   exclude_blobs;
+} BlobId_resolve, PNTR BlobId_resolvePtr;
 #endif /* NLM_GENERATED_CODE_PROTO */
 
-#define TseId_tse_id_tse_id 1
-#define TseId_tse_id_TseId_Gi 2
-
 #ifdef NLM_GENERATED_CODE_PROTO
 
-static TseId_tse_idPtr LIBCALL TseId_tse_idFree PROTO ((TseId_tse_idPtr ));
-static TseId_tse_idPtr LIBCALL TseId_tse_idAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-static Boolean LIBCALL TseId_tse_idAsnWrite PROTO (( TseId_tse_idPtr , AsnIoPtr, AsnTypePtr));
+static BlobId_resolvePtr LIBCALL BlobId_resolveFree PROTO ((BlobId_resolvePtr ));
+static BlobId_resolvePtr LIBCALL BlobId_resolveNew PROTO (( void ));
+static BlobId_resolvePtr LIBCALL BlobId_resolveAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL BlobId_resolveAsnWrite PROTO (( BlobId_resolvePtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
@@ -241,45 +229,20 @@ static Boolean LIBCALL TseId_tse_idAsnWrite PROTO (( TseId_tse_idPtr , AsnIoPtr,
 
 /**************************************************
 *
-*    TseId_gi
+*    ID2RequestReGetBlob
 *
 **************************************************/
-
-#ifdef NLM_GENERATED_CODE_PROTO
-
-typedef struct struct_TseId_Gi {
-   struct struct_ID2_Request_Gi_To_TSE_Id PNTR   request;
-   struct struct_ID2_TSE_Id PNTR   exclude_tses;
-} TseId_gi, PNTR TseId_giPtr;
-#endif /* NLM_GENERATED_CODE_PROTO */
-
-#ifdef NLM_GENERATED_CODE_PROTO
-
-static TseId_giPtr LIBCALL TseId_giFree PROTO ((TseId_giPtr ));
-static TseId_giPtr LIBCALL TseId_giNew PROTO (( void ));
-static TseId_giPtr LIBCALL TseId_giAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-static Boolean LIBCALL TseId_giAsnWrite PROTO (( TseId_giPtr , AsnIoPtr, AsnTypePtr));
-
-#endif /* NLM_GENERATED_CODE_PROTO */
-
-
-
-/**************************************************
-*
-*    ID2RequestReGetTSE
-*
-**************************************************/
-typedef struct struct_ID2_Request_ReGet_TSE {
-   struct struct_ID2_TSE_Id PNTR   tse_id;
-   struct struct_ID2_Get_TSE_Details PNTR   details;
+typedef struct struct_ID2_Request_ReGet_Blob {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   Int4   split_version;
    Int4   offset;
-} ID2RequestReGetTSE, PNTR ID2RequestReGetTSEPtr;
+} ID2RequestReGetBlob, PNTR ID2RequestReGetBlobPtr;
 
 
-NLM_EXTERN ID2RequestReGetTSEPtr LIBCALL ID2RequestReGetTSEFree PROTO ((ID2RequestReGetTSEPtr ));
-NLM_EXTERN ID2RequestReGetTSEPtr LIBCALL ID2RequestReGetTSENew PROTO (( void ));
-NLM_EXTERN ID2RequestReGetTSEPtr LIBCALL ID2RequestReGetTSEAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2RequestReGetTSEAsnWrite PROTO (( ID2RequestReGetTSEPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2RequestReGetBlobPtr LIBCALL ID2RequestReGetBlobFree PROTO ((ID2RequestReGetBlobPtr ));
+NLM_EXTERN ID2RequestReGetBlobPtr LIBCALL ID2RequestReGetBlobNew PROTO (( void ));
+NLM_EXTERN ID2RequestReGetBlobPtr LIBCALL ID2RequestReGetBlobAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2RequestReGetBlobAsnWrite PROTO (( ID2RequestReGetBlobPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -289,7 +252,7 @@ NLM_EXTERN Boolean LIBCALL ID2RequestReGetTSEAsnWrite PROTO (( ID2RequestReGetTS
 *
 **************************************************/
 typedef struct struct_ID2S_Request_Get_Chunks {
-   struct struct_ID2_TSE_Id PNTR   tse_id;
+   struct struct_ID2_Blob_Id PNTR   blob_id;
    ValNodePtr   chunks;
 } ID2SRequestGetChunks, PNTR ID2SRequestGetChunksPtr;
 
@@ -299,33 +262,45 @@ NLM_EXTERN ID2SRequestGetChunksPtr LIBCALL ID2SRequestGetChunksNew PROTO (( void
 NLM_EXTERN ID2SRequestGetChunksPtr LIBCALL ID2SRequestGetChunksAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ID2SRequestGetChunksAsnWrite PROTO (( ID2SRequestGetChunksPtr , AsnIoPtr, AsnTypePtr));
 
+typedef ValNodePtr ID2SeqIdPtr;
+typedef ValNode ID2SeqId;
+#define ID2SeqId_string 1
+#define ID2SeqId_seq_id 2
+
+
+NLM_EXTERN ID2SeqIdPtr LIBCALL ID2SeqIdFree PROTO ((ID2SeqIdPtr ));
+NLM_EXTERN ID2SeqIdPtr LIBCALL ID2SeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SeqIdAsnWrite PROTO (( ID2SeqIdPtr , AsnIoPtr, AsnTypePtr));
+
 
 
 /**************************************************
 *
-*    ID2TSEId
+*    ID2BlobId
 *
 **************************************************/
-typedef struct struct_ID2_TSE_Id {
-   struct struct_ID2_TSE_Id PNTR next;
+typedef struct struct_ID2_Blob_Id {
+   struct struct_ID2_Blob_Id PNTR next;
    Int4   sat;
+   Int4   sub_sat;
    Int4   sat_key;
-} ID2TSEId, PNTR ID2TSEIdPtr;
+   Int4   version;
+} ID2BlobId, PNTR ID2BlobIdPtr;
 
 
-NLM_EXTERN ID2TSEIdPtr LIBCALL ID2TSEIdFree PROTO ((ID2TSEIdPtr ));
-NLM_EXTERN ID2TSEIdPtr LIBCALL ID2TSEIdNew PROTO (( void ));
-NLM_EXTERN ID2TSEIdPtr LIBCALL ID2TSEIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2TSEIdAsnWrite PROTO (( ID2TSEIdPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2BlobIdPtr LIBCALL ID2BlobIdFree PROTO ((ID2BlobIdPtr ));
+NLM_EXTERN ID2BlobIdPtr LIBCALL ID2BlobIdNew PROTO (( void ));
+NLM_EXTERN ID2BlobIdPtr LIBCALL ID2BlobIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2BlobIdAsnWrite PROTO (( ID2BlobIdPtr , AsnIoPtr, AsnTypePtr));
 
 
 
 /**************************************************
 *
-*    ID2GetTSEDetails
+*    ID2GetBlobDetails
 *
 **************************************************/
-typedef struct struct_ID2_Get_TSE_Details {
+typedef struct struct_ID2_Get_Blob_Details {
    ValNodePtr   location;
    Int4   seq_class_level;
    Int4   descr_level;
@@ -334,30 +309,17 @@ typedef struct struct_ID2_Get_TSE_Details {
    Int4   feat_type_mask;
    Uint2   sequence_level;
    /* following #defines are for enumerated type, not used by object loaders */
-#define ID2_Get_TSE_Details_sequence_level_none 0
-#define ID2_Get_TSE_Details_sequence_level_seq_map 1
-#define ID2_Get_TSE_Details_sequence_level_seq_data 2
+#define ID2_Get_Blob_Details_sequence_level_none 0
+#define ID2_Get_Blob_Details_sequence_level_seq_map 1
+#define ID2_Get_Blob_Details_sequence_level_seq_data 2
 
-} ID2GetTSEDetails, PNTR ID2GetTSEDetailsPtr;
-
-
-NLM_EXTERN ID2GetTSEDetailsPtr LIBCALL ID2GetTSEDetailsFree PROTO ((ID2GetTSEDetailsPtr ));
-NLM_EXTERN ID2GetTSEDetailsPtr LIBCALL ID2GetTSEDetailsNew PROTO (( void ));
-NLM_EXTERN ID2GetTSEDetailsPtr LIBCALL ID2GetTSEDetailsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2GetTSEDetailsAsnWrite PROTO (( ID2GetTSEDetailsPtr , AsnIoPtr, AsnTypePtr));
-
-typedef ValNodePtr ID2SeqLocPtr;
-typedef ValNode ID2SeqLoc;
-#define ID2SeqLoc_whole 1
-#define ID2SeqLoc_int__ 2
-#define ID2SeqLoc_int_set 3
-#define ID2SeqLoc_whole_range 4
-#define ID2SeqLoc_loc_set 5
+} ID2GetBlobDetails, PNTR ID2GetBlobDetailsPtr;
 
 
-NLM_EXTERN ID2SeqLocPtr LIBCALL ID2SeqLocFree PROTO ((ID2SeqLocPtr ));
-NLM_EXTERN ID2SeqLocPtr LIBCALL ID2SeqLocAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SeqLocAsnWrite PROTO (( ID2SeqLocPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2GetBlobDetailsPtr LIBCALL ID2GetBlobDetailsFree PROTO ((ID2GetBlobDetailsPtr ));
+NLM_EXTERN ID2GetBlobDetailsPtr LIBCALL ID2GetBlobDetailsNew PROTO (( void ));
+NLM_EXTERN ID2GetBlobDetailsPtr LIBCALL ID2GetBlobDetailsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2GetBlobDetailsAsnWrite PROTO (( ID2GetBlobDetailsPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -369,9 +331,9 @@ NLM_EXTERN Boolean LIBCALL ID2SeqLocAsnWrite PROTO (( ID2SeqLocPtr , AsnIoPtr, A
 typedef struct struct_ID2_Reply {
    Int4   serial_number;
    struct struct_ID2_Param PNTR   params;
-   ValNodePtr   Reply_reply;
    struct struct_ID2_Error PNTR   error;
    Uint1   end_of_reply;
+   ValNodePtr   Reply_reply;
 } ID2Reply, PNTR ID2ReplyPtr;
 
 
@@ -389,12 +351,15 @@ typedef ValNode Reply_reply;
 #endif /* NLM_GENERATED_CODE_PROTO */
 
 #define Reply_reply_init 1
-#define Reply_reply_get_package 2
-#define Reply_reply_seq_id_to_gi 3
-#define Reply_reply_gi_to_tse_id 4
-#define Reply_reply_get_tse 5
-#define Reply_reply_get_tse_info 6
-#define Reply_reply_get_chunk 7
+#define Reply_reply_empty 2
+#define Reply_reply_get_package 3
+#define Reply_reply_get_seq_id 4
+#define Reply_reply_get_blob_id 5
+#define Reply_reply_get_blob_seq_ids 6
+#define Reply_reply_get_blob 7
+#define Reply_reply_reget_blob 8
+#define Reply_reply_get_split_info 9
+#define Reply_reply_get_chunk 10
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -403,117 +368,6 @@ static Reply_replyPtr LIBCALL Reply_replyAsnRead PROTO (( AsnIoPtr, AsnTypePtr))
 static Boolean LIBCALL Reply_replyAsnWrite PROTO (( Reply_replyPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
-
-
-
-/**************************************************
-*
-*    ID2ReplyGetPackage
-*
-**************************************************/
-typedef struct struct_ID2_Reply_Get_Package {
-   CharPtr   name;
-   struct struct_ID2_Param PNTR   params;
-} ID2ReplyGetPackage, PNTR ID2ReplyGetPackagePtr;
-
-
-NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageFree PROTO ((ID2ReplyGetPackagePtr ));
-NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageNew PROTO (( void ));
-NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2ReplyGetPackageAsnWrite PROTO (( ID2ReplyGetPackagePtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2ReplySeqIdToGi
-*
-**************************************************/
-typedef struct struct_ID2_Reply_Seq_id_To_Gi {
-   ValNodePtr   seq_id;
-   Int4   gi;
-} ID2ReplySeqIdToGi, PNTR ID2ReplySeqIdToGiPtr;
-
-
-NLM_EXTERN ID2ReplySeqIdToGiPtr LIBCALL ID2ReplySeqIdToGiFree PROTO ((ID2ReplySeqIdToGiPtr ));
-NLM_EXTERN ID2ReplySeqIdToGiPtr LIBCALL ID2ReplySeqIdToGiNew PROTO (( void ));
-NLM_EXTERN ID2ReplySeqIdToGiPtr LIBCALL ID2ReplySeqIdToGiAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2ReplySeqIdToGiAsnWrite PROTO (( ID2ReplySeqIdToGiPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2ReplyGiToTSEId
-*
-**************************************************/
-typedef struct struct_ID2_Reply_Gi_To_TSE_Id {
-   Int4   gi;
-   CharPtr   source;
-   struct struct_ID2_TSE_Id_Info PNTR   tses;
-} ID2ReplyGiToTSEId, PNTR ID2ReplyGiToTSEIdPtr;
-
-
-NLM_EXTERN ID2ReplyGiToTSEIdPtr LIBCALL ID2ReplyGiToTSEIdFree PROTO ((ID2ReplyGiToTSEIdPtr ));
-NLM_EXTERN ID2ReplyGiToTSEIdPtr LIBCALL ID2ReplyGiToTSEIdNew PROTO (( void ));
-NLM_EXTERN ID2ReplyGiToTSEIdPtr LIBCALL ID2ReplyGiToTSEIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2ReplyGiToTSEIdAsnWrite PROTO (( ID2ReplyGiToTSEIdPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2ReplyGetTSE
-*
-**************************************************/
-typedef struct struct_ID2_Reply_Get_TSE {
-   struct struct_ID2_TSE_Id PNTR   tse_id;
-   struct struct_ID2_Reply_Data PNTR   data;
-} ID2ReplyGetTSE, PNTR ID2ReplyGetTSEPtr;
-
-
-NLM_EXTERN ID2ReplyGetTSEPtr LIBCALL ID2ReplyGetTSEFree PROTO ((ID2ReplyGetTSEPtr ));
-NLM_EXTERN ID2ReplyGetTSEPtr LIBCALL ID2ReplyGetTSENew PROTO (( void ));
-NLM_EXTERN ID2ReplyGetTSEPtr LIBCALL ID2ReplyGetTSEAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2ReplyGetTSEAsnWrite PROTO (( ID2ReplyGetTSEPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SReplyGetTSEInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Reply_Get_TSE_Info {
-   struct struct_ID2_TSE_Id PNTR   tse_id;
-   Int4   split_version;
-   struct struct_ID2_Reply_Data PNTR   info;
-} ID2SReplyGetTSEInfo, PNTR ID2SReplyGetTSEInfoPtr;
-
-
-NLM_EXTERN ID2SReplyGetTSEInfoPtr LIBCALL ID2SReplyGetTSEInfoFree PROTO ((ID2SReplyGetTSEInfoPtr ));
-NLM_EXTERN ID2SReplyGetTSEInfoPtr LIBCALL ID2SReplyGetTSEInfoNew PROTO (( void ));
-NLM_EXTERN ID2SReplyGetTSEInfoPtr LIBCALL ID2SReplyGetTSEInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SReplyGetTSEInfoAsnWrite PROTO (( ID2SReplyGetTSEInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SReplyGetChunk
-*
-**************************************************/
-typedef struct struct_ID2S_Reply_Get_Chunk {
-   struct struct_ID2_TSE_Id PNTR   tse_id;
-   Int4   chunk_id;
-   struct struct_ID2_Reply_Data PNTR   data;
-} ID2SReplyGetChunk, PNTR ID2SReplyGetChunkPtr;
-
-
-NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkFree PROTO ((ID2SReplyGetChunkPtr ));
-NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkNew PROTO (( void ));
-NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SReplyGetChunkAsnWrite PROTO (( ID2SReplyGetChunkPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -549,20 +403,152 @@ NLM_EXTERN Boolean LIBCALL ID2ErrorAsnWrite PROTO (( ID2ErrorPtr , AsnIoPtr, Asn
 
 /**************************************************
 *
-*    ID2TSEIdInfo
+*    ID2ReplyGetPackage
 *
 **************************************************/
-typedef struct struct_ID2_TSE_Id_Info {
-   struct struct_ID2_TSE_Id_Info PNTR next;
-   struct struct_ID2_TSE_Id PNTR   tse_id;
+typedef struct struct_ID2_Reply_Get_Package {
+   CharPtr   name;
+   struct struct_ID2_Param PNTR   params;
+} ID2ReplyGetPackage, PNTR ID2ReplyGetPackagePtr;
+
+
+NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageFree PROTO ((ID2ReplyGetPackagePtr ));
+NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageNew PROTO (( void ));
+NLM_EXTERN ID2ReplyGetPackagePtr LIBCALL ID2ReplyGetPackageAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyGetPackageAsnWrite PROTO (( ID2ReplyGetPackagePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2ReplyGetSeqId
+*
+**************************************************/
+typedef struct struct_ID2_Reply_Get_Seq_id {
+   struct struct_ID2_Request_Get_Seq_id PNTR   request;
+   ValNodePtr   seq_id;
+} ID2ReplyGetSeqId, PNTR ID2ReplyGetSeqIdPtr;
+
+
+NLM_EXTERN ID2ReplyGetSeqIdPtr LIBCALL ID2ReplyGetSeqIdFree PROTO ((ID2ReplyGetSeqIdPtr ));
+NLM_EXTERN ID2ReplyGetSeqIdPtr LIBCALL ID2ReplyGetSeqIdNew PROTO (( void ));
+NLM_EXTERN ID2ReplyGetSeqIdPtr LIBCALL ID2ReplyGetSeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyGetSeqIdAsnWrite PROTO (( ID2ReplyGetSeqIdPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2ReplyGetBlobId
+*
+**************************************************/
+typedef struct struct_ID2_Reply_Get_Blob_Id {
+   ValNodePtr   seq_id;
+   struct struct_ID2_Blob_Id PNTR   blob_id;
    Int4   split_version;
-} ID2TSEIdInfo, PNTR ID2TSEIdInfoPtr;
+   struct struct_ID2S_Seq_annot_Info PNTR   annot_info;
+} ID2ReplyGetBlobId, PNTR ID2ReplyGetBlobIdPtr;
 
 
-NLM_EXTERN ID2TSEIdInfoPtr LIBCALL ID2TSEIdInfoFree PROTO ((ID2TSEIdInfoPtr ));
-NLM_EXTERN ID2TSEIdInfoPtr LIBCALL ID2TSEIdInfoNew PROTO (( void ));
-NLM_EXTERN ID2TSEIdInfoPtr LIBCALL ID2TSEIdInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2TSEIdInfoAsnWrite PROTO (( ID2TSEIdInfoPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2ReplyGetBlobIdPtr LIBCALL ID2ReplyGetBlobIdFree PROTO ((ID2ReplyGetBlobIdPtr ));
+NLM_EXTERN ID2ReplyGetBlobIdPtr LIBCALL ID2ReplyGetBlobIdNew PROTO (( void ));
+NLM_EXTERN ID2ReplyGetBlobIdPtr LIBCALL ID2ReplyGetBlobIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyGetBlobIdAsnWrite PROTO (( ID2ReplyGetBlobIdPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2ReplyGetBlobSeqIds
+*
+**************************************************/
+typedef struct struct_ID2_Reply_Get_Blob_Seq_ids {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   struct struct_ID2_Reply_Data PNTR   ids;
+} ID2ReplyGetBlobSeqIds, PNTR ID2ReplyGetBlobSeqIdsPtr;
+
+
+NLM_EXTERN ID2ReplyGetBlobSeqIdsPtr LIBCALL ID2ReplyGetBlobSeqIdsFree PROTO ((ID2ReplyGetBlobSeqIdsPtr ));
+NLM_EXTERN ID2ReplyGetBlobSeqIdsPtr LIBCALL ID2ReplyGetBlobSeqIdsNew PROTO (( void ));
+NLM_EXTERN ID2ReplyGetBlobSeqIdsPtr LIBCALL ID2ReplyGetBlobSeqIdsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyGetBlobSeqIdsAsnWrite PROTO (( ID2ReplyGetBlobSeqIdsPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2ReplyGetBlob
+*
+**************************************************/
+typedef struct struct_ID2_Reply_Get_Blob {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   Int4   split_version;
+   struct struct_ID2_Reply_Data PNTR   data;
+} ID2ReplyGetBlob, PNTR ID2ReplyGetBlobPtr;
+
+
+NLM_EXTERN ID2ReplyGetBlobPtr LIBCALL ID2ReplyGetBlobFree PROTO ((ID2ReplyGetBlobPtr ));
+NLM_EXTERN ID2ReplyGetBlobPtr LIBCALL ID2ReplyGetBlobNew PROTO (( void ));
+NLM_EXTERN ID2ReplyGetBlobPtr LIBCALL ID2ReplyGetBlobAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyGetBlobAsnWrite PROTO (( ID2ReplyGetBlobPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2ReplyReGetBlob
+*
+**************************************************/
+typedef struct struct_ID2_Reply_ReGet_Blob {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   Int4   split_version;
+   Int4   offset;
+   struct struct_ID2_Reply_Data PNTR   data;
+} ID2ReplyReGetBlob, PNTR ID2ReplyReGetBlobPtr;
+
+
+NLM_EXTERN ID2ReplyReGetBlobPtr LIBCALL ID2ReplyReGetBlobFree PROTO ((ID2ReplyReGetBlobPtr ));
+NLM_EXTERN ID2ReplyReGetBlobPtr LIBCALL ID2ReplyReGetBlobNew PROTO (( void ));
+NLM_EXTERN ID2ReplyReGetBlobPtr LIBCALL ID2ReplyReGetBlobAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2ReplyReGetBlobAsnWrite PROTO (( ID2ReplyReGetBlobPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2SReplyGetSplitInfo
+*
+**************************************************/
+typedef struct struct_ID2S_Reply_Get_Split_Info {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   Int4   split_version;
+   struct struct_ID2_Reply_Data PNTR   data;
+} ID2SReplyGetSplitInfo, PNTR ID2SReplyGetSplitInfoPtr;
+
+
+NLM_EXTERN ID2SReplyGetSplitInfoPtr LIBCALL ID2SReplyGetSplitInfoFree PROTO ((ID2SReplyGetSplitInfoPtr ));
+NLM_EXTERN ID2SReplyGetSplitInfoPtr LIBCALL ID2SReplyGetSplitInfoNew PROTO (( void ));
+NLM_EXTERN ID2SReplyGetSplitInfoPtr LIBCALL ID2SReplyGetSplitInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SReplyGetSplitInfoAsnWrite PROTO (( ID2SReplyGetSplitInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    ID2SReplyGetChunk
+*
+**************************************************/
+typedef struct struct_ID2S_Reply_Get_Chunk {
+   struct struct_ID2_Blob_Id PNTR   blob_id;
+   Int4   chunk_id;
+   struct struct_ID2_Reply_Data PNTR   data;
+} ID2SReplyGetChunk, PNTR ID2SReplyGetChunkPtr;
+
+
+NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkFree PROTO ((ID2SReplyGetChunkPtr ));
+NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkNew PROTO (( void ));
+NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2SReplyGetChunkAsnWrite PROTO (( ID2SReplyGetChunkPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -588,286 +574,19 @@ NLM_EXTERN Boolean LIBCALL ID2ReplyDataAsnWrite PROTO (( ID2ReplyDataPtr , AsnIo
 
 /**************************************************
 *
-*    ID2SSplitInfo
+*    ID2BlobSeqIds
 *
 **************************************************/
-typedef struct struct_ID2S_Split_Info {
-   struct struct_ID2S_Bioseqs_Info PNTR   bioseqs_info;
-   struct struct_ID2S_Chunk_Info PNTR   chunks;
-} ID2SSplitInfo, PNTR ID2SSplitInfoPtr;
-
-
-NLM_EXTERN ID2SSplitInfoPtr LIBCALL ID2SSplitInfoFree PROTO ((ID2SSplitInfoPtr ));
-NLM_EXTERN ID2SSplitInfoPtr LIBCALL ID2SSplitInfoNew PROTO (( void ));
-NLM_EXTERN ID2SSplitInfoPtr LIBCALL ID2SSplitInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SSplitInfoAsnWrite PROTO (( ID2SSplitInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SBioseqsInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Bioseqs_Info {
-   struct struct_ID2S_Bioseqs_Info PNTR next;
-   struct struct_ID2S_Bioseq_Info PNTR   info;
-   struct struct_ID2_Id_Range PNTR   bioseqs;
-} ID2SBioseqsInfo, PNTR ID2SBioseqsInfoPtr;
-
-
-NLM_EXTERN ID2SBioseqsInfoPtr LIBCALL ID2SBioseqsInfoFree PROTO ((ID2SBioseqsInfoPtr ));
-NLM_EXTERN ID2SBioseqsInfoPtr LIBCALL ID2SBioseqsInfoNew PROTO (( void ));
-NLM_EXTERN ID2SBioseqsInfoPtr LIBCALL ID2SBioseqsInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SBioseqsInfoAsnWrite PROTO (( ID2SBioseqsInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SChunkInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Chunk_Info {
-   struct struct_ID2S_Chunk_Info PNTR next;
-   Int4   id;
-   ValNodePtr   content;
-} ID2SChunkInfo, PNTR ID2SChunkInfoPtr;
-
-
-NLM_EXTERN ID2SChunkInfoPtr LIBCALL ID2SChunkInfoFree PROTO ((ID2SChunkInfoPtr ));
-NLM_EXTERN ID2SChunkInfoPtr LIBCALL ID2SChunkInfoNew PROTO (( void ));
-NLM_EXTERN ID2SChunkInfoPtr LIBCALL ID2SChunkInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SChunkInfoAsnWrite PROTO (( ID2SChunkInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SBioseqInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Bioseq_Info {
-   Int4   gap_count;
-   Uint1   seq_map_has_ref;
-   struct struct_ID2S_Sequence_Split_Info PNTR   sequence_split;
-} ID2SBioseqInfo, PNTR ID2SBioseqInfoPtr;
-
-
-NLM_EXTERN ID2SBioseqInfoPtr LIBCALL ID2SBioseqInfoFree PROTO ((ID2SBioseqInfoPtr ));
-NLM_EXTERN ID2SBioseqInfoPtr LIBCALL ID2SBioseqInfoNew PROTO (( void ));
-NLM_EXTERN ID2SBioseqInfoPtr LIBCALL ID2SBioseqInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SBioseqInfoAsnWrite PROTO (( ID2SBioseqInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2IdRange
-*
-**************************************************/
-typedef struct struct_ID2_Id_Range {
-   struct struct_ID2_Id_Range PNTR next;
-   Int4   start;
-   Int4   count;
-} ID2IdRange, PNTR ID2IdRangePtr;
-
-
-NLM_EXTERN ID2IdRangePtr LIBCALL ID2IdRangeFree PROTO ((ID2IdRangePtr ));
-NLM_EXTERN ID2IdRangePtr LIBCALL ID2IdRangeNew PROTO (( void ));
-NLM_EXTERN ID2IdRangePtr LIBCALL ID2IdRangeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2IdRangeAsnWrite PROTO (( ID2IdRangePtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SSequenceSplitInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Sequence_Split_Info {
-   Int4   block_size;
-   Int4   chunk_start;
-   ValNodePtr   chunk_blocks;
-} ID2SSequenceSplitInfo, PNTR ID2SSequenceSplitInfoPtr;
-
-
-NLM_EXTERN ID2SSequenceSplitInfoPtr LIBCALL ID2SSequenceSplitInfoFree PROTO ((ID2SSequenceSplitInfoPtr ));
-NLM_EXTERN ID2SSequenceSplitInfoPtr LIBCALL ID2SSequenceSplitInfoNew PROTO (( void ));
-NLM_EXTERN ID2SSequenceSplitInfoPtr LIBCALL ID2SSequenceSplitInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SSequenceSplitInfoAsnWrite PROTO (( ID2SSequenceSplitInfoPtr , AsnIoPtr, AsnTypePtr));
-
-typedef ValNodePtr ID2SChunkContentPtr;
-typedef ValNode ID2SChunkContent;
-#define ID2SChunkContent_seq_descr 1
-#define ID2SChunkContent_seq_annot 2
-#define ID2SChunkContent_seq_assembly 3
-#define ID2SChunkContent_seq_map 4
-#define ID2SChunkContent_seq_data 5
-
-
-NLM_EXTERN ID2SChunkContentPtr LIBCALL ID2SChunkContentFree PROTO ((ID2SChunkContentPtr ));
-NLM_EXTERN ID2SChunkContentPtr LIBCALL ID2SChunkContentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SChunkContentAsnWrite PROTO (( ID2SChunkContentPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SSeqDescrInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Seq_descr_Info {
-   Int4   type_mask;
-   struct struct_ID2_Id_Range PNTR   bioseqs;
-   struct struct_ID2_Id_Range PNTR   bioseq_sets;
-} ID2SSeqDescrInfo, PNTR ID2SSeqDescrInfoPtr;
-
-
-NLM_EXTERN ID2SSeqDescrInfoPtr LIBCALL ID2SSeqDescrInfoFree PROTO ((ID2SSeqDescrInfoPtr ));
-NLM_EXTERN ID2SSeqDescrInfoPtr LIBCALL ID2SSeqDescrInfoNew PROTO (( void ));
-NLM_EXTERN ID2SSeqDescrInfoPtr LIBCALL ID2SSeqDescrInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SSeqDescrInfoAsnWrite PROTO (( ID2SSeqDescrInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SSeqAnnotInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Seq_annot_Info {
-   CharPtr   name;
-   Uint1   align;
-   Uint1   graph;
-   struct struct_ID2S_Feat_type_Info PNTR   feat;
-   ValNodePtr   seq_loc;
-} ID2SSeqAnnotInfo, PNTR ID2SSeqAnnotInfoPtr;
-
-
-NLM_EXTERN ID2SSeqAnnotInfoPtr LIBCALL ID2SSeqAnnotInfoFree PROTO ((ID2SSeqAnnotInfoPtr ));
-NLM_EXTERN ID2SSeqAnnotInfoPtr LIBCALL ID2SSeqAnnotInfoNew PROTO (( void ));
-NLM_EXTERN ID2SSeqAnnotInfoPtr LIBCALL ID2SSeqAnnotInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SSeqAnnotInfoAsnWrite PROTO (( ID2SSeqAnnotInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SSeqAssemblyInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Seq_assembly_Info {
-   struct struct_ID2_Id_Range PNTR   bioseqs;
-} ID2SSeqAssemblyInfo, PNTR ID2SSeqAssemblyInfoPtr;
-
-
-NLM_EXTERN ID2SSeqAssemblyInfoPtr LIBCALL ID2SSeqAssemblyInfoFree PROTO ((ID2SSeqAssemblyInfoPtr ));
-NLM_EXTERN ID2SSeqAssemblyInfoPtr LIBCALL ID2SSeqAssemblyInfoNew PROTO (( void ));
-NLM_EXTERN ID2SSeqAssemblyInfoPtr LIBCALL ID2SSeqAssemblyInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SSeqAssemblyInfoAsnWrite PROTO (( ID2SSeqAssemblyInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SSeqMapInfo
-*
-**************************************************/
-#define ID2SSeqMapInfo  ValNode
-#define ID2SSeqMapInfoPtr  ValNodePtr
-#define ID2SSeqMapInfoFree  ValNodeFree
-#define ID2SSeqMapInfoNew  ValNodeNew
-#define ID2SSeqMapInfoAsnRead  ValNodeAsnRead
-#define ID2SSeqMapInfoAsnWrite  ValNodeAsnWrite
-
-
-/**************************************************
-*
-*    ID2SSeqDataInfo
-*
-**************************************************/
-#define ID2SSeqDataInfo  ValNode
-#define ID2SSeqDataInfoPtr  ValNodePtr
-#define ID2SSeqDataInfoFree  ValNodeFree
-#define ID2SSeqDataInfoNew  ValNodeNew
-#define ID2SSeqDataInfoAsnRead  ValNodeAsnRead
-#define ID2SSeqDataInfoAsnWrite  ValNodeAsnWrite
-
-
-/**************************************************
-*
-*    ID2SFeatTypeInfo
-*
-**************************************************/
-typedef struct struct_ID2S_Feat_type_Info {
-   struct struct_ID2S_Feat_type_Info PNTR next;
-   Int4   type;
-   ValNodePtr   subtypes;
-} ID2SFeatTypeInfo, PNTR ID2SFeatTypeInfoPtr;
-
-
-NLM_EXTERN ID2SFeatTypeInfoPtr LIBCALL ID2SFeatTypeInfoFree PROTO ((ID2SFeatTypeInfoPtr ));
-NLM_EXTERN ID2SFeatTypeInfoPtr LIBCALL ID2SFeatTypeInfoNew PROTO (( void ));
-NLM_EXTERN ID2SFeatTypeInfoPtr LIBCALL ID2SFeatTypeInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SFeatTypeInfoAsnWrite PROTO (( ID2SFeatTypeInfoPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SChunk
-*
-**************************************************/
-typedef struct struct_ID2S_Chunk {
-   struct struct_ID2S_Chunk_Data PNTR   data;
-} ID2SChunk, PNTR ID2SChunkPtr;
-
-
-NLM_EXTERN ID2SChunkPtr LIBCALL ID2SChunkFree PROTO ((ID2SChunkPtr ));
-NLM_EXTERN ID2SChunkPtr LIBCALL ID2SChunkNew PROTO (( void ));
-NLM_EXTERN ID2SChunkPtr LIBCALL ID2SChunkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SChunkAsnWrite PROTO (( ID2SChunkPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SChunkData
-*
-**************************************************/
-typedef struct struct_ID2S_Chunk_Data {
-   struct struct_ID2S_Chunk_Data PNTR next;
-   ValNodePtr   Id_id;
-   ValNodePtr   descrs;
-   struct struct_Seq_annot PNTR   annots;
-   struct struct_Seq_align PNTR   assembly;
-   struct struct_Seq_literal PNTR   seq_map;
-   struct struct_Seq_literal PNTR   seq_data;
-} ID2SChunkData, PNTR ID2SChunkDataPtr;
-
-
-NLM_EXTERN ID2SChunkDataPtr LIBCALL ID2SChunkDataFree PROTO ((ID2SChunkDataPtr ));
-NLM_EXTERN ID2SChunkDataPtr LIBCALL ID2SChunkDataNew PROTO (( void ));
-NLM_EXTERN ID2SChunkDataPtr LIBCALL ID2SChunkDataAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SChunkDataAsnWrite PROTO (( ID2SChunkDataPtr , AsnIoPtr, AsnTypePtr));
-
+typedef struct struct_ID2BlobSeqId ID2BlobSeqIds;
+typedef struct struct_ID2BlobSeqId PNTR ID2BlobSeqIdsPtr;
+#define ID2BlobSeqIdsNew() ID2BlobSeqIdNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-typedef ValNodePtr Id_idPtr;
-typedef ValNode Id_id;
-
-#endif /* NLM_GENERATED_CODE_PROTO */
-
-#define Id_id_bioseq_set 1
-#define Id_id_gi 2
-
-#ifdef NLM_GENERATED_CODE_PROTO
-
-static Id_idPtr LIBCALL Id_idFree PROTO ((Id_idPtr ));
-static Id_idPtr LIBCALL Id_idAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-static Boolean LIBCALL Id_idAsnWrite PROTO (( Id_idPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2BlobSeqIdsPtr LIBCALL ID2BlobSeqIdsFree PROTO ((ID2BlobSeqIdsPtr ));
+NLM_EXTERN ID2BlobSeqIdsPtr LIBCALL ID2BlobSeqIdsNew PROTO (( void ));
+NLM_EXTERN ID2BlobSeqIdsPtr LIBCALL ID2BlobSeqIdsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2BlobSeqIdsAsnWrite PROTO (( ID2BlobSeqIdsPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 
@@ -875,57 +594,20 @@ static Boolean LIBCALL Id_idAsnWrite PROTO (( Id_idPtr , AsnIoPtr, AsnTypePtr));
 
 /**************************************************
 *
-*    ID2Interval
+*    ID2BlobSeqId
 *
 **************************************************/
-typedef struct struct_ID2_Interval {
-   Int4   gi;
-   Int4   start;
-   Int4   length;
-} ID2Interval, PNTR ID2IntervalPtr;
+typedef struct struct_ID2_Blob_Seq_id {
+   struct struct_ID2_Blob_Seq_id PNTR next;
+   ValNodePtr   seq_id;
+   Uint1   replaced;
+} ID2BlobSeqId, PNTR ID2BlobSeqIdPtr;
 
 
-NLM_EXTERN ID2IntervalPtr LIBCALL ID2IntervalFree PROTO ((ID2IntervalPtr ));
-NLM_EXTERN ID2IntervalPtr LIBCALL ID2IntervalNew PROTO (( void ));
-NLM_EXTERN ID2IntervalPtr LIBCALL ID2IntervalAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2IntervalAsnWrite PROTO (( ID2IntervalPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2PackedSeqInts
-*
-**************************************************/
-typedef struct struct_ID2_Packed_Seq_ints {
-   Int4   gi;
-   struct struct_ID2_Seq_range PNTR   ints;
-} ID2PackedSeqInts, PNTR ID2PackedSeqIntsPtr;
-
-
-NLM_EXTERN ID2PackedSeqIntsPtr LIBCALL ID2PackedSeqIntsFree PROTO ((ID2PackedSeqIntsPtr ));
-NLM_EXTERN ID2PackedSeqIntsPtr LIBCALL ID2PackedSeqIntsNew PROTO (( void ));
-NLM_EXTERN ID2PackedSeqIntsPtr LIBCALL ID2PackedSeqIntsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2PackedSeqIntsAsnWrite PROTO (( ID2PackedSeqIntsPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    ID2SeqRange
-*
-**************************************************/
-typedef struct struct_ID2_Seq_range {
-   struct struct_ID2_Seq_range PNTR next;
-   Int4   start;
-   Int4   length;
-} ID2SeqRange, PNTR ID2SeqRangePtr;
-
-
-NLM_EXTERN ID2SeqRangePtr LIBCALL ID2SeqRangeFree PROTO ((ID2SeqRangePtr ));
-NLM_EXTERN ID2SeqRangePtr LIBCALL ID2SeqRangeNew PROTO (( void ));
-NLM_EXTERN ID2SeqRangePtr LIBCALL ID2SeqRangeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL ID2SeqRangeAsnWrite PROTO (( ID2SeqRangePtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN ID2BlobSeqIdPtr LIBCALL ID2BlobSeqIdFree PROTO ((ID2BlobSeqIdPtr ));
+NLM_EXTERN ID2BlobSeqIdPtr LIBCALL ID2BlobSeqIdNew PROTO (( void ));
+NLM_EXTERN ID2BlobSeqIdPtr LIBCALL ID2BlobSeqIdAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL ID2BlobSeqIdAsnWrite PROTO (( ID2BlobSeqIdPtr , AsnIoPtr, AsnTypePtr));
 
 
 

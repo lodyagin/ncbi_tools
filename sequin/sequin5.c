@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.166 $
+* $Revision: 6.169 $
 *
 * File Description:
 *
@@ -3280,7 +3280,7 @@ static void BlastCDD (BioseqPtr bsp, Pointer userdata)
   SeqAlignSetFree (salp);
 }
 
-void SimpleCDDBlastProc (IteM i)
+extern void SimpleCDDBlastProc (IteM i)
 
 {
   BaseFormPtr          bfp;
@@ -8551,6 +8551,7 @@ typedef struct sourceformdata {
   TexT           onlyThisPart;
   GrouP          sourceGroup;
   GrouP          modGrp;
+  GrouP          applyChoiceGrp;
   GrouP          genGrp;
   GrouP          refGrp;
   GrouP          txtGrp;
@@ -9106,6 +9107,142 @@ static void ConvertOrgModToSubSource (
   }
   RemoveOrgModByPtr (biop, mod);
 }
+
+static Boolean DoesBioSourceQualContainString (BioSourcePtr biop, CharPtr str)
+{
+  SubSourcePtr  ssp = NULL;
+  OrgRefPtr     orp = NULL;
+  OrgNamePtr    onp = NULL;
+  OrgModPtr     mod = NULL;
+  
+  if (biop == NULL) 
+  {
+	return FALSE;
+  } 
+  if (str == NULL || StringHasNoText (str))
+  {
+	return TRUE;
+  }
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (ssp->name != NULL && StringStr (ssp->name, str) != NULL) 
+    {
+      return TRUE;
+    }
+  }
+  orp = biop->org;
+  if (orp == NULL) {
+    return FALSE;
+  }
+  onp = orp->orgname;
+  if (onp == NULL) {
+    return FALSE;
+  }
+  for (mod = onp->mod; mod != NULL; mod = mod->next) {
+	if (mod->subname != NULL && StringStr (mod->subname, str) != NULL) 
+	{
+	  return TRUE;
+	}
+  }
+  return FALSE;
+}
+
+static Boolean DoesBioSourceHaveQual (BioSourcePtr biop, Uint1 subtype, Boolean is_ssp)
+{
+  SubSourcePtr  ssp = NULL;
+  OrgRefPtr     orp = NULL;
+  OrgNamePtr    onp = NULL;
+  OrgModPtr     mod = NULL;
+  
+  if (biop == NULL) 
+  {
+  	return FALSE;
+  }
+  if (is_ssp) 
+  {
+    if (subtype == 55 || subtype == 155) {
+      subtype = 255;
+    }
+    for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+      if (ssp->subtype == subtype) {
+        return TRUE;
+      }
+    }
+  }
+  else 
+  {
+    if (subtype == 55 || subtype == 155) {
+      subtype = 255;
+    } else if (subtype == 53) {
+      subtype = 253;
+    } else if (subtype == 54) {
+      subtype = 254;
+    }
+
+    orp = biop->org;
+    if (orp == NULL) {
+      return FALSE;
+    }
+    onp = orp->orgname;
+    if (onp == NULL) {
+      return FALSE;
+    }
+    for (mod = onp->mod; mod != NULL; mod = mod->next) {
+      if (mod->subtype == subtype) {
+	    return TRUE;
+ 	  }
+    }
+  }
+  return FALSE;
+}
+
+static Boolean OkToApplyQual (BioSourcePtr biop, SourceFormPtr sfp)
+{
+  Int2           val;
+  Uint1          subtype;
+  Boolean        is_ssp;
+  
+  if (biop == NULL || sfp == NULL) {
+    return FALSE;
+  }
+  if (sfp->choice != 1 || sfp->type != ADD_SOURCE) 
+  {
+  	return TRUE;
+  }
+  val = GetValue (sfp->applyChoiceGrp);
+  switch (val) 
+  {
+  	case 1:
+  	  return TRUE;
+  	  break;
+  	case 2:
+  	  subtype = sfp->toval;
+  	  is_ssp = FALSE;
+  	  if (subtype == 999) 
+  	  {
+  	  	subtype = 255;
+  	  	is_ssp = TRUE;
+  	  	if (DoesBioSourceHaveQual (biop, subtype, TRUE))
+  	  	{
+  	      return TRUE;
+  	  	}
+  	  	else 
+  	  	{
+  	  	  return DoesBioSourceHaveQual (biop, subtype, FALSE);
+  	  	}
+  	  }
+  	  else if (subtype >= 100)
+  	  {
+  	  	subtype = subtype - 100;
+  	  	is_ssp = TRUE;
+  	  }
+  	  return DoesBioSourceHaveQual (biop, subtype, is_ssp);
+  	  break;
+  	case 4:
+      return DoesBioSourceQualContainString (biop, sfp->replaceStr);
+      break; 	  
+  }
+  return FALSE;	
+}
  
 static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean is_feat)
 
@@ -9119,8 +9256,10 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
   CharPtr       str1 = NULL;
   CharPtr       str2 = NULL;
   CharPtr       tmp_str;
+  Int4          offset;
 
   if (biop == NULL || sfp == NULL) return;
+  if (! OkToApplyQual (biop, sfp)) return;
   if (sfp->choice == 1) {
     if (sfp->fromval == 999) {
       ssp = FindSubSource (biop, 255, sfp, FALSE, FALSE, is_feat);
@@ -9161,15 +9300,19 @@ static void ProcessBioSourceFunc (BioSourcePtr biop, SourceFormPtr sfp, Boolean 
       case EDIT_SOURCE :
         if (ssp != NULL) {
           foundit = StringISearch (ssp->name, sfp->findStr);
-          if (foundit != NULL) {
+		  while (foundit != NULL) {
+		    offset = foundit - ssp->name;
             EditSourceString (&(ssp->name), sfp, foundit);
+			foundit = StringISearch (ssp->name + offset, sfp->findStr);
           }
         } else if (mod != NULL) {
           foundit = StringISearch (mod->subname, sfp->findStr);
-          if (foundit != NULL) {
+ 		  while (foundit != NULL) {
+		    offset = foundit - mod->subname;
             EditSourceString (&(mod->subname), sfp, foundit);
+			foundit = StringISearch (mod->subname + offset, sfp->findStr);
           }
-        }
+       }
         break;
       case ADD_SOURCE :
         if (ssp != NULL) {
@@ -9690,6 +9833,30 @@ static void ClearProcessSourceDlg (ButtoN b)
   Select (sfp->findthis);
 }
 
+static void ChangeApplyTarget (GrouP g)
+{
+  SourceFormPtr  sfp;
+  Int2           val;
+
+  sfp = (SourceFormPtr) GetObjectExtra (g);
+  if (sfp == NULL) return;
+  val = GetValue (g);
+  switch (val) {
+  	case 1:
+      Disable (sfp->tomod);
+      Disable (sfp->replacewith);
+      break;
+  	case 2:
+  	  Enable (sfp->tomod);
+  	  Disable (sfp->replacewith);
+  	  break;
+  	case 4:
+  	  Disable (sfp->tomod);
+  	  Enable (sfp->replacewith);
+  	  break;
+  }
+}
+
 static void ProcessSource (IteM i, Int2 type)
 
 {
@@ -9794,6 +9961,16 @@ static void ProcessSource (IteM i, Int2 type)
     case ADD_SOURCE :
       StaticPrompt (sfp->modGrp, "Type", 0, popupMenuHeight, programFont, 'l');
       sfp->frommod = PopupOrSingleList (sfp->modGrp, TRUE, NULL, subsource_and_orgmod_subtype_alistX, 0);
+      sfp->applyChoiceGrp = HiddenGroup (sfp->modGrp, 1, 3, ChangeApplyTarget);
+      SetObjectExtra (sfp->applyChoiceGrp, sfp, NULL);
+      RadioButton (sfp->applyChoiceGrp, "To every biosource");
+      RadioButton (sfp->applyChoiceGrp, "When qualifier present");
+      sfp->tomod = PopupOrSingleList (sfp->applyChoiceGrp, TRUE, NULL, subsource_and_orgmod_subtype_alistX, 0);      
+      RadioButton (sfp->applyChoiceGrp, "When any qualifier contains");
+      sfp->replacewith = DialogText (sfp->applyChoiceGrp, "", 14, NULL);
+      SetValue (sfp->applyChoiceGrp, 1);
+      Disable (sfp->tomod);
+      Disable (sfp->replacewith);
       break;
     default :
       break;

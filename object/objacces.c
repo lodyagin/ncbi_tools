@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  Object manager for module NCBI-Access
 *
@@ -40,6 +40,9 @@
 * 05-13-93 Schuler     All public functions are now declared LIBCALL.
 *
 * $Log: objacces.c,v $
+* Revision 6.1  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.0  1997/08/25 18:49:05  madden
 * Revision changed to 6.0
 *
@@ -179,9 +182,9 @@ erret:
 *
 *   LinkSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN LinkSetPtr LIBCALL LinkSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)

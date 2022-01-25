@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha Exp $";
+static char const rcsid[] = "$Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha Exp $";
 
-/* $Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha Exp $ */
+/* $Id: xmlblast.c,v 6.33 2004/04/29 19:55:35 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -32,12 +32,18 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.31 $
+* $Revision: 6.33 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.33  2004/04/29 19:55:35  dondosha
+* Mask filtered locations in query sequence lines
+*
+* Revision 6.32  2004/03/31 17:58:23  dondosha
+* Added PSIXmlReset function to allow keeping the AsnIoPtr between outputs for multiple queries in blastpgp
+*
 * Revision 6.31  2003/08/04 16:19:16  dondosha
 * Added effective HSP length (length adjustment) to other returns, so it can be reported in XML output
 *
@@ -142,7 +148,8 @@ static char const rcsid[] = "$Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha
 
 static Int4Ptr PNTR glb_matrix;
 
-Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Boolean is_aa, Int4Ptr PNTR matrix)
+Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length,
+                                   Boolean is_aa, Int4Ptr PNTR matrix)
 {
     SeqIdPtr m_id, t_id;
     SeqInt si;
@@ -173,7 +180,6 @@ Boolean BXMLGetSeqLineForDenseDiag(DenseDiagPtr ddp, HspPtr hsp, Int4 length, Bo
     si.to = hsp->query_to;
     si.strand = (ddp->strands == NULL) ? 0 : ddp->strands[0];
 
-    
     m_spp = SeqPortNewByLoc(&sl, is_aa ? Seq_code_ncbieaa : Seq_code_iupacna);
     
     /* SeqLoc for the subject */
@@ -579,8 +585,33 @@ Boolean BXMLGetSeqLines(SeqAlignPtr align, HspPtr hsp, Int4 length,
     return TRUE;
 }
 
+static void 
+MaskFilteredLocInHsp(HspPtr hsp, ValNodePtr mask, Boolean is_prot)
+{
+   Char mask_char;
+   SeqLocPtr mask_loc;
+   SeqLocPtr seqloc = NULL;
+   Int4 start, stop, index;
+
+   if (!mask)
+      return;
+
+   mask_loc = (SeqLocPtr) mask->data.ptrvalue;
+   mask_char = (is_prot ? 'X' : 'N');
+
+   while((seqloc = SeqLocFindNext(mask_loc, seqloc)) != NULL) {
+      start = MAX(0, SeqLocStart(seqloc) - hsp->query_from);
+      stop = MIN(SeqLocStop(seqloc), hsp->query_to) - hsp->query_from;
+      for (index = start; index <= stop; ++index) {
+         hsp->qseq[index] = mask_char;
+         if (hsp->hseq[index] != mask_char)
+            hsp->midline[index] = ' ';
+      }
+   }
+}
+
 HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
-                              Boolean is_ooframe)
+                              Boolean is_ooframe, ValNodePtr mask_loc)
 {
     HspPtr hsp;
     AlignSum as;
@@ -589,6 +620,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
     BioseqPtr bsp;
     Char tmp[256];
     static Boolean master_checked;
+    Boolean prot_alphabet;
 
     if((hsp = HspNew()) == NULL)
         return NULL;
@@ -660,13 +692,18 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
     hsp->density = 0;             /* ???? */
     
 
-    /* For sequence retrievel from should always be less than to */
+    /* For sequence retrieval from should always be less than to */
     hsp->query_from = as.master_from;
     hsp->query_to = as.master_to;
     hsp->hit_from = as.target_from;
     hsp->hit_to = as.target_to;
 
     BXMLGetSeqLines(sap, hsp, as.totlen, is_aa, chain, as.matrix);
+    /* Sequences are shown in protein alphabet in all cases except blastn,
+       that is if either subject is protein, or it is a translated search, 
+       in which case alignment segments have StdSeg form. */
+    prot_alphabet = (is_aa || sap->segtype == SAS_STD);
+    MaskFilteredLocInHsp(hsp, mask_loc, prot_alphabet);
 
     /* For display it depends on strand */
     
@@ -696,7 +733,7 @@ HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
 }
 
 HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped, 
-                          Boolean is_ooframe)
+                          Boolean is_ooframe, ValNodePtr mask_loc)
 {
     HitPtr hitp, hitp_head;
     HspPtr hspp;
@@ -762,9 +799,12 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
 
             while(TRUE) {
                 if(hitp->hsps == NULL) {
-                    hspp = hitp->hsps = BXMLGetHspFromSeqAlign(sap2, is_aa, chain, is_ooframe);
+                    hspp = hitp->hsps = 
+                       BXMLGetHspFromSeqAlign(sap2, is_aa, chain, is_ooframe, 
+                                              mask_loc);
                 } else {
-                    if((hspp->next = BXMLGetHspFromSeqAlign(sap2, is_aa, chain, is_ooframe)) == NULL)
+                    if((hspp->next = BXMLGetHspFromSeqAlign(sap2, is_aa, chain,
+                                        is_ooframe, mask_loc)) == NULL)
                         break;
                     else
                         hspp = hspp->next;
@@ -799,17 +839,19 @@ HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped,
 IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign, 
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
-                                   Int4 iter_num, CharPtr message)
+                                   Int4 iter_num, CharPtr message,
+                                   ValNodePtr mask_loc)
 {
    return BXMLBuildOneQueryIteration(seqalign, other_returns, is_ooframe,
-                                     ungapped, iter_num, message, NULL);
+                                     ungapped, iter_num, message, NULL, 
+                                     mask_loc);
 }
 
 IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign, 
                                    ValNodePtr other_returns,
                                    Boolean is_ooframe, Boolean ungapped,
                                    Int4 iter_num, CharPtr message,
-                                   BioseqPtr query)
+                                   BioseqPtr query, ValNodePtr mask_loc)
 {
     IterationPtr iterp;
     TxDfDbInfoPtr dbinfo=NULL;
@@ -833,7 +875,8 @@ IterationPtr BXMLBuildOneQueryIteration(SeqAlignPtr seqalign,
     }
 
     if(seqalign != NULL) {
-        iterp->hits = BXMLSeqAlignToHits(seqalign, ungapped, is_ooframe);
+       iterp->hits = 
+          BXMLSeqAlignToHits(seqalign, ungapped, is_ooframe, mask_loc);
     }
 
     iterp->stat = BXMLBuildStatistics(other_returns, ungapped);
@@ -982,7 +1025,7 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
                         BLAST_OptionsBlkPtr options,CharPtr program,
                         CharPtr database, BioseqPtr query, 
                         ValNodePtr other_returns, Int4 flags, 
-                        CharPtr message)
+                        CharPtr message, ValNodePtr mask_loc)
 {
     BlastOutputPtr boutp;
     Boolean ungapped = FALSE;
@@ -997,7 +1040,7 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     /* Here is one-iterational Blast output */
     boutp->iterations = BXMLBuildOneIteration(seqalign, other_returns,
                                               options->is_ooframe, ungapped,
-                                              1, message);
+                                              1, message, mask_loc);
     
     if (aip != NULL)      
         BlastOutputAsnWrite(boutp, aip, NULL);
@@ -1016,7 +1059,7 @@ Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
 Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign, 
            BLAST_OptionsBlkPtr options, CharPtr program, CharPtr database, 
            BioseqSetPtr query_set, ValNodePtr other_returns, Int4 flags,
-           CharPtr message)
+           CharPtr message, ValNodePtr mask_loc)
 {
     Boolean ungapped = FALSE;
     BioseqPtr query;
@@ -1029,6 +1072,7 @@ Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
     Boolean query_found;
     SeqIdPtr seqid = NULL;
     SeqAlignPtr sap = NULL, next_seqalign = NULL;
+    ValNodePtr next_mask_loc = NULL, current_mask_loc = NULL;
 
     sep = (SeqEntryPtr) ((BioseqSetPtr)query_set)->seq_set;
     BlastGetTypes(program, &q_is_na, &d_is_na);
@@ -1046,11 +1090,14 @@ Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
        Boolean return_value;
        SeqEntryExplore(sep, &query, seqentry_callback);
        return_value = BXMLPrintOutput(aip, seqalign, options, program, 
-                         database, query, other_returns, flags, message);
+                         database, query, other_returns, flags, 
+                         message, mask_loc);
        /* This function is presumed to close the AsnIoPtr inside */
        AsnIoClose(aip);
        return return_value;
     }
+
+    next_mask_loc = mask_loc;
 
     index = 0;
     while (seqalign) {
@@ -1079,13 +1126,23 @@ Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
           break;
        }
 
+       /* Find the masking locations for this query */
+       if (next_mask_loc && 
+           SeqIdComp(SeqLocId((SeqLocPtr)next_mask_loc->data.ptrvalue), 
+                     seqid) == SIC_YES) {
+          current_mask_loc = (SeqLocPtr) 
+             MemDup(next_mask_loc, sizeof(SeqLoc));
+          next_mask_loc = next_mask_loc->next;
+          current_mask_loc->next = NULL;
+       } else {
+          current_mask_loc = NULL;
+       }
+
        if (!mbxp) {
           if (options->is_megablast_search) {
-             mbxp = 
-                PSIXmlInit(aip, "megablast", database, options, query, 0);
+             mbxp = PSIXmlInit(aip, "megablast", database, options, query, 0);
           } else {
-             mbxp = 
-                PSIXmlInit(aip, program, database, options, query, 0);
+             mbxp = PSIXmlInit(aip, program, database, options, query, 0);
           }
        }
        if(options->gapped_calculation == FALSE || 
@@ -1093,8 +1150,10 @@ Boolean BXMLPrintMultiQueryOutput(AsnIoPtr aip, SeqAlignPtr seqalign,
           ungapped = TRUE;
     
        /* Here is one-iterational Blast output */
-       iterp = BXMLBuildOneQueryIteration(seqalign, NULL,
-                      options->is_ooframe, ungapped, index, NULL, query);
+       iterp = BXMLBuildOneQueryIteration(seqalign, NULL, options->is_ooframe,
+                                          ungapped, index, NULL, query, 
+                                          current_mask_loc);
+       current_mask_loc = (ValNodePtr) MemFree(current_mask_loc);
     
        IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
        AsnIoFlush(mbxp->aip);
@@ -1241,10 +1300,23 @@ PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     return psixp;
 }
 
-void PSIXmlClose(PSIXmlPtr psixp)
+void PSIXmlReset(PSIXmlPtr psixp)
 {
     AsnCloseStruct(psixp->aip, psixp->BlastOutput_iterations, NULL);
     AsnCloseStruct(psixp->aip, psixp->BlastOutput, NULL);
+    psixp->BlastOutput_iterations = NULL;
+    psixp->BlastOutput = NULL;
+    AsnIoReset(psixp->aip);
+    
+    psixp->boutp = BlastOutputFree(psixp->boutp);
+}
+
+void PSIXmlClose(PSIXmlPtr psixp)
+{
+   if (psixp->BlastOutput_iterations)
+      AsnCloseStruct(psixp->aip, psixp->BlastOutput_iterations, NULL);
+   if (psixp->BlastOutput)
+      AsnCloseStruct(psixp->aip, psixp->BlastOutput, NULL);
     
     AsnIoClose(psixp->aip);
     

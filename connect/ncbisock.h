@@ -1,7 +1,7 @@
 #ifndef NCBISOCK__H
 #define NCBISOCK__H
 
-/* $Id: ncbisock.h,v 6.2 2000/02/25 16:45:55 vakatov Exp $
+/* $Id: ncbisock.h,v 6.3 2004/04/01 13:43:06 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.h,v $
+ * Revision 6.3  2004/04/01 13:43:06  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
  * Revision 6.2  2000/02/25 16:45:55  vakatov
  * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
  * the C++ toolkits, and even to use them in a "standalone" fashion
@@ -132,7 +135,7 @@ typedef struct SOCK_tag*  SOCK;  /* socket:  handle */
  */
 typedef enum
 {
-  eSOCK_ESuccess = 0, /* everything is fine, no errors occured          */
+  eSOCK_ESuccess = 0, /* everything is fine, no errors occurred         */
   eSOCK_ETimeout,     /* timeout expired before the data could be i/o'd */
   eSOCK_EClosed,      /* peer has closed the connection                 */
 

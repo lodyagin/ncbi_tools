@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastconcat.c,v 1.5 2003/12/29 15:42:46 coulouri Exp $";
+static char const rcsid[] = "$Id: blastconcat.c,v 1.9 2004/04/21 19:25:04 coulouri Exp $";
 
 /* ===========================================================================
 *
@@ -33,8 +33,21 @@ Contents: implementation of functions needed for query multiplexing
           functionality.
 
 ******************************************************************************/
-/* $Revision: 1.5 $ 
+/* $Revision: 1.9 $ 
 *  $Log: blastconcat.c,v $
+*  Revision 1.9  2004/04/21 19:25:04  coulouri
+*  do not cast lvalues
+*
+*  Revision 1.8  2004/04/21 13:54:23  camacho
+*  Remove unused variable
+*
+*  Revision 1.7  2004/04/20 14:55:47  morgulis
+*  1. Fixed query offsets in results when -B option is used.
+*  2. Fixes for lower case masking handling with -B option.
+*
+*  Revision 1.6  2004/02/26 15:52:29  papadopo
+*  Mike Gertz' modifications to unify handling of gapped Karlin blocks between protein and nucleotide searches
+*
 *  Revision 1.5  2003/12/29 15:42:46  coulouri
 *  tblastn query concatenation fixes from morgulis
 *
@@ -214,10 +227,11 @@ Uint4 LIBCALL GetNumSpacers PROTO(( BLAST_OptionsBlkPtr options, Boolean believe
 
     if( last_context == 1 )
       BlastScoreBlkFill( sbp, (CharPtr)query_seq_start, query_length, 1 );
-
+    /* EMG: kbp and kbp_gap both appear to be unused in this routine */
     sbp->kbp_gap = sbp->kbp_gap_std;
     sbp->kbp = sbp->kbp_std;
-    kbp = sbp->kbp[first_context];
+    kbp     = sbp->kbp[first_context];
+    kbp_gap = sbp->kbp[first_context];
     Lambda = kbp->Lambda;
   }
   else /* tblastn */
@@ -503,6 +517,89 @@ SeqAlignPtrArray LIBCALL DivideSeqAligns PROTO(( BLAST_OptionsBlkPtr options,
   MemFree( (void *)secondary_node_pool );
   MemFree( (void *)secondary );
 
+  /* Now correct offsets in result. */
+  for( count = 0; count < num_queries; ++count )
+    if( result[count] )
+    {
+      sap = result[count];
+
+      while( sap )
+      {
+	SeqIdPtr tmpid = NULL;
+
+        if( StringCmp( options->program_name, "blastn" ) == 0 )
+        {
+	  Uint4 i = 0;
+	  DenseSegPtr dsp = (DenseSegPtr)(sap->segs);
+
+	  for( ; i < dsp->numseg; ++i )
+	  {
+            start = dsp->starts[i];
+	    query = mult_queries->WhichQuery[start + 1] - 1;
+	    start = start - mult_queries->QueryStarts[query];
+            dsp->starts[i] = start;
+	  }
+
+	  tmpid = SeqIdDup( mult_queries->FakeBsps[query]->id );
+	  tmpid->next = dsp->ids->next;
+	  dsp->ids = tmpid;
+        }
+        else
+        {
+	  Uint4 end = 0, len;
+	  SeqLocPtr loc, newloc = NULL;
+	  StdSegPtr ssp = (StdSegPtr)(sap->segs);
+	  StdSegPtr tmpssp = ssp;
+	  SeqIdPtr newid = NULL;
+
+	  while( tmpssp )
+	  {
+	    if( ssp->loc->choice != SEQLOC_EMPTY )
+	    {
+	      loc = ssp->loc;
+	      start = SeqLocStart( loc );
+	      query = mult_queries->WhichQuery[start + 1] - 1;
+	      tmpid = SeqIdDup( mult_queries->FakeBsps[query]->id );
+	      break;
+	    }
+
+	    tmpssp = tmpssp->next;
+	  }
+
+	  while( ssp )
+	  {
+	    loc = ssp->loc;
+	    start = SeqLocStart( loc );
+	    
+	    if( start != -1 )
+	    {
+	      end = SeqLocStop( loc );
+	      len = end - start;
+	      start = start - mult_queries->QueryStarts[query];
+	      end = start + len;
+	      newloc = SeqLocIntNew( start, end, SeqLocStrand( loc ), tmpid );
+	    }
+	    else
+	    {
+	      newloc = ValNodeNew( NULL );
+	      newloc->choice = SEQLOC_EMPTY;
+	      newloc->data.ptrvalue = SeqIdDup( tmpid );
+	    }
+
+	    newid = SeqIdDup( tmpid );
+	    newid->next = ssp->ids->next;
+	    ssp->ids = newid; 
+	    newloc->next = loc->next;
+	    ssp->loc = newloc;
+	    SeqLocFree( loc );
+	    ssp = ssp->next;
+	  }
+        }
+
+	sap = sap->next;
+      }
+    }
+
   return result;
 }
 
@@ -527,7 +624,7 @@ BlastMakeFakeBspConcat PROTO((BspArray bsp_arr, Uint1 num_bsps, Boolean is_na, U
 	BioseqPtr tot;
 	Int4 bsp_iter, letter_iter;
 		/* "compact" len refers to #bytes to store the seq, not to #of letters */
-	Int4 tot_len, tot_compact_len, spacer_compact_len, len_to_add;	
+	Int4 tot_len, tot_compact_len, spacer_compact_len;
 	Int4 indiv_len;		/*keep an Int4 to satisfy BlastGetSequenceFromBioseq */
 	Uint4 total_written;
 	BioseqPtr curr_bsp;
@@ -695,6 +792,7 @@ QueriesPtr LIBCALL BlastDuplicateMultQueries PROTO(( QueriesPtr source ))
   result->NumQueries = source->NumQueries;
   result->TotalLength = source->TotalLength;
   result->FakeBsps = source->FakeBsps;
+  result->LCaseMasks = source->LCaseMasks;
   result->QueryStarts = source->QueryStarts;
   result->QueryEnds = source->QueryEnds;
   result->WhichQuery = source->WhichQuery;
@@ -732,7 +830,8 @@ QueriesPtr LIBCALL BlastDuplicateMultQueries PROTO(( QueriesPtr source ))
          based on numbering beginning with 1, not 0 for queries and positions
 */
 QueriesPtr LIBCALL 
-BlastMakeMultQueries PROTO((BspArray bsp_arr, Uint1 num_queries, Boolean is_na, Uint1 spacer_len)) {
+BlastMakeMultQueries PROTO((BspArray bsp_arr, Uint1 num_queries, Boolean is_na, Uint1 spacer_len,
+                            SeqLocPtr PNTR lcase_mask_arr)) {
 	QueriesPtr queries;
 	Int4 bsp_iter, pos_iter;
 	BioseqPtr curr_bsp;
@@ -747,6 +846,7 @@ BlastMakeMultQueries PROTO((BspArray bsp_arr, Uint1 num_queries, Boolean is_na, 
 
 	queries->NumQueries = num_queries;
 	queries->FakeBsps = bsp_arr;	
+	queries->LCaseMasks = lcase_mask_arr;
 
 	/* AM: These has to be dynamically allocated (bug fix) */
 	starts = (IntArray)MemNew( sizeof( Int4 )*num_queries );
@@ -814,6 +914,46 @@ BlastMakeMultQueries PROTO((BspArray bsp_arr, Uint1 num_queries, Boolean is_na, 
 	queries->WhichQuery = which_query;
 	queries->WhichPos = which_pos;
 	return queries;	
+}
+
+/* ConcatSeqLoc():
+
+   Takes a SeqLoc of type SEQLOCK_PACKED_INT that has offsets local to 
+   individual queries and returns a new SeqLoc with offsets relative to
+   the concatenated query.
+
+*/
+SeqLocPtr LIBCALL ConcatSeqLoc PROTO(( QueriesPtr mult_queries, SeqLocPtr loc, SeqIdPtr id, Uint4 qnum ))
+{
+  SeqLocPtr result = NULL;
+  SeqLocPtr current = NULL, newloc = NULL, last = NULL;
+  Uint4 start, end;
+
+  if( mult_queries && loc->choice == SEQLOC_PACKED_INT ) 
+  {
+    result = ValNodeNew( NULL );
+    result->choice = loc->choice;
+    current = (SeqLocPtr)loc->data.ptrvalue;
+
+    while( current )
+    {
+      start = SeqLocStart( current );
+      end = SeqLocStop( current );
+      start = mult_queries->QueryStarts[qnum] + start;
+      end = mult_queries->QueryStarts[qnum] + end;
+      newloc = SeqLocIntNew( start, end, SeqLocStrand( loc ), id );
+
+      if( last )
+        last->next = newloc;
+      else
+        result->data.ptrvalue = (void *)newloc;
+
+      last = newloc;
+      current = current->next;
+    }
+  }
+
+  return result;
 }
 
 /* InitHitLists():

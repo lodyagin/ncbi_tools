@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.h,v $
+* Revision 6.19  2004/03/25 21:20:03  kskatz
+* All SPI_is_acceptor_* functions have been corrected: 'N' no longer contributes to nor subtracts from the score, log odds are calculated and the scores added; they are however all antilogged because there are too many places in the code where the score is expected to be between 0 and 1.  Also, corrected sequence frequency determination in SPI_is_acceptor_user and SPI_is_donor_user, as well as correcting for 'N'. Finally, and this all began with, I added matrices for Dictyostelium - command line -r -m
+*
 * Revision 6.18  2003/04/04 19:42:56  kskatz
 * Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
 *
@@ -198,6 +201,7 @@ extern "C" {
 #define SPI_FLY         2
 #define SPI_PLANT       3
 #define SPI_CELEGANS    4
+#define SPI_DICTY       5
 
 /* return codes for progress callback */
 #define SPI_START     1

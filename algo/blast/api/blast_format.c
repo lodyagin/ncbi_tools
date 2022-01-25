@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.36 2003/12/09 15:31:23 kans Exp $
+/* $Id: blast_format.c,v 1.48 2004/05/03 15:24:04 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,10 +34,10 @@ Contents: Formatting of BLAST results (SeqAlign)
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.36 $
+ * $Revision: 1.48 $
  * */
 
-static char const rcsid[] = "$Id: blast_format.c,v 1.36 2003/12/09 15:31:23 kans Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.48 2004/05/03 15:24:04 dondosha Exp $";
 
 #include <algo/blast/api/blast_format.h>
 #include <algo/blast/api/blast_seq.h>
@@ -64,7 +64,7 @@ extern void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign,
 extern IterationPtr 
 BXMLBuildOneQueryIteration (SeqAlignPtr seqalign, ValNodePtr other_returns, 
    Boolean is_ooframe, Boolean ungapped, Int4 iter_num, char* message,
-   BioseqPtr query);
+   BioseqPtr query, ValNodePtr mask_loc);
 extern BlastPruneSapStruct* 
 BlastPruneHitsFromSeqAlign PROTO((SeqAlignPtr sap, Int4 number, 
    BlastPruneSapStruct* prune));
@@ -86,7 +86,7 @@ MegaBlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
 extern void MBXmlClose(MBXml* mbxp, ValNodePtr other_returns, 
                        Boolean ungapped);
 
-extern CharPtr BlastGetReference (Boolean html);
+extern CharPtr LIBCALL BlastGetReference (Boolean html);
 
 extern CharPtr LIBCALL BlastGetVersionNumber PROTO((void));
 extern CharPtr LIBCALL BlastGetReleaseDate PROTO((void));
@@ -110,6 +110,15 @@ Int2 BlastFormattingOptionsNew(Uint1 program_number, char* file_out,
         BlastFormattingOptions** format_options_ptr)
 {
    BlastFormattingOptions* format_options; 
+
+   /* For translated RPS blast, the query will be a
+      nucleotide sequence and subject sequences will
+      be protein; thus the formatting must behave as
+      if a blastx search was performed */
+
+   if (program_number == blast_type_rpstblastn)
+      program_number = blast_type_blastx;
+
    if ((format_options = (BlastFormattingOptions*)
         calloc(1, sizeof(BlastFormattingOptions))) == NULL)
       return -1;
@@ -187,6 +196,11 @@ CreateBlastOutputHead(CharPtr program, CharPtr database,
     if((boutp = BlastOutputNew()) == NULL)
         return FALSE;
     
+    if (strcmp(program, "rpsblast") == 0)
+       program = "blastp";
+    else if (strcmp(program, "rpstblastn") == 0)
+       program = "blastx";
+
     /* For optimization BLOSUM62 may be loaded ones */
     if (query_loc) {
        SeqIdPtr sip = SeqLocId(query_loc);
@@ -271,6 +285,11 @@ static MBXml* MBXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database,
     AsnTypePtr       BLASTOUTPUT_iterations;
     AsnTypePtr       BLASTOUTPUT_iterations_E;
     AsnTypePtr       BLASTOUTPUT_mbstat;
+
+    if (strcmp(program, "rpsblast") == 0)
+       program = "blastp";
+    else if (strcmp(program, "rpstblastn") == 0)
+       program = "blastx";
 
     mbxp = (MBXml*) MemNew(sizeof(MBXml));
     
@@ -380,8 +399,9 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
 {  
    SeqAlignPtr seqalign = head, sap, next_seqalign;
    SeqLocPtr mask_loc, next_mask_loc = NULL, tmp_loc = NULL, mask_loc_head;
-   Uint1 align_type, program_number;
-   Boolean db_is_na, query_is_na;
+   Uint1 program_number;
+   Uint1 align_type;
+   Boolean query_is_na, db_is_na;
    Int4 query_index;
    SeqLocPtr slp, mask_slp;
    SeqIdPtr query_id;
@@ -400,9 +420,18 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
    else 
       aip = (AsnIoPtr) format_options->outfp; 
 
-   align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
+   if (strcmp(blast_program, "rpsblast") == 0)
+      blast_program = "blastp";
+   else if (strcmp(blast_program, "rpstblastn") == 0)
+      blast_program = "blastx";
+
    BlastProgram2Number(blast_program, &program_number);
-   
+
+   /* Old toolkit might have different values for program numbers, so 
+      use old toolkit function to determine alignment type. */
+
+   align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
+
    if (blast_database)
       ReadDBBioseqFetchEnable ("blast", blast_database, db_is_na, TRUE);
 
@@ -495,7 +524,8 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
          IterationPtr iterp;
          
          iterp = BXMLBuildOneQueryIteration(seqalign, NULL, FALSE, 
-                    format_options->ungapped, query_index, NULL, bsp);
+                    format_options->ungapped, query_index, NULL, bsp, 
+                    mask_loc);
          IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
          AsnIoFlush(mbxp->aip);
          IterationFree(iterp);
@@ -704,8 +734,7 @@ FormatBlastParameters(Uint1 program_number,
    Int4 qlen;
    double evalue;
    Boolean single_query = (query_info->last_context <= 1);
-   BLAST_KarlinBlk* kbp;
-   char* prog_name = NULL;
+   Blast_KarlinBlk* kbp;
    
    ret_buffer = NULL;
    ret_buffer_length = 0;
@@ -767,10 +796,8 @@ FormatBlastParameters(Uint1 program_number,
          add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       }
    }
-   BlastNumber2Program(program_number, &prog_name);
    /* Total query length does not include the first and last sentinel byte */
    qlen = query_info->context_offsets[query_info->last_context+1] - 1;
-   sfree(prog_name);
    sprintf(buffer, "length of query: %ld", (long)qlen);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    sprintf(buffer, "length of database: %s", Nlm_Int8tostr (total_length, 1));
@@ -787,8 +814,7 @@ FormatBlastParameters(Uint1 program_number,
    sprintf(buffer, "A: %ld", (long) word_options->window_size);
    add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    
-   if (program_number == blast_type_blastn || 
-       !score_options->gapped_calculation)
+   if (!score_options->gapped_calculation)
       kbp = sbp->kbp[query_info->first_context];
    else
       kbp = sbp->kbp_gap[query_info->first_context];
@@ -805,17 +831,22 @@ FormatBlastParameters(Uint1 program_number,
               ext_options->gap_x_dropoff_final);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
       
-      sprintf(buffer, "S1: %4.1f (%4.1f bits)", 
-              return_stats->gap_trigger, ext_options->gap_trigger);
+      sprintf(buffer, "S1: %ld (%4.1f bits)", 
+              (long)return_stats->gap_trigger, ext_options->gap_trigger);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
    }
    
    cutoff = 0;
    if (single_query) {
+      Int4 context = query_info->first_context;
+      double searchsp = (double) query_info->eff_searchsp_array[context];
+
+      /* For translated RPS blast the search space must be scaled down */
+      if (program_number == blast_type_rpstblastn)
+         searchsp = searchsp / NUM_FRAMES;
+
       evalue = hit_options->expect_value;
-      BLAST_Cutoffs(&cutoff, &evalue, kbp,
-         (double) query_info->eff_searchsp_array[query_info->first_context], 
-         FALSE, 0);
+      BLAST_Cutoffs(&cutoff, &evalue, kbp, searchsp, FALSE, 0);
       sprintf(buffer, "S2: %ld (%4.1f bits)", (long) cutoff, 
               (((cutoff)*(kbp->Lambda))-(kbp->logK))/NCBIMATH_LN2);
       add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
@@ -830,8 +861,9 @@ Int2 PrintOutputFooter(Uint1 program_number,
         BlastInitialWordOptions* word_options,
         BlastExtensionOptions* ext_options,
         BlastHitSavingOptions* hit_options,
-        BlastQueryInfo* query_info, ReaddbNewArgs* readdb_args, 
-        BlastReturnStat* return_stats) 
+        BlastQueryInfo* query_info, char* dbname, 
+        BlastReturnStat* return_stats,
+        Boolean db_is_na) 
 {
    FILE *outfp;
    TxDfDbInfo* dbinfo_head,* dbinfo;
@@ -850,8 +882,7 @@ Int2 PrintOutputFooter(Uint1 program_number,
       fprintf(outfp, "<PRE>\n");
    init_buff_ex(85);
 
-   if (readdb_args && 
-       (rdfp = readdb_new(readdb_args->dbname, readdb_args->is_protein))) {
+   if (dbname && (rdfp = readdb_new(dbname, !db_is_na))) {
       dbinfo_head = BLAST_GetDbInfo(rdfp);
 
       for (dbinfo = dbinfo_head; dbinfo; dbinfo = dbinfo->next) {
@@ -861,7 +892,7 @@ Int2 PrintOutputFooter(Uint1 program_number,
    }
    
    if (sbp && sbp->kbp) {
-      BLAST_KarlinBlk* ka_params;
+      Blast_KarlinBlk* ka_params;
       
       if (sbp->kbp[query_info->first_context]) {
          ka_params = sbp->kbp[query_info->first_context];
@@ -869,7 +900,7 @@ Int2 PrintOutputFooter(Uint1 program_number,
                            outfp, FALSE);
       }
 
-      if (sbp->kbp_gap[query_info->first_context]) {
+      if (score_options->gapped_calculation) {
          ka_params = sbp->kbp_gap[query_info->first_context];
          PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, 
                            outfp, TRUE);
@@ -890,11 +921,8 @@ Int2 PrintOutputFooter(Uint1 program_number,
    return 0;
 }
 
-/** Prints the top part of the traditional BLAST output, including version, 
- * reference(s) and database information.
- */
 Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
-        Boolean greedy_extension, ReaddbNewArgs* readdb_args)
+        Boolean is_megablast, char* dbname, Boolean is_protein)
 {
    if (format_options->align_view < 7) {
       if (format_options->html) {
@@ -911,14 +939,14 @@ Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
       fprintf(format_options->outfp, "\n");
       BlastPrintReference(format_options->html, 90, format_options->outfp);
       fprintf(format_options->outfp, "\n");
-      if (greedy_extension) {
+      if (is_megablast) {
          MegaBlastPrintReference(format_options->html, 90, 
                                  format_options->outfp);
          fprintf(format_options->outfp, "\n");
       }
 
-      if(readdb_args && 
-         !PrintDbInformation(readdb_args->dbname, readdb_args->is_protein, 70, 
+      if(dbname && 
+         !PrintDbInformation(dbname, is_protein, 70, 
              format_options->outfp, format_options->html))
          return 1;
               
@@ -927,10 +955,10 @@ Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
 #ifdef OS_UNIX
       fprintf(format_options->outfp, "%s", "Searching\n\n");
 #endif
-   } else if (readdb_args && format_options->align_view == 9) {
-      PrintTabularOutputHeader(readdb_args->dbname, NULL,
-         NULL, "BLAST", 0, format_options->believe_query,
-         format_options->outfp);
+   } else if (dbname && format_options->align_view == 9) {
+      PrintTabularOutputHeader(dbname, NULL, NULL, "BLAST", 0, 
+                               format_options->believe_query,
+                               format_options->outfp);
    }
    return 0;
 }
@@ -1034,7 +1062,7 @@ void BLAST_PrintIntermediateResults(BlastHSPResults* results,
    FILE *outfp;
    SeqLocPtr slp;
    char* subject_descr;
-   BLAST_KarlinBlk* kbp;
+   Blast_KarlinBlk* kbp;
    char* bit_score_buff,* eval_buff;
    double bit_score;
    BlastHSP* hsp;

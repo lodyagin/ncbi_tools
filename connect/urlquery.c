@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.28  2004/02/23 15:30:02  lavr
+* New (last) parameter "how" added in CONN_Write() API call
+*
 * Revision 6.27  2003/10/21 18:27:43  lavr
 * QUERY_OpenServiceQuery(): Timeout override changed
 *
@@ -246,8 +249,9 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
     ASSERT( !conn );
   } else if ( !StringHasNoText (arguments) ) {
       args_len = StringLen (arguments);
-      status = CONN_Write (conn, arguments, args_len, &n_written);
-      if (status != eIO_Success  ||  n_written != args_len) {
+      status = CONN_Write (conn, arguments, args_len,
+                           &n_written, eIO_WritePersist);
+      if (status != eIO_Success) {
           ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write arguments in CONN_Write");
           CONN_Close (conn);
           conn = 0;
@@ -294,7 +298,8 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
   buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
     while ((ct = FileRead (buffer, 1, URL_QUERY_BUFLEN, fp)) > 0) {
-      status = CONN_Write (conn, (const void *) buffer, ct, &n_written);
+      status = CONN_Write (conn, (const void *) buffer, ct,
+                           &n_written, eIO_WritePersist);
     }
   }
   MemFree (buffer);
@@ -334,7 +339,8 @@ static Nlm_Int2 LIBCALL AsnIoConnWrite (
 
 	aicp = (AsnIoConnPtr) ptr;
 	if (aicp == NULL || aicp->conn == NULL) return 0;
-	CONN_Write (aicp->conn, (const void *) buf, (size_t) count, &bytes);
+	CONN_Write (aicp->conn, (const void *) buf, (size_t) count,
+               &bytes, eIO_WritePersist);
 	return (Nlm_Int2) bytes;
 }
 

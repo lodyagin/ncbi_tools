@@ -26,6 +26,75 @@
 **************************************************************************
  *
  * $Log: blast_options.c,v $
+ * Revision 1.101  2004/04/29 17:41:05  papadopo
+ * Scale down the search space when calculating the S2 cutoff score for a translated RPS search
+ *
+ * Revision 1.100  2004/04/29 15:08:43  madden
+ * Add BlastScoringOptionsDup
+ *
+ * Revision 1.99  2004/04/23 14:02:25  papadopo
+ * ignore validation of LookupTableOptions if performing an RPS search
+ *
+ * Revision 1.98  2004/04/22 22:18:03  dondosha
+ * Set lookup table type correctly in BLAST_FillLookupTableOptions - needed for C driver only
+ *
+ * Revision 1.97  2004/04/21 17:00:59  madden
+ * Removed set but not read variable
+ *
+ * Revision 1.96  2004/04/19 12:58:44  madden
+ * Changed BLAST_KarlinBlk to Blast_KarlinBlk to avoid conflict with blastkar.h structure, renamed some functions to start with Blast_Karlin, made Blast_KarlinBlkDestruct public
+ *
+ * Revision 1.95  2004/04/16 14:17:06  papadopo
+ * add use of RPS-specific defines, remove RPS argument to FillLookupTableOptions
+ *
+ * Revision 1.94  2004/04/07 03:06:16  camacho
+ * Added blast_encoding.[hc], refactoring blast_stat.[hc]
+ *
+ * Revision 1.93  2004/03/26 20:46:00  dondosha
+ * Made gap_trigger parameter an integer, as in the old code
+ *
+ * Revision 1.92  2004/03/22 20:11:37  dondosha
+ * Do not allow small gaps cutoff to be less than gap trigger
+ *
+ * Revision 1.91  2004/03/17 15:19:10  camacho
+ * Add missing casts
+ *
+ * Revision 1.90  2004/03/11 23:58:10  dondosha
+ * Set cutoff_score to 0 before calling BLAST_Cutoffs, so it knows what to calculate
+ *
+ * Revision 1.89  2004/03/11 20:41:49  camacho
+ * Remove dead code
+ *
+ * Revision 1.88  2004/03/10 17:33:10  papadopo
+ * Make a separate lookup table type for RPS blast
+ *
+ * Revision 1.87  2004/03/09 22:37:26  dondosha
+ * Added const qualifiers to parameter arguments wherever relevant
+ *
+ * Revision 1.86  2004/03/09 18:46:24  dondosha
+ * Corrected how cutoffs are calculated
+ *
+ * Revision 1.85  2004/03/04 21:07:48  papadopo
+ * add RPS BLAST functionality
+ *
+ * Revision 1.84  2004/02/27 15:56:33  papadopo
+ * Mike Gertz' modifications to unify handling of gapped Karlin blocks for protein and nucleotide searches. Also modified BLAST_MainSetUp to allocate gapped Karlin blocks last
+ *
+ * Revision 1.83  2004/02/24 17:57:14  dondosha
+ * Added function to combine all options validation functions for the C engine
+ *
+ * Revision 1.82  2004/02/19 21:16:48  dondosha
+ * Use enum type for severity argument in Blast_MessageWrite
+ *
+ * Revision 1.81  2004/02/17 22:10:30  dondosha
+ * Set preliminary hitlist size in options initialization
+ *
+ * Revision 1.80  2004/02/07 15:48:30  ucko
+ * PSIBlastOptionsNew: rearrange slightly so that declarations come first.
+ *
+ * Revision 1.79  2004/02/06 22:49:30  dondosha
+ * Check for NULL pointer in PSIBlastOptionsNew
+ *
  * Revision 1.78  2004/02/03 18:33:39  dondosha
  * Correction to previous change: word size can be 11 if discontiguous words
  *
@@ -358,11 +427,12 @@
  *
 */
 
-static char const rcsid[] = "$Id: blast_options.c,v 1.78 2004/02/03 18:33:39 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_options.c,v 1.101 2004/04/29 17:41:05 papadopo Exp $";
 
 #include <algo/blast/core/blast_options.h>
 #include <algo/blast/core/blast_gapalign.h>
 #include <algo/blast/core/blast_filter.h>
+#include <algo/blast/core/blast_encoding.h>
 
 QuerySetUpOptions*
 BlastQuerySetUpOptionsFree(QuerySetUpOptions* options)
@@ -495,59 +565,104 @@ BlastInitialWordParametersFree(BlastInitialWordParameters* parameters)
 
 }
 
+static double GetUngappedCutoff(Uint1 program)
+{
+   switch(program) {
+   case blast_type_blastn:
+      return UNGAPPED_CUTOFF_E_BLASTN;
+   case blast_type_blastp: 
+   case blast_type_rpsblast: 
+      return UNGAPPED_CUTOFF_E_BLASTP;
+   case blast_type_blastx: 
+      return UNGAPPED_CUTOFF_E_BLASTX;
+   case blast_type_tblastn:
+   case blast_type_rpstblastn:
+      return UNGAPPED_CUTOFF_E_TBLASTN;
+   case blast_type_tblastx:
+      return UNGAPPED_CUTOFF_E_TBLASTX;
+   }
+   return 0;
+}
 
 Int2
 BlastInitialWordParametersNew(Uint1 program_number, 
    const BlastInitialWordOptions* word_options, 
-   BlastHitSavingParameters* hit_params, 
-   BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
+   const BlastHitSavingParameters* hit_params, 
+   const BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
    BlastQueryInfo* query_info, 
-   const BlastEffectiveLengthsOptions* eff_len_options, 
-   Boolean gapped_calculation, BlastInitialWordParameters* *parameters)
+   Uint4 subject_length,
+   BlastInitialWordParameters* *parameters)
 {
-   Int4 context = query_info->first_context;
-   Int4 cutoff_score = 0, s2 = 0;
-   double e2;
-   BLAST_KarlinBlk* kbp;
-   double qlen;
-   double avglen;
+   Int2 status = 0;
 
-   if (!word_options || !hit_params || !sbp || !sbp->kbp_std[context])
-      return 8;
+   /* If parameters pointer is NULL, there is nothing to fill, 
+      so don't do anything */
+   if (!parameters)
+      return 0;
+
+   ASSERT(sbp);
+   ASSERT(word_options);
 
    *parameters = (BlastInitialWordParameters*) 
       calloc(1, sizeof(BlastInitialWordParameters));
 
    (*parameters)->options = (BlastInitialWordOptions *) word_options;
 
+   ASSERT(sbp->kbp_std[query_info->first_context]);
+
    (*parameters)->x_dropoff = (Int4)
-      ceil(word_options->x_dropoff*NCBIMATH_LN2/sbp->kbp_std[context]->Lambda);
+      ceil(word_options->x_dropoff*NCBIMATH_LN2/
+           sbp->kbp_std[query_info->first_context]->Lambda);
 
-   if (program_number != blast_type_blastn && gapped_calculation)
-      kbp = sbp->kbp_gap[context];
-   else
-      kbp = sbp->kbp_std[context];
+   status = BlastInitialWordParametersUpdate(program_number,
+               hit_params, ext_params, sbp, query_info,
+               subject_length, *parameters);
 
-   /* Calculate score cutoff corresponding to a fixed e-value (0.05);
-      If it is smaller, then use this one */
-   qlen = query_info->context_offsets[query_info->last_context+1] - 1;
+   return status;
+}
 
-   avglen = ((double) eff_len_options->db_length) / 
-      eff_len_options->dbseq_num;
+Int2
+BlastInitialWordParametersUpdate(Uint1 program_number, 
+   const BlastHitSavingParameters* hit_params, 
+   const BlastExtensionParameters* ext_params, BlastScoreBlk* sbp, 
+   BlastQueryInfo* query_info, Uint4 subj_length,
+   BlastInitialWordParameters* parameters)
+{
+   Blast_KarlinBlk* kbp;
+   Boolean gapped_calculation = TRUE;
 
-   e2 = UNGAPPED_CUTOFF_EVALUE;
-   BLAST_Cutoffs(&s2, &e2, kbp, MIN(avglen, qlen)*avglen, TRUE, 
-                 hit_params->gap_decay_rate);
+   ASSERT(sbp);
+   ASSERT(hit_params);
+   ASSERT(ext_params);
+   ASSERT(query_info);
 
-   cutoff_score = MIN(hit_params->cutoff_score, s2);
-
-   /* For non-blastn programs, the cutoff score should not be larger than 
-      gap trigger */
-   if (gapped_calculation && program_number != blast_type_blastn) {
-      (*parameters)->cutoff_score = 
-         MIN((Int4)ext_params->gap_trigger, cutoff_score);
+   /* kbp_gap is only non-NULL for gapped searches! */
+   if (sbp->kbp_gap) {
+      kbp = sbp->kbp_gap[query_info->first_context];
    } else {
-      (*parameters)->cutoff_score = cutoff_score;
+      kbp = sbp->kbp_std[query_info->first_context];
+      gapped_calculation = FALSE;
+   }
+
+   ASSERT(kbp);
+   /* For non-blastn programs cutoff score should not be larger than 
+      gap trigger. */
+   if (gapped_calculation && program_number != blast_type_blastn) {
+      parameters->cutoff_score = 
+         MIN(ext_params->gap_trigger, hit_params->cutoff_score);
+   } else {
+      Int4 s2 = 0;
+      double e2;
+      double qlen;
+      /* Calculate score cutoff corresponding to a fixed e-value (0.05);
+         If it is smaller, then use this one */
+      qlen = query_info->context_offsets[query_info->last_context+1] - 1;
+      
+      e2 = GetUngappedCutoff(program_number);
+
+      BLAST_Cutoffs(&s2, &e2, kbp, MIN(subj_length, qlen)*subj_length, TRUE, 
+                    hit_params->gap_decay_rate);
+      parameters->cutoff_score = MIN(hit_params->cutoff_score, s2);
    }
 
    return 0;
@@ -633,7 +748,8 @@ BlastExtensionOptionsValidate(Uint1 program_number,
 		{
 			Int4 code=2;
 			Int4 subcode=1;
-			Blast_MessageWrite(blast_msg, 1, code, subcode, "Greedy extension only supported for BLASTN");
+			Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
+                            "Greedy extension only supported for BLASTN");
 			return (Int2) code;
 		}
 	}
@@ -645,8 +761,13 @@ Int2 BlastExtensionParametersNew(Uint1 program_number,
         const BlastExtensionOptions* options, BlastScoreBlk* sbp,
         BlastQueryInfo* query_info, BlastExtensionParameters* *parameters)
 {
-   BLAST_KarlinBlk* kbp,* kbp_gap;
+   Blast_KarlinBlk* kbp,* kbp_gap;
    BlastExtensionParameters* params;
+
+   /* If parameters pointer is NULL, there is nothing to fill, 
+      so don't do anything */
+   if (!parameters)
+      return 0;
 
    if (sbp->kbp) {
       kbp = sbp->kbp[query_info->first_context];
@@ -656,7 +777,7 @@ Int2 BlastExtensionParametersNew(Uint1 program_number,
       return -1;
    }
 
-   if ((program_number != blast_type_blastn) && sbp->kbp_gap) {
+   if (sbp->kbp_gap) {
       kbp_gap = sbp->kbp_gap[query_info->first_context];
    } else {
       kbp_gap = kbp;
@@ -671,8 +792,8 @@ Int2 BlastExtensionParametersNew(Uint1 program_number,
    params->gap_x_dropoff_final = (Int4) 
       (options->gap_x_dropoff_final*NCBIMATH_LN2 / kbp_gap->Lambda);
 
-   params->gap_trigger = 
-      (options->gap_trigger*NCBIMATH_LN2 + kbp->logK) / kbp->Lambda;
+   params->gap_trigger = (Int4)
+      ((options->gap_trigger*NCBIMATH_LN2 + kbp->logK) / kbp->Lambda);
 
    return 0;
 }
@@ -775,7 +896,7 @@ BlastScoringOptionsValidate(Uint1 program_number,
    {
 		Int4 code=2;
 		Int4 subcode=1;
-      Blast_MessageWrite(blast_msg, 2, code, subcode, 
+      Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
          "Gapped search is not allowed for tblastx");
 		return (Int2) code;
    }
@@ -786,14 +907,16 @@ BlastScoringOptionsValidate(Uint1 program_number,
 		{
 			Int4 code=2;
 			Int4 subcode=1;
-			Blast_MessageWrite(blast_msg, 1, code, subcode, "BLASTN penalty must be negative");
+			Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
+                            "BLASTN penalty must be negative");
 			return (Int2) code;
 		}
                 if (options->gap_open > 0 && options->gap_extend == 0) 
                 {
                         Int4 code=2;
                         Int4 subcode=1;
-                        Blast_MessageWrite(blast_msg, 1, code, subcode, 
+                        Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, 
+                           code, subcode, 
                            "BLASTN gap extension penalty cannot be 0");
                         return (Int2) code;
                 }
@@ -802,7 +925,9 @@ BlastScoringOptionsValidate(Uint1 program_number,
 	{
 		Int2 status=0;
 
-		if ((status=BLAST_KarlinkGapBlkFill(NULL, options->gap_open, options->gap_extend, options->decline_align, options->matrix)) != 0)
+		if ((status=Blast_KarlinkGapBlkFill(NULL, options->gap_open, 
+                     options->gap_extend, options->decline_align, 
+                     options->matrix)) != 0)
 		{
 			if (status == 1)
 			{
@@ -811,7 +936,8 @@ BlastScoringOptionsValidate(Uint1 program_number,
 				Int4 subcode=1;
 
 				buffer = BLAST_PrintMatrixMessage(options->matrix); 
-                                Blast_MessageWrite(blast_msg, 2, code, subcode, buffer);
+            Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR,
+                               code, subcode, buffer);
 				sfree(buffer);
 				return (Int2) code;
 				
@@ -822,8 +948,11 @@ BlastScoringOptionsValidate(Uint1 program_number,
 				Int4 code=2;
 				Int4 subcode=1;
 
-				buffer = BLAST_PrintAllowedValues(options->matrix, options->gap_open, options->gap_extend, options->decline_align); 
-                                Blast_MessageWrite(blast_msg, 2, code, subcode, buffer);
+				buffer = BLAST_PrintAllowedValues(options->matrix, 
+                        options->gap_open, options->gap_extend, 
+                        options->decline_align); 
+            Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                               buffer);
 				sfree(buffer);
 				return (Int2) code;
 			}
@@ -836,13 +965,32 @@ BlastScoringOptionsValidate(Uint1 program_number,
 	{
       Int4 code=2;
       Int4 subcode=1;
-      Blast_MessageWrite(blast_msg, 1, code, subcode, 
+      Blast_MessageWrite(blast_msg, BLAST_SEV_WARNING, code, subcode, 
          "Out-of-frame only permitted for blastx and tblastn");
       return (Int2) code;
 	}
 
 	return 0;
 
+}
+
+Int2 
+BlastScoringOptionsDup(BlastScoringOptions* *new_opt, const BlastScoringOptions* old_opt)
+{
+    if (old_opt == NULL || new_opt == NULL)
+       return -1;
+
+    *new_opt = (BlastScoringOptions*) BlastMemDup(old_opt, sizeof(BlastScoringOptions));
+    if (*new_opt == NULL)
+       return -1;
+
+    if (old_opt->matrix)
+       (*new_opt)->matrix = strdup(old_opt->matrix);
+
+    if (old_opt->matrix_path)
+       (*new_opt)->matrix_path = strdup(old_opt->matrix_path);
+
+    return 0;
 }
 
 
@@ -869,6 +1017,28 @@ BlastEffectiveLengthsOptionsNew(BlastEffectiveLengthsOptions* *options)
    return 0;
 }
 
+BlastEffectiveLengthsParameters*
+BlastEffectiveLengthsParametersFree(BlastEffectiveLengthsParameters* parameters)
+
+{
+	sfree(parameters);
+
+	return NULL;
+}
+
+Int2 
+BlastEffectiveLengthsParametersNew(const BlastEffectiveLengthsOptions* options, 
+                               Int8 db_length, Int4 num_seqs,
+                               BlastEffectiveLengthsParameters* *parameters)
+{
+   *parameters = (BlastEffectiveLengthsParameters*) 
+      calloc(1, sizeof(BlastEffectiveLengthsParameters));
+   (*parameters)->options = (BlastEffectiveLengthsOptions*) options;
+   (*parameters)->real_db_length = db_length;
+   (*parameters)->real_num_seqs = num_seqs;
+   return 0;
+}
+
 Int2 
 BLAST_FillEffectiveLengthsOptions(BlastEffectiveLengthsOptions* options, 
    Int4 dbseq_num, Int8 db_length, Int8 searchsp_eff)
@@ -883,8 +1053,8 @@ BLAST_FillEffectiveLengthsOptions(BlastEffectiveLengthsOptions* options,
       return 0;
    }
 
-   options->dbseq_num = MAX(dbseq_num, 1);
-   options->db_length = MAX(db_length, 1);
+   options->dbseq_num = dbseq_num;
+   options->db_length = db_length;
 
    return 0;
 }
@@ -912,11 +1082,13 @@ LookupTableOptionsNew(Uint1 program_number, LookupTableOptions* *options)
       (*options)->alphabet_size = BLASTAA_SIZE;
       (*options)->lut_type = AA_LOOKUP_TABLE;
       
-      if (program_number == blast_type_blastp)
+      if (program_number == blast_type_blastp ||
+          program_number == blast_type_rpsblast)
          (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTP;
       else if (program_number == blast_type_blastx)
          (*options)->threshold = BLAST_WORD_THRESHOLD_BLASTX;
-      else if (program_number == blast_type_tblastn)
+      else if (program_number == blast_type_tblastn ||
+               program_number == blast_type_rpstblastn)
          (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTN;
       else if (program_number == blast_type_tblastx)
          (*options)->threshold = BLAST_WORD_THRESHOLD_TBLASTX;
@@ -974,6 +1146,8 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
          options->lut_type = NA_LOOKUP_TABLE;
          options->word_size = BLAST_WORDSIZE_NUCL;
       }
+   } else {
+      options->lut_type = AA_LOOKUP_TABLE;
    }
 
    /* if the supplied threshold is -1, disable neighboring words */
@@ -988,6 +1162,9 @@ BLAST_FillLookupTableOptions(LookupTableOptions* options,
 
    if (use_pssm)
       options->use_pssm = use_pssm;
+   if (program_number == blast_type_rpsblast ||
+       program_number == blast_type_rpstblastn)
+      options->lut_type = RPS_LOOKUP_TABLE;
    if (word_size)
       options->word_size = word_size;
    if (program_number == blast_type_blastn) {
@@ -1038,25 +1215,32 @@ LookupTableOptionsValidate(Uint1 program_number,
 	if (options == NULL)
 		return 1;
 
+        if (program_number == blast_type_rpsblast ||
+            program_number == blast_type_rpstblastn)
+                return 0;
+
 	if (program_number != blast_type_blastn && options->threshold <= 0)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "Non-zero threshold required");
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                         "Non-zero threshold required");
 		return (Int2) code;
 	}
 
 	if (options->word_size <= 0)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, 
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
                          "Word-size must be greater than zero");
 		return (Int2) code;
 	} else if (program_number == blast_type_blastn && options->word_size < 7)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "Word-size must be 7" 
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                         "Word-size must be 7" 
                          "or greater for nucleotide comparison");
 		return (Int2) code;
 	} else if (program_number != blast_type_blastn && options->word_size > 5)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "Word-size must be less"
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                         "Word-size must be less"
                          "than 6 for protein comparison");
 		return (Int2) code;
 	}
@@ -1065,13 +1249,14 @@ LookupTableOptionsValidate(Uint1 program_number,
 	if (program_number != blast_type_blastn && 
        options->lut_type == MB_LOOKUP_TABLE)
 	{
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "Megablast lookup table only supported with blastn");
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                         "Megablast lookup table only supported with blastn");
 		return (Int2) code;
 	}
 
    if (options->lut_type == MB_LOOKUP_TABLE && options->word_size < 12 && 
        options->mb_template_length == 0) {
-      Blast_MessageWrite(blast_msg, 2, code, subcode, 
+      Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
                          "Word size must be 12 or greater with megablast"
                          " lookup table");
       return (Int2) code;
@@ -1081,16 +1266,16 @@ LookupTableOptionsValidate(Uint1 program_number,
        options->mb_template_length > 0) {
       if (!DiscWordOptionsValidate(options->word_size,
             options->mb_template_length, options->mb_template_type)) {
-         Blast_MessageWrite(blast_msg, 2, code, subcode, 
+         Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
             "Invalid discontiguous template parameters");
          return (Int2) code;
       } else if (options->lut_type != MB_LOOKUP_TABLE) {
-         Blast_MessageWrite(blast_msg, 2, code, subcode, 
+         Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
             "Invalid lookup table type for discontiguous Mega BLAST");
          return (Int2) code;
       } else if (options->scan_step != 1 && 
                  options->scan_step != COMPRESSION_RATIO) {
-         Blast_MessageWrite(blast_msg, 2, code, subcode, 
+         Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
             "Invalid scanning stride for discontiguous Mega BLAST");
          return (Int2) code;
       }
@@ -1117,11 +1302,8 @@ Int2 BlastHitSavingOptionsNew(Uint1 program_number,
       return 1;
 
    (*options)->hitlist_size = 500;
+   (*options)->prelim_hitlist_size = 500;
    (*options)->expect_value = BLAST_EXPECT_VALUE;
-
-   if (program_number != blast_type_blastn && 
-       program_number != blast_type_blastp)
-      (*options)->do_sum_stats = TRUE;
 
    /* other stuff?? */
    
@@ -1137,7 +1319,7 @@ BLAST_FillHitSavingOptions(BlastHitSavingOptions* options,
       return 1;
 
    if (hitlist_size)
-      options->hitlist_size = hitlist_size;
+      options->hitlist_size = options->prelim_hitlist_size = hitlist_size;
    if (evalue)
       options->expect_value = evalue;
 
@@ -1152,11 +1334,12 @@ BlastHitSavingOptionsValidate(Uint1 program_number,
 	if (options == NULL)
 		return 1;
 
-	if (options->hitlist_size < 1)
+	if (options->hitlist_size < 1 || options->prelim_hitlist_size < 1)
 	{
 		Int4 code=1;
 		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, 2, code, subcode, "No hits are being saved");
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+                         "No hits are being saved");
 		return (Int2) code;
 	}
 
@@ -1164,8 +1347,8 @@ BlastHitSavingOptionsValidate(Uint1 program_number,
 	{
 		Int4 code=2;
 		Int4 subcode=1;
-		Blast_MessageWrite(blast_msg, 
-			2, code, subcode, "expect value or cutoff score must be greater than zero");
+		Blast_MessageWrite(blast_msg, BLAST_SEV_ERROR, code, subcode, 
+         "expect value or cutoff score must be greater than zero");
 		return (Int2) code;
 	}	
 
@@ -1185,18 +1368,27 @@ BlastHitSavingParametersFree(BlastHitSavingParameters* parmameters)
 Int2
 BlastHitSavingParametersNew(Uint1 program_number, 
    const BlastHitSavingOptions* options, 
-   int (*handle_results)(void*, void*, void*, void*, void*, void*, void*), 
+   const BlastExtensionParameters* ext_params, 
    BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
    BlastHitSavingParameters* *parameters)
 {
-   BlastHitSavingParameters* params;
-   BLAST_KarlinBlk* kbp;
-   double evalue = options->expect_value;
    Boolean gapped_calculation = TRUE;
+   Int2 status = 0;
+   BlastHitSavingParameters* params;
 
-   if (!options || !parameters)
-      return 1;
+   /* If parameters pointer is NULL, there is nothing to fill, 
+      so don't do anything */
+   if (!parameters)
+      return 0;
 
+   ASSERT(options);
+   ASSERT(sbp);
+   
+   if (!sbp->kbp_gap)
+      gapped_calculation = FALSE;
+
+   /* If parameters have not yet been created, allocate and fill all
+      parameters that are constant throughout the search */
    *parameters = params = (BlastHitSavingParameters*) 
       calloc(1, sizeof(BlastHitSavingParameters));
 
@@ -1205,25 +1397,17 @@ BlastHitSavingParametersNew(Uint1 program_number,
 
    params->options = (BlastHitSavingOptions *) options;
 
-   params->handle_results = handle_results;
-
-   if (sbp->kbp_gap && sbp->kbp_gap[query_info->first_context]) {
-      kbp = sbp->kbp_gap[query_info->first_context];
-   } else {
-      kbp = sbp->kbp[query_info->first_context];
-      gapped_calculation = FALSE;
-   }
-
-   if (options->cutoff_score > 0) {
-      params->cutoff_score = options->cutoff_score;
-   } else if (!options->phi_align) {
-      BLAST_Cutoffs(&(params->cutoff_score), &evalue, kbp, 
-         (double)query_info->eff_searchsp_array[query_info->first_context], 
-         FALSE, 0);
-   } else {
-      params->cutoff_score = 0;
-   }
-   
+   /* If sum statistics use is forced by the options, 
+      set it in the paramters */
+   params->do_sum_stats = options->do_sum_stats;
+   /* Sum statistics is used anyway for all ungapped searches and all 
+      translated gapped searches (except RPS translated searches) */
+   if (!gapped_calculation || 
+       (program_number != blast_type_blastn && 
+        program_number != blast_type_blastp &&
+        program_number != blast_type_rpsblast &&
+        program_number != blast_type_rpstblastn))
+      params->do_sum_stats = TRUE;
    if (program_number == blast_type_blastn || !gapped_calculation) {
       params->gap_prob = BLAST_GAP_PROB;
       params->gap_decay_rate = BLAST_GAP_DECAY_RATE;
@@ -1233,16 +1417,75 @@ BlastHitSavingParametersNew(Uint1 program_number,
    }
    params->gap_size = BLAST_GAP_SIZE;
    params->cutoff_big_gap = 0;
-   params->cutoff_small_gap = params->cutoff_score;
 
+   status = BlastHitSavingParametersUpdate(program_number, 
+               ext_params, sbp, query_info, params);
+   return status;
+}
+
+Int2
+BlastHitSavingParametersUpdate(Uint1 program_number, 
+   const BlastExtensionParameters* ext_params, 
+   BlastScoreBlk* sbp, BlastQueryInfo* query_info, 
+   BlastHitSavingParameters* params)
+{
+   BlastHitSavingOptions* options;
+   Blast_KarlinBlk* kbp;
+   double evalue;
+
+   ASSERT(params);
+   ASSERT(query_info);
+   ASSERT(ext_params);
+
+   options = params->options;
+   evalue = options->expect_value;
+
+   /* Scoring options are not available here, but we can determine whether
+      this is a gapped or ungapped search by checking whether gapped
+      Karlin blocks have been set. */
+   if (sbp->kbp_gap) {
+      kbp = sbp->kbp_gap[query_info->first_context];
+   } else {
+      kbp = sbp->kbp[query_info->first_context];
+   }
+
+   /* Calculate cutoffs based on the current effective lengths information */
+   if (options->cutoff_score > 0) {
+      params->cutoff_score = options->cutoff_score;
+   } else if (!options->phi_align) {
+      Int4 context = query_info->first_context;
+      double searchsp = (double)query_info->eff_searchsp_array[context];
+
+      /* translated RPS searches must scale the search space down */
+      if (program_number == blast_type_rpstblastn)
+         searchsp = searchsp / NUM_FRAMES;
+
+      params->cutoff_score = 0;
+      BLAST_Cutoffs(&params->cutoff_score, &evalue, kbp, searchsp, FALSE, 0);
+      /* When sum statistics is used, all HSPs above the gap trigger 
+         cutoff are saved until the sum statistics is applied to potentially
+         link them with other HSPs and improve their e-values. 
+         However this does not apply to the ungapped search! */
+      if (params->do_sum_stats) {
+         params->cutoff_score = 
+            MIN(params->cutoff_score, ext_params->gap_trigger);
+      }
+   } else {
+      params->cutoff_score = 0;
+   }
+   
+   params->cutoff_small_gap = 
+      MIN(params->cutoff_score, ext_params->gap_trigger);
       
    return 0;
 }
 
 Int2 PSIBlastOptionsNew(PSIBlastOptions** psi_options)
 {
-   PSIBlastOptions* options = 
-      (PSIBlastOptions*) calloc(1, sizeof(PSIBlastOptions));
+   PSIBlastOptions* options;
+   if (!psi_options)
+      return 0;
+   options = (PSIBlastOptions*)calloc(1, sizeof(PSIBlastOptions));
    *psi_options = options;
    options->ethresh = PSI_ETHRESH;
    options->maxNumPasses = PSI_MAX_NUM_PASSES;
@@ -1321,3 +1564,106 @@ Int2 BLAST_InitDefaultOptions(Uint1 program_number,
 
 }
 
+Int2 BLAST_ValidateOptions(Uint1 program_number,
+                           const BlastExtensionOptions* ext_options,
+                           const BlastScoringOptions* score_options, 
+                           const LookupTableOptions* lookup_options, 
+                           const BlastHitSavingOptions* hit_options,
+                           Blast_Message* *blast_msg)
+{
+   Int2 status = 0;
+
+   if ((status = BlastExtensionOptionsValidate(program_number, ext_options,
+                                               blast_msg)) != 0)
+       return status;
+   if ((status = BlastScoringOptionsValidate(program_number, score_options,
+                                               blast_msg)) != 0)
+       return status;
+   if ((status = LookupTableOptionsValidate(program_number, 
+                    lookup_options, blast_msg)) != 0)   
+       return status;
+   if ((status = BlastHitSavingOptionsValidate(program_number, hit_options,
+                                               blast_msg)) != 0)
+       return status;
+   return status;
+}
+
+#define MY_EPS 1.0e-9
+void
+CalculateLinkHSPCutoffs(Uint1 program, BlastQueryInfo* query_info, 
+   BlastScoreBlk* sbp, BlastHitSavingParameters* hit_params, 
+   Int8 db_length, Int4 subject_length, 
+   const PSIBlastOptions* psi_options)
+{
+	double gap_prob, gap_decay_rate, x_variable, y_variable;
+	Blast_KarlinBlk* kbp;
+	Int4 expected_length, gap_size, query_length;
+	Int8 search_sp;
+   Boolean translated_subject = (program == blast_type_tblastn || 
+                                 program == blast_type_rpstblastn || 
+                                 program == blast_type_tblastx);
+
+	/* Do this for the first context, should this be changed?? */
+	kbp = sbp->kbp[query_info->first_context];
+	gap_size = hit_params->gap_size;
+	gap_prob = hit_params->gap_prob;
+	gap_decay_rate = hit_params->gap_decay_rate;
+   /* Use average query length */
+	query_length = query_info->context_offsets[query_info->last_context+1] /
+      (query_info->last_context + 1);
+
+   if (translated_subject) {
+      /* Lengths in subsequent calculations should be on the protein scale */
+      subject_length /= CODON_LENGTH;
+      db_length /= CODON_LENGTH;
+   }
+
+	/* Subtract off the expected score. */
+   expected_length = BLAST_Nint(log(kbp->K*((double) query_length)*
+                                    ((double) subject_length))/(kbp->H));
+   query_length = query_length - expected_length;
+
+   subject_length = subject_length - expected_length;
+   query_length = MAX(query_length, 1);
+   subject_length = MAX(subject_length, 1);
+
+   /* If this is a database search, use database length, else the single 
+      subject sequence length */
+   if (db_length > subject_length) {
+      y_variable = log((double) (db_length)/(double) subject_length)*(kbp->K)/
+         (gap_decay_rate);
+   } else {
+      y_variable = log((double) (subject_length + expected_length)/
+                       (double) subject_length)*(kbp->K)/(gap_decay_rate);
+   }
+   search_sp = ((Int8) query_length)* ((Int8) subject_length);
+   x_variable = 0.25*y_variable*((double) search_sp);
+
+   /* To use "small" gaps the query and subject must be "large" compared to
+      the gap size. If small gaps may be used, then the cutoff values must be
+      adjusted for the "bayesian" possibility that both large and small gaps 
+      are being checked for. */
+
+   if (search_sp > 8*gap_size*gap_size) {
+      x_variable /= (1.0 - gap_prob + MY_EPS);
+      hit_params->cutoff_big_gap = 
+         (Int4) floor((log(x_variable)/kbp->Lambda)) + 1;
+      x_variable = y_variable*(gap_size*gap_size);
+      x_variable /= (gap_prob + MY_EPS);
+      hit_params->cutoff_small_gap = 
+         MAX(hit_params->cutoff_small_gap, 
+             (Int4) floor((log(x_variable)/kbp->Lambda)) + 1);
+
+      hit_params->ignore_small_gaps = FALSE;
+   } else {
+      hit_params->cutoff_big_gap = 
+         (Int4) floor((log(x_variable)/kbp->Lambda)) + 1;
+      hit_params->cutoff_small_gap = hit_params->cutoff_big_gap;
+      hit_params->ignore_small_gaps = TRUE;
+   }	
+
+   if (psi_options) {
+      hit_params->cutoff_big_gap *= (Int4) psi_options->scalingFactor;
+      hit_params->cutoff_small_gap *= (Int4) psi_options->scalingFactor;
+   }
+}

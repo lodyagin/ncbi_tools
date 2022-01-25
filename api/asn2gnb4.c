@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.3 $
+* $Revision: 1.11 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1357,6 +1357,7 @@ static CharPtr validRefSeqExceptionString [] = {
   "nonconsensus splice site",
   "rearrangement required for product",
   "modified codon recognition",
+  "alternative start codon",
   "unclassified transcription discrepancy",
   "unclassified translation discrepancy",
   NULL
@@ -1442,6 +1443,9 @@ NLM_EXTERN Int2 ValidateAccn (
           accession [1] == 'Z') {
         return 0;
       }
+    }
+    if (accession [0] == 'A' || accession [0] == 'Y') {
+      if (accession [1] == 'P') return 0;
     }
   }
 
@@ -1730,6 +1734,23 @@ static void FF_AddECnumber (
    except from FormatFeatureBlock.  It performs no input
    validation.  (perhaps it should?) */
 
+static void LIBCALLBACK SaveGBSeqSequence (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  CharPtr       tmp;
+  CharPtr PNTR  tmpp;
+
+  tmpp = (CharPtr PNTR) userdata;
+  tmp = *tmpp;
+
+  tmp = StringMove (tmp, sequence);
+
+  *tmpp = tmp;
+}
+
 static void FormatFeatureBlockQuals (
   StringItemPtr    ffstring,
   IntAsn2gbJobPtr  ajp,
@@ -1763,7 +1784,9 @@ static void FormatFeatureBlockQuals (
   CodeBreakPtr       cbp;
   Char               ch;
   Uint1              choice;
+  /*
   Uint1              code = Seq_code_ncbieaa;
+  */
   Int4               gi;
   Boolean            hadProtDesc = FALSE;
   DbtagPtr           dbt;
@@ -1790,6 +1813,7 @@ static void FormatFeatureBlockQuals (
   CharPtr            protein_seq = NULL;
   size_t             prtlen;
   CharPtr            ptr;
+  CharPtr            region;
   Uint1              residue;
   SeqCodeTablePtr    sctp;
   Int4               sec_str;
@@ -1799,7 +1823,9 @@ static void FormatFeatureBlockQuals (
   SeqIdPtr           sip;
   SeqLocPtr          slp;
   Boolean            split;
+  /*
   SeqPortPtr         spp;
+  */
   CharPtr            start;
   CharPtr            str;
   Boolean            suppress_period;
@@ -2240,7 +2266,8 @@ static void FormatFeatureBlockQuals (
             tmp = StringSave (gbq->val);
             str = tmp;
             len = StringLen (str);
-            if (len > 1 && *str == '(' && str [len - 1] == ')' /* && StringChr (str, ',') != NULL */) {
+            if (len > 1 && *str == '(' && str [len - 1] == ')' &&
+                StringChr (str + 1, '(') == NULL /* && StringChr (str, ',') != NULL */) {
               str++;
               while (! StringHasNoText (str)) {
                 ptr = StringChr (str, ',');
@@ -2736,11 +2763,21 @@ static void FormatFeatureBlockQuals (
               }
               str = (CharPtr) MemNew ((size_t) (len + 1) * sizeof (Char));
               protein_seq = str;
+              /*
               if (ajp->flags.iupacaaOnly) {
                 code = Seq_code_iupacaa;
               } else {
                 code = Seq_code_ncbieaa;
               }
+              */
+              SeqPortStreamLoc (sfp->product, STREAM_EXPAND_GAPS, (Pointer) &protein_seq, SaveGBSeqSequence);
+              if (! StringHasNoText (str)) {
+                FFAddTextToString(ffstring, "/translation=\"", str, "\"", 
+                                  FALSE, TRUE, TILDE_TO_SPACES);
+                FFAddOneChar(ffstring, '\n', FALSE);
+              }
+              MemFree (str);
+              /*
               spp = SeqPortNewByLoc (sfp->product, code);
               if (spp != NULL) {
                 SeqPortSet_do_virtual (spp, TRUE);
@@ -2752,11 +2789,6 @@ static void FormatFeatureBlockQuals (
                   *protein_seq = residue;
                   protein_seq++;
                 }
-                /*
-                if (at_end && StringLen (str) < GENPEPT_MIN) {
-                  str = MemFree (str);
-                }
-                */
                 if (! StringHasNoText (str)) {
                   FFAddTextToString(ffstring, "/translation=\"", str, "\"", 
                                     FALSE, TRUE, TILDE_TO_SPACES);
@@ -2767,6 +2799,7 @@ static void FormatFeatureBlockQuals (
                 ajp->relModeError = TRUE;
               }
               SeqPortFree (spp);
+              */
             } else {
               ajp->relModeError = TRUE;
             }
@@ -3031,20 +3064,28 @@ static void FormatFeatureBlockQuals (
               break;
 
             case Qual_class_region :
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+              FFAddTextToString(unique, prefix, qvp [jdx].str, NULL, FALSE, FALSE, TILDE_IGNORE);
+#else
+              region = NULL;
               if (! StringHasNoText (qvp [jdx].str)) {
                 if ( FFEmpty(unique) ) {
-                  prefix = "Region: ";
+                    prefix = "Region: ";
                 } else {
                   prefix = "; Region: ";
                 }
-#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
-                FFAddTextToString(unique, prefix, qvp [jdx].str, NULL, FALSE, FALSE, TILDE_IGNORE);
-#else
-                FFAddString_NoRedund (unique, prefix, qvp [jdx].str, NULL);
-#endif
+                region = MemNew(StringLen(prefix) + StringLen(qvp [jdx].str) + 1);
+                if ( region != NULL ) {
+                    sprintf(region, "%s%s", prefix, (qvp [jdx].str));
+                    FFAddString_NoRedund(unique, NULL, region, NULL);
+                    region = MemFree(region);
+                } else {
+                    FFAddTextToString(unique, prefix, qvp [jdx].str, NULL, FALSE, FALSE, TILDE_IGNORE);
+                }
                 prefix = "; ";
                 add_period = FALSE;
               }
+#endif
               break;
 
             case Qual_class_site :
@@ -4008,7 +4049,7 @@ static CharPtr FormatFeatureBlockEx (
       }
     }
 
-  } else {
+  } else if (fcontext->featdeftype != FEATDEF_operon) {
 
     grp = SeqMgrGetGeneXref (sfp);
     if (grp != NULL) {
@@ -4248,6 +4289,9 @@ static CharPtr FormatFeatureBlockEx (
 
           crp = (CdRegionPtr) sfp->data.value.ptrvalue;
           if (crp != NULL) {
+            if (crp->frame > 1) {
+              qvp [FTQUAL_codon_start].num = crp->frame;
+            }
             gcp = crp->genetic_code;
             if (gcp != NULL) {
               for (vnp = gcp->data.ptrvalue; vnp != NULL; vnp = vnp->next) {
@@ -4370,18 +4414,18 @@ static CharPtr FormatFeatureBlockEx (
           if (rrp->pseudo) {
             pseudo = TRUE;
           }
-          if (rrp->type == 2) {
-            sip = SeqLocIdForProduct (sfp->product);
-            if (sip != NULL) {
-              /* for RefSeq records or GenBank not release_mode or entrez_mode */
-              if (is_other || (ajp->mode == SEQUIN_MODE || ajp->mode == DUMP_MODE)) {
-                qvp [FTQUAL_transcript_id].sip = sip;
-              } else {
-                /* otherwise now goes in note */
-                qvp [FTQUAL_transcript_id_note].sip = sip; /* !!! remove October 15, 2003 !!! */
-              }
-              prod = BioseqFind (sip);
+          sip = SeqLocIdForProduct (sfp->product);
+          if (sip != NULL) {
+            /* for RefSeq records or GenBank not release_mode or entrez_mode */
+            if (is_other || (ajp->mode == SEQUIN_MODE || ajp->mode == DUMP_MODE)) {
+              qvp [FTQUAL_transcript_id].sip = sip;
+            } else {
+              /* otherwise now goes in note */
+              qvp [FTQUAL_transcript_id_note].sip = sip; /* !!! remove October 15, 2003 !!! */
             }
+            prod = BioseqFind (sip);
+          }
+          if (rrp->type == 2) {
             if (! pseudo) {
               if (ajp->showTranscript) {
                 qvp [FTQUAL_transcription].ble = TRUE;

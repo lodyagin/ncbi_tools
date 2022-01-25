@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.18 2002/08/28 13:37:09 madden Exp $
+/* $Id: seed.h,v 6.19 2004/04/01 13:43:08 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,12 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.18 $
+$Revision: 6.19 $
 
 $Log: seed.h,v $
+Revision 6.19  2004/04/01 13:43:08  lavr
+Spell "occurred", "occurrence", and "occurring"
+
 Revision 6.18  2002/08/28 13:37:09  madden
 Lower MAX_HIT to 20000 again (for LINUX)
 
@@ -137,7 +140,7 @@ typedef struct hit_str {
     Int4 l_score;
     Nlm_FloatHi mul; /*multiplier for scores of characters*/
     Int4 hit_pos, hit_end;
-    Int4 bi, bj, ei, ej; /*beginning and end of pattern occurence
+    Int4 bi, bj, ei, ej; /*beginning and end of pattern occurrence
                            in query sequence
                            and database sequence, respectively*/
     struct hit_str *next;  /*next hit in linked list*/

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.31 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -449,6 +449,180 @@ NLM_EXTERN void DisplayEntrezReply (Entrez2ReplyPtr e2ry)
   AsnIoClose (aip);
   LogOrLaunch (path, "Entrez2ReplyAsnWrite");
   FileRemove (path);
+}
+
+/* text version of entrez2 query for debugging purposes */
+
+static Entrez2ReplyPtr EntrezTextWaitForReply (
+  CONN conn
+)
+
+{
+  AsnIoConnPtr     aicp;
+  AsnIoPtr         aip;
+  Char             buffer [1025];
+  time_t           currtime, starttime;
+  Entrez2ReplyPtr  e2ry = NULL;
+  Boolean          first;
+  FILE *           fp;
+  Int2             max = 0;
+  size_t           n_read;
+  Boolean          special_read = FALSE;
+  EIO_Status       status;
+  STimeout         timeout;
+  Char             tmp [PATH_MAX];
+
+  if (conn == NULL) return NULL;
+
+  timeout.sec = 100;
+  timeout.usec = 0;
+
+  starttime = GetSecs ();
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) == eIO_Timeout && max < 300) {
+    currtime = GetSecs ();
+    max = currtime - starttime;
+  }
+  if (status == eIO_Success) {
+#ifdef OS_UNIX
+    if (getenv ("ENTREZ2_RECORD_QUERY") != 0) {
+      special_read = TRUE;
+    }
+#endif
+    if (special_read) {
+      TmpNam (tmp);
+#ifdef OS_UNIX
+printf ("TmpNam '%s'\n", tmp);
+#endif
+      fp = FileOpen (tmp, "w");
+      if (fp != NULL) {
+
+        first = TRUE;
+        do {
+          status = CONN_Read (conn, buffer, sizeof (buffer) -1, &n_read,
+                              first ? eIO_ReadPersist : eIO_ReadPlain);
+          buffer [n_read] = '\0';
+          if (first) {
+            if (StringStr (buffer, "Entrez2-reply") == NULL) {
+              ErrPostEx (SEV_ERROR, 0, 0, "EntrezReadReply failed on '%s'", buffer);
+              FileClose (fp);
+              /*
+              FileRemove (tmp);
+              */
+              return NULL;
+            }
+            first = FALSE;
+          }
+          fprintf (fp, "%s", buffer);
+        } while (status == eIO_Success);
+        FileClose (fp);
+
+        aip = AsnIoOpen (tmp, "r");
+        e2ry = Entrez2ReplyAsnRead (aip, NULL);
+        AsnIoClose (aip);
+        /*
+        FileRemove (tmp);
+        */
+      }
+    } else {
+      aicp = QUERY_AsnIoConnOpen ("r", conn);
+      e2ry = Entrez2ReplyAsnRead (aicp->aip, NULL);
+      QUERY_AsnIoConnClose (aicp);
+    }
+  }
+  CONN_Close (conn);
+
+  return e2ry;
+}
+
+static Entrez2ReplyPtr EntrezTextSynchronousQuery (
+  Entrez2RequestPtr e2rq
+)
+
+{
+  AsnIoConnPtr     aicp;
+  CONN             conn;
+  Entrez2ReplyPtr  e2ry;
+  CharPtr          tempcookie = NULL;
+  CharPtr          host_machine = NULL;
+  Uint2            host_port = 0;
+  CharPtr          host_path = NULL;
+  CharPtr          env_machine = NULL;
+  CharPtr          env_path = NULL;
+  CharPtr          env_port = NULL;
+  CharPtr          env_service = NULL;
+  int              val = 0;
+
+  if (e2rq == NULL) return NULL;
+
+#ifdef OS_UNIX
+  env_machine = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_MACHINE");
+  if (! StringHasNoText (env_machine)) {
+    host_machine = env_machine;
+  }
+#endif
+  if (StringHasNoText (host_machine)) {
+    host_machine = "www.ncbi.nlm.nih.gov";
+  }
+
+#ifdef OS_UNIX
+  env_port = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PORT");
+  if (! StringHasNoText (env_port)) {
+    if (sscanf (env_port, "%d", &val) == 1) {
+      host_port = (Uint2) val;
+    }
+  }
+#endif
+  if (host_port == 0) {
+    host_port = 80;
+  }
+
+#ifdef OS_UNIX
+  env_path = (CharPtr) getenv ("NCBI_ENTREZ2_HOST_PATH");
+  if (! StringHasNoText (env_path)) {
+    host_path = env_path;
+  }
+#endif
+  if (StringHasNoText (host_path)) {
+    host_path = "/entrez/eutils/entrez2server.fcgi";
+  }
+
+  conn = QUERY_OpenUrlQuery (host_machine, host_port, host_path, NULL,
+                             "Entrez2Text", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
+
+  aicp = QUERY_AsnIoConnOpen ("w", conn);
+
+  tempcookie = e2rq->cookie;
+
+  Entrez2RequestAsnWrite (e2rq, aicp->aip, NULL);
+
+  e2rq->cookie = tempcookie;
+
+  AsnIoFlush (aicp->aip);
+  QUERY_AsnIoConnClose (aicp);
+
+  QUERY_SendQuery (conn);
+
+  e2ry = EntrezTextWaitForReply (conn);
+
+  return e2ry;
+}
+
+extern Entrez2ReplyPtr SpecialEntrezSynchronousQuery (
+  Entrez2RequestPtr e2rq
+);
+
+extern Entrez2ReplyPtr SpecialEntrezSynchronousQuery (
+  Entrez2RequestPtr e2rq
+)
+
+{
+#ifdef OS_UNIX
+  if (getenv ("ENTREZ2_TEXT_QUERY") != 0) {
+    return EntrezTextSynchronousQuery (e2rq);
+  }
+#endif
+  return EntrezSynchronousQuery (e2rq);
 }
 
 /*==================================================================*/
@@ -946,7 +1120,7 @@ static Uint4 GetUidFromAccn (CharPtr dbName, CharPtr accn)
   e2rq = EntrezCreateBooleanRequest (TRUE, FALSE, dbName, str, 0, 0, NULL, 1, 0);
 
   if (e2rq == NULL) return 0;
-  e2ry = EntrezSynchronousQuery (e2rq);
+  e2ry = SpecialEntrezSynchronousQuery (e2rq);
   e2rq = Entrez2RequestFree (e2rq);
   if (e2ry == NULL) return 0;
   e2br = EntrezExtractBooleanReply (e2ry);
@@ -1457,7 +1631,7 @@ static CharPtr FetchFromTermList (DoC d, Int2 item, Pointer ptr)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2rq);
 
-  e2ry = EntrezSynchronousQuery (e2rq);
+  e2ry = SpecialEntrezSynchronousQuery (e2rq);
   if (e2ry != NULL) {
     if (ShowASN () == TRUE)
       DisplayEntrezReply (e2ry);
@@ -1509,7 +1683,7 @@ static Int4 GetTermPage (FormInfoPtr pFormInfo, CharPtr str)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2rq);
 
-  e2ry = EntrezSynchronousQuery (e2rq);
+  e2ry = SpecialEntrezSynchronousQuery (e2rq);
   if (e2ry != NULL) {
     if (ShowASN () == TRUE)
       DisplayEntrezReply (e2ry);
@@ -2238,7 +2412,7 @@ static Int4 Query_TruncateCount (FormInfoPtr pFormInfo, CharPtr str)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -2308,7 +2482,7 @@ static Int4 Query_FetchRangeCount (FormInfoPtr pFormInfo, CharPtr str)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -2810,10 +2984,12 @@ static Boolean RepopulateTaxonomy (FormInfoPtr pFormInfo, CharPtr taxterm)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2Request);
 
-  e2Reply = EntrezSynchronousQuery (e2Request);
+  e2Reply = SpecialEntrezSynchronousQuery (e2Request);
+
+  if (ShowASN () == TRUE)
+    DisplayEntrezReply (e2Reply);
+
   if (e2Reply == NULL) {
-    if (ShowASN () == TRUE)
-      DisplayEntrezReply (e2Reply);
     Show (pFormInfo->taxLineagePopup);
     Update ();
     return FALSE;
@@ -2821,15 +2997,10 @@ static Boolean RepopulateTaxonomy (FormInfoPtr pFormInfo, CharPtr taxterm)
 
   e2TermNode = EntrezExtractHierNodeReply (e2Reply);
   if (e2TermNode == NULL) {
-    if (ShowASN () == TRUE)
-      DisplayEntrezReply (e2Reply);
     Show (pFormInfo->taxLineagePopup);
     Update ();
     return FALSE;
   }
-
-  if (ShowASN () == TRUE)
-    DisplayEntrezReply (e2Reply);
 
   Entrez2RequestFree (e2Request);
 
@@ -2933,7 +3104,7 @@ static void RepopulateTaxonomyRoot (FormInfoPtr pFormInfo)
   dbName = DBGetNameFromID (pFormInfo->currDb);
 
   if (StringICmp (dbName, "PubMed") == 0) {
-    RepopulateTaxonomy (pFormInfo, ".MeSH Root.");
+    RepopulateTaxonomy (pFormInfo, "All MeSH Categories");
   } else {
     RepopulateTaxonomy (pFormInfo, "root");
   }
@@ -3524,7 +3695,7 @@ static Boolean Query_AddUidsTerm (ForM f, CharPtr uidListName, Int4 iUidCount, I
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2rq);
 
-  e2ry = EntrezSynchronousQuery (e2rq);
+  e2ry = SpecialEntrezSynchronousQuery (e2rq);
   if (e2ry == NULL) return FALSE;
 
   if (ShowASN () == TRUE)
@@ -6386,7 +6557,7 @@ NLM_EXTERN Entrez2InfoPtr Query_GetInfo (void)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2rq);
 
-  e2ry = EntrezSynchronousQuery (e2rq);
+  e2ry = SpecialEntrezSynchronousQuery (e2rq);
   if (e2ry == NULL) return NULL;
 
   if (ShowASN () == TRUE)
@@ -6632,7 +6803,7 @@ NLM_EXTERN Entrez2BooleanReplyPtr Query_FetchUIDs (ForM f)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
   if (e2ReplyPtr == NULL) return 0;
 
   if (ShowASN () == TRUE)
@@ -6675,7 +6846,7 @@ NLM_EXTERN Entrez2TermListPtr Query_FetchSeveralCounts (CharPtr dbName, CharPtr 
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -6693,7 +6864,7 @@ NLM_EXTERN Entrez2TermListPtr Query_FetchSeveralCounts (CharPtr dbName, CharPtr 
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -6759,7 +6930,7 @@ NLM_EXTERN Int4 Query_FetchCount (ForM f)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -6870,7 +7041,7 @@ NLM_EXTERN Int4 Query_FetchParsedCount (ForM f)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -6946,7 +7117,7 @@ static Int4 Query_GetTranslatedTermCount (FormInfoPtr pFormInfo, CharPtr dbName,
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -6965,7 +7136,7 @@ static Int4 Query_GetTranslatedTermCount (FormInfoPtr pFormInfo, CharPtr dbName,
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);
@@ -7071,7 +7242,7 @@ static Boolean Query_TranslateAndAddBoolTerm (
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
 
   if (ShowASN () == TRUE)
     DisplayEntrezReply (e2ReplyPtr);

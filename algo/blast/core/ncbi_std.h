@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.23 2003/12/09 18:51:40 dondosha Exp $
+/* $Id: ncbi_std.h,v 1.27 2004/04/09 13:41:53 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,7 +35,7 @@ Contents: Type and macro definitions from C toolkit that are not defined in
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.23 $
+ * $Revision: 1.27 $
  * */
 #ifndef __NCBI_STD__
 #define __NCBI_STD__
@@ -57,6 +57,16 @@ Detailed Contents:
 extern "C" {
 #endif
 
+/* For some reason, ICC claims a suitable __STDC_VERSION__ but then
+   barfs on restrict. */
+#ifdef __ICC
+#define NCBI_RESTRICT __restrict
+#elif __STDC_VERSION__ >= 199901
+#define NCBI_RESTRICT restrict
+#else
+#define NCBI_RESTRICT
+#endif
+
 /* inlining support -- compiler dependent */
 #if defined(__cplusplus)  ||  __STDC_VERSION__ >= 199901
 /* C++ and C99 both guarantee "inline" */
@@ -65,7 +75,7 @@ extern "C" {
 /* So does GCC, normally, but it may be running with strict options
    that require the extra underscores */
 #define NCBI_INLINE __inline__
-#elif defined(_MSC_VER)  ||  defined(__sgi)
+#elif defined(_MSC_VER)  ||  defined(__sgi) || defined(HPUX)
 /* MSVC and (older) MIPSpro always require leading underscores */
 #define NCBI_INLINE __inline
 #else
@@ -76,9 +86,8 @@ extern "C" {
 
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
-#endif
-#ifdef _MSC_VER
 #define strdup _strdup
+#define snprintf _snprintf
 #endif
 
 #ifndef _NCBISTD_ /* if we're not in the C toolkit... */

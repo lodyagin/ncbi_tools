@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,25 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.14  2004/03/19 18:32:03  bazhin
+* One more patch related to the previous one.
+*
+* Revision 6.13  2004/03/19 14:53:18  bazhin
+* Added function PropogateInPress(), which is called from FixPubEquiv().
+* It sets Imprint.prepub value to "in-press" if input Cit-art was flagged
+* as "in-press", but had Medline or/and Pubmed id(s) and successful lookup
+* returned Cit-art with no article references, such as volume and page
+* numbers.
+*
+* Revision 6.12  2004/03/17 16:59:35  bazhin
+* Slight modification in ten_authors() function. If the number of input
+* authors greater than 10 and number of MedArch ones less or equal 11,
+* or input has more than 25 and MedArch has less or equal 26, then
+* it will take input set instead of MedArch one.
+*
+* Revision 6.11  2004/03/16 18:53:37  bazhin
+* Now does not ignore in-press'ed Cit-arts for lookup.
+*
 * Revision 6.10  2003/10/01 13:08:33  bazhin
 * Modified ten_authors() function to handle consortiums properly.
 *
@@ -334,6 +353,7 @@ Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
     CharPtr    newcon;
     Int2       num;
     Int2       numnew;
+    Int2       numtmp;
     Int2       i;
     Int2       match;
 
@@ -367,14 +387,14 @@ Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
             oldcon = aup->name->data;
     }
 
-    for(newcon = NULL, v = art_tmp->authors->names; v != NULL; v = v->next)
+    newcon = NULL;
+    for(numtmp = 0, v = art_tmp->authors->names; v != NULL; v = v->next)
     {
         aup = v->data.ptrvalue;
-        if(aup->name->choice == 5)
-        {
+        if(aup->name->choice == 2)
+            numtmp++;
+        else if(aup->name->choice == 5)
             newcon = aup->name->data;
-            break;
-        }
     }
 
     if(oldcon != NULL)
@@ -435,7 +455,7 @@ Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
     if(i > 3 * match)
         return(FALSE);
 
-    if(num > 10 || numnew == 0)
+    if(numtmp == 0 || (num > 10 && numtmp < 12) || (num > 25 && numtmp < 27))
     {
         AuthListFree(art_tmp->authors);
         art_tmp->authors = art->authors;
@@ -677,6 +697,58 @@ ValNodePtr SplitMedlineEntry(MedlineEntryPtr mep)
 	return uid;
 }
 
+/**********************************************************/
+static Boolean if_inpress_set(CitArtPtr cap)
+{
+    CitJourPtr jour;
+    CitBookPtr book;
+
+    if(cap == NULL || cap->fromptr == NULL)
+        return(FALSE);
+
+    if(cap->from == 1)
+    {
+        jour = cap->fromptr;
+        if(jour->imp != NULL && jour->imp->prepub == 2)
+            return(TRUE);
+    }
+    else if(cap->from == 2 || cap->from == 3)
+    {
+        book = cap->fromptr;
+        if(book->imp != NULL && book->imp->prepub == 2)
+            return(TRUE);
+    }
+    return(FALSE);
+}
+
+/**********************************************************/
+static void PropogateInPress(Boolean inpress, ValNodePtr vnp)
+{
+    CitJourPtr jour;
+    CitBookPtr book;
+    CitArtPtr  cap;
+
+    if(inpress == FALSE || vnp == NULL || vnp->data.ptrvalue == NULL)
+        return;
+
+    cap = vnp->data.ptrvalue;
+    if(in_press(cap) == FALSE || cap->fromptr == NULL)
+        return;
+
+    if(cap->from == 1)
+    {
+        jour = cap->fromptr;
+        if(jour->imp != NULL)
+            jour->imp->prepub = 2;
+    }
+    else if(cap->from == 2 || cap->from == 3)
+    {
+        book = cap->fromptr;
+        if(book->imp != NULL)
+            book->imp->prepub = 2;
+    }
+}
+
 /*****************************************************************************
 *
 *   FixPubEquiv()
@@ -689,8 +761,19 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 	Int2 muidctr = 0, pmidctr = 0, citartctr = 0, mepctr = 0, otherctr = 0;
 	Int4 muid = 0, oldmuid=0, pmid = 0, oldpmid=0;
 	CitArtPtr	cit;
+	Boolean		got;
+	Boolean		inpress;
 
 	if (pube == NULL) return NULL;
+
+	for(got = FALSE, tmp = pube; tmp != NULL; tmp = tmp->next)
+	{
+		if(tmp->choice == PUB_Muid || tmp->choice == PUB_PMid)
+		{
+			got = TRUE;
+			break;
+		}
+	}
 
 	for (tmp = pube; tmp != NULL; tmp = next)
 	{
@@ -722,7 +805,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 				break;
 			case PUB_Article:
 				cit = tmp->data.ptrvalue;
-				if (cit->from == 2 || in_press(cit)) {
+				if (cit->from == 2 || (in_press(cit) && got == FALSE)) {
 					otherctr++;
 					if (otherptr == NULL)
 						otherptr = tmp;
@@ -892,6 +975,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			citartptr->next = PubEquivFree(citartptr->next);
 		}
 
+		inpress = if_inpress_set(citartptr->data.ptrvalue);
 		fpop->lookups_attempted++;
 		muid = MedArchCitMatch(citartptr);
 		if (muid != 0)   /* success */
@@ -933,6 +1017,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 						tmp->next = new;
 						
 						PubFree(citartptr);
+						citartptr = new;
 					} else {
 						print_pub(citartptr, FALSE, TRUE, muid);
 						PubFree(new);
@@ -979,6 +1064,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 				tmp->next = citartptr;
 				MedlineToISO(citartptr);
 			}
+			PropogateInPress(inpress, citartptr);
 			return pube;
 		}
 
@@ -1024,6 +1110,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 						tmp->next = new;
 						
 						PubFree(citartptr);
+						citartptr = new;
 					} else {
 						print_pub(citartptr, FALSE, TRUE, pmid);
 						PubFree(new);
@@ -1070,6 +1157,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 				tmp->next = citartptr;
 				MedlineToISO(citartptr);
 			}
+			PropogateInPress(inpress, citartptr);
 			return pube;
 		}
 
@@ -1080,6 +1168,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			tmp2->next = citartptr;
 		if (muidptr != NULL)   /* ditch the mismatched muid */
 			PubFree(muidptr);
+		PropogateInPress(inpress, citartptr);
 		return pube;
 
 	}

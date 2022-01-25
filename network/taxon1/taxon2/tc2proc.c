@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.33 2003/07/29 20:06:05 soussov Exp $           */
+/* $Id: tc2proc.c,v 1.34 2004/02/25 19:21:21 soussov Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -316,31 +316,37 @@ int tax1_getChildren(Int4 id_tax, Int4** ids_out)
 /* find last common ancestor for two nodes */
 Int4 tax1_join(Int4 taxid1, Int4 taxid2)
 {
-    TreeNodeId nid;
-    Int4 aid= 0;
-    TreeCursorPtr cursor1= tree_openCursor(tax_tree, NULL, NULL);
-    TreeCursorPtr cursor2= tree_openCursor(tax_tree, NULL, NULL);
-    
-    if((cursor1 == NULL) || (cursor2 == NULL) || 
-       (!tc2_toNode(cursor1, taxid1)) || (!tc2_toNode(cursor2, taxid2))) {
-        if(cursor1 != NULL) tree_closeCursor(cursor1);
-        if(cursor2 != NULL) tree_closeCursor(cursor2);
-        return -1;
+    if(taxid1 == taxid2) {
+        taxid2= getLiveId(taxid1);
+        return (taxid2 > 0)? taxid2 : -1;
     }
+    else {
+        TreeNodeId nid;
+        Int4 aid= 0;
+        TreeCursorPtr cursor1= tree_openCursor(tax_tree, NULL, NULL);
+        TreeCursorPtr cursor2= tree_openCursor(tax_tree, NULL, NULL);
     
-    nid= tree_getAncestor(cursor1, cursor2);
-    
-    if(tree_toNode(cursor1, nid)) {
-        TXC_TreeNodePtr tnp;
-        Uint2 s;
+        if((cursor1 == NULL) || (cursor2 == NULL) || 
+           (!tc2_toNode(cursor1, taxid1)) || (!tc2_toNode(cursor2, taxid2))) {
+            if(cursor1 != NULL) tree_closeCursor(cursor1);
+            if(cursor2 != NULL) tree_closeCursor(cursor2);
+            return -1;
+        }
         
-        tnp= tree_getNodeData(cursor1, &s);
-        if(tnp != NULL) aid= tnp->tax_id;
+        nid= tree_getAncestor(cursor1, cursor2);
+        
+        if(tree_toNode(cursor1, nid)) {
+            TXC_TreeNodePtr tnp;
+            Uint2 s;
+            
+            tnp= tree_getNodeData(cursor1, &s);
+            if(tnp != NULL) aid= tnp->tax_id;
+        }
+        
+        tree_closeCursor(cursor1);
+        tree_closeCursor(cursor2);
+        return aid;
     }
-    
-    tree_closeCursor(cursor1);
-    tree_closeCursor(cursor2);
-    return aid;
 }
 
 

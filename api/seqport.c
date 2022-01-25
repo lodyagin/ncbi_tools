@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.86 $
+* $Revision: 6.108 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,72 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.108  2004/05/03 20:58:33  kans
+* SaveCdsBases protects against rare cases where the frame is >= the number of sequence bases passed from the first or second segment
+*
+* Revision 6.107  2004/05/03 15:41:42  kans
+* SeqPortStreamSeqLoc posts an error if BioseqLockById failed
+*
+* Revision 6.106  2004/04/29 14:47:55  kans
+* stream test should be if (cumulative + len <= start), not if (cumulative + len < start) - got tripped up by NC_005787
+*
+* Revision 6.105  2004/04/27 20:09:26  kans
+* StreamCacheGetResidue returns Uint1 because Char might be signed, preventing IS_residue from working
+*
+* Revision 6.104  2004/04/27 18:15:12  kans
+* added StreamCache functions that provide buffered request-driven access to sequence via SeqPortStream
+*
+* Revision 6.103  2004/04/26 13:59:20  kans
+* SeqPortStreamGap uses small buffer, multiple calls to proc, instead of allocating possibly large temporary array on heap
+*
+* Revision 6.102  2004/04/23 19:32:19  kans
+* GetSequenceByBsp and GetSequenceByFeature use SeqPortStream with default behavior passing string pointer and NULL callback proc
+*
+* Revision 6.101  2004/04/23 15:50:09  kans
+* fixed SaveCdsBases - offset sequence variable with initial frame, then reset frame to 0 for remainder
+*
+* Revision 6.100  2004/04/23 14:16:20  kans
+* ReadCodingRegionBases uses SeqPortSreamLoc with special callback that allows skipping at beginning by frame offset
+*
+* Revision 6.99  2004/04/23 02:14:02  kans
+* SeqPortStreamSeg and SeqPortStreamDelta need strand-specific code for adjusting from and to
+*
+* Revision 6.98  2004/04/22 20:04:28  kans
+* SeqPortStreamRaw/Block do not need smtp if code and alphabet are identical
+*
+* Revision 6.97  2004/04/21 19:19:58  kans
+* SeqPortStreamBlock uses Uint4 arrays to ensure 4-byte address alignment by compiler even if buffer size is changed
+*
+* Revision 6.96  2004/04/21 18:16:44  kans
+* in SeqPortStreamBlock, buf and bytes are now multiples of Int4 size for Int4Ptr copy alignment
+*
+* Revision 6.95  2004/04/15 19:27:29  kans
+* skip SEQLOC_NULL, also send back total number of bases or residues streamed, internally for now
+*
+* Revision 6.94  2004/04/15 17:23:20  kans
+* reverse complement done at low level, delta and seg present components in reverse order if minus strand, thus reverse complementing on-the-fly to avoid large buffer allocation
+*
+* Revision 6.93  2004/04/14 12:39:01  kans
+* SeqPortStreamLoc is public function, SeqPortStreamRaw directly uncompresses byte store, avoids any SeqPort calls - still need more efficient way to reverse complement without a big buffer
+*
+* Revision 6.92  2004/04/08 20:19:34  kans
+* SeqPortStreamInt is external, SeqPortStreamWork is main internal recursive function
+*
+* Revision 6.91  2004/04/07 14:43:33  kans
+* rewrite of SeqPortStream for speed improvement - still need to do smart locking of old NT records that weave in and out of the same component multiple times
+*
+* Revision 6.90  2004/03/30 20:26:55  kans
+* GetSequenceByBsp now passes ipuacna or ipuacaa code to SeqPortNew
+*
+* Revision 6.89  2004/03/15 19:54:54  kans
+* SeqPortStream takes expandable bit flags parameter
+*
+* Revision 6.88  2004/03/08 17:20:55  kans
+* TransTableTranslateCommon now writes letters to allocated string, instead of with BSPutByte, calls BSWrite only at end
+*
+* Revision 6.87  2004/02/25 19:07:45  kans
+* ProteinFromCdRegionExEx and TransTableTranslateCdRegionEx return alternative start flag
+*
 * Revision 6.86  2003/11/18 17:08:46  kans
 * added MapNa4ByteTo4BitString, use in seqport read and get char
 *
@@ -2295,159 +2361,766 @@ NLM_EXTERN Int2 LIBCALL SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
 
 /*******************************************************************************
 *	
-*	SeqPortStream (bsp, expandGaps, userdata, proc)
-*		Efficient function to stream through sequence
+*   SeqPortStream (bsp, flags, userdata, proc)
+*   SeqPortStreamInt (bsp, start, stop, strand, flags, userdata, proc)
+*   SeqPortStreamLoc (slp, flags, userdata, proc)
+*       Efficient functions to stream through sequence
 *
 ********************************************************************************/
 
-static void SeqPortStreamRaw (
+/* structure for passing common arguments internal functions */
+
+typedef struct streamdata {
+  StreamFlgType      flags;
+  Pointer            userdata;
+  SeqPortStreamProc  proc;
+  Uint1              letterToComp [256];
+  CharPtr            tmp;
+} StreamData, PNTR StreamDataPtr;
+
+/* prototype for main internal recursive processing function */
+
+static Int4 SeqPortStreamWork (
   BioseqPtr bsp,
   Int4 start,
   Int4 stop,
   Uint1 strand,
-  Boolean expandGaps,
-  Pointer userdata,
-  SeqPortStreamProc proc
+  StreamDataPtr sdp
+);
+
+static Int4 SeqPortStreamGap (
+  Int4 length,
+  Boolean is_na,
+  StreamDataPtr sdp
 )
 
 {
-  Char        buf [71];
-  Uint1       code;
-  Boolean     do_virtual;
-  Boolean     is_na;
-  SeqPortPtr  spp;
+  Char  buf [4004];
+  Char  ch;
+  Int4  len;
 
-  if (bsp == NULL || proc == NULL) return;
-  if (bsp->repr == Seq_repr_virtual && (! expandGaps)) return;
+  if (is_na) {
+    ch = 'N';
+  } else {
+    ch = 'X';
+  }
 
-  is_na = ISA_na (bsp->mol);
+  len = MIN (length, 4000L);
+  MemSet ((Pointer) buf, ch, len);
+  buf [(int) (Int2) len] = '\0';
+
+  for (len = length; len > 0; len -= 4000L) {
+
+    /* on last loop, send only partial buffer */
+
+    if (len < 4000L) {
+      buf [(int) (Int2) len] = '\0';
+    }
+
+    sdp->proc (buf, sdp->userdata);
+  }
+
+  /* return number of N or X characters sent */
+
+  return length;
+}
+
+static Uint1Ptr LIBCALL MapNa8ByteToIUPACString (
+  Uint1Ptr bytep,
+  Uint1Ptr buf,
+  Int4 total,
+  SeqMapTablePtr smtp
+)
+
+{
+  Int4      k;
+  Uint1Ptr  ptr;
+  Uint1     residue;
+
+  if (bytep == NULL || buf == NULL) return buf;
+  ptr = buf;
+
+  for (k = 0; k < total; k++) {
+    residue = *bytep;
+    if (smtp != NULL) {
+      *ptr = SeqMapTableConvert (smtp, residue);
+    } else {
+      *ptr = residue;
+    }
+    bytep++;
+    ptr++;
+  }
+
+  return ptr;
+}
+
+static Int4 SeqPortStreamBlock (
+  ByteStorePtr bs,
+  Int4 blk,
+  Int4 compress,
+  Uint1 alphabet,
+  SeqMapTablePtr smtp,
+  Int4 start,
+  Int4 stop,
+  Boolean revcomp,
+  StreamDataPtr sdp
+)
+
+{
+  Uint4     uncomp [1001]; /* 4000 characters + extra for end-of-string null byte */
+  Uint4     compr [251];   /* 1000 bytes + extra for safety */
+  CharPtr   buf;
+  Uint1Ptr  bytes;
+  /*
+  Char      buf [4004];
+  Uint1     bytes [1004];
+  */
+  Char      ch;
+  Int4      count = 0, cumulative, total;
+  Int2      from, to;
+  CharPtr   nd, ptr, str, tmp;
+
+  if (bs == NULL || sdp == NULL) return 0;
+
+  /* Uint4 arrays ensure 4-byte address alignment by the compiler, no need for & since array is pointer */
+
+  buf = (CharPtr) uncomp;
+  bytes = (Uint1Ptr) compr;
+
+  BSSeek (bs, blk, SEEK_SET);
+
+  total = BSRead (bs, (VoidPtr) bytes, 1000L);
+  if (total < 1) return 0;
+
+  ptr = buf;
+  switch (alphabet) {
+    case Seq_code_ncbi2na :
+      ptr = (CharPtr) MapNa2ByteToIUPACString (bytes, (Uint4Ptr) ptr, total);
+      break;
+    case Seq_code_ncbi4na :
+      ptr = (CharPtr) MapNa4ByteToIUPACString (bytes, (Uint2Ptr) ptr, total);
+      break;
+    default :
+      ptr = (CharPtr) MapNa8ByteToIUPACString (bytes, (Uint1Ptr) ptr, total, smtp);
+      break;
+  }
+  *ptr = '\0';
+
+  cumulative = blk * compress;
+
+  /* deal with end conditions */
+
+  total = ptr - buf;
+
+  from = 0;
+  if (start > cumulative && start < cumulative + total) {
+    from += start - cumulative;
+  }
+
+  if (stop < cumulative + total) {
+    to = (Int2) (stop - cumulative + 1);
+    buf [to] = '\0';
+  }
+
+  str = buf + from;
+
+  if (revcomp) {
+
+    /* reverse string first - middle base not touched, so cannot also complement here */
+
+    nd = str;
+    while (*nd != '\0') {
+      nd++;
+    }
+    nd--;
+
+    tmp = str;
+    while (nd > tmp) {
+      ch = *nd;
+      *nd = *tmp;
+      *tmp = ch;
+      nd--;
+      tmp++;
+    }
+
+    /* now complement every base in string */
+
+    nd = str;
+    ch = *nd;
+    while (ch != '\0') {
+      *nd = sdp->letterToComp [(int) (Uint1) ch];
+      nd++;
+      ch = *nd;
+    }
+
+  }
+
+  /* send characters to stream callback */
+
+  sdp->proc (str, sdp->userdata);
+
+  /* return number of characters sent */
+
+  tmp = str;
+  while (*tmp != '\0') {
+    count++;
+    tmp++;
+  }
+
+  return count;
+}
+
+static Int4 SeqPortStreamRaw (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Uint1           alphabet, code;
+  ByteStorePtr    bs;
+  Int4            blk, compress, count = 0, from, to;
+  Boolean         is_na, revcomp = FALSE;
+  SeqMapTablePtr  smtp = NULL;
+
+  if (bsp == NULL || sdp == NULL) return 0;
+  if (bsp->repr != Seq_repr_raw && bsp->repr != Seq_repr_const) return 0;
+  bs = bsp->seq_data;
+  if (bs == NULL) return 0;
+
+  alphabet = bsp->seq_data_type;
+
+  is_na = (Boolean) ISA_na (bsp->mol);
+
+  if (strand == Seq_strand_minus && is_na) {
+    revcomp = TRUE;
+  }
+
+  /* setup code conversion and decompression parameters */
+
   if (is_na) {
     code = Seq_code_iupacna;
   } else {
     code = Seq_code_ncbieaa;
   }
 
-  spp = SeqPortNew (bsp, start, stop, strand, code);
-  if (spp == NULL) return;
-
-  do_virtual = FALSE;
-  if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
-    SeqPortSet_do_virtual (spp, TRUE);
-    do_virtual = TRUE;
+  switch (alphabet) {
+    case Seq_code_ncbi2na :
+      compress = 4;
+      break;
+    case Seq_code_ncbi4na :
+      compress = 2;
+      break;
+    default :
+      compress = 1;
+      break;
   }
 
-  SeqPortSeek (spp, 0, SEEK_SET);
-
-  MemSet ((Pointer) &buf, 0, sizeof (buf));
-
-  while (FastaSeqLineEx (spp, buf, sizeof (buf) - 1, is_na, do_virtual)) {
-    proc (buf, userdata);
+  if (code != alphabet) {
+    smtp = SeqMapTableFind (code, alphabet);
+    if (smtp == NULL) return 0;
   }
 
-  SeqPortFree (spp);
+  /* calculate bytestore block addresses in chunks of 1000 */
+
+  from = ((start / compress) / 1000L) * 1000L;
+  to = ((stop / compress) / 1000L) * 1000L;
+
+  /* process sequential blocks of sequence */
+
+  if (revcomp) {
+
+    for (blk = to; blk >= from; blk -= 1000) {
+      count += SeqPortStreamBlock (bs, blk, compress, alphabet, smtp, start, stop, TRUE, sdp);
+    }
+
+  } else {
+
+    for (blk = from; blk <= to; blk += 1000) {
+      count += SeqPortStreamBlock (bs, blk, compress, alphabet, smtp, start, stop, FALSE, sdp);
+    }
+  }
+
+  return count;
 }
 
-static void SeqPortStreamLit (
+static Int4 SeqPortStreamLit (
   SeqLitPtr slitp,
   Boolean is_na,
-  Boolean expandGaps,
-  Pointer userdata,
-  SeqPortStreamProc proc
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Bioseq  bsq;
+  Int4    count = 0;
+
+  if (slitp == NULL || sdp == NULL) return 0;
+
+  /* ignore gaps of unknown length */
+
+  if (slitp->length < 1) return 0;
+
+  if (slitp->seq_data == NULL) {
+
+    /* literal without sequence data is a virtual gap */
+
+    if ((Boolean) ((sdp->flags & STREAM_EXPAND_GAPS) == 0)) return 0;
+
+    count += SeqPortStreamGap (stop - start + 1, is_na, sdp);
+
+    return count;
+  }
+
+  /* otherwise fake a Bioseq with the literal as its data */
+
+  MemSet ((Pointer) &bsq, 0, sizeof (Bioseq));
+
+  bsq.repr = Seq_repr_raw;
+  if (is_na) {
+    bsq.mol = Seq_mol_dna;
+  } else {
+    bsq.mol = Seq_mol_aa;
+  }
+  bsq.seq_data_type = slitp->seq_data_type;
+  bsq.seq_data = slitp->seq_data;
+  bsq.length = slitp->length;
+
+  /* call SeqPortStreamRaw to handle sequence data in the byte store */
+
+  count = SeqPortStreamRaw (&bsq, start, stop, strand, sdp);
+
+  return count;
+}
+
+static Int4 SeqPortStreamSeqLoc (
+  SeqLocPtr slp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
 )
 
 {
   BioseqPtr  bsp;
+  Char       buf [64];
+  Int4       count = 0;
+  SeqIdPtr   sip;
 
-  if (slitp == NULL || slitp->length < 1 || proc == NULL) return;
-  if (slitp->seq_data && (! expandGaps)) return;
+  if (slp == NULL || sdp == NULL) return 0;
 
-  bsp = BioseqNew ();
-  if (bsp == NULL) return;
+  sip = SeqLocId (slp);
+  if (sip == NULL) return 0;
 
-  if (slitp->seq_data != NULL) {
-    bsp->repr = Seq_repr_raw;
-  } else {
-    bsp->repr = Seq_repr_virtual;
+  bsp = BioseqLockById (sip);
+  if (bsp == NULL) {
+    SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
+    ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream failed to load Bioseq %s", buf);
+    return 0;
   }
-  if (is_na) {
-    bsp->mol = Seq_mol_dna;
-  } else {
-    bsp->mol = Seq_mol_aa;
-  }
-  bsp->seq_data_type = slitp->seq_data_type;
-  bsp->seq_data = slitp->seq_data;
-  bsp->length = slitp->length;
-  bsp->id = SeqIdParse ("lcl|seqportstream");
 
-  SeqPortStreamRaw (bsp, 0, -1, 0, expandGaps, userdata, proc);
+  count = SeqPortStreamWork (bsp, start, stop, strand, sdp);
 
-  bsp->seq_data = NULL;
+  BioseqUnlock (bsp);
 
-  BioseqFree (bsp);
+  return count;
 }
 
-static void RevCompStr (
-  CharPtr str
+/* structure for processing components in forward or reverse direction */
+
+typedef struct streamobj {
+  SeqLocPtr  slp;
+  SeqLitPtr  slitp;
+  Int4       from;
+  Int4       to;
+  Uint1      strand;
+} StreamObj, PNTR StreamObjPtr;
+
+static StreamObjPtr StreamObjNew (
+  SeqLocPtr slp,
+  SeqLitPtr slitp,
+  Int4 from,
+  Int4 to,
+  Uint1 strand
 )
 
 {
-  Char     ch;
-  CharPtr  complementBase = " TVGH  CD  M KN   YSAABW R ";
-  Int2     i;
-  Uint1    letterToComp [256];
-  Char     lttr;
-  CharPtr  nd;
-  CharPtr  tmp;
+  StreamObjPtr  sop;
 
-  if (str == NULL) return;
+  sop = (StreamObjPtr) MemNew (sizeof (StreamObj));
+  if (sop == NULL) return NULL;
 
-  /* set up complementation lookup table */
+  sop->slp = slp;
+  sop->slitp = slitp;
+  sop->from = from;
+  sop->to = to;
+  sop->strand = strand;
 
-  for (i = 0; i < 256; i++) {
-    letterToComp [i] = '\0';
-  }
-  for (ch = 'A', i = 1; ch <= 'Z'; ch++, i++) {
-    lttr = complementBase [i];
-    if (lttr != ' ') {
-      letterToComp [(int) (Uint1) ch] = lttr;
-    }
-  }
-  for (ch = 'a', i = 1; ch <= 'z'; ch++, i++) {
-    lttr = complementBase [i];
-    if (lttr != ' ') {
-      letterToComp [(int) (Uint1) ch] = lttr;
-    }
-  }
-
-  /* reverse string */
-
-  nd = str;
-  while (*nd != '\0') {
-    nd++;
-  }
-  nd--;
-
-  tmp = str;
-  while (nd > tmp) {
-    ch = *nd;
-    *nd = *tmp;
-    *tmp = ch;
-    nd--;
-    tmp++;
-  }
-
-  /* complement string */
-
-  nd = str;
-  ch = *nd;
-  while (ch != '\0') {
-    *nd = letterToComp [(int) (Uint1) ch];
-    nd++;
-    ch = *nd;
-  }
+  return sop;
 }
 
-static void LIBCALLBACK SaveLocStream (
+static Int4 SeqPortStreamDelta (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Int4          count = 0, cumulative, from, to, len;
+  DeltaSeqPtr   dsp;
+  ValNodePtr    head = NULL, last = NULL, vnp;
+  Boolean       is_na;
+  Boolean       revcomp = FALSE;
+  SeqLitPtr     slitp;
+  SeqLocPtr     slp;
+  StreamObjPtr  sop;
+
+  if (bsp == NULL || sdp == NULL) return 0;
+
+  is_na = (Boolean) ISA_na (bsp->mol);
+
+  if (strand == Seq_strand_minus && is_na) {
+    revcomp = TRUE;
+  }
+
+  /* build linked list in forward or reverse order, depending upon input strand */
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext, cumulative = 0;
+       dsp != NULL && cumulative <= stop;
+       dsp = dsp->next, cumulative += len) {
+
+    len = 0;
+
+    switch (dsp->choice) {
+
+      case 1 :
+        slp = (SeqLocPtr) dsp->data.ptrvalue;
+        if (slp == NULL) continue;
+
+        if (slp->choice == SEQLOC_NULL) continue;
+
+        from = SeqLocStart (slp);
+        to = SeqLocStop (slp);
+        strand = SeqLocStrand (slp);
+
+        if (from < 0 || to < 0) continue;
+
+        len = to - from + 1;
+
+        if (cumulative + len <= start) continue;
+
+        /* adjust from and to if not using entire interval */
+
+        if (strand == Seq_strand_minus) {
+
+          if (start > cumulative) {
+            to -= start - cumulative;
+          }
+
+          if (stop < cumulative + len) {
+            from += cumulative + len - stop - 1;
+          }
+
+        } else {
+
+          if (start > cumulative) {
+            from += start - cumulative;
+          }
+
+          if (stop < cumulative + len) {
+            to -= cumulative + len - stop - 1;
+          }
+        }
+
+        if (revcomp) {
+          if (strand == Seq_strand_minus) {
+            strand = Seq_strand_plus;
+          } else {
+            strand = Seq_strand_minus;
+          }
+        }
+
+        sop = StreamObjNew (slp, NULL, from, to, strand);
+        if (sop == NULL) continue;
+
+        if (revcomp) {
+
+          vnp = ValNodeAddPointer (NULL, 0, (Pointer) sop);
+          vnp->next = head;
+          head = vnp;
+
+        } else {
+
+          vnp = ValNodeAddPointer (&last, 0, (Pointer) sop);
+          if (head == NULL) {
+            head = vnp;
+          }
+          last = vnp;
+        }
+        break;
+
+      case 2 :
+        slitp = (SeqLitPtr) dsp->data.ptrvalue;
+        if (slitp == NULL) continue;
+
+        from = 0;
+        to = slitp->length - 1;
+        strand = Seq_strand_plus;
+
+        if (from < 0 || to < 0) continue;
+
+        len = to - from + 1;
+
+        if (cumulative + len <= start) continue;
+
+        /* adjust from and to if not using entire interval */
+
+        if (start > cumulative) {
+          from += start - cumulative;
+        }
+
+        if (stop < cumulative + len) {
+          to -= cumulative + len - stop - 1;
+        }
+
+        if (revcomp) {
+          if (strand == Seq_strand_minus) {
+            strand = Seq_strand_plus;
+          } else {
+            strand = Seq_strand_minus;
+          }
+        }
+
+        sop = StreamObjNew (NULL, slitp, from, to, strand);
+        if (sop == NULL) continue;
+
+        if (revcomp) {
+
+          vnp = ValNodeAddPointer (NULL, 0, (Pointer) sop);
+          vnp->next = head;
+          head = vnp;
+
+        } else {
+
+          vnp = ValNodeAddPointer (&last, 0, (Pointer) sop);
+          if (head == NULL) {
+            head = vnp;
+          }
+          last = vnp;
+        }
+        break;
+
+      default :
+        break;
+    }
+  }
+
+  /* process components in correct order */
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+
+    sop = (StreamObjPtr) vnp->data.ptrvalue;
+    if (sop == NULL) continue;
+
+    if (sop->slp != NULL) {
+
+      count += SeqPortStreamSeqLoc (sop->slp, sop->from, sop->to, sop->strand, sdp);
+
+    } else if (sop->slitp != NULL) {
+
+      count += SeqPortStreamLit (sop->slitp, is_na, sop->from, sop->to, sop->strand, sdp);
+    }
+  }
+
+  /* free control list */
+
+  ValNodeFreeData (head);
+
+  return count;
+}
+
+static Int4 SeqPortStreamSeg (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Int4          count = 0, cumulative, from, to, len;
+  ValNodePtr    head = NULL, last = NULL, vnp;
+  Boolean       is_na;
+  Boolean       revcomp = FALSE;
+  SeqLocPtr     slp;
+  StreamObjPtr  sop;
+
+  if (bsp == NULL || sdp == NULL) return 0;
+
+  is_na = (Boolean) ISA_na (bsp->mol);
+
+  if (strand == Seq_strand_minus && is_na) {
+    revcomp = TRUE;
+  }
+
+  /* build linked list in forward or reverse order, depending upon input strand */
+
+  for (slp = (SeqLocPtr) bsp->seq_ext, cumulative = 0;
+       slp != NULL && cumulative <= stop;
+       slp = slp->next, cumulative += len) {
+
+    len = 0;
+
+    if (slp->choice == SEQLOC_NULL) continue;
+
+    from = SeqLocStart (slp);
+    to = SeqLocStop (slp);
+    strand = SeqLocStrand (slp);
+
+    if (from < 0 || to < 0) continue;
+
+    len = to - from + 1;
+
+    if (cumulative + len <= start) continue;
+
+    /* adjust from and to if not using entire interval */
+
+    if (strand == Seq_strand_minus) {
+
+      if (start > cumulative) {
+        to -= start - cumulative;
+      }
+
+      if (stop < cumulative + len) {
+        from += cumulative + len - stop - 1;
+      }
+
+    } else {
+
+      if (start > cumulative) {
+        from += start - cumulative;
+      }
+
+      if (stop < cumulative + len) {
+        to -= cumulative + len - stop - 1;
+      }
+    }
+
+    if (revcomp) {
+      if (strand == Seq_strand_minus) {
+        strand = Seq_strand_plus;
+      } else {
+        strand = Seq_strand_minus;
+      }
+    }
+
+    sop = StreamObjNew (slp, NULL, from, to, strand);
+    if (sop == NULL) continue;
+
+    if (revcomp) {
+
+      vnp = ValNodeAddPointer (NULL, 0, (Pointer) sop);
+      vnp->next = head;
+      head = vnp;
+
+    } else {
+
+      vnp = ValNodeAddPointer (&last, 0, (Pointer) sop);
+      if (head == NULL) {
+        head = vnp;
+      }
+      last = vnp;
+    }
+  }
+
+  /* process components in correct order */
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+
+    sop = (StreamObjPtr) vnp->data.ptrvalue;
+    if (sop == NULL) continue;
+
+    if (sop->slp != NULL) {
+
+      count += SeqPortStreamSeqLoc (sop->slp, sop->from, sop->to, sop->strand, sdp);
+    }
+  }
+
+  /* free control list */
+
+  ValNodeFreeData (head);
+
+  return count;
+}
+
+/* SeqPortStreamWork calls appropriate representation-specific function */
+
+static Int4 SeqPortStreamWork (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Int4  count = 0;
+
+  if (bsp == NULL || sdp == NULL) return 0;
+
+  /* start and stop position reality checks */
+
+  if (start < 0 || start >= bsp->length) {
+  	start = 0;
+  }
+  if (stop < 0 || stop >= bsp->length) {
+  	stop = bsp->length - 1;
+  }
+  if (start > stop) return 0;
+
+  /* call appropriate stream function */
+
+  switch (bsp->repr) {
+
+    case Seq_repr_virtual :
+      if ((Boolean) ((sdp->flags & STREAM_EXPAND_GAPS) != 0)) {
+        count += SeqPortStreamGap (stop - start + 1, ISA_na (bsp->mol), sdp);
+      }
+      break;
+
+    case Seq_repr_raw :
+    case Seq_repr_const :
+      count += SeqPortStreamRaw (bsp, start, stop, strand, sdp);
+      break;
+
+    case Seq_repr_seg :
+      if (bsp->seq_ext_type == 1) {
+        count += SeqPortStreamSeg (bsp, start, stop, strand, sdp);
+      }
+      break;
+
+    case Seq_repr_delta :
+      if (bsp->seq_ext_type == 4) {
+        count += SeqPortStreamDelta (bsp, start, stop, strand, sdp);
+      }
+      break;
+
+    default :
+      break;
+  }
+
+  return count;
+}
+
+/* default callback for copying to allocated buffer */
+
+static void LIBCALLBACK SaveStreamSequence (
   CharPtr sequence,
   Pointer userdata
 )
@@ -2464,105 +3137,204 @@ static void LIBCALLBACK SaveLocStream (
   *tmpp = tmp;
 }
 
-static void SeqPortStreamLoc (
-  SeqLocPtr slp,
-  Boolean expandGaps,
+/* SeqPortStreamSetup creates revcomp table, calls SeqPortStreamWork  */
+
+static Int4 SeqPortStreamSetup (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  SeqLocPtr loc,
+  StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc
 )
 
 {
-  BioseqPtr  bsp;
-  Int4       from;
-  CharPtr    str;
-  Uint1      strand;
-  CharPtr    tmp;
-  Int4       to;
+  Char        ch, lttr;
+  CharPtr     complementBase = " TVGH  CD  M KN   YSAABW R ";
+  Int4        count = 0, from, to;
+  Int2        i;
+  StreamData  sd;
+  SeqLocPtr   slp;
 
-  if (slp == NULL || proc == NULL) return;
+  if (bsp == NULL && loc == NULL) return 0;
+  if (proc == NULL && userdata == NULL) return 0;
 
-  bsp = BioseqLockById (SeqLocId (slp));
-  if (bsp == NULL) return;
+  MemSet ((Pointer) &sd, 0, sizeof (StreamData));
 
-  from = SeqLocStart (slp);
-  to = SeqLocStop (slp);
-  strand = SeqLocStrand (slp);
+  sd.flags = flags;
+  sd.userdata = userdata;
+  sd.proc = proc;
+  sd.tmp = NULL;
 
-  str = str = MemNew (sizeof (Char) * (bsp->length + 10));
-  if (str != NULL) {
-    tmp = str;
-    SeqPortStream (bsp, TRUE, (Pointer) &tmp, SaveLocStream);
+  /* if NULL callback, copy into allocated userdata string */
 
-    if (to > 0 && to < bsp->length) {
-      str [to + 1] = '\0';
-    }
-    tmp = str;
-    if (from > 0 && from < bsp->length) {
-      tmp += from;
-    }
-    if (strand == Seq_strand_minus && ISA_na (bsp->mol)) {
-      RevCompStr (tmp);
-    }
-
-    proc (tmp, userdata);
-
-    MemFree (str);
+  if (proc == NULL) {
+    sd.proc = SaveStreamSequence;
+    sd.tmp = userdata;
+    sd.userdata = &(sd.tmp);
   }
 
-  /* SeqPortStreamRaw (bsp, from, to, strand, expandGaps, userdata, proc); */
+  /* set up nucleotide complementation lookup table */
 
-  BioseqUnlock (bsp);
+  for (i = 0; i < 256; i++) {
+    sd.letterToComp [i] = '\0';
+  }
+  for (ch = 'A', i = 1; ch <= 'Z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      sd.letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+  for (ch = 'a', i = 1; ch <= 'z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      sd.letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+
+  /* commence streaming */
+
+  if (bsp != NULL) {
+
+    count += SeqPortStreamWork (bsp, start, stop, strand, &sd);
+
+  } else if (loc != NULL) {
+
+    slp = SeqLocFindNext (loc, NULL);
+    while (slp != NULL) {
+
+      from = SeqLocStart (slp);
+      to = SeqLocStop (slp);
+      strand = SeqLocStrand (slp);
+
+      count += SeqPortStreamSeqLoc (slp, from, to, strand, &sd);
+
+      slp = SeqLocFindNext (loc, slp);
+    }
+  }
+
+  /* return number of bases or residues streamed to callback */
+
+  return count;
 }
+
+/* public functions all call SeqPortStreamSetup */
 
 NLM_EXTERN void SeqPortStream (
   BioseqPtr bsp,
-  Boolean expandGaps,
+  StreamFlgType flags,
   Pointer userdata,
   SeqPortStreamProc proc
 )
 
 {
-  DeltaSeqPtr  dsp;
-  SeqLocPtr    slp;
+  SeqPortStreamSetup (bsp, 0, -1, Seq_strand_unknown, NULL, flags, userdata, proc);
+}
 
-  if (bsp == NULL || proc == NULL) return;
+NLM_EXTERN void SeqPortStreamInt (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
 
-  switch (bsp->repr) {
+{
+  SeqPortStreamSetup (bsp, start, stop, strand, NULL, flags, userdata, proc);
+}
 
-    case Seq_repr_virtual :
-    case Seq_repr_raw :
-    case Seq_repr_const :
-      SeqPortStreamRaw (bsp, 0, -1, 0, expandGaps, userdata, proc);
-      break;
+NLM_EXTERN void SeqPortStreamLoc (
+  SeqLocPtr slp,
+  StreamFlgType flags,
+  Pointer userdata,
+  SeqPortStreamProc proc
+)
 
-    case Seq_repr_seg :
-      if (bsp->seq_ext_type == 1) {
-        for (slp = (SeqLocPtr) bsp->seq_ext; slp != NULL; slp = slp->next) {
-          SeqPortStreamLoc (slp, expandGaps, userdata, proc);
-        }
-      }
-      break;
+{
+  SeqPortStreamSetup (NULL, 0, 0, 0, slp, flags, userdata, proc);
+}
 
-    case Seq_repr_delta :
-      if (bsp->seq_ext_type == 4) {
-        for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
-          switch (dsp->choice) {
-            case 1 :
-              SeqPortStreamLoc ((SeqLocPtr) dsp->data.ptrvalue, expandGaps, userdata, proc);
-              break;
-            case 2 :
-              SeqPortStreamLit ((SeqLitPtr) dsp->data.ptrvalue, ISA_na (bsp->mol), expandGaps, userdata, proc);
-              break;
-            default :
-              break;
-          }
-        }
-      }
-      break;
+/*******************************************************************************
+*	
+*   StreamCacheSetup (bsp, flags, scp)
+*   StreamCacheGetResidue (scp)
+*   StreamCacheSetPosition (scp, pos)
+*       SeqPort functional replacement implemented on top of SeqPortStreams
+*
+********************************************************************************/
 
-    default :
-      break;
+NLM_EXTERN Boolean StreamCacheSetup (
+  BioseqPtr bsp,
+  StreamFlgType flags,
+  StreamCache PNTR scp
+)
+
+{
+  if (bsp == NULL || scp == NULL) return FALSE;
+
+  MemSet ((Pointer) scp, 0, sizeof (StreamCache));
+
+  scp->bsp = bsp;
+  scp->length = bsp->length;
+  scp->flags = flags;
+
+  return TRUE;
+}
+
+NLM_EXTERN Uint1 StreamCacheGetResidue (
+  StreamCache PNTR scp
+)
+
+{
+  Uint1  residue = '\0';
+  Int4   stop;
+
+  if (scp == NULL) return residue;
+
+  if (scp->ctr >= scp->total) {
+    scp->offset += (Int4) scp->total;
+    scp->ctr = 0;
+    scp->total = 0;
+
+    if (scp->offset >= scp->length) return residue;
+
+    stop = MIN (scp->offset + 4000L, scp->length);
+    SeqPortStreamInt (scp->bsp, scp->offset, stop - 1, Seq_strand_plus,
+                      scp->flags, (Pointer) &(scp->buf), NULL);
+
+    scp->total = StringLen (scp->buf);
   }
+
+  if (scp->ctr < scp->total) {
+    residue = scp->buf [(int) scp->ctr];
+    (scp->ctr)++;
+  }
+
+  return residue;
+}
+
+NLM_EXTERN Boolean StreamCacheSetPosition (
+  StreamCache PNTR scp,
+  Int4 pos
+)
+
+{
+  if (scp == NULL) return FALSE;
+
+  if (scp->offset <= pos && scp->offset + (Int4) scp->total >= pos) {
+    scp->ctr = (Int2) (pos - scp->offset);
+    return TRUE;
+  }
+
+  scp->ctr = 0;
+  scp->total = 0;
+  scp->offset = pos;
+
+  return TRUE;
 }
 
 /*******************************************************************************
@@ -2572,7 +3344,7 @@ NLM_EXTERN void SeqPortStream (
 *
 ********************************************************************************/
 
-NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionExEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX, BoolPtr altStartP)
 
 {
   ByteStorePtr   bs;
@@ -2616,8 +3388,8 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_s
   tbl = (TransTablePtr) GetAppProperty (str);
   tableExists = (Boolean) (tbl != NULL);
 
-  bs = TransTableTranslateCdRegion (&tbl, sfp, include_stop, remove_trailingX,
-                                    FALSE);
+  bs = TransTableTranslateCdRegionEx (&tbl, sfp, include_stop, remove_trailingX,
+                                      FALSE, altStartP);
 
   /* save FSA in genetic code-specific app property name */
 
@@ -2626,6 +3398,12 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_s
   }
 
   return bs;
+}
+
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+
+{
+  return ProteinFromCdRegionExEx (sfp, include_stop, remove_trailingX, NULL);
 }
 
 NLM_EXTERN ByteStorePtr ProteinFromCdRegionExWithTrailingCodonHandling
@@ -5016,20 +5794,75 @@ NLM_EXTERN void TransTableProcessBioseq (
 
 /* trans table translation function can be passed cds feature or individual parameters */
 
+typedef struct readcdsdata {
+  CharPtr  tmp;
+  size_t    frame;
+} ReadCdsData, PNTR ReadCdsPtr;
+
+/* callback allows skipping one or two bases at beginning */
+
+static void LIBCALLBACK SaveCdsBases (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  size_t      len;
+  ReadCdsPtr  rcp;
+
+  rcp = (ReadCdsPtr) userdata;
+
+  if (rcp->frame > 0) {
+    len = StringLen (sequence);
+    if (rcp->frame >= len) {
+
+      /* unusual locations can have fewer bases in the first segments than the frame, so just decrement */
+
+      rcp->frame -= len;
+      return;
+    }
+  }
+
+  rcp->tmp = StringMove (rcp->tmp, sequence + rcp->frame);
+
+  rcp->frame = 0;
+}
+
 NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 frame, Int4Ptr totalP)
 
 {
-  Int2        actual, cnt;
-  CharPtr     bases, txt;
-  BioseqPtr   bsp;
-  Int4        mod, position;
-  SeqIdPtr    sip;
-  SeqLocPtr   slp;
-  SeqPortPtr  spp;
+  CharPtr      bases, txt;
+  Int4         mod;
+  ReadCdsData  rcd;
+  /*
+  Int2         actual, cnt;
+  BioseqPtr    bsp;
+  Int4         mod, position;
+  SeqIdPtr     sip;
+  SeqLocPtr    slp;
+  SeqPortPtr   spp;
+  */
 
   bases = MemNew ((size_t) (len + 6));
   if (bases == NULL) return NULL;
 
+  rcd.tmp = bases;
+
+  /* adjust start position */
+
+  if (frame == 2) {
+    rcd.frame = 1;
+  } else if (frame == 3) {
+    rcd.frame = 2;
+  } else {
+    rcd.frame = 0;
+  }
+
+  SeqPortStreamLoc (location, STREAM_EXPAND_GAPS, (Pointer) &rcd, SaveCdsBases);
+
+  txt = rcd.tmp;
+
+#if 0
   spp = SeqPortNewByLoc (location, Seq_code_iupacna);
   if (spp == NULL) {
     MemFree (bases);
@@ -5084,6 +5917,7 @@ NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 fr
   }
 
   SeqPortFree (spp);
+#endif
 
   /* pad incomplete last codon with Ns */
 
@@ -5183,7 +6017,8 @@ static ByteStorePtr TransTableTranslateCommon (
   CodeBreakPtr code_break,
   Boolean include_stop,
   Boolean remove_trailingX,
-  Boolean no_stop_at_end_of_complete_cds
+  Boolean no_stop_at_end_of_complete_cds,
+  BoolPtr altStartP
 )
 
 {
@@ -5191,12 +6026,12 @@ static ByteStorePtr TransTableTranslateCommon (
   Int2           j, state = 0;
   Boolean        bad_base, no_start, check_start, got_stop,
                  incompleteLastCodon, use_break, is_first;
-  CharPtr        bases, txt;
+  CharPtr        bases, txt, protseq;
   ByteStorePtr   bs;
   ValNodePtr     codebreakhead = NULL, vnp;
   TransTablePtr  localtbl = NULL, tbl;
   Uint2          part_prod = 0, part_loc = 0;
-  Int4           dnalen, protlen, total, k, p;
+  Int4           dnalen, protlen, total, k, p, q;
   Uint1          residue = 0;
 
   /* if table pointer not passed in from calling stack, use local table */
@@ -5270,9 +6105,18 @@ static ByteStorePtr TransTableTranslateCommon (
   protlen /= 3;
   protlen += 1;
 
+  protseq = (CharPtr) MemNew ((size_t) protlen + 2);
+  if (protseq == NULL) {
+    MemFree (bases);
+    ValNodeFree (codebreakhead);
+    TransTableFree (localtbl);
+    return NULL;
+  }
+
   bs = BSNew (protlen);
   if (bs == NULL) {
     MemFree (bases);
+    MemFree (protseq);
     ValNodeFree (codebreakhead);
     TransTableFree (localtbl);
     return NULL;
@@ -5286,8 +6130,13 @@ static ByteStorePtr TransTableTranslateCommon (
 
   k = 0;
   p = 0;
+  q = 0;
   txt = bases;
   residue = (Uint1) *txt;
+
+  if (altStartP != NULL) {
+    *altStartP = FALSE;
+  }
 
   /* loop through all codons */
 
@@ -5316,6 +6165,12 @@ static ByteStorePtr TransTableTranslateCommon (
         if ((! ((part_loc & SLP_STOP) || (part_prod & SLP_STOP))) && (partial)) {
           aa = GetCodonResidue (tbl, state, TTBL_TOP_STRAND);
         }
+      } else {
+        if (altStartP != NULL) {
+          if (IsAltStart (tbl, state, TTBL_TOP_STRAND)) {
+            *altStartP = TRUE;
+          }
+        }
       }
     } else {
 
@@ -5332,7 +6187,11 @@ static ByteStorePtr TransTableTranslateCommon (
 
     } else {
 
+      protseq [q] = aa;
+      q++;
+      /*
       BSPutByte (bs, (Int2) aa);
+      */
     }
 
     /* advance protein position for code break test */
@@ -5344,7 +6203,12 @@ static ByteStorePtr TransTableTranslateCommon (
     incompleteLastCodon = TRUE;
   }
 
-  if ((! got_stop) && incompleteLastCodon) {
+  if ((! got_stop) && incompleteLastCodon && q > 0) {
+    aa = protseq [q - 1];
+    if ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && q > 0) {
+      q--;
+    }
+#if 0
     BSSeek (bs, -1, SEEK_END);  /* remove last X if incomplete last codon */
     aa = (Char) BSGetByte (bs);
     if ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && BSLen (bs) > 0) {
@@ -5352,9 +6216,16 @@ static ByteStorePtr TransTableTranslateCommon (
       BSDelete (bs, 1);
       BSSeek (bs, -1, SEEK_END);
     }
+#endif
   }
 
-  if ((! got_stop) && remove_trailingX) { /* only remove trailing X on partial CDS */
+  if ((! got_stop) && remove_trailingX && q > 0) { /* only remove trailing X on partial CDS */
+    aa = protseq [q - 1];
+    while ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && q > 0) {
+      q--;
+      aa = protseq [q - 1];
+    }
+#if 0
     BSSeek (bs, -1, SEEK_END);  /* back up to last residue */
     aa = (Char) BSGetByte (bs);
     while ((aa == 'X' /* || aa == 'B' || aa == 'Z' */) && BSLen (bs) > 0) {
@@ -5363,7 +6234,10 @@ static ByteStorePtr TransTableTranslateCommon (
       BSSeek (bs, -1, SEEK_END);
       aa = (Char) BSGetByte (bs);
     }
+#endif
   }
+
+  BSWrite (bs, (Pointer) protseq, q);
 
   if (BSLen (bs) < 1) {
     bs = BSFree (bs);
@@ -5372,6 +6246,7 @@ static ByteStorePtr TransTableTranslateCommon (
   /* clean up temporarily allocated memory */
 
   MemFree (bases);
+  MemFree (protseq);
   ValNodeFree (codebreakhead);
 
   /* free local table, if allocated */
@@ -5395,15 +6270,16 @@ NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
 {
   return TransTableTranslateCommon (tblptr, location, NULL, FALSE, genCode,
                                     frame, NULL, include_stop,
-                                    remove_trailingX, FALSE);
+                                    remove_trailingX, FALSE, NULL);
 }
 
-NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
+NLM_EXTERN ByteStorePtr TransTableTranslateCdRegionEx (
   TransTablePtr  PNTR tblptr,
   SeqFeatPtr cds,
   Boolean include_stop,
   Boolean remove_trailingX,
-  Boolean no_stop_at_end_of_complete_cds
+  Boolean no_stop_at_end_of_complete_cds,
+  BoolPtr altStartP
 )
 
 {
@@ -5430,7 +6306,20 @@ NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
   return TransTableTranslateCommon (tblptr, cds->location, cds->product, cds->partial,
                                     genCode, crp->frame, crp->code_break,
                                     include_stop, remove_trailingX,
-                                    no_stop_at_end_of_complete_cds);
+                                    no_stop_at_end_of_complete_cds, altStartP);
+}
+
+NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
+  TransTablePtr  PNTR tblptr,
+  SeqFeatPtr cds,
+  Boolean include_stop,
+  Boolean remove_trailingX,
+  Boolean no_stop_at_end_of_complete_cds
+)
+
+{
+  return TransTableTranslateCdRegionEx (tblptr, cds, include_stop, remove_trailingX,
+                                        no_stop_at_end_of_complete_cds, NULL);
 }
 
 /* allow reuse of translation tables by saving as AppProperty */
@@ -6401,17 +7290,23 @@ extern void TestSeqSearch (void)
 NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
 
 {
+  Int4        len;
+  CharPtr     str = NULL;
+  /*
   Int2        actual, cnt;
   BioseqPtr   bsp;
-  Int4        len;
   SeqPortPtr  spp;
   CharPtr     str = NULL, txt;
+  */
 
   if (sfp == NULL) return NULL;
   len = SeqLocLen (sfp->location);
   if (len > 0 && len < MAXALLOC) {
     str = MemNew (sizeof (Char) * (len + 2));
     if (str != NULL) {
+      SeqPortStreamLoc (sfp->location, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+    
+#if 0
       spp = SeqPortNewByLoc (sfp->location, Seq_code_iupacna);
       if (spp != NULL) {
 
@@ -6444,6 +7339,7 @@ NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
 
         SeqPortFree (spp);
       }
+#endif
     }
   }
     
@@ -6453,17 +7349,27 @@ NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
 NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
 
 {
+  CharPtr     str = NULL;
+  /*
   Int2        actual, cnt;
+  Uint1       code = Seq_code_iupacna;
   Int4        len;
   SeqPortPtr  spp;
   CharPtr     str = NULL, txt;
+  */
 
   if (bsp == NULL || bsp->length >= MAXALLOC) return NULL;
 
   str = MemNew (sizeof (Char) * (bsp->length + 2));
   if (str == NULL) return NULL;
 
-  spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
+  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+
+#if 0
+  if (ISA_aa (bsp->mol)) {
+  	code = Seq_code_iupacaa;
+  }
+  spp = SeqPortNew (bsp, 0, -1, 0, code);
   if (spp == NULL) {
     MemFree (str);
     return NULL;
@@ -6493,6 +7399,7 @@ NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
   }
 
   SeqPortFree (spp);
+#endif
 
   return str;
 }

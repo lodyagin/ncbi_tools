@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,38 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.26  2004/03/17 16:09:14  sinyakov
+* WIN_MSWIN: fixed text box activation and text selection logic,
+* do not reset currentText when text window loses focus (to match Motif version),
+* removed scroll text size limit,
+* in Nlm_SelectAText(): scroll selection into view for scroll text,
+* in Nlm_TextGainFocus(), when focus changes to a single-line edit box,
+* do not highlight all text, instead just set the cursor pos to beginning,
+* in MyCls_OnChar(), multiline edit boxes accept tabs
+* as input characters and not as focus change commands.
+*
+* Revision 6.25  2004/02/23 16:36:52  sinyakov
+* Use Int4 instead of Int2 for cursor position and text selection in text boxes
+*
+* Revision 6.24  2004/02/17 16:01:15  bollin
+* implemented Nlm_SetScrollTextOffset for Motif
+*
+* Revision 6.23  2004/02/12 20:29:09  kans
+* put ifdef WIN_MOTIF wrapper around Nlm_KeepCrNlTextFieldCallback
+*
+* Revision 6.22  2004/02/12 20:05:10  bazhin
+* Added callback function "Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)",
+* which allows to copy-paste texts from multiple columns to single string.
+*
+* Revision 6.21  2004/02/09 17:46:27  bollin
+* added fix from Yoon Choi for copy-paste from Windows clipboard into Unix application
+*
+* Revision 6.20  2004/02/06 19:27:33  bollin
+* Use PostMessage to communicate with scrolling function on TextViewer window
+*
+* Revision 6.19  2004/02/05 16:25:05  kans
+* revert to Nlm_GetTextVScrollBar and Nlm_GetTextHScrollBar being static, implement setOffset and getOffset for scroll text, since Windows scroll text has its own scroll bar
+*
 * Revision 6.18  2004/02/04 15:21:03  kans
 * make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
 *
@@ -359,7 +391,7 @@ static Nlm_TextTool Nlm_GetTextHandle (Nlm_TexT t)
   return tdata.handle;
 }
 
-extern Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
+static Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
 
 {
   Nlm_TextData  tdata;
@@ -368,7 +400,7 @@ extern Nlm_BaR Nlm_GetTextVScrollBar (Nlm_TexT t)
   return tdata.vScrollBar;
 }
 
-extern Nlm_BaR Nlm_GetTextHScrollBar (Nlm_TexT t)
+static Nlm_BaR Nlm_GetTextHScrollBar (Nlm_TexT t)
 
 {
   Nlm_TextData  tdata;
@@ -683,7 +715,7 @@ static Nlm_Boolean Nlm_DoReturnCallback (Nlm_TexT t)
   return FALSE;
 }
 
-static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end)
+static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end)
 
 {
 #ifdef WIN_MAC
@@ -716,10 +748,10 @@ static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end)
 
   h = Nlm_GetTextHandle (t);
   Edit_SetSel (h, begin, end);
-  if (Nlm_Visible (t) && Nlm_AllParentsVisible (t)) {
-    SetFocus (h);
-    Nlm_DoTextSelect (t);
-  }
+  Edit_ScrollCaret (h);
+  Nlm_SetActive (t, TRUE);
+  Nlm_DoActivate ((Nlm_GraphiC) t, FALSE);
+  Nlm_DoTextSelect (t);
 #endif
 #ifdef WIN_MOTIF
   Nlm_TextTool    h;
@@ -746,11 +778,10 @@ static void Nlm_SelectAText (Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end)
 #endif
 }
 
-
 extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
-                                          Nlm_Int2Ptr begin, Nlm_Int2Ptr end)
+                                          Nlm_Int4Ptr begin, Nlm_Int4Ptr end)
 {
-  Nlm_Int2 x_begin, x_end;
+  Nlm_Int4 x_begin, x_end;
   Nlm_TextTool h = Nlm_GetTextHandle( t );
   if ( !h )
     return FALSE;
@@ -761,15 +792,16 @@ extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
 
     HLock( (Handle)h );
     hp = (TEPtr) *( (Handle)h );
-    x_begin = (Nlm_Int2)hp->selStart;
-    x_end   = (Nlm_Int2)hp->selEnd;
+    x_begin = hp->selStart;
+    x_end   = hp->selEnd;
     HUnlock( (Handle)h );
 
 #elif defined(WIN_MSWIN)
-    DWORD val = Edit_GetSel( h );
-
-    x_begin = (Nlm_Int2)LOWORD( val );
-    x_end   = (Nlm_Int2)HIWORD( val );
+    DWORD dwBegin, dwEnd;
+    SNDMSG(h, EM_GETSEL, (WPARAM)(&dwBegin), (LPARAM)(&dwEnd));
+    
+    x_begin = dwBegin;
+    x_end   = dwEnd;
 
 #elif defined(WIN_MOTIF)
     XmTextPosition left;
@@ -778,25 +810,35 @@ extern Nlm_Boolean Nlm_TextSelectionRange(Nlm_TexT t,
     if (!Nlm_WindowHasBeenShown( Nlm_ParentWindow(t) )  ||
         !XmTextGetSelectionPosition(h, &left, &right))
       return FALSE;
-    x_begin = (Nlm_Int2)left;
-    x_end   = (Nlm_Int2)right;
+    x_begin = left;
+    x_end   = right;
 
 #else
     return FALSE;
 #endif
   }}
 
+#if !defined(WIN_MAC)
+  /* MAC implmementation uses Nlm_TextSelectionRange()
+     to get current cursor position even when selection is empty */
   if (x_begin == x_end)
     return FALSE;
+#endif
 
   if ( begin )
     *begin = x_begin;
   if ( end )
     *end   = x_end;
 
+#if defined(WIN_MAC)
+  /* MAC implmementation uses Nlm_TextSelectionRange()
+     to get current cursor position even when selection is empty */
+  if (x_begin == x_end)
+    return FALSE;
+#endif
+
   return TRUE;
 }
-
 
 #ifdef WIN_MAC
 static Nlm_Boolean Nlm_DialogTextClick (Nlm_GraphiC t, Nlm_PoinT pt)
@@ -1163,8 +1205,8 @@ static Nlm_Boolean Nlm_ScrollTextCommand (Nlm_GraphiC t)
        Nlm_DoLoseFocus (t, NULL, TRUE);
        break;
      case EN_SETFOCUS:
-       Nlm_DoGainFocus (t, '\t', TRUE);
-       Nlm_SelectText ((Nlm_TexT) t, 0, 0);
+       Nlm_DoGainFocus (t, 0 /* '\t' */, TRUE);
+       /* Nlm_SelectText ((Nlm_TexT) t, 0, 0); */
        break;
    }
   return TRUE;
@@ -1400,8 +1442,11 @@ static void Nlm_ActivateText (Nlm_GraphiC t, Nlm_Boolean savePort)
       TEUpdate (&rtool, h);
 #endif
 #ifdef WIN_MSWIN
-      if (t != NULL) {
-        Nlm_SelectAText ((Nlm_TexT) t, 0, 32767);
+      Nlm_TextTool h = Nlm_GetTextHandle ((Nlm_TexT) t);
+      if (t != NULL && h != NULL) {
+        if (Nlm_Visible (t) && Nlm_AllParentsVisible (t)) {
+          SetFocus (h);
+        }
       }
 #endif
 #ifdef WIN_MOTIF
@@ -1634,8 +1679,10 @@ static void Nlm_TextSelectProc (Nlm_GraphiC t, Nlm_Boolean savePort)
   Nlm_WindoW  tempPort;
 
   if (t != NULL) {
+    size_t len;
     tempPort = Nlm_SavePortIfNeeded (t, savePort);
-    Nlm_SelectAText ((Nlm_TexT) t, 0, 32767);
+    len = Nlm_TextLength ((Nlm_TexT) t);
+    Nlm_SelectAText ((Nlm_TexT) t, 0, len);
     Nlm_RestorePort (tempPort);
   }
 #endif
@@ -1643,8 +1690,10 @@ static void Nlm_TextSelectProc (Nlm_GraphiC t, Nlm_Boolean savePort)
   Nlm_WindoW  tempPort;
 
   if (t != NULL) {
+    size_t len;
     tempPort = Nlm_SavePortIfNeeded (t, savePort);
-    Nlm_SelectAText ((Nlm_TexT) t, 0, 32767);
+    len = Nlm_TextLength ((Nlm_TexT) t);
+    Nlm_SelectAText ((Nlm_TexT) t, 0, len);
     Nlm_RestorePort (tempPort);
   }
 #endif
@@ -1687,7 +1736,7 @@ extern size_t Nlm_TextLength (Nlm_TexT t)
 }
 
 
-extern void Nlm_SelectText(Nlm_TexT t, Nlm_Int2 begin, Nlm_Int2 end)
+extern void Nlm_SelectText(Nlm_TexT t, Nlm_Int4 begin, Nlm_Int4 end)
 {
   Nlm_WindoW tempPort;
   if ( !t )
@@ -2153,21 +2202,38 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
 
 {
   Nlm_Boolean  ishidden;
+  Nlm_Boolean  iseditable;
   Nlm_TexT     t;
 
   t = (Nlm_TexT) GetProp (hwnd, (LPSTR) "Nlm_VibrantProp");
   handlechar = FALSE;
   ishidden = Nlm_IsHiddenOrSpecialText ((Nlm_TexT) t);
+  iseditable = Nlm_GetTextEditable(t);
   if (ch == '\t' && ishidden) {
     Nlm_DoTabCallback (t);
+  } else if (ch == '\t'  && !Nlm_ctrlKey && iseditable && (GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE)) {
+    /* editable multiline boxes accept tab as input character not as focus change to stay 
+       consistent with behavior on MOTIF */
+    handlechar = TRUE;
   } else if (ch == '\t') {
     Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
-  } else if (ch == '\n' || ch == '\r' && ishidden) {
+  } else if ((ch == '\n' || ch == '\r') && ishidden) {
     Nlm_DoReturnCallback (t);
-  } else if (ch == '\n' || ch == '\r') {
-    Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+  } else if ((ch == '\n' || ch == '\r') && iseditable) {
+    if (GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE) {
+	/* multiline edit box */
+	if (Nlm_ctrlKey)
+	    /* Ctrl-Enter goes to dialog box buttons */
+    	    Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+	else
+	    /* plain Enter goes as character to the edit field */
+	    handlechar = TRUE;
+    }
+    else
+	Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+  } else if (!iseditable && ch == '\3') { /* pass Ctrl-C ("Copy") to default handler */
     handlechar = TRUE;
-  } else {
+  } else if (iseditable) {
     handlechar = TRUE;
   }
 }
@@ -2191,7 +2257,9 @@ static void MyCls_OnKillFocus (HWND hwnd, HWND hwndNewFocus)
   if (Nlm_GetActive (t)) {
     Nlm_DoTextDeselect (t);
   }
+  /*
   currentText = NULL;
+  */
 }
 
 LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
@@ -2218,24 +2286,25 @@ LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
   Nlm_currentWParam = wParam;
   Nlm_currentLParam = lParam;
   Nlm_cmmdKey = FALSE;
-  Nlm_ctrlKey = FALSE;
   Nlm_optKey = FALSE;
-  Nlm_shftKey = FALSE;
+  Nlm_ctrlKey = (Nlm_Boolean) ((GetKeyState (VK_CONTROL) & 0x8000) != 0);
+  Nlm_shftKey = (Nlm_Boolean) ((GetKeyState (VK_SHIFT)   & 0x8000) != 0);
   Nlm_dblClick = FALSE;
 
   switch ( message ) {
     case WM_KEYDOWN:
+      if(!Nlm_GetTextEditable(t) && Nlm_KeydownToChar( wParam ) == NLM_DEL)
+      {
+	  call_win_proc = FALSE;
+	  break;
+      }
       call_win_proc = !(Nlm_GetVisLines(t) == 1  &&
                         Nlm_ProcessKeydown((Nlm_GraphiC)t,
                                            wParam, VERT_PAGE|VERT_ARROW));
       break;
     case WM_CHAR:
-      if ( Nlm_GetTextEditable(t) ) {
-        HANDLE_WM_CHAR(hwnd, wParam, lParam, MyCls_OnChar);
-        call_win_proc = handlechar;
-      }
-      else
-        call_win_proc = FALSE;
+      HANDLE_WM_CHAR(hwnd, wParam, lParam, MyCls_OnChar);
+      call_win_proc = handlechar;
       break;
     case WM_SETFOCUS:
       HANDLE_WM_SETFOCUS (hwnd, wParam, lParam, MyCls_OnSetFocus);
@@ -2244,6 +2313,11 @@ LRESULT CALLBACK EXPORT TextProc (HWND hwnd, UINT message,
       HANDLE_WM_KILLFOCUS (hwnd, wParam, lParam, MyCls_OnKillFocus);
       break;
     case WM_PASTE:
+      if ( !Nlm_GetTextEditable(t) )
+      {
+	  call_win_proc = FALSE;
+	  break;
+      }
       if ( !(GetWindowLong(hwnd, GWL_STYLE) & ES_MULTILINE) ) {
         LPSTR text = NULL, str;
         HANDLE h_text;
@@ -2308,8 +2382,21 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
 
   rsult = NULL;
   if (ch == '\t' && Nlm_GetVisible (t) && Nlm_GetEnabled (t)) {
+    Nlm_TextTool h = Nlm_GetTextHandle ((Nlm_TexT) t);
     Nlm_SetActive ((Nlm_TexT) t, TRUE);
-    Nlm_SelectAText ((Nlm_TexT) t, 0, 32767);
+    if (GetWindowLong(h, GWL_STYLE) & ES_MULTILINE) {
+	/* multiline edit box */
+	Nlm_Int4 begin = 0, end = 0;
+	Nlm_TextSelectionRange((Nlm_TexT) t, &begin, &end);
+	Nlm_SelectAText ((Nlm_TexT) t, begin, end);
+    } else {
+        /* singleline edit box - make it consistent with MOTIF by setting len = 0 
+           which just sets the cursor pos to the beginning and does not highlight 
+           the text
+        */
+        size_t len = 0;  /* Nlm_TextLength ((Nlm_TexT) t); */
+	Nlm_SelectAText ((Nlm_TexT) t, 0, len);
+    }
     rsult = t;
   }
   return rsult;
@@ -2319,8 +2406,10 @@ static Nlm_GraphiC Nlm_TextGainFocus (Nlm_GraphiC t, Nlm_Char ch, Nlm_Boolean sa
 
   rsult = NULL;
   if (ch == '\t' && Nlm_GetVisible (t) && Nlm_GetEnabled (t)) {
+    size_t len;
     Nlm_SetActive ((Nlm_TexT) t, TRUE);
-    Nlm_SelectAText ((Nlm_TexT) t, 0, 32767);
+    len = Nlm_TextLength ((Nlm_TexT) t);
+    Nlm_SelectAText ((Nlm_TexT) t, 0, len);
     rsult = t;
   }
   return rsult;
@@ -2512,6 +2601,91 @@ static void Nlm_ResetVisLines (Nlm_TexT t)
   Nlm_SetTextData (t, &tdata);
 }
 
+
+static void Nlm_SetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2 horiz,
+                                     Nlm_Int2 vert, Nlm_Boolean savePort)
+
+{
+#ifdef WIN_MAC
+  Nlm_BaR  sb;
+
+  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
+  if (sb != NULL) {
+    Nlm_DoSetValue ((Nlm_GraphiC) sb, vert, savePort);
+  }
+#endif
+#ifdef WIN_MSWIN
+  Nlm_TextTool  h;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  PostMessage (h, WM_VSCROLL, MAKEWPARAM (SB_THUMBPOSITION, vert), 0L);
+
+
+#endif
+#ifdef WIN_MOTIF
+  Nlm_Int4 value, slider_size, increment, page_increment;
+  Nlm_TextTool  h;
+  Widget        scrolled_window;
+  Widget        vscroll;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  value = 0;
+  slider_size = 0;
+  increment = 0;
+  page_increment = 0;
+  vscroll = NULL;
+
+  scrolled_window = XtParent (h);
+  if (scrolled_window == NULL) return;
+
+  XtVaGetValues (scrolled_window, XmNverticalScrollBar, &vscroll, NULL);
+  if (vscroll == NULL) return;
+
+  XmScrollBarGetValues (vscroll, &value, &slider_size, &increment, &page_increment);
+  XmScrollBarSetValues (vscroll, vert, slider_size, increment, page_increment, TRUE);
+
+#endif
+}
+
+static void Nlm_GetScrollTextOffset (Nlm_GraphiC t, Nlm_Int2Ptr horiz, Nlm_Int2Ptr vert)
+
+{
+#ifdef WIN_MAC
+  Nlm_BaR   sb;
+  Nlm_Int2  rsult;
+
+  sb = Nlm_GetTextVScrollBar ((Nlm_TexT) t);
+  rsult = 0;
+  if (sb != NULL) {
+    rsult = Nlm_DoGetValue ((Nlm_GraphiC) sb);
+  }
+  if (vert != NULL) {
+    *vert = rsult;
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+#ifdef WIN_MSWIN
+  Nlm_TextTool  h;
+
+  h = Nlm_GetTextHandle ((Nlm_TexT) t);
+  if (vert != NULL) {
+    *vert = (Nlm_Int2) GetScrollPos (h, SB_VERT);
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+#ifdef WIN_MOTIF
+  if (vert != NULL) {
+    *vert = 0;
+  }
+  if (horiz != NULL) {
+    *horiz = 0;
+  }
+#endif
+}
 
 static void Nlm_SetScrollTextPosition (Nlm_GraphiC t, Nlm_RectPtr r,
 				       Nlm_Boolean savePort, Nlm_Boolean force)
@@ -2771,8 +2945,18 @@ static void Nlm_TextFieldCallback(Widget w,
   XmTextVerifyCallbackStruct *cbs = (XmTextVerifyCallbackStruct *)call_data;
 
   int i;
+
+  /* recalculate the correct length by detecting the null byte */
   for (i = 0;  i < cbs->text->length;  i++) {
-    if ( !isprint(cbs->text->ptr[i]) )
+    if (cbs->text->ptr[i] == '\0') {
+      cbs->text->length = i + 1;
+      break;
+    }
+  }
+
+  /* Don't convert carriage returns and linefeeds into space */
+  for (i = 0;  i < cbs->text->length;  i++) {
+    if ( !isprint(cbs->text->ptr[i])  &&  !isspace (cbs->text->ptr[i]) )
       cbs->text->ptr[i] = ' ';
   }
 }
@@ -3355,6 +3539,7 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
   if (h != NULL) {
     SetProp (h, (LPSTR) "Nlm_VibrantProp", (Nlm_HandleTool) t);
   }
+  Edit_LimitText (h, 0);
   oldFont = NULL;
   if (font != NULL) {
     fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
@@ -3419,6 +3604,7 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
   XtAddCallback (h, XmNvalueChangedCallback, Nlm_TextCallback, (XtPointer) t);
   XtAddCallback (h, XmNfocusCallback, Nlm_FocusCallback, (XtPointer) t);
   XtAddCallback (h, XmNlosingFocusCallback, Nlm_LoseFocusCallback, (XtPointer) t);
+  XtAddCallback (h, XmNmodifyVerifyCallback, Nlm_TextFieldCallback, (XtPointer)t);
   XtManageChild (h);
 
   allowTextCallback = TRUE;
@@ -3690,9 +3876,9 @@ extern void Nlm_SetTextEditable(Nlm_TexT t, Nlm_Boolean editable)
 }
 
 
-extern Nlm_Int2 Nlm_SetTextCursorPos(Nlm_TexT t, Nlm_Int2 pos)
+extern Nlm_Int4 Nlm_SetTextCursorPos(Nlm_TexT t, Nlm_Int4 pos)
 {
-  Nlm_Int2 actual_pos = 0;
+  Nlm_Int4 actual_pos = 0;
 #if defined(WIN_MOTIF) || defined(WIN_MSWIN)
   Nlm_TextTool h = Nlm_GetTextHandle( t );
   allowTextCallback = FALSE;
@@ -3704,13 +3890,17 @@ extern Nlm_Int2 Nlm_SetTextCursorPos(Nlm_TexT t, Nlm_Int2 pos)
   XmTextSetSelection(h, (XmTextPosition)0, (XmTextPosition)0, (Time)0);
   XmTextShowPosition(h, pos);
   XmTextSetInsertionPosition(h, pos);
-  actual_pos = (Nlm_Int2)XmTextGetInsertionPosition( h );
+  actual_pos = XmTextGetInsertionPosition( h );
 #elif defined(WIN_MSWIN)
   Edit_SetSel(h, pos, pos);
 #ifdef WIN32
   Edit_ScrollCaret( h );
 #endif
-  actual_pos = (Nlm_Int2)Edit_GetSel( h );
+  {{
+  DWORD dwBegin = 0;
+  SNDMSG(h, EM_GETSEL, (WPARAM)(&dwBegin), 0L);
+  actual_pos = dwBegin;
+  }}
 #endif
 #if defined(WIN_MOTIF) || defined(WIN_MSWIN)
   allowTextCallback = TRUE;
@@ -3719,19 +3909,23 @@ extern Nlm_Int2 Nlm_SetTextCursorPos(Nlm_TexT t, Nlm_Int2 pos)
 }
 
 
-extern Nlm_Int2 Nlm_GetTextCursorPos(Nlm_TexT t)
+extern Nlm_Int4 Nlm_GetTextCursorPos(Nlm_TexT t)
 {
-  Nlm_Int2     pos = 0;
+  Nlm_Int4     pos = 0;
   Nlm_TextTool h   = Nlm_GetTextHandle( t );
   if ( !h )
     return 0;
 
 #if   defined(WIN_MAC)
-  Nlm_TextSelectionRange(t, &pos, NULL); /* ????? */
+  Nlm_TextSelectionRange(t, &pos, NULL);
 #elif defined(WIN_MOTIF) 
-  pos = (Nlm_Int2)XmTextGetInsertionPosition( h );
+  pos = (Nlm_Int4)XmTextGetInsertionPosition( h );
 #elif defined(WIN_MSWIN)
-  pos = (Nlm_Int2)Edit_GetSel( h );
+  {{
+  DWORD dwBegin = 0;
+  SNDMSG(h, EM_GETSEL, (WPARAM)&dwBegin, 0L);
+  pos = dwBegin;
+  }}
 #endif
 
   return pos;
@@ -3970,6 +4164,8 @@ extern void Nlm_InitTexts (void)
   scrollTextProcs->select = Nlm_TextSelectProc;
   scrollTextProcs->setTitle = Nlm_SetScrollText;
   scrollTextProcs->getTitle = Nlm_GetScrollText;
+  scrollTextProcs->setOffset = Nlm_SetScrollTextOffset;
+  scrollTextProcs->getOffset = Nlm_GetScrollTextOffset;
   scrollTextProcs->setPosition = Nlm_SetScrollTextPosition;
   scrollTextProcs->getPosition = Nlm_GetScrollTextPosition;
   scrollTextProcs->gainFocus = Nlm_TextGainFocus;
@@ -4006,6 +4202,49 @@ extern void Nlm_SetTextColor(Nlm_TexT t, Nlm_Uint4 r, Nlm_Uint4 g, Nlm_Uint4 b)
         return;
     XtSetArg(args[0], XmNforeground, Nlm_GetColorRGB(r, g, b));
     XtSetValues(h, args, 1);
+#endif
+    return;
+}
+
+#ifdef WIN_MOTIF
+static void Nlm_KeepCrNlTextFieldCallback(Widget w,
+                                          XtPointer client_data,
+                                          XtPointer call_data)
+{
+    XmTextVerifyCallbackStruct *cbs = (XmTextVerifyCallbackStruct *) call_data;
+    char *p;
+    int i;
+
+    /* recalculate the correct length by detecting the null byte
+     */
+    p = cbs->text->ptr;
+    for(i = 0; i < cbs->text->length; i++)
+    {
+        if(p[i] == '\0')
+        {
+            cbs->text->length = i + 1;
+            break;
+        }
+    }
+
+    for(i = 0; i < cbs->text->length; i++)
+        if((!isprint(p[i]) && !isspace(p[i])) || p[i] == '\r' || p[i] == '\n')
+            p[i] = ' ';
+}
+#endif
+
+extern void Nlm_SetKeepCrNlTextFieldCallback(Nlm_TexT t)
+{
+#ifdef WIN_MOTIF
+    Nlm_TextTool h;
+
+    if(t == NULL)
+        return;
+    h = Nlm_GetTextHandle(t);
+    if(h == NULL)
+        return;
+    XtAddCallback(h, XmNmodifyVerifyCallback,
+                  Nlm_KeepCrNlTextFieldCallback, (XtPointer) t);
 #endif
     return;
 }

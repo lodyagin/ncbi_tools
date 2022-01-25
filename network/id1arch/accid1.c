@@ -257,6 +257,8 @@ s_ID1BioseqFetchFunc(Pointer data)
 	BioseqPtr		bsp;
 	SeqIdPtr		sip;
 	Int4			gi=0;
+	Int4			ent=0;
+	CharPtr			sat=NULL;
 	Int2			retcode=0;
 
 	ompcp = (OMProcControlPtr)data;
@@ -287,6 +289,13 @@ s_ID1BioseqFetchFunc(Pointer data)
                         return OM_MSG_RET_ERROR;
 
                 if(sip->choice != SEQID_GI){
+			if(sip->choice==SEQID_GENERAL){
+				Dbtag *db = (Dbtag*)sip->data.ptrvalue;
+				sat=db->db;
+				gi=ent=db->tag->str?atoi(db->tag->str):db->tag->id;
+				sep=ID1ArchSeqEntryGet(gi,sat,ent,0,0);
+				if(sep) goto GOTIT;
+			}
 			gi = ID1FindSeqId(sip);
 		} else {
                         gi = sip->data.intvalue;
@@ -298,7 +307,7 @@ s_ID1BioseqFetchFunc(Pointer data)
         sep = ID1SeqEntryGet(gi,0);/*** always get a whole blob in anticipation of following requests ***/
         if(sep == NULL) 
 		return OM_MSG_RET_ERROR;
-
+GOTIT:
         sip = (SeqIdPtr)(ompcp->input_data);
         bsp = BioseqFindInSeqEntry(sip, sep);
         ompcp->output_data = (Pointer)bsp;

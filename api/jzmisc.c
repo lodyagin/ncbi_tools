@@ -2166,7 +2166,7 @@ NLM_EXTERN SeqIdPtr make_master( SeqAlignPtr sap_p)
     StdSegPtr ssp;
     SeqLocPtr slp;
     SeqAlignPtr sap;
-    
+
     while(sap_p !=NULL) {
         switch(sap_p->segtype) {
         case 1:

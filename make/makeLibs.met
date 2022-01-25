@@ -144,6 +144,7 @@ on SetProjectData()
 		mkFileData("corelib:morefile:"), Â
 		mkFileDataListFiles("connect:", {"ncbibuf", "ncbisock", "urlquery"}), Â
 		mkFileData("ctools:"), Â
+		mkFileDataListFiles("util:tables:", {"raw_scoremat"}), Â
 		mkFileDataExceptFiles("asnlib:", {"asncode.c", "asntool.c"})}))
 	
 	AddProject(ProjectData("ncbiobj", {}, {Â
@@ -192,6 +193,8 @@ on SetProjectData()
 	
 	AddSimpleProjectExceptFiles("ncbiid1", {}, "network:id1arch", {"idfetch.c"})
 	
+	AddSimpleProject("ncbiid2", {}, "network:id2arch")
+	
 	AddSimpleProjectExceptFiles("ncbimla", {}, "network:medarch:client", {"sybmed.c"})
 	
 	AddProject(DataPlusPrefixFile(ProjectData("ncbitxc2", {}, {Â
@@ -209,7 +212,7 @@ on SetProjectData()
 	AddSimpleProjectExceptFiles("netcli", {}, "network:nsclilib", {"ni_encr.c", "ni_list.c", "ni_lib.c"})
 	
 	AddSimpleProject("ncbispell", {}, "network:spell:client")
-
+	
 	AddSimpleProject("ncbiblast", {}, "algo:blast:core")
 	
 	AddSimpleProject("ncbiblastapi", {}, "algo:blast:api")
@@ -342,23 +345,18 @@ on UpdateRenameHeader(canonicalName, canonicalDir, dotHName, dotHDir)
 				set needCopy to false
 			end if
 		end if
-		
 		if needCopy then
 			duplicate canonicalFile to dotHDir
 			if needRename then set name of file canonicalName of dotHDir to dotHName
 		end if
-		
 	end tell
 end UpdateRenameHeader
 
 on CopyHeaders()
 	CreateFolder(gIncludeDir)
 	tell application "Finder"
-		
 		set corelibFolder to folder (gDistribRoot & "corelib")
-		
 		my UpdateRenameHeader("ncbilcl.met", corelibFolder, "ncbilcl.h", "")
-		
 	end tell
 end CopyHeaders
 
@@ -368,7 +366,7 @@ on AppendAccessPath(aPath, isRecursive, isUserPath)
 		if (aPath does not end with ":") then set aPath to aPath & ":"
 		
 		set aPath to POSIX path of aPath
-		set pathsToAdd to {{name:aPath, recursive:isRecursive, origin:root relative, root:"OS X Volume", format:Unix Path}}
+		set pathsToAdd to {{name:aPath, recursive:isRecursive, origin:absolute, format:Unix Path}}
 		if isUserPath then
 			Set Preferences of panel "Access Paths" to {User Paths:pathsToAdd}
 		else
@@ -690,9 +688,12 @@ end UpdateTarget
 on CreateFolder(folderPath)
 	set text item delimiters of AppleScript to ":"
 	-- strip off disk name.
-	set folderPath to (rest of text items of folderPath) as string
-	set pathSoFar to ""
 	tell application "Finder"
+		set pathSoFar to ""
+		if (exists disk (first text item of folderPath)) then
+			set pathSoFar to first text item of folderPath
+			set folderPath to (rest of text items of folderPath) as string
+		end if
 		repeat with f in (text items of folderPath)
 			set longerPath to pathSoFar & ":" & f
 			if not (exists folder (longerPath)) then

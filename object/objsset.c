@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objsset.c,v $
+* Revision 6.7  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.6  2002/08/19 20:05:54  kans
 * fixes for SeqEntryAsnGet when asking for nuc-prot retcode but Bioseq is not inside a nuc-prot set
 *
@@ -605,9 +608,9 @@ static void SeqDescrPack (ValNodePtr PNTR to, ValNodePtr PNTR from)
 *
 *   BioseqSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -952,9 +955,9 @@ erret:
 *
 *   SeqEntryAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqEntryPtr LIBCALL SeqEntryAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1028,9 +1031,9 @@ static void SeqEntryClearFeatures PROTO((SeqEntryPtr sep));
 *
 *   SeqEntryAsnGet(aip, atp, sip, retcode)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *       looks for entry with sip=SeqId
 *       returns a collection of maximum complexity = retcode
 *         where retcode =

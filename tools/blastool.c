@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastool.c,v 6.258 2003/12/30 15:14:40 camacho Exp $";
+static char const rcsid[] = "$Id: blastool.c,v 6.264 2004/04/30 15:25:20 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -34,8 +34,26 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.258 $
+* $Revision: 6.264 $
 * $Log: blastool.c,v $
+* Revision 6.264  2004/04/30 15:25:20  dondosha
+* Added argument in call to BXMLGetHspFromSeqAlign
+*
+* Revision 6.263  2004/04/28 20:32:55  bealer
+* - Fix BLAST_Wizard defaults for PSI-Blast: comp-based-stats=TRUE, E=0.005.
+*
+* Revision 6.262  2004/03/22 22:04:43  dondosha
+* Do not reassign kbp_gap pointers for megablast traceback, as they are already set due to recent changes
+*
+* Revision 6.261  2004/03/22 15:24:56  dondosha
+* Do not set gapped-search-specific options for tblastx
+*
+* Revision 6.260  2004/02/26 15:52:30  papadopo
+* Mike Gertz' modifications to unify handling of gapped Karlin blocks between protein and nucleotide searches
+*
+* Revision 6.259  2004/02/24 14:07:42  camacho
+* BlastAdjustDbNumbers is DEPRECATED
+*
 * Revision 6.258  2003/12/30 15:14:40  camacho
 * Fix to MergeDbGiListsWithOIDLists:
 * When searching gi lists for matches in rdfp linked list, isolate each
@@ -1094,8 +1112,7 @@ FormatBlastParameters(BlastSearchBlkPtr search)
         }
         if (search->last_context <= 1) {
           evalue = pbp->cutoff_e;
-          if (StringCmp(search->prog_name, "blastn") == 0 ||
-              search->pbp->gapped_calculation == FALSE) {
+          if (search->pbp->gapped_calculation == FALSE) {
             /* AM: Changed to support query concatenation. */
             if( !search->mult_queries ) {
               Nlm_FloatHi search_sp =
@@ -1833,14 +1850,6 @@ BLASTOptionNewEx(CharPtr progname, Boolean gapped, Boolean is_megablast)
 		options->gap_decay_rate = 0.5;
 		options->gap_prob = 0.5;
 		options->no_check_score  = TRUE;
-		if (gapped)
-		{
-			options->two_pass_method = FALSE;
-			options->multiple_hits_only  = TRUE;
-			options->dropoff_2nd_pass  = options->dropoff_1st_pass;
-			options->gap_decay_rate = 0.1;
-			options->gap_prob = 1.0;
-		}
 
 		options->gap_open  = GAP_OPEN_PROT;
 		options->gap_extend  = GAP_EXTN_PROT;
@@ -1881,10 +1890,18 @@ BLASTOptionNewEx(CharPtr progname, Boolean gapped, Boolean is_megablast)
 			options->gap_extend  = 0;
 			options->gap_x_dropoff  = 0;
 			options->gap_x_dropoff_final  = 0;
-			options->gapped_calculation = FALSE;
+			options->gapped_calculation = gapped = FALSE;
 			options->do_sum_stats = TRUE;
 			options->strand_option  = BLAST_BOTH_STRAND;
 			options->hsp_num_max = 100;
+		}
+		if (gapped)
+		{
+			options->two_pass_method = FALSE;
+			options->multiple_hits_only  = TRUE;
+			options->dropoff_2nd_pass  = options->dropoff_1st_pass;
+			options->gap_decay_rate = 0.1;
+			options->gap_prob = 1.0;
 		}
 	}
 
@@ -2302,6 +2319,8 @@ BlastGetSequenceFromBioseq (BioseqPtr bsp, Int4Ptr length)
     bases/residues based on the information on the rdfp parameter (all others
     are ignored). This function should be called after BlastProcessGiLists and
     before calculating the effective search space.
+
+    02/12/2004: This function is *deprecated*
 */
 
 Boolean
@@ -4656,7 +4675,7 @@ static SappSetPtr BLASTCreateSappArray(SeqAlignPtr sap_in,
                    PRINTID_FASTA_LONG,
                    sizeof(ssp->fapp[count]->subject_sip));
         ssp->fapp[count]->hsp = BXMLGetHspFromSeqAlign(sap, subject_is_aa, 0,
-                                                       is_ooframe);
+                                                       is_ooframe, NULL);
 
         sap = sap->next;
         ssp->fapp[count]->sap->next = NULL; /* Single SAP */
@@ -5454,11 +5473,6 @@ int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
    }
    BioseqUnlock(query_bsp);
    
-   if (is_na) {
-      search->sbp->kbp_gap[search->first_context] = 
-         search->sbp->kbp[search->first_context];
-   }
-
    hsp_array = search->current_hitlist->hsp_array;
 
    subject_id = GetTheSeqAlignID(sip);
@@ -6313,8 +6327,7 @@ SeqAlignPtr BlastClusterHitsFromSeqAlign(SeqAlignPtr seqalign,
             hitlist = search1->result_struct->results[0];
             if (hitlist && hitlist->hspcnt > 0) {
                best_hsp = &hitlist->hsp_array[0];
-               if (StrCmp(prog_name, "blastn") &&
-                   search1->pbp->gapped_calculation)
+               if (search1->pbp->gapped_calculation)
                   kbp = search1->sbp->kbp_gap[search1->first_context];
                else
                   kbp = search1->sbp->kbp[search1->first_context]; 
@@ -6455,19 +6468,10 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
            search->pbp->gap_x_dropoff = (BLAST_Score) (options->gap_x_dropoff*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
            search->pbp->gap_x_dropoff_final = (BLAST_Score) (options->gap_x_dropoff_final*NCBIMATH_LN2 / search->sbp->kbp_gap[search->first_context]->Lambda);
          */
-         
          if (!search->pbp->mb_params) {
             result_struct = search->result_struct;
-            if (result_struct) {
-               search->sbp->kbp_gap[search->first_context] =
-                  search->sbp->kbp[search->first_context];
-            }
          } else {
             result_struct = search->mb_result_struct[query_index];
-            if (result_struct) {
-               search->sbp->kbp_gap[search->first_context] =
-                  search->sbp->kbp[2*query_index];
-            }
          }
          
          if (!result_struct)
@@ -6513,7 +6517,6 @@ BLASTPostSearchLogic(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options,
          }
          sequence = MemFree(sequence);
          sequence_length = 0;
-         search->sbp->kbp_gap[search->first_context] = NULL;
          
          HeapSort(result_struct->results, hitlist_count, sizeof(BLASTResultHitlistPtr), evalue_compare_hits);
 
@@ -7026,7 +7029,7 @@ BLAST_Wizard(
 
         /* set some defaults for backward compat. with blastcgicmd.cpp */
         if(!StringCmp(service, "psi"))
-            out->ethresh = 0.001;
+            out->ethresh = 0.005;
 	else if (!StringCmp(service, "rpsblast"))
             out->is_rps_blast = TRUE;
 
@@ -7045,22 +7048,22 @@ BLAST_Wizard(
             options->no_traceback :
             FALSE;
     }
-	if(mask->is_ooframe)
-		out->is_ooframe = options->is_ooframe;
-	if(mask->first_db_seq)
-		out->first_db_seq = options->first_db_seq;
-	if(mask->final_db_seq)
-		out->final_db_seq = options->final_db_seq;
-	if(mask->pseudoCountConst)
-		out->pseudoCountConst = options->pseudoCountConst;
-	if(mask->strand_option)
-		out->strand_option = options->strand_option;
-	if(mask->use_best_align)
-		out->use_best_align = options->use_best_align;
-	if(mask->use_real_db_size)
-		out->use_real_db_size = options->use_real_db_size;
-	if(mask->window_size)
-		out->window_size = options->window_size;
+    if(mask->is_ooframe)
+        out->is_ooframe = options->is_ooframe;
+    if(mask->first_db_seq)
+        out->first_db_seq = options->first_db_seq;
+    if(mask->final_db_seq)
+        out->final_db_seq = options->final_db_seq;
+    if(mask->pseudoCountConst)
+        out->pseudoCountConst = options->pseudoCountConst;
+    if(mask->strand_option)
+        out->strand_option = options->strand_option;
+    if(mask->use_best_align)
+        out->use_best_align = options->use_best_align;
+    if(mask->use_real_db_size)
+        out->use_real_db_size = options->use_real_db_size;
+    if(mask->window_size)
+        out->window_size = options->window_size;
     if(mask->expect_value)
         out->expect_value = options->expect_value;
     if(mask->cutoff_s)
@@ -7116,9 +7119,9 @@ BLAST_Wizard(
         if(mask->mb_disc_type)
             out->mb_disc_type = options->mb_disc_type;
         if(out->mb_template_length > 0
-                && out->wordsize <= 12
-                && out->wordsize >= 11
-                && out->perc_identity < 90.0) {
+           && out->wordsize <= 12
+           && out->wordsize >= 11
+           && out->perc_identity < 90.0) {
             if(out->perc_identity >= 85.0) {
                 out->gap_open = 4;
                 out->gap_extend = 1;
@@ -7156,10 +7159,10 @@ BLAST_Wizard(
     if(!strcmp(service, "psi")) {
         out->ethresh = mask->ethresh ?
             options->ethresh :
-            0.001;
+            0.005;
         out->tweak_parameters = mask->tweak_parameters ?
             options->tweak_parameters :
-            FALSE;
+            TRUE;
     }
     if(options->entrez_query) {
         out->entrez_query = options->entrez_query; /* take ownership */

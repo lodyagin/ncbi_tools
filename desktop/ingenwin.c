@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -4415,7 +4415,7 @@ static void  Ing_OpenAcceptProc(ButtoN b)
       Show(ParentWindow(b));
     }
   }
- end:
+
   if (dfodp->hStart){
     Remove(dfodp->hStart);
     dfodp->hStart=NULL;

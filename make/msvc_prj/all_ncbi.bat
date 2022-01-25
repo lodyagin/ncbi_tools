@@ -1,5 +1,5 @@
 @ECHO OFF
-REM $Id: all_ncbi.bat,v 1.2 2002/09/03 16:18:11 lavr Exp $
+REM $Id: all_ncbi.bat,v 1.4 2004/03/11 16:48:32 ivanov Exp $
 REM ===========================================================================
 REM 
 REM                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@ REM Build NCBI C Toolkit under Windows
 REM
 REM ---------------------------------------------------------------------------
 REM $Log: all_ncbi.bat,v $
+REM Revision 1.4  2004/03/11 16:48:32  ivanov
+REM Disable @ECHO
+REM
+REM Revision 1.3  2004/03/09 19:33:56  ivanov
+REM Enable @ECHO for script debug purposes
+REM
 REM Revision 1.2  2002/09/03 16:18:11  lavr
 REM Message corrected
 REM

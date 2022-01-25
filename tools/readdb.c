@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.432 2004/02/04 15:35:04 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.441 2004/05/04 17:07:20 kans Exp $";
 
-/* $Id: readdb.c,v 6.432 2004/02/04 15:35:04 camacho Exp $ */
+/* $Id: readdb.c,v 6.441 2004/05/04 17:07:20 kans Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.432 $
+* $Revision: 6.441 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,34 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.441  2004/05/04 17:07:20  kans
+* ReadDBBioseqFetchFunc checks result of ReadDBFindFetchStruct call for NULL before attempting to dereference - picked up by trying to use multiple threads
+*
+* Revision 6.440  2004/04/21 16:54:52  camacho
+* Added removal for PIG files
+*
+* Revision 6.439  2004/04/13 17:22:46  camacho
+* Optimization to Int4ListReadFromFile
+*
+* Revision 6.438  2004/04/01 13:43:08  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
+* Revision 6.437  2004/03/29 05:17:55  camacho
+* Fix to Int4ListConcat
+*
+* Revision 6.436  2004/03/15 18:45:05  coulouri
+* Throw fatal error if BSRebuildDNA_4na() fails
+*
+* Revision 6.435  2004/02/24 16:32:52  camacho
+* Use correct calling convention for win32
+*
+* Revision 6.434  2004/02/24 14:06:00  camacho
+* Added support for approximate sequence length calculation for nucleotide
+* sequences.
+*
+* Revision 6.433  2004/02/09 20:53:20  camacho
+* Add FDBAddPig call from FDBAddSequence2
+*
 * Revision 6.432  2004/02/04 15:35:04  camacho
 * Rollback to fix problems in release 2.2.7
 *
@@ -2281,13 +2309,39 @@ Int4ListReadFromFile PROTO((CharPtr fname))
     if (SwapUint4(tmp_value) == READDB_MAGIC_NUMBER) {
 
         /*** Binary gi list ***/
+
+        /* Use a 32 kb buffer to read the file */
+        const Int4 BUFFER_SIZE = (0x1<<15); 
+
+        /* Number of gis per BUFFER_SIZE byte chunk */
+        const Int4 NGIS = BUFFER_SIZE/sizeof(Int4);   
+
+        /* Buffer to read the gi list in BUFFER_SIZE byte chunks */
+        Int4Ptr buffer = (Int4Ptr) Malloc(BUFFER_SIZE);
+
+        if ( !buffer ) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Not enough memory to read %s\n",
+                      file_name);
+            return NULL;
+        }
+
+        /* Read the number of gis in this file */
         NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
         number = SwapUint4(tmp_value);
         listp = Int4ListNewEx(number);
-        for (index = 0; index < number; index++) {
-            NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
-            Int4ListAdd(listp, SwapUint4(tmp_value));
+
+        for (index = 0; index < number; ) {
+            Int4 bytes_read = NlmReadMFILE((Uint1Ptr)buffer, sizeof(Uint1), 
+                                           BUFFER_SIZE, mfp);
+            Uint4 idx = 0;
+
+            for (idx = 0; idx < bytes_read/sizeof(Int4) && idx < NGIS; idx++) {
+                Int4ListAdd(listp, SwapUint4(buffer[idx]));
+                index++;
+            }
         }
+
+        buffer = MemFree(buffer);
         mfp = NlmCloseMFILE(mfp);
 
     } else {
@@ -2348,11 +2402,17 @@ Int4ListConcat PROTO((Int4ListPtr *list1, Int4ListPtr *list2))
     Int4ListPtr retval = NULL;
     Int4 size;
 
-    if ((*list1) && !(*list2))
-        return (*list1);
+    if ((*list1) && !(*list2)) {
+        retval = (*list1);
+        (*list1) = NULL;
+        return retval;
+    }
 
-    if ((*list2) && !(*list1))
-        return (*list2);
+    if ((*list2) && !(*list1)) {
+        retval = (*list2);
+        (*list2) = NULL;
+        return retval;
+    }
 
     if ( (size = (*list1)->count + (*list2)->count) <= 0) {
         (*list1) = Int4ListFree((*list1));
@@ -3558,6 +3618,18 @@ readdb_new (CharPtr filename, Uint1 is_prot)
     return readdb_new_ex(filename, is_prot, TRUE);
 }
 
+/*
+    Get total length and number of sequences in multiple databases.
+*/
+
+Boolean LIBCALL
+readdb_get_totals(ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num)
+
+{
+    return readdb_get_totals_ex(rdfp_list, total_len, total_num, FALSE);
+}
+
+
 
 /*
     Get total length and number of sequences in multiple databases.
@@ -3581,10 +3653,28 @@ Boolean LIBCALL
 readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, 
         Int4Ptr total_num, Boolean use_alias, Boolean use_virtual_oidlist))
 {
+    return readdb_get_totals_ex3(rdfp_list, total_len, total_num, use_alias,
+                                 use_virtual_oidlist, eExact);
+}
+
+/* retrieves the total number of sequences and database length in the
+ * rdfp_list. use_alias and use_virtual_oidlist are mutually exclusive
+ * options: use_virtual_oidlist assumes this rdfp_list has been processed by
+ * BlastProcessGiLists. */
+Boolean LIBCALL
+readdb_get_totals_ex3 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len, 
+        Int4Ptr total_num, Boolean use_alias, Boolean use_virtual_oidlist,
+        EAccountingMode acc_mode))
+{
     ReadDBFILEPtr rdfp;
     OIDListPtr virtual_oidlist = NULL;
     Uint4 maskindex, i, base = 0, total_mask;
     Uint4 mask;
+    typedef Int4 (LIBCALL *fun_ptr) (ReadDBFILEPtr, Int4);
+
+    fun_ptr get_sequence_length = (acc_mode == eExact ?
+                                   &readdb_get_sequence_length :
+                                   &readdb_get_sequence_length_approx);
     *total_len = 0;
     *total_num = 0;
 
@@ -3608,7 +3698,7 @@ readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
                     while (mask) {
                         if ((mask & (((Uint4)0x1) << (MASK_WORD_SIZE-1)))) {
                             (*total_num)++;
-                            *total_len += readdb_get_sequence_length(rdfp_list,
+                            *total_len += (*get_sequence_length)(rdfp_list,
                                     base+i);
                         }
                         mask <<= 1;
@@ -3653,17 +3743,7 @@ readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
     }
 
     return TRUE;
-}
 
-/*
-    Get total length and number of sequences in multiple databases.
-*/
-
-Boolean LIBCALL
-readdb_get_totals(ReadDBFILEPtr rdfp_list, Int8Ptr total_len, Int4Ptr total_num)
-
-{
-    return readdb_get_totals_ex(rdfp_list, total_len, total_num, FALSE);
 }
 
 /*
@@ -5335,6 +5415,8 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
         /* Convert sequence if ambiguities. */
                if(ambchar != NULL) {/* are there any ambiguity ? */
                     byte_store = BSRebuildDNA_4na(byte_store, ambchar);
+                    if (byte_store == NULL)
+                        ErrPostEx(SEV_FATAL, 1, 0, "BSRebuildDNA_4na() failed to allocate memory.");
                     MemFree(ambchar);
             }
         MemFree(buffer_4na);
@@ -5392,6 +5474,29 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
     return length;
 }
 
+Int4 LIBCALL
+readdb_get_sequence_length_approx(ReadDBFILEPtr rdfp, Int4 sequence_number)
+{
+    Uint4 length = 0;
+
+    rdfp = readdb_get_link(rdfp, sequence_number);
+
+    if (rdfp == NULL)
+        return 0;
+
+    if (readdb_is_prot(rdfp) == FALSE)
+    {
+        length = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) -
+                 Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
+        length *= READDB_COMPRESSION_RATIO;
+    }
+    else
+    {
+        length = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
+                 Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
+    }
+    return (Int4)length;
+}
 /* 
     Gets the length of sequence number "sequence_number". 
 */
@@ -5400,31 +5505,14 @@ Int4 LIBCALL
 readdb_get_sequence_length (ReadDBFILEPtr rdfp, Int4 sequence_number)
 
 {
-
-    Uint4 length;
-    Uint1 remainder;
-    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
-
-        rdfp = readdb_get_link(rdfp, sequence_number);
-
-    if (rdfp == NULL)
-        return 0;
-
-    if (is_prot == FALSE)
-    {
-        length = Nlm_SwapUint4(rdfp->ambchar_index[sequence_number]) -
-            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]);
-    }
-    else
-    {
-        length = Nlm_SwapUint4(rdfp->sequence_index[sequence_number+1]) -
-            Nlm_SwapUint4(rdfp->sequence_index[sequence_number]) - 1;
-    }
+    Int4 length = readdb_get_sequence_length_approx(rdfp, sequence_number);
 
     /* For nucl. return "unpacked" length and get the remainder out
-    of the last byte. */
-    if (is_prot == FALSE)
+       of the last byte. */
+    if (readdb_is_prot(rdfp) == FALSE)
     {
+        Uint1 remainder = 0;
+        rdfp = readdb_get_link(rdfp, sequence_number);
         if (rdfp->sequencefp->mfile_true == TRUE)
         {
             NlmSeekInMFILE(rdfp->sequencefp, 
@@ -5437,13 +5525,17 @@ readdb_get_sequence_length (ReadDBFILEPtr rdfp, Int4 sequence_number)
                 Nlm_SwapUint4(rdfp->ambchar_index[sequence_number])-1, SEEK_SET);
             NlmReadMFILE((Uint1Ptr) &remainder, 1, 1, rdfp->sequencefp);
         }
-/* The first six bits in the byte holds the "remainder" (not a multiple of 4) 
-and the last two bits of the byte holds the size of the remainder (0-3). */
-        remainder &= 3;
-        length--;
-/* 4 bases per byte. */
-        length *= 4;
-        length += remainder;
+        /* The first six bits in the byte holds the "remainder" (not a 
+           multiple of 4) and the last two bits of the byte holds the size of 
+           the remainder (0-3). Note that length (as returned from
+           readdb_get_sequence_length_approx) is the "unpacked" approximate
+           length, that is, it assumes the last byte has 4 bases in it. 
+           Therefore, the next 3 lines correct that calculation with the exact
+           sequence length.
+        */
+        remainder &= 3;  /* number of bases stored in the last byte */
+        length -= READDB_COMPRESSION_RATIO; /* subtract the last byte */
+        length += remainder; /* this is the exact "unpacked" sequence length */
     }
 
     return length;
@@ -6466,6 +6558,11 @@ static Int2 LIBCALLBACK ReadDBBioseqFetchFunc(Pointer data)
 
     rdfsp = ReadDBFindFetchStruct((ReadDBFetchStructPtr)(ompp->procdata));
 
+    if (rdfsp == NULL)
+    {
+        return OM_MSG_RET_OK;
+    }
+
     if (rdfsp->ReadDBFetchState == READDBBF_DISABLE)
     {
         return OM_MSG_RET_OK;
@@ -7230,6 +7327,12 @@ Boolean FDBCleanUpRecursively(CharPtr base_name, Char dbtype)
         FileRemove(filenamebuf); /* numeric isam index file */
         sprintf(filenamebuf, "%s.%cnd", base_name, dbtype);
         FileRemove(filenamebuf); /* numeric isam data file */
+        if (dbtype == 'p') {
+            sprintf(filenamebuf, "%s.ppi", base_name);
+            FileRemove(filenamebuf); /* PIG isam index file */
+            sprintf(filenamebuf, "%s.ppd", base_name);
+            FileRemove(filenamebuf); /* PIG isam data file */
+        }
         sprintf(filenamebuf, "%s.%cti", base_name, dbtype);
         FileRemove(filenamebuf); /* deprecated taxonomy index file */
         sprintf(filenamebuf, "%s.%ctd", base_name, dbtype);
@@ -8776,9 +8879,10 @@ Int2 FDBAddSequence2 (FormatDBPtr fdbp, BlastDefLinePtr bdp,
     }
 
     /* Add the PIG information */
-    if (fdbp->options->is_protein && 
-        bdp->other_info == NULL && pig_id != PIG_NONE) {
-        ValNodeAddInt(&bdp->other_info, 0, pig_id);
+    if (fdbp->options->is_protein && pig_id != PIG_NONE) {
+        if (!bdp->other_info)
+            ValNodeAddInt(&bdp->other_info, 0, pig_id);
+        FDBAddPig(fdbp->ptable, pig_id, fdbp->num_of_seqs);
     }
 
     /* ----------- Dumping misc info file ----------- */
@@ -10843,7 +10947,7 @@ Boolean    ScanDIFile(CharPtr difilename, GMSubsetDataPtr gmsubsetdp,
     }
     
     if (readstat != EOF) {
-        fprintf(out, "\nError occured while parsing %s "
+        fprintf(out, "\nError occurred while parsing %s "
                 "(missing accesion field?)", difilename);
         return FALSE;
     }

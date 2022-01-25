@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/92
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: picture.c,v $
+* Revision 6.7  2004/02/17 19:22:54  johnson
+* make segment ID consistly unsigned
+*
 * Revision 6.6  2002/08/07 18:13:42  kans
 * G/SetPrimitiveIDs, itemID is Uint4
 *
@@ -540,11 +543,11 @@ SegmenT Nlm_ParentSegment (SegmenT segment)
 *
 *****************************************************************************/
 
-Int2 Nlm_SegmentID (SegmenT segment)
+Uint2 Nlm_SegmentID (SegmenT segment)
 
 {
   SegPPtr  seg;
-  Int2     segID;
+  Uint2     segID;
 
   segID = 0;
   if (segment != NULL) {

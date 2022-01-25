@@ -1,6 +1,6 @@
 README for stand-alone BLAST
 
-$Date: 2004/02/04 15:44:35 $
+$Date: 2004/04/12 15:06:00 $
 
 This document provides information on stand-alone BLAST.  Topics covered are
 setting up stand-alone BLAST, command-line options for stand-alone BLAST,
@@ -8,17 +8,16 @@ and a release history of the different versions.
 
 NCBI provides binaries for the following platforms:
 
-Apple MacOS 9 (powerpc)
-Apple MacOS X (powerpc)
-DEC/Compaq/HP OSF1 5.1 (alpha)
+Apple MacOS X (ppc)
 FreeBSD 4.5 (ia32)
-HP HPUX 11 (hppa, ia64)
-IBM AIX 5.1 (power4, powerpc)
+HP HPUX 11 (ia64)
+HP Tru64 5.1 (alpha)
+IBM AIX 5.1 (ppc64)
 Linux (kernel 2.4, glibc 2.2.5) (ia32, ia64, amd64)
 Microsoft Windows 2000 (ia32)
-SGI IRIX 6.5 (mips)
-Sun Solaris 7 (ia32)
-Sun Solaris 8 (sparc)
+SGI IRIX 6.5 (mips64)
+Sun Solaris 9 (ia32)
+Sun Solaris 8 (sparc64)
 
 We will attempt to produce binaries for other platforms upon request.
 

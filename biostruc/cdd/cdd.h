@@ -9,8 +9,8 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "cdd.h19";
-static AsnValxNode avnx[70] = {
+static char * asnfilename = "cdd.h21";
+static AsnValxNode avnx[86] = {
     {20,"unassigned" ,0,0.0,&avnx[1] } ,
     {20,"finished-ok" ,1,0.0,&avnx[2] } ,
     {20,"pending-release" ,2,0.0,&avnx[3] } ,
@@ -80,14 +80,30 @@ static AsnValxNode avnx[70] = {
     {20,"other" ,255,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {2,NULL,1,0.0,NULL } };
+    {2,NULL,1,0.0,NULL } ,
+    {20,"unassigned" ,0,0.0,&avnx[71] } ,
+    {20,"cd-info" ,1,0.0,&avnx[72] } ,
+    {20,"align-annot" ,2,0.0,&avnx[73] } ,
+    {20,"seq-list" ,3,0.0,&avnx[74] } ,
+    {20,"seq-tree" ,4,0.0,&avnx[75] } ,
+    {20,"merge-preview" ,5,0.0,&avnx[76] } ,
+    {20,"cross-hits" ,6,0.0,&avnx[77] } ,
+    {20,"notes" ,7,0.0,&avnx[78] } ,
+    {20,"tax-tree" ,8,0.0,&avnx[79] } ,
+    {20,"dart" ,9,0.0,&avnx[80] } ,
+    {20,"dart-selected-rows" ,10,0.0,&avnx[81] } ,
+    {20,"other" ,255,0.0,NULL } ,
+    {20,"unassigned" ,0,0.0,&avnx[83] } ,
+    {20,"user-recorded" ,1,0.0,&avnx[84] } ,
+    {20,"server-generated" ,2,0.0,&avnx[85] } ,
+    {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[194] = {
+static AsnType atx[218] = {
   {401, "Cdd-id" ,1,0,0,0,0,1,0,0,NULL,&atx[11],&atx[1],0,&atx[12]} ,
   {0, "uid" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "gid" ,128,1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
-  {427, "Global-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[5],0,&atx[38]} ,
+  {428, "Global-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[5],0,&atx[38]} ,
   {0, "accession" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[7]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "release" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[8]} ,
@@ -102,18 +118,18 @@ static AsnType atx[194] = {
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[17]} ,
   {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[18]} ,
   {0, "description" ,128,2,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[54]} ,
-  {431, "Cdd-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[20],0,&atx[66]} ,
+  {432, "Cdd-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[20],0,&atx[66]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[21],NULL,0,NULL} ,
-  {430, "Cdd-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[22],0,&atx[19]} ,
+  {431, "Cdd-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[22],0,&atx[19]} ,
   {0, "othername" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[23]} ,
   {0, "category" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[24]} ,
   {0, "comment" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[25]} ,
   {0, "reference" ,128,3,0,0,0,0,0,0,NULL,&atx[26],NULL,0,&atx[27]} ,
-  {409, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[58]} ,
+  {410, "Pub" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[58]} ,
   {0, "create-date" ,128,4,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[29]} ,
-  {408, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
+  {409, "Date" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[26]} ,
   {0, "tax-source" ,128,5,0,0,0,0,0,0,NULL,&atx[30],NULL,0,&atx[31]} ,
-  {414, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[106]} ,
+  {415, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[106]} ,
   {0, "source" ,128,6,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[32]} ,
   {0, "status" ,128,7,0,0,0,0,0,0,NULL,&atx[2],&avnx[0],0,&atx[33]} ,
   {0, "update-date" ,128,8,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[34]} ,
@@ -121,16 +137,16 @@ static AsnType atx[194] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {0, "source-id" ,128,10,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[37]} ,
   {0, "repeats" ,128,11,0,0,0,0,0,0,NULL,&atx[38],NULL,0,&atx[43]} ,
-  {428, "Cdd-repeat" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[39],0,&atx[47]} ,
+  {429, "Cdd-repeat" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[39],0,&atx[47]} ,
   {0, "count" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[40]} ,
   {0, "location" ,128,1,0,1,0,0,0,0,NULL,&atx[41],NULL,0,&atx[42]} ,
-  {417, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[122]} ,
+  {418, "Seq-loc" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[122]} ,
   {0, "avglen" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "old-root" ,128,12,0,0,0,0,0,0,NULL,&atx[12],NULL,0,&atx[44]} ,
   {0, "curation-status" ,128,13,0,0,0,0,0,0,NULL,&atx[2],&avnx[10],0,&atx[45]} ,
   {0, "readonly-status" ,128,14,0,0,0,0,0,0,NULL,&atx[2],&avnx[20],0,&atx[46]} ,
   {0, "book-ref" ,128,15,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {429, "Cdd-book-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[48],0,&atx[21]} ,
+  {430, "Cdd-book-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[48],0,&atx[21]} ,
   {0, "bookname" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[49]} ,
   {0, "textelement" ,128,1,0,0,0,0,0,0,NULL,&atx[50],&avnx[24],0,&atx[51]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -139,17 +155,17 @@ static AsnType atx[194] = {
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "seqannot" ,128,3,0,1,0,0,0,0,NULL,&atx[14],&atx[55],0,&atx[57]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {412, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[60]} ,
+  {413, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[60]} ,
   {0, "features" ,128,4,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[59]} ,
-  {410, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[64]} ,
+  {411, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[64]} ,
   {0, "sequences" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[61]} ,
-  {413, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[30]} ,
+  {414, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[30]} ,
   {0, "profile-range" ,128,6,0,1,0,0,0,0,NULL,&atx[62],NULL,0,&atx[63]} ,
-  {416, "Seq-interval" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[41]} ,
+  {417, "Seq-interval" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[41]} ,
   {0, "trunc-master" ,128,7,0,1,0,0,0,0,NULL,&atx[64],NULL,0,&atx[65]} ,
-  {411, "Bioseq" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[56]} ,
+  {412, "Bioseq" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[56]} ,
   {0, "posfreq" ,128,8,0,1,0,0,0,0,NULL,&atx[66],NULL,0,&atx[74]} ,
-  {432, "Matrix" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[67],0,&atx[76]} ,
+  {433, "Matrix" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[67],0,&atx[76]} ,
   {0, "ncolumns" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[68]} ,
   {0, "nrows" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[69]} ,
   {0, "row-labels" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[70],0,&atx[71]} ,
@@ -159,10 +175,10 @@ static AsnType atx[194] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "scoremat" ,128,9,0,1,0,0,0,0,NULL,&atx[66],NULL,0,&atx[75]} ,
   {0, "distance" ,128,10,0,1,0,0,0,0,NULL,&atx[76],NULL,0,&atx[82]} ,
-  {433, "Triangle" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[77],0,&atx[91]} ,
+  {434, "Triangle" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[77],0,&atx[91]} ,
   {0, "nelements" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[78]} ,
   {0, "scores" ,128,1,0,1,0,0,0,0,NULL,&atx[79],NULL,0,&atx[80]} ,
-  {419, "Score-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[125]} ,
+  {420, "Score-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[125]} ,
   {0, "div-ranks" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[81],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "parent" ,128,11,0,1,0,0,0,0,NULL,&atx[0],NULL,0,&atx[83]} ,
@@ -171,10 +187,10 @@ static AsnType atx[194] = {
   {0, "neighbors" ,128,14,0,1,0,0,0,0,NULL,&atx[12],NULL,0,&atx[86]} ,
   {0, "pending" ,128,15,0,1,0,0,0,0,NULL,&atx[14],&atx[87],0,&atx[99]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[88],NULL,0,NULL} ,
-  {435, "Update-align" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[89],0,&atx[101]} ,
+  {436, "Update-align" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[89],0,&atx[101]} ,
   {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[14],&atx[90],0,&atx[97]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,
-  {434, "Update-comment" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[92],0,&atx[88]} ,
+  {435, "Update-comment" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[92],0,&atx[88]} ,
   {0, "comment" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[93]} ,
   {0, "addthis" ,128,1,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[94]} ,
   {0, "replaces" ,128,2,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[95]} ,
@@ -184,46 +200,46 @@ static AsnType atx[194] = {
   {0, "type" ,128,2,0,0,0,0,0,0,NULL,&atx[2],&avnx[34],0,NULL} ,
   {0, "rejects" ,128,16,0,1,0,0,0,0,NULL,&atx[14],&atx[100],0,&atx[107]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[101],NULL,0,NULL} ,
-  {436, "Reject-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[102],0,&atx[117]} ,
+  {437, "Reject-id" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[102],0,&atx[117]} ,
   {0, "description" ,128,0,0,1,0,0,0,0,NULL,&atx[14],&atx[103],0,&atx[104]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,
   {0, "ids" ,128,1,0,0,0,0,0,0,NULL,&atx[53],&atx[105],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[106],NULL,0,NULL} ,
-  {415, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
+  {416, "Seq-id" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[62]} ,
   {0, "master3d" ,128,17,0,1,0,0,0,0,NULL,&atx[53],&atx[108],0,&atx[109]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[106],NULL,0,NULL} ,
   {0, "alignannot" ,128,18,0,1,0,0,0,0,NULL,&atx[110],NULL,0,&atx[124]} ,
-  {439, "Align-annot-set" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[111],0,&atx[130]} ,
+  {440, "Align-annot-set" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[111],0,&atx[130]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[112],NULL,0,NULL} ,
-  {438, "Align-annot" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[113],0,&atx[110]} ,
+  {439, "Align-annot" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[113],0,&atx[110]} ,
   {0, "location" ,128,0,0,0,0,0,0,0,NULL,&atx[41],NULL,0,&atx[114]} ,
   {0, "description" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[115]} ,
   {0, "evidence" ,128,2,0,1,0,0,0,0,NULL,&atx[14],&atx[116],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[117],NULL,0,NULL} ,
-  {437, "Feature-evidence" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[118],0,&atx[112]} ,
+  {438, "Feature-evidence" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[118],0,&atx[112]} ,
   {0, "comment" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[119]} ,
   {0, "reference" ,128,1,0,0,0,0,0,0,NULL,&atx[26],NULL,0,&atx[120]} ,
   {0, "bsannot" ,128,2,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[121]} ,
   {0, "seqfeat" ,128,3,0,0,0,0,0,0,NULL,&atx[122],NULL,0,&atx[123]} ,
-  {418, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[79]} ,
+  {419, "Seq-feat" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[79]} ,
   {0, "book-ref" ,128,4,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
   {0, "style-dictionary" ,128,19,0,1,0,0,0,0,NULL,&atx[125],NULL,0,&atx[126]} ,
-  {420, "Cn3d-style-dictionary" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[127]} ,
+  {421, "Cn3d-style-dictionary" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[127]} ,
   {0, "user-annotations" ,128,20,0,1,0,0,0,0,NULL,&atx[127],NULL,0,&atx[128]} ,
-  {421, "Cn3d-user-annotations" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[135]} ,
+  {422, "Cn3d-user-annotations" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[135]} ,
   {0, "ancestors" ,128,21,0,1,0,0,0,0,NULL,&atx[14],&atx[129],0,&atx[134]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[130],NULL,0,NULL} ,
-  {440, "Domain-parent" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[131],0,&atx[137]} ,
+  {441, "Domain-parent" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[131],0,&atx[137]} ,
   {0, "parent-type" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[40],0,&atx[132]} ,
   {0, "parentid" ,128,1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,&atx[133]} ,
   {0, "seqannot" ,128,2,0,1,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
   {0, "scoreparams" ,128,22,0,1,0,0,0,0,NULL,&atx[135],NULL,0,&atx[136]} ,
-  {422, "Score-matrix-parameters" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[183]} ,
+  {423, "Score-matrix-parameters" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[183]} ,
   {0, "seqtree" ,128,23,0,1,0,0,0,0,NULL,&atx[137],NULL,0,NULL} ,
-  {441, "Sequence-tree" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[138],0,&atx[140]} ,
+  {442, "Sequence-tree" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[138],0,&atx[140]} ,
   {0, "cdAccession" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[139]} ,
   {0, "algorithm" ,128,1,0,0,0,0,0,0,NULL,&atx[140],NULL,0,&atx[149]} ,
-  {442, "Algorithm-type" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[141],0,&atx[152]} ,
+  {443, "Algorithm-type" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[141],0,&atx[152]} ,
   {0, "scoring-Scheme" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[45],0,&atx[142]} ,
   {0, "clustering-Method" ,128,1,0,0,0,0,0,0,NULL,&atx[2],&avnx[54],0,&atx[143]} ,
   {0, "score-Matrix" ,128,2,0,1,0,0,0,0,NULL,&atx[2],&avnx[59],0,&atx[144]} ,
@@ -235,7 +251,7 @@ static AsnType atx[194] = {
   {0, "isAnnotated" ,128,2,0,0,1,0,0,0,&avnx[67],&atx[150],NULL,0,&atx[151]} ,
   {301, "BOOLEAN" ,0,1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "root" ,128,3,0,0,0,0,0,0,NULL,&atx[152],NULL,0,NULL} ,
-  {443, "SeqTree-node" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[153],0,&atx[164]} ,
+  {444, "SeqTree-node" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[153],0,&atx[164]} ,
   {0, "isAnnotated" ,128,0,0,0,1,0,0,0,&avnx[68],&atx[150],NULL,0,&atx[154]} ,
   {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[155]} ,
   {0, "distance" ,128,2,0,1,0,0,0,0,NULL,&atx[156],NULL,0,&atx[157]} ,
@@ -247,7 +263,7 @@ static AsnType atx[194] = {
   {0, "seqRange" ,128,0,0,0,0,0,0,0,NULL,&atx[62],NULL,0,&atx[162]} ,
   {0, "rowId" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "annotation" ,128,4,0,1,0,0,0,0,NULL,&atx[164],NULL,0,NULL} ,
-  {444, "Node-annotation" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[165],0,NULL} ,
+  {445, "Node-annotation" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[165],0,&atx[204]} ,
   {0, "presentInChildCD" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[166]} ,
   {0, "note" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {404, "Cdd-set" ,1,0,0,0,0,1,0,0,NULL,&atx[53],&atx[168],0,&atx[169]} ,
@@ -262,24 +278,48 @@ static AsnType atx[194] = {
   {0, "neighbors" ,128,6,0,1,0,0,0,0,NULL,&atx[12],NULL,0,NULL} ,
   {406, "Cdd-tree-set" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[178],0,&atx[179]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[169],NULL,0,NULL} ,
-  {407, "Cdd-pref-nodes" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[180],0,&atx[28]} ,
+  {407, "Cdd-pref-nodes" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[180],0,&atx[194]} ,
   {0, "preferred-nodes" ,128,0,0,0,0,0,0,0,NULL,&atx[181],NULL,0,&atx[186]} ,
-  {424, "Cdd-org-ref-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[182],0,&atx[191]} ,
+  {425, "Cdd-org-ref-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[182],0,&atx[191]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[183],NULL,0,NULL} ,
-  {423, "Cdd-org-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[184],0,&atx[181]} ,
+  {424, "Cdd-org-ref" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[184],0,&atx[181]} ,
   {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[30],NULL,0,&atx[185]} ,
   {0, "active" ,128,1,0,0,1,0,0,0,&avnx[69],&atx[150],NULL,0,NULL} ,
   {0, "model-organisms" ,128,1,0,1,0,0,0,0,NULL,&atx[181],NULL,0,&atx[187]} ,
   {0, "optional-nodes" ,128,2,0,1,0,0,0,0,NULL,&atx[181],NULL,0,&atx[188]} ,
   {0, "description" ,128,3,0,1,0,0,0,0,NULL,&atx[189],NULL,0,NULL} ,
-  {426, "Cdd-pref-node-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[190],0,&atx[4]} ,
+  {427, "Cdd-pref-node-descr-set" ,1,0,0,0,0,0,0,0,NULL,&atx[53],&atx[190],0,&atx[4]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[191],NULL,0,NULL} ,
-  {425, "Cdd-pref-node-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[192],0,&atx[189]} ,
+  {426, "Cdd-pref-node-descr" ,1,0,0,0,0,0,0,0,NULL,&atx[11],&atx[192],0,&atx[189]} ,
   {0, "create-date" ,128,0,0,0,0,0,0,0,NULL,&atx[28],NULL,0,&atx[193]} ,
-  {0, "description" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} };
+  {0, "description" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {408, "Cdd-Project" ,1,0,0,0,0,1,0,0,NULL,&atx[10],&atx[195],0,&atx[28]} ,
+  {0, "cds" ,128,0,0,0,0,0,0,0,NULL,&atx[14],&atx[196],0,&atx[197]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[15],NULL,0,NULL} ,
+  {0, "cdcolor" ,128,1,0,0,0,0,0,0,NULL,&atx[14],&atx[198],0,&atx[199]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "viewers" ,128,2,0,0,0,0,0,0,NULL,&atx[14],&atx[200],0,&atx[211]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[201],NULL,0,NULL} ,
+  {447, "Cdd-Viewer" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[202],0,&atx[214]} ,
+  {0, "ctrl" ,128,0,0,0,0,0,0,0,NULL,&atx[2],&avnx[70],0,&atx[203]} ,
+  {0, "rect" ,128,1,0,1,0,0,0,0,NULL,&atx[204],NULL,0,&atx[209]} ,
+  {446, "Cdd-Viewer-Rect" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[205],0,&atx[201]} ,
+  {0, "top" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[206]} ,
+  {0, "left" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[207]} ,
+  {0, "width" ,128,2,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[208]} ,
+  {0, "height" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "accessions" ,128,2,0,0,0,0,0,0,NULL,&atx[14],&atx[210],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {0, "log" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[212]} ,
+  {0, "scripts" ,128,4,0,1,0,0,0,0,NULL,&atx[14],&atx[213],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[214],NULL,0,NULL} ,
+  {448, "Cdd-Script" ,1,0,0,0,0,0,0,0,NULL,&atx[10],&atx[215],0,NULL} ,
+  {0, "type" ,128,0,0,1,0,0,0,0,NULL,&atx[2],&avnx[82],0,&atx[216]} ,
+  {0, "name" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[217]} ,
+  {0, "commands" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Cdd" , "cdd.h19",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Cdd" , "cdd.h21",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -351,6 +391,17 @@ static AsnModulePtr amp = ampx;
 #define CDD_PREF_NODES_model_organisms &at[186]
 #define CDD_PREF_NODES_optional_nodes &at[187]
 #define CDD_PREF_NODES_description &at[188]
+
+#define CDD_PROJECT &at[194]
+#define CDD_PROJECT_cds &at[195]
+#define CDD_PROJECT_cds_E &at[196]
+#define CDD_PROJECT_cdcolor &at[197]
+#define CDD_PROJECT_cdcolor_E &at[198]
+#define CDD_PROJECT_viewers &at[199]
+#define CDD_PROJECT_viewers_E &at[200]
+#define CDD_PROJECT_log &at[211]
+#define CDD_PROJECT_scripts &at[212]
+#define CDD_PROJECT_scripts_E &at[213]
 
 #define CDD_ORG_REF &at[183]
 #define CDD_ORG_REF_reference &at[184]
@@ -491,3 +542,20 @@ static AsnModulePtr amp = ampx;
 #define NODE_ANNOTATION &at[164]
 #define NODE_ANNOTATION_presentInChildCD &at[165]
 #define NODE_ANNOTATION_note &at[166]
+
+#define CDD_VIEWER_RECT &at[204]
+#define CDD_VIEWER_RECT_top &at[205]
+#define CDD_VIEWER_RECT_left &at[206]
+#define CDD_VIEWER_RECT_width &at[207]
+#define CDD_VIEWER_RECT_height &at[208]
+
+#define CDD_VIEWER &at[201]
+#define CDD_VIEWER_ctrl &at[202]
+#define CDD_VIEWER_rect &at[203]
+#define CDD_VIEWER_accessions &at[209]
+#define CDD_VIEWER_accessions_E &at[210]
+
+#define CDD_SCRIPT &at[214]
+#define CDD_SCRIPT_type &at[215]
+#define CDD_SCRIPT_name &at[216]
+#define CDD_SCRIPT_commands &at[217]

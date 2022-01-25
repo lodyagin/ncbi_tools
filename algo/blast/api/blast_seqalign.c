@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.c,v 1.27 2003/12/03 17:30:25 dondosha Exp $
+/* $Id: blast_seqalign.c,v 1.31 2004/04/19 15:03:20 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,10 +32,10 @@ Author: Ilya Dondoshansky
 Contents: Conversion of BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.27 $
+ * $Revision: 1.31 $
  * */
 
-static char const rcsid[] = "$Id: blast_seqalign.c,v 1.27 2003/12/03 17:30:25 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seqalign.c,v 1.31 2004/04/19 15:03:20 papadopo Exp $";
 
 #include <algo/blast/api/blast_seqalign.h>
 
@@ -53,7 +53,7 @@ GetScoreSetFromBlastHsp(Uint1 program_number, BlastHSP* hsp,
    double	prob;
    Int4		score;
    char*	scoretype;
-   BLAST_KarlinBlk* kbp;
+   Blast_KarlinBlk* kbp;
 
    score = hsp->score;
    if (score > 0)
@@ -77,8 +77,7 @@ GetScoreSetFromBlastHsp(Uint1 program_number, BlastHSP* hsp,
       MakeBlastScore(&score_set, scoretype, prob, 0);
    }
 
-   if (program_number == blast_type_blastn || 
-       !score_options->gapped_calculation) {
+   if (!score_options->gapped_calculation) {
       kbp = sbp->kbp[hsp->context];
    } else {
       kbp = sbp->kbp_gap[hsp->context];
@@ -92,9 +91,7 @@ GetScoreSetFromBlastHsp(Uint1 program_number, BlastHSP* hsp,
    if (hsp->num_ident > 0)
       MakeBlastScore(&score_set, "num_ident", 0.0, hsp->num_ident);
    
-   if (hsp->num > 1 && hsp->ordering_method == BLAST_SMALL_GAPS) {
-      MakeBlastScore(&score_set, "small_gap", 0.0, 1);
-   } else if (hsp->ordering_method > 3) { 
+   if (hsp->num > 1 && hsp->splice_junction > 0) { 
       /* In new tblastn this means splice junction was found */
       MakeBlastScore(&score_set, "splice_junction", 0.0, 1);
    }
@@ -336,13 +333,14 @@ BLAST_UngappedHSPToSeqAlign(Uint1 program_number,
 {
    BlastHSP* hsp;
    DenseDiagPtr	ddp_head=NULL, ddp;
-   SeqIdPtr gi_list=NULL, sip;
+   SeqIdPtr sip;
    SeqIdPtr new_sip=NULL;
    StdSeg* ssp_head=NULL,* ssp;
    SeqAlignPtr seqalign;
    Int4 hsp_cnt, index2, hspset_cnt_old;
    Boolean getdensediag = 
       (program_number == blast_type_blastn ||
+       program_number == blast_type_rpsblast ||
        program_number == blast_type_blastp);
 
 	ddp_head = NULL;

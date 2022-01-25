@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.96 2001/04/26 16:41:20 juran Exp $
+/*  $Id: ddvopen.c,v 1.97 2004/04/01 13:43:06 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.96 $
+* $Revision: 1.97 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.97  2004/04/01 13:43:06  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 1.96  2001/04/26 16:41:20  juran
 * Squelch warnings.
 *
@@ -623,7 +626,7 @@ Int4          from_col,to_col,from_row,to_row,bsp_start,bsp_stop,nBspInstances=0
 	DDV_GetCurrentDispRange(dmp->hWndDDV,&(dmp->GrData),dmp->MSA_d.pgp_l.LengthAli,
 			&from_col,&to_col,&from_row,&to_row);
 
-	/*get the occurence(s) (row(s) #) for that bioseq*/
+	/*get the occurrence(s) (row(s) #) for that bioseq*/
 	bsp_List=DDV_GetBspListGivenIDs(&(dmp->MSA_d.pgp_l),ommsp->entityID,
 		ommsp->itemID,&nBspInstances);
 

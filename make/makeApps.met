@@ -78,7 +78,7 @@ on SetProjectData()
 		set myRsrcs to {"sequin.r", "InfoSequin.plc"}
 		set myLibs to {"ncbi", "ncbiconn", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", Â
 			"ncbimmdb", "ncbitool", "netcli", "netentr", "ncbibls3", "ncbimla", Â
-			"ncbitxc2", "ncbiid1", "ncbispell", "vibnet"}
+			"ncbitxc2", "ncbiid1", "ncbispell", "vibnet", "ncbiblast", "ncbiblastapi"}
 		set myFiles to Â
 			{{projPath:"cdromlib:", fileList:{"accentr.c", "accutils.c"}}, Â
 				{projPath:"sequin:", fileList:{"sequin1.c", "sequin2.c", "sequin3.c", "sequin4.c", "sequin5.c", Â
@@ -377,7 +377,7 @@ on AppendAccessPath(aPath, isRecursive, isUserPath)
 		if (aPath does not end with ":") then set aPath to aPath & ":"
 		
 		set aPath to POSIX path of aPath
-		set pathsToAdd to {{name:aPath, recursive:isRecursive, origin:root relative, root:"OS X Volume", format:Unix Path}}
+		set pathsToAdd to {{name:aPath, recursive:isRecursive, origin:absolute, format:Unix Path}}
 		if isUserPath then
 			Set Preferences of panel "Access Paths" to {User Paths:pathsToAdd}
 		else
@@ -741,9 +741,12 @@ end UpdateTarget
 on CreateFolder(folderPath)
 	set text item delimiters of AppleScript to ":"
 	-- strip off disk name.
-	set folderPath to (rest of text items of folderPath) as string
-	set pathSoFar to ""
 	tell application "Finder"
+		set pathSoFar to ""
+		if (exists disk (first text item of folderPath)) then
+			set pathSoFar to first text item of folderPath
+			set folderPath to (rest of text items of folderPath) as string
+		end if
 		repeat with f in (text items of folderPath)
 			set longerPath to pathSoFar & ":" & f
 			if not (exists folder (longerPath)) then

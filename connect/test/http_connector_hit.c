@@ -1,4 +1,4 @@
-/*  $Id: http_connector_hit.c,v 6.11 2003/04/15 14:06:09 lavr Exp $
+/*  $Id: http_connector_hit.c,v 6.13 2004/04/01 14:14:02 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -159,12 +159,14 @@ int main(int argc, const char* argv[])
                 break; /* EOF */
             }
 
-            status = CONN_Write(conn, buffer, n_read, &n_written);
+            status = CONN_Write(conn, buffer, n_read,
+                                &n_written, eIO_WritePersist);
             if (status != eIO_Success) {
                 fprintf(stderr, "Error writing to URL (%s)",
                         IO_StatusStr(status));
                 assert(0);
             }
+            assert(n_written == n_read);
         }
         fclose(inp_fp);
     }
@@ -197,11 +199,17 @@ int main(int argc, const char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: http_connector_hit.c,v $
+ * Revision 6.13  2004/04/01 14:14:02  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
+ * Revision 6.12  2004/02/23 15:23:42  lavr
+ * New (last) parameter "how" added in CONN_Write() API call
+ *
  * Revision 6.11  2003/04/15 14:06:09  lavr
  * Changed ray.nlm.nih.gov -> ray.ncbi.nlm.nih.gov
  *
  * Revision 6.10  2002/11/22 15:09:40  lavr
- * Replace all occurances of "ray" with "yar"
+ * Replace all occurrences of "ray" with "yar"
  *
  * Revision 6.9  2002/10/28 15:47:12  lavr
  * Use "ncbi_ansi_ext.h" privately and use strncpy0()

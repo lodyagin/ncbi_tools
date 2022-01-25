@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -121,6 +121,7 @@ typedef struct featform {
   FEATURE_FORM_BLOCK
 } FeatureForm, PNTR FeatureFormPtr;
 
+extern Int2 LIBCALLBACK DescriptorPropagate (Pointer data);
 extern Boolean DescFormReplaceWithoutUpdateProc (ForM f);
 extern void StdDescFormActnProc (ForM f);
 

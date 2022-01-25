@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: bl2seq.c,v 6.59 2003/06/26 18:56:05 coulouri Exp $";
+static char const rcsid[] = "$Id: bl2seq.c,v 6.60 2004/02/26 16:25:06 camacho Exp $";
 
 /**************************************************************************
 *                                                                         *
@@ -27,6 +27,9 @@ static char const rcsid[] = "$Id: bl2seq.c,v 6.59 2003/06/26 18:56:05 coulouri E
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.60  2004/02/26 16:25:06  camacho
+* Fix uninitialized variable errors that caused core dumps on empty input files
+*
 * Revision 6.59  2003/06/26 18:56:05  coulouri
 * remove unnecessary variables
 *
@@ -453,8 +456,8 @@ Int2 Main (void)
 {
 	
 	AsnIoPtr aip;
-	BioseqPtr fake_bsp = NULL, fake_subject_bsp = NULL, query_bsp, 
-                  subject_bsp;
+	BioseqPtr fake_bsp = NULL, fake_subject_bsp = NULL, query_bsp = NULL, 
+                  subject_bsp = NULL;
         BioseqPtr bsp1, bsp2;
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
 	BLAST_OptionsBlkPtr options;

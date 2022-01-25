@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.119 $
+* $Revision: 6.134 $
 *
 * File Description: 
 *
@@ -104,9 +104,8 @@ extern "C" {
 #define NUM_SEQ_PKG           9
 
 #define SEQ_FMT_FASTA         1
-#define SEQ_FMT_CONTIGUOUS    2 
-#define SEQ_FMT_INTERLEAVE    3 
-#define NUM_SEQ_FMT           3 
+#define SEQ_FMT_ALIGNMENT     2 
+#define NUM_SEQ_FMT           2 
   
 /*
 #define SEQ_FMT_FASTAGAP      2
@@ -165,6 +164,7 @@ extern void EditFeatureStrand (IteM i);
 extern void PrefixAuthorityWithOrganism (IteM i);
 extern void UpdateFastaSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
+extern void SplitSegmentedFeatsMenuItem (IteM i);
 extern SeqLocPtr SeqLocWholeNew (BioseqPtr bsp);
 extern SeqFeatPtr SeqFeatCopy (SeqFeatPtr sfp);
 extern SeqLocPtr SeqLocReplaceLocalID (SeqLocPtr slp,
@@ -325,6 +325,8 @@ extern Uint2 PackageFormResults (SequinBlockPtr sbp, SeqEntryPtr sep,
 extern void EnableFeaturesPerTarget (BaseFormPtr bfp);
 extern void EnableAnalysisItems (BaseFormPtr bfp, Boolean isDocSum);
 
+extern void ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5);
+
 #define REGISTER_BIOSEQ_SEG_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Bioseq Seg","BioseqSegEditor",OBJ_BIOSEQ_SEG,0,OBJ_BIOSEQ_SEG,0,NULL,BioseqSegEditFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK BioseqSegEditFunc (Pointer data);
 
@@ -394,6 +396,8 @@ extern void EditSequenceHistory (IteM i);
 extern void FindGeneAndProtForCDS (Uint2 entityID, SeqFeatPtr cds,
                                    SeqFeatPtr PNTR gene, SeqFeatPtr PNTR prot);
 extern SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product);
+extern void ExportAlignmentInterleave (IteM i);
+extern void ExportAlignmentContiguous (IteM i);
 extern void NewDescriptorMenuFunc (ObjMgrProcPtr ompp, BaseFormPtr bfp, Uint2 descsubtype);
 extern Boolean PropagateFromGenBankBioseqSet (SeqEntryPtr sep, Boolean ask);
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn);
@@ -426,6 +430,10 @@ extern void RemoveRNA (IteM i);
 extern void ConvertRNA (IteM i);
 extern void AddRNA (IteM i);
 extern void EditRNA (IteM i);
+
+extern void RemoveRedundantProproteinMiscFeats (IteM i);
+extern void AddTypeStrainCommentsToAll (IteM i);
+extern void RemoveSequencesFromAlignment (IteM i);
 
 extern void ParseDefToSource (IteM i);
 extern void ParseLocalIDToSource (IteM i);
@@ -490,6 +498,9 @@ extern void MakeExonsFromCDSIntervals (IteM i);
 extern void MakeExonsFromMRNAIntervals (IteM i);
 
 extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
+extern Int2 LIBCALLBACK CreateSegregateByTextWindow (Pointer data);
+extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data);
+extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
 extern void ParseCommentToAnywhere (IteM i);
 extern void ParseLocalIDToAnywhere (IteM i);
@@ -545,12 +556,27 @@ extern void NewExtendSequence (IteM i);
 
 extern void FastaNucDirectToSeqEdProc (IteM i);
 
+extern void ParseCodonsFromtRNAComment (IteM i);
+extern void ParseAntiCodonsFromtRNAComment (IteM i);
+
 extern void RemoveAlignment (IteM i);
 extern void RemoveGraph (IteM i);
 extern void RemoveProteins (IteM i);
 
+extern void GlobalAddTranslExcept (IteM i);
+
+extern void ReadAlignment (IteM i);
+extern SeqEntryPtr SeqEntryFromAlignmentFile (FILE *fp, CharPtr missing, CharPtr match,
+                                              CharPtr beginning_gap, CharPtr middle_gap,
+                                              CharPtr end_gap, CharPtr alphabet, Uint1 moltype,
+                                              CharPtr no_org_err_msg);
+
 extern SeqAlignPtr Sqn_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 extern SeqAlignPtr Sequin_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, Int4Ptr endsfixed);
+
+/* eventually this declaration should be moved to libncbitool */
+NLM_EXTERN SeqAlignPtr Sqn_LocalAlign2SeqEx (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, Boolean use_new_blast);
+extern void SqnNewAlign (BioseqPtr bsp1, BioseqPtr bsp2, SeqAlignPtr PNTR salp);
 
 extern Boolean CreateUpdateCitSubFromBestTemplate (SeqEntryPtr top_sep, SeqEntryPtr upd_sep);
 

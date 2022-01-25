@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.2 $
+* $Revision: 1.9 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -376,7 +376,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "IMGT/LIGM",
   "IMGT/HLA",
   "InterimID",
-  "Interpro",
+  "InterPro",
   "ISFinder",
   "JCM",
   "LocusID",
@@ -386,18 +386,19 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "MIM",
   "NextDB",
   "niaEST",
+  "PGN",
   "PIR",
   "PSEUDO",
   "RATMAP",
   "RiceGenes",
-  "REMTREMBL",
   "RGD",
   "RZPD",
   "SGD",
   "SoyBase",
-  "SPTREMBL",
-  "SWISS-PROT",
+  "SubtiList",
+  "Swiss-Prot",
   "taxon",
+  "TrEMBL",
   "UniGene",
   "UniSTS",
   "WorfDB",
@@ -887,7 +888,7 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
   return str;
 }
 
-/* A tilde is not an EOL if it is found in a sring of the form:    */
+/* A tilde is not an EOL if it is found in a string of the form:    */
 /* /~alpahnumdot/ where alphanumdot is either alpha numeric or '.' */
 /*                                                                 */
 /* str points to the tilde in question.                            */
@@ -944,6 +945,9 @@ NLM_EXTERN void AddCommentWithURLlinks (
 
   while (! StringHasNoText (str)) {
     ptr = StringStr (str, "http://");
+    if (ptr == NULL) {
+      ptr = StringStr (str, "https://");
+    }
     if (ptr == NULL) {
       if (prefix != NULL) {
         FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
@@ -2921,6 +2925,13 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   return str;
 }
 
+static void CountBases (
+)
+
+{
+    
+}
+
 
 static Boolean CountBasesByRead (
   IntAsn2gbJobPtr ajp,
@@ -3074,7 +3085,7 @@ NLM_EXTERN CharPtr FormatBasecountBlock (
     if (! CountBasesByRead (ajp, bsp, base_count)) return NULL;
   } else {
     len = bsp->length;
-    SeqPortStream (bsp, TRUE, (Pointer) base_count, CountBasesByStream);
+    SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) base_count, CountBasesByStream);
   }
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
@@ -3518,7 +3529,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   BioseqPtr         bsp;
   Char              buf [80];
   Char              ch;
-  Int2              cnt;
+  Int2              cnt = 0;
   Uint1             code = Seq_code_iupacna;
   Int2              count;
   Int2              ctr;
@@ -3557,7 +3568,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     if (str == NULL) return NULL;
 
     tmp = str;
-    SeqPortStream (bsp, TRUE, (Pointer) &tmp, SaveGBSeqSequence);
+    SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &tmp, SaveGBSeqSequence);
     gbseq->sequence = StringSave (str);
 
     tmp = gbseq->sequence;
@@ -3574,6 +3585,22 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
     CompressNonBases (gbseq->sequence);
 
     return str;
+  }
+
+  /* replace SeqPort with improved SeqPortStream */
+
+  if (ajp->ajp.slp == NULL && sbp->bases == NULL) {
+    start = sbp->start;
+    stop = sbp->stop;
+    if (stop > start) {
+
+      str = MemNew (sizeof (Char) * (stop - start + 3));
+      if (str != NULL) {
+        tmp = str;
+        SeqPortStreamInt (bsp, start, stop - 1, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) &tmp, SaveGBSeqSequence);
+        sbp->bases = str;
+      }
+    }
   }
 
   /* if subsequence cached with SeqPortStream, use it */

@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.28 2003/12/10 23:14:34 dondosha Exp $
+/* $Id: blast_gapalign.h,v 1.40 2004/04/16 14:56:58 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Structures and functions prototypes used for BLAST gapped extension
 
 ******************************************************************************
- * $Revision: 1.28 $
+ * $Revision: 1.40 $
  * */
 
 #ifndef __BLAST_GAPALIGN__
@@ -43,6 +43,7 @@ Contents: Structures and functions prototypes used for BLAST gapped extension
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/gapinfo.h>
 #include <algo/blast/core/greedy_align.h>
+#include <algo/blast/core/blast_hits.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,83 +57,36 @@ typedef enum {
     EXTEND_ALGO_MAX
 } ExtensionAlgorithmType;
 
-#define MB_DIAG_NEAR 30
-#define MB_DIAG_CLOSE 6
-#define MIN_NEIGHBOR_HSP_LENGTH 100
-#define MIN_NEIGHBOR_PERC_IDENTITY 96
+/** Diagonal distance cutoff when looking for HSP inclusion in Mega BLAST */ 
+#define MB_DIAG_NEAR 30 
 
-#define MAX_DBSEQ_LEN 5000000
+/** Diagonal distance between HSPs for which one can be considered included in 
+   the other in Mega BLAST */
+#define MB_DIAG_CLOSE 6 
 
-/* One sequence segment within an HSP */
-typedef struct BlastSeg {
-   Int2 frame;  /**< Translation frame */
-   Int4 offset; /**< Start of hsp */
-   Int4 length; /**< Length of hsp */
-   Int4 end;    /**< End of HSP */
-   Int4 offset_trim; /**< Start of trimmed hsp */
-   Int4 end_trim;    /**< End of trimmed HSP */
-   Int4 gapped_start;/**< Where the gapped extension started. */
-} BlastSeg;
+/** Minimal HSP length allowed for neighboring */
+#define MIN_NEIGHBOR_HSP_LENGTH 100 
 
-/** BLAST_NUMBER_OF_ORDERING_METHODS tells how many methods are used
- * to "order" the HSP's.
-*/
-#define BLAST_NUMBER_OF_ORDERING_METHODS 2
+/** Minimal percent of identities allowed for neighboring */
+#define MIN_NEIGHBOR_PERC_IDENTITY 96 
 
-/** The following structure is used in "link_hsps" to decide between
- * two different "gapping" models.  Here link is used to hook up
- * a chain of HSP's (this is a void* as _blast_hsp is not yet
- * defined), num is the number of links, and sum is the sum score.
- * Once the best gapping model has been found, this information is
- * transferred up to the BlastHSP.  This structure should not be
- * used outside of the function link_hsps.
-*/
-typedef struct BlastHSPLink {
-   void* link[BLAST_NUMBER_OF_ORDERING_METHODS]; /**< Used to order the HSPs
-                                           (i.e., hook-up w/o overlapping). */
-   Int2 num[BLAST_NUMBER_OF_ORDERING_METHODS]; /**< number of HSP in the
-                                                  ordering. */
-   Int4 sum[BLAST_NUMBER_OF_ORDERING_METHODS]; /**< Sum-Score of HSP. */
-   double xsum[BLAST_NUMBER_OF_ORDERING_METHODS]; /**< Sum-Score of HSP,
-                                     multiplied by the appropriate Lambda. */
-   Int4 changed;
-} BlastHSPLink;
-
-/** Structure holding all information about an HSP */
-typedef struct BlastHSP {
-   struct BlastHSP* next; /**< The next HSP */
-   struct BlastHSP* prev; /**< The previous HSP. */
-   BlastHSPLink  hsp_link;
-   Boolean linked_set;        /**< Is this HSp part of a linked set? */
-   Int2 ordering_method;/**< Which method (max or no max for gaps) was used? */
-   Int4 num;            /**< How many HSP's make up this (sum) segment */
-   Int4 sumscore;/**< Sumscore of a set of "linked" HSP's. */
-   Boolean start_of_chain; /**< If TRUE, this HSP starts a chain along the
-                              "link" pointer. */
-   Int4 score;         /**< This HSP's raw score */
-   Int4 num_ident;         /**< Number of identical base pairs in this HSP */
-   double evalue;        /**< This HSP's e-value */
-   BlastSeg query;            /**< Query sequence info. */
-   BlastSeg subject;          /**< Subject sequence info. */
-   Int2     context;          /**< Context number of query */
-   GapEditBlock* gap_info; /**< ALL gapped alignment is here */
-   Int4 num_ref;              /**< Number of references in the linked set */
-   Int4 linked_to;            /**< Where this HSP is linked to? */
-} BlastHSP;
+/** Split subject sequences if longer than this */
+#define MAX_DBSEQ_LEN 5000000 
 
 /** Auxiliary structure for dynamic programming gapped extension */
 typedef struct BlastGapDP {
-  Int4 CC, DD, FF;      /**< Values for gap opening and extensions. */
+  Int4 best;
+  Int4 best_gap;
+  Int4 best_decline;
 } BlastGapDP;
 
 /** Structure supporting the gapped alignment */
 typedef struct BlastGapAlignStruct {
    Boolean positionBased; /**< Is this PSI-BLAST? */
+   Int4 position_offset; /**< Offset into the PSSM for the present sequence */
    GapStateArrayStruct* state_struct; /**< Structure to keep extension 
                                                 state information */
    GapEditBlock* edit_block; /**< The traceback (gap) information */
-   BlastGapDP* dyn_prog; /**< Preallocated memory for the dynamic 
-                              programming extension */
    GreedyAlignMem* greedy_align_mem;/**< Preallocated memory for the greedy 
                                          gapped extension */
    BlastScoreBlk* sbp; /**< Pointer to the scoring information block */
@@ -155,33 +109,13 @@ typedef struct BlastGapAlignStruct {
 */
 Int2
 BLAST_GapAlignStructNew(const BlastScoringOptions* score_options, 
-   BlastExtensionParameters* ext_params, 
+   const BlastExtensionParameters* ext_params, 
    Uint4 max_subject_length, Int4 query_length, 
    BlastScoreBlk* sbp, BlastGapAlignStruct** gap_align_ptr);
 
 /** Deallocates memory in the BlastGapAlignStruct structure */
 BlastGapAlignStruct* 
 BLAST_GapAlignStructFree(BlastGapAlignStruct* gap_align);
-
-/** The structure to hold all HSPs for a given sequence after the gapped 
- *  alignment.
- */
-typedef struct BlastHSPList {
-   Int4 oid;/**< The ordinal id of the subject sequence this HSP list is for */
-   BlastHSP** hsp_array; /**< Array of pointers to individual HSPs */
-   Int4 hspcnt; /**< Number of HSPs saved */
-   Int4 allocated; /**< The allocated size of the hsp_array */
-   Int4 hsp_max; /**< The maximal number of HSPs allowed to be saved */
-   Boolean do_not_reallocate; /**< Is reallocation of the hsp_array allowed? */
-   Boolean traceback_done; /**< Has the traceback already been done on HSPs in
-                              this list? */
-} BlastHSPList;
-
-/** Creates HSP list structure with a default size HSP array */
-BlastHSPList* BlastHSPListNew(void);
-
-/** Deallocate memory for the HSP list */
-BlastHSPList* BlastHSPListDestruct(BlastHSPList* hsp_list);
 
 /** Mega BLAST function performing gapped alignment: 
  *  Sorts initial HSPs by diagonal; 
@@ -193,6 +127,8 @@ BlastHSPList* BlastHSPListDestruct(BlastHSPList* hsp_list);
  *      structure.
  * @param program_number Not needed: added for prototype consistency.
  * @param query The query sequence [in]
+ * @param query_info Query information structure, containing offsets into 
+ *                   the concatenated sequence [in]
  * @param subject The subject sequence [in]
  * @param gap_align A placeholder for gapped alignment information and 
  *        score block. [in] [out]
@@ -203,12 +139,12 @@ BlastHSPList* BlastHSPListDestruct(BlastHSPList* hsp_list);
  * @param hsp_list_ptr List of HSPs with full extension information [out]
 */
 Int2 BLAST_MbGetGappedScore(Uint1 program_number, 
-        BLAST_SequenceBlk* query, 
+             BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
 			    BLAST_SequenceBlk* subject,
 			    BlastGapAlignStruct* gap_align,
 			    const BlastScoringOptions* score_options, 
-			    BlastExtensionParameters* ext_params,
-			    BlastHitSavingParameters* hit_params,
+			    const BlastExtensionParameters* ext_params,
+			    const BlastHitSavingParameters* hit_params,
 			    BlastInitHitList* init_hitlist,
 			    BlastHSPList** hsp_list_ptr);
 
@@ -222,6 +158,8 @@ Int2 BLAST_MbGetGappedScore(Uint1 program_number,
  * Saves HSPs into an HSP list.
  * @param program_number Type of BLAST program [in]
  * @param query The query sequence block [in]
+ * @param query_info Query information structure, containing offsets into 
+ *                   the concatenated sequence [in]
  * @param subject The subject sequence block [in]
  * @param gap_align The auxiliary structure for gapped alignment [in]
  * @param score_options Options related to scoring [in]
@@ -231,12 +169,13 @@ Int2 BLAST_MbGetGappedScore(Uint1 program_number,
  *        information from the ungapped alignment performed earlier) [in]
  * @param hsp_list_ptr Structure containing all saved HSPs [out]
  */
-Int2 BLAST_GetGappedScore (Uint1 program_number, BLAST_SequenceBlk* query, 
+Int2 BLAST_GetGappedScore (Uint1 program_number, 
+            BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
 		      BLAST_SequenceBlk* subject,
 		      BlastGapAlignStruct* gap_align,
 		      const BlastScoringOptions* score_options, 
-		      BlastExtensionParameters* ext_params,
-		      BlastHitSavingParameters* hit_params,
+		      const BlastExtensionParameters* ext_params,
+		      const BlastHitSavingParameters* hit_params,
 		      BlastInitHitList* init_hitlist,
 		      BlastHSPList** hsp_list_ptr);
 
@@ -248,6 +187,7 @@ Int2 BLAST_GetGappedScore (Uint1 program_number, BLAST_SequenceBlk* query,
  * @param score_options Scoring parameters [in]
  * @param q_start Offset in query where to start alignment [in]
  * @param s_start Offset in subject where to start alignment [in]
+ * @param query_length Maximal allowed extension in query [in]
  * @param subject_length Maximal allowed extension in subject [in]
  */
 Int2 BLAST_GappedAlignmentWithTraceback(Uint1 program, 
@@ -263,7 +203,7 @@ Int2 BLAST_GappedAlignmentWithTraceback(Uint1 program,
  * @param query The query sequence [in]
  * @param subject The subject sequence [in]
  * @param query_length The query sequence length [in]
- * @param subject The subject sequence length [in]
+ * @param subject_length The subject sequence length [in]
  * @param gap_align The structure holding various information and memory 
  *        needed for gapped alignment [in] [out]
  * @param score_options Options related to scoring alignments [in]
@@ -286,6 +226,7 @@ BLAST_GreedyGappedAlignment(Uint1* query, Uint1* subject,
  * @param score_options Scoring parameters [in]
  * @param q_start Offset in query where to start alignment [in]
  * @param s_start Offset in subject where to start alignment [in]
+ * @param query_length Maximal allowed extension in query [in]
  * @param subject_length Maximal allowed extension in subject [in]
  */
 Int2 PHIGappedAlignmentWithTraceback(Uint1 program, 
@@ -299,18 +240,22 @@ Int2 PHIGappedAlignmentWithTraceback(Uint1 program,
  * to work.
  * @param init_hitlist List of initial HSPs with ungapped extension 
  *                     information [in]
+ * @param query_info Query information structure, containing offsets into
+ *                   the concatenated queries/strands/frames [in]
  * @param subject Subject sequence block containing frame information [in]
  * @param hit_options Hit saving options [in]
  * @param hsp_list_ptr HSPs in the final form [out]
  */
 Int2 BLAST_GetUngappedHSPList(BlastInitHitList* init_hitlist, 
-        BLAST_SequenceBlk* subject, 
+        BlastQueryInfo* query_info, BLAST_SequenceBlk* subject, 
         const BlastHitSavingOptions* hit_options, 
         BlastHSPList** hsp_list_ptr);
 
 /** Preliminary gapped alignment for PHI BLAST.
  * @param program_number Type of BLAST program [in]
  * @param query The query sequence block [in]
+ * @param query_info Query information structure, containing offsets into 
+ *                   the concatenated sequence [in]
  * @param subject The subject sequence block [in]
  * @param gap_align The auxiliary structure for gapped alignment [in]
  * @param score_options Options related to scoring [in]
@@ -321,14 +266,35 @@ Int2 BLAST_GetUngappedHSPList(BlastInitHitList* init_hitlist,
  * @param hsp_list_ptr Structure containing all saved HSPs [out]
  */
 Int2 PHIGetGappedScore (Uint1 program_number, 
-        BLAST_SequenceBlk* query, 
+        BLAST_SequenceBlk* query, BlastQueryInfo* query_info, 
         BLAST_SequenceBlk* subject, 
         BlastGapAlignStruct* gap_align,
         const BlastScoringOptions* score_options,
-        BlastExtensionParameters* ext_params,
-        BlastHitSavingParameters* hit_params,
+        const BlastExtensionParameters* ext_params,
+        const BlastHitSavingParameters* hit_params,
         BlastInitHitList* init_hitlist,
         BlastHSPList** hsp_list_ptr);
+
+void 
+AdjustSubjectRange(Int4* subject_offset_ptr, Int4* subject_length_ptr, 
+                   Int4 query_offset, Int4 query_length, Int4* start_shift);
+
+/** Function to look for the highest scoring window (of size HSP_MAX_WINDOW)
+ * in an HSP and return the middle of this.  Used by the gapped-alignment
+ * functions to start the gapped alignments.
+ * @param query The query sequence [in]
+ * @param subject The subject sequence [in]
+ * @param sbp Scoring block, containing matrix [in]
+ * @param q_start Starting offset in query [in]
+ * @param q_length Length of HSP in query [in]
+ * @param s_start Starting offset in subject [in]
+ * @param s_length Length of HSP in subject [in]
+ * @return The offset at which alignment should be started [out]
+*/
+Int4 
+BlastGetStartForGappedAlignment (Uint1* query, Uint1* subject,
+   const BlastScoreBlk* sbp, Uint4 q_start, Uint4 q_length, 
+   Uint4 s_start, Uint4 s_length);
 
 #ifdef __cplusplus
 }

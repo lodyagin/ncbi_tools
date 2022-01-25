@@ -33,9 +33,6 @@ Package=<5>
 Package=<4>
 {{{
     Begin Project Dependency
-    Project_Dep_Name demo_asn2ff
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name demo_asn2xml
     End Project Dependency
     Begin Project Dependency
@@ -266,6 +263,15 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name demo_spidey
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_asn2ff
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name demo_flint
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -292,6 +298,9 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name exe_sequin
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name exe_idfetch
     End Project Dependency
 }}}
 
@@ -395,6 +404,9 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name blast
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
 }}}
 
 ###############################################################################
@@ -423,7 +435,19 @@ Package=<4>
 
 ###############################################################################
 
-Project: "blast"=.\blast\blast.dsp - Package Owner=<4>
+Project: "blast"=.\algo\blast\core\blast.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "blastapi"=.\algo\blast\api\blastapi.dsp - Package Owner=<4>
 
 Package=<5>
 {{{
@@ -586,6 +610,39 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_blast"=.\demo\blast\demo_blast.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimmdb
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
     End Project Dependency
 }}}
 
@@ -1253,6 +1310,39 @@ Package=<5>
 
 Package=<4>
 {{{
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "demo_flint"=.\demo\flint\demo_flint.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbitool
     End Project Dependency
@@ -2469,6 +2559,39 @@ Package=<4>
 
 ###############################################################################
 
+Project: "exe_idfetch"=.\network\idfetch\exe_idfetch.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbiid1
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbitool
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name netcli
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbinacc
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbiobj
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ncbimain
+    End Project Dependency
+}}}
+
+###############################################################################
+
 Project: "exe_sequin"=.\sequin\sequin\exe_sequin.dsp - Package Owner=<4>
 
 Package=<5>
@@ -2518,6 +2641,12 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbi
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
     End Project Dependency
 }}}
 
@@ -2578,6 +2707,12 @@ Package=<4>
     End Project Dependency
     Begin Project Dependency
     Project_Dep_Name ncbispel
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blast
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name blastapi
     End Project Dependency
 }}}
 

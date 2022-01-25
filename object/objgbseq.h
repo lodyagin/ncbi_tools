@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.14 at Jul 19, 2002  2:16 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 9, 2004 11:58 AM
 *
 **************************************************/
 
@@ -41,8 +41,11 @@ typedef struct struct_GBSeq {
    CharPtr   division;
    CharPtr   update_date;
    CharPtr   create_date;
+   CharPtr   update_release;
+   CharPtr   create_release;
    CharPtr   definition;
    CharPtr   primary_accession;
+   CharPtr   entry_version;
    CharPtr   accession_version;
    ValNodePtr   other_seqids;
    ValNodePtr   secondary_accessions;
@@ -55,6 +58,7 @@ typedef struct struct_GBSeq {
    CharPtr   comment;
    CharPtr   primary;
    CharPtr   source_db;
+   CharPtr   database_reference;
    struct struct_GBFeature PNTR   feature_table;
    CharPtr   sequence;
    CharPtr   contig;

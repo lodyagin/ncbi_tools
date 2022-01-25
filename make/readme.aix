@@ -3,6 +3,11 @@ General Information for BLAST Developers on IBM-AIX Systems
 ===========================================================
 
  To compile the toolkit under AIX follow the steps in readme.unx
+ SPECIAL NOTE:
+ To build the 64-bit version type:
+ $ env AIX_MODE=64 ./ncbi/make/makedis.csh or
+ $ env AIX_MODE=64 ./ncbi/make/makedis.csh 2> log 1>&2    ! Korn shell users
+ % env AIX_MODE=64 ./ncbi/make/makedis.csh >& log         ! C shell users
 
  AIX Specific information
  ------------------------
@@ -11,7 +16,7 @@ General Information for BLAST Developers on IBM-AIX Systems
 
  1.  makedis.csh in ./ncbi/make
 
- 2.  ibm_pwr3.ncbi.mk and ibm_auto.ncbi.mk in ./ncbi/platform
+ 2.  ibm64_auto.ncbi.mk and ibm_auto.ncbi.mk in ./ncbi/platform
 
  3.  ncbilcl.ibm in ./ncbi/corelib
 
@@ -28,11 +33,9 @@ makedis.csh:
 
 ibm_xxxx.ncbi.mk:
 
-     Currently xxxx can be either pwr3 or auto.  This notation is 
-     consistent with the compiler flags for the -qarch= option. 
-     This notation allows to easily target other architectures within
-     the IBM systems.  This file contains compiler and loader flags
-     specific for IBM.
+     Currently xxxx can be either auto64 or auto.  auto64 builds the
+     64-bit version.
+     This file contains compiler and loader flags specific for IBM.
 
 ncbilcl.ibm:
 
@@ -47,8 +50,8 @@ Multi-threading
      When running multi-threaded it may be beneficial to set the
      following environment variables:
 
-	AIXTHREAD_SCOPE=S
-	MALLOCMULTIHEAP=true
+                 AIXTHREAD_SCOPE=S
+                 MALLOCMULTIHEAP=true
 
      Addional benefit is possibly achieved by experimenting with 
      the value of the environment variables SPINLOOPTIME and 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:  New GenBank flatfile generator, private header
 *
@@ -43,6 +43,7 @@
 
 #include <asn2gnbk.h>
 #include <objgbseq.h>
+#include <objinsdseq.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT

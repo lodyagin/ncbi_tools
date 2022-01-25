@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.58 $
+* $Revision: 6.62 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,19 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.62  2004/05/04 16:34:23  shomrat
+* Remove file name restrictions for MSWIN
+*
+* Revision 6.61  2004/03/30 17:22:36  rsmith
+* Mac/Darwin (OSX) handle special case when converting an FSSpec to a path name when the file does not exist.
+*
+* Revision 6.60  2004/03/29 21:02:57  rsmith
+* use better system functions to convert FSSpec to a path on Darwin
+*
+* Revision 6.59  2004/02/24 16:51:13  sinyakov
+* [WIN_MSWIN] Nlm_GetInput/OutputFileName now use current working
+* directory as default (as Motif version does)
+*
 * Revision 6.58  2004/02/03 23:36:21  sinyakov
 * Nlm_CheckThisLevel(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
 *
@@ -409,6 +422,7 @@ either.
 # endif
 # ifdef OS_UNIX_DARWIN
 #  include <LaunchServices.h>
+#  include <Files.h>
 # endif
 # include <Navigation.h>
 #endif
@@ -4632,16 +4646,42 @@ extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
 
 /* new code calling MoreFiles */
 extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
-
-
 {
   OSErr        err;
+#ifdef OS_UNIX_DARWIN
+  const Nlm_Int4    maxPathLen = 256;
+  FSRef             fsref;
+  
+  err = FSpMakeFSRef(fss, &fsref);
+  if (err == noErr) {
+    /* if the file exists we can use this. */
+    err = FSRefMakePath(&fsref, (Nlm_UcharPtr) filename, maxPathLen);
+  } else if (err == fnfErr) {
+    /* if the file does not exist we make the path of the parent directory 
+      and tack on the name of the file when done. */
+    FSSpec parentFSS = *fss;
+    parentFSS.name[0] =  '\0';
+    err = FSpMakeFSRef(&parentFSS, &fsref);
+    if (err == noErr) {
+      err = FSRefMakePath(&fsref, (Nlm_UcharPtr) filename, maxPathLen);  
+      if (err == noErr) {
+        Nlm_StrCat(filename, "/");
+        /* fss->name is a pascal string. */
+        Nlm_StrNCat(filename, (char *) &fss->name[1], fss->name[0]);
+      }
+    }
+  }
+  
+  /* if there were any errors make sure the filename is blank. */
+  if (err != noErr) {
+      filename[0] = '\0';
+  }
+  
+#else // OS_UNIX_DARWIN
+
   short        fullPathLen;
   Handle       fullPath = NULL;
   Nlm_CharPtr  str;
-#ifdef OS_UNIX_DARWIN
-  Nlm_CharPtr  ptr;
-#endif
 
   if (fss == NULL || filename == NULL) return;
   *filename = '\0';
@@ -4659,20 +4699,7 @@ extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
     if (fullPathLen > 0 && fullPathLen < 255) {
       str [(int) fullPathLen] = '\0';
     }
-#ifdef OS_UNIX_DARWIN
-	ptr = StringChr (str, ':'); /* skip the volume name */
-	if (ptr == NULL) {
-	  ptr = str;
-	}
-	StringCpy (filename, ptr);
-    for (ptr = filename; *ptr != '\0'; ptr++) {
-      if (*ptr == ':') {
-        *ptr = '/';
-      }
-    }
-#else
     Nlm_StringCpy (filename, str);
-#endif
   }
   HUnlock ((Ptr *) fullPath);
   DisposeHandle ((Ptr *) fullPath);
@@ -4680,7 +4707,9 @@ extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename )
   Nlm_HandUnlock (fullPath);
   Nlm_HandFree (fullPath);
   */
+#endif // OS_UNIX_DARWIN
 }
+
 
 #else
 
@@ -4948,13 +4977,10 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
   UINT  cbString;
   char  chReplace;
   char  szFilter [256];
-  char  *lastSlash;
 
-  GetModuleFileName (Nlm_currentHInst, szDirName, sizeof (szDirName));
-  lastSlash = Nlm_StringRChr (szDirName, DIRDELIMCHR);
-  if (lastSlash != NULL) {
-    lastSlash [1] = '\0';
-  }
+  /* Get the current working directory: */
+  szDirName[0] = '\0';
+  _getcwd(szDirName, sizeof (szDirName));
   szFile [0] = '\0';
   if (extType != NULL && extType [0] != '\0') {
     Nlm_StringCpy (szFilter, "Filtered Files (*");
@@ -5073,14 +5099,18 @@ extern Nlm_Boolean Nlm_GetInputFileName (Nlm_CharPtr fileName, size_t maxsize,
 #ifdef WIN_MSWIN
 static void Nlm_CopyDefaultName (Nlm_CharPtr dst, Nlm_CharPtr src)
 {
+  /*
   Nlm_Char  ch;
   Nlm_Int2  i;
   Nlm_Int2  j;
   Nlm_Int2  k;
+  */
 
   if (dst == NULL  ||  src == NULL)
     return;
-
+  Nlm_StringCpy(dst, src);
+  
+  /*
   i = 0;
   j = 0;
   k = 0;
@@ -5114,6 +5144,7 @@ static void Nlm_CopyDefaultName (Nlm_CharPtr dst, Nlm_CharPtr src)
     }
 
   dst[j] = '\0';
+  */
 }
 #endif
 
@@ -5272,13 +5303,10 @@ extern Nlm_Boolean Nlm_GetOutputFileName (Nlm_CharPtr fileName, size_t maxsize,
   UINT  cbString;
   char  chReplace;
   char  szFilter [256];
-  char  *lastSlash;
 
-  GetModuleFileName (Nlm_currentHInst, szDirName, sizeof (szDirName));
-  lastSlash = Nlm_StringRChr (szDirName, DIRDELIMCHR);
-  if (lastSlash != NULL) {
-    lastSlash [1] = '\0';
-  }
+  /* Get the current working directory: */
+  szDirName[0] = '\0';
+  _getcwd(szDirName, sizeof (szDirName));
   szFile [0] = '\0';
   Nlm_CopyDefaultName ((Nlm_CharPtr) szFile, dfault);
   Nlm_StringCpy (szFilter, "All Files (*.*)|*.*|");

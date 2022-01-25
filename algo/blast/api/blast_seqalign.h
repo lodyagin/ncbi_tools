@@ -1,4 +1,4 @@
-/* $Id: blast_seqalign.h,v 1.12 2003/12/03 17:30:26 dondosha Exp $
+/* $Id: blast_seqalign.h,v 1.13 2004/03/12 15:18:53 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions to convert BLAST results to the SeqAlign form
 
 ******************************************************************************
- * $Revision: 1.12 $
+ * $Revision: 1.13 $
  * */
 #ifndef __BLAST_SEQALIGN__
 #define __BLAST_SEQALIGN__
@@ -66,6 +66,17 @@ Int2 BLAST_ResultsToSeqAlign(Uint1 program_number, BlastHSPResults* results,
         SeqLocPtr query_slp, BlastSeqSrc* bssp, SeqLocPtr subject_slp, 
         BlastScoringOptions* score_options, BlastScoreBlk* sbp,
         Boolean is_gapped, SeqAlignPtr* head_seqalign);
+
+Boolean GapCollectDataForSeqalign(GapEditBlock* edit_block,
+                                  GapEditScript* curr_in, Int4 numseg,
+                                  Int4** start_out,
+                                  Int4** length_out,
+                                  Uint1** strands_out,
+                                  Int4* start1, Int4* start2);
+
+SeqAlignPtr LIBCALL GapEditBlockToSeqAlign(GapEditBlock* edit_block,
+                                           SeqIdPtr subject_id,
+                                           SeqIdPtr query_id);
 
 #ifdef __cplusplus
 }

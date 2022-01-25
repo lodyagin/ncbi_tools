@@ -4,6 +4,9 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.38  2004/03/02 17:15:44  kans
+* added GBQUAL_allele to -10_signal and -35_signal
+*
 * Revision 6.37  2003/10/07 17:05:58  kans
 * added allele and operon to many features
 *
@@ -720,15 +723,15 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_locus_tag, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"-10_signal",  0, {-1, -1, -1, -1, -1}, 12,
-     {GBQUAL_citation,GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_gene,
+   {"-10_signal",  0, {-1, -1, -1, -1, -1}, 13,
+     {GBQUAL_allele, GBQUAL_citation,GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_gene,
      GBQUAL_label, GBQUAL_map,GBQUAL_note,GBQUAL_partial, 
      GBQUAL_standard_name, GBQUAL_usedin,
       GBQUAL_locus_tag, GBQUAL_operon, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"-35_signal",  0, {-1, -1, -1, -1, -1}, 12,
-     {GBQUAL_citation,GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_gene,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
+   {"-35_signal",  0, {-1, -1, -1, -1, -1}, 13,
+     {GBQUAL_allele, GBQUAL_citation,GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_gene,
      GBQUAL_label, GBQUAL_map,GBQUAL_note,GBQUAL_partial, 
      GBQUAL_standard_name, GBQUAL_usedin,
       GBQUAL_locus_tag, GBQUAL_operon, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,

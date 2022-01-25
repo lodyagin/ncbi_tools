@@ -1,4 +1,4 @@
-/*  $Id: debug_server.c,v 6.8 2002/08/07 18:45:19 lavr Exp $
+/*  $Id: debug_server.c,v 6.9 2004/04/01 13:43:06 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: debug_server.c,v $
+* Revision 6.9  2004/04/01 13:43:06  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.8  2002/08/07 18:45:19  lavr
 * Change from deprecated to current EIO_ReadMethod enums
 *
@@ -236,7 +239,7 @@ static size_t s_ErrTotal = 0;  /* # of bytes read from the server STDERR */
 typedef enum {
   eIOS_Success,  /* available for i/o */
   eIOS_Timeout,  /* timeout expired */
-  eIOS_Error     /* error occured */
+  eIOS_Error     /* error occurred */
 } EIOStatus;
 
 

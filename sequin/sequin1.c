@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.431 $
+* $Revision: 6.450 $
 *
 * File Description: 
 *
@@ -86,6 +86,8 @@ static char *time_of_compilation = "now";
 #include <ddvopen.h>
 #include <dotseq.h>
 #include <ingenwin.h>
+#include <util/creaders/alnread.h>
+#include <sqnutils.h>
 
 /* USE_SMARTNET */
 #ifdef USE_SMARTNET
@@ -123,7 +125,11 @@ static char *time_of_compilation = "now";
 #include <spellapi.h>
 #endif
 
-#define SEQ_APP_VER "5.16"
+#ifdef OS_MAC
+#include <Gestalt.h>
+#endif
+
+#define SEQ_APP_VER "5.22"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -1187,7 +1193,7 @@ static void SmartnetDoneFunc (BaseFormPtr bfp)
     ObjMgrDataPtr omdp;  
     OMUserDataPtr omudp;
     SMUserDataPtr sm_usr_data;
-    Uint2         entityID;
+/*    Uint2         entityID; */
 
     Boolean       resetUpdateDate = TRUE;
     ValNodePtr    vnp;
@@ -2692,6 +2698,7 @@ static CharPtr FGetLine (FILE *fp)
 #define SQACT_TXTALN 1
 #define SQACT_NOTTXTALN 2
 
+
 static Int4 SQACT_GuessWhatIAm (FILE *fp)
 {
    Boolean  found;
@@ -2700,10 +2707,10 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
    Int4     prevlen;
    Int4     seq;
    CharPtr  tmp;
+   ValNodePtr current_data = NULL;
 
    if (fp == NULL) return SQACT_NOTTXTALN;
-   line = NULL;
-   line = FGetLine(fp);
+   line = MyFGetLine (fp, &current_data);
    found = FALSE;
    while (line != NULL && !found) /* find first non-empty line */
    {
@@ -2711,24 +2718,32 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
       {
          if (StringLen(line) > 0)
             found = TRUE;
-      } else
+      } 
+      else
       {
          MemFree(line);
-         line = FGetLine(fp);
+         line = MyFGetLine (fp, &current_data);
       }
    }
-   if (!found)
-      return -1;
+   if (!found) 
+   {
+     FreeBufferedReadList (current_data);
+     return -1;
+   }
    tmp = StringStr(line, "::="); /* ASN.1 */
    if (tmp != NULL)
    {
       MemFree(line);
+      line = NULL;
+      FreeBufferedReadList (current_data);
       return SQACT_NOTTXTALN;
    }
    tmp = StringStr(line, "LOCUS");  /* GenBank flat file */
    if (tmp != NULL)
    {
       MemFree(line);
+      line = NULL;
+      FreeBufferedReadList (current_data);
       return SQACT_NOTTXTALN;
    }
    if (line[0] == '>')  /* FASTA sequences or FASTA alignment */
@@ -2745,10 +2760,12 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
           StringNCmp (line, ">Virtual", 8) == 0 ||
           StringNCmp (line, ">Message", 8) == 0) {
         MemFree(line);
+        line = NULL;
+        FreeBufferedReadList (current_data);
       	return SQACT_NOTTXTALN;
       }
       MemFree(line);
-      line = FGetLine(fp);
+      line = MyFGetLine (fp, &current_data);
       prevlen = -1;
       len = 0;
       seq = 0;
@@ -2761,32 +2778,42 @@ static Int4 SQACT_GuessWhatIAm (FILE *fp)
             if (tmp != NULL)  /* found a gap -> alignment */
             {
                MemFree(line);
+               line = NULL;
+               FreeBufferedReadList (current_data);
                return SQACT_TXTALN;
             }
             len += StringLen(line);
             MemFree(line);
-            line = FGetLine(fp);
+            line = MyFGetLine (fp, &current_data);
          }
          if (line != NULL)
          {
             MemFree(line);
-            line = FGetLine(fp);
+            line = MyFGetLine (fp, &current_data);
          }
          if (prevlen == -1)
             prevlen = len;
          if (len != prevlen)  /* sequences of different length -> FASTA seq */
          {
             MemFree(line);
+            line = NULL;
+            FreeBufferedReadList (current_data);
             return SQACT_NOTTXTALN;
          }
       }
-      if (seq > 1)
+      MemFree (line);
+      line = NULL;
+      FreeBufferedReadList (current_data);
+      current_data = NULL;
+      if (seq > 1) 
          return SQACT_TXTALN;
       else
          return SQACT_NOTTXTALN;
    } else
    {
       MemFree(line);
+      line = NULL;
+      FreeBufferedReadList (current_data);
       return SQACT_TXTALN;  /* NEXUS, PHYLIP, etc */
    }
 }
@@ -2986,6 +3013,431 @@ static Boolean CommonReadNewAsnProc (Handle obj, Boolean removeold, Boolean askF
   ArrowCursor ();
   return rsult;
 }
+
+static void FinishAlignmentRead (Handle obj, SeqEntryPtr sep, CharPtr path) {
+  BaseFormPtr  bfp;
+  Pointer      dataptr;
+  Uint2        datatype;
+  Uint2        entityID;
+  Boolean      rsult;
+  Uint2        updateEntityID;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (obj);
+#endif
+
+  VisitBioseqsInSep (sep, NULL, SQACT_FixBioseqs);
+  if (IS_Bioseq (sep)) {
+    datatype = OBJ_BIOSEQ;
+  } else {
+    datatype = OBJ_BIOSEQSET;
+  }
+  dataptr = (Pointer) sep->data.ptrvalue;
+  entityID = ObjMgrRegister (datatype, dataptr);
+  rsult = HandleOneNewAsnProc (bfp, FALSE, FALSE, path,
+                               dataptr, datatype, entityID, &updateEntityID);
+  if (updateEntityID != 0) {
+    ObjMgrSetDirtyFlag (updateEntityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, updateEntityID, 0, 0);
+  }
+}
+
+
+static void PrintExtraErrorInstructions (FILE *fp, CharPtr message)
+{
+  CharPtr explanation, end;
+  Char    tmp;
+  if (fp == NULL || message == NULL) return;
+
+  if (StringStr (message, "bad characters") == NULL
+      && StringStr (message, " found at position ") == NULL) {
+    return;
+  }
+
+  explanation = StringRChr (message, '(');
+  if (explanation == NULL) return;
+  if (StringNCmp (explanation, "(expect only ", 13) == 0) {
+    end = StringStr (explanation + 13, " here)");
+    if (end != NULL) {
+      tmp = *end;
+      *end = 0;
+    }
+    fprintf (fp, 
+             "Try changing the sequence character specifications for %s.\n",
+             explanation + 13);
+    if (StringNCmp (explanation + 13, "beginning", 9) == 0) {
+      fprintf (fp, 
+"\nWhen some of the sequences in an alignment are shorter or "
+"longer than others, beginning gap characters are added to "
+"the beginning of the sequence to maintain the correct spacing."
+"  These will not appear in your sequence file.\n");
+    } else if (StringNCmp (explanation + 13, "end", 3) == 0) {
+      fprintf (fp,
+"\nWhen some of the sequences in an alignment are shorter or "
+"longer than others, end gap characters are added to "
+"the end of the sequence to maintain the correct spacing."
+"  These will not appear in your sequence file.\n");
+    } else {
+      fprintf (fp,
+"\nMiddle gap characters are used to maintain the spacing "
+"inside an alignment.  These are not nucleotides and will "
+"not appear as part of your sequence file.\n"
+"Missing characters are used to represent indeterminate/ambiguous "
+"nucleotides.  These will appear in your sequence file as 'n'.\n"
+"Match characters are used to indicate positions where "
+"sequences are identical to the first sequence.  These will be "
+"replaced by the actual characters from the first sequence.\n");
+    }
+    if (end != NULL) {
+      *end = tmp;
+    }
+  } else if (StringCmp (explanation, 
+                        "(can't specify match chars in first sequence).") == 0) {
+    fprintf (fp, "Try changing the match character specification.\n");
+    fprintf (fp,
+"\nMatch characters are used to indicate positions where "
+"sequences are identical to the first sequence.  These will be "
+"replaced by the actual characters from the first sequence.\n");
+  }
+}
+static void PrintError (FILE *fp, TErrorInfoPtr eip)
+{
+  if (eip == NULL || fp == NULL) return;
+
+  fprintf (fp, "*****\nError category %d\n", eip->category);
+  if (eip->line_num > -1) {
+    fprintf (fp, "Line number %d\n", eip->line_num);
+  }
+  if (eip->id != NULL) {
+    fprintf (fp, "Sequence ID %s\n", eip->id);
+  }
+  if (eip->message != NULL) {
+    fprintf (fp, "%s\n", eip->message);
+    PrintExtraErrorInstructions (fp, eip->message);
+  }
+}
+  
+static void WalkErrorList (TErrorInfoPtr list, FILE *fp)
+{
+  TErrorInfoPtr eip;
+  
+  if (list == NULL || fp == NULL) return;
+
+  for (eip = list; eip != NULL; eip = eip->next) {
+    PrintError (fp, eip);
+  }
+
+}
+
+static void PrintAlignmentSummary (TAlignmentFilePtr afp, FILE *fp)
+{
+  Int4         index;
+
+  if (fp == NULL) return;
+
+  if (afp == NULL) {
+    fprintf (fp, "Catastrophic failure during reading\n");
+  } else {
+    fprintf (fp, "Found %d sequences\n", afp->num_sequences);
+    fprintf (fp, "Found %d organisms\n", afp->num_organisms);
+    for (index = 0; index < afp->num_sequences; index++)
+    {
+      fprintf (fp, "\t%s\t", afp->ids [index]);
+      if (index < afp->num_organisms) {
+        fprintf (fp, "%s\n", afp->organisms [index]);
+      } else {
+        fprintf (fp, "No organism information\n");
+      }
+    }
+    while (index < afp->num_organisms) {
+      fprintf (fp, "Unclaimed organism: %s\n", afp->organisms [index]);
+      index++;
+    }
+  }
+}
+
+static void 
+ProduceAlignmentNotes 
+(TAlignmentFilePtr afp,
+ TErrorInfoPtr error_list)
+{
+  Char         path [PATH_MAX];
+  FILE         *fp;
+
+  TmpNam (path);
+  fp = FileOpen (path, "wb");
+  if (fp == NULL) return;
+
+  WalkErrorList (error_list, fp);
+  PrintAlignmentSummary (afp, fp);
+
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Alignment reading summary");
+  FileRemove (path);
+}
+
+typedef struct alphabetformdata {
+  FEATURE_FORM_BLOCK
+
+  TexT  missing;
+  TexT  beginning_gap;
+  TexT  middle_gap;
+  TexT  end_gap;
+  TexT  match;
+  PopuP sequence_type;
+  Handle obj;
+  Char  path [PATH_MAX];
+  FILE  *fp;
+} AlphabetFormData, PNTR AlphabetFormPtr;
+
+static Boolean DoSequenceLengthsMatch (TAlignmentFilePtr afp)
+{
+  int    seq_index;
+  Int4   seq_len;
+
+  if (afp == NULL || afp->sequences == NULL || afp->num_sequences == 0) {
+    return TRUE;
+  }
+  seq_len = StringLen (afp->sequences[0]);
+  for (seq_index = 1; seq_index < afp->num_sequences; seq_index++) {
+    if (StringLen (afp->sequences[seq_index]) != seq_len) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+extern SeqEntryPtr 
+SeqEntryFromAlignmentFile 
+(FILE *fp,
+ CharPtr missing,
+ CharPtr match,
+ CharPtr beginning_gap,
+ CharPtr middle_gap,
+ CharPtr end_gap,
+ CharPtr alphabet,
+ Uint1   moltype,
+ CharPtr no_org_err_msg)
+{
+  TSequenceInfoPtr  sequence_info;
+  TErrorInfoPtr     error_list;
+  ReadBufferData    rbd;
+  TAlignmentFilePtr afp;
+  SeqEntryPtr       sep = NULL;
+  MsgAnswer         ans;
+
+  if (fp == NULL) return NULL;
+
+  sequence_info = SequenceInfoNew ();
+  if (sequence_info == NULL) return NULL;
+
+  MemFree (sequence_info->missing);
+  sequence_info->missing = StringSave (missing);
+  MemFree (sequence_info->beginning_gap);
+  sequence_info->beginning_gap = StringSave (beginning_gap);
+  MemFree (sequence_info->middle_gap);
+  sequence_info->middle_gap = StringSave (middle_gap);
+  MemFree (sequence_info->end_gap);
+  sequence_info->end_gap = StringSave (end_gap);
+  MemFree (sequence_info->match);
+  sequence_info->match = StringSave (match);
+  MemFree (sequence_info->alphabet);
+  sequence_info->alphabet = StringSave (alphabet);
+
+  error_list = NULL;
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+  afp = ReadAlignmentFile ( AbstractReadFunction,
+                            (Pointer) &rbd,
+                            AbstractReportError,
+                            (Pointer) &error_list,
+                            sequence_info);
+
+  ProduceAlignmentNotes (afp, error_list);
+  ErrorInfoFree (error_list);
+  if (afp != NULL) {
+    if (afp->num_organisms == 0 && no_org_err_msg != NULL) {
+      Message (MSG_ERROR, no_org_err_msg);
+    } else if (afp->num_organisms != 0 && afp->num_organisms != afp->num_sequences) {
+      Message (MSG_ERROR, "Number of organisms must match number of sequences!");
+    } else {
+      ans = ANS_YES;
+      if (! DoSequenceLengthsMatch (afp)) {
+        ans = Message (MSG_YN, "Sequences are not all the same length - are you sure you want to continue?");
+      }
+      if (ans == ANS_YES) {
+        sep = MakeSequinDataFromAlignment (afp, moltype);
+      }
+    }
+  }
+  SequenceInfoFree (sequence_info);
+
+  AlignmentFileFree (afp);
+  return sep;
+}
+
+static void DoReadAlignment (ButtoN b)
+{
+  AlphabetFormPtr  abc;
+  TAlignmentFilePtr afp;
+  TErrorInfoPtr     error_list;
+  Char             missing [15];
+  Char             beginning_gap [15];
+  Char             middle_gap [15];
+  Char             end_gap [15];
+  Char             match [15];
+  TSequenceInfoPtr  sequence_info;
+  Char             nucleotide_alphabet[] = "ABCDGHKMRSTUVWXYabcdghkmrstuvwxy";
+  Char             protein_alphabet[] = "ABCDEFGHIKLMPQRSTUVWXYZabcdefghiklmpqrstuvwxyz";
+  SeqEntryPtr      sep;
+  Uint1            moltype;
+  ReadBufferData   rbd;
+
+  abc = GetObjectExtra (b);
+  if (abc == NULL) return;
+  Hide (abc->form);
+  Update ();
+
+  sequence_info = SequenceInfoNew ();
+  if (sequence_info == NULL) return;
+
+
+  WatchCursor ();
+  Update ();
+
+  GetTitle (abc->missing, missing, sizeof (missing) -1);
+  GetTitle (abc->beginning_gap, beginning_gap, sizeof (beginning_gap) - 1);
+  GetTitle (abc->middle_gap, middle_gap, sizeof (middle_gap) - 1);
+  GetTitle (abc->end_gap, end_gap, sizeof (end_gap) - 1);
+  GetTitle (abc->match, match, sizeof (match) - 1);
+  if (GetValue (abc->sequence_type) == 1) {
+    sequence_info->alphabet = StringSave (nucleotide_alphabet);
+    moltype = Seq_mol_na;
+  } else {
+    sequence_info->alphabet = StringSave (protein_alphabet);
+    moltype = Seq_mol_aa;
+  }
+
+  MemFree (sequence_info->missing);
+  sequence_info->missing = StringSave (missing);
+  MemFree (sequence_info->beginning_gap);
+  sequence_info->beginning_gap = StringSave (beginning_gap);
+  MemFree (sequence_info->middle_gap);
+  sequence_info->middle_gap = StringSave (middle_gap);
+  MemFree (sequence_info->end_gap);
+  sequence_info->end_gap = StringSave (end_gap);
+  MemFree (sequence_info->match);
+  sequence_info->match = StringSave (match);
+
+  error_list = NULL;
+  rbd.fp = abc->fp;
+  rbd.current_data = NULL;
+  afp = ReadAlignmentFile ( AbstractReadFunction,
+                            (Pointer) &rbd,
+                            AbstractReportError,
+                            (Pointer) &error_list,
+                            sequence_info);
+  if (afp != NULL) {
+      sep = MakeSequinDataFromAlignment (afp, moltype);
+      FinishAlignmentRead (abc->obj, sep, abc->path);
+  }
+  ProduceAlignmentNotes (afp, error_list);
+  ErrorInfoFree (error_list);
+  SequenceInfoFree (sequence_info);
+
+  AlignmentFileFree (afp);
+  FileClose (abc->fp);
+  abc->fp = NULL;
+  ArrowCursor ();
+  Update ();
+  Remove (abc->form);
+}
+
+/* Need cleanup for Alphabet Dialog to close File Pointer */
+static void CleanupAlphabetDialog (GraphiC g, VoidPtr data)
+{
+    AlphabetFormPtr afp;
+
+    afp = (AlphabetFormPtr) data;
+    if (afp != NULL && afp->fp != NULL) {
+        FileClose (afp->fp);
+        afp->fp = NULL;
+    }
+    StdCleanupFormProc (g, data);
+}
+
+static void BuildGetAlphabetDialog (IteM i)
+{
+  BaseFormPtr        bfp;
+  ButtoN             b;
+  GrouP              c, h, g;
+  AlphabetFormPtr    afp;
+  WindoW             w;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  afp = (AlphabetFormPtr) MemNew (sizeof (AlphabetFormData));
+  if (afp == NULL) return;
+  afp->obj = i;
+
+  if (! GetInputFileName (afp->path, sizeof (afp->path), NULL, "TEXT")) return;
+
+  afp->fp = FileOpen (afp->path, "r");
+  if (afp->fp == NULL)
+  {
+    Message (MSG_ERROR, "Unable to open file");
+    return;
+  }
+
+  w = FixedWindow (-50, -33, -10, -10, "Alignment Alphabet", StdCloseWindowProc);
+  SetObjectExtra (w, afp, CleanupAlphabetDialog);
+  afp->form = (ForM) w;
+  afp->formmessage = NULL;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  g = HiddenGroup (h, 2, 4, NULL);
+  StaticPrompt (g, "Missing", 0, dialogTextHeight, programFont, 'c');
+  afp->missing = DialogText (g, "?", 5, NULL);
+  StaticPrompt (g, "Match", 0, dialogTextHeight, programFont, 'c');
+  afp->match = DialogText (g, ".", 5, NULL);
+  StaticPrompt (g, "Beginning Gap", 0, dialogTextHeight, programFont, 'c');
+  afp->beginning_gap = DialogText (g, "-.nN", 5, NULL);
+  StaticPrompt (g, "Middle Gap", 0, dialogTextHeight, programFont, 'c');
+  afp->middle_gap = DialogText (g, "-nN", 5, NULL);
+  StaticPrompt (g, "End Gap", 0, dialogTextHeight, programFont, 'c');
+  afp->end_gap = DialogText (g, "-?", 5, NULL);
+  StaticPrompt (g, "Sequence Type", 0, dialogTextHeight, programFont, 'c');
+  afp->sequence_type = PopupList (g, TRUE, NULL);
+  PopupItem (afp->sequence_type, "Nucleotide");
+  PopupItem (afp->sequence_type, "Protein");
+  SetValue (afp->sequence_type, 1);
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  b = DefaultButton (c, "Accept", DoReadAlignment);
+  SetObjectExtra (b, afp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+}
+
+extern void ReadAlignment (IteM i)
+{
+  BuildGetAlphabetDialog (i);
+
+}
+
 
 static void ReadNewAsnProc (IteM i)
 
@@ -3969,7 +4421,7 @@ static void CloseProc (BaseFormPtr bfp)
               ObjMgrGetUserData(bfp->input_entityID, 0, 0, SMART_KEY)) != NULL) {
               if((sm_usr_data = 
                   (SMUserDataPtr) omudp->userdata.ptrvalue) != NULL && 
-                 sm_usr_data->fd != NULL) {
+                 sm_usr_data->fd != (int) NULL) {
                   sm_usr_data->header->status = SMStatClosed;
                   SMSendMsgToClient(sm_usr_data); 
               }
@@ -5657,6 +6109,8 @@ static void SqnReadAlignViewEx (BioseqPtr target_bsp, SeqEntryPtr source_sep, In
   MsgAnswer   ans;
   SeqEntryPtr target_sep;
   Uint2       entityID;
+  Boolean     asked_about_prop = FALSE;
+  Boolean     propagate_descriptors = FALSE;
  
   if (target_bsp==NULL)  
      return;
@@ -5666,8 +6120,8 @@ static void SqnReadAlignViewEx (BioseqPtr target_bsp, SeqEntryPtr source_sep, In
      if (SeqEntryHasPubs (source_sep) || SeqEntryHasPubs (target_sep)) {
        ans = Message (MSG_YN, convPubDescMssg);
        if (ans == ANS_YES) {
-         ConvertPubSrcComDescsToFeats (source_sep, TRUE, FALSE, FALSE, FALSE);
-         ConvertPubSrcComDescsToFeats (target_sep, TRUE, FALSE, FALSE, FALSE);
+         ConvertPubSrcComDescsToFeats (source_sep, TRUE, FALSE, FALSE, FALSE, &asked_about_prop, &propagate_descriptors, NULL);
+         ConvertPubSrcComDescsToFeats (target_sep, TRUE, FALSE, FALSE, FALSE, &asked_about_prop, &propagate_descriptors, NULL);
        }
      }
      if (IS_Bioseq_set(source_sep))
@@ -6223,6 +6677,8 @@ static void MedlineViewFormMenus (WindoW w)
   }
 }
 
+extern void NewUpdateSequenceNewBlast (IteM i);
+
 static void BioseqViewFormMenus (WindoW w)
 
 {
@@ -6385,6 +6841,8 @@ static void BioseqViewFormMenus (WindoW w)
     sub = SubMenu (m, "Update Sequence");
     SetFormMenuItem (bfp, mssgupd, (IteM) sub);
     i = CommandItem (sub, "Read FASTA File...", UpdateSeqWithFASTA);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (sub, "Read FASTA File, Use New BLAST...", NewUpdateSequenceNewBlast);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (sub, "Read Sequence Record...", UpdateSeqWithRec);
     SetObjectExtra (i, bfp, NULL);
@@ -8435,6 +8893,30 @@ static void SetupDesktop (void)
     }
   }
 
+  if (indexerVersion) {
+    if (seqviewprocs.minPixelWidth < 500) {
+      seqviewprocs.minPixelWidth = 500;
+    }
+    if (seqviewprocs.minPixelHeight < 600) {
+      seqviewprocs.minPixelHeight = 600;
+    }
+    if (txtviewprocs.minPixelWidth < 750) {
+      txtviewprocs.minPixelWidth = 750;
+    }
+    if (txtviewprocs.minPixelHeight < 600) {
+      txtviewprocs.minPixelHeight = 600;
+    }
+  }
+
+  if (screenRect.bottom < 780) {
+    if (seqviewprocs.minPixelHeight > 500) {
+      seqviewprocs.minPixelHeight = 500;
+    }
+    if (txtviewprocs.minPixelHeight > 500) {
+      txtviewprocs.minPixelHeight = 500;
+    }
+  }
+
   if (GetSequinAppParam ("PREFERENCES", "TEXTPIXELWIDTH", NULL, str, sizeof (str))) {
     if (StrToInt (str, &val) && val > 0) {
       val = MIN (val, screenRect.right);
@@ -8921,7 +9403,11 @@ static void SetupCommonFonts (void)
   seqviewprocs.displayFont = ChooseAFont ("DISPLAY", "Monaco,9");
 #endif
 #ifdef WIN_MSWIN
-  seqviewprocs.displayFont = ChooseAFont ("DISPLAY", "Courier New,10");
+  if (indexerVersion) {
+    seqviewprocs.displayFont = ChooseAFont ("DISPLAY", "Courier New,11");
+  } else {
+    seqviewprocs.displayFont = ChooseAFont ("DISPLAY", "Courier New,10");
+  }
 #endif
 #ifdef WIN_MOTIF
   seqviewprocs.displayFont = ChooseAFont ("DISPLAY", "Courier,10");
@@ -10666,6 +11152,9 @@ Int2 Main (void)
 #ifdef WIN_MOTIF
   RecT           r;
 #endif
+#if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
+  long           sysVer;
+#endif
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
@@ -10673,6 +11162,15 @@ Int2 Main (void)
 
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
+
+#if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
+  if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
+    /* system version in low order word is hexadecimal */
+    if (sysVer >= 4096) {
+      Message (MSG_OK, "You should consider running the MacOS X native version, SequinOSX");
+    }
+  }
+#endif
 
   ReadSettings ();
 

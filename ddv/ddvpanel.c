@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.c,v 1.107 2000/08/30 14:31:28 hurwitz Exp $
+/*  $Id: ddvpanel.c,v 1.108 2004/04/01 13:43:06 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.107 $
+* $Revision: 1.108 $
 *
 * File Description: window management module of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.c,v $
+* Revision 1.108  2004/04/01 13:43:06  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 1.107  2000/08/30 14:31:28  hurwitz
 * quick fix so build does not crash
 *
@@ -313,7 +316,7 @@
 * fix a problem of redeclaration of the function DDV_CloseData
 *
 * Revision 1.14  1999/11/30 14:17:31  durand
-* fix a bug occuring when deleting a SeqAlign
+* fix a bug occurring when deleting a SeqAlign
 *
 * Revision 1.13  1999/11/29 15:26:26  durand
 * designed a new GUI to fix problems under MacOS, Linux and SGI

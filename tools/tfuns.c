@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: tfuns.c,v 6.11 2003/05/30 17:25:38 coulouri Exp $";
+static char const rcsid[] = "$Id: tfuns.c,v 6.12 2004/04/01 13:43:08 lavr Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -801,7 +801,7 @@ CharPtr get_qvalue(GBQualPtr curq, CharPtr qual)
 
 /*****************************************************************************
 *   laststr:
-*     -- strstr, last occurance
+*     -- strstr, last occurrence
 ******************************************************************************/
 CharPtr laststr(CharPtr str, CharPtr word)
 {

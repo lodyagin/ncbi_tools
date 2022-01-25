@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.11  2004/03/10 15:19:47  kans
+* ParseMedline loops on journal, only saves one of iso-jta or ml-jta to avoid memory leak
+*
 * Revision 6.10  2003/09/28 20:22:47  kans
 * added PubmedEntryToXXXFile functions
 *
@@ -910,8 +913,10 @@ NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
   DatePtr          date;
   ValNodePtr       gene;
   ImprintPtr       imp;
+  CharPtr          iso_jta;
   CharPtr          last;
   MedlineMeshPtr   mesh;
+  CharPtr          ml_jta;
   MedlinePtr       mPtr = NULL;
   ValNodePtr       names;
   NameStdPtr       nsp;
@@ -933,15 +938,27 @@ NLM_EXTERN MedlinePtr ParseMedline (MedlineEntryPtr mep)
         if (cit->from == 1) {
           citjour = (CitJourPtr) cit->fromptr;
           if (citjour != NULL) {
+            iso_jta = NULL;
+            ml_jta = NULL;
             title = citjour->title;
             while (title != NULL) {
-              if (title->choice == 6 || title->choice == 5) {
-                AddString (title->data.ptrvalue);
-                AddString (" ");
-                mPtr->journal = StringSave (buffer);
-                ClearString ();
+              if (title->choice == 5) {
+                iso_jta = title->data.ptrvalue;
+              } else if (title->choice == 6) {
+                ml_jta = title->data.ptrvalue;
               }
               title = title->next;
+            }
+            if (iso_jta != NULL) {
+              AddString (iso_jta);
+              AddString (" ");
+              mPtr->journal = StringSave (buffer);
+              ClearString ();
+            } else if (ml_jta != NULL) {
+              AddString (ml_jta);
+              AddString (" ");
+              mPtr->journal = StringSave (buffer);
+              ClearString ();
             }
             imp = citjour->imp;
             if (imp != NULL) {

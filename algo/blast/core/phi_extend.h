@@ -1,4 +1,4 @@
-/* $Id: phi_extend.h,v 1.1 2003/09/09 22:04:02 dondosha Exp $
+/* $Id: phi_extend.h,v 1.2 2004/03/09 22:37:11 dondosha Exp $
 
 * ===========================================================================
 *
@@ -34,7 +34,7 @@ Contents: Word finder for PHI-BLAST
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.1 $
+ * $Revision: 1.2 $
  * */
 
 #include <algo/blast/core/blast_extend.h>
@@ -49,7 +49,7 @@ extern "C" {
 
 Int4 PHIBlastWordFinder(BLAST_SequenceBlk* subject, 
         BLAST_SequenceBlk* query, LookupTableWrap* lookup_wrap,
-        Int4** matrix, BlastInitialWordParameters* word_params,
+        Int4** matrix, const BlastInitialWordParameters* word_params,
         BLAST_ExtendWord* ewp, Uint4* q_offsets, Uint4* s_offsets,
         Int4 max_hits, BlastInitHitList* init_hitlist);
 

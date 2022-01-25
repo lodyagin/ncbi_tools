@@ -29,13 +29,22 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.144 $
+* $Revision: 6.147 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.147  2004/03/30 20:29:33  kans
+* in static std_order array within SeqIdBestRank, demoted gibbsq, gibbmt, and patent
+*
+* Revision 6.146  2004/03/16 22:08:31  kans
+* added CL to WHICH_db_accession as NCBI EST
+*
+* Revision 6.145  2004/03/15 18:42:59  coulouri
+* Handle memory allocation failure gracefully with BSRebuildDNA_4na
+*
 * Revision 6.144  2004/01/16 16:37:01  kans
 * added CM as scaffold/CON record
 *
@@ -1672,7 +1681,10 @@ NLM_EXTERN ByteStorePtr BSRebuildDNA_4na (ByteStorePtr from, Uint4Ptr lbytes)
         return from;
     
     bs_length = BSLen(from);
-    buffer = (Uint1Ptr) MemNew(bs_length + sizeof(Char));
+    buffer = (Uint1Ptr) Nlm_Malloc(bs_length);
+    if (buffer == NULL)
+        return NULL;
+
     BSSeek(from, 0, SEEK_SET);
 
     if((num_bytes = BSRead(from, buffer, bs_length)) != bs_length)
@@ -2976,24 +2988,24 @@ NLM_EXTERN Int2 SeqIdBestRank (Uint1Ptr buf, Int2 num)
 	static Uint1 std_order[NUM_SEQID] = {
  	83, /* 0 = not set */
 	80, /* 1 = local Object-id */
-	55,  /* 2 = gibbsq */
-	56,  /* 3 = gibbmt */
+	70,  /* 2 = gibbsq */
+	70,  /* 3 = gibbmt */
 	70, /* 4 = giim Giimport-id */
 	60, /* 5 = genbank */
 	60, /* 6 = embl */
 	60, /* 7 = pir */
 	60, /* 8 = swissprot */
-	55,  /* 9 = patent */
+	67,  /* 9 = patent */
 	65, /* 10 = other TextSeqId */
 	80, /* 11 = general Dbtag */
 	51,  /* 12 = gi */
 	60, /* 13 = ddbj */
 	60, /* 14 = prf */
 	60, /* 15 = pdb */
-        60,  /* 16 = tpg */
-        60,  /* 17 = tpe */
-        60   /* 18 = tpd */
-    };
+	60,  /* 16 = tpg */
+	60,  /* 17 = tpe */
+	60   /* 18 = tpd */
+	};
 
 	if (buf == NULL) return NUM_SEQID;
 
@@ -8781,7 +8793,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"CB") == 0) || 
 	      (StringICmp(temp,"CD") == 0) || 
 	      (StringICmp(temp,"CF") == 0) || 
-	      (StringICmp(temp,"CK") == 0) ) {                /* NCBI EST */
+	      (StringICmp(temp,"CK") == 0) || 
+	      (StringICmp(temp,"CL") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;

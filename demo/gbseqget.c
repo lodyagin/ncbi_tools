@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/4/02
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description:  Demo to fetch by accession, write GBSet XML
 *
@@ -164,7 +164,7 @@ static void DoSeqEntryToGnbk (
 
 {
   CstType  cust = SHOW_TRANCRIPTION | SHOW_PEPTIDE;
-  FlgType  flags = SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ;
+  FlgType  flags = SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ | PRODUCE_OLD_GBSEQ;
   Boolean  isGED;
   Boolean  isNTorNW;
   Boolean  isNC;
@@ -438,7 +438,7 @@ Int2 Main (void)
     return 1;
   }
 
-  if (! GetArgs ("fetchgbseq", sizeof (myargs) / sizeof (Args), myargs)) {
+  if (! GetArgs ("gbseqget", sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 

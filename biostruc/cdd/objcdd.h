@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Jan 15, 2004  1:40 PM
+*    Generated using ASNCODE Revision: 6.14 at Apr 28, 2004  4:00 PM
 *
 **************************************************/
 
@@ -180,6 +180,27 @@ NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesFree PROTO ((CddPrefNodesPtr ));
 NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesNew PROTO (( void ));
 NLM_EXTERN CddPrefNodesPtr LIBCALL CddPrefNodesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL CddPrefNodesAsnWrite PROTO (( CddPrefNodesPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddProject
+*
+**************************************************/
+typedef struct struct_Cdd_Project {
+   struct struct_Cdd PNTR   cds;
+   ValNodePtr   cdcolor;
+   struct struct_Cdd_Viewer PNTR   viewers;
+   CharPtr   log;
+   struct struct_Cdd_Script PNTR   scripts;
+} CddProject, PNTR CddProjectPtr;
+
+
+NLM_EXTERN CddProjectPtr LIBCALL CddProjectFree PROTO ((CddProjectPtr ));
+NLM_EXTERN CddProjectPtr LIBCALL CddProjectNew PROTO (( void ));
+NLM_EXTERN CddProjectPtr LIBCALL CddProjectAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddProjectAsnWrite PROTO (( CddProjectPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -657,6 +678,66 @@ NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationFree PROTO ((NodeAnnotationPt
 NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationNew PROTO (( void ));
 NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL NodeAnnotationAsnWrite PROTO (( NodeAnnotationPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddViewerRect
+*
+**************************************************/
+typedef struct struct_Cdd_Viewer_Rect {
+   Int4   top;
+   Int4   left;
+   Int4   width;
+   Int4   height;
+} CddViewerRect, PNTR CddViewerRectPtr;
+
+
+NLM_EXTERN CddViewerRectPtr LIBCALL CddViewerRectFree PROTO ((CddViewerRectPtr ));
+NLM_EXTERN CddViewerRectPtr LIBCALL CddViewerRectNew PROTO (( void ));
+NLM_EXTERN CddViewerRectPtr LIBCALL CddViewerRectAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddViewerRectAsnWrite PROTO (( CddViewerRectPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddViewer
+*
+**************************************************/
+typedef struct struct_Cdd_Viewer {
+   struct struct_Cdd_Viewer PNTR next;
+   Int4   ctrl;
+   struct struct_Cdd_Viewer_Rect PNTR   rect;
+   ValNodePtr   accessions;
+} CddViewer, PNTR CddViewerPtr;
+
+
+NLM_EXTERN CddViewerPtr LIBCALL CddViewerFree PROTO ((CddViewerPtr ));
+NLM_EXTERN CddViewerPtr LIBCALL CddViewerNew PROTO (( void ));
+NLM_EXTERN CddViewerPtr LIBCALL CddViewerAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddViewerAsnWrite PROTO (( CddViewerPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    CddScript
+*
+**************************************************/
+typedef struct struct_Cdd_Script {
+   struct struct_Cdd_Script PNTR next;
+   Int4   type;
+   CharPtr   name;
+   CharPtr   commands;
+} CddScript, PNTR CddScriptPtr;
+
+
+NLM_EXTERN CddScriptPtr LIBCALL CddScriptFree PROTO ((CddScriptPtr ));
+NLM_EXTERN CddScriptPtr LIBCALL CddScriptNew PROTO (( void ));
+NLM_EXTERN CddScriptPtr LIBCALL CddScriptAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddScriptAsnWrite PROTO (( CddScriptPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

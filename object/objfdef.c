@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -187,9 +187,9 @@ erret:
 *
 *   FeatDefAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN FeatDefPtr LIBCALL FeatDefAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -316,9 +316,9 @@ erret:
 *
 *   FeatDefSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN FeatDefPtr LIBCALL FeatDefSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -442,9 +442,9 @@ erret:
 *
 *   FeatDispGroupAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN FeatDispGroupPtr LIBCALL FeatDispGroupAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -561,9 +561,9 @@ erret:
 *
 *   FeatDispGroupSetAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN FeatDispGroupPtr LIBCALL FeatDispGroupSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)

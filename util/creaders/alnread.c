@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.1 2004/02/03 16:47:02 ucko Exp $
+ * $Id: alnread.c,v 1.9 2004/03/16 21:05:15 bollin Exp $
  *
  * ===========================================================================
  *
@@ -208,7 +208,7 @@ s_ReportBadCharError
 {
     TErrorInfoPtr eip;
     const char *  err_format =
-                          "%d bad characters (%c) found at position %d (%s)";
+                          "%d bad characters (%c) found at position %d (%s).";
 
     if (errfunc == NULL  ||  num_bad == 0  ||  bad_char == 0
         ||  reason == NULL) {
@@ -367,7 +367,7 @@ s_ReportLineLengthError
 {
     TErrorInfoPtr eip;
     char *        msg;
-    const char *  format = "Expected length %d, actual length %d";
+    const char *  format = "Expected line length %d, actual length %d";
     int           len;
 
     if (lip == NULL  ||  report_error == NULL) {
@@ -653,6 +653,34 @@ s_ReportRepeatedId
 }
 
 
+/* This function creates and sends an error message indicating that the file
+ * being read is an ASN.1 file.
+ */
+static void 
+s_ReportASN1Error 
+(FReportErrorFunction errfunc,
+ void *             errdata)
+{
+    TErrorInfoPtr eip;
+    const char * msg = "This is an ASN.1 file, "
+        "which cannot be read by this function.";
+
+    if (errfunc == NULL) {
+        return;
+    }
+
+    eip = ErrorInfoNew (NULL);
+    if (eip != NULL) {
+        eip->category = eAlnErr_BadData;
+        eip->message = (char *) malloc (strlen (msg) + 1);
+        if (eip->message != NULL) {
+            sprintf (eip->message, msg);
+        }
+        errfunc (eip, errdata);
+    }
+}
+
+
 /* This function allocates memory for a SSequenceInfo structure and
  * initializes the member variables.  It returns a pointer to the newly
  * allocated memory.
@@ -691,6 +719,69 @@ extern void SequenceInfoFree (TSequenceInfoPtr sip)
     free (sip->match);
     sip->alphabet = NULL;
     free (sip);
+}
+
+
+/* This function creates and sends an error message regarding an unused line.
+ */
+static void 
+s_ReportUnusedLine
+(int                  line_num_start,
+ int                  line_num_stop,
+ TLineInfoPtr         line_val,
+ FReportErrorFunction errfunc,
+ void *               errdata)
+{
+    TErrorInfoPtr eip;
+    const char * errformat1 = "Line %d could not be assigned to an interleaved block";
+    const char * errformat2 = "Lines %d through %d could not be assigned to an interleaved block";
+    const char * errformat3 = "Contents of unused line: %s";
+    int skip;
+
+    if (errfunc == NULL  ||  line_val == NULL) {
+        return;
+    }
+
+    eip = ErrorInfoNew (NULL);
+    if (eip != NULL) {
+        eip->category = eAlnErr_BadFormat;
+        eip->line_num = line_num_start;
+        if (line_num_start == line_num_stop) {
+              eip->message = (char *) malloc (strlen (errformat1)
+                                            + kMaxPrintedIntLen + 1);
+            if (eip->message != NULL) {
+                sprintf (eip->message, errformat1, line_num_start);
+            }
+        } else {
+            eip->message = (char *) malloc (strlen (errformat2)
+                                            + 2 * kMaxPrintedIntLen + 1);
+            if (eip->message != NULL) {
+                sprintf (eip->message, errformat2, line_num_start,
+                         line_num_stop);
+            }
+        }
+        errfunc (eip, errdata);
+    }
+    /* report contents of unused lines */
+    for (skip = line_num_start;
+         skip < line_num_stop + 1  &&  line_val != NULL;
+         skip++) {
+        if (line_val->data == NULL) {
+            continue;
+        }
+        eip = ErrorInfoNew (NULL);
+        if (eip != NULL) {
+            eip->category = eAlnErr_BadFormat;
+            eip->line_num = skip;
+            eip->message = (char *) malloc (strlen (errformat3)
+                                            + strlen (line_val->data) + 1);
+            if (eip->message != NULL) {
+                sprintf (eip->message, errformat3, line_val->data);
+            }
+            errfunc (eip, errdata);
+        }
+        line_val = line_val->next;
+    }
 }
 
 
@@ -1852,26 +1943,31 @@ s_GetOneNexusSizeComment
  * alignment file.  If the function finds these comments, it returns eTrue,
  * otherwise it returns eFalse.
  */
-static EBool 
+static void 
 s_GetNexusSizeComments 
 (char *           str,
+ EBool *          found_ntax,
+ EBool *          found_nchar,
  SAlignRawFilePtr afrp)
 {
     int  num_sequences;
     int  num_chars;
   
-    if (str == NULL  ||  afrp == NULL) {
-        return eFalse;
+    if (str == NULL  ||  found_nchar == NULL  
+        ||  found_ntax == NULL  ||  afrp == NULL) {
+        return;
     }
-    if ((s_GetOneNexusSizeComment (str, "ntax", &num_sequences)
-            ||   s_GetOneNexusSizeComment (str, "NTAX", &num_sequences))
-        &&  (s_GetOneNexusSizeComment (str, "nchar", &num_chars)
-            ||  s_GetOneNexusSizeComment (str, "NCHAR", &num_chars))) {
+    if (! *found_ntax  && 
+        (s_GetOneNexusSizeComment (str, "ntax", &num_sequences)
+        ||   s_GetOneNexusSizeComment (str, "NTAX", &num_sequences))) {
         afrp->expected_num_sequence = num_sequences;
+        *found_ntax = eTrue;
+    }
+    if (! *found_nchar  &&
+        (s_GetOneNexusSizeComment (str, "nchar", &num_chars)
+        ||  s_GetOneNexusSizeComment (str, "NCHAR", &num_chars))) {
         afrp->expected_sequence_len = num_chars;
-        return eTrue;
-    } else {
-        return eFalse;
+        *found_nchar = eTrue;
     }
 }
 
@@ -1997,6 +2093,36 @@ static EBool s_IsConsensusLine (char * str)
 }
 
 
+/* This function identifies lines that begin with a NEXUS keyword and end
+ * with a semicolon - they will not contain sequence data.  The function
+ * returns eTrue if the line contains only a NEXUS comment, eFalse otherwise.
+ */
+static EBool s_SkippableNexusComment (char *str)
+{
+    char * last_semicolon;
+
+    if (str == NULL) {
+        return eFalse;
+    }
+    last_semicolon = strrchr (str, ';');
+    if (last_semicolon == NULL
+        ||  strspn (last_semicolon + 1, " \t\r") != strlen (last_semicolon + 1)
+        ||  strchr (str, ';') != last_semicolon) {
+        return eFalse;
+    }
+    if (s_StringNICmp (str, "format ", 7) == 0
+        ||  s_StringNICmp (str, "dimensions ", 11) == 0
+        ||  s_StringNICmp (str, "dimensions ", 11) == 0
+        ||  s_StringNICmp (str, "options ", 8) == 0
+        ||  s_StringNICmp (str, "begin characters", 16) == 0
+        ||  s_StringNICmp (str, "begin data", 10) == 0) {
+        return eTrue;
+    } else {
+        return eFalse;
+    }
+}
+
+
 /* This function determines whether the contents of str are "skippable"
  * in that they do not contain sequence data and therefore should not be
  * considered part of any block patterns or sequence data.
@@ -2005,10 +2131,9 @@ static EBool s_SkippableString (char * str)
 {
     if (str == NULL
         ||  s_StringNICmp (str, "matrix", 6) == 0
-        ||  s_StringNICmp (str, "begin data;", 11) == 0
-        ||  s_StringNICmp (str, "format ;", 8) == 0
-        ||  s_StringNICmp (str, "format datatype", 15) == 0
-        ||  s_StringNICmp (str, "dimensions ntax", 15) == 0
+        ||  s_StringNICmp (str, "#NEXUS", 6) == 0
+        ||  s_StringNICmp (str, "CLUSTAL W", 8) == 0
+        ||  s_SkippableNexusComment (str)
         ||  s_IsTwoNumbersSeparatedBySpace (str)
         ||  s_IsConsensusLine (str)
         ||  str [0] == ';') {
@@ -2050,6 +2175,19 @@ static EBool s_FoundStopLine (char * linestring)
         return eTrue;
     }
     return eFalse;
+}
+
+
+/* This function identifies the beginning line of an ASN.1 file, which
+ * cannot be read by the alignment reader.
+ */
+static EBool s_IsASN1 (char * linestring)
+{
+    if (linestring != NULL  &&  strstr (linestring, "::=") != NULL) {
+        return eTrue;
+    } else {
+        return eFalse;
+    }
 }
 
 
@@ -2124,6 +2262,12 @@ static void s_RemoveCommentFromLine (char * linestring)
     if ( linestring [0] == '>'  &&  linestring [1] == 0) {
         linestring [0] = 0;
     }
+
+    /* if the line now contains only space, truncate it */
+    if (strspn (linestring, " \t\r") == strlen (linestring)) {
+        linestring [0] = 0;
+    }
+    
 }
 
 
@@ -2721,6 +2865,73 @@ s_AugmentBlockPatternOffsetList
 }
 
 
+/* This function looks for lines that could not be assigned to an interleaved
+ * block.  It returns eTrue if it finds any such lines after the first offset,
+ * eFalse otherwise, and reports all instances of unused lines as errors.
+ */
+static EBool
+s_FindUnusedLines 
+(SLengthListPtr pattern_list,
+ SAlignRawFilePtr afrp)
+{
+    TIntLinkPtr    offset;
+    SLengthListPtr llp;
+    int            line_counter;
+    int            block_line_counter;
+    EBool          rval = eFalse;
+    TLineInfoPtr   line_val;
+    int            skip;
+
+    if (pattern_list == NULL  ||  afrp == NULL
+        ||  afrp->offset_list == NULL  ||  afrp->block_size < 2) {
+        return eFalse;
+    }
+    
+    offset = afrp->offset_list;
+    llp = pattern_list;
+    line_counter = 0;
+    line_val = afrp->line_list;
+ 
+    while (llp != NULL  &&  line_val != NULL) {
+        while (llp != NULL  &&  line_val != NULL
+               &&  (offset == NULL  ||  line_counter < offset->ival)) {
+            if (llp->lengthrepeats != NULL) {
+                s_ReportUnusedLine (line_counter,
+                                    line_counter + llp->num_appearances - 1,
+                                    line_val,
+                                    afrp->report_error,
+                                    afrp->report_error_userdata);
+                if (offset != afrp->offset_list) {
+                    rval = eTrue;
+                }
+            }
+            line_counter += llp->num_appearances;
+            for (skip = 0;
+                 skip < llp->num_appearances  &&  line_val != NULL;
+                 skip++) {
+                line_val = line_val->next;
+            }
+            llp = llp->next;
+        }
+        block_line_counter = 0;
+        while (block_line_counter < afrp->block_size  &&  llp != NULL) {
+            block_line_counter += llp->num_appearances;
+            line_counter += llp->num_appearances;
+            for (skip = 0;
+                 skip < llp->num_appearances  &&  line_val != NULL;
+                 skip++) {
+                line_val = line_val->next;
+            }
+            llp = llp->next;
+        }
+        if (offset != NULL) {
+            offset = offset->next;
+        }
+    }
+    return rval;
+}
+
+
 /* This function examines a list of line lengths, looking for interleaved
  * blocks.  If it finds them, it will set the SAlignRawFileData offset_list
  * member variable to point to a list of locations for the blocks.
@@ -2766,6 +2977,11 @@ s_FindInterleavedBlocks
                                                            afrp->offset_list, 
                                                            afrp->block_size);
     }
+    if (s_FindUnusedLines (pattern_list, afrp)) {
+        s_IntLinkFree (afrp->offset_list);
+        afrp->offset_list = NULL;
+        afrp->block_size = 0;
+    }
     s_SizeInfoFree (size_list);
     
 }
@@ -2784,13 +3000,16 @@ s_ReadAlignFileRaw
     char *           tmp;
     EBool            found_stop;
     int              overall_line_count;
-    EBool            found_expected;
+    EBool            found_expected_ntax = eFalse;
+    EBool            found_expected_nchar = eFalse;
     EBool            found_char_comment = eFalse;
     SLengthListPtr   pattern_list = NULL;
     SLengthListPtr   this_pattern;
     char *           cp;
     int              len;
     TIntLinkPtr      new_offset;
+    EBool            in_taxa_comment;
+    EBool            in_bracketed_comment = eFalse;
 
     if (readfunc == NULL  ||  sequence_info == NULL) {
         return NULL;
@@ -2807,8 +3026,14 @@ s_ReadAlignFileRaw
 
     overall_line_count = 0;
     found_stop = eFalse;
-    found_expected = eFalse;
+    in_taxa_comment = eFalse;
     linestring = readfunc (userdata);
+    if (s_IsASN1 (linestring)) {
+        s_ReportASN1Error (afrp->report_error, afrp->report_error_userdata);
+        s_AlignFileRawFree (afrp);
+        return NULL;
+    }
+
     while (linestring != NULL  &&  linestring [0] != EOF) {
         s_ReadOrgNamesFromText (linestring, overall_line_count, afrp);
         /* we want to remove the comment from the line for the purpose 
@@ -2822,16 +3047,18 @@ s_ReadAlignFileRaw
             return NULL;
         }
  
-        if (! found_stop) {
+        if (! found_stop && ! in_taxa_comment) {
             found_stop = s_FoundStopLine (tmp);
         }
         if (! found_stop) {
-            if (! found_expected) {
+            if (! found_expected_ntax  ||  ! found_expected_nchar) {
                 if (s_IsTwoNumbersSeparatedBySpace (tmp)) {
                     s_GetFASTAExpectedNumbers (tmp, afrp);
-                    found_expected = eTrue;
-                } else {
-                    found_expected = s_GetNexusSizeComments (tmp, afrp);
+                    found_expected_ntax = eTrue;
+                    found_expected_nchar = eTrue;
+               } else {
+                    s_GetNexusSizeComments (tmp, &found_expected_ntax,
+                                            &found_expected_nchar, afrp);
                 }
             }
             if (! found_char_comment) {
@@ -2839,6 +3066,27 @@ s_ReadAlignFileRaw
                                                    afrp->report_error,
                                                    afrp->report_error_userdata);
             }
+            
+            if (in_taxa_comment) {
+                if (strncmp (tmp, "end;", 4) == 0) {
+                    in_taxa_comment = eFalse;
+                } 
+                tmp [0] = 0;
+            } else if (strncmp (tmp, "begin taxa;", 11) == 0) {
+                tmp [0] = 0;
+                in_taxa_comment = eTrue;
+            }
+
+            if (in_bracketed_comment) {
+                if (strchr (tmp, ']') != NULL) {
+                    in_bracketed_comment = eFalse;
+                }
+                tmp [0] = 0;
+            } else if (tmp [0] == '[' && strchr (tmp, ']') == NULL) {
+                in_bracketed_comment = eTrue;
+                tmp [0] = 0;
+            }
+
             s_RemoveCommentFromLine (tmp);
             if (s_SkippableString (tmp)) {
                 tmp [0] = 0;
@@ -2856,9 +3104,9 @@ s_ReadAlignFileRaw
                 len = strcspn (tmp, " \t\r");
                 if (len > 0) {
                     cp = tmp + len;
-                    len = strspn (tmp, " \t\r");
+                    len = strspn (cp, " \t\r");
                     if (len > 0) {
-                        cp = tmp + len;
+                        cp = cp + len;
                     }
                     if (*cp == 0) {
                         this_pattern = s_GetBlockPattern (tmp);
@@ -3135,6 +3383,7 @@ static void s_ProcessAlignRawFileByBlockOffsets (SAlignRawFilePtr afrp)
     TIntLinkPtr   offset_ptr;
     TLineInfoPtr  lip;
     EBool         first_block = eTrue;
+    EBool         in_taxa_comment = eFalse;
  
     if (afrp == NULL) {
         return;
@@ -3144,7 +3393,15 @@ static void s_ProcessAlignRawFileByBlockOffsets (SAlignRawFilePtr afrp)
     offset_ptr = afrp->offset_list;
     lip = afrp->line_list;
     while (lip != NULL  &&  offset_ptr != NULL
-           &&  ! s_FoundStopLine (lip->data)) {
+           &&  (in_taxa_comment  ||  ! s_FoundStopLine (lip->data))) {
+        if (in_taxa_comment) {
+            if (strncmp (lip->data, "end;", 4) == 0) {
+                in_taxa_comment = eFalse;
+            } 
+        } else if (lip->data != NULL
+            &&  strncmp (lip->data, "begin taxa;", 11) == 0) {
+            in_taxa_comment = eTrue;
+        }
         if (line_counter == offset_ptr->ival) {
             s_RemoveCommentsFromBlock (lip, afrp->block_size);
             s_ProcessBlockLines (afrp, lip, afrp->block_size, first_block);
@@ -3855,7 +4112,10 @@ s_AugmentOffsetList
     line_counter = 0;
     sip = list;
     while (sip != NULL) {
-        if (next_offset != NULL  &&  line_counter == next_offset->ival) {
+        /* if we are somehow out of synch, don't get caught in infinite loop */
+        if (next_offset != NULL  &&  line_counter > next_offset->ival) {
+            next_offset = next_offset->next;
+        } else if (next_offset != NULL  &&  line_counter == next_offset->ival) {
             skipped_previous = eFalse;
             prev_offset = next_offset;
             next_offset = next_offset->next;
@@ -4006,6 +4266,9 @@ s_GetBestCharacterLength
         prev_offset = new_offset;
     }
     best_num_chars = s_GetMostPopularSize (pattern_length_list);
+    if (best_num_chars == 0  &&  pattern_length_list != NULL) {
+        best_num_chars = pattern_length_list->size_value;
+    }
     s_SizeInfoFree (pattern_length_list);
     pattern_length_list = NULL;
     return best_num_chars;
@@ -4167,6 +4430,9 @@ static void s_InsertNewOffsets
                     num_chars += strlen (lip->data);
                     lip = lip->next;
                 }
+                if (lip == NULL) {
+                  return;
+                }
                 /* set new offset at first line of next pattern */
                 line_diff ++;
                 lip = lip->next;
@@ -4195,6 +4461,33 @@ static void s_InsertNewOffsets
         }
         prev_offset = new_offset;
     }
+    
+    /* iterate through the last block */
+    for (line_diff = 0;
+         line_diff < block_length && lip != NULL; 
+         line_diff ++) {
+        lip = lip->next;
+    }
+
+    /* if we have room for one more sequence, or even most of one more sequence, add it */
+    if (lip != NULL  &&  ! s_SkippableString (lip->data)) {
+        splice_offset = s_IntLinkNew (line_diff + prev_offset->ival, prev_offset);
+    }
+}
+
+
+/* This function returns true if the string contains digits, false otherwise */
+static EBool s_ContainsDigits (char *data)
+{
+    char *cp;
+
+    if (data == NULL) return eFalse;
+    for (cp = data; *cp != 0; cp++) {
+        if (isdigit (*cp)) {
+            return eTrue;
+        }
+    }
+    return eFalse;
 }
 
 
@@ -4225,7 +4518,7 @@ static void s_ProcessAlignFileRawByLengthPattern (SAlignRawFilePtr afrp)
          lip != NULL  &&  ! s_FoundStopLine (lip->data);
          lip = lip->next)
     {
-        if (s_SkippableString (lip->data)) {
+        if (s_SkippableString (lip->data)  ||  s_ContainsDigits(lip->data)) {
             s_AddLengthRepeat (list, 0);
         } else {
             s_AddLengthRepeat (list, strlen (lip->data));
@@ -4247,6 +4540,9 @@ static void s_ProcessAlignFileRawByLengthPattern (SAlignRawFilePtr afrp)
 
     /* resolve unusual distances between anchor patterns */
     best_length = s_GetMostPopularPatternLength (offset_list);
+    if (best_length < 1  &&  offset_list != NULL  && offset_list->next != NULL) {
+        best_length = offset_list->next->ival - offset_list->ival;
+    }
     best_num_chars = s_GetBestCharacterLength (token_list, offset_list,
                                              best_length);
     s_InsertNewOffsets (token_list, offset_list, best_length, best_num_chars,
@@ -4863,6 +5159,9 @@ s_ConvertDataToOutput
         afp->ids [index] = strdup (arsp->id);
     }
     best_length = s_GetMostPopularSize (lengths);
+    if (best_length == 0  &&  lengths != NULL) {
+        best_length = lengths->size_value;
+    }   
 
     for (index = 0;  index < afp->num_sequences;  index++) {
         if (afp->sequences [index] == NULL) {
@@ -4942,8 +5241,10 @@ ReadAlignmentFile
 
     s_ReprocessIds (afrp);
 
+#if 0 /* this step was removed by indexer request */
     /* Note - have to check deflines after reprocessing IDs */
     s_AreDeflinesIdentical (afrp);
+#endif
 
     if (s_s_FindBadDataCharsInSequenceList (afrp, sequence_info)) {
         s_AlignFileRawFree (afrp);
@@ -4959,6 +5260,32 @@ ReadAlignmentFile
 /*
  * ===========================================================================
  * $Log: alnread.c,v $
+ * Revision 1.9  2004/03/16 21:05:15  bollin
+ * Added some improvements to the portion of the alignment reader that deals
+ * with contiguous alignments that do not have a '>' at the beginning of each
+ * ID.
+ *
+ * Revision 1.8  2004/03/16 16:25:38  bollin
+ * Added function to recognize a file as ASN.1 and reject immediately
+ *
+ * Revision 1.7  2004/03/09 21:27:39  bollin
+ * in s_InsertNewOffsets, if the list ends while searching for the next pattern, exit immediately (prevents NULL pointer access)
+ *
+ * Revision 1.6  2004/03/04 19:15:07  bollin
+ * file reading now skips over multi-line bracketed comments
+ *
+ * Revision 1.5  2004/03/04 16:29:32  bollin
+ * added skip of taxa comment for PAUP format alignment files
+ *
+ * Revision 1.4  2004/02/10 16:15:13  bollin
+ * now checks for unused lines when finding interleaved blocks, will reject and try other methods if unused lines found after first block found.
+ *
+ * Revision 1.3  2004/02/05 16:29:32  bollin
+ * smarter function for skipping NEXUS comment lines
+ *
+ * Revision 1.2  2004/02/04 19:49:11  bollin
+ * fixed infinite loop condition in s_AugmentOffsetList, properly skip over first non-space column when looking for interleaved block patterns in s_ReadAlignFileRaw
+ *
  * Revision 1.1  2004/02/03 16:47:02  ucko
  * Add Colleen Bollin's Toolkit-independent alignment reader.
  *

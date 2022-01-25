@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_stat.c,v 1.45 2003/12/05 16:03:57 camacho Exp $";
+static char const rcsid[] = "$Id: blast_stat.c,v 1.66 2004/05/04 13:00:02 madden Exp $";
 
 /* ===========================================================================
 *
@@ -25,7 +25,7 @@ static char const rcsid[] = "$Id: blast_stat.c,v 1.45 2003/12/05 16:03:57 camach
 * ===========================================================================*/
 /*****************************************************************************
 
-File name: blastkar.c
+File name: blast_stat.c
 
 Author: Tom Madden
 
@@ -49,8 +49,99 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 1.45 $
+ * $Revision: 1.66 $
  * $Log: blast_stat.c,v $
+ * Revision 1.66  2004/05/04 13:00:02  madden
+ * Change BlastKarlinBlkStandardCalcEx to more descriptive Blast_KarlinBlkIdealCalc, make public
+ *
+ * Revision 1.65  2004/04/30 14:39:44  papadopo
+ * 1. Remove unneeded #defines
+ * 2. use BLAST_SCORE_RANGE_MAX during RPS PSSM creation instead of
+ * 	(possibly incompatible) RPS_SCORE_MAX
+ * 3. return NULL instead of FALSE on an error
+ *
+ * Revision 1.64  2004/04/30 12:58:49  camacho
+ * Replace RPSKarlinLambdaNR by Blast_KarlinLambdaNR
+ *
+ * Revision 1.63  2004/04/29 20:32:38  papadopo
+ * remove RPS_SCORE_MIN, since it turned out to be a workaround for a bug that has since been fixed
+ *
+ * Revision 1.62  2004/04/29 19:58:03  camacho
+ * Use generic matrix allocator/deallocator from blast_psi_priv.h
+ *
+ * Revision 1.61  2004/04/28 14:40:23  madden
+ * Changes from Mike Gertz:
+ * - I created the new routine BLAST_GapDecayDivisor that computes a
+ *   divisor used to weight the evalue of a collection of distinct
+ *   alignments.
+ * - I removed  BLAST_GapDecay and BLAST_GapDecayInverse which had become
+ *   redundant.
+ * - I modified the BLAST_Cutoffs routine so that it uses the value
+ *   returned by BLAST_GapDecayDivisor to weight evalues.
+ * - I modified BLAST_SmallGapSumE, BLAST_LargeGapSumE and
+ *   BLAST_UnevenGapSumE no longer refer to the gap_prob parameter.
+ *   Replaced the gap_decay_rate parameter of each of these routines with
+ *   a weight_divisor parameter.  Added documentation.
+ *
+ * Revision 1.60  2004/04/23 19:06:33  camacho
+ * Do NOT use lowercase names for #defines
+ *
+ * Revision 1.59  2004/04/23 13:49:20  madden
+ * Cleaned up ifndef in BlastKarlinLHtoK
+ *
+ * Revision 1.58  2004/04/23 13:21:25  madden
+ * Rewrote BlastKarlinLHtoK to do the following and more:
+ * 1. fix a bug whereby the wrong formula was used when high score == 1
+ *    and low score == -1;
+ * 2. fix a methodological error of truncating the first sum
+ *    and trying to make it converge quickly by adding terms
+ *    of a geometric progression, even though the geometric progression
+ *    estimate is not correct in all cases;
+ *    the old adjustment code is left in for historical purposes but
+ *    #ifdef'd out
+ * 3. Eliminate the Boolean bi_modal_score variable.  The old test that
+ *    set the value of bi_modal_score would frequently fail to choose the
+ *    correct value due to rounding error.
+ * 4. changed numerous local variable names to make them more meaningful;
+ * 5. added substantial comments to explain what the procedure
+ *    is doing and what each variable represents
+ *
+ * Revision 1.57  2004/04/19 12:58:18  madden
+ * Changed BLAST_KarlinBlk to Blast_KarlinBlk to avoid conflict with blastkar.h structure, renamed some functions to start with Blast_Karlin, made Blast_KarlinBlkDestruct public
+ *
+ * Revision 1.56  2004/04/12 18:57:31  madden
+ * Rename BLAST_ResFreq to Blast_ResFreq, make Blast_ResFreqNew, Blast_ResFreqDestruct, and Blast_ResFreqStdComp non-static
+ *
+ * Revision 1.55  2004/04/08 13:53:10  papadopo
+ * fix doxygen warning
+ *
+ * Revision 1.54  2004/04/07 03:06:16  camacho
+ * Added blast_encoding.[hc], refactoring blast_stat.[hc]
+ *
+v * Revision 1.53  2004/04/05 18:53:35  madden
+ * Set dimensions if matrix from memory
+ *
+ * Revision 1.52  2004/04/01 14:14:02  lavr
+ * Spell "occurred", "occurrence", and "occurring"
+ *
+ * Revision 1.51  2004/03/31 17:50:09  papadopo
+ * Mike Gertz' changes for length adjustment calculations
+ *
+ * Revision 1.50  2004/03/11 18:52:41  camacho
+ * Remove THREADS_IMPLEMENTED
+ *
+ * Revision 1.49  2004/03/10 18:00:06  camacho
+ * Remove outdated references to blastkar
+ *
+ * Revision 1.48  2004/03/05 17:52:33  papadopo
+ * Allow 32-bit context numbers for queries
+ *
+ * Revision 1.47  2004/03/04 21:07:51  papadopo
+ * add RPS BLAST functionality
+ *
+ * Revision 1.46  2004/02/19 21:16:48  dondosha
+ * Use enum type for severity argument in Blast_MessageWrite
+ *
  * Revision 1.45  2003/12/05 16:03:57  camacho
  * Remove compiler warnings
  *
@@ -193,6 +284,8 @@ Detailed Contents:
 #include <algo/blast/core/blast_stat.h>
 #include <algo/blast/core/blast_util.h>
 #include <util/tables/raw_scoremat.h>
+#include <algo/blast/core/blast_encoding.h>
+#include "blast_psi_priv.h"
 
 /* OSF1 apparently doesn't like this. */
 #if defined(HUGE_VAL) && !defined(OS_UNIX_OSF1)
@@ -217,83 +310,6 @@ static double BlastSumPCalc (int r, double s);
 	(it's four, of course).
 */
 #define NUMBER_NON_AMBIG_BP 4
-
-/** Translates between ncbi4na and blastna. The first four elements
- *	of this array match ncbi2na.
- */
-Uint1 NCBI4NA_TO_BLASTNA[] = {
-15,/* Gap, 0 */
-0, /* A,   1 */
-1, /* C,   2 */
-6, /* M,   3 */
-2, /* G,   4 */
-4, /* R,   5 */
-9, /* S,   6 */
-13, /* V,   7 */
-3, /* T,   8 */
-8, /* W,   9 */
- 5, /* Y,  10 */
- 12, /* H,  11 */
- 7, /* K,  12 */
- 11, /* D,  13 */
- 10, /* B,  14 */
- 14  /* N,  15 */
-};
-
-static Uint1 blastna_to_ncbi4na[] = {
-         	 1, /* A, 0 */
-				 2, /* C, 1 */
-				 4, /* G, 2 */
-				 8, /* T, 3 */
-				 5, /* R, 4 */
-				10, /* Y, 5 */
-				 3, /* M, 6 */
-				12, /* K, 7 */
-				 9, /* W, 8 */
-				 6, /* S, 9 */
-				14, /* B, 10 */
-				13, /* D, 11 */
-				11, /* H, 12 */
-				 7, /* V, 13 */
-				15, /* N, 14 */
-				 0  /* Gap, 15 */
-};
-
-static Uint1 iupacna_to_blastna[128]={
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-15, 0,10, 1,11,15,15, 2,12,15,15, 7,15, 6,14,15,
-15,15, 4, 9, 3,15,13, 8,15, 5,15,15,15,15,15,15,
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,
-15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15};
-
-static Uint1 iupacna_to_ncbi4na[128]={
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 1,14, 2,13, 0, 0, 4,11, 0, 0,12, 0, 3,15, 0,
- 0, 0, 5, 6, 8, 0, 7, 9, 0,10, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-static Uint1 ncbieaa_to_ncbistdaa[128]={
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,25, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0,10,11,12,13, 0,
-14,15,16,17,18,24,19,20,21,22,23, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
- 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-#if 0  /* Is this really needed ? */
-static Uint1 ncbistdaa_to_ncbieaa[BLASTAA_SIZE]={
-'-','A','B','C','D','E','F','G','H','I','K','L','M',
-'N','P','Q','R','S','T','V','W','X','Y','Z','U','*'};
-#endif
 
 /* Used in BlastKarlinBlkGappedCalc */
 typedef double array_of_8[8];
@@ -343,9 +359,9 @@ The decline-to-align penalty is only supported in a few cases, so it is normally
 set to INT2_MAX.
 
 
-How to add a new matrix to blastkar.c:
+How to add a new matrix to blast_stat.c:
 --------------------------------------
-To add a new matrix to blastkar.c it is necessary to complete 
+To add a new matrix to blast_stat.c it is necessary to complete 
 four steps.  As an example consider adding the matrix
 called TESTMATRIX
 
@@ -764,7 +780,7 @@ BLAST_MATRIX_NOMINAL
 */
 
 BlastScoreBlk*
-BlastScoreBlkNew(Uint1 alphabet, Int2 number_of_contexts)
+BlastScoreBlkNew(Uint1 alphabet, Int4 number_of_contexts)
 
 {
 	BlastScoreBlk* sbp;
@@ -802,14 +818,14 @@ BlastScoreBlkNew(Uint1 alphabet, Int2 number_of_contexts)
 		sbp->number_of_contexts = number_of_contexts;
 		sbp->sfp = (BLAST_ScoreFreq**) 
          calloc(sbp->number_of_contexts, sizeof(BLAST_ScoreFreq*));
-		sbp->kbp_std = (BLAST_KarlinBlk**)
-         calloc(sbp->number_of_contexts, sizeof(BLAST_KarlinBlk*));
-		sbp->kbp_gap_std = (BLAST_KarlinBlk**)
-         calloc(sbp->number_of_contexts, sizeof(BLAST_KarlinBlk*));
-		sbp->kbp_psi = (BLAST_KarlinBlk**)
-         calloc(sbp->number_of_contexts, sizeof(BLAST_KarlinBlk*));
-		sbp->kbp_gap_psi = (BLAST_KarlinBlk**)
-         calloc(sbp->number_of_contexts, sizeof(BLAST_KarlinBlk*));
+		sbp->kbp_std = (Blast_KarlinBlk**)
+         calloc(sbp->number_of_contexts, sizeof(Blast_KarlinBlk*));
+		sbp->kbp_gap_std = (Blast_KarlinBlk**)
+         calloc(sbp->number_of_contexts, sizeof(Blast_KarlinBlk*));
+		sbp->kbp_psi = (Blast_KarlinBlk**)
+         calloc(sbp->number_of_contexts, sizeof(Blast_KarlinBlk*));
+		sbp->kbp_gap_psi = (Blast_KarlinBlk**)
+         calloc(sbp->number_of_contexts, sizeof(Blast_KarlinBlk*));
 	}
 
 	return sbp;
@@ -830,8 +846,8 @@ BlastScoreFreqDestruct(BLAST_ScoreFreq* sfp)
 /*
 	Deallocates the Karlin Block.
 */
-static BLAST_KarlinBlk*
-BlastKarlinBlkDestruct(BLAST_KarlinBlk* kbp)
+Blast_KarlinBlk*
+Blast_KarlinBlkDestruct(Blast_KarlinBlk* kbp)
 
 {
 	sfree(kbp);
@@ -864,16 +880,16 @@ BlastScoreBlkFree(BlastScoreBlk* sbp)
         if (sbp->sfp)
             sbp->sfp[index] = BlastScoreFreqDestruct(sbp->sfp[index]);
         if (sbp->kbp_std)
-            sbp->kbp_std[index] = BlastKarlinBlkDestruct(sbp->kbp_std[index]);
+            sbp->kbp_std[index] = Blast_KarlinBlkDestruct(sbp->kbp_std[index]);
         if (sbp->kbp_gap_std)
-            sbp->kbp_gap_std[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_std[index]);
+            sbp->kbp_gap_std[index] = Blast_KarlinBlkDestruct(sbp->kbp_gap_std[index]);
         if (sbp->kbp_psi)
-            sbp->kbp_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_psi[index]);
+            sbp->kbp_psi[index] = Blast_KarlinBlkDestruct(sbp->kbp_psi[index]);
         if (sbp->kbp_gap_psi)
-            sbp->kbp_gap_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_psi[index]);
+            sbp->kbp_gap_psi[index] = Blast_KarlinBlkDestruct(sbp->kbp_gap_psi[index]);
     }
     if (sbp->kbp_ideal)
-        sbp->kbp_ideal = BlastKarlinBlkDestruct(sbp->kbp_ideal);
+        sbp->kbp_ideal = Blast_KarlinBlkDestruct(sbp->kbp_ideal);
     sfree(sbp->sfp);
     sfree(sbp->kbp_std);
     sfree(sbp->kbp_psi);
@@ -935,15 +951,15 @@ BLAST_ScoreSetAmbigRes(BlastScoreBlk* sbp, char ambiguous_res)
 	if (sbp->alphabet_code == BLASTAA_SEQ_CODE)
 	{
 		sbp->ambiguous_res[sbp->ambig_occupy] = 
-         ncbieaa_to_ncbistdaa[toupper(ambiguous_res)];
+         AMINOACID_TO_NCBISTDAA[toupper(ambiguous_res)];
 	}
 	else {
       if (sbp->alphabet_code == BLASTNA_SEQ_CODE)
          sbp->ambiguous_res[sbp->ambig_occupy] = 
-            iupacna_to_blastna[toupper(ambiguous_res)];
+            IUPACNA_TO_BLASTNA[toupper(ambiguous_res)];
       else if (sbp->alphabet_code == NCBI4NA_SEQ_CODE)
          sbp->ambiguous_res[sbp->ambig_occupy] = 
-            iupacna_to_ncbi4na[toupper(ambiguous_res)];
+            IUPACNA_TO_NCBI4NA[toupper(ambiguous_res)];
    }
 	(sbp->ambig_occupy)++;
 	
@@ -990,7 +1006,7 @@ static Int4 **BlastScoreBlkMatCreateEx(Int4 **matrix,Int4 penalty,
 		degen=0;
 		for (index2=0; index2<NUMBER_NON_AMBIG_BP; index2++) /* ncbi2na */
 		{
-			if (blastna_to_ncbi4na[index1] & blastna_to_ncbi4na[index2])
+			if (BLASTNA_TO_NCBI4NA[index1] & BLASTNA_TO_NCBI4NA[index2])
 				degen++;
 		}
 		degeneracy[index1] = degen;
@@ -1001,7 +1017,7 @@ static Int4 **BlastScoreBlkMatCreateEx(Int4 **matrix,Int4 penalty,
 	{
 		for (index2=index1; index2<BLASTNA_SIZE; index2++) /* blastna */
 		{
-			if (blastna_to_ncbi4na[index1] & blastna_to_ncbi4na[index2])
+			if (BLASTNA_TO_NCBI4NA[index1] & BLASTNA_TO_NCBI4NA[index2])
 			{ /* round up for positive scores, down for negatives. */
 				matrix[index1][index2] = BLAST_Nint( (double) ((degeneracy[index2]-1)*penalty + reward))/degeneracy[index2];
 				if (index1 != index2)
@@ -1069,11 +1085,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     double	xscore;
     register int	index1, index2;
     Int2 status;
-#ifdef THREADS_IMPLEMENTED
-    static TNlmMutex read_matrix_mutex;
-    NlmMutexInit(&read_matrix_mutex);
-    NlmMutexLock(read_matrix_mutex);
-#endif
     
     matrix = sbp->matrix;	
     
@@ -1086,9 +1097,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
         status=BlastScoreBlkMatCreate(sbp); 
         if(status != 0)
 	{
-#ifdef THREADS_IMPLEMENTED
-        	NlmMutexUnlock(read_matrix_mutex); 
-#endif
         	return status;
 	}
     }
@@ -1097,9 +1105,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     while (fgets(buf, sizeof(buf), fp) != NULL) {
         ++lineno;
         if (strchr(buf, '\n') == NULL) {
-#ifdef THREADS_IMPLEMENTED
-            NlmMutexUnlock(read_matrix_mutex); 
-#endif
             return 2;
         }
 
@@ -1116,9 +1121,9 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
             continue;
         while (lp != NULL) {
            if (sbp->alphabet_code == BLASTAA_SEQ_CODE)
-              ch = ncbieaa_to_ncbistdaa[toupper(*lp)];
+              ch = AMINOACID_TO_NCBISTDAA[toupper(*lp)];
            else if (sbp->alphabet_code == BLASTNA_SEQ_CODE) {
-              ch = iupacna_to_blastna[toupper(*lp)];
+              ch = IUPACNA_TO_BLASTNA[toupper(*lp)];
            } else {
               ch = *lp;
            }
@@ -1130,9 +1135,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     }
     
     if (a2cnt <= 1) { 
-#ifdef THREADS_IMPLEMENTED
-        NlmMutexUnlock(read_matrix_mutex); 
-#endif
         return 2;
     }
 
@@ -1142,9 +1144,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     while (fgets(buf, sizeof(buf), fp) != NULL)  {
         ++lineno;
         if ((cp = strchr(buf, '\n')) == NULL) {
-#ifdef THREADS_IMPLEMENTED
-            NlmMutexUnlock(read_matrix_mutex); 
-#endif
             return 2;
         }
         if ((cp = strchr(buf, COMMENT_CHR)) != NULL)
@@ -1154,23 +1153,17 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
         ch = *lp;
         cp = (char*) lp;
         if ((cp = strtok(NULL, TOKSTR)) == NULL) {
-#ifdef THREADS_IMPLEMENTED
-            NlmMutexUnlock(read_matrix_mutex); 
-#endif
             return 2;
         }
         if (a1cnt >= DIM(a1chars)) {
-#ifdef THREADS_IMPLEMENTED
-            NlmMutexUnlock(read_matrix_mutex); 
-#endif
             return 2;
         }
 
         if (sbp->alphabet_code == BLASTAA_SEQ_CODE) {
-           ch = ncbieaa_to_ncbistdaa[toupper(ch)];
+           ch = AMINOACID_TO_NCBISTDAA[toupper(ch)];
         } else {
             if (sbp->alphabet_code == BLASTNA_SEQ_CODE) {
-                ch = iupacna_to_blastna[toupper(ch)];
+                ch = IUPACNA_TO_BLASTNA[toupper(ch)];
             }
         }
         a1chars[a1cnt++] = ch;
@@ -1178,9 +1171,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
         index2 = 0;
         while (cp != NULL) {
             if (index2 >= (int) a2cnt) {
-#ifdef THREADS_IMPLEMENTED
-                NlmMutexUnlock(read_matrix_mutex); 
-#endif
                 return 2;
             }
             strcpy(temp, cp);
@@ -1189,16 +1179,10 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
                 score = BLAST_SCORE_1MIN;
             } else  {
                 if (sscanf(temp, "%lg", &xscore) != 1) {
-#ifdef THREADS_IMPLEMENTED
-                    NlmMutexUnlock(read_matrix_mutex); 
-#endif
                     return 2;
                 }
 				/*xscore = MAX(xscore, BLAST_SCORE_1MIN);*/
                 if (xscore > BLAST_SCORE_1MAX || xscore < BLAST_SCORE_1MIN) {
-#ifdef THREADS_IMPLEMENTED
-                    NlmMutexUnlock(read_matrix_mutex); 
-#endif
                     return 2;
                 }
                 xscore += (xscore >= 0. ? 0.5 : -0.5);
@@ -1212,9 +1196,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
     }
     
     if (a1cnt <= 1) {
-#ifdef THREADS_IMPLEMENTED
-        NlmMutexUnlock(read_matrix_mutex); 
-#endif
         return 2;
     }
     
@@ -1222,9 +1203,6 @@ BlastScoreBlkMatRead(BlastScoreBlk* sbp, FILE *fp)
         sbp->mat_dim1 = a1cnt;
     }
     
-#ifdef THREADS_IMPLEMENTED
-    NlmMutexUnlock(read_matrix_mutex); 
-#endif
     return 0;
 }
 
@@ -1301,14 +1279,20 @@ BlastScoreBlkMatrixLoad(BlastScoreBlk* sbp)
 
     for (i = 0; i < sbp->alphabet_size; i++) {
         for (j = 0; j < sbp->alphabet_size; j++) {
-            if (i == 24 || i == GAP_CHAR ||
-                j == 24 || j == GAP_CHAR) {  /* skip selenocysteine and gap */
+            /* skip selenocysteine and gap */
+            if (i == AMINOACID_TO_NCBISTDAA['U'] || 
+                i == AMINOACID_TO_NCBISTDAA['-'] ||
+                j == AMINOACID_TO_NCBISTDAA['U'] || 
+                j == AMINOACID_TO_NCBISTDAA['-']) {
                 continue;
             }
             matrix[i][j] = NCBISM_GetScore((const SNCBIPackedScoreMatrix*) psm,
                                            i, j);
         }
     }
+    /* Sets dimensions of matrix. */
+    sbp->mat_dim1 = sbp->mat_dim2 = sbp->alphabet_size;
+
     return status;
 }
 
@@ -1361,8 +1345,8 @@ BLAST_ScoreBlkMatFill(BlastScoreBlk* sbp, char* matrix_path)
     return status;
 }
 
-static BLAST_ResFreq*
-BlastResFreqDestruct(BLAST_ResFreq* rfp)
+Blast_ResFreq*
+Blast_ResFreqDestruct(Blast_ResFreq* rfp)
 {
 	if (rfp == NULL)
 		return NULL;
@@ -1376,21 +1360,21 @@ BlastResFreqDestruct(BLAST_ResFreq* rfp)
 }
 
 /*
-	Allocates the BLAST_ResFreq* and then fills in the frequencies
+	Allocates the Blast_ResFreq* and then fills in the frequencies
 	in the probabilities.
 */ 
 
-static BLAST_ResFreq*
-BlastResFreqNew(BlastScoreBlk* sbp)
+Blast_ResFreq*
+Blast_ResFreqNew(const BlastScoreBlk* sbp)
 {
-	BLAST_ResFreq*	rfp;
+	Blast_ResFreq*	rfp;
 
 	if (sbp == NULL)
 	{
 		return NULL;
 	}
 
-	rfp = (BLAST_ResFreq*) calloc(1, sizeof(BLAST_ResFreq));
+	rfp = (Blast_ResFreq*) calloc(1, sizeof(Blast_ResFreq));
 	if (rfp == NULL)
 		return NULL;
 
@@ -1399,7 +1383,7 @@ BlastResFreqNew(BlastScoreBlk* sbp)
 	rfp->prob0 = (double*) calloc(sbp->alphabet_size, sizeof(double));
 	if (rfp->prob0 == NULL) 
 	{
-		rfp = BlastResFreqDestruct(rfp);
+		rfp = Blast_ResFreqDestruct(rfp);
 		return rfp;
 	}
 	rfp->prob = rfp->prob0 - sbp->alphabet_start;
@@ -1502,7 +1486,7 @@ static BLAST_LetterProb	nt_prob[] = {
 	Normalize the frequencies to "norm".
 */
 static Int2
-BlastResFreqNormalize(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, double norm)
+Blast_ResFreqNormalize(const BlastScoreBlk* sbp, Blast_ResFreq* rfp, double norm)
 {
 	Int2	alphabet_stop, index;
 	double	sum = 0., p;
@@ -1551,7 +1535,7 @@ BlastGetStdAlphabet (Uint1 alphabet_code, Uint1* residues, Uint4 residues_size)
 		if (alphabet_code == BLASTAA_SEQ_CODE)
 		{
 	 		residues[index] = 
-            ncbieaa_to_ncbistdaa[toupper(STD_AMINO_ACID_FREQS[index].ch)];
+            AMINOACID_TO_NCBISTDAA[toupper(STD_AMINO_ACID_FREQS[index].ch)];
 		}
 		else
 		{
@@ -1562,11 +1546,11 @@ BlastGetStdAlphabet (Uint1 alphabet_code, Uint1* residues, Uint4 residues_size)
 	return index;
 }
 
-static Int2
-BlastResFreqStdComp(BlastScoreBlk* sbp, BLAST_ResFreq* rfp)
+Int2
+Blast_ResFreqStdComp(const BlastScoreBlk* sbp, Blast_ResFreq* rfp)
 {
 	Int2 retval;
-   Uint4 index;
+        Uint4 index;
 	Uint1* residues;
 
 	if (sbp->protein_alphabet == TRUE)
@@ -1591,7 +1575,7 @@ BlastResFreqStdComp(BlastScoreBlk* sbp, BLAST_ResFreq* rfp)
 		}
 	}
 
-	BlastResFreqNormalize(sbp, rfp, 1.0);
+	Blast_ResFreqNormalize(sbp, rfp, 1.0);
 
 	return 0;
 }
@@ -1677,7 +1661,7 @@ BlastResCompStr(BlastScoreBlk* sbp, BLAST_ResComp* rcp, char* str, Int4 length)
 }
 
 static Int2
-BlastResFreqClr(BlastScoreBlk* sbp, BLAST_ResFreq* rfp)
+Blast_ResFreqClr(const BlastScoreBlk* sbp, Blast_ResFreq* rfp)
 {
 	Int2	alphabet_max, index;
  
@@ -1692,7 +1676,7 @@ BlastResFreqClr(BlastScoreBlk* sbp, BLAST_ResFreq* rfp)
 	Calculate the residue frequencies associated with the provided ResComp
 */
 static Int2
-BlastResFreqResComp(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, BLAST_ResComp* rcp)
+Blast_ResFreqResComp(BlastScoreBlk* sbp, Blast_ResFreq* rfp, BLAST_ResComp* rcp)
 {
 	Int2	alphabet_max, index;
 	double	sum = 0.;
@@ -1708,7 +1692,7 @@ BlastResFreqResComp(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, BLAST_ResComp* rcp)
 		sum += rcp->comp[index];
 
 	if (sum == 0.) {
-		BlastResFreqClr(sbp, rfp);
+		Blast_ResFreqClr(sbp, rfp);
 		return 0;
 	}
 
@@ -1719,7 +1703,7 @@ BlastResFreqResComp(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, BLAST_ResComp* rcp)
 }
 
 static Int2
-BlastResFreqString(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, char* string, Int4 length)
+Blast_ResFreqString(BlastScoreBlk* sbp, Blast_ResFreq* rfp, char* string, Int4 length)
 {
 	BLAST_ResComp* rcp;
 	
@@ -1727,7 +1711,7 @@ BlastResFreqString(BlastScoreBlk* sbp, BLAST_ResFreq* rfp, char* string, Int4 le
 
 	BlastResCompStr(sbp, rcp, string, length);
 
-	BlastResFreqResComp(sbp, rfp, rcp);
+	Blast_ResFreqResComp(sbp, rfp, rcp);
 
 	rcp = BlastResCompDestruct(rcp);
 
@@ -1778,7 +1762,7 @@ BlastScoreFreqNew(Int4 score_min, Int4 score_max)
 }
 
 static Int2
-BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, BLAST_ResFreq* rfp1, BLAST_ResFreq* rfp2)
+BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, Blast_ResFreq* rfp1, Blast_ResFreq* rfp2)
 {
 	Int4 **	matrix;
 	Int4	score, obs_min, obs_max;
@@ -1839,156 +1823,228 @@ BlastScoreFreqCalc(BlastScoreBlk* sbp, BLAST_ScoreFreq* sfp, BLAST_ResFreq* rfp1
 	return 0;
 }
 
-#define DIMOFP0	(iter*range + 1)
+
+#define DIMOFP0	(iterlimit*range + 1)
 #define DIMOFP0_MAX (BLAST_KARLIN_K_ITER_MAX*BLAST_SCORE_RANGE_MAX+1)
 
 
+#define SMALL_LAMBDA_THRESHOLD 20 /*defines special case in K computation*/
+                                /*threshold is on exp(-Lambda)*/
+
+/*The following procedure computes K. The input includes Lambda, H,
+ *  and an array of probabilities for each score.
+ *  There are distinct closed form for three cases:
+ *  1. high score is 1 low score is -1
+ *  2. high score is 1 low score is not -1
+ *  3. low score is -1, high score is not 1
+ *
+ * Otherwise, in most cases the value is computed as:
+ * -exp(-2.0*outerSum) / ((H/lambda)*(exp(-lambda) - 1)
+ * The last term (exp(-lambda) - 1) can be computed in two different
+ * ways depending on whether lambda is small or not.
+ * outerSum is a sum of the terms
+ * innerSum/j, where j is denoted by iterCounter in the code.
+ * The sum is truncated when the new term innersum/j i sufficiently small.
+ * innerSum is a weighted sum of the probabilities of
+ * of achieving a total score i in a gapless alignment,
+ * which we denote by P(i,j).
+ * of exactly j characters. innerSum(j) has two parts
+ * Sum over i < 0  P(i,j)exp(-i * lambda) +
+ * Sum over i >=0  P(i,j)
+ * The terms P(i,j) are computed by dynamic programming.
+ * An earlier version was flawed in that ignored the special case 1
+ * and tried to replace the tail of the computation of outerSum
+ * by a geometric series, but the base of the geometric series
+ * was not accurately estimated in some cases.
+ */
+
 static double
-BlastKarlinLHtoK(BLAST_ScoreFreq* sfp, double	lambda, double H)
+BlastKarlinLHtoK(BLAST_ScoreFreq* sfp, double lambda, double H)
 {
-#ifndef BLAST_KARLIN_STACKP
-	double* P0 = NULL;
-#else
-	double	P0 [DIMOFP0_MAX];
-#endif
-	Int4	low;	/* Lowest score (must be negative) */
-	Int4	high;	/* Highest score (must be positive) */
-	double	K;			/* local copy of K */
-	double	ratio;
-	int		i, j;
-	Int4	range, lo, hi, first, last, d;
-	register double	sum;
-	double	Sum, av, oldsum, oldsum2, score_avg;
-	int		iter;
-	double	sumlimit;
-	double* p, * ptrP, * ptr1, * ptr2, * ptr1e;
-	double	x;
-        Boolean         bi_modal_score = FALSE;
+    /*The next array stores the probabilities of getting each possible
+      score in an alignment of fixed length; the array is shifted
+      during part of the computation, so that
+      entry 0 is for score 0.  */
+    double         *alignmentScoreProbabilities = NULL;
+    Int4            low;    /* Lowest score (must be negative) */
+    Int4            high;   /* Highest score (must be positive) */
+    Int4            range;  /* range of scores, computed as high - low*/
+    double          K;      /* local copy of K  to return*/
+    int             i;   /*loop index*/
+    int             iterCounter; /*counter on iterations*/
+    Int4            divisor; /*candidate divisor of all scores with
+                               non-zero probabilities*/
+    /*highest and lowest possible alignment scores for current length*/
+    Int4            lowAlignmentScore, highAlignmentScore;
+    Int4            first, last; /*loop indices for dynamic program*/
+    register double innerSum;
+    double          oldsum, oldsum2;  /* values of innerSum on previous
+                                         iterations*/
+    double          outerSum;        /* holds sum over j of (innerSum
+                                        for iteration j/j)*/
 
-	if (lambda <= 0. || H <= 0.) {
-		return -1.;
-	}
+    double          score_avg; /*average score*/
+    /*first term to use in the closed form for the case where
+      high == 1 or low == -1, but not both*/
+    double          firstTermClosedForm;  /*usually store H/lambda*/
+    int             iterlimit; /*upper limit on iterations*/
+    double          sumlimit; /*lower limit on contributions
+                                to sum over scores*/
 
-	if (sfp->score_avg >= 0.0) {
-		return -1.;
-	}
+    /*array of score probabilities reindexed so that low is at index 0*/
+    double         *probArrayStartLow;
 
-	low = sfp->obs_min;
-	high = sfp->obs_max;
-	range = high - low;
-	p = &sfp->sprob[low];
+    /*pointers used in dynamic program*/
+    double         *ptrP, *ptr1, *ptr2, *ptr1e;
+    double          expMinusLambda; /*e^^(-Lambda) */
 
-        /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
-           Karlin&Altschul (1990) */
-    	for (i = 1, d = -low; i <= range && d > 1; ++i)
-           if (p[i])
-              d = BLAST_Gcd(d, i);
-        
-        high /= d;
-        low /= d;
-        lambda *= d;
+    if (lambda <= 0. || H <= 0.) {
+        /* Theory dictates that H and lambda must be positive, so
+         * return -1 to indicate an error */
+        return -1.;
+    }
 
-	range = high - low;
+    /*Karlin-Altschul theory works only if the expected score
+      is negative*/
+    if (sfp->score_avg >= 0.0) {
+        return -1.;
+    }
 
-	av = H/lambda;
-	x = exp((double) -lambda);
+    low   = sfp->obs_min;
+    high  = sfp->obs_max;
+    range = high - low;
 
-	if (low == -1 || high == 1) {
-           if (high == 1)
-              K = av;
-           else {
-              score_avg = sfp->score_avg / d;
-              K = (score_avg * score_avg) / av;
-           }
-           return K * (1.0 - x);
-	}
+    probArrayStartLow = &sfp->sprob[low];
+    /* Look for the greatest common divisor ("delta" in Appendix of PNAS 87 of
+       Karlin&Altschul (1990) */
+    for (i = 1, divisor = -low; i <= range && divisor > 1; ++i) {
+        if (probArrayStartLow[i])
+            divisor = BLAST_Gcd(divisor, i);
+    }
 
-	sumlimit = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
+    high   /= divisor;
+    low    /= divisor;
+    lambda *= divisor;
 
-	iter = BLAST_KARLIN_K_ITER_MAX;
+    range = high - low;
 
-	if (DIMOFP0 > DIMOFP0_MAX) {
-		return -1.;
-	}
-#ifndef BLAST_KARLIN_STACKP
-	P0 = (double*)calloc(DIMOFP0 , sizeof(*P0));
-	if (P0 == NULL)
-		return -1.;
-#else
-	memset((char*)P0, 0, DIMOFP0*sizeof(P0[0]));
-#endif
+    firstTermClosedForm = H/lambda;
+    expMinusLambda      = exp((double) -lambda);
 
-	Sum = 0.;
-	lo = hi = 0;
-	P0[0] = sum = oldsum = oldsum2 = 1.;
+    if (low == -1 && high == 1) {
+        K = (sfp->sprob[low] - sfp->sprob[high]) *
+            (sfp->sprob[low] - sfp->sprob[high]) / sfp->sprob[low];
+        return(K);
+    }
 
-        if (p[0] + p[range*d] == 1.) {
-           /* There are only two scores (e.g. DNA comparison matrix */
-           bi_modal_score = TRUE;
-           sumlimit *= 0.01;
+    if (low == -1 || high == 1) {
+        if (high == 1)
+            ;
+        else {
+            score_avg = sfp->score_avg / divisor;
+            firstTermClosedForm
+                = (score_avg * score_avg) / firstTermClosedForm;
         }
+        return firstTermClosedForm * (1.0 - expMinusLambda);
+    }
 
-        for (j = 0; j < iter && sum > sumlimit; Sum += sum /= ++j) {
-           first = last = range;
-           lo += low;
-           hi += high;
-           for (ptrP = P0+(hi-lo); ptrP >= P0; *ptrP-- =sum) {
-              ptr1 = ptrP - first;
-              ptr1e = ptrP - last;
-              ptr2 = p + first;
-              for (sum = 0.; ptr1 >= ptr1e; )
-                 sum += *ptr1--  *  *ptr2++;
-              if (first)
-                 --first;
-              if (ptrP - P0 <= range)
-                 --last;
-           }
-					 /* Horner's rule */
-					 sum = *++ptrP;
-					 for( i = lo + 1; i < 0; i++ ) {
-						 sum = *++ptrP + sum * x;
-					 }
-					 sum *= x;
+    sumlimit  = BLAST_KARLIN_K_SUMLIMIT_DEFAULT;
+    iterlimit = BLAST_KARLIN_K_ITER_MAX;
 
-           for (; i <= hi; ++i)
-              sum += *++ptrP;
-           oldsum2 = oldsum;
-           oldsum = sum;
+    if (DIMOFP0 > DIMOFP0_MAX) {
+        return -1.;
+    }
+    alignmentScoreProbabilities =
+        (double *)calloc(DIMOFP0, sizeof(*alignmentScoreProbabilities));
+    if (alignmentScoreProbabilities == NULL)
+        return -1.;
+
+    outerSum = 0.;
+    lowAlignmentScore = highAlignmentScore = 0;
+    alignmentScoreProbabilities[0] = innerSum = oldsum = oldsum2 = 1.;
+
+    for (iterCounter = 0;
+         ((iterCounter < iterlimit) && (innerSum > sumlimit));
+         outerSum += innerSum /= ++iterCounter) {
+        first = last = range;
+        lowAlignmentScore  += low;
+        highAlignmentScore += high;
+        /*dynamic program to compute P(i,j)*/
+        for (ptrP = alignmentScoreProbabilities +
+                 (highAlignmentScore-lowAlignmentScore);
+             ptrP >= alignmentScoreProbabilities;
+             *ptrP-- =innerSum) {
+            ptr1  = ptrP - first;
+            ptr1e = ptrP - last;
+            ptr2  = probArrayStartLow + first;
+            for (innerSum = 0.; ptr1 >= ptr1e; )
+                innerSum += *ptr1--  *  *ptr2++;
+            if (first)
+                --first;
+            if (ptrP - alignmentScoreProbabilities <= range)
+                --last;
         }
-        
-        if (!bi_modal_score) {
-           /* Terms of geometric progression added for correction */
-           ratio = oldsum / oldsum2;
-           if (ratio >= (1.0 - sumlimit*0.001)) {
-              K = -1.;
-              goto CleanUp;
-           }
-           sumlimit *= 0.01;
-           while (sum > sumlimit) {
-              oldsum *= ratio;
-              Sum += sum = oldsum / ++j;
-           }
+        /* Horner's rule */
+        innerSum = *++ptrP;
+        for( i = lowAlignmentScore + 1; i < 0; i++ ) {
+            innerSum = *++ptrP + innerSum * expMinusLambda;
         }
+        innerSum *= expMinusLambda;
 
-	if (x <  1.0 / 0.05 ) {
-		K = exp((double)-2.0*Sum) / (av*(1.0 - x));
-	} else {
-		K = -exp((double)-2.0*Sum) / (av*BLAST_Expm1(-(double)lambda));
-	}
+        for (; i <= highAlignmentScore; ++i)
+            innerSum += *++ptrP;
+        oldsum2 = oldsum;
+        oldsum  = innerSum;
+    }
 
-CleanUp:
-#ifndef BLAST_KARLIN_K_STACKP
-	if (P0 != NULL)
-		sfree(P0);
+#ifdef ADD_GEOMETRIC_TERMS_TO_K
+    /*old code assumed that the later terms in sum were
+      asymptotically comparable to those of a geometric
+      progression, and tried to speed up convergence by
+      guessing the estimated ratio between sucessive terms
+      and using the explicit terms of a geometric progression
+      to speed up convergence. However, the assumption does not
+      always hold, and convergenece of the above code is fast
+      enough in practice*/
+    /* Terms of geometric progression added for correction */
+    {
+        double     ratio;  /* fraction used to generate the
+                                   geometric progression */
+
+        ratio = oldsum / oldsum2;
+        if (ratio >= (1.0 - sumlimit*0.001)) {
+            K = -1.;
+            if (alignmentScoreProbabilities != NULL)
+                sfree(alignmentScoreProbabilities);
+            return K;
+        }
+        sumlimit *= 0.01;
+        while (innerSum > sumlimit) {
+            oldsum   *= ratio;
+            outerSum += innerSum = oldsum / ++iterCounter;
+        }
+    }
 #endif
 
-	return K;
+    if (expMinusLambda <  SMALL_LAMBDA_THRESHOLD ) {
+        K = -exp((double)-2.0*outerSum) /
+            (firstTermClosedForm*(expMinusLambda - 1.0));
+    } else {
+        K = -exp((double)-2.0*outerSum) /
+            (firstTermClosedForm*BLAST_Expm1(-(double)lambda));
+    }
+
+    if (alignmentScoreProbabilities != NULL)
+        sfree(alignmentScoreProbabilities);
+
+    return K;
 }
+
 
 /**
  * Find positive solution to sum_{i=low}^{high} exp(i lambda) = 1.
  * 
- * @param probs probabilities of a score occuring 
+ * @param probs probabilities of a score occurring 
  * @param d the gcd of the possible scores. This equals 1 if the scores
  * are not a lattice
  * @param low the lowest possible score
@@ -2100,8 +2156,8 @@ NlmKarlinLambdaNR( double* probs, Int4 d, Int4 low, Int4 high, double lambda0, d
 }
 
 
-static double
-BlastKarlinLambdaNR(BLAST_ScoreFreq* sfp)
+double
+Blast_KarlinLambdaNR(BLAST_ScoreFreq* sfp, double initialLambdaGuess)
 {
 	Int4	low;			/* Lowest score (must be negative)  */
 	Int4	high;			/* Highest score (must be positive) */
@@ -2126,9 +2182,9 @@ BlastKarlinLambdaNR(BLAST_ScoreFreq* sfp)
 	}
 	returnValue =
 		NlmKarlinLambdaNR( sprob, d, low, high,
-											 BLAST_KARLIN_LAMBDA0_DEFAULT,
-											 BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT,
-											 20, 20 + BLAST_KARLIN_LAMBDA_ITER_DEFAULT, &itn );
+                           initialLambdaGuess,
+                           BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT,
+						   20, 20 + BLAST_KARLIN_LAMBDA_ITER_DEFAULT, &itn );
 
 
 	return returnValue;
@@ -2194,7 +2250,7 @@ See:  Karlin, S. & Altschul, S.F. "Methods for Assessing the Statistical
 
     A program that calls this routine must provide the value of the lowest
     possible score, the value of the greatest possible score, and a pointer
-    to an array of probabilities for the occurence of all scores between
+    to an array of probabilities for the occurrence of all scores between
     these two extreme scores.  For example, if score -2 occurs with
     probability 0.7, score 0 occurs with probability 0.1, and score 3
     occurs with probability 0.2, then the subroutine must be called with
@@ -2232,7 +2288,7 @@ See:  Karlin, S. & Altschul, S.F. "Methods for Assessing the Statistical
 
 *******************************************************************************/
 static Int2
-BlastKarlinBlkCalc(BLAST_KarlinBlk* kbp, BLAST_ScoreFreq* sfp)
+BlastKarlinBlkCalc(Blast_KarlinBlk* kbp, BLAST_ScoreFreq* sfp)
 {
 	
 
@@ -2241,7 +2297,7 @@ BlastKarlinBlkCalc(BLAST_KarlinBlk* kbp, BLAST_ScoreFreq* sfp)
 
 	/* Calculate the parameter Lambda */
 
-	kbp->Lambda = BlastKarlinLambdaNR(sfp);
+	kbp->Lambda = Blast_KarlinLambdaNR(sfp, BLAST_KARLIN_LAMBDA0_DEFAULT);
 	if (kbp->Lambda < 0.)
 		goto ErrExit;
 
@@ -2282,29 +2338,29 @@ ErrExit:
 */
 
 Int2
-BLAST_ScoreBlkFill(BlastScoreBlk* sbp, char* query, Int4 query_length, Int2 context_number)
+BLAST_ScoreBlkFill(BlastScoreBlk* sbp, char* query, Int4 query_length, Int4 context_number)
 {
-	BLAST_ResFreq* rfp,* stdrfp;
+	Blast_ResFreq* rfp,* stdrfp;
 	Int2 retval=0;
 
-	rfp = BlastResFreqNew(sbp);
-	stdrfp = BlastResFreqNew(sbp);
-	BlastResFreqStdComp(sbp, stdrfp);
-	BlastResFreqString(sbp, rfp, query, query_length);
+	rfp = Blast_ResFreqNew(sbp);
+	stdrfp = Blast_ResFreqNew(sbp);
+	Blast_ResFreqStdComp(sbp, stdrfp);
+	Blast_ResFreqString(sbp, rfp, query, query_length);
 	sbp->sfp[context_number] = BlastScoreFreqNew(sbp->loscore, sbp->hiscore);
 	BlastScoreFreqCalc(sbp, sbp->sfp[context_number], rfp, stdrfp);
-	sbp->kbp_std[context_number] = BLAST_KarlinBlkCreate();
+	sbp->kbp_std[context_number] = Blast_KarlinBlkCreate();
 	retval = BlastKarlinBlkCalc(sbp->kbp_std[context_number], sbp->sfp[context_number]);
 	if (retval)
 	{
-		rfp = BlastResFreqDestruct(rfp);
-		stdrfp = BlastResFreqDestruct(stdrfp);
+		rfp = Blast_ResFreqDestruct(rfp);
+		stdrfp = Blast_ResFreqDestruct(stdrfp);
 		return retval;
 	}
-	sbp->kbp_psi[context_number] = BLAST_KarlinBlkCreate();
+	sbp->kbp_psi[context_number] = Blast_KarlinBlkCreate();
 	retval = BlastKarlinBlkCalc(sbp->kbp_psi[context_number], sbp->sfp[context_number]);
-	rfp = BlastResFreqDestruct(rfp);
-	stdrfp = BlastResFreqDestruct(stdrfp);
+	rfp = Blast_ResFreqDestruct(rfp);
+	stdrfp = Blast_ResFreqDestruct(stdrfp);
 
 	return retval;
 }
@@ -2315,21 +2371,21 @@ BLAST_ScoreBlkFill(BlastScoreBlk* sbp, char* query, Int4 query_length, Int2 cont
 	parameters are bad, as they're calculated for non-coding regions.
 */
 
-static BLAST_KarlinBlk*
-BlastKarlinBlkStandardCalcEx(BlastScoreBlk* sbp)
+Blast_KarlinBlk*
+Blast_KarlinBlkIdealCalc(BlastScoreBlk* sbp)
 
 {
-	BLAST_KarlinBlk* kbp_ideal;
-	BLAST_ResFreq* stdrfp;
+	Blast_KarlinBlk* kbp_ideal;
+	Blast_ResFreq* stdrfp;
 	BLAST_ScoreFreq* sfp;
 
-	stdrfp = BlastResFreqNew(sbp);
-	BlastResFreqStdComp(sbp, stdrfp);
+	stdrfp = Blast_ResFreqNew(sbp);
+	Blast_ResFreqStdComp(sbp, stdrfp);
 	sfp = BlastScoreFreqNew(sbp->loscore, sbp->hiscore);
 	BlastScoreFreqCalc(sbp, sfp, stdrfp, stdrfp);
-	kbp_ideal = BLAST_KarlinBlkCreate();
+	kbp_ideal = Blast_KarlinBlkCreate();
 	BlastKarlinBlkCalc(kbp_ideal, sfp);
-	stdrfp = BlastResFreqDestruct(stdrfp);
+	stdrfp = Blast_ResFreqDestruct(stdrfp);
 
 	sfp = BlastScoreFreqDestruct(sfp);
 
@@ -2337,13 +2393,13 @@ BlastKarlinBlkStandardCalcEx(BlastScoreBlk* sbp)
 }
 
 Int2
-BLAST_KarlinBlkStandardCalc(BlastScoreBlk* sbp, Int2 context_start, Int2 context_end)
+Blast_KarlinBlkStandardCalc(BlastScoreBlk* sbp, Int4 context_start, Int4 context_end)
 {
 
-	BLAST_KarlinBlk* kbp_ideal,* kbp;
-	Int2 index;
+	Blast_KarlinBlk* kbp_ideal,* kbp;
+	Int4 index;
 
-	kbp_ideal = BlastKarlinBlkStandardCalcEx(sbp);
+	kbp_ideal = Blast_KarlinBlkIdealCalc(sbp);
 /* Replace the calculated values with ideal ones for blastx, tblastx. */
 	for (index=context_start; index<=context_end; index++)
 	{
@@ -2358,7 +2414,7 @@ BLAST_KarlinBlkStandardCalc(BlastScoreBlk* sbp, Int2 context_start, Int2 context
 			kbp->H = kbp_ideal->H;
 		}
 	}
-	kbp_ideal = BlastKarlinBlkDestruct(kbp_ideal);
+	kbp_ideal = Blast_KarlinBlkDestruct(kbp_ideal);
 
 	return 0;
 }
@@ -2367,13 +2423,13 @@ BLAST_KarlinBlkStandardCalc(BlastScoreBlk* sbp, Int2 context_start, Int2 context
 	Creates the Karlin Block.
 */
 
-BLAST_KarlinBlk*
-BLAST_KarlinBlkCreate(void)
+Blast_KarlinBlk*
+Blast_KarlinBlkCreate(void)
 
 {
-	BLAST_KarlinBlk* kbp;
+	Blast_KarlinBlk* kbp;
 
-	kbp = (BLAST_KarlinBlk*) calloc(1, sizeof(BLAST_KarlinBlk));
+	kbp = (Blast_KarlinBlk*) calloc(1, sizeof(Blast_KarlinBlk));
 
 	return kbp;
 }
@@ -2672,7 +2728,7 @@ BlastKarlinReportAllowedValues(const char *matrix_name,
 				sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) BLAST_Nint(values[index][0]), (long) BLAST_Nint(values[index][1]));
 			else
 				sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld are supported", (long) BLAST_Nint(values[index][0]), (long) BLAST_Nint(values[index][1]), (long) BLAST_Nint(values[index][2]));
-			Blast_MessageWrite(error_return, 2, 0, 0, buffer);
+			Blast_MessageWrite(error_return, BLAST_SEV_ERROR, 0, 0, buffer);
 		}
 	}
 
@@ -2688,11 +2744,11 @@ BlastKarlinReportAllowedValues(const char *matrix_name,
 	if kbp is NULL, then a validation is perfomed.
 */
 Int2
-BLAST_KarlinBlkGappedCalc(BLAST_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, char* matrix_name, Blast_Message** error_return)
+Blast_KarlinBlkGappedCalc(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, char* matrix_name, Blast_Message** error_return)
 
 {
 	char buffer[256];
-	Int2 status = BLAST_KarlinkGapBlkFill(kbp, gap_open, gap_extend, decline_align, matrix_name);
+	Int2 status = Blast_KarlinkGapBlkFill(kbp, gap_open, gap_extend, decline_align, matrix_name);
 
 	if (status && error_return)
 	{
@@ -2704,13 +2760,13 @@ BLAST_KarlinBlkGappedCalc(BLAST_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, 
 			vnp = head = BlastLoadMatrixValues();
 
 			sprintf(buffer, "%s is not a supported matrix", matrix_name);
-			Blast_MessageWrite(error_return, 2, 0, 0, buffer);
+			Blast_MessageWrite(error_return, BLAST_SEV_ERROR, 0, 0, buffer);
 
 			while (vnp)
 			{
 				matrix_info = vnp->ptr;
 				sprintf(buffer, "%s is a supported matrix", matrix_info->name);
-            Blast_MessageWrite(error_return, 2, 0, 0, buffer);
+            Blast_MessageWrite(error_return, BLAST_SEV_ERROR, 0, 0, buffer);
 				vnp = vnp->next;
 			}
 
@@ -2722,7 +2778,7 @@ BLAST_KarlinBlkGappedCalc(BLAST_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, 
 				sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
 			else
 				sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
-			Blast_MessageWrite(error_return, 2, 0, 0, buffer);
+			Blast_MessageWrite(error_return, BLAST_SEV_ERROR, 0, 0, buffer);
 			BlastKarlinReportAllowedValues(matrix_name, error_return);
 		}
 	}
@@ -2739,7 +2795,7 @@ BLAST_KarlinBlkGappedCalc(BLAST_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, 
 			2 if matrix found, but open, extend etc. values not supported.
 */
 Int2
-BLAST_KarlinkGapBlkFill(BLAST_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, char* matrix_name)
+Blast_KarlinkGapBlkFill(Blast_KarlinBlk* kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, char* matrix_name)
 {
 	Boolean found_matrix=FALSE, found_values=FALSE;
 	array_of_8 *values;
@@ -2886,23 +2942,6 @@ BLAST_PrintAllowedValues(const char *matrix_name, Int4 gap_open, Int4 gap_extend
 	return buffer;
 }
 	
-static double
-BlastGapDecayInverse(double pvalue, unsigned nsegs, double decayrate)
-{
-	if (decayrate <= 0. || decayrate >= 1. || nsegs == 0)
-		return pvalue;
-
-	return pvalue * (1. - decayrate) * BLAST_Powi(decayrate, nsegs - 1);
-}
-
-static double
-BlastGapDecay(double pvalue, unsigned nsegs, double decayrate)
-{
-	if (decayrate <= 0. || decayrate >= 1. || nsegs == 0)
-		return pvalue;
-
-	return pvalue / ((1. - decayrate) * BLAST_Powi(decayrate, nsegs - 1));
-}
 
 /* Smallest float that might not cause a floating point exception in
 	S = (Int4) (ceil( log((double)(K * searchsp / E)) / Lambda ));
@@ -2911,7 +2950,7 @@ below.
 #define BLASTKAR_SMALL_FLOAT 1.0e-297
 static Int4
 BlastKarlinEtoS_simple(double	E,	/* Expect value */
-	BLAST_KarlinBlk*	kbp,
+	Blast_KarlinBlk*	kbp,
 	double	searchsp)	/* size of search space */
 {
 
@@ -2932,6 +2971,26 @@ BlastKarlinEtoS_simple(double	E,	/* Expect value */
 	return S;
 }
 
+/* Compute a divisor used to weight the evalue of a collection of
+ * "nsegs" distinct alignments.  These divisors are used to compensate
+ * for the effect of choosing the best among multiple collections of
+ * alignments.  See
+ *
+ * Stephen F. Altschul. Evaluating the statitical significance of
+ * multiple distinct local alignments. In Suhai, editior, Theoretical
+ * and Computational Methods in Genome Research, pages 1-14. Plenum
+ * Press, New York, 1997.
+ *
+ * The "decayrate" parameter of this routine is a value in the
+ * interval (0,1). Typical values of decayrate are .1 and .5. */
+
+double
+BLAST_GapDecayDivisor(double decayrate, unsigned nsegs )
+{
+    return (1. - decayrate) * BLAST_Powi(decayrate, nsegs - 1);
+}
+
+
 /*
 	BlastCutoffs
 	Calculate the cutoff score, S, and the highest expected score.
@@ -2940,7 +2999,7 @@ BlastKarlinEtoS_simple(double	E,	/* Expect value */
 Int2
 BLAST_Cutoffs(Int4 *S, /* cutoff score */
 	double* E, /* expected no. of HSPs scoring at or above S */
-	BLAST_KarlinBlk* kbp,
+	Blast_KarlinBlk* kbp,
 	double searchsp, /* size of search space. */
 	Boolean dodecay,  /* TRUE ==> use gapdecay feature */
    double gap_decay_rate)
@@ -2960,9 +3019,15 @@ BLAST_Cutoffs(Int4 *S, /* cutoff score */
 	esave = e;
 	if (e > 0.) 
 	{
-		if (dodecay)
-			e = BlastGapDecayInverse(e, 1, gap_decay_rate);
-		es = BlastKarlinEtoS_simple(e, kbp, searchsp);
+        if (dodecay) {
+            /* Invert the adjustment to the e-value that will be applied
+             * to compensate for the effect of choosing the best among
+             * multiple alignments */
+            if( gap_decay_rate > 0 && gap_decay_rate < 1 ) {
+                e *= BLAST_GapDecayDivisor(gap_decay_rate, 1);
+            }
+        }
+        es = BlastKarlinEtoS_simple(e, kbp, searchsp);
 	}
 	/*
 	Pick the larger cutoff score between the user's choice
@@ -2979,8 +3044,14 @@ BLAST_Cutoffs(Int4 *S, /* cutoff score */
 	if (esave <= 0. || !s_changed) 
 	{
 		e = BLAST_KarlinStoE_simple(s, kbp, searchsp);
-		if (dodecay)
-			e = BlastGapDecay(e, 1, gap_decay_rate);
+		if (dodecay) {
+            /* Weight the e-value to compensate for the effect of
+             * choosing the best of more than one collection of
+             * distinct alignments */
+            if( gap_decay_rate > 0 && gap_decay_rate < 1 ) {
+                e /= BLAST_GapDecayDivisor(gap_decay_rate, 1);
+            }
+        }
 		*E = e;
 	}
 
@@ -2994,7 +3065,7 @@ BLAST_Cutoffs(Int4 *S, /* cutoff score */
 */
 double
 BLAST_KarlinStoE_simple(Int4 S,
-		BLAST_KarlinBlk* kbp,
+		Blast_KarlinBlk* kbp,
 		double	searchsp)	/* size of search space. */
 {
 	double	Lambda, K, H; /* parameters for Karlin statistics */
@@ -3229,115 +3300,445 @@ f(double	x, void*	vp)
 }
 
 /*
-	Calculates the p-value for alignments with "small" gaps (typically
-	under fifty residues/basepairs) following ideas of Stephen Altschul's.
-	"gap" gives the size of this gap, "gap_prob" is the probability
-	of this model of gapping being correct (it's thought that gap_prob
-	will generally be 0.5).  "num" is the number of HSP's involved, "sum" 
-	is the "raw" sum-score of these HSP's. "subject_len" is the (effective)
-	length of the database sequence, "query_length" is the (effective) 
-	length of the query sequence.  min_length_one specifies whether one
-	or 1/K will be used as the minimum expected length.
-
+    Calculates the e-value for alignments with "small" gaps (typically
+    under fifty residues/basepairs) following ideas of Stephen Altschul's.
 */
 
 double
-BLAST_SmallGapSumE(BLAST_KarlinBlk* kbp, Int4 gap, double gap_prob, double gap_decay_rate, Int2 num, double score_prime, Int4 query_length, Int4 subject_length)
-
+BLAST_SmallGapSumE(
+    Blast_KarlinBlk * kbp,     /* statistical parameters */
+    Int4 gap,                   /* maximum size of gaps between alignments */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    double score_prime,         /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    double weight_divisor)      /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
 {
+    double search_space;        /* The effective size of the search space */
+    double sum_p;               /* The p-value of this set of alignments */
+    double sum_e;               /* The e-value of this set of alignments */
 
-	double sum_p, sum_e;
-		
-	score_prime -= kbp->logK + log((double)subject_length*(double)query_length) + (num-1)*(kbp->logK + 2*log((double)gap));
-	score_prime -= BLAST_LnFactorial((double) num); 
+    search_space = (double)subject_length*(double)query_length;
 
-	sum_p = BlastSumP(num, score_prime);
+    score_prime -= kbp->logK +
+        log(search_space) + (num-1)*(kbp->logK + 2*log((double)gap));
+    score_prime -= BLAST_LnFactorial((double) num);
 
-	sum_e = BlastKarlinPtoE(sum_p);
+    sum_p = BlastSumP(num, score_prime);
 
-	sum_e = sum_e/((1.0-gap_decay_rate)*BLAST_Powi(gap_decay_rate, (num-1)));
+    sum_e = BlastKarlinPtoE(sum_p);
 
-	if (num > 1)
-	{
-		if (gap_prob == 0.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/gap_prob;
-	}
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
 
-	return sum_e;
+    return sum_e;
 }
 
 /*
-	Calculates the p-value for alignments with asymmetric gaps, typically 
-        a small (like in BlastSmallGapSumE) gap for one (protein) sequence and
-        a possibly large (up to 4000 bp) gap in the other (translated DNA) 
-        sequence. Used for linking HSPs representing exons in the DNA sequence
-        that are separated by introns.
+    Calculates the e-value of a collection multiple distinct
+    alignments with asymmetric gaps between the alignments. The gaps
+    in one (protein) sequence are typically small (like in
+    BLAST_SmallGapSumE) gap an the gaps in the other (translated DNA)
+    sequence are possibly large (up to 4000 bp.)  This routine is used
+    for linking HSPs representing exons in the DNA sequence that are
+    separated by introns.
 */
 
 double
-BLAST_UnevenGapSumE(BLAST_KarlinBlk* kbp, Int4 p_gap, Int4 n_gap, double gap_prob, double gap_decay_rate, Int2 num, double score_prime, Int4 query_length, Int4 subject_length)
-
+BLAST_UnevenGapSumE(
+    Blast_KarlinBlk * kbp,      /* statistical parameters */
+    Int4 p_gap,                 /* maximum size of gaps between alignments,
+                                 * in one sequence */
+    Int4 n_gap,                 /* maximum size of gaps between alignments,
+                                 * in the other sequence */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    double score_prime,         /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    double weight_divisor)      /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
 {
+    double search_space;   /* The effective size of the search space */
+    double sum_p;          /* The p-value of this set of alignments */
+    double sum_e;          /* The e-value of this set of alignments */
 
-	double sum_p, sum_e;
-		
-	score_prime -= kbp->logK + log((double)subject_length*(double)query_length) + (num-1)*(kbp->logK + log((double)p_gap) + log((double)n_gap));
-	score_prime -= BLAST_LnFactorial((double) num); 
+    search_space = (double)subject_length*(double)query_length;
 
-	sum_p = BlastSumP(num, score_prime);
+    score_prime -=
+        kbp->logK + log(search_space) +
+        (num-1)*(kbp->logK + log((double)p_gap) + log((double)n_gap));
+    score_prime -= BLAST_LnFactorial((double) num);
 
-	sum_e = BlastKarlinPtoE(sum_p);
+    sum_p = BlastSumP(num, score_prime);
 
-	sum_e = sum_e/((1.0-gap_decay_rate)*BLAST_Powi(gap_decay_rate, (num-1)));
+    sum_e = BlastKarlinPtoE(sum_p);
 
-	if (num > 1)
-	{
-		if (gap_prob == 0.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/gap_prob;
-	}
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
 
-	return sum_e;
+    return sum_e;
 }
 
+
 /*
-	Calculates the p-values for alignments with "large" gaps (i.e., 
-	infinite) followings an idea of Stephen Altschul's.
+    Calculates the e-value if a collection of distinct alignments with
+    arbitrarily large gaps between the alignments
 */
 
 double
-BLAST_LargeGapSumE(BLAST_KarlinBlk* kbp, double gap_prob, double gap_decay_rate, Int2 num, double score_prime, Int4 query_length, Int4 subject_length)
-
+BLAST_LargeGapSumE(
+    Blast_KarlinBlk * kbp,      /* statistical parameters */
+    Int2 num,                   /* the number of distinct alignments in this
+                                 * collection */
+    double      score_prime,    /* the sum of the scores of these alignments
+                                 * each weighted by an appropriate value of
+                                 * Lambda */
+    Int4 query_length,          /* the effective len of the query seq */
+    Int4 subject_length,        /* the effective len of the database seq */
+    double weight_divisor)      /* a divisor used to weight the e-value
+                                 * when multiple collections of alignments
+                                 * are being considered by the calling
+                                 * routine */
 {
+    double sum_p;               /* The p-value of this set of alignments */
+    double sum_e;               /* The e-value of this set of alignments */
 
-	double sum_p, sum_e;
 /* The next two variables are for compatability with Warren's code. */
-	double lcl_subject_length, lcl_query_length;
+    double lcl_subject_length;     /* query_length as a float */
+    double lcl_query_length;       /* subject_length as a float */
 
-        lcl_query_length = (double) query_length;
-        lcl_subject_length = (double) subject_length;
+    lcl_query_length = (double) query_length;
+    lcl_subject_length = (double) subject_length;
 
-	score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length)) 
-	    - BLAST_LnFactorial((double) num); 
+    score_prime -= num*(kbp->logK + log(lcl_subject_length*lcl_query_length))
+        - BLAST_LnFactorial((double) num);
 
-	sum_p = BlastSumP(num, score_prime);
+    sum_p = BlastSumP(num, score_prime);
 
-	sum_e = BlastKarlinPtoE(sum_p);
+    sum_e = BlastKarlinPtoE(sum_p);
 
-	sum_e = sum_e/((1.0-gap_decay_rate)*BLAST_Powi(gap_decay_rate, (num-1)));
+    if( weight_divisor == 0 || (sum_e /= weight_divisor) > INT4_MAX ) {
+        sum_e = INT4_MAX;
+    }
 
-	if (num > 1)
-	{
-		if (gap_prob == 1.0)
-			sum_e = INT4_MAX;
-		else
-			sum_e = sum_e/(1.0 - gap_prob);
-	}
-
-	return sum_e;
+    return sum_e;
 }
 
+/*------------------- RPS BLAST functions --------------------*/
 
+static double
+RPSfindUngappedLambda(Char *matrixName)
+{
+    if (0 == strcmp(matrixName, "BLOSUM62"))
+        return 0.3176;
+    if (0 == strcmp(matrixName, "BLOSUM90"))
+        return 0.3346;
+    if (0 == strcmp(matrixName, "BLOSUM80"))
+        return 0.3430;
+    if (0 == strcmp(matrixName, "BLOSUM50"))
+        return 0.232;
+    if (0 == strcmp(matrixName, "BLOSUM45"))
+        return 0.2291;
+    if (0 == strcmp(matrixName, "PAM30"))
+        return 0.340;
+    if (0 == strcmp(matrixName, "PAM70"))
+        return 0.3345;
+    if (0 == strcmp(matrixName, "PAM250"))
+        return 0.229;
+    return(0);
+}
+
+/* matrix is a position-specific score matrix with matrixLength positions
+   queryProbArray is an array containing the probability of occurrence
+        of each residue in the query
+   scoreArray is an array of probabilities for each score that is
+        to be used as a field in return_sfp
+   return_sfp is a the structure to be filled in and returned
+   range is the size of scoreArray and is an upper bound on the
+        difference between maximum score and minimum score in the matrix
+   the routine fillSfp computes the probability of each score weighted
+        by the probability of each query residue and fills those probabilities
+        into scoreArray and puts scoreArray as a field in
+        that in the structure that is returned
+   for indexing convenience the field storing scoreArray points to the
+        entry for score 0, so that referring to the -k index corresponds to
+        score -k 
+*/
+
+static void
+RPSFillScores(Int4 **matrix, Int4 matrixLength, 
+              double *queryProbArray, double *scoreArray,  
+              BLAST_ScoreFreq* return_sfp, Int4 range)
+{
+    Int4 minScore, maxScore;    /*observed minimum and maximum scores */
+    Int4 i,j;                   /* indices */
+    double recipLength;        /* 1/matrix length as a double */
+
+    minScore = maxScore = 0;
+
+    for (i = 0; i < matrixLength; i++) {
+        for (j = 0 ; j < PSI_ALPHABET_SIZE; j++) {
+            if (j == AMINOACID_TO_NCBISTDAA['X'])
+                continue;
+            if ((matrix[i][j] > BLAST_SCORE_MIN) && 
+                (matrix[i][j] < minScore))
+                minScore = matrix[i][j];
+            if (matrix[i][j] > maxScore)
+                maxScore = matrix[i][j];
+        }
+    }
+
+    return_sfp->obs_min = minScore;
+    return_sfp->obs_max = maxScore;
+    for (i = 0; i < range; i++)
+        scoreArray[i] = 0.0;
+
+    return_sfp->sprob = &(scoreArray[-minScore]); /*center around 0*/
+    recipLength = 1.0 / (double) matrixLength;
+    for(i = 0; i < matrixLength; i++) {
+        for (j = 0; j < PSI_ALPHABET_SIZE; j++) {
+            if (j == AMINOACID_TO_NCBISTDAA['X'])
+                continue;
+            if(matrix[i][j] >= minScore)
+                return_sfp->sprob[matrix[i][j]] += recipLength * 
+                                                queryProbArray[j];
+        }
+    }
+
+    return_sfp->score_avg = 0;
+    for(i = minScore; i <= maxScore; i++)
+        return_sfp->score_avg += i * return_sfp->sprob[i];
+}
+
+/*  Given a sequence of 'length' amino acid residues, compute the
+    probability of each residue and put that in the array resProb*/
+
+static void 
+RPSFillResidueProbability(Uint1 * sequence, Int4 length, double * resProb)
+{
+    Int4 frequency[PSI_ALPHABET_SIZE];  /*frequency of each letter*/
+    Int4 i;                             /*index*/
+    Int4 denominator;                   /*length not including X's*/
+
+    denominator = length;
+    for(i = 0; i < PSI_ALPHABET_SIZE; i++)
+        frequency[i] = 0;
+
+    for(i = 0; i < length; i++) {
+        if (sequence[i] != AMINOACID_TO_NCBISTDAA['X'])
+            frequency[sequence[i]]++;
+        else
+            denominator--;
+    }
+
+    for(i = 0; i < PSI_ALPHABET_SIZE; i++) {
+        if (frequency[i] == 0)
+            resProb[i] = 0.0;
+        else
+            resProb[i] = ((double) frequency[i]) /((double) denominator);
+    }
+}
+
+/* Calculate a new PSSM, using composition-based statistics, for use
+   with RPS BLAST. This function produces a PSSM for a single RPS DB
+   sequence (of size db_seq_length) and incorporates information from 
+   the RPS blast query. Each individual database sequence must call this
+   function to retrieve its own PSSM. The matrix is returned (and must
+   be freed elsewhere). posMatrix is the portion of the complete 
+   concatenated PSSM that is specific to this DB sequence */
+
+Int4 **
+RPSCalculatePSSM(double scalingFactor, Int4 rps_query_length, 
+                   Uint1 * rps_query_seq, Int4 db_seq_length, 
+                   Int4 **posMatrix)
+{
+    double *scoreArray;         /*array of score probabilities*/
+    double *resProb;            /*array of probabilities for each residue*/
+    BLAST_ScoreFreq * return_sfp;/*score frequency pointers to compute lambda*/
+    Int4* * returnMatrix;        /*the PSSM to return */
+    double initialUngappedLambda; 
+    double scaledInitialUngappedLambda; 
+    double correctUngappedLambda;
+    double finalLambda;
+    double temp;               /*intermediate variable for adjusting matrix*/
+    Int4 index, inner_index; 
+
+    resProb = (double *)malloc(PSI_ALPHABET_SIZE * sizeof(double));
+    scoreArray = (double *)malloc(BLAST_SCORE_RANGE_MAX * sizeof(double));
+    return_sfp = (BLAST_ScoreFreq *)malloc(sizeof(BLAST_ScoreFreq));
+
+    RPSFillResidueProbability(rps_query_seq, rps_query_length, resProb);
+
+    RPSFillScores(posMatrix, db_seq_length, resProb, scoreArray, 
+                 return_sfp, BLAST_SCORE_RANGE_MAX);
+
+    initialUngappedLambda = RPSfindUngappedLambda("BLOSUM62");
+    scaledInitialUngappedLambda = initialUngappedLambda / scalingFactor;
+    correctUngappedLambda = Blast_KarlinLambdaNR(return_sfp, 
+                                              scaledInitialUngappedLambda);
+    sfree(resProb);
+    sfree(scoreArray);
+    sfree(return_sfp);
+    if(correctUngappedLambda == -1.0)
+        return NULL;
+
+    finalLambda = correctUngappedLambda/scaledInitialUngappedLambda;
+
+    returnMatrix = (Int4 **)_PSIAllocateMatrix((db_seq_length+1),
+                                               PSI_ALPHABET_SIZE,
+                                               sizeof(Int4));
+
+    for (index = 0; index < db_seq_length+1; index++) {
+        for (inner_index = 0; inner_index < PSI_ALPHABET_SIZE; inner_index++) {
+            if (posMatrix[index][inner_index] <= BLAST_SCORE_MIN || 
+                inner_index == AMINOACID_TO_NCBISTDAA['X']) {
+                returnMatrix[index][inner_index] = 
+                    posMatrix[index][inner_index];
+            }
+            else {
+               temp = ((double)(posMatrix[index][inner_index])) * finalLambda;
+               returnMatrix[index][inner_index] = BLAST_Nint(temp);
+           }
+        }
+    }
+
+    return returnMatrix;
+}
+
+/** 
+ * Computes the adjustment to the lengths of the query and database sequences
+ * that is used to compensate for edge effects when computing evalues. 
+ *
+ * The length adjustment is an integer-valued approximation to the fixed
+ * point of the function
+ *
+ *    f(ell) = beta + 
+ *               (alpha/lambda) * (log K + log((m - ell)*(n - N ell)))
+ *
+ * where m is the query length n is the length of the database and N is the
+ * number of sequences in the database. The values beta, alpha, lambda and
+ * K are statistical, Karlin-Altschul parameters.
+ * 
+ * The value of the length adjustment computed by this routine, A, 
+ * will always be an integer smaller than the fixed point of
+ * f(ell). Usually, it will be the largest such integer.  However, the
+ * computed length adjustment, A, will also be so small that 
+ *
+ *    K * (m - A) * (n - N * A) > MAX(m,n).
+ *
+ * Moreover, an iterative method is used to compute A, and under
+ * unusual circumstances the iterative method may not converge. 
+ *
+ * @param K      the statistical parameter K
+ * @param logK   the natural logarithm of K
+ * @param alpha_d_lambda    the ratio of the statistical parameters 
+ *                          alpha and lambda (for ungapped alignments, the
+ *                          value 1/H should be used)
+ * @param beta              the statistical parameter beta (for ungapped
+ *                          alignments, beta == 0)
+ * @param query_length      the length of the query sequence
+ * @param db_length         the length of the database
+ * @param db_num_seqs       the number of sequences in the database
+ * @param length_adjustment the computed value of the length adjustment [out]
+ *
+ * @return   0 if length_adjustment is known to be the largest integer less
+ *           than the fixed point of f(ell); 1 otherwise.
+ */
+Int4
+BLAST_ComputeLengthAdjustment(double K,
+                             double logK,
+                             double alpha_d_lambda,
+                             double beta,
+                             Int4 query_length,
+                             Int8 db_length,
+                             Int4 db_num_seqs,
+                             Int4 * length_adjustment)
+{
+    Int4 i;                     /* iteration index */
+    const Int4 maxits = 20;     /* maximum allowed iterations */
+    double m = query_length, n = db_length, N = db_num_seqs;
+
+    double ell;                 /* A float value of the length adjustment */
+    double ss;                  /* effective size of the search space */
+    double ell_min = 0, ell_max;   /* At each iteration i,
+                                         * ell_min <= ell <= ell_max. */
+    Boolean converged    = FALSE;       /* True if the iteration converged */
+    double ell_next = 0;        /* Value the variable ell takes at iteration
+                                 * i + 1 */
+    /* Choose ell_max to be the largest nonnegative value that satisfies
+     *
+     *    K * (m - ell) * (n - N * ell) > MAX(m,n)
+     *
+     * Use quadratic formula: 2 c /( - b + sqrt( b*b - 4 * a * c )) */
+    { /* scope of a, mb, and c, the coefficients in the quadratic formula
+       * (the variable mb is -b) */
+        double a  = N;
+        double mb = m * N + n;
+        double c  = n * m - MAX(m, n) / K;
+
+        if(c < 0) {
+            *length_adjustment = 0;
+            return 1;
+        } else {
+            ell_max = 2 * c / (mb + sqrt(mb * mb - 4 * a * c));
+        }
+    } /* end scope of a, mb and c */
+
+    for(i = 1; i <= maxits; i++) {      /* for all iteration indices */
+        double ell_bar;         /* proposed next value of ell */
+        ell      = ell_next;
+        ss       = (m - ell) * (n - N * ell);
+        ell_bar  = alpha_d_lambda * (logK + log(ss)) + beta;
+        if(ell_bar >= ell) { /* ell is no bigger than the true fixed point */
+            ell_min = ell;
+            if(ell_bar - ell_min <= 1.0) {
+                converged = TRUE;
+                break;
+            }
+            if(ell_min == ell_max) { /* There are no more points to check */
+                break;
+            }
+        } else { /* else ell is greater than the true fixed point */
+            ell_max = ell;
+        }
+        if(ell_min <= ell_bar && ell_bar <= ell_max) { 
+          /* ell_bar is in range. Accept it */
+            ell_next = ell_bar;
+        } else { /* else ell_bar is not in range. Reject it */
+            ell_next = (i == 1) ? ell_max : (ell_min + ell_max) / 2;
+        }
+    } /* end for all iteration indices */
+    if(converged) { /* the iteration converged */
+        /* If ell_fixed is the (unknown) true fixed point, then we
+         * wish to set (*length_adjustment) to floor(ell_fixed).  We
+         * assume that floor(ell_min) = floor(ell_fixed) */
+        *length_adjustment = (Int4) ell_min;
+        /* But verify that ceil(ell_min) != floor(ell_fixed) */
+        ell = ceil(ell_min);
+        if( ell <= ell_max ) {
+          ss = (m - ell) * (n - N * ell);
+          if(alpha_d_lambda * (logK + log(ss)) + beta >= ell) {
+            /* ceil(ell_min) == floor(ell_fixed) */
+            *length_adjustment = (Int4) ell;
+          }
+        }
+    } else { /* else the iteration did not converge. */
+        /* Use the best value seen so far */
+        *length_adjustment = (Int4) ell_min;
+    }
+
+    return converged ? 0 : 1;
+}

@@ -1,4 +1,4 @@
-/* $Id: blast_format.h,v 1.17 2003/12/03 17:30:24 dondosha Exp $
+/* $Id: blast_format.h,v 1.20 2004/04/22 22:15:40 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Functions needed for formatting of BLAST results
 
 ******************************************************************************
- * $Revision: 1.17 $
+ * $Revision: 1.20 $
  * */
 #ifndef __BLAST_FORMAT__
 #define __BLAST_FORMAT__
@@ -129,8 +129,9 @@ Int2 BLAST_FormatResults(SeqAlignPtr head, char* blast_database,
  * @param ext_options Extension options and parameters [in]
  * @param hit_options Hit saving options [in]
  * @param query_info Query information [in]
- * @param readdb_args BLAST database information [in]
+ * @param dbname BLAST database name [in]
  * @param return_stats Data about this run [in]
+ * @param db_is_na TRUE if a nucleotide database [in]
  */
 Int2 PrintOutputFooter(Uint1 program_number, 
         BlastFormattingOptions* format_options, 
@@ -139,11 +140,19 @@ Int2 PrintOutputFooter(Uint1 program_number,
         BlastInitialWordOptions* word_options,
         BlastExtensionOptions* ext_options,
         BlastHitSavingOptions* hit_options,
-        BlastQueryInfo* query_info, ReaddbNewArgs* readdb_args, 
-        BlastReturnStat* return_stats); 
+        BlastQueryInfo* query_info, char* dbname, 
+        BlastReturnStat* return_stats, Boolean db_is_na); 
 
+/** Prints the top part of the traditional BLAST output, including version, 
+ * reference(s) and database information.
+ * @param format_options Formatting options [in]
+ * @param is_megablast Is this a megablast search (i.e. greedy gapped
+ *                     extension used)? [in]
+ * @param dbname BLAST database name [in]
+ * @param is_protein Is the database protein or nucleotide? [in]
+ */
 Int2 BLAST_PrintOutputHeader(BlastFormattingOptions* format_options,
-        Boolean greedy_extension, ReaddbNewArgs* readdb_args);
+        Boolean is_megablast, char* dbname, Boolean is_protein);
 
 void BLAST_PrintIntermediateResults(BlastHSPResults* results, 
         BlastQueryInfo* query_info, SeqLocPtr query_slp, 

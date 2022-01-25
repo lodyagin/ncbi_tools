@@ -26,9 +26,6 @@ CFG=ncbiobj - Win32 DebugDLL
 # PROP Scc_LocalPath ""
 CPP=cl.exe
 RSC=rc.exe
-
-!IF  "$(CFG)" == "ncbiobj - Win32 DebugDLL"
-
 # PROP BASE Use_MFC 0
 # PROP BASE Use_Debug_Libraries 1
 # PROP BASE Output_Dir "DebugDLL"
@@ -39,9 +36,9 @@ RSC=rc.exe
 # PROP Output_Dir "DebugDLL"
 # PROP Intermediate_Dir "DebugDLL"
 # PROP Target_Dir ""
-# ADD BASE CPP /nologo /MDd /W3 /Gm /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
+# ADD BASE CPP /nologo /MDd /W3 /GX /Z7 /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # SUBTRACT BASE CPP /Fr
-# ADD CPP /nologo /MDd /W3 /Gm /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\ddv" /I "..\..\..\access" /I "..\..\..\connect" /I "..\..\..\tools" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /GR /Z7 /Od /I "..\..\.." /I "..\..\..\corelib" /I "..\..\..\asnstat" /I "..\..\..\asnlib" /I "..\..\..\object" /I "..\..\..\api" /I "..\..\..\cdromlib" /I "..\..\..\biostruc" /I "..\..\..\ddv" /I "..\..\..\access" /I "..\..\..\connect" /I "..\..\..\tools" /D "WIN32" /D "_DEBUG" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /d "_DEBUG"
 BSC32=bscmake.exe
@@ -50,9 +47,6 @@ BSC32=bscmake.exe
 LIB32=link.exe -lib
 # ADD BASE LIB32 /nologo
 # ADD LIB32 /nologo
-
-!ENDIF 
-
 # Begin Target
 
 # Name "ncbiobj - Win32 DebugDLL"
@@ -138,6 +132,10 @@ SOURCE=..\..\..\api\asn2gnb6.c
 # Begin Source File
 
 SOURCE=..\..\..\api\blocks.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\cddapi.c
 # End Source File
 # Begin Source File
 
@@ -270,6 +268,10 @@ SOURCE=..\..\..\object\objgbseq.c
 # Begin Source File
 
 SOURCE=..\..\..\object\objgen.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objinsdseq.c
 # End Source File
 # Begin Source File
 
@@ -459,10 +461,6 @@ SOURCE=..\..\..\api\viewmgr.c
 
 SOURCE=..\..\..\api\wprint.c
 # End Source File
-# Begin Source File
-
-SOURCE=..\..\..\access\cddapi.c
-# End Source File
 # End Group
 # Begin Group "Header Files"
 
@@ -645,6 +643,10 @@ SOURCE=..\..\..\asnstat\blstspc.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\access\cddapi.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\asnstat\cdrom.h
 # End Source File
 # Begin Source File
@@ -818,6 +820,10 @@ SOURCE=..\..\..\object\objgbseq.h
 # Begin Source File
 
 SOURCE=..\..\..\object\objgen.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\object\objinsdseq.h
 # End Source File
 # Begin Source File
 
@@ -1014,10 +1020,6 @@ SOURCE=..\..\..\access\vecscnapi.h
 # Begin Source File
 
 SOURCE=..\..\..\api\viewmgr.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\..\..\access\cddapi.h
 # End Source File
 # End Group
 # End Target

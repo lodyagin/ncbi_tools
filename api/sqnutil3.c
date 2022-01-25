@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.28 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -56,6 +56,8 @@
 #include <utilpars.h>
 #include <validatr.h>
 #include <explore.h>
+#include <salsap.h>
+#include <salutil.h>
 
 /* CautiousSeqEntryCleanup section */
 
@@ -1517,7 +1519,7 @@ NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp)
   bs = BSNew (bsp->length);
   if (bs == NULL) return;
 
-  SeqPortStream (bsp, TRUE, (Pointer) bs, SPStreamToRaw);
+  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) bs, SPStreamToRaw);
 
   if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1) {
     bsp->seq_ext = SeqLocSetFree ((ValNodePtr) bsp->seq_ext);
@@ -1553,3 +1555,407 @@ NLM_EXTERN PubmedEntryPtr LIBCALL GetPubMedForUid (Int4 uid)
   return func (uid);
 }
 
+static Boolean IsTerminator (int c)
+{
+  if (c == '\n' || c == '\r') {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+typedef struct bufferedread {
+  CharPtr data;
+  Int4    len;
+  Int4    offset;
+} BufferedReadData, PNTR BufferedReadPtr;
+
+static BufferedReadPtr BufferedReadFree (BufferedReadPtr brp)
+{
+  if (brp == NULL) return NULL;
+  if (brp->data != NULL) {
+    MemFree (brp->data);
+    brp->data = NULL;
+  }
+  brp->offset = 0;
+  brp->len = 0;
+  return NULL;
+}
+
+extern void FreeBufferedReadList (ValNodePtr vnp)
+{
+  if (vnp == NULL) return;
+  FreeBufferedReadList (vnp->next);
+  vnp->next = NULL;
+  vnp->data.ptrvalue = BufferedReadFree ( (BufferedReadPtr)vnp->data.ptrvalue); 
+  ValNodeFree (vnp);
+}
+
+/* three possible return codes:
+ * 0 = no terminators seen at all
+ * 1 = have terminator plus one character
+ * 2 = last is terminator - need more characters
+ */
+static Int4 HasTerminator (ValNodePtr list, Int4 PNTR len)
+{
+  CharPtr      cp;
+  ValNodePtr   vnp;
+  BufferedReadPtr brp;
+
+  if (len == NULL) return 0;
+  *len = 0;
+  if (list == NULL) return 0;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->data.ptrvalue == NULL) continue;
+    brp = (BufferedReadPtr) vnp->data.ptrvalue;
+    if (brp->data == NULL) continue;
+    for (cp = brp->data + brp->offset; *cp != 0; cp++) {
+      if (IsTerminator (*cp)) {
+        if (* (cp + 1) != 0 || vnp->next != NULL) {
+          return 1;
+        } else {
+          return 2;
+        }
+      } else { 
+        (*len) ++;
+      }
+    }
+  }
+  return 0;
+}
+
+static CharPtr GetLineFromBuffer (ValNodePtr PNTR current_data, Int4 len)
+{
+  ValNodePtr      vnp, next_vnp;
+  BufferedReadPtr brp;
+  CharPtr         cp;
+  CharPtr         new_line;
+  Int4            ctr;
+  Char            this_terminator;
+  CharPtr         next_char;
+
+  if (current_data == NULL || *current_data == NULL) return NULL;
+
+  new_line = MemNew (len + 1);
+  if (new_line == NULL) return NULL;
+
+  ctr = 0;
+  vnp = *current_data;
+  while (vnp != NULL && ctr < len) {
+    if ((brp = (BufferedReadPtr)vnp->data.ptrvalue) == NULL || brp->data == NULL) {
+      next_vnp = vnp->next;
+      vnp->next = NULL;
+      vnp->data.ptrvalue = BufferedReadFree (brp);
+      ValNodeFree (vnp);
+      vnp = next_vnp;
+    } else {
+      if (ctr + brp->len <= len) {
+        MemCpy (new_line + ctr, brp->data + brp->offset, brp->len);
+        ctr += brp->len;
+        next_vnp = vnp->next;
+        vnp->next = NULL;
+        vnp->data.ptrvalue = BufferedReadFree (brp);
+        ValNodeFree (vnp);
+        vnp = next_vnp;
+      } else {
+        MemCpy (new_line + ctr, brp->data + brp->offset, len - ctr);
+        brp->offset += len - ctr;
+        brp->len -= (len - ctr);
+        ctr = len;
+      }
+    }
+  }
+  if (vnp != NULL) {
+    brp = (BufferedReadPtr)vnp->data.ptrvalue;
+    if (brp->len >= 0) {
+      cp = brp->data + brp->offset;
+      this_terminator = *cp;
+      /* handle condition when last character in data is terminator */
+      if (* (cp + 1) == 0) {
+        next_vnp = vnp->next;
+        vnp->next = NULL;
+        vnp->data.ptrvalue = BufferedReadFree (brp);
+        ValNodeFree (vnp);
+        vnp = next_vnp;
+        while (vnp != NULL && (brp = (BufferedReadPtr)vnp->data.ptrvalue) == NULL) {
+          next_vnp = vnp->next;
+          vnp->next = NULL;
+          vnp->data.ptrvalue = BufferedReadFree (brp);
+          ValNodeFree (vnp);
+          vnp = next_vnp;
+        }
+        if (vnp == NULL) {
+          *current_data = NULL;
+          new_line [len] = 0;
+          return new_line;
+        } else {
+          next_char = brp->data + brp->offset;
+          if (IsTerminator (*next_char) && *next_char != this_terminator) {
+            brp->offset ++;
+            brp->len --;
+            if (brp->len == 0) {
+              next_vnp = vnp->next;
+              vnp->next = NULL;
+              vnp->data.ptrvalue = BufferedReadFree (brp);
+              ValNodeFree (vnp);
+              vnp = next_vnp;
+            }
+          }
+        }
+      } else {
+        next_char = cp + 1;
+        if (IsTerminator (*next_char) && *next_char != this_terminator) {
+          brp->offset += 2;
+          brp->len -= 2;
+        } else {
+          brp->offset ++;
+          brp->len --;
+        }
+      }
+      if (brp->len <= 0) {
+        next_vnp = vnp->next;
+        vnp->next = NULL;
+        vnp->data.ptrvalue = BufferedReadFree (brp);
+        ValNodeFree (vnp);
+        vnp = next_vnp;
+      }
+    }
+  }
+  *current_data = vnp;
+  new_line [len] = 0;
+  return new_line;
+}
+
+#define READ_BUFFER_SIZE 5000
+
+static ValNodePtr AddToBuffer (ValNodePtr current_data, FILE *fp)
+{
+  ValNodePtr vnp;
+  BufferedReadPtr brp;
+
+  vnp = ValNodeNew (current_data);
+  if (vnp == NULL) return NULL;
+ 
+  brp = (BufferedReadPtr) MemNew (sizeof (BufferedReadData));
+  if (brp == NULL) return NULL;
+  brp->data = MemNew (READ_BUFFER_SIZE);
+  if (brp->data == NULL) return NULL;
+  brp->offset = 0;
+ 
+  brp->len = fread (brp->data, 1, READ_BUFFER_SIZE - 1, fp);
+  *(char *)(brp->data + brp->len) = 0; 
+
+  vnp->data.ptrvalue = brp;
+  return vnp;
+}
+
+extern CharPtr MyFGetLine (FILE *fp, ValNodePtr PNTR current_data)
+{
+  Int4       terminator_status;
+  Int4       data_len;
+  ValNodePtr last_vnp;
+
+  terminator_status = HasTerminator (*current_data, &data_len);
+  while (!feof (fp) && terminator_status == 0) {
+    last_vnp = AddToBuffer (*current_data, fp);
+    if (*current_data == NULL) {
+      *current_data = last_vnp;
+    }
+    terminator_status = HasTerminator (*current_data, &data_len);
+  }
+
+  if (!feof (fp) && terminator_status == 2) {
+    AddToBuffer (*current_data, fp);
+  }
+  return GetLineFromBuffer (current_data, data_len);
+} 
+
+
+
+#if defined (WIN32)
+extern char * __stdcall AbstractReadFunction (Pointer userdata)
+#else
+extern char * AbstractReadFunction (Pointer userdata)
+#endif
+{
+  ReadBufferPtr rbp;
+
+  if (userdata == NULL) return NULL;
+
+  rbp = (ReadBufferPtr) userdata;
+
+  return MyFGetLine (rbp->fp, &(rbp->current_data));
+}
+
+#if defined (WIN32)
+extern void __stdcall AbstractReportError (
+#else
+extern void AbstractReportError (
+#endif
+  TErrorInfoPtr err_ptr,
+  Pointer      userdata
+)
+{
+  TErrorInfoPtr PNTR list;
+  TErrorInfoPtr last;
+
+  if (err_ptr == NULL || userdata == NULL) return;
+
+  list = (TErrorInfoPtr PNTR) userdata;
+
+  if (*list == NULL)
+  {
+    *list = err_ptr;
+  }
+  else
+  {
+    for (last = *list; last != NULL && last->next != NULL; last = last->next)
+    {}
+    last->next = err_ptr;
+  }
+
+}
+
+static void AddDefLinesToAlignmentSequences (
+  TAlignmentFilePtr afp,
+  SeqEntryPtr sep_head
+)
+{
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sep;
+  Int4         index;
+  ValNodePtr   sdp;
+  CharPtr      new_title;
+  Int4         new_title_len;
+  
+  if (afp == NULL || sep_head == NULL || ! IS_Bioseq_set (sep_head))
+  {
+    return;
+  }
+  if ((afp->num_deflines == 0 || afp->deflines == NULL)
+    && (afp->num_organisms == 0 || afp->organisms == NULL))
+  {
+    return;
+  }
+  
+  bssp = sep_head->data.ptrvalue;
+  for (sep = bssp->seq_set, index = 0;
+       sep != NULL && (index < afp->num_deflines || index < afp->num_organisms);
+       sep = sep->next, index++)
+  {
+    new_title_len = 0;
+    if (index < afp->num_organisms) {
+      new_title_len += StringLen (afp->organisms [index]) + 1;
+    }
+    if (index < afp->num_deflines && afp->deflines [index] != NULL) {
+      new_title_len += StringLen (afp->deflines [index]) + 1;
+    }
+    if (new_title_len > 0) {
+      new_title = (CharPtr) MemNew (new_title_len);
+      if (new_title == NULL) return;
+      new_title [0] = 0;
+      if (index < afp->num_organisms) {
+        StringCat (new_title, afp->organisms [index]);
+        if (new_title_len > StringLen (new_title) + 1)
+        {
+          StringCat (new_title, " ");
+        }
+      }
+      if (index < afp->num_deflines && afp->deflines [index] != NULL) {
+        StringCat (new_title, afp->deflines [index]);
+      }
+
+      sdp = CreateNewDescriptor (sep, Seq_descr_title);
+      if (sdp != NULL) {
+        sdp->data.ptrvalue = new_title;
+      } else {
+        MemFree (new_title);
+      }
+    }
+  }
+}
+
+extern SeqEntryPtr MakeSequinDataFromAlignment (TAlignmentFilePtr afp, Uint1 moltype) 
+{
+  SeqAnnotPtr sap;
+  SeqEntryPtr sep_list, sep, sep_prev;
+  SeqIdPtr    sip_list, sip, sip_prev;
+  ValNodePtr  seqvnp, vnp;
+  Int4        index, len;
+
+  if (afp == NULL) return NULL;
+  
+  if (afp->num_sequences == 0) return NULL;
+
+  seqvnp = NULL;
+  sip_list = NULL;
+  sip_prev = NULL;
+  sep_list = NULL;
+  sep_prev = NULL;
+  for (index = 0; index < afp->num_sequences; index++) {
+    sip = MakeSeqID (afp->ids [index]);
+    if (sip_prev == NULL) {
+      sip_list = sip;
+    } else {
+      sip_prev->next = sip;
+    }
+    sip_prev = sip;
+    len = (Int4) StringLen (afp->sequences [index]);
+    sep = StringToSeqEntry (afp->sequences [index], sip, len, moltype);
+    if (sep != NULL) {
+      if (sep_list == NULL) {
+        sep_list = sep;
+      } else {
+        sep_prev->next = sep;
+      }
+      sep_prev = sep;
+      vnp = ValNodeNew (seqvnp);
+      if (seqvnp == NULL) seqvnp = vnp;
+      vnp->data.ptrvalue = afp->sequences [index];
+    }
+  }
+  sap = LocalAlignToSeqAnnotDimn (seqvnp, sip_list, NULL, afp->num_sequences,
+                                  0, NULL, FALSE);
+  sep_list = make_seqentry_for_seqentry (sep_list);
+  SeqAlignAddInSeqEntry (sep_list, sap);
+  ValNodeFree (seqvnp);
+  AddDefLinesToAlignmentSequences (afp, sep_list);
+  return sep_list;
+}
+
+/* Create sequences and alignment annotation */
+
+/**********************************************************/
+extern SeqEntryPtr make_seqentry_for_seqentry (SeqEntryPtr sep)
+{
+  SeqEntryPtr  sep1 = NULL,
+               tmp;
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+ 
+  if (sep == NULL) return NULL;
+
+  if (! IS_Bioseq (sep) && ! IS_Bioseq_set (sep)) {
+    return sep;
+  } else if (sep->next == NULL) {
+    return sep;
+  } else if ((bssp = BioseqSetNew ()) == NULL) {
+    return sep;
+  } else {
+    bssp->_class = 14;
+    bssp->seq_set = sep;
+    sep1 = SeqEntryNew ();
+    sep1->choice = 2;
+    sep1->data.ptrvalue = bssp;
+    SeqMgrLinkSeqEntry (sep1, 0, NULL);
+          
+    for (tmp = bssp->seq_set; tmp!=NULL; tmp=tmp->next) {
+      if (IS_Bioseq(tmp)) {
+        bsp = (BioseqPtr) tmp->data.ptrvalue;
+        ObjMgrConnect (OBJ_BIOSEQ, (Pointer) bsp, OBJ_BIOSEQSET, (Pointer) bssp);
+      }
+    }
+  }
+  return sep1;
+}

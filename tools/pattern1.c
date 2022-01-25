@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pattern1.c,v 6.17 2003/08/06 15:11:17 dondosha Exp $";
+static char const rcsid[] = "$Id: pattern1.c,v 6.18 2004/04/01 13:43:08 lavr Exp $";
 
-/* $Id: pattern1.c,v 6.17 2003/08/06 15:11:17 dondosha Exp $
+/* $Id: pattern1.c,v 6.18 2004/04/01 13:43:08 lavr Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,9 +33,12 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.17 $ 
+$Revision: 6.18 $ 
 
 $Log: pattern1.c,v $
+Revision 6.18  2004/04/01 13:43:08  lavr
+Spell "occurred", "occurrence", and "occurring"
+
 Revision 6.17  2003/08/06 15:11:17  dondosha
 Fixed search for pattern remainder when it starts from a base non-divisible by 4
 
@@ -176,7 +179,7 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
     Int4  tj; /*temporary copy of j*/
     Int4 tempInputPatternMasked[MaxP]; /*local copy of parts
             of inputPatternMasked*/
-    Uint1 c;  /*character occuring in pattern*/
+    Uint1 c;  /*character occurring in pattern*/
     Uint1 localPattern[MaxP]; /*local variable to hold
                                for each position whether it is
                                last in pattern (1) or not (0) */

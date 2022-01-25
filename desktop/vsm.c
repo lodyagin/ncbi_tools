@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -47,6 +47,7 @@
 #include <objfdef.h>
 #include <dlogutil.h>
 #include <bspview.h>
+#include <salpacc.h>
 
 static VSMWinPtr NEAR VSMWinNew PROTO((VSeqMgrPtr vsmp));
 
@@ -925,6 +926,88 @@ static void VSeqMgrMoveProc (IteM i)
 	return;
 }
 
+typedef struct warnifalignmentdata {
+	Boolean found;
+	SeqEntryPtr lookingfor;
+} WarnIfAlignmentData, PNTR WarnIfAlignmentPtr;
+
+static Boolean IsSeqEntryInAlignment (SeqAlignPtr salp, SeqEntryPtr sep)
+{
+	BioseqPtr bsp;
+	BioseqSetPtr bssp;
+	SeqIdPtr sip;
+	Boolean found = FALSE;
+	SeqEntryPtr this_sep;
+
+	if (IS_Bioseq (sep)) {
+		bsp = (BioseqPtr) sep->data.ptrvalue;
+		for (sip = bsp->id; sip != NULL && ! found; sip = sip->next) {
+			found = SeqAlignFindSeqId (salp, sip);
+		}
+	} else if (IS_Bioseq_set (sep)) {
+		bssp = (BioseqSetPtr) sep->data.ptrvalue;
+		for (this_sep = bssp->seq_set;
+			 this_sep != NULL && !found;
+			 this_sep = this_sep->next) {
+            found = IsSeqEntryInAlignment (salp, this_sep);
+	    }
+	}
+    return found;
+}
+
+static void FindAlignmentCallback (SeqAnnotPtr sap, Pointer userdata)
+{
+    WarnIfAlignmentPtr wiap;
+	SeqAlignPtr        salp;
+	SeqIdPtr           sip_list, sip;
+	BioseqPtr bsp;
+	SeqIdPtr  bsp_id;
+
+	if (sap == NULL || sap->type != 2 || userdata == NULL) {
+		return;
+	}
+	wiap = (WarnIfAlignmentPtr) userdata;
+	if (wiap->found) return;
+    salp = (SeqAlignPtr) sap->data;
+	if (salp == NULL) return;
+	wiap->found = IsSeqEntryInAlignment (salp, wiap->lookingfor);
+
+#if 0
+	if (IS_Bioseq (sep)) {
+        bsp = (BioseqPtr)wiap->lookingfor->data.ptrvalue;
+        sip_list = SeqIdPtrFromSeqAlign(salp);
+	    for (sip = sip_list; sip != NULL && !wiap->found; sip = sip->next) {
+		    for (bsp_id = bsp->id; bsp_id != NULL && !wiap->found; bsp_id = bsp_id->next) {
+			    if (SeqIdComp (sip, bsp_id) == SIC_YES) {
+				    wiap->found = TRUE;
+				}
+			}
+		}
+#endif
+
+}
+
+static void WarnIfAlignment (Uint2 type, Pointer ptr, Uint2 input_entityID)
+{
+	SeqEntryPtr sep;
+	SeqEntryPtr topsep;
+	WarnIfAlignmentData wiad;
+
+	if (type == 1) {
+        sep = (SeqEntryPtr) ptr;
+	} else {
+		return;
+	}
+	topsep = GetTopSeqEntryForEntityID (input_entityID);
+	wiad.found = FALSE;
+	wiad.lookingfor = sep;
+
+	VisitAnnotsInSep (topsep, &wiad, FindAlignmentCallback);
+	if (wiad.found) {
+	    Message (MSG_OK, "Warning - this sequence is part of an alignment.");
+	}
+}
+
 static void VSeqMgrDeleteProc (IteM i)
 {
 	OMProcControl ompc;
@@ -951,6 +1034,7 @@ static void VSeqMgrDeleteProc (IteM i)
 		type = ompc.input_itemtype;
 		ptr = ompc.input_data;
 	}
+	WarnIfAlignment (type, ptr, ompc.input_entityID);
 
 	omp = ObjMgrGet();
 	omtp = ObjMgrTypeFind(omp, type, NULL, NULL);

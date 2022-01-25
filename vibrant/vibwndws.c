@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.61 $
+* $Revision: 6.62 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.62  2004/04/14 19:14:06  sinyakov
+* WIN_MSWIN: support X-Windows-like -bg color command line option
+*
+* Choi: Added support for either the left or right monitor being the primary
+* monitor in a dual monitor setup.  Added function Nlm_UsePrimaryMonitor.
+*
+* Choi: modified Nlm_SetupWindows to use the virtual screen
+* size to support dual monitor setups.  this effectively limits our target
+* platform to WINVER >= 0x0500 (Windows2000 or later) which all indexers
+* have.  modified Nlm_HasDualScreen to use system metrics call for
+* windows2000 or later platforms.
+*
 * Revision 6.61  2004/02/03 23:34:58  sinyakov
 * Nlm_WindowGainFocus(): call Nlm_GetNext() before calling Nlm_DoGainFocus()
 *
@@ -718,7 +730,8 @@ extern void Nlm_ConvertFilename ( FSSpec *fss, Nlm_CharPtr filename );
 typedef enum {
   USE_FULL_SCREEN = 1,
   USE_LEFT_SCREEN,
-  USE_RIGHT_SCREEN
+  USE_RIGHT_SCREEN,
+  USE_PRIMARY_MONITOR
 } Nlm_ScreenMode;
 
 static Nlm_ScreenMode Nlm_screenMode = USE_FULL_SCREEN;
@@ -882,6 +895,9 @@ static UINT          timerID;
 static Nlm_Char      windowclass [32];
 static int           discard_count = 0;
 static Nlm_Boolean   handlechar;
+BOOLEAN Nlm_hasBackColor = FALSE;
+COLORREF Nlm_crBackColor = 0;
+HBRUSH Nlm_hbrWindowBackground = NULL;
 #endif
 
 #ifdef WIN_MOTIF
@@ -3128,15 +3144,29 @@ NLM_EXTERN void Nlm_UseRightScreen (void)
   Nlm_screenMode = USE_RIGHT_SCREEN;
 }
 
+NLM_EXTERN void Nlm_UsePrimaryMonitor (void)
+
+{
+  Nlm_screenMode = USE_PRIMARY_MONITOR;
+}
+
 NLM_EXTERN Nlm_Boolean Nlm_HasDualScreen (void)
 
 {
+#if(WINVER >= 0x0500)
+  int num_monitors  = (Nlm_Int2)GetSystemMetrics (SM_CMONITORS);
+  if (num_monitors == 2) {
+    return TRUE;
+  }
+  return FALSE;
+#else
   if (screenBitBounds.right > 2000 && screenBitBounds.bottom < 800) {
     return TRUE;
   } else if (screenBitBounds.right > 2500 && screenBitBounds.bottom < 1100) {
     return TRUE;
   }
   return FALSE;
+#endif
 }
 
 /* esl: extraWidth parameter added */
@@ -3197,6 +3227,38 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
       height = r.bottom + extraHeight;
     if (r.left < 0)
       {
+#if(WINVER >= 0x0500)
+        if (Nlm_HasDualScreen ()) {
+          screenMode = Nlm_GetScreenMode ((Nlm_WindoW) w);
+          if (screenMode == USE_PRIMARY_MONITOR) {
+            free = (screenBitBounds.right - screenBitBounds.left) / 2 - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix;
+	  } else if (screenMode == USE_LEFT_SCREEN) {
+            free = (screenBitBounds.right - screenBitBounds.left) / 2 - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix + screenBitBounds.left;
+          } else if (screenMode == USE_RIGHT_SCREEN) {
+            free = (screenBitBounds.right - screenBitBounds.left) / 2 - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix + screenBitBounds.left;
+            r.left += (screenBitBounds.right - screenBitBounds.left) / 2;
+          } else {
+            free = (screenBitBounds.right - screenBitBounds.left) - width;
+            rleft = (Nlm_Int4)r.left;
+            leftpix = free * (-rleft) / 100;
+            r.left = (Nlm_Int2)leftpix + screenBitBounds.left;
+          }
+        } else {
+          free = screenBitBounds.right - width;
+          rleft = (Nlm_Int4)r.left;
+          leftpix = free * (-rleft) / 100;
+          r.left = (Nlm_Int2)leftpix;
+        }
+#else
         if (Nlm_HasDualScreen ()) {
           screenMode = Nlm_GetScreenMode ((Nlm_WindoW) w);
           if (screenMode == USE_LEFT_SCREEN) {
@@ -3222,6 +3284,7 @@ static void Nlm_ResizeWindow (Nlm_GraphiC w, Nlm_Int2 dragHeight,
           leftpix = free * (-rleft) / 100;
           r.left = (Nlm_Int2)leftpix;
         }
+#endif
       }
     if (r.top < 0)
       {
@@ -5907,8 +5970,28 @@ LRESULT CALLBACK EXPORT MainProc (HWND hwnd, UINT message,
     case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLOREDIT:
       {
-              SetBkColor((HDC)wParam, RGB(255, 255, 255));
-              mainwndrsult = (long)GetStockObject( WHITE_BRUSH );
+	      if(Nlm_hasBackColor)
+	      {
+		SetBkColor((HDC)wParam, Nlm_crBackColor);
+		mainwndrsult = (long)Nlm_hbrWindowBackground;
+	      }
+	      else
+	      {
+		SetBkColor((HDC)wParam, RGB(255, 255, 255));
+		mainwndrsult = (long)GetStockObject( WHITE_BRUSH );
+	      }
+              break;
+      }
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLORBTN:
+      {
+	      if(Nlm_hasBackColor)
+	      {
+		SetBkColor((HDC)wParam, Nlm_crBackColor);
+		mainwndrsult = (long)Nlm_hbrWindowBackground;
+	      }
+	      else
+		mainwndrsult = DefWindowProc (hwnd, message, wParam, lParam);
               break;
       }
 #else
@@ -5995,12 +6078,56 @@ extern Nlm_Boolean Nlm_RegisterWindows (void)
   wc.hInstance = Nlm_currentHInst;
   wc.hIcon = LoadIcon (NULL, IDI_APPLICATION);
   wc.hCursor = NULL;
-  wc.hbrBackground = CreateSolidBrush( GetSysColor(COLOR_ACTIVEBORDER) );
+  wc.hbrBackground = Nlm_hasBackColor ?
+	               CreateSolidBrush( Nlm_crBackColor ) :
+                       CreateSolidBrush( GetSysColor(COLOR_ACTIVEBORDER) );
   wc.lpszMenuName = NULL;
   sprintf (windowclass, "Nlm_WindowClass%ld", (long) (int) Nlm_currentHInst);
   wc.lpszClassName = windowclass;
 
   return (Nlm_Boolean)(RegisterClass(&wc) != 0);
+}
+
+
+#include "vibrgb.h"
+
+
+static Nlm_RGBName* Nlm_FindRGBName(const Nlm_Char* name)
+
+{
+  Nlm_RGBName* p;
+  for(p = RGBNames; p->name; ++p) {
+    if (StringICmp(p->name, name) == 0)
+      return p;
+  }
+
+  return NULL;
+}
+
+
+static void Nlm_ParseXArguments(int* argc, char** argv)
+
+{
+  int i, j;
+
+  if (argc == 0 || argv == NULL)
+    return;
+
+  for(i = 0, j = 0; i < *argc; ) {
+    if (StringCmp(argv[i], "-bg") == 0 && argv[i+1] != NULL) {
+      Nlm_RGBName* p = Nlm_FindRGBName(argv[i+1]);
+      if (p != NULL) {
+	/* Set user-defined background color */
+	Nlm_hasBackColor = TRUE;
+	Nlm_crBackColor = RGB(p->red, p->green, p->blue);
+	Nlm_hbrWindowBackground = CreateSolidBrush( Nlm_crBackColor );
+	i += 2;
+	continue;
+      }
+    }
+    argv[j++] = argv[i++];
+  }
+  *argc = j;
 }
 
 
@@ -6013,10 +6140,27 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_RecT   r;
   Nlm_Int2   width;
 
+  int        xx_argc = (int)Nlm_GetArgc();
+  char     **xx_argv =      Nlm_GetArgv();
+
+  /*
+    Using SM_CXVIRTUALSCREEN to accomodate dual monitors effectively limits target platform 
+    to Windows2000 or later (i.e. Win95/98/ME are NOT supported).
+    In order to use these identifiers, must define WINVER=0x0500.
+  */
+#if(WINVER >= 0x0500)
+  int x = (Nlm_Int2)GetSystemMetrics (SM_XVIRTUALSCREEN);
+  int y = (Nlm_Int2)GetSystemMetrics (SM_YVIRTUALSCREEN);
+  width  = (Nlm_Int2)GetSystemMetrics (SM_CXVIRTUALSCREEN);
+  height = (Nlm_Int2)GetSystemMetrics (SM_CYVIRTUALSCREEN);
+  Nlm_LoadRect (&screenBitBounds, x, y, x+width, y+height);
+  Nlm_LoadPt (&pt, x, y);
+#else
   width  = (Nlm_Int2)GetSystemMetrics (SM_CXSCREEN);
   height = (Nlm_Int2)GetSystemMetrics (SM_CYSCREEN);
   Nlm_LoadRect (&screenBitBounds, 0, 0, width, height);
   Nlm_LoadPt (&pt, 0, 0);
+#endif
   r = screenBitBounds;
   Nlm_screenRect = screenBitBounds;
   Nlm_desktopWindow = (Nlm_WindoW) Nlm_HandNew (sizeof (Nlm_WindowRec));
@@ -6031,6 +6175,9 @@ static Nlm_Boolean Nlm_SetupWindows (void)
   Nlm_currentWindowTool = (Nlm_WindowTool) 0;
   quitProgram = FALSE;
   
+  Nlm_ParseXArguments(&xx_argc, xx_argv);
+  Nlm_SetupArguments(xx_argc, xx_argv);
+
   Nlm_SetUpDrawingTools ();
 
   Nlm_hScrollBarHeight = (Nlm_Int2)GetSystemMetrics (SM_CYHSCROLL);
@@ -6678,6 +6825,7 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 #endif
 
   Nlm_currentHInst = hInstance;
+  ParseSetupArguments(Nlm_currentHInst, StringSave(lpszCmdLine));
 
   Nlm_InitVibrantHooks ();
 
@@ -6707,7 +6855,6 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
   }
 
 
-  ParseSetupArguments(Nlm_currentHInst, StringSave(lpszCmdLine));
   Nlm_GetReady ();
 
   /* Initialize connection library's logger, registry and lock */
@@ -6733,7 +6880,8 @@ int CALLBACK WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 
   sprintf (str, "Nlm_WindowClass%ld", (long) (int) Nlm_currentHInst);
   if (GetClassInfo (Nlm_currentHInst, str, &wc)) {
-    DeleteObject (wc.hbrBackground);
+    /* WNDCLASS description says application should not destroy background brush */
+    /* DeleteObject (wc.hbrBackground); */
   }
   UnregisterClass (str, Nlm_currentHInst);
   sprintf (str, "Nlm_SlateClass%ld", (long) (int) Nlm_currentHInst);

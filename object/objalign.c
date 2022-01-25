@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -500,9 +500,9 @@ erret:
 *
 *   SeqAlignAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -949,9 +949,9 @@ erret:
 *
 *   DenseDiagAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN DenseDiagPtr LIBCALL DenseDiagAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1208,9 +1208,9 @@ erret:
 *
 *   DenseSegAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN DenseSegPtr LIBCALL DenseSegAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1460,9 +1460,9 @@ erret:
 *
 *   StdSegAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 
@@ -1830,9 +1830,9 @@ erret:
 *
 *   PackSegAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PackSegPtr LIBCALL PackSegAsnRead (AsnIoPtr aip, AsnTypePtr orig)

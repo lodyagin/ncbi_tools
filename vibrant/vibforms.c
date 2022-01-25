@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: vibforms.c,v $
+* Revision 6.14  2004/03/06 20:00:38  kans
+* SetEnumPopupEx and SetEnumPopupByNameEx set popup to 0 if desired choice not found
+*
 * Revision 6.13  2004/01/16 22:35:37  kans
 * added WidestString and WidestAlist
 *
@@ -316,6 +319,7 @@ static void SetEnumPopupEx (PopuP lst, EnumFieldAssocPtr al, UIEnum val, Boolean
      if (al->value == val) { SafeSetValue (lst, i); return; }
   if (zeroOkay && val == 0) return;
   Message(MSG_POSTERR, "SetEnumPopup: %ld", (long)val);
+  SafeSetValue (lst, 0);
 } 
 
 void SetEnumPopup (PopuP lst, EnumFieldAssocPtr al, UIEnum val) 
@@ -339,6 +343,7 @@ static void SetEnumPopupByNameEx (PopuP lst, EnumFieldAssocPtr al, CharPtr name,
      if (StringICmp (al->name, name) == 0) { SafeSetValue (lst, i); return; }
   if (zeroOkay && StringHasNoText (name)) return;
   Message(MSG_POSTERR, "SetEnumPopupByName: %s", name);
+  SafeSetValue (lst, 0);
 }
 
 void SetEnumPopupByName (PopuP lst, EnumFieldAssocPtr al, CharPtr name)

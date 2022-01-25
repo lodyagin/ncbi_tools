@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,9 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.14  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.13  2001/10/11 14:39:08  ostell
 * added support for XMLModulePrefix
 *
@@ -85,7 +88,7 @@
 * Revision changed to 6.0
 *
 * Revision 5.1  1996/11/26 20:02:42  vakatov
-* Added ErrClear() after GetArgs() to disable warnings occured during
+* Added ErrClear() after GetArgs() to disable warnings occurred during
 * the reading of configuration files
 *
  * Revision 5.0  1996/05/28  14:00:29  ostell

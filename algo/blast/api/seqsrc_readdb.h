@@ -1,4 +1,4 @@
-/*  $Id: seqsrc_readdb.h,v 1.8 2003/12/03 16:50:37 dondosha Exp $
+/*  $Id: seqsrc_readdb.h,v 1.9 2004/02/18 19:38:20 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -68,6 +68,19 @@ BlastSeqSrc* ReaddbSeqSrcNew(BlastSeqSrc* bssp, void* args);
  * @return NULL
  */
 BlastSeqSrc* ReaddbSeqSrcFree(BlastSeqSrc* bssp);
+
+/** Initialize the sequence source structure.
+ * @param dbname BLAST database name [in]
+ * @param is_prot Is this a protein or nucleotide database? [in]
+ * @param first_seq First ordinal id in the database to search [in]
+ * @param last_seq Last ordinal id in the database to search 
+ *                 (full database if 0) [in]
+ * @param extra_arg Reserved for the future implementation of other database
+ *                  restrictions [in]
+ */
+BlastSeqSrc* 
+ReaddbBlastSeqSrcInit(const char* dbname, Boolean is_prot, int first_seq, 
+                      int last_seq, void* extra_arg);
 
 #ifdef __cplusplus
 }

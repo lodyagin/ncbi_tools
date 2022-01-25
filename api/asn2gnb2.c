@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.1 $
+* $Revision: 1.4 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -3298,7 +3298,9 @@ static RefBlockPtr AddPub (
         if (cgp != NULL) {
           if (StringNICmp ("BackBone id_pub", cgp->cit, 15) != 0) {
             rbp->category = REF_CAT_UNP;
-            dp = cgp->date;
+            if (dp == NULL) {
+              dp = cgp->date;
+            }
             if (cgp->serial_number > 0) {
               rbp->serial = cgp->serial_number;
             }
@@ -3328,10 +3330,14 @@ static RefBlockPtr AddPub (
         if (csp != NULL) {
           imp = csp->imp;
           if (imp != NULL) {
-            dp = imp->date;
+            if (dp == NULL) {
+              dp = imp->date;
+            }
           }
           if (csp->date != NULL) {
-            dp = csp->date;
+            if (dp == NULL) {
+              dp = csp->date;
+            }
           }
         }
         break;
@@ -3344,7 +3350,9 @@ static RefBlockPtr AddPub (
               if (cjp != NULL) {
                 imp = (ImprintPtr) cjp->imp;
                 if (imp != NULL) {
-                  dp = imp->date;
+                  if (dp == NULL) {
+                    dp = imp->date;
+                  }
                 }
               }
               break;
@@ -3353,7 +3361,9 @@ static RefBlockPtr AddPub (
               if (cbp != NULL) {
                 imp = (ImprintPtr) cbp->imp;
                 if (imp != NULL) {
-                  dp = imp->date;
+                  if (dp == NULL) {
+                    dp = imp->date;
+                  }
                 }
               }
               break;
@@ -3362,7 +3372,9 @@ static RefBlockPtr AddPub (
               if (cbp != NULL) {
                 imp = (ImprintPtr) cbp->imp;
                 if (imp != NULL) {
-                  dp = imp->date;
+                  if (dp == NULL) {
+                    dp = imp->date;
+                  }
                 }
               }
               break;
@@ -3376,7 +3388,9 @@ static RefBlockPtr AddPub (
         if (cbp != NULL) {
           imp = (ImprintPtr) cbp->imp;
           if (imp != NULL) {
-            dp = imp->date;
+            if (dp == NULL) {
+              dp = imp->date;
+            }
           }
         }
         break;
@@ -3385,7 +3399,9 @@ static RefBlockPtr AddPub (
         if (cbp != NULL) {
           imp = (ImprintPtr) cbp->imp;
           if (imp != NULL) {
-            dp = imp->date;
+            if (dp == NULL) {
+              dp = imp->date;
+            }
           }
         }
         break;
@@ -3394,9 +3410,13 @@ static RefBlockPtr AddPub (
         cpp = (CitPatPtr) vnp->data.ptrvalue;
         if (cpp != NULL) {
           if (cpp->date_issue != NULL) {
-            dp = (DatePtr) cpp->date_issue;
+            if (dp == NULL) {
+              dp = (DatePtr) cpp->date_issue;
+            }
           } else if (cpp->app_date != NULL) {
-            dp = (DatePtr) cpp->app_date;
+            if (dp == NULL) {
+              dp = (DatePtr) cpp->app_date;
+            }
           }
         }
         break;
@@ -3405,7 +3425,9 @@ static RefBlockPtr AddPub (
         if (cbp != NULL) {
           imp = (ImprintPtr) cbp->imp;
           if (imp != NULL) {
-            dp = imp->date;
+            if (dp == NULL) {
+              dp = imp->date;
+            }
           }
         }
         break;
@@ -3538,7 +3560,14 @@ static int LIBCALLBACK SortReferences (
 
   irp1 = (IntRefBlockPtr) rbp1;
   irp2 = (IntRefBlockPtr) rbp2;
-  status = DateMatch (irp1->date, irp2->date, FALSE);
+
+  if ( irp1->date != 0  &&  irp2->date == 0 ) {
+      return 1;
+  } else if ( irp1->date == 0  &&  irp2->date != 0 ) {
+      return -1;
+  }
+
+  status = DateMatch (irp1->date, irp2->date, TRUE);
   if (status == 1 || status == -1) return status;
 
   /* if dates (e.g., years) match, try to distinguish by uids */
@@ -4408,7 +4437,7 @@ NLM_EXTERN void AddWGSBlock (
                   if (StringCmp (first, last) != 0) {
                     FFAddTextToString(ffstring, "<a href=", link_wgs, NULL, FALSE, FALSE, TILDE_IGNORE);
                     FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", first, NULL, FALSE, FALSE, TILDE_IGNORE);
-                    FFAddTextToString(ffstring, ":", last, "[ACCN]>", FALSE, FALSE, TILDE_IGNORE);
+                    FFAddTextToString(ffstring, ":", last, "[PACC]>", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s-%s", first, last);
                     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
                     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);

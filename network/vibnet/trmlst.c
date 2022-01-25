@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -2489,9 +2489,9 @@ static Boolean InsertAdvText (TermFormPtr tfp, CharPtr str)
   CharPtr finalstr;
   Int2 i;
   Boolean retval = TRUE;
-  Int2 begin;
-  Int2 end;
-  Int2 curstrLen;
+  Int4 begin;
+  Int4 end;
+  Int4 curstrLen;
   Char textObjectReturnStr [3];
   Int2 strLen;
   ValNodePtr head = NULL, vnp;

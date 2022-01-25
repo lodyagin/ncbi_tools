@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.42 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -1279,6 +1279,10 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "rearrangement required for product");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 9 :
+      SetTitle (ffp->exceptText, "alternative start codon");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1419,6 +1423,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "artificial frameshift");
       PopupItem (canned, "nonconsensus splice site");
       PopupItem (canned, "rearrangement required");
+      PopupItem (canned, "alternative start codon");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
@@ -1438,6 +1443,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
           SetValue (canned, 7);
         } else if (StringICmp (sfp->except_text, "rearrangement required for product") == 0) {
           SetValue (canned, 8);
+        } else if (StringICmp (sfp->except_text, "alternative start codon") == 0) {
+          SetValue (canned, 9);
         }
       } else {
         SetValue (canned, 1);
@@ -1662,6 +1669,7 @@ extern Boolean FileToScrollText (TexT t, CharPtr path)
 {
   FILE     *fp;
   Int4     len;
+  Int4     read_len;
   Int4     max;
   CharPtr  str;
 #ifdef WIN_MAC
@@ -1691,7 +1699,8 @@ extern Boolean FileToScrollText (TexT t, CharPtr path)
       if (str != NULL) {
         fp = FileOpen (path, "r");
         if (fp != NULL) {
-          FileRead (str, sizeof (char), (size_t) len, fp);
+          read_len = FileRead (str, sizeof (char), (size_t) len, fp);
+          str [ read_len ] = 0;
 #if (defined(OS_DOS) || defined (OS_NT))
           p = str;
           q = str;
@@ -1731,7 +1740,6 @@ extern void ScrollTextToFile (TexT t, CharPtr path)
 {
   FILE     *fp;
   size_t   len;
-  Int4     max;
   CharPtr  str;
 #ifdef WIN_MAC
   CharPtr  p;
@@ -1739,12 +1747,7 @@ extern void ScrollTextToFile (TexT t, CharPtr path)
 
   if (t != NULL && path != NULL && *path != '\0') {
     len = TextLength (t);
-#ifdef WIN_MOTIF
-    max = INT4_MAX;
-#else
-    max = (Int4) INT2_MAX;
-#endif
-    if (len > 0 && (Int4) len < max - 4) {
+    if (len > 0) {
 #ifdef WIN_MAC
       fp = FileOpen (path, "r");
       if (fp != NULL) {
@@ -1841,6 +1844,8 @@ typedef struct textviewform {
 
   DoC              doc;
   TexT             text;
+
+  TexT             find;
 } TextViewForm, PNTR TextViewFormPtr;
 
 static ParData txtParFmt = {FALSE, FALSE, FALSE, FALSE, TRUE, 0, 0};
@@ -1970,10 +1975,126 @@ static void TextViewFormMessage (ForM f, Int2 mssg)
   }
 }
 
+
+static void FindInGeneralText (ButtoN b)
+
+{
+  Int2             actual;
+  Char             buf [1030];
+  Char             ch;
+  Int2             cnt;
+  Int4             cntr;
+  Int2             first;
+  FILE             *fp;
+  Char             lastch;
+  Int4             line;
+  ValNodePtr       matches;
+  Int2             next;
+  Int2             offset = 0;
+  Char             path [PATH_MAX];
+  CharPtr          ptr;
+  Int2             state;
+  CharPtr          str;
+  TextFsaPtr       tbl;
+  TextViewFormPtr  tfp;
+  Int4             max;
+
+  tfp = (TextViewFormPtr) GetObjectExtra (b);
+  if (tfp == NULL) return;
+  if (tfp->doc != NULL) {
+    GetOffset (tfp->doc, NULL, &offset);
+  } else if (tfp->text != NULL) {
+    GetOffset (tfp->text, NULL, &offset);
+  }
+  first = -1;
+  next = -1;
+  max = INT2_MAX;
+
+  str = SaveStringFromText (tfp->find);
+
+  if (StringDoesHaveText) {
+    TmpNam (path);
+    if (ExportForm (tfp->form, path)) {
+      tbl = TextFsaNew ();
+      if (tbl != NULL) {
+        TextFsaAdd (tbl, str);
+        fp = FileOpen (path, "r");
+        if (fp != NULL) {
+          line = 0;
+          state = 0;
+          cntr = FileLength (path);
+          cnt = (Int2) MIN (cntr, 1024L);
+          lastch = '\0';
+          while (cnt > 0 && cntr > 0 && line <= max && 
+                 ((next == -1 && offset > first) || first == -1)) {
+            actual = (Int2) FileRead (buf, 1, cnt, fp);
+            if (actual > 0) {
+              cnt = actual;
+              buf [cnt] = '\0';
+              ptr = buf;
+              ch = *ptr;
+              while (ch != '\0') {
+                if (ch == '\n' || ch == '\r') {
+                  if (ch == '\n' && lastch == '\r') {
+                    /* do not increment line */
+                  } else if (ch == '\r' && lastch == '\n') {
+                    /* do not increment line */
+                  } else {
+                    line++;
+                  }
+                }
+                state = TextFsaNext (tbl, state, ch, &matches);
+                if (matches != NULL) {
+                  if (first == -1) {
+                    first = line;
+                  }
+                  if (next == -1 && line > offset) {
+                    next = line;
+                  }
+                }
+                lastch = ch;
+                ptr++;
+                ch = *ptr;
+              }
+              cntr -= cnt;
+              cnt = (Int2) MIN (cntr, 1024L);
+            } else {
+              cnt = 0;
+              cntr = 0;
+            }
+          }
+        }
+        FileClose (fp);
+      }
+      TextFsaFree (tbl);
+    }
+    FileRemove (path);
+  }
+  MemFree (str);
+  if (line > max) {
+    Message (MSG_ERROR, "Too many lines for search");
+  }
+
+  if (next >= 0) {
+    offset = next;
+  } else if (first >= 0) {
+    offset = first;
+  } else return;
+  if (tfp->doc != NULL) {
+    SetOffset (tfp->doc, 0, offset);
+    Update ();
+  } else if (tfp->text != NULL) {
+    SetOffset (tfp->text, 0, offset);
+    Update ();
+  }
+}
+
 static void LaunchGeneralTextViewerEx (CharPtr path, CharPtr title, Boolean useScrollText)
 
 {
+  ButtoN             b;
   FonT               fnt;
+  GrouP              g;
   Int2               pixheight;
   Int2               pixwidth;
   StdEditorProcsPtr  sepp;
@@ -2028,6 +2149,14 @@ static void LaunchGeneralTextViewerEx (CharPtr path, CharPtr title, Boolean useS
     FormCommandItem (m, CLEAR_MENU_ITEM, (BaseFormPtr) tfp, VIB_MSG_DELETE);
   }
 #endif
+
+  /* right now Find button is only in indexer Sequin */
+  if (useScrollText) {
+    g = HiddenGroup (w, 5, 0, NULL);
+    b = PushButton (g, "Find", FindInGeneralText);
+    SetObjectExtra (b, tfp, NULL);
+    tfp->find = DialogText (g, "", 10, NULL);
+  }
 
   if (useScrollText) {
     tfp->text = ScrollText (w, (pixwidth + stdCharWidth - 1) / stdCharWidth,

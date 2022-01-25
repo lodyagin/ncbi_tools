@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -464,7 +464,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %ld", (long) Intvalue);
       break;
 
-    defaulf:
+    default:
       break;
   }
   if (useValErr) {

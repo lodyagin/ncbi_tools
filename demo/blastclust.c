@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastclust.c,v 6.39 2003/07/22 17:59:48 dondosha Exp $";
+static char const rcsid[] = "$Id: blastclust.c,v 6.43 2004/05/03 19:59:48 dondosha Exp $";
 
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.39 $  $Date: 2003/07/22 17:59:48 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.43 $  $Date: 2004/05/03 19:59:48 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -33,6 +33,18 @@ static char const rcsid[] = "$Id: blastclust.c,v 6.39 2003/07/22 17:59:48 dondos
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.43  2004/05/03 19:59:48  dondosha
+* Display version number when run with no arguments
+*
+* Revision 6.42  2004/02/24 15:18:15  dondosha
+* Fixed several memory leaks for nucleotide clustering
+*
+* Revision 6.41  2004/02/18 20:42:59  dondosha
+* Cleaned up how id strings are retrieved for output
+*
+* Revision 6.40  2004/02/18 15:18:46  dondosha
+* Minor fix when freeing title strings
+*
 * Revision 6.39  2003/07/22 17:59:48  dondosha
 * Added call to BlastErrorPrint to make warnings more informative
 *
@@ -704,7 +716,6 @@ PrintNeighbors(VoidPtr ptr)
                                         &start, &length, &strands, 
                                         &hsp->query.offset, 
                                         &hsp->subject.offset);
-              GapXEditBlockDelete(hsp->gap_info);
               perc_identity = 0;
               for (i=0; i<numseg; i++) {
                  align_length += length[i];
@@ -712,6 +723,9 @@ PrintNeighbors(VoidPtr ptr)
                     perc_identity += MegaBlastGetNumIdentical(query, subject, start[2*i], start[2*i+1], length[i], FALSE);
               }
               perc_identity = perc_identity / align_length * 100;
+              start = MemFree(start);
+              length = MemFree(length);
+              strands = MemFree(strands);
            }
            if (global_parameters->score_threshold < 3.0)
               score_coverage = bit_score / (MAX(q_length, s_length));
@@ -756,11 +770,17 @@ PrintNeighbors(VoidPtr ptr)
         }
 
         /* Deallocate memory for the auxiliary array of HSP info 
-           structures */
+           structures. Also free all gap information structures, 
+           because they are not freed when hit list is cleaned. */
         if (search->prog_number == blast_type_blastn) {
            for (index=0; index<query_count; index++)
               MemFree(hsp_info_array[index]);
            hsp_info_array = MemFree(hsp_info_array);
+           
+           for (index=0; index < current_hitlist->hspcnt; ++index) {
+              hsp = current_hitlist->hsp_array[index];
+              hsp->gap_info = GapXEditBlockDelete(hsp->gap_info);
+           }
         }
 
 	if (global_parameters->logfp && loginfo) {
@@ -858,8 +878,11 @@ Int2 Main (void)
     CharPtr tmpdir;
     Int4 total_query_length;
     CharPtr title = NULL;
+    Char buf[256] = { '\0' };
 
-    if (! GetArgs ("blastclust", NUMARG, myargs))
+    StringCpy(buf, "blastclust ");
+    StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
+    if (! GetArgs (buf, NUMARG, myargs))
        return (1);
     
     UseLocalAsnloadDataAndErrMsg ();
@@ -1064,25 +1087,18 @@ Int2 Main (void)
 	  readdb_get_descriptor(rdfp, index, &sip, &title);
 	  seq_len[index] = readdb_get_sequence_length(rdfp, index);
 	  
-          if (sip->choice == SEQID_LOCAL) {
-             if (title) {
-                numeric_id_type = FALSE;
-                id_list[index] = StringTokMT(title, " ", &title);
-             } else {
-                numeric_id_type &=
-                   GetAccessionFromSeqId(sip, &gi_list[index], 
-                                         &id_list[index]);
-             }
-          } else if (sip->choice != SEQID_GENERAL) {
+          if (sip->choice != SEQID_GENERAL ||
+              StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
              numeric_id_type &= 
                 GetAccessionFromSeqId(sip, &gi_list[index], 
                                       &id_list[index]); 
           } else {
-             if (title) {
-                numeric_id_type = FALSE;
-                id_list[index] = StringTokMT(title, " ", &title);
+             CharPtr dummy_ptr = NULL;
+             numeric_id_type = FALSE;
+             if (title && *title != NULLB) {
+                id_list[index] = 
+                   StringSave(StringTokMT(title, " ", &dummy_ptr));
              } else {
-                numeric_id_type = FALSE;
                 id_list[index] = (CharPtr) Malloc(BUFFER_SIZE+1);
                 SeqIdWrite(sip, id_list[index],
                            PRINTID_FASTA_SHORT, BUFFER_SIZE);

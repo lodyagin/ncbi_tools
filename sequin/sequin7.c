@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.134 $
+* $Revision: 6.144 $
 *
 * File Description: 
 *
@@ -70,6 +70,8 @@ static char *time_of_compilation = "now";
 #include <salptool.h>
 #include <salutil.h>
 #include <explore.h>
+#include <seqpanel.h>
+#include <alignmgr2.h>
 
 #define CONVERT_TO_JOIN  1
 #define CONVERT_TO_ORDER 2
@@ -431,8 +433,7 @@ typedef struct formatform {
   GrouP           package;
   GrouP           format;
   GrouP           submType;
-  ButtoN          nexusButton;
-  ButtoN          paupButton;
+  ButtoN          alignmentButton;
   ButtoN          originalButton;
   ButtoN          tpaButton;
   TexT            numseqs;
@@ -460,16 +461,13 @@ static void FormatBlockPtrToFormatForm (ForM f, Pointer data)
         SafeSetValue (ffp->package, fbp->seqPackage);
       }
       if (fbp->seqPackage <= SEQ_PKG_GENOMICCDNA || fbp->seqPackage == SEQ_PKG_GENBANK) {
-        SafeDisable (ffp->nexusButton);
-        SafeDisable (ffp->paupButton);
+        SafeDisable (ffp->alignmentButton);
       } else {
-        SafeEnable (ffp->nexusButton);
-        SafeEnable (ffp->paupButton);
+        SafeEnable (ffp->alignmentButton);
       }
     } else {
       SafeSetValue (ffp->package, SEQ_PKG_SINGLE);
-      SafeDisable (ffp->nexusButton);
-      SafeDisable (ffp->paupButton);
+      SafeDisable (ffp->alignmentButton);
     }
     if (fbp->seqFormat > 0 && fbp->seqFormat <= NUM_SEQ_FMT) {
       SafeSetValue (ffp->format, fbp->seqFormat);
@@ -484,8 +482,7 @@ static void FormatBlockPtrToFormatForm (ForM f, Pointer data)
     }
   } else {
     SafeSetValue (ffp->package, SEQ_PKG_SINGLE);
-    SafeDisable (ffp->nexusButton);
-    SafeDisable (ffp->paupButton);
+    SafeDisable (ffp->alignmentButton);
     SafeSetValue (ffp->format, SEQ_FMT_FASTA);
     SafeSetTitle (ffp->numseqs, "");
     ffp->restoreFormatTo = SEQ_FMT_FASTA;
@@ -533,18 +530,16 @@ static void EnableOrDisableFormats (GrouP g)
     val++;
   }
   if (val <= SEQ_PKG_GENOMICCDNA || val == SEQ_PKG_GENBANK) {
-    if (Enabled (ffp->nexusButton)) {
+    if (Enabled (ffp->alignmentButton)) {
       ffp->restoreFormatTo = GetValue (ffp->format);
     }
     SafeSetValue (ffp->format, SEQ_FMT_FASTA);
-    SafeDisable (ffp->nexusButton);
-    SafeDisable (ffp->paupButton);
+    SafeDisable (ffp->alignmentButton);
   } else {
-    if (! Enabled (ffp->nexusButton)) {
+    if (! Enabled (ffp->alignmentButton)) {
       SafeSetValue (ffp->format, ffp->restoreFormatTo);
     }
-    SafeEnable (ffp->nexusButton);
-    SafeEnable (ffp->paupButton);
+    SafeEnable (ffp->alignmentButton);
   }
 }
 
@@ -608,11 +603,9 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     ppt = StaticPrompt (g2, "Sequence data format", 0, 0, programFont, 'l');
     ffp->format = HiddenGroup (g2, -1, 0, NULL);
     SetObjectExtra (ffp->format, ffp, NULL);
-    RadioButton (ffp->format, "FASTA");
-    ffp->paupButton = RadioButton (ffp->format, "Contiguous (FASTA+GAP, NEXUS, MACAW)");
-    ffp->nexusButton = RadioButton (ffp->format, "Interleaved (PHYLIP, NEXUS)");
-    Disable (ffp->nexusButton);
-    Disable (ffp->paupButton);
+    RadioButton (ffp->format, "FASTA (no alignment)");
+    ffp->alignmentButton = RadioButton (ffp->format, "Alignment (FASTA+GAP, NEXUS, Phylip, etc.)");
+    Disable (ffp->alignmentButton);
     SetValue (ffp->format, SEQ_FMT_FASTA);
     ffp->restoreFormatTo = SEQ_FMT_FASTA;
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->format, NULL);
@@ -3549,6 +3542,13 @@ typedef struct cdsetformdata {
   PopuP          protSubType;
   GrouP          protSubGrp;
   ButtoN         leaveDlgUp;
+  ValNodePtr     already_processed;
+  GrouP          target_restriction;
+  PopuP          present_qual;
+  TexT           qual_text;
+  Int2           target_restriction_choice;
+  Int2           present_qual_choice;
+  CharPtr        qual_text_str;
 } CdsetFormData, PNTR CdsetFormPtr;
 
 typedef struct geneprotfind {
@@ -3969,19 +3969,63 @@ static CharPtr GetStringFromField (Int2       fromval,
   return str;
 }
 
+static Boolean OkToProcessCDSFunc 
+(SeqFeatPtr cds,
+ SeqFeatPtr gene,
+ GeneRefPtr grp,
+ SeqFeatPtr prot,
+ ProtRefPtr prp,
+ CdsetFormPtr cfp)
+
+{
+  Boolean rval = FALSE;
+  Int2    i;
+  CharPtr str;
+
+  if (cfp == NULL)
+  {
+	rval = FALSE;
+  } 
+  else if (cfp->target_restriction_choice == 1)
+  {
+	rval = TRUE;
+  } 
+  else if (cfp->target_restriction_choice == 2) {
+    str = GetStringFromField (cfp->present_qual_choice, cds, gene, grp, prot, prp);
+	if (!StringHasNoText (str)) {
+	  rval = TRUE;
+	}
+	MemFree (str);
+  } 
+  else if (cfp->target_restriction_choice == 4)
+  {
+    for (i=1; i < 14 && !rval; i++) {
+	  str = GetStringFromField (i, cds, gene, grp, prot, prp);
+      if (StringISearch (str, cfp->qual_text_str))
+	  {
+	    rval = TRUE;
+	  }
+	  MemFree (str);
+	}
+  }
+  return rval;
+}
+
 static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
 
 {
-  SeqFeatPtr    cds;
-  CdsetFormPtr  cfp;
-  CharPtr       foundit;
-  SeqFeatPtr    gene;
-  GeneRefPtr    grp;
-  SeqFeatPtr    prot;
-  ProtRefPtr    prp;
-  SeqFeatPtr    sfp;
-  CharPtr       str;
-  UIEnum        val;
+  SeqFeatPtr        cds = NULL;
+  CdsetFormPtr      cfp;
+  CharPtr           foundit;
+  SeqFeatPtr        gene = NULL;
+  GeneRefPtr        grp = NULL;
+  SeqFeatPtr        prot = NULL;
+  ProtRefPtr        prp = NULL;
+  SeqFeatPtr        sfp = NULL;
+  CharPtr           str = NULL;
+  UIEnum            val;
+  SeqMgrFeatContext context;
+  SeqFeatPtr        tmp;
 
   if (gcp == NULL)
     return TRUE;
@@ -4013,6 +4057,17 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
   if (sfp->data.choice == SEQFEAT_GENE) {
     gene = sfp;
     grp = (GeneRefPtr) gene->data.value.ptrvalue;
+	if (cfp->onlyGene) {
+      cds = SeqMgrGetOverlappingCDS (gene->location, &context);
+	  FindGeneAndProtForCDS (cfp->input_entityID, cds, &tmp, &prot);
+	  if (tmp != gene) {
+	    cds = NULL;
+	    prot = NULL;
+	  }
+	  if (prot != NULL) {
+	    prp = (ProtRefPtr) prot->data.value.ptrvalue;
+	  }
+	}
   }
   else if (sfp->data.choice == SEQFEAT_PROT) {
     prot = sfp;
@@ -4036,6 +4091,10 @@ static Boolean ProcessEachCDSFunc (GatherContextPtr gcp)
         prp = NULL;
       }
     }
+  }
+
+  if (! OkToProcessCDSFunc (cds, gene, grp, prot, prp, cfp)) {
+    return TRUE;
   }
 
   str = NULL;
@@ -4320,6 +4379,23 @@ static void DoProcessCDSet (ButtoN b)
     TrimSpacesAroundString (cfp->findStr);
     TrimSpacesAroundString (cfp->replaceStr);
   }
+
+  cfp->qual_text_str = NULL;
+  cfp->target_restriction_choice = 1;
+  if (cfp->type != REMOVE_CDSET) {
+    /* get CDS-Gene-Prot set restriction information */
+    cfp->target_restriction_choice = GetValue (cfp->target_restriction); 
+    if (cfp->target_restriction_choice == 2) {
+  	  if (GetEnumPopup (cfp->present_qual, cds_gene_prot_field_alist, &val)) {
+        cfp->present_qual_choice = (Int2) val;
+	  } else {
+	    cfp->present_qual_choice = 0;
+      }
+    } else if (cfp->target_restriction_choice == 4) {
+      cfp->qual_text_str = JustSaveStringFromText (cfp->qual_text);
+	}
+  }
+
   MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
   gs.seglevels = 1;
   gs.get_feats_location = FALSE;
@@ -4370,6 +4446,7 @@ static void DoProcessCDSet (ButtoN b)
   sep = GetTopSeqEntryForEntityID (cfp->input_entityID);
   SeqEntryExplore (sep, NULL, CleanupEmptyFeatCallback);
   ObjMgrSendMsg (OM_MSG_UPDATE, cfp->input_entityID, 0, 0);
+  cfp->qual_text_str = MemFree (cfp->qual_text_str);
   if (GetStatus (cfp->leaveDlgUp)) {
     Show (cfp->form);
   } else {
@@ -4623,6 +4700,30 @@ static void ClearProcessCDSetDlg (ButtoN b)
   SafeSetTitle (cfp->example, "");
 }
 
+static void ChangeTargetRestriction (GrouP g)
+{
+  CdsetFormPtr  cfp;
+  Int2          val;
+
+  cfp = (CdsetFormPtr) GetObjectExtra (g);
+  if (cfp == NULL) return;
+  val = GetValue (g);
+  switch (val) {
+  	case 1:
+      Disable (cfp->present_qual);
+      Disable (cfp->qual_text);
+     break;
+  	case 2:
+  	  Enable (cfp->present_qual);
+  	  Disable (cfp->qual_text);
+  	  break;
+  	case 4:
+  	  Disable (cfp->present_qual);
+  	  Enable (cfp->qual_text);
+  	  break;
+  }
+}
+
 static void ProcessCDSet (IteM i, Int2 type)
 
 {
@@ -4653,6 +4754,7 @@ static void ProcessCDSet (IteM i, Int2 type)
   if (sep == NULL) return;
   cfp = (CdsetFormPtr) MemNew (sizeof (CdsetFormData));
   if (cfp == NULL) return;
+  cfp->already_processed = NULL;
   cfp->type = type;
   switch (type) {
     case REMOVE_CDSET :
@@ -4793,6 +4895,21 @@ static void ProcessCDSet (IteM i, Int2 type)
       break;
   }
 
+  if (type != REMOVE_CDSET) {
+    cfp->target_restriction = HiddenGroup (h, 1, 3, ChangeTargetRestriction);
+    SetObjectExtra (cfp->target_restriction, cfp, NULL);
+    RadioButton (cfp->target_restriction, "All CDS-Gene-Prot sets");
+    RadioButton (cfp->target_restriction, "When qualifier is present");
+    cfp->present_qual = PopupList (cfp->target_restriction, TRUE, NULL);
+    InitEnumPopup (cfp->present_qual, cds_gene_prot_field_alist, NULL);
+    SetEnumPopup (cfp->present_qual, cds_gene_prot_field_alist, 0);
+    RadioButton (cfp->target_restriction, "When any qualifer contains");
+    cfp->qual_text = DialogText (cfp->target_restriction, "", 14, NULL);
+    SetValue (cfp->target_restriction, 1);
+    Disable (cfp->present_qual);
+    Disable (cfp->qual_text);
+  }
+
   b1 = PushButton (h, "Legend", CDSetLegend);
 
   c = HiddenGroup (w, 4, 0, NULL);
@@ -4836,6 +4953,126 @@ extern void ConvertCDSet (IteM i)
   ProcessCDSet (i, CONVERT_CDSET);
 }
 
+typedef struct cdsettupledata 
+{
+  SeqFeatPtr    cds;
+  SeqFeatPtr    gene;
+  GeneRefPtr    grp;
+  SeqFeatPtr    prot;
+  ProtRefPtr    prp;
+} CdsetTupleData, PNTR CdsetTuplePtr;
+
+static ValNodePtr AddToTupleList 
+(SeqFeatPtr cds, SeqFeatPtr gene,
+ GeneRefPtr grp,
+ SeqFeatPtr prot,
+ ProtRefPtr prp,
+ ValNodePtr list)
+{
+  ValNodePtr    vnp;
+  CdsetTuplePtr ctp;
+
+  ctp = (CdsetTuplePtr) MemNew (sizeof (CdsetTupleData));
+  if (ctp == NULL) return NULL;
+  ctp->cds = cds;
+  ctp->gene = gene;
+  ctp->grp = grp;
+  ctp->prot = prot;
+  ctp->prp = prp;
+  
+  vnp = ValNodeNew (list);
+  if (vnp == NULL) 
+  {
+  	return NULL;
+  }
+  vnp->data.ptrvalue = ctp;
+  if (list == NULL) 
+  {
+  	list = vnp;
+  }
+  return list;
+}
+
+static Boolean IsTargetInTupleList 
+(SeqFeatPtr cds, SeqFeatPtr gene,
+ GeneRefPtr grp,
+ SeqFeatPtr prot,
+ ProtRefPtr prp,
+ Int4       targetfield,
+ ValNodePtr list)
+{
+  ValNodePtr vnp;
+  CdsetTuplePtr ctp;
+  
+  if (list == NULL) return FALSE;
+  switch (targetfield)
+  {
+    case CDS_COMMENT_FIELD :
+      for (vnp = list; vnp != NULL; vnp = vnp->next)
+      {
+  	    ctp = vnp->data.ptrvalue;
+  	    if (ctp != NULL) 
+  	    {
+  	      if (cds != NULL && ctp->cds == cds) return TRUE;
+  	    }
+      }
+      break;
+    case GENE_LOCUS_FIELD :
+    case GENE_DESCRIPTION_FIELD :
+    case GENE_ALLELE_FIELD :
+    case GENE_MAPLOC_FIELD :
+    case GENE_SYNONYM_FIELD :
+    case GENE_LOCUS_TAG_FIELD :
+      for (vnp = list; vnp != NULL; vnp = vnp->next)
+      {
+  	    ctp = vnp->data.ptrvalue;
+  	    if (ctp != NULL) 
+  	    {
+  	      if (gene != NULL && ctp->gene == gene) return TRUE;
+  	      if (grp != NULL && ctp->grp == grp) return TRUE;
+  	      if (gene != NULL && ctp->grp == gene->data.value.ptrvalue) return TRUE;
+  	    }
+      }
+      break;
+    case GENE_COMMENT_FIELD :
+      for (vnp = list; vnp != NULL; vnp = vnp->next)
+      {
+  	    ctp = vnp->data.ptrvalue;
+  	    if (ctp != NULL) 
+  	    {
+  	      if (gene != NULL && ctp->gene == gene) return TRUE;
+  	    }
+      }
+      break;
+    case PROT_NAME_FIELD :
+    case PROT_DESCRIPTION_FIELD :
+    case PROT_EC_NUMBER_FIELD :
+    case PROT_ACTIVITY_FIELD :
+      for (vnp = list; vnp != NULL; vnp = vnp->next)
+      {
+  	    ctp = vnp->data.ptrvalue;
+  	    if (ctp != NULL) 
+  	    {
+  	      if (prot != NULL && ctp->prot == prot) return TRUE;
+  	      if (prp != NULL && ctp->prp == prp) return TRUE;
+  	      if (prot != NULL && ctp->prp == prot->data.value.ptrvalue) return TRUE;
+  	    }
+      }
+      break;
+    case PROT_COMMENT_FIELD :
+      for (vnp = list; vnp != NULL; vnp = vnp->next)
+      {
+  	    ctp = vnp->data.ptrvalue;
+  	    if (ctp != NULL) 
+  	    {
+  	      if (prot != NULL && ctp->prot == prot) return TRUE;
+  	    }
+      }
+      break;
+  }
+  return FALSE;
+}
+
 static Boolean LIBCALLBACK DoSwapQualifiers_FeatureCallback (SeqFeatPtr sfp,
 				SeqMgrFeatContextPtr fcontext)
 {
@@ -4872,6 +5109,14 @@ static Boolean LIBCALLBACK DoSwapQualifiers_FeatureCallback (SeqFeatPtr sfp,
       prp = (ProtRefPtr) prot->data.value.ptrvalue;
     }
   }
+
+  /* have we already swapped for this target? */
+  if (IsTargetInTupleList (cds, gene, grp, prot, prp, cfp->fromval, cfp->already_processed))
+  {
+    return TRUE;  	
+  }
+  cfp->already_processed = AddToTupleList (cds, gene, grp, prot, prp, cfp->already_processed);
+
 
   /* Get the values from the two fields */
 
@@ -4986,6 +5231,10 @@ static void DoSwapQualifiers (ButtoN b)
 			  DoSwapQualifiers_BioseqCallback,
 			  TRUE, TRUE, TRUE);
 
+  /* free already_processed list */
+  ValNodeFreeData (cfp->already_processed);
+  cfp->already_processed = NULL;
+
   /* Flag as changed, cleanup, and exit */
 
   ArrowCursor ();
@@ -5035,6 +5284,7 @@ extern void SwapQualifiers (IteM i)
   cfp = (CdsetFormPtr) MemNew (sizeof (CdsetFormData));
   if (cfp == NULL)
     return;
+  cfp->already_processed = NULL;
 
   /* Set up the main window */
 
@@ -5153,6 +5403,9 @@ typedef struct findform {
   ButtoN          findAllBtn;
   ButtoN          replaceAllBtn;
   Int2            type;
+  ButtoN          findFirstBtn;
+  ButtoN          findNextBtn;
+  Int4            last_paragraph_found;
 } FindForm, PNTR FindFormPtr;
 
 extern CharPtr CompressSpaces (CharPtr str)
@@ -5229,27 +5482,79 @@ extern CharPtr SearchForString (CharPtr str, CharPtr sub, Boolean case_counts, B
   return ptr;
 }
 
-static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
-                            Uint1 format, Uint1 mode,
-                            CharPtr sub, Boolean case_counts, Boolean whole_word)
+
+static Int4
+FindInFlatFileNext 
+(Asn2gbJobPtr ajp,
+ CharPtr sub,
+ Boolean case_counts,
+ Boolean whole_word,
+ Boolean stop_after_one_found,
+ Int4    start_index)
+{
+  Int4             index;
+  CharPtr          string;
+  BaseBlockPtr     bbp;
+  SelStructPtr     sel;
+  unsigned int     entID;
+  unsigned int     itmID;
+  unsigned int     itmtype;
+  Boolean          past_prev = FALSE;
+  Boolean          already = FALSE;
+
+  if (ajp == NULL) return -1;
+      
+  for (index = start_index + 1; index < ajp->numParagraphs; index++) {
+    string = asn2gnbk_format (ajp, (Int4) index);
+    if (string != NULL && *string != '\0') {
+      CompressSpaces (string);
+      if (SearchForString (string, sub, case_counts, whole_word) != NULL) {
+        bbp = ajp->paragraphArray [index];
+        if (bbp != NULL) {
+          entID = bbp->entityID;
+          itmID = bbp->itemID;
+          itmtype = bbp->itemtype;
+          already = FALSE;
+          for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
+            if (sel->entityID == entID && sel->itemID == itmID && sel->itemtype == itmtype) {
+              already = TRUE;
+            }
+          }
+          if (! already) {
+            ObjMgrAlsoSelect (entID, itmID, itmtype, 0, NULL);
+            if (stop_after_one_found) return index;
+          }
+        }
+      }
+    }
+  }
+  return -1;
+}
+
+
+static Int4 
+FindInFlatFile 
+(Uint2 entityID,
+ Uint2 itemID,
+ Uint2 itemtype,                           
+ Uint1 format,
+ Uint1 mode,                           
+ CharPtr sub,
+ Boolean case_counts,
+ Boolean whole_word,                           
+ Boolean stop_after_one,
+ Int4 start_index)
 
 {
   Asn2gbJobPtr     ajp;
-  Boolean          already;
-  BaseBlockPtr     bbp;
   BioseqPtr        bsp;
   BioseqSetPtr     bssp;
-  unsigned int     entID;
-  Int4             index;
-  unsigned int     itmID;
-  unsigned int     itmtype;
   ErrSev           level;
   SeqEntryPtr      oldsep;
   SeqEntryPtr      sep = NULL;
-  SelStructPtr     sel;
-  CharPtr          string;
   SeqEntryPtr      topsep;
   SeqEntryPtr      usethetop = NULL;
+  Int4             retval = -1;
 
   if (itemID == 0) {
     sep = GetTopSeqEntryForEntityID (entityID);
@@ -5257,7 +5562,7 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
   } else {
     bsp = GetBioseqGivenIDs (entityID, itemID, itemtype);
     if (bsp == NULL)
-      return;
+      return retval;
     sep = SeqMgrGetSeqEntryForData (bsp);
     if (bsp->repr == Seq_repr_seg) {
       sep = GetBestTopParentForData (entityID, bsp);
@@ -5265,7 +5570,7 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
   }
 
   if (sep == NULL)
-    return;
+    return retval;
 
   level = ErrSetMessageLevel (SEV_MAX);
   WatchCursor ();
@@ -5281,30 +5586,7 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
     ajp = asn2gnbk_setup (bsp, NULL, NULL, format, mode, NORMAL_STYLE, 0, 0, 0, NULL);
   }
   if (ajp != NULL) {
-    for (index = 0; index < ajp->numParagraphs; index++) {
-      string = asn2gnbk_format (ajp, (Int4) index);
-      if (string != NULL && *string != '\0') {
-        CompressSpaces (string);
-        if (SearchForString (string, sub, case_counts, whole_word) != NULL) {
-          bbp = ajp->paragraphArray [index];
-          if (bbp != NULL) {
-            entID = bbp->entityID;
-            itmID = bbp->itemID;
-            itmtype = bbp->itemtype;
-            already = FALSE;
-            for (sel = ObjMgrGetSelected (); sel != NULL; sel = sel->next) {
-              if (sel->entityID == entID && sel->itemID == itmID && sel->itemtype == itmtype) {
-                already = TRUE;
-              }
-            }
-            if (! already) {
-              ObjMgrAlsoSelect (entID, itmID, itmtype, 0, NULL);
-            }
-          }
-        }
-      }
-      MemFree (string);
-    }
+    retval = FindInFlatFileNext (ajp, sub, case_counts, whole_word, stop_after_one, start_index);
     asn2gnbk_cleanup (ajp);
   }
 
@@ -5313,6 +5595,7 @@ static void FindInFlatFile (Uint2 entityID, Uint2 itemID, Uint2 itemtype,
   ErrSetMessageLevel (level);
   ArrowCursor ();
   Update ();
+  return retval;
 }
 
 static void FindFlatProc (ButtoN b)
@@ -5330,9 +5613,51 @@ static void FindFlatProc (ButtoN b)
   caseCounts = GetStatus (ffp->caseCounts);
   wholeWord = GetStatus (ffp->wholeWord);
   CompressSpaces (findme);
-  FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
+  ffp->last_paragraph_found = FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
                   ffp->input_itemtype, GENBANK_FMT, SEQUIN_MODE,
-                  findme, caseCounts, wholeWord);
+                  findme, caseCounts, wholeWord, FALSE, -1);
+  MemFree (findme);
+}
+
+static void FindFlatProcFirst (ButtoN b)
+
+{
+  Boolean      caseCounts;
+  FindFormPtr  ffp;
+  CharPtr      findme;
+  Boolean      wholeWord;
+
+  ffp = (FindFormPtr) GetObjectExtra (b);
+  if (ffp == NULL) return;
+  findme = SaveStringFromText (ffp->findTxt);
+  ObjMgrDeSelect (0, 0, 0, 0, NULL);
+  caseCounts = GetStatus (ffp->caseCounts);
+  wholeWord = GetStatus (ffp->wholeWord);
+  CompressSpaces (findme);
+  ffp->last_paragraph_found = FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
+                  ffp->input_itemtype, GENBANK_FMT, SEQUIN_MODE,
+                  findme, caseCounts, wholeWord, TRUE, -1);
+  MemFree (findme);
+}
+
+static void FindFlatProcNext (ButtoN b)
+
+{
+  Boolean      caseCounts;
+  FindFormPtr  ffp;
+  CharPtr      findme;
+  Boolean      wholeWord;
+
+  ffp = (FindFormPtr) GetObjectExtra (b);
+  if (ffp == NULL) return;
+  findme = SaveStringFromText (ffp->findTxt);
+  ObjMgrDeSelect (0, 0, 0, 0, NULL);
+  caseCounts = GetStatus (ffp->caseCounts);
+  wholeWord = GetStatus (ffp->wholeWord);
+  CompressSpaces (findme);
+  ffp->last_paragraph_found = FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
+                  ffp->input_itemtype, GENBANK_FMT, SEQUIN_MODE,
+                  findme, caseCounts, wholeWord, TRUE, ffp->last_paragraph_found);
   MemFree (findme);
 }
 
@@ -5346,9 +5671,23 @@ static void FindTextProc (TexT t)
     if (TextLength (t) > 0) {
       SafeEnable (ffp->findAllBtn);
       SafeEnable (ffp->replaceAllBtn);
+      if (ffp->type == FIND_FLAT) {
+        SafeEnable (ffp->findFirstBtn);
+        SafeEnable (ffp->findNextBtn);
+      }
+      if (ffp->type == FIND_GENE || ffp->type == FIND_PROT) {
+        SafeEnable (ffp->findFirstBtn);
+      }
     } else {
       SafeDisable (ffp->findAllBtn);
       SafeDisable (ffp->replaceAllBtn);
+      if (ffp->type == FIND_FLAT) {
+        SafeDisable (ffp->findFirstBtn);
+        SafeDisable (ffp->findNextBtn);
+      }
+      if (ffp->type == FIND_GENE || ffp->type == FIND_PROT) {
+        SafeDisable (ffp->findFirstBtn);
+      }
     }
   }
 }
@@ -5399,6 +5738,193 @@ static void ReplaceAllProc (ButtoN b)
   CommonFindReplaceProc (b, TRUE, TRUE);
 }
 
+static ObjMgrDataPtr SeqMgrGetOmdpForBioseq (BioseqPtr bsp)
+
+{
+  ObjMgrDataPtr  omdp;
+  ObjMgrPtr      omp;
+
+  if (bsp == NULL) return NULL;
+  omdp = (ObjMgrDataPtr) bsp->omdp;
+  if (omdp != NULL) return omdp;
+  omp = ObjMgrWriteLock ();
+  omdp = ObjMgrFindByData (omp, bsp);
+  ObjMgrUnlock ();
+  bsp->omdp = (Pointer) omdp;
+  return omdp;
+}
+
+static SeqFeatPtr 
+FindNthFeatureOnBspByLabel 
+(BioseqPtr              bsp,
+ CharPtr                label,
+ Uint1                  seqFeatChoice,
+ Uint1                  featDefChoice,
+ Int4                   n,
+ Int4 PNTR              last_found,
+ SeqMgrFeatContext PNTR context)
+{
+  SMFeatItemPtr PNTR  array;
+  BioseqExtraPtr      bspextra;
+  Uint2               entityID;
+  SMFeatItemPtr       feat;
+  Int4                L;
+  Int4                mid;
+  Int4                num;
+  ObjMgrDataPtr       omdp;
+  Int4                R;
+  SeqFeatPtr          sfp;
+  Uint1               seqfeattype;
+  Int4                index = 0;
+
+  if (context != NULL) {
+    MemSet ((Pointer) context, 0, sizeof (SeqMgrFeatContext));
+  }
+  if (last_found != NULL) {
+    *last_found = -1;
+  }
+
+  if (bsp == NULL || StringHasNoText (label)) return NULL;
+
+  omdp = SeqMgrGetOmdpForBioseq (bsp);
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
+
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return NULL;
+  array = bspextra->featsByLabel;
+  num = bspextra->numfeats;
+
+  if (array == NULL || num < 1) return NULL;
+
+  if (n < 0 || n > bspextra->numfeats) return NULL;
+
+  entityID = ObjMgrGetEntityIDForPointer (omdp->dataptr);
+
+  /* binary search to leftmost candidate within the featsByLabel array */
+
+  L = 0;
+  R = num - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    feat = array [mid];
+    if (feat != NULL && StringICmp (feat->label, label) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  feat = array [R];
+
+  /* linear scan to find desired label on desired feature type */
+
+  while (R < num && feat != NULL && StringICmp (feat->label, label) == 0) {
+    sfp = feat->sfp;
+    if (sfp != NULL) {
+      seqfeattype = sfp->data.choice;
+      if ((seqFeatChoice == 0 || seqfeattype == seqFeatChoice) &&
+          (featDefChoice == 0 || feat->subtype == featDefChoice) &&
+          (! feat->ignore)) {
+        if (context != NULL) {
+          context->entityID = entityID;
+          context->itemID = feat->itemID;
+          context->sfp = sfp;
+          context->sap = feat->sap;
+          context->bsp = feat->bsp;
+          context->label = feat->label;
+          context->left = feat->left;
+          context->right = feat->right;
+          context->dnaStop = feat->dnaStop;
+          context->partialL = feat->partialL;
+          context->partialR = feat->partialR;
+          context->farloc = feat->farloc;
+          context->strand = feat->strand;
+          context->seqfeattype = seqfeattype;
+          context->featdeftype = feat->subtype;
+          context->numivals = feat->numivals;
+          context->ivals = feat->ivals;
+          context->userdata = NULL;
+          context->omdp = (Pointer) omdp;
+          context->index = R + 1;
+        }
+        if (index == n) {
+          if (last_found != NULL) {
+            *last_found = index;
+          }
+          return sfp;
+        } else {
+          if (last_found != NULL) {
+            *last_found = index;
+          }
+          index++;
+        }
+      }
+    }
+
+    R++;
+    feat = array [R];
+  }
+
+  return NULL;
+}
+
+typedef struct findnthfeatdata {
+  CharPtr                findme;
+  Uint1                  seqFeatChoice;
+  Uint1                  featDefChoice;
+  Int4                   n;
+  Int4                   passed_so_far;
+  SeqMgrFeatContext PNTR context;
+  SeqFeatPtr             sfp;
+} FindNthFeatData, PNTR FindNthFeatPtr;
+
+static void FindNthFeatureByLabelInSeqEntryBspProc (BioseqPtr bsp, Pointer userdata)
+{
+  FindNthFeatPtr fnfp;
+  Int4           this_search_index;
+  Int4           passed_this_bsp = 0;
+
+  if (bsp == NULL || (fnfp = (FindNthFeatPtr)userdata) == NULL
+      || fnfp->sfp != NULL) {
+    return;
+  }
+
+  this_search_index = fnfp->n - fnfp->passed_so_far;
+  fnfp->sfp = FindNthFeatureOnBspByLabel (bsp,
+                                          fnfp->findme,
+                                          fnfp->seqFeatChoice,
+                                          fnfp->featDefChoice,
+                                          this_search_index,
+                                          &passed_this_bsp,
+                                          fnfp->context);
+  if (fnfp->sfp == NULL) {
+    fnfp->passed_so_far += passed_this_bsp + 1;
+  }
+}
+
+static SeqFeatPtr FindNthFeatureByLabelInSeqEntry
+(SeqEntryPtr            sep,
+ CharPtr                findme,
+ Uint1                  seqFeatChoice,
+ Uint1                  featDefChoice,
+ Int4                   n,
+ SeqMgrFeatContext PNTR context)
+{
+  FindNthFeatData fnf;
+  
+  fnf.findme = findme;
+  fnf.seqFeatChoice = seqFeatChoice;
+  fnf.featDefChoice = featDefChoice;
+  fnf.n = n;
+  fnf.context = context;
+  fnf.passed_so_far = 0;
+  fnf.sfp = NULL;
+
+  VisitBioseqsInSep (sep, &fnf, FindNthFeatureByLabelInSeqEntryBspProc);
+
+  return fnf.sfp;
+}
+
 static void FindByLabelOrPosProc (ButtoN b)
 
 {
@@ -5433,10 +5959,24 @@ static void FindByLabelOrPosProc (ButtoN b)
 
   switch (ffp->type) {
     case FIND_GENE :
-      sfp = SeqMgrGetFeatureByLabel (bsp, findme, SEQFEAT_GENE, 0, &context);
+      sfp = FindNthFeatureByLabelInSeqEntry (sep, findme, SEQFEAT_GENE, 0,
+                                             ffp->last_paragraph_found + 1,
+                                             &context);
+      if (sfp == NULL) {
+        ffp->last_paragraph_found = -1;
+      } else {
+        ffp->last_paragraph_found ++;
+      }
       break;
     case FIND_PROT :
-      sfp = SeqMgrGetFeatureByLabel (bsp, findme, SEQFEAT_CDREGION, 0, &context);
+      sfp = FindNthFeatureByLabelInSeqEntry (sep, findme, SEQFEAT_CDREGION, 0,
+                                             ffp->last_paragraph_found + 1,
+                                             &context);
+      if (sfp == NULL) {
+        ffp->last_paragraph_found = -1;
+      } else {
+        ffp->last_paragraph_found ++;
+      }
       break;
     case FIND_POS :
       if (StrToLong (findme, &val)) {
@@ -5472,6 +6012,16 @@ static void FindByLabelOrPosProc (ButtoN b)
 
 }
 
+static void FindByLabelOrPosProcFindFirst (ButtoN b)
+{
+  FindFormPtr ffp;
+
+  ffp = (FindFormPtr) GetObjectExtra (b);
+  if (ffp == NULL) return;
+  ffp->last_paragraph_found = -1;
+  FindByLabelOrPosProc (b);
+}
+
 static void ClearFindTextProc (ButtoN b)
 
 {
@@ -5481,6 +6031,11 @@ static void ClearFindTextProc (ButtoN b)
   if (ffp == NULL) return;
   SafeSetTitle (ffp->findTxt, "");
   SafeSetTitle (ffp->replaceTxt, "");
+  if (ffp->type == FIND_FLAT) {
+    ObjMgrDeSelect (0, 0, 0, 0, NULL);
+    ffp->last_paragraph_found = -1;
+  }
+  FindTextProc (ffp->findTxt);
   Select (ffp->findTxt);
 }
 
@@ -5541,6 +6096,7 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
     ffp->input_itemID = itemID;
     ffp->input_itemtype = itemtype;
     ffp->type = type;
+    ffp->last_paragraph_found = -1;
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -5574,7 +6130,7 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
       }
     }
 
-    c = HiddenGroup (w, 4, 0, NULL);
+    c = HiddenGroup (w, 5, 0, NULL);
     SetGroupSpacing (c, 10, 2);
     if (type == FIND_ASN) {
       ffp->findAllBtn = DefaultButton (c, "Find All", FindAllProc);
@@ -5584,15 +6140,27 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
       SetObjectExtra (ffp->replaceAllBtn, ffp, NULL);
       Disable (ffp->replaceAllBtn);
     } else if (type == FIND_FLAT) {
+      ffp->findFirstBtn = PushButton (c, "Find First", FindFlatProcFirst);
+      SetObjectExtra (ffp->findFirstBtn, ffp, NULL);
+      Disable (ffp->findFirstBtn);
+      ffp->findNextBtn = PushButton (c, "Find Next", FindFlatProcNext);
+      SetObjectExtra (ffp->findNextBtn, ffp, NULL);
+      Disable (ffp->findNextBtn);
       ffp->findAllBtn = DefaultButton (c, "Find All", FindFlatProc);
       SetObjectExtra (ffp->findAllBtn, ffp, NULL);
       Disable (ffp->findAllBtn);
     } else if (type == FIND_GENE) {
-      ffp->findAllBtn = DefaultButton (c, "Find Gene", FindByLabelOrPosProc);
+      ffp->findFirstBtn = DefaultButton (c, "Find First Gene", FindByLabelOrPosProcFindFirst);
+      SetObjectExtra (ffp->findFirstBtn, ffp, NULL);
+      Disable (ffp->findFirstBtn);
+      ffp->findAllBtn = PushButton (c, "Find Next Gene", FindByLabelOrPosProc);
       SetObjectExtra (ffp->findAllBtn, ffp, NULL);
       Disable (ffp->findAllBtn);
     } else if (type == FIND_PROT) {
-      ffp->findAllBtn = DefaultButton (c, "Find Protein", FindByLabelOrPosProc);
+     ffp->findFirstBtn = DefaultButton (c, "Find First Protein", FindByLabelOrPosProcFindFirst);
+      SetObjectExtra (ffp->findFirstBtn, ffp, NULL);
+      Disable (ffp->findFirstBtn);
+      ffp->findAllBtn = PushButton (c, "Find Next Protein", FindByLabelOrPosProc);
       SetObjectExtra (ffp->findAllBtn, ffp, NULL);
       Disable (ffp->findAllBtn);
     } else if (type == FIND_POS) {
@@ -8347,4 +8915,244 @@ extern void EditSeqEndsProc (IteM i)
   Select (esp->seq);
   Update ();
 }
- 
+
+static Int4 FindMaxLabelLen (SeqAlignPtr salp)
+{
+  SeqIdPtr  sip;
+  BioseqPtr bsp;
+  Char      tmpbuf[42];
+  Int4      i;
+  Int4      max_len = 0;
+  Int4      len;
+
+  if (salp == NULL) return 0;
+  for (i = 0; i < salp->dim; i++) {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
+    bsp = BioseqLockById(sip);
+    if (bsp != NULL) {
+      SeqIdWrite (bsp->id, tmpbuf, PRINTID_TEXTID_ACCESSION, 41);
+      BioseqUnlock (bsp);
+      len = StringLen (tmpbuf) + 1;
+      if (len > max_len) {
+        max_len = len;
+      }
+    }
+  }
+  return max_len;
+}
+
+static CharPtr GetSeqAlignLabels (SeqAlignPtr salp, Int4Ptr label_len)
+{
+  CharPtr   labels;
+  BioseqPtr bsp;
+  SeqIdPtr  sip;
+  Int4      i;
+
+  if (salp == NULL || label_len == NULL) {
+    return NULL;
+  }
+
+  *label_len = FindMaxLabelLen (salp);
+  if (*label_len < 1) return NULL;
+
+  labels = (CharPtr) MemNew ((*label_len + 1) * salp->dim * sizeof (Char));
+  if (labels == NULL) return NULL;
+  MemSet (labels, 0, *label_len * salp->dim * sizeof (Char));
+
+  for (i = 0; i < salp->dim; i++) {
+    sip = AlnMgr2GetNthSeqIdPtr(salp, i + 1);
+    bsp = BioseqLockById(sip);
+    if (bsp != NULL) {
+      SeqIdWrite (bsp->id, labels + i * (*label_len + 1) * sizeof (Char),
+                  PRINTID_TEXTID_ACCESSION, *label_len);
+      BioseqUnlock (bsp);
+    }
+  }
+  return labels;
+}
+
+static void 
+WriteAlignmentInterleaveToFile 
+(SeqAlignPtr salp,
+ FILE *fp)
+{
+  Int4     row, start, stop;
+  Uint1Ptr alnbuf;
+  Uint1Ptr seqbuf;
+  Int4     alnbuf_len;
+  Int4     aln_len = AlnMgr2GetAlnLength(salp, FALSE);
+  CharPtr  alnlabels;
+  CharPtr  printed_line;
+  Int4     printed_line_len;
+  CharPtr  label_pos;
+  Int4     label_len = 0;
+  Int4 seq_chars_per_row;
+
+  if (salp == NULL || fp == NULL) return;
+
+  alnlabels = GetSeqAlignLabels (salp, &label_len);
+  if (alnlabels != NULL) {
+    seq_chars_per_row = 80 - label_len - 1;
+    alnbuf = (Uint1Ptr) MemNew ((seq_chars_per_row + 1)* sizeof (Uint1));
+    if (alnbuf != NULL) {
+      seqbuf = (Uint1Ptr) MemNew ((seq_chars_per_row + 1) * sizeof (Uint1));
+      if (seqbuf != NULL) {
+        printed_line_len = label_len + 1 + seq_chars_per_row + 3;
+        printed_line = (CharPtr) MemNew (printed_line_len * sizeof (Char));
+        if (printed_line != NULL) {
+          printed_line [ printed_line_len - 1] = 0;
+          printed_line [ printed_line_len - 2] = '\n';
+          start = 0;
+          stop = seq_chars_per_row - 1;
+          while (start < aln_len) {
+            for (row = 1; row <= salp->dim; row++) {
+              MemSet (printed_line, ' ', printed_line_len - 2);
+              label_pos = alnlabels + (row - 1) * (label_len + 1) * sizeof (Char);
+              MemCpy (printed_line, label_pos, StringLen (label_pos));
+              AlignmentIntervalToString (salp, row, start, stop, 1, FALSE, 
+                                         seqbuf, alnbuf, &alnbuf_len);
+              MemCpy (printed_line + label_len + 1, alnbuf, alnbuf_len);
+              fprintf (fp, printed_line);
+            }
+            fprintf (fp, "\n");
+            start = stop + 1;
+            stop += seq_chars_per_row;
+          }
+          MemFree (printed_line);
+        }
+        MemFree (seqbuf);
+      }
+      MemFree (alnbuf);
+    }
+    MemFree (alnlabels);
+  }
+}
+
+static void 
+WriteAlignmentContiguousToFile 
+(SeqAlignPtr salp,
+ FILE *fp)
+{
+  Int4     row, start, stop;
+  Uint1Ptr alnbuf;
+  Uint1Ptr seqbuf;
+  Int4     alnbuf_len;
+  Int4     aln_len = AlnMgr2GetAlnLength(salp, FALSE);
+  CharPtr  alnlabels;
+  CharPtr  printed_line;
+  Int4     printed_line_len;
+  CharPtr  label_pos;
+  Int4     label_len = 0;
+  Int4 seq_chars_per_row = 80;
+
+  if (salp == NULL || fp == NULL || seq_chars_per_row < 1) return;
+
+  alnlabels = GetSeqAlignLabels (salp, &label_len);
+  if (alnlabels != NULL) {
+    alnbuf = (Uint1Ptr) MemNew (seq_chars_per_row * sizeof (Uint1));
+    if (alnbuf != NULL) {
+      seqbuf = (Uint1Ptr) MemNew (seq_chars_per_row * sizeof (Uint1));
+      if (seqbuf != NULL) {
+        printed_line_len = seq_chars_per_row + 3;
+        printed_line = (CharPtr) MemNew (printed_line_len * sizeof (Char));
+        if (printed_line != NULL) {
+          printed_line [ printed_line_len - 1] = 0;
+          printed_line [ printed_line_len - 2] = '\n';
+          for (row = 1; row <= salp->dim; row++) {
+            label_pos = alnlabels + (row - 1) * (label_len + 1) * sizeof (Char);
+            fprintf (fp, "%s\n", label_pos);
+            start = 0;
+            stop = seq_chars_per_row - 1;
+            while (start < aln_len) {
+              MemSet (printed_line, ' ', printed_line_len - 2);
+              MemCpy (printed_line, label_pos, StringLen (label_pos));
+              AlignmentIntervalToString (salp, row, start, stop, 1, FALSE, 
+                                         seqbuf, alnbuf, &alnbuf_len);
+              MemCpy (printed_line, alnbuf, alnbuf_len);
+              fprintf (fp, printed_line);
+              start = stop + 1;
+              stop += seq_chars_per_row;
+            }
+            fprintf (fp, "\n");
+          }
+          MemFree (printed_line);
+        }
+        MemFree (seqbuf);
+      }
+      MemFree (alnbuf);
+    }
+    MemFree (alnlabels);
+  }
+}
+
+static void WriteSeqEntryAlignmentToFile (SeqEntryPtr sep, FILE *fp, Boolean Interleave)
+{
+  BioseqSetPtr bssp;
+  SeqAnnotPtr  sap;
+  SeqAlignPtr  salp;
+
+  if (sep == NULL || ! IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return;
+  for (sap = bssp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type == 2) {
+      salp = (SeqAlignPtr) sap->data;
+      if (salp->saip == NULL) {
+        AlnMgr2IndexSingleChildSeqAlign (salp);
+      }
+      if (Interleave) {
+        WriteAlignmentInterleaveToFile (salp, fp);
+      } else {
+        WriteAlignmentContiguousToFile (salp, fp);
+      }
+    }
+  }
+
+  for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+    WriteSeqEntryAlignmentToFile (sep, fp, Interleave);
+  }
+}
+
+static void ExportAlignment (IteM i, Boolean Interleave)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+  Char        path [PATH_MAX];
+  FILE *      fp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  if (! GetOutputFileName (path, sizeof (path), "")) return;
+  if (! StringHasNoText (path)) {
+    fp = FileOpen (path, "w");
+    if (fp != NULL) {
+      WatchCursor ();
+      Update();
+      WriteSeqEntryAlignmentToFile (sep, fp, Interleave);
+      ArrowCursor ();
+      Update();
+      FileClose (fp);
+    } else {
+      Message (MSG_ERROR, "Unable to open file");
+    }
+  }
+}
+
+extern void ExportAlignmentInterleave (IteM i)
+{
+  ExportAlignment (i, TRUE);
+}
+
+extern void ExportAlignmentContiguous (IteM i)
+{
+  ExportAlignment (i, FALSE);
+}
+
+

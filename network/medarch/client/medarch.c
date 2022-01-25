@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/31/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *       API for Medline Archive service
@@ -53,6 +53,9 @@
 *
 * RCS Modification History:
 * $Log: medarch.c,v $
+* Revision 6.1  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.0  1997/08/25 18:35:40  madden
 * Revision changed to 6.0
 *
@@ -1110,7 +1113,7 @@ ValNodePtr s_MedArchGetMriPmids (
    This function call MedArch server and sends accession/xref code, it recives
    list of Medline IDs. plAccNum is an optional argument in accordance with
    Medline-si definition. Set it to NULL if accession code is unknown.
-   It returns NULL if there are no entries found or if some error occured.
+   It returns NULL if there are no entries found or if some error occurred.
 -*/
 /******************************************************************************/
 static
@@ -1154,7 +1157,7 @@ ValNodePtr s_MedArchGetAccUids (
    list of PubMed IDs. 
    plAccNum is an optional argument in accordance with
    Medline-si definition. Set it to NULL if accession code is unknown.
-   It returns NULL if there are no entries found or if some error occured.
+   It returns NULL if there are no entries found or if some error occurred.
  -*/
 /******************************************************************************/
 static
@@ -1979,7 +1982,7 @@ ValNodePtr
    Server will return list of articles(MuId's) that are present in this issue. 
    plAccNum is an optional argument in accordance with
    Medline-si definition. Set it to NULL if accession code is unknown.
-   It returns NULL if there are no entries found or if some error occured.-*/
+   It returns NULL if there are no entries found or if some error occurred.-*/
 /******************************************************************************/
 ValNodePtr
 /*FCN*/MedArchGetAccUids (
@@ -2019,7 +2022,7 @@ ValNodePtr
    Server will return list of PmIds that are present in this issue. 
    plAccNum is an optional argument in accordance with
    Medline-si definition. Set it to NULL if accession code is unknown.
-   It returns NULL if there are no entries found or if some error occured.-*/
+   It returns NULL if there are no entries found or if some error occurred.-*/
 /******************************************************************************/
 ValNodePtr
 /*FCN*/MedArchGetAccPmids (

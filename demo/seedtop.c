@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: seedtop.c,v 6.8 2003/05/30 17:31:10 coulouri Exp $";
+static char const rcsid[] = "$Id: seedtop.c,v 6.9 2004/04/01 13:43:06 lavr Exp $";
 
-/* $Id: seedtop.c,v 6.8 2003/05/30 17:31:10 coulouri Exp $ */
+/* $Id: seedtop.c,v 6.9 2004/04/01 13:43:06 lavr Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.8 $
+$Revision: 6.9 $
 
 $Log: seedtop.c,v $
+Revision 6.9  2004/04/01 13:43:06  lavr
+Spell "occurred", "occurrence", and "occurring"
+
 Revision 6.8  2003/05/30 17:31:10  coulouri
 add rcsid
 
@@ -151,7 +154,7 @@ Int2 Main(void)
         Int4  numPatOccur; /*number of pattern occurrences in query string*/
         Int4  effectiveOccurrences; /*number of occurrences not overlapping
                                       in more than half the pattern*/
-        Int4  occurIndex;  /*index over pattern ocuurences*/
+        Int4  occurIndex;  /*index over pattern occurrences*/
         Int4  twiceNumMatches; /*stores return value from find_hits*/
         Int4  matchIndex;  /*index for matches to a single sequence*/
         Int4 totalOccurrences = 0, newOccurrences; /*total occurrences of pattern in database*/

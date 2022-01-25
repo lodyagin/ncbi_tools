@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.52 $
+* $Revision: 6.53 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.53  2004/02/24 20:57:45  kans
+* added genesByLocusTag field, SeqMgrGetNextGeneByLocusTag function, now that locus_tag should be a unique identifier
+*
 * Revision 6.52  2003/10/23 17:40:01  kans
 * added SeqMgrGetOverlappingOperon and bspextra operonsByPos and numoperons fields
 *
@@ -938,6 +941,8 @@ typedef struct bioseqextra {
   SMFeatItemPtr PNTR  pubsByPos;      /* subset of featsByPos array containing only publication features */
   SMFeatItemPtr PNTR  orgsByPos;      /* subset of featsByPos array containing only biosource features */
   SMFeatItemPtr PNTR  operonsByPos;   /* subset of featsByPos array containing only operon features */
+
+  SMFeatItemPtr PNTR  genesByLocusTag;  /* array of gene features sorted by locus_tag */
 
   BioseqPtr           parentBioseq;   /* segmented parent of this raw part all packaged together */
   SMSeqIdxPtr         segparthead;    /* linked list to speed mapping from parts to segmented bioseq */

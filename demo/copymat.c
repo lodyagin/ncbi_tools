@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.30 2004/01/30 20:34:45 coulouri Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.36 2004/04/23 21:11:31 papadopo Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,24 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.36  2004/04/23 21:11:31  papadopo
+force the thick backbone (dumped to the RPS .loo file) to contain the number of cells assumed by RPS blast
+
+Revision 6.35  2004/04/16 14:48:04  papadopo
+remove unneeded argument to FillLookupTableOptions
+
+Revision 6.34  2004/04/07 21:48:48  camacho
+Add missing header file
+
+Revision 6.33  2004/04/06 12:15:44  camacho
+Rename DoubleInt -> SSeqRange
+
+Revision 6.32  2004/03/10 20:21:27  papadopo
+add (unused) RPS blast parameters to FillLookupTableOptions
+
+Revision 6.31  2004/03/04 21:16:10  papadopo
+add (unused) RPS blast parameter to FillLookupTable call
+
 Revision 6.30  2004/01/30 20:34:45  coulouri
 fix minor nit to FileWrite call
 
@@ -123,6 +141,7 @@ Changed a little format of RPS lookup tables file.
 #include <sequtil.h>
 #include <seqport.h>
 #include <tofasta.h>
+#include <algo/blast/core/blast_encoding.h>
 
 #ifndef MAXLINELEN
 #   define MAXLINELEN 2000
@@ -138,6 +157,9 @@ Changed a little format of RPS lookup tables file.
 #endif
 #ifndef RPS_MAGIC_NUMBER
 #   define RPS_MAGIC_NUMBER 7702
+#endif
+#ifndef RPS_ARRAY_SIZE
+#   define RPS_ARRAY_SIZE 32768
 #endif
 /*factor used to multiply the gapped K parameter to make it
   more accurate in most cases*/
@@ -469,6 +491,8 @@ Boolean RPSDumpLookupTable(LookupTable *lookup, FILE *fd)
 {
     Uint4 *new_overflow;
     Uint4 new_overflow_size;
+    LookupBackboneCell empty_cell;
+    Int4 index;
 
     RPSUpdateOffsets(lookup);
 
@@ -476,6 +500,14 @@ Boolean RPSDumpLookupTable(LookupTable *lookup, FILE *fd)
     RPSUpdatePointers(lookup, new_overflow, &new_overflow_size);
 
     FileWrite(lookup->thick_backbone, sizeof(LookupBackboneCell), lookup->backbone_size, fd);
+    
+    /* write empty cells out to the thick backbone size that
+       RPS blast expects */
+
+    memset(&empty_cell, 0, sizeof(empty_cell));
+    for (index = lookup->backbone_size; index < RPS_ARRAY_SIZE + 1; index++)
+        FileWrite(&empty_cell, sizeof(empty_cell), 1, fd);
+
     if(new_overflow_size)
         FileWrite(new_overflow,
                   sizeof(Uint4),
@@ -496,7 +528,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
                             Nlm_FloatHi scalingFactor)
 {
     BlastScoreBlk *sbp;
-    DoubleInt *double_int;
+    SSeqRange *sequence_range;
     FILE *fd;
     Int4  **posMatrix;
     Int4 start, i, header_size, all_length, magicNumber;
@@ -534,14 +566,14 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
 	(Int4) (myargs[3].floatvalue*scalingFactor), myargs[4].intvalue, FALSE, FALSE, TRUE);  /* add last arg for psi-blast?? */
 
 
-    double_int = (DoubleInt*) calloc(1, sizeof(DoubleInt));
-    double_int->i1 = 0;
-    double_int->i2 = all_length;
+    sequence_range = (SSeqRange*) calloc(1, sizeof(SSeqRange));
+    sequence_range->left = 0;
+    sequence_range->right = all_length;
 
-    ListNodeAddPointer(&lookup_segment, 0, double_int);
+    ListNodeAddPointer(&lookup_segment, 0, sequence_range);
 
     /* Need query for psi-blast??  where to put the PSSM? */
-    LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr);
+    LookupTableWrapInit(NULL, lookup_options, lookup_segment, sbp, &lookup_wrap_ptr, NULL);
    
     sbp->posMatrix = NULL;
     sbp = BlastScoreBlkFree(sbp);

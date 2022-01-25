@@ -1,4 +1,4 @@
-/* $Id: blast_lookup.h,v 1.2 2004/01/26 19:39:27 coulouri Exp $
+/* $Id: blast_lookup.h,v 1.7 2004/04/06 16:34:37 papadopo Exp $
 
 * ===========================================================================
 *
@@ -28,6 +28,7 @@
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_rps.h>
 #include <algo/blast/core/lookup_wrap.h>
 
 #ifndef BLAST_LOOKUP__H
@@ -142,8 +143,30 @@ Int4 _BlastAaLookupFinalize(LookupTable* lookup);
 Int4 BlastAaScanSubject(const LookupTableWrap* lookup_wrap, /* in: the LUT */
                         const BLAST_SequenceBlk *subject,
                         Int4* offset,
-                        Uint4 * query_offsets, /* out: pointer to the array to which hits will be copied */
-		        Uint4 * subject_offsets, /* out : pointer to the array where offsets will be stored */
+                        Uint4 * NCBI_RESTRICT query_offsets, /* out: pointer to the array to which hits will be copied */
+                        Uint4 * NCBI_RESTRICT subject_offsets, /* out : pointer to the array where offsets will be stored */
+                        Int4 array_size);
+
+/**
+ * Scans the RPS query sequence from "offset" to the end of the sequence.
+ * Copies at most array_size hits.
+ * Returns the number of hits found.
+ * If there isn't enough room to copy all the hits, return early, and update
+ * "offset". 
+ *
+ * @param lookup_wrap the lookup table [in]
+ * @param sequence the subject sequence [in]
+ * @param offset the offset in the subject at which to begin scanning [in/out]
+ * @param table_offsets array to which hits will be copied [out]
+ * @param sequence_offsets array to which hits will be copied [out]
+ * @param array_size length of the offset arrays [in]
+ * @return The number of hits found.
+ */
+Int4 BlastRPSScanSubject(const LookupTableWrap* lookup_wrap, /* in: the LUT */
+                        const BLAST_SequenceBlk *sequence,
+                        Int4* offset,
+		        Uint4 * table_offsets, /* out : pointer to the array where offsets will be stored */
+                        Uint4 * sequence_offsets, /* out: pointer to the array to which hits will be copied */
 		        Int4 array_size);
 
 /** Create a new protein lookup table.
@@ -187,14 +210,15 @@ Int4 BlastAaLookupIndexQueries(LookupTable* lookup,
  * @param matrix the substitution matrix [in]
  * @param query the array of queries to index
  * @param unmasked_regions a ListNode* which points to a (list of) integer pair(s) which specify the unmasked region(s) of the query [in]
-i
+ * @param query_bias number added to each offset put into lookup table (only used for RPS blast database creation, otherwise 0) [in]
  * @return Zero.
  */
 
 Int4 _BlastAaLookupIndexQuery(LookupTable* lookup,
 			      Int4 ** matrix,
 			      BLAST_SequenceBlk* query,
-			      ListNode* unmasked_regions);
+			      ListNode* unmasked_regions,
+                              Int4 query_bias);
 
 /** Create a sequence containing all possible words as subsequences.
  *
@@ -219,17 +243,54 @@ Int4 MakeAllWordSequence(LookupTable* lookup);
  * @param matrix the substitution matrix [in]
  * @param query the query sequence [in]
  * @param offset the offset of the word
+ * @param query_bias number added to each offset put into lookup table (only used for RPS blast database creation, otherwise 0) [in]
  * @return Zero.
  */
 
 Int4 AddNeighboringWords(LookupTable* lookup,
 			 Int4 ** matrix,
 			 BLAST_SequenceBlk* query,
-			 Int4 offset);
+			 Int4 offset,
+                         Int4 query_bias);
 
 #define SET_HIGH_BIT(x) (x |= 0x80000000)
 #define CLEAR_HIGH_BIT(x) (x &= 0x7FFFFFFF)
 #define TEST_HIGH_BIT(x) ( ((x) >> 31) & 1 )
+
+/* RPS blast structures and functions */
+
+#define RPS_HITS_PER_CELL 3
+
+typedef struct RPSBackboneCell {
+    Int4 num_used;
+    Int4 entries[RPS_HITS_PER_CELL];
+} RPSBackboneCell;
+
+typedef struct RPSLookupTable {
+    Int4 wordsize; /* number of full bytes in a full word */
+    Int4 longest_chain; /* length of the longest chain on the backbone */
+    Int4 mask; /* part of index to mask off, that is, top (wordsize*charsize) bits should be discarded. */
+    Int4 alphabet_size; /* number of letters in the alphabet */
+    Int4 charsize; /* number of bits for a base/residue */
+    Int4 backbone_size; /* number of cells in the backbone */
+    RPSBackboneCell * rps_backbone; /* the lookup table used for RPS blast */
+    Int4 ** rps_pssm; /* Pointer to memory-mapped RPS Blast profile file */
+    Int4 * rps_seq_offsets; /* array of start offsets for each RPS DB seq. */
+    RPSAuxInfo* rps_aux_info; /* RPS Blast auxiliary information */
+    Int4 * overflow; /* the overflow array for the compacted lookup table */
+    Int4  overflow_size; /* Number of elements in the overflow array (above). */
+    PV_ARRAY_TYPE *pv; /* presence vector. a bit vector indicating which cells are occupied */
+} RPSLookupTable;
+  
+/** Create a new RPS blast lookup table.
+  * @param rps_info pointer to structure with RPS setup information [in]
+  * @param lut handle to lookup table [in/modified]
+  */
+  
+Int4 RPSLookupTableNew(const RPSInfo *rps_info, RPSLookupTable* * lut);
+
+/** Free the lookup table. */
+RPSLookupTable* RPSLookupTableDestruct(RPSLookupTable* lookup);
 
 /*********************************
  * 
@@ -253,9 +314,12 @@ Int4 AddNeighboringWords(LookupTable* lookup,
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
-       const BLAST_SequenceBlk* subject, Int4 start_offset,
-       Uint4* q_offsets, Uint4* s_offsets, Int4 max_hits, 
-       Int4* end_offset);
+                        const BLAST_SequenceBlk* subject,
+                        Int4 start_offset,
+                        Uint4* NCBI_RESTRICT q_offsets,
+                        Uint4* NCBI_RESTRICT s_offsets,
+                        Int4 max_hits, 
+                        Int4* end_offset);
 
 /** Scan the compressed subject sequence, returning all word hits, using the 
  *  arbitrary stride. Lookup table is presumed to have a traditional BLASTn 
@@ -270,9 +334,12 @@ Int4 BlastNaScanSubject(const LookupTableWrap* lookup_wrap,
  * @param end_offset Where the scanning should stop [in], has stopped [out]
 */
 Int4 BlastNaScanSubject_AG(const LookupTableWrap* lookup_wrap,
-       const BLAST_SequenceBlk* subject, Int4 start_offset,
-       Uint4* q_offsets, Uint4* s_offsets, Int4 max_hits, 
-       Int4* end_offset);
+                        const BLAST_SequenceBlk* subject,
+                        Int4 start_offset,
+                        Uint4* NCBI_RESTRICT q_offsets,
+                        Uint4* NCBI_RESTRICT s_offsets,
+                        Int4 max_hits, 
+                        Int4* end_offset);
 
 /** Fill the lookup table for a given query sequence or partial sequence.
  * @param lookup Pointer to the lookup table structure [in] [out]

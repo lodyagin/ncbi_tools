@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -532,6 +532,10 @@ typedef struct summformdata {
   Entrez2DocsumListPtr  tempE2DLP;
 } SummFormData, PNTR SummFormPtr;
 
+
+extern Entrez2ReplyPtr SpecialEntrezSynchronousQuery (
+  Entrez2RequestPtr e2rq
+);
 
 /*==================================================================*/
 /*                                                                  */
@@ -1234,7 +1238,7 @@ static CharPtr Query_FetchDocSumCommon (DoC d, Int2 item, FormatE2DSPProc proc)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr);
+  e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr);
   if (e2ReplyPtr == NULL) return failed;
 
   if (ShowASN () == TRUE)
@@ -1964,7 +1968,7 @@ static Boolean Query_FetchNeighbors (SummFormPtr sfp, Int2 num)
   if (ShowASN () == TRUE)
     DisplayEntrezRequest (e2RequestPtr);
 
-  if ((e2ReplyPtr = EntrezSynchronousQuery (e2RequestPtr)) == NULL)
+  if ((e2ReplyPtr = SpecialEntrezSynchronousQuery (e2RequestPtr)) == NULL)
     return FALSE;
 
   if (ShowASN () == TRUE)

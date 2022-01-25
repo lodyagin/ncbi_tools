@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.163 2004/02/03 20:36:13 ucko Exp $
+#	$Id: makenet.unx,v 6.172 2004/05/05 02:01:08 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -132,6 +132,9 @@ BLIB45 = libddvlib.a
 
 BLIB46 = libncbiid2.a
 
+BLIB60 = libblast.a
+BLIB61 = libblastapi.a
+
 #
 # Pseudo-dummy targets when Vibrant is not used
 #
@@ -203,6 +206,8 @@ LIB43 = -losutils
 LIB44 = -lidload
 LIB45 = -lddvlib
 LIB46 = -lncbiid2
+LIB60 = -lblast
+LIB61 = -lblastapi
 
 ##
 ## encryption of network services
@@ -331,13 +336,13 @@ SRC40 = objtax1.c taxutil.c tc2dproc.c txcdproc.c parttree.c taxcs.c taxblast.c
 
 SRC41 = id1gen.c id1arch.c accid1.c
 
-SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c
+SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c gicache.c
 
 SRC43 = os_mtutils.c already_running.c
 
 SRC44 = idload_lib.c
 
-SRC46 = id2.c
+SRC46 = id2.c id2sgen.c
 
 #NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
 NET_LIBS_SRC = $(SRC6) $(SRC7) $(SRC8) $(SRC9)
@@ -400,13 +405,13 @@ OBJ40 = objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o taxblast.o
 
 OBJ41 = id1gen.o id1arch.o accid1.o 
 
-OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o
+OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o gicache.o
 
 OBJ43 = os_mtutils.o already_running.o
 
 OBJ44 = idload_lib.o
 
-OBJ46 = id2.o
+OBJ46 = id2.o id2sgen.o
 
 # objects & sources needed for versions of network demo programs
 
@@ -515,7 +520,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf asn2fsa asn2fsa_psf flint gbseqget insdseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -663,7 +668,10 @@ copy :
 	$(SRCCOPY) ../demo/rtestval.c .
 	$(SRCCOPY) ../demo/asn2ff.c .
 	$(SRCCOPY) ../demo/asn2gb.c .
+	$(SRCCOPY) ../demo/asn2fsa.c .
+	$(SRCCOPY) ../demo/flint.c .
 	$(SRCCOPY) ../demo/gbseqget.c .
+	$(SRCCOPY) ../demo/insdseqget.c .
 	$(SRCCOPY) ../demo/testent2.c .
 	$(SRCCOPY) ../demo/entrez2.c .
 	$(SRCCOPY) ../demo/condense.c .
@@ -671,6 +679,8 @@ copy :
 	$(SRCCOPY) ../demo/dotmain.c .
 	$(SRCCOPY) ../demo/ingenmain.c .
 	$(SRCCOPY) ../demo/bl2seq.c .
+	$(SRCCOPY) ../demo/blastall.c .
+	$(SRCCOPY) ../demo/blast_driver.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -750,6 +760,8 @@ id1arch.o: id1arch.c
 	$(CC) $(CFLAGS) id1arch.c
 id2.o: id2.c
 	$(CC) $(CFLAGS) id2.c
+id2sgen.o: id2sgen.c
+	$(CC) $(CFLAGS) id2sgen.c
 objbl1p1.o : objbl1p1.c
 	$(CC) $(CFLAGS) objbl1p1.c
 objbl1p2.o : objbl1p2.c
@@ -1070,6 +1082,9 @@ password.o : password.c
 gipropmmap.o : gipropmmap.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c gipropmmap.c
 
+gicache.o : gicache.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c gicache.c
+
 os_mtutils.o : os_mtutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c os_mtutils.c
 
@@ -1175,9 +1190,27 @@ asn2gb :	asn2gb.c
 asn2gb_psf :	asn2gb.c
 	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c $(LIB_PS) $(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
+# asn2fsa program (asn2fsa)
+asn2fsa :	asn2fsa.c
+	$(CC) -g -o asn2fsa $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# asn2fsa_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqfetchEnable
+# should be used only internally within NCBI.
+asn2fsa_psf :	asn2fsa.c
+	$(CC) -DINTERNAL_NCBI_ASN2FSA -g -o asn2fsa_psf $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB_PS) \
+	$(LIB23) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# flint program (flint)
+flint :	flint.c
+	$(CC) -g -o flint $(LDFLAGS) flint.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # gbseqget program (gbseqget)
 gbseqget :	gbseqget.c
 	$(CC) -g -o gbseqget $(LDFLAGS) gbseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# insdseqget program (insdseqget)
+insdseqget :	insdseqget.c
+	$(CC) -g -o insdseqget $(LDFLAGS) insdseqget.c $(LIB41) $(NETCLILIB) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # Entrez2 service test program (testent2)
 testent2 :	testent2.c
@@ -1364,33 +1397,33 @@ cnsgnv : cnsgnv.c
 
 
 # 'sequin' direct submission tool
-sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
+sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB45) $(LIB19) $(LIB40) $(LIB41) \
+	$(LIB61) $(LIB60) $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB45) $(LIB19) $(LIB40) $(LIB41) \
 	$(LIB36) $(LIB23) $(LIB11) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) sequin
 
 # 'sequin' direct submission tool with interprocess communication capability
-Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
+Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31) $(ULIB33) $(THREAD_OBJ)
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB22) $(LIB19) $(LIB40) \
+	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB45) $(LIB61) $(LIB60) $(LIB31) $(LIB20) $(LIB22) $(LIB19) $(LIB40) \
 	$(LIB41) $(LIB36) $(LIB23) $(LIB11) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
-Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
+Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
-	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
+	$(LIB30) $(LIB45) $(LIB61) $(LIB60) $(LIB31) $(LIB20) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) Psequin
 

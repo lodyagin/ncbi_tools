@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.1 2003/09/10 19:37:26 dondosha Exp $
+/* $Id: lookup_wrap.h,v 1.3 2004/03/11 18:31:06 papadopo Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Wrapper for all lookup tables used in BLAST
 
 ******************************************************************************
- * $Revision: 1.1 $
+ * $Revision: 1.3 $
  * */
 #ifndef __LOOKUP_WRAP__
 #define __LOOKUP_WRAP__
@@ -43,6 +43,7 @@ extern "C" {
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_options.h>
+#include <algo/blast/core/blast_rps.h>
 #include <algo/blast/core/blast_stat.h>
 
 /** Wrapper structure for different types of BLAST lookup tables */
@@ -58,11 +59,12 @@ typedef struct LookupTableWrap {
  *                        construction [in]
  * @param sbp Scoring block containing matrix [in]
  * @param lookup_wrap_ptr The initialized lookup table [out]
+ * @param rps_info Structure containing RPS blast setup information [in]
  */
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
         const LookupTableOptions* lookup_options,	
         ListNode* lookup_segments, BlastScoreBlk* sbp, 
-        LookupTableWrap** lookup_wrap_ptr);
+        LookupTableWrap** lookup_wrap_ptr, RPSInfo *rps_info);
 
 /** Deallocate memory for the lookup table */
 LookupTableWrap* LookupTableWrapFree(LookupTableWrap* lookup);

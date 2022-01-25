@@ -1,10 +1,10 @@
 #
-# $Id: sgi.ncbi.mk,v 1.22 2003/05/07 17:40:12 beloslyu Exp $
+# $Id: sgi.ncbi.mk,v 1.23 2004/02/23 22:03:17 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
 NCBI_AR=ar
-NCBI_CC = cc -mips1 `uname -r | sed 's/6\..*/-n32 -G0/;s/5\..*//'` 
+NCBI_CC = cc -64
 NCBI_SYBASE = /usr/people/sybase_10.0.3
 NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb
 NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a

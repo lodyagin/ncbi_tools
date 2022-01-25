@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blast_seq.c,v 1.33 2003/12/03 17:30:25 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seq.c,v 1.39 2004/04/16 14:44:07 papadopo Exp $";
 /*
 * ===========================================================================
 *
@@ -33,7 +33,7 @@ Author: Ilya Dondoshansky
 Contents: Functions converting between SeqLocs and structures used in BLAST.
 
 ******************************************************************************
- * $Revision: 1.33 $
+ * $Revision: 1.39 $
  * */
 
 #include <seqport.h>
@@ -42,7 +42,7 @@ Contents: Functions converting between SeqLocs and structures used in BLAST.
 #include <algo/blast/api/blast_seq.h>
 #include <algo/blast/core/blast_filter.h>
 #include <algo/blast/core/blast_util.h>
-#include <algo/blast/core/blast_stat.h> /* Needed for NCBI4NA_TO_BLASTNA definition only */
+#include <algo/blast/core/blast_encoding.h>
 
 BlastMaskLoc* BlastMaskLocFromSeqLoc(SeqLocPtr mask_slp, Int4 index)
 {
@@ -77,7 +77,7 @@ SeqLocPtr BlastMaskLocToSeqLoc(Uint1 program_number, BlastMaskLoc* mask_loc,
    SeqLocPtr mask_head = NULL, last_mask = NULL;
    SeqLocPtr mask_slp_last, mask_slp_head, new_mask_slp;
    SeqIdPtr seqid;
-   DoubleInt* di;
+   SSeqRange* di;
    Int4 index;
    Boolean translated_query;
    Uint1 num_frames;
@@ -104,10 +104,10 @@ SeqLocPtr BlastMaskLocToSeqLoc(Uint1 program_number, BlastMaskLoc* mask_loc,
       
          mask_slp_head = mask_slp_last = NULL;
          for (loc = mask_loc->loc_list; loc; loc = loc->next) {
-            di = (DoubleInt*) loc->ptr;
+            di = (SSeqRange*) loc->ptr;
             si = SeqIntNew();
-            si->from = di->i1;
-            si->to = di->i2;
+            si->from = di->left;
+            si->to = di->right;
             si->id = SeqIdDup(seqid);
             if (!mask_slp_last)
                mask_slp_last = 
@@ -148,7 +148,7 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
    BlastMaskLoc* last_mask = NULL,* head_mask = NULL,* mask_loc; 
    Int4 dna_length;
    BlastSeqLoc* dna_loc,* prot_loc_head,* prot_loc_last;
-   DoubleInt* dip;
+   SSeqRange* dip;
    Int4 index, context;
    Int2 frame;
    Int4 from, to;
@@ -181,13 +181,13 @@ Int2 BlastMaskLocDNAToProtein(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
 
          for (dna_loc = mask_loc->loc_list; dna_loc; 
               dna_loc = dna_loc->next) {
-            dip = (DoubleInt*) dna_loc->ptr;
+            dip = (SSeqRange*) dna_loc->ptr;
             if (frame < 0) {
-               from = (dna_length + frame - dip->i2)/CODON_LENGTH;
-               to = (dna_length + frame - dip->i1)/CODON_LENGTH;
+               from = (dna_length + frame - dip->right)/CODON_LENGTH;
+               to = (dna_length + frame - dip->left)/CODON_LENGTH;
             } else {
-               from = (dip->i1 - frame + 1)/CODON_LENGTH;
-               to = (dip->i2 - frame + 1)/CODON_LENGTH;
+               from = (dip->left - frame + 1)/CODON_LENGTH;
+               to = (dip->right - frame + 1)/CODON_LENGTH;
             }
             if (!prot_loc_last) {
                prot_loc_head = prot_loc_last = BlastSeqLocNew(from, to);
@@ -217,7 +217,7 @@ Int2 BlastMaskLocProteinToDNA(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
    Int4 index;
    BlastMaskLoc* mask_loc;
    BlastSeqLoc* loc;
-   DoubleInt* dip;
+   SSeqRange* dip;
    Int4 dna_length;
    Int2 frame;
    Int4 from, to;
@@ -240,16 +240,16 @@ Int2 BlastMaskLocProteinToDNA(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
                                 mask_loc->index % NUM_FRAMES);
 
          for (loc = mask_loc->loc_list; loc; loc = loc->next) {
-            dip = (DoubleInt*) loc->ptr;
+            dip = (SSeqRange*) loc->ptr;
             if (frame < 0)	{
-               to = dna_length - CODON_LENGTH*dip->i1 + frame;
-               from = dna_length - CODON_LENGTH*dip->i2 + frame + 1;
+               to = dna_length - CODON_LENGTH*dip->left + frame;
+               from = dna_length - CODON_LENGTH*dip->right + frame + 1;
             } else {
-               from = CODON_LENGTH*dip->i1 + frame - 1;
-               to = CODON_LENGTH*dip->i2 + frame - 1;
+               from = CODON_LENGTH*dip->left + frame - 1;
+               to = CODON_LENGTH*dip->right + frame - 1;
             }
-            dip->i1 = from;
-            dip->i2 = to;
+            dip->left = from;
+            dip->right = to;
          }
          /* Advance to the next mask */
          mask_loc = mask_loc->next;
@@ -261,7 +261,7 @@ Int2 BlastMaskLocProteinToDNA(BlastMaskLoc** mask_loc_ptr, SeqLocPtr slp)
 static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program, 
                BlastQueryInfo** query_info_ptr)
 {
-   Int4 length, protein_length;
+   Uint4 length, protein_length;
    Boolean translate = 
       (program == blast_type_blastx || program == blast_type_tblastx);
    Boolean is_na = (program == blast_type_blastn);
@@ -271,6 +271,7 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    Int4* context_offsets;
    Int4 index;
    Int4 total_contexts;
+   Uint4 max_length = 0;
 
    if (translate)
       num_frames = 6;
@@ -317,7 +318,7 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
    
    /* Fill the context offsets */
    for (index = 0; slp; slp = slp->next, index += num_frames) {
-      length = SeqLocLen(slp);
+      length = SeqLocLen(slp);  /* FIXME: could return -1 */
       strand = SeqLocStrand(slp);
       if (translate) {
          Int2 first_frame, last_frame;
@@ -335,26 +336,34 @@ static Int4 BLAST_SetUpQueryInfo(SeqLocPtr slp, Uint1 program,
             context_offsets[index+frame+1] = context_offsets[index+frame];
          for (frame = first_frame; frame <= last_frame; ++frame) {
             protein_length = (length - frame%CODON_LENGTH)/CODON_LENGTH;
+            max_length = MAX(max_length, protein_length);
             context_offsets[index+frame+1] = 
                context_offsets[index+frame] + protein_length + 1;
          }
          for ( ; frame < num_frames; ++frame)
             context_offsets[index+frame+1] = context_offsets[index+frame];
-      } else if (is_na) {
-         if (strand == Seq_strand_plus) {
-            context_offsets[index+1] = context_offsets[index] + length + 1;
-            context_offsets[index+2] = context_offsets[index+1];
-         } else if (strand == Seq_strand_minus) {
-            context_offsets[index+1] = context_offsets[index];
-            context_offsets[index+2] = context_offsets[index+1] + length + 1;
+      } else {
+         max_length = MAX(max_length, length);
+         
+         if (is_na) {
+            if (strand == Seq_strand_plus) {
+               context_offsets[index+1] = context_offsets[index] + length + 1;
+               context_offsets[index+2] = context_offsets[index+1];
+            } else if (strand == Seq_strand_minus) {
+               context_offsets[index+1] = context_offsets[index];
+               context_offsets[index+2] = 
+                  context_offsets[index+1] + length + 1;
+            } else {
+               context_offsets[index+1] = context_offsets[index] + length + 1;
+               context_offsets[index+2] = 
+                  context_offsets[index+1] + length + 1;
+            }
          } else {
             context_offsets[index+1] = context_offsets[index] + length + 1;
-            context_offsets[index+2] = context_offsets[index+1] + length + 1;
          }
-      } else {
-         context_offsets[index+1] = context_offsets[index] + length + 1;
       }
    }
+   query_info->max_length = max_length;
 
    *query_info_ptr = query_info;
    return 0;
@@ -596,6 +605,9 @@ BLAST_GetSequence(SeqLocPtr slp, BlastQueryInfo* query_info,
          SeqLocFillSequenceBuffer(slp_var, encoding, add_sentinel_bytes, 
                                   (num_frames == 2), &buffer[offset]);
       }
+      /* For subjects, do only one SeqLoc at a time */
+      if (!query_info)
+         break;
    }
 
    return status;
@@ -617,9 +629,13 @@ Int2 BLAST_SetUpQuery(Uint1 program_number, SeqLocPtr query_slp,
    if (program_number == blast_type_blastn) {
       encoding = BLASTNA_ENCODING;
       num_frames = 2;
-   } else if (program_number == blast_type_blastp || 
+   } else if (program_number == blast_type_blastp ||
+              program_number == blast_type_rpsblast ||
               program_number == blast_type_tblastn) {
       encoding = BLASTP_ENCODING;
+      num_frames = 1;
+   } else if (program_number == blast_type_rpstblastn) {
+      encoding = NCBI4NA_ENCODING;
       num_frames = 1;
    } else { 
       encoding = NCBI4NA_ENCODING;

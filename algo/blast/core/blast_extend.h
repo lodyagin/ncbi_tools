@@ -1,4 +1,4 @@
-/* $Id: blast_extend.h,v 1.15 2003/09/10 19:43:05 dondosha Exp $
+/* $Id: blast_extend.h,v 1.23 2004/03/24 19:09:46 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@ Author: Ilya Dondoshansky
 Contents: Structures used for BLAST extension
 
 ******************************************************************************
- * $Revision: 1.15 $
+ * $Revision: 1.23 $
  * */
 
 #ifndef __BLAST_EXTEND__
@@ -45,13 +45,6 @@ Contents: Structures used for BLAST extension
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define EXTEND_WORD_BLASTN        0x00000001
-#define EXTEND_WORD_DIAG_ARRAY    0x00000002
-#define EXTEND_WORD_MB_STACKS     0x00000004
-#define EXTEND_WORD_AG            0x00000008
-#define EXTEND_WORD_VARIABLE_SIZE 0x00000010
-#define EXTEND_WORD_UNGAPPED      0x00000020
 
 /** Structure to hold ungapped alignment information */
 typedef struct BlastUngappedData {
@@ -106,7 +99,7 @@ typedef struct BLAST_DiagTable {
                    to be zeroed out every time. */
    Int4 window; /**< The "window" size, within which two (or more)
                    hits must be found in order to be extended. */
-   Boolean multiple_hits;/**< Used by BLAST_ExtendWordInit to decide whether
+   Boolean multiple_hits;/**< Used by BlastExtendWordNew to decide whether
                             or not to prepare the structure for multiple-hit
                             type searches. If TRUE, multiple hits are not
                             neccessary, but possible. */
@@ -129,21 +122,24 @@ typedef struct BLAST_ExtendWord {
 } BLAST_ExtendWord;
 
 /** Initializes the word extension structure
- * @param query The query sequence [in]
+ * @param query_length Length of the query sequence [in]
  * @param word_options Options for initial word extension [in]
- * @param dblen The total length of the database [in]
- * @param dbseq_num The total number of sequences in the database [in]
+ * @param subject_length Average length of a subject sequence, used to 
+ *                       calculate average search space. [in]
  * @param ewp_ptr Pointer to the word extension structure [out]
  */
-Int2 BLAST_ExtendWordInit(BLAST_SequenceBlk* query,
+Int2 BlastExtendWordNew(Uint4 query_length,
    const BlastInitialWordOptions* word_options,
-   Int8 dblen, Int4 dbseq_num, BLAST_ExtendWord** ewp_ptr);
+   Uint4 subject_length, BLAST_ExtendWord** ewp_ptr);
 
 /** Allocate memory for the BlastInitHitList structure */
 BlastInitHitList* BLAST_InitHitListNew(void);
 
-  /** Free memory for the BlastInitList structure */
-BlastInitHitList* BLAST_InitHitListDestruct(BlastInitHitList* init_hitlist);
+/** Free the ungapped data substructures and reset initial HSP count to 0 */
+void BlastInitHitListReset(BlastInitHitList* init_hitlist);
+
+/** Free memory for the BlastInitList structure */
+BlastInitHitList* BLAST_InitHitListFree(BlastInitHitList* init_hitlist);
 
 /** Finds all words for a given subject sequence, satisfying the wordsize and 
  *  discontiguous template conditions, and performs initial (exact match) 
@@ -166,7 +162,7 @@ Int4 MB_WordFinder(BLAST_SequenceBlk* subject,
 		   BLAST_SequenceBlk* query, 
 		   LookupTableWrap* lookup,
 		   Int4** matrix, 
-		   BlastInitialWordParameters* word_params,
+		   const BlastInitialWordParameters* word_params,
 		   BLAST_ExtendWord* ewp,
 		   Uint4* q_offsets,
 		   Uint4* s_offsets,
@@ -211,7 +207,7 @@ Int4 BlastNaWordFinder(BLAST_SequenceBlk* subject,
 		       BLAST_SequenceBlk* query,
 		       LookupTableWrap* lookup_wrap,
 		       Int4** matrix,
-		       BlastInitialWordParameters* word_params, 
+		       const BlastInitialWordParameters* word_params, 
 		       BLAST_ExtendWord* ewp,
 		       Uint4* q_offsets,
 		       Uint4* s_offsets,
@@ -239,7 +235,7 @@ Int4 BlastNaWordFinder_AG(BLAST_SequenceBlk* subject,
 			  BLAST_SequenceBlk* query,
 			  LookupTableWrap* lookup_wrap,
 			  Int4** matrix,
-			  BlastInitialWordParameters* word_params, 
+			  const BlastInitialWordParameters* word_params, 
 			  BLAST_ExtendWord* ewp,
 			  Uint4* q_offsets,
 			  Uint4* s_offsets,
@@ -263,6 +259,7 @@ BLAST_ExtendWord* BlastExtendWordFree(BLAST_ExtendWord* ewp);
 void 
 BlastSaveInitHsp(BlastInitHitList* ungapped_hsps, Int4 q_start, Int4 s_start, 
                  Int4 q_off, Int4 s_off, Int4 len, Int4 score);
+
 
 #ifdef __cplusplus
 }

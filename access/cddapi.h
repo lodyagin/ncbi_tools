@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
@@ -66,6 +66,18 @@ extern "C" {
 
 /* See synchronous and asynchronous code examples at bottom of this header */
 
+/*
+   Parameters are as follows:
+
+   BioseqPtr bsp       - Query sequence
+   FloatHi expectValue - Expectation value
+   Boolean findBest    - Return only non-redundant CDs
+   Boolean doFilter    - Filter out low sequence complexity
+   Boolean makeFeats   - Return features (T) or alignments (F)
+   CharPtr dataLib     - RPS-BLAST database
+   Boolean precalc     - Use DART to avoid search
+*/
+
 /* low-level connection functions */
 
 NLM_EXTERN CONN CddOpenConnection (
@@ -74,7 +86,8 @@ NLM_EXTERN CONN CddOpenConnection (
   Boolean findBest,
   Boolean doFilter,
   Boolean makeFeats,
-  CharPtr dataLib
+  CharPtr dataLib,
+  Boolean precalc
 );
 
 NLM_EXTERN SeqAnnotPtr CddWaitForReply (
@@ -92,7 +105,8 @@ NLM_EXTERN SeqAnnotPtr CddSynchronousQuery (
   Boolean findBest,
   Boolean doFilter,
   Boolean makeFeats,
-  CharPtr dataLib
+  CharPtr dataLib,
+  Boolean precalc
 );
 
 /*
@@ -116,6 +130,7 @@ NLM_EXTERN Boolean CddAsynchronousQuery (
   Boolean doFilter,
   Boolean makeFeats,
   CharPtr dataLib,
+  Boolean precalc,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata

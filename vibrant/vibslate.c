@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.43  2004/04/14 19:15:51  sinyakov
+* WIN_MSWIN: support X-Windows-like -bg color command line option
+*
 * Revision 6.42  2002/11/06 21:32:25  ucko
 * Nlm_LoadSlateData: initialize sptr->cMap to 0 rather than NULL, as it
 * is an integer rather than a pointer.
@@ -4416,6 +4419,10 @@ LRESULT CALLBACK EXPORT SlateProc(HWND hwnd, UINT message,
 }
 
 
+extern BOOLEAN Nlm_hasBackColor;
+extern COLORREF Nlm_crBackColor;
+extern HBRUSH Nlm_hbrWindowBackground;
+
 
 extern Nlm_Boolean Nlm_RegisterSlates (void)
 
@@ -4432,7 +4439,9 @@ extern Nlm_Boolean Nlm_RegisterSlates (void)
   wc.hIcon = LoadIcon (NULL, IDI_APPLICATION);
 /*wc.hCursor = LoadCursor (NULL, IDC_ARROW);      M.I */
   wc.hCursor = NULL;                           /* M.I */
-  wc.hbrBackground = CreateSolidBrush( GetSysColor(COLOR_WINDOW));
+  wc.hbrBackground = Nlm_hasBackColor ?
+                       	CreateSolidBrush( Nlm_crBackColor ) :
+                       	CreateSolidBrush( GetSysColor(COLOR_WINDOW));
   wc.lpszMenuName = NULL;
   sprintf (slateclass, "Nlm_SlateClass%ld", (long) (int) Nlm_currentHInst);
   wc.lpszClassName = slateclass;

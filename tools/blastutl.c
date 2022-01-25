@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blastutl.c,v 6.431 2004/02/04 15:35:03 camacho Exp $";
+static char const rcsid[] = "$Id: blastutl.c,v 6.434 2004/04/22 16:40:32 dondosha Exp $";
 
 /* ===========================================================================
 *
@@ -32,12 +32,21 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.431 $
+$Revision: 6.434 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.434  2004/04/22 16:40:32  dondosha
+* Set search->subject_id to correct ordinal id, needed for finding splice junctions in HSP links at traceback stage
+*
+* Revision 6.433  2004/03/22 22:10:38  dondosha
+* Use kbp_gap instead of kbp pointers in megablast traceback
+*
+* Revision 6.432  2004/02/26 15:52:30  papadopo
+* Mike Gertz' modifications to unify handling of gapped Karlin blocks between protein and nucleotide searches
+*
 * Revision 6.431  2004/02/04 15:35:03  camacho
 * Rollback to fix problems in release 2.2.7
 *
@@ -2671,8 +2680,6 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
              seqalign = MegaBlastGapInfoToSeqAlign(search, 0, 0);
 	  } else if (StringCmp(search->prog_name, "blastn") == 0 &&
 		   search->pbp->gapped_calculation == TRUE) {
-             /* kbp_gap used in Traceback function. */
-             search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
              result_struct = search->result_struct;
              hitlist_count = result_struct->hitlist_count;
              if (hitlist_count > 0)
@@ -2711,7 +2718,6 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
                 sequence_start = MemFree(sequence_start);
                 spp = SeqPortFree(spp);
              }
-             search->sbp->kbp_gap[search->first_context] = NULL;
 	  }
 	  else if (search->pbp->gapped_calculation == TRUE)
 	  {
@@ -4704,8 +4710,6 @@ BioseqHitRangeEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options)
 	if (StringCmp(search->prog_name, "blastn") == 0 && 
 		search->pbp->gapped_calculation)
         {
-		search->sbp->kbp_gap[search->first_context] = search->sbp->kbp[search->first_context];
-
 		search->pbp->gap_open = options->gap_open;
 		search->pbp->gap_extend = options->gap_extend;
 /*
@@ -4736,7 +4740,6 @@ BioseqHitRangeEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options)
 			SumBlastGetGappedAlignmentEx(search, index, FALSE, FALSE, sequence+1, length, FALSE, NULL, bhrp, 0);
 		}
 		sequence = MemFree(sequence);
-		search->sbp->kbp_gap[search->first_context] = NULL;
 	}
 	else
 	{
@@ -5308,22 +5311,12 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
     }
     
     if (search->pbp->gapped_calculation == TRUE) {
-        if (StringCmp(search->prog_name, "blastn") == 0) {
-            if (search->sbp->kbp && search->sbp->kbp[search->first_context]) {
-                ka_params = BlastKarlinBlkCreate();
-                ka_params->Lambda = search->sbp->kbp[search->first_context]->Lambda;
-                ka_params->K = search->sbp->kbp[search->first_context]->K;
-                ka_params->H = search->sbp->kbp[search->first_context]->H;
-                ValNodeAddPointer (&other_returns, TXKABLK_GAP, ka_params);
-            }
-        } else {
-            if (search->sbp->kbp_gap && search->sbp->kbp_gap[search->first_context]) {
+        if (search->sbp->kbp_gap && search->sbp->kbp_gap[search->first_context]) {
                 ka_params = BlastKarlinBlkCreate();
                 ka_params->Lambda = search->sbp->kbp_gap[search->first_context]->Lambda;
                 ka_params->K = search->sbp->kbp_gap[search->first_context]->K;
                 ka_params->H = search->sbp->kbp_gap[search->first_context]->H;
                 ValNodeAddPointer (&other_returns, TXKABLK_GAP, ka_params);
-            }
         }
     }
     
@@ -9090,7 +9083,7 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                          (FloatHi) search->context[hsp->context].query->effective_length;
                       
                       hsp->evalue = BlastKarlinStoE_simple(hsp->score,
-                                                           search->sbp->kbp[hsp->context],
+                                                           search->sbp->kbp_gap[hsp->context],
                                                            searchsp_eff);
                    } else {
 		      /* AM: Changed to support query concatenation. */
@@ -9229,10 +9222,12 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
         search->subject->length = subject_length;
         
         if (search->prog_number == blast_type_tblastn &&
-            search->pbp->longest_intron > 0)
+            search->pbp->longest_intron > 0) {
            BlastSequenceAddSequence(search->subject, NULL, subject-1, 
                                     subject_length, subject_length, 0);
-        
+           search->subject_id = ordinal_id;
+        }
+ 
 	/* AM: Changed to support query concatenation. */
         if (search->pbp->do_sum_stats == TRUE)
 	{

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -43,6 +43,10 @@
 */
 
 /*
+*  To compile on Linux:
+*
+*   gcc -o testcgi.cgi testcgi.c -lm
+*
 *  To compile on Solaris:
 *
 *   cc -xildoff -o testcgi.cgi testcgi.c -lgen -lm
@@ -50,6 +54,7 @@
 *  To compile on SGI:
 *
 *   cc -mips1 -o testcgi.cgi testcgi.c -lm -lPW -lsun
+*
 */
 
 #include <stddef.h>
@@ -605,7 +610,7 @@ static void RunSeg (CharPtr tempfile)
     }
   }
 
-  sprintf (cmmd, "/usr/ncbi/bin/seg %s %s %s %s -x", tempfile, window, lowcut, hicut);
+  sprintf (cmmd, "./seg %s %s %s %s -x", tempfile, window, lowcut, hicut);
   fp = popen (cmmd, "r");
   if (fp == NULL) return;
 
@@ -665,9 +670,9 @@ static void RunTrnaScan (CharPtr tempfile)
 
   speed = FindByName ("speed");
   if (speed != NULL && strcmp (speed, "slow") == 0) {
-    sprintf (cmmd, "/am/MolBio/trnascan-SE/bin/tRNAscan-SE -q -C %s", tempfile);
+    sprintf (cmmd, "./tRNAscan-SE -q -C %s", tempfile);
   } else {
-    sprintf (cmmd, "/am/MolBio/trnascan-SE/bin/tRNAscan-SE -q %s", tempfile);
+    sprintf (cmmd, "./tRNAscan-SE -q %s", tempfile);
   }
 
   fp = popen (cmmd, "r");

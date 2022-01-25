@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/24/96
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *    This is a companion file to sequinx.c. In order to register additional proceedures
@@ -55,7 +55,7 @@
 *    The work function does the real job. It looks at the contents of the data pointer,
 *    executes the appropriate actions and returns a completion or error code. Normally it
 *    will return one of:
-*      OM_MSG_RET_ERROR - an error occured, presumably reported with ErrPostEx()
+*      OM_MSG_RET_ERROR - an error occurred, presumably reported with ErrPostEx()
 *      OM_MSG_RET_OK - everything was ok, but this function did not do anything.
 *      OM_MSG_RET_DONE - everything was ok, and this function did the processing requested.
 *

@@ -25,6 +25,9 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.31  2004/02/18 22:18:45  yaschenk
+ adding recognition of gnl|sat_name|ent seqids
+
  Revision 1.30  2004/02/03 21:25:16  yaschenk
  relaxing ranges for -g and -e
 
@@ -602,9 +605,15 @@ Int2 Main()
     gi = ID1ArchGIGet (sip);
     if(gi <= 0)
     {
-      SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
-      ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
-      goto FATAL;
+	if(sip->choice==SEQID_GENERAL){
+		Dbtag *db = (Dbtag*)sip->data.ptrvalue;
+		gi=myargs[entarg].intvalue=db->tag->str?atoi(db->tag->str):db->tag->id;
+		myargs[dbarg].strvalue=StringSave(db->db);
+	} else {
+	      SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
+	      ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
+	      goto FATAL;	
+	}
     }
   }
   else if(fp_in)
@@ -744,7 +753,10 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
   if(seqIdParse)
   {
     SeqIdPtr sip;
-    Int4 gi;
+    Int4 gi,ent=0;
+    CharPtr	sat=NULL;
+
+   
     sip = SeqIdParse(data);
     if(sip == NULL)
     {
@@ -754,11 +766,17 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
     gi = ID1ArchGIGet(sip);
     if(gi <= 0)
     {
-      SeqIdPrint(sip, data, PRINTID_FASTA_SHORT);
-      ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", data);
-      exit(1);
+	if(sip->choice==SEQID_GENERAL){
+                Dbtag *db = (Dbtag*)sip->data.ptrvalue;
+                gi=ent=db->tag->str?atoi(db->tag->str):db->tag->id;
+                sat=StringSave(db->db);
+	} else {
+	      SeqIdPrint(sip, data, PRINTID_FASTA_SHORT);
+	      ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", data);
+	      exit(1);
+	}
     }
-    return IdFetch_func(gi, NULL, 0, maxplex);
+    return IdFetch_func(gi, sat, ent, maxplex);
   }
   else if(hasVersion || accession)
   {
@@ -996,13 +1014,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       }
       break;
     case 3:
-#if 0
-      if(!SeqEntryToFlat(sep, fp, GENBANK_FMT, RELEASE_MODE)){
-#else 
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
       if(!SeqEntryToGnbk(sep,NULL,GENBANK_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
          LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp)){
-#endif
         ErrPostEx(SEV_WARNING,0,0,
                   "GenBank Format does not exist for this sequence ");
         retval=FALSE;
@@ -1010,13 +1024,9 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       }
       break;
     case 4:
-#if 0
-      if(!SeqEntryToFlat(sep, fp, GENPEPT_FMT, RELEASE_MODE))
-#else 
       AssignIDsInEntity(0,OBJ_SEQENTRY,sep);
       if(!SeqEntryToGnbk(sep,NULL,GENPEPT_FMT,ENTREZ_MODE,0,SHOW_CONTIG_FEATURES|ONLY_NEAR_FEATURES,
         LOOKUP_FAR_COMPONENTS|LOOKUP_FAR_LOCATIONS|LOOKUP_FAR_PRODUCTS|LOOKUP_FAR_HISTORY|STREAM_SEQ_PORT_FIRST,0,NULL,fp))
-#endif
       {
         ErrPostEx(SEV_WARNING,0,0,
                   "GenPept Format does not exist for this sequence");
@@ -1031,21 +1041,11 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
       switch(myargs[infotypearg].intvalue){
       case 0:
         if(bsp){
-#if 0
-          SeqEntrysToFasta (sep, fp, ISA_na (bsp->mol), group_segs);
-#else
 		MyBioseqToFasta(bsp,(Pointer)fp);
-#endif
         }
         else
         {
-#if 0
-          SeqEntryToFasta(sep, fp, TRUE);  /* nuc acids */
-          SeqEntryToFasta(sep, fp, FALSE); /* proteins */
-#else
 		VisitBioseqsInSep(sep,(Pointer)fp, MyBioseqToFasta);
-
-#endif
         }
         break;
       case 2:

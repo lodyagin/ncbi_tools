@@ -1,4 +1,4 @@
-/* $Id: debruijn.c,v 1.3 2004/01/05 20:44:55 coulouri Exp $
+/* $Id: debruijn.c,v 1.4 2004/02/09 21:24:59 ucko Exp $
 
 * ===========================================================================
 *
@@ -26,7 +26,7 @@
 
 */
 
-static char const rcsid[] = "$Id: debruijn.c,v 1.3 2004/01/05 20:44:55 coulouri Exp $";
+static char const rcsid[] = "$Id: debruijn.c,v 1.4 2004/02/09 21:24:59 ucko Exp $";
 
 /*
  * example driver for de Bruijn sequences.
@@ -101,7 +101,7 @@ Int2 Main(void)
 
   /* Terminate the string. */
 
-  output[outputsize+1] = '\0';
+  output[outputsize] = '\0';
 
   puts(output);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.201 $
+* $Revision: 6.210 $
 *
 * File Description: 
 *
@@ -95,6 +95,8 @@
 
 #define REGISTER_DELETE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Delete By Text","DeleteByText",0,0,0,0,NULL,CreateDeleteByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
 
+#define REGISTER_SEGREGATE_BY_TEXT ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By Text","SegregateByText",0,0,0,0,NULL,CreateSegregateByTextWindow,PROC_PRIORITY_DEFAULT, "Indexer")
+
 #define REGISTER_CONVERTSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Convert SeqAlign","ConvertSeqAlign",0,0,0,0,NULL,ConvertToTrueMultipleAlignment,PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_MAKESEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Make SeqAlign","CreateSeqAlign",0,0,0,0,NULL,GenerateSeqAlignFromSeqEntry,PROC_PRIORITY_DEFAULT, "Alignment")
@@ -152,7 +154,7 @@
 
 #define REGISTER_DESKTOP_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Desktop Report", "DesktopReport", 0, 0, 0, 0, NULL, DesktopReportFunc, PROC_PRIORITY_DEFAULT, "Indexer")
 
-#define REGISTER_DESCRIPTOR_PROPAGATE ObjMgrProcLoadEx (OMPROC_FILTER, "Descriptor Propagate", "DescriptorPropagate", 0, 0, 0, 0, NULL, DoDescriptorPropagate, PROC_PRIORITY_DEFAULT, "Indexer")
+#define REGISTER_DESCRIPTOR_PROPAGATE ObjMgrProcLoadEx (OMPROC_FILTER, "Descriptor Propagate", "DescriptorPropagate", 0, 0, 0, 0, NULL, DescriptorPropagate, PROC_PRIORITY_DEFAULT, "Indexer")
 
 #define REGISTER_CLEAR_SEQENTRYSCOPE ObjMgrProcLoadEx (OMPROC_FILTER, "Clear SeqEntry Scope", "ClearSeqEntryScope", 0, 0, 0, 0, NULL, DoClearSeqEntryScope, PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -603,6 +605,221 @@ static Int2 LIBCALLBACK AdjustSegSeqLength (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+#if 0
+static SeqLocPtr FixLonelySeqLocIntervals (SeqLocPtr slp)
+{
+  SeqLocPtr loc;
+
+  if (slp == NULL || (slp->choice != SEQLOC_MIX && slp->choice != SEQLOC_PACKED_INT)) {
+    return slp;
+  }
+
+  loc = SeqLocFindNext (slp, NULL);
+  if (loc == NULL) {
+    SeqLocFree (slp);
+    return NULL;
+  } else if (loc->next == NULL) {
+    slp->data.ptrvalue = NULL;
+    SeqLocFree (slp);
+    return loc;
+  } else {
+    return slp;
+  }
+}
+#endif
+
+static SeqLocPtr ReduceLocationToSingleBioseq (SeqLocPtr slp, BioseqPtr bsp)
+{
+  SeqLocPtr this_slp, tmp_slp;
+  BioseqPtr this_bsp;
+
+  if (slp == NULL || bsp == NULL) return NULL;
+
+  this_slp = SeqLocFindNext (slp, NULL);
+
+  while (slp != NULL && this_slp != NULL) {
+    this_bsp = BioseqFindFromSeqLoc (this_slp);
+    if (this_bsp != bsp) {
+      tmp_slp = SeqLocMerge (this_bsp, this_slp, NULL, TRUE, FALSE, FALSE);
+      slp = SeqLocSubtract (slp, tmp_slp);
+      SeqLocFree (tmp_slp);
+      this_slp = SeqLocFindNext (slp, NULL);
+    } else {
+      this_slp = SeqLocFindNext (slp, this_slp);
+    }
+  }
+  return slp;
+}
+
+static SeqLocPtr RemoveBioseqFromLocation (SeqLocPtr slp, BioseqPtr bsp)
+{
+  SeqLocPtr this_slp, tmp_slp;
+  BioseqPtr this_bsp;
+
+  if (slp == NULL || bsp == NULL) return slp;
+
+  this_slp = SeqLocFindNext (slp, NULL);
+  while (slp != NULL && this_slp != NULL) {
+    this_bsp = BioseqFindFromSeqLoc (this_slp);
+    if (this_bsp == bsp) {
+      tmp_slp = SeqLocMerge (bsp, this_slp, NULL, TRUE, FALSE, FALSE);
+      slp = SeqLocSubtract (slp, tmp_slp);
+      SeqLocFree (tmp_slp);
+      this_slp = SeqLocFindNext (slp, NULL);
+    } else {
+      this_slp = SeqLocFindNext (slp, this_slp);
+    }
+  }
+  return slp;
+}
+
+static void PushFeaturesDownToBioseq (SeqAnnotPtr annot, SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp, this_bsp;
+  SeqFeatPtr   sfp, prev_sfp, last_sfp, next_sfp;
+
+  if (annot == NULL || annot->type != 1 || sep == NULL) return;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = sep->data.ptrvalue;
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+      PushFeaturesDownToBioseq (annot, sep);
+    }
+    return;
+  }
+
+  if (! IS_Bioseq (sep)) return;
+
+  bsp = sep->data.ptrvalue;
+  sfp = annot->data;
+  prev_sfp = NULL;
+  while (sfp != NULL) {
+    next_sfp = sfp->next;
+    while (sfp != NULL && (this_bsp = BioseqFindFromSeqLoc (sfp->location)) != bsp) {
+      prev_sfp = sfp;
+      sfp = sfp->next;
+      if (sfp != NULL) {
+        next_sfp = sfp->next;
+      }
+    }
+    if (sfp != NULL) {  
+      if (bsp->annot == NULL) {
+        bsp->annot = SeqAnnotNew ();
+        bsp->annot->type = 1;
+        bsp->annot->data = sfp;
+      } else {
+        if (bsp->annot->data == NULL) {
+          bsp->annot->data = sfp;
+        } else {
+          last_sfp = bsp->annot->data;
+          while (last_sfp->next != NULL) {
+            last_sfp = last_sfp->next;
+          }
+          last_sfp->next = sfp;
+        }
+      }
+      if (prev_sfp == NULL) {
+        annot->data = sfp->next;
+      } else {
+        prev_sfp->next = sfp->next;
+      }
+      sfp->next = NULL;
+      sfp = next_sfp;
+    }
+  }
+}
+
+static void SplitSegmentedFeatsOnOneSet (BioseqSetPtr set)
+{
+  SeqAnnotPtr annot, prev_annot, next_annot;
+  SeqFeatPtr  sfp, new_sfp, prev_sfp, next_sfp;
+  SeqEntryPtr sep;
+  BioseqPtr   bsp, last_bsp;
+  SeqLocPtr   loc, slp;
+
+  if (set == NULL || set->annot == NULL) return;
+  prev_annot = NULL;
+  annot = set->annot;
+  next_annot = annot->next;
+  while (annot != NULL) {
+    next_annot = annot->next;
+    if (annot->type != 1) {
+      prev_annot = annot;
+      annot = next_annot;
+      continue;
+    }
+    sfp = annot->data;
+    while (sfp != NULL) {
+      next_sfp = sfp->next;
+      prev_sfp = sfp;
+      loc = SeqLocFindNext (sfp->location, NULL);
+      last_bsp = BioseqFindFromSeqLoc (loc);
+      slp = SeqLocFindNext (sfp->location, loc);
+      while (slp != NULL) {
+        bsp = BioseqFindFromSeqLoc (slp);
+        if (bsp != last_bsp && bsp != NULL) {
+          new_sfp = SeqFeatCopy (sfp);
+          new_sfp->location = ReduceLocationToSingleBioseq (new_sfp->location, bsp);
+          sfp->location = RemoveBioseqFromLocation (sfp->location, bsp);
+          prev_sfp->next = new_sfp;
+          new_sfp->next = next_sfp;
+          prev_sfp = new_sfp;
+          slp = SeqLocFindNext (sfp->location, NULL);
+        } else {
+          slp = SeqLocFindNext (sfp->location, slp);
+        }
+      }
+      sfp = next_sfp;
+    }
+
+    /* push features to appropriate bioseqs */
+    for (sep = set->seq_set; sep != NULL; sep = sep->next) {
+      PushFeaturesDownToBioseq (annot, sep);
+    }
+    if (prev_annot == NULL) {
+      set->annot = annot->next;
+    } else {
+      prev_annot->next = annot->next;
+    }
+    annot->next = NULL;
+    SeqAnnotFree (annot);
+    annot = next_annot;      
+  }
+}
+
+static void SplitSegmentedFeats (SeqEntryPtr sep)
+{
+  BioseqSetPtr bssp;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    SplitSegmentedFeatsOnOneSet (bssp);
+    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+      SplitSegmentedFeats (sep);
+    }
+  }
+}
+
+extern void SplitSegmentedFeatsMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  SplitSegmentedFeats (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+
+}
+
 static void DoSegSetUndo (BioseqPtr segseq, BioseqSetPtr parts, BioseqSetPtr segset)
 
 {
@@ -655,6 +872,7 @@ static Int2 DoOneSegUndo (SeqEntryPtr sep)
       return count;
     }
   }
+
   uss.segseq = NULL;
   uss.parts = NULL;
   uss.segset = NULL;
@@ -807,7 +1025,7 @@ static void RemoveDupGenBankSets (SeqEntryPtr sep)
   annot = tmpbssp->annot;
   tmpbssp->annot = NULL;
   if (bssp->annot == NULL) {
-    tmpbssp->annot = annot;
+    bssp->annot = annot;
     annot = NULL;
   } else {
     sap = bssp->annot;
@@ -858,6 +1076,9 @@ static Int2 LIBCALLBACK UndoSegSet (Pointer data)
   RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
   if (count > 0) {
     PropagateFromGenBankBioseqSet (sep, FALSE);
+    SeqMgrClearFeatureIndexes (ompcp->input_entityID, NULL);
+    SeqMgrIndexFeatures (ompcp->input_entityID, NULL);
+    SplitSegmentedFeats (sep);
     ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
   }
@@ -1479,17 +1700,23 @@ static Int2 LIBCALLBACK GenerateSeqAlignFromSeqEntry (Pointer data)
     {
        sip1 = SeqIdDup(bsp->id);
        sip2 = SeqIdDup(sbp->bsp->id);
+       revcomp = FALSE;
        salp = Sqn_GlobalAlign2Seq(bsp, sbp->bsp, &revcomp);
-       dsp = (DenseSegPtr)(salp->segs);
-       SeqIdSetFree(dsp->ids);
-       dsp->ids = sip1;
-       dsp->ids->next = sip2;
-       if (salp != NULL && salp_head != NULL)
-       {
-          salp_prev->next = salp;
-          salp_prev = salp;
-       } else if (salp != NULL)
+       if (revcomp) {
+         BioseqRevComp (sbp->bsp);
+       }
+       if (salp != NULL) {
+         dsp = (DenseSegPtr)(salp->segs);
+         SeqIdSetFree(dsp->ids);
+         dsp->ids = sip1;
+         dsp->ids->next = sip2;
+         if (salp != NULL && salp_head != NULL) {
+            salp_prev->next = salp;
+            salp_prev = salp;
+         } else if (salp != NULL) {
           salp_head = salp_prev = salp;
+         }
+       }
     }
     sbp_prev = sbp;
     sbp = sbp->next;
@@ -1996,7 +2223,7 @@ static Int2 LIBCALLBACK GroupExplodeFunc (Pointer data)
   Boolean           isDirty = FALSE;
   Boolean           isFirstSsp;
   ExplodeStructPtr  esp;
-  ExplodeStructPtr  firstEsp;
+  ExplodeStructPtr  firstEsp = NULL;
   ExplodeStructPtr  lastEsp;
   Boolean           isFirstEsp;
 
@@ -4741,7 +4968,7 @@ static int LIBCALLBACK SortByVnpDataPtrvalue (VoidPtr ptr1, VoidPtr ptr2)
   }
 }
 
-static void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep)
+extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep)
 
 {
   Int2        doit;
@@ -4968,7 +5195,7 @@ static Int2 LIBCALLBACK PopWithinGenBankSet (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-static Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data)
+extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data)
 
 {
   BioseqPtr         bsp;
@@ -6139,63 +6366,6 @@ static Int2 LIBCALLBACK SplitIntoSegmentedBioseq (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
-static Int2 LIBCALLBACK DoDescriptorPropagate (Pointer data)
-
-{
-  BioseqPtr         bsp;
-  BioseqSetPtr      bssp = NULL;
-  OMProcControlPtr  ompcp;
-  SeqEntryPtr       seqentry;
-  ValNodePtr        sourcedescr;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->input_entityID == 0) {
-    Message (MSG_ERROR, "Please select a BioseqSet");
-    return OM_MSG_RET_ERROR;
-  }
-  switch (ompcp->input_itemtype) {
-    case OBJ_BIOSEQSET :
-      bssp = (BioseqSetPtr) ompcp->input_data;
-      break;
-    case 0 :
-      Message (MSG_ERROR, "Please select a BioseqSet");
-      return OM_MSG_RET_ERROR;
-    default :
-      Message (MSG_ERROR, "Please select a BioseqSet");
-      return OM_MSG_RET_ERROR;
-  }
-
-  if (bssp != NULL) {
-    sourcedescr = bssp->descr;
-    if (sourcedescr != NULL) {
-      bssp->descr = NULL;
-      seqentry = bssp->seq_set;
-      while (seqentry != NULL) {
-        if (seqentry->data.ptrvalue != NULL) {
-          if (seqentry->choice == 1) {
-            bsp = (BioseqPtr) seqentry->data.ptrvalue;
-            ValNodeLink (&(bsp->descr),
-                         AsnIoMemCopy ((Pointer) sourcedescr,
-                                       (AsnReadFunc) SeqDescrAsnRead,
-                                       (AsnWriteFunc) SeqDescrAsnWrite));
-          } else if (seqentry->choice == 2) {
-            bssp = (BioseqSetPtr) seqentry->data.ptrvalue;
-            ValNodeLink (&(bssp->descr),
-                         AsnIoMemCopy ((Pointer) sourcedescr,
-                                       (AsnReadFunc) SeqDescrAsnRead,
-                                       (AsnWriteFunc) SeqDescrAsnWrite));
-          }
-        }
-        seqentry = seqentry->next;
-      }
-      SeqDescrFree (sourcedescr);
-    }
-  }
-
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
-  return OM_MSG_RET_DONE;
-}
 
 static void ReindexBioseqs (BioseqPtr bsp, Pointer userdata)
 
@@ -6220,6 +6390,52 @@ static Int2 LIBCALLBACK DoClearSeqEntryScope (Pointer data)
   SeqEntrySetScope (NULL);
   return OM_MSG_RET_DONE;
 }
+
+static Int2 LIBCALLBACK FilterMolWtFunc (Pointer data)
+
+{
+  BioseqPtr         bsp = NULL;
+  Char              buf [32];
+  FloatHi           molwt;
+  OMProcControlPtr  ompcp;
+  SeqEntryPtr       sep;
+  SeqLocPtr         slp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_itemtype == 0) return OM_MSG_RET_ERROR;
+
+  switch (ompcp->input_itemtype)
+  {
+    case OBJ_BIOSEQ:
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+    default:
+      return OM_MSG_RET_ERROR;
+  }
+
+  if (bsp == NULL) return OM_MSG_RET_ERROR;
+  if (! (ISA_aa (bsp->mol))) return OM_MSG_RET_ERROR;
+
+  sep = bsp->seqentry;
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+
+  slp = CreateWholeInterval (sep);
+  if (slp == NULL) return OM_MSG_RET_ERROR;
+
+  molwt = MolWtForLoc (slp);
+  sprintf (buf, "%15.3lf", (double) molwt);
+  TrimSpacesAroundString (buf);
+  Message (MSG_OK, "Protein molecular weight is %s", buf);
+
+  SeqLocFree (slp);
+
+  return OM_MSG_RET_DONE;
+}
+
+#define REGISTER_GROUP_MOLWT ObjMgrProcLoadEx (OMPROC_FILTER, \
+        "MOLWT", "MolWt", \
+        OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, \
+        NULL, FilterMolWtFunc, PROC_PRIORITY_DEFAULT, "Analysis")
 
 extern void SetupSequinFilters (void)
 
@@ -6293,6 +6509,7 @@ extern void SetupSequinFilters (void)
 
   if (indexerVersion) {
     REGISTER_DELETE_BY_TEXT;
+    REGISTER_SEGREGATE_BY_TEXT;
     REGISTER_FIND_NON_ACGT;
     REGISTER_BSP_INDEX;
     REGISTER_POPSET_WITHIN_GENBANK;
@@ -6310,6 +6527,7 @@ extern void SetupSequinFilters (void)
   REGISTER_GROUP_HOPP;
   REGISTER_GROUP_KYTE;
   REGISTER_GROUP_MATRIX;
+  REGISTER_GROUP_MOLWT;
 }
 
 extern CharPtr MergeValNodeStrings (ValNodePtr list, Boolean useReturn)

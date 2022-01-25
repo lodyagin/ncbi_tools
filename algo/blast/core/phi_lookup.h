@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.h,v 1.2 2003/09/10 19:43:05 dondosha Exp $
+/* $Id: phi_lookup.h,v 1.3 2004/03/11 18:31:06 papadopo Exp $
 
 * ===========================================================================
 *
@@ -35,7 +35,7 @@ Contents: Pseudo lookup table structure and database scanning functions used
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.2 $
+ * $Revision: 1.3 $
  * */
 
 #include <algo/blast/core/blast_def.h>
@@ -97,6 +97,7 @@ Int4 PHIBlastIndexQuery(PHILookupTable* lookup,
  *
  * @param lookup_wrap contains the pseudo lookup table with offsets of pattern
  *                    occurrencies in query [in]
+ * @param query_blk the query sequence [in]
  * @param subject the subject sequence [in]
  * @param offset the offset in the subject at which to begin scanning [in/out]
  * @param query_offsets array to which hits will be copied [out]

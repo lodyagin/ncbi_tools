@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.2 $
+* $Revision: 1.9 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -1274,20 +1274,20 @@ NLM_EXTERN Boolean FFEmpty(StringItemPtr ffstring) {
  * 
  * The result is returned in the supplied vector.
  */
-static void ComputeLastOccurance(const CharPtr pattern, Uint4 last_occurance[])
+static void ComputeLastOccurrence(const CharPtr pattern, Uint4 last_occurrence[])
 {
     Uint4 i;
     Uint4 pat_len;
 
     /* Initilalize vector */
     for ( i = 0; i < 256; ++i ) {
-        last_occurance[i] = 0;
+        last_occurrence[i] = 0;
     }
 
-    /* compute right-most occurance */
+    /* compute right-most occurrence */
     pat_len = StringLen(pattern);
     for ( i = 0; i < pat_len; ++i ) {
-        last_occurance[(Uint1)pattern[i]] = i;
+        last_occurrence[(Uint1)pattern[i]] = i;
     }
 }
 
@@ -1364,7 +1364,7 @@ NLM_EXTERN Int4 FFStringSearch (
 {
   Uint4 text_len = FFLength(text);
   Uint4 pat_len = StringLen(pattern);
-  Uint4 last_occurance[256];
+  Uint4 last_occurrence[256];
   Uint4Ptr good_suffix;
   Uint4 shift;
   Int4 j;
@@ -1375,7 +1375,7 @@ NLM_EXTERN Int4 FFStringSearch (
   good_suffix = (Uint4Ptr)MemNew(pat_len * sizeof(Int4));
   if ( good_suffix == NULL ) return -1;
 
-  ComputeLastOccurance(pattern, last_occurance);
+  ComputeLastOccurrence(pattern, last_occurrence);
   ComputeGoodSuffix(pattern, good_suffix);
 
   shift = position;
@@ -1388,7 +1388,7 @@ NLM_EXTERN Int4 FFStringSearch (
       return shift;
     } else {
         shift += MAX( (Int4)good_suffix[j],
-              (Int4)(j - last_occurance[FFCharAt(text,shift + j)]));
+              (Int4)(j - last_occurrence[FFCharAt(text,shift + j)]));
     }
   }
 
@@ -1677,7 +1677,7 @@ static CharPtr DoSeqPortStream (
   if (str == NULL) return NULL;
 
   tmp = str;
-  SeqPortStream (bsp, TRUE, (Pointer) &tmp, SaveGBSeqSequence);
+  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) &tmp, SaveGBSeqSequence);
 
   tmp = str;
   if (tmp == NULL) return NULL;
@@ -2249,6 +2249,11 @@ NLM_EXTERN void DoOneBioseq (
   }
   if (awp->style == CONTIG_STYLE) {
     contig = TRUE;
+  }
+  // Never do segmented style in FTABLE format
+  if (awp->format == FTABLE_FMT) {
+      segmented = FALSE;
+      contig = FALSE;
   }
 
   awp->partcount = 0;
@@ -2913,6 +2918,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   if (format == GENBANK_FMT || format == GENPEPT_FMT) {
     ajp->newSourceOrg = (Boolean) ((flags & USE_OLD_SOURCE_ORG) == 0);
   }
+  ajp->produceInsdSeq = (Boolean) ((flags & PRODUCE_OLD_GBSEQ) == 0);
 
   ajp->relModeError = FALSE;
   ajp->skipProts = skipProts;
@@ -3275,6 +3281,11 @@ static void PrintFTUserFld (
   for (entry = ufp->data.ptrvalue; entry != NULL; entry = entry->next) {
     if (entry == NULL || entry->choice != 11) break;
   
+    pmid = 0;
+    goid = NULL;
+    evidence = NULL;
+    textstr = NULL;
+
     for (ufp = (UserFieldPtr) entry->data.ptrvalue; ufp != NULL; ufp = ufp->next) {
       oip = ufp->label;
       if (oip == NULL) continue;
@@ -4827,7 +4838,11 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
       /* if generating GBSeq XML/ASN, write at each slash block */
 
       if (block == SLASH_BLOCK && gbseq != NULL && aip != NULL) {
-        GBSeqAsnWrite (gbseq, aip, atp);
+        if (iajp->produceInsdSeq) {
+          INSDSeqAsnWrite ((INSDSeqPtr) gbseq, aip, atp);
+        } else {
+          GBSeqAsnWrite (gbseq, aip, atp);
+        }
         if (atp == NULL) {
           AsnPrintNewLine (aip);
         }

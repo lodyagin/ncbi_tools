@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.16  2004/03/03 13:38:57  kans
+* removed unused end: labels
+*
 * Revision 6.15  2003/05/05 12:34:47  rsmith
 * type of DOTVibDataPtr displayOpts1 is Nlm_Handle, not HANDLE. Needed to compile under Codewarrior for Win32
 *
@@ -183,7 +186,7 @@ void DOT_SetupMenus ()
 ____________________________________________________________________*/
 void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4 HFrom, Int4 HTo, Int4 comp, Boolean GRID)
 {
-  Int4         x, y, y2, offset=0, start, end;
+  Int4         x, y, y2, offset=0, start;
   Int4         scale_pos, pos, Hseq_pos;
   Char         scale_buf[15] = {""};	/*scale value*/
   
@@ -289,7 +292,6 @@ void DOT_DrawXGrids (RecT rupdate, RecT rcP, DOTVibDataPtr vdp, Int4 VFrom, Int4
         }
 
 
- end:
   Black();
     
     

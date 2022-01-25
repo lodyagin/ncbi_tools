@@ -39,4 +39,5 @@ asntool -m ../asn/proj.asn -o asnproj.h
 asntool -m ../access/entrez2.asn -o asnent2.h
 asntool -m ../access/mim.asn -o asnmim.h
 asntool -m ../asn/gbseq.asn -o asngbseq.h
+asntool -m ../asn/insdseq.asn -o asninsdseq.h
 asntool -m ../asn/tinyseq.asn -o asntseq.h

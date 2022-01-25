@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.7 $
+* $Revision: 1.11 $
 *
 * File Description: 
 *
@@ -56,7 +56,8 @@ NLM_EXTERN CONN CddOpenConnection (
   Boolean findBest,
   Boolean doFilter,
   Boolean makeFeats,
-  CharPtr dataLib
+  CharPtr dataLib,
+  Boolean precalc
 )
 
 {
@@ -66,6 +67,7 @@ NLM_EXTERN CONN CddOpenConnection (
   Char        filter [8];
   Char        graph [8];
   Char        id [42];
+  Char        inputtype [32];
   size_t      len;
   CharPtr     query;
   SeqIdPtr    sip;
@@ -111,8 +113,18 @@ NLM_EXTERN CONN CddOpenConnection (
     dataLib = "cdd";
   }
 
+  if (precalc) {
+    StringCpy (inputtype, "INPUT_TYPE=precalc&FULL&");
+  } else {
+    StringCpy (inputtype, "");
+  }
+
   sip = SeqIdFindBest (bsp->id, 0);
-  SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
+  if (precalc) {
+    SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id) - 1);
+  } else {
+    SeqIdWrite (sip, id, PRINTID_FASTA_SHORT, sizeof (id) - 1);
+  }
   if (StringHasNoText (id)) {
     StringCpy (id, "tmpseq_0");
   }
@@ -131,7 +143,13 @@ NLM_EXTERN CONN CddOpenConnection (
   }
   */
 
-  sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&SEQUENCE=>%s\n%s", feats, dataLib, expect, filter, graph, id, str);
+  if (precalc) {
+    sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&%sSEQUENCE=%s",
+             feats, dataLib, expect, filter, graph, inputtype, id);
+  } else {
+    sprintf (query, "%s&NOHTML&DATALIB=%s&EXPECT=%s&FILTER=%s&GRAPH=%s&%sSEQUENCE=>%s\n%s",
+             feats, dataLib, expect, filter, graph, inputtype, id, str);
+  }
   conn = QUERY_OpenServiceQuery ("CddSearch", query, 30);
 
   MemFree (str);
@@ -158,6 +176,10 @@ NLM_EXTERN SeqAnnotPtr CddReadReply (
 
     sap = SeqAnnotAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
+
+    if (sap != NULL && sap->data == NULL) {
+      sap = SeqAnnotFree (sap);
+    }
   }
   return sap;
 }
@@ -214,14 +236,15 @@ NLM_EXTERN SeqAnnotPtr CddSynchronousQuery (
   Boolean findBest,
   Boolean doFilter,
   Boolean makeFeats,
-  CharPtr dataLib
+  CharPtr dataLib,
+  Boolean precalc
 )
 
 {
   CONN         conn;
   SeqAnnotPtr  sap;
 
-  conn = CddOpenConnection (bsp, expectValue, findBest, doFilter, makeFeats, dataLib);
+  conn = CddOpenConnection (bsp, expectValue, findBest, doFilter, makeFeats, dataLib, precalc);
 
   if (conn == NULL) return NULL;
 
@@ -239,6 +262,7 @@ NLM_EXTERN Boolean CddAsynchronousQuery (
   Boolean doFilter,
   Boolean makeFeats,
   CharPtr dataLib,
+  Boolean precalc,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -247,7 +271,7 @@ NLM_EXTERN Boolean CddAsynchronousQuery (
 {
   CONN  conn;
 
-  conn = CddOpenConnection (bsp, expectValue, findBest, doFilter, makeFeats, dataLib);
+  conn = CddOpenConnection (bsp, expectValue, findBest, doFilter, makeFeats, dataLib, precalc);
 
   if (conn == NULL) return FALSE;
 
@@ -273,9 +297,11 @@ static void PromoteSeqId (SeqIdPtr sip, Pointer userdata)
 {
   SeqIdPtr  bestid, newid, oldid;
 
-  /* only change lcl|tmpseq_0 returned from CGI */
+  if (sip == NULL) return;
 
-  if (sip == NULL || sip->choice != SEQID_LOCAL) return;
+  /* change lcl|tmpseq_0 returned from CGI, or gi if precalcualted */
+
+  if (sip->choice != SEQID_LOCAL && sip->choice != SEQID_GI) return;
 
   bestid = (SeqIdPtr) userdata;
 

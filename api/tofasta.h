@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.21 $
+* $Revision: 6.23 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.23  2004/04/21 14:42:36  kans
+* added blocklen and grouplen parameters to BioseqFastaStream and SeqEntryFastaStream, former also has do_defline parameter
+*
+* Revision 6.22  2004/03/15 19:56:09  kans
+* BioseqFastaStream takes StreamFlgType flags parameter, added SeqEntryFastaStream for exploration
+*
 * Revision 6.21  2003/11/18 19:04:29  kans
 * added BioseqFastaStream, rapid generator based on SeqPortStream
 *
@@ -242,13 +248,34 @@ NLM_EXTERN Boolean BioseqToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is
 
 /*****************************************************************************
 *
-*   BioseqFastaStream(bsp, fp, expandGaps, maxlen)
+*   BioseqFastaStream(bsp, fp, flags, linelen, blocklen, grouplen, do_defline)
+*   SeqEntryFastaStream (sep, fp, flags, linelen, blocklen, grouplen,
+*                        do_na, do_aa, master_style)
 *
-*   	Rapid FASTA generator using SeqPortStream
+*   	Rapid FASTA generators using SeqPortStream
 *
 *****************************************************************************/
-NLM_EXTERN void BioseqFastaStream PROTO((BioseqPtr bsp, FILE *fp, Boolean expandGaps, Int2 linelen));
+NLM_EXTERN void BioseqFastaStream (
+  BioseqPtr bsp,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_defline
+);
 
+NLM_EXTERN void SeqEntryFastaStream (
+  SeqEntryPtr sep,
+  FILE *fp,
+  StreamFlgType flags,
+  Int2 linelen,
+  Int2 blocklen,
+  Int2 grouplen,
+  Boolean do_na,
+  Boolean do_aa,
+  Boolean master_style
+);
 
 /*****************************************************************************
 *

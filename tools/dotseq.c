@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: dotseq.c,v 6.12 2003/09/17 20:55:12 kskatz Exp $";
+static char const rcsid[] = "$Id: dotseq.c,v 6.13 2004/03/17 20:33:48 bollin Exp $";
 
 /* dotSeq.c */
 /* ===========================================================================
@@ -31,7 +31,7 @@ static char const rcsid[] = "$Id: dotseq.c,v 6.12 2003/09/17 20:55:12 kskatz Exp
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: computes local alignments for dot matrix
 *
@@ -40,8 +40,12 @@ static char const rcsid[] = "$Id: dotseq.c,v 6.12 2003/09/17 20:55:12 kskatz Exp
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 
-$Revision: 6.12 $
+$Revision: 6.13 $
 $Log: dotseq.c,v $
+Revision 6.13  2004/03/17 20:33:48  bollin
+In DOT_InitMainInfobyLoc, exit function and return NULL if unable to determine
+ID or Bioseq from SeqLoc provided.  This change averts a core dump.
+
 Revision 6.12  2003/09/17 20:55:12  kskatz
 Resetting to the way it was in revision 6.10; accidently checked in a kludge meant to be used only locally in DOT_GetNResidues
 
@@ -1927,8 +1931,9 @@ static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1,
   Int4   qlen, temp;
   SeqLocPtr qslp, sslp;
   BioseqPtr qbsp, sbsp;
+  SeqIdPtr qsip, ssip;
 
-
+  if (mip == NULL || slp1 == NULL || slp2 == NULL) return MemFree (mip);
   qlen=SeqLocLen(slp1);
   slen=SeqLocLen(slp2);
 
@@ -1938,9 +1943,23 @@ static DOTMainDataPtr DOT_InitMainInfobyLoc (DOTMainDataPtr mip, SeqLocPtr slp1,
   mip->qstrand = SeqLocStrand(qslp);
   mip->sstrand = SeqLocStrand(sslp);
 
+  qsip = SeqLocId (qslp);
+  if (qsip == NULL) {
+    return MemFree (mip);
+  }
+  ssip = SeqLocId (sslp);
+  if (ssip == NULL) {
+    return MemFree (mip);
+  }
 
   mip->qbsp = BioseqFind(SeqLocId(qslp));
+  if (mip->qbsp == NULL) {
+    return MemFree (mip);
+  }    
   mip->sbsp = BioseqFind(SeqLocId(sslp));
+  if (mip->sbsp == NULL) {
+    return MemFree (mip);
+  }    
 
    if (!((ISA_aa (mip->qbsp->mol) && ISA_aa (mip->sbsp->mol))||(ISA_na(mip->qbsp->mol) && ISA_na (mip->sbsp->mol))))
     {

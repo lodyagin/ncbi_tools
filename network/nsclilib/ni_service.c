@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.16 $  $Date: 2003/10/27 14:10:49 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.18 $  $Date: 2004/02/23 17:00:39 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.18  2004/02/23 17:00:39  lavr
+ * Fix n_written variable name typo
+ *
+ * Revision 6.17  2004/02/23 15:30:21  lavr
+ * New (last) parameter "how" added in CONN_Write() API call
+ *
  * Revision 6.16  2003/10/27 14:10:49  lavr
  * Better flow control in s_AsnWrite()
  *
@@ -124,20 +130,8 @@ static Int2 LIBCALLBACK s_AsnRead(Pointer p, CharPtr buf, Uint2 len)
 
 static Int2 LIBCALLBACK s_AsnWrite(Pointer p, CharPtr buf, Uint2 len)
 {
-    CONN   conn = (CONN) p;
-    size_t n_written = 0;
-    for (;;) {
-        size_t     x_written;
-        EIO_Status status = CONN_Write(conn, buf, len, &x_written);
-        n_written += x_written;
-        if (len == x_written  ||  status != eIO_Success  ||
-            CONN_Wait(conn, eIO_Write,
-                      CONN_GetTimeout(conn, eIO_Write)) != eIO_Success) {
-            break;
-        }
-        buf += x_written;
-        len -= x_written;
-    }
+    size_t n_written;
+    CONN_Write((CONN) p, buf, len, &n_written, eIO_WritePersist);
     return (Int2) n_written;
 }
 

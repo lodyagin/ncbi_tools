@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: megablast.c,v 6.111 2004/01/27 20:47:18 dondosha Exp $";
+static char const rcsid[] = "$Id: megablast.c,v 6.113 2004/04/29 19:56:00 dondosha Exp $";
 
-/* $Id: megablast.c,v 6.111 2004/01/27 20:47:18 dondosha Exp $
+/* $Id: megablast.c,v 6.113 2004/04/29 19:56:00 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,12 @@ static char const rcsid[] = "$Id: megablast.c,v 6.111 2004/01/27 20:47:18 dondos
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.113  2004/04/29 19:56:00  dondosha
+ * Mask filtered locations in query sequence lines in XML output
+ *
+ * Revision 6.112  2004/03/24 22:55:54  dondosha
+ * Ignore -m option when on-the-fly tabular output is returned
+ *
  * Revision 6.111  2004/01/27 20:47:18  dondosha
  * Set no_traceback option to 2 for -D4, 1 for -D0, 0 for others
  *
@@ -953,7 +959,12 @@ Int2 Main (void)
 
 	align_view = (Int1) myargs[3].intvalue;
 	outfp = NULL;
-	if (align_view != 7 && align_view != 10 && align_view != 11 && blast_outputfile != NULL) {
+        traditional_formatting = 
+           (myargs[12].intvalue == MBLAST_ALIGNMENTS ||
+            myargs[12].intvalue == MBLAST_DELAYED_TRACEBACK);
+	if ((!traditional_formatting ||
+            (align_view != 7 && align_view != 10 && align_view != 11)) && 
+            blast_outputfile != NULL) {
 	   if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
 	      ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", blast_outputfile);
 	      return (1);
@@ -961,9 +972,6 @@ Int2 Main (void)
 	}
 
 	align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
-   traditional_formatting = 
-      (myargs[12].intvalue == MBLAST_ALIGNMENTS ||
-       myargs[12].intvalue == MBLAST_DELAYED_TRACEBACK);
 
         if (myargs[15].strvalue) {
            if (myargs[15].strvalue[0] == 'f' || myargs[15].strvalue[0] == 'F' ||
@@ -1126,7 +1134,7 @@ Int2 Main (void)
         aip = NULL;
         if (myargs[14].strvalue != NULL) {
            if ((aip = AsnIoOpen (myargs[14].strvalue,"w")) == NULL) {
-              ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", "blastngp.sat");
+              ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[14].strvalue);
               return 1;
            }
         }
@@ -1134,7 +1142,7 @@ Int2 Main (void)
     	{
         	const char* mode = (align_view == 10) ? "w" : "wb";
         	if ((aip = AsnIoOpen (blast_outputfile, (char*) mode)) == NULL) {
-                	ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                	ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", blast_outputfile);
                 	return 1;
         	}
     	}
@@ -1363,7 +1371,7 @@ Int2 Main (void)
                        iterp = BXMLBuildOneQueryIteration(seqalign, 
                                   NULL, FALSE, 
                                   !options->gapped_calculation, index, 
-                                  NULL, query_bsp_array[index]);
+                                  NULL, query_bsp_array[index], mask_loc);
                        IterationAsnWrite(iterp, mbxp->aip, mbxp->atp);
                        AsnIoFlush(mbxp->aip);
                        IterationFree(iterp);

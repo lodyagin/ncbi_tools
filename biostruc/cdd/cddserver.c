@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.42 2003/11/19 14:37:52 bauer Exp $
+/* $Id: cddserver.c,v 1.44 2004/04/01 13:43:05 lavr Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.42 $
+* $Revision: 1.44 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.44  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
+* Revision 1.43  2004/02/17 16:32:54  bauer
+* added citation, remove books-links, ancestors etc. from published CDs
+*
 * Revision 1.42  2003/11/19 14:37:52  bauer
 * more consistent use of PSSM-IDs
 *
@@ -879,7 +885,7 @@ static CddSumPtr CddSumLink(CddSumPtr PNTR head, CddSumPtr newnode)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/* Check whether a particular gi has occured previously in the CddSum lnklst */
+/* Check whether a particular gi has occurred previously in the CddSum lnklst*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static Boolean CDSUniqueUid(Int4 uid, CddSumPtr pcds) {
@@ -897,7 +903,7 @@ static Boolean CDSUniqueUid(Int4 uid, CddSumPtr pcds) {
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/* Check whether a particular gi has occured previously in the CddSum lnklst */
+/* Check whether a particular gi has occurred previously in the CddSum lnklst*/
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static Boolean UniqueSip(SeqIdPtr sip, CddSumPtr pcds) {
@@ -1249,6 +1255,15 @@ static void CDDSrvFoot(FILE *table)
   fprintf(table,"<!-- -------- end of view --------- -->\n");
   fprintf(table,"         </td>\n");
   fprintf(table,"<!-- end of right content column  -->                         \n");
+  fprintf(table,"      </tr>\n");
+  fprintf(table,"      <tr valign=\"TOP\"> \n");
+  fprintf(table,"        <td width=\"100%%\"> \n");
+  fprintf(table,"          <br>\n");
+  fprintf(table,"          <div align=\"left\" class=\"medium1\">  \n");
+  fprintf(table,"            <p><b><a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?cmd=retrieve&db=pubmed&list_uids=12520028&dopt=Abstract\">Citing CDD:</a></b> Marchler-Bauer A, Anderson JB, DeWeese-Scott C, Fedorova ND, Geer LY, He S, Hurwitz DI, Jackson JD, Jacobs AR, Lanczycki CJ, Liebert CA, Liu C, Madej T, Marchler GH, Mazumder R, Nikolskaya AN, Panchenko AR, Rao BS, Shoemaker BA, Simonyan V, Song JS, Thiessen PA, Vasudevan S, Wang Y, Yamashita RA, Yin JJ, Bryant SH (2003), \"<i>CDD: a curated Entrez database of conserved domain alignments</i>\", <b>Nucleic Acids Res. 31</b>: 383-387</p>\n");
+  fprintf(table,"            <p>&nbsp;</p>\n");
+  fprintf(table,"          </div>\n");
+  fprintf(table,"        </td>\n");
   fprintf(table,"      </tr>\n");
   fprintf(table,"      <tr valign=\"TOP\"> \n");
   fprintf(table,"        <td width=\"100%%\"> \n");
@@ -2602,7 +2617,7 @@ static void CddDrawFamilyTree(CharPtr pc)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
-/* remove notes from a published CD                                          */
+/* remove notes, book references, and new-style parents from a published CD  */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static void CddSrvRemoveNotes(CddPtr pcdd)
@@ -2618,6 +2633,18 @@ static void CddSrvRemoveNotes(CddPtr pcdd)
     }
     pcddsc = pcddsc->next;
   }
+  pcddsc_last = NULL;
+  pcddsc = pcdd->description;
+  while (pcddsc) {
+    if (pcddsc->choice != CddDescr_book_ref) {
+      if (pcddsc_last) pcddsc_last->next = pcddsc;
+      pcddsc_last = pcddsc;
+    }
+    pcddsc = pcddsc->next;
+  }
+  if (NULL != pcdd->ancestors) pcdd->ancestors = NULL;
+  if (NULL != pcdd->scoreparams) pcdd->scoreparams = NULL;
+  if (NULL != pcdd->seqtree) pcdd->seqtree = NULL;
 }
 
 /*---------------------------------------------------------------------------*/

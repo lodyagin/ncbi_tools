@@ -32,8 +32,24 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.34 $ 
+/* $Revision: 6.38 $ 
 * $Log: blastkar.h,v $
+* Revision 6.38  2004/04/28 14:36:34  madden
+* Changes from Mike Gertz:
+*  - Added a function prototype for BlastGapDecayDivisor
+*   - Removed the function prototypes for  BlastGapDecay and BlastGapDecayInverse
+*   - Modified function prototypes for BlastSmallGapSumE, BlastLargeGapSumE and
+*   BlastUnevenGapSumE
+*
+* Revision 6.37  2004/04/23 13:20:25  madden
+* Change: BLAST_KARLIN_K_SUMLIMIT_DEFAULT from 0.01 to 0.00001
+*
+* Revision 6.36  2004/03/31 18:39:24  kans
+* fixed typo in BlastBlastComputeLengthAdjustment
+*
+* Revision 6.35  2004/03/31 17:58:51  papadopo
+* Mike Gertz' changes for length adjustment calculations
+*
 * Revision 6.34  2003/12/12 16:00:46  madden
 * Add gap_decay_rate to BlastCutoffs, remove BlastCutoffs_simple, removal of defunct _real variables (all from Mike Gertz)
 *
@@ -273,7 +289,7 @@ Note:  statistical significance is often not greatly affected by the value
 of K, so high accuracy is generally unwarranted.
 *****************************************************************************/
 /* K_SUMLIMIT_DEFAULT == sumlimit used in BlastKarlinLHtoK() */
-#define BLAST_KARLIN_K_SUMLIMIT_DEFAULT 0.01
+#define BLAST_KARLIN_K_SUMLIMIT_DEFAULT 0.0001
 
 /* LAMBDA_ACCURACY_DEFAULT == accuracy to which Lambda should be calc'd */
 #define BLAST_KARLIN_LAMBDA_ACCURACY_DEFAULT    (1.e-5)
@@ -523,6 +539,8 @@ Nlm_FloatHi LIBCALL BlastKarlinStoE PROTO((BLAST_Score S, BLAST_KarlinBlkPtr kbp
 
 Nlm_FloatHi LIBCALL BlastKarlinStoE_simple PROTO((BLAST_Score S, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi  searchsp));
 
+Nlm_FloatHi LIBCALL BlastGapDecayDivisor PROTO((Nlm_FloatHi decayrate, unsigned nsegs ));
+
 Int2 LIBCALL BlastCutoffs PROTO((BLAST_ScorePtr S, Nlm_FloatHi PNTR E, BLAST_KarlinBlkPtr kbp, Nlm_FloatHi search_sp, Nlm_Boolean dodecay,
   Nlm_FloatHi gap_decay_rate));
 
@@ -532,11 +550,11 @@ Nlm_FloatHi LIBCALL BlastKarlinStoLen PROTO((BLAST_KarlinBlkPtr kbp, BLAST_Score
 Nlm_FloatHi LIBCALL BlastSumP PROTO((Int4 r, Nlm_FloatHi s));
 
 /* Functions to calculate SumE (for large and small gaps). */
-Nlm_FloatHi LIBCALL BlastSmallGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean min_length_one));
+Nlm_FloatHi LIBCALL BlastSmallGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap, Int2 num,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Nlm_FloatHi weight_divisor));
 
-Nlm_FloatHi LIBCALL BlastUnevenGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean min_length_one));
+Nlm_FloatHi LIBCALL BlastUnevenGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Int2 num, Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Nlm_FloatHi weight_divisor));
 
-Nlm_FloatHi LIBCALL BlastLargeGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean old_stats));
+Nlm_FloatHi LIBCALL BlastLargeGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int2 num,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Nlm_FloatHi weight_divisor));
 
 /* Used to produce random sequences. */
 CharPtr  LIBCALL BlastRepresentativeResidues PROTO((Int2 length));
@@ -603,6 +621,16 @@ Int2 LIBCALL BlastKarlinGetDefaultMatrixValues PROTO((CharPtr matrix, Int4Ptr op
 
 Int4Ptr PNTR LIBCALL BlastMatrixToTxMatrix PROTO((BLAST_MatrixPtr matrix));
 Int4Ptr PNTR LIBCALL TxMatrixDestruct PROTO((Int4Ptr PNTR txmatrix)); 
+
+Int4
+BlastComputeLengthAdjustment(Nlm_FloatHi K,
+                                  Nlm_FloatHi logK,
+                                  Nlm_FloatHi alpha_d_lambda,
+                                  Nlm_FloatHi beta,
+                                  Int4 query_length,
+                                  Int8 db_length,
+                                  Int4 db_num_seqs,
+                                  Int4 * length_adjustment);
 
 #ifdef __cplusplus
 }

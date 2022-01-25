@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: actutils.c,v 6.35 2004/01/02 18:11:28 kans Exp $";
+static char const rcsid[] = "$Id: actutils.c,v 6.36 2004/02/11 20:51:48 bollin Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,16 @@ static char const rcsid[] = "$Id: actutils.c,v 6.35 2004/01/02 18:11:28 kans Exp
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.36  2004/02/11 20:51:48  bollin
+* use error log instead of popup message to indicate that  BLAST found no sequence similarity
+*
 * Revision 6.35  2004/01/02 18:11:28  kans
 * Sqn_GlobalAlign2Seq flips code break, anticodon when reverse complementing sequence
 *
@@ -2565,7 +2568,7 @@ NLM_EXTERN SeqAlignPtr Sqn_GlobalAlign2Seq (BioseqPtr bsp1, BioseqPtr bsp2, Bool
    BLASTOptionDelete(options);
    if (sap == NULL)
    {
-      Message(MSG_OK,"BLAST finds no sequence similarity");
+      ErrPostEx (SEV_ERROR, 0, 0, "BLAST finds no sequence similarity");
       return NULL;
    }
    AlnMgr2IndexLite(sap);

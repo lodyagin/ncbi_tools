@@ -1,4 +1,4 @@
-/* $Id: thrdsgoi.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdsgoi.c,v 1.2 2004/04/01 13:43:05 lavr Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdsgoi.c,v $
+* Revision 1.2  2004/04/01 13:43:05  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -89,7 +92,7 @@ switch(is) {
 			k=rsmp(pvl); so[k]=0; si[i]=k; } 
 			break; } 
 
-	case 1: {	/* Order by occurence in the core definition */
+	case 1: {	/* Order by occurrence in the core definition */
 
 		/* printf("segment order by occurrence, case 1\n"); */
 		for(i=0; i<nsc; i++)  si[i]=i;  break; } 

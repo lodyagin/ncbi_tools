@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.14  2004/02/05 16:25:06  kans
+* revert to Nlm_GetTextVScrollBar and Nlm_GetTextHScrollBar being static, implement setOffset and getOffset for scroll text, since Windows scroll text has its own scroll bar
+*
 * Revision 6.13  2004/02/04 15:21:02  kans
 * make GetTextVScrollBar and GetTextHScrollBar extern, to add search function to general text viewer
 *
@@ -340,8 +343,6 @@ extern "C" {
 #define SetTextCursorPos Nlm_SetTextCursorPos
 #define GetTextCursorPos Nlm_GetTextCursorPos
 #define SetTextCursorBlinkRate Nlm_SetTextCursorBlinkRate
-#define GetTextVScrollBar Nlm_GetTextVScrollBar
-#define GetTextHScrollBar Nlm_GetTextHScrollBar
 
 #define StaticPrompt Nlm_StaticPrompt
 

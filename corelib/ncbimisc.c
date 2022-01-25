@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,12 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.26  2004/03/25 15:37:24  lavr
+* Change UINT64_MAX into UINT8_MAX back for the toolkit to compile portably
+*
+* Revision 6.25  2004/03/24 18:48:49  lebedev
+* Use UINT64_MAX in divray_init function
+*
 * Revision 6.24  2003/12/03 02:10:23  kans
 * added defines missing from Mac OS 10.3 headers
 *

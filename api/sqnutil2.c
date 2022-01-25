@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.160 $
+* $Revision: 6.168 $
 *
 * File Description: 
 *
@@ -946,7 +946,52 @@ static void ConvertToFeatsOnNucsOnly (SeqEntryPtr sep, Pointer mydata, Int4 inde
   ConvertToFeatsCallback (sep, mydata, index, indent, FALSE);
 }
 
-static void ExtractPubSrcComDescs (SeqEntryPtr sep, ValNodePtr PNTR head, Boolean pub, Boolean src, Boolean com)
+typedef struct descstringcheck {
+	CharPtr  findstring;
+	Boolean  stringfound;
+	AsnIoPtr aip;
+} DescStringCheckData, PNTR DescStringCheckPtr;
+
+static void LIBCALLBACK AsnWriteConvertForDCallBack (AsnExpOptStructPtr pAEOS)
+
+{
+  CharPtr            pchFind;
+  CharPtr            pchSource;
+  DescStringCheckPtr dscp;
+
+  dscp = (DescStringCheckPtr) pAEOS->data;
+  if (ISA_STRINGTYPE (AsnFindBaseIsa (pAEOS->atp))) {
+	pchSource = (CharPtr) pAEOS->dvp->ptrvalue;
+	pchFind = dscp->findstring;
+	if (StringSearch (pchSource, pchFind) != NULL) {
+	  dscp->stringfound = TRUE;
+	}
+  }
+}
+
+static Boolean PubSrcComHasSubstring (ObjMgrTypePtr omtp, Pointer ptr, DescStringCheckPtr dscp)
+{
+  if (omtp == NULL || dscp == NULL || dscp->findstring == NULL || StringHasNoText (dscp->findstring)) {
+    return TRUE;
+  }
+  if (ptr == NULL || dscp->aip == NULL) {
+	return FALSE;
+  }
+  dscp->stringfound = FALSE;
+  (omtp->asnwrite) (ptr, dscp->aip, NULL);
+  return dscp->stringfound;
+}
+
+static void 
+ExtractPubSrcComDescs 
+(SeqEntryPtr sep,
+ ValNodePtr PNTR head,
+ Boolean pub,
+ Boolean src,
+ Boolean com,
+ ObjMgrTypePtr omtp,
+ DescStringCheckPtr dscp
+ )
 
 {
   BioseqPtr     bsp;
@@ -954,6 +999,9 @@ static void ExtractPubSrcComDescs (SeqEntryPtr sep, ValNodePtr PNTR head, Boolea
   ValNodePtr    nextsdp;
   Pointer PNTR  prevsdp;
   ValNodePtr    sdp;
+  Boolean       ok_to_extract;
+
+  if (sep == NULL || head == NULL) return;
 
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
@@ -966,9 +1014,15 @@ static void ExtractPubSrcComDescs (SeqEntryPtr sep, ValNodePtr PNTR head, Boolea
   } else return;
   while (sdp != NULL) {
     nextsdp = sdp->next;
+	ok_to_extract = FALSE;
     if ((sdp->choice == Seq_descr_pub && pub) ||
         (sdp->choice == Seq_descr_source && src) ||
         (sdp->choice == Seq_descr_comment && com)) {
+	  if (PubSrcComHasSubstring (omtp, sdp, dscp)) {
+	    ok_to_extract = TRUE;
+	  }
+	}
+	if (ok_to_extract) {
       *(prevsdp) = sdp->next;
       sdp->next = NULL;
       ValNodeLink (head, sdp);
@@ -979,28 +1033,165 @@ static void ExtractPubSrcComDescs (SeqEntryPtr sep, ValNodePtr PNTR head, Boolea
   }
 }
 
-NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, Boolean src, Boolean com, Boolean toProts)
+
+
+
+static Boolean 
+HasPubSrcComDescriptors 
+(SeqEntryPtr sep,
+ Boolean pub,
+ Boolean src,
+ Boolean com,
+ ObjMgrTypePtr omtp,
+ DescStringCheckPtr dscp
+)
+{
+  BioseqPtr           bsp;
+  BioseqSetPtr        bssp;
+  ValNodePtr          list = NULL;
+  AsnExpOptPtr        aeop;
+  Boolean             rval = FALSE;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
+  if (IS_Bioseq (sep)) {
+    bsp = sep->data.ptrvalue;
+    list = bsp->descr;
+  } else if (IS_Bioseq_set(sep)){
+    bssp = sep->data.ptrvalue;
+    list = bssp->descr;
+  }
+  if (list == NULL) return FALSE;
+  while (list != NULL && !rval) {
+    if ((list->choice == Seq_descr_pub && pub) ||
+        (list->choice == Seq_descr_source && src) ||
+        (list->choice == Seq_descr_comment && com)) {
+ 	  if (PubSrcComHasSubstring (omtp, list, dscp)) {
+	    rval = TRUE;
+	  }
+	}
+	list = list->next;
+  }
+  return rval;
+}
+
+static void 
+PropagatePubSrcComDescriptors 
+(SeqEntryPtr sep,
+ Boolean pub,
+ Boolean src,
+ Boolean com,
+ ObjMgrTypePtr omtp,
+ DescStringCheckPtr dscp
+)
+{
+  ValNodePtr   sdp_list = NULL;
+  BioseqSetPtr bssp;
+  BioseqPtr    bsp;
+  SeqEntryPtr  seqentry;
+
+  if (sep == NULL || ! IS_Bioseq_set (sep)) return;
+  bssp = (BioseqSetPtr)sep->data.ptrvalue;
+  if (bssp == NULL || bssp->descr == NULL) return;
+ 
+  ExtractPubSrcComDescs (sep, &sdp_list, pub, src, com, omtp, dscp);
+  
+  if (sdp_list == NULL) return;
+  for (seqentry = bssp->seq_set; seqentry != NULL; seqentry =seqentry->next) {
+	if (IS_Bioseq_set (seqentry)) {
+	  bssp = seqentry->data.ptrvalue;
+	  ValNodeLink (&(bssp->descr),
+                   AsnIoMemCopy ((Pointer) sdp_list,
+                                 (AsnReadFunc) SeqDescrAsnRead,
+                                 (AsnWriteFunc) SeqDescrAsnWrite));
+	} else if (IS_Bioseq (seqentry)){
+      bsp = (BioseqPtr) seqentry->data.ptrvalue;
+      ValNodeLink (&(bsp->descr),
+                   AsnIoMemCopy ((Pointer) sdp_list,
+                                 (AsnReadFunc) SeqDescrAsnRead,
+                                 (AsnWriteFunc) SeqDescrAsnWrite));
+	}
+  }
+  SeqDescrFree (sdp_list);
+}
+
+NLM_EXTERN Boolean 
+ConvertPubSrcComDescsToFeats 
+(SeqEntryPtr sep,
+ Boolean pub,
+ Boolean src,
+ Boolean com,
+ Boolean toProts,
+ Boolean PNTR asked_about_prop,
+ Boolean PNTR propagate_descriptors,
+ CharPtr findstring
+ )
 
 {
-  BioseqSetPtr  bssp;
-  ValNodePtr    head;
-  Boolean       rsult;
-  ValNodePtr    sdp;
+  BioseqSetPtr        bssp;
+  ValNodePtr          head;
+  Boolean             rsult;
+  ValNodePtr          sdp;
+  SeqEntryPtr         set_sep;
+  MsgAnswer           ans;
+  DescStringCheckData dscd;
+  AsnExpOptPtr        aeop;
+  ObjMgrPtr           omp;
+  ObjMgrTypePtr       omtp = NULL;
+
 
   rsult = FALSE;
   if (! (pub || src || com)) return FALSE;
   if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
+  if (findstring != NULL && ! StringHasNoText (findstring)) {
+    omp = ObjMgrGet();
+    if (omp != NULL) {
+      omtp = ObjMgrTypeFind(omp, OBJ_SEQDESC, NULL, NULL);
+    }
+  }
+
+  if (findstring != NULL && ! StringHasNoText (findstring) && omtp != NULL) {
+    dscd.aip = AsnIoNullOpen ();
+    aeop = AsnExpOptNew (dscd.aip, NULL, NULL, AsnWriteConvertForDCallBack);
+    if (aeop != NULL) {
+      aeop->user_data = (Pointer) &dscd;
+    }
+    dscd.findstring = findstring;
+  } else {
+    dscd.aip = NULL;
+	dscd.findstring = NULL;
+  }
+  dscd.stringfound = FALSE;
+
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-      if (ConvertPubSrcComDescsToFeats (sep, pub, src, com, toProts)) {
+	if (HasPubSrcComDescriptors (sep, pub, src, com, omtp, &dscd)){
+	  if (asked_about_prop != NULL 
+		  && *asked_about_prop == FALSE
+		  && propagate_descriptors != NULL
+		  && *propagate_descriptors == FALSE) {
+        ans = Message (MSG_YN, "Do you want to propagate descriptors on sets so that they can be converted?");
+		*asked_about_prop = TRUE;
+		if (ans == ANS_YES) {
+		  *propagate_descriptors = TRUE;
+		}
+	  }
+	  if (propagate_descriptors != NULL && *propagate_descriptors) {
+        PropagatePubSrcComDescriptors (sep, pub, src, com, omtp, &dscd);
+	  }
+	}
+    for (set_sep = bssp->seq_set; set_sep != NULL; set_sep = set_sep->next) {
+      if (ConvertPubSrcComDescsToFeats (set_sep, pub, src, com, toProts && ! pub, asked_about_prop, propagate_descriptors, findstring)) {
         rsult = TRUE;
       }
     }
-    return rsult;
+	if (dscd.aip != NULL) {
+	  AsnIoClose (dscd.aip);  
+	  dscd.aip = NULL;
+	}
+	return rsult;
   }
   head = NULL;
-  ExtractPubSrcComDescs (sep, &head, pub, src, com);
+  ExtractPubSrcComDescs (sep, &head, pub, src, com, omtp, &dscd);
   rsult = (head != NULL);
   if (toProts) {
     BioseqExplore (sep, head, ConvertToFeatsOnNucsAndProts);
@@ -1023,6 +1214,10 @@ NLM_EXTERN Boolean ConvertPubSrcComDescsToFeats (SeqEntryPtr sep, Boolean pub, B
     }
   }
   ValNodeFree (head);
+  if (dscd.aip != NULL) {
+    AsnIoClose (dscd.aip);  
+	dscd.aip = NULL;
+  }
   return rsult;
 }
 
@@ -1325,6 +1520,11 @@ static CharPtr sqntag_biosrc_genome_list [] = {
   "proplastid", "endogenous-virus", NULL
 };
 
+static CharPtr sqntag_biosrc_origin_list [] = {
+  "?", "natural", "natural mutant", "mutant", "artificial",
+  "synthetic", "other", NULL
+};
+
 static CharPtr sqntag_biosrc_orgmod_list [] = {
   "?", "?", "strain", "substrain", "type", "subtype", "variety",
   "serotype", "serogroup", "serovar", "cultivar", "pathovar", "chemovar",
@@ -1412,6 +1612,18 @@ NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
       if (StringICmp (str, sqntag_biosrc_genome_list [i]) == 0) {
         biop->genome = (Uint1) i;
       }
+    }
+  }
+
+  str = SqnTagFind (stp, "origin");
+  if (str != NULL) {
+    for (i = 0; sqntag_biosrc_origin_list [i] != NULL; i++) {
+      if (StringICmp (str, sqntag_biosrc_origin_list [i]) == 0) {
+        biop->origin = (Uint1) i;
+      }
+    }
+    if (biop->origin == 6) {
+      biop->origin = 255;
     }
   }
 
@@ -2485,6 +2697,7 @@ static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag
 
 {
   Char     ch;
+  CharPtr  dst;
   CharPtr  ptr;
 
   if (seqid != NULL) {
@@ -2503,13 +2716,50 @@ static CharPtr GetSeqId (CharPtr seqid, CharPtr str, size_t max, Boolean skiptag
     str++;
     ch = *str;
   }
+
   StringNCpy_0 (seqid, str, max);
   str = seqid;
+
+  /* find first token, or anything within quotation marks */
+
   while (ch != '\0' && (! IS_WHITESP (ch))) {
-    str++;
-    ch = *str;
+    if (ch == '"') {
+      str++;
+      ch = *str;
+      while (ch != '\0' && ch != '"') {
+        str++;
+        ch = *str;
+      }
+      if (ch == '"') {
+        str++;
+        ch = *str;
+      }
+    } else {
+      str++;
+      ch = *str;
+    }
   }
+  *str = '\0';
+
+  /* remove quotation marks in seqid */
+
+  dst = seqid;
+  ptr = seqid;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch != '"') {
+      *dst = ch;
+      dst++;
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  *dst = '\0';
+
   if (ch == '\0') return NULL;
+
+  /* trim optional annot name */
+
   *str = '\0';
   str++;
   ch = *str;
@@ -3610,7 +3860,8 @@ static Uint1 ParseCodon (CharPtr str)
   return IndexForCodon (codon, Seq_code_iupacna);
 }
 
-extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val);
+extern Boolean ParseCodeBreak (SeqFeatPtr sfp, CharPtr val, Int4 offset);
+extern Boolean ParseAnticodon (SeqFeatPtr sfp, CharPtr val, Int4 offset);
 
 static CharPtr orgRefList [] = {
   "", "organism", "mitochondrion", "div", "lineage", "gcode", "mgcode", NULL
@@ -4069,13 +4320,13 @@ static Boolean ParseQualIntoGeneOntologyUserObject (SeqFeatPtr sfp, CharPtr qual
       pmid = (Int4) num;
     }
     AddToGeneOntologyUserObject (uop, goQualType [found], fields [0], fields [1], pmid, fields [3]);
-    MemFree (val);
+    MemFree (str);
     return TRUE;
   }
   return FALSE;
 }
 
-NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
+static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, Int4 offset)
 
 {
   Uint1           aa;
@@ -4372,7 +4623,9 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       }
       return;
     } else if (qnum == GBQUAL_transl_except) {
-      if (ParseCodeBreak (sfp, val)) return;
+      if (ParseCodeBreak (sfp, val, offset)) return;
+    } else if (qnum == GBQUAL_anticodon) {
+      if (ParseAnticodon (sfp, val, offset)) return;
     } else if (qnum == GBQUAL_codon_start) {
       crp = (CdRegionPtr) sfp->data.value.ptrvalue;
       if (sscanf (val, "%d", &num) == 1 && crp != NULL) {
@@ -4471,6 +4724,12 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
     }
     last->next = gbq;
   }
+}
+
+NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val)
+
+{
+  AddQualifierToFeatureEx (sfp, qual, val, 0);
 }
 
 NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip,
@@ -4904,7 +5163,7 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                     StringCmp (qual, "exception") == 0 ||
                     StringCmp (qual, "mitochondrion") == 0)) {
 
-          AddQualifierToFeature (sfp, qual, val);
+          AddQualifierToFeatureEx (sfp, qual, val, offset);
 
         } else if (sfp != NULL && qual != NULL && val == NULL) {
 
@@ -7027,6 +7286,13 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
 
   str = MemNew (sizeof (Byte) * (bsp->length + 2));
   if (str == NULL) return NULL;
+
+  /* initialize every byte to 255 (gap) so only real regions will be kept */
+
+  for (ptr = str, i = 0; i < bsp->length; ptr++, i++) {
+    *ptr = 255;
+  }
+
   ptr = str;
 
   /* lock all components once, get uniqued list of component Bioseqs and scores */
@@ -7104,8 +7370,6 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
           }
         }
       }
-
-      MemFree (bp);
 
     } else if (dsp->choice == 2) {
 
@@ -7245,6 +7509,7 @@ NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (
   for (vnp = phplist; vnp != NULL; vnp = vnp->next) {
     pdp = (PhrapDataPtr) vnp->data.ptrvalue;
     BioseqUnlock (pdp->bsp);
+    MemFree (pdp->scores);
   }
   ValNodeFreeData (phplist);
 

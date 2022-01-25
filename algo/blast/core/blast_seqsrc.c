@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.15 2003/12/08 22:43:50 dondosha Exp $
+/*  $Id: blast_seqsrc.c,v 1.18 2004/04/28 19:37:16 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 *
 */
 
-static char const rcsid[] = "$Id: blast_seqsrc.c,v 1.15 2003/12/08 22:43:50 dondosha Exp $";
+static char const rcsid[] = "$Id: blast_seqsrc.c,v 1.18 2004/04/28 19:37:16 dondosha Exp $";
 
 #include <algo/blast/core/blast_seqsrc.h>
 
@@ -43,6 +43,8 @@ struct BlastSeqSrc {
    /* Functions to get information about database as a whole */
     GetInt4FnPtr      GetNumSeqs;     /**< Get number of sequences in set */
     GetInt4FnPtr      GetMaxSeqLen;   /**< Get length of longest seq in set */
+    GetInt4FnPtr      GetAvgSeqLen;   /**< Get average length of sequences in 
+                                         the set */
     GetInt8FnPtr      GetTotLen;      /**< Get tot length of all seqs in set */
     GetStrFnPtr       GetName;        /**< Get the name of the database */
     GetStrFnPtr       GetDefinition;  /**< Get the database definition */
@@ -52,16 +54,21 @@ struct BlastSeqSrc {
 
    /* Functions to get information about individual sequences */
     GetSeqBlkFnPtr    GetSequence;    /**< Retrieve individual sequence */
-    GetStrFnPtr  GetSeqIdStr;  /**< Retrieve sequence identifier string */
-    GetSeqIdFnPtr     GetSeqId;       /**< Retrieve sequence identifier */
+    GetStrFnPtr       GetSeqIdStr;    /**< Retrieve sequence identifier 
+                                         string */
+    GetGenDataFnPtr   GetSeqId;       /**< Retrieve sequence identifier */
+    GetGenDataFnPtr   GetSeqLoc;      /**< Retrieve sequence identifier */
     GetInt4FnPtr      GetSeqLen;      /**< Retrieve given sequence length */
 
    /* Functions to iterate over sequences in the database */
     GetNextChunkFnPtr GetNextChunk;   /**< Get next chunk of seq indices */
     AdvanceIteratorFnPtr IterNext;    /**< Gets next oid from the iterator */
+    GetGenDataFnPtr   GetError;       /**< Gets a saved error message, if
+                                         supported. */
+    GetSeqBlkFnPtr    RetSequence;    /**< Deallocate individual sequence 
+                                         buffer if necessary. */
    
     void*             DataStructure;  /**< ADT holding the sequence data */
-
 };
 
 BlastSeqSrc* BlastSeqSrcNew(const BlastSeqSrcNewInfo* bssn_info)
@@ -176,6 +183,7 @@ DEFINE_MEMBER_FUNCTIONS(BlastSeqSrcDestructor, DeleteFnPtr, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(void*, DataStructure, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetNumSeqs, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetMaxSeqLen, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetAvgSeqLen, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetInt8FnPtr, GetTotLen, BlastSeqSrc*)
 
 DEFINE_MEMBER_FUNCTIONS(GetStrFnPtr, GetName, BlastSeqSrc*)
@@ -185,7 +193,10 @@ DEFINE_MEMBER_FUNCTIONS(GetBoolFnPtr, GetIsProt, BlastSeqSrc*)
 
 DEFINE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, GetSequence, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetStrFnPtr, GetSeqIdStr, BlastSeqSrc*)
-DEFINE_MEMBER_FUNCTIONS(GetSeqIdFnPtr, GetSeqId, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetSeqId, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetSeqLoc, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetInt4FnPtr, GetSeqLen, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(GetNextChunkFnPtr, GetNextChunk, BlastSeqSrc*)
 DEFINE_MEMBER_FUNCTIONS(AdvanceIteratorFnPtr, IterNext, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(GetGenDataFnPtr, GetError, BlastSeqSrc*)
+DEFINE_MEMBER_FUNCTIONS(GetSeqBlkFnPtr, RetSequence, BlastSeqSrc*)

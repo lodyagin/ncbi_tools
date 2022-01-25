@@ -28,6 +28,9 @@
 * Author:  Karl Sirotkin
 *
 * $Log: gbparint.c,v $
+* Revision 6.7  2004/03/03 17:32:19  kans
+* Nlm_gbparselex checks against NULL input
+*
 * Revision 6.6  2003/12/05 16:42:11  bazhin
 * Nlm_gbparselex() and Nlm_gbparselex_ver() functions now can handle
 * RefSeq and WGS accessions.
@@ -1891,9 +1894,12 @@ Nlm_gbparselex(CharPtr linein, ValNodePtr PNTR lexed)
 	Boolean die_now=FALSE;
 	ValNode forerrmacro;
 
+
+	if (linein == NULL) return retval;
+
 	forerrmacro.choice =GBPARSE_INT_ACCESION ;
 
-	if (*linein	){
+	if (*linein){
 		len = StringLen(linein);
 		line_use = MemNew(len + 1);
 		StringCpy(line_use, linein);

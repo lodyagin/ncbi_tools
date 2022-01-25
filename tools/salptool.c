@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salptool.c,v 6.31 2003/05/30 17:25:37 coulouri Exp $";
+static char const rcsid[] = "$Id: salptool.c,v 6.35 2004/04/28 20:32:52 bollin Exp $";
 
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
@@ -1889,7 +1889,7 @@ static void ValMessage (Int1 MessageCode, ErrSev errlevel, SeqIdPtr id, SeqIdPtr
       sprintf(string2, "This alignment has a undefined or unsupported Seqalign segtype %d\n", Intvalue);
       break;
 
-    defaulf:
+    default:
       break;
   }
   if (StringLen(string1) > 0)
@@ -2203,8 +2203,9 @@ static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 off
                  j=dsp->dim*dsp->numseg-dsp->dim;
                  k=dsp->numseg-1;
                  for (j=0; j<dsp->numseg; j++) {
-                    if (startp[j*dsp->dim + index]>=0)
+                   if (startp[j*dsp->dim + index]>=0) {
                        startp[j*dsp->dim + index]=len-startp[j*dsp->dim + index]-dsp->lens[j]+1;
+                   }
                  }
               } else
               {
@@ -2263,10 +2264,12 @@ typedef struct besthit {
    SeqAlignPtr  sap;
    SeqIdPtr     sip1;
    SeqIdPtr     sip2;
-   CharPtr      errstr;
+   BioseqPtr    bsp1;
+   BioseqPtr    bsp2;
+  CharPtr      errstr;
    Int4         nonly;
    Int4         errtype;
-   struct besthit PNTR next;
+    struct besthit PNTR next;
 } BestHit, PNTR BestHitPtr;
 
 static int LIBCALLBACK OrderBestHits(Pointer ptr1, Pointer ptr2)
@@ -2516,6 +2519,7 @@ static void SWPrintFarpointerAln(SeqAlignPtr sap, CharPtr filename)
    FileClose(ofp);
 }
 
+
 static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 {
   BLAST_OptionsBlkPtr options;
@@ -2528,13 +2532,13 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                       next,
                       tmpsip;
   SeqAlignPtr         seqalign = NULL;
-  SeqAlignPtr         bestsalp;
+  SeqAlignPtr         bestsalp = NULL;
   CharPtr             TmpBuff, tmp;
   Char                str [52];
   Int4                gi = 0,
                       offset,
                       totlenlcl = 0, totlendb = 0;
-  Int4                i, j, k, len, n;
+  Int4                i, j, k, len = 0, n;
   Int2                index;
   Uint1               strand;
   Boolean             ok, 
@@ -2628,6 +2632,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                    }
                  }
                  hip->sip2 = dbsip;
+                 hip->bsp1 = bsp1;
+                 hip->bsp2 = bsp2;
                  hip->errstr = StringSave(errstr);
                  hip->nonly = nonly;
                  if (*hip->errstr == '\0')
@@ -2659,6 +2665,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip->errstr = StringSave(errstr);
                  hip->nonly = 0;
                  hip->errtype = 3;
+                 hip->bsp1 = NULL;
+                 hip->bsp2 = NULL;
                  if (hip_head != NULL)
                  {
                     hip_prev->next = hip;
@@ -2677,6 +2685,8 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  hip->errstr = StringSave(errstr);
                  hip->nonly = 0;
                  hip->errtype = 3;
+                 hip->bsp1 = NULL;
+                 hip->bsp2 = NULL;
                  if (hip_head != NULL)
                  {
                     hip_prev->next = hip;
@@ -2738,6 +2748,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                       strand=Seq_strand_plus;
                  SeqAlignStartUpdate (salp, hiparray[j]->sip1, abs(offset), len, strand);
                  dsp->ids = SWSeqIdReplaceID(dsp->ids, hiparray[j]->sip1, hiparray[j]->sip2);
+
                  if (presip)
                     sip = presip->next;
                  else
@@ -2746,6 +2757,15 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
                  found = TRUE;
                  SeqAlignFree(hiparray[j]->sap);
+                 if (hiparray[j]->bsp1 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp1);
+                   hiparray[j]->bsp1->idx.deleteme = TRUE;
+                   hiparray[j]->bsp1 = NULL;
+                 }
+                 if (hiparray[j]->bsp2 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp2);
+                   hiparray[j]->bsp2 = NULL;
+                 }
               }
            } else /* need to ask one by one */
            {
@@ -2774,7 +2794,18 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                     SeqAlignReplaceId (hiparray[j]->sip1, hiparray[j]->sip2, salp);
                     vnp = nrSeqIdAdd (vnp, hiparray[j]->sip1);
                     found = TRUE;
-                    SeqAlignFree(hiparray[j]->sap);
+                    if (hiparray[j]->bsp1 != NULL) {
+                      hiparray[j]->bsp1->idx.deleteme = TRUE;
+                    }
+                 }
+                 SeqAlignFree(hiparray[j]->sap);
+                 if (hiparray[j]->bsp1 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp1);
+                   hiparray[j]->bsp1 = NULL;
+                 }
+                 if (hiparray[j]->bsp2 != NULL) {
+                   BioseqUnlock (hiparray[j]->bsp2);
+                   hiparray[j]->bsp2 = NULL;
                  }
               }
            }

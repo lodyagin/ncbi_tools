@@ -1,4 +1,4 @@
-/* $Id: mb_lookup.h,v 1.9 2003/09/10 19:42:20 dondosha Exp $
+/* $Id: mb_lookup.h,v 1.11 2004/02/23 19:52:22 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@ Contents: Functions responsible for the creation of a lookup table
 Detailed Contents: 
 
 ******************************************************************************
- * $Revision: 1.9 $
+ * $Revision: 1.11 $
  */
 
 #ifndef MBLOOKUP__H
@@ -149,7 +149,7 @@ extern "C" {
 #define MASK6_18    0xc0000000
 
 /* 12 of 18 */
-#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_12_18)>>2) | (((n)&MASK4_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6)>>8))
+#define GET_WORD_INDEX_12_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_12_18)>>2) | (((n)&MASK4_18)>>4) | (((n)&MASK5_18)>>6) | (((n)&MASK6_18)>>8))
 /* 11 of 18 */
 #define GET_WORD_INDEX_11_18(n) ((((n)&MASK1_18)<<2) | ((n)&MASK2_18) | (((n)&MASK3_11_18)>>2) | (((n)&MASK4_18)>>6) | (((n)&MASK5_18)>>8) | (((n)&MASK6_18)>>10))
 
@@ -199,7 +199,7 @@ typedef struct MBLookupTable {
    Int4 num_unique_pos_added; /**< Number of positions added to the l.t. */
    PV_ARRAY_TYPE *pv_array;/**< Presence vector, used for quick presence 
                               check */
-   Uint1 pv_array_bts; /**< The exponent of 2 by which pv_array is smaller than
+   Int4 pv_array_bts; /**< The exponent of 2 by which pv_array is smaller than
                           the backbone */
    Int4 longest_chain; /**< Largest number of query positions for a given 
                           word */

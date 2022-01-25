@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.60 $
+* $Revision: 1.64 $
 *
 * File Description: 
 *
@@ -60,9 +60,8 @@ NLM_EXTERN void EntrezSetProgramName (
   CharPtr  str;
 
   str = (CharPtr) GetAppProperty (ENTREZ_TOOL_PROPERTY);
-  if (str != NULL) {
-    MemFree (str);
-  }
+  MemFree (str);
+
   if (! StringHasNoText (progname)) {
     SetAppProperty (ENTREZ_TOOL_PROPERTY, StringSave (progname));
   } else {
@@ -92,11 +91,11 @@ static CharPtr EntrezGetProgramName (
 }
 
 /* override URL paths or service name */
-
+#if 0
 static CharPtr  e2_host_machine = NULL;
 static Uint2    e2_host_port = 0;
 static CharPtr  e2_host_path = NULL;
-
+#endif
 static CharPtr  e2_service = NULL;
 
 /* to be phased out, currently overrides ncbi named service, goes directly to URL */
@@ -108,6 +107,7 @@ NLM_EXTERN void EntrezSetServer (
 )
 
 {
+#if 0
   if (! StringHasNoText (host_machine)) {
     e2_host_machine = MemFree (e2_host_machine);
     e2_host_machine = StringSaveNoNull (host_machine);
@@ -119,6 +119,9 @@ NLM_EXTERN void EntrezSetServer (
     e2_host_path = MemFree (e2_host_path);
     e2_host_path = StringSaveNoNull (host_path);
   }
+#else
+  /* define as NOP for now */
+#endif
 }
 
 /* use EntrezTest to override default Entrez ncbi named service */
@@ -141,10 +144,13 @@ NLM_EXTERN CONN EntrezOpenConnection (
 )
 
 {
+#if 0
   CharPtr  host_machine = e2_host_machine;
   Uint2    host_port = e2_host_port;
   CharPtr  host_path = e2_host_path;
+#endif
   CharPtr  host_service = e2_service;
+#if 0
 #ifdef OS_UNIX
   CharPtr  env_machine = NULL;
   CharPtr  env_path = NULL;
@@ -191,10 +197,11 @@ NLM_EXTERN CONN EntrezOpenConnection (
     host_service = env_service;
   }
 #endif
+#endif
   if (StringHasNoText (host_service)) {
     host_service = "Entrez2";
   }
-
+#if 0
   /* temporarily for direct access to URL, to be phased out */
 
   if (e2_host_machine != NULL || e2_host_port != 0 || e2_host_path != NULL) {
@@ -203,6 +210,7 @@ NLM_EXTERN CONN EntrezOpenConnection (
                                30, eMIME_T_NcbiData, eMIME_AsnBinary,
                                eENCOD_None, 0);
   }
+#endif
 
   /* use new named service, Entrez or EntrezTest */
 
@@ -1276,6 +1284,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title/Abstract") == 0) {
             } else if (StringICmp (last, "Rank") == 0 && StringICmp (str, "Ranked standard deviation") == 0) {
             } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book's Topic") == 0) {
+            } else if (StringICmp (last, "Gene Name") == 0 && StringICmp (str, "Gene Name or Description") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
@@ -1314,7 +1323,8 @@ static CONN NetTestOpenConnection (void)
 
   sprintf (buffer, "test\n");
   buffer [4] = '\012';
-  status = CONN_Write (conn, (const void *) buffer, StringLen (buffer), &n_written);
+  status = CONN_Write (conn, (const void *) buffer, StringLen (buffer),
+                       &n_written, eIO_WritePersist);
   if (status != eIO_Success) {
     CONN_Close (conn);
     return NULL;

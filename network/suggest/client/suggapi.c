@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/14/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *	Implementation of API for Suggest service
@@ -210,7 +210,7 @@ SuggestFini(void)
  *
  * Return:
  *	pointer to SeqAnnot structure which will contain the result of
- * 	the processing or NULL if error occured.
+ * 	the processing or NULL if error occurred.
  *
  * Note:
  *	SuggestResponse structure can contain an error from Suggest Server, so
@@ -250,7 +250,7 @@ SeqAnnotPtr SuggestFindIntervals(SuggestIntervalsPtr pIntervals)
 	return NULL;
 
     if (pResp->choice == SuggestResponse_error) {
-	/* Error occured on server's side, report it
+	/* Error occurred on server's side, report it
 	 */
 	ErrorFromServer(pResp->data.ptrvalue);
 	SuggestResponseFree(pResp);

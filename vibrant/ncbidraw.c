@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *       Vibrant drawing functions.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.c,v $
+* Revision 6.37  2004/04/14 19:15:50  sinyakov
+* WIN_MSWIN: support X-Windows-like -bg color command line option
+*
 * Revision 6.36  2003/11/17 17:03:30  kans
 * changed C++ style comments to C comments
 *
@@ -892,6 +895,13 @@ static Nlm_Boolean Nlm_GetTextMetrics (void)
 #endif
 
 
+#ifdef WIN_MSWIN
+extern BOOLEAN Nlm_hasBackColor;
+extern COLORREF Nlm_crBackColor;
+extern HBRUSH Nlm_hbrWindowBackground;
+#endif
+
+
 extern void Nlm_ResetDrawingTools (void)
 {
 #ifdef WIN_MAC
@@ -911,7 +921,9 @@ extern void Nlm_ResetDrawingTools (void)
     SetROP2 (Nlm_currentHDC, R2_COPYPEN);
     SelectObject(Nlm_currentHDC, GetStockObject(SYSTEM_FONT));
     winTextColor = GetSysColor (COLOR_WINDOWTEXT);
-    winBkColor = GetSysColor (COLOR_WINDOW);
+    winBkColor = Nlm_hasBackColor ?
+		   Nlm_crBackColor :
+		   GetSysColor (COLOR_WINDOW);
     SetTextColor (Nlm_currentHDC, winTextColor);
     SetBkColor (Nlm_currentHDC, winBkColor);
     SetBkMode (Nlm_currentHDC, TRANSPARENT);

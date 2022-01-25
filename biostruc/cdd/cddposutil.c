@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.17 2004/01/22 15:43:57 bauer Exp $
+/* $Id: cddposutil.c,v 1.18 2004/03/31 17:58:51 papadopo Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.18  2004/03/31 17:58:51  papadopo
+* Mike Gertz' changes for length adjustment calculations
+*
 * Revision 1.17  2004/01/22 15:43:57  bauer
 * call BlastCalculateEffectiveLengths in CddSetUpSearchInternalByLoc
 *
@@ -1710,27 +1713,33 @@ static Int2 LIBCALL CddSetUpSearchInternalByLoc
 	*/
 	if (retval)
 		return retval;
+        if( 0 != BlastComputeLengthAdjustment(1/min_query_length,
+                                         search->sbp->
+                                         kbp[search->first_context]->logK,
+                                         1/search->sbp->
+                                         kbp[search->first_context]->H,
+                                         0.0, 
+                                         length,
+                                         search->dblen, search->dbseq_num,
+                                         &length_adjustment) ) {
+            ErrPostEx(SEV_WARNING, 0, 0,
+                      "BlastComputeLengthAdjustment failed!");
+        }
+        search->length_adjustment = length_adjustment;
+        search->dblen_eff =
+            search->dblen - search->dbseq_num*search->length_adjustment;
 
-/* replaced code to calculate effecitve lengths with function call, AMB 1/22/04 */
+        effective_query_length    = length - length_adjustment;
+        for (index=search->first_context; index<=search->last_context; index++)
+        {
+            search->context[index].query->effective_length =
+                effective_query_length;
+        }
 
-        if (!BlastCalculateEffectiveLengths(options, search->dbseq_num, search->dblen, 
-			length, search->sbp->kbp_gap_std[search->first_context],
-			&effective_query_length, &length_adjustment)) {
-	  ErrPostEx(SEV_WARNING, 0, 0, "BlastCalculateEffectiveLengths failed!");
-	}
-
-/* old code below to set values in 'search' */
-
-	search->length_adjustment = MAX(length_adjustment, 0);
-	search->dblen_eff = MAX(1, search->dblen - search->dbseq_num*search->length_adjustment);
-
-	for (index=search->first_context; index<=search->last_context; index++)
-	{
-		search->context[index].query->effective_length = effective_query_length;
-	}
-
-	if (search->searchsp_eff == 0)
-		search->searchsp_eff = ((Nlm_FloatHi) search->dblen_eff)*((Nlm_FloatHi) effective_query_length);
+        if (search->searchsp_eff == 0)
+            search->searchsp_eff =
+                ((Nlm_FloatHi) search->dblen_eff)*
+                ((Nlm_FloatHi) effective_query_length);
 
 	/* The default is that cutoff_s was not set and is zero. */
 	if (options->cutoff_s == 0)

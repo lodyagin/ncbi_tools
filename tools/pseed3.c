@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: pseed3.c,v 6.41 2003/08/04 19:47:56 dondosha Exp $";
+static char const rcsid[] = "$Id: pseed3.c,v 6.42 2004/04/01 13:43:08 lavr Exp $";
 
-/* $Id: pseed3.c,v 6.41 2003/08/04 19:47:56 dondosha Exp $ */
+/* $Id: pseed3.c,v 6.42 2004/04/01 13:43:08 lavr Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -35,9 +35,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.41 $
+$Revision: 6.42 $
 
 $Log: pseed3.c,v $
+Revision 6.42  2004/04/01 13:43:08  lavr
+Spell "occurred", "occurrence", and "occurring"
+
 Revision 6.41  2003/08/04 19:47:56  dondosha
 Correct alignment endpoints after traceback in PHI BLAST
 
@@ -402,7 +405,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
     Int4  numPatOccur, maxNumPatterns; /*number of pattern occurrences in query string*/
     Int4  effectiveOccurrences; /*number of occurrences not overlapping
                                   in more than half the pattern*/
-    Int4  occurIndex;  /*index over pattern ocuurences*/
+    Int4  occurIndex;  /*index over pattern occurrences*/
     Int4  twiceNumMatches; /*stores return value from find_hits*/
     Int4  matchIndex;  /*index for matches to a single sequence*/
     Int4 totalOccurrences = 0; /*total occurrences of pattern in database*/
@@ -467,7 +470,7 @@ ValNodePtr LIBCALL seedEngineCore(BlastSearchBlkPtr search,
                     maxNumPatterns = numPatOccur;
                 } else {
 
-                    sprintf(buffer, "Number of times pattern occur in the sequence %d exceded limit %d. Processing only %d occurences.\n", numPatOccur, options->max_num_patterns, options->max_num_patterns);
+                    sprintf(buffer, "Number of times pattern occur in the sequence %d exceded limit %d. Processing only %d occurrences.\n", numPatOccur, options->max_num_patterns, options->max_num_patterns);
                     ValNodeCopyStr(info_vnp, 0, buffer);
                     
                     maxNumPatterns = options->max_num_patterns;
@@ -1099,7 +1102,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
             Boolean is_dna, Int4 effectiveOccurrences,
             seedSearchItems *seedSearch, seedResultItems *seedResults, 
             patternSearchItems * patternSearch, Boolean reverse, 
-            Int4 numOccurences, Nlm_FloatHi eThresh,
+            Int4 numOccurrences, Nlm_FloatHi eThresh,
             SeqIdPtr query_id, Nlm_FloatHi posEthresh, 
             posSearchItems *posSearch, Int4 numMatches,
             Int4 * totalBelowEThresh, Boolean showDiagnostics,
@@ -1151,7 +1154,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 
     Char tmpbuf[512];
 
-    probability = ((Nlm_FloatHi) numOccurences /  dbLength);
+    probability = ((Nlm_FloatHi) numOccurrences /  dbLength);
     oldNumber = -1;
     if (score_only) {
       for (oneMatch = seedResults->listOfMatchingSequences; 

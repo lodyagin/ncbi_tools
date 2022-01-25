@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/10/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager for module GenBank-General,
 *   					EMBL-General, PIR-General, SWISSPROT-General
@@ -43,6 +43,9 @@
 *                      class is a C++ keyword.
 *
 * $Log: objblock.c,v $
+* Revision 6.3  2004/04/01 13:43:07  lavr
+* Spell "occurred", "occurrence", and "occurring"
+*
 * Revision 6.2  2003/05/16 17:21:05  bazhin
 * Fixed bug in PrfBlockAsnWrite().
 *
@@ -247,9 +250,9 @@ erret:
 *
 *   PirBlockAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN PirBlockPtr LIBCALL PirBlockAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -465,9 +468,9 @@ erret:
 *
 *   GBBlockAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN GBBlockPtr LIBCALL GBBlockAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -720,9 +723,9 @@ erret:
 *
 *   SPBlockAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN SPBlockPtr LIBCALL SPBlockAsnRead (AsnIoPtr aip, AsnTypePtr orig)
@@ -1030,9 +1033,9 @@ erret:
 *
 *   EMBLBlockAsnRead(aip, atp)
 *   	atp is the current type (if identifier of a parent struct)
-*            assumption is readIdent has occured
+*            assumption is readIdent has occurred
 *       if atp == NULL, then assumes it stands alone and read ident
-*            has not occured.
+*            has not occurred.
 *
 *****************************************************************************/
 NLM_EXTERN EMBLBlockPtr LIBCALL EMBLBlockAsnRead (AsnIoPtr aip, AsnTypePtr orig)

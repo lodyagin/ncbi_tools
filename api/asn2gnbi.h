@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.3 $
+* $Revision: 1.4 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -130,6 +130,7 @@ typedef struct int_asn2gb_job {
   Boolean        transientSeqPort;
   Boolean        masterStyle;
   Boolean        newSourceOrg;
+  Boolean        produceInsdSeq;
   ValNodePtr     lockedBspList;
   Boolean        relModeError;
   Boolean        skipProts;
