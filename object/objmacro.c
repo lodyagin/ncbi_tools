@@ -31,7 +31,7 @@ objmacroAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at Oct 30, 2008 12:26 PM
+*    Generated using ASNCODE Revision: 6.16 at Jan 30, 2009 11:42 AM
 *
 **************************************************/
 
@@ -2866,6 +2866,20 @@ SourceQualChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == SOURCE_QUAL_CHOICE_gcode) {
+      choice = SourceQualChoice_gcode;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SOURCE_QUAL_CHOICE_mgcode) {
+      choice = SourceQualChoice_mgcode;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -2939,6 +2953,14 @@ SourceQualChoiceAsnWrite(SourceQualChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, SOURCE_QUAL_CHOICE_origin, &av);
       break;
+   case SourceQualChoice_gcode:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_CHOICE_gcode, &av);
+      break;
+   case SourceQualChoice_mgcode:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_CHOICE_mgcode, &av);
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -2952,6 +2974,491 @@ erret:
    AsnUnlinkType(orig);       /* unlink local tree */
    return retval;
 }
+
+
+/**************************************************
+*
+*    SourceQualTextValNew()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualTextValPtr LIBCALL
+SourceQualTextValNew(void)
+{
+   SourceQualTextValPtr ptr = MemNew((size_t) sizeof(SourceQualTextVal));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SourceQualTextValFree()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualTextValPtr LIBCALL
+SourceQualTextValFree(SourceQualTextValPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> val);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SourceQualTextValAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualTextValPtr LIBCALL
+SourceQualTextValAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SourceQualTextValPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SourceQualTextVal ::= (self contained) */
+      atp = AsnReadId(aip, amp, SOURCE_QUAL_TEXT_VAL);
+   } else {
+      atp = AsnLinkType(orig, SOURCE_QUAL_TEXT_VAL);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SourceQualTextValNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SOURCE_QUAL_TEXT_VAL_srcqual) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> srcqual = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == SOURCE_QUAL_TEXT_VAL_val) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> val = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SourceQualTextValFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SourceQualTextValAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SourceQualTextValAsnWrite(SourceQualTextValPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SOURCE_QUAL_TEXT_VAL);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> srcqual;
+   retval = AsnWrite(aip, SOURCE_QUAL_TEXT_VAL_srcqual,  &av);
+   if (ptr -> val != NULL) {
+      av.ptrvalue = ptr -> val;
+      retval = AsnWrite(aip, SOURCE_QUAL_TEXT_VAL_val,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SourceQualValChoiceFree()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualValChoicePtr LIBCALL
+SourceQualValChoiceFree(ValNodePtr anp)
+{
+   Pointer pnt;
+
+   if (anp == NULL) {
+      return NULL;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   default:
+      break;
+   case SourceQualValChoice_textqual:
+      SourceQualTextValFree(anp -> data.ptrvalue);
+      break;
+   }
+   return MemFree(anp);
+}
+
+
+/**************************************************
+*
+*    SourceQualValChoiceAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualValChoicePtr LIBCALL
+SourceQualValChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   ValNodePtr anp;
+   Uint1 choice;
+   Boolean isError = FALSE;
+   Boolean nullIsError = FALSE;
+   AsnReadFunc func;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SourceQualValChoice ::= (self contained) */
+      atp = AsnReadId(aip, amp, SOURCE_QUAL_VAL_CHOICE);
+   } else {
+      atp = AsnLinkType(orig, SOURCE_QUAL_VAL_CHOICE);    /* link in local tree */
+   }
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   anp = ValNodeNew(NULL);
+   if (anp == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the CHOICE or OpenStruct value (nothing) */
+      goto erret;
+   }
+
+   func = NULL;
+
+   atp = AsnReadId(aip, amp, atp);  /* find the choice */
+   if (atp == NULL) {
+      goto erret;
+   }
+   if (atp == SOURCE_QUAL_VAL_CHOICE_textqual) {
+      choice = SourceQualValChoice_textqual;
+      func = (AsnReadFunc) SourceQualTextValAsnRead;
+   }
+   else if (atp == SOURCE_QUAL_VAL_CHOICE_location) {
+      choice = SourceQualValChoice_location;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SOURCE_QUAL_VAL_CHOICE_origin) {
+      choice = SourceQualValChoice_origin;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SOURCE_QUAL_VAL_CHOICE_gcode) {
+      choice = SourceQualValChoice_gcode;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   else if (atp == SOURCE_QUAL_VAL_CHOICE_mgcode) {
+      choice = SourceQualValChoice_mgcode;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+   anp->choice = choice;
+   if (func != NULL)
+   {
+      anp->data.ptrvalue = (* func)(aip, atp);
+      if (aip -> io_failure) goto erret;
+
+      if (nullIsError && anp->data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return anp;
+
+erret:
+   anp = MemFree(anp);
+   aip -> io_failure = TRUE;
+   goto ret;
+}
+
+
+/**************************************************
+*
+*    SourceQualValChoiceAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SourceQualValChoiceAsnWrite(SourceQualValChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
+
+{
+   DataVal av;
+   AsnTypePtr atp, writetype = NULL;
+   Pointer pnt;
+   AsnWriteFunc func = NULL;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad())
+      return FALSE;
+   }
+
+   if (aip == NULL)
+   return FALSE;
+
+   atp = AsnLinkType(orig, SOURCE_QUAL_VAL_CHOICE);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+   av.ptrvalue = (Pointer)anp;
+   if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
+      goto erret;
+   }
+
+   pnt = anp->data.ptrvalue;
+   switch (anp->choice)
+   {
+   case SourceQualValChoice_textqual:
+      writetype = SOURCE_QUAL_VAL_CHOICE_textqual;
+      func = (AsnWriteFunc) SourceQualTextValAsnWrite;
+      break;
+   case SourceQualValChoice_location:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_VAL_CHOICE_location, &av);
+      break;
+   case SourceQualValChoice_origin:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_VAL_CHOICE_origin, &av);
+      break;
+   case SourceQualValChoice_gcode:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_VAL_CHOICE_gcode, &av);
+      break;
+   case SourceQualValChoice_mgcode:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, SOURCE_QUAL_VAL_CHOICE_mgcode, &av);
+      break;
+   }
+   if (writetype != NULL) {
+      retval = (* func)(pnt, aip, writetype);   /* write it out */
+   }
+   if (!retval) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+/**************************************************
+*
+*    SourceQualValSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualValSetPtr LIBCALL
+SourceQualValSetFree(SourceQualValSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericChoiceSeqOfFree(ptr, (AsnOptFreeFunc) SourceQualValChoiceFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    SourceQualValSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SourceQualValSetPtr LIBCALL
+SourceQualValSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SourceQualValSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SourceQualValSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, SOURCE_QUAL_VAL_SET);
+   } else {
+      atp = AsnLinkType(orig, SOURCE_QUAL_VAL_SET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SourceQualValChoiceAsnRead, (AsnOptFreeFunc) SourceQualValChoiceFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SourceQualValSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SourceQualValSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SourceQualValSetAsnWrite(SourceQualValSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SOURCE_QUAL_VAL_SET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) SourceQualValChoiceAsnWrite, aip, atp, SOURCE_QUAL_VAL_SET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -10080,6 +10587,13 @@ ParseDestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = ParseDest_featqual;
       func = (AsnReadFunc) FeatureFieldLegalAsnRead;
    }
+   else if (atp == PARSE_DEST_comment_descriptor) {
+      choice = ParseDest_comment_descriptor;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
    else if (atp == PARSE_DEST_dbxref) {
       choice = ParseDest_dbxref;
       if (AsnReadVal(aip, atp, &av) <= 0) {
@@ -10159,6 +10673,10 @@ ParseDestAsnWrite(ParseDestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case ParseDest_featqual:
       writetype = PARSE_DEST_featqual;
       func = (AsnWriteFunc) FeatureFieldLegalAsnWrite;
+      break;
+   case ParseDest_comment_descriptor:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, PARSE_DEST_comment_descriptor, &av);
       break;
    case ParseDest_dbxref:
       av.ptrvalue = anp->data.ptrvalue;
@@ -10841,6 +11359,7 @@ ApplyFeatureActionFree(ApplyFeatureActionPtr ptr)
    LocationChoiceFree(ptr -> location);
    SequenceListChoiceFree(ptr -> seq_list);
    FeatQualLegalSetFree(ptr -> fields);
+   SourceQualValSetFree(ptr -> src_fields);
    return MemFree(ptr);
 }
 
@@ -10969,6 +11488,13 @@ ApplyFeatureActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == APPLY_FEATURE_ACTION_src_fields) {
+      ptr -> src_fields = SourceQualValSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -11048,6 +11574,11 @@ ApplyFeatureActionAsnWrite(ApplyFeatureActionPtr ptr, AsnIoPtr aip, AsnTypePtr o
    retval = AsnWrite(aip, FEATURE_ACTION_only_seg_num,  &av);
    if (ptr -> fields != NULL) {
       if ( ! FeatQualLegalSetAsnWrite(ptr -> fields, aip, APPLY_FEATURE_ACTION_fields)) {
+         goto erret;
+      }
+   }
+   if (ptr -> src_fields != NULL) {
+      if ( ! SourceQualValSetAsnWrite(ptr -> src_fields, aip, APPLY_FEATURE_ACTION_src_fields)) {
          goto erret;
       }
    }
@@ -13184,6 +13715,332 @@ erret:
 
 /**************************************************
 *
+*    RemoveDescriptorActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+RemoveDescriptorActionPtr LIBCALL
+RemoveDescriptorActionNew(void)
+{
+   RemoveDescriptorActionPtr ptr = MemNew((size_t) sizeof(RemoveDescriptorAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    RemoveDescriptorActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+RemoveDescriptorActionPtr LIBCALL
+RemoveDescriptorActionFree(RemoveDescriptorActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   ConstraintChoiceSetFree(ptr -> constraint);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    RemoveDescriptorActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+RemoveDescriptorActionPtr LIBCALL
+RemoveDescriptorActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   RemoveDescriptorActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* RemoveDescriptorAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, REMOVE_DESCRIPTOR_ACTION);
+   } else {
+      atp = AsnLinkType(orig, REMOVE_DESCRIPTOR_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = RemoveDescriptorActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == REMOVE_DESCRIPTOR_ACTION_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == DESCRIPTOR_ACTION_constraint) {
+      ptr -> constraint = ConstraintChoiceSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = RemoveDescriptorActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    RemoveDescriptorActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+RemoveDescriptorActionAsnWrite(RemoveDescriptorActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, REMOVE_DESCRIPTOR_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, REMOVE_DESCRIPTOR_ACTION_type,  &av);
+   if (ptr -> constraint != NULL) {
+      if ( ! ConstraintChoiceSetAsnWrite(ptr -> constraint, aip, DESCRIPTOR_ACTION_constraint)) {
+         goto erret;
+      }
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    AutodefActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+AutodefActionPtr LIBCALL
+AutodefActionNew(void)
+{
+   AutodefActionPtr ptr = MemNew((size_t) sizeof(AutodefAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    AutodefActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+AutodefActionPtr LIBCALL
+AutodefActionFree(AutodefActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr -> modifiers ,ASNCODE_INTVAL_SLOT);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    AutodefActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+AutodefActionPtr LIBCALL
+AutodefActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   AutodefActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* AutodefAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, AUTODEF_ACTION);
+   } else {
+      atp = AsnLinkType(orig, AUTODEF_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = AutodefActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == AUTODEF_ACTION_modifiers) {
+      ptr -> modifiers = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_INTVAL_SLOT, &isError);
+      if (isError && ptr -> modifiers == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == AUTODEF_ACTION_clause_list_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> clause_list_type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = AutodefActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    AutodefActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+AutodefActionAsnWrite(AutodefActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, AUTODEF_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> modifiers ,ASNCODE_INTVAL_SLOT, aip, AUTODEF_ACTION_modifiers, AUTODEF_ACTION_modifiers_E);
+   av.intvalue = ptr -> clause_list_type;
+   retval = AsnWrite(aip, AUTODEF_ACTION_clause_list_type,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    MacroActionChoiceFree()
 *
 **************************************************/
@@ -13219,6 +14076,12 @@ MacroActionChoiceFree(ValNodePtr anp)
       break;
    case MacroActionChoice_edit_location:
       EditFeatureLocationActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_remove_descriptor:
+      RemoveDescriptorActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_autodef:
+      AutodefActionFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -13299,6 +14162,14 @@ MacroActionChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    else if (atp == ACTION_CHOICE_edit_location) {
       choice = MacroActionChoice_edit_location;
       func = (AsnReadFunc) EditFeatureLocationActionAsnRead;
+   }
+   else if (atp == CHOICE_remove_descriptor) {
+      choice = MacroActionChoice_remove_descriptor;
+      func = (AsnReadFunc) RemoveDescriptorActionAsnRead;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_autodef) {
+      choice = MacroActionChoice_autodef;
+      func = (AsnReadFunc) AutodefActionAsnRead;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -13384,6 +14255,14 @@ MacroActionChoiceAsnWrite(MacroActionChoicePtr anp, AsnIoPtr aip, AsnTypePtr ori
    case MacroActionChoice_edit_location:
       writetype = ACTION_CHOICE_edit_location;
       func = (AsnWriteFunc) EditFeatureLocationActionAsnWrite;
+      break;
+   case MacroActionChoice_remove_descriptor:
+      writetype = CHOICE_remove_descriptor;
+      func = (AsnWriteFunc) RemoveDescriptorActionAsnWrite;
+      break;
+   case MacroActionChoice_autodef:
+      writetype = MACRO_ACTION_CHOICE_autodef;
+      func = (AsnWriteFunc) AutodefActionAsnWrite;
       break;
    }
    if (writetype != NULL) {

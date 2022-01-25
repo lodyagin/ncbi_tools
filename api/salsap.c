@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -3752,7 +3752,6 @@ static void FindSeqAlignVisitCallback (SeqAnnotPtr sap, Pointer userdata)
 {
   CcId2Ptr           cip;
   SeqAlignPtr        salp;
-  Boolean            found = FALSE;
 
   if (sap == NULL || sap->type != 2 || (cip = (CcId2Ptr) userdata) == NULL || cip->sap != NULL) return;
 
@@ -4670,8 +4669,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL multseqalign_to_pairseqalign (SeqAlignPtr salp)
   DenseSegPtr dsp =NULL,
               newdsp;
   SeqIdPtr    sip;
-  Int4Ptr     dspstarts =NULL,
-              dsplen;
+  Int4Ptr     dsplen;
   Int4        k, j;
   Int2        salp_dim,
               dim;

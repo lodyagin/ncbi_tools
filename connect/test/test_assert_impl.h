@@ -1,7 +1,7 @@
 #ifndef TEST_ASSERT_IMPL__H
 #define TEST_ASSERT_IMPL__H
 
-/*  $Id: test_assert_impl.h,v 1.2 2007/01/30 21:13:40 kazimird Exp $
+/*  $Id: test_assert_impl.h,v 1.3 2009/01/22 17:59:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,12 +38,7 @@
 #  error "Must not use this header alone, but from a proper wrapper."
 #endif /*TEST_ASSERT__H*/
 
-#if defined(NCBI_OS_MAC) || \
-   (defined(NCBI_OS_DARWIN) && defined(NCBI_COMPILER_METROWERKS))
-#  include <stdio.h>
-#  include <stdlib.h>
-
-#elif defined(NCBI_OS_MSWIN)
+#if defined(NCBI_OS_MSWIN)
 #  ifdef   _ASSERT
 #    undef _ASSERT
 #  endif
@@ -143,18 +138,5 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 #  undef _DEBUG_ARG
 #endif
 #define _DEBUG_ARG(arg) arg
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: test_assert_impl.h,v $
- * Revision 1.2  2007/01/30 21:13:40  kazimird
- * Synchronized with the C++ Toolkit.
- *
- * Revision 1.1  2006/03/07 18:22:09  lavr
- * Initial revision
- *
- * ===========================================================================
- */
 
 #endif  /* TEST_ASSERT_IMPL__H */

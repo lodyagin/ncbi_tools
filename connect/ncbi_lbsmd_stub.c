@@ -1,4 +1,4 @@
-/*  $Id: ncbi_lbsmd_stub.c,v 6.16 2008/09/03 20:55:44 kazimird Exp $
+/* $Id: ncbi_lbsmd_stub.c,v 6.18 2009/02/03 16:39:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -65,6 +65,14 @@ extern HEAP LBSMD_GetHeapCopy(TNCBI_Time time/*ignored*/)
 
 
 /*ARGSUSED*/
+extern const char* LBSMD_GetHostParameter(unsigned int host,
+                                          const char*  name)
+{
+    return 0;
+}
+
+
+/*ARGSUSED*/
 int LBSM_HINFO_CpuCount(const HOST_INFO hinfo)
 {
     return -1;
@@ -94,6 +102,13 @@ int LBSM_HINFO_TaskCount(const HOST_INFO hinfo)
 
 /*ARGSUSED*/
 int LBSM_HINFO_Memusage(const HOST_INFO hinfo, double memusage[5])
+{
+    return 0/*failure*/;
+}
+
+
+/*ARGSUSED*/
+int LBSM_HINFO_MachineParams(const HOST_INFO hinfo, SHINFO_Params* p)
 {
     return 0/*failure*/;
 }

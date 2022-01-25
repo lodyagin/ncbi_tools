@@ -17,12 +17,32 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
+*    Generated using ASNCODE Revision: 6.16 at Jan 15, 2009  2:16 PM
 *
 **************************************************/
 
 NLM_EXTERN Boolean LIBCALL
 objgbseqAsnLoad PROTO((void));
+
+
+/**************************************************
+*
+*    GBSet
+*
+**************************************************/
+typedef struct struct_GBSeq GBSet;
+typedef struct struct_GBSeq PNTR GBSetPtr;
+#define GBSetNew() GBSeqNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN GBSetPtr LIBCALL GBSetFree PROTO ((GBSetPtr ));
+NLM_EXTERN GBSetPtr LIBCALL GBSetNew PROTO (( void ));
+NLM_EXTERN GBSetPtr LIBCALL GBSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBSetAsnWrite PROTO (( GBSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
 
 
 /**************************************************
@@ -57,6 +77,7 @@ typedef struct struct_GBSeq {
    CharPtr   taxonomy;
    struct struct_GBReference PNTR   references;
    CharPtr   comment;
+   struct struct_GBTagset PNTR   tagset;
    CharPtr   primary;
    CharPtr   source_db;
    CharPtr   database_reference;
@@ -99,6 +120,27 @@ NLM_EXTERN GBReferencePtr LIBCALL GBReferenceFree PROTO ((GBReferencePtr ));
 NLM_EXTERN GBReferencePtr LIBCALL GBReferenceNew PROTO (( void ));
 NLM_EXTERN GBReferencePtr LIBCALL GBReferenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GBReferenceAsnWrite PROTO (( GBReferencePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    GBTagset
+*
+**************************************************/
+typedef struct struct_GBTagset {
+   Uint4 OBbits__;
+   CharPtr   authority;
+   CharPtr   version;
+   CharPtr   url;
+   struct struct_GBTag PNTR   tags;
+} GBTagset, PNTR GBTagsetPtr;
+
+
+NLM_EXTERN GBTagsetPtr LIBCALL GBTagsetFree PROTO ((GBTagsetPtr ));
+NLM_EXTERN GBTagsetPtr LIBCALL GBTagsetNew PROTO (( void ));
+NLM_EXTERN GBTagsetPtr LIBCALL GBTagsetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagsetAsnWrite PROTO (( GBTagsetPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -148,6 +190,47 @@ NLM_EXTERN GBXrefPtr LIBCALL GBXrefFree PROTO ((GBXrefPtr ));
 NLM_EXTERN GBXrefPtr LIBCALL GBXrefNew PROTO (( void ));
 NLM_EXTERN GBXrefPtr LIBCALL GBXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GBXrefAsnWrite PROTO (( GBXrefPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    GBTags
+*
+**************************************************/
+typedef struct struct_GBTag GBTags;
+typedef struct struct_GBTag PNTR GBTagsPtr;
+#define GBTagsNew() GBTagNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN GBTagsPtr LIBCALL GBTagsFree PROTO ((GBTagsPtr ));
+NLM_EXTERN GBTagsPtr LIBCALL GBTagsNew PROTO (( void ));
+NLM_EXTERN GBTagsPtr LIBCALL GBTagsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagsAsnWrite PROTO (( GBTagsPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    GBTag
+*
+**************************************************/
+typedef struct struct_GBTag {
+   struct struct_GBTag PNTR next;
+   Uint4 OBbits__;
+   CharPtr   name;
+   CharPtr   value;
+   CharPtr   unit;
+} GBTag, PNTR GBTagPtr;
+
+
+NLM_EXTERN GBTagPtr LIBCALL GBTagFree PROTO ((GBTagPtr ));
+NLM_EXTERN GBTagPtr LIBCALL GBTagNew PROTO (( void ));
+NLM_EXTERN GBTagPtr LIBCALL GBTagAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagAsnWrite PROTO (( GBTagPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -207,19 +290,65 @@ NLM_EXTERN Boolean LIBCALL GBQualifierAsnWrite PROTO (( GBQualifierPtr , AsnIoPt
 
 /**************************************************
 *
-*    GBSet
+*    GBTagsetRules
 *
 **************************************************/
-typedef struct struct_GBSeq GBSet;
-typedef struct struct_GBSeq PNTR GBSetPtr;
-#define GBSetNew() GBSeqNew() 
+typedef struct struct_GBTagsetRules {
+   struct struct_GBTagsetRules PNTR next;
+   Uint4 OBbits__;
+   CharPtr   authority;
+   CharPtr   version;
+   ValNodePtr   mandatorytags;
+   ValNodePtr   optionaltags;
+   ValNodePtr   uniquetags;
+#define OB__GBTagsetRules_extensible 0
+
+   Uint1   extensible;
+} GBTagsetRules, PNTR GBTagsetRulesPtr;
+
+
+NLM_EXTERN GBTagsetRulesPtr LIBCALL GBTagsetRulesFree PROTO ((GBTagsetRulesPtr ));
+NLM_EXTERN GBTagsetRulesPtr LIBCALL GBTagsetRulesNew PROTO (( void ));
+NLM_EXTERN GBTagsetRulesPtr LIBCALL GBTagsetRulesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagsetRulesAsnWrite PROTO (( GBTagsetRulesPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    GBTagNames
+*
+**************************************************/
+typedef ValNode GBTagNames;
+typedef ValNodePtr GBTagNamesPtr;
+#define GBTagNamesNew() ValNodeNew(NULL) 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-NLM_EXTERN GBSetPtr LIBCALL GBSetFree PROTO ((GBSetPtr ));
-NLM_EXTERN GBSetPtr LIBCALL GBSetNew PROTO (( void ));
-NLM_EXTERN GBSetPtr LIBCALL GBSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL GBSetAsnWrite PROTO (( GBSetPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN GBTagNamesPtr LIBCALL GBTagNamesFree PROTO ((GBTagNamesPtr ));
+NLM_EXTERN GBTagNamesPtr LIBCALL GBTagNamesNew PROTO (( void ));
+NLM_EXTERN GBTagNamesPtr LIBCALL GBTagNamesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagNamesAsnWrite PROTO (( GBTagNamesPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    GBTagsetRuleSet
+*
+**************************************************/
+typedef struct struct_GBTagsetRules GBTagsetRuleSet;
+typedef struct struct_GBTagsetRules PNTR GBTagsetRuleSetPtr;
+#define GBTagsetRuleSetNew() GBTagsetRulesNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN GBTagsetRuleSetPtr LIBCALL GBTagsetRuleSetFree PROTO ((GBTagsetRuleSetPtr ));
+NLM_EXTERN GBTagsetRuleSetPtr LIBCALL GBTagsetRuleSetNew PROTO (( void ));
+NLM_EXTERN GBTagsetRuleSetPtr LIBCALL GBTagsetRuleSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL GBTagsetRuleSetAsnWrite PROTO (( GBTagsetRuleSetPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 

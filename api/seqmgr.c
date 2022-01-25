@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.295 $
+* $Revision: 6.296 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -4372,6 +4372,83 @@ static Int4 GetOffsetInNearBioseq (SeqLocPtr loc, BioseqPtr in, Uint1 which_end)
   return -1;
 }
 
+
+static void GetLeftAndRightOffsetsInNearBioseq (SeqLocPtr loc, BioseqPtr in, Int4Ptr left, Int4Ptr right)
+
+{
+  BioseqPtr  bsp;
+  SeqLocPtr  first = NULL, last = NULL, slp = NULL;
+  SeqIdPtr   sip;
+  Uint1      strand;
+  Int4       val_left = -1, val_right = -1;
+
+  if (left != NULL) {
+    *left = -1;
+  }
+  if (right != NULL) {
+    *right = -1;
+  }
+  if (loc == NULL) return;
+
+  /* first attempt should work if no far bioseqs */
+  sip = SeqLocId (loc);
+  if (in != NULL && SeqIdIn (sip, in->id)) {
+    bsp = in;
+  } else {
+    bsp = BioseqFind (sip);
+  }
+  if (bsp != NULL) {
+#if 1
+    GetLeftAndRightOffsetsInBioseq (loc, in, &val_left, &val_right, bsp->topology == TOPOLOGY_CIRCULAR);
+#else
+    val_left = GetOffsetInBioseqEx (loc, in, SEQLOC_LEFT_END, bsp->topology == TOPOLOGY_CIRCULAR);
+    val_right = GetOffsetInBioseqEx (loc, in, SEQLOC_RIGHT_END, bsp->topology == TOPOLOGY_CIRCULAR);
+#endif
+    if (val_left != -1 && val_right != -1) {
+      if (left != NULL) {
+        *left = val_left;
+      }
+      if (right != NULL) {
+        *right = val_right;
+      }
+      return;
+    }
+  }
+
+  /* now go through sublocs and find extremes that are not on far bioseqs */
+
+  while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
+    sip = SeqLocId (slp);
+    if (sip != NULL) {
+      bsp = BioseqFind (sip);
+      if (bsp != NULL) {
+        last = slp;
+        if (first == NULL) {
+          first = slp;
+        }
+      }
+    }
+  }
+  if (first == NULL) return;
+  strand = SeqLocStrand (first);
+
+  if (strand == Seq_strand_minus) {
+    val_left = GetOffsetInBioseq (last, in, SEQLOC_LEFT_END);
+    val_right = GetOffsetInBioseq (first, in, SEQLOC_RIGHT_END);
+  } else {
+    val_left = GetOffsetInBioseq (first, in, SEQLOC_LEFT_END);
+    val_right = GetOffsetInBioseq (last, in, SEQLOC_RIGHT_END);
+  }
+
+  if (left != NULL) {
+    *left = val_left;
+  }
+  if (right != NULL) {
+    *right = val_right;
+  }
+}
+
+
 /*
 static Int4 GetOffsetInFirstLocalBioseq (SeqLocPtr loc, BioseqPtr in, Uint1 which_end)
 
@@ -5288,6 +5365,30 @@ static void ProcessFeatureProducts (SeqFeatPtr sfp, Uint4 itemID, GatherObjectPt
   }
 }
 
+
+static Boolean SimpleIvalsCalculation (SeqLocPtr slp, BioseqPtr bsp, Boolean flip, SMFeatItemPtr item)
+{
+  SeqIntPtr sint;
+
+  if (!flip && slp != NULL && bsp != NULL && item != NULL && slp->choice == SEQLOC_INT
+      && (sint = (SeqIntPtr) slp->data.ptrvalue) != NULL
+      && SeqIdIn (sint->id, bsp->id)) {
+    item->strand = sint->strand;
+    item->numivals = 1;
+    item->ivals = MemNew (sizeof (Int4) * 2);
+    if (item->strand == Seq_strand_minus) {
+      item->ivals[0] = sint->to;
+      item->ivals[1] = sint->from;
+    } else {
+      item->ivals[0] = sint->from;
+      item->ivals[1] = sint->to;
+    }
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
 static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
                               BioseqPtr bsp, ExtraIndexPtr exindx, SeqFeatPtr sfp,
                               Int4 left, Int4 right, Uint4 itemID, Uint2 subtype,
@@ -5394,46 +5495,51 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         single_interval = (Boolean) (item->subtype == FEATDEF_GENE ||
                                      item->subtype == FEATDEF_PUB);
         */
-        loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE);
 
-        if (exindx->flip) {
-          sip = SeqIdFindBest (bsp->id, 0);
-          slp = SeqLocCopyRegion (sip, loc, bsp, 0, bsp->length - 1, Seq_strand_minus, FALSE);
-          SeqLocFree (loc);
-          loc = slp;
-        }
-        /* record strand relative to segmented parent */
-        item->strand = SeqLocStrand (loc);
-        if (exindx->flip) {
-          item->strand = StrandCmp (item->strand);
-        }
-        strand = item->strand;
+        if (SimpleIvalsCalculation (sfp->location, bsp, exindx->flip, item)) {
+          /* don't need to do complex merging to calculate intervals */
+        } else {
+          loc = SeqLocMergeExEx (bsp, sfp->location, NULL, FALSE, FALSE, FALSE, FALSE, TRUE);
 
-        slp = NULL;
-        while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
-          numivals++;
-        }
-        if (numivals > 0) {
-          ivals = MemNew (sizeof (Int4) * (numivals * 2));
-          item->ivals = ivals;
-          item->numivals = numivals;
-          slp = NULL;
-          i = 0;
-          while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
-            from = SeqLocStart (slp);
-            to = SeqLocStop (slp);
-            if (strand == Seq_strand_minus) {
-              swap = from;
-              from = to;
-              to = swap;
-            }
-            ivals [i] = from;
-            i++;
-            ivals [i] = to;
-            i++;
+          if (exindx->flip) {
+            sip = SeqIdFindBest (bsp->id, 0);
+            slp = SeqLocCopyRegion (sip, loc, bsp, 0, bsp->length - 1, Seq_strand_minus, FALSE);
+            SeqLocFree (loc);
+            loc = slp;
           }
+          /* record strand relative to segmented parent */
+          item->strand = SeqLocStrand (loc);
+          if (exindx->flip) {
+            item->strand = StrandCmp (item->strand);
+          }
+          strand = item->strand;
+
+          slp = NULL;
+          while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
+            numivals++;
+          }
+          if (numivals > 0) {
+            ivals = MemNew (sizeof (Int4) * (numivals * 2));
+            item->ivals = ivals;
+            item->numivals = numivals;
+            slp = NULL;
+            i = 0;
+            while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
+              from = SeqLocStart (slp);
+              to = SeqLocStop (slp);
+              if (strand == Seq_strand_minus) {
+                swap = from;
+                from = to;
+                to = swap;
+              }
+              ivals [i] = from;
+              i++;
+              ivals [i] = to;
+              i++;
+            }
+          }
+          SeqLocFree (loc);
         }
-        SeqLocFree (loc);
       }
 
       /* increment count on current block */
@@ -5810,8 +5916,13 @@ static Boolean RecordFeaturesInBioseqs (GatherObjectPtr gop)
   } else {
     slp = sfp->location;
   }
+
+#if 1
+  GetLeftAndRightOffsetsInNearBioseq (slp, bsp, &left, &right);
+#else
   left = GetOffsetInNearBioseq (slp, bsp, SEQLOC_LEFT_END);
   right = GetOffsetInNearBioseq (slp, bsp, SEQLOC_RIGHT_END);
+#endif
   /*
   SeqLocFree (slp);
   */

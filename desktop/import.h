@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -111,7 +111,7 @@ extern Int2 LIBCALLBACK GenBankGenFunc (Pointer data);
 #define REGISTER_NAME_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Name","Name",OBJ_SEQDESC,Seq_descr_name,OBJ_SEQDESC,Seq_descr_name,NULL,VisStrGenFunc,PROC_PRIORITY_DEFAULT)
 
 extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
-                              Uint2 subtype, FormActnFunc actproc);
+                              Uint2 subtype, FormActnFunc actproc, SeqDescrPtr sdp);
 
 extern Int2 LIBCALLBACK VisStrGenFunc (Pointer data);
 

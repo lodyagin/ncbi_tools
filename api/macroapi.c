@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/2007
 *
-* $Revision: 1.163 $
+* $Revision: 1.180 $
 *
 * File Description: 
 *
@@ -54,6 +54,7 @@
 #include <ffprint.h>
 #include <asn2gnbi.h>
 #include <findrepl.h>
+#include <utilpub.h>
 #define NLM_GENERATED_CODE_PROTO
 #include <objmacro.h>
 #include <macroapi.h>
@@ -84,6 +85,50 @@ static int LIBCALLBACK SortVnpByChoiceAndIntvalue (VoidPtr ptr1, VoidPtr ptr2);
  * ReportMissingTargets
  * CountObjectsForColumnFields
  */
+
+
+NLM_EXTERN FeatureFieldPtr FeatureFieldCopy (FeatureFieldPtr orig)
+{
+  FeatureFieldPtr ff = NULL;
+
+  if (orig != NULL) {
+    ff = FeatureFieldNew();
+    ff->type = orig->type;
+    if (orig->field != NULL) {
+      ff->field = AsnIoMemCopy (orig->field, (AsnReadFunc) FeatQualChoiceAsnRead, (AsnWriteFunc) FeatQualChoiceAsnWrite);
+    }
+  }
+  return ff;
+}
+
+
+NLM_EXTERN FieldTypePtr FieldTypeCopy (FieldTypePtr orig)
+{
+  FieldTypePtr ft = NULL;
+  RnaQualPtr   rq, rq_orig;
+
+  if (orig != NULL) {
+    if (orig->data.ptrvalue == NULL) {
+      ft = ValNodeNew (NULL);
+      ft->choice = orig->choice;
+    } else if (orig->choice == FieldType_feature_field) {
+      ft = ValNodeNew (NULL);
+      ft->choice = FieldType_feature_field;
+      ft->data.ptrvalue = FeatureFieldCopy (orig->data.ptrvalue);
+    } else if (orig->choice == FieldType_rna_field) {
+      ft = ValNodeNew (NULL);
+      ft->choice = FieldType_rna_field;
+      rq_orig = (RnaQualPtr) orig->data.ptrvalue;
+      rq = RnaQualNew ();
+      rq->field = rq_orig->field;
+      rq->type = AsnIoMemCopy (rq_orig->type, (AsnReadFunc) RnaFeatTypeAsnRead, (AsnWriteFunc) RnaFeatTypeAsnWrite);
+      ft->data.ptrvalue = rq;
+    } else {
+      ft = AsnIoMemCopy (orig, (AsnReadFunc) FieldTypeAsnRead, (AsnWriteFunc) FieldTypeAsnWrite);
+    }
+  }
+  return ft;
+}    
 
 
 /* Functions for handling FieldPairs */
@@ -810,6 +855,8 @@ static Boolean IsObjectAppropriateForFieldValue (Uint1 choice, Pointer data, Fie
     case FieldType_misc:
       if (choice == OBJ_BIOSEQ && field->data.intvalue == Misc_field_genome_project_id) {
         rval = TRUE;
+      } else if (choice == OBJ_SEQDESC && field->data.intvalue == Misc_field_comment_descriptor) {
+        rval = TRUE;
       }
       break;      
   }
@@ -1340,6 +1387,20 @@ NLM_EXTERN void AddAllFeatureFieldsToChoiceList (ValNodePtr PNTR field_list)
 
   for (i = 0; i < NUM_featqual_gbqual; i++) {
     ValNodeAddPointer (field_list, featqual_gbqual[i].featqual, StringSave (featqual_gbqual[i].qualname));
+  }
+}
+
+
+NLM_EXTERN CharPtr SummarizeFeatQual (ValNodePtr qual)
+{
+  if (qual == NULL) {
+    return StringSave ("unspecified qualifier");
+  } else if (qual->choice == FeatQualChoice_legal_qual) {
+    return StringSave (GetFeatQualName (qual->data.intvalue));
+  } else if (qual->choice == FeatQualChoice_illegal_qual) {
+    return StringSave (qual->data.ptrvalue);
+  } else {
+    return StringSave ("unspecified qualifier");
   }
 }
 
@@ -2126,7 +2187,8 @@ NLM_EXTERN Boolean AllowSourceQualMulti (SourceQualChoicePtr s)
     return FALSE;
   } else if (s->data.intvalue == Source_qual_culture_collection
              || s->data.intvalue == Source_qual_bio_material
-             || s->data.intvalue == Source_qual_specimen_voucher) {
+             || s->data.intvalue == Source_qual_specimen_voucher
+             || s->data.intvalue == Source_qual_dbxref) {
     rval = TRUE;
   }
   return rval;
@@ -2266,6 +2328,19 @@ NLM_EXTERN Int4 OriginFromSrcOrig (Int4 srcorig)
 }
 
 
+NLM_EXTERN Int4 SrcOrigFromOrigin (Int4 origin) 
+{
+  Int4 i;
+
+  for (i = 0; i < NUM_srcorig_origin; i++) {
+    if (srcorig_origin[i].origin == origin) {
+      return srcorig_origin[i].srcorig;
+    }
+  }
+  return -1;
+}
+
+
 NLM_EXTERN CharPtr OriginNameFromOrigin (Int4 origin) 
 {
   Int4 i;
@@ -2306,6 +2381,214 @@ NLM_EXTERN ValNodePtr GetOriginList (Boolean for_remove)
   }
   return list;
 }
+
+
+/* special code for converting source features to source qualifier val lists */
+static void SetSrcQualTextValue (ValNodePtr PNTR fields, Int4 srcqual, CharPtr val)
+{
+  SourceQualTextValPtr st;
+
+  st = SourceQualTextValNew ();
+  st->srcqual = srcqual;
+  st->val = StringSave (val);
+  ValNodeAddPointer (fields, SourceQualValChoice_textqual, st);
+}
+
+
+static ValNodePtr SourceQualValsFromOrgMods (OrgModPtr mod)
+{
+  Int4 src_qual;
+  ValNodePtr fields = NULL;
+
+  while (mod != NULL) {
+    src_qual = GetSrcQualFromSubSrcOrOrgMod (mod->subtype, TRUE);
+    if (src_qual > -1) {
+      SetSrcQualTextValue (&fields, src_qual, mod->subname);
+    }
+    mod = mod->next;
+  }
+  return fields;
+}
+
+
+static ValNodePtr SourceQualValsFromSubSrcs (SubSourcePtr ssp)
+{
+  Int4 src_qual;
+  ValNodePtr fields = NULL;
+
+  while (ssp != NULL) {
+    src_qual = GetSrcQualFromSubSrcOrOrgMod (ssp->subtype, FALSE);
+    if (src_qual > -1) {
+      SetSrcQualTextValue (&fields, src_qual, ssp->name);
+    }
+    ssp = ssp->next;
+  }
+  return fields;
+}
+
+
+static ValNodePtr SourceQualValsFromSynonyms (ValNodePtr syn)
+{
+  ValNodePtr fields = NULL;
+
+  while (syn != NULL) {
+    SetSrcQualTextValue (&fields, Source_qual_synonym, syn->data.ptrvalue);
+    syn = syn->next;
+  }
+  return fields;
+}
+
+
+static CharPtr GetDbtagString (DbtagPtr db_tag);
+
+static ValNodePtr SourceQualValsFromDbxrefs (ValNodePtr dbxref)
+{
+  ValNodePtr fields = NULL;
+  CharPtr tmp;
+
+  while (dbxref != NULL) {
+    tmp = GetDbtagString (dbxref->data.ptrvalue);
+    SetSrcQualTextValue (&fields, Source_qual_dbxref, tmp);
+    dbxref = dbxref->next;
+  }
+  return fields;
+}
+
+
+NLM_EXTERN ValNodePtr SourceQualValsFromBioSourcePtr (BioSourcePtr biop)
+{
+  ValNodePtr fields = NULL;
+  Int4 loc, origin;
+
+  if (biop == NULL) {
+    return NULL;
+  }
+
+  ValNodeLink (&fields, SourceQualValsFromSubSrcs (biop->subtype));
+
+  /* genome */
+  if (biop->genome != GENOME_unknown) {
+    loc = SrcLocFromGenome (biop->genome);
+    if (loc > -1) {
+      ValNodeAddInt (&fields, SourceQualValChoice_location, loc);
+    }
+  }
+  /* origin */
+  if (origin > 0) {
+    origin = SrcOrigFromOrigin (biop->origin);
+    if (origin > -1) {
+      ValNodeAddInt (&fields, SourceQualValChoice_origin, origin);
+    }
+  }
+  /* TODO: need focus */
+
+
+  if (biop->org != NULL) {
+    if (!StringHasNoText (biop->org->taxname)) {
+      SetSrcQualTextValue (&fields, Source_qual_taxname, biop->org->taxname);
+    }
+    /* need common */
+    if (!StringHasNoText (biop->org->common)) {
+      SetSrcQualTextValue (&fields, Source_qual_common, biop->org->common);
+    }
+    /* dbxrefs */
+    ValNodeLink (&fields, SourceQualValsFromDbxrefs (biop->org->db));
+
+    /* add synonyms */
+    SourceQualValsFromSynonyms (biop->org->syn);
+
+    if (biop->org->orgname != NULL) {
+      ValNodeLink (&fields, SourceQualValsFromOrgMods (biop->org->orgname->mod));
+      
+      /* lineage */
+      if (!StringHasNoText (biop->org->orgname->lineage)) {
+        SetSrcQualTextValue (&fields, Source_qual_lineage, biop->org->orgname->lineage);
+      }
+      /* div */
+      if (!StringHasNoText (biop->org->orgname->div)) {
+        SetSrcQualTextValue (&fields, Source_qual_division, biop->org->orgname->div);
+      }
+
+      /* gcode, mgcode */
+      if (biop->org->orgname->gcode > 0) {
+        ValNodeAddInt (&fields, SourceQualChoice_gcode, biop->org->orgname->gcode);
+      }
+      if (biop->org->orgname->mgcode > 0) {
+        ValNodeAddInt (&fields, SourceQualChoice_mgcode, biop->org->orgname->mgcode);
+      }
+
+    }
+
+  }
+
+  return fields;
+}
+
+
+static void SetSourceQualValOnBioSource (BioSourcePtr biop, ValNodePtr src_qual)
+{
+  ValNode vn;
+  SourceQualTextValPtr st;
+
+  if (biop == NULL || src_qual == NULL) {
+    return;
+  }
+
+  vn.next = NULL;
+  switch (src_qual->choice) {
+    case SourceQualValChoice_textqual:
+      st = (SourceQualTextValPtr) src_qual->data.ptrvalue;
+      if (st != NULL) {
+        vn.choice = SourceQualChoice_textqual;
+        vn.data.intvalue = st->srcqual;
+        if (AllowSourceQualMulti (src_qual)) {
+          SetSourceQualInBioSource (biop, &vn, NULL, st->val, ExistingTextOption_add_qual);
+        } else {
+          SetSourceQualInBioSource (biop, &vn, NULL, st->val, ExistingTextOption_replace_old);
+        }
+      }
+      break;
+    case SourceQualValChoice_location:
+      vn.choice = SourceQualChoice_location;
+      vn.data.intvalue = src_qual->data.intvalue;
+      SetSourceQualInBioSource (biop, &vn, NULL, NULL, ExistingTextOption_replace_old);
+      break;
+    case SourceQualValChoice_origin:
+      vn.choice = SourceQualChoice_origin;
+      vn.data.intvalue = src_qual->data.intvalue;
+      SetSourceQualInBioSource (biop, &vn, NULL, NULL, ExistingTextOption_replace_old);
+      break;
+    case SourceQualValChoice_gcode:
+      vn.choice = SourceQualChoice_gcode;
+      vn.data.intvalue = src_qual->data.intvalue;
+      SetSourceQualInBioSource (biop, &vn, NULL, NULL, ExistingTextOption_replace_old);
+      break;
+    case SourceQualValChoice_mgcode:
+      vn.choice = SourceQualChoice_mgcode;
+      vn.data.intvalue = src_qual->data.intvalue;
+      SetSourceQualInBioSource (biop, &vn, NULL, NULL, ExistingTextOption_replace_old);
+      break;
+  }
+}
+
+
+NLM_EXTERN BioSourcePtr BioSourceFromSourceQualVals (ValNodePtr fields)
+{
+  BioSourcePtr biop = NULL;
+  ValNodePtr vnp;
+
+  if (fields != NULL) {
+    biop = BioSourceNew ();
+
+    for (vnp = fields; vnp != NULL; vnp = vnp->next) {
+      SetSourceQualValOnBioSource (biop, vnp);
+    }
+  }
+  return biop;
+}
+
+
+
 
 
 typedef struct cdsgeneprotfieldname {
@@ -4326,62 +4609,6 @@ static void ReplaceStringForParse(CharPtr src_text, TextPortionPtr text_portion)
 }
 
 
-/* generic functions for getting string values */
-static Int4 GetDbtagStringLen (DbtagPtr db_tag)
-{
-  Int4 len;
-  
-  if (db_tag == NULL)
-  {
-    return 0;
-  }
-  
-  len = StringLen (db_tag->db) + 2;
-  if (db_tag->tag != NULL)
-  {
-    if (db_tag->tag->str != NULL)
-    {
-      len += StringLen (db_tag->tag->str);
-    }
-    else
-    {
-      len += 10;
-    }
-  }
-  return len;
-}
-
-
-static CharPtr GetDbtagString (DbtagPtr db_tag)
-{
-  Int4    len;
-  CharPtr str;
-  
-  if (db_tag == NULL) {
-    return NULL;
-  }
-  
-  len = GetDbtagStringLen (db_tag);
-  if (len == 0) {
-    return NULL;
-  }
-  
-  str = (CharPtr) MemNew (len * sizeof (Char));
-  if (str != NULL) {
-    StringCpy (str, db_tag->db);
-    StringCat (str, ":");
-    if (db_tag->tag != NULL) {
-      if (db_tag->tag->str != NULL) {
-        StringCat (str, db_tag->tag->str);
-      } else {
-        sprintf (str + StringLen (str), "%d", db_tag->tag->id);
-      }
-    }
-  }
-  return str;
-}
-
-
 /* generic functions for setting field values */
 NLM_EXTERN Boolean SetStringValue (CharPtr PNTR existing_val, CharPtr new_val, Uint2 existing_text)
 {
@@ -4988,6 +5215,62 @@ static Boolean DoesObjectIdMatchStringConstraint (ObjectIdPtr oip, StringConstra
 }
 
 
+/* generic functions for getting string values */
+static Int4 GetDbtagStringLen (DbtagPtr db_tag)
+{
+  Int4 len;
+  
+  if (db_tag == NULL)
+  {
+    return 0;
+  }
+  
+  len = StringLen (db_tag->db) + 2;
+  if (db_tag->tag != NULL)
+  {
+    if (db_tag->tag->str != NULL)
+    {
+      len += StringLen (db_tag->tag->str);
+    }
+    else
+    {
+      len += 10;
+    }
+  }
+  return len;
+}
+
+
+static CharPtr GetDbtagString (DbtagPtr db_tag)
+{
+  Int4    len;
+  CharPtr str;
+  
+  if (db_tag == NULL) {
+    return NULL;
+  }
+  
+  len = GetDbtagStringLen (db_tag);
+  if (len == 0) {
+    return NULL;
+  }
+  
+  str = (CharPtr) MemNew (len * sizeof (Char));
+  if (str != NULL) {
+    StringCpy (str, db_tag->db);
+    StringCat (str, ":");
+    if (db_tag->tag != NULL) {
+      if (db_tag->tag->str != NULL) {
+        StringCat (str, db_tag->tag->str);
+      } else {
+        sprintf (str + StringLen (str), "%d", db_tag->tag->id);
+      }
+    }
+  }
+  return str;
+}
+
+
 static Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_text)
 {
   Boolean rval = FALSE;
@@ -5004,7 +5287,7 @@ static Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_te
   if (cp == NULL) {
     tmp = StringSave (db_tag->db);
     if (SetStringValue (&tmp, value, existing_text)) {
-      dbxvalid = IsDbxrefValid (tmp, NULL, NULL, TRUE, NULL);
+      dbxvalid = DbxrefIsValid (tmp, NULL, NULL, NULL, NULL);
       if (dbxvalid != 0) {
         db_tag->db = MemFree (db_tag->db);
         db_tag->db = tmp;
@@ -5035,28 +5318,28 @@ static Boolean SetDbtagString (DbtagPtr db_tag, CharPtr value, Uint2 existing_te
 }
 
 
-static Boolean SetDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+static Boolean SetDbxrefString (ValNodePtr PNTR list, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
 {
   ValNodePtr vnp;
   Boolean    rval = FALSE, skip;
   DbtagPtr   dbtag;
   CharPtr    cp;
   
-  if (sfp == NULL) {
+  if (list == NULL) {
     return FALSE;
   }
 
   if (existing_text == ExistingTextOption_add_qual
-      || (sfp->dbxref == NULL && (scp == NULL || StringHasNoText (scp->match_text)))) {
+      || (*list == NULL && (scp == NULL || StringHasNoText (scp->match_text)))) {
     dbtag = DbtagNew ();
     rval = SetDbtagString (dbtag, value, existing_text);
     if (rval) {
-      ValNodeAddPointer (&(sfp->dbxref), 0, dbtag);
+      ValNodeAddPointer (list, 0, dbtag);
     } else {
       dbtag = DbtagFree (dbtag);
     }
   } else {
-    for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    for (vnp = *list; vnp != NULL; vnp = vnp->next) {
       skip = FALSE;
       if (scp != NULL) {
         cp = GetDbtagString (vnp->data.ptrvalue);
@@ -5225,17 +5508,17 @@ static Boolean RemoveGBQualMatchConstraintName (GBQualPtr PNTR list, StringConst
 }
 
 
-static CharPtr GetDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp)
+static CharPtr GetDbxrefString (ValNodePtr list, StringConstraintPtr scp)
 {
   ValNodePtr vnp;
   Int4       len = 0;
   CharPtr    str = NULL, cp;
   
-  if (sfp == NULL || sfp->dbxref == NULL) {
+  if (list == NULL) {
     return NULL;
   }
   
-  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
     cp = GetDbtagString (vnp->data.ptrvalue);
     if (cp != NULL && DoesStringMatchConstraint(cp, scp)) {
       len += StringLen (cp) + 1;
@@ -5249,7 +5532,7 @@ static CharPtr GetDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp)
   
   str = (CharPtr) MemNew ((len + 1) * sizeof (Char));
   if (str != NULL) {
-    for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    for (vnp = list; vnp != NULL; vnp = vnp->next) {
       cp = GetDbtagString (vnp->data.ptrvalue);
       if (cp != NULL && DoesStringMatchConstraint(cp, scp)) {
         StringCat (str, cp);
@@ -5266,23 +5549,23 @@ static CharPtr GetDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp)
 }
 
 
-static Boolean RemoveDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp)
+static Boolean RemoveDbxrefString (ValNodePtr PNTR list, StringConstraintPtr scp)
 {
   ValNodePtr vnp, vnp_prev = NULL, vnp_next;
   CharPtr    cp;
   Boolean    rval = FALSE;
   
-  if (sfp == NULL || sfp->dbxref == NULL) {
+  if (list == NULL || *list == NULL) {
     return FALSE;
   }
   
-  vnp = sfp->dbxref;
+  vnp = *list;
   while (vnp != NULL) {
     vnp_next = vnp->next;
     cp = GetDbtagString (vnp->data.ptrvalue);
     if (DoesStringMatchConstraint(cp, scp)) {
       if (vnp_prev == NULL) {
-        sfp->dbxref = vnp->next;
+        *list = vnp->next;
       } else {
         vnp_prev->next = vnp->next;
       }
@@ -5298,7 +5581,7 @@ static Boolean RemoveDbxrefString (SeqFeatPtr sfp, StringConstraintPtr scp)
 }
 
 
-static CharPtr GetRNAProductString (SeqFeatPtr sfp, StringConstraintPtr scp)
+NLM_EXTERN CharPtr GetRNAProductString (SeqFeatPtr sfp, StringConstraintPtr scp)
 {
   RnaRefPtr  rrp;
   SeqMgrFeatContext context;
@@ -6111,7 +6394,48 @@ static void GetGeneInfoForFeature (SeqFeatPtr sfp, GeneRefPtr PNTR p_grp, SeqFea
 }
 
 
-NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp)
+static CharPtr GetCitationTextFromFeature (SeqFeatPtr sfp, StringConstraintPtr scp, ValNodePtr cit_list)
+{
+  SeqEntryPtr sep;
+  BioseqPtr   bsp;
+  ValNodePtr  list = NULL, vnp;
+  CharPtr     rval = NULL;
+  Int4        serial_number;
+  Char        buf[100];
+  ValNodePtr  psp;
+
+  if (sfp == NULL || sfp->cit == NULL) {
+    return NULL;
+  }
+
+  bsp = GetSequenceForObject (OBJ_SEQFEAT, sfp);
+
+  if (cit_list == NULL) {
+    /* list not provided - must create now */
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    list = GetCitListsForSeqEntry (sep);
+    cit_list = list;
+  } 
+
+  psp = sfp->cit->data.ptrvalue;
+  for (vnp = psp; vnp != NULL && rval == NULL; vnp = vnp->next) {
+    
+    serial_number = GetCitationNumberForMinPub (bsp, vnp, cit_list);
+    if (serial_number > -1) {
+      sprintf (buf, "%d", serial_number);
+      if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (buf, scp)) {
+        rval = StringSave (buf);
+      }
+    }
+  }
+  
+  list = PubSerialNumberListFree (list);
+
+  return rval;
+}
+
+
+NLM_EXTERN CharPtr GetQualFromFeatureEx (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   CharPtr   str = NULL;
   GeneRefPtr grp = NULL;
@@ -6150,7 +6474,7 @@ NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, St
       && ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_db_xref)
           || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("db_xref", field->field->data.ptrvalue))))
   {
-    str = GetDbxrefString (sfp, scp);
+    str = GetDbxrefString (sfp->dbxref, scp);
   }
   /* exception */
   if (str == NULL 
@@ -6178,6 +6502,14 @@ NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, St
     if (!DoesStringMatchConstraint(str, scp)) {
       str = MemFree (str);
     }
+  }
+
+  /* citation */
+  if (str == NULL
+      && ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_citation)
+          || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("citation", field->field->data.ptrvalue))))
+  {
+    str = GetCitationTextFromFeature (sfp, scp, batch_extra == NULL ? NULL : batch_extra->cit_list);
   }
 
   /* fields common to some features */
@@ -6346,6 +6678,12 @@ NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, St
 }
 
 
+NLM_EXTERN CharPtr GetQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp)
+{
+  return GetQualFromFeatureEx (sfp, field, scp, NULL);
+}
+
+
 static Boolean RemoveQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp)
 {
   Boolean rval = FALSE;
@@ -6405,7 +6743,7 @@ static Boolean RemoveQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, Str
   if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_db_xref)
       || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("db_xref", field->field->data.ptrvalue)))
   {
-    rval = RemoveDbxrefString (sfp, scp);
+    rval = RemoveDbxrefString (&(sfp->dbxref), scp);
   }
   /* exception */
   if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_exception)
@@ -6427,6 +6765,17 @@ static Boolean RemoveQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, Str
       rval = TRUE;
     }
   }
+
+  /* citation */
+  if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_citation)
+      || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("citation", field->field->data.ptrvalue)))
+  {
+    if (sfp->cit != NULL) {
+      sfp->cit = PubSetFree (sfp->cit);
+      rval = TRUE;
+    }
+  }
+
 
   /* fields common to some features */
   /* product */
@@ -6532,9 +6881,13 @@ static Boolean RemoveQualFromFeature (SeqFeatPtr sfp, FeatureFieldPtr field, Str
     rval = RemoveValNodeStringMatch (&(prp->ec), scp);
   }
   /* activity */
-  if (((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_activity)
-           || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("activity", field->field->data.ptrvalue)))
-       && prp != NULL)
+  if (((field->field->choice == FeatQualChoice_legal_qual 
+        && (field->field->data.intvalue == Feat_qual_legal_activity 
+            || field->field->data.intvalue == Feat_qual_legal_function))
+       || (field->field->choice == FeatQualChoice_illegal_qual 
+           && (DoesStringMatchConstraint ("activity", field->field->data.ptrvalue)
+               || DoesStringMatchConstraint ("function", field->field->data.ptrvalue))))
+      && prp != NULL)
   {
     rval = RemoveValNodeStringMatch (&(prp->activity), scp);
   }
@@ -6641,7 +6994,74 @@ static SeqFeatPtr CreateGeneForFeature (SeqFeatPtr sfp)
 static void AdjustProteinSequenceForReadingFrame (SeqFeatPtr cds);
 
 
-static Boolean SetQualOnFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+static Boolean SetCitationTextOnFeature (SeqFeatPtr sfp, StringConstraintPtr scp, CharPtr value, Uint2 existing_text, ValNodePtr cit_list)
+{
+  SeqEntryPtr sep;
+  BioseqPtr   bsp;
+  ValNodePtr  list = NULL, vnp;
+  Boolean     rval = FALSE, already_present = FALSE;
+  Int4        new_number, serial_number;
+  ValNodePtr  min_pub, new_list;
+
+  if (sfp == NULL) {
+    return FALSE;
+  }
+
+  if (sfp->cit != NULL && existing_text == ExistingTextOption_leave_old) {
+    return FALSE;
+  }
+
+  if (!IsAllDigits (value)) {
+    return FALSE;
+  }
+
+  new_number = atoi (value);
+
+  bsp = GetSequenceForObject (OBJ_SEQFEAT, sfp);
+
+  if (cit_list == NULL) {
+    /* list not provided - must create now */
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    list = GetCitListsForSeqEntry (sep);
+    cit_list = list;
+  } 
+
+  min_pub = GetMinPubForCitationNumber (bsp, new_number, cit_list);
+  if (min_pub == NULL) {
+    list = PubSerialNumberListFree (list);
+    return FALSE;
+  }
+
+  if (existing_text == ExistingTextOption_replace_old) {
+    sfp->cit = PubSetFree (sfp->cit);
+    sfp->cit = ValNodeNew (NULL);
+    sfp->cit->choice = 1;
+    new_list = NULL;
+    ValNodeLink (&new_list, AsnIoMemCopy (min_pub->data.ptrvalue, (AsnReadFunc) PubAsnRead, (AsnWriteFunc) PubAsnWrite));
+    sfp->cit->data.ptrvalue = new_list;
+    rval = TRUE;
+  } else {    
+    for (vnp = sfp->cit->data.ptrvalue; vnp != NULL && !already_present; vnp = vnp->next) {    
+      serial_number = GetCitationNumberForMinPub (bsp, vnp, cit_list);
+      if (serial_number == new_number) {
+        already_present = TRUE;
+      }
+    }
+    if (!already_present) {
+      new_list = sfp->cit->data.ptrvalue;
+      ValNodeLink (&new_list, AsnIoMemCopy (min_pub->data.ptrvalue, (AsnReadFunc) PubAsnRead, (AsnWriteFunc) PubAsnWrite));
+      sfp->cit->data.ptrvalue = new_list;
+      rval = TRUE;
+    }
+  }
+  
+  list = PubSerialNumberListFree (list);
+
+  return rval;
+}
+
+
+static Boolean SetQualOnFeatureEx (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text, BatchExtraPtr batch_extra)
 {
   Boolean rval = FALSE;
   GeneRefPtr grp = NULL;
@@ -6691,7 +7111,7 @@ static Boolean SetQualOnFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringCo
   if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_db_xref)
           || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("db_xref", field->field->data.ptrvalue)))
   {
-    rval = SetDbxrefString (sfp, scp, value, existing_text);
+    rval = SetDbxrefString (&(sfp->dbxref), scp, value, existing_text);
   }
   /* exception */
   if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_exception)
@@ -6733,7 +7153,13 @@ static Boolean SetQualOnFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringCo
     }
     tmp = MemFree (tmp);
   }
-  
+
+  /* citation */
+  if ((field->field->choice == FeatQualChoice_legal_qual && field->field->data.intvalue == Feat_qual_legal_citation)
+          || (field->field->choice == FeatQualChoice_illegal_qual && DoesStringMatchConstraint ("citation", field->field->data.ptrvalue)))
+  {
+    rval = SetCitationTextOnFeature (sfp, scp, value, existing_text, batch_extra == NULL ? NULL : batch_extra->cit_list);
+  }
 
   /* fields common to some features */
   /* product */
@@ -6906,10 +7332,15 @@ static Boolean SetQualOnFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringCo
 }
 
 
+static Boolean SetQualOnFeature (SeqFeatPtr sfp, FeatureFieldPtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+{
+  return SetQualOnFeatureEx (sfp, field, scp, value, existing_text, NULL);
+}
+
 static void AddLegalFeatureField (ValNodePtr PNTR list, Uint2 featdef, Uint2 qual)
 {
   FeatureFieldPtr ffield;
-  Int4            gbqual, num_subfields, i;
+  Int4            gbqual, num_subfields, i, legal_qual;
 
   if (list == NULL) return;
 
@@ -6922,11 +7353,11 @@ static void AddLegalFeatureField (ValNodePtr PNTR list, Uint2 featdef, Uint2 qua
   gbqual = GetGBQualFromFeatQual (qual, NULL);
   num_subfields = NumGbQualSubfields (gbqual);
   for (i = 1; i <= num_subfields; i++) {
-    qual = GetFeatQualByGBQualAndSubfield (gbqual, i);
-    if (qual > -1) {
+    legal_qual = GetFeatQualByGBQualAndSubfield (gbqual, i);
+    if (legal_qual > -1) {
       ffield = FeatureFieldNew ();
       ffield->type = GetFeatureTypeFromFeatdef (featdef);
-      ValNodeAddInt (&(ffield->field), FeatQualChoice_legal_qual, qual);
+      ValNodeAddInt (&(ffield->field), FeatQualChoice_legal_qual, legal_qual);
       ValNodeAddPointer (list, FieldType_feature_field, ffield);
     }
   }
@@ -7012,6 +7443,11 @@ static ValNodePtr GetFieldListFromFeature (SeqFeatPtr sfp)
     AddLegalFeatureField (&list, sfp->idx.subtype, Feat_qual_legal_evidence);
   }
 
+  /* citation */
+  if (sfp->cit != NULL) {
+    AddLegalFeatureField (&list, sfp->idx.subtype, Feat_qual_legal_citation);
+  }
+
   /* RNA specific */
   if (sfp->data.choice == SEQFEAT_RNA) {
     AddLegalFeatureField (&list, sfp->idx.subtype, Feat_qual_legal_product);
@@ -7042,6 +7478,7 @@ NLM_EXTERN CharPtr GetSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoi
   Int4 orgmod_subtype = -1, subsrc_subtype = -1;
   Int4 subfield;
   ValNode vn;
+  Char buf[15];
 
   if (biop == NULL || scp == NULL) return NULL;
 
@@ -7067,6 +7504,10 @@ NLM_EXTERN CharPtr GetSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoi
         if (biop->org != NULL && biop->org->orgname != NULL  && !StringHasNoText (biop->org->orgname->div)
             && DoesStringMatchConstraint (biop->org->orgname->div, constraint)) {
           str = StringSave (biop->org->orgname->div);
+        }
+      } else if (scp->data.intvalue == Source_qual_dbxref) {
+        if (biop->org != NULL) {
+          str = GetDbxrefString (biop->org->db, constraint);
         }
       } else if (scp->data.intvalue == Source_qual_all_notes) {
         vn.choice = SourceQualChoice_textqual;
@@ -7145,6 +7586,18 @@ NLM_EXTERN CharPtr GetSourceQualFromBioSource (BioSourcePtr biop, SourceQualChoi
         str = StringSave (str);
       } else {
         str = NULL;
+      }
+      break;
+    case SourceQualChoice_gcode:
+      if (biop->org != NULL && biop->org->orgname != NULL && biop->org->orgname->gcode != 0) {
+        sprintf (buf, "%d", biop->org->orgname->gcode);
+        str = StringSave (buf);
+      }
+      break;
+    case SourceQualChoice_mgcode:
+      if (biop->org != NULL && biop->org->orgname != NULL && biop->org->orgname->mgcode != 0) {
+        sprintf (buf, "%d", biop->org->orgname->mgcode);
+        str = StringSave (buf);
       }
       break;
   }
@@ -7243,6 +7696,10 @@ NLM_EXTERN Boolean RemoveSourceQualFromBioSource (BioSourcePtr biop, SourceQualC
           biop->org->orgname->div = MemFree (biop->org->orgname->div);
           rval = TRUE;
         }
+      } else if (scp->data.intvalue == Source_qual_dbxref) {
+        if (biop->org != NULL) {
+          rval = RemoveDbxrefString (&(biop->org->db), constraint);
+        }        
       } else if (scp->data.intvalue == Source_qual_all_notes) {
         vn.choice = SourceQualChoice_textqual;
         vn.data.intvalue = Source_qual_subsource_note;
@@ -7250,7 +7707,6 @@ NLM_EXTERN Boolean RemoveSourceQualFromBioSource (BioSourcePtr biop, SourceQualC
         rval |= RemoveSourceQualFromBioSource (biop, &vn, constraint);
         vn.data.intvalue = Source_qual_orgmod_note;
         rval |= RemoveSourceQualFromBioSource (biop, &vn, constraint);
-
       } else if (scp->data.intvalue == Source_qual_all_quals) {
         rval |= RemoveAllSourceQualsFromBioSource (biop, constraint);
       } else {
@@ -7357,6 +7813,18 @@ NLM_EXTERN Boolean RemoveSourceQualFromBioSource (BioSourcePtr biop, SourceQualC
         }
       }
       break; 
+    case SourceQualChoice_gcode:
+      if (biop->org != NULL && biop->org->orgname != NULL && biop->org->orgname->gcode != 0) {
+        biop->org->orgname->gcode = 0;
+        rval = TRUE;
+      }
+      break;
+    case SourceQualChoice_mgcode:
+      if (biop->org != NULL && biop->org->orgname != NULL && biop->org->orgname->mgcode != 0) {
+        biop->org->orgname->mgcode = 0;
+        rval = TRUE;
+      }
+      break;
   }
   return rval;
 }
@@ -7377,8 +7845,12 @@ NLM_EXTERN Boolean SetSourceQualInBioSource (BioSourcePtr biop, SourceQualChoice
   {
     case SourceQualChoice_textqual:
       if (scp->data.intvalue == Source_qual_taxname) {
-        if (biop->org != NULL
-            && DoesStringMatchConstraint (biop->org->taxname, constraint)) {
+        if ((biop->org == NULL && IsStringConstraintEmpty (constraint))
+            || (biop->org != NULL
+                && DoesStringMatchConstraint (biop->org->taxname, constraint))) {
+          if (biop->org == NULL) {
+            biop->org = OrgRefNew();
+          }
           rval = SetStringValue (&(biop->org->taxname), value, existing_text);
           if (rval) {
             RemoveTaxRef (biop->org);
@@ -7386,20 +7858,45 @@ NLM_EXTERN Boolean SetSourceQualInBioSource (BioSourcePtr biop, SourceQualChoice
           }
         }
       } else if (scp->data.intvalue == Source_qual_common_name) {
-        if (biop->org != NULL
-            && DoesStringMatchConstraint (biop->org->common, constraint)) {
+        if ((biop->org == NULL && IsStringConstraintEmpty (constraint)) 
+            || (biop->org != NULL
+                && DoesStringMatchConstraint (biop->org->common, constraint))) {
+          if (biop->org == NULL) {
+            biop->org = OrgRefNew();
+          }
           rval = SetStringValue (&(biop->org->common), value, existing_text);
         }
       } else if (scp->data.intvalue == Source_qual_lineage) {
-        if (biop->org != NULL && biop->org->orgname != NULL 
-            && DoesStringMatchConstraint (biop->org->orgname->lineage, constraint)) {
+        if ((biop->org == NULL && IsStringConstraintEmpty (constraint)) 
+            ||(biop->org != NULL && biop->org->orgname == NULL && IsStringConstraintEmpty (constraint))
+            ||(biop->org != NULL && biop->org->orgname != NULL 
+               && DoesStringMatchConstraint (biop->org->orgname->lineage, constraint))) {
+          if (biop->org == NULL) {
+            biop->org = OrgRefNew();
+          }
+          if (biop->org->orgname == NULL) {
+            biop->org->orgname = OrgNameNew ();
+          }
           rval = SetStringValue (&(biop->org->orgname->lineage), value, existing_text);
         }
       } else if (scp->data.intvalue == Source_qual_division) {
-        if (biop->org != NULL && biop->org->orgname != NULL
-            && DoesStringMatchConstraint (biop->org->orgname->div, constraint)) {
+        if ((biop->org == NULL && IsStringConstraintEmpty (constraint)) 
+            || (biop->org != NULL && biop->org->orgname == NULL && IsStringConstraintEmpty (constraint))
+            || (biop->org != NULL && biop->org->orgname != NULL
+                && DoesStringMatchConstraint (biop->org->orgname->div, constraint))) {
+          if (biop->org == NULL) {
+            biop->org = OrgRefNew();
+          }
+          if (biop->org->orgname == NULL) {
+            biop->org->orgname = OrgNameNew ();
+          }
           rval = SetStringValue (&(biop->org->orgname->div), value, existing_text);
         }
+      } else if (scp->data.intvalue == Source_qual_dbxref) {
+        if (biop->org == NULL) {
+          biop->org = OrgRefNew ();
+        }
+        rval = SetDbxrefString (&(biop->org->db), constraint, value, existing_text);
       } else if (scp->data.intvalue == Source_qual_all_notes) {
         vn.choice = SourceQualChoice_textqual;
         vn.data.intvalue = Source_qual_subsource_note;
@@ -7581,6 +8078,26 @@ NLM_EXTERN Boolean SetSourceQualInBioSource (BioSourcePtr biop, SourceQualChoice
         rval = TRUE;
       }
       break; 
+    case SourceQualChoice_gcode:
+      if (biop->org == NULL) {
+        biop->org = OrgRefNew();
+      }
+      if (biop->org->orgname == NULL) {
+        biop->org->orgname = OrgNameNew();
+      }
+      biop->org->orgname->gcode = scp->data.intvalue;
+      rval = TRUE;
+      break;
+    case SourceQualChoice_mgcode:
+      if (biop->org == NULL) {
+        biop->org = OrgRefNew();
+      }
+      if (biop->org->orgname == NULL) {
+        biop->org->orgname = OrgNameNew();
+      }
+      biop->org->orgname->mgcode = scp->data.intvalue;
+      rval = TRUE;
+      break;
   }
   return rval;
 }
@@ -8737,6 +9254,38 @@ static Boolean SetGenomeProjectIdOnBioseq (BioseqPtr bsp, StringConstraintPtr sc
     sdp->data.ptrvalue = uop;
     rval = TRUE;
   }
+  return rval;
+}
+
+
+static Boolean SetCommentDescriptor (SeqDescrPtr sdp, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+{
+  Boolean rval = FALSE;
+  CharPtr cp;
+  ObjValNodePtr ovp;
+  Boolean was_empty;
+
+  if (sdp == NULL) {
+    return FALSE;
+  }
+  
+  if (IsStringConstraintEmpty (scp) || DoesStringMatchConstraint (sdp->data.ptrvalue, scp)) {
+    if (StringHasNoText (sdp->data.ptrvalue)) {
+      was_empty = TRUE;
+    } else {
+      was_empty = FALSE;
+    }
+    cp = sdp->data.ptrvalue;
+    if (SetStringValue (&cp, value, existing_text)) {
+      rval = TRUE;
+    }
+    sdp->data.ptrvalue = cp;
+    if (was_empty) {
+      ovp = (ObjValNodePtr) sdp;
+      ovp->idx.deleteme = FALSE;
+    }
+  }
+
   return rval;
 }
 
@@ -10198,7 +10747,7 @@ static Boolean SetPubFieldOnCitBook (CitBookPtr cbp, Int4 field, StringConstrain
 }
 
 
-static CharPtr GetPubFieldFromPub (PubPtr the_pub, Int4 field, StringConstraintPtr scp)
+NLM_EXTERN CharPtr GetPubFieldFromPub (PubPtr the_pub, Int4 field, StringConstraintPtr scp)
 {
   CitGenPtr    cgp;
   CitArtPtr    cap;
@@ -10270,7 +10819,7 @@ static CharPtr GetPubFieldFromPub (PubPtr the_pub, Int4 field, StringConstraintP
           break;
         case Publication_field_title:
           if (!StringHasNoText (cgp->title) && DoesStringMatchConstraint (cgp->title, scp)) {
-            str = StringSave (str = cgp->title);
+            str = StringSave (cgp->title);
           }
           break;
       }
@@ -10905,8 +11454,345 @@ NLM_EXTERN Uint1 FieldTypeFromAECRAction (AECRActionPtr action)
   return field_type;
 }
 
+typedef struct pubserialnumber {
+  BioseqPtr bsp;
+  Int4      serial_number;
+  ValNodePtr min_pub;
+} PubSerialNumberData, PNTR PubSerialNumberPtr;
 
-NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp)
+
+static PubSerialNumberPtr PubSerialNumberNew ()
+{
+  PubSerialNumberPtr psn;
+
+  psn = (PubSerialNumberPtr) MemNew (sizeof (PubSerialNumberData));
+  psn->bsp = NULL;
+  psn->serial_number = 0;
+  psn->min_pub = NULL;
+
+  return psn;
+}
+
+
+static PubSerialNumberPtr PubSerialNumberFree (PubSerialNumberPtr psn)
+{
+  if (psn != NULL) {
+    psn->min_pub = PubSetFree (psn->min_pub);
+    psn = MemFree (psn);
+  }
+  return psn;
+}
+
+
+NLM_EXTERN ValNodePtr PubSerialNumberListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = PubSerialNumberFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static void CaptureRefBlockSerialNumbers
+(CharPtr str,
+ Pointer userdata,
+ BlockType blocktype,
+ Uint2 entityID,
+ Uint2 itemtype,
+ Uint4 itemID)
+{
+  CharPtr          cp;
+  Int4             serial_number;
+  ValNodePtr       vnp;
+  BioseqPtr        bsp = NULL;
+  SeqFeatPtr       sfp;
+  SeqDescrPtr      sdp;
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+  PubSerialNumberPtr psn;
+  ValNodePtr        ppr;
+  PubdescPtr        pdp = NULL;
+
+  if (blocktype != REFERENCE_BLOCK || userdata == NULL) return;
+  if (StringNICmp (str, "REFERENCE", 9) != 0) {
+    return;
+  }
+  cp = str + 9;
+  while (isspace (*cp)) {
+    cp++;
+  }
+  if (!isdigit (*cp)) {
+    return;
+  }
+  serial_number = atoi (cp);
+
+  if (itemtype == OBJ_SEQFEAT) {
+    sfp = SeqMgrGetDesiredFeature (entityID, NULL, itemID, 0, NULL, &fcontext);
+    if (sfp != NULL && sfp->data.choice == SEQFEAT_PUB) {
+      pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+      bsp = GetSequenceForObject (OBJ_SEQFEAT, sfp);
+    }
+  } else if (itemtype == OBJ_SEQDESC) {
+    sdp = SeqMgrGetDesiredDescriptor (entityID, NULL, itemID, 0, NULL, &dcontext);
+    if (sdp != NULL && sdp->choice == Seq_descr_pub) {
+      pdp = (PubdescPtr) sdp->data.ptrvalue;
+      bsp = GetSequenceForObject (OBJ_SEQDESC, sdp);
+    }
+  }
+  if (pdp != NULL && bsp != NULL) {    
+    vnp = ValNodeNew (NULL);
+    if (vnp != NULL) {
+      vnp->choice = PUB_Equiv;
+      vnp->data.ptrvalue = pdp->pub;
+      ppr = MinimizePub (vnp);
+      ValNodeFree (vnp);
+    }
+    vnp = ValNodeNew (NULL);
+    if (vnp != NULL) {
+      vnp->choice = PUB_Equiv;
+      vnp->data.ptrvalue = ppr;
+
+      psn = PubSerialNumberNew ();
+      psn->bsp = bsp;
+      psn->serial_number = serial_number;
+      psn->min_pub = vnp;
+      ValNodeAddPointer ((ValNodePtr PNTR) userdata, 0, psn);
+    }
+  }
+}
+
+
+NLM_EXTERN ValNodePtr GetCitListsForSeqEntry (SeqEntryPtr sep)
+{
+  XtraBlock       xtra;
+  ValNodePtr      head = NULL;
+  ErrSev          level;
+  Boolean         okay;
+  SeqEntryPtr     oldscope;
+  Uint2           entityID;
+
+  if (sep == NULL) return NULL;
+  
+  MemSet ((Pointer) &xtra, 0, sizeof (XtraBlock));
+  xtra.ffwrite = CaptureRefBlockSerialNumbers;
+  xtra.userdata = (Pointer) &head;
+  level = ErrSetMessageLevel (SEV_MAX);
+  oldscope = SeqEntrySetScope (sep);
+  okay = SeqEntryToGnbk (sep, NULL, GENBANK_FMT, SEQUIN_MODE, NORMAL_STYLE,
+                         SHOW_CONTIG_FEATURES, 0, 0, &xtra, NULL);
+  entityID = SeqMgrGetEntityIDForSeqEntry (sep);
+  SeqEntrySetScope (oldscope);
+  ErrSetMessageLevel (level);
+  return head;
+}
+
+
+NLM_EXTERN Int4 GetCitationNumberForMinPub (BioseqPtr bsp, ValNodePtr min_pub, ValNodePtr pub_list)
+{
+  Int4 rval = -1;
+  PubSerialNumberPtr psn;
+  ValNodePtr vnp, tmp;
+
+  if (bsp == NULL || min_pub == NULL || pub_list == NULL) {
+    return -1;
+  }
+
+  tmp = ValNodeNew (NULL);
+  tmp->choice = PUB_Equiv;
+  tmp->data.ptrvalue = min_pub;
+
+  for (vnp = pub_list; vnp != NULL && rval == -1; vnp = vnp->next) {
+    psn = (PubSerialNumberPtr) vnp->data.ptrvalue;
+    if (psn->bsp == bsp) {
+      if (PubLabelMatch (tmp, psn->min_pub) == 0) {
+        rval = psn->serial_number;
+      }
+    }
+  }
+
+  tmp = ValNodeFree (tmp);
+
+  return rval;
+}
+
+
+NLM_EXTERN ValNodePtr GetMinPubForCitationNumber (BioseqPtr bsp, Int4 number, ValNodePtr pub_list)
+{
+  ValNodePtr rval = NULL;
+  PubSerialNumberPtr psn;
+  ValNodePtr vnp;
+
+  if (bsp == NULL || number < 0 || pub_list == NULL) {
+    return NULL;
+  }
+
+  for (vnp = pub_list; vnp != NULL && rval == NULL; vnp = vnp->next) {
+    psn = (PubSerialNumberPtr) vnp->data.ptrvalue;
+    if (psn->bsp == bsp && psn->serial_number == number) {
+      rval = psn->min_pub;
+    }
+  }
+
+  return rval;
+}
+
+
+/* 
+ * Some batch operations will be faster if information about the entire record is collected once
+ * and reused.  The BatchExtra structure is where such data belongs.
+ */
+NLM_EXTERN BatchExtraPtr BatchExtraNew ()
+{
+  BatchExtraPtr b;
+
+  b = (BatchExtraPtr) MemNew (sizeof (BatchExtraData));
+  b->cit_list = NULL;
+
+  return b;
+}
+
+
+NLM_EXTERN BatchExtraPtr BatchExtraFree (BatchExtraPtr b)
+{
+  if (b != NULL) {
+    b->cit_list = PubSerialNumberListFree (b->cit_list);
+    
+    b = MemFree (b);
+  }
+  return b;
+}
+
+
+static Boolean IsCitationField (FieldTypePtr field)
+{
+  FeatureFieldPtr feature_field;
+
+  if (field != NULL
+      && field->choice == FieldType_feature_field
+      && (feature_field = field->data.ptrvalue) != NULL
+      && feature_field->field != NULL
+      && ((feature_field->field->choice == FeatQualChoice_legal_qual 
+           && feature_field->field->data.intvalue == Feat_qual_legal_citation)
+          || (feature_field->field->choice == FeatQualChoice_illegal_qual 
+          && DoesStringMatchConstraint ("citation", feature_field->field->data.ptrvalue)))) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+
+}
+
+
+static void InitBatchExtraForField (BatchExtraPtr batch_extra, FieldTypePtr field, SeqEntryPtr sep)
+{
+  if (batch_extra == NULL) {
+    return;
+  }
+  /* only need to collect citations if citation is in the list of applicable fields */
+  if (IsCitationField (field)) {
+    ValNodeLink (&(batch_extra->cit_list), GetCitListsForSeqEntry (sep));
+  }
+}
+
+
+static void InitBatchExtraForAECRAction (BatchExtraPtr batch_extra, AECRActionPtr action, SeqEntryPtr sep)
+{
+  ValNodePtr field_list, field;
+
+  if (batch_extra == NULL || action == NULL) {
+    return;
+  }
+
+  field_list = GetFieldTypeListFromAECRAction (action);
+  for (field = field_list; field != NULL; field = field->next) {
+    InitBatchExtraForField (batch_extra, field, sep);
+  }
+  field_list = FieldTypeListFree (field_list);
+}
+
+
+NLM_EXTERN int LIBCALLBACK SortVnpByObject (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  CharPtr     str1, str2;
+  int         rval = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      if (vnp1->choice < vnp2->choice) {
+        rval = -1;
+      } else if (vnp1->choice > vnp2->choice) {
+        rval = 1;
+      } else {
+        str1 = GetDiscrepancyItemText (vnp1);
+        str2 = GetDiscrepancyItemText (vnp2);
+        rval = StringCmp (str1, str1);
+        str1 = MemFree (str1);
+        str2 = MemFree (str2);
+      }
+    }
+  }
+
+  return rval;
+}
+
+
+static ValNodePtr BioseqListForObjectList (ValNodePtr object_list)
+{
+  ValNodePtr vnp, bsp_list = NULL;
+  BioseqPtr  bsp;
+
+  for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
+    bsp = GetSequenceForObject (vnp->choice, vnp->data.ptrvalue);
+    if (bsp != NULL) {
+      ValNodeAddPointer (&bsp_list, OBJ_BIOSEQ, bsp);
+    }
+  }
+  bsp_list = ValNodeSort (bsp_list, SortVnpByObject);
+  ValNodeUnique (&bsp_list, SortVnpByObject, ValNodeFree);
+  return bsp_list;
+}
+
+
+static void InitBatchExtraForAECRActionAndObjectList (BatchExtraPtr batch_extra, AECRActionPtr action, ValNodePtr object_list)
+{
+  ValNodePtr field_list, field;
+  ValNodePtr bsp_list = NULL, vnp;
+  SeqEntryPtr sep;
+
+  if (batch_extra == NULL || action == NULL) {
+    return;
+  }
+
+  field_list = GetFieldTypeListFromAECRAction (action);
+  bsp_list = BioseqListForObjectList (object_list);
+  for (vnp = bsp_list; vnp != NULL; vnp = vnp->next) {
+    sep = SeqMgrGetSeqEntryForData (vnp->data.ptrvalue);
+    for (field = field_list; field != NULL; field = field->next) {
+      InitBatchExtraForField (batch_extra, field, sep);
+    }
+  }
+  bsp_list = ValNodeFree (bsp_list);
+
+  field_list = FieldTypeListFree (field_list);
+
+}
+
+
+
+
+
+NLM_EXTERN CharPtr GetFieldValueForObjectEx (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   CharPtr str = NULL;
   FeatureFieldPtr feature_field;
@@ -10920,7 +11806,7 @@ NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldType
       break;
     case FieldType_feature_field :
       if (choice == OBJ_SEQFEAT) {
-        str = GetQualFromFeature ((SeqFeatPtr) data, (FeatureFieldPtr) field->data.ptrvalue, scp);
+        str = GetQualFromFeatureEx ((SeqFeatPtr) data, (FeatureFieldPtr) field->data.ptrvalue, scp, batch_extra);
       }
       break;
     case FieldType_cds_gene_prot :
@@ -10958,6 +11844,11 @@ NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldType
     case FieldType_misc:
       if (choice == OBJ_BIOSEQ && field->data.intvalue == Misc_field_genome_project_id) {
         str = GetGenomeProjectIdFromBioseq ((BioseqPtr) data, scp);
+      } else if (choice == OBJ_SEQDESC && field->data.intvalue == Misc_field_comment_descriptor) {
+        sdp = (SeqDescrPtr) data;
+        if (sdp != NULL && sdp->choice == Seq_descr_comment && !StringHasNoText (sdp->data.ptrvalue)) {
+          str = StringSave (sdp->data.ptrvalue);
+        }
       }
       break;
   }
@@ -10965,11 +11856,17 @@ NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldType
 }
 
 
+NLM_EXTERN CharPtr GetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp)
+{
+  return GetFieldValueForObjectEx (choice, data, field, scp, NULL);
+}
+
 static Boolean RemoveFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp)
 {
   Boolean rval = FALSE;
   FeatureFieldPtr feature_field;
   SeqDescrPtr     sdp;
+  ObjValNodePtr   ovp;
 
   if (data == NULL || field == NULL || field->data.ptrvalue == NULL) return FALSE;
 
@@ -11017,6 +11914,10 @@ static Boolean RemoveFieldValueForObject (Uint1 choice, Pointer data, FieldTypeP
     case FieldType_misc:
       if (choice == OBJ_BIOSEQ && field->data.intvalue == Misc_field_genome_project_id) {
         rval = RemoveGenomeProjectIdFromBioseq ((BioseqPtr) data, scp);
+      } else if (choice == OBJ_SEQDESC && field->data.intvalue == Misc_field_comment_descriptor) {
+        sdp = (SeqDescrPtr) data;
+        ovp = (ObjValNodePtr) sdp;
+        ovp->idx.deleteme = TRUE;
       }
       break;
   }
@@ -11024,7 +11925,7 @@ static Boolean RemoveFieldValueForObject (Uint1 choice, Pointer data, FieldTypeP
 }
 
 
-NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+NLM_EXTERN Boolean SetFieldValueForObjectEx (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text, BatchExtraPtr batch_extra)
 {
   Boolean rval = FALSE;
   FeatureFieldPtr feature_field;
@@ -11038,7 +11939,7 @@ NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldType
       break;
     case FieldType_feature_field :
       if (choice == OBJ_SEQFEAT) {
-        rval = SetQualOnFeature ((SeqFeatPtr) data, (FeatureFieldPtr) field->data.ptrvalue, scp, value, existing_text);
+        rval = SetQualOnFeatureEx ((SeqFeatPtr) data, (FeatureFieldPtr) field->data.ptrvalue, scp, value, existing_text, batch_extra);
       }
       break;
     case FieldType_cds_gene_prot:
@@ -11046,7 +11947,7 @@ NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldType
         rval = SetFieldValueInCGPSet ((CGPSetPtr) data, field->data.intvalue, scp, value, existing_text);
       } else if (choice == OBJ_SEQFEAT) {
         feature_field = FeatureFieldFromCDSGeneProtField (field->data.intvalue);
-        rval = SetQualOnFeature ((SeqFeatPtr) data, feature_field, scp, value, existing_text);
+        rval = SetQualOnFeatureEx ((SeqFeatPtr) data, feature_field, scp, value, existing_text, batch_extra);
         feature_field = FeatureFieldFree (feature_field);
       }
       break;
@@ -11061,7 +11962,7 @@ NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldType
     case FieldType_rna_field :
       if (choice == OBJ_SEQFEAT) {
         feature_field = FeatureFieldFromRnaQual (field->data.ptrvalue);
-        rval = SetQualOnFeature ((SeqFeatPtr) data, feature_field, scp, value, existing_text);
+        rval = SetQualOnFeatureEx ((SeqFeatPtr) data, feature_field, scp, value, existing_text, batch_extra);
         feature_field = FeatureFieldFree (feature_field);
       }
       break;
@@ -11076,10 +11977,91 @@ NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldType
     case FieldType_misc:
       if (choice == OBJ_BIOSEQ && field->data.intvalue == Misc_field_genome_project_id) {
         rval = SetGenomeProjectIdOnBioseq ((BioseqPtr) data, scp, value, existing_text);
+      } else if (choice == OBJ_SEQDESC && field->data.intvalue == Misc_field_comment_descriptor) {
+        sdp = (SeqDescrPtr) data;
+        rval = SetCommentDescriptor (sdp, scp, value, existing_text);
       }
       break;
   }
   return rval;
+}
+
+
+NLM_EXTERN Boolean SetFieldValueForObject (Uint1 choice, Pointer data, FieldTypePtr field, StringConstraintPtr scp, CharPtr value, Uint2 existing_text)
+{
+  return SetFieldValueForObjectEx (choice, data, field, scp, value, existing_text, NULL);
+}
+
+
+NLM_EXTERN ValNodePtr GetFieldTypeListFromAECRAction (AECRActionPtr action)
+{
+  ValNodePtr field_list = NULL;
+  ApplyActionPtr apply;
+  EditActionPtr  edit;
+  ConvertActionPtr convert;
+  CopyActionPtr    copy;
+  SwapActionPtr    swap;
+  RemoveActionPtr  remove;
+  AECRParseActionPtr parse;
+
+  if (action == NULL) {
+    return NULL;
+  }
+
+  /* todo - add fields from constraints ? */
+
+  /* get fields from action */
+  if (action->action != NULL) {
+    switch (action->action->choice) {
+      case ActionChoice_apply:
+        apply = (ApplyActionPtr) action->action->data.ptrvalue;
+        if (apply != NULL) {
+          ValNodeLink (&field_list, FieldTypeCopy (apply->field));
+        }
+        break;
+      case ActionChoice_edit:
+        edit = (EditActionPtr) action->action->data.ptrvalue;
+        if (edit != NULL) {
+          ValNodeLink (&field_list, FieldTypeCopy (edit->field));
+        }
+        break;
+      case ActionChoice_convert:
+        convert = (ConvertActionPtr) action->action->data.ptrvalue;
+        if (convert != NULL) {
+          ValNodeLink (&field_list, GetFromFieldFromFieldPair (convert->fields));
+          ValNodeLink (&field_list, GetToFieldFromFieldPair (convert->fields));
+        }
+        break;
+      case ActionChoice_copy:
+        copy = (CopyActionPtr) action->action->data.ptrvalue;
+        if (copy != NULL) {
+          ValNodeLink (&field_list, GetFromFieldFromFieldPair (copy->fields));
+          ValNodeLink (&field_list, GetToFieldFromFieldPair (copy->fields));
+        }
+        break;
+      case ActionChoice_swap:
+        swap = (SwapActionPtr) action->action->data.ptrvalue;
+        if (swap != NULL) {
+          ValNodeLink (&field_list, GetFromFieldFromFieldPair (swap->fields));
+          ValNodeLink (&field_list, GetToFieldFromFieldPair (swap->fields));
+        }
+        break;
+      case ActionChoice_remove:
+        remove = (RemoveActionPtr) action->action->data.ptrvalue;
+        if (remove != NULL) {
+          ValNodeLink (&field_list, FieldTypeCopy (remove->field));
+        }
+        break;
+      case ActionChoice_parse:
+        parse = (AECRParseActionPtr) action->action->data.ptrvalue;
+        if (parse != NULL) {
+          ValNodeLink (&field_list, GetFromFieldFromFieldPair (parse->fields));
+          ValNodeLink (&field_list, GetToFieldFromFieldPair (parse->fields));
+        }
+        break;
+    }
+  }
+  return field_list;
 }
 
 
@@ -12343,7 +13325,7 @@ NLM_EXTERN Boolean IsPublicationConstraintEmpty (PublicationConstraintPtr constr
 }
 
 
-static Int4 GetPubStatus (PubPtr the_pub)
+NLM_EXTERN Int4 GetPubMLStatus (PubPtr the_pub)
 {
   CitGenPtr  cgp;
   CitSubPtr  csp;
@@ -12444,7 +13426,7 @@ static Boolean DoesPubMatchPublicationConstraint (PubdescPtr pdp, PublicationCon
   if (constraint->type != Pub_type_any) {
     type_ok = FALSE;
     for (pub = pdp->pub; pub != NULL && !type_ok; pub = pub->next) {
-      if (GetPubStatus (pub) == constraint->type) {
+      if (GetPubMLStatus (pub) == constraint->type) {
         type_ok = TRUE;
       }
     }
@@ -12904,6 +13886,7 @@ static void RemoveFieldNameFromString (CharPtr field_name, CharPtr str)
 typedef struct objectcollection {
   AECRActionPtr action;
   ValNodePtr object_list;
+  BatchExtraPtr batch_extra;
 } ObjectCollectionData, PNTR ObjectCollectionPtr;
 
 
@@ -12938,7 +13921,7 @@ static void AECRActionObjectCollectionItemCallback (Uint1 objecttype, Pointer ob
           && IsObjectAppropriateForFieldValue (objecttype, objectdata, e->field)
           && DoesObjectMatchConstraintChoiceSet (objecttype, objectdata, o->action->constraint)) {
         scp = StringConstraintFromFieldEdit (e->edit);
-        str = GetFieldValueForObject (objecttype, objectdata, e->field, scp);
+        str = GetFieldValueForObjectEx (objecttype, objectdata, e->field, scp, o->batch_extra);
         if (!StringHasNoText (str)) {
           ValNodeAddPointer (&(o->object_list), objecttype, objectdata);
         }
@@ -12952,7 +13935,7 @@ static void AECRActionObjectCollectionItemCallback (Uint1 objecttype, Pointer ob
           && IsObjectAppropriateForFieldValue (objecttype, objectdata, field_from)
           && DoesObjectMatchConstraintChoiceSet (objecttype, objectdata, o->action->constraint)) {
         scp = FindStringConstraintInConstraintSetForField (field_from, o->action->constraint);
-        str = GetFieldValueForObject (objecttype, objectdata, field_from, scp);
+        str = GetFieldValueForObjectEx (objecttype, objectdata, field_from, scp, o->batch_extra);
         if (v->strip_name) {
           field_to = GetToFieldFromFieldPair (v->fields);
           field_name = SummarizeFieldType (field_to);
@@ -13010,7 +13993,7 @@ static void AECRActionObjectCollectionItemCallback (Uint1 objecttype, Pointer ob
           && IsObjectAppropriateForFieldValue (objecttype, objectdata, field_to)
           && DoesObjectMatchConstraintChoiceSet (objecttype, objectdata, o->action->constraint)) {
         scp = FindStringConstraintInConstraintSetForField (field_from, o->action->constraint);
-        str = GetFieldValueForObject (objecttype, objectdata, field_from, scp);
+        str = GetFieldValueForObjectEx (objecttype, objectdata, field_from, scp, o->batch_extra);
         portion = GetTextPortionFromString (str, p->portion);
         if (!StringHasNoText (portion)) {
           ValNodeAddPointer (&(o->object_list), objecttype, objectdata);
@@ -13059,21 +14042,38 @@ static void AECRObjectCollectionBioseqCallback (BioseqPtr bsp, Pointer data)
 }
 
 
-NLM_EXTERN ValNodePtr GetObjectListForAECRAction (SeqEntryPtr sep, AECRActionPtr action)
+NLM_EXTERN ValNodePtr GetObjectListForAECRActionEx (SeqEntryPtr sep, AECRActionPtr action, BatchExtraPtr batch_extra)
 {
   ObjectCollectionData ocd;
 
+  if (action == NULL) return NULL;
+
   ocd.action = action;
   ocd.object_list = NULL;
+  if (batch_extra == NULL) {
+    ocd.batch_extra = BatchExtraNew ();
+    InitBatchExtraForAECRAction (ocd.batch_extra, action, sep);
+  } else {
+    ocd.batch_extra = batch_extra;
+  }
 
-  if (action == NULL) return NULL;
   if (FieldTypeFromAECRAction (action) == FieldType_molinfo_field) {
     VisitBioseqsInSep (sep, &ocd, AECRObjectCollectionBioseqCallback);
   } else {
     VisitFeaturesInSep (sep, &ocd, AECRActionObjectCollectionFeatureCallback);
     VisitDescriptorsInSep (sep, &ocd, AECRActionObjectCollectionDescriptorCallback);
   }
+
+  if (batch_extra != ocd.batch_extra) {
+    ocd.batch_extra = BatchExtraFree (ocd.batch_extra);
+  }
   return ocd.object_list;
+}
+
+
+NLM_EXTERN ValNodePtr GetObjectListForAECRAction (SeqEntryPtr sep, AECRActionPtr action)
+{
+  return GetObjectListForAECRActionEx (sep, action, NULL);
 }
 
 
@@ -13264,6 +14264,7 @@ AdjustCGPObjectListForMatPeptides
       || constraints == NULL
       || (field1 == NULL && field2 == NULL) /* no fields specified */
       || (!IsFieldTypeMatPeptideRelated (field1) && !IsFieldTypeMatPeptideRelated(field2))) {
+    return;
   }
 
   /* get list of constraints that apply to mat-peptide features */
@@ -13538,7 +14539,7 @@ static void AlsoChangeMrnaForObject (Uint1 choice, Pointer data)
 }
 
 
-NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+NLM_EXTERN Int4 DoApplyActionToObjectListEx (ApplyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   Int4       num_succeed = 0, num_fail = 0;
@@ -13546,7 +14547,7 @@ NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr obj
   if (action == NULL || object_list == NULL) return 0;
 
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-    if (SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, action->field, scp, action->value, action->existing_text)) {
+    if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, action->field, scp, action->value, action->existing_text, batch_extra)) {
       if (also_change_mrna) {
         AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
       }
@@ -13555,11 +14556,18 @@ NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr obj
       num_fail++;
     }
   }
+
   return num_succeed;
 }
 
 
-NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr object_list, Boolean also_change_mrna)
+NLM_EXTERN Int4 DoApplyActionToObjectList (ApplyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+{
+  return DoApplyActionToObjectListEx (action, object_list, also_change_mrna, scp, NULL);
+}
+
+
+NLM_EXTERN Int4 DoEditActionToObjectListEx (EditActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   Int4       num_succeed = 0, num_fail = 0;
@@ -13567,13 +14575,14 @@ NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr objec
   CharPtr    str, new_str;
 
   if (action == NULL || object_list == NULL) return 0;
+
   scp = StringConstraintFromFieldEdit (action->edit);
 
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-    str = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, action->field, scp);
+    str = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, action->field, scp, batch_extra);
     new_str = ApplyEditToString (str, action->edit);
     if (StringCmp (str, new_str) != 0
-        && SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, action->field, scp, new_str, ExistingTextOption_replace_old)) {
+        && SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, action->field, scp, new_str, ExistingTextOption_replace_old, batch_extra)) {
       if (also_change_mrna) {
         AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
       }
@@ -13588,7 +14597,13 @@ NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr objec
 }
 
 
-NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+NLM_EXTERN Int4 DoEditActionToObjectList (EditActionPtr action, ValNodePtr object_list, Boolean also_change_mrna)
+{
+  return DoEditActionToObjectListEx (action, object_list, also_change_mrna, NULL);
+}
+
+
+NLM_EXTERN Int4 DoConvertActionToObjectListEx (ConvertActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   Int4       num_succeed = 0, num_fail = 0;
@@ -13606,21 +14621,21 @@ NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr
 
   if (action->fields->choice == FieldPairType_molinfo_field) {
     for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-      str = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, NULL);
+      str = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, NULL, batch_extra);
       from_val = GetSequenceQualValName (field_from->data.ptrvalue);
       if (StringCmp (str, from_val) == 0
-          && SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, ExistingTextOption_replace_old)) {
+          && SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, ExistingTextOption_replace_old, batch_extra)) {
         num_succeed ++;
       }
       str = MemFree (str);
     }
   } else {
     for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-      str = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp);
+      str = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, batch_extra);
       if (action->strip_name) {
         RemoveFieldNameFromString (field_name, str);
       }
-      if (SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text)
+      if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text, batch_extra)
           && (action->keep_original || RemoveFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp))) {
         if (also_change_mrna) {
           AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
@@ -13641,7 +14656,13 @@ NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr
 }
 
 
-NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+NLM_EXTERN Int4 DoConvertActionToObjectList (ConvertActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+{
+  return DoConvertActionToObjectListEx (action, object_list, also_change_mrna, scp, NULL);
+}
+
+
+NLM_EXTERN Int4 DoCopyActionToObjectListEx (CopyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   Int4       num_succeed = 0, num_fail = 0;
@@ -13653,8 +14674,8 @@ NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr objec
   field_to = GetToFieldFromFieldPair (action->fields);
 
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-    str = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp);
-    if (SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text)) {
+    str = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, batch_extra);
+    if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str, action->existing_text, batch_extra)) {
       if (also_change_mrna) {
         AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
       }
@@ -13671,7 +14692,12 @@ NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr objec
 }
 
 
-NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+NLM_EXTERN Int4 DoCopyActionToObjectList (CopyActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+{
+  return DoCopyActionToObjectListEx (action, object_list, also_change_mrna, scp, NULL);
+}
+
+NLM_EXTERN Int4 DoSwapActionToObjectListEx (SwapActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   Int4       num_succeed = 0, num_fail = 0;
@@ -13683,10 +14709,10 @@ NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr objec
   field_to = GetToFieldFromFieldPair (action->fields);
 
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-    str1 = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp);
-    str2 = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL);
-    if (SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str1, ExistingTextOption_replace_old)
-        && SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp, str2, ExistingTextOption_replace_old)) {
+    str1 = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, batch_extra);
+    str2 = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, batch_extra);
+    if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str1, ExistingTextOption_replace_old, batch_extra)
+        && SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, str2, ExistingTextOption_replace_old, batch_extra)) {
       if (also_change_mrna) {
         AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
       }
@@ -13700,6 +14726,12 @@ NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr objec
   field_from = FieldTypeFree (field_from);
   field_to = FieldTypeFree (field_to);
   return num_succeed;
+}
+
+
+NLM_EXTERN Int4 DoSwapActionToObjectList (SwapActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+{
+  return DoSwapActionToObjectListEx (action, object_list, also_change_mrna, scp, NULL);
 }
 
 
@@ -13724,7 +14756,7 @@ NLM_EXTERN Int4 DoRemoveActionToObjectList (RemoveActionPtr action, ValNodePtr o
 }
 
 
-NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+NLM_EXTERN Int4 DoParseActionToObjectListEx (AECRParseActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp, BatchExtraPtr batch_extra)
 {
   ValNodePtr vnp;
   CharPtr    str1, str2, cp;
@@ -13736,7 +14768,7 @@ NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr
   field_to = GetToFieldFromFieldPair (action->fields);
 
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
-    str1 = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp);
+    str1 = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, batch_extra);
     str2 = GetTextPortionFromString (str1, action->portion);    
     if (str2 != NULL) {
       if (action->remove_from_parsed) {
@@ -13753,10 +14785,10 @@ NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr
             len += diff;
           }
           StringCpy (cp, cp + len);
-          SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, scp, str1, ExistingTextOption_replace_old);
+          SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_from, scp, str1, ExistingTextOption_replace_old, batch_extra);
         }
       }
-      if (SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str2, action->existing_text)) {
+      if (SetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field_to, NULL, str2, action->existing_text, batch_extra)) {
         if (also_change_mrna) {
           AlsoChangeMrnaForObject (vnp->choice, vnp->data.ptrvalue);
         }
@@ -13772,6 +14804,12 @@ NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr
 }
 
 
+NLM_EXTERN Int4 DoParseActionToObjectList (AECRParseActionPtr action, ValNodePtr object_list, Boolean also_change_mrna, StringConstraintPtr scp)
+{
+  return DoParseActionToObjectListEx (action, object_list, also_change_mrna, scp, NULL);
+}
+
+
 static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep)
 {
   StringConstraintPtr scp;
@@ -13783,25 +14821,31 @@ static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep)
   Uint2               entityID;
   Int4                num_succeed = 0;
   FieldTypePtr        field_from;
+  BatchExtraPtr       batch_extra;
 
   if (act == NULL || act->action == NULL) return 0;
+
+  batch_extra = BatchExtraNew ();
+  InitBatchExtraForAECRAction (batch_extra, act, sep);
+
   field_type = FieldTypeFromAECRAction (act);
   if (field_type == FieldType_cds_gene_prot) {
     entityID = ObjMgrGetEntityIDForChoice(sep);
     object_list = BuildCGPSetList (entityID, act);
     
   } else {
-    object_list = GetObjectListForAECRAction (sep, act);
+    object_list = GetObjectListForAECRActionEx (sep, act, batch_extra);
   }
+
 
   switch (act->action->choice) {
     case ActionChoice_apply:
       a = (ApplyActionPtr) act->action->data.ptrvalue;
       scp = FindStringConstraintInConstraintSetForField (a->field, act->constraint);
-      num_succeed = DoApplyActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, scp);
+      num_succeed = DoApplyActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, scp, batch_extra);
       break;
     case ActionChoice_edit:
-      num_succeed = DoEditActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna);
+      num_succeed = DoEditActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, batch_extra);
       break;
     case ActionChoice_convert:
       scp = NULL;
@@ -13811,13 +14855,13 @@ static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep)
         scp = FindStringConstraintInConstraintSetForField (field_from, act->constraint);
         field_from = FieldTypeFree (field_from);
       }
-      num_succeed = DoConvertActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, scp);
+      num_succeed = DoConvertActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, scp, batch_extra);
       break;
     case ActionChoice_swap:
-      num_succeed = DoSwapActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL);
+      num_succeed = DoSwapActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL, batch_extra);
       break;
     case ActionChoice_copy:
-      num_succeed = DoCopyActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL);
+      num_succeed = DoCopyActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL, batch_extra);
       break;
     case ActionChoice_remove:
       r = (RemoveActionPtr) act->action->data.ptrvalue;
@@ -13825,10 +14869,11 @@ static Int4 ApplyAECRActionToSeqEntry (AECRActionPtr act, SeqEntryPtr sep)
       num_succeed = DoRemoveActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, scp);
       break;
     case ActionChoice_parse:
-      num_succeed = DoParseActionToObjectList (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL);
+      num_succeed = DoParseActionToObjectListEx (act->action->data.ptrvalue, object_list, act->also_change_mrna, NULL, batch_extra);
       break;
   }
   object_list = FreeObjectList (object_list);
+  batch_extra = BatchExtraFree (batch_extra);
   return num_succeed;
 }
 
@@ -13888,17 +14933,31 @@ static void AddTextToAECRSample (AECRSamplePtr sample, CharPtr txt)
 }
 
 
-NLM_EXTERN AECRSamplePtr GetAECRSampleFromObjectList (ValNodePtr object_list, FieldTypePtr field)
+NLM_EXTERN AECRSamplePtr GetAECRSampleFromObjectListEx (ValNodePtr object_list, FieldTypePtr field, BatchExtraPtr batch_extra)
 {
   AECRSamplePtr sample;
-  ValNodePtr    vnp, prot_vnp;
+  ValNodePtr    vnp, prot_vnp, bsp_list;
   CharPtr       txt;
   CGPSetPtr     cgp;
   SeqFeatPtr    sfp;
+  BatchExtraPtr b = NULL;
+  SeqEntryPtr   sep;
 
   if (object_list == NULL || field == NULL) return NULL;
+
+  if (batch_extra == NULL) {
+    b = BatchExtraNew ();
+    batch_extra = b;
+    bsp_list = BioseqListForObjectList (object_list);
+    for (vnp = bsp_list; vnp != NULL; vnp = vnp->next) {
+      sep = SeqMgrGetSeqEntryForData (vnp->data.ptrvalue);
+      InitBatchExtraForField (batch_extra, field, sep);
+    }
+    bsp_list = ValNodeFree (bsp_list);
+  }
+
   sample = AECRSampleNew ();
-  sample->field = AsnIoMemCopy (field, (AsnReadFunc) FieldTypeAsnRead, (AsnWriteFunc) FieldTypeAsnWrite);
+  sample->field = FieldTypeCopy (field);
   for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
     if (vnp->choice == 0 && IsFieldTypeMatPeptideRelated (field)) {
       cgp = (CGPSetPtr) vnp->data.ptrvalue;
@@ -13906,17 +14965,25 @@ NLM_EXTERN AECRSamplePtr GetAECRSampleFromObjectList (ValNodePtr object_list, Fi
         for (prot_vnp = cgp->prot_list; prot_vnp != NULL; prot_vnp = prot_vnp->next) {
           sfp = (SeqFeatPtr) prot_vnp->data.ptrvalue;
           if (sfp != NULL && sfp->idx.subtype == FEATDEF_mat_peptide_aa) {
-            txt = GetFieldValueForObject (OBJ_SEQFEAT, sfp, field, NULL);
+            txt = GetFieldValueForObjectEx (OBJ_SEQFEAT, sfp, field, NULL, batch_extra);
             AddTextToAECRSample (sample, txt);
           }
         }
       }
     } else {
-      txt = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field, NULL);
+      txt = GetFieldValueForObjectEx (vnp->choice, vnp->data.ptrvalue, field, NULL, batch_extra);
       AddTextToAECRSample (sample, txt);
     }
   }
+
+  b = BatchExtraFree (b);
   return sample;
+}
+
+
+NLM_EXTERN AECRSamplePtr GetAECRSampleFromObjectList (ValNodePtr object_list, FieldTypePtr field)
+{
+  return GetAECRSampleFromObjectListEx (object_list, field, NULL);
 }
 
 
@@ -14006,7 +15073,7 @@ NLM_EXTERN ValNodePtr LIBCALLBACK FieldTypeListCopy (ValNodePtr orig)
   ValNodePtr prev = NULL, new_list = NULL, vnp;
 
   while (orig != NULL) {
-    vnp = (AsnIoMemCopy) (orig, (AsnReadFunc) FieldTypeAsnRead, (AsnWriteFunc) FieldTypeAsnWrite);
+    vnp = FieldTypeCopy (orig);
     if (prev == NULL) {
       new_list = vnp;
     } else {
@@ -14433,6 +15500,54 @@ static void CollectNucBioseqCallback (BioseqPtr bsp, Pointer data)
 }
 
 
+static void AddCommentDescriptorDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest_list)
+{
+  SeqDescrPtr sdp;
+  SeqMgrDescContext context;
+  Boolean found = FALSE;
+  ObjValNodePtr ovp;
+
+  if (bsp == NULL || dest_list == NULL) {
+    return;
+  }
+
+  for (sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_comment, &context);
+       sdp != NULL;
+       sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_comment, &context)) {
+    ValNodeAddPointer (dest_list, OBJ_SEQDESC, sdp);
+    found = TRUE;
+  }
+  if (!found) {
+    /* if no existing comment descriptor, create one, marked for delete.
+     * unmark it for deletion when it gets populated.
+     */
+    sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_comment);
+    sdp->data.ptrvalue = StringSave ("");
+    ovp = (ObjValNodePtr) sdp;
+    ovp->idx.deleteme = TRUE;
+    ValNodeAddPointer (dest_list, OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static ValNodePtr CollectCommentDescriptors (SeqEntryPtr sep)
+{
+  ValNodePtr seq_list = NULL, vnp, desc_list = NULL;
+
+  if (sep == NULL) {
+    return NULL;
+  }
+
+  VisitBioseqsInSep (sep, &seq_list, CollectNucBioseqCallback);
+
+  for (vnp = seq_list; vnp != NULL; vnp = vnp->next) {
+    AddCommentDescriptorDestinationsForBioseq (vnp->data.ptrvalue, &desc_list);
+  }
+  seq_list = ValNodeFree (seq_list);
+  return desc_list;
+}
+
+
 static void CollectStructuredCommentsCallback (SeqDescrPtr sdp, Pointer data)
 {
   UserObjectPtr uop;
@@ -14477,6 +15592,7 @@ NLM_EXTERN ValNodePtr GetObjectListForFieldType (Uint1 field_type, SeqEntryPtr s
       break;
     case FieldType_misc:
       VisitBioseqsInSep (sep, &object_list, CollectNucBioseqCallback);
+      ValNodeLink (&object_list, CollectCommentDescriptors (sep));
       break;
   }
   return object_list;
@@ -14512,6 +15628,7 @@ NLM_EXTERN ValNodePtr GetFieldListForFieldType (Uint1 field_type, SeqEntryPtr se
       break;
     case FieldType_misc:
       ValNodeAddInt (&fields, FieldType_misc, Misc_field_genome_project_id);
+      ValNodeAddInt (&fields, FieldType_misc, Misc_field_comment_descriptor);
       break;
   }
   return fields;
@@ -14524,14 +15641,19 @@ NLM_EXTERN ValNodePtr GetAECRSampleListForSeqEntry (Uint1 field_type, SeqEntryPt
   ValNodePtr          fields = NULL, vnp;
   ValNodePtr          list = NULL;
   AECRSamplePtr       sample;
+  BatchExtraPtr       batch_extra;
 
   object_list = GetObjectListForFieldType (field_type, sep);
 
   /* get a list of the fields that are appropriate for the objects collected */
   fields = GetFieldListForFieldType (field_type, sep);
 
+  batch_extra = BatchExtraNew ();
   for (vnp = fields; vnp != NULL; vnp = vnp->next) {
-    sample = GetAECRSampleFromObjectList (object_list, vnp);
+    InitBatchExtraForField (batch_extra, vnp, sep);
+  }
+  for (vnp = fields; vnp != NULL; vnp = vnp->next) {
+    sample = GetAECRSampleFromObjectListEx (object_list, vnp, batch_extra);
     if (sample != NULL && sample->num_found > 0) {
       ValNodeAddPointer (&list, 0, sample);
     } else {
@@ -14539,6 +15661,7 @@ NLM_EXTERN ValNodePtr GetAECRSampleListForSeqEntry (Uint1 field_type, SeqEntryPt
     }
   }
 
+  batch_extra = BatchExtraFree (batch_extra);
   fields = FieldTypeListFree (fields);
 
   object_list = FreeObjectList (object_list);
@@ -14554,20 +15677,24 @@ NLM_EXTERN ValNodePtr GetAECRSampleList (AECRActionPtr act, SeqEntryPtr sep)
   ValNodePtr          fields = NULL, vnp;
   ValNodePtr          list = NULL;
   AECRSamplePtr       sample;
+  BatchExtraPtr       batch_extra;
+
+  batch_extra = BatchExtraNew ();
+  InitBatchExtraForAECRAction (batch_extra, act, sep);
 
   field_type = FieldTypeFromAECRAction (act);
   if (field_type == FieldType_cds_gene_prot) {
     entityID = ObjMgrGetEntityIDForChoice(sep);
     object_list = BuildCGPSetList (entityID, act);
   } else {
-    object_list = GetObjectListForAECRAction (sep, act);
+    object_list = GetObjectListForAECRActionEx (sep, act, batch_extra);
   }
 
-  /* get a list of the fields that are appropriate for the objects collected */
-  fields = GetFieldListForFieldType (field_type, sep);
+  /* get fields used in action */
+  fields = GetFieldTypeListFromAECRAction (act);
 
   for (vnp = fields; vnp != NULL; vnp = vnp->next) {
-    sample = GetAECRSampleFromObjectList (object_list, vnp);
+    sample = GetAECRSampleFromObjectListEx (object_list, vnp, batch_extra);
     if (sample != NULL && sample->num_found > 0) {
       ValNodeAddPointer (&list, 0, sample);
     } else {
@@ -14576,6 +15703,8 @@ NLM_EXTERN ValNodePtr GetAECRSampleList (AECRActionPtr act, SeqEntryPtr sep)
   }
 
   fields = FieldTypeListFree (fields);
+
+  batch_extra = BatchExtraFree (batch_extra);
 
   FreeObjectList (object_list);
   return list;
@@ -15290,7 +16419,7 @@ static void FindParseSourceBioseqCallback (BioseqPtr bsp, Pointer userdata)
 {
   ParseSrcCollectionPtr psp;
   
-  if (bsp == NULL || userdata == NULL)
+  if (bsp == NULL || ISA_aa (bsp->mol) || userdata == NULL)
   {
     return;
   }
@@ -15404,20 +16533,22 @@ static void AddDeflineDestinationsForBioseq (BioseqPtr bsp, ValNodePtr PNTR dest
 }
 
 
+static ValNodePtr GetFeatureListForNucleotideBioseq (Uint1 featdef, BioseqPtr bsp);
+static ValNodePtr GetFeatureListForProteinBioseq (Uint1 featdef, BioseqPtr bsp);
+
 static void AddFeatureDestinationsForBioseq (BioseqPtr bsp, FeatureFieldLegalPtr featfield, ValNodePtr PNTR dest_list)
 {
-  SeqFeatPtr        sfp;
-  SeqMgrFeatContext fcontext;
-  Int4             featdef;
+  Int4 featdef;
 
   if (bsp == NULL || featfield == NULL || dest_list == NULL) return;
 
   featdef = GetFeatdefFromFeatureType (featfield->type);
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, featdef, &fcontext);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, featdef, &fcontext)) {
-    ValNodeAddPointer (dest_list, OBJ_SEQFEAT, sfp);
+  if (ISA_aa (bsp->mol)) {
+    ValNodeLink (dest_list, GetFeatureListForProteinBioseq (featdef, bsp));
+  } else {
+    ValNodeLink (dest_list, GetFeatureListForNucleotideBioseq (featdef, bsp));
   }
+
 }
 
 
@@ -15479,6 +16610,9 @@ static void AddParseDestinations (ParseSourceInfoPtr psip, ParseDestPtr dst)
       break;
     case ParseDest_featqual :
       AddFeatureDestinationsForBioseq (psip->bsp, dst->data.ptrvalue, &(psip->dest_list));
+      break;
+    case ParseDest_comment_descriptor :
+      AddCommentDescriptorDestinationsForBioseq (psip->bsp, &(psip->dest_list));
       break;
     case ParseDest_dbxref :
       GetBioSourceDestinationsForBioseq (psip->bsp, Object_type_constraint_any, &(psip->dest_list));
@@ -15773,6 +16907,26 @@ static void PropagateSourceOnSegSetForParse (ValNodePtr parse_source_list)
 }
 
 
+
+static CharPtr GetDBxrefFromBioSource (BioSourcePtr biop, CharPtr db_name)
+{
+  CharPtr    rval = NULL;
+  ValNodePtr vnp;
+  DbtagPtr   dbtag;
+
+  if (biop == NULL || biop->org == NULL || StringHasNoText (db_name)) {
+    return NULL;
+  }
+  for (vnp = biop->org->db; vnp != NULL && rval != NULL; vnp = vnp->next) {
+    dbtag = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbtag != NULL && StringCmp (db_name, dbtag->db)) {
+      rval = GetObjectIdString (dbtag->tag);
+    }
+  }
+  return rval;
+}
+
+
 static Boolean SetDBxrefForBioSource (BioSourcePtr biop, CharPtr db_name, CharPtr str, Uint2 existing_text)
 {
   ValNodePtr    dbx;
@@ -15829,11 +16983,13 @@ static Int4 SetFieldForDestList (ValNodePtr dest_list, ParseDestPtr field, CharP
 {
   ValNodePtr vnp;
   SeqDescrPtr sdp;
+  ObjValNodePtr ovp;
   CharPtr     cp;
   BioSourcePtr biop;
   ParseDstOrgPtr o;
   FeatureFieldLegalPtr fl;
   FeatureField f;
+  Boolean      was_empty;
   Int4         num_succeeded = 0;
 
   if (dest_list == NULL || field == NULL) return 0;
@@ -15880,6 +17036,25 @@ static Int4 SetFieldForDestList (ValNodePtr dest_list, ParseDestPtr field, CharP
         f.field = ValNodeFree (f.field);
       }
       break;
+    case ParseDest_comment_descriptor:
+      for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+        sdp = vnp->data.ptrvalue;
+        if (StringHasNoText (sdp->data.ptrvalue)) {
+          was_empty = TRUE;
+        } else {
+          was_empty = FALSE;
+        }
+        cp = sdp->data.ptrvalue;
+        if (SetStringValue (&cp, str, existing_text)) {
+          num_succeeded++;
+        }
+        sdp->data.ptrvalue = cp;
+        if (was_empty) {
+          ovp = (ObjValNodePtr) sdp;
+          ovp->idx.deleteme = FALSE;
+        }
+      }
+      break;
     case ParseDest_dbxref:
       if (!StringHasNoText (field->data.ptrvalue)) {
         for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
@@ -15892,6 +17067,70 @@ static Int4 SetFieldForDestList (ValNodePtr dest_list, ParseDestPtr field, CharP
       break;
   }
   return num_succeeded;
+}
+
+
+
+static void AddToSampleForDestList (AECRSamplePtr sample, ValNodePtr dest_list, ParseDestPtr field)
+{
+  ValNodePtr vnp;
+  SeqDescrPtr sdp;
+  BioSourcePtr biop;
+  ParseDstOrgPtr o;
+  FeatureFieldLegalPtr fl;
+  FeatureField f;
+
+  if (dest_list == NULL || field == NULL || sample == NULL) return;
+
+  switch (field->choice) {
+    case ParseDest_defline :
+      for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+        if (vnp->choice == OBJ_SEQDESC && vnp->data.ptrvalue != NULL) {
+          sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+          if (sdp->choice == Seq_descr_title) {
+            AddTextToAECRSample (sample, StringSave (sdp->data.ptrvalue));
+          }
+        }
+      }
+      break;
+    case ParseDest_org :
+      o = (ParseDstOrgPtr) field->data.ptrvalue;
+      if (o != NULL) {
+        for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+          biop = GetBioSourceFromObject (vnp->choice, vnp->data.ptrvalue);
+          AddTextToAECRSample (sample, GetSourceQualFromBioSource (biop, o->field, NULL));
+        }
+      }
+      break;
+    case ParseDest_featqual:
+      fl = (FeatureFieldLegalPtr) field->data.ptrvalue;
+      if (fl != NULL) {
+        f.type = fl->type;
+        f.field = ValNodeNew(NULL);
+        f.field->next = NULL;
+        f.field->choice = FeatQualChoice_legal_qual;
+        f.field->data.intvalue = fl->field;        
+        for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+          AddTextToAECRSample (sample, GetQualFromFeature (vnp->data.ptrvalue, &f, NULL));
+        }
+        f.field = ValNodeFree (f.field);
+      }
+      break;
+    case ParseDest_comment_descriptor:
+      for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+        sdp = (SeqDescrPtr) vnp->data.ptrvalue;
+        AddTextToAECRSample (sample, StringSave (sdp->data.ptrvalue));
+      }
+      break;
+    case ParseDest_dbxref:
+      if (!StringHasNoText (field->data.ptrvalue)) {
+        for (vnp = dest_list; vnp != NULL; vnp = vnp->next) {
+          biop = GetBioSourceFromObject (vnp->choice, vnp->data.ptrvalue);
+          AddTextToAECRSample (sample, GetDBxrefFromBioSource (biop, field->data.ptrvalue));
+        }
+      }
+      break;
+  }
 }
 
 
@@ -15950,6 +17189,49 @@ static void StripFieldForSrcList (ParseSourceInfoPtr psip, ParseSrcPtr field, Te
       }
       break;
   }
+}
+
+
+
+NLM_EXTERN AECRSamplePtr GetExistingTextForParseAction (ParseActionPtr action, SeqEntryPtr sep)
+{
+  ParseSrcCollectionData psd;
+  ParseSourceInfoPtr     psip;
+  ValNodePtr             vnp;
+  ValNodePtr             dest_list = NULL;
+  AECRSamplePtr          sample;
+
+  if (action == NULL || sep == NULL) return 0;
+
+  psd.src = action->src;
+  psd.portion = action->portion;
+  psd.src_list = NULL;
+
+  /* first, we need to get a list of the parse sources */  
+  VisitBioseqsInSep (sep, &psd, FindParseSourceBioseqCallback);
+
+
+  /* for each parse source, get a list of the destinations */
+  for (vnp = psd.src_list; vnp != NULL; vnp = vnp->next)
+  {
+    if (vnp->data.ptrvalue == NULL) continue;
+    psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
+
+    /* find destinations */
+    AddParseDestinations (psip, action->dest);
+
+    /* add destinations to list */
+    ValNodeLink (&dest_list, psip->dest_list);
+    psip->dest_list = NULL;
+  }
+
+  psd.src_list = ParseSourceListFree (psd.src_list);
+
+  /* get sample for dest_list */
+  sample = AECRSampleNew ();
+  AddToSampleForDestList (sample, dest_list, action->dest);
+  dest_list = ValNodeFree (dest_list);
+  return sample;
 }
 
 
@@ -16012,6 +17294,8 @@ static Int4 ApplyParseActionToSeqEntry (ParseActionPtr action, SeqEntryPtr sep)
     psip = (ParseSourceInfoPtr) vnp->data.ptrvalue;
     StripFieldForSrcList (psip, action->src, action->portion);
   }
+
+  psd.src_list = ParseSourceListFree (psd.src_list);
   return num_succeeded;
 }
 
@@ -16251,8 +17535,8 @@ static SeqLocPtr LocationFromApplyFeatureAction (BioseqPtr bsp, ApplyFeatureActi
   if (action->location->choice == LocationChoice_interval) {
     l = (LocationIntervalPtr) action->location->data.ptrvalue;
     if (l != NULL) {
-      from = MIN (l->from, l->to);
-      to = MAX (l->from, l->to);
+      from = MIN (l->from, l->to) - 1;
+      to = MAX (l->from, l->to) - 1;
       slp = SeqLocIntNew (from, to, strand, SeqIdFindWorst (bsp->id));
     }
   } else if (action->location->choice == LocationChoice_whole_sequence) {
@@ -16491,8 +17775,15 @@ static Int4 ApplyApplyFeatureActionToSeqEntry (ApplyFeatureActionPtr action, Seq
     CreateDataForFeature (sfp, action->type);
     /* any extra actions */
     switch (action->type) {
-      case (Feature_type_cds) :
+      case Feature_type_cds :
         ExtraCDSCreationActions (sfp, GetBestTopParentForData (bsp->idx.entityID, bsp));
+        break;
+      case Feature_type_source :
+        if (action->src_fields != NULL) {
+          sfp->data.value.ptrvalue = ImpFeatFree (sfp->data.value.ptrvalue);
+          sfp->data.choice = SEQFEAT_BIOSRC;
+          sfp->data.value.ptrvalue = BioSourceFromSourceQualVals (action->src_fields);
+        }
         break;
     }
     gene = NULL;
@@ -17909,6 +19200,245 @@ NLM_EXTERN void ApplyMolinfoBlockToSeqEntry (SeqEntryPtr sep, MolinfoBlockPtr mi
 }
 
 
+typedef struct descriptortypename {
+  Int4 descriptortype;
+  Uint1 descriptor_choice;
+  CharPtr descriptorname;
+} DescriptorTypeNameData, PNTR DescriptorTypeNamePtr;
+
+static DescriptorTypeNameData descriptortypename[] = {
+ { Descriptor_type_all , 0 , "Any" } , 
+ { Descriptor_type_title , Seq_descr_title , "Title" } , 
+ { Descriptor_type_source , Seq_descr_source , "Source" } , 
+ { Descriptor_type_publication , Seq_descr_pub , "Publication" } , 
+ { Descriptor_type_comment , Seq_descr_comment , "Comment" } , 
+ { Descriptor_type_genbank , Seq_descr_genbank , "GenBank" } , 
+ { Descriptor_type_user , Seq_descr_user , "User" } , 
+ { Descriptor_type_create_date , Seq_descr_create_date , "CreateDate" } , 
+ { Descriptor_type_update_date , Seq_descr_update_date , "UpdateDate" } , 
+ { Descriptor_type_mol_info , Seq_descr_molinfo , "MolInfo" } ,
+ { Descriptor_type_structured_comment , Descriptor_type_user , "StructuredComment" }
+};
+
+#define NUM_descriptortypename sizeof (descriptortypename) / sizeof (DescriptorTypeNameData)
+
+static Int4 GetDescriptorTypeFromDescriptorChoice (Uint1 descriptor_choice) 
+{
+  Int4 i;
+
+  for (i = 0; i < NUM_descriptortypename; i++) {
+    if (descriptor_choice == descriptortypename[i].descriptor_choice) {
+      return descriptortypename[i].descriptortype;
+    }
+  }
+  return -1;
+}
+
+
+static Uint1 GetDescriptorChoiceFromDescriptorType (Int4 descriptortype) 
+{
+  Int4 i;
+
+  for (i = 0; i < NUM_descriptortypename; i++) {
+    if (descriptortype == descriptortypename[i].descriptortype) {
+      return descriptortypename[i].descriptor_choice;
+    }
+  }
+  return SEQDESCR_MAX;
+}
+
+
+NLM_EXTERN CharPtr GetDescriptorNameFromDescriptorType (Int4 descriptortype)
+{
+  CharPtr str = NULL;
+  Int4 i;
+
+  for (i = 0; i < NUM_descriptortypename && str == NULL; i++) {
+    if (descriptortype == descriptortypename[i].descriptortype) {
+      str = descriptortypename[descriptortype].descriptorname;
+    }
+  } 
+  if (str == NULL) {
+    str = "Unknown descriptor type";
+  }
+  return str;
+}
+
+
+NLM_EXTERN void AddAllDescriptorsToChoiceList (ValNodePtr PNTR descriptor_type_list)
+{
+  Int4 i;
+  ValNodePtr tmp_list = NULL;
+
+  for (i = 0; i < NUM_descriptortypename; i++) {
+    ValNodeAddPointer (&tmp_list, descriptortypename[i].descriptortype, StringSave (descriptortypename[i].descriptorname));
+  }
+  tmp_list = ValNodeSort (tmp_list, SortVnpByString);
+  ValNodeLink (descriptor_type_list, tmp_list);
+}
+
+
+
+static Boolean DoesDescriptorMatchType (SeqDescrPtr sdp, Int4 descriptortype)
+{
+  Uint1 descriptorchoice;
+  UserObjectPtr uop;
+
+  if (sdp == NULL) {
+    return FALSE;
+  } else if (descriptortype == Descriptor_type_all) {
+    return TRUE;
+  } else if ((descriptorchoice = GetDescriptorChoiceFromDescriptorType (descriptortype)) == SEQDESCR_MAX) {
+    return FALSE;
+  } else if (descriptorchoice != sdp->choice) {
+    return FALSE;
+  } else if (descriptortype == Descriptor_type_structured_comment) {
+    if ((uop = (UserObjectPtr) sdp->data.ptrvalue) == NULL
+        || uop->type == NULL
+        || StringCmp (uop->type->str, "StructuredComment") == 0) {
+      return FALSE;
+    } else {
+      return TRUE;
+    }
+  } else {
+    return TRUE;
+  }
+}
+
+
+typedef struct removedescriptoractioncollection {
+  RemoveDescriptorActionPtr action;
+  ValNodePtr obj_list;
+} RemoveDescriptorActionCollectionData, PNTR RemoveDescriptorActionCollectionPtr;
+
+
+static void RemoveDescriptorCollectionCallback (SeqDescrPtr sdp, Pointer data)
+{
+  RemoveDescriptorActionCollectionPtr d;
+
+  if (sdp == NULL || (d = (RemoveDescriptorActionCollectionPtr) data) == NULL
+      || d->action == NULL) {
+    return;
+  }
+  
+  if (DoesDescriptorMatchType (sdp, d->action->type)
+      && DoesObjectMatchConstraintChoiceSet (OBJ_SEQDESC, sdp, d->action->constraint)) {
+    ValNodeAddPointer (&(d->obj_list), OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static Int4 ApplyRemoveDescriptorActionToSeqEntry (RemoveDescriptorActionPtr action, SeqEntryPtr sep)
+{
+  RemoveDescriptorActionCollectionData d;
+  SeqDescrPtr sdp;
+  ObjValNodePtr ovp;
+  ValNodePtr vnp;
+  Int4       num_deleted = 0;
+
+  if (action == NULL) return 0;
+
+  d.action = action;
+  d.obj_list = NULL;
+
+  VisitDescriptorsInSep (sep, &d, RemoveDescriptorCollectionCallback);
+  for (vnp = d.obj_list; vnp != NULL; vnp = vnp->next) {
+    sdp = vnp->data.ptrvalue;
+    if (sdp != NULL && sdp->extended != 0) {
+      ovp = (ObjValNodePtr) sdp;
+      ovp->idx.deleteme = TRUE;
+      num_deleted ++;
+    }
+  }
+  DeleteMarkedObjects (ObjMgrGetEntityIDForChoice(sep), 0, NULL);
+  return num_deleted;
+}
+
+
+static DefLineType DefLineTypeFromAutodefListType(Uint2 list_type)
+{
+  DefLineType deflinetype = DEFLINE_USE_FEATURES;
+
+  switch (list_type) {
+    case Autodef_list_type_feature_list:
+      deflinetype = DEFLINE_USE_FEATURES;
+      break;
+    case Autodef_list_type_complete_sequence:
+      deflinetype = DEFLINE_COMPLETE_SEQUENCE;
+      break;
+    case Autodef_list_type_complete_genome:
+      deflinetype = DEFLINE_COMPLETE_GENOME;
+      break;
+  }
+  return deflinetype;
+}
+
+
+static void ApplyAutodefActionToSeqEntry (AutodefActionPtr action, SeqEntryPtr sep)
+{
+  OrganismDescriptionModifiers od;
+  ModifierItemLocalPtr modList;
+  DeflineFeatureRequestList dfrl;
+  ValNodePtr           vnp, modifier_indices = NULL;
+  ValNode              field_type, source_qual_choice;
+  Uint4                i;
+  Int4                 defline_pos;
+
+  od.allow_semicolon_in_modifier = FALSE;
+  od.clone_isolate_HIV_rule_num = clone_isolate_HIV_rule_want_both;
+  od.exclude_aff = FALSE;
+  od.exclude_cf = FALSE;
+  od.exclude_nr = FALSE;
+  od.exclude_sp = TRUE;
+  od.include_country_extra = FALSE;
+  od.keep_paren = TRUE;
+  od.max_mods = -99;
+  od.use_labels = TRUE;
+  od.use_modifiers = TRUE;
+
+  modList = MemNew (NumDefLineModifiers () * sizeof (ModifierItemLocalData));
+  for (i = 0; i < NumDefLineModifiers(); i++) {
+    modList[i].any_present = FALSE;
+    modList[i].all_present = FALSE;
+    modList[i].is_unique = FALSE;
+    modList[i].first_value_seen = NULL;
+    modList[i].values_seen = NULL;
+    modList[i].all_unique = FALSE;
+    modList[i].status = NULL;
+    modList[i].required = FALSE;
+  }
+  SetRequiredModifiers (modList);
+
+  /* add modifiers specified in action */
+  source_qual_choice.next = NULL;
+  source_qual_choice.choice = SourceQualChoice_textqual;
+  field_type.next = NULL;
+  field_type.choice = FieldType_source_qual;
+  field_type.data.ptrvalue = &source_qual_choice;
+
+  for (vnp = action->modifiers; vnp != NULL; vnp = vnp->next) {
+    source_qual_choice.data.intvalue = vnp->data.intvalue;
+    defline_pos = GetDeflinePosForFieldType (&field_type);
+    if (defline_pos > -1) {
+      modList[defline_pos].required = TRUE;
+      modList[defline_pos].any_present = TRUE;
+      ValNodeAddInt (&modifier_indices, 0, defline_pos);
+
+    }
+  }
+
+  InitFeatureRequests (&dfrl);
+  dfrl.feature_list_type = DefLineTypeFromAutodefListType (action->clause_list_type);
+  
+  AutoDefForSeqEntry (sep, SeqMgrGetEntityIDForSeqEntry (sep), &od, modList, modifier_indices, &dfrl,
+                      DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE);
+
+  modList = MemFree (modList);
+  modifier_indices = ValNodeFree (modifier_indices);
+
+}
+
+
 NLM_EXTERN void ApplyMacroToSeqEntry (SeqEntryPtr sep, ValNodePtr macro, Int4Ptr pNumFields, Int4Ptr pNumFeat)
 {
   Int4 num_AECR = 0, num_parse = 0, num_feature = 0, num_fields = 0;
@@ -17933,6 +19463,12 @@ NLM_EXTERN void ApplyMacroToSeqEntry (SeqEntryPtr sep, ValNodePtr macro, Int4Ptr
         break;
       case MacroActionChoice_convert_feature:
         num_feature += ApplyConvertFeatureActionToSeqEntry ((ConvertFeatureActionPtr) macro->data.ptrvalue, sep);
+        break;
+      case MacroActionChoice_remove_descriptor:
+        num_feature += ApplyRemoveDescriptorActionToSeqEntry ((RemoveDescriptorActionPtr) macro->data.ptrvalue, sep);
+        break;
+      case MacroActionChoice_autodef:
+        ApplyAutodefActionToSeqEntry ((AutodefActionPtr) macro->data.ptrvalue, sep);
         break;
     }
     macro = macro->next;
@@ -18088,6 +19624,8 @@ NLM_EXTERN CharPtr SummarizeFieldType (ValNodePtr vnp)
       case FieldType_misc:
         if (vnp->data.intvalue == Misc_field_genome_project_id) {
           str = StringSave ("Genome Project ID");
+        } else if (vnp->data.intvalue == Misc_field_comment_descriptor) {
+          str = StringSave ("Comment Descriptor");
         } else {
           str = StringSave ("Invalid field type");
         }
@@ -18280,7 +19818,7 @@ NLM_EXTERN TabColumnConfigPtr TabColumnConfigCopy (TabColumnConfigPtr orig)
     t->existing_text = orig->existing_text;
     t->skip_blank = orig->skip_blank;
     t->match_mrna = orig->match_mrna;
-    t->field = AsnIoMemCopy (orig->field, (AsnReadFunc) FieldTypeAsnRead, (AsnWriteFunc) FieldTypeAsnWrite);
+    t->field = FieldTypeCopy (orig->field);
     t->constraint = AsnIoMemCopy (orig->constraint, (AsnReadFunc) ConstraintChoiceSetAsnRead, (AsnWriteFunc) ConstraintChoiceSetAsnWrite);
   }
   return t;
@@ -19315,7 +20853,7 @@ static ValNodePtr GetStructuredCommentListForRowAndColumn (MatchTypePtr match_ty
 
 static ValNodePtr GetTargetListForRowAndColumn (MatchTypePtr match_type, ValNodePtr match_list, FieldTypePtr field, ValNodePtr constraint)
 {
-  ValNodePtr target_list = NULL, vnp_prev = NULL, vnp, vnp_next;
+  ValNodePtr target_list = NULL, vnp_prev = NULL, vnp, vnp_next, tmp_list;
   FeatureFieldPtr feature_field;
 
   if (field == NULL || match_type == NULL) return NULL;
@@ -19345,6 +20883,12 @@ static ValNodePtr GetTargetListForRowAndColumn (MatchTypePtr match_type, ValNode
     case FieldType_misc:
       if (field->data.intvalue == Misc_field_genome_project_id) {
         target_list = GetSequenceListForRowAndColumn (match_type, match_list);
+      } else if (field->data.intvalue == Misc_field_comment_descriptor) {
+        tmp_list = GetSequenceListForRowAndColumn (match_type, match_list);
+        for (vnp = tmp_list; vnp != NULL; vnp = vnp->next) {
+          AddCommentDescriptorDestinationsForBioseq (vnp->data.ptrvalue, &target_list);
+        }
+        tmp_list = ValNodeFree (tmp_list);
       }
       break;
   }
@@ -19691,10 +21235,23 @@ NLM_EXTERN ValNodePtr FreeSequenceLists (ValNodePtr lists)
 }
 
 
+static ValNodePtr ReportTableSummaryLine (Int4 err_lines, Int4 total_lines, CharPtr fmt)
+{
+  CharPtr str;
+  ValNodePtr vnp;
+
+  str = (CharPtr) MemNew (sizeof (Char) + (StringLen (fmt) + 30));
+  sprintf (str, fmt, err_lines, total_lines);
+  vnp = ValNodeNew (NULL);
+  vnp->data.ptrvalue = str;
+  return vnp;
+}
+
+
 NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr PNTR p_err_list)
 {
   ValNodePtr err_list = NULL;
-  ValNodePtr line_vnp, val_vnp, col_vnp;
+  ValNodePtr line_vnp, val_vnp, col_vnp, err_vnp;
   ValNodePtr obj_table = NULL, obj_row;
   Int4       line_num = 1, col_num;
   Uint2      entityID;
@@ -19703,6 +21260,8 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
   CharPtr            err_msg;
   CharPtr            no_match_fmt = "No match for %s, line %d";
   MatchTypePtr       match_type;
+  Int4       num_empty = 0, num_missing = 0, num_no_targets = 0;
+
 
   if (sep == NULL) {
     ValNodeAddPointer (&err_list, 0, StringSave ("No SeqEntry"));
@@ -19732,12 +21291,14 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
     match_choice = FindMatchChoiceInLine (line_vnp->data.ptrvalue, columns);
     if (match_choice == NULL || StringHasNoText (match_choice->data.ptrvalue)) {
       ReportEmptyIDColumn (&err_list, line_num);
+      num_empty++;
     } else {
       match_list = FindMatchForRow (match_type, match_choice->data.ptrvalue, entityID, sep);
       if (match_list == NULL) {
         err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_match_fmt) + StringLen (match_choice->data.ptrvalue) + 15));
         sprintf (err_msg, no_match_fmt, match_choice->data.ptrvalue, line_num);
         ValNodeAddPointer (&err_list, 0, err_msg);
+        num_missing ++;
       } else {
         for (val_vnp = line_vnp->data.ptrvalue, col_vnp = columns, col_num = 1;
              col_vnp != NULL;
@@ -19751,6 +21312,7 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
             target_list = GetTargetListForRowAndColumn (match_type, match_list, t->field, t->constraint);
             if (target_list == NULL) {
               ReportMissingTargets (&err_list, t->field, match_choice->data.ptrvalue, col_num, line_num); 
+              num_no_targets++;
             }
           }
           ValNodeAddPointer (&obj_row, 0, target_list);
@@ -19765,7 +21327,22 @@ NLM_EXTERN ValNodePtr GetObjectTableForTabTable (SeqEntryPtr sep, ValNodePtr tab
 
   match_type = MatchTypeFree (match_type);
 
-  if (err_list != NULL) {
+  if (err_list != NULL) {    
+    if (num_empty > 0) {
+      err_vnp = ReportTableSummaryLine (num_empty, line_num - 1, "%d lines out of %d have no ID value");
+      err_vnp->next = err_list;
+      err_list = err_vnp;
+    }
+    if (num_no_targets > 0) {
+      err_vnp = ReportTableSummaryLine (num_no_targets, line_num - 1, "%d lines out of %d have no targets");
+      err_vnp->next = err_list;
+      err_list = err_vnp;
+    }
+    if (num_missing > 0) {
+      err_vnp = ReportTableSummaryLine (num_missing, line_num - 1, "%d lines out of %d have no match");
+      err_vnp->next = err_list;
+      err_list = err_vnp;
+    }
     if (p_err_list == NULL) {
       err_list = ValNodeFreeData (err_list);
     } else {
@@ -19915,9 +21492,15 @@ static ValNodePtr CountObjectsForColumnFields (SeqEntryPtr sep, ValNodePtr colum
           tmp_list = ValNodeFree (tmp_list);
           break;
         case FieldType_misc:
-          VisitBioseqsInSep (sep, &tmp_list, CollectNucBioseqCallback);
-          num = ValNodeLen (tmp_list);
-          tmp_list = ValNodeFree (tmp_list);
+          if (t->field->data.intvalue == Misc_field_genome_project_id) {
+            VisitBioseqsInSep (sep, &tmp_list, CollectNucBioseqCallback);
+            num = ValNodeLen (tmp_list);
+            tmp_list = ValNodeFree (tmp_list);
+          } else if (t->field->data.intvalue == Misc_field_comment_descriptor) {
+            tmp_list = CollectCommentDescriptors (sep);
+            num = ValNodeLen (tmp_list);
+            tmp_list = ValNodeFree (tmp_list);
+          }
           break;
       }
     }
@@ -20185,11 +21768,13 @@ static CharPtr GetMatchTextForLine (ValNodePtr values, ValNodePtr columns)
 }
 
 
+/* Note - when creating error messages, mark summary messages with choice = 1 */
 NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr table, ValNodePtr columns, ValNodePtr obj_table)
 {
   ValNodePtr err_list = NULL, vnp;
   ValNodePtr val_line_vnp, obj_line_vnp;
   ValNodePtr val_vnp, obj_vnp, col_vnp;
+  ValNodePtr col_tot = NULL, col_tot_vnp;
   Int4       line_num = 1, col_num, num_existing_text = 0;
   Uint2      entityID;
   TabColumnConfigPtr t;
@@ -20197,6 +21782,7 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
   CharPtr            already_has_val_fmt = "%s\t%s\t%s\t%d\t%s\t%d";
   CharPtr            num_existing_text_fmt = "%d fields already have text.\nID\tOld Value\tReplacement\tColumn\tQualifier\tLine";
   CharPtr            mrna_warn_fmt = "%d coding region features have mRNAs, but %d do not.";
+  CharPtr            col_tot_fmt = "For column %d, %d out of %d fields already have text.";
   ValNodePtr         target_list, feat_vnp;
   Int4               num_with_mrna = 0, num_without_mrna = 0;
   CharPtr            match_txt;
@@ -20225,6 +21811,10 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
     col_vnp = columns;
     if (val_vnp == NULL || obj_vnp == NULL) continue;
     col_num = 1;
+    col_tot_vnp = col_tot;
+    if (col_tot_vnp == NULL) {
+      col_tot_vnp = ValNodeAddInt (&col_tot, 0, 0);
+    }
     while (obj_vnp != NULL && col_vnp != NULL) {
       if (obj_vnp->data.ptrvalue != NULL) {
         t = (TabColumnConfigPtr) col_vnp->data.ptrvalue;
@@ -20256,9 +21846,10 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
                                                            + StringLen (qual_name)
                                                            + 30));
               sprintf (err_msg, already_has_val_fmt, match_txt, str, new_val, col_num, qual_name, line_num); 
-              ValNodeAddPointer (&err_list, col_num, err_msg);
+              ValNodeAddPointer (&err_list, 0, err_msg);
               num_existing_text ++;
               new_val = MemFree (new_val);
+              col_tot_vnp->data.intvalue ++;
             }
             str = MemFree (str);
             /* check for mrna if changing CDS product */
@@ -20278,9 +21869,21 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
       obj_vnp = obj_vnp->next;
       col_vnp = col_vnp->next;
       col_num++;
+      col_tot_vnp = col_tot_vnp->next;
+      if (col_tot_vnp == NULL) {
+        col_tot_vnp = ValNodeAddInt (&col_tot, 0, 0);
+      }
     }
   }          
   if (num_existing_text > 0) {
+    for (col_tot_vnp = col_tot, col_num = 1; col_tot_vnp != NULL; col_tot_vnp = col_tot_vnp->next, col_num++) {
+      if (col_tot_vnp->data.intvalue > 0) {
+        err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (col_tot_fmt) + 45));
+        sprintf (err_msg, col_tot_fmt, col_num, col_tot_vnp->data.intvalue, line_num - 1);
+        ValNodeAddPointer (&err_list, 1, err_msg);
+      }
+    }
+
     err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (num_existing_text_fmt)
                                                 + 15));
     sprintf (err_msg, num_existing_text_fmt, num_existing_text);
@@ -20290,12 +21893,13 @@ NLM_EXTERN ValNodePtr CheckObjTableForExistingText (SeqEntryPtr sep, ValNodePtr 
     vnp->next = err_list;
     err_list = vnp;
   }
+  col_tot = ValNodeFree (col_tot);
   if (num_with_mrna > 0 && num_without_mrna > 0) {
     err_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (mrna_warn_fmt)
                                                 + 30));
     sprintf (err_msg, mrna_warn_fmt, num_with_mrna, num_without_mrna);
     vnp = ValNodeNew (NULL);
-    vnp->choice = 0;
+    vnp->choice = 1;
     vnp->data.ptrvalue = err_msg;
     vnp->next = err_list;
     err_list = vnp;

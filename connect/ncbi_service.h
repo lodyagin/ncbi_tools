@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.54 2008/07/29 14:55:32 kazimird Exp $
+/* $Id: ncbi_service.h,v 6.56 2009/01/23 19:44:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -199,6 +199,15 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Penalize
  );
 
 
+/* Rerate the server returned last from SERV_GetNextInfo[Ex]().
+ * Return 0 if failed, 1 if successful.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Rerate
+(SERV_ITER            iter,          /* handle obtained via 'SERV_Open*' call*/
+ double               rate           /* new rate, 0 to off, <0 to set default*/
+ );
+
+
 /* Reset the iterator to the state as if it has just been opened.
  * CAUTION:  All pointers to server descriptors (SSERV_Info*), if any
  * previously obtained via this iterator, are rendered invalid by this call.
@@ -212,6 +221,26 @@ extern NCBI_XCONNECT_EXPORT void SERV_Reset
  */
 extern NCBI_XCONNECT_EXPORT void SERV_Close
 (SERV_ITER            iter           /* handle obtained via 'SERV_Open*' call*/
+ );
+
+
+/* Obtain port number that corresponds to the named (standalone) service
+ * declared on the specified host (per LB configuration information).
+ * @param name
+ *   service name (of type fSERV_Standalone) to look up
+ * @param host
+ *   host address (or SERV_LOCALHOST or 0, same) to look the service up on
+ * @return
+ *   the port number or 0 on error (no suitable service found)
+ * Note that the call returns the first match, and does not check
+ * whether an application is already running on the returned port
+ * (i.e. regradless of whether or not the service is currently up).
+ * @sa
+ *   SERV_Open, LSOCK_CreateEx
+ */
+extern NCBI_XCONNECT_EXPORT unsigned short SERV_ServerPort
+(const char*  name,
+ unsigned int host
  );
 
 

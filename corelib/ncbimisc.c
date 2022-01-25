@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,10 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.37  2008/12/04 15:05:11  bollin
+* Added ValNodeInsert, which inserts a new ValNode into a sorted list at the
+* correct position.
+*
 * Revision 6.36  2008/09/11 20:30:37  bollin
 * Added ValNodePurge function.
 *
@@ -970,6 +974,38 @@ ValNodeUnique
       tmp = valnodefree (tmp);
     } else {
       vnp = vnp->next;
+    }
+  }
+}
+
+
+NLM_EXTERN void LIBCALL
+ValNodeInsert
+(ValNodePtr PNTR list,
+ ValNodePtr new_item,
+ int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )))
+{
+  ValNodePtr vnp, vnp_prev = NULL;
+
+  if (list == NULL || new_item == NULL) {
+    return;
+  }
+  if (*list == NULL) {
+    *list = new_item;
+  } else if (compar == NULL) {
+    ValNodeLink (list, new_item);
+  } else {
+    vnp = *list;
+    while (vnp != NULL && compar (&vnp, &new_item) < 1) {
+      vnp_prev = vnp;
+      vnp = vnp->next;
+    }
+    if (vnp_prev == NULL) {
+      new_item->next= *list;
+      *list = new_item;
+    } else {
+      new_item->next= vnp_prev->next;
+      vnp_prev->next= new_item;
     }
   }
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   ByteStore typedefs, prototypes, and defines
@@ -38,41 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-*
-*
-* $Log: ncbibs.h,v $
-* Revision 6.4  2003/01/21 17:56:24  kans
-* minor fix in BSAdd, comment that BSAdd does not change totlen
-*
-* Revision 6.3  2000/05/26 23:34:58  kans
-* added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
-*
-* Revision 6.2  1999/01/27 01:59:52  kans
-* cleaned up comment problem
-*
-* Revision 6.1  1999/01/21 20:38:16  ostell
-* added support for integer bytestores
-*
-* Revision 6.0  1997/08/25 18:15:16  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:48:33  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.1  1995/12/21  02:33:19  ostell
- * added use_min_size to BSAll
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.4  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -121,6 +86,7 @@ NLM_EXTERN Nlm_Int2 LIBCALL Nlm_BSPutByte PROTO((Nlm_ByteStorePtr bsp, Nlm_Int2 
 NLM_EXTERN Nlm_Int4 LIBCALL Nlm_BSLen PROTO((Nlm_ByteStorePtr ssp));
 NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSFree PROTO((Nlm_ByteStorePtr ssp));
 NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup PROTO((Nlm_ByteStorePtr source));
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_BSEqual PROTO((Nlm_ByteStorePtr bs1, Nlm_ByteStorePtr bs2));
 /*****************************************************************************
 *
 *   Int4 BSAdd(bsp, len, use_min_size)
@@ -186,6 +152,7 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDupAndSwapUint4 (Nlm_ByteStorePtr sour
 #define BSInsert Nlm_BSInsert
 #define BSInsertFromBS Nlm_BSInsertFromBS
 #define BSDup Nlm_BSDup
+#define BSEqual Nlm_BSEqual
 #define BSRead Nlm_BSRead
 #define BSGetByte Nlm_BSGetByte
 #define BSPutByte Nlm_BSPutByte

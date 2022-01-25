@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.35 2008/11/14 22:44:42 kazimird Exp $
+/* $Id: test_ncbi_socket.c,v 6.38 2009/01/29 18:09:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,8 +35,8 @@
 
 /* OS must be specified in the command-line ("-D....") or in the conf. header
  */
-#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN) && !defined(NCBI_OS_MAC)
-#  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN, NCBI_OS_MAC!"
+#if !defined(NCBI_OS_UNIX) && !defined(NCBI_OS_MSWIN)
+#  error "Unknown OS, must be one of NCBI_OS_UNIX, NCBI_OS_MSWIN!"
 #endif
 
 #include <connect/ncbi_socket.h>
@@ -100,16 +100,7 @@ static void TEST__client_1(SOCK sock)
     /* Send a short string */
     SOCK_SetDataLoggingAPI(eOn);
     {{
-#if defined(NCBI_OS_MAC)
-        /* Special treatment for MAC clients -- server not to
-         * shutdown the socket on writing. MAC library
-         * mistakingly assumes that if server is shutdown on writing then
-         * it is shutdown on reading, too (?!). 
-         */
-        const char* x_C1 = s_M1;
-#else
         const char* x_C1 = s_C1;
-#endif
         n_io = strlen(x_C1) + 1;
         status = SOCK_Write(sock, x_C1, n_io, &n_io_done, eIO_WritePersist);
     }}
@@ -178,14 +169,12 @@ static void TEST__client_1(SOCK sock)
     }}
 
     /* Try to read more data (must hit EOF as the peer is shut down) */
-#if !defined(NCBI_OS_MAC)
     assert(SOCK_Read(sock, buf, 1, &n_io_done, eIO_ReadPeek)
            == eIO_Closed);
     assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
     assert(SOCK_Read(sock, buf, 1, &n_io_done, eIO_ReadPlain)
            == eIO_Closed);
     assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
-#endif
 
     /* Shutdown on read */
     assert(SOCK_Shutdown(sock, eIO_Read)  == eIO_Success);
@@ -906,8 +895,7 @@ static void TEST_SOCK_isip(void)
  */
 extern int main(int argc, char** argv)
 {
-    /* Setup log stream
-     */
+    /* Setup log stream */
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
@@ -919,8 +907,7 @@ extern int main(int argc, char** argv)
     argc = 3;
 #endif
 
-    /* Printout local hostname
-     */
+    /* Printout local hostname */
     {{
         char local_host[64];
         assert(SOCK_gethostname(local_host, sizeof(local_host)) == 0);
@@ -931,6 +918,21 @@ extern int main(int argc, char** argv)
     /* Parse cmd.-line args and decide whether it's a client or a server
      */
     switch ( argc ) {
+    case 1:
+        /*** Try to set various fake MT safety locks ***/
+        CORE_SetLOCK( MT_LOCK_Create(0,
+                                     TEST_LockHandler, TEST_LockCleanup) );
+        CORE_SetLOCK(0);
+        CORE_SetLOCK(0);
+        CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
+                                     TEST_LockHandler, TEST_LockCleanup) );
+        TEST_gethostby();
+
+        TEST_SOCK_isip();
+
+        CORE_SetLOCK(0);
+        break;
+
     case 2: {
         /*** SERVER ***/
         int port;
@@ -950,60 +952,49 @@ extern int main(int argc, char** argv)
 
     case 3: case 4: {
         /*** CLIENT ***/
-        const char* server_host;
-        int         server_port;
-        STimeout*   timeout = 0;
+        const char* host;
+        int         port;
+        STimeout*   tmo;
 
 #if defined(DO_CLIENT)
-        server_host = DEF_HOST;
-        server_port = DEF_PORT;
+        host = DEF_HOST;
+        port = DEF_PORT;
+        tmo  = 0/*infinite*/;
 #else
-        STimeout    x_timeout;
+        STimeout    x_tmo;
         /* host */
-        server_host = argv[1];
+        host = argv[1];
 
         /* port */
-        if (sscanf(argv[2], "%d", &server_port) != 1  ||
-            server_port < MIN_PORT)
+        if (sscanf(argv[2], "%d", &port) != 1  ||  port < MIN_PORT)
             break;
 
         /* timeout */
         if (argc == 4) {
-            double tm_out = atof(argv[3]);
-            if (tm_out < 0)
+            double val = atof(argv[3]);
+            if (val < 0)
                 break;
-            x_timeout.sec  = (unsigned int)tm_out;
-            x_timeout.usec = (unsigned int)((tm_out - x_timeout.sec) *1000000);
-            timeout = &x_timeout;
-        };
+            x_tmo.sec  = (unsigned int)  val;
+            x_tmo.usec = (unsigned int)((val - x_tmo.sec) * 1000000);
+            tmo = &x_tmo;
+        } else
+            tmo = 0/*infinite*/;
 #endif /* DO_CLIENT */
 
-        TEST__client(server_host, (unsigned short) server_port, timeout);
+        TEST__client(host, (unsigned short) port, tmo);
         assert(SOCK_ShutdownAPI() == eIO_Success);
         CORE_SetLOG(0);
         return 0;
     }
     } /* switch */
 
-    /* Try to set various fake MT safety locks
-     */
-    CORE_SetLOCK( MT_LOCK_Create(0, TEST_LockHandler, TEST_LockCleanup) );
-    CORE_SetLOCK(0);
-    CORE_SetLOCK(0);
-    CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
-                                 TEST_LockHandler, TEST_LockCleanup) );
-
-    TEST_gethostby();
-
-    TEST_SOCK_isip();
-
+    /* USAGE */
     fprintf(stderr,
             "\nClient/Server USAGE:\n"
-            "Client: %s <srv_host> <port> [timeout]\n"
+            "Client: %s <host> <port> [timeout]\n"
             "Server: %s <port>\n"
             "where <port> is greater than %d, and [timeout] is a double\n\n",
             argv[0], argv[0], MIN_PORT);
-    CORE_SetLOCK(0);
     CORE_SetLOG(0);
-    return 0;
+    return argc == 1 ? 0 : 1;
 }

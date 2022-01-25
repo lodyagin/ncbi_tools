@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.395 $
+* $Revision: 6.444 $
 *
 * File Description: 
 *
@@ -6564,6 +6564,48 @@ static void FindAdjacentPseudoGenes (ValNodePtr PNTR discrepancy_list, ValNodePt
 
 
 /* functions for the missing and superfluous gene tests */
+static Boolean GeneRefMatchForSuperfluousCheck (GeneRefPtr grp1, GeneRefPtr grp2)
+{
+  if (grp1 == NULL && grp2 == NULL)
+  {
+    return TRUE;
+  }
+  else if (grp1 == NULL || grp2 == NULL)
+  {
+    return FALSE;
+  }
+  else if (StringCmp (grp1->locus, grp2->locus) != 0
+           || StringCmp (grp1->locus_tag, grp2->locus_tag) != 0
+           || (grp1->pseudo && !grp2->pseudo)
+           || (!grp1->pseudo && grp2->pseudo))
+  {
+    return FALSE;
+  }
+  else if (StringHasNoText (grp1->allele) 
+           && !StringHasNoText (grp2->allele) 
+           && StringCmp (grp1->allele, grp2->allele) != 0) 
+  {
+    return FALSE;
+  }
+  else if (StringHasNoText (grp1->desc) 
+           && !StringHasNoText (grp2->desc) 
+           && StringCmp (grp1->desc, grp2->desc) != 0) 
+  {
+    return FALSE;
+  }
+  else if (StringHasNoText (grp1->maploc) 
+           && !StringHasNoText (grp2->maploc) 
+           && StringCmp (grp1->maploc, grp2->maploc) != 0) 
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+
 static void ExtractGeneFromListByGeneRef (ValNodePtr PNTR list, GeneRefPtr grp)
 {
   ValNodePtr prev = NULL, this_vnp, next_vnp;
@@ -6579,7 +6621,7 @@ static void ExtractGeneFromListByGeneRef (ValNodePtr PNTR list, GeneRefPtr grp)
   {
     next_vnp = this_vnp->next;
     gene_feat = (SeqFeatPtr) this_vnp->data.ptrvalue;
-    if (gene_feat != NULL && GeneRefMatch (gene_feat->data.value.ptrvalue, grp))
+    if (gene_feat != NULL && GeneRefMatchForSuperfluousCheck (gene_feat->data.value.ptrvalue, grp))
     {
       if (prev == NULL)
       {
@@ -8013,6 +8055,7 @@ static Boolean IsEukaryotic (BioseqPtr bsp)
       || biop->genome == GENOME_mitochondrion
       || biop->genome == GENOME_chloroplast
       || biop->genome == GENOME_plastid
+      || biop->genome == GENOME_apicoplast
       || biop->org == NULL || biop->org->orgname == NULL
       || StringSearch (biop->org->orgname->lineage, "Eukaryota") == NULL) {
     return FALSE;
@@ -8949,7 +8992,7 @@ static void FindContainedCDSs (BioseqPtr bsp, Pointer userdata)
   SeqMgrFeatContext  context;
   ValNodePtr PNTR    contained_cds = NULL;
   ValNodePtr         cds_list = NULL;
-  ValNodePtr         contained_list = NULL, vnp, vnp_next;
+  ValNodePtr         contained_list = NULL, vnp, vnp_next, last;
   Int2               loc_compare;
   Uint1              strand, strand_compare;
   
@@ -8959,14 +9002,19 @@ static void FindContainedCDSs (BioseqPtr bsp, Pointer userdata)
   }
   
   contained_cds = (ValNodePtr PNTR) userdata;
-  
+  last = NULL;
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &context);
        sfp != NULL;
        sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &context))
   {
-    ValNodeAddPointer (&cds_list, OBJ_SEQFEAT, sfp);
+    ValNodeAddPointer (&last, OBJ_SEQFEAT, sfp);
+    if (cds_list == NULL) 
+    {
+      cds_list = last;
+    }
   }
   
+  last = NULL;
   for (vnp = cds_list; vnp != NULL && vnp->next != NULL; vnp = vnp->next)
   {    
     sfp = vnp->data.ptrvalue;
@@ -8985,11 +9033,19 @@ static void FindContainedCDSs (BioseqPtr bsp, Pointer userdata)
       {
         if (!AlreadyInList (contained_list, sfp)) 
         {
-          ValNodeAddPointer (&contained_list, OBJ_SEQFEAT, sfp);
+          ValNodeAddPointer (&last, OBJ_SEQFEAT, sfp);
+          if (contained_list == NULL) 
+          {
+            contained_list = last;
+          }
         }
         if (!AlreadyInList (contained_list, sfp_compare)) 
         {
-          ValNodeAddPointer (&contained_list, OBJ_SEQFEAT, sfp_compare);
+          ValNodeAddPointer (&last, OBJ_SEQFEAT, sfp_compare);
+          if (contained_list == NULL) 
+          {
+            contained_list = last;
+          }
         }
       }
     }
@@ -10833,9 +10889,10 @@ extern void rRNACountFeaturesAndFindDups (ValNodePtr PNTR discrepancy_list, ValN
   RNACountFeaturesAndFindDups (discrepancy_list, sep_list, FEATDEF_rRNA);
 }
 
+/* do not count short tRNAs if they are partial */
 static void CountShorttRNA (SeqFeatPtr sfp, Pointer data)
 {
-  if (sfp == NULL || sfp->idx.subtype != FEATDEF_tRNA || data == NULL) return;
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_tRNA || data == NULL || sfp->partial) return;
 
   if (SeqLocLen (sfp->location) < 50) {
     ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
@@ -10844,10 +10901,19 @@ static void CountShorttRNA (SeqFeatPtr sfp, Pointer data)
 
 static void CountLongtRNA (SeqFeatPtr sfp, Pointer data)
 {
+  SeqMgrFeatContext fcontext;
+  Int4 len;
+
   if (sfp == NULL || sfp->idx.subtype != FEATDEF_tRNA || data == NULL) return;
 
-  if (SeqLocLen (sfp->location) > 90) {
-    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  if ((len = SeqLocLen (sfp->location)) > 90) {
+    if (len > 100
+        || (sfp = SeqMgrGetDesiredFeature (sfp->idx.entityID, NULL, 0, 0, sfp, &fcontext)) == NULL
+        || (StringCmp (fcontext.label, "Ser") != 0
+            && StringCmp (fcontext.label, "Leu") != 0
+            && StringCmp (fcontext.label, "Sec") != 0)) {
+      ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+    }
   }
 }
 
@@ -10875,6 +10941,7 @@ extern void tRNAFindBadLength (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_
 
 }
 
+
 static void FindRNAsWithoutProductsCallback (SeqFeatPtr sfp, Pointer data)
 {
   ValNode field;
@@ -10885,8 +10952,11 @@ static void FindRNAsWithoutProductsCallback (SeqFeatPtr sfp, Pointer data)
     return;
   }
 
-  if (sfp->idx.subtype == FEATDEF_otherRNA && StringNICmp (sfp->comment, "contains ", 9) == 0) {
-    return;
+  if (sfp->idx.subtype == FEATDEF_otherRNA) {
+    if (StringNICmp (sfp->comment, "contains ", 9) == 0
+        || StringNICmp (sfp->comment, "may contain", 11) == 0) {
+      return;
+    }
   } else if (sfp->idx.subtype == FEATDEF_tmRNA) {
     /* don't require products for tmRNA */
     return;
@@ -10907,6 +10977,59 @@ static void FindRNAsWithoutProductsCallback (SeqFeatPtr sfp, Pointer data)
   ff = FeatureFieldFree (ff);
 }
 
+
+static ClickableItemPtr PseudoAndNonPseudoClickableItem (Uint4 clickable_item_type, CharPtr format, ValNodePtr item_list)
+{
+  ValNodePtr pseudo_list = NULL, non_pseudo_list = NULL, vnp;
+  CharPtr pseudo_fmt = " and are pseudo", non_pseudo_fmt = " and are not pseudo";
+  ClickableItemPtr cip, pseudo_cip = NULL, non_pseudo_cip = NULL;
+
+  if (item_list == NULL) {
+    return NULL;
+  }
+
+  for (vnp = item_list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == OBJ_SEQFEAT) {
+      if (IsPseudo(vnp->data.ptrvalue)) {
+        ValNodeAddPointer (&pseudo_list, OBJ_SEQFEAT, vnp->data.ptrvalue);
+      } else {
+        ValNodeAddPointer (&non_pseudo_list, OBJ_SEQFEAT, vnp->data.ptrvalue);
+      }
+    }
+  }
+  if (pseudo_list != NULL) {
+    pseudo_cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+    MemSet (pseudo_cip, 0, sizeof (ClickableItemData));
+    pseudo_cip->clickable_item_type = clickable_item_type;
+    pseudo_cip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (format) + StringLen (pseudo_fmt) + 15));
+    sprintf (pseudo_cip->description, format, ValNodeLen (pseudo_list));
+    StringCat (pseudo_cip->description, pseudo_fmt);
+    pseudo_cip->item_list = pseudo_list;
+  }
+
+  if (non_pseudo_list != NULL) {
+    non_pseudo_cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+    MemSet (non_pseudo_cip, 0, sizeof (ClickableItemData));
+    non_pseudo_cip->clickable_item_type = clickable_item_type;
+    non_pseudo_cip->description = (CharPtr) MemNew (sizeof (Char) * (StringLen (format) + StringLen (non_pseudo_fmt) + 15));
+    sprintf (non_pseudo_cip->description, format, ValNodeLen (non_pseudo_list));
+    StringCat (non_pseudo_cip->description, non_pseudo_fmt);
+    non_pseudo_cip->item_list = non_pseudo_list;
+  }
+
+  if (pseudo_cip == NULL) {
+    cip = non_pseudo_cip;
+  } else if (non_pseudo_cip == NULL) {
+    cip = pseudo_cip;
+  } else {
+    cip = NewClickableItem (clickable_item_type, format, item_list);
+    ValNodeAddPointer (&(cip->subcategories), 0, non_pseudo_cip);
+    ValNodeAddPointer (&(cip->subcategories), 0, pseudo_cip);
+  }
+  return cip;
+}
+
+
 extern void FindRNAsWithoutProducts (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
 {
   ValNodePtr       vnp;
@@ -10919,7 +11042,7 @@ extern void FindRNAsWithoutProducts (ValNodePtr PNTR discrepancy_list, ValNodePt
     VisitFeaturesInSep (sep, &rna_list, FindRNAsWithoutProductsCallback);
   }
   if (rna_list != NULL) {
-   cip = NewClickableItem (DISC_RNA_NO_PRODUCT, "%d RNA features have no product", rna_list);
+   cip = PseudoAndNonPseudoClickableItem (DISC_RNA_NO_PRODUCT, "%d RNA features have no product", rna_list);
    ValNodeAddPointer (discrepancy_list, 0, cip);
   }
 }
@@ -12129,8 +12252,7 @@ static Boolean LIBCALLBACK IsUnwantedSourceQualifier (ValNodePtr vnp)
 static void AdjustSourceQualSampleFieldListForOnCallerTest (ValNodePtr PNTR qual_list, ValNodePtr object_list)
 {
   ValNodePtr vnp, field;
-  AECRSamplePtr       sample;
-
+  AECRSamplePtr sample;
   if (qual_list == NULL || *qual_list == NULL) {
     return;
   }
@@ -12339,7 +12461,7 @@ static void FindRepeatedFieldValues (ValNodePtr PNTR discrepancy_list, ValNodePt
 
 static void AddDiscrepanciesForSourceQualComboList (ValNodePtr PNTR discrepancy_list, ValNodePtr PNTR combo_list, ValNodePtr src_list, Uint4 item_type)
 {
-  ValNodePtr missing_for_qual = NULL, repeated = NULL, unique_list = NULL, dup_qual_list = NULL, val_dup_list = NULL;
+  ValNodePtr missing_for_qual = NULL, repeated = NULL, unique_list = NULL, dup_qual_list = NULL;
   ValNodePtr subcat = NULL;
   ValNodePtr vnp_c;
   DuplicateQualPtr dq1, dq2;
@@ -12347,6 +12469,7 @@ static void AddDiscrepanciesForSourceQualComboList (ValNodePtr PNTR discrepancy_
   CharPtr          missing_fmt = "%%d sources are missing %s";
   CharPtr          dup_fmt = "%%d sources have '%s' for %s";
   CharPtr          fmt, qual_name;
+  Char tmp[30];
 
   if (combo_list == NULL || *combo_list == NULL || src_list == NULL) {
     return;
@@ -12429,7 +12552,11 @@ static void AddDiscrepanciesForSourceQualComboList (ValNodePtr PNTR discrepancy_
     cip->subcategories = subcat;
     cip->clickable_item_type = item_type;
     cip->description = StringSave ("Source Qualifier Report");
-    cip->expanded = TRUE;
+
+    if (GetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", NULL, tmp, sizeof (tmp) - 1)
+        && StringICmp (tmp, "TRUE") == 0) {
+      cip->expanded = TRUE; /* initially source qualifier report should be open */
+    }
     ValNodeAddPointer (discrepancy_list, 0, cip);
   }
 
@@ -12616,24 +12743,6 @@ static Boolean IsPlasmodium (BioSourcePtr biop)
 }
 
 
-static Boolean BioSourceHasPlasmodiumButNotIsolate (BioSourcePtr biop)
-{
-  OrgModPtr orgmod;
-  Boolean   has_isolate = FALSE;
-
-  if (!IsPlasmodium (biop)) {
-    return FALSE;
-  }
-
-  for (orgmod = biop->org->orgname->mod; orgmod != NULL && !has_isolate; orgmod = orgmod->next) {
-    if (orgmod->subtype == ORGMOD_isolate) {
-      has_isolate = TRUE;
-    }
-  }
-  return !has_isolate;  
-}
-
-
 static Boolean BioSourceHasPlasmodiumAndStrain (BioSourcePtr biop)
 {
   OrgModPtr orgmod;
@@ -12658,15 +12767,6 @@ static void CheckPlasmodiumIsolateNotStrain (ValNodePtr PNTR discrepancy_list, V
   ClickableItemPtr cip;
 
   for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
-    ValNodeLink (&item_list, RunBioSourceTest (vnp->data.ptrvalue, BioSourceHasPlasmodiumButNotIsolate));
-  }
-
-  if (item_list != NULL) {
-    ValNodeAddPointer (&subcat, 0, NewClickableItem (DISC_PLASMODIUM_ISOLATE_NOT_STRAIN, "%d biosources have plasmodium but not isolate", item_list));
-    item_list = NULL;
-  }
-
-  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
     ValNodeLink (&item_list, RunBioSourceTest (vnp->data.ptrvalue, BioSourceHasPlasmodiumAndStrain));
   }
 
@@ -12683,6 +12783,43 @@ static void CheckPlasmodiumIsolateNotStrain (ValNodePtr PNTR discrepancy_list, V
     cip->subcategories = subcat;
     ValNodeAddPointer (discrepancy_list, 0, cip);
   }
+}
+
+
+static void RetroviridaeDNACallback (BioseqPtr bsp, Pointer data)
+{
+  SeqMgrDescContext context;
+  SeqDescrPtr       sdp;
+  BioSourcePtr      biop;
+
+  if (bsp == NULL || bsp->mol != Seq_mol_dna || data == NULL) {
+    return;
+  }
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+  if (sdp == NULL || (biop = sdp->data.ptrvalue) == NULL
+      || biop->org == NULL || biop->org->orgname == NULL
+      || biop->genome == GENOME_proviral
+      || StringSearch (biop->org->orgname->lineage, "Retroviridae") == NULL) {
+    return;
+  } else {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static void CheckRetroviridaeDNA (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp, item_list = NULL;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    VisitBioseqsInSep (vnp->data.ptrvalue, &item_list, RetroviridaeDNACallback);
+  }
+
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_RETROVIRIDAE_DNA, "%d Retroviridae biosources on DNA sequences are not proviral", item_list));
+    item_list = NULL;
+  }
+
 }
 
 
@@ -13037,10 +13174,10 @@ static AffilPtr AffilFromCitSub (CitSubPtr csp)
   return affil;
 }
 
-
 static int ComparePubAffilForItem (ValNodePtr vnp1, ValNodePtr vnp2)
 {
   AffilPtr afp1, afp2;
+  CharPtr  str1, str2;
   int rval = 0;
 
   if (vnp1 == NULL && vnp2 == NULL) {
@@ -13052,36 +13189,11 @@ static int ComparePubAffilForItem (ValNodePtr vnp1, ValNodePtr vnp2)
   } else {
     afp1 = AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (vnp1)));
     afp2 = AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (vnp2)));
-
-    if (afp1 == NULL && afp2 == NULL) {
-      rval = 0;
-    } else if (afp1 == NULL) {
-      rval = -1;
-    } else if (afp2 == NULL) {
-      rval = 1;
-    } else if ((rval = StringCmp (afp1->affil, afp2->affil)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->div, afp2->div)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->city, afp2->city)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->sub, afp2->sub)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->country, afp2->country)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->street, afp2->street)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->email, afp2->email)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->fax, afp2->fax)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->phone, afp2->phone)) != 0) {
-      /* found difference */
-    } else if ((rval = StringCmp (afp1->postal_code, afp2->postal_code)) != 0) {
-      /* found difference */
-    } else {
-      rval = 0;
-    }
+    str1 = GetFlatFileAffilString (afp1);
+    str2 = GetFlatFileAffilString (afp2);
+    rval = StringCmp (str1, str2);
+    str1 = MemFree (str1);
+    str2 = MemFree (str2);
   }
   return rval;
 }
@@ -13100,39 +13212,6 @@ static int LIBCALLBACK SortVnpByPubAffil (VoidPtr ptr1, VoidPtr ptr2)
   }
 
   return rval;
-}
-
-
-static CharPtr SummarizeAffil (AffilPtr afp)
-{
-  CharPtr summ = NULL;
-  Int4 len;
-
-  if (afp == NULL) {
-    return NULL;
-  }
-
-  len = StringLen (afp->affil) + StringLen (afp->div) + StringLen (afp->city) + StringLen (afp->sub)
-          + StringLen (afp->country) + StringLen (afp->street) 
-          + StringLen (afp->postal_code) + 10;
-
-  summ = (CharPtr) MemNew (sizeof (Char) * len);
-  summ[0] = 0;
-  StringCat (summ, afp->affil);
-  StringCat (summ, ":");
-  StringCat (summ, afp->div);
-  StringCat (summ, ":");
-	StringCat (summ, afp->city);
-  StringCat (summ, ":");
-	StringCat (summ, afp->sub);
-  StringCat (summ, ":");
-	StringCat (summ, afp->country);
-  StringCat (summ, ":");
-	StringCat (summ, afp->street);
-  StringCat (summ, ":");
-  StringCat (summ, afp->postal_code);
-
-  return summ;
 }
 
 
@@ -13179,11 +13258,12 @@ static void FindMismatchedCitSubAffiliations (ValNodePtr PNTR discrepancy_list, 
 
   cit_sub_list = ValNodeSort (cit_sub_list, SortVnpByPubAffil);
   if (cit_sub_list != NULL && cit_sub_list->next != NULL) {
-    summ1 = SummarizeAffil (AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (cit_sub_list))));
+    summ1 = GetFlatFileAffilString (AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (cit_sub_list))));
     ValNodeAddPointer (&repeated, cit_sub_list->choice, cit_sub_list->data.ptrvalue);
     for (vnp = cit_sub_list->next; vnp != NULL; vnp = vnp->next) {
-      summ2 = SummarizeAffil (AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (vnp))));
+      summ2 = GetFlatFileAffilString (AffilFromCitSub (CitSubFromPubdesc (PubdescFromItem (vnp))));
       if (StringCmp (summ1, summ2) != 0) {
+        repeated = ValNodeSort (repeated, SortVnpByDiscrepancyItemText);
         if (StringHasNoText (summ1)) {
           ValNodeAddPointer (&subcat, 0, NewClickableItem (DISC_CITSUBAFFIL_CONFLICT, "%d Cit-subs have no affiliation", repeated));
         } else {
@@ -13198,6 +13278,7 @@ static void FindMismatchedCitSubAffiliations (ValNodePtr PNTR discrepancy_list, 
       summ1 = MemFree (summ1);
       summ1 = summ2;
     }
+    repeated = ValNodeSort (repeated, SortVnpByDiscrepancyItemText);
     if (StringHasNoText (summ1)) {
       ValNodeAddPointer (&subcat, 0, NewClickableItem (DISC_CITSUBAFFIL_CONFLICT, "%d Cit-subs have no affiliation", repeated));
     } else {
@@ -13218,11 +13299,12 @@ static void FindMismatchedCitSubAffiliations (ValNodePtr PNTR discrepancy_list, 
       ValNodeAddPointer (discrepancy_list, 0, cip);
     }
   } else if (subcat->next == NULL && !StringHasNoText (summ1)) {
+    /* Make no report if all values match 
     cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
     MemSet (cip, 0, sizeof (ClickableItemData));
     cip->clickable_item_type = DISC_CITSUBAFFIL_CONFLICT;
     cip->description = StringSave ("All citsub affiliations match");
-    ValNodeAddPointer (discrepancy_list, 0, cip);
+    ValNodeAddPointer (discrepancy_list, 0, cip); */
     subcat = FreeClickableList (subcat);
   } else {
     cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
@@ -13617,6 +13699,42 @@ static void ReportFeatureMoltypeMismatch (ValNodePtr PNTR discrepancy_list, ValN
 }
 
 
+const CharPtr kmRNAVariant = ", transcript variant ";
+const CharPtr kCDSVariant = ", isoform ";
+
+static Boolean ProductsMatchForRefSeq (CharPtr cds_str, CharPtr mrna_str)
+{
+  CharPtr join_mrna, join_cds;
+  Int4    len;
+
+  if (StringHasNoText (cds_str) || StringHasNoText (mrna_str)) {
+    return FALSE;
+  }
+
+  join_mrna = StringStr (mrna_str, kmRNAVariant);
+  if (join_mrna == NULL) {
+    return FALSE;
+  }
+  join_cds = StringStr (cds_str, kCDSVariant);
+  if (join_cds == NULL) {
+    return FALSE;
+  }
+  len = join_mrna - mrna_str;
+  if (len != join_cds - cds_str) {
+    return FALSE;
+  } else if (StringNCmp (cds_str, mrna_str, len) != 0) {
+    return FALSE;
+  }
+  cds_str = join_cds + StringLen (kCDSVariant);
+  mrna_str = join_mrna + StringLen (kmRNAVariant);
+  if (StringCmp (cds_str, mrna_str) != 0) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
 static void ReportCDSWithoutmRNACallback (BioseqPtr bsp, Pointer data)
 {
   SeqMgrFeatContext fcontext, mcontext;
@@ -13654,7 +13772,7 @@ static void ReportCDSWithoutmRNACallback (BioseqPtr bsp, Pointer data)
   for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_CDS, &fcontext);
        sfp != NULL;
        sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_CDS, &fcontext)) {
-    if (sfp->pseudo) {
+    if (IsPseudo (sfp)) {
       continue;
     }
     mRNA = SeqMgrGetOverlappingmRNA (sfp->location, &mcontext);
@@ -13663,7 +13781,7 @@ static void ReportCDSWithoutmRNACallback (BioseqPtr bsp, Pointer data)
     } else {
       feat_product = GetFieldValueForObject (OBJ_SEQFEAT, sfp, &field, NULL);
       mrna_product = GetFieldValueForObject (OBJ_SEQFEAT, mRNA, &field, NULL);
-      if (StringCmp (feat_product, mrna_product) != 0) {
+      if (StringCmp (feat_product, mrna_product) != 0 && !ProductsMatchForRefSeq(feat_product, mrna_product)) {
         ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
       }
       feat_product = MemFree (feat_product);
@@ -13687,6 +13805,64 @@ static void ReportCDSWithoutmRNA (ValNodePtr PNTR discrepancy_list, ValNodePtr s
     ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_CDS_WITHOUT_MRNA, "%d coding regions do not have an mRNA", item_list));
   }
 }
+
+
+static void ReportmRNAOnNonGenomicEukaryoticSequencesCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+  SeqFeatPtr        sfp;
+  SeqDescrPtr       sdp;
+  MolInfoPtr        mip;
+  BioSourcePtr      biop;
+
+  if (bsp == NULL || bsp->mol != Seq_mol_dna || data == NULL) {
+    return;
+  }
+  
+  if (!IsEukaryotic (bsp)) {
+    return;
+  }
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &dcontext);
+  if (sdp == NULL || sdp->data.ptrvalue == NULL) {
+    return;
+  }
+  mip = (MolInfoPtr) sdp->data.ptrvalue;
+  if (mip->biomol != MOLECULE_TYPE_GENOMIC) {
+    return;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp == NULL || sdp->data.ptrvalue == NULL) {
+    return;
+  }
+  biop = (BioSourcePtr) sdp->data.ptrvalue;
+  if (biop->genome == GENOME_macronuclear || biop->genome == GENOME_unknown || biop->genome == GENOME_genomic) {
+    return;
+  }
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_RNA, FEATDEF_mRNA, &fcontext);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_RNA, FEATDEF_mRNA, &fcontext)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  }
+}
+
+
+static void ReportmRNAOnNonGenomicEukaryoticSequences (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp;
+  ValNodePtr item_list = NULL;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    VisitBioseqsInSep (vnp->data.ptrvalue, &item_list, ReportmRNAOnNonGenomicEukaryoticSequencesCallback);
+  }
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_mRNA_ON_WRONG_SEQUENCE_TYPE, "%d mRNAs are located on eukaryotic sequences that do not have genomic or plasmid sources", item_list));
+  }
+}
+
+
 
 
 /* exon and intron locations */
@@ -14668,6 +14844,7 @@ typedef struct objfindbytext {
 typedef struct objfindlistoftext {
   CharPtr PNTR search_items;
   ValNodePtr PNTR item_lists;
+  Boolean whole_word;
 } ObjFindListOfTextData, PNTR ObjFindListOfTextPtr;
 
 static void RemoveTranslation (CharPtr str)
@@ -14690,6 +14867,52 @@ static void RemoveTranslation (CharPtr str)
 }
 
 
+static CharPtr GetTaxnameForObject (Uint2 entityID, Uint2 itemtype, Uint4 itemID)
+{
+  BioseqPtr        bsp = NULL;
+  SeqFeatPtr       sfp;
+  SeqDescrPtr      sdp;
+  ObjValNodePtr    ovn;
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+  BioSourcePtr      biop;
+  CharPtr           taxname = NULL;
+
+  switch (itemtype) {
+    case OBJ_BIOSEQ:
+      bsp =  GetBioseqGivenIDs (entityID, itemID, itemtype);
+      break;
+    case OBJ_SEQFEAT:
+      sfp = SeqMgrGetDesiredFeature (entityID, NULL, itemID, 0, NULL, &fcontext);          
+      if (sfp != NULL) {
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+      }
+      break;
+    case OBJ_SEQDESC:
+      sdp = SeqMgrGetDesiredDescriptor (entityID, NULL, itemID, 0, NULL, &dcontext);
+      if (sdp != NULL && sdp->extended != 0) {
+        ovn = (ObjValNodePtr) sdp;
+        if (ovn->idx.parenttype == OBJ_BIOSEQ) {
+          bsp = (BioseqPtr) ovn->idx.parentptr;
+        } else if (ovn->idx.parenttype == OBJ_BIOSEQSET && ovn->idx.parentptr != NULL) {
+          bsp = GetRepresentativeBioseqFromBioseqSet (ovn->idx.parentptr);
+        }
+      }
+      break;
+  }
+  if (bsp != NULL) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+    if (sdp != NULL) {
+      biop = sdp->data.ptrvalue;
+      if (biop != NULL && biop->org != NULL) {
+        taxname = biop->org->taxname;
+      }
+    }
+  }
+  return taxname;
+}
+
+
 static void FlatfileTextFind (
   CharPtr str,
   Pointer userdata,
@@ -14708,8 +14931,12 @@ static void FlatfileTextFind (
   ObjFindListOfTextPtr  obj;
   CharPtr               cpy;
   Int4                  i;
+  CharPtr               taxname = NULL;
+  Boolean               do_add;
 
   if (blocktype == SEQUENCE_BLOCK) return;
+  /* don't spellcheck organism name or lineage */
+  if (blocktype == ORGANISM_BLOCK) return;
   if (userdata == NULL) return;
 
   obj = (ObjFindListOfTextPtr) userdata;
@@ -14721,7 +14948,20 @@ static void FlatfileTextFind (
   }
 
   for (i = 0; obj->search_items[i] != NULL; i++) {
-    if (StringISearch (cpy, obj->search_items[i]) != NULL) {
+    do_add = FALSE;
+    if (DoesStringContainPhrase (cpy, obj->search_items[i], FALSE, obj->whole_word)) {
+      if (taxname == NULL) {
+        /* remove taxname */
+        taxname = GetTaxnameForObject (entityID, itemtype, itemID);
+        FindReplaceString (&cpy, taxname, "", FALSE, TRUE);
+        if (DoesStringContainPhrase (cpy, obj->search_items[i], FALSE, obj->whole_word)) {
+          do_add = TRUE;
+        }
+      } else {
+        do_add = TRUE;
+      }
+    }
+    if (do_add) {
       switch (itemtype) {
         case OBJ_BIOSEQ:
           bsp =  GetBioseqGivenIDs (entityID, itemID, itemtype);
@@ -14748,7 +14988,7 @@ static void FlatfileTextFind (
 }
 
 
-static void FindTextInFlatfileEx (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list, Uint4 item_type, CharPtr PNTR find_list)
+static void FindTextInFlatfileEx (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list, Uint4 item_type, CharPtr PNTR find_list, Boolean whole_word)
 {
   XtraBlock       xtra;
   ObjFindListOfTextData od;
@@ -14767,6 +15007,7 @@ static void FindTextInFlatfileEx (ValNodePtr PNTR discrepancy_list, ValNodePtr s
   xtra.userdata = (Pointer) &od;
   level = ErrSetMessageLevel (SEV_MAX);
 
+  od.whole_word = whole_word;
   od.search_items = find_list;
   for (i = 0; find_list[i] != NULL; i++) {
     num++;
@@ -14802,6 +15043,7 @@ static void FindTextInFlatfileEx (ValNodePtr PNTR discrepancy_list, ValNodePtr s
 
 static CharPtr flatfile_find_list_oncaller[] = {
  "univeristy",
+ "univerisity",
  "putatvie",
  "putaitve",
  "protien",
@@ -14843,7 +15085,6 @@ static CharPtr flatfile_find_list_oncaller[] = {
  "hypothetcial",
  "consevered",
  "haemagglutination",
- "chian",
  "oxydase",
  "colour",
  "indepedent",
@@ -14851,42 +15092,33 @@ static CharPtr flatfile_find_list_oncaller[] = {
  "agricultral",
  "Bacilllus",
  "catalize",
+ "localise",
+ "subitilus",
+ "P.R.Chian",
+ "PRChian",
+ "phylogentic",
+ "pylogeny",
+ "insitute",
+ "reseach",
+ "ribossomal",
+ "mithocon",
  NULL
+};
+
+
+static CharPtr flatfile_find_list_oncaller_wholeword[] = {
+  "chian",
+  "casette",
+  "unversity",
+  "varent",
+  NULL
 };
 
 
 static void FindTextInFlatfileOncaller (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
 {
-  FindTextInFlatfileEx (discrepancy_list, sep_list, DISC_FLATFILE_FIND_ONCALLER, flatfile_find_list_oncaller);
-}
-
-
-static CharPtr flatfile_find_list_discrepancyreport[] = {
- "univeristy",
- "putatvie",
- "putaitve",
- "protien",
- "homologue",
- "orthologue"
- "paralogue",
- "simmilar",
- "Insitiute",
- "Instutite",
- "instute",
- "ribosoml",
- "transcirbed",
- "Agricultutral", 
- "characterised",
- "recognised",
- "resaerch",
- "characterisation",
- NULL
-};
-
-
-static void FindTextInFlatfileDiscrepancyReport (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
-{
-  FindTextInFlatfileEx (discrepancy_list, sep_list, DISC_FLATFILE_FIND_ONCALLER, flatfile_find_list_discrepancyreport);
+  FindTextInFlatfileEx (discrepancy_list, sep_list, DISC_FLATFILE_FIND_ONCALLER, flatfile_find_list_oncaller, FALSE);
+  FindTextInFlatfileEx (discrepancy_list, sep_list, DISC_FLATFILE_FIND_ONCALLER, flatfile_find_list_oncaller_wholeword, TRUE);
 }
 
 
@@ -15372,6 +15604,7 @@ static void CheckUSAStates (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_lis
   }
 
   if (item_list != NULL) {
+    item_list = ValNodeSort (item_list, SortVnpByDiscrepancyItemText);
     ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_USA_STATE, "%d cit-subs are missing state abbreviations", item_list));
   }
 }
@@ -15508,6 +15741,10 @@ static ClickableItemPtr MakeAuthorTitleItem (CharPtr title, CharPtr authors, Val
   CharPtr    fmt;
   ClickableItemPtr cip;
 
+  if (title == NULL) {
+    title = "NULL";
+  }
+
   fmt = (CharPtr) MemNew (sizeof (Char) * (StringLen (title_author_fmt) + StringLen (title) + StringLen (authors)));;
   sprintf (fmt, title_author_fmt, title, authors);
   cip = NewClickableItem (DISC_TITLE_AUTHOR_CONFLICT, fmt, list);
@@ -15625,6 +15862,368 @@ static void CheckForTitleAuthorConflicts (ValNodePtr PNTR discrepancy_list, ValN
 }
 
 
+static Boolean IsNameCapitalizationOk (CharPtr str)
+{
+  CharPtr cp;
+  Boolean need_cap = TRUE, rval = TRUE;
+
+  if (StringHasNoText(str)) {
+    return TRUE;
+  }
+
+  cp = str;
+  while (*cp != 0 && rval) {
+    if (isalpha (*cp)) {
+      if (need_cap && !isupper (*cp)) {
+        rval = FALSE;
+      }
+      need_cap = FALSE;
+    } else {
+      need_cap = TRUE;
+    }
+    cp++;
+  }
+  return rval;
+}
+
+
+static void CheckAuthCapsAuthCallback (NameStdPtr nsp, Pointer userdata)
+{
+  BoolPtr pIsBad;
+
+  if (nsp == NULL || (pIsBad = (BoolPtr)userdata) == NULL || *pIsBad) {
+    return;
+  }
+
+  if (!IsNameCapitalizationOk (nsp->names[0])) {
+    /* last name bad */
+    *pIsBad = TRUE;
+  } else if(!IsNameCapitalizationOk (nsp->names[1])) {
+    /* first name bad */
+    *pIsBad = TRUE;
+  } else if(!IsNameCapitalizationOk (nsp->names[4])) {
+    /* initials bad */
+    *pIsBad = TRUE;
+  }
+}
+
+
+static Boolean AreBadAuthCapsInPubdesc (PubdescPtr pubdesc)
+{
+  Boolean is_bad = FALSE;
+
+  if (pubdesc == NULL) {
+    return FALSE;
+  }
+  VisitAuthorsInPub (pubdesc, &is_bad, CheckAuthCapsAuthCallback);
+  return is_bad;
+}
+
+
+static void CheckAuthCapsFeatCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (data != NULL && sfp != NULL && sfp->data.choice == SEQFEAT_PUB && AreBadAuthCapsInPubdesc (sfp->data.value.ptrvalue)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  }
+}
+
+static void CheckAuthCapsDescrCallback (SeqDescrPtr sdp, Pointer data)
+{
+  if (data != NULL && sdp != NULL && sdp->choice == Seq_descr_pub && AreBadAuthCapsInPubdesc (sdp->data.ptrvalue)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static Boolean AreAuthCapsOkInSubmitBlock (SubmitBlockPtr sbp)
+{
+  Boolean is_bad = FALSE;
+  AuthorPtr    ap;
+  PersonIdPtr  pid;
+  ValNodePtr vnp;
+
+  if (sbp == NULL || sbp->cit == NULL || sbp->cit->authors == NULL || sbp->cit->authors->choice != 1) {
+    return TRUE;
+  }
+  for (vnp = sbp->cit->authors->names; vnp != NULL && !is_bad; vnp = vnp->next) {
+    if ((ap = (AuthorPtr) vnp->data.ptrvalue) != NULL
+        && (pid = (PersonIdPtr) ap->name) != NULL
+        && pid->choice == 2) {
+      CheckAuthCapsAuthCallback (pid->data, &is_bad);
+    }
+  }
+  return !is_bad;
+}
+
+
+static void CheckAuthCaps (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp;
+  ValNodePtr pub_list = NULL;
+  SeqEntryPtr sep;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    VisitDescriptorsInSep (sep, &pub_list, CheckAuthCapsDescrCallback);
+    VisitFeaturesInSep (sep, &pub_list, CheckAuthCapsFeatCallback);
+    if (!AreAuthCapsOkInSubmitBlock(FindSubmitBlockForSeqEntry (sep))) {
+      if (IS_Bioseq (sep)) {
+        ValNodeAddPointer (&pub_list, OBJ_BIOSEQ, sep->data.ptrvalue);
+      } else if (IS_Bioseq_set (sep)) {
+        ValNodeAddPointer (&pub_list, OBJ_BIOSEQSET, sep->data.ptrvalue);
+      }
+    }
+  }
+
+  if (pub_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_CHECK_AUTH_CAPS, "%d pubs have incorrect author capitalization", pub_list));
+  }
+}
+
+
+static CharPtr suspect_rna_product_names[] = 
+{
+  "gene",
+  "genes"
+};
+
+const int num_suspect_rna_product_names = sizeof (suspect_rna_product_names) / sizeof (CharPtr);
+
+static void CheckRNAProductsAndCommentsCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  ValNodePtr PNTR feature_list;
+  Int4            k;
+  CharPtr         str;
+  BoolPtr         phrase_in_product;
+  
+  if (sfp == NULL || (feature_list = (ValNodePtr PNTR) userdata) == NULL 
+      || (sfp->idx.subtype != FEATDEF_rRNA && sfp->idx.subtype != FEATDEF_tRNA)) {
+    return;
+  }
+
+  phrase_in_product = (BoolPtr) MemNew (sizeof (Boolean) * num_suspect_rna_product_names);
+  for (k = 0; k < num_suspect_rna_product_names; k++) {
+    phrase_in_product[k] = FALSE;
+  }
+
+  /* check product */
+  str = GetRNAProductString (sfp, NULL);
+  for (k = 0; k < num_suspect_rna_product_names; k++) {
+    if (DoesStringContainPhrase (str, suspect_rna_product_names[k], FALSE, TRUE)) {
+      ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
+      phrase_in_product[k] = TRUE;
+    }
+  }
+  str = MemFree (str);
+
+  /* check comment */
+
+  for (k = 0; k < num_suspect_rna_product_names; k++) {
+    if (!phrase_in_product[k] && DoesStringContainPhrase (sfp->comment, suspect_rna_product_names[k], FALSE, TRUE)) {
+      ValNodeAddPointer (&(feature_list[k]), OBJ_SEQFEAT, sfp);
+    }
+  }
+  phrase_in_product = MemFree (phrase_in_product);
+}
+
+
+static void CheckRNAProductsAndComments (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp, master_list = NULL, subcategories = NULL;
+  ValNodePtr PNTR feature_list;
+  ClickableItemPtr dip;
+  SeqEntryPtr sep;
+  Int4        k;
+
+  feature_list = (ValNodePtr PNTR) MemNew (sizeof (ValNodePtr) * num_suspect_rna_product_names);
+
+  for (k = 0; k < num_suspect_rna_product_names; k++) {
+    feature_list[k] = NULL;
+  }
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    VisitFeaturesInSep (sep, feature_list, CheckRNAProductsAndCommentsCallback);
+  }
+
+  for (k = 0; k < num_suspect_rna_product_names; k++)
+  {
+    if (feature_list[k] != NULL)
+    {
+      dip = SuspectPhrase (DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS, suspect_rna_product_names[k], "product name or comment", feature_list[k]);
+      if (dip != NULL)
+      {
+        ValNodeAddPointer (&subcategories, 0, dip);
+      }
+      ValNodeLinkCopy (&master_list, feature_list[k]);
+    }
+  }
+  
+  if (master_list != NULL)
+  {
+    dip = SuspectPhrase (DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS, "suspect phrase", "product_name or comment", master_list);
+    if (dip != NULL)
+    {
+      dip->subcategories = subcategories;
+      ValNodeAddPointer (discrepancy_list, 0, dip);
+    }
+  }
+
+  MemFree (feature_list);
+}
+
+
+static void CheckMicrosatelliteRepeatTypeCallback (SeqFeatPtr sfp, Pointer userdata)
+{
+  ValNodePtr PNTR item_list;
+  Boolean is_microsatellite = FALSE;
+  Boolean is_tandem = FALSE;
+  GBQualPtr qual;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region
+    || (item_list = (ValNodePtr PNTR) userdata) == NULL) {
+    return;
+  }
+
+  for (qual = sfp->qual; qual != NULL && (!is_microsatellite || !is_tandem); qual = qual->next) {
+    if (StringCmp (qual->qual, "satellite") == 0) {
+      if (StringICmp (qual->val, "microsatellite") == 0
+          || StringNICmp (qual->val, "microsatellite:", 15) == 0) {
+        is_microsatellite = TRUE;
+      }
+    } else if (StringCmp (qual->qual, "rpt_type") == 0) {
+      if (StringCmp (qual->val, "tandem") == 0) {
+        is_tandem = TRUE;
+      }
+    }
+  }
+
+  if (is_microsatellite && !is_tandem) {
+    ValNodeAddPointer (item_list, OBJ_SEQFEAT, sfp);
+  }
+}
+
+
+static void CheckMicrosatelliteRepeatType (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp, item_list = NULL;
+  SeqEntryPtr sep;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    VisitFeaturesInSep (sep, &item_list, CheckMicrosatelliteRepeatTypeCallback);
+  }
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_MICROSATELLITE_REPEAT_TYPE, "%d microsatellites do not have a repeat type of tandem", item_list));
+  }
+}
+
+
+static void CheckMitochondrionRequiredCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+  SeqFeatPtr   sfp;
+  SeqDescrPtr  sdp;
+  BioSourcePtr biop;
+  Boolean      needs_mitochondrial = FALSE;
+
+  if (bsp == NULL || data == NULL) {
+    return;
+  }
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_D_loop, &fcontext);
+  if (sfp == NULL) {
+    for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_misc_feature, &fcontext);
+         sfp != NULL && !needs_mitochondrial;
+         sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_misc_feature, &fcontext)) {
+      if (StringISearch (sfp->comment, "control region") != NULL) {
+        needs_mitochondrial = TRUE;
+      }
+    }
+  } else {
+    needs_mitochondrial = TRUE;
+  }
+
+  if (needs_mitochondrial) {
+    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+    if (sdp == NULL || (biop = sdp->data.ptrvalue) == NULL || biop->genome != GENOME_mitochondrion) {
+      ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_BIOSEQ, bsp);
+    }
+  }
+}
+
+
+static void CheckMitochondrionRequired (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp, item_list = NULL;
+  SeqEntryPtr sep;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    VisitBioseqsInSep (sep, &item_list, CheckMitochondrionRequiredCallback);
+  }
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_MITOCHONDRION_REQUIRED, "%d bioseqs have D-loop or control region misc_feature, but are do not have mitochondrial source", item_list));
+  }
+}
+
+
+static Boolean DoesPubdescContainUnpubPubWithoutTitle (PubdescPtr pdp)
+{
+  ValNodePtr pub;
+  Boolean    rval = FALSE;
+  Int4       status;
+  CharPtr    title;
+
+  if (pdp == NULL) {
+    return FALSE;
+  }
+
+  for (pub = pdp->pub; pub != NULL && !rval; pub = pub->next) {
+    status = GetPubMLStatus (pub);
+    if (status == Pub_type_unpublished) {
+      title = GetPubFieldFromPub(pub, Publication_field_title, NULL);
+      if (StringHasNoText (title) || StringICmp (title, "Direct Submission") == 0) {
+        rval = TRUE;
+      }
+      title = MemFree (title);
+    }
+  }
+  return rval;
+}
+
+
+static void FindUnpubPubsWithoutTitlesFeatCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (data != NULL && sfp != NULL && sfp->data.choice == SEQFEAT_PUB && DoesPubdescContainUnpubPubWithoutTitle (sfp->data.value.ptrvalue)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  }
+}
+
+
+static void FindUnpubPubsWithoutTitlesDescCallback (SeqDescrPtr sdp, Pointer data)
+{
+  if (data != NULL && sdp != NULL && sdp->choice == Seq_descr_pub && DoesPubdescContainUnpubPubWithoutTitle (sdp->data.ptrvalue)) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+  }
+}
+
+static void FindUnpubPubsWithoutTitles (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  ValNodePtr vnp, item_list = NULL;
+  SeqEntryPtr sep;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    sep = vnp->data.ptrvalue;
+    VisitFeaturesInSep (sep, &item_list, FindUnpubPubsWithoutTitlesFeatCallback);
+    VisitDescriptorsInSep (sep, &item_list, FindUnpubPubsWithoutTitlesDescCallback);
+  }
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_UNPUB_PUB_WITHOUT_TITLE, "%d unpublished pubs have no title", item_list));
+  }
+}
+
+
 static void CheckGeneFeatureStrandConflictsCallback (BioseqPtr bsp, Pointer data)
 {
   SeqFeatPtr gene, sfp;
@@ -15682,19 +16281,30 @@ static void CheckGeneFeatureStrandConflicts (ValNodePtr PNTR discrepancy_list, V
 }
 
 
-static void FindRBSWithoutGene (SeqFeatPtr sfp, Pointer data)
+static void FindRBSWithoutGene (BioseqPtr bsp, Pointer data)
 {
-  SeqMgrFeatContext context;
+  SeqMgrFeatContext context, gcontext;
+  SeqFeatPtr        sfp;
 
-  if (sfp == NULL || sfp->idx.subtype != FEATDEF_RBS || data == NULL) {
+  if (bsp == NULL || data == NULL || ISA_aa (bsp->mol)) {
     return;
   }
 
-  if (SeqMgrGetOverlappingGene (sfp->location, &context) == NULL) {
-    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  /* only report RBSs without genes if there are any genes on the sequence */
+  sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &context);
+  if (sfp == NULL) {
+    return;
+  }
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_RBS, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_RBS, &context)) {
+    if (SeqMgrGetOverlappingGene (sfp->location, &gcontext) == NULL) {
+      ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+    }
   }
 }
-
+    
 
 static void CheckForRBSWithoutGene (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
 {
@@ -15702,10 +16312,528 @@ static void CheckForRBSWithoutGene (ValNodePtr PNTR discrepancy_list, ValNodePtr
   CharPtr    fmt = "%d RBS features do not have overlapping genes";
 
   for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
-    VisitFeaturesInSep (vnp->data.ptrvalue, &item_list, FindRBSWithoutGene);
+    VisitBioseqsInSep (vnp->data.ptrvalue, &item_list, FindRBSWithoutGene);
   }
   if (item_list != NULL) {
     ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_RBS_WITHOUT_GENE, fmt, item_list));
+  }
+}
+
+
+/* use integer with flags
+ * 1 : found some with graphs
+ * 2 : found some without graphs
+ */
+static void CheckForQualityScoresCallback (BioseqPtr bsp, Pointer data)
+{
+  SeqAnnotPtr sap;
+  Int4Ptr     p_i;
+  Int4        i;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || (p_i = (Int4Ptr)data) == NULL) {
+    return;
+  }
+
+  for (sap = bsp->annot; sap != NULL && sap->type != 3; sap = sap->next) {
+  }
+  i = *p_i;
+  if (sap == NULL) {
+    i |= 2;
+  } else {
+    i |= 1;
+  }
+  *p_i = i;
+}
+
+
+static void CheckForQualityScores (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  Int4 i = 0;
+  ValNodePtr vnp;
+  ClickableItemPtr cip;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    VisitBioseqsInSep (vnp->data.ptrvalue, &i, CheckForQualityScoresCallback);
+  }
+
+  cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+  MemSet (cip, 0, sizeof (ClickableItemData));
+  cip->clickable_item_type = DISC_QUALITY_SCORES;
+  if (i == 1) {
+    cip->description = StringSave ("Quality scores are present on all sequences.");
+  } else if (i == 2) {
+    cip->description = StringSave ("Quality scores are missing on all sequences.");
+  } else if (i == 3) {
+    cip->description = StringSave ("Quality scores are missing on some sequences.");
+  }
+  ValNodeAddPointer (discrepancy_list, 0, cip);
+}
+
+
+static void InternalTranscribedrRNACallback (SeqFeatPtr sfp, Pointer data)
+{
+  CharPtr product;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_rRNA || data == NULL) {
+    return;
+  }
+
+  product = GetRNAProductString (sfp, NULL);
+
+  if (StringISearch (product, "internal") != NULL
+      || StringISearch (product, "transcribed") != NULL
+      || StringISearch (product, "spacer") != NULL) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQFEAT, sfp);
+  }
+}
+
+
+static void InternalTranscribedSpacerrRNA (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  Int4 i = 0;
+  ValNodePtr item_list = NULL, vnp;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    VisitFeaturesInSep (vnp->data.ptrvalue, &item_list, InternalTranscribedrRNACallback);
+  }
+
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA, "%d rRNA feature products contain 'internal', 'transcribed', or 'spacer'", item_list));
+  }
+}
+
+
+static Boolean CouldExtendLeft (BioseqPtr bsp, Int4 pos)
+{
+  Char      str[4];
+  Boolean   rval = FALSE;
+
+  if (pos == 0) {
+    rval = FALSE;
+  } else if (pos < 3) {
+    rval = TRUE;
+  } else if (bsp->repr == Seq_repr_delta) {
+    /* wasn't close to the sequence end, but perhaps it is close to a gap */
+    SeqPortStreamInt (bsp, pos - 3, pos - 1, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+    if (str[2] != '-' && (str[0] == '-' || str[1] == '-')) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static Boolean CouldExtendRight (BioseqPtr bsp, Int4 pos)
+{
+  Char      str[4];
+  Boolean   rval = FALSE;
+
+  if (pos == bsp->length - 1) {
+    rval = FALSE;
+  } else if (pos > bsp->length - 3) {
+    rval = TRUE;
+  } else {
+    /* wasn't close to the sequence end, but perhaps it is close to a gap */
+    SeqPortStreamInt (bsp, pos + 1, pos + 3, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+    if (str[0] != '-' && (str[1] == '-' || str[2] == '-')) {
+      rval = TRUE;
+    }
+  }
+
+  return rval;
+}
+
+
+static Boolean ExtendPartialSeqIntToEndOrGap (SeqIntPtr sint, BioseqPtr bsp)
+{
+  Char      str[4];
+  Boolean   rval = FALSE;
+
+  if (sint == NULL || bsp == NULL) {
+    return FALSE;
+  }
+
+  if (sint->if_from != NULL && sint->from != 0) {
+    if (sint->from < 3) {
+      sint->from = 0;
+      rval = TRUE;
+    } else if (bsp->repr == Seq_repr_delta) {
+      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+      SeqPortStreamInt (bsp, sint->from - 3, sint->from - 1, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+      if (str[2] == '-') {
+        /* already abuts gap */
+      } else if (str[1] == '-') {
+        sint->from -= 1;
+        rval = TRUE;
+      } else if (str[0] == '-') {
+        sint->from -= 2;
+        rval = TRUE;
+      }
+    }
+  }
+
+  if (sint->if_to != NULL && sint->to != bsp->length - 1) {
+    if (sint->to > bsp->length - 3) {
+      sint->to = bsp->length - 1;
+      rval = TRUE;
+    } else if (bsp->repr == Seq_repr_delta) {
+      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+      SeqPortStreamInt (bsp, sint->to + 1, sint->to + 3, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+      if (str[0] == '-') {
+        /* already abuts gap */
+      } else if (str[1] == '-') {
+        sint->to ++;
+        rval = TRUE;
+      } else if (str[2] == '-') {
+        sint->to += 2;
+        rval = TRUE;
+      }
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product)
+
+{
+  SeqFeatPtr        sfp, bestprot = NULL;
+  SeqMgrFeatContext context;
+  BioseqPtr         bsp;
+  SeqLocPtr         slp = NULL;
+  
+  if (product == NULL) return NULL;
+  
+  bsp = BioseqFindFromSeqLoc (product);
+  if (bsp == NULL) return NULL;
+  
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PROT, 0, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_PROT, 0, &context))
+  {
+    if (slp == NULL) 
+    {
+      bestprot = sfp;
+      slp = sfp->location;
+    } else if (SeqLocCompare (slp, sfp->location) == SLC_A_IN_B) {
+      bestprot = sfp;
+      slp = sfp->location;
+    }
+  }
+  return bestprot;
+}
+
+
+NLM_EXTERN Boolean RetranslateOneCDS 
+( SeqFeatPtr sfp,
+  Uint2 entityID,
+  Boolean include_stop,
+  Boolean no_stop_at_end_of_complete_cds)
+
+{
+  SeqFeatPtr    bestprot;
+  ByteStorePtr  bs;
+  BioseqPtr     bsp;
+  Char          ch;
+  SeqFeatPtr    gene;
+  GeneRefPtr    grp;
+  SeqEntryPtr   master;
+  MolInfoPtr    mip;
+  SeqEntryPtr   old;
+  Boolean       partial5;
+  Boolean       partial3;
+  CharPtr       prot;
+  CharPtr       ptr;
+  SeqEntryPtr   sep;
+  SeqIdPtr      sip;
+  ValNodePtr    vnp;
+  ProtRefPtr    prp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
+
+  /* bail on pseudo CDS */
+
+  if (sfp->pseudo) return TRUE;
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) {
+    if (grp->pseudo) return TRUE;
+  } else {
+    gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+    if (gene != NULL) {
+      if (gene->pseudo) return TRUE;
+      grp = (GeneRefPtr) gene->data.value.ptrvalue;
+      if (grp != NULL && grp->pseudo) return TRUE;
+    }
+  }
+
+  if (sfp->location == NULL) return TRUE;
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+
+  if (sfp->product == NULL) {
+    master = NULL;
+    old = NULL;
+    bsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
+    if (bsp != NULL) {
+      master = GetBestTopParentForData (entityID, bsp);
+    }
+    bsp = BioseqNew ();
+    if (bsp != NULL) {
+      bsp->mol = Seq_mol_aa;
+      bsp->repr = Seq_repr_raw;
+      bsp->seq_data_type = Seq_code_ncbieaa;
+      bsp->length = 0;
+      bsp->seq_data = (SeqDataPtr) BSNew (0);
+      if (master != NULL) {
+        old = SeqEntrySetScope (master);
+      }
+      bsp->id = MakeNewProteinSeqId (sfp->location, NULL);
+      SeqMgrAddToBioseqIndex (bsp);
+      if (master != NULL) {
+        SeqEntrySetScope (old);
+      }
+      sep = SeqEntryNew ();
+      if (sep != NULL) {
+        sep->choice = 1;
+        sep->data.ptrvalue = (Pointer) bsp;
+        SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
+      }
+      SetSeqFeatProduct (sfp, bsp);
+      if (master != NULL && sep != NULL) {
+        AddSeqEntryToSeqEntry (master, sep, TRUE);
+      }
+    }
+  }
+
+  sip = SeqLocId (sfp->product);
+  if (sip != NULL) {
+    bsp = BioseqFind (sip);
+    if (bsp != NULL && ISA_aa (bsp->mol) && bsp->repr == Seq_repr_raw) {
+      bestprot = FindBestProtein (entityID, sfp->product);
+      bs = ProteinFromCdRegionExWithTrailingCodonHandling (sfp,
+                                              include_stop,
+                                              FALSE,
+                                              no_stop_at_end_of_complete_cds );
+      if (bs == NULL) return TRUE;
+      prot = BSMerge (bs, NULL);
+      bs = BSFree (bs);
+      if (prot == NULL) return TRUE;
+      ptr = prot;
+      ch = *ptr;
+      while (ch != '\0') {
+        *ptr = TO_UPPER (ch);
+        ptr++;
+        ch = *ptr;
+      }
+      bs = BSNew (1000);
+      if (bs != NULL) {
+        ptr = prot;
+        /*
+        if (prot [0] == '-') {
+          ptr++;
+        }
+        */
+        BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
+      }
+      bsp->repr = Seq_repr_raw;
+      bsp->mol = Seq_mol_aa;
+      bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
+      bsp->seq_data = (SeqDataPtr) bs;
+      bsp->seq_data_type = Seq_code_ncbieaa;
+      bsp->length = BSLen (bs);
+      sep = SeqMgrGetSeqEntryForData (bsp);
+      if (sep == NULL) return TRUE;
+      if (bestprot == NULL)
+      {
+        bestprot = CreateNewFeature (sep, NULL, SEQFEAT_PROT, NULL);
+        prp = ProtRefNew ();
+        bestprot->data.value.ptrvalue = prp;
+      }
+      if (bestprot != NULL) {
+        bestprot->location = SeqLocFree (bestprot->location);
+        bestprot->location = CreateWholeInterval (sep);
+        SetSeqLocPartial (bestprot->location, partial5, partial3);
+        bestprot->partial = (partial5 || partial3);
+      }
+      vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
+      if (vnp == NULL) {
+        vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+        if (vnp != NULL) {
+          mip = MolInfoNew ();
+          vnp->data.ptrvalue = (Pointer) mip;
+          if (mip != NULL) {
+            mip->biomol = 8;
+            mip->tech = 13;
+          }
+        }
+      }
+      if (vnp != NULL) {
+        mip = (MolInfoPtr) vnp->data.ptrvalue;
+        if (mip != NULL) {
+          if (partial5 && partial3) {
+            mip->completeness = 5;
+          } else if (partial5) {
+            mip->completeness = 3;
+          } else if (partial3) {
+            mip->completeness = 4;
+          /*
+          } else if (partial) {
+            mip->completeness = 2;
+          */
+          } else {
+            mip->completeness = 0;
+          }
+        }
+      }
+    }
+  }
+  return TRUE;
+}
+
+
+NLM_EXTERN Boolean ExtendPartialsToEndOrGap (SeqFeatPtr sfp)
+{
+  Boolean rval = FALSE;
+  SeqIdPtr sip;
+  SeqLocPtr slp, slp_start = NULL, slp_stop = NULL;
+  BioseqPtr bsp;
+  Uint1 strand;
+  Int4  end5, diff;
+  CdRegionPtr crp;
+
+  if (sfp == NULL || (slp = sfp->location) == NULL) {
+    return FALSE;
+  }
+
+  if (slp->choice == SEQLOC_INT) {
+    slp_start = slp;
+    slp_stop = slp;
+    sip = SeqLocId (slp);
+  } else if (slp->choice == SEQLOC_MIX) {
+    if ((sip = SeqLocId (slp)) != NULL) /* can only process if all on one bioseq */ {
+      slp_start = slp->data.ptrvalue;
+      slp_stop = slp_start;
+      while (slp_stop->next != NULL) {
+        slp_stop = slp_stop->next;
+      }
+    }
+  }
+  if (slp_start == NULL || slp_stop == NULL || slp_start->choice != SEQLOC_INT || slp_stop->choice != SEQLOC_INT) {
+    return FALSE;
+  }
+
+  bsp = BioseqFind (sip);
+  if (bsp == NULL) {
+    return FALSE;
+  }
+
+  if (sfp->data.choice == SEQFEAT_CDREGION) {
+    strand = SeqLocStrand (slp);
+    if (strand == Seq_strand_minus) {
+      end5 = SeqLocStop (slp);
+    } else {
+      end5 = SeqLocStart (slp);
+    }
+  }
+
+  rval = ExtendPartialSeqIntToEndOrGap (slp_start->data.ptrvalue, bsp);
+  if (slp_stop != slp_start) {
+    rval |= ExtendPartialSeqIntToEndOrGap (slp_stop->data.ptrvalue, bsp);
+  }
+
+  if (rval) {
+    if (sfp->data.choice == SEQFEAT_CDREGION) {
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp == NULL) {
+        crp = CdRegionNew ();
+        sfp->data.value.ptrvalue = crp;
+      }
+      if (strand == Seq_strand_minus) {
+        diff = SeqLocStop (sfp->location) - end5;
+      } else {
+        diff = end5 - SeqLocStart (sfp->location);
+      }
+      if (diff > 0) {
+        switch (crp->frame) {
+          case 0:
+          case 1:
+            crp->frame = diff + 1;
+            break;
+          case 2:
+            if (diff == 1) {
+              crp->frame = 1;
+            } else if (diff == 2) {
+              crp->frame = 3;
+            }
+            break;
+          case 3:
+            if (diff == 1) {
+              crp->frame = 2;
+            } else if (diff == 2) {
+              crp->frame = 1;
+            }
+            break;
+        }
+      }
+    }
+
+    RetranslateOneCDS (sfp, sfp->idx.entityID, TRUE, FALSE);
+  }
+
+  return rval;
+}
+
+
+
+
+static void FindBacterialExtendablePartialsCallback (BioseqPtr bsp, Pointer userdata)
+{
+  SeqDescrPtr sdp;
+  SeqFeatPtr  sfp;
+  SeqMgrDescContext dcontext;
+  SeqMgrFeatContext fcontext;
+  BioSourcePtr biop;
+  Boolean partialL, partialR, partial5, partial3;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || userdata == NULL) {
+    return;
+  }
+
+  /* only perform test if associated organism cannot be identified as eukaryote */
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
+  if (sdp == NULL || (biop = sdp->data.ptrvalue) == NULL || biop->org == NULL
+      || biop->org->orgname == NULL
+      || StringISearch (biop->org->orgname->lineage, "Eukaryota") == NULL) {
+    for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &fcontext);
+         sfp != NULL;
+         sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &fcontext)) {
+      CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+      if (fcontext.strand == Seq_strand_minus) {
+        partialL = partial3;
+        partialR = partial5;
+      } else {
+        partialL = partial5;
+        partialR = partial3;
+      }
+      if ((partialL && CouldExtendLeft (bsp, fcontext.left))
+        || (partialR && CouldExtendRight (bsp, fcontext.right))) {
+        ValNodeAddPointer ((ValNodePtr PNTR) userdata, OBJ_SEQFEAT, sfp);
+      }
+    }
+  }
+}
+
+
+static void FindBacterialExtendablePartials (ValNodePtr PNTR discrepancy_list, ValNodePtr sep_list)
+{
+  Int4 i = 0;
+  ValNodePtr item_list = NULL, vnp;
+
+  for (vnp = sep_list; vnp != NULL; vnp = vnp->next) {
+    VisitBioseqsInSep (vnp->data.ptrvalue, &item_list, FindBacterialExtendablePartialsCallback);
+  }
+
+  if (item_list != NULL) {
+    ValNodeAddPointer (discrepancy_list, 0, NewClickableItem (DISC_BACTERIAL_PARTIAL_PROBLEMS, "%d features have partial ends that do not abut the end of the sequence or a gap, but could be extended by 3 or fewer nucleotides to do so", item_list));
   }
 }
 
@@ -15859,7 +16987,17 @@ static DiscrepancyInfoData discrepancy_info_list[] =
   { "All Cit-subs should have identical affiliations", "DISC_CITSUBAFFIL_CONFLICT", FindMismatchedCitSubAffiliations},
   { "Uncultured or environmental sources should have clone", "DISC_REQUIRED_CLONE", FindRequiredClones},
   { "Sources with Plasmodium in lineage should have isolate and not strain", "DISC_PLASMODIUM_ISOLATE_NOT_STRAIN", CheckPlasmodiumIsolateNotStrain},
-  { "Source Qualifier test for Asndisc", "DISC_SOURCE_QUALS_ASNDISC", CheckBioSourceQualsAsnDisc}
+  { "Source Qualifier test for Asndisc", "DISC_SOURCE_QUALS_ASNDISC", CheckBioSourceQualsAsnDisc},
+  { "Eukaryotic sequences that are not genomic or macronuclear should not have mRNA features", "DISC_mRNA_ON_WRONG_SEQUENCE_TYPE", ReportmRNAOnNonGenomicEukaryoticSequences},
+  { "When the organism lineage contains 'Retroviridae' and the molecule type is 'DNA', the location should be set as 'proviral'", "DISC_RETROVIRIDAE_DNA", CheckRetroviridaeDNA},
+  { "Check for correct capitalization in author names", "DISC_CHECK_AUTH_CAPS", CheckAuthCaps},
+  { "Check for gene or genes in rRNA and tRNA products and comments", "DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS", CheckRNAProductsAndComments},
+  { "Microsatellites must have repeat type of tandem", "DISC_MICROSATELLITE_REPEAT_TYPE", CheckMicrosatelliteRepeatType},
+  { "If D-loop or control region misc_feat is present, source must be mitochondrial", "DISC_MITOCHONDRION_REQUIRED", CheckMitochondrionRequired},
+  { "Unpublished pubs should have titles", "DISC_UNPUB_PUB_WITHOUT_TITLE", FindUnpubPubsWithoutTitles},
+  { "Check for Quality Scores", "DISC_QUALITY_SCORES", CheckForQualityScores},
+  { "rRNA product names should not contain 'internal', 'transcribed', or 'spacer'", "DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA", InternalTranscribedSpacerrRNA},
+  { "Find partial feature ends on bacterial sequences that could be extended", "DISC_BACTERIAL_PARTIAL_PROBLEMS", FindBacterialExtendablePartials}
 };
 
 
@@ -15898,7 +17036,15 @@ extern Boolean IsTestTypeAppropriateForReportType (Int4 test_type, EDiscrepancyR
           || test_type == DISC_CITSUBAFFIL_CONFLICT
           || test_type == DISC_REQUIRED_CLONE
           || test_type == DISC_PLASMODIUM_ISOLATE_NOT_STRAIN
-          || test_type == DISC_SUSPICIOUS_NOTE_TEXT) {
+          || test_type == DISC_SUSPICIOUS_NOTE_TEXT
+          || test_type == DISC_mRNA_ON_WRONG_SEQUENCE_TYPE
+          || test_type == DISC_RETROVIRIDAE_DNA
+          || test_type == DISC_CHECK_AUTH_CAPS
+          || test_type == DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS
+          || test_type == DISC_MICROSATELLITE_REPEAT_TYPE
+          || test_type == DISC_MITOCHONDRION_REQUIRED
+          || test_type == DISC_UNPUB_PUB_WITHOUT_TITLE
+          || test_type == DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA) {
         rval = FALSE;
       } else {
         rval = TRUE;
@@ -15906,6 +17052,7 @@ extern Boolean IsTestTypeAppropriateForReportType (Int4 test_type, EDiscrepancyR
       break;
     case eReportTypeOnCaller:
       if (test_type == DISC_RNA_NO_PRODUCT 
+          || test_type == DISC_BADLEN_TRNA
           || test_type == DISC_MISSING_VIRAL_QUALS
           || test_type == DISC_MISSING_SRC_QUAL
           || test_type == DISC_DUP_SRC_QUAL
@@ -15938,7 +17085,15 @@ extern Boolean IsTestTypeAppropriateForReportType (Int4 test_type, EDiscrepancyR
           || test_type == DISC_CITSUBAFFIL_CONFLICT
           || test_type == DISC_REQUIRED_CLONE
           || test_type == DISC_PLASMODIUM_ISOLATE_NOT_STRAIN
-          || test_type == DISC_SUSPICIOUS_NOTE_TEXT) {
+          || test_type == DISC_SUSPICIOUS_NOTE_TEXT
+          || test_type == DISC_mRNA_ON_WRONG_SEQUENCE_TYPE
+          || test_type == DISC_RETROVIRIDAE_DNA
+          || test_type == DISC_CHECK_AUTH_CAPS
+          || test_type == DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS
+          || test_type == DISC_MICROSATELLITE_REPEAT_TYPE
+          || test_type == DISC_MITOCHONDRION_REQUIRED
+          || test_type == DISC_UNPUB_PUB_WITHOUT_TITLE
+          || test_type == DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA) {
         rval = TRUE;
       }
       break;
@@ -16047,6 +17202,7 @@ extern void ConfigureForBigSequence (DiscrepancyConfigPtr dcp)
   dcp->conf_list[DISC_ZERO_BASECOUNT] = TRUE;
   dcp->conf_list[DISC_NO_ANNOTATION] = TRUE;
   dcp->conf_list[DISC_COUNT_NUCLEOTIDES] = TRUE;
+  dcp->conf_list[DISC_QUALITY_SCORES] = TRUE;
 }
 
 
@@ -16105,6 +17261,7 @@ extern void ConfigureForGenomes (DiscrepancyConfigPtr dcp)
   dcp->conf_list[DISC_USA_STATE] = TRUE;
   dcp->conf_list[DISC_RBS_WITHOUT_GENE] = TRUE;
   dcp->conf_list[DISC_FEATURE_COUNT] = TRUE;
+  dcp->conf_list[DISC_QUALITY_SCORES] = TRUE;
 }
 
 
@@ -16196,7 +17353,7 @@ extern CharPtr GetBioseqSetLabel (BioseqSetPtr bssp)
     sprintf (id_str, "np|");
   } else if (bssp->seq_set != NULL && bssp->seq_set->data.ptrvalue != NULL && IS_Bioseq (bssp->seq_set)) {
     bsp = bssp->seq_set->data.ptrvalue;
-    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str + 3, PRINTID_REPORT, 39);
+    SeqIdWrite (SeqIdFindBest (bsp->id, SEQID_GENBANK), id_str, PRINTID_REPORT, 39);
     tmp = MemNew (sizeof (Char) * (StringLen (set_fmt) + StringLen (id_str)));
     sprintf (tmp, set_fmt, id_str);
     return tmp;
@@ -16793,9 +17950,6 @@ extern DiscrepancyConfigPtr DiscrepancyConfigNew (void)
     dcp->conf_list[i] = TRUE;
   }
 
-  /* by default, tRNA and rRNA tests are off */
-  DisableTRNATests (dcp);
-
   dcp->use_feature_table_format = FALSE;
   return dcp;
 }
@@ -16820,6 +17974,9 @@ extern DiscrepancyConfigPtr ReadDiscrepancyConfigEx (CharPtr report_config_name)
   Char                 str[20];
   
   dcp = DiscrepancyConfigNew();
+  if (StringCmp (report_config_name, "DISCREPANCY_REPORT") == 0) {
+    DisableTRNATests (dcp);
+  }
   if (dcp != NULL)
   {
     for (i = 0; i < MAX_DISC_TYPE; i++)
@@ -17051,19 +18208,15 @@ static ClickableItemPtr CombineDiscrepancyReports (ClickableItemPtr cip1, Clicka
     return NULL;
   }
 
-  cp1 = cip1->description;
-  cp2 = cip2->description;
-    
-  while (*cp1 == *cp2 && *cp1 != 0 && *cp2 != 0 && !isdigit (*cp1)) {
-    cp1++;
-    cp2++;
-    common_start_len++;
-  }
-  if (*cp1 == 0 && *cp2 == 0) {
-    /* entire description matches */
+  if (cip1->clickable_item_type == DISC_QUALITY_SCORES) {
+    /* special case for quality scores */
     combined = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
     combined->clickable_item_type = cip1->clickable_item_type;
-    combined->description = StringSave (cip1->description);
+    if (StringCmp (cip1->description, cip2->description) == 0) {
+      combined->description = StringSave (cip1->description);
+    } else {
+      combined->description= StringSave ("Quality scores are missing on some sequences.");
+    }
     combined->item_list = cip1->item_list;
     cip1->item_list = NULL;
     combined->subcategories = cip1->subcategories;
@@ -17072,54 +18225,21 @@ static ClickableItemPtr CombineDiscrepancyReports (ClickableItemPtr cip1, Clicka
     cip2->item_list = NULL;
     ValNodeLink (&(combined->subcategories), cip2->subcategories);
     cip2->subcategories = NULL;
-  } else if (isdigit (*cp1) && isdigit (*cp2) && (cp1 == cip1->description || isspace (*(cp1 - 1)))) {
-    num_start1 = cp1;
-    num_len1 = 0;
-    while (isdigit (*cp1)) {
-      cp1++;
-      num_len1++;
-    }
-    num_start2 = cp2;
-    num_len2 = 0;
-    while (isdigit (*cp2)) {
-      cp2++;
-      num_len2++;
-    }
-    if ((*cp1 == 0 || isspace (*cp1)) && StringCmp (cp1, cp2) == 0) {
-      /* matches on the other side of the number */
-      /* build combined description */
-      if (num_len1 < sizeof (fixed_buf)) {
-        StringNCpy (fixed_buf, num_start1, num_len1);
-        fixed_buf[num_len1] = 0;
-        num_items1 = atoi(fixed_buf);
-      } else {
-        num_buf = (CharPtr) MemNew (sizeof (Char) * (num_len1 + 1));
-        StringNCpy (num_buf, num_start1, num_len1);
-        num_buf[num_len1] = 0;
-        num_items1 = atoi (num_buf);
-        num_buf = MemFree (num_buf);
-      }
-      if (num_len2 < sizeof (fixed_buf) - 1) {
-        StringNCpy (fixed_buf, num_start2, num_len2);
-        fixed_buf[num_len2] = 0;
-        num_items2 = atoi(fixed_buf);
-      } else {
-        num_buf = (CharPtr) MemNew (sizeof (Char) * (num_len2 + 1));
-        StringNCpy (num_buf, num_start2, num_len2);
-        num_buf[num_len2] = 0;
-        num_items2 = atoi (num_buf);
-        num_buf = MemFree (num_buf);
-      }
+  } else {
+    /* all other tests */
+    cp1 = cip1->description;
+    cp2 = cip2->description;
       
+    while (*cp1 == *cp2 && *cp1 != 0 && *cp2 != 0 && !isdigit (*cp1)) {
+      cp1++;
+      cp2++;
+      common_start_len++;
+    }
+    if (*cp1 == 0 && *cp2 == 0) {
+      /* entire description matches */
       combined = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
-
-      combined->description = (CharPtr) MemNew (sizeof (Char) * (common_start_len + sizeof (fixed_buf) + StringLen (cp1) + 1));
-      StringNCpy (combined->description, cip1->description, common_start_len);
-      sprintf (fixed_buf, "%d", num_items1 + num_items2);
-      StringCat (combined->description, fixed_buf);
-      StringCat (combined->description, cp1);
-
-      combined->clickable_item_type = cip1->clickable_item_type;  
+      combined->clickable_item_type = cip1->clickable_item_type;
+      combined->description = StringSave (cip1->description);
       combined->item_list = cip1->item_list;
       cip1->item_list = NULL;
       combined->subcategories = cip1->subcategories;
@@ -17128,8 +18248,65 @@ static ClickableItemPtr CombineDiscrepancyReports (ClickableItemPtr cip1, Clicka
       cip2->item_list = NULL;
       ValNodeLink (&(combined->subcategories), cip2->subcategories);
       cip2->subcategories = NULL;
-    } else {
-      combined = NULL;
+    } else if (isdigit (*cp1) && isdigit (*cp2) && (cp1 == cip1->description || isspace (*(cp1 - 1)))) {
+      num_start1 = cp1;
+      num_len1 = 0;
+      while (isdigit (*cp1)) {
+        cp1++;
+        num_len1++;
+      }
+      num_start2 = cp2;
+      num_len2 = 0;
+      while (isdigit (*cp2)) {
+        cp2++;
+        num_len2++;
+      }
+      if ((*cp1 == 0 || isspace (*cp1)) && StringCmp (cp1, cp2) == 0) {
+        /* matches on the other side of the number */
+        /* build combined description */
+        if (num_len1 < sizeof (fixed_buf)) {
+          StringNCpy (fixed_buf, num_start1, num_len1);
+          fixed_buf[num_len1] = 0;
+          num_items1 = atoi(fixed_buf);
+        } else {
+          num_buf = (CharPtr) MemNew (sizeof (Char) * (num_len1 + 1));
+          StringNCpy (num_buf, num_start1, num_len1);
+          num_buf[num_len1] = 0;
+          num_items1 = atoi (num_buf);
+          num_buf = MemFree (num_buf);
+        }
+        if (num_len2 < sizeof (fixed_buf) - 1) {
+          StringNCpy (fixed_buf, num_start2, num_len2);
+          fixed_buf[num_len2] = 0;
+          num_items2 = atoi(fixed_buf);
+        } else {
+          num_buf = (CharPtr) MemNew (sizeof (Char) * (num_len2 + 1));
+          StringNCpy (num_buf, num_start2, num_len2);
+          num_buf[num_len2] = 0;
+          num_items2 = atoi (num_buf);
+          num_buf = MemFree (num_buf);
+        }
+        
+        combined = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+
+        combined->description = (CharPtr) MemNew (sizeof (Char) * (common_start_len + sizeof (fixed_buf) + StringLen (cp1) + 1));
+        StringNCpy (combined->description, cip1->description, common_start_len);
+        sprintf (fixed_buf, "%d", num_items1 + num_items2);
+        StringCat (combined->description, fixed_buf);
+        StringCat (combined->description, cp1);
+
+        combined->clickable_item_type = cip1->clickable_item_type;  
+        combined->item_list = cip1->item_list;
+        cip1->item_list = NULL;
+        combined->subcategories = cip1->subcategories;
+        cip1->subcategories = NULL;
+        ValNodeLink (&(combined->item_list), cip2->item_list);
+        cip2->item_list = NULL;
+        ValNodeLink (&(combined->subcategories), cip2->subcategories);
+        cip2->subcategories = NULL;
+      } else {
+        combined = NULL;
+      }
     }
   }
   if (combined != NULL && combined->subcategories != NULL) {
@@ -17386,17 +18563,14 @@ static ClickableItemPtr AnalyzeGlobalSrcVals (ValNodePtr src_list, ValNodePtr st
   present_src = ValNodeSort (present_src, SortVnpByString);
 
   vnp_s = src_list;
-  vnp = start;
+  vnp = present_src;
   while (vnp_s != NULL) {
     if (vnp == NULL) {
       ValNodeAddPointer (&missing, 0, StringSave (vnp_s->data.ptrvalue));
+    } else if (StringCmp (vnp_s->data.ptrvalue, vnp->data.ptrvalue) != 0) {
+      ValNodeAddPointer (&missing, 0, StringSave (vnp_s->data.ptrvalue));
     } else {
-      g1 = vnp->data.ptrvalue;
-      if (StringCmp (vnp_s->data.ptrvalue, g1->src_id_txt) != 0) {
-        ValNodeAddPointer (&missing, 0, StringSave (vnp_s->data.ptrvalue));
-      } else {
-        vnp = vnp->next;
-      }
+      vnp = vnp->next;
     }
     vnp_s = vnp_s->next;
   }
@@ -17412,23 +18586,25 @@ static ClickableItemPtr AnalyzeGlobalSrcVals (ValNodePtr src_list, ValNodePtr st
   /* now look for duplicates and unique values */
   g1 = start->data.ptrvalue;
   ValNodeAddPointer (&repeated, 0, g1->src_id_txt);
-  for (vnp = start->next; vnp != NULL; vnp = vnp->next) {
-    g2 = vnp->data.ptrvalue;
-    if (StringCmp (g1->val, g2->val) != 0) {
-      if (repeated->next == NULL) {
-        ValNodeLink (&unique, repeated);
-      } else {
-        fmt = (CharPtr) MemNew (sizeof (Char) * (StringLen (dup_fmt) + StringLen (qual) + StringLen (g1->val)));
-        sprintf (fmt, dup_fmt, g1->val, qual);
-        ValNodeAddPointer (&dup_list, 0, NewClickableItem (DISC_SOURCE_QUALS_ASNDISC, fmt, repeated));
-        fmt = MemFree (fmt);
+  if (start != stop) {
+    for (vnp = start->next; vnp != NULL; vnp = vnp->next) {
+      g2 = vnp->data.ptrvalue;
+      if (StringCmp (g1->val, g2->val) != 0) {
+        if (repeated->next == NULL) {
+          ValNodeLink (&unique, repeated);
+        } else {
+          fmt = (CharPtr) MemNew (sizeof (Char) * (StringLen (dup_fmt) + StringLen (qual) + StringLen (g1->val)));
+          sprintf (fmt, dup_fmt, g1->val, qual);
+          ValNodeAddPointer (&dup_list, 0, NewClickableItem (DISC_SOURCE_QUALS_ASNDISC, fmt, repeated));
+          fmt = MemFree (fmt);
+        }
+        repeated = NULL;
       }
-      repeated = NULL;
-    }
-    ValNodeAddPointer (&repeated, 0, g2->src_id_txt);
-    g1 = g2;
-    if (vnp == stop) {
-      break;
+      ValNodeAddPointer (&repeated, 0, g2->src_id_txt);
+      g1 = g2;
+      if (vnp == stop) {
+        break;
+      }
     }
   }
 
@@ -17570,6 +18746,18 @@ GetMissingAndInconsistentDiscrepanciesFromGlobalSrcValList (ValNodePtr PNTR val_
       g1 = vnp->data.ptrvalue;
     }
   }
+
+  /* analyze from start to last for last field*/
+  qual = SummarizeFieldType (g1->qual);
+  vnp_multi = ExtractMultiForQualFromList (multi_list, qual);
+  qual = MemFree (qual);
+  if (vnp_multi == NULL) {
+    cip_multi = NULL;
+  } else {
+    cip_multi = vnp_multi->data.ptrvalue;
+  }
+  vnp_multi = ValNodeFree (vnp_multi);
+  ValNodeAddPointer (&disc_list, 0, AnalyzeGlobalSrcVals (*src_list, start, last, cip_multi));
   
   return disc_list;
 }
@@ -17859,34 +19047,13 @@ static void WriteDiscrepancyReportSummary (ValNodePtr discrepancy_list, FILE *fp
 
 static ClickableItemPtr GetReportForFeatdefList (ValNodePtr PNTR list, Int4 featdef)
 {
-  FeatureCountPtr f;
-  ValNodePtr      tmp_list, orig_list = NULL, subcat = NULL;
   ClickableItemPtr cip = NULL;
 
   if (list == NULL || *list == NULL) {
     return NULL;
   }
 
-#if 1
   cip = AddFeatureTypeSummary (featdef, NULL, GetNumFeaturesInList (*list));
-#else
-  while (*list != NULL) {
-    f = (*list)->data.ptrvalue;
-    tmp_list = ValNodeExtractListByFunction (list, FeatureCountHasNumFeats, &(f->num_feats));
-    if (*list == NULL && subcat == NULL) {
-      cip = AddFeatureTypeSummary (featdef, NULL, GetNumFeaturesInList (tmp_list));
-    } else {
-      ValNodeAddPointer (&subcat, 0, AddFeatureCountReport (featdef, f->num_feats, ValNodeDupStringList(tmp_list)));
-    }
-    ValNodeLink (&orig_list, tmp_list);
-    tmp_list = NULL;
-  }
-   
-  if (cip == NULL) {
-    cip = AddFeatureTypeSummary (featdef, subcat, GetNumFeaturesInList (orig_list));
-  }
-  *list = orig_list;
-#endif
   return cip;
 }
 
@@ -21300,7 +22467,7 @@ static CharPtr NewFixCountry (CharPtr country, CharPtr PNTR country_list)
   CharPtr valid_country = NULL, new_country = NULL, tmp;
   Char    ch;
   CharPtr separator_list = ",:";
-  Boolean too_many_countries = FALSE;
+  Boolean too_many_countries = FALSE, bad_cap = FALSE;
   Int4    len_country, len_before, len_after, len_diff;
   ReplacePairPtr fix;
   Boolean fix_found;
@@ -21312,7 +22479,7 @@ static CharPtr NewFixCountry (CharPtr country, CharPtr PNTR country_list)
     ch = *next_sep;
     *next_sep = 0;
     
-    if (CountryIsValid (cp, NULL)) {
+    if (CountryIsValid (cp, NULL, &bad_cap)) {
       if (valid_country == NULL) {
         valid_country = cp;
       } else {
@@ -21389,7 +22556,20 @@ static CharPtr NewFixCountry (CharPtr country, CharPtr PNTR country_list)
 
     new_country = MemNew (sizeof (Char) * (len_country + len_before + len_after + 5));
     
-    StringNCpy (new_country, valid_country, len_country);
+    if (bad_cap && valid_country != NULL) {
+      next_sep = valid_country + StringCSpn (valid_country, separator_list);
+      ch = *next_sep;
+      *next_sep = 0;
+      tmp = GetCorrectedCountryCapitalization(valid_country);
+      *next_sep = ch;
+      if (tmp == NULL) {
+        StringNCpy (new_country, valid_country, len_country);
+      } else {
+        StringNCpy (new_country, tmp, len_country);
+      }
+    } else {
+      StringNCpy (new_country, valid_country, len_country);
+    }
     if (len_before > 0 || len_after > 0) {
       StringCat (new_country, ": ");
       if (len_before > 0) {
@@ -21512,11 +22692,12 @@ extern ValNodePtr ListCodingRegionsContainedInSourceFeatures (SeqEntryPtr sep)
 }
 
 
-extern void CountNsInSequence (BioseqPtr bsp, Int4Ptr p_total, Int4Ptr p_max_stretch)
+extern void CountNsInSequence (BioseqPtr bsp, Int4Ptr p_total, Int4Ptr p_max_stretch, Boolean expand_gaps)
 {
   Int2      ctr, pos, i;
-  Char      buf1[50];
+  Char      buf1[51];
   Int4      len = 50, total = 0, max_stretch = 0, this_stretch = 0;
+  StreamFlgType flags = STREAM_CORRECT_INVAL;
 
   if (p_total != NULL) {
     *p_total = 0;
@@ -21528,11 +22709,13 @@ extern void CountNsInSequence (BioseqPtr bsp, Int4Ptr p_total, Int4Ptr p_max_str
     return;
   }
 
+  if (expand_gaps) {
+    flags |= STREAM_EXPAND_GAPS;
+  }
   pos = 0;
   while (pos < bsp->length) {
     ctr = SeqPortStreamInt (bsp, pos, MIN(pos + len - 1, bsp->length - 1), Seq_strand_plus,
-                        STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
-                        (Pointer) buf1, NULL);
+                            flags, (Pointer) buf1, NULL);
     for (i = 0; i < ctr; i++) {
       if (buf1[i] == 'N') {
         total++;

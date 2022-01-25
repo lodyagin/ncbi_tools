@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ASSERT__H
 #define CONNECT___NCBI_ASSERT__H
 
-/*  $Id: ncbi_assert.h,v 1.3 2008/05/12 15:55:44 kazimird Exp $
+/* $Id: ncbi_assert.h,v 1.4 2009/01/22 17:59:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,12 +45,6 @@
 #if defined(NDEBUG)
 #  define verify(expr)  (void)(expr)
 #else
-#  ifdef NCBI_COMPILER_METROWERKS
-     /* The following 2 headers are only required for Codewarrior
-      * on Mac to prototype printf() and abort() respectively */
-#    include <stdio.h>
-#    include <stdlib.h>
-#  endif
 #  define verify(expr)  assert(expr)
 #endif
 

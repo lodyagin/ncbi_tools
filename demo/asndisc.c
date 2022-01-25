@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.24 $
+* $Revision: 1.25 $
 *
 * File Description:
 *
@@ -1121,6 +1121,7 @@ Int2 Main (void)
   /* set up Discrepancy Report Configuration */
   dfd.global_report = GlobalDiscrepReportNew ();
   dfd.global_report->test_config = DiscrepancyConfigNew();
+  DisableTRNATests (dfd.global_report->test_config);
 
   ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, dfd.global_report->output_config);
   dfd.global_report->output_config->summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;

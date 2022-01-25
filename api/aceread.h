@@ -2,7 +2,7 @@
 #define API_ACEREAD__H
 
 /*
- * $Id: aceread.h,v 1.8 2008/11/14 20:16:12 bollin Exp $
+ * $Id: aceread.h,v 1.12 2008/12/02 18:58:24 bollin Exp $
  *
  * ===========================================================================
  *
@@ -92,6 +92,7 @@ typedef struct SContigRead {
     TGapInfoPtr gaps;
     int    valid;
     int    local;
+    char * tag; /* notes, comments, annotation for the read */
     /* quality scores - these are optional, used when recalculating consensus sequence */
     int  * qual_scores;
     int    num_qual_scores;
@@ -99,6 +100,28 @@ typedef struct SContigRead {
 
 extern TContigReadPtr ContigReadNew (void);
 extern void ContigReadFree (TContigReadPtr r);
+
+typedef struct SConsensusReadAln {
+    int numseg;
+    int *cons_starts;
+    int *read_starts;
+    int *lens;
+    char is_complement;
+} SConsensusReadAln, * TConsensusReadAlnPtr;
+
+extern TConsensusReadAlnPtr ConsensusReadAlnNew (int numseg);
+extern TConsensusReadAlnPtr ConsensusReadAlnFree (TConsensusReadAlnPtr a);
+extern TConsensusReadAlnPtr GetConsensusReadAln (char *consensus_seq, TContigReadPtr read);
+
+
+typedef struct SBaseSeg {
+    char * read_id;
+    int    cons_start;
+    int    cons_stop;
+} SBaseSeg, * TBaseSegPtr;
+
+extern TBaseSegPtr BaseSegNew (void);
+extern void BaseSegFree (TBaseSegPtr b);
 
 typedef struct SContig {
     char  * consensus_id;
@@ -111,14 +134,17 @@ typedef struct SContig {
     TGapInfoPtr gaps;
     int     num_reads;
     TContigReadPtr * reads;
+    int     num_base_segs;
+    TBaseSegPtr *base_segs;
+    char  * tag; /* notes, comments, annotation for the contig */
 } SContig, * TContigPtr;
 
 extern TContigPtr ContigNew (void);
 extern void ContigFree (TContigPtr c);
    
 typedef struct SACEFile {
-  int        num_contigs;
-  TContigPtr * contigs;
+    int        num_contigs;
+    TContigPtr * contigs;
 } SACEFile, * TACEFilePtr;
 
 extern NCBI_CREADERS_EXPORT TACEFilePtr ACEFileNew (void);
@@ -207,8 +233,26 @@ WriteTraceAssemblyFromAceFile
  char      * description,
  FILE      * fp);
 
+extern void
+WriteTraceAssemblyHeader
+(char * assembly_type,
+ char * subref,
+ char * center_name,
+ int    taxid,
+ char * description,
+ char * assembly,
+ int    num_contigs,
+ unsigned int    num_conbases,
+ int    num_reads,
+ unsigned int    num_readbases,
+ FILE * fp);
+
+extern void WriteTraceAssemblyTrailer (FILE *fp);
+
+
+extern void WriteTraceAssemblyFromContig (TContigPtr contig, FILE *fp);
+
 extern void WriteTraceArchiveRead (FILE *fp, TContigReadPtr read);
-extern void WriteTraceArchiveContig (FILE *fp, TContigPtr contig);
 
 extern void
 WriteFASTAFromAceFile
@@ -221,8 +265,22 @@ extern void PrintACEFormatErrorXML (char *msg, char *id, char *has_errors);
 
 extern int AddReadQualScores (TACEFilePtr afp, FReadLineFunction readfunc, void *userdata, FReadLineFunction fasta_readfunc, void *fasta_userdata);
 
-extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns);
+extern int ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns);
 extern void RecalculateConsensusSequences (TACEFilePtr ace_file, char only_ns);
+
+extern void WriteFASTAFromContig (TContigPtr contig, FILE *fp);
+extern void WriteContigQualScores (TContigPtr contig, FILE *out);
+
+typedef char (*ProcessContigFunc) (TContigPtr, void *);
+
+extern char
+ProcessLargeACEFileForContigFastaAndQualScores
+(FReadLineFunction    readfunc,
+ void *               userdata,
+ char                 make_qual_scores,
+ char *               has_errors,
+ ProcessContigFunc    process_func,
+ void *               process_data);
 
 
 #ifdef __cplusplus
@@ -233,6 +291,19 @@ extern void RecalculateConsensusSequences (TACEFilePtr ace_file, char only_ns);
  * ==========================================================================
  *
  * $Log: aceread.h,v $
+ * Revision 1.12  2008/12/02 18:58:24  bollin
+ * Added argument to WriteTraceAssemblyHeader for assembly type.
+ *
+ * Revision 1.11  2008/12/02 18:41:39  bollin
+ * Checking in unfinished work on creating pairwise denseg alignment for consensus-read comparison.  Unfinished.
+ *
+ * Revision 1.10  2008/11/26 18:30:02  bollin
+ * Changes to make aceread_tst more efficient when handling large ACE files,
+ * added TSA field tags for assembly and taxid.
+ *
+ * Revision 1.9  2008/11/19 15:21:48  bollin
+ * Changes for handling large files.
+ *
  * Revision 1.8  2008/11/14 20:16:12  bollin
  * Allow correction of just Ns in consensus sequences.
  *

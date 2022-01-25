@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.92 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -6145,7 +6145,8 @@ static void DoApplyFeatureToAlignment (ButtoN b)
     
     if (sfp != NULL
         || (aafdp->feattype == ADD_IMP
-            && feature_details_data->featdef_choice == FEATDEF_GENE))
+            && feature_details_data->featdef_choice == FEATDEF_GENE
+            && sep != NULL))
     {
       if (! StringHasNoText (feature_details_data->geneName) || ! StringHasNoText (feature_details_data->geneDesc)) 
       {

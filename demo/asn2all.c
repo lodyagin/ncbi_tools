@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/26/04
 *
-* $Revision: 1.45 $
+* $Revision: 1.58 $
 *
 * File Description:
 *
@@ -48,12 +48,12 @@
 #include <sequtil.h>
 #include <sqnutils.h>
 #include <explore.h>
-#include <asn2gnbp.h>
+#include <asn2gnbi.h>
 #include <tofasta.h>
 #include <pmfapi.h>
 #include <lsqfetch.h>
 
-#define ASN2ALL_APP_VER "3.2"
+#define ASN2ALL_APP_VER "4.4"
 
 CharPtr ASN2ALL_APPLICATION = ASN2ALL_APP_VER;
 
@@ -85,6 +85,7 @@ static ValNodePtr DoLockFarComponents (
 typedef enum {
   FLATFILE_FORMAT = 1,
   FASTA_FORMAT,
+  CDS_FORMAT,
   TABLE_FORMAT,
   TINY_FORMAT,
   INSDSEQ_FORMAT,
@@ -158,8 +159,10 @@ static void SaveTinyNucStreams (
   afp = (AppFlagPtr) userdata;
 
   BioseqAsnWriteAsTSeq (bsp, afp->an, afp->atp_tsse);
+  /*
   AsnPrintNewLine (afp->an);
   AsnIoFlush (afp->an);
+  */
 }
 
 static void SaveTinyPrtStreams (
@@ -175,11 +178,13 @@ static void SaveTinyPrtStreams (
   afp = (AppFlagPtr) userdata;
 
   BioseqAsnWriteAsTSeq (bsp, afp->ap, afp->atp_tsse);
+  /*
   AsnPrintNewLine (afp->ap);
   AsnIoFlush (afp->ap);
+  */
 }
 
-static Boolean DeltaLitOnly (
+static Boolean A2ADeltaLitOnly (
   BioseqPtr bsp
 )
 
@@ -193,7 +198,7 @@ static Boolean DeltaLitOnly (
   return TRUE;
 }
 
-static Boolean SegHasParts (
+static Boolean A2ASegHasParts (
   BioseqPtr bsp
 )
 
@@ -222,11 +227,45 @@ static void IsItFar (
   if (bsp == NULL || userdata == NULL) return;
   bp = (BoolPtr) userdata;
 
-  if (bsp->repr == Seq_repr_seg && (! SegHasParts (bsp))) {
+  if (bsp->repr == Seq_repr_seg && (! A2ASegHasParts (bsp))) {
     *bp = TRUE;
-  } else if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
+  } else if (bsp->repr == Seq_repr_delta && (! A2ADeltaLitOnly (bsp))) {
     *bp = TRUE;
   }
+}
+
+static void DoCDSFasta (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  AppFlagPtr  afp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  CdRegionFastaStream (sfp, afp->nt,
+                       STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                       afp->linelen, 0, 0, TRUE);
+}
+
+static void DoTransFasta (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  AppFlagPtr  afp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return;
+  afp = (AppFlagPtr) userdata;
+  if (afp == NULL) return;
+
+  TranslationFastaStream (sfp, afp->aa,
+                          STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL,
+                          afp->linelen, 0, 0, TRUE);
 }
 
 static void FormatRecord (
@@ -284,6 +323,24 @@ static void FormatRecord (
       if (afp->aa != NULL) {
         SeqEntryFastaStream (sep, afp->aa, STREAM_EXPAND_GAPS, afp->linelen,
                              0, 0, FALSE, TRUE, FALSE);
+      }
+      break;
+    case CDS_FORMAT :
+      if (afp->nt != NULL) {
+        entityID = ObjMgrGetEntityIDForChoice (sep);
+        top = GetTopSeqEntryForEntityID (entityID);
+        if (top != NULL) {
+          SeqMgrIndexFeatures (0, top->data.ptrvalue);
+          VisitFeaturesInSep (top, (Pointer) afp, DoCDSFasta);
+        }
+      }
+      if (afp->aa != NULL) {
+        entityID = ObjMgrGetEntityIDForChoice (sep);
+        top = GetTopSeqEntryForEntityID (entityID);
+        if (top != NULL) {
+          SeqMgrIndexFeatures (0, top->data.ptrvalue);
+          VisitFeaturesInSep (top, (Pointer) afp, DoTransFasta);
+        }
       }
       break;
     case TABLE_FORMAT :
@@ -764,6 +821,7 @@ static CharPtr helpLines [] = {
   "",
   "  g  GenBank (nucleotide) or GenPept (protein)",
   "  f  FASTA",
+  "  d  CDS FASTA (nucleotide) or Translated FASTA (protein)",
   "  t  5-column feature table",
   "  y  TinySet XML",
   "  s  INSDSet XML",
@@ -824,9 +882,24 @@ Args myargs [] = {
     TRUE, 'v', ARG_FILE_OUT, 0.0, 0, NULL},
   {"File Selection Suffix", ".aso", NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
-  {"Format (g GenBank/GenPept, f FASTA, t Feature Table, y TinySet XML, s INSDSet XML, a ASN.1, x XML, c Cache Components)", NULL, NULL, NULL,
+  {"Format\n"
+   "      g GenBank/GenPept\n"
+   "      f FASTA\n"
+   "      d CDS FASTA\n"
+   "      t Feature Table\n"
+   "      y TinySet XML\n"
+   "      s INSDSet XML\n"
+   "      a ASN.1\n"
+   "      x XML\n"
+   "      c Cache Components\n", NULL, NULL, NULL,
     TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Processing)", "a", NULL, NULL,
+  {"ASN.1 Type\n"
+   "      a Any\n"
+   "      e Seq-entry\n"
+   "      b Bioseq\n"
+   "      s Bioseq-set\n"
+   "      m Seq-submit\n"
+   "      t Batch Processing\n", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -842,7 +915,10 @@ Args myargs [] = {
     TRUE, 'l', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Use Threads", "F", NULL, NULL,
     TRUE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Near Fasta Policy (a All, n Near Only, f Far Only)", "n", NULL, NULL,
+  {"Near Fasta Policy\n"
+   "      a All\n"
+   "      n Near Only\n"
+   "      f Far Only\n", "n", NULL, NULL,
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
   {"Extended Qualifier Output", "F", NULL, NULL,
     TRUE, 'X', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -972,6 +1048,9 @@ Int2 Main (void)
     case 'f' :
       afd.format = FASTA_FORMAT;
       break;
+    case 'd' :
+      afd.format = CDS_FORMAT;
+      break;
     case 't' :
       afd.format = TABLE_FORMAT;
       break;
@@ -1076,6 +1155,7 @@ Int2 Main (void)
   switch (afd.format) {
     case FLATFILE_FORMAT :
     case FASTA_FORMAT :
+    case CDS_FORMAT :
     case TABLE_FORMAT :
       if (! StringHasNoText (ntout)) {
         afd.nt = FileOpen (ntout, "w");

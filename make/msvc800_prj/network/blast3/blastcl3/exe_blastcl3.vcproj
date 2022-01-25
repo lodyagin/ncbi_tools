@@ -76,7 +76,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -170,7 +170,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -265,7 +265,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -361,7 +361,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -456,7 +456,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
@@ -550,7 +550,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -645,7 +645,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -741,7 +741,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="oldnames.lib ws2_32.lib wsock32.lib"
+				AdditionalDependencies="oldnames.lib ws2_32.lib"
 				OutputFile="$(OutDir)/blastcl3.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"

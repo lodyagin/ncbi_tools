@@ -31,7 +31,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.162 $
+* $Revision: 1.171 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -2410,7 +2410,7 @@ NLM_EXTERN void DoOneSection (
     AddKeywordsBlock (awp);
 
     if (awp->format == GENBANK_FMT || awp->format == GENPEPT_FMT) {
-      AddSegmentBlock (awp, onePartOfSeg);
+      AddSegmentBlock (awp, onePartOfSeg, (Boolean) ISA_na (bsp->mol));
     }
 
     AddSourceBlock (awp);
@@ -3272,7 +3272,7 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE,  FALSE, TRUE,  TRUE,
+   TRUE,  TRUE,  TRUE, TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE},
 
   /* ENTREZ_MODE */
@@ -3280,7 +3280,7 @@ static ModeFlags flagTable [] = {
    FALSE, TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, FALSE, TRUE,
-   TRUE,  TRUE,  FALSE, TRUE,  TRUE,
+   TRUE,  TRUE,  TRUE, TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  FALSE},
 
   /* SEQUIN_MODE */
@@ -3288,7 +3288,7 @@ static ModeFlags flagTable [] = {
    FALSE, FALSE, TRUE,  FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE, FALSE, FALSE, FALSE,
+   FALSE, FALSE, TRUE, FALSE, FALSE,
    FALSE, TRUE,  FALSE, FALSE, FALSE},
 
   /* DUMP_MODE */
@@ -3343,7 +3343,7 @@ static void SetFlagsFromMode (
 
   ajp->flags.hideEmptySource = *(bp++);
   ajp->flags.goQualsToNote = *(bp++);
-  ajp->flags.geneSynsToNote = *(bp++);
+  ajp->flags.separateGeneSyns = *(bp++);
   ajp->flags.refSeqQualsToNote = *(bp++);
   ajp->flags.selenocysteineToNote = *(bp++);
 
@@ -3370,7 +3370,7 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
-      ajp->flags.geneSynsToNote = FALSE;
+      ajp->flags.separateGeneSyns = FALSE;
       ajp->flags.codonRecognizedToNote = FALSE;
       ajp->flags.goQualsToNote = FALSE;
       ajp->flags.refSeqQualsToNote = FALSE;
@@ -3385,7 +3385,7 @@ static void SetFlagsFromMode (
       /* collaboration unapproved Gene Ontology quals on their own line only for RefSeq */
 
       /* ajp->flags.goQualsToNote = TRUE; */
-      /* ajp->flags.geneSynsToNote = TRUE; */
+      /* ajp->flags.separateGeneSyns = TRUE; */
     }
 
   } else {
@@ -3394,7 +3394,7 @@ static void SetFlagsFromMode (
     if (IsSepRefseq (sep)) {
 
       ajp->flags.srcQualsToNote = FALSE;
-      ajp->flags.geneSynsToNote = FALSE;
+      ajp->flags.separateGeneSyns = FALSE;
       ajp->flags.codonRecognizedToNote = FALSE;
 
       /* selenocysteine always a separate qualifier for RefSeq */
@@ -3407,7 +3407,7 @@ static void SetFlagsFromMode (
 
   if (ajp->refseqConventions) {
     ajp->flags.srcQualsToNote = FALSE;
-    ajp->flags.geneSynsToNote = FALSE;
+    ajp->flags.separateGeneSyns = FALSE;
     ajp->flags.codonRecognizedToNote = FALSE;
     ajp->flags.goQualsToNote = FALSE;
     ajp->flags.refSeqQualsToNote = FALSE;
@@ -3460,6 +3460,7 @@ typedef struct lookforids {
   Boolean  isGeneral;
   Boolean  isTPA;
   Boolean  isTPG;
+  Boolean  isSP;
   Boolean  isNuc;
   Boolean  isProt;
   Boolean  isLocal;
@@ -3492,6 +3493,9 @@ static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
       case SEQID_DDBJ :
         lfip->isGED = TRUE;
         lfip->isNonLocal = TRUE;
+        break;
+      case SEQID_SWISSPROT :
+        lfip->isSP = TRUE; 
         break;
       case SEQID_TPG :
         lfip->isTPG = TRUE;
@@ -3579,6 +3583,7 @@ static void LookForGEDetc (
   BoolPtr isGeneral,
   BoolPtr isTPA,
   BoolPtr isTPG,
+  BoolPtr isSP,
   BoolPtr isNuc,
   BoolPtr isProt,
   BoolPtr isOnlyLocal,
@@ -3598,6 +3603,7 @@ static void LookForGEDetc (
   *isGeneral = lfi.isGeneral;
   *isTPA = lfi.isTPA;
   *isTPG = lfi.isTPG;
+  *isSP = lfi.isSP;
   *isNuc = lfi.isNuc;
   *isProt = lfi.isProt;
   if (lfi.isLocal && (! lfi.isNonLocal)) {
@@ -3608,9 +3614,10 @@ static void LookForGEDetc (
   *sourcePubFuse = lfi.sourcePubFuse;
 }
 
-static void MakeGapFeats (
+static void MakeGapFeatsBase (
   BioseqPtr bsp,
-  Pointer userdata
+  Pointer userdata,
+  Boolean isSP
 )
 
 {
@@ -3643,40 +3650,87 @@ static void MakeGapFeats (
     if (vnp->choice == 2) {
       litp = (SeqLitPtr) vnp->data.ptrvalue;
       if (litp == NULL) continue;
-      if ((litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) &&
-           litp->length > 0) {
-        if (fakebsp == NULL) {
-          /* to be freed with MemFree, not BioseqFree */
-          fakebsp = MemNew (sizeof (Bioseq));
-          if (fakebsp == NULL) return;
-          sap = SeqAnnotNew ();
-          if (sap == NULL) return;
-          sap->type = 1;
-          fakebsp->annot = sap;
-          ValNodeAddPointer (gapvnp, 0, (Pointer) fakebsp);
-        }
-        ifp = ImpFeatNew ();
-        if (ifp == NULL) continue;
-        ifp->key = StringSave ("gap");
-        sfp = SeqFeatNew ();
-        if (sfp == NULL) continue;
-        sfp->data.choice = SEQFEAT_IMP;
-        sfp->data.value.ptrvalue = (Pointer) ifp;
-        sfp->next = (SeqFeatPtr) sap->data;
-        sap->data = (Pointer) sfp;
-        fuzz = litp->fuzz;
-        if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
-          AddQualifierToFeature (sfp, "estimated_length", "unknown");
+      if (litp->seq_data == NULL || litp->seq_data_type == Seq_code_gap) {
+        if (litp->length > 0) {
+          if (fakebsp == NULL) {
+            /* to be freed with MemFree, not BioseqFree */
+            fakebsp = MemNew (sizeof (Bioseq));
+            if (fakebsp == NULL) return;
+            sap = SeqAnnotNew ();
+            if (sap == NULL) return;
+            sap->type = 1;
+            fakebsp->annot = sap;
+            ValNodeAddPointer (gapvnp, 0, (Pointer) fakebsp);
+          }
+          ifp = ImpFeatNew ();
+          if (ifp == NULL) continue;
+          ifp->key = StringSave ("gap");
+          sfp = SeqFeatNew ();
+          if (sfp == NULL) continue;
+          sfp->data.choice = SEQFEAT_IMP;
+          sfp->data.value.ptrvalue = (Pointer) ifp;
+          sfp->next = (SeqFeatPtr) sap->data;
+          sap->data = (Pointer) sfp;
+          fuzz = litp->fuzz;
+          if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
+            AddQualifierToFeature (sfp, "estimated_length", "unknown");
+          } else {
+            sprintf (buf, "%ld", (long) litp->length);
+            AddQualifierToFeature (sfp, "estimated_length", buf);
+          }
           sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
-        } else {
-          sprintf (buf, "%ld", (long) litp->length);
-          AddQualifierToFeature (sfp, "estimated_length", buf);
-          sfp->location = AddIntervalToLocation (NULL, sip, currpos, currpos + litp->length - 1, FALSE, FALSE);
+        } else if (isSP && litp->length == 0) {
+          if (fakebsp == NULL) {
+            /* to be freed with MemFree, not BioseqFree */
+            fakebsp = MemNew (sizeof (Bioseq));
+            if (fakebsp == NULL) return;
+            sap = SeqAnnotNew ();
+            if (sap == NULL) return;
+            sap->type = 1;
+            fakebsp->annot = sap;
+            ValNodeAddPointer (gapvnp, 0, (Pointer) fakebsp);
+          }
+          ifp = ImpFeatNew ();
+          if (ifp == NULL) continue;
+          ifp->key = StringSave ("gap");
+          sfp = SeqFeatNew ();
+          if (sfp == NULL) continue;
+          sfp->data.choice = SEQFEAT_IMP;
+          sfp->data.value.ptrvalue = (Pointer) ifp;
+          sfp->next = (SeqFeatPtr) sap->data;
+          sap->data = (Pointer) sfp;
+          fuzz = litp->fuzz;
+          if (fuzz != NULL && fuzz->choice == 4 && fuzz->a == 0) {
+            AddQualifierToFeature (sfp, "estimated_length", "unknown");
+          } else {
+            sprintf (buf, "%ld", (long) litp->length);
+            AddQualifierToFeature (sfp, "estimated_length", buf);
+          }
+          sfp->location = AddIntervalToLocation (NULL, sip, currpos - 1, currpos, FALSE, FALSE);
+          sfp->comment = StringSave ("Non-consecutive residues");
         }
       }
       currpos += litp->length;
     }
   }
+}
+
+static void MakeSPGapFeats (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  MakeGapFeatsBase (bsp, userdata, TRUE);
+}
+
+static void MakeGapFeats (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  MakeGapFeatsBase (bsp, userdata, FALSE);
 }
 
 static void LookFarFeatFetchPolicy (
@@ -3782,6 +3836,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   Boolean          isOnlyLocal;
   Boolean          isProt;
   Boolean          isRefSeq;
+  Boolean          isSP;
   Boolean          isTPA;
   Boolean          isTPG;
   Int4             j;
@@ -3933,7 +3988,7 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   sep = GetTopSeqEntryForEntityID (entityID);
 
   LookForGEDetc (sep, &isG, &isGED, &isNTorNWorNG, &isNC, &isRefSeq,
-                 &isGeneral, &isTPA, &isTPG, &isNuc, &isProt,
+                 &isGeneral, &isTPA, &isTPG, &isSP, &isNuc, &isProt,
                  &isOnlyLocal, &sourcePubFuse);
 
   if (mode == RELEASE_MODE) {
@@ -3949,9 +4004,13 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
 
   gapvnp = NULL;
   if (format != FTABLE_FMT) {
-    if (isGED /* was isG */ || isTPG || isOnlyLocal || isRefSeq || (isGeneral && (! isGED))) {
+    if (isGED /* was isG */ || isTPG || isOnlyLocal || isRefSeq || isSP || (isGeneral && (! isGED))) {
       if ((Boolean) ((custom & HIDE_GAP_FEATS) == 0)) {
-        VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeGapFeats);
+        if (isSP) {
+          VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeSPGapFeats);
+        } else {
+          VisitBioseqsInSep (sep, (Pointer) &gapvnp, MakeGapFeats);
+        }
       }
     }
   }
@@ -4219,8 +4278,9 @@ static Asn2gbJobPtr asn2gnbk_setup_ex (
   aw.hideFeatures = (Boolean) ((custom & HIDE_FEATURES) != 0);
 
   aw.hideImpFeats = (Boolean) ((custom & HIDE_IMP_FEATS) != 0);
-  aw.hideVariations = (Boolean) ((custom & HIDE_VARIATION_FEATS) != 0);
-  aw.hideRepeatRegions = (Boolean) ((custom & HIDE_REPEAT_REGIONS) != 0);
+  aw.hideVariations = (Boolean) ((custom & HIDE_VARS_AND_REPT_REGNS) != 0);
+  aw.hideRepeatRegions = (Boolean) ((custom & HIDE_VARS_AND_REPT_REGNS) != 0);
+  aw.hideSitesBondsRegions = (Boolean) ((custom & HIDE_SITES_BONDS_REGIONS) != 0);
   aw.hideCddFeats = (Boolean) ((custom & HIDE_CDD_FEATS) != 0);
   aw.hideCdsProdFeats = (Boolean) ((custom & HIDE_CDS_PROD_FEATS) != 0);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.201 $
+* $Revision: 6.203 $
 *
 * File Description: 
 *
@@ -4719,7 +4719,8 @@ typedef struct valnodeselection
   DIALOG_MESSAGE_BLOCK
   DialoG           list_dlg;
   ValNodePtr       choice_list;
-  
+
+  Boolean             is_multi;  
   FreeValNodeProc     free_vn_proc;
   CopyValNodeDataProc copy_vn_proc;
   MatchValNodeProc    match_vn_proc;
@@ -4747,7 +4748,11 @@ static void ValNodeSelectionListToDialog (DialoG d, Pointer userdata)
   for (vnp_list = item_list; vnp_list != NULL; vnp_list = vnp_list->next)
   {
     found = FALSE;
-    for (vnp_sel = dlg->choice_list, i = 1;
+    i = 1;
+    if (dlg->is_multi) {
+      i++;
+    }
+    for (vnp_sel = dlg->choice_list;
          vnp_sel != NULL && !found;
          vnp_sel = vnp_sel->next, i++)
     {
@@ -4923,6 +4928,8 @@ extern DialoG ValNodeSelectionDialogExEx
   dlg->copy_vn_proc = copy_vn_proc;
   dlg->match_vn_proc = match_vn_proc;
   dlg->remap_vn_proc = remap_vn_proc;
+
+  dlg->is_multi = allow_multi;
 
   for (vnp = choice_list; vnp != NULL; vnp = vnp->next)
   {
@@ -8988,16 +8995,18 @@ static void ClickList (DoC d, PoinT pt)
         }
         else if (col == cip->level + 2)
         {
-          cip->expanded = !cip->expanded;
-          rsult = GetScrlParams4 (dlg->doc, &offset, &first_shown, NULL);
-          PopulateClickableList (dlg, dlg->list_list);
-          if (rsult) {
-            GetItemParams4 (dlg->doc, first_shown, &offset, NULL, NULL, NULL, NULL);
-            SetScrlParams4 (dlg->doc, offset);
+          if (cip->subcategories != NULL) {
+            cip->expanded = !cip->expanded;
+            rsult = GetScrlParams4 (dlg->doc, &offset, &first_shown, NULL);
+            PopulateClickableList (dlg, dlg->list_list);
+            if (rsult) {
+              GetItemParams4 (dlg->doc, first_shown, &offset, NULL, NULL, NULL, NULL);
+              SetScrlParams4 (dlg->doc, offset);
+            }
+            ObjectRect (dlg->doc, &r);
+            InsetRect (&r, -1, -1);
+            InvalRect (&r);
           }
-          ObjectRect (dlg->doc, &r);
-          InsetRect (&r, -1, -1);
-          InvalRect (&r);
         } else {
           dlg->text_select_item_anchor = item;
           dlg->text_select_row_anchor = row;

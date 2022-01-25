@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: salign.c,v 6.10 2007/05/07 13:30:54 kans Exp $";
+static char const rcsid[] = "$Id: salign.c,v 6.11 2009/01/21 17:09:18 bollin Exp $";
 
 /*   salign.c
 * ===========================================================================
@@ -861,7 +861,7 @@ static FloatHi is_donor (CharPtr str, Int4 len)
   Int4   i;
   Int4  PNTR num=NULL;
 
-  if ((num = (Int4Ptr)MemNew(len*sizeof(Int4)))==NULL) {
+  if ((num = (Int4Ptr)MemNew((len + 1)*sizeof(Int4)))==NULL) {
     return(-1);
   }
 
@@ -876,14 +876,30 @@ static FloatHi is_donor (CharPtr str, Int4 len)
       num[i] = 3;
   }
   score *= one[num[0]];
-  score *= two[num[1]];
-  score *= three[num[2]];
-  score *= four[num[3]];
-  score *= five[num[4]];
-  score *= six[num[5]];
-  score *= seven[num[6]];
-  score *= eight[num[7]];
-  score *= nine[num[8]];
+  if (len >= 1) {
+    score *= two[num[1]];
+    if (len >= 2) {
+      score *= three[num[2]];
+      if (len >= 3) {
+        score *= four[num[3]];
+        if (len >= 4) {
+          score *= five[num[4]];
+          if (len >= 5) {
+            score *= six[num[5]];
+            if (len >= 6) {
+              score *= seven[num[6]];
+              if (len >= 7) {
+                score *= eight[num[7]];
+                if (len >= 8) {
+                  score *= nine[num[8]];
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 
   MemFree(num);
   num=NULL;
@@ -903,7 +919,7 @@ static Int4 getSplicePos (CharPtr str)
 
   if (str == NULL)
     return -1;
-  length = MIN(StringLen(str)/2-10, 10);
+  length = MIN(StringLen(str)/2-10, 20);
   while (xcursor <= length)
   {
       for (c = 0; c < 9; c++)
@@ -1779,7 +1795,11 @@ NLM_EXTERN SeqLocPtr AlignmRNA2genomic (BioseqPtr bsp1, BioseqPtr bsp2)
      return NULL;
   slp2 = SeqLocIntNew (0, bsp2->length - 1, Seq_strand_plus, sip);
   ValNodeAddPointer(&vnp, 0, (Pointer)slp2);
+  /* create MashPtr locally so can set gap_open */
+  msp = MashNew (FALSE);
+  msp->gap_open = 6;
   salpblast = BlastTwoSeqLocs (slp1, slp2, FALSE, msp);
+  msp = MemFree (msp);
   if (salpblast!=NULL)
   {
      salp = AlignmRNA2genomicToSeqAlign (slp1, slp2, salpblast, msp);

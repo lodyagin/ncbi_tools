@@ -1,4 +1,4 @@
-/* $Id: blast_options.c,v 1.210 2008/11/03 20:59:44 kazimird Exp $
+/* $Id: blast_options.c,v 1.211 2009/02/03 18:14:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_options.c,v 1.210 2008/11/03 20:59:44 kazimird Exp $";
+    "$Id: blast_options.c,v 1.211 2009/02/03 18:14:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_options.h>
@@ -816,16 +816,14 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	if (options == NULL)
 		return BLASTERR_INVALIDPARAM;
 
-   if (program_number == eBlastTypeTblastx && 
-              options->gapped_calculation)
-   {
-      Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
-         "Gapped search is not allowed for tblastx");
+        if (program_number == eBlastTypeTblastx && options->gapped_calculation)
+        {
+            Blast_MessageWrite(blast_msg, eBlastSevError, kBlastMessageNoContext,
+               "Gapped search is not allowed for tblastx");
 		return BLASTERR_OPTION_PROGRAM_INVALID;
-   }
+        }
 
-	if (program_number == eBlastTypeBlastn ||
-        program_number == eBlastTypePhiBlastn)
+	if (program_number == eBlastTypeBlastn || program_number == eBlastTypePhiBlastn)
 	{
 		if (options->penalty >= 0)
 		{
@@ -834,12 +832,12 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 			return BLASTERR_OPTION_VALUE_INVALID;
 		}
 
-        if (!BLAST_CheckRewardPenaltyScores(options->reward, options->penalty))
-        {
+                if (options->gapped_calculation && !BLAST_CheckRewardPenaltyScores(options->reward, options->penalty))
+                {
 			Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
-                            "BLASTN reward/penalty combination not supported");
+                            "BLASTN reward/penalty combination not supported for gapped search");
 			return BLASTERR_OPTION_VALUE_INVALID;
-        }
+                }
 
                 if (options->gapped_calculation && options->gap_open > 0 && options->gap_extend == 0) 
                 {
@@ -880,16 +878,14 @@ BlastScoringOptionsValidate(EBlastProgramType program_number,
 	       }
 	}
 
-	if (program_number != eBlastTypeBlastx && 
-       program_number != eBlastTypeTblastn && options->is_ooframe)
+	if (program_number != eBlastTypeBlastx && program_number != eBlastTypeTblastn && options->is_ooframe)
 	{
-          Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
-             "Out-of-frame only permitted for blastx and tblastn");
-          return  BLASTERR_OPTION_PROGRAM_INVALID;
+            Blast_MessageWrite(blast_msg, eBlastSevWarning, kBlastMessageNoContext,
+               "Out-of-frame only permitted for blastx and tblastn");
+            return  BLASTERR_OPTION_PROGRAM_INVALID;
 	}
 
 	return 0;
-
 }
 
 Int2 

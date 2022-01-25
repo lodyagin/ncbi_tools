@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.68 $
+* $Revision: 6.70 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -1547,6 +1547,24 @@ NLM_EXTERN void AddItemStructuredCommentUserObject (
   CharPtr str
 );
 
+/* DBLink user object for flatfile presentation */
+
+NLM_EXTERN UserObjectPtr CreateDBLinkUserObject (
+  void
+);
+
+NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  Int4Ptr values
+);
+
+NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+);
+
 
 #ifdef __cplusplus
 }
@@ -1598,10 +1616,12 @@ NLM_EXTERN void AddItemStructuredCommentUserObject (
                 ( symbol "G", name "Glycine" ),
                 ( symbol "H", name "Histidine" ) ,
                 ( symbol "I", name "Isoleucine" ),
+                ( symbol "J", name "Leu or Ile" ),
                 ( symbol "K", name "Lysine" ),
                 ( symbol "L", name "Leucine" ),
                 ( symbol "M", name "Methionine" ),
                 ( symbol "N", name "Asparagine" ) ,
+                ( symbol "O", name "Pyrrolysine" ),
                 ( symbol "P", name "Proline" ),
                 ( symbol "Q", name "Glutamine"),
                 ( symbol "R", name "Arginine"),

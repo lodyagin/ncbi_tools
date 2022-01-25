@@ -1,5 +1,5 @@
 /*
- * $Id: acerdapi.c,v 1.11 2008/11/07 19:00:53 bollin Exp $
+ * $Id: acerdapi.c,v 1.15 2008/12/02 17:13:14 bollin Exp $
  *
  * ===========================================================================
  *
@@ -92,6 +92,51 @@ static SeqGraphPtr SeqGraphFromContig (TContigPtr contig, BioseqPtr bsp)
   ValNodeAddPointer (&(sgp->loc), SEQLOC_INT, (Pointer) sintp);
 
   return sgp;
+}
+
+
+NLM_EXTERN SeqEntryPtr MakeSeqEntryFromRead (TContigReadPtr read)
+{
+  CharPtr seq_data;
+  SeqIdPtr sip;
+  SeqEntryPtr sep = NULL;
+  BioseqPtr   bsp;
+  SeqDescrPtr sdp;
+  MolInfoPtr  mip;
+
+  if (read == NULL) {
+    return NULL;
+  }
+
+  seq_data = AlignmentStringToSequenceString (read->read_seq, Seq_mol_na);
+  sip = MakeSeqID (read->read_id);
+  sep = SequenceStringToSeqEntry (seq_data, sip, Seq_mol_na);
+  if (sep != NULL && IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    bsp->mol = Seq_mol_rna;
+    if (read->is_complement) {
+      BioseqRevComp (bsp);
+    }
+    /* add molinfo */
+    sdp = bsp->descr;
+    while (sdp != NULL && sdp->choice != Seq_descr_molinfo) {
+      sdp = sdp->next;
+    }
+    if (sdp == NULL) {
+      sdp = SeqDescrNew (bsp->descr);
+      if (bsp->descr == NULL) {
+        bsp->descr = sdp;
+      }
+      sdp->choice = Seq_descr_molinfo;
+      mip = MolInfoNew ();
+      mip->biomol = MOLECULE_TYPE_MRNA;
+      sdp->data.ptrvalue = mip;
+    } else {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+    }
+    mip->tech = MI_TECH_tsa;
+  }
+  return sep;
 }
 
 
@@ -225,7 +270,6 @@ static SeqEntryPtr FetchRead (SeqIdPtr sip)
   tid = GetTraceID (sip);
   if (tid > 0) {
     sep = PubSeqSynchronousQueryTI (tid, 0, -1);
-    return sep;
   } else {
     uid = GetGIForSeqId (sip);
     if (uid > 0) {
@@ -233,20 +277,9 @@ static SeqEntryPtr FetchRead (SeqIdPtr sip)
     }
   }
   
-  return NULL;
+  return sep;
 }
 
-
-
-typedef struct seqidpair {
-  SeqIdPtr sip_find;
-  SeqIdPtr sip_replace;
-  Boolean  is_complement;
-  Int4     trim5;
-  Int4     trim3;
-  Boolean  is_consensus;
-  Int4     ti;
-} SeqIdPairData, PNTR SeqIdPairPtr;
 
 
 static SeqIdPairPtr SeqIdPairNew ()
@@ -271,7 +304,34 @@ static SeqIdPairPtr SeqIdPairFree (SeqIdPairPtr pair)
 }
 
 
-NLM_EXTERN ValNodePtr SeqIdPairListFree (ValNodePtr pair_list)
+static int SeqIdPairCompare (SeqIdPairPtr sp1, SeqIdPairPtr sp2)
+{
+  if (sp1 == NULL || sp2 == NULL) {
+    return 0;
+  }
+  return StringICmp (sp1->buf_find, sp2->buf_find);
+}
+
+
+static int LIBCALLBACK SortSeqIdPairList (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  int rval = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      rval = SeqIdPairCompare (vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+    }
+  }
+  return rval;
+}
+
+
+static ValNodePtr SeqIdPairListFree (ValNodePtr pair_list)
 {
   ValNodePtr vnp_next;
 
@@ -286,13 +346,53 @@ NLM_EXTERN ValNodePtr SeqIdPairListFree (ValNodePtr pair_list)
 }
 
 
-NLM_EXTERN ValNodePtr ReadSeqIdPairListFromFile (FILE *fp)
+static SeqIdReplaceListPtr SeqIdReplaceListNew (ValNodePtr id_list)
+{
+  SeqIdReplaceListPtr replace_list;
+  SeqIdPairPtr        pair;
+  Int4                i;
+
+  replace_list = (SeqIdReplaceListPtr) MemNew (sizeof (SeqIdReplaceListData));
+  replace_list->num_ids = ValNodeLen (id_list);
+  replace_list->list = (SeqIdPairPtr) MemNew (sizeof (SeqIdPairData) * replace_list->num_ids);
+  for (i = 0; id_list != NULL; id_list = id_list->next, i++) {
+    pair = (SeqIdPairPtr) id_list->data.ptrvalue;
+    replace_list->list[i].sip_find = SeqIdDup (pair->sip_find);
+    StringCpy (replace_list->list[i].buf_find, pair->buf_find);
+    replace_list->list[i].sip_replace = SeqIdDup (pair->sip_replace);
+    replace_list->list[i].is_complement = pair->is_complement;
+    replace_list->list[i].trim5 = pair->trim5;
+    replace_list->list[i].trim3 = pair->trim3;
+    replace_list->list[i].is_consensus = pair->is_consensus;
+    replace_list->list[i].ti = pair->ti;
+  }
+  return replace_list;
+}
+
+
+NLM_EXTERN SeqIdReplaceListPtr SeqIdReplaceListFree (SeqIdReplaceListPtr replace_list)
+{
+  Int4 i;
+  if (replace_list != NULL) {
+    for (i = 0; i < replace_list->num_ids; i++) {
+      replace_list->list[i].sip_find = SeqIdFree (replace_list->list[i].sip_find);
+      replace_list->list[i].sip_replace = SeqIdFree (replace_list->list[i].sip_replace);
+    }
+    replace_list->list = MemFree (replace_list->list);
+    replace_list = MemFree (replace_list);
+  }
+  return replace_list;
+}
+
+
+NLM_EXTERN SeqIdReplaceListPtr ReadSeqIdPairListFromFile (FILE *fp)
 {
   ReadBufferData rbd;
   CharPtr        linestring, cp, id2, buf = NULL;
   Int4           len, buf_len = 0;
   SeqIdPairPtr   pair;
   ValNodePtr     pair_list = NULL, last = NULL, vnp;
+  SeqIdReplaceListPtr replace_list = NULL;
   
   if (fp == NULL) return NULL;
 
@@ -315,6 +415,7 @@ NLM_EXTERN ValNodePtr ReadSeqIdPairListFromFile (FILE *fp)
         buf[len] = 0;
         pair = SeqIdPairNew ();
         pair->sip_find = MakeSeqID (buf);
+        SeqIdWrite (pair->sip_find, pair->buf_find, PRINTID_REPORT, sizeof (pair->buf_find) - 1);
         pair->sip_replace = MakeSeqID (id2);
         vnp = ValNodeNew (NULL);
         vnp->data.ptrvalue = pair;
@@ -329,8 +430,43 @@ NLM_EXTERN ValNodePtr ReadSeqIdPairListFromFile (FILE *fp)
     free (linestring);
     linestring = AbstractReadFunction (&rbd);     
   }
-  return pair_list;
+  pair_list = ValNodeSort (pair_list, SortSeqIdPairList);
+
+  replace_list = SeqIdReplaceListNew (pair_list);
+  pair_list = SeqIdPairListFree (pair_list);
+
+  return replace_list;
 }
+
+
+static SeqIdPairPtr FindReplacementInSeqIdReplaceList (SeqIdPtr sip, SeqIdReplaceListPtr pair_list)
+{
+  Int4         l, r, m;
+  Char         buf_find[100];
+  int          cmp;
+
+  if (sip == NULL || pair_list == NULL) return NULL;
+
+  SeqIdWrite (sip, buf_find, PRINTID_REPORT, sizeof (buf_find) - 1);
+  l = 0;
+  r = pair_list->num_ids - 1;
+  m = (r + l) / 2;
+
+  while ((cmp = StringICmp (buf_find, pair_list->list[m].buf_find)) != 0 && l <= r) {
+    if (cmp < 0) {
+      r = m - 1;
+    } else {
+      l = m + 1;
+    }
+    m = (r + l) / 2;
+  }
+  if (cmp == 0) {
+    return pair_list->list + m;
+  } else {
+    return NULL;
+  }
+}
+
 
 
 static void ReportInvalidReplacement (SeqIdPtr sip, CharPtr reason, char *has_errors)
@@ -341,31 +477,6 @@ static void ReportInvalidReplacement (SeqIdPtr sip, CharPtr reason, char *has_er
   PrintACEFormatErrorXMLStart (buf, has_errors);
   printf ("%s", reason);
   PrintACEFormatErrorXMLEnd ();
-}
-
-
-static SeqIdPairPtr FindReplacementInPairList (SeqIdPtr sip, ValNodePtr pair_list)
-{
-  SeqIdPairPtr pair;
-  Boolean      look_here = FALSE;
-  ObjectIdPtr  oip;
-
-  if (sip == NULL || pair_list == NULL) return NULL;
-  while (pair_list != NULL) {
-    pair = (SeqIdPairPtr) pair_list->data.ptrvalue;
-    if (pair->sip_find->choice == SEQID_LOCAL) {
-      oip = (ObjectIdPtr) pair->sip_find->data.ptrvalue;
-      if (StringNCmp (oip->str, "Contig", 6) == 0) {
-        look_here = TRUE;
-      }
-    }
-    if (pair != NULL && pair->sip_replace != NULL && SeqIdComp (pair->sip_find, sip) == SIC_YES) {
-      return pair;
-    } else {
-      pair_list = pair_list->next;
-    }
-  }
-  return NULL;
 }
 
 
@@ -411,7 +522,7 @@ static Boolean OkToReplaceId (SeqIdPairPtr pair, CharPtr seq_str, char *has_erro
 }
 
 
-static Boolean UpdateContigReadId (TContigReadPtr read, ValNodePtr pair_list, Boolean no_lookup, Boolean is_srr, char *has_errors)
+static Boolean UpdateContigReadId (TContigReadPtr read, SeqIdReplaceListPtr pair_list, Boolean no_lookup, Boolean is_srr, char *has_errors)
 {
   SeqIdPairPtr pair;
   SeqIdPtr     sip_find;
@@ -422,7 +533,7 @@ static Boolean UpdateContigReadId (TContigReadPtr read, ValNodePtr pair_list, Bo
     rval = FALSE;
   } else {
     sip_find = MakeSeqID (read->read_id);
-    pair = FindReplacementInPairList (sip_find, pair_list);
+    pair = FindReplacementInSeqIdReplaceList (sip_find, pair_list);
     if (pair != NULL && (no_lookup || OkToReplaceId (pair, read->read_seq, has_errors))) {
       if (pair->is_complement) {
         if (read->is_complement) {
@@ -461,7 +572,7 @@ static Boolean UpdateContigReadId (TContigReadPtr read, ValNodePtr pair_list, Bo
 }
 
 
-static Boolean UpdateContigIds (TContigPtr contig, ValNodePtr pair_list, Boolean no_lookup, Boolean is_srr, char *has_errors)
+NLM_EXTERN Boolean UpdateContigIds (TContigPtr contig, SeqIdReplaceListPtr pair_list, Boolean no_lookup, Boolean is_srr, char *has_errors)
 {
   Int4 i;
   SeqIdPairPtr pair;
@@ -474,7 +585,7 @@ static Boolean UpdateContigIds (TContigPtr contig, ValNodePtr pair_list, Boolean
 
   if (contig->consensus_id != NULL) {
     sip_find = MakeSeqID (contig->consensus_id);
-    pair = FindReplacementInPairList (sip_find, pair_list);
+    pair = FindReplacementInSeqIdReplaceList (sip_find, pair_list);
     if (pair != NULL && (no_lookup || OkToReplaceId (pair, contig->consensus_seq, has_errors))) {
       if (pair->is_complement) {
         if (contig->is_complement) {
@@ -502,7 +613,7 @@ static Boolean UpdateContigIds (TContigPtr contig, ValNodePtr pair_list, Boolean
 NLM_EXTERN Boolean UpdateAceFileIds (TACEFilePtr afp, FILE *id_file, Boolean no_lookup, Boolean is_srr, char *has_errors)
 {
   Boolean    rval = TRUE;
-  ValNodePtr pair_list;
+  SeqIdReplaceListPtr pair_list;
   SeqEntryPtr old_scope;
   Int4        i;
 
@@ -513,7 +624,7 @@ NLM_EXTERN Boolean UpdateAceFileIds (TACEFilePtr afp, FILE *id_file, Boolean no_
     rval &= UpdateContigIds (afp->contigs[i], pair_list, no_lookup, is_srr, has_errors);
   }  
   
-  pair_list = SeqIdPairListFree (pair_list);
+  pair_list = SeqIdReplaceListFree (pair_list);
   SeqEntrySetScope (old_scope);
   return rval; 
 }

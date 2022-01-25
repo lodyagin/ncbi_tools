@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/* $Id: ncbi_util.h,v 6.35 2008/10/22 15:25:33 kazimird Exp $
+/* $Id: ncbi_util.h,v 6.38 2008/12/01 16:34:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,7 +38,6 @@
  *    macros:     LOG_Write(), LOG_Data(),
  *                LOG_WRITE(), LOG_DATA(),
  *                THIS_FILE, THIS_MODULE,
- *                LOG_WRITE_ERRNO()
  *    flags:      TLOG_FormatFlags, ELOG_FormatFlags
  *    methods:    LOG_ComposeMessage(), LOG_ToFILE(), NcbiMessagePlusError(),
  *                CORE_SetLOCK(), CORE_GetLOCK(),
@@ -57,6 +56,7 @@
  * 4. Miscellaneous:
  *       UTIL_MatchesMask[Ex]()
  *       UTIL_NcbiLocalHostName()
+ *       UTIL_PrintableString[Size]()
  *
  */
 
@@ -103,34 +103,22 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK CORE_GetLOCK(void);
  */
 
 
-/** Slightly customized LOG_WriteInternal() -- to distinguish between
- * logging only a message vs logging a message with some data.
- * @sa
- *  LOG_WriteInternal
- */
-#define LOG_Write(lg,code,subcode,level,module,file,line,message)       \
-  LOG_WriteInternal(lg,level,module,file,line,message,0,0,code,subcode)
-
-#define LOG_Data(lg,code,subcode,level,module,file,line,data,size,message) \
-  LOG_WriteInternal(lg,level,module,file,line,message,data,size,code,subcode)
-
-
 /** Auxiliary plain macros to write message (maybe, with raw data) to the log.
  * @sa
- *   LOG_Write, LOG_Data
+ *   LOG_Write
  */
 #define  LOG_WRITE(lg, code, subcode, level, message)                   \
-  LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
-            message)
+    LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
+              message, 0, 0)
 
 #ifdef   LOG_DATA
 /* AIX's <pthread.h> defines LOG_DATA to be an integer constant;
    we must explicitly drop such definitions to avoid trouble */
 #  undef LOG_DATA
 #endif
-#define  LOG_DATA(lg, code, subcode, level, data, size, message)       \
-  LOG_Data(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
-           data, size, message)
+#define  LOG_DATA(lg, code, subcode, level, data, size, message)        \
+    LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
+              message, data, size)
 
 
 /** Defaults for the THIS_FILE and THIS_MODULE macros (used by LOG_WRITE).
@@ -299,51 +287,34 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE
 
 
 /** Add current "error" (and maybe its description) to the message:
- * <message>[ {error=[<error>][,][<descr>]}]
+ * <message>[ {error=[[<error>][,]][<descr>]}]
+ * @param dynamic
+ *  [inout] non-zero pointed value means message was allocated from heap
  * @param message
- *  [in]  message text (can be NULL)
+ *  [in]    message text (can be NULL)
  * @param error
- *  [in]  error code (if it is zero, then use "descr" only)
+ *  [in]    error code (if it is zero, then use "descr" only if non-NULL/empty)
  * @param descr
- *  [in]  error description (if NULL, then use "strerror(error)" if error!=0)
- * @param buf
- *  [out] buffer to put the composed message to
- * @param buf_size
- *  [in]  buffer size available for use
+ *  [in]    error description (if NULL, then use "strerror(error)" if error!=0)
  * @return
- *  Return "buf" if composition occurred, else "message" (if non-empty) or ""
+ *  Always non-NULL message (perhaps, "") and re-set "*dynamic" as appropriate.
+ * @li <b>NOTE:</b>  this routine may call "free(message)" if it had
+ * to reallocate the original message that had been allocated dynamically
+ * before the call (and "*dynamic" thus had been passed non-zero).
  * @sa
  *  LOG_ComposeMessage
  */
 extern NCBI_XCONNECT_EXPORT const char* NcbiMessagePlusError
-(const char*  message,
+(int*/*bool*/ dynamic,
+ const char*  message,
  int          error,
- const char*  descr,
- char*        buf,
- size_t       buf_size
+ const char*  descr
  );
 
 
-/** Special log writing macro that makes use of a specified error number,
- * and an optional description thereof.
- * NOTE: Pass descr as NULL to get the standard errno description that
- * corresponds to the passed error value.
- */
-#define LOG_WRITE_ERRNO(lg, code, subcode, level, message,              \
-                        error, descr)                                   \
-do {                                                                    \
-    if ((lg)  ||  (level) == eLOG_Fatal) {                              \
-        char _buf[1024];                                                \
-        LOG_WRITE(lg, code, subcode, level,                             \
-                  NcbiMessagePlusError(message, error, descr,           \
-                                       _buf, sizeof(_buf)));            \
-    }                                                                   \
-} while (0)
-
-
-/* Several defines brought here from ncbidiag.hpp. Names of macros slightly
- * changed (added _C) because some sources include this header and
- * ncbidiag.hpp simultaneously
+/* Several macros brought here from ncbidiag.hpp.  The names slightly
+ * changed (added _C) because some sources can include this header and
+ * ncbidiag.hpp simultaneously.
  */
 
 /** Defines global error code name with given value (err_code)
@@ -498,6 +469,51 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ UTIL_MatchesMask
  */
 extern char* UTIL_NcbiLocalHostName
 (char*       hostname
+ );
+
+
+/** Calculate size of buffer needed to store printable representation of the
+ * block of data of the specified size (or, if size is 0, strlen(data)).
+ * NOTE:  The calculated size does not include terminating '\0'.
+ * @param data
+ *  Block of data (NULL causes 0 to return regardless of "size")
+ * @param size
+ *  Size of block (0 causes strlen(data) to be used)
+ * @return the buffer size needed (0 for NULL or empty (size==0) block).
+ * @sa UTIL_PrintableString
+ */
+extern size_t UTIL_PrintableStringSize
+(const char* data,
+ size_t      size
+ );
+
+
+/** Create printable representation of the block of data of the specified size
+ * (or, if size is 0, strlen(data), and return buffer pointer past the last
+ * stored character (non '\0'-terminated).
+ * NOTE:  The input buffer "buf" where to store the printable representation
+ * is assumed to be of adequate size to hold the resultant string.
+ * Non-printable characters can be represented in a reduced octal form
+ * as long as the result is unambiguous (unless "full" passed true (non-zero),
+ * in which case all non-printable characters get represented by full
+ * octal tetrads).  NB: Hexadecimal output is not used because it is
+ * ambiguous by the standard (can contain undefined number of hex digits).
+ * @param data
+ *  Block of data (NULL causes NULL to return regardless of "size" or "buf")
+ * @param size
+ *  Size of block (0 causes strlen(data) to be used)
+ * @buf
+ *  Buffer to store the result (NULL always causes NULL to return)
+ * @full
+ *  Whether to print full octal representation of non-printable characters
+ * @return next position in the buffer past the last stored character.
+ * @sa UTIL_PrintableStringSize
+ */
+extern char* UTIL_PrintableString
+(const char* data,
+ size_t      size,
+ char*       buf,
+ int         full
  );
 
 

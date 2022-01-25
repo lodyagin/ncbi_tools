@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.538 2008/10/31 18:50:52 madden Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.541 2009/02/24 18:19:36 coulouri Exp $";
 
-/* $Id: readdb.c,v 6.538 2008/10/31 18:50:52 madden Exp $ */
+/* $Id: readdb.c,v 6.541 2009/02/24 18:19:36 coulouri Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.538 $
+* $Revision: 6.541 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.541  2009/02/24 18:19:36  coulouri
+* correct Nlm_StringTokMT invocation; fixes JIRA SB-181
+*
+* Revision 6.540  2009/01/14 21:50:47  madden
+* Enable REDUCED_E2INDEX_SET
+*
+* Revision 6.539  2008/12/24 13:58:10  maning
+* Quote path containing spaces.  Attempt to fix JIRA SB136.
+*
 * Revision 6.538  2008/10/31 18:50:52  madden
 * Add readdb_check_oid to be used with pseed (SB-109)
 *
@@ -2695,7 +2704,7 @@ Int4ListPtr LIBCALL
 Int4ListReadFromFile PROTO((CharPtr fname))
 {
     Int4ListPtr listp = NULL;
-    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
+    Char *wrk_buf,  blast_dir[PATH_MAX];
     Char *one_blast_dir ;
     Char path_delim[2];
     CharPtr envp = NULL;
@@ -2710,7 +2719,6 @@ Int4ListReadFromFile PROTO((CharPtr fname))
     }
     /* parse pathes and check files*/
     StringCpy(path_delim,":");
-    memset(wrk_buf,0,sizeof(wrk_buf));
     for( one_blast_dir = Nlm_StringTokMT(blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
 	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
@@ -2950,7 +2958,7 @@ readdb_read_alias_file(CharPtr filename)
 
                         buffer_length = StringLen(full_buffer);
                         /* + 1 for the extra space in between multiple paths */
-                        if (buffer_length+length+1 >= total_length)
+                        if (buffer_length+length+3 >= total_length)
                         {
                             rdbap->dblist = Realloc(rdbap->dblist, 
                                             2*total_length);
@@ -2963,8 +2971,12 @@ readdb_read_alias_file(CharPtr filename)
                         }
                         else
                             first = FALSE;
+                        StringCpy(rdbap->dblist+length, "\"");
+                        length++;
                         StringCpy(rdbap->dblist+length, full_buffer);
                         length += buffer_length;
+                        StringCpy(rdbap->dblist+length, "\"");
+                        length++;
                     }
                     
                 } 
@@ -3468,7 +3480,7 @@ return NULL;
 
 CharPtr    FindBlastDBFile (CharPtr filename)
 {
-    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
+    Char *wrk_buf,  blast_dir[PATH_MAX];
     Char *one_blast_dir ;
     Char path_delim[2];
     CharPtr envp = NULL, found_name = NULL;
@@ -3483,7 +3495,6 @@ CharPtr    FindBlastDBFile (CharPtr filename)
     }
     /* parse pathes and lookup filename */
     StringCpy(path_delim,":");
-    memset(wrk_buf,0,sizeof(wrk_buf));
     for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
 	 one_blast_dir = Nlm_StringTokMT (NULL,(char*)path_delim, (char **)&wrk_buf) )
@@ -3858,8 +3869,8 @@ static ReadDBFILEPtr
 readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonIndexHeadPtr cih)
 {
     ReadDBFILEPtr ret_rdfp = NULL;
-    Char wrk_buf[PATH_MAX],  blast_dir[PATH_MAX];
-    Char *one_blast_dir ;
+    Char *wrk_buf,  blast_dir[PATH_MAX];
+    Char *one_blast_dir;
     Char path_delim[2];
     CharPtr envp = NULL;
     if( (ret_rdfp = readdb_new_internalEx(NULL,filename,is_prot,init_state,cih)) ){
@@ -3876,7 +3887,6 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     }
     /* put all passes to ValNode list */
     StringCpy(path_delim,":");
-    memset(wrk_buf,0,sizeof(wrk_buf));
 
     for( one_blast_dir = Nlm_StringTokMT (blast_dir,(char*)path_delim, (char **)&wrk_buf);
 	 one_blast_dir != NULL;
@@ -8516,7 +8526,7 @@ ValNodePtr FDBDestroyMembershipsTable(ValNodePtr tbl)
 }
 
 
-/* #define REDUCED_E2INDEX_SET 1 */
+#define REDUCED_E2INDEX_SET 1
 #ifdef REDUCED_E2INDEX_SET
 /*****************************************************************************
 *

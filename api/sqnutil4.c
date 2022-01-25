@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/27/2007
 *
-* $Revision: 1.47 $
+* $Revision: 1.52 $
 *
 * File Description: 
 * This file contains functions for automatically generating definition lines.
@@ -2979,7 +2979,7 @@ static Boolean DoGenesMatch
 /* This function looks at the pseudo flag on the object itself as well as
  * the pseudo flag on the gene reference for the object (if one is present).
  */
-static Boolean IsPseudo (
+NLM_EXTERN Boolean IsPseudo (
   SeqFeatPtr sfp
 )
 {
@@ -3603,6 +3603,35 @@ static Boolean LIBCALLBACK IsIntergenicSpacer (
   return TRUE;
 }
 
+static ValNodePtr GettRNAGenesAndSpacers (CharPtr str);
+static ValNodePtr FreetRNAGenesAndSpacersList (ValNodePtr list);
+
+static Boolean LIBCALLBACK IsParsableList (
+  SeqFeatPtr sfp
+)
+{
+  ValNodePtr list;
+
+  if (sfp == NULL
+    || sfp->idx.subtype != FEATDEF_misc_feature
+    || sfp->comment == NULL)
+  {
+    return FALSE;
+  }
+  
+  list = GettRNAGenesAndSpacers (sfp->comment);
+  if (list == NULL) 
+  {
+    return FALSE;
+  } 
+  else
+  {
+    FreetRNAGenesAndSpacersList (list);
+    return TRUE;
+  }
+}
+
+
 /* This function produces the default definition line label for a misc_feature 
  * that has the word "intergenic spacer" in the comment.  If the comment starts
  * with the word "contains", "contains" is ignored.  If "intergenic spacer"
@@ -3712,6 +3741,72 @@ static IntergenicSpacerDefPtr IntergenicSpacerDefFree (IntergenicSpacerDefPtr ip
 }
 
 
+CharPtr s_tRNAGeneFromProduct (CharPtr product)
+{
+    CharPtr gene = NULL;
+
+    if (StringNCmp (product, "tRNA-", 5) != 0) {
+      return NULL;
+    }
+    product += 5;
+
+    if (StringICmp (product, "Ala") == 0) {
+        gene = "trnA";
+    } else if (StringICmp (product, "Asx") == 0) {
+        gene = "trnB";
+    } else if (StringICmp (product, "Cys") == 0) {
+        gene = "trnC";
+    } else if (StringICmp (product, "Asp") == 0) {
+        gene = "trnD";
+    } else if (StringICmp (product, "Glu") == 0) {
+        gene = "trnE";
+    } else if (StringICmp (product, "Phe") == 0) {
+        gene = "trnF";
+    } else if (StringICmp (product, "Gly") == 0) {
+        gene = "trnG";
+    } else if (StringICmp (product, "His") == 0) {
+        gene = "trnH";
+    } else if (StringICmp (product, "Ile") == 0) {
+        gene = "trnI";
+    } else if (StringICmp (product, "Xle") == 0) {
+        gene = "trnJ";
+    } else if (StringICmp (product, "Lys") == 0) {
+        gene = "trnK";
+    } else if (StringICmp (product, "Leu") == 0) {
+        gene = "trnL";
+    } else if (StringICmp (product, "Met") == 0) {
+        gene = "trnM";
+    } else if (StringICmp (product, "Asn") == 0) {
+        gene = "trnN";
+    } else if (StringICmp (product, "Pyl") == 0) {
+        gene = "trnO";
+    } else if (StringICmp (product, "Pro") == 0) {
+        gene = "trnP";
+    } else if (StringICmp (product, "Gln") == 0) {
+        gene = "trnQ";
+    } else if (StringICmp (product, "Arg") == 0) {
+        gene = "trnR";
+    } else if (StringICmp (product, "Ser") == 0) {
+        gene = "trnS";
+    } else if (StringICmp (product, "Thr") == 0) {
+        gene = "trnT";
+    } else if (StringICmp (product, "Sec") == 0) {
+        gene = "trnU";
+    } else if (StringICmp (product, "Val") == 0) {
+        gene = "trnV";
+    } else if (StringICmp (product, "Trp") == 0) {
+        gene = "trnW";
+    } else if (StringICmp (product, "OTHER") == 0) {
+        gene = "trnX";
+    } else if (StringICmp (product, "Tyr") == 0) {
+        gene = "trnY";
+    } else if (StringICmp (product, "Glx") == 0) {
+        gene = "trnZ";
+    }
+    return gene;
+}
+
+
 static CommentFeatPtr ParseGeneFromNoteForDefLine (CharPtr PNTR comment)
 {
   CommentFeatPtr tdp;
@@ -3722,39 +3817,62 @@ static CommentFeatPtr ParseGeneFromNoteForDefLine (CharPtr PNTR comment)
   {
     return NULL;
   }
+  /* spacers are not genes */
+  if (StringNICmp (*comment, "intergenic", 10) == 0 || StringNICmp (*comment, "spacer", 6) == 0) 
+  {
+    return NULL;
+  }
   
   /* tRNA name must start with "tRNA-" and be followed by one uppercase letter and
    * two lowercase letters.
    */
   product_start = *comment;
   gene_start = product_start;
-  while (*gene_start != 0 && !isspace (*gene_start)) {
+  while (*gene_start != 0 && !isspace (*gene_start) && *gene_start != ',') {
     gene_start++;
   }
   if (gene_start == product_start) {
     return NULL;
   }
   product_end = gene_start;
+
+  /* if tRNA, don't require gene name, but parse if present */
   while (isspace (*gene_start)) {
     gene_start++;
   }
-  if (*gene_start != '(') {
+  if (*gene_start == '(') {
+    /* parse in gene name */
+    gene_start++;
+    gene_end = gene_start;
+    while (*gene_end != 0 && *gene_end != ')') {
+      gene_end++;
+    }
+    if (*gene_end == 0) {
+      return NULL;
+    }
+    cp = gene_end + 1;
+    while (*cp != 0 && isspace (*cp)) {
+      cp++;
+    }
+  } else if (StringNICmp (gene_start, "intergenic", 10) == 0 || StringNICmp (gene_start, "spacer", 6) == 0) {
+    /* spacers are not genes */
     return NULL;
-  }
-  gene_start++;
-  gene_end = gene_start;
-  while (*gene_end != 0 && *gene_end != ')') {
-    gene_end++;
-  }
-  if (*gene_end == 0) {
+  } else if (StringNCmp (product_start, "tRNA", 4) != 0) {
+    /* only tRNAs can leave out gene names */
     return NULL;
-  }
-  cp = gene_end + 1;
-  while (*cp != 0 && isspace (*cp)) {
-    cp++;
+  } else {
+    cp = gene_start;
+    gene_start = NULL;
+
   }
 
-  if (StringNCmp (cp, "gene", 4) == 0) {
+  /* skip over gene or genes if present */
+  if (StringNCmp (cp, "genes", 5) == 0) {
+    cp +=5;
+    while (*cp != 0 && isspace (*cp)) {
+      cp++;
+    }
+  } else if (StringNCmp (cp, "gene", 4) == 0) {
     cp += 4;
     while (*cp != 0 && isspace (*cp)) {
       cp++;
@@ -3771,10 +3889,12 @@ static CommentFeatPtr ParseGeneFromNoteForDefLine (CharPtr PNTR comment)
   StringNCpy (tdp->product_name, product_start, product_len);
   tdp->product_name[product_len] = 0;
   
-  gene_len = gene_end - gene_start;
-  tdp->gene_name = (CharPtr) MemNew (sizeof (Char) * (1 + gene_len));
-  StringNCpy (tdp->gene_name, gene_start, gene_len);
-  tdp->gene_name[gene_len] = 0;
+  if (gene_start != NULL) {
+    gene_len = gene_end - gene_start;
+    tdp->gene_name = (CharPtr) MemNew (sizeof (Char) * (1 + gene_len));
+    StringNCpy (tdp->gene_name, gene_start, gene_len);
+    tdp->gene_name[gene_len] = 0;
+  }
   
   *comment = cp;
   return tdp;
@@ -3850,6 +3970,7 @@ FeatureClauseFromParsedComment
  DeflineFeatureRequestListPtr rp)
 {
   FeatureClausePtr fcp;
+  CharPtr gene_fmt = "%s (%s)";
   
   if (tdp == NULL)
   {
@@ -3861,11 +3982,17 @@ FeatureClauseFromParsedComment
   {
     fcp->feature_label_data.is_typeword_first = FALSE;
     fcp->feature_label_data.typeword = StringSave ("gene");
-    fcp->feature_label_data.description = (CharPtr) MemNew (16 * sizeof (Char));
-    if (fcp->feature_label_data.description != NULL)
-    {
-      sprintf (fcp->feature_label_data.description, "%s (%s)",
-               tdp->product_name, tdp->gene_name);
+    if (tdp->gene_name == NULL) {
+      fcp->feature_label_data.description = StringSave (tdp->product_name);
+    } else {
+      fcp->feature_label_data.description = (CharPtr) MemNew (sizeof (Char) * (StringLen (gene_fmt)
+                                                                               + StringLen (tdp->gene_name)
+                                                                               + StringLen (tdp->product_name)));
+      if (fcp->feature_label_data.description != NULL)
+      {
+        sprintf (fcp->feature_label_data.description, gene_fmt,
+                tdp->product_name, tdp->gene_name);
+      }
     }
     if (is_partial)
     {
@@ -3888,9 +4015,13 @@ static CharPtr AdvancePastSeparators (CharPtr cp)
   {
     cp++;
   }
-  if (StringNCmp (cp, " and", 4) == 0)
+  while (isspace (*cp))
   {
-    cp += 4;
+    cp++;
+  }
+  if (StringNCmp (cp, "and", 3) == 0)
+  {
+    cp += 3;
   }
   while (isspace (*cp))
   {
@@ -3927,7 +4058,7 @@ static ValNodePtr GettRNAGenesAndSpacers (CharPtr str)
   CharPtr    cp;
   CommentFeatPtr gene, last_gene = NULL;
   IntergenicSpacerDefPtr spacer, last_spacer = NULL;
-  Boolean                none_left = FALSE, alternating = TRUE, names_correct = TRUE;
+  Boolean                none_left = FALSE, names_correct = TRUE, alternating = TRUE;
   Int4                   last_item_type = 0;
 
   if (StringNICmp (str, "contains ", 9) == 0) {
@@ -3947,13 +4078,15 @@ static ValNodePtr GettRNAGenesAndSpacers (CharPtr str)
     none_left = TRUE;
     gene = ParseGeneFromNoteForDefLine (&cp);
     if (gene != NULL) {
-      /* must alternate between genes and spacers */
-      if (last_item_type == MISCFEAT_TRNA_GENE) {
-        alternating = FALSE;
-      }
-      /* spacer names and gene names must agree */
-      if (last_spacer != NULL && StringCmp (last_spacer->second_gene, gene->gene_name) != 0) {
-        names_correct = FALSE;
+      /* if previous item was spacer, spacer names and gene names must agree */
+      if (last_item_type == MISCFEAT_TRNA_SPACER && last_spacer != NULL) {
+        if (gene->gene_name == NULL) {
+          if (StringCmp (last_spacer->second_gene, s_tRNAGeneFromProduct (gene->product_name)) != 0) {
+            names_correct = FALSE;
+          }
+        } else if (StringCmp (last_spacer->second_gene, gene->gene_name) != 0) {
+          names_correct = FALSE;
+        }
       }
       ValNodeAddPointer (&list, MISCFEAT_TRNA_GENE, gene);
       cp = AdvancePastSeparators (cp);
@@ -3969,8 +4102,14 @@ static ValNodePtr GettRNAGenesAndSpacers (CharPtr str)
         alternating = FALSE;
       }
       /* spacer names and gene names must agree */
-      if (last_gene != NULL && StringCmp (last_gene->gene_name, spacer->first_gene) != 0) {
-        names_correct = FALSE;
+      if (last_gene != NULL) {
+        if (last_gene->gene_name == NULL) {
+          if (StringCmp (s_tRNAGeneFromProduct (last_gene->product_name), spacer->first_gene) != 0) {
+            names_correct = FALSE;
+          }
+        } else if (StringCmp (last_gene->gene_name, spacer->first_gene) != 0) {
+          names_correct = FALSE;
+        }
       }
       ValNodeAddPointer (&list, MISCFEAT_TRNA_SPACER, spacer);
       cp = AdvancePastSeparators (cp);
@@ -4167,6 +4306,7 @@ static Boolean LIBCALLBACK IsNoncodingProductFeat (
     || sfp->idx.subtype != FEATDEF_misc_feature
     || sfp->comment == NULL
     || StringStr (sfp->comment, "intergenic") != NULL
+    || IsParsableList (sfp)
     || (find_noncoding_feature_keyword (sfp->comment) == NULL
       && (StringStr (sfp->comment, "nonfunctional ") == NULL
         || StringStr (sfp->comment, " due to ") == NULL)))
@@ -7078,13 +7218,19 @@ static void ReplaceIntergenicSpacerClauses (
     }
     main_feat = (SeqFeatPtr) fcp->featlist->data.ptrvalue;
   
-    if (IsIntergenicSpacer (main_feat) 
-        && (replacement_clauses = ParsetRNAIntergenicSpacerElements ( main_feat, bsp, rp)) != NULL)
+    if (IsParsableList (main_feat)) 
     {
-      for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
-      vnp->next = clause->next;
-      clause->next = replacement_clauses;
-      fcp->delete_me = TRUE;
+      if ((replacement_clauses = ParsetRNAIntergenicSpacerElements ( main_feat, bsp, rp)) != NULL)
+      {
+        for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
+        vnp->next = clause->next;
+        clause->next = replacement_clauses;
+        fcp->delete_me = TRUE;
+      }
+      else
+      {
+        fcp->delete_me = TRUE;
+      }
     }
     clause = nextclause;
   }
@@ -7202,7 +7348,8 @@ static void RemoveUnwantedMiscFeats (
         && ! IsNoncodingProductFeat (sfp)
         && ! IsControlRegion (sfp)
         && ! IsIntergenicSpacer (sfp)
-        && ! IsGeneCluster (sfp))
+        && ! IsGeneCluster (sfp)
+        && ! IsParsableList (sfp))
       {
         fcp->delete_me = TRUE;
       }
@@ -11487,14 +11634,24 @@ NLM_EXTERN SeqLocPtr FindNucleotideLocationForProteinFeatureConversion (SeqLocPt
 {
   SeqMgrFeatContext context;
   SeqFeatPtr cds;
+  SeqLocPtr  slp_nuc;
+  Boolean    partial5, partial3;
 
-  cds = SeqMgrGetOverlappingCDS (slp, &context);
+  cds = SeqMgrGetCDSgivenProduct (BioseqFindFromSeqLoc (slp), &context);
   if (NULL == cds)
   {
     return NULL;
   }
 
-  return aaLoc_to_dnaLoc (cds, slp);
+  slp_nuc = aaLoc_to_dnaLoc (cds, slp);
+  if (slp_nuc == NULL) 
+  {
+    CheckSeqLocForPartial (slp, &partial5, &partial3);
+    if (partial5 && partial3) {
+      slp_nuc = AsnIoMemCopy (cds->location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+    }
+  }
+  return slp_nuc;
 }
 
 
@@ -11520,6 +11677,9 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
   Char          idStr[64];
   ObjectIdPtr   oip;
   Uint2         entityID;
+  BioseqPtr     bsp;
+  SeqAnnotPtr   old_sap, new_sap;
+  SeqFeatPtr    tmp, tmp_prev;
 
   /* Make sure that we have a matching peptide feature */
 
@@ -11554,11 +11714,47 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
   /* to the nucleotide Bioseq.             */
 
   slp = FindNucleotideLocationForProteinFeatureConversion (sfp->location);
-
   if (NULL == slp)
     return FALSE;
   sfp->location = SeqLocFree (sfp->location);
   sfp->location = slp;
+  /* move feature to correct annot */
+  if (sfp->idx.parenttype == OBJ_SEQANNOT
+      && (old_sap = (SeqAnnotPtr) sfp->idx.parentptr) != NULL
+      && old_sap->type == 1
+      && (bsp = BioseqFindFromSeqLoc (sfp->location)) != NULL)
+  {
+    tmp_prev = NULL;
+    tmp = old_sap->data;
+    while (tmp != sfp) {
+      tmp_prev = tmp;
+      tmp = tmp->next;
+    }
+    if (tmp != NULL) {
+      if (tmp_prev == NULL) {
+        old_sap->data = tmp->next;
+      } else {
+        tmp_prev->next = tmp->next;
+      }
+      if (old_sap->data == NULL) {
+        old_sap->idx.deleteme = TRUE;
+      }
+      new_sap = bsp->annot;
+      while (new_sap != NULL && new_sap->type != 1) {
+        new_sap = new_sap->next;
+      }
+      if (new_sap == NULL) {
+        new_sap = SeqAnnotNew ();
+        new_sap->type = 1;
+        new_sap->next = bsp->annot;
+        bsp->annot = new_sap;
+      }
+      sfp->next = new_sap->data;
+      new_sap->data = sfp;
+      sfp->idx.parentptr = new_sap;
+    }
+  }
+        
 
   /* Create a new import feature and */
   /* attach it to the feature.       */
@@ -11569,17 +11765,8 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
     return FALSE;
   }
 
-  switch (sfp->idx.subtype) {
-    case FEATDEF_mat_peptide_aa :
-      ifp->key = StringSave ("mat_peptide");
-      break;
-    case FEATDEF_sig_peptide_aa :
-      ifp->key = StringSave ("sig_peptide");
-      break;
-    case FEATDEF_transit_peptide_aa :
-      ifp->key = StringSave ("transit_peptide");
-      break;
-  }
+  /* set key */
+  ifp->key = StringSave (GetFeatureNameFromFeatureType(featdef_to));
 
   sfp->data.choice = SEQFEAT_IMP;
   sfp->data.value.ptrvalue = (Pointer) ifp;
@@ -12417,7 +12604,7 @@ NLM_EXTERN void ConvertLocalIdsToTSAIds (SeqEntryPtr sep)
 }
 
 
-static Int4 GetDeflinePosForFieldType (FieldTypePtr field)
+NLM_EXTERN Int4 GetDeflinePosForFieldType (ValNodePtr field)
 {
   Int4    i, rval = -1;
   CharPtr name;

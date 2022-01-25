@@ -29,134 +29,13 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: vibforms.h,v $
-* Revision 6.15  2007/06/28 15:57:14  bollin
-* Added buttons to delete interval row from location editor.
 *
-* Revision 6.14  2007/06/12 14:21:32  bollin
-* Made JustSaveStringFromText extern - do not strip spaces.
-*
-* Revision 6.13  2005/06/29 13:55:14  bollin
-* added flag for left scroll bar to CreateTagListDialogExEx
-*
-* Revision 6.12  2005/05/12 15:25:34  bollin
-* added callbacks to the TagListDialog, so that when a value is changed, the
-* callback for the column in which the value is changed will be called.
-*
-* Revision 6.11  2005/05/05 15:29:06  bollin
-* added function ReplaceTagListColumn:
-* similar to ExtractTagListColumn in that it acts on the data.ptrvalue
-* of a TagListPtr ValNode list
-*
-* Revision 6.10  2005/04/15 15:11:28  kans
-* switched font for SYSTEM_FOLDER_TAB and PROGRAM_FOLDER_TAB if MS Windows
-*
-* Revision 6.9  2004/01/16 22:35:38  kans
-* added WidestString and WidestAlist
-*
-* Revision 6.8  2002/08/07 18:13:42  kans
-* G/SetPrimitiveIDs, itemID is Uint4
-*
-* Revision 6.7  1999/10/20 22:09:44  kans
-* AlistDialogData public, has userdata field, convenience functions set userdata, initial value
-*
-* Revision 6.6  1999/10/18 15:33:04  kans
-* added MakeEnumFieldAlistFromValNodeList
-*
-* Revision 6.5  1999/06/16 20:55:02  kans
-* added CreateEnumListDialog using SingleList
-*
-* Revision 6.4  1999/06/16 19:03:25  kans
-* added CreateEnumPopupDialog
-*
-* Revision 6.3  1999/06/16 17:44:54  kans
-* added DuplicateEnumFieldAlist
-*
-* Revision 6.2  1999/05/06 21:23:44  vakatov
-* Get rid of the erroneous 'extern "C"' around the #include's
-*
-* Revision 6.1  1999/03/11 16:10:25  kans
-* StringHasNoText and TrimSpacesAroundString moved to ncbistr
-*
-* Revision 5.7  1997/05/05 15:01:31  kans
-* implemented MultiLinePromptEx
-*
- * Revision 5.6  1997/04/17  18:51:19  kans
- * added vib_msg_select (to send objmgr select/deselect/alsoselect messages)
- *
- * Revision 5.5  1997/04/17  16:17:50  kans
- * added RegisterFormMenuItemName (assigns unique number to string, to avoid
- * need to hard code form item numbers beyond that supplied by Vibrant)
- *
- * Revision 5.4  1997/03/05  16:24:22  kans
- * added EnumAlist convenience functions, RepeatProcOnHandles
- *
- * Revision 5.3  1996/11/25  22:59:35  kans
- * added noExtend field to TagList, and noExtend param to
- * CreateTagListDialogEx, to prevent spreadsheet from being enlarged by user
- *
- * Revision 5.2  1996/08/30  18:44:09  kans
- * added TAGLIST_PROMPT choice to make read-only spreadsheet column
- *
- * Revision 5.1  1996/07/18  19:44:33  kans
- * added userdataptr, cleanupuser, activate slots in form structure
- *
- * Revision 4.18  1996/03/21  00:46:49  kans
- * added TAGLIST_LIST to TAGLIST_TEXT and TAGLIST_POPUP
- *
- * Revision 4.17  1996/02/08  00:34:47  kans
- * new SetFormMenuItem function for registration (can cast in a MenU handle)
- *
- * Revision 4.16  1996/02/07  23:45:37  kans
- * menulistsize slot allows application-specific menu item numbers
- *
- * Revision 4.15  1996/02/07  21:24:49  kans
- * added CHANGE message
- *
- * Revision 4.14  1996/01/29  18:02:30  kans
- * added filepath to base form structure (for Save menu item)
- *
- * Revision 4.13  1996/01/14  22:43:47  kans
- * added VIB_MSG_ACCEPT, three new send message standard procs
- *
- * Revision 4.12  1996/01/02  18:59:08  kans
- * added appmessage slot for application to handle messages for the form
- *
- * Revision 4.11  1996/01/02  18:06:55  kans
- * added new message IDs
- *
- * Revision 4.10  1995/12/30  19:41:45  kans
- * added CreateTextTabs, FormCommandItem, FindFormMenuItem, and VIB_MSG_CLOSE
- *
- * Revision 4.8  1995/12/30  00:46:29  kans
- * new messages for enter, init, reset, redraw dialog/form
- *
- * Revision 4.7  1995/12/29  23:15:05  kans
- * added send message dialog and form functions
- *
- * Revision 4.6  1995/12/12  23:32:31  kans
- * extra parameters to customize folder tab
- *
- * Revision 4.5  1995/12/07  00:57:41  kans
- * added maxPerLine and indentNextLine parameters to CreateFolderTabs
- *
- * Revision 4.4  1995/11/12  21:35:08  kans
- * added Import/Export Dialog/Form function slots
- *
- * Revision 4.3  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 1.7  1995/07/20  17:31:56  kans
- * added TrimSpacesAroundString function
- *
- * Revision 1.5  1995/05/24  21:06:19  kans
- * add initial page parameter to folder tabs
 * ==========================================================================
 */
 
@@ -265,13 +144,15 @@ typedef Nlm_Boolean (*Nlm_DialogInOutFunc) (Nlm_DialoG, Nlm_CharPtr filename);
 
 #define DIALOG_MESSAGE_BLOCK       \
   Nlm_DialoG             dialog;          \
+  Nlm_DialogActnFunc     actproc;         \
   Nlm_ToDialogFunc       todialog;        \
   Nlm_FromDialogFunc     fromdialog;      \
   Nlm_DialogTestFunc     testdialog;      \
   Nlm_DialogMessageFunc  dialogmessage;   \
   Nlm_DialogInOutFunc    importdialog;    \
   Nlm_DialogInOutFunc    exportdialog;    \
-  Nlm_Int4               intvalue;
+  Nlm_Int4               intvalue;        \
+  Nlm_VoidPtr            userdata;
 
 typedef struct Nlm_basedialog {
   DIALOG_MESSAGE_BLOCK
@@ -284,13 +165,14 @@ extern void Nlm_SendMessageToDialog (Nlm_DialoG d, Nlm_Int2 mssg);
 extern Nlm_Boolean Nlm_ImportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 extern Nlm_Boolean Nlm_ExportDialog (Nlm_DialoG d, Nlm_CharPtr filename);
 
+extern void Nlm_SetDialogActnProc (Nlm_DialoG d, Nlm_DialogActnFunc actproc);
+
 /* popup list autonomous dialogs - copies alist, frees on cleanup */
 
 typedef struct alistdialogdata {
   DIALOG_MESSAGE_BLOCK
   Nlm_PopuP                pop;
   Nlm_EnumFieldAssoc PNTR  alist;
-  Pointer                  userdata;
 } Nlm_AlistDialogData, PNTR Nlm_AlistDialogPtr;
 
 /* convenience function that creates enumerated popup as a dialog, copies alist, cleans up on freeing */
@@ -591,6 +473,7 @@ extern Nlm_CharPtr ReplaceTagListColumn (CharPtr source, CharPtr new_value, Int2
 #define SendMessageToDialog Nlm_SendMessageToDialog
 #define ImportDialog Nlm_ImportDialog
 #define ExportDialog Nlm_ExportDialog
+#define SetDialogActnProc Nlm_SetDialogActnProc
 #define AlistDialogData Nlm_AlistDialogData
 #define AlistDialogPtr Nlm_AlistDialogPtr
 #define CreateEnumPopupDialog Nlm_CreateEnumPopupDialog

@@ -1,5 +1,5 @@
 #
-# $Id: linux-x86.ncbi.mk,v 1.32 2005/04/06 16:36:25 coulouri Exp $
+# $Id: linux-x86.ncbi.mk,v 1.33 2009/02/04 14:24:03 lavr Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -9,7 +9,7 @@ NCBI_MAKE_SHELL = /bin/sh
 #it appears the flags above do not work anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
 NCBI_AR=ar
-NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O3 -mcpu=pentium4
 NCBI_OPTFLAG = -O3 -mcpu=pentium4

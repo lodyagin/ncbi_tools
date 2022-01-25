@@ -86,7 +86,6 @@ TSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
-   Boolean isError = FALSE;
    AsnReadFunc func;
    TSeqPtr ptr;
 
@@ -444,7 +443,7 @@ NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp)
 	TSeqPtr tsp;
 	SeqIdPtr sip;
 	Char buf[255];
-	CharPtr accession = NULL, organism = NULL, title = NULL;
+	CharPtr accession = NULL, organism = NULL;
 	CharPtr seq;
 	Uint1 seqcode;
 	ValNodePtr vnp;
@@ -557,7 +556,7 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 	TSeqPtr tsp;
 	SeqIdPtr sip;
 	Char buf[255];
-	CharPtr accession = NULL, organism = NULL, title = NULL;
+	CharPtr accession = NULL, organism = NULL, gpipe = NULL;
 	Uint1 seqcode;
 	ValNodePtr vnp;
 	BioSourcePtr biosp;
@@ -567,15 +566,14 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 
 	if (bsp == NULL) return NULL;
 	tsp = TSeqNew ();
-	if (ISA_aa(bsp->mol))
+	if (ISA_aa (bsp->mol)) {
 		tsp->seqtype = TSeq_seqtype_protein;
-	else
+	} else {
 		tsp->seqtype = TSeq_seqtype_nucleotide;
+    }
 
-	for (sip = bsp->id; sip != NULL; sip = sip->next)
-	{
-		switch (sip->choice)
-		{
+	for (sip = bsp->id; sip != NULL; sip = sip->next) {
+		switch (sip->choice) {
 			case SEQID_GI:
 				tsp->gi = sip->data.intvalue;
 				break;
@@ -587,35 +585,44 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 		    case SEQID_TPG:
 		    case SEQID_TPE:
 		    case SEQID_TPD:
+				SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, 250);
+				tsp->accver = StringSave (buf);
+				break;
 		    case SEQID_GPIPE:
-				SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, 250);
-				tsp->accver = StringSave(buf);
+				SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, 250);
+				gpipe = StringSave (buf);
 				break;
 			default:
-				SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 250);
-				tsp->sid = StringSave(buf);
+				SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, 250);
+				tsp->sid = StringSave (buf);
 				break;
 		}
 	}
+    if (gpipe != NULL) {
+        if (tsp->accver == NULL) {
+            tsp->accver = gpipe;
+        } else if (tsp->sid == NULL) {
+            tsp->sid = gpipe;
+        }
+    }
 
-	CreateDefLine(NULL, bsp, buf, 250, 0, accession, organism);
-	tsp->defline = StringSave(buf);
+	CreateDefLine (NULL, bsp, buf, 250, 0, accession, organism);
+	tsp->defline = StringSave (buf);
 
 	vnp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
 	if (vnp != NULL && vnp->data.ptrvalue != NULL) {
 		biosp = (BioSourcePtr)(vnp->data.ptrvalue);
 		orp = biosp->org;
 		if (orp != NULL) {
-			if (orp->taxname != NULL)
-				tsp->orgname = StringSave(orp->taxname);
-			else if (orp->common != NULL)
-				tsp->orgname = StringSave(orp->common);
+			if (orp->taxname != NULL) {
+				tsp->orgname = StringSave (orp->taxname);
+			} else if (orp->common != NULL) {
+				tsp->orgname = StringSave (orp->common);
+            }
 
-			for (vnp = orp->db; vnp != NULL; vnp = vnp->next)
-			{
+			for (vnp = orp->db; vnp != NULL; vnp = vnp->next) {
 				dbp = (DbtagPtr)(vnp->data.ptrvalue);
-				if (! StringICmp("taxon", dbp->db))
-				{
+				if (! StringICmp ("taxon", dbp->db)) {
 					oip = dbp->tag;
 					tsp->taxid = oip->id;
 					break;
@@ -626,12 +633,9 @@ static TSeqPtr BioseqToMiniTSeq (BioseqPtr bsp)
 
 	tsp->length = bsp->length;
 	
-	if (ISA_aa(bsp->mol))
-	{
+	if (ISA_aa (bsp->mol)) {
 		seqcode = Seq_code_ncbieaa;
-	}
-	else
-	{
+	} else {
 		seqcode = Seq_code_iupacna;
 	}
 

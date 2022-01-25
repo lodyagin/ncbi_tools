@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.101 $
+* $Revision: 6.102 $
 *
 * File Description: 
 *
@@ -388,7 +388,7 @@ static SeqEntryPtr NewFastaRead (FILE *fp, Boolean is_na, Boolean parseSeqId, In
                   if (segcount > segtotal)
                      segtotal = segcount;
                   sepnuc = FindNucSeqEntry (lastsep);
-                  if (IS_Bioseq(sepnuc)) {
+                  if (sepnuc != NULL && IS_Bioseq(sepnuc)) {
                      segbsp=(BioseqPtr)sepnuc->data.ptrvalue;
                      segsip=segbsp->id;
                      if (segsip != NULL) {

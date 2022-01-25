@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.1131 $
+* $Revision: 6.1178 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -162,6 +162,9 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   Boolean         is_htg_in_sep;
   Boolean         is_barcode_sep;
   Boolean         is_refseq_in_sep;
+  Boolean         is_gps_in_sep;
+  Boolean         is_embl_ddbj_in_sep;
+  Boolean         is_insd_in_sep;
   Boolean         only_lcl_gnl_in_sep;
   Boolean         has_gnl_prot_sep;
   Boolean         is_smupd_in_sep;
@@ -207,6 +210,9 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   is_htg_in_sep = vsp->is_htg_in_sep;
   is_barcode_sep = vsp->is_barcode_sep;
   is_refseq_in_sep = vsp->is_refseq_in_sep;
+  is_gps_in_sep = vsp->is_gps_in_sep;
+  is_embl_ddbj_in_sep = vsp->is_embl_ddbj_in_sep;
+  is_insd_in_sep = vsp->is_insd_in_sep;
   only_lcl_gnl_in_sep = vsp->only_lcl_gnl_in_sep;
   has_gnl_prot_sep = vsp->has_gnl_prot_sep;
   is_smupd_in_sep = vsp->is_smupd_in_sep;
@@ -249,6 +255,9 @@ NLM_EXTERN void ValidStructClear (ValidStructPtr vsp)
   vsp->is_htg_in_sep = is_htg_in_sep;
   vsp->is_barcode_sep = is_barcode_sep;
   vsp->is_refseq_in_sep = is_refseq_in_sep;
+  vsp->is_gps_in_sep = is_gps_in_sep;
+  vsp->is_embl_ddbj_in_sep = is_embl_ddbj_in_sep;
+  vsp->is_insd_in_sep = is_insd_in_sep;
   vsp->only_lcl_gnl_in_sep = only_lcl_gnl_in_sep;
   vsp->has_gnl_prot_sep = has_gnl_prot_sep;
   vsp->is_smupd_in_sep = is_smupd_in_sep;
@@ -536,6 +545,7 @@ static CharPtr err1Label [] = {
   "TSAHistAssemblyMissing",
   "ProteinsHaveGeneralID",
   "HighNContent",
+  "SeqLitDataLength0",
 };
 
 static CharPtr err2Label [] = {
@@ -599,7 +609,10 @@ static CharPtr err2Label [] = {
   "ChromosomeLocation",
   "MultipleSourceQualifiers",
   "UnbalancedParentheses",
-  "MultipleSourceVouchers"
+  "MultipleSourceVouchers",
+  "BadCountryCapitalization",
+  "WrongVoucherType",
+  "UserObjectProblem"
 };
 
 static CharPtr err3Label [] = {
@@ -636,7 +649,11 @@ static CharPtr err4Label [] = {
   "ArchaicFeatureProduct",
   "GraphPackagingProblem",
   "InternalGenBankSet",
-  "ConSetProblem"
+  "ConSetProblem",
+  "NoBioseqFound",
+  "INSDRefSeqPackaging",
+  "GPSnonGPSPackaging",
+  "RefSeqPopSet"
 };
 
 static CharPtr err5Label [] = {
@@ -802,6 +819,10 @@ static CharPtr err5Label [] = {
   "BadTrailingCharacter",
   "BadTrailingHyphen",
   "MultipleGeneOverlap",
+  "BadCharInAuthorLastName",
+  "PseudoCDSmRNArange",
+  "ExtendablePartialProblem",
+  "GeneXrefNeeded"
 };
 
 static CharPtr err6Label [] = {
@@ -1667,7 +1688,7 @@ static void ValidateGeneLocusTags (SeqEntryPtr sep, ValidStructPtr vsp)
   
   AddDiscrepanciesForMissingOrNonUniqueGeneLocusTagsEx (&discrepancy_list, &vn, TRUE);
 
-  DiscrepanciesToValidationErrs (discrepancy_list, DISC_GENE_MISSING_LOCUS_TAG, vsp, SEV_ERROR, ERR_SEQ_FEAT_MissingGeneLocusTag, "Missing gene locus tag");
+  DiscrepanciesToValidationErrs (discrepancy_list, DISC_GENE_MISSING_LOCUS_TAG, vsp, SEV_WARNING, ERR_SEQ_FEAT_MissingGeneLocusTag, "Missing gene locus tag");
 
   discrepancy_list = FreeClickableList (discrepancy_list);
 }
@@ -2245,10 +2266,10 @@ static void CheckForCollidingSerials (
 )
 
 {
-  Int4        curr, last, max;
+  Int4        curr, last;
   Uint2       olditemtype = 0;
   Uint4       olditemid = 0;
-  ValNodePtr  vnp;
+  ValNodePtr  vnp, vnp_next;
 
   if (vsp == NULL || gcp == NULL || list == NULL) return;
 
@@ -2258,17 +2279,24 @@ static void CheckForCollidingSerials (
   gcp->thistype = 0;
 
   last = (Int4) list->data.intvalue;
-  max = last;
-  for (vnp = list->next; vnp != NULL; vnp = vnp->next) {
+  for (vnp = list->next; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
     curr = (Int4) vnp->data.intvalue;
     if (last == curr) {
-      if (curr > max) {
-        ValidErr (vsp, SEV_WARNING, ERR_GENERIC_CollidingSerialNumbers,
-                  "Multiple publications have serial number %ld", (long) curr);
-        max = curr;
+      ValidErr (vsp, SEV_WARNING, ERR_GENERIC_CollidingSerialNumbers,
+                "Multiple publications have serial number %ld", (long) curr);
+      while (vnp != NULL && vnp->data.intvalue == last) {
+        vnp = vnp->next;
       }
+      if (vnp == NULL) {
+        vnp_next = NULL;
+      } else {
+        last = vnp->data.intvalue;
+        vnp_next = vnp->next;
+      }
+    } else {
+      last = curr;
     }
-    last = curr;
   }
 
   gcp->itemID = olditemid;
@@ -2502,6 +2530,82 @@ static void LookForNC (BioseqPtr bsp, Pointer userdata)
         */
         *is_ncp = TRUE; /* any refseq now drops pubdesc message severity */
       }
+    }
+  }
+}
+
+static void LookForGPS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+
+{
+  BioseqSetPtr  bssp;
+  BoolPtr       is_gpsp;
+
+  if (sep == NULL || data == NULL) return;
+  is_gpsp = (BoolPtr) data;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+      *is_gpsp = TRUE;
+    }
+  }
+}
+
+static void LookForNonGPS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+
+{
+  BioseqSetPtr  bssp;
+  BoolPtr       is_ngpsp;
+
+  if (sep == NULL || data == NULL) return;
+  is_ngpsp = (BoolPtr) data;
+
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    if (bssp->_class == BioseqseqSet_class_mut_set ||
+        bssp->_class == BioseqseqSet_class_pop_set ||
+        bssp->_class == BioseqseqSet_class_phy_set ||
+        bssp->_class == BioseqseqSet_class_eco_set ||
+        bssp->_class == BioseqseqSet_class_wgs_set) {
+      *is_ngpsp = TRUE;
+    }
+  }
+}
+
+static void LookForEmblDdbj (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr   is_ed;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+  is_ed = (BoolPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
+      *is_ed = TRUE;
+    }
+  }
+}
+
+static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
+{
+  BoolPtr         isGEDPtr;
+  SeqIdPtr        sip;
+
+  isGEDPtr = (BoolPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+    case SEQID_GENBANK:
+    case SEQID_EMBL:
+    case SEQID_DDBJ:
+    case SEQID_TPG:
+    case SEQID_TPE:
+    case SEQID_TPD:
+      *isGEDPtr = TRUE;
+      return;
+    default:
+      break;
     }
   }
 }
@@ -2998,6 +3102,7 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   Int2            errors[6], i;
   Boolean         suppress_no_pubs = TRUE;
   Boolean         suppress_no_biosrc = TRUE;
+  Boolean         other_sets_in_sep = FALSE;
   FeatProb        featprob;
   GatherContextPtr gcp = NULL;
   GatherContext   gc;
@@ -3103,8 +3208,16 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
   VisitDescriptorsInSep (sep, (Pointer) &(vsp->is_barcode_sep), LookForBarcode);
   vsp->is_smupd_in_sep = FALSE;
   VisitDescriptorsInSep (sep, (Pointer) &(vsp->is_smupd_in_sep), LookForSMUPD);
+  vsp->is_gps_in_sep = FALSE;
+  SeqEntryExplore (sep, (Pointer) &(vsp->is_gps_in_sep), LookForGPS);
+  other_sets_in_sep = FALSE;
+  SeqEntryExplore (sep, (Pointer) &(other_sets_in_sep), LookForNonGPS);
   vsp->is_refseq_in_sep = FALSE;
   VisitBioseqsInSep (sep, (Pointer) &(vsp->is_refseq_in_sep), LookForNC);
+  vsp->is_embl_ddbj_in_sep = FALSE;
+  VisitBioseqsInSep (sep, (Pointer) &(vsp->is_embl_ddbj_in_sep), LookForEmblDdbj);
+  vsp->is_insd_in_sep = FALSE;
+  VisitBioseqsInSep (sep, (Pointer) &(vsp->is_insd_in_sep), LookForGEDseqID);
   vsp->only_lcl_gnl_in_sep = FALSE;
   VisitBioseqsInSep (sep, (Pointer) &(vsp->only_lcl_gnl_in_sep), LookForLclGnl);
   vsp->has_gnl_prot_sep = FALSE;
@@ -3140,6 +3253,16 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
     vsp->suppress_no_pubs = suppress_no_pubs;
     vsp->suppress_no_biosrc = suppress_no_biosrc;
 
+    if (vsp->is_refseq_in_sep && vsp->is_insd_in_sep) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_PKG_INSDRefSeqPackaging,
+                "INSD and RefSeq records should not be present in the same set");
+    }
+
+    if (vsp->is_gps_in_sep && other_sets_in_sep) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_PKG_GPSnonGPSPackaging,
+                "Genomic product set and mut/pop/phy/eco set records should not be present in the same set");
+    }
+
     /* build seqmgr feature indices if not already done */
 
     bsplist = NULL;
@@ -3171,150 +3294,155 @@ NLM_EXTERN Boolean ValidateSeqEntry (SeqEntryPtr sep, ValidStructPtr vsp)
       vsp->bsp = fbsp;
     }
 
-    for (sip = fbsp->id; sip != NULL; sip = sip->next) {
-      if (sip->choice == SEQID_PATENT) {
-        isPatent = TRUE;
-      } else if (sip->choice == SEQID_PDB) {
-        isPDB = TRUE;
+    if (fbsp == NULL) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_PKG_NoBioseqFound, "No Bioseqs in this entire record.");
+    } else {
+
+      for (sip = fbsp->id; sip != NULL; sip = sip->next) {
+        if (sip->choice == SEQID_PATENT) {
+          isPatent = TRUE;
+        } else if (sip->choice == SEQID_PDB) {
+          isPDB = TRUE;
+        }
       }
-    }
-
-    if (first) {
-      TestDeletedOrReplacedECnumbers (vsp);
-
-      if (suppress_no_pubs && (! vsp->seqSubmitParent)) {
-        omdp = ObjMgrGetData (gc.entityID);
-        if (omdp == NULL || omdp->datatype != OBJ_SEQSUB) {
-          sev = SEV_ERROR;
-          if ((!isGPS) && (!IsNoncuratedRefSeq (fbsp, &sev)) && (! IsGpipe (fbsp))) {
-            ValidErr (vsp, sev, ERR_SEQ_DESCR_NoPubFound, "No publications anywhere on this entire record.");
+  
+      if (first) {
+        TestDeletedOrReplacedECnumbers (vsp);
+  
+        if (suppress_no_pubs && (! vsp->seqSubmitParent)) {
+          omdp = ObjMgrGetData (gc.entityID);
+          if (omdp == NULL || omdp->datatype != OBJ_SEQSUB) {
+            sev = SEV_ERROR;
+            if ((!isGPS) && (!IsNoncuratedRefSeq (fbsp, &sev)) && (! IsGpipe (fbsp))) {
+              ValidErr (vsp, sev, ERR_SEQ_DESCR_NoPubFound, "No publications anywhere on this entire record.");
+            }
+          }
+        }
+        if (suppress_no_biosrc) {
+          if ((!isPatent) && ((!isPDB))) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name anywhere on this entire record.");
+          }
+        }
+  
+        if (featprob.num_misplaced_features > 1) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There are %d mispackaged features in this record.", (int) featprob.num_misplaced_features);
+        } else if (featprob.num_misplaced_features == 1) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There is %d mispackaged feature in this record.", (int) featprob.num_misplaced_features);
+        }
+  
+        if (featprob.num_misplaced_graphs > 1) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There are %d mispackaged graphs in this record.", (int) featprob.num_misplaced_graphs);
+        } else if (featprob.num_misplaced_graphs == 1) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There is %d mispackaged graph in this record.", (int) featprob.num_misplaced_graphs);
+        }
+  
+        /*
+        if (featprob.num_archaic_locations > 1) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There are %d archaic feature locations in this record.", (int) featprob.num_archaic_locations);
+        } else if (featprob.num_archaic_locations == 1) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There is %d archaic feature location in this record.", (int) featprob.num_archaic_locations);
+        }
+  
+        if (featprob.num_archaic_products > 1) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There are %d archaic feature products in this record.", (int) featprob.num_archaic_products);
+        } else if (featprob.num_archaic_products == 1) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There is %d archaic feature product in this record.", (int) featprob.num_archaic_products);
+        }
+        */
+  
+        if (featprob.num_gene_feats == 0 && featprob.num_gene_xrefs > 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_OnlyGeneXrefs, "There are %ld gene xrefs and no gene features in this record.", (long) featprob.num_gene_xrefs);
+        }
+  
+        if (featprob.num_tpa_with_hist > 0 && featprob.num_tpa_without_hist > 0) {
+          ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs with history and %ld without history in this record.",
+                    (long) featprob.num_tpa_with_hist, (long) featprob.num_tpa_without_hist);
+        }
+  
+        if (featprob.has_gi && featprob.num_tpa_without_hist > 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs without history in this record, but the record has a gi number assignment.",
+                    (long) featprob.num_tpa_without_hist);
+        }
+  
+        if (vsp->indexerVersion && vsp->has_gnl_prot_sep && (! vsp->is_refseq_in_sep)) {
+          if (FindNucBioseq (sep) != NULL) {
+            ValidErr (vsp, SEV_INFO, ERR_SEQ_INST_ProteinsHaveGeneralID, "INDEXER_ONLY - Protein bioseqs have general seq-id.");
+          }
+        }
+  
+        first = FALSE;
+      }
+  
+      vsp->bsp = NULL;
+  
+      topsep = GetTopSeqEntryForEntityID (gc.entityID);
+      oldsep = SeqEntrySetScope (topsep);
+  
+      ValidateGeneLocusTags (topsep, vsp);
+  
+      VisitFeaturesInSep (sep, NULL, AddScratchToFeatures);
+      VisitBioseqsInSep (sep, NULL, SetupFeatureScratchData);
+  
+      /* AssignIDsInEntity (gc.entityID, 0, NULL); */
+  
+      GatherSeqEntry (sep, (Pointer) vsp, Valid1GatherProc, &gs);
+  
+      if (ssp != NULL) {
+        if (ssp->datatype == 1) {
+          vsp->bsp = NULL;
+          vsp->bssp = NULL;
+          vsp->sfp = NULL;
+          vsp->descr = NULL;
+          vsp->gcp = NULL;
+          sbp = ssp->sub;
+          if (sbp != NULL) {
+            csp = sbp->cit;
+            if (csp != NULL) {
+              alp = csp->authors;
+              if (alp != NULL) {
+                ValidateAffil (vsp, alp->affil);
+              }
+            }
+            cip = sbp->contact;
+            if (cip != NULL) {
+              ap = cip->contact;
+              if (ap != NULL) {
+                ValidateAffil (vsp, ap->affil);
+              }
+            }
           }
         }
       }
-      if (suppress_no_biosrc) {
-        if ((!isPatent) && ((!isPDB))) {
-          ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoOrgFound, "No organism name anywhere on this entire record.");
-        }
-      }
-
-      if (featprob.num_misplaced_features > 1) {
-        ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There are %d mispackaged features in this record.", (int) featprob.num_misplaced_features);
-      } else if (featprob.num_misplaced_features == 1) {
-        ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_FeaturePackagingProblem, "There is %d mispackaged feature in this record.", (int) featprob.num_misplaced_features);
-      }
-
-      if (featprob.num_misplaced_graphs > 1) {
-        ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There are %d mispackaged graphs in this record.", (int) featprob.num_misplaced_graphs);
-      } else if (featprob.num_misplaced_graphs == 1) {
-        ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_GraphPackagingProblem, "There is %d mispackaged graph in this record.", (int) featprob.num_misplaced_graphs);
-      }
-
-      /*
-      if (featprob.num_archaic_locations > 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There are %d archaic feature locations in this record.", (int) featprob.num_archaic_locations);
-      } else if (featprob.num_archaic_locations == 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureLocation, "There is %d archaic feature location in this record.", (int) featprob.num_archaic_locations);
-      }
-
-      if (featprob.num_archaic_products > 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There are %d archaic feature products in this record.", (int) featprob.num_archaic_products);
-      } else if (featprob.num_archaic_products == 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_ArchaicFeatureProduct, "There is %d archaic feature product in this record.", (int) featprob.num_archaic_products);
-      }
-      */
-
-      if (featprob.num_gene_feats == 0 && featprob.num_gene_xrefs > 0) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_OnlyGeneXrefs, "There are %ld gene xrefs and no gene features in this record.", (long) featprob.num_gene_xrefs);
-      }
-
-      if (featprob.num_tpa_with_hist > 0 && featprob.num_tpa_without_hist > 0) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs with history and %ld without history in this record.",
-                  (long) featprob.num_tpa_with_hist, (long) featprob.num_tpa_without_hist);
-      }
-
-      if (featprob.has_gi && featprob.num_tpa_without_hist > 0) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_TpaAssmeblyProblem, "There are %ld TPAs without history in this record, but the record has a gi number assignment.",
-                  (long) featprob.num_tpa_without_hist);
-      }
-
-      if (vsp->indexerVersion && vsp->has_gnl_prot_sep && (! vsp->is_refseq_in_sep)) {
-        if (FindNucBioseq (sep) != NULL) {
-          ValidErr (vsp, SEV_INFO, ERR_SEQ_INST_ProteinsHaveGeneralID, "INDEXER_ONLY - Protein bioseqs have general seq-id.");
-        }
-      }
-
-      first = FALSE;
-    }
-
-    vsp->bsp = NULL;
-
-    topsep = GetTopSeqEntryForEntityID (gc.entityID);
-    oldsep = SeqEntrySetScope (topsep);
-
-    ValidateGeneLocusTags (topsep, vsp);
-
-    VisitFeaturesInSep (sep, NULL, AddScratchToFeatures);
-    VisitBioseqsInSep (sep, NULL, SetupFeatureScratchData);
-
-    /* AssignIDsInEntity (gc.entityID, 0, NULL); */
-
-    GatherSeqEntry (sep, (Pointer) vsp, Valid1GatherProc, &gs);
-
-    if (ssp != NULL) {
-      if (ssp->datatype == 1) {
-        vsp->bsp = NULL;
-        vsp->bssp = NULL;
-        vsp->sfp = NULL;
-        vsp->descr = NULL;
+  
+      vsp->gcp = NULL;
+      ValidateFeatCits (sep, vsp);
+      vsp->gcp = NULL;
+  
+      vsp->gcp = NULL;
+      ValidateFeatIDs (gc.entityID, vsp);
+      vsp->gcp = NULL;
+  
+      vsp->gcp = NULL;
+      ValidateSeqIdCase (sep, vsp);
+      vsp->gcp = NULL;
+  
+      if (vsp->validateAlignments) {
         vsp->gcp = NULL;
-        sbp = ssp->sub;
-        if (sbp != NULL) {
-          csp = sbp->cit;
-          if (csp != NULL) {
-            alp = csp->authors;
-            if (alp != NULL) {
-              ValidateAffil (vsp, alp->affil);
-            }
-          }
-          cip = sbp->contact;
-          if (cip != NULL) {
-            ap = cip->contact;
-            if (ap != NULL) {
-              ValidateAffil (vsp, ap->affil);
-            }
-          }
-        }
+        ValidateSeqAlignWithinValidator (vsp, sep, vsp->alignFindRemoteBsp, vsp->doSeqHistAssembly);
+        vsp->gcp = NULL;
       }
+  
+      if (vsp->far_fetch_failure) {
+        vsp->gcp = NULL;
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_FarFetchFailure, "Far fetch failures caused some validator tests to be bypassed");
+      }
+  
+      VisitFeaturesInSep (sep, NULL, ClearScratchOnFeatures);
+  
+      SeqEntrySetScope (oldsep);
+  
+      VisitDescriptorsInSep (sep, NULL, ClearPubScratchData);
     }
-
-    vsp->gcp = NULL;
-    ValidateFeatCits (sep, vsp);
-    vsp->gcp = NULL;
-
-    vsp->gcp = NULL;
-    ValidateFeatIDs (gc.entityID, vsp);
-    vsp->gcp = NULL;
-
-    vsp->gcp = NULL;
-    ValidateSeqIdCase (sep, vsp);
-    vsp->gcp = NULL;
-
-    if (vsp->validateAlignments) {
-      vsp->gcp = NULL;
-      ValidateSeqAlignWithinValidator (vsp, sep, vsp->alignFindRemoteBsp, vsp->doSeqHistAssembly);
-      vsp->gcp = NULL;
-    }
-
-    if (vsp->far_fetch_failure) {
-      vsp->gcp = NULL;
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_INST_FarFetchFailure, "Far fetch failures caused some validator tests to be bypassed");
-    }
-
-    VisitFeaturesInSep (sep, NULL, ClearScratchOnFeatures);
-
-    SeqEntrySetScope (oldsep);
-
-    VisitDescriptorsInSep (sep, NULL, ClearPubScratchData);
 
     if (vsp->useSeqMgrIndexes) {
 
@@ -3422,21 +3550,47 @@ static CharPtr GetBioseqSetClass (Uint1 cl)
   return ("not-set");
 }
 
+
+static BioseqSetPtr FindGenProdSetParentOfBioseqSet (BioseqSetPtr bssp)
+{
+  if (bssp == NULL) {
+    return NULL;
+  } else if (bssp->idx.parenttype != OBJ_BIOSEQSET) {
+    return NULL;
+  } else if ((bssp = (BioseqSetPtr)bssp->idx.parentptr) == NULL) {
+    return NULL;
+  } else if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
+    return bssp;
+  } else {
+    return FindGenProdSetParentOfBioseqSet (bssp);
+  }
+}
+
+
+static BioseqSetPtr FindGenProdSetParentOfBioseq (BioseqPtr bsp)
+{
+  BioseqSetPtr bssp;
+  if (bsp == NULL) {
+    return NULL;
+  } else if (bsp->idx.parenttype != OBJ_BIOSEQSET) {
+    return NULL;
+  } else if ((bssp = (BioseqSetPtr)bsp->idx.parentptr) == NULL) {
+    return NULL;
+  } else if (bssp->_class == BioseqseqSet_class_gen_prod_set) {
+    return bssp;
+  } else {
+    return FindGenProdSetParentOfBioseqSet (bssp);
+  }
+}
+
+
 static void IfInGPSmustBeMrnaProduct (ValidStructPtr vsp, BioseqPtr bsp)
 
 {
-  BioseqSetPtr  bssp;
-  SeqEntryPtr   sep;
-
   /* see if in genomic product */
-
-  sep = vsp->sep;
-  if (sep != NULL && IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
-      if (SeqMgrGetRNAgivenProduct (bsp, NULL) == NULL) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_GenomicProductPackagingProblem, "Nucleotide bioseq should be product of mRNA feature on contig, but is not");
-      }
+  if (FindGenProdSetParentOfBioseq(bsp) != NULL) {
+    if (SeqMgrGetRNAgivenProduct (bsp, NULL) == NULL) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_GenomicProductPackagingProblem, "Nucleotide bioseq should be product of mRNA feature on contig, but is not");
     }
   }
 }
@@ -3451,24 +3605,19 @@ static void IfInGPSmustBeCDSProduct (ValidStructPtr vsp, BioseqPtr bsp)
   SeqFeatPtr    sfp;
 
   /* see if in genomic product */
-
-  sep = vsp->sep;
-  if (sep != NULL && IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
-      sep = bssp->seq_set;
-      if (sep == NULL) return;
-      if (! IS_Bioseq (sep)) return;
-      contig = (BioseqPtr) sep->data.ptrvalue;
-      if (contig == NULL) return;
-      head = SeqMgrGetSfpProductList (bsp);
-      for (vnp = head; vnp != NULL; vnp = vnp->next) {
-        sfp = (SeqFeatPtr) vnp->data.ptrvalue;
-        if (sfp == NULL) continue;
-        if (BioseqFindFromSeqLoc (sfp->location) == contig) return;
-      }
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_GenomicProductPackagingProblem, "Protein bioseq should be product of CDS feature on contig, but is not");
+  if ((bssp = FindGenProdSetParentOfBioseq(bsp)) != NULL) {
+    sep = bssp->seq_set;
+    if (sep == NULL) return;
+    if (! IS_Bioseq (sep)) return;
+    contig = (BioseqPtr) sep->data.ptrvalue;
+    if (contig == NULL) return;
+    head = SeqMgrGetSfpProductList (bsp);
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+      if (sfp == NULL) continue;
+      if (BioseqFindFromSeqLoc (sfp->location) == contig) return;
     }
+    ValidErr (vsp, SEV_WARNING, ERR_SEQ_PKG_GenomicProductPackagingProblem, "Protein bioseq should be product of CDS feature on contig, but is not");
   }
 }
 
@@ -3885,6 +4034,11 @@ static void ValidatePopSet (BioseqSetPtr bssp, ValidStructPtr vsp)
   if (bssp->_class != BioseqseqSet_class_pop_set)
     return;
 
+  if (vsp->is_refseq_in_sep) {
+    ValidErr (vsp, SEV_REJECT, ERR_SEQ_PKG_RefSeqPopSet,
+              "RefSeq record should not be a Pop-set");
+  }
+
   for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
     if (!IS_Bioseq_set (sep)) continue;
     bssp1 = sep->data.ptrvalue;
@@ -4083,28 +4237,6 @@ static void ValidateBioseqSet (GatherContextPtr gcp)
     break;
   }
   return;
-}
-
-static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
-{
-  BoolPtr         isGEDPtr;
-  SeqIdPtr        sip;
-
-  isGEDPtr = (BoolPtr) userdata;
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    switch (sip->choice) {
-    case SEQID_GENBANK:
-    case SEQID_EMBL:
-    case SEQID_DDBJ:
-    case SEQID_TPG:
-    case SEQID_TPE:
-    case SEQID_TPD:
-      *isGEDPtr = TRUE;
-      return;
-    default:
-      break;
-    }
-  }
 }
 
 static Boolean SuppressTrailingXMessage (BioseqPtr bsp)
@@ -4671,13 +4803,13 @@ static void CheckDeltaForReuse (ValidStructPtr vsp, GatherContextPtr gcp, Bioseq
   SeqIntPtr     sintp;
   SeqIdPtr      sip;
   SeqLocPtr     slp;
-  ValNodePtr    vnp;
+  ValNodePtr    vnp_dsp, vnp_r;
 
   if (vsp == NULL || gcp == NULL || bsp == NULL) return;
 
-  for (vnp = (ValNodePtr) bsp->seq_ext; vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice != 1) continue;
-    slp = (SeqLocPtr) vnp->data.ptrvalue;
+  for (vnp_dsp = (ValNodePtr) bsp->seq_ext; vnp_dsp != NULL; vnp_dsp = vnp_dsp->next) {
+    if (vnp_dsp->choice != 1) continue;
+    slp = (SeqLocPtr) vnp_dsp->data.ptrvalue;
     if (slp == NULL) continue;
     if (slp->choice != SEQLOC_INT) continue;
     sintp = (SeqIntPtr) slp->data.ptrvalue;
@@ -4690,19 +4822,19 @@ static void CheckDeltaForReuse (ValidStructPtr vsp, GatherContextPtr gcp, Bioseq
     rdp->seqidstr = StringSave (buf);
     rdp->from = sintp->from;
     rdp->to = sintp->to;
-    vnp = ValNodeAddPointer (&last, 0, (Pointer) rdp);
+    vnp_r = ValNodeAddPointer (&last, 0, (Pointer) rdp);
     if (head == NULL) {
-      head = vnp;
+      head = vnp_r;
     }
-    last = vnp;
+    last = vnp_r;
   }
 
   if (head == NULL) return;
 
   head = ValNodeSort (head, SortVnpByDeltaLoc);
 
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
-    rdp = (ReuseDataPtr) vnp->data.ptrvalue;
+  for (vnp_r = head; vnp_r != NULL; vnp_r = vnp_r->next) {
+    rdp = (ReuseDataPtr) vnp_r->data.ptrvalue;
     if (rdp == NULL) continue;
     if (lastrdp != NULL) {
       if (StringICmp (lastrdp->seqidstr, rdp->seqidstr) == 0) {
@@ -4717,8 +4849,8 @@ static void CheckDeltaForReuse (ValidStructPtr vsp, GatherContextPtr gcp, Bioseq
     lastrdp = rdp;
   }
 
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
-    rdp = (ReuseDataPtr) vnp->data.ptrvalue;
+  for (vnp_r = head; vnp_r != NULL; vnp_r = vnp_r->next) {
+    rdp = (ReuseDataPtr) vnp_r->data.ptrvalue;
     if (rdp == NULL) continue;
     rdp->seqidstr = MemFree (rdp->seqidstr);
   }
@@ -4736,6 +4868,7 @@ static CharPtr legal_refgene_status_strings [] = {
   "Pipeline",
   NULL
 };
+
 
 static void ValidateBioseqInst (GatherContextPtr gcp)
 {
@@ -5445,11 +5578,11 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
             BSSeek ((ByteStorePtr) bsp->seq_data, len, SEEK_SET);
             x = BSGetByte ((ByteStorePtr) bsp->seq_data);
             if (bsp->seq_data_type == Seq_code_ncbistdaa) {
-              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] in position [%ld]", (int) x, (long) (len + 1));
-            } else if (IS_ALPHANUM (x)) {
-              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue '%c' in position [%ld]", (char) x, (long) (len + 1));
+              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] at position [%ld]", (int) x, (long) (len + 1));
+            } else if (IS_ALPHA (x)) {
+              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue '%c' at position [%ld]", (char) x, (long) (len + 1));
             } else {
-              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] in position [%ld]", (int) x, (long) (len + 1));
+              ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] at position [%ld]", (int) x, (long) (len + 1));
             }
           }
         } else if (residue == termination) {
@@ -5465,6 +5598,10 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
           if (isFirst) {
             leadingX = TRUE;
           }
+        } else if (ISA_na (bsp->mol) && StringChr ("EFIJLPQZ", (Char) residue) != NULL) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid nucleotide residue '%c' at position [%ld]", (char) residue, (long) (len + 1));
+        } else if (! IS_ALPHA ((Char) residue)) {
+          ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue '%c' at position [%ld]", (char) residue, (long) (len + 1));
         } else {
           trailingX = 0;
           if (IS_LOWER ((Char) residue)) {
@@ -5813,6 +5950,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
         case 2:                /* SeqLitPtr */
           slitp = (SeqLitPtr) (vnp->data.ptrvalue);
           if (slitp->seq_data != NULL && slitp->seq_data_type != Seq_code_gap) {
+            if (slitp->length == 0) {
+              ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_SeqLitDataLength0, "Seq-lit of length 0 in delta chain");
+            }
             sctp = SeqCodeTableFind (slitp->seq_data_type);
             if (sctp == NULL) {
               ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidAlphabet, "Using illegal sequence alphabet [%d] in SeqLitPtr", (int) slitp->seq_data_type);
@@ -5839,9 +5979,9 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
                   is_invalid = TRUE;
                 if (is_invalid) {
                   if (slitp->seq_data_type == Seq_code_ncbistdaa)
-                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] in position [%ld]", (int) residue, (long) (len + len2));
+                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%d] at position [%ld]", (int) residue, (long) (len + len2));
                   else
-                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%c] in position [%ld]", (char) residue, (long) (len + len2));
+                    ValidErr (vsp, SEV_REJECT, ERR_SEQ_INST_InvalidResidue, "Invalid residue [%c] at position [%ld]", (char) residue, (long) (len + len2));
                 }
               }
               break;
@@ -5909,7 +6049,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
       if ((!isNTorNC) && (! is_gps) && mip->tech != MI_TECH_htgs_0 && mip->tech != MI_TECH_htgs_1 &&
           mip->tech != MI_TECH_htgs_2 && mip->tech != MI_TECH_htgs_3 && mip->tech != MI_TECH_wgs &&
           mip->tech != MI_TECH_composite_wgs_htgs && mip->tech != MI_TECH_unknown && mip->tech != MI_TECH_standard
-          && mip->tech != MI_TECH_htc && mip->tech != MI_TECH_barcode) {
+          && mip->tech != MI_TECH_htc && mip->tech != MI_TECH_barcode && mip->tech != MI_TECH_tsa) {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_BadDeltaSeq, "Delta seq technique should not be [%d]", (int) (mip->tech));
       }
     }
@@ -5969,7 +6109,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
     vnp = (DeltaSeqPtr) bsp->seq_ext;
     if (vnp != NULL && vnp->choice == 2) {
       slitp = (SeqLitPtr) vnp->data.ptrvalue;
-      if (slitp != NULL && slitp->seq_data == NULL) {
+      if (slitp != NULL && (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap)) {
         ValidErr (vsp, sev, ERR_SEQ_INST_BadDeltaSeq, "First delta seq component is a gap");
       }
     }
@@ -5981,7 +6121,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
       vnp = vnp->next;
       if (vnp != NULL && vnp->choice == 2) {
         slitp = (SeqLitPtr) vnp->data.ptrvalue;
-        if (slitp != NULL && slitp->seq_data == NULL) {
+        if (slitp != NULL && (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap)) {
           if (last_is_gap) {
             num_adjacent_gaps++;
           }
@@ -6001,7 +6141,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
       }
     }
     if (non_interspersed_gaps && (! hasGi) && mip != NULL &&
-        (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2 || mip->tech == MI_TECH_htgs_3)) {
+        (mip->tech == MI_TECH_htgs_0 || mip->tech == MI_TECH_htgs_1 || mip->tech == MI_TECH_htgs_2 /* || mip->tech == MI_TECH_htgs_3 */)) {
       if (hasRefGeneTracking) {  
         ValidErr (vsp, SEV_INFO, ERR_SEQ_INST_MissingGaps, "HTGS delta seq should have gaps between all sequence runs");
       } else {
@@ -6015,7 +6155,7 @@ static void ValidateBioseqInst (GatherContextPtr gcp)
     }
     if (vnp != NULL && vnp->choice == 2) {
       slitp = (SeqLitPtr) vnp->data.ptrvalue;
-      if (slitp != NULL && slitp->seq_data == NULL) {
+      if (slitp != NULL && (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap)) {
         ValidErr (vsp, sev, ERR_SEQ_INST_BadDeltaSeq, "Last delta seq component is a gap");
       }
     }
@@ -6632,7 +6772,7 @@ static Boolean BadCharsInAuth (CharPtr str, CharPtr PNTR badauthor, Boolean allo
   return FALSE;
 }
 
-static Boolean BadCharsInName (ValNodePtr name, CharPtr PNTR badauthor)
+static Boolean BadCharsInName (ValNodePtr name, CharPtr PNTR badauthor, BoolPtr last_name_badP)
 
 {
   AuthorPtr    ap;
@@ -6649,7 +6789,12 @@ static Boolean BadCharsInName (ValNodePtr name, CharPtr PNTR badauthor)
     nsp = pid->data;
     if (nsp == NULL) return FALSE;
     if (StringICmp (nsp->names [0], "et al.") == 0) return FALSE;
-    if (BadCharsInAuth (nsp->names [0], badauthor, FALSE, FALSE, TRUE)) return TRUE; /* last    */
+    if (BadCharsInAuth (nsp->names [0], badauthor, FALSE, FALSE, TRUE)) {
+      if (last_name_badP != NULL) {
+        *last_name_badP = TRUE;
+      }
+      return TRUE; /* last    */
+    }
     if (BadCharsInAuth (nsp->names [1], badauthor, FALSE, FALSE, FALSE)) return TRUE; /* first    */
     if (BadCharsInAuth (nsp->names [4], badauthor, FALSE, TRUE, FALSE)) return TRUE;  /* initials */
     if (BadCharsInAuth (nsp->names [5], badauthor, FALSE, TRUE, FALSE)) return TRUE;  /* suffix */
@@ -6754,6 +6899,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
                   conflicting_muids = FALSE, redundant_muids = FALSE,
                   unpub = FALSE;
   ImprintPtr      imp;
+  Boolean         last_name_bad;
   Int4            muid = 0;
   Boolean         noVol, noPages;
   ValNodePtr      name;
@@ -7042,11 +7188,16 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
     if (alp->choice == 1) {
       for (name = alp->names; name != NULL; name = name->next) {
         badauthor = NULL;
-        if (BadCharsInName (name, &badauthor)) {
+        last_name_bad = FALSE;
+        if (BadCharsInName (name, &badauthor, &last_name_bad)) {
           if (StringHasNoText (badauthor)) {
             badauthor = "?";
           }
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_BadCharInAuthorName, "Bad characters in author %s", badauthor);
+          if (last_name_bad) {
+            ValidErr (vsp, sev, ERR_SEQ_FEAT_BadCharInAuthorLastName, "Bad characters in author %s", badauthor);
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadCharInAuthorName, "Bad characters in author %s", badauthor);
+          }
         }
         ValidateSuffix (vsp, gcp, pdp, name);
         ap = (AuthorPtr) name->data.ptrvalue;
@@ -7073,7 +7224,7 @@ static void ValidatePubdesc (ValidStructPtr vsp, GatherContextPtr gcp, PubdescPt
           if (StringHasNoText (badauthor)) {
             badauthor = "?";
           }
-          ValidErr (vsp, sev, ERR_SEQ_FEAT_BadCharInAuthorName, "Bad characters in author %s", badauthor);
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_BadCharInAuthorName, "Bad characters in author %s", badauthor);
         }
       }
     }
@@ -7916,14 +8067,14 @@ NLM_EXTERN CharPtr PNTR GetValidCountryList (void)
   return (CharPtr PNTR) Nlm_valid_country_codes;
 }
 
-NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP)
+NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP, BoolPtr bad_capP)
 {
-  Int2            L, R, mid;
-  CharPtr         ptr;
-  Char            str[256];
+  Int2     L, R, mid;
+  CharPtr  ptr;
+  Char     str [256];
 
-  if (StringHasNoText (name))
-    return FALSE;
+  if (StringHasNoText (name)) return FALSE;
+
   StringNCpy_0 (str, name, sizeof (str));
   ptr = StringChr (str, ':');
   if (ptr != NULL) {
@@ -7931,36 +8082,46 @@ NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP)
   }
 
   L = 0;
-  R = sizeof (Nlm_valid_country_codes) / sizeof (Nlm_valid_country_codes[0]) - 1; /* -1 because now NULL terminated */
+  R = sizeof (Nlm_valid_country_codes) / sizeof (Nlm_valid_country_codes [0]) - 1; /* -1 because now NULL terminated */
 
   while (L < R) {
     mid = (L + R) / 2;
-    if (StringICmp (Nlm_valid_country_codes[mid], str) < 0) {
+    if (StringICmp (Nlm_valid_country_codes [mid], str) < 0) {
       L = mid + 1;
     } else {
       R = mid;
     }
   }
 
-  if (StringICmp (Nlm_valid_country_codes[R], str) == 0) {
+  if (StringICmp (Nlm_valid_country_codes [R], str) == 0) {
+    if (bad_capP != NULL) {
+      if (StringCmp (Nlm_valid_country_codes [R], str) != 0) {
+        *bad_capP = TRUE;
+      }
+    }
     return TRUE;
   }
 
   L = 0;
-  R = sizeof (Nlm_formerly_valid_country_codes) / sizeof (Nlm_formerly_valid_country_codes[0]) - 1; /* -1 because now NULL terminated */
+  R = sizeof (Nlm_formerly_valid_country_codes) / sizeof (Nlm_formerly_valid_country_codes [0]) - 1; /* -1 because now NULL terminated */
 
   while (L < R) {
     mid = (L + R) / 2;
-    if (StringICmp (Nlm_formerly_valid_country_codes[mid], str) < 0) {
+    if (StringICmp (Nlm_formerly_valid_country_codes [mid], str) < 0) {
       L = mid + 1;
     } else {
       R = mid;
     }
   }
 
-  if (StringICmp (Nlm_formerly_valid_country_codes[R], str) == 0) {
+  if (StringICmp (Nlm_formerly_valid_country_codes [R], str) == 0) {
     if (old_countryP != NULL) {
       *old_countryP = TRUE;
+    }
+    if (bad_capP != NULL) {
+      if (StringCmp (Nlm_formerly_valid_country_codes [R], str) != 0) {
+        *bad_capP = TRUE;
+      }
     }
     return FALSE;
   }
@@ -7968,6 +8129,39 @@ NLM_EXTERN Boolean CountryIsValid (CharPtr name, BoolPtr old_countryP)
   return FALSE;
 }
 
+
+NLM_EXTERN CharPtr GetCorrectedCountryCapitalization (CharPtr name)
+{
+  Int2     L, R, mid;
+  CharPtr  ptr;
+  Char     str [256];
+
+  if (StringHasNoText (name)) return NULL;
+
+  StringNCpy_0 (str, name, sizeof (str));
+  ptr = StringChr (str, ':');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+
+  L = 0;
+  R = sizeof (Nlm_valid_country_codes) / sizeof (Nlm_valid_country_codes [0]) - 1; /* -1 because now NULL terminated */
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (Nlm_valid_country_codes [mid], str) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (Nlm_valid_country_codes [R], str) == 0) {
+    return Nlm_valid_country_codes[R];
+  }
+
+  return NULL;
+}
 
 
 static CharPtr ctry_lat_lon [] = {
@@ -9035,12 +9229,12 @@ static Boolean CollectionDateIsValid (CharPtr name)
  *   data [0] : Set to 1
  *        [1] - year (- 1900)
  *        [2] - month (1-12)  optional
- *   	    [3] - day (1-31)	 optional
+ *        [3] - day (1-31)     optional
  * Not bothering with time.
  */
 
 typedef struct betterdate {
-	Int4 data[8];      /* see box above */
+    Int4 data[8];      /* see box above */
 } BetterDateData, PNTR BetterDatePtr;
 
 static BetterDatePtr BetterDateNew()
@@ -9703,11 +9897,13 @@ static Boolean inst_code_not_found = FALSE;
 
 static ValNodePtr    ic_code_list = NULL;
 static CharPtr PNTR  ic_code_data = NULL;
+static Uint1 PNTR    ic_code_type = NULL;
 static Int4          ic_code_len = 0;
 
 static void SetupInstCollTable (void)
 
 {
+  Char        ch;
   FileCache   fc;
   CharPtr     file = "institution_codes.txt";
   FILE        *fp = NULL;
@@ -9718,6 +9914,7 @@ static void SetupInstCollTable (void)
   CharPtr     ptr;
   ErrSev      sev;
   CharPtr     str;
+  CharPtr     tmp;
   ValNodePtr  vnp;
 
   if (ic_code_data != NULL) return;
@@ -9740,12 +9937,21 @@ static void SetupInstCollTable (void)
   str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
   while (str != NULL) {
     if (StringDoesHaveText (str)) {
+      ch = '\0';
       ptr = StringChr (str, '\t');
       if (ptr != NULL) {
         *ptr = '\0';
+        ptr++;
+        tmp = StringChr (ptr, '\t');
+        if (tmp != NULL) {
+          *tmp = '\0';
+          if (ptr [1] == '\0') {
+            ch = *ptr;
+          }
+        }
       }
       TrimSpacesAroundString (str);
-      vnp = ValNodeCopyStr (&last, 0, str);
+      vnp = ValNodeCopyStr (&last, (Uint1) ch, str);
       if (ic_code_list == NULL) {
         ic_code_list = vnp;
       }
@@ -9766,16 +9972,27 @@ static void SetupInstCollTable (void)
         ic_code_data [i] = str;
       }
     }
+
+    ic_code_type = (Uint1 PNTR) MemNew (sizeof (Uint1) * (ic_code_len + 1));
+    if (ic_code_type != NULL) {
+      for (vnp = ic_code_list, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+        ic_code_type [i] = vnp->choice;
+      }
+    }
   }
 }
 
-static CharPtr CheckInstCollName (CharPtr name)
+static CharPtr CheckInstCollName (CharPtr name, Uint1Ptr typeP)
 
 {
   Int4     L, R, mid;
   CharPtr  str;
 
   SetupInstCollTable ();
+
+  if (typeP != NULL) {
+    *typeP = 0;
+  }
 
   L = 0;
   R = ic_code_len - 1;
@@ -9789,6 +10006,11 @@ static CharPtr CheckInstCollName (CharPtr name)
     }
   }
   if (R < 0) return NULL;
+
+  if (typeP != NULL) {
+    *typeP = ic_code_type [(int) R];
+  }
+
   return ic_code_data [(int) R];
 }
 
@@ -9798,6 +10020,7 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
   Char     buf [512];
   CharPtr  inst = NULL, id = NULL, coll = NULL, str;
   size_t   len1, len2;
+  Uint1    type;
   
   if (vsp == NULL || mod == NULL) return;
   
@@ -9819,8 +10042,21 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
   }
   if (inst == NULL) return;
   
-  str = CheckInstCollName (inst);
-  if (StringCmp (str, inst) == 0) return;
+  str = CheckInstCollName (inst, &type);
+  if (StringCmp (str, inst) == 0) {
+    if ((mod->subtype == ORGMOD_bio_material && type != 'b') ||
+        (mod->subtype == ORGMOD_culture_collection && type != 'c') ||
+        (mod->subtype == ORGMOD_specimen_voucher && type != 's')) {
+      if (type == 'b') {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be bio_material", inst);
+      } else if (type == 'c') {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be culture_collection", inst);
+      } else if (type == 's') {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_DESCR_WrongVoucherType, "Institution code %s should be specimen_voucher", inst);
+      }
+    }
+    return;
+  }
 
   if (StringICmp (str, inst) == 0) {
     ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCollectionCode,
@@ -9849,14 +10085,18 @@ static void ValidateOrgModVoucher (ValidStructPtr vsp, OrgModPtr mod)
 
   *coll = '\0';
   coll++;
-  str = CheckInstCollName (inst);
+  str = CheckInstCollName (inst, &type);
   if (StringCmp (str, inst) == 0) {
-    /* DNA is a valid collection for any institution (using bio_material) */
-    if (StringCmp (coll, "DNA") != 0) {
+    if (StringCmp (coll, "DNA") == 0) {
+      /* DNA is a valid collection for any institution (using bio_material) */
+      if (type != 'b') {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_WrongVoucherType, "DNA should be bio_material");
+      }
+    } else {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCollectionCode,
                 "Institution code %s exists, but collection %s:%s is not in list", inst, inst, coll);
-      return;
     }
+    return;
   }
 
   len1 = StringLen (inst);
@@ -9876,10 +10116,11 @@ NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst)
 
 {
   CharPtr  str;
+  Uint1    type;
 
   if (StringHasNoText (inst)) return FALSE;
   
-  str = CheckInstCollName (inst);
+  str = CheckInstCollName (inst, &type);
   if (StringCmp (str, inst) == 0) return TRUE;
   
   return FALSE;
@@ -10059,6 +10300,7 @@ static Boolean IsValidSexValue (CharPtr str)
 static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSourcePtr biop, SeqFeatPtr sfp, ValNodePtr sdp)
 {
   Char            badch;
+  Boolean         bad_cap = FALSE;
   Boolean         bad_frequency;
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
@@ -10073,6 +10315,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Boolean         format_ok;
   CharPtr         gb_synonym = NULL;
   Boolean         germline = FALSE;
+  CharPtr         good;
   CharPtr         guess = NULL;
   Boolean         has_strain = FALSE;
   Boolean         has_fwd_pcr_seq = FALSE;
@@ -10093,6 +10336,9 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Boolean         isFungal = FALSE;
   Boolean         isPlant = FALSE;
   Boolean         isViral = FALSE;
+  Boolean         is_bc;
+  Boolean         is_rf;
+  Boolean         is_sc;
   CharPtr         last_db = NULL;
   FloatHi         lat = 0.0;
   FloatHi         lon = 0.0;
@@ -10125,8 +10371,6 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
   Boolean         strict = TRUE;
   CharPtr         synonym = NULL;
   Char            tmp [128];
-  Int4            dbvalid;
-  CharPtr         dbxerr;
   Boolean         varietyOK;
   CharPtr         inst1, inst2, id1, id2, coll1, coll2;
   Char            buf1 [512], buf2 [512];
@@ -10175,7 +10419,11 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCountryCode, "Multiple country names on BioSource");
       }
       countryname = ssp->name;
-      if (! CountryIsValid (countryname, &old_country)) {
+      if (CountryIsValid (countryname, &old_country, &bad_cap)) {
+        if (bad_cap) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadCountryCapitalization, "Bad country capitalization [%s]", countryname);
+        }
+      } else {
         if (StringHasNoText (countryname)) {
           countryname = "?";
         }
@@ -10202,7 +10450,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_ObsoleteSourceQual,
                 "Transposon name and insertion sequence name are no longer legal qualifiers");
     } else if (ssp->subtype == 0) {
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSubSource, "Unknown subsource subtype %d", (int) (ssp->subtype));
+      ValidErr (vsp, SEV_REJECT, ERR_SEQ_DESCR_BadSubSource, "Unknown subsource subtype %d", (int) (ssp->subtype));
     } else if (ssp->subtype == SUBSRC_other) {
       ValidateSourceQualTags (vsp, gcp, biop, ssp->name);
     } else if (ssp->subtype == SUBSRC_germline) {
@@ -10640,6 +10888,9 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
           }
         }
       }
+      if (vsp->is_embl_ddbj_in_sep) {
+        sev = SEV_WARNING;
+      }
       ValidErr (vsp, sev, ERR_SEQ_DESCR_MissingLineage, "No lineage for this BioSource.");
     }
   } else {
@@ -10681,7 +10932,7 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     varietyOK = FALSE;
     while (omp != NULL) {
       if (omp->subtype == 0 || omp->subtype == 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadOrgMod, "Unknown orgmod subtype %d", (int) (omp->subtype));
+        ValidErr (vsp, SEV_REJECT, ERR_SEQ_DESCR_BadOrgMod, "Unknown orgmod subtype %d", (int) (omp->subtype));
       } else if (omp->subtype == ORGMOD_strain) {
         if (has_strain) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadOrgMod, "Multiple strain qualifiers on the same BioSource");
@@ -10813,12 +11064,45 @@ static void ValidateBioSource (ValidStructPtr vsp, GatherContextPtr gcp, BioSour
     id = -1;
     dbt = (DbtagPtr) db->data.ptrvalue;
     if (dbt != NULL && dbt->db != NULL) {
+
+      if (DbxrefIsValid (dbt->db, &is_rf, &is_sc, &is_bc, &good)) {
+        if (is_bc) {
+          if (StringHasNoText (good)) {
+            good = "?";
+          }
+          if (is_sc) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "Illegal db_xref type %s, legal capitalization is %s", dbt->db, good);
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "Illegal db_xref type %s, legal capitalization is %s, but should not be used on an OrgRef",
+                      dbt->db, good);
+          }
+        } else if (is_rf) {
+          if (vsp->is_refseq_in_sep || vsp->is_gps_in_sep) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, 
+                      "RefSeq-specific db_xref type %s should not used on an OrgRef", dbt->db);
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "RefSeq-specific db_xref type %s should not used on a non-RefSeq OrgRef", dbt->db);
+          }
+        } else if (is_sc) {
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                    "db_xref type %s should not used on an OrgRef", dbt->db);
+        }
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", dbt->db);
+      }
+
+      /*
       dbxerr = NULL;
       dbvalid = IsDbxrefValid (dbt->db, NULL, orp, FALSE, &dbxerr);
       if (dbxerr != NULL) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, dbxerr);
         dbxerr = MemFree (dbxerr);
-      } 
+      }
+      */
     }
   }
 
@@ -10928,6 +11212,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
   ValNodePtr      keywords = NULL;
   PubdescPtr      pdp;
   MolInfoPtr      mip;
+  ObjectIdPtr     oip;
   Uint2           olditemtype = 0;
   Uint4           olditemid = 0;
   BioSourcePtr    biop;
@@ -10936,6 +11221,7 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
   SeqFeatPtr      sfp;
   Boolean         tpa_exp;
   Boolean         tpa_inf;
+  UserObjectPtr   uop;
   BioseqPtr       bsp;
   DatePtr         dp;
   size_t          len;
@@ -11243,6 +11529,19 @@ static Boolean ValidateSeqDescrCommon (ValNodePtr sdp, BioseqValidStrPtr bvsp, V
     str = (CharPtr) vnp->data.ptrvalue;
     if (StringHasNoText (str)) {
       ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_MissingText, "Region descriptor needs text");
+    }
+    break;
+  case Seq_descr_user:
+    uop = (UserObjectPtr) vnp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL) {
+        if (StringCmp (oip->str, "StructuredComment") == 0) {
+          if (uop->data == NULL) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_UserObjectProblem, "Structured Comment user object descriptor is empty");
+          }
+        }
+      }
     }
     break;
   case Seq_descr_pub:
@@ -12871,6 +13170,26 @@ static void CheckBioseqForFeatsInGap (
   }
 }
 
+static Boolean ReportGeneCollision (GeneRefPtr grp, GeneRefPtr lastgrp)
+
+{
+  if (grp == NULL || lastgrp == NULL) return TRUE;
+
+  if (StringDoesHaveText (grp->locus) && StringDoesHaveText (lastgrp->locus)) {
+    if (StringICmp (grp->locus, lastgrp->locus) == 0) return TRUE;
+  }
+
+  if (StringDoesHaveText (grp->locus_tag) && StringDoesHaveText (lastgrp->locus_tag)) {
+    if (StringICmp (grp->locus_tag, lastgrp->locus_tag) == 0) return TRUE;
+  }
+
+  if (StringDoesHaveText (grp->desc) && StringDoesHaveText (lastgrp->desc)) {
+    if (StringICmp (grp->desc, lastgrp->desc) == 0) return FALSE;
+  }
+
+  return TRUE;
+}
+
 static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bvsp)
 
 {
@@ -12884,7 +13203,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   SeqMgrFeatContext  fcontext;
   Uint2              featdeftype = 0;
   Boolean            firstCDS;
-  GeneRefPtr         grp, genomicgrp;
+  GeneRefPtr         grp, genomicgrp, lastgrp;
   SeqFeatPtr         last = NULL;
   Boolean            leave;
   CharPtr            label = NULL;
@@ -13319,6 +13638,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
                         severity = SEV_WARNING;
                       }
                     }
+                    if (fcontext.seqfeattype == SEQFEAT_IMP) {
+                      severity = SEV_WARNING;
+                    }
                     ValidErr (vsp, severity, ERR_SEQ_FEAT_DuplicateFeat, "Features have identical intervals, but labels differ");
                   }
                 }
@@ -13402,8 +13724,12 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
   }
 
   lastLabel = NULL;
+  lastsfp = NULL;
+  lastgrp = NULL;
+  grp = NULL;
   sfp = SeqMgrGetNextFeatureByLabel (bsp, NULL, SEQFEAT_GENE, 0, &fcontext);
   while (sfp != NULL) {
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
     label = fcontext.label;
     if (lastLabel != NULL) {
       message = NULL;
@@ -13412,7 +13738,7 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
       } else if (StringICmp (lastLabel, label) == 0) {
         message = "Colliding names (with different capitalization) in gene features";
       }
-      if (message != NULL) {
+      if (message != NULL && (ReportGeneCollision (grp, lastgrp))) {
         if (gcp != NULL) {
           gcp->itemID = fcontext.itemID;
           gcp->thistype = OBJ_SEQFEAT;
@@ -13427,7 +13753,9 @@ static Boolean ValidateBioseqContextIndexed (BioseqPtr bsp, BioseqValidStrPtr bv
         }
       }
     }
-    lastLabel = label; 
+    lastLabel = label;
+    lastsfp = sfp;
+    lastgrp = grp;
     sfp = SeqMgrGetNextFeatureByLabel (bsp, sfp, SEQFEAT_GENE, 0, &fcontext);
   }
 
@@ -14172,7 +14500,7 @@ static void ValidateTSASequenceForNs (BioseqPtr bsp, ValidStructPtr vsp)
   oldItemtype = gcp->thistype;
 
   if (IsTSA (bsp)) {
-    CountNsInSequence (bsp, &total, &max_stretch);
+    CountNsInSequence (bsp, &total, &max_stretch, FALSE);
     percent_N = (total * 100) / bsp->length;
     if (percent_N > 5) {
       vsp->bsp = bsp;
@@ -14241,6 +14569,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
   Boolean         is_local_only = TRUE;
   Boolean         is_neg_strand_virus = FALSE;
   Boolean         is_ambisense_virus = FALSE;
+  Boolean         is_synthetic = FALSE;
   Boolean         is_transgenic = FALSE;
   Boolean         has_cds = FALSE;
   ErrSev          sev;
@@ -14251,7 +14580,9 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
   OrgRefPtr       orp;
   OrgNamePtr      onp;
   OrgModPtr       omp;
+  /*
   Char            buf1[255];
+  */
 
   vsp = (ValidStructPtr) (gcp->userdata);
   bsp = (BioseqPtr) (gcp->thisitem);
@@ -14319,6 +14650,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
           if (onp != NULL) {
             if (StringICmp (onp->div, "SYN") == 0) {
               bvs.is_syn_constr = TRUE;
+              is_synthetic = TRUE;
             }
             if (StringISearch (onp->lineage, "artificial sequences") != NULL) {
               bvs.is_syn_constr = TRUE;
@@ -14364,6 +14696,9 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
         }
         if (biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_SYNTHETIC) {
           bvs.is_artificial = TRUE;
+        }
+        if (biop->origin == ORG_MUT || biop->origin == ORG_ARTIFICIAL || biop->origin == ORG_SYNTHETIC) {
+          is_synthetic = TRUE;
         }
         for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
           if (ssp->subtype == SUBSRC_transgenic) {
@@ -14416,7 +14751,7 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Negative-strand virus with minus strand CDS should be genomic");
         }
       } else {
-        if (mip->biomol != MOLECULE_TYPE_MRNA && mip->biomol != MOLECULE_TYPE_CRNA && (! is_ambisense_virus)) {
+        if (mip->biomol != MOLECULE_TYPE_MRNA && mip->biomol != MOLECULE_TYPE_CRNA && (! is_ambisense_virus) && (! is_synthetic)) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BioSourceInconsistency, "Negative-strand virus with plus strand CDS should be mRNA or cRNA");
         }
       }
@@ -14677,12 +15012,14 @@ static void ValidateBioseqContext (GatherContextPtr gcp)
     ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_NoMolInfoFound, "No Mol-info applies to this Bioseq");
   }
 
+#if 0 /* temporarily suppress */
   /* if tech is TSA, must have assembly */
   if (mip != NULL && mip->tech == MI_TECH_tsa
       && (bsp->hist == NULL || bsp->hist->assembly == NULL)) {
     SeqIdWrite (bsp->id, buf1, PRINTID_FASTA_SHORT, sizeof (buf1) - 1);
     ValidErr (vsp, SEV_ERROR, ERR_SEQ_INST_TSAHistAssemblyMissing, "TSA record %s should have Seq-hist.assembly", buf1);    
   }
+#endif
 
   /* look for genes that overlap two other genes */
   FindMultiGeneOverlaps (bsp, vsp);
@@ -14795,830 +15132,1018 @@ static CharPtr legal_mobile_element_strings [] = {
 };
 
 static CharPtr ecnum_ambig [] = {
-  "1.-.-.-", "1.1.-.-", "1.1.1.-", "1.1.1.n", "1.1.2.-", "1.1.2.n",
-  "1.1.3.-", "1.1.3.n", "1.1.4.-", "1.1.4.n", "1.1.5.-", "1.1.5.n",
-  "1.1.99.-", "1.1.99.n", "1.1.n.n", "1.2.-.-", "1.2.1.-", "1.2.1.n",
-  "1.2.2.-", "1.2.2.n", "1.2.3.-", "1.2.3.n", "1.2.4.-", "1.2.4.n",
-  "1.2.7.-", "1.2.7.n", "1.2.99.-", "1.2.99.n", "1.2.n.n", "1.3.-.-",
-  "1.3.1.-", "1.3.1.n", "1.3.2.-", "1.3.2.n", "1.3.3.-", "1.3.3.n",
-  "1.3.5.-", "1.3.5.n", "1.3.7.-", "1.3.7.n", "1.3.99.-", "1.3.99.n",
-  "1.3.n.n", "1.4.-.-", "1.4.1.-", "1.4.1.n", "1.4.2.-", "1.4.2.n",
-  "1.4.3.-", "1.4.3.n", "1.4.4.-", "1.4.4.n", "1.4.7.-", "1.4.7.n",
-  "1.4.99.-", "1.4.99.n", "1.4.n.n", "1.5.-.-", "1.5.1.-", "1.5.1.n",
-  "1.5.3.-", "1.5.3.n", "1.5.4.-", "1.5.4.n", "1.5.5.-", "1.5.5.n",
-  "1.5.7.-", "1.5.7.n", "1.5.8.-", "1.5.8.n", "1.5.99.-", "1.5.99.n",
-  "1.5.n.n", "1.6.-.-", "1.6.1.-", "1.6.1.n", "1.6.2.-", "1.6.2.n",
-  "1.6.3.-", "1.6.3.n", "1.6.5.-", "1.6.5.n", "1.6.6.-", "1.6.6.n",
-  "1.6.99.-", "1.6.99.n", "1.6.n.n", "1.7.-.-", "1.7.1.-", "1.7.1.n",
-  "1.7.2.-", "1.7.2.n", "1.7.3.-", "1.7.3.n", "1.7.7.-", "1.7.7.n",
-  "1.7.99.-", "1.7.99.n", "1.7.n.n", "1.8.-.-", "1.8.1.-", "1.8.1.n",
-  "1.8.2.-", "1.8.2.n", "1.8.3.-", "1.8.3.n", "1.8.4.-", "1.8.4.n",
-  "1.8.5.-", "1.8.5.n", "1.8.7.-", "1.8.7.n", "1.8.98.-", "1.8.98.n",
-  "1.8.99.-", "1.8.99.n", "1.8.n.n", "1.9.-.-", "1.9.3.-", "1.9.3.n",
-  "1.9.6.-", "1.9.6.n", "1.9.99.-", "1.9.99.n", "1.9.n.n", "1.10.-.-",
-  "1.10.1.-", "1.10.1.n", "1.10.2.-", "1.10.2.n", "1.10.3.-", "1.10.3.n",
-  "1.10.99.-", "1.10.99.n", "1.10.n.n", "1.11.-.-", "1.11.1.-", "1.11.1.n",
-  "1.11.n.n", "1.12.-.-", "1.12.1.-", "1.12.1.n", "1.12.2.-", "1.12.2.n",
-  "1.12.5.-", "1.12.5.n", "1.12.7.-", "1.12.7.n", "1.12.98.-", "1.12.98.n",
-  "1.12.99.-", "1.12.99.n", "1.12.n.n", "1.13.-.-", "1.13.11.-",
-  "1.13.11.n", "1.13.12.-", "1.13.12.n", "1.13.99.-", "1.13.99.n",
-  "1.13.n.n", "1.14.-.-", "1.14.11.-", "1.14.11.n", "1.14.12.-",
-  "1.14.12.n", "1.14.13.-", "1.14.13.n", "1.14.14.-", "1.14.14.n",
-  "1.14.15.-", "1.14.15.n", "1.14.16.-", "1.14.16.n", "1.14.17.-",
-  "1.14.17.n", "1.14.18.-", "1.14.18.n", "1.14.19.-", "1.14.19.n",
-  "1.14.20.-", "1.14.20.n", "1.14.21.-", "1.14.21.n", "1.14.99.-",
-  "1.14.99.n", "1.14.n.n", "1.15.-.-", "1.15.1.-", "1.15.1.n", "1.15.n.n",
-  "1.16.-.-", "1.16.1.-", "1.16.1.n", "1.16.3.-", "1.16.3.n", "1.16.8.-",
-  "1.16.8.n", "1.16.n.n", "1.17.-.-", "1.17.1.-", "1.17.1.n", "1.17.3.-",
-  "1.17.3.n", "1.17.4.-", "1.17.4.n", "1.17.5.-", "1.17.5.n", "1.17.99.-",
-  "1.17.99.n", "1.17.n.n", "1.18.-.-", "1.18.1.-", "1.18.1.n", "1.18.6.-",
-  "1.18.6.n", "1.18.n.n", "1.19.-.-", "1.19.6.-", "1.19.6.n", "1.19.n.n",
-  "1.20.-.-", "1.20.1.-", "1.20.1.n", "1.20.4.-", "1.20.4.n", "1.20.98.-",
-  "1.20.98.n", "1.20.99.-", "1.20.99.n", "1.20.n.n", "1.21.-.-",
-  "1.21.3.-", "1.21.3.n", "1.21.4.-", "1.21.4.n", "1.21.99.-", "1.21.99.n",
-  "1.21.n.n", "1.97.-.-", "1.97.1.-", "1.97.1.n", "1.97.n.n", "1.n.n.n",
-  "2.-.-.-", "2.1.-.-", "2.1.1.-", "2.1.1.n", "2.1.2.-", "2.1.2.n",
-  "2.1.3.-", "2.1.3.n", "2.1.4.-", "2.1.4.n", "2.1.n.n", "2.2.-.-",
-  "2.2.1.-", "2.2.1.n", "2.2.n.n", "2.3.-.-", "2.3.1.-", "2.3.1.n",
-  "2.3.2.-", "2.3.2.n", "2.3.3.-", "2.3.3.n", "2.3.n.n", "2.4.-.-",
-  "2.4.1.-", "2.4.1.n", "2.4.2.-", "2.4.2.n", "2.4.99.-", "2.4.99.n",
-  "2.4.n.n", "2.5.-.-", "2.5.1.-", "2.5.1.n", "2.5.n.n", "2.6.-.-",
-  "2.6.1.-", "2.6.1.n", "2.6.3.-", "2.6.3.n", "2.6.99.-", "2.6.99.n",
-  "2.6.n.n", "2.7.-.-", "2.7.1.-", "2.7.1.n", "2.7.2.-", "2.7.2.n",
-  "2.7.3.-", "2.7.3.n", "2.7.4.-", "2.7.4.n", "2.7.6.-", "2.7.6.n",
-  "2.7.7.-", "2.7.7.n", "2.7.8.-", "2.7.8.n", "2.7.9.-", "2.7.9.n",
-  "2.7.10.-", "2.7.10.n", "2.7.11.-", "2.7.11.n", "2.7.12.-", "2.7.12.n",
-  "2.7.13.-", "2.7.13.n", "2.7.99.-", "2.7.99.n", "2.7.n.n", "2.8.-.-",
-  "2.8.1.-", "2.8.1.n", "2.8.2.-", "2.8.2.n", "2.8.3.-", "2.8.3.n",
-  "2.8.4.-", "2.8.4.n", "2.8.n.n", "2.9.-.-", "2.9.1.-", "2.9.1.n",
-  "2.9.n.n", "2.n.n.n", "3.-.-.-", "3.1.-.-", "3.1.1.-", "3.1.1.n",
-  "3.1.2.-", "3.1.2.n", "3.1.3.-", "3.1.3.n", "3.1.4.-", "3.1.4.n",
-  "3.1.5.-", "3.1.5.n", "3.1.6.-", "3.1.6.n", "3.1.7.-", "3.1.7.n",
-  "3.1.8.-", "3.1.8.n", "3.1.11.-", "3.1.11.n", "3.1.13.-", "3.1.13.n",
-  "3.1.14.-", "3.1.14.n", "3.1.15.-", "3.1.15.n", "3.1.16.-", "3.1.16.n",
-  "3.1.21.-", "3.1.21.n", "3.1.22.-", "3.1.22.n", "3.1.25.-", "3.1.25.n",
-  "3.1.26.-", "3.1.26.n", "3.1.27.-", "3.1.27.n", "3.1.30.-", "3.1.30.n",
-  "3.1.31.-", "3.1.31.n", "3.1.n.n", "3.2.-.-", "3.2.1.-", "3.2.1.n",
-  "3.2.2.-", "3.2.2.n", "3.2.n.n", "3.3.-.-", "3.3.1.-", "3.3.1.n",
-  "3.3.2.-", "3.3.2.n", "3.3.n.n", "3.4.-.-", "3.4.11.-", "3.4.11.n",
-  "3.4.13.-", "3.4.13.n", "3.4.14.-", "3.4.14.n", "3.4.15.-", "3.4.15.n",
-  "3.4.16.-", "3.4.16.n", "3.4.17.-", "3.4.17.n", "3.4.18.-", "3.4.18.n",
-  "3.4.19.-", "3.4.19.n", "3.4.21.-", "3.4.21.n", "3.4.22.-", "3.4.22.n",
-  "3.4.23.-", "3.4.23.n", "3.4.24.-", "3.4.24.n", "3.4.25.-", "3.4.25.n",
-  "3.4.99.-", "3.4.99.n", "3.4.n.n", "3.5.-.-", "3.5.1.-", "3.5.1.n",
-  "3.5.2.-", "3.5.2.n", "3.5.3.-", "3.5.3.n", "3.5.4.-", "3.5.4.n",
-  "3.5.5.-", "3.5.5.n", "3.5.99.-", "3.5.99.n", "3.5.n.n", "3.6.-.-",
-  "3.6.1.-", "3.6.1.n", "3.6.2.-", "3.6.2.n", "3.6.3.-", "3.6.3.n",
-  "3.6.4.-", "3.6.4.n", "3.6.5.-", "3.6.5.n", "3.6.n.n", "3.7.-.-",
-  "3.7.1.-", "3.7.1.n", "3.7.n.n", "3.8.-.-", "3.8.1.-", "3.8.1.n",
-  "3.8.n.n", "3.9.-.-", "3.9.1.-", "3.9.1.n", "3.9.n.n", "3.10.-.-",
-  "3.10.1.-", "3.10.1.n", "3.10.n.n", "3.11.-.-", "3.11.1.-", "3.11.1.n",
-  "3.11.n.n", "3.12.-.-", "3.12.1.-", "3.12.1.n", "3.12.n.n", "3.13.-.-",
-  "3.13.1.-", "3.13.1.n", "3.13.n.n", "3.n.n.n", "4.-.-.-", "4.1.-.-",
-  "4.1.1.-", "4.1.1.n", "4.1.2.-", "4.1.2.n", "4.1.3.-", "4.1.3.n",
-  "4.1.99.-", "4.1.99.n", "4.1.n.n", "4.2.-.-", "4.2.1.-", "4.2.1.n",
-  "4.2.2.-", "4.2.2.n", "4.2.3.-", "4.2.3.n", "4.2.99.-", "4.2.99.n",
-  "4.2.n.n", "4.3.-.-", "4.3.1.-", "4.3.1.n", "4.3.2.-", "4.3.2.n",
-  "4.3.3.-", "4.3.3.n", "4.3.n.n", "4.4.-.-", "4.4.1.-", "4.4.1.n",
-  "4.4.n.n", "4.5.-.-", "4.5.1.-", "4.5.1.n", "4.5.n.n", "4.6.-.-",
-  "4.6.1.-", "4.6.1.n", "4.6.n.n", "4.99.-.-", "4.99.1.-", "4.99.1.n",
-  "4.99.n.n", "4.n.n.n", "5.-.-.-", "5.1.-.-", "5.1.1.-", "5.1.1.n",
-  "5.1.2.-", "5.1.2.n", "5.1.3.-", "5.1.3.n", "5.1.99.-", "5.1.99.n",
-  "5.1.n.n", "5.2.-.-", "5.2.1.-", "5.2.1.n", "5.2.n.n", "5.3.-.-",
-  "5.3.1.-", "5.3.1.n", "5.3.2.-", "5.3.2.n", "5.3.3.-", "5.3.3.n",
-  "5.3.4.-", "5.3.4.n", "5.3.99.-", "5.3.99.n", "5.3.n.n", "5.4.-.-",
-  "5.4.1.-", "5.4.1.n", "5.4.2.-", "5.4.2.n", "5.4.3.-", "5.4.3.n",
-  "5.4.4.-", "5.4.4.n", "5.4.99.-", "5.4.99.n", "5.4.n.n", "5.5.-.-",
-  "5.5.1.-", "5.5.1.n", "5.5.n.n", "5.99.-.-", "5.99.1.-", "5.99.1.n",
-  "5.99.n.n", "5.n.n.n", "6.-.-.-", "6.1.-.-", "6.1.1.-", "6.1.1.n",
-  "6.1.n.n", "6.2.-.-", "6.2.1.-", "6.2.1.n", "6.2.n.n", "6.3.-.-",
-  "6.3.1.-", "6.3.1.n", "6.3.2.-", "6.3.2.n", "6.3.3.-", "6.3.3.n",
-  "6.3.4.-", "6.3.4.n", "6.3.5.-", "6.3.5.n", "6.3.n.n", "6.4.-.-",
-  "6.4.1.-", "6.4.1.n", "6.4.n.n", "6.5.-.-", "6.5.1.-", "6.5.1.n",
-  "6.5.n.n", "6.6.-.-", "6.6.1.-", "6.6.1.n", "6.6.n.n", "6.n.n.n",
+  "1.-.-.-", "1.1.-.-", "1.1.1.-", "1.1.1.n", "1.1.2.-",
+  "1.1.2.n", "1.1.3.-", "1.1.3.n", "1.1.4.-", "1.1.4.n",
+  "1.1.5.-", "1.1.5.n", "1.1.99.-", "1.1.99.n", "1.1.n.n",
+  "1.2.-.-", "1.2.1.-", "1.2.1.n", "1.2.2.-", "1.2.2.n",
+  "1.2.3.-", "1.2.3.n", "1.2.4.-", "1.2.4.n", "1.2.7.-",
+  "1.2.7.n", "1.2.99.-", "1.2.99.n", "1.2.n.n", "1.3.-.-",
+  "1.3.1.-", "1.3.1.n", "1.3.2.-", "1.3.2.n", "1.3.3.-",
+  "1.3.3.n", "1.3.5.-", "1.3.5.n", "1.3.7.-", "1.3.7.n",
+  "1.3.99.-", "1.3.99.n", "1.3.n.n", "1.4.-.-", "1.4.1.-",
+  "1.4.1.n", "1.4.2.-", "1.4.2.n", "1.4.3.-", "1.4.3.n",
+  "1.4.4.-", "1.4.4.n", "1.4.7.-", "1.4.7.n", "1.4.99.-",
+  "1.4.99.n", "1.4.n.n", "1.5.-.-", "1.5.1.-", "1.5.1.n",
+  "1.5.3.-", "1.5.3.n", "1.5.4.-", "1.5.4.n", "1.5.5.-",
+  "1.5.5.n", "1.5.7.-", "1.5.7.n", "1.5.8.-", "1.5.8.n",
+  "1.5.99.-", "1.5.99.n", "1.5.n.n", "1.6.-.-", "1.6.1.-",
+  "1.6.1.n", "1.6.2.-", "1.6.2.n", "1.6.3.-", "1.6.3.n",
+  "1.6.5.-", "1.6.5.n", "1.6.6.-", "1.6.6.n", "1.6.99.-",
+  "1.6.99.n", "1.6.n.n", "1.7.-.-", "1.7.1.-", "1.7.1.n",
+  "1.7.2.-", "1.7.2.n", "1.7.3.-", "1.7.3.n", "1.7.7.-",
+  "1.7.7.n", "1.7.99.-", "1.7.99.n", "1.7.n.n", "1.8.-.-",
+  "1.8.1.-", "1.8.1.n", "1.8.2.-", "1.8.2.n", "1.8.3.-",
+  "1.8.3.n", "1.8.4.-", "1.8.4.n", "1.8.5.-", "1.8.5.n",
+  "1.8.7.-", "1.8.7.n", "1.8.98.-", "1.8.98.n", "1.8.99.-",
+  "1.8.99.n", "1.8.n.n", "1.9.-.-", "1.9.3.-", "1.9.3.n",
+  "1.9.6.-", "1.9.6.n", "1.9.99.-", "1.9.99.n", "1.9.n.n",
+  "1.10.-.-", "1.10.1.-", "1.10.1.n", "1.10.2.-", "1.10.2.n",
+  "1.10.3.-", "1.10.3.n", "1.10.99.-", "1.10.99.n",
+  "1.10.n.n", "1.11.-.-", "1.11.1.-", "1.11.1.n", "1.11.n.n",
+  "1.12.-.-", "1.12.1.-", "1.12.1.n", "1.12.2.-", "1.12.2.n",
+  "1.12.5.-", "1.12.5.n", "1.12.7.-", "1.12.7.n", "1.12.98.-",
+  "1.12.98.n", "1.12.99.-", "1.12.99.n", "1.12.n.n",
+  "1.13.-.-", "1.13.11.-", "1.13.11.n", "1.13.12.-",
+  "1.13.12.n", "1.13.99.-", "1.13.99.n", "1.13.n.n",
+  "1.14.-.-", "1.14.11.-", "1.14.11.n", "1.14.12.-",
+  "1.14.12.n", "1.14.13.-", "1.14.13.n", "1.14.14.-",
+  "1.14.14.n", "1.14.15.-", "1.14.15.n", "1.14.16.-",
+  "1.14.16.n", "1.14.17.-", "1.14.17.n", "1.14.18.-",
+  "1.14.18.n", "1.14.19.-", "1.14.19.n", "1.14.20.-",
+  "1.14.20.n", "1.14.21.-", "1.14.21.n", "1.14.99.-",
+  "1.14.99.n", "1.14.n.n", "1.15.-.-", "1.15.1.-", "1.15.1.n",
+  "1.15.n.n", "1.16.-.-", "1.16.1.-", "1.16.1.n", "1.16.3.-",
+  "1.16.3.n", "1.16.8.-", "1.16.8.n", "1.16.n.n", "1.17.-.-",
+  "1.17.1.-", "1.17.1.n", "1.17.3.-", "1.17.3.n", "1.17.4.-",
+  "1.17.4.n", "1.17.5.-", "1.17.5.n", "1.17.99.-",
+  "1.17.99.n", "1.17.n.n", "1.18.-.-", "1.18.1.-", "1.18.1.n",
+  "1.18.6.-", "1.18.6.n", "1.18.n.n", "1.19.-.-", "1.19.6.-",
+  "1.19.6.n", "1.19.n.n", "1.20.-.-", "1.20.1.-", "1.20.1.n",
+  "1.20.4.-", "1.20.4.n", "1.20.98.-", "1.20.98.n",
+  "1.20.99.-", "1.20.99.n", "1.20.n.n", "1.21.-.-",
+  "1.21.3.-", "1.21.3.n", "1.21.4.-", "1.21.4.n", "1.21.99.-",
+  "1.21.99.n", "1.21.n.n", "1.97.-.-", "1.97.1.-", "1.97.1.n",
+  "1.97.n.n", "1.n.n.n", "2.-.-.-", "2.1.-.-", "2.1.1.-",
+  "2.1.1.n", "2.1.2.-", "2.1.2.n", "2.1.3.-", "2.1.3.n",
+  "2.1.4.-", "2.1.4.n", "2.1.n.n", "2.2.-.-", "2.2.1.-",
+  "2.2.1.n", "2.2.n.n", "2.3.-.-", "2.3.1.-", "2.3.1.n",
+  "2.3.2.-", "2.3.2.n", "2.3.3.-", "2.3.3.n", "2.3.n.n",
+  "2.4.-.-", "2.4.1.-", "2.4.1.n", "2.4.2.-", "2.4.2.n",
+  "2.4.99.-", "2.4.99.n", "2.4.n.n", "2.5.-.-", "2.5.1.-",
+  "2.5.1.n", "2.5.n.n", "2.6.-.-", "2.6.1.-", "2.6.1.n",
+  "2.6.3.-", "2.6.3.n", "2.6.99.-", "2.6.99.n", "2.6.n.n",
+  "2.7.-.-", "2.7.1.-", "2.7.1.n", "2.7.2.-", "2.7.2.n",
+  "2.7.3.-", "2.7.3.n", "2.7.4.-", "2.7.4.n", "2.7.6.-",
+  "2.7.6.n", "2.7.7.-", "2.7.7.n", "2.7.8.-", "2.7.8.n",
+  "2.7.9.-", "2.7.9.n", "2.7.10.-", "2.7.10.n", "2.7.11.-",
+  "2.7.11.n", "2.7.12.-", "2.7.12.n", "2.7.13.-", "2.7.13.n",
+  "2.7.99.-", "2.7.99.n", "2.7.n.n", "2.8.-.-", "2.8.1.-",
+  "2.8.1.n", "2.8.2.-", "2.8.2.n", "2.8.3.-", "2.8.3.n",
+  "2.8.4.-", "2.8.4.n", "2.8.n.n", "2.9.-.-", "2.9.1.-",
+  "2.9.1.n", "2.9.n.n", "2.n.n.n", "3.-.-.-", "3.1.-.-",
+  "3.1.1.-", "3.1.1.n", "3.1.2.-", "3.1.2.n", "3.1.3.-",
+  "3.1.3.n", "3.1.4.-", "3.1.4.n", "3.1.5.-", "3.1.5.n",
+  "3.1.6.-", "3.1.6.n", "3.1.7.-", "3.1.7.n", "3.1.8.-",
+  "3.1.8.n", "3.1.11.-", "3.1.11.n", "3.1.13.-", "3.1.13.n",
+  "3.1.14.-", "3.1.14.n", "3.1.15.-", "3.1.15.n", "3.1.16.-",
+  "3.1.16.n", "3.1.21.-", "3.1.21.n", "3.1.22.-", "3.1.22.n",
+  "3.1.25.-", "3.1.25.n", "3.1.26.-", "3.1.26.n", "3.1.27.-",
+  "3.1.27.n", "3.1.30.-", "3.1.30.n", "3.1.31.-", "3.1.31.n",
+  "3.1.n.n", "3.2.-.-", "3.2.1.-", "3.2.1.n", "3.2.2.-",
+  "3.2.2.n", "3.2.n.n", "3.3.-.-", "3.3.1.-", "3.3.1.n",
+  "3.3.2.-", "3.3.2.n", "3.3.n.n", "3.4.-.-", "3.4.11.-",
+  "3.4.11.n", "3.4.13.-", "3.4.13.n", "3.4.14.-", "3.4.14.n",
+  "3.4.15.-", "3.4.15.n", "3.4.16.-", "3.4.16.n", "3.4.17.-",
+  "3.4.17.n", "3.4.18.-", "3.4.18.n", "3.4.19.-", "3.4.19.n",
+  "3.4.21.-", "3.4.21.n", "3.4.22.-", "3.4.22.n", "3.4.23.-",
+  "3.4.23.n", "3.4.24.-", "3.4.24.n", "3.4.25.-", "3.4.25.n",
+  "3.4.n.n", "3.5.-.-", "3.5.1.-", "3.5.1.n", "3.5.2.-",
+  "3.5.2.n", "3.5.3.-", "3.5.3.n", "3.5.4.-", "3.5.4.n",
+  "3.5.5.-", "3.5.5.n", "3.5.99.-", "3.5.99.n", "3.5.n.n",
+  "3.6.-.-", "3.6.1.-", "3.6.1.n", "3.6.2.-", "3.6.2.n",
+  "3.6.3.-", "3.6.3.n", "3.6.4.-", "3.6.4.n", "3.6.5.-",
+  "3.6.5.n", "3.6.n.n", "3.7.-.-", "3.7.1.-", "3.7.1.n",
+  "3.7.n.n", "3.8.-.-", "3.8.1.-", "3.8.1.n", "3.8.n.n",
+  "3.9.-.-", "3.9.1.-", "3.9.1.n", "3.9.n.n", "3.10.-.-",
+  "3.10.1.-", "3.10.1.n", "3.10.n.n", "3.11.-.-", "3.11.1.-",
+  "3.11.1.n", "3.11.n.n", "3.12.-.-", "3.12.1.-", "3.12.1.n",
+  "3.12.n.n", "3.13.-.-", "3.13.1.-", "3.13.1.n", "3.13.n.n",
+  "3.n.n.n", "4.-.-.-", "4.1.-.-", "4.1.1.-", "4.1.1.n",
+  "4.1.2.-", "4.1.2.n", "4.1.3.-", "4.1.3.n", "4.1.99.-",
+  "4.1.99.n", "4.1.n.n", "4.2.-.-", "4.2.1.-", "4.2.1.n",
+  "4.2.2.-", "4.2.2.n", "4.2.3.-", "4.2.3.n", "4.2.99.-",
+  "4.2.99.n", "4.2.n.n", "4.3.-.-", "4.3.1.-", "4.3.1.n",
+  "4.3.2.-", "4.3.2.n", "4.3.3.-", "4.3.3.n", "4.3.n.n",
+  "4.4.-.-", "4.4.1.-", "4.4.1.n", "4.4.n.n", "4.5.-.-",
+  "4.5.1.-", "4.5.1.n", "4.5.n.n", "4.6.-.-", "4.6.1.-",
+  "4.6.1.n", "4.6.n.n", "4.99.-.-", "4.99.1.-", "4.99.1.n",
+  "4.99.n.n", "4.n.n.n", "5.-.-.-", "5.1.-.-", "5.1.1.-",
+  "5.1.1.n", "5.1.2.-", "5.1.2.n", "5.1.3.-", "5.1.3.n",
+  "5.1.99.-", "5.1.99.n", "5.1.n.n", "5.2.-.-", "5.2.1.-",
+  "5.2.1.n", "5.2.n.n", "5.3.-.-", "5.3.1.-", "5.3.1.n",
+  "5.3.2.-", "5.3.2.n", "5.3.3.-", "5.3.3.n", "5.3.4.-",
+  "5.3.4.n", "5.3.99.-", "5.3.99.n", "5.3.n.n", "5.4.-.-",
+  "5.4.1.-", "5.4.1.n", "5.4.2.-", "5.4.2.n", "5.4.3.-",
+  "5.4.3.n", "5.4.4.-", "5.4.4.n", "5.4.99.-", "5.4.99.n",
+  "5.4.n.n", "5.5.-.-", "5.5.1.-", "5.5.1.n", "5.5.n.n",
+  "5.99.-.-", "5.99.1.-", "5.99.1.n", "5.99.n.n", "5.n.n.n",
+  "6.-.-.-", "6.1.-.-", "6.1.1.-", "6.1.1.n", "6.1.n.n",
+  "6.2.-.-", "6.2.1.-", "6.2.1.n", "6.2.n.n", "6.3.-.-",
+  "6.3.1.-", "6.3.1.n", "6.3.2.-", "6.3.2.n", "6.3.3.-",
+  "6.3.3.n", "6.3.4.-", "6.3.4.n", "6.3.5.-", "6.3.5.n",
+  "6.3.n.n", "6.4.-.-", "6.4.1.-", "6.4.1.n", "6.4.n.n",
+  "6.5.-.-", "6.5.1.-", "6.5.1.n", "6.5.n.n", "6.6.-.-",
+  "6.6.1.-", "6.6.1.n", "6.6.n.n", "6.n.n.n",
   NULL
 };
 
 static CharPtr ecnum_specif [] = {
-  "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6",
-  "1.1.1.7", "1.1.1.8", "1.1.1.9", "1.1.1.10", "1.1.1.11", "1.1.1.12",
-  "1.1.1.13", "1.1.1.14", "1.1.1.15", "1.1.1.16", "1.1.1.17", "1.1.1.18",
-  "1.1.1.19", "1.1.1.20", "1.1.1.21", "1.1.1.22", "1.1.1.23", "1.1.1.24",
-  "1.1.1.25", "1.1.1.26", "1.1.1.27", "1.1.1.28", "1.1.1.29", "1.1.1.30",
-  "1.1.1.31", "1.1.1.32", "1.1.1.33", "1.1.1.34", "1.1.1.35", "1.1.1.36",
-  "1.1.1.37", "1.1.1.38", "1.1.1.39", "1.1.1.40", "1.1.1.41", "1.1.1.42",
-  "1.1.1.43", "1.1.1.44", "1.1.1.45", "1.1.1.46", "1.1.1.47", "1.1.1.48",
-  "1.1.1.49", "1.1.1.50", "1.1.1.51", "1.1.1.52", "1.1.1.53", "1.1.1.54",
-  "1.1.1.55", "1.1.1.56", "1.1.1.57", "1.1.1.58", "1.1.1.59", "1.1.1.60",
-  "1.1.1.61", "1.1.1.62", "1.1.1.63", "1.1.1.64", "1.1.1.65", "1.1.1.66",
-  "1.1.1.67", "1.1.1.69", "1.1.1.71", "1.1.1.72", "1.1.1.73", "1.1.1.75",
-  "1.1.1.76", "1.1.1.77", "1.1.1.78", "1.1.1.79", "1.1.1.80", "1.1.1.81",
-  "1.1.1.82", "1.1.1.83", "1.1.1.84", "1.1.1.85", "1.1.1.86", "1.1.1.87",
-  "1.1.1.88", "1.1.1.90", "1.1.1.91", "1.1.1.92", "1.1.1.93", "1.1.1.94",
-  "1.1.1.95", "1.1.1.96", "1.1.1.97", "1.1.1.98", "1.1.1.99", "1.1.1.100",
-  "1.1.1.101", "1.1.1.102", "1.1.1.103", "1.1.1.104", "1.1.1.105",
-  "1.1.1.106", "1.1.1.107", "1.1.1.108", "1.1.1.110", "1.1.1.111",
-  "1.1.1.112", "1.1.1.113", "1.1.1.114", "1.1.1.115", "1.1.1.116",
-  "1.1.1.117", "1.1.1.118", "1.1.1.119", "1.1.1.120", "1.1.1.121",
-  "1.1.1.122", "1.1.1.123", "1.1.1.124", "1.1.1.125", "1.1.1.126",
-  "1.1.1.127", "1.1.1.128", "1.1.1.129", "1.1.1.130", "1.1.1.131",
-  "1.1.1.132", "1.1.1.133", "1.1.1.134", "1.1.1.135", "1.1.1.136",
-  "1.1.1.137", "1.1.1.138", "1.1.1.140", "1.1.1.141", "1.1.1.142",
-  "1.1.1.143", "1.1.1.144", "1.1.1.145", "1.1.1.146", "1.1.1.147",
-  "1.1.1.148", "1.1.1.149", "1.1.1.150", "1.1.1.151", "1.1.1.152",
-  "1.1.1.153", "1.1.1.154", "1.1.1.156", "1.1.1.157", "1.1.1.158",
-  "1.1.1.159", "1.1.1.160", "1.1.1.161", "1.1.1.162", "1.1.1.163",
-  "1.1.1.164", "1.1.1.165", "1.1.1.166", "1.1.1.167", "1.1.1.168",
-  "1.1.1.169", "1.1.1.170", "1.1.1.172", "1.1.1.173", "1.1.1.174",
-  "1.1.1.175", "1.1.1.176", "1.1.1.177", "1.1.1.178", "1.1.1.179",
-  "1.1.1.181", "1.1.1.183", "1.1.1.184", "1.1.1.185", "1.1.1.186",
-  "1.1.1.187", "1.1.1.188", "1.1.1.189", "1.1.1.190", "1.1.1.191",
-  "1.1.1.192", "1.1.1.193", "1.1.1.194", "1.1.1.195", "1.1.1.196",
-  "1.1.1.197", "1.1.1.198", "1.1.1.199", "1.1.1.200", "1.1.1.201",
-  "1.1.1.202", "1.1.1.203", "1.1.1.205", "1.1.1.206", "1.1.1.207",
-  "1.1.1.208", "1.1.1.209", "1.1.1.210", "1.1.1.211", "1.1.1.212",
-  "1.1.1.213", "1.1.1.214", "1.1.1.215", "1.1.1.216", "1.1.1.217",
-  "1.1.1.218", "1.1.1.219", "1.1.1.220", "1.1.1.221", "1.1.1.222",
-  "1.1.1.223", "1.1.1.224", "1.1.1.225", "1.1.1.226", "1.1.1.227",
-  "1.1.1.228", "1.1.1.229", "1.1.1.230", "1.1.1.231", "1.1.1.232",
-  "1.1.1.233", "1.1.1.234", "1.1.1.235", "1.1.1.236", "1.1.1.237",
-  "1.1.1.238", "1.1.1.239", "1.1.1.240", "1.1.1.241", "1.1.1.243",
-  "1.1.1.244", "1.1.1.245", "1.1.1.246", "1.1.1.247", "1.1.1.248",
-  "1.1.1.250", "1.1.1.251", "1.1.1.252", "1.1.1.254", "1.1.1.255",
-  "1.1.1.256", "1.1.1.257", "1.1.1.258", "1.1.1.259", "1.1.1.260",
-  "1.1.1.261", "1.1.1.262", "1.1.1.263", "1.1.1.264", "1.1.1.265",
-  "1.1.1.266", "1.1.1.267", "1.1.1.268", "1.1.1.269", "1.1.1.270",
-  "1.1.1.271", "1.1.1.272", "1.1.1.273", "1.1.1.274", "1.1.1.275",
-  "1.1.1.276", "1.1.1.277", "1.1.1.278", "1.1.1.279", "1.1.1.280",
-  "1.1.1.281", "1.1.1.282", "1.1.1.283", "1.1.1.284", "1.1.1.285",
-  "1.1.1.286", "1.1.1.287", "1.1.1.288", "1.1.1.289", "1.1.1.290",
-  "1.1.1.291", "1.1.1.292", "1.1.1.294", "1.1.2.2", "1.1.2.3", "1.1.2.4",
-  "1.1.2.5", "1.1.3.3", "1.1.3.4", "1.1.3.5", "1.1.3.6", "1.1.3.7",
-  "1.1.3.8", "1.1.3.9", "1.1.3.10", "1.1.3.11", "1.1.3.12", "1.1.3.13",
-  "1.1.3.14", "1.1.3.15", "1.1.3.16", "1.1.3.17", "1.1.3.18", "1.1.3.19",
-  "1.1.3.20", "1.1.3.21", "1.1.3.23", "1.1.3.27", "1.1.3.28", "1.1.3.29",
-  "1.1.3.30", "1.1.3.37", "1.1.3.38", "1.1.3.39", "1.1.3.40", "1.1.3.41",
-  "1.1.4.1", "1.1.4.2", "1.1.5.2", "1.1.99.1", "1.1.99.2", "1.1.99.3",
-  "1.1.99.4", "1.1.99.5", "1.1.99.6", "1.1.99.7", "1.1.99.8", "1.1.99.9",
-  "1.1.99.10", "1.1.99.11", "1.1.99.12", "1.1.99.13", "1.1.99.14",
-  "1.1.99.16", "1.1.99.18", "1.1.99.20", "1.1.99.21", "1.1.99.22",
-  "1.1.99.23", "1.1.99.24", "1.1.99.25", "1.1.99.26", "1.1.99.27",
-  "1.1.99.28", "1.1.99.29", "1.1.99.30", "1.1.99.31", "1.2.1.2", "1.2.1.3",
-  "1.2.1.4", "1.2.1.5", "1.2.1.7", "1.2.1.8", "1.2.1.9", "1.2.1.10",
-  "1.2.1.11", "1.2.1.12", "1.2.1.13", "1.2.1.15", "1.2.1.16", "1.2.1.17",
-  "1.2.1.18", "1.2.1.19", "1.2.1.20", "1.2.1.21", "1.2.1.22", "1.2.1.23",
-  "1.2.1.24", "1.2.1.25", "1.2.1.26", "1.2.1.27", "1.2.1.28", "1.2.1.29",
-  "1.2.1.30", "1.2.1.31", "1.2.1.32", "1.2.1.33", "1.2.1.36", "1.2.1.38",
-  "1.2.1.39", "1.2.1.40", "1.2.1.41", "1.2.1.42", "1.2.1.43", "1.2.1.44",
-  "1.2.1.45", "1.2.1.46", "1.2.1.47", "1.2.1.48", "1.2.1.49", "1.2.1.50",
-  "1.2.1.51", "1.2.1.52", "1.2.1.53", "1.2.1.54", "1.2.1.57", "1.2.1.58",
-  "1.2.1.59", "1.2.1.60", "1.2.1.61", "1.2.1.62", "1.2.1.63", "1.2.1.64",
-  "1.2.1.65", "1.2.1.66", "1.2.1.67", "1.2.1.68", "1.2.1.69", "1.2.1.70",
-  "1.2.1.71", "1.2.1.72", "1.2.2.1", "1.2.2.2", "1.2.2.3", "1.2.2.4",
-  "1.2.3.1", "1.2.3.3", "1.2.3.4", "1.2.3.5", "1.2.3.6", "1.2.3.7",
-  "1.2.3.8", "1.2.3.9", "1.2.3.11", "1.2.3.13", "1.2.3.14", "1.2.4.1",
-  "1.2.4.2", "1.2.4.4", "1.2.7.1", "1.2.7.2", "1.2.7.3", "1.2.7.4",
-  "1.2.7.5", "1.2.7.6", "1.2.7.7", "1.2.7.8", "1.2.99.2", "1.2.99.3",
-  "1.2.99.4", "1.2.99.5", "1.2.99.6", "1.2.99.7", "1.3.1.1", "1.3.1.2",
-  "1.3.1.3", "1.3.1.4", "1.3.1.5", "1.3.1.6", "1.3.1.7", "1.3.1.8",
-  "1.3.1.9", "1.3.1.10", "1.3.1.11", "1.3.1.12", "1.3.1.13", "1.3.1.14",
-  "1.3.1.15", "1.3.1.16", "1.3.1.17", "1.3.1.18", "1.3.1.19", "1.3.1.20",
-  "1.3.1.21", "1.3.1.22", "1.3.1.24", "1.3.1.25", "1.3.1.26", "1.3.1.27",
-  "1.3.1.28", "1.3.1.29", "1.3.1.30", "1.3.1.31", "1.3.1.32", "1.3.1.33",
-  "1.3.1.34", "1.3.1.35", "1.3.1.36", "1.3.1.37", "1.3.1.38", "1.3.1.39",
-  "1.3.1.40", "1.3.1.41", "1.3.1.42", "1.3.1.43", "1.3.1.44", "1.3.1.45",
-  "1.3.1.46", "1.3.1.47", "1.3.1.48", "1.3.1.49", "1.3.1.51", "1.3.1.52",
-  "1.3.1.53", "1.3.1.54", "1.3.1.56", "1.3.1.57", "1.3.1.58", "1.3.1.60",
-  "1.3.1.62", "1.3.1.63", "1.3.1.64", "1.3.1.65", "1.3.1.66", "1.3.1.67",
-  "1.3.1.68", "1.3.1.69", "1.3.1.70", "1.3.1.71", "1.3.1.72", "1.3.1.73",
-  "1.3.1.74", "1.3.1.75", "1.3.1.76", "1.3.1.77", "1.3.1.78", "1.3.1.79",
-  "1.3.1.80", "1.3.2.3", "1.3.3.1", "1.3.3.3", "1.3.3.4", "1.3.3.5",
-  "1.3.3.6", "1.3.3.7", "1.3.3.8", "1.3.3.9", "1.3.3.10", "1.3.3.11",
-  "1.3.3.12", "1.3.5.1", "1.3.7.1", "1.3.7.2", "1.3.7.3", "1.3.7.4",
-  "1.3.7.5", "1.3.99.1", "1.3.99.2", "1.3.99.3", "1.3.99.4", "1.3.99.5",
-  "1.3.99.6", "1.3.99.7", "1.3.99.8", "1.3.99.10", "1.3.99.11",
-  "1.3.99.12", "1.3.99.13", "1.3.99.14", "1.3.99.15", "1.3.99.16",
-  "1.3.99.17", "1.3.99.18", "1.3.99.19", "1.3.99.20", "1.3.99.21",
-  "1.3.99.22", "1.3.99.23", "1.4.1.1", "1.4.1.2", "1.4.1.3", "1.4.1.4",
-  "1.4.1.5", "1.4.1.7", "1.4.1.8", "1.4.1.9", "1.4.1.10", "1.4.1.11",
-  "1.4.1.12", "1.4.1.13", "1.4.1.14", "1.4.1.15", "1.4.1.16", "1.4.1.17",
-  "1.4.1.18", "1.4.1.19", "1.4.1.20", "1.4.1.21", "1.4.2.1", "1.4.3.1",
-  "1.4.3.2", "1.4.3.3", "1.4.3.4", "1.4.3.5", "1.4.3.6", "1.4.3.7",
-  "1.4.3.8", "1.4.3.10", "1.4.3.11", "1.4.3.12", "1.4.3.13", "1.4.3.14",
-  "1.4.3.15", "1.4.3.16", "1.4.3.19", "1.4.3.20", "1.4.4.2", "1.4.7.1",
-  "1.4.99.1", "1.4.99.2", "1.4.99.3", "1.4.99.4", "1.4.99.5", "1.5.1.1",
-  "1.5.1.2", "1.5.1.3", "1.5.1.5", "1.5.1.6", "1.5.1.7", "1.5.1.8",
-  "1.5.1.9", "1.5.1.10", "1.5.1.11", "1.5.1.12", "1.5.1.15", "1.5.1.16",
-  "1.5.1.17", "1.5.1.18", "1.5.1.19", "1.5.1.20", "1.5.1.21", "1.5.1.22",
-  "1.5.1.23", "1.5.1.24", "1.5.1.25", "1.5.1.26", "1.5.1.27", "1.5.1.28",
-  "1.5.1.29", "1.5.1.30", "1.5.1.31", "1.5.1.32", "1.5.1.33", "1.5.1.34",
-  "1.5.3.1", "1.5.3.2", "1.5.3.4", "1.5.3.5", "1.5.3.6", "1.5.3.7",
-  "1.5.3.10", "1.5.3.11", "1.5.3.12", "1.5.4.1", "1.5.5.1", "1.5.7.1",
-  "1.5.8.1", "1.5.8.2", "1.5.99.1", "1.5.99.2", "1.5.99.3", "1.5.99.4",
-  "1.5.99.5", "1.5.99.6", "1.5.99.8", "1.5.99.9", "1.5.99.11", "1.5.99.12",
-  "1.6.1.1", "1.6.1.2", "1.6.2.2", "1.6.2.4", "1.6.2.5", "1.6.2.6",
-  "1.6.3.1", "1.6.5.2", "1.6.5.3", "1.6.5.4", "1.6.5.5", "1.6.5.6",
-  "1.6.5.7", "1.6.6.9", "1.6.99.1", "1.6.99.3", "1.6.99.5", "1.6.99.6",
-  "1.7.1.1", "1.7.1.2", "1.7.1.3", "1.7.1.4", "1.7.1.5", "1.7.1.6",
-  "1.7.1.7", "1.7.1.9", "1.7.1.10", "1.7.1.11", "1.7.1.12", "1.7.1.13",
-  "1.7.2.1", "1.7.2.2", "1.7.2.3", "1.7.3.1", "1.7.3.2", "1.7.3.3",
-  "1.7.3.4", "1.7.3.5", "1.7.7.1", "1.7.7.2", "1.7.99.1", "1.7.99.4",
-  "1.7.99.6", "1.7.99.7", "1.7.99.8", "1.8.1.2", "1.8.1.3", "1.8.1.4",
-  "1.8.1.5", "1.8.1.6", "1.8.1.7", "1.8.1.8", "1.8.1.9", "1.8.1.10",
-  "1.8.1.11", "1.8.1.12", "1.8.1.13", "1.8.1.14", "1.8.1.15", "1.8.2.1",
-  "1.8.2.2", "1.8.3.1", "1.8.3.2", "1.8.3.3", "1.8.3.4", "1.8.3.5",
-  "1.8.4.1", "1.8.4.2", "1.8.4.3", "1.8.4.4", "1.8.4.7", "1.8.4.8",
-  "1.8.4.9", "1.8.4.10", "1.8.4.11", "1.8.4.12", "1.8.4.13", "1.8.4.14",
-  "1.8.5.1", "1.8.5.2", "1.8.7.1", "1.8.98.1", "1.8.98.2", "1.8.99.1",
-  "1.8.99.2", "1.8.99.3", "1.9.3.1", "1.9.6.1", "1.9.99.1", "1.10.1.1",
-  "1.10.2.1", "1.10.2.2", "1.10.3.1", "1.10.3.2", "1.10.3.3", "1.10.3.4",
-  "1.10.3.5", "1.10.3.6", "1.10.99.1", "1.10.99.2", "1.10.99.3",
-  "1.11.1.1", "1.11.1.2", "1.11.1.3", "1.11.1.5", "1.11.1.6", "1.11.1.7",
-  "1.11.1.8", "1.11.1.9", "1.11.1.10", "1.11.1.11", "1.11.1.12",
-  "1.11.1.13", "1.11.1.14", "1.11.1.15", "1.11.1.16", "1.12.1.2",
-  "1.12.1.3", "1.12.2.1", "1.12.5.1", "1.12.7.2", "1.12.98.1", "1.12.98.2",
-  "1.12.98.3", "1.12.99.6", "1.13.11.1", "1.13.11.2", "1.13.11.3",
-  "1.13.11.4", "1.13.11.5", "1.13.11.6", "1.13.11.8", "1.13.11.9",
-  "1.13.11.10", "1.13.11.11", "1.13.11.12", "1.13.11.13", "1.13.11.14",
-  "1.13.11.15", "1.13.11.16", "1.13.11.17", "1.13.11.18", "1.13.11.19",
-  "1.13.11.20", "1.13.11.22", "1.13.11.23", "1.13.11.24", "1.13.11.25",
-  "1.13.11.26", "1.13.11.27", "1.13.11.28", "1.13.11.29", "1.13.11.30",
-  "1.13.11.31", "1.13.11.32", "1.13.11.33", "1.13.11.34", "1.13.11.35",
-  "1.13.11.36", "1.13.11.37", "1.13.11.38", "1.13.11.39", "1.13.11.40",
-  "1.13.11.41", "1.13.11.43", "1.13.11.44", "1.13.11.45", "1.13.11.46",
-  "1.13.11.47", "1.13.11.48", "1.13.11.49", "1.13.11.50", "1.13.11.51",
-  "1.13.11.52", "1.13.11.53", "1.13.11.54", "1.13.11.55", "1.13.12.1",
-  "1.13.12.2", "1.13.12.3", "1.13.12.4", "1.13.12.5", "1.13.12.6",
-  "1.13.12.7", "1.13.12.8", "1.13.12.9", "1.13.12.12", "1.13.12.13",
-  "1.13.12.14", "1.13.99.1", "1.13.99.3", "1.14.11.1", "1.14.11.2",
-  "1.14.11.3", "1.14.11.4", "1.14.11.6", "1.14.11.7", "1.14.11.8",
-  "1.14.11.9", "1.14.11.10", "1.14.11.11", "1.14.11.12", "1.14.11.13",
-  "1.14.11.14", "1.14.11.15", "1.14.11.16", "1.14.11.17", "1.14.11.18",
-  "1.14.11.19", "1.14.11.20", "1.14.11.21", "1.14.11.22", "1.14.11.23",
-  "1.14.11.24", "1.14.11.25", "1.14.11.26", "1.14.11.27", "1.14.11.28",
-  "1.14.12.1", "1.14.12.3", "1.14.12.4", "1.14.12.5", "1.14.12.7",
-  "1.14.12.8", "1.14.12.9", "1.14.12.10", "1.14.12.11", "1.14.12.12",
-  "1.14.12.13", "1.14.12.14", "1.14.12.15", "1.14.12.16", "1.14.12.17",
-  "1.14.12.18", "1.14.12.19", "1.14.12.20", "1.14.13.1", "1.14.13.2",
-  "1.14.13.3", "1.14.13.4", "1.14.13.5", "1.14.13.6", "1.14.13.7",
-  "1.14.13.8", "1.14.13.9", "1.14.13.10", "1.14.13.11", "1.14.13.12",
-  "1.14.13.13", "1.14.13.14", "1.14.13.15", "1.14.13.16", "1.14.13.17",
-  "1.14.13.18", "1.14.13.19", "1.14.13.20", "1.14.13.21", "1.14.13.22",
-  "1.14.13.23", "1.14.13.24", "1.14.13.25", "1.14.13.26", "1.14.13.27",
-  "1.14.13.28", "1.14.13.29", "1.14.13.30", "1.14.13.31", "1.14.13.32",
-  "1.14.13.33", "1.14.13.34", "1.14.13.35", "1.14.13.36", "1.14.13.37",
-  "1.14.13.38", "1.14.13.39", "1.14.13.40", "1.14.13.41", "1.14.13.42",
-  "1.14.13.43", "1.14.13.44", "1.14.13.46", "1.14.13.47", "1.14.13.48",
-  "1.14.13.49", "1.14.13.50", "1.14.13.51", "1.14.13.52", "1.14.13.53",
-  "1.14.13.54", "1.14.13.55", "1.14.13.56", "1.14.13.57", "1.14.13.58",
-  "1.14.13.59", "1.14.13.60", "1.14.13.61", "1.14.13.62", "1.14.13.63",
-  "1.14.13.64", "1.14.13.66", "1.14.13.67", "1.14.13.68", "1.14.13.69",
-  "1.14.13.70", "1.14.13.71", "1.14.13.72", "1.14.13.73", "1.14.13.74",
-  "1.14.13.75", "1.14.13.76", "1.14.13.77", "1.14.13.78", "1.14.13.79",
-  "1.14.13.80", "1.14.13.81", "1.14.13.82", "1.14.13.83", "1.14.13.84",
-  "1.14.13.85", "1.14.13.86", "1.14.13.87", "1.14.13.88", "1.14.13.89",
-  "1.14.13.90", "1.14.13.91", "1.14.13.92", "1.14.13.93", "1.14.13.94",
-  "1.14.13.95", "1.14.13.96", "1.14.13.97", "1.14.13.98", "1.14.13.99",
-  "1.14.13.100", "1.14.13.101", "1.14.13.102", "1.14.13.103", "1.14.14.1",
-  "1.14.14.3", "1.14.14.5", "1.14.15.1", "1.14.15.2", "1.14.15.3",
-  "1.14.15.4", "1.14.15.5", "1.14.15.6", "1.14.15.7", "1.14.16.1",
-  "1.14.16.2", "1.14.16.3", "1.14.16.4", "1.14.16.5", "1.14.16.6",
-  "1.14.17.1", "1.14.17.3", "1.14.17.4", "1.14.18.1", "1.14.18.2",
-  "1.14.19.1", "1.14.19.2", "1.14.19.3", "1.14.20.1", "1.14.21.1",
-  "1.14.21.2", "1.14.21.3", "1.14.21.4", "1.14.21.5", "1.14.21.6",
-  "1.14.99.1", "1.14.99.2", "1.14.99.3", "1.14.99.4", "1.14.99.7",
-  "1.14.99.9", "1.14.99.10", "1.14.99.11", "1.14.99.12", "1.14.99.14",
-  "1.14.99.15", "1.14.99.19", "1.14.99.20", "1.14.99.21", "1.14.99.22",
-  "1.14.99.23", "1.14.99.24", "1.14.99.26", "1.14.99.27", "1.14.99.28",
-  "1.14.99.29", "1.14.99.30", "1.14.99.31", "1.14.99.32", "1.14.99.33",
-  "1.14.99.34", "1.14.99.35", "1.14.99.36", "1.14.99.37", "1.14.99.38",
-  "1.15.1.1", "1.15.1.2", "1.16.1.1", "1.16.1.2", "1.16.1.3", "1.16.1.4",
-  "1.16.1.5", "1.16.1.6", "1.16.1.7", "1.16.1.8", "1.16.3.1", "1.16.8.1",
-  "1.17.1.1", "1.17.1.2", "1.17.1.3", "1.17.1.4", "1.17.1.5", "1.17.3.1",
-  "1.17.3.2", "1.17.3.3", "1.17.4.1", "1.17.4.2", "1.17.4.3", "1.17.5.1",
-  "1.17.99.1", "1.17.99.2", "1.17.99.3", "1.17.99.4", "1.17.99.5",
-  "1.18.1.1", "1.18.1.2", "1.18.1.3", "1.18.1.4", "1.18.6.1", "1.19.6.1",
-  "1.20.1.1", "1.20.4.1", "1.20.4.2", "1.20.98.1", "1.20.99.1", "1.21.3.1",
-  "1.21.3.2", "1.21.3.3", "1.21.3.4", "1.21.3.5", "1.21.3.6", "1.21.4.1",
-  "1.21.4.2", "1.21.4.3", "1.21.4.4", "1.21.99.1", "1.97.1.1", "1.97.1.2",
-  "1.97.1.3", "1.97.1.4", "1.97.1.8", "1.97.1.9", "1.97.1.10", "1.97.1.11",
-  "2.1.1.1", "2.1.1.2", "2.1.1.3", "2.1.1.4", "2.1.1.5", "2.1.1.6",
-  "2.1.1.7", "2.1.1.8", "2.1.1.9", "2.1.1.10", "2.1.1.11", "2.1.1.12",
-  "2.1.1.13", "2.1.1.14", "2.1.1.15", "2.1.1.16", "2.1.1.17", "2.1.1.18",
-  "2.1.1.19", "2.1.1.20", "2.1.1.21", "2.1.1.22", "2.1.1.25", "2.1.1.26",
-  "2.1.1.27", "2.1.1.28", "2.1.1.29", "2.1.1.31", "2.1.1.32", "2.1.1.33",
-  "2.1.1.34", "2.1.1.35", "2.1.1.36", "2.1.1.37", "2.1.1.38", "2.1.1.39",
-  "2.1.1.40", "2.1.1.41", "2.1.1.42", "2.1.1.43", "2.1.1.44", "2.1.1.45",
-  "2.1.1.46", "2.1.1.47", "2.1.1.48", "2.1.1.49", "2.1.1.50", "2.1.1.51",
-  "2.1.1.52", "2.1.1.53", "2.1.1.54", "2.1.1.55", "2.1.1.56", "2.1.1.57",
-  "2.1.1.59", "2.1.1.60", "2.1.1.61", "2.1.1.62", "2.1.1.63", "2.1.1.64",
-  "2.1.1.65", "2.1.1.66", "2.1.1.67", "2.1.1.68", "2.1.1.69", "2.1.1.70",
-  "2.1.1.71", "2.1.1.72", "2.1.1.74", "2.1.1.75", "2.1.1.76", "2.1.1.77",
-  "2.1.1.78", "2.1.1.79", "2.1.1.80", "2.1.1.82", "2.1.1.83", "2.1.1.84",
-  "2.1.1.85", "2.1.1.86", "2.1.1.87", "2.1.1.88", "2.1.1.89", "2.1.1.90",
-  "2.1.1.91", "2.1.1.92", "2.1.1.93", "2.1.1.94", "2.1.1.95", "2.1.1.96",
-  "2.1.1.97", "2.1.1.98", "2.1.1.99", "2.1.1.100", "2.1.1.101",
-  "2.1.1.102", "2.1.1.103", "2.1.1.104", "2.1.1.105", "2.1.1.106",
-  "2.1.1.107", "2.1.1.108", "2.1.1.109", "2.1.1.110", "2.1.1.111",
-  "2.1.1.112", "2.1.1.113", "2.1.1.114", "2.1.1.115", "2.1.1.116",
-  "2.1.1.117", "2.1.1.118", "2.1.1.119", "2.1.1.120", "2.1.1.121",
-  "2.1.1.122", "2.1.1.123", "2.1.1.124", "2.1.1.125", "2.1.1.126",
-  "2.1.1.127", "2.1.1.128", "2.1.1.129", "2.1.1.130", "2.1.1.131",
-  "2.1.1.132", "2.1.1.133", "2.1.1.136", "2.1.1.137", "2.1.1.139",
-  "2.1.1.140", "2.1.1.141", "2.1.1.142", "2.1.1.143", "2.1.1.144",
-  "2.1.1.145", "2.1.1.146", "2.1.1.147", "2.1.1.148", "2.1.1.149",
-  "2.1.1.150", "2.1.1.151", "2.1.1.152", "2.1.1.153", "2.1.1.154",
-  "2.1.1.155", "2.1.1.156", "2.1.1.157", "2.1.1.158", "2.1.1.159",
-  "2.1.1.160", "2.1.1.161", "2.1.1.162", "2.1.2.1", "2.1.2.2", "2.1.2.3",
-  "2.1.2.4", "2.1.2.5", "2.1.2.7", "2.1.2.8", "2.1.2.9", "2.1.2.10",
-  "2.1.2.11", "2.1.3.1", "2.1.3.2", "2.1.3.3", "2.1.3.5", "2.1.3.6",
-  "2.1.3.7", "2.1.3.8", "2.1.3.9", "2.1.4.1", "2.1.4.2", "2.2.1.1",
-  "2.2.1.2", "2.2.1.3", "2.2.1.4", "2.2.1.5", "2.2.1.6", "2.2.1.7",
-  "2.2.1.8", "2.3.1.1", "2.3.1.2", "2.3.1.3", "2.3.1.4", "2.3.1.5",
-  "2.3.1.6", "2.3.1.7", "2.3.1.8", "2.3.1.9", "2.3.1.10", "2.3.1.11",
-  "2.3.1.12", "2.3.1.13", "2.3.1.14", "2.3.1.15", "2.3.1.16", "2.3.1.17",
-  "2.3.1.18", "2.3.1.19", "2.3.1.20", "2.3.1.21", "2.3.1.22", "2.3.1.23",
-  "2.3.1.24", "2.3.1.25", "2.3.1.26", "2.3.1.27", "2.3.1.28", "2.3.1.29",
-  "2.3.1.30", "2.3.1.31", "2.3.1.32", "2.3.1.33", "2.3.1.34", "2.3.1.35",
-  "2.3.1.36", "2.3.1.37", "2.3.1.38", "2.3.1.39", "2.3.1.40", "2.3.1.41",
-  "2.3.1.42", "2.3.1.43", "2.3.1.44", "2.3.1.45", "2.3.1.46", "2.3.1.47",
-  "2.3.1.48", "2.3.1.49", "2.3.1.50", "2.3.1.51", "2.3.1.52", "2.3.1.53",
-  "2.3.1.54", "2.3.1.56", "2.3.1.57", "2.3.1.58", "2.3.1.59", "2.3.1.60",
-  "2.3.1.61", "2.3.1.62", "2.3.1.63", "2.3.1.64", "2.3.1.65", "2.3.1.66",
-  "2.3.1.67", "2.3.1.68", "2.3.1.69", "2.3.1.70", "2.3.1.71", "2.3.1.72",
-  "2.3.1.73", "2.3.1.74", "2.3.1.75", "2.3.1.76", "2.3.1.77", "2.3.1.78",
-  "2.3.1.79", "2.3.1.80", "2.3.1.81", "2.3.1.82", "2.3.1.83", "2.3.1.84",
-  "2.3.1.85", "2.3.1.86", "2.3.1.87", "2.3.1.88", "2.3.1.89", "2.3.1.90",
-  "2.3.1.91", "2.3.1.92", "2.3.1.93", "2.3.1.94", "2.3.1.95", "2.3.1.96",
-  "2.3.1.97", "2.3.1.98", "2.3.1.99", "2.3.1.100", "2.3.1.101",
-  "2.3.1.102", "2.3.1.103", "2.3.1.104", "2.3.1.105", "2.3.1.106",
-  "2.3.1.107", "2.3.1.108", "2.3.1.109", "2.3.1.110", "2.3.1.111",
-  "2.3.1.112", "2.3.1.113", "2.3.1.114", "2.3.1.115", "2.3.1.116",
-  "2.3.1.117", "2.3.1.118", "2.3.1.119", "2.3.1.121", "2.3.1.122",
-  "2.3.1.123", "2.3.1.125", "2.3.1.126", "2.3.1.127", "2.3.1.128",
-  "2.3.1.129", "2.3.1.130", "2.3.1.131", "2.3.1.132", "2.3.1.133",
-  "2.3.1.134", "2.3.1.135", "2.3.1.136", "2.3.1.137", "2.3.1.138",
-  "2.3.1.139", "2.3.1.140", "2.3.1.141", "2.3.1.142", "2.3.1.143",
-  "2.3.1.144", "2.3.1.145", "2.3.1.146", "2.3.1.147", "2.3.1.148",
-  "2.3.1.149", "2.3.1.150", "2.3.1.151", "2.3.1.152", "2.3.1.153",
-  "2.3.1.154", "2.3.1.155", "2.3.1.156", "2.3.1.157", "2.3.1.158",
-  "2.3.1.159", "2.3.1.160", "2.3.1.161", "2.3.1.162", "2.3.1.163",
-  "2.3.1.164", "2.3.1.165", "2.3.1.166", "2.3.1.167", "2.3.1.168",
-  "2.3.1.169", "2.3.1.170", "2.3.1.171", "2.3.1.172", "2.3.1.173",
-  "2.3.1.174", "2.3.1.175", "2.3.1.176", "2.3.1.177", "2.3.1.178",
-  "2.3.1.179", "2.3.1.180", "2.3.1.181", "2.3.1.182", "2.3.1.183",
-  "2.3.1.184", "2.3.2.1", "2.3.2.2", "2.3.2.3", "2.3.2.4", "2.3.2.5",
-  "2.3.2.6", "2.3.2.7", "2.3.2.8", "2.3.2.9", "2.3.2.10", "2.3.2.11",
-  "2.3.2.12", "2.3.2.13", "2.3.2.14", "2.3.2.15", "2.3.3.1", "2.3.3.2",
-  "2.3.3.3", "2.3.3.4", "2.3.3.5", "2.3.3.6", "2.3.3.7", "2.3.3.8",
-  "2.3.3.9", "2.3.3.10", "2.3.3.11", "2.3.3.12", "2.3.3.13", "2.3.3.14",
-  "2.3.3.15", "2.4.1.1", "2.4.1.2", "2.4.1.4", "2.4.1.5", "2.4.1.7",
-  "2.4.1.8", "2.4.1.9", "2.4.1.10", "2.4.1.11", "2.4.1.12", "2.4.1.13",
-  "2.4.1.14", "2.4.1.15", "2.4.1.16", "2.4.1.17", "2.4.1.18", "2.4.1.19",
-  "2.4.1.20", "2.4.1.21", "2.4.1.22", "2.4.1.23", "2.4.1.24", "2.4.1.25",
-  "2.4.1.26", "2.4.1.27", "2.4.1.28", "2.4.1.29", "2.4.1.30", "2.4.1.31",
-  "2.4.1.32", "2.4.1.33", "2.4.1.34", "2.4.1.35", "2.4.1.36", "2.4.1.37",
-  "2.4.1.38", "2.4.1.39", "2.4.1.40", "2.4.1.41", "2.4.1.43", "2.4.1.44",
-  "2.4.1.45", "2.4.1.46", "2.4.1.47", "2.4.1.48", "2.4.1.49", "2.4.1.50",
-  "2.4.1.52", "2.4.1.53", "2.4.1.54", "2.4.1.56", "2.4.1.57", "2.4.1.58",
-  "2.4.1.60", "2.4.1.62", "2.4.1.63", "2.4.1.64", "2.4.1.65", "2.4.1.66",
-  "2.4.1.67", "2.4.1.68", "2.4.1.69", "2.4.1.70", "2.4.1.71", "2.4.1.73",
-  "2.4.1.74", "2.4.1.78", "2.4.1.79", "2.4.1.80", "2.4.1.81", "2.4.1.82",
-  "2.4.1.83", "2.4.1.85", "2.4.1.86", "2.4.1.87", "2.4.1.88", "2.4.1.90",
-  "2.4.1.91", "2.4.1.92", "2.4.1.94", "2.4.1.95", "2.4.1.96", "2.4.1.97",
-  "2.4.1.99", "2.4.1.100", "2.4.1.101", "2.4.1.102", "2.4.1.103",
-  "2.4.1.104", "2.4.1.105", "2.4.1.106", "2.4.1.109", "2.4.1.110",
-  "2.4.1.111", "2.4.1.113", "2.4.1.114", "2.4.1.115", "2.4.1.116",
-  "2.4.1.117", "2.4.1.118", "2.4.1.119", "2.4.1.120", "2.4.1.121",
-  "2.4.1.122", "2.4.1.123", "2.4.1.125", "2.4.1.126", "2.4.1.127",
-  "2.4.1.128", "2.4.1.129", "2.4.1.130", "2.4.1.131", "2.4.1.132",
-  "2.4.1.133", "2.4.1.134", "2.4.1.135", "2.4.1.136", "2.4.1.137",
-  "2.4.1.138", "2.4.1.139", "2.4.1.140", "2.4.1.141", "2.4.1.142",
-  "2.4.1.143", "2.4.1.144", "2.4.1.145", "2.4.1.146", "2.4.1.147",
-  "2.4.1.148", "2.4.1.149", "2.4.1.150", "2.4.1.152", "2.4.1.153",
-  "2.4.1.155", "2.4.1.156", "2.4.1.157", "2.4.1.158", "2.4.1.159",
-  "2.4.1.160", "2.4.1.161", "2.4.1.162", "2.4.1.163", "2.4.1.164",
-  "2.4.1.165", "2.4.1.166", "2.4.1.167", "2.4.1.168", "2.4.1.170",
-  "2.4.1.171", "2.4.1.172", "2.4.1.173", "2.4.1.174", "2.4.1.175",
-  "2.4.1.176", "2.4.1.177", "2.4.1.178", "2.4.1.179", "2.4.1.180",
-  "2.4.1.181", "2.4.1.182", "2.4.1.183", "2.4.1.184", "2.4.1.185",
-  "2.4.1.186", "2.4.1.187", "2.4.1.188", "2.4.1.189", "2.4.1.190",
-  "2.4.1.191", "2.4.1.192", "2.4.1.193", "2.4.1.194", "2.4.1.195",
-  "2.4.1.196", "2.4.1.197", "2.4.1.198", "2.4.1.199", "2.4.1.201",
-  "2.4.1.202", "2.4.1.203", "2.4.1.205", "2.4.1.206", "2.4.1.207",
-  "2.4.1.208", "2.4.1.209", "2.4.1.210", "2.4.1.211", "2.4.1.212",
-  "2.4.1.213", "2.4.1.214", "2.4.1.215", "2.4.1.216", "2.4.1.217",
-  "2.4.1.218", "2.4.1.219", "2.4.1.220", "2.4.1.221", "2.4.1.222",
-  "2.4.1.223", "2.4.1.224", "2.4.1.225", "2.4.1.226", "2.4.1.227",
-  "2.4.1.228", "2.4.1.229", "2.4.1.230", "2.4.1.231", "2.4.1.232",
-  "2.4.1.234", "2.4.1.236", "2.4.1.237", "2.4.1.238", "2.4.1.239",
-  "2.4.1.240", "2.4.1.241", "2.4.1.242", "2.4.1.243", "2.4.1.244",
-  "2.4.2.1", "2.4.2.2", "2.4.2.3", "2.4.2.4", "2.4.2.5", "2.4.2.6",
-  "2.4.2.7", "2.4.2.8", "2.4.2.9", "2.4.2.10", "2.4.2.11", "2.4.2.12",
-  "2.4.2.14", "2.4.2.15", "2.4.2.16", "2.4.2.17", "2.4.2.18", "2.4.2.19",
-  "2.4.2.20", "2.4.2.21", "2.4.2.22", "2.4.2.23", "2.4.2.24", "2.4.2.25",
-  "2.4.2.26", "2.4.2.27", "2.4.2.28", "2.4.2.29", "2.4.2.30", "2.4.2.31",
-  "2.4.2.32", "2.4.2.33", "2.4.2.34", "2.4.2.35", "2.4.2.36", "2.4.2.37",
-  "2.4.2.38", "2.4.2.39", "2.4.2.40", "2.4.99.1", "2.4.99.2", "2.4.99.3",
-  "2.4.99.4", "2.4.99.5", "2.4.99.6", "2.4.99.7", "2.4.99.8", "2.4.99.9",
-  "2.4.99.10", "2.4.99.11", "2.5.1.1", "2.5.1.2", "2.5.1.3", "2.5.1.4",
-  "2.5.1.5", "2.5.1.6", "2.5.1.7", "2.5.1.8", "2.5.1.9", "2.5.1.10",
-  "2.5.1.11", "2.5.1.15", "2.5.1.16", "2.5.1.17", "2.5.1.18", "2.5.1.19",
-  "2.5.1.20", "2.5.1.21", "2.5.1.22", "2.5.1.23", "2.5.1.24", "2.5.1.25",
-  "2.5.1.26", "2.5.1.27", "2.5.1.28", "2.5.1.29", "2.5.1.30", "2.5.1.31",
-  "2.5.1.32", "2.5.1.33", "2.5.1.34", "2.5.1.35", "2.5.1.36", "2.5.1.38",
-  "2.5.1.39", "2.5.1.41", "2.5.1.42", "2.5.1.43", "2.5.1.44", "2.5.1.45",
-  "2.5.1.46", "2.5.1.47", "2.5.1.48", "2.5.1.49", "2.5.1.50", "2.5.1.51",
-  "2.5.1.52", "2.5.1.53", "2.5.1.54", "2.5.1.55", "2.5.1.56", "2.5.1.57",
-  "2.5.1.58", "2.5.1.59", "2.5.1.60", "2.5.1.61", "2.5.1.62", "2.5.1.63",
-  "2.5.1.64", "2.5.1.65", "2.5.1.66", "2.5.1.67", "2.5.1.68", "2.5.1.69",
-  "2.5.1.70", "2.5.1.71", "2.6.1.1", "2.6.1.2", "2.6.1.3", "2.6.1.4",
-  "2.6.1.5", "2.6.1.6", "2.6.1.7", "2.6.1.8", "2.6.1.9", "2.6.1.11",
-  "2.6.1.12", "2.6.1.13", "2.6.1.14", "2.6.1.15", "2.6.1.16", "2.6.1.17",
-  "2.6.1.18", "2.6.1.19", "2.6.1.21", "2.6.1.22", "2.6.1.23", "2.6.1.24",
-  "2.6.1.26", "2.6.1.27", "2.6.1.28", "2.6.1.29", "2.6.1.30", "2.6.1.31",
-  "2.6.1.32", "2.6.1.33", "2.6.1.34", "2.6.1.35", "2.6.1.36", "2.6.1.37",
-  "2.6.1.38", "2.6.1.39", "2.6.1.40", "2.6.1.41", "2.6.1.42", "2.6.1.43",
-  "2.6.1.44", "2.6.1.45", "2.6.1.46", "2.6.1.47", "2.6.1.48", "2.6.1.49",
-  "2.6.1.50", "2.6.1.51", "2.6.1.52", "2.6.1.54", "2.6.1.55", "2.6.1.56",
-  "2.6.1.57", "2.6.1.58", "2.6.1.59", "2.6.1.60", "2.6.1.62", "2.6.1.63",
-  "2.6.1.64", "2.6.1.65", "2.6.1.66", "2.6.1.67", "2.6.1.68", "2.6.1.70",
-  "2.6.1.71", "2.6.1.72", "2.6.1.73", "2.6.1.74", "2.6.1.75", "2.6.1.76",
-  "2.6.1.77", "2.6.1.78", "2.6.1.79", "2.6.1.80", "2.6.1.81", "2.6.1.82",
-  "2.6.1.83", "2.6.1.84", "2.6.1.85", "2.6.3.1", "2.6.99.1", "2.6.99.2",
-  "2.7.1.1", "2.7.1.2", "2.7.1.3", "2.7.1.4", "2.7.1.5", "2.7.1.6",
-  "2.7.1.7", "2.7.1.8", "2.7.1.10", "2.7.1.11", "2.7.1.12", "2.7.1.13",
-  "2.7.1.14", "2.7.1.15", "2.7.1.16", "2.7.1.17", "2.7.1.18", "2.7.1.19",
-  "2.7.1.20", "2.7.1.21", "2.7.1.22", "2.7.1.23", "2.7.1.24", "2.7.1.25",
-  "2.7.1.26", "2.7.1.27", "2.7.1.28", "2.7.1.29", "2.7.1.30", "2.7.1.31",
-  "2.7.1.32", "2.7.1.33", "2.7.1.34", "2.7.1.35", "2.7.1.36", "2.7.1.39",
-  "2.7.1.40", "2.7.1.41", "2.7.1.42", "2.7.1.43", "2.7.1.44", "2.7.1.45",
-  "2.7.1.46", "2.7.1.47", "2.7.1.48", "2.7.1.49", "2.7.1.50", "2.7.1.51",
-  "2.7.1.52", "2.7.1.53", "2.7.1.54", "2.7.1.55", "2.7.1.56", "2.7.1.58",
-  "2.7.1.59", "2.7.1.60", "2.7.1.61", "2.7.1.62", "2.7.1.63", "2.7.1.64",
-  "2.7.1.65", "2.7.1.66", "2.7.1.67", "2.7.1.68", "2.7.1.69", "2.7.1.71",
-  "2.7.1.72", "2.7.1.73", "2.7.1.74", "2.7.1.76", "2.7.1.77", "2.7.1.78",
-  "2.7.1.79", "2.7.1.80", "2.7.1.81", "2.7.1.82", "2.7.1.83", "2.7.1.84",
-  "2.7.1.85", "2.7.1.86", "2.7.1.87", "2.7.1.88", "2.7.1.89", "2.7.1.90",
-  "2.7.1.91", "2.7.1.92", "2.7.1.93", "2.7.1.94", "2.7.1.95", "2.7.1.100",
-  "2.7.1.101", "2.7.1.102", "2.7.1.103", "2.7.1.105", "2.7.1.106",
-  "2.7.1.107", "2.7.1.108", "2.7.1.113", "2.7.1.114", "2.7.1.118",
-  "2.7.1.119", "2.7.1.121", "2.7.1.122", "2.7.1.127", "2.7.1.130",
-  "2.7.1.134", "2.7.1.136", "2.7.1.137", "2.7.1.138", "2.7.1.140",
-  "2.7.1.142", "2.7.1.143", "2.7.1.144", "2.7.1.145", "2.7.1.146",
-  "2.7.1.147", "2.7.1.148", "2.7.1.149", "2.7.1.150", "2.7.1.151",
-  "2.7.1.153", "2.7.1.154", "2.7.1.156", "2.7.1.157", "2.7.1.158",
-  "2.7.1.159", "2.7.1.160", "2.7.2.1", "2.7.2.2", "2.7.2.3", "2.7.2.4",
-  "2.7.2.6", "2.7.2.7", "2.7.2.8", "2.7.2.10", "2.7.2.11", "2.7.2.12",
-  "2.7.2.13", "2.7.2.14", "2.7.2.15", "2.7.3.1", "2.7.3.2", "2.7.3.3",
-  "2.7.3.4", "2.7.3.5", "2.7.3.6", "2.7.3.7", "2.7.3.8", "2.7.3.9",
-  "2.7.3.10", "2.7.4.1", "2.7.4.2", "2.7.4.3", "2.7.4.4", "2.7.4.6",
-  "2.7.4.7", "2.7.4.8", "2.7.4.9", "2.7.4.10", "2.7.4.11", "2.7.4.12",
-  "2.7.4.13", "2.7.4.14", "2.7.4.15", "2.7.4.16", "2.7.4.17", "2.7.4.18",
-  "2.7.4.19", "2.7.4.20", "2.7.4.21", "2.7.4.22", "2.7.4.23", "2.7.4.24",
-  "2.7.6.1", "2.7.6.2", "2.7.6.3", "2.7.6.4", "2.7.6.5", "2.7.7.1",
-  "2.7.7.2", "2.7.7.3", "2.7.7.4", "2.7.7.5", "2.7.7.6", "2.7.7.7",
-  "2.7.7.8", "2.7.7.9", "2.7.7.10", "2.7.7.11", "2.7.7.12", "2.7.7.13",
-  "2.7.7.14", "2.7.7.15", "2.7.7.18", "2.7.7.19", "2.7.7.21", "2.7.7.22",
-  "2.7.7.23", "2.7.7.24", "2.7.7.25", "2.7.7.27", "2.7.7.28", "2.7.7.30",
-  "2.7.7.31", "2.7.7.32", "2.7.7.33", "2.7.7.34", "2.7.7.35", "2.7.7.36",
-  "2.7.7.37", "2.7.7.38", "2.7.7.39", "2.7.7.40", "2.7.7.41", "2.7.7.42",
-  "2.7.7.43", "2.7.7.44", "2.7.7.45", "2.7.7.46", "2.7.7.47", "2.7.7.48",
-  "2.7.7.49", "2.7.7.50", "2.7.7.51", "2.7.7.52", "2.7.7.53", "2.7.7.54",
-  "2.7.7.55", "2.7.7.56", "2.7.7.57", "2.7.7.58", "2.7.7.59", "2.7.7.60",
-  "2.7.7.61", "2.7.7.62", "2.7.7.63", "2.7.7.64", "2.7.8.1", "2.7.8.2",
-  "2.7.8.3", "2.7.8.4", "2.7.8.5", "2.7.8.6", "2.7.8.7", "2.7.8.8",
-  "2.7.8.9", "2.7.8.10", "2.7.8.11", "2.7.8.12", "2.7.8.13", "2.7.8.14",
-  "2.7.8.15", "2.7.8.17", "2.7.8.18", "2.7.8.19", "2.7.8.20", "2.7.8.21",
-  "2.7.8.22", "2.7.8.23", "2.7.8.24", "2.7.8.25", "2.7.8.26", "2.7.8.27",
-  "2.7.9.1", "2.7.9.2", "2.7.9.3", "2.7.9.4", "2.7.9.5", "2.7.10.1",
-  "2.7.10.2", "2.7.11.1", "2.7.11.2", "2.7.11.3", "2.7.11.4", "2.7.11.5",
-  "2.7.11.6", "2.7.11.7", "2.7.11.8", "2.7.11.9", "2.7.11.10", "2.7.11.11",
-  "2.7.11.12", "2.7.11.13", "2.7.11.14", "2.7.11.15", "2.7.11.16",
-  "2.7.11.17", "2.7.11.18", "2.7.11.19", "2.7.11.20", "2.7.11.21",
-  "2.7.11.22", "2.7.11.23", "2.7.11.24", "2.7.11.25", "2.7.11.26",
-  "2.7.11.27", "2.7.11.28", "2.7.11.29", "2.7.11.30", "2.7.11.31",
-  "2.7.12.1", "2.7.12.2", "2.7.13.1", "2.7.13.2", "2.7.13.3", "2.7.99.1",
-  "2.8.1.1", "2.8.1.2", "2.8.1.3", "2.8.1.4", "2.8.1.5", "2.8.1.6",
-  "2.8.1.7", "2.8.1.8", "2.8.2.1", "2.8.2.2", "2.8.2.3", "2.8.2.4",
-  "2.8.2.5", "2.8.2.6", "2.8.2.7", "2.8.2.8", "2.8.2.9", "2.8.2.10",
-  "2.8.2.11", "2.8.2.13", "2.8.2.14", "2.8.2.15", "2.8.2.16", "2.8.2.17",
-  "2.8.2.18", "2.8.2.19", "2.8.2.20", "2.8.2.21", "2.8.2.22", "2.8.2.23",
-  "2.8.2.24", "2.8.2.25", "2.8.2.26", "2.8.2.27", "2.8.2.28", "2.8.2.29",
-  "2.8.2.30", "2.8.2.31", "2.8.2.32", "2.8.2.33", "2.8.2.34", "2.8.3.1",
-  "2.8.3.2", "2.8.3.3", "2.8.3.5", "2.8.3.6", "2.8.3.7", "2.8.3.8",
-  "2.8.3.9", "2.8.3.10", "2.8.3.11", "2.8.3.12", "2.8.3.13", "2.8.3.14",
-  "2.8.3.15", "2.8.3.16", "2.8.3.17", "2.8.4.1", "2.9.1.1", "3.1.1.1",
-  "3.1.1.2", "3.1.1.3", "3.1.1.4", "3.1.1.5", "3.1.1.6", "3.1.1.7",
-  "3.1.1.8", "3.1.1.10", "3.1.1.11", "3.1.1.13", "3.1.1.14", "3.1.1.15",
-  "3.1.1.17", "3.1.1.19", "3.1.1.20", "3.1.1.21", "3.1.1.22", "3.1.1.23",
-  "3.1.1.24", "3.1.1.25", "3.1.1.26", "3.1.1.27", "3.1.1.28", "3.1.1.29",
-  "3.1.1.30", "3.1.1.31", "3.1.1.32", "3.1.1.33", "3.1.1.34", "3.1.1.35",
-  "3.1.1.36", "3.1.1.37", "3.1.1.38", "3.1.1.39", "3.1.1.40", "3.1.1.41",
-  "3.1.1.42", "3.1.1.43", "3.1.1.44", "3.1.1.45", "3.1.1.46", "3.1.1.47",
-  "3.1.1.48", "3.1.1.49", "3.1.1.50", "3.1.1.51", "3.1.1.52", "3.1.1.53",
-  "3.1.1.54", "3.1.1.55", "3.1.1.56", "3.1.1.57", "3.1.1.58", "3.1.1.59",
-  "3.1.1.60", "3.1.1.61", "3.1.1.63", "3.1.1.64", "3.1.1.65", "3.1.1.66",
-  "3.1.1.67", "3.1.1.68", "3.1.1.70", "3.1.1.71", "3.1.1.72", "3.1.1.73",
-  "3.1.1.74", "3.1.1.75", "3.1.1.76", "3.1.1.77", "3.1.1.78", "3.1.1.79",
-  "3.1.1.80", "3.1.1.81", "3.1.1.82", "3.1.2.1", "3.1.2.2", "3.1.2.3",
-  "3.1.2.4", "3.1.2.5", "3.1.2.6", "3.1.2.7", "3.1.2.10", "3.1.2.11",
-  "3.1.2.12", "3.1.2.13", "3.1.2.14", "3.1.2.15", "3.1.2.16", "3.1.2.17",
-  "3.1.2.18", "3.1.2.19", "3.1.2.20", "3.1.2.21", "3.1.2.22", "3.1.2.23",
-  "3.1.2.25", "3.1.2.26", "3.1.2.27", "3.1.3.1", "3.1.3.2", "3.1.3.3",
-  "3.1.3.4", "3.1.3.5", "3.1.3.6", "3.1.3.7", "3.1.3.8", "3.1.3.9",
-  "3.1.3.10", "3.1.3.11", "3.1.3.12", "3.1.3.13", "3.1.3.14", "3.1.3.15",
-  "3.1.3.16", "3.1.3.17", "3.1.3.18", "3.1.3.19", "3.1.3.20", "3.1.3.21",
-  "3.1.3.22", "3.1.3.23", "3.1.3.24", "3.1.3.25", "3.1.3.26", "3.1.3.27",
-  "3.1.3.28", "3.1.3.29", "3.1.3.31", "3.1.3.32", "3.1.3.33", "3.1.3.34",
-  "3.1.3.35", "3.1.3.36", "3.1.3.37", "3.1.3.38", "3.1.3.39", "3.1.3.40",
-  "3.1.3.41", "3.1.3.42", "3.1.3.43", "3.1.3.44", "3.1.3.45", "3.1.3.46",
-  "3.1.3.47", "3.1.3.48", "3.1.3.49", "3.1.3.50", "3.1.3.51", "3.1.3.52",
-  "3.1.3.53", "3.1.3.54", "3.1.3.55", "3.1.3.56", "3.1.3.57", "3.1.3.58",
-  "3.1.3.59", "3.1.3.60", "3.1.3.62", "3.1.3.63", "3.1.3.64", "3.1.3.66",
-  "3.1.3.67", "3.1.3.68", "3.1.3.69", "3.1.3.70", "3.1.3.71", "3.1.3.72",
-  "3.1.3.73", "3.1.3.74", "3.1.3.75", "3.1.3.76", "3.1.3.77", "3.1.4.1",
-  "3.1.4.2", "3.1.4.3", "3.1.4.4", "3.1.4.11", "3.1.4.12", "3.1.4.13",
-  "3.1.4.14", "3.1.4.15", "3.1.4.16", "3.1.4.17", "3.1.4.35", "3.1.4.37",
-  "3.1.4.38", "3.1.4.39", "3.1.4.40", "3.1.4.41", "3.1.4.42", "3.1.4.43",
-  "3.1.4.44", "3.1.4.45", "3.1.4.46", "3.1.4.48", "3.1.4.49", "3.1.4.50",
-  "3.1.4.51", "3.1.5.1", "3.1.6.1", "3.1.6.2", "3.1.6.3", "3.1.6.4",
-  "3.1.6.6", "3.1.6.7", "3.1.6.8", "3.1.6.9", "3.1.6.10", "3.1.6.11",
-  "3.1.6.12", "3.1.6.13", "3.1.6.14", "3.1.6.15", "3.1.6.16", "3.1.6.17",
-  "3.1.6.18", "3.1.7.1", "3.1.7.2", "3.1.7.3", "3.1.8.1", "3.1.8.2",
-  "3.1.11.1", "3.1.11.2", "3.1.11.3", "3.1.11.4", "3.1.11.5", "3.1.11.6",
-  "3.1.13.1", "3.1.13.2", "3.1.13.3", "3.1.13.4", "3.1.13.5", "3.1.14.1",
-  "3.1.15.1", "3.1.16.1", "3.1.21.1", "3.1.21.2", "3.1.21.3", "3.1.21.4",
-  "3.1.21.5", "3.1.21.6", "3.1.21.7", "3.1.22.1", "3.1.22.2", "3.1.22.4",
-  "3.1.22.5", "3.1.25.1", "3.1.26.1", "3.1.26.2", "3.1.26.3", "3.1.26.4",
-  "3.1.26.5", "3.1.26.6", "3.1.26.7", "3.1.26.8", "3.1.26.9", "3.1.26.10",
-  "3.1.26.11", "3.1.27.1", "3.1.27.2", "3.1.27.3", "3.1.27.4", "3.1.27.5",
-  "3.1.27.6", "3.1.27.7", "3.1.27.8", "3.1.27.9", "3.1.27.10", "3.1.30.1",
-  "3.1.30.2", "3.1.31.1", "3.2.1.1", "3.2.1.2", "3.2.1.3", "3.2.1.4",
-  "3.2.1.6", "3.2.1.7", "3.2.1.8", "3.2.1.10", "3.2.1.11", "3.2.1.14",
-  "3.2.1.15", "3.2.1.17", "3.2.1.18", "3.2.1.20", "3.2.1.21", "3.2.1.22",
-  "3.2.1.23", "3.2.1.24", "3.2.1.25", "3.2.1.26", "3.2.1.28", "3.2.1.31",
-  "3.2.1.32", "3.2.1.33", "3.2.1.35", "3.2.1.36", "3.2.1.37", "3.2.1.38",
-  "3.2.1.39", "3.2.1.40", "3.2.1.41", "3.2.1.42", "3.2.1.43", "3.2.1.44",
-  "3.2.1.45", "3.2.1.46", "3.2.1.47", "3.2.1.48", "3.2.1.49", "3.2.1.50",
-  "3.2.1.51", "3.2.1.52", "3.2.1.53", "3.2.1.54", "3.2.1.55", "3.2.1.56",
-  "3.2.1.57", "3.2.1.58", "3.2.1.59", "3.2.1.60", "3.2.1.61", "3.2.1.62",
-  "3.2.1.63", "3.2.1.64", "3.2.1.65", "3.2.1.66", "3.2.1.67", "3.2.1.68",
-  "3.2.1.70", "3.2.1.71", "3.2.1.72", "3.2.1.73", "3.2.1.74", "3.2.1.75",
-  "3.2.1.76", "3.2.1.77", "3.2.1.78", "3.2.1.80", "3.2.1.81", "3.2.1.82",
-  "3.2.1.83", "3.2.1.84", "3.2.1.85", "3.2.1.86", "3.2.1.87", "3.2.1.88",
-  "3.2.1.89", "3.2.1.91", "3.2.1.92", "3.2.1.93", "3.2.1.94", "3.2.1.95",
-  "3.2.1.96", "3.2.1.97", "3.2.1.98", "3.2.1.99", "3.2.1.100", "3.2.1.101",
-  "3.2.1.102", "3.2.1.103", "3.2.1.104", "3.2.1.105", "3.2.1.106",
-  "3.2.1.107", "3.2.1.108", "3.2.1.109", "3.2.1.110", "3.2.1.111",
-  "3.2.1.112", "3.2.1.113", "3.2.1.114", "3.2.1.115", "3.2.1.116",
-  "3.2.1.117", "3.2.1.118", "3.2.1.119", "3.2.1.120", "3.2.1.121",
-  "3.2.1.122", "3.2.1.123", "3.2.1.124", "3.2.1.125", "3.2.1.126",
-  "3.2.1.127", "3.2.1.128", "3.2.1.129", "3.2.1.130", "3.2.1.131",
-  "3.2.1.132", "3.2.1.133", "3.2.1.134", "3.2.1.135", "3.2.1.136",
-  "3.2.1.137", "3.2.1.139", "3.2.1.140", "3.2.1.141", "3.2.1.142",
-  "3.2.1.143", "3.2.1.144", "3.2.1.145", "3.2.1.146", "3.2.1.147",
-  "3.2.1.149", "3.2.1.150", "3.2.1.151", "3.2.1.152", "3.2.1.153",
-  "3.2.1.154", "3.2.1.155", "3.2.1.156", "3.2.1.157", "3.2.1.158",
-  "3.2.1.159", "3.2.1.160", "3.2.1.161", "3.2.1.162", "3.2.1.163",
-  "3.2.1.164", "3.2.2.1", "3.2.2.2", "3.2.2.3", "3.2.2.4", "3.2.2.5",
-  "3.2.2.6", "3.2.2.7", "3.2.2.8", "3.2.2.9", "3.2.2.10", "3.2.2.11",
-  "3.2.2.12", "3.2.2.13", "3.2.2.14", "3.2.2.15", "3.2.2.16", "3.2.2.17",
-  "3.2.2.19", "3.2.2.20", "3.2.2.21", "3.2.2.22", "3.2.2.23", "3.2.2.24",
-  "3.2.2.25", "3.3.1.1", "3.3.1.2", "3.3.2.1", "3.3.2.2", "3.3.2.4",
-  "3.3.2.5", "3.3.2.6", "3.3.2.7", "3.3.2.8", "3.3.2.9", "3.3.2.10",
-  "3.3.2.11", "3.4.11.1", "3.4.11.2", "3.4.11.3", "3.4.11.4", "3.4.11.5",
-  "3.4.11.6", "3.4.11.7", "3.4.11.9", "3.4.11.10", "3.4.11.13",
-  "3.4.11.14", "3.4.11.15", "3.4.11.16", "3.4.11.17", "3.4.11.18",
-  "3.4.11.19", "3.4.11.20", "3.4.11.21", "3.4.11.22", "3.4.11.23",
-  "3.4.13.3", "3.4.13.4", "3.4.13.5", "3.4.13.7", "3.4.13.9", "3.4.13.12",
-  "3.4.13.17", "3.4.13.18", "3.4.13.19", "3.4.13.20", "3.4.13.21",
-  "3.4.13.22", "3.4.14.1", "3.4.14.2", "3.4.14.4", "3.4.14.5", "3.4.14.6",
-  "3.4.14.9", "3.4.14.10", "3.4.14.11", "3.4.14.12", "3.4.15.1",
-  "3.4.15.4", "3.4.15.5", "3.4.15.6", "3.4.16.2", "3.4.16.4", "3.4.16.5",
-  "3.4.16.6", "3.4.17.1", "3.4.17.2", "3.4.17.3", "3.4.17.4", "3.4.17.6",
-  "3.4.17.8", "3.4.17.10", "3.4.17.11", "3.4.17.12", "3.4.17.13",
-  "3.4.17.14", "3.4.17.15", "3.4.17.16", "3.4.17.17", "3.4.17.18",
-  "3.4.17.19", "3.4.17.20", "3.4.17.21", "3.4.17.22", "3.4.18.1",
-  "3.4.19.1", "3.4.19.2", "3.4.19.3", "3.4.19.5", "3.4.19.6", "3.4.19.7",
-  "3.4.19.9", "3.4.19.11", "3.4.19.12", "3.4.21.1", "3.4.21.2", "3.4.21.3",
-  "3.4.21.4", "3.4.21.5", "3.4.21.6", "3.4.21.7", "3.4.21.9", "3.4.21.10",
-  "3.4.21.12", "3.4.21.19", "3.4.21.20", "3.4.21.21", "3.4.21.22",
-  "3.4.21.25", "3.4.21.26", "3.4.21.27", "3.4.21.32", "3.4.21.34",
-  "3.4.21.35", "3.4.21.36", "3.4.21.37", "3.4.21.38", "3.4.21.39",
-  "3.4.21.41", "3.4.21.42", "3.4.21.43", "3.4.21.45", "3.4.21.46",
-  "3.4.21.47", "3.4.21.48", "3.4.21.49", "3.4.21.50", "3.4.21.53",
-  "3.4.21.54", "3.4.21.55", "3.4.21.57", "3.4.21.59", "3.4.21.60",
-  "3.4.21.61", "3.4.21.62", "3.4.21.63", "3.4.21.64", "3.4.21.65",
-  "3.4.21.66", "3.4.21.67", "3.4.21.68", "3.4.21.69", "3.4.21.70",
-  "3.4.21.71", "3.4.21.72", "3.4.21.73", "3.4.21.74", "3.4.21.75",
-  "3.4.21.76", "3.4.21.77", "3.4.21.78", "3.4.21.79", "3.4.21.80",
-  "3.4.21.81", "3.4.21.82", "3.4.21.83", "3.4.21.84", "3.4.21.85",
-  "3.4.21.86", "3.4.21.88", "3.4.21.89", "3.4.21.90", "3.4.21.91",
-  "3.4.21.92", "3.4.21.93", "3.4.21.94", "3.4.21.95", "3.4.21.96",
-  "3.4.21.97", "3.4.21.98", "3.4.21.99", "3.4.21.100", "3.4.21.101",
-  "3.4.21.102", "3.4.21.103", "3.4.21.104", "3.4.21.105", "3.4.21.106",
-  "3.4.21.107", "3.4.21.108", "3.4.21.109", "3.4.21.110", "3.4.21.111",
-  "3.4.21.112", "3.4.21.113", "3.4.21.114", "3.4.21.115", "3.4.21.116",
-  "3.4.21.117", "3.4.21.118", "3.4.21.119", "3.4.21.120", "3.4.22.1",
-  "3.4.22.2", "3.4.22.3", "3.4.22.6", "3.4.22.7", "3.4.22.8", "3.4.22.10",
-  "3.4.22.14", "3.4.22.15", "3.4.22.16", "3.4.22.24", "3.4.22.25",
-  "3.4.22.26", "3.4.22.27", "3.4.22.28", "3.4.22.29", "3.4.22.30",
-  "3.4.22.31", "3.4.22.32", "3.4.22.33", "3.4.22.34", "3.4.22.35",
-  "3.4.22.36", "3.4.22.37", "3.4.22.38", "3.4.22.39", "3.4.22.40",
-  "3.4.22.41", "3.4.22.42", "3.4.22.43", "3.4.22.44", "3.4.22.45",
-  "3.4.22.46", "3.4.22.47", "3.4.22.48", "3.4.22.49", "3.4.22.50",
-  "3.4.22.51", "3.4.22.52", "3.4.22.53", "3.4.22.54", "3.4.22.55",
-  "3.4.22.56", "3.4.22.57", "3.4.22.58", "3.4.22.59", "3.4.22.60",
-  "3.4.22.61", "3.4.22.62", "3.4.22.63", "3.4.22.64", "3.4.22.65",
-  "3.4.22.66", "3.4.22.67", "3.4.23.1", "3.4.23.2", "3.4.23.3", "3.4.23.4",
-  "3.4.23.5", "3.4.23.12", "3.4.23.15", "3.4.23.16", "3.4.23.17",
-  "3.4.23.18", "3.4.23.19", "3.4.23.20", "3.4.23.21", "3.4.23.22",
-  "3.4.23.23", "3.4.23.24", "3.4.23.25", "3.4.23.26", "3.4.23.28",
-  "3.4.23.29", "3.4.23.30", "3.4.23.31", "3.4.23.32", "3.4.23.34",
-  "3.4.23.35", "3.4.23.36", "3.4.23.38", "3.4.23.39", "3.4.23.40",
-  "3.4.23.41", "3.4.23.42", "3.4.23.43", "3.4.23.44", "3.4.23.45",
-  "3.4.23.46", "3.4.23.47", "3.4.23.48", "3.4.23.49", "3.4.24.1",
-  "3.4.24.3", "3.4.24.6", "3.4.24.7", "3.4.24.11", "3.4.24.12",
-  "3.4.24.13", "3.4.24.14", "3.4.24.15", "3.4.24.16", "3.4.24.17",
-  "3.4.24.18", "3.4.24.19", "3.4.24.20", "3.4.24.21", "3.4.24.22",
-  "3.4.24.23", "3.4.24.24", "3.4.24.25", "3.4.24.26", "3.4.24.27",
-  "3.4.24.28", "3.4.24.29", "3.4.24.30", "3.4.24.31", "3.4.24.32",
-  "3.4.24.33", "3.4.24.34", "3.4.24.35", "3.4.24.36", "3.4.24.37",
-  "3.4.24.38", "3.4.24.39", "3.4.24.40", "3.4.24.41", "3.4.24.42",
-  "3.4.24.43", "3.4.24.44", "3.4.24.45", "3.4.24.46", "3.4.24.47",
-  "3.4.24.48", "3.4.24.49", "3.4.24.50", "3.4.24.51", "3.4.24.52",
-  "3.4.24.53", "3.4.24.54", "3.4.24.55", "3.4.24.56", "3.4.24.57",
-  "3.4.24.58", "3.4.24.59", "3.4.24.60", "3.4.24.61", "3.4.24.62",
-  "3.4.24.63", "3.4.24.64", "3.4.24.65", "3.4.24.66", "3.4.24.67",
-  "3.4.24.68", "3.4.24.69", "3.4.24.70", "3.4.24.71", "3.4.24.72",
-  "3.4.24.73", "3.4.24.74", "3.4.24.75", "3.4.24.76", "3.4.24.77",
-  "3.4.24.78", "3.4.24.79", "3.4.24.80", "3.4.24.81", "3.4.24.82",
-  "3.4.24.83", "3.4.24.84", "3.4.24.85", "3.4.24.86", "3.4.25.1",
-  "3.5.1.1", "3.5.1.2", "3.5.1.3", "3.5.1.4", "3.5.1.5", "3.5.1.6",
-  "3.5.1.7", "3.5.1.8", "3.5.1.9", "3.5.1.10", "3.5.1.11", "3.5.1.12",
-  "3.5.1.13", "3.5.1.14", "3.5.1.15", "3.5.1.16", "3.5.1.17", "3.5.1.18",
-  "3.5.1.19", "3.5.1.20", "3.5.1.21", "3.5.1.22", "3.5.1.23", "3.5.1.24",
-  "3.5.1.25", "3.5.1.26", "3.5.1.27", "3.5.1.28", "3.5.1.29", "3.5.1.30",
-  "3.5.1.31", "3.5.1.32", "3.5.1.33", "3.5.1.35", "3.5.1.36", "3.5.1.38",
-  "3.5.1.39", "3.5.1.40", "3.5.1.41", "3.5.1.42", "3.5.1.43", "3.5.1.44",
-  "3.5.1.46", "3.5.1.47", "3.5.1.48", "3.5.1.49", "3.5.1.50", "3.5.1.51",
-  "3.5.1.52", "3.5.1.53", "3.5.1.54", "3.5.1.55", "3.5.1.56", "3.5.1.57",
-  "3.5.1.58", "3.5.1.59", "3.5.1.60", "3.5.1.61", "3.5.1.62", "3.5.1.63",
-  "3.5.1.64", "3.5.1.65", "3.5.1.66", "3.5.1.67", "3.5.1.68", "3.5.1.69",
-  "3.5.1.70", "3.5.1.71", "3.5.1.72", "3.5.1.73", "3.5.1.74", "3.5.1.75",
-  "3.5.1.76", "3.5.1.77", "3.5.1.78", "3.5.1.79", "3.5.1.81", "3.5.1.82",
-  "3.5.1.83", "3.5.1.84", "3.5.1.85", "3.5.1.86", "3.5.1.87", "3.5.1.88",
-  "3.5.1.89", "3.5.1.90", "3.5.1.91", "3.5.1.92", "3.5.1.93", "3.5.1.94",
-  "3.5.1.95", "3.5.1.96", "3.5.1.97", "3.5.2.1", "3.5.2.2", "3.5.2.3",
-  "3.5.2.4", "3.5.2.5", "3.5.2.6", "3.5.2.7", "3.5.2.9", "3.5.2.10",
-  "3.5.2.11", "3.5.2.12", "3.5.2.13", "3.5.2.14", "3.5.2.15", "3.5.2.16",
-  "3.5.2.17", "3.5.2.18", "3.5.3.1", "3.5.3.2", "3.5.3.3", "3.5.3.4",
-  "3.5.3.5", "3.5.3.6", "3.5.3.7", "3.5.3.8", "3.5.3.9", "3.5.3.10",
-  "3.5.3.11", "3.5.3.12", "3.5.3.13", "3.5.3.14", "3.5.3.15", "3.5.3.16",
-  "3.5.3.17", "3.5.3.18", "3.5.3.19", "3.5.3.20", "3.5.3.21", "3.5.3.22",
-  "3.5.3.23", "3.5.4.1", "3.5.4.2", "3.5.4.3", "3.5.4.4", "3.5.4.5",
-  "3.5.4.6", "3.5.4.7", "3.5.4.8", "3.5.4.9", "3.5.4.10", "3.5.4.11",
-  "3.5.4.12", "3.5.4.13", "3.5.4.14", "3.5.4.15", "3.5.4.16", "3.5.4.17",
-  "3.5.4.18", "3.5.4.19", "3.5.4.20", "3.5.4.21", "3.5.4.22", "3.5.4.23",
-  "3.5.4.24", "3.5.4.25", "3.5.4.26", "3.5.4.27", "3.5.4.28", "3.5.4.29",
-  "3.5.4.30", "3.5.5.1", "3.5.5.2", "3.5.5.4", "3.5.5.5", "3.5.5.6",
-  "3.5.5.7", "3.5.5.8", "3.5.99.1", "3.5.99.2", "3.5.99.3", "3.5.99.4",
-  "3.5.99.5", "3.5.99.6", "3.5.99.7", "3.6.1.1", "3.6.1.2", "3.6.1.3",
-  "3.6.1.5", "3.6.1.6", "3.6.1.7", "3.6.1.8", "3.6.1.9", "3.6.1.10",
-  "3.6.1.11", "3.6.1.12", "3.6.1.13", "3.6.1.14", "3.6.1.15", "3.6.1.16",
-  "3.6.1.17", "3.6.1.18", "3.6.1.19", "3.6.1.20", "3.6.1.21", "3.6.1.22",
-  "3.6.1.23", "3.6.1.24", "3.6.1.25", "3.6.1.26", "3.6.1.27", "3.6.1.28",
-  "3.6.1.29", "3.6.1.30", "3.6.1.31", "3.6.1.39", "3.6.1.40", "3.6.1.41",
-  "3.6.1.42", "3.6.1.43", "3.6.1.44", "3.6.1.45", "3.6.1.52", "3.6.2.1",
-  "3.6.2.2", "3.6.3.1", "3.6.3.2", "3.6.3.3", "3.6.3.4", "3.6.3.5",
-  "3.6.3.6", "3.6.3.7", "3.6.3.8", "3.6.3.9", "3.6.3.10", "3.6.3.11",
-  "3.6.3.12", "3.6.3.14", "3.6.3.15", "3.6.3.16", "3.6.3.17", "3.6.3.18",
-  "3.6.3.19", "3.6.3.20", "3.6.3.21", "3.6.3.22", "3.6.3.23", "3.6.3.24",
-  "3.6.3.25", "3.6.3.26", "3.6.3.27", "3.6.3.28", "3.6.3.29", "3.6.3.30",
-  "3.6.3.31", "3.6.3.32", "3.6.3.33", "3.6.3.34", "3.6.3.35", "3.6.3.36",
-  "3.6.3.37", "3.6.3.38", "3.6.3.39", "3.6.3.40", "3.6.3.41", "3.6.3.42",
-  "3.6.3.43", "3.6.3.44", "3.6.3.46", "3.6.3.47", "3.6.3.48", "3.6.3.49",
-  "3.6.3.50", "3.6.3.51", "3.6.3.52", "3.6.3.53", "3.6.4.1", "3.6.4.2",
-  "3.6.4.3", "3.6.4.4", "3.6.4.5", "3.6.4.6", "3.6.4.7", "3.6.4.8",
-  "3.6.4.9", "3.6.4.10", "3.6.4.11", "3.6.5.1", "3.6.5.2", "3.6.5.3",
-  "3.6.5.4", "3.6.5.5", "3.6.5.6", "3.7.1.1", "3.7.1.2", "3.7.1.3",
-  "3.7.1.4", "3.7.1.5", "3.7.1.6", "3.7.1.7", "3.7.1.8", "3.7.1.9",
-  "3.7.1.10", "3.8.1.1", "3.8.1.2", "3.8.1.3", "3.8.1.5", "3.8.1.6",
-  "3.8.1.7", "3.8.1.8", "3.8.1.9", "3.8.1.10", "3.8.1.11", "3.9.1.1",
-  "3.10.1.1", "3.10.1.2", "3.11.1.1", "3.11.1.2", "3.11.1.3", "3.12.1.1",
-  "3.13.1.1", "3.13.1.3", "4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4",
-  "4.1.1.5", "4.1.1.6", "4.1.1.7", "4.1.1.8", "4.1.1.9", "4.1.1.11",
-  "4.1.1.12", "4.1.1.14", "4.1.1.15", "4.1.1.16", "4.1.1.17", "4.1.1.18",
-  "4.1.1.19", "4.1.1.20", "4.1.1.21", "4.1.1.22", "4.1.1.23", "4.1.1.24",
-  "4.1.1.25", "4.1.1.28", "4.1.1.29", "4.1.1.30", "4.1.1.31", "4.1.1.32",
-  "4.1.1.33", "4.1.1.34", "4.1.1.35", "4.1.1.36", "4.1.1.37", "4.1.1.38",
-  "4.1.1.39", "4.1.1.40", "4.1.1.41", "4.1.1.42", "4.1.1.43", "4.1.1.44",
-  "4.1.1.45", "4.1.1.46", "4.1.1.47", "4.1.1.48", "4.1.1.49", "4.1.1.50",
-  "4.1.1.51", "4.1.1.52", "4.1.1.53", "4.1.1.54", "4.1.1.55", "4.1.1.56",
-  "4.1.1.57", "4.1.1.58", "4.1.1.59", "4.1.1.60", "4.1.1.61", "4.1.1.62",
-  "4.1.1.63", "4.1.1.64", "4.1.1.65", "4.1.1.66", "4.1.1.67", "4.1.1.68",
-  "4.1.1.69", "4.1.1.70", "4.1.1.71", "4.1.1.72", "4.1.1.73", "4.1.1.74",
-  "4.1.1.75", "4.1.1.76", "4.1.1.77", "4.1.1.78", "4.1.1.79", "4.1.1.80",
-  "4.1.1.81", "4.1.1.82", "4.1.1.83", "4.1.1.84", "4.1.1.85", "4.1.1.86",
-  "4.1.2.2", "4.1.2.4", "4.1.2.5", "4.1.2.8", "4.1.2.9", "4.1.2.10",
-  "4.1.2.11", "4.1.2.12", "4.1.2.13", "4.1.2.14", "4.1.2.17", "4.1.2.18",
-  "4.1.2.19", "4.1.2.20", "4.1.2.21", "4.1.2.22", "4.1.2.23", "4.1.2.24",
-  "4.1.2.25", "4.1.2.26", "4.1.2.27", "4.1.2.28", "4.1.2.29", "4.1.2.30",
-  "4.1.2.32", "4.1.2.33", "4.1.2.34", "4.1.2.35", "4.1.2.36", "4.1.2.37",
-  "4.1.2.38", "4.1.2.40", "4.1.2.41", "4.1.2.42", "4.1.3.1", "4.1.3.3",
-  "4.1.3.4", "4.1.3.6", "4.1.3.13", "4.1.3.14", "4.1.3.16", "4.1.3.17",
-  "4.1.3.22", "4.1.3.24", "4.1.3.25", "4.1.3.26", "4.1.3.27", "4.1.3.30",
-  "4.1.3.32", "4.1.3.34", "4.1.3.35", "4.1.3.36", "4.1.3.38", "4.1.3.39",
-  "4.1.3.40", "4.1.99.1", "4.1.99.2", "4.1.99.3", "4.1.99.5", "4.1.99.11",
-  "4.1.99.12", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.1.5",
-  "4.2.1.6", "4.2.1.7", "4.2.1.8", "4.2.1.9", "4.2.1.10", "4.2.1.11",
-  "4.2.1.12", "4.2.1.17", "4.2.1.18", "4.2.1.19", "4.2.1.20", "4.2.1.22",
-  "4.2.1.24", "4.2.1.25", "4.2.1.27", "4.2.1.28", "4.2.1.30", "4.2.1.31",
-  "4.2.1.32", "4.2.1.33", "4.2.1.34", "4.2.1.35", "4.2.1.36", "4.2.1.39",
-  "4.2.1.40", "4.2.1.41", "4.2.1.42", "4.2.1.43", "4.2.1.44", "4.2.1.45",
-  "4.2.1.46", "4.2.1.47", "4.2.1.48", "4.2.1.49", "4.2.1.50", "4.2.1.51",
-  "4.2.1.52", "4.2.1.53", "4.2.1.54", "4.2.1.55", "4.2.1.56", "4.2.1.57",
-  "4.2.1.58", "4.2.1.59", "4.2.1.60", "4.2.1.61", "4.2.1.62", "4.2.1.65",
-  "4.2.1.66", "4.2.1.67", "4.2.1.68", "4.2.1.69", "4.2.1.70", "4.2.1.73",
-  "4.2.1.74", "4.2.1.75", "4.2.1.76", "4.2.1.77", "4.2.1.78", "4.2.1.79",
-  "4.2.1.80", "4.2.1.81", "4.2.1.82", "4.2.1.83", "4.2.1.84", "4.2.1.85",
-  "4.2.1.87", "4.2.1.88", "4.2.1.89", "4.2.1.90", "4.2.1.91", "4.2.1.92",
-  "4.2.1.93", "4.2.1.94", "4.2.1.95", "4.2.1.96", "4.2.1.97", "4.2.1.98",
-  "4.2.1.99", "4.2.1.100", "4.2.1.101", "4.2.1.103", "4.2.1.104",
-  "4.2.1.105", "4.2.1.106", "4.2.1.107", "4.2.1.108", "4.2.1.109",
-  "4.2.1.110", "4.2.1.111", "4.2.1.112", "4.2.1.113", "4.2.2.1", "4.2.2.2",
-  "4.2.2.3", "4.2.2.5", "4.2.2.6", "4.2.2.7", "4.2.2.8", "4.2.2.9",
-  "4.2.2.10", "4.2.2.11", "4.2.2.12", "4.2.2.13", "4.2.2.14", "4.2.2.15",
-  "4.2.2.16", "4.2.2.17", "4.2.2.18", "4.2.2.19", "4.2.2.20", "4.2.2.21",
-  "4.2.2.22", "4.2.3.1", "4.2.3.2", "4.2.3.3", "4.2.3.4", "4.2.3.5",
-  "4.2.3.6", "4.2.3.7", "4.2.3.8", "4.2.3.9", "4.2.3.10", "4.2.3.11",
-  "4.2.3.12", "4.2.3.13", "4.2.3.14", "4.2.3.15", "4.2.3.16", "4.2.3.17",
-  "4.2.3.18", "4.2.3.19", "4.2.3.20", "4.2.3.21", "4.2.3.22", "4.2.3.23",
-  "4.2.3.24", "4.2.3.25", "4.2.3.26", "4.2.3.27", "4.2.99.12", "4.2.99.18",
-  "4.3.1.1", "4.3.1.2", "4.3.1.3", "4.3.1.4", "4.3.1.5", "4.3.1.6",
-  "4.3.1.7", "4.3.1.9", "4.3.1.10", "4.3.1.12", "4.3.1.13", "4.3.1.14",
-  "4.3.1.15", "4.3.1.16", "4.3.1.17", "4.3.1.18", "4.3.1.19", "4.3.1.20",
-  "4.3.1.22", "4.3.2.1", "4.3.2.2", "4.3.2.3", "4.3.2.4", "4.3.2.5",
-  "4.3.3.1", "4.3.3.2", "4.3.3.3", "4.3.3.4", "4.4.1.1", "4.4.1.2",
-  "4.4.1.3", "4.4.1.4", "4.4.1.5", "4.4.1.6", "4.4.1.8", "4.4.1.9",
-  "4.4.1.10", "4.4.1.11", "4.4.1.13", "4.4.1.14", "4.4.1.15", "4.4.1.16",
-  "4.4.1.17", "4.4.1.19", "4.4.1.20", "4.4.1.21", "4.4.1.22", "4.4.1.23",
-  "4.4.1.24", "4.4.1.25", "4.5.1.1", "4.5.1.2", "4.5.1.3", "4.5.1.4",
-  "4.5.1.5", "4.6.1.1", "4.6.1.2", "4.6.1.6", "4.6.1.12", "4.6.1.13",
-  "4.6.1.14", "4.6.1.15", "4.99.1.1", "4.99.1.2", "4.99.1.3", "4.99.1.4",
-  "4.99.1.5", "4.99.1.6", "4.99.1.7", "5.1.1.1", "5.1.1.2", "5.1.1.3",
-  "5.1.1.4", "5.1.1.5", "5.1.1.6", "5.1.1.7", "5.1.1.8", "5.1.1.9",
-  "5.1.1.10", "5.1.1.11", "5.1.1.12", "5.1.1.13", "5.1.1.14", "5.1.1.15",
-  "5.1.1.16", "5.1.1.17", "5.1.1.18", "5.1.2.1", "5.1.2.2", "5.1.2.3",
-  "5.1.2.4", "5.1.2.5", "5.1.2.6", "5.1.3.1", "5.1.3.2", "5.1.3.3",
-  "5.1.3.4", "5.1.3.5", "5.1.3.6", "5.1.3.7", "5.1.3.8", "5.1.3.9",
-  "5.1.3.10", "5.1.3.11", "5.1.3.12", "5.1.3.13", "5.1.3.14", "5.1.3.15",
-  "5.1.3.16", "5.1.3.17", "5.1.3.18", "5.1.3.19", "5.1.3.20", "5.1.3.21",
-  "5.1.3.22", "5.1.3.23", "5.1.99.1", "5.1.99.2", "5.1.99.3", "5.1.99.4",
-  "5.2.1.1", "5.2.1.2", "5.2.1.3", "5.2.1.4", "5.2.1.5", "5.2.1.6",
-  "5.2.1.7", "5.2.1.8", "5.2.1.9", "5.2.1.10", "5.3.1.1", "5.3.1.3",
-  "5.3.1.4", "5.3.1.5", "5.3.1.6", "5.3.1.7", "5.3.1.8", "5.3.1.9",
-  "5.3.1.12", "5.3.1.13", "5.3.1.14", "5.3.1.15", "5.3.1.16", "5.3.1.17",
-  "5.3.1.20", "5.3.1.21", "5.3.1.22", "5.3.1.23", "5.3.1.24", "5.3.1.25",
-  "5.3.1.26", "5.3.2.1", "5.3.2.2", "5.3.3.1", "5.3.3.2", "5.3.3.3",
-  "5.3.3.4", "5.3.3.5", "5.3.3.6", "5.3.3.7", "5.3.3.8", "5.3.3.9",
-  "5.3.3.10", "5.3.3.11", "5.3.3.12", "5.3.3.13", "5.3.3.14", "5.3.3.15",
-  "5.3.4.1", "5.3.99.2", "5.3.99.3", "5.3.99.4", "5.3.99.5", "5.3.99.6",
-  "5.3.99.7", "5.3.99.8", "5.3.99.9", "5.4.1.1", "5.4.1.2", "5.4.2.1",
-  "5.4.2.2", "5.4.2.3", "5.4.2.4", "5.4.2.5", "5.4.2.6", "5.4.2.7",
-  "5.4.2.8", "5.4.2.9", "5.4.2.10", "5.4.3.2", "5.4.3.3", "5.4.3.4",
-  "5.4.3.5", "5.4.3.6", "5.4.3.7", "5.4.3.8", "5.4.4.1", "5.4.4.2",
-  "5.4.4.3", "5.4.99.1", "5.4.99.2", "5.4.99.3", "5.4.99.4", "5.4.99.5",
-  "5.4.99.7", "5.4.99.8", "5.4.99.9", "5.4.99.11", "5.4.99.12",
-  "5.4.99.13", "5.4.99.14", "5.4.99.15", "5.4.99.16", "5.4.99.17",
-  "5.4.99.18", "5.5.1.1", "5.5.1.2", "5.5.1.3", "5.5.1.4", "5.5.1.5",
-  "5.5.1.6", "5.5.1.7", "5.5.1.8", "5.5.1.9", "5.5.1.10", "5.5.1.11",
-  "5.5.1.12", "5.5.1.13", "5.99.1.1", "5.99.1.2", "5.99.1.3", "6.1.1.1",
-  "6.1.1.2", "6.1.1.3", "6.1.1.4", "6.1.1.5", "6.1.1.6", "6.1.1.7",
-  "6.1.1.9", "6.1.1.10", "6.1.1.11", "6.1.1.12", "6.1.1.13", "6.1.1.14",
-  "6.1.1.15", "6.1.1.16", "6.1.1.17", "6.1.1.18", "6.1.1.19", "6.1.1.20",
-  "6.1.1.21", "6.1.1.22", "6.1.1.23", "6.1.1.24", "6.1.1.25", "6.1.1.26",
-  "6.2.1.1", "6.2.1.2", "6.2.1.3", "6.2.1.4", "6.2.1.5", "6.2.1.6",
-  "6.2.1.7", "6.2.1.8", "6.2.1.9", "6.2.1.10", "6.2.1.11", "6.2.1.12",
-  "6.2.1.13", "6.2.1.14", "6.2.1.15", "6.2.1.16", "6.2.1.17", "6.2.1.18",
-  "6.2.1.19", "6.2.1.20", "6.2.1.22", "6.2.1.23", "6.2.1.24", "6.2.1.25",
-  "6.2.1.26", "6.2.1.27", "6.2.1.28", "6.2.1.30", "6.2.1.31", "6.2.1.32",
-  "6.2.1.33", "6.2.1.34", "6.3.1.1", "6.3.1.2", "6.3.1.4", "6.3.1.5",
-  "6.3.1.6", "6.3.1.7", "6.3.1.8", "6.3.1.9", "6.3.1.10", "6.3.1.11",
-  "6.3.1.12", "6.3.2.1", "6.3.2.2", "6.3.2.3", "6.3.2.4", "6.3.2.5",
-  "6.3.2.6", "6.3.2.7", "6.3.2.8", "6.3.2.9", "6.3.2.10", "6.3.2.11",
-  "6.3.2.12", "6.3.2.13", "6.3.2.14", "6.3.2.16", "6.3.2.17", "6.3.2.18",
-  "6.3.2.19", "6.3.2.20", "6.3.2.21", "6.3.2.22", "6.3.2.23", "6.3.2.24",
-  "6.3.2.25", "6.3.2.26", "6.3.2.27", "6.3.2.28", "6.3.2.29", "6.3.2.30",
-  "6.3.3.1", "6.3.3.2", "6.3.3.3", "6.3.3.4", "6.3.4.1", "6.3.4.2",
-  "6.3.4.3", "6.3.4.4", "6.3.4.5", "6.3.4.6", "6.3.4.7", "6.3.4.8",
-  "6.3.4.9", "6.3.4.10", "6.3.4.11", "6.3.4.12", "6.3.4.13", "6.3.4.14",
-  "6.3.4.15", "6.3.4.16", "6.3.4.17", "6.3.4.18", "6.3.5.1", "6.3.5.2",
-  "6.3.5.3", "6.3.5.4", "6.3.5.5", "6.3.5.6", "6.3.5.7", "6.3.5.9",
-  "6.3.5.10", "6.4.1.1", "6.4.1.2", "6.4.1.3", "6.4.1.4", "6.4.1.5",
-  "6.4.1.6", "6.4.1.7", "6.5.1.1", "6.5.1.2", "6.5.1.3", "6.5.1.4",
-  "6.6.1.1", "6.6.1.2",
+  "1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5",
+  "1.1.1.6", "1.1.1.7", "1.1.1.8", "1.1.1.9", "1.1.1.10",
+  "1.1.1.11", "1.1.1.12", "1.1.1.13", "1.1.1.14", "1.1.1.15",
+  "1.1.1.16", "1.1.1.17", "1.1.1.18", "1.1.1.19", "1.1.1.20",
+  "1.1.1.21", "1.1.1.22", "1.1.1.23", "1.1.1.24", "1.1.1.25",
+  "1.1.1.26", "1.1.1.27", "1.1.1.28", "1.1.1.29", "1.1.1.30",
+  "1.1.1.31", "1.1.1.32", "1.1.1.33", "1.1.1.34", "1.1.1.35",
+  "1.1.1.36", "1.1.1.37", "1.1.1.38", "1.1.1.39", "1.1.1.40",
+  "1.1.1.41", "1.1.1.42", "1.1.1.43", "1.1.1.44", "1.1.1.45",
+  "1.1.1.46", "1.1.1.47", "1.1.1.48", "1.1.1.49", "1.1.1.50",
+  "1.1.1.51", "1.1.1.52", "1.1.1.53", "1.1.1.54", "1.1.1.55",
+  "1.1.1.56", "1.1.1.57", "1.1.1.58", "1.1.1.59", "1.1.1.60",
+  "1.1.1.61", "1.1.1.62", "1.1.1.63", "1.1.1.64", "1.1.1.65",
+  "1.1.1.66", "1.1.1.67", "1.1.1.69", "1.1.1.71", "1.1.1.72",
+  "1.1.1.73", "1.1.1.75", "1.1.1.76", "1.1.1.77", "1.1.1.78",
+  "1.1.1.79", "1.1.1.80", "1.1.1.81", "1.1.1.82", "1.1.1.83",
+  "1.1.1.84", "1.1.1.85", "1.1.1.86", "1.1.1.87", "1.1.1.88",
+  "1.1.1.90", "1.1.1.91", "1.1.1.92", "1.1.1.93", "1.1.1.94",
+  "1.1.1.95", "1.1.1.96", "1.1.1.97", "1.1.1.98", "1.1.1.99",
+  "1.1.1.100", "1.1.1.101", "1.1.1.102", "1.1.1.103",
+  "1.1.1.104", "1.1.1.105", "1.1.1.106", "1.1.1.107",
+  "1.1.1.108", "1.1.1.110", "1.1.1.111", "1.1.1.112",
+  "1.1.1.113", "1.1.1.114", "1.1.1.115", "1.1.1.116",
+  "1.1.1.117", "1.1.1.118", "1.1.1.119", "1.1.1.120",
+  "1.1.1.121", "1.1.1.122", "1.1.1.123", "1.1.1.124",
+  "1.1.1.125", "1.1.1.126", "1.1.1.127", "1.1.1.128",
+  "1.1.1.129", "1.1.1.130", "1.1.1.131", "1.1.1.132",
+  "1.1.1.133", "1.1.1.134", "1.1.1.135", "1.1.1.136",
+  "1.1.1.137", "1.1.1.138", "1.1.1.140", "1.1.1.141",
+  "1.1.1.142", "1.1.1.143", "1.1.1.144", "1.1.1.145",
+  "1.1.1.146", "1.1.1.147", "1.1.1.148", "1.1.1.149",
+  "1.1.1.150", "1.1.1.151", "1.1.1.152", "1.1.1.153",
+  "1.1.1.154", "1.1.1.156", "1.1.1.157", "1.1.1.158",
+  "1.1.1.159", "1.1.1.160", "1.1.1.161", "1.1.1.162",
+  "1.1.1.163", "1.1.1.164", "1.1.1.165", "1.1.1.166",
+  "1.1.1.167", "1.1.1.168", "1.1.1.169", "1.1.1.170",
+  "1.1.1.172", "1.1.1.173", "1.1.1.174", "1.1.1.175",
+  "1.1.1.176", "1.1.1.177", "1.1.1.178", "1.1.1.179",
+  "1.1.1.181", "1.1.1.183", "1.1.1.184", "1.1.1.185",
+  "1.1.1.186", "1.1.1.187", "1.1.1.188", "1.1.1.189",
+  "1.1.1.190", "1.1.1.191", "1.1.1.192", "1.1.1.193",
+  "1.1.1.194", "1.1.1.195", "1.1.1.196", "1.1.1.197",
+  "1.1.1.198", "1.1.1.199", "1.1.1.200", "1.1.1.201",
+  "1.1.1.202", "1.1.1.203", "1.1.1.205", "1.1.1.206",
+  "1.1.1.207", "1.1.1.208", "1.1.1.209", "1.1.1.210",
+  "1.1.1.211", "1.1.1.212", "1.1.1.213", "1.1.1.214",
+  "1.1.1.215", "1.1.1.216", "1.1.1.217", "1.1.1.218",
+  "1.1.1.219", "1.1.1.220", "1.1.1.221", "1.1.1.222",
+  "1.1.1.223", "1.1.1.224", "1.1.1.225", "1.1.1.226",
+  "1.1.1.227", "1.1.1.228", "1.1.1.229", "1.1.1.230",
+  "1.1.1.231", "1.1.1.232", "1.1.1.233", "1.1.1.234",
+  "1.1.1.235", "1.1.1.236", "1.1.1.237", "1.1.1.238",
+  "1.1.1.239", "1.1.1.240", "1.1.1.241", "1.1.1.243",
+  "1.1.1.244", "1.1.1.245", "1.1.1.246", "1.1.1.247",
+  "1.1.1.248", "1.1.1.250", "1.1.1.251", "1.1.1.252",
+  "1.1.1.254", "1.1.1.255", "1.1.1.256", "1.1.1.257",
+  "1.1.1.258", "1.1.1.259", "1.1.1.260", "1.1.1.261",
+  "1.1.1.262", "1.1.1.263", "1.1.1.264", "1.1.1.265",
+  "1.1.1.266", "1.1.1.267", "1.1.1.268", "1.1.1.269",
+  "1.1.1.270", "1.1.1.271", "1.1.1.272", "1.1.1.273",
+  "1.1.1.274", "1.1.1.275", "1.1.1.276", "1.1.1.277",
+  "1.1.1.278", "1.1.1.279", "1.1.1.280", "1.1.1.281",
+  "1.1.1.282", "1.1.1.283", "1.1.1.284", "1.1.1.285",
+  "1.1.1.286", "1.1.1.287", "1.1.1.288", "1.1.1.289",
+  "1.1.1.290", "1.1.1.291", "1.1.1.292", "1.1.1.294",
+  "1.1.1.295", "1.1.1.296", "1.1.1.297", "1.1.2.2", "1.1.2.3",
+  "1.1.2.4", "1.1.2.5", "1.1.3.3", "1.1.3.4", "1.1.3.5",
+  "1.1.3.6", "1.1.3.7", "1.1.3.8", "1.1.3.9", "1.1.3.10",
+  "1.1.3.11", "1.1.3.12", "1.1.3.13", "1.1.3.14", "1.1.3.15",
+  "1.1.3.16", "1.1.3.17", "1.1.3.18", "1.1.3.19", "1.1.3.20",
+  "1.1.3.21", "1.1.3.23", "1.1.3.27", "1.1.3.28", "1.1.3.29",
+  "1.1.3.30", "1.1.3.37", "1.1.3.38", "1.1.3.39", "1.1.3.40",
+  "1.1.3.41", "1.1.4.1", "1.1.4.2", "1.1.5.2", "1.1.99.1",
+  "1.1.99.2", "1.1.99.3", "1.1.99.4", "1.1.99.5", "1.1.99.6",
+  "1.1.99.7", "1.1.99.8", "1.1.99.9", "1.1.99.10",
+  "1.1.99.11", "1.1.99.12", "1.1.99.13", "1.1.99.14",
+  "1.1.99.16", "1.1.99.18", "1.1.99.20", "1.1.99.21",
+  "1.1.99.22", "1.1.99.23", "1.1.99.24", "1.1.99.25",
+  "1.1.99.26", "1.1.99.27", "1.1.99.28", "1.1.99.29",
+  "1.1.99.30", "1.1.99.31", "1.1.99.32", "1.2.1.2", "1.2.1.3",
+  "1.2.1.4", "1.2.1.5", "1.2.1.7", "1.2.1.8", "1.2.1.9",
+  "1.2.1.10", "1.2.1.11", "1.2.1.12", "1.2.1.13", "1.2.1.15",
+  "1.2.1.16", "1.2.1.17", "1.2.1.18", "1.2.1.19", "1.2.1.20",
+  "1.2.1.21", "1.2.1.22", "1.2.1.23", "1.2.1.24", "1.2.1.25",
+  "1.2.1.26", "1.2.1.27", "1.2.1.28", "1.2.1.29", "1.2.1.30",
+  "1.2.1.31", "1.2.1.32", "1.2.1.33", "1.2.1.36", "1.2.1.38",
+  "1.2.1.39", "1.2.1.40", "1.2.1.41", "1.2.1.42", "1.2.1.43",
+  "1.2.1.44", "1.2.1.45", "1.2.1.46", "1.2.1.47", "1.2.1.48",
+  "1.2.1.49", "1.2.1.50", "1.2.1.51", "1.2.1.52", "1.2.1.53",
+  "1.2.1.54", "1.2.1.57", "1.2.1.58", "1.2.1.59", "1.2.1.60",
+  "1.2.1.61", "1.2.1.62", "1.2.1.63", "1.2.1.64", "1.2.1.65",
+  "1.2.1.66", "1.2.1.67", "1.2.1.68", "1.2.1.69", "1.2.1.70",
+  "1.2.1.71", "1.2.1.72", "1.2.1.73", "1.2.2.1", "1.2.2.2",
+  "1.2.2.3", "1.2.2.4", "1.2.3.1", "1.2.3.3", "1.2.3.4",
+  "1.2.3.5", "1.2.3.6", "1.2.3.7", "1.2.3.8", "1.2.3.9",
+  "1.2.3.11", "1.2.3.13", "1.2.3.14", "1.2.4.1", "1.2.4.2",
+  "1.2.4.4", "1.2.7.1", "1.2.7.2", "1.2.7.3", "1.2.7.4",
+  "1.2.7.5", "1.2.7.6", "1.2.7.7", "1.2.7.8", "1.2.99.2",
+  "1.2.99.3", "1.2.99.4", "1.2.99.5", "1.2.99.6", "1.2.99.7",
+  "1.3.1.1", "1.3.1.2", "1.3.1.3", "1.3.1.4", "1.3.1.5",
+  "1.3.1.6", "1.3.1.7", "1.3.1.8", "1.3.1.9", "1.3.1.10",
+  "1.3.1.11", "1.3.1.12", "1.3.1.13", "1.3.1.14", "1.3.1.15",
+  "1.3.1.16", "1.3.1.17", "1.3.1.18", "1.3.1.19", "1.3.1.20",
+  "1.3.1.21", "1.3.1.22", "1.3.1.24", "1.3.1.25", "1.3.1.26",
+  "1.3.1.27", "1.3.1.28", "1.3.1.29", "1.3.1.30", "1.3.1.31",
+  "1.3.1.32", "1.3.1.33", "1.3.1.34", "1.3.1.35", "1.3.1.36",
+  "1.3.1.37", "1.3.1.38", "1.3.1.39", "1.3.1.40", "1.3.1.41",
+  "1.3.1.42", "1.3.1.43", "1.3.1.44", "1.3.1.45", "1.3.1.46",
+  "1.3.1.47", "1.3.1.48", "1.3.1.49", "1.3.1.51", "1.3.1.52",
+  "1.3.1.53", "1.3.1.54", "1.3.1.56", "1.3.1.57", "1.3.1.58",
+  "1.3.1.60", "1.3.1.62", "1.3.1.63", "1.3.1.64", "1.3.1.65",
+  "1.3.1.66", "1.3.1.67", "1.3.1.68", "1.3.1.69", "1.3.1.70",
+  "1.3.1.71", "1.3.1.72", "1.3.1.73", "1.3.1.74", "1.3.1.75",
+  "1.3.1.76", "1.3.1.77", "1.3.1.78", "1.3.1.79", "1.3.1.80",
+  "1.3.1.81", "1.3.1.82", "1.3.2.3", "1.3.3.1", "1.3.3.3",
+  "1.3.3.4", "1.3.3.5", "1.3.3.6", "1.3.3.7", "1.3.3.8",
+  "1.3.3.9", "1.3.3.10", "1.3.3.11", "1.3.3.12", "1.3.5.1",
+  "1.3.7.1", "1.3.7.2", "1.3.7.3", "1.3.7.4", "1.3.7.5",
+  "1.3.7.6", "1.3.99.1", "1.3.99.2", "1.3.99.3", "1.3.99.4",
+  "1.3.99.5", "1.3.99.6", "1.3.99.7", "1.3.99.8", "1.3.99.10",
+  "1.3.99.11", "1.3.99.12", "1.3.99.13", "1.3.99.14",
+  "1.3.99.15", "1.3.99.16", "1.3.99.17", "1.3.99.18",
+  "1.3.99.19", "1.3.99.20", "1.3.99.21", "1.3.99.22",
+  "1.3.99.23", "1.3.99.24", "1.3.99.25", "1.4.1.1", "1.4.1.2",
+  "1.4.1.3", "1.4.1.4", "1.4.1.5", "1.4.1.7", "1.4.1.8",
+  "1.4.1.9", "1.4.1.10", "1.4.1.11", "1.4.1.12", "1.4.1.13",
+  "1.4.1.14", "1.4.1.15", "1.4.1.16", "1.4.1.17", "1.4.1.18",
+  "1.4.1.19", "1.4.1.20", "1.4.1.21", "1.4.2.1", "1.4.3.1",
+  "1.4.3.2", "1.4.3.3", "1.4.3.4", "1.4.3.5", "1.4.3.7",
+  "1.4.3.8", "1.4.3.10", "1.4.3.11", "1.4.3.12", "1.4.3.13",
+  "1.4.3.14", "1.4.3.15", "1.4.3.16", "1.4.3.19", "1.4.3.20",
+  "1.4.3.21", "1.4.3.22", "1.4.4.2", "1.4.7.1", "1.4.99.1",
+  "1.4.99.2", "1.4.99.3", "1.4.99.4", "1.4.99.5", "1.5.1.1",
+  "1.5.1.2", "1.5.1.3", "1.5.1.5", "1.5.1.6", "1.5.1.7",
+  "1.5.1.8", "1.5.1.9", "1.5.1.10", "1.5.1.11", "1.5.1.12",
+  "1.5.1.15", "1.5.1.16", "1.5.1.17", "1.5.1.18", "1.5.1.19",
+  "1.5.1.20", "1.5.1.21", "1.5.1.22", "1.5.1.23", "1.5.1.24",
+  "1.5.1.25", "1.5.1.26", "1.5.1.27", "1.5.1.28", "1.5.1.29",
+  "1.5.1.30", "1.5.1.31", "1.5.1.32", "1.5.1.33", "1.5.1.34",
+  "1.5.3.1", "1.5.3.2", "1.5.3.4", "1.5.3.5", "1.5.3.6",
+  "1.5.3.7", "1.5.3.10", "1.5.3.11", "1.5.3.12", "1.5.4.1",
+  "1.5.5.1", "1.5.7.1", "1.5.8.1", "1.5.8.2", "1.5.99.1",
+  "1.5.99.2", "1.5.99.3", "1.5.99.4", "1.5.99.5", "1.5.99.6",
+  "1.5.99.8", "1.5.99.9", "1.5.99.11", "1.5.99.12", "1.6.1.1",
+  "1.6.1.2", "1.6.2.2", "1.6.2.4", "1.6.2.5", "1.6.2.6",
+  "1.6.3.1", "1.6.5.2", "1.6.5.3", "1.6.5.4", "1.6.5.5",
+  "1.6.5.6", "1.6.5.7", "1.6.6.9", "1.6.99.1", "1.6.99.3",
+  "1.6.99.5", "1.6.99.6", "1.7.1.1", "1.7.1.2", "1.7.1.3",
+  "1.7.1.4", "1.7.1.5", "1.7.1.6", "1.7.1.7", "1.7.1.9",
+  "1.7.1.10", "1.7.1.11", "1.7.1.12", "1.7.1.13", "1.7.2.1",
+  "1.7.2.2", "1.7.2.3", "1.7.3.1", "1.7.3.2", "1.7.3.3",
+  "1.7.3.4", "1.7.3.5", "1.7.7.1", "1.7.7.2", "1.7.99.1",
+  "1.7.99.4", "1.7.99.6", "1.7.99.7", "1.7.99.8", "1.8.1.2",
+  "1.8.1.3", "1.8.1.4", "1.8.1.5", "1.8.1.6", "1.8.1.7",
+  "1.8.1.8", "1.8.1.9", "1.8.1.10", "1.8.1.11", "1.8.1.12",
+  "1.8.1.13", "1.8.1.14", "1.8.1.15", "1.8.2.1", "1.8.2.2",
+  "1.8.3.1", "1.8.3.2", "1.8.3.3", "1.8.3.4", "1.8.3.5",
+  "1.8.4.1", "1.8.4.2", "1.8.4.3", "1.8.4.4", "1.8.4.7",
+  "1.8.4.8", "1.8.4.9", "1.8.4.10", "1.8.4.11", "1.8.4.12",
+  "1.8.4.13", "1.8.4.14", "1.8.5.1", "1.8.5.2", "1.8.7.1",
+  "1.8.98.1", "1.8.98.2", "1.8.99.1", "1.8.99.2", "1.8.99.3",
+  "1.9.3.1", "1.9.6.1", "1.9.99.1", "1.10.1.1", "1.10.2.1",
+  "1.10.2.2", "1.10.3.1", "1.10.3.2", "1.10.3.3", "1.10.3.4",
+  "1.10.3.5", "1.10.3.6", "1.10.99.1", "1.10.99.2",
+  "1.10.99.3", "1.11.1.1", "1.11.1.2", "1.11.1.3", "1.11.1.5",
+  "1.11.1.6", "1.11.1.7", "1.11.1.8", "1.11.1.9", "1.11.1.10",
+  "1.11.1.11", "1.11.1.12", "1.11.1.13", "1.11.1.14",
+  "1.11.1.15", "1.11.1.16", "1.12.1.2", "1.12.1.3",
+  "1.12.2.1", "1.12.5.1", "1.12.7.2", "1.12.98.1",
+  "1.12.98.2", "1.12.98.3", "1.12.99.6", "1.13.11.1",
+  "1.13.11.2", "1.13.11.3", "1.13.11.4", "1.13.11.5",
+  "1.13.11.6", "1.13.11.8", "1.13.11.9", "1.13.11.10",
+  "1.13.11.11", "1.13.11.12", "1.13.11.13", "1.13.11.14",
+  "1.13.11.15", "1.13.11.16", "1.13.11.17", "1.13.11.18",
+  "1.13.11.19", "1.13.11.20", "1.13.11.22", "1.13.11.23",
+  "1.13.11.24", "1.13.11.25", "1.13.11.26", "1.13.11.27",
+  "1.13.11.28", "1.13.11.29", "1.13.11.30", "1.13.11.31",
+  "1.13.11.32", "1.13.11.33", "1.13.11.34", "1.13.11.35",
+  "1.13.11.36", "1.13.11.37", "1.13.11.38", "1.13.11.39",
+  "1.13.11.40", "1.13.11.41", "1.13.11.43", "1.13.11.44",
+  "1.13.11.45", "1.13.11.46", "1.13.11.47", "1.13.11.48",
+  "1.13.11.49", "1.13.11.50", "1.13.11.51", "1.13.11.52",
+  "1.13.11.53", "1.13.11.54", "1.13.11.55", "1.13.12.1",
+  "1.13.12.2", "1.13.12.3", "1.13.12.4", "1.13.12.5",
+  "1.13.12.6", "1.13.12.7", "1.13.12.8", "1.13.12.9",
+  "1.13.12.12", "1.13.12.13", "1.13.12.14", "1.13.99.1",
+  "1.13.99.3", "1.14.11.1", "1.14.11.2", "1.14.11.3",
+  "1.14.11.4", "1.14.11.6", "1.14.11.7", "1.14.11.8",
+  "1.14.11.9", "1.14.11.10", "1.14.11.11", "1.14.11.12",
+  "1.14.11.13", "1.14.11.14", "1.14.11.15", "1.14.11.16",
+  "1.14.11.17", "1.14.11.18", "1.14.11.19", "1.14.11.20",
+  "1.14.11.21", "1.14.11.22", "1.14.11.23", "1.14.11.24",
+  "1.14.11.25", "1.14.11.26", "1.14.11.27", "1.14.11.28",
+  "1.14.12.1", "1.14.12.3", "1.14.12.4", "1.14.12.5",
+  "1.14.12.7", "1.14.12.8", "1.14.12.9", "1.14.12.10",
+  "1.14.12.11", "1.14.12.12", "1.14.12.13", "1.14.12.14",
+  "1.14.12.15", "1.14.12.16", "1.14.12.17", "1.14.12.18",
+  "1.14.12.19", "1.14.12.20", "1.14.13.1", "1.14.13.2",
+  "1.14.13.3", "1.14.13.4", "1.14.13.5", "1.14.13.6",
+  "1.14.13.7", "1.14.13.8", "1.14.13.9", "1.14.13.10",
+  "1.14.13.11", "1.14.13.12", "1.14.13.13", "1.14.13.14",
+  "1.14.13.15", "1.14.13.16", "1.14.13.17", "1.14.13.18",
+  "1.14.13.19", "1.14.13.20", "1.14.13.21", "1.14.13.22",
+  "1.14.13.23", "1.14.13.24", "1.14.13.25", "1.14.13.26",
+  "1.14.13.27", "1.14.13.28", "1.14.13.29", "1.14.13.30",
+  "1.14.13.31", "1.14.13.32", "1.14.13.33", "1.14.13.34",
+  "1.14.13.35", "1.14.13.36", "1.14.13.37", "1.14.13.38",
+  "1.14.13.39", "1.14.13.40", "1.14.13.41", "1.14.13.42",
+  "1.14.13.43", "1.14.13.44", "1.14.13.46", "1.14.13.47",
+  "1.14.13.48", "1.14.13.49", "1.14.13.50", "1.14.13.51",
+  "1.14.13.52", "1.14.13.53", "1.14.13.54", "1.14.13.55",
+  "1.14.13.56", "1.14.13.57", "1.14.13.58", "1.14.13.59",
+  "1.14.13.60", "1.14.13.61", "1.14.13.62", "1.14.13.63",
+  "1.14.13.64", "1.14.13.66", "1.14.13.67", "1.14.13.68",
+  "1.14.13.69", "1.14.13.70", "1.14.13.71", "1.14.13.72",
+  "1.14.13.73", "1.14.13.74", "1.14.13.75", "1.14.13.76",
+  "1.14.13.77", "1.14.13.78", "1.14.13.79", "1.14.13.80",
+  "1.14.13.81", "1.14.13.82", "1.14.13.83", "1.14.13.84",
+  "1.14.13.85", "1.14.13.86", "1.14.13.87", "1.14.13.88",
+  "1.14.13.89", "1.14.13.90", "1.14.13.91", "1.14.13.92",
+  "1.14.13.93", "1.14.13.94", "1.14.13.95", "1.14.13.96",
+  "1.14.13.97", "1.14.13.98", "1.14.13.99", "1.14.13.100",
+  "1.14.13.101", "1.14.13.102", "1.14.13.103", "1.14.13.104",
+  "1.14.13.105", "1.14.14.1", "1.14.14.3", "1.14.14.5",
+  "1.14.15.1", "1.14.15.2", "1.14.15.3", "1.14.15.4",
+  "1.14.15.5", "1.14.15.6", "1.14.15.7", "1.14.16.1",
+  "1.14.16.2", "1.14.16.3", "1.14.16.4", "1.14.16.5",
+  "1.14.16.6", "1.14.17.1", "1.14.17.3", "1.14.17.4",
+  "1.14.18.1", "1.14.18.2", "1.14.19.1", "1.14.19.2",
+  "1.14.19.3", "1.14.19.4", "1.14.19.5", "1.14.19.6",
+  "1.14.20.1", "1.14.21.1", "1.14.21.2", "1.14.21.3",
+  "1.14.21.4", "1.14.21.5", "1.14.21.6", "1.14.99.1",
+  "1.14.99.2", "1.14.99.3", "1.14.99.4", "1.14.99.7",
+  "1.14.99.9", "1.14.99.10", "1.14.99.11", "1.14.99.12",
+  "1.14.99.14", "1.14.99.15", "1.14.99.19", "1.14.99.20",
+  "1.14.99.21", "1.14.99.22", "1.14.99.23", "1.14.99.24",
+  "1.14.99.26", "1.14.99.27", "1.14.99.28", "1.14.99.29",
+  "1.14.99.30", "1.14.99.31", "1.14.99.32", "1.14.99.33",
+  "1.14.99.34", "1.14.99.35", "1.14.99.36", "1.14.99.37",
+  "1.14.99.38", "1.15.1.1", "1.15.1.2", "1.16.1.1",
+  "1.16.1.2", "1.16.1.3", "1.16.1.4", "1.16.1.5", "1.16.1.6",
+  "1.16.1.7", "1.16.1.8", "1.16.3.1", "1.16.8.1", "1.17.1.1",
+  "1.17.1.2", "1.17.1.3", "1.17.1.4", "1.17.1.5", "1.17.3.1",
+  "1.17.3.2", "1.17.3.3", "1.17.4.1", "1.17.4.2", "1.17.4.3",
+  "1.17.5.1", "1.17.99.1", "1.17.99.2", "1.17.99.3",
+  "1.17.99.4", "1.17.99.5", "1.18.1.1", "1.18.1.2",
+  "1.18.1.3", "1.18.1.4", "1.18.6.1", "1.19.6.1", "1.20.1.1",
+  "1.20.4.1", "1.20.4.2", "1.20.98.1", "1.20.99.1",
+  "1.21.3.1", "1.21.3.2", "1.21.3.3", "1.21.3.4", "1.21.3.5",
+  "1.21.3.6", "1.21.4.1", "1.21.4.2", "1.21.4.3", "1.21.4.4",
+  "1.21.99.1", "1.97.1.1", "1.97.1.2", "1.97.1.3", "1.97.1.4",
+  "1.97.1.8", "1.97.1.9", "1.97.1.10", "1.97.1.11", "2.1.1.1",
+  "2.1.1.2", "2.1.1.3", "2.1.1.4", "2.1.1.5", "2.1.1.6",
+  "2.1.1.7", "2.1.1.8", "2.1.1.9", "2.1.1.10", "2.1.1.11",
+  "2.1.1.12", "2.1.1.13", "2.1.1.14", "2.1.1.15", "2.1.1.16",
+  "2.1.1.17", "2.1.1.18", "2.1.1.19", "2.1.1.20", "2.1.1.21",
+  "2.1.1.22", "2.1.1.25", "2.1.1.26", "2.1.1.27", "2.1.1.28",
+  "2.1.1.29", "2.1.1.31", "2.1.1.32", "2.1.1.33", "2.1.1.34",
+  "2.1.1.35", "2.1.1.36", "2.1.1.37", "2.1.1.38", "2.1.1.39",
+  "2.1.1.40", "2.1.1.41", "2.1.1.42", "2.1.1.43", "2.1.1.44",
+  "2.1.1.45", "2.1.1.46", "2.1.1.47", "2.1.1.48", "2.1.1.49",
+  "2.1.1.50", "2.1.1.51", "2.1.1.52", "2.1.1.53", "2.1.1.54",
+  "2.1.1.55", "2.1.1.56", "2.1.1.57", "2.1.1.59", "2.1.1.60",
+  "2.1.1.61", "2.1.1.62", "2.1.1.63", "2.1.1.64", "2.1.1.65",
+  "2.1.1.66", "2.1.1.67", "2.1.1.68", "2.1.1.69", "2.1.1.70",
+  "2.1.1.71", "2.1.1.72", "2.1.1.74", "2.1.1.75", "2.1.1.76",
+  "2.1.1.77", "2.1.1.78", "2.1.1.79", "2.1.1.80", "2.1.1.82",
+  "2.1.1.83", "2.1.1.84", "2.1.1.85", "2.1.1.86", "2.1.1.87",
+  "2.1.1.88", "2.1.1.89", "2.1.1.90", "2.1.1.91", "2.1.1.94",
+  "2.1.1.95", "2.1.1.96", "2.1.1.97", "2.1.1.98", "2.1.1.99",
+  "2.1.1.100", "2.1.1.101", "2.1.1.102", "2.1.1.103",
+  "2.1.1.104", "2.1.1.105", "2.1.1.106", "2.1.1.107",
+  "2.1.1.108", "2.1.1.109", "2.1.1.110", "2.1.1.111",
+  "2.1.1.112", "2.1.1.113", "2.1.1.114", "2.1.1.115",
+  "2.1.1.116", "2.1.1.117", "2.1.1.118", "2.1.1.119",
+  "2.1.1.120", "2.1.1.121", "2.1.1.122", "2.1.1.123",
+  "2.1.1.124", "2.1.1.125", "2.1.1.126", "2.1.1.127",
+  "2.1.1.128", "2.1.1.129", "2.1.1.130", "2.1.1.131",
+  "2.1.1.132", "2.1.1.133", "2.1.1.136", "2.1.1.137",
+  "2.1.1.139", "2.1.1.140", "2.1.1.141", "2.1.1.142",
+  "2.1.1.143", "2.1.1.144", "2.1.1.145", "2.1.1.146",
+  "2.1.1.147", "2.1.1.148", "2.1.1.149", "2.1.1.150",
+  "2.1.1.151", "2.1.1.152", "2.1.1.153", "2.1.1.154",
+  "2.1.1.155", "2.1.1.156", "2.1.1.157", "2.1.1.158",
+  "2.1.1.159", "2.1.1.160", "2.1.1.161", "2.1.1.162",
+  "2.1.2.1", "2.1.2.2", "2.1.2.3", "2.1.2.4", "2.1.2.5",
+  "2.1.2.7", "2.1.2.8", "2.1.2.9", "2.1.2.10", "2.1.2.11",
+  "2.1.3.1", "2.1.3.2", "2.1.3.3", "2.1.3.5", "2.1.3.6",
+  "2.1.3.7", "2.1.3.8", "2.1.3.9", "2.1.4.1", "2.1.4.2",
+  "2.2.1.1", "2.2.1.2", "2.2.1.3", "2.2.1.4", "2.2.1.5",
+  "2.2.1.6", "2.2.1.7", "2.2.1.8", "2.2.1.9", "2.3.1.1",
+  "2.3.1.2", "2.3.1.3", "2.3.1.4", "2.3.1.5", "2.3.1.6",
+  "2.3.1.7", "2.3.1.8", "2.3.1.9", "2.3.1.10", "2.3.1.11",
+  "2.3.1.12", "2.3.1.13", "2.3.1.14", "2.3.1.15", "2.3.1.16",
+  "2.3.1.17", "2.3.1.18", "2.3.1.19", "2.3.1.20", "2.3.1.21",
+  "2.3.1.22", "2.3.1.23", "2.3.1.24", "2.3.1.25", "2.3.1.26",
+  "2.3.1.27", "2.3.1.28", "2.3.1.29", "2.3.1.30", "2.3.1.31",
+  "2.3.1.32", "2.3.1.33", "2.3.1.34", "2.3.1.35", "2.3.1.36",
+  "2.3.1.37", "2.3.1.38", "2.3.1.39", "2.3.1.40", "2.3.1.41",
+  "2.3.1.42", "2.3.1.43", "2.3.1.44", "2.3.1.45", "2.3.1.46",
+  "2.3.1.47", "2.3.1.48", "2.3.1.49", "2.3.1.50", "2.3.1.51",
+  "2.3.1.52", "2.3.1.53", "2.3.1.54", "2.3.1.56", "2.3.1.57",
+  "2.3.1.58", "2.3.1.59", "2.3.1.60", "2.3.1.61", "2.3.1.62",
+  "2.3.1.63", "2.3.1.64", "2.3.1.65", "2.3.1.66", "2.3.1.67",
+  "2.3.1.68", "2.3.1.69", "2.3.1.70", "2.3.1.71", "2.3.1.72",
+  "2.3.1.73", "2.3.1.74", "2.3.1.75", "2.3.1.76", "2.3.1.77",
+  "2.3.1.78", "2.3.1.79", "2.3.1.80", "2.3.1.81", "2.3.1.82",
+  "2.3.1.83", "2.3.1.84", "2.3.1.85", "2.3.1.86", "2.3.1.87",
+  "2.3.1.88", "2.3.1.89", "2.3.1.90", "2.3.1.91", "2.3.1.92",
+  "2.3.1.93", "2.3.1.94", "2.3.1.95", "2.3.1.96", "2.3.1.97",
+  "2.3.1.98", "2.3.1.99", "2.3.1.100", "2.3.1.101",
+  "2.3.1.102", "2.3.1.103", "2.3.1.104", "2.3.1.105",
+  "2.3.1.106", "2.3.1.107", "2.3.1.108", "2.3.1.109",
+  "2.3.1.110", "2.3.1.111", "2.3.1.112", "2.3.1.113",
+  "2.3.1.114", "2.3.1.115", "2.3.1.116", "2.3.1.117",
+  "2.3.1.118", "2.3.1.119", "2.3.1.121", "2.3.1.122",
+  "2.3.1.123", "2.3.1.125", "2.3.1.126", "2.3.1.127",
+  "2.3.1.128", "2.3.1.129", "2.3.1.130", "2.3.1.131",
+  "2.3.1.132", "2.3.1.133", "2.3.1.134", "2.3.1.135",
+  "2.3.1.136", "2.3.1.137", "2.3.1.138", "2.3.1.139",
+  "2.3.1.140", "2.3.1.141", "2.3.1.142", "2.3.1.143",
+  "2.3.1.144", "2.3.1.145", "2.3.1.146", "2.3.1.147",
+  "2.3.1.148", "2.3.1.149", "2.3.1.150", "2.3.1.151",
+  "2.3.1.152", "2.3.1.153", "2.3.1.154", "2.3.1.155",
+  "2.3.1.156", "2.3.1.157", "2.3.1.158", "2.3.1.159",
+  "2.3.1.160", "2.3.1.161", "2.3.1.162", "2.3.1.163",
+  "2.3.1.164", "2.3.1.165", "2.3.1.166", "2.3.1.167",
+  "2.3.1.168", "2.3.1.169", "2.3.1.170", "2.3.1.171",
+  "2.3.1.172", "2.3.1.173", "2.3.1.174", "2.3.1.175",
+  "2.3.1.176", "2.3.1.177", "2.3.1.178", "2.3.1.179",
+  "2.3.1.180", "2.3.1.181", "2.3.1.182", "2.3.1.183",
+  "2.3.1.184", "2.3.1.185", "2.3.1.186", "2.3.2.1", "2.3.2.2",
+  "2.3.2.3", "2.3.2.4", "2.3.2.5", "2.3.2.6", "2.3.2.7",
+  "2.3.2.8", "2.3.2.9", "2.3.2.10", "2.3.2.11", "2.3.2.12",
+  "2.3.2.13", "2.3.2.14", "2.3.2.15", "2.3.3.1", "2.3.3.2",
+  "2.3.3.3", "2.3.3.4", "2.3.3.5", "2.3.3.6", "2.3.3.7",
+  "2.3.3.8", "2.3.3.9", "2.3.3.10", "2.3.3.11", "2.3.3.12",
+  "2.3.3.13", "2.3.3.14", "2.3.3.15", "2.4.1.1", "2.4.1.2",
+  "2.4.1.4", "2.4.1.5", "2.4.1.7", "2.4.1.8", "2.4.1.9",
+  "2.4.1.10", "2.4.1.11", "2.4.1.12", "2.4.1.13", "2.4.1.14",
+  "2.4.1.15", "2.4.1.16", "2.4.1.17", "2.4.1.18", "2.4.1.19",
+  "2.4.1.20", "2.4.1.21", "2.4.1.22", "2.4.1.23", "2.4.1.24",
+  "2.4.1.25", "2.4.1.26", "2.4.1.27", "2.4.1.28", "2.4.1.29",
+  "2.4.1.30", "2.4.1.31", "2.4.1.32", "2.4.1.33", "2.4.1.34",
+  "2.4.1.35", "2.4.1.36", "2.4.1.37", "2.4.1.38", "2.4.1.39",
+  "2.4.1.40", "2.4.1.41", "2.4.1.43", "2.4.1.44", "2.4.1.45",
+  "2.4.1.46", "2.4.1.47", "2.4.1.48", "2.4.1.49", "2.4.1.50",
+  "2.4.1.52", "2.4.1.53", "2.4.1.54", "2.4.1.56", "2.4.1.57",
+  "2.4.1.58", "2.4.1.60", "2.4.1.62", "2.4.1.63", "2.4.1.64",
+  "2.4.1.65", "2.4.1.66", "2.4.1.67", "2.4.1.68", "2.4.1.69",
+  "2.4.1.70", "2.4.1.71", "2.4.1.73", "2.4.1.74", "2.4.1.78",
+  "2.4.1.79", "2.4.1.80", "2.4.1.81", "2.4.1.82", "2.4.1.83",
+  "2.4.1.85", "2.4.1.86", "2.4.1.87", "2.4.1.88", "2.4.1.90",
+  "2.4.1.91", "2.4.1.92", "2.4.1.94", "2.4.1.95", "2.4.1.96",
+  "2.4.1.97", "2.4.1.99", "2.4.1.100", "2.4.1.101",
+  "2.4.1.102", "2.4.1.103", "2.4.1.104", "2.4.1.105",
+  "2.4.1.106", "2.4.1.109", "2.4.1.110", "2.4.1.111",
+  "2.4.1.113", "2.4.1.114", "2.4.1.115", "2.4.1.116",
+  "2.4.1.117", "2.4.1.118", "2.4.1.119", "2.4.1.120",
+  "2.4.1.121", "2.4.1.122", "2.4.1.123", "2.4.1.125",
+  "2.4.1.126", "2.4.1.127", "2.4.1.128", "2.4.1.129",
+  "2.4.1.130", "2.4.1.131", "2.4.1.132", "2.4.1.133",
+  "2.4.1.134", "2.4.1.135", "2.4.1.136", "2.4.1.137",
+  "2.4.1.138", "2.4.1.139", "2.4.1.140", "2.4.1.141",
+  "2.4.1.142", "2.4.1.143", "2.4.1.144", "2.4.1.145",
+  "2.4.1.146", "2.4.1.147", "2.4.1.148", "2.4.1.149",
+  "2.4.1.150", "2.4.1.152", "2.4.1.153", "2.4.1.155",
+  "2.4.1.156", "2.4.1.157", "2.4.1.158", "2.4.1.159",
+  "2.4.1.160", "2.4.1.161", "2.4.1.162", "2.4.1.163",
+  "2.4.1.164", "2.4.1.165", "2.4.1.166", "2.4.1.167",
+  "2.4.1.168", "2.4.1.170", "2.4.1.171", "2.4.1.172",
+  "2.4.1.173", "2.4.1.174", "2.4.1.175", "2.4.1.176",
+  "2.4.1.177", "2.4.1.178", "2.4.1.179", "2.4.1.180",
+  "2.4.1.181", "2.4.1.182", "2.4.1.183", "2.4.1.184",
+  "2.4.1.185", "2.4.1.186", "2.4.1.187", "2.4.1.188",
+  "2.4.1.189", "2.4.1.190", "2.4.1.191", "2.4.1.192",
+  "2.4.1.193", "2.4.1.194", "2.4.1.195", "2.4.1.196",
+  "2.4.1.197", "2.4.1.198", "2.4.1.199", "2.4.1.201",
+  "2.4.1.202", "2.4.1.203", "2.4.1.205", "2.4.1.206",
+  "2.4.1.207", "2.4.1.208", "2.4.1.209", "2.4.1.210",
+  "2.4.1.211", "2.4.1.212", "2.4.1.213", "2.4.1.214",
+  "2.4.1.215", "2.4.1.216", "2.4.1.217", "2.4.1.218",
+  "2.4.1.219", "2.4.1.220", "2.4.1.221", "2.4.1.222",
+  "2.4.1.223", "2.4.1.224", "2.4.1.225", "2.4.1.226",
+  "2.4.1.227", "2.4.1.228", "2.4.1.229", "2.4.1.230",
+  "2.4.1.231", "2.4.1.232", "2.4.1.234", "2.4.1.236",
+  "2.4.1.237", "2.4.1.238", "2.4.1.239", "2.4.1.240",
+  "2.4.1.241", "2.4.1.242", "2.4.1.243", "2.4.1.244",
+  "2.4.1.245", "2.4.2.1", "2.4.2.2", "2.4.2.3", "2.4.2.4",
+  "2.4.2.5", "2.4.2.6", "2.4.2.7", "2.4.2.8", "2.4.2.9",
+  "2.4.2.10", "2.4.2.11", "2.4.2.12", "2.4.2.14", "2.4.2.15",
+  "2.4.2.16", "2.4.2.17", "2.4.2.18", "2.4.2.19", "2.4.2.20",
+  "2.4.2.21", "2.4.2.22", "2.4.2.23", "2.4.2.24", "2.4.2.25",
+  "2.4.2.26", "2.4.2.27", "2.4.2.28", "2.4.2.29", "2.4.2.30",
+  "2.4.2.31", "2.4.2.32", "2.4.2.33", "2.4.2.34", "2.4.2.35",
+  "2.4.2.36", "2.4.2.37", "2.4.2.38", "2.4.2.39", "2.4.2.40",
+  "2.4.99.1", "2.4.99.2", "2.4.99.3", "2.4.99.4", "2.4.99.5",
+  "2.4.99.6", "2.4.99.7", "2.4.99.8", "2.4.99.9", "2.4.99.10",
+  "2.4.99.11", "2.5.1.1", "2.5.1.2", "2.5.1.3", "2.5.1.4",
+  "2.5.1.5", "2.5.1.6", "2.5.1.7", "2.5.1.8", "2.5.1.9",
+  "2.5.1.10", "2.5.1.11", "2.5.1.15", "2.5.1.16", "2.5.1.17",
+  "2.5.1.18", "2.5.1.19", "2.5.1.20", "2.5.1.21", "2.5.1.22",
+  "2.5.1.23", "2.5.1.24", "2.5.1.25", "2.5.1.26", "2.5.1.27",
+  "2.5.1.28", "2.5.1.29", "2.5.1.30", "2.5.1.31", "2.5.1.32",
+  "2.5.1.33", "2.5.1.34", "2.5.1.35", "2.5.1.36", "2.5.1.38",
+  "2.5.1.39", "2.5.1.41", "2.5.1.42", "2.5.1.43", "2.5.1.44",
+  "2.5.1.45", "2.5.1.46", "2.5.1.47", "2.5.1.48", "2.5.1.49",
+  "2.5.1.50", "2.5.1.51", "2.5.1.52", "2.5.1.53", "2.5.1.54",
+  "2.5.1.55", "2.5.1.56", "2.5.1.57", "2.5.1.58", "2.5.1.59",
+  "2.5.1.60", "2.5.1.61", "2.5.1.62", "2.5.1.63", "2.5.1.65",
+  "2.5.1.66", "2.5.1.67", "2.5.1.68", "2.5.1.69", "2.5.1.70",
+  "2.5.1.71", "2.6.1.1", "2.6.1.2", "2.6.1.3", "2.6.1.4",
+  "2.6.1.5", "2.6.1.6", "2.6.1.7", "2.6.1.8", "2.6.1.9",
+  "2.6.1.11", "2.6.1.12", "2.6.1.13", "2.6.1.14", "2.6.1.15",
+  "2.6.1.16", "2.6.1.17", "2.6.1.18", "2.6.1.19", "2.6.1.21",
+  "2.6.1.22", "2.6.1.23", "2.6.1.24", "2.6.1.26", "2.6.1.27",
+  "2.6.1.28", "2.6.1.29", "2.6.1.30", "2.6.1.31", "2.6.1.32",
+  "2.6.1.33", "2.6.1.34", "2.6.1.35", "2.6.1.36", "2.6.1.37",
+  "2.6.1.38", "2.6.1.39", "2.6.1.40", "2.6.1.41", "2.6.1.42",
+  "2.6.1.43", "2.6.1.44", "2.6.1.45", "2.6.1.46", "2.6.1.47",
+  "2.6.1.48", "2.6.1.49", "2.6.1.50", "2.6.1.51", "2.6.1.52",
+  "2.6.1.54", "2.6.1.55", "2.6.1.56", "2.6.1.57", "2.6.1.58",
+  "2.6.1.59", "2.6.1.60", "2.6.1.62", "2.6.1.63", "2.6.1.64",
+  "2.6.1.65", "2.6.1.66", "2.6.1.67", "2.6.1.68", "2.6.1.70",
+  "2.6.1.71", "2.6.1.72", "2.6.1.73", "2.6.1.74", "2.6.1.75",
+  "2.6.1.76", "2.6.1.77", "2.6.1.78", "2.6.1.79", "2.6.1.80",
+  "2.6.1.81", "2.6.1.82", "2.6.1.83", "2.6.1.84", "2.6.1.85",
+  "2.6.1.86", "2.6.3.1", "2.6.99.1", "2.6.99.2", "2.7.1.1",
+  "2.7.1.2", "2.7.1.3", "2.7.1.4", "2.7.1.5", "2.7.1.6",
+  "2.7.1.7", "2.7.1.8", "2.7.1.10", "2.7.1.11", "2.7.1.12",
+  "2.7.1.13", "2.7.1.14", "2.7.1.15", "2.7.1.16", "2.7.1.17",
+  "2.7.1.18", "2.7.1.19", "2.7.1.20", "2.7.1.21", "2.7.1.22",
+  "2.7.1.23", "2.7.1.24", "2.7.1.25", "2.7.1.26", "2.7.1.27",
+  "2.7.1.28", "2.7.1.29", "2.7.1.30", "2.7.1.31", "2.7.1.32",
+  "2.7.1.33", "2.7.1.34", "2.7.1.35", "2.7.1.36", "2.7.1.39",
+  "2.7.1.40", "2.7.1.41", "2.7.1.42", "2.7.1.43", "2.7.1.44",
+  "2.7.1.45", "2.7.1.46", "2.7.1.47", "2.7.1.48", "2.7.1.49",
+  "2.7.1.50", "2.7.1.51", "2.7.1.52", "2.7.1.53", "2.7.1.54",
+  "2.7.1.55", "2.7.1.56", "2.7.1.58", "2.7.1.59", "2.7.1.60",
+  "2.7.1.61", "2.7.1.62", "2.7.1.63", "2.7.1.64", "2.7.1.65",
+  "2.7.1.66", "2.7.1.67", "2.7.1.68", "2.7.1.69", "2.7.1.71",
+  "2.7.1.72", "2.7.1.73", "2.7.1.74", "2.7.1.76", "2.7.1.77",
+  "2.7.1.78", "2.7.1.79", "2.7.1.80", "2.7.1.81", "2.7.1.82",
+  "2.7.1.83", "2.7.1.84", "2.7.1.85", "2.7.1.86", "2.7.1.87",
+  "2.7.1.88", "2.7.1.89", "2.7.1.90", "2.7.1.91", "2.7.1.92",
+  "2.7.1.93", "2.7.1.94", "2.7.1.95", "2.7.1.100",
+  "2.7.1.101", "2.7.1.102", "2.7.1.103", "2.7.1.105",
+  "2.7.1.106", "2.7.1.107", "2.7.1.108", "2.7.1.113",
+  "2.7.1.114", "2.7.1.118", "2.7.1.119", "2.7.1.121",
+  "2.7.1.122", "2.7.1.127", "2.7.1.130", "2.7.1.134",
+  "2.7.1.136", "2.7.1.137", "2.7.1.138", "2.7.1.140",
+  "2.7.1.142", "2.7.1.143", "2.7.1.144", "2.7.1.145",
+  "2.7.1.146", "2.7.1.147", "2.7.1.148", "2.7.1.149",
+  "2.7.1.150", "2.7.1.151", "2.7.1.153", "2.7.1.154",
+  "2.7.1.156", "2.7.1.157", "2.7.1.158", "2.7.1.159",
+  "2.7.1.160", "2.7.1.161", "2.7.1.162", "2.7.2.1", "2.7.2.2",
+  "2.7.2.3", "2.7.2.4", "2.7.2.6", "2.7.2.7", "2.7.2.8",
+  "2.7.2.10", "2.7.2.11", "2.7.2.12", "2.7.2.13", "2.7.2.14",
+  "2.7.2.15", "2.7.3.1", "2.7.3.2", "2.7.3.3", "2.7.3.4",
+  "2.7.3.5", "2.7.3.6", "2.7.3.7", "2.7.3.8", "2.7.3.9",
+  "2.7.3.10", "2.7.4.1", "2.7.4.2", "2.7.4.3", "2.7.4.4",
+  "2.7.4.6", "2.7.4.7", "2.7.4.8", "2.7.4.9", "2.7.4.10",
+  "2.7.4.11", "2.7.4.12", "2.7.4.13", "2.7.4.14", "2.7.4.15",
+  "2.7.4.16", "2.7.4.17", "2.7.4.18", "2.7.4.19", "2.7.4.20",
+  "2.7.4.21", "2.7.4.22", "2.7.4.23", "2.7.4.24", "2.7.6.1",
+  "2.7.6.2", "2.7.6.3", "2.7.6.4", "2.7.6.5", "2.7.7.1",
+  "2.7.7.2", "2.7.7.3", "2.7.7.4", "2.7.7.5", "2.7.7.6",
+  "2.7.7.7", "2.7.7.8", "2.7.7.9", "2.7.7.10", "2.7.7.11",
+  "2.7.7.12", "2.7.7.13", "2.7.7.14", "2.7.7.15", "2.7.7.18",
+  "2.7.7.19", "2.7.7.21", "2.7.7.22", "2.7.7.23", "2.7.7.24",
+  "2.7.7.25", "2.7.7.27", "2.7.7.28", "2.7.7.30", "2.7.7.31",
+  "2.7.7.32", "2.7.7.33", "2.7.7.34", "2.7.7.35", "2.7.7.36",
+  "2.7.7.37", "2.7.7.38", "2.7.7.39", "2.7.7.40", "2.7.7.41",
+  "2.7.7.42", "2.7.7.43", "2.7.7.44", "2.7.7.45", "2.7.7.46",
+  "2.7.7.47", "2.7.7.48", "2.7.7.49", "2.7.7.50", "2.7.7.51",
+  "2.7.7.52", "2.7.7.53", "2.7.7.54", "2.7.7.55", "2.7.7.56",
+  "2.7.7.57", "2.7.7.58", "2.7.7.59", "2.7.7.60", "2.7.7.61",
+  "2.7.7.62", "2.7.7.63", "2.7.7.64", "2.7.7.65", "2.7.7.66",
+  "2.7.8.1", "2.7.8.2", "2.7.8.3", "2.7.8.4", "2.7.8.5",
+  "2.7.8.6", "2.7.8.7", "2.7.8.8", "2.7.8.9", "2.7.8.10",
+  "2.7.8.11", "2.7.8.12", "2.7.8.13", "2.7.8.14", "2.7.8.15",
+  "2.7.8.17", "2.7.8.18", "2.7.8.19", "2.7.8.20", "2.7.8.21",
+  "2.7.8.22", "2.7.8.23", "2.7.8.24", "2.7.8.25", "2.7.8.26",
+  "2.7.8.27", "2.7.9.1", "2.7.9.2", "2.7.9.3", "2.7.9.4",
+  "2.7.9.5", "2.7.10.1", "2.7.10.2", "2.7.11.1", "2.7.11.2",
+  "2.7.11.3", "2.7.11.4", "2.7.11.5", "2.7.11.6", "2.7.11.7",
+  "2.7.11.8", "2.7.11.9", "2.7.11.10", "2.7.11.11",
+  "2.7.11.12", "2.7.11.13", "2.7.11.14", "2.7.11.15",
+  "2.7.11.16", "2.7.11.17", "2.7.11.18", "2.7.11.19",
+  "2.7.11.20", "2.7.11.21", "2.7.11.22", "2.7.11.23",
+  "2.7.11.24", "2.7.11.25", "2.7.11.26", "2.7.11.27",
+  "2.7.11.28", "2.7.11.29", "2.7.11.30", "2.7.11.31",
+  "2.7.12.1", "2.7.12.2", "2.7.13.1", "2.7.13.2", "2.7.13.3",
+  "2.7.99.1", "2.8.1.1", "2.8.1.2", "2.8.1.3", "2.8.1.4",
+  "2.8.1.5", "2.8.1.6", "2.8.1.7", "2.8.1.8", "2.8.2.1",
+  "2.8.2.2", "2.8.2.3", "2.8.2.4", "2.8.2.5", "2.8.2.6",
+  "2.8.2.7", "2.8.2.8", "2.8.2.9", "2.8.2.10", "2.8.2.11",
+  "2.8.2.13", "2.8.2.14", "2.8.2.15", "2.8.2.16", "2.8.2.17",
+  "2.8.2.18", "2.8.2.19", "2.8.2.20", "2.8.2.21", "2.8.2.22",
+  "2.8.2.23", "2.8.2.24", "2.8.2.25", "2.8.2.26", "2.8.2.27",
+  "2.8.2.28", "2.8.2.29", "2.8.2.30", "2.8.2.31", "2.8.2.32",
+  "2.8.2.33", "2.8.2.34", "2.8.3.1", "2.8.3.2", "2.8.3.3",
+  "2.8.3.5", "2.8.3.6", "2.8.3.7", "2.8.3.8", "2.8.3.9",
+  "2.8.3.10", "2.8.3.11", "2.8.3.12", "2.8.3.13", "2.8.3.14",
+  "2.8.3.15", "2.8.3.16", "2.8.3.17", "2.8.4.1", "2.9.1.1",
+  "3.1.1.1", "3.1.1.2", "3.1.1.3", "3.1.1.4", "3.1.1.5",
+  "3.1.1.6", "3.1.1.7", "3.1.1.8", "3.1.1.10", "3.1.1.11",
+  "3.1.1.13", "3.1.1.14", "3.1.1.15", "3.1.1.17", "3.1.1.19",
+  "3.1.1.20", "3.1.1.21", "3.1.1.22", "3.1.1.23", "3.1.1.24",
+  "3.1.1.25", "3.1.1.26", "3.1.1.27", "3.1.1.28", "3.1.1.29",
+  "3.1.1.30", "3.1.1.31", "3.1.1.32", "3.1.1.33", "3.1.1.34",
+  "3.1.1.35", "3.1.1.36", "3.1.1.37", "3.1.1.38", "3.1.1.39",
+  "3.1.1.40", "3.1.1.41", "3.1.1.42", "3.1.1.43", "3.1.1.44",
+  "3.1.1.45", "3.1.1.46", "3.1.1.47", "3.1.1.48", "3.1.1.49",
+  "3.1.1.50", "3.1.1.51", "3.1.1.52", "3.1.1.53", "3.1.1.54",
+  "3.1.1.55", "3.1.1.56", "3.1.1.57", "3.1.1.58", "3.1.1.59",
+  "3.1.1.60", "3.1.1.61", "3.1.1.63", "3.1.1.64", "3.1.1.65",
+  "3.1.1.66", "3.1.1.67", "3.1.1.68", "3.1.1.70", "3.1.1.71",
+  "3.1.1.72", "3.1.1.73", "3.1.1.74", "3.1.1.75", "3.1.1.76",
+  "3.1.1.77", "3.1.1.78", "3.1.1.79", "3.1.1.80", "3.1.1.81",
+  "3.1.1.82", "3.1.1.83", "3.1.2.1", "3.1.2.2", "3.1.2.3",
+  "3.1.2.4", "3.1.2.5", "3.1.2.6", "3.1.2.7", "3.1.2.10",
+  "3.1.2.11", "3.1.2.12", "3.1.2.13", "3.1.2.14", "3.1.2.15",
+  "3.1.2.16", "3.1.2.17", "3.1.2.18", "3.1.2.19", "3.1.2.20",
+  "3.1.2.21", "3.1.2.22", "3.1.2.23", "3.1.2.25", "3.1.2.26",
+  "3.1.2.27", "3.1.3.1", "3.1.3.2", "3.1.3.3", "3.1.3.4",
+  "3.1.3.5", "3.1.3.6", "3.1.3.7", "3.1.3.8", "3.1.3.9",
+  "3.1.3.10", "3.1.3.11", "3.1.3.12", "3.1.3.13", "3.1.3.14",
+  "3.1.3.15", "3.1.3.16", "3.1.3.17", "3.1.3.18", "3.1.3.19",
+  "3.1.3.20", "3.1.3.21", "3.1.3.22", "3.1.3.23", "3.1.3.24",
+  "3.1.3.25", "3.1.3.26", "3.1.3.27", "3.1.3.28", "3.1.3.29",
+  "3.1.3.31", "3.1.3.32", "3.1.3.33", "3.1.3.34", "3.1.3.35",
+  "3.1.3.36", "3.1.3.37", "3.1.3.38", "3.1.3.39", "3.1.3.40",
+  "3.1.3.41", "3.1.3.42", "3.1.3.43", "3.1.3.44", "3.1.3.45",
+  "3.1.3.46", "3.1.3.47", "3.1.3.48", "3.1.3.49", "3.1.3.50",
+  "3.1.3.51", "3.1.3.52", "3.1.3.53", "3.1.3.54", "3.1.3.55",
+  "3.1.3.56", "3.1.3.57", "3.1.3.58", "3.1.3.59", "3.1.3.60",
+  "3.1.3.62", "3.1.3.63", "3.1.3.64", "3.1.3.66", "3.1.3.67",
+  "3.1.3.68", "3.1.3.69", "3.1.3.70", "3.1.3.71", "3.1.3.72",
+  "3.1.3.73", "3.1.3.74", "3.1.3.75", "3.1.3.76", "3.1.3.77",
+  "3.1.4.1", "3.1.4.2", "3.1.4.3", "3.1.4.4", "3.1.4.11",
+  "3.1.4.12", "3.1.4.13", "3.1.4.14", "3.1.4.15", "3.1.4.16",
+  "3.1.4.17", "3.1.4.35", "3.1.4.37", "3.1.4.38", "3.1.4.39",
+  "3.1.4.40", "3.1.4.41", "3.1.4.42", "3.1.4.43", "3.1.4.44",
+  "3.1.4.45", "3.1.4.46", "3.1.4.48", "3.1.4.49", "3.1.4.50",
+  "3.1.4.51", "3.1.4.52", "3.1.4.53", "3.1.5.1", "3.1.6.1",
+  "3.1.6.2", "3.1.6.3", "3.1.6.4", "3.1.6.6", "3.1.6.7",
+  "3.1.6.8", "3.1.6.9", "3.1.6.10", "3.1.6.11", "3.1.6.12",
+  "3.1.6.13", "3.1.6.14", "3.1.6.15", "3.1.6.16", "3.1.6.17",
+  "3.1.6.18", "3.1.7.1", "3.1.7.2", "3.1.7.3", "3.1.7.4",
+  "3.1.8.1", "3.1.8.2", "3.1.11.1", "3.1.11.2", "3.1.11.3",
+  "3.1.11.4", "3.1.11.5", "3.1.11.6", "3.1.13.1", "3.1.13.2",
+  "3.1.13.3", "3.1.13.4", "3.1.13.5", "3.1.14.1", "3.1.15.1",
+  "3.1.16.1", "3.1.21.1", "3.1.21.2", "3.1.21.3", "3.1.21.4",
+  "3.1.21.5", "3.1.21.6", "3.1.21.7", "3.1.22.1", "3.1.22.2",
+  "3.1.22.4", "3.1.22.5", "3.1.25.1", "3.1.26.1", "3.1.26.2",
+  "3.1.26.3", "3.1.26.4", "3.1.26.5", "3.1.26.6", "3.1.26.7",
+  "3.1.26.8", "3.1.26.9", "3.1.26.10", "3.1.26.11",
+  "3.1.26.12", "3.1.27.1", "3.1.27.2", "3.1.27.3", "3.1.27.4",
+  "3.1.27.5", "3.1.27.6", "3.1.27.7", "3.1.27.8", "3.1.27.9",
+  "3.1.27.10", "3.1.30.1", "3.1.30.2", "3.1.31.1", "3.2.1.1",
+  "3.2.1.2", "3.2.1.3", "3.2.1.4", "3.2.1.6", "3.2.1.7",
+  "3.2.1.8", "3.2.1.10", "3.2.1.11", "3.2.1.14", "3.2.1.15",
+  "3.2.1.17", "3.2.1.18", "3.2.1.20", "3.2.1.21", "3.2.1.22",
+  "3.2.1.23", "3.2.1.24", "3.2.1.25", "3.2.1.26", "3.2.1.28",
+  "3.2.1.31", "3.2.1.32", "3.2.1.33", "3.2.1.35", "3.2.1.36",
+  "3.2.1.37", "3.2.1.38", "3.2.1.39", "3.2.1.40", "3.2.1.41",
+  "3.2.1.42", "3.2.1.43", "3.2.1.44", "3.2.1.45", "3.2.1.46",
+  "3.2.1.47", "3.2.1.48", "3.2.1.49", "3.2.1.50", "3.2.1.51",
+  "3.2.1.52", "3.2.1.53", "3.2.1.54", "3.2.1.55", "3.2.1.56",
+  "3.2.1.57", "3.2.1.58", "3.2.1.59", "3.2.1.60", "3.2.1.61",
+  "3.2.1.62", "3.2.1.63", "3.2.1.64", "3.2.1.65", "3.2.1.66",
+  "3.2.1.67", "3.2.1.68", "3.2.1.70", "3.2.1.71", "3.2.1.72",
+  "3.2.1.73", "3.2.1.74", "3.2.1.75", "3.2.1.76", "3.2.1.77",
+  "3.2.1.78", "3.2.1.80", "3.2.1.81", "3.2.1.82", "3.2.1.83",
+  "3.2.1.84", "3.2.1.85", "3.2.1.86", "3.2.1.87", "3.2.1.88",
+  "3.2.1.89", "3.2.1.91", "3.2.1.92", "3.2.1.93", "3.2.1.94",
+  "3.2.1.95", "3.2.1.96", "3.2.1.97", "3.2.1.98", "3.2.1.99",
+  "3.2.1.100", "3.2.1.101", "3.2.1.102", "3.2.1.103",
+  "3.2.1.104", "3.2.1.105", "3.2.1.106", "3.2.1.107",
+  "3.2.1.108", "3.2.1.109", "3.2.1.110", "3.2.1.111",
+  "3.2.1.112", "3.2.1.113", "3.2.1.114", "3.2.1.115",
+  "3.2.1.116", "3.2.1.117", "3.2.1.118", "3.2.1.119",
+  "3.2.1.120", "3.2.1.121", "3.2.1.122", "3.2.1.123",
+  "3.2.1.124", "3.2.1.125", "3.2.1.126", "3.2.1.127",
+  "3.2.1.128", "3.2.1.129", "3.2.1.130", "3.2.1.131",
+  "3.2.1.132", "3.2.1.133", "3.2.1.134", "3.2.1.135",
+  "3.2.1.136", "3.2.1.137", "3.2.1.139", "3.2.1.140",
+  "3.2.1.141", "3.2.1.142", "3.2.1.143", "3.2.1.144",
+  "3.2.1.145", "3.2.1.146", "3.2.1.147", "3.2.1.149",
+  "3.2.1.150", "3.2.1.151", "3.2.1.152", "3.2.1.153",
+  "3.2.1.154", "3.2.1.155", "3.2.1.156", "3.2.1.157",
+  "3.2.1.158", "3.2.1.159", "3.2.1.160", "3.2.1.161",
+  "3.2.1.162", "3.2.1.163", "3.2.1.164", "3.2.1.165",
+  "3.2.2.1", "3.2.2.2", "3.2.2.3", "3.2.2.4", "3.2.2.5",
+  "3.2.2.6", "3.2.2.7", "3.2.2.8", "3.2.2.9", "3.2.2.10",
+  "3.2.2.11", "3.2.2.12", "3.2.2.13", "3.2.2.14", "3.2.2.15",
+  "3.2.2.16", "3.2.2.17", "3.2.2.19", "3.2.2.20", "3.2.2.21",
+  "3.2.2.22", "3.2.2.23", "3.2.2.24", "3.2.2.25", "3.3.1.1",
+  "3.3.1.2", "3.3.2.1", "3.3.2.2", "3.3.2.4", "3.3.2.5",
+  "3.3.2.6", "3.3.2.7", "3.3.2.8", "3.3.2.9", "3.3.2.10",
+  "3.3.2.11", "3.4.11.1", "3.4.11.2", "3.4.11.3", "3.4.11.4",
+  "3.4.11.5", "3.4.11.6", "3.4.11.7", "3.4.11.9", "3.4.11.10",
+  "3.4.11.13", "3.4.11.14", "3.4.11.15", "3.4.11.16",
+  "3.4.11.17", "3.4.11.18", "3.4.11.19", "3.4.11.20",
+  "3.4.11.21", "3.4.11.22", "3.4.11.23", "3.4.11.24",
+  "3.4.13.3", "3.4.13.4", "3.4.13.5", "3.4.13.7", "3.4.13.9",
+  "3.4.13.12", "3.4.13.17", "3.4.13.18", "3.4.13.19",
+  "3.4.13.20", "3.4.13.21", "3.4.13.22", "3.4.14.1",
+  "3.4.14.2", "3.4.14.4", "3.4.14.5", "3.4.14.6", "3.4.14.9",
+  "3.4.14.10", "3.4.14.11", "3.4.14.12", "3.4.15.1",
+  "3.4.15.4", "3.4.15.5", "3.4.15.6", "3.4.16.2", "3.4.16.4",
+  "3.4.16.5", "3.4.16.6", "3.4.17.1", "3.4.17.2", "3.4.17.3",
+  "3.4.17.4", "3.4.17.6", "3.4.17.8", "3.4.17.10",
+  "3.4.17.11", "3.4.17.12", "3.4.17.13", "3.4.17.14",
+  "3.4.17.15", "3.4.17.16", "3.4.17.17", "3.4.17.18",
+  "3.4.17.19", "3.4.17.20", "3.4.17.21", "3.4.17.22",
+  "3.4.18.1", "3.4.19.1", "3.4.19.2", "3.4.19.3", "3.4.19.5",
+  "3.4.19.6", "3.4.19.7", "3.4.19.9", "3.4.19.11",
+  "3.4.19.12", "3.4.21.1", "3.4.21.2", "3.4.21.3", "3.4.21.4",
+  "3.4.21.5", "3.4.21.6", "3.4.21.7", "3.4.21.9", "3.4.21.10",
+  "3.4.21.12", "3.4.21.19", "3.4.21.20", "3.4.21.21",
+  "3.4.21.22", "3.4.21.25", "3.4.21.26", "3.4.21.27",
+  "3.4.21.32", "3.4.21.34", "3.4.21.35", "3.4.21.36",
+  "3.4.21.37", "3.4.21.38", "3.4.21.39", "3.4.21.41",
+  "3.4.21.42", "3.4.21.43", "3.4.21.45", "3.4.21.46",
+  "3.4.21.47", "3.4.21.48", "3.4.21.49", "3.4.21.50",
+  "3.4.21.53", "3.4.21.54", "3.4.21.55", "3.4.21.57",
+  "3.4.21.59", "3.4.21.60", "3.4.21.61", "3.4.21.62",
+  "3.4.21.63", "3.4.21.64", "3.4.21.65", "3.4.21.66",
+  "3.4.21.67", "3.4.21.68", "3.4.21.69", "3.4.21.70",
+  "3.4.21.71", "3.4.21.72", "3.4.21.73", "3.4.21.74",
+  "3.4.21.75", "3.4.21.76", "3.4.21.77", "3.4.21.78",
+  "3.4.21.79", "3.4.21.80", "3.4.21.81", "3.4.21.82",
+  "3.4.21.83", "3.4.21.84", "3.4.21.85", "3.4.21.86",
+  "3.4.21.88", "3.4.21.89", "3.4.21.90", "3.4.21.91",
+  "3.4.21.92", "3.4.21.93", "3.4.21.94", "3.4.21.95",
+  "3.4.21.96", "3.4.21.97", "3.4.21.98", "3.4.21.99",
+  "3.4.21.100", "3.4.21.101", "3.4.21.102", "3.4.21.103",
+  "3.4.21.104", "3.4.21.105", "3.4.21.106", "3.4.21.107",
+  "3.4.21.108", "3.4.21.109", "3.4.21.110", "3.4.21.111",
+  "3.4.21.112", "3.4.21.113", "3.4.21.114", "3.4.21.115",
+  "3.4.21.116", "3.4.21.117", "3.4.21.118", "3.4.21.119",
+  "3.4.21.120", "3.4.22.1", "3.4.22.2", "3.4.22.3",
+  "3.4.22.6", "3.4.22.7", "3.4.22.8", "3.4.22.10",
+  "3.4.22.14", "3.4.22.15", "3.4.22.16", "3.4.22.24",
+  "3.4.22.25", "3.4.22.26", "3.4.22.27", "3.4.22.28",
+  "3.4.22.29", "3.4.22.30", "3.4.22.31", "3.4.22.32",
+  "3.4.22.33", "3.4.22.34", "3.4.22.35", "3.4.22.36",
+  "3.4.22.37", "3.4.22.38", "3.4.22.39", "3.4.22.40",
+  "3.4.22.41", "3.4.22.42", "3.4.22.43", "3.4.22.44",
+  "3.4.22.45", "3.4.22.46", "3.4.22.47", "3.4.22.48",
+  "3.4.22.49", "3.4.22.50", "3.4.22.51", "3.4.22.52",
+  "3.4.22.53", "3.4.22.54", "3.4.22.55", "3.4.22.56",
+  "3.4.22.57", "3.4.22.58", "3.4.22.59", "3.4.22.60",
+  "3.4.22.61", "3.4.22.62", "3.4.22.63", "3.4.22.64",
+  "3.4.22.65", "3.4.22.66", "3.4.22.67", "3.4.22.68",
+  "3.4.23.1", "3.4.23.2", "3.4.23.3", "3.4.23.4", "3.4.23.5",
+  "3.4.23.12", "3.4.23.15", "3.4.23.16", "3.4.23.17",
+  "3.4.23.18", "3.4.23.19", "3.4.23.20", "3.4.23.21",
+  "3.4.23.22", "3.4.23.23", "3.4.23.24", "3.4.23.25",
+  "3.4.23.26", "3.4.23.28", "3.4.23.29", "3.4.23.30",
+  "3.4.23.31", "3.4.23.32", "3.4.23.34", "3.4.23.35",
+  "3.4.23.36", "3.4.23.38", "3.4.23.39", "3.4.23.40",
+  "3.4.23.41", "3.4.23.42", "3.4.23.43", "3.4.23.44",
+  "3.4.23.45", "3.4.23.46", "3.4.23.47", "3.4.23.48",
+  "3.4.23.49", "3.4.24.1", "3.4.24.3", "3.4.24.6", "3.4.24.7",
+  "3.4.24.11", "3.4.24.12", "3.4.24.13", "3.4.24.14",
+  "3.4.24.15", "3.4.24.16", "3.4.24.17", "3.4.24.18",
+  "3.4.24.19", "3.4.24.20", "3.4.24.21", "3.4.24.22",
+  "3.4.24.23", "3.4.24.24", "3.4.24.25", "3.4.24.26",
+  "3.4.24.27", "3.4.24.28", "3.4.24.29", "3.4.24.30",
+  "3.4.24.31", "3.4.24.32", "3.4.24.33", "3.4.24.34",
+  "3.4.24.35", "3.4.24.36", "3.4.24.37", "3.4.24.38",
+  "3.4.24.39", "3.4.24.40", "3.4.24.41", "3.4.24.42",
+  "3.4.24.43", "3.4.24.44", "3.4.24.45", "3.4.24.46",
+  "3.4.24.47", "3.4.24.48", "3.4.24.49", "3.4.24.50",
+  "3.4.24.51", "3.4.24.52", "3.4.24.53", "3.4.24.54",
+  "3.4.24.55", "3.4.24.56", "3.4.24.57", "3.4.24.58",
+  "3.4.24.59", "3.4.24.60", "3.4.24.61", "3.4.24.62",
+  "3.4.24.63", "3.4.24.64", "3.4.24.65", "3.4.24.66",
+  "3.4.24.67", "3.4.24.68", "3.4.24.69", "3.4.24.70",
+  "3.4.24.71", "3.4.24.72", "3.4.24.73", "3.4.24.74",
+  "3.4.24.75", "3.4.24.76", "3.4.24.77", "3.4.24.78",
+  "3.4.24.79", "3.4.24.80", "3.4.24.81", "3.4.24.82",
+  "3.4.24.83", "3.4.24.84", "3.4.24.85", "3.4.24.86",
+  "3.4.25.1", "3.5.1.1", "3.5.1.2", "3.5.1.3", "3.5.1.4",
+  "3.5.1.5", "3.5.1.6", "3.5.1.7", "3.5.1.8", "3.5.1.9",
+  "3.5.1.10", "3.5.1.11", "3.5.1.12", "3.5.1.13", "3.5.1.14",
+  "3.5.1.15", "3.5.1.16", "3.5.1.17", "3.5.1.18", "3.5.1.19",
+  "3.5.1.20", "3.5.1.21", "3.5.1.22", "3.5.1.23", "3.5.1.24",
+  "3.5.1.25", "3.5.1.26", "3.5.1.27", "3.5.1.28", "3.5.1.29",
+  "3.5.1.30", "3.5.1.31", "3.5.1.32", "3.5.1.33", "3.5.1.35",
+  "3.5.1.36", "3.5.1.38", "3.5.1.39", "3.5.1.40", "3.5.1.41",
+  "3.5.1.42", "3.5.1.43", "3.5.1.44", "3.5.1.46", "3.5.1.47",
+  "3.5.1.48", "3.5.1.49", "3.5.1.50", "3.5.1.51", "3.5.1.52",
+  "3.5.1.53", "3.5.1.54", "3.5.1.55", "3.5.1.56", "3.5.1.57",
+  "3.5.1.58", "3.5.1.59", "3.5.1.60", "3.5.1.61", "3.5.1.62",
+  "3.5.1.63", "3.5.1.64", "3.5.1.65", "3.5.1.66", "3.5.1.67",
+  "3.5.1.68", "3.5.1.69", "3.5.1.70", "3.5.1.71", "3.5.1.72",
+  "3.5.1.73", "3.5.1.74", "3.5.1.75", "3.5.1.76", "3.5.1.77",
+  "3.5.1.78", "3.5.1.79", "3.5.1.81", "3.5.1.82", "3.5.1.83",
+  "3.5.1.84", "3.5.1.85", "3.5.1.86", "3.5.1.87", "3.5.1.88",
+  "3.5.1.89", "3.5.1.90", "3.5.1.91", "3.5.1.92", "3.5.1.93",
+  "3.5.1.94", "3.5.1.95", "3.5.1.96", "3.5.1.97", "3.5.1.98",
+  "3.5.2.1", "3.5.2.2", "3.5.2.3", "3.5.2.4", "3.5.2.5",
+  "3.5.2.6", "3.5.2.7", "3.5.2.9", "3.5.2.10", "3.5.2.11",
+  "3.5.2.12", "3.5.2.13", "3.5.2.14", "3.5.2.15", "3.5.2.16",
+  "3.5.2.17", "3.5.2.18", "3.5.3.1", "3.5.3.2", "3.5.3.3",
+  "3.5.3.4", "3.5.3.5", "3.5.3.6", "3.5.3.7", "3.5.3.8",
+  "3.5.3.9", "3.5.3.10", "3.5.3.11", "3.5.3.12", "3.5.3.13",
+  "3.5.3.14", "3.5.3.15", "3.5.3.16", "3.5.3.17", "3.5.3.18",
+  "3.5.3.19", "3.5.3.20", "3.5.3.21", "3.5.3.22", "3.5.3.23",
+  "3.5.4.1", "3.5.4.2", "3.5.4.3", "3.5.4.4", "3.5.4.5",
+  "3.5.4.6", "3.5.4.7", "3.5.4.8", "3.5.4.9", "3.5.4.10",
+  "3.5.4.11", "3.5.4.12", "3.5.4.13", "3.5.4.14", "3.5.4.15",
+  "3.5.4.16", "3.5.4.17", "3.5.4.18", "3.5.4.19", "3.5.4.20",
+  "3.5.4.21", "3.5.4.22", "3.5.4.23", "3.5.4.24", "3.5.4.25",
+  "3.5.4.26", "3.5.4.27", "3.5.4.28", "3.5.4.29", "3.5.4.30",
+  "3.5.5.1", "3.5.5.2", "3.5.5.4", "3.5.5.5", "3.5.5.6",
+  "3.5.5.7", "3.5.5.8", "3.5.99.1", "3.5.99.2", "3.5.99.3",
+  "3.5.99.4", "3.5.99.5", "3.5.99.6", "3.5.99.7", "3.6.1.1",
+  "3.6.1.2", "3.6.1.3", "3.6.1.5", "3.6.1.6", "3.6.1.7",
+  "3.6.1.8", "3.6.1.9", "3.6.1.10", "3.6.1.11", "3.6.1.12",
+  "3.6.1.13", "3.6.1.14", "3.6.1.15", "3.6.1.16", "3.6.1.17",
+  "3.6.1.18", "3.6.1.19", "3.6.1.20", "3.6.1.21", "3.6.1.22",
+  "3.6.1.23", "3.6.1.24", "3.6.1.25", "3.6.1.26", "3.6.1.27",
+  "3.6.1.28", "3.6.1.29", "3.6.1.30", "3.6.1.31", "3.6.1.39",
+  "3.6.1.40", "3.6.1.41", "3.6.1.42", "3.6.1.43", "3.6.1.44",
+  "3.6.1.45", "3.6.1.52", "3.6.2.1", "3.6.2.2", "3.6.3.1",
+  "3.6.3.2", "3.6.3.3", "3.6.3.4", "3.6.3.5", "3.6.3.6",
+  "3.6.3.7", "3.6.3.8", "3.6.3.9", "3.6.3.10", "3.6.3.11",
+  "3.6.3.12", "3.6.3.14", "3.6.3.15", "3.6.3.16", "3.6.3.17",
+  "3.6.3.18", "3.6.3.19", "3.6.3.20", "3.6.3.21", "3.6.3.22",
+  "3.6.3.23", "3.6.3.24", "3.6.3.25", "3.6.3.26", "3.6.3.27",
+  "3.6.3.28", "3.6.3.29", "3.6.3.30", "3.6.3.31", "3.6.3.32",
+  "3.6.3.33", "3.6.3.34", "3.6.3.35", "3.6.3.36", "3.6.3.37",
+  "3.6.3.38", "3.6.3.39", "3.6.3.40", "3.6.3.41", "3.6.3.42",
+  "3.6.3.43", "3.6.3.44", "3.6.3.46", "3.6.3.47", "3.6.3.48",
+  "3.6.3.49", "3.6.3.50", "3.6.3.51", "3.6.3.52", "3.6.3.53",
+  "3.6.4.1", "3.6.4.2", "3.6.4.3", "3.6.4.4", "3.6.4.5",
+  "3.6.4.6", "3.6.4.7", "3.6.4.8", "3.6.4.9", "3.6.4.10",
+  "3.6.4.11", "3.6.5.1", "3.6.5.2", "3.6.5.3", "3.6.5.4",
+  "3.6.5.5", "3.6.5.6", "3.7.1.1", "3.7.1.2", "3.7.1.3",
+  "3.7.1.4", "3.7.1.5", "3.7.1.6", "3.7.1.7", "3.7.1.8",
+  "3.7.1.9", "3.7.1.10", "3.8.1.1", "3.8.1.2", "3.8.1.3",
+  "3.8.1.5", "3.8.1.6", "3.8.1.7", "3.8.1.8", "3.8.1.9",
+  "3.8.1.10", "3.8.1.11", "3.9.1.1", "3.10.1.1", "3.10.1.2",
+  "3.11.1.1", "3.11.1.2", "3.11.1.3", "3.12.1.1", "3.13.1.1",
+  "3.13.1.3", "4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4",
+  "4.1.1.5", "4.1.1.6", "4.1.1.7", "4.1.1.8", "4.1.1.9",
+  "4.1.1.11", "4.1.1.12", "4.1.1.14", "4.1.1.15", "4.1.1.16",
+  "4.1.1.17", "4.1.1.18", "4.1.1.19", "4.1.1.20", "4.1.1.21",
+  "4.1.1.22", "4.1.1.23", "4.1.1.24", "4.1.1.25", "4.1.1.28",
+  "4.1.1.29", "4.1.1.30", "4.1.1.31", "4.1.1.32", "4.1.1.33",
+  "4.1.1.34", "4.1.1.35", "4.1.1.36", "4.1.1.37", "4.1.1.38",
+  "4.1.1.39", "4.1.1.40", "4.1.1.41", "4.1.1.42", "4.1.1.43",
+  "4.1.1.44", "4.1.1.45", "4.1.1.46", "4.1.1.47", "4.1.1.48",
+  "4.1.1.49", "4.1.1.50", "4.1.1.51", "4.1.1.52", "4.1.1.53",
+  "4.1.1.54", "4.1.1.55", "4.1.1.56", "4.1.1.57", "4.1.1.58",
+  "4.1.1.59", "4.1.1.60", "4.1.1.61", "4.1.1.62", "4.1.1.63",
+  "4.1.1.64", "4.1.1.65", "4.1.1.66", "4.1.1.67", "4.1.1.68",
+  "4.1.1.69", "4.1.1.70", "4.1.1.71", "4.1.1.72", "4.1.1.73",
+  "4.1.1.74", "4.1.1.75", "4.1.1.76", "4.1.1.77", "4.1.1.78",
+  "4.1.1.79", "4.1.1.80", "4.1.1.81", "4.1.1.82", "4.1.1.83",
+  "4.1.1.84", "4.1.1.85", "4.1.1.86", "4.1.2.2", "4.1.2.4",
+  "4.1.2.5", "4.1.2.8", "4.1.2.9", "4.1.2.10", "4.1.2.11",
+  "4.1.2.12", "4.1.2.13", "4.1.2.14", "4.1.2.17", "4.1.2.18",
+  "4.1.2.19", "4.1.2.20", "4.1.2.21", "4.1.2.22", "4.1.2.23",
+  "4.1.2.24", "4.1.2.25", "4.1.2.26", "4.1.2.27", "4.1.2.28",
+  "4.1.2.29", "4.1.2.30", "4.1.2.32", "4.1.2.33", "4.1.2.34",
+  "4.1.2.35", "4.1.2.36", "4.1.2.37", "4.1.2.38", "4.1.2.40",
+  "4.1.2.41", "4.1.2.42", "4.1.3.1", "4.1.3.3", "4.1.3.4",
+  "4.1.3.6", "4.1.3.13", "4.1.3.14", "4.1.3.16", "4.1.3.17",
+  "4.1.3.22", "4.1.3.24", "4.1.3.25", "4.1.3.26", "4.1.3.27",
+  "4.1.3.30", "4.1.3.32", "4.1.3.34", "4.1.3.35", "4.1.3.36",
+  "4.1.3.38", "4.1.3.39", "4.1.3.40", "4.1.99.1", "4.1.99.2",
+  "4.1.99.3", "4.1.99.5", "4.1.99.11", "4.1.99.12", "4.2.1.1",
+  "4.2.1.2", "4.2.1.3", "4.2.1.4", "4.2.1.5", "4.2.1.6",
+  "4.2.1.7", "4.2.1.8", "4.2.1.9", "4.2.1.10", "4.2.1.11",
+  "4.2.1.12", "4.2.1.17", "4.2.1.18", "4.2.1.19", "4.2.1.20",
+  "4.2.1.22", "4.2.1.24", "4.2.1.25", "4.2.1.27", "4.2.1.28",
+  "4.2.1.30", "4.2.1.31", "4.2.1.32", "4.2.1.33", "4.2.1.34",
+  "4.2.1.35", "4.2.1.36", "4.2.1.39", "4.2.1.40", "4.2.1.41",
+  "4.2.1.42", "4.2.1.43", "4.2.1.44", "4.2.1.45", "4.2.1.46",
+  "4.2.1.47", "4.2.1.48", "4.2.1.49", "4.2.1.50", "4.2.1.51",
+  "4.2.1.52", "4.2.1.53", "4.2.1.54", "4.2.1.55", "4.2.1.56",
+  "4.2.1.57", "4.2.1.58", "4.2.1.59", "4.2.1.60", "4.2.1.61",
+  "4.2.1.62", "4.2.1.65", "4.2.1.66", "4.2.1.67", "4.2.1.68",
+  "4.2.1.69", "4.2.1.70", "4.2.1.73", "4.2.1.74", "4.2.1.75",
+  "4.2.1.76", "4.2.1.77", "4.2.1.78", "4.2.1.79", "4.2.1.80",
+  "4.2.1.81", "4.2.1.82", "4.2.1.83", "4.2.1.84", "4.2.1.85",
+  "4.2.1.87", "4.2.1.88", "4.2.1.89", "4.2.1.90", "4.2.1.91",
+  "4.2.1.92", "4.2.1.93", "4.2.1.94", "4.2.1.95", "4.2.1.96",
+  "4.2.1.97", "4.2.1.98", "4.2.1.99", "4.2.1.100",
+  "4.2.1.101", "4.2.1.103", "4.2.1.104", "4.2.1.105",
+  "4.2.1.106", "4.2.1.107", "4.2.1.108", "4.2.1.109",
+  "4.2.1.110", "4.2.1.111", "4.2.1.112", "4.2.1.113",
+  "4.2.2.1", "4.2.2.2", "4.2.2.3", "4.2.2.5", "4.2.2.6",
+  "4.2.2.7", "4.2.2.8", "4.2.2.9", "4.2.2.10", "4.2.2.11",
+  "4.2.2.12", "4.2.2.13", "4.2.2.14", "4.2.2.15", "4.2.2.16",
+  "4.2.2.17", "4.2.2.18", "4.2.2.19", "4.2.2.20", "4.2.2.21",
+  "4.2.2.22", "4.2.3.1", "4.2.3.2", "4.2.3.3", "4.2.3.4",
+  "4.2.3.5", "4.2.3.6", "4.2.3.7", "4.2.3.8", "4.2.3.9",
+  "4.2.3.10", "4.2.3.11", "4.2.3.12", "4.2.3.13", "4.2.3.14",
+  "4.2.3.15", "4.2.3.16", "4.2.3.17", "4.2.3.18", "4.2.3.19",
+  "4.2.3.20", "4.2.3.21", "4.2.3.22", "4.2.3.23", "4.2.3.24",
+  "4.2.3.25", "4.2.3.26", "4.2.3.27", "4.2.3.28", "4.2.3.29",
+  "4.2.3.30", "4.2.3.31", "4.2.3.32", "4.2.3.33", "4.2.3.34",
+  "4.2.3.35", "4.2.3.36", "4.2.99.12", "4.2.99.18",
+  "4.2.99.20", "4.3.1.1", "4.3.1.2", "4.3.1.3", "4.3.1.4",
+  "4.3.1.6", "4.3.1.7", "4.3.1.9", "4.3.1.10", "4.3.1.12",
+  "4.3.1.13", "4.3.1.14", "4.3.1.15", "4.3.1.16", "4.3.1.17",
+  "4.3.1.18", "4.3.1.19", "4.3.1.20", "4.3.1.22", "4.3.1.23",
+  "4.3.1.24", "4.3.1.25", "4.3.2.1", "4.3.2.2", "4.3.2.3",
+  "4.3.2.4", "4.3.2.5", "4.3.3.1", "4.3.3.2", "4.3.3.3",
+  "4.3.3.4", "4.4.1.1", "4.4.1.2", "4.4.1.3", "4.4.1.4",
+  "4.4.1.5", "4.4.1.6", "4.4.1.8", "4.4.1.9", "4.4.1.10",
+  "4.4.1.11", "4.4.1.13", "4.4.1.14", "4.4.1.15", "4.4.1.16",
+  "4.4.1.17", "4.4.1.19", "4.4.1.20", "4.4.1.21", "4.4.1.22",
+  "4.4.1.23", "4.4.1.24", "4.4.1.25", "4.5.1.1", "4.5.1.2",
+  "4.5.1.3", "4.5.1.4", "4.5.1.5", "4.6.1.1", "4.6.1.2",
+  "4.6.1.6", "4.6.1.12", "4.6.1.13", "4.6.1.14", "4.6.1.15",
+  "4.99.1.1", "4.99.1.2", "4.99.1.3", "4.99.1.4", "4.99.1.5",
+  "4.99.1.6", "4.99.1.7", "5.1.1.1", "5.1.1.2", "5.1.1.3",
+  "5.1.1.4", "5.1.1.5", "5.1.1.6", "5.1.1.7", "5.1.1.8",
+  "5.1.1.9", "5.1.1.10", "5.1.1.11", "5.1.1.12", "5.1.1.13",
+  "5.1.1.14", "5.1.1.15", "5.1.1.16", "5.1.1.17", "5.1.1.18",
+  "5.1.2.1", "5.1.2.2", "5.1.2.3", "5.1.2.4", "5.1.2.5",
+  "5.1.2.6", "5.1.3.1", "5.1.3.2", "5.1.3.3", "5.1.3.4",
+  "5.1.3.5", "5.1.3.6", "5.1.3.7", "5.1.3.8", "5.1.3.9",
+  "5.1.3.10", "5.1.3.11", "5.1.3.12", "5.1.3.13", "5.1.3.14",
+  "5.1.3.15", "5.1.3.16", "5.1.3.17", "5.1.3.18", "5.1.3.19",
+  "5.1.3.20", "5.1.3.21", "5.1.3.22", "5.1.3.23", "5.1.99.1",
+  "5.1.99.2", "5.1.99.3", "5.1.99.4", "5.2.1.1", "5.2.1.2",
+  "5.2.1.3", "5.2.1.4", "5.2.1.5", "5.2.1.6", "5.2.1.7",
+  "5.2.1.8", "5.2.1.9", "5.2.1.10", "5.3.1.1", "5.3.1.3",
+  "5.3.1.4", "5.3.1.5", "5.3.1.6", "5.3.1.7", "5.3.1.8",
+  "5.3.1.9", "5.3.1.12", "5.3.1.13", "5.3.1.14", "5.3.1.15",
+  "5.3.1.16", "5.3.1.17", "5.3.1.20", "5.3.1.21", "5.3.1.22",
+  "5.3.1.23", "5.3.1.24", "5.3.1.25", "5.3.1.26", "5.3.2.1",
+  "5.3.2.2", "5.3.3.1", "5.3.3.2", "5.3.3.3", "5.3.3.4",
+  "5.3.3.5", "5.3.3.6", "5.3.3.7", "5.3.3.8", "5.3.3.9",
+  "5.3.3.10", "5.3.3.11", "5.3.3.12", "5.3.3.13", "5.3.3.14",
+  "5.3.3.15", "5.3.4.1", "5.3.99.2", "5.3.99.3", "5.3.99.4",
+  "5.3.99.5", "5.3.99.6", "5.3.99.7", "5.3.99.8", "5.3.99.9",
+  "5.4.1.1", "5.4.1.2", "5.4.2.1", "5.4.2.2", "5.4.2.3",
+  "5.4.2.4", "5.4.2.5", "5.4.2.6", "5.4.2.7", "5.4.2.8",
+  "5.4.2.9", "5.4.2.10", "5.4.3.2", "5.4.3.3", "5.4.3.4",
+  "5.4.3.5", "5.4.3.6", "5.4.3.7", "5.4.3.8", "5.4.4.1",
+  "5.4.4.2", "5.4.4.3", "5.4.99.1", "5.4.99.2", "5.4.99.3",
+  "5.4.99.4", "5.4.99.5", "5.4.99.7", "5.4.99.8", "5.4.99.9",
+  "5.4.99.11", "5.4.99.12", "5.4.99.13", "5.4.99.14",
+  "5.4.99.15", "5.4.99.16", "5.4.99.17", "5.4.99.18",
+  "5.5.1.1", "5.5.1.2", "5.5.1.3", "5.5.1.4", "5.5.1.5",
+  "5.5.1.6", "5.5.1.7", "5.5.1.8", "5.5.1.9", "5.5.1.10",
+  "5.5.1.11", "5.5.1.12", "5.5.1.13", "5.5.1.14", "5.5.1.15",
+  "5.5.1.16", "5.99.1.1", "5.99.1.2", "5.99.1.3", "6.1.1.1",
+  "6.1.1.2", "6.1.1.3", "6.1.1.4", "6.1.1.5", "6.1.1.6",
+  "6.1.1.7", "6.1.1.9", "6.1.1.10", "6.1.1.11", "6.1.1.12",
+  "6.1.1.13", "6.1.1.14", "6.1.1.15", "6.1.1.16", "6.1.1.17",
+  "6.1.1.18", "6.1.1.19", "6.1.1.20", "6.1.1.21", "6.1.1.22",
+  "6.1.1.23", "6.1.1.24", "6.1.1.25", "6.1.1.26", "6.2.1.1",
+  "6.2.1.2", "6.2.1.3", "6.2.1.4", "6.2.1.5", "6.2.1.6",
+  "6.2.1.7", "6.2.1.8", "6.2.1.9", "6.2.1.10", "6.2.1.11",
+  "6.2.1.12", "6.2.1.13", "6.2.1.14", "6.2.1.15", "6.2.1.16",
+  "6.2.1.17", "6.2.1.18", "6.2.1.19", "6.2.1.20", "6.2.1.22",
+  "6.2.1.23", "6.2.1.24", "6.2.1.25", "6.2.1.26", "6.2.1.27",
+  "6.2.1.28", "6.2.1.30", "6.2.1.31", "6.2.1.32", "6.2.1.33",
+  "6.2.1.34", "6.3.1.1", "6.3.1.2", "6.3.1.4", "6.3.1.5",
+  "6.3.1.6", "6.3.1.7", "6.3.1.8", "6.3.1.9", "6.3.1.10",
+  "6.3.1.11", "6.3.1.12", "6.3.2.1", "6.3.2.2", "6.3.2.3",
+  "6.3.2.4", "6.3.2.5", "6.3.2.6", "6.3.2.7", "6.3.2.8",
+  "6.3.2.9", "6.3.2.10", "6.3.2.11", "6.3.2.12", "6.3.2.13",
+  "6.3.2.14", "6.3.2.16", "6.3.2.17", "6.3.2.18", "6.3.2.19",
+  "6.3.2.20", "6.3.2.21", "6.3.2.22", "6.3.2.23", "6.3.2.24",
+  "6.3.2.25", "6.3.2.26", "6.3.2.27", "6.3.2.28", "6.3.2.29",
+  "6.3.2.30", "6.3.3.1", "6.3.3.2", "6.3.3.3", "6.3.3.4",
+  "6.3.4.1", "6.3.4.2", "6.3.4.3", "6.3.4.4", "6.3.4.5",
+  "6.3.4.6", "6.3.4.7", "6.3.4.8", "6.3.4.9", "6.3.4.10",
+  "6.3.4.11", "6.3.4.12", "6.3.4.13", "6.3.4.14", "6.3.4.15",
+  "6.3.4.16", "6.3.4.17", "6.3.4.18", "6.3.5.1", "6.3.5.2",
+  "6.3.5.3", "6.3.5.4", "6.3.5.5", "6.3.5.6", "6.3.5.7",
+  "6.3.5.9", "6.3.5.10", "6.4.1.1", "6.4.1.2", "6.4.1.3",
+  "6.4.1.4", "6.4.1.5", "6.4.1.6", "6.4.1.7", "6.5.1.1",
+  "6.5.1.2", "6.5.1.3", "6.5.1.4", "6.6.1.1", "6.6.1.2",
   NULL
 };
 
@@ -16029,25 +16554,27 @@ static void ValidateRptUnit (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
     ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Illegal value for qualifier %s", gbqual->qual);
   }
   */
-  if (StringICmp (key,"repeat_region") == 0) {
-    if (! multi_rpt_unit) {
-      if (StringLen (gbqual->val) == SeqLocLen (sfp->location)) {
-        just_nuc_letters = TRUE;
-        for (ptr = gbqual->val, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
-          if (StringChr ("ACGTNacgtn", ch) == NULL) {
-            just_nuc_letters = FALSE;
-          }
-        }
-        if (just_nuc_letters) {
-          tmp = GetSequenceByFeature (sfp);
-          if (tmp != NULL) {
-            if (StringICmp (tmp, gbqual->val) != 0) {
-              ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidQualifierValue, "repeat_region /rpt_unit and underlying sequence do not match");
-            }
-            MemFree (tmp);
-          }
+  if (StringICmp (key,"repeat_region") == 0 && qual == GBQUAL_rpt_unit_seq && ! multi_rpt_unit) {
+    if (StringLen (gbqual->val) <= SeqLocLen (sfp->location)) {
+      just_nuc_letters = TRUE;
+      for (ptr = gbqual->val, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+        if (StringChr ("ACGTNacgtn", ch) == NULL) {
+          just_nuc_letters = FALSE;
         }
       }
+      if (just_nuc_letters) {
+        tmp = GetSequenceByFeature (sfp);
+        if (tmp != NULL) {
+          if (StringISearch (tmp, gbqual->val) == NULL) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_InvalidQualifierValue, "repeat_region /rpt_unit and underlying sequence do not match");
+          }
+          MemFree (tmp);
+        }
+      } else {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_InvalidQualifierValue, "rpt_unit_seq qualifier contains invalid characters");
+      }
+    } else {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_InvalidQualifierValue, "Length of rpt_unit_seq is greater than feature length");
     }
   }
 
@@ -16105,7 +16632,6 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
   GeneRefPtr      grp;
   Int2            i;
   Int2            index;
-  Boolean         isGenBankEMBLorDDBJ;
   Boolean         just_nuc_letters;
   Boolean         just_prt_letters;
   CharPtr         key;
@@ -16421,9 +16947,7 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
             } else if (adv != 0) {
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "%s is not a legal accession for qualifier %s", gbqual->val, gbqual->qual);
             } else if (StringChr (gbqual->val, '_') != NULL) {
-              isGenBankEMBLorDDBJ = FALSE;
-              VisitBioseqsInSep (vsp->sep, (Pointer) &isGenBankEMBLorDDBJ, LookForGEDseqID);
-              if (isGenBankEMBLorDDBJ) {
+              if (vsp->is_insd_in_sep) {
                 ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "RefSeq accession %s cannot be used for qualifier %s", gbqual->val, gbqual->qual);
               }
             }
@@ -16504,7 +17028,6 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
   GBQualPtr  gbqual;
   Int2       i;
   Int2       index;
-  Boolean    isGenBankEMBLorDDBJ;
   CharPtr    key;
   Boolean    multi_compare;
   Boolean    no_white_space;
@@ -16639,9 +17162,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
             } else if (adv != 0) {
               ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "%s is not a legal accession for qualifier %s", gbqual->val, gbqual->qual);
             } else if (StringChr (gbqual->val, '_') != NULL) {
-              isGenBankEMBLorDDBJ = FALSE;
-              VisitBioseqsInSep (vsp->sep, (Pointer) &isGenBankEMBLorDDBJ, LookForGEDseqID);
-              if (isGenBankEMBLorDDBJ) {
+              if (vsp->is_insd_in_sep) {
                 ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "RefSeq accession %s cannot be used for qualifier %s", gbqual->val, gbqual->qual);
               }
             }
@@ -16652,6 +17173,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
   }
   if (index != -1 && ParFlat_GBFeat[index].mand_num > 0) {
     for (i = 0; i < ParFlat_GBFeat[index].mand_num; i++) {
+      sev = SEV_WARNING;
       found = FALSE;
       qual = ParFlat_GBFeat[index].mand_qual[i];
       for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
@@ -16692,6 +17214,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
       }
       if (!found) {
         if (qual == GBQUAL_ncRNA_class) {
+          sev = SEV_ERROR;
           if (sfp->data.choice == SEQFEAT_RNA) {
             rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
             if (rrp != NULL) {
@@ -16708,9 +17231,7 @@ static void ValidateNonImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFea
         }
       }
       if (!found) {
-        ValidErr (vsp, 
-                  StringCmp (key, "ncRNA") == 0 ? SEV_INFO : SEV_WARNING, 
-                  ERR_SEQ_FEAT_MissingQualOnFeature, 
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_MissingQualOnFeature, 
                   "Missing qualifier %s for feature %s", ParFlat_GBQual_names[qual].name, key);
       }
     }
@@ -17112,6 +17633,7 @@ static void CheckTrnaCodons (
   CharPtr         three_letter_aa = NULL;
   ValNodePtr      vnp;
   CharPtr         wobble = NULL;
+  Boolean         rna_editing = FALSE;
 
   if (vsp == NULL || gcp == NULL || sfp == NULL || trp == NULL) return;
 
@@ -17200,6 +17722,10 @@ static void CheckTrnaCodons (
     }
   }
 
+  if (StringCmp (sfp->except_text, "RNA editing") == 0) {
+    rna_editing = TRUE;
+  }
+
   /* loop through codon_recognized array */
 
   for (j = 0; j < 6; j++) {
@@ -17211,6 +17737,9 @@ static void CheckTrnaCodons (
       ValidErr (vsp, sev, ERR_SEQ_FEAT_BadTrnaCodon,
                 "tRNA codon value %d is greater than maximum 63",
                 (int) (index));
+      continue;
+    }
+    if (rna_editing) {
       continue;
     }
 
@@ -17469,6 +17998,66 @@ static Boolean NucAndProtNotInNPS (BioseqPtr nuc, BioseqPtr prot)
   return FALSE;
 }
 
+static Boolean CDS5primePartialTest (
+  SeqFeatPtr sfp
+)
+
+{
+  BioseqPtr  nbsp;
+  SeqLocPtr  slp = NULL;
+
+  if (sfp == NULL) return FALSE;
+  nbsp = BioseqFindFromSeqLoc (sfp->location);
+  if (nbsp != NULL) {
+    slp = SeqLocFindNext (sfp->location, NULL);
+    if (slp != NULL) {
+      if (SeqLocStrand (slp) == Seq_strand_minus) {
+        if (SeqLocStop (slp) == nbsp->length - 1) {
+          return TRUE;
+        }
+      } else {
+        if (SeqLocStart (slp) == 0) {
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+static Boolean CDS3primePartialTest (
+  SeqFeatPtr sfp
+)
+
+{
+  BioseqPtr  nbsp;
+  SeqLocPtr  last = NULL;
+  SeqLocPtr  slp = NULL;
+
+  if (sfp == NULL) return FALSE;
+  nbsp = BioseqFindFromSeqLoc (sfp->location);
+  if (nbsp != NULL) {
+    last = NULL;
+    slp = SeqLocFindNext (sfp->location, NULL);
+    while (slp != NULL) {
+      last = slp;
+      slp = SeqLocFindNext (sfp->location, last);
+    }
+    if (last != NULL) {
+      if (SeqLocStrand (last) == Seq_strand_minus) {
+        if (SeqLocStart (last) == 0) {
+          return TRUE;
+        }
+      } else {
+        if (SeqLocStop (last) == nbsp->length - 1) {
+          return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
 static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
 
 {
@@ -17478,6 +18067,7 @@ static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
   Boolean            partial5;
   Boolean            partial3;
   SeqDescrPtr        sdp;
+  ErrSev             sev;
 
   if (vsp == NULL || sfp == NULL) return;
   if (sfp->product == NULL) return;
@@ -17504,7 +18094,11 @@ static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 5' complete but protein is NH2 partial");
       }
       if (partial3) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 3' partial but protein is NH2 partial");
+        sev = SEV_ERROR;
+        if (CDS3primePartialTest (sfp)) {
+          sev = SEV_WARNING;
+        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "CDS is 3' partial but protein is NH2 partial");
       }
       break;
     case 4 : /* no-right */
@@ -17512,15 +18106,27 @@ static void CheckCDSPartial (ValidStructPtr vsp, SeqFeatPtr sfp)
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 3' complete but protein is CO2 partial");
       }
       if (partial5) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 5' partial but protein is CO2 partial");
+        sev = SEV_ERROR;
+        if (CDS5primePartialTest (sfp)) {
+          sev = SEV_WARNING;
+        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "CDS is 5' partial but protein is CO2 partial");
       }
       break;
     case 5 : /* no-ends */
       if (partial5 && partial3) {
       } else if (partial5) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 5' partial but protein has neither end");
+        sev = SEV_ERROR;
+        if (CDS5primePartialTest (sfp)) {
+          sev = SEV_WARNING;
+        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "CDS is 5' partial but protein has neither end");
       } else if (partial3) {
-        ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is 3' partial but protein has neither end");
+        sev = SEV_ERROR;
+        if (CDS3primePartialTest (sfp)) {
+          sev = SEV_WARNING;
+        }
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_PartialProblem, "CDS is 3' partial but protein has neither end");
       } else {
         ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_PartialProblem, "CDS is complete but protein has neither end");
       }
@@ -17736,13 +18342,44 @@ static void CheckForBadGeneOverlap (ValidStructPtr vsp, SeqFeatPtr sfp)
 }
 
 static void CheckForBadMRNAOverlap (ValidStructPtr vsp, SeqFeatPtr sfp)
+
 {
-  SeqMgrFeatContext fcontext;
-  SeqFeatPtr      mrna;
-  ErrSev          sev = /* SEV_ERROR */ SEV_WARNING;
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  fcontext;
+  SeqFeatPtr         gene = NULL;
+  GeneRefPtr         grp;
+  SeqFeatPtr         mrna;
+  Boolean            pseudo = FALSE;
+  ErrSev             sev = /* SEV_ERROR */ SEV_WARNING;
 
   if (sfp == NULL)
     return;
+
+  if (sfp->pseudo) {
+    pseudo = TRUE;
+  }
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) {
+    if (SeqMgrGeneIsSuppressed (grp)) {
+    } else {
+      if (grp->pseudo) return;
+      bsp = BioseqFindFromSeqLoc (sfp->location);
+      if (bsp != NULL) {
+        if (StringDoesHaveText (grp->locus_tag)) {
+          gene = SeqMgrGetGeneByLocusTag (bsp, grp->locus_tag, &fcontext);
+        } else if (StringDoesHaveText (grp->locus)) {
+          gene = SeqMgrGetFeatureByLabel (bsp, grp->locus_tag, SEQFEAT_GENE, 0, &fcontext);
+        }
+        if (gene != NULL) {
+          grp = (GeneRefPtr) gene->data.value.ptrvalue;
+          if (grp != NULL && grp->pseudo) {
+            pseudo = TRUE;
+          }
+        }
+      }
+    }
+  }
+
   mrna = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_mRNA, NULL, 0, NULL, SIMPLE_OVERLAP, &fcontext);
   if (mrna == NULL)
     return;
@@ -17761,10 +18398,18 @@ static void CheckForBadMRNAOverlap (ValidStructPtr vsp, SeqFeatPtr sfp)
   mrna = SeqMgrGetOverlappingFeature (sfp->location, FEATDEF_mRNA, NULL, 0, NULL, LOCATION_SUBSET, &fcontext);
   if (mrna != NULL) {
     if (StringISearch (sfp->except_text, "ribosomal slippage") == NULL && StringISearch (sfp->except_text, "trans-splicing") == NULL) {
-      ValidErr (vsp, sev, ERR_SEQ_FEAT_CDSmRNArange, "mRNA contains CDS but internal intron-exon boundaries do not match");
+      if (pseudo) {
+        ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PseudoCDSmRNArange, "mRNA contains CDS but internal intron-exon boundaries do not match");
+      } else {
+        ValidErr (vsp, sev, ERR_SEQ_FEAT_CDSmRNArange, "mRNA contains CDS but internal intron-exon boundaries do not match");
+      }
     }
   } else {
-    ValidErr (vsp, sev, ERR_SEQ_FEAT_CDSmRNArange, "mRNA overlaps or contains CDS but does not completely contain intervals");
+    if (pseudo) {
+      ValidErr (vsp, SEV_INFO, ERR_SEQ_FEAT_PseudoCDSmRNArange, "mRNA overlaps or contains CDS but does not completely contain intervals");
+    } else {
+      ValidErr (vsp, sev, ERR_SEQ_FEAT_CDSmRNArange, "mRNA overlaps or contains CDS but does not completely contain intervals");
+    }
   }
 }
 
@@ -17876,16 +18521,49 @@ static Boolean OverlappingGeneIsPseudo (SeqFeatPtr sfp)
 static void CheckForIllegalDbxref (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, ValNodePtr dbxref)
 
 {
-  CharPtr     dbxerr;          
   DbtagPtr    db;
+  CharPtr     good;
   Int4        id;
+  Boolean     is_bc;
+  Boolean     is_rf;
+  Boolean     is_sc;
   ValNodePtr  vnp;
-  Boolean     valid;
 
   for (vnp = dbxref; vnp != NULL; vnp = vnp->next) {
     id = -1;
     db = (DbtagPtr) vnp->data.ptrvalue;
     if (db != NULL && db->db != NULL) {
+
+      if (DbxrefIsValid (db->db, &is_rf, &is_sc, &is_bc, &good)) {
+        if (is_bc) {
+          if (StringHasNoText (good)) {
+            good = "?";
+          }
+          if (is_sc && StringICmp (db->db, "taxon") == 0) {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "Illegal db_xref type %s, legal capitalization is %s, but should only be used on an OrgRef",
+                      db->db, good);
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "Illegal db_xref type %s, legal capitalization is %s",
+                      db->db, good);
+          }
+        } else if (is_rf) {
+          if (vsp->is_refseq_in_sep || vsp->is_gps_in_sep) {
+          } else {
+            ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                      "db_xref type %s is only legal for RefSeq", db->db);
+          }
+        } else if (is_sc && StringICmp (db->db, "taxon") == 0) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref,
+                    "db_xref type %s should only be used on an OrgRef", db->db);
+        } else {
+        }
+      } else {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, "Illegal db_xref type %s", db->db);
+      }
+
+      /*
       dbxerr = NULL;
       valid = IsDbxrefValid (db->db, sfp, NULL,
                              GPSorRefSeq (vsp->sep, sfp->location),
@@ -17893,7 +18571,8 @@ static void CheckForIllegalDbxref (ValidStructPtr vsp, GatherContextPtr gcp, Seq
       if (dbxerr != NULL) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_IllegalDbXref, dbxerr);
         dbxerr = MemFree (dbxerr);
-      }                 
+      }
+      */              
     }
   }
 }
@@ -18671,8 +19350,10 @@ static Boolean JustQuotes (CharPtr str)
 }
 
 typedef struct dummysmfedata {
-  Int4  max;
-  Int4  num_at_max;
+  Int4        max;
+  Int4        num_at_max;
+  Boolean     equivalent_genes;
+  GeneRefPtr  grp_at_max;
 } DummySmfeData, PNTR DummySmfePtr;
 
 static Boolean LIBCALLBACK DummySMFEProc (
@@ -18683,18 +19364,50 @@ static Boolean LIBCALLBACK DummySMFEProc (
 
 {
   DummySmfePtr  dsp;
+  GeneRefPtr    grp, grpx;
   Int4          len;
+  Boolean       redundantgenexref;
+  CharPtr       syn1, syn2;
 
   if (sfp == NULL || context == NULL) return TRUE;
   dsp = context->userdata;
   if (dsp == NULL) return TRUE;
+  if (sfp->data.choice != SEQFEAT_GENE) return TRUE;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return TRUE;
 
   len = SeqLocLen (sfp->location);
   if (len < dsp->max) {
     dsp->max = len;
     dsp->num_at_max = 1;
+    dsp->equivalent_genes = FALSE;
+    dsp->grp_at_max = grp;
   } else if (len == dsp->max) {
     (dsp->num_at_max)++;
+    grpx = dsp->grp_at_max;
+    if (grpx != NULL) {
+      redundantgenexref = FALSE;
+      if (StringDoesHaveText (grp->locus_tag) && StringDoesHaveText (grpx->locus_tag)) {
+        if (StringICmp (grp->locus_tag, grpx->locus_tag) == 0) {
+          redundantgenexref = TRUE;
+        }
+      } else if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grpx->locus)) {
+        if (StringICmp (grp->locus, grpx->locus) == 0) {
+          redundantgenexref = TRUE;
+        }
+      } else if (grp->syn != NULL && grpx->syn != NULL) {
+        syn1 = (CharPtr) grp->syn->data.ptrvalue;
+        syn2 = (CharPtr) grpx->syn->data.ptrvalue;
+        if (StringDoesHaveText (syn1) && StringDoesHaveText (syn2)) {
+          if (StringICmp (syn1, syn2) == 0) {
+            redundantgenexref = TRUE;
+          }
+        }
+      }
+    }
+    if (redundantgenexref) {
+      dsp->equivalent_genes = TRUE;
+    }
   }
 
   return TRUE;
@@ -19320,6 +20033,53 @@ static Boolean EndsWithHyphen (CharPtr str)
   return FALSE;
 }
 
+
+static Boolean CouldExtendPartial (SeqLocPtr slp, Boolean partial5)
+{
+  BioseqPtr bsp;
+  Int4      pos;
+  Uint1     strand;
+  Char      str[4];
+  Boolean   rval = FALSE;
+
+  if (slp == NULL) {
+    return FALSE;
+  }
+
+  bsp = BioseqFindFromSeqLoc (slp);
+  if (bsp == NULL) {
+    return FALSE;
+  }
+  strand = SeqLocStrand (slp);
+
+  if ((strand != Seq_strand_minus && partial5) || (strand == Seq_strand_minus && !partial5)) {
+    pos = SeqLocStart (slp);
+    if (pos < 2) {
+      rval = TRUE;
+    } else if (bsp->repr == Seq_repr_delta) {
+      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+      SeqPortStreamInt (bsp, pos - 3, pos - 1, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+      if (str[0] == '-' || str[1] == '-' || str[2] == '-') {
+        rval = TRUE;
+      }
+    }    
+  } else {
+    pos = SeqLocStop (slp);
+    if (pos > bsp->length - 2) {
+      rval = TRUE;
+    } else {
+      /* wasn't close to the sequence end, but perhaps it is close to a gap */
+      SeqPortStreamInt (bsp, pos + 1, pos + 3, Seq_strand_plus, EXPAND_GAPS_TO_DASHES, (Pointer) str, NULL);
+      if (str[0] == '-' || str[1] == '-' || str[2] == '-') {
+        rval = TRUE;
+      }
+    }
+  }
+
+  return rval;
+}
+
+
 NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
 {
   Int2            type, i, j;
@@ -19724,6 +20484,9 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       }
       if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grp->desc) && StringCmp (grp->locus, grp->desc) == 0) {
         ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene description has same value as gene locus");
+      }
+      if (StringHasNoText (grp->locus) && StringHasNoText (grp->desc) && grp->syn != NULL) {
+        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_UndesiredGeneSynonym, "gene synonym without gene locus or description");
       }
       /* - need to ignore if curated drosophila - add to vsp internal flags for efficiency?
       if (StringDoesHaveText (grp->locus)) {
@@ -20570,11 +21333,18 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       MemSet ((Pointer) &dsd, 0, sizeof (DummySmfeData));
       dsd.max = INT4_MAX;
       dsd.num_at_max = 0;
+      dsd.equivalent_genes = FALSE;
+      dsd.grp_at_max = NULL;
       count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_GENE, NULL, 0,
                                                LOCATION_SUBSET, (Pointer) &dsd, DummySMFEProc);
       if (dsd.num_at_max > 1) {
-        ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_MissingGeneXref,
-                  "Feature overlapped by %d identical-length genes but has no cross-reference", (int) dsd.num_at_max);
+        if (dsd.equivalent_genes) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_GeneXrefNeeded,
+                    "Feature overlapped by %d identical-length equivalent genes but has no cross-reference", (int) dsd.num_at_max);
+        } else {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_MissingGeneXref,
+                    "Feature overlapped by %d identical-length genes but has no cross-reference", (int) dsd.num_at_max);
+        }
       }
       return;
     }
@@ -20650,6 +21420,8 @@ NLM_EXTERN void ValidateSeqFeat (GatherContextPtr gcp)
       MemSet ((Pointer) &dsd, 0, sizeof (DummySmfeData));
       dsd.max = INT4_MAX;
       dsd.num_at_max = 0;
+      dsd.equivalent_genes = FALSE;
+      dsd.grp_at_max = NULL;
       count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_GENE, NULL, 0,
                                                LOCATION_SUBSET, (Pointer) &dsd, DummySMFEProc);
       if (dsd.num_at_max > 1) {
@@ -21274,7 +22046,7 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
     } else if (Loc_is_GEDL (sfp->location)) {
       sev = SEV_NONE;
     }
-    if (sfp->excpt && (! StringHasNoText (sfp->except_text))) {
+    if (sfp->excpt && StringDoesHaveText (sfp->except_text)) {
       if (StringStr (sfp->except_text, "alternative start codon") != NULL) {
         sev = SEV_NONE;
       }
@@ -21284,6 +22056,14 @@ NLM_EXTERN void CdTransCheck (ValidStructPtr vsp, SeqFeatPtr sfp)
       other_than_mismatch = TRUE;
       if (report_errors) {
         ValidErr (vsp, sev, ERR_SEQ_FEAT_AltStartCodon, "Alternative start codon used");
+      }
+    }
+  } else if (! alt_start) {
+    if (sfp->excpt && StringDoesHaveText (sfp->except_text)) {
+      if (StringStr (sfp->except_text, "alternative start codon") != NULL) {
+        if (Loc_is_RefSeq (sfp->location)) {
+          ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_AltStartCodon, "Unnecessary alternative start codon exception");
+        }
       }
     }
   }

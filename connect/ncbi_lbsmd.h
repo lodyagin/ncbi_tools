@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_LBSMD__H
 #define CONNECT___NCBI_LBSMD__H
 
-/*  $Id: ncbi_lbsmd.h,v 6.19 2008/09/04 12:55:44 kazimird Exp $
+/* $Id: ncbi_lbsmd.h,v 6.21 2009/02/03 16:39:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -77,6 +77,18 @@ extern NCBI_XCONNECT_EXPORT const char* LBSMD_GetConfig(void);
 extern NCBI_XCONNECT_EXPORT HEAP LBSMD_GetHeapCopy(TNCBI_Time time);
 
 
+/* Get a value of a host parameter from the LBSMD host environment.
+ * Return 0 if none found;  return heap-allocated string otherwise
+ * (the caller is responsible for calling free() when no longer needing it).
+ * Argument "host" can be either an IP address of the host to inquire about,
+ * or SERV_LOCALHOST(or 0) to get the information as defined for the current
+ * (local) host.
+ */
+extern NCBI_XCONNECT_EXPORT const char* LBSMD_GetHostParameter
+(unsigned int addr,
+ const char*  name);
+
+
 extern NCBI_XCONNECT_EXPORT ESwitch LBSMD_FastHeapAccess(ESwitch onoff);
 
 
@@ -93,6 +105,9 @@ int LBSM_HINFO_TaskCount(const HOST_INFO hinfo);
 
 
 int/*bool*/ LBSM_HINFO_Memusage(const HOST_INFO hinfo, double memusage[5]);
+
+
+int/*bool*/ LBSM_HINFO_MachineParams(const HOST_INFO hinfo, SHINFO_Params* p);
 
 
 int/*bool*/ LBSM_HINFO_LoadAverage(const HOST_INFO hinfo, double lavg[2]);

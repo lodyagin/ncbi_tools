@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.421 $
+* $Revision: 6.428 $
 *
 * File Description: 
 *
@@ -220,6 +220,9 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 #define REGISTER_GENOMEPROJSDBUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit GenomeProjectsDB User Desc","GenomeProjectsDB",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,GenomeProjectsDBUserGenFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK GenomeProjectsDBUserGenFunc (Pointer data);
 
+#define REGISTER_DBLINKUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit DBLink User Desc","DBLink",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,DBlinkUserGenFunc,PROC_PRIORITY_DEFAULT)
+extern Int2 LIBCALLBACK DBlinkUserGenFunc (Pointer data);
+
 #define REGISTER_TPAASSEMBLYUSER_DESC_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Assembly User Desc","TPA Assembly",OBJ_SEQDESC,Seq_descr_user,OBJ_SEQDESC,Seq_descr_user,NULL,AssemblyUserGenFunc,PROC_PRIORITY_DEFAULT)
 extern Int2 LIBCALLBACK AssemblyUserGenFunc (Pointer data);
 
@@ -248,6 +251,7 @@ extern Int2 LIBCALLBACK StruCommUserGenFunc (Pointer data);
 
 #define REGISTER_SEGREGATE_BY_ID ObjMgrProcLoadEx (OMPROC_FILTER, "Segregate By ID","SegregateByID",0,0,0,0,NULL,CreateSegregateByIdWindow,PROC_PRIORITY_DEFAULT, "Segregate")
 
+#define REGISTER_SEQUESTER_SETS ObjMgrProcLoadEx (OMPROC_FILTER, "Sequester", "Sequester",0,0,0,0,NULL,SequesterSequences, PROC_PRIORITY_DEFAULT, "Segregate")
 /* commands for Desktop SegmentedSets menu */
 #define REGISTER_CREATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Create Segmented Set", "CreateSegSet", 0,0,0,0,NULL,CreateSegSet, PROC_PRIORITY_DEFAULT, "SegmentedSets")
 #define REGISTER_UPDATESEGSET ObjMgrProcLoadEx (OMPROC_FILTER,"Update Segmented Set","UpdateSegSet",0,0,0,0,NULL,UpdateSegSet,PROC_PRIORITY_DEFAULT, "SegmentedSets")
@@ -2002,15 +2006,31 @@ static void DoRepairPartsSet (SeqEntryPtr sep)
   }
 }
 
-static Int2 LIBCALLBACK PackagePartsInPartsSet (Pointer data)
 
+static void RepackageParksInPartsSetForEntityID (Uint2 entityID)
 {
-  OMProcControlPtr  ompcp;
   ObjMgrDataPtr     omdptop;
   ObjMgrData        omdata;
   Uint2             parenttype;
   Pointer           parentptr;
   SeqEntryPtr       sep;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return;
+  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
+  GetSeqEntryParent (sep, &parentptr, &parenttype);
+  DoRepairPartsSet (sep);
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+}
+
+
+static Int2 LIBCALLBACK PackagePartsInPartsSet (Pointer data)
+
+{
+  OMProcControlPtr  ompcp;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -2025,17 +2045,24 @@ static Int2 LIBCALLBACK PackagePartsInPartsSet (Pointer data)
       return OM_MSG_RET_ERROR;
   }
   if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
-  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  if (sep == NULL) return OM_MSG_RET_ERROR;
-  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
-  GetSeqEntryParent (sep, &parentptr, &parenttype);
-  DoRepairPartsSet (sep);
-  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
-  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  RepackageParksInPartsSetForEntityID (ompcp->input_entityID);
   return OM_MSG_RET_DONE;
 }
+
+
+NLM_EXTERN void RepackagePartsMenuItem (IteM i)
+{
+  BaseFormPtr bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  RepackageParksInPartsSetForEntityID (bfp->input_entityID);
+}
+
 
 NLM_EXTERN void RemoveDupGenBankSets (SeqEntryPtr sep)
 
@@ -2573,31 +2600,26 @@ RemoveSetsInNucProtSet
   return rval;
 }
 
-static Int2 LIBCALLBACK RemoveSetsInSelectedSet (Pointer data)
+
+static Int2 LIBCALLBACK RemoveSetsInBioseqSet (BioseqSetPtr parent_bssp, Uint2 entityID)
 {
   ObjMgrDataPtr     omdptop;
   ObjMgrData        omdata;
-  OMProcControlPtr  ompcp;
   Uint2             top_parenttype;
   Pointer           top_parentptr;
   SeqEntryPtr       top_sep, this_sep, next_sep;
-  BioseqSetPtr      target_bssp, parent_bssp;
+  BioseqSetPtr      target_bssp;
   Boolean           need_locus_fixup = FALSE;
 
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL 
-      || ompcp->input_itemtype != OBJ_BIOSEQSET
-      || ompcp->input_data == NULL)
-  {
+
+  if (parent_bssp == NULL) {
     return OM_MSG_RET_ERROR;
   }
 
-  top_sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  top_sep = GetTopSeqEntryForEntityID (entityID);
   if (top_sep == NULL) return OM_MSG_RET_ERROR;
   SaveSeqEntryObjMgrData (top_sep, &omdptop, &omdata);
   GetSeqEntryParent (top_sep, &top_parentptr, &top_parenttype);
-
-  parent_bssp = (BioseqSetPtr) ompcp->input_data;
 
   if (parent_bssp->_class == BioseqseqSet_class_not_set
       || parent_bssp->_class == BioseqseqSet_class_segset
@@ -2608,7 +2630,7 @@ static Int2 LIBCALLBACK RemoveSetsInSelectedSet (Pointer data)
   }
   else if (parent_bssp->_class == BioseqseqSet_class_nuc_prot)
   {
-    if (! RemoveSetsInNucProtSet (parent_bssp, ompcp->input_entityID))
+    if (! RemoveSetsInNucProtSet (parent_bssp, entityID))
     {
       Message (MSG_ERROR, "Can't move sequences up into parent");
       return OM_MSG_RET_ERROR;
@@ -2630,11 +2652,11 @@ static Int2 LIBCALLBACK RemoveSetsInSelectedSet (Pointer data)
       target_bssp = (BioseqSetPtr) this_sep->data.ptrvalue;
       if (target_bssp->_class == BioseqseqSet_class_nuc_prot)
       {
-        need_locus_fixup |= RemoveSetsInNucProtSet (target_bssp, ompcp->input_entityID);
+        need_locus_fixup |= RemoveSetsInNucProtSet (target_bssp, entityID);
       }
       else if (target_bssp->_class == BioseqseqSet_class_segset)
       {
-        RemoveOneSegSet (this_sep, parent_bssp, target_bssp, ompcp->input_entityID);
+        RemoveOneSegSet (this_sep, parent_bssp, target_bssp, entityID);
       }
       else if (target_bssp->_class != BioseqseqSet_class_not_set
                && target_bssp->_class != BioseqseqSet_class_parts)
@@ -2655,36 +2677,64 @@ static Int2 LIBCALLBACK RemoveSetsInSelectedSet (Pointer data)
 
   SeqMgrLinkSeqEntry (top_sep, top_parenttype, top_parentptr);
     
-  SeqMgrClearFeatureIndexes (ompcp->input_entityID, NULL);
-  SeqMgrIndexFeatures (ompcp->input_entityID, NULL);
+  SeqMgrClearFeatureIndexes (entityID, NULL);
+  SeqMgrIndexFeatures (entityID, NULL);
 
   RestoreSeqEntryObjMgrData (top_sep, omdptop, &omdata);
   
-  SeqMgrClearFeatureIndexes (ompcp->input_entityID, NULL);
-  SeqMgrIndexFeatures (ompcp->input_entityID, NULL);
+  SeqMgrClearFeatureIndexes (entityID, NULL);
+  SeqMgrIndexFeatures (entityID, NULL);
 
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);    
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);    
 
-  ForceCleanupEntityID (ompcp->input_entityID);
+  ForceCleanupEntityID (entityID);
     
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);    
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);    
   
   return OM_MSG_RET_DONE;  
 }
 
-#if 0
-typedef struct denseg {
-    Int2 dim,
-        numseg;
-    SeqIdPtr ids;           /* dimension is dim */
-    Int4Ptr starts;			/* dimension is dim * numseg */
-    Int4Ptr lens;			/* dimension is numseg */
-    Uint1Ptr strands;		/* dimension is dim * numseg */
-    ScorePtr scores;		/* dimension is numseg */
-} DenseSeg, PNTR DenseSegPtr;
+static Int2 LIBCALLBACK RemoveSetsInSelectedSet (Pointer data)
+{
+  OMProcControlPtr  ompcp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL 
+      || ompcp->input_itemtype != OBJ_BIOSEQSET
+      || ompcp->input_data == NULL)
+  {
+    return OM_MSG_RET_ERROR;
+  }
+
+  return RemoveSetsInBioseqSet((BioseqSetPtr) ompcp->input_data, ompcp->input_entityID);
+
+}
+
+
+extern void RemoveSetsInSetMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
 #endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+  } else {
+    bssp = FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue);
+    RemoveSetsInBioseqSet(bssp, bfp->input_entityID);
+  }
+}
+
 
 static void DoPartSeqAlignToParent (DenseSegPtr dsp)
 
@@ -2947,6 +2997,26 @@ static Int2 LIBCALLBACK NoMoreSegGap (Pointer data)
   ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
   return OM_MSG_RET_DONE;
 }
+
+
+extern void GetRidOfSegGapMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  VisitAlignmentsInSep (sep, NULL, NoMoreSegGapForOneAlignment);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 
 static void SqnSeqAlignDeleteInSeqEntryCallBack (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
@@ -3616,20 +3686,17 @@ CreateSeqAnnotsForDiscontiguousAlignments
 }
 
 
-static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
+static Int2 LIBCALLBACK UpdateSeqAlignForSeqEntry (SeqEntryPtr sep)
 
 {
   Char              path [PATH_MAX];
   FILE              *fp;
-  OMProcControlPtr  ompcp;
   SeqAlignPtr       salp=NULL,
                     salpnew;
-  SeqEntryPtr       sep=NULL,
-                    sepnew=NULL;
+  SeqEntryPtr       sepnew=NULL;
   Uint2             entityID,
                     itemID;
   MsgAnswer         ans;
-  SeqSubmitPtr      ssp;
   Boolean           ok = TRUE, 
                     dirty = FALSE;
   TSequenceInfoPtr  sequence_info;
@@ -3642,33 +3709,6 @@ static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
   SeqAlignPtr       salp_copy;
   BioseqSetPtr      bssp = NULL;
    
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
-
-  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
-
-  switch(ompcp->input_itemtype)
-    {
-    case OBJ_BIOSEQ :
-      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
-      break;
-    case OBJ_BIOSEQSET :
-      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
-      bssp = (BioseqSetPtr) ompcp->input_data;
-      break;
-    case OBJ_SEQENTRY :
-      sep = ompcp->input_data;
-      break;
-    case OBJ_SEQSUB :
-      ssp = ompcp->input_data;
-      if(ssp->datatype==1)
-         sep = (SeqEntryPtr)ssp->data;
-      break;
-    case 0 :
-      return OM_MSG_RET_ERROR;
-    default :
-      return OM_MSG_RET_ERROR;
-  }
   if (sep==NULL)
      return OM_MSG_RET_ERROR;
   entityID = ObjMgrGetEntityIDForChoice (sep);
@@ -3763,6 +3803,70 @@ static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
     sepnew=NULL;
   }
   return OM_MSG_RET_OK;
+}
+
+static Int2 LIBCALLBACK NewUpdateSeqAlign (Pointer data)
+{
+  OMProcControlPtr ompcp;
+  SeqEntryPtr      sep = NULL;
+  BioseqSetPtr     bssp;
+  SeqSubmitPtr     ssp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+
+  if (ompcp->input_data == NULL) return OM_MSG_RET_ERROR;
+
+  switch(ompcp->input_itemtype)
+    {
+    case OBJ_BIOSEQ :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      break;
+    case OBJ_BIOSEQSET :
+      sep = SeqMgrGetSeqEntryForData (ompcp->input_data);
+      bssp = (BioseqSetPtr) ompcp->input_data;
+      break;
+    case OBJ_SEQENTRY :
+      sep = ompcp->input_data;
+      break;
+    case OBJ_SEQSUB :
+      ssp = ompcp->input_data;
+      if(ssp->datatype==1)
+         sep = (SeqEntryPtr)ssp->data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (sep==NULL)
+     return OM_MSG_RET_ERROR;
+
+  return UpdateSeqAlignForSeqEntry (sep);
+
+}
+
+extern void UpdateSeqAlignMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+  } else {
+    bssp = FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue);
+    sep = SeqMgrGetSeqEntryForData (bssp);
+    UpdateSeqAlignForSeqEntry (sep);
+  }
 }
 
 
@@ -5554,6 +5658,30 @@ extern Int2 AddSeqAlignForSeqEntry (SeqEntryPtr sep, Uint2 entityID, Boolean cho
   }
   FileRemove (path);
   return OM_MSG_RET_DONE;
+}
+
+
+extern void GenerateSeqAlignMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  BioseqSetPtr  bssp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+  } else {
+    bssp = FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue);
+    sep = SeqMgrGetSeqEntryForData (bssp);
+    AddSeqAlignForSeqEntry (sep, bfp->input_entityID, FALSE, TRUE);
+  }
 }
 
 static Int2 LIBCALLBACK 
@@ -9335,17 +9463,13 @@ static void DoRevComp (ButtoN b)
   bsp_list = ValNodeFree (bsp_list);
 }
 
-static Int2 LIBCALLBACK BioseqRevCompByID (Pointer data)
+static Int2 LIBCALLBACK BioseqRevCompByIDForEntityID (Uint2 entityID)
 
 {
-  OMProcControlPtr ompcp;
   GrouP            c;
   GrouP            h;
   RevCompByIdFrmPtr f;
   WindoW           w;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL) return OM_MSG_RET_ERROR;
 
   f = (RevCompByIdFrmPtr) MemNew (sizeof (RevCompByIdFrmData));
   if (f == NULL) return OM_MSG_RET_ERROR;
@@ -9354,7 +9478,7 @@ static Int2 LIBCALLBACK BioseqRevCompByID (Pointer data)
   f->form = (ForM) w;
   f->formmessage = NULL;
 
-  f->input_entityID = ompcp->input_entityID;
+  f->input_entityID = entityID;
 
   h = HiddenGroup (w, -1, 0, NULL);
   f->revcomp_seq = CheckBox (h, "Reverse complement sequence", ChangeRevComp);
@@ -9376,6 +9500,33 @@ static Int2 LIBCALLBACK BioseqRevCompByID (Pointer data)
   Show (w);
   Update ();
   return OM_MSG_RET_DONE;
+}
+
+
+static Int2 LIBCALLBACK BioseqRevCompByID (Pointer data)
+
+{
+  OMProcControlPtr ompcp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+
+  return BioseqRevCompByIDForEntityID (ompcp->input_entityID);
+}
+
+
+extern void BioseqRevCompByIDMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  BioseqRevCompByIDForEntityID (bfp->input_entityID);
 }
 
 
@@ -10994,6 +11145,7 @@ extern void SetupSequinFilters (void)
     REGISTER_SEQUIN_ACCN_TO_GI;
     REGISTER_SEQUIN_GI_TO_ACCN;
     REGISTER_GENOMEPROJSDBUSER_DESC_EDIT;
+    REGISTER_DBLINKUSER_DESC_EDIT;
     REGISTER_REFGENEUSER_DESC_EDIT;
     REGISTER_PROT_IDS_TO_GENE_SYN;
     REGISTER_COPY_MASTER_SOURCE_TO_SEGMENTS;
@@ -11079,6 +11231,7 @@ extern void SetupSequinFilters (void)
     REGISTER_REORDER_BY_ID;
     REGISTER_CONVERT_TO_DELTA;
     REGISTER_DELETE_BY_TEXT;
+    REGISTER_SEQUESTER_SETS;
     REGISTER_SEGREGATE_BY_ID;
     REGISTER_SEGREGATE_BY_MOLECULE_TYPE;
     REGISTER_SEGREGATE_BY_FEATURE;

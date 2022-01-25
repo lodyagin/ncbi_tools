@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.127 $
+* $Revision: 1.149 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -65,350 +65,12 @@
 
 /* URLs */
 
-NLM_EXTERN Char link_feat [MAX_WWWBUF];
-#define DEF_LINK_FEAT  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 
-NLM_EXTERN Char link_featc [MAX_WWWBUF];
-#define DEF_LINK_FEATC  "http://www.ncbi.nlm.nih.gov/entrez/viewer.cgi?"
+static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids=";
 
-NLM_EXTERN Char link_seq [MAX_WWWBUF];
-#define DEF_LINK_SEQ  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
+static CharPtr link_uspto = "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber=";
 
-NLM_EXTERN Char link_projid [MAX_WWWBUF];
-#define DEF_LINK_PROJID  "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids="
-
-NLM_EXTERN Char link_wgs [MAX_WWWBUF];
-#define DEF_LINK_WGS  "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?"
-
-NLM_EXTERN Char link_omim [MAX_WWWBUF];
-#define DEF_LINK_OMIM "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="
-
-NLM_EXTERN Char ref_link [MAX_WWWBUF];
-#define DEF_LINK_REF  "http://www.ncbi.nlm.nih.gov/RefSeq/"
-
-NLM_EXTERN Char nt_link [MAX_WWWBUF];
-#define DEF_LINK_NT  "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?view=graph&val="
-
-NLM_EXTERN Char doc_link [MAX_WWWBUF];
-#define DEF_LINK_DOC  "http://www.ncbi.nlm.nih.gov/genome/guide/build.shtml"
-
-NLM_EXTERN Char ev_link [MAX_WWWBUF];
-#define DEF_LINK_EV  "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?"
-
-NLM_EXTERN Char ec_link [MAX_WWWBUF];
-#define DEF_LINK_EC "http://www.expasy.org/cgi-bin/nicezyme.pl?"
-
-NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
-#define DEF_LINK_ECAMBIG "http://www.chem.qmw.ac.uk/iubmb/enzyme/"
-
-NLM_EXTERN Char link_tax [MAX_WWWBUF];
-#define DEF_LINK_TAX "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"
-
-NLM_EXTERN Char link_muid [MAX_WWWBUF];
-#define DEF_LINK_MUID  "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids="
-
-NLM_EXTERN Char link_code [MAX_WWWBUF];
-#define DEF_LINK_CODE "http://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?"
-
-NLM_EXTERN Char link_sp [MAX_WWWBUF];
-#define DEF_LINK_SP "http://www.uniprot.org/entry/"
-
-NLM_EXTERN Char link_encode [MAX_WWWBUF];
-#define DEF_LINK_ENCODE  "http://www.nhgri.nih.gov/10005107"
-
-NLM_EXTERN Char link_go [MAX_WWWBUF];
-#define DEF_LINK_GO "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query="
-
-NLM_EXTERN Char link_go_ref [MAX_WWWBUF];
-#define DEF_LINK_GO_REF "http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:"
-
-static Char link_ff [MAX_WWWBUF];
-#define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
-
-static Char link_ace [MAX_WWWBUF];
-#define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="
-
-static Char link_fly [MAX_WWWBUF];
-#define DEF_LINK_FLY "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
-
-static Char link_fly_fban [MAX_WWWBUF];
-#define DEF_LINK_FBAN "http://www.fruitfly.org/cgi-bin/annot/fban?"
-
-static Char link_fly_fbgn [MAX_WWWBUF];
-#define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
-
-static Char link_fly_fbst [MAX_WWWBUF];
-#define DEF_LINK_FBST "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
-
-static Char link_cog [MAX_WWWBUF];
-#define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="
-
-static Char link_sgd [MAX_WWWBUF];
-#define DEF_LINK_SGD "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="
-
-static Char link_gdb [MAX_WWWBUF];
-#define DEF_LINK_GDB "http://www.gdb.org/gdb-bin/genera/genera/hgd/DBObject/GDB:"
-
-static Char link_ck [MAX_WWWBUF];
-#define DEF_LINK_CK "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="
-
-static Char link_rice [MAX_WWWBUF];
-#define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="
-
-static Char link_pdb [MAX_WWWBUF];
-#define DEF_LINK_PDB "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="
-
-static Char link_UniSTS [MAX_WWWBUF];
-#define DEF_LINK_UniSTS "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="
-
-static Char link_dbSTS [MAX_WWWBUF];
-#define DEF_LINK_dbSTS "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
-
-static Char link_dbEST [MAX_WWWBUF];
-#define DEF_LINK_dbEST "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
-
-static Char link_locus [MAX_WWWBUF];
-#define DEF_LINK_LOCUS "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="
-
-static Char link_snp [MAX_WWWBUF];
-#define DEF_LINK_SNP "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="
-
-static Char link_ratmap [MAX_WWWBUF];
-#define DEF_LINK_RATMAP "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="
-
-static Char link_rgd [MAX_WWWBUF];
-#define DEF_LINK_RGD "http://rgd.mcw.edu/query/query.cgi?id="
-
-static Char link_mgd [MAX_WWWBUF];
-#define DEF_LINK_MGD "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"
-
-static Char link_cdd [MAX_WWWBUF];
-#define DEF_LINK_CDD "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="
-
-static Char link_niaest [MAX_WWWBUF];
-#define DEF_LINK_NIAEST "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="
-
-static Char link_worm_base [MAX_WWWBUF];
-#define DEF_LINK_WORM_BASE "http://www.wormbase.org/db/gene/gene?class=CDS;name="
-
-static Char link_worfdb [MAX_WWWBUF];
-#define DEF_LINK_WORFDB "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="
-
-static Char link_nextdb [MAX_WWWBUF];
-#define DEF_LINK_NEXTDB "http://nematode.lab.nig.ac.jp/cgi-bin/db/ShowGeneInfo.sh?celk="
-
-static Char link_imgt [MAX_WWWBUF];
-#define DEF_LINK_IMGT "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"
-
-static Char link_imgt_gene [MAX_WWWBUF];
-#define DEF_LINK_IMGT_GENE "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"
-
-static Char link_imgt_gene_hs [MAX_WWWBUF];
-#define DEF_LINK_IMGT_GENE_HS "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"
-
-static Char link_imgt_gene_mm [MAX_WWWBUF];
-#define DEF_LINK_IMGT_GENE_MM "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Mus+musculus&query=2+"
-
-static Char link_nbrc [MAX_WWWBUF];
-#define DEF_LINK_NBRC "http://www.nbrc.nite.go.jp/NBRC2/NBRCCatalogueDetailServlet?ID=NBRC&CAT="
-
-static Char link_jcm [MAX_WWWBUF];
-#define DEF_LINK_JCM "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="
-
-static Char link_isfinder [MAX_WWWBUF];
-#define DEF_LINK_ISFINDER "http://www-is.biotoul.fr/scripts/is/is_spec.idc?name="
-
-static Char link_gabi [MAX_WWWBUF];
-#define DEF_LINK_GABI "http://gabi.rzpd.de/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="
-
-static Char link_fantom [MAX_WWWBUF];
-#define DEF_LINK_FANTOM "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="
-
-static Char link_interpro [MAX_WWWBUF];
-#define DEF_LINK_INTERPRO "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="
-
-static Char link_genedb [MAX_WWWBUF];
-#define DEF_LINK_GENEDB "http://www.genedb.org/genedb/Dispatcher?formType=navBar&submit=Search+for&organism=All%3Apombe%3Acerevisiae%3Adicty%3Aasp%3Atryp%3Aleish%3Amalaria%3Astyphi%3Aglossina&desc=yes&ohmr=%2F&name="
-
-static Char link_geneid [MAX_WWWBUF];
-#define DEF_LINK_GENEID "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=Retrieve&dopt=full_report&list_uids="
-
-static Char link_zfin [MAX_WWWBUF];
-#define DEF_LINK_ZFIN "http://zfin.org/cgi-bin/webdriver?MIval=aa-markerview.apg&OID="
-
-static Char link_rebase [MAX_WWWBUF];
-#define DEF_LINK_REBASE "http://rebase.neb.com/rebase/enz/"
-
-static Char link_pgn [MAX_WWWBUF];
-#define DEF_LINK_PGN  "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="
-
-static Char link_subtilist [MAX_WWWBUF];
-#define DEF_LINK_SUBTILIST  "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"
-
-static Char link_hinvdb [MAX_WWWBUF];
-#define DEF_LINK_HINVDB "http://www.h-invitational.jp"
-
-static Char link_hinvdbhit [MAX_WWWBUF];
-#define DEF_LINK_HINVDBHIT "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=30&KEN_STR="
-
-static Char link_hinvdbhix [MAX_WWWBUF];
-#define DEF_LINK_HINVDBHIX "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=31&KEN_STR="
-
-static Char link_asap [MAX_WWWBUF];
-#define DEF_LINK_ASAP "https://asap.ahabs.wisc.edu/annotation/php/feature_info.php?FeatureID="
-
-static Char link_dicty [MAX_WWWBUF];
-#define DEF_LINK_DICTY "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="
-
-static Char link_maizegdb [MAX_WWWBUF];
-#define DEF_LINK_MAIZEGDB "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?id="
-
-static Char link_axeldb [MAX_WWWBUF];
-#define DEF_LINK_AXELDB "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="
-
-static Char link_vbase2 [MAX_WWWBUF];
-#define DEF_LINK_VBASE2 "http://www.dnaplot.de/vbase2/vgene.php?id="
-
-static Char link_ccds [MAX_WWWBUF];
-#define DEF_LINK_CCDS "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="
-
-static Char link_ecocyc [MAX_WWWBUF];
-#define DEF_LINK_ECOCYC "http://biocyc.org/ECOLI/new-image?type=GENE&object="
-
-static Char link_hssp [MAX_WWWBUF];
-#define DEF_LINK_HSSP "http://www.sander.ebi.ac.uk/hssp"
-
-static Char link_hgnc [MAX_WWWBUF];
-#define DEF_LINK_HGNC "http://www.genenames.org/data/hgnc_data.php?hgnc_id="
-
-static Char link_bold [MAX_WWWBUF];
-#define DEF_LINK_BOLD "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="
-
-static Char link_aftol [MAX_WWWBUF];
-#define DEF_LINK_AFTOL "http://aftol.biology.duke.edu/pub/displayTaxonInfo?aftol_id="
-
-static Char link_hprd [MAX_WWWBUF];
-#define DEF_LINK_HPRD "http://www.hprd.org/protein/"
-
-static Char link_uspto [MAX_WWWBUF];
-#define DEF_LINK_USPTO "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber="
-
-static Char link_cambia [MAX_WWWBUF];
-#define DEF_LINK_CAMBIA "http://www.patentlens.net/patentlens/simple.cgi?patnum="
-
-static Char link_vector [MAX_WWWBUF];
-#define DEF_LINK_VECTOR "http://www.vectorbase.org/Genome/BRCGene/?feature="
-
-static Char link_mirbase [MAX_WWWBUF];
-#define DEF_LINK_MIRBASE "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="
-
-static Char link_dbclone [MAX_WWWBUF];
-#define DEF_LINK_DBCLONE "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clone&cmd=Retrieve&list_uids="
-
-static Char link_dbclonelib [MAX_WWWBUF];
-#define DEF_LINK_DBCLONELIB "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clonelib&cmd=Retrieve&list_uids="
-
-static Char link_dbprobe [MAX_WWWBUF];
-#define DEF_LINK_DBPROBE "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=probe&cmd=Retrieve&list_uids="
-
-static Char link_isd [MAX_WWWBUF];
-#define DEF_LINK_ISD "http://www.flu.lanl.gov/search/view_record.html?accession="
-
-static Char link_grin [MAX_WWWBUF];
-#define DEF_LINK_GRIN "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"
-
-static Char link_eric [MAX_WWWBUF];
-#define DEF_LINK_ERIC "http://www.ericbrc.org/genbank/dbxref/"
-
-static Char link_pbr [MAX_WWWBUF];
-#define DEF_LINK_PBR "http://www.poxvirus.org/query.asp?web_id="
-
-static Char link_nmpdr [MAX_WWWBUF];
-#define DEF_LINK_NMPDR "http://www.nmpdr.org/linkin.cgi?id="
-
-static Char link_seed [MAX_WWWBUF];
-#define DEF_LINK_SEED "http://www.theseed.org/linkin.cgi?id="
-
-static Char link_ecogene [MAX_WWWBUF];
-#define DEF_LINK_ECOGENE "http://ecogene.org/geneInfo.php?eg_id="
-
-static Char link_tair [MAX_WWWBUF];
-#define DEF_LINK_TAIR "http://www.arabidopsis.org/servlets/TairObject?type=locus&name="
-
-static Char link_apidb [MAX_WWWBUF];
-#define DEF_LINK_APIDB "http://www.apidb.org/apidb/showRecord.do?name=GeneRecordClasses.ApiDBGeneRecordClass&primary_key="
-
-static Char link_apidb_cryptodb [MAX_WWWBUF];
-#define DEF_LINK_APIDB_CRYPTODB "http://cryptodb.org/cryptodb/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="
-
-static Char link_apidb_plasmodb [MAX_WWWBUF];
-#define DEF_LINK_APIDB_PLASMODB "http://www.plasmodb.org/plasmo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="
-
-static Char link_apidb_toxodb [MAX_WWWBUF];
-#define DEF_LINK_APIDB_TOXODB "http://www.toxodb.org/toxo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="
-
-static Char link_pathema [MAX_WWWBUF];
-/* #define DEF_LINK_PATHEMA "http://pathema.tigr.org/tigr-cripts/Burkholderia/shared/GenePage.cgi?all=1&locus=" */
-#define DEF_LINK_PATHEMA "http://pathema.jcvi.org/cgi-bin/Burkholderia/shared/GenePage.cgi?all=1&locus="
-
-/*
-static Char link_pathema_prefix [MAX_WWWBUF];
-#define DEF_LINK_PATHEMA_PREFIX "http://pathema.tigr.org/tigr-scripts/"
-
-static Char link_pathema_suffix [MAX_WWWBUF];
-#define DEF_LINK_PATHEMA_SUFFIX "/shared/GenePage.cgi?all=1&locus="
-*/
-
-static Char link_pfam [MAX_WWWBUF];
-#define DEF_LINK_PFAM "http://pfam.sanger.ac.uk/family?acc="
-
-static Char link_rfam [MAX_WWWBUF];
-#define DEF_LINK_RFAM "http://www.sanger.ac.uk/cgi-bin/Rfam/getacc?"
-
-static Char link_xenbase [MAX_WWWBUF];
-#define DEF_LINK_XENBASE "http://www.xenbase.org/gene/showgene.do?method=display&geneId="
-
-static Char link_nrestdb [MAX_WWWBUF];
-#define DEF_LINK_NRESTDB "http://genome.ukm.my/nrestdb/db/single_view_est.php?id="
-
-static Char link_tigrfam [MAX_WWWBUF];
-#define DEF_LINK_TIGRFAM "http://cmr.tigr.org/tigr-scripts/CMR/HmmReport.cgi?hmm_acc="
-
-static Char link_vbrc [MAX_WWWBUF];
-#define DEF_LINK_VBRC "http://vbrc.org/query.asp?web_view=curation&web_id="
-
-static Char link_bhb_acc_prefix [MAX_WWWBUF];
-#define DEF_LINK_BHB_ACC_PREFIX "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?decorator="
-
-static Char link_bhb_loc_prefix [MAX_WWWBUF];
-#define DEF_LINK_BHB_LOC_PREFIX "http://www.biohealthbase.org/GSearch/details.do?decorator="
-
-static Char link_bhb_acc_suffix [MAX_WWWBUF];
-#define DEF_LINK_BHB_ACC_SUFFIX "&ncbiGenomicAccession="
-
-static Char link_bhb_loc_suffix [MAX_WWWBUF];
-#define DEF_LINK_BHB_LOC_SUFFIX "&locus="
-
-static Char link_biohealthbase [MAX_WWWBUF];
-#define DEF_LINK_BIOHEALTHBASE "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?bhbSubmissionId="
-
-static Char link_atcc [MAX_WWWBUF];
-#define DEF_LINK_ATCC "http://www.atcc.org/SearchCatalogs/linkin?id="
-
-static Char link_unigene [MAX_WWWBUF];
-#define DEF_LINK_UNIGENE "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="
-
-static Char link_pseudocap [MAX_WWWBUF];
-#define DEF_LINK_PSEUDOCAP "http://www.pseudomonas.com/getAnnotation.do?locusID="
-
-static Char link_pbmice [MAX_WWWBUF];
-#define DEF_LINK_PBMICE "http://www.idmshanghai.cn/PBmice/DetailedSearch.do?type=insert&id="
-
-static Char link_rapdb [MAX_WWWBUF];
-#define DEF_LINK_RAPDB "http://rapdb.dna.affrc.go.jp/cgi-bin/gbrowse_details/latest?name="
-
-static Char link_osa1 [MAX_WWWBUF];
-#define DEF_LINK_OSA1 "http://rice.plantbiology.msu.edu/cgi-bin/gbrowse/rice/?name="
+static CharPtr link_cambia = "http://www.patentlens.net/patentlens/simple.cgi?patnum=";
 
 
 
@@ -425,124 +87,6 @@ NLM_EXTERN void FiniWWW (IntAsn2gbJobPtr ajp) {
 NLM_EXTERN void InitWWW (IntAsn2gbJobPtr ajp)
 {
   ajp->www = TRUE;
-
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEAT", DEF_LINK_FEAT, link_feat, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FEATC", DEF_LINK_FEATC, link_featc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEQ", DEF_LINK_SEQ, link_seq, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PROJID", DEF_LINK_PROJID, link_projid, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_WGS", DEF_LINK_WGS, link_wgs, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_OMIM", DEF_LINK_OMIM, link_omim, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_REF", DEF_LINK_REF, ref_link, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NT", DEF_LINK_NT, nt_link, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DOC", DEF_LINK_DOC, doc_link, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_EV", DEF_LINK_EV, ev_link, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_EC", DEF_LINK_EC, ec_link, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECAMBIG", DEF_LINK_ECAMBIG, ec_ambig, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FF", DEF_LINK_FF, link_ff, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MUID", DEF_LINK_MUID, link_muid, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ACE", DEF_LINK_ACE, link_ace, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_TAX", DEF_LINK_TAX, link_tax, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CODE", DEF_LINK_CODE, link_code, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FLY", DEF_LINK_FLY, link_fly, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_COG", DEF_LINK_COG, link_cog, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SGD", DEF_LINK_SGD, link_sgd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SGD", DEF_LINK_GDB, link_gdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CK", DEF_LINK_CK, link_ck, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RICE", DEF_LINK_RICE, link_rice, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SP", DEF_LINK_SP, link_sp, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PDB", DEF_LINK_PDB, link_pdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_OMIM", DEF_LINK_OMIM, link_omim, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_UniSTS", DEF_LINK_UniSTS, link_UniSTS, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_dbSTS", DEF_LINK_dbSTS, link_dbSTS, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_dbEST", DEF_LINK_dbEST, link_dbEST, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_LOCUS", DEF_LINK_LOCUS, link_locus, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SNP", DEF_LINK_SNP, link_snp, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RATMAP", DEF_LINK_RATMAP, link_ratmap, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RGD", DEF_LINK_RGD, link_rgd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MGD", DEF_LINK_MGD, link_mgd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBGN", DEF_LINK_FBGN, link_fly_fbgn, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBAN", DEF_LINK_FBAN, link_fly_fban, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FBST", DEF_LINK_FBST, link_fly_fbst, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CDD", DEF_LINK_CDD, link_cdd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NIAEST", DEF_LINK_NIAEST, link_niaest, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_WORM_BASE", DEF_LINK_WORM_BASE, link_worm_base, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_WORFDB", DEF_LINK_WORFDB, link_worfdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NEXTDB", DEF_LINK_NEXTDB, link_nextdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT", DEF_LINK_IMGT, link_imgt, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE", DEF_LINK_IMGT_GENE, link_imgt_gene, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE_HS", DEF_LINK_IMGT_GENE_HS, link_imgt_gene_hs, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_IMGT_GENE_MM", DEF_LINK_IMGT_GENE_MM, link_imgt_gene_mm, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NBRC", DEF_LINK_NBRC, link_nbrc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_JCM", DEF_LINK_JCM, link_jcm, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISFINDER", DEF_LINK_ISFINDER, link_isfinder, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GABI", DEF_LINK_GABI, link_gabi, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_FANTOM", DEF_LINK_FANTOM, link_fantom, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_INTERPRO", DEF_LINK_INTERPRO, link_interpro, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GENEDB", DEF_LINK_GENEDB, link_genedb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GENEID", DEF_LINK_GENEID, link_geneid, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ZFIN", DEF_LINK_ZFIN, link_zfin, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_REBASE", DEF_LINK_REBASE, link_rebase, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ENCODE", DEF_LINK_ENCODE, link_encode, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PGN", DEF_LINK_PGN, link_pgn, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SUBTILIST", DEF_LINK_SUBTILIST, link_subtilist, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GO", DEF_LINK_GO, link_go, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GO_REF", DEF_LINK_GO_REF, link_go_ref, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDB", DEF_LINK_HINVDB, link_hinvdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIT", DEF_LINK_HINVDBHIT, link_hinvdbhit, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HINVDBHIX", DEF_LINK_HINVDBHIX, link_hinvdbhix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ASAP", DEF_LINK_ASAP, link_asap, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DICTY", DEF_LINK_DICTY, link_dicty, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MAIZEGDB", DEF_LINK_MAIZEGDB, link_maizegdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_AXELDB", DEF_LINK_AXELDB, link_axeldb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBASE2", DEF_LINK_VBASE2, link_vbase2, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CCDS", DEF_LINK_CCDS, link_ccds, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECOCYC", DEF_LINK_ECOCYC, link_ecocyc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HSSP", DEF_LINK_HSSP, link_hssp, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HGNC", DEF_LINK_HGNC, link_hgnc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BOLD", DEF_LINK_BOLD, link_bold, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_AFTOL", DEF_LINK_AFTOL, link_aftol, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_HPRD", DEF_LINK_HPRD, link_hprd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_USPTO", DEF_LINK_USPTO, link_uspto, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_CAMBIA", DEF_LINK_CAMBIA, link_cambia, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VECTOR", DEF_LINK_VECTOR, link_vector, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_MIRBASE", DEF_LINK_MIRBASE, link_mirbase, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBCLONE", DEF_LINK_DBCLONE, link_dbclone, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBCLONELIB", DEF_LINK_DBCLONELIB, link_dbclonelib, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_DBPROBE", DEF_LINK_DBPROBE, link_dbprobe, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISD", DEF_LINK_ISD, link_isd, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GRIN", DEF_LINK_GRIN, link_grin, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ERIC", DEF_LINK_ERIC, link_eric, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PBR", DEF_LINK_PBR, link_pbr, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NMPDR", DEF_LINK_NMPDR, link_nmpdr, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_SEED", DEF_LINK_SEED, link_seed, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ECOGENE", DEF_LINK_ECOGENE, link_ecogene, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_TAIR", DEF_LINK_TAIR, link_tair, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB", DEF_LINK_APIDB, link_apidb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_CRYPTODB", DEF_LINK_APIDB_CRYPTODB, link_apidb_cryptodb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_PLASMODB", DEF_LINK_APIDB_PLASMODB, link_apidb_plasmodb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_APIDB_TOXODB", DEF_LINK_APIDB_TOXODB, link_apidb_toxodb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA", DEF_LINK_PATHEMA, link_pathema, MAX_WWWBUF);
-  /*
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_PREFIX", DEF_LINK_PATHEMA_PREFIX, link_pathema_prefix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PATHEMA_SUFFIX", DEF_LINK_PATHEMA_SUFFIX, link_pathema_suffix, MAX_WWWBUF);
-  */
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PFAM", DEF_LINK_PFAM, link_pfam, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RFAM", DEF_LINK_RFAM, link_rfam, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_XENBASE", DEF_LINK_XENBASE, link_xenbase, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_NRESTDB", DEF_LINK_NRESTDB, link_nrestdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_TIGRFAM", DEF_LINK_TIGRFAM, link_tigrfam, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_VBRC", DEF_LINK_VBRC, link_vbrc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_ACC_PREFIX", DEF_LINK_BHB_ACC_PREFIX, link_bhb_acc_prefix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_LOC_PREFIX", DEF_LINK_BHB_LOC_PREFIX, link_bhb_loc_prefix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_ACC_SUFFIX", DEF_LINK_BHB_ACC_SUFFIX, link_bhb_acc_suffix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BHB_LOC_SUFFIX", DEF_LINK_BHB_LOC_SUFFIX, link_bhb_loc_suffix, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_BIOHEALTHBASE", DEF_LINK_BIOHEALTHBASE, link_biohealthbase, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ATCC", DEF_LINK_ATCC, link_atcc, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_UNIGENE", DEF_LINK_UNIGENE, link_unigene, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PSEUDOCAP", DEF_LINK_PSEUDOCAP, link_pseudocap, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_PBMICE", DEF_LINK_PBMICE, link_pbmice, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_RAPDB", DEF_LINK_RAPDB, link_rapdb, MAX_WWWBUF);
-  GetAppParam ("NCBI", "WWWENTREZ", "LINK_OSA1", DEF_LINK_OSA1, link_osa1, MAX_WWWBUF);
 }
 
 NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
@@ -554,12 +98,12 @@ NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
   for ( ptr = loc; *ptr != '\0'; ++ptr ) {
     switch (*ptr) {
     case '<' :
-      /*FFAddOneString(ffstring, "<", FALSE, FALSE, TILDE_IGNORE);*/
-      FFAddOneString(ffstring, "&lt;", FALSE, FALSE, TILDE_IGNORE);
+      /*FFAddOneString (ffstring, "<", FALSE, FALSE, TILDE_IGNORE);*/
+      FFAddOneString (ffstring, "&lt;", FALSE, FALSE, TILDE_IGNORE);
       break;
     case '>' :
-      /*FFAddOneString(ffstring, ">", FALSE, FALSE, TILDE_IGNORE);*/
-      FFAddOneString(ffstring, "&gt;", FALSE, FALSE, TILDE_IGNORE);
+      /*FFAddOneString (ffstring, ">", FALSE, FALSE, TILDE_IGNORE);*/
+      FFAddOneString (ffstring, "&gt;", FALSE, FALSE, TILDE_IGNORE);
       break;
     default:
       FFAddOneChar(ffstring, *ptr, FALSE);
@@ -569,705 +113,404 @@ NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
 }
 
 
-static void FF_www_db_xref_std (
-  StringItemPtr ffstring,
-  CharPtr db,
-  CharPtr identifier,
-  CharPtr link
+/* ************** */
+
+typedef struct dbxrefurldata {
+  CharPtr  tag;
+  CharPtr  url;
+} UrlData, PNTR UrlDataPtr;
+
+static UrlData Nlm_url_base [] = {
+  {"AceView/WormGenes",     "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="},
+  {"AFTOL",                 "http://aftol.biology.duke.edu/pub/displayTaxonInfo?aftol_id="},
+  {"ApiDB",                 "http://www.apidb.org/apidb/showRecord.do?name=GeneRecordClasses.ApiDBGeneRecordClass&primary_key="},
+  {"ApiDB_CryptoDB",        "http://cryptodb.org/cryptodb/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
+  {"ApiDB_PlasmoDB",        "http://www.plasmodb.org/plasmo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
+  {"ApiDB_ToxoDB",          "http://www.toxodb.org/toxo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
+  {"ASAP",                  "https://asap.ahabs.wisc.edu/annotation/php/feature_info.php?FeatureID="},
+  {"ATCC",                  "http://www.atcc.org/SearchCatalogs/linkin?id="},
+  {"Axeldb",                "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="},
+  {"BEETLEBASE",            "http://www.beetlebase.org/cgi-bin/report.cgi?name="},
+  {"BioHealthBase",         "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?bhbSubmissionId="},
+  {"BOLD",                  "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="},
+  {"CCDS",                  "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="},
+  {"CDD",                   "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
+  {"CK",                    "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="},
+  {"COG",                   "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
+  {"dbClone",               "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clone&cmd=Retrieve&list_uids="},
+  {"dbCloneLib",            "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=clonelib&cmd=Retrieve&list_uids="},
+  {"dbEST",                 "http://www.ncbi.nlm.nih.gov/nucest/"},
+  {"dbProbe",               "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=probe&cmd=Retrieve&list_uids="},
+  {"dbSNP",                 "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="},
+  {"dbSTS",                 "http://www.ncbi.nlm.nih.gov/nuccore/"},
+  {"dictyBase",             "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="},
+  {"ECOCYC",                "http://biocyc.org/ECOLI/new-image?type=GENE&object="},
+  {"EcoGene",               "http://ecogene.org/geneInfo.php?eg_id="},
+  {"ERIC",                  "http://www.ericbrc.org/genbank/dbxref/"},
+  {"FANTOM_DB",             "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="},
+  {"FLYBASE",               "http://flybase.bio.indiana.edu/.bin/fbidq.html?"},
+  {"GABI",                  "http://www.gabipd.org/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="},
+  {"GeneDB",                "http://www.genedb.org/genedb/Dispatcher?formType=navBar&submit=Search+for&organism=All%3Apombe%3Acerevisiae%3Adicty%3Aasp%3Atryp%3Aleish%3Amalaria%3Astyphi%3Aglossina&desc=yes&ohmr=%2F&name="},
+  {"GeneID",                "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
+  {"GO",                    "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:"},
+  {"GRIN",                  "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"},
+  {"H-InvDB",               "http://www.h-invitational.jp"},
+  {"HGNC",                  "http://www.genenames.org/data/hgnc_data.php?hgnc_id="},
+  {"HPRD",                  "http://www.hprd.org/protein/"},
+  {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},
+  {"IMGT/GENE-DB",          "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+"},
+  {"IMGT/LIGM",             "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"},
+  {"InterimID",             "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
+  {"InterPro",              "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="},
+  {"ISD",                   "http://www.flu.lanl.gov/search/view_record.html?accession="},
+  {"ISFinder",              "http://www-is.biotoul.fr/scripts/is/is_spec.idc?name="},
+  {"JCM",                   "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="},
+  {"JGIDB",                 "http://genome.jgi-psf.org/cgi-bin/jgrs?id="},
+  {"LocusID",               "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
+  {"MaizeGDB",              "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?id="},
+  {"MGI",                   "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"},
+  {"MIM",                   "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="},
+  {"miRBase",               "http://microrna.sanger.ac.uk/cgi-bin/sequences/mirna_entry.pl?acc="},
+  {"NBRC",                  "http://www.nbrc.nite.go.jp/NBRC2/NBRCCatalogueDetailServlet?ID=NBRC&CAT="},
+  {"NextDB",                "http://nematode.lab.nig.ac.jp/cgi-bin/db/ShowGeneInfo.sh?celk="},
+  {"niaEST",                "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="},
+  {"NMPDR",                 "http://www.nmpdr.org/linkin.cgi?id="},
+  {"NRESTdb",               "http://genome.ukm.my/nrestdb/db/single_view_est.php?id="},
+  {"Osa1",                  "http://rice.plantbiology.msu.edu/cgi-bin/gbrowse/rice/?name="},
+  {"Pathema",               "http://pathema.jcvi.org/cgi-bin/Burkholderia/shared/GenePage.cgi?all=1&locus="},
+  {"PBmice",                "http://www.idmshanghai.cn/PBmice/DetailedSearch.do?type=insert&id="},
+  {"PBR",                   "http://www.poxvirus.org/query.asp?web_id="},
+  {"PDB",                   "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="},
+  {"PFAM",                  "http://pfam.sanger.ac.uk/family?acc="},
+  {"PGN",                   "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="},
+  {"PseudoCap",             "http://www.pseudomonas.com/getAnnotation.do?locusID="},
+  {"RAP-DB",                "http://rapdb.dna.affrc.go.jp/cgi-bin/gbrowse_details/latest?name="},
+  {"RATMAP",                "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="},
+  {"REBASE",                "http://rebase.neb.com/rebase/enz/"},
+  {"RFAM",                  "http://www.sanger.ac.uk/cgi-bin/Rfam/getacc?"},
+  {"RGD",                   "http://rgd.mcw.edu/query/query.cgi?id="},
+  {"RiceGenes",             "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="},
+  {"SEED",                  "http://www.theseed.org/linkin.cgi?id="},
+  {"SGD",                   "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="},
+  {"SubtiList",             "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"},
+  {"TAIR",                  "http://www.arabidopsis.org/servlets/TairObject?type=locus&name="},
+  {"taxon",                 "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"},
+  {"TIGRFAM",               "http://cmr.tigr.org/tigr-scripts/CMR/HmmReport.cgi?hmm_acc="},
+  {"UniGene",               "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="},
+  {"UniProtKB/Swiss-Prot",  "http://www.uniprot.org/uniprot/"},
+  {"UniProtKB/TrEMBL",      "http://www.uniprot.org/uniprot/"},
+  {"UniSTS",                "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="},
+  {"UNITE",                 "http://unite.ut.ee/bl_forw.php?nimi="},
+  {"VBASE2",                "http://www.dnaplot.de/vbase2/vgene.php?id="},
+  {"VBRC",                  "http://vbrc.org/query.asp?web_view=curation&web_id="},
+  {"VectorBase",            "http://www.vectorbase.org/Genome/BRCGene/?feature="},
+  {"WorfDB",                "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="},
+  {"WormBase",              "http://www.wormbase.org/db/gene/gene?class=CDS;name="},
+  {"Xenbase",               "http://www.xenbase.org/gene/showgene.do?method=display&geneId="},
+  {"ZFIN",                  "http://zfin.org/cgi-bin/webdriver?MIval=aa-markerview.apg&OID="},
+};
+
+static Int2 DbNameIsValid (
+  CharPtr db
 )
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-static void FF_www_db_xref_ext (
-  StringItemPtr ffstring,
-  CharPtr db,
-  CharPtr identifier,
-  CharPtr link,
-  CharPtr suffix
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link, identifier, FALSE, FALSE, TILDE_IGNORE);
-  if (StringDoesHaveText (suffix)) {
-    FFAddOneString(ffstring, suffix, FALSE, FALSE, TILDE_IGNORE);
-  }
-  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-static void FF_www_db_xref_fly (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  CharPtr link = link_fly;
-
-  if ( StringStr(identifier, "FBa") != NULL ) {
-    link = link_fly_fban;
-  }
-  if ( StringStr(identifier, "FBg") != NULL ) {
-    link = link_fly_fbgn;
-  }
-  if ( StringStr(identifier, "FBs") != NULL ) {
-    link = link_fly_fbst;
-  }
-
-  FF_www_db_xref_std(ffstring, db, identifier, link);
-}
-
-static Boolean IsOnlyDigits (CharPtr str)
 
 {
-  Char     ch;
-  Boolean  hasDigit = FALSE;
+  Int2  L, R, mid;
 
-  if (str == NULL) return FALSE;
-  ch = *str;
-  while (ch != '\0') {
-    if (IS_DIGIT (ch)) {
-      hasDigit = TRUE;
+  if (StringHasNoText (db)) return -1;
+
+  L = 0;
+  R = sizeof (Nlm_url_base) / sizeof (Nlm_url_base [0]);
+
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (Nlm_url_base [mid].tag, db) < 0) {
+      L = mid + 1;
     } else {
-      return FALSE;
-    }
-    str++;
-    ch = *str;
-  }
-  return hasDigit;
-}
-
-static void FF_www_db_xref_pathema (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier,
-  BioseqPtr bsp
-)
-
-{
-  /*
-  if ( StringStr (identifier, "SOP_") != NULL ) {
-    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
-  } else if ( StringChr (identifier, '_') != NULL ) {
-    FF_www_db_xref_std (ffstring, db, identifier, link_pathema_locus);
-  } else if (IsOnlyDigits (identifier)) {
-    FF_www_db_xref_std (ffstring, db, identifier, link_pathema_taxon_id);
-  } else {
-    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
-  }
-  */
-
-  /*
-  Char     link [256];
-  CharPtr  ptr;
-  Char     taxname [128];
-
-  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
-    ptr = StringChr (taxname, ' ');
-    if (ptr != NULL) {
-      *ptr = '\0';
-    }
-    StringCpy (link, link_pathema_prefix);
-    StringCat (link, taxname);
-    StringCat (link, link_pathema_suffix);
-
-    FF_www_db_xref_std(ffstring, db, identifier, link);
-  } else {
-    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
-  }
-  */
-
-
-  FF_www_db_xref_std(ffstring, db, identifier, link_pathema);
-}
-
-static void FF_www_db_xref_imgt_gene (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier,
-  BioseqPtr bsp
-)
-
-{
-  CharPtr link = link_imgt_gene;
-  Char    taxname [64];
-
-  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
-    if ( StringCmp (taxname, "Homo sapiens") == 0) {
-      link = link_imgt_gene_hs;
-    }
-    if ( StringCmp (taxname, "Mus musculus") == 0) {
-      link = link_imgt_gene_mm;
+      R = mid;
     }
   }
 
-  FF_www_db_xref_std(ffstring, db, identifier, link);
-}
+  /* case sensitive comparison at end enforces strictness */
 
-static void FF_www_db_xref_mgd (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  if (StringNICmp (identifier, "MGI:", 4) == 0) {
-    identifier += 4;
-  } else if (StringNICmp (identifier, "MGD:", 4) == 0) {
-    identifier += 4;
+  if (StringCmp (Nlm_url_base [R].tag, db) == 0) {
+    return R;
   }
 
-  FF_www_db_xref_std(ffstring, "MGI", identifier, link_mgd);
+  return -1;
 }
 
-static void FF_www_db_xref_pid(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  if ( *identifier != 'g' ) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_seq);
-    return;
-  }
-  ++identifier;
-
-  FFAddTextToString(ffstring, NULL, db, ":g", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-/*prefix = "<a href=\"%sval=gnl|dbest|%s\">"; */
-static void FF_www_db_xref_dbEST(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link_dbEST, "val=gnl|dbest|", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-static void FF_www_db_xref_dbSTS(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  Char     ch;
-  Boolean  is_numeric = TRUE;
-  CharPtr  str;
-
-  while (*identifier == ' ')
-    identifier++;
-
-  if (*identifier == '\0') return;
-
-  str = identifier;
-  ch = *str;
-  while (ch != '\0') {
-    if (! IS_DIGIT (ch)) {
-      is_numeric = FALSE;
-    }
-    str++;
-    ch = *str;
-  }
-
-  if (is_numeric) {
-    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=\"", link_dbSTS, "val=gnl|dbsts|", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-  } else if (ValidateAccn (identifier) == 0) {
-    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-  }
-}
-
-static void FF_www_db_xref_niaEST(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link_niaest, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "&val=1\">", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-
-static void FF_www_db_xref_gdb(
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  CharPtr start;
-  Char id[20], PNTR idp = id;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-
-  if ( (start = StringStr(identifier, "G00-")) != NULL ) {
-    /* G00-id-id */
-    start += StringLen("G00-");
-    while ( *start != '\0' ) {
-      if ( *start != '-' ) {
-        *idp = *start;
-        ++idp;
-      }
-      ++start;
-    }
-    *idp = '\0';
-    FFAddTextToString(ffstring, "<a href=\"", link_gdb, id, FALSE, FALSE, TILDE_IGNORE);  
-    FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-  } else if ( IS_DIGIT(*identifier) ) {
-    /* id */
-    FFAddTextToString(ffstring, "<a href=\"", link_gdb, identifier, FALSE, FALSE, TILDE_IGNORE);  
-    FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-  } else {
-    FFAddOneString(ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
-  }
-}
-
-static void FF_www_db_xref_rebase (
+static void FF_www_get_url (
   StringItemPtr ffstring,
   CharPtr db,
-  CharPtr identifier
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link_rebase, identifier, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, ".html\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-static void FF_www_db_xref_hinvdb (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  CharPtr link = link_hinvdb;
-  
-  if ( StringStr(identifier, "HIT") != NULL ) {
-    link = link_hinvdbhit;
-  }
-  if ( StringStr(identifier, "HIX") != NULL ) {
-    link = link_hinvdbhix;
-  }
-
-  FF_www_db_xref_std(ffstring, db, identifier, link);
-}
-
-static void FF_www_db_xref_tax (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier
-)
-{
-  CharPtr link = MemNew (StringLen(link_tax) + 10);
-  if (link == NULL) return;
-  
-  StringCpy(link, link_tax);
-
-  if (IS_DIGIT(*identifier)) {
-    StringCat(link, "id=");
-  } else {
-    StringCat(link, "name=");
-  }
-
-  FF_www_db_xref_std(ffstring, db, identifier, link);
-}
-
-static void FF_www_db_xref_hprd (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier,
-  CharPtr link
-)
-{
-  if (StringNICmp (identifier, "HPRD_", 5) == 0) {
-    identifier += 5;
-  }
-
-  FF_www_db_xref_std (ffstring, db, identifier, link);
-}
-
-static void FF_www_db_xref_bhb (
-  StringItemPtr ffstring,
-  CharPtr db, 
   CharPtr identifier,
   BioseqPtr bsp
 )
 
 {
-  Char          ch;
-  Boolean       is_accession = FALSE;
-  Char          link [512];
-  CharPtr       ptr;
+  CharPtr       base = NULL, prefix = NULL, profix = NULL, ident = NULL, suffix = NULL, url = NULL, ptr, str;
+  Char          ch, buf [128], id [20], taxname [128];
+  Boolean       is_accession;
+  /*
+  Boolean       is_numeric;
+  */
+  Int2          R;
   SeqIdPtr      sip;
-  Char          taxname [128];
   TextSeqIdPtr  tsip;
 
-  if (bsp != NULL && ValidateAccn (identifier) == 0) {
-    for (sip = bsp->id; sip != NULL; sip = sip->next) {
-      switch (sip->choice) {
-        case SEQID_GENBANK :
-        case SEQID_EMBL :
-        case SEQID_DDBJ :
-        case SEQID_TPG :
-        case SEQID_TPE :
-        case SEQID_TPD :
-        case SEQID_OTHER :
-          tsip = (TextSeqIdPtr) sip->data.ptrvalue;
-          if (tsip != NULL) {
-            if (StringICmp (tsip->accession, identifier) == 0) {
-              is_accession = TRUE;
-            }
-          }
-          break;
-        default :
-          break;
-      }
-    }
-  }
+  if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
 
-  if (! is_accession) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_biohealthbase);
+  while (*identifier == ' ') {
+    identifier++;
+  }
+  ident = identifier;
+
+  R = DbNameIsValid (db);
+  if (R < 0) {
+    FFAddOneString (ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
     return;
   }
 
-  if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
-    ptr = StringChr (taxname, ' ');
-    if (ptr != NULL) {
-      *ptr = '\0';
-    }
-    ch = taxname [0];
-    if (IS_UPPER (ch)) {
-      taxname [0] = TO_LOWER (ch);
-    }
-    if (StringNICmp (taxname, "influenza", 9) == 0) {
-      StringCpy (link, link_bhb_acc_prefix);
-      StringCat (link, taxname);
-      StringCat (link, link_bhb_acc_suffix);
-    } else {
-      StringCpy (link, link_bhb_loc_prefix);
-      StringCat (link, taxname);
-      StringCat (link, link_bhb_loc_suffix);
-    }
+  url = Nlm_url_base [R].url;
 
-    FF_www_db_xref_std(ffstring, db, identifier, link);
-  } else {
-    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+  /* NCBI URL can be overridden by configuration file */
+
+  if (StringNICmp (url, "http://www.ncbi.nlm.nih.gov/", 28) == 0) {
+    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+      if (StringDoesHaveText (buf)) {
+        base = buf;
+        url += 28;
+      }
+    }
   }
-}
 
-/*
-static void FF_www_db_xref_vector (
-  StringItemPtr ffstring,
-  CharPtr db, 
-  CharPtr identifier,
-  BioseqPtr bsp,
-  CharPtr link
-)
-{
-  Char     ch;
-  Char     buf [512], tax [256];
-  CharPtr  ptr;
+  /* special cases */
 
-  StringCpy (buf, link);
-  if (bsp != NULL) {
-    if (BioseqToGeneticCode (bsp, NULL, NULL, NULL, tax, sizeof (tax), NULL)) {
-      ptr = tax;
-      ch = *ptr;
-      while (ch != '\0') {
-        if (IS_WHITESP (ch)) {
-          *ptr = '_';
+
+  if (StringCmp (db, "BioHealthBase") == 0) {
+
+    is_accession = FALSE;
+
+    if (bsp != NULL && ValidateAccn (identifier) == 0) {
+      for (sip = bsp->id; sip != NULL; sip = sip->next) {
+        switch (sip->choice) {
+          case SEQID_GENBANK :
+          case SEQID_EMBL :
+          case SEQID_DDBJ :
+          case SEQID_TPG :
+          case SEQID_TPE :
+          case SEQID_TPD :
+          case SEQID_OTHER :
+            tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+            if (tsip != NULL) {
+              if (StringICmp (tsip->accession, identifier) == 0) {
+                is_accession = TRUE;
+              }
+            }
+            break;
+          default :
+            break;
         }
-        ptr++;
-        ch = *ptr;
       }
-      StringCat (buf, "org=");
-      StringCat (buf, tax);
-      StringCat (buf, "&");
     }
-  }
-  StringCat (buf, "gene=");
-  FF_www_db_xref_std (ffstring, db, identifier, buf);
-}
-*/
 
-static void FF_www_db_xref_null (
-  StringItemPtr ffstring,
-  CharPtr db,
-  CharPtr identifier,
-  CharPtr link
-)
-{
-  while (*identifier == ' ')
-    identifier++;
-
-  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "<a href=\"", link, NULL, FALSE, FALSE, TILDE_IGNORE);
-  FFAddTextToString(ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
-}
-
-static void Do_www_db_xref(
-  IntAsn2gbJobPtr ajp,
-  StringItemPtr ffstring,
-  CharPtr db,
-  CharPtr identifier,
-  BioseqPtr bsp
-)
-{
-  if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
-
-  if ( StringCmp(db, "FLYBASE") == 0 || StringCmp(db, "FlyBase") == 0) {
-    FF_www_db_xref_fly(ffstring, db, identifier);
-  } else if ( StringCmp(db , "COG") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_cog);
-  } else if ( StringCmp(db , "UniSTS") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_UniSTS);
-  } else if ( StringCmp(db , "LocusID") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_locus);
-  } else if ( StringCmp(db , "InterimID") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_locus);
-  } else if ( StringCmp(db , "MIM") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_omim);
-  } else if ( StringCmp(db , "SGD") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_sgd);
-  } else if ( StringCmp(db , "IMGT/LIGM") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_imgt);
-  } else if ( StringCmp(db , "IMGT/GENE-DB") == 0) {
-    FF_www_db_xref_imgt_gene(ffstring, db, identifier, bsp);
-  } else if ( StringCmp(db , "CK") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ck);
-  } else if ( StringCmp(db , "RiceGenes") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_rice);
-  } else if ( StringCmp(db , "dbSNP") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_snp);
-  } else if ( StringCmp(db , "RATMAP") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ratmap);
-  } else if ( StringCmp(db , "RGD") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_rgd);
-  } else if ( StringCmp(db , "MGI") == 0) {
-    FF_www_db_xref_mgd(ffstring, db, identifier);
-  } else if ( StringCmp(db , "MGD") == 0) {
-    FF_www_db_xref_mgd(ffstring, db, identifier);
-  } else if ( StringCmp(db , "CDD") == 0 || StringCmp(db , "cdd") == 0) {
-    FF_www_db_xref_std(ffstring, "CDD", identifier, link_cdd);
-  } else if ( StringCmp(db , "JCM") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_jcm);
-  } else if ( StringCmp(db , "ISFinder") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_isfinder);
-  } else if ( StringCmp(db , "GABI") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_gabi);
-  } else if ( StringCmp(db , "ZFIN") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_zfin);
-  } else if ( StringCmp(db , "FANTOM_DB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_fantom);
-  } else if ( StringCmp(db , "InterPro") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_interpro);
-  } else if ( StringCmp(db , "GeneDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_genedb);
-  } else if ( StringCmp(db , "GeneID") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_geneid);
-  } else if ( StringCmp(db , "PID") == 0) {
-    FF_www_db_xref_pid(ffstring, db, identifier);
-  } else if ( StringCmp(db , "dbEST") == 0) {
-    FF_www_db_xref_dbEST(ffstring, db, identifier);
-  } else if ( StringCmp(db , "dbSTS") == 0) {
-    FF_www_db_xref_dbSTS(ffstring, db, identifier);
-  } else if ( StringCmp(db , "niaEST") == 0) {
-    FF_www_db_xref_niaEST(ffstring, db, identifier);
-  } else if ( StringCmp(db , "WormBase") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_worm_base);
-  } else if ( StringCmp(db , "AceView/WormGenes") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ace);
-  } else if ( StringCmp(db , "WorfDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_worfdb);
-  } else if ( StringCmp(db , "NextDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_nextdb);
-  } else if ( StringCmp(db , "NBRC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_nbrc);
-  } else if ( StringCmp(db , "GDB") == 0) {
-    FF_www_db_xref_gdb(ffstring, db, identifier);
-  } else if ( StringCmp(db , "REBASE") == 0) {
-    FF_www_db_xref_rebase(ffstring, db, identifier);
-  } else if ( StringCmp(db , "UniProt") == 0 ||
-              /*
-              StringCmp(db , "Swiss-Prot") == 0 ||
-              StringCmp(db , "TrEMBL") == 0 ||
-              StringCmp(db , "UniProt/Swiss-Prot") == 0 ||
-              StringCmp(db , "UniProt/TrEMBL") == 0 ||
-              */
-              StringCmp(db , "UniProtKB/Swiss-Prot") == 0 ||
-              StringCmp(db , "UniProtKB/TrEMBL") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_sp);
-  /*
-  } else if ( StringCmp(db , "ENCODE") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_encode);
-  */
-  } else if ( StringCmp(db , "PGN") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pgn);
-  } else if ( StringCmp(db , "PDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pdb);
-  } else if ( StringCmp(db , "SubtiList") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_subtilist);
-  } else if ( StringCmp(db , "GO") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_go);
-  } else if ( StringCmp(db , "H-InvDB") == 0) {
-    FF_www_db_xref_hinvdb(ffstring, db, identifier);
-  } else if ( StringCmp(db , "ASAP") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_asap);
-  } else if ( StringCmp(db , "dictyBase") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_dicty);
-  } else if ( StringCmp(db , "MaizeGDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_maizegdb);
-  } else if ( StringCmp(db , "axeldb") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_axeldb);
-  } else if ( StringCmp(db , "VBASE2") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_vbase2);
-  } else if ( StringCmp(db , "CCDS") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ccds);
-  } else if ( StringCmp(db , "ECOCYC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ecocyc);
-  } else if ( StringCmp(db , "taxon") == 0) {
-    FF_www_db_xref_tax(ffstring, db, identifier);
-  } else if ( StringCmp(db , "HSSP") == 0) {
-    FF_www_db_xref_null(ffstring, db, identifier, link_hssp);
-  } else if ( StringCmp(db , "HGNC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_hgnc);
-  } else if ( StringCmp(db , "BOLD") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_bold);
-  } else if ( StringCmp(db , "AFTOL") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_aftol);
-  } else if ( StringCmp(db , "HPRD") == 0) {
-    FF_www_db_xref_hprd(ffstring, db, identifier, link_hprd);
-  } else if ( StringCmp(db , "VectorBase") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_vector);
-  } else if ( StringCmp(db , "miRBase") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_mirbase);
-  } else if ( StringCmp(db , "dbClone") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_dbclone);
-  } else if ( StringCmp(db , "dbCloneLib") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_dbclonelib);
-  } else if ( StringCmp(db , "dbProbe") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_dbprobe);
-  } else if ( StringCmp(db , "ISD") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_isd);
-  } else if ( StringCmp(db , "GRIN") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_grin);
-  } else if ( StringCmp(db , "ERIC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_eric);
-  } else if ( StringCmp(db , "PBR") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pbr);
-  } else if ( StringCmp(db , "NMPDR") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_nmpdr);
-  } else if ( StringCmp(db , "SEED") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_seed);
-  } else if ( StringCmp(db , "EcoGene") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_ecogene);
-  } else if ( StringCmp(db , "TAIR") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_tair);
-  } else if ( StringCmp(db , "Pathema") == 0) {
-    FF_www_db_xref_pathema(ffstring, db, identifier, bsp);
-  } else if ( StringCmp(db , "ApiDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_apidb);
-  } else if ( StringCmp(db , "ApiDB_CryptoDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_apidb_cryptodb);
-  } else if ( StringCmp(db , "ApiDB_PlasmoDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_apidb_plasmodb);
-  } else if ( StringCmp(db , "ApiDB_ToxoDB") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_apidb_toxodb);
-  } else if ( StringCmp(db , "PFAM") == 0 || StringCmp(db , "Pfam") == 0 ) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pfam);
-  } else if ( StringCmp(db , "RFAM") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_rfam);
-  } else if ( StringCmp(db , "Xenbase") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_xenbase);
-  } else if ( StringCmp(db , "NRESTdb") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_nrestdb);
-  } else if ( StringCmp(db , "TIGRFAM") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_tigrfam);
-  } else if ( StringCmp(db , "VBRC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_vbrc);
-  } else if ( StringCmp(db , "BioHealthBase") == 0) {
-    FF_www_db_xref_bhb(ffstring, db, identifier, bsp);
-  } else if ( StringCmp(db , "ATCC") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_atcc);
-  } else if ( StringCmp(db , "PseudoCap") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pseudocap);
-  } else if ( StringCmp(db , "PBmice") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_pbmice);
-  } else if ( StringCmp(db , "RAP-DB") == 0) {
-    FF_www_db_xref_ext(ffstring, db, identifier, link_rapdb, ";class=locus_id");
-  } else if ( StringCmp(db , "Osa1") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_osa1);
-
-  /* for dbsource */
-  } else if ( StringCmp(db , "UniGene") == 0) {
-    FF_www_db_xref_std(ffstring, db, identifier, link_unigene);
-  } else if ( StringCmp(db , "RefSeq") == 0) {
-    FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "<a href=\"", link_seq, "val=", FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, identifier, "\">", identifier, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-
-  } else {  
-    /* default: no link just the text */
-    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
-  }             
-}
-
-NLM_EXTERN void FF_www_db_xref(
-  IntAsn2gbJobPtr ajp,
-  StringItemPtr ffstring,
-  CharPtr db,
-  CharPtr identifier,
-  BioseqPtr bsp
-)
-{
-  if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
-  
-  if ( GetWWW(ajp) ) {
-    Do_www_db_xref (ajp, ffstring, db, identifier, bsp);
-  } else { /* not in www mode */
-    if (StringCmp(db , "MGD") == 0 || StringCmp(db , "MGI") == 0) {
-      if (StringNICmp (identifier, "MGI:", 4) == 0) {
-        identifier += 4;
-      } else if (StringNICmp (identifier, "MGD:", 4) == 0) {
-        identifier += 4;
+    if (is_accession && bsp != NULL &&
+        BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
+      ptr = StringChr (taxname, ' ');
+      if (ptr != NULL) {
+        *ptr = '\0';
       }
-      FFAddTextToString(ffstring, "MGI", ":", identifier, FALSE, FALSE, TILDE_IGNORE);
-    } else if ( StringCmp(db , "CDD") == 0 || StringCmp(db , "cdd") == 0) {
-      FFAddTextToString(ffstring, "CDD", ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+      ch = taxname [0];
+      if (IS_UPPER (ch)) {
+        taxname [0] = TO_LOWER (ch);
+      }
+      if (StringNICmp (taxname, "influenza", 9) == 0) {
+        url = "http://www.biohealthbase.org/GSearch/fluSegmentDetails.do?decorator=";
+        prefix = taxname;
+        profix = "&ncbiGenomicAccession=";
+      } else {
+        url = "http://www.biohealthbase.org/GSearch/details.do?decorator=";
+        prefix = taxname;
+        profix = "&locus=";
+      }
+    }
+
+  } else if (StringCmp (db, "dbSTS") == 0) {
+
+    /*
+    is_numeric = TRUE;
+    str = identifier;
+    ch = *str;
+    while (ch != '\0') {
+      if (! IS_DIGIT (ch)) {
+        is_numeric = FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+
+    if (is_numeric) {
+      prefix = "val=gnl|dbsts|";
+    } else if (ValidateAccn (identifier) == 0) {
+      prefix = "val=";
     } else {
-      FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
+      return;
     }
+    */
+
+  } else if (StringCmp (db, "FLYBASE") == 0) {
+
+    if (StringStr (identifier, "FBa") != NULL ) {
+      url = "http://www.fruitfly.org/cgi-bin/annot/fban?";
+    }
+
+  } else if (StringCmp (db, "dictyBase") == 0) {
+
+    /*
+    if (StringChr (identifier, '_') == NULL) {
+      url = "http://dictybase.org/db/cgi-bin/feature_page.pl?primary_id=";
+    }
+    */
+
+  } else if (StringCmp (db, "GDB") == 0) {
+
+    str = StringStr (identifier, "G00-");
+    if (str != NULL) {
+      ptr = id;
+      str += 4;
+      ch = *str;
+      while (ch != '\0') {
+        if (ch != '-') {
+          *ptr = ch;
+          ptr++;
+        }
+        str++;
+        ch = *str;
+      }
+      *ptr = '\0';
+      ident = id;
+    } else {
+      ch = *identifier;
+      if (! IS_DIGIT (ch)) {
+        FFAddOneString (ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
+        return;
+      }
+    }
+
+  } else if (StringCmp (db, "H_InvDB") == 0) {
+
+    if (StringStr (identifier, "HIT") != NULL) {
+      url = "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=30&KEN_STR=";
+    } else if (StringStr (identifier, "HIX") != NULL) {
+      url = "http://www.jbirc.aist.go.jp/hinv/hinvsys/servlet/ExecServlet?KEN_INDEX=0&KEN_TYPE=31&KEN_STR=";
+    }
+
+  } else if (StringCmp (db, "IMGT/GENE-DB") == 0) {
+
+    if (bsp != NULL && BioseqToGeneticCode (bsp, NULL, NULL, NULL, taxname, sizeof (taxname), NULL)) {
+      if (StringCmp (taxname, "Homo sapiens") == 0) {
+        url = "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Homo+sapiens&query=2+";
+      }
+      if (StringCmp (taxname, "Mus musculus") == 0) {
+        url = "http://imgt.cines.fr/cgi-bin/GENElect.jv?species=Mus+musculus&query=2+";
+      }
+    }
+
+  } else if (StringCmp (db, "niaEST") == 0) {
+
+    suffix = "&val=1";
+
+  } else if (StringCmp (db, "RAP-DB") == 0) {
+
+    suffix = ";class=locus_id";
+
+  } else if (StringCmp (db, "REBASE") == 0) {
+
+    suffix = ".html";
+
+  } else if (StringCmp (db, "taxon") == 0) {
+
+    ch = *identifier;
+    if (IS_DIGIT (ch)) {
+      prefix = "id=";
+    } else {
+      prefix = "name=";
+    }
+
+  }
+
+  /* now generate URL */
+
+  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+  if (StringDoesHaveText (base)) {
+    FFAddOneString (ffstring, base, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddOneString (ffstring, url, FALSE, FALSE, TILDE_IGNORE);
+  if (StringDoesHaveText (prefix)) {
+    FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (StringDoesHaveText (profix)) {
+    FFAddOneString (ffstring, profix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (StringDoesHaveText (ident)) {
+    FFAddOneString (ffstring, ident, FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (StringDoesHaveText (suffix)) {
+    FFAddOneString (ffstring, suffix, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddTextToString (ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
+
+NLM_EXTERN void FF_www_db_xref (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  CharPtr db,
+  CharPtr identifier,
+  BioseqPtr bsp
+)
+{
+  if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
+
+  if (GetWWW (ajp)) {
+    FFAddTextToString (ffstring, db, ":", NULL, FALSE, FALSE, TILDE_IGNORE);
+    FF_www_get_url (ffstring, db, identifier, bsp);
+  } else {
+    FFAddTextToString (ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
   }
 }
+
+NLM_EXTERN void FF_Add_NCBI_Base_URL (
+  StringItemPtr ffstring,
+  CharPtr url
+)
+
+{
+  CharPtr  base = NULL;
+  Char     buf [128];
+
+  if (ffstring == NULL || StringHasNoText (url)) return;
+
+  /* NCBI URL can be overridden by configuration file */
+
+  if (StringNICmp (url, "http://www.ncbi.nlm.nih.gov/", 28) == 0) {
+    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+      if (StringDoesHaveText (buf)) {
+        base = buf;
+        url += 28;
+      }
+    }
+  }
+
+  if (StringDoesHaveText (base)) {
+    FFAddOneString (ffstring, base, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddOneString (ffstring, url, FALSE, FALSE, TILDE_IGNORE);
+}
+
+
+/* ************** */
+
 
 /* public function to get URLs for collaboration-approved db_xrefs */
 
@@ -1301,7 +544,7 @@ NLM_EXTERN CharPtr asn2gnbk_dbxref (
 
   ajp = (IntAsn2gbJobPtr) MemNew (sizeof (IntAsn2gbJob));
   if (ajp == NULL) return NULL;
-  ffstring = FFGetString(ajp);
+  ffstring = FFGetString (ajp);
   if ( ffstring == NULL ) return NULL;
 
   if (! links_loaded) {
@@ -1310,14 +553,17 @@ NLM_EXTERN CharPtr asn2gnbk_dbxref (
   }
   ajp->www = TRUE;
 
-  Do_www_db_xref (ajp, ffstring, dbt->db, buf, NULL);
+  FF_www_db_xref (ajp, ffstring, dbt->db, buf, NULL);
 
   ajp->www = FALSE;
 
   str = FFToCharPtr (ffstring);
 
   FFRecycleString (ajp, ffstring);
+  /*
   MemFree (ajp);
+  */
+  asn2gnbk_cleanup ((Asn2gbJobPtr) ajp);
 
   tmp = StringChr (str, '<');
   if (tmp != NULL) {
@@ -2581,6 +1827,12 @@ static CharPtr GetAffil (
   return string;
 }
 
+NLM_EXTERN CharPtr GetFlatFileAffilString (AffilPtr afp)
+{
+  return GetAffil (afp);
+}
+
+
 static CharPtr FormatCitBookArt (
   FmtType format,
   CitBookPtr cbp
@@ -3818,14 +3070,15 @@ static void  FF_www_muid(
   Char numbuf[40];
   
   if ( GetWWW(ajp) ) {
-    FFAddTextToString(ffstring, "<a href=\"", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
-    sprintf(numbuf, "%ld", (long)muid);
-    FFAddTextToString(ffstring, NULL, numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+    FF_Add_NCBI_Base_URL (ffstring, link_muid);
+    sprintf (numbuf, "%ld", (long)muid);
+    FFAddTextToString (ffstring, NULL, numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
     sprintf(numbuf, "%ld", (long)muid);
-    FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
   }
 }
 
@@ -4055,7 +3308,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     sprintf (buf, "[%d]", (int) rbp->serial);
   }
 
-  FFAddOneString(temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
+  FFAddOneString (temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
 
   /* print base range */
 
@@ -4077,7 +3330,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   if (rbp->sites == 1 || rbp->sites == 2) {
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFAddOneString(temp, "(sites)", FALSE, FALSE, TILDE_TO_SPACES);
+      FFAddOneString (temp, "(sites)", FALSE, FALSE, TILDE_TO_SPACES);
       FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
     } else {
       FFLineWrap(ffstring, temp, 5, 5, ASN2FF_EMBL_MAX, "RP");
@@ -4092,9 +3345,9 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FFAddNChar(temp, ' ', 15 - temp->pos, FALSE);
       if (afp->format == GENBANK_FMT) {
-        FFAddOneString(temp, "(bases ", FALSE, FALSE, TILDE_TO_SPACES);
+        FFAddOneString (temp, "(bases ", FALSE, FALSE, TILDE_TO_SPACES);
       } else {
-        FFAddOneString(temp, "(residues ", FALSE, FALSE, TILDE_TO_SPACES);
+        FFAddOneString (temp, "(residues ", FALSE, FALSE, TILDE_TO_SPACES);
       }
     }
 
@@ -4121,7 +3374,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
         if (nextslp == NULL) {
           suffix = NULL;
         }
-        FFAddTextToString(temp, NULL, buf, suffix, FALSE, FALSE, TILDE_TO_SPACES);
+        FFAddTextToString (temp, NULL, buf, suffix, FALSE, FALSE, TILDE_TO_SPACES);
         slp = nextslp;
       }
 
@@ -4136,11 +3389,11 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
       } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
         sprintf (buf, "%ld-%ld", (long) start, (long) stop);
       }
-      FFAddOneString(temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
+      FFAddOneString (temp, buf, FALSE, FALSE, TILDE_TO_SPACES);
     }
 
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-      FFAddOneString(temp, ")", FALSE, FALSE, TILDE_TO_SPACES);
+      FFAddOneString (temp, ")", FALSE, FALSE, TILDE_TO_SPACES);
     }
     if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
       FFLineWrap(ffstring, temp, 12, 12, ASN2FF_GB_MAX, NULL);
@@ -4184,7 +3437,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
     /* if no authors were found, period will still be added by this call */
     if (str != NULL) {
-      FFAddTextToString(temp, NULL, str, suffix, trailingPeriod, FALSE, TILDE_TO_SPACES);
+      FFAddTextToString (temp, NULL, str, suffix, trailingPeriod, FALSE, TILDE_TO_SPACES);
     } else if (StringHasNoText (consortium)) {
       if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
         FFAddOneChar(temp, '.', FALSE);

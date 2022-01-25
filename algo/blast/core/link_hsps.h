@@ -1,4 +1,4 @@
-/* $Id: link_hsps.h,v 1.17 2006/11/21 16:48:22 papadopo Exp $
+/* $Id: link_hsps.h,v 1.18 2009/01/07 16:29:41 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -54,6 +54,7 @@ extern "C" {
  * @param link_hsp_params Parameters for linking of HSPs [in]
  * @param gapped_calculation Is this a gapped search? [in]
  */
+NCBI_XBLAST_EXPORT
 Int2 
 BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list, 
    const BlastQueryInfo* query_info, Int4 subject_length, 

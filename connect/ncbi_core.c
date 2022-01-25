@@ -1,4 +1,4 @@
-/* $Id: ncbi_core.c,v 6.20 2008/10/17 16:25:39 kazimird Exp $
+/* $Id: ncbi_core.c,v 6.22 2008/12/01 16:34:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,7 +42,7 @@
 
 extern const char* IO_StatusStr(EIO_Status status)
 {
-    static const char* s_StatusStr[eIO_Unknown+1] = {
+    static const char* s_StatusStr[eIO_Unknown + 1] = {
         "Success",
         "Timeout",
         "Closed",
@@ -109,13 +109,13 @@ extern MT_LOCK MT_LOCK_Delete(MT_LOCK lk)
     if (lk) {
         MT_LOCK_VALID;
 
-        if ( !--lk->ref_count ) {
-            if ( lk->handler ) {  /* weak extra protection */
+        if (!--lk->ref_count) {
+            if (lk->handler) {  /* weak extra protection */
                 verify(lk->handler(lk->user_data, eMT_Lock));
                 verify(lk->handler(lk->user_data, eMT_Unlock));
             }
 
-            if ( lk->cleanup )
+            if (lk->cleanup)
                 lk->cleanup(lk->user_data);
 
             lk->magic_number++;
@@ -130,7 +130,7 @@ extern MT_LOCK MT_LOCK_Delete(MT_LOCK lk)
 extern int/*bool*/ MT_LOCK_DoInternal(MT_LOCK lk, EMT_Lock how)
 {
     MT_LOCK_VALID;
-    if ( lk->handler )
+    if (lk->handler)
         return lk->handler(lk->user_data, how);
     return -1/* rightful non-doing */;
 }
@@ -171,8 +171,8 @@ extern const char* LOG_LevelStr(ELOG_Level level)
         "NOTE",
         "WARNING",
         "ERROR",
-        "CRITICAL_ERROR",
-        "FATAL_ERROR"
+        "CRITICAL",
+        "FATAL"
     };
     return s_PostSeverityStr[level];
 }
@@ -198,7 +198,7 @@ extern LOG LOG_Create
 }
 
 
-extern void LOG_Reset
+extern LOG LOG_Reset
 (LOG          lg,
  void*        user_data,
  FLOG_Handler handler,
@@ -215,6 +215,7 @@ extern void LOG_Reset
     lg->cleanup   = cleanup;
 
     LOG_UNLOCK;
+    return lg;
 }
 
 
@@ -232,11 +233,11 @@ extern LOG LOG_AddRef(LOG lg)
 
 extern LOG LOG_Delete(LOG lg)
 {
-    if ( lg ) {
+    if (lg) {
         LOG_LOCK_WRITE;
         LOG_VALID;
 
-        if ( lg->ref_count > 1) {
+        if (lg->ref_count > 1) {
             lg->ref_count--;
             LOG_UNLOCK;
             return lg;
@@ -248,7 +249,7 @@ extern LOG LOG_Delete(LOG lg)
         lg->ref_count--;
         lg->magic_number++;
 
-        if ( lg->mt_lock )
+        if (lg->mt_lock)
             MT_LOCK_Delete(lg->mt_lock);
         free(lg);
     }
@@ -257,49 +258,63 @@ extern LOG LOG_Delete(LOG lg)
 
 
 extern void LOG_WriteInternal
-(LOG         lg,
- ELOG_Level  level,
- const char* module,
- const char* file,
- int         line,
- const char* message,
- const void* raw_data,
- size_t      raw_size,
- int         err_code,
- int         err_subcode)
+(LOG           lg,
+ SLOG_Handler* call_data
+ )
 {
-    if ( lg ) {
+    assert(!call_data->raw_size  ||  call_data->raw_data);
+
+    if (lg) {
         LOG_LOCK_READ;
         LOG_VALID;
-        assert(!raw_size || raw_data);
 
-        if ( lg->handler ) {
-            SLOG_Handler call_data;
-
-            call_data.level       = level;
-            call_data.err_code    = err_code;
-            call_data.err_subcode = err_subcode;
-            call_data.module      = module;
-            call_data.file        = file;
-            call_data.line        = line;
-            call_data.message     = message;
-            call_data.raw_data    = raw_data;
-            call_data.raw_size    = raw_size;
-
-            lg->handler(lg->user_data, &call_data);
-        }
+        if (lg->handler)
+            lg->handler(lg->user_data, call_data);
 
         LOG_UNLOCK;
+
+        if (call_data->dynamic  &&  call_data->message)
+            free((void*) call_data->message);
     }
 
     /* unconditional exit/abort on fatal error */
-    if (level == eLOG_Fatal) {
+    if (call_data->level == eLOG_Fatal) {
 #if defined(NDEBUG)
         exit(1);
 #else
         abort();
 #endif
     }
+}
+
+
+extern void LOG_Write
+(LOG         lg,
+ int         code,
+ int         subcode,
+ ELOG_Level  level,
+ const char* module,
+ const char* file,
+ int         line,
+ const char* message,
+ const void* raw_data,
+ size_t      raw_size
+ )
+{
+    SLOG_Handler call_data;
+
+    call_data.dynamic     = 0;
+    call_data.message     = message;
+    call_data.level       = level;
+    call_data.module      = module;
+    call_data.file        = file;
+    call_data.line        = line;
+    call_data.raw_data    = raw_data;
+    call_data.raw_size    = raw_size;
+    call_data.err_code    = code;
+    call_data.err_subcode = subcode;
+
+    LOG_WriteInternal(lg, &call_data);
 }
 
 
@@ -391,7 +406,7 @@ extern REG REG_AddRef(REG rg)
 
 extern REG REG_Delete(REG rg)
 {
-    if ( rg ) {
+    if (rg) {
         REG_LOCK_WRITE;
         REG_VALID;
 
@@ -407,7 +422,7 @@ extern REG REG_Delete(REG rg)
         rg->ref_count--;
         rg->magic_number++;
 
-        if ( rg->mt_lock )
+        if (rg->mt_lock)
             MT_LOCK_Delete(rg->mt_lock);
         free(rg);
     }
@@ -415,7 +430,7 @@ extern REG REG_Delete(REG rg)
 }
 
 
-extern char* REG_Get
+extern const char* REG_Get
 (REG         rg,
  const char* section,
  const char* name,
@@ -426,16 +441,16 @@ extern char* REG_Get
     if (!value  ||  value_size <= 0)
         return 0;
 
-    if ( def_value )
+    if (def_value)
         strncpy0(value, def_value, value_size - 1);
     else
         *value = '\0';
 
-    if ( rg ) {
+    if (rg) {
         REG_LOCK_READ;
         REG_VALID;
 
-        if ( rg->get )
+        if (rg->get)
             rg->get(rg->user_data, section, name, value, value_size);
 
         REG_UNLOCK;
@@ -453,12 +468,13 @@ extern int/*bool*/ REG_Set
  EREG_Storage storage)
 {
     int result;
-    if ( rg ) {
+    if (rg) {
         REG_LOCK_READ;
         REG_VALID;
 
-        result =
-            rg->set ? rg->set(rg->user_data, section, name, value, storage) : 0;
+        result = (rg->set
+                  ? rg->set(rg->user_data, section, name, value, storage)
+                  : 0);
 
         REG_UNLOCK;
     } else

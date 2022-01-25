@@ -29,6 +29,9 @@
 * Version Creation Date:   1/27/96
 *
 * $Log: salstruc.c,v $
+* Revision 6.18  2009/01/15 21:24:38  kans
+* removed unused variables
+*
 * Revision 6.17  2008/08/13 14:25:32  bollin
 * Fixed bug in method for adjusting alignments affected by trimming sequences.
 *
@@ -1683,8 +1686,7 @@ static Int4 get_tot_line (EditAlignDataPtr adp, Int4 line_len, Int4 left, Int4 r
 
 NLM_EXTERN void data_collect_arrange (EditAlignDataPtr adp, Boolean recollect)
 {
-  ValNodePtr         list = NULL, 
-                     vnp = NULL;
+  ValNodePtr         vnp = NULL;
   Int4               maxscroll;
   Int2               x;
   Boolean            goOn = FALSE;
@@ -2445,7 +2447,6 @@ NLM_EXTERN ValNodePtr CollectFeatureForEditor (SeqLocPtr slp, ValNodePtr seqfeat
   SeqEntryPtr      sep,
                    old;
   Int2             j;
-  Uint1Ptr         flabel_format = NULL;
   Boolean          show_feature, collect = FALSE;
    
   if(slp == NULL)

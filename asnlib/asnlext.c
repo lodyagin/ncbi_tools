@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   Routines for parsing ASN.1 module definitions.  Extends asnlex.c
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlext.c,v $
+* Revision 6.9  2009/02/04 16:12:12  gouriano
+* Added skipping 'AUTOMATIC TAGS' in ASN spec. JIRA: CXX-915
+*
 * Revision 6.8  2000/12/12 15:56:13  ostell
 * added support BigInt
 *
@@ -866,11 +869,14 @@ NLM_EXTERN AsnModulePtr AsnLexTStartModule (AsnIoPtr aip)
 	else
 		token = AsnLexTWord(aip);
 
-        while (token == COMMENT_TOKEN)
-        {
-                token = AsnLexTWord(aip);
-	}
-
+    while (token == COMMENT_TOKEN)
+    {
+        token = AsnLexTWord(aip);
+    }
+    while (token != ISDEF && token != BEGIN_TOKEN && token != ERROR_TOKEN)
+    {
+        token = AsnLexTWord(aip);
+    }
 	if (token != ISDEF)           /* ::= */
 	{
 		AsnIoErrorMsg(aip, 69, "::=", aip->linenumber);

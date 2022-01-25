@@ -1,4 +1,4 @@
-/* $Id: ncbi_service.c,v 6.99 2008/10/16 18:55:44 kazimird Exp $
+/* $Id: ncbi_service.c,v 6.106 2009/02/04 19:29:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -192,13 +192,13 @@ static SERV_ITER s_Open(const char*          service,
     if (types & fSERV_Stateless)
         iter->stateless     = 1;
     iter->external          = external;
-    if (arg) {
+    if (arg  &&  *arg) {
         iter->arg           = arg;
         iter->arglen        = strlen(arg);
-    }
-    if (iter->arglen  &&  val) {
-        iter->val           = val;
-        iter->vallen        = strlen(val);
+        if (val) {
+            iter->val       = val;
+            iter->vallen    = strlen(val);
+        }
     }
     iter->time              = (TNCBI_Time) time(0);
 
@@ -206,9 +206,9 @@ static SERV_ITER s_Open(const char*          service,
         size_t i;
         for (i = 0; i < n_skip; i++) {
             const char* name = (iter->ismask  ||  skip[i]->type == fSERV_Dns
-                                ? SERV_NameOfInfo(skip[i])
-                                : iter->reverse_dns ? s : "");
-            SSERV_Info* temp = SERV_CopyInfoEx(skip[i], name);
+                                ? SERV_NameOfInfo(skip[i]) : "");
+            SSERV_Info* temp = SERV_CopyInfoEx(skip[i], !iter->reverse_dns
+                                               ||  *name ? name : s);
             if (temp) {
                 temp->time = NCBI_TIME_INFINITE;
                 if (!s_AddSkipInfo(iter, name, temp)) {
@@ -246,9 +246,8 @@ static SERV_ITER s_Open(const char*          service,
          !(do_dispd= !s_IsMapperConfigured(service, REG_CONN_DISPD_DISABLE)) ||
          !(op = SERV_DISPD_Open(iter, net_info, info, host_info)))) {
         if (!do_lbsmd  &&  !do_dispd) {
-            CORE_LOGF_X(1, eLOG_Warning,
-                        ("[SERV]  No service mappers available for `%s'",
-                         service));
+            CORE_LOGF_X(1, eLOG_Error,
+                        ("[%s]  No service mappers available", service));
         }
         SERV_Close(iter);
         return 0;
@@ -483,9 +482,17 @@ const char* SERV_CurrentName(SERV_ITER iter)
 
 int/*bool*/ SERV_Penalize(SERV_ITER iter, double fine)
 {
-    if (!iter  ||  !iter->op  ||  !iter->op->Penalize  ||  !iter->last)
+    if (!iter  ||  !iter->op  ||  !iter->op->Feedback  ||  !iter->last)
         return 0/*false*/;
-    return (*iter->op->Penalize)(iter, fine);
+    return (*iter->op->Feedback)(iter, fine, 1/*i.e.fine*/);
+}
+
+
+int/*bool*/ SERV_Rerate(SERV_ITER iter, double rate)
+{
+    if (!iter  ||  !iter->op  ||  !iter->op->Feedback  ||  !iter->last)
+        return 0/*false*/;
+    return (*iter->op->Feedback)(iter, rate, 0/*i.e.rate*/);
 }
 
 
@@ -496,7 +503,7 @@ void SERV_Reset(SERV_ITER iter)
     iter->last  = 0;
     iter->time  = 0;
     s_SkipSkip(iter);
-    if (iter->op && iter->op->Reset)
+    if (iter->op  &&  iter->op->Reset)
         (*iter->op->Reset)(iter);
 }
 
@@ -510,8 +517,11 @@ void SERV_Close(SERV_ITER iter)
     for (i = 0; i < iter->n_skip; i++)
         free(iter->skip[i]);
     iter->n_skip = 0;
-    if (iter->op && iter->op->Close)
-        (*iter->op->Close)(iter);
+    if (iter->op) {
+        if (iter->op->Close)
+            (*iter->op->Close)(iter);
+        iter->op = 0;
+    }
     if (iter->skip)
         free(iter->skip);
     if (iter->name)
@@ -525,7 +535,7 @@ int/*bool*/ SERV_Update(SERV_ITER iter, const char* text, int code)
     static const char used_server_info[] = "Used-Server-Info-";
     int retval = 0/*not updated yet*/;
 
-    if (iter && iter->op && text) {
+    if (iter  &&  iter->op  &&  text) {
         const char *c, *b;
         iter->time = (TNCBI_Time) time(0);
         for (b = text; (c = strchr(b, '\n')) != 0; b = c + 1) {
@@ -625,6 +635,7 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
     static const char kUsedServerInfo[] = "Used-Server-Info: ";
     static const char kServerCount[] = "Server-Count: ";
     static const char kSkipInfo[] = "Skip-Info-%u: ";
+    static const char kAffinity[] = "Affinity: ";
     char buffer[128], *str;
     size_t buflen, i;
     TSERV_Type t;
@@ -663,12 +674,23 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
                 return 0;
             }
         }
-        /* How many server-infos for the dispatcher to send to us */
         if (iter->ismask  ||  (iter->pref  &&  iter->host)) {
+            /* How many server-infos for the dispatcher to send to us */
             if (!BUF_Write(&buf, kServerCount, sizeof(kServerCount) - 1)  ||
                 !BUF_Write(&buf,
                            iter->ismask ? "10" : "ALL",
                            iter->ismask ?   2  :    3)                    ||
+                !BUF_Write(&buf, "\r\n", 2)) {
+                BUF_Destroy(buf);
+                return 0;
+            }
+        }
+        if (iter->arglen) {
+            /* Affinity */
+            if (!BUF_Write(&buf, kAffinity, sizeof(kAffinity) - 1)           ||
+                !BUF_Write(&buf, iter->arg, iter->arglen)                    ||
+                (iter->val  &&  (!BUF_Write(&buf, "=", 1)                    ||
+                                 !BUF_Write(&buf, iter->val, iter->vallen))) ||
                 !BUF_Write(&buf, "\r\n", 2)) {
                 BUF_Destroy(buf);
                 return 0;
@@ -689,11 +711,11 @@ char* SERV_Print(SERV_ITER iter, SConnNetInfo* net_info, int/*bool*/ but_last)
             } else
                 buflen = sprintf(buffer, kSkipInfo, (unsigned) i + 1); 
             assert(buflen < sizeof(buffer) - 1);
-            if (!BUF_Write(&buf, buffer, buflen)
-                ||  (name  &&  !BUF_Write(&buf, name, strlen(name)))
-                ||  (name  &&  *name  &&  !BUF_Write(&buf, " ", 1))
-                ||  !BUF_Write(&buf, str, strlen(str))
-                ||  !BUF_Write(&buf, "\r\n", 2)) {
+            if (!BUF_Write(&buf, buffer, buflen)                  ||
+                (name  &&  !BUF_Write(&buf, name, strlen(name)))  ||
+                (name  &&  *name  &&  !BUF_Write(&buf, " ", 1))   ||
+                !BUF_Write(&buf, str, strlen(str))                ||
+                !BUF_Write(&buf, "\r\n", 2)) {
                 free(str);
                 break;
             }
@@ -740,4 +762,27 @@ double SERV_Preference(double pref, double gap, size_t n)
         return pref;
     else
         return 2.0/spread*gap*pref;
+}
+
+
+unsigned short SERV_ServerPort(const char*  name,
+                               unsigned int host)
+{
+    SSERV_Info*    info;
+    unsigned short port;
+
+    if (!host  ||  host == SERV_LOCALHOST)
+        host = SOCK_GetLocalHostAddress(eDefault);
+    if (!(info = s_GetInfo(name, fSERV_Standalone | fSERV_Promiscuous,
+                           host, 0/*pref. port*/, -1.0/*latch host*/,
+                           0/*net_info*/, 0/*skip*/, 0/*n_skip*/,
+                           0/*not external*/, 0/*arg*/, 0/*val*/,
+                           0/*host_info*/))) {
+        return 0;
+    }
+    assert(info->host == host);
+    port = info->port;
+    free((void*) info);
+    assert(port);
+    return port;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/23/2007
 *
-* $Revision: 1.130 $
+* $Revision: 1.147 $
 *
 * File Description: 
 *
@@ -556,6 +556,26 @@ static ConvertFeatureActionPtr BuildDefaultConvertFeatureAction(void)
 
   convert = ConvertFeatureActionNew ();
   return convert;
+}
+
+
+static RemoveDescriptorActionPtr BuildDefaultRemoveDescriptorAction(void)
+{
+  RemoveDescriptorActionPtr remove;
+
+  remove = RemoveDescriptorActionNew();
+  remove->type = Descriptor_type_all;
+  return remove;
+}
+
+
+static AutodefActionPtr BuildDefaultAutodefAction(void)
+{
+  AutodefActionPtr autodef;
+
+  autodef = AutodefActionNew();
+  autodef->clause_list_type = Autodef_list_type_complete_sequence;
+  return autodef;
 }
 
 
@@ -2891,7 +2911,7 @@ static void CDSGeneProtPseudoConstraintToDialog (DialoG d, Pointer data)
     PointerToDialog (dlg->feat, NULL);
     SetValue (dlg->pseudo, 1);
   } else {
-    vn.choice = pseudo->feature;
+    vn.choice = (Uint1) pseudo->feature;
     vn.data.ptrvalue = NULL;
     vn.next = NULL;
     PointerToDialog (dlg->feat, &vn);
@@ -3580,9 +3600,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->molecule_from_dlg, NULL);
           PointerToDialog (dlg->molecule_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoMoleculePairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoMoleculePairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->molecule_from_dlg, &vn);
-          vn.choice = ((MolinfoMoleculePairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoMoleculePairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->molecule_to_dlg, &vn);
         }
         break;
@@ -3592,9 +3612,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->technique_from_dlg, NULL);
           PointerToDialog (dlg->technique_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoTechniquePairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoTechniquePairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->technique_from_dlg, &vn);
-          vn.choice = ((MolinfoTechniquePairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoTechniquePairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->technique_to_dlg, &vn);
         }
         break;
@@ -3604,9 +3624,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->completedness_from_dlg, NULL);
           PointerToDialog (dlg->completedness_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoCompletednessPairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoCompletednessPairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->completedness_from_dlg, &vn);
-          vn.choice = ((MolinfoCompletednessPairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoCompletednessPairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->completedness_to_dlg, &vn);
         }
         break;
@@ -3616,9 +3636,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->mol_class_from_dlg, NULL);
           PointerToDialog (dlg->mol_class_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoMolClassPairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoMolClassPairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->mol_class_from_dlg, &vn);
-          vn.choice = ((MolinfoMolClassPairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoMolClassPairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->mol_class_to_dlg, &vn);
         }
         break;
@@ -3628,9 +3648,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->topology_from_dlg, NULL);
           PointerToDialog (dlg->topology_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoTopologyPairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoTopologyPairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->topology_from_dlg, &vn);
-          vn.choice = ((MolinfoTopologyPairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoTopologyPairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->topology_to_dlg, &vn);
         }
         break;
@@ -3640,9 +3660,9 @@ static void SequenceQualPairToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->strand_from_dlg, NULL);
           PointerToDialog (dlg->strand_to_dlg, NULL);
         } else {
-          vn.choice = ((MolinfoStrandPairPtr) m_fields->data.ptrvalue)->from;
+          vn.choice = (Uint1)((MolinfoStrandPairPtr) m_fields->data.ptrvalue)->from;
           PointerToDialog (dlg->strand_from_dlg, &vn);
-          vn.choice = ((MolinfoStrandPairPtr) m_fields->data.ptrvalue)->to;
+          vn.choice = (Uint1)((MolinfoStrandPairPtr) m_fields->data.ptrvalue)->to;
           PointerToDialog (dlg->strand_to_dlg, &vn);
         }
         break;
@@ -4425,7 +4445,7 @@ static void PublicationConstraintToDialog (DialoG d, Pointer data)
       PointerToDialog (dlg->field_type, NULL);
       PointerToDialog (dlg->string_constraint, NULL);
     } else {
-      vn.choice = constraint->field->field;
+      vn.choice = (Uint1)constraint->field->field;
       vn.data.ptrvalue = NULL;
       vn.next = NULL;
       PointerToDialog (dlg->field_type, &vn);
@@ -4613,7 +4633,7 @@ static void SequenceConstraintToDialog (DialoG d, Pointer data)
       PointerToDialog (dlg->feature_type, NULL);
     } else {
       SetStatus (dlg->feat_present, TRUE);
-      vn.choice = constraint->feature;
+      vn.choice = (Uint1)constraint->feature;
       vn.data.ptrvalue = NULL;
       vn.next = NULL;
       PointerToDialog (dlg->feature_type, &vn);
@@ -6360,7 +6380,7 @@ static void DataToFeatureFieldConstraintDlg (DialoG d, Pointer data)
         PointerToDialog (dlg->feature_type, NULL);
         PointerToDialog (dlg->feature_field, NULL);
       } else {
-        vn.choice = ff->type;
+        vn.choice = (Uint1)ff->type;
         vn.data.ptrvalue = NULL;
         vn.next = NULL;
         PointerToDialog (dlg->feature_type, &vn);
@@ -7214,7 +7234,6 @@ static ValNodePtr TestRnaFeatureTypeDialog (DialoG d)
 {
   RnaFeatureTypeDlgPtr dlg;
   ValNodePtr     vnp, err_list = NULL;
-  CharPtr        c;
 
   dlg = (RnaFeatureTypeDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return NULL;
@@ -7222,12 +7241,6 @@ static ValNodePtr TestRnaFeatureTypeDialog (DialoG d)
   vnp = DialogToPointer (dlg->rna_type_dlg);
   if (vnp == NULL) {
     ValNodeAddPointer (&err_list, 0, "no type");
-  } else if (vnp->choice == RnaFeatType_ncRNA) {
-    c = DialogToPointer (dlg->ncrna_class_dlg);
-    if (StringHasNoText (c)) {
-      ValNodeAddPointer (&err_list, 0, "no class");
-    }
-    c = MemFree (c);
   }
   vnp = ValNodeFree (vnp);
   return err_list;
@@ -7300,7 +7313,7 @@ static void RnaQualToDialog (DialoG d, Pointer data)
     PointerToDialog (dlg->field_dlg, NULL);
   } else {
     PointerToDialog (dlg->rnafeat_dlg, q->type);
-    vn.choice = q->field;
+    vn.choice = (Uint1)q->field;
     vn.data.ptrvalue = NULL;
     vn.next = NULL;
     PointerToDialog (dlg->field_dlg, &vn);
@@ -7608,7 +7621,7 @@ static void FieldTypeToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->feature_type, NULL);
           PointerToDialog (dlg->feature_field, NULL);
         } else {
-          vn.choice = ffp->type;
+          vn.choice = (Uint1)ffp->type;
           vn.data.ptrvalue = NULL;
           vn.next = NULL;
           PointerToDialog (dlg->feature_type, &vn);
@@ -7865,7 +7878,7 @@ static void FieldPairTypeToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->feature_field_from, NULL);
           PointerToDialog (dlg->feature_field_to, NULL);
         } else {
-          vn.choice = ffp->type;
+          vn.choice = (Uint1)ffp->type;
           vn.data.ptrvalue = NULL;
           vn.next = NULL;
           PointerToDialog (dlg->feature_type, &vn);
@@ -7904,11 +7917,11 @@ static void FieldPairTypeToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->rna_field_to, NULL);
         } else {
           PointerToDialog (dlg->rna_feat_dlg, rna_quals->type);
-          vn.choice = rna_quals->field_from;
+          vn.choice = (Uint1)rna_quals->field_from;
           vn.data.ptrvalue = NULL;
           vn.next = NULL;
           PointerToDialog (dlg->rna_field_from, &vn);
-          vn.choice = rna_quals->field_to;
+          vn.choice = (Uint1)rna_quals->field_to;
           PointerToDialog (dlg->rna_field_to, &vn);
         }
         dlg->field_type = FieldPairType_rna_field;
@@ -9617,6 +9630,9 @@ typedef struct applyfeatureactiondlg {
   /* for import features */
   DialoG                   quals;
   
+  /* for source features */
+  DialoG                   src_quals;
+
   /* for all */
   TexT                     gene_locus;
   TexT                     gene_description;
@@ -9811,6 +9827,7 @@ static void ApplyFeatureActionToDialog (DialoG d, Pointer data)
   LocationIntervalPtr      lint;
   CharPtr                  txt;
   ValNode                  vn;
+  BioSourcePtr             biop;
 
   dlg = (ApplyFeatureActionDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) {
@@ -9845,6 +9862,9 @@ static void ApplyFeatureActionToDialog (DialoG d, Pointer data)
 
     /* for import features */
     PointerToDialog (dlg->quals, NULL);
+
+    /* for source features */
+    PointerToDialog (dlg->src_quals, NULL);
   
     /* for all */
     SafeSetTitle (dlg->gene_locus, "");
@@ -9912,6 +9932,11 @@ static void ApplyFeatureActionToDialog (DialoG d, Pointer data)
     SafeSetTitle (dlg->protein_name, FindFeatQualValue (action->fields, Feat_qual_legal_product));
     SafeSetTitle (dlg->protein_description, FindFeatQualValue (action->fields, Feat_qual_legal_description));
 
+    /* for source feature */
+    biop = BioSourceFromSourceQualVals (action->src_fields);
+    PointerToDialog (dlg->src_quals, biop);
+    biop = BioSourceFree (biop);
+
     /* for RNA */
     PointerToDialog (dlg->ncrna_class, FindFeatQualValue (action->fields, Feat_qual_legal_ncRNA_class));
     SafeSetTitle (dlg->rna_name, FindFeatQualValue (action->fields, Feat_qual_legal_product));
@@ -9939,6 +9964,7 @@ static Pointer DialogToApplyFeatureAction (DialoG d)
   Int4                     frame;
   GBQualPtr                gbq;
   ValNodePtr               vnp;
+  BioSourcePtr             biop;
 
   dlg = (ApplyFeatureActionDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) {
@@ -10039,6 +10065,13 @@ static Pointer DialogToApplyFeatureAction (DialoG d)
     txt = SaveStringFromText (dlg->rna_name);
     SetFeatQualValue (&(action->fields), Feat_qual_legal_product, txt);
     txt = MemFree (txt);
+  }
+
+  /* for source features */
+  if (dlg->src_quals != NULL) {
+    biop = DialogToPointer (dlg->src_quals);
+    action->src_fields = SourceQualValsFromBioSourcePtr (biop);
+    biop = BioSourceFree (biop);
   }
 
   /* for import features */
@@ -10150,6 +10183,7 @@ ApplyFeatureActionDialog
   ButtoN                comment_btn;
   ValNodePtr            feature_type_list = NULL;
   SeqFeatPtr            sfp;
+  BioSourcePtr          biop;
 
   dlg = (ApplyFeatureActionDlgPtr) MemNew (sizeof (ApplyFeatureActionDlgData));
   p = HiddenGroup (h, -1, 0, NULL);
@@ -10248,7 +10282,13 @@ ApplyFeatureActionDialog
     PopupItem (dlg->reading_frame, "3");
     PopupItem (dlg->reading_frame, "Best");
     SetValue (dlg->reading_frame, 4);
-  }    
+  } else if (action != NULL && action->type == Feature_type_source) {
+    dlg->src_quals = BioSourceDialog (p);
+    biop = BioSourceFromSourceQualVals (action->src_fields);
+    PointerToDialog (dlg->src_quals, biop);
+    biop = BioSourceFree (biop);
+  } 
+
   r = HiddenGroup (p, 2, 0, NULL);
   if (action != NULL && action->type == Feature_type_cds) {
 
@@ -10273,7 +10313,7 @@ ApplyFeatureActionDialog
       StaticPrompt (r, "ncRNA Class", 0, dialogTextHeight, programFont, 'l');
       dlg->ncrna_class = CreatencRNAClassDialog (r, FALSE, NULL, NULL);
     }
-  } else if (action != NULL && action->type != Feature_type_gene) {
+  } else if (action != NULL && action->type != Feature_type_gene && action->type != Feature_type_source) {
     StaticPrompt (r, "Qualifiers", 0, dialogTextHeight, programFont, 'l');
     sfp = CreateFeatureWithImportFeatureQuals (action);
     dlg->quals = NewCreateImportFields (r, GetFeatureNameFromFeatureType (action->type), sfp, FALSE);
@@ -10295,14 +10335,42 @@ ApplyFeatureActionDialog
     SetObjectExtra (comment_btn, dlg, NULL);
   }
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
-                              (HANDLE) parts_group,
-                              (HANDLE) g,
-                              (HANDLE) dlg->strand_group,
-                              (HANDLE) indexer_only_group,
-                              (HANDLE) r,
-                              (HANDLE) (frame_grp != NULL ? frame_grp : comment_btns_grp),
-                              NULL);
+  if (frame_grp != NULL) {
+    AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
+                                (HANDLE) parts_group,
+                                (HANDLE) g,
+                                (HANDLE) dlg->strand_group,
+                                (HANDLE) indexer_only_group,
+                                (HANDLE) r,
+                                (HANDLE) frame_grp,
+                                NULL);
+  } else if (comment_btns_grp != NULL) {
+    AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
+                                (HANDLE) parts_group,
+                                (HANDLE) g,
+                                (HANDLE) dlg->strand_group,
+                                (HANDLE) indexer_only_group,
+                                (HANDLE) r,
+                                (HANDLE) comment_btns_grp,
+                                NULL);
+  } else if (dlg->src_quals != NULL) {
+    AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
+                                (HANDLE) parts_group,
+                                (HANDLE) g,
+                                (HANDLE) dlg->strand_group,
+                                (HANDLE) indexer_only_group,
+                                (HANDLE) r,
+                                (HANDLE) dlg->src_quals,
+                                NULL);
+  } else {
+    AlignObjects (ALIGN_CENTER, (HANDLE) dlg->feature_type_dlg,
+                                (HANDLE) parts_group,
+                                (HANDLE) g,
+                                (HANDLE) dlg->strand_group,
+                                (HANDLE) indexer_only_group,
+                                (HANDLE) r,
+                                NULL);
+  }
 
   return (DialoG) p;  
 }
@@ -10331,7 +10399,7 @@ static void RemoveFeatureActionToDialog (DialoG d, Pointer data)
     PointerToDialog (dlg->feature_type_dlg, NULL);
     PointerToDialog (dlg->constraint_dlg, NULL);
   } else {
-    vn.choice = action->type;
+    vn.choice = (Uint1)action->type;
     vn.data.ptrvalue = NULL;
     vn.next = NULL;
     PointerToDialog (dlg->feature_type_dlg, &vn);
@@ -10594,9 +10662,9 @@ static void ConvertFeatureActionToDialog (DialoG d, Pointer data)
   } else {
     vn.next = NULL;
     vn.data.ptrvalue = NULL;
-    vn.choice = action->type_from;
+    vn.choice = (Uint1)action->type_from;
     PointerToDialog (dlg->feature_type_from_dlg, &vn);
-    vn.choice = action->type_to;
+    vn.choice = (Uint1)action->type_to;
     PointerToDialog (dlg->feature_type_to_dlg, &vn);
     /* set source options */
     if (action->src_options != NULL && action->src_options->choice == ConvertFeatureSrcOptions_cds) {
@@ -10829,6 +10897,289 @@ static DialoG ConvertFeatureActionDialog
 }
 
 
+static DialoG DescriptorTypeDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
+{
+  ValNodePtr desc_list = NULL;
+
+  AddAllDescriptorsToChoiceList (&desc_list);
+  return ValNodeSelectionDialog (h, desc_list, TALL_SELECTION_LIST, ValNodeStringName,
+                                ValNodeSimpleDataFree, ValNodeStringCopy,
+                                ValNodeChoiceMatch, "descriptor type", 
+                                change_notify, change_userdata, FALSE);
+}
+
+
+typedef struct removedescriptoractiondlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG                   descriptor_type_dlg;
+
+  DialoG                   constraint_dlg;
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} RemoveDescriptorActionDlgData, PNTR RemoveDescriptorActionDlgPtr;
+
+
+static void RemoveDescriptorActionToDialog (DialoG d, Pointer data)
+{
+  RemoveDescriptorActionDlgPtr dlg;
+  RemoveDescriptorActionPtr    action;
+  ValNode vn;
+
+  dlg = (RemoveDescriptorActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  vn.data.ptrvalue = NULL;
+  vn.next = NULL;
+
+  action = (RemoveDescriptorActionPtr) data;
+  if (action == NULL) {
+    vn.choice = Descriptor_type_all;
+    PointerToDialog (dlg->descriptor_type_dlg, &vn);
+    PointerToDialog (dlg->constraint_dlg, NULL);
+  } else {
+    vn.choice = (Uint1)action->type;
+    PointerToDialog (dlg->descriptor_type_dlg, &vn);
+    PointerToDialog (dlg->constraint_dlg, action->constraint);
+  }
+}
+
+
+static Pointer DialogToRemoveDescriptorAction (DialoG d)
+{
+  RemoveDescriptorActionDlgPtr dlg;
+  RemoveDescriptorActionPtr    action;
+  ValNodePtr                   vnp;
+
+  dlg = (RemoveDescriptorActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = RemoveDescriptorActionNew();
+
+  vnp = DialogToPointer (dlg->descriptor_type_dlg);
+  if (vnp == NULL) {
+    action->type = Descriptor_type_all;
+  } else {
+    action->type = vnp->choice;
+  }
+  vnp = ValNodeFree (vnp);
+  action->constraint = DialogToPointer (dlg->constraint_dlg);
+  return action;
+}
+
+
+static ValNodePtr TestRemoveDescriptorActionDialog (DialoG d)
+{
+  RemoveDescriptorActionDlgPtr dlg;
+
+  dlg = (RemoveDescriptorActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  return TestDialog (dlg->descriptor_type_dlg);
+}
+
+
+static DialoG RemoveDescriptorActionDialog 
+(GrouP h,
+ Boolean indexer_version, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  RemoveDescriptorActionDlgPtr dlg;
+  GrouP                      p;
+
+  dlg = (RemoveDescriptorActionDlgPtr) MemNew (sizeof (RemoveDescriptorActionDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = RemoveDescriptorActionToDialog;
+  dlg->fromdialog = DialogToRemoveDescriptorAction;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = TestRemoveDescriptorActionDialog;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->descriptor_type_dlg = DescriptorTypeDialog (p, change_notify, change_userdata);
+
+  dlg->constraint_dlg = ConstraintSetDialog (p, change_notify, change_userdata);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->descriptor_type_dlg, (HANDLE) dlg->constraint_dlg, NULL);
+
+  return (DialoG) p;
+}
+
+
+typedef struct autodefactiondlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG                   modifiers_dlg;
+  PopuP                    clause_list_type_popup;
+
+  Nlm_ChangeNotifyProc     change_notify;
+  Pointer                  change_userdata;
+} AutodefActionDlgData, PNTR AutodefActionDlgPtr;
+
+
+static void AutodefActionToDialog(DialoG d, Pointer data)
+{
+  AutodefActionDlgPtr dlg;
+  AutodefActionPtr    action;
+  ValNodePtr          list = NULL, vnp;
+
+  dlg = (AutodefActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  action = (AutodefActionPtr) data;
+  if (action == NULL) {
+    PointerToDialog (dlg->modifiers_dlg, NULL);
+    SetValue (dlg->clause_list_type_popup, 2);
+  } else {
+    /* populate modifiers */
+    for (vnp = action->modifiers; vnp != NULL; vnp = vnp->next) {
+      ValNodeAddPointer (&list, 0, GetSourceQualName (vnp->data.intvalue));
+    }
+    PointerToDialog (dlg->modifiers_dlg, list);
+
+    /* populate clause list type */
+    switch (action->clause_list_type) {
+      case Autodef_list_type_feature_list:
+        SetValue (dlg->clause_list_type_popup, 1);
+        break;
+      case Autodef_list_type_complete_sequence:
+        SetValue (dlg->clause_list_type_popup, 2);
+        break;
+      case Autodef_list_type_complete_genome:
+        SetValue (dlg->clause_list_type_popup, 3);
+        break;
+      default:
+        SetValue (dlg->clause_list_type_popup, 2);
+        break;
+    }
+  }
+}
+
+
+static Pointer DialogToAutodefAction (DialoG d)
+{
+  AutodefActionDlgPtr dlg;
+  AutodefActionPtr    action = NULL;
+  Int2                v;
+  ValNodePtr          list, vnp;
+
+  dlg = (AutodefActionDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  action = AutodefActionNew();
+  v = GetValue (dlg->clause_list_type_popup);
+  switch (v) {
+    case 1:
+      action->clause_list_type = Autodef_list_type_feature_list;
+      break;
+    case 2:
+      action->clause_list_type = Autodef_list_type_complete_sequence;
+      break;
+    case 3:
+      action->clause_list_type = Autodef_list_type_complete_genome;
+      break;
+    default:
+      action->clause_list_type = Autodef_list_type_feature_list;
+      break;
+  }
+
+  list = DialogToPointer (dlg->modifiers_dlg);
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    ValNodeAddInt (&(action->modifiers), SourceQualChoice_textqual, GetSourceQualTypeByName (vnp->data.ptrvalue));
+  }
+  list = ValNodeFree (list);
+
+  return action;
+}
+
+
+static void ChangeAutodefPopup (PopuP p)
+{
+  AutodefActionDlgPtr dlg;
+
+  dlg = (AutodefActionDlgPtr) GetObjectExtra (p);
+  if (dlg == NULL) {
+    return;
+  }
+  if (dlg->change_notify != NULL) {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG AutodefActionDialog 
+(GrouP h,
+ Boolean indexer_version, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  AutodefActionDlgPtr dlg;
+  GrouP               p;
+  PrompT              ppt1, ppt2;
+  ValNodePtr          src_quals = NULL;
+  ValNode             vn;
+
+  dlg = (AutodefActionDlgPtr) MemNew (sizeof (AutodefActionDlgData));
+  p = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = AutodefActionToDialog;
+  dlg->fromdialog = DialogToAutodefAction;
+  dlg->dialogmessage = NULL;
+  dlg->testdialog = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  ppt1 = StaticPrompt (p, "Modifiers", 0, dialogTextHeight, systemFont, 'l');
+
+  ValNodeAddPointer (&src_quals, 0, StringSave ("clone"));
+  ValNodeAddPointer (&src_quals, 0, StringSave ("cultivar"));
+  ValNodeAddPointer (&src_quals, 0, StringSave ("haplogroup"));
+  ValNodeAddPointer (&src_quals, 0, StringSave ("isolate"));
+  ValNodeAddPointer (&src_quals, 0, StringSave ("strain"));
+  ValNodeAddPointer (&src_quals, 0, StringSave ("specimen-voucher"));
+
+  dlg->modifiers_dlg = ValNodeSelectionDialog (p, src_quals, SHORT_SELECTION_LIST,
+                                               ValNodeStringName,
+                                               ValNodeSimpleDataFree,
+                                               ValNodeStringCopy,
+                                               ValNodeStringMatch,
+                                               "source qual",
+                                               change_notify, change_userdata, TRUE);
+  vn.choice = 0;
+  vn.next = NULL;
+  vn.data.ptrvalue = "haplogroup";
+  PointerToDialog (dlg->modifiers_dlg, &vn);
+
+  ppt2 = StaticPrompt (p, "Features or Complete", 0, dialogTextHeight, systemFont, 'l');
+
+  dlg->clause_list_type_popup = PopupList (p, TRUE, ChangeAutodefPopup);
+  SetObjectExtra (dlg->clause_list_type_popup, dlg, NULL);
+  PopupItem (dlg->clause_list_type_popup, "List Features");
+  PopupItem (dlg->clause_list_type_popup, "Complete Sequence");
+  PopupItem (dlg->clause_list_type_popup, "Complete Genome");
+  SetValue (dlg->clause_list_type_popup, 2);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt1, (HANDLE) dlg->modifiers_dlg, (HANDLE) ppt2, (HANDLE) dlg->clause_list_type_popup, NULL);
+
+  return (DialoG) p;
+}
+
+
 typedef struct editfeaturelocationactiondlg {
   DIALOG_MESSAGE_BLOCK
   DialoG                   feature_type_dlg;
@@ -10921,7 +11272,7 @@ static void EditFeatureLocationActionToDialog (DialoG d, Pointer data)
     ResetFeatureLocationActionEditType (dlg);
     PointerToDialog (dlg->constraint_dlg, NULL);
   } else {
-    vn.choice = action->type;
+    vn.choice = (Uint1)action->type;
     vn.data.ptrvalue = NULL;
     vn.next = NULL;
     PointerToDialog (dlg->feature_type_dlg, &vn);
@@ -11469,11 +11820,11 @@ static void ChangeParseSrcDialogPopup (PopuP p)
 
   val = GetValue (dlg->main_choice);
   switch (val) {
-    case 4:
+    case 5:
       Show (dlg->src_grp);
       Hide (dlg->structured_comment_field);
       break;
-    case 7:
+    case 8:
       Show (dlg->structured_comment_field);
       Hide (dlg->src_grp);
       break;
@@ -11531,9 +11882,9 @@ static void ParseSrcToDialog (DialoG d, Pointer data)
         SetValue (dlg->main_choice, 3);
         break;
       case ParseSrc_org:
-        SetValue (dlg->main_choice, 4);
         org = (ParseSrcOrgPtr) src->data.ptrvalue;
         if (org == NULL) {
+          SetValue (dlg->main_choice, 5);
           SetValue (dlg->feat_or_desc, 1);
           PointerToDialog (dlg->src_qual_choice, NULL);
         } else {
@@ -11552,34 +11903,38 @@ static void ParseSrcToDialog (DialoG d, Pointer data)
               break;
           }
           if (org->field == NULL) {
-             PointerToDialog (dlg->src_qual_choice, NULL);
+            PointerToDialog (dlg->src_qual_choice, NULL);
+            SetValue (dlg->main_choice, 5);
           } else if (org->field->choice == ParseSrcOrgChoice_taxname_after_binomial) {
-            vn.choice = 0;
-            vn.data.ptrvalue = kTaxnameAfterBinomialString;
-            vn.next = NULL;
-            PointerToDialog (dlg->src_qual_choice, &vn);
+            SetValue (dlg->main_choice, 9);
           } else if (org->field->choice == ParseSrcOrgChoice_source_qual) {
             vn.choice = 0;
             vn.data.ptrvalue = GetSourceQualName (org->field->data.intvalue);
             vn.next = NULL;
             PointerToDialog (dlg->src_qual_choice, &vn);
+            if (org->field->data.intvalue == Source_qual_taxname) {
+              SetValue (dlg->main_choice, 4);
+            } else {
+              SetValue (dlg->main_choice, 5);
+            }
           } else {
             PointerToDialog (dlg->src_qual_choice, NULL);
+            SetValue (dlg->main_choice, 5);
           }
         }
         break;
       case ParseSrc_comment:
-        SetValue (dlg->main_choice, 5);
-        break;
-      case ParseSrc_bankit_comment:
         SetValue (dlg->main_choice, 6);
         break;
-      case ParseSrc_structured_comment:
+      case ParseSrc_bankit_comment:
         SetValue (dlg->main_choice, 7);
+        break;
+      case ParseSrc_structured_comment:
+        SetValue (dlg->main_choice, 8);
         SetTitle (dlg->structured_comment_field, src->data.ptrvalue);
         break;
       case ParseSrc_file_id:
-        SetValue (dlg->main_choice, 8);
+        SetValue (dlg->main_choice, 10);
         break;
       default:
         SetValue (dlg->main_choice, 0);
@@ -11631,6 +11986,29 @@ static Pointer DialogToParseSrc (DialoG d)
           org->type = Object_type_constraint_any;
           break;
       }
+      org->field = ValNodeNew (NULL);
+      org->field->choice = ParseSrcOrgChoice_source_qual;
+      org->field->data.intvalue = Source_qual_taxname;
+      src = ValNodeNew (NULL);
+      src->choice = ParseSrc_org;
+      src->data.ptrvalue = org;
+      break;
+    case 5:
+      org = ParseSrcOrgNew ();
+      switch (GetValue (dlg->feat_or_desc)) {
+        case 1:
+          org->type = Object_type_constraint_any;
+          break;
+        case 2:
+          org->type = Object_type_constraint_feature;
+          break;
+        case 3:
+          org->type = Object_type_constraint_descriptor;
+          break;
+        default:
+          org->type = Object_type_constraint_any;
+          break;
+      }
       vnp = (ValNodePtr) DialogToPointer (dlg->src_qual_choice);
       if (vnp != NULL) {
         org->field = ValNodeNew (NULL);
@@ -11646,20 +12024,42 @@ static Pointer DialogToParseSrc (DialoG d)
       src->choice = ParseSrc_org;
       src->data.ptrvalue = org;
       break;
-    case 5:
+    case 6:
       src = ValNodeNew (NULL);
       src->choice = ParseSrc_comment;
       break;
-    case 6:
+    case 7:
       src = ValNodeNew (NULL);
       src->choice = ParseSrc_bankit_comment;
       break;
-    case 7:
+    case 8:
       src = ValNodeNew (NULL);
       src->choice = ParseSrc_structured_comment;
       src->data.ptrvalue = SaveStringFromText (dlg->structured_comment_field);
       break;
-    case 8:
+    case 9:
+      org = ParseSrcOrgNew ();
+      switch (GetValue (dlg->feat_or_desc)) {
+        case 1:
+          org->type = Object_type_constraint_any;
+          break;
+        case 2:
+          org->type = Object_type_constraint_feature;
+          break;
+        case 3:
+          org->type = Object_type_constraint_descriptor;
+          break;
+        default:
+          org->type = Object_type_constraint_any;
+          break;
+      }
+      org->field = ValNodeNew (NULL);
+      org->field->choice = ParseSrcOrgChoice_taxname_after_binomial;
+      src = ValNodeNew (NULL);
+      src->choice = ParseSrc_org;
+      src->data.ptrvalue = org;
+      break;
+    case 10:
       src = ValNodeNew (NULL);
       src->choice = ParseSrc_file_id;
       break;
@@ -11678,11 +12078,11 @@ static ValNodePtr TestParseSrcDialog (DialoG d)
   if (dlg == NULL) return NULL;
 
   val = GetValue (dlg->main_choice);
-  if (val < 1 || val > 8) {
+  if (val < 1 || val > 10) {
     ValNodeAddPointer (&err_list, 0, "main choice");
-  } else if (val == 4) {
+  } else if (val == 5) {
     ValNodeLink (&err_list, TestDialog (dlg->src_qual_choice));
-  } else if (val == 7 && TextHasNoText (dlg->structured_comment_field)) {
+  } else if (val == 8 && TextHasNoText (dlg->structured_comment_field)) {
     ValNodeAddPointer (&err_list, 0, "structured comment field");
   }
   return err_list;
@@ -11711,13 +12111,15 @@ static DialoG ParseSrcDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Point
 
   dlg->main_choice = PopupList (p, TRUE, ChangeParseSrcDialogPopup);
   SetObjectExtra (dlg->main_choice, dlg, NULL);
-  PopupItem (dlg->main_choice, "Defline");
-  PopupItem (dlg->main_choice, "FlatFile");
+  PopupItem (dlg->main_choice, "Definition Line");
+  PopupItem (dlg->main_choice, "GenBank FlatFile");
   PopupItem (dlg->main_choice, "Local ID");
+  PopupItem (dlg->main_choice, "Organism Name");
   PopupItem (dlg->main_choice, "Source Qualifier");
   PopupItem (dlg->main_choice, "Comment");
   PopupItem (dlg->main_choice, "BankIT Comment");
   PopupItem (dlg->main_choice, "Structured Comment");
+  PopupItem (dlg->main_choice, "Taxname after Binomial");
   PopupItem (dlg->main_choice, "File ID");
   SetValue (dlg->main_choice, 4);
 
@@ -11744,6 +12146,7 @@ static DialoG ParseSrcDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Point
   RadioButton (dlg->feat_or_desc, "Features Only");
   SetValue (dlg->feat_or_desc, 1);
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->src_qual_choice, (HANDLE) dlg->feat_or_desc, NULL);
+  Hide (dlg->src_grp);
 
   dlg->structured_comment_field = DialogText (g, "", 20, ChangeParseSrcDialogText);
   SetObjectExtra (dlg->structured_comment_field, dlg, NULL);
@@ -11759,16 +12162,36 @@ typedef struct parsedstdlg {
  DIALOG_MESSAGE_BLOCK
  PopuP main_choice;
  GrouP src_grp;
+ PopuP biosrc_list;
  DialoG src_qual_choice;
  GrouP feat_or_desc;
+ PopuP  gene_field;
+ DialoG rna_field;
+ PopuP protein_field;
  GrouP  feature_field_grp;
  DialoG feature_type_choice;
  DialoG feature_field_choice;
+ DialoG feature_note;
  TexT  dbxref_db;
  Nlm_ChangeNotifyProc change_notify;
  Pointer              change_userdata;
 } ParseDstDlgData, PNTR ParseDstDlgPtr;
 
+typedef enum {
+  eParseDstDialog_defline = 1,
+  eParseDstDialog_biosrc,
+  eParseDstDialog_srcqual,
+  eParseDstDialog_genefield,
+  eParseDstDialog_rnafield,
+  eParseDstDialog_cdscomment,
+  eParseDstDialog_proteinfield,
+  eParseDstDialog_featqual,
+  eParseDstDialog_featnote,
+  eParseDstDialog_commentdesc,
+  eParseDstDialog_dbxref 
+} EParseDstDialog;
+
+#define eParseDstDialog_last eParseDstDialog_dbxref
 
 static void ChangeParseDstDialogPopup (PopuP p) 
 {
@@ -11780,25 +12203,90 @@ static void ChangeParseDstDialogPopup (PopuP p)
 
   val = GetValue (dlg->main_choice);
   switch (val) {
-    case 2:
+    case eParseDstDialog_biosrc:
       Show (dlg->src_grp);
+      Show (dlg->biosrc_list);
+      Hide (dlg->src_qual_choice);
       Hide (dlg->feature_field_grp);
       Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
       break;
-    case 3:
+    case eParseDstDialog_srcqual:
+      Show (dlg->src_grp);
+      Hide (dlg->biosrc_list);
+      Show (dlg->src_qual_choice);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
+      break;
+    case eParseDstDialog_genefield:
+      Show (dlg->gene_field);
+      Hide (dlg->src_grp);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
+      break;
+    case eParseDstDialog_rnafield:
+      Show (dlg->rna_field);
+      Hide (dlg->src_grp);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->dbxref_db);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
+      break;
+    case eParseDstDialog_proteinfield:
+      Show (dlg->protein_field);
+      Hide (dlg->rna_field);
+      Hide (dlg->src_grp);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->dbxref_db);
+      Hide (dlg->gene_field);
+      Hide (dlg->feature_note);
+      break;
+    case eParseDstDialog_featqual:
       Hide (dlg->src_grp);
       Show (dlg->feature_field_grp);
       Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
       break;
-    case 4:
+    case eParseDstDialog_featnote:
+      Show (dlg->feature_note);
+      Hide (dlg->src_grp);
+      Hide (dlg->feature_field_grp);
+      Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      break;
+    case eParseDstDialog_dbxref:
       Hide (dlg->src_grp);
       Hide (dlg->feature_field_grp);
       Show (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
       break;
     default:
       Hide (dlg->src_grp);
       Hide (dlg->feature_field_grp);
       Hide (dlg->dbxref_db);
+      Hide (dlg->rna_field);
+      Hide (dlg->gene_field);
+      Hide (dlg->protein_field);
+      Hide (dlg->feature_note);
       break;
   }
   if (dlg->change_notify != NULL) {
@@ -11833,16 +12321,16 @@ static void ParseDstToDialog (DialoG d, Pointer data)
 
   dst = (ValNodePtr) data;
   if (dst == NULL) {
-    SetValue (dlg->main_choice, 1);
+    SetValue (dlg->main_choice, eParseDstDialog_defline);
   } else {
     switch (dst->choice) {
       case ParseDest_defline:
-        SetValue (dlg->main_choice, 1);
+        SetValue (dlg->main_choice, eParseDstDialog_defline );
         break;
       case ParseDest_org:
-        SetValue (dlg->main_choice, 2);
         org = (ParseDstOrgPtr) dst->data.ptrvalue;
         if (org == NULL) {
+          SetValue (dlg->main_choice, eParseDstDialog_srcqual);
           PointerToDialog (dlg->src_qual_choice, NULL);
           SetValue (dlg->feat_or_desc, 1);
         } else {
@@ -11862,31 +12350,53 @@ static void ParseDstToDialog (DialoG d, Pointer data)
           }
           if (org->field == NULL) {
             PointerToDialog (dlg->src_qual_choice, NULL);
+            SetValue (dlg->main_choice, eParseDstDialog_srcqual);
           } else {
-            vn.choice = 0;
-            vn.data.ptrvalue = GetSourceQualName (org->field->data.intvalue);
-            vn.next = NULL;
-            PointerToDialog (dlg->src_qual_choice, &vn);
+            switch (org->field->data.intvalue) {
+              case Source_qual_taxname:
+                SetValue (dlg->biosrc_list, 1);
+                SetValue (dlg->main_choice, eParseDstDialog_biosrc);
+                break;
+              case Source_qual_lineage:
+                SetValue (dlg->biosrc_list, 2);
+                SetValue (dlg->main_choice, eParseDstDialog_biosrc);
+                break;
+              case Source_qual_division:
+                SetValue (dlg->biosrc_list, 3);
+                SetValue (dlg->main_choice, eParseDstDialog_biosrc);
+                break;
+              default:
+                vn.choice = 0;
+                vn.data.ptrvalue = GetSourceQualName (org->field->data.intvalue);
+                vn.next = NULL;
+                PointerToDialog (dlg->src_qual_choice, &vn);
+                SetValue (dlg->main_choice, eParseDstDialog_biosrc);
+                break;
+            }
           }
         }
         break;
       case ParseDest_featqual:
-        SetValue (dlg->main_choice, 3);
+        /* TODO - look for RNA fields, gene fields, cds comment, feature note? */
+        SetValue (dlg->main_choice, eParseDstDialog_featqual);
         ffp = (FeatureFieldLegalPtr) dst->data.ptrvalue;
         if (ffp == NULL) {
           PointerToDialog (dlg->feature_type_choice, NULL);
           PointerToDialog (dlg->feature_field_choice, NULL);
         } else {
-          vn.choice = ffp->type;
+          vn.choice = (Uint1)ffp->type;
           vn.data.ptrvalue = NULL;
           vn.next = NULL;
           PointerToDialog (dlg->feature_type_choice, &vn);
-          vn.choice = ffp->field;
+          vn.choice = (Uint1)ffp->field;
           PointerToDialog (dlg->feature_field_choice, &vn);
         }
         break;
+      case ParseDest_comment_descriptor:
+        SetValue (dlg->main_choice, eParseDstDialog_commentdesc);
+        break;
       case ParseDest_dbxref:
-        SetValue (dlg->main_choice, 4);
+        SetValue (dlg->main_choice, eParseDstDialog_dbxref);
         SetTitle (dlg->dbxref_db, dst->data.ptrvalue);
         break;
     }
@@ -11901,19 +12411,59 @@ static Pointer DialogToParseDst (DialoG d)
   ParseDstDlgPtr dlg;
   ParseDstOrgPtr org;
   FeatureFieldLegalPtr ffp;
+  FeatureFieldPtr ff;
   ValNodePtr     dst = NULL, vnp;
-  Int2           val;
+  Int2           val, subval;
+  RnaQualPtr     rq;
 
   dlg = (ParseDstDlgPtr) GetObjectExtra (d);
   if (dlg == NULL) return NULL;
 
   val = GetValue (dlg->main_choice);
   switch (val) {
-    case 1:
+    case eParseDstDialog_defline:
       dst = ValNodeNew (NULL);
       dst->choice = ParseDest_defline;
       break;
-    case 2:
+    case eParseDstDialog_biosrc:
+      org = ParseDstOrgNew ();
+      switch (GetValue (dlg->feat_or_desc)) {
+        case 1:
+          org->type = Object_type_constraint_any;
+          break;
+        case 2:
+          org->type = Object_type_constraint_feature;
+          break;
+        case 3:
+          org->type = Object_type_constraint_descriptor;
+          break;
+        default:
+          org->type = Object_type_constraint_any;
+          break;
+      }
+      subval = GetValue (dlg->biosrc_list);
+      switch (subval) {
+        case 1:
+          org->field = ValNodeNew (NULL);
+          org->field->choice = SourceQualChoice_textqual;
+          org->field->data.intvalue = Source_qual_taxname;
+          break;
+        case 2:
+          org->field = ValNodeNew (NULL);
+          org->field->choice = SourceQualChoice_textqual;
+          org->field->data.intvalue = Source_qual_lineage;
+          break;
+        case 3:
+          org->field = ValNodeNew (NULL);
+          org->field->choice = SourceQualChoice_textqual;
+          org->field->data.intvalue = Source_qual_division;
+          break;
+      }
+      dst = ValNodeNew (NULL);
+      dst->choice = ParseDest_org;
+      dst->data.ptrvalue = org;
+      break;
+    case eParseDstDialog_srcqual:
       org = ParseDstOrgNew ();
       switch (GetValue (dlg->feat_or_desc)) {
         case 1:
@@ -11940,7 +12490,170 @@ static Pointer DialogToParseDst (DialoG d)
       dst->choice = ParseDest_org;
       dst->data.ptrvalue = org;
       break;
-    case 3:
+    case eParseDstDialog_genefield:
+      subval = GetValue (dlg->gene_field);
+      switch (subval) {
+        case 1: /* locus */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_gene;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 2: /* description */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_gene_description;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 3: /* comment */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_note;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 4: /* allele */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_allele;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 5: /* maploc */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_map;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 6: /* locus tag */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_locus_tag;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 7: /* synonym */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_synonym;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 8: /* old locus tag */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_gene;
+          ffp->field = Feat_qual_legal_old_locus_tag;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+      }
+      break;
+    case eParseDstDialog_rnafield:
+      /* get rna qual, translate to feature qual */
+      rq = DialogToPointer (dlg->rna_field);
+      ff = FeatureFieldFromRnaQual (rq);
+      rq = RnaQualFree (rq);
+      if (ff != NULL) {
+        ffp = FeatureFieldLegalNew ();
+        ffp->type = ff->type;
+        if (ff->field != NULL) {
+          ffp->field = ff->field->data.intvalue;
+        }
+        dst = ValNodeNew (NULL);
+        dst->choice = ParseDest_featqual;
+        dst->data.ptrvalue = ffp;
+      }
+      ff = FeatureFieldFree (ff);
+      break;
+    case eParseDstDialog_cdscomment:
+      ffp = FeatureFieldLegalNew ();
+      ffp->type = Feature_type_cds;
+      ffp->field = Feat_qual_legal_note;
+      dst = ValNodeNew (NULL);
+      dst->choice = ParseDest_featqual;
+      dst->data.ptrvalue = ffp;
+      break;
+    case eParseDstDialog_proteinfield:
+      subval = GetValue (dlg->protein_field);
+      switch (subval) {
+        case 1: /* name */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_cds;
+          ffp->field = Feat_qual_legal_product;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 2: /* description */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_prot;
+          ffp->field = Feat_qual_legal_description;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 3: /* e.c. number */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_prot;
+          ffp->field = Feat_qual_legal_ec_number;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 4: /* activity */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_prot;
+          ffp->field = Feat_qual_legal_activity;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 5: /* comment */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_prot;
+          ffp->field = Feat_qual_legal_note;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 6: /* mat-peptide name */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_mat_peptide_aa;
+          ffp->field = Feat_qual_legal_product;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 7: /* mat-peptide description */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_mat_peptide_aa;
+          ffp->field = Feat_qual_legal_description;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+        case 8: /* mat-peptide comment */
+          ffp = FeatureFieldLegalNew ();
+          ffp->type = Feature_type_mat_peptide_aa;
+          ffp->field = Feat_qual_legal_note;
+          dst = ValNodeNew (NULL);
+          dst->choice = ParseDest_featqual;
+          dst->data.ptrvalue = ffp;
+          break;
+      }
+      break;
+    case eParseDstDialog_featqual:
       ffp = FeatureFieldLegalNew ();
       vnp = (ValNodePtr) DialogToPointer (dlg->feature_type_choice);
       if (vnp != NULL) {
@@ -11956,7 +12669,23 @@ static Pointer DialogToParseDst (DialoG d)
       dst->choice = ParseDest_featqual;
       dst->data.ptrvalue = ffp;
       break;
-    case 4:
+    case eParseDstDialog_featnote:
+      ffp = FeatureFieldLegalNew ();
+      vnp = (ValNodePtr) DialogToPointer (dlg->feature_note);
+      if (vnp != NULL) {
+        ffp->type = vnp->choice;
+        vnp = ValNodeFree (vnp);
+      }
+      ffp->field = Feat_qual_legal_note;
+      dst = ValNodeNew (NULL);
+      dst->choice = ParseDest_featqual;
+      dst->data.ptrvalue = ffp;
+      break;
+    case eParseDstDialog_commentdesc:
+      dst = ValNodeNew (NULL);
+      dst->choice = ParseDest_comment_descriptor;
+      break;
+    case eParseDstDialog_dbxref:
       dst = ValNodeNew (NULL);
       dst->choice = ParseDest_dbxref;
       dst->data.ptrvalue = SaveStringFromText (dlg->dbxref_db);
@@ -11976,24 +12705,28 @@ static ValNodePtr TestParseDstDialog (DialoG d)
   if (dlg == NULL) return NULL;
 
   val = GetValue (dlg->main_choice);
-  if (val < 1 || val > 4) {
+  if (val < 1 || val > eParseDstDialog_last) {
     ValNodeAddPointer (&err_list, 0, "main choice");
-  } else if (val == 2) {
+  } else if (val == eParseDstDialog_srcqual) {
     ValNodeLink (&err_list, TestDialog (dlg->src_qual_choice));
-  } else if (val == 3) {
+  } else if (val == eParseDstDialog_rnafield) {
+    ValNodeLink (&err_list, TestDialog (dlg->rna_field));
+  } else if (val == eParseDstDialog_featqual) {
     ValNodeLink (&err_list, TestDialog (dlg->feature_type_choice));
     ValNodeLink (&err_list, TestDialog (dlg->feature_field_choice));
-  } else if (val == 4 && TextHasNoText (dlg->dbxref_db)) {
+  } else if (val == eParseDstDialog_featnote) {
+    ValNodeLink (&err_list, TestDialog (dlg->feature_note));
+  } else if (val == eParseDstDialog_dbxref && TextHasNoText (dlg->dbxref_db)) {
     ValNodeAddPointer (&err_list, 0, "dbxref db");
   }
   return err_list;
 }
-  
+
 
 static DialoG ParseDstDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Pointer change_userdata)
 {
   ParseDstDlgPtr dlg;
-  GrouP          p, g;
+  GrouP          p, g, g2;
   ValNodePtr     qual_list;
 
   p = HiddenGroup (h, 2, 0, NULL);
@@ -12011,22 +12744,37 @@ static DialoG ParseDstDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Point
 
   dlg->main_choice = PopupList (p, TRUE, ChangeParseDstDialogPopup);
   SetObjectExtra (dlg->main_choice, dlg, NULL);
-  PopupItem (dlg->main_choice, "Defline");
+  PopupItem (dlg->main_choice, "Definition Line");
+  PopupItem (dlg->main_choice, "Biosource");
   PopupItem (dlg->main_choice, "Source Qualifier");
+  PopupItem (dlg->main_choice, "Gene Field");
+  PopupItem (dlg->main_choice, "RNA Field");
+  PopupItem (dlg->main_choice, "CDS Comment");
+  PopupItem (dlg->main_choice, "Protein Field");
   PopupItem (dlg->main_choice, "Feature Qualifier");
+  PopupItem (dlg->main_choice, "Feature Note");
+  PopupItem (dlg->main_choice, "Comment Descriptor");
   PopupItem (dlg->main_choice, "Dbxref");
   SetValue (dlg->main_choice, 1);
 
   g = HiddenGroup (p, 0, 0, NULL);
   dlg->src_grp = HiddenGroup (g, -1, 0, NULL);
+  g2 = HiddenGroup (dlg->src_grp, 0, 0, NULL);
   qual_list = GetSourceQualList (FALSE);  
-  dlg->src_qual_choice = ValNodeSelectionDialog (dlg->src_grp, qual_list, SHORT_SELECTION_LIST,
+  dlg->src_qual_choice = ValNodeSelectionDialog (g2, qual_list, SHORT_SELECTION_LIST,
                                                ValNodeStringName,
                                                ValNodeSimpleDataFree,
                                                ValNodeStringCopy,
                                                ValNodeStringMatch,
                                                "source qual",
                                                change_notify, change_userdata, FALSE);
+  dlg->biosrc_list = PopupList (g2, TRUE, ChangeParseDstDialogPopup);
+  SetObjectExtra (dlg->biosrc_list, dlg, NULL);
+  PopupItem (dlg->biosrc_list, "Organism Name");
+  PopupItem (dlg->biosrc_list, "Lineage");
+  PopupItem (dlg->biosrc_list, "Division");
+  SetValue (dlg->biosrc_list, 1);
+
   dlg->feat_or_desc = HiddenGroup (dlg->src_grp, 3, 0, NULL);
   RadioButton (dlg->feat_or_desc, "Descriptors and Features");
   RadioButton (dlg->feat_or_desc, "Descriptors Only");
@@ -12035,10 +12783,42 @@ static DialoG ParseDstDialog (GrouP h, Nlm_ChangeNotifyProc change_notify, Point
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->src_qual_choice, (HANDLE) dlg->feat_or_desc, NULL);
   Hide (dlg->src_grp);
 
+  dlg->gene_field = PopupList (g, TRUE, ChangeParseDstDialogPopup);
+  SetObjectExtra (dlg->gene_field, dlg, NULL);
+  PopupItem (dlg->gene_field, "locus");
+  PopupItem (dlg->gene_field, "description");
+  PopupItem (dlg->gene_field, "comment");
+  PopupItem (dlg->gene_field, "allele");
+  PopupItem (dlg->gene_field, "maploc");
+  PopupItem (dlg->gene_field, "locus_tag");
+  PopupItem (dlg->gene_field, "synonym");
+  PopupItem (dlg->gene_field, "old_locus_tag");
+  SetValue (dlg->gene_field, 1);
+  Hide (dlg->gene_field);
+
+  dlg->rna_field = RnaQualDialog (g, "RNA Type", change_notify, change_userdata);
+  Hide (dlg->rna_field);
+
+  dlg->protein_field = PopupList (g, TRUE, ChangeParseDstDialogPopup);
+  SetObjectExtra (dlg->protein_field, dlg, NULL);
+  PopupItem (dlg->protein_field, "name");
+  PopupItem (dlg->protein_field, "description");
+  PopupItem (dlg->protein_field, "E.C. number");
+  PopupItem (dlg->protein_field, "activity");
+  PopupItem (dlg->protein_field, "comment");
+  PopupItem (dlg->protein_field, "mat_peptide name");
+  PopupItem (dlg->protein_field, "mat_peptide description");
+  PopupItem (dlg->protein_field, "mat_peptide comment");
+  SetValue (dlg->protein_field, 1);
+  Hide (dlg->protein_field);
+
   dlg->feature_field_grp = HiddenGroup (g, 2, 0, NULL);
   dlg->feature_type_choice = FeatureTypeDialog (dlg->feature_field_grp, change_notify, change_userdata);
   dlg->feature_field_choice = LegalFeatQualChoiceDialog (dlg->feature_field_grp, change_notify, change_userdata);
   Hide (dlg->feature_field_grp);
+
+  dlg->feature_note = FeatureTypeDialog (g, change_notify, change_userdata);
+  Hide (dlg->feature_note);
 
   dlg->dbxref_db = DialogText (g, "", 20, ChangeParseDstDialogText);
   SetObjectExtra (dlg->dbxref_db, dlg, NULL);
@@ -12165,9 +12945,10 @@ static ValNodePtr TestParseActionDialog (DialoG d)
 
 
 static DialoG 
-ParseActionDialog 
+ParseActionDialogEx 
 (GrouP h,
  Boolean indexer_version, 
+ Boolean use_existing_text,
  Nlm_ChangeNotifyProc     change_notify,
  Pointer                  change_userdata)
 {
@@ -12194,7 +12975,7 @@ ParseActionDialog
   dlg->src = ParseSrcDialog (g, change_notify, change_userdata);
   StaticPrompt (g, "And place in", 0, popupMenuHeight, programFont, 'r');
   dlg->dst = ParseDstDialog (g, change_notify, change_userdata);
-  dlg->cap_change = NormalGroup (p, 3, 0, "Capitalization", programFont, NULL);
+  dlg->cap_change = NormalGroup (p, 4, 0, "Capitalization", programFont, NULL);
   SetGroupSpacing (dlg->cap_change, 10, 10);
 
   RadioButton (dlg->cap_change, "No change");
@@ -12205,20 +12986,32 @@ ParseActionDialog
 
   dlg->remove_from_parsed = CheckBox (p, "Remove from parsed field", NULL);
 
-  dlg->existing_text = ExistingTextDialog (p, change_notify, change_userdata);
-
+  if (use_existing_text) {
+    dlg->existing_text = ExistingTextDialog (p, change_notify, change_userdata);
+  }
 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->cap_change,
                               (HANDLE) dlg->remove_from_parsed,
-                              (HANDLE) dlg->existing_text,
                               (HANDLE) dlg->text_portion,
                               (HANDLE) g,
+                              (HANDLE) dlg->existing_text,
                               NULL);
 
   return (DialoG) p;  
 }
 
-  
+
+static DialoG 
+ParseActionDialog 
+(GrouP h,
+ Boolean indexer_version, 
+ Nlm_ChangeNotifyProc     change_notify,
+ Pointer                  change_userdata)
+{
+  return ParseActionDialogEx (h, indexer_version, TRUE, change_notify, change_userdata);
+}
+
+
 typedef struct editmacroaction {
   PopuP action_type;
 
@@ -12318,6 +13111,14 @@ static void RunMacroInEditor (ButtoN b)
       break;
     case 12:
       action->choice = MacroActionChoice_convert_feature;
+      action->data.ptrvalue = DialogToPointer (e->action_dlg);
+      break;
+    case 13:
+      action->choice = MacroActionChoice_remove_descriptor;
+      action->data.ptrvalue = DialogToPointer (e->action_dlg);
+      break;
+    case 14:
+      action->choice = MacroActionChoice_autodef;
       action->data.ptrvalue = DialogToPointer (e->action_dlg);
       break;
   }
@@ -12461,6 +13262,8 @@ BuildEditMacroActionWindow
   EditFeatureLocationActionPtr edit_loc = NULL;
   ConvertFeatureActionPtr convert_feat = NULL;
   ParseActionPtr        parse = NULL;
+  RemoveDescriptorActionPtr remove_desc = NULL;
+  AutodefActionPtr      autodef = NULL;
   WindoW                w;
   GrouP                 h, c;
   ButtoN                b;
@@ -12488,6 +13291,8 @@ BuildEditMacroActionWindow
   PopupItem (d->action_type, "Remove Feature");
   PopupItem (d->action_type, "Edit Feature Location");
   PopupItem (d->action_type, "Convert Feature");
+  PopupItem (d->action_type, "Remove Descriptor");
+  PopupItem (d->action_type, "Autodef");
 
   if (d->action_copy == NULL) {
     SetValue (d->action_type, 1);
@@ -12546,6 +13351,14 @@ BuildEditMacroActionWindow
         SetValue (d->action_type, 12);
         convert_feat = (ConvertFeatureActionPtr) d->action_copy->data.ptrvalue;
         break;
+      case MacroActionChoice_remove_descriptor:
+        SetValue (d->action_type, 13);
+        remove_desc = (RemoveDescriptorActionPtr) d->action_copy->data.ptrvalue;
+        break;
+      case MacroActionChoice_autodef:
+        SetValue (d->action_type, 14);
+        autodef = (AutodefActionPtr) d->action_copy->data.ptrvalue;
+        break;
       default:
         SetValue (d->action_type, 1);
         break;
@@ -12585,6 +13398,13 @@ BuildEditMacroActionWindow
     case 12:
       d->action_dlg = ConvertFeatureActionDialog (h, d->indexer_version, EnableEditMacroActionAccept, d);
       PointerToDialog (d->action_dlg, convert_feat);
+      break;
+    case 13:
+      d->action_dlg = RemoveDescriptorActionDialog (h, d->indexer_version, EnableEditMacroActionAccept, d);
+      PointerToDialog (d->action_dlg, remove_desc);
+      break;
+    case 14:
+      d->action_dlg = AutodefActionDialog (h, d->indexer_version, EnableEditMacroActionAccept, d);
       break;
   }
   c = HiddenGroup (h, 4, 0, NULL);
@@ -12688,6 +13508,14 @@ static Boolean EditMacroAction (ValNodePtr action, Boolean indexer_version)
           d.action_copy = ValNodeNew (NULL);
           d.action_copy->choice = MacroActionChoice_convert_feature;
           d.action_copy->data.ptrvalue = BuildDefaultConvertFeatureAction ();
+        } else if (action_type == 13) {
+          d.action_copy = ValNodeNew (NULL);
+          d.action_copy->choice = MacroActionChoice_remove_descriptor;
+          d.action_copy->data.ptrvalue = BuildDefaultRemoveDescriptorAction ();
+        } else if (action_type == 14) {
+          d.action_copy = ValNodeNew (NULL);
+          d.action_copy->choice = MacroActionChoice_autodef;
+          d.action_copy->data.ptrvalue = BuildDefaultAutodefAction ();
         }
       }
 
@@ -12724,6 +13552,12 @@ static Boolean EditMacroAction (ValNodePtr action, Boolean indexer_version)
       case MacroActionChoice_convert_feature:
         action->data.ptrvalue = ConvertFeatureActionFree (action->data.ptrvalue);
         break;
+      case MacroActionChoice_remove_descriptor:
+        action->data.ptrvalue = RemoveDescriptorActionFree(action->data.ptrvalue);
+        break;
+      case MacroActionChoice_autodef:
+        action->data.ptrvalue = AutodefActionFree (action->data.ptrvalue);
+        break;
     }
     switch (GetValue (d.action_type)) {
       case 1:
@@ -12754,6 +13588,14 @@ static Boolean EditMacroAction (ValNodePtr action, Boolean indexer_version)
         break;
       case 12:
         action->choice = MacroActionChoice_convert_feature;
+        action->data.ptrvalue = DialogToPointer (d.action_dlg);
+        break;
+      case 13:
+        action->choice = MacroActionChoice_remove_descriptor;
+        action->data.ptrvalue = DialogToPointer (d.action_dlg);
+        break;
+      case 14:
+        action->choice = MacroActionChoice_autodef;
         action->data.ptrvalue = DialogToPointer (d.action_dlg);
         break;
     }
@@ -12849,6 +13691,14 @@ static void AddMacroActions (MacroEditorFormPtr f, Int2 item)
             d.action_copy = ValNodeNew (NULL);
             d.action_copy->choice = MacroActionChoice_convert_feature;
             d.action_copy->data.ptrvalue = BuildDefaultConvertFeatureAction();
+          } else if (action_type == 13) {
+            d.action_copy = ValNodeNew (NULL);
+            d.action_copy->choice = MacroActionChoice_remove_descriptor;
+            d.action_copy->data.ptrvalue = BuildDefaultRemoveDescriptorAction();
+          } else if (action_type == 14) {
+            d.action_copy = ValNodeNew (NULL);
+            d.action_copy->choice = MacroActionChoice_autodef;
+            d.action_copy->data.ptrvalue = BuildDefaultAutodefAction();
           }
         }
 
@@ -12910,6 +13760,14 @@ static void AddMacroActions (MacroEditorFormPtr f, Int2 item)
           break;
         case 12:
           new_action->choice = MacroActionChoice_convert_feature;
+          new_action->data.ptrvalue = DialogToPointer (d.action_dlg);
+          break;
+        case 13:
+          new_action->choice = MacroActionChoice_remove_descriptor;
+          new_action->data.ptrvalue = DialogToPointer (d.action_dlg);
+          break;
+        case 14:
+          new_action->choice = MacroActionChoice_autodef;
           new_action->data.ptrvalue = DialogToPointer (d.action_dlg);
           break;
       }
@@ -14795,6 +15653,10 @@ SingleMacroAction (Uint2 entityID, Boolean indexer_version)
   frm->no_callback = FALSE;
   ChangeSingleMacroActionPopup (frm->action_type);
 
+#ifndef WIN_MAC
+  CreateStdEditorFormMenus (w);
+#endif
+
   return (ForM) w;
 }
 
@@ -14816,6 +15678,199 @@ NLM_EXTERN void SingleAECRMacroAction (Uint2 entityID, Boolean indexer_version, 
   Select (f);
 }
 
+
+typedef struct singleparseactionfrm {
+  FORM_MESSAGE_BLOCK
+  DialoG dlg;
+  ButtoN leave_dlg_up;
+  ButtoN accept_btn;
+} SingleParseActionFrmData, PNTR SingleParseActionFrmPtr;
+
+
+static void ChangeSingleParseAction (Pointer data)
+{
+  SingleParseActionFrmPtr frm;
+  ValNodePtr err_list;
+
+  frm = (SingleParseActionFrmPtr) data;
+  if (frm == NULL) {
+    return;
+  }
+
+  /* enable or disable accept button */
+  err_list = TestDialog (frm->dlg);
+  if (err_list == NULL) {
+    Enable (frm->accept_btn);
+  } else {
+    Disable (frm->accept_btn);
+  }
+  err_list = ValNodeFree (err_list);
+}
+
+
+static void ClearSingleParseAction (ButtoN b)
+{
+  SingleParseActionFrmPtr frm;
+
+  frm = (SingleParseActionFrmPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  PointerToDialog (frm->dlg, NULL);
+  ChangeSingleParseAction (frm);
+}
+
+
+static void ClearTextSingleParseAction (ButtoN b)
+{
+  SingleParseActionFrmPtr frm;
+  ParseActionPtr parse;
+
+  frm = (SingleParseActionFrmPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  parse = DialogToPointer (frm->dlg);
+
+  if (parse != NULL && parse->portion != NULL) {
+    parse->portion->left_text = MemFree (parse->portion->left_text);
+    parse->portion->right_text = MemFree (parse->portion->right_text);
+    PointerToDialog (frm->dlg, parse);
+    parse = ParseActionFree (parse);
+    ChangeSingleParseAction (frm);
+  }
+}
+
+
+static void ActionToSingleParseActionForm (ForM f, Pointer data)
+{
+  SingleParseActionFrmPtr frm;
+  ParseActionPtr          parse;
+
+
+  frm = (SingleParseActionFrmPtr) GetObjectExtra (f);
+  if (frm == NULL) return;
+
+  parse = (ParseActionPtr) data;
+
+  PointerToDialog (frm->dlg, parse);
+  ChangeSingleParseAction (frm);
+}
+
+
+static Pointer FormToParseAction (ForM f)
+{
+  SingleParseActionFrmPtr frm;
+  ParseActionPtr          parse;
+
+
+  frm = (SingleParseActionFrmPtr) GetObjectExtra (f);
+  if (frm == NULL) return NULL;
+
+  parse = DialogToPointer (frm->dlg);
+  return parse;
+}
+
+
+
+static void SingleParseAcceptButton (ButtoN b)
+{
+  SingleParseActionFrmPtr frm;
+  ParseActionPtr          parse;
+  AECRSamplePtr           sample;
+  SeqEntryPtr             sep;
+  ValNodePtr              vnp;
+  Int4                    num_fields = 0, num_feat = 0;
+
+  frm = (SingleParseActionFrmPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  sep = GetTopSeqEntryForEntityID (frm->input_entityID);
+
+  parse = DialogToPointer (frm->dlg);
+  if (parse == NULL) {
+    return;
+  }
+
+  /* check for existing text, then set value in parse*/
+  sample = GetExistingTextForParseAction (parse, sep);
+  if (sample != NULL && sample->num_found > 0) {
+    parse->existing_text = TwoStepExistingText (sample->num_found, FALSE, FALSE);
+  } else {
+    parse->existing_text = ExistingTextOption_replace_old;
+  }
+  sample = AECRSampleFree (sample);
+  if (parse->existing_text == 0) {
+    parse = ParseActionFree (parse);
+    return;
+  }
+
+  vnp = ValNodeNew (NULL);
+  vnp->choice = MacroActionChoice_parse;
+  vnp->data.ptrvalue = parse;
+
+  ApplyMacroToSeqEntry (sep, vnp, &num_fields, &num_feat);
+
+  vnp = MacroActionChoiceFree (vnp);
+
+  ObjMgrSetDirtyFlag (frm->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, frm->input_entityID, 0, 0);
+  if (!GetStatus (frm->leave_dlg_up)) {
+    Remove (frm->form);
+  }
+  Update ();
+}
+
+
+/* todo - later allow different starting setups */
+NLM_EXTERN ForM SingleParseAction (Uint2 entityID)
+{
+  WindoW                w;
+  GrouP                 h, c, c1;
+  ButtoN                b;
+  SingleParseActionFrmPtr     frm;
+
+  frm = (SingleParseActionFrmPtr) MemNew (sizeof (SingleParseActionFrmData));
+
+  w = FixedWindow(-20, -13, -10, -10, "Parse Text", StdCloseWindowProc);
+  SetObjectExtra (w, frm, NULL);
+
+  frm->form = (ForM) w;
+  frm->input_entityID = entityID;
+  frm->toform = ActionToSingleParseActionForm;
+  frm->fromform = FormToParseAction;
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  frm->dlg = ParseActionDialogEx (h, FALSE, FALSE, ChangeSingleParseAction, frm);
+
+  c1 = HiddenGroup (h, 3, 0, NULL);
+  b = PushButton (c1, "Clear", ClearSingleParseAction);
+  SetObjectExtra (b, frm, NULL);
+  b = PushButton (c1, "Clear Text", ClearTextSingleParseAction);
+  SetObjectExtra (b, frm, NULL);
+  frm->leave_dlg_up = CheckBox (c1, "Leave dialog up", NULL);
+
+
+  c = HiddenGroup (h, 4, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  frm->accept_btn = PushButton (c, "Accept", SingleParseAcceptButton);
+  SetObjectExtra (frm->accept_btn, frm, NULL);
+  b = PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->dlg,
+                              (HANDLE) c1,
+                              (HANDLE) c,
+                              NULL);
+
+  return (ForM) w;
+
+}
 
 /* Functions for summarizing macro actions for display */
 
@@ -16058,6 +17113,98 @@ static CharPtr SummarizeRemoveFeatureAction (RemoveFeatureActionPtr a)
 }
 
 
+static CharPtr SummarizeRemoveDescriptorAction (RemoveDescriptorActionPtr a)
+{
+  CharPtr    label = NULL;
+  CharPtr    constraint, str;
+  CharPtr    fmt = "Remove %s";
+  CharPtr    constraint_fmt = "Remove %s descriptors %s";
+
+  if (a == NULL) {
+    str = StringSave ("No action");
+  } else {
+    label = GetDescriptorNameFromDescriptorType (a->type);
+    constraint = SummarizeConstraintSet (a->constraint);
+    if (constraint == NULL) {
+      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (label)));
+      sprintf (str, fmt, label);
+    } else {
+      str = (CharPtr) MemNew (sizeof (Char) * (StringLen (constraint_fmt) + StringLen (label) + StringLen (constraint)));
+      sprintf (str, constraint_fmt, label, constraint);
+      constraint = MemFree (constraint);
+    }
+  }
+
+  return str;
+}
+
+
+static CharPtr SummarizeAutodefClauseListType (Uint2 clause_list_type)
+{
+  CharPtr str = "complete sequence";
+
+  switch (clause_list_type) {
+    case Autodef_list_type_feature_list:
+      str = "list fFeatures";
+      break;
+    case Autodef_list_type_complete_sequence:
+      str = "complete sequence";
+      break;
+    case Autodef_list_type_complete_genome:
+      str = "complete genome";
+      break;
+  }
+  return str;
+}
+
+
+static CharPtr SummarizeAutodefAction (AutodefActionPtr autodef)
+{
+  CharPtr    label = NULL, mod_name;
+  CharPtr    str = NULL;
+  CharPtr    fmt = "Autodef %s";
+  CharPtr    modifiers_fmt = " with modifier";
+  Int4       len;
+  ValNodePtr mod_names = NULL, vnp;
+
+  if (autodef == NULL) {
+    str = StringSave ("No action");
+  } else {
+    label = SummarizeAutodefClauseListType (autodef->clause_list_type);
+    len = StringLen (fmt) + StringLen (label);
+    if (autodef->modifiers != NULL) {
+      len += StringLen (modifiers_fmt) + 2;
+      for (vnp = autodef->modifiers; vnp != NULL; vnp = vnp->next) {
+        mod_name = GetSourceQualName (vnp->data.intvalue);
+        len += StringLen (mod_name) + 3;
+        ValNodeAddPointer (&mod_names, 0, mod_name);
+      }
+    }
+    
+    str = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+    sprintf (str, fmt, label);
+
+    if (autodef->modifiers != NULL) {
+      StringCat (str, modifiers_fmt);
+      if (autodef->modifiers->next != NULL) {
+        StringCat (str, "s");
+      }
+      for (vnp = mod_names; vnp != NULL; vnp = vnp->next) {
+        StringCat (str, " ");
+        StringCat (str, vnp->data.ptrvalue);
+        if (vnp->next != NULL) {
+          StringCat (str, ",");
+        }
+      }
+    }
+
+    mod_names = ValNodeFree (mod_names);
+  }
+
+  return str;
+}
+
+
 static CharPtr SummarizeConvertSourceOptions (ValNodePtr vnp)
 {
   ConvertFromCDSOptionsPtr options;
@@ -16421,6 +17568,12 @@ static CharPtr SummarizeMacroAction (ValNodePtr vnp)
     case MacroActionChoice_convert_feature:
       str = SummarizeConvertFeatureAction (vnp->data.ptrvalue);
       break;
+    case MacroActionChoice_remove_descriptor:
+      str = SummarizeRemoveDescriptorAction (vnp->data.ptrvalue);
+      break;
+    case MacroActionChoice_autodef:
+      str = SummarizeAutodefAction (vnp->data.ptrvalue);
+      break;
     default:
       str = StringSave ("Invalid action");
       break;
@@ -16470,7 +17623,8 @@ typedef enum {
   eTabColumnConfig_Apply_CDSGeneProtField,
   eTabColumnConfig_Apply_FeatureField,
   eTabColumnConfig_Apply_PubField,
-  eTabColumnConfig_Apply_GenomeProjectId
+  eTabColumnConfig_Apply_GenomeProjectId,
+  eTabColumnConfig_Apply_CommentDescriptor
 } ETabColumnConfig;
 
 typedef enum {
@@ -16667,6 +17821,10 @@ static Pointer TabColumnConfigDialogToChoice (DialoG d)
       f->field = ValNodeNew (NULL);
       f->field->choice = FieldType_misc;
       f->field->data.intvalue = Misc_field_genome_project_id;
+    } else if (val == eTabColumnConfig_Apply_CommentDescriptor) {
+      f->field = ValNodeNew (NULL);
+      f->field->choice = FieldType_misc;
+      f->field->data.intvalue = Misc_field_comment_descriptor;
     }
 
     if (dlg->erase_when_blank == NULL) {
@@ -16780,6 +17938,7 @@ static void TabColumnActionChange (PopuP p)
       Hide (dlg->match_grp);
       break;
     case eTabColumnConfig_Apply_GenomeProjectId:
+    case eTabColumnConfig_Apply_CommentDescriptor:
       Show (dlg->qual_grp);
       Hide (dlg->src_qual);
       Hide (dlg->feature_field_grp);
@@ -16875,7 +18034,7 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
           PointerToDialog (dlg->feature_type, NULL);
           PointerToDialog (dlg->feature_field, NULL);
         } else {
-          vn.choice = ff->type;
+          vn.choice = (Uint1) ff->type;
           vn.data.ptrvalue = NULL;
           vn.next = NULL;
           PointerToDialog (dlg->feature_type, &vn);
@@ -16899,6 +18058,8 @@ static void TabColumnConfigToDialog (DialoG d, Pointer data)
         PointerToDialog (dlg->pub_field, &vn);
       } else if (f->field->choice == FieldType_misc && f->field->data.intvalue == Misc_field_genome_project_id) {
         SetValue (dlg->column_action, eTabColumnConfig_Apply_GenomeProjectId);
+      } else if (f->field->choice == FieldType_misc && f->field->data.intvalue == Misc_field_comment_descriptor) {
+        SetValue (dlg->column_action, eTabColumnConfig_Apply_CommentDescriptor);
       }
         
       SafeSetStatus (dlg->change_mrna, f->match_mrna);
@@ -17009,6 +18170,7 @@ NLM_EXTERN DialoG TabColumnConfigDialog
   PopupItem (dlg->column_action, "Apply to Feature Field");
   PopupItem (dlg->column_action, "Apply to Publication Field");
   PopupItem (dlg->column_action, "Apply to Genome Project ID");
+  PopupItem (dlg->column_action, "Apply to Comment Descriptor");
   SetValue (dlg->column_action, 1);
   
   k = HiddenGroup (p, 0, 0, NULL);
@@ -17405,7 +18567,7 @@ NLM_EXTERN DialoG TabColumnConfigListDialog (GrouP h, ValNodePtr first_values, V
   dlg->change_userdata = change_userdata;
 
 
-  dlg->column_list_doc = DocumentPanel (p, stdCharWidth * 50, stdLineHeight * 12);
+  dlg->column_list_doc = DocumentPanel (p, stdCharWidth * 50, stdLineHeight * 8);
   SetObjectExtra (dlg->column_list_doc, dlg, NULL);
   SetDocProcs (dlg->column_list_doc, ClickColumnListDoc, NULL, NULL, NULL);
   SetDocShade (dlg->column_list_doc, NULL, NULL, ShowSelectedColumn, NULL);
@@ -17446,6 +18608,78 @@ NLM_EXTERN DialoG TabColumnConfigListDialog (GrouP h, ValNodePtr first_values, V
   SetTabColumnConfigDialogTitle (dlg->edit_col_dlg, dlg->first_values[0], dlg->blank_list[0]);
     
   return (DialoG) p;
+}
+
+
+NLM_EXTERN void ChangeDataForTabColumnConfigListDialog (DialoG d, ValNodePtr first_values, ValNodePtr blank_list)
+{
+  TabColumnConfigListDlgPtr dlg;
+  TabColumnConfigPtr PNTR column_list;
+  Int4 num_columns, i;
+  ValNodePtr           vnp_v, vnp_b;
+
+  dlg = (TabColumnConfigListDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  num_columns = ValNodeLen (blank_list);
+  if (num_columns < dlg->num_columns) {
+    /* truncate existing list */
+    for (i = num_columns; i < dlg->num_columns; i++) {
+      dlg->column_list[i] = TabColumnConfigFree (dlg->column_list[i]);
+      dlg->first_values[i] = MemFree (dlg->first_values[i]);
+    }
+    if (dlg->current_column >= num_columns) {
+      dlg->current_column = num_columns - 1;
+    }
+
+    dlg->num_columns = num_columns;
+  } else if (num_columns > dlg->num_columns) {
+    /* need larger lists */
+    for (i = 0; i < dlg->num_columns; i++) {
+      dlg->first_values[i] = MemFree (dlg->first_values[i]);
+    }
+    dlg->first_values = MemFree (dlg->first_values);
+    dlg->first_values = MemNew (sizeof (CharPtr) * num_columns);
+
+    dlg->blank_list = MemFree (dlg->blank_list);
+    dlg->blank_list = (Int4Ptr) MemNew (sizeof (Int4) * num_columns);
+
+    column_list = (TabColumnConfigPtr PNTR) MemNew (sizeof (TabColumnConfigPtr) * num_columns);
+    for (i = 0; i < dlg->num_columns; i++) {
+      column_list[i] = dlg->column_list[i];
+      dlg->column_list[i] = NULL;
+    }
+    dlg->column_list = MemFree (dlg->column_list);
+    dlg->column_list = column_list;
+
+    dlg->num_columns = num_columns;
+  }
+
+  /* populate column list */
+  vnp_v = first_values;
+  vnp_b = blank_list;
+  i = 0;
+  while (vnp_b != NULL) {
+    dlg->blank_list[i] = vnp_b->data.intvalue;
+    if (vnp_v == NULL || StringHasNoText (vnp_v->data.ptrvalue)) {
+      dlg->first_values[i] = StringSave ("First row value is blank");
+    } else {
+      dlg->first_values[i] = StringSave (vnp_v->data.ptrvalue);
+    }
+    vnp_b = vnp_b->next;
+    if (vnp_v != NULL) {
+      vnp_v = vnp_v->next;
+    }
+    i++;
+  }
+    
+  PopulateTabConfigListColumnListDoc (d);
+
+  PointerToDialog (dlg->edit_col_dlg, dlg->column_list[dlg->current_column]);
+  SetTabColumnConfigDialogTitle (dlg->edit_col_dlg, dlg->first_values[dlg->current_column], dlg->blank_list[dlg->current_column]);
+
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.18 $
+* $Revision: 1.19 $
 *
 * File Description: 
 *
@@ -175,6 +175,22 @@ extern Boolean ApplyOneSpecificHostFix (SpecificHostFixPtr s);
 NLM_EXTERN ValNodePtr Taxon3GetSpecificHostFixesInSeqEntry (SeqEntryPtr sep, Boolean caps, Boolean paren);
 
 NLM_EXTERN ValNodePtr GetOrganismTaxLookupFailuresInSeqEntry (SeqEntryPtr sep);
+
+typedef struct taxfixitem {
+  Uint1 data_choice;
+  Pointer data;
+  OrgRefPtr response_org;
+  CharPtr taxname;
+  CharPtr suggested_fix;
+  CharPtr rank;
+} TaxFixItemData, PNTR TaxFixItemPtr;
+
+NLM_EXTERN TaxFixItemPtr TaxFixItemNew (void);
+NLM_EXTERN TaxFixItemPtr TaxFixItemCopy (TaxFixItemPtr orig);
+NLM_EXTERN TaxFixItemPtr TaxFixItemFree (TaxFixItemPtr t);
+NLM_EXTERN ValNodePtr LIBCALLBACK TaxFixItemListFree (ValNodePtr vnp);
+NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list);
+
 
 
 #ifdef __cplusplus

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.95 $
+* $Revision: 1.102 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,6 +63,19 @@
 #endif
 #endif
 
+static CharPtr ref_link = "http://www.ncbi.nlm.nih.gov/RefSeq/";
+
+static CharPtr doc_link = "http://www.ncbi.nlm.nih.gov/genome/guide/build.shtml";
+
+static CharPtr ev_link = "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?";
+
+static CharPtr link_encode = "http://www.nhgri.nih.gov/10005107";
+
+static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+
+
 /* ********************************************************************** */
 
 static void AddHistCommentString (
@@ -71,7 +84,8 @@ static void AddHistCommentString (
   CharPtr prefix,
   CharPtr suffix,
   DatePtr dp,
-  SeqIdPtr ids
+  SeqIdPtr ids,
+  Boolean is_na
 )
 
 {
@@ -120,9 +134,14 @@ static void AddHistCommentString (
       first = FALSE;
       if ( GetWWW(ajp) ) {
         FFAddOneString (ffstring, " gi:", FALSE, FALSE, TILDE_IGNORE);
-        FFAddTextToString (ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        if (is_na) {
+          FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+        } else {
+          FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+        }
         sprintf (buf, "%ld", (long) gi);
-        FFAddTextToString (ffstring, "val=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString (ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
       } else {
@@ -510,7 +529,8 @@ static Boolean URLHasSuspiciousHtml (
 static void AddStrForRefTrack (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  UserObjectPtr uop
+  UserObjectPtr uop,
+  Boolean is_na
 )
 
 {
@@ -582,7 +602,9 @@ static void AddStrForRefTrack (
     }
   }
   if ( GetWWW(ajp) ) {
-    FFAddTextToString(ffstring, "<a href=\"", ref_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+    FF_Add_NCBI_Base_URL (ffstring, ref_link);
+    FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
@@ -635,8 +657,13 @@ static void AddStrForRefTrack (
   if (source != NULL) {
     FFAddOneString (ffstring, reftxt9, FALSE, FALSE, TILDE_IGNORE);
     if (GetWWW (ajp) && ValidateAccn (source) == 0) {
-      FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-      FFAddTextToString(ffstring, "val=", source, "\">", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+      if (is_na) {
+        FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+      } else {
+        FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+      }
+      FFAddTextToString(ffstring, /* "val=" */ NULL, source, "\">", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
     } else {
@@ -675,12 +702,17 @@ static void AddStrForRefTrack (
       }
       if (StringDoesHaveText (accn)) {
         if (GetWWW (ajp) && ValidateAccn (accn) == 0) {
-          FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          if (is_na) {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+          } else {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+          }
           if (gi > 0) {
             sprintf (buf, "%ld", (long) gi);
-            FFAddTextToString(ffstring, "val=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+            FFAddTextToString(ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
           } else {
-            FFAddTextToString(ffstring, "val=", accn, "\">", FALSE, FALSE, TILDE_IGNORE);
+            FFAddTextToString(ffstring, /* "val=" */ NULL, accn, "\">", FALSE, FALSE, TILDE_IGNORE);
           }
           FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -1494,43 +1526,61 @@ static CharPtr GetStrForStructuredComment (
       ValNodeAddStr (&head, 0, tmp);  
     }
   }
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-   if (curr->choice != 1) continue;
-    oip = curr->label;
-    if (oip == NULL) continue;
-    field = oip->str;
-    if (StringHasNoText (field)) continue;
-    if (StringCmp (field, "StructuredCommentPrefix") == 0) continue;
-    if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
-    str = (CharPtr) curr->data.ptrvalue;
-    if (StringHasNoText (str)) continue;
-    len = max + StringLen (str) + 4;
-    FFStartPrint (ffstring, GENBANK_FMT, 0, max + 1, field, max + 1, 0, max + 1, field, TRUE);
-    FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
-    /*
-    FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
-    */
-    tmp = StrucCommentFFEndPrint (ajp, ffstring, awp->format, max + 1, max + 1, 0, max + 1, NULL);
-    ValNodeCopyStr (&head, 0, tmp);
-    MemFree (tmp);
-    FFRecycleString (ajp, ffstring);
-    ffstring = FFGetString (ajp);
-    /*
-    tmp = (CharPtr) MemNew (len);
-    if (tmp == NULL) continue;
-    StringCpy (tmp, field);
-    len = StringLen (tmp);
-    while (len < max) {
-      tmp [len] = ' ';
-      len++;
+  if (max > 79) {
+    for (curr = uop->data; curr != NULL; curr = curr->next) {
+     if (curr->choice != 1) continue;
+      oip = curr->label;
+      if (oip == NULL) continue;
+      field = oip->str;
+      if (StringHasNoText (field)) continue;
+      if (StringCmp (field, "StructuredCommentPrefix") == 0) continue;
+      if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
+      str = (CharPtr) curr->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      ValNodeCopyStr (&head, 0, field);  
+      ValNodeCopyStr (&head, 0, " ");  
+      ValNodeCopyStr (&head, 0, str);  
+      ValNodeCopyStr (&head, 0, "\n");  
     }
-    tmp [len] = '\0';
-    StringCat (tmp, " ");
-    StringCat (tmp, str);
-    StringCat (tmp, "\n");
-    ValNodeCopyStr (&head, 0, tmp);
-    MemFree (tmp);
-    */
+  } else {
+    for (curr = uop->data; curr != NULL; curr = curr->next) {
+     if (curr->choice != 1) continue;
+      oip = curr->label;
+      if (oip == NULL) continue;
+      field = oip->str;
+      if (StringHasNoText (field)) continue;
+      if (StringCmp (field, "StructuredCommentPrefix") == 0) continue;
+      if (StringCmp (field, "StructuredCommentSuffix") == 0) continue;
+      str = (CharPtr) curr->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      len = max + StringLen (str) + 4;
+      FFStartPrint (ffstring, GENBANK_FMT, 0, max + 1, field, max + 1, 0, max + 1, field, TRUE);
+      FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+      /*
+      FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
+      */
+      tmp = StrucCommentFFEndPrint (ajp, ffstring, awp->format, max + 1, max + 1, 0, max + 1, NULL);
+      ValNodeCopyStr (&head, 0, tmp);
+      MemFree (tmp);
+      FFRecycleString (ajp, ffstring);
+      ffstring = FFGetString (ajp);
+      /*
+      tmp = (CharPtr) MemNew (len);
+      if (tmp == NULL) continue;
+      StringCpy (tmp, field);
+      len = StringLen (tmp);
+      while (len < max) {
+        tmp [len] = ' ';
+        len++;
+      }
+      tmp [len] = '\0';
+      StringCat (tmp, " ");
+      StringCat (tmp, str);
+      StringCat (tmp, "\n");
+      ValNodeCopyStr (&head, 0, tmp);
+      MemFree (tmp);
+      */
+    }
   }
   if (StringDoesHaveText (suffix)) {
     tmp = (CharPtr) MemNew (StringLen (suffix) + 4);
@@ -1862,6 +1912,39 @@ static CharPtr reftxt33 = "from the";
 static CharPtr reftxt34 = "assembly of the human genome (NCBI build";
 static CharPtr reftxt35 = ").";
 
+/*
+static CharPtr GetDBLinkString (
+  UserObjectPtr uop
+)
+
+{
+  Char          buf [128];
+  Int4Ptr       ip;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+  Int4          val;
+
+  if (uop == NULL) return NULL;
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || oip->str == NULL || ufp->choice != 8) continue;
+    if (StringICmp (oip->str, "Trace Assembly Archive") == 0) {
+      ip = (Int4Ptr) ufp->data.ptrvalue;
+      if (ufp->num > 0 && ip != NULL) {
+        val = ip [0];
+        if (val > 0) {
+          sprintf (buf, "Trace Assembly Archive:%ld", (long) val);
+          return StringSave (buf);
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+*/
+
 static CharPtr GetEncodeString (
   UserObjectPtr uop,
   BioseqPtr bsp
@@ -1950,7 +2033,11 @@ NLM_EXTERN void AddCommentBlock (
   Boolean            didTPA = FALSE;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
+  /*
+  UserObjectPtr      dblinkUop = NULL;
+  */
   DeltaSeqPtr        dsp;
+  UserObjectPtr      encodeUop = NULL;
   Boolean            estEv = FALSE;
   /*
   SeqMgrFeatContext  fcontext;
@@ -2026,12 +2113,51 @@ NLM_EXTERN void AddCommentBlock (
         genomeVersionNumber = GetGenomeVersionNumber (uop);
       }
       oip = uop->type;
-      if (oip != NULL && StringICmp (oip->str, "ENCODE") == 0) {
-        is_encode = TRUE;
+      if (oip != NULL) {
+        if (StringICmp (oip->str, "ENCODE") == 0) {
+          is_encode = TRUE;
+          encodeUop = uop;
+        }
+        /*
+        if (StringICmp (oip->str, "DBLink") == 0) {
+          dblinkUop = uop;
+        }
+        */
       }
     }
     sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
   }
+
+  /*
+  if (dblinkUop != NULL) {
+    str = GetDBLinkString (dblinkUop);
+    if (StringDoesHaveText (str)) {
+      cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+      if (cbp != NULL) {
+
+        cbp->entityID = awp->entityID;
+        cbp->first = first;
+        first = FALSE;
+
+        if (cbp->first) {
+          FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+        } else {
+          FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+        }
+
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+
+        cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+        FFRecycleString(ajp, ffstring);
+        ffstring = FFGetString(ajp);
+
+        if (awp->afp != NULL) {
+          DoImmediateFormat (awp->afp, (BaseBlockPtr) cbp);
+        }
+      }
+    }
+  }
+  */
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
@@ -2057,7 +2183,9 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, "GENOME ANNOTATION ", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", ref_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, ref_link);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
               if ( GetWWW(ajp) ) {
@@ -2077,7 +2205,9 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, " [see ", FALSE, FALSE, TILDE_EXPAND);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", doc_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, doc_link);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "documentation", FALSE, FALSE, TILDE_IGNORE);
               if ( GetWWW(ajp) ) {
@@ -2117,7 +2247,9 @@ NLM_EXTERN void AddCommentBlock (
 
               FFAddOneString (ffstring, "This record was provided by the ", FALSE, FALSE, TILDE_EXPAND);
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", link_encode, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, link_encode);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "ENCODE", FALSE, FALSE, TILDE_EXPAND);
               if ( GetWWW(ajp) ) {
@@ -2125,7 +2257,7 @@ NLM_EXTERN void AddCommentBlock (
               }
               FFAddOneString (ffstring, " project.", FALSE, FALSE, TILDE_EXPAND);
 
-              str = GetEncodeString (uop, bsp);
+              str = GetEncodeString (encodeUop, bsp);
               if (str != NULL) {
                 FFAddOneString (ffstring, "  ", FALSE, FALSE, TILDE_EXPAND);
                 FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
@@ -2159,7 +2291,9 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, "GENOME ANNOTATION ", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", ref_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, ref_link);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
               if ( GetWWW(ajp) ) {
@@ -2180,7 +2314,9 @@ NLM_EXTERN void AddCommentBlock (
                 FFAddOneString (ffstring, " [see ", FALSE, FALSE, TILDE_EXPAND);
 
                 if ( GetWWW(ajp) ) {
-                  FFAddTextToString (ffstring, "<a href=\"", doc_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                  FF_Add_NCBI_Base_URL (ffstring, doc_link);
+                  FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
                 }
                 FFAddOneString (ffstring, "documentation", FALSE, FALSE, TILDE_IGNORE);
                 if ( GetWWW(ajp) ) {
@@ -2195,7 +2331,9 @@ NLM_EXTERN void AddCommentBlock (
                 FFAddOneString (ffstring, "~Also see:~    ", FALSE, FALSE, TILDE_EXPAND);
 
                 if ( GetWWW(ajp) ) {
-                  FFAddTextToString (ffstring, "<a href=\"", doc_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                  FF_Add_NCBI_Base_URL (ffstring, doc_link);
+                  FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
                 }
                 FFAddOneString (ffstring, "Documentation", FALSE, FALSE, TILDE_IGNORE);
                 if ( GetWWW(ajp) ) {
@@ -2242,7 +2380,9 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, "MODEL ", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", ref_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, ref_link);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
               if ( GetWWW(ajp) ) {
@@ -2253,7 +2393,14 @@ NLM_EXTERN void AddCommentBlock (
               FFAddTextToString (ffstring, NULL, reftxt11, " (", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", nt_link, name, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                if (ISA_na (bsp->mol)) {
+                  FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+                } else {
+                  FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+                }
+                FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "?report=graph", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, name, FALSE, FALSE, TILDE_IGNORE);
@@ -2283,7 +2430,8 @@ NLM_EXTERN void AddCommentBlock (
                 locusID [0] = '\0';
                 taxID [0] = '\0';
                 if ( GetWWW(ajp) && GetGeneAndLocus (bsp, &geneName, locusID, taxID)) {
-                  FFAddTextToString (ffstring, "<a href=\"", ev_link, NULL, FALSE, FALSE, TILDE_IGNORE);
+                  FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                  FF_Add_NCBI_Base_URL (ffstring, ev_link);
                   FFAddTextToString (ffstring, "contig=", name, NULL, FALSE, FALSE, TILDE_IGNORE);
                   FFAddTextToString (ffstring, "&gene=", geneName, NULL, FALSE, FALSE, TILDE_IGNORE);
                   FFAddTextToString (ffstring, "&lid=", locusID, NULL, FALSE, FALSE, TILDE_IGNORE);
@@ -2303,7 +2451,9 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, "~Also see:~    ", FALSE, FALSE, TILDE_EXPAND);
 
               if ( GetWWW(ajp) ) {
-                FFAddTextToString (ffstring, "<a href=\"", doc_link, "\">", FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, doc_link);
+                FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
               }
               FFAddOneString (ffstring, "Documentation", FALSE, FALSE, TILDE_IGNORE);
               if ( GetWWW(ajp) ) {
@@ -2591,7 +2741,7 @@ NLM_EXTERN void AddCommentBlock (
               FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
             }
 
-            AddStrForRefTrack (ajp, ffstring, uop);
+            AddStrForRefTrack (ajp, ffstring, uop, ISA_na (bsp->mol));
 
             cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
             FFRecycleString(ajp, ffstring);
@@ -2718,7 +2868,7 @@ NLM_EXTERN void AddCommentBlock (
           }
 
           AddHistCommentString (ajp, ffstring, "[WARNING] On", "this sequence was replaced by",
-                                hist->replaced_by_date, hist->replaced_by_ids);
+                                hist->replaced_by_date, hist->replaced_by_ids, ISA_na (bsp->mol));
 
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
@@ -2757,7 +2907,7 @@ NLM_EXTERN void AddCommentBlock (
           }
 
           AddHistCommentString (ajp, ffstring, "On", "this sequence version replaced",
-                                hist->replace_date, hist->replace_ids);
+                                hist->replace_date, hist->replace_ids, ISA_na (bsp->mol));
 
           cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
           FFRecycleString(ajp, ffstring);
@@ -4352,7 +4502,13 @@ static void GetFeatsOnCdsProduct (
         pcontext.featdeftype == FEATDEF_transit_peptide_aa ||
         (pcontext.featdeftype == FEATDEF_preprotein /* && isRefSeq */)) {
 
-      if (awp->hideCddFeats && pcontext.featdeftype == FEATDEF_REGION && IsCDD (prt)) {
+      if (awp->hideSitesBondsRegions && (pcontext.featdeftype == FEATDEF_REGION ||
+                                         pcontext.featdeftype == FEATDEF_SITE ||
+                                         pcontext.featdeftype == FEATDEF_BOND)) {
+
+        /* hide site, bond, and region features */
+
+      } else if (awp->hideCddFeats && pcontext.featdeftype == FEATDEF_REGION && IsCDD (prt)) {
 
         /* passing this test prevents mapping of COG CDD region features */
 
@@ -4525,7 +4681,13 @@ static void GetRemoteFeatsOnCdsProduct (
         prt->idx.subtype == FEATDEF_transit_peptide_aa ||
         (prt->idx.subtype == FEATDEF_preprotein /* && isRefSeq */)) {
 
-      if (awp->hideCddFeats && prt->idx.subtype == FEATDEF_REGION && IsCDD (prt)) {
+      if (awp->hideSitesBondsRegions && (prt->idx.subtype == FEATDEF_REGION ||
+                                         prt->idx.subtype == FEATDEF_SITE ||
+                                         prt->idx.subtype == FEATDEF_BOND)) {
+
+        /* hide site, bond, and region features */
+
+      } else if (awp->hideCddFeats && prt->idx.subtype == FEATDEF_REGION && IsCDD (prt)) {
 
         /* passing this test prevents mapping of COG CDD region features */
 
@@ -4701,6 +4863,9 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
   if (awp->hideGaps && fcontext->featdeftype == FEATDEF_gap) return TRUE;
   if (ISA_aa (bsp->mol) && fcontext->featdeftype == FEATDEF_REGION &&
       awp->hideCddFeats && IsCDD (sfp)) return TRUE;
+  if (awp->hideSitesBondsRegions && (fcontext->featdeftype == FEATDEF_REGION ||
+                                     fcontext->featdeftype == FEATDEF_SITE ||
+                                     fcontext->featdeftype == FEATDEF_BOND)) return TRUE;
 
   /* DDBJ does not want to show gene features */
 

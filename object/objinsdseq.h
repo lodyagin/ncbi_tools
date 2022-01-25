@@ -17,12 +17,32 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
+*    Generated using ASNCODE Revision: 6.16 at Jan 15, 2009  2:16 PM
 *
 **************************************************/
 
 NLM_EXTERN Boolean LIBCALL
 objinsdseqAsnLoad PROTO((void));
+
+
+/**************************************************
+*
+*    INSDSet
+*
+**************************************************/
+typedef struct struct_INSDSeq INSDSet;
+typedef struct struct_INSDSeq PNTR INSDSetPtr;
+#define INSDSetNew() INSDSeqNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN INSDSetPtr LIBCALL INSDSetFree PROTO ((INSDSetPtr ));
+NLM_EXTERN INSDSetPtr LIBCALL INSDSetNew PROTO (( void ));
+NLM_EXTERN INSDSetPtr LIBCALL INSDSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDSetAsnWrite PROTO (( INSDSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
 
 
 /**************************************************
@@ -57,6 +77,7 @@ typedef struct struct_INSDSeq {
    CharPtr   taxonomy;
    struct struct_INSDReference PNTR   references;
    CharPtr   comment;
+   struct struct_INSDTagset PNTR   tagset;
    CharPtr   primary;
    CharPtr   source_db;
    CharPtr   database_reference;
@@ -99,6 +120,27 @@ NLM_EXTERN INSDReferencePtr LIBCALL INSDReferenceFree PROTO ((INSDReferencePtr )
 NLM_EXTERN INSDReferencePtr LIBCALL INSDReferenceNew PROTO (( void ));
 NLM_EXTERN INSDReferencePtr LIBCALL INSDReferenceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL INSDReferenceAsnWrite PROTO (( INSDReferencePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    INSDTagset
+*
+**************************************************/
+typedef struct struct_INSDTagset {
+   Uint4 OBbits__;
+   CharPtr   authority;
+   CharPtr   version;
+   CharPtr   url;
+   struct struct_INSDTag PNTR   tags;
+} INSDTagset, PNTR INSDTagsetPtr;
+
+
+NLM_EXTERN INSDTagsetPtr LIBCALL INSDTagsetFree PROTO ((INSDTagsetPtr ));
+NLM_EXTERN INSDTagsetPtr LIBCALL INSDTagsetNew PROTO (( void ));
+NLM_EXTERN INSDTagsetPtr LIBCALL INSDTagsetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagsetAsnWrite PROTO (( INSDTagsetPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -148,6 +190,47 @@ NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefFree PROTO ((INSDXrefPtr ));
 NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefNew PROTO (( void ));
 NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL INSDXrefAsnWrite PROTO (( INSDXrefPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    INSDTags
+*
+**************************************************/
+typedef struct struct_INSDTag INSDTags;
+typedef struct struct_INSDTag PNTR INSDTagsPtr;
+#define INSDTagsNew() INSDTagNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN INSDTagsPtr LIBCALL INSDTagsFree PROTO ((INSDTagsPtr ));
+NLM_EXTERN INSDTagsPtr LIBCALL INSDTagsNew PROTO (( void ));
+NLM_EXTERN INSDTagsPtr LIBCALL INSDTagsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagsAsnWrite PROTO (( INSDTagsPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    INSDTag
+*
+**************************************************/
+typedef struct struct_INSDTag {
+   struct struct_INSDTag PNTR next;
+   Uint4 OBbits__;
+   CharPtr   name;
+   CharPtr   value;
+   CharPtr   unit;
+} INSDTag, PNTR INSDTagPtr;
+
+
+NLM_EXTERN INSDTagPtr LIBCALL INSDTagFree PROTO ((INSDTagPtr ));
+NLM_EXTERN INSDTagPtr LIBCALL INSDTagNew PROTO (( void ));
+NLM_EXTERN INSDTagPtr LIBCALL INSDTagAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagAsnWrite PROTO (( INSDTagPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -207,19 +290,65 @@ NLM_EXTERN Boolean LIBCALL INSDQualifierAsnWrite PROTO (( INSDQualifierPtr , Asn
 
 /**************************************************
 *
-*    INSDSet
+*    INSDTagsetRules
 *
 **************************************************/
-typedef struct struct_INSDSeq INSDSet;
-typedef struct struct_INSDSeq PNTR INSDSetPtr;
-#define INSDSetNew() INSDSeqNew() 
+typedef struct struct_INSDTagsetRules {
+   struct struct_INSDTagsetRules PNTR next;
+   Uint4 OBbits__;
+   CharPtr   authority;
+   CharPtr   version;
+   ValNodePtr   mandatorytags;
+   ValNodePtr   optionaltags;
+   ValNodePtr   uniquetags;
+#define OB__INSDTagsetRules_extensible 0
+
+   Uint1   extensible;
+} INSDTagsetRules, PNTR INSDTagsetRulesPtr;
+
+
+NLM_EXTERN INSDTagsetRulesPtr LIBCALL INSDTagsetRulesFree PROTO ((INSDTagsetRulesPtr ));
+NLM_EXTERN INSDTagsetRulesPtr LIBCALL INSDTagsetRulesNew PROTO (( void ));
+NLM_EXTERN INSDTagsetRulesPtr LIBCALL INSDTagsetRulesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagsetRulesAsnWrite PROTO (( INSDTagsetRulesPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    INSDTagNames
+*
+**************************************************/
+typedef ValNode INSDTagNames;
+typedef ValNodePtr INSDTagNamesPtr;
+#define INSDTagNamesNew() ValNodeNew(NULL) 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
-NLM_EXTERN INSDSetPtr LIBCALL INSDSetFree PROTO ((INSDSetPtr ));
-NLM_EXTERN INSDSetPtr LIBCALL INSDSetNew PROTO (( void ));
-NLM_EXTERN INSDSetPtr LIBCALL INSDSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL INSDSetAsnWrite PROTO (( INSDSetPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN INSDTagNamesPtr LIBCALL INSDTagNamesFree PROTO ((INSDTagNamesPtr ));
+NLM_EXTERN INSDTagNamesPtr LIBCALL INSDTagNamesNew PROTO (( void ));
+NLM_EXTERN INSDTagNamesPtr LIBCALL INSDTagNamesAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagNamesAsnWrite PROTO (( INSDTagNamesPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    INSDTagsetRuleSet
+*
+**************************************************/
+typedef struct struct_INSDTagsetRules INSDTagsetRuleSet;
+typedef struct struct_INSDTagsetRules PNTR INSDTagsetRuleSetPtr;
+#define INSDTagsetRuleSetNew() INSDTagsetRulesNew() 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN INSDTagsetRuleSetPtr LIBCALL INSDTagsetRuleSetFree PROTO ((INSDTagsetRuleSetPtr ));
+NLM_EXTERN INSDTagsetRuleSetPtr LIBCALL INSDTagsetRuleSetNew PROTO (( void ));
+NLM_EXTERN INSDTagsetRuleSetPtr LIBCALL INSDTagsetRuleSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL INSDTagsetRuleSetAsnWrite PROTO (( INSDTagsetRuleSetPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 

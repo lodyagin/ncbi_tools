@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.365 $
+* $Revision: 6.372 $
 *
 * File Description: 
 *
@@ -437,6 +437,20 @@ static SeqLocRangePtr SeqLocRangeFree (SeqLocRangePtr slrp)
   return NULL;
 }
 
+
+static Boolean IsLocationOnCircularBioseq (SeqLocPtr slp)
+{
+  BioseqPtr bsp;
+  Boolean is_circular = FALSE;
+
+  bsp = BioseqFind (SeqLocId(slp));
+  if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
+      is_circular = TRUE;
+  }
+  return is_circular;
+}
+
+
 static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
 
 {
@@ -448,6 +462,7 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
   Int4            right;
   SeqLocRangePtr  slrp;
   Uint1           strand;
+  Boolean         is_circular;
 
   if (target == NULL) return NULL;
   head = NULL;
@@ -455,8 +470,13 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
   curr = SeqLocFindNext (slp, NULL);
   while (curr != NULL) {
     if (curr->choice != SEQLOC_NULL) {
-      left = GetOffsetInBioseq (curr, target, SEQLOC_LEFT_END);
-      right = GetOffsetInBioseq (curr, target, SEQLOC_RIGHT_END);
+      is_circular = IsLocationOnCircularBioseq (curr);
+#if 1
+      GetLeftAndRightOffsetsInBioseq (curr, target, &left, &right, is_circular);
+#else
+      left = GetOffsetInBioseqEx (curr, target, SEQLOC_LEFT_END, is_circular);
+      right = GetOffsetInBioseqEx (curr, target, SEQLOC_RIGHT_END, is_circular);
+#endif
       strand = SeqLocStrand (curr);
       /* left > right if within a minus strand delta seq component, flip strand here */
       if (left > right) {
@@ -489,8 +509,12 @@ static SeqLocRangePtr CollectRanges (BioseqPtr target, SeqLocPtr slp)
     curr = SeqLocFindNext (slp, curr);
   }
   if (head == NULL || target->topology != TOPOLOGY_CIRCULAR) return head;
-  left = GetOffsetInBioseq (slp, target, SEQLOC_LEFT_END);
-  right = GetOffsetInBioseq (slp, target, SEQLOC_RIGHT_END);
+#if 1
+  GetLeftAndRightOffsetsInBioseq (slp, target, &left, &right, target->topology == TOPOLOGY_CIRCULAR);
+#else
+  left = GetOffsetInBioseqEx (slp, target, SEQLOC_LEFT_END, target->topology == TOPOLOGY_CIRCULAR);
+  right = GetOffsetInBioseqEx (slp, target, SEQLOC_RIGHT_END, target->topology == TOPOLOGY_CIRCULAR);
+#endif
   if (left == -1 || right == -1 || left <= right) return head;
   /* feature spans origin */
   change = NULL;
@@ -746,6 +770,22 @@ static SeqLocPtr SeqLocFromRange (SeqLocRangePtr head, BioseqPtr target,
   return master_loc;
 }
 
+
+static SeqLocPtr SimpleMerge (BioseqPtr target, SeqLocPtr to, SeqLocPtr from)
+{
+  SeqIntPtr sint, sint_new;
+  SeqLocPtr slp;
+
+  if (target != NULL && to != NULL && from == NULL
+      && to->choice == SEQLOC_INT && (sint = (SeqIntPtr) to->data.ptrvalue) != NULL
+      && SeqIdIn (sint->id, target->id)) {
+    return SeqLocCopy (to);
+  } else {
+    return NULL;
+  }
+}
+
+   
 NLM_EXTERN SeqLocPtr SeqLocMergeExEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr from,
                        Boolean single_interval, Boolean fuse_joints,
                        Boolean merge_overlaps, Boolean add_null, Boolean ignore_mixed)
@@ -764,6 +804,10 @@ NLM_EXTERN SeqLocPtr SeqLocMergeExEx (BioseqPtr target, SeqLocPtr to, SeqLocPtr 
 
   if (target == NULL) return NULL;
   if (to == NULL && from == NULL) return NULL;
+
+  if ((slp = SimpleMerge (target, to, from)) != NULL) {
+    return slp;
+  }
 
   slp = NULL;
   partial5 = FALSE;
@@ -5768,6 +5812,19 @@ static void AddQualifierToFeatureEx (SeqFeatPtr sfp, CharPtr qual, CharPtr val, 
     }
     return;
   } else if (qnum == GBQUAL_db_xref) {
+    if (StringICmp (val, "GI") == 0) {
+      ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Reserved db_xref value %s", val);
+      return;
+    }
+    if (StringICmp (val, "NID") == 0 ||
+        StringICmp (val, "PID") == 0 ||
+        StringICmp (val, "PIDg") == 0 ||
+        StringICmp (val, "PIDe") == 0 ||
+        StringICmp (val, "PIDd") == 0) {
+      ErrPostEx (SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Obsolete db_xref value %s", val);
+      return;
+    }
+
     vnp = ValNodeNew (NULL);
     db = DbtagNew ();
     vnp->data.ptrvalue = db;
@@ -12017,7 +12074,7 @@ static Boolean s_IsSkippable (Char ch)
 }
 
 
-NLM_EXTERN ValNodePtr MakeTokensFromLine (CharPtr line)
+static ValNodePtr MakeTokensFromLineAnySeparator (CharPtr line)
 {
   CharPtr token_start, token_end, token;
   ValNodePtr tokens = NULL;
@@ -12026,6 +12083,7 @@ NLM_EXTERN ValNodePtr MakeTokensFromLine (CharPtr line)
   if (StringHasNoText (line)) {
     return NULL;
   }
+
   token_start = line;
   while (*token_start != 0) {
     while (s_IsSkippable (*token_start)) {
@@ -12045,6 +12103,74 @@ NLM_EXTERN ValNodePtr MakeTokensFromLine (CharPtr line)
     }
   }
   return tokens;
+}
+
+
+static ValNodePtr MakeTokensFromLineTab (CharPtr line)
+{
+  CharPtr token_start, token;
+  ValNodePtr tokens = NULL;
+  Int4       len;
+
+  if (StringHasNoText (line)) {
+    return NULL;
+  }
+
+  token_start = line;
+  while (*token_start != 0) {
+    len = StringCSpn (token_start, "\t");
+    token = (CharPtr) MemNew (sizeof (Char) * (len + 1));
+    StringNCpy (token, token_start, len);
+    token[len] = 0;
+    ValNodeAddPointer (&tokens, 0, token);
+    token_start += len;
+    if (*token_start == '\t') {
+      token_start++;
+    }
+  }
+  return tokens;
+}
+
+
+NLM_EXTERN ValNodePtr MakeTokensFromLine (CharPtr line)
+{
+  ValNodePtr tokens = NULL;
+
+  if (StringChr (line, '\t') == NULL) {
+    tokens = MakeTokensFromLineAnySeparator (line);
+  } else {
+    tokens = MakeTokensFromLineTab (line);
+  }
+  return tokens;
+}
+
+
+static ValNodePtr MakeTranscriptomeIDTokensFromLine (CharPtr line)
+{
+  ValNodePtr tokens = NULL, vnp, vnp_next, tmp, prev;
+
+  if (StringChr (line, '\t') == NULL) {
+    tokens = MakeTokensFromLineAnySeparator (line);
+  } else {
+    tokens = MakeTokensFromLineTab (line);
+    if (tokens != NULL && tokens->next != NULL) {
+      prev = tokens;
+      for (vnp = tokens->next; vnp != NULL; vnp = vnp_next) {
+        vnp_next = vnp->next;
+        tmp = MakeTokensFromLineAnySeparator (vnp->data.ptrvalue);
+        if (tmp != NULL) {
+          ValNodeLink (&tmp, vnp->next);
+          prev->next = tmp;
+          vnp->next = NULL;
+          vnp = ValNodeFreeData (vnp);
+        } else {
+          prev = vnp;
+        }
+      }
+    }
+  }
+  return tokens;
+
 }
 
 
@@ -12637,6 +12763,7 @@ static BioseqPtr GetTranscriptomeBioseqFromStringId (CharPtr str)
   Int4      i, j, num = -1, imin = 0, imax;
   SeqIdIndexElementPtr PNTR sipp;
   SeqEntryPtr               scope;
+  Boolean   found;
 
   if (StringHasNoText (str)) {
     return NULL;
@@ -12660,10 +12787,43 @@ static BioseqPtr GetTranscriptomeBioseqFromStringId (CharPtr str)
 
   while (imax >= imin) {
     i = (imax + imin)/2;
-    if (StringLen (sipp[i]->str) > len && sipp[i]->str[len] == '|'
-        && StringNCmp (sipp[i]->str, rev_id, len) == 0) {
-      num = i;
-      break;
+    if (StringLen (sipp[i]->str) > len && StringNCmp (sipp[i]->str, rev_id, len) == 0) {
+      if (sipp[i]->str[len] == '|') {
+        num = i;
+        break;
+      } else {
+        /* search down the list */
+        j = i - 1;
+        found = FALSE;
+        while (!found && j > -1 && StringLen (sipp[j]->str) > len 
+               && StringNCmp (sipp[j]->str, rev_id, len) == 0) {
+          if (sipp[j]->str[len] == '|') {
+            found = TRUE;
+          } else {
+            j--;
+          }
+        }
+        if (found) {
+          num = j;
+          break;
+        }
+        /* search up the list */
+        j = i + 1;
+        while (!found && j < smp->BioseqIndexCnt && StringLen (sipp[j]->str) > len
+               && StringNCmp (sipp[j]->str, rev_id, len) == 0) {
+          if (sipp[j]->str[len] == '|') {
+            found = TRUE;
+          } else {
+            j++;
+          }
+        }
+        if (found) {
+          num = j;
+          break;
+        } else {
+          break;
+        }
+      }
     } else if ((j = StringCmp (sipp[i]->str, rev_id)) > 0) {
       imax = i - 1;
     } else if (j < 0) {
@@ -12739,7 +12899,7 @@ NLM_EXTERN ValNodePtr GetTranscriptomeIdsList (FILE *fp, SeqEntryPtr sep, ValNod
 
   while (line != NULL && line[0] != EOF) {
     if (!StringHasNoText (line)) {
-      token_list = MakeTokensFromLine (line);
+      token_list = MakeTranscriptomeIDTokensFromLine (line);
       if (token_list != NULL && token_list->next != NULL) {     
         sip = CreateSeqIdFromText (token_list->data.ptrvalue, sep);
         bsp = BioseqFind (sip);
@@ -13920,11 +14080,25 @@ NLM_EXTERN void SplitPubsByList (ValNodePtr split_list)
 }
 
 
+static void AddStructuredCommentCallback (BioseqPtr bsp, Pointer data)
+{
+  UserObjectPtr uop;
+  SeqDescrPtr   sdp;
+
+  if (bsp == NULL || ISA_aa (bsp->mol) || (uop = (UserObjectPtr) data) == NULL) {
+    return;
+  }
+
+  sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+  sdp->data.ptrvalue = AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
+}
+
+
 /* This function reads in a tab-delimited table.  The first line is a header.
  * The first column must contain sequence IDs.  The remaining cells in the first
  * line are the names of fields to create in structured comments.
  */
-NLM_EXTERN ValNodePtr CreateStructuredCommentsFromFile (FILE *fp, SeqEntryPtr sep)
+NLM_EXTERN ValNodePtr CreateStructuredCommentsFromFile (FILE *fp, SeqEntryPtr sep, Boolean apply_to_all)
 {
   ValNodePtr err_list = NULL;
   ValNodePtr table, header, line, vnp_h, vnp_l;
@@ -13954,40 +14128,66 @@ NLM_EXTERN ValNodePtr CreateStructuredCommentsFromFile (FILE *fp, SeqEntryPtr se
   }
   line = table->next;
 
-  while (line != NULL) {
-    vnp_h = header;
-    vnp_l = line->data.ptrvalue;
-    if (vnp_l != NULL)  {
-      id_str = vnp_l->data.ptrvalue;
-      sip = CreateSeqIdFromText (id_str, sep);
-      if (sip == NULL || (bsp = BioseqFind (sip)) == NULL) {
-        msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_id_fmt) + StringLen (id_str)));
-        sprintf (msg, bad_id_fmt, id_str);
-        ValNodeAddPointer (&err_list, 0, msg);
-      } else {
-        uop = CreateStructuredCommentUserObject (NULL, NULL);
+  if (apply_to_all) {
+    while (line != NULL) {
+      vnp_h = header;
+      vnp_l = line->data.ptrvalue;
+      uop = CreateStructuredCommentUserObject (NULL, NULL);
+      while (vnp_h != NULL && vnp_l != NULL) {
+        if (!StringHasNoText (vnp_l->data.ptrvalue)) {
+          AddItemStructuredCommentUserObject (uop, vnp_h->data.ptrvalue, vnp_l->data.ptrvalue);
+        }
         vnp_h = vnp_h->next;
         vnp_l = vnp_l->next;
-        while (vnp_h != NULL && vnp_l != NULL) {
-          if (!StringHasNoText (vnp_l->data.ptrvalue)) {
-            AddItemStructuredCommentUserObject (uop, vnp_h->data.ptrvalue, vnp_l->data.ptrvalue);
-          }
+      }
+      while (vnp_l != NULL && StringHasNoText (vnp_l->data.ptrvalue)) {
+        vnp_l = vnp_l->next;
+      }
+      if (vnp_l != NULL) {
+        msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (extra_data_fmt) + StringLen (id_str)));
+        sprintf (msg, extra_data_fmt, id_str);
+        ValNodeAddPointer (&err_list, 0, msg);
+      }
+      VisitBioseqsInSep (sep, uop, AddStructuredCommentCallback);
+      uop = UserObjectFree (uop);
+      line = line->next;
+    }
+  } else {
+    while (line != NULL) {
+      vnp_h = header;
+      vnp_l = line->data.ptrvalue;
+      if (vnp_l != NULL)  {
+        id_str = vnp_l->data.ptrvalue;
+        sip = CreateSeqIdFromText (id_str, sep);
+        if (sip == NULL || (bsp = BioseqFind (sip)) == NULL) {
+          msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (bad_id_fmt) + StringLen (id_str)));
+          sprintf (msg, bad_id_fmt, id_str);
+          ValNodeAddPointer (&err_list, 0, msg);
+        } else {
+          uop = CreateStructuredCommentUserObject (NULL, NULL);
           vnp_h = vnp_h->next;
           vnp_l = vnp_l->next;
+          while (vnp_h != NULL && vnp_l != NULL) {
+            if (!StringHasNoText (vnp_l->data.ptrvalue)) {
+              AddItemStructuredCommentUserObject (uop, vnp_h->data.ptrvalue, vnp_l->data.ptrvalue);
+            }
+            vnp_h = vnp_h->next;
+            vnp_l = vnp_l->next;
+          }
+          while (vnp_l != NULL && StringHasNoText (vnp_l->data.ptrvalue)) {
+            vnp_l = vnp_l->next;
+          }
+          if (vnp_l != NULL) {
+            msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (extra_data_fmt) + StringLen (id_str)));
+            sprintf (msg, extra_data_fmt, id_str);
+            ValNodeAddPointer (&err_list, 0, msg);
+          }
+          sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
+          sdp->data.ptrvalue = uop;
         }
-        while (vnp_l != NULL && StringHasNoText (vnp_l->data.ptrvalue)) {
-          vnp_l = vnp_l->next;
-        }
-        if (vnp_l != NULL) {
-          msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (extra_data_fmt) + StringLen (id_str)));
-          sprintf (msg, extra_data_fmt, id_str);
-          ValNodeAddPointer (&err_list, 0, msg);
-        }
-        sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_user);
-        sdp->data.ptrvalue = uop;
       }
+      line = line->next;
     }
-    line = line->next;
   }
   return err_list;
 }

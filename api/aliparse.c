@@ -2089,7 +2089,7 @@ SeqLineInfoPtr SeqLineReEval (SeqLineInfoPtr seqLinePtr)
 /*                                                                         */
 /*=========================================================================*/
 
-static s_IsExistingId (AlignFileDataPtr fileInfoPtr,
+static Boolean s_IsExistingId (AlignFileDataPtr fileInfoPtr,
 		       CharPtr          testIdStr)
 {
   IdInfoPtr  idListPtr = NULL;

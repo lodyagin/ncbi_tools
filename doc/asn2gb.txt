@@ -290,8 +290,8 @@ Another set suppresses common feature types or all features.
 #define HIDE_FEATURES              4
 
 #define HIDE_IMP_FEATS             8
-#define HIDE_VARIATION_FEATS      16
-#define HIDE_REPEAT_REGIONS       32
+#define HIDE_VARS_AND_REPT_REGNS  16
+#define HIDE_SITES_BONDS_REGIONS  32
 #define HIDE_CDD_FEATS            64
 #define HIDE_CDS_PROD_FEATS      128
 

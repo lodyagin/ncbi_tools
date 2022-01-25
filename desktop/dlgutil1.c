@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.139 $
+* $Revision: 6.141 $
 *
 * File Description: 
 *
@@ -1499,7 +1499,7 @@ static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName, TexT protXrefDesc
   }
 }
 
-static Boolean IsPseudo (SeqFeatPtr sfp)
+static Boolean FeatIsPseudo (SeqFeatPtr sfp)
 {
   Boolean   pseudo = FALSE;
   GBQualPtr qual;
@@ -1965,7 +1965,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
         if (ffp->fidxref != NULL) {
           TextToFeatXref (ffp->fidxref, sfp);
         }
-        if (IsPseudo (sfp))
+        if (FeatIsPseudo (sfp))
         {
           RemoveProtXrefs (sfp);
         }
@@ -5513,8 +5513,11 @@ ReadAlignedSeqLocList
                                    partial5, partial3,
                                    &(loc_list [loc_num])))
             {
-              loc_list [loc_num] = ValNodeNew (NULL);
-              loc_list [loc_num]->choice = SEQLOC_NULL;
+              if (loc_list[loc_num] == NULL) 
+              {
+                loc_list [loc_num] = ValNodeNew (NULL);
+                loc_list [loc_num]->choice = SEQLOC_NULL;
+              }
             }
           }
           else
@@ -7399,7 +7402,6 @@ static DialoG LatLonDialog (GrouP h, TaglistCallback change_notify, Pointer chan
 
 static Boolean ParseLatLonOk (CharPtr str)
 {
-  Boolean rval = FALSE;
   CharPtr ns, ew, cp;
 
   if (StringHasNoText (str))
@@ -8809,7 +8811,7 @@ extern void FreeSqnTempFiles (void)
 
 
 /* This gets a list of the open views */
-NLM_EXTERN ValNodePtr GetBaseFormList ()
+NLM_EXTERN ValNodePtr GetBaseFormList (void)
 
 {
   Uint4          j;

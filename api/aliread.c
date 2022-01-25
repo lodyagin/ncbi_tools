@@ -1141,7 +1141,6 @@ ValNodePtr Ali_ReadLines (FILE PNTR        alignFilePtr,
   CharPtr          lineStr = NULL;
   ValNodePtr       rowList = NULL;
   ValNodePtr       newRow;
-  Boolean          first = TRUE;
   SeqLineInfoPtr   seqLine;
   SeqLineInfoPtr   reEvalSeqPtr;
   DefLineInfoPtr   defLine;

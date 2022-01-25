@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/*  $Id: ncbi_servicep.h,v 6.45 2008/05/31 11:25:47 kazimird Exp $
+/* $Id: ncbi_servicep.h,v 6.46 2009/01/23 19:44:42 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,7 +48,7 @@ typedef struct {
     void        (*Reset)(SERV_ITER iter);
     SSERV_Info* (*GetNextInfo)(SERV_ITER iter, HOST_INFO* host_info);
     int/*bool*/ (*Update)(SERV_ITER iter, const char* text, int code);
-    int/*bool*/ (*Penalize)(SERV_ITER iter, double penalty);
+    int/*bool*/ (*Feedback)(SERV_ITER iter, double value, int/*bool*/ fine);
     void        (*Close)(SERV_ITER iter);
     const char* name;
 } SSERV_VTable;
@@ -68,7 +68,7 @@ struct SSERV_IterTag {
     const SSERV_Info*   last; /* last server info taken out                  */
     const SSERV_VTable*   op; /* table of virtual functions                  */
 
-    void*               data; /* private data field                          */
+    void*               data; /* private opaque data field                   */
     unsigned        ismask:1; /* whether the name is to be treated as a mask */
     unsigned       ok_down:1; /* as taken..                                  */
     unsigned ok_suppressed:1; /*      ..from types..                         */

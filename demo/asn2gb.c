@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.117 $
+* $Revision: 6.124 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -54,7 +54,7 @@
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "5.5"
+#define ASN2GB_APP_VER "6.4"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -701,6 +701,17 @@ static void CompareFlatFiles (
 
   } else if (batch == 6) {
 
+#ifdef ASN2GNBK_SUPPRESS_UNPUB_AFFIL
+    VisitPubdescsInSep (sep, NULL, FreeUnpubAffil);
+#endif
+
+    SaveAsn2gnbk (sep, path1, format, ENTREZ_MODE, style, (flags | 1), locks, custom);
+    SaveAsn2gnbk (sep, path2, format, ENTREZ_MODE, style, (flags | 1 | 262144), locks, custom);
+
+    ReportDiffs (path1, path2, path3, fp, ffdiff, useFfdiff);
+
+  } else if (batch == 7) {
+
     aip = AsnIoOpen (path3, "w");
     if (aip == NULL) return;
 
@@ -709,18 +720,18 @@ static void CompareFlatFiles (
 
     if (FindNucBioseq (sep) != NULL) {
 
-      sprintf (cmmd, "./oldasn2gb -i %s -o %s", path3, path1);
+      sprintf (cmmd, "./oldasn2gb -i %s -o %s -m e -g 1", path3, path1);
       system (cmmd);
 
-      sprintf (cmmd, "./newasn2gb -i %s -o %s", path3, path2);
+      sprintf (cmmd, "./newasn2gb -i %s -o %s -m e -g 1", path3, path2);
       system (cmmd);
 
     } else {
 
-      sprintf (cmmd, "./oldasn2gb -f p -i %s -o %s", path3, path1);
+      sprintf (cmmd, "./oldasn2gb -f p -i %s -o %s -m e -g 1", path3, path1);
       system (cmmd);
 
-      sprintf (cmmd, "./newasn2gb -f p -i %s -o %s", path3, path2);
+      sprintf (cmmd, "./newasn2gb -f p -i %s -o %s -m e -g 1", path3, path2);
       system (cmmd);
 
     }
@@ -1374,7 +1385,8 @@ Args myargs [] = {
    "      3 asn2gb SSEC/nocleanup\n"
    "      4 asn2flat BSEC/nocleanup\n"
    "      5 asn2gb/asn2flat\n"
-   "      6 oldasn2gb/newasn2gb)", "0", "0", "5",
+   "      6 asn2gb NEW dbxref/OLD dbxref\n"
+   "      7 oldasn2gb/newasn2gb", "0", "0", "7",
     FALSE, 't', ARG_INT, 0.0, 0, NULL},
   {"Input File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},

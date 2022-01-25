@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.73 $
+* $Revision: 6.75 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -1343,7 +1343,7 @@ NLM_EXTERN SeqEntryPtr AddSeqToNucProtEntry (   /** add unsegmented nuc or prot 
 	Int2 strandedness )
 {
 	BioseqSetPtr nucprot, tp;
-	BioseqPtr bsp, segseq= NULL;
+	BioseqPtr bsp;
 	SeqEntryPtr sep, tmp, prev, tmp2;
 	Boolean is_nuc;
 
@@ -1526,7 +1526,7 @@ NLM_EXTERN SeqEntryPtr AddDeltaSeqToNucProtEntry (   /** add delta nuc bioseq */
 	Int2 strandedness )
 {
 	BioseqSetPtr nucprot, tp;
-	BioseqPtr bsp, segseq= NULL;
+	BioseqPtr bsp;
 	SeqEntryPtr sep, tmp, prev, tmp2;
 	Boolean is_nuc;
 
@@ -2956,8 +2956,6 @@ NLM_EXTERN SeqFeatPtr FeatureBuild (
 	CharPtr comment )
 {
 	SeqFeatPtr sfp;
-	static char * ev [2] = {
-		"experimental", "not_experimental" };
 
 	if (entry_to_put_feature == NULL) return NULL;
 
@@ -3553,7 +3551,6 @@ static SeqEntryPtr TranslateCdRegionNew (
 	ByteStorePtr bp;
 	Int4 protlen;
 	ValNodePtr vnp;
-	Boolean	partial = FALSE;
 
 	if ((cdregion_feature == NULL) || (nuc_prot_entry_to_put_sequence == NULL))
 		return NULL;
@@ -5312,5 +5309,130 @@ NLM_EXTERN void AddItemStructuredCommentUserObject (
   } else {
     uop->data = curr;
   }
+}
+
+
+
+
+NLM_EXTERN UserObjectPtr CreateDBLinkUserObject (
+  void
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("DBLink");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  Int4Ptr values
+)
+
+{
+  UserFieldPtr   curr;
+  Int4           i;
+  Int4Ptr        ip;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Trace Assembly Archive") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Trace Assembly Archive");
+    curr->label = oip;
+    curr->choice = 8; /* sequence of integer */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 8) return;
+
+  ip = (Int4Ptr) MemNew (sizeof (Int4) * (num));
+  if (ip == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    ip [i] = values [i];
+  }
+  curr->data.ptrvalue = (Pointer) ip;
+}
+
+NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  CharPtr PNTR   cpp;
+  UserFieldPtr   curr;
+  Int4           i;
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+
+  if (uop == NULL || values == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "Bio Sample") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("Bio Sample");
+    curr->label = oip;
+    curr->choice = 7; /* sequence of string */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 7) return;
+
+  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
+  if (cpp == NULL) return;
+
+  curr->num = num;
+  for (i = 0; i < num; i++) {
+    cpp [i] = StringSaveNoNull (values [i]);
+  }
+  curr->data.ptrvalue = (Pointer) cpp;
 }
 

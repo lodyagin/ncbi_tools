@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.547 $
+* $Revision: 6.565 $
 *
 * File Description: 
 *
@@ -424,7 +424,6 @@ extern void InsertGeneLocusTagPrefix (IteM i);
 extern void ReplaceRepeatRegionLocusTagWithDbxref (IteM i);
 extern void FindGeneAndProtForCDS (Uint2 entityID, SeqFeatPtr cds,
                                    SeqFeatPtr PNTR gene, SeqFeatPtr PNTR prot);
-extern SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product);
 extern void ExportAlignmentInterleave (IteM i);
 extern void ExportAlignmentContiguous (IteM i);
 extern void FixFeatureIntervals (IteM i);
@@ -505,6 +504,7 @@ extern void AutoDefToolBtn (ButtoN b);
 extern void AutoDefOptionsToolBtn (ButtoN b);
 extern void AutoDefStrainToolBtn (ButtoN b);
 extern void AutoDefMiscFeatToolBtn (ButtoN b);
+extern void AutoDefEntityIDNoOptions (Uint2 entityID, Boolean use_modifiers);
 
 extern void RemoveDefLinesToolBtn (ButtoN b);
 extern void FindStringProcToolBtn (ButtoN b);
@@ -542,6 +542,7 @@ extern Int2 LIBCALLBACK CreateSegregateByFeatureWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByDescriptorWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByMoleculeTypeWindow (Pointer data);
 extern Int2 LIBCALLBACK CreateSegregateByIdWindow (Pointer data);
+extern Int2 LIBCALLBACK SequesterSequences (Pointer data);
 extern Int2 LIBCALLBACK RemoveExtraneousSets (Pointer data);
 extern void ReverseComplementBioseqAndFeats (BioseqPtr bsp, Uint2 entityID);
 extern void RemoveOrphanProteins (Uint2 entityID, SeqEntryPtr sep);
@@ -729,11 +730,6 @@ extern void MergeToPartsOrdered (IteM i);
 
 extern void ConvertInnerCDSsToMatPeptidesCallback (BioseqPtr bsp, Pointer userdata);
 extern void MergeCDS (IteM i);
-extern Boolean RetranslateOneCDS 
-( SeqFeatPtr sfp,
-  Uint2 entityID,
-  Boolean include_stop,
-  Boolean no_stop_at_end_of_complete_cds);
 
 extern void InitValNodePopup (ValNodePtr list, PopuP p);
 extern Int2 GetValNodePopup (PopuP p, ValNodePtr list);
@@ -863,13 +859,32 @@ extern void RemoveGBQual (IteM i);
 extern void ConvertLocusTagToOldLocusTag (IteM i);
 extern void ExportLastLineage (IteM i);
 
+extern void MacroApplyGBQual (IteM i);
+extern void MacroApplySourceQual (IteM i);
 extern void MacroApplyCDSGeneProt (IteM i);
 extern void PublicMacroApplyCDSGeneProt (IteM i);
+extern void MacroApplyRNAQual (IteM i);
+
+extern void MacroRemoveGBQual (IteM i);
+extern void MacroRemoveSourceQual (IteM i);
+extern void MacroRemoveCDSGeneProt (IteM i);
+extern void MacroRemoveRNAQual (IteM i);
+
+extern void MacroConvertGBQual (IteM i);
+extern void MacroConvertSourceQual (IteM i);
+extern void MacroConvertCDSGeneProt (IteM i);
+extern void MacroConvertRNAQual (IteM i);
+
+extern void MacroSwapGBQual (IteM i);
+extern void MacroSwapSourceQual (IteM i);
+extern void MacroSwapCDSGeneProt (IteM i);
+extern void MacroSwapRNAQual (IteM i);
+
+extern void MacroEditGBQual (IteM i);
+extern void MacroEditSourceQual (IteM i);
 extern void MacroEditCDSGeneProt (IteM i);
 extern void PublicMacroEditCDSGeneProt (IteM i);
-extern void MacroConvertCDSGeneProt (IteM i);
-extern void MacroSwapCDSGeneProt (IteM i);
-extern void MacroRemoveCDSGeneProt (IteM i);
+extern void MacroEditRNAQual (IteM i);
 
 extern void MacroApplyStructuredComment (IteM i);
 extern void MacroEditStructuredComment (IteM i);
@@ -1635,6 +1650,7 @@ extern void BulkEditRNA (IteM i);
 extern void BulkEditorFeatList (Uint2 entityID, ValNodePtr feat_list);
 extern void BulkEditorDescrList (Uint2 entityID, ValNodePtr descr_list);
 extern void BulkEditDiscrepancy (ValNodePtr vnp, Pointer userdata);
+extern void BulkEditorCheckAllDialog (DialoG dlg);
 
 extern Uint1 GetSubtypeForBulkEdit (ValNodePtr feat_list);
 
@@ -1664,6 +1680,10 @@ extern Pointer GetLatLonCountryCorrection (Uint1 data_choice, Pointer data, Poin
 extern void LatLonCountryTool (IteM i);
 extern DialoG CountryTestResultsDisplay (GrouP h, Pointer metadata);
 extern void CountryFixupTool (IteM i);
+
+extern DialoG TaxFixDisplay (GrouP h);
+extern Boolean IsTaxNameBad (OrgRefPtr org);
+extern void TaxFixTool (IteM i);
 
 extern void SetTransgenicOnSourceDescWhenSourceFeatPresent (IteM i);
 extern void SetFocusOnSourceDescWhenSourceFeatPresent (IteM i);
@@ -1759,6 +1779,8 @@ CreateBulkEditorDialog
  ClickableCallback   single_click_func,
  ClickableCallback   double_click_func);
 
+NLM_EXTERN void ApplyBulkEditorToObjectList (DialoG d);
+
 NLM_EXTERN void FlipSequenceIntervals (IteM i);
 
 NLM_EXTERN void CreateRefSeqProteinIDs (IteM i);
@@ -1785,6 +1807,26 @@ extern void AdvancedAssemblyAlignmentEditor (IteM i);
 extern void AssemblyAlignmentIntervalResolution (IteM i);
 
 extern void ExternalSourceQualifierTableReader (IteM i);
+
+extern void TrimPrimerSeqJunk (IteM i);
+
+extern void SequinSeqViewFormMessage (ForM f, Int2 mssg);
+extern Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary);
+
+extern BioseqSetPtr FindTopLevelSetForDesktopFunction (BioseqSetPtr bssp);
+extern void ReorderSetByAccessionMenuItem (IteM i);
+extern void DescriptorPropagateMenuItem (IteM i);
+NLM_EXTERN void RepackagePartsMenuItem (IteM i);
+extern void NewSegregateBioseqSetMenuItem (IteM i);
+extern void SequesterSequencesMenuItem (IteM i);
+extern void GetRidOfSegGapMenuItem (IteM i);
+extern void GenerateSeqAlignMenuItem (IteM i);
+extern void UpdateSeqAlignMenuItem (IteM i);
+extern void CorrectRNAStrandednessMenuItem (IteM i);
+extern void BioseqRevCompByIDMenuItem (IteM i);
+extern void RemoveSetsInSetMenuItem (IteM i);
+
+extern void LoadTaxTableReader (IteM i);
 
 #ifdef OS_MSWIN
 NLM_EXTERN Int4 RunSilent(const char *cmdline);

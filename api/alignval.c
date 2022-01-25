@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.67 $
+* $Revision: 6.68 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -2423,7 +2423,6 @@ GetAlignmentColumnPercentIdentities
   Uint1Ptr       seqbuf_list;
   Int4           sample_len = 50;
   Int4           chars_appearing[5]; /* 0 is A, 1 is T, 2 is G, 3 is C, 4 is internal gap */
-  double         col_pct_total = 0;
   Int4           max_app, total_app, i;
   double *       pct_ids;
   

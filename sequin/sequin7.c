@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.344 $
+* $Revision: 6.352 $
 *
 * File Description: 
 *
@@ -1276,6 +1276,7 @@ typedef struct fa2htgsform {
   TexT               remark;
   TexT               clone;
   TexT               strain;
+  TexT               cultivar;
   TexT               chromosome;
   TexT               title;
   DialoG             secondaries;
@@ -1571,7 +1572,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   Int2 htgs_phase = -1;
   Uint1 tech;
   CharPtr seqname = NULL, accession = NULL, orgname = NULL;
-  CharPtr clone = NULL, strain = NULL, chromosome = NULL;
+  CharPtr clone = NULL, strain = NULL, cultivar = NULL, chromosome = NULL;
   CharPtr remark = NULL, title = NULL, seqbuf = NULL;
   Int4 length = 0, cumlength = 0, gaplen;
   BioseqPtr bsp;
@@ -1600,6 +1601,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   }
   clone = SaveStringFromText (ffp->clone);
   strain = SaveStringFromText (ffp->strain);
+  cultivar = SaveStringFromText (ffp->cultivar);
   chromosome = SaveStringFromText (ffp->chromosome);
   remark = SaveStringFromText (ffp->remark);
   title = SaveStringFromText (ffp->title);
@@ -1819,8 +1821,10 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
       AddSubSourceToEntry(nsp, the_entry, 3, clone);
    if (chromosome != NULL)
        AddSubSourceToEntry(nsp, the_entry, 1, chromosome);
-   if (clone != NULL)
+   if (strain != NULL)
       AddOrgModToEntry(nsp, the_entry, 2, strain);
+   if (cultivar != NULL)
+      AddOrgModToEntry(nsp, the_entry, ORGMOD_cultivar, cultivar);
    if (title != NULL)
       AddTitleToEntry(nsp, the_entry, title);
    if (ffp->readPhrap) {
@@ -2615,6 +2619,10 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
   StaticPrompt (g, "Strain", 0, dialogTextHeight, programFont, 'l');
   ffp->strain = DialogText (g, "", 10, (TxtActnProc) SetFa2htgsAcceptBtn);
   SetObjectExtra (ffp->strain, ffp, NULL);
+
+  StaticPrompt (g, "Cultivar", 0, dialogTextHeight, programFont, 'l');
+  ffp->cultivar = DialogText (g, "", 10, (TxtActnProc) SetFa2htgsAcceptBtn);
+  SetObjectExtra (ffp->cultivar, ffp, NULL);
 
   wid = MaxStringWidths (secaccstrings) + 2;
   sa = MultiLinePrompt (g, "Secondary Accessions", wid, programFont);
@@ -6193,35 +6201,6 @@ static Boolean EditSeqEntryHasGene (BioseqPtr bsp, SeqEntryPtr sep, EditSeqPtr e
   return esp->rsult;
 }
 
-extern SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product)
-
-{
-  SeqFeatPtr        sfp, bestprot = NULL;
-  SeqMgrFeatContext context;
-  BioseqPtr         bsp;
-  SeqLocPtr         slp = NULL;
-  
-  if (product == NULL) return NULL;
-  
-  bsp = BioseqFindFromSeqLoc (product);
-  if (bsp == NULL) return NULL;
-  
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_PROT, 0, &context);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_PROT, 0, &context))
-  {
-    if (slp == NULL) 
-    {
-      bestprot = sfp;
-      slp = sfp->location;
-    } else if (SeqLocCompare (slp, sfp->location) == SLC_A_IN_B) {
-      bestprot = sfp;
-      slp = sfp->location;
-    }
-  }
-  return bestprot;
-}
-
 static Boolean FixACDSFunc (GatherContextPtr gcp)
 
 {
@@ -8839,10 +8818,9 @@ static void ChangeStrandSmart (ButtoN b)
 }
 
 
-static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smart)
+static Int2 CorrectRNAStrandednessForEntityID (Uint2 entityID, Boolean use_smart)
 
 {
-  OMProcControlPtr        ompcp;
   SeqEntryPtr             sep;
   ValNodePtr              sequence_list = NULL;
   RNAStrandPtr            strand_info;
@@ -8852,14 +8830,7 @@ static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smar
   RecT                    r;
   ButtoN                  refresh_btn;
 
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL)
-  {
-    Message (MSG_ERROR, "You must select something!");
-    return OM_MSG_RET_ERROR;
-  }
-
-  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  sep = GetTopSeqEntryForEntityID (entityID);
   if (sep == NULL) return OM_MSG_RET_ERROR;
 
   if (use_smart)
@@ -8882,7 +8853,7 @@ static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smar
     return OM_MSG_RET_ERROR;
   }
   
-  strand_info->input_entityID = ompcp->input_entityID;
+  strand_info->input_entityID = entityID;
   strand_info->sep = sep;
   strand_info->sequence_list = sequence_list;
   strand_info->num_sequences = ValNodeLen (sequence_list);
@@ -8981,6 +8952,21 @@ static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smar
 }
 
 
+static Int2 LIBCALLBACK CorrectRNAStrandednessEx (Pointer data, Boolean use_smart)
+{
+  OMProcControlPtr ompcp;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL)
+  {
+    Message (MSG_ERROR, "You must select something!");
+    return OM_MSG_RET_ERROR;
+  }
+
+  return CorrectRNAStrandednessForEntityID (ompcp->input_entityID, use_smart);
+}
+
+
 extern Int2 LIBCALLBACK CorrectRNAStrandedness (Pointer data)
 {
   return CorrectRNAStrandednessEx (data, FALSE);
@@ -8989,6 +8975,21 @@ extern Int2 LIBCALLBACK CorrectRNAStrandednessUseSmart (Pointer data)
 {
   return CorrectRNAStrandednessEx (data, TRUE);
 }
+
+extern void CorrectRNAStrandednessMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  CorrectRNAStrandednessForEntityID (bfp->input_entityID, TRUE);
+}
+
 
 /* collection_date has a controlled format.  
  * It is YYYY or Mmm-YYYY or DD-Mmm-YYYY where Mmm = Jan, Feb, Mar, Apr, May, 
@@ -9194,16 +9195,32 @@ static int LIBCALLBACK SortSeqEntryByIDStr (VoidPtr ptr1, VoidPtr ptr2)
   return rval;
 }
 
+static void ReorderBioseqSetByAccession (BioseqSetPtr bssp)
+{
+  SeqEntryPtr       sep;
+  ObjMgrDataPtr     omdptop;
+  ObjMgrData        omdata;
+  Uint2             parenttype;
+  Pointer           parentptr;
+
+  sep = SeqMgrGetSeqEntryForData (bssp);
+  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
+  GetSeqEntryParent (sep, &parentptr, &parenttype);  
+
+  bssp->seq_set = ValNodeSort (bssp->seq_set, SortSeqEntryByIDStr);
+  
+  
+  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
+  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata); 
+  ObjMgrSetDirtyFlag (bssp->idx.entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bssp->idx.entityID, 0, 0);  
+}
+
 
 extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data)
 {
   BioseqSetPtr      bssp;
   OMProcControlPtr  ompcp;
-  ObjMgrDataPtr     omdptop;
-  ObjMgrData        omdata;
-  Uint2             parenttype;
-  Pointer           parentptr;
-  SeqEntryPtr       sep;
 
   /* Check parameters and get a pointer to the current data */
 
@@ -9217,18 +9234,69 @@ extern Int2 LIBCALLBACK ReorderSetByAccession (Pointer data)
   }
   
   bssp = (BioseqSetPtr) ompcp->input_data;
-  sep = SeqMgrGetSeqEntryForData (bssp);
-  SaveSeqEntryObjMgrData (sep, &omdptop, &omdata);
-  GetSeqEntryParent (sep, &parentptr, &parenttype);  
 
-  bssp->seq_set = ValNodeSort (bssp->seq_set, SortSeqEntryByIDStr);
-  
-  
-  SeqMgrLinkSeqEntry (sep, parenttype, parentptr);
-  RestoreSeqEntryObjMgrData (sep, omdptop, &omdata); 
-  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);  
+  ReorderBioseqSetByAccession (bssp);
   return OM_MSG_RET_DONE;
+}
+
+
+extern BioseqSetPtr FindTopLevelSetForDesktopFunction (BioseqSetPtr bssp)
+{
+  if (bssp == NULL) {
+    return NULL;
+  } else if (bssp->_class != BioseqseqSet_class_genbank) {
+    return bssp;
+  } else if (bssp->seq_set != NULL && IS_Bioseq_set (bssp->seq_set) && bssp->seq_set->next == NULL) {
+    return (BioseqSetPtr) bssp->seq_set->data.ptrvalue;
+  } else {
+    return bssp;
+  }
+}
+
+
+extern void ReorderSetByAccessionMenuItem (IteM i)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+  } else {
+    ReorderBioseqSetByAccession (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue));
+  }
+}
+
+
+extern void DescriptorPropagateMenuItem (IteM i) 
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL || !IS_Bioseq_set (sep)) {
+    Message (MSG_ERROR, "This record does not have a top-levelset!");
+    return;
+  }
+
+  SetDescriptorPropagate (FindTopLevelSetForDesktopFunction((BioseqSetPtr) sep->data.ptrvalue));
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
 
@@ -13930,6 +13998,7 @@ static void RefreshLatLonTool (Pointer data)
 
 }
 
+
 static void CleanupLatLonTool (GraphiC g, VoidPtr data)
 
 {
@@ -14267,6 +14336,7 @@ extern void LatLonTool (IteM i)
   drfp->clickable_list = LatLonTestResultsDisplay (h);
 
   RefreshLatLonTool (drfp);
+  BulkEditorCheckAllDialog (drfp->clickable_list);
 
   c = HiddenGroup (h, 5, 0, NULL);
   SetGroupSpacing (c, 10, 10);
@@ -14279,7 +14349,7 @@ extern void LatLonTool (IteM i)
   SetObjectExtra (b, drfp, NULL);
   b = PushButton (c, "Move to Note", MoveIncorrectlyFormattedLatLonToNote);
   SetObjectExtra (b, drfp, NULL);
-    
+
   PushButton (c, "Dismiss", StdCancelButtonProc);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) c, NULL);
@@ -15045,6 +15115,340 @@ extern void ListFailedTaxonomyLookups (IteM i)
   ShowClickableItemListEx (item_list, bfp, 
                            "Failed Taxonomy Lookups", "Organism Names", "BioSources",
                            ReportFailedTaxonomyLookups, RefreshFailedTaxonomyLookups);
+
+}
+
+
+static void FindTaxnames (SeqDescrPtr sdp, Pointer data)
+{
+  if (sdp != NULL && data != NULL && sdp->choice == Seq_descr_source) {
+    ValNodeAddPointer ((ValNodePtr PNTR) data, OBJ_SEQDESC, sdp);
+  }
+}
+
+
+static ValNodePtr FindTaxNameFixes (SeqEntryPtr sep)
+{
+  ValNodePtr org_list = NULL, fix_list = NULL;
+
+  VisitDescriptorsInSep (sep, &org_list, FindTaxnames);
+  fix_list = Taxon3GetTaxFixList (org_list);
+  org_list = ValNodeFree (org_list);
+  return fix_list;
+}
+
+
+static void RefreshTaxFixTool (Pointer data)
+{
+  BarcodeToolPtr vstp = (BarcodeToolPtr) data;
+
+  if (vstp == NULL) return;
+  
+  PointerToDialog (vstp->clickable_list, NULL);
+  vstp->item_list = TaxFixItemListFree (vstp->item_list);
+
+  vstp->item_list = FindTaxNameFixes (vstp->top_sep);
+
+  PointerToDialog (vstp->clickable_list, vstp->item_list);  
+
+}
+
+NLM_EXTERN BioSourcePtr GetBioSourceFromObject (Uint1 choice, Pointer data);
+
+static void TaxFixAutocorrectList (FILE *fp, ValNodePtr tax_fix_list)
+{
+  ValNodePtr vnp;
+  TaxFixItemPtr t;
+  BioSourcePtr biop;
+
+  if (fp == NULL || tax_fix_list == NULL) return;
+
+  for (vnp = tax_fix_list; vnp != NULL; vnp = vnp->next)
+  {
+    t = (TaxFixItemPtr) vnp->data.ptrvalue;
+    if (t == NULL || t->suggested_fix == NULL) {
+      continue;
+    }
+    biop = GetBioSourceFromObject (t->data_choice, t->data);
+    if (biop != NULL) {
+      if (biop->org == NULL) {
+        biop->org = OrgRefNew();
+      }
+      fprintf (fp, "Corrected %s to %s\n", biop->org->taxname == NULL ? "missing name" : biop->org->taxname, t->suggested_fix);
+      SetTaxNameAndRemoveTaxRef (biop->org, StringSave (t->suggested_fix));
+    }
+  }
+}
+
+
+static void TaxFixAutocorrect (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        object_list;
+  LogInfoPtr        lip;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  ApplyBulkEditorToObjectList (drfp->clickable_list);
+
+  object_list = DialogToPointer (drfp->clickable_list);
+
+  if (object_list == NULL)
+  {
+    if (ANS_YES == Message (MSG_YN, "You have not selected any taxname values - correct all?"))
+    {
+      object_list = drfp->item_list;
+    }
+    else
+    {
+      return;
+    }
+  }
+  
+  lip = OpenLog ("Taxname Values Corrected");
+  TaxFixAutocorrectList (lip->fp, object_list);
+
+  if (object_list != drfp->item_list) 
+  {
+    object_list = ValNodeFree (object_list);
+  }
+
+  RefreshTaxFixTool (drfp);
+  RedrawBarcodeTool (drfp);  
+
+  ObjMgrSetDirtyFlag (drfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, drfp->input_entityID, 0, 0);
+  Update();
+
+  lip->data_in_log = TRUE;
+  CloseLog (lip);
+  lip = FreeLog (lip);
+
+}
+
+
+static void TaxFixReport (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        vnp;
+  LogInfoPtr        lip;
+  TaxFixItemPtr     t;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+  
+  lip = OpenLog ("Tax Name Fixes");
+  
+  for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next)
+  {
+    if ((t = (TaxFixItemPtr) vnp->data.ptrvalue) == NULL) {
+      continue;
+    }
+    if (t->suggested_fix == NULL) {
+      fprintf (lip->fp, "%s (No suggested correction)\n", t->taxname);
+    } else {
+      fprintf (lip->fp, "%s (Suggested correction: %s)\n", t->taxname, t->suggested_fix);
+      lip->data_in_log = TRUE;
+    }
+  }
+
+  CloseLog (lip);
+  lip = FreeLog (lip);
+}
+
+
+static void AddTextToFix (CharPtr text, BarcodeToolPtr drfp)
+{
+  ValNodePtr        vnp;
+  TaxFixItemPtr     t;
+  CharPtr           tmp;
+
+  if (drfp == NULL || text == NULL) {
+    return;
+  }
+
+  ApplyBulkEditorToObjectList (drfp->clickable_list);
+  PointerToDialog (drfp->clickable_list, NULL);
+
+  for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next) {
+    t = (TaxFixItemPtr) vnp->data.ptrvalue;
+    if (t == NULL) {
+      continue;
+    }
+    if (t->suggested_fix == NULL) {
+      t->suggested_fix = (CharPtr) MemNew (sizeof (Char) * (StringLen (t->taxname) + StringLen (text) + 1));
+      sprintf (t->suggested_fix, "%s%s", t->taxname, text);
+    } else {
+      tmp = (CharPtr) MemNew (sizeof (Char) * (StringLen (t->suggested_fix) + StringLen (text) + 1));
+      sprintf (tmp, "%s%s", t->suggested_fix, text);
+      t->suggested_fix = MemFree (t->suggested_fix);
+      t->suggested_fix = tmp;
+    }
+  }
+  PointerToDialog (drfp->clickable_list, drfp->item_list);
+  RedrawBarcodeTool (drfp);  
+
+}
+
+
+static void TaxFixAddSp (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  CharPtr           sp = " sp.";
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  AddTextToFix (sp, drfp);
+}
+
+
+static void TaxFixAddBacterium (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  CharPtr           bacterium = " bacterium";
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  AddTextToFix (bacterium, drfp);
+}
+
+
+static void TaxFixCopyNameToCorrection (ButtoN b)
+{
+  BarcodeToolPtr    drfp;
+  ValNodePtr        vnp;
+  TaxFixItemPtr     t;
+
+  drfp = (BarcodeToolPtr) GetObjectExtra (b);
+  if (drfp == NULL) return;
+
+  ApplyBulkEditorToObjectList (drfp->clickable_list);
+  PointerToDialog (drfp->clickable_list, NULL);
+
+  for (vnp = drfp->item_list; vnp != NULL; vnp = vnp->next) {
+    t = (TaxFixItemPtr) vnp->data.ptrvalue;
+    if (t == NULL) {
+      continue;
+    }
+    t->suggested_fix = MemFree (t->suggested_fix);
+    t->suggested_fix = StringSave (t->taxname);
+  }
+  PointerToDialog (drfp->clickable_list, drfp->item_list);
+  RedrawBarcodeTool (drfp);  
+}
+
+
+static void CleanupTaxFixTool (GraphiC g, VoidPtr data)
+
+{
+  BarcodeToolPtr drfp;
+
+  drfp = (BarcodeToolPtr) data;
+  if (drfp != NULL) {
+    drfp->item_list = TaxFixItemListFree (drfp->item_list);
+    ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
+extern void TaxFixTool (IteM i)
+{
+  BaseFormPtr       bfp;
+  SeqEntryPtr       sep;
+  ValNodePtr        biosources = NULL;
+  BarcodeToolPtr    drfp;
+  WindoW            w;
+  GrouP             h, c;
+  ButtoN            b;
+  OMUserDataPtr            omudp;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL || bfp->input_entityID == 0) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  biosources = FindTaxNameFixes (sep);
+
+  if (biosources == NULL)
+  {
+    Message (MSG_OK, "No bad taxnames.");
+    return;
+  }
+
+  biosources = TaxFixItemListFree (biosources);
+
+  drfp = (BarcodeToolPtr) MemNew (sizeof (BarcodeToolData));
+  if (drfp == NULL)
+  {
+    return;
+  }
+  
+  drfp->bfp = bfp;
+  drfp->input_entityID = bfp->input_entityID;
+  drfp->top_sep = GetTopSeqEntryForEntityID (drfp->input_entityID);
+  w = FixedWindow (-50, -33, -10, -10, "Tax Fix Tool", StdCloseWindowProc);
+  SetObjectExtra (w, drfp, CleanupTaxFixTool);
+  drfp->form = (ForM) w;
+  drfp->formmessage = BarcodeToolMessage;
+
+  drfp->refresh_func = RefreshTaxFixTool;    
+  /* register to receive update messages */
+  drfp->userkey = OMGetNextUserKey ();
+  drfp->procid = 0;
+  drfp->proctype = OMPROC_EDIT;
+  omudp = ObjMgrAddUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
+  if (omudp != NULL) {
+    omudp->userdata.ptrvalue = (Pointer) drfp;
+    omudp->messagefunc = BarcodeToolMsgFunc;
+  }
+
+
+#ifndef WIN_MAC
+  CreateStdValidatorFormMenus (w);
+#endif
+  
+  drfp->item_list = NULL;
+  drfp->cfg = NULL;
+  drfp->undo_list = NULL;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  
+  drfp->clickable_list = TaxFixDisplay (h);
+
+  RefreshTaxFixTool (drfp);
+
+  c = HiddenGroup (h, 7, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+
+  b = PushButton (c, "Apply Corrections", TaxFixAutocorrect);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Make Report", TaxFixReport);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Refresh List", BarcodeRefreshButton);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Add sp.", TaxFixAddSp);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Add bacterium", TaxFixAddBacterium);
+  SetObjectExtra (b, drfp, NULL);
+  b = PushButton (c, "Copy Taxname to Correction", TaxFixCopyNameToCorrection);
+  SetObjectExtra (b, drfp, NULL);
+
+  PushButton (c, "Dismiss", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) drfp->clickable_list, (HANDLE) c, NULL);
+
+  RealizeWindow (w);
+  
+  Show (w);
 
 }
 

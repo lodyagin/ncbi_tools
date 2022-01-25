@@ -1,12 +1,14 @@
 #
-# $Id: linux_icc9.ncbi.mk,v 1.7 2007/05/30 14:22:41 ucko Exp $
+# $Id: linux_icc9.ncbi.mk,v 1.9 2009/02/04 14:24:03 lavr Exp $
 #
 # ICC 9.0 with optimization options for Pentium 4 processor
 
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
-NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+# Defining _GCC_NEXT_LIMITS_H ensures that <limits.h> chaining doesn't
+# stop short, as can otherwise happen (at least with ICC 10).
+NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -D_GCC_NEXT_LIMITS_H -D_GNU_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -i-static -O3 -unroll -tpp7 -fno-builtin-memcpy -fno-builtin-memset
 NCBI_OPTFLAG = -O3 -unroll -tpp7 -fno-builtin-memcpy -fno-builtin-memset

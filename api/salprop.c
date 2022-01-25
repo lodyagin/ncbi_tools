@@ -950,8 +950,6 @@ NLM_EXTERN void PropagateFeatureBySeqLock (SeqAnnotPtr sap, Uint4 source_bspitem
   SeqLocPtr        featslp;
   SeqLocPtr        new_slp;
   ValNodePtr       vnpf;
-  ValNodePtr       vnpfeat = NULL;
-  ValNodePtr       vnpsfp = NULL;
   Uint2            subtype;
   Uint1            frame;
   Uint1            gap_choice_subtype;
@@ -1087,7 +1085,6 @@ NLM_EXTERN PropaStructPtr CreatePropaStruc (SeqIdPtr target_id,
               target_slp;
   BioseqPtr   source_bsp = NULL;
   BioseqPtr   target_bsp = NULL;
-  SeqEntryPtr source_sep = NULL;
 
   PropaStructPtr psp = NULL;
 

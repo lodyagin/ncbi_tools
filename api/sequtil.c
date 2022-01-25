@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.259 $
+* $Revision: 6.273 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -2900,7 +2900,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
                     return tmp;
                 } else if ((format == PRINTID_TEXTID_ACC_VER) 
                     && (tsip->accession != NULL)) {
-                    if (tsip->version > 0 && release == NULL && sip->choice != SEQID_GPIPE) {
+                    if (tsip->version > 0 && release == NULL) {
                         sprintf(localbuf, "%s.%d", tsip->accession,
                             (int)(tsip->version));
                     } else {
@@ -2969,8 +2969,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
             if (sip->choice == SEQID_SWISSPROT) {
               release = NULL;
             }
-           if (((tsip->version > 0) && (release == NULL) &&
-                sip->choice != SEQID_GPIPE) && SHOWVERSION)
+           if ((tsip->version > 0) && (release == NULL) && SHOWVERSION)
              version = tsip->version;  /* show versions */
            sprintf(versionbuf, ".%d", (int)version);
         case SEQID_PIR:
@@ -5743,6 +5742,8 @@ NLM_EXTERN CharPtr StringForSeqTech (Int2 tech)
 }
 
 static Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end);
+Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, Boolean is_circular);
+Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr right, Boolean is_circular);
 static Int4 CheckOffsetInLoc(SeqLocPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr the_id);
 NLM_EXTERN Int4 CheckPointInBioseq(SeqPntPtr sp, BioseqPtr in);
 
@@ -5784,6 +5785,7 @@ NLM_EXTERN Int4 GetOffsetInLoc (SeqLocPtr of, SeqLocPtr in, Uint1 which_end)
     return result;
 }
 
+
 /*****************************************************************************
 *
 * Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
@@ -5801,6 +5803,45 @@ NLM_EXTERN Int4 GetOffsetInBioseq (SeqLocPtr of, BioseqPtr in, Uint1 which_end)
         return -1L;
 
     return CheckPointInBioseq(&sp, in);
+}
+
+
+NLM_EXTERN Int4 GetOffsetInBioseqEx (SeqLocPtr of, BioseqPtr in, Uint1 which_end, Boolean is_circular)
+{
+    SeqPnt sp;
+
+    if ((of == NULL) || (in == NULL))
+        return -1;
+
+    if (! GetThePointForOffsetEx(of, &sp, which_end, is_circular))
+        return -1L;
+
+    return CheckPointInBioseq(&sp, in);
+}
+
+
+NLM_EXTERN void GetLeftAndRightOffsetsInBioseq (SeqLocPtr of, BioseqPtr in, Int4Ptr left, Int4Ptr right, Boolean is_circular)
+{
+    SeqPnt l, r;
+
+    if (left != NULL) {
+      *left = -1;
+    }
+    if (right != NULL) {
+      *right = -1;
+    }
+    if ((of == NULL) || (in == NULL))
+        return;
+
+    if (!GetPointsForLeftAndRightOffsets (of, &l, &r, is_circular)) {
+        return;
+    }
+    if (left != NULL) {
+        *left = CheckPointInBioseq (&l, in);
+    }
+    if (right != NULL) {
+        *right = CheckPointInBioseq (&r, in);
+    }
 }
 
 /*****************************************************************************
@@ -5974,7 +6015,7 @@ static SeqIdPtr GetEarlierSeqIdPtr (SeqIdPtr sip1, SeqIdPtr sip2)
 *   Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 *
 *****************************************************************************/
-Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
+Boolean GetThePointForOffsetEx(SeqLocPtr of, SeqPntPtr target, Uint1 which_end, Boolean is_circular)
 {
     SeqLocPtr pnt, first=NULL, last=NULL;
     Uint1 first_strand, last_strand;
@@ -5982,15 +6023,8 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
     Int4    lowest = -1, highest = 0, tmp;
     SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
     Boolean   id_same;
-    BioseqPtr bsp;
-    Boolean   is_circular = FALSE;
 
     pnt = NULL;    /* get first or last single span type in "of"*/
-    
-    bsp = BioseqFind (SeqLocId(of));
-    if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
-        is_circular = TRUE;
-    }
     
     while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
     {
@@ -6128,6 +6162,125 @@ Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
 
     return TRUE;
 }
+
+
+Boolean GetThePointForOffset(SeqLocPtr of, SeqPntPtr target, Uint1 which_end)
+{
+    BioseqPtr bsp;
+    Boolean is_circular = FALSE;
+
+    bsp = BioseqFind (SeqLocId(of));
+    if (bsp != NULL && bsp->topology == TOPOLOGY_CIRCULAR) {
+        is_circular = TRUE;
+    }
+    return GetThePointForOffsetEx (of, target, which_end, is_circular);
+}
+
+
+Boolean GetPointsForLeftAndRightOffsets(SeqLocPtr of, SeqPntPtr left, SeqPntPtr right, Boolean is_circular)
+{
+    SeqLocPtr pnt, first=NULL, last=NULL;
+    Uint1 first_strand, last_strand;
+    Boolean all_minus = TRUE;
+    Int4    lowest = -1, highest = 0, tmp;
+    SeqIdPtr low_sip = NULL, high_sip = NULL, first_sip = NULL, last_sip = NULL;
+    Boolean   id_same;
+
+    pnt = NULL;    /* get first or last single span type in "of"*/
+    
+    while ((pnt = SeqLocFindNext(of, pnt)) != NULL)
+    {
+      last_strand = SeqLocStrand (pnt);
+      last_sip = SeqLocId (pnt);
+      if (last_strand != Seq_strand_minus)
+      {
+        all_minus = FALSE;
+      }
+        last = pnt;
+        if (first == NULL)
+        {
+            first = pnt;
+            first_strand = last_strand;
+            first_sip = last_sip;
+            lowest = SeqLocStart(pnt);
+            highest = SeqLocStop (pnt);
+            low_sip = last_sip;
+            high_sip = last_sip;
+        }
+        else
+        {
+          tmp = SeqLocStart (pnt);
+          if (SeqIdComp (last_sip, low_sip))
+          {
+            id_same = TRUE;
+          }
+          else
+          {
+            id_same = FALSE;
+          }
+          if ((id_same && tmp < lowest)
+              || (!id_same && last_sip == GetEarlierSeqIdPtr (last_sip, low_sip)))
+          {
+            lowest = tmp;
+            low_sip = last_sip;
+          }
+          tmp = SeqLocStop (pnt);
+          
+          if (SeqIdComp (last_sip, high_sip))
+          {
+            id_same = TRUE;
+          }
+          else
+          {
+            id_same = FALSE;
+          }
+          if ((id_same && tmp > highest)
+              || (!id_same && high_sip == GetEarlierSeqIdPtr (high_sip, last_sip)))
+          {
+            highest = tmp;
+            high_sip = last_sip;
+          }
+        }
+    }                   /* otherwise, get last */
+    if (first == NULL)
+        return FALSE;
+    
+
+    /* left */
+    if (is_circular) {
+      if (all_minus) {
+        left->point = SeqLocStart (last);
+        left->id = last_sip;
+      } else {
+        left->point = SeqLocStart (first);
+        left->id = first_sip;
+      }
+    } else {
+      left->point = lowest;
+      left->id = low_sip;
+    }
+
+    /* right */
+    if (is_circular) {
+      if (all_minus) {
+        right->point = SeqLocStop (first);
+        right->id = first_sip;
+      } else {
+        right->point = SeqLocStop (last);
+        right->id = last_sip;
+      }
+    } else {  
+      right->point = highest;
+      right->id = high_sip;
+    }
+
+
+    if ((left->point < 0) || (left->id == NULL) || (right->point < 0) || (right->id == NULL))
+        return FALSE;
+
+    return TRUE;
+}
+
 
 /*****************************************************************************
 *
@@ -8644,6 +8797,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_TPA_PROT;
           } else  if ((StringICmp(temp,"GAA") >= 0) && (StringICmp(temp,"GZZ") <= 0)) { 
               retcode = ACCN_DDBJ_WGS_PROT;
+          } else if ((StringICmp(temp,"HAA") >= 0) && (StringICmp(temp,"HZZ") <= 0)) { 
+              retcode = ACCN_NCBI_TPA_PROT;
           } else {
               retcode = ACCN_IS_PROTEIN;
               retval = TRUE;
@@ -8698,7 +8853,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           (StringICmp(temp,"FK") == 0) || 
           (StringICmp(temp,"FL") == 0) || 
           (StringICmp(temp,"GD") == 0) || 
-          (StringICmp(temp,"GE") == 0) ) {                /* NCBI EST */
+          (StringICmp(temp,"GE") == 0) || 
+          (StringICmp(temp,"GH") == 0) || 
+          (StringICmp(temp,"GO") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0) ||
                      (StringICmp(temp,"GF") == 0)) {      /* NCBI STS */
@@ -8727,9 +8884,22 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"EP") == 0) ||
                      (StringICmp(temp,"EQ") == 0) ||
                      (StringICmp(temp,"FA") == 0) ||
-                     (StringICmp(temp,"GG") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"GG") == 0) ||
+                     (StringICmp(temp,"GL") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
-          } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
+          } else if ((StringICmp(temp,"AS") == 0) ||
+                     (StringICmp(temp,"GO") == 0) ||
+                     (StringICmp(temp,"GP") == 0) ||
+                     (StringICmp(temp,"GQ") == 0) ||
+                     (StringICmp(temp,"GR") == 0) ||
+                     (StringICmp(temp,"GS") == 0) ||
+                     (StringICmp(temp,"GT") == 0) ||
+                     (StringICmp(temp,"GU") == 0) ||
+                     (StringICmp(temp,"GV") == 0) ||
+                     (StringICmp(temp,"GW") == 0) ||
+                     (StringICmp(temp,"GX") == 0) ||
+                     (StringICmp(temp,"GY") == 0) ||
+                     (StringICmp(temp,"GZ") == 0)) {      /* NCBI "other" */
               retcode = ACCN_NCBI_OTHER;
           } else if ((StringICmp(temp,"AD") == 0)) {      /* NCBI accessions assigned to GSDB entries */
               retcode = ACCN_NCBI_GSDB;
@@ -8757,14 +8927,17 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
                      (StringICmp(temp,"EA") == 0) ||
-                     (StringICmp(temp,"GC") == 0)) {      /* NCBI patent */
+                     (StringICmp(temp,"GC") == 0) ||
+                     (StringICmp(temp,"GP") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
           } else if((StringICmp(temp,"BT")==0)) {         /* NCBI FLI_cDNA */
               retcode = ACCN_NCBI_cDNA;
-          } else if((StringICmp(temp,"BK")==0) ||         /* NCBI third-party annotation */
-                    (StringICmp(temp,"BL") == 0)) {
+          } else if ((StringICmp(temp,"BK") == 0) ||
+                     (StringICmp(temp,"BL") == 0) ||
+                     (StringICmp(temp,"GJ") == 0) ||
+                     (StringICmp(temp,"GK") == 0)) {      /* NCBI third-party annotation */
               retcode = ACCN_NCBI_TPA;
           } else if((StringICmp(temp,"EZ") == 0)) {
               retcode = ACCN_NCBI_TSA;
@@ -8787,7 +8960,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           } else if ((StringICmp(temp,"AX") == 0) ||
                      (StringICmp(temp,"CQ") == 0) ||
                      (StringICmp(temp,"CS") == 0) ||
-                     (StringICmp(temp,"FB") == 0)) {      /* EMBL patent division */
+                     (StringICmp(temp,"FB") == 0) ||
+                     (StringICmp(temp,"GM") == 0) ||
+                     (StringICmp(temp,"GN") == 0)) {      /* EMBL patent division */
               retcode = ACCN_EMBL_PATENT;
           } else if ((StringICmp(temp,"AT") == 0) || 
                      (StringICmp(temp,"AU") == 0) ||
@@ -8802,7 +8977,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DA") == 0) ||
                      (StringICmp(temp,"DB") == 0) ||
                      (StringICmp(temp,"DC") == 0) ||
-                     (StringICmp(temp,"DK") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"DK") == 0) ||
+                     (StringICmp(temp,"FS") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
           } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
@@ -8820,13 +8996,13 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"DD") == 0) || 
                      (StringICmp(temp,"DI") == 0) || 
                      (StringICmp(temp,"DJ") == 0) || 
-                     (StringICmp(temp,"DL") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"DL") == 0) || 
+                     (StringICmp(temp,"DM") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
-          } else if ((StringICmp(temp,"FS") == 0) ||
-                     (StringICmp(temp,"FT") == 0) || 
+          } else if ((StringICmp(temp,"FT") == 0) || 
                      (StringICmp(temp,"FU") == 0) || 
                      (StringICmp(temp,"FV") == 0) || 
                      (StringICmp(temp,"FW") == 0) || 
@@ -8916,8 +9092,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
       }
       break;
     case 12:
+    case 13:
+    case 14:
       if(IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && IS_ALPHA(*(s+2)) && IS_ALPHA(*(s+3))) {
-        /* whole genome shotgun 12-character accession, four letters + 8 digits */
+        /* whole genome shotgun 12-14-character accession, four letters + 8-10 digits */
         temp[0] = *s; s++;
         temp[1] = *s; s++;
         temp[2] = *s; s++;
@@ -8929,6 +9107,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_DDBJ_WGS;
         } else if ((StringNICmp(temp,"C", 1) == 0)) {
           retcode = ACCN_EMBL_WGS;
+        } else if ((StringNICmp(temp,"D", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
         } else
           retval = FALSE;
         while (*s) {
@@ -8938,7 +9118,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           }
           s++;
         }
-      } else if(IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && (*(s+2)=='_')) {
+      } else if(len == 12 && IS_ALPHA(*s) && IS_ALPHA(*(s+1)) && (*(s+2)=='_')) {
         /* New 12-character accession, two letters +"_"+ 9 digits */
         temp[0] = *s; s++;
         temp[1] = *s; s++;

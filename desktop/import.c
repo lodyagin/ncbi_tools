@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.70 $
+* $Revision: 6.71 $
 *
 * File Description: 
 *
@@ -3505,7 +3505,7 @@ typedef struct visstrpage {
 
 typedef struct visstrform {
   DESCRIPTOR_FORM_BLOCK
-  Uint2         subtype;
+  Uint1         subtype;
 } VisStrForm, PNTR VisStrFormPtr;
 
 static void CharPtrToVisStrPage (DialoG d, Pointer data)
@@ -3647,8 +3647,91 @@ static void VisStrFormMessage (ForM f, Int2 mssg)
   }
 }
 
+
+static CharPtr citInCommentMsg =
+"This comment looks like it has citation references in [#] form.\n\
+You should put comments about references in the REMARK section by\n\
+double clicking on the reference and launching its editor.\n\
+Continue saving this comment?";
+
+
+typedef struct replacevisstr {
+  Uint1       subtype;
+  CharPtr     deleteThis;
+  CharPtr     replaceWith;
+} ReplaceVisStrData, PNTR ReplaceVisStrPtr;
+
+static void ReplaceAllCallback (SeqDescrPtr sdp, Pointer data)
+
+{
+  ReplaceVisStrPtr   rp;
+
+  if ((rp = (ReplaceVisStrPtr) data) == NULL || sdp == NULL || sdp->choice != rp->subtype) {
+    return;
+  }
+
+  if (StringCmp (sdp->data.ptrvalue, rp->deleteThis) == 0) {
+    sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+    sdp->data.ptrvalue = StringSave (rp->replaceWith);
+  }
+}
+
+
+static void ReplaceAllVisibleStringsButtonProc (ButtoN b)
+{
+  VisStrFormPtr vfp;
+  Boolean       suspicious = FALSE;
+  SeqEntryPtr   sep;
+  ReplaceVisStrData rd; 
+  SeqDescrPtr       sdp_orig;
+  SeqMgrDescContext context;
+
+  vfp = (VisStrFormPtr) GetObjectExtra (b);
+  if (vfp == NULL) {
+    return;
+  }
+
+  rd.subtype = vfp->subtype;
+  rd.replaceWith = DialogToPointer (vfp->data);
+  if (rd.replaceWith == NULL || StringHasNoText (rd.replaceWith)) {
+    Message (MSG_ERROR, "Must supply text!");
+    rd.replaceWith = MemFree (rd.replaceWith);
+    return;
+  }
+
+  sdp_orig = SeqMgrGetDesiredDescriptor (vfp->input_entityID, NULL, vfp->input_itemID, 0, NULL, &context);
+  if (sdp_orig == NULL || sdp_orig->choice != vfp->subtype) {
+    Message (MSG_ERROR, "Unable to find original descriptor!");
+    Remove (vfp->form);
+    rd.replaceWith = MemFree (rd.replaceWith);
+    return;
+  }
+  rd.deleteThis = StringSave (sdp_orig->data.ptrvalue);
+
+  if (vfp->subtype == Seq_descr_comment) {
+    suspicious = SerialNumberInString (rd.replaceWith);
+  }
+  if (suspicious) {
+    if (Message (MSG_OKC, "%s", citInCommentMsg) == ANS_CANCEL) {
+      rd.deleteThis = MemFree (rd.deleteThis);
+      rd.replaceWith = MemFree (rd.replaceWith);
+      return;
+    }
+  }
+
+  sep = GetTopSeqEntryForEntityID (vfp->input_entityID);
+  VisitDescriptorsInSep (sep, &rd, ReplaceAllCallback);
+  
+  GetRidOfEmptyFeatsDescStrings (vfp->input_entityID, NULL);
+  ObjMgrSetDirtyFlag (vfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, vfp->input_entityID,
+                  vfp->input_itemID, vfp->input_itemtype);
+  Remove (vfp->form);
+}
+
+
 extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
-                              Uint2 subtype, FormActnFunc actproc)
+                              Uint2 subtype, FormActnFunc actproc, SeqDescrPtr sdp)
 
 {
   ButtoN             b;
@@ -3666,7 +3749,7 @@ extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
     vfp->form = (ForM) w;
     vfp->actproc = actproc;
     vfp->formmessage = VisStrFormMessage;
-    vfp->subtype = subtype;
+    vfp->subtype = (Uint1)subtype;
 
 #ifndef WIN_MAC
     CreateStdEditorFormMenus (w);
@@ -3681,21 +3764,24 @@ extern ForM CreateVisStrForm (Int2 left, Int2 top, CharPtr title,
     g = HiddenGroup (w, -1, 0, NULL);
     vfp->data = CreateVisStrDialog (g, NULL, subtype);
 
-    c = HiddenGroup (w, 2, 0, NULL);
-    b = PushButton (c, "Accept", StdAcceptFormButtonProc);
-    SetObjectExtra (b, vfp, NULL);
+    c = HiddenGroup (w, 3, 0, NULL);
+
+    if (sdp == NULL) {
+      b = PushButton (c, "Accept", StdAcceptFormButtonProc);
+      SetObjectExtra (b, vfp, NULL);
+    } else {
+      b = PushButton (c, "Replace All", ReplaceAllVisibleStringsButtonProc);
+      SetObjectExtra (b, vfp, NULL);
+      b = PushButton (c, "Replace This", StdAcceptFormButtonProc);
+      SetObjectExtra (b, vfp, NULL);
+    }
+
     PushButton (c, "Cancel", StdCancelButtonProc);
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
     RealizeWindow (w);
   }
   return (ForM) w;
 }
-
-static CharPtr citInCommentMsg =
-"This comment looks like it has citation references in [#] form.\n\
-You should put comments about references in the REMARK section by\n\
-double clicking on the reference and launching its editor.\n\
-Continue saving this comment?";
 
 static void VisStrDescFormActnProc (ForM f)
 
@@ -3798,16 +3884,16 @@ extern Int2 LIBCALLBACK VisStrGenFunc (Pointer data)
   }
   if (subtype == Seq_descr_title) {
       w = (WindoW) CreateVisStrForm (-50, -33, "Title",
-                                     subtype, VisStrDescFormActnProc);
+                                     subtype, VisStrDescFormActnProc, sdp);
   } else if (subtype == Seq_descr_comment) {
       w = (WindoW) CreateVisStrForm (-50, -33, "Comment",
-                                     subtype, VisStrDescFormActnProc);
+                                     subtype, VisStrDescFormActnProc, sdp);
   } else if (subtype == Seq_descr_name) {
       w = (WindoW) CreateVisStrForm (-50, -33, "Name",
-                                     subtype, VisStrDescFormActnProc);
+                                     subtype, VisStrDescFormActnProc, sdp);
   } else if (subtype == Seq_descr_region) {
       w = (WindoW) CreateVisStrForm (-50, -33, "Region",
-                                     subtype, VisStrDescFormActnProc);
+                                     subtype, VisStrDescFormActnProc, sdp);
   } else {
     return OM_MSG_RET_ERROR;
   }

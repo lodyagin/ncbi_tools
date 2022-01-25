@@ -1,12 +1,12 @@
 #
-# $Id: linux_icc.ncbi.mk,v 1.7 2007/05/09 16:00:56 ucko Exp $
+# $Id: linux_icc.ncbi.mk,v 1.8 2009/02/04 14:24:03 lavr Exp $
 #
 # ICC 8.x with optimization options for Pentium 4 processor
 
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
-NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
+NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE -D_GNU_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -static-libcxa -O3 -unroll -tpp7
 NCBI_OPTFLAG = -O3 -unroll -tpp7

@@ -198,3 +198,4 @@ extern FloatHiPtr AAComposition (SeqPortPtr spp,
   fptr = AAC (spp, start, end, numval, window, scr, res);
   return fptr;
 }
+

@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.125 2008/08/21 19:55:43 kazimird Exp $
+/* $Id: blast_util.c,v 1.127 2009/02/03 18:14:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.125 2008/08/21 19:55:43 kazimird Exp $";
+    "$Id: blast_util.c,v 1.127 2009/02/03 18:14:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
@@ -57,17 +57,34 @@ SSeqRange SSeqRangeNew(Int4 start, Int4 stop)
     return retval;
 }
 
-Boolean SSeqRangeIntersectsWith(const SSeqRange* a, const SSeqRange* b)
+Int4
+SSeqRangeArrayLessThanOrEqual(const SSeqRange* ranges, Int4 num_ranges, Int4
+                              target)
 {
-    if ( !a || !b ) {
-        return FALSE;
+    Int4 retval = -1;       /* assume failure */
+    Int4 m = 0, b = 0, e = 0;
+
+    if (ranges == NULL || num_ranges <= 0) {
+        return retval;
     }
 
-    if ((a->left <= b->right && a->right >= b->right) || 
-        (a->left <= b->left  && a->right >= b->left)) {
-        return TRUE;
+    b = 0;
+    e = num_ranges;
+    while (b < e - 1) {
+        m = (b + e) / 2;
+        if (ranges[m].left > target) {
+            e = m;
+        } else {
+            b = m;
+        }
     }
-    return FALSE;
+    /* if the target isn't in the range at index b and there is still more
+     * data, return the next element */
+    if (target > ranges[b].right && b < num_ranges) {
+        return b + 1;
+    } else {
+        return b;
+    }
 }
 
 /** Auxiliary function to free the BLAST_SequenceBlk::seq_ranges field if
@@ -95,6 +112,10 @@ static Int2
 s_BlastSeqBlkSetLookupTableRangesToIndex(BLAST_SequenceBlk* seq_blk)
 {
     static const Uint4 kDfltSize = 1;
+    if (seq_blk->seq_ranges != NULL) {
+        return 0;
+    }
+
     s_BlastSequenceBlkFreeSeqRanges(seq_blk);
     seq_blk->seq_ranges = (SSeqRange*) calloc(kDfltSize, 
                                               sizeof(*seq_blk->seq_ranges));
@@ -430,9 +451,9 @@ BLAST_GetTranslation(const Uint1* query_seq, const Uint1* query_seq_rev,
 	Uint1 codon[CODON_LENGTH];
 	Int4 index, index_prot;
 	Uint1 residue;
-   Uint1* nucl_seq;
+        Uint1* nucl_seq;
 
-   nucl_seq = (frame >= 0 ? (Uint1 *)query_seq : (Uint1 *)(query_seq_rev+1));
+        nucl_seq = (frame >= 0 ? (Uint1 *)query_seq : (Uint1 *)(query_seq_rev+1));
 
 	/* The first character in the protein is the NULLB sentinel. */
 	prot_seq[0] = NULLB;
@@ -1048,7 +1069,7 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, EBlastEncoding encoding,
       return -1;
 
    if ((translation_buffer = 
-        (Uint1*) malloc(2*(nucl_length+1)+1)) == NULL)
+        (Uint1*) malloc(2*(nucl_length+1)+2)) == NULL)
       return -1;
 
    if (encoding == eBlastEncodingNcbi4na) {
@@ -1262,6 +1283,81 @@ Blast_SetUpSubjectTranslation(BLAST_SequenceBlk* subject_blk,
    }
 
    return 0;
+}
+
+SBlastTargetTranslation*
+BlastTargetTranslationFree(SBlastTargetTranslation* target_t)
+{
+
+        if (target_t)
+        {
+                if (target_t->translations)
+                {
+			int index;
+			for (index=0; index<target_t->num_frames; index++)
+                           sfree(target_t->translations[index]);
+                        sfree(target_t->translations);
+                }
+                if (target_t->range)
+                	sfree(target_t->range);
+                sfree(target_t);
+        }
+        return NULL;
+}
+
+Int2 
+BlastTargetTranslationNew(BLAST_SequenceBlk* subject_blk,
+                              const Uint1* gen_code_string,
+                              EBlastProgramType program_number,
+                              Boolean is_ooframe,
+                              SBlastTargetTranslation** target)
+{
+      SBlastTargetTranslation* retval = (SBlastTargetTranslation*) calloc(1, sizeof(SBlastTargetTranslation));
+      Int4 num_frames = retval->num_frames = NUM_FRAMES;
+      *target = retval;
+
+      retval->gen_code_string = gen_code_string;
+      retval->program_number = program_number;
+
+      /* If target is OOF do translation now, otherwise do it as needed. */
+      retval->partial = !is_ooframe;
+
+      retval->translations = (Uint1**) calloc(num_frames, sizeof(Uint1*));
+
+      if (!retval->partial)
+      {
+         if (is_ooframe) {
+             BLAST_GetAllTranslations(subject_blk->sequence_start,
+                eBlastEncodingNcbi4na, subject_blk->length, gen_code_string,
+                NULL, NULL, &subject_blk->oof_sequence);
+             subject_blk->oof_sequence_allocated = TRUE;
+         }
+         else
+         {
+              int context = 0;
+              Uint1* nucl_seq_rev = NULL;
+
+               /* First produce the reverse strand of the nucleotide sequence */
+              GetReverseNuclSequence(subject_blk->sequence_start, subject_blk->length, 
+                    &nucl_seq_rev);
+
+              for (context = 0; context < num_frames; ++context) {
+                 int frame = BLAST_ContextToFrame(eBlastTypeBlastx, context);
+                 retval->translations[context] = (Uint1*) malloc((2+subject_blk->length/3)*sizeof(Uint1));
+                 BLAST_GetTranslation(subject_blk->sequence_start, nucl_seq_rev,
+                    subject_blk->length, frame, retval->translations[context], gen_code_string);
+              }
+              sfree(nucl_seq_rev);
+         }
+      }
+      else
+      {
+           retval->range = (Int4*) calloc(2*num_frames, sizeof(Int4));
+           retval->subject_blk = subject_blk; /* Get pointer for later translations. */
+      }
+      
+
+      return 0;
 }
 
 double* 

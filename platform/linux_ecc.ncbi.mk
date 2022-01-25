@@ -1,5 +1,5 @@
 #
-# $Id: linux_ecc.ncbi.mk,v 1.4 2005/08/15 15:58:14 coulouri Exp $
+# $Id: linux_ecc.ncbi.mk,v 1.5 2009/02/04 14:24:03 lavr Exp $
 #
 # Linux/IA64 running on SGI Altix 3000
 # Supplied to NCBI by Haruna Cofer <haruna@sgi.com> on 01/07/2003
@@ -12,7 +12,7 @@ NCBI_MAKE_SHELL = /bin/sh
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
 NCBI_AR=ar
-NCBI_CC = icc
+NCBI_CC = icc -D_GNU_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2 -ftz -i-static
 NCBI_OPTFLAG = -O2 -ftz -i-static

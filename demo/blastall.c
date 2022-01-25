@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: blastall.c,v 6.202 2008/07/01 18:38:14 madden Exp $";
+static char const rcsid[] = "$Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden Exp $";
 
-/* $Id: blastall.c,v 6.202 2008/07/01 18:38:14 madden Exp $
+/* $Id: blastall.c,v 6.203 2009/01/26 14:00:56 madden Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -28,6 +28,9 @@ static char const rcsid[] = "$Id: blastall.c,v 6.202 2008/07/01 18:38:14 madden 
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.203  2009/01/26 14:00:56  madden
+ * env variable sets BLAST_MAXQUERY_SIZE
+ *
  * Revision 6.202  2008/07/01 18:38:14  madden
  * Correct X3 value for blastn/megablast
  *
@@ -1432,6 +1435,7 @@ Int2 Main_new (void)
       PSI-TBLASTN. The name of the file is specified by the -R
       option; the FILE * is NULL if no file is specified. */
    Blast_PsiCheckpointLoc * psi_checkpoint = NULL;
+   char* max_query_string = NULL;
 
    GeneticCodeSingletonInit();
 
@@ -1470,6 +1474,10 @@ Int2 Main_new (void)
        default:
            maxquery = 10000;
    }
+
+   max_query_string = getenv("BLAST_MAXQUERY_SIZE");
+   if (max_query_string)
+        sscanf (max_query_string, "%ld", &maxquery);
 
    BlastGetTypes(myargs[ARG_PROGRAM].strvalue, &query_is_na, &db_is_na);
 

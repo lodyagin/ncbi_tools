@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.324 $
+* $Revision: 6.342 $
 *
 * File Description: 
 *
@@ -954,6 +954,16 @@ typedef enum {
   DISC_REQUIRED_CLONE,
   DISC_PLASMODIUM_ISOLATE_NOT_STRAIN,
   DISC_SOURCE_QUALS_ASNDISC,
+  DISC_mRNA_ON_WRONG_SEQUENCE_TYPE,
+  DISC_RETROVIRIDAE_DNA,
+  DISC_CHECK_AUTH_CAPS,
+  DISC_CHECK_RNA_PRODUCTS_AND_COMMENTS,
+  DISC_MICROSATELLITE_REPEAT_TYPE,
+  DISC_MITOCHONDRION_REQUIRED,
+  DISC_UNPUB_PUB_WITHOUT_TITLE,
+  DISC_QUALITY_SCORES,
+  DISC_INTERNAL_TRANSCRIBED_SPACER_RRNA,
+  DISC_BACTERIAL_PARTIAL_PROBLEMS,
   MAX_DISC_TYPE
 } DiscrepancyType;
 
@@ -1306,6 +1316,7 @@ NLM_EXTERN void AddCDSGapComment (SeqFeatPtr sfp);
 
 NLM_EXTERN Boolean SeqEdFixProteinFeatures (BioseqPtr oldbsp, BioseqPtr newbsp, Boolean force_fix, GlobalAlignFunc align_func);
 NLM_EXTERN void SeqEdTranslateOneCDS (SeqFeatPtr sfp, BioseqPtr featbsp, Uint2 entityID, GlobalAlignFunc align_func);
+NLM_EXTERN void SeqEdRemapLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 seq_len);
 
 NLM_EXTERN CharPtr GetStateAbbreviation (CharPtr state);
 
@@ -1479,6 +1490,8 @@ typedef enum {
   DEFLINE_POS_Type,
   DEFLINE_POS_Variety
 } DefLinePos;
+
+NLM_EXTERN Int4 GetDeflinePosForFieldType (ValNodePtr field);
 
 /* ModifierItemGlobalData is used to store information about the available
  * modifiers - the name to use when displaying a list of checkboxes, whether
@@ -1663,7 +1676,7 @@ NLM_EXTERN Int4 GetMonthNumFromAbbrev (CharPtr month_abbrev);
 NLM_EXTERN CharPtr GetMonthAbbrev (Int4 n);
 NLM_EXTERN Int4 GetDaysInMonth (Int4 n);
 
-NLM_EXTERN ValNodePtr CreateStructuredCommentsFromFile (FILE *fp, SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr CreateStructuredCommentsFromFile (FILE *fp, SeqEntryPtr sep, Boolean apply_to_all);
 
 #define ALNMGR_GAP           -2
 #define ALNMGR_ROW_UNDEFINED -1
@@ -1688,9 +1701,18 @@ NLM_EXTERN int LIBCALL OrgModSetCompare (OrgModPtr mod1, OrgModPtr mod2);
 NLM_EXTERN int LIBCALL OrgNameCompare (OrgNamePtr onp1, OrgNamePtr onp2);
 NLM_EXTERN int LIBCALL OrgRefCompare (OrgRefPtr orp1, OrgRefPtr orp2);
 
-extern void CountNsInSequence (BioseqPtr bsp, Int4Ptr p_total, Int4Ptr p_max_stretch);
+extern void CountNsInSequence (BioseqPtr bsp, Int4Ptr p_total, Int4Ptr p_max_stretch, Boolean expand_gaps);
 NLM_EXTERN Boolean IsTSA (BioseqPtr bsp);
 
+NLM_EXTERN Boolean IsPseudo (SeqFeatPtr sfp);
+
+NLM_EXTERN Boolean ExtendPartialsToEndOrGap (SeqFeatPtr sfp);
+NLM_EXTERN Boolean RetranslateOneCDS 
+( SeqFeatPtr sfp,
+  Uint2 entityID,
+  Boolean include_stop,
+  Boolean no_stop_at_end_of_complete_cds);
+NLM_EXTERN SeqFeatPtr FindBestProtein (Uint2 entityID, SeqLocPtr product);
 
 
 #ifdef __cplusplus

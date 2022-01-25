@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.476 $
+* $Revision: 6.477 $
 *
 * File Description: 
 *
@@ -17297,6 +17297,11 @@ static ValNodePtr GetUpdatesWithoutAlignments (ValNodePtr orig_bioseq_list, ValN
       SeqIdWrite (SeqIdFindBest (orig_bsp->id, SEQID_GENBANK), id_txt,
                 PRINTID_REPORT, sizeof (id_txt) - 1);
       ValNodeAddPointer (&no_aln_list, 0, StringSave (id_txt));
+    }
+    if (revcomp) {
+      BioseqRevComp (update_bsp);
+      ReverseBioseqFeatureStrands (update_bsp);
+      SeqMgrReplaceInBioseqIndex (update_bsp);
     }
     salp = SeqAlignFree (salp);
   }

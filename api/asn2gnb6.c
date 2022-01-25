@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.167 $
+* $Revision: 1.187 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -62,6 +62,19 @@
 #include <Profiler.h>
 #endif
 #endif
+
+static CharPtr link_tax = "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?";
+
+static CharPtr link_featn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+static CharPtr link_lat_lon = "http://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?";
+
+
+
 
 /* ordering arrays for qualifiers and note components */
 
@@ -421,7 +434,6 @@ NLM_EXTERN SourceType subSourceToSourceIdx [42] = {
 /* superset of http://www.ncbi.nlm.nih.gov/collab/db_xref.html and RefSeq db_xrefs */
 
 NLM_EXTERN CharPtr legalDbXrefs [] = {
-  "PIDe", "PIDd", "PIDg", "PID",
   "AceView/WormGenes",
   "AFTOL",
   "ApiDB",
@@ -432,14 +444,13 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ATCC",
   "ATCC(in host)",
   "ATCC(dna)",
-  "axeldb",
+  "Axeldb",
   "BDGP_EST",
   "BDGP_INS",
-  "BHB",
+  "BEETLEBASE",
   "BioHealthBase",
   "BOLD",
   "CDD",
-  "cdd",
   "CK",
   "COG",
   "dbClone",
@@ -454,13 +465,11 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ERIC",
   "ESTLIB",
   "FANTOM_DB",
-  "FlyBase",
   "FLYBASE",
   "GABI",
   "GDB",
   "GeneDB",
   "GeneID",
-  "GI",
   "GO",
   "GOA",
   "GRIN",
@@ -475,9 +484,9 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ISD",
   "ISFinder",
   "JCM",
+  "JGIDB",
   "LocusID",
   "MaizeGDB",
-  "MGD",
   "MGI",
   "MIM",
   "NBRC",
@@ -507,15 +516,38 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "taxon",
   "TIGRFAM",
   "UniGene",
+  "UNILIB",
   "UniProtKB/Swiss-Prot",
   "UniProtKB/TrEMBL",
   "UniSTS",
+  "UNITE",
   "VBASE2",
   "VectorBase",
   "WorfDB",
   "WormBase",
   "Xenbase",
   "ZFIN",
+  NULL
+};
+
+NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
+  "AFTOL",
+  "ATCC",
+  "ATCC(dna)",
+  "ATCC(in host)",
+  "BOLD",
+  "FANTOM_DB",
+  "FLYBASE",
+  "GRIN",
+  "IMGT/HLA",
+  "IMGT/LIGM",
+  "JCM",
+  "MGI",
+  "NBRC",
+  "RZPD",
+  "taxon",
+  "UNILIB",
+  "UNITE",
   NULL
 };
 
@@ -533,153 +565,122 @@ NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
   NULL
 };
 
+static Boolean IsDbxrefInList (
+  CharPtr name,
+  CharPtr PNTR list,
+  size_t num,
+  BoolPtr badcapP,
+  CharPtr PNTR goodcapP
+)
 
-typedef struct dbxrefval {
-  CharPtr dbval;
-  Uint4   flags;
-} DbxrefValData, PNTR DbxrefValPtr;
+{
+  Int2  L, R, mid;
 
-#define DBXREF_VAL_FLAG_KNOWN_BAD       0
-#define DBXREF_VAL_FLAG_OK_ON_ANYFEAT   1
-#define DBXREF_VAL_FLAG_OK_ON_CDSFEAT   2
-#define DBXREF_VAL_FLAG_OK_ON_ORGREF    4
-#define DBXREF_VAL_FLAG_OK_ON_ANY       8
-#define DBXREF_VAL_FLAG_OK_ON_NCBI      16
-#define DBXREF_VAL_FLAG_OK_ON_EMBL      32
-#define DBXREF_VAL_FLAG_OK_ON_DDBJ      64
+  L = 0;
+  R = num;
 
-static DbxrefValData validDbxref [] = {
- {"AceView/WormGenes",        DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"AFTOL",                    DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ApiDB",                    DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ApiDB_CryptoDB",           DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ApiDB_PlasmoDB",           DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ApiDB_ToxoDB",             DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ASAP",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ATCC",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ATCC(dna)",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ATCC(in host)",            DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"axeldb",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"BDGP_EST",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"BDGP_INS",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"BHB",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"BioHealthBase",            DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"BOLD",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"CCDS",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"CDD",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"cdd",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"CK",                       DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"CloneID",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"COG",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbClone",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbCloneLib",               DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbEST",                    DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbProbe",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbSNP",                    DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"dbSTS",                    DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"DDBJ",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"dictyBase",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ECOCYC",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"EcoGene",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"EMBL",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"ENSEMBL",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ERIC",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ESTLIB",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"FANTOM_DB",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"FLYBASE",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"FlyBase",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GABI",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GDB",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GenBank",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"GeneDB",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GeneID",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GI",                       DBXREF_VAL_FLAG_KNOWN_BAD },
- {"GO",                       DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GOA",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"GRIN",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"H-InvDB",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"HGNC",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"HPRD",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"HSSP",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"IMGT/GENE-DB",             DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"IMGT/HLA",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"IMGT/LIGM",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"InterimID",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"InterPro",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ISD",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ISFinder",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"JCM",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"LocusID",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"MaizeGDB",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"MGD",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"MGI",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"MIM",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"miRBASE",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"NBRC",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"NextDB",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"niaEST",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"NID",                      DBXREF_VAL_FLAG_KNOWN_BAD },
- {"NMPDR",                    DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"NRESTdb",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"Osa1",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"Pathema",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PBmice",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PBR",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"PDB",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PFAM",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PGN",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PID",                      DBXREF_VAL_FLAG_OK_ON_CDSFEAT },
- {"PIDd",                     DBXREF_VAL_FLAG_OK_ON_CDSFEAT },
- {"PIDe",                     DBXREF_VAL_FLAG_OK_ON_CDSFEAT },
- {"PIDg",                     DBXREF_VAL_FLAG_OK_ON_CDSFEAT },
- {"PIR",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PSEUDO",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"PseudoCap",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"RAP-DB",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"RATMAP",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"REBASE",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"RFAM",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"RGD",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"RiceGenes",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"RZPD",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ORGREF | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"SEED",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"SGD",                      DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"SoyBase",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"SubtiList",                DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"TAIR",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"taxon",                    DBXREF_VAL_FLAG_OK_ON_ORGREF  | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"TIGRFAM",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"UniGene",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"UniProtKB/Swiss-Prot",     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"UniProtKB/TrEMBL",         DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"UniSTS",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"VBASE2",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"VBRC",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT },
- {"VectorBase",               DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"WorfDB",                   DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"WormBase",                 DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"Xenbase",                  DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY },
- {"ZFIN",                     DBXREF_VAL_FLAG_OK_ON_ANYFEAT | DBXREF_VAL_FLAG_OK_ON_ANY }
-};
+  while (L < R) {
+    mid = (L + R) / 2;
+    if (StringICmp (list [mid], name) < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
 
-const Int4 cNumValidDbxref = sizeof (validDbxref) / sizeof (DbxrefValData);
+  if (StringICmp (list [R], name) == 0) {
+    if (StringCmp (list [R], name) != 0) {
+      if (badcapP != NULL) {
+        *badcapP = TRUE;
+      }
+      if (goodcapP != NULL) {
+        *goodcapP = list [R];
+      }
+    }
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+NLM_EXTERN Boolean DbxrefIsValid (
+  CharPtr name,
+  BoolPtr is_refseq_P,
+  BoolPtr is_source_P,
+  BoolPtr is_badcap_P,
+  CharPtr PNTR goodcapP
+)
+
+{
+  if (is_refseq_P != NULL) {
+    *is_refseq_P = FALSE;
+  }
+  if (is_source_P != NULL) {
+    *is_source_P = FALSE;
+  }
+  if (is_badcap_P != NULL) {
+    *is_badcap_P = FALSE;
+  }
+  if (goodcapP != NULL) {
+    *goodcapP = NULL;
+  }
+
+  if (StringHasNoText (name)) return FALSE;
+
+  if (IsDbxrefInList (name, legalRefSeqDbXrefs,
+                      sizeof (legalRefSeqDbXrefs) / sizeof (legalRefSeqDbXrefs [0]) - 1,
+                      is_badcap_P, goodcapP)) {
+    if (is_refseq_P != NULL) {
+      *is_refseq_P = TRUE;
+    }
+    return TRUE;
+  }
+
+  if (IsDbxrefInList (name, legalSrcDbXrefs,
+                      sizeof (legalSrcDbXrefs) / sizeof (legalSrcDbXrefs [0]) - 1,
+                      is_badcap_P, goodcapP)) {
+    if (is_source_P != NULL) {
+      *is_source_P = TRUE;
+    }
+    return TRUE;
+  }
+
+  if (IsDbxrefInList (name, legalDbXrefs,
+                      sizeof (legalDbXrefs) / sizeof (legalDbXrefs [0]) - 1,
+                      is_badcap_P, goodcapP)) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
 
 
 /* These functions are for testing dbxrefs */
+
 static ValNodePtr MakeDbxrefList (void)
 {
   ValNodePtr dbxref_list = NULL;
   Int4 i;
   DbtagPtr dbtag;
-  
-  for (i = 0; i < cNumValidDbxref; i++)
-  {
+
+  for (i = 0; legalDbXrefs [i] != NULL; i++) {
     dbtag = DbtagNew ();
-    dbtag->db = StringSave (validDbxref[i].dbval);
+    dbtag->db = StringSave (legalDbXrefs [i]);
     dbtag->tag = ObjectIdNew ();
     dbtag->tag->id = 42;
     ValNodeAddPointer (&dbxref_list, 0, dbtag);
   }
+
+  /* legalSrcDbXrefs is contained within legalDbXrefs */
+
+  for (i = 0; legalRefSeqDbXrefs [i] != NULL; i++) {
+    dbtag = DbtagNew ();
+    dbtag->db = StringSave (legalRefSeqDbXrefs [i]);
+    dbtag->tag = ObjectIdNew ();
+    dbtag->tag->id = 42;
+    ValNodeAddPointer (&dbxref_list, 0, dbtag);
+  }
+
   return dbxref_list;
 }
 
@@ -729,217 +730,6 @@ NLM_EXTERN void AddAllDbxrefsToBioseq (BioseqPtr bsp)
   }
 }
 
-/* functions for validating dbxrefs */
-
-static CharPtr FormatIllegalMsg (CharPtr db)
-{
-  CharPtr msg_fmt = "Illegal db_xref type %s";
-  CharPtr err = NULL;
-
-  if (StringHasNoText (db)) return NULL;
-  err = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_fmt) + StringLen (db)));
-  sprintf (err, msg_fmt, db);
-  return err;
-}
-
-
-static CharPtr FormatBadCapMsg (CharPtr db, CharPtr correct)
-{
-  CharPtr msg_fmt = "Illegal db_xref type %s, legal capitalization is %s";
-  CharPtr err = NULL;
-
-  if (StringHasNoText (db) || StringHasNoText (correct)) return NULL;
-  err = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_fmt) + StringLen (db) + StringLen (correct)));
-  sprintf (err, msg_fmt, db, correct);
-  return err;
-}
-
-
-static CharPtr FormatFlatfileOnlyMsg (CharPtr db)
-{
-  CharPtr msg_fmt = "db_xref type %s is only created by the flatfile generator, and should not be in the record as a separate xref";
-  CharPtr err = NULL;
-
-  if (StringHasNoText (db)) return NULL;
-  err = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_fmt) + StringLen (db)));
-  sprintf (err, msg_fmt, db);
-  return err;
-}
-
-
-static CharPtr FormatBadOrgDbxrefMsg (CharPtr db)
-{
-  CharPtr msg_fmt = "db_xref type %s should not used on an OrgRef";
-  CharPtr err = NULL;
-
-  if (StringHasNoText (db)) return NULL;
-  err = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_fmt) * StringLen (db)));
-  sprintf (err, msg_fmt, db);
-  return err;
-}
-  
-
-static CharPtr FormatBadSeqFeatDbxrefMsg (CharPtr db)
-{
-  CharPtr msg_fmt = "db_xref type %s should not used as a feature xref";
-  CharPtr err = NULL;
-
-  if (StringHasNoText (db)) return NULL;
-  err = (CharPtr) MemNew (sizeof (Char) * (StringLen (msg_fmt) * StringLen (db)));
-  sprintf (err, msg_fmt, db);
-  return err;
-}
-
-
-/* returns 1 if found and valid
- * returns 0 if not found
- * returns -1 if found but invalid
- * returns -2 if found and known bad
- */
-NLM_EXTERN Int4 IsDbxrefValid (CharPtr db, SeqFeatPtr sfp, OrgRefPtr org, Boolean IsRefSeq, CharPtr PNTR errmsg)
-{
-  Int4 imin, imax, i, j;
-  Int4 capmismatch = -1, exactmatch = -1, validmatch;
-  Int4 rval = 0;
-
-  if (StringHasNoText (db)) return 0;
-
-  if (errmsg != NULL) *errmsg = NULL;
-
-  imin = 0;                   /* find in list */
-  imax = cNumValidDbxref - 1;
-  i = (imax + imin) / 2;
-  while (imax > imin)
-  {
-    j = StringICmp (db, validDbxref[i].dbval);
-    if (j < 0)
-      imax = i - 1;
-      else if (j > 0)
-          imin = i + 1;
-      else
-          break;
-      i = (imax + imin)/2;
-  }
-
-  if (i > -1 && StringICmp (db, validDbxref[i].dbval) == 0)
-  {
-    j = StringCmp (db, validDbxref[i].dbval);
-    if (j == 0)
-    {
-      exactmatch = i;
-    }
-    else if (j < 0)
-    {
-      capmismatch = i;
-      i--;
-      while (i > -1 && StringICmp (db, validDbxref[i].dbval) == 0 && exactmatch < 0)
-      {
-        if (StringCmp (db, validDbxref[i].dbval) == 0)
-        {
-          exactmatch = i;
-        }
-        else
-        {
-          i--;
-        }
-      }
-    }
-    else if (j > 0)
-    {
-      capmismatch = i;
-      i++;
-      while (i < cNumValidDbxref && StringICmp (db, validDbxref[i].dbval) == 0 && exactmatch < 0)
-      {
-        if (StringCmp (db, validDbxref[i].dbval) == 0)
-        {
-          exactmatch = i;
-        }
-        else
-        {
-          i--;
-        }
-      }
-    }
-  }
-
-  if (capmismatch > -1 && exactmatch < 0)
-  {
-    validmatch = capmismatch;
-  }
-  else
-  {
-    validmatch = exactmatch;
-  }
-
-  if (validmatch < 0)
-  {
-    rval = 0;
-    if (errmsg != NULL) 
-    {
-      *errmsg = FormatIllegalMsg (db);
-    }
-  } 
-  else 
-  {
-    if (validDbxref[validmatch].flags == DBXREF_VAL_FLAG_KNOWN_BAD)
-    {
-      rval = -2;
-      if (errmsg != NULL)
-      {
-        *errmsg = FormatFlatfileOnlyMsg (db);
-      }
-    }
-    else if (org != NULL && !(validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_ORGREF))
-    {
-      rval = -1;
-      if (errmsg != NULL)
-      {
-        *errmsg = FormatBadOrgDbxrefMsg (db);
-      }
-    }
-    else if (sfp != NULL && !(validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_ANYFEAT)
-             && (sfp->data.choice != SEQFEAT_CDREGION 
-                 || !(validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_CDSFEAT)))
-    {
-      if ((validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_CDSFEAT)
-          && !(validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_ANYFEAT)
-          && sfp->data.choice != SEQFEAT_CDREGION)
-      {
-        rval = -2;
-        if (errmsg != NULL)
-        {
-          *errmsg = FormatFlatfileOnlyMsg (db);
-        }
-      }
-      else
-      {
-        rval = -1;
-        if (errmsg != NULL)
-        {
-          *errmsg = FormatBadSeqFeatDbxrefMsg (db);
-        }
-      }
-    }
-    else if (IsRefSeq ||(validDbxref[validmatch].flags & DBXREF_VAL_FLAG_OK_ON_ANY))
-    {
-      rval = 1;
-      if (validmatch == capmismatch && errmsg != NULL)
-      {
-        *errmsg = FormatBadCapMsg (db, validDbxref[validmatch].dbval);
-      }
-    }
-    else
-    {
-      rval = -1;
-      if (errmsg != NULL) 
-      {
-        *errmsg = FormatIllegalMsg (db);
-      }
-    }
-  }
-
-  return rval;
-}
 
 
 static CharPtr organellePrefix [] = {
@@ -1392,14 +1182,14 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
       if ( GetWWW(ajp) ) { 
         if (taxid != -1) {
           FFAddOneString(temp, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(temp, link_tax, FALSE, FALSE, TILDE_IGNORE);
+          FF_Add_NCBI_Base_URL (temp, link_tax);
           FFAddOneString(temp, "id=", FALSE, FALSE, TILDE_IGNORE);
           sprintf (buf, "%ld", (long) taxid);
           FFAddOneString(temp, buf, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(temp, "\">", FALSE, FALSE, TILDE_IGNORE);
         } else {
           FFAddOneString(temp, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(temp, link_tax, FALSE, FALSE, TILDE_IGNORE);
+          FF_Add_NCBI_Base_URL (temp, link_tax);
           FFAddOneString(temp, "name=", FALSE, FALSE, TILDE_IGNORE);
           tmp = StringSave (taxname);
           if (tmp != NULL) {
@@ -3316,6 +3106,7 @@ static CharPtr NextPCRReaction (
 #define s_ku_base   "http://collections.nhm.ku.edu/"
 #define s_mvz_base  "http://mvzarctos.berkeley.edu/SpecimenDetail.cfm?guid="
 #define s_pcc_base  "http://www.pasteur.fr/recherche/banques/PCC/docs/pcc"
+#define s_pcmb_base "http://www2.bishopmuseum.org/HBS/PCMB/results3.asp?searchterm3="
 #define s_uam_base  "http://arctos.database.museum/SpecimenDetail.cfm?GUID="
 
 #define s_colon_pfx ":"
@@ -3339,6 +3130,7 @@ static CharPtr NextPCRReaction (
 #define s_mvz_inst   "Museum of Vertebrate Zoology, University of California"
 #define s_nbsb_inst  "National Biomonitoring Specimen Bank, U.S. Geological Survey"
 #define s_pcc_inst   "Pasteur Culture Collection of Cyanobacteria"
+#define s_pcmb_inst  "Pacific Center for Molecular Biodiversity"
 #define s_psu_inst   "Portland State University"
 #define s_uam_inst   "University of Alaska Museum of the North"
 #define s_wmnu_inst  "Western New Mexico University Museum"
@@ -3379,6 +3171,7 @@ static VouchData Nlm_spec_vouchers [] = {
  { "MVZObs:Herp", s_mvz_base,  TRUE,  s_colon_pfx,  NULL,       s_mvz_inst  },
  { "NBSB:Bird",   s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_nbsb_inst },
  { "PCC",         s_pcc_base,  FALSE, NULL,         s_pcc_sfx,  s_pcc_inst  },
+ { "PCMB",        s_pcmb_base, FALSE, NULL,         NULL,       s_pcmb_inst },
  { "PSU:Mamm",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_psu_inst  },
  { "UAM:Bird",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_uam_inst  },
  { "UAM:Bryo",    s_uam_base,  TRUE,  s_colon_pfx,  NULL,       s_uam_inst  },
@@ -3505,7 +3298,7 @@ static void Do_www_specimen_voucher (
   FFAddTextToString (ffstring, ">", id, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
-static void FF_www_specimen_voucher (
+NLM_EXTERN void FF_www_specimen_voucher (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr subname
@@ -3540,11 +3333,6 @@ static void FF_www_specimen_voucher (
   Do_www_specimen_voucher (ffstring, inst, id, vdp);
 }
 
-NLM_EXTERN Char link_lat_lon [MAX_WWWBUF];
-#define DEF_LINK_LAT_LON "http://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?"
-
-static Boolean lat_lon_link_set = FALSE;
-
 static void Do_www_lat_lon (
   StringItemPtr ffstring,
   CharPtr lat_lon
@@ -3561,11 +3349,6 @@ static void Do_www_lat_lon (
   CharPtr  tokens [6];
 
   if ( ffstring == NULL || lat_lon == NULL ) return;
-
-  if (! lat_lon_link_set) {
-    GetAppParam ("NCBI", "WWWENTREZ", "LINK_LAT_LON", DEF_LINK_LAT_LON, link_lat_lon, MAX_WWWBUF);
-    lat_lon_link_set = TRUE;
-  }
 
   MemSet ((Pointer) tokens, 0, sizeof (tokens));
 
@@ -3609,7 +3392,7 @@ static void Do_www_lat_lon (
   }
 
   FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString (ffstring, link_lat_lon, FALSE, FALSE, TILDE_IGNORE);
+  FF_Add_NCBI_Base_URL (ffstring, link_lat_lon);
   sprintf (tmp, "lat=%s%s&lon=%s%s", ns, tokens [0], ew, tokens [2]);
   FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
   FFAddTextToString (ffstring, "\">", lat_lon, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -3658,6 +3441,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Asn2gbSectPtr      asp;
   BioSourcePtr       biop = NULL;
   BioseqPtr          bsp;
+  BioseqSetPtr       bssp;
   Char               buf [80];
   CharPtr            common = NULL;
   DbtagPtr           dbt;
@@ -3669,7 +3453,11 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   Uint1              idx;
   IntSrcBlockPtr     isp;
   Boolean            is_desc = TRUE;
+  Boolean            is_gps = FALSE;
   Boolean            is_other = FALSE;
+  Boolean            is_bc;
+  Boolean            is_rf;
+  Boolean            is_sc;
   Int2               j;
   Uint1              jdx;
   Uint1              lastomptype;
@@ -3691,6 +3479,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   SourceType PNTR    qualtbl = NULL;
   QualValPtr         qvp;
   SeqDescrPtr        sdp;
+  SeqEntryPtr        sep;
   SeqFeatPtr         sfp = NULL;
   SeqIdPtr           sip;
   SubSourcePtr       ssp;
@@ -3818,6 +3607,14 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
     }
   }
 
+  sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
+  if (sep == NULL && IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+      is_gps = TRUE;
+    }
+  }
+
   if (bsp != NULL) {
     for (sip = bsp->id; sip != NULL; sip = sip->next) {
       if (sip->choice == SEQID_OTHER) {
@@ -3938,14 +3735,6 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
     qvp [SCQUAL_mating_type].ssp = NULL;
   }
 #endif
-
-  if (is_other || (ajp->mode == SEQUIN_MODE || ajp->mode == DUMP_MODE)) {
-    /* leave linkage_group as a separate qualifier */
-  } else if (qvp [SCQUAL_map].ssp == NULL &&  qvp [SCQUAL_linkage_group].ssp != NULL) {
-    /* move linkage_group to map if available */
-    qvp [SCQUAL_map].ssp = qvp [SCQUAL_linkage_group].ssp;
-    qvp [SCQUAL_linkage_group].ssp = NULL;
-  }
 
   /* now print qualifiers from table */
 
@@ -4134,12 +3923,30 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
               okay = TRUE;
               if (ajp->flags.dropBadDbxref) {
                 /* if RELEASE_MODE, drop unknown dbtag */
+
+                okay = FALSE;
+                if (DbxrefIsValid (dbt->db, &is_rf, &is_sc, &is_bc, NULL)) {
+                  if (is_bc) {
+                    /* case counts, so suppress if bad case */
+                  } else if (is_rf && (is_other || is_gps)) {
+                    /* allow refseq dbxrefs in source feature */
+                    okay = TRUE;
+                  } else if (is_sc) {
+                    /* expect it to be in legalSrcDbXrefs list */
+                    okay = TRUE;
+                  } else {
+                    /* suppress regular dbxrefs, also warn in validator */
+                  }
+                }
+
+                /*
                 okay = FALSE;
                 for (j = 0; legalDbXrefs [j] != NULL; j++) {
                   if (StringCmp (dbt->db, legalDbXrefs [j]) == 0) {
                     okay = TRUE;
                   }
                 }
+                */
               }
 
               if (okay) {
@@ -4656,7 +4463,8 @@ static void PrintGenome (
   StringItemPtr ffstring,
   SeqLocPtr slp_head, 
   CharPtr prefix, 
-  Boolean segWithParts
+  Boolean segWithParts,
+  Boolean is_na
 )
 {
   Char         buf[40], val[166];
@@ -4742,8 +4550,13 @@ static void PrintGenome (
         newid = sid;
       }
       if (newid->choice != SEQID_GENERAL) {
-        FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-        FFAddTextToString(ffstring, "val=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        if (is_na) {
+          FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+        } else {
+          FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+        }
+        FFAddTextToString(ffstring, /* "val=" */ NULL, buf, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddTextToString(ffstring, NULL, buf, "</a>", FALSE, FALSE, TILDE_IGNORE);
       }
     } else {
@@ -4776,6 +4589,7 @@ NLM_EXTERN CharPtr FormatContigBlock (
   DeltaSeqPtr      dsp;
   IntFuzzPtr       fuzz;
   GBSeqPtr         gbseq;
+  Boolean          is_na;
   SeqLitPtr        litp;
   CharPtr          prefix = NULL;
   Boolean          segWithParts = FALSE;
@@ -4798,6 +4612,8 @@ NLM_EXTERN CharPtr FormatContigBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return NULL;
 
+  is_na = ISA_na (bsp->mol);
+
   FFStartPrint (ffstring, afp->format, 0, 0, "CONTIG", 12, 5, 5, "CO", FALSE);
   /*
   if ( GetWWW(ajp) ) {
@@ -4819,7 +4635,7 @@ NLM_EXTERN CharPtr FormatContigBlock (
     }
 
     slp_head = (SeqLocPtr) bsp->seq_ext;
-    PrintGenome (ajp, ffstring, slp_head, prefix, segWithParts);
+    PrintGenome (ajp, ffstring, slp_head, prefix, segWithParts, is_na);
 
   } else if (bsp->seq_ext_type == 4) {
 
@@ -4827,7 +4643,7 @@ NLM_EXTERN CharPtr FormatContigBlock (
       if (dsp->choice == 1) {
 
         slp_head = (SeqLocPtr) dsp->data.ptrvalue;
-        PrintGenome (ajp, ffstring, slp_head, prefix, FALSE);
+        PrintGenome (ajp, ffstring, slp_head, prefix, FALSE, is_na);
 
       } else {
 
@@ -5102,13 +4918,16 @@ static Int2 ProcessGapSpecialFormat (
       }
       if (gi > 0) {
         sprintf(gi_buf, "%ld", (long) gi);
-        sprintf(fmt_buf, "&fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
+        sprintf(fmt_buf, "?fmt_mask=%ld", (long) EXPANDED_GAP_DISPLAY);
         if (bsp->repr == Seq_repr_delta && (! DeltaLitOnly (bsp))) {
-          StringCat (fmt_buf, "&view=gbwithparts");
+          StringCat (fmt_buf, "&report=gbwithparts");
         }
         FFAddOneString (ffstring, "    <a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString (ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+        if (is_na) {
+          FF_Add_NCBI_Base_URL (ffstring, link_featn);
+        } else {
+          FF_Add_NCBI_Base_URL (ffstring, link_featp);
+        }
         FFAddOneString (ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, fmt_buf, FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, "\">Expand Ns", FALSE, FALSE, TILDE_IGNORE);

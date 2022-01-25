@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/* $Id: ncbi_connutil.h,v 6.66 2008/11/10 17:09:45 kazimird Exp $
+/* $Id: ncbi_connutil.h,v 6.67 2009/02/04 19:29:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -402,11 +402,12 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ParseURL
  );
 
 
-/* Setup standard arguments:  service, address, and platform.
+/* Setup standard arguments:  service(as passed), address, and platform.
  * Return non-zero on success; zero on error.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_SetupStandardArgs
-(SConnNetInfo* info
+(SConnNetInfo* info,
+ const char*   service
  );
 
 

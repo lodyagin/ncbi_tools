@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   ByteStore functions
@@ -48,58 +48,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++.
-* 09-19-91 Schuler     All sizes are expressed as Int4, not Uint4.
-* 09-20-91 Schuler     All exported functions are LIBCALL.
-* 09-20-91 Schuler     BSGetByte returns EOF on failure.
-* 09-20-91 Schuler     BSPutByte(bsp,EOF) truncates bsp at curr. position.
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-*
-* $Log: ncbibs.c,v $
-* Revision 6.7  2003/01/21 17:56:23  kans
-* minor fix in BSAdd, comment that BSAdd does not change totlen
-*
-* Revision 6.6  2002/02/07 21:52:40  kans
-* added cast in Nlm_SwapUint4Buff call
-*
-* Revision 6.5  2000/05/26 23:34:58  kans
-* added BSDupAndSwapUint4 for copying and swapping of UID lists passed over network to BIG_ENDIAN server
-*
-* Revision 6.4  1999/11/05 19:59:09  beloslyu
-* Fixed the error with size_t vs Int4 comparisons
-*
-* Revision 6.3  1999/08/25 17:43:04  madden
-* Removed extra comment starts
-*
-* Revision 6.2  1999/01/21 20:08:37  ostell
-* added SwitchUint2 and 4, added integer bytestores
-*
-* Revision 6.1  1998/06/11 18:59:58  shavirin
-* Fixed some compiler warnings.
-*
-* Revision 6.0  1997/08/25 18:15:13  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:48:33  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1995/12/21  02:33:19  ostell
- * added use_min_size to BSAll
- *
- * Revision 4.1  1995/12/20  22:56:58  ostell
- * started using MIN_BSALLOC in BSAdd()
- * added check for BSAdd failure in BSWrite
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.11  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
 *
 * ==========================================================================
 */
@@ -887,6 +835,45 @@ NLM_EXTERN Nlm_ByteStorePtr LIBCALL Nlm_BSDup (Nlm_ByteStorePtr source)
   }
   return dest;
 }
+
+/*****************************************************************************
+*
+*   Boolean Nlm_BSEqual (bs1, bs2)
+*
+*****************************************************************************/
+
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_BSEqual (Nlm_ByteStorePtr bs1, Nlm_ByteStorePtr bs2)
+
+{
+  Nlm_Byte  buf1 [256], buf2 [256];
+  Nlm_Int4  count1, count2, idx;
+
+  if (bs1 == NULL || bs2 == NULL) {
+    if (bs1 == NULL && bs2 == NULL) return TRUE;
+    if (Nlm_BSLen (bs1) == 0 && Nlm_BSLen (bs2) == 0) return TRUE;
+    return FALSE;
+  }
+
+  Nlm_BSSeek (bs1, 0, SEEK_SET);
+  Nlm_BSSeek (bs2, 0, SEEK_SET);
+
+  count1 = Nlm_BSRead (bs1, buf1, sizeof (buf1));
+  count2 = Nlm_BSRead (bs2, buf2, sizeof (buf2));
+
+  while (count1 == count2 && count2 > 0) {
+    for (idx = 0; idx < count1; idx++) {
+      if (buf1 [idx] != buf2 [idx]) return FALSE;
+    }
+
+    count1 = Nlm_BSRead (bs1, buf1, sizeof (buf1));
+    count2 = Nlm_BSRead (bs2, buf2, sizeof (buf2));
+  }
+
+  if (count1 != count2) return FALSE;
+
+  return TRUE;
+}
+
 
 /* for copying and swapping of UID lists passed over network to BIG_ENDIAN server */
 

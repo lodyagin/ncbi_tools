@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.516 $
+* $Revision: 6.524 $
 *
 * File Description: 
 *
@@ -897,171 +897,6 @@ extern void RecomputeSuggestFixGenes (IteM i)
   RecomputeSuggestEx (bfp->input_entityID, TRUE, FALSE);
 }
 
-
-extern Boolean RetranslateOneCDS 
-( SeqFeatPtr sfp,
-  Uint2 entityID,
-  Boolean include_stop,
-  Boolean no_stop_at_end_of_complete_cds)
-
-{
-  SeqFeatPtr    bestprot;
-  ByteStorePtr  bs;
-  BioseqPtr     bsp;
-  Char          ch;
-  SeqFeatPtr    gene;
-  GeneRefPtr    grp;
-  SeqEntryPtr   master;
-  MolInfoPtr    mip;
-  SeqEntryPtr   old;
-  Boolean       partial5;
-  Boolean       partial3;
-  CharPtr       prot;
-  CharPtr       ptr;
-  SeqEntryPtr   sep;
-  SeqIdPtr      sip;
-  ValNodePtr    vnp;
-  ProtRefPtr    prp;
-
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
-
-  /* bail on pseudo CDS */
-
-  if (sfp->pseudo) return TRUE;
-  grp = SeqMgrGetGeneXref (sfp);
-  if (grp != NULL) {
-    if (grp->pseudo) return TRUE;
-  } else {
-    gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
-    if (gene != NULL) {
-      if (gene->pseudo) return TRUE;
-      grp = (GeneRefPtr) gene->data.value.ptrvalue;
-      if (grp != NULL && grp->pseudo) return TRUE;
-    }
-  }
-
-  if (sfp->location == NULL) return TRUE;
-  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-
-  if (sfp->product == NULL) {
-    master = NULL;
-    old = NULL;
-    bsp = GetBioseqGivenSeqLoc (sfp->location, entityID);
-    if (bsp != NULL) {
-      master = GetBestTopParentForData (entityID, bsp);
-    }
-    bsp = BioseqNew ();
-    if (bsp != NULL) {
-      bsp->mol = Seq_mol_aa;
-      bsp->repr = Seq_repr_raw;
-      bsp->seq_data_type = Seq_code_ncbieaa;
-      bsp->length = 0;
-      bsp->seq_data = (SeqDataPtr) BSNew (0);
-      if (master != NULL) {
-        old = SeqEntrySetScope (master);
-      }
-      bsp->id = MakeNewProteinSeqId (sfp->location, NULL);
-      SeqMgrAddToBioseqIndex (bsp);
-      if (master != NULL) {
-        SeqEntrySetScope (old);
-      }
-      sep = SeqEntryNew ();
-      if (sep != NULL) {
-        sep->choice = 1;
-        sep->data.ptrvalue = (Pointer) bsp;
-        SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) bsp, sep);
-      }
-      SetSeqFeatProduct (sfp, bsp);
-      if (master != NULL && sep != NULL) {
-        AddSeqEntryToSeqEntry (master, sep, TRUE);
-      }
-    }
-  }
-
-  sip = SeqLocId (sfp->product);
-  if (sip != NULL) {
-    bsp = BioseqFind (sip);
-    if (bsp != NULL && ISA_aa (bsp->mol) && bsp->repr == Seq_repr_raw) {
-      bestprot = FindBestProtein (entityID, sfp->product);
-      bs = ProteinFromCdRegionExWithTrailingCodonHandling (sfp,
-                                              include_stop,
-                                              FALSE,
-                                              no_stop_at_end_of_complete_cds );
-      if (bs == NULL) return TRUE;
-      prot = BSMerge (bs, NULL);
-      bs = BSFree (bs);
-      if (prot == NULL) return TRUE;
-      ptr = prot;
-      ch = *ptr;
-      while (ch != '\0') {
-        *ptr = TO_UPPER (ch);
-        ptr++;
-        ch = *ptr;
-      }
-      bs = BSNew (1000);
-      if (bs != NULL) {
-        ptr = prot;
-        /*
-        if (prot [0] == '-') {
-          ptr++;
-        }
-        */
-        BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
-      }
-      bsp->repr = Seq_repr_raw;
-      bsp->mol = Seq_mol_aa;
-      bsp->seq_data = SeqDataFree (bsp->seq_data, bsp->seq_data_type);
-      bsp->seq_data = (SeqDataPtr) bs;
-      bsp->seq_data_type = Seq_code_ncbieaa;
-      bsp->length = BSLen (bs);
-      sep = SeqMgrGetSeqEntryForData (bsp);
-      if (sep == NULL) return TRUE;
-      if (bestprot == NULL)
-      {
-        bestprot = CreateNewFeature (sep, NULL, SEQFEAT_PROT, NULL);
-        prp = ProtRefNew ();
-        bestprot->data.value.ptrvalue = prp;
-      }
-      if (bestprot != NULL) {
-        bestprot->location = SeqLocFree (bestprot->location);
-        bestprot->location = CreateWholeInterval (sep);
-        SetSeqLocPartial (bestprot->location, partial5, partial3);
-        bestprot->partial = (partial5 || partial3);
-      }
-      vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
-      if (vnp == NULL) {
-        vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
-        if (vnp != NULL) {
-          mip = MolInfoNew ();
-          vnp->data.ptrvalue = (Pointer) mip;
-          if (mip != NULL) {
-            mip->biomol = 8;
-            mip->tech = 13;
-          }
-        }
-      }
-      if (vnp != NULL) {
-        mip = (MolInfoPtr) vnp->data.ptrvalue;
-        if (mip != NULL) {
-          if (partial5 && partial3) {
-            mip->completeness = 5;
-          } else if (partial5) {
-            mip->completeness = 3;
-          } else if (partial3) {
-            mip->completeness = 4;
-          /*
-          } else if (partial) {
-            mip->completeness = 2;
-          */
-          } else {
-            mip->completeness = 0;
-          }
-        }
-      }
-    }
-  }
-  return TRUE;
-}
 
 static Boolean RetranslateCDSCallback (GatherContextPtr gcp)
 
@@ -2650,6 +2485,7 @@ typedef struct removeformdata {
   TexT           toTxt;
   Uint2          itemtype;
   Uint2          subtype;
+  CharPtr        extra_string;
   ValNodePtr     head;
   Boolean        stringfound;
   Char           findStr [128];
@@ -2770,6 +2606,23 @@ static void RemoveFeatures (SeqEntryPtr sep, RemoveFormPtr rfp)
   DeleteMarkedObjects (rfp->input_entityID, OBJ_SEQENTRY, (Pointer) sep);
 }
 
+
+static Boolean IsUserObjectType (SeqDescrPtr sdp, CharPtr string)
+{
+  UserObjectPtr uop;
+  ObjectIdPtr   oip;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return FALSE;
+  if (StringHasNoText (string)) return TRUE;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return FALSE;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, string) != 0) return FALSE;
+  return TRUE;
+}
+
+
 static void RemoveDescriptorCallback (SeqDescrPtr sdp, Pointer userdata)
 {
   ObjValNodePtr ovp;
@@ -2783,7 +2636,9 @@ static void RemoveDescriptorCallback (SeqDescrPtr sdp, Pointer userdata)
     
   if (sdp->choice == rfp->subtype) 
   {
-    ovp->idx.deleteme = TRUE;	
+    if (sdp->choice != Seq_descr_user || IsUserObjectType (sdp, rfp->extra_string)) {
+      ovp->idx.deleteme = TRUE;	
+    }
   }
 }
 
@@ -2870,11 +2725,15 @@ static void DoRemoveAsnObject (ButtoN b)
     if (GetItemStatus (rfp->objlist, val))
     {
       rfp->subtype = vnp->choice;
+      rfp->extra_string = NULL;
       if (rfp->subtype != 0) {
         if (rfp->is_feature) {
           RemoveFeatures (sep, rfp);
           removed_some_features = TRUE;
         } else {
+          if (rfp->subtype == Seq_descr_user && StringCmp (vnp->data.ptrvalue, "User") != 0) {
+            rfp->extra_string = vnp->data.ptrvalue;
+          }
           RemoveDescriptors (sep, rfp);
         }
       }
@@ -3144,6 +3003,7 @@ extern ValNodePtr BuildDescriptorValNodeList (void)
   return head;
 }
 
+
 static void RemoveAsnObject (IteM i, Boolean feature)
 
 {
@@ -3214,6 +3074,10 @@ static void RemoveAsnObject (IteM i, Boolean feature)
     head = BuildFeatureValNodeList (TRUE, "All", ALL_FEATURES, TRUE, FALSE);
   } else {
     head = BuildDescriptorValNodeList();
+    vnp = ValNodeNew (NULL);
+    vnp->choice = Seq_descr_user;
+    vnp->data.ptrvalue = StringSave ("StructuredComment");
+    ValNodeInsert (&(head->next), vnp, SortVnpByString);
   }
   if (head != NULL) {
 
@@ -4546,6 +4410,378 @@ extern Int2 LIBCALLBACK GenomeProjectsDBUserGenFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+
+typedef struct dblinkdialog {
+  DIALOG_MESSAGE_BLOCK
+  DialoG  traceassm;
+  DialoG  biosample;
+} DblinkDialog, PNTR DblinkDialogPtr;
+
+typedef struct dblinkform {
+  FEATURE_FORM_BLOCK
+  SeqEntryPtr   sep;
+} DblinkForm, PNTR DblinkFormPtr;
+
+static void UserObjectPtrToDblinkDialog (
+  DialoG d,
+  Pointer data
+)
+
+{
+  Char             buf [32];
+  CharPtr PNTR     cpp;
+  UserFieldPtr     curr;
+  DblinkDialogPtr  ddp;
+  ValNodePtr       head;
+  Int4             i, val;
+  Int4Ptr          ip;
+  Int4             num;
+  ObjectIdPtr      oip;
+  CharPtr          str;
+  UserObjectPtr    uop;
+ 
+  ddp = (DblinkDialogPtr) GetObjectExtra (d);
+  if (ddp == NULL) return;
+
+  uop = (UserObjectPtr) data;
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "DBLink") != 0) {
+    PointerToDialog (ddp->traceassm, NULL);
+    PointerToDialog (ddp->biosample, NULL);
+    return;
+  }
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip == NULL) continue;
+    if (StringICmp (oip->str, "Trace Assembly Archive") == 0) {
+      if (curr->choice == 8) {
+        num = curr->num;
+        ip = (Int4Ptr) curr->data.ptrvalue;
+        if (num > 0 && ip != NULL) {
+          head = NULL;
+          for (i = 0; i < num; i++) {
+            val = ip [i];
+            if (val > 0) {
+              sprintf (buf, "%ld", (long) val);
+              ValNodeCopyStr (&head, 0, buf);
+            }
+          }
+          if (head != NULL) {
+            PointerToDialog (ddp->traceassm, (Pointer) head);
+          }
+          ValNodeFreeData (head);
+        }
+      }
+    } else if (StringICmp (oip->str, "Bio Sample") == 0) {
+      if (curr->choice == 7) {
+        num = curr->num;
+        cpp = (CharPtr PNTR) curr->data.ptrvalue;
+        if (num > 0 && cpp != NULL) {
+          head = NULL;
+          for (i = 0; i < num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              ValNodeCopyStr (&head, 0, str);
+            }
+          }
+          if (head != NULL) {
+            PointerToDialog (ddp->biosample, (Pointer) head);
+          }
+          ValNodeFreeData (head);
+        }
+      }
+    }
+  }
+}
+
+static Pointer DblinkDialogToUserObjectPtr (
+  DialoG d
+)
+
+{
+  CharPtr PNTR     cpp;
+  DblinkDialogPtr  ddp;
+  ValNodePtr       head, vnp;
+  Int4             i, num;
+  Int4Ptr          ipp;
+  Boolean          okay = FALSE;
+  CharPtr          str;
+  UserObjectPtr    uop;
+  long int         val;
+
+  ddp = (DblinkDialogPtr) GetObjectExtra (d);
+  if (ddp == NULL) return NULL;
+
+  uop = CreateDBLinkUserObject ();
+  if (uop == NULL) return NULL;
+
+  head = (ValNodePtr) DialogToPointer (ddp->traceassm);
+  if (head != NULL) {
+    num = 0;
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      num++;
+    }
+    if (num > 0) {
+      ipp = (Int4Ptr) MemNew (sizeof (Int4) * num);
+      if (ipp != NULL) {
+        i = 0;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          if (sscanf (str, "%ld", &val) == 1) {
+            ipp [i] = (Int4) val;
+            i++;
+          }
+        }
+        if (i > 0) {
+          AddTraceAssemblyIDsToDBLinkUserObject (uop, i, ipp);
+          okay = TRUE;
+        }
+      }
+    }
+  }
+  ValNodeFreeData (head);
+
+  head = (ValNodePtr) DialogToPointer (ddp->biosample);
+  if (head != NULL) {
+    num = 0;
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      num++;
+    }
+    if (num > 0) {
+      cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * num);
+      if (cpp != NULL) {
+        i = 0;
+        for (vnp = head; vnp != NULL; vnp = vnp->next) {
+          str = (CharPtr) vnp->data.ptrvalue;
+          if (StringHasNoText (str)) continue;
+          cpp [i] = str;
+          i++;
+        }
+        if (i > 0) {
+          AddBioSampleIDsToDBLinkUserObject (uop, i, cpp);
+          okay = TRUE;
+        }
+      }
+    }
+  }
+  ValNodeFreeData (head);
+
+  if (! okay) {
+    uop = UserObjectFree (uop);
+  }
+
+  return uop;
+}
+
+static DialoG CreateDblinkDialog (
+  GrouP g
+)
+
+{
+  DblinkDialogPtr  ddp;
+  GrouP            p, x;
+
+  p = HiddenGroup (g, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  ddp = (DblinkDialogPtr) MemNew (sizeof (DblinkDialog));
+  if (ddp == NULL) return NULL;
+
+  SetObjectExtra (p, ddp, NULL);
+  ddp->dialog = (DialoG) p;
+  ddp->todialog = UserObjectPtrToDblinkDialog;
+  ddp->fromdialog = DblinkDialogToUserObjectPtr;
+
+  x = HiddenGroup (p, 0, 8, NULL);
+
+  StaticPrompt (x, "Trace Assembly", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->traceassm = CreateVisibleStringDialog (x, 3, -1, 15);
+
+  StaticPrompt (x, "Bio Sample", 10 * stdCharWidth, 0, programFont, 'c');
+  ddp->biosample = CreateVisibleStringDialog (x, 3, -1, 15);
+
+  return (DialoG) p;
+}
+
+static void DblinkFormMessage (
+  ForM f,
+  Int2 mssg
+)
+
+{
+  DblinkFormPtr  dfp;
+
+  dfp = (DblinkFormPtr) GetObjectExtra (f);
+  if (dfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CLOSE :
+        Remove (f);
+        break;
+      case VIB_MSG_CUT :
+        StdCutTextProc (NULL);
+        break;
+      case VIB_MSG_COPY :
+        StdCopyTextProc (NULL);
+        break;
+      case VIB_MSG_PASTE :
+        StdPasteTextProc (NULL);
+        break;
+      case VIB_MSG_DELETE :
+        StdDeleteTextProc (NULL);
+        break;
+      default :
+        if (dfp->appmessage != NULL) {
+          dfp->appmessage (f, mssg);
+        }
+        break;
+    }
+  }
+}
+
+static ForM CreateDblinkDescForm (
+  Int2 left,
+  Int2 top,
+  Int2 width,
+  Int2 height,
+  CharPtr title,
+  ValNodePtr sdp,
+  SeqEntryPtr sep,
+  FormActnFunc actproc
+)
+
+{
+  ButtoN             b;
+  DblinkFormPtr      dfp;
+  GrouP              c, g;
+  StdEditorProcsPtr  sepp;
+  WindoW             w;
+
+  w = NULL;
+  dfp = (DblinkFormPtr) MemNew (sizeof (DblinkForm));
+
+  if (dfp != NULL) {
+    w = FixedWindow (left, top, width, height, title, StdCloseWindowProc);
+    SetObjectExtra (w, dfp, StdDescFormCleanupProc);
+    dfp->form = (ForM) w;
+    dfp->actproc = actproc;
+    dfp->formmessage = DblinkFormMessage;
+
+    dfp->sep = sep;
+
+#ifndef WIN_MAC
+    CreateStdEditorFormMenus (w);
+#endif
+    sepp = (StdEditorProcsPtr) GetAppProperty ("StdEditorForm");
+    if (sepp != NULL) {
+      SetActivate (w, sepp->activateForm);
+      dfp->appmessage = sepp->handleMessages;
+    }
+
+    g = HiddenGroup (w, -1, 0, NULL);
+    dfp->data = CreateDblinkDialog (g);
+
+    c = HiddenGroup (w, 2, 0, NULL);
+    b = DefaultButton (c, "Accept", StdAcceptFormButtonProc);
+    SetObjectExtra (b, dfp, NULL);
+    PushButton (c, "Cancel", StdCancelButtonProc);
+    AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) c, NULL);
+    RealizeWindow (w);
+  }
+
+  return (ForM) w;
+}
+
+extern Int2 LIBCALLBACK DBlinkUserGenFunc (Pointer data);
+extern Int2 LIBCALLBACK DBlinkUserGenFunc (Pointer data)
+
+{
+  ObjectIdPtr              oip;
+  OMProcControlPtr         ompcp;
+  OMUserDataPtr            omudp;
+  ObjMgrProcPtr            proc;
+  DblinkFormPtr            dfp;
+  ValNodePtr               sdp;
+  SeqEntryPtr              sep;
+  UserObjectPtr            uop;
+  WindoW                   w;
+
+  ompcp = (OMProcControlPtr) data;
+  w = NULL;
+  sdp = NULL;
+  sep = NULL;
+  uop = NULL;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  proc = ompcp->proc;
+  switch (ompcp->input_itemtype) {
+    case OBJ_SEQDESC :
+      sdp = (ValNodePtr) ompcp->input_data;
+      if (sdp != NULL && sdp->choice != Seq_descr_user) {
+        return OM_MSG_RET_ERROR;
+      }
+      uop = (UserObjectPtr) sdp->data.ptrvalue;
+      break;
+    case OBJ_BIOSEQ :
+      break;
+    case OBJ_BIOSEQSET :
+      break;
+    case 0 :
+      break;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  omudp = ItemAlreadyHasEditor (ompcp->input_entityID, ompcp->input_itemID,
+                                ompcp->input_itemtype, ompcp->proc->procid);
+  if (omudp != NULL) {
+    if (StringCmp (proc->procname, "Edit DBLink User Desc") == 0) {
+      dfp = (DblinkFormPtr) omudp->userdata.ptrvalue;
+      if (dfp != NULL) {
+        Select (dfp->form);
+      }
+      return OM_MSG_RET_DONE;
+    } else {
+      return OM_MSG_RET_OK; /* not this type, check next registered user object editor */
+    }
+  }
+  if (uop != NULL) {
+    oip = uop->type;
+    if (oip == NULL || oip->str == NULL) return OM_MSG_RET_OK;
+    if (StringCmp (oip->str, "DBLink") != 0) return OM_MSG_RET_OK;
+  }
+  sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
+  w = (WindoW) CreateDblinkDescForm (-50, -33, -10, -10,
+                                     "DBLink", sdp, sep,
+                                     StdDescFormActnProc);
+  dfp = (DblinkFormPtr) GetObjectExtra (w);
+  if (dfp != NULL) {
+    dfp->input_entityID = ompcp->input_entityID;
+    dfp->input_itemID = ompcp->input_itemID;
+    dfp->input_itemtype = ompcp->input_itemtype;
+    dfp->this_itemtype = OBJ_SEQDESC;
+    dfp->this_subtype = Seq_descr_user;
+    dfp->procid = ompcp->proc->procid;
+    dfp->proctype = ompcp->proc->proctype;
+    dfp->userkey = OMGetNextUserKey ();
+    omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
+	                           OMPROC_EDIT, dfp->userkey);
+    if (omudp != NULL) {
+      omudp->userdata.ptrvalue = (Pointer) dfp;
+      omudp->messagefunc = StdVibrantEditorMsgFunc;
+    }
+    SendMessageToForm (dfp->form, VIB_MSG_INIT);
+    if (sdp != NULL) {
+      PointerToDialog (dfp->data, (Pointer) sdp->data.ptrvalue);
+      SetClosestParentIfDuplicating ((BaseFormPtr) dfp);
+    }
+  }
+  Show (w);
+  Select (w);
+  return OM_MSG_RET_DONE;
+}
 
 
 extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
@@ -11530,7 +11766,6 @@ static Pointer TSAAssemblyDialogToTranscriptomeIdsList (DialoG d)
   TagListPtr            tlp;
   ValNodePtr            vnp;
   CharPtr               txt;
-  Int4                  num_cols = 6;
   TranscriptomeIdsPtr   t;
   ValNodePtr            token_list = NULL;
 
@@ -13330,34 +13565,6 @@ static Boolean CanCombineDeltaSeq (DeltaSeqPtr dsp1, DeltaSeqPtr dsp2)
 }
 
 
-static void RemoveZeroLengthSeqLits (BioseqPtr bsp)
-{
-  DeltaSeqPtr dsp, prev = NULL, dsp_next;
-  SeqLitPtr slip;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) {
-    return;
-  }
-
-  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp_next) {
-    dsp_next = dsp->next;
-    if (dsp->choice == 2 && (slip = (SeqLitPtr) (dsp->data.ptrvalue)) != NULL 
-        && slip->length == 0 && slip->seq_data_type == 1) {
-      if (prev == NULL) {
-        bsp->seq_ext = dsp->next;
-      } else {
-        prev->next = dsp->next;
-      }
-      dsp->next = NULL;
-      dsp = DeltaSeqFree (dsp);
-    } else {
-      prev = dsp;
-    }
-  }
-}
-
-
-
 extern void CombineAdjacentGapsOnBioseq (BioseqPtr bsp, Pointer userdata)
 {
   SeqLitPtr  litp, pitp;
@@ -13373,8 +13580,6 @@ extern void CombineAdjacentGapsOnBioseq (BioseqPtr bsp, Pointer userdata)
     return;
   }
 
-  RemoveZeroLengthSeqLits (bsp);
-  
   /* combine adjacent gaps */
   prev = (DeltaSeqPtr) bsp->seq_ext;
   if (prev == NULL) return;
@@ -13891,9 +14096,23 @@ static void CleanupDiscrepancyReportForm (GraphiC g, VoidPtr data)
 
 {
   DiscrepancyReportFormPtr drfp;
+  ValNodePtr               vnp;
+  ClickableItemPtr         cip;
 
   drfp = (DiscrepancyReportFormPtr) data;
   if (drfp != NULL) {
+    /* find whether source qual report is open or closed */
+    for (vnp = drfp->clickable_list_data; vnp != NULL; vnp = vnp->next) {
+      cip = vnp->data.ptrvalue;
+      if (cip != NULL && cip->clickable_item_type == DISC_SRC_QUAL_PROBLEM) {
+        if (cip->expanded) {
+          SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "TRUE");
+        } else {
+          SetAppParam ("SEQUINCUSTOM", "ONCALLERTOOL", "EXPAND_SRCQUAL_REPORT", "FALSE");
+        }
+        break;
+      }
+    }
     drfp->clickable_list_data = FreeClickableList (drfp->clickable_list_data);
     drfp->dcp = DiscrepancyConfigFree (drfp->dcp);
     ObjMgrFreeUserData (drfp->input_entityID, drfp->procid, drfp->proctype, drfp->userkey);
@@ -14044,7 +14263,7 @@ extern Int4 CountChosenDiscrepancies (ValNodePtr discrepancy_list, Boolean count
     {
       if (dip->chosen || count_all)
       {
-        if (dip->expanded)
+        if (dip->expanded && dip->subcategories != NULL)
         {
           num_chosen += CountChosenDiscrepancies (dip->subcategories, TRUE);
         }
@@ -14192,6 +14411,45 @@ static void EditCDStRNAOverlap (ValNodePtr item_list);
 static void EditCDStRNAOverlapCallback (ValNodePtr vnp, Pointer userdata)
 {
   EditCDStRNAOverlap (vnp); 
+}
+
+
+static void ExtendPartialsToEndOrGapCallback (ValNodePtr list, Pointer userdata)
+{
+  ValNodePtr vnp, entityID_list = NULL;
+  SeqFeatPtr sfp;
+  LogInfoPtr lip;
+  CharPtr    orig_location, new_location;
+
+  if (Message (MSG_OKC, "Extend partial ends of features to gaps/end of sequence if within two nucleotides?") == ANS_CANCEL) {
+    return;
+  }
+  WatchCursor();
+  Update();
+  lip = OpenLog ("Extended Features");
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == OBJ_SEQFEAT && (sfp = vnp->data.ptrvalue) != NULL) {
+      orig_location = SeqLocPrintUseBestID (sfp->location);
+      if (ExtendPartialsToEndOrGap (sfp)) {
+        ValNodeAddInt (&entityID_list, 0, sfp->idx.entityID);
+        new_location = SeqLocPrintUseBestID (sfp->location);
+        fprintf (lip->fp, "Extended %s to %s\n", orig_location, new_location);
+        new_location = MemFree (new_location);
+        lip->data_in_log = TRUE;
+      }
+      orig_location = MemFree (orig_location);
+    }
+  }
+  entityID_list = ValNodeSort (entityID_list, SortByIntvalue);
+  ValNodeUnique (&entityID_list, SortByIntvalue, ValNodeFree);
+  for (vnp = entityID_list; vnp != NULL; vnp = vnp->next) {
+    ObjMgrSetDirtyFlag (vnp->data.intvalue, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, vnp->data.intvalue, 0, 0);
+  }
+  ArrowCursor();
+  Update();
+  CloseLog (lip);
+  lip = FreeLog (lip);
 }
 
 
@@ -14385,7 +14643,9 @@ static void AddBulkEditing (ValNodePtr clickable_list)
       if (cip->clickable_item_type == DISC_CDS_OVERLAP_TRNA) {
         cip->callback_func = EditCDStRNAOverlapCallback;    
       } else if (cip->clickable_item_type == DISC_INCONSISTENT_BIOSRC_DEFLINE) {
-        cip->callback_func = ApplyTagToCodingRegionsCallback;  
+        cip->callback_func = ApplyTagToCodingRegionsCallback; 
+      } else if (cip->clickable_item_type == DISC_BACTERIAL_PARTIAL_PROBLEMS) {
+        cip->callback_func = ExtendPartialsToEndOrGapCallback;
       } else {
         subtype = GetSubtypeForBulkEdit (cip->item_list);
         /* Note - using FEATDEF_rRNA to represent all editable RNA features */
@@ -17701,6 +17961,20 @@ static void TrimSelectedCDS (ButtoN b)
   }
 }
 
+
+static void SelectAllCDS (ButtoN b)
+{
+  CDStRNAToolPtr    dlg;
+
+  dlg = (CDStRNAToolPtr) GetObjectExtra (b);
+  if (dlg == NULL) return;
+
+  ChooseCategories (dlg->clickable_list, TRUE);
+  PointerToDialog (dlg->clickable_list_dlg, dlg->clickable_list);
+
+}
+
+
 static void EditCDStRNAOverlap (ValNodePtr item_list)
 {
   ValNodePtr overlap_list;
@@ -17752,6 +18026,8 @@ static void EditCDStRNAOverlap (ValNodePtr item_list)
   SetGroupSpacing (c, 10, 10);
 
   b = PushButton (c, "Trim Selected", TrimSelectedCDS);
+  SetObjectExtra (b, dlg, NULL);
+  b = PushButton (c, "Select All", SelectAllCDS);
   SetObjectExtra (b, dlg, NULL);
   b = PushButton (c, "Dismiss", StdCancelButtonProc);
 

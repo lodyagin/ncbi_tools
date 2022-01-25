@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.942 $
+* $Revision: 6.960 $
 *
 * File Description: 
 *
@@ -330,6 +330,51 @@ static void CreateTSAIDsFromLocalIDs (IteM i)
   if (sep == NULL) return;
 
   ConvertLocalIdsToTSAIds (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+
+static void AddmRNASequenceCallback (SeqDescrPtr sdp, Pointer data)
+{
+  Int4 len, len_add;
+  CharPtr add = ", mRNA sequence.", tmp, title;
+
+  if (sdp != NULL && sdp->choice == Seq_descr_title) {
+    title = (CharPtr) sdp->data.ptrvalue;
+    len_add = StringLen (add);
+    len = StringLen (title);
+    if (len < len_add || StringCmp (title + (len - len_add), add) != 0) {
+      /* remove trailing period if present */
+      if (title[len - 1] == '.') {
+        title[len - 1] = 0;
+      }
+      tmp = (CharPtr) MemNew (sizeof (Char) * (len + len_add + 1));
+      sprintf (tmp, "%s%s", title, add);
+      sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+      sdp->data.ptrvalue = tmp;
+    }
+  }
+}
+
+
+static void AddmRNASequenceToDeflines (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  AutoDefEntityIDNoOptions (bfp->input_entityID, TRUE);
+  VisitDescriptorsInSep (sep, NULL, AddmRNASequenceCallback);
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
@@ -15233,7 +15278,6 @@ static void AtccStrainToCultureCollection (IteM i)
   AECRParseActionPtr  parse;
   AECRActionPtr       action;
   CharPtr             str1, str2, cp, new_str;
-  FieldConstraintPtr  constraint;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -15272,17 +15316,6 @@ static void AtccStrainToCultureCollection (IteM i)
   action->action->choice = ActionChoice_parse;
   action->action->data.ptrvalue = parse;
 
-  constraint = FieldConstraintNew ();
-  constraint->field = GetFromFieldFromFieldPair (parse->fields);
-  constraint->string_constraint = StringConstraintNew ();
-  constraint->string_constraint->match_text = StringSave ("ATCC ");
-  constraint->string_constraint->match_location = String_location_starts;
-  constraint->string_constraint->case_sensitive = 0;
-  constraint->string_constraint->whole_word = 0;
-  constraint->string_constraint->not_present = 0;
-
-  ValNodeAddPointer (&(action->constraint), ConstraintChoice_field, constraint);
-
   object_list = GetObjectListForAECRAction (sep, action);
 
   field_to = GetToFieldFromFieldPair (parse->fields);
@@ -15298,15 +15331,17 @@ static void AtccStrainToCultureCollection (IteM i)
     field_from = GetFromFieldFromFieldPair (parse->fields);
     for (vnp = object_list; vnp != NULL; vnp = vnp->next) {
       str1 = GetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_from, NULL);
-      str2 = GetTextPortionFromString (str1, parse->portion);    
-      cp = StringChr (str2, ';');
-      if (cp != NULL) {
-        *cp = 0;
+      str2 = GetTextPortionFromString (str1, parse->portion);
+      if (str2 != NULL) {
+        cp = StringChr (str2, ';');
+        if (cp != NULL) {
+          *cp = 0;
+        }
+        new_str = (CharPtr) MemNew (sizeof (Char) * (5 + StringLen (str2) + 1));
+        sprintf (new_str, "ATCC:%s", str2);
+        SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, new_str, parse->existing_text);
+        new_str = MemFree (new_str);
       }
-      new_str = (CharPtr) MemNew (sizeof (Char) * (5 + StringLen (str2) + 1));
-      sprintf (new_str, "ATCC:%s", str2);
-      SetFieldValueForObject (vnp->choice, vnp->data.ptrvalue, field_to, NULL, new_str, parse->existing_text);
-      new_str = MemFree (new_str);
       str1 = MemFree (str1);
       str2 = MemFree (str2);
     }
@@ -21208,6 +21243,84 @@ static void ModernizeGenes (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void GI2dbSTSCallback (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  BioseqPtr    bsp;
+  Char         buf [64];
+  DbtagPtr     dbt;
+  ImpFeatPtr   ifp;
+  MolInfoPtr   mip;
+  ObjectIdPtr  oip;
+  SeqDescrPtr  sdp;
+  SeqId        si;
+  SeqIdPtr     sip;
+  Int4         uid;
+  ValNodePtr   vnp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_IMP) return;
+  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+  if (ifp == NULL || StringICmp (ifp->key, "STS") != 0) return;
+  for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
+    dbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (dbt == NULL) continue;
+    if (StringICmp (dbt->db, "GI") != 0) continue;
+    oip = dbt->tag;
+    if (oip == NULL) continue;
+    if (oip->str != NULL) continue;
+    uid = oip->id;
+    if (uid < 1) continue;
+    MemSet ((Pointer) &si, 0, sizeof (SeqId));
+    si.choice = SEQID_GI;
+    si.data.intvalue = uid;
+    bsp = BioseqLockById (&si);
+    if (bsp == NULL) continue;
+    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_molinfo, NULL);
+    if (sdp != NULL && sdp->choice == Seq_descr_molinfo) {
+      mip = (MolInfoPtr) sdp->data.ptrvalue;
+      if (mip != NULL) {
+        if (mip->tech == MI_TECH_sts) {
+          sip = GetSeqIdForGI (uid);
+          if (sip != NULL) {
+            SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_ONLY, sizeof (buf) - 1);
+            SeqIdFree (sip);
+            if (StringDoesHaveText (buf)) {
+              dbt->db = MemFree (dbt->db);
+              dbt->db = StringSave ("dbSTS");
+              oip->id = 0;
+              oip->str = StringSave (buf);
+            }
+          }
+        } else {
+          Message (MSG_POST, "Tech for gi %ld is %d", (long) uid, (int) mip->tech);
+        }
+      }
+    }
+    BioseqUnlock (bsp);
+  }
+}
+
+static void DoGI2dbSTSConversion (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitFeaturesInSep (sep, NULL, GI2dbSTSCallback);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static void SplitSemicolonedCallback (BioSourcePtr biop, Pointer userdata)
 
 {
@@ -21281,6 +21394,25 @@ static void PrintDiscrepancyTestListMenuItem (IteM i)
 }
 
 
+static void TestNewParse (IteM i)
+{
+  BaseFormPtr  bfp;
+  ForM         f;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  f = SingleParseAction (bfp->input_entityID);
+  if (f != NULL) {
+    Show (f);
+  }
+}
+
+
 static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
 {
   IteM  i;
@@ -21321,6 +21453,8 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Make Bad Specific-Host Table", MakeBadSpecificHostValueTable);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "List Failed Taxonomy Lookups", ListFailedTaxonomyLookups);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "TaxFix Tool", TaxFixTool);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Abbreviate Voucher Institution Codes", UpdateVoucherName);
@@ -21365,6 +21499,8 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Export Last Lineage Table", ExportLastLineage);
   SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Load Tax Table", LoadTaxTableReader);
+  SetObjectExtra (i, bfp, NULL);  
   i = CommandItem (s, "Parse File to Source", ParseFileToSource);
   SetObjectExtra (i, bfp, NULL);  
   SeparatorItem (s);
@@ -21388,6 +21524,9 @@ static void MakeSpecialOrganismMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (x, "Seq to Name", ConvertPrimerSeqToName);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (x, "Name to Seq", ConvertPrimerNameToSeq);
+  SetObjectExtra (i, bfp, NULL);
+
+  i = CommandItem (s, "Trim Junk in Primer Seqs", TrimPrimerSeqJunk);
   SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
@@ -21470,6 +21609,8 @@ static void MakeSpecialProjectsMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (s, "Edit TSA Assembly", EditTSAAssembly);
     SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (s, "Add mRNA sequence to deflines", AddmRNASequenceToDeflines);
+    SetObjectExtra (i, bfp, NULL);
     SeparatorItem (s);
     i = CommandItem (s, "Create RefSeq Protein IDs", CreateRefSeqProteinIDs);
     SetObjectExtra (i, bfp, NULL); 
@@ -21479,6 +21620,11 @@ static void MakeSpecialProjectsMenu (MenU m, BaseFormPtr bfp)
     SeparatorItem (s);
     i = CommandItem (s, "Create Structured Comments from Table", CreateStructuredCommentsItem);
     SetObjectExtra (i, bfp, NULL); 
+
+    /* remove after retro */
+    SeparatorItem (s);
+    i = CommandItem (s, "GI to dbSTS Conversion", DoGI2dbSTSConversion);
+    SetObjectExtra (i, bfp, NULL);
   }
 }
 
@@ -21502,6 +21648,110 @@ static void MakeSpecialLocusTagMenu (MenU m, BaseFormPtr bfp)
                    ReplaceRepeatRegionLocusTagWithDbxref);
   SetObjectExtra (i, bfp, NULL);  
   
+}
+
+
+static void MakeSpecialApplyMenu (MenU m, BaseFormPtr bfp)
+{
+  IteM  i;
+  MenU  s, x;
+
+  s = SubMenu (m, "Apply/ A");
+  i = CommandItem (s, "Add CDS", ApplyCDS);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add RNA", ApplyRRNA);
+  SetObjectExtra (i, bfp, NULL);
+  x = SubMenu (s, "Add Named rRNA");
+  i = CommandItem (x, "12S", Apply12SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "16S", Apply16SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "23S", Apply23SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "18S", Apply18SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "28S", Apply28SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "26S", Apply26SRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Small", ApplySmallRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Large", ApplyLargeRNA);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Apply rRNA_ITS", ApplyRNA_ITS);
+  SetObjectExtra (i, bfp, NULL); 
+
+  i = CommandItem (s, "Add other Feature", ApplyImpFeat);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add Qualifier", MacroApplyGBQual);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Add Source Qual", MacroApplySourceQual);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add CDS-Gene-Prot-mRNA Qual", MacroApplyCDSGeneProt);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add RNA Qual", MacroApplyRNAQual);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Apply Structured Comment Field", MacroApplyStructuredComment);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Add Molecule Information", ApplyMolInfo);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  x = SubMenu (s, "Add Gene Pseudo");
+  i = CommandItem (x, "To All", AddGenePseudo);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "Where Feature is Pseudo", MarkGenesWithPseudoFeaturesPseudo);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Add Global Code Break", AddGlobalCodeBreak);
+  SetObjectExtra (i, bfp, NULL);  
+  if (indexerVersion)
+  {
+    x = SubMenu (s, "Add Keyword");
+    i = CommandItem (x, "GDS", ApplyGDSKeyword);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "TPA:inferential", ApplyTPAInferentialKeyword);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "TPA:experimental", ApplyTPAExperimentalKeyword);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "TPA:reassembly", ApplyTPAReassemblyKeyword);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (x, "With Constraint", ApplyKeywordWithStringConstraint);
+    SetObjectExtra (i, bfp, NULL);
+  }
+  else
+  {
+    i = CommandItem (s, "Add GDS Keyword", ApplyGDSKeyword);
+    SetObjectExtra (i, bfp, NULL);
+  }
+  SeparatorItem(s);  
+  if (indexerVersion) {
+    SetupEditSecondary (s, bfp);
+  }
+  x = SubMenu (s, "Load Secondary Accessions from File");
+  i = CommandItem (x, "Extra Accessions",
+                   LoadSecondaryAccessionNumbersFromFile);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (x, "History Takeover",
+                   LoadHistoryAccessionNumbersFromFile);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Load Genome Project IDs from File", LoadGenomeProjectIDsFromFile);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  
+  i = CommandItem (s, "Load Feature Qualifiers from File",
+                   LoadFeatureQualifierTable);
+  SetObjectExtra (i, bfp, NULL);
+
+  i = CommandItem (s, "Load Feature Fields from File", LoadFeatureFieldTable);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Table Reader", NewLoadFeatureQualifierTable);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Export Table", ExportQualifiers);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Export Bankit Comments", ExportBankitComments);
+  SetObjectExtra (i, bfp, NULL);
 }
 
 
@@ -21534,16 +21784,16 @@ static void MakeSpecialRemoveMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   
-  i = CommandItem (s, "Remove Qualifiers", RemoveGBQual);
+  i = CommandItem (s, "Remove Qualifiers", MacroRemoveGBQual);
   SetObjectExtra (i, bfp, NULL);
 
-  i = CommandItem (s, "Remove Source Qualifier", RemoveSourceQual);
+  i = CommandItem (s, "Remove Source Qualifier", MacroRemoveSourceQual);
   SetObjectExtra (i, bfp, NULL);
 
-  i = CommandItem (s, "Remove CDS-Gene-Prot-mRNA Qual", RemoveCDSGeneProt);
+  i = CommandItem (s, "Remove CDS-Gene-Prot-mRNA Qual", MacroRemoveCDSGeneProt);
   SetObjectExtra (i, bfp, NULL);
   
-  i = CommandItem (s, "Remove RNA Qual", RemoveRNAQual);
+  i = CommandItem (s, "Remove RNA Qual", MacroRemoveRNAQual);
   SetObjectExtra (i, bfp, NULL);
 
   i = CommandItem (s, "Remove Structured Comment Field", MacroRemoveStructuredComment);
@@ -21712,17 +21962,17 @@ static void MakeSpecialConvertMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Convert Features", ConvertFeatures);
   SetObjectExtra (i, bfp, NULL);
 
-  i = CommandItem (s, "Convert Qualifiers", ConvertGBQual);
+  i = CommandItem (s, "Convert Qualifiers", MacroConvertGBQual);
   SetObjectExtra (i, bfp, NULL);
 
   SeparatorItem (s);
-  i = CommandItem (s, "Convert Source Qualifier", ConvertSourceQual);
+  i = CommandItem (s, "Convert Source Qualifier", MacroConvertSourceQual);
   SetObjectExtra (i, bfp, NULL);
 
-  i = CommandItem (s, "Convert CDS-Gene-Prot-mRNA Qual", ConvertCDSGeneProt);
+  i = CommandItem (s, "Convert CDS-Gene-Prot-mRNA Qual", MacroConvertCDSGeneProt);
   SetObjectExtra (i, bfp, NULL);
 
-  i = CommandItem (s, "Convert RNA Qual", ConvertRNAQual);
+  i = CommandItem (s, "Convert RNA Qual", MacroConvertRNAQual);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
 
@@ -21742,13 +21992,13 @@ static void MakeSpecialConvertMenu (MenU m, BaseFormPtr bfp)
   
   SeparatorItem (s);
 
-  i = CommandItem (s, "Swap Source Qualifiers", SwapSourceQual);
+  i = CommandItem (s, "Swap Source Qualifiers", MacroSwapSourceQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Swap CDS-Gene-Prot-mRNA Qualifiers", SwapCDSGeneProt);
+  i = CommandItem (s, "Swap CDS-Gene-Prot-mRNA Qualifiers", MacroSwapCDSGeneProt);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Swap RNA Qualifiers", SwapRNAQual);
+  i = CommandItem (s, "Swap RNA Qualifiers", MacroSwapRNAQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Swap Qualifiers", SwapGBQual);
+  i = CommandItem (s, "Swap Qualifiers", MacroSwapGBQual);
   SetObjectExtra (i, bfp, NULL);
 
 
@@ -21846,13 +22096,13 @@ static void MakeSpecialEditMenu (MenU m, BaseFormPtr bfp)
   MenU  s, x;
 
   s = SubMenu (m, "Edit/ E");
-  i = CommandItem (s, "Edit Qualifiers", EditGBQual);
+  i = CommandItem (s, "Edit Qualifiers", MacroEditGBQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Edit Source Qual", EditSourceQual);
+  i = CommandItem (s, "Edit Source Qual", MacroEditSourceQual);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Edit CDS-Gene-Prot-mRNA Qual", EditCDSGeneProt);
+  i = CommandItem (s, "Edit CDS-Gene-Prot-mRNA Qual", MacroEditCDSGeneProt);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Edit RNA Qual", EditRNAQual);
+  i = CommandItem (s, "Edit RNA Qual", MacroEditRNAQual);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Edit Structured Comment Field", MacroEditStructuredComment);
   SetObjectExtra (i, bfp, NULL);
@@ -22093,6 +22343,42 @@ static void MakeSpecialLinkMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
 }
 
+
+static void MakeSpecialDesktopMenu (MenU m, BaseFormPtr bfp)
+{
+  MenU s;
+  IteM i;
+
+  s = SubMenu (m, "Desktop");
+  i = CommandItem (s, "Reorder by ID", ReorderSetByAccessionMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Repackage Parts", RepackagePartsMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Descriptor Propagate", DescriptorPropagateMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Segregate Sets", NewSegregateBioseqSetMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Sequester Sets", SequesterSequencesMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Get Rid of Seg Gaps", GetRidOfSegGapMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Create SeqAlign", GenerateSeqAlignMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Update SeqAlign", UpdateSeqAlignMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+#if defined(OS_UNIX) || defined(OS_MSWIN) 
+  i = CommandItem (s, "Correct RNA strandedness (Use SMART)", CorrectRNAStrandednessMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+#endif 
+  i = CommandItem (s, "Bioseq RevComp By ID", BioseqRevCompByIDMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Sets in Set", RemoveSetsInSetMenuItem);
+  SetObjectExtra (i, bfp, NULL);
+
+
+}
+
+
 extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
 {
@@ -22134,103 +22420,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
   MakeSpecialOrganismMenu (m, bfp);
 
-  s = SubMenu (m, "Apply/ A");
-  i = CommandItem (s, "Add CDS", ApplyCDS);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Add RNA", ApplyRRNA);
-  SetObjectExtra (i, bfp, NULL);
-  x = SubMenu (s, "Add Named rRNA");
-  i = CommandItem (x, "12S", Apply12SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "16S", Apply16SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "23S", Apply23SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "18S", Apply18SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "28S", Apply28SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "26S", Apply26SRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Small", ApplySmallRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Large", ApplyLargeRNA);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Apply rRNA_ITS", ApplyRNA_ITS);
-  SetObjectExtra (i, bfp, NULL); 
+  MakeSpecialApplyMenu (m, bfp);
 
-  i = CommandItem (s, "Add other Feature", ApplyImpFeat);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Add Qualifier", ApplyGBQual);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  i = CommandItem (s, "Add Source Qual", ApplySourceQual);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Add CDS-Gene-Prot-mRNA Qual", ApplyCDSGeneProt);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Add RNA Qual", ApplyRNAQual);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Apply Structured Comment Field", MacroApplyStructuredComment);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  i = CommandItem (s, "Add Molecule Information", ApplyMolInfo);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  x = SubMenu (s, "Add Gene Pseudo");
-  i = CommandItem (x, "To All", AddGenePseudo);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "Where Feature is Pseudo", MarkGenesWithPseudoFeaturesPseudo);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Add Global Code Break", AddGlobalCodeBreak);
-  SetObjectExtra (i, bfp, NULL);  
-  if (indexerVersion)
-  {
-    x = SubMenu (s, "Add Keyword");
-    i = CommandItem (x, "GDS", ApplyGDSKeyword);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (x, "TPA:inferential", ApplyTPAInferentialKeyword);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (x, "TPA:experimental", ApplyTPAExperimentalKeyword);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (x, "TPA:reassembly", ApplyTPAReassemblyKeyword);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (x, "With Constraint", ApplyKeywordWithStringConstraint);
-    SetObjectExtra (i, bfp, NULL);
-  }
-  else
-  {
-    i = CommandItem (s, "Add GDS Keyword", ApplyGDSKeyword);
-    SetObjectExtra (i, bfp, NULL);
-  }
-  SeparatorItem(s);  
-  if (indexerVersion) {
-    SetupEditSecondary (s, bfp);
-  }
-  x = SubMenu (s, "Load Secondary Accessions from File");
-  i = CommandItem (x, "Extra Accessions",
-                   LoadSecondaryAccessionNumbersFromFile);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (x, "History Takeover",
-                   LoadHistoryAccessionNumbersFromFile);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  i = CommandItem (s, "Load Genome Project IDs from File", LoadGenomeProjectIDsFromFile);
-  SetObjectExtra (i, bfp, NULL);
-  SeparatorItem (s);
-  
-  i = CommandItem (s, "Load Feature Qualifiers from File",
-                   LoadFeatureQualifierTable);
-  SetObjectExtra (i, bfp, NULL);
-
-  i = CommandItem (s, "Load Feature Fields from File", LoadFeatureFieldTable);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Table Reader", NewLoadFeatureQualifierTable);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Export Table", ExportQualifiers);
-  SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Export Bankit Comments", ExportBankitComments);
-  SetObjectExtra (i, bfp, NULL);
-    
   MakeSpecialRemoveMenu (m, bfp);
 
   MakeSpecialConvertMenu (m, bfp);
@@ -22584,6 +22775,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
   MakeSpecialSelectMenu (m, bfp);
 
+  MakeSpecialDesktopMenu (m, bfp);
+
   SeparatorItem (m);
   s = SubMenu (m, "Sort Unique Count/ U");
   x = SubMenu (s, "By Group");
@@ -22610,7 +22803,7 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SetObjectExtra (i, bfp, NULL);
 
     SeparatorItem (m);
-    i = CommandItem (m, "Test New Apply Quals", MacroApplyCDSGeneProt);
+    i = CommandItem (m, "Test New Parse", TestNewParse);
     SetObjectExtra (i, bfp, NULL);
 
 #if 0        

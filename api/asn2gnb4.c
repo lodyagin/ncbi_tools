@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.176 $
+* $Revision: 1.185 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -63,6 +63,26 @@
 #endif
 #endif
 
+static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/sites/entrez?cmd=Retrieve&db=pubmed&list_uids=";
+
+static CharPtr link_go = "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:";
+
+static CharPtr link_go_ref = "http://www.geneontology.org/cgi-bin/references.cgi#GO_REF:";
+
+static CharPtr link_code = "http://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?";
+
+static CharPtr link_featn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+static CharPtr ec_link = "http://www.expasy.org/cgi-bin/nicezyme.pl?";
+
+static CharPtr ec_ambig = "http://www.chem.qmw.ac.uk/iubmb/enzyme/";
+
+
+
 /* ordering arrays for qualifiers and note components */
 
 static FtQualType feat_qual_order [] = {
@@ -73,6 +93,7 @@ static FtQualType feat_qual_order [] = {
   FTQUAL_old_locus_tag,
 
   FTQUAL_gene_syn_refseq,
+  FTQUAL_gene_syn,
 
   FTQUAL_gene_allele,
 
@@ -189,7 +210,6 @@ pseudo after note - gi|6598562|gb|AC006419.3|AC006419
 static FtQualType feat_note_order [] = {
   FTQUAL_transcript_id_note, /* !!! remove October 15, 2003 !!! */
   FTQUAL_gene_desc,
-  FTQUAL_gene_syn,
   FTQUAL_trna_codons_note,
   FTQUAL_encodes,
   FTQUAL_prot_desc,
@@ -268,7 +288,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "cyt_map",            Qual_class_map            },
   { "gen_map",            Qual_class_map            },
   { "rad_map",            Qual_class_map            },
-  { "gene_syn",           Qual_class_gene_syn       },
+  { "gene_synonym",       Qual_class_sep_gene_syn   },
   { "gene_synonym",       Qual_class_gene_syn       },
   { "gene_note",          Qual_class_string         },
   { "db_xref",            Qual_class_db_xref        },
@@ -316,7 +336,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "prot_missing",       Qual_class_string         },
   { "name",               Qual_class_tilde          },
   { "prot_names",         Qual_class_protnames      },
-  { "protein_id",         Qual_class_seq_id         },
+  { "protein_id",         Qual_class_prt_id         },
   { "pseudo",             Qual_class_boolean        },
   { "pyrrolysine",        Qual_class_boolean        },
   { "pyrrolysine",        Qual_class_string         },
@@ -342,8 +362,8 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR]  =  {
   { "tag_peptide",        Qual_class_noquote        },
   { "tag_peptide",        Qual_class_tag_peptide    },
   { "transcription",      Qual_class_transcription  },
-  { "transcript_id",      Qual_class_seq_id         },
-  { "tscpt_id_note",      Qual_class_seq_id         },
+  { "transcript_id",      Qual_class_nuc_id         },
+  { "tscpt_id_note",      Qual_class_nuc_id         },
   { "transl_except",      Qual_class_code_break     },
   { "transl_table",       Qual_class_int            },
   { "translation",        Qual_class_translation    },
@@ -2017,6 +2037,86 @@ static CharPtr GetCombinedGOtext (
   if (head == NULL) return NULL;
   head = ValNodeSort (head, SortVnpByGsp);
 
+  if (is_www) {
+    ffstring = FFGetString (ajp);
+    if (ffstring != NULL) {
+
+      last = NULL;
+      prefix = NULL;
+      for (vnp = head; vnp != NULL; vnp = vnp->next) {
+        gsp = (GoStrucPtr) vnp->data.ptrvalue;
+        if (gsp == NULL) continue;
+        if (StringICmp (gsp->term, last) != 0) {
+          if (prefix != NULL) {
+            FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+          }
+          if (StringDoesHaveText (gsp->goid)) {
+            FFAddOneString (ffstring, "GO:", FALSE, TRUE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+            FF_Add_NCBI_Base_URL (ffstring, link_go);
+            FFAddOneString (ffstring, gsp->goid, FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, gsp->goid, FALSE, TRUE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+          }
+          if (StringDoesHaveText (gsp->term)) {
+            FFAddOneString (ffstring, " - ", FALSE, TRUE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+            FF_Add_NCBI_Base_URL (ffstring, link_go);
+            FFAddOneString (ffstring, gsp->goid, FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, gsp->term, FALSE, TRUE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+          }
+        }
+        if (StringDoesHaveText (gsp->evidence)) {
+          FFAddOneString (ffstring, " [Evidence ", FALSE, TRUE, TILDE_IGNORE);
+          FFAddOneString (ffstring, gsp->evidence, FALSE, TRUE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+        }
+        if (gsp->pmid > 0) {
+          sprintf (tmp, "%ld", (long) gsp->pmid);
+          FFAddOneString (ffstring, " [PMID <a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          FF_Add_NCBI_Base_URL (ffstring, link_muid);
+          FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+        } else if (StringDoesHaveText (gsp->goref)) {
+          FFAddOneString (ffstring, " [GO Ref <a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          FF_Add_NCBI_Base_URL (ffstring, link_go_ref);
+          FFAddOneString (ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+        }
+        prefix = "; ";
+        last = gsp->term;
+      }
+
+      str = FFToCharPtr (ffstring);
+      TrimSpacesAroundString (str);
+
+      FFRecycleString (ajp, ffstring);
+
+      for (vnp = head; vnp != NULL; vnp = vnp->next) {
+        gsp = (GoStrucPtr) vnp->data.ptrvalue;
+        if (gsp == NULL) continue;
+        gsp->term = MemFree (gsp->term);
+        gsp->goid = MemFree (gsp->goid);
+        gsp->goref = MemFree (gsp->goref);
+        gsp->evidence = MemFree (gsp->evidence);
+      }
+      ValNodeFreeData (head);
+
+      return str;
+    }
+  }
+
+  /* not is_www */
+
   ffstring = FFGetString (ajp);
   if (ffstring != NULL) {
     last = NULL;
@@ -2024,71 +2124,42 @@ static CharPtr GetCombinedGOtext (
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
       gsp = (GoStrucPtr) vnp->data.ptrvalue;
       if (gsp == NULL) continue;
-      if (StringICmp (gsp->term, last) == 0) {
-        if (gsp->pmid > 0) {
-          sprintf (tmp, "%ld", (long) gsp->pmid);
-          if (is_www) {
-            FFAddOneString(ffstring, " [PMID <a href=\"", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, link_muid, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "</a>]", FALSE, FALSE, TILDE_IGNORE);
-          } else {
-            FFAddOneString(ffstring, " [PMID ", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
-          }
-        }
-      } else {
+      if (StringICmp (gsp->term, last) != 0) {
         if (prefix != NULL) {
-          FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
         }
-        if (is_www) {
-          FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, link_go, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, gsp->goid, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, gsp->term, FALSE, TRUE, TILDE_IGNORE);
-          FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-        } else {
-          FFAddOneString(ffstring, gsp->term, FALSE, FALSE, TILDE_IGNORE);
+        if (StringDoesHaveText (gsp->goid)) {
+          FFAddOneString (ffstring, "GO:", FALSE, TRUE, TILDE_IGNORE);
+          FFAddOneString (ffstring, gsp->goid, FALSE, TRUE, TILDE_IGNORE);
         }
-        if (gsp->pmid > 0) {
-          sprintf (tmp, "%ld", (long) gsp->pmid);
-          if (is_www) {
-            FFAddOneString(ffstring, " [PMID <a href=\"", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, link_muid, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "</a>]", FALSE, FALSE, TILDE_IGNORE);
-          } else {
-            FFAddOneString(ffstring, " [PMID ", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
-          }
-        } else if (StringDoesHaveText (gsp->goref)) {
-          if (is_www) {
-            FFAddOneString(ffstring, " [GO Ref <a href=\"", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, link_go_ref, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-          } else {
-            FFAddOneString(ffstring, " [GO Ref ", FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
-            FFAddOneString(ffstring, "]", FALSE, FALSE, TILDE_IGNORE);
-          }
+        if (StringDoesHaveText (gsp->term)) {
+          FFAddOneString (ffstring, " - ", FALSE, TRUE, TILDE_IGNORE);
+          FFAddOneString (ffstring, gsp->term, FALSE, TRUE, TILDE_IGNORE);
         }
-        prefix = "; ";
       }
+      if (StringDoesHaveText (gsp->evidence)) {
+        FFAddOneString (ffstring, " [Evidence ", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, gsp->evidence, FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      }
+      if (gsp->pmid > 0) {
+        sprintf (tmp, "%ld", (long) gsp->pmid);
+        FFAddOneString (ffstring, " [PMID ", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      } else if (StringDoesHaveText (gsp->goref)) {
+        FFAddOneString (ffstring, " [GO Ref", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, gsp->goref, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      }
+      prefix = "; ";
       last = gsp->term;
     }
   }
 
   str = FFToCharPtr (ffstring);
+  TrimSpacesAroundString (str);
+
   FFRecycleString (ajp, ffstring);
 
   for (vnp = head; vnp != NULL; vnp = vnp->next) {
@@ -2120,7 +2191,6 @@ static CharPtr GetGOtext (
   Int2           j;
   ObjectIdPtr    oip;
   Int4           pmid = 0;
-  CharPtr        ptr;
   CharPtr        str;
   CharPtr        textstr = NULL;
   Char           tmp [32];
@@ -2171,113 +2241,98 @@ static CharPtr GetGOtext (
   }
   /* if (StringHasNoText (textstr)) return NULL; */
 
-  str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) +
-                          StringLen (goref) + StringLen (link_go) + StringLen (link_muid) + 130);
-  if (str == NULL) return NULL;
-
-  if (abbreviate && is_www) {
+  if (is_www) {
     ffstring = FFGetString (ajp);
     if (ffstring != NULL) {
-      FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, link_go, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, textstr, FALSE, TRUE, TILDE_IGNORE);
-      FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-      ptr = FFToCharPtr (ffstring);
-      FFRecycleString (ajp, ffstring);
-      StringCat (str, ptr);
-      MemFree (ptr);
-    } else {
-      StringCpy (str, textstr);
-    }
-  } else {
-    StringCpy (str, textstr);
-  }
-  if (! abbreviate) {
-    if (StringDoesHaveText (goid)) {
-      StringCat (str, " [GO ID ");
-      if (is_www) {
-        ffstring = FFGetString (ajp);
-        if (ffstring != NULL) {
-          FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, link_go, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-          ptr = FFToCharPtr (ffstring);
-          FFRecycleString (ajp, ffstring);
-          StringCat (str, ptr);
-          MemFree (ptr);
-        } else {
-          StringCat (str, goid);
-        }
-      } else {
-        StringCat (str, goid);
+      if (StringDoesHaveText (goid)) {
+        FFAddOneString (ffstring, "GO:", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_go);
+        FFAddOneString (ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, goid, FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
       }
-      StringCat (str, "]");
-    }
-    if (StringDoesHaveText (evidence)) {
-      StringCat (str, " [Evidence ");
-      StringCat (str, evidence);
-      StringCat (str, "]");
+
+      if (StringDoesHaveText (textstr)) {
+        FFAddOneString (ffstring, " - ", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_go);
+        FFAddOneString (ffstring, goid, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, textstr, FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      }
+
+      if (StringDoesHaveText (evidence)) {
+        FFAddOneString (ffstring, " [Evidence ", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, evidence, FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      }
+
+      if (pmid != 0) {
+        sprintf (tmp, "%ld", (long) pmid);
+        FFAddOneString (ffstring, " [PMID ", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_muid);
+        FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
+        FFAddOneString (ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      } else if (StringDoesHaveText (goref)) {
+        FFAddOneString (ffstring, " [GO Ref ", FALSE, TRUE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_go_ref);
+        FFAddOneString (ffstring, goref, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, goref, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "]", FALSE, TRUE, TILDE_IGNORE);
+      }
+
+      str = FFToCharPtr (ffstring);
+      TrimSpacesAroundString (str);
+
+      FFRecycleString (ajp, ffstring);
+
+      return str;
     }
   }
+
+  /* not is_www */
+
+  str = (CharPtr) MemNew (StringLen (goid) + StringLen (textstr) +
+                          StringLen (evidence) + StringLen (goref) + 100);
+  if (str == NULL) return NULL;
+
+  if (StringDoesHaveText (goid)) {
+    StringCat (str, "GO:");
+    StringCat (str, goid);
+  }
+
+  if (StringDoesHaveText (textstr)) {
+    StringCat (str, " - ");
+    StringCat (str, textstr);
+  }
+
+  if (StringDoesHaveText (evidence)) {
+    StringCat (str, " [Evidence ");
+    StringCat (str, evidence);
+    StringCat (str, "]");
+  }
+
   if (pmid != 0) {
     sprintf (tmp, "%ld", (long) pmid);
-    if (is_www) {
-      ffstring = FFGetString (ajp);
-      if (ffstring != NULL) {
-        FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, link_muid, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
-        FFAddOneString(ffstring, tmp, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-        ptr = FFToCharPtr (ffstring);
-        FFRecycleString (ajp, ffstring);
-        StringCat (str, " [PMID ");
-        StringCat (str, ptr);
-        StringCat (str, "]");
-        MemFree (ptr);
-      } else {
-        StringCat (str, " [PMID ");
-        StringCat (str, tmp);
-        StringCat (str, "]");
-      }
-    } else {
-      StringCat (str, " [PMID ");
-      StringCat (str, tmp);
-      StringCat (str, "]");
-    }
+    StringCat (str, " [PMID ");
+    StringCat (str, tmp);
+    StringCat (str, "]");
   } else if (StringDoesHaveText (goref)) {
-    if (is_www) {
-      ffstring = FFGetString (ajp);
-      if (ffstring != NULL) {
-        FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, link_go_ref, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, goref, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, goref, FALSE, FALSE, TILDE_IGNORE);
-        FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-        ptr = FFToCharPtr (ffstring);
-        FFRecycleString (ajp, ffstring);
-        StringCat (str, " [GO Ref ");
-        StringCat (str, ptr);
-        StringCat (str, "]");
-        MemFree (ptr);
-      } else {
-        StringCat (str, " [GO Ref ");
-        StringCat (str, goref);
-        StringCat (str, "]");
-      }
-    } else {
-      StringCat (str, " [GO Ref ");
-      StringCat (str, goref);
-      StringCat (str, "]");
-    }
+    StringCat (str, " [GO Ref ");
+    StringCat (str, goref);
+    StringCat (str, "]");
   }
+
   TrimSpacesAroundString (str);
 
   return str;
@@ -2452,17 +2507,21 @@ static Boolean DbxrefAlreadyInGeneXref (
   return FALSE;
 }
 
-static void FF_www_protein_id(
+static void FF_www_nuc_or_prot_id(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  CharPtr seqid
+  CharPtr seqid,
+  Boolean is_na
 )
 {
 
   if ( GetWWW(ajp) ) {
     FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, link_seq, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+    if (is_na) {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+    } else {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+    }
     FFAddOneString(ffstring, seqid, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
     FFAddOneString(ffstring, seqid, FALSE, FALSE, TILDE_IGNORE);
@@ -2481,7 +2540,7 @@ static void FF_www_gcode (
 
   if ( GetWWW(ajp) ) {
     FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, link_code, FALSE, FALSE, TILDE_IGNORE);
+    FF_Add_NCBI_Base_URL (ffstring, link_code);
     FFAddOneString(ffstring, "mode=c#SG", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, gcode, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE); 
@@ -2742,8 +2801,10 @@ static void FormatFeatureBlockQuals (
 
 {
   Boolean              add_period;
+  /*
   CharPtr              ascii;
   Int2                 ascii_len;
+  */
   Boolean              at_end = FALSE;
   ByteStorePtr         bs;
   Char                 buf [80];
@@ -2763,9 +2824,13 @@ static void FormatFeatureBlockQuals (
   FtQualType           idx;
   IntPrtBlockPtr       ipp;
   Boolean              isTRNA;
+  Boolean              is_bc;
+  Boolean              is_rf;
+  Boolean              is_sc;
   Int2                 j;
   FtQualType           jdx;
   Int4                 len;
+  Boolean              link_is_na;
   FloatHi              molwt;
   SeqLocPtr            newloc;
   CharPtr              notestr;
@@ -2812,6 +2877,8 @@ static void FormatFeatureBlockQuals (
   indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
 
   for (i = 0, idx = feat_qual_order [i]; idx != (FtQualType) 0; i++, idx = feat_qual_order [i]) {
+
+    link_is_na = FALSE;
 
     lasttype = NULL;
     switch (asn2gnbk_featur_quals [idx].qualclass) {
@@ -2862,6 +2929,7 @@ static void FormatFeatureBlockQuals (
 
       case Qual_class_sgml :
         if (! StringHasNoText (qvp [idx].str)) {
+          /*
           if (is_journalscan) {
             ascii_len = Sgml2AsciiLen (qvp [idx].str);
             start = ascii = MemNew ((size_t) (10 + ascii_len));
@@ -2883,6 +2951,12 @@ static void FormatFeatureBlockQuals (
                 FALSE, TRUE, TILDE_TO_SPACES);
               FFAddOneChar(ffstring, '\n', FALSE);
           }
+          */
+          FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
+                            FALSE, TRUE, TILDE_TO_SPACES);
+          FFAddTextToString(ffstring, "\"", qvp[idx].str, "\"",
+                            FALSE, TRUE, TILDE_TO_SPACES);
+          FFAddOneChar(ffstring, '\n', FALSE);
         }
         break;
 
@@ -2934,20 +3008,19 @@ static void FormatFeatureBlockQuals (
         }
         break;
 
-      case Qual_class_gene_syn :
-        /*
+      case Qual_class_sep_gene_syn :
         for (vnp = qvp[idx].vnp; vnp != NULL; vnp = vnp->next) {
           str = (CharPtr) vnp->data.ptrvalue;
-          if (str != NULL) {
-              FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
-                  FALSE, TRUE, TILDE_TO_SPACES);
-              FFAddTextToString(ffstring, "\"", str, "\"",
-                  FALSE, TRUE, TILDE_TO_SPACES);
-              FFAddOneChar(ffstring, '\n', FALSE);
-          }
+          if (StringHasNoText (str)) continue;
+            FFAddTextToString (ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
+                               FALSE, TRUE, TILDE_TO_SPACES);
+            FFAddTextToString (ffstring, "\"", str, "\"",
+                               FALSE, TRUE, TILDE_TO_SPACES);
+            FFAddOneChar (ffstring, '\n', FALSE);
         }
-        */
-        /*
+        break;
+
+      case Qual_class_gene_syn :
         numsyns = 0;
         for (vnp = qvp [idx].vnp; vnp != NULL; vnp = vnp->next) {
           str = (CharPtr) vnp->data.ptrvalue;
@@ -2963,21 +3036,11 @@ static void FormatFeatureBlockQuals (
             str = (CharPtr) vnp->data.ptrvalue;
             if (! StringHasNoText (str)) {
               FFAddTextToString (ffstring, prefix, str, NULL, FALSE, FALSE, TILDE_IGNORE);
-              prefix = ", ";
+              prefix = "; ";
             }
           }
           FFAddOneChar(ffstring, '\"', FALSE);
           FFAddOneChar(ffstring, '\n', FALSE);
-        }
-        */
-        for (vnp = qvp[idx].vnp; vnp != NULL; vnp = vnp->next) {
-          str = (CharPtr) vnp->data.ptrvalue;
-          if (StringHasNoText (str)) continue;
-            FFAddTextToString (ffstring, "/", asn2gnbk_featur_quals [idx].name, "=",
-                               FALSE, TRUE, TILDE_TO_SPACES);
-            FFAddTextToString (ffstring, "\"", str, "\"",
-                               FALSE, TRUE, TILDE_TO_SPACES);
-            FFAddOneChar (ffstring, '\n', FALSE);
         }
         break;
 
@@ -3774,7 +3837,8 @@ static void FormatFeatureBlockQuals (
                 }
               }
               if (pmid > 0 && GetWWW (ajp)) {
-                FFAddTextToString(ffstring, "<a href=\"", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, link_muid);
                 sprintf (pmidbuf, "%ld", (long) pmid);
                 FFAddTextToString(ffstring, NULL, pmidbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString(ffstring, numbuf, FALSE, FALSE, TILDE_IGNORE);
@@ -3793,7 +3857,8 @@ static void FormatFeatureBlockQuals (
               FFAddOneString(ffstring, "/citation=[PUBMED ", FALSE, TRUE, TILDE_TO_SPACES);
               if (GetWWW (ajp)) {
 
-                FFAddTextToString(ffstring, "<a href=\"", link_muid, NULL, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                FF_Add_NCBI_Base_URL (ffstring, link_muid);
                 FFAddTextToString(ffstring, NULL, pmidbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString(ffstring, pmidbuf, FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
@@ -3824,7 +3889,24 @@ static void FormatFeatureBlockQuals (
               okay = TRUE;
               if (ajp->flags.dropBadDbxref) {
                 /* if RELEASE_MODE, drop unknown dbtag */
+
                 okay = FALSE;
+                if (DbxrefIsValid (dbt->db, &is_rf, &is_sc, &is_bc, NULL)) {
+                  if (is_bc) {
+                    /* case counts, so suppress if bad case */
+                  } else if (is_rf) {
+                    if (is_gps || is_other) {
+                      okay = TRUE;
+                    }
+                  } else if (is_sc) {
+                    /* show, but warn in validator */
+                    okay = TRUE;
+                  } else {
+                    okay = TRUE;
+                  }
+                }
+
+                /*okay = FALSE;
                 for (j = 0; legalDbXrefs [j] != NULL; j++) {
                   if (StringCmp (dbt->db, legalDbXrefs [j]) == 0) {
                     okay = TRUE;
@@ -3839,8 +3921,12 @@ static void FormatFeatureBlockQuals (
                     }
                   }
                 }
+                */
               }
-              if (StringCmp (dbt->db, "PID") == 0 || StringCmp (dbt->db, "GI") == 0) {
+
+              if (StringICmp (dbt->db, "taxon") == 0 ||
+                  StringCmp (dbt->db, "PID") == 0 ||
+                  StringCmp (dbt->db, "GI") == 0) {
                 okay = FALSE;
               }
               if (okay && idx == FTQUAL_db_xref && qvp [FTQUAL_gene_xref].vnp != NULL) {
@@ -3878,8 +3964,10 @@ static void FormatFeatureBlockQuals (
         }
         break;
 
-      
-      case Qual_class_seq_id :
+      case Qual_class_nuc_id :
+        link_is_na = TRUE;
+        /* fall through */
+      case Qual_class_prt_id :
         sip = qvp [idx].sip;
         if (sip != NULL) {
           /* should always be found above for protein_id or transcript_id
@@ -3900,7 +3988,7 @@ static void FormatFeatureBlockQuals (
                 if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_protein_id(ajp, ffstring, seqid);
+                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 }
               } else if (sip->choice == SEQID_GI) {
@@ -3908,7 +3996,7 @@ static void FormatFeatureBlockQuals (
                   sprintf (seqid, "%ld", (long) sip->data.intvalue);
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_protein_id(ajp, ffstring, seqid);
+                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 }
                 sprintf (seqid, "%ld", (long) sip->data.intvalue);
@@ -3937,7 +4025,7 @@ static void FormatFeatureBlockQuals (
                       if (SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid)) != NULL) {
                         FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                           FALSE, FALSE, TILDE_IGNORE);
-                        FF_www_protein_id(ajp, ffstring, seqid);
+                        FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                         FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                       }
                     }
@@ -3957,7 +4045,7 @@ static void FormatFeatureBlockQuals (
                 if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_protein_id(ajp, ffstring, seqid);
+                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 } else {
                   ajp->relModeError = TRUE;
@@ -3973,7 +4061,7 @@ static void FormatFeatureBlockQuals (
                   if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                     FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                    FF_www_protein_id(ajp, ffstring, seqid);
+                    FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                     FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                   } else {
                     ajp->relModeError = TRUE;
@@ -3982,7 +4070,7 @@ static void FormatFeatureBlockQuals (
                   sprintf (seqid, "%ld", (long) gi);
                   FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                     FALSE, FALSE, TILDE_IGNORE);
-                  FF_www_protein_id(ajp, ffstring, seqid);
+                  FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                   FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
                 } else {
                   ajp->relModeError = TRUE;
@@ -3997,7 +4085,7 @@ static void FormatFeatureBlockQuals (
               if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
                 FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
                                   FALSE, FALSE, TILDE_IGNORE);
-                FF_www_protein_id(ajp, ffstring, seqid);
+                FF_www_nuc_or_prot_id(ajp, ffstring, seqid, link_is_na);
                 FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
               } else {
                 ajp->relModeError = TRUE;
@@ -4200,9 +4288,12 @@ static void FormatFeatureBlockQuals (
       case Qual_class_note :
         if (! ajp->flags.goQualsToNote) {
 
-          /* in entrez_mode, sequin_mode and dump_mode in RefSeq, GO terms show up as separate /qualifiers */
+          /* in GenBank sequin_mode and dump_mode, and in RefSeq, GO terms show up as separate /qualifiers */
 
           for (j = 0, jdx = feat_note_order [j]; jdx != 0; j++, jdx = feat_note_order [j]) {
+
+            link_is_na = FALSE;
+
             switch (asn2gnbk_featur_quals [jdx].qualclass) {
 
               case Qual_class_go :
@@ -4492,6 +4583,7 @@ static void FormatFeatureBlockQuals (
               }
               break;
 
+            /*
             case Qual_class_gene_syn :
               numsyns = 0;
               for (vnp = qvp [jdx].vnp; vnp != NULL; vnp = vnp->next) {
@@ -4518,6 +4610,7 @@ static void FormatFeatureBlockQuals (
                 add_period = FALSE;
               }
               break;
+            */
 
             case Qual_class_region :
 #ifdef ASN2GNBK_STRIP_NOTE_PERIODS
@@ -4571,6 +4664,7 @@ static void FormatFeatureBlockQuals (
               /* process gene sgml for check against subsequent protein names */
               start = NULL;
               if (! StringHasNoText (qvp [FTQUAL_gene].str)) {
+                /*
                 if (is_journalscan) {
                   ascii_len = Sgml2AsciiLen (qvp [FTQUAL_gene].str);
                   start = ascii = MemNew ((size_t) (10 + ascii_len));
@@ -4580,6 +4674,8 @@ static void FormatFeatureBlockQuals (
                 } else {
                   start = StringSaveNoNull (qvp [FTQUAL_gene].str);
                 }
+                */
+                start = StringSaveNoNull (qvp [FTQUAL_gene].str);
               }
               for (vnp = qvp [jdx].vnp; vnp != NULL; vnp = vnp->next) {
                 str = (CharPtr) vnp->data.ptrvalue;
@@ -4666,7 +4762,10 @@ static void FormatFeatureBlockQuals (
               }
               break;
 
-            case Qual_class_seq_id :
+            case Qual_class_nuc_id :
+              link_is_na = TRUE;
+              /* fall through */
+            case Qual_class_prt_id :
               sip = qvp [jdx].sip;
               if (sip != NULL) {
                 /* should always be found above for protein_id or transcript_id
@@ -4733,7 +4832,6 @@ static void FormatFeatureBlockQuals (
                 add_period = FALSE;
               }
               break;
-
             default :
               break;
           }
@@ -4778,7 +4876,8 @@ static void FF_asn2gb_www_featkey (
   Int4 from,
   Int4 to,
   Uint1 strand,
-  Uint4 itemID
+  Uint4 itemID,
+  Boolean is_na
 )
 
 {
@@ -4791,6 +4890,7 @@ static void FF_asn2gb_www_featkey (
   Char         gi_buf[16];
   Boolean      is_aa = FALSE;
   ObjectIdPtr  oip;
+  CharPtr      prefix = "?";
   SeqIntPtr    sintp;
   SeqIdPtr     sip;
   SeqLocPtr    slp;
@@ -4833,29 +4933,38 @@ static void FF_asn2gb_www_featkey (
 
   if (gi > 0) {
     FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, link_feat, FALSE, FALSE, TILDE_IGNORE);
-    FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+    if (is_na) {
+      FF_Add_NCBI_Base_URL (ffstring, link_featn);
+    } else {
+      FF_Add_NCBI_Base_URL (ffstring, link_featp);
+    }
+    /* FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE); */
     FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
     if (featID > 0) {
       sprintf (buf, "%ld", (long) featID);
-      FFAddOneString(ffstring, "&featID=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "?featID=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+      prefix = "&";
     } else if (ffrom > 0 && fto > 0) {
       sprintf (buf, "%ld", (long) ffrom);
-      FFAddOneString(ffstring, "&from=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "?from=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
       sprintf (buf, "%ld", (long) fto);
       FFAddOneString(ffstring, "&to=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+      prefix = "&";
     } else if (itemID > 0) {
       sprintf (buf, "%ld", (long) itemID);
-      FFAddOneString(ffstring, "&itemID=", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "?itemid=", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+      prefix = "&";
     }
     if ( is_aa ) {
-      FFAddOneString(ffstring, "&view=gpwithparts", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "report=gpwithparts", FALSE, FALSE, TILDE_IGNORE);
     } else {
-      FFAddOneString(ffstring, "&view=gbwithparts", FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+      FFAddOneString(ffstring, "report=gbwithparts", FALSE, FALSE, TILDE_IGNORE);
     }
     FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
   }
@@ -5755,8 +5864,9 @@ static CharPtr FormatFeatureBlockEx (
     FFStartPrint(ffstring, format, 5, 21, NULL, 0, 5, 21, "FT", /* ifp->firstfeat */ FALSE);
     if (ajp->ajp.slp != NULL) {
       FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
-    } else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
-      FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1, fcontext->strand, itemID);
+    } else if ( GetWWW(ajp) && StringICmp (key, "gap") != 0 && bsp != NULL /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
+      FF_asn2gb_www_featkey (ffstring, key, sfp, fcontext->left + 1, fcontext->right + 1,
+                             fcontext->strand, itemID, ISA_na (bsp->mol));
     } else {
       FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
     }
@@ -5905,7 +6015,7 @@ static CharPtr FormatFeatureBlockEx (
       }
       qvp [FTQUAL_gene_nomen].gnp = grp->formal_name;
     }
-    if (! ajp->flags.geneSynsToNote) {
+    if (! ajp->flags.separateGeneSyns) {
       qvp [FTQUAL_gene_syn_refseq].vnp = qvp [FTQUAL_gene_syn].vnp;
       qvp [FTQUAL_gene_syn].vnp = NULL;
     }
@@ -6052,7 +6162,7 @@ static CharPtr FormatFeatureBlockEx (
           gene_syn = vnp;
         }
       }
-      if (! ajp->flags.geneSynsToNote) {
+      if (! ajp->flags.separateGeneSyns) {
         qvp [FTQUAL_gene_syn_refseq].vnp = qvp [FTQUAL_gene_syn].vnp;
         qvp [FTQUAL_gene_syn].vnp = NULL;
       }
@@ -6131,6 +6241,7 @@ static CharPtr FormatFeatureBlockEx (
                       smtp = SeqMapTableFind (seqcode, Seq_code_ncbieaa);
                       residue = SeqMapTableConvert (smtp, residue);
                     }
+                    /*
                     if (residue == 'U') {
                       if (ajp->flags.selenocysteineToNote) {
                         qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
@@ -6144,6 +6255,7 @@ static CharPtr FormatFeatureBlockEx (
                         qvp [FTQUAL_pyrrolysine].ble = TRUE;
                       }
                     }
+                    */
                   }
                 }
               }
@@ -6330,6 +6442,7 @@ static CharPtr FormatFeatureBlockEx (
                       smtp = SeqMapTableFind (seqcode, Seq_code_ncbieaa);
                       residue = SeqMapTableConvert (smtp, residue);
                     }
+                    /*
                     if (residue == 'U') {
                       if (ajp->flags.selenocysteineToNote) {
                         qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
@@ -6343,6 +6456,7 @@ static CharPtr FormatFeatureBlockEx (
                         qvp [FTQUAL_pyrrolysine].ble = TRUE;
                       }
                     }
+                    */
                   }
                 }
               }
@@ -6518,6 +6632,7 @@ static CharPtr FormatFeatureBlockEx (
                   }
                 }
                 if (aa > 0 && aa != 255) {
+                  /*
                   if (aa == 'U') {
                      if (ajp->flags.selenocysteineToNote) {
                       qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
@@ -6531,6 +6646,7 @@ static CharPtr FormatFeatureBlockEx (
                       qvp [FTQUAL_pyrrolysine].ble = TRUE;
                     }
                   }
+                  */
                   if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
                     /* O and J no longer quarantined */
                     /*
@@ -6675,6 +6791,11 @@ static CharPtr FormatFeatureBlockEx (
   }
 
   /* common fields set here */
+
+  if (ajp->mode == DUMP_MODE && qvp [FTQUAL_gene_syn_refseq].vnp != NULL) {
+    qvp [FTQUAL_gene_syn].vnp = qvp [FTQUAL_gene_syn_refseq].vnp;
+    qvp [FTQUAL_gene_syn_refseq].vnp = NULL;
+  }
 
   VisitUserObjectsInUop (sfp->ext, (Pointer) qvp, RecordUserObjectsInQVP);
 

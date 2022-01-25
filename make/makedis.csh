@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh 139837 2008-09-09 19:37:43Z ucko $
+# $Id: makedis.csh 148594 2008-12-30 15:11:36Z ucko $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -190,6 +190,11 @@ case GNU/Linux:
 			set platform=linux64
 		else
 			set platform=linux
+		endif
+		if ("$?LINUX_MODE" == 1) then
+			if ("$LINUX_MODE" == "icc") then
+				set platform=${platform}_icc9
+			endif
 		endif
 		breaksw
 	endsw

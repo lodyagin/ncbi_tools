@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.686 $
+* $Revision: 6.693 $
 *
 * File Description: 
 *
@@ -131,7 +131,7 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "8.50"
+#define SEQ_APP_VER "9.20"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;
@@ -512,7 +512,7 @@ static void UncompressBsps (BioseqPtr bsp, Pointer userdata)
   }
 }
 
-static Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary)
+extern Boolean WriteTheEntityID (Uint2 entityID, CharPtr path, Boolean binary)
 
 {
   AsnIoPtr       aip;
@@ -7646,7 +7646,7 @@ static void DeleteMultipleSelections (Uint2 entityID, SelStructPtr selhead)
   DeleteMarkedObjects (entityID, 0, NULL);
 }
 
-static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
+extern void SequinSeqViewFormMessage (ForM f, Int2 mssg)
 
 {
   MsgAnswer     ans;

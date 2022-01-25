@@ -1,4 +1,4 @@
-/* $Id: blast_kappa.c,v 1.96 2008/07/17 17:55:44 kazimird Exp $
+/* $Id: blast_kappa.c,v 1.98 2009/01/05 16:54:38 kazimird Exp $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-"$Id: blast_kappa.c,v 1.96 2008/07/17 17:55:44 kazimird Exp $";
+"$Id: blast_kappa.c,v 1.98 2009/01/05 16:54:38 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <float.h>
@@ -428,24 +428,23 @@ s_HitlistEvaluateAndPurge(int * pbestScore, double *pbestEvalue,
     return status == 0 ? 0 : -1;
 }
 
-#if 0
 /** Compute the number of identities for the HSPs in the hsp_list
- * @note this only works for blastp right now and it's not currently being used
- * because we cannot reliably calculate the number of identities for queries
- * that have hard masking applied to them (which is the default).
+ * @note Should work for blastp and tblastn now.
  * 
  * @param query_blk the query sequence data [in]
  * @param query_info structure describing the query_blk structure [in]
  * @param seq_src source of subject sequence data [in]
  * @param hsp_list list of HSPs to be processed [in|out]
  * @param scoring_options scoring options [in]
+ * @gen_code_string Genetic code for tblastn [in]
  */
 static void
 s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
                        const BlastQueryInfo* query_info,
                        const BlastSeqSrc* seq_src,
                        BlastHSPList* hsp_list,
-                       const BlastScoringOptions* scoring_options)
+                       const BlastScoringOptions* scoring_options,
+                       const Uint1* gen_code_string)
 {
     Uint1* query = NULL;
     Uint1* subject = NULL;
@@ -453,12 +452,13 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
     const Boolean kIsOutOfFrame = scoring_options->is_ooframe;
     const EBlastEncoding encoding = Blast_TracebackGetEncoding(program_number);
     BlastSeqSrcGetSeqArg seq_arg;
+    BLAST_SequenceBlk* subject_blk = NULL;
     Int2 status = 0;
     int i;
+    SBlastTargetTranslation* target_t = NULL;
 
-    if ( !hsp_list || program_number != eBlastTypeBlastp ) {
+    if ( !hsp_list || (program_number != eBlastTypeBlastp && program_number != eBlastTypeTblastn)) 
         return;
-    }
 
     /* Initialize the subject */
     {
@@ -467,6 +467,14 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
         seq_arg.encoding = encoding;
         status = BlastSeqSrcGetSequence(seq_src, (void*) &seq_arg);
         ASSERT(status == 0);
+    }
+
+    if (program_number == eBlastTypeTblastn) {
+        subject_blk = seq_arg.seq;
+	BlastTargetTranslationNew(subject_blk, gen_code_string, eBlastTypeTblastn,
+            kIsOutOfFrame, &target_t);
+    }
+    else {
         subject = seq_arg.seq->sequence;
     }
 
@@ -483,14 +491,20 @@ s_ComputeNumIdentities(const BLAST_SequenceBlk* query_blk,
                 query_info->contexts[hsp->context].query_offset;
         }
 
-        status = Blast_HSPGetNumIdentities(query, subject, hsp, 
-                                           scoring_options, 0);
+        /* Translate subject if needed. */
+        if (program_number == eBlastTypeTblastn) {
+            const Uint1* target_sequence = Blast_HSPGetTargetTranslation(target_t, hsp, NULL);
+            status = Blast_HSPGetNumIdentities(query, target_sequence, hsp, scoring_options, 0);
+        }
+        else
+            status = Blast_HSPGetNumIdentities(query, subject, hsp, scoring_options, 0);
+
         ASSERT(status == 0);
     }
+    target_t = BlastTargetTranslationFree(target_t);
     BlastSeqSrcReleaseSequence(seq_src, (void*) &seq_arg);
     BlastSequenceBlkFree(seq_arg.seq);
 }
-#endif
 
 
 /**
@@ -2038,6 +2052,7 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
     /* which test function do we use to see if a composition-adjusted
        p-value is desired; value needs to be passed in eventually*/
     int compositionTestIndex = extendParams->options->unifiedP;
+    Uint1* genetic_code_string = GenCodeSingletonFind(default_db_genetic_code);
 
     ASSERT(program_number == eBlastTypeBlastp ||
            program_number == eBlastTypeTblastn ||
@@ -2264,10 +2279,9 @@ Blast_RedoAlignmentCore(EBlastProgramType program_number,
                     s_HSPListNormalizeScores(hsp_list,
                                              kbp->Lambda, kbp->logK,
                                              localScalingFactor);
-                    /* currently commented out, see function definition for
-                      explanation
                      s_ComputeNumIdentities(queryBlk, queryInfo, seqSrc,
-                                           hsp_list, scoringParams->options);*/
+                                           hsp_list, scoringParams->options,
+ 						genetic_code_string);
                     status_code =
                         BlastCompo_HeapInsert(&redoneMatches[query_index],
                                               hsp_list, bestEvalue,

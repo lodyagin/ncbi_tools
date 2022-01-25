@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.46 $
+* $Revision: 1.48 $
 *
 * File Description:
 *
@@ -61,7 +61,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASN2FSA_APP_VER "2.7"
+#define ASN2FSA_APP_VER "3.1"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 

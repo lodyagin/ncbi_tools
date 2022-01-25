@@ -1,4 +1,4 @@
-/* $Id: blast_extend.c,v 1.117 2006/11/21 17:01:24 papadopo Exp $
+/* $Id: blast_extend.c,v 1.118 2009/01/05 16:54:38 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] =
-    "$Id: blast_extend.c,v 1.117 2006/11/21 17:01:24 papadopo Exp $";
+    "$Id: blast_extend.c,v 1.118 2009/01/05 16:54:38 kazimird Exp $";
 #endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_extend.h>
@@ -134,6 +134,8 @@ Int2 BlastExtendWordNew(Uint4 query_length,
         ewp->hash_table->chain =
             calloc(ewp->hash_table->capacity, sizeof(DiagHashCell));
         ewp->hash_table->occupancy = 1;
+        ewp->hash_table->window = word_params->options->window_size;
+        ewp->hash_table->offset = word_params->options->window_size;
     } else {                    /* container_type == eDiagArray */
 
         Boolean multiple_hits = (word_params->options->window_size > 0);

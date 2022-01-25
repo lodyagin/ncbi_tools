@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/3/2003
 *
-* $Revision: 1.432 $
+* $Revision: 1.444 $
 *
 * File Description: 
 *
@@ -883,6 +883,71 @@ static void AddBestModifiersToModList (
 }
 
 
+extern void AutoDefEntityIDNoOptions (Uint2 entityID, Boolean use_modifiers)
+{
+  SeqEntryPtr sep;
+  DeflineFeatureRequestList feature_requests;
+  ModifierItemLocalPtr modList;
+  ValNodePtr modifier_indices = NULL;
+  OrganismDescriptionModifiers odmp;
+  Int4 index;
+  ValNodePtr defline_clauses = NULL;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return;
+
+  InitFeatureRequests (&feature_requests);
+
+  modList = MemNew (NumDefLineModifiers () * sizeof (ModifierItemLocalData));
+  if (modList == NULL) return;
+  SetRequiredModifiers (modList);
+  CountModifiers (modList, sep);
+    odmp.use_labels = TRUE;
+    odmp.max_mods = -99;
+    odmp.keep_paren = TRUE;
+    odmp.exclude_sp = ShouldExcludeSp (sep);
+    odmp.exclude_cf = FALSE;
+    odmp.exclude_aff = FALSE;
+    odmp.exclude_nr = FALSE;
+    odmp.include_country_extra = FALSE;
+    odmp.clone_isolate_HIV_rule_num = clone_isolate_HIV_rule_want_both;
+    odmp.use_modifiers = use_modifiers;
+    odmp.allow_semicolon_in_modifier = FALSE;
+
+    RemoveNucProtSetTitles (sep);  
+    SeqEntrySetScope (sep);
+
+    BuildDefLineFeatClauseList (sep, entityID, &feature_requests,
+                                DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE,
+                                &defline_clauses);
+    if ( AreFeatureClausesUnique (defline_clauses))
+    {
+      modifier_indices = GetModifierIndicesFromModList (modList);
+    }
+    else
+    {
+      modifier_indices = FindBestModifiersForDeflineClauseList (defline_clauses, modList);
+    }
+
+    BuildDefinitionLinesFromFeatureClauseLists (defline_clauses, modList,
+                                                modifier_indices, &odmp);
+
+    DefLineFeatClauseListFree (defline_clauses);
+    if (modList != NULL)
+    {
+      for (index=0; index < NumDefLineModifiers (); index++)
+      {
+        ValNodeFree (modList[index].values_seen);
+      }
+      MemFree (modList);
+    }
+    modifier_indices = ValNodeFree (modifier_indices);
+
+    ClearProteinTitlesInNucProts (entityID, NULL);
+    InstantiateProteinTitles (entityID, NULL);
+}
+
+
 extern void AutoDefBaseFormCommon (
   BaseFormPtr bfp,
   Boolean use_form,
@@ -999,12 +1064,20 @@ extern void AutoDefStrain (
     modList[DEFLINE_POS_Clone].required = TRUE;
   } else if (modList[DEFLINE_POS_Isolate].all_present) {
     modList[DEFLINE_POS_Isolate].required = TRUE;
+  } else if (modList[DEFLINE_POS_Cultivar].all_present) {
+    modList[DEFLINE_POS_Cultivar].required = TRUE;
+  } else if (modList[DEFLINE_POS_Specimen_voucher].all_present) {
+    modList[DEFLINE_POS_Specimen_voucher].required = TRUE;
   } else if (modList[DEFLINE_POS_Strain].any_present) {
     modList[DEFLINE_POS_Strain].required = TRUE;
   } else if (modList[DEFLINE_POS_Clone].any_present) {
     modList[DEFLINE_POS_Clone].required = TRUE;
   } else if (modList[DEFLINE_POS_Isolate].any_present) {
     modList[DEFLINE_POS_Isolate].required = TRUE;
+  } else if (modList[DEFLINE_POS_Cultivar].any_present) {
+    modList[DEFLINE_POS_Cultivar].required = TRUE;
+  } else if (modList[DEFLINE_POS_Specimen_voucher].any_present) {
+    modList[DEFLINE_POS_Specimen_voucher].required = TRUE;
   }
 
   WatchCursor ();
@@ -4754,7 +4827,8 @@ static Boolean ApplyTableValues (SeqEntryPtr sep, ValNodePtr table, ValNodePtr c
 {
   ValNodePtr err_list, vnp, obj_table, dup_dest_errs;
   LogInfoPtr lip;
-
+  Int4       msg_len = 0;
+  CharPtr    msg = NULL, msg_end = "Continue with errors?  Hit cancel to scroll through details";
 
   lip = OpenLog ("Table Problems");
 
@@ -4779,24 +4853,53 @@ static Boolean ApplyTableValues (SeqEntryPtr sep, ValNodePtr table, ValNodePtr c
     err_list = ValNodeFreeData (err_list);
     FreeLog (lip);
     obj_table = FreeObjectTableForTabTable (obj_table);
+    DeleteMarkedObjects (SeqMgrGetEntityIDForSeqEntry (sep), 0, NULL);
     return FALSE;
   }
 
   ValNodeLink (&err_list, CheckObjTableForExistingText (sep, table, columns, obj_table));
 
+  msg_len = StringLen (msg_end) + 1;
+  /* cycle through errors twice - first time, just print the ones with choice 1 (and sum lengths) */
   for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
-    fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
-    lip->data_in_log = TRUE;
+    if (vnp->choice == 1) {
+      fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
+      lip->data_in_log = TRUE;
+      msg_len += StringLen (vnp->data.ptrvalue) + 2;
+    }
   }
+  /* then cycle again, printing 0s */
+  for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == 0) {
+      fprintf (lip->fp, "%s\n", vnp->data.ptrvalue);
+      lip->data_in_log = TRUE;
+    }
+  }
+
+  /* now produce error message */
+  if (lip->data_in_log) {
+    msg = (CharPtr) MemNew (sizeof (Char) * msg_len);
+    for (vnp = err_list; vnp != NULL; vnp = vnp->next) {
+      if (vnp->choice == 1) {
+        StringCat (msg, vnp->data.ptrvalue);
+        StringCat (msg, "\n");
+      }
+    }
+    StringCat (msg, msg_end);
+  }
+  
   err_list = ValNodeFreeData (err_list);
 
   CloseLog (lip);
   if (lip->data_in_log) {
-    if (ANS_CANCEL == Message (MSG_OKC, "Continue with errors?")) {
+    if (ANS_CANCEL == Message (MSG_OKC, msg)) {
+      msg = MemFree (msg);
       FreeLog (lip);
+      DeleteMarkedObjects (SeqMgrGetEntityIDForSeqEntry (sep), 0, NULL);
       return FALSE;
     }
   }
+  msg = MemFree (msg);
   FreeLog (lip);
 
   err_list =  ApplyTableValuesToObjectTable (sep, table, columns, obj_table);
@@ -4810,6 +4913,7 @@ static Boolean ApplyTableValues (SeqEntryPtr sep, ValNodePtr table, ValNodePtr c
   CloseLog (lip);
   FreeLog (lip);
   obj_table = FreeObjectTableForTabTable (obj_table);
+  DeleteMarkedObjects (SeqMgrGetEntityIDForSeqEntry (sep), 0, NULL);
   return TRUE;
 }
 
@@ -4904,12 +5008,85 @@ static void AutoMatchQuals (ButtoN b)
 }
 
 
-static WindoW CreateTableReaderWindow (Uint2 entityID)
+static WindoW CreateTableReaderWindowWithTable (Uint2 entityID, ValNodePtr table);
+
+static void LoadNewTable (ButtoN b)
 {
   Char         path [PATH_MAX];
   FILE *fp;
+  QualLoadFormPtr form_data, new_form_data;
+  ValNodePtr      table, special_list, blank_list, columns = NULL, c_vnp;
+  Int4            i;
+  WindoW          w;
+  TabColumnConfigPtr t;
 
-  ValNodePtr   table, blank_list;
+  form_data = (QualLoadFormPtr) GetObjectExtra (b);
+  if (form_data == NULL) return;
+
+  path [0] = '\0';
+  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return;
+  
+  fp = FileOpen (path, "r");
+
+  table = ReadTabTableFromFile (fp);
+  FileClose (fp);
+  if (table == NULL) return;
+  special_list = ScanTabTableForSpecialCharacters (table);
+  if (special_list != NULL 
+      && !FixSpecialCharactersForStringsInList (special_list, 
+                                                "The table contains special characters\nand cannot be used until they are replaced.",
+                                                FALSE)) {
+    special_list = FreeContextList (special_list);
+    return;
+  }
+  special_list = FreeContextList (special_list);
+  if (form_data->list_dlg != NULL) {
+    form_data->table = table;
+    /* it's ok, can just repopulate dialogs */
+    blank_list = CountTabTableBlanks (table);
+    ChangeDataForTabColumnConfigListDialog (form_data->list_dlg, form_data->table->data.ptrvalue, blank_list);
+    blank_list = ValNodeFree (blank_list);
+  } else {
+    /* build a new window */
+    w = CreateTableReaderWindowWithTable (form_data->input_entityID, table);
+    /* get old configurations */
+    if (form_data->list_dlg == NULL) {
+      for (i = 0; i < form_data->num_columns; i++) {
+        t = DialogToPointer (form_data->column_list[i]);
+        ValNodeAddPointer (&columns, 0, t);
+      }
+    } else {
+      columns = DialogToPointer (form_data->list_dlg);
+    }
+
+    /* apply to new window */
+    new_form_data = (QualLoadFormPtr) GetObjectExtra (w);
+    if (new_form_data->list_dlg == NULL) {
+      for (i = 0, c_vnp = columns; i < new_form_data->num_columns && c_vnp != NULL; i++, c_vnp = c_vnp->next) {
+        PointerToDialog (new_form_data->column_list[i], c_vnp->data.ptrvalue);
+      }
+    } else {
+      PointerToDialog (new_form_data->list_dlg, columns);
+    }
+    columns = ValNodeFree (columns);
+    SetStatus (new_form_data->remove_quotes, GetStatus (form_data->remove_quotes));
+    SetStatus (new_form_data->leave_dlg_up, GetStatus (form_data->leave_dlg_up));
+
+    /* remove old window */
+    Remove ((WindoW) form_data->form);
+    
+    RealizeWindow (w);
+    Show (w);
+    Update ();
+  }
+
+
+}
+
+
+static WindoW CreateTableReaderWindowWithTable (Uint2 entityID, ValNodePtr table)
+{
+  ValNodePtr   blank_list;
   ValNodePtr   col_vnp, blank_vnp;
   Int4         index;
   WindoW        w;
@@ -4918,26 +5095,7 @@ static WindoW CreateTableReaderWindow (Uint2 entityID)
   CharPtr         title;
   Int4            col_for_list = 3;
   Char            buf[15];
-  ValNodePtr      special_list;
   ButtoN          b;
-
-  path [0] = '\0';
-  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return NULL;
-  
-  fp = FileOpen (path, "r");
-
-  table = ReadTabTableFromFile (fp);
-  FileClose (fp);
-  if (table == NULL) return NULL;
-  special_list = ScanTabTableForSpecialCharacters (table);
-  if (special_list != NULL 
-      && !FixSpecialCharactersForStringsInList (special_list, 
-                                                "The table contains special characters\nand cannot be used until they are replaced.",
-                                                FALSE)) {
-    special_list = FreeContextList (special_list);
-    return NULL;
-  }
-  special_list = FreeContextList (special_list);
   
   form_data = MemNew (sizeof (QualLoadFormData));
   if (form_data == NULL) return NULL;
@@ -4969,11 +5127,16 @@ static WindoW CreateTableReaderWindow (Uint2 entityID)
     blank_vnp = blank_list;
     for (index = 0; index < form_data->num_columns; index++) {
       if (col_vnp == NULL || StringHasNoText (col_vnp->data.ptrvalue)) {
-        title = "First row value is blank";
+        title = StringSave ("First row value is blank");
       } else {
-        title = col_vnp->data.ptrvalue;
+        title = StringSave (col_vnp->data.ptrvalue);
+        if (StringLen (title) > 104) {
+          StringCpy (title + 100, "...");
+          *(title + 103) = 0;
+        }
       }
       form_data->column_list[index] = TabColumnConfigDialog (g, title, blank_vnp->data.intvalue, ChangeTabColumnChoice, form_data);
+      title = MemFree (title);
       if (col_vnp != NULL) {
         col_vnp = col_vnp->next;
       }
@@ -4991,6 +5154,8 @@ static WindoW CreateTableReaderWindow (Uint2 entityID)
   form_data->accept_button = DefaultButton (c, "Accept", DoAcceptQuals);
   SetObjectExtra (form_data->accept_button, form_data, NULL);
   Disable (form_data->accept_button);
+  b = PushButton (c, "Load New Table", LoadNewTable);
+  SetObjectExtra (b, form_data, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
   form_data->leave_dlg_up = CheckBox (c, "Leave Dialog Up", NULL);
 
@@ -5001,6 +5166,36 @@ static WindoW CreateTableReaderWindow (Uint2 entityID)
 
   blank_list = ValNodeFree (blank_list);
   return w;
+}
+
+
+static WindoW CreateTableReaderWindow (Uint2 entityID)
+{
+  Char         path [PATH_MAX];
+  FILE *fp;
+
+  ValNodePtr   table;
+  ValNodePtr      special_list;
+
+  path [0] = '\0';
+  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return NULL;
+  
+  fp = FileOpen (path, "r");
+
+  table = ReadTabTableFromFile (fp);
+  FileClose (fp);
+  if (table == NULL) return NULL;
+  special_list = ScanTabTableForSpecialCharacters (table);
+  if (special_list != NULL 
+      && !FixSpecialCharactersForStringsInList (special_list, 
+                                                "The table contains special characters\nand cannot be used until they are replaced.",
+                                                FALSE)) {
+    special_list = FreeContextList (special_list);
+    return NULL;
+  }
+  special_list = FreeContextList (special_list);
+
+  return CreateTableReaderWindowWithTable (entityID, table);
 }
 
 
@@ -5036,6 +5231,69 @@ extern void NewLoadFeatureQualifierTable (IteM i)
         column_list = ValNodeFree (column_list);
       }
       t = TabColumnConfigFree (t);
+    } 
+
+    RealizeWindow (w);
+    Show (w);
+    Update ();
+  }
+}
+
+
+extern void LoadTaxTableReader (IteM i)
+{
+  BaseFormPtr  bfp;
+  WindoW        w;
+  QualLoadFormPtr form_data;
+  TabColumnConfigPtr t;
+  ValNodePtr         column_list = NULL, s;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  w = CreateTableReaderWindow (bfp->input_entityID);
+
+  if (w != NULL) {
+    /* populate */
+    form_data = (QualLoadFormPtr) GetObjectExtra (w);
+    if (form_data != NULL) {
+      if (form_data->list_dlg == NULL) {
+        if (form_data->num_columns > 1) {
+          t = TabColumnConfigNew ();
+          t->match_type = MatchTypeNew ();
+          t->match_type->choice = eTableMatchBioSource;
+          PointerToDialog (form_data->column_list[0], t);
+          t->match_type = MatchTypeFree(t->match_type);
+          t->field = ValNodeNew(NULL);
+          t->field->choice = FieldType_source_qual;
+          s = ValNodeNew (NULL);
+          t->field->data.ptrvalue = s;
+          s->choice = SourceQualChoice_textqual;
+          s->data.intvalue = Source_qual_taxname;
+          PointerToDialog (form_data->column_list[1], t);
+          t = TabColumnConfigFree(t);
+        }
+      } else {
+        t = TabColumnConfigNew ();
+        t->match_type = MatchTypeNew ();
+        t->match_type->choice = eTableMatchBioSource;
+        PointerToDialog (form_data->column_list[0], t);
+        ValNodeAddPointer (&column_list, 0, t);
+        t = TabColumnConfigNew ();
+        t->field = ValNodeNew(NULL);
+        t->field->choice = FieldType_source_qual;
+        s = ValNodeNew (NULL);
+        t->field->data.ptrvalue = s;
+        s->choice = SourceQualChoice_textqual;
+        s->data.intvalue = Source_qual_taxname;
+        ValNodeAddPointer (&column_list, 0, t);
+        PointerToDialog (form_data->list_dlg, column_list);
+        column_list = TabColumnConfigListFree (column_list);
+      }
     } 
 
     RealizeWindow (w);
@@ -8099,7 +8357,19 @@ static void MacroAECRAction (IteM i, Boolean indexer_version, Uint1 action_type,
 
   SingleAECRMacroAction (bfp->input_entityID, indexer_version, action_type, qual_type);
 }
-  
+
+extern void MacroApplyGBQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_apply, FieldType_feature_field);
+}
+
+
+extern void MacroApplySourceQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_apply, FieldType_source_qual);
+}
+
+
 extern void MacroApplyCDSGeneProt (IteM i)
 {
   MacroAECRAction (i, TRUE, ActionChoice_apply, FieldType_cds_gene_prot);
@@ -8110,29 +8380,112 @@ extern void PublicMacroApplyCDSGeneProt (IteM i)
   MacroAECRAction (i, FALSE, ActionChoice_apply, FieldType_cds_gene_prot);
 }
 
-extern void MacroEditCDSGeneProt (IteM i)
+
+extern void MacroApplyRNAQual (IteM i)
 {
-  MacroAECRAction (i, TRUE, ActionChoice_edit, FieldType_cds_gene_prot);
+  MacroAECRAction (i, TRUE, ActionChoice_apply, FieldType_rna_field);
 }
 
-extern void PublicMacroEditCDSGeneProt (IteM i)
+
+extern void MacroRemoveGBQual (IteM i)
 {
-  MacroAECRAction (i, FALSE, ActionChoice_edit, FieldType_cds_gene_prot);
+  MacroAECRAction (i, TRUE, ActionChoice_remove, FieldType_feature_field);
 }
+
+
+extern void MacroRemoveSourceQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_remove, FieldType_source_qual);
+}
+
+
+extern void MacroRemoveCDSGeneProt (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_remove, FieldType_cds_gene_prot);
+}
+
+
+extern void MacroRemoveRNAQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_remove, FieldType_rna_field);
+}
+
+
+extern void MacroConvertGBQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_convert, FieldType_feature_field);
+}
+
+
+extern void MacroConvertSourceQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_convert, FieldType_source_qual);
+}
+
 
 extern void MacroConvertCDSGeneProt (IteM i)
 {
   MacroAECRAction (i, TRUE, ActionChoice_convert, FieldType_cds_gene_prot);
 }
 
+
+extern void MacroConvertRNAQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_convert, FieldType_rna_field);
+}
+
+
+extern void MacroSwapGBQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_swap, FieldType_feature_field);
+}
+
+
+extern void MacroSwapSourceQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_swap, FieldType_source_qual);
+}
+
+
 extern void MacroSwapCDSGeneProt (IteM i)
 {
   MacroAECRAction (i, TRUE, ActionChoice_swap, FieldType_cds_gene_prot);
 }
 
-extern void MacroRemoveCDSGeneProt (IteM i)
+
+extern void MacroSwapRNAQual (IteM i)
 {
-  MacroAECRAction (i, TRUE, ActionChoice_remove, FieldType_cds_gene_prot);
+  MacroAECRAction (i, TRUE, ActionChoice_swap, FieldType_rna_field);
+}
+
+
+extern void MacroEditGBQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_edit, FieldType_feature_field);
+}
+
+
+extern void MacroEditSourceQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_edit, FieldType_source_qual);
+}
+
+
+extern void MacroEditCDSGeneProt (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_edit, FieldType_cds_gene_prot);
+}
+
+
+extern void PublicMacroEditCDSGeneProt (IteM i)
+{
+  MacroAECRAction (i, FALSE, ActionChoice_edit, FieldType_cds_gene_prot);
+}
+
+
+extern void MacroEditRNAQual (IteM i)
+{
+  MacroAECRAction (i, TRUE, ActionChoice_edit, FieldType_rna_field);
 }
 
 
@@ -9439,16 +9792,6 @@ static void FieldTypeDataFree (ValNodePtr vnp)
 }
 
 
-static ValNodePtr FieldTypeCopy (ValNodePtr vnp)
-{
-  ValNodePtr vnp_copy = NULL;
-  if (vnp != NULL) {
-    vnp_copy = AsnIoMemCopy (vnp, (AsnReadFunc) FieldTypeAsnRead, (AsnWriteFunc) FieldTypeAsnWrite);
-  }
-  return vnp_copy;
-}
-
-
 static Boolean FieldTypeMatch (ValNodePtr vnp1, ValNodePtr vnp2)
 {
   if (vnp1 == NULL || vnp2 == NULL)
@@ -9610,4 +9953,100 @@ extern void ExportBankitComments (IteM i)
 
 }
 
+
+static void TrimPrimerSeqJunkFromString (CharPtr str)
+{
+  Int4 len;
+  CharPtr src, dst;
+  
+  if (StringHasNoText (str)) {
+    return;
+  }
+  len = StringLen (str);
+
+  if (len >= 7 && StringNCmp (str, "5'-", 3) == 0 && StringCmp (str + len - 3, "-3'") == 0) {
+    src = str + 3;
+    dst = str;
+    len -= 6;
+
+    while (len > 0) {
+      *dst = *src;
+      src++;
+      dst++;
+      len--;
+    }
+    *dst = 0;
+  } else if ((len >= 5 && StringNCmp (str, "5-", 2) == 0 && StringCmp (str + len - 2, "-3") == 0)
+             || (len >= 5 && StringNCmp (str, "5'", 2) == 0 && StringCmp (str + len - 2, "3'") == 0)) {
+    src = str + 2;
+    dst = str;
+    len -= 4;
+    while (len > 0) {
+      *dst = *src;
+      src++;
+      dst++;
+      len--;
+    }
+    *dst = 0;
+  }
+
+}
+
+
+static void TrimPrimerSeqJunkOnBioSource (BioSourcePtr biop)
+{
+  SubSourcePtr ssp;
+
+  if (biop == NULL) {
+    return;
+  }
+
+  for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
+    if (ssp->subtype == SUBSRC_fwd_primer_seq
+      || ssp->subtype == SUBSRC_rev_primer_seq) {
+      TrimPrimerSeqJunkFromString (ssp->name);
+    }
+  }
+}
+
+
+static void TrimPrimerSeqJunkDescrCallback (SeqDescrPtr sdp, Pointer data)
+{
+  if (sdp != NULL && sdp->choice == Seq_descr_source) {
+    TrimPrimerSeqJunkOnBioSource (sdp->data.ptrvalue);
+  }
+}
+
+
+static void TrimPrimerSeqJunkFeatCallback (SeqFeatPtr sfp, Pointer data)
+{
+  if (sfp != NULL && sfp->data.choice == SEQFEAT_BIOSRC) {
+    TrimPrimerSeqJunkOnBioSource (sfp->data.value.ptrvalue);
+  }
+}
+
+extern void TrimPrimerSeqJunk (IteM i)
+{
+  BaseFormPtr    bfp;
+  SeqEntryPtr    sep;
+
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+
+  WatchCursor ();
+  Update();
+  VisitDescriptorsInSep (sep, NULL, TrimPrimerSeqJunkDescrCallback);
+  VisitFeaturesInSep (sep, NULL, TrimPrimerSeqJunkFeatCallback);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
 

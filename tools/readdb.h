@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.179 $
+* $Revision: 6.180 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,9 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.180  2009/01/15 15:20:35  madden
+* Add prototype for readdb_check_oid
+*
 * Revision 6.179  2007/09/27 17:20:54  madden
 * Add readdb_get_full_filename
 *
@@ -1429,6 +1432,9 @@ Obtains the total number of real database sequences from all the ReadDBFILE stru
 */
 
 Int4 LIBCALL readdb_get_num_entries_total_real PROTO((ReadDBFILEPtr rdfp));
+
+/* Check whether an OID is actually in the database according to the mask file. */
+Boolean readdb_check_oid(ReadDBFILEPtr rdfp_head, Int4 oid);
 
 /* 
 Get the length of the longest sequence in the database. 

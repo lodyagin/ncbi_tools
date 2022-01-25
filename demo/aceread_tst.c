@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/22/08
 *
-* $Revision: 1.11 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
@@ -82,6 +82,9 @@ typedef enum {
   q_argReadQualScoresFile,
   r_argReadFASTAFile,
   N_argRecalculateConsensus,
+  c_argChunkSize,
+  n_argReadNameType,
+  z_argIncludeReads,
   l_argLimitNumContigs
 } EArgNum;
 
@@ -120,6 +123,12 @@ Args myargs [] = {
     TRUE, 'r', ARG_FILE_IN, 0.0, 0, NULL},
   {"Recalculate consensus sequence using read data\n\tW Whole Consensus\n\tN Ns Only", "", NULL, NULL,
     TRUE, 'N', ARG_STRING, 0.0, 0, NULL},
+  {"Number of contig bases per file", "50000", NULL, NULL,
+    TRUE, 'c', ARG_INT, 0.0, 0, NULL},
+  {"Read name type in ACE file\n\tL local trace name\n\tT TI number\n\tS SRR ID\n", "L", NULL, NULL,
+    TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
+  {"Include read sequences in ASN.1 output", "F", NULL, NULL,
+    TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Limit number of contigs to read", NULL, NULL, NULL,
     TRUE, 'l', ARG_INT, 0.0, 0, NULL},
 };
@@ -287,10 +296,12 @@ GetTSAFieldsFromString
 (CharPtr str,
  CharPtr PNTR p_submitter_reference,
  CharPtr PNTR p_archive_id,
- CharPtr PNTR p_description)
+ CharPtr PNTR p_description,
+ CharPtr PNTR p_assembly,
+ Int4Ptr p_taxon_id)
 {
   CharPtr cp, cp_next, cp_equal, cp_end;
-  CharPtr subref = NULL, arch_id = NULL, desc = NULL;
+  CharPtr subref = NULL, arch_id = NULL, desc = NULL, assembly = NULL, tmp;
   Boolean is_bad = FALSE;
 
   if (p_submitter_reference != NULL) {
@@ -338,6 +349,17 @@ GetTSAFieldsFromString
         } else {
           is_bad = TRUE;
         }
+      } else if (BracketMatchesLabel (cp, cp_equal, "assembly")) {
+        if (assembly == NULL) {
+          assembly = GetBracketValue (cp_equal + 1, cp_end);
+        } else {
+          is_bad = TRUE;
+        }
+      } else if (BracketMatchesLabel (cp, cp_equal, "taxon_id")) {
+        tmp = GetBracketValue (cp_equal + 1, cp_end);
+        if (p_taxon_id != NULL) {
+          *p_taxon_id = atoi (tmp);
+        }
       } else {
         is_bad = TRUE;
       }
@@ -358,6 +380,11 @@ GetTSAFieldsFromString
     desc = MemFree (desc);
   } else {
     *p_description = desc;
+  }
+  if (p_assembly == NULL) {
+    assembly = MemFree (assembly);
+  } else {
+    *p_assembly = assembly;
   }
   return TRUE;
 }
@@ -495,9 +522,14 @@ static void AddDescrToNucBioseqCallback (BioseqPtr bsp, Pointer data)
     return;
   }
   sdp = (SeqDescrPtr) data;
-  sdp_copy = (SeqDescrPtr) AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
-  sdp_copy->next = bsp->descr;
-  bsp->descr = sdp_copy;
+  while (sdp != NULL) {
+    if (sdp->choice != Seq_descr_pub) {
+      sdp_copy = (SeqDescrPtr) AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
+      sdp_copy->next = bsp->descr;
+      bsp->descr = sdp_copy;
+    }
+    sdp = sdp->next;
+  }
 }
 
   
@@ -603,6 +635,879 @@ static Boolean AddReadQualityScores (TACEFilePtr afp, CharPtr qs_filename, CharP
 }
 
 
+static Boolean LIBCALL MyBioseqSetAsnWrite (BioseqSetPtr bsp, AsnIoPtr aip, AsnTypePtr orig)
+{
+	DataVal av;
+	AsnTypePtr atp;
+	Boolean retval = FALSE;
+
+	if (aip == NULL)
+		return FALSE;
+
+	atp = AsnLinkType(orig, AsnFind ("Bioseq-set"));   /* link local tree */
+	if (atp == NULL) return FALSE;
+
+	if (bsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+	if (! AsnOpenStruct(aip, atp, (Pointer)bsp)) goto erret;
+    
+  if (bsp->id != NULL)
+	{
+    if (! ObjectIdAsnWrite(bsp->id, aip, AsnFind ("Bioseq-set.id"))) goto erret;
+	}
+  if (bsp->coll != NULL)
+	{
+    if (! DbtagAsnWrite(bsp->coll, aip, AsnFind ("Bioseq-set.coll"))) goto erret;
+	}
+  if (bsp->level != INT2_MIN)
+  {
+    av.intvalue = bsp->level;
+    if (! AsnWrite(aip, AsnFind ("Bioseq-set.level"), &av)) goto erret;
+  }
+  if (bsp->_class != 0)
+  {
+    av.intvalue = bsp->_class;
+    if (! AsnWrite(aip, AsnFind ("Bioseq-set.class"), &av)) goto erret;
+  }
+  if (bsp->release != NULL)
+  {
+    av.ptrvalue = bsp->release;
+    if (! AsnWrite(aip, AsnFind ("Bioseq-set.release"), &av)) goto erret;
+  }
+  if (bsp->date != NULL)
+	{
+    if (! DateAsnWrite(bsp->date, aip, AsnFind ("Bioseq-set.date"))) goto erret;
+	}
+  if (bsp->descr != NULL)              /* Seq-descr optional */
+	{
+    if (! SeqDescrAsnWrite(bsp->descr, aip, AsnFind ("Bioseq-set.descr"))) goto erret;
+	}
+
+  if (! AsnOpenStruct(aip, AsnFind ("Bioseq-set.seq-set"), (Pointer)bsp->seq_set)) goto erret;
+  /* this is where we stop */
+  retval = TRUE;
+erret:
+	AsnUnlinkType(orig);        /* unlink local tree */
+	return retval;
+}
+
+static Boolean LIBCALL MySeqEntryAsnWrite (SeqEntryPtr sep, AsnIoPtr aip, AsnTypePtr orig)
+{
+  AsnTypePtr atp;
+	DataVal av;
+	Boolean retval = FALSE;
+
+	if (aip == NULL)
+		return FALSE;
+
+	atp = AsnLinkType(orig, AsnFind ("Seq-entry"));   /* link local tree */
+	if (atp == NULL) return FALSE;
+
+	if (sep == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+	av.ptrvalue = (Pointer)sep;
+  if (! AsnWriteChoice(aip, atp, (Int2)sep->choice, &av)) goto erret;
+  if (sep->choice == 1)
+	{
+    if (! BioseqAsnWrite((BioseqPtr)sep->data.ptrvalue, aip, AsnFind ("Seq-entry.seq"))) 
+    {
+			goto erret;
+    }
+	}
+  else if (sep->choice == 2)
+	{
+    if (! MyBioseqSetAsnWrite((BioseqSetPtr)sep->data.ptrvalue, aip, AsnFind ("Seq-entry.set")))
+    {
+			goto erret;
+    }
+	}
+  /* this is where we stop */
+	retval = TRUE;
+erret:
+  AsnUnlinkType(orig);
+  return retval;
+}
+
+
+static Boolean MySeqSubmitAsnWrite (AsnIoPtr aip, SubmitBlockPtr sbp, SeqDescrPtr desc_list)
+{
+	DataVal av;
+	AsnTypePtr atp;
+  Boolean retval = FALSE;
+	SeqEntryPtr sep;
+  SeqSubmitPtr ssp = NULL;
+  BioseqSetPtr bssp;
+  SeqDescrPtr  sdp, sdp_copy;
+
+	if (aip == NULL)
+		return FALSE;
+
+	atp = AsnLinkType(NULL, AsnFind ("Seq-submit"));   /* link local tree */
+  if (atp == NULL)
+    return FALSE;
+
+  ssp = SeqSubmitNew ();
+  ssp->sub = sbp;
+  ssp->datatype = 1;
+  sep = SeqEntryNew ();
+  sep->choice = 2;
+  bssp = BioseqSetNew ();
+  bssp->_class = BioseqseqSet_class_genbank;
+
+  if (desc_list != NULL) {
+    for (sdp = desc_list; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice == Seq_descr_pub) {
+        sdp_copy = (SeqDescrPtr) AsnIoMemCopy (sdp, (AsnReadFunc) SeqDescrAsnRead, (AsnWriteFunc) SeqDescrAsnWrite);
+        sdp_copy->next = bssp->descr;
+        bssp->descr = sdp_copy;
+      }
+    }
+  }
+
+  sep->data.ptrvalue = bssp;
+  ssp->data = sep;
+
+  if (! AsnOpenStruct(aip, atp, (Pointer)ssp))
+    goto erret;
+
+	if (! SubmitBlockAsnWrite(ssp->sub, aip, AsnFind ("Seq-submit.sub"))) goto erret;
+
+	av.ptrvalue = ssp->data;
+  if (! AsnWriteChoice(aip, AsnFind ("Seq-submit.data"), (Int2)ssp->datatype, &av)) goto erret;
+
+	if (! AsnOpenStruct(aip, AsnFind ("Seq-submit.data.entrys"), ssp->data)) goto erret;
+	sep = (SeqEntryPtr) ssp->data;
+	if (! MySeqEntryAsnWrite(sep, aip, AsnFind ("Seq-submit.data.entrys.E"))) goto erret;
+  /* This is where we stop */
+  retval = TRUE;
+erret:
+  ssp->sub = NULL;
+  ssp = SeqSubmitFree (ssp);
+	return retval;
+}
+
+static void StartSeqSubmit (AsnIoPtr aip, SubmitBlockPtr sbp, SeqDescrPtr desc_list)
+{
+
+  if (aip == NULL || aip->fp == NULL) {
+    return;
+  }
+
+  if (sbp == NULL) {
+    fprintf (aip->fp, "Seq-entry ::= set {\n");
+    fprintf (aip->fp, "class genbank ,\n");
+    fprintf (aip->fp, "seq-set {\n");
+  } else {
+    MySeqSubmitAsnWrite (aip, sbp, desc_list);
+    AsnIoFlush (aip);
+  }
+}
+
+
+static DenseSegPtr DenseSegFromConsensusReadAln (TConsensusReadAlnPtr aln, CharPtr contig_id, CharPtr read_id) 
+{
+  DenseSegPtr dsp;
+  Int4        i;
+
+  if (aln == NULL) {
+    return NULL;
+  }
+
+  dsp = DenseSegNew ();
+  dsp->dim = 2;
+  dsp->numseg = aln->numseg;
+  dsp->ids = MakeSeqID (contig_id);
+  dsp->ids->next = MakeSeqID (read_id);
+  dsp->starts = (Int4Ptr) MemNew (sizeof (Int4) * dsp->dim * dsp->numseg);
+  dsp->lens = (Int4Ptr) MemNew (sizeof (Int4) * dsp->numseg);
+  if (aln->is_complement) {
+    dsp->strands = (Uint1Ptr) MemNew (sizeof (Uint1) * dsp->dim * dsp->numseg);
+    for (i = 0; i < dsp->numseg; i++) {
+      dsp->strands[i * 2] = Seq_strand_plus;
+      dsp->strands[(i * 2) + 1] = Seq_strand_minus;
+    }
+  }
+  for (i = 0; i < dsp->numseg; i++) {
+    dsp->starts[i * 2] = aln->cons_starts[i];
+    dsp->starts[(i * 2) + 1] = aln->read_starts[i];
+    dsp->lens [i] = aln->lens[i];
+  }
+  return dsp;
+}
+
+
+static SeqAlignPtr SeqAlignsForConsensusAndReads (TContigPtr contig)
+{
+  SeqAlignPtr salp_list = NULL, salp_last = NULL, salp_tmp;
+  TConsensusReadAlnPtr aln;
+  DenseSegPtr dsp;
+  Int4 i;
+
+  if (contig == NULL) {
+    return NULL;
+  }
+
+  for (i = 0; i < contig->num_reads; i++) {
+    aln = GetConsensusReadAln (contig->consensus_seq, contig->reads[i]);
+    if (aln != NULL) {
+      dsp = DenseSegFromConsensusReadAln (aln, contig->consensus_id, contig->reads[i]->read_id);
+      if (dsp != NULL) {
+        salp_tmp = SeqAlignNew ();
+        salp_tmp->type = SAT_MASTERSLAVE;
+        salp_tmp->segtype = SAS_DENSEG;
+        salp_tmp->segs = dsp;
+        salp_tmp->dim = 2;
+        if (salp_list == NULL) {
+          salp_list = salp_tmp;
+        } else {
+          salp_last->next = salp_tmp;
+        }
+        salp_last = salp_tmp;
+      }
+    }
+  }
+  return salp_list;
+}
+
+
+static SeqEntryPtr MakeContigSeqEntryWithReads (TContigPtr contig)
+{
+  BioseqSetPtr bssp;
+  SeqEntryPtr  sep, sep_prev;
+  Int4 i;
+  SeqAlignPtr salp;
+
+  if (contig == NULL) {
+    return NULL;
+  }
+
+  bssp = BioseqSetNew ();
+  bssp->_class = BioseqseqSet_class_genbank;
+  bssp->seq_set = MakeSeqEntryFromContig (contig);
+  salp = SeqAlignsForConsensusAndReads (contig);
+  if (salp != NULL) {
+    bssp->annot = SeqAnnotNew ();
+    bssp->annot->type = 2;
+    bssp->annot->data = salp;
+  }
+  sep_prev = bssp->seq_set;
+  for (i = 0; i < contig->num_reads; i++) {
+    sep = MakeSeqEntryFromRead (contig->reads[i]);
+    sep_prev->next = sep;
+    sep_prev = sep;
+  }
+  sep = SeqEntryNew ();
+  sep->choice = 2;
+  sep->data.ptrvalue = bssp;
+  return sep;
+}
+
+
+static void WriteXMLMsgUnableToOpenFile (CharPtr has_errors, CharPtr filename)
+{
+  if (has_errors == NULL || filename == NULL) {
+    return;
+  }
+  if (*has_errors == 0) {
+    printf ("<aceread>\n");
+    *has_errors = 1;
+  }
+  printf ("<message severity=\"ERROR\" seq-id=\"No ID\" code=\"bad_format\">Unable to open %s</message>\n", filename);
+}
+
+
+typedef struct contigcountcallback {
+  Int4 num_contigs;
+  Uint4 num_conbases;
+  Int4 num_reads;
+  Uint4 num_readbases;
+  Int4  file_num;
+} ContigCountCallbackData, PNTR ContigCountCallbackPtr;
+
+
+static ContigCountCallbackPtr ContigCountCallbackNew ()
+{
+  ContigCountCallbackPtr c;
+
+  c = (ContigCountCallbackPtr) MemNew (sizeof (ContigCountCallbackData));
+  MemSet (c, 0, sizeof (ContigCountCallbackData));
+  return c;
+}
+
+
+static ContigCountCallbackPtr SummarizeContigCountList (ValNodePtr list)
+{
+  ContigCountCallbackPtr summ, c;
+  
+  summ = ContigCountCallbackNew();
+  while (list != NULL) {
+    c = (ContigCountCallbackPtr) list->data.ptrvalue;
+    if (c != NULL) {
+      summ->num_contigs += c->num_contigs;
+      summ->num_conbases += c->num_conbases;
+      summ->num_reads += c->num_reads;
+      summ->num_readbases += c->num_readbases;
+    }
+    list = list->next;
+  }
+  return summ;
+}
+
+
+typedef struct contigfilelist {
+  ValNodePtr list;
+  Int4 max_bases;
+  ContigCountCallbackPtr current;
+} ContigFileListData, PNTR ContigFileListPtr;
+
+
+#define ONE_CONTIG_FOR_FIRST
+
+static char ProcessContigCountCallback (TContigPtr contig, void *data)
+{
+  ContigFileListPtr list;
+  Int4 i;
+
+  list = (ContigFileListPtr) data;
+  if (contig == NULL || list == NULL) {
+    return 0;
+  }
+
+  if (list->current == NULL || list->current->num_conbases > list->max_bases
+#ifdef ONE_CONTIG_FOR_FIRST
+      || list->list->next == NULL
+#endif
+    ) {
+    list->current = ContigCountCallbackNew();
+    list->current->file_num = ValNodeLen (list->list);
+    ValNodeAddPointer (&(list->list), 0, list->current);
+  }
+
+  list->current->num_contigs++;
+  list->current->num_conbases += contig->consensus_seq_len;
+  list->current->num_reads += contig->num_reads;
+
+  for (i = 0; i < contig->num_reads; i++) {
+    list->current->num_readbases += contig->reads[i]->read_len;
+  }
+  return 1;
+}
+
+
+typedef enum {
+  eReadNameType_local = 0,
+  eReadNameType_TI,
+  eReadNameType_SRR } EReadNameType;
+
+static EReadNameType ReadNameTypeFromArg (CharPtr arg)
+{
+  EReadNameType read_name_type = eReadNameType_local;
+
+  if (arg != NULL) {
+    if (StringNICmp (arg, "T", 1) == 0) {
+      read_name_type = eReadNameType_TI;
+    } else if (StringNICmp (arg, "S", 1) == 0) {
+      read_name_type = eReadNameType_SRR;
+    }
+  }
+  return read_name_type;
+}
+
+
+typedef struct contigcallback {
+  AsnIoPtr asn1_out;
+  AsnTypePtr atp;
+  FILE *fasta_out;
+  FILE *qual_out;
+  FILE *xml_out;
+
+  ValNodePtr file_counts_list;
+  Int4 contig_count;
+
+  CharPtr fasta_base;
+  CharPtr asn_base;
+  CharPtr xml_base;
+  CharPtr qual_base;
+
+  /* XML values */
+  CharPtr subref;
+  CharPtr center_name;
+  Int4    taxid;
+  CharPtr description;
+  CharPtr assembly;
+
+  Boolean recalculate_consensus;
+  Boolean recalculate_only_Ns;
+
+  Boolean no_lookup;
+  Boolean is_srr;
+  Boolean asn1_include_reads;
+
+  EReadNameType read_name_type;
+
+  SeqIdReplaceListPtr id_replacement_list;
+
+  SubmitBlockPtr sbp;
+  SeqDescrPtr desc_list;
+
+  char *has_errors;
+} ContigCallbackData, PNTR ContigCallbackPtr;
+
+
+static AsnIoPtr StartAsnFile (CharPtr filename, SubmitBlockPtr sbp, SeqDescrPtr desc_list)
+{
+  AsnIoPtr aip;
+
+  aip = AsnIoOpen (filename, "w");
+  if (aip != NULL) {
+    aip->indent_level = 1;
+    aip->first[aip->indent_level] = FALSE;
+    StartSeqSubmit (aip, sbp, desc_list);
+  }
+  return aip;
+}
+
+
+static AsnIoPtr EndAsnFile (AsnIoPtr aip, Boolean is_submitblock)
+{
+  if (aip != NULL) {
+    AsnIoFlush (aip);
+    if (is_submitblock) {
+      fprintf (aip->fp, " } } } }\n");
+    } else {
+      fprintf (aip->fp, " } }\n");
+    }
+    AsnIoClose (aip);
+    aip = NULL;
+  }
+  return aip;
+}
+
+
+static char ProcessContigCallback (TContigPtr contig, void *data)
+{
+  ContigCallbackPtr c;
+  SeqEntryPtr       sep;
+  Char              filename[300];
+  ContigCountCallbackPtr count = NULL;
+  ValNodePtr             tmp;
+  Boolean write_out = FALSE;
+  Int4    i, ti;
+  char rval = 0;
+
+  c = (ContigCallbackPtr) data;
+  if (contig == NULL || c == NULL) {
+    return 0;
+  }
+
+  if (c->id_replacement_list != NULL) {
+    UpdateContigIds (contig, c->id_replacement_list, c->no_lookup, c->is_srr, c->has_errors);
+  }
+
+  if (c->read_name_type == eReadNameType_TI) {
+    for (i = 0; i < contig->num_reads; i++) {
+      if (contig->reads[i]->read_id != NULL) {
+        ti = atoi (contig->reads[i]->read_id);
+        if (ti < 1) {
+          if (*(c->has_errors) == 0) {
+            printf ("<aceread>\n");
+            *(c->has_errors) = 1;
+          }
+          printf ("<message severity=\"ERROR\" seq-id=\"%s\" code=\"bad_format\">Non-integer value for ti</message>\n", contig->reads[i]->read_id);
+        } else if (contig->reads[i]->ti == 0) {
+          contig->reads[i]->ti = ti;
+          free (contig->reads[i]->read_id);
+          contig->reads[i]->read_id = NULL;
+        } else if (ti == contig->reads[i]->ti) {
+          free (contig->reads[i]->read_id);
+          contig->reads[i]->read_id = NULL;
+        } else {
+          if (*(c->has_errors) == 0) {
+            printf ("<aceread>\n");
+            *(c->has_errors) = 1;
+          }
+          printf ("<message severity=\"ERROR\" seq-id=\"%s\" code=\"bad_format\">Conflicting values for ti</message>\n", contig->reads[i]->read_id);
+        }
+      }
+    }
+  } else if (c->read_name_type == eReadNameType_SRR) {
+    for (i = 0; i < contig->num_reads; i++) {
+      if (contig->reads[i]->read_id != NULL) {
+        if (contig->reads[i]->srr == NULL) {
+          contig->reads[i]->srr = contig->reads[i]->read_id;
+          contig->reads[i]->read_id = NULL;
+        } else if (StringCmp (contig->reads[i]->read_id, contig->reads[i]->srr) == 0) {
+          free (contig->reads[i]->read_id);
+          contig->reads[i]->read_id = NULL;
+        } else {
+          if (*(c->has_errors) == 0) {
+            printf ("<aceread>\n");
+            *(c->has_errors) = 1;
+          }
+          printf ("<message severity=\"ERROR\" seq-id=\"%s\" code=\"bad_format\">Conflicting values for srr</message>\n", contig->reads[i]->read_id);
+        }
+      }
+    }
+  }
+
+  if (c->recalculate_consensus) {
+    /* TODO - add read quality scores ? */
+
+    if (ReplaceConsensusSequenceFromTraces (contig, c->recalculate_only_Ns) > 0) {
+      write_out = TRUE;
+    }
+  } else {
+    write_out = TRUE;
+  }
+
+  c->contig_count ++;
+
+  if (write_out) {
+    rval = 1;
+    if (c->file_counts_list != NULL) {
+      count = c->file_counts_list->data.ptrvalue;
+    }
+
+    /* write ASN.1 */
+    if (c->asn1_out == NULL 
+        && c->asn_base != NULL && count != NULL) {
+      sprintf (filename, "%s.%d", c->asn_base, count->file_num);
+      c->asn1_out = StartAsnFile (filename, c->sbp, c->desc_list);
+      if (c->asn1_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c->has_errors, filename);
+        rval = 0;
+      }
+    }
+    if (c->asn1_out != NULL) {
+      if (c->asn1_include_reads) {
+        sep = MakeContigSeqEntryWithReads (contig);
+      } else {
+        sep = MakeSeqEntryFromContig (contig);
+      }
+      if (c->desc_list != NULL) {
+        VisitBioseqsInSep (sep, c->desc_list, AddDescrToNucBioseqCallback);
+      }
+      SeqEntryAsnWrite(sep, c->asn1_out, c->atp);
+      sep = SeqEntryFree (sep);
+      if (count != NULL && c->contig_count >= count->num_contigs) {
+        c->asn1_out = EndAsnFile (c->asn1_out, c->sbp != NULL);
+      }
+    }
+    
+    /* write FASTA */
+    if (c->fasta_out == NULL
+        && c->fasta_base != NULL && count != NULL) {
+      sprintf (filename, "%s.%d", c->fasta_base, count->file_num);
+      c->fasta_out = FileOpen (filename, "w");
+      if (c->fasta_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c->has_errors, filename);
+        rval = 0;
+      }
+    }
+    if (c->fasta_out != NULL) {
+      WriteFASTAFromContig (contig, c->fasta_out);
+      if (count != NULL && c->contig_count >= count->num_contigs) {
+        FileClose (c->fasta_out);
+        c->fasta_out = NULL;
+      }
+    }
+
+    /* write quality scores */
+    if (c->qual_out == NULL
+        && c->qual_base != NULL && count != NULL) {
+      sprintf (filename, "%s.%d", c->qual_base, count->file_num);
+      c->qual_out = FileOpen (filename, "w");
+      if (c->qual_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c->has_errors, filename);
+        rval = 0;
+      }
+    }
+    if (c->qual_out != NULL) {
+      WriteContigQualScores (contig, c->qual_out);
+      if (count != NULL && c->contig_count >= count->num_contigs) {
+        FileClose (c->qual_out);
+        c->qual_out = NULL;
+      }
+    }
+
+    /* write XML */
+    if (c->xml_out == NULL
+        && c->xml_base != NULL && count != NULL) {
+      sprintf (filename, "%s.%d", c->xml_base, count->file_num);
+      c->xml_out = FileOpen (filename, "w");
+      WriteTraceAssemblyHeader ("UPDATE", c->subref, c->center_name, c->taxid, c->description, c->assembly,
+                                count->num_contigs, count->num_conbases, count->num_reads, count->num_readbases,
+                                c->xml_out);
+
+      if (c->xml_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c->has_errors, filename);
+        rval = 0;
+      }
+    }
+    if (c->xml_out != NULL) {
+      WriteTraceAssemblyFromContig (contig, c->xml_out);
+      if (count != NULL && c->contig_count >= count->num_contigs) {
+        WriteTraceAssemblyTrailer (c->xml_out);
+        FileClose (c->xml_out);
+        c->xml_out = NULL;
+      }
+    }
+  }
+
+  if (count != NULL && c->contig_count >= count->num_contigs) {
+    tmp = c->file_counts_list;
+    c->file_counts_list = tmp->next;
+    tmp->next = NULL;
+    tmp = ValNodeFreeData (tmp);
+    c->contig_count = 0;
+  }
+
+  return 1;
+}
+
+static void ReadLargeAceFile 
+(CharPtr acefile,
+ CharPtr asn1_out,
+ CharPtr fasta_out,
+ CharPtr template_in,
+ CharPtr qual_scores_out,
+ CharPtr xml_out,
+ CharPtr id_lookup,
+ char *has_errors,
+ Boolean recalculate_consensus,
+ Boolean recalculate_only_Ns,
+ CharPtr subref,
+ CharPtr center_name,
+ Int4    taxid,
+ CharPtr description,
+ CharPtr assembly,
+ Boolean no_lookup,
+ Boolean is_srr,
+ Boolean make_qual_scores,
+ Int4    chunk_size,
+ EReadNameType read_name_type,
+ Boolean include_reads)
+{
+  ReadBufferData    rbd;
+  ContigCallbackData c;
+  SeqEntryPtr old_scope;
+  FILE *f;
+  SeqSubmitPtr   ssp = NULL;
+  CitSubPtr      csp;
+  Pointer         dataptr;
+  Uint2           datatype;
+  SeqDescrPtr     sdp, sdp_next;
+  ContigFileListData file_count_list;
+  ContigCountCallbackPtr summ;
+
+  MemSet (&c, 0, sizeof (ContigCallbackData));
+
+  c.no_lookup = no_lookup;
+  c.is_srr = is_srr;
+  c.has_errors = has_errors;
+  c.asn1_include_reads = include_reads;
+  c.read_name_type = read_name_type;
+
+  /* filenames */
+  c.asn_base = asn1_out;
+  c.asn1_out = NULL;
+  c.fasta_base = fasta_out;
+  c.fasta_out = NULL;
+  c.qual_base = qual_scores_out;
+  c.qual_out = NULL;
+  c.xml_base = xml_out;
+  c.xml_out = NULL;
+
+  /* XML values */
+  c.subref = subref;
+  c.center_name = center_name;
+  c.taxid = taxid;
+  c.description = description;
+  c.assembly = assembly;
+
+  file_count_list.list = NULL;
+  file_count_list.current = NULL;
+  file_count_list.max_bases = chunk_size;
+
+  rbd.fp = OpenAceFile (acefile);
+  if (rbd.fp == NULL) {
+    WriteXMLMsgUnableToOpenFile (c.has_errors, acefile);
+    goto escape;
+  }
+  rbd.current_data = NULL;
+
+  ProcessLargeACEFileForContigFastaAndQualScores ( AbstractReadFunction, &rbd, 
+                                                          qual_scores_out == NULL ? make_qual_scores : TRUE,
+                                                          has_errors, ProcessContigCountCallback, &file_count_list);
+
+  FileClose (rbd.fp);
+  rbd.fp = NULL;
+
+  /* prepare XML output */
+  if (c.xml_base != NULL) {
+    if (chunk_size < 1) {
+      summ = SummarizeContigCountList (file_count_list.list);
+      c.xml_out = FileOpen (c.xml_base, "w");
+      if (c.xml_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.xml_base);
+        goto escape;
+      }
+      WriteTraceAssemblyHeader ("NEW", c.subref, c.center_name, c.taxid, c.description, c.assembly,
+                                summ->num_contigs, summ->num_conbases, summ->num_reads, summ->num_readbases,
+                                c.xml_out);
+      summ = MemFree (summ);
+      file_count_list.list = ValNodeFreeData (file_count_list.list);
+    } else {
+#ifdef ONE_CONTIG_FOR_FIRST
+      /* temporarily, start the first file instead, which will have just one contig */
+      c.xml_out = FileOpen (c.xml_base, "w");
+      if (c.xml_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.xml_base);
+        goto escape;
+      }
+      summ = (ContigCountCallbackPtr) file_count_list.list->data.ptrvalue;
+      WriteTraceAssemblyHeader ("NEW", c.subref, c.center_name, c.taxid, c.description, c.assembly,
+                                summ->num_contigs, summ->num_conbases, summ->num_reads, summ->num_readbases,
+                                c.xml_out);
+#else
+      f = FileOpen (c.xml_base, "w");
+      if (f == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.xml_base);
+        goto escape;
+      }
+      WriteTraceAssemblyHeader ("NEW", c.subref, c.center_name, c.taxid, c.description, c.assembly,
+                                0, 0, 0, 0,
+                                f);
+      WriteTraceAssemblyTrailer (f);
+      FileClose (f);
+#endif
+    }
+  } else {
+    if (chunk_size < 1) {
+      file_count_list.list = ValNodeFreeData (file_count_list.list);
+    }
+  }
+
+  c.file_counts_list = file_count_list.list;
+
+  /* read template file */
+  c.sbp = NULL;
+  c.desc_list = NULL;
+  if (!StringHasNoText (template_in)) {
+    f = FileOpen (template_in, "r");
+    if (f == NULL) {
+      WriteXMLMsgUnableToOpenFile (c.has_errors, template_in);
+      goto escape;
+    }
+    while ((dataptr = ReadAsnFastaOrFlatFile (f, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+      if (datatype == OBJ_SEQSUB) {
+        ssp = (SeqSubmitPtr) dataptr;
+        c.sbp = ssp->sub;
+        ssp->sub = NULL;
+        ssp = SeqSubmitFree (ssp);
+      } else if (datatype == OBJ_SUBMIT_BLOCK) {
+        c.sbp = (SubmitBlockPtr) dataptr;
+      } else if (datatype == OBJ_SEQDESC) {
+        ValNodeLink (&(c.desc_list), (ValNodePtr) dataptr);
+      } else {
+        ObjMgrFree (datatype, dataptr);
+      }
+    }
+    FileClose (f);
+    if (c.sbp != NULL) {
+      c.sbp->tool = MemFree (c.sbp->tool);
+      c.sbp->tool = StringSave ("aceread");
+      c.sbp->hup = FALSE;
+      c.sbp->reldate = DateFree (c.sbp->reldate);
+      csp = c.sbp->cit;
+      if (csp != NULL) {
+        csp->date = DateFree (csp->date);
+        csp->date = DateCurr ();
+      }
+    }
+  }
+
+  c.atp = AsnFind ("Bioseq-set.seq-set.E");
+
+  c.recalculate_consensus = recalculate_consensus;
+  c.recalculate_only_Ns = recalculate_only_Ns;
+
+  if (id_lookup != NULL) {
+    f = FileOpen (id_lookup, "r");
+    if (f == NULL) {
+      WriteXMLMsgUnableToOpenFile (c.has_errors, id_lookup);
+      goto escape;
+    }
+    c.id_replacement_list = ReadSeqIdPairListFromFile (f);
+    SeqEntrySetScope (old_scope);
+    FileClose (f);
+  }
+
+  if (chunk_size < 1) {
+    if (c.asn_base != NULL) {
+      c.asn1_out = StartAsnFile (c.asn_base, c.sbp, c.desc_list);
+      if (c.asn1_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.asn_base);
+        goto escape;
+      }
+    }
+    if (c.fasta_base != NULL) {
+      c.fasta_out = FileOpen (c.fasta_base, "w");
+      if (c.fasta_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.fasta_base);
+        goto escape;
+      }
+    }
+    if (c.qual_out != NULL) {
+      c.qual_out = FileOpen (c.qual_base, "w");
+      if (c.qual_out == NULL) {
+        WriteXMLMsgUnableToOpenFile (c.has_errors, c.qual_base);
+        goto escape;
+      }
+    }
+  }
+  
+  rbd.fp = OpenAceFile (acefile);
+  if (rbd.fp == NULL) {
+    WriteXMLMsgUnableToOpenFile (c.has_errors, acefile);
+    goto escape;
+  }
+  rbd.current_data = NULL;
+
+  ProcessLargeACEFileForContigFastaAndQualScores ( AbstractReadFunction, &rbd, 
+                                                          qual_scores_out == NULL ? FALSE : TRUE,
+                                                          has_errors, ProcessContigCallback, &c);
+
+
+escape:
+  FileClose (rbd.fp);
+  c.id_replacement_list = SeqIdReplaceListFree (c.id_replacement_list);
+  /* free c.desc_list */
+  for (sdp = c.desc_list; sdp != NULL; sdp = sdp_next) {
+    sdp_next = sdp->next;
+    sdp->next = NULL;
+    sdp = SeqDescrFree (sdp);
+  }
+  if (c.xml_out != NULL) {
+    WriteTraceAssemblyTrailer (c.xml_out);
+    FileClose (c.xml_out);
+    c.xml_out = NULL;
+  }
+  if (c.asn1_out != NULL) {
+    c.asn1_out = EndAsnFile (c.asn1_out, c.sbp != NULL);
+  }
+  if (c.fasta_out != NULL) {
+    FileClose (c.fasta_out);
+    c.fasta_out = NULL;
+  }
+  if (c.qual_out != NULL) {
+    FileClose (c.qual_out);
+    c.qual_out = NULL;
+  }
+  c.sbp = SubmitBlockFree (c.sbp);
+}
+
+
 Int2 Main (void)
 
 {
@@ -620,7 +1525,7 @@ Int2 Main (void)
   SeqEntryPtr  last_sep = NULL;
   Uint2        entityID;
   Boolean      make_qual_scores, suppress_lookup, srr_ids, fasta_out;
-  CharPtr      submitter_ref = NULL, archive_id = NULL, description = NULL;
+  CharPtr      submitter_ref = NULL, archive_id = NULL, description = NULL, assembly = NULL;
   CharPtr      center_name = NULL;
   CharPtr      format = NULL;
   CharPtr      gap_string;
@@ -630,6 +1535,8 @@ Int2 Main (void)
   Boolean      recalculate_consensus = FALSE, recalculate_only_Ns = FALSE;
   CharPtr      recalculate_options;
   SeqSubmitPtr ssp;
+  CharPtr      id_substitution_file = NULL;
+  Int4         taxon_id = 0;
 
   /* standard setup */
 
@@ -707,10 +1614,18 @@ Int2 Main (void)
   if (!GetTSAFieldsFromString ((CharPtr) myargs [T_argTSAFields].strvalue,
                                &submitter_ref,
                                &archive_id,
-                               &description)) {
+                               &description,
+                               &assembly,
+                               &taxon_id)) {
     Message (MSG_FATAL, "Error reading TSA fields");
     return 1;
   }
+
+  if (!StringHasNoText (xmlfile) && (StringHasNoText (center_name) || taxon_id < 1)) {
+    PrintACEFormatErrorXML ("Must specify center name and taxid for XML output", NULL, &has_errors);
+    printf ("</aceread>\n");
+    return 1;
+  }        
 
   len = StringLen (infile);
   if (StringHasNoText (outfile)) {
@@ -727,9 +1642,32 @@ Int2 Main (void)
   }
 
   if (!StringHasNoText ((CharPtr) myargs [S_argIDSubstitutionFile].strvalue)) {
-    f = FileOpen (myargs [S_argIDSubstitutionFile].strvalue, "r");
+    id_substitution_file = ((CharPtr) myargs [S_argIDSubstitutionFile].strvalue);
+  }
+
+  if (StringChr (format, 'A') != NULL) {
+    ReadLargeAceFile (infile, fasta_out ? NULL : outfile,
+                      fasta_out ? outfile : NULL, 
+                      (CharPtr) myargs[t_argTemplateFile].strvalue,
+                      NULL, xmlfile, id_substitution_file, &has_errors,
+                      recalculate_consensus, recalculate_only_Ns,
+                      submitter_ref, center_name, taxon_id, description, assembly, 
+                      suppress_lookup, srr_ids, make_qual_scores,
+                      myargs[c_argChunkSize].intvalue,
+                      ReadNameTypeFromArg (myargs[n_argReadNameType].strvalue),
+                      (Boolean) myargs [z_argIncludeReads].intvalue);
+    if (has_errors) {
+      printf ("</aceread>\n");
+      return 1;
+    } else {
+      return 0;
+    }
+  }
+
+  if (id_substitution_file != NULL) {
+    f = FileOpen (id_substitution_file, "r");
     if (f == NULL) {
-      Message (MSG_FATAL, "Unable to open %s", myargs [S_argIDSubstitutionFile].strvalue);
+      Message (MSG_FATAL, "Unable to open %s", id_substitution_file);
       return 1;
     }
   }

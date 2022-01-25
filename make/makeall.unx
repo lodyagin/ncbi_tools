@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.293 2008/10/17 13:33:14 lavr Exp $
+#	$Id: makeall.unx,v 6.295 2009/02/04 19:15:43 lavr Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -708,10 +708,10 @@ copy :
 	$(SRCCOPY) ../connect/ncbi_lbsmd.h .
 	$(SRCCOPY) ../connect/ncbi_local.h .
 	$(SRCCOPY) ../connect/ncbi_lb.h .
-	$(SRCCOPY) ../connect/*.h ../include
+	$(SRCCOPY) ../connect/version.h .
+	$(SRCCOPY) ../connect/urlquery.h ../include
 	-mkdir ../include/connect
 	-chmod ug+rw,o+r ../include/connect
-	-rm ../include/ncbi_*.h ../include/connect_export.h
 	cp -fp ../connect/ncbi_*.h ../connect/connect_export.h ../include/connect
 	$(SRCCOPY) ../util/tables/*.c .
 	-mkdir -p ../include/util/tables

@@ -231,6 +231,9 @@ One or more protein Bioseqs have a general Seq-id.
 $^   HighNContent, 65
 This sequence contains too many Ns.
 
+$^   SeqLitDataLength0, 66
+A SeqLit component of a delta Bioseq must not have 0 length.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -448,6 +451,16 @@ $^   MultipleSourceVouchers, 60
 BioSource has unexpected multiple bio_material/culture_collection/specimen_voucher
 from the same institution.
 
+$^   BadCountryCapitalization, 61
+The country code does not use the correct capitalization.
+
+$^   WrongVoucherType, 62
+The institution (or institution: collection) code normally uses a different
+bio_material/culture_collection/specimen_voucher type.
+
+$^   UserObjectProblem, 63
+The user object is missing required fields or has invalid data.
+
 
 $$ GENERIC, 3
 
@@ -551,6 +564,19 @@ An outer BioseqSet should not contain an internal BioseqSet of class genbank.
 
 $^   ConSetProblem, 17
 BioseqSet class should not be conset.
+
+$^   NoBioseqFound, 18
+No Bioseqs were found in the entire record.
+
+$^   INSDRefSeqPackaging, 19
+INSD and RefSeq records should not be packaged together.
+
+$^   GPSnonGPSPackaging, 20
+Genomic product set records should not be packaged with other set types.
+
+$^   RefSeqPopSet, 21
+RefSeq records should not be packaged in a popset.
+
 
 $$ SEQ_FEAT, 5
 
@@ -1176,6 +1202,22 @@ Biological names or labels should not end with a hyphen.
 
 $^   MultipleGeneOverlap, 161
 This genes completely contains two or more other genes.
+
+$^ BadCharInAuthorLastName, 162
+An author name has illegal characters.
+
+$^   PseudoCDSmRNArange, 163
+A pseudo CDS is overlapped by an mRNA feature, but the mRNA does not cover all
+intervals (i.e., exons) on the CDS. This may be an annotation error.
+
+$^   ExtendablePartialProblem, 164
+A partial end of this feature does not abut a gap and does not include the first
+or last nucleotide in the sequence, but it could be extended by one or two
+nucleotides to do so.
+
+$^ GeneXrefNeeded, 165
+This feature has multiple overlapping genes of the same length and same name,
+but no xref to determine which one should be used for the /gene qualifier.
 
 $$ SEQ_ALIGN, 6
 

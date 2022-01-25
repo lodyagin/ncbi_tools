@@ -1,4 +1,4 @@
-/* $Id: ncbi_connutil.c,v 6.127 2008/11/13 05:49:43 kazimird Exp $
+/* $Id: ncbi_connutil.c,v 6.132 2009/02/11 17:24:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -349,53 +349,55 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         if ((info->scheme = s_ParseScheme(url, len)) == eURL_Unspec)
             return 0/*failure*/;
 
+        /* find end of host spec */
+        if (!(s = strchr(h, '/')))
+            s = h + strlen(h);
+        len = (size_t)(s - h);
+
         /* username:password */
-        if (!(a = strchr(h, '@'))) {
+        if (!(a = memchr(h, '@', len))) {
             info->user[0] = '\0';
             info->pass[0] = '\0';
         } else {
-            len = (size_t)(a - h);
-            s = (const char*) memchr(h, ':', len);
-            if (s)
-                len = (size_t)(s - h);
-            if (len < sizeof(info->user)) {
-                memcpy(info->user, h, len);
-                info->user[len] = '\0';
+            size_t   ulen = (size_t)(a - h);
+            const char* t = (const char*) memchr(h, ':', ulen);
+            if (t)
+                ulen = (size_t)(t - h);
+            if (ulen < sizeof(info->user)) {
+                memcpy(info->user, h, ulen);
+                info->user[ulen] = '\0';
             } else {
                 memcpy(info->user, h, sizeof(info->user) - 1);
                 info->user[sizeof(info->user) - 1] = '\0';
             }
-            if (s  &&  len) { /* take pass only if user non-empty */
-                len = (size_t)(a - ++s);
+            if (t  &&  ulen) { /* take pass only if user non-empty */
+                len = (size_t)(a - ++t);
                 if (len < sizeof(info->pass)) {
-                    memcpy(info->pass, s, len);
+                    memcpy(info->pass, t, len);
                     info->pass[len] = '\0';
                 } else {
-                    memcpy(info->pass, s, sizeof(info->pass) - 1);
+                    memcpy(info->pass, t, sizeof(info->pass) - 1);
                     info->pass[sizeof(info->pass) - 1] = '\0';
                 }
             } else
                 info->pass[0] = '\0';
             h = ++a;
+            len = (size_t)(s - h);
         }
 
-        if (!(s = strchr(h, '/')))
-            s = h + strlen(h);
-
         /* host ends at "s" here */
-        len = (size_t)(s - h);
         if (!(a = (const char*) memchr(h, ':', len))) {
-            a = s;
             info->port = 0/*default*/;
-        } else {
+            /*len remains unchanged*/
+        } else if (isdigit(a[1])) {
             unsigned short port;
             int n;
             if (sscanf(a, ":%hu%n", &port, &n) < 1  ||  a + n != s  ||  !port)
                 return 0/*failure*/;
             info->port = port;
-        }
-        /* host ends at "a" here */
-        len = (size_t)(a - h);
+            len = (size_t)(a - h);
+        } else
+            return 0/*failure*/;
         if (len < sizeof(info->host)) {
             memcpy(info->host, h, len);
             info->host[len] = '\0';
@@ -810,42 +812,43 @@ static const char* s_ClientAddress(const char* client_host,
 }
 
 
-extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info)
+extern int/*bool*/ ConnNetInfo_SetupStandardArgs(SConnNetInfo* info,
+                                                 const char*   service)
 {
-    static const char service[]  = "service";
-    static const char address[]  = "address";
-    static const char platform[] = "platform";
+    static const char kService[]  = "service";
+    static const char kAddress[]  = "address";
+    static const char kPlatform[] = "platform";
     int/*bool*/ local_host;
     const char* arch;
     const char* addr;
 
     if (!info)
         return 0/*failed*/;
-    if (!info->service  ||  !*info->service) {
+    if (!service  ||  !*service) {
         assert(0);
         return 0/*failed*/;
     }
     /* Dispatcher CGI args (may sacrifice some if they don't fit altogether) */
     if (!(arch = CORE_GetPlatform())  ||  !*arch)
-        ConnNetInfo_DeleteArg(info, platform);
+        ConnNetInfo_DeleteArg(info, kPlatform);
     else
-        ConnNetInfo_PreOverrideArg(info, platform, arch);
+        ConnNetInfo_PreOverrideArg(info, kPlatform, arch);
     local_host = !info->client_host[0];
     if (local_host  &&
         !SOCK_gethostbyaddr(0, info->client_host, sizeof(info->client_host))) {
         SOCK_gethostname(info->client_host, sizeof(info->client_host));
     }
     if (!(addr = s_ClientAddress(info->client_host, local_host))  ||  !*addr)
-        ConnNetInfo_DeleteArg(info, address);
+        ConnNetInfo_DeleteArg(info, kAddress);
     else
-        ConnNetInfo_PreOverrideArg(info, address, addr);
+        ConnNetInfo_PreOverrideArg(info, kAddress, addr);
     if (addr != info->client_host)
         free((void*) addr);
-    if (!ConnNetInfo_PreOverrideArg(info, service, info->service)) {
-        ConnNetInfo_DeleteArg(info, platform);
-        if (!ConnNetInfo_PreOverrideArg(info, service, info->service)) {
-            ConnNetInfo_DeleteArg(info, address);
-            if (!ConnNetInfo_PreOverrideArg(info, service, info->service))
+    if (!ConnNetInfo_PreOverrideArg(info, kService, service)) {
+        ConnNetInfo_DeleteArg(info, kPlatform);
+        if (!ConnNetInfo_PreOverrideArg(info, kService, service)) {
+            ConnNetInfo_DeleteArg(info, kAddress);
+            if (!ConnNetInfo_PreOverrideArg(info, kService, service))
                 return 0/*failed*/;
         }
     }
@@ -905,7 +908,7 @@ static const char* s_PortStr(unsigned short port, char buf[])
         sprintf(buf, "%hu", port);
         return buf;
     }
-    return 0;
+    return "<default>";
 }
 
 static void s_SaveStringQuot(char* s, const char* name,
@@ -922,6 +925,11 @@ static void s_SaveString(char* s, const char* name, const char* str)
     s_SaveStringQuot(s, name, str, 1);
 }
 
+static void s_SaveKeyval(char* s, const char* name, const char* str)
+{
+    s_SaveStringQuot(s, name, str, 0);
+}
+
 static void s_SaveULong(char* s, const char* name, unsigned long lll)
 {
     sprintf(s + strlen(s), "%-16.16s: %lu\n", name, lll);
@@ -932,64 +940,80 @@ static void s_SaveBool(char* s, const char* name, int/*bool*/ bbb)
     sprintf(s + strlen(s), "%-16.16s: %s\n", name, bbb ? "TRUE" : "FALSE");
 }
 
+static void s_SaveUserHeader(char* s, const char* name,
+                             const char* uh, size_t uhlen)
+{
+    s += strlen(s);
+    s += sprintf(s, "%-16.16s: ", name);
+    if (uh) {
+        *s++ = '"';
+        memcpy(UTIL_PrintableString(uh, uhlen, s, 0/*reduce*/), "\"\n", 3);
+    } else
+        memcpy(s, "NULL\n", 6);
+}
+
 extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
 {
-    char scheme[32];
-    char port[16];
-    char* s;
+    char   scheme[32];
+    char   port[16];
+    size_t uhlen;
+    char*  s;
 
     if (!lg)
         return;
 
     if (!info) {
         LOG_Write(lg, NCBI_C_ERRCODE_X, 10, eLOG_Trace, 0, 0, 0,
-                  "ConnNetInfo_Log: NULL info");
+                  "ConnNetInfo_Log: NULL info", 0, 0);
         return;
     }
 
-    if (!(s = (char*) malloc(sizeof(*info) + 4096 +
+    uhlen = info->http_user_header ? strlen(info->http_user_header) : 0;
+       
+    if (!(s = (char*) malloc(sizeof(*info) + 1024/*slack for all labels*/ +
                              (info->service ? strlen(info->service) : 0) +
-                             (info->http_user_header
-                              ? strlen(info->http_user_header) : 0) +
+                             UTIL_PrintableStringSize(info->http_user_header,
+                                                      uhlen) +
                              (info->http_referer
                               ? strlen(info->http_referer) : 0)))) {
         LOG_WRITE(lg, NCBI_C_ERRCODE_X, 11, eLOG_Error,
-                  "ConnNetInfo_Log: Cannot alloc temp buffer");
+                  "ConnNetInfo_Log: Cannot allocate temporary buffer");
         return;
     }
 
     strcpy(s, "ConnNetInfo_Log\n"
            "#################### [BEGIN] SConnNetInfo:\n");
     s_SaveString    (s, "service",         info->service);
-    s_SaveStringQuot(s, "client_host",     (*info->client_host
-                                            ? info->client_host
-                                            : "<default>"), 0);
+    if (*info->client_host)
+        s_SaveString(s, "client_host",     info->client_host);
+    else
+        s_SaveKeyval(s, "client_host",     "<default>");
     s_SaveString    (s, "scheme",          s_SchemeStr(info->scheme, scheme));
     s_SaveString    (s, "user",            info->user);
     s_SaveString    (s, "pass",            info->pass);
     s_SaveString    (s, "host",            info->host);
-    s_SaveStringQuot(s, "port",            s_PortStr(info->port, port), 0);
+    s_SaveKeyval    (s, "port",            s_PortStr(info->port, port));
     s_SaveString    (s, "path",            info->path);
     s_SaveString    (s, "args",            info->args);
-    s_SaveStringQuot(s, "req_method",     (info->req_method == eReqMethod_Any
+    s_SaveKeyval    (s, "req_method",     (info->req_method == eReqMethod_Any
                                            ? "ANY"
                                            : (info->req_method
                                               == eReqMethod_Get
                                               ? "GET"
                                               : (info->req_method
                                                  == eReqMethod_Post
-                                                 ? "POST" : "<unknown>"))), 0);
+                                                 ? "POST" : "<unknown>"))));
     if (info->timeout) {
         s_SaveULong (s, "timeout(sec)",    info->timeout->sec);
         s_SaveULong (s, "timeout(usec)",   info->timeout->usec);
     } else
-        s_SaveString(s, "timeout",         "infinite");
+        s_SaveKeyval(s, "timeout",         "INFINITE");
     s_SaveULong     (s, "max_try",         info->max_try);
     s_SaveString    (s, "http_proxy_host", info->http_proxy_host);
-    s_SaveStringQuot(s, "http_proxy_port", s_PortStr(info->http_proxy_port,
-                                                     port), 0);
+    s_SaveKeyval    (s, "http_proxy_port", s_PortStr(info->http_proxy_port,
+                                                     port));
     s_SaveString    (s, "proxy_host",      info->proxy_host);
-    s_SaveStringQuot(s, "debug_printout", (info->debug_printout
+    s_SaveKeyval    (s, "debug_printout", (info->debug_printout
                                            == eDebugPrintout_None
                                            ? "NONE"
                                            : (info->debug_printout
@@ -997,16 +1021,16 @@ extern void ConnNetInfo_Log(const SConnNetInfo* info, LOG lg)
                                               ? "SOME"
                                               : (info->debug_printout
                                                  == eDebugPrintout_Data
-                                                 ? "DATA" : "<unknown>"))), 0);
+                                                 ? "DATA" : "<unknown>"))));
     s_SaveBool      (s, "stateless",       info->stateless);
     s_SaveBool      (s, "firewall",        info->firewall);
     s_SaveBool      (s, "lb_disable",      info->lb_disable);
-    s_SaveString    (s, "http_user_header",info->http_user_header);
+    s_SaveUserHeader(s, "http_user_header",info->http_user_header, uhlen);
     s_SaveString    (s, "http_referer",    info->http_referer);
     s_SaveBool      (s, "proxy_adjusted",  info->http_proxy_adjusted);
     strcat(s, "#################### [END] SConnNetInfo\n");
 
-    LOG_Write(lg, NCBI_C_ERRCODE_X, 12, eLOG_Trace, 0, 0, 0, s);
+    LOG_Write(lg, NCBI_C_ERRCODE_X, 12, eLOG_Trace, 0, 0, 0, s, 0, 0);
     free(s);
 }
 

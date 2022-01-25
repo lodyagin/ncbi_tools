@@ -33,4 +33,4 @@ Ssequin.exe: sequin;-D INTERNAL_NCBI_SEQUIN USE_SMARTNET TAXSERVICE
 -L netentr.lib vibnet.lib ncbicn3d.lib ncbidesk.lib ddvlib.lib ncbimmdb.lib
 -L blast.lib blastapi.lib ncbispel.lib ncbiid1.lib netblast.lib ncbitool.lib
 -L ncbimla.lib ncbiacc.lib netcli.lib ncbitxc2.lib smartnet.lib;-I corelib object asn cdromlib desktop vibrant api connect
--S shell32.lib comdlg32.lib advapi32.lib ws2_32.lib Gdi32.lib Kernel32.lib User32.lib ws2_32.lib wsock32.lib
+-S shell32.lib comdlg32.lib advapi32.lib ws2_32.lib Gdi32.lib Kernel32.lib User32.lib ws2_32.lib 

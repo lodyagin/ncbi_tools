@@ -1,4 +1,4 @@
-/* $Id: ncbi_http_connector.c,v 6.92 2008/11/10 17:14:42 kazimird Exp $
+/* $Id: ncbi_http_connector.c,v 6.94 2009/02/04 20:49:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -285,7 +285,7 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,
     EIO_Status status;
 
     for (;;) {
-        char*  null = 0;
+        char* null = 0;
 
         if (!uuu->sock) {
             if ((status = s_Connect(uuu, read_mode)) != eIO_Success)
@@ -417,7 +417,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu,
     }
 
     /* HTTP status must come on the first line of the response */
-    if (sscanf(header, "HTTP/%*d.%*d %d ", &http_status) != 1  ||  !http_status)
+    if (sscanf(header, "HTTP/%*d.%*d %d ", &http_status) != 1 || !http_status)
         http_status = -1;
     if (http_status < 200  ||  299 < http_status) {
         server_error = http_status;
@@ -474,7 +474,7 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu,
                         }
                     } else {
                         s_MessageIssued = -1;
-                        CORE_LOGF_X(10, eLOG_Warning,
+                        CORE_LOGF_X(10, eLOG_Critical,
                                     ("[NCBI-MESSAGE]  %.*s",
                                      (int)(s - message), message));
                     }
@@ -862,7 +862,7 @@ static char* s_VT_Descr
         sprintf(&buf[len], "%s%s%s%s%s", uuu->net_info->http_proxy_adjusted
                 ? "<" : *uuu->net_info->path != '/'
                 ? "/" : "", uuu->net_info->path,
-                &"&"[!*uuu->net_info->args], uuu->net_info->args,
+                &"?"[!*uuu->net_info->args], uuu->net_info->args,
                 ">" + !uuu->net_info->http_proxy_adjusted);
     }
     return buf;
@@ -1152,7 +1152,7 @@ static CONNECTOR s_CreateConnector
         ConnNetInfo_OverrideUserHeader(xxx, user_header);
     s_AddReferer(xxx);
 
-    ConnNetInfo_GetValue(0, "HTTP_INSECURE_REDIRECT", value, sizeof(value), "");
+    ConnNetInfo_GetValue(0, "HTTP_INSECURE_REDIRECT", value, sizeof(value),"");
     if (*value  &&  (strcmp    (value, "1")    == 0  ||
                      strcasecmp(value, "true") == 0  ||
                      strcasecmp(value, "yes")  == 0  ||
@@ -1170,17 +1170,17 @@ static CONNECTOR s_CreateConnector
 
     uuu->flags            = flags;
     uuu->reserved         = 0;
-    uuu->can_connect      = eCC_Once;         /* will be properly set at open */
+    uuu->can_connect      = eCC_Once;         /* will be properly set at open*/
 
-    ConnNetInfo_GetValue(0, "HTTP_ERROR_HEADER_ONLY", value, sizeof(value), "");
+    ConnNetInfo_GetValue(0, "HTTP_ERROR_HEADER_ONLY", value, sizeof(value),"");
     uuu->error_header = (*value  &&  (strcmp    (value, "1")    == 0  ||
                                       strcasecmp(value, "true") == 0  ||
                                       strcasecmp(value, "yes")  == 0  ||
                                       strcasecmp(value, "on")   == 0));
 
     uuu->sock             = 0;
-    uuu->o_timeout        = kDefaultTimeout;  /* deliberately bad values --   */
-    uuu->w_timeout        = kDefaultTimeout;  /* must be reset prior to use   */
+    uuu->o_timeout        = kDefaultTimeout;  /* deliberately bad values --  */
+    uuu->w_timeout        = kDefaultTimeout;  /* must be reset prior to use  */
     uuu->http             = 0;
     uuu->r_buf            = 0;
     uuu->w_buf            = 0;

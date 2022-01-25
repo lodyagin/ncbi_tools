@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.90 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -161,6 +161,843 @@ typedef struct genbioform {
   LookupTaxonomyProc  lookupTaxonomy;
 } GenBioForm, PNTR GenBioFormPtr;
 
+#ifndef WIN16
+static CharPtr taxlistMemStrs [] = {
+  "15\n",
+  "Acanthamoeba castellanii\t\t1\t4\tINV\t5755\n",
+  "Acanthoscurria gomesiana\t\t1\t5\tINV\t115339\n",
+  "Acetabularia acetabulum\t\t6\t1\tPLN\t35845\n",
+  "Acipenser sinensis\tChinese sturgeon\t1\t2\tVRT\t61970\n",
+  "Acipenser transmontanus\twhite sturgeon\t1\t2\tVRT\t7904\n",
+  "Acorus americanus\t\t1\t1\tPLN\t263995\n",
+  "Acropora millepora\t\t1\t4\tINV\t45264\n",
+  "Acropora palmata\t\t1\t4\tINV\t6131\n",
+  "Acyrthosiphon pisum\tpea aphid\t1\t5\tINV\t7029\n",
+  "Adiantum capillus-veneris\t\t1\t1\tPLN\t13818\n",
+  "Aedes aegypti\tyellow fever mosquito\t1\t5\tINV\t7159\n",
+  "Aegilops speltoides\t\t1\t1\tPLN\t4573\n",
+  "Aegilops tauschii\t\t1\t1\tPLN\t37682\n",
+  "Agrostis capillaris\t\t1\t1\tPLN\t204232\n",
+  "Agrostis stolonifera\t\t1\t1\tPLN\t63632\n",
+  "Ajellomyces capsulatus\t\t1\t4\tPLN\t5037\n",
+  "Ajellomyces capsulatus NAm1\t\t1\t4\tPLN\t339724\n",
+  "Alexandrium tamarense\t\t1\t4\tPLN\t2926\n",
+  "Alligator mississippiensis\tAmerican alligator\t1\t2\tVRT\t8496\n",
+  "Allium cepa\tonion\t1\t1\tPLN\t4679\n",
+  "Allomyces macrogynus\t\t1\t4\tPLN\t28583\n",
+  "Alternaria brassicicola\t\t1\t4\tPLN\t29001\n",
+  "Amblyomma americanum\tlone star tick\t1\t5\tINV\t6943\n",
+  "Amblyomma variegatum\t\t1\t5\tINV\t34610\n",
+  "Amborella trichopoda\t\t1\t1\tPLN\t13333\n",
+  "Ambystoma mexicanum\taxolotl\t1\t2\tVRT\t8296\n",
+  "Ambystoma ordinarium\tPuerto Hondo stream salamander\t1\t2\tVRT\t288796\n",
+  "Ambystoma tigrinum tigrinum\tEastern tiger salamander\t1\t2\tVRT\t43116\n",
+  "Amoebidium parasiticum\t\t1\t4\tINV\t4881\n",
+  "Amorphotheca resinae\tcreosote fungus\t1\t4\tPLN\t5101\n",
+  "Amphidinium carterae\t\t1\t4\tPLN\t2961\n",
+  "Ananas comosus\tpineapple\t1\t1\tPLN\t4615\n",
+  "Anas platyrhynchos\t\t1\t2\tVRT\t8839\n",
+  "Ancylostoma caninum\tdog hookworm\t1\t5\tINV\t29170\n",
+  "Ancylostoma ceylanicum\t\t1\t5\tINV\t53326\n",
+  "Anolis carolinensis\tgreen anole\t1\t2\tVRT\t28377\n",
+  "Anolis sagrei\tbrown anole\t1\t2\tVRT\t38937\n",
+  "Anopheles albimanus\t\t1\t5\tINV\t7167\n",
+  "Anopheles funestus\tAfrican malaria mosquito\t1\t5\tINV\t62324\n",
+  "Anopheles gambiae\tAfrican malaria mosquito\t1\t5\tINV\t7165\n",
+  "Anopheles gambiae str. PEST\t\t1\t5\tINV\t180454\n",
+  "Antheraea mylitta\t\t1\t5\tINV\t34739\n",
+  "Antirrhinum majus\tsnapdragon\t1\t1\tPLN\t4151\n",
+  "Antonospora locustae\t\t1\t1\tINV\t278021\n",
+  "Antrodia cinnamomea\t\t1\t4\tPLN\t279009\n",
+  "Aphanomyces cochlioides\t\t1\t1\tPLN\t112091\n",
+  "Aphis gossypii\tcotton aphid\t1\t5\tINV\t80765\n",
+  "Apis mellifera\thoney bee\t1\t5\tINV\t7460\n",
+  "Aplysia californica\tCalifornia sea hare\t1\t5\tINV\t6500\n",
+  "Aquilegia formosa\t\t1\t1\tPLN\t223430\n",
+  "Arabidopsis lyrata subsp. petraea\t\t1\t1\tPLN\t59691\n",
+  "Arabidopsis thaliana\tthale cress\t1\t1\tPLN\t3702\n",
+  "Arachis batizocoi\t\t1\t1\tPLN\t108210\n",
+  "Arachis duranensis\t\t1\t1\tPLN\t130453\n",
+  "Arachis hypogaea\tpeanut\t1\t1\tPLN\t3818\n",
+  "Arachis stenosperma\t\t1\t1\tPLN\t217475\n",
+  "Argas monolakensis\t\t1\t5\tINV\t34602\n",
+  "Argopecten irradians\t\t1\t5\tINV\t31199\n",
+  "Ascaris suum\tpig roundworm\t1\t5\tINV\t6253\n",
+  "Ascosphaera apis USDA-ARSEF 7405\t\t1\t4\tPLN\t392613\n",
+  "Ashbya gossypii ATCC 10895\t\t1\t3\tPLN\t284811\n",
+  "Asparagus officinalis\tgarden asparagus\t1\t1\tPLN\t4686\n",
+  "Aspergillus clavatus NRRL 1\t\t1\t4\tPLN\t344612\n",
+  "Aspergillus flavus\t\t1\t4\tPLN\t5059\n",
+  "Aspergillus flavus NRRL3357\t\t1\t4\tPLN\t332952\n",
+  "Aspergillus fumigatus Af293\t\t1\t4\tPLN\t330879\n",
+  "Aspergillus nidulans FGSC A4\t\t1\t4\tPLN\t227321\n",
+  "Aspergillus niger\t\t1\t4\tPLN\t5061\n",
+  "Aspergillus niger CBS 513.88\t\t1\t4\tPLN\t425011\n",
+  "Aspergillus oryzae\t\t1\t4\tPLN\t5062\n",
+  "Aspergillus terreus NIH2624\t\t1\t4\tPLN\t341663\n",
+  "Astatotilapia burtoni\t\t1\t2\tVRT\t8153\n",
+  "Aureobasidium pullulans\t\t1\t4\tPLN\t5580\n",
+  "Avena sativa\toat\t1\t1\tPLN\t4498\n",
+  "Babesia bovis\t\t1\t4\tINV\t5865\n",
+  "Bacillus cereus\t\t11\t0\tBCT\t1396\n",
+  "Bacillus clausii\t\t11\t0\tBCT\t79880\n",
+  "Bacillus licheniformis\t\t11\t0\tBCT\t1402\n",
+  "Bacillus subtilis\t\t11\t0\tBCT\t1423\n",
+  "Bemisia tabaci\t\t1\t5\tINV\t7038\n",
+  "Beta vulgaris\t\t1\t1\tPLN\t161934\n",
+  "Betula pendula\tEuropean white birch\t1\t1\tPLN\t3505\n",
+  "Bicyclus anynana\tsquinting bush brown\t1\t5\tINV\t110368\n",
+  "Bigelowiella natans\t\t1\t1\tINV\t227086\n",
+  "Biomphalaria glabrata\t\t1\t5\tINV\t6526\n",
+  "Blastocladiella emersonii\t\t1\t4\tPLN\t4808\n",
+  "Blastocystis hominis\t\t1\t1\tPLN\t12968\n",
+  "Blumeria graminis f. sp. hordei\t\t1\t4\tPLN\t62688\n",
+  "Boechera stricta\t\t1\t1\tPLN\t72658\n",
+  "Bombyx mori\tdomestic silkworm\t1\t5\tINV\t7091\n",
+  "Borrelia burgdorferi\tLyme disease spirochete\t11\t0\tBCT\t139\n",
+  "Bos indicus\t\t1\t2\tMAM\t9915\n",
+  "Bos taurus\tcattle\t1\t2\tMAM\t9913\n",
+  "Botryotinia fuckeliana\t\t1\t4\tPLN\t40559\n",
+  "Botryotinia fuckeliana B05.10\t\t1\t4\tPLN\t332648\n",
+  "Brachionus plicatilis\t\t1\t5\tINV\t10195\n",
+  "Brachypodium distachyon\t\t1\t1\tPLN\t15368\n",
+  "Bradyrhizobium japonicum\t\t11\t0\tBCT\t375\n",
+  "Branchiostoma floridae\tFlorida lancelet\t1\t5\tINV\t7739\n",
+  "Brassica carinata\t\t1\t1\tPLN\t52824\n",
+  "Brassica napus\trape\t1\t1\tPLN\t3708\n",
+  "Brassica oleracea\t\t1\t1\tPLN\t3712\n",
+  "Brassica oleracea var. alboglabra\tChinese kale\t1\t1\tPLN\t3714\n",
+  "Brassica oleracea var. italica\tasparagus broccoli\t1\t1\tPLN\t36774\n",
+  "Brassica rapa\t\t1\t1\tPLN\t3711\n",
+  "Brassica rapa subsp. pekinensis\t\t1\t1\tPLN\t51351\n",
+  "Brucella abortus\t\t11\t0\tBCT\t235\n",
+  "Brugia malayi\t\t1\t5\tINV\t6279\n",
+  "Bruguiera gymnorhiza\t\t1\t1\tPLN\t39984\n",
+  "Bubalus bubalis\twater buffalo\t1\t2\tMAM\t89462\n",
+  "Burkholderia pseudomallei 112\t\t11\t0\tBCT\t441154\n",
+  "Burkholderia pseudomallei 14\t\t11\t0\tBCT\t441160\n",
+  "Burkholderia pseudomallei 381\t\t11\t0\tBCT\t441157\n",
+  "Burkholderia pseudomallei 7894\t\t11\t0\tBCT\t441156\n",
+  "Burkholderia pseudomallei 9\t\t11\t0\tBCT\t441158\n",
+  "Burkholderia pseudomallei 91\t\t11\t0\tBCT\t441159\n",
+  "Burkholderia pseudomallei B7210\t\t11\t0\tBCT\t441155\n",
+  "Burkholderia pseudomallei DM98\t\t11\t0\tBCT\t441161\n",
+  "Bursaphelenchus mucronatus\t\t1\t5\tINV\t6325\n",
+  "Bursaphelenchus xylophilus\t\t1\t5\tINV\t6326\n",
+  "Caenorhabditis brenneri\t\t1\t5\tINV\t135651\n",
+  "Caenorhabditis briggsae\t\t1\t5\tINV\t6238\n",
+  "Caenorhabditis briggsae AF16\t\t1\t5\tINV\t473542\n",
+  "Caenorhabditis elegans\t\t1\t5\tINV\t6239\n",
+  "Caenorhabditis remanei\t\t1\t5\tINV\t31234\n",
+  "Calanus finmarchicus\t\t1\t5\tINV\t6837\n",
+  "Callinectes sapidus\tblue crab\t1\t5\tINV\t6763\n",
+  "Callithrix jacchus\twhite-tufted-ear marmoset\t1\t2\tPRI\t9483\n",
+  "Callorhinchus milii\telephantfish\t1\t2\tVRT\t7868\n",
+  "Camellia sinensis\t\t1\t1\tPLN\t4442\n",
+  "Candida albicans\t\t12\t4\tPLN\t5476\n",
+  "Candida albicans SC5314\t\t12\t4\tPLN\t237561\n",
+  "Candida glabrata\t\t1\t3\tPLN\t5478\n",
+  "Candida glabrata CBS 138\t\t1\t3\tPLN\t284593\n",
+  "Candida parapsilosis\t\t12\t4\tPLN\t5480\n",
+  "Candida tropicalis\t\t12\t3\tPLN\t5482\n",
+  "candidate division TM7 single-cell isolate TM7a\t\t11\t0\tBCT\t447454\n",
+  "Canis latrans\tcoyote\t1\t2\tMAM\t9614\n",
+  "Canis lupus\tgray wolf\t1\t2\tMAM\t9612\n",
+  "Canis lupus familiaris\tdog\t1\t2\tMAM\t9615\n",
+  "Cannabis sativa\themp\t1\t1\tPLN\t3483\n",
+  "Capra hircus\tgoat\t1\t2\tMAM\t9925\n",
+  "Capsaspora owczarzaki\t\t1\t1\tINV\t192875\n",
+  "Capsicum annuum\t\t1\t1\tPLN\t4072\n",
+  "Carcinus maenas\tgreen crab\t1\t5\tINV\t6759\n",
+  "Carica papaya\tpapaya\t1\t1\tPLN\t3649\n",
+  "Carthamus tinctorius\tsafflower\t1\t1\tPLN\t4222\n",
+  "Catharanthus roseus\tMadagascar periwinkle\t1\t1\tPLN\t4058\n",
+  "Cavia porcellus\tdomestic guinea pig\t1\t2\tROD\t10141\n",
+  "Celuca pugilator\tAtlantic sand fiddler crab\t1\t5\tINV\t6772\n",
+  "Cenchrus ciliaris\t\t1\t1\tPLN\t35872\n",
+  "Centaurea maculosa\t\t1\t1\tPLN\t215693\n",
+  "Centaurea solstitialis\t\t1\t1\tPLN\t347529\n",
+  "Ceratodon purpureus\t\t1\t1\tPLN\t3225\n",
+  "Ceratopteris richardii\t\t1\t1\tPLN\t49495\n",
+  "Cercomonas longicauda\t\t1\t1\tINV\t100933\n",
+  "Chaetomium cupreum\t\t1\t4\tPLN\t155874\n",
+  "Chaetomium globosum CBS 148.51\t\t1\t4\tPLN\t306901\n",
+  "Chamaecyparis obtusa\t\t1\t1\tPLN\t13415\n",
+  "Chironomus tentans\t\t1\t5\tINV\t7153\n",
+  "Chlamydia trachomatis\t\t11\t0\tBCT\t813\n",
+  "Chlamydomonas incerta\t\t1\t1\tPLN\t51695\n",
+  "Chlamydomonas reinhardtii\t\t1\t1\tPLN\t3055\n",
+  "Chlamys farreri\t\t1\t5\tINV\t202578\n",
+  "Chlorocebus aethiops\tAfrican green monkey\t1\t2\tPRI\t9534\n",
+  "Chondrus crispus\tcarragheen\t1\t4\tPLN\t2769\n",
+  "Chrysemys picta\t\t1\t2\tVRT\t8479\n",
+  "Cicer arietinum\tchickpea\t1\t1\tPLN\t3827\n",
+  "Cichorium endivia\t\t1\t1\tPLN\t114280\n",
+  "Cichorium intybus\tchicory\t1\t1\tPLN\t13427\n",
+  "Ciona intestinalis\t\t1\t13\tINV\t7719\n",
+  "Ciona savignyi\t\t1\t13\tINV\t51511\n",
+  "Citrus aurantium\t\t1\t1\tPLN\t43166\n",
+  "Citrus clementina\t\t1\t1\tPLN\t85681\n",
+  "Citrus reshni\t\t1\t1\tPLN\t171252\n",
+  "Citrus reticulata\t\t1\t1\tPLN\t85571\n",
+  "Citrus sinensis\t\t1\t1\tPLN\t2711\n",
+  "Citrus unshiu\t\t1\t1\tPLN\t55188\n",
+  "Cleome hassleriana\t\t1\t1\tPLN\t28532\n",
+  "Clonorchis sinensis\t\t1\t9\tINV\t79923\n",
+  "Closterium peracerosum-strigosum-littorale complex\t\t1\t1\tPLN\t34146\n",
+  "Coccidioides immitis H538.4\t\t1\t4\tPLN\t396776\n",
+  "Coccidioides immitis RMSCC 3703\t\t1\t4\tPLN\t454286\n",
+  "Coccidioides immitis RS\t\t1\t4\tPLN\t246410\n",
+  "Coccidioides posadasii\t\t1\t4\tPLN\t199306\n",
+  "Coccidioides posadasii str. Silveira\t\t1\t4\tPLN\t443226\n",
+  "Coffea arabica\tcoffee\t1\t1\tPLN\t13443\n",
+  "Coffea canephora\t\t1\t1\tPLN\t49390\n",
+  "Coprinopsis cinerea\t\t1\t4\tPLN\t5346\n",
+  "Cordyceps bassiana\t\t1\t4\tPLN\t176275\n",
+  "Coregonus clupeaformis\tlake whitefish\t1\t2\tVRT\t59861\n",
+  "Corynascus heterothallicus\t\t1\t4\tPLN\t78579\n",
+  "Corynebacterium glutamicum\t\t11\t0\tBCT\t1718\n",
+  "Crassostrea gigas\tPacific oyster\t1\t5\tINV\t29159\n",
+  "Crassostrea virginica\teastern oyster\t1\t5\tINV\t6565\n",
+  "Cricetulus griseus\tChinese hamster\t1\t2\tROD\t10029\n",
+  "Crocus sativus\t\t1\t1\tPLN\t82528\n",
+  "Cryphonectria parasitica\t\t1\t4\tPLN\t5116\n",
+  "Cryptococcus laurentii\t\t1\t4\tPLN\t5418\n",
+  "Cryptococcus neoformans var. neoformans\t\t1\t4\tPLN\t40410\n",
+  "Cryptococcus neoformans var. neoformans B-3501A\t\t1\t4\tPLN\t283643\n",
+  "Cryptococcus neoformans var. neoformans JEC21\t\t1\t4\tPLN\t214684\n",
+  "Cryptomeria japonica\tJapanese cedar\t1\t1\tPLN\t3369\n",
+  "Cryptosporidium hominis TU502\t\t1\t4\tINV\t353151\n",
+  "Cryptosporidium parvum\t\t1\t4\tINV\t5807\n",
+  "Cryptosporidium parvum Iowa II\t\t1\t4\tINV\t353152\n",
+  "Ctenocephalides felis\tcat flea\t1\t5\tINV\t7515\n",
+  "Cucumis melo\tmuskmelon\t1\t1\tPLN\t3656\n",
+  "Cucumis melo subsp. agrestis\t\t1\t1\tPLN\t217619\n",
+  "Cucumis melo subsp. melo\t\t1\t1\tPLN\t412675\n",
+  "Cucumis sativus\tcucumber\t1\t1\tPLN\t3659\n",
+  "Culex pipiens quinquefasciatus\tsouthern house mosquito\t1\t5\tINV\t7176\n",
+  "Culicoides sonorensis\t\t1\t5\tINV\t179676\n",
+  "Cunninghamella elegans\t\t1\t4\tPLN\t4853\n",
+  "Curcuma longa\t\t1\t1\tPLN\t136217\n",
+  "Cyamopsis tetragonoloba\tguar\t1\t1\tPLN\t3832\n",
+  "Cyanidioschyzon merolae strain 10D\t\t1\t1\tPLN\t280699\n",
+  "Cyanophora paradoxa\t\t1\t1\tPLN\t2762\n",
+  "Cycas rumphii\t\t1\t1\tPLN\t58031\n",
+  "Cynodon dactylon\tBermuda grass\t1\t1\tPLN\t28909\n",
+  "Cyprinus carpio\tcommon carp\t1\t2\tVRT\t7962\n",
+  "Danio rerio\tzebrafish\t1\t2\tVRT\t7955\n",
+  "Daphnia magna\t\t1\t5\tINV\t35525\n",
+  "Dasypus novemcinctus\tnine-banded armadillo\t1\t2\tMAM\t9361\n",
+  "Debaryomyces hansenii CBS767\t\t1\t3\tPLN\t284592\n",
+  "Debaryomyces hansenii var. hansenii\t\t1\t3\tPLN\t58641\n",
+  "Deinagkistrodon acutus\t\t1\t2\tVRT\t36307\n",
+  "Dekkera bruxellensis\t\t1\t4\tPLN\t5007\n",
+  "Diabrotica virgifera virgifera\twestern corn rootworm\t1\t5\tINV\t50390\n",
+  "Diaphorina citri\tAsian citrus psyllid\t1\t5\tINV\t121845\n",
+  "Diaprepes abbreviatus\tDiaprepes root weevil\t1\t5\tINV\t13040\n",
+  "Dicentrarchus labrax\tEuropean sea bass\t1\t2\tVRT\t13489\n",
+  "Dictyocaulus viviparus\tbovine lungworm\t1\t5\tINV\t29172\n",
+  "Dictyostelium discoideum\t\t1\t1\tINV\t44689\n",
+  "Dictyostelium discoideum AX4\t\t1\t1\tINV\t352472\n",
+  "Diplonema papillatum\t\t1\t4\tINV\t91374\n",
+  "Dirofilaria immitis\tdog heartworm nematode\t1\t5\tINV\t6287\n",
+  "Drosophila ananassae\t\t1\t5\tINV\t7217\n",
+  "Drosophila auraria\t\t1\t5\tINV\t47315\n",
+  "Drosophila erecta\t\t1\t5\tINV\t7220\n",
+  "Drosophila grimshawi\t\t1\t5\tINV\t7222\n",
+  "Drosophila melanogaster\tfruit fly\t1\t5\tINV\t7227\n",
+  "Drosophila mojavensis\t\t1\t5\tINV\t7230\n",
+  "Drosophila persimilis\t\t1\t5\tINV\t7234\n",
+  "Drosophila pseudoobscura\t\t1\t5\tINV\t7237\n",
+  "Drosophila sechellia\t\t1\t5\tINV\t7238\n",
+  "Drosophila simulans\t\t1\t5\tINV\t7240\n",
+  "Drosophila virilis\t\t1\t5\tINV\t7244\n",
+  "Drosophila willistoni\t\t1\t5\tINV\t7260\n",
+  "Drosophila yakuba\t\t1\t5\tINV\t7245\n",
+  "Dugesia japonica\t\t1\t9\tINV\t6161\n",
+  "Dugesia ryukyuensis\t\t1\t9\tINV\t79738\n",
+  "Dunaliella salina\t\t1\t1\tPLN\t3046\n",
+  "Echinococcus granulosus\t\t1\t9\tINV\t6210\n",
+  "Echinops telfairi\tsmall Madagascar hedgehog\t1\t2\tMAM\t9371\n",
+  "Eimeria tenella\t\t1\t4\tINV\t5802\n",
+  "Eisenia fetida\tcommon brandling worm\t1\t5\tINV\t6396\n",
+  "Elaeis guineensis\tAfrican oil palm\t1\t1\tPLN\t51953\n",
+  "Elaeis oleifera\t\t1\t1\tPLN\t80265\n",
+  "Emericella nidulans\t\t1\t4\tPLN\t162425\n",
+  "Emiliania huxleyi\t\t1\t4\tPLN\t2903\n",
+  "Endoriftia persephone 'Hot96_1+Hot96_2'\t\t11\t0\tBCT\t394104\n",
+  "Entamoeba dispar\t\t1\t1\tINV\t46681\n",
+  "Entamoeba dispar SAW760\t\t1\t1\tINV\t370354\n",
+  "Entamoeba histolytica\t\t1\t1\tINV\t5759\n",
+  "Entamoeba histolytica HM-1:IMSS\t\t1\t1\tINV\t294381\n",
+  "Entamoeba invadens\t\t1\t1\tINV\t33085\n",
+  "Entamoeba invadens IP1\t\t1\t1\tINV\t370355\n",
+  "Entamoeba moshkovskii FIC\t\t1\t1\tINV\t434306\n",
+  "Entamoeba terrapinae\t\t1\t1\tINV\t110771\n",
+  "Epiphyas postvittana\t\t1\t5\tINV\t65032\n",
+  "Eptatretus burgeri\tinshore hagfish\t1\t2\tVRT\t7764\n",
+  "Equus caballus\thorse\t1\t2\tMAM\t9796\n",
+  "Eragrostis tef\t\t1\t1\tPLN\t110835\n",
+  "Erinaceus europaeus\twestern European hedgehog\t1\t2\tMAM\t9365\n",
+  "Escherichia coli\t\t11\t0\tBCT\t562\n",
+  "Eschscholzia californica\tCalifornia poppy\t1\t1\tPLN\t3467\n",
+  "Esox lucius\tnorthern pike\t1\t2\tVRT\t8010\n",
+  "Eubalaena glacialis\tNorth Atlantic right whale\t1\t2\tMAM\t27606\n",
+  "Eucalyptus camaldulensis\tMurray red gum\t1\t1\tPLN\t34316\n",
+  "Eucalyptus globulus subsp. bicostata\t\t1\t1\tPLN\t71272\n",
+  "Eucalyptus grandis\t\t1\t1\tPLN\t71139\n",
+  "Eucalyptus gunnii\tcider tree\t1\t1\tPLN\t3933\n",
+  "Euglena gracilis\t\t1\t4\tPLN\t3039\n",
+  "Euglena longa\t\t1\t4\tPLN\t3037\n",
+  "Euphorbia esula\tleafy spurge\t1\t1\tPLN\t3993\n",
+  "Euphorbia tirucalli\t\t1\t1\tPLN\t142860\n",
+  "Euprymna scolopes\t\t1\t5\tINV\t6613\n",
+  "Felis catus\tdomestic cat\t1\t2\tMAM\t9685\n",
+  "Fenneropenaeus chinensis\t\t1\t5\tINV\t139456\n",
+  "Festuca arundinacea\t\t1\t1\tPLN\t4606\n",
+  "Folsomia candida\t\t1\t5\tINV\t158441\n",
+  "fossil metagenome\t\t11\t2\tENV\t444079\n",
+  "Fragaria vesca\t\t1\t1\tPLN\t57918\n",
+  "Fragaria vesca subsp. vesca\t\t1\t1\tPLN\t101020\n",
+  "Fragilariopsis cylindrus\t\t1\t1\tPLN\t186039\n",
+  "Fundulus heteroclitus\tkillifish\t1\t2\tVRT\t8078\n",
+  "Fusarium oxysporum f. sp. cucumerinum\t\t1\t4\tPLN\t5508\n",
+  "Fusarium oxysporum f. sp. melonis\t\t1\t4\tPLN\t61369\n",
+  "Fusarium solani\t\t1\t4\tPLN\t169388\n",
+  "Fusarium sporotrichioides\t\t1\t4\tPLN\t5514\n",
+  "Fusarium virguliforme\t\t1\t4\tPLN\t232082\n",
+  "Gadus morhua\tAtlantic cod\t1\t2\tVRT\t8049\n",
+  "Gallus gallus\tchicken\t1\t2\tVRT\t9031\n",
+  "Gammarus pulex\t\t1\t5\tINV\t52641\n",
+  "Gasterosteus aculeatus\tthree-spined stickleback\t1\t2\tVRT\t69293\n",
+  "GB virus C\t\t1\t0\tVRL\t54290\n",
+  "Gekko japonicus\t\t1\t2\tVRT\t146911\n",
+  "Gene trapping vector VICTR75\t\t11\t0\tSYN\t447634\n",
+  "Gene trapping vector VICTR76\t\t11\t0\tSYN\t447635\n",
+  "Geomyces pannorum\t\t1\t4\tPLN\t79858\n",
+  "Gerbera hybrid cv. 'Terra Regina'\t\t1\t1\tPLN\t226891\n",
+  "Giardia intestinalis\t\t1\t0\tINV\t5741\n",
+  "Giardia lamblia ATCC 50803\t\t1\t0\tINV\t184922\n",
+  "Gibberella moniliformis\t\t1\t4\tPLN\t117187\n",
+  "Gibberella zeae\t\t1\t4\tPLN\t5518\n",
+  "Gibberella zeae PH-1\t\t1\t4\tPLN\t229533\n",
+  "Gillichthys mirabilis\tlong-jawed mudsucker\t1\t2\tVRT\t8222\n",
+  "Ginkgo biloba\tmaidenhair tree\t1\t1\tPLN\t3311\n",
+  "Glaucocystis nostochinearum\t\t1\t1\tPLN\t38271\n",
+  "Globodera pallida\t\t1\t5\tINV\t36090\n",
+  "Globodera rostochiensis\t\t1\t5\tINV\t31243\n",
+  "Gloeophyllum trabeum\t\t1\t4\tPLN\t104355\n",
+  "Glomus intraradices\t\t1\t4\tPLN\t4876\n",
+  "Glossina morsitans morsitans\t\t1\t5\tINV\t37546\n",
+  "Glycine max\tsoybean\t1\t1\tPLN\t3847\n",
+  "Glycine soja\t\t1\t1\tPLN\t3848\n",
+  "Glycyphagus domesticus\t\t1\t5\tINV\t105145\n",
+  "Gnetum gnemon\t\t1\t1\tPLN\t3382\n",
+  "Gobiocypris rarus\t\t1\t2\tVRT\t143606\n",
+  "Gorilla gorilla\tgorilla\t1\t2\tPRI\t9593\n",
+  "Gossypium arboreum\t\t1\t1\tPLN\t29729\n",
+  "Gossypium exiguum\t\t1\t1\tPLN\t47626\n",
+  "Gossypium herbaceum\t\t1\t1\tPLN\t34274\n",
+  "Gossypium hirsutum\tupland cotton\t1\t1\tPLN\t3635\n",
+  "Gossypium raimondii\t\t1\t1\tPLN\t29730\n",
+  "Gracilaria changii\t\t1\t4\tPLN\t172969\n",
+  "Graphocephala atropunctata\t\t1\t5\tINV\t36148\n",
+  "Grosmannia clavigera\t\t1\t4\tPLN\t226899\n",
+  "Gryllus bimaculatus\ttwo-spotted cricket\t1\t5\tINV\t6999\n",
+  "Guillardia theta\t\t1\t1\tPLN\t55529\n",
+  "Haemonchus contortus\t\t1\t5\tINV\t6289\n",
+  "Haemophilus influenzae\t\t11\t0\tBCT\t727\n",
+  "Halocynthia roretzi\t\t1\t13\tINV\t7729\n",
+  "Hartmannella vermiformis\t\t1\t1\tINV\t5778\n",
+  "Hebeloma cylindrosporum\t\t1\t4\tPLN\t76867\n",
+  "Hedyotis centranthoides\t\t1\t1\tPLN\t219666\n",
+  "Hedyotis terminalis\t\t1\t1\tPLN\t219667\n",
+  "Helianthus annuus\tcommon sunflower\t1\t1\tPLN\t4232\n",
+  "Helianthus argophyllus\t\t1\t1\tPLN\t73275\n",
+  "Helianthus ciliaris\t\t1\t1\tPLN\t73280\n",
+  "Helianthus exilis\t\t1\t1\tPLN\t400408\n",
+  "Helianthus paradoxus\t\t1\t1\tPLN\t73304\n",
+  "Helianthus petiolaris\t\t1\t1\tPLN\t4234\n",
+  "Helianthus tuberosus\t\t1\t1\tPLN\t4233\n",
+  "Helicobacter pylori\t\t11\t0\tBCT\t210\n",
+  "Heliconius erato\tcrimson-patched longwing\t1\t5\tINV\t33431\n",
+  "Heliconius melpomene\t\t1\t5\tINV\t34740\n",
+  "Hemicentrotus pulcherrimus\t\t1\t9\tINV\t7650\n",
+  "Hepatitis A virus\t\t1\t0\tVRL\t12092\n",
+  "Hepatitis B virus\t\t1\t0\tVRL\t10407\n",
+  "Hepatitis C virus\t\t1\t0\tVRL\t11103\n",
+  "Hepatitis C virus subtype 1a\t\t1\t0\tVRL\t31646\n",
+  "Hepatitis C virus subtype 1b\t\t1\t0\tVRL\t31647\n",
+  "Heterocapsa triquetra\t\t1\t4\tPLN\t66468\n",
+  "Heterodera glycines\t\t1\t5\tINV\t51029\n",
+  "Heterodera schachtii\t\t1\t5\tINV\t97005\n",
+  "Heterorhabditis bacteriophora\t\t1\t5\tINV\t37862\n",
+  "Hevea brasiliensis\t\t1\t1\tPLN\t3981\n",
+  "Hippoglossus hippoglossus\tAtlantic halibut\t1\t2\tVRT\t8267\n",
+  "Histiona aroides\t\t1\t1\tINV\t392300\n",
+  "Holothuria glaberrima\t\t1\t9\tINV\t31192\n",
+  "Homalodisca coagulata\tglassy-winged sharpshooter\t1\t5\tINV\t197043\n",
+  "Homarus americanus\tAmerican lobster\t1\t5\tINV\t6706\n",
+  "Homo sapiens\thuman\t1\t2\tPRI\t9606\n",
+  "Hordeum vulgare\t\t1\t1\tPLN\t4513\n",
+  "Hordeum vulgare subsp. spontaneum\t\t1\t1\tPLN\t77009\n",
+  "Hordeum vulgare subsp. vulgare\tdomesticated barley\t1\t1\tPLN\t112509\n",
+  "Human herpesvirus 5\tHuman cytomegalovirus\t1\t0\tVRL\t10359\n",
+  "Human immunodeficiency virus 1\t\t1\t0\tVRL\t11676\n",
+  "Human immunodeficiency virus 2\t\t1\t0\tVRL\t11709\n",
+  "Human metapneumovirus\t\t1\t0\tVRL\t162145\n",
+  "Human T-lymphotropic virus 1\t\t1\t0\tVRL\t11908\n",
+  "Humulus lupulus\tEuropean hop\t1\t1\tPLN\t3486\n",
+  "Hydra magnipapillata\t\t1\t4\tINV\t6085\n",
+  "Hydra vulgaris\t\t1\t4\tINV\t6087\n",
+  "Hydractinia echinata\t\t1\t4\tINV\t35630\n",
+  "Hyperamoeba dachnaya\t\t1\t1\tINV\t181200\n",
+  "Hypocrea jecorina\t\t1\t4\tPLN\t51453\n",
+  "Hypocrea lixii\t\t1\t4\tPLN\t5544\n",
+  "Hypocrea virens\t\t1\t4\tPLN\t29875\n",
+  "Hypsibius dujardini\t\t1\t5\tINV\t232323\n",
+  "Ichthyophthirius multifiliis\t\t6\t4\tINV\t5932\n",
+  "Ictalurus furcatus\tblue catfish\t1\t2\tVRT\t66913\n",
+  "Ictalurus punctatus\tchannel catfish\t1\t2\tVRT\t7998\n",
+  "Idiosepius paradoxus\t\t1\t5\tINV\t294707\n",
+  "Ipomoea batatas\tsweet potato\t1\t1\tPLN\t4120\n",
+  "Ipomoea nil\tJapanese morning glory\t1\t1\tPLN\t35883\n",
+  "Isochrysis galbana\t\t1\t1\tPLN\t37099\n",
+  "Ixodes scapularis\tblack-legged tick\t1\t5\tINV\t6945\n",
+  "Jakoba bahamiensis\t\t1\t1\tINV\t221721\n",
+  "Jakoba libera\t\t1\t1\tINV\t143017\n",
+  "Juglans regia\tEnglish walnut\t1\t1\tPLN\t51240\n",
+  "Karenia brevis\t\t1\t4\tPLN\t156230\n",
+  "Karlodinium micrum\t\t1\t4\tPLN\t342587\n",
+  "Kazachstania exigua\t\t1\t3\tPLN\t34358\n",
+  "Kazachstania unispora\t\t1\t3\tPLN\t27294\n",
+  "Kluyveromyces lactis\t\t1\t4\tPLN\t28985\n",
+  "Kluyveromyces lactis NRRL Y-1140\t\t1\t4\tPLN\t284590\n",
+  "Kluyveromyces marxianus\t\t1\t3\tPLN\t4911\n",
+  "Kluyveromyces thermotolerans\t\t1\t3\tPLN\t4916\n",
+  "Laccaria bicolor\t\t1\t4\tPLN\t29883\n",
+  "Lachancea kluyveri\t\t1\t3\tPLN\t4934\n",
+  "Lactuca perennis\t\t1\t1\tPLN\t43195\n",
+  "Lactuca saligna\t\t1\t1\tPLN\t75948\n",
+  "Lactuca sativa\t\t1\t1\tPLN\t4236\n",
+  "Lactuca serriola\t\t1\t1\tPLN\t75943\n",
+  "Lactuca virosa\t\t1\t1\tPLN\t75947\n",
+  "Lama pacos\talpaca\t1\t2\tMAM\t30538\n",
+  "Laminaria digitata\t\t1\t1\tPLN\t80365\n",
+  "Laupala kohalensis\t\t1\t5\tINV\t109027\n",
+  "Lawsonia intracellularis\t\t11\t0\tBCT\t29546\n",
+  "Leishmania braziliensis\t\t1\t4\tINV\t5660\n",
+  "Leishmania donovani chagasi\t\t1\t4\tINV\t44271\n",
+  "Leishmania infantum JPCM5\t\t1\t4\tINV\t435258\n",
+  "Leishmania major\t\t1\t4\tINV\t5664\n",
+  "Leishmania major strain Friedlin\t\t1\t4\tINV\t347515\n",
+  "Lentinula edodes\tshiitake mushroom\t1\t4\tPLN\t5353\n",
+  "Lepeophtheirus salmonis\tsalmon louse\t1\t5\tINV\t72036\n",
+  "Leptinotarsa decemlineata\tColorado potato beetle\t1\t5\tINV\t7539\n",
+  "Leucoraja erinacea\tlittle skate\t1\t2\tVRT\t7782\n",
+  "Leucosporidium scottii\t\t1\t4\tPLN\t5278\n",
+  "Limnanthes alba subsp. versicolor\t\t1\t1\tPLN\t377281\n",
+  "Limonium bicolor\t\t1\t1\tPLN\t293754\n",
+  "Lingulodinium polyedrum\t\t1\t4\tPLN\t160621\n",
+  "Linum usitatissimum\tflax\t1\t1\tPLN\t4006\n",
+  "Liriodendron tulipifera\t\t1\t1\tPLN\t3415\n",
+  "Listeria monocytogenes\t\t11\t0\tBCT\t1639\n",
+  "Listeria monocytogenes FSL F2-515\t\t11\t0\tBCT\t393116\n",
+  "Listeria monocytogenes FSL J1-208\t\t11\t0\tBCT\t393119\n",
+  "Lithognathus mormyrus\t\t1\t2\tVRT\t50591\n",
+  "Litomosoides sigmodontis\t\t1\t5\tINV\t42156\n",
+  "Litopenaeus vannamei\tPacific white shrimp\t1\t5\tINV\t6689\n",
+  "Locusta migratoria\tmigratory locust\t1\t5\tINV\t7004\n",
+  "Lodderomyces elongisporus NRRL YB-4239\t\t1\t3\tPLN\t379508\n",
+  "Lolium multiflorum\tItalian ryegrass\t1\t1\tPLN\t4521\n",
+  "Lolium temulentum\t\t1\t1\tPLN\t34176\n",
+  "Lotus japonicus\t\t1\t1\tPLN\t34305\n",
+  "Loxodonta africana\tAfrican savanna elephant\t1\t2\tMAM\t9785\n",
+  "Lumbricus rubellus\thumus earthworm\t1\t5\tINV\t35632\n",
+  "Lupinus albus\twhite lupine\t1\t1\tPLN\t3870\n",
+  "Lutzomyia longipalpis\t\t1\t5\tINV\t7200\n",
+  "Lycoris longituba\t\t1\t1\tPLN\t272140\n",
+  "Lysiphlebus testaceipes\t\t1\t5\tINV\t77504\n",
+  "Macaca fascicularis\tcrab-eating macaque\t1\t2\tPRI\t9541\n",
+  "Macaca mulatta\trhesus monkey\t1\t2\tPRI\t9544\n",
+  "Macaca nemestrina\tpig-tailed macaque\t1\t2\tPRI\t9545\n",
+  "Maconellicoccus hirsutus\thibiscus mealybug\t1\t5\tINV\t177089\n",
+  "Macropus eugenii\ttammar wallaby\t1\t2\tMAM\t9315\n",
+  "Macrostomum lignano\t\t1\t9\tINV\t282301\n",
+  "Magnaporthe grisea\t\t1\t4\tPLN\t148305\n",
+  "Magnaporthe grisea 70-15\t\t1\t4\tPLN\t242507\n",
+  "Magnetospirillum magnetotacticum MS-1\t\t11\t0\tBCT\t272627\n",
+  "Malawimonas californiana\t\t1\t1\tINV\t221722\n",
+  "Malawimonas jakobiformis\t\t1\t1\tINV\t136089\n",
+  "Manduca sexta\ttobacco hornworm\t1\t5\tINV\t7130\n",
+  "Manihot esculenta\tcassava\t1\t1\tPLN\t3983\n",
+  "Marchantia polymorpha\tliverwort\t1\t1\tPLN\t3197\n",
+  "marine metagenome\t\t11\t2\tENV\t408172\n",
+  "Marsupenaeus japonicus\t\t1\t5\tINV\t27405\n",
+  "Mastigamoeba balamuthi\t\t1\t1\tINV\t108607\n",
+  "Measles virus\t\t1\t0\tVRL\t11234\n",
+  "Medicago sativa\t\t1\t1\tPLN\t3879\n",
+  "Medicago truncatula\tbarrel medic\t1\t1\tPLN\t3880\n",
+  "Meleagris gallopavo\tturkey\t1\t2\tVRT\t9103\n",
+  "Meloidogyne arenaria\t\t1\t5\tINV\t6304\n",
+  "Meloidogyne chitwoodi\t\t1\t5\tINV\t59747\n",
+  "Meloidogyne hapla\t\t1\t5\tINV\t6305\n",
+  "Meloidogyne incognita\tsouthern root-knot nematode\t1\t5\tINV\t6306\n",
+  "Meloidogyne javanica\troot-knot nematode\t1\t5\tINV\t6303\n",
+  "Meloidogyne paranaensis\t\t1\t5\tINV\t189293\n",
+  "Mesembryanthemum crystallinum\tcommon iceplant\t1\t1\tPLN\t3544\n",
+  "Mesocricetus auratus\tgolden hamster\t1\t2\tROD\t10036\n",
+  "Mesostigma viride\t\t1\t1\tPLN\t41882\n",
+  "metagenome sequence\t\t11\t2\tENV\t256318\n",
+  "Metarhizium anisopliae\t\t1\t4\tPLN\t5530\n",
+  "Microbotryum violaceum\t\t1\t4\tPLN\t5272\n",
+  "Microcebus murinus\tgray mouse lemur\t1\t2\tPRI\t30608\n",
+  "Mimulus guttatus\tspotted monkey flower\t1\t1\tPLN\t4155\n",
+  "Mimulus lewisii\t\t1\t1\tPLN\t69919\n",
+  "Misgurnus anguillicaudatus\toriental weatherfish\t1\t2\tVRT\t75329\n",
+  "Molgula tectiformis\t\t1\t13\tINV\t30286\n",
+  "Monacrosporium haptotylum\t\t1\t4\tPLN\t74495\n",
+  "Monodelphis domestica\tgray short-tailed opossum\t1\t2\tMAM\t13616\n",
+  "Monosiga ovata\t\t1\t1\tINV\t81526\n",
+  "mouse gut metagenome\t\t11\t2\tENV\t410661\n",
+  "Mus musculus\thouse mouse\t1\t2\tROD\t10090\n",
+  "Mus musculus domesticus\twestern European house mouse\t1\t2\tROD\t10092\n",
+  "Mus musculus molossinus\tJapanese wild mouse\t1\t2\tROD\t57486\n",
+  "Musa acuminata\tdessert banana\t1\t1\tPLN\t4641\n",
+  "Mycobacterium tuberculosis\t\t11\t0\tBCT\t1773\n",
+  "Mycosphaerella graminicola\t\t1\t4\tPLN\t54734\n",
+  "Myotis lucifugus\tlittle brown bat\t1\t2\tMAM\t59463\n",
+  "Mytilus californianus\tCalifornia mussel\t1\t5\tINV\t6549\n",
+  "Mytilus galloprovincialis\tMediterranean mussel\t1\t5\tINV\t29158\n",
+  "Myzus persicae\tgreen peach aphid\t1\t5\tINV\t13164\n",
+  "Nakaseomyces delphensis\t\t1\t3\tPLN\t51657\n",
+  "Nasonia giraulti\t\t1\t5\tINV\t7426\n",
+  "Nasonia vitripennis\tjewel wasp\t1\t5\tINV\t7425\n",
+  "Necator americanus\t\t1\t5\tINV\t51031\n",
+  "Neisseria gonorrhoeae\t\t11\t0\tBCT\t485\n",
+  "Neisseria meningitidis\t\t11\t0\tBCT\t487\n",
+  "Nelumbo nucifera\t\t1\t1\tPLN\t4432\n",
+  "Nematostella vectensis\tstarlet sea anemone\t1\t4\tINV\t45351\n",
+  "Neosartorya fischeri NRRL 181\t\t1\t4\tPLN\t331117\n",
+  "Neospora caninum\t\t1\t4\tINV\t29176\n",
+  "Neovison vison\t\t1\t2\tMAM\t452646\n",
+  "Neurospora crassa\t\t1\t4\tPLN\t5141\n",
+  "Neurospora crassa OR74A\t\t1\t4\tPLN\t367110\n",
+  "Newcastle disease virus\t\t1\t0\tVRL\t11176\n",
+  "Nicotiana benthamiana\t\t1\t1\tPLN\t4100\n",
+  "Nicotiana sylvestris\twood tobacco\t1\t1\tPLN\t4096\n",
+  "Nicotiana tabacum\tcommon tobacco\t1\t1\tPLN\t4097\n",
+  "Nippostrongylus brasiliensis\t\t1\t5\tINV\t27835\n",
+  "Nuphar advena\t\t1\t1\tPLN\t77108\n",
+  "Ochotona princeps\tAmerican pika\t1\t2\tMAM\t9978\n",
+  "Ocimum basilicum\tsweet basil\t1\t1\tPLN\t39350\n",
+  "Onchocerca volvulus\t\t1\t5\tINV\t6282\n",
+  "Oncometopia nigricans\t\t1\t5\tINV\t266772\n",
+  "Oncorhynchus mykiss\trainbow trout\t1\t2\tVRT\t8022\n",
+  "Oncorhynchus nerka\tsockeye salmon\t1\t2\tVRT\t8023\n",
+  "Oncorhynchus tshawytscha\tChinook salmon\t1\t2\tVRT\t74940\n",
+  "Ophiostoma piliferum\t\t1\t4\tPLN\t38032\n",
+  "Opisthorchis viverrini\t\t1\t9\tINV\t6198\n",
+  "Oreochromis niloticus\tNile tilapia\t1\t2\tVRT\t8128\n",
+  "Ornithorhynchus anatinus\tplatypus\t1\t2\tMAM\t9258\n",
+  "Oryctolagus cuniculus\trabbit\t1\t2\tMAM\t9986\n",
+  "Oryza alta\t\t1\t1\tPLN\t52545\n",
+  "Oryza australiensis\t\t1\t1\tPLN\t4532\n",
+  "Oryza brachyantha\t\t1\t1\tPLN\t4533\n",
+  "Oryza coarctata\t\t1\t1\tPLN\t77588\n",
+  "Oryza glaberrima\tAfrican rice\t1\t1\tPLN\t4538\n",
+  "Oryza granulata\t\t1\t1\tPLN\t110450\n",
+  "Oryza minuta\t\t1\t1\tPLN\t63629\n",
+  "Oryza nivara\t\t1\t1\tPLN\t4536\n",
+  "Oryza officinalis\t\t1\t1\tPLN\t4535\n",
+  "Oryza punctata\t\t1\t1\tPLN\t4537\n",
+  "Oryza ridleyi\t\t1\t1\tPLN\t83308\n",
+  "Oryza rufipogon\t\t1\t1\tPLN\t4529\n",
+  "Oryza sativa\trice\t1\t1\tPLN\t4530\n",
+  "Oryza sativa Indica Group\t\t1\t1\tPLN\t39946\n",
+  "Oryza sativa Japonica Group\t\t1\t1\tPLN\t39947\n",
+  "Oryzias latipes\tJapanese medaka\t1\t2\tVRT\t8090\n",
+  "Oscarella carmela\t\t1\t4\tINV\t386100\n",
+  "Osmerus mordax\trainbow smelt\t1\t2\tVRT\t8014\n",
+  "Ostertagia ostertagi\t\t1\t5\tINV\t6317\n",
+  "Ostreococcus lucimarinus CCE9901\t\t1\t1\tPLN\t436017\n",
+  "Otolemur garnettii\tsmall-eared galago\t1\t2\tPRI\t30611\n",
+  "Ovis aries\tsheep\t1\t2\tMAM\t9940\n",
+  "Pan paniscus\tpygmy chimpanzee\t1\t2\tPRI\t9597\n",
+  "Pan troglodytes\tchimpanzee\t1\t2\tPRI\t9598\n",
+  "Pan troglodytes troglodytes\t\t1\t2\tPRI\t37011\n",
+  "Pan troglodytes verus\t\t1\t2\tPRI\t37012\n",
+  "Panax ginseng\t\t1\t1\tPLN\t4054\n",
+  "Panicum virgatum\tswitchgrass\t1\t1\tPLN\t38727\n",
+  "Paracentrotus lividus\tcommon urchin\t1\t9\tINV\t7656\n",
+  "Paracoccidioides brasiliensis\t\t1\t4\tPLN\t121759\n",
+  "Paralabidochromis chilotes\t\t1\t2\tVRT\t77306\n",
+  "Paralichthys olivaceus\tbastard halibut\t1\t2\tVRT\t8255\n",
+  "Paramecium tetraurelia\t\t6\t4\tINV\t5888\n",
+  "Parastrongyloides trichosuri\t\t1\t5\tINV\t131310\n",
+  "Pasteuria penetrans\t\t11\t0\tBCT\t86005\n",
+  "Patiria pectinifera\t\t1\t9\tINV\t7594\n",
+  "Pavlova lutheri\t\t1\t1\tPLN\t2832\n",
+  "Paxillus involutus\t\t1\t4\tPLN\t71150\n",
+  "Pediculus humanus capitis\thuman head louse\t1\t5\tINV\t121226\n",
+  "Pediculus humanus corporis\thuman body louse\t1\t5\tINV\t121224\n",
+  "Penaeus monodon\tblack tiger shrimp\t1\t5\tINV\t6687\n",
+  "Penicillium marneffei\t\t1\t4\tPLN\t37727\n",
+  "Pennisetum glaucum\t\t1\t1\tPLN\t4543\n",
+  "Perkinsus marinus ATCC 50983\t\t1\t4\tINV\t423536\n",
+  "Peromyscus maniculatus bairdii\tprairie deer mouse\t1\t2\tROD\t230844\n",
+  "Persea americana\tavocado\t1\t1\tPLN\t3435\n",
+  "Petromyzon marinus\tsea lamprey\t1\t2\tVRT\t7757\n",
+  "Phaeodactylum tricornutum\t\t1\t1\tPLN\t2850\n",
+  "Phaeosphaeria nodorum SN15\t\t1\t4\tPLN\t321614\n",
+  "Phakopsora pachyrhizi\t\t1\t4\tPLN\t170000\n",
+  "Phalaenopsis equestris\t\t1\t1\tPLN\t78828\n",
+  "Phalaenopsis violacea\t\t1\t1\tPLN\t86509\n",
+  "Phanerochaete chrysosporium\t\t1\t4\tPLN\t5306\n",
+  "Phaseolus coccineus\t\t1\t1\tPLN\t3886\n",
+  "Phaseolus vulgaris\t\t1\t1\tPLN\t3885\n",
+  "Phlebotomus papatasi\t\t1\t5\tINV\t29031\n",
+  "Photorhabdus luminescens\t\t11\t0\tBCT\t29488\n",
+  "Physarum polycephalum\tslime mold\t1\t1\tINV\t5791\n",
+  "Physcomitrella patens\t\t1\t1\tPLN\t3218\n",
+  "Physcomitrella patens subsp. patens\t\t1\t1\tPLN\t145481\n",
+  "Phytophthora brassicae\t\t1\t1\tPLN\t187813\n",
+  "Phytophthora infestans\tpotato late blight agent\t1\t1\tPLN\t4787\n",
+  "Phytophthora infestans T30-4\t\t1\t1\tPLN\t403677\n",
+  "Phytophthora parasitica\t\t1\t1\tPLN\t4792\n",
+  "Phytophthora ramorum\tSudden oak death agent\t1\t1\tPLN\t164328\n",
+  "Phytophthora sojae\t\t1\t1\tPLN\t67593\n",
+  "Picea abies\tNorway spruce\t1\t1\tPLN\t3329\n",
+  "Picea glauca\twhite spruce\t1\t1\tPLN\t3330\n",
+  "Picea sitchensis\tSitka spruce\t1\t1\tPLN\t3332\n",
+  "Pichia angusta\t\t1\t3\tPLN\t4905\n",
+  "Pichia farinosa\t\t1\t3\tPLN\t4920\n",
+  "Pichia guilliermondii ATCC 6260\t\t1\t3\tPLN\t294746\n",
+  "Pichia stipitis CBS 6054\t\t12\t3\tPLN\t322104\n",
+  "Pimephales promelas\t\t1\t2\tVRT\t90988\n",
+  "Pinus pinaster\t\t1\t1\tPLN\t71647\n",
+  "Pinus taeda\tloblolly pine\t1\t1\tPLN\t3352\n",
+  "Pisum sativum\tpea\t1\t1\tPLN\t3888\n",
+  "Plasmodium berghei\t\t1\t4\tINV\t5821\n",
+  "Plasmodium berghei strain ANKA\t\t1\t4\tINV\t5823\n",
+  "Plasmodium chabaudi\t\t1\t4\tINV\t5825\n",
+  "Plasmodium chabaudi chabaudi\t\t1\t4\tINV\t31271\n",
+  "Plasmodium falciparum\tmalaria parasite P. falciparum\t1\t4\tINV\t5833\n",
+  "Plasmodium falciparum 3D7\t\t1\t4\tINV\t36329\n",
+  "Plasmodium falciparum Dd2\t\t1\t4\tINV\t57267\n",
+  "Plasmodium falciparum HB3\t\t1\t4\tINV\t137071\n",
+  "Plasmodium vivax\tmalaria parasite P. vivax\t1\t4\tINV\t5855\n",
+  "Plasmodium yoelii\t\t1\t4\tINV\t5861\n",
+  "Plasmodium yoelii yoelii\t\t1\t4\tINV\t73239\n",
+  "Plasmodium yoelii yoelii str. 17XNL\t\t1\t4\tINV\t352914\n",
+  "Platichthys flesus\tEuropean flounder\t1\t2\tVRT\t8260\n",
+  "Plodia interpunctella\tIndianmeal moth\t1\t5\tINV\t58824\n",
+  "Pneumocystis carinii\t\t1\t4\tPLN\t4754\n",
+  "Podocoryne carnea\t\t1\t4\tINV\t6096\n",
+  "Poecilia reticulata\tguppy\t1\t2\tVRT\t8081\n",
+  "Polygonatum sibiricum\t\t1\t1\tPLN\t261423\n",
+  "Polysphondylium pallidum\t\t1\t1\tINV\t13642\n",
+  "Polytomella parva\t\t1\t1\tPLN\t51329\n",
+  "Poncirus trifoliata\t\t1\t1\tPLN\t37690\n",
+  "Pongo pygmaeus\torangutan\t1\t2\tPRI\t9600\n",
+  "Populus deltoides\t\t1\t1\tPLN\t3696\n",
+  "Populus euphratica\t\t1\t1\tPLN\t75702\n",
+  "Populus nigra\t\t1\t1\tPLN\t3691\n",
+  "Populus tremula\t\t1\t1\tPLN\t113636\n",
+  "Populus tremuloides\tquaking aspen\t1\t1\tPLN\t3693\n",
+  "Populus trichocarpa\t\t1\t1\tPLN\t3694\n",
+  "Porcine respiratory and reproductive syndrome virus\t\t1\t0\tVRL\t28344\n",
+  "Porphyra haitanensis\t\t1\t4\tPLN\t76159\n",
+  "Porphyra yezoensis\t\t1\t4\tPLN\t2788\n",
+  "Pratylenchus vulnus\t\t1\t5\tINV\t45931\n",
+  "Pristionchus pacificus\t\t1\t5\tINV\t54126\n",
+  "Prototheca wickerhamii\t\t1\t1\tPLN\t3111\n",
+  "Prunus armeniaca\tapricot\t1\t1\tPLN\t36596\n",
+  "Prunus dulcis\talmond\t1\t1\tPLN\t3755\n",
+  "Prunus persica\tpeach\t1\t1\tPLN\t3760\n",
+  "Prymnesium parvum\t\t1\t1\tPLN\t97485\n",
+  "Pseudomonas aeruginosa\t\t11\t0\tBCT\t287\n",
+  "Pseudotsuga menziesii\tDouglas-fir\t1\t1\tPLN\t3357\n",
+  "Pseudotsuga menziesii var. menziesii\t\t1\t1\tPLN\t278161\n",
+  "Psychroflexus torquis ATCC 700755\t\t11\t0\tBCT\t313595\n",
+  "Puccinellia tenuiflora\t\t1\t1\tPLN\t240906\n",
+  "Puccinia graminis f. sp. tritici CRL 75-36-700-3\t\t1\t4\tPLN\t418459\n",
+  "Puccinia triticina\t\t1\t4\tPLN\t208348\n",
+  "Pythium ultimum DAOM BR144\t\t1\t1\tPLN\t431595\n",
+  "Rabies virus\t\t1\t0\tVRL\t11292\n",
+  "Raphanus raphanistrum subsp. landra\t\t1\t1\tPLN\t328428\n",
+  "Raphanus raphanistrum subsp. maritimus\t\t1\t1\tPLN\t457179\n",
+  "Raphanus raphanistrum subsp. raphanistrum\t\t1\t1\tPLN\t109997\n",
+  "Raphanus sativus\tradish\t1\t1\tPLN\t3726\n",
+  "Raphanus sativus var. oleiformis\t\t1\t1\tPLN\t463157\n",
+  "Rattus norvegicus\tNorway rat\t1\t2\tROD\t10116\n",
+  "Reclinomonas americana\t\t1\t1\tINV\t48483\n",
+  "Rhipicephalus appendiculatus\t\t1\t5\tINV\t34631\n",
+  "Rhipicephalus microplus\tsouthern cattle tick\t1\t5\tINV\t6941\n",
+  "Rhizopus oryzae\t\t1\t1\tPLN\t64495\n",
+  "Rhodnius prolixus\t\t1\t5\tINV\t13249\n",
+  "Rhynchosciara americana\t\t1\t5\tINV\t7186\n",
+  "Ricinus communis\tcastor bean\t1\t1\tPLN\t3988\n",
+  "Robinia pseudoacacia\t\t1\t1\tPLN\t35938\n",
+  "Rosa hybrid cultivar\t\t1\t1\tPLN\t128735\n",
+  "Rutilus rutilus\troach minnow\t1\t2\tVRT\t48668\n",
+  "Saccharomyces castellii\t\t1\t3\tPLN\t27288\n",
+  "Saccharomyces cerevisiae\tbaker's yeast\t1\t3\tPLN\t4932\n",
+  "Saccharomyces mikatae IFO 1815\t\t1\t3\tPLN\t226126\n",
+  "Saccharomyces pastorianus\t\t1\t3\tPLN\t27292\n",
+  "Saccharomyces servazzii\t\t1\t3\tPLN\t27293\n",
+  "Saccharomyces uvarum\t\t1\t3\tPLN\t230603\n",
+  "Saccharum hybrid cultivar\t\t1\t1\tPLN\t128810\n",
+  "Saccharum officinarum\t\t1\t1\tPLN\t4547\n",
+  "Saccoglossus kowalevskii\t\t1\t9\tINV\t10224\n",
+  "Saitoella complicata\t\t1\t4\tPLN\t5606\n",
+  "Salmo salar\tAtlantic salmon\t1\t2\tVRT\t8030\n",
+  "Salvelinus fontinalis\tbrook trout\t1\t2\tVRT\t8038\n",
+  "Salvia miltiorrhiza\t\t1\t1\tPLN\t226208\n",
+  "Sarcocystis falcatula\t\t1\t4\tINV\t32593\n",
+  "Sarcocystis neurona\t\t1\t4\tINV\t42890\n",
+  "Saruma henryi\t\t1\t1\tPLN\t13258\n",
+  "Sawyeria marylandensis\t\t1\t1\tINV\t194530\n",
+  "Scenedesmus obliquus\t\t1\t22\tPLN\t3088\n",
+  "Schistosoma japonicum\t\t1\t9\tINV\t6182\n",
+  "Schistosoma mansoni\t\t1\t9\tINV\t6183\n",
+  "Schizosaccharomyces pombe\tfission yeast\t1\t4\tPLN\t4896\n",
+  "Schizosaccharomyces pombe 972h-\t\t1\t4\tPLN\t284812\n",
+  "Schmidtea mediterranea\t\t1\t9\tINV\t79327\n",
+  "Sclerotinia sclerotiorum\t\t1\t4\tPLN\t5180\n",
+  "Sclerotinia sclerotiorum 1980\t\t1\t4\tPLN\t325569\n",
+  "Sebastes rastrelliger\tgrass rockfish\t1\t2\tVRT\t72095\n",
+  "Secale cereale\trye\t1\t1\tPLN\t4550\n",
+  "Seculamonas ecuadoriensis\t\t1\t1\tINV\t221724\n",
+  "Selaginella lepidophylla\t\t1\t1\tPLN\t59777\n",
+  "Sesamum indicum\tsesame\t1\t1\tPLN\t4182\n",
+  "Simian immunodeficiency virus\t\t1\t0\tVRL\t11723\n",
+  "Solanum chacoense\tChaco potato\t1\t1\tPLN\t4108\n",
+  "Solanum habrochaites\t\t1\t1\tPLN\t62890\n",
+  "Solanum lycopersicum\t\t1\t1\tPLN\t4081\n",
+  "Solanum pennellii\t\t1\t1\tPLN\t28526\n",
+  "Solanum tuberosum\tpotato\t1\t1\tPLN\t4113\n",
+  "Solenopsis invicta\tred fire ant\t1\t5\tINV\t13686\n",
+  "Sorex araneus\tEuropean shrew\t1\t2\tMAM\t42254\n",
+  "Sorghum bicolor\tsorghum\t1\t1\tPLN\t4558\n",
+  "Sorghum propinquum\t\t1\t1\tPLN\t132711\n",
+  "Sparus aurata\tgilthead seabream\t1\t2\tVRT\t8175\n",
+  "Spermophilus lateralis\tgolden-mantled ground squirrel\t1\t2\tROD\t76772\n",
+  "Spermophilus tridecemlineatus\tthirteen-lined ground squirrel\t1\t2\tROD\t43179\n",
+  "Sphaeroforma arctica\t\t1\t1\tINV\t72019\n",
+  "Spironucleus barkhanus\t\t6\t0\tINV\t103874\n",
+  "Spizellomyces punctatus\t\t1\t16\tPLN\t109760\n",
+  "Spodoptera frugiperda\tfall armyworm\t1\t5\tINV\t7108\n",
+  "Squalus acanthias\tspiny dogfish\t1\t2\tVRT\t7797\n",
+  "Stachyamoeba lipophora\t\t1\t1\tINV\t463046\n",
+  "Staphylococcus aureus\t\t11\t0\tBCT\t1280\n",
+  "Staphylococcus epidermidis\t\t11\t0\tBCT\t1282\n",
+  "Sterkiella histriomuscorum\t\t6\t4\tINV\t94289\n",
+  "Stevia rebaudiana\t\t1\t1\tPLN\t55670\n",
+  "Streblomastix strix\t\t6\t1\tINV\t222440\n",
+  "Streptococcus agalactiae\t\t11\t0\tBCT\t1311\n",
+  "Streptococcus pneumoniae\t\t11\t0\tBCT\t1313\n",
+  "Streptococcus pyogenes\t\t11\t0\tBCT\t1314\n",
+  "Strongylocentrotus purpuratus\t\t1\t9\tINV\t7668\n",
+  "Strongyloides ratti\t\t1\t5\tINV\t34506\n",
+  "Strongyloides stercoralis\t\t1\t5\tINV\t6248\n",
+  "Suidasia medanensis\t\t1\t5\tINV\t223625\n",
+  "Sus scrofa\tpig\t1\t2\tMAM\t9823\n",
+  "Taenia solium\tpork tapeworm\t1\t9\tINV\t6204\n",
+  "Taeniopygia guttata\t\t1\t2\tVRT\t59729\n",
+  "Taiwania cryptomerioides\t\t1\t1\tPLN\t50187\n",
+  "Takifugu rubripes\ttorafugu\t1\t2\tVRT\t31033\n",
+  "Tamarix androssowii\t\t1\t1\tPLN\t189785\n",
+  "Tamarix hispida\t\t1\t1\tPLN\t189793\n",
+  "Taphrina deformans\tpeach leaf curl fungus\t1\t4\tPLN\t5011\n",
+  "Taraxacum kok-saghyz\t\t1\t1\tPLN\t333970\n",
+  "Taraxacum officinale\t\t1\t1\tPLN\t50225\n",
+  "Teladorsagia circumcincta\t\t1\t5\tINV\t45464\n",
+  "Tetrahymena thermophila\t\t6\t4\tINV\t5911\n",
+  "Tetrahymena thermophila SB210\t\t6\t4\tINV\t312017\n",
+  "Tetraodon nigroviridis\t\t1\t2\tVRT\t99883\n",
+  "Thalassiosira pseudonana CCMP1335\t\t1\t4\tPLN\t296543\n",
+  "Theileria annulata\t\t1\t4\tINV\t5874\n",
+  "Theileria annulata strain Ankara\t\t1\t4\tINV\t353154\n",
+  "Theileria parva\t\t1\t4\tINV\t5875\n",
+  "Theileria parva strain Muguga\t\t1\t4\tINV\t333668\n",
+  "Thellungiella halophila\t\t1\t1\tPLN\t98038\n",
+  "Thellungiella salsuginea\t\t1\t1\tPLN\t72664\n",
+  "Theobroma cacao\tcacao\t1\t1\tPLN\t3641\n",
+  "Thermomyces lanuginosus\t\t1\t4\tPLN\t5541\n",
+  "Thlaspi caerulescens\t\t1\t1\tPLN\t107243\n",
+  "Thunnus thynnus\tbluefin tuna\t1\t2\tVRT\t8237\n",
+  "Thymallus arcticus\tArctic grayling\t1\t2\tVRT\t70285\n",
+  "Torque teno virus\t\t1\t0\tVRL\t68887\n",
+  "Tortula ruralis\t\t1\t1\tPLN\t38588\n",
+  "Toxocara canis\t\t1\t5\tINV\t6265\n",
+  "Toxoplasma gondii\t\t1\t4\tINV\t5811\n",
+  "Toxoplasma gondii RH\t\t1\t4\tINV\t383379\n",
+  "Toxoptera citricida\tbrown citrus aphid\t1\t5\tINV\t223852\n",
+  "Trametes versicolor\t\t1\t4\tPLN\t5325\n",
+  "Tribolium castaneum\tred flour beetle\t1\t5\tINV\t7070\n",
+  "Trichinella spiralis\t\t1\t5\tINV\t6334\n",
+  "Trichoderma reesei QM6a\t\t1\t4\tPLN\t431241\n",
+  "Trichomonas vaginalis\t\t1\t0\tINV\t5722\n",
+  "Trichomonas vaginalis G3\t\t1\t0\tINV\t412133\n",
+  "Trichophyton rubrum\t\t1\t4\tPLN\t5551\n",
+  "Trichosurus vulpecula\tsilver-gray brushtail possum\t1\t2\tMAM\t9337\n",
+  "Trichuris muris\t\t1\t5\tINV\t70415\n",
+  "Trichuris vulpis\t\t1\t5\tINV\t219738\n",
+  "Trifolium pratense\t\t1\t1\tPLN\t57577\n",
+  "Trifolium repens\twhite clover\t1\t1\tPLN\t3899\n",
+  "Trimastix pyriformis\t\t1\t1\tINV\t342808\n",
+  "Triphysaria versicolor\t\t1\t1\tPLN\t64093\n",
+  "Triticum aestivum\tbread wheat\t1\t1\tPLN\t4565\n",
+  "Triticum monococcum\t\t1\t1\tPLN\t4568\n",
+  "Triticum turgidum subsp. durum\tdurum wheat\t1\t1\tPLN\t4567\n",
+  "Tritrichomonas foetus\t\t1\t0\tINV\t5724\n",
+  "Trypanosoma brucei\t\t1\t4\tINV\t5691\n",
+  "Trypanosoma brucei rhodesiense\t\t1\t4\tINV\t31286\n",
+  "Trypanosoma brucei TREU927\t\t1\t4\tINV\t185431\n",
+  "Trypanosoma cruzi\t\t1\t4\tINV\t5693\n",
+  "Trypanosoma cruzi strain CL Brener\t\t1\t4\tINV\t353153\n",
+  "Tuber borchii\twhitish truffle\t1\t4\tPLN\t42251\n",
+  "Tupaia belangeri\tnorthern tree shrew\t1\t2\tMAM\t37347\n",
+  "Tursiops truncatus\tbottlenosed dolphin\t1\t2\tMAM\t9739\n",
+  "uncultured archaeon\t\t11\t0\tENV\t115547\n",
+  "uncultured bacterium\t\t11\t0\tENV\t77133\n",
+  "uncultured eukaryote\t\t1\t1\tENV\t100272\n",
+  "uncultured fungus\t\t1\t4\tENV\t175245\n",
+  "uncultured marine virus\t\t1\t0\tENV\t186617\n",
+  "uncultured organism\t\t11\t2\tENV\t155900\n",
+  "uncultured prokaryote\t\t11\t0\tENV\t198431\n",
+  "Uromyces appendiculatus\t\t1\t4\tPLN\t5264\n",
+  "Ustilago maydis\t\t1\t4\tPLN\t5270\n",
+  "Ustilago maydis 521\t\t1\t4\tPLN\t237631\n",
+  "Vaccinium corymbosum\t\t1\t1\tPLN\t69266\n",
+  "Vanderwaltozyma polyspora DSM 70294\t\t1\t3\tPLN\t436907\n",
+  "Verticillium dahliae\t\t1\t4\tPLN\t27337\n",
+  "Vibrio parahaemolyticus AQ3810\t\t11\t0\tBCT\t419109\n",
+  "Vigna unguiculata\tcowpea\t1\t1\tPLN\t3917\n",
+  "Vitis hybrid cultivar\t\t1\t1\tPLN\t241073\n",
+  "Vitis shuttleworthii\t\t1\t1\tPLN\t246827\n",
+  "Vitis vinifera\t\t1\t1\tPLN\t29760\n",
+  "Welwitschia mirabilis\t\t1\t1\tPLN\t3377\n",
+  "Wuchereria bancrofti\t\t1\t5\tINV\t6293\n",
+  "Xenopus laevis\tAfrican clawed frog\t1\t2\tVRT\t8355\n",
+  "Xenopus tropicalis\twestern clawed frog\t1\t2\tVRT\t8364\n",
+  "Xiphinema index\t\t1\t5\tINV\t46003\n",
+  "Yarrowia lipolytica\t\t1\t3\tPLN\t4952\n",
+  "Yarrowia lipolytica CLIB122\t\t1\t3\tPLN\t284591\n",
+  "Zamia fischeri\t\t1\t1\tPLN\t34342\n",
+  "Zantedeschia aethiopica\t\t1\t1\tPLN\t69721\n",
+  "Zea mays\t\t1\t1\tPLN\t4577\n",
+  "Zea mays subsp. mays\tmaize\t1\t1\tPLN\t381124\n",
+  "Zea mays subsp. parviglumis\t\t1\t1\tPLN\t76912\n",
+  "Zingiber officinale\t\t1\t1\tPLN\t94328\n",
+  "Zinnia elegans\t\t1\t1\tPLN\t34245\n",
+  "Zostera marina\t\t1\t1\tPLN\t29655\n",
+  "Zygosaccharomyces rouxii\t\t1\t3\tPLN\t4956\n",
+  NULL
+};
+#endif
+
 extern Boolean LoadOrganismTable (void)
 
 {
@@ -169,9 +1006,10 @@ extern Boolean LoadOrganismTable (void)
   Boolean  failed;
   Char     first [16];
   Int2     idx;
+  CharPtr  lst;
   Int8     len;
   Int2     num;
-  CharPtr  ptr;
+  CharPtr  ptr = NULL;
   Char     str [PATH_MAX];
   CharPtr  tmp;
   Int2     version;
@@ -188,9 +1026,9 @@ extern Boolean LoadOrganismTable (void)
   orgNum = 0;
   failed = TRUE;
   ProgramPath (str, sizeof (str));
-  ptr = StringRChr (str, DIRDELIMCHR);
-  if (ptr != NULL) {
-    *ptr = '\0';
+  tmp = StringRChr (str, DIRDELIMCHR);
+  if (tmp != NULL) {
+    *tmp = '\0';
     FileBuildPath (str, NULL, "taxlist.txt");
     len = FileLength (str);
     f = FileOpen (str, "r");
@@ -204,7 +1042,6 @@ extern Boolean LoadOrganismTable (void)
     if (f != NULL) {
       ptr = MemNew ((size_t) (len + 5));
       if (ptr != NULL) {
-        orgTxtPtr = ptr;
         FileRead (ptr, (size_t) len, 1, f);
 #if (defined(OS_DOS) || defined (OS_NT))
         p = ptr;
@@ -229,51 +1066,77 @@ extern Boolean LoadOrganismTable (void)
           p++;
         }
 #endif
-        tmp = ptr;
-        ch = *tmp;
-        while (ch != '\0' && ch != '\n') {
-          tmp++;
-          ch = *tmp;
-        }
-        *tmp = '\0';
-        StringNCpy_0 (first, ptr, sizeof (first) - 1);
-        *tmp = ch;
-        if (StrToInt (first, &version)) {
-          tmp++;
-          ptr = tmp;
-        }
-        num = 0;
-        tmp = ptr;
-        ch = *tmp;
-        while (ch != '\0') {
-          if (ch == '\n') {
-            num++;
-          }
-          tmp++;
-          ch = *tmp;
-        }
-        orgStrIdx = MemNew (sizeof (CharPtr) * (size_t) (num + 3));
-        if (orgStrIdx != NULL) {
-          idx = 0;
-          tmp = ptr;
-          ch = *tmp;
-          orgStrIdx [idx] = tmp;
-          while (ch != '\0') {
-            if (ch == '\n') {
-              idx++;
-              tmp++;
-              ch = *tmp;
-              orgStrIdx [idx] = tmp;
-            } else {
-              tmp++;
-              ch = *tmp;
-            }
-          }
-          orgNum = num;
-          failed = FALSE;
-        }
       }
       FileClose (f);
+    }
+  }
+  if (ptr == NULL) {
+#ifndef WIN16
+    idx = 0;
+    len = 0;
+    tmp = taxlistMemStrs [idx];
+    while (tmp != NULL) {
+      len += StringLen (tmp);
+      idx++;
+      tmp = taxlistMemStrs [idx];
+    }
+    ptr = MemNew ((size_t) (len + 5));
+    if (ptr != NULL) {
+      lst = ptr;
+      idx = 0;
+      tmp = taxlistMemStrs [idx];
+      while (tmp != NULL) {
+        lst = StringMove (lst, tmp);
+        idx++;
+        tmp = taxlistMemStrs [idx];
+      }
+    }
+#endif
+  }
+  if (ptr != NULL) {
+    orgTxtPtr = ptr;
+    tmp = ptr;
+    ch = *tmp;
+    while (ch != '\0' && ch != '\n') {
+      tmp++;
+      ch = *tmp;
+    }
+    *tmp = '\0';
+    StringNCpy_0 (first, ptr, sizeof (first) - 1);
+    *tmp = ch;
+    if (StrToInt (first, &version)) {
+      tmp++;
+      ptr = tmp;
+    }
+    num = 0;
+    tmp = ptr;
+    ch = *tmp;
+    while (ch != '\0') {
+      if (ch == '\n') {
+        num++;
+      }
+      tmp++;
+      ch = *tmp;
+    }
+    orgStrIdx = MemNew (sizeof (CharPtr) * (size_t) (num + 3));
+    if (orgStrIdx != NULL) {
+      idx = 0;
+      tmp = ptr;
+      ch = *tmp;
+      orgStrIdx [idx] = tmp;
+      while (ch != '\0') {
+        if (ch == '\n') {
+          idx++;
+          tmp++;
+          ch = *tmp;
+          orgStrIdx [idx] = tmp;
+        } else {
+          tmp++;
+          ch = *tmp;
+        }
+      }
+      orgNum = num;
+      failed = FALSE;
     }
   }
   if (failed) {
@@ -1729,7 +2592,7 @@ static void FixModifierTextMove (ButtoN b)
   fp->remove = FALSE;
   fp->move_to_text = TRUE;
   fp->do_all = FALSE;
-  fp->done = TRUE;	
+  fp->done = TRUE;    
 }
 
 static void FixModifierTextMoveAll (ButtoN b)
@@ -1743,7 +2606,7 @@ static void FixModifierTextMoveAll (ButtoN b)
   fp->remove = FALSE;
   fp->move_to_text = TRUE;
   fp->do_all = TRUE;
-  fp->done = TRUE;	
+  fp->done = TRUE;    
 }
 
 static void FixModifierTextRemove (ButtoN b)
@@ -1757,7 +2620,7 @@ static void FixModifierTextRemove (ButtoN b)
   fp->remove = TRUE;
   fp->move_to_text = FALSE;
   fp->do_all = FALSE;
-  fp->done = TRUE;	
+  fp->done = TRUE;    
 }
 
 static void FixModifierTextRemoveAll (ButtoN b)
@@ -1771,7 +2634,7 @@ static void FixModifierTextRemoveAll (ButtoN b)
   fp->remove = TRUE;
   fp->move_to_text = FALSE;
   fp->do_all = TRUE;
-  fp->done = TRUE;	
+  fp->done = TRUE;    
 }
 
 extern ModTextFixPtr ModTextFixNew (void)
@@ -1807,78 +2670,78 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   if (tfp == NULL) return;
   switch (subtype)
   {
-  	case SUBSRC_rearranged:
-  	  if (tfp->remove_all_rearranged)
-  	  {
-  	  	tfp->remove_this = TRUE;
-  	  	tfp->move_this = FALSE;
-  	  	return;
-  	  }
-  	  else if (tfp->move_all_rearranged)
-  	  {
-  	  	tfp->move_this = TRUE;
-  	  	tfp->remove_this = FALSE;
-  	  	return;
-  	  }
-  	  break;
-  	case SUBSRC_transgenic:
-  	  if (tfp->remove_all_transgenic)
-  	  {
-  	  	tfp->remove_this = TRUE;
-  	  	tfp->move_this = FALSE;
-  	  	return;
-  	  }
-  	  else if (tfp->move_all_transgenic)
-  	  {
-  	  	tfp->move_this = TRUE;
-  	  	tfp->remove_this = FALSE;
-  	  	return;
-  	  }
-  	  break;
-  	case SUBSRC_germline:
-  	  if (tfp->remove_all_germline)
-  	  {
-  	  	tfp->remove_this = TRUE;
-  	  	tfp->move_this = FALSE;
-  	  	return;
-  	  }
-  	  else if (tfp->move_all_germline)
-  	  {
-  	  	tfp->move_this = TRUE;
-  	  	tfp->remove_this = FALSE;
-  	  	return;
-  	  }
-  	  break;
-  	case SUBSRC_environmental_sample:
-  	  if (tfp->remove_all_environmental)
-  	  {
-  	  	tfp->remove_this = TRUE;
-  	  	tfp->move_this = FALSE;
-  	  	return;
-  	  }
-  	  else if (tfp->move_all_environmental)
-  	  {
-  	  	tfp->move_this = TRUE;
-  	  	tfp->remove_this = FALSE;
-  	  	return;
-  	  }
-  	  break;
-  	case SUBSRC_metagenomic:
-  	  if (tfp->remove_all_metagenomic)
-  	  {
-  	  	tfp->remove_this = TRUE;
-  	  	tfp->move_this = FALSE;
-  	  	return;
-  	  }
-  	  else if (tfp->move_all_metagenomic)
-  	  {
-  	  	tfp->move_this = TRUE;
-  	  	tfp->remove_this = FALSE;
-  	  	return;
-  	  }
-  	  break;
-  	default:
-  	  break;
+      case SUBSRC_rearranged:
+        if (tfp->remove_all_rearranged)
+        {
+            tfp->remove_this = TRUE;
+            tfp->move_this = FALSE;
+            return;
+        }
+        else if (tfp->move_all_rearranged)
+        {
+            tfp->move_this = TRUE;
+            tfp->remove_this = FALSE;
+            return;
+        }
+        break;
+      case SUBSRC_transgenic:
+        if (tfp->remove_all_transgenic)
+        {
+            tfp->remove_this = TRUE;
+            tfp->move_this = FALSE;
+            return;
+        }
+        else if (tfp->move_all_transgenic)
+        {
+            tfp->move_this = TRUE;
+            tfp->remove_this = FALSE;
+            return;
+        }
+        break;
+      case SUBSRC_germline:
+        if (tfp->remove_all_germline)
+        {
+            tfp->remove_this = TRUE;
+            tfp->move_this = FALSE;
+            return;
+        }
+        else if (tfp->move_all_germline)
+        {
+            tfp->move_this = TRUE;
+            tfp->remove_this = FALSE;
+            return;
+        }
+        break;
+      case SUBSRC_environmental_sample:
+        if (tfp->remove_all_environmental)
+        {
+            tfp->remove_this = TRUE;
+            tfp->move_this = FALSE;
+            return;
+        }
+        else if (tfp->move_all_environmental)
+        {
+            tfp->move_this = TRUE;
+            tfp->remove_this = FALSE;
+            return;
+        }
+        break;
+      case SUBSRC_metagenomic:
+        if (tfp->remove_all_metagenomic)
+        {
+            tfp->remove_this = TRUE;
+            tfp->move_this = FALSE;
+            return;
+        }
+        else if (tfp->move_all_metagenomic)
+        {
+            tfp->move_this = TRUE;
+            tfp->remove_this = FALSE;
+            return;
+        }
+        break;
+      default:
+        break;
   }
 
   fd.w = ModalWindow(-20, -13, -10, -10, NULL);
@@ -1889,21 +2752,21 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
   if (prompt_str == NULL) return;
   switch (subtype)
   {
-  	case SUBSRC_rearranged:
-  	  sprintf (prompt_str, prompt_fmt, txt, "a rearranged");
-  	  break;
-  	case SUBSRC_germline:
-  	  sprintf (prompt_str, prompt_fmt, txt, "a germline");
-  	  break;
-  	case SUBSRC_transgenic:
-  	  sprintf (prompt_str, prompt_fmt, txt, "a transgenic");
-  	  break;
-  	case SUBSRC_environmental_sample:
-  	  sprintf (prompt_str, prompt_fmt, txt, "an environmental sample");
-  	  break;
-  	case SUBSRC_metagenomic:
-  	  sprintf (prompt_str, prompt_fmt, txt, "a metagenomic");
-  	  break;
+      case SUBSRC_rearranged:
+        sprintf (prompt_str, prompt_fmt, txt, "a rearranged");
+        break;
+      case SUBSRC_germline:
+        sprintf (prompt_str, prompt_fmt, txt, "a germline");
+        break;
+      case SUBSRC_transgenic:
+        sprintf (prompt_str, prompt_fmt, txt, "a transgenic");
+        break;
+      case SUBSRC_environmental_sample:
+        sprintf (prompt_str, prompt_fmt, txt, "an environmental sample");
+        break;
+      case SUBSRC_metagenomic:
+        sprintf (prompt_str, prompt_fmt, txt, "a metagenomic");
+        break;
   }
   
   t = HiddenGroup (g, 1, 0, NULL);
@@ -1934,63 +2797,63 @@ GetModifierTextFix (ModTextFixPtr tfp, Uint1 subtype, CharPtr txt)
 
   if (fd.remove)
   {
-  	tfp->remove_this = TRUE;
-  	if (fd.do_all)
-  	{
-  	  switch (subtype)
-  	  {
-  	  	case SUBSRC_rearranged:
-  	  	  tfp->remove_all_rearranged = TRUE;
-  	  	  tfp->move_all_rearranged = FALSE;
-  	  	  break;
-  	  	case SUBSRC_transgenic:
-  	  	  tfp->remove_all_transgenic = TRUE;
-  	  	  tfp->move_all_transgenic = FALSE;
-  	  	  break;
-  	  	case SUBSRC_germline:
-  	  	  tfp->remove_all_germline = TRUE;
-  	  	  tfp->move_all_germline = FALSE;
-  	  	  break;
-  	  	case SUBSRC_environmental_sample:
-  	  	  tfp->remove_all_environmental = TRUE;
-  	  	  tfp->move_all_environmental = FALSE;
-  	  	  break;
-  	  	case SUBSRC_metagenomic:
-  	  	  tfp->remove_all_metagenomic = TRUE;
-  	  	  tfp->move_all_metagenomic = FALSE;
-  	  	  break;
-  	  }
-  	}
+      tfp->remove_this = TRUE;
+      if (fd.do_all)
+      {
+        switch (subtype)
+        {
+            case SUBSRC_rearranged:
+              tfp->remove_all_rearranged = TRUE;
+              tfp->move_all_rearranged = FALSE;
+              break;
+            case SUBSRC_transgenic:
+              tfp->remove_all_transgenic = TRUE;
+              tfp->move_all_transgenic = FALSE;
+              break;
+            case SUBSRC_germline:
+              tfp->remove_all_germline = TRUE;
+              tfp->move_all_germline = FALSE;
+              break;
+            case SUBSRC_environmental_sample:
+              tfp->remove_all_environmental = TRUE;
+              tfp->move_all_environmental = FALSE;
+              break;
+            case SUBSRC_metagenomic:
+              tfp->remove_all_metagenomic = TRUE;
+              tfp->move_all_metagenomic = FALSE;
+              break;
+        }
+      }
   }
   else if (fd.move_to_text)
   {
-  	tfp->move_this = TRUE;
-  	if (fd.do_all)
-  	{
-  	  switch (subtype)
-  	  {
-  	  	case SUBSRC_rearranged:
-  	  	  tfp->remove_all_rearranged = FALSE;
-  	  	  tfp->move_all_rearranged = TRUE;
-  	  	  break;
-  	  	case SUBSRC_transgenic:
-  	  	  tfp->remove_all_transgenic = FALSE;
-  	  	  tfp->move_all_transgenic = TRUE;
-  	  	  break;
-  	  	case SUBSRC_germline:
-  	  	  tfp->remove_all_germline = FALSE;
-  	  	  tfp->move_all_germline = TRUE;
-  	  	  break;
-  	  	case SUBSRC_environmental_sample:
-  	  	  tfp->remove_all_environmental = FALSE;
-  	  	  tfp->move_all_environmental = TRUE;
-  	  	  break;
-  	  	case SUBSRC_metagenomic:
-  	  	  tfp->remove_all_metagenomic = FALSE;
-  	  	  tfp->move_all_metagenomic = TRUE;
-  	  	  break;
-  	  }
-  	}
+      tfp->move_this = TRUE;
+      if (fd.do_all)
+      {
+        switch (subtype)
+        {
+            case SUBSRC_rearranged:
+              tfp->remove_all_rearranged = FALSE;
+              tfp->move_all_rearranged = TRUE;
+              break;
+            case SUBSRC_transgenic:
+              tfp->remove_all_transgenic = FALSE;
+              tfp->move_all_transgenic = TRUE;
+              break;
+            case SUBSRC_germline:
+              tfp->remove_all_germline = FALSE;
+              tfp->move_all_germline = TRUE;
+              break;
+            case SUBSRC_environmental_sample:
+              tfp->remove_all_environmental = FALSE;
+              tfp->move_all_environmental = TRUE;
+              break;
+            case SUBSRC_metagenomic:
+              tfp->remove_all_metagenomic = FALSE;
+              tfp->move_all_metagenomic = TRUE;
+              break;
+        }
+      }
   }
 }
 
@@ -2011,76 +2874,76 @@ extern void RemoveTextFromTextFreeSubSourceModifiers (BioSourcePtr biop, Pointer
   }
   else
   {
-  	tfp = (ModTextFixPtr) userdata;
+      tfp = (ModTextFixPtr) userdata;
   }
   
   for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next)
   {
-  	tfp->move_this = FALSE;
-  	tfp->remove_this = FALSE;
-  	if ((ssp->subtype == SUBSRC_germline
-  	    || ssp->subtype == SUBSRC_transgenic
-  	    || ssp->subtype == SUBSRC_rearranged
-  	    || ssp->subtype == SUBSRC_environmental_sample
-  	    || ssp->subtype == SUBSRC_metagenomic)
-  	    && ! StringHasNoText (ssp->name))
-  	{
- 	  GetModifierTextFix (tfp, ssp->subtype, ssp->name);
-  	  if (tfp->move_this)
-  	  {
-  	    /* if a note modifier is found, add this text to it, otherwise create a new
-  	     * note modifier to hold this text.
-  	     */
-  	    if (note_ssp == NULL)
-  	    {
-  	      for (note_ssp = biop->subtype; note_ssp != NULL && note_ssp->subtype != 255; note_ssp = note_ssp->next)
-  	      {	
-  	      }
-  	    }
-  	    if (note_ssp == NULL)
-  	    {
-  	  	  note_ssp = SubSourceNew ();
-  	  	  if (note_ssp != NULL)
-  	  	  {
-  	  	    note_ssp->subtype = 255;
-  	  	    note_ssp->name = ssp->name;
-  	  	    ssp->name = StringSave ("");
-  	  	    note_ssp->next = ssp->next;
-  	  	    ssp->next = note_ssp;
-  	  	  }
-  	    }
-  	    else if (StringHasNoText (note_ssp->name))
-  	    {
+      tfp->move_this = FALSE;
+      tfp->remove_this = FALSE;
+      if ((ssp->subtype == SUBSRC_germline
+          || ssp->subtype == SUBSRC_transgenic
+          || ssp->subtype == SUBSRC_rearranged
+          || ssp->subtype == SUBSRC_environmental_sample
+          || ssp->subtype == SUBSRC_metagenomic)
+          && ! StringHasNoText (ssp->name))
+      {
+       GetModifierTextFix (tfp, ssp->subtype, ssp->name);
+        if (tfp->move_this)
+        {
+          /* if a note modifier is found, add this text to it, otherwise create a new
+           * note modifier to hold this text.
+           */
+          if (note_ssp == NULL)
+          {
+            for (note_ssp = biop->subtype; note_ssp != NULL && note_ssp->subtype != 255; note_ssp = note_ssp->next)
+            {    
+            }
+          }
+          if (note_ssp == NULL)
+          {
+              note_ssp = SubSourceNew ();
+              if (note_ssp != NULL)
+              {
+                note_ssp->subtype = 255;
+                note_ssp->name = ssp->name;
+                ssp->name = StringSave ("");
+                note_ssp->next = ssp->next;
+                ssp->next = note_ssp;
+              }
+          }
+          else if (StringHasNoText (note_ssp->name))
+          {
           note_ssp->name = MemFree (note_ssp->name);
           note_ssp->name = ssp->name;
-          ssp->name = StringSave ("");  	  		
-  	    }
-  	    else
-  	    {
-  	  	  len = StringLen (note_ssp->name) + StringLen (ssp->name) + 3;
-  	  	  new_note = (CharPtr) MemNew (len * sizeof (Char));
-  	  	  if (new_note != NULL)
-  	  	  {
-  	  	    StringCpy (new_note, note_ssp->name);
-  	  	    StringCat (new_note, "; ");
-  	  	    StringCat (new_note, ssp->name);
-  	  	    note_ssp->name = MemFree (note_ssp->name);
-  	  	    note_ssp->name = new_note;
-  	  	    ssp->name = MemFree (ssp->name);
-  	  	    ssp->name = StringSave ("");
-  	  	  }
-  	    }
-  	  }
-  	  else if (tfp->remove_this)
-  	  {
-  	    ssp->name = MemFree (ssp->name);
-  	    ssp->name = StringSave ("");
-  	  }
-  	}
+          ssp->name = StringSave ("");                
+          }
+          else
+          {
+              len = StringLen (note_ssp->name) + StringLen (ssp->name) + 3;
+              new_note = (CharPtr) MemNew (len * sizeof (Char));
+              if (new_note != NULL)
+              {
+                StringCpy (new_note, note_ssp->name);
+                StringCat (new_note, "; ");
+                StringCat (new_note, ssp->name);
+                note_ssp->name = MemFree (note_ssp->name);
+                note_ssp->name = new_note;
+                ssp->name = MemFree (ssp->name);
+                ssp->name = StringSave ("");
+              }
+          }
+        }
+        else if (tfp->remove_this)
+        {
+          ssp->name = MemFree (ssp->name);
+          ssp->name = StringSave ("");
+        }
+      }
   }
   if (userdata == NULL)
   {
-  	MemFree (tfp);
+      MemFree (tfp);
   }
 }
 
@@ -2172,6 +3035,7 @@ Uint2 subsource_types [] = {
   TAGLIST_POPUP, TAGLIST_TEXT
 };
 
+/*
 static CharPtr orgmod_extra_prompts [] = {
   "Additional", "Organism", "Information", NULL
 };
@@ -2179,6 +3043,7 @@ static CharPtr orgmod_extra_prompts [] = {
 static CharPtr subsource_extra_prompts [] = {
   "Additional", "Source", "Information", NULL
 };
+*/
 
 static CharPtr orgTabs [] = {
   "Names", "Location", "Genetic Codes", "Lineage", NULL
@@ -3429,7 +4294,7 @@ extern Int2 LIBCALLBACK BioSourceGenFunc (Pointer data)
     gfp->proctype = ompcp->proc->proctype;
     gfp->userkey = OMGetNextUserKey ();
     omudp = ObjMgrAddUserData (ompcp->input_entityID, ompcp->proc->procid,
-	                           OMPROC_EDIT, gfp->userkey);
+                               OMPROC_EDIT, gfp->userkey);
     if (omudp != NULL) {
       omudp->userdata.ptrvalue = (Pointer) gfp;
       omudp->messagefunc = StdVibrantEditorMsgFunc;

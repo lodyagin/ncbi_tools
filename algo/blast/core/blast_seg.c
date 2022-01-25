@@ -1,4 +1,4 @@
-/* $Id: blast_seg.c,v 1.37 2006/11/21 17:08:06 papadopo Exp $
+/* $Id: blast_seg.c,v 1.39 2009/02/03 18:14:30 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE                          
@@ -36,7 +36,7 @@
 
 #ifndef SKIP_DOXYGEN_PROCESSING
 static char const rcsid[] = 
-    "$Id: blast_seg.c,v 1.37 2006/11/21 17:08:06 papadopo Exp $";
+    "$Id: blast_seg.c,v 1.39 2009/02/03 18:14:30 kazimird Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_seg.h>
@@ -1864,6 +1864,7 @@ s_LnPerm(const Int4* sv, Int4 window_length)
    double ans;
    Int4 i;
 
+   ASSERT(window_length < sizeof(lnfact)/sizeof(*lnfact));
    ans = lnfact[window_length];
 
    for (i=0; sv[i]!=0; i++) 
@@ -1891,6 +1892,7 @@ s_LnAss(const Int4* sv, Int4 alphasize)
 	int	class, total;
 	int    i;
 
+    ASSERT(alphasize < sizeof(lnfact)/sizeof(*lnfact));
 	ans = lnfact[alphasize];
 	if (sv[0] == 0)
 		return ans;
@@ -1963,7 +1965,7 @@ s_GetProb(const Int4* sv, Int4 total, const Alpha* palpha)
  * @param rightend right-most end of sequence [in|out]
  * @param sparamsp the SEG parameters [in]
  */
-static void 
+static Int2 
 s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* sparamsp)
 
 {
@@ -1972,6 +1974,7 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
    Int4 lend, rend;
    Int4 minlen;
    Int4 maxtrim;
+   Int2 status = 0;
 
    lend = 0;
    rend = seq->length - 1;
@@ -1979,6 +1982,10 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
    maxtrim = sparamsp->maxtrim;
    if ((seq->length-maxtrim)>minlen) 
         minlen = seq->length-maxtrim;
+
+   /* probably a nucleotide sequence.  s_GetProb cannot handle */
+   if (seq->length > sizeof(lnfact)/sizeof(*lnfact))
+      return -1;
 
    minprob = 1.;
    for (len=seq->length; len>minlen; len--)
@@ -2006,7 +2013,7 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
    *rightend = *rightend - (seq->length - rend - 1);
 
    s_CloseWin(seq);
-   return;
+   return status;
 }
 
 /** High-level function to perform calculations to find 
@@ -2018,7 +2025,7 @@ s_Trim(SSequence* seq, Int4* leftend, Int4* rightend, const SegParameters* spara
  * @param segs low-complexity segments found [out]
  * @param offset offset of sequence passed in [in]
  */
-static void 
+static Int2 
 s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
                    Int4 offset)
 {
@@ -2030,8 +2037,9 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
    Int4 i;
    Int4 leftend, rightend;
    double* H;
+   Int2 status = 0;
 
-   if (sparamsp->window<=0) return;
+   if (sparamsp->window<=0) return status;
    if (sparamsp->locut<=0.) sparamsp->locut = 0.;
    if (sparamsp->hicut<=0.) sparamsp->hicut = 0.;
 
@@ -2044,7 +2052,7 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
    H = s_SeqEntropy(seq, window, sparamsp->maxbogus);
 
    if (H == NULL) 
-      return;
+      return status;
 
    first = downset;
    last = seq->length - upset;
@@ -2056,12 +2064,18 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
         {
          Int4 loi = s_FindLow(i, lowlim, hicut, H);
          Int4 hii = s_FindHigh(i, last, hicut, H);
+         SSequence* temp_seq = NULL;
 
          leftend = loi - downset;
          rightend = hii + upset - 1;
 
-         s_Trim(s_OpenWin(seq, leftend, rightend-leftend+1), &leftend, &rightend,
+         temp_seq = s_OpenWin(seq, leftend, rightend-leftend+1);
+         status = s_Trim(temp_seq, &leftend, &rightend,
               sparamsp);
+         if (status < 0) {
+             s_CloseWin(temp_seq);
+             break;
+         }
 
          if (i+upset-1<leftend)   /* check for trigger window in left trim */
          {
@@ -2070,7 +2084,9 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
 
             SSequence* leftseq = s_OpenWin(seq, lend, rend-lend+1);
             SSeg *leftsegs = (SSeg*) NULL;
-            s_SegSeq(leftseq, sparamsp, &leftsegs, offset+lend);
+            status = s_SegSeq(leftseq, sparamsp, &leftsegs, offset+lend);
+            if (status < 0)
+              return status;
             if (leftsegs!=NULL)
             {
                if (*segs==NULL) *segs = leftsegs;
@@ -2093,7 +2109,7 @@ s_SegSeq(SSequence* seq, SegParameters* sparamsp, SSeg* *segs,
         }
    }
    sfree(H);
-   return;
+   return status;
 }
 
 /*------------------------------------------------------------(mergesegs)---*/
@@ -2284,11 +2300,11 @@ Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,
    SSequence* seqwin;
    SSeg* segs;
    Boolean params_allocated = FALSE;
+   Int2 status = 0;
    
    s_SegParametersCheck (sparamsp);
    
    /* check seg parameters */
-   
    if (!sparamsp) {
       params_allocated = TRUE;
       sparamsp = SegParametersNewAa();
@@ -2296,18 +2312,26 @@ Int2 SeqBufferSeg (Uint1* sequence, Int4 length, Int4 offset,
       if (!sparamsp)
          return -1;
    }
-   
+
    /* make an old-style genwin sequence window object */
     
    seqwin = s_SSequenceNew();
    seqwin->seq = (char*) sequence;
    seqwin->length = length;
    seqwin->palpha = s_AA20alphaStd();
+
+   *seg_locs = NULL;
    
    /* seg the sequence */
    
    segs = (SSeg*) NULL;
-   s_SegSeq (seqwin, sparamsp, &segs, 0);
+   status = s_SegSeq (seqwin, sparamsp, &segs, 0);
+   if (status < 0)
+   {
+     seqwin->seq = NULL;
+     s_SSequenceFree (seqwin);
+     return status;
+   }
 
    /* merge the segment if desired. */
    if (sparamsp->overlaps)

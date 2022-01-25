@@ -28,13 +28,16 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.62 $
+* $Revision: 6.63 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.63  2008/12/01 19:35:39  bollin
+* prevent crash when mapping positions and row of alignment is entirely in the gapl.
+*
 * Revision 6.62  2007/03/09 20:37:06  bollin
 * Fixed insidious double-increment bug in AlnMgr2MergeTwoAlignments - if the
 * second alignment to be merged had more than one segment, the seg index was
@@ -7599,6 +7602,9 @@ NLM_EXTERN Int4 AlnMgr2MapBioseqToSeqAlign(SeqAlignPtr sap, Int4 pos, Int4 row)
    if (row > saip->numrows)
       return -1;
    srdp = saip->srdp[row-1];
+   if (srdp->numsect < 1) {
+     return -1;
+   }
    strand = AlnMgr2GetNthStrand(sap, row);
    L = 0;
    R = srdp->numsect - 1;

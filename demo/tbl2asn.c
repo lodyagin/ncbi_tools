@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.271 $
+* $Revision: 6.278 $
 *
 * File Description:
 *
@@ -72,7 +72,7 @@
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define TBL2ASN_APP_VER "12.7"
+#define TBL2ASN_APP_VER "13.2"
 
 CharPtr TBL2ASN_APPLICATION = TBL2ASN_APP_VER;
 
@@ -129,6 +129,7 @@ typedef struct tblargs {
   CharPtr     aln_match;
   Boolean     aln_is_protein;
   Boolean     save_bioseq_set;
+  Boolean     apply_cmt_to_all;
 
   GlobalDiscrepReportPtr global_report;
 
@@ -5807,7 +5808,54 @@ static void DoTbl2AsnCleanup (SeqEntryPtr sep, CleanupArgsPtr c)
     item_list = ValNodeFree (item_list);
   }
 }
-  
+
+
+static void SeqEntryHasConflictingIDsCallback (BioseqPtr bsp, Pointer data)
+{
+  CharPtr msg, fmt = "SeqID %s is present on multiple Bioseqs in record";
+  BioseqPtr bsp2;
+  SeqIdPtr sip;
+  DbtagPtr dbt;
+  Char     buf[100];
+
+  if (bsp == NULL || data == NULL) {
+    return;
+  }
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_GENERAL 
+        && (dbt = (DbtagPtr) sip->data.ptrvalue) != NULL
+        && StringICmp (dbt->db, "NCBIFILE") == 0) {
+      continue;
+        }
+    bsp2 = BioseqFindSpecial (sip);
+    if (bsp2 != NULL && bsp2 != bsp) {
+      SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
+      msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (buf)));
+      sprintf (msg, fmt, buf);
+      ValNodeAddPointer ((ValNodePtr PNTR) data, 0, msg);
+    }
+  }
+}
+
+
+static Boolean SeqEntryHasConflictingIDs (SeqEntryPtr sep)
+{
+  ValNodePtr errs = NULL, vnp;
+
+  VisitBioseqsInSep (sep, &errs, SeqEntryHasConflictingIDsCallback);
+  if (errs == NULL) {
+    return FALSE;
+  } else {
+    ValNodeUnique (&errs, SortVnpByString, ValNodeFreeData);
+    for (vnp = errs; vnp != NULL; vnp = vnp->next) {
+      Message (MSG_POSTERR, vnp->data.ptrvalue);
+    }
+    errs = ValNodeFreeData (errs);
+    return TRUE;
+  }
+}
+
 
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
@@ -5927,6 +5975,11 @@ static void ProcessOneRecord (
 
   if (entityID == 0) return;
 
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (SeqEntryHasConflictingIDs (sep)) {
+    return;
+  }
+
   if (tbl->dotaxlookup) {
     sep = GetTopSeqEntryForEntityID (entityID);
     if (sep != NULL) {
@@ -6030,7 +6083,7 @@ static void ProcessOneRecord (
   fp = OpenOneFile (directory, base, ".cmt");
   if (fp != NULL) {
     sep = GetTopSeqEntryForEntityID (entityID);
-    cmt_errors = CreateStructuredCommentsFromFile (fp, sep);
+    cmt_errors = CreateStructuredCommentsFromFile (fp, sep, tbl->apply_cmt_to_all);
     FileClose (fp);
     if (cmt_errors != NULL) {
       for (vnp = cmt_errors; vnp != NULL; vnp = vnp->next) {
@@ -6948,6 +7001,7 @@ static DatePtr DateParse (
 #define H_argHoldUntilPub     36
 #define Z_argDiscRepFile      37
 #define c_argCleanupOptions   38
+#define X_argExtraFlags       39
 
 
 Args myargs [] = {
@@ -7054,6 +7108,9 @@ Args myargs [] = {
    "      b Append note to coding regions that overlap other coding regions with similar product names and do not contain 'ABC'",
     NULL, NULL, NULL,
     TRUE, 'c', ARG_STRING, 0.0, 0, NULL},
+  {"Extra Flags (combine any of the following letters)\n"
+   "      C Apply comments in .cmt files to all sequences\n",  NULL, NULL, NULL,
+    TRUE, 'X', ARG_STRING, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -7279,12 +7336,21 @@ Int2 Main (void)
 
   tbl.save_bioseq_set = (Boolean) myargs [K_argBioseqSet].intvalue;
 
+  /* get extra flags */
+  ptr = myargs [X_argExtraFlags].strvalue;
+  if (StringChr (ptr, 'C') == NULL) {
+    tbl.apply_cmt_to_all = FALSE;
+  } else {
+    tbl.apply_cmt_to_all = TRUE;
+  }
+
   disc_rep_file = (CharPtr) myargs [Z_argDiscRepFile].strvalue;
   if (StringHasNoText (disc_rep_file)) {
     tbl.global_report = NULL;
   } else {
     tbl.global_report = GlobalDiscrepReportNew();
     tbl.global_report->test_config = DiscrepancyConfigNew ();
+    DisableTRNATests (tbl.global_report->test_config);
     ConfigureForGenomes (tbl.global_report->test_config);
     tbl.global_report->taxlookup = taxlookup;
     tbl.global_report->output_config->summary_report = FALSE;

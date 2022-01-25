@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.103 $
+* $Revision: 1.115 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -62,6 +62,24 @@
 #include <Profiler.h>
 #endif
 #endif
+
+static CharPtr link_projid = "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=genomeprj&cmd=Retrieve&dopt=Overview&list_uids=";
+
+static CharPtr link_wgs = "http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?";
+
+static CharPtr link_sp = "http://www.uniprot.org/uniprot/";
+
+static CharPtr link_featn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
+
+/*
+static CharPtr link_omim = "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id=";
+*/
+
+
 
 /* ********************************************************************** */
 
@@ -1273,13 +1291,16 @@ NLM_EXTERN void AddLocusBlock (
 
       sprintf(gi_buf, "%ld", (long) gi);
       FFAddOneString(ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, link_featc, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString(ffstring, "val=", FALSE, FALSE, TILDE_IGNORE);
+      if (is_aa) {
+        FF_Add_NCBI_Base_URL(ffstring, link_featp);
+      } else {
+        FF_Add_NCBI_Base_URL(ffstring, link_featn);
+      }
       FFAddOneString(ffstring, gi_buf, FALSE, FALSE, TILDE_IGNORE);
       if ( is_aa ) {
-        FFAddOneString(ffstring, "&view=gpwithparts", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, "?report=gpwithparts", FALSE, FALSE, TILDE_IGNORE);
       } else {
-        FFAddOneString(ffstring, "&view=gbwithparts", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString(ffstring, "?report=gbwithparts", FALSE, FALSE, TILDE_IGNORE);
       }
       FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
       if (bsp->length > 1000000) {
@@ -1535,14 +1556,20 @@ NLM_EXTERN void AddDeflineBlock (
 static void FF_www_accession (
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
-  CharPtr cstring
+  CharPtr cstring,
+  Boolean is_na
 )
 {
   if (cstring == NULL || ffstring == NULL) return;
 
   if ( GetWWW(ajp) ) {
-    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "val=", cstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+    if (is_na) {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+    } else {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+    }
+    FFAddTextToString(ffstring, /* "val=" */ NULL, cstring, "\">", FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, cstring, FALSE, FALSE, TILDE_IGNORE);
     FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
   } else {
@@ -1702,6 +1729,7 @@ NLM_EXTERN void AddAccessionBlock (
   SeqIdPtr           gnl = NULL;
   SeqIdPtr           gpp = NULL;
   IndxPtr            index;
+  Boolean            is_na;
   SeqIdPtr           lcl = NULL;
   size_t             len = 0;
   MolInfoPtr         mip;
@@ -1725,6 +1753,8 @@ NLM_EXTERN void AddAccessionBlock (
   
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
+
+  is_na = ISA_na (bsp->mol);
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
@@ -1823,7 +1853,7 @@ NLM_EXTERN void AddAccessionBlock (
     FFAddOneString (ffstring, ";", FALSE, FALSE, TILDE_TO_SPACES);
 
   } else if (ajp->ajp.slp != NULL) {
-    FF_www_accession (ajp, ffstring, buf);
+    FF_www_accession (ajp, ffstring, buf, is_na);
     flatloc =  FFFlatLoc (ajp, bsp, ajp->ajp.slp, ajp->masterStyle);
     FFAddTextToString (ffstring, " REGION: ", flatloc, NULL, FALSE, FALSE, TILDE_TO_SPACES);
     MemFree (flatloc);
@@ -1890,7 +1920,8 @@ NLM_EXTERN void AddAccessionBlock (
         }
         if (! StringHasNoText (buf)) {
           if ( GetWWW(ajp) ) {
-            FFAddTextToString(ffstring, separator, "<a href=\"", link_wgs, FALSE, FALSE, TILDE_IGNORE);
+            FFAddTextToString(ffstring, separator, "<a href=\"", NULL, FALSE, FALSE, TILDE_IGNORE);
+            FF_Add_NCBI_Base_URL (ffstring, link_wgs);
             FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", buf, "\">", FALSE, FALSE, TILDE_IGNORE);
             FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
             FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
@@ -2031,7 +2062,6 @@ NLM_EXTERN void AddVersionBlock (
       case SEQID_GPIPE :
         /* should not override better accession */
         gpp = sip;
-        format = PRINTID_TEXTID_ACC_ONLY;
         break;
       default :
         break;
@@ -2040,6 +2070,9 @@ NLM_EXTERN void AddVersionBlock (
 
   if (accn == NULL) {
     accn = gpp;
+    /*
+    format = PRINTID_TEXTID_ACC_ONLY;
+    */
   }
 
   /* if (gi < 1 && accn == NULL) return; */
@@ -2174,14 +2207,14 @@ static void FF_asn2gb_www_projID (
 
 {
   FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
-  FFAddOneString (ffstring, link_projid, FALSE, FALSE, TILDE_IGNORE);
+  FF_Add_NCBI_Base_URL (ffstring, link_projid);
   FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString (ffstring, projID, FALSE, FALSE, TILDE_IGNORE);
   FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
-NLM_EXTERN void AddProjectBlock (
+static void AddOldProjectBlock (
   Asn2gbWorkPtr awp
 )
 
@@ -2325,6 +2358,283 @@ NLM_EXTERN void AddProjectBlock (
   }
 }
 
+static CharPtr GetDBLinkString (
+  UserObjectPtr uop
+)
+
+{
+  Char          buf1 [256];
+  Char          buf2 [256];
+  CharPtr PNTR  cpp;
+  Int4          i;
+  Int4Ptr       ip;
+  size_t        len;
+  ObjectIdPtr   oip;
+  CharPtr       prefix;
+  CharPtr       str;
+  Char          tmp [32];
+  UserFieldPtr  ufp;
+  Int4          val;
+
+  if (uop == NULL) return NULL;
+
+  buf1 [0] = '\0';
+  buf2 [0] = '\0';
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (oip == NULL || oip->str == NULL) continue;
+    if (StringICmp (oip->str, "Trace Assembly Archive") == 0 && ufp->choice == 8) {
+      ip = (Int4Ptr) ufp->data.ptrvalue;
+      if (ufp->num > 0 && ip != NULL) {
+        val = ip [0];
+        if (val > 0) {
+          sprintf (buf1, "Trace Assembly Archive:%ld", (long) val);
+          for (i = 1; i < ufp->num; i++) {
+            val = ip [i];
+            if (val > 0) {
+              sprintf (tmp, ",%ld", (long) val);
+              StringCat (buf1, tmp);
+            }
+          }
+        }
+      }
+    }
+    if (StringICmp (oip->str, "Bio Sample") == 0 && ufp->choice == 7) {
+      cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+      if (ufp->num > 0 && cpp != NULL) {
+        str = cpp [0];
+        if (StringDoesHaveText (str)) {
+          sprintf (buf2, "Bio Sample:%s", str);
+          for (i = 1; i < ufp->num; i++) {
+            str = cpp [i];
+            if (StringDoesHaveText (str)) {
+              sprintf (tmp, ",%s", str);
+              StringCat (buf2, tmp);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (StringHasNoText (buf1) && StringHasNoText (buf2)) return NULL;
+
+  len = StringLen (buf1) + StringLen (buf2);
+  str = (CharPtr) MemNew (sizeof (Char) * (len + 2));
+  if (str == NULL) return NULL;
+
+  prefix = "";
+
+  if (StringDoesHaveText (buf1)) {
+    StringCat (str, buf1);
+    prefix = "\n";
+  }
+
+  if (StringDoesHaveText (buf2)) {
+    StringCat (str, prefix);
+    StringCat (str, buf2);
+    prefix = "\n";
+  }
+
+  return str;
+}
+
+static void AddDblinkBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  IntAsn2gbJobPtr    ajp;
+  Asn2gbSectPtr      asp;
+  BaseBlockPtr       bbp;
+  BioseqPtr          bsp;
+  Char               buf [32];
+  UserFieldPtr       curr;
+  Uint4              dbitemID = 0;
+  UserObjectPtr      dbuop = NULL;
+  SeqMgrDescContext  dcontext;
+  Boolean            first = TRUE;
+  StringItemPtr      ffstring;
+  GBSeqPtr           gbseq;
+  Uint4              gpitemID = 0;
+  UserObjectPtr      gpuop = NULL;
+  ValNodePtr         head = NULL;
+  ObjectIdPtr        oip;
+  Int4               parentID;
+  CharPtr            prefix;
+  Int4               projectID;
+  SeqDescrPtr        sdp;
+  CharPtr            str;
+  UserObjectPtr      uop;
+  Int4               val;
+
+  if (awp == NULL) return;
+  ajp = awp->ajp;
+  if (ajp == NULL) return;
+  bsp = awp->bsp;
+  if (bsp == NULL) return;
+  asp = awp->asp;
+  if (asp == NULL) return;
+
+  if (! ISA_na (bsp->mol)) return;
+  if (awp->format != GENBANK_FMT) return;
+
+  if (ajp->gbseq) {
+    gbseq = &asp->gbseq;
+  } else {
+    gbseq = NULL;
+  }
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      oip = uop->type;
+      if (oip != NULL && StringICmp (oip->str, "GenomeProjectsDB") == 0) {
+        gpuop = uop;
+        gpitemID = dcontext.itemID;
+      }
+      if (oip != NULL && StringICmp (oip->str, "DBLink") == 0) {
+        dbuop = uop;
+        dbitemID = dcontext.itemID;
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+  if (gpuop == NULL && dbuop == NULL) return;
+
+  ffstring = FFGetString (ajp);
+  if ( ffstring == NULL ) return;
+
+  if (gpuop != NULL) {
+    bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
+    if (bbp == NULL) return;
+
+    bbp->entityID = awp->entityID;
+    bbp->itemID = gpitemID;
+    bbp->itemtype = OBJ_SEQDESC;
+
+    if (first) {
+      FFStartPrint (ffstring, awp->format, 0, 12, "DBLINK", 12, 5, 5, "XX", TRUE);
+    } else {
+      FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "XX", TRUE);
+    }
+    first = FALSE;
+
+    prefix = "Project:";
+    projectID = 0;
+    parentID = 0;
+    for (curr = gpuop->data; curr != NULL; curr = curr->next) {
+      oip = curr->label;
+      if (oip == NULL) continue;
+      if (StringICmp (oip->str, "ProjectID") == 0) {
+        if (curr->choice == 2) {
+          val = (Int4) curr->data.intvalue;
+          if (projectID > 0) {
+            sprintf (buf, "%ld", (long) projectID);
+            FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+            if (GetWWW (ajp)) {
+              FF_asn2gb_www_projID (ffstring, buf);
+            } else {
+              FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+            }
+            /*
+            FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
+            */
+            if (gbseq != NULL) {
+              if (head == NULL) {
+                sprintf (buf, "%ld", (long) projectID);
+              } else {
+                sprintf (buf, ", %ld", (long) projectID);
+              }
+              ValNodeCopyStr (&head, 0, buf);
+            }
+            prefix = ",";
+            parentID = 0;
+          }
+          projectID = val;
+        }
+      } else if (StringICmp (oip->str, "ParentID") == 0) {
+        if (curr->choice == 2) {
+          val = (Int4) curr->data.intvalue;
+          parentID = val;
+        }
+      }
+    }
+    if (projectID > 0) {
+      sprintf (buf, "%ld", (long) projectID);
+      FFAddOneString (ffstring, prefix, FALSE, FALSE, TILDE_IGNORE);
+      if (GetWWW (ajp)) {
+        FF_asn2gb_www_projID (ffstring, buf);
+      } else {
+        FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
+      }
+      /*
+      FFAddTextToString (ffstring, prefix, buf, NULL, FALSE, FALSE, TILDE_IGNORE);
+      */
+      if (gbseq != NULL) {
+        if (head == NULL) {
+          sprintf (buf, "%ld", (long) projectID);
+        } else {
+          sprintf (buf, ", %ld", (long) projectID);
+        }
+        ValNodeCopyStr (&head, 0, buf);
+      }
+    }
+
+    bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
+    FFRecycleString (ajp, ffstring);
+    ffstring = FFGetString (ajp);
+  }
+
+  if (dbuop != NULL) {
+    str = GetDBLinkString (dbuop);
+    if (StringDoesHaveText (str)) {
+      bbp = Asn2gbAddBlock (awp, PROJECT_BLOCK, sizeof (BaseBlock));
+      if (bbp == NULL) return;
+
+      bbp->entityID = awp->entityID;
+      bbp->itemID = dbitemID;
+      bbp->itemtype = OBJ_SEQDESC;
+
+      if (first) {
+        FFStartPrint (ffstring, awp->format, 0, 12, "DBLINK", 12, 5, 5, "XX", TRUE);
+      } else {
+        FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "XX", TRUE);
+      }
+      first = FALSE;
+
+      FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+
+      bbp->string = FFEndPrint (ajp, ffstring, awp->format, 12, 12, 5, 5, "XX");
+      MemFree (str);
+    }
+  }
+
+  FFRecycleString (ajp, ffstring);
+
+  if (gbseq != NULL) {
+    if (head != NULL) {
+      gbseq->project = MergeFFValNodeStrs (head);
+      ValNodeFreeData (head);
+    }
+  }
+
+  if (awp->afp != NULL) {
+    DoImmediateFormat (awp->afp, bbp);
+  }
+}
+
+NLM_EXTERN void AddProjectBlock (
+  Asn2gbWorkPtr awp
+)
+
+{
+  AddOldProjectBlock (awp);
+  AddDblinkBlock (awp);
+}
+
 /* only displaying PID in GenPept format */
 
 /*
@@ -2414,10 +2724,12 @@ static void AddToUniqueSipList (
 
 static Boolean WriteDbsourceID (
   SeqIdPtr sip,
-  CharPtr str
+  CharPtr str,
+  BoolPtr is_na_p
 )
 
 {
+  Boolean       check_na = FALSE;
   DbtagPtr      db;
   CharPtr       dt;
   Int4          gi;
@@ -2431,6 +2743,9 @@ static Boolean WriteDbsourceID (
   Char          tmp [32];
   TextSeqIdPtr  tsip = NULL;
 
+  if (is_na_p != NULL) {
+    *is_na_p = FALSE;
+  }
   if (sip == NULL || str == NULL) return FALSE;
   *str = '\0';
   switch (sip->choice) {
@@ -2461,13 +2776,17 @@ static Boolean WriteDbsourceID (
     case SEQID_EMBL :
     case SEQID_DDBJ :
     case SEQID_OTHER :
-    case SEQID_PIR :
-    case SEQID_SWISSPROT :
-    case SEQID_PRF :
     case SEQID_TPG :
     case SEQID_TPE :
     case SEQID_TPD :
     case SEQID_GPIPE :
+      tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+      if (tsip == NULL) return FALSE;
+      check_na = TRUE;
+      break;
+    case SEQID_PIR :
+    case SEQID_SWISSPROT :
+    case SEQID_PRF :
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip == NULL) return FALSE;
       break;
@@ -2489,11 +2808,11 @@ static Boolean WriteDbsourceID (
       StringCat (str, "REFSEQ: ");
       break;
     case SEQID_SWISSPROT :
-      StringCat (str, "swissprot: ");
+      StringCat (str, "UniProtKB: ");
       suffix = ",";
       break;
     case SEQID_PIR :
-      StringCat (str, "pir: ");
+      StringCat (str, "UniProtKB: ");
       break;
     case SEQID_PRF :
       StringCat (str, "prf: ");
@@ -2525,6 +2844,9 @@ static Boolean WriteDbsourceID (
       sfx = suffix;
       pfx = prefix;
       rsult = TRUE;
+      if (check_na && is_na_p != NULL) {
+        *is_na_p = IS_ntdb_accession (tsip->accession);
+      }
     }
     if (tsip->version > 0 && sip->choice != SEQID_SWISSPROT) {
       sprintf (tmp, ".%d", (int) tsip->version);
@@ -2587,6 +2909,7 @@ static void AddSPBlock (
 
 {
   CharPtr            acc;
+  Char               buf [64];
   DbtagPtr           db;
   SeqMgrDescContext  dcontext;
   Boolean            first;
@@ -2594,6 +2917,7 @@ static void AddSPBlock (
   Boolean            has_link;
   Char               id [42];
   ObjectIdPtr        oip;
+  CharPtr            ptr;
   SeqDescrPtr        sdp;
   SeqIdPtr           sid;
   SeqIdPtr           sif;
@@ -2694,53 +3018,21 @@ static void AddSPBlock (
       if (StringDoesHaveText (id)) {
         acc = id;
       }
-      /*
-      if (acc != NULL) {
-        switch (sip->choice) {
-          case SEQID_GENBANK:
-            FFAddOneString (ffstring, "genbank accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_EMBL:
-            FFAddOneString (ffstring, "embl accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_PIR:
-            FFAddOneString (ffstring, "pir locus ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_SWISSPROT:
-            FFAddOneString (ffstring, "swissprot accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_DDBJ:
-            FFAddOneString (ffstring, "ddbj accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_PRF:
-            FFAddOneString (ffstring, "prf accession ", FALSE, FALSE, TILDE_IGNORE);
-            break;
-          case SEQID_PDB:
-            FFAddOneString (ffstring, "pdb accession ", FALSE, FALSE, TILDE_IGNORE);
-            break;
-          case SEQID_GI:
-            FFAddOneString (ffstring, "gi: ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_TPG:
-            FFAddOneString (ffstring, "genbank third party accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_TPE:
-            FFAddOneString (ffstring, "embl third party accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          case SEQID_TPD:
-            FFAddOneString (ffstring, "ddbj third party accession ", FALSE, FALSE, TILDE_IGNORE);
-            break; 
-          default:
-            acc = NULL;
-            break; 
-        }
-      }
-      */
       if (acc != NULL) {
         if ( GetWWW(ajp) && has_link ) {
           sprintf(numbuf, "%ld", (long) sid->data.intvalue);
-          FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-          FFAddTextToString(ffstring, "val=", numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
+          FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+          StringNCpy_0 (buf, acc, sizeof (buf));
+          ptr = StringChr (buf, '.');
+          if (ptr != NULL) {
+            *ptr = '\0';
+          }
+          if (IS_ntdb_accession (buf)) {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+          } else {
+            FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+          }
+          FFAddTextToString(ffstring, /* "val=" */ NULL, numbuf, "\">", FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(ffstring, acc, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
         } else {
@@ -2814,7 +3106,9 @@ static void AddSPBlock (
       FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
       if ( GetWWW(ajp) && has_link) {
         FFAddOneChar (ffstring, ' ', FALSE);
-        FFAddTextToString(ffstring, "<a href=\"", link_omim, str, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_omim);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_IGNORE);
         FFAddTextToString(ffstring, "\">", str, "</a>", FALSE, FALSE, TILDE_IGNORE);
       } else {
         FFAddOneString(ffstring, str, FALSE, FALSE, TILDE_IGNORE);
@@ -2936,10 +3230,10 @@ static void AddPIRBlock (
             FFAddOneString (ffstring, "embl ", FALSE, FALSE, TILDE_IGNORE);
             break; 
           case SEQID_PIR:
-            FFAddOneString (ffstring, "pir ", FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "UniProtKB ", FALSE, FALSE, TILDE_IGNORE);
             break; 
           case SEQID_SWISSPROT:
-            FFAddOneString (ffstring, "swissprot ", FALSE, FALSE, TILDE_IGNORE);
+            FFAddOneString (ffstring, "UniProtKB ", FALSE, FALSE, TILDE_IGNORE);
             break; 
           case SEQID_DDBJ:
             FFAddOneString (ffstring, "ddbj ", FALSE, FALSE, TILDE_IGNORE);
@@ -3118,7 +3412,8 @@ static Boolean FF_www_dbsource(
   StringItemPtr ffstring,
   CharPtr str,
   Boolean first,
-  Uint1 choice
+  Uint1 choice,
+  Boolean is_na
 )
 {
   CharPtr  temp, end, text, loc, link=NULL;
@@ -3126,18 +3421,22 @@ static Boolean FF_www_dbsource(
 
   if( GetWWW(ajp) ) {
     if (choice == SEQID_PIR) {
-      link = link_seq;
+      link = link_seqp;
     } else if (choice == SEQID_SWISSPROT) {
       link = link_sp;
     } else if (choice == SEQID_PDB || choice == SEQID_PRF) {
-      link = link_seq;
+      link = link_seqp;
     } else if (choice == SEQID_EMBL || choice == SEQID_GENBANK || 
         choice == SEQID_DDBJ || choice == SEQID_GIBBSQ || 
         choice == SEQID_GIBBMT || choice == SEQID_GI || 
         choice == SEQID_GIIM || choice == SEQID_OTHER ||
         choice == SEQID_TPG || choice == SEQID_TPE || choice == SEQID_TPD ||
         choice == SEQID_GPIPE)  {
-      link = link_seq;
+      if (is_na) {
+        link = link_seqn;
+      } else {
+        link = link_seqp;
+      }
     } else {
       AddStringWithTildes(ffstring, str);
       return TRUE;
@@ -3167,9 +3466,12 @@ static Boolean FF_www_dbsource(
       }
 
       if (choice == SEQID_SWISSPROT) {
-        FFAddTextToString(ffstring, "<a href=\"", link, NULL, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link);
       } else {
-        FFAddTextToString(ffstring, "<a href=\"", link, "val=", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link);
+        FFAddOneString (ffstring, /* "val=" */ NULL, FALSE, FALSE, TILDE_IGNORE);
       }
       for (text = temp; text != end; ++text ) {
         FFAddOneChar(ffstring, *text, FALSE);
@@ -3209,6 +3511,7 @@ NLM_EXTERN void AddDbsourceBlock (
   DbtagPtr         db;
   GBSeqPtr         gbseq;
   SeqIdPtr         id;
+  Boolean          is_na;
   ValNodePtr       list = NULL;
   BioseqPtr        nuc;
   SeqEntryPtr      sep;
@@ -3246,8 +3549,8 @@ NLM_EXTERN void AddDbsourceBlock (
       case SEQID_SWISSPROT :
       case SEQID_PRF :
       case SEQID_PDB :
-        if (WriteDbsourceID (sip, buf)) {
-          FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice);
+        if (WriteDbsourceID (sip, buf, &is_na)) {
+          FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
           FFAddNewLine(ffstring);
           unknown = FALSE;
         }
@@ -3302,8 +3605,8 @@ NLM_EXTERN void AddDbsourceBlock (
                 sip = id;
               }
               if (sip != NULL) {
-                if (WriteDbsourceID (sip, buf)) {
-                  FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice);
+                if (WriteDbsourceID (sip, buf, &is_na)) {
+                  FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
                   FFAddNewLine(ffstring);
                   unknown = FALSE;
                 }
@@ -3321,16 +3624,16 @@ NLM_EXTERN void AddDbsourceBlock (
                   sip = id;
                 }
               }
-              if (WriteDbsourceID (sip, buf)) {
-                FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice);
+              if (WriteDbsourceID (sip, buf, &is_na)) {
+                FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
                 FFAddNewLine(ffstring);
                 unknown = FALSE;
               }
             }
           }
         } else {
-          if (WriteDbsourceID (sip, buf)) {
-            FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice);
+          if (WriteDbsourceID (sip, buf, &is_na)) {
+            FF_www_dbsource (ajp, ffstring, buf, TRUE, sip->choice, is_na);
             FFAddNewLine(ffstring);
             unknown = FALSE;
           }
@@ -3592,14 +3895,6 @@ NLM_EXTERN void AddKeywordsBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring == NULL ) return;
 
-  for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_TPG || sip->choice == SEQID_TPE || sip->choice == SEQID_TPD) {
-      ValNodeCopyStr (&head, 0, "Third Party Annotation");
-      ValNodeCopyStr (&head, 0, "; ");
-      ValNodeCopyStr (&head, 0, "TPA");
-    }
-  }
-
   biop = NULL;
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &dcontext);
   if (sdp != NULL) {
@@ -3751,6 +4046,17 @@ NLM_EXTERN void AddKeywordsBlock (
     ValNodeCopyStr (&head, 0, "ENCODE");
   }
 
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_TPG || sip->choice == SEQID_TPE || sip->choice == SEQID_TPD) {
+      if (head != NULL) {
+        ValNodeCopyStr (&head, 0, "; ");
+      }
+      ValNodeCopyStr (&head, 0, "Third Party Annotation");
+      ValNodeCopyStr (&head, 0, "; ");
+      ValNodeCopyStr (&head, 0, "TPA");
+    }
+  }
+
   sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &dcontext);
   while (sdp != NULL) {
 
@@ -3869,7 +4175,8 @@ NLM_EXTERN void AddKeywordsBlock (
 
 NLM_EXTERN void AddSegmentBlock (
   Asn2gbWorkPtr awp,
-  Boolean onePartOfSeg
+  Boolean onePartOfSeg,
+  Boolean is_na
 )
 
 {
@@ -3903,8 +4210,13 @@ NLM_EXTERN void AddSegmentBlock (
     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
     SeqIdWrite (awp->parent->id, acc, PRINTID_TEXTID_ACC_VER, sizeof (acc) - 1);
 
-    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-    FFAddTextToString(ffstring, "val=", acc, "\">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+    if (is_na) {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+    } else {
+      FF_Add_NCBI_Base_URL (ffstring, link_seqp);
+    }
+    FFAddTextToString(ffstring, /* "val=" */ NULL, acc, "\">", FALSE, FALSE, TILDE_IGNORE);
 
     sprintf (buf, "%ld", (long) awp->numsegs);
     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_IGNORE);
@@ -5450,15 +5762,17 @@ NLM_EXTERN void AddWGSBlock (
               
                 if ( GetWWW(ajp) ) {
                   if (StringCmp (first, last) != 0) {
-                    FFAddTextToString(ffstring, "<a href=\"", link_wgs, NULL, FALSE, FALSE, TILDE_IGNORE);
+                    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                    FF_Add_NCBI_Base_URL (ffstring, link_wgs);
                     FFAddTextToString(ffstring, "db=Nucleotide&cmd=Search&term=", first, NULL, FALSE, FALSE, TILDE_IGNORE);
                     FFAddTextToString(ffstring, ":", last, "[PACC]\">", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s-%s", first, last);
                     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
                     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);
                   } else {
-                    FFAddTextToString(ffstring, "<a href=\"", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-                    FFAddTextToString(ffstring, "val=", first, "\">", FALSE, FALSE, TILDE_IGNORE);
+                    FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+                    FF_Add_NCBI_Base_URL (ffstring, link_seqn);
+                    FFAddTextToString(ffstring, /* "val=" */ NULL, first, "\">", FALSE, FALSE, TILDE_IGNORE);
                     sprintf (buf, "%s", first);
                     FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_TO_SPACES);
                     FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_TO_SPACES);

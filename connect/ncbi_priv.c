@@ -1,4 +1,4 @@
-/*  $Id: ncbi_priv.c,v 6.10 2007/01/23 22:31:29 kazimird Exp $
+/* $Id: ncbi_priv.c,v 6.14 2008/12/01 16:34:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,7 @@
 #  include <connect/ncbi_socket.h>
 #endif /*NCBI_OS_...*/
 #include <stdarg.h>
+#include <stdlib.h>
 #include <string.h>
 
 
@@ -51,7 +52,7 @@ REG     g_CORE_Registry          = 0;
 
 extern int g_NCBI_ConnectSrandAddend(void)
 {
-#if defined(NCBI_OS_UNIX)
+#if   defined(NCBI_OS_UNIX)
     return (int) getpid(); 
 #elif defined(NCBI_OS_MSWIN)
     return (int) GetCurrentProcessId();
@@ -63,67 +64,37 @@ extern int g_NCBI_ConnectSrandAddend(void)
 
 extern const char* g_CORE_Sprintf(const char* fmt, ...)
 {
-  va_list args;
-  static char str[4096];
+    static const size_t buf_size = 4096;
+    char*   buf;
+    va_list args;
 
-  va_start(args, fmt);
-  *str = '\0';
-  vsprintf(str, fmt, args);
-  assert(strlen(str) < sizeof(str));
-  va_end(args);
-  return str;
+    if (!(buf = (char*) malloc(buf_size)))
+        return 0;
+    *buf = '\0';
+
+    va_start(args, fmt);
+#ifdef HAVE_VSNPRINTF
+    vsnprintf(buf, buf_size, fmt, args);
+#else
+    vsprintf (buf,           fmt, args);
+#endif /*HAVE_VSNPRINTF*/
+    assert(strlen(buf) < buf_size);
+    va_end(args);
+    return buf;
 }
 
 
-extern char* g_CORE_RegistryGET
+extern const char* g_CORE_RegistryGET
 (const char* section,
  const char* name,
  char*       value,
  size_t      value_size,
  const char* def_value)
 {
-    char* ret_value;
+    const char* ret_value;
     CORE_LOCK_READ;
     ret_value = REG_Get(g_CORE_Registry,
                         section, name, value, value_size, def_value);
     CORE_UNLOCK;
     return ret_value;
 }
-
-
-/*
- * ---------------------------------------------------------------------------
- * $Log: ncbi_priv.c,v $
- * Revision 6.10  2007/01/23 22:31:29  kazimird
- * Synchronized with the C++ Toolkit.
- *
- * Revision 6.9  2005/10/25 18:53:10  lavr
- * Fix ADDEND spelling (finally, hopefully)
- *
- * Revision 6.8  2005/07/11 18:14:14  lavr
- * Fix ADDEND spelling
- *
- * Revision 6.7  2005/05/03 13:56:40  lavr
- * +<connect/ncbi_socket.h> for non-UNIX, non-Windows platforms
- *
- * Revision 6.6  2005/05/03 11:50:19  ivanov
- * Added MS Win specific for NCBI_CONNECT_SRAND_ADDEND, removing dependency
- * from socket library.
- *
- * Revision 6.5  2005/05/02 16:04:20  lavr
- * Use global random seed
- *
- * Revision 6.4  2002/09/24 15:06:40  lavr
- * Log moved to end
- *
- * Revision 6.3  2002/06/18 18:39:38  ucko
- * Explicitly initialize global variables to avoid a MacOS X linker bug.
- *
- * Revision 6.2  2002/03/22 19:52:17  lavr
- * Do not include <stdio.h>: included from ncbi_util.h or ncbi_priv.h
- *
- * Revision 6.1  2000/03/24 22:53:35  vakatov
- * Initial revision
- *
- * ===========================================================================
- */

@@ -903,6 +903,7 @@ CIMSC	c	Collezione Instituto di Microbiologia
 CINC	s	University of Cincinnati, Biological Sciences Department
 CIP<COL>	s	Centro de Investigaciones Pesqueras
 CIP<FRA>	c	Pasteur Institute Collection, Biological Resource Center of Pasteur Institute (CRBIP)
+CIP<PER>	b	Centro Internacional de las Papas
 CIPDE	c	Collection of Insect Pathogens, Dept. of Entomology
 CIPT	c	Collection Institut Pasteur Tuberculose
 CIQR	s	El Colegio de la Frontera Sur
@@ -989,6 +990,7 @@ CNHM<CRO>	s	Croatian Natural History Museum, Botany Department
 CNHM<USA-OH>	s	Cincinnati Museum of Natural History
 CNHP	s	Beijing Natural History Museum
 CNHS	s	Croydon Natural History and Scientific Society
+CNIN	s	Coleccin Nacional de Insectos, Universidad Nacional Autnoma de Mxico
 CNM	s	Cheltenham Naturalists' Association
 CNMC	s	Colorado National Monument
 CNMS	s	National Museum
@@ -1684,6 +1686,7 @@ FSIU	s	Laboratory of Fisheries, Department of Oceanography
 FSL	s	Collections de la Faculte des Sciences de Lyon
 FSLF	s	Rocky Mountain Forest and Range Experiment Station
 FSMC	s	Florida State Museum
+FSP-USP	s	Faculdade de Saude Publica, Universidade de So Paulo
 FSSR	s	Forest Service, USDA, Biological and Physical Resources Unit
 FSU	s	Florida State University, Department of Biological Science
 FSU<DEU>	c	Pilz-Referenz-Zentrum Jena
@@ -2295,7 +2298,7 @@ IFGP	s	Pacific Southwest Research Station, USDA Forest Service
 IFI	s	Imperial Fisheries Institute
 IFM<AUS>	c	IFM Quality Services Pty Ltd
 IFM<JPN>	c	Research Center for Pathogenic Fungi and Microbial Toxicoses, Chiba University
-IFO	s	Institute for Fermentation
+IFO	c	Institute for Fermentation
 IFP	s	Institute of Applied Ecology, Academia Sinica
 IFREMER	s	Institut Francais pour l'Etude de la Mer
 IFRI	s	Indian Forest Research Institute
@@ -3103,6 +3106,7 @@ MAINE	s	University of Maine, Department of Biological Sciences
 MAIS	s	Institut d'Elevage et de Medecine Veterinaire des Pays Tropicaux, Departement de Botanique
 MAK	s	Tokyo Metropolitan University
 MAKAR	s	Institut Planina i More
+MAKFUNGI	s	SS Cyril and Methodius University Faculty of Natural Science and Mathematics Institute of Biology
 MAL	s	Botanic Gardens of Malawi
 MALA	s	Malaspina University, Biology Department
 MALC	s	Museu Municipal de la Vila d'Alcover
@@ -3982,6 +3986,7 @@ NNA	s	Nanning Arboretum
 NNHMK	s	National Natural History Museum of the Ukraine
 NNKN	s	Noordbrabants Natuurmuseum
 NNM	s	Nationaal Natuurhistroisch Museum
+NNMN	s	Nationaal Natuurhistorisch Museum Naturalis
 NNSU	s	N. I. Lobachevsky Nizhni Novgorod State University, Department of Botany
 NO	s	Tulane University, Department of Ecology and Evolutionary Biology
 NOAS	s	New Orleans Academy of Science
@@ -4259,7 +4264,7 @@ PCC	c	Pasteur Culture Collection of Cyanobacteria
 PCH	s	Prestwich and Pilkington Botanical Society
 PCM<IND>	s	Presidency College, Botany Department
 PCM<POL>	c	Polish Collection of Microorganisms
-PCMB	c	The Pacific Center for Molecular Biodiversity
+PCMB	b	The Pacific Center for Molecular Biodiversity
 PCNZ	s	Lincoln Plant Health Station
 PCU<FRA>	s	Museum National d'Histoire Naturelle
 PCU<THA>	c	Department of Microbiology, Faculty of Pharmaceutical Sciences
@@ -4620,6 +4625,7 @@ RM<SGP>	s	Raffles Museum
 RM<USA-WY>	s	University of Wyoming, Department of Botany, Dept. 3165
 RMBL	s	Rocky Mountain Biological Laboratory
 RMBR	s	Raffles Museum of Biodiversity Research
+RMCA	s	Royal Museum for Central Africa
 RMDRC	s	Rocky Mountain Dinosaur Resource Center
 RMF	c	Rocky Mountain Herbarium, Fungi
 RMFM	s	Richmond Marine Fossils Museum
@@ -4636,6 +4642,7 @@ RMNH:MOL		Nationaal Natuurhistorisch Museum, mollusc collection
 RMNH:PISC	s	Nationaal Natuurhistorisch Museum, fish collection
 RMNH:POR	s	Nationaal Natuurhistorisch Museum, poriferan collection
 RMNP	s	Riding Mountain National Park
+RMRC	b	Regional Medical Research Centre
 RMS	s	University of Wyoming, Department of Botany, Dept. 3165
 RMSC	s	Rocky Mountain Forest and Range Experiment Station
 RMWC	s	Randolph-Macon Woman's College, Biology Department
@@ -4834,6 +4841,7 @@ SDU	s	University of South Dakota, Department of Biology
 SEAC	s	Estacion Experimental de Agricolas de la Campara
 SEAMEO	c	Seameo-Biotrop
 SEAN	s	Museo Entomologico
+SEBR	c	Sanofi ELF Biorecherches
 SECM	s	Science Education Center
 SEFES	s	Southeastern Forest Experiment Station
 SEFSC	s	Southeast Fisheries Science Center
@@ -5262,7 +5270,8 @@ TCB	s	National Chung Hsing University, Botany Department
 TCC/USP	c	Trypanosomatid Culture Collection
 TCD	s	Trinity College
 TCDL	s	Trinity College Library, Manuscript Department
-TCDU	s	Ministry of Animal Industry and Fisheries
+TCDU<IRL>	b	Trinity College, Dublin
+TCDU<UGA>	s	Ministry of Animal Industry and Fisheries
 TCF	s	National Chung Hsing University, Forestry Department
 TCMM	c	Thai Collection of Medical Microorganism, Department of Pathology, Faculty of Veterinary Science
 TCNM	s	Timpanogos Cave National Monument
@@ -5460,6 +5469,7 @@ TZM	s	National Science Museum
 U	s	Nationaal Herbarium Nederland, Utrecht University branch
 UA<GRC>	s	Department of Historical Geology and Paleontology
 UA<USA-AZ>	s	University of Arizona
+UAAAC	s	University of Alaska Anchorage Avian Collection
 UAAH	s	University of Alaska Anchorage, Department of Biological Sciences
 UAAM	s	The Arthropod Museum, University of Arkansas
 UAB<COL>	s	Universidad de Los Andes
@@ -5582,12 +5592,12 @@ UEFS	s	Laboratorio de Ictiologia
 UESS	s	Universidad de El Salvador
 UEVH	s	Universidade de Evora, Departamento de Biologia
 UF	s	Florida Museum of Natural History
+UF/FGS	s	Florida Geological Survey
 UF:Herpetology	s	Florida Museum of Natural History, Herpetology Collection
 UF:Ichthyology	s	Florida Museum of Natural History, Fish Collection
 UF:Invertebrate	s	Florida Museum of Natural History, Invertebrate Zoology and Malacology Collection
 UF:Mammalogy	s	Florida Museum of Natural History, Mammalogy Collection
 UF:Ornithology	s	Florida Museum of Natural History, Ornithology Skins and Skeletons Collection
-UF/FGS	s	Florida Geological Survey
 UFA	s	Ufa Scientific Centre, Russian Academy of Sciences
 UFC	s	Universidade Federal do Ceara, Departamento de Biologia
 UFES	s	Departamento de Biologia, Colecao Entomologica
@@ -5726,6 +5736,7 @@ UNH	s	University of New Hampshire
 UNI	s	University of Northern Iowa
 UNIN	s	University of the North, Botany Department
 UNIP	s	Universidade Paulista, Laboratorio de Botanica
+UNIQEM	c	Institute of Microbiology, Russian Academy of Sciences
 UNL<MEX>	s	Universidad Autonoma de Nuevo Leon
 UNL<PRT>	s	Centro de Estratigrafia e Paleobiologia da Universidade Nova de Lisboa
 UNL<USA-NE>	s	University of Nebraska State Museum
@@ -5744,7 +5755,7 @@ UNR<USA-NV>	s	University of Nevada, Museum of Biology
 UNSA	s	University of Natal
 UNSL	s	Universidad Nacional de San Luis
 UNSM	s	University of Nebraska State Museum
-UNSW<AUS>	c	Microbiology Culture Collection
+UNSW	c	Microbiology Culture Collection
 UNT	s	Universidad nacional de Tucumn
 UNWH	s	University of North-West, Biological Sciences Department
 UO	s	University of Oklahoma
@@ -5837,6 +5848,7 @@ USM<PER>	s	Universidad Nacional Mayor de San Marcos, Division de Botanica
 USMS	s	University of Southern Mississippi, Department of Biological Sciences
 USNC	s	Smithsonian Institution, Paleobiology Department
 USNM	s	National Museum of Natural History, Smithsonian Institution
+USNM:LAB	b	National Museum of Natural History, Smithsonian Institution, Laboratories of Analytical Biology
 USNTC	s	U.S. National Tick Collection
 USON	s	Universidad de Sonora, Departamento de Investigaciones Cientificas y Technologicas
 USP<ESP>	s	Universidad San Pablo-CEU, Departamento de Biologia Vegetal (seccion Botanica)
@@ -5999,6 +6011,7 @@ VU	s	Voronezh State University
 VUT	c	School of Veterinary Medicine, Faculty of Agriculture
 VUW	s	Victoria University
 VUWE	s	Victoria University
+VYH	c	Finnish Environment Institute
 VYM	s	Muzeum Vyakovska
 W	s	Naturhistorisches Museum Wien, Department of Botany
 WA	s	Warsaw University, Department of Plant Systematics and Geography

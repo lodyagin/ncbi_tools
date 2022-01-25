@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.73 $
+* $Revision: 6.79 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -144,8 +144,8 @@ typedef unsigned long CstType;
 #define HIDE_FEATURES              4
 
 #define HIDE_IMP_FEATS             8
-#define HIDE_VARIATION_FEATS      16
-#define HIDE_REPEAT_REGIONS       32
+#define HIDE_VARS_AND_REPT_REGNS  16
+#define HIDE_SITES_BONDS_REGIONS  32
 #define HIDE_CDD_FEATS            64
 #define HIDE_CDS_PROD_FEATS      128
 
@@ -202,6 +202,7 @@ NLM_EXTERN Boolean BioseqToGnbk (
   FILE *fp
 );
 
+NLM_EXTERN CharPtr GetFlatFileAffilString (AffilPtr afp);
 
 #ifdef __cplusplus
 }

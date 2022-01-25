@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.661 $
+* $Revision: 6.663 $
 *
 * File Description: 
 *
@@ -18146,6 +18146,39 @@ static Boolean EditHasDuplicateIDs (IDAndTitleEditPtr iatep_new, IDAndTitleEditP
   return FALSE;
 }
 
+
+static Boolean StringHasSpace (CharPtr str)
+{
+  CharPtr cp;
+  Boolean has_space = FALSE;
+
+  /* look for space in ID */
+  for (cp = str; cp != NULL && *cp != 0 && !has_space; cp++) 
+  {
+    if (isspace (*cp)) {
+      has_space = TRUE;
+    }
+  }
+  return has_space;
+}
+
+
+static Boolean EditHasSpaceInIDs (IDAndTitleEditPtr iatep)
+{
+  Int4 i;
+  Boolean has_space = FALSE;
+  
+  if (iatep != NULL)
+  {
+    for (i = 0; i < iatep->num_sequences && !has_space; i++)
+    {
+      has_space = StringHasSpace (iatep->id_list[i]);
+    }
+  }
+  return has_space;
+}
+
+
 /* This function creates a list of suggested IDs and titles 
  * based on errors in the IDs of the original lists.
  * The errors that can be auto-corrected are:
@@ -18216,6 +18249,16 @@ static IDAndTitleEditPtr SuggestCorrectionForLocalIDs (IDAndTitleEditPtr iatep_n
       }
       *cp = 0;
     }
+
+    /* suggest correction for spaces in sequence IDs */
+    cp = iatep_corrected->id_list [seq_num];
+    while (*cp != 0) {
+      if (isspace (*cp)) {
+        *cp = '_';
+      }
+      cp++;
+    }
+
   }
   return iatep_corrected;  
 }
@@ -18994,7 +19037,7 @@ GetIDAndTitleErrorMessage
  Boolean           is_nuc)
 {
   ValNodePtr unrec_mod_list = NULL, bad_value_list;  
-  Boolean    is_dup, has_id_bracket = FALSE;
+  Boolean    is_dup, has_id_bracket = FALSE, has_space = FALSE;
   Int4       msg_num = 0;
   CharPtr    err_msg = "";
   BadValuePtr bvp;
@@ -19018,8 +19061,11 @@ GetIDAndTitleErrorMessage
   {
     has_id_bracket = TRUE;   
   }
+
+  /* look for space in ID */
+  has_space = StringHasSpace (iatep_new->id_list [seq_num]);
   
-  if (has_dups || has_missing || has_id_bracket)
+  if (has_dups || has_missing || has_id_bracket || has_space)
   {
     if (StringHasNoText (iatep_new->id_list [seq_num]))
     {
@@ -19032,6 +19078,10 @@ GetIDAndTitleErrorMessage
     else if (has_id_bracket)
     {
       err_msg = "Bracket in ID";
+    }
+    else if (has_space)
+    {
+      err_msg = "Space in ID";
     }
   }
   else if (seqid_edit_phase)
@@ -19133,7 +19183,7 @@ UpdateIdAndTitleEditDialog
   CharPtr    err_msg, old_err_msg;
   ValNodePtr taglist_data = NULL;
   Int4       row_to_show, row_to_hide;
-  Boolean    has_dups, has_missing, has_bracket, has_unrec_mods = FALSE;
+  Boolean    has_dups, has_missing, has_bracket, has_space, has_unrec_mods = FALSE;
   ValNodePtr unrec_mods = NULL;
   
   tlp = (TagListPtr) GetObjectExtra (d);
@@ -19147,6 +19197,7 @@ UpdateIdAndTitleEditDialog
   has_missing = HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current);
   has_bracket = EditNeedsBracketingFixes (iatep_new) 
                 || EditNeedsBracketingFixes (iatep_current);
+  has_space = EditHasSpaceInIDs (iatep_new) || EditHasSpaceInIDs (iatep_current);
 
   if (!has_bracket)
   {
@@ -19171,6 +19222,7 @@ UpdateIdAndTitleEditDialog
       old_err_msg = GetTagListErrValueForSeqNum (tlp, seq_num);
       if (StringCmp (old_err_msg, "Duplicate ID") == 0
           || StringCmp (old_err_msg, "Missing ID") == 0
+          || StringCmp (old_err_msg, "Space in ID") == 0
           || StringCmp (old_err_msg, "Fixed") == 0)
       {
         err_msg = MemFree (err_msg);
@@ -19261,6 +19313,7 @@ static void UpdateIdAndTitleData (DialoG d, IDAndTitleEditPtr iatep)
     /* collect ID */
     iatep->id_list [seq_pos] = MemFree (iatep->id_list [seq_pos]);
     iatep->id_list [seq_pos] = GetTagListValueEx (tlp, row_num, 2);
+    TrimSpacesAroundString (iatep->id_list [seq_pos]);
     
     /* collect title */
     iatep->title_list [seq_pos] = MemFree (iatep->title_list [seq_pos]);
@@ -19280,7 +19333,7 @@ static void SetIDAndTitleEditDialogErrorColumn
   Int4       seq_num, seq_pos;
   Int4       row_num;
   CharPtr    err_msg, old_err_msg;
-  Boolean    has_dups, has_missing, has_bracket, has_unrec_mods = FALSE;
+  Boolean    has_dups, has_missing, has_bracket, has_unrec_mods = FALSE, has_space;
   CharPtr    str;
   ValNodePtr unrec_mods = NULL;
   
@@ -19295,6 +19348,7 @@ static void SetIDAndTitleEditDialogErrorColumn
   has_missing = HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current);
   has_bracket = EditNeedsBracketingFixes (iatep_new) 
                 || EditNeedsBracketingFixes (iatep_current);
+  has_space = EditHasSpaceInIDs (iatep_new) || EditHasSpaceInIDs (iatep_current);
   
   if (!has_bracket)
   {
@@ -19335,6 +19389,7 @@ static void SetIDAndTitleEditDialogErrorColumn
       old_err_msg = GetTagListValueEx (tlp, row_num, 0);
       if (StringCmp (old_err_msg, "Duplicate ID") == 0
           || StringCmp (old_err_msg, "Missing ID") == 0
+          || StringCmp (old_err_msg, "Space in ID") == 0
           || StringCmp (old_err_msg, "Fixed") == 0)
       {
         err_msg = MemFree (err_msg);
@@ -21852,7 +21907,8 @@ IDAndTitleEditIDsNeedFix
 {
   if (HasMissingIDs (iatep_new) || HasMissingIDs (iatep_current)
       || (EditHasDuplicateIDs (iatep_new, iatep_current) && is_nuc)
-      || AnyBracketsInIDs (iatep_new) || AnyBracketsInIDs (iatep_current))
+      || AnyBracketsInIDs (iatep_new) || AnyBracketsInIDs (iatep_current)
+      || EditHasSpaceInIDs (iatep_new) || EditHasSpaceInIDs (iatep_current))
   {
     return TRUE;
   }
@@ -22001,7 +22057,7 @@ static Boolean SomeErrorMessagesAreHidden (SeqIdEditPtr siep)
 static void ShowErrorInstructions (Pointer userdata)
 {
   SeqIdEditPtr      siep;
-  Boolean           has_missing, has_dups, has_bracket_ids;
+  Boolean           has_missing, has_dups, has_bracket_ids, has_space;
   Boolean           old_seqid_edit_phase;
   Boolean           show_all;
     
@@ -22017,6 +22073,7 @@ static void ShowErrorInstructions (Pointer userdata)
   has_missing = HasMissingIDs (siep->iatep_new) || HasMissingIDs (siep->iatep_current);
   has_dups = EditHasDuplicateIDs (siep->iatep_new, siep->iatep_current);
   has_bracket_ids = AnyBracketsInIDs (siep->iatep_new) || AnyBracketsInIDs (siep->iatep_current);
+  has_space = EditHasSpaceInIDs (siep->iatep_new) || EditHasSpaceInIDs (siep->iatep_current);
   
   old_seqid_edit_phase = siep->seqid_edit_phase;
   siep->seqid_edit_phase |= has_missing | (has_dups && siep->is_nuc) | has_bracket_ids;
@@ -22062,7 +22119,7 @@ static void ShowErrorInstructions (Pointer userdata)
   Hide (siep->bracket_dlg);
   Hide (siep->badvalue_pnl);
   Hide (siep->unrec_mod_pnl);
-  if (has_missing || (has_dups && siep->is_nuc))
+  if (has_missing || (has_dups && siep->is_nuc) || has_space)
   {
     if (has_missing)
     {
@@ -22073,6 +22130,11 @@ static void ShowErrorInstructions (Pointer userdata)
       AppendText (siep->auto_correct_doc, "Some of your sequence IDs are duplicated.", NULL, NULL, programFont);
     }
     AppendText (siep->auto_correct_doc, "Please provide unique sequence IDs for every sequence.", NULL, NULL, programFont);
+
+    if (has_space)
+    {
+      AppendText (siep->auto_correct_doc, "Some of your sequence IDs contain spaces.", NULL, NULL, programFont);
+    }
     
     if (SomeErrorMessagesAreHidden (siep))
     {

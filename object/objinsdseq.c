@@ -31,9 +31,123 @@ objinsdseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.14 at Dec 14, 2005  4:58 PM
+*    Generated using ASNCODE Revision: 6.16 at Jan 15, 2009  2:16 PM
 *
 **************************************************/
+
+
+/**************************************************
+*
+*    INSDSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDSetPtr LIBCALL
+INSDSetFree(INSDSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) INSDSeqFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    INSDSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDSetPtr LIBCALL
+INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDSET);
+   } else {
+      atp = AsnLinkType(orig, INSDSET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDSeqAsnRead, (AsnOptFreeFunc) INSDSeqFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDSET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) INSDSeqAsnWrite, aip, atp, INSDSET_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
 
 
 /**************************************************
@@ -88,6 +202,7 @@ INSDSeqFree(INSDSeqPtr ptr)
    MemFree(ptr -> taxonomy);
    AsnGenericUserSeqOfFree(ptr -> references, (AsnOptFreeFunc) INSDReferenceFree);
    MemFree(ptr -> comment);
+   INSDTagsetFree(ptr -> tagset);
    MemFree(ptr -> primary);
    MemFree(ptr -> source_db);
    MemFree(ptr -> database_reference);
@@ -313,6 +428,13 @@ INSDSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> comment = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == INSDSEQ_tagset) {
+      ptr -> tagset = INSDTagsetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == INSDSEQ_primary) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -487,6 +609,11 @@ INSDSeqAsnWrite(INSDSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> comment != NULL) {
       av.ptrvalue = ptr -> comment;
       retval = AsnWrite(aip, INSDSEQ_comment,  &av);
+   }
+   if (ptr -> tagset != NULL) {
+      if ( ! INSDTagsetAsnWrite(ptr -> tagset, aip, INSDSEQ_tagset)) {
+         goto erret;
+      }
    }
    if (ptr -> primary != NULL) {
       av.ptrvalue = ptr -> primary;
@@ -752,6 +879,198 @@ INSDReferenceAsnWrite(INSDReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> remark != NULL) {
       av.ptrvalue = ptr -> remark;
       retval = AsnWrite(aip, INSDREFERENCE_remark,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagsetNew()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetPtr LIBCALL
+INSDTagsetNew(void)
+{
+   INSDTagsetPtr ptr = MemNew((size_t) sizeof(INSDTagset));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    INSDTagsetFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetPtr LIBCALL
+INSDTagsetFree(INSDTagsetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> authority);
+   MemFree(ptr -> version);
+   MemFree(ptr -> url);
+   INSDTagsFree(ptr -> tags);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    INSDTagsetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetPtr LIBCALL
+INSDTagsetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDTagsetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDTagset ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAGSET);
+   } else {
+      atp = AsnLinkType(orig, INSDTAGSET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = INSDTagsetNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == INSDTAGSET_authority) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> authority = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSET_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> version = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSET_url) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> url = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSET_tags) {
+      ptr -> tags = INSDTagsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDTagsetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagsetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDTagsetAsnWrite(INSDTagsetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDTAGSET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> authority != NULL) {
+      av.ptrvalue = ptr -> authority;
+      retval = AsnWrite(aip, INSDTAGSET_authority,  &av);
+   }
+   if (ptr -> version != NULL) {
+      av.ptrvalue = ptr -> version;
+      retval = AsnWrite(aip, INSDTAGSET_version,  &av);
+   }
+   if (ptr -> url != NULL) {
+      av.ptrvalue = ptr -> url;
+      retval = AsnWrite(aip, INSDTAGSET_url,  &av);
+   }
+   if (ptr -> tags != NULL) {
+      if ( ! INSDTagsAsnWrite(ptr -> tags, aip, INSDTAGSET_tags)) {
+         goto erret;
+      }
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -1153,6 +1472,299 @@ erret:
 
 /**************************************************
 *
+*    INSDTagsFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsPtr LIBCALL
+INSDTagsFree(INSDTagsPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) INSDTagFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    INSDTagsAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsPtr LIBCALL
+INSDTagsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDTagsPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDTags ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAGS);
+   } else {
+      atp = AsnLinkType(orig, INSDTAGS);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDTagAsnRead, (AsnOptFreeFunc) INSDTagFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDTagsFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagsAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDTagsAsnWrite(INSDTagsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDTAGS);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) INSDTagAsnWrite, aip, atp, INSDTAGS_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagNew()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagPtr LIBCALL
+INSDTagNew(void)
+{
+   INSDTagPtr ptr = MemNew((size_t) sizeof(INSDTag));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    INSDTagFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagPtr LIBCALL
+INSDTagFree(INSDTagPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> name);
+   MemFree(ptr -> value);
+   MemFree(ptr -> unit);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    INSDTagAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagPtr LIBCALL
+INSDTagAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDTagPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDTag ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAG);
+   } else {
+      atp = AsnLinkType(orig, INSDTAG);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = INSDTagNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == INSDTAG_name) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> name = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAG_value) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> value = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAG_unit) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> unit = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDTagFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDTagAsnWrite(INSDTagPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDTAG);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> name != NULL) {
+      av.ptrvalue = ptr -> name;
+      retval = AsnWrite(aip, INSDTAG_name,  &av);
+   }
+   if (ptr -> value != NULL) {
+      av.ptrvalue = ptr -> value;
+      retval = AsnWrite(aip, INSDTAG_value,  &av);
+   }
+   if (ptr -> unit != NULL) {
+      av.ptrvalue = ptr -> unit;
+      retval = AsnWrite(aip, INSDTAG_unit,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
 *    INSDIntervalNew()
 *
 **************************************************/
@@ -1530,35 +2142,56 @@ erret:
 
 /**************************************************
 *
-*    INSDSetFree()
+*    INSDTagsetRulesNew()
 *
 **************************************************/
 NLM_EXTERN 
-INSDSetPtr LIBCALL
-INSDSetFree(INSDSetPtr ptr)
+INSDTagsetRulesPtr LIBCALL
+INSDTagsetRulesNew(void)
 {
+   INSDTagsetRulesPtr ptr = MemNew((size_t) sizeof(INSDTagsetRules));
 
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) INSDSeqFree);
-   return NULL;
+   return ptr;
+
 }
 
 
 /**************************************************
 *
-*    INSDSetAsnRead()
+*    INSDTagsetRulesFree()
 *
 **************************************************/
 NLM_EXTERN 
-INSDSetPtr LIBCALL
-INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+INSDTagsetRulesPtr LIBCALL
+INSDTagsetRulesFree(INSDTagsetRulesPtr ptr)
 {
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> authority);
+   MemFree(ptr -> version);
+   INSDTagNamesFree(ptr -> mandatorytags);
+   INSDTagNamesFree(ptr -> optionaltags);
+   INSDTagNamesFree(ptr -> uniquetags);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    INSDTagsetRulesAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetRulesPtr LIBCALL
+INSDTagsetRulesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   INSDSetPtr ptr;
+   INSDTagsetRulesPtr ptr;
 
    if (! loaded)
    {
@@ -1571,24 +2204,75 @@ INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* INSDSet ::= (self contained) */
-      atp = AsnReadId(aip, amp, INSDSET);
+   if (orig == NULL) {         /* INSDTagsetRules ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAGSETRULES);
    } else {
-      atp = AsnLinkType(orig, INSDSET);
+      atp = AsnLinkType(orig, INSDTAGSETRULES);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   func = NULL;
-
-   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDSeqAsnRead, (AsnOptFreeFunc) INSDSeqFree);
-   if (isError && ptr  == NULL) {
+   ptr = INSDTagsetRulesNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
       goto erret;
    }
 
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
 
+   if (atp == INSDTAGSETRULES_authority) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> authority = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSETRULES_version) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> version = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSETRULES_mandatorytags) {
+      ptr -> mandatorytags = INSDTagNamesAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSETRULES_optionaltags) {
+      ptr -> optionaltags = INSDTagNamesAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSETRULES_uniquetags) {
+      ptr -> uniquetags = INSDTagNamesAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == INSDTAGSETRULES_extensible) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> extensible = av.boolvalue;
+      ptr -> OBbits__ |= 1<<0;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
 
 ret:
    AsnUnlinkType(orig);       /* unlink local tree */
@@ -1596,7 +2280,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = INSDSetFree(ptr);
+   ptr = INSDTagsetRulesFree(ptr);
    goto ret;
 }
 
@@ -1604,12 +2288,13 @@ erret:
 
 /**************************************************
 *
-*    INSDSetAsnWrite()
+*    INSDTagsetRulesAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+INSDTagsetRulesAsnWrite(INSDTagsetRulesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -1624,13 +2309,273 @@ INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, INSDSET);   /* link local tree */
+   atp = AsnLinkType(orig, INSDTAGSETRULES);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) INSDSeqAsnWrite, aip, atp, INSDSET_E);
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> authority != NULL) {
+      av.ptrvalue = ptr -> authority;
+      retval = AsnWrite(aip, INSDTAGSETRULES_authority,  &av);
+   }
+   if (ptr -> version != NULL) {
+      av.ptrvalue = ptr -> version;
+      retval = AsnWrite(aip, INSDTAGSETRULES_version,  &av);
+   }
+   if (ptr -> mandatorytags != NULL) {
+      if ( ! INSDTagNamesAsnWrite(ptr -> mandatorytags, aip, INSDTAGSETRULES_mandatorytags)) {
+         goto erret;
+      }
+   }
+   if (ptr -> optionaltags != NULL) {
+      if ( ! INSDTagNamesAsnWrite(ptr -> optionaltags, aip, INSDTAGSETRULES_optionaltags)) {
+         goto erret;
+      }
+   }
+   if (ptr -> uniquetags != NULL) {
+      if ( ! INSDTagNamesAsnWrite(ptr -> uniquetags, aip, INSDTAGSETRULES_uniquetags)) {
+         goto erret;
+      }
+   }
+   if (ptr -> extensible || (ptr -> OBbits__ & (1<<0) )){   av.boolvalue = ptr -> extensible;
+      retval = AsnWrite(aip, INSDTAGSETRULES_extensible,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagNamesFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagNamesPtr LIBCALL
+INSDTagNamesFree(INSDTagNamesPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr,ASNCODE_PTRVAL_SLOT);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    INSDTagNamesAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagNamesPtr LIBCALL
+INSDTagNamesAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDTagNamesPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDTagNames ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAGNAMES);
+   } else {
+      atp = AsnLinkType(orig, INSDTAGNAMES);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDTagNamesFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagNamesAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDTagNamesAsnWrite(INSDTagNamesPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDTAGNAMES);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_PTRVAL_SLOT, aip, atp, INSDTAGNAMES_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagsetRuleSetFree()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetRuleSetPtr LIBCALL
+INSDTagsetRuleSetFree(INSDTagsetRuleSetPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr,  (AsnOptFreeFunc) INSDTagsetRulesFree);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    INSDTagsetRuleSetAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+INSDTagsetRuleSetPtr LIBCALL
+INSDTagsetRuleSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   INSDTagsetRuleSetPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* INSDTagsetRuleSet ::= (self contained) */
+      atp = AsnReadId(aip, amp, INSDTAGSETRULESET);
+   } else {
+      atp = AsnLinkType(orig, INSDTAGSETRULESET);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDTagsetRulesAsnRead, (AsnOptFreeFunc) INSDTagsetRulesFree);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = INSDTagsetRuleSetFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    INSDTagsetRuleSetAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+INSDTagsetRuleSetAsnWrite(INSDTagsetRuleSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objinsdseqAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, INSDTAGSETRULESET);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) INSDTagsetRulesAsnWrite, aip, atp, INSDTAGSETRULESET_E);
    retval = TRUE;
 
 erret:

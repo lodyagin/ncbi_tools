@@ -1,4 +1,4 @@
---$Revision: 1.44 $
+--$Revision: 1.49 $
 --**********************************************************************
 --
 --  NCBI ASN.1 macro editing language specifications
@@ -376,7 +376,8 @@ Source-qual ::= ENUMERATED {
     mating-type (92),
     linkage-group (93) ,
     haplogroup (94),
-    all-quals (95)
+    all-quals (95),
+    dbxref (96) 
 }
 
 Source-qual-pair ::= SEQUENCE {
@@ -420,8 +421,22 @@ Source-origin ::= ENUMERATED {
 Source-qual-choice ::= CHOICE {
     textqual Source-qual ,
     location Source-location,
-    origin Source-origin }
+    origin Source-origin ,
+    gcode INTEGER  ,
+    mgcode INTEGER  }
+
+Source-qual-text-val ::= SEQUENCE {
+    srcqual Source-qual ,
+    val VisibleString } 
     
+Source-qual-val-choice ::= CHOICE {
+    textqual Source-qual-text-val ,
+    location Source-location,
+    origin Source-origin ,
+    gcode INTEGER ,
+    mgcode INTEGER }
+
+Source-qual-val-set ::= SET OF Source-qual-val-choice
 
 CDSGeneProt-field ::= ENUMERATED {
     cds-comment (1) ,
@@ -611,7 +626,8 @@ Structured-comment-field-pair ::= SEQUENCE {
 -- misc fields --
 -- these would not appear in pairs --
 Misc-field ::= ENUMERATED {
-    genome-project-id (1)
+    genome-project-id (1) ,
+    comment-descriptor (2)
     }
      
 -- complex constraints --
@@ -829,6 +845,7 @@ Parse-dest ::= CHOICE {
     defline NULL ,
     org Parse-dst-org ,
     featqual Feature-field-legal ,
+    comment-descriptor NULL ,
     dbxref VisibleString }
 
 Parse-action ::= SEQUENCE {
@@ -864,7 +881,8 @@ Apply-feature-action ::= SEQUENCE {
     add-mrna BOOLEAN DEFAULT FALSE ,
     apply-to-parts BOOLEAN DEFAULT FALSE ,
     only-seg-num INTEGER DEFAULT -1 ,
-    fields Feat-qual-legal-set OPTIONAL }
+    fields Feat-qual-legal-set OPTIONAL,
+    src-fields Source-qual-val-set OPTIONAL }
 
 Remove-feature-action ::= SEQUENCE {
     type Feature-type ,
@@ -1006,13 +1024,41 @@ Molinfo-block ::= SEQUENCE {
     from-list Molinfo-field-list OPTIONAL ,
     constraint Constraint-choice-set OPTIONAL }
 
+Descriptor-type ::= ENUMERATED {
+  all (0) ,
+  title (1) ,
+  source (2) ,
+  publication (3) ,
+  comment (4) ,
+  genbank (5) ,
+  user (6) ,
+  create-date (7) ,
+  update-date (8) ,
+  mol-info (9) ,
+  structured-comment (10) }
+
+Remove-descriptor-action ::= SEQUENCE {
+  type Descriptor-type ,
+  constraint Constraint-choice-set OPTIONAL }  
+
+Autodef-list-type ::= ENUMERATED {
+  feature-list (1) ,
+  complete-sequence (2) ,
+  complete-genome (3) }
+  
+Autodef-action ::= SEQUENCE {
+  modifiers SET OF Source-qual OPTIONAL ,
+  clause-list-type Autodef-list-type }
+
 Macro-action-choice ::= CHOICE {
   aecr AECR-action ,
   parse Parse-action ,
   add-feature Apply-feature-action ,
   remove-feature Remove-feature-action ,
   convert-feature Convert-feature-action ,
-  edit-location Edit-feature-location-action }
+  edit-location Edit-feature-location-action ,
+  remove-descriptor Remove-descriptor-action ,
+  autodef Autodef-action }
 
 
 Macro-action-list ::= SET OF Macro-action-choice

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.7 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -84,6 +84,7 @@ typedef struct asnstream {
 typedef struct stripitems {
   Boolean strip_features;
   Boolean strip_noncitsubpubs;
+  Boolean strip_comment_descriptors;
 } StripItemsData, PNTR StripItemsPtr;
 
 static FILE* OpenOneFile (
@@ -219,14 +220,19 @@ static Boolean IsCitSubPub (PubdescPtr pdp)
   return is_cit_sub;
 }
 
-static void DeleteNonCitSubPubsCallback (SeqDescrPtr sdp, Pointer userdata)
+static void DeleteDescriptorsCallback (SeqDescrPtr sdp, Pointer userdata)
 {
   ObjValNodePtr ovp;
+  StripItemsPtr sip;
 
   if (sdp != NULL 
-      && sdp->choice == Seq_descr_pub
-      && ! IsCitSubPub ((PubdescPtr)sdp->data.ptrvalue)
-      && sdp->extended != 0) {
+      && (sip = (StripItemsPtr) userdata) != NULL
+      && sdp->extended != 0
+      && ((sip->strip_noncitsubpubs
+           && sdp->choice == Seq_descr_pub
+           && ! IsCitSubPub ((PubdescPtr)sdp->data.ptrvalue))
+          || (sip->strip_comment_descriptors
+              && sdp->choice == Seq_descr_comment))) {
     ovp = (ObjValNodePtr) sdp;
     ovp->idx.deleteme = TRUE;
   }
@@ -306,8 +312,8 @@ static Uint2 ProcessOneAsn (
     if (sip->strip_features) {
       VisitFeaturesInSep (sep, NULL, DeleteFeatureCallback);
     }
-    if (sip->strip_noncitsubpubs) {
-      VisitDescriptorsInSep (sep, NULL, DeleteNonCitSubPubsCallback);
+    if (sip->strip_noncitsubpubs || sip->strip_comment_descriptors) {
+      VisitDescriptorsInSep (sep, sip, DeleteDescriptorsCallback);
     }
     DeleteMarkedObjects (entityID, 0, NULL);
     RenormalizeNucProtSets (sep, TRUE);
@@ -391,7 +397,7 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
         VisitFeaturesInSep (sep, NULL, DeleteFeatureCallback);
       }
       if (sip->strip_noncitsubpubs) {
-        VisitDescriptorsInSep (sep, NULL, DeleteNonCitSubPubsCallback);
+        VisitDescriptorsInSep (sep, sip, DeleteDescriptorsCallback);
       }
       DeleteMarkedObjects (entityID, 0, NULL);
       RenormalizeNucProtSets (sep, TRUE);
@@ -527,6 +533,7 @@ static Boolean SetUpAsnStreamData (AsnStreamPtr asp)
 #define e_argInputSeqEntry     7
 #define d_argOutputBinary      8
 #define z_argStripNonCitSubPubs 9
+#define c_argStripCommentDescriptors 10
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -548,7 +555,9 @@ Args myargs [] = {
   {"Output is binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Strip non-CitSub Pubs", "F", NULL, NULL,
-    TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL}
+    TRUE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Strip Comment Descriptors", "F", NULL, NULL,
+    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 Int2 Main(void)
@@ -614,6 +623,7 @@ Int2 Main(void)
   /* collect items to be stripped */
   sid.strip_noncitsubpubs = (Boolean) myargs [z_argStripNonCitSubPubs].intvalue;
   sid.strip_features = TRUE; /* by default, for now */
+  sid.strip_comment_descriptors = (Boolean) myargs [c_argStripCommentDescriptors].intvalue;
 
   directory = (CharPtr) myargs [p_argInputPath].strvalue;
   osd.results_dir = (CharPtr) myargs [r_argOutputPath].strvalue;

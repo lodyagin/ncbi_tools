@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.27 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -37,250 +37,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-*
-*
-* $Log: vibforms.c,v $
-* Revision 6.27  2007/07/17 13:09:33  bollin
-* If deleting a row from a TagList, and the row is the last visible row and the
-* offscreen row is empty, remove the last offscreen row and adjust the scrollbar.
-*
-* Revision 6.26  2007/06/28 15:57:14  bollin
-* Added buttons to delete interval row from location editor.
-*
-* Revision 6.25  2007/06/12 14:21:32  bollin
-* Made JustSaveStringFromText extern - do not strip spaces.
-*
-* Revision 6.24  2007/02/01 16:31:11  bollin
-* Use Int4 instead of Int2 in EnumAssoc functions to allow larger lists.
-*
-* Revision 6.23  2006/05/09 19:12:19  kans
-* CreateTagListDialogExEx protects against row or col being > maximum allowed
-*
-* Revision 6.22  2006/02/01 17:57:57  kans
-* for Mac, FindFormMenuItem first tries window-specific list, and if nothing set it then tries the desktop window menu
-*
-* Revision 6.21  2006/01/27 17:42:02  kans
-* FindFormMenuItem handles menu inside Mac window in addition to desktop
-*
-* Revision 6.20  2005/07/11 14:11:50  bollin
-* when saving text from a TexT control for the TagList dialog, do not trim off
-* trailing space - if there is a callback for the text control this causes
-* unexpected behavior.
-*
-* Revision 6.19  2005/06/29 13:55:14  bollin
-* added flag for left scroll bar to CreateTagListDialogExEx
-*
-* Revision 6.18  2005/05/12 15:25:34  bollin
-* added callbacks to the TagListDialog, so that when a value is changed, the
-* callback for the column in which the value is changed will be called.
-*
-* Revision 6.17  2005/05/05 16:01:34  bollin
-* added ReplaceTagListColumn function
-*
-* Revision 6.16  2005/04/05 13:09:32  bollin
-* avoid SetEnumPopup error when resetting a TagList with a Popup control for
-* which the alist has no 0 value.
-*
-* Revision 6.15  2005/03/30 21:09:33  bollin
-* added function UpdateTagListPopupChoices so that if the user changes the
-* values in the alist array passed to CreateTagListDialog, the changes can
-* be reflected in the popup displayed
-*
-* Revision 6.14  2004/03/06 20:00:38  kans
-* SetEnumPopupEx and SetEnumPopupByNameEx set popup to 0 if desired choice not found
-*
-* Revision 6.13  2004/01/16 22:35:37  kans
-* added WidestString and WidestAlist
-*
-* Revision 6.12  2002/01/09 15:11:23  kans
-* SetEnumPopupEx and SetEnumPopupByNameEx to suppress error if 0 or NULL initial value, called by dialog creators
-*
-* Revision 6.11  1999/10/21 16:50:40  kans
-* use SafeSetValue for enum lists and spreadsheets
-*
-* Revision 6.10  1999/10/20 22:09:44  kans
-* AlistDialogData public, has userdata field, convenience functions set userdata, initial value
-*
-* Revision 6.9  1999/10/18 21:47:39  kans
-* MakeEnumFieldAlistFromValNodeList strips paren and changes slash to dash
-*
-* Revision 6.8  1999/10/18 15:33:03  kans
-* added MakeEnumFieldAlistFromValNodeList
-*
-* Revision 6.7  1999/08/20 15:57:07  kans
-* CreateEnumListDialog calculates width if passed in 0
-*
-* Revision 6.6  1999/06/17 18:05:14  kans
-* fixed EnumPopupDialogToUIEnumPtr
-*
-* Revision 6.5  1999/06/16 20:55:02  kans
-* added CreateEnumListDialog using SingleList
-*
-* Revision 6.4  1999/06/16 19:03:25  kans
-* added CreateEnumPopupDialog
-*
-* Revision 6.3  1999/06/16 17:44:53  kans
-* added DuplicateEnumFieldAlist
-*
-* Revision 6.2  1999/03/11 16:10:25  kans
-* StringHasNoText and TrimSpacesAroundString moved to ncbistr
-*
-* Revision 6.1  1997/11/26 21:30:17  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.0  1997/08/25 18:56:59  madden
-* Revision changed to 6.0
-*
-* Revision 5.15  1997/06/04 00:06:19  kans
-* support for Japanese by Tomo Koike of DDBJ
-*
-* Revision 5.14  1997/05/05 15:01:28  kans
-* implemented MultiLinePromptEx
-*
- * Revision 5.13  1997/04/17  17:16:05  kans
- * needed total_vib_msg variable
- *
- * Revision 5.12  1997/04/17  16:17:50  kans
- * added RegisterFormMenuItemName (assigns unique number to string, to avoid
- * need to hard code form item numbers beyond that supplied by Vibrant)
- *
- * Revision 5.11  1997/03/05  20:05:01  kans
- * made an Int2 variable to negate from a Uint2 parameter
- *
- * Revision 5.10  1997/03/05  17:35:26  kans
- * RepeatProcOnHandles is not static
- *
- * Revision 5.9  1997/03/05  16:24:22  kans
- * added EnumAlist convenience functions, RepeatProcOnHandles
- *
- * Revision 5.8  1997/01/29  17:53:59  kans
- * minor changes due to StringNCpy_0 change
- *
- * Revision 5.7  1997/01/29  16:41:22  kans
- * using StringNCpy_0
- *
- * Revision 5.6  1996/11/25  22:59:35  kans
- * added noExtend field to TagList, and noExtend param to
- * CreateTagListDialogEx, to prevent spreadsheet from being enlarged by user
- *
- * Revision 5.5  1996/09/09  19:43:05  kans
- * prompt style spreadsheet column needed to be taller for minimal scroll bar
- *
- * Revision 5.4  1996/08/30  18:44:09  kans
- * added TAGLIST_PROMPT choice to make read-only spreadsheet column
- *
- * Revision 5.3  1996/07/18  19:44:33  kans
- * added userdataptr, cleanupuser, activate slots in form structure
- *
- * Revision 5.2  1996/07/05  15:16:54  kans
- * set folder tabs now selects initial tab, not tab group, for invalidating
- *
- * Revision 5.1  1996/07/01  22:46:22  kans
- * spreadsheet makes copy of types list (some applications change the list)
- *
- * Revision 5.0  1996/05/28  13:45:08  ostell
- * Set to revision 5.0
- *
- * Revision 4.26  1996/05/16  20:11:11  kans
- * prevent list popup element from having horizontal scroll bar (Motif)
- *
- * Revision 4.25  1996/03/21  00:46:49  kans
- * added TAGLIST_LIST to TAGLIST_TEXT and TAGLIST_POPUP
- *
- * Revision 4.24  1996/03/20  20:57:22  kans
- * create folder tab doesn't trash return value, set folder tab value
- * calls changeView application callback
- *
- * Revision 4.23  1996/02/27  16:31:13  kans
- * subclass folder tabs to allow SetValue (but with 0, not 1, as first value)
- *
- * Revision 4.22  1996/02/19  21:27:48  kans
- * form message menus on the Mac can now work on menus in windows
- *
- * Revision 4.21  1996/02/08  14:05:13  kans
- * *** empty log message ***
- *
- * Revision 4.20  1996/02/08  00:34:47  kans
- * new SetFormMenuItem function for registration (can cast in a MenU handle)
- *
- * Revision 4.19  1996/02/04  20:09:35  kans
- * tag list now accepts ENTER message, selects first text component
- *
- * Revision 4.18  1996/01/30  22:52:55  kans
- * spreadsheet sets bar page scrolling
- *
- * Revision 4.17  1996/01/29  18:02:30  kans
- * added filepath to base form structure (for Save menu item)
- *
- * Revision 4.16  1996/01/24  18:32:59  kans
- * CreateTagListDialogEx implemented (hidden from public view for now)
- *
- * Revision 4.15  1996/01/14  22:43:47  kans
- * added VIB_MSG_ACCEPT, three new send message standard procs
- *
- * Revision 4.14  1995/12/30  19:41:45  kans
- * added CreateTextTabs, FormCommandItem, FindFormMenuItem, and VIB_MSG_CLOSE
- *
- * Revision 4.13  1995/12/30  00:46:29  kans
- * new messages for enter, init, reset, redraw dialog/form
- *
- * Revision 4.12  1995/12/29  23:15:05  kans
- * added send message dialog and form functions
- *
- * Revision 4.11  1995/12/26  15:07:44  kans
- * TagRtn now opens an empty space below the current spreadsheet row
- *
- * Revision 4.10  1995/12/22  20:44:56  kans
- * implemented TagRtnProc to insert in the middle of a spreadsheet
- *
- * Revision 4.9  1995/12/20  16:00:33  kans
- * font always set before calculating folder tab widths
- *
- * Revision 4.8  1995/12/12  23:32:31  kans
- * extra parameters to customize folder tab
- *
- * Revision 4.7  1995/12/07  23:17:57  kans
- * implemented tab offset for subsequent lines
- *
- * Revision 4.6  1995/12/07  00:57:41  kans
- * added maxPerLine and indentNextLine parameters to CreateFolderTabs
- *
- * Revision 4.5  1995/11/27  21:12:46  kans
- * SaveStringFromText returns NULL if string has no text
- *
- * Revision 4.4  1995/11/12  21:35:08  kans
- * added Import/Export Dialog/Form function slots
- *
- * Revision 4.3  1995/11/08  23:30:31  kans
- * removed edit block fields, which belong in the application
- *
- * Revision 4.2  1995/08/01  17:52:55  kans
- * MultiLinePrompt doesn't add CharWidth of newline or return
- *
- * Revision 4.0  1995/07/26  13:51:04  ostell
- * force revision to 4.0
- *
- * Revision 1.9  1995/07/20  19:30:46  kans
- * *** empty log message ***
- *
- * Revision 1.8  1995/07/20  17:31:56  kans
- * added TrimSpacesAroundString function
- *
- * Revision 1.7  1995/06/07  23:05:58  kans
- * fixed MultiLinePrompt, which was dropping last character
- *
- * Revision 1.6  1995/06/04  19:32:02  kans
- * *** empty log message ***
- *
- * Revision 1.5  1995/05/24  21:06:19  kans
- * add initial page parameter to folder tabs
- *
- * Revision 1.4  1995/05/17  21:04:51  kans
- * removed unused variables
- *
- * Revision 1.3  1995/05/17  15:15:14  kans
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -779,6 +535,19 @@ extern Boolean ExportDialog (DialoG d, CharPtr filename)
     }
   }
   return FALSE;
+}
+
+extern void SetDialogActnProc (DialoG d, DialogActnFunc actproc)
+
+{
+  BaseDialogPtr  bdp;
+
+  if (d != NULL) {
+    bdp = (BaseDialogPtr) GetObjectExtra (d);
+    if (bdp != NULL) {
+      bdp->actproc = actproc;
+    }
+  }
 }
 
 extern void StdCloseWindowProc (WindoW w)
@@ -2486,7 +2255,6 @@ typedef struct foldertab {
   TabActnProc     changeView;
   PnlActnProc     flipProc;
   PnlActnProc     changeProc;
-  Pointer         userdata;
 } FolderTabs, PNTR FolderTabsPtr;
 
 static void DrawFolderTabs (PaneL p)

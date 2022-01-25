@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.101 $
+* $Revision: 6.102 $
 *
 * File Description: 
 *
@@ -765,7 +765,7 @@ extern Boolean FixSpecialCharactersForStringsInList (ValNodePtr find_list, CharP
 NLM_EXTERN Boolean FixSpecialCharactersForObject (Uint2 datatype, Pointer objdata, CharPtr msg, Boolean force_fix, BoolPtr changed);
 
 /* for functions that act on all open records */
-NLM_EXTERN ValNodePtr GetBaseFormList ();
+NLM_EXTERN ValNodePtr GetBaseFormList (void);
 NLM_EXTERN ValNodePtr GetViewedSeqEntryList (void);
 NLM_EXTERN SeqEntryPtr RestoreFromFile (CharPtr path);
 NLM_EXTERN Uint2 RestoreEntityIDFromFile (CharPtr path, Uint2 entityID);

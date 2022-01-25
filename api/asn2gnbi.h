@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.98 $
+* $Revision: 1.108 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -93,7 +93,7 @@ typedef struct asn2gbflags {
   Boolean             srcQualsToNote;
   Boolean             hideEmptySource;
   Boolean             goQualsToNote;
-  Boolean             geneSynsToNote;
+  Boolean             separateGeneSyns;
   Boolean             refSeqQualsToNote;
   Boolean             selenocysteineToNote;
   Boolean             pyrrolysineToNote;
@@ -281,6 +281,7 @@ typedef struct asn2gbwork {
   Boolean          hideImpFeats;
   Boolean          hideVariations;
   Boolean          hideRepeatRegions;
+  Boolean          hideSitesBondsRegions;
   Boolean          hideCddFeats;
   Boolean          hideCdsProdFeats;
 
@@ -448,7 +449,8 @@ typedef enum {
   Qual_class_method,
   Qual_class_pubset,
   Qual_class_db_xref,
-  Qual_class_seq_id,
+  Qual_class_nuc_id,
+  Qual_class_prt_id,
   Qual_class_seq_loc,
   Qual_class_its,
   Qual_class_sec_str,
@@ -464,6 +466,7 @@ typedef enum {
   Qual_class_product,
   Qual_class_model_ev,
   Qual_class_gene_syn,
+  Qual_class_sep_gene_syn,
   Qual_class_locus_tag,
   Qual_class_map,
   Qual_class_go,
@@ -718,35 +721,23 @@ typedef enum {
   ASN2GNBK_TOTAL_FEATUR
 }  FtQualType;
 
-#define MAX_WWWBUF 328
-
-NLM_EXTERN Char link_feat [MAX_WWWBUF];
-NLM_EXTERN Char link_featc [MAX_WWWBUF];
-NLM_EXTERN Char link_seq [MAX_WWWBUF];
-NLM_EXTERN Char link_projid [MAX_WWWBUF];
-NLM_EXTERN Char link_wgs [MAX_WWWBUF];
-NLM_EXTERN Char link_omim [MAX_WWWBUF];
-NLM_EXTERN Char ref_link [MAX_WWWBUF];
-NLM_EXTERN Char nt_link [MAX_WWWBUF];
-NLM_EXTERN Char doc_link [MAX_WWWBUF];
-NLM_EXTERN Char ev_link [MAX_WWWBUF];
-NLM_EXTERN Char ec_link [MAX_WWWBUF];
-NLM_EXTERN Char ec_ambig [MAX_WWWBUF];
-NLM_EXTERN Char link_tax [MAX_WWWBUF];
-NLM_EXTERN Char link_muid [MAX_WWWBUF];
-NLM_EXTERN Char link_lat_lon [MAX_WWWBUF];
-NLM_EXTERN Char link_code [MAX_WWWBUF];
-NLM_EXTERN Char link_encode [MAX_WWWBUF];
-NLM_EXTERN Char link_go [MAX_WWWBUF];
-NLM_EXTERN Char link_go_ref [MAX_WWWBUF];
-NLM_EXTERN Char link_sp [MAX_WWWBUF];
-
 NLM_EXTERN void FF_www_db_xref(
   IntAsn2gbJobPtr ajp,
   StringItemPtr ffstring,
   CharPtr db,
   CharPtr identifier,
   BioseqPtr bsp
+);
+
+NLM_EXTERN void FF_www_specimen_voucher (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  CharPtr subname
+);
+
+NLM_EXTERN void FF_Add_NCBI_Base_URL (
+  StringItemPtr ffstring,
+  CharPtr url
 );
 
 NLM_EXTERN Boolean StringIsJustQuotes (
@@ -1103,19 +1094,20 @@ NLM_EXTERN CharPtr goQualType [];
 NLM_EXTERN CharPtr goFieldType [];
 
 NLM_EXTERN CharPtr legalDbXrefs [];
+NLM_EXTERN CharPtr legalSrcDbXrefs [];
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [];
 
-NLM_EXTERN Int4 IsDbxrefValid (
-  CharPtr    db,
-  SeqFeatPtr sfp,
-  OrgRefPtr  org, 
-  Boolean    IsRefSeq,
-  CharPtr PNTR case_correction
+NLM_EXTERN Boolean DbxrefIsValid (
+  CharPtr name,
+  BoolPtr is_refseq_P,
+  BoolPtr is_source_P,
+  BoolPtr is_badcap_P,
+  CharPtr PNTR goodcapP
 );
 
-
-NLM_EXTERN void AddAllDbxrefsToBioseq (BioseqPtr bsp);
-
+NLM_EXTERN void AddAllDbxrefsToBioseq (
+  BioseqPtr bsp
+);
 
 NLM_EXTERN void AddRefStatsBlock (
   Asn2gbWorkPtr awp
@@ -1163,7 +1155,8 @@ NLM_EXTERN void AddKeywordsBlock (
 );
 NLM_EXTERN void AddSegmentBlock (
   Asn2gbWorkPtr awp,
-  Boolean onePartOfSeg
+  Boolean onePartOfSeg,
+  Boolean is_na
 );
 NLM_EXTERN void AddSourceBlock (
   Asn2gbWorkPtr awp

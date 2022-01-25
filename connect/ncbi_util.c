@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.54 2008/11/05 17:04:44 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.59 2009/02/06 16:14:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -143,7 +143,7 @@ extern int/*bool*/ CORE_SetLOGFILE_NAME_Ex
  ELOG_Level  cut_off)
 {
     FILE* fp = fopen(filename, "a");
-    if ( !fp ) {
+    if (!fp) {
         CORE_LOGF_ERRNO_X(9, eLOG_Error, errno,
                           ("Cannot open \"%s\"", filename));
         return 0/*false*/;
@@ -182,6 +182,164 @@ static int/*bool*/ s_IsQuoted(unsigned char c)
             c == '\r'  ||  c == '\f'  ||  c == '\a'  ||
             c == '\n'  ||  c == '\\'  ||  c == '\''  ||
             c == '"' ? 1/*true*/ : 0/*false*/);
+}
+
+
+extern size_t UTIL_PrintableStringSize(const char* data, size_t size)
+{
+    const unsigned char* c;
+    size_t retval;
+    if (!data)
+        return 0;
+    if (!size)
+        size = strlen(data);
+    retval = size;
+    for (c = (const unsigned char*) data;  size;  size--, c++) {
+        if (*c == '\n')
+            retval += 3;
+        else if (s_IsQuoted(*c))
+            retval++;
+        else if (!isprint(*c))
+            retval += 3;
+    }
+    return retval;
+}
+
+
+extern char* UTIL_PrintableString(const char* data, size_t size,
+                                  char* buf, int/*bool*/ full_octal)
+{
+    const unsigned char* s;
+    unsigned char* d;
+
+    if (!data  ||  !buf)
+        return 0;
+    if (!size)
+        size = strlen(data);
+
+    d = (unsigned char*) buf;
+    for (s = (const unsigned char*) data;  size;  size--, s++) {
+        switch (*s) {
+        case '\t':
+            *d++ = '\\';
+            *d++ = 't';
+            continue;
+        case '\v':
+            *d++ = '\\';
+            *d++ = 'v';
+            continue;
+        case '\b':
+            *d++ = '\\';
+            *d++ = 'b';
+            continue;
+        case '\r':
+            *d++ = '\\';
+            *d++ = 'r';
+            continue;
+        case '\f':
+            *d++ = '\\';
+            *d++ = 'f';
+            continue;
+        case '\a':
+            *d++ = '\\';
+            *d++ = 'a';
+            continue;
+        case '\n':
+            *d++ = '\\';
+            *d++ = 'n';
+            /*FALLTHRU*/
+        case '\\':
+        case '\'':
+        case '"':
+            *d++ = '\\';
+            break;
+        default:
+            if (!isprint(*s)) {
+                int/*bool*/ reduce;
+                unsigned char v;
+                if (full_octal)
+                    reduce = 0/*false*/;
+                else {
+                    reduce = (size == 1       ||  s_IsQuoted(s[1])  ||
+                              !isprint(s[1])  ||  s[1] < '0'  ||  s[1] > '7');
+                }
+                *d++ = '\\';
+                v =  *s >> 6;
+                if (v  ||  !reduce) {
+                    *d++ = '0' + v;
+                    reduce = 0;
+                }
+                v = (*s >> 3) & 7;
+                if (v  ||  !reduce)
+                    *d++ = '0' + v;
+                v =  *s & 7;
+                *d++ =     '0' + v;
+                continue;
+            }
+            break;
+        }
+        *d++ = (char) *s;
+    }
+
+    return (char*) d;
+}
+
+
+extern const char* NcbiMessagePlusError
+(int/*bool*/ *dynamic,
+ const char*  message,
+ int          error,
+ const char*  descr)
+{
+    char*  buf;
+    size_t mlen;
+    size_t dlen;
+
+    /* Check for an empty addition */
+    if (!error  &&  (!descr  ||  !*descr)) {
+        if (message)
+            return message;
+        *dynamic = 0/*false*/;
+        return "";
+    }
+
+    /* Adjust description, if necessary and possible */
+    if (error  &&  !descr) {
+        if (error < 0  ||  !(descr = strerror(error)))
+            descr = "";
+    }
+    dlen = strlen(descr);
+    while (dlen  &&  isspace((unsigned char) descr[dlen - 1]))
+        dlen--;
+    if (dlen > 1  &&  descr[dlen - 1] == '.')
+        dlen--;
+
+    mlen = message ? strlen(message) : 0;
+
+    if (!(buf = (char*)(*dynamic  &&  message
+                        ? realloc((void*) message, mlen + dlen + 40)
+                        : malloc (                 mlen + dlen + 40)))) {
+        if (*dynamic  &&  message)
+            free((void*) message);
+        *dynamic = 0;
+        return "<Ouch! Out of memory>";
+    }
+
+    if (message) {
+        if (!*dynamic)
+            memcpy(buf, message, mlen);
+        buf[mlen++] = ' ';
+    }
+    memcpy(buf + mlen, "{error=", 7);
+    mlen += 7;
+
+    if (error)
+        mlen += sprintf(buf + mlen, "%d%s", error, "," + !*descr);
+
+    memcpy((char*) memcpy(buf + mlen, descr, dlen) + dlen, "}", 2);
+
+    *dynamic = 1/*true*/;
+    return buf;
 }
 
 
@@ -232,7 +390,7 @@ extern char* LOG_ComposeMessage
         datetime[datetime_len++] = ' ';
         datetime[datetime_len]   = '\0';
 #else /*NCBI_OS_MSWIN*/
-        static const char timefmt[] = "%D %T ";
+        static const char timefmt[] = "%m/%d/%y %H:%M:%S ";
         struct tm* tm;
 #  ifdef NCBI_CXX_TOOLKIT
         time_t t = time(0);
@@ -269,18 +427,11 @@ extern char* LOG_ComposeMessage
         message_len = strlen(call_data->message);
     }
 
-    if ( call_data->raw_size ) {
-        const unsigned char* d = (const unsigned char*) call_data->raw_data;
-        size_t i = call_data->raw_size;
-        for (data_len = 0;  i;  i--, d++) {
-            if (s_IsQuoted(*d)) {
-                data_len++;
-            } else if (!isprint(*d)) {
-                data_len += 3;
-            }
-        }
-        data_len += (sizeof(kRawData_Begin) + 20 + call_data->raw_size +
-                     sizeof(kRawData_End));
+    if (call_data->raw_size) {
+        data_len = (sizeof(kRawData_Begin) + 20
+                    + UTIL_PrintableStringSize(call_data->raw_data,
+                                               call_data->raw_size) +
+                    sizeof(kRawData_End));
     }
 
     /* Allocate memory for the resulting message */
@@ -293,98 +444,39 @@ extern char* LOG_ComposeMessage
 
     s = str;
     /* Compose the message */
-    if ( datetime_len ) {
+    if (datetime_len) {
         memcpy(s, datetime, datetime_len);
         s += datetime_len;
     }
-    if ( file_line_len ) {
+    if (file_line_len) {
         s += sprintf(s, "\"%s\", line %d: ",
                      call_data->file, (int) call_data->line);
     }
-    if ( module_len ) {
+    if (module_len) {
         *s++ = '[';
         memcpy(s, call_data->module, module_len -= 3);
         s += module_len;
         *s++ = ']';
         *s++ = ' ';
     }
-    if ( level_len ) {
+    if (level_len) {
         memcpy(s, level, level_len -= 2);
         s += level_len;
         *s++ = ':';
         *s++ = ' ';
     }
-    if ( message_len ) {
+    if (message_len) {
         memcpy(s, call_data->message, message_len);
         s += message_len;
     }
-    if ( data_len ) {
-        const unsigned char* d;
-        size_t i;
-
-        s += sprintf(s, kRawData_Begin, (unsigned long) call_data->raw_size,
+    if (data_len) {
+        s += sprintf(s, kRawData_Begin,
+                     (unsigned long) call_data->raw_size,
                      &"s"[call_data->raw_size == 1]);
 
-        d = (const unsigned char*) call_data->raw_data;
-        for (i = call_data->raw_size;  i;  i--, d++) {
-            switch (*d) {
-            case '\t':
-                *s++ = '\\';
-                *s++ = 't';
-                continue;
-            case '\v':
-                *s++ = '\\';
-                *s++ = 'v';
-                continue;
-            case '\b':
-                *s++ = '\\';
-                *s++ = 'b';
-                continue;
-            case '\r':
-                *s++ = '\\';
-                *s++ = 'r';
-                continue;
-            case '\f':
-                *s++ = '\\';
-                *s++ = 'f';
-                continue;
-            case '\a':
-                *s++ = '\\';
-                *s++ = 'a';
-                continue;
-            case '\n':
-            case '\\':
-            case '\'':
-            case '"':
-                *s++ = '\\';
-                break;
-            default:
-                if (!isprint(*d)) {
-                    int/*bool*/ reduce;
-                    unsigned char v;
-                    if (format_flags & fLOG_FullOctal)
-                        reduce = 0/*false*/;
-                    else {
-                        reduce = (i == 1         || s_IsQuoted(d[1]) ||
-                                  !isprint(d[1]) || d[1] < '0' || d[1] > '7');
-                    }
-                    *s++ = '\\';
-                    v =  *d >> 6;
-                    if (v  ||  !reduce) {
-                        *s++ = '0' + v;
-                        reduce = 0;
-                    }
-                    v = (*d >> 3) & 7;
-                    if (v  ||  !reduce)
-                        *s++ = '0' + v;
-                    v =  *d & 7;
-                    *s++ =     '0' + v;
-                    continue;
-                }
-                break;
-            }
-            *s++ = (char) *d;
-        }
+        s = UTIL_PrintableString(call_data->raw_data,
+                                 call_data->raw_size,
+                                 s, format_flags & fLOG_FullOctal);
 
         memcpy(s, kRawData_End, sizeof(kRawData_End));
     } else
@@ -411,7 +503,7 @@ static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data)
 
     if (call_data->level >= data->cut_off  ||  call_data->level == eLOG_Fatal){
         char* str = LOG_ComposeMessage(call_data, s_LogFormatFlags);
-        if ( str ) {
+        if (str) {
             fprintf(data->fp, "%s\n", str);
             fflush(data->fp);
             free(str);
@@ -442,7 +534,7 @@ extern void LOG_ToFILE_Ex
  )
 {
     SLogData* data = (SLogData*)(fp ? malloc(sizeof(*data)) : 0);
-    if ( data ) {
+    if (data) {
         data->fp         = fp;
         data->cut_off    = cut_off;
         data->auto_close = auto_close;
@@ -460,124 +552,6 @@ extern void LOG_ToFILE
  )
 {
     LOG_ToFILE_Ex(lg, fp, eLOG_Trace, auto_close);
-}
-
-
-/* Return non-zero value if "*beg" has reached the "end"
- */
-static int/*bool*/ s_SafeCopy(const char* src, size_t len,
-                              char** beg, const char* end)
-{
-    assert(src);
-    for ( ;  len > 0  &&  *src  &&  *beg < end;  len--, src++, (*beg)++)
-        **beg = *src;
-    **beg = '\0';
-    return (*beg >= end);
-}
-
-
-extern const char* NcbiMessagePlusError
-(const char*  message,
- int          error,
- const char*  descr,
- char*        buf,
- size_t       buf_size)
-{
-    size_t len;
-    char*  beg;
-    char*  end;
-
-    /* Check for an empty result */
-    if (!error  &&  (!descr  ||  !*descr))
-        return !message  ||  !*message ? "" : message;
-
-    /* Check and init */
-    if (!buf  ||  !buf_size)
-        return 0;
-
-    buf[0] = '\0';
-    if (buf_size < 2)
-        return buf;  /* empty */
-
-    /* Adjust the description, if necessary and possible */
-    if (error  &&  !descr) {
-        descr = error > 0 ? strerror(error) : 0;
-        if (!descr  ||  !*descr)
-            descr = "Error code is out of range";
-    }
-
-    /* Compose:   <message> {error=<error>,<descr>} */
-    beg = buf;
-    end = buf + buf_size - 1;
-
-    /* <message> */
-    if (message  &&  s_SafeCopy(message, strlen(message), &beg, end))
-        return buf;
-
-    /* {error=<error>,<descr>} */
-    if (!error  &&  (!descr  ||  !*descr))
-        return buf;
-
-    /* "{error=" */
-    if (s_SafeCopy(" {error=", 8, &beg, end - 3))
-        return buf;
-
-    /* <error> */
-    if (error) {
-        /* calculate length */
-        int/*bool*/ neg;
-        int         mod;
-
-        if (error < 0) {
-            neg = 1/*true*/;
-            error = -error;
-        } else
-            neg = 0/*false*/;
-
-        for (len = 1, mod = 1;  (error / mod) > 9;  len++, mod *= 10)
-            continue;
-        if (neg)
-            len++;
-
-        /* ? not enough space */
-        if (beg + len >= end) {
-            s_SafeCopy("...", 3, &beg, end);
-            return buf;
-        }
-
-        /* ? add sign */ 
-        if (neg)
-            *beg++ = '-';
-
-        /* print error code */
-        for ( ;  mod;  mod /= 10) {
-            assert(error / mod < 10);
-            *beg++ = '0' + error / mod;
-            error %= mod;
-        }
-        /* "," before "<descr>" */
-        if (descr  &&  *descr  &&  beg < end)
-            *beg++ = ',';
-    }
-
-    /* "<descr>" */
-    if (descr) {
-        len = strlen(descr);
-        while (len  &&  isspace((unsigned char) descr[len - 1]))
-            len--;
-        if (len > 1  &&  descr[len - 1] == '.')
-            len--;
-        if (s_SafeCopy(descr, len, &beg, end))
-            return buf;
-    }
-
-    /* "}\0" */
-    assert(beg <= end);
-    if (beg < end)
-        *beg++ = '}';
-    *beg = '\0';
-
-    return buf;
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.42 $
+* $Revision: 1.46 $
 *
 * File Description: 
 *
@@ -441,6 +441,419 @@ NLM_EXTERN ValNodePtr Taxon3GetOrgRefList (ValNodePtr org_list)
   ptr_array = MemFree (ptr_array);
   
   return org_list;
+}
+
+
+NLM_EXTERN TaxFixItemPtr TaxFixItemNew (void)
+{
+  TaxFixItemPtr t;
+
+  t = (TaxFixItemPtr) MemNew (sizeof (TaxFixItemData));
+  MemSet (t, 0, sizeof (TaxFixItemData));
+  return t;
+}
+
+
+NLM_EXTERN TaxFixItemPtr TaxFixItemCopy (TaxFixItemPtr orig)
+{
+  TaxFixItemPtr t = NULL;
+
+  if (orig != NULL) {
+    t = (TaxFixItemPtr) MemNew (sizeof (TaxFixItemData));
+    t->data_choice = orig->data_choice;
+    t->data = orig->data;
+    t->response_org = AsnIoMemCopy (orig->response_org, (AsnReadFunc) OrgRefAsnRead, (AsnWriteFunc) OrgRefAsnWrite);
+    if (orig->taxname != NULL) {
+      t->taxname = StringSave (orig->taxname);
+    }
+    if (orig->suggested_fix != NULL) {
+      t->suggested_fix = StringSave (orig->suggested_fix);
+    }
+    if (orig->rank != NULL) {
+      t->rank = StringSave (orig->rank);
+    }
+  }
+  return t;
+}
+
+
+NLM_EXTERN TaxFixItemPtr TaxFixItemFree (TaxFixItemPtr t)
+{
+  if (t != NULL) {
+    t->response_org = OrgRefFree (t->response_org);
+    t->taxname = MemFree (t->taxname);
+    t->suggested_fix = MemFree (t->suggested_fix);
+    t->rank = MemFree (t->rank);
+    t = MemFree (t);
+  }
+  return t;
+}
+
+
+NLM_EXTERN ValNodePtr LIBCALLBACK TaxFixItemListFree (ValNodePtr vnp)
+{
+  ValNodePtr vnp_next;
+
+  while (vnp != NULL) {
+    vnp_next = vnp->next;
+    vnp->next = NULL;
+    vnp->data.ptrvalue = TaxFixItemFree (vnp->data.ptrvalue);
+    vnp = ValNodeFree (vnp);
+    vnp = vnp_next;
+  }
+  return vnp;
+}
+
+
+static Boolean LIBCALLBACK TaxFixItemOrigIsOk (ValNodePtr vnp)
+{
+  TaxFixItemPtr t;
+
+  if (vnp == NULL || (t = (TaxFixItemPtr) vnp->data.ptrvalue) == NULL) {
+    return TRUE;
+  } else if (StringCmp (t->taxname, t->suggested_fix) == 0 && StringICmp (t->rank, "species") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static CharPtr StringSum (CharPtr str1, CharPtr str2) 
+{
+  CharPtr sum = NULL;
+
+  if (str1 == NULL && str2 == NULL) {
+    sum = NULL;
+  } else if (str1 == NULL) {
+    sum = StringSave (str2);
+  } else if (str2 == NULL) {
+    sum = StringSave (str1);
+  } else {
+    sum = (CharPtr) MemNew (sizeof (Char) * (StringLen (str1) + StringLen (str2) + 1));
+    sprintf (sum, "%s%s", str1, str2);
+  }
+  return sum;
+}
+
+
+static CharPtr SuggestedTaxNameFixFromOrgAndRank (CharPtr taxname, OrgRefPtr response_org, CharPtr rank)
+{
+  CharPtr fix = NULL, tmp;
+
+  if (response_org == NULL) {
+    return NULL;
+  }
+
+  if (StringICmp (rank, "species") == 0) {
+    fix = StringSave (response_org->taxname);
+  } else if (response_org->orgname != NULL) {
+    if (((StringNICmp (taxname, "uncultured ", 11) == 0
+           && StringICmp (taxname + 11, response_org->taxname) == 0)
+         || StringICmp (taxname, response_org->taxname) == 0)
+        && (StringISearch (response_org->orgname->lineage, "archaea") != NULL
+            || StringISearch (response_org->orgname->lineage, "bacteria") != NULL)) {
+      if (StringICmp (rank, "genus") == 0) {
+        fix = StringSum (response_org->taxname, " sp.");
+      } else if (StringNICmp (response_org->orgname->lineage, "bacteria", 8) == 0) {
+        fix = StringSum (response_org->taxname, " bacterium");
+      } else if (StringNICmp (response_org->orgname->lineage, "Archaea", 7) == 0) {
+        fix = StringSum (response_org->taxname, " archaeon");
+      }
+      if (fix != NULL 
+          && StringNICmp (fix, "uncultured ", 11) != 0) {
+        tmp = fix;
+        fix = StringSum ("uncultured ", tmp);
+        tmp = MemFree (tmp);
+      }
+    }
+  }
+  return fix;
+}
+
+
+static ValNodePtr MakeTaxFixRequestList (ValNodePtr biop_list)
+{
+  ValNodePtr rq_list = NULL, prev = NULL;
+  BioSourcePtr biop;
+  OrgRefPtr  org;
+  CharPtr    new_name;
+  Int4       len;
+
+  while (biop_list != NULL) {
+    biop = GetBioSourceFromObject (biop_list->choice, biop_list->data.ptrvalue);
+    org = AsnIoMemCopy (biop->org, (AsnReadFunc) OrgRefAsnRead, (AsnWriteFunc) OrgRefAsnWrite);
+    if ((len = StringLen (org->taxname)) > 3 && StringCmp (org->taxname + len - 3, " sp") == 0) {
+      new_name = StringSum (org->taxname, ".");
+      org->taxname = MemFree (org->taxname);
+      org->taxname = new_name;
+    }
+
+    ValNodeAddPointer (&prev, 3, org);
+    if (rq_list == NULL) {
+      rq_list = prev;
+    }
+    biop_list = biop_list->next;
+  }
+  return rq_list;
+}
+
+
+static void CheckSuggestedFixes (ValNodePtr tax_fix_list) 
+{
+  ValNodePtr rq_list = NULL, rp_list = NULL, prev, vnp_rq, vnp_rp;
+  ValNodePtr vnp, next_org_list, last_org;
+  Int4             request_num, max_requests = 2000;
+  TaxFixItemPtr t;
+  Taxon3RequestPtr t3rq;
+  Taxon3ReplyPtr   t3ry;
+  T3DataPtr        tdp;
+  T3ReplyPtr       trp;
+  T3ErrorPtr       tep;
+  T3StatusFlagsPtr tfp;
+  OrgRefPtr        org;
+  Boolean          is_species;
+
+  prev = NULL;
+  for (vnp = tax_fix_list; vnp != NULL; vnp = vnp->next) {
+    t = (TaxFixItemPtr) vnp->data.ptrvalue;
+    if (t != NULL && t->suggested_fix != NULL) {
+      ValNodeAddPointer (&prev, 2, StringSave (t->suggested_fix));
+    }
+    if (rq_list == NULL) {
+      rq_list = prev;
+    }
+  }
+
+  /* now break large lists into manageable chunks */
+  vnp = rq_list;
+  while (vnp != NULL) {
+    next_org_list = vnp->next;
+    last_org = vnp; 
+    request_num = 1;
+    while (next_org_list != NULL && request_num < max_requests) {
+      last_org = next_org_list;
+      next_org_list = next_org_list->next;
+      request_num++;
+    }
+    if (last_org != NULL) {
+      last_org->next = NULL;
+    }
+      
+    /* now create the request */
+  
+    t3rq = CreateMultiTaxon3Request (vnp);
+    if (t3rq == NULL) return;
+    t3ry = Tax3SynchronousQuery (t3rq);
+    Taxon3RequestFree (t3rq);
+    if (t3ry != NULL) {
+      for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
+        switch (trp->choice) {
+          case T3Reply_error :
+            tep = (T3ErrorPtr) trp->data.ptrvalue;
+            ValNodeAddPointer (&rp_list, 0, NULL);
+            break;
+          case T3Reply_data :
+            tdp = (T3DataPtr) trp->data.ptrvalue;
+            is_species = FALSE;
+            if (tdp != NULL) {
+              for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
+                if (StringICmp (tfp->property, "rank") == 0
+                    && tfp->Value_value != NULL
+                    && tfp->Value_value->choice == Value_value_str
+                    && StringICmp (tfp->Value_value->data.ptrvalue, "species") == 0) {
+                  is_species = TRUE;
+                }
+              }
+            }
+            if (is_species) {
+              org = (OrgRefPtr) tdp->org;
+              ValNodeAddPointer (&rp_list, 0, StringSave (org->taxname));
+            } else {
+              ValNodeAddPointer (&rp_list, 0, NULL);
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      Taxon3ReplyFree (t3ry);
+    }
+    
+    if (last_org != NULL) {
+        last_org->next = next_org_list;
+    }
+    vnp = next_org_list;
+  }  
+  rq_list = ValNodeFreeData (rq_list);
+
+  /* adjust suggested fixes */
+  vnp_rq = tax_fix_list;
+  vnp_rp = rp_list;
+
+  while (vnp_rq != NULL && vnp_rp != NULL) {
+    while (vnp_rq != NULL && ((t = (TaxFixItemPtr) vnp_rq->data.ptrvalue) == NULL || t->suggested_fix == NULL)) {
+      vnp_rq = vnp_rq->next;
+    }
+    if (t != NULL) {
+      t->suggested_fix = MemFree (t->suggested_fix);
+      t->suggested_fix = vnp_rp->data.ptrvalue;
+      vnp_rp->data.ptrvalue = NULL;
+      vnp_rq = vnp_rq->next;
+      vnp_rp = vnp_rp->next;
+    }
+  }
+  rp_list = ValNodeFreeData (rp_list);
+}
+
+
+NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list)
+{
+  Taxon3RequestPtr t3rq;
+  Taxon3ReplyPtr   t3ry;
+  T3DataPtr        tdp;
+  T3ReplyPtr       trp;
+  T3ErrorPtr       tep;
+  ValNodePtr       uniq_list, response_list = NULL, next_org_list, last_org, request_list;
+  Int4             request_num, max_requests = 2000;
+  ValNodePtr PNTR  ptr_array;
+  ValNodePtr       vnp, vnp_rq, vnp_rp, vnp_b;
+  T3StatusFlagsPtr tfp;
+  Int4             i, num_orgs;
+  TaxFixItemPtr    t;
+  BioSourcePtr     biop;
+
+  if (biop_list == NULL) {
+    return NULL;
+  }
+
+  /* make a copy of the original list, removing uncultured */
+  request_list = MakeTaxFixRequestList (biop_list);
+
+  /* make array to show original order of ValNodes, so that we can restore after sorting */
+  num_orgs = ValNodeLen (request_list);
+  ptr_array = (ValNodePtr PNTR) MemNew (sizeof (ValNodePtr) * num_orgs);
+  for (vnp = request_list, i = 0; vnp != NULL; vnp = vnp->next, i++) {
+    ptr_array[i] = vnp;
+  }
+
+  request_list = ValNodeSort (request_list, SortVnpByOrgRef);
+
+  /* now make a list of just the unique requests */
+  uniq_list = ValNodeCopyPtr (request_list);
+  ValNodeUnique (&uniq_list, SortVnpByOrgRef, ValNodeFree);
+  
+  /* now break large lists into manageable chunks */
+  vnp = uniq_list;
+  while (vnp != NULL) {
+    next_org_list = vnp->next;
+    last_org = vnp; 
+    request_num = 1;
+    while (next_org_list != NULL && request_num < max_requests) {
+      last_org = next_org_list;
+      next_org_list = next_org_list->next;
+      request_num++;
+    }
+    if (last_org != NULL) {
+      last_org->next = NULL;
+    }
+      
+    /* now create the request */
+  
+    t3rq = CreateMultiTaxon3Request (vnp);
+    if (t3rq == NULL) return NULL;
+    t3ry = Tax3SynchronousQuery (t3rq);
+    Taxon3RequestFree (t3rq);
+    if (t3ry != NULL) {
+      for (trp = t3ry->reply; trp != NULL; trp = trp->next) {
+        switch (trp->choice) {
+          case T3Reply_error :
+            tep = (T3ErrorPtr) trp->data.ptrvalue;
+            t = TaxFixItemNew ();
+            ValNodeAddPointer (&response_list, 0, t);
+            break;
+          case T3Reply_data :
+            tdp = (T3DataPtr) trp->data.ptrvalue;
+            if (tdp != NULL) {
+              t = TaxFixItemNew ();
+              t->response_org = (OrgRefPtr)(tdp->org);
+              tdp->org = NULL;
+              for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
+                if (StringICmp (tfp->property, "rank") == 0
+                    && tfp->Value_value != NULL
+                    && tfp->Value_value->choice == Value_value_str) {
+                  t->rank = StringSave (tfp->Value_value->data.ptrvalue);
+                }
+              }
+              t->taxname = StringSave (t->response_org->taxname);
+              t->suggested_fix = SuggestedTaxNameFixFromOrgAndRank (t->taxname, t->response_org, t->rank);
+              ValNodeAddPointer (&response_list, 0, t);
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      Taxon3ReplyFree (t3ry);
+    }
+    
+    if (last_org != NULL) {
+        last_org->next = next_org_list;
+    }
+    vnp = next_org_list;
+  }  
+
+  CheckSuggestedFixes (response_list);
+  
+  /* now put responses in list */
+  vnp = uniq_list;
+  vnp_rq = request_list;
+  vnp_rp = response_list;
+
+  while (vnp != NULL && vnp_rq != NULL && vnp_rp != NULL) {
+    while (vnp_rq != NULL && OrgRefCompare (vnp->data.ptrvalue, vnp_rq->data.ptrvalue) == 0) {
+      t = TaxFixItemCopy (vnp_rp->data.ptrvalue);
+      vnp_rq->data.ptrvalue = t;
+      vnp_rq = vnp_rq->next;
+    }
+    vnp_rp = vnp_rp->next;
+    vnp = vnp->next;
+  }
+  /* if there were more requests than responses, set responses to NULL */
+  while (vnp_rq != NULL) {
+    vnp_rq->data.ptrvalue = NULL;
+    vnp_rq = vnp_rq->next;
+  }
+
+  /* free response list */
+  response_list = TaxFixItemListFree (response_list);
+
+  uniq_list = ValNodeFree (uniq_list);
+
+  /* now restore original order */
+  for (i = 0; i < num_orgs - 1; i++) {
+    ptr_array[i]->next = ptr_array[i + 1];
+  }
+  ptr_array[num_orgs - 1]->next = NULL;
+  request_list = ptr_array[0];
+  ptr_array = MemFree (ptr_array);
+
+  /* now reassociate with original objects */
+  for (vnp_b = biop_list, vnp_rp = request_list; vnp_b != NULL && vnp_rp != NULL; vnp_b = vnp_b->next, vnp_rp = vnp_rp->next) {
+    t = vnp_rp->data.ptrvalue;
+    t->data_choice = vnp_b->choice;
+    t->data = vnp_b->data.ptrvalue;
+    t->taxname = MemFree (t->taxname);
+    biop = GetBioSourceFromObject (t->data_choice, t->data);
+    if (biop != NULL && biop->org != NULL) {
+      t->taxname = StringSave (biop->org->taxname);
+    }
+  }
+
+  /* now remove items for which the original and suggested taxnames are the same */
+  
+  ValNodePurge (&request_list, TaxFixItemOrigIsOk, TaxFixItemListFree);
+  return request_list;
 }
 
 
@@ -1181,12 +1594,48 @@ static BioSourcePtr GetBioSourceFromValNode (ValNodePtr vnp)
   return biop;
 }
 
+
+static CharPtr extract_list[] = {
+  "cf.",
+  "cf ",
+  "aff ",
+  "aff.",
+  "near",
+  "nr.",
+  "nr ",
+  NULL};
+
+static void AdjustSpecificHostForTaxServer (CharPtr spec_host)
+{
+  CharPtr cp, src, dst;
+  Int4 i;
+
+  /* ignore separator words */
+  for (i = 0; extract_list[i] != NULL; i++) {
+    if ((cp = StringSearch (spec_host, extract_list[i])) != NULL && cp > spec_host && isspace (*(cp - 1))) {
+      src = cp + StringLen (extract_list[i]);
+      dst = cp;
+      while (isspace (*src)) {
+        src++;
+      }
+      while (*src != 0) {
+        *dst = *src;
+        dst++;
+        src++;
+      }
+      *dst = 0;
+    }
+  }
+}
+
+
 static void AddBioSourcesToSpecificHostChecklist (ValNodePtr biop_list, ValNodePtr check_list)
 {
   ValNodePtr biop_vnp, last_vnp = NULL, stop_search;
   BioSourcePtr biop;
   OrgModPtr    mod;
   SpecificHostCheckPtr p;
+  CharPtr tmp;
 
   if (biop_list == NULL || check_list == NULL) return;
 
@@ -1212,10 +1661,12 @@ static void AddBioSourcesToSpecificHostChecklist (ValNodePtr biop_list, ValNodeP
         {
           stop_search = last_vnp;
         }
+        tmp = StringSave (mod->subname);
+        AdjustSpecificHostForTaxServer (tmp);
         p = NULL;
         while (last_vnp != NULL 
                && (p = (SpecificHostCheckPtr) last_vnp->data.ptrvalue) != NULL
-               && StringCmp (p->spec_host, mod->subname) != 0)
+               && StringCmp (p->spec_host, tmp) != 0)
         {
           p = NULL;
           last_vnp = last_vnp->next;
@@ -1225,13 +1676,13 @@ static void AddBioSourcesToSpecificHostChecklist (ValNodePtr biop_list, ValNodeP
           last_vnp = check_list;
           while (last_vnp != stop_search 
                  && (p = (SpecificHostCheckPtr) last_vnp->data.ptrvalue) != NULL
-                 && StringCmp (p->spec_host, mod->subname) != 0)
+                 && StringCmp (p->spec_host, tmp) != 0)
           {
             p = NULL;
             last_vnp = last_vnp->next;
           }
         }
-
+        tmp = MemFree (tmp);
         if (p != NULL)
         {
           ValNodeAddPointer (&(p->biop_list), biop_vnp->choice, biop_vnp->data.ptrvalue);
@@ -1396,6 +1847,7 @@ static ValNodePtr GetListOfUniqueSpecificHostValues (ValNodePtr biop_list)
   BioSourcePtr biop;
   OrgModPtr    mod;
   ValNodePtr   spec_host_list = NULL;
+  CharPtr      tmp;
   
   /* get a list of unique specific_host values */
   for (biop_vnp = biop_list; biop_vnp != NULL; biop_vnp = biop_vnp->next)
@@ -1409,7 +1861,9 @@ static ValNodePtr GetListOfUniqueSpecificHostValues (ValNodePtr biop_list)
       if (mod->subtype == ORGMOD_nat_host
           && !StringHasNoText (mod->subname))
       {
-        ValNodeAddPointer (&spec_host_list, 0, StringSave (mod->subname));
+        tmp = StringSave (mod->subname);
+        AdjustSpecificHostForTaxServer (tmp);
+        ValNodeAddPointer (&spec_host_list, 0, tmp);
       }
       mod = mod->next;
     }

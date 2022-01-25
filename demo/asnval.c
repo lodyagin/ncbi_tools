@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.76 $
+* $Revision: 1.80 $
 *
 * File Description:
 *
@@ -60,7 +60,7 @@
 #include <accpubseq.h>
 #endif
 
-#define ASNVAL_APP_VER "5.9"
+#define ASNVAL_APP_VER "6.2"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -1571,6 +1571,10 @@ Int2 Main (void)
 #ifdef INTERNAL_NCBI_ASN2VAL
   vfd.seqSubmitParent = (Boolean) myargs [w_argSeqSubParent].intvalue;
   vfd.indexerVersion = (Boolean) myargs [y_argAIndexer].intvalue;
+#endif
+
+#ifdef INTERNAL_NCBI_ASN2VAL
+  SetAppProperty ("InternalNcbiSequin", (void *) 1024);
 #endif
 
   batch = FALSE;

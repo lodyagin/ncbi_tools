@@ -1,5 +1,5 @@
 /*
- * $Id: aceread.c,v 1.7 2008/11/14 20:16:12 bollin Exp $
+ * $Id: aceread.c,v 1.16 2008/12/22 22:40:30 bollin Exp $
  *
  * ===========================================================================
  *
@@ -319,6 +319,7 @@ extern TContigReadPtr ContigReadNew (void)
     r->valid = 0;
     r->qual_scores = NULL;
     r->num_qual_scores = 0;
+    r->tag = NULL;
     return r;
 }
 
@@ -341,8 +342,324 @@ extern void ContigReadFree (TContigReadPtr r)
         if (r->qual_scores != NULL) {
             free (r->qual_scores);
         }
+        if (r->tag != NULL) {
+            free (r->tag);
+        }
         free (r);
     }
+}
+
+
+extern TBaseSegPtr BaseSegNew (void)
+{
+    TBaseSegPtr b;
+
+    b = (TBaseSegPtr) malloc (sizeof (SBaseSeg));
+    if (b == NULL) {
+        return NULL;
+    }
+    b->read_id = NULL;
+    b->cons_start = 0;
+    b->cons_stop = 0;
+    return b;
+}
+
+
+extern void BaseSegFree (TBaseSegPtr b)
+{
+    if (b != NULL) {
+        if (b->read_id != NULL) {
+            free (b->read_id);
+        }
+        free (b);
+    }
+}
+
+
+/* reads a correctly formatted line and creates a base seg.
+ */
+static TBaseSegPtr s_ReadBaseSeg (char *line)
+{
+    TBaseSegPtr base_seg = NULL;
+    char *cp;
+    int   start, stop, len;
+
+    if (line == NULL || *line != 'B' || *(line + 1) != 'S') {
+        return NULL;
+    }
+
+
+    cp = line + 2;
+    while (isspace (*cp)) {
+        cp++;
+    }
+    if (!isdigit (*cp)) {
+        return NULL;
+    }
+    start = atoi (cp);
+    while (isdigit (*cp)) {
+        cp++;
+    }
+    while (isspace (*cp)) {
+        cp++;
+    }
+    if (!isdigit (*cp)) {
+        return NULL;
+    }
+    stop = atoi (cp);
+    while (isdigit (*cp)) {
+        cp++;
+    }
+    while (isspace (*cp)) {
+        cp++;
+    }
+    if (*cp == 0) {
+        return NULL;
+    }
+
+    len = strlen (cp);
+
+    base_seg = BaseSegNew ();
+    base_seg->cons_start = start;
+    base_seg->cons_stop = stop;
+    base_seg->read_id = malloc (sizeof (char) * len + 1);
+    strcpy (base_seg->read_id, cp);
+
+    return base_seg;
+}
+
+
+extern TConsensusReadAlnPtr ConsensusReadAlnNew (int numseg)
+{
+    TConsensusReadAlnPtr a;
+    int i;
+
+    a = (TConsensusReadAlnPtr) malloc (sizeof (SConsensusReadAln));
+    a->is_complement = 0;
+    if (numseg < 1) {
+        a->lens = NULL;
+        a->cons_starts = NULL;
+        a->read_starts = NULL;
+        a->numseg = 0;
+    } else {
+        a->lens = (int *) malloc (sizeof (int) * numseg);
+        a->cons_starts = (int *) malloc (sizeof (int) * numseg);
+        a->read_starts = (int *) malloc (sizeof (int) * numseg);
+        for (i = 0; i < numseg; i++) {
+            a->lens[i] = 0;
+            a->cons_starts[i] = 0;
+            a->read_starts[0] = 0;
+        }
+        a->numseg = numseg;
+    }
+    return a;
+}
+
+
+extern TConsensusReadAlnPtr ConsensusReadAlnFree (TConsensusReadAlnPtr a)
+{
+    if (a != NULL) {
+        if (a->lens != NULL) {
+            free (a->lens);
+            a->lens = NULL;
+        }
+        if (a->cons_starts != NULL) {
+            free (a->cons_starts);
+            a->cons_starts = NULL;
+        }
+        if (a->read_starts != NULL) {
+            free (a->read_starts);
+            a->read_starts = NULL;
+        }
+        free (a);
+        a = NULL;
+    }
+    return a;
+}
+
+
+extern TConsensusReadAlnPtr GetConsensusReadAln (char *consensus_seq, TContigReadPtr read)
+{
+    TConsensusReadAlnPtr aln = NULL;
+    char *c;
+    char *c_start;
+    char *r;
+    char *r_start;
+    int numseg = 0, aln_len, pos, seg, con_offset = 0, read_offset = 0;
+    char con_gap_open = 0, read_gap_open = 0, gap_change;
+
+    if (consensus_seq == NULL || read == NULL) {
+        return NULL;
+    }
+
+    if (read->cons_start > 0) {
+        c_start = consensus_seq + read->cons_start;
+        r_start = read->read_seq + read->read_assem_start - 1;
+    } else {
+        c_start = consensus_seq;
+        r_start = read->read_seq + read->read_assem_start - 1;
+    }
+
+    aln_len = read->cons_stop - read->cons_start + 1;
+    while (*c_start == '*' && *r_start == '*') {
+        c_start++;
+        r_start++;
+        aln_len--;
+    }
+
+    /* first, count number of segments needed */
+    c = c_start;
+    r = r_start;
+    if (*c != '*' && *r != '*') {
+      numseg++;
+    }
+    pos = 0;
+    while (*c != 0 && *r != 0 && pos < aln_len) {
+        if (*c == '*' && *r == '*') {
+            /* both in gap - ignore */
+        } else {
+            gap_change = 0;
+            if (*c == '*') {
+                if (!con_gap_open) {
+                    gap_change = 1;
+                    con_gap_open = 1;
+                }
+            } else {
+                if (con_gap_open) {
+                    gap_change = 1;
+                    con_gap_open = 0;
+                }
+            }
+            if (*r == '*') {
+                if (!read_gap_open) {
+                    gap_change = 1;
+                    read_gap_open = 1;
+                }
+            } else {
+                if (read_gap_open) {
+                    gap_change = 1;
+                    read_gap_open = 0;
+                }
+            }
+            if (gap_change) {
+                numseg++;
+            }
+        }
+        c++;
+        r++;
+        pos++;
+    }
+
+    /* create alignment */
+    aln = ConsensusReadAlnNew (numseg);
+    pos = 0;
+    seg = 0;
+
+
+    c = consensus_seq;        
+    while (c < c_start) {
+        if (*c != '*') {
+            con_offset ++;
+        }
+        c++;
+    }
+
+    r = read->read_seq;
+    while (r < r_start) {
+        if (*r != '*') {
+            read_offset ++;
+        }
+        r++;
+    }
+    
+    
+    if (*c_start == '*') {
+        aln->cons_starts[0] = -1;
+        con_gap_open = 1;
+    } else {
+        aln->cons_starts[0] = con_offset;
+        con_gap_open = 0;
+    }
+
+    if (*r_start == '*') {
+        aln->read_starts[0] = -1;
+        read_gap_open = 1;
+    } else {
+        aln->read_starts[0] = read_offset;
+        read_gap_open = 0;
+    }
+
+    c = c_start + 1;
+    r = r_start + 1;
+    aln->lens[0] = 1;
+    pos = 1;
+    
+    while (*c != 0 && *r != 0 && pos < aln_len) {
+        if (*c == '*' && *r == '*') {
+            /* both in gap - ignore */
+        } else {
+            gap_change = 0;
+            if (*c == '*') {
+                if (!con_gap_open) {
+                    gap_change = 1;
+                    con_gap_open = 1;
+                }
+            } else {
+                if (con_gap_open) {
+                    gap_change = 1;
+                    con_gap_open = 0;
+                }
+            }
+            if (*r == '*') {
+                if (!read_gap_open) {
+                    gap_change = 1;
+                    read_gap_open = 1;
+                }
+            } else {
+                if (read_gap_open) {
+                    gap_change = 1;
+                    read_gap_open = 0;
+                }
+            }
+            if (gap_change) {
+                seg++;
+                if (con_gap_open) {
+                    aln->cons_starts[seg] = -1;
+                } else if (aln->cons_starts[seg - 1] > -1) {
+                    aln->cons_starts[seg] = aln->cons_starts[seg - 1] + aln->lens[seg - 1];
+                } else if (seg > 1 && aln->cons_starts[seg - 2] > -1) {
+                    aln->cons_starts[seg] = aln->cons_starts[seg - 2] + aln->lens[seg - 2];
+                } else {
+                    aln->cons_starts[seg] = con_offset;
+                }
+                if (read_gap_open) {
+                    aln->read_starts[seg] = -1;
+                } else if (aln->read_starts[seg - 1] > -1) {
+                    aln->read_starts[seg] = aln->read_starts[seg - 1] + aln->lens[seg - 1];
+                } else if (seg > 1 && aln->read_starts[seg - 2] > -1) {
+                    aln->read_starts[seg] = aln->read_starts[seg - 2] + aln->lens[seg - 2];
+                } else {
+                    aln->read_starts[seg] = read_offset;
+                }
+            }
+            aln->lens[seg]++;
+        }
+        c++;
+        r++;
+        pos++;
+    }
+
+    /* todo - adjust starts for complement */
+    if (read->is_complement) {
+      for (seg = 0; seg < aln->numseg; seg++) {
+        if (aln->read_starts[seg] > -1) {
+          aln->read_starts[seg] = read->read_len - aln->read_starts[seg] - aln->lens[seg];
+        }
+      }
+      aln->is_complement = 1;
+    }
+
+    return aln;
 }
 
 
@@ -366,6 +683,9 @@ extern TContigPtr ContigNew (void)
     c->gaps = NULL;
     c->num_reads = 0;
     c->reads = NULL;
+    c->num_base_segs = 0;
+    c->base_segs = NULL;
+    c->tag = NULL;
 
     return c;
 }
@@ -387,6 +707,17 @@ extern void ContigFree (TContigPtr c)
                 }
             }
             free (c->reads);
+        }
+        if (c->base_segs != NULL) {
+            for (i = 0; i < c->num_base_segs; i++) {
+                if (c->base_segs[i] != NULL) {
+                    BaseSegFree (c->base_segs[i]);
+                }
+            }
+            free (c->base_segs);
+        }
+        if (c->tag != NULL) {
+            free (c->tag);
         }
         free (c);
     }
@@ -661,16 +992,19 @@ static EFound s_ReadAFLines
 }
 
 
-static EFound s_SkipBaseSegs
-(int                  num_base_segs,
+static EFound s_ReadBaseSegs
+(TContigPtr           contig,
+ int                  num_base_segs,
  char *               firstline,
  FReadLineFunction    readfunc,
  void *               userdata)
 {
     char * linestring;
-    int    seg_num;
 
-    if (readfunc == NULL || num_base_segs == 0) return eNone;
+    if (contig == NULL || readfunc == NULL || num_base_segs == 0) return eNone;
+
+    contig->base_segs = malloc (sizeof (TBaseSegPtr) * num_base_segs);
+    contig->num_base_segs = 0;
 
     /* get BS lines */
     linestring = firstline;
@@ -682,14 +1016,13 @@ static EFound s_SkipBaseSegs
         return eNone;
     }
     
-    seg_num = 0;
-    while (linestring != NULL  &&  linestring [0] != EOF && seg_num < num_base_segs
+    while (linestring != NULL  &&  linestring [0] != EOF && contig->num_base_segs < num_base_segs
            && linestring [0] == 'B' && linestring [1] == 'S' && isspace (linestring [2])) {
-        seg_num++;
+        contig->base_segs[contig->num_base_segs++] = s_ReadBaseSeg (linestring);
         free (linestring);
         linestring = readfunc (userdata);
     }
-    if (seg_num < num_base_segs) {
+    if (contig->num_base_segs < num_base_segs) {
         return eTooFew;
     } else if (linestring != NULL && linestring [0] != EOF && ! s_LineIsEmptyButNotEof (linestring)) {
         return eTooMany;
@@ -863,6 +1196,12 @@ static char ApplyQALineToRead (TContigReadPtr read, char *linestring, char *id, 
     } else if (values[3] > 0) {
         read->read_assem_stop = values[3];
     }
+
+    /* adjust first gap position for start */
+    if (read->read_assem_start > 1 && read->gaps != NULL && read->gaps->num_gaps > 0 && read->gaps->gap_offsets != NULL) {
+        read->gaps->gap_offsets[0] -= read->read_assem_start - 1;
+    }
+        
     return 1;
 }
     
@@ -898,6 +1237,73 @@ static int s_GetUngappedSeqLen (char *str, char *gap_chars)
         str++;
     }
     return len;
+}
+
+
+static char * s_AddToTagComment (char *orig, char *extra)
+{
+    char * tag = NULL;
+    int    tag_len;
+
+    if (orig == NULL) {
+        tag = extra;
+    } else {
+        tag_len = strlen (orig) + strlen (extra) + 1;
+        tag = malloc (sizeof (char) * (tag_len + 1));
+        strcpy (tag, orig);
+        strcat (tag, "\n");
+        strcat (tag, extra);
+        free (orig);
+        free (extra);
+    }
+    return tag;
+}
+
+
+static char * s_ReadTagComment
+(FReadLineFunction    readfunc,
+ void *               userdata)
+{
+    char *linestring;
+    char *tag = NULL;
+    char *cp = NULL;
+    char *tmp;
+    int   tag_len = 0, end_len;
+
+    linestring = readfunc (userdata);
+    while (linestring != NULL  &&  linestring [0] != EOF && (cp = strchr (linestring, '}')) == NULL) {
+        if (tag == NULL) {
+            tag_len = strlen (linestring);
+            tag = malloc (sizeof (char) * (tag_len + 1));
+            strcpy (tag, linestring);
+        } else {
+            tag_len = tag_len + strlen (linestring) + 1;
+            tmp = malloc (sizeof (char) * (tag_len + 1));
+            strcpy (tmp, tag);
+            strcat (tmp, "\n");
+            strcat (tmp, linestring);
+            free (tag);
+            tag = tmp;
+        }
+        free (linestring);
+        linestring = readfunc (userdata);
+    }
+    if (cp != NULL && cp > linestring) {
+        end_len = cp - linestring;
+        tag_len = tag_len + end_len + 1;
+        tmp = malloc (sizeof (char) * (tag_len + 1));
+        strcpy (tmp, tag);
+        strcat (tmp, "\n");
+        strncat (tmp, linestring, end_len);
+        tmp[tag_len] = 0;
+        free (tag);
+        tag = tmp;
+    }
+    if (linestring != NULL) {
+        free (linestring);
+    }
+
+    return tag;
 }
 
 
@@ -1006,7 +1412,7 @@ static TContigPtr s_ReadContig
     }
  
     if (num_base_segs > 0) {
-        val = s_SkipBaseSegs (num_base_segs, linestring, readfunc, userdata);
+        val = s_ReadBaseSegs (contig, num_base_segs, linestring, readfunc, userdata);
         if (val != eJustRight) {
             s_ReportFound (val, "base segments", contig->consensus_id, has_errors);
             ContigFree (contig);
@@ -1048,6 +1454,14 @@ static TContigPtr s_ReadContig
             }
         } else if (linestring[0] == 'D' && linestring[1] == 'S' && isspace (linestring[2])) {
             /* skip DS lines */
+        } else if (strncmp (linestring, "RT{", 3) == 0) {
+            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[read_num - 1]->tag, s_ReadTagComment (readfunc, userdata));
+        } else if (strncmp (linestring, "WR{", 3) == 0) {
+            contig->reads[read_num - 1]->tag = s_AddToTagComment (contig->reads[read_num - 1]->tag, s_ReadTagComment (readfunc, userdata));
+        } else if (strncmp (linestring, "CT{", 3) == 0) {
+            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata));
+        } else if (strncmp (linestring, "WA{", 3) == 0) {
+            contig->tag = s_AddToTagComment (contig->tag, s_ReadTagComment (readfunc, userdata));
         } else if (linestring[0] != 0) {
             /* found next line */
             *initline = linestring;
@@ -1110,20 +1524,29 @@ ReadACEFile
             if (num_reads_expected > 0) {
                 PrintACEFormatErrorXML ("Two file header lines!", NULL, has_errors);
                 ACEFileFree (afp);
+                free (linestring);
                 return NULL;
             }
             /* first line in file, number of contigs */
             cp = linestring + 3;
             afp->num_contigs = atoi (cp);
             afp->contigs = malloc (afp->num_contigs * sizeof (TContigPtr));
+            if (afp->contigs == NULL) {
+                PrintACEFormatErrorXML ("Memory allocation failed!", NULL, has_errors);
+                free (linestring);
+                ACEFileFree (afp);
+                return NULL;
+            }
             while (isdigit (*cp)) {
                 cp++;
             }
             num_reads_expected = atoi (cp);
+            free (linestring);
             linestring = readfunc (userdata);
         } else if (linestring [0] == 'C' && linestring [1] == 'O' && isspace (linestring [2])) {
             if (contig_num >= afp->num_contigs) {
                 PrintACEFormatErrorXML ("Too many contigs!", NULL, has_errors);
+                free (linestring);
                 ACEFileFree (afp);
                 return NULL;
             }
@@ -1139,11 +1562,13 @@ ReadACEFile
             contig_num++;
         } else if (s_UnexpectedLineBetweenContigs (linestring)) {
             PrintACEFormatErrorXMLStart (NULL, has_errors);
-            printf ("Unexpected line after contig %d", read_num);
+            printf ("Unexpected line after contig %d:%s", read_num, linestring);
             PrintACEFormatErrorXMLEnd ();
+            free (linestring);
             ACEFileFree (afp);
             return NULL;
         } else {
+            free (linestring);
             linestring = readfunc (userdata);
         }
     }
@@ -1159,7 +1584,6 @@ ReadACEFile
 
     return afp;
 }
-
 
 
 /* This function writes out sequence characters, 60 per line. */
@@ -1430,24 +1854,6 @@ extern void WriteTraceArchiveRead (FILE *fp, TContigReadPtr read)
     free (cp);
     fprintf (fp, "</trace>\n");
 }
-
-
-extern void WriteTraceArchiveContig (FILE *fp, TContigPtr contig)
-{
-    int i;
-
-    if (fp == NULL || contig == NULL) {
-        return;
-    }
-
-    /* write consensus */
-
-    /* write reads */
-    for (i = 0; i < contig->num_reads; i++) {
-        WriteTraceArchiveRead (fp, contig->reads[i]);
-    }
-}
-
 
 
 static int s_GetTokenLen (char *str)
@@ -1969,7 +2375,7 @@ static void WriteTraceGapsXML (TGapInfoPtr gap_info, FILE *fp)
     if (gap_info->num_gaps > 0) {
       fprintf (fp, "    <tracegaps source=\"INLINE\">");
       for (i = 0; i < gap_info->num_gaps - 1; i++) {
-        fprintf (fp, "%d,", gap_info->gap_offsets[i]);
+        fprintf (fp, "%d ", gap_info->gap_offsets[i]);
       }
       fprintf (fp, "%d</tracegaps>\n", gap_info->gap_offsets[gap_info->num_gaps - 1]);
     } else {
@@ -1990,7 +2396,7 @@ static void WriteTraceReadXML (TContigReadPtr read, FILE *fp)
       fprintf (fp, "  <srr>%s</srr>\n", read->srr);
     }
     if (read->read_id != NULL) {
-      fprintf (fp, "  <trace_name>%s</trace_name>\n", read->read_id == NULL ? "" : read->read_id);
+      fprintf (fp, "  <trace_name>%s</trace_name>\n", read->read_id);
     }
     fprintf (fp, "  <nbasecalls>%d</nbasecalls>\n", read->read_len);
     fprintf (fp, "  <valid>\n");
@@ -2011,7 +2417,7 @@ static void WriteTraceReadXML (TContigReadPtr read, FILE *fp)
 }
 
 
-static void WriteTraceAssemblyFromContig (TContigPtr contig, FILE *fp)
+extern void WriteTraceAssemblyFromContig (TContigPtr contig, FILE *fp)
 {
   int i;
 
@@ -2034,7 +2440,7 @@ static void WriteTraceAssemblyFromContig (TContigPtr contig, FILE *fp)
     if (contig->gaps->num_gaps > 0) {
       fprintf (fp, "  <congaps source=\"INLINE\">");
       for (i = 0; i < contig->gaps->num_gaps - 1; i++) {
-        fprintf (fp, "%d,", contig->gaps->gap_offsets[i]);
+        fprintf (fp, "%d ", contig->gaps->gap_offsets[i]);
       }
       fprintf (fp, "%d</congaps>\n", contig->gaps->gap_offsets[contig->gaps->num_gaps - 1]);
     }
@@ -2056,6 +2462,50 @@ static void WriteTraceAssemblyFromContig (TContigPtr contig, FILE *fp)
 }
 
 
+extern void
+WriteTraceAssemblyHeader
+(char * assembly_type,
+ char * subref,
+ char * center_name,
+ int    taxid,
+ char * description,
+ char * assembly,
+ int    num_contigs,
+ unsigned int    num_conbases,
+ int    num_reads,
+ unsigned int    num_readbases,
+ FILE * fp)
+{
+    if (fp == NULL) {
+        return;
+    }
+
+    fprintf (fp, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+
+    fprintf (fp, "<assembly submitter_reference=\"%s\" type = \"%s\">\n", 
+                 subref == NULL ? "Not supplied" : subref,
+                 assembly_type == NULL ? "NEW" : assembly_type);
+    fprintf (fp, "  <center_name>%s</center_name>\n", center_name == NULL ? "Not supplied" : center_name);\
+    fprintf (fp, "  <organism descriptor=\"TAXID\">%d</organism>\n", taxid);
+    fprintf (fp, "  <description>%s</description>\n", description == NULL ? "Not supplied" : description);
+    fprintf (fp, "  <structure>%s</structure>\n", assembly == NULL ? "transcript assembly" : assembly);
+    fprintf (fp, "  <ncontigs>%d</ncontigs>\n", num_contigs);
+    fprintf (fp, "  <nconbases>%u</nconbases>\n", num_conbases);
+    fprintf (fp, "  <ntraces>%d</ntraces>\n", num_reads);
+    fprintf (fp, "  <nbasecalls>%u</nbasecalls>\n", num_readbases);
+    fprintf (fp, "  <coverage>%f</coverage>\n", num_conbases == 0 ? 0 : (float) ((float) num_readbases/ (float) num_conbases));
+}
+ 
+
+extern void WriteTraceAssemblyTrailer (FILE *fp)
+{
+    if (fp == NULL) {
+        return;
+    }
+    fprintf (fp, "</assembly>\n");
+}
+
+
 extern void 
 WriteTraceAssemblyFromAceFile 
 (TACEFilePtr afp,
@@ -2065,36 +2515,51 @@ WriteTraceAssemblyFromAceFile
  char *      description,
  FILE        *fp)
 { 
-  int i, j, conbases = 0, basecalls = 0, traces = 0;
+  int i, j, traces = 0;
+  unsigned int conbases = 0, basecalls = 0;
 
   if (afp == NULL || fp == NULL) return;
 
-  fprintf (fp, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
 
-  fprintf (fp, "<assembly submitter_reference=\"%s\" type = \"NEW\">\n", subref == NULL ? "Not supplied" : subref);
-  fprintf (fp, "  <center_name>%s</center_name>\n", center_name == NULL ? "Not supplied" : center_name);
-  fprintf (fp, "  <taxid>%d</taxid>\n", taxid);
-  fprintf (fp, "  <description>%s</description>\n", description == NULL ? "Not supplied" : description);
-  fprintf (fp, "  <structure>transcript assembly</structure>\n");
-  fprintf (fp, "  <ncontigs>%d</ncontigs>\n", afp->num_contigs);
   for (i = 0; i < afp->num_contigs; i++) {
     conbases += afp->contigs[i]->consensus_seq_len;
-  }
-  fprintf (fp, "  <nconbases>%d</nconbases>\n", conbases);
-  fprintf (fp, "  <ntraces>%d</ntraces>\n", traces);
-  for (i = 0; i < afp->num_contigs; i++) {
     traces += afp->contigs[i]->num_reads;
     for (j = 0; j < afp->contigs[i]->num_reads; j++) {
       basecalls += afp->contigs[i]->reads[j]->read_len;
     }
   }
-  fprintf (fp, "  <nbasecalls>%d</nbasecalls>\n", basecalls);
-  fprintf (fp, "  <coverage>%f</coverage>\n", conbases == 0 ? 0 : (float) ((float) basecalls/ (float) conbases));
+  WriteTraceAssemblyHeader (NULL, subref, center_name, taxid, description, NULL, afp->num_contigs, conbases, traces, basecalls, fp);
 
   for (i = 0; i < afp->num_contigs; i++) {
     WriteTraceAssemblyFromContig (afp->contigs[i], fp);
   }
-  fprintf (fp, "</assembly>\n");
+  WriteTraceAssemblyTrailer (fp);
+}
+
+
+extern void WriteFASTAFromContig
+(TContigPtr contig,
+ FILE       *fp)
+{
+    int   k;
+    char *cp;
+
+    if (contig == NULL || fp == NULL) return;
+    
+    fprintf (fp, ">%s\n", contig->consensus_id);
+    cp = contig->consensus_seq;
+    while (*cp != 0) {
+        k = 0;
+        while (k < 40 && *cp != 0) {
+            if (*cp != '*') {
+                fprintf (fp, "%c", *cp);
+                k++;
+            }
+            cp++;
+        }
+        fprintf (fp, "\n");
+    }
+    fprintf (fp, "\n");
 }
 
 
@@ -2103,26 +2568,12 @@ WriteFASTAFromAceFile
 (TACEFilePtr afp,
  FILE        *fp)
 {
-  int i, k;
-  char *cp;
+  int i;
 
   if (afp == NULL || fp == NULL) return;
   
   for (i = 0; i < afp->num_contigs; i++) {
-    fprintf (fp, ">%s\n", afp->contigs[i]->consensus_id);
-    cp = afp->contigs[i]->consensus_seq;
-    while (*cp != 0) {
-      k = 0;
-      while (k < 40 && *cp != 0) {
-        if (*cp != '*') {
-          fprintf (fp, "%c", *cp);
-          k++;
-        }
-        cp++;
-      }
-      fprintf (fp, "\n");
-    }
-    fprintf (fp, "\n");
+    WriteFASTAFromContig (afp->contigs[i], fp);
   }
 }
 
@@ -2819,7 +3270,7 @@ static int s_GetQualScoreForReadPos (TContigReadPtr r, int pos)
 }
 
 
-extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
+extern int ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
 {
     char * consensus_buf;
     int  * new_qual_scores = NULL;
@@ -2829,9 +3280,11 @@ extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
     char   best_ch, ch;
     int    num_best, sum_best;
     int  * consensus_qual_ptr = NULL;
+    int    read_offset, len;
+    int    num_change = 0;
 
     if (contig == NULL) {
-        return;
+        return 0;
     }
 
     consensus_buf = (char *) malloc (sizeof (char) * (contig->consensus_assem_len + 1));
@@ -2856,9 +3309,11 @@ extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
             best = 0;
             best_ch = 'N';
             for (k = 0; k < contig->num_reads; k++) {
-                if (strlen (contig->reads[k]->read_seq) > i
-                    && i >= contig->reads[k]->cons_start) {
-                    ch = toupper (contig->reads[k]->read_seq[i - contig->reads[k]->cons_start]);
+                read_offset = i - contig->reads[k]->cons_start;
+                len = strlen (contig->reads[k]->read_seq);
+                if (len > read_offset
+                    && read_offset >= 0) {
+                    ch = toupper (contig->reads[k]->read_seq[read_offset]);
                     letter_pos = s_LetterPos (ch);
                     if (letter_pos > -1) {
                       char_counts[letter_pos]++;
@@ -2870,23 +3325,26 @@ extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
                     }
                 }
             }
-            consensus_buf[i] = best_ch;
-            if (best_ch != '*') {
-                /* calculate quality score */
-                if (new_qual_scores != NULL) {
-                    sum_best = 0;
-                    num_best = 0;
-                    for (k = 0; k < contig->num_reads; k++) {
-                        if (contig->reads[k]->num_qual_scores > i - contig->reads[k]->cons_start
-                            &&  best_ch == toupper (contig->reads[k]->read_seq[i - contig->reads[k]->cons_start])) {
-                            num_best ++;
-                            sum_best += s_GetQualScoreForReadPos (contig->reads[k], i - contig->reads[k]->cons_start);
+            if (toupper (consensus_buf[i]) != best_ch) {
+                num_change++;
+                consensus_buf[i] = best_ch;
+                if (best_ch != '*') {
+                    /* calculate quality score */
+                    if (new_qual_scores != NULL) {
+                        sum_best = 0;
+                        num_best = 0;
+                        for (k = 0; k < contig->num_reads; k++) {
+                            if (contig->reads[k]->num_qual_scores > i - contig->reads[k]->cons_start
+                                &&  best_ch == toupper (contig->reads[k]->read_seq[i - contig->reads[k]->cons_start])) {
+                                num_best ++;
+                                sum_best += s_GetQualScoreForReadPos (contig->reads[k], i - contig->reads[k]->cons_start);
+                            }
                         }
-                    }
-                    if (num_best == 0) {
-                        new_qual_scores[num_qual_scores++] = 0;
-                    } else {
-                        new_qual_scores[num_qual_scores++] = sum_best / num_best;
+                        if (num_best == 0) {
+                            new_qual_scores[num_qual_scores++] = 0;
+                        } else {
+                            new_qual_scores[num_qual_scores++] = sum_best / num_best;
+                        }
                     }
                 }
             }
@@ -2904,6 +3362,8 @@ extern void ReplaceConsensusSequenceFromTraces (TContigPtr contig, char only_ns)
     }
     contig->qual_scores = new_qual_scores;
     contig->num_qual_scores = num_qual_scores;
+    
+    return num_change;
 }
 
 
@@ -2922,4 +3382,96 @@ extern void RecalculateConsensusSequences (TACEFilePtr ace_file, char only_ns)
 }
 
 
+extern void WriteContigQualScores (TContigPtr contig, FILE *out)
+{
+    int i = 0, j;
 
+    if (contig == NULL || contig->qual_scores == NULL || contig->num_qual_scores < 1 || out == NULL) {
+        return;
+    }
+    fprintf (out, ">%s\n", contig->consensus_id);
+
+    while (i < contig->num_qual_scores) {
+        for (j = 0; j < 60 && i < contig->num_qual_scores; j++, i++) {
+            fprintf (out, "%d ", contig->qual_scores[i]);
+        }
+        fprintf (out, "\n");
+    }
+    fprintf (out, "\n");
+}
+
+
+extern char
+ProcessLargeACEFileForContigFastaAndQualScores
+(FReadLineFunction    readfunc,
+ void *               userdata,
+ char                 make_qual_scores,
+ char *               has_errors,
+ ProcessContigFunc    process_func,
+ void *               process_data)
+{
+    char *              linestring;
+    char *              cp;
+    int                 contig_num = 0, read_num = 0;
+    int                 num_reads_expected = 0;
+    int                 num_contigs = 0;
+    TContigPtr          contig = NULL;
+    char                rval = 1;
+
+    if (readfunc == NULL || process_func == NULL) {
+        return 0;
+    }
+
+    linestring = readfunc (userdata);
+
+    while (linestring != NULL  &&  linestring [0] != EOF) {
+        if (linestring [0] == 'A' && linestring [1] == 'S' && isspace (linestring [2])) {
+            if (num_reads_expected > 0) {
+                PrintACEFormatErrorXML ("Two file header lines!", NULL, has_errors);
+                return 0;
+            }
+            /* first line in file, number of contigs */
+            cp = linestring + 3;
+            num_contigs = atoi (cp);
+            while (isdigit (*cp)) {
+                cp++;
+            }
+            num_reads_expected = atoi (cp);
+            linestring = readfunc (userdata);
+        } else if (linestring [0] == 'C' && linestring [1] == 'O' && isspace (linestring [2])) {
+            if (contig_num >= num_contigs) {
+                PrintACEFormatErrorXML ("Too many contigs!", NULL, has_errors);
+                return 0;
+            }
+
+            contig = s_ReadContig (&linestring, readfunc, userdata, make_qual_scores, has_errors);
+            if (contig == NULL) {
+                PrintACEFormatErrorXMLStart (NULL, has_errors);
+                printf ("Unable to read contig (%d)", contig_num);
+                PrintACEFormatErrorXMLEnd ();
+                return 0;
+            }
+            read_num += contig->num_reads;
+            process_func (contig, process_data);
+            ContigFree (contig);
+            contig = NULL;
+            contig_num++;
+        } else if (s_UnexpectedLineBetweenContigs (linestring)) {
+            PrintACEFormatErrorXMLStart (NULL, has_errors);
+            printf ("Unexpected line after contig %d", read_num);
+            PrintACEFormatErrorXMLEnd ();
+            return 0;
+        } else {
+            linestring = readfunc (userdata);
+        }
+    }
+    if (contig_num < num_contigs) {
+        PrintACEFormatErrorXML ("Not enough contigs!", NULL, has_errors);
+        rval = 0;
+    } else if (read_num < num_reads_expected) {
+        PrintACEFormatErrorXML ("Not enough reads!", NULL, has_errors);
+        rval = 0;
+    }
+
+    return rval;
+}

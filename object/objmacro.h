@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.16 at Oct 30, 2008 12:26 PM
+*    Generated using ASNCODE Revision: 6.16 at Jan 30, 2009 11:42 AM
 *
 **************************************************/
 
@@ -591,6 +591,7 @@ NLM_EXTERN Boolean LIBCALL RnaQualPairAsnWrite PROTO (( RnaQualPairPtr , AsnIoPt
 #define Source_qual_linkage_group 93
 #define Source_qual_haplogroup 94
 #define Source_qual_all_quals 95
+#define Source_qual_dbxref 96
 
 
 
@@ -649,11 +650,64 @@ typedef ValNode SourceQualChoice;
 #define SourceQualChoice_textqual 1
 #define SourceQualChoice_location 2
 #define SourceQualChoice_origin 3
+#define SourceQualChoice_gcode 4
+#define SourceQualChoice_mgcode 5
 
 
 NLM_EXTERN SourceQualChoicePtr LIBCALL SourceQualChoiceFree PROTO ((SourceQualChoicePtr ));
 NLM_EXTERN SourceQualChoicePtr LIBCALL SourceQualChoiceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL SourceQualChoiceAsnWrite PROTO (( SourceQualChoicePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SourceQualTextVal
+*
+**************************************************/
+typedef struct struct_Source_qual_text_val {
+   Uint2   srcqual;
+   CharPtr   val;
+} SourceQualTextVal, PNTR SourceQualTextValPtr;
+
+
+NLM_EXTERN SourceQualTextValPtr LIBCALL SourceQualTextValFree PROTO ((SourceQualTextValPtr ));
+NLM_EXTERN SourceQualTextValPtr LIBCALL SourceQualTextValNew PROTO (( void ));
+NLM_EXTERN SourceQualTextValPtr LIBCALL SourceQualTextValAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SourceQualTextValAsnWrite PROTO (( SourceQualTextValPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr SourceQualValChoicePtr;
+typedef ValNode SourceQualValChoice;
+#define SourceQualValChoice_textqual 1
+#define SourceQualValChoice_location 2
+#define SourceQualValChoice_origin 3
+#define SourceQualValChoice_gcode 4
+#define SourceQualValChoice_mgcode 5
+
+
+NLM_EXTERN SourceQualValChoicePtr LIBCALL SourceQualValChoiceFree PROTO ((SourceQualValChoicePtr ));
+NLM_EXTERN SourceQualValChoicePtr LIBCALL SourceQualValChoiceAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SourceQualValChoiceAsnWrite PROTO (( SourceQualValChoicePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SourceQualValSet
+*
+**************************************************/
+typedef ValNode SourceQualValSet;
+typedef ValNodePtr SourceQualValSetPtr;
+#define SourceQualValSetNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN SourceQualValSetPtr LIBCALL SourceQualValSetFree PROTO ((SourceQualValSetPtr ));
+NLM_EXTERN SourceQualValSetPtr LIBCALL SourceQualValSetNew PROTO (( void ));
+NLM_EXTERN SourceQualValSetPtr LIBCALL SourceQualValSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SourceQualValSetAsnWrite PROTO (( SourceQualValSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define CDSGeneProt_field_cds_comment 1
@@ -983,6 +1037,7 @@ NLM_EXTERN Boolean LIBCALL StructuredCommentFieldPairAsnWrite PROTO (( Structure
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Misc_field_genome_project_id 1
+#define Misc_field_comment_descriptor 2
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Pub_type_any 0
@@ -1510,7 +1565,8 @@ typedef ValNode ParseDest;
 #define ParseDest_defline 1
 #define ParseDest_org 2
 #define ParseDest_featqual 3
-#define ParseDest_dbxref 4
+#define ParseDest_comment_descriptor 4
+#define ParseDest_dbxref 5
 
 
 NLM_EXTERN ParseDestPtr LIBCALL ParseDestFree PROTO ((ParseDestPtr ));
@@ -1594,6 +1650,7 @@ typedef struct struct_Apply_feature_action {
    Uint1   apply_to_parts;
    Int4   only_seg_num;
    ValNodePtr   fields;
+   ValNodePtr   src_fields;
 } ApplyFeatureAction, PNTR ApplyFeatureActionPtr;
 
 
@@ -1881,6 +1938,60 @@ NLM_EXTERN MolinfoBlockPtr LIBCALL MolinfoBlockNew PROTO (( void ));
 NLM_EXTERN MolinfoBlockPtr LIBCALL MolinfoBlockAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL MolinfoBlockAsnWrite PROTO (( MolinfoBlockPtr , AsnIoPtr, AsnTypePtr));
 
+/* following #defines are for enumerated type, not used by object loaders */
+#define Descriptor_type_all 0
+#define Descriptor_type_title 1
+#define Descriptor_type_source 2
+#define Descriptor_type_publication 3
+#define Descriptor_type_comment 4
+#define Descriptor_type_genbank 5
+#define Descriptor_type_user 6
+#define Descriptor_type_create_date 7
+#define Descriptor_type_update_date 8
+#define Descriptor_type_mol_info 9
+#define Descriptor_type_structured_comment 10
+
+
+
+/**************************************************
+*
+*    RemoveDescriptorAction
+*
+**************************************************/
+typedef struct struct_Remove_descriptor_action {
+   Uint2   type;
+   ValNodePtr   constraint;
+} RemoveDescriptorAction, PNTR RemoveDescriptorActionPtr;
+
+
+NLM_EXTERN RemoveDescriptorActionPtr LIBCALL RemoveDescriptorActionFree PROTO ((RemoveDescriptorActionPtr ));
+NLM_EXTERN RemoveDescriptorActionPtr LIBCALL RemoveDescriptorActionNew PROTO (( void ));
+NLM_EXTERN RemoveDescriptorActionPtr LIBCALL RemoveDescriptorActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RemoveDescriptorActionAsnWrite PROTO (( RemoveDescriptorActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Autodef_list_type_feature_list 1
+#define Autodef_list_type_complete_sequence 2
+#define Autodef_list_type_complete_genome 3
+
+
+
+/**************************************************
+*
+*    AutodefAction
+*
+**************************************************/
+typedef struct struct_Autodef_action {
+   ValNodePtr   modifiers;
+   Uint2   clause_list_type;
+} AutodefAction, PNTR AutodefActionPtr;
+
+
+NLM_EXTERN AutodefActionPtr LIBCALL AutodefActionFree PROTO ((AutodefActionPtr ));
+NLM_EXTERN AutodefActionPtr LIBCALL AutodefActionNew PROTO (( void ));
+NLM_EXTERN AutodefActionPtr LIBCALL AutodefActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AutodefActionAsnWrite PROTO (( AutodefActionPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr MacroActionChoicePtr;
 typedef ValNode MacroActionChoice;
 #define MacroActionChoice_aecr 1
@@ -1889,6 +2000,8 @@ typedef ValNode MacroActionChoice;
 #define MacroActionChoice_remove_feature 4
 #define MacroActionChoice_convert_feature 5
 #define MacroActionChoice_edit_location 6
+#define MacroActionChoice_remove_descriptor 7
+#define MacroActionChoice_autodef 8
 
 
 NLM_EXTERN MacroActionChoicePtr LIBCALL MacroActionChoiceFree PROTO ((MacroActionChoicePtr ));

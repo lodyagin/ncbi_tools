@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -43,6 +43,9 @@
 *                      it is linked as a DLL).
 *
 * $Log: objgen.c,v $
+* Revision 6.16  2008/12/30 19:58:39  bollin
+* corrected crash bug in DatePrint when month exceeds 12 (an error condition)
+*
 * Revision 6.15  2008/09/10 15:22:46  bollin
 * Added DbtagMatchEx and ObjectIdMatchEx, which are optionally case sensitive or case insensitive.
 *
@@ -343,7 +346,11 @@ NLM_EXTERN Boolean LIBCALL DatePrint (NCBI_DatePtr dp, CharPtr to)
 	{
 		if (dp->data[2] > 0)
 		{
-			to = StringMove(to, NCBI_months[dp->data[2] - 1]);
+      if (dp->data[2] > 12) {
+        to = StringMove (to, "inv");
+      } else {
+			  to = StringMove(to, NCBI_months[dp->data[2] - 1]);
+      }
 			*to = ' ';
 			to++;
 			*to = '\0';

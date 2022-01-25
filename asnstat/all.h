@@ -10,7 +10,7 @@
 #endif
 
 static char * asnfilename = "all.h60";
-static AsnValxNode avnx[1214] = {
+static AsnValxNode avnx[1232] = {
     {20,"unk" ,0,0.0,&avnx[1] } ,
     {20,"gt" ,1,0.0,&avnx[2] } ,
     {20,"lt" ,2,0.0,&avnx[3] } ,
@@ -581,529 +581,533 @@ static AsnValxNode avnx[1214] = {
     {20,"wgs-set" ,18,0.0,&avnx[568] } ,
     {20,"named-annot" ,19,0.0,&avnx[569] } ,
     {20,"named-annot-prod" ,20,0.0,&avnx[570] } ,
+    {20,"read-set" ,21,0.0,&avnx[571] } ,
+    {20,"paired-end-reads" ,22,0.0,&avnx[572] } ,
     {20,"other" ,255,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"iupacna" ,1,0.0,&avnx[573] } ,
-    {20,"iupacaa" ,2,0.0,&avnx[574] } ,
-    {20,"ncbi2na" ,3,0.0,&avnx[575] } ,
-    {20,"ncbi4na" ,4,0.0,&avnx[576] } ,
-    {20,"ncbi8na" ,5,0.0,&avnx[577] } ,
-    {20,"ncbipna" ,6,0.0,&avnx[578] } ,
-    {20,"ncbi8aa" ,7,0.0,&avnx[579] } ,
-    {20,"ncbieaa" ,8,0.0,&avnx[580] } ,
-    {20,"ncbipaa" ,9,0.0,&avnx[581] } ,
-    {20,"iupacaa3" ,10,0.0,&avnx[582] } ,
+    {20,"iupacna" ,1,0.0,&avnx[575] } ,
+    {20,"iupacaa" ,2,0.0,&avnx[576] } ,
+    {20,"ncbi2na" ,3,0.0,&avnx[577] } ,
+    {20,"ncbi4na" ,4,0.0,&avnx[578] } ,
+    {20,"ncbi8na" ,5,0.0,&avnx[579] } ,
+    {20,"ncbipna" ,6,0.0,&avnx[580] } ,
+    {20,"ncbi8aa" ,7,0.0,&avnx[581] } ,
+    {20,"ncbieaa" ,8,0.0,&avnx[582] } ,
+    {20,"ncbipaa" ,9,0.0,&avnx[583] } ,
+    {20,"iupacaa3" ,10,0.0,&avnx[584] } ,
     {20,"ncbistdaa" ,11,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {20,"new" ,1,0.0,&avnx[587] } ,
-    {20,"update" ,2,0.0,&avnx[588] } ,
-    {20,"revision" ,3,0.0,&avnx[589] } ,
+    {20,"new" ,1,0.0,&avnx[589] } ,
+    {20,"update" ,2,0.0,&avnx[590] } ,
+    {20,"revision" ,3,0.0,&avnx[591] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"off" ,1,0.0,&avnx[591] } ,
-    {20,"trace" ,2,0.0,&avnx[592] } ,
-    {20,"partial" ,3,0.0,&avnx[593] } ,
+    {20,"off" ,1,0.0,&avnx[593] } ,
+    {20,"trace" ,2,0.0,&avnx[594] } ,
+    {20,"partial" ,3,0.0,&avnx[595] } ,
     {20,"complete" ,4,0.0,NULL } ,
-    {20,"wire" ,1,0.0,&avnx[595] } ,
-    {20,"tubes" ,2,0.0,&avnx[596] } ,
-    {20,"ball-and-stick" ,3,0.0,&avnx[597] } ,
-    {20,"space-fill" ,4,0.0,&avnx[598] } ,
-    {20,"wire-worm" ,5,0.0,&avnx[599] } ,
-    {20,"tube-worm" ,6,0.0,&avnx[600] } ,
-    {20,"with-arrows" ,7,0.0,&avnx[601] } ,
+    {20,"wire" ,1,0.0,&avnx[597] } ,
+    {20,"tubes" ,2,0.0,&avnx[598] } ,
+    {20,"ball-and-stick" ,3,0.0,&avnx[599] } ,
+    {20,"space-fill" ,4,0.0,&avnx[600] } ,
+    {20,"wire-worm" ,5,0.0,&avnx[601] } ,
+    {20,"tube-worm" ,6,0.0,&avnx[602] } ,
+    {20,"with-arrows" ,7,0.0,&avnx[603] } ,
     {20,"without-arrows" ,8,0.0,NULL } ,
-    {20,"element" ,1,0.0,&avnx[603] } ,
-    {20,"object" ,2,0.0,&avnx[604] } ,
-    {20,"molecule" ,3,0.0,&avnx[605] } ,
-    {20,"domain" ,4,0.0,&avnx[606] } ,
-    {20,"residue" ,20,0.0,&avnx[607] } ,
-    {20,"secondary-structure" ,5,0.0,&avnx[608] } ,
-    {20,"user-select" ,6,0.0,&avnx[609] } ,
-    {20,"aligned" ,7,0.0,&avnx[610] } ,
-    {20,"identity" ,8,0.0,&avnx[611] } ,
-    {20,"variety" ,9,0.0,&avnx[612] } ,
-    {20,"weighted-variety" ,10,0.0,&avnx[613] } ,
-    {20,"information-content" ,11,0.0,&avnx[614] } ,
-    {20,"fit" ,12,0.0,&avnx[615] } ,
-    {20,"block-fit" ,17,0.0,&avnx[616] } ,
-    {20,"block-z-fit" ,18,0.0,&avnx[617] } ,
-    {20,"block-row-fit" ,19,0.0,&avnx[618] } ,
-    {20,"temperature" ,13,0.0,&avnx[619] } ,
-    {20,"hydrophobicity" ,14,0.0,&avnx[620] } ,
-    {20,"charge" ,15,0.0,&avnx[621] } ,
+    {20,"element" ,1,0.0,&avnx[605] } ,
+    {20,"object" ,2,0.0,&avnx[606] } ,
+    {20,"molecule" ,3,0.0,&avnx[607] } ,
+    {20,"domain" ,4,0.0,&avnx[608] } ,
+    {20,"residue" ,20,0.0,&avnx[609] } ,
+    {20,"secondary-structure" ,5,0.0,&avnx[610] } ,
+    {20,"user-select" ,6,0.0,&avnx[611] } ,
+    {20,"aligned" ,7,0.0,&avnx[612] } ,
+    {20,"identity" ,8,0.0,&avnx[613] } ,
+    {20,"variety" ,9,0.0,&avnx[614] } ,
+    {20,"weighted-variety" ,10,0.0,&avnx[615] } ,
+    {20,"information-content" ,11,0.0,&avnx[616] } ,
+    {20,"fit" ,12,0.0,&avnx[617] } ,
+    {20,"block-fit" ,17,0.0,&avnx[618] } ,
+    {20,"block-z-fit" ,18,0.0,&avnx[619] } ,
+    {20,"block-row-fit" ,19,0.0,&avnx[620] } ,
+    {20,"temperature" ,13,0.0,&avnx[621] } ,
+    {20,"hydrophobicity" ,14,0.0,&avnx[622] } ,
+    {20,"charge" ,15,0.0,&avnx[623] } ,
     {20,"rainbow" ,16,0.0,NULL } ,
     {3,NULL,255,0.0,NULL } ,
     {3,NULL,255,0.0,NULL } ,
-    {20,"one-letter" ,1,0.0,&avnx[625] } ,
+    {20,"one-letter" ,1,0.0,&avnx[627] } ,
     {20,"three-letter" ,2,0.0,NULL } ,
-    {20,"none" ,0,0.0,&avnx[627] } ,
-    {20,"sequential" ,1,0.0,&avnx[628] } ,
+    {20,"none" ,0,0.0,&avnx[629] } ,
+    {20,"sequential" ,1,0.0,&avnx[630] } ,
     {20,"pdb" ,2,0.0,NULL } ,
-    {20,"aa" ,1,0.0,&avnx[630] } ,
-    {20,"na" ,2,0.0,&avnx[631] } ,
+    {20,"aa" ,1,0.0,&avnx[632] } ,
+    {20,"na" ,2,0.0,&avnx[633] } ,
     {20,"both" ,3,0.0,NULL } ,
-    {20,"docsum" ,1,0.0,&avnx[633] } ,
-    {20,"genbank" ,2,0.0,&avnx[634] } ,
-    {20,"genpept" ,3,0.0,&avnx[635] } ,
-    {20,"fasta" ,4,0.0,&avnx[636] } ,
-    {20,"asn1" ,5,0.0,&avnx[637] } ,
-    {20,"graphic" ,6,0.0,&avnx[638] } ,
-    {20,"alignment" ,7,0.0,&avnx[639] } ,
-    {20,"globalview" ,8,0.0,&avnx[640] } ,
-    {20,"report" ,9,0.0,&avnx[641] } ,
-    {20,"medlars" ,10,0.0,&avnx[642] } ,
-    {20,"embl" ,11,0.0,&avnx[643] } ,
-    {20,"pdb" ,12,0.0,&avnx[644] } ,
+    {20,"docsum" ,1,0.0,&avnx[635] } ,
+    {20,"genbank" ,2,0.0,&avnx[636] } ,
+    {20,"genpept" ,3,0.0,&avnx[637] } ,
+    {20,"fasta" ,4,0.0,&avnx[638] } ,
+    {20,"asn1" ,5,0.0,&avnx[639] } ,
+    {20,"graphic" ,6,0.0,&avnx[640] } ,
+    {20,"alignment" ,7,0.0,&avnx[641] } ,
+    {20,"globalview" ,8,0.0,&avnx[642] } ,
+    {20,"report" ,9,0.0,&avnx[643] } ,
+    {20,"medlars" ,10,0.0,&avnx[644] } ,
+    {20,"embl" ,11,0.0,&avnx[645] } ,
+    {20,"pdb" ,12,0.0,&avnx[646] } ,
     {20,"kinemage" ,13,0.0,NULL } ,
-    {20,"ncbi-backbone" ,2,0.0,&avnx[646] } ,
-    {20,"ncbi-all-atom" ,3,0.0,&avnx[647] } ,
+    {20,"ncbi-backbone" ,2,0.0,&avnx[648] } ,
+    {20,"ncbi-all-atom" ,3,0.0,&avnx[649] } ,
     {20,"pdb-model" ,4,0.0,NULL } ,
-    {20,"nucleotide" ,1,0.0,&avnx[649] } ,
+    {20,"nucleotide" ,1,0.0,&avnx[651] } ,
     {20,"protein" ,2,0.0,NULL } ,
     {2,NULL,1,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {3,NULL,1,0.0,NULL } ,
-    {20,"unassigned" ,0,0.0,&avnx[654] } ,
-    {20,"threshold" ,1,0.0,&avnx[655] } ,
-    {20,"minscore" ,2,0.0,&avnx[656] } ,
-    {20,"maxscore" ,3,0.0,&avnx[657] } ,
-    {20,"meanscore" ,4,0.0,&avnx[658] } ,
-    {20,"variance" ,5,0.0,&avnx[659] } ,
-    {20,"name" ,10,0.0,&avnx[660] } ,
-    {20,"is-optional" ,20,0.0,&avnx[661] } ,
+    {20,"unassigned" ,0,0.0,&avnx[656] } ,
+    {20,"threshold" ,1,0.0,&avnx[657] } ,
+    {20,"minscore" ,2,0.0,&avnx[658] } ,
+    {20,"maxscore" ,3,0.0,&avnx[659] } ,
+    {20,"meanscore" ,4,0.0,&avnx[660] } ,
+    {20,"variance" ,5,0.0,&avnx[661] } ,
+    {20,"name" ,10,0.0,&avnx[662] } ,
+    {20,"is-optional" ,20,0.0,&avnx[663] } ,
     {20,"other" ,255,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {3,NULL,100000,0.0,NULL } ,
-    {20,"acronym" ,1,0.0,&avnx[665] } ,
-    {20,"anamorph" ,2,0.0,&avnx[666] } ,
-    {20,"authority" ,3,0.0,&avnx[667] } ,
-    {20,"bio-material" ,4,0.0,&avnx[668] } ,
-    {20,"biotype" ,5,0.0,&avnx[669] } ,
-    {20,"biovar" ,6,0.0,&avnx[670] } ,
-    {20,"breed" ,7,0.0,&avnx[671] } ,
-    {20,"cell-line" ,8,0.0,&avnx[672] } ,
-    {20,"cell-type" ,9,0.0,&avnx[673] } ,
-    {20,"chemovar" ,10,0.0,&avnx[674] } ,
-    {20,"chromosome" ,11,0.0,&avnx[675] } ,
-    {20,"clone" ,12,0.0,&avnx[676] } ,
-    {20,"clone-lib" ,13,0.0,&avnx[677] } ,
-    {20,"collected-by" ,14,0.0,&avnx[678] } ,
-    {20,"collection-date" ,15,0.0,&avnx[679] } ,
-    {20,"common" ,16,0.0,&avnx[680] } ,
-    {20,"common-name" ,17,0.0,&avnx[681] } ,
-    {20,"country" ,18,0.0,&avnx[682] } ,
-    {20,"cultivar" ,19,0.0,&avnx[683] } ,
-    {20,"culture-collection" ,20,0.0,&avnx[684] } ,
-    {20,"dev-stage" ,21,0.0,&avnx[685] } ,
-    {20,"division" ,22,0.0,&avnx[686] } ,
-    {20,"dosage" ,23,0.0,&avnx[687] } ,
-    {20,"ecotype" ,24,0.0,&avnx[688] } ,
-    {20,"endogenous-virus-name" ,25,0.0,&avnx[689] } ,
-    {20,"environmental-sample" ,26,0.0,&avnx[690] } ,
-    {20,"forma" ,27,0.0,&avnx[691] } ,
-    {20,"forma-specialis" ,28,0.0,&avnx[692] } ,
-    {20,"frequency" ,29,0.0,&avnx[693] } ,
-    {20,"fwd-primer-name" ,30,0.0,&avnx[694] } ,
-    {20,"fwd-primer-seq" ,31,0.0,&avnx[695] } ,
-    {20,"gb-acronym" ,32,0.0,&avnx[696] } ,
-    {20,"gb-anamorph" ,33,0.0,&avnx[697] } ,
-    {20,"gb-synonym" ,34,0.0,&avnx[698] } ,
-    {20,"genotype" ,35,0.0,&avnx[699] } ,
-    {20,"germline" ,36,0.0,&avnx[700] } ,
-    {20,"group" ,37,0.0,&avnx[701] } ,
-    {20,"haplotype" ,38,0.0,&avnx[702] } ,
-    {20,"identified-by" ,39,0.0,&avnx[703] } ,
-    {20,"insertion-seq-name" ,40,0.0,&avnx[704] } ,
-    {20,"isolate" ,41,0.0,&avnx[705] } ,
-    {20,"isolation-source" ,42,0.0,&avnx[706] } ,
-    {20,"lab-host" ,43,0.0,&avnx[707] } ,
-    {20,"lat-lon" ,44,0.0,&avnx[708] } ,
-    {20,"lineage" ,45,0.0,&avnx[709] } ,
-    {20,"map" ,46,0.0,&avnx[710] } ,
-    {20,"metagenome-source" ,47,0.0,&avnx[711] } ,
-    {20,"metagenomic" ,48,0.0,&avnx[712] } ,
-    {20,"old-lineage" ,49,0.0,&avnx[713] } ,
-    {20,"old-name" ,50,0.0,&avnx[714] } ,
-    {20,"orgmod-note" ,51,0.0,&avnx[715] } ,
-    {20,"nat-host" ,52,0.0,&avnx[716] } ,
-    {20,"pathovar" ,53,0.0,&avnx[717] } ,
-    {20,"plasmid-name" ,54,0.0,&avnx[718] } ,
-    {20,"plastid-name" ,55,0.0,&avnx[719] } ,
-    {20,"pop-variant" ,56,0.0,&avnx[720] } ,
-    {20,"rearranged" ,57,0.0,&avnx[721] } ,
-    {20,"rev-primer-name" ,58,0.0,&avnx[722] } ,
-    {20,"rev-primer-seq" ,59,0.0,&avnx[723] } ,
-    {20,"segment" ,60,0.0,&avnx[724] } ,
-    {20,"serogroup" ,61,0.0,&avnx[725] } ,
-    {20,"serotype" ,62,0.0,&avnx[726] } ,
-    {20,"serovar" ,63,0.0,&avnx[727] } ,
-    {20,"sex" ,64,0.0,&avnx[728] } ,
-    {20,"specimen-voucher" ,65,0.0,&avnx[729] } ,
-    {20,"strain" ,66,0.0,&avnx[730] } ,
-    {20,"subclone" ,67,0.0,&avnx[731] } ,
-    {20,"subgroup" ,68,0.0,&avnx[732] } ,
-    {20,"subsource-note" ,69,0.0,&avnx[733] } ,
-    {20,"sub-species" ,70,0.0,&avnx[734] } ,
-    {20,"substrain" ,71,0.0,&avnx[735] } ,
-    {20,"subtype" ,72,0.0,&avnx[736] } ,
-    {20,"synonym" ,73,0.0,&avnx[737] } ,
-    {20,"taxname" ,74,0.0,&avnx[738] } ,
-    {20,"teleomorph" ,75,0.0,&avnx[739] } ,
-    {20,"tissue-lib" ,76,0.0,&avnx[740] } ,
-    {20,"tissue-type" ,77,0.0,&avnx[741] } ,
-    {20,"transgenic" ,78,0.0,&avnx[742] } ,
-    {20,"transposon-name" ,79,0.0,&avnx[743] } ,
-    {20,"type" ,80,0.0,&avnx[744] } ,
-    {20,"variety" ,81,0.0,&avnx[745] } ,
-    {20,"specimen-voucher-INST" ,82,0.0,&avnx[746] } ,
-    {20,"specimen-voucher-COLL" ,83,0.0,&avnx[747] } ,
-    {20,"specimen-voucher-SpecID" ,84,0.0,&avnx[748] } ,
-    {20,"culture-collection-INST" ,85,0.0,&avnx[749] } ,
-    {20,"culture-collection-COLL" ,86,0.0,&avnx[750] } ,
-    {20,"culture-collection-SpecID" ,87,0.0,&avnx[751] } ,
-    {20,"bio-material-INST" ,88,0.0,&avnx[752] } ,
-    {20,"bio-material-COLL" ,89,0.0,&avnx[753] } ,
-    {20,"bio-material-SpecID" ,90,0.0,&avnx[754] } ,
-    {20,"all-notes" ,91,0.0,&avnx[755] } ,
-    {20,"mating-type" ,92,0.0,&avnx[756] } ,
-    {20,"linkage-group" ,93,0.0,&avnx[757] } ,
-    {20,"haplogroup" ,94,0.0,&avnx[758] } ,
-    {20,"all-quals" ,95,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[760] } ,
-    {20,"genomic" ,1,0.0,&avnx[761] } ,
-    {20,"chloroplast" ,2,0.0,&avnx[762] } ,
-    {20,"chromoplast" ,3,0.0,&avnx[763] } ,
-    {20,"kinetoplast" ,4,0.0,&avnx[764] } ,
-    {20,"mitochondrion" ,5,0.0,&avnx[765] } ,
-    {20,"plastid" ,6,0.0,&avnx[766] } ,
-    {20,"macronuclear" ,7,0.0,&avnx[767] } ,
-    {20,"extrachrom" ,8,0.0,&avnx[768] } ,
-    {20,"plasmid" ,9,0.0,&avnx[769] } ,
-    {20,"transposon" ,10,0.0,&avnx[770] } ,
-    {20,"insertion-seq" ,11,0.0,&avnx[771] } ,
-    {20,"cyanelle" ,12,0.0,&avnx[772] } ,
-    {20,"proviral" ,13,0.0,&avnx[773] } ,
-    {20,"virion" ,14,0.0,&avnx[774] } ,
-    {20,"nucleomorph" ,15,0.0,&avnx[775] } ,
-    {20,"apicoplast" ,16,0.0,&avnx[776] } ,
-    {20,"leucoplast" ,17,0.0,&avnx[777] } ,
-    {20,"proplastid" ,18,0.0,&avnx[778] } ,
-    {20,"endogenous-virus" ,19,0.0,&avnx[779] } ,
-    {20,"hydrogenosome" ,20,0.0,&avnx[780] } ,
-    {20,"chromosome" ,21,0.0,&avnx[781] } ,
+    {20,"acronym" ,1,0.0,&avnx[667] } ,
+    {20,"anamorph" ,2,0.0,&avnx[668] } ,
+    {20,"authority" ,3,0.0,&avnx[669] } ,
+    {20,"bio-material" ,4,0.0,&avnx[670] } ,
+    {20,"biotype" ,5,0.0,&avnx[671] } ,
+    {20,"biovar" ,6,0.0,&avnx[672] } ,
+    {20,"breed" ,7,0.0,&avnx[673] } ,
+    {20,"cell-line" ,8,0.0,&avnx[674] } ,
+    {20,"cell-type" ,9,0.0,&avnx[675] } ,
+    {20,"chemovar" ,10,0.0,&avnx[676] } ,
+    {20,"chromosome" ,11,0.0,&avnx[677] } ,
+    {20,"clone" ,12,0.0,&avnx[678] } ,
+    {20,"clone-lib" ,13,0.0,&avnx[679] } ,
+    {20,"collected-by" ,14,0.0,&avnx[680] } ,
+    {20,"collection-date" ,15,0.0,&avnx[681] } ,
+    {20,"common" ,16,0.0,&avnx[682] } ,
+    {20,"common-name" ,17,0.0,&avnx[683] } ,
+    {20,"country" ,18,0.0,&avnx[684] } ,
+    {20,"cultivar" ,19,0.0,&avnx[685] } ,
+    {20,"culture-collection" ,20,0.0,&avnx[686] } ,
+    {20,"dev-stage" ,21,0.0,&avnx[687] } ,
+    {20,"division" ,22,0.0,&avnx[688] } ,
+    {20,"dosage" ,23,0.0,&avnx[689] } ,
+    {20,"ecotype" ,24,0.0,&avnx[690] } ,
+    {20,"endogenous-virus-name" ,25,0.0,&avnx[691] } ,
+    {20,"environmental-sample" ,26,0.0,&avnx[692] } ,
+    {20,"forma" ,27,0.0,&avnx[693] } ,
+    {20,"forma-specialis" ,28,0.0,&avnx[694] } ,
+    {20,"frequency" ,29,0.0,&avnx[695] } ,
+    {20,"fwd-primer-name" ,30,0.0,&avnx[696] } ,
+    {20,"fwd-primer-seq" ,31,0.0,&avnx[697] } ,
+    {20,"gb-acronym" ,32,0.0,&avnx[698] } ,
+    {20,"gb-anamorph" ,33,0.0,&avnx[699] } ,
+    {20,"gb-synonym" ,34,0.0,&avnx[700] } ,
+    {20,"genotype" ,35,0.0,&avnx[701] } ,
+    {20,"germline" ,36,0.0,&avnx[702] } ,
+    {20,"group" ,37,0.0,&avnx[703] } ,
+    {20,"haplotype" ,38,0.0,&avnx[704] } ,
+    {20,"identified-by" ,39,0.0,&avnx[705] } ,
+    {20,"insertion-seq-name" ,40,0.0,&avnx[706] } ,
+    {20,"isolate" ,41,0.0,&avnx[707] } ,
+    {20,"isolation-source" ,42,0.0,&avnx[708] } ,
+    {20,"lab-host" ,43,0.0,&avnx[709] } ,
+    {20,"lat-lon" ,44,0.0,&avnx[710] } ,
+    {20,"lineage" ,45,0.0,&avnx[711] } ,
+    {20,"map" ,46,0.0,&avnx[712] } ,
+    {20,"metagenome-source" ,47,0.0,&avnx[713] } ,
+    {20,"metagenomic" ,48,0.0,&avnx[714] } ,
+    {20,"old-lineage" ,49,0.0,&avnx[715] } ,
+    {20,"old-name" ,50,0.0,&avnx[716] } ,
+    {20,"orgmod-note" ,51,0.0,&avnx[717] } ,
+    {20,"nat-host" ,52,0.0,&avnx[718] } ,
+    {20,"pathovar" ,53,0.0,&avnx[719] } ,
+    {20,"plasmid-name" ,54,0.0,&avnx[720] } ,
+    {20,"plastid-name" ,55,0.0,&avnx[721] } ,
+    {20,"pop-variant" ,56,0.0,&avnx[722] } ,
+    {20,"rearranged" ,57,0.0,&avnx[723] } ,
+    {20,"rev-primer-name" ,58,0.0,&avnx[724] } ,
+    {20,"rev-primer-seq" ,59,0.0,&avnx[725] } ,
+    {20,"segment" ,60,0.0,&avnx[726] } ,
+    {20,"serogroup" ,61,0.0,&avnx[727] } ,
+    {20,"serotype" ,62,0.0,&avnx[728] } ,
+    {20,"serovar" ,63,0.0,&avnx[729] } ,
+    {20,"sex" ,64,0.0,&avnx[730] } ,
+    {20,"specimen-voucher" ,65,0.0,&avnx[731] } ,
+    {20,"strain" ,66,0.0,&avnx[732] } ,
+    {20,"subclone" ,67,0.0,&avnx[733] } ,
+    {20,"subgroup" ,68,0.0,&avnx[734] } ,
+    {20,"subsource-note" ,69,0.0,&avnx[735] } ,
+    {20,"sub-species" ,70,0.0,&avnx[736] } ,
+    {20,"substrain" ,71,0.0,&avnx[737] } ,
+    {20,"subtype" ,72,0.0,&avnx[738] } ,
+    {20,"synonym" ,73,0.0,&avnx[739] } ,
+    {20,"taxname" ,74,0.0,&avnx[740] } ,
+    {20,"teleomorph" ,75,0.0,&avnx[741] } ,
+    {20,"tissue-lib" ,76,0.0,&avnx[742] } ,
+    {20,"tissue-type" ,77,0.0,&avnx[743] } ,
+    {20,"transgenic" ,78,0.0,&avnx[744] } ,
+    {20,"transposon-name" ,79,0.0,&avnx[745] } ,
+    {20,"type" ,80,0.0,&avnx[746] } ,
+    {20,"variety" ,81,0.0,&avnx[747] } ,
+    {20,"specimen-voucher-INST" ,82,0.0,&avnx[748] } ,
+    {20,"specimen-voucher-COLL" ,83,0.0,&avnx[749] } ,
+    {20,"specimen-voucher-SpecID" ,84,0.0,&avnx[750] } ,
+    {20,"culture-collection-INST" ,85,0.0,&avnx[751] } ,
+    {20,"culture-collection-COLL" ,86,0.0,&avnx[752] } ,
+    {20,"culture-collection-SpecID" ,87,0.0,&avnx[753] } ,
+    {20,"bio-material-INST" ,88,0.0,&avnx[754] } ,
+    {20,"bio-material-COLL" ,89,0.0,&avnx[755] } ,
+    {20,"bio-material-SpecID" ,90,0.0,&avnx[756] } ,
+    {20,"all-notes" ,91,0.0,&avnx[757] } ,
+    {20,"mating-type" ,92,0.0,&avnx[758] } ,
+    {20,"linkage-group" ,93,0.0,&avnx[759] } ,
+    {20,"haplogroup" ,94,0.0,&avnx[760] } ,
+    {20,"all-quals" ,95,0.0,&avnx[761] } ,
+    {20,"dbxref" ,96,0.0,NULL } ,
+    {20,"unknown" ,0,0.0,&avnx[763] } ,
+    {20,"genomic" ,1,0.0,&avnx[764] } ,
+    {20,"chloroplast" ,2,0.0,&avnx[765] } ,
+    {20,"chromoplast" ,3,0.0,&avnx[766] } ,
+    {20,"kinetoplast" ,4,0.0,&avnx[767] } ,
+    {20,"mitochondrion" ,5,0.0,&avnx[768] } ,
+    {20,"plastid" ,6,0.0,&avnx[769] } ,
+    {20,"macronuclear" ,7,0.0,&avnx[770] } ,
+    {20,"extrachrom" ,8,0.0,&avnx[771] } ,
+    {20,"plasmid" ,9,0.0,&avnx[772] } ,
+    {20,"transposon" ,10,0.0,&avnx[773] } ,
+    {20,"insertion-seq" ,11,0.0,&avnx[774] } ,
+    {20,"cyanelle" ,12,0.0,&avnx[775] } ,
+    {20,"proviral" ,13,0.0,&avnx[776] } ,
+    {20,"virion" ,14,0.0,&avnx[777] } ,
+    {20,"nucleomorph" ,15,0.0,&avnx[778] } ,
+    {20,"apicoplast" ,16,0.0,&avnx[779] } ,
+    {20,"leucoplast" ,17,0.0,&avnx[780] } ,
+    {20,"proplastid" ,18,0.0,&avnx[781] } ,
+    {20,"endogenous-virus" ,19,0.0,&avnx[782] } ,
+    {20,"hydrogenosome" ,20,0.0,&avnx[783] } ,
+    {20,"chromosome" ,21,0.0,&avnx[784] } ,
     {20,"chromatophore" ,22,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[783] } ,
-    {20,"natural" ,1,0.0,&avnx[784] } ,
-    {20,"natmut" ,2,0.0,&avnx[785] } ,
-    {20,"mut" ,3,0.0,&avnx[786] } ,
-    {20,"artificial" ,4,0.0,&avnx[787] } ,
-    {20,"synthetic" ,5,0.0,&avnx[788] } ,
+    {20,"unknown" ,0,0.0,&avnx[786] } ,
+    {20,"natural" ,1,0.0,&avnx[787] } ,
+    {20,"natmut" ,2,0.0,&avnx[788] } ,
+    {20,"mut" ,3,0.0,&avnx[789] } ,
+    {20,"artificial" ,4,0.0,&avnx[790] } ,
+    {20,"synthetic" ,5,0.0,&avnx[791] } ,
     {20,"other" ,255,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[790] } ,
-    {20,"gene" ,1,0.0,&avnx[791] } ,
-    {20,"org" ,2,0.0,&avnx[792] } ,
-    {20,"cds" ,3,0.0,&avnx[793] } ,
-    {20,"prot" ,4,0.0,&avnx[794] } ,
-    {20,"preRNA" ,5,0.0,&avnx[795] } ,
-    {20,"mRNA" ,6,0.0,&avnx[796] } ,
-    {20,"tRNA" ,7,0.0,&avnx[797] } ,
-    {20,"rRNA" ,8,0.0,&avnx[798] } ,
-    {20,"snRNA" ,9,0.0,&avnx[799] } ,
-    {20,"scRNA" ,10,0.0,&avnx[800] } ,
-    {20,"otherRNA" ,11,0.0,&avnx[801] } ,
-    {20,"pub" ,12,0.0,&avnx[802] } ,
-    {20,"seq" ,13,0.0,&avnx[803] } ,
-    {20,"imp" ,14,0.0,&avnx[804] } ,
-    {20,"allele" ,15,0.0,&avnx[805] } ,
-    {20,"attenuator" ,16,0.0,&avnx[806] } ,
-    {20,"c-region" ,17,0.0,&avnx[807] } ,
-    {20,"caat-signal" ,18,0.0,&avnx[808] } ,
-    {20,"imp-CDS" ,19,0.0,&avnx[809] } ,
-    {20,"conflict" ,20,0.0,&avnx[810] } ,
-    {20,"d-loop" ,21,0.0,&avnx[811] } ,
-    {20,"d-segment" ,22,0.0,&avnx[812] } ,
-    {20,"enhancer" ,23,0.0,&avnx[813] } ,
-    {20,"exon" ,24,0.0,&avnx[814] } ,
-    {20,"gC-signal" ,25,0.0,&avnx[815] } ,
-    {20,"iDNA" ,26,0.0,&avnx[816] } ,
-    {20,"intron" ,27,0.0,&avnx[817] } ,
-    {20,"j-segment" ,28,0.0,&avnx[818] } ,
-    {20,"ltr" ,29,0.0,&avnx[819] } ,
-    {20,"mat-peptide" ,30,0.0,&avnx[820] } ,
-    {20,"misc-binding" ,31,0.0,&avnx[821] } ,
-    {20,"misc-difference" ,32,0.0,&avnx[822] } ,
-    {20,"misc-feature" ,33,0.0,&avnx[823] } ,
-    {20,"misc-recomb" ,34,0.0,&avnx[824] } ,
-    {20,"misc-RNA" ,35,0.0,&avnx[825] } ,
-    {20,"misc-signal" ,36,0.0,&avnx[826] } ,
-    {20,"misc-structure" ,37,0.0,&avnx[827] } ,
-    {20,"modified-base" ,38,0.0,&avnx[828] } ,
-    {20,"mutation" ,39,0.0,&avnx[829] } ,
-    {20,"n-region" ,40,0.0,&avnx[830] } ,
-    {20,"old-sequence" ,41,0.0,&avnx[831] } ,
-    {20,"polyA-signal" ,42,0.0,&avnx[832] } ,
-    {20,"polyA-site" ,43,0.0,&avnx[833] } ,
-    {20,"precursor-RNA" ,44,0.0,&avnx[834] } ,
-    {20,"prim-transcript" ,45,0.0,&avnx[835] } ,
-    {20,"primer-bind" ,46,0.0,&avnx[836] } ,
-    {20,"promoter" ,47,0.0,&avnx[837] } ,
-    {20,"protein-bind" ,48,0.0,&avnx[838] } ,
-    {20,"rbs" ,49,0.0,&avnx[839] } ,
-    {20,"repeat-region" ,50,0.0,&avnx[840] } ,
-    {20,"rep-origin" ,51,0.0,&avnx[841] } ,
-    {20,"s-region" ,52,0.0,&avnx[842] } ,
-    {20,"sig-peptide" ,53,0.0,&avnx[843] } ,
-    {20,"source" ,54,0.0,&avnx[844] } ,
-    {20,"stem-loop" ,55,0.0,&avnx[845] } ,
-    {20,"sts" ,56,0.0,&avnx[846] } ,
-    {20,"tata-signal" ,57,0.0,&avnx[847] } ,
-    {20,"terminator" ,58,0.0,&avnx[848] } ,
-    {20,"transit-peptide" ,59,0.0,&avnx[849] } ,
-    {20,"unsure" ,60,0.0,&avnx[850] } ,
-    {20,"v-region" ,61,0.0,&avnx[851] } ,
-    {20,"v-segment" ,62,0.0,&avnx[852] } ,
-    {20,"variation" ,63,0.0,&avnx[853] } ,
-    {20,"virion" ,64,0.0,&avnx[854] } ,
-    {20,"n3clip" ,65,0.0,&avnx[855] } ,
-    {20,"n3UTR" ,66,0.0,&avnx[856] } ,
-    {20,"n5clip" ,67,0.0,&avnx[857] } ,
-    {20,"n5UTR" ,68,0.0,&avnx[858] } ,
-    {20,"n10-signal" ,69,0.0,&avnx[859] } ,
-    {20,"n35-signal" ,70,0.0,&avnx[860] } ,
-    {20,"site-ref" ,71,0.0,&avnx[861] } ,
-    {20,"region" ,72,0.0,&avnx[862] } ,
-    {20,"comment" ,73,0.0,&avnx[863] } ,
-    {20,"bond" ,74,0.0,&avnx[864] } ,
-    {20,"site" ,75,0.0,&avnx[865] } ,
-    {20,"rsite" ,76,0.0,&avnx[866] } ,
-    {20,"user" ,77,0.0,&avnx[867] } ,
-    {20,"txinit" ,78,0.0,&avnx[868] } ,
-    {20,"num" ,79,0.0,&avnx[869] } ,
-    {20,"psec-str" ,80,0.0,&avnx[870] } ,
-    {20,"non-std-residue" ,81,0.0,&avnx[871] } ,
-    {20,"het" ,82,0.0,&avnx[872] } ,
-    {20,"biosrc" ,83,0.0,&avnx[873] } ,
-    {20,"preprotein" ,84,0.0,&avnx[874] } ,
-    {20,"mat-peptide-aa" ,85,0.0,&avnx[875] } ,
-    {20,"sig-peptide-aa" ,86,0.0,&avnx[876] } ,
-    {20,"transit-peptide-aa" ,87,0.0,&avnx[877] } ,
-    {20,"snoRNA" ,88,0.0,&avnx[878] } ,
-    {20,"gap" ,89,0.0,&avnx[879] } ,
-    {20,"operon" ,90,0.0,&avnx[880] } ,
-    {20,"oriT" ,91,0.0,&avnx[881] } ,
-    {20,"ncRNA" ,92,0.0,&avnx[882] } ,
+    {20,"any" ,0,0.0,&avnx[793] } ,
+    {20,"gene" ,1,0.0,&avnx[794] } ,
+    {20,"org" ,2,0.0,&avnx[795] } ,
+    {20,"cds" ,3,0.0,&avnx[796] } ,
+    {20,"prot" ,4,0.0,&avnx[797] } ,
+    {20,"preRNA" ,5,0.0,&avnx[798] } ,
+    {20,"mRNA" ,6,0.0,&avnx[799] } ,
+    {20,"tRNA" ,7,0.0,&avnx[800] } ,
+    {20,"rRNA" ,8,0.0,&avnx[801] } ,
+    {20,"snRNA" ,9,0.0,&avnx[802] } ,
+    {20,"scRNA" ,10,0.0,&avnx[803] } ,
+    {20,"otherRNA" ,11,0.0,&avnx[804] } ,
+    {20,"pub" ,12,0.0,&avnx[805] } ,
+    {20,"seq" ,13,0.0,&avnx[806] } ,
+    {20,"imp" ,14,0.0,&avnx[807] } ,
+    {20,"allele" ,15,0.0,&avnx[808] } ,
+    {20,"attenuator" ,16,0.0,&avnx[809] } ,
+    {20,"c-region" ,17,0.0,&avnx[810] } ,
+    {20,"caat-signal" ,18,0.0,&avnx[811] } ,
+    {20,"imp-CDS" ,19,0.0,&avnx[812] } ,
+    {20,"conflict" ,20,0.0,&avnx[813] } ,
+    {20,"d-loop" ,21,0.0,&avnx[814] } ,
+    {20,"d-segment" ,22,0.0,&avnx[815] } ,
+    {20,"enhancer" ,23,0.0,&avnx[816] } ,
+    {20,"exon" ,24,0.0,&avnx[817] } ,
+    {20,"gC-signal" ,25,0.0,&avnx[818] } ,
+    {20,"iDNA" ,26,0.0,&avnx[819] } ,
+    {20,"intron" ,27,0.0,&avnx[820] } ,
+    {20,"j-segment" ,28,0.0,&avnx[821] } ,
+    {20,"ltr" ,29,0.0,&avnx[822] } ,
+    {20,"mat-peptide" ,30,0.0,&avnx[823] } ,
+    {20,"misc-binding" ,31,0.0,&avnx[824] } ,
+    {20,"misc-difference" ,32,0.0,&avnx[825] } ,
+    {20,"misc-feature" ,33,0.0,&avnx[826] } ,
+    {20,"misc-recomb" ,34,0.0,&avnx[827] } ,
+    {20,"misc-RNA" ,35,0.0,&avnx[828] } ,
+    {20,"misc-signal" ,36,0.0,&avnx[829] } ,
+    {20,"misc-structure" ,37,0.0,&avnx[830] } ,
+    {20,"modified-base" ,38,0.0,&avnx[831] } ,
+    {20,"mutation" ,39,0.0,&avnx[832] } ,
+    {20,"n-region" ,40,0.0,&avnx[833] } ,
+    {20,"old-sequence" ,41,0.0,&avnx[834] } ,
+    {20,"polyA-signal" ,42,0.0,&avnx[835] } ,
+    {20,"polyA-site" ,43,0.0,&avnx[836] } ,
+    {20,"precursor-RNA" ,44,0.0,&avnx[837] } ,
+    {20,"prim-transcript" ,45,0.0,&avnx[838] } ,
+    {20,"primer-bind" ,46,0.0,&avnx[839] } ,
+    {20,"promoter" ,47,0.0,&avnx[840] } ,
+    {20,"protein-bind" ,48,0.0,&avnx[841] } ,
+    {20,"rbs" ,49,0.0,&avnx[842] } ,
+    {20,"repeat-region" ,50,0.0,&avnx[843] } ,
+    {20,"rep-origin" ,51,0.0,&avnx[844] } ,
+    {20,"s-region" ,52,0.0,&avnx[845] } ,
+    {20,"sig-peptide" ,53,0.0,&avnx[846] } ,
+    {20,"source" ,54,0.0,&avnx[847] } ,
+    {20,"stem-loop" ,55,0.0,&avnx[848] } ,
+    {20,"sts" ,56,0.0,&avnx[849] } ,
+    {20,"tata-signal" ,57,0.0,&avnx[850] } ,
+    {20,"terminator" ,58,0.0,&avnx[851] } ,
+    {20,"transit-peptide" ,59,0.0,&avnx[852] } ,
+    {20,"unsure" ,60,0.0,&avnx[853] } ,
+    {20,"v-region" ,61,0.0,&avnx[854] } ,
+    {20,"v-segment" ,62,0.0,&avnx[855] } ,
+    {20,"variation" ,63,0.0,&avnx[856] } ,
+    {20,"virion" ,64,0.0,&avnx[857] } ,
+    {20,"n3clip" ,65,0.0,&avnx[858] } ,
+    {20,"n3UTR" ,66,0.0,&avnx[859] } ,
+    {20,"n5clip" ,67,0.0,&avnx[860] } ,
+    {20,"n5UTR" ,68,0.0,&avnx[861] } ,
+    {20,"n10-signal" ,69,0.0,&avnx[862] } ,
+    {20,"n35-signal" ,70,0.0,&avnx[863] } ,
+    {20,"site-ref" ,71,0.0,&avnx[864] } ,
+    {20,"region" ,72,0.0,&avnx[865] } ,
+    {20,"comment" ,73,0.0,&avnx[866] } ,
+    {20,"bond" ,74,0.0,&avnx[867] } ,
+    {20,"site" ,75,0.0,&avnx[868] } ,
+    {20,"rsite" ,76,0.0,&avnx[869] } ,
+    {20,"user" ,77,0.0,&avnx[870] } ,
+    {20,"txinit" ,78,0.0,&avnx[871] } ,
+    {20,"num" ,79,0.0,&avnx[872] } ,
+    {20,"psec-str" ,80,0.0,&avnx[873] } ,
+    {20,"non-std-residue" ,81,0.0,&avnx[874] } ,
+    {20,"het" ,82,0.0,&avnx[875] } ,
+    {20,"biosrc" ,83,0.0,&avnx[876] } ,
+    {20,"preprotein" ,84,0.0,&avnx[877] } ,
+    {20,"mat-peptide-aa" ,85,0.0,&avnx[878] } ,
+    {20,"sig-peptide-aa" ,86,0.0,&avnx[879] } ,
+    {20,"transit-peptide-aa" ,87,0.0,&avnx[880] } ,
+    {20,"snoRNA" ,88,0.0,&avnx[881] } ,
+    {20,"gap" ,89,0.0,&avnx[882] } ,
+    {20,"operon" ,90,0.0,&avnx[883] } ,
+    {20,"oriT" ,91,0.0,&avnx[884] } ,
+    {20,"ncRNA" ,92,0.0,&avnx[885] } ,
     {20,"tmRNA" ,93,0.0,NULL } ,
-    {20,"allele" ,1,0.0,&avnx[884] } ,
-    {20,"activity" ,2,0.0,&avnx[885] } ,
-    {20,"anticodon" ,3,0.0,&avnx[886] } ,
-    {20,"bound-moiety" ,4,0.0,&avnx[887] } ,
-    {20,"chromosome" ,5,0.0,&avnx[888] } ,
-    {20,"citation" ,6,0.0,&avnx[889] } ,
-    {20,"codon" ,7,0.0,&avnx[890] } ,
-    {20,"codon-start" ,8,0.0,&avnx[891] } ,
-    {20,"codons-recognized" ,9,0.0,&avnx[892] } ,
-    {20,"compare" ,10,0.0,&avnx[893] } ,
-    {20,"cons-splice" ,11,0.0,&avnx[894] } ,
-    {20,"db-xref" ,12,0.0,&avnx[895] } ,
-    {20,"description" ,13,0.0,&avnx[896] } ,
-    {20,"direction" ,14,0.0,&avnx[897] } ,
-    {20,"ec-number" ,15,0.0,&avnx[898] } ,
-    {20,"environmental-sample" ,16,0.0,&avnx[899] } ,
-    {20,"evidence" ,17,0.0,&avnx[900] } ,
-    {20,"exception" ,18,0.0,&avnx[901] } ,
-    {20,"experiment" ,19,0.0,&avnx[902] } ,
-    {20,"focus" ,20,0.0,&avnx[903] } ,
-    {20,"frequency" ,21,0.0,&avnx[904] } ,
-    {20,"function" ,22,0.0,&avnx[905] } ,
-    {20,"gene" ,23,0.0,&avnx[906] } ,
-    {20,"gene-description" ,24,0.0,&avnx[907] } ,
-    {20,"inference" ,25,0.0,&avnx[908] } ,
-    {20,"label" ,26,0.0,&avnx[909] } ,
-    {20,"locus-tag" ,27,0.0,&avnx[910] } ,
-    {20,"map" ,28,0.0,&avnx[911] } ,
-    {20,"mobile-element" ,29,0.0,&avnx[912] } ,
-    {20,"mod-base" ,30,0.0,&avnx[913] } ,
-    {20,"mol-type" ,31,0.0,&avnx[914] } ,
-    {20,"ncRNA-class" ,32,0.0,&avnx[915] } ,
-    {20,"note" ,33,0.0,&avnx[916] } ,
-    {20,"number" ,34,0.0,&avnx[917] } ,
-    {20,"old-locus-tag" ,35,0.0,&avnx[918] } ,
-    {20,"operon" ,36,0.0,&avnx[919] } ,
-    {20,"organism" ,37,0.0,&avnx[920] } ,
-    {20,"organelle" ,38,0.0,&avnx[921] } ,
-    {20,"partial" ,39,0.0,&avnx[922] } ,
-    {20,"phenotype" ,40,0.0,&avnx[923] } ,
-    {20,"plasmid" ,41,0.0,&avnx[924] } ,
-    {20,"product" ,42,0.0,&avnx[925] } ,
-    {20,"protein-id" ,43,0.0,&avnx[926] } ,
-    {20,"pseudo" ,44,0.0,&avnx[927] } ,
-    {20,"rearranged" ,45,0.0,&avnx[928] } ,
-    {20,"replace" ,46,0.0,&avnx[929] } ,
-    {20,"rpt-family" ,47,0.0,&avnx[930] } ,
-    {20,"rpt-type" ,48,0.0,&avnx[931] } ,
-    {20,"rpt-unit" ,49,0.0,&avnx[932] } ,
-    {20,"rpt-unit-seq" ,50,0.0,&avnx[933] } ,
-    {20,"rpt-unit-range" ,51,0.0,&avnx[934] } ,
-    {20,"segment" ,52,0.0,&avnx[935] } ,
-    {20,"sequenced-mol" ,53,0.0,&avnx[936] } ,
-    {20,"standard-name" ,54,0.0,&avnx[937] } ,
-    {20,"synonym" ,55,0.0,&avnx[938] } ,
-    {20,"transcript-id" ,56,0.0,&avnx[939] } ,
-    {20,"transgenic" ,57,0.0,&avnx[940] } ,
-    {20,"translation" ,58,0.0,&avnx[941] } ,
-    {20,"transl-except" ,59,0.0,&avnx[942] } ,
-    {20,"transl-table" ,60,0.0,&avnx[943] } ,
-    {20,"usedin" ,61,0.0,&avnx[944] } ,
-    {20,"mobile-element-type" ,62,0.0,&avnx[945] } ,
-    {20,"mobile-element-name" ,63,0.0,&avnx[946] } ,
-    {20,"gene-comment" ,64,0.0,&avnx[947] } ,
-    {20,"satellite" ,65,0.0,&avnx[948] } ,
-    {20,"satellite-type" ,66,0.0,&avnx[949] } ,
+    {20,"allele" ,1,0.0,&avnx[887] } ,
+    {20,"activity" ,2,0.0,&avnx[888] } ,
+    {20,"anticodon" ,3,0.0,&avnx[889] } ,
+    {20,"bound-moiety" ,4,0.0,&avnx[890] } ,
+    {20,"chromosome" ,5,0.0,&avnx[891] } ,
+    {20,"citation" ,6,0.0,&avnx[892] } ,
+    {20,"codon" ,7,0.0,&avnx[893] } ,
+    {20,"codon-start" ,8,0.0,&avnx[894] } ,
+    {20,"codons-recognized" ,9,0.0,&avnx[895] } ,
+    {20,"compare" ,10,0.0,&avnx[896] } ,
+    {20,"cons-splice" ,11,0.0,&avnx[897] } ,
+    {20,"db-xref" ,12,0.0,&avnx[898] } ,
+    {20,"description" ,13,0.0,&avnx[899] } ,
+    {20,"direction" ,14,0.0,&avnx[900] } ,
+    {20,"ec-number" ,15,0.0,&avnx[901] } ,
+    {20,"environmental-sample" ,16,0.0,&avnx[902] } ,
+    {20,"evidence" ,17,0.0,&avnx[903] } ,
+    {20,"exception" ,18,0.0,&avnx[904] } ,
+    {20,"experiment" ,19,0.0,&avnx[905] } ,
+    {20,"focus" ,20,0.0,&avnx[906] } ,
+    {20,"frequency" ,21,0.0,&avnx[907] } ,
+    {20,"function" ,22,0.0,&avnx[908] } ,
+    {20,"gene" ,23,0.0,&avnx[909] } ,
+    {20,"gene-description" ,24,0.0,&avnx[910] } ,
+    {20,"inference" ,25,0.0,&avnx[911] } ,
+    {20,"label" ,26,0.0,&avnx[912] } ,
+    {20,"locus-tag" ,27,0.0,&avnx[913] } ,
+    {20,"map" ,28,0.0,&avnx[914] } ,
+    {20,"mobile-element" ,29,0.0,&avnx[915] } ,
+    {20,"mod-base" ,30,0.0,&avnx[916] } ,
+    {20,"mol-type" ,31,0.0,&avnx[917] } ,
+    {20,"ncRNA-class" ,32,0.0,&avnx[918] } ,
+    {20,"note" ,33,0.0,&avnx[919] } ,
+    {20,"number" ,34,0.0,&avnx[920] } ,
+    {20,"old-locus-tag" ,35,0.0,&avnx[921] } ,
+    {20,"operon" ,36,0.0,&avnx[922] } ,
+    {20,"organism" ,37,0.0,&avnx[923] } ,
+    {20,"organelle" ,38,0.0,&avnx[924] } ,
+    {20,"partial" ,39,0.0,&avnx[925] } ,
+    {20,"phenotype" ,40,0.0,&avnx[926] } ,
+    {20,"plasmid" ,41,0.0,&avnx[927] } ,
+    {20,"product" ,42,0.0,&avnx[928] } ,
+    {20,"protein-id" ,43,0.0,&avnx[929] } ,
+    {20,"pseudo" ,44,0.0,&avnx[930] } ,
+    {20,"rearranged" ,45,0.0,&avnx[931] } ,
+    {20,"replace" ,46,0.0,&avnx[932] } ,
+    {20,"rpt-family" ,47,0.0,&avnx[933] } ,
+    {20,"rpt-type" ,48,0.0,&avnx[934] } ,
+    {20,"rpt-unit" ,49,0.0,&avnx[935] } ,
+    {20,"rpt-unit-seq" ,50,0.0,&avnx[936] } ,
+    {20,"rpt-unit-range" ,51,0.0,&avnx[937] } ,
+    {20,"segment" ,52,0.0,&avnx[938] } ,
+    {20,"sequenced-mol" ,53,0.0,&avnx[939] } ,
+    {20,"standard-name" ,54,0.0,&avnx[940] } ,
+    {20,"synonym" ,55,0.0,&avnx[941] } ,
+    {20,"transcript-id" ,56,0.0,&avnx[942] } ,
+    {20,"transgenic" ,57,0.0,&avnx[943] } ,
+    {20,"translation" ,58,0.0,&avnx[944] } ,
+    {20,"transl-except" ,59,0.0,&avnx[945] } ,
+    {20,"transl-table" ,60,0.0,&avnx[946] } ,
+    {20,"usedin" ,61,0.0,&avnx[947] } ,
+    {20,"mobile-element-type" ,62,0.0,&avnx[948] } ,
+    {20,"mobile-element-name" ,63,0.0,&avnx[949] } ,
+    {20,"gene-comment" ,64,0.0,&avnx[950] } ,
+    {20,"satellite" ,65,0.0,&avnx[951] } ,
+    {20,"satellite-type" ,66,0.0,&avnx[952] } ,
     {20,"satellite-name" ,67,0.0,NULL } ,
     {3,NULL,1,0.0,NULL } ,
-    {20,"contains" ,1,0.0,&avnx[952] } ,
-    {20,"equals" ,2,0.0,&avnx[953] } ,
-    {20,"starts" ,3,0.0,&avnx[954] } ,
-    {20,"ends" ,4,0.0,&avnx[955] } ,
+    {20,"contains" ,1,0.0,&avnx[955] } ,
+    {20,"equals" ,2,0.0,&avnx[956] } ,
+    {20,"starts" ,3,0.0,&avnx[957] } ,
+    {20,"ends" ,4,0.0,&avnx[958] } ,
     {20,"inlist" ,5,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
-    {20,"product" ,1,0.0,&avnx[960] } ,
-    {20,"comment" ,2,0.0,&avnx[961] } ,
-    {20,"codons-recognized" ,3,0.0,&avnx[962] } ,
-    {20,"ncrna-class" ,4,0.0,&avnx[963] } ,
-    {20,"anticodon" ,5,0.0,&avnx[964] } ,
-    {20,"transcript-id" ,6,0.0,&avnx[965] } ,
-    {20,"gene-locus" ,7,0.0,&avnx[966] } ,
-    {20,"gene-description" ,8,0.0,&avnx[967] } ,
-    {20,"gene-maploc" ,9,0.0,&avnx[968] } ,
-    {20,"gene-locus-tag" ,10,0.0,&avnx[969] } ,
-    {20,"gene-synonym" ,11,0.0,&avnx[970] } ,
+    {20,"product" ,1,0.0,&avnx[963] } ,
+    {20,"comment" ,2,0.0,&avnx[964] } ,
+    {20,"codons-recognized" ,3,0.0,&avnx[965] } ,
+    {20,"ncrna-class" ,4,0.0,&avnx[966] } ,
+    {20,"anticodon" ,5,0.0,&avnx[967] } ,
+    {20,"transcript-id" ,6,0.0,&avnx[968] } ,
+    {20,"gene-locus" ,7,0.0,&avnx[969] } ,
+    {20,"gene-description" ,8,0.0,&avnx[970] } ,
+    {20,"gene-maploc" ,9,0.0,&avnx[971] } ,
+    {20,"gene-locus-tag" ,10,0.0,&avnx[972] } ,
+    {20,"gene-synonym" ,11,0.0,&avnx[973] } ,
     {20,"gene-comment" ,12,0.0,NULL } ,
-    {20,"cds-comment" ,1,0.0,&avnx[972] } ,
-    {20,"gene-locus" ,2,0.0,&avnx[973] } ,
-    {20,"gene-description" ,3,0.0,&avnx[974] } ,
-    {20,"gene-comment" ,4,0.0,&avnx[975] } ,
-    {20,"gene-allele" ,5,0.0,&avnx[976] } ,
-    {20,"gene-maploc" ,6,0.0,&avnx[977] } ,
-    {20,"gene-locus-tag" ,7,0.0,&avnx[978] } ,
-    {20,"gene-synonym" ,8,0.0,&avnx[979] } ,
-    {20,"gene-old-locus-tag" ,9,0.0,&avnx[980] } ,
-    {20,"mrna-product" ,10,0.0,&avnx[981] } ,
-    {20,"mrna-comment" ,11,0.0,&avnx[982] } ,
-    {20,"prot-name" ,12,0.0,&avnx[983] } ,
-    {20,"prot-description" ,13,0.0,&avnx[984] } ,
-    {20,"prot-ec-number" ,14,0.0,&avnx[985] } ,
-    {20,"prot-activity" ,15,0.0,&avnx[986] } ,
-    {20,"prot-comment" ,16,0.0,&avnx[987] } ,
-    {20,"mat-peptide-name" ,17,0.0,&avnx[988] } ,
-    {20,"mat-peptide-description" ,18,0.0,&avnx[989] } ,
-    {20,"mat-peptide-ec-number" ,19,0.0,&avnx[990] } ,
-    {20,"mat-peptide-activity" ,20,0.0,&avnx[991] } ,
-    {20,"mat-peptide-comment" ,21,0.0,&avnx[992] } ,
-    {20,"cds-inference" ,22,0.0,&avnx[993] } ,
-    {20,"gene-inference" ,23,0.0,&avnx[994] } ,
+    {20,"cds-comment" ,1,0.0,&avnx[975] } ,
+    {20,"gene-locus" ,2,0.0,&avnx[976] } ,
+    {20,"gene-description" ,3,0.0,&avnx[977] } ,
+    {20,"gene-comment" ,4,0.0,&avnx[978] } ,
+    {20,"gene-allele" ,5,0.0,&avnx[979] } ,
+    {20,"gene-maploc" ,6,0.0,&avnx[980] } ,
+    {20,"gene-locus-tag" ,7,0.0,&avnx[981] } ,
+    {20,"gene-synonym" ,8,0.0,&avnx[982] } ,
+    {20,"gene-old-locus-tag" ,9,0.0,&avnx[983] } ,
+    {20,"mrna-product" ,10,0.0,&avnx[984] } ,
+    {20,"mrna-comment" ,11,0.0,&avnx[985] } ,
+    {20,"prot-name" ,12,0.0,&avnx[986] } ,
+    {20,"prot-description" ,13,0.0,&avnx[987] } ,
+    {20,"prot-ec-number" ,14,0.0,&avnx[988] } ,
+    {20,"prot-activity" ,15,0.0,&avnx[989] } ,
+    {20,"prot-comment" ,16,0.0,&avnx[990] } ,
+    {20,"mat-peptide-name" ,17,0.0,&avnx[991] } ,
+    {20,"mat-peptide-description" ,18,0.0,&avnx[992] } ,
+    {20,"mat-peptide-ec-number" ,19,0.0,&avnx[993] } ,
+    {20,"mat-peptide-activity" ,20,0.0,&avnx[994] } ,
+    {20,"mat-peptide-comment" ,21,0.0,&avnx[995] } ,
+    {20,"cds-inference" ,22,0.0,&avnx[996] } ,
+    {20,"gene-inference" ,23,0.0,&avnx[997] } ,
     {20,"codon-start" ,24,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[996] } ,
-    {20,"genomic" ,1,0.0,&avnx[997] } ,
-    {20,"precursor-RNA" ,2,0.0,&avnx[998] } ,
-    {20,"mRNA" ,3,0.0,&avnx[999] } ,
-    {20,"rRNA" ,4,0.0,&avnx[1000] } ,
-    {20,"tRNA" ,5,0.0,&avnx[1001] } ,
-    {20,"genomic-mRNA" ,6,0.0,&avnx[1002] } ,
-    {20,"cRNA" ,7,0.0,&avnx[1003] } ,
-    {20,"transcribed-RNA" ,8,0.0,&avnx[1004] } ,
-    {20,"ncRNA" ,9,0.0,&avnx[1005] } ,
-    {20,"transfer-messenger-RNA" ,10,0.0,&avnx[1006] } ,
+    {20,"unknown" ,0,0.0,&avnx[999] } ,
+    {20,"genomic" ,1,0.0,&avnx[1000] } ,
+    {20,"precursor-RNA" ,2,0.0,&avnx[1001] } ,
+    {20,"mRNA" ,3,0.0,&avnx[1002] } ,
+    {20,"rRNA" ,4,0.0,&avnx[1003] } ,
+    {20,"tRNA" ,5,0.0,&avnx[1004] } ,
+    {20,"genomic-mRNA" ,6,0.0,&avnx[1005] } ,
+    {20,"cRNA" ,7,0.0,&avnx[1006] } ,
+    {20,"transcribed-RNA" ,8,0.0,&avnx[1007] } ,
+    {20,"ncRNA" ,9,0.0,&avnx[1008] } ,
+    {20,"transfer-messenger-RNA" ,10,0.0,&avnx[1009] } ,
     {20,"other" ,11,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[1008] } ,
-    {20,"standard" ,1,0.0,&avnx[1009] } ,
-    {20,"est" ,2,0.0,&avnx[1010] } ,
-    {20,"sts" ,3,0.0,&avnx[1011] } ,
-    {20,"survey" ,4,0.0,&avnx[1012] } ,
-    {20,"genetic-map" ,5,0.0,&avnx[1013] } ,
-    {20,"physical-map" ,6,0.0,&avnx[1014] } ,
-    {20,"derived" ,7,0.0,&avnx[1015] } ,
-    {20,"concept-trans" ,8,0.0,&avnx[1016] } ,
-    {20,"seq-pept" ,9,0.0,&avnx[1017] } ,
-    {20,"both" ,10,0.0,&avnx[1018] } ,
-    {20,"seq-pept-overlap" ,11,0.0,&avnx[1019] } ,
-    {20,"seq-pept-homol" ,12,0.0,&avnx[1020] } ,
-    {20,"concept-trans-a" ,13,0.0,&avnx[1021] } ,
-    {20,"htgs-1" ,14,0.0,&avnx[1022] } ,
-    {20,"htgs-2" ,15,0.0,&avnx[1023] } ,
-    {20,"htgs-3" ,16,0.0,&avnx[1024] } ,
-    {20,"fli-cDNA" ,17,0.0,&avnx[1025] } ,
-    {20,"htgs-0" ,18,0.0,&avnx[1026] } ,
-    {20,"htc" ,19,0.0,&avnx[1027] } ,
-    {20,"wgs" ,20,0.0,&avnx[1028] } ,
-    {20,"barcode" ,21,0.0,&avnx[1029] } ,
-    {20,"composite-wgs-htgs" ,22,0.0,&avnx[1030] } ,
-    {20,"tsa" ,23,0.0,&avnx[1031] } ,
+    {20,"unknown" ,0,0.0,&avnx[1011] } ,
+    {20,"standard" ,1,0.0,&avnx[1012] } ,
+    {20,"est" ,2,0.0,&avnx[1013] } ,
+    {20,"sts" ,3,0.0,&avnx[1014] } ,
+    {20,"survey" ,4,0.0,&avnx[1015] } ,
+    {20,"genetic-map" ,5,0.0,&avnx[1016] } ,
+    {20,"physical-map" ,6,0.0,&avnx[1017] } ,
+    {20,"derived" ,7,0.0,&avnx[1018] } ,
+    {20,"concept-trans" ,8,0.0,&avnx[1019] } ,
+    {20,"seq-pept" ,9,0.0,&avnx[1020] } ,
+    {20,"both" ,10,0.0,&avnx[1021] } ,
+    {20,"seq-pept-overlap" ,11,0.0,&avnx[1022] } ,
+    {20,"seq-pept-homol" ,12,0.0,&avnx[1023] } ,
+    {20,"concept-trans-a" ,13,0.0,&avnx[1024] } ,
+    {20,"htgs-1" ,14,0.0,&avnx[1025] } ,
+    {20,"htgs-2" ,15,0.0,&avnx[1026] } ,
+    {20,"htgs-3" ,16,0.0,&avnx[1027] } ,
+    {20,"fli-cDNA" ,17,0.0,&avnx[1028] } ,
+    {20,"htgs-0" ,18,0.0,&avnx[1029] } ,
+    {20,"htc" ,19,0.0,&avnx[1030] } ,
+    {20,"wgs" ,20,0.0,&avnx[1031] } ,
+    {20,"barcode" ,21,0.0,&avnx[1032] } ,
+    {20,"composite-wgs-htgs" ,22,0.0,&avnx[1033] } ,
+    {20,"tsa" ,23,0.0,&avnx[1034] } ,
     {20,"other" ,24,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[1033] } ,
-    {20,"complete" ,1,0.0,&avnx[1034] } ,
-    {20,"partial" ,2,0.0,&avnx[1035] } ,
-    {20,"no-left" ,3,0.0,&avnx[1036] } ,
-    {20,"no-right" ,4,0.0,&avnx[1037] } ,
-    {20,"no-ends" ,5,0.0,&avnx[1038] } ,
-    {20,"has-left" ,6,0.0,&avnx[1039] } ,
-    {20,"has-right" ,7,0.0,&avnx[1040] } ,
+    {20,"unknown" ,0,0.0,&avnx[1036] } ,
+    {20,"complete" ,1,0.0,&avnx[1037] } ,
+    {20,"partial" ,2,0.0,&avnx[1038] } ,
+    {20,"no-left" ,3,0.0,&avnx[1039] } ,
+    {20,"no-right" ,4,0.0,&avnx[1040] } ,
+    {20,"no-ends" ,5,0.0,&avnx[1041] } ,
+    {20,"has-left" ,6,0.0,&avnx[1042] } ,
+    {20,"has-right" ,7,0.0,&avnx[1043] } ,
     {20,"other" ,6,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[1042] } ,
-    {20,"dna" ,1,0.0,&avnx[1043] } ,
-    {20,"rna" ,2,0.0,&avnx[1044] } ,
-    {20,"protein" ,3,0.0,&avnx[1045] } ,
-    {20,"nucleotide" ,4,0.0,&avnx[1046] } ,
+    {20,"unknown" ,0,0.0,&avnx[1045] } ,
+    {20,"dna" ,1,0.0,&avnx[1046] } ,
+    {20,"rna" ,2,0.0,&avnx[1047] } ,
+    {20,"protein" ,3,0.0,&avnx[1048] } ,
+    {20,"nucleotide" ,4,0.0,&avnx[1049] } ,
     {20,"other" ,5,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[1048] } ,
-    {20,"linear" ,1,0.0,&avnx[1049] } ,
-    {20,"circular" ,2,0.0,&avnx[1050] } ,
-    {20,"tandem" ,3,0.0,&avnx[1051] } ,
+    {20,"unknown" ,0,0.0,&avnx[1051] } ,
+    {20,"linear" ,1,0.0,&avnx[1052] } ,
+    {20,"circular" ,2,0.0,&avnx[1053] } ,
+    {20,"tandem" ,3,0.0,&avnx[1054] } ,
     {20,"other" ,4,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[1053] } ,
-    {20,"single" ,1,0.0,&avnx[1054] } ,
-    {20,"double" ,2,0.0,&avnx[1055] } ,
-    {20,"mixed" ,3,0.0,&avnx[1056] } ,
-    {20,"mixed-rev" ,4,0.0,&avnx[1057] } ,
+    {20,"unknown" ,0,0.0,&avnx[1056] } ,
+    {20,"single" ,1,0.0,&avnx[1057] } ,
+    {20,"double" ,2,0.0,&avnx[1058] } ,
+    {20,"mixed" ,3,0.0,&avnx[1059] } ,
+    {20,"mixed-rev" ,4,0.0,&avnx[1060] } ,
     {20,"other" ,5,0.0,NULL } ,
-    {20,"cit" ,1,0.0,&avnx[1059] } ,
-    {20,"authors" ,2,0.0,&avnx[1060] } ,
-    {20,"journal" ,3,0.0,&avnx[1061] } ,
-    {20,"volume" ,4,0.0,&avnx[1062] } ,
-    {20,"issue" ,5,0.0,&avnx[1063] } ,
-    {20,"pages" ,6,0.0,&avnx[1064] } ,
-    {20,"date" ,7,0.0,&avnx[1065] } ,
-    {20,"serial-number" ,8,0.0,&avnx[1066] } ,
-    {20,"title" ,9,0.0,&avnx[1067] } ,
-    {20,"affiliation" ,10,0.0,&avnx[1068] } ,
-    {20,"affil-div" ,11,0.0,&avnx[1069] } ,
-    {20,"affil-city" ,12,0.0,&avnx[1070] } ,
-    {20,"affil-sub" ,13,0.0,&avnx[1071] } ,
-    {20,"affil-country" ,14,0.0,&avnx[1072] } ,
-    {20,"affil-street" ,15,0.0,&avnx[1073] } ,
-    {20,"affil-email" ,16,0.0,&avnx[1074] } ,
-    {20,"affil-fax" ,17,0.0,&avnx[1075] } ,
-    {20,"affil-phone" ,18,0.0,&avnx[1076] } ,
-    {20,"affil-zipcode" ,19,0.0,&avnx[1077] } ,
+    {20,"cit" ,1,0.0,&avnx[1062] } ,
+    {20,"authors" ,2,0.0,&avnx[1063] } ,
+    {20,"journal" ,3,0.0,&avnx[1064] } ,
+    {20,"volume" ,4,0.0,&avnx[1065] } ,
+    {20,"issue" ,5,0.0,&avnx[1066] } ,
+    {20,"pages" ,6,0.0,&avnx[1067] } ,
+    {20,"date" ,7,0.0,&avnx[1068] } ,
+    {20,"serial-number" ,8,0.0,&avnx[1069] } ,
+    {20,"title" ,9,0.0,&avnx[1070] } ,
+    {20,"affiliation" ,10,0.0,&avnx[1071] } ,
+    {20,"affil-div" ,11,0.0,&avnx[1072] } ,
+    {20,"affil-city" ,12,0.0,&avnx[1073] } ,
+    {20,"affil-sub" ,13,0.0,&avnx[1074] } ,
+    {20,"affil-country" ,14,0.0,&avnx[1075] } ,
+    {20,"affil-street" ,15,0.0,&avnx[1076] } ,
+    {20,"affil-email" ,16,0.0,&avnx[1077] } ,
+    {20,"affil-fax" ,17,0.0,&avnx[1078] } ,
+    {20,"affil-phone" ,18,0.0,&avnx[1079] } ,
+    {20,"affil-zipcode" ,19,0.0,&avnx[1080] } ,
     {20,"authors-initials" ,20,0.0,NULL } ,
-    {20,"genome-project-id" ,1,0.0,NULL } ,
-    {20,"replace-old" ,1,0.0,&avnx[1080] } ,
-    {20,"append-semi" ,2,0.0,&avnx[1081] } ,
-    {20,"append-space" ,3,0.0,&avnx[1082] } ,
-    {20,"append-colon" ,4,0.0,&avnx[1083] } ,
-    {20,"append-none" ,5,0.0,&avnx[1084] } ,
-    {20,"prefix-semi" ,6,0.0,&avnx[1085] } ,
-    {20,"prefix-space" ,7,0.0,&avnx[1086] } ,
-    {20,"prefix-colon" ,8,0.0,&avnx[1087] } ,
-    {20,"prefix-none" ,9,0.0,&avnx[1088] } ,
-    {20,"leave-old" ,10,0.0,&avnx[1089] } ,
+    {20,"genome-project-id" ,1,0.0,&avnx[1082] } ,
+    {20,"comment-descriptor" ,2,0.0,NULL } ,
+    {20,"replace-old" ,1,0.0,&avnx[1084] } ,
+    {20,"append-semi" ,2,0.0,&avnx[1085] } ,
+    {20,"append-space" ,3,0.0,&avnx[1086] } ,
+    {20,"append-colon" ,4,0.0,&avnx[1087] } ,
+    {20,"append-none" ,5,0.0,&avnx[1088] } ,
+    {20,"prefix-semi" ,6,0.0,&avnx[1089] } ,
+    {20,"prefix-space" ,7,0.0,&avnx[1090] } ,
+    {20,"prefix-colon" ,8,0.0,&avnx[1091] } ,
+    {20,"prefix-none" ,9,0.0,&avnx[1092] } ,
+    {20,"leave-old" ,10,0.0,&avnx[1093] } ,
     {20,"add-qual" ,11,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"anywhere" ,0,0.0,&avnx[1092] } ,
-    {20,"beginning" ,1,0.0,&avnx[1093] } ,
+    {20,"anywhere" ,0,0.0,&avnx[1096] } ,
+    {20,"beginning" ,1,0.0,&avnx[1097] } ,
     {20,"end" ,2,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
@@ -1114,50 +1118,50 @@ static AsnValxNode avnx[1214] = {
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1104] } ,
-    {20,"plus" ,1,0.0,&avnx[1105] } ,
+    {20,"any" ,0,0.0,&avnx[1108] } ,
+    {20,"plus" ,1,0.0,&avnx[1109] } ,
     {20,"minus" ,2,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1108] } ,
-    {20,"nuc" ,1,0.0,&avnx[1109] } ,
+    {20,"any" ,0,0.0,&avnx[1112] } ,
+    {20,"nuc" ,1,0.0,&avnx[1113] } ,
     {20,"prot" ,2,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"either" ,0,0.0,&avnx[1112] } ,
-    {20,"partial" ,1,0.0,&avnx[1113] } ,
+    {20,"either" ,0,0.0,&avnx[1116] } ,
+    {20,"partial" ,1,0.0,&avnx[1117] } ,
     {20,"complete" ,2,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1116] } ,
-    {20,"feature" ,1,0.0,&avnx[1117] } ,
+    {20,"any" ,0,0.0,&avnx[1120] } ,
+    {20,"feature" ,1,0.0,&avnx[1121] } ,
     {20,"descriptor" ,2,0.0,NULL } ,
-    {20,"gene" ,1,0.0,&avnx[1119] } ,
-    {20,"mRNA" ,2,0.0,&avnx[1120] } ,
-    {20,"cds" ,3,0.0,&avnx[1121] } ,
-    {20,"prot" ,4,0.0,&avnx[1122] } ,
-    {20,"exon" ,5,0.0,&avnx[1123] } ,
+    {20,"gene" ,1,0.0,&avnx[1123] } ,
+    {20,"mRNA" ,2,0.0,&avnx[1124] } ,
+    {20,"cds" ,3,0.0,&avnx[1125] } ,
+    {20,"prot" ,4,0.0,&avnx[1126] } ,
+    {20,"exon" ,5,0.0,&avnx[1127] } ,
     {20,"mat-peptide" ,6,0.0,NULL } ,
     {2,NULL,1,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1126] } ,
-    {20,"genomic" ,1,0.0,&avnx[1127] } ,
-    {20,"precursor-RNA" ,2,0.0,&avnx[1128] } ,
-    {20,"mRNA" ,3,0.0,&avnx[1129] } ,
-    {20,"rRNA" ,4,0.0,&avnx[1130] } ,
-    {20,"tRNA" ,5,0.0,&avnx[1131] } ,
-    {20,"genomic-mRNA" ,6,0.0,&avnx[1132] } ,
-    {20,"cRNA" ,7,0.0,&avnx[1133] } ,
-    {20,"transcribed-RNA" ,8,0.0,&avnx[1134] } ,
-    {20,"ncRNA" ,9,0.0,&avnx[1135] } ,
+    {20,"any" ,0,0.0,&avnx[1130] } ,
+    {20,"genomic" ,1,0.0,&avnx[1131] } ,
+    {20,"precursor-RNA" ,2,0.0,&avnx[1132] } ,
+    {20,"mRNA" ,3,0.0,&avnx[1133] } ,
+    {20,"rRNA" ,4,0.0,&avnx[1134] } ,
+    {20,"tRNA" ,5,0.0,&avnx[1135] } ,
+    {20,"genomic-mRNA" ,6,0.0,&avnx[1136] } ,
+    {20,"cRNA" ,7,0.0,&avnx[1137] } ,
+    {20,"transcribed-RNA" ,8,0.0,&avnx[1138] } ,
+    {20,"ncRNA" ,9,0.0,&avnx[1139] } ,
     {20,"transfer-messenger-RNA" ,10,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1137] } ,
-    {20,"published" ,1,0.0,&avnx[1138] } ,
-    {20,"unpublished" ,2,0.0,&avnx[1139] } ,
-    {20,"in-press" ,3,0.0,&avnx[1140] } ,
+    {20,"any" ,0,0.0,&avnx[1141] } ,
+    {20,"published" ,1,0.0,&avnx[1142] } ,
+    {20,"unpublished" ,2,0.0,&avnx[1143] } ,
+    {20,"in-press" ,3,0.0,&avnx[1144] } ,
     {20,"submitter-block" ,4,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"none" ,0,0.0,&avnx[1145] } ,
-    {20,"tolower" ,1,0.0,&avnx[1146] } ,
-    {20,"toupper" ,2,0.0,&avnx[1147] } ,
+    {20,"none" ,0,0.0,&avnx[1149] } ,
+    {20,"tolower" ,1,0.0,&avnx[1150] } ,
+    {20,"toupper" ,2,0.0,&avnx[1151] } ,
     {20,"firstcap" ,3,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
@@ -1167,66 +1171,80 @@ static AsnValxNode avnx[1214] = {
     {2,NULL,0,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } ,
     {3,NULL,-1,0.0,NULL } ,
-    {20,"disulfide" ,1,0.0,&avnx[1157] } ,
-    {20,"thioester" ,2,0.0,&avnx[1158] } ,
-    {20,"crosslink" ,3,0.0,&avnx[1159] } ,
-    {20,"thioether" ,4,0.0,&avnx[1160] } ,
+    {20,"disulfide" ,1,0.0,&avnx[1161] } ,
+    {20,"thioester" ,2,0.0,&avnx[1162] } ,
+    {20,"crosslink" ,3,0.0,&avnx[1163] } ,
+    {20,"thioether" ,4,0.0,&avnx[1164] } ,
     {20,"other" ,5,0.0,NULL } ,
-    {20,"active" ,1,0.0,&avnx[1162] } ,
-    {20,"binding" ,2,0.0,&avnx[1163] } ,
-    {20,"cleavage" ,3,0.0,&avnx[1164] } ,
-    {20,"inhibit" ,4,0.0,&avnx[1165] } ,
-    {20,"modified" ,5,0.0,&avnx[1166] } ,
-    {20,"glycosylation" ,6,0.0,&avnx[1167] } ,
-    {20,"myristoylation" ,7,0.0,&avnx[1168] } ,
-    {20,"mutagenized" ,8,0.0,&avnx[1169] } ,
-    {20,"metal-binding" ,9,0.0,&avnx[1170] } ,
-    {20,"phosphorylation" ,10,0.0,&avnx[1171] } ,
-    {20,"acetylation" ,11,0.0,&avnx[1172] } ,
-    {20,"amidation" ,12,0.0,&avnx[1173] } ,
-    {20,"methylation" ,13,0.0,&avnx[1174] } ,
-    {20,"hydroxylation" ,14,0.0,&avnx[1175] } ,
-    {20,"sulfatation" ,15,0.0,&avnx[1176] } ,
-    {20,"oxidative-deamination" ,16,0.0,&avnx[1177] } ,
-    {20,"pyrrolidone-carboxylic-acid" ,17,0.0,&avnx[1178] } ,
-    {20,"gamma-carboxyglutamic-acid" ,18,0.0,&avnx[1179] } ,
-    {20,"blocked" ,19,0.0,&avnx[1180] } ,
-    {20,"lipid-binding" ,20,0.0,&avnx[1181] } ,
-    {20,"np-binding" ,21,0.0,&avnx[1182] } ,
-    {20,"dna-binding" ,22,0.0,&avnx[1183] } ,
-    {20,"signal-peptide" ,23,0.0,&avnx[1184] } ,
-    {20,"transit-peptide" ,24,0.0,&avnx[1185] } ,
-    {20,"transmembrane-region" ,25,0.0,&avnx[1186] } ,
-    {20,"nitrosylation" ,26,0.0,&avnx[1187] } ,
+    {20,"active" ,1,0.0,&avnx[1166] } ,
+    {20,"binding" ,2,0.0,&avnx[1167] } ,
+    {20,"cleavage" ,3,0.0,&avnx[1168] } ,
+    {20,"inhibit" ,4,0.0,&avnx[1169] } ,
+    {20,"modified" ,5,0.0,&avnx[1170] } ,
+    {20,"glycosylation" ,6,0.0,&avnx[1171] } ,
+    {20,"myristoylation" ,7,0.0,&avnx[1172] } ,
+    {20,"mutagenized" ,8,0.0,&avnx[1173] } ,
+    {20,"metal-binding" ,9,0.0,&avnx[1174] } ,
+    {20,"phosphorylation" ,10,0.0,&avnx[1175] } ,
+    {20,"acetylation" ,11,0.0,&avnx[1176] } ,
+    {20,"amidation" ,12,0.0,&avnx[1177] } ,
+    {20,"methylation" ,13,0.0,&avnx[1178] } ,
+    {20,"hydroxylation" ,14,0.0,&avnx[1179] } ,
+    {20,"sulfatation" ,15,0.0,&avnx[1180] } ,
+    {20,"oxidative-deamination" ,16,0.0,&avnx[1181] } ,
+    {20,"pyrrolidone-carboxylic-acid" ,17,0.0,&avnx[1182] } ,
+    {20,"gamma-carboxyglutamic-acid" ,18,0.0,&avnx[1183] } ,
+    {20,"blocked" ,19,0.0,&avnx[1184] } ,
+    {20,"lipid-binding" ,20,0.0,&avnx[1185] } ,
+    {20,"np-binding" ,21,0.0,&avnx[1186] } ,
+    {20,"dna-binding" ,22,0.0,&avnx[1187] } ,
+    {20,"signal-peptide" ,23,0.0,&avnx[1188] } ,
+    {20,"transit-peptide" ,24,0.0,&avnx[1189] } ,
+    {20,"transmembrane-region" ,25,0.0,&avnx[1190] } ,
+    {20,"nitrosylation" ,26,0.0,&avnx[1191] } ,
     {20,"other" ,27,0.0,NULL } ,
-    {20,"any" ,0,0.0,&avnx[1189] } ,
-    {20,"plus" ,1,0.0,&avnx[1190] } ,
-    {20,"minus" ,2,0.0,&avnx[1191] } ,
-    {20,"unknown" ,3,0.0,&avnx[1192] } ,
-    {20,"both" ,4,0.0,NULL } ,
+    {20,"any" ,0,0.0,&avnx[1193] } ,
     {20,"plus" ,1,0.0,&avnx[1194] } ,
     {20,"minus" ,2,0.0,&avnx[1195] } ,
     {20,"unknown" ,3,0.0,&avnx[1196] } ,
-    {20,"both" ,4,0.0,&avnx[1197] } ,
+    {20,"both" ,4,0.0,NULL } ,
+    {20,"plus" ,1,0.0,&avnx[1198] } ,
+    {20,"minus" ,2,0.0,&avnx[1199] } ,
+    {20,"unknown" ,3,0.0,&avnx[1200] } ,
+    {20,"both" ,4,0.0,&avnx[1201] } ,
     {20,"reverse" ,5,0.0,NULL } ,
-    {20,"all" ,0,0.0,&avnx[1199] } ,
-    {20,"at-end" ,1,0.0,&avnx[1200] } ,
-    {20,"bad-start" ,2,0.0,&avnx[1201] } ,
-    {20,"frame-not-one" ,3,0.0,NULL } ,
     {20,"all" ,0,0.0,&avnx[1203] } ,
-    {20,"not-at-end" ,1,0.0,&avnx[1204] } ,
+    {20,"at-end" ,1,0.0,&avnx[1204] } ,
+    {20,"bad-start" ,2,0.0,&avnx[1205] } ,
+    {20,"frame-not-one" ,3,0.0,NULL } ,
+    {20,"all" ,0,0.0,&avnx[1207] } ,
+    {20,"not-at-end" ,1,0.0,&avnx[1208] } ,
     {20,"good-start" ,2,0.0,NULL } ,
-    {20,"all" ,0,0.0,&avnx[1206] } ,
-    {20,"at-end" ,1,0.0,&avnx[1207] } ,
+    {20,"all" ,0,0.0,&avnx[1210] } ,
+    {20,"at-end" ,1,0.0,&avnx[1211] } ,
     {20,"bad-end" ,2,0.0,NULL } ,
-    {20,"all" ,0,0.0,&avnx[1209] } ,
-    {20,"not-at-end" ,1,0.0,&avnx[1210] } ,
+    {20,"all" ,0,0.0,&avnx[1213] } ,
+    {20,"not-at-end" ,1,0.0,&avnx[1214] } ,
     {20,"good-end" ,2,0.0,NULL } ,
-    {20,"join" ,1,0.0,&avnx[1212] } ,
-    {20,"order" ,2,0.0,&avnx[1213] } ,
-    {20,"merge" ,3,0.0,NULL } };
+    {20,"join" ,1,0.0,&avnx[1216] } ,
+    {20,"order" ,2,0.0,&avnx[1217] } ,
+    {20,"merge" ,3,0.0,NULL } ,
+    {20,"all" ,0,0.0,&avnx[1219] } ,
+    {20,"title" ,1,0.0,&avnx[1220] } ,
+    {20,"source" ,2,0.0,&avnx[1221] } ,
+    {20,"publication" ,3,0.0,&avnx[1222] } ,
+    {20,"comment" ,4,0.0,&avnx[1223] } ,
+    {20,"genbank" ,5,0.0,&avnx[1224] } ,
+    {20,"user" ,6,0.0,&avnx[1225] } ,
+    {20,"create-date" ,7,0.0,&avnx[1226] } ,
+    {20,"update-date" ,8,0.0,&avnx[1227] } ,
+    {20,"mol-info" ,9,0.0,&avnx[1228] } ,
+    {20,"structured-comment" ,10,0.0,NULL } ,
+    {20,"feature-list" ,1,0.0,&avnx[1230] } ,
+    {20,"complete-sequence" ,2,0.0,&avnx[1231] } ,
+    {20,"complete-genome" ,3,0.0,NULL } };
 
-static AsnType atx[2222] = {
+static AsnType atx[2294] = {
   {401, "Date" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[15]} ,
   {0, "str" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[3]} ,
   {323, "VisibleString" ,0,26,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
@@ -2461,7 +2479,7 @@ static AsnType atx[2222] = {
   {0, "coll" ,128,1,0,1,0,0,0,0,NULL,&atx[1232],NULL,0,&atx[1233]} ,
   {407, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,&atx[17],NULL,0,&atx[1237]} ,
   {0, "level" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1234]} ,
-  {0, "class" ,128,3,0,0,1,0,0,0,&avnx[571],&atx[42],&avnx[549],0,&atx[1235]} ,
+  {0, "class" ,128,3,0,0,1,0,0,0,&avnx[573],&atx[42],&avnx[549],0,&atx[1235]} ,
   {0, "release" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1236]} ,
   {0, "date" ,128,5,0,1,0,0,0,0,NULL,&atx[1237],NULL,0,&atx[1238]} ,
   {408, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,NULL} ,
@@ -2478,10 +2496,10 @@ static AsnType atx[2222] = {
   {404, "Seq-annot" ,1,0,0,0,0,0,1,0,NULL,&atx[1105],NULL,0,&atx[1239]} ,
   {401, "Seq-code-table" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1250],0,&atx[1261]} ,
   {0, "code" ,128,0,0,0,0,0,0,0,NULL,&atx[1251],NULL,0,&atx[1252]} ,
-  {404, "Seq-code-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[572],0,NULL} ,
+  {404, "Seq-code-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[574],0,NULL} ,
   {0, "num" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1253]} ,
   {0, "one-letter" ,128,2,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1254]} ,
-  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[583],&atx[6],NULL,0,&atx[1255]} ,
+  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[585],&atx[6],NULL,0,&atx[1255]} ,
   {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[66],&atx[1256],0,&atx[1259]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[13],&atx[1257],0,NULL} ,
   {0, "symbol" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1258]} ,
@@ -2492,7 +2510,7 @@ static AsnType atx[2222] = {
   {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1251],NULL,0,&atx[1263]} ,
   {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1251],NULL,0,&atx[1264]} ,
   {0, "num" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1265]} ,
-  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[584],&atx[6],NULL,0,&atx[1266]} ,
+  {0, "start-at" ,128,3,0,0,1,0,0,0,&avnx[586],&atx[6],NULL,0,&atx[1266]} ,
   {0, "table" ,128,4,0,0,0,0,0,0,NULL,&atx[66],&atx[1267],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {403, "Seq-code-set" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1269],0,&atx[1251]} ,
@@ -2524,10 +2542,10 @@ static AsnType atx[2222] = {
   {404, "Author" ,1,0,0,0,0,0,1,0,NULL,&atx[96],NULL,0,&atx[1299]} ,
   {0, "cit" ,128,1,0,0,0,0,0,0,NULL,&atx[1296],NULL,0,&atx[1297]} ,
   {403, "Cit-sub" ,1,0,0,0,0,0,1,0,NULL,&atx[227],NULL,0,&atx[1294]} ,
-  {0, "hup" ,128,2,0,0,1,0,0,0,&avnx[585],&atx[60],NULL,0,&atx[1298]} ,
+  {0, "hup" ,128,2,0,0,1,0,0,0,&avnx[587],&atx[60],NULL,0,&atx[1298]} ,
   {0, "reldate" ,128,3,0,1,0,0,0,0,NULL,&atx[1299],NULL,0,&atx[1300]} ,
   {405, "Date" ,1,0,0,0,0,0,1,0,NULL,&atx[0],NULL,0,&atx[1288]} ,
-  {0, "subtype" ,128,4,0,1,0,0,0,0,NULL,&atx[6],&avnx[586],0,&atx[1301]} ,
+  {0, "subtype" ,128,4,0,1,0,0,0,0,NULL,&atx[6],&avnx[588],0,&atx[1301]} ,
   {0, "tool" ,128,5,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1302]} ,
   {0, "user-tag" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1303]} ,
   {0, "comment" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
@@ -2548,18 +2566,18 @@ static AsnType atx[2222] = {
   {0, "protein-backbone" ,128,1,0,0,0,0,0,0,NULL,&atx[1319],NULL,0,&atx[1333]} ,
   {410, "Cn3d-backbone-style" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1320],0,&atx[1335]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1321],NULL,0,&atx[1322]} ,
-  {406, "Cn3d-backbone-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[590],0,&atx[1323]} ,
+  {406, "Cn3d-backbone-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[592],0,&atx[1323]} ,
   {0, "style" ,128,1,0,0,0,0,0,0,NULL,&atx[1323],NULL,0,&atx[1324]} ,
-  {407, "Cn3d-drawing-style" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[594],0,&atx[1325]} ,
+  {407, "Cn3d-drawing-style" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[596],0,&atx[1325]} ,
   {0, "color-scheme" ,128,2,0,0,0,0,0,0,NULL,&atx[1325],NULL,0,&atx[1326]} ,
-  {408, "Cn3d-color-scheme" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[602],0,&atx[1327]} ,
+  {408, "Cn3d-color-scheme" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[604],0,&atx[1327]} ,
   {0, "user-color" ,128,3,0,0,0,0,0,0,NULL,&atx[1327],NULL,0,NULL} ,
   {409, "Cn3d-color" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1328],0,&atx[1319]} ,
-  {0, "scale-factor" ,128,0,0,0,1,0,0,0,&avnx[622],&atx[6],NULL,0,&atx[1329]} ,
+  {0, "scale-factor" ,128,0,0,0,1,0,0,0,&avnx[624],&atx[6],NULL,0,&atx[1329]} ,
   {0, "red" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1330]} ,
   {0, "green" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1331]} ,
   {0, "blue" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1332]} ,
-  {0, "alpha" ,128,4,0,0,1,0,0,0,&avnx[623],&atx[6],NULL,0,NULL} ,
+  {0, "alpha" ,128,4,0,0,1,0,0,0,&avnx[625],&atx[6],NULL,0,NULL} ,
   {0, "nucleotide-backbone" ,128,2,0,0,0,0,0,0,NULL,&atx[1319],NULL,0,&atx[1334]} ,
   {0, "protein-sidechains" ,128,3,0,0,0,0,0,0,NULL,&atx[1335],NULL,0,&atx[1340]} ,
   {411, "Cn3d-general-style" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1336],0,&atx[1360]} ,
@@ -2589,8 +2607,8 @@ static AsnType atx[2222] = {
   {0, "protein-labels" ,128,23,0,1,0,0,0,0,NULL,&atx[1360],NULL,0,&atx[1366]} ,
   {412, "Cn3d-backbone-label-style" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1361],0,&atx[1316]} ,
   {0, "spacing" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1362]} ,
-  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[42],&avnx[624],0,&atx[1363]} ,
-  {0, "number" ,128,2,0,0,0,0,0,0,NULL,&atx[42],&avnx[626],0,&atx[1364]} ,
+  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[42],&avnx[626],0,&atx[1363]} ,
+  {0, "number" ,128,2,0,0,0,0,0,0,NULL,&atx[42],&avnx[628],0,&atx[1364]} ,
   {0, "termini" ,128,3,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1365]} ,
   {0, "white" ,128,4,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
   {0, "nucleotide-labels" ,128,24,0,1,0,0,0,0,NULL,&atx[1360],NULL,0,&atx[1367]} ,
@@ -2736,7 +2754,7 @@ static AsnType atx[2222] = {
   {0, "entrygroup" ,128,4,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1507]} ,
   {0, "displaygroup" ,128,5,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1508]} ,
   {0, "molgroup" ,128,6,0,0,0,0,0,0,NULL,&atx[1509],NULL,0,NULL} ,
-  {405, "FeatMolType" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[629],0,&atx[1517]} ,
+  {405, "FeatMolType" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[631],0,&atx[1517]} ,
   {402, "FeatDefSet" ,1,0,0,0,0,1,0,0,NULL,&atx[66],&atx[1511],0,&atx[1512]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1501],NULL,0,NULL} ,
   {403, "FeatDispGroup" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1513],0,&atx[1515]} ,
@@ -2763,7 +2781,7 @@ static AsnType atx[2222] = {
   {0, "strucAnnot" ,128,5,0,0,0,0,0,0,NULL,&atx[1534],NULL,0,NULL} ,
   {403, "Biostruc-annot-set" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[1592]} ,
   {0, "style" ,128,2,0,0,0,0,0,0,NULL,&atx[1536],NULL,0,&atx[1537]} ,
-  {417, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[632],0,NULL} ,
+  {417, "Entrez-style" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[634],0,NULL} ,
   {0, "location" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "alignstruc" ,128,1,0,0,0,0,0,0,NULL,&atx[1539],NULL,0,&atx[1553]} ,
   {411, "Biostruc-align" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1540],0,&atx[1554]} ,
@@ -2822,7 +2840,7 @@ static AsnType atx[2222] = {
   {404, "Cdd" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[1528]} ,
   {0, "structures" ,128,1,0,1,0,0,0,0,NULL,&atx[45],&atx[1594],0,&atx[1595]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1532],NULL,0,NULL} ,
-  {0, "structure-type" ,128,2,0,1,0,0,0,0,NULL,&atx[42],&avnx[645],0,NULL} ,
+  {0, "structure-type" ,128,2,0,1,0,0,0,0,NULL,&atx[42],&avnx[647],0,NULL} ,
   {401, "PrintTemplate" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1597],0,&atx[1630]} ,
   {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[1598],NULL,0,&atx[1599]} ,
   {403, "TemplateName" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1601]} ,
@@ -2859,596 +2877,668 @@ static AsnType atx[2222] = {
   {0, "null" ,128,6,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
   {402, "PrintTemplateSet" ,1,0,0,0,0,1,0,0,NULL,&atx[66],&atx[1631],0,&atx[1598]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1596],NULL,0,NULL} ,
-  {401, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1633],0,&atx[1649]} ,
-  {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1634]} ,
-  {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1635]} ,
-  {0, "strandedness" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1636]} ,
-  {0, "moltype" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1637]} ,
-  {0, "topology" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1638]} ,
-  {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1639]} ,
-  {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1640]} ,
-  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1641]} ,
-  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1642]} ,
-  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1643]} ,
-  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1644]} ,
-  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1645]} ,
-  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1646]} ,
-  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1647]} ,
-  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1648],0,&atx[1650]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1649],NULL,0,NULL} ,
-  {402, "GBSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1652]} ,
-  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1651],0,&atx[1653]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1652],NULL,0,NULL} ,
-  {403, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1656]} ,
-  {0, "project" ,128,16,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1654]} ,
-  {0, "keywords" ,128,17,0,1,0,0,0,0,NULL,&atx[66],&atx[1655],0,&atx[1657]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1656],NULL,0,NULL} ,
-  {404, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1663]} ,
-  {0, "segment" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1658]} ,
-  {0, "source" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1659]} ,
-  {0, "organism" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1660]} ,
-  {0, "taxonomy" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1661]} ,
-  {0, "references" ,128,22,0,1,0,0,0,0,NULL,&atx[66],&atx[1662],0,&atx[1679]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1663],NULL,0,NULL} ,
-  {405, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1664],0,&atx[1685]} ,
-  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1665]} ,
-  {0, "position" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1666]} ,
-  {0, "authors" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1667],0,&atx[1669]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1668],NULL,0,NULL} ,
-  {407, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1674]} ,
-  {0, "consortium" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1670]} ,
-  {0, "title" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1671]} ,
-  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1672]} ,
-  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[45],&atx[1673],0,&atx[1677]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1674],NULL,0,NULL} ,
-  {408, "GBXref" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1675],0,&atx[1690]} ,
-  {0, "dbname" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1676]} ,
+  {401, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1633],0,&atx[1634]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1634],NULL,0,NULL} ,
+  {402, "GBSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1635],0,&atx[1651]} ,
+  {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1636]} ,
+  {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1637]} ,
+  {0, "strandedness" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1638]} ,
+  {0, "moltype" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1639]} ,
+  {0, "topology" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1640]} ,
+  {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1641]} ,
+  {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1642]} ,
+  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1643]} ,
+  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1644]} ,
+  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1645]} ,
+  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1646]} ,
+  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1647]} ,
+  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1648]} ,
+  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1649]} ,
+  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1650],0,&atx[1652]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1651],NULL,0,NULL} ,
+  {403, "GBSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1654]} ,
+  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1653],0,&atx[1655]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1654],NULL,0,NULL} ,
+  {404, "GBSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1658]} ,
+  {0, "project" ,128,16,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1656]} ,
+  {0, "keywords" ,128,17,0,1,0,0,0,0,NULL,&atx[66],&atx[1657],0,&atx[1659]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1658],NULL,0,NULL} ,
+  {405, "GBKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1665]} ,
+  {0, "segment" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1660]} ,
+  {0, "source" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1661]} ,
+  {0, "organism" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1662]} ,
+  {0, "taxonomy" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1663]} ,
+  {0, "references" ,128,22,0,1,0,0,0,0,NULL,&atx[66],&atx[1664],0,&atx[1681]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1665],NULL,0,NULL} ,
+  {406, "GBReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1666],0,&atx[1683]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1667]} ,
+  {0, "position" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1668]} ,
+  {0, "authors" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1669],0,&atx[1671]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1670],NULL,0,NULL} ,
+  {409, "GBAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1676]} ,
+  {0, "consortium" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1672]} ,
+  {0, "title" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1673]} ,
+  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1674]} ,
+  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[45],&atx[1675],0,&atx[1679]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1676],NULL,0,NULL} ,
+  {410, "GBXref" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1677],0,&atx[1688]} ,
+  {0, "dbname" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1678]} ,
   {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pubmed" ,128,7,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1678]} ,
+  {0, "pubmed" ,128,7,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1680]} ,
   {0, "remark" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "comment" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1680]} ,
-  {0, "primary" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1681]} ,
-  {0, "source-db" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1682]} ,
-  {0, "database-reference" ,128,26,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1683]} ,
-  {0, "feature-table" ,128,27,0,1,0,0,0,0,NULL,&atx[66],&atx[1684],0,&atx[1705]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1685],NULL,0,NULL} ,
-  {406, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1686],0,&atx[1668]} ,
-  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1687]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1688]} ,
-  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1689],0,&atx[1697]} ,
+  {0, "comment" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1682]} ,
+  {0, "tagset" ,128,24,0,1,0,0,0,0,NULL,&atx[1683],NULL,0,&atx[1694]} ,
+  {407, "GBTagset" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1684],0,&atx[1699]} ,
+  {0, "authority" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1685]} ,
+  {0, "version" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1686]} ,
+  {0, "url" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1687]} ,
+  {0, "tags" ,128,3,0,1,0,0,0,0,NULL,&atx[1688],NULL,0,NULL} ,
+  {411, "GBTags" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1689],0,&atx[1690]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1690],NULL,0,NULL} ,
-  {409, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1691],0,&atx[1702]} ,
-  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1692]} ,
-  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1693]} ,
-  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1694]} ,
-  {0, "iscomp" ,128,3,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1695]} ,
-  {0, "interbp" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1696]} ,
+  {412, "GBTag" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1691],0,&atx[1704]} ,
+  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1692]} ,
+  {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1693]} ,
+  {0, "unit" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "primary" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1695]} ,
+  {0, "source-db" ,128,26,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1696]} ,
+  {0, "database-reference" ,128,27,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1697]} ,
+  {0, "feature-table" ,128,28,0,1,0,0,0,0,NULL,&atx[66],&atx[1698],0,&atx[1719]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1699],NULL,0,NULL} ,
+  {408, "GBFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1700],0,&atx[1670]} ,
+  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1701]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1702]} ,
+  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1703],0,&atx[1711]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1704],NULL,0,NULL} ,
+  {413, "GBInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1705],0,&atx[1716]} ,
+  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1706]} ,
+  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1707]} ,
+  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1708]} ,
+  {0, "iscomp" ,128,3,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1709]} ,
+  {0, "interbp" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1710]} ,
   {0, "accession" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "operator" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1698]} ,
-  {0, "partial5" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1699]} ,
-  {0, "partial3" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1700]} ,
-  {0, "quals" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1701],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1702],NULL,0,NULL} ,
-  {410, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1703],0,&atx[1707]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1704]} ,
+  {0, "operator" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1712]} ,
+  {0, "partial5" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1713]} ,
+  {0, "partial3" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1714]} ,
+  {0, "quals" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1715],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1716],NULL,0,NULL} ,
+  {414, "GBQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1717],0,&atx[1721]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1718]} ,
   {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "sequence" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1706]} ,
-  {0, "contig" ,128,29,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {411, "GBSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1708],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1632],NULL,0,NULL} ,
-  {401, "INSDSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1710],0,&atx[1726]} ,
-  {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1711]} ,
-  {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1712]} ,
-  {0, "strandedness" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1713]} ,
-  {0, "moltype" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1714]} ,
-  {0, "topology" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1715]} ,
-  {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1716]} ,
-  {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1717]} ,
-  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1718]} ,
-  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1719]} ,
-  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1720]} ,
-  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1721]} ,
-  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1722]} ,
-  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1723]} ,
-  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1724]} ,
-  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1725],0,&atx[1727]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1726],NULL,0,NULL} ,
-  {402, "INSDSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1729]} ,
-  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1728],0,&atx[1730]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1729],NULL,0,NULL} ,
-  {403, "INSDSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1733]} ,
-  {0, "project" ,128,16,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1731]} ,
-  {0, "keywords" ,128,17,0,1,0,0,0,0,NULL,&atx[66],&atx[1732],0,&atx[1734]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1733],NULL,0,NULL} ,
-  {404, "INSDKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1740]} ,
-  {0, "segment" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1735]} ,
-  {0, "source" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1736]} ,
-  {0, "organism" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1737]} ,
-  {0, "taxonomy" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1738]} ,
-  {0, "references" ,128,22,0,1,0,0,0,0,NULL,&atx[66],&atx[1739],0,&atx[1756]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1740],NULL,0,NULL} ,
-  {405, "INSDReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1741],0,&atx[1762]} ,
-  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1742]} ,
-  {0, "position" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1743]} ,
-  {0, "authors" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1744],0,&atx[1746]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1745],NULL,0,NULL} ,
-  {407, "INSDAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1751]} ,
-  {0, "consortium" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1747]} ,
-  {0, "title" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1748]} ,
-  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1749]} ,
-  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[45],&atx[1750],0,&atx[1754]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1751],NULL,0,NULL} ,
-  {408, "INSDXref" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1752],0,&atx[1767]} ,
-  {0, "dbname" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1753]} ,
-  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "pubmed" ,128,7,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1755]} ,
-  {0, "remark" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "comment" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1757]} ,
-  {0, "primary" ,128,24,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1758]} ,
-  {0, "source-db" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1759]} ,
-  {0, "database-reference" ,128,26,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1760]} ,
-  {0, "feature-table" ,128,27,0,1,0,0,0,0,NULL,&atx[66],&atx[1761],0,&atx[1782]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1762],NULL,0,NULL} ,
-  {406, "INSDFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1763],0,&atx[1745]} ,
-  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1764]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1765]} ,
-  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1766],0,&atx[1774]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1767],NULL,0,NULL} ,
-  {409, "INSDInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1768],0,&atx[1779]} ,
-  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1769]} ,
-  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1770]} ,
-  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1771]} ,
-  {0, "iscomp" ,128,3,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1772]} ,
-  {0, "interbp" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1773]} ,
-  {0, "accession" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "operator" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1775]} ,
-  {0, "partial5" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1776]} ,
-  {0, "partial3" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1777]} ,
-  {0, "quals" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1778],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1779],NULL,0,NULL} ,
-  {410, "INSDQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1780],0,&atx[1784]} ,
-  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1781]} ,
-  {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "sequence" ,128,28,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1783]} ,
-  {0, "contig" ,128,29,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {411, "INSDSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1785],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1709],NULL,0,NULL} ,
-  {401, "TSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1787],0,&atx[1797]} ,
-  {0, "seqtype" ,128,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[648],0,&atx[1788]} ,
-  {0, "gi" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1789]} ,
-  {0, "accver" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1790]} ,
-  {0, "sid" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1791]} ,
-  {0, "local" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1792]} ,
-  {0, "taxid" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1793]} ,
-  {0, "orgname" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1794]} ,
-  {0, "defline" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1795]} ,
-  {0, "length" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1796]} ,
-  {0, "sequence" ,128,9,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {402, "TSeqSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1798],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1786],NULL,0,NULL} ,
-  {401, "Pssm" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1800],0,&atx[1811]} ,
-  {0, "isProtein" ,128,0,0,0,1,0,0,0,&avnx[650],&atx[60],NULL,0,&atx[1801]} ,
-  {0, "identifier" ,128,1,0,1,0,0,0,0,NULL,&atx[1802],NULL,0,&atx[1803]} ,
-  {406, "Object-id" ,1,0,0,0,0,0,1,0,NULL,&atx[20],NULL,0,&atx[1809]} ,
-  {0, "numRows" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1804]} ,
-  {0, "numColumns" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1805]} ,
-  {0, "rowLabels" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1806],0,&atx[1807]} ,
+  {0, "sequence" ,128,29,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1720]} ,
+  {0, "contig" ,128,30,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {415, "GBTagsetRules" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1722],0,&atx[1725]} ,
+  {0, "authority" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1723]} ,
+  {0, "version" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1724]} ,
+  {0, "mandatorytags" ,128,2,0,1,0,0,0,0,NULL,&atx[1725],NULL,0,&atx[1727]} ,
+  {416, "GBTagNames" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1726],0,&atx[1730]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "byRow" ,128,5,0,0,1,0,0,0,&avnx[651],&atx[60],NULL,0,&atx[1808]} ,
-  {0, "query" ,128,6,0,1,0,0,0,0,NULL,&atx[1809],NULL,0,&atx[1810]} ,
-  {407, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[1242],NULL,0,&atx[1858]} ,
-  {0, "intermediateData" ,128,7,0,1,0,0,0,0,NULL,&atx[1811],NULL,0,&atx[1828]} ,
-  {402, "PssmIntermediateData" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1812],0,&atx[1829]} ,
-  {0, "resFreqsPerPos" ,128,0,0,1,0,0,0,0,NULL,&atx[66],&atx[1813],0,&atx[1814]} ,
+  {0, "optionaltags" ,128,3,0,1,0,0,0,0,NULL,&atx[1725],NULL,0,&atx[1728]} ,
+  {0, "uniquetags" ,128,4,0,1,0,0,0,0,NULL,&atx[1725],NULL,0,&atx[1729]} ,
+  {0, "extensible" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
+  {417, "GBTagsetRuleSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1731],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1721],NULL,0,NULL} ,
+  {401, "INSDSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1733],0,&atx[1734]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1734],NULL,0,NULL} ,
+  {402, "INSDSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1735],0,&atx[1751]} ,
+  {0, "locus" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1736]} ,
+  {0, "length" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1737]} ,
+  {0, "strandedness" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1738]} ,
+  {0, "moltype" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1739]} ,
+  {0, "topology" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1740]} ,
+  {0, "division" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1741]} ,
+  {0, "update-date" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1742]} ,
+  {0, "create-date" ,128,7,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1743]} ,
+  {0, "update-release" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1744]} ,
+  {0, "create-release" ,128,9,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1745]} ,
+  {0, "definition" ,128,10,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1746]} ,
+  {0, "primary-accession" ,128,11,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1747]} ,
+  {0, "entry-version" ,128,12,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1748]} ,
+  {0, "accession-version" ,128,13,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1749]} ,
+  {0, "other-seqids" ,128,14,0,1,0,0,0,0,NULL,&atx[66],&atx[1750],0,&atx[1752]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1751],NULL,0,NULL} ,
+  {403, "INSDSeqid" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1754]} ,
+  {0, "secondary-accessions" ,128,15,0,1,0,0,0,0,NULL,&atx[66],&atx[1753],0,&atx[1755]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1754],NULL,0,NULL} ,
+  {404, "INSDSecondary-accn" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1758]} ,
+  {0, "project" ,128,16,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1756]} ,
+  {0, "keywords" ,128,17,0,1,0,0,0,0,NULL,&atx[66],&atx[1757],0,&atx[1759]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1758],NULL,0,NULL} ,
+  {405, "INSDKeyword" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1765]} ,
+  {0, "segment" ,128,18,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1760]} ,
+  {0, "source" ,128,19,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1761]} ,
+  {0, "organism" ,128,20,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1762]} ,
+  {0, "taxonomy" ,128,21,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1763]} ,
+  {0, "references" ,128,22,0,1,0,0,0,0,NULL,&atx[66],&atx[1764],0,&atx[1781]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1765],NULL,0,NULL} ,
+  {406, "INSDReference" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1766],0,&atx[1783]} ,
+  {0, "reference" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1767]} ,
+  {0, "position" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1768]} ,
+  {0, "authors" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1769],0,&atx[1771]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1770],NULL,0,NULL} ,
+  {409, "INSDAuthor" ,1,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1776]} ,
+  {0, "consortium" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1772]} ,
+  {0, "title" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1773]} ,
+  {0, "journal" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1774]} ,
+  {0, "xref" ,128,6,0,1,0,0,0,0,NULL,&atx[45],&atx[1775],0,&atx[1779]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1776],NULL,0,NULL} ,
+  {410, "INSDXref" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1777],0,&atx[1788]} ,
+  {0, "dbname" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1778]} ,
+  {0, "id" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "pubmed" ,128,7,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1780]} ,
+  {0, "remark" ,128,8,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "comment" ,128,23,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1782]} ,
+  {0, "tagset" ,128,24,0,1,0,0,0,0,NULL,&atx[1783],NULL,0,&atx[1794]} ,
+  {407, "INSDTagset" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1784],0,&atx[1799]} ,
+  {0, "authority" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1785]} ,
+  {0, "version" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1786]} ,
+  {0, "url" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1787]} ,
+  {0, "tags" ,128,3,0,1,0,0,0,0,NULL,&atx[1788],NULL,0,NULL} ,
+  {411, "INSDTags" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1789],0,&atx[1790]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1790],NULL,0,NULL} ,
+  {412, "INSDTag" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1791],0,&atx[1804]} ,
+  {0, "name" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1792]} ,
+  {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1793]} ,
+  {0, "unit" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "primary" ,128,25,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1795]} ,
+  {0, "source-db" ,128,26,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1796]} ,
+  {0, "database-reference" ,128,27,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1797]} ,
+  {0, "feature-table" ,128,28,0,1,0,0,0,0,NULL,&atx[66],&atx[1798],0,&atx[1819]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1799],NULL,0,NULL} ,
+  {408, "INSDFeature" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1800],0,&atx[1770]} ,
+  {0, "key" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1801]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1802]} ,
+  {0, "intervals" ,128,2,0,1,0,0,0,0,NULL,&atx[66],&atx[1803],0,&atx[1811]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1804],NULL,0,NULL} ,
+  {413, "INSDInterval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1805],0,&atx[1816]} ,
+  {0, "from" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1806]} ,
+  {0, "to" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1807]} ,
+  {0, "point" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1808]} ,
+  {0, "iscomp" ,128,3,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1809]} ,
+  {0, "interbp" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1810]} ,
+  {0, "accession" ,128,5,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "operator" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1812]} ,
+  {0, "partial5" ,128,4,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1813]} ,
+  {0, "partial3" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,&atx[1814]} ,
+  {0, "quals" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1815],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1816],NULL,0,NULL} ,
+  {414, "INSDQualifier" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1817],0,&atx[1821]} ,
+  {0, "name" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1818]} ,
+  {0, "value" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "sequence" ,128,29,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1820]} ,
+  {0, "contig" ,128,30,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {415, "INSDTagsetRules" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1822],0,&atx[1825]} ,
+  {0, "authority" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1823]} ,
+  {0, "version" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1824]} ,
+  {0, "mandatorytags" ,128,2,0,1,0,0,0,0,NULL,&atx[1825],NULL,0,&atx[1827]} ,
+  {416, "INSDTagNames" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1826],0,&atx[1830]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "optionaltags" ,128,3,0,1,0,0,0,0,NULL,&atx[1825],NULL,0,&atx[1828]} ,
+  {0, "uniquetags" ,128,4,0,1,0,0,0,0,NULL,&atx[1825],NULL,0,&atx[1829]} ,
+  {0, "extensible" ,128,5,0,1,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
+  {417, "INSDTagsetRuleSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1831],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1821],NULL,0,NULL} ,
+  {401, "TSeq" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1833],0,&atx[1843]} ,
+  {0, "seqtype" ,128,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[650],0,&atx[1834]} ,
+  {0, "gi" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1835]} ,
+  {0, "accver" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1836]} ,
+  {0, "sid" ,128,3,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1837]} ,
+  {0, "local" ,128,4,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1838]} ,
+  {0, "taxid" ,128,5,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1839]} ,
+  {0, "orgname" ,128,6,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1840]} ,
+  {0, "defline" ,128,7,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1841]} ,
+  {0, "length" ,128,8,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1842]} ,
+  {0, "sequence" ,128,9,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {402, "TSeqSet" ,1,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1844],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1832],NULL,0,NULL} ,
+  {401, "Pssm" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1846],0,&atx[1857]} ,
+  {0, "isProtein" ,128,0,0,0,1,0,0,0,&avnx[652],&atx[60],NULL,0,&atx[1847]} ,
+  {0, "identifier" ,128,1,0,1,0,0,0,0,NULL,&atx[1848],NULL,0,&atx[1849]} ,
+  {406, "Object-id" ,1,0,0,0,0,0,1,0,NULL,&atx[20],NULL,0,&atx[1855]} ,
+  {0, "numRows" ,128,2,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1850]} ,
+  {0, "numColumns" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1851]} ,
+  {0, "rowLabels" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1852],0,&atx[1853]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "byRow" ,128,5,0,0,1,0,0,0,&avnx[653],&atx[60],NULL,0,&atx[1854]} ,
+  {0, "query" ,128,6,0,1,0,0,0,0,NULL,&atx[1855],NULL,0,&atx[1856]} ,
+  {407, "Seq-entry" ,1,0,0,0,0,0,1,0,NULL,&atx[1242],NULL,0,&atx[1904]} ,
+  {0, "intermediateData" ,128,7,0,1,0,0,0,0,NULL,&atx[1857],NULL,0,&atx[1874]} ,
+  {402, "PssmIntermediateData" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1858],0,&atx[1875]} ,
+  {0, "resFreqsPerPos" ,128,0,0,1,0,0,0,0,NULL,&atx[66],&atx[1859],0,&atx[1860]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "weightedResFreqsPerPos" ,128,1,0,1,0,0,0,0,NULL,&atx[66],&atx[1815],0,&atx[1816]} ,
+  {0, "weightedResFreqsPerPos" ,128,1,0,1,0,0,0,0,NULL,&atx[66],&atx[1861],0,&atx[1862]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {0, "freqRatios" ,128,2,0,0,0,0,0,0,NULL,&atx[66],&atx[1817],0,&atx[1818]} ,
+  {0, "freqRatios" ,128,2,0,0,0,0,0,0,NULL,&atx[66],&atx[1863],0,&atx[1864]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {0, "informationContent" ,128,3,0,1,0,0,0,0,NULL,&atx[66],&atx[1819],0,&atx[1820]} ,
+  {0, "informationContent" ,128,3,0,1,0,0,0,0,NULL,&atx[66],&atx[1865],0,&atx[1866]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {0, "gaplessColumnWeights" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1821],0,&atx[1822]} ,
+  {0, "gaplessColumnWeights" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1867],0,&atx[1868]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {0, "sigma" ,128,5,0,1,0,0,0,0,NULL,&atx[66],&atx[1823],0,&atx[1824]} ,
+  {0, "sigma" ,128,5,0,1,0,0,0,0,NULL,&atx[66],&atx[1869],0,&atx[1870]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {0, "intervalSizes" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1825],0,&atx[1826]} ,
+  {0, "intervalSizes" ,128,6,0,1,0,0,0,0,NULL,&atx[66],&atx[1871],0,&atx[1872]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "numMatchingSeqs" ,128,7,0,1,0,0,0,0,NULL,&atx[66],&atx[1827],0,NULL} ,
+  {0, "numMatchingSeqs" ,128,7,0,1,0,0,0,0,NULL,&atx[66],&atx[1873],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "finalData" ,128,8,0,1,0,0,0,0,NULL,&atx[1829],NULL,0,NULL} ,
-  {403, "PssmFinalData" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1830],0,&atx[1839]} ,
-  {0, "scores" ,128,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1831],0,&atx[1832]} ,
+  {0, "finalData" ,128,8,0,1,0,0,0,0,NULL,&atx[1875],NULL,0,NULL} ,
+  {403, "PssmFinalData" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1876],0,&atx[1885]} ,
+  {0, "scores" ,128,0,0,0,0,0,0,0,NULL,&atx[66],&atx[1877],0,&atx[1878]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "lambda" ,128,1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1833]} ,
-  {0, "kappa" ,128,2,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1834]} ,
-  {0, "h" ,128,3,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1835]} ,
-  {0, "scalingFactor" ,128,4,0,0,1,0,0,0,&avnx[652],&atx[6],NULL,0,&atx[1836]} ,
-  {0, "lambdaUngapped" ,128,5,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1837]} ,
-  {0, "kappaUngapped" ,128,6,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1838]} ,
+  {0, "lambda" ,128,1,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1879]} ,
+  {0, "kappa" ,128,2,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1880]} ,
+  {0, "h" ,128,3,0,0,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1881]} ,
+  {0, "scalingFactor" ,128,4,0,0,1,0,0,0,&avnx[654],&atx[6],NULL,0,&atx[1882]} ,
+  {0, "lambdaUngapped" ,128,5,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1883]} ,
+  {0, "kappaUngapped" ,128,6,0,1,0,0,0,0,NULL,&atx[58],NULL,0,&atx[1884]} ,
   {0, "hUngapped" ,128,7,0,1,0,0,0,0,NULL,&atx[58],NULL,0,NULL} ,
-  {404, "PssmParameters" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1840],0,&atx[1867]} ,
-  {0, "pseudocount" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1841]} ,
-  {0, "rpsdbparams" ,128,1,0,1,0,0,0,0,NULL,&atx[1842],NULL,0,&atx[1846]} ,
-  {412, "FormatRpsDbParameters" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1843],0,NULL} ,
-  {0, "matrixName" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1844]} ,
-  {0, "gapOpen" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1845]} ,
+  {404, "PssmParameters" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1886],0,&atx[1913]} ,
+  {0, "pseudocount" ,128,0,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1887]} ,
+  {0, "rpsdbparams" ,128,1,0,1,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[1892]} ,
+  {412, "FormatRpsDbParameters" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1889],0,NULL} ,
+  {0, "matrixName" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1890]} ,
+  {0, "gapOpen" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1891]} ,
   {0, "gapExtend" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
-  {0, "constraints" ,128,2,0,1,0,0,0,0,NULL,&atx[1847],NULL,0,NULL} ,
-  {411, "CoreDef" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1848],0,&atx[1842]} ,
-  {0, "nblocks" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1849]} ,
-  {0, "blocks" ,128,1,0,0,0,0,0,0,NULL,&atx[66],&atx[1850],0,&atx[1862]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1851],NULL,0,NULL} ,
-  {409, "CoreBlock" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1852],0,&atx[1864]} ,
-  {0, "start" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1853]} ,
-  {0, "stop" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1854]} ,
-  {0, "minstart" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1855]} ,
-  {0, "maxstop" ,128,3,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1856]} ,
-  {0, "property" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1857],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1858],NULL,0,NULL} ,
-  {408, "BlockProperty" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1859],0,&atx[1851]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[653],0,&atx[1860]} ,
-  {0, "intvalue" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1861]} ,
+  {0, "constraints" ,128,2,0,1,0,0,0,0,NULL,&atx[1893],NULL,0,NULL} ,
+  {411, "CoreDef" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1894],0,&atx[1888]} ,
+  {0, "nblocks" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1895]} ,
+  {0, "blocks" ,128,1,0,0,0,0,0,0,NULL,&atx[66],&atx[1896],0,&atx[1908]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1897],NULL,0,NULL} ,
+  {409, "CoreBlock" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1898],0,&atx[1910]} ,
+  {0, "start" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1899]} ,
+  {0, "stop" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1900]} ,
+  {0, "minstart" ,128,2,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1901]} ,
+  {0, "maxstop" ,128,3,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1902]} ,
+  {0, "property" ,128,4,0,1,0,0,0,0,NULL,&atx[66],&atx[1903],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1904],NULL,0,NULL} ,
+  {408, "BlockProperty" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1905],0,&atx[1897]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[6],&avnx[655],0,&atx[1906]} ,
+  {0, "intvalue" ,128,1,0,1,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1907]} ,
   {0, "textvalue" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "loops" ,128,2,0,0,0,0,0,0,NULL,&atx[66],&atx[1863],0,NULL} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1864],NULL,0,NULL} ,
-  {410, "LoopConstraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1865],0,&atx[1847]} ,
-  {0, "minlength" ,128,0,0,0,1,0,0,0,&avnx[662],&atx[6],NULL,0,&atx[1866]} ,
-  {0, "maxlength" ,128,1,0,0,1,0,0,0,&avnx[663],&atx[6],NULL,0,NULL} ,
-  {405, "PssmWithParameters" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1868],0,&atx[1802]} ,
-  {0, "pssm" ,128,0,0,0,0,0,0,0,NULL,&atx[1799],NULL,0,&atx[1869]} ,
-  {0, "params" ,128,1,0,1,0,0,0,0,NULL,&atx[1839],NULL,0,NULL} ,
-  {401, "AECR-action" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1871],0,&atx[2091]} ,
-  {0, "action" ,128,0,0,0,0,0,0,0,NULL,&atx[1872],NULL,0,&atx[2033]} ,
-  {477, "Action-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1873],0,&atx[2122]} ,
-  {0, "apply" ,128,0,0,0,0,0,0,0,NULL,&atx[1874],NULL,0,&atx[1942]} ,
-  {470, "Apply-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1875],0,&atx[1943]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1876],NULL,0,&atx[1939]} ,
-  {459, "Field-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1877],0,&atx[2079]} ,
-  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1878],NULL,0,&atx[1885]} ,
-  {428, "Source-qual-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1879],0,&atx[1915]} ,
-  {0, "textqual" ,128,0,0,0,0,0,0,0,NULL,&atx[1880],NULL,0,&atx[1881]} ,
-  {424, "Source-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[664],0,&atx[1956]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[1882],NULL,0,&atx[1883]} ,
-  {426, "Source-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[759],0,&atx[1884]} ,
-  {0, "origin" ,128,2,0,0,0,0,0,0,NULL,&atx[1884],NULL,0,NULL} ,
-  {427, "Source-origin" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[782],0,&atx[1878]} ,
-  {0, "feature-field" ,128,1,0,0,0,0,0,0,NULL,&atx[1886],NULL,0,&atx[1901]} ,
-  {417, "Feature-field" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1887],0,&atx[2117]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[1889]} ,
-  {411, "Feature-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[789],0,&atx[1892]} ,
-  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1890],NULL,0,NULL} ,
-  {416, "Feat-qual-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1891],0,&atx[1886]} ,
-  {0, "legal-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1892],NULL,0,&atx[1893]} ,
-  {412, "Feat-qual-legal" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[883],0,&atx[2158]} ,
-  {0, "illegal-qual" ,128,1,0,0,0,0,0,0,NULL,&atx[1894],NULL,0,NULL} ,
-  {405, "String-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1895],0,&atx[2042]} ,
-  {0, "match-text" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1896]} ,
-  {0, "match-location" ,128,1,0,0,1,0,0,0,&avnx[950],&atx[1897],NULL,0,&atx[1898]} ,
-  {404, "String-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[951],0,&atx[1894]} ,
-  {0, "case-sensitive" ,128,2,0,0,1,0,0,0,&avnx[956],&atx[60],NULL,0,&atx[1899]} ,
-  {0, "whole-word" ,128,3,0,0,1,0,0,0,&avnx[957],&atx[60],NULL,0,&atx[1900]} ,
-  {0, "not-present" ,128,4,0,0,1,0,0,0,&avnx[958],&atx[60],NULL,0,NULL} ,
-  {0, "rna-field" ,128,2,0,0,0,0,0,0,NULL,&atx[1902],NULL,0,&atx[1914]} ,
-  {422, "Rna-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1903],0,&atx[1965]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1904],NULL,0,&atx[1912]} ,
-  {420, "Rna-feat-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1905],0,&atx[1913]} ,
-  {0, "preRNA" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1906]} ,
-  {0, "mRNA" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1907]} ,
-  {0, "tRNA" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1908]} ,
-  {0, "rRNA" ,128,3,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1909]} ,
-  {0, "ncRNA" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1910]} ,
-  {0, "tmRNA" ,128,5,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1911]} ,
+  {0, "loops" ,128,2,0,0,0,0,0,0,NULL,&atx[66],&atx[1909],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1910],NULL,0,NULL} ,
+  {410, "LoopConstraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1911],0,&atx[1893]} ,
+  {0, "minlength" ,128,0,0,0,1,0,0,0,&avnx[664],&atx[6],NULL,0,&atx[1912]} ,
+  {0, "maxlength" ,128,1,0,0,1,0,0,0,&avnx[665],&atx[6],NULL,0,NULL} ,
+  {405, "PssmWithParameters" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1914],0,&atx[1848]} ,
+  {0, "pssm" ,128,0,0,0,0,0,0,0,NULL,&atx[1845],NULL,0,&atx[1915]} ,
+  {0, "params" ,128,1,0,1,0,0,0,0,NULL,&atx[1885],NULL,0,NULL} ,
+  {401, "AECR-action" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[1917],0,&atx[2139]} ,
+  {0, "action" ,128,0,0,0,0,0,0,0,NULL,&atx[1918],NULL,0,&atx[2081]} ,
+  {480, "Action-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1919],0,&atx[2171]} ,
+  {0, "apply" ,128,0,0,0,0,0,0,0,NULL,&atx[1920],NULL,0,&atx[1990]} ,
+  {473, "Apply-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1921],0,&atx[1991]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1922],NULL,0,&atx[1987]} ,
+  {462, "Field-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1923],0,&atx[2127]} ,
+  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1924],NULL,0,&atx[1933]} ,
+  {428, "Source-qual-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1925],0,&atx[2215]} ,
+  {0, "textqual" ,128,0,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,&atx[1927]} ,
+  {424, "Source-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[666],0,&atx[2004]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[1928],NULL,0,&atx[1929]} ,
+  {426, "Source-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[762],0,&atx[1930]} ,
+  {0, "origin" ,128,2,0,0,0,0,0,0,NULL,&atx[1930],NULL,0,&atx[1931]} ,
+  {427, "Source-origin" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[785],0,&atx[1924]} ,
+  {0, "gcode" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[1932]} ,
+  {0, "mgcode" ,128,4,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {0, "feature-field" ,128,1,0,0,0,0,0,0,NULL,&atx[1934],NULL,0,&atx[1949]} ,
+  {417, "Feature-field" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1935],0,&atx[2165]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[1937]} ,
+  {411, "Feature-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[792],0,&atx[1940]} ,
+  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1938],NULL,0,NULL} ,
+  {416, "Feat-qual-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1939],0,&atx[1934]} ,
+  {0, "legal-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1940],NULL,0,&atx[1941]} ,
+  {412, "Feat-qual-legal" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[886],0,&atx[2207]} ,
+  {0, "illegal-qual" ,128,1,0,0,0,0,0,0,NULL,&atx[1942],NULL,0,NULL} ,
+  {405, "String-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1943],0,&atx[2090]} ,
+  {0, "match-text" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1944]} ,
+  {0, "match-location" ,128,1,0,0,1,0,0,0,&avnx[953],&atx[1945],NULL,0,&atx[1946]} ,
+  {404, "String-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[954],0,&atx[1942]} ,
+  {0, "case-sensitive" ,128,2,0,0,1,0,0,0,&avnx[959],&atx[60],NULL,0,&atx[1947]} ,
+  {0, "whole-word" ,128,3,0,0,1,0,0,0,&avnx[960],&atx[60],NULL,0,&atx[1948]} ,
+  {0, "not-present" ,128,4,0,0,1,0,0,0,&avnx[961],&atx[60],NULL,0,NULL} ,
+  {0, "rna-field" ,128,2,0,0,0,0,0,0,NULL,&atx[1950],NULL,0,&atx[1962]} ,
+  {422, "Rna-qual" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1951],0,&atx[2013]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1952],NULL,0,&atx[1960]} ,
+  {420, "Rna-feat-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1953],0,&atx[1961]} ,
+  {0, "preRNA" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1954]} ,
+  {0, "mRNA" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1955]} ,
+  {0, "tRNA" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1956]} ,
+  {0, "rRNA" ,128,3,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1957]} ,
+  {0, "ncRNA" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1958]} ,
+  {0, "tmRNA" ,128,5,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1959]} ,
   {0, "miscRNA" ,128,6,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1913],NULL,0,NULL} ,
-  {421, "Rna-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[959],0,&atx[1902]} ,
-  {0, "cds-gene-prot" ,128,3,0,0,0,0,0,0,NULL,&atx[1915],NULL,0,&atx[1916]} ,
-  {429, "CDSGeneProt-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[971],0,&atx[1970]} ,
-  {0, "molinfo-field" ,128,4,0,0,0,0,0,0,NULL,&atx[1917],NULL,0,&atx[1930]} ,
-  {437, "Molinfo-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1918],0,&atx[1976]} ,
-  {0, "molecule" ,128,0,0,0,0,0,0,0,NULL,&atx[1919],NULL,0,&atx[1920]} ,
-  {431, "Molecule-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[995],0,&atx[1921]} ,
-  {0, "technique" ,128,1,0,0,0,0,0,0,NULL,&atx[1921],NULL,0,&atx[1922]} ,
-  {432, "Technique-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1007],0,&atx[1923]} ,
-  {0, "completedness" ,128,2,0,0,0,0,0,0,NULL,&atx[1923],NULL,0,&atx[1924]} ,
-  {433, "Completedness-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1032],0,&atx[1925]} ,
-  {0, "mol-class" ,128,3,0,0,0,0,0,0,NULL,&atx[1925],NULL,0,&atx[1926]} ,
-  {434, "Molecule-class-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1041],0,&atx[1927]} ,
-  {0, "topology" ,128,4,0,0,0,0,0,0,NULL,&atx[1927],NULL,0,&atx[1928]} ,
-  {435, "Topology-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1047],0,&atx[1929]} ,
-  {0, "strand" ,128,5,0,0,0,0,0,0,NULL,&atx[1929],NULL,0,NULL} ,
-  {436, "Strand-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1052],0,&atx[1917]} ,
-  {0, "pub" ,128,5,0,0,0,0,0,0,NULL,&atx[1931],NULL,0,&atx[1932]} ,
-  {446, "Publication-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1058],0,&atx[1933]} ,
-  {0, "struc-comment-field" ,128,6,0,0,0,0,0,0,NULL,&atx[1933],NULL,0,&atx[1937]} ,
-  {447, "Structured-comment-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1934],0,&atx[2000]} ,
-  {0, "database" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1935]} ,
-  {0, "named" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1936]} ,
+  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1961],NULL,0,NULL} ,
+  {421, "Rna-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[962],0,&atx[1950]} ,
+  {0, "cds-gene-prot" ,128,3,0,0,0,0,0,0,NULL,&atx[1963],NULL,0,&atx[1964]} ,
+  {432, "CDSGeneProt-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[974],0,&atx[2018]} ,
+  {0, "molinfo-field" ,128,4,0,0,0,0,0,0,NULL,&atx[1965],NULL,0,&atx[1978]} ,
+  {440, "Molinfo-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1966],0,&atx[2024]} ,
+  {0, "molecule" ,128,0,0,0,0,0,0,0,NULL,&atx[1967],NULL,0,&atx[1968]} ,
+  {434, "Molecule-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[998],0,&atx[1969]} ,
+  {0, "technique" ,128,1,0,0,0,0,0,0,NULL,&atx[1969],NULL,0,&atx[1970]} ,
+  {435, "Technique-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1010],0,&atx[1971]} ,
+  {0, "completedness" ,128,2,0,0,0,0,0,0,NULL,&atx[1971],NULL,0,&atx[1972]} ,
+  {436, "Completedness-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1035],0,&atx[1973]} ,
+  {0, "mol-class" ,128,3,0,0,0,0,0,0,NULL,&atx[1973],NULL,0,&atx[1974]} ,
+  {437, "Molecule-class-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1044],0,&atx[1975]} ,
+  {0, "topology" ,128,4,0,0,0,0,0,0,NULL,&atx[1975],NULL,0,&atx[1976]} ,
+  {438, "Topology-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1050],0,&atx[1977]} ,
+  {0, "strand" ,128,5,0,0,0,0,0,0,NULL,&atx[1977],NULL,0,NULL} ,
+  {439, "Strand-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1055],0,&atx[1965]} ,
+  {0, "pub" ,128,5,0,0,0,0,0,0,NULL,&atx[1979],NULL,0,&atx[1980]} ,
+  {449, "Publication-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1061],0,&atx[1981]} ,
+  {0, "struc-comment-field" ,128,6,0,0,0,0,0,0,NULL,&atx[1981],NULL,0,&atx[1985]} ,
+  {450, "Structured-comment-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1982],0,&atx[2048]} ,
+  {0, "database" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[1983]} ,
+  {0, "named" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1984]} ,
   {0, "field-name" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "misc" ,128,7,0,0,0,0,0,0,NULL,&atx[1938],NULL,0,NULL} ,
-  {449, "Misc-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1078],0,&atx[2086]} ,
-  {0, "value" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1940]} ,
-  {0, "existing-text" ,128,2,0,0,0,0,0,0,NULL,&atx[1941],NULL,0,NULL} ,
-  {469, "ExistingTextOption" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1079],0,&atx[1874]} ,
-  {0, "edit" ,128,1,0,0,0,0,0,0,NULL,&atx[1943],NULL,0,&atx[1951]} ,
-  {471, "Edit-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1944],0,&atx[1952]} ,
-  {0, "edit" ,128,0,0,0,0,0,0,0,NULL,&atx[1945],NULL,0,&atx[1950]} ,
-  {467, "Field-edit" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1946],0,&atx[1954]} ,
-  {0, "find-txt" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1947]} ,
-  {0, "repl-txt" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1948]} ,
-  {0, "location" ,128,2,0,0,1,0,0,0,&avnx[1090],&atx[1949],NULL,0,NULL} ,
-  {466, "Field-edit-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1091],0,&atx[1945]} ,
-  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1876],NULL,0,NULL} ,
-  {0, "convert" ,128,2,0,0,0,0,0,0,NULL,&atx[1952],NULL,0,&atx[2006]} ,
-  {472, "Convert-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1953],0,&atx[2007]} ,
-  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[1954],NULL,0,&atx[2003]} ,
-  {468, "Field-pair-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1955],0,&atx[1941]} ,
-  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1956],NULL,0,&atx[1959]} ,
-  {425, "Source-qual-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1957],0,&atx[1882]} ,
-  {0, "field-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1880],NULL,0,&atx[1958]} ,
-  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1880],NULL,0,NULL} ,
-  {0, "feature-field" ,128,1,0,0,0,0,0,0,NULL,&atx[1960],NULL,0,&atx[1964]} ,
-  {419, "Feature-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1961],0,&atx[1904]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[1962]} ,
-  {0, "field-from" ,128,1,0,0,0,0,0,0,NULL,&atx[1890],NULL,0,&atx[1963]} ,
-  {0, "field-to" ,128,2,0,0,0,0,0,0,NULL,&atx[1890],NULL,0,NULL} ,
-  {0, "rna-field" ,128,2,0,0,0,0,0,0,NULL,&atx[1965],NULL,0,&atx[1969]} ,
-  {423, "Rna-qual-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1966],0,&atx[1880]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1904],NULL,0,&atx[1967]} ,
-  {0, "field-from" ,128,1,0,0,0,0,0,0,NULL,&atx[1913],NULL,0,&atx[1968]} ,
-  {0, "field-to" ,128,2,0,0,0,0,0,0,NULL,&atx[1913],NULL,0,NULL} ,
-  {0, "cds-gene-prot" ,128,3,0,0,0,0,0,0,NULL,&atx[1970],NULL,0,&atx[1973]} ,
-  {430, "CDSGeneProt-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1971],0,&atx[1919]} ,
-  {0, "field-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1915],NULL,0,&atx[1972]} ,
-  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1915],NULL,0,NULL} ,
-  {0, "molinfo-field" ,128,4,0,0,0,0,0,0,NULL,&atx[1974],NULL,0,&atx[1999]} ,
-  {444, "Molinfo-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[1975],0,&atx[2216]} ,
-  {0, "molecule" ,128,0,0,0,0,0,0,0,NULL,&atx[1976],NULL,0,&atx[1979]} ,
-  {438, "Molinfo-molecule-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1977],0,&atx[1980]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1919],NULL,0,&atx[1978]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1919],NULL,0,NULL} ,
-  {0, "technique" ,128,1,0,0,0,0,0,0,NULL,&atx[1980],NULL,0,&atx[1983]} ,
-  {439, "Molinfo-technique-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1981],0,&atx[1984]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1921],NULL,0,&atx[1982]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1921],NULL,0,NULL} ,
-  {0, "completedness" ,128,2,0,0,0,0,0,0,NULL,&atx[1984],NULL,0,&atx[1987]} ,
-  {440, "Molinfo-completedness-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1985],0,&atx[1988]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1923],NULL,0,&atx[1986]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1923],NULL,0,NULL} ,
-  {0, "mol-class" ,128,3,0,0,0,0,0,0,NULL,&atx[1988],NULL,0,&atx[1991]} ,
-  {441, "Molinfo-mol-class-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1989],0,&atx[1992]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1925],NULL,0,&atx[1990]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1925],NULL,0,NULL} ,
-  {0, "topology" ,128,4,0,0,0,0,0,0,NULL,&atx[1992],NULL,0,&atx[1995]} ,
-  {442, "Molinfo-topology-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1993],0,&atx[1996]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1927],NULL,0,&atx[1994]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1927],NULL,0,NULL} ,
-  {0, "strand" ,128,5,0,0,0,0,0,0,NULL,&atx[1996],NULL,0,NULL} ,
-  {443, "Molinfo-strand-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1997],0,&atx[1974]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1929],NULL,0,&atx[1998]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1929],NULL,0,NULL} ,
-  {0, "struc-comment-field" ,128,5,0,0,0,0,0,0,NULL,&atx[2000],NULL,0,NULL} ,
-  {448, "Structured-comment-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2001],0,&atx[1938]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1933],NULL,0,&atx[2002]} ,
-  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1933],NULL,0,NULL} ,
-  {0, "strip-name" ,128,1,0,0,1,0,0,0,&avnx[1094],&atx[60],NULL,0,&atx[2004]} ,
-  {0, "keep-original" ,128,2,0,0,1,0,0,0,&avnx[1095],&atx[60],NULL,0,&atx[2005]} ,
-  {0, "existing-text" ,128,3,0,0,0,0,0,0,NULL,&atx[1941],NULL,0,NULL} ,
-  {0, "copy" ,128,3,0,0,0,0,0,0,NULL,&atx[2007],NULL,0,&atx[2010]} ,
-  {473, "Copy-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2008],0,&atx[2011]} ,
-  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[1954],NULL,0,&atx[2009]} ,
-  {0, "existing-text" ,128,1,0,0,0,0,0,0,NULL,&atx[1941],NULL,0,NULL} ,
-  {0, "swap" ,128,4,0,0,0,0,0,0,NULL,&atx[2011],NULL,0,&atx[2014]} ,
-  {474, "Swap-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2012],0,&atx[2018]} ,
-  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[1954],NULL,0,&atx[2013]} ,
-  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1876],NULL,0,NULL} ,
-  {0, "remove" ,128,5,0,0,0,0,0,0,NULL,&atx[2015],NULL,0,&atx[2017]} ,
-  {476, "Remove-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2016],0,&atx[1872]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1876],NULL,0,NULL} ,
-  {0, "parse" ,128,6,0,0,0,0,0,0,NULL,&atx[2018],NULL,0,NULL} ,
-  {475, "AECRParse-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2019],0,&atx[2015]} ,
-  {0, "portion" ,128,0,0,0,0,0,0,0,NULL,&atx[2020],NULL,0,&atx[2028]} ,
-  {465, "Text-portion" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2021],0,&atx[1949]} ,
-  {0, "left-text" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2022]} ,
-  {0, "include-left" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2023]} ,
-  {0, "right-text" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2024]} ,
-  {0, "include-right" ,128,3,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2025]} ,
-  {0, "inside" ,128,4,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2026]} ,
-  {0, "case-sensitive" ,128,5,0,0,1,0,0,0,&avnx[1096],&atx[60],NULL,0,&atx[2027]} ,
-  {0, "whole-word" ,128,6,0,0,1,0,0,0,&avnx[1097],&atx[60],NULL,0,NULL} ,
-  {0, "fields" ,128,1,0,0,0,0,0,0,NULL,&atx[1954],NULL,0,&atx[2029]} ,
-  {0, "remove-from-parsed" ,128,2,0,0,1,0,0,0,&avnx[1098],&atx[60],NULL,0,&atx[2030]} ,
-  {0, "remove-left" ,128,3,0,0,1,0,0,0,&avnx[1099],&atx[60],NULL,0,&atx[2031]} ,
-  {0, "remove-right" ,128,4,0,0,1,0,0,0,&avnx[1100],&atx[60],NULL,0,&atx[2032]} ,
-  {0, "existing-text" ,128,5,0,0,0,0,0,0,NULL,&atx[1941],NULL,0,NULL} ,
-  {0, "also-change-mrna" ,128,1,0,0,1,0,0,0,&avnx[1101],&atx[60],NULL,0,&atx[2034]} ,
-  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2035],NULL,0,NULL} ,
-  {464, "Constraint-choice-set" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2036],0,&atx[2020]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2037],NULL,0,NULL} ,
-  {463, "Constraint-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2038],0,&atx[2035]} ,
-  {0, "string" ,128,0,0,0,0,0,0,0,NULL,&atx[1894],NULL,0,&atx[2039]} ,
-  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2040],NULL,0,&atx[2048]} ,
-  {409, "Location-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2041],0,&atx[2058]} ,
-  {0, "strand" ,128,0,0,0,1,0,0,0,&avnx[1102],&atx[2042],NULL,0,&atx[2043]} ,
-  {406, "Strand-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1103],0,&atx[2044]} ,
-  {0, "seq-type" ,128,1,0,0,1,0,0,0,&avnx[1106],&atx[2044],NULL,0,&atx[2045]} ,
-  {407, "Seqtype-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1107],0,&atx[2046]} ,
-  {0, "partial5" ,128,2,0,0,1,0,0,0,&avnx[1110],&atx[2046],NULL,0,&atx[2047]} ,
-  {408, "Partial-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1111],0,&atx[2040]} ,
-  {0, "partial3" ,128,3,0,0,1,0,0,0,&avnx[1114],&atx[2046],NULL,0,NULL} ,
-  {0, "field" ,128,2,0,0,0,0,0,0,NULL,&atx[2049],NULL,0,&atx[2052]} ,
-  {458, "Field-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2050],0,&atx[1876]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1876],NULL,0,&atx[2051]} ,
-  {0, "string-constraint" ,128,1,0,0,0,0,0,0,NULL,&atx[1894],NULL,0,NULL} ,
-  {0, "source" ,128,3,0,0,0,0,0,0,NULL,&atx[2053],NULL,0,&atx[2059]} ,
-  {453, "Source-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2054],0,&atx[2069]} ,
-  {0, "field1" ,128,0,0,1,0,0,0,0,NULL,&atx[1878],NULL,0,&atx[2055]} ,
-  {0, "field2" ,128,1,0,1,0,0,0,0,NULL,&atx[1878],NULL,0,&atx[2056]} ,
-  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[1894],NULL,0,&atx[2057]} ,
-  {0, "type-constraint" ,128,3,0,1,0,0,0,0,NULL,&atx[2058],NULL,0,NULL} ,
-  {410, "Object-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1115],0,&atx[1888]} ,
-  {0, "cdsgeneprot-qual" ,128,4,0,0,0,0,0,0,NULL,&atx[2060],NULL,0,&atx[2066]} ,
-  {457, "CDSGeneProt-qual-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2061],0,&atx[2049]} ,
-  {0, "field1" ,128,0,0,1,0,0,0,0,NULL,&atx[2062],NULL,0,&atx[2064]} ,
-  {456, "CDSGeneProt-constraint-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2063],0,&atx[2060]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1915],NULL,0,NULL} ,
-  {0, "field2" ,128,1,0,1,0,0,0,0,NULL,&atx[2062],NULL,0,&atx[2065]} ,
-  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[1894],NULL,0,NULL} ,
-  {0, "cdsgeneprot-pseudo" ,128,5,0,0,0,0,0,0,NULL,&atx[2067],NULL,0,&atx[2071]} ,
-  {455, "CDSGeneProt-pseudo-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2068],0,&atx[2062]} ,
-  {0, "feature" ,128,0,0,0,0,0,0,0,NULL,&atx[2069],NULL,0,&atx[2070]} ,
-  {454, "CDSGeneProt-feature-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1118],0,&atx[2067]} ,
-  {0, "is-pseudo" ,128,1,0,0,1,0,0,0,&avnx[1124],&atx[60],NULL,0,NULL} ,
-  {0, "sequence" ,128,6,0,0,0,0,0,0,NULL,&atx[2072],NULL,0,&atx[2083]} ,
-  {462, "Sequence-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2073],0,&atx[2037]} ,
-  {0, "seqtype" ,128,0,0,1,0,0,0,0,NULL,&atx[2074],NULL,0,&atx[2081]} ,
-  {461, "Sequence-constraint-mol-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2075],0,&atx[2072]} ,
-  {0, "any" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2076]} ,
-  {0, "nucleotide" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2077]} ,
-  {0, "dna" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2078]} ,
-  {0, "rna" ,128,3,0,0,0,0,0,0,NULL,&atx[2079],NULL,0,&atx[2080]} ,
-  {460, "Sequence-constraint-rnamol" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1125],0,&atx[2074]} ,
+  {0, "misc" ,128,7,0,0,0,0,0,0,NULL,&atx[1986],NULL,0,NULL} ,
+  {452, "Misc-field" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1081],0,&atx[2134]} ,
+  {0, "value" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1988]} ,
+  {0, "existing-text" ,128,2,0,0,0,0,0,0,NULL,&atx[1989],NULL,0,NULL} ,
+  {472, "ExistingTextOption" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1083],0,&atx[1920]} ,
+  {0, "edit" ,128,1,0,0,0,0,0,0,NULL,&atx[1991],NULL,0,&atx[1999]} ,
+  {474, "Edit-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1992],0,&atx[2000]} ,
+  {0, "edit" ,128,0,0,0,0,0,0,0,NULL,&atx[1993],NULL,0,&atx[1998]} ,
+  {470, "Field-edit" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[1994],0,&atx[2002]} ,
+  {0, "find-txt" ,128,0,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1995]} ,
+  {0, "repl-txt" ,128,1,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[1996]} ,
+  {0, "location" ,128,2,0,0,1,0,0,0,&avnx[1094],&atx[1997],NULL,0,NULL} ,
+  {469, "Field-edit-location" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1095],0,&atx[1993]} ,
+  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1922],NULL,0,NULL} ,
+  {0, "convert" ,128,2,0,0,0,0,0,0,NULL,&atx[2000],NULL,0,&atx[2054]} ,
+  {475, "Convert-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2001],0,&atx[2055]} ,
+  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[2002],NULL,0,&atx[2051]} ,
+  {471, "Field-pair-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2003],0,&atx[1989]} ,
+  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[2004],NULL,0,&atx[2007]} ,
+  {425, "Source-qual-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2005],0,&atx[1928]} ,
+  {0, "field-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,&atx[2006]} ,
+  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,NULL} ,
+  {0, "feature-field" ,128,1,0,0,0,0,0,0,NULL,&atx[2008],NULL,0,&atx[2012]} ,
+  {419, "Feature-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2009],0,&atx[1952]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2010]} ,
+  {0, "field-from" ,128,1,0,0,0,0,0,0,NULL,&atx[1938],NULL,0,&atx[2011]} ,
+  {0, "field-to" ,128,2,0,0,0,0,0,0,NULL,&atx[1938],NULL,0,NULL} ,
+  {0, "rna-field" ,128,2,0,0,0,0,0,0,NULL,&atx[2013],NULL,0,&atx[2017]} ,
+  {423, "Rna-qual-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2014],0,&atx[1926]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1952],NULL,0,&atx[2015]} ,
+  {0, "field-from" ,128,1,0,0,0,0,0,0,NULL,&atx[1961],NULL,0,&atx[2016]} ,
+  {0, "field-to" ,128,2,0,0,0,0,0,0,NULL,&atx[1961],NULL,0,NULL} ,
+  {0, "cds-gene-prot" ,128,3,0,0,0,0,0,0,NULL,&atx[2018],NULL,0,&atx[2021]} ,
+  {433, "CDSGeneProt-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2019],0,&atx[1967]} ,
+  {0, "field-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1963],NULL,0,&atx[2020]} ,
+  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1963],NULL,0,NULL} ,
+  {0, "molinfo-field" ,128,4,0,0,0,0,0,0,NULL,&atx[2022],NULL,0,&atx[2047]} ,
+  {447, "Molinfo-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2023],0,&atx[2288]} ,
+  {0, "molecule" ,128,0,0,0,0,0,0,0,NULL,&atx[2024],NULL,0,&atx[2027]} ,
+  {441, "Molinfo-molecule-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2025],0,&atx[2028]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1967],NULL,0,&atx[2026]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1967],NULL,0,NULL} ,
+  {0, "technique" ,128,1,0,0,0,0,0,0,NULL,&atx[2028],NULL,0,&atx[2031]} ,
+  {442, "Molinfo-technique-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2029],0,&atx[2032]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1969],NULL,0,&atx[2030]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1969],NULL,0,NULL} ,
+  {0, "completedness" ,128,2,0,0,0,0,0,0,NULL,&atx[2032],NULL,0,&atx[2035]} ,
+  {443, "Molinfo-completedness-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2033],0,&atx[2036]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1971],NULL,0,&atx[2034]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1971],NULL,0,NULL} ,
+  {0, "mol-class" ,128,3,0,0,0,0,0,0,NULL,&atx[2036],NULL,0,&atx[2039]} ,
+  {444, "Molinfo-mol-class-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2037],0,&atx[2040]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1973],NULL,0,&atx[2038]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1973],NULL,0,NULL} ,
+  {0, "topology" ,128,4,0,0,0,0,0,0,NULL,&atx[2040],NULL,0,&atx[2043]} ,
+  {445, "Molinfo-topology-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2041],0,&atx[2044]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1975],NULL,0,&atx[2042]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1975],NULL,0,NULL} ,
+  {0, "strand" ,128,5,0,0,0,0,0,0,NULL,&atx[2044],NULL,0,NULL} ,
+  {446, "Molinfo-strand-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2045],0,&atx[2022]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1977],NULL,0,&atx[2046]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1977],NULL,0,NULL} ,
+  {0, "struc-comment-field" ,128,5,0,0,0,0,0,0,NULL,&atx[2048],NULL,0,NULL} ,
+  {451, "Structured-comment-field-pair" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2049],0,&atx[1986]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[1981],NULL,0,&atx[2050]} ,
+  {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[1981],NULL,0,NULL} ,
+  {0, "strip-name" ,128,1,0,0,1,0,0,0,&avnx[1098],&atx[60],NULL,0,&atx[2052]} ,
+  {0, "keep-original" ,128,2,0,0,1,0,0,0,&avnx[1099],&atx[60],NULL,0,&atx[2053]} ,
+  {0, "existing-text" ,128,3,0,0,0,0,0,0,NULL,&atx[1989],NULL,0,NULL} ,
+  {0, "copy" ,128,3,0,0,0,0,0,0,NULL,&atx[2055],NULL,0,&atx[2058]} ,
+  {476, "Copy-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2056],0,&atx[2059]} ,
+  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[2002],NULL,0,&atx[2057]} ,
+  {0, "existing-text" ,128,1,0,0,0,0,0,0,NULL,&atx[1989],NULL,0,NULL} ,
+  {0, "swap" ,128,4,0,0,0,0,0,0,NULL,&atx[2059],NULL,0,&atx[2062]} ,
+  {477, "Swap-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2060],0,&atx[2066]} ,
+  {0, "fields" ,128,0,0,0,0,0,0,0,NULL,&atx[2002],NULL,0,&atx[2061]} ,
+  {0, "field-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1922],NULL,0,NULL} ,
+  {0, "remove" ,128,5,0,0,0,0,0,0,NULL,&atx[2063],NULL,0,&atx[2065]} ,
+  {479, "Remove-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2064],0,&atx[1918]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1922],NULL,0,NULL} ,
+  {0, "parse" ,128,6,0,0,0,0,0,0,NULL,&atx[2066],NULL,0,NULL} ,
+  {478, "AECRParse-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2067],0,&atx[2063]} ,
+  {0, "portion" ,128,0,0,0,0,0,0,0,NULL,&atx[2068],NULL,0,&atx[2076]} ,
+  {468, "Text-portion" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2069],0,&atx[1997]} ,
+  {0, "left-text" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2070]} ,
+  {0, "include-left" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2071]} ,
+  {0, "right-text" ,128,2,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2072]} ,
+  {0, "include-right" ,128,3,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2073]} ,
+  {0, "inside" ,128,4,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2074]} ,
+  {0, "case-sensitive" ,128,5,0,0,1,0,0,0,&avnx[1100],&atx[60],NULL,0,&atx[2075]} ,
+  {0, "whole-word" ,128,6,0,0,1,0,0,0,&avnx[1101],&atx[60],NULL,0,NULL} ,
+  {0, "fields" ,128,1,0,0,0,0,0,0,NULL,&atx[2002],NULL,0,&atx[2077]} ,
+  {0, "remove-from-parsed" ,128,2,0,0,1,0,0,0,&avnx[1102],&atx[60],NULL,0,&atx[2078]} ,
+  {0, "remove-left" ,128,3,0,0,1,0,0,0,&avnx[1103],&atx[60],NULL,0,&atx[2079]} ,
+  {0, "remove-right" ,128,4,0,0,1,0,0,0,&avnx[1104],&atx[60],NULL,0,&atx[2080]} ,
+  {0, "existing-text" ,128,5,0,0,0,0,0,0,NULL,&atx[1989],NULL,0,NULL} ,
+  {0, "also-change-mrna" ,128,1,0,0,1,0,0,0,&avnx[1105],&atx[60],NULL,0,&atx[2082]} ,
+  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} ,
+  {467, "Constraint-choice-set" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2084],0,&atx[2068]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2085],NULL,0,NULL} ,
+  {466, "Constraint-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2086],0,&atx[2083]} ,
+  {0, "string" ,128,0,0,0,0,0,0,0,NULL,&atx[1942],NULL,0,&atx[2087]} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[2088],NULL,0,&atx[2096]} ,
+  {409, "Location-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2089],0,&atx[2106]} ,
+  {0, "strand" ,128,0,0,0,1,0,0,0,&avnx[1106],&atx[2090],NULL,0,&atx[2091]} ,
+  {406, "Strand-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1107],0,&atx[2092]} ,
+  {0, "seq-type" ,128,1,0,0,1,0,0,0,&avnx[1110],&atx[2092],NULL,0,&atx[2093]} ,
+  {407, "Seqtype-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1111],0,&atx[2094]} ,
+  {0, "partial5" ,128,2,0,0,1,0,0,0,&avnx[1114],&atx[2094],NULL,0,&atx[2095]} ,
+  {408, "Partial-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1115],0,&atx[2088]} ,
+  {0, "partial3" ,128,3,0,0,1,0,0,0,&avnx[1118],&atx[2094],NULL,0,NULL} ,
+  {0, "field" ,128,2,0,0,0,0,0,0,NULL,&atx[2097],NULL,0,&atx[2100]} ,
+  {461, "Field-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2098],0,&atx[1922]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1922],NULL,0,&atx[2099]} ,
+  {0, "string-constraint" ,128,1,0,0,0,0,0,0,NULL,&atx[1942],NULL,0,NULL} ,
+  {0, "source" ,128,3,0,0,0,0,0,0,NULL,&atx[2101],NULL,0,&atx[2107]} ,
+  {456, "Source-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2102],0,&atx[2117]} ,
+  {0, "field1" ,128,0,0,1,0,0,0,0,NULL,&atx[1924],NULL,0,&atx[2103]} ,
+  {0, "field2" ,128,1,0,1,0,0,0,0,NULL,&atx[1924],NULL,0,&atx[2104]} ,
+  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[1942],NULL,0,&atx[2105]} ,
+  {0, "type-constraint" ,128,3,0,1,0,0,0,0,NULL,&atx[2106],NULL,0,NULL} ,
+  {410, "Object-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1119],0,&atx[1936]} ,
+  {0, "cdsgeneprot-qual" ,128,4,0,0,0,0,0,0,NULL,&atx[2108],NULL,0,&atx[2114]} ,
+  {460, "CDSGeneProt-qual-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2109],0,&atx[2097]} ,
+  {0, "field1" ,128,0,0,1,0,0,0,0,NULL,&atx[2110],NULL,0,&atx[2112]} ,
+  {459, "CDSGeneProt-constraint-field" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2111],0,&atx[2108]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1963],NULL,0,NULL} ,
+  {0, "field2" ,128,1,0,1,0,0,0,0,NULL,&atx[2110],NULL,0,&atx[2113]} ,
+  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[1942],NULL,0,NULL} ,
+  {0, "cdsgeneprot-pseudo" ,128,5,0,0,0,0,0,0,NULL,&atx[2115],NULL,0,&atx[2119]} ,
+  {458, "CDSGeneProt-pseudo-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2116],0,&atx[2110]} ,
+  {0, "feature" ,128,0,0,0,0,0,0,0,NULL,&atx[2117],NULL,0,&atx[2118]} ,
+  {457, "CDSGeneProt-feature-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1122],0,&atx[2115]} ,
+  {0, "is-pseudo" ,128,1,0,0,1,0,0,0,&avnx[1128],&atx[60],NULL,0,NULL} ,
+  {0, "sequence" ,128,6,0,0,0,0,0,0,NULL,&atx[2120],NULL,0,&atx[2131]} ,
+  {465, "Sequence-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2121],0,&atx[2085]} ,
+  {0, "seqtype" ,128,0,0,1,0,0,0,0,NULL,&atx[2122],NULL,0,&atx[2129]} ,
+  {464, "Sequence-constraint-mol-type-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2123],0,&atx[2120]} ,
+  {0, "any" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2124]} ,
+  {0, "nucleotide" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2125]} ,
+  {0, "dna" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2126]} ,
+  {0, "rna" ,128,3,0,0,0,0,0,0,NULL,&atx[2127],NULL,0,&atx[2128]} ,
+  {463, "Sequence-constraint-rnamol" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1129],0,&atx[2122]} ,
   {0, "protein" ,128,4,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "id" ,128,1,0,1,0,0,0,0,NULL,&atx[1894],NULL,0,&atx[2082]} ,
-  {0, "feature" ,128,2,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,NULL} ,
-  {0, "pub" ,128,7,0,0,0,0,0,0,NULL,&atx[2084],NULL,0,NULL} ,
-  {452, "Publication-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2085],0,&atx[2053]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[2086],NULL,0,&atx[2087]} ,
-  {450, "Pub-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1136],0,&atx[2088]} ,
-  {0, "field" ,128,1,0,1,0,0,0,0,NULL,&atx[2088],NULL,0,NULL} ,
-  {451, "Pub-field-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2089],0,&atx[2084]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1931],NULL,0,&atx[2090]} ,
-  {0, "constraint" ,128,1,0,0,0,0,0,0,NULL,&atx[1894],NULL,0,NULL} ,
-  {402, "Parse-action" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[2092],0,&atx[2125]} ,
-  {0, "portion" ,128,0,0,0,0,0,0,0,NULL,&atx[2020],NULL,0,&atx[2093]} ,
-  {0, "src" ,128,1,0,0,0,0,0,0,NULL,&atx[2094],NULL,0,&atx[2109]} ,
-  {481, "Parse-src" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2095],0,&atx[2113]} ,
-  {0, "defline" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2096]} ,
-  {0, "flatfile" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2097]} ,
-  {0, "local-id" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2098]} ,
-  {0, "org" ,128,3,0,0,0,0,0,0,NULL,&atx[2099],NULL,0,&atx[2105]} ,
-  {480, "Parse-src-org" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2100],0,&atx[2094]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[2101],NULL,0,&atx[2104]} ,
-  {479, "Parse-src-org-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2102],0,&atx[2099]} ,
-  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1880],NULL,0,&atx[2103]} ,
+  {0, "id" ,128,1,0,1,0,0,0,0,NULL,&atx[1942],NULL,0,&atx[2130]} ,
+  {0, "feature" ,128,2,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,NULL} ,
+  {0, "pub" ,128,7,0,0,0,0,0,0,NULL,&atx[2132],NULL,0,NULL} ,
+  {455, "Publication-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2133],0,&atx[2101]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[2134],NULL,0,&atx[2135]} ,
+  {453, "Pub-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1140],0,&atx[2136]} ,
+  {0, "field" ,128,1,0,1,0,0,0,0,NULL,&atx[2136],NULL,0,NULL} ,
+  {454, "Pub-field-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2137],0,&atx[2132]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1979],NULL,0,&atx[2138]} ,
+  {0, "constraint" ,128,1,0,0,0,0,0,0,NULL,&atx[1942],NULL,0,NULL} ,
+  {402, "Parse-action" ,1,0,0,0,0,1,0,0,NULL,&atx[13],&atx[2140],0,&atx[2174]} ,
+  {0, "portion" ,128,0,0,0,0,0,0,0,NULL,&atx[2068],NULL,0,&atx[2141]} ,
+  {0, "src" ,128,1,0,0,0,0,0,0,NULL,&atx[2142],NULL,0,&atx[2157]} ,
+  {484, "Parse-src" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2143],0,&atx[2161]} ,
+  {0, "defline" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2144]} ,
+  {0, "flatfile" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2145]} ,
+  {0, "local-id" ,128,2,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2146]} ,
+  {0, "org" ,128,3,0,0,0,0,0,0,NULL,&atx[2147],NULL,0,&atx[2153]} ,
+  {483, "Parse-src-org" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2148],0,&atx[2142]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[2149],NULL,0,&atx[2152]} ,
+  {482, "Parse-src-org-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2150],0,&atx[2147]} ,
+  {0, "source-qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,&atx[2151]} ,
   {0, "taxname-after-binomial" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[1141],&atx[2058],NULL,0,NULL} ,
-  {0, "comment" ,128,4,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2106]} ,
-  {0, "bankit-comment" ,128,5,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2107]} ,
-  {0, "structured-comment" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2108]} ,
+  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[1145],&atx[2106],NULL,0,NULL} ,
+  {0, "comment" ,128,4,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2154]} ,
+  {0, "bankit-comment" ,128,5,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2155]} ,
+  {0, "structured-comment" ,128,6,0,0,0,0,0,0,NULL,&atx[2],NULL,0,&atx[2156]} ,
   {0, "file-id" ,128,7,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "dest" ,128,2,0,0,0,0,0,0,NULL,&atx[2110],NULL,0,&atx[2121]} ,
-  {483, "Parse-dest" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2111],0,&atx[2139]} ,
-  {0, "defline" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2112]} ,
-  {0, "org" ,128,1,0,0,0,0,0,0,NULL,&atx[2113],NULL,0,&atx[2116]} ,
-  {482, "Parse-dst-org" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2114],0,&atx[2110]} ,
-  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1878],NULL,0,&atx[2115]} ,
-  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[1142],&atx[2058],NULL,0,NULL} ,
-  {0, "featqual" ,128,2,0,0,0,0,0,0,NULL,&atx[2117],NULL,0,&atx[2120]} ,
-  {418, "Feature-field-legal" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2118],0,&atx[1960]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2119]} ,
-  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1892],NULL,0,NULL} ,
-  {0, "dbxref" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "capitalization" ,128,3,0,0,1,0,0,0,&avnx[1143],&atx[2122],NULL,0,&atx[2123]} ,
-  {478, "Cap-change" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1144],0,&atx[2101]} ,
-  {0, "remove-from-parsed" ,128,4,0,0,1,0,0,0,&avnx[1148],&atx[60],NULL,0,&atx[2124]} ,
-  {0, "existing-text" ,128,5,0,0,0,0,0,0,NULL,&atx[1941],NULL,0,NULL} ,
-  {403, "Macro-action-list" ,1,0,0,0,0,1,0,0,NULL,&atx[45],&atx[2126],0,&atx[1897]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2127],NULL,0,NULL} ,
-  {510, "Macro-action-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2128],0,NULL} ,
-  {0, "aecr" ,128,0,0,0,0,0,0,0,NULL,&atx[1870],NULL,0,&atx[2129]} ,
-  {0, "parse" ,128,1,0,0,0,0,0,0,NULL,&atx[2091],NULL,0,&atx[2130]} ,
-  {0, "add-feature" ,128,2,0,0,0,0,0,0,NULL,&atx[2131],NULL,0,&atx[2161]} ,
-  {488, "Apply-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2132],0,&atx[2162]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2133]} ,
-  {0, "partial5" ,128,1,0,0,1,0,0,0,&avnx[1149],&atx[60],NULL,0,&atx[2134]} ,
-  {0, "partial3" ,128,2,0,0,1,0,0,0,&avnx[1150],&atx[60],NULL,0,&atx[2135]} ,
-  {0, "plus-strand" ,128,3,0,0,1,0,0,0,&avnx[1151],&atx[60],NULL,0,&atx[2136]} ,
-  {0, "location" ,128,4,0,0,0,0,0,0,NULL,&atx[2137],NULL,0,&atx[2143]} ,
-  {485, "Location-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2138],0,&atx[2146]} ,
-  {0, "interval" ,128,0,0,0,0,0,0,0,NULL,&atx[2139],NULL,0,&atx[2142]} ,
-  {484, "Location-interval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2140],0,&atx[2137]} ,
-  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[2141]} ,
+  {0, "dest" ,128,2,0,0,0,0,0,0,NULL,&atx[2158],NULL,0,&atx[2170]} ,
+  {486, "Parse-dest" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2159],0,&atx[2188]} ,
+  {0, "defline" ,128,0,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2160]} ,
+  {0, "org" ,128,1,0,0,0,0,0,0,NULL,&atx[2161],NULL,0,&atx[2164]} ,
+  {485, "Parse-dst-org" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2162],0,&atx[2158]} ,
+  {0, "field" ,128,0,0,0,0,0,0,0,NULL,&atx[1924],NULL,0,&atx[2163]} ,
+  {0, "type" ,128,1,0,0,1,0,0,0,&avnx[1146],&atx[2106],NULL,0,NULL} ,
+  {0, "featqual" ,128,2,0,0,0,0,0,0,NULL,&atx[2165],NULL,0,&atx[2168]} ,
+  {418, "Feature-field-legal" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2166],0,&atx[2008]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2167]} ,
+  {0, "field" ,128,1,0,0,0,0,0,0,NULL,&atx[1940],NULL,0,NULL} ,
+  {0, "comment-descriptor" ,128,3,0,0,0,0,0,0,NULL,&atx[388],NULL,0,&atx[2169]} ,
+  {0, "dbxref" ,128,4,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "capitalization" ,128,3,0,0,1,0,0,0,&avnx[1147],&atx[2171],NULL,0,&atx[2172]} ,
+  {481, "Cap-change" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1148],0,&atx[2149]} ,
+  {0, "remove-from-parsed" ,128,4,0,0,1,0,0,0,&avnx[1152],&atx[60],NULL,0,&atx[2173]} ,
+  {0, "existing-text" ,128,5,0,0,0,0,0,0,NULL,&atx[1989],NULL,0,NULL} ,
+  {403, "Macro-action-list" ,1,0,0,0,0,1,0,0,NULL,&atx[45],&atx[2175],0,&atx[1945]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2176],NULL,0,NULL} ,
+  {517, "Macro-action-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2177],0,NULL} ,
+  {0, "aecr" ,128,0,0,0,0,0,0,0,NULL,&atx[1916],NULL,0,&atx[2178]} ,
+  {0, "parse" ,128,1,0,0,0,0,0,0,NULL,&atx[2139],NULL,0,&atx[2179]} ,
+  {0, "add-feature" ,128,2,0,0,0,0,0,0,NULL,&atx[2180],NULL,0,&atx[2222]} ,
+  {491, "Apply-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2181],0,&atx[2223]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2182]} ,
+  {0, "partial5" ,128,1,0,0,1,0,0,0,&avnx[1153],&atx[60],NULL,0,&atx[2183]} ,
+  {0, "partial3" ,128,2,0,0,1,0,0,0,&avnx[1154],&atx[60],NULL,0,&atx[2184]} ,
+  {0, "plus-strand" ,128,3,0,0,1,0,0,0,&avnx[1155],&atx[60],NULL,0,&atx[2185]} ,
+  {0, "location" ,128,4,0,0,0,0,0,0,NULL,&atx[2186],NULL,0,&atx[2192]} ,
+  {488, "Location-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2187],0,&atx[2195]} ,
+  {0, "interval" ,128,0,0,0,0,0,0,0,NULL,&atx[2188],NULL,0,&atx[2191]} ,
+  {487, "Location-interval" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2189],0,&atx[2186]} ,
+  {0, "from" ,128,0,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[2190]} ,
   {0, "to" ,128,1,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
   {0, "whole-sequence" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "seq-list" ,128,5,0,0,0,0,0,0,NULL,&atx[2144],NULL,0,&atx[2149]} ,
-  {487, "Sequence-list-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2145],0,&atx[2131]} ,
-  {0, "list" ,128,0,0,0,0,0,0,0,NULL,&atx[2146],NULL,0,&atx[2148]} ,
-  {486, "Sequence-list" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2147],0,&atx[2144]} ,
+  {0, "seq-list" ,128,5,0,0,0,0,0,0,NULL,&atx[2193],NULL,0,&atx[2198]} ,
+  {490, "Sequence-list-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2194],0,&atx[2180]} ,
+  {0, "list" ,128,0,0,0,0,0,0,0,NULL,&atx[2195],NULL,0,&atx[2197]} ,
+  {489, "Sequence-list" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2196],0,&atx[2193]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
   {0, "all" ,128,1,0,0,0,0,0,0,NULL,&atx[388],NULL,0,NULL} ,
-  {0, "add-redundant" ,128,6,0,0,1,0,0,0,&avnx[1152],&atx[60],NULL,0,&atx[2150]} ,
-  {0, "add-mrna" ,128,7,0,0,1,0,0,0,&avnx[1153],&atx[60],NULL,0,&atx[2151]} ,
-  {0, "apply-to-parts" ,128,8,0,0,1,0,0,0,&avnx[1154],&atx[60],NULL,0,&atx[2152]} ,
-  {0, "only-seg-num" ,128,9,0,0,1,0,0,0,&avnx[1155],&atx[6],NULL,0,&atx[2153]} ,
-  {0, "fields" ,128,10,0,1,0,0,0,0,NULL,&atx[2154],NULL,0,NULL} ,
-  {415, "Feat-qual-legal-set" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2155],0,&atx[1890]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2156],NULL,0,NULL} ,
-  {414, "Feat-qual-legal-val-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2157],0,&atx[2154]} ,
-  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[2158],NULL,0,NULL} ,
-  {413, "Feat-qual-legal-val" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2159],0,&atx[2156]} ,
-  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1892],NULL,0,&atx[2160]} ,
+  {0, "add-redundant" ,128,6,0,0,1,0,0,0,&avnx[1156],&atx[60],NULL,0,&atx[2199]} ,
+  {0, "add-mrna" ,128,7,0,0,1,0,0,0,&avnx[1157],&atx[60],NULL,0,&atx[2200]} ,
+  {0, "apply-to-parts" ,128,8,0,0,1,0,0,0,&avnx[1158],&atx[60],NULL,0,&atx[2201]} ,
+  {0, "only-seg-num" ,128,9,0,0,1,0,0,0,&avnx[1159],&atx[6],NULL,0,&atx[2202]} ,
+  {0, "fields" ,128,10,0,1,0,0,0,0,NULL,&atx[2203],NULL,0,&atx[2210]} ,
+  {415, "Feat-qual-legal-set" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2204],0,&atx[1938]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2205],NULL,0,NULL} ,
+  {414, "Feat-qual-legal-val-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2206],0,&atx[2203]} ,
+  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[2207],NULL,0,NULL} ,
+  {413, "Feat-qual-legal-val" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2208],0,&atx[2205]} ,
+  {0, "qual" ,128,0,0,0,0,0,0,0,NULL,&atx[1940],NULL,0,&atx[2209]} ,
   {0, "val" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "remove-feature" ,128,3,0,0,0,0,0,0,NULL,&atx[2162],NULL,0,&atx[2165]} ,
-  {489, "Remove-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2163],0,&atx[2172]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2164]} ,
-  {0, "constraint" ,128,1,0,1,0,0,0,0,NULL,&atx[2035],NULL,0,NULL} ,
-  {0, "convert-feature" ,128,4,0,0,0,0,0,0,NULL,&atx[2166],NULL,0,&atx[2188]} ,
-  {496, "Convert-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2167],0,&atx[2196]} ,
-  {0, "type-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2168]} ,
-  {0, "type-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2169]} ,
-  {0, "src-options" ,128,2,0,1,0,0,0,0,NULL,&atx[2170],NULL,0,&atx[2176]} ,
-  {491, "Convert-feature-src-options" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2171],0,&atx[2179]} ,
-  {0, "cds" ,128,0,0,0,0,0,0,0,NULL,&atx[2172],NULL,0,NULL} ,
-  {490, "Convert-from-CDS-options" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2173],0,&atx[2170]} ,
-  {0, "remove-mRNA" ,128,0,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2174]} ,
-  {0, "remove-gene" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2175]} ,
+  {0, "src-fields" ,128,11,0,1,0,0,0,0,NULL,&atx[2211],NULL,0,NULL} ,
+  {431, "Source-qual-val-set" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2212],0,&atx[1963]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[2213],NULL,0,NULL} ,
+  {430, "Source-qual-val-choice" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2214],0,&atx[2211]} ,
+  {0, "textqual" ,128,0,0,0,0,0,0,0,NULL,&atx[2215],NULL,0,&atx[2218]} ,
+  {429, "Source-qual-text-val" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2216],0,&atx[2213]} ,
+  {0, "srcqual" ,128,0,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,&atx[2217]} ,
+  {0, "val" ,128,1,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
+  {0, "location" ,128,1,0,0,0,0,0,0,NULL,&atx[1928],NULL,0,&atx[2219]} ,
+  {0, "origin" ,128,2,0,0,0,0,0,0,NULL,&atx[1930],NULL,0,&atx[2220]} ,
+  {0, "gcode" ,128,3,0,0,0,0,0,0,NULL,&atx[6],NULL,0,&atx[2221]} ,
+  {0, "mgcode" ,128,4,0,0,0,0,0,0,NULL,&atx[6],NULL,0,NULL} ,
+  {0, "remove-feature" ,128,3,0,0,0,0,0,0,NULL,&atx[2223],NULL,0,&atx[2226]} ,
+  {492, "Remove-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2224],0,&atx[2233]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2225]} ,
+  {0, "constraint" ,128,1,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} ,
+  {0, "convert-feature" ,128,4,0,0,0,0,0,0,NULL,&atx[2227],NULL,0,&atx[2249]} ,
+  {499, "Convert-feature-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2228],0,&atx[2257]} ,
+  {0, "type-from" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2229]} ,
+  {0, "type-to" ,128,1,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2230]} ,
+  {0, "src-options" ,128,2,0,1,0,0,0,0,NULL,&atx[2231],NULL,0,&atx[2237]} ,
+  {494, "Convert-feature-src-options" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2232],0,&atx[2240]} ,
+  {0, "cds" ,128,0,0,0,0,0,0,0,NULL,&atx[2233],NULL,0,NULL} ,
+  {493, "Convert-from-CDS-options" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2234],0,&atx[2231]} ,
+  {0, "remove-mRNA" ,128,0,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2235]} ,
+  {0, "remove-gene" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2236]} ,
   {0, "remove-transcript-id" ,128,2,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
-  {0, "dst-options" ,128,3,0,1,0,0,0,0,NULL,&atx[2177],NULL,0,&atx[2186]} ,
-  {495, "Convert-feature-dst-options" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2178],0,&atx[2166]} ,
-  {0, "bond" ,128,0,0,0,0,0,0,0,NULL,&atx[2179],NULL,0,&atx[2180]} ,
-  {492, "Bond-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1156],0,&atx[2181]} ,
-  {0, "site" ,128,1,0,0,0,0,0,0,NULL,&atx[2181],NULL,0,&atx[2182]} ,
-  {493, "Site-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1161],0,&atx[2183]} ,
-  {0, "region" ,128,2,0,0,0,0,0,0,NULL,&atx[2183],NULL,0,&atx[2185]} ,
-  {494, "Region-type" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2184],0,&atx[2177]} ,
+  {0, "dst-options" ,128,3,0,1,0,0,0,0,NULL,&atx[2238],NULL,0,&atx[2247]} ,
+  {498, "Convert-feature-dst-options" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2239],0,&atx[2227]} ,
+  {0, "bond" ,128,0,0,0,0,0,0,0,NULL,&atx[2240],NULL,0,&atx[2241]} ,
+  {495, "Bond-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1160],0,&atx[2242]} ,
+  {0, "site" ,128,1,0,0,0,0,0,0,NULL,&atx[2242],NULL,0,&atx[2243]} ,
+  {496, "Site-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1165],0,&atx[2244]} ,
+  {0, "region" ,128,2,0,0,0,0,0,0,NULL,&atx[2244],NULL,0,&atx[2246]} ,
+  {497, "Region-type" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2245],0,&atx[2238]} ,
   {0, "create-nucleotide" ,128,0,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
   {0, "ncrna-class" ,128,3,0,0,0,0,0,0,NULL,&atx[2],NULL,0,NULL} ,
-  {0, "leave-original" ,128,4,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2187]} ,
-  {0, "src-feat-constraint" ,128,5,0,1,0,0,0,0,NULL,&atx[2035],NULL,0,NULL} ,
-  {0, "edit-location" ,128,5,0,0,0,0,0,0,NULL,&atx[2189],NULL,0,NULL} ,
-  {508, "Edit-feature-location-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2190],0,&atx[2218]} ,
-  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1888],NULL,0,&atx[2191]} ,
-  {0, "action" ,128,1,0,0,0,0,0,0,NULL,&atx[2192],NULL,0,&atx[2215]} ,
-  {507, "Location-edit-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2193],0,&atx[2189]} ,
-  {0, "strand" ,128,0,0,0,0,0,0,0,NULL,&atx[2194],NULL,0,&atx[2199]} ,
-  {499, "Edit-location-strand" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2195],0,&atx[2202]} ,
-  {0, "strand-from" ,128,0,0,0,0,0,0,0,NULL,&atx[2196],NULL,0,&atx[2197]} ,
-  {497, "Feature-location-strand-from" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1188],0,&atx[2198]} ,
-  {0, "strand-to" ,128,1,0,0,0,0,0,0,NULL,&atx[2198],NULL,0,NULL} ,
-  {498, "Feature-location-strand-to" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1193],0,&atx[2194]} ,
-  {0, "set-5-partial" ,128,1,0,0,0,0,0,0,NULL,&atx[2200],NULL,0,&atx[2204]} ,
-  {501, "Partial-5-set-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2201],0,&atx[2205]} ,
-  {0, "constraint" ,128,0,0,0,0,0,0,0,NULL,&atx[2202],NULL,0,&atx[2203]} ,
-  {500, "Partial-5-set-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1198],0,&atx[2200]} ,
+  {0, "leave-original" ,128,4,0,0,0,0,0,0,NULL,&atx[60],NULL,0,&atx[2248]} ,
+  {0, "src-feat-constraint" ,128,5,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} ,
+  {0, "edit-location" ,128,5,0,0,0,0,0,0,NULL,&atx[2250],NULL,0,&atx[2277]} ,
+  {511, "Edit-feature-location-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2251],0,&atx[2290]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[1936],NULL,0,&atx[2252]} ,
+  {0, "action" ,128,1,0,0,0,0,0,0,NULL,&atx[2253],NULL,0,&atx[2276]} ,
+  {510, "Location-edit-type" ,1,0,0,0,0,0,0,0,NULL,&atx[14],&atx[2254],0,&atx[2250]} ,
+  {0, "strand" ,128,0,0,0,0,0,0,0,NULL,&atx[2255],NULL,0,&atx[2260]} ,
+  {502, "Edit-location-strand" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2256],0,&atx[2263]} ,
+  {0, "strand-from" ,128,0,0,0,0,0,0,0,NULL,&atx[2257],NULL,0,&atx[2258]} ,
+  {500, "Feature-location-strand-from" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1192],0,&atx[2259]} ,
+  {0, "strand-to" ,128,1,0,0,0,0,0,0,NULL,&atx[2259],NULL,0,NULL} ,
+  {501, "Feature-location-strand-to" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1197],0,&atx[2255]} ,
+  {0, "set-5-partial" ,128,1,0,0,0,0,0,0,NULL,&atx[2261],NULL,0,&atx[2265]} ,
+  {504, "Partial-5-set-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2262],0,&atx[2266]} ,
+  {0, "constraint" ,128,0,0,0,0,0,0,0,NULL,&atx[2263],NULL,0,&atx[2264]} ,
+  {503, "Partial-5-set-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1202],0,&atx[2261]} ,
   {0, "extend" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
-  {0, "clear-5-partial" ,128,2,0,0,0,0,0,0,NULL,&atx[2205],NULL,0,&atx[2206]} ,
-  {502, "Partial-5-clear-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1202],0,&atx[2209]} ,
-  {0, "set-3-partial" ,128,3,0,0,0,0,0,0,NULL,&atx[2207],NULL,0,&atx[2211]} ,
-  {504, "Partial-3-set-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2208],0,&atx[2212]} ,
-  {0, "constraint" ,128,0,0,0,0,0,0,0,NULL,&atx[2209],NULL,0,&atx[2210]} ,
-  {503, "Partial-3-set-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1205],0,&atx[2207]} ,
+  {0, "clear-5-partial" ,128,2,0,0,0,0,0,0,NULL,&atx[2266],NULL,0,&atx[2267]} ,
+  {505, "Partial-5-clear-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1206],0,&atx[2270]} ,
+  {0, "set-3-partial" ,128,3,0,0,0,0,0,0,NULL,&atx[2268],NULL,0,&atx[2272]} ,
+  {507, "Partial-3-set-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2269],0,&atx[2273]} ,
+  {0, "constraint" ,128,0,0,0,0,0,0,0,NULL,&atx[2270],NULL,0,&atx[2271]} ,
+  {506, "Partial-3-set-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1209],0,&atx[2268]} ,
   {0, "extend" ,128,1,0,0,0,0,0,0,NULL,&atx[60],NULL,0,NULL} ,
-  {0, "clear-3-partial" ,128,4,0,0,0,0,0,0,NULL,&atx[2212],NULL,0,&atx[2213]} ,
-  {505, "Partial-3-clear-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1208],0,&atx[2214]} ,
-  {0, "convert" ,128,5,0,0,0,0,0,0,NULL,&atx[2214],NULL,0,NULL} ,
-  {506, "Convert-location-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1211],0,&atx[2192]} ,
-  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2035],NULL,0,NULL} ,
-  {445, "Molinfo-field-list" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2217],0,&atx[1931]} ,
-  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1917],NULL,0,NULL} ,
-  {509, "Molinfo-block" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2219],0,&atx[2127]} ,
-  {0, "to-list" ,128,0,0,0,0,0,0,0,NULL,&atx[2216],NULL,0,&atx[2220]} ,
-  {0, "from-list" ,128,1,0,1,0,0,0,0,NULL,&atx[2216],NULL,0,&atx[2221]} ,
-  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2035],NULL,0,NULL} };
+  {0, "clear-3-partial" ,128,4,0,0,0,0,0,0,NULL,&atx[2273],NULL,0,&atx[2274]} ,
+  {508, "Partial-3-clear-constraint" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1212],0,&atx[2275]} ,
+  {0, "convert" ,128,5,0,0,0,0,0,0,NULL,&atx[2275],NULL,0,NULL} ,
+  {509, "Convert-location-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1215],0,&atx[2253]} ,
+  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} ,
+  {0, "remove-descriptor" ,128,6,0,0,0,0,0,0,NULL,&atx[2278],NULL,0,&atx[2282]} ,
+  {514, "Remove-descriptor-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2279],0,&atx[2287]} ,
+  {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[2280],NULL,0,&atx[2281]} ,
+  {513, "Descriptor-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1218],0,&atx[2278]} ,
+  {0, "constraint" ,128,1,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} ,
+  {0, "autodef" ,128,7,0,0,0,0,0,0,NULL,&atx[2283],NULL,0,NULL} ,
+  {516, "Autodef-action" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2284],0,&atx[2176]} ,
+  {0, "modifiers" ,128,0,0,1,0,0,0,0,NULL,&atx[45],&atx[2285],0,&atx[2286]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1926],NULL,0,NULL} ,
+  {0, "clause-list-type" ,128,1,0,0,0,0,0,0,NULL,&atx[2287],NULL,0,NULL} ,
+  {515, "Autodef-list-type" ,1,0,0,0,0,0,0,0,NULL,&atx[42],&avnx[1229],0,&atx[2283]} ,
+  {448, "Molinfo-field-list" ,1,0,0,0,0,0,0,0,NULL,&atx[45],&atx[2289],0,&atx[1979]} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[1965],NULL,0,NULL} ,
+  {512, "Molinfo-block" ,1,0,0,0,0,0,0,0,NULL,&atx[13],&atx[2291],0,&atx[2280]} ,
+  {0, "to-list" ,128,0,0,0,0,0,0,0,NULL,&atx[2288],NULL,0,&atx[2292]} ,
+  {0, "from-list" ,128,1,0,1,0,0,0,0,NULL,&atx[2288],NULL,0,&atx[2293]} ,
+  {0, "constraint" ,128,2,0,1,0,0,0,0,NULL,&atx[2083],NULL,0,NULL} };
 
 static AsnModule ampx[39] = {
   { "NCBI-General" , "all.h60",&atx[0],NULL,&ampx[1],0,0} ,
@@ -3486,10 +3576,10 @@ static AsnModule ampx[39] = {
   { "NCBI-Mime" , NULL,&atx[1520],NULL,&ampx[33],0,0} ,
   { "NCBI-ObjPrt" , NULL,&atx[1596],NULL,&ampx[34],0,0} ,
   { "NCBI-GBSeq" , NULL,&atx[1632],NULL,&ampx[35],0,0} ,
-  { "INSD-INSDSeq" , NULL,&atx[1709],NULL,&ampx[36],0,0} ,
-  { "NCBI-TSeq" , NULL,&atx[1786],NULL,&ampx[37],0,0} ,
-  { "NCBI-ScoreMat" , NULL,&atx[1799],NULL,&ampx[38],0,0} ,
-  { "NCBI-Macro" , NULL,&atx[1870],NULL,NULL,0,0} };
+  { "INSD-INSDSeq" , NULL,&atx[1732],NULL,&ampx[36],0,0} ,
+  { "NCBI-TSeq" , NULL,&atx[1832],NULL,&ampx[37],0,0} ,
+  { "NCBI-ScoreMat" , NULL,&atx[1845],NULL,&ampx[38],0,0} ,
+  { "NCBI-Macro" , NULL,&atx[1916],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -5486,93 +5576,122 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define GBSEQ &at[1632]
-#define GBSEQ_locus &at[1633]
-#define GBSEQ_length &at[1634]
-#define GBSEQ_strandedness &at[1635]
-#define GBSEQ_moltype &at[1636]
-#define GBSEQ_topology &at[1637]
-#define GBSEQ_division &at[1638]
-#define GBSEQ_update_date &at[1639]
-#define GBSEQ_create_date &at[1640]
-#define GBSEQ_update_release &at[1641]
-#define GBSEQ_create_release &at[1642]
-#define GBSEQ_definition &at[1643]
-#define GBSEQ_primary_accession &at[1644]
-#define GBSEQ_entry_version &at[1645]
-#define GBSEQ_accession_version &at[1646]
-#define GBSEQ_other_seqids &at[1647]
-#define GBSEQ_other_seqids_E &at[1648]
-#define GBSEQ_secondary_accessions &at[1650]
-#define GBSEQ_secondary_accessions_E &at[1651]
-#define GBSEQ_project &at[1653]
-#define GBSEQ_keywords &at[1654]
-#define GBSEQ_keywords_E &at[1655]
-#define GBSEQ_segment &at[1657]
-#define GBSEQ_source &at[1658]
-#define GBSEQ_organism &at[1659]
-#define GBSEQ_taxonomy &at[1660]
-#define GBSEQ_references &at[1661]
-#define GBSEQ_references_E &at[1662]
-#define GBSEQ_comment &at[1679]
-#define GBSEQ_primary &at[1680]
-#define GBSEQ_source_db &at[1681]
-#define GBSEQ_database_reference &at[1682]
-#define GBSEQ_feature_table &at[1683]
-#define GBSEQ_feature_table_E &at[1684]
-#define GBSEQ_sequence &at[1705]
-#define GBSEQ_contig &at[1706]
+#define GBSET &at[1632]
+#define GBSET_E &at[1633]
 
-#define GBSEQID &at[1649]
+#define GBSEQ &at[1634]
+#define GBSEQ_locus &at[1635]
+#define GBSEQ_length &at[1636]
+#define GBSEQ_strandedness &at[1637]
+#define GBSEQ_moltype &at[1638]
+#define GBSEQ_topology &at[1639]
+#define GBSEQ_division &at[1640]
+#define GBSEQ_update_date &at[1641]
+#define GBSEQ_create_date &at[1642]
+#define GBSEQ_update_release &at[1643]
+#define GBSEQ_create_release &at[1644]
+#define GBSEQ_definition &at[1645]
+#define GBSEQ_primary_accession &at[1646]
+#define GBSEQ_entry_version &at[1647]
+#define GBSEQ_accession_version &at[1648]
+#define GBSEQ_other_seqids &at[1649]
+#define GBSEQ_other_seqids_E &at[1650]
+#define GBSEQ_secondary_accessions &at[1652]
+#define GBSEQ_secondary_accessions_E &at[1653]
+#define GBSEQ_project &at[1655]
+#define GBSEQ_keywords &at[1656]
+#define GBSEQ_keywords_E &at[1657]
+#define GBSEQ_segment &at[1659]
+#define GBSEQ_source &at[1660]
+#define GBSEQ_organism &at[1661]
+#define GBSEQ_taxonomy &at[1662]
+#define GBSEQ_references &at[1663]
+#define GBSEQ_references_E &at[1664]
+#define GBSEQ_comment &at[1681]
+#define GBSEQ_tagset &at[1682]
+#define GBSEQ_primary &at[1694]
+#define GBSEQ_source_db &at[1695]
+#define GBSEQ_database_reference &at[1696]
+#define GBSEQ_feature_table &at[1697]
+#define GBSEQ_feature_table_E &at[1698]
+#define GBSEQ_sequence &at[1719]
+#define GBSEQ_contig &at[1720]
 
-#define GBSECONDARY_ACCN &at[1652]
+#define GBSEQID &at[1651]
 
-#define GBKEYWORD &at[1656]
+#define GBSECONDARY_ACCN &at[1654]
 
-#define GBREFERENCE &at[1663]
-#define GBREFERENCE_reference &at[1664]
-#define GBREFERENCE_position &at[1665]
-#define GBREFERENCE_authors &at[1666]
-#define GBREFERENCE_authors_E &at[1667]
-#define GBREFERENCE_consortium &at[1669]
-#define GBREFERENCE_title &at[1670]
-#define GBREFERENCE_journal &at[1671]
-#define GBREFERENCE_xref &at[1672]
-#define GBREFERENCE_xref_E &at[1673]
-#define GBREFERENCE_pubmed &at[1677]
-#define GBREFERENCE_remark &at[1678]
+#define GBKEYWORD &at[1658]
 
-#define GBFEATURE &at[1685]
-#define GBFEATURE_key &at[1686]
-#define GBFEATURE_location &at[1687]
-#define GBFEATURE_intervals &at[1688]
-#define GBFEATURE_intervals_E &at[1689]
-#define GBFEATURE_operator &at[1697]
-#define GBFEATURE_partial5 &at[1698]
-#define GBFEATURE_partial3 &at[1699]
-#define GBFEATURE_quals &at[1700]
-#define GBFEATURE_quals_E &at[1701]
+#define GBREFERENCE &at[1665]
+#define GBREFERENCE_reference &at[1666]
+#define GBREFERENCE_position &at[1667]
+#define GBREFERENCE_authors &at[1668]
+#define GBREFERENCE_authors_E &at[1669]
+#define GBREFERENCE_consortium &at[1671]
+#define GBREFERENCE_title &at[1672]
+#define GBREFERENCE_journal &at[1673]
+#define GBREFERENCE_xref &at[1674]
+#define GBREFERENCE_xref_E &at[1675]
+#define GBREFERENCE_pubmed &at[1679]
+#define GBREFERENCE_remark &at[1680]
 
-#define GBAUTHOR &at[1668]
+#define GBTAGSET &at[1683]
+#define GBTAGSET_authority &at[1684]
+#define GBTAGSET_version &at[1685]
+#define GBTAGSET_url &at[1686]
+#define GBTAGSET_tags &at[1687]
 
-#define GBXREF &at[1674]
-#define GBXREF_dbname &at[1675]
-#define GBXREF_id &at[1676]
+#define GBFEATURE &at[1699]
+#define GBFEATURE_key &at[1700]
+#define GBFEATURE_location &at[1701]
+#define GBFEATURE_intervals &at[1702]
+#define GBFEATURE_intervals_E &at[1703]
+#define GBFEATURE_operator &at[1711]
+#define GBFEATURE_partial5 &at[1712]
+#define GBFEATURE_partial3 &at[1713]
+#define GBFEATURE_quals &at[1714]
+#define GBFEATURE_quals_E &at[1715]
 
-#define GBINTERVAL &at[1690]
-#define GBINTERVAL_from &at[1691]
-#define GBINTERVAL_to &at[1692]
-#define GBINTERVAL_point &at[1693]
-#define GBINTERVAL_iscomp &at[1694]
-#define GBINTERVAL_interbp &at[1695]
-#define GBINTERVAL_accession &at[1696]
+#define GBAUTHOR &at[1670]
 
-#define GBQUALIFIER &at[1702]
-#define GBQUALIFIER_name &at[1703]
-#define GBQUALIFIER_value &at[1704]
+#define GBXREF &at[1676]
+#define GBXREF_dbname &at[1677]
+#define GBXREF_id &at[1678]
 
-#define GBSET &at[1707]
-#define GBSET_E &at[1708]
+#define GBTAGS &at[1688]
+#define GBTAGS_E &at[1689]
+
+#define GBTAG &at[1690]
+#define GBTAG_name &at[1691]
+#define GBTAG_value &at[1692]
+#define GBTAG_unit &at[1693]
+
+#define GBINTERVAL &at[1704]
+#define GBINTERVAL_from &at[1705]
+#define GBINTERVAL_to &at[1706]
+#define GBINTERVAL_point &at[1707]
+#define GBINTERVAL_iscomp &at[1708]
+#define GBINTERVAL_interbp &at[1709]
+#define GBINTERVAL_accession &at[1710]
+
+#define GBQUALIFIER &at[1716]
+#define GBQUALIFIER_name &at[1717]
+#define GBQUALIFIER_value &at[1718]
+
+#define GBTAGSETRULES &at[1721]
+#define GBTAGSETRULES_authority &at[1722]
+#define GBTAGSETRULES_version &at[1723]
+#define GBTAGSETRULES_mandatorytags &at[1724]
+#define GBTAGSETRULES_optionaltags &at[1727]
+#define GBTAGSETRULES_uniquetags &at[1728]
+#define GBTAGSETRULES_extensible &at[1729]
+
+#define GBTAGNAMES &at[1725]
+#define GBTAGNAMES_E &at[1726]
+
+#define GBTAGSETRULESET &at[1730]
+#define GBTAGSETRULESET_E &at[1731]
 
 
 /**************************************************
@@ -5581,93 +5700,122 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define INSDSEQ &at[1709]
-#define INSDSEQ_locus &at[1710]
-#define INSDSEQ_length &at[1711]
-#define INSDSEQ_strandedness &at[1712]
-#define INSDSEQ_moltype &at[1713]
-#define INSDSEQ_topology &at[1714]
-#define INSDSEQ_division &at[1715]
-#define INSDSEQ_update_date &at[1716]
-#define INSDSEQ_create_date &at[1717]
-#define INSDSEQ_update_release &at[1718]
-#define INSDSEQ_create_release &at[1719]
-#define INSDSEQ_definition &at[1720]
-#define INSDSEQ_primary_accession &at[1721]
-#define INSDSEQ_entry_version &at[1722]
-#define INSDSEQ_accession_version &at[1723]
-#define INSDSEQ_other_seqids &at[1724]
-#define INSDSEQ_other_seqids_E &at[1725]
-#define INSDSEQ_secondary_accessions &at[1727]
-#define INSDSEQ_secondary_accessions_E &at[1728]
-#define INSDSEQ_project &at[1730]
-#define INSDSEQ_keywords &at[1731]
-#define INSDSEQ_keywords_E &at[1732]
-#define INSDSEQ_segment &at[1734]
-#define INSDSEQ_source &at[1735]
-#define INSDSEQ_organism &at[1736]
-#define INSDSEQ_taxonomy &at[1737]
-#define INSDSEQ_references &at[1738]
-#define INSDSEQ_references_E &at[1739]
-#define INSDSEQ_comment &at[1756]
-#define INSDSEQ_primary &at[1757]
-#define INSDSEQ_source_db &at[1758]
-#define INSDSEQ_database_reference &at[1759]
-#define INSDSEQ_feature_table &at[1760]
-#define INSDSEQ_feature_table_E &at[1761]
-#define INSDSEQ_sequence &at[1782]
-#define INSDSEQ_contig &at[1783]
+#define INSDSET &at[1732]
+#define INSDSET_E &at[1733]
 
-#define INSDSEQID &at[1726]
+#define INSDSEQ &at[1734]
+#define INSDSEQ_locus &at[1735]
+#define INSDSEQ_length &at[1736]
+#define INSDSEQ_strandedness &at[1737]
+#define INSDSEQ_moltype &at[1738]
+#define INSDSEQ_topology &at[1739]
+#define INSDSEQ_division &at[1740]
+#define INSDSEQ_update_date &at[1741]
+#define INSDSEQ_create_date &at[1742]
+#define INSDSEQ_update_release &at[1743]
+#define INSDSEQ_create_release &at[1744]
+#define INSDSEQ_definition &at[1745]
+#define INSDSEQ_primary_accession &at[1746]
+#define INSDSEQ_entry_version &at[1747]
+#define INSDSEQ_accession_version &at[1748]
+#define INSDSEQ_other_seqids &at[1749]
+#define INSDSEQ_other_seqids_E &at[1750]
+#define INSDSEQ_secondary_accessions &at[1752]
+#define INSDSEQ_secondary_accessions_E &at[1753]
+#define INSDSEQ_project &at[1755]
+#define INSDSEQ_keywords &at[1756]
+#define INSDSEQ_keywords_E &at[1757]
+#define INSDSEQ_segment &at[1759]
+#define INSDSEQ_source &at[1760]
+#define INSDSEQ_organism &at[1761]
+#define INSDSEQ_taxonomy &at[1762]
+#define INSDSEQ_references &at[1763]
+#define INSDSEQ_references_E &at[1764]
+#define INSDSEQ_comment &at[1781]
+#define INSDSEQ_tagset &at[1782]
+#define INSDSEQ_primary &at[1794]
+#define INSDSEQ_source_db &at[1795]
+#define INSDSEQ_database_reference &at[1796]
+#define INSDSEQ_feature_table &at[1797]
+#define INSDSEQ_feature_table_E &at[1798]
+#define INSDSEQ_sequence &at[1819]
+#define INSDSEQ_contig &at[1820]
 
-#define INSDSECONDARY_ACCN &at[1729]
+#define INSDSEQID &at[1751]
 
-#define INSDKEYWORD &at[1733]
+#define INSDSECONDARY_ACCN &at[1754]
 
-#define INSDREFERENCE &at[1740]
-#define INSDREFERENCE_reference &at[1741]
-#define INSDREFERENCE_position &at[1742]
-#define INSDREFERENCE_authors &at[1743]
-#define INSDREFERENCE_authors_E &at[1744]
-#define INSDREFERENCE_consortium &at[1746]
-#define INSDREFERENCE_title &at[1747]
-#define INSDREFERENCE_journal &at[1748]
-#define INSDREFERENCE_xref &at[1749]
-#define INSDREFERENCE_xref_E &at[1750]
-#define INSDREFERENCE_pubmed &at[1754]
-#define INSDREFERENCE_remark &at[1755]
+#define INSDKEYWORD &at[1758]
 
-#define INSDFEATURE &at[1762]
-#define INSDFEATURE_key &at[1763]
-#define INSDFEATURE_location &at[1764]
-#define INSDFEATURE_intervals &at[1765]
-#define INSDFEATURE_intervals_E &at[1766]
-#define INSDFEATURE_operator &at[1774]
-#define INSDFEATURE_partial5 &at[1775]
-#define INSDFEATURE_partial3 &at[1776]
-#define INSDFEATURE_quals &at[1777]
-#define INSDFEATURE_quals_E &at[1778]
+#define INSDREFERENCE &at[1765]
+#define INSDREFERENCE_reference &at[1766]
+#define INSDREFERENCE_position &at[1767]
+#define INSDREFERENCE_authors &at[1768]
+#define INSDREFERENCE_authors_E &at[1769]
+#define INSDREFERENCE_consortium &at[1771]
+#define INSDREFERENCE_title &at[1772]
+#define INSDREFERENCE_journal &at[1773]
+#define INSDREFERENCE_xref &at[1774]
+#define INSDREFERENCE_xref_E &at[1775]
+#define INSDREFERENCE_pubmed &at[1779]
+#define INSDREFERENCE_remark &at[1780]
 
-#define INSDAUTHOR &at[1745]
+#define INSDTAGSET &at[1783]
+#define INSDTAGSET_authority &at[1784]
+#define INSDTAGSET_version &at[1785]
+#define INSDTAGSET_url &at[1786]
+#define INSDTAGSET_tags &at[1787]
 
-#define INSDXREF &at[1751]
-#define INSDXREF_dbname &at[1752]
-#define INSDXREF_id &at[1753]
+#define INSDFEATURE &at[1799]
+#define INSDFEATURE_key &at[1800]
+#define INSDFEATURE_location &at[1801]
+#define INSDFEATURE_intervals &at[1802]
+#define INSDFEATURE_intervals_E &at[1803]
+#define INSDFEATURE_operator &at[1811]
+#define INSDFEATURE_partial5 &at[1812]
+#define INSDFEATURE_partial3 &at[1813]
+#define INSDFEATURE_quals &at[1814]
+#define INSDFEATURE_quals_E &at[1815]
 
-#define INSDINTERVAL &at[1767]
-#define INSDINTERVAL_from &at[1768]
-#define INSDINTERVAL_to &at[1769]
-#define INSDINTERVAL_point &at[1770]
-#define INSDINTERVAL_iscomp &at[1771]
-#define INSDINTERVAL_interbp &at[1772]
-#define INSDINTERVAL_accession &at[1773]
+#define INSDAUTHOR &at[1770]
 
-#define INSDQUALIFIER &at[1779]
-#define INSDQUALIFIER_name &at[1780]
-#define INSDQUALIFIER_value &at[1781]
+#define INSDXREF &at[1776]
+#define INSDXREF_dbname &at[1777]
+#define INSDXREF_id &at[1778]
 
-#define INSDSET &at[1784]
-#define INSDSET_E &at[1785]
+#define INSDTAGS &at[1788]
+#define INSDTAGS_E &at[1789]
+
+#define INSDTAG &at[1790]
+#define INSDTAG_name &at[1791]
+#define INSDTAG_value &at[1792]
+#define INSDTAG_unit &at[1793]
+
+#define INSDINTERVAL &at[1804]
+#define INSDINTERVAL_from &at[1805]
+#define INSDINTERVAL_to &at[1806]
+#define INSDINTERVAL_point &at[1807]
+#define INSDINTERVAL_iscomp &at[1808]
+#define INSDINTERVAL_interbp &at[1809]
+#define INSDINTERVAL_accession &at[1810]
+
+#define INSDQUALIFIER &at[1816]
+#define INSDQUALIFIER_name &at[1817]
+#define INSDQUALIFIER_value &at[1818]
+
+#define INSDTAGSETRULES &at[1821]
+#define INSDTAGSETRULES_authority &at[1822]
+#define INSDTAGSETRULES_version &at[1823]
+#define INSDTAGSETRULES_mandatorytags &at[1824]
+#define INSDTAGSETRULES_optionaltags &at[1827]
+#define INSDTAGSETRULES_uniquetags &at[1828]
+#define INSDTAGSETRULES_extensible &at[1829]
+
+#define INSDTAGNAMES &at[1825]
+#define INSDTAGNAMES_E &at[1826]
+
+#define INSDTAGSETRULESET &at[1830]
+#define INSDTAGSETRULESET_E &at[1831]
 
 
 /**************************************************
@@ -5676,20 +5824,20 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define TSEQ &at[1786]
-#define TSEQ_seqtype &at[1787]
-#define TSEQ_gi &at[1788]
-#define TSEQ_accver &at[1789]
-#define TSEQ_sid &at[1790]
-#define TSEQ_local &at[1791]
-#define TSEQ_taxid &at[1792]
-#define TSEQ_orgname &at[1793]
-#define TSEQ_defline &at[1794]
-#define TSEQ_length &at[1795]
-#define TSEQ_sequence &at[1796]
+#define TSEQ &at[1832]
+#define TSEQ_seqtype &at[1833]
+#define TSEQ_gi &at[1834]
+#define TSEQ_accver &at[1835]
+#define TSEQ_sid &at[1836]
+#define TSEQ_local &at[1837]
+#define TSEQ_taxid &at[1838]
+#define TSEQ_orgname &at[1839]
+#define TSEQ_defline &at[1840]
+#define TSEQ_length &at[1841]
+#define TSEQ_sequence &at[1842]
 
-#define TSEQSET &at[1797]
-#define TSEQSET_E &at[1798]
+#define TSEQSET &at[1843]
+#define TSEQSET_E &at[1844]
 
 
 /**************************************************
@@ -5698,84 +5846,84 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define PSSM &at[1799]
-#define PSSM_isProtein &at[1800]
-#define PSSM_identifier &at[1801]
-#define PSSM_numRows &at[1803]
-#define PSSM_numColumns &at[1804]
-#define PSSM_rowLabels &at[1805]
-#define PSSM_rowLabels_E &at[1806]
-#define PSSM_byRow &at[1807]
-#define PSSM_query &at[1808]
-#define PSSM_intermediateData &at[1810]
-#define PSSM_finalData &at[1828]
+#define PSSM &at[1845]
+#define PSSM_isProtein &at[1846]
+#define PSSM_identifier &at[1847]
+#define PSSM_numRows &at[1849]
+#define PSSM_numColumns &at[1850]
+#define PSSM_rowLabels &at[1851]
+#define PSSM_rowLabels_E &at[1852]
+#define PSSM_byRow &at[1853]
+#define PSSM_query &at[1854]
+#define PSSM_intermediateData &at[1856]
+#define PSSM_finalData &at[1874]
 
-#define PSSMINTERMEDIATEDATA &at[1811]
-#define resFreqsPerPos &at[1812]
-#define resFreqsPerPos_E &at[1813]
-#define weightedResFreqsPerPos &at[1814]
-#define weightedResFreqsPerPos_E &at[1815]
-#define PSSMINTERMEDIATEDATA_freqRatios &at[1816]
-#define freqRatios_E &at[1817]
-#define informationContent &at[1818]
-#define informationContent_E &at[1819]
-#define gaplessColumnWeights &at[1820]
-#define gaplessColumnWeights_E &at[1821]
-#define PSSMINTERMEDIATEDATA_sigma &at[1822]
-#define PSSMINTERMEDIATEDATA_sigma_E &at[1823]
-#define intervalSizes &at[1824]
-#define intervalSizes_E &at[1825]
-#define numMatchingSeqs &at[1826]
-#define numMatchingSeqs_E &at[1827]
+#define PSSMINTERMEDIATEDATA &at[1857]
+#define resFreqsPerPos &at[1858]
+#define resFreqsPerPos_E &at[1859]
+#define weightedResFreqsPerPos &at[1860]
+#define weightedResFreqsPerPos_E &at[1861]
+#define PSSMINTERMEDIATEDATA_freqRatios &at[1862]
+#define freqRatios_E &at[1863]
+#define informationContent &at[1864]
+#define informationContent_E &at[1865]
+#define gaplessColumnWeights &at[1866]
+#define gaplessColumnWeights_E &at[1867]
+#define PSSMINTERMEDIATEDATA_sigma &at[1868]
+#define PSSMINTERMEDIATEDATA_sigma_E &at[1869]
+#define intervalSizes &at[1870]
+#define intervalSizes_E &at[1871]
+#define numMatchingSeqs &at[1872]
+#define numMatchingSeqs_E &at[1873]
 
-#define PSSMFINALDATA &at[1829]
-#define PSSMFINALDATA_scores &at[1830]
-#define PSSMFINALDATA_scores_E &at[1831]
-#define PSSMFINALDATA_lambda &at[1832]
-#define PSSMFINALDATA_kappa &at[1833]
-#define PSSMFINALDATA_h &at[1834]
-#define PSSMFINALDATA_scalingFactor &at[1835]
-#define PSSMFINALDATA_lambdaUngapped &at[1836]
-#define PSSMFINALDATA_kappaUngapped &at[1837]
-#define PSSMFINALDATA_hUngapped &at[1838]
+#define PSSMFINALDATA &at[1875]
+#define PSSMFINALDATA_scores &at[1876]
+#define PSSMFINALDATA_scores_E &at[1877]
+#define PSSMFINALDATA_lambda &at[1878]
+#define PSSMFINALDATA_kappa &at[1879]
+#define PSSMFINALDATA_h &at[1880]
+#define PSSMFINALDATA_scalingFactor &at[1881]
+#define PSSMFINALDATA_lambdaUngapped &at[1882]
+#define PSSMFINALDATA_kappaUngapped &at[1883]
+#define PSSMFINALDATA_hUngapped &at[1884]
 
-#define PSSMPARAMETERS &at[1839]
-#define PSSMPARAMETERS_pseudocount &at[1840]
-#define PSSMPARAMETERS_rpsdbparams &at[1841]
-#define PSSMPARAMETERS_constraints &at[1846]
+#define PSSMPARAMETERS &at[1885]
+#define PSSMPARAMETERS_pseudocount &at[1886]
+#define PSSMPARAMETERS_rpsdbparams &at[1887]
+#define PSSMPARAMETERS_constraints &at[1892]
 
-#define PSSMWITHPARAMETERS &at[1867]
-#define PSSMWITHPARAMETERS_pssm &at[1868]
-#define PSSMWITHPARAMETERS_params &at[1869]
+#define PSSMWITHPARAMETERS &at[1913]
+#define PSSMWITHPARAMETERS_pssm &at[1914]
+#define PSSMWITHPARAMETERS_params &at[1915]
 
-#define BLOCKPROPERTY &at[1858]
-#define BLOCKPROPERTY_type &at[1859]
-#define BLOCKPROPERTY_intvalue &at[1860]
-#define BLOCKPROPERTY_textvalue &at[1861]
+#define BLOCKPROPERTY &at[1904]
+#define BLOCKPROPERTY_type &at[1905]
+#define BLOCKPROPERTY_intvalue &at[1906]
+#define BLOCKPROPERTY_textvalue &at[1907]
 
-#define COREBLOCK &at[1851]
-#define COREBLOCK_start &at[1852]
-#define COREBLOCK_stop &at[1853]
-#define COREBLOCK_minstart &at[1854]
-#define COREBLOCK_maxstop &at[1855]
-#define COREBLOCK_property &at[1856]
-#define COREBLOCK_property_E &at[1857]
+#define COREBLOCK &at[1897]
+#define COREBLOCK_start &at[1898]
+#define COREBLOCK_stop &at[1899]
+#define COREBLOCK_minstart &at[1900]
+#define COREBLOCK_maxstop &at[1901]
+#define COREBLOCK_property &at[1902]
+#define COREBLOCK_property_E &at[1903]
 
-#define LOOPCONSTRAINT &at[1864]
-#define LOOPCONSTRAINT_minlength &at[1865]
-#define LOOPCONSTRAINT_maxlength &at[1866]
+#define LOOPCONSTRAINT &at[1910]
+#define LOOPCONSTRAINT_minlength &at[1911]
+#define LOOPCONSTRAINT_maxlength &at[1912]
 
-#define COREDEF &at[1847]
-#define COREDEF_nblocks &at[1848]
-#define COREDEF_blocks &at[1849]
-#define COREDEF_blocks_E &at[1850]
-#define COREDEF_loops &at[1862]
-#define COREDEF_loops_E &at[1863]
+#define COREDEF &at[1893]
+#define COREDEF_nblocks &at[1894]
+#define COREDEF_blocks &at[1895]
+#define COREDEF_blocks_E &at[1896]
+#define COREDEF_loops &at[1908]
+#define COREDEF_loops_E &at[1909]
 
-#define FORMATRPSDBPARAMETERS &at[1842]
-#define matrixName &at[1843]
-#define FORMATRPSDBPARAMETERS_gapOpen &at[1844]
-#define FORMATRPSDBPARAMETERS_gapExtend &at[1845]
+#define FORMATRPSDBPARAMETERS &at[1888]
+#define matrixName &at[1889]
+#define FORMATRPSDBPARAMETERS_gapOpen &at[1890]
+#define FORMATRPSDBPARAMETERS_gapExtend &at[1891]
 
 
 /**************************************************
@@ -5784,464 +5932,497 @@ static AsnModulePtr amp = ampx;
 *
 **************************************************/
 
-#define AECR_ACTION &at[1870]
-#define AECR_ACTION_action &at[1871]
-#define AECR_ACTION_also_change_mrna &at[2033]
-#define AECR_ACTION_constraint &at[2034]
+#define AECR_ACTION &at[1916]
+#define AECR_ACTION_action &at[1917]
+#define AECR_ACTION_also_change_mrna &at[2081]
+#define AECR_ACTION_constraint &at[2082]
 
-#define PARSE_ACTION &at[2091]
-#define PARSE_ACTION_portion &at[2092]
-#define PARSE_ACTION_src &at[2093]
-#define PARSE_ACTION_dest &at[2109]
-#define PARSE_ACTION_capitalization &at[2121]
-#define PARSE_ACTION_remove_from_parsed &at[2123]
-#define PARSE_ACTION_existing_text &at[2124]
+#define PARSE_ACTION &at[2139]
+#define PARSE_ACTION_portion &at[2140]
+#define PARSE_ACTION_src &at[2141]
+#define PARSE_ACTION_dest &at[2157]
+#define PARSE_ACTION_capitalization &at[2170]
+#define PARSE_ACTION_remove_from_parsed &at[2172]
+#define PARSE_ACTION_existing_text &at[2173]
 
-#define MACRO_ACTION_LIST &at[2125]
-#define MACRO_ACTION_LIST_E &at[2126]
+#define MACRO_ACTION_LIST &at[2174]
+#define MACRO_ACTION_LIST_E &at[2175]
 
-#define STRING_LOCATION &at[1897]
+#define STRING_LOCATION &at[1945]
+
+#define STRING_CONSTRAINT &at[1942]
+#define STRING_CONSTRAINT_match_text &at[1943]
+#define CONSTRAINT_match_location &at[1944]
+#define CONSTRAINT_case_sensitive &at[1946]
+#define STRING_CONSTRAINT_whole_word &at[1947]
+#define STRING_CONSTRAINT_not_present &at[1948]
 
-#define STRING_CONSTRAINT &at[1894]
-#define STRING_CONSTRAINT_match_text &at[1895]
-#define CONSTRAINT_match_location &at[1896]
-#define CONSTRAINT_case_sensitive &at[1898]
-#define STRING_CONSTRAINT_whole_word &at[1899]
-#define STRING_CONSTRAINT_not_present &at[1900]
+#define STRAND_CONSTRAINT &at[2090]
 
-#define STRAND_CONSTRAINT &at[2042]
+#define SEQTYPE_CONSTRAINT &at[2092]
 
-#define SEQTYPE_CONSTRAINT &at[2044]
+#define PARTIAL_CONSTRAINT &at[2094]
 
-#define PARTIAL_CONSTRAINT &at[2046]
+#define LOCATION_CONSTRAINT &at[2088]
+#define LOCATION_CONSTRAINT_strand &at[2089]
+#define LOCATION_CONSTRAINT_seq_type &at[2091]
+#define LOCATION_CONSTRAINT_partial5 &at[2093]
+#define LOCATION_CONSTRAINT_partial3 &at[2095]
 
-#define LOCATION_CONSTRAINT &at[2040]
-#define LOCATION_CONSTRAINT_strand &at[2041]
-#define LOCATION_CONSTRAINT_seq_type &at[2043]
-#define LOCATION_CONSTRAINT_partial5 &at[2045]
-#define LOCATION_CONSTRAINT_partial3 &at[2047]
+#define OBJECT_TYPE_CONSTRAINT &at[2106]
 
-#define OBJECT_TYPE_CONSTRAINT &at[2058]
+#define FEATURE_TYPE &at[1936]
 
-#define FEATURE_TYPE &at[1888]
+#define FEAT_QUAL_LEGAL &at[1940]
 
-#define FEAT_QUAL_LEGAL &at[1892]
+#define FEAT_QUAL_LEGAL_VAL &at[2207]
+#define FEAT_QUAL_LEGAL_VAL_qual &at[2208]
+#define FEAT_QUAL_LEGAL_VAL_val &at[2209]
 
-#define FEAT_QUAL_LEGAL_VAL &at[2158]
-#define FEAT_QUAL_LEGAL_VAL_qual &at[2159]
-#define FEAT_QUAL_LEGAL_VAL_val &at[2160]
+#define FEAT_QUAL_LEGAL_VAL_CHOICE &at[2205]
+#define FEAT_QUAL_LEGAL_VAL_CHOICE_qual &at[2206]
 
-#define FEAT_QUAL_LEGAL_VAL_CHOICE &at[2156]
-#define FEAT_QUAL_LEGAL_VAL_CHOICE_qual &at[2157]
+#define FEAT_QUAL_LEGAL_SET &at[2203]
+#define FEAT_QUAL_LEGAL_SET_E &at[2204]
 
-#define FEAT_QUAL_LEGAL_SET &at[2154]
-#define FEAT_QUAL_LEGAL_SET_E &at[2155]
+#define FEAT_QUAL_CHOICE &at[1938]
+#define FEAT_QUAL_CHOICE_legal_qual &at[1939]
+#define FEAT_QUAL_CHOICE_illegal_qual &at[1941]
 
-#define FEAT_QUAL_CHOICE &at[1890]
-#define FEAT_QUAL_CHOICE_legal_qual &at[1891]
-#define FEAT_QUAL_CHOICE_illegal_qual &at[1893]
+#define FEATURE_FIELD &at[1934]
+#define FEATURE_FIELD_type &at[1935]
+#define FEATURE_FIELD_field &at[1937]
 
-#define FEATURE_FIELD &at[1886]
-#define FEATURE_FIELD_type &at[1887]
-#define FEATURE_FIELD_field &at[1889]
+#define FEATURE_FIELD_LEGAL &at[2165]
+#define FEATURE_FIELD_LEGAL_type &at[2166]
+#define FEATURE_FIELD_LEGAL_field &at[2167]
 
-#define FEATURE_FIELD_LEGAL &at[2117]
-#define FEATURE_FIELD_LEGAL_type &at[2118]
-#define FEATURE_FIELD_LEGAL_field &at[2119]
+#define FEATURE_FIELD_PAIR &at[2008]
+#define FEATURE_FIELD_PAIR_type &at[2009]
+#define FEATURE_FIELD_PAIR_field_from &at[2010]
+#define FEATURE_FIELD_PAIR_field_to &at[2011]
 
-#define FEATURE_FIELD_PAIR &at[1960]
-#define FEATURE_FIELD_PAIR_type &at[1961]
-#define FEATURE_FIELD_PAIR_field_from &at[1962]
-#define FEATURE_FIELD_PAIR_field_to &at[1963]
+#define RNA_FEAT_TYPE &at[1952]
+#define RNA_FEAT_TYPE_preRNA &at[1953]
+#define RNA_FEAT_TYPE_mRNA &at[1954]
+#define RNA_FEAT_TYPE_tRNA &at[1955]
+#define RNA_FEAT_TYPE_rRNA &at[1956]
+#define RNA_FEAT_TYPE_ncRNA &at[1957]
+#define RNA_FEAT_TYPE_tmRNA &at[1958]
+#define RNA_FEAT_TYPE_miscRNA &at[1959]
 
-#define RNA_FEAT_TYPE &at[1904]
-#define RNA_FEAT_TYPE_preRNA &at[1905]
-#define RNA_FEAT_TYPE_mRNA &at[1906]
-#define RNA_FEAT_TYPE_tRNA &at[1907]
-#define RNA_FEAT_TYPE_rRNA &at[1908]
-#define RNA_FEAT_TYPE_ncRNA &at[1909]
-#define RNA_FEAT_TYPE_tmRNA &at[1910]
-#define RNA_FEAT_TYPE_miscRNA &at[1911]
+#define RNA_FIELD &at[1961]
 
-#define RNA_FIELD &at[1913]
+#define RNA_QUAL &at[1950]
+#define RNA_QUAL_type &at[1951]
+#define RNA_QUAL_field &at[1960]
 
-#define RNA_QUAL &at[1902]
-#define RNA_QUAL_type &at[1903]
-#define RNA_QUAL_field &at[1912]
+#define RNA_QUAL_PAIR &at[2013]
+#define RNA_QUAL_PAIR_type &at[2014]
+#define RNA_QUAL_PAIR_field_from &at[2015]
+#define RNA_QUAL_PAIR_field_to &at[2016]
 
-#define RNA_QUAL_PAIR &at[1965]
-#define RNA_QUAL_PAIR_type &at[1966]
-#define RNA_QUAL_PAIR_field_from &at[1967]
-#define RNA_QUAL_PAIR_field_to &at[1968]
+#define SOURCE_QUAL &at[1926]
 
-#define SOURCE_QUAL &at[1880]
+#define SOURCE_QUAL_PAIR &at[2004]
+#define SOURCE_QUAL_PAIR_field_from &at[2005]
+#define SOURCE_QUAL_PAIR_field_to &at[2006]
 
-#define SOURCE_QUAL_PAIR &at[1956]
-#define SOURCE_QUAL_PAIR_field_from &at[1957]
-#define SOURCE_QUAL_PAIR_field_to &at[1958]
+#define SOURCE_LOCATION &at[1928]
 
-#define SOURCE_LOCATION &at[1882]
+#define SOURCE_ORIGIN &at[1930]
 
-#define SOURCE_ORIGIN &at[1884]
+#define SOURCE_QUAL_CHOICE &at[1924]
+#define SOURCE_QUAL_CHOICE_textqual &at[1925]
+#define SOURCE_QUAL_CHOICE_location &at[1927]
+#define SOURCE_QUAL_CHOICE_origin &at[1929]
+#define SOURCE_QUAL_CHOICE_gcode &at[1931]
+#define SOURCE_QUAL_CHOICE_mgcode &at[1932]
 
-#define SOURCE_QUAL_CHOICE &at[1878]
-#define SOURCE_QUAL_CHOICE_textqual &at[1879]
-#define SOURCE_QUAL_CHOICE_location &at[1881]
-#define SOURCE_QUAL_CHOICE_origin &at[1883]
+#define SOURCE_QUAL_TEXT_VAL &at[2215]
+#define SOURCE_QUAL_TEXT_VAL_srcqual &at[2216]
+#define SOURCE_QUAL_TEXT_VAL_val &at[2217]
 
-#define CDSGENEPROT_FIELD &at[1915]
+#define SOURCE_QUAL_VAL_CHOICE &at[2213]
+#define SOURCE_QUAL_VAL_CHOICE_textqual &at[2214]
+#define SOURCE_QUAL_VAL_CHOICE_location &at[2218]
+#define SOURCE_QUAL_VAL_CHOICE_origin &at[2219]
+#define SOURCE_QUAL_VAL_CHOICE_gcode &at[2220]
+#define SOURCE_QUAL_VAL_CHOICE_mgcode &at[2221]
 
-#define CDSGENEPROT_FIELD_PAIR &at[1970]
-#define FIELD_PAIR_field_from &at[1971]
-#define CDSGENEPROT_FIELD_PAIR_field_to &at[1972]
+#define SOURCE_QUAL_VAL_SET &at[2211]
+#define SOURCE_QUAL_VAL_SET_E &at[2212]
 
-#define MOLECULE_TYPE &at[1919]
+#define CDSGENEPROT_FIELD &at[1963]
 
-#define TECHNIQUE_TYPE &at[1921]
+#define CDSGENEPROT_FIELD_PAIR &at[2018]
+#define FIELD_PAIR_field_from &at[2019]
+#define CDSGENEPROT_FIELD_PAIR_field_to &at[2020]
 
-#define COMPLETEDNESS_TYPE &at[1923]
+#define MOLECULE_TYPE &at[1967]
 
-#define MOLECULE_CLASS_TYPE &at[1925]
+#define TECHNIQUE_TYPE &at[1969]
 
-#define TOPOLOGY_TYPE &at[1927]
+#define COMPLETEDNESS_TYPE &at[1971]
 
-#define STRAND_TYPE &at[1929]
+#define MOLECULE_CLASS_TYPE &at[1973]
 
-#define MOLINFO_FIELD &at[1917]
-#define MOLINFO_FIELD_molecule &at[1918]
-#define MOLINFO_FIELD_technique &at[1920]
-#define MOLINFO_FIELD_completedness &at[1922]
-#define MOLINFO_FIELD_mol_class &at[1924]
-#define MOLINFO_FIELD_topology &at[1926]
-#define MOLINFO_FIELD_strand &at[1928]
+#define TOPOLOGY_TYPE &at[1975]
 
-#define MOLINFO_MOLECULE_PAIR &at[1976]
-#define MOLINFO_MOLECULE_PAIR_from &at[1977]
-#define MOLINFO_MOLECULE_PAIR_to &at[1978]
-
-#define MOLINFO_TECHNIQUE_PAIR &at[1980]
-#define MOLINFO_TECHNIQUE_PAIR_from &at[1981]
-#define MOLINFO_TECHNIQUE_PAIR_to &at[1982]
-
-#define MOLINFO_COMPLETEDNESS_PAIR &at[1984]
-#define MOLINFO_COMPLETEDNESS_PAIR_from &at[1985]
-#define MOLINFO_COMPLETEDNESS_PAIR_to &at[1986]
-
-#define MOLINFO_MOL_CLASS_PAIR &at[1988]
-#define MOLINFO_MOL_CLASS_PAIR_from &at[1989]
-#define MOLINFO_MOL_CLASS_PAIR_to &at[1990]
-
-#define MOLINFO_TOPOLOGY_PAIR &at[1992]
-#define MOLINFO_TOPOLOGY_PAIR_from &at[1993]
-#define MOLINFO_TOPOLOGY_PAIR_to &at[1994]
-
-#define MOLINFO_STRAND_PAIR &at[1996]
-#define MOLINFO_STRAND_PAIR_from &at[1997]
-#define MOLINFO_STRAND_PAIR_to &at[1998]
-
-#define MOLINFO_FIELD_PAIR &at[1974]
-#define MOLINFO_FIELD_PAIR_molecule &at[1975]
-#define MOLINFO_FIELD_PAIR_technique &at[1979]
-#define FIELD_PAIR_completedness &at[1983]
-#define MOLINFO_FIELD_PAIR_mol_class &at[1987]
-#define MOLINFO_FIELD_PAIR_topology &at[1991]
-#define MOLINFO_FIELD_PAIR_strand &at[1995]
-
-#define MOLINFO_FIELD_LIST &at[2216]
-#define MOLINFO_FIELD_LIST_E &at[2217]
-
-#define PUBLICATION_FIELD &at[1931]
-
-#define STRUCTURED_COMMENT_FIELD &at[1933]
-#define COMMENT_FIELD_database &at[1934]
-#define STRUCTURED_COMMENT_FIELD_named &at[1935]
-#define COMMENT_FIELD_field_name &at[1936]
-
-#define STRUCTURED_COMMENT_FIELD_PAIR &at[2000]
-#define COMMENT_FIELD_PAIR_from &at[2001]
-#define COMMENT_FIELD_PAIR_to &at[2002]
-
-#define MISC_FIELD &at[1938]
-
-#define PUB_TYPE &at[2086]
-
-#define PUB_FIELD_CONSTRAINT &at[2088]
-#define PUB_FIELD_CONSTRAINT_field &at[2089]
-#define PUB_FIELD_CONSTRAINT_constraint &at[2090]
-
-#define PUBLICATION_CONSTRAINT &at[2084]
-#define PUBLICATION_CONSTRAINT_type &at[2085]
-#define PUBLICATION_CONSTRAINT_field &at[2087]
-
-#define SOURCE_CONSTRAINT &at[2053]
-#define SOURCE_CONSTRAINT_field1 &at[2054]
-#define SOURCE_CONSTRAINT_field2 &at[2055]
-#define SOURCE_CONSTRAINT_constraint &at[2056]
-#define CONSTRAINT_type_constraint &at[2057]
-
-#define FEATURE_TYPE_CONSTRAINT &at[2069]
-
-#define CDSGENEPROT_PSEUDO_CONSTRAINT &at[2067]
-#define PSEUDO_CONSTRAINT_feature &at[2068]
-#define PSEUDO_CONSTRAINT_is_pseudo &at[2070]
-
-#define CDSGENEPROT_CONSTRAINT_FIELD &at[2062]
-#define CONSTRAINT_FIELD_field &at[2063]
-
-#define CDSGENEPROT_QUAL_CONSTRAINT &at[2060]
-#define QUAL_CONSTRAINT_field1 &at[2061]
-#define QUAL_CONSTRAINT_field2 &at[2064]
-#define QUAL_CONSTRAINT_constraint &at[2065]
-
-#define FIELD_CONSTRAINT &at[2049]
-#define FIELD_CONSTRAINT_field &at[2050]
-#define CONSTRAINT_string_constraint &at[2051]
-
-#define FIELD_TYPE &at[1876]
-#define FIELD_TYPE_source_qual &at[1877]
-#define FIELD_TYPE_feature_field &at[1885]
-#define FIELD_TYPE_rna_field &at[1901]
-#define FIELD_TYPE_cds_gene_prot &at[1914]
-#define FIELD_TYPE_molinfo_field &at[1916]
-#define FIELD_TYPE_pub &at[1930]
-#define FIELD_TYPE_struc_comment_field &at[1932]
-#define FIELD_TYPE_misc &at[1937]
-
-#define SEQUENCE_CONSTRAINT_RNAMOL &at[2079]
-
-#define CONSTRAINT_MOL_TYPE_CONSTRAINT &at[2074]
-#define MOL_TYPE_CONSTRAINT_any &at[2075]
-#define MOL_TYPE_CONSTRAINT_nucleotide &at[2076]
-#define MOL_TYPE_CONSTRAINT_dna &at[2077]
-#define MOL_TYPE_CONSTRAINT_rna &at[2078]
-#define MOL_TYPE_CONSTRAINT_protein &at[2080]
-
-#define SEQUENCE_CONSTRAINT &at[2072]
-#define SEQUENCE_CONSTRAINT_seqtype &at[2073]
-#define SEQUENCE_CONSTRAINT_id &at[2081]
-#define SEQUENCE_CONSTRAINT_feature &at[2082]
-
-#define CONSTRAINT_CHOICE &at[2037]
-#define CONSTRAINT_CHOICE_string &at[2038]
-#define CONSTRAINT_CHOICE_location &at[2039]
-#define CONSTRAINT_CHOICE_field &at[2048]
-#define CONSTRAINT_CHOICE_source &at[2052]
-#define CHOICE_cdsgeneprot_qual &at[2059]
-#define CHOICE_cdsgeneprot_pseudo &at[2066]
-#define CONSTRAINT_CHOICE_sequence &at[2071]
-#define CONSTRAINT_CHOICE_pub &at[2083]
-
-#define CONSTRAINT_CHOICE_SET &at[2035]
-#define CONSTRAINT_CHOICE_SET_E &at[2036]
-
-#define TEXT_PORTION &at[2020]
-#define TEXT_PORTION_left_text &at[2021]
-#define TEXT_PORTION_include_left &at[2022]
-#define TEXT_PORTION_right_text &at[2023]
-#define TEXT_PORTION_include_right &at[2024]
-#define TEXT_PORTION_inside &at[2025]
-#define TEXT_PORTION_case_sensitive &at[2026]
-#define TEXT_PORTION_whole_word &at[2027]
-
-#define FIELD_EDIT_LOCATION &at[1949]
-
-#define FIELD_EDIT &at[1945]
-#define FIELD_EDIT_find_txt &at[1946]
-#define FIELD_EDIT_repl_txt &at[1947]
-#define FIELD_EDIT_location &at[1948]
-
-#define FIELD_PAIR_TYPE &at[1954]
-#define FIELD_PAIR_TYPE_source_qual &at[1955]
-#define FIELD_PAIR_TYPE_feature_field &at[1959]
-#define FIELD_PAIR_TYPE_rna_field &at[1964]
-#define FIELD_PAIR_TYPE_cds_gene_prot &at[1969]
-#define FIELD_PAIR_TYPE_molinfo_field &at[1973]
-#define PAIR_TYPE_struc_comment_field &at[1999]
-
-#define EXISTINGTEXTOPTION &at[1941]
-
-#define APPLY_ACTION &at[1874]
-#define APPLY_ACTION_field &at[1875]
-#define APPLY_ACTION_value &at[1939]
-#define APPLY_ACTION_existing_text &at[1940]
-
-#define EDIT_ACTION &at[1943]
-#define EDIT_ACTION_edit &at[1944]
-#define EDIT_ACTION_field &at[1950]
-
-#define CONVERT_ACTION &at[1952]
-#define CONVERT_ACTION_fields &at[1953]
-#define CONVERT_ACTION_strip_name &at[2003]
-#define CONVERT_ACTION_keep_original &at[2004]
-#define CONVERT_ACTION_existing_text &at[2005]
-
-#define COPY_ACTION &at[2007]
-#define COPY_ACTION_fields &at[2008]
-#define COPY_ACTION_existing_text &at[2009]
-
-#define SWAP_ACTION &at[2011]
-#define SWAP_ACTION_fields &at[2012]
-#define SWAP_ACTION_field_to &at[2013]
-
-#define AECRPARSE_ACTION &at[2018]
-#define AECRPARSE_ACTION_portion &at[2019]
-#define AECRPARSE_ACTION_fields &at[2028]
-#define ACTION_remove_from_parsed &at[2029]
-#define AECRPARSE_ACTION_remove_left &at[2030]
-#define AECRPARSE_ACTION_remove_right &at[2031]
-#define AECRPARSE_ACTION_existing_text &at[2032]
-
-#define REMOVE_ACTION &at[2015]
-#define REMOVE_ACTION_field &at[2016]
-
-#define ACTION_CHOICE &at[1872]
-#define ACTION_CHOICE_apply &at[1873]
-#define ACTION_CHOICE_edit &at[1942]
-#define ACTION_CHOICE_convert &at[1951]
-#define ACTION_CHOICE_copy &at[2006]
-#define ACTION_CHOICE_swap &at[2010]
-#define ACTION_CHOICE_remove &at[2014]
-#define ACTION_CHOICE_parse &at[2017]
-
-#define CAP_CHANGE &at[2122]
-
-#define PARSE_SRC_ORG_CHOICE &at[2101]
-#define SRC_ORG_CHOICE_source_qual &at[2102]
-#define CHOICE_taxname_after_binomial &at[2103]
-
-#define PARSE_SRC_ORG &at[2099]
-#define PARSE_SRC_ORG_field &at[2100]
-#define PARSE_SRC_ORG_type &at[2104]
-
-#define PARSE_SRC &at[2094]
-#define PARSE_SRC_defline &at[2095]
-#define PARSE_SRC_flatfile &at[2096]
-#define PARSE_SRC_local_id &at[2097]
-#define PARSE_SRC_org &at[2098]
-#define PARSE_SRC_comment &at[2105]
-#define PARSE_SRC_bankit_comment &at[2106]
-#define PARSE_SRC_structured_comment &at[2107]
-#define PARSE_SRC_file_id &at[2108]
-
-#define PARSE_DST_ORG &at[2113]
-#define PARSE_DST_ORG_field &at[2114]
-#define PARSE_DST_ORG_type &at[2115]
-
-#define PARSE_DEST &at[2110]
-#define PARSE_DEST_defline &at[2111]
-#define PARSE_DEST_org &at[2112]
-#define PARSE_DEST_featqual &at[2116]
-#define PARSE_DEST_dbxref &at[2120]
-
-#define LOCATION_INTERVAL &at[2139]
-#define LOCATION_INTERVAL_from &at[2140]
-#define LOCATION_INTERVAL_to &at[2141]
-
-#define LOCATION_CHOICE &at[2137]
-#define LOCATION_CHOICE_interval &at[2138]
-#define LOCATION_CHOICE_whole_sequence &at[2142]
-
-#define SEQUENCE_LIST &at[2146]
-#define SEQUENCE_LIST_E &at[2147]
-
-#define SEQUENCE_LIST_CHOICE &at[2144]
-#define SEQUENCE_LIST_CHOICE_list &at[2145]
-#define SEQUENCE_LIST_CHOICE_all &at[2148]
-
-#define APPLY_FEATURE_ACTION &at[2131]
-#define APPLY_FEATURE_ACTION_type &at[2132]
-#define APPLY_FEATURE_ACTION_partial5 &at[2133]
-#define APPLY_FEATURE_ACTION_partial3 &at[2134]
-#define FEATURE_ACTION_plus_strand &at[2135]
-#define APPLY_FEATURE_ACTION_location &at[2136]
-#define APPLY_FEATURE_ACTION_seq_list &at[2143]
-#define FEATURE_ACTION_add_redundant &at[2149]
-#define APPLY_FEATURE_ACTION_add_mrna &at[2150]
-#define FEATURE_ACTION_apply_to_parts &at[2151]
-#define FEATURE_ACTION_only_seg_num &at[2152]
-#define APPLY_FEATURE_ACTION_fields &at[2153]
-
-#define REMOVE_FEATURE_ACTION &at[2162]
-#define REMOVE_FEATURE_ACTION_type &at[2163]
-#define FEATURE_ACTION_constraint &at[2164]
-
-#define CONVERT_FROM_CDS_OPTIONS &at[2172]
-#define FROM_CDS_OPTIONS_remove_mRNA &at[2173]
-#define FROM_CDS_OPTIONS_remove_gene &at[2174]
-#define OPTIONS_remove_transcript_id &at[2175]
-
-#define CONVERT_FEATURE_SRC_OPTIONS &at[2170]
-#define CONVERT_FEATURE_SRC_OPTIONS_cds &at[2171]
-
-#define BOND_TYPE &at[2179]
-
-#define SITE_TYPE &at[2181]
-
-#define REGION_TYPE &at[2183]
-#define REGION_TYPE_create_nucleotide &at[2184]
-
-#define CONVERT_FEATURE_DST_OPTIONS &at[2177]
-#define FEATURE_DST_OPTIONS_bond &at[2178]
-#define FEATURE_DST_OPTIONS_site &at[2180]
-#define FEATURE_DST_OPTIONS_region &at[2182]
-#define DST_OPTIONS_ncrna_class &at[2185]
-
-#define CONVERT_FEATURE_ACTION &at[2166]
-#define FEATURE_ACTION_type_from &at[2167]
-#define CONVERT_FEATURE_ACTION_type_to &at[2168]
-#define FEATURE_ACTION_src_options &at[2169]
-#define FEATURE_ACTION_dst_options &at[2176]
-#define FEATURE_ACTION_leave_original &at[2186]
-#define ACTION_src_feat_constraint &at[2187]
-
-#define FEATURE_LOCATION_STRAND_FROM &at[2196]
-
-#define FEATURE_LOCATION_STRAND_TO &at[2198]
-
-#define EDIT_LOCATION_STRAND &at[2194]
-#define LOCATION_STRAND_strand_from &at[2195]
-#define EDIT_LOCATION_STRAND_strand_to &at[2197]
-
-#define PARTIAL_5_SET_CONSTRAINT &at[2202]
-
-#define PARTIAL_5_SET_ACTION &at[2200]
-#define PARTIAL_5_SET_ACTION_constraint &at[2201]
-#define PARTIAL_5_SET_ACTION_extend &at[2203]
-
-#define PARTIAL_5_CLEAR_CONSTRAINT &at[2205]
-
-#define PARTIAL_3_SET_CONSTRAINT &at[2209]
-
-#define PARTIAL_3_SET_ACTION &at[2207]
-#define PARTIAL_3_SET_ACTION_constraint &at[2208]
-#define PARTIAL_3_SET_ACTION_extend &at[2210]
-
-#define PARTIAL_3_CLEAR_CONSTRAINT &at[2212]
-
-#define CONVERT_LOCATION_TYPE &at[2214]
-
-#define LOCATION_EDIT_TYPE &at[2192]
-#define LOCATION_EDIT_TYPE_strand &at[2193]
-#define EDIT_TYPE_set_5_partial &at[2199]
-#define EDIT_TYPE_clear_5_partial &at[2204]
-#define EDIT_TYPE_set_3_partial &at[2206]
-#define EDIT_TYPE_clear_3_partial &at[2211]
-#define LOCATION_EDIT_TYPE_convert &at[2213]
-
-#define EDIT_FEATURE_LOCATION_ACTION &at[2189]
-#define FEATURE_LOCATION_ACTION_type &at[2190]
-#define FEATURE_LOCATION_ACTION_action &at[2191]
-#define LOCATION_ACTION_constraint &at[2215]
-
-#define MOLINFO_BLOCK &at[2218]
-#define MOLINFO_BLOCK_to_list &at[2219]
-#define MOLINFO_BLOCK_from_list &at[2220]
-#define MOLINFO_BLOCK_constraint &at[2221]
-
-#define MACRO_ACTION_CHOICE &at[2127]
-#define MACRO_ACTION_CHOICE_aecr &at[2128]
-#define MACRO_ACTION_CHOICE_parse &at[2129]
-#define MACRO_ACTION_CHOICE_add_feature &at[2130]
-#define ACTION_CHOICE_remove_feature &at[2161]
-#define ACTION_CHOICE_convert_feature &at[2165]
-#define ACTION_CHOICE_edit_location &at[2188]
+#define STRAND_TYPE &at[1977]
+
+#define MOLINFO_FIELD &at[1965]
+#define MOLINFO_FIELD_molecule &at[1966]
+#define MOLINFO_FIELD_technique &at[1968]
+#define MOLINFO_FIELD_completedness &at[1970]
+#define MOLINFO_FIELD_mol_class &at[1972]
+#define MOLINFO_FIELD_topology &at[1974]
+#define MOLINFO_FIELD_strand &at[1976]
+
+#define MOLINFO_MOLECULE_PAIR &at[2024]
+#define MOLINFO_MOLECULE_PAIR_from &at[2025]
+#define MOLINFO_MOLECULE_PAIR_to &at[2026]
+
+#define MOLINFO_TECHNIQUE_PAIR &at[2028]
+#define MOLINFO_TECHNIQUE_PAIR_from &at[2029]
+#define MOLINFO_TECHNIQUE_PAIR_to &at[2030]
+
+#define MOLINFO_COMPLETEDNESS_PAIR &at[2032]
+#define MOLINFO_COMPLETEDNESS_PAIR_from &at[2033]
+#define MOLINFO_COMPLETEDNESS_PAIR_to &at[2034]
+
+#define MOLINFO_MOL_CLASS_PAIR &at[2036]
+#define MOLINFO_MOL_CLASS_PAIR_from &at[2037]
+#define MOLINFO_MOL_CLASS_PAIR_to &at[2038]
+
+#define MOLINFO_TOPOLOGY_PAIR &at[2040]
+#define MOLINFO_TOPOLOGY_PAIR_from &at[2041]
+#define MOLINFO_TOPOLOGY_PAIR_to &at[2042]
+
+#define MOLINFO_STRAND_PAIR &at[2044]
+#define MOLINFO_STRAND_PAIR_from &at[2045]
+#define MOLINFO_STRAND_PAIR_to &at[2046]
+
+#define MOLINFO_FIELD_PAIR &at[2022]
+#define MOLINFO_FIELD_PAIR_molecule &at[2023]
+#define MOLINFO_FIELD_PAIR_technique &at[2027]
+#define FIELD_PAIR_completedness &at[2031]
+#define MOLINFO_FIELD_PAIR_mol_class &at[2035]
+#define MOLINFO_FIELD_PAIR_topology &at[2039]
+#define MOLINFO_FIELD_PAIR_strand &at[2043]
+
+#define MOLINFO_FIELD_LIST &at[2288]
+#define MOLINFO_FIELD_LIST_E &at[2289]
+
+#define PUBLICATION_FIELD &at[1979]
+
+#define STRUCTURED_COMMENT_FIELD &at[1981]
+#define COMMENT_FIELD_database &at[1982]
+#define STRUCTURED_COMMENT_FIELD_named &at[1983]
+#define COMMENT_FIELD_field_name &at[1984]
+
+#define STRUCTURED_COMMENT_FIELD_PAIR &at[2048]
+#define COMMENT_FIELD_PAIR_from &at[2049]
+#define COMMENT_FIELD_PAIR_to &at[2050]
+
+#define MISC_FIELD &at[1986]
+
+#define PUB_TYPE &at[2134]
+
+#define PUB_FIELD_CONSTRAINT &at[2136]
+#define PUB_FIELD_CONSTRAINT_field &at[2137]
+#define PUB_FIELD_CONSTRAINT_constraint &at[2138]
+
+#define PUBLICATION_CONSTRAINT &at[2132]
+#define PUBLICATION_CONSTRAINT_type &at[2133]
+#define PUBLICATION_CONSTRAINT_field &at[2135]
+
+#define SOURCE_CONSTRAINT &at[2101]
+#define SOURCE_CONSTRAINT_field1 &at[2102]
+#define SOURCE_CONSTRAINT_field2 &at[2103]
+#define SOURCE_CONSTRAINT_constraint &at[2104]
+#define CONSTRAINT_type_constraint &at[2105]
+
+#define FEATURE_TYPE_CONSTRAINT &at[2117]
+
+#define CDSGENEPROT_PSEUDO_CONSTRAINT &at[2115]
+#define PSEUDO_CONSTRAINT_feature &at[2116]
+#define PSEUDO_CONSTRAINT_is_pseudo &at[2118]
+
+#define CDSGENEPROT_CONSTRAINT_FIELD &at[2110]
+#define CONSTRAINT_FIELD_field &at[2111]
+
+#define CDSGENEPROT_QUAL_CONSTRAINT &at[2108]
+#define QUAL_CONSTRAINT_field1 &at[2109]
+#define QUAL_CONSTRAINT_field2 &at[2112]
+#define QUAL_CONSTRAINT_constraint &at[2113]
+
+#define FIELD_CONSTRAINT &at[2097]
+#define FIELD_CONSTRAINT_field &at[2098]
+#define CONSTRAINT_string_constraint &at[2099]
+
+#define FIELD_TYPE &at[1922]
+#define FIELD_TYPE_source_qual &at[1923]
+#define FIELD_TYPE_feature_field &at[1933]
+#define FIELD_TYPE_rna_field &at[1949]
+#define FIELD_TYPE_cds_gene_prot &at[1962]
+#define FIELD_TYPE_molinfo_field &at[1964]
+#define FIELD_TYPE_pub &at[1978]
+#define FIELD_TYPE_struc_comment_field &at[1980]
+#define FIELD_TYPE_misc &at[1985]
+
+#define SEQUENCE_CONSTRAINT_RNAMOL &at[2127]
+
+#define CONSTRAINT_MOL_TYPE_CONSTRAINT &at[2122]
+#define MOL_TYPE_CONSTRAINT_any &at[2123]
+#define MOL_TYPE_CONSTRAINT_nucleotide &at[2124]
+#define MOL_TYPE_CONSTRAINT_dna &at[2125]
+#define MOL_TYPE_CONSTRAINT_rna &at[2126]
+#define MOL_TYPE_CONSTRAINT_protein &at[2128]
+
+#define SEQUENCE_CONSTRAINT &at[2120]
+#define SEQUENCE_CONSTRAINT_seqtype &at[2121]
+#define SEQUENCE_CONSTRAINT_id &at[2129]
+#define SEQUENCE_CONSTRAINT_feature &at[2130]
+
+#define CONSTRAINT_CHOICE &at[2085]
+#define CONSTRAINT_CHOICE_string &at[2086]
+#define CONSTRAINT_CHOICE_location &at[2087]
+#define CONSTRAINT_CHOICE_field &at[2096]
+#define CONSTRAINT_CHOICE_source &at[2100]
+#define CHOICE_cdsgeneprot_qual &at[2107]
+#define CHOICE_cdsgeneprot_pseudo &at[2114]
+#define CONSTRAINT_CHOICE_sequence &at[2119]
+#define CONSTRAINT_CHOICE_pub &at[2131]
+
+#define CONSTRAINT_CHOICE_SET &at[2083]
+#define CONSTRAINT_CHOICE_SET_E &at[2084]
+
+#define TEXT_PORTION &at[2068]
+#define TEXT_PORTION_left_text &at[2069]
+#define TEXT_PORTION_include_left &at[2070]
+#define TEXT_PORTION_right_text &at[2071]
+#define TEXT_PORTION_include_right &at[2072]
+#define TEXT_PORTION_inside &at[2073]
+#define TEXT_PORTION_case_sensitive &at[2074]
+#define TEXT_PORTION_whole_word &at[2075]
+
+#define FIELD_EDIT_LOCATION &at[1997]
+
+#define FIELD_EDIT &at[1993]
+#define FIELD_EDIT_find_txt &at[1994]
+#define FIELD_EDIT_repl_txt &at[1995]
+#define FIELD_EDIT_location &at[1996]
+
+#define FIELD_PAIR_TYPE &at[2002]
+#define FIELD_PAIR_TYPE_source_qual &at[2003]
+#define FIELD_PAIR_TYPE_feature_field &at[2007]
+#define FIELD_PAIR_TYPE_rna_field &at[2012]
+#define FIELD_PAIR_TYPE_cds_gene_prot &at[2017]
+#define FIELD_PAIR_TYPE_molinfo_field &at[2021]
+#define PAIR_TYPE_struc_comment_field &at[2047]
+
+#define EXISTINGTEXTOPTION &at[1989]
+
+#define APPLY_ACTION &at[1920]
+#define APPLY_ACTION_field &at[1921]
+#define APPLY_ACTION_value &at[1987]
+#define APPLY_ACTION_existing_text &at[1988]
+
+#define EDIT_ACTION &at[1991]
+#define EDIT_ACTION_edit &at[1992]
+#define EDIT_ACTION_field &at[1998]
+
+#define CONVERT_ACTION &at[2000]
+#define CONVERT_ACTION_fields &at[2001]
+#define CONVERT_ACTION_strip_name &at[2051]
+#define CONVERT_ACTION_keep_original &at[2052]
+#define CONVERT_ACTION_existing_text &at[2053]
+
+#define COPY_ACTION &at[2055]
+#define COPY_ACTION_fields &at[2056]
+#define COPY_ACTION_existing_text &at[2057]
+
+#define SWAP_ACTION &at[2059]
+#define SWAP_ACTION_fields &at[2060]
+#define SWAP_ACTION_field_to &at[2061]
+
+#define AECRPARSE_ACTION &at[2066]
+#define AECRPARSE_ACTION_portion &at[2067]
+#define AECRPARSE_ACTION_fields &at[2076]
+#define ACTION_remove_from_parsed &at[2077]
+#define AECRPARSE_ACTION_remove_left &at[2078]
+#define AECRPARSE_ACTION_remove_right &at[2079]
+#define AECRPARSE_ACTION_existing_text &at[2080]
+
+#define REMOVE_ACTION &at[2063]
+#define REMOVE_ACTION_field &at[2064]
+
+#define ACTION_CHOICE &at[1918]
+#define ACTION_CHOICE_apply &at[1919]
+#define ACTION_CHOICE_edit &at[1990]
+#define ACTION_CHOICE_convert &at[1999]
+#define ACTION_CHOICE_copy &at[2054]
+#define ACTION_CHOICE_swap &at[2058]
+#define ACTION_CHOICE_remove &at[2062]
+#define ACTION_CHOICE_parse &at[2065]
+
+#define CAP_CHANGE &at[2171]
+
+#define PARSE_SRC_ORG_CHOICE &at[2149]
+#define SRC_ORG_CHOICE_source_qual &at[2150]
+#define CHOICE_taxname_after_binomial &at[2151]
+
+#define PARSE_SRC_ORG &at[2147]
+#define PARSE_SRC_ORG_field &at[2148]
+#define PARSE_SRC_ORG_type &at[2152]
+
+#define PARSE_SRC &at[2142]
+#define PARSE_SRC_defline &at[2143]
+#define PARSE_SRC_flatfile &at[2144]
+#define PARSE_SRC_local_id &at[2145]
+#define PARSE_SRC_org &at[2146]
+#define PARSE_SRC_comment &at[2153]
+#define PARSE_SRC_bankit_comment &at[2154]
+#define PARSE_SRC_structured_comment &at[2155]
+#define PARSE_SRC_file_id &at[2156]
+
+#define PARSE_DST_ORG &at[2161]
+#define PARSE_DST_ORG_field &at[2162]
+#define PARSE_DST_ORG_type &at[2163]
+
+#define PARSE_DEST &at[2158]
+#define PARSE_DEST_defline &at[2159]
+#define PARSE_DEST_org &at[2160]
+#define PARSE_DEST_featqual &at[2164]
+#define PARSE_DEST_comment_descriptor &at[2168]
+#define PARSE_DEST_dbxref &at[2169]
+
+#define LOCATION_INTERVAL &at[2188]
+#define LOCATION_INTERVAL_from &at[2189]
+#define LOCATION_INTERVAL_to &at[2190]
+
+#define LOCATION_CHOICE &at[2186]
+#define LOCATION_CHOICE_interval &at[2187]
+#define LOCATION_CHOICE_whole_sequence &at[2191]
+
+#define SEQUENCE_LIST &at[2195]
+#define SEQUENCE_LIST_E &at[2196]
+
+#define SEQUENCE_LIST_CHOICE &at[2193]
+#define SEQUENCE_LIST_CHOICE_list &at[2194]
+#define SEQUENCE_LIST_CHOICE_all &at[2197]
+
+#define APPLY_FEATURE_ACTION &at[2180]
+#define APPLY_FEATURE_ACTION_type &at[2181]
+#define APPLY_FEATURE_ACTION_partial5 &at[2182]
+#define APPLY_FEATURE_ACTION_partial3 &at[2183]
+#define FEATURE_ACTION_plus_strand &at[2184]
+#define APPLY_FEATURE_ACTION_location &at[2185]
+#define APPLY_FEATURE_ACTION_seq_list &at[2192]
+#define FEATURE_ACTION_add_redundant &at[2198]
+#define APPLY_FEATURE_ACTION_add_mrna &at[2199]
+#define FEATURE_ACTION_apply_to_parts &at[2200]
+#define FEATURE_ACTION_only_seg_num &at[2201]
+#define APPLY_FEATURE_ACTION_fields &at[2202]
+#define APPLY_FEATURE_ACTION_src_fields &at[2210]
+
+#define REMOVE_FEATURE_ACTION &at[2223]
+#define REMOVE_FEATURE_ACTION_type &at[2224]
+#define FEATURE_ACTION_constraint &at[2225]
+
+#define CONVERT_FROM_CDS_OPTIONS &at[2233]
+#define FROM_CDS_OPTIONS_remove_mRNA &at[2234]
+#define FROM_CDS_OPTIONS_remove_gene &at[2235]
+#define OPTIONS_remove_transcript_id &at[2236]
+
+#define CONVERT_FEATURE_SRC_OPTIONS &at[2231]
+#define CONVERT_FEATURE_SRC_OPTIONS_cds &at[2232]
+
+#define BOND_TYPE &at[2240]
+
+#define SITE_TYPE &at[2242]
+
+#define REGION_TYPE &at[2244]
+#define REGION_TYPE_create_nucleotide &at[2245]
+
+#define CONVERT_FEATURE_DST_OPTIONS &at[2238]
+#define FEATURE_DST_OPTIONS_bond &at[2239]
+#define FEATURE_DST_OPTIONS_site &at[2241]
+#define FEATURE_DST_OPTIONS_region &at[2243]
+#define DST_OPTIONS_ncrna_class &at[2246]
+
+#define CONVERT_FEATURE_ACTION &at[2227]
+#define FEATURE_ACTION_type_from &at[2228]
+#define CONVERT_FEATURE_ACTION_type_to &at[2229]
+#define FEATURE_ACTION_src_options &at[2230]
+#define FEATURE_ACTION_dst_options &at[2237]
+#define FEATURE_ACTION_leave_original &at[2247]
+#define ACTION_src_feat_constraint &at[2248]
+
+#define FEATURE_LOCATION_STRAND_FROM &at[2257]
+
+#define FEATURE_LOCATION_STRAND_TO &at[2259]
+
+#define EDIT_LOCATION_STRAND &at[2255]
+#define LOCATION_STRAND_strand_from &at[2256]
+#define EDIT_LOCATION_STRAND_strand_to &at[2258]
+
+#define PARTIAL_5_SET_CONSTRAINT &at[2263]
+
+#define PARTIAL_5_SET_ACTION &at[2261]
+#define PARTIAL_5_SET_ACTION_constraint &at[2262]
+#define PARTIAL_5_SET_ACTION_extend &at[2264]
+
+#define PARTIAL_5_CLEAR_CONSTRAINT &at[2266]
+
+#define PARTIAL_3_SET_CONSTRAINT &at[2270]
+
+#define PARTIAL_3_SET_ACTION &at[2268]
+#define PARTIAL_3_SET_ACTION_constraint &at[2269]
+#define PARTIAL_3_SET_ACTION_extend &at[2271]
+
+#define PARTIAL_3_CLEAR_CONSTRAINT &at[2273]
+
+#define CONVERT_LOCATION_TYPE &at[2275]
+
+#define LOCATION_EDIT_TYPE &at[2253]
+#define LOCATION_EDIT_TYPE_strand &at[2254]
+#define EDIT_TYPE_set_5_partial &at[2260]
+#define EDIT_TYPE_clear_5_partial &at[2265]
+#define EDIT_TYPE_set_3_partial &at[2267]
+#define EDIT_TYPE_clear_3_partial &at[2272]
+#define LOCATION_EDIT_TYPE_convert &at[2274]
+
+#define EDIT_FEATURE_LOCATION_ACTION &at[2250]
+#define FEATURE_LOCATION_ACTION_type &at[2251]
+#define FEATURE_LOCATION_ACTION_action &at[2252]
+#define LOCATION_ACTION_constraint &at[2276]
+
+#define MOLINFO_BLOCK &at[2290]
+#define MOLINFO_BLOCK_to_list &at[2291]
+#define MOLINFO_BLOCK_from_list &at[2292]
+#define MOLINFO_BLOCK_constraint &at[2293]
+
+#define DESCRIPTOR_TYPE &at[2280]
+
+#define REMOVE_DESCRIPTOR_ACTION &at[2278]
+#define REMOVE_DESCRIPTOR_ACTION_type &at[2279]
+#define DESCRIPTOR_ACTION_constraint &at[2281]
+
+#define AUTODEF_LIST_TYPE &at[2287]
+
+#define AUTODEF_ACTION &at[2283]
+#define AUTODEF_ACTION_modifiers &at[2284]
+#define AUTODEF_ACTION_modifiers_E &at[2285]
+#define AUTODEF_ACTION_clause_list_type &at[2286]
+
+#define MACRO_ACTION_CHOICE &at[2176]
+#define MACRO_ACTION_CHOICE_aecr &at[2177]
+#define MACRO_ACTION_CHOICE_parse &at[2178]
+#define MACRO_ACTION_CHOICE_add_feature &at[2179]
+#define ACTION_CHOICE_remove_feature &at[2222]
+#define ACTION_CHOICE_convert_feature &at[2226]
+#define ACTION_CHOICE_edit_location &at[2249]
+#define CHOICE_remove_descriptor &at[2277]
+#define MACRO_ACTION_CHOICE_autodef &at[2282]

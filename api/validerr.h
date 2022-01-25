@@ -67,6 +67,7 @@
 #define ERR_SEQ_INST_TSAHistAssemblyMissing  1,63
 #define ERR_SEQ_INST_ProteinsHaveGeneralID  1,64
 #define ERR_SEQ_INST_HighNContent  1,65
+#define ERR_SEQ_INST_SeqLitDataLength0  1,66
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -128,6 +129,9 @@
 #define ERR_SEQ_DESCR_MultipleSourceQualifiers  2,58
 #define ERR_SEQ_DESCR_UnbalancedParentheses  2,59
 #define ERR_SEQ_DESCR_MultipleSourceVouchers  2,60
+#define ERR_SEQ_DESCR_BadCountryCapitalization  2,61
+#define ERR_SEQ_DESCR_WrongVoucherType  2,62
+#define ERR_SEQ_DESCR_UserObjectProblem  2,63
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -159,6 +163,10 @@
 #define ERR_SEQ_PKG_GraphPackagingProblem  4,15
 #define ERR_SEQ_PKG_InternalGenBankSet  4,16
 #define ERR_SEQ_PKG_ConSetProblem  4,17
+#define ERR_SEQ_PKG_NoBioseqFound  4,18
+#define ERR_SEQ_PKG_INSDRefSeqPackaging  4,19
+#define ERR_SEQ_PKG_GPSnonGPSPackaging  4,20
+#define ERR_SEQ_PKG_RefSeqPopSet  4,21
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -321,6 +329,10 @@
 #define ERR_SEQ_FEAT_BadTrailingCharacter  5,159
 #define ERR_SEQ_FEAT_BadTrailingHyphen  5,160
 #define ERR_SEQ_FEAT_MultipleGeneOverlap  5,161
+#define ERR_SEQ_FEAT_BadCharInAuthorLastName  5,162
+#define ERR_SEQ_FEAT_PseudoCDSmRNArange  5,163
+#define ERR_SEQ_FEAT_ExtendablePartialProblem  5,164
+#define ERR_SEQ_FEAT_GeneXrefNeeded  5,165
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

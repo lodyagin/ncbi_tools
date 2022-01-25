@@ -462,7 +462,7 @@ unknown length, the second is 234 nucleotides long.
 
 #A number of programs output sets of aligned sequences in FASTA format.
 Frequently, to align these sequences, gaps must be inserted.  The
-default alignment settings should correctl interpret gap and ambiguous
+default alignment settings should correctly interpret gap and ambiguous
 characters in most cases.  If Sequin can not read your alignment, you
 may need to change these settings using the Optional Alignment Settings
 button on the
@@ -559,7 +559,7 @@ Source Modifiers for PHYLIP and NEXUS
 standard PHYLIP format and enter the organism, strain, chromosome, etc.
 information on the following
 
-<A HREF="#SourceModifiersForm">
+<A HREF="#ImportSourceModifiers">
 Source Modifers form
 </A>
 . 
@@ -1412,7 +1412,7 @@ was derived.  The name of the organism is absolutely required for a
 database entry.
 
 #If Sequin does not detect any problems with the format of your record,
-you will see a message that "Validation test succeeded".  
+you will see a message stating "Validation test succeeded".  
 
 #To prepare the submission, click the "Done" button on the record
 viewer, or select "Prepare Submission" under the File menu. You will be
@@ -1459,7 +1459,7 @@ as a GenBank or DDBJ entry.  It is the default format.
 
 #The Mode pop-up default setting is Sequin.  Release mode shows certain
 qualifiers and db_xrefs in RefSeq entries which are non-collaborative. 
-Entrez mode is used fro web display and can show new elements that have
+Entrez mode is used for web display and can show new elements that have
 not yet finished their four month quarentine period. Dump mode requires
 that the accession slot be populated.  In most cases, there is no need
 to change from the default Sequin mode.
@@ -1499,7 +1499,7 @@ with any annotated features (such as CDS or mRNA).  You can only view a
 single sequence at a time with this option.  You can use the Features
 pop-up menu to change the display of the features.  With the numbering
 pop-up menu, select where you want the sequence numbers to be
-indicated, at the side of the sindow, at the top of each sequence line,
+indicated, at the side of the window, at the top of each sequence line,
 or not at all.
 
 **Alignment
@@ -1615,7 +1615,7 @@ existing ones.  Select the descriptor that you wish to modify.
 "Descriptor Target Control".  Using the target control pop-up menu,
 select the sequences you wish this descriptor to cover.  The name(s)
 listed correspond to the SeqID(s) given to the nucleotide or amino acid
-sequences when when they were imported into Sequin.  The default
+sequences when they were imported into Sequin.  The default
 selection for this menu is set in the Target Sequence pop-up menu on
 the record viewer.  You may choose to have the descriptor cover just
 one sequence, or a set of sequences in your entry.  If you are creating
@@ -1679,12 +1679,6 @@ line of the database entry.  If you supplied a title for your
 nucleotide sequence when you imported it into Sequin, that information
 is here.  If you wish to change the Definition line, or if you did not
 supply a title when you submitted the sequence, edit this Descriptor.
-For more information on creating proper Definition lines, please see
-the Sequin help documentation for the 
-
-<A HREF="#NucleotideDefinitionLine(Title)">
-Nucleotide Definition Line (Title)
-</A>.
 
 **Molecule Description
 
@@ -1998,7 +1992,7 @@ http://www.ncbi.nlm.nih.gov/collab/db_xref.html
 #This page is primarily used by large sequencing centers to explain
 annotation prediction methods and its use is optional.  More details
 about these qualifiers can be found in the
-<A HREF="http://www.ncbi.nlm.nih.gov/GenBank/evidence.html">
+<A HREF="http://www.ncbi.nlm.nih.gov/Genbank/genomesubmit_annotation.html#Evidence_Qualifiers">
 genome submission guidelines
 </A>.
 The two choices of evidence are Experiment or Inference.
@@ -2199,7 +2193,7 @@ reflect the new translation.
 
 ***Protein Subpage
 
-#Use this page to enter or edit a name or descriptionof the protein
+#Use this page to enter or edit a name or description of the protein
 product.  For a new sequence, enter information directly into the
 boxes.  You can edit descriptions of an existing sequence by clicking
 on Edit Protein Feature which will bring up the Protein feature form. 
@@ -2457,7 +2451,7 @@ series of STSs.
 
 *TATA_signal
 
-#TATA box; Goldberg-Hogness box; a conserved AT-rich septamer found
+#TATA box; Goldberg-Hogness box; a conserved AT-rich heptamer found
 about 25 bp before the start point of each eukaryotic RNA polymerase II
 transcript unit that may be involved in positioning the enzyme for
 correct initiation; consensus=TATA(A or T)A(A or T).
@@ -2766,7 +2760,7 @@ molecules.
 
 #-Tissue-type:  Type of tissue from which sequence derives.
 
-#-Transgenic:  Identifies organism was the recipient of transgenic
+#-Transgenic:  Identifies organism that was the recipient of transgenic
 DNA.  You cannot include extra text when using this modifier; the text box
 will change to TRUE upon selection of this modifier from the pull-down list. 
 
@@ -3236,7 +3230,7 @@ point changes within the aligned region between the new and old
 sequences.  Clicking on a region in this graphic will scroll to the
 corresponding nucleotide sequence in the alignment text below.
 
-#The Sequence Update box to the left shows the action that will be
+#The Sequence Update box to the right shows the action that will be
 performed upon updating the sequence, i.e., no change, replace, extend
 5', extend 3', or patch.  The patch function allows you to replace an
 internal fragment of the sequence without affecting flanking regions.  
@@ -3437,7 +3431,7 @@ length order on the right side of the window.  Intervals on the complementary
 reorder the list based on the nucleotide location of the start codon.  
 
 #Clicking on the box labelled ORF changes the graphical display so that the
-#potential start codons are indicated in white, and stop codons in red.
+potential start codons are indicated in white, and stop codons in red.
 
 #The default settings display only those ORFs which contain an ATG start
 codon.  Selecting 'Alternative' in the 'Initiation Codon' box, will also
@@ -3454,7 +3448,7 @@ displayed.  For example, the default of 10 shows all ORFs that are
 greater than 10 nucleotides in length.  
 
 #Checking the Show Partial ORFs box will display ORFs that extend to the
-#end(s) of the nucleotide sequence but are 5' or 3' partial.
+end(s) of the nucleotide sequence but are 5' or 3' partial.
 
 #ORFs can be selected by clicking on the graphical representation or on the
 sequence interval.  Once an ORF has been selected, its location and amino acid
@@ -3667,13 +3661,7 @@ handle complex annotations with multiple features.  The title will
 follow GenBank conventions, but may be modified by the database staff
 if it is not appropriate.  The title you enter here will replace any
 title you entered elsewhere in the submission, for example, any title
-that was attached to the nucleotide sequence.  For a description of
-definition lines, see
-
-<A HREF="#NucleotideDefinitionLine(Title)">
-Nucleotide Definition Line (Title)
-</A>
-, above.
+that was attached to the nucleotide sequence.  
 
 #The Advanced Table Readers option imports a properly formatted structured
 comment table.  Please contact us if you wish to use this option.
@@ -4077,7 +4065,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
 Desk</A></P>
-<P CLASS=medium1>Revised October 29, 2008
+<P CLASS=medium1>Revised November 17, 2008
 
 </CENTER>
 
