@@ -1,4 +1,4 @@
-/* $Id: kappa.c,v 6.12 2000/10/16 21:08:05 madden Exp $ 
+/* $Id: kappa.c,v 6.15 2001/03/20 15:07:34 madden Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,18 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.12 $
+ $Revision: 6.15 $
 
  $Log: kappa.c,v $
+ Revision 6.15  2001/03/20 15:07:34  madden
+ Fix from AS for (near) exact matches
+
+ Revision 6.14  2001/01/04 13:48:44  madden
+ Correction for 3-parameter gapping
+
+ Revision 6.13  2000/12/05 19:31:33  madden
+ Avoid duplicate insertion into heap when ((doThis == FALSE) && (currentState = SWPurging))
+
  Revision 6.12  2000/10/16 21:08:05  madden
  segResult takes BioseqPtr as argument, produced from readdb_get_bioseq
 
@@ -1237,6 +1246,8 @@ void scalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix, Cha
      MemFree(compactSearch);
 }
 
+#define LambdaRatioLowerBound 0.5
+
 /************************************************************************
 *  Top level routine to recompute alignments for each
 *  match found by the gapped BLAST algorithm
@@ -1315,7 +1326,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    BLAST_Score **matrix; /*score matrix*/
    BLAST_Score **startMatrix; /*score matrix to start investigating each pair*/
    BLAST_Score **holdMatrix; /*matrix to hold what was originally passed in*/
-   Int4 gapOpen, gapExtend; /*costs for opening and extending a gap*/
+   Int4 gapOpen, gapExtend, gapDecline; /*costs for opening and extending a gap*/
    Nlm_FloatHi localScalingFactor; /*scaling factor for scoring system*/
    GapAlignBlkPtr gap_align; /*keeps track of gapped alignment parameters*/
    Nlm_FloatHi *resProb; /*array of probabilities for each residue in a matching sequence*/
@@ -1340,11 +1351,14 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    queryLength = search->context[0].query->length;
    gapOpen = search->pbp->gap_open;
    gapExtend = search->pbp->gap_extend;
+   gapDecline = search->pbp->decline_align;
 
    if (adjustParameters)
      localScalingFactor = scalingFactor;
    else
      localScalingFactor = 1.0;
+   if ((0 == strcmp(options->matrix,"BLOSUM62_20")))
+     localScalingFactor = localScalingFactor/10;
 
    if (search->gap_align == NULL) {
        search->gap_align = GapAlignBlkNew(1, 1);
@@ -1354,7 +1368,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 
    gap_align->gap_open = Nlm_Nint(gapOpen * localScalingFactor);
    gap_align->gap_extend =  Nlm_Nint(gapExtend * localScalingFactor);
-   /* gap_align->decline_align = (-(BLAST_SCORE_MIN)); */
+   /*gap_align->decline_align = (-(BLAST_SCORE_MIN)); */
+   if (gapDecline != INT2_MAX)
+     gap_align->decline_align = Nlm_Nint(gapDecline *localScalingFactor);
+   else
+     gap_align->decline_align = gapDecline;
    gap_align->matrix = NULL;
    gap_align->positionBased = search->positionBased;
    if (search->positionBased) {
@@ -1527,8 +1545,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
            else
 	     this_sfp =  notposfillSfp(matrix, resProb, queryProb, scoreArray, return_sfp, scoreRange);
 	   correctUngappedLambda = impalaKarlinLambdaNR(this_sfp, scaledInitialUngappedLambda);
+
 	   LambdaRatio = correctUngappedLambda/scaledInitialUngappedLambda;
 	   LambdaRatio = MIN(1,LambdaRatio);
+	   LambdaRatio = MAX(LambdaRatio,LambdaRatioLowerBound);
+
 	   doThis = FALSE;
 	   if (LambdaRatio > 0) {
 	     doThis = TRUE;
@@ -1543,7 +1564,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	   }
 	   else {
 	     doThis = FALSE;
-             newEvalue = 2 *search->pbp->cutoff_e;
+             bestEvalue = newEvalue = 2 *search->pbp->cutoff_e;
 	   }
 	 }
 	 if (doThis || (!adjustParameters)) {
@@ -1718,7 +1739,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	    && ((currentState != SWPurging) || (bestEvalue < maxEInHeap)));
        }
      } while (terminationTest);
-     if ((bestEvalue <= search->pbp->cutoff_e) && (!skipThis)) {
+     if ((bestEvalue <= search->pbp->cutoff_e) && (!skipThis) && (doThis)) {
        if (SWFewMatches == currentState) {
 	 /*reached maximum number of hits and this is not the last hit*/
 	 if ((numMatches >= options->hitlist_size) && (index < (hitlist_count -1))) {

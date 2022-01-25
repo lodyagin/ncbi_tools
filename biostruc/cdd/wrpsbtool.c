@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.c,v 1.6 2000/10/12 20:48:26 bauer Exp $
+/* $Id: wrpsbtool.c,v 1.11 2001/03/09 22:52:01 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.6 $
+* $Revision: 1.11 $
 *
 * File Description:
 *         tools for WWW-RPS BLAST 
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.c,v $
+* Revision 1.11  2001/03/09 22:52:01  bauer
+* use JavaScript to embed graphics in results page
+*
+* Revision 1.10  2001/03/02 23:36:59  bauer
+* more verbose Error messages
+*
+* Revision 1.9  2001/02/22 15:53:22  bauer
+* support for jagged edge blocks
+*
+* Revision 1.8  2001/01/11 21:52:21  bauer
+* fixed typo
+*
+* Revision 1.7  2000/12/29 20:32:40  bauer
+* Changed header string in hitlist table
+*
 * Revision 1.6  2000/10/12 20:48:26  bauer
 * added absolute URLs for graphics elements on the CD-search results pages
 *
@@ -121,8 +136,14 @@ Boolean OverlapMutual(Int4 from1, Int4 to1, Int4 from2, Int4 to2)
 void WRPSBHtmlError(CharPtr cErrTxt) 
 {
   printf("Content-type: text/html\n\n");
+  printf("<HTML>\n");
+  printf("<TITLE>CD-Search Error</TITLE>\n");
+  printf("<BODY BGCOLOR=#FFFFFF>\n");
+  printf("<A HREF=\"blast_form.map\">\n");
+  printf("<IMG SRC=\"%scdsearch.gif\" BORDER=0 ISMAP></A>\n",URLcgi);
   printf("<h2>WRPSB Error:</h2>\n");
   printf("<h3>%s</h3>\n",cErrTxt);
+  printf("</BODY></HTML>\n");
   exit(1);
 }
 
@@ -230,7 +251,7 @@ void WRPSBPrintDefLinesFromSeqAlign(AlignmentAbstractPtr aap, FILE *table,
   fprintf(table,"<TABLE CELLPADDING=1 CELLSPACING=1 BORDER=0 width=600>\n");
   fprintf(table,"<TR>\n");
   if (bAnyPdb) fprintf(table,"<TD NOWRAP VALIGN=BOTTOM ALIGN=CENTER>&nbsp;</TD>\n");
-  fprintf(table,"<TD COLSPAN=2 NOWRAP VALIGN=BOTTOM ALIGN=LEFT>Sequences producing significant alignments:</TD>\n");
+  fprintf(table,"<TD COLSPAN=2 NOWRAP VALIGN=BOTTOM ALIGN=LEFT>PSSMs producing significant alignments:</TD>\n");
   fprintf(table,"<TD NOWRAP VALIGN=BOTTOM ALIGN=CENTER>Score<br>(bits)</TD>\n");
   fprintf(table,"<TD NOWRAP VALIGN=BOTTOM ALIGN=CENTER>E<br>value</TD>\n");
   fprintf(table,"</TR>\n");
@@ -860,6 +881,7 @@ Boolean WRPSBDisplayBlastPairList(AlignmentAbstractPtr aap,
   CddDescrPtr     description;
   DenseSegPtr     dsp;
   Int4            subject_length, nsegments;
+  Nlm_FloatHi     aligned_fraction;
   BioseqPtr       bsp;
   Char            cTmp1[16], cTmp2[16], cTmp3[16];
   SeqPortPtr      spp;
@@ -993,7 +1015,9 @@ Boolean WRPSBDisplayBlastPairList(AlignmentAbstractPtr aap,
     if (option&DISP_FULL_HTML) fprintf(fp,"<pre>\n");
     bsp = BioseqLockById(new_id);
     subject_length = bsp->length;
-    fprintf(fp,"             Length = %d\n",subject_length);
+    aligned_fraction = 1.0 - aap->nmissg - aap->cmissg;
+    fprintf(fp,"             CD-Length = %d residues, %5.1f%% aligned\n",subject_length,
+            100.0 * aligned_fraction);
     print_score_sonly(aap->defline->bit_score,cTmp1);
     print_score_eonly(aap->defline->evalue,cTmp3);
     fprintf(fp,"             Score = %s bits (%d), Expect = %s\n",cTmp1, aap->defline->score, cTmp3);
@@ -1114,6 +1138,7 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
   CddDescrPtr     description;
   DenseSegPtr     dsp;
   Int4            subject_length, nsegments, maxsubjaln;
+  Nlm_FloatHi     aligned_fraction;
   BioseqPtr       bsp;
   Char            cTmp1[16], cTmp2[16], cTmp3[16];
   SeqPortPtr      spp;
@@ -1256,7 +1281,7 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
       fprintf(fp,"<OPTION VALUE=\"-1\">all\n");
       fprintf(fp,"</SELECT>&nbsp; sequences\n");
       fprintf(fp, "<SELECT NAME=\"seltype\">\n");
-      fprintf(fp, "<OPTION VALUE=\"1\">from the top of the CD aligment\n"); 
+      fprintf(fp, "<OPTION VALUE=\"1\">from the top of the CD alignment\n"); 
       fprintf(fp, "<OPTION VALUE=\"2\">from the most diverse subset\n"); 
       fprintf(fp, "<OPTION SELECTED VALUE=\"3\">most similar to the query \n"); 
       fprintf(fp, "</SELECT>\n");
@@ -1279,7 +1304,14 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
     if (maxsubjaln >= subject_length) {
       WRPSBHtmlError("Error in RPS-Blast alignment!");
     }
-    fprintf(fp,"             Length = %d\n",subject_length);
+    aligned_fraction = 1.0 - aap->nmissg - aap->cmissg;
+    if (aap->nmissg >= 0.2 || aap->cmissg >= 0.2) {
+      fprintf(fp,"             CD-Length = %d residues, <FONT COLOR=#CC0000>only %5.1f%% aligned</FONT>\n",subject_length,
+              100.0 * aligned_fraction);
+    } else {
+      fprintf(fp,"             CD-Length = %d residues, %5.1f%% aligned\n",subject_length,
+              100.0 * aligned_fraction);
+    }
     print_score_sonly(aap->defline->bit_score,cTmp1);
     print_score_eonly(aap->defline->evalue,cTmp3);
     fprintf(fp,"             Score = %s bits (%d), Expect = %s\n",cTmp1, aap->defline->score, cTmp3);
@@ -1302,6 +1334,53 @@ Boolean WRPSBCl3DisplayBlastPairList(AlignmentAbstractPtr aap,
   return(bRet);
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* return data as a dynamic pointer                                          */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+gdIOCtx* gdNewBorkCtx (void) {
+  borkIOCtx 	*ctx;
+
+  ctx = (borkIOCtx*) malloc(sizeof(borkIOCtx));
+  if (ctx == NULL) {
+    return NULL;
+  }
+  ctx->buffer = (char*) malloc(1024);
+  ctx->len = 0;
+  ctx->bufsz = 1024;
+  ctx->ctx.putC = borkPutchar;
+  ctx->ctx.putBuf = borkPutbuf;
+  ctx->ctx.free = freeBorkCtx;
+  return (gdIOCtx*)ctx;
+}
+
+static void freeBorkCtx(gdIOCtx *ctx)
+{
+  free(ctx);
+}
+
+static Int4 borkPutbuf( gdIOCtx* ctx, const void *buf, Int4 size )
+{
+  borkIOCtx          *bctx;
+  bctx = (borkIOCtx*) ctx;
+  if (bctx->len + size >= bctx->bufsz) {
+      bctx->buffer = (Char*) realloc(bctx->buffer, (bctx->bufsz+size)*2);
+      bctx->bufsz += size;
+      bctx->bufsz *= 2;
+  }
+  memcpy(bctx->buffer + bctx->len, buf, size);
+  bctx->len += size;
+  return size;
+}
+
+static void borkPutchar( gdIOCtx* ctx, int a )
+{
+    char	*onechar = (char*) malloc(2);
+    onechar[0] = a; 
+    onechar[1] = '\0'; 
+    borkPutbuf(ctx, onechar, 1);
+}
 
 
 

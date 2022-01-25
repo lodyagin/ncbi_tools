@@ -29,13 +29,40 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.47 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.47  2001/04/02 21:25:19  kans
+* AddGBQual under ASN2GNBK_STRIP_NOTE_PERIODS also removes ; ; substrings
+*
+* Revision 6.46  2001/03/26 17:36:06  kans
+* added NULL for endogenous-virus to genome prefix array
+*
+* Revision 6.45  2001/02/16 16:52:22  tatiana
+* special case locus for NT_ records
+*
+* Revision 6.44  2001/01/26 19:21:48  kans
+* extrachromosomal into source note, removed macronuclear, extrachrom, plasmid from organism line
+*
+* Revision 6.43  2001/01/19 21:51:04  kans
+* finally got ASN2GNBK_STRIP_NOTE_PERIODS logic right
+*
+* Revision 6.42  2001/01/19 18:45:28  kans
+* another attempt to use ASN2GNBK_STRIP_NOTE_PERIODS to remove extraneous asn2ff/asn2gnbk diffs
+*
+* Revision 6.41  2001/01/08 18:36:40  kans
+* removed ASN2GNBK_STRIP_NOTE_PERIODS - this was not the right place
+*
+* Revision 6.40  2001/01/06 22:09:42  kans
+* added ASN2GNBK_STRIP_NOTE_PERIODS to try to eliminate trivial note discrepancies
+*
+* Revision 6.39  2000/11/29 20:46:11  tatiana
+* HTC division added for MI_TECH_htc
+*
 * Revision 6.38  2000/10/24 20:28:44  tatiana
 * ValidateAccession accepts XP, XM
 *
@@ -1198,7 +1225,7 @@ NLM_EXTERN GBQualPtr AddGBQualEx (CharPtr PNTR key, GBQualPtr gbqual, CharPtr qu
 
 NLM_EXTERN GBQualPtr AddGBQual (GBQualPtr gbqual, CharPtr qual, CharPtr val)
 {
-	GBQualPtr curq;
+	GBQualPtr curq, note = NULL;
 
 	if (StringCmp(qual, "translation") == 0) {
 		if (val == NULL) 
@@ -1217,13 +1244,38 @@ NLM_EXTERN GBQualPtr AddGBQual (GBQualPtr gbqual, CharPtr qual, CharPtr val)
 		if (val)
 			curq->val = StringSave(val);
 		curq->qual = StringSave(qual);
+		note = curq;
 	} else {
 		gbqual = GBQualNew();
 		gbqual->next = NULL;
 		if (val)
 			gbqual->val = StringSave(val);
 		gbqual->qual = StringSave(qual);
+		note = gbqual;
 	}
+
+#ifdef ASN2GNBK_STRIP_NOTE_PERIODS
+	if (note != NULL && StringICmp (qual, "note") == 0) {
+		size_t len;
+		CharPtr p, q;
+		len = StringLen (note->val);
+		if (len > 0 && note->val [len - 1] == '.') {
+ 			note->val [len - 1] = '\0';
+		}
+		p = note->val;
+		q = note->val;
+		while (*p) {
+		  if (*p == ';' && p [1] == ' ' && p [2] == ';') {
+		    p += 2;
+		  } else {
+		    *q = *p;
+		    p++;
+		    q++;
+		  }
+		}
+		*q = '\0';
+	}
+#endif
 
 	return gbqual;
 }
@@ -1296,7 +1348,7 @@ NLM_EXTERN CharPtr FlatOrganelle(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid ", "Macronuclear ", "Extrachrom ", "Plasmid ", NULL, NULL, "Cyanelle ", "Proviral ", "Virion ", "Nucleomorph ", "Apicoplast ", "Leucoplast ", "Proplastid "};
 */	
 	static CharPtr genome[] = {
-	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid ", "Macronuclear ", "Extrachrom ", "Plasmid ", NULL, NULL, "Cyanelle ", NULL, NULL, "Nucleomorph ", "Apicoplast ", "Leucoplast ", "Proplastid "};
+	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid ", NULL, NULL, NULL, NULL, NULL, "Cyanelle ", NULL, NULL, "Nucleomorph ", "Apicoplast ", "Leucoplast ", "Proplastid ", NULL};
 	
 /* try new first */
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
@@ -1499,6 +1551,9 @@ NLM_EXTERN Int2 BioseqGetGBDivCode(BioseqPtr bsp, CharPtr buf, Int2 buflen, Bool
 		break;
 		case MI_TECH_survey:
 			diff = LabelCopy(buf, "GSS", buflen);
+		break;
+		case MI_TECH_htc:
+			diff = LabelCopy(buf, "HTC", buflen);
 		break;
 		case MI_TECH_htgs_0:
 		case MI_TECH_htgs_1:
@@ -2407,7 +2462,7 @@ static CharPtr GetDivision(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	CharPtr buffer;
 	static CharPtr embl_divs [] = {
 	"FUN","INV","MAM","ORG","PHG","PLN","PRI","PRO","ROD","SYN","UNA","VRL",
-	"VRT","PAT","EST","STS", "HUM"
+	"VRT","PAT","EST","STS", "HUM", "HTC"
 	};
 
 	buffer = MemNew(buflen);
@@ -2427,6 +2482,9 @@ static CharPtr GetDivision(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 				if (mol) {
 					if (mol->tech == MI_TECH_survey) {
 						StringNCpy_0(buffer, "GSS", buflen);
+						return buffer;
+					} else if (mol->tech == MI_TECH_htc) {
+						StringNCpy_0(buffer, "HTC", buflen);
 						return buffer;
 					} else if (mol->tech == MI_TECH_htgs_1
 							 || mol->tech == MI_TECH_htgs_2) {
@@ -3045,7 +3103,12 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 					total_segs, num_seg, buf_locus, tsip->name, buf_acc); 
 				StringNCpy_0(gbp->accession, 
 					buf_acc, MAX_ACCESSION_LEN+1);
-				sprintf(gbp->locus, "%-10s", buf_locus); 
+				if (sip->choice == SEQID_OTHER 
+						&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
+					sprintf(gbp->locus, "%-10s", buf_acc);
+				} else {
+					sprintf(gbp->locus, "%-10s", buf_locus);
+				}
 				num_seg--;
 			if (ajp->show_version) {
 				if (ValidateVersion(sip, ajp) == FALSE) {
@@ -3101,7 +3164,12 @@ NLM_EXTERN void GetLocusPartsAwp (Asn2ffJobPtr ajp)
 			buf_locus = ValidateLocus(ajp, bsp, base_locus, 
 				total_segs, num_seg, buf_locus, tsip->name, buf_acc); 
 			StringNCpy_0(gbp->accession, buf_acc, MAX_ACCESSION_LEN+1);
-			sprintf(gbp->locus, "%-10s", buf_locus); 
+			if (sip->choice == SEQID_OTHER 
+					&& StringNCmp(tsip->accession, "NT_", 3) == 0) {
+				sprintf(gbp->locus, "%-10s", buf_acc);
+			} else {
+				sprintf(gbp->locus, "%-10s", buf_locus);
+			}
 			num_seg--;
 			
 			break;

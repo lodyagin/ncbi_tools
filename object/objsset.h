@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager interface for module NCBI-Seqset
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objsset.h,v $
+* Revision 6.4  2001/02/14 23:57:28  kans
+* added define for BioseqseqSet_class_eco_set
+*
 * Revision 6.3  1999/09/27 17:48:38  kans
 * using GatherIndex structure
 *
@@ -169,6 +172,7 @@ NLM_EXTERN Int2 LIBCALL BioseqSetLabel PROTO((BioseqSetPtr bssp, CharPtr buffer,
 #define BioseqseqSet_class_mut_set 13
 #define BioseqseqSet_class_pop_set 14
 #define BioseqseqSet_class_phy_set 15
+#define BioseqseqSet_class_eco_set 16
 #define BioseqseqSet_class_gen_prod_set 255
 #define BioseqseqSet_class_other 255
 

@@ -2,7 +2,7 @@
                           (last updated 10/20/2000)
 
 
-Mega BLAST uses the greeedy algorithm of Webb Miller et al. for nucleotide
+Mega BLAST uses the greedy algorithm of Webb Miller et al. for nucleotide
 sequence alignment search and concatenates many queries to save time spent
 scanning the database. This program is optimized for aligning sequences that
 differ slightly as a result of sequencing or other similar "errors". It is up to
@@ -37,36 +37,37 @@ either specific to Mega BLAST or having different meaning:
 
 -----------------------------
 
--D The level of details in the Mega BLAST output.
+-D Type of the Mega BLAST output.
 
-   Level 0 produces one-line output for each alignment, in the form
+   0: Produce one-line output for each alignment, in the form
 
-   'subject-id'=='[+-]query-id' (s_off q_off s_end q_end) score
+      'subject-id'=='[+-]query-id' (s_off q_off s_end q_end) score
 
-   Here subject(query)-id is a gi number, an accession or some other type of
-   identifier found in the FASTA definition line of the respective sequence.
+      Here subject(query)-id is a gi number, an accession or some other type of
+      identifier found in the FASTA definition line of the respective sequence.
 
-   + or - corresponds to same or different strand alignment.
+      + or - corresponds to same or different strand alignment.
 
-   Score for non-affine gapping parameters means the total number of differences
-   (mismatches + gaps). For affine case it is the actual (raw) score of the
-   alignment.
+      Score for non-affine gapping parameters means the total number of
+      differences (mismatches + gaps). For affine case it is the actual (raw)
+      score of the alignment.
 
-   Level 1 shows the same output as level 0, plus the endpoints and percentage 
-   of identical nucleotides for each ungapped segment in the alignment.
+   1: Show the same output as level 0, plus the endpoints and percentage 
+      of identical nucleotides for each ungapped segment in the alignment.
 
-   Level 2 shows the traditional blastn-style output.
+   2: Show the traditional BLAST (blastn) output.
 
-   Level 3 shows one-line output for each alignment, with the following fields 
-   tab-separated:
-   Query id, Subject id, percent of identity, alignment length, number of
-   mismatches (not including gaps), number of gap openings, start of alignment
-   in query, end of alignment in query, start of alignment in subject, end of
-   alignment in subject, expected value, bit score.
+   3: Show one-line output for each alignment, with the following fields 
+      tab-separated:
+
+      Query id, Subject id, percent of identity, alignment length, number of
+      mismatches (not including gaps), number of gap openings, start of
+      alignment in query, end of alignment in query, start of alignment in
+      subject, end of alignment in subject, expected value, bit score.
   
-   If the alignment is from a reverse strand, the subject start and end are
-   printed in the reverse order, reflecting the actual direction of the
-   alignment. 
+      If the alignment is from a reverse strand, the subject start and end are
+      printed in the reverse order, reflecting the actual direction of the
+      alignment. 
     
 -----------------------------
 -F Filtering
@@ -100,6 +101,15 @@ either specific to Mega BLAST or having different meaning:
 
 -----------------------------
 
+-X X-dropoff value.
+
+   As in BLAST, this values provides a cutoff threshold for the extension
+   algorithm tree exploration. When the score of a given branch drops below the
+   current best score minus the X-dropoff, the exploration of this branch
+   stops. 
+
+-----------------------------
+
 -e The cutoff expectation value. 
 
    By default this value is set to a very large number, i.e. effectively there
@@ -116,8 +126,11 @@ either specific to Mega BLAST or having different meaning:
 
 -J Believe the query defline.
 
-   This option must be set to FALSE (F) if the sequence IDs in the FASTA file 
-   are not unique.
+   The default is T (TRUE) for all types of output except -D 2. In the latter
+   case, the default is F (FALSE), unless a SeqAlign ASN.1 output is required,
+   specified by the -O option.
+   Note: this option must be set to F (FALSE) if the sequence IDs in the FASTA 
+   file are not unique.
 
 -----------------------------
 
@@ -142,7 +155,7 @@ either specific to Mega BLAST or having different meaning:
 
 -----------------------------
 
--O Seqalign file.
+-O ASN.1 Seqalign file.
 
    This option specifies a file name for writing ASN.1 output. It is only
    meaningful in conjunction with -D 2. The ASN.1 will consist of separate
@@ -152,7 +165,7 @@ either specific to Mega BLAST or having different meaning:
       All hits for first query
                  }	
    Seq-annot ::= {
-      All hits for first query
+      All hits for second query
                  }	
    etc.
 
@@ -160,7 +173,9 @@ either specific to Mega BLAST or having different meaning:
 
 -s Minimal hit score to report. 
 
-   By default this value is set to W - 4, where W is the wordsize.
+   By default this value is set to W, where W is the wordsize (-W option),
+   i.e. is ignored (since all found alignments are extended from an exact match
+   of length at least W).
 
 -----------------------------
 
@@ -186,3 +201,12 @@ either specific to Mega BLAST or having different meaning:
    Like in blastall binary, this option allows to treat lower case in the query
    sequences as masked residues. The deafult for this option is set to FALSE, 
    in which case the lower case is treated identically to upper case.
+
+-----------------------------
+
+-p Cutoff by percentage of identity
+
+   The alignments with identity percentage below the value of this option are
+   not reported in all output formats except -D 0 (with the latter the traceback 
+   is not performed, so it is impossible to calculate the percentage of identical 
+   residues). 

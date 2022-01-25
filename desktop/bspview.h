@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -72,16 +72,21 @@ typedef struct bioseqviewdata {
   DoC             doc;
   TexT            text;
   PaneL           pnl;
+
   PaneL           udv;
   PaneL           ddv;
+
   GrouP           styleControlGrp;
   GrouP           scaleControlGrp;
   GrouP           findGeneGrp;
   GrouP           docTxtControlGrp;
   GrouP           modeControlGrp;
   GrouP           pnlParentGrp;
+
   GrouP           udvParentGrp;
+  /*
   GrouP           ddvParentGrp;
+  */
   PrompT          clickMe;
 
   Boolean         useScrollText;
@@ -167,8 +172,10 @@ extern BioseqPageData sumPageData;
 extern BioseqPageData gphPageData;
 extern BioseqPageData alnPageData;
 extern BioseqPageData seqPageData;
+/*
 extern BioseqPageData udvPageData;
 extern BioseqPageData ddvPageData;
+*/
 
 extern BioseqPageData gbgnPageData;
 extern BioseqPageData gnbkPageData;
@@ -237,6 +244,8 @@ typedef struct seqviewprocs {
 
   IteM             alignWithChecked;  /* application sets to EntrezGlobalsPtr->alignWithChecked */
   Boolean          alignDefault;  /* application sets to EntrezGlobalsPtr->alignDefault */
+
+  Boolean          lockFarComponents;
 } SeqViewProcs, PNTR SeqViewProcsPtr;
 
 #define REGISTER_NEW_SEQENTRY_VIEW ObjMgrProcLoad(OMPROC_VIEW,"View Bioseq Report","Bioseq Report",OBJ_BIOSEQ,0,OBJ_BIOSEQ,0,NULL,NewSeqEntryViewGenFunc,PROC_PRIORITY_DEFAULT)

@@ -47,6 +47,7 @@ Contents: main routines for makematrices program to convert
 #include <simutil.h>
 #include <posit.h>
 #include <profiles.h>
+#include <sqnutils.h>
 
 
 /*counts the number of items in sequencesFile and matricesFile, assumed to
@@ -270,7 +271,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
          profileFileName[c1] = relativeProfileFileName[c2];
        profileFileName[c1] = '\0';
      }
-     if ((thisProfileFile = FileOpen(profileFileName, "r")) == NULL) {
+     if ((thisProfileFile = FileOpen(profileFileName, "rb")) == NULL) {
 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open file %s\n", profileFileName);
 	return (1);
      }

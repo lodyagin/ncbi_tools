@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.98 $
+* $Revision: 6.100 $
 *
 * File Description: 
 *
@@ -791,8 +791,8 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
     sep = ppp->sep;
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                           bssp->_class == 14 || bssp->_class == 15)) {
+      if (bssp != NULL && (bssp->_class == 7 ||
+                           (bssp->_class >= 13 && bssp->_class <= 16))) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
           num++;
           if (IS_Bioseq (sep)) {
@@ -829,8 +829,8 @@ static void FormatPhylipDoc (PhylipPagePtr ppp)
     sep = ppp->sep;
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
-      if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                           bssp->_class == 14 || bssp->_class == 15)) {
+      if (bssp != NULL && (bssp->_class == 7 ||
+                           (bssp->_class >= 13 && bssp->_class <= 16))) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
           num++;
           len = 0;
@@ -1107,8 +1107,8 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
 
             if (sep != NULL && IS_Bioseq_set (sep) && SeqEntryHasNoTitles (sep)) {
               bssp = (BioseqSetPtr) sep->data.ptrvalue;
-              if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                                   bssp->_class == 14 || bssp->_class == 15)) {
+              if (bssp != NULL && (bssp->_class == 7 ||
+                                   (bssp->_class >= 13 && bssp->_class <= 16))) {
                 for (tmp = bssp->seq_set, vnp = head;
                      tmp != NULL && vnp != NULL;
                      tmp = tmp->next, vnp = vnp->next) {
@@ -1126,8 +1126,8 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
 
             if (sep != NULL && IS_Bioseq_set (sep)) {
               bssp = (BioseqSetPtr) sep->data.ptrvalue;
-              if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                                   bssp->_class == 14 || bssp->_class == 15)) {
+              if (bssp != NULL && (bssp->_class == 7 ||
+                                   (bssp->_class >= 13 && bssp->_class <= 16))) {
                 seqtitles = 0;
                 seqtotals = 0;
                 for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
@@ -3113,8 +3113,8 @@ static void PrefixOrgToDefline (SeqEntryPtr sep)
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         PrefixOrgToDefline (sep);
       }
@@ -3194,6 +3194,9 @@ static void OnlyOneComponentWarning (SequencesFormPtr sqfp)
         break;
       case SEQ_PKG_MUTATION :
         type = "mutation set";
+        break;
+      case SEQ_PKG_ENVIRONMENT :
+        type = "environmental samples";
         break;
       case SEQ_PKG_GENBANK :
         type = "batch submission";
@@ -3726,6 +3729,9 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
           case SEQ_PKG_MUTATION :
             bssp->_class = 13;
             break;
+          case SEQ_PKG_ENVIRONMENT :
+            bssp->_class = 16;
+            break;
           case SEQ_PKG_GENBANK :
             bssp->_class = 7;
             break;
@@ -4241,8 +4247,8 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
       }
       if (IS_Bioseq_set (sep)) {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                             bssp->_class == 14 || bssp->_class == 15)) {
+        if (bssp != NULL && (bssp->_class == 7 ||
+                             (bssp->_class >= 13 && bssp->_class <= 16))) {
           seqtitles = 0;
           seqtotals = 0;
           for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
@@ -4304,6 +4310,9 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
               break;
             case SEQ_PKG_MUTATION :
               bssp->_class = 13;
+              break;
+            case SEQ_PKG_ENVIRONMENT :
+              bssp->_class = 16;
               break;
             case SEQ_PKG_GENBANK :
               bssp->_class = 7;

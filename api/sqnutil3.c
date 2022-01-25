@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -145,8 +145,8 @@ static void ReplicatePopPhyMutSetBioSource (SeqEntryPtr sep)
   if (! IS_Bioseq_set (sep)) return;
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
-  if (bssp->_class == 7 || bssp->_class == 13 ||
-      bssp->_class == 14 || bssp->_class == 15) {
+  if (bssp->_class == 7 ||
+      (bssp->_class >= 13 && bssp->_class <= 16)) {
     sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
     if (sdp == NULL) return;
     biop = (BioSourcePtr) sdp->data.ptrvalue;

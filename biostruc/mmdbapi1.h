@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -43,6 +43,9 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
+* Revision 6.32  2000/12/05 21:03:05  hurwitz
+* made it neat
+*
 * Revision 6.31  2000/07/24 22:29:45  thiessen
 * fix header conflict
 *
@@ -221,7 +224,6 @@
 *  last mod: 28 AUGUST 95
 *****************************************************************************/
 
-
 #ifndef _MMDBAPI1_
 #define _MMDBAPI1_
 
@@ -243,8 +245,6 @@
 #define INP_BINARY_FILE 0
 #define INP_GI 2
 #define INP_PDB_ACCESSION 3
-
-
 
 #define DICT_DEFAULT "bstdt.val"
 /* new version 4 ASN.1 defines */
@@ -298,9 +298,6 @@
 #define Feature_type_cn3dstate 254
 #define Feature_type_comment 7
 
- 
-
-
 #define MAX_FEATURES 10  
 #define VIEW_CODE 1 /* undef to remove display specific stuff in Modelstruc*/
 /* #define BIG_CODE 1  define to add "user" variables to a Modelstruc PFB nodes */
@@ -327,7 +324,6 @@
 /* #define FEATURE_TAB  0x80 not used */
 #define POWER_VIEW   0xFF
 #define CONVERT_ALL  0xFF
-
 
 /*
  * Flags for the bMe of the MBD,MAD,MGD,MMD, MSD hierarchy of structures.
@@ -368,7 +364,6 @@
 #define AM_MSD     0x01  /* Model Structure Data */
 #define AM_UNK     0x00  
 
-
 /*
  * Flags for the bWhat of MBD, MAD, MGD, MMD, MDS hierarchy.
  * This says what is contained in this branch of hierarchy, i.e.
@@ -392,7 +387,6 @@
 #define  AM_PROT  0x02
 #define  AM_POLY  0x01  
 
-
 /* Flags Block bWhat byte for Graph */
 /* these bits ARE stacked */
 #define  DICT_REF     0x80
@@ -408,7 +402,6 @@
 #define   SS_STRAND    0x20
 #define   SS_TURN      0x10
  
-
 /* Flags Block bWhat byte for MAD atom */
 /* all these are  set by traversers */
 #define  AM_BACKBONE            0x01  /* PROT & NA */
@@ -428,7 +421,6 @@
 #define Bond_order_other 6
 #define Bond_order_unknown 255
 #define Bond_order_single 1
-
 
 /* Flags Block bWhat byte for MBD bond */
 /* these bits are stacked */
@@ -453,7 +445,6 @@
 #define  OBJ_TRIANGLES  0x08
 #define  OBJ_CONE       0x04
  
-
 /* Pointers to the hierarchical types for Biostruc data
  * Note the terse struct names MMx, PMMx, MMxD are used to limit the
  * length of long pointer casts when coding and for Hungarian Notation
@@ -508,7 +499,6 @@ typedef DValNodePtr PDNSF; /* Structure Feature */
 /*MMDBAPI NODE DECLARATIONS*/
 /***************************/
 
-
 /**************/
 /* Flag Block */
 /**************/
@@ -518,13 +508,12 @@ typedef DValNodePtr PDNSF; /* Structure Feature */
  
 typedef struct nlm_flagblock { 
   struct nlm_flagblock PNTR pfbParent; 
-         /* pointer to parent Data node (for MSD it is NULL) */
+  /* pointer to parent Data node (for MSD it is NULL) */
   Byte bMe; /* Me byte - identifies typecast and display triage */
   Byte bWhat; /* What is in me? */
   Byte bUpdate; /* byte to indicate status */
   Byte bReserved;
- 
-    Int4Ptr pI4vFeatID;  /* Feature Id */ 
+  Int4Ptr pI4vFeatID;  /* Feature Id */ 
   PointerPtr ppvFeatData; /* vector containing pointers */
   Int2 iNumFeats;  /* number of Features registered in node */
 #ifdef BIG_CODE
@@ -533,16 +522,12 @@ typedef struct nlm_flagblock {
   Int2 i2Reserved;
   Int2 i2User;
 #endif
-
- }FB,  *PFB, **PPFB;
+}FB,  *PFB, **PPFB;
 
 
 /*************************/
 /*  Feature Handlers     */
 /*************************/
-
-
-
 
 typedef DValNodePtr PDNTRN;
 
@@ -551,7 +536,6 @@ typedef DValNodePtr PDNSFS; /* Structure Feature Set*/
 /* choice = Feature Set Id  - each "session" is a new feature set */
  
 typedef void (LIBCALLBACK *PColor3DFunc)(ColorPropPtr pcpThis, Uint1  PNTR pIndex);
-
 
 typedef void (LIBCALLBACK *PStrFeatFunc)(Pointer PNTR ppCUserData, 
 				         UserObjectPtr PNTR ppASNUserObj);
@@ -571,7 +555,6 @@ typedef void (LIBCALLBACK *PStrFeatFunc)(Pointer PNTR ppCUserData,
 /* reconstructed, and the features are reconstructed from the feature  */
 /* registry.  Afterward, the feature ASN.1 structures are freed.       */
  
-   
 typedef ValNodePtr PVNSFF;  /* linked list of SFF */
 /* choice = feature type code */   
  
@@ -584,101 +567,98 @@ typedef struct Nlm_sff
     }SFF, *PSFF;
 
 typedef struct Nlm_sfd  
-    {
-	struct Nlm_sfd PNTR next;
-	PDNSFS pdnsfsSet;
-        Int4 iId;
-        Int4 iType;
-        CharPtr pcName;
-	Int2 iColor;  /* table integer index */
-        Int2 iRender;  /* render code from spec */
-        Byte bPFBtype;  /* type of node feature applies to */
-        Pointer pData; /* transform, camera, script, align in ASN.1 format  */
-        BiostrucFeaturePtr pbsfFeat; /* stub for ASN.1 used only for write */        
-     }SFD,  *PSFD;       
+{
+  struct Nlm_sfd PNTR next;
+  PDNSFS pdnsfsSet;
+  Int4 iId;
+  Int4 iType;
+  CharPtr pcName;
+  Int2 iColor;  /* table integer index */
+  Int2 iRender;  /* render code from spec */
+  Byte bPFBtype;  /* type of node feature applies to */
+  Pointer pData; /* transform, camera, script, align in ASN.1 format  */
+  BiostrucFeaturePtr pbsfFeat; /* stub for ASN.1 used only for write */        
+}SFD,  *PSFD;       
 
 typedef struct Nlm_sfs  
-    {
-        Int4 iId;
-        PDNSFS pdnsfsSet;
-        Boolean SetisOn;
-        CharPtr pcName;
-	PSFD   psfdFeats;
-        ValNodePtr pvnDescr;
-        BiostrucFeatureSetPtr pbsfsFeatSet;  /* ASN.1 stub only for write */
-     }SFS,  *PSFS;       
-
-
-
+{
+  Int4 iId;
+  PDNSFS pdnsfsSet;
+  Boolean SetisOn;
+  CharPtr pcName;
+  PSFD   psfdFeats;
+  ValNodePtr pvnDescr;
+  BiostrucFeatureSetPtr pbsfsFeatSet;  /* ASN.1 stub only for write */
+}SFS,  *PSFS;       
 
 
 /************************/
 /* Model Structure Data */
 /************************/
 typedef struct Nlm_msd  
-    {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate; 
-        Byte bReserved; 
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate; 
+  Byte bReserved; 
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-     Byte bVisible; /* can it be seen? */ 
-     Byte bMaster; /* am I a master struct? */
-     Byte bAligned; /* master: how many slaves? */
-     BytePtr pbAligned;  /* slave: pointer to master bAligned */
-     PDNMS pdnmsLink; 
-     CharPtr pcSName; /* the "retrieval" string */
-     Int2 iType; /* encodes pcSName as net id or filename for retrieve */
-     BiostrucPtr pbsBS;  /* the ASN.1 Biostruc is kept here, usually */ 
-                         /* "header" with {id, desc, history} only */
-		         /* but during write operations it is to be */
-		 	 /* fully reconstructed. */
-     ResidueGraphPtr pDictLocal;  /* the local ASN.1 dictionary */
-/* make this into a linked-list of dictionaries with id's */
-     BiomolDescrPtr pGraphDescr;  /* The chemical graph ASN.1 descr (ValNode) */
-     CharPtr pcPDBName;  /* from ASN.1 Biostruc descr field */
-     Int4 iMMDBid;  /* MMDB unique number */
-     CharPtr pcChemName; /* from ASN.1 chem graph descr field */
-     CharPtr pcPdbClass; 
-     CharPtr pcPdbSource; 
-     Int2 iModels;  /* Number of Models present */
-     Int2 iActiveModel; /* Index of Active Model */
-     Int2 iFeatures;
-     Int2 iPDBType;  /* enum from ASN.1 */
-     Int4 iMolCount; /* number of molecules */
-     Int4 iObjCount; /* number of objects */
-     Int4 iDensCount; /* number of densities */
-     Int4 iIMBCount; /* number of inter-molecule bonds */
-     Int4 iHashChange; /* iModels+iFeatures+iObjCount+iDensCount + #ALD's */
-/* data block */
-     Int2 iMimeType;
-     PDNML pdnmlModels; /* contains PMLD with Models that are */ 
-/*   PDNSF pdnsfFeatures; */  /*  BiostrucFeatureSetPtrs */ 
-                     /* moved to psastrucAlignment */
-     PDNSFS pdnsfsHead;  /* the feature registry for this structure */ 
-     PDNMM pdnmmHead; /* the list of molecules (children) */          
-     PVNMB pvnmbIMBHead;  /* Inter-molecule bonds in structure (children) */
-     PVNMO pvnmoHead; /* the list of model objects */
-     PVNMD pvnmdHead; /* the list of model densities */
-     FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
-     /*  When needed, Allocated with:  ppflBoundBox = FLMatrix(0,2,0,3); */
-     FloatLoPtr PNTR ppflRotate; /* matrix 3x3 with rotations for structure */
-     FloatLoPtr pflTranslate; /* 3 - vector with translations for structure */
-     PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
-     BiostrucAnnotSetPtr psaStrucAlignment;
-     VoidPtr pGlobalPARS; /* will hold pointer to default "global" PARS for this structure */
-     ValNodePtr pdnSlaveToMasterTransforms; /* store transformation for slave onto master */
+  /* bookkeeping block */
+  Byte bVisible; /* can it be seen? */ 
+  Byte bMaster; /* am I a master struct? */
+  Byte bAligned; /* master: how many slaves? */
+  BytePtr pbAligned;  /* slave: pointer to master bAligned */
+  PDNMS pdnmsLink; 
+  CharPtr pcSName; /* the "retrieval" string */
+  Int2 iType; /* encodes pcSName as net id or filename for retrieve */
+  BiostrucPtr pbsBS;  /* the ASN.1 Biostruc is kept here, usually */ 
+  /* "header" with {id, desc, history} only */
+  /* but during write operations it is to be */
+  /* fully reconstructed. */
+  ResidueGraphPtr pDictLocal;  /* the local ASN.1 dictionary */
+  /* make this into a linked-list of dictionaries with id's */
+  BiomolDescrPtr pGraphDescr;  /* The chemical graph ASN.1 descr (ValNode) */
+  CharPtr pcPDBName;  /* from ASN.1 Biostruc descr field */
+  Int4 iMMDBid;  /* MMDB unique number */
+  CharPtr pcChemName; /* from ASN.1 chem graph descr field */
+  CharPtr pcPdbClass; 
+  CharPtr pcPdbSource; 
+  Int2 iModels;  /* Number of Models present */
+  Int2 iActiveModel; /* Index of Active Model */
+  Int2 iFeatures;
+  Int2 iPDBType;  /* enum from ASN.1 */
+  Int4 iMolCount; /* number of molecules */
+  Int4 iObjCount; /* number of objects */
+  Int4 iDensCount; /* number of densities */
+  Int4 iIMBCount; /* number of inter-molecule bonds */
+  Int4 iHashChange; /* iModels+iFeatures+iObjCount+iDensCount + #ALD's */
+  /* data block */
+  Int2 iMimeType;
+  PDNML pdnmlModels; /* contains PMLD with Models that are */ 
+  /*   PDNSF pdnsfFeatures; */  /*  BiostrucFeatureSetPtrs */ 
+  /* moved to psastrucAlignment */
+  PDNSFS pdnsfsHead;  /* the feature registry for this structure */ 
+  PDNMM pdnmmHead; /* the list of molecules (children) */          
+  PVNMB pvnmbIMBHead;  /* Inter-molecule bonds in structure (children) */
+  PVNMO pvnmoHead; /* the list of model objects */
+  PVNMD pvnmdHead; /* the list of model densities */
+  FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
+  /*  When needed, Allocated with:  ppflBoundBox = FLMatrix(0,2,0,3); */
+  FloatLoPtr PNTR ppflRotate; /* matrix 3x3 with rotations for structure */
+  FloatLoPtr pflTranslate; /* 3 - vector with translations for structure */
+  PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
+  BiostrucAnnotSetPtr psaStrucAlignment;
+  VoidPtr pGlobalPARS; /* will hold pointer to default "global" PARS for this structure */
+  ValNodePtr pdnSlaveToMasterTransforms; /* store transformation for slave onto master */
 } MSD,  *PMSD;
  
 
@@ -687,158 +667,151 @@ typedef struct Nlm_msd
 /***********************/
 typedef struct Nlm_mmd 
 {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;
-    Byte bReserved;   
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;
+  Byte bReserved;   
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-  	Byte bVisible;  /* to control show/off on MM level -- Yanli  */
-    PDNMM pdnmmLink;
-    ValNodePtr pMolDescr; /* the ASN.1 molecule descr */
-    ValNodePtr pSeqId;
-    CharPtr pcMolName; /* from ASN.1 "chain" descr field */
-    Int4 iChainId;
-    Int4 iGi;
-    Int4 iResCount; /* number of graphs */
-    Int4 iIRBCount; /* number of inter-res bonds */
-    CharPtr pcSeqId;
-    CharPtr pcSequence;
-    PDNMG pdnmgStartSelect, pdnmgEndSelect;  /* used to select a range of residues in the molecule.  lyg */
-    Int4 iTargetRow; /* corresponding row in the original ASN1 alignment */
-     
-/* data block */
-    PDNMG pdnmgHead;  /* the list of model graphs (children)  */
-    PVNMB pvnmbIRBHead;  /* Inter-residue bonds in molecule (children) */
-    FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
-    ValNodePtr pvnContainedBy;
+  /* bookkeeping block */
+  Byte bVisible;  /* to control show/off on MM level -- Yanli  */
+  PDNMM pdnmmLink;
+  ValNodePtr pMolDescr; /* the ASN.1 molecule descr */
+  ValNodePtr pSeqId;
+  CharPtr pcMolName; /* from ASN.1 "chain" descr field */
+  Int4 iChainId;
+  Int4 iGi;
+  Int4 iResCount; /* number of graphs */
+  Int4 iIRBCount; /* number of inter-res bonds */
+  CharPtr pcSeqId;
+  CharPtr pcSequence;
+  PDNMG pdnmgStartSelect, pdnmgEndSelect;  /* used to select a range of residues in the molecule.  lyg */
+  Int4 iTargetRow; /* corresponding row in the original ASN1 alignment */
+  /* data block */
+  PDNMG pdnmgHead;  /* the list of model graphs (children)  */
+  PVNMB pvnmbIRBHead;  /* Inter-residue bonds in molecule (children) */
+  FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
+  ValNodePtr pvnContainedBy;
 } MMD, *PMMD;
 
- 
-    
+
 /********************/    
 /* Model Graph Data */
 /********************/
 typedef struct Nlm_mgd  
 {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-    Byte bReserved;
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved;
  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-    Byte bVisible;     /* control display at residue level */
-    Byte bHighlighted;
-
-    Byte bNCBISecStru;
-    Byte bPDBSecStru;
-    PDNMG pdnmgLink;
-    Int2 iDomain;   /* NCBI assigned domain number */
-    CharPtr pcGraphName;  /* PDB 3-letter code */
-    CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
-    Int4 iIDict;  /* index into dictionary */
-    CharPtr pcIUPAC; /* IUPAC name X = invalid graph code */ 
-    CharPtr pcNCBISS; /* pointer into the NCBI ss features string */
-    CharPtr pcPDBSS; /* pointer into the PDB ss features string */
-    CharPtr pcPDBComment; /* pointer into name of heterogen in dict */
-    Int4 iAtomCount;
-    Int4 iBondCount;
-/* data block */
-    PVNMA pvnmaAHead; /* the atom list (children) */
-    PVNMB pvnmbBHead; /* the bond list (children) */
-    FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
-    ValNodePtr pvnContainedBy;
-    BytePtr pbMasterReserved;
-
-    /* will contain list of pointers to PARS structures - "global" has choice = 0,
-     * "special style" has choice >= 1 */
-    ValNodePtr pvnPARSList;
+  /* bookkeeping block */
+  Byte bVisible;     /* control display at residue level */
+  Byte bHighlighted;
+  Byte bNCBISecStru;
+  Byte bPDBSecStru;
+  PDNMG pdnmgLink;
+  Int2 iDomain;   /* NCBI assigned domain number */
+  CharPtr pcGraphName;  /* PDB 3-letter code */
+  CharPtr pcGraphNum; /* the PDB numbering string e.g . 38A */
+  Int4 iIDict;  /* index into dictionary */
+  CharPtr pcIUPAC; /* IUPAC name X = invalid graph code */ 
+  CharPtr pcNCBISS; /* pointer into the NCBI ss features string */
+  CharPtr pcPDBSS; /* pointer into the PDB ss features string */
+  CharPtr pcPDBComment; /* pointer into name of heterogen in dict */
+  Int4 iAtomCount;
+  Int4 iBondCount;
+  /* data block */
+  PVNMA pvnmaAHead; /* the atom list (children) */
+  PVNMB pvnmbBHead; /* the bond list (children) */
+  FloatLoPtr PNTR ppflBoundBox; /* matrix 2x3 with max & min XYZs */     
+  ValNodePtr pvnContainedBy;
+  BytePtr pbMasterReserved;
+  /* will contain list of pointers to PARS structures - "global" has choice = 0,
+  * "special style" has choice >= 1 */
+  ValNodePtr pvnPARSList;
 } MGD, *PMGD;
-
 
 
 /*******************/
 /* Model Atom Data */
 /*******************/
 typedef struct Nlm_mad  
-    {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-        Byte bReserved; 
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved; 
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-     PVNMA pvnmaLink; /* element number is pvnmaLink->choice */
-     CharPtr pcAName; /* PDB name in the DICTIONARY!! */
-     Int2 iIndex; /* MMDB index */
-/* data block */
-     ValNodePtr pvnBonds; 
-     ValNodePtr pvnContainedBy;
-     PVNAL pvnalLocate;
-     }MAD,  *PMAD;
+  /* bookkeeping block */
+  PVNMA pvnmaLink; /* element number is pvnmaLink->choice */
+  CharPtr pcAName; /* PDB name in the DICTIONARY!! */
+  Int2 iIndex; /* MMDB index */
+  /* data block */
+  ValNodePtr pvnBonds; 
+  ValNodePtr pvnContainedBy;
+  PVNAL pvnalLocate;
+}MAD,  *PMAD;
 
 
 /**********************/   
 /* Atom Location Data */
 /**********************/
 typedef struct Nlm_ald
-  {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-        Byte bReserved;
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved;
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-   struct  Nlm_ald PNTR next;
-    PVNAL pvnalLink; /* link to get model id */ 
-    Int4 iUniqueId;  
-    Char  cAltConf; /* if = " " */
-    Int1 iCoordSet;  /* index from ASN.1 model coord set */
-    Int1 iFloatNo;
-    FloatLoPtr pflvData;
-    Pointer pGraphic;  /* pointer to graphic segment */
- 
-   } ALD, *PALD;
-
+  struct  Nlm_ald PNTR next;
+  PVNAL pvnalLink; /* link to get model id */ 
+  Int4 iUniqueId;  
+  Char  cAltConf; /* if = " " */
+  Int1 iCoordSet;  /* index from ASN.1 model coord set */
+  Int1 iFloatNo;
+  FloatLoPtr pflvData;
+  Pointer pGraphic;  /* pointer to graphic segment */
+} ALD, *PALD;
 
 
 /*  pflvData is a vector containing...
@@ -865,123 +838,116 @@ Indexed as follows...
 /* Model Bond Data */
 /*******************/
 typedef struct Nlm_mbd  
-    {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-        Byte bReserved;
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved;
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-     PVNMB pvnmbLink;  /*  ASN.1 defined types is in pvnmbLink->choice */
-/* data block */
-     PMAD pmadFrom;
-     PMAD pmadTo;
-     }MBD,  *PMBD;       
-
+  /* bookkeeping block */
+  PVNMB pvnmbLink;  /*  ASN.1 defined types is in pvnmbLink->choice */
+  /* data block */
+  PMAD pmadFrom;
+  PMAD pmadTo;
+}MBD,  *PMBD;       
 
 
 /*********************/
 /* Model Object Data */
 /*********************/
 typedef struct Nlm_mod  
-    {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-        Byte bReserved;
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved;
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-     PVNMO pvnmoLink;
-     ValNodePtr pvnContains;
-     struct  Nlm_mld PNTR pmldCoordSet; 
-     Byte bVisible;   /* control object display to synchronize with its partner display -- Yanli  */
-  
-/* data block */
-     Int4  	   iCoordNo;
-     FloatLoPtrPtr ppflObject;  /* coordinate lists */
-     UcharPtr pucSwap;          /* same length as coord list */
-     Int4	   iTriNo;
-     Int4PtrPtr ppi4Triangles;  /* triangles list */
-     FloatLo flRadius;     
-     Int2Ptr pi2vColor;  /* colors for each triangle */
-    
-     /* cast a matrix Floating pt N x 3 for data */
-     /* length 0 for sphere */
-     /*        1 for cylinder */
-     /*        7 for brick */
-     /*        n for surface */
-    
-    
+  /* bookkeeping block */
+  PVNMO pvnmoLink;
+  ValNodePtr pvnContains;
+  struct  Nlm_mld PNTR pmldCoordSet; 
+  Byte bVisible;   /* control object display to synchronize with its partner display -- Yanli  */
+  /* data block */
+  Int4  	   iCoordNo;
+  FloatLoPtrPtr ppflObject;  /* coordinate lists */
+  UcharPtr pucSwap;          /* same length as coord list */
+  Int4	   iTriNo;
+  Int4PtrPtr ppi4Triangles;  /* triangles list */
+  FloatLo flRadius;     
+  Int2Ptr pi2vColor;  /* colors for each triangle */
+  /* cast a matrix Floating pt N x 3 for data */
+  /* length 0 for sphere */
+  /*        1 for cylinder */
+  /*        7 for brick */
+  /*        n for surface */
 #ifdef VIEW_CODE
- /* logic to pass surface as optimized t-mesh */
- /* regardless of order of points */
- /* can view surface as dots or as t-mesh */
-/* display block */
+  /* logic to pass surface as optimized t-mesh */
+  /* regardless of order of points */
+  /* can view surface as dots or as t-mesh */
+  /* display block */
 #endif
-    }MOD,  *PMOD;       
+}MOD,  *PMOD;       
 
 
 /**********************/
 /* Model Density Data */
 /**********************/
 typedef struct Nlm_mdd  
-    {
-/* flag block */
-  	PFB pfbParent; 
-  	Byte bMe; 
-  	Byte bWhat;  
-  	Byte bUpdate;  
-        Byte bReserved;
-  	Int4Ptr pI4vFeatID;  
-  	PointerPtr ppvFeatData; 
-  	Int2 iNumFeats;  
+{
+  /* flag block */
+  PFB pfbParent; 
+  Byte bMe; 
+  Byte bWhat;  
+  Byte bUpdate;  
+  Byte bReserved;
+  Int4Ptr pI4vFeatID;  
+  PointerPtr ppvFeatData; 
+  Int2 iNumFeats;  
 #ifdef BIG_CODE
-  	Byte bReserved1;  /*  */
-  	Byte bUser1;
-  	Int2 i2Reserved;
-  	Int2 i2User;
+  Byte bReserved1;  /*  */
+  Byte bUser1;
+  Int2 i2Reserved;
+  Int2 i2User;
 #endif
-/* bookkeeping block */
-     PVNMD pvnmdLink;
-     struct  Nlm_mld PNTR pmldCoordSet;
-     /* pointer to the ASN.1 data */
-/* data block */
-    /* put the floating point Brick values into a matrix */
-    /* cast the density matrix into XYZ points in a n x 3 matrix */
-    /* make a connectivity matrix m x 2 of integer array indices */
-    /* cast the contents into a ValNode matrix containing PFB's */
-
-    ValNodePtr pvnContains;
+  /* bookkeeping block */
+  PVNMD pvnmdLink;
+  struct  Nlm_mld PNTR pmldCoordSet;
+  /* pointer to the ASN.1 data */
+  /* data block */
+  /* put the floating point Brick values into a matrix */
+  /* cast the density matrix into XYZ points in a n x 3 matrix */
+  /* make a connectivity matrix m x 2 of integer array indices */
+  /* cast the contents into a ValNode matrix containing PFB's */
+  ValNodePtr pvnContains;
 #ifdef VIEW_CODE
-   /* display the Brick as lines */
-   /* display the intensity as dots or connected lines */
-   /* cast the intensity value into colors in an Int2 n-vector  */
-   /* cast the intensities into display layers - and Int2 n-vector */
- 
-/* display block */
-#endif
-    }MDD,  *PMDD;       
+  /* display the Brick as lines */
+  /* display the intensity as dots or connected lines */
+  /* cast the intensity value into colors in an Int2 n-vector  */
+  /* cast the intensities into display layers - and Int2 n-vector */
 
+  /* display block */
+#endif
+}MDD,  *PMDD;       
 
 
 /**********************/   
@@ -993,28 +959,23 @@ typedef struct Nlm_mdd
  * pointers to each and every ALD in the model
  * This vector allows indexing features to atom locs
  */
-
 typedef struct Nlm_mld
-  {  
-    /* tiny flag block */
-    PMSD    pmsdParent;  /* Parent Structure*/
-    struct  Nlm_mld PNTR next;
-    Byte    bSelected; /* for saving/conversion to other file formats */
-    Byte    bReserved;
-    Int2 iType;  
-    Int2 iId;
-    CharPtr pcModelName;
-    CharPtr pcAltConf; /* A string of all AltConfs in model */
-    Int2 iNoCoordSet;  /* index from ASN.1 model coord set */   
-    PointerPtr ppAsnOrder; /* vector containing all PALD's if atomic data */
-    PMOD pmodObject;  /* if model coord set is object */
-    PMDD pmddDensity;  /* if model coord set is density */
-    BiostrucModelPtr pbsmModel; 
-  } MLD, *PMLD;
-
-
-
-
+{  
+  /* tiny flag block */
+  PMSD    pmsdParent;  /* Parent Structure*/
+  struct  Nlm_mld PNTR next;
+  Byte    bSelected; /* for saving/conversion to other file formats */
+  Byte    bReserved;
+  Int2 iType;  
+  Int2 iId;
+  CharPtr pcModelName;
+  CharPtr pcAltConf; /* A string of all AltConfs in model */
+  Int2 iNoCoordSet;  /* index from ASN.1 model coord set */   
+  PointerPtr ppAsnOrder; /* vector containing all PALD's if atomic data */
+  PMOD pmodObject;  /* if model coord set is object */
+  PMDD pmddDensity;  /* if model coord set is density */
+  BiostrucModelPtr pbsmModel; 
+} MLD, *PMLD;
 
 
 typedef BiostrucResidueGraphSetPtr PRGD;
@@ -1172,4 +1133,3 @@ NLM_EXTERN Boolean LIBCALL BiostrucAvail (void);
 #endif
 
 #endif
-

@@ -31,7 +31,7 @@ bxmlobjAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.9 at Oct 23, 2000  4:18 PM
+*    Generated using ASNCODE Revision: 6.9 at Nov 24, 2000 11:42 AM
 *
 **************************************************/
 
@@ -72,10 +72,8 @@ BlastOutputFree(BlastOutputPtr ptr)
    MemFree(ptr -> query_ID);
    MemFree(ptr -> query_def);
    MemFree(ptr -> query_seq);
-   AsnGenericUserSeqOfFree(ptr -> hits, (AsnOptFreeFunc) HitFree);
    ParametersFree(ptr -> param);
-   StatisticsFree(ptr -> stat);
-   MemFree(ptr -> message);
+   AsnGenericUserSeqOfFree(ptr -> iterations, (AsnOptFreeFunc) IterationFree);
    return MemFree(ptr);
 }
 
@@ -183,20 +181,6 @@ BlastOutputAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> query_seq = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BLASTOUTPUT_iter_num) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> iter_num = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLASTOUTPUT_hits) {
-      ptr -> hits = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) HitAsnRead, (AsnOptFreeFunc) HitFree);
-      if (isError && ptr -> hits == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
    if (atp == BLASTOUTPUT_param) {
       ptr -> param = ParametersAsnRead(aip, atp);
       if (aip -> io_failure) {
@@ -204,18 +188,11 @@ BlastOutputAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == BLASTOUTPUT_stat) {
-      ptr -> stat = StatisticsAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == BLASTOUTPUT_iterations) {
+      ptr -> iterations = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) IterationAsnRead, (AsnOptFreeFunc) IterationFree);
+      if (isError && ptr -> iterations == NULL) {
          goto erret;
       }
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == BLASTOUTPUT_message) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> message = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
 
@@ -299,229 +276,12 @@ BlastOutputAsnWrite(BlastOutputPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> query_seq;
       retval = AsnWrite(aip, BLASTOUTPUT_query_seq,  &av);
    }
-   av.intvalue = ptr -> iter_num;
-   retval = AsnWrite(aip, BLASTOUTPUT_iter_num,  &av);
-   AsnGenericUserSeqOfAsnWrite(ptr -> hits, (AsnWriteFunc) HitAsnWrite, aip, BLASTOUTPUT_hits, BLASTOUTPUT_hits_E);
    if (ptr -> param != NULL) {
       if ( ! ParametersAsnWrite(ptr -> param, aip, BLASTOUTPUT_param)) {
          goto erret;
       }
    }
-   if (ptr -> stat != NULL) {
-      if ( ! StatisticsAsnWrite(ptr -> stat, aip, BLASTOUTPUT_stat)) {
-         goto erret;
-      }
-   }
-   if (ptr -> message != NULL) {
-      av.ptrvalue = ptr -> message;
-      retval = AsnWrite(aip, BLASTOUTPUT_message,  &av);
-   }
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    HitNew()
-*
-**************************************************/
-NLM_EXTERN 
-HitPtr LIBCALL
-HitNew(void)
-{
-   HitPtr ptr = MemNew((size_t) sizeof(Hit));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    HitFree()
-*
-**************************************************/
-NLM_EXTERN 
-HitPtr LIBCALL
-HitFree(HitPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   MemFree(ptr -> id);
-   MemFree(ptr -> def);
-   MemFree(ptr -> accession);
-   AsnGenericUserSeqOfFree(ptr -> hsps, (AsnOptFreeFunc) HspFree);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    HitAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-HitPtr LIBCALL
-HitAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   HitPtr ptr;
-
-   if (! loaded)
-   {
-      if (! bxmlobjAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* Hit ::= (self contained) */
-      atp = AsnReadId(aip, amp, HIT);
-   } else {
-      atp = AsnLinkType(orig, HIT);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = HitNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == HIT_num) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> num = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == HIT_id) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> id = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == HIT_def) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> def = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == HIT_accession) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> accession = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == HIT_len) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> len = av.intvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == HIT_hsps) {
-      ptr -> hsps = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) HspAsnRead, (AsnOptFreeFunc) HspFree);
-      if (isError && ptr -> hsps == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = HitFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    HitAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-HitAsnWrite(HitPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! bxmlobjAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, HIT);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   av.intvalue = ptr -> num;
-   retval = AsnWrite(aip, HIT_num,  &av);
-   if (ptr -> id != NULL) {
-      av.ptrvalue = ptr -> id;
-      retval = AsnWrite(aip, HIT_id,  &av);
-   }
-   if (ptr -> def != NULL) {
-      av.ptrvalue = ptr -> def;
-      retval = AsnWrite(aip, HIT_def,  &av);
-   }
-   if (ptr -> accession != NULL) {
-      av.ptrvalue = ptr -> accession;
-      retval = AsnWrite(aip, HIT_accession,  &av);
-   }
-   av.intvalue = ptr -> len;
-   retval = AsnWrite(aip, HIT_len,  &av);
-   AsnGenericUserSeqOfAsnWrite(ptr -> hsps, (AsnWriteFunc) HspAsnWrite, aip, HIT_hsps, HIT_hsps_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> iterations, (AsnWriteFunc) IterationAsnWrite, aip, BLASTOUTPUT_iterations, BLASTOUTPUT_iterations_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -767,6 +527,398 @@ ParametersAsnWrite(ParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> entrez_query;
       retval = AsnWrite(aip, PARAMETERS_entrez_query,  &av);
    }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    IterationNew()
+*
+**************************************************/
+NLM_EXTERN 
+IterationPtr LIBCALL
+IterationNew(void)
+{
+   IterationPtr ptr = MemNew((size_t) sizeof(Iteration));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    IterationFree()
+*
+**************************************************/
+NLM_EXTERN 
+IterationPtr LIBCALL
+IterationFree(IterationPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericUserSeqOfFree(ptr -> hits, (AsnOptFreeFunc) HitFree);
+   StatisticsFree(ptr -> stat);
+   MemFree(ptr -> message);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    IterationAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+IterationPtr LIBCALL
+IterationAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   IterationPtr ptr;
+
+   if (! loaded)
+   {
+      if (! bxmlobjAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Iteration ::= (self contained) */
+      atp = AsnReadId(aip, amp, ITERATION);
+   } else {
+      atp = AsnLinkType(orig, ITERATION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = IterationNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ITERATION_iter_num) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> iter_num = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ITERATION_hits) {
+      ptr -> hits = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) HitAsnRead, (AsnOptFreeFunc) HitFree);
+      if (isError && ptr -> hits == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ITERATION_stat) {
+      ptr -> stat = StatisticsAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ITERATION_message) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> message = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = IterationFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    IterationAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+IterationAsnWrite(IterationPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! bxmlobjAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ITERATION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> iter_num;
+   retval = AsnWrite(aip, ITERATION_iter_num,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> hits, (AsnWriteFunc) HitAsnWrite, aip, ITERATION_hits, ITERATION_hits_E);
+   if (ptr -> stat != NULL) {
+      if ( ! StatisticsAsnWrite(ptr -> stat, aip, ITERATION_stat)) {
+         goto erret;
+      }
+   }
+   if (ptr -> message != NULL) {
+      av.ptrvalue = ptr -> message;
+      retval = AsnWrite(aip, ITERATION_message,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    HitNew()
+*
+**************************************************/
+NLM_EXTERN 
+HitPtr LIBCALL
+HitNew(void)
+{
+   HitPtr ptr = MemNew((size_t) sizeof(Hit));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    HitFree()
+*
+**************************************************/
+NLM_EXTERN 
+HitPtr LIBCALL
+HitFree(HitPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> id);
+   MemFree(ptr -> def);
+   MemFree(ptr -> accession);
+   AsnGenericUserSeqOfFree(ptr -> hsps, (AsnOptFreeFunc) HspFree);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    HitAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+HitPtr LIBCALL
+HitAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   HitPtr ptr;
+
+   if (! loaded)
+   {
+      if (! bxmlobjAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* Hit ::= (self contained) */
+      atp = AsnReadId(aip, amp, HIT);
+   } else {
+      atp = AsnLinkType(orig, HIT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = HitNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == HIT_num) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> num = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == HIT_id) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> id = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == HIT_def) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> def = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == HIT_accession) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> accession = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == HIT_len) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> len = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == HIT_hsps) {
+      ptr -> hsps = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) HspAsnRead, (AsnOptFreeFunc) HspFree);
+      if (isError && ptr -> hsps == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = HitFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    HitAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+HitAsnWrite(HitPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! bxmlobjAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, HIT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> num;
+   retval = AsnWrite(aip, HIT_num,  &av);
+   if (ptr -> id != NULL) {
+      av.ptrvalue = ptr -> id;
+      retval = AsnWrite(aip, HIT_id,  &av);
+   }
+   if (ptr -> def != NULL) {
+      av.ptrvalue = ptr -> def;
+      retval = AsnWrite(aip, HIT_def,  &av);
+   }
+   if (ptr -> accession != NULL) {
+      av.ptrvalue = ptr -> accession;
+      retval = AsnWrite(aip, HIT_accession,  &av);
+   }
+   av.intvalue = ptr -> len;
+   retval = AsnWrite(aip, HIT_len,  &av);
+   AsnGenericUserSeqOfAsnWrite(ptr -> hsps, (AsnWriteFunc) HspAsnWrite, aip, HIT_hsps, HIT_hsps_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1075,6 +1227,13 @@ HspAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> num = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == HSP_bit_score) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> bit_score = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == HSP_score) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -1166,6 +1325,13 @@ HspAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> gaps = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == HSP_align_len) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> align_len = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
    if (atp == HSP_density) {
       if ( AsnReadVal(aip, atp, &av) <= 0) {
          goto erret;
@@ -1247,6 +1413,8 @@ HspAsnWrite(HspPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 
    av.intvalue = ptr -> num;
    retval = AsnWrite(aip, HSP_num,  &av);
+   av.realvalue = ptr -> bit_score;
+   retval = AsnWrite(aip, HSP_bit_score,  &av);
    av.realvalue = ptr -> score;
    retval = AsnWrite(aip, HSP_score,  &av);
    av.realvalue = ptr -> evalue;
@@ -1273,6 +1441,8 @@ HspAsnWrite(HspPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, HSP_positive,  &av);
    av.intvalue = ptr -> gaps;
    retval = AsnWrite(aip, HSP_gaps,  &av);
+   av.intvalue = ptr -> align_len;
+   retval = AsnWrite(aip, HSP_align_len,  &av);
    av.intvalue = ptr -> density;
    retval = AsnWrite(aip, HSP_density,  &av);
    if (ptr -> qseq != NULL) {

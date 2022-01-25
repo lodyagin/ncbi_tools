@@ -8,7 +8,7 @@
 --
 --**********************************************************************
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --**********************************************************************
 --
 --  NCBI General Data elements
@@ -47,6 +47,13 @@ EXPORTS Date, Person-id, Object-id, Dbtag, Int-fuzz, User-object;
 --   is here just for completness
 -- 
 --  StringStore ::= [APPLICATION 1] IMPLICIT OCTET STRING
+--
+
+-- BigInt is really an INTEGER. It is used to warn the recieving code to expect
+--   a value bigger than Int4 (actually Int8). It will be stored in DataVal.bigintvalue
+--
+--   Like StringStore, AsnTool incorporates it as a primitive. The definition would be:
+--   BigInt ::= [APPLICATION 2] IMPLICIT INTEGER
 --
 
 -- Date is used to replace the (overly complex) UTCTtime, GeneralizedTime
@@ -726,7 +733,7 @@ Seq-loc-equiv ::= SET OF Seq-loc      -- for a set of equivalent locations
 END
     
 
---$Revision: 6.1 $
+--$Revision: 6.2 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -826,6 +833,7 @@ MolInfo ::= SEQUENCE {
         peptide (8) ,
         other-genetic (9) ,      -- other genetic material
         genomic-mRNA (10) ,      -- reported a mix of genomic and cdna sequence
+	cRNA (11) ,              -- viral RNA genome copy intermediate
         other (255) } DEFAULT unknown ,
     tech INTEGER {
         unknown (0) ,
@@ -845,6 +853,9 @@ MolInfo ::= SEQUENCE {
         htgs-1 (14) ,           -- unordered High Throughput sequence contig
         htgs-2 (15) ,           -- ordered High Throughput sequence contig
         htgs-3 (16) ,           -- finished High Throughput sequence
+	fli-cdna (17) ,         -- full length insert cDNA
+	htgs-0 (18) ,           -- single genomic reads for coordination
+	htc (19) ,              -- high throughput cDNA
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -949,10 +960,12 @@ Pubdesc ::= SEQUENCE {              -- how sequence presented in pub
     seq-raw StringStore OPTIONAL ,  -- original sequence from paper
     align-group INTEGER OPTIONAL ,  -- this seq aligned with others in paper
     comment VisibleString OPTIONAL, -- any comment on this pub in context
-	reftype INTEGER {               -- type of reference in a GenBank record
-		seq (0) ,                   -- refers to sequence
-		sites (1) ,                 -- refers to unspecified features
-		feats (2) } DEFAULT seq }   -- refers to specified features
+	reftype INTEGER {           -- type of reference in a GenBank record
+		seq (0) ,               -- refers to sequence
+		sites (1) ,             -- refers to unspecified features
+		feats (2) ,             -- refers to specified features
+		no-target (3) }         -- nothing specified (EMBL)
+		DEFAULT seq }
 
 Heterogen ::= VisibleString       -- cofactor, prosthetic group, inibitor, etc
 
@@ -1126,7 +1139,7 @@ Seq-annot ::= SEQUENCE {
 END
 
 
---$Revision: 6.0 $
+--$Revision: 6.1 $
 --**********************************************************************
 --
 --  NCBI Sequence Collections
@@ -1168,6 +1181,8 @@ Bioseq-set ::= SEQUENCE {      -- just a collection
         mut-set (13) ,              -- set of mutations
         pop-set (14) ,              -- population study
         phy-set (15) ,              -- phylogenetic study
+	eco-set (16) ,              -- ecological sample study
+        gen-prod-set (17) ,         -- genomic products, chrom+mRNa+protein  
         other (255) } DEFAULT not-set ,
     release VisibleString OPTIONAL ,
     date Date OPTIONAL ,
@@ -1479,7 +1494,7 @@ PDB-replace ::= SEQUENCE {
 
 END
 
---$Revision: 6.2 $
+--$Revision: 6.4 $
 --**********************************************************************
 --
 --  NCBI Sequence Feature elements
@@ -1833,6 +1848,15 @@ OrgMod ::= SEQUENCE {
         nat-host (21) ,		-- natural host of this specimen
 	sub-species (22) ,
         specimen-voucher (23) ,
+	authority (24) ,
+	forma (25) ,
+	forma-specialis (26) ,
+	ecotype (27) ,
+	synonym (28) ,
+	anamorph (29) ,
+	teleomorph (30) ,
+	breed (31) ,
+	old-lineage (253) ,
         old-name (254) ,
         other (255) } ,         -- ASN5: old-name (254) will be added to next spec
     subname VisibleString ,
@@ -1897,7 +1921,13 @@ BioSource ::= SEQUENCE {
         insertion-seq (11) ,
 	cyanelle (12) ,
 	proviral (13) ,
-	virion (14) } DEFAULT unknown ,
+	virion (14) ,
+	nucleomorph (15) ,
+	apicoplast (16) ,
+	leucoplast (17) ,
+	proplastid (18) ,
+	endogenous-virus (19)
+	 } DEFAULT unknown ,
                                        -- 4 more genome values coming
                                        -- nucleomorph (15)
                                        -- apicoplast (16)
@@ -1939,6 +1969,9 @@ SubSource ::= SEQUENCE {
         transposon-name (20) ,
         insertion-seq-name (21) ,
         plastid-name (22) ,
+	country (23) ,
+	segment (24) ,
+	endogenous-virus-name (25) ,
         other (255) } ,
     name VisibleString ,
     attrib VisibleString OPTIONAL }    -- attribution/source of this name

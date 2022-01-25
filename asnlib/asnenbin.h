@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   Typedefs and prototypes for internal routines in asnenbin.c
@@ -40,6 +40,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asnenbin.h,v $
+* Revision 6.1  2000/12/12 15:56:11  ostell
+* added support BigInt
+*
 * Revision 6.0  1997/08/25 18:09:53  madden
 * Revision changed to 6.0
 *
@@ -81,6 +84,7 @@
 NLM_EXTERN void AsnEnBinTags PROTO((AsnTypePtr atp, AsnIoPtr aip));
 NLM_EXTERN void AsnEnBinReal PROTO((FloatHi realvalue, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN void AsnEnBinInteger PROTO((Int4 theInt, AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN void AsnEnBinBigInt PROTO((Int8 theInt, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN void AsnEnBinBoolean PROTO((Boolean value, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean AsnEnBinString PROTO((CharPtr str, AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN void AsnEnBinNull PROTO((AsnIoPtr aip, AsnTypePtr atp));

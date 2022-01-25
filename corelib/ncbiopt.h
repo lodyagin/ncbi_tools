@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $RCSfile: ncbiopt.h,v $  $Revision: 6.3 $  $Date: 2000/03/20 16:04:38 $
+/*  $Id: ncbiopt.h,v 6.7 2001/03/15 21:23:12 vakatov Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,19 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.7  2001/03/15 21:23:12  vakatov
+* [OS_UNIX_AIX] #define Int8 long long  (was just "long").
+* Fix by the Ruth Isserlin & Christopher Hogue, chogue@mdsproteomics.com
+*
+* Revision 6.6  2001/03/14 21:11:27  vakatov
+* Int8 is "long long" for OS_UNIX::PROC_HPPA (M.Dumontier, micheld@mshri.on.ca)
+*
+* Revision 6.5  2000/12/21 15:52:22  vakatov
+* [__GNUC__, OS_LINUX]  Force Int8 be "long long"
+*
+* Revision 6.4  2000/12/20 19:02:49  vakatov
+* [__GNUC__]  Use "long long", do not rely on LONG_BIT (RedHat Linux 7.0)
+*
 * Revision 6.3  2000/03/20 16:04:38  vakatov
 * [__GNUC__]  Fixed for absent #LONG_LONG_***
 *
@@ -90,17 +103,11 @@
 #  endif
 
    /* on 64-bit operating systems, the long data type is already 8 bytes */
-   /* and we have to pre-define 4-byte integer types(see "ncbistd.h") */
-#  if LONG_BIT==64
+#  if LONG_BIT==64  &&  !defined(OS_UNIX_LINUX)
 #    define Int8  long
 #    define Uint8 unsigned long
-#    if !defined(Int4) && !defined(Uint4)
-#      define Int4  int
-#      define Uint4 unsigned int
-#      define PREDEF_INT4
-#    endif
 
-   /* the GNU compiler defines the long long data type */
+   /* GNU compiler defines "long long" data type */
 #  elif defined(__GNUC__)
 #    define Int8  long long
 #    define Uint8 unsigned long long
@@ -112,9 +119,9 @@
 
 #  elif defined(OS_UNIX)
      /* (signed) */
-#    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || defined(OS_UNIX_IRIX)
+#    if defined(OS_UNIX_LINUX) || defined(OS_UNIX_SOL) || defined(OS_UNIX_IRIX) || defined(PROC_HPPA) || defined(OS_UNIX_AIX)
 #      define Int8 long long
-#    elif defined(PROC_ALPHA) || defined(OS_UNIX_AIX)
+#    elif defined(PROC_ALPHA)
 #      define Int8 long
 #    endif
 
@@ -150,12 +157,6 @@
      typedef Int8*  Nlm_Int8Ptr;
      typedef Uint8  Nlm_Uint8;
      typedef Uint8* Nlm_Uint8Ptr;
-#    ifdef PREDEF_INT4
-       typedef Int4   Nlm_Int4;
-       typedef Int4*  Nlm_Int4Ptr;
-       typedef Uint4  Nlm_Uint4;
-       typedef Uint4* Nlm_Uint4Ptr;
-#    endif
 
 /* Have to undefine Int8 limits if already defined, as on some platforms
  * INT8_MAX, etc. exist but refer to 8-bit(not 8-byte!) integers
@@ -173,11 +174,6 @@
 #      define INT8_MIN  LONG_MIN
 #      define INT8_MAX  LONG_MAX
 #      define UINT8_MAX ULONG_MAX
-#      ifdef PREDEF_INT4
-#        define INT4_MIN  INT_MIN
-#        define INT4_MAX  INT_MAX
-#        define UINT4_MAX UINT_MAX
-#      endif
 
 #    elif defined(__GNUC__)  &&  defined(LONG_LONG_MIN)
 #      define INT8_MIN  LONG_LONG_MIN
@@ -212,10 +208,6 @@
      /* will be (re)defined after this #if */
 #    undef  Int8
 #    undef  Uint8
-#    ifdef PREDEF_INT4
-#      undef Int4
-#      undef Uint4
-#    endif
 
 #  else
      /* Until we migrate to C++, and we can overload operations and
@@ -241,13 +233,6 @@
 #  define Uint8    Nlm_Uint8
 #  define Int8Ptr  Nlm_Int8Ptr
 #  define Uint8Ptr Nlm_Uint8Ptr
-#  ifdef PREDEF_INT4
-#    define Int4     Nlm_Int4
-#    define Uint4    Nlm_Uint4
-#    define Int4Ptr  Nlm_Int4Ptr
-#    define Uint4Ptr Nlm_Uint4Ptr
-#    undef PREDEF_INT4
-#  endif
 
 #endif /* ndef Int8, ndef Uint8, ndef Int8Ptr, ndef Uint8Ptr */
 

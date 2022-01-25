@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/9/93
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       Vibrant miscellaneous extensions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: vibextra.c,v $
+* Revision 6.2  2001/03/19 19:15:17  juran
+* Change "for (...);" to "for (...) ;" (added space before semicolon) to silence trying-to-be-helpful compiler warning.
+*
 * Revision 6.1  1997/11/26 21:30:14  vakatov
 * Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
 *
@@ -1117,7 +1120,7 @@ static int Nlm_GetColorVal ( Nlm_TexT t ) {
 
   Nlm_GetTitle( t, cValue, 64 );
   cValue[63] = 0;
-  for ( cValuePtr = cValue; IS_DIGIT(*cValuePtr); cValuePtr++ );
+  for ( cValuePtr = cValue; IS_DIGIT(*cValuePtr); cValuePtr++ ) ;
   if ( *cValuePtr != '\0' ) {
     *cValuePtr = 0;
     update = 1;

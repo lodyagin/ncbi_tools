@@ -31,6 +31,12 @@
 *
 *
 * $Log: parttree.c,v $
+* Revision 1.11  2001/01/19 17:57:43  soussov
+* yet another fixed bug in tax_ptree_addNode related to secondary tax_id
+*
+* Revision 1.10  2001/01/19 17:44:20  soussov
+* fixed bug in tax_ptree_addNode related to secondary tax_id
+*
 * Revision 1.9  2000/05/11 21:45:03  soussov
 * fixes bug in lookup by secondary taxid
 *
@@ -203,6 +209,12 @@ Boolean tax_ptree_addNode(TreePtr ptree, Int4 tax_id)
     
     for(i= lin_size; i--; ) {
 	if(!known_id(cursor, lineage[i]->tax_id)) break;
+	if((i == 0) && (tax_id != lineage[0]->tax_id)) {
+	    lineage[0]->tax_id= tax_id;
+	    nid= tree_getId(cursor);
+	    ptree_spy(ptree, 0, TREE_NODE_ADDED, nid, nid, lineage[0], s);
+	}
+	
 	MemFree(lineage[i]);
     }
     

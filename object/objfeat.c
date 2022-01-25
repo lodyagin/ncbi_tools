@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1806,11 +1806,11 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
 "{ name \"Echinoderm Mitochondrial\" , name \"SGC8\" , id 9 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
 "{ name \"Euplotid Nuclear\" , name \"SGC9\" , id 10 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCCWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
-"{ name \"Bacterial\" , id 11 ,\n" \
+"{ name \"Bacterial and Plant Plastid\" , id 11 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"---M---------------M------------MMMM---------------M------------\" } ,\n" \
 "{ name \"Alternative Yeast Nuclear\" , id 12 ,\n" \
@@ -1831,7 +1831,7 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "{ name \"Trematode Mitochondrial\" , id 21 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIMMTTTTNNNKSSSSVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
-"{ name \"TAG-Leu,TCA-stop\" , id 22 ,\n" \
+"{ name \"Scenedesmus obliquus mitochondrial\" , id 22 ,\n" \
 "ncbieaa  \"FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
 "sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
 "{ name \"Thraustochytrium mitochondrial code\" , id 23 ,\n" \

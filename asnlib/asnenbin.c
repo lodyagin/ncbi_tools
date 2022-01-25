@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   Special binary (BER) encoder for ASN.1
@@ -42,6 +42,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnenbin.c,v $
+* Revision 6.4  2000/12/12 15:56:11  ostell
+* added support BigInt
+*
 * Revision 6.3  1998/06/12 19:27:49  kans
 * fixed unix compiler warnings
 *
@@ -134,6 +137,9 @@ NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 		case INTEGER_TYPE:
 		case ENUM_TYPE:
 			AsnEnBinInteger(dvp->intvalue, aip, atp);
+			break;
+		case BIGINT_TYPE:
+			AsnEnBinBigInt(dvp->bigintvalue, aip, atp);
 			break;
 		case REAL_TYPE:
 			AsnEnBinReal(dvp->realvalue, aip, atp);
@@ -358,6 +364,64 @@ NLM_EXTERN void AsnEnBinInteger (Int4 theInt, AsnIoPtr aip, AsnTypePtr atp)
 
 	return;
 }
+
+/*****************************************************************************
+*
+*   void AsnEnBinBigInt(theInt, aip)
+*
+*****************************************************************************/
+NLM_EXTERN void AsnEnBinBigInt (Int8 theInt, AsnIoPtr aip, AsnTypePtr atp)
+{
+	AsnTypePtr atp2;
+	Byte octets[8];
+	int msb, len, i;
+	Int8 cint;
+
+	atp2 = AsnFindBaseType(atp);
+	atp2 = atp2->type;
+	AsnEnBinTags(atp2, aip);
+
+	len = 0;
+	/**** split integer into bytes *****/
+	cint = theInt;
+	for (i = 7; i >= 0; i--)
+	{
+		octets[i] = (Byte)(cint & 0x0ff);
+		cint >>= 8;
+	}
+
+	/***** find most significant byte ****/
+	msb = 0;
+	if (theInt >= 0)
+	{
+		while (msb < 7 && octets[msb] == 0 &&
+				((octets[msb+1] & 0x080) == 0))
+			msb++;
+	}
+	else
+	{
+		while (msb < 7 && octets[msb] == 0x0ff &&
+				((octets[msb+1] & 0x080) == 0x080))
+			msb++;
+	}
+
+	len = 8 - msb;
+
+	AsnEnBinLen((Uint4)len, aip);
+
+	/** shift left to eliminate unnecessary bytes */
+	for ( ; msb > 0; msb--)
+	{
+		for (i = 0; i < 7; i++)
+			octets[i] = octets[i+1];
+		octets[7] = 0;
+	}
+
+	AsnEnBinBytes(octets, (Uint4)len, aip);
+
+	return;
+}
+
 /*****************************************************************************
 *
 *   void AsnEnBinBoolean(value, aip)

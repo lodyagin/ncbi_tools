@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.30 2000/08/30 13:43:11 lewisg Exp $
+/*   $Id: viewmgr.c,v 1.35 2001/01/18 22:28:06 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.30 2000/08/30 13:43:11 lewisg Exp $
+* File Name:  $Id: viewmgr.c,v 1.35 2001/01/18 22:28:06 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.30 $
+* $Revision: 1.35 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.35  2001/01/18 22:28:06  hurwitz
+* added fast option for ViewMgr_Update
+*
+* Revision 1.34  2001/01/07 08:11:13  vakatov
+* Fixed C++ style comments to the C-style ones
+*
+* Revision 1.33  2001/01/06 01:09:00  lewisg
+* get indexed begin in make multiple, copy seqaligns correctly
+*
+* Revision 1.32  2001/01/02 23:38:20  lewisg
+* null target and begin pointers
+*
+* Revision 1.31  2000/12/29 21:10:43  lewisg
+* bug fixes
+*
 * Revision 1.30  2000/08/30 13:43:11  lewisg
 * change seqalign state when made into multiple
 *
@@ -557,7 +572,7 @@ NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin,
 
     pInfo = ViewMgr_GetInfo(salp);
     if(pInfo == NULL) return NULL;
-
+    SeqAlignListFree(pInfo->pBegin);
     pInfo->pBegin = pNewBegin;
     pInfo->Neat = Neat;
     pInfo->Intersect = Intersect;
@@ -715,7 +730,9 @@ static Int4 ViewMgr_Massage(ViewMgr_AlignInfo *pInfo)
     ValNode *pvn;
     
     SeqAlignListFree(pInfo->pTarget);
+    pInfo->pTarget = NULL;
     SeqAlignListFree(pInfo->pBeginIndexed);
+    pInfo->pBeginIndexed = NULL;
     pInfo->BeginIndexed = FALSE;
 
     if(pInfo->Neat) {
@@ -724,6 +741,7 @@ static Int4 ViewMgr_Massage(ViewMgr_AlignInfo *pInfo)
         /* delete neat rows */
         len = ValNodeLen(pInfo->pHiddenRows);
         pInfo->pBeginIndexed = SeqAlignListDup(pInfo->pBegin);
+        AlnMgrNeatlyIndex(pInfo->pBeginIndexed);
         if(len > 0) {
             throwaway = MemNew(sizeof(Int4)*len);
             for(pvn = pInfo->pHiddenRows, i = 0; pvn != NULL; pvn = pvn->next, i++) 
@@ -733,6 +751,7 @@ static Int4 ViewMgr_Massage(ViewMgr_AlignInfo *pInfo)
         }
         else { 
             pInfo->pTarget = SeqAlignListDup(pInfo->pBegin);
+            AlnMgrNeatlyIndex(pInfo->pTarget);
         }
     }
     else {
@@ -787,13 +806,13 @@ NLM_EXTERN Int4 ViewMgr_MakeMultiple(SeqAlign *salp)
     pInfo = ViewMgr_GetInfo(salp);
     if(pInfo == NULL) ErrorReturn(SEV_ERROR, "ViewMgr_MakeMultiple", -1);
 
-    pSeqAlign = AlnMgrGetSubAlign(pInfo->pBeginIndexed, NULL, 0, -1);
+    pSeqAlign = AlnMgrGetSubAlign(ViewMgr_GetBeginIndexed(salp), NULL, 0, -1);
 
     if(pSeqAlign == NULL) return 0;
     pInfo->pBegin = pSeqAlign;
-    ViewMgr_Massage(pInfo);
+    /*    ViewMgr_Massage(pInfo); */
 
-    AlnMgrCopyIndexedParentIntoSap(pInfo->pTarget, salp);
+    /*    AlnMgrCopyIndexedParentIntoSap(pInfo->pTarget, salp); */
     
     return ViewMgr_Update(salp);
 }
@@ -953,6 +972,11 @@ NLM_EXTERN Int4 ViewMgr_SetHidden(SeqAlign *salp, Boolean Hidden, Int4 Row)
 }
 
 
+NLM_EXTERN Int4 ViewMgr_Update(SeqAlign *salp) {
+  ViewMgr_Update2(salp, FALSE);
+}
+
+
 /*****************************************************************************
 
 Function: ViewMgr_Update
@@ -965,8 +989,7 @@ Parameters: salp, the seqalign to work on
 Returns: 1 on success
 
 *****************************************************************************/
-
-NLM_EXTERN Int4 ViewMgr_Update(SeqAlign *salp)
+NLM_EXTERN Int4 ViewMgr_Update2(SeqAlign *salp, Boolean Fast)
 {
     ViewMgr_AlignInfo *pInfo;
     Uint2 itemID;
@@ -979,24 +1002,26 @@ NLM_EXTERN Int4 ViewMgr_Update(SeqAlign *salp)
 
     AlnMgrCopyIndexedParentIntoSap(pInfo->pTarget, salp);
 
-    itemID =
-        GetItemIDGivenPointer(pInfo->entityID, OBJ_SEQALIGN, (void *) salp);
+    if (!Fast) {
+      itemID =
+          GetItemIDGivenPointer(pInfo->entityID, OBJ_SEQALIGN, (void *) salp);
 
-    /* first tell everyone to recolor the entity */
-    MemSet(&dum, 0, sizeof(DDVUpdateMSG));
-    dum.data = NULL;
-    dum.type = UPDATE_TYPE_RECOLOR;
+      /* first tell everyone to recolor the entity */
+      MemSet(&dum, 0, sizeof(DDVUpdateMSG));
+      dum.data = NULL;
+      dum.type = UPDATE_TYPE_RECOLOR;
 
-    ObjMgrSendProcMsg(OM_MSG_UPDATE, pInfo->entityID, itemID, OBJ_SEQALIGN,
-				0, 0, (Pointer)&dum);
+      ObjMgrSendProcMsg(OM_MSG_UPDATE, pInfo->entityID, itemID, OBJ_SEQALIGN,
+				  0, 0, (Pointer)&dum);
 
-    /* then redraw the entity */
-    MemSet(&dum, 0, sizeof(DDVUpdateMSG));
-    dum.data = NULL;
-    dum.type = UPDATE_TYPE_VIEWMGR;
+      /* then redraw the entity */
+      MemSet(&dum, 0, sizeof(DDVUpdateMSG));
+      dum.data = NULL;
+      dum.type = UPDATE_TYPE_VIEWMGR;
 
-    ObjMgrSendProcMsg(OM_MSG_UPDATE, pInfo->entityID, itemID, OBJ_SEQALIGN,
-				0, 0, (Pointer)&dum);
+      ObjMgrSendProcMsg(OM_MSG_UPDATE, pInfo->entityID, itemID, OBJ_SEQALIGN,
+				  0, 0, (Pointer)&dum);
+    }
 
     return 1;
 }

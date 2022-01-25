@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibmenus.c,v $
+* Revision 6.11  2001/01/24 18:43:00  kans
+* remove artifact bar caused by popup label on Solaris (TF)
+*
 * Revision 6.10  2000/02/07 20:17:35  lewisg
 * minor bug fixes, use gui font for win32
 *
@@ -251,6 +254,7 @@
 #define Nlm_MenuTool   Widget
 #define Nlm_PopupTool  Widget
 #define Nlm_ItemTool   Widget
+#define POPUP_LOCATION_ADJUSTMENT -2
 #endif
 
 typedef  struct  Nlm_menudata {
@@ -4545,6 +4549,15 @@ static void Nlm_SetPopListPosition (Nlm_GraphiC m, Nlm_RectPtr r,
   }
 #endif
 #ifdef WIN_MOTIF
+
+  /* Adjust the popup slightly to the left in */
+  /* order to adjust for the space that it    */
+  /* leaves for the empty label.              */
+
+  r->left += POPUP_LOCATION_ADJUSTMENT;
+
+  /* Set the Popup's size and position */
+
   u = Nlm_GetMenuPopup ((Nlm_MenU) m);
   XtVaSetValues (u,
 		 XmNx, (Position) r->left,
@@ -4895,11 +4908,15 @@ static void Nlm_NewPopupList (Nlm_MenU m, Nlm_ChoicE c, Nlm_PupActnProc actn)
   XtSetArg (wargs [n], XmNborderWidth, (Dimension) 0); n++;
   XtSetArg (wargs [n], XmNhighlightThickness, 0); n++;
   XtSetArg (wargs [n], XmNsubMenuId, h); n++;
+  /*
+  XtSetArg (wargs [n], XmNorientation, XmVERTICAL); n++;
+  */
 
   pop = XmCreateOptionMenu (wptr, (String) "", wargs, n);
   Nlm_OverrideStdTranslations((Nlm_GraphiC)m, pop,
                               VERT_PAGE|VERT_ARROW|HORIZ_PAGE|HORIZ_ARROW);
 
+  /*
   lbl = XmOptionLabelGadget (pop);
   XtVaGetValues (lbl, XmNforeground, &color, 0);
 
@@ -4913,6 +4930,7 @@ static void Nlm_NewPopupList (Nlm_MenU m, Nlm_ChoicE c, Nlm_PupActnProc actn)
   XtSetArg (wargs [n], XmNbackground, (Pixel) color); n++;
   XtSetValues (lbl, wargs, n);
   XmStringFree (label);
+  */
 
   XtManageChild (pop);
 
@@ -4934,7 +4952,6 @@ static void Nlm_NewPopupList (Nlm_MenU m, Nlm_ChoicE c, Nlm_PupActnProc actn)
   XtAddCallback (itool, XmNactivateCallback, Nlm_MenuCallback, (XtPointer) c);
   XmStringFree (label);
   XtManageChild (itool);
-
   hdls = (Nlm_ItemTool *) Nlm_MemNew (64 * sizeof (Nlm_ItemTool));
   hdls [63] = itool;
   XtVaSetValues (pop, XmNmenuHistory, hdls [63], NULL);

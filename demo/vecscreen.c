@@ -25,6 +25,9 @@
 **************************************************************************/
 /* $Revision 1.0 $  
 * $Log: vecscreen.c,v $
+* Revision 6.5  2001/01/09 17:30:51  madden
+* Fix umr
+*
 * Revision 6.4  2000/05/10 14:33:45  kitts
 * Added extra error checks and messages
 * Added "No hits" output moved from VSPrintListFromSeqLocs
@@ -90,7 +93,7 @@ Int2 Main (void)
 	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 	Uint1 align_type;
 	Uint4 align_options;
-	ValNodePtr  mask_loc, vnp, vnp1, other_returns, error_returns;
+	ValNodePtr  mask_loc, vnp, vnp1=NULL, other_returns, error_returns;
 
 	CharPtr blast_inputfile, blast_outputfile;
 	FILE *infp, *outfp;

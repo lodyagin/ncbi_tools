@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.64 $
+* $Revision: 6.67 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.67  2001/02/18 20:58:51  kans
+* added GetSequenceByBsp
+*
+* Revision 6.66  2000/11/30 15:55:14  kans
+* SeqPortAdjustLength checks for not spp->isa_null to prevent null NULL segment from having a length of 1
+*
+* Revision 6.65  2000/11/28 16:06:31  kans
+* fixes for far delta genome situation (JO)
+*
 * Revision 6.64  2000/10/27 14:03:24  kans
 * fixed memory leak when seqport fails - with far accessions, no longer always considered fatal (JO)
 *
@@ -720,7 +729,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp)
 		}
 		spp->totlen = len;
 	}
-	else
+	else if (! spp->isa_null)
 		spp->totlen = spp->stop - spp->start + 1;
 	spp->curpos = -1;  /* reset to unused */
 
@@ -1344,6 +1353,7 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 			if (spp->backing == 1)
 			{
 				ClearQCache(spp, -1);
+				spp->eos = TRUE; /* note backing off segment */
 				return 0;
 			}
 			if (spp->curpos == -1)  /* not set */
@@ -1830,7 +1840,7 @@ byte */
     	residue = SeqPortGetResidue(spp->curr);
         while (! IS_residue(residue))
         {
-            spp->curr->eos = FALSE;   /* just in case was set */
+            /* spp->curr->eos = FALSE;  just in case was set */
 			moveup = FALSE;
 
 			switch (residue)
@@ -5812,15 +5822,59 @@ NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
   return str;
 }
 
-NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession, Boolean is_na)
+NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
 
 {
   Int2        actual, cnt;
-  BioseqPtr   bsp;
-  SeqIdPtr    deleteme = NULL;
   Int4        len;
   SeqPortPtr  spp;
   CharPtr     str = NULL, txt;
+
+  if (bsp == NULL || bsp->length >= MAXALLOC) return NULL;
+
+  str = MemNew (sizeof (Char) * (bsp->length + 2));
+  if (str == NULL) return NULL;
+
+  spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
+  if (spp == NULL) {
+    MemFree (str);
+    return NULL;
+  }
+
+  if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+    SeqPortSet_do_virtual (spp, TRUE);
+  }
+
+  len = bsp->length;
+  cnt = (Int2) MIN (len, 32000L);
+  txt = str;
+  actual = 1;
+
+  while (cnt > 0 && len > 0 && actual > 0) {
+    actual = SeqPortRead (spp, (BytePtr) txt, cnt);
+    if (actual < 0) {
+      actual = -actual;
+      if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
+        actual = 1; /* ignore, keep going */
+      }
+    } else if (actual > 0) {
+      len -= actual;
+      txt += actual;
+      cnt = (Int2) MIN (len, 32000L);
+    }
+  }
+
+  SeqPortFree (spp);
+
+  return str;
+}
+
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession, Boolean is_na)
+
+{
+  BioseqPtr  bsp;
+  SeqIdPtr   deleteme = NULL;
+  CharPtr    str = NULL;
 
   if (sip == NULL) {
     if (StringHasNoText (accession)) return NULL;
@@ -5835,36 +5889,7 @@ NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession,
 
   if ((ISA_na (bsp->mol) && is_na) || (ISA_aa (bsp->mol) && (! is_na))) {
     if (bsp->length < MAXALLOC) {
-      str = MemNew (sizeof (Char) * (bsp->length + 2));
-      if (str != NULL) {
-        spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
-        if (spp != NULL) {
-          if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
-            SeqPortSet_do_virtual (spp, TRUE);
-          }
-
-          len = bsp->length;
-          cnt = (Int2) MIN (len, 32000L);
-          txt = str;
-          actual = 1;
-
-          while (cnt > 0 && len > 0 && actual > 0) {
-            actual = SeqPortRead (spp, (BytePtr) txt, cnt);
-            if (actual < 0) {
-              actual = -actual;
-              if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
-                actual = 1; /* ignore, keep going */
-              }
-            } else if (actual > 0) {
-              len -= actual;
-              txt += actual;
-              cnt = (Int2) MIN (len, 32000L);
-            }
-          }
-
-          SeqPortFree (spp);
-        }
-      }
+      str = GetSequenceByBsp (bsp);
     }
   }
 

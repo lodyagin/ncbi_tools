@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.53 2000/11/01 18:51:03 beloslyu Exp $
+# $Id: makedis.csh,v 1.59 2001/03/15 21:30:22 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -73,6 +73,11 @@ case SunOS:
 	default:
 		if ( `uname -p` == i386 ) then
 			set platform=solarisintel
+			if ("$?CC" == 1) then
+				if ("$CC" == "gcc") then
+					set platform=solaris-gcc
+				endif
+			endif
 		else
 			set platform=solaris
 			if ("$?CC" == 1) then
@@ -83,6 +88,10 @@ case SunOS:
 		endif
 		breaksw
 	endsw
+	if (! -d /usr/openwin/include/GL) then
+		echo Failed to find OpenGL library, will not build X11 apps
+		#set HAVE_MOTIF=0
+	endif
 	breaksw
 case IRIX*:
 	switch (`uname -r`)
@@ -130,6 +139,10 @@ case FreeBSD:
 			break
 		endif
 	end
+	breaksw
+case Darwin:
+	set platform=darwin
+	set HAVE_MOTIF=0
 	breaksw
 case NetBSD:
 	set platform=netbsd
@@ -236,7 +249,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez udv ddv blastcl3 blast.REAL \
-		idfetch $OGL_TARGETS\") 
+		idfetch asn2xml $OGL_TARGETS\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -245,12 +258,12 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 idfetch\") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch asn2xml \") 
 endif
 
 set CMD='make $MFLG \
    CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE $PNG_INCLUDE\" \
-   LDFLAGS1=\"$NCBI_LDFLAGS1\" \
+   LDFLAGS1=\"$NCBI_LDFLAGS1\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
    RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" $ALL_VIB all'
 eval echo $CMD
@@ -291,18 +304,27 @@ rm -f $mtapps
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\"  \
-   THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=$NCBI_MT_OTHERLIBS \
+   THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
    $DEMO_VIB $mtapps'
 eval echo $CMD
 eval echo $CMD | sh 
 
 set threaded_demo_stat = $status
 
-set CMD='make $MFLG -f makenet.unx \
-   CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
-   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-   CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
-   NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
+if ("$?THREAD_OTHERLIBS" == "1") then
+	set CMD='make $MFLG -f makenet.unx \
+		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
+		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
+		CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+		THREAD_OTHERLIBS=\"$NCBI_THREAD_OTHERLIBS\" \
+		NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
+else
+	set CMD='make $MFLG -f makenet.unx \
+		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
+		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
+		CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+		NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
+endif
 eval echo $CMD
 eval echo $CMD | sh 
 

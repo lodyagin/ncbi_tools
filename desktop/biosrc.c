@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.26 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -144,6 +144,7 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Chloroplast",          2},
   {"Kinetoplast",          4},
   {"Mitochondrion",        5},
+  {"Plastid",              6},
   {"Macronuclear",         7},
   {"Extrachromosomal",     8},
   {"Plasmid",              9},
@@ -584,6 +585,14 @@ static void ChangeGencodePopups (GenBioPagePtr gbp)
       if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
         if (genome == 4 || genome == 5) {
           SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->mitoGC]);
+        } else if (genome == GENOME_chloroplast ||
+                   genome == GENOME_chromoplast ||
+                   genome == GENOME_plastid ||
+                   genome == GENOME_cyanelle ||
+                   genome == GENOME_apicoplast ||
+                   genome == GENOME_leucoplast ||
+                   genome == GENOME_proplastid) {
+          SafeSetValue (gbp->simplecode, gcIdToIndex [11]);
         } else {
           SafeSetValue (gbp->simplecode, gcIdToIndex [gbp->nuclGC]);
         }
@@ -1088,6 +1097,14 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
         if (GetEnumPopup (gbp->genome, gbp->genomeAlist, &genome)) {
           if (genome == 4 || genome == 5) {
             SafeSetValue (gbp->simplecode, gcIdToIndex [onp->mgcode]);
+          } else if (genome == GENOME_chloroplast ||
+                     genome == GENOME_chromoplast ||
+                     genome == GENOME_plastid ||
+                     genome == GENOME_cyanelle ||
+                     genome == GENOME_apicoplast ||
+                     genome == GENOME_leucoplast ||
+                     genome == GENOME_proplastid) {
+            SafeSetValue (gbp->simplecode, gcIdToIndex [11]);
           } else {
             SafeSetValue (gbp->simplecode, gcIdToIndex [onp->gcode]);
           }

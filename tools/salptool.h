@@ -12,7 +12,9 @@ typedef struct p_seqaligninfo{
 	struct p_seqaligninfo PNTR next;
 } PSeqAlignInfo, PNTR PSeqAlignInfoPtr;
 
-
+NLM_EXTERN void SeqAlignReverseOrder(SeqAlignPtr align);
+NLM_EXTERN void SeqAlignSwapSeqs(SeqAlignPtr align);
+NLM_EXTERN SeqAlignPtr BlastTwoSequencesByLocBOTH(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr program, BLAST_OptionsBlkPtr options);
 NLM_EXTERN SeqAlignPtr SeqAlignSplitBlastTwoSeq(SeqLocPtr slp1, SeqLocPtr slp2, 
 		Int4 split_len, Int4 overlap_len, BLAST_OptionsBlkPtr options);
 NLM_EXTERN PSeqAlignInfoPtr SeqAlignToPSeqAlignInfo (SeqAlignPtr sap);

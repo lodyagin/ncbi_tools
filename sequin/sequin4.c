@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.126 $
+* $Revision: 6.130 $
 *
 * File Description: 
 *
@@ -113,6 +113,8 @@
 #define REGISTER_BIOSEQ_REVCOMP_NOTFEAT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq only RevComp", "BioseqOnlyRevComp", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, RevCompFunc, PROC_PRIORITY_DEFAULT, "Utilities")
 #define REGISTER_BIOSEQ_REVERSE ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Reverse", "BioseqReverse", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, RevFunc, PROC_PRIORITY_DEFAULT, "Utilities")
 #define REGISTER_BIOSEQ_COMPLEMENT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Complement", "BioseqComplement", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, CompFunc, PROC_PRIORITY_DEFAULT, "Utilities")
+
+#define REGISTER_BIOSEQ_SEG_REPORT ObjMgrProcLoadEx (OMPROC_FILTER, "Bioseq Seg Report", "BioseqSegReport", OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, NULL, ReportDeltaSegments, PROC_PRIORITY_DEFAULT, "Misc")
 
 #define REGISTER_FIXUP_RBS ObjMgrProcLoadEx (OMPROC_FILTER,"Fixup RBS","FixupRBS",0,0,0,0,NULL,FixupRBS,PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -406,8 +408,8 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
   if (sep == NULL) return 0;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       choice = 0;
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         if (choice == 0) {
@@ -595,8 +597,8 @@ static Int2 DoOneSegUndo (SeqEntryPtr sep)
   if (sep == NULL) return 0;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         count += DoOneSegUndo (sep);
       }
@@ -667,8 +669,8 @@ static void DoRepairPartsSet (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
+    if (bssp->_class == 7 ||
+        (bssp->_class >= 13 && bssp->_class <= 16)) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         DoRepairPartsSet (tmp);
       }
@@ -2602,7 +2604,7 @@ static void CacheByAccn (SeqIdPtr sip, CharPtr directory)
   BioseqPtr    bsp;
   Char         buf [45];
   Uint2        entityID;
-  Int4         gi;
+  Int4         gi = 0;
   SeqIdPtr     newsip = NULL;
   Char         path [PATH_MAX];
   SeqEntryPtr  sep;
@@ -2615,7 +2617,11 @@ static void CacheByAccn (SeqIdPtr sip, CharPtr directory)
   }
   if (sip == NULL) return;
 
-  SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 40);
+  if (gi != 0) {
+    sprintf (buf, "%ld", (long) gi);
+  } else {
+    SeqIdWrite (sip, buf, PRINTID_TEXTID_ACCESSION, 40);
+  }
   StringCat (buf, ".ent");
   StringCpy (path, directory);
   FileBuildPath (path, NULL, buf);
@@ -2646,6 +2652,7 @@ static Boolean CacheAccnsCallback (GatherContextPtr gcp)
 {
   SeqAlignPtr   align;
   DenseDiagPtr  ddp;
+  DeltaSeqPtr   dlt;
   DenseSegPtr   dsp;
   CharPtr       path;
   SeqIdPtr      sip;
@@ -2661,6 +2668,16 @@ static Boolean CacheAccnsCallback (GatherContextPtr gcp)
       if (slp != NULL) {
         sip = SeqLocId (slp);
         CacheByAccn (sip, path);
+      }
+      break;
+    case OBJ_BIOSEQ_DELTA :
+      dlt = (DeltaSeqPtr) gcp->thisitem;
+      if (dlt != NULL && dlt->choice == 1) {
+        slp = (SeqLocPtr) dlt->data.ptrvalue;
+        if (slp != NULL) {
+          sip = SeqLocId (slp);
+          CacheByAccn (sip, path);
+        }
       }
       break;
     case OBJ_SEQALIGN :
@@ -2718,6 +2735,7 @@ static Int2 LIBCALLBACK CacheAccnsToDisk (Pointer data)
   MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
   gs.ignore[OBJ_BIOSEQ] = FALSE;
   gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
+  gs.ignore[OBJ_BIOSEQ_DELTA] = FALSE;
   gs.ignore[OBJ_SEQALIGN] = FALSE;
   gs.ignore[OBJ_SEQHIST_ALIGN] = FALSE;
   gs.ignore[OBJ_SEQANNOT] = FALSE;
@@ -4002,8 +4020,8 @@ static void FixupRBSGenes (Uint2 entityID, SeqEntryPtr sep)
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         FixupRBSGenes (entityID, sep);
       }
@@ -4314,6 +4332,98 @@ static Int2 LIBCALLBACK DoBioseqIndexing (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static void NEAR RevStringUpper (CharPtr str)
+{
+	CharPtr nd;
+	Char tmp;
+
+		if (str == NULL)
+			return;
+    nd = str;
+	while (*nd != '\0')
+		nd++;
+	nd--;
+
+	while (nd > str)
+	{
+		tmp = TO_UPPER(*nd);
+		*nd = TO_UPPER(*str);
+		*str = tmp;
+		nd--; str++;
+	}
+
+	if (nd == str)
+		*nd = TO_UPPER(*nd);
+	return;
+}
+
+static Int2 LIBCALLBACK ReportDeltaSegments (Pointer data)
+
+{
+  BioseqPtr         bsp = NULL;
+  BioseqExtraPtr    bspextra;
+  FILE              *fp;
+  Int4              i;
+  Char              id [64];
+  ObjMgrDataPtr     omdp;
+  OMProcControlPtr  ompcp;
+  SMSeqIdxPtr PNTR  partsByLoc;
+  Char              path [PATH_MAX];
+  SMSeqIdxPtr       sidx;
+  CharPtr           strand;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->input_entityID == 0) {
+    Message (MSG_ERROR, "Please select a Bioseq");
+    return OM_MSG_RET_ERROR;
+  }
+  switch (ompcp->input_itemtype) {
+    case OBJ_BIOSEQ :
+      bsp = (BioseqPtr) ompcp->input_data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (bsp == NULL) {
+    Message (MSG_ERROR, "Please select a Bioseq");
+    return OM_MSG_RET_ERROR;
+  }
+  omdp = (ObjMgrDataPtr) bsp->omdp;
+  if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return OM_MSG_RET_ERROR;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return OM_MSG_RET_ERROR;
+
+  partsByLoc = bspextra->partsByLoc;
+  if (partsByLoc == NULL || bspextra->numsegs < 1) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+  fp = FileOpen (path, "w");
+
+  for (i = 0; i < bspextra->numsegs; i++) {
+    sidx = partsByLoc [i];
+    if (sidx == NULL) continue;
+    if (sidx->strand == Seq_strand_minus) {
+      strand = "-";
+    } else {
+      strand = "+";
+    }
+    StringNCpy_0 (id, sidx->seqIdOfPart, sizeof (id) - 30);
+    RevStringUpper (id);
+    StringCat (id, "                    ");
+    id [20] = '\0';
+    fprintf (fp, "%s%9ld%9ld%9ld%9ld %s\n", id,
+             (long) sidx->cumOffset, (long) (sidx->to - sidx->from + 1),
+             (long) sidx->from, (long) sidx->to, strand);
+  }
+
+  FileClose (fp);
+  LaunchGeneralTextViewer (path, "Bioseq Segment Report");
+  FileRemove (path);
+  return OM_MSG_RET_DONE;
+}
+
 static Int2 FindBestGeneFeat (ValNodePtr PNTR genelist, Int4 max, FeatsIntsPtr fipr)
 
 {
@@ -4378,8 +4488,8 @@ static void DoTrimGenesGenes (Uint2 entityID, SeqEntryPtr sep)
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoTrimGenesGenes (entityID, sep);
       }
@@ -4662,6 +4772,7 @@ extern void SetupSequinFilters (void)
   Char  str [32];
 
   if (extraServices) {
+    REGISTER_BIOSEQ_SEG_REPORT;
     REGISTER_SEQUIN_PROT_TITLES;
     REGISTER_SEQUIN_NUC_TITLES;
     REGISTER_SEQUIN_FEAT_TABLE;

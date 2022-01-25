@@ -29,6 +29,9 @@
  * Version Creation Date: 10 March 1998
  *
  * $Log: vastsrv.c,v $
+ * Revision 6.26  2000/12/06 20:58:53  lewisg
+ * change cn3d 2.5 string
+ *
  * Revision 6.25  2000/06/23 22:35:58  lewisg
  * get rid of hardcoded urls
  *
@@ -351,7 +354,7 @@ VastTableBegin (FILE *table, CharPtr pcPDB, CharPtr JobID, CharPtr pcPass,
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"1\"> See File<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"action\" value=\"2\"> Save File<BR></TD>\n");
     fprintf(table,"<TD VALIGN=TOP NOWRAP>\n");
-    fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"a\"CHECKED> Cn3D v2.5 (asn.1)<BR>\n");
+    fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"a\"CHECKED> Cn3D (asn.1)<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"m\"> Mage (Kinemage)<BR>\n");
     fprintf(table,"<INPUT TYPE=\"radio\" NAME=\"calltype\" value=\"p\"> (PDB)<BR></TD>\n");
     fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");

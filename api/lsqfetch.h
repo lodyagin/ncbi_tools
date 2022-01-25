@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 5/25/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Utilities for fetching local sequences
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: lsqfetch.h,v $
+* Revision 6.2  2001/03/12 23:19:33  kans
+* added IndexedFastaLib functions - currently uses genome contig naming conventions
+*
 * Revision 6.1  1998/02/06 17:41:39  zjing
 * make the function CheckDnaResidue external
 *
@@ -240,6 +243,15 @@ NLM_EXTERN BioseqPtr LIBCALL find_big_bioseq PROTO((SeqEntryPtr sep));
 *
 ***********************************************************************/
 NLM_EXTERN Boolean CheckDnaResidue PROTO((CharPtr seq_ptr, Int4 ck_len, Int4Ptr pnon_DNA));
+
+/**********************************************************************/
+
+/* indexed FASTA lib functions - currently uses genome contig naming convention */
+
+NLM_EXTERN Boolean IndexedFastaLibFetchEnable (CharPtr path);
+NLM_EXTERN void IndexedFastaLibFetchDisable (void);
+NLM_EXTERN void CreateFastaIndex (CharPtr file);
+
 
 #ifdef __cplusplus
 }

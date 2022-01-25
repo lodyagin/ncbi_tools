@@ -1,12 +1,12 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.153 2000/10/31 19:50:46 beloslyu Exp $
+#	$Id: makeall.unx,v 6.164 2001/04/04 23:24:30 vakatov Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
 #	SunOS with Gnu C [ make LCL=gcc RAN=ranlib CC=gcc ]
-#   Sun with Solaris 2.x OS [ make LCL=sol CC="cc -Xa" OTHERLIBS="-lm"]
-#   Sun with Solaris 2.x OS using gcc [ make LCL=sol CC=gcc OTHERLIBS="-lm"]
+#	Sun with Solaris 2.x OS [ make LCL=sol CC="cc -Xa" OTHERLIBS="-lm"]
+#	Sun with Solaris 2.x OS using gcc [ make LCL=sol CC=gcc OTHERLIBS="-lm"]
 #	Silicon Graphics [ make LCL=sgi OTHERLIBS="-lm -lPW -lsun" ]
 #	IBM 3090 with AIX [ make LCL=370 ]
 #  IBM rs6000 with AIX [ make LCL=r6k CC=xlc ]
@@ -16,20 +16,20 @@
 #	DEC Alpha under OSF/1 version 4.x [ make LCL=alf CC=cc RAN=ranlib ]
 #	DEC Alpha under OSF/1 version 3.x [ make LCL=alf CC="cc -DNCBI_NOTHREADS_AVAIL" RAN=ranlib OTHERLIBS="-lc_r -lm"]
 #
-#   see README for other supported systems
+#	see README for other supported systems
 #	
 #	Subsequent makes should make ... nocopy instead of make ... all
 #	to avoid recopying the include files
 #
 #	To Make the Motif version of Vibrant libraries and add Vibrant front
-#   end to asntool, add:
-#      VIBLIBS="-lXm -lXmu -lXt -lX11" LIB4=libvibrant.a VIBFLAG="-I/am/Motif/include -DWIN_MOTIF"
-#   to the argument list.  Substitute the path to your Motif includes for
-#    /am/Motif/include.
+#	end to asntool, add:
+#	VIBLIBS="-lXm -lXmu -lXt -lX11" LIB4=libvibrant.a VIBFLAG="-I/am/Motif/include -DWIN_MOTIF"
+#	to the argument list.  Substitute the path to your Motif includes for
+#	/am/Motif/include.
 #
-#   Motif versions on Solaris 2.x are more complicated
+#	Motif versions on Solaris 2.x are more complicated
 #
-#   make LCL=sol CC="cc -Xa"
+#	make LCL=sol CC="cc -Xa"
 # VIBLIBS="-L/netopt/X11R5/lib -L/netopt/Motif1.2.2/lib -lXm -lXmu -lXt -lX11"
 # LIB4=libvibrant.a
 # VIBFLAG="-I/netopt/X11R5/include -I/netopt/Motif1.2.2/include -DWIN_MOTIF"
@@ -160,6 +160,7 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(VIBFLAG) $(NCBI_OTHERLINKOPTIONS) -L$(N
 
 # sources needed for versions of asntool and entrez
 THR_SRC = ncbithr.c
+NCBI_LBSM_SRC = ncbi_service_lbsmd_stub.c
 
 SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbiprop.c ncbimain.c ncbimath.c ncbimem.c ncbimisc.c \
@@ -167,26 +168,31 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	asnbufo.c asndebin.c asnenbin.c asngen.c asnio.c asnlex.c \
 	asnlext.c asnout.c asnprint.c asntypes.c asngenob.c \
 	gifgen.c togif.c ncbithr.c regex.c tsprintf.c ncbiargs.c tree.c \
-	ncbisock.c ncbi_socket_.c ncbi_socket.c matrix.c ncbibuf.c ncbi_buffer.c \
-   ncbi_core.c ncbi_util.c \
-   connectn.c connutil.c con_url.c con_sock.c \
-	urlquery.c lbapi.c con_stateless.c binary.c
+	ncbisock.c ncbi_socket_.c ncbi_socket.c matrix.c ncbibuf.c \
+	ncbi_buffer.c ncbi_core.c ncbi_util.c ncbi_priv.c \
+	ncbi_ansi_ext.c ncbi_connection.c ncbi_connector.c ncbi_connutil.c \
+	ncbi_file_connector.c ncbi_heapmgr.c ncbi_http_connector.c \
+	$(NCBI_LBSM_SRC) ncbi_server_info.c ncbi_service.c \
+	ncbi_service_connector.c ncbi_service_dispd.c \
+	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
+	ncbi_sendmail_.c ncbi_sendmail.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
-	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c strucapi.c \
-	qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c sequtil.c prtutil.c \
-	simple.c tofasta.c tofile.c tomedlin.c \
-	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c subutil.c edutil.c asn2ff1.c \
-	asn2ff2.c asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
+	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
+	strucapi.c qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c \
+	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
+	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
+	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
+	asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
-	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
+	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
 	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c \
-	jsavlt.c needleman.c 
+	jsavlt.c needleman.c txalign.c fdlobj.c
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -241,7 +247,8 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c \
-	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c fdlobj.c dotseq.c
+	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c fdlobj.c \
+	dotseq.c 
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -251,11 +258,12 @@ SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
 	cn3dmsg.c cn3dmatn.c cn3dmodl.c cn3dshim.c cn3dmesh.c \
 	cn3dstyl.c seqcons.c
 
-SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c
+SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c \
+	pir_index.c
 
-SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ff2asn.c ftamain.c gb_ascii.c \
+SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ftamain.c gb_ascii.c \
 	genref.c hash.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
-	utilfeat.c utilref.c fta_qscore.c
+	utilfeat.c utilref.c fta_qscore.c pir_ascii.c
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 
@@ -266,6 +274,7 @@ SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
 # objects needed for versions of asntool and entrez
 
 THR_OBJ = ncbithr.o
+NCBI_LBSM_OBJ = ncbi_service_lbsmd_stub.o
 
 OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbimain.o ncbiprop.o ncbimath.o ncbimem.o ncbimisc.o \
@@ -274,26 +283,30 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	asnlext.o asnout.o asnprint.o asntypes.o asngenob.o \
 	gifgen.o togif.o ncbithrs.o regex.o tsprintf.o ncbiargs.o tree.o \
 	ncbisock.o ncbi_socket_.o matrix.o ncbibuf.o ncbi_buffer.o \
-   connectn.o connutil.o con_url.o con_sock.o \
-	ncbi_core.o ncbi_util.o \
-	urlquery.o lbapi.o con_stateless.o binary.o
+	ncbi_core.o ncbi_util.o ncbi_priv.o \
+	ncbi_ansi_ext.o ncbi_connection.o ncbi_connector.o ncbi_connutil.o \
+	ncbi_file_connector.o ncbi_heapmgr.o ncbi_http_connector.o \
+	$(NCBI_LBSM_OBJ) ncbi_server_info.o ncbi_service.o \
+	ncbi_service_connector.o ncbi_service_dispd.o \
+	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
+	ncbi_sendmail_.o
 
-OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
-	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
-	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o objalignloc.o \
-	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o strucapi.o \
-	qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o sequtil.o prtutil.o \
-	simple.o tofasta.o \
-	tofile.o tomedlin.o valid.o alignmgr.o alignval.o sqnutil1.o \
-	sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
-	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o \
-	gbfeat.o gbftglob.o \
+OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
+	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
+	objres.o objseq.o objblock.o objcode.o objsset.o \
+	objsub.o objprt.o objfdef.o objmime.o objalignloc.o \
+	objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
+	strucapi.o qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o \
+	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
+	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
+	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
+	asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
-	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
-	salpedit.o salpstat.o salpacc.o salsap.o salstruc.o salutil.o salprop.o \
+	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o \
+	salpedit.o salpstat.o salpacc.o salprop.o salsap.o salstruc.o salutil.o \
 	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o \
-	jsavlt.o needleman.o
+	jsavlt.o needleman.o txalign.o fdlobj.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -359,7 +372,8 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o \
-	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o fdlobj.o dotseq.o
+	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o \
+	dotseq.o 
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -374,11 +388,12 @@ OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
 	cn3dmsg.glo cn3dmatn.glo cn3dmodl.glo cn3dshim.glo cn3dmesh.glo \
 	cn3dstyl.glo seqcons.glo
 
-OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o
+OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o \
+	pir_index.o
 
-OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ff2asn.o ftamain.o gb_ascii.o \
+OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ftamain.o gb_ascii.o \
 	genref.o hash.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
-	utilfeat.o utilref.o fta_qscore.o
+	utilfeat.o utilref.o fta_qscore.o pir_ascii.o
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
@@ -411,7 +426,7 @@ sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) $
 clean :
 	-rm -f *.[acho]
 
-.NO_PARALLEL:	copy
+.NO_PARALLEL:	copy $(ULIB4)
 
 .WAIT:
 	echo Waiting...go
@@ -435,8 +450,8 @@ clean :
 
 ncbi_socket_.o : ncbi_socket.c ncbi_socket_.c
 	$(CC) $(CFLAGS) ncbi_socket_.c
-con_stateless.o : con_stateless.c
-	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) con_stateless.c
+ncbi_sendmail_.o : ncbi_sendmail.c ncbi_sendmail_.c
+	$(CC) $(CFLAGS) ncbi_sendmail_.c
 lbapi.o : lbapi.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) lbapi.c
 ncbithrs.o: ncbithrs.c
@@ -459,6 +474,8 @@ gb_index.o: gb_index.c
 	$(CC) $(CFLAGS) $<
 sp_index.o: sp_index.c
 	$(CC) $(CFLAGS) $<
+pir_index.o: pir_index.c
+	$(CC) $(CFLAGS) $<
 add.o: add.c
 	$(CC) $(CFLAGS) $<
 asci_blk.o: asci_blk.c
@@ -466,8 +483,6 @@ asci_blk.o: asci_blk.c
 em_ascii.o: em_ascii.c
 	$(CC) $(CFLAGS) $<
 em_unorg.o: em_unorg.c
-	$(CC) $(CFLAGS) $<
-ff2asn.o: ff2asn.c
 	$(CC) $(CFLAGS) $<
 ftamain.o: ftamain.c
 	$(CC) $(CFLAGS) $<
@@ -494,6 +509,8 @@ utilfeat.o: utilfeat.c
 utilref.o: utilref.c
 	$(CC) $(CFLAGS) $<
 fta_qscore.o: fta_qscore.c
+	$(CC) $(CFLAGS) $<
+pir_ascii.o: pir_ascii.c
 	$(CC) $(CFLAGS) $<
 
 deflate.o: deflate.c
@@ -599,6 +616,13 @@ copy :
 	mv asn.h ../include
 	$(SRCCOPY) ../asnlib/*.c .
 	$(SRCCOPY) ../connect/*.c .
+	$(SRCCOPY) ../connect/ncbi_priv.h .
+	$(SRCCOPY) ../connect/ncbi_comm.h .
+	$(SRCCOPY) ../connect/ncbi_lbsm.h .
+	$(SRCCOPY) ../connect/ncbi_lbsm_ipc.h .
+	$(SRCCOPY) ../connect/ncbi_servicep.h .
+	$(SRCCOPY) ../connect/ncbi_servicep_dispd.h .
+	$(SRCCOPY) ../connect/ncbi_servicep_lbsmd.h .
 	$(SRCCOPY) ../connect/*.h ../include
 	-mkdir ../include/connect
 	-chmod ug+rw,o+r ../include/connect
@@ -723,7 +747,7 @@ $(TLIB38) : $(ULIB38)
 
 $(TLIB39) : $(ULIB39)
 
-$(ULIB4) : $(OBJ4)
+$(ULIB4) : .WAIT $(OBJ4)
 	- $(RM_LIB) $(LIB4)
 	$(AR) cru $(LIB4) $(OBJ4)
 	$(LIBCOPY) $(LIB4) $(NCBI_LIBDIR)

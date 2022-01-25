@@ -1,5 +1,5 @@
 #! /bin/sh
-#    $Id: PubStruct_control.sh,v 6.23 2000/08/08 20:03:49 kimelman Exp $
+#    $Id: PubStruct_control.sh,v 6.24 2000/12/29 17:26:29 kimelman Exp $
 #  ===========================================================================
 # 
 #                             PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 #  Modifications:  
 #  --------------------------------------------------------------------------
 #  $Log: PubStruct_control.sh,v $
+#  Revision 6.24  2000/12/29 17:26:29  kimelman
+#  PDQBACH -> BACH
+#
 #  Revision 6.23  2000/08/08 20:03:49  kimelman
 #  BACH10 -> PDQBACH
 #
@@ -126,7 +129,7 @@ progdir=`dirname $progname`
 options="$*"
 
 #default PubStruct production DB server
-DBserver=PDQBACH 
+DBserver=BACH 
 DBname=PubStruct
 DBuser=kimelman
 DBpasswrd=kmlmNu

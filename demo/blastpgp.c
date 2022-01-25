@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.83 2000/10/27 21:26:50 shavirin Exp $ */
+/* $Id: blastpgp.c,v 6.90 2001/03/30 22:02:04 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,29 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.83 $ 
+ * $Revision: 6.90 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.90  2001/03/30 22:02:04  madden
+ * Suppress options not yet ready for prime-time
+ *
+ * Revision 6.89  2000/11/30 17:10:13  shavirin
+ * Initialized to NULL xml pointer.
+ *
+ * Revision 6.88  2000/11/28 20:48:49  shavirin
+ * Adopted for usage with many-iterations XML.
+ *
+ * Revision 6.87  2000/11/22 21:57:08  shavirin
+ * Added passing of iteration number into XML output.
+ *
+ * Revision 6.86  2000/11/22 21:41:52  shavirin
+ * Removed problem with mutiple iteration XML output.
+ *
+ * Revision 6.85  2000/11/22 17:34:32  madden
+ * Change NULL to 0 for an intvalue
+ *
+ * Revision 6.84  2000/11/22 17:28:31  madden
+ * Enable decline-to-align
+ *
  * Revision 6.83  2000/10/27 21:26:50  shavirin
  * Produce valid XML output if no hits found.
  *
@@ -482,7 +503,7 @@ static Args myargs [] = {
     {"Use lower case filtering of FASTA sequence",    /* 41 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
     { "Tweak Lambda, K, and score matrix for each match", /*42*/
-      "T", NULL, NULL, FALSE, 't', ARG_BOOLEAN, 0.0, 0, NULL}
+      "T", NULL, NULL, FALSE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
 #ifdef YES_TO_DECLINE_TO_ALIGN
     { "Cost to decline alignment (disabled when 0)", /* 43 */
       "0", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
@@ -941,7 +962,7 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
     search->gap_align->decline_align = INT2_MAX;
 
 #ifdef YES_TO_DECLINE_TO_ALIGN
-    if(myargs[43].intvalue != NULL) {
+    if(myargs[43].intvalue != 0) {
         search->gap_align->decline_align = myargs[43].intvalue;
     } else {
         search->gap_align->decline_align = INT2_MAX;
@@ -1205,7 +1226,8 @@ Int2 Main (void)
                                   2-level list can be converted to a 1-level
                                   list and then back to 2-level*/
     Int4 numLastSeqAligns = 0;
-    AsnIoPtr xml_aip;
+
+    PSIXmlPtr psixp = NULL;
 
     /* ----- End of definitions ----- */
     
@@ -1227,6 +1249,15 @@ Int2 Main (void)
     
     if (search == NULL)
         return 1;
+    
+    if(bop->is_xml_output) {
+        AsnIoPtr aip;
+        if((aip = AsnIoOpen(myargs[6].strvalue, "wx")) == NULL)
+            return 1;
+        
+        psixp = PSIXmlInit(aip, "blastp", bop->blast_database, bop->options, 
+                           bop->fake_bsp, 0);
+    }
     
     /*AAS*/
     if ((NULL != myargs[29].strvalue) || (NULL != myargs[39].strvalue)) {
@@ -1339,10 +1370,15 @@ Int2 Main (void)
             alreadyRecovered = TRUE;
         }
         
-        
-        compactSearch = compactSearchNew(compactSearch);
+        if (thisPassNum == 1) {
+            compactSearch = compactSearchNew(compactSearch);
+        } else {
+            MemFree(compactSearch->standardProb);
+        }
+
         copySearchItems(compactSearch, search, bop->options->matrix);
         
+
         /* The next two calls (after the "if") are diagnostics 
            for Stephen. Don't perform this if only one pass will 
            be made (i.e., standard BLAST) */
@@ -1379,23 +1415,20 @@ Int2 Main (void)
         if(bop->is_xml_output) {
 
             ValNodePtr other_returns;
-            
+            IterationPtr iterp;
+
             other_returns = BlastOtherReturnsPrepare(search);
-            
-            xml_aip = AsnIoOpen(myargs[6].strvalue, "wx");
-            
+
             if (head == NULL) {                
-                BXMLPrintOutput(xml_aip, NULL, 
-                                bop->options, "blastp", bop->blast_database,
-                                bop->fake_bsp, other_returns, 0, 
-                                "No hits found");
+                iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, "No hits found");
             } else {
-                BXMLPrintOutput(xml_aip, head, bop->options, 
-                                "blastp", bop->blast_database, 
-                                bop->fake_bsp, other_returns, 0, NULL);
+                iterp = BXMLBuildOneIteration(head, other_returns, bop->options->is_ooframe, !bop->options->gapped_calculation, thisPassNum, search->posConverged ? "CONVERGED" : NULL);
             }
 
-            AsnIoClose(xml_aip);
+            IterationAsnWrite(iterp, psixp->aip, psixp->atp);
+            AsnIoFlush(psixp->aip);
+
+            IterationFree(iterp);
             BlastOtherReturnsFree(other_returns);
         } else {
             PGPFormatMainOutput(head, bop, search, thisPassNum,
@@ -1478,8 +1511,10 @@ Int2 Main (void)
         FileClose(bop->patfp);
     }
     
-    if (ALL_ROUNDS)
-        posSearch = MemFree(posSearch);
+    if (ALL_ROUNDS) {
+        posFreeInformation(posSearch);
+        MemFree(posSearch);
+    }
     
     compactSearchDestruct(compactSearch);
     bop->options = BLASTOptionDelete(bop->options);
@@ -1488,6 +1523,11 @@ Int2 Main (void)
 /*
     ObjMgrFreeCache(0);
 */
+    
+    if(psixp != NULL) {
+        PSIXmlClose(psixp);
+    }
+    
     FileClose(bop->infp);
     PGPFreeBlastOptions(bop);
     

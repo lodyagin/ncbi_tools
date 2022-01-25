@@ -9,28 +9,20 @@
 	11/16/95	Harmon		Created
 	  3/1/96	Kans		Consolidated
 	 4/19/00	Kans		Include files now found in situ in ncbi directory
+	11/01/00	Kans		Removed 68K support
 	
 	Before running this file, build the libraries with makeall.met and makenet.met
 	AppleScripts.
 
-	In order to compile for 68K, change the MASTER property.
-
 	================================================================================ *)
 
-(* ==== Uncomment one of the MASTER symbols ==== *)
+property MAKEPROJECTS : true
+property MAKEAPPS : true
 
-property MASTER : "PPC"
--- property MASTER : "68K"
-
-property MAKEAPPS : "TRUE"
-
--- property DOPNG : "TRUE"
-property DOPNG : "FALSE"
+-- property DOPNG : true
+property DOPNG : false
 
 (* ==== These symbols will be derived ==== *)
-
-global PREFIX
-global SUFFIX
 
 global HARDDISK
 global METRO
@@ -42,6 +34,7 @@ global LIBRARIES
 global BUILDTEST
 
 global DOOPENGL
+global DEBUGSYMBOLS
 global OPTIMIZE
 
 (* ==== The following steps populate and build the programs ==== *)
@@ -50,81 +43,88 @@ with timeout of 60000 seconds
 	
 	DoSetGlobals()
 	
-	if DOOPENGL = "TRUE" then
-		CreateCn3D()
+	if MAKEPROJECTS then
+		if DOOPENGL then
+			CreateCn3D()
+		end if
+		CreateNENTREZ()
+		CreateSEQUIN()
+		CreateTBL2ASN()
+		CreateFORMATDB()
+		CreateFASTACMD()
+		CreateBL2SEQ()
+		CreateBLASTALL()
+		CreateBLASTPGP()
+		CreateBLASTCL3()
 	end if
-	CreateNENTREZ()
-	CreateSEQUIN()
-	CreateTBL2ASN()
-	CreateFORMATDB()
-	CreateFASTACMD()
-	CreateBL2SEQ()
-	CreateBLASTALL()
-	CreateBLASTPGP()
-	CreateBLASTCL3()
 	
-	if MAKEAPPS = "TRUE" then
+	if MAKEAPPS then
 		CompilePrograms()
 	end if
 	
+	beep
+	
 end timeout
+
+on ResolveAlias(pathname)
+	tell application "Finder"
+		--if the last character of pathname is ":" then error "Don't use a trailing colon with ResolveAlias."
+		if exists folder pathname then return pathname & ":"
+		if exists alias file pathname then return the original item of alias file pathname as string
+		error "The folder (or alias) '" & pathname & "' doesn't exist."
+	end tell
+end ResolveAlias
 
 (* ==== These subroutines set paths and other preferences during population ==== *)
 
 on DoSetGlobals()
-	if MASTER = "PPC" then
-		set PREFIX to "PPC "
-		set SUFFIX to "ppc"
-	else if MASTER = "68K" then
-		set PREFIX to "68K "
-		set SUFFIX to "68k"
-	end if
-	
 	tell application "Finder"
 		
 		set HARDDISK to startup disk as string
-		set METRO to HARDDISK & "CodeWarrior Pro 5:" as string
+		set METRO to HARDDISK & "Metrowerks CodeWarrior 6.0:" as string
 		set METROWERKSCW to METRO & "Metrowerks CodeWarrior:" as string
 		set OGLSDK to METRO & "OpenGL SDK:" as string
 		
 		set NCBISOURCE to METRO & "ncbi:" as string
 		
+		try
+			tell me to set Dev to ResolveAlias(HARDDISK & "Development")
+			tell me to set Trees to ResolveAlias(Dev & "Trees")
+			tell me to set NCBIgroup to ResolveAlias(Trees & "NCBI")
+			tell me to set Vault to ResolveAlias(NCBIgroup & "ncbi.vault")
+			tell me to set Distrib to ResolveAlias(Vault & "distrib")
+			set NCBISOURCE to Distrib
+		end try
+		
 		set LIBRARIES to NCBISOURCE & "lib:" as string
 		set BUILDTEST to NCBISOURCE & "build:" as string
 		
-		if MASTER = "PPC" and (exists (file "debug.flg" of folder METRO)) then
-			set OPTIMIZE to "FALSE"
+		if (exists (file "debug.flg" of folder METRO)) then
+			set DEBUGSYMBOLS to true
 		else
-			set OPTIMIZE to "TRUE"
+			set DEBUGSYMBOLS to false
 		end if
+		set OPTIMIZE to not DEBUGSYMBOLS
 		
-		if MASTER = "PPC" and (exists (folder OGLSDK)) then
-			set DOOPENGL to "TRUE"
+		if (exists (folder OGLSDK)) then
+			set DOOPENGL to true
 		else
-			set DOOPENGL to "FALSE"
+			set DOOPENGL to false
 		end if
 		
 	end tell
 end DoSetGlobals
 
 on DoSetPreferences()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
 		(* ===== Panel Target ===== *)
-		if MASTER = "PPC" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
-		else if MASTER = "68K" then
-			Set Preferences of panel "Target Settings" to {Linker:"MacOS 68K Linker"}
-		end if
+		Set Preferences of panel "Target Settings" to {Linker:"MacOS PPC Linker"}
 		
 		(* ===== Panel Project ===== *)
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:library}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:library}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:library}
 		
-		(* ===== Panel C/C++ Language =====  *)
+		(* ===== Panel C/C++ Language ===== *)
 		Set Preferences of panel "C/C++ Compiler" to Â
 			{Activate CPlusPlus:false Â
 				, ARM Conformance:false Â
@@ -157,84 +157,53 @@ on DoSetPreferences()
 				, NonInlined Functions:true Â
 				, Inconsistent Class Struct:true}
 		
-		if MASTER = "PPC" then
-			
-			(* ===== Panel PPC Processor =====  *)
-			Set Preferences of panel "PPC CodeGen" to Â
-				{Struct Alignment:Align_PPC Â
-					, Make Strings ReadOnly:true Â
-					, Store Data in TOC:true Â
-					, Use FMADD Instructions:false Â
-					, Use Profiler:false Â
-					, Traceback Tables:TB_None Â
-					, Schedule:false Â
-					, Peephole Optimizer:false}
-			
-			(* ===== Panel PPC Global Optimizer =====  *)
-			if OPTIMIZE = "TRUE" then
-				Set Preferences of panel "PPC Global Optimizer" to Â
-					{Optimize For:code_Speed Â
-						, Level:1}
-			else
-				Set Preferences of panel "PPC Global Optimizer" to Â
-					{Optimize For:code_Speed Â
-						, Level:0}
-			end if
-			
-			(* ===== Panel PPC Linker ===== *)
-			Set Preferences of panel "PPC Linker" to Â
-				{Generate SYM File:true Â
-					, Full Path In Sym Files:true Â
-					, Generate Link Map:false Â
-					, Suppress Warnings:false Â
-					, Link Mode:fast Â
-					, Initialization Name:Â
-					"", Main Name:Â
-					"__start", Termination Name:""}
-			
-			(* ===== Panel PPC PEF =====  *)
-			Set Preferences of panel "PPC PEF" to Â
-				{Export Symbols:none Â
-					, Old Definition:0 Â
-					, Old Implementation:0 Â
-					, Current Version:0 Â
-					, Code Sorting:nosort Â
-					, Share Data Section:false Â
-					, Expand Uninitialized Data:false Â
-					, Fragment Name:""}
-			
-			(* ===== Panel Debugger =====  *)
-			Set Preferences of panel "Debugger Target" to Â
-				{Log System Messages:false Â
-					, Stop At Watchpoints:true}
-			
-		else if MASTER = "68K" then
-			(* ===== Panel 68K Processor =====  *)
-			Set Preferences of panel "68K CodeGen" to Â
-				{Code Model:large Â
-					, Struct Alignment:Align_68k Â
-					, MC68020 CodeGen:false Â
-					, Floating Point CodeGen:SANE Â
-					, PC Relative Strings:false Â
-					, Use Profiler:false Â
-					, Four Bytes Ints:true Â
-					, Eight Byte Double:true Â
-					, Far Data:true Â
-					, Far Method Tables:true Â
-					, Far String Constants:true Â
-					, MPW Calling Conventions:false}
-			
-			(* ===== Panel 68K Linker ===== *)
-			Set Preferences of panel "68K Linker" to Â
-				{Generate SYM File:true Â
-					, Full Path In Sym Files:true Â
-					, Generate Link Map:false Â
-					, Link Single Segment:false Â
-					, Suppress Warnings:false Â
-					, Fast Link:true Â
-					, Merge Compiler Glue:false}
-			
+		(* ===== Panel PPC Processor ===== *)
+		Set Preferences of panel "PPC CodeGen" to Â
+			{Struct Alignment:Align_PPC Â
+				, Make Strings ReadOnly:true Â
+				, Store Data in TOC:true Â
+				, Use FMADD Instructions:false Â
+				, Use Profiler:false Â
+				, Traceback Tables:TB_None Â
+				, Schedule:false Â
+				, Peephole Optimizer:false}
+		
+		(* ===== Panel PPC Global Optimizer ===== *)
+		if OPTIMIZE then
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed Â
+					, Level:1}
+		else
+			Set Preferences of panel "PPC Global Optimizer" to Â
+				{Optimize For:code_Speed Â
+					, Level:0}
 		end if
+		
+		(* ===== Panel PPC Linker ===== *)
+		Set Preferences of panel "PPC Linker" to Â
+			{Generate SYM File:true Â
+				, Full Path In Sym Files:true Â
+				, Generate Link Map:false Â
+				, Suppress Warnings:false Â
+				, Link Mode:fast Â
+				, Initialization Name:Â
+				"", Main Name:Â
+				"__start", Termination Name:""}
+		
+		(* ===== Panel PPC PEF ===== *)
+		Set Preferences of panel "PPC PEF" to Â
+			{Export Symbols:none Â
+				, Old Definition:0 Â
+				, Old Implementation:0 Â
+				, Current Version:0 Â
+				, Code Sorting:nosort Â
+				, Share Data Section:false Â
+				, Expand Uninitialized Data:false Â
+				, Fragment Name:""}
+		
+		(* ===== Panel Debugger ===== *)
+		Set Preferences of panel "Debugger Target" to Â
+			{Log System Messages:false}
 		
 		my DoSetPaths1()
 		
@@ -242,7 +211,7 @@ on DoSetPreferences()
 end DoSetPreferences
 
 on DoSetPaths1()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
 		(* ===== Panel Access Paths ===== *)
 		-- We need to be able to move the default system compiler folder to the end of the list
@@ -258,7 +227,7 @@ on DoSetPaths1()
 end DoSetPaths1
 
 on DoSetPaths2()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
 		-- After we have added all paths, reinsert compiler default at end of list
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:":MacOS Support:Headers:", recursive:true, origin:shell relative}}}
@@ -271,70 +240,80 @@ on DoSetPaths2()
 end DoSetPaths2
 
 on AddLibraries()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		if MASTER = "PPC" then
-			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL C.PPC.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL SIOUX.PPC.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:InterfaceLib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries::AppearanceLib"} To Segment 1
-			Set Project File "AppearanceLib" to {weak link:true}
-			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:NavigationLib"} To Segment 1
-			Set Project File "NavigationLib" to {weak link:true}
-			Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:MathLib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
-		else if MASTER = "68K" then
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime 68K:MSL Runtime68k.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:68K:MSL C.68K Fa(4i_8d).Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:68K:MSL SIOUX.68K.Lib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MacOS.lib"} To Segment 1
-			Add Files {METROWERKSCW & "MacOS Support:Libraries:MacOS 68K:MathLib68K:MathLib68K (Model Far):MathLib68K Fa(4i_8d).Lib"} To Segment 1
-		end if
+		Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL C.PPC.Lib"} To Segment 1
+		Add Files {METROWERKSCW & "MSL:MSL_C:MSL_MacOS:Lib:PPC:MSL SIOUX.PPC.Lib"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:InterfaceLib"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries::AppearanceLib"} To Segment 1
+		Set Project File "AppearanceLib" to {weak link:true}
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:NavigationLib"} To Segment 1
+		Set Project File "NavigationLib" to {weak link:true}
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:StubLibraries:MathLib"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Universal:Libraries:PPCLibraries:CarbonAccessors.o"} To Segment 1
+		Add Files {METROWERKSCW & "MacOS Support:Libraries:Runtime:Runtime PPC:MSL RuntimePPC.Lib"} To Segment 1
+		
 	end tell
 end AddLibraries
 
+on SetDebugSymbols()
+	tell application "CodeWarrior IDE 4.1"
+		set the debug of every target file of target 1 of project document 1 to DEBUGSYMBOLS
+	end tell
+end SetDebugSymbols
+
 on CompilePrograms()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		if DOOPENGL = "TRUE" then
-			open (BUILDTEST & "cn3d" & SUFFIX & ".µ")
+		if DOOPENGL then
+			open (BUILDTEST & "cn3d.mcp")
+			my SetDebugSymbols()
 			Make Project
 			Close Project
 		end if
 		
-		open (BUILDTEST & "nentrez" & SUFFIX & ".µ")
+		open (BUILDTEST & "nentrez.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "sequin" & SUFFIX & ".µ")
+		open (BUILDTEST & "sequin.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "tbl2asn" & SUFFIX & ".µ")
+		open (BUILDTEST & "tbl2asn.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "formatdb" & SUFFIX & ".µ")
+		open (BUILDTEST & "formatdb.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "fastacmd" & SUFFIX & ".µ")
+		open (BUILDTEST & "fastacmd.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "bl2seq" & SUFFIX & ".µ")
+		open (BUILDTEST & "bl2seq.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "blastall" & SUFFIX & ".µ")
+		open (BUILDTEST & "blastall.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "blastpgp" & SUFFIX & ".µ")
+		open (BUILDTEST & "blastpgp.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
-		open (BUILDTEST & "blastcl3" & SUFFIX & ".µ")
+		open (BUILDTEST & "blastcl3.mcp")
+		my SetDebugSymbols()
 		Make Project
 		Close Project
 		
@@ -344,22 +323,16 @@ end CompilePrograms
 (* ==== This section populates the programs ==== *)
 
 on CreateNENTREZ()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "nentrez" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "nentrez.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Entrez"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"entrez"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Entrez"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"ENTZ", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
@@ -370,7 +343,7 @@ on CreateNENTREZ()
 		
 		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
 			"netentr", "ncbibls3", "ncbiid1", "vibnet"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"accentr", "accutils"}
@@ -388,22 +361,16 @@ on CreateNENTREZ()
 end CreateNENTREZ
 
 on CreateSEQUIN()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "sequin" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "sequin.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Sequin"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"sequin"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Sequin"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"SEQN", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:32000, Minimum Size:6000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
@@ -414,7 +381,7 @@ on CreateSEQUIN()
 		
 		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
 			"netentr", "ncbibls3", "ncbimla", "ncbitxc2", "ncbiid1", "vibnet"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"accentr", "accutils"}
@@ -432,22 +399,16 @@ on CreateSEQUIN()
 end CreateSEQUIN
 
 on CreateTBL2ASN()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "tbl2asn" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "tbl2asn.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"tbl2asn"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"tbl2asn"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"tbl2asn"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -456,7 +417,7 @@ on CreateTBL2ASN()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"tbl2asn"}
@@ -470,29 +431,23 @@ on CreateTBL2ASN()
 end CreateTBL2ASN
 
 on CreateCn3D()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		if DOOPENGL = "TRUE" then
-			Create Project {BUILDTEST & "cn3d" & SUFFIX & ".µ"}
+		if DOOPENGL then
+			Create Project {BUILDTEST & "cn3d.mcp"}
 			
 			my DoSetPreferences()
 			Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
 			
-			if MASTER = "PPC" then
-				Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Cn3D"}
-				Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-				Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
-			else if MASTER = "68K" then
-				Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"Cn3D"}
-				Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-				Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
-			end if
+			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"Cn3D"}
+			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
+			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
 			
 			Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
 			Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
 			Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "OpenGL SDK:Libraries:", origin:absolute}}}
-			if DOPNG = "TRUE" then
+			if DOPNG then
 				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "zlib:mac:", origin:absolute}}}
 				Set Preferences of panel "Access Paths" to {System Paths:{{name:METRO & "libpng:mac:", origin:absolute}}}
 			end if
@@ -502,14 +457,14 @@ on CreateCn3D()
 			
 			repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrantOGL", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3dOGL", "ncbitool", "netcli", Â
 				"netentr", "vibnet"}
-				Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+				Add Files {LIBRARIES & i} To Segment 1
 			end repeat
 			
 			repeat with i in {"OpenGL SDK:Libraries:OpenGLLibraryStub", "OpenGL SDK:Libraries:OpenGLUtilityStub"}
 				Add Files {METRO & i} To Segment 1
 			end repeat
 			
-			if DOPNG = "TRUE" then
+			if DOPNG then
 				repeat with i in {"zlib:mac:zlib.ppc.Lib", "libpng:mac:png.ppc.Lib"}
 					Add Files {METRO & i} To Segment 1
 				end repeat
@@ -531,22 +486,16 @@ on CreateCn3D()
 end CreateCn3D
 
 on CreateFORMATDB()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "formatdb" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "formatdb.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"formatdb"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"formatdb"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"formatdb"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -555,7 +504,7 @@ on CreateFORMATDB()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"formatdb"}
@@ -569,22 +518,16 @@ on CreateFORMATDB()
 end CreateFORMATDB
 
 on CreateFASTACMD()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "fastacmd" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "fastacmd.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"fastacmd"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"fastacmd"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"fastacmd"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -593,7 +536,7 @@ on CreateFASTACMD()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"fastacmd"}
@@ -607,22 +550,16 @@ on CreateFASTACMD()
 end CreateFASTACMD
 
 on CreateBL2SEQ()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "bl2seq" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "bl2seq.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"bl2seq"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"bl2seq"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"bl2seq"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -631,7 +568,7 @@ on CreateBL2SEQ()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"bl2seq"}
@@ -645,22 +582,16 @@ on CreateBL2SEQ()
 end CreateBL2SEQ
 
 on CreateBLASTALL()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "blastall" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "blastall.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastall"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastall"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastall"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -669,7 +600,7 @@ on CreateBLASTALL()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"blastall"}
@@ -683,22 +614,16 @@ on CreateBLASTALL()
 end CreateBLASTALL
 
 on CreateBLASTPGP()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "blastpgp" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "blastpgp.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastpgp"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastpgp"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastpgp"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "demo:", origin:absolute}}}
@@ -707,7 +632,7 @@ on CreateBLASTPGP()
 		my AddLibraries()
 		
 		repeat with i in {"ncbi", "ncbiobj", "vibrant", "ncbitool"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"blastpgp"}
@@ -721,22 +646,16 @@ on CreateBLASTPGP()
 end CreateBLASTPGP
 
 on CreateBLASTCL3()
-	tell application "CodeWarrior IDE 4.0.4"
+	tell application "CodeWarrior IDE 4.1"
 		
-		Create Project {BUILDTEST & "blastcl3" & SUFFIX & ".µ"}
+		Create Project {BUILDTEST & "blastcl3.mcp"}
 		
 		my DoSetPreferences()
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:""}
 		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastcl3"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"blastcl3"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
-		end if
+		Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"blastcl3"}
+		Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"NCBI", File Type:"APPL"}
+		Set Preferences of panel "PPC Project" to {Preferred Size:8000, Minimum Size:5000, Stack Size:64}
 		
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "network:blast3:client:", origin:absolute}}}
@@ -745,7 +664,7 @@ on CreateBLASTCL3()
 		my AddLibraries()
 		
 		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "vibrant", "ncbitool", "netcli", "ncbibls3"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
+			Add Files {LIBRARIES & i} To Segment 1
 		end repeat
 		
 		repeat with i in {"blastcl3"}

@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.8 $  $Date: 1998/09/08 17:59:06 $
+/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.9 $  $Date: 2001/02/21 22:09:27 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_lib_.c,v $
+* Revision 4.9  2001/02/21 22:09:27  lavr
+* SERVICE connector included
+*
 * Revision 4.8  1998/09/08 17:59:06  vakatov
 * Added WWW/Firewall network interface
 *
@@ -73,6 +76,7 @@
 #ifdef ALLOW_STATELESS 
 #define NI_WWWDIRECT_SUPPORTED
 #endif
+#define NI_SERVICE_SUPPORTED
 #define NI_DEBUG_SUPPORTED
 #endif /* OS_UNIX | OS_MSWIN | OS_MAC */
 
@@ -93,6 +97,7 @@
 #define WWW_CLIENT_MODE      "WWW"
 #define WWW_FIREWALL_MODE    "FIREWALL"
 #define WWW_DIRECT_MODE      "STATELESS"
+#define SERVICE_MODE         "SERVICE"
 #define DEBUG_MODE           "DEBUG"
 
 
@@ -120,6 +125,12 @@ static const NIInterface **s_NII[eNII_Default] = {
 
 #ifdef NI_WWWDIRECT_SUPPORTED
   &g_NII_WWWDirect,
+#else
+  0,
+#endif
+
+#ifdef NI_SERVICE_SUPPORTED
+  &g_NII_Service,
 #else
   0,
 #endif
@@ -178,6 +189,8 @@ static NIOptions* s_GetNIOptions
     nio->interface = eNII_WWWFirewall;
   else if (StringCmp(conn_mode, WWW_DIRECT_MODE) == 0)
     nio->interface = eNII_WWWDirect;
+  else if (StringCmp(conn_mode, SERVICE_MODE) == 0)
+    nio->interface = eNII_Service;
   else if (StringCmp(conn_mode, DEBUG_MODE) == 0)
     nio->interface = eNII_Debug;
   else
@@ -254,6 +267,7 @@ NLM_EXTERN Boolean NI_IsInterfaceSupported(ENIInterface ni_interface)
   case eNII_WWW:
   case eNII_WWWFirewall:
   case eNII_WWWDirect:
+  case eNII_Service:
   case eNII_Debug:
     return (Boolean)(s_NII[ni_interface] != 0);
   case eNII_Default:

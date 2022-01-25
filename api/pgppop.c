@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.64 2000/10/25 01:22:56 bauer Exp $
+/*  $Id: pgppop.c,v 6.66 2001/01/16 17:15:54 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.64 $
+* $Revision: 6.66 $
 *
 * File Description: 
 *
@@ -37,6 +37,12 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.66  2001/01/16 17:15:54  hurwitz
+* modified DDV_GetBspCoordGivenDispCoord
+*
+* Revision 6.65  2001/01/10 23:38:39  lewisg
+* fix seqid and various memory leaks
+*
 * Revision 6.64  2000/10/25 01:22:56  bauer
 * fixed DDV display of PDB-Id's in CDD-server
 *
@@ -491,6 +497,7 @@ ParaGPtr pgp;
 			if (pgp->ptxtList) DDV_DeleteTxtList(&pgp->ptxtList);
 			if (pgp->szEditSeq) MemFree(pgp->szEditSeq);
 			if (pgp->pFeatList) ValNodeFree(pgp->pFeatList);
+            if (pgp->sip) SeqIdFree(pgp->sip);
 			MemFree(pgp);
 		}
 	}
@@ -1697,16 +1704,27 @@ Uint1		  strand=Seq_strand_unknown;
 	return(TRUE);
 }
 
+
+NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp, Int4 disp_pos) {
+/*****************************************************************************
+*  same as DDV_GetBspCoordGivenDispCoord2, except alignment status is ignored
+*****************************************************************************/
+  Boolean  UnAligned;
+  return(DDV_GetBspCoordGivenDispCoord2(pgp, disp_pos, &UnAligned));
+}
+
+
 /*****************************************************************************
 
-Function: DDV_GetBspCoordGivenDispCoord()
+Function: DDV_GetBspCoordGivenDispCoord2()
 
 Purpose: compute a BSP coord given a display coord and a ParaG 
 
-Return value: BSP coord
+Return values: BSP coord
+               Alignment status of this coord in pUnAligned
 
 *****************************************************************************/
-NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp,Int4 disp_pos)
+NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord2(ParaGPtr pgp, Int4 disp_pos, Boolean* pUnAligned)
 {
 MsaTxtDispPtr  mtdp;
 ValNodePtr     vnp;
@@ -1726,6 +1744,7 @@ Int4           pgp_start,diff,bsp_coord;
 				if(mtdp->strand==Seq_strand_minus){
 					bsp_coord=mtdp->to-(bsp_coord-mtdp->from);
 				}
+        *pUnAligned = mtdp->IsUnAligned;
 			}
 			else{
 				bsp_coord=(Int4)-1;

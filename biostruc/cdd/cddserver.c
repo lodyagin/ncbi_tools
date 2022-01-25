@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.7 2000/08/03 22:02:23 bauer Exp $
+/* $Id: cddserver.c,v 1.20 2001/03/07 20:29:19 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.7 $
+* $Revision: 1.20 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,45 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.20  2001/03/07 20:29:19  bauer
+* cddserver.c
+*
+* Revision 1.19  2001/03/07 16:31:49  bauer
+* bullet-proof against service failures?
+*
+* Revision 1.18  2001/03/02 23:35:46  bauer
+* FASTA format now done by CddAlignView
+*
+* Revision 1.17  2001/02/28 19:45:11  bauer
+* changed options menu
+*
+* Revision 1.16  2001/02/16 03:11:38  bauer
+* more support for CddAlignView
+*
+* Revision 1.15  2001/02/14 17:10:41  bauer
+* added bit-threshold to CddAlignView call
+*
+* Revision 1.14  2001/02/13 23:11:57  bauer
+* integrated CddAlignView
+*
+* Revision 1.13  2001/02/10 01:57:26  bauer
+* use of CddAlignView library conditional
+*
+* Revision 1.12  2001/02/06 22:54:52  bauer
+* make Paul's CddAlignView the default
+*
+* Revision 1.11  2001/02/05 23:02:11  bauer
+* changes for consensus CDs
+*
+* Revision 1.10  2001/01/24 03:08:47  bauer
+* changes for consensus CDs
+*
+* Revision 1.9  2001/01/11 21:50:45  bauer
+* fixed typo
+*
+* Revision 1.8  2000/12/08 20:17:32  bauer
+* changed status text for oAsIs CDs
+*
 * Revision 1.7  2000/08/03 22:02:23  bauer
 * added support for 3D-structure link highlighting
 *
@@ -75,15 +114,22 @@
 /* #include <asnmime.h> */
 #include <objmime.h>
 #include <strimprt.h>
-#include "objcdd.h"
+#include <objcdd.h>
 #include "cddsrv.h"
 #include <pgppop.h> 
 #include <alignmgr.h>
 #include <taxutil.h>
 #include <txcommon.h>
-#include "cdd.h"
+#include <cdd.h>
+#ifdef  USE_CAV
+#include "cddalignview.h"
+#endif
+#include "cddutil.h"
 
 #undef DEBUG
+#ifdef  USE_CAV
+#define CAV_DEFAULT
+#endif
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -119,12 +165,12 @@ static Boolean CddGetParams()
                 return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "PFAMcgi", "", PFAMcgi, PATH_MAX);
-  if (URLcgi[0] == '\0') {
+  if (PFAMcgi[0] == '\0') {
                 ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no PFAMcgi...\n");
                 return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "SMARTcgi", "", SMARTcgi, PATH_MAX);
-  if (URLcgi[0] == '\0') {
+  if (SMARTcgi[0] == '\0') {
                 ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no SMARTcgi...\n");
                 return FALSE;
   }
@@ -240,6 +286,7 @@ static CddSumPtr CddSumNew()
   if (pcds==NULL) return(pcds);
   pcds->bIsPdb      = FALSE;
   pcds->bIsMaster   = FALSE;
+  pcds->bIs3dRep    = FALSE;
   pcds->cPdbId[0]   = '\0';
   pcds->cChainId[0] = '\0';
   pcds->cPKBMDom[0] = '\0';
@@ -419,11 +466,16 @@ static void CddCountTaxLineage(TXC_TreeNodePtr *tnpp, Int4 iLen, CddSumPtr pcds)
   while (pcdsThis) {
     bsp = BioseqLockById(pcdsThis->sip);
     if (bsp) {
-      descr = bsp->descr;
+      descr = bsp->descr; thistaxid = 0;
       while (descr) {
         if (descr->choice == Seq_descr_source) {
           bsop = descr->data.ptrvalue;
           pOrgRef = bsop->org;
+	  if (NULL != pOrgRef) {
+	    if (NULL != pOrgRef->taxname) {
+	      pcdsThis->cTaxName = strdup(pOrgRef->taxname);
+	    }
+	  }
           if (pOrgRef->db) {
             dbtp = pOrgRef->db->data.ptrvalue;
             oidp = dbtp->tag;
@@ -435,6 +487,7 @@ static void CddCountTaxLineage(TXC_TreeNodePtr *tnpp, Int4 iLen, CddSumPtr pcds)
         }
         descr = descr->next;
       }
+      pcdsThis->iTaxId = thistaxid;
       txtnpp = (TXC_TreeNodePtr*)txc_getLineage(thistaxid,&inLineage);
       if (txtnpp && inLineage > 0) {
         for (i=0; i<inLineage;i++) {
@@ -456,7 +509,8 @@ static void CddCountTaxLineage(TXC_TreeNodePtr *tnpp, Int4 iLen, CddSumPtr pcds)
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
-                                Boolean bHasPdb, CharPtr dbversion)
+                                Boolean bHasPdb, CharPtr dbversion, Boolean bHasConsensus,
+				Boolean bShowTax)
 {
   CddDescrPtr       pCddesc;
   CddSumPtr         pcdsThis;
@@ -473,6 +527,8 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
   TXC_TreeNodePtr   *txtnpp; 
   ValNodePtr        pub;
   Boolean           bRefOpen = FALSE;
+  Boolean           bProfileOnly = FALSE;
+  Boolean           bIsOasis = FALSE;
   Char              buf[61];
   Char              cTax[PATH_MAX];
   Char              descript[CDD_MAX_DESCR];
@@ -485,6 +541,8 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
   Int4              muid;
   Int4              *piChildren;
   FILE              *table = NULL;
+
+  if (strcmp(CDDdbtype,"oasis")==0) bIsOasis = TRUE;
 
   pcdsThis = pcds;
 
@@ -511,13 +569,18 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
   while (pCddesc) {
     if (pCddesc->choice == CddDescr_reference) {
       if (!bRefOpen) {
-        fprintf(table, "<TR><TD ALIGN=RIGHT BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>References:</FONT></STRONG></TD><TD BGCOLOR=#FFFFCC><A HREF=\"%s",PUBcgi);
-        bRefOpen = TRUE; MedArchInit();
+        if (MedArchInit()) {
+          bRefOpen = TRUE;
+          fprintf(table, "<TR><TD ALIGN=RIGHT BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>References:</FONT></STRONG></TD><TD BGCOLOR=#FFFFCC><A HREF=\"%s",PUBcgi);
+          pub = pCddesc->data.ptrvalue; muid=0;
+          muid = MedArchCitMatch(pub);
+          if (muid) fprintf(table, "%d,",muid);
+        }
+      } else {
+        pub = pCddesc->data.ptrvalue; muid=0;
+        muid = MedArchCitMatch(pub);
+        if (muid) fprintf(table, "%d,",muid);
       }
-      pub = pCddesc->data.ptrvalue; muid=0;
-      muid = MedArchCitMatch(pub);
-      if (muid) fprintf(table, "%d,",muid);
-      
     } else {
       if (bRefOpen) {
         fprintf(table, "\">PubMed</A></TD></TR>\n");
@@ -537,10 +600,11 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
               fprintf(table,"CDD pending release</TD></TR>\n");
               break;        
             case 3:
-              fprintf(table,"Full-length sequences with known 3D structures. Alignment from source, reindexed to representative</TD></TR>\n");
+              fprintf(table,"Full-length sequences, including 3D structure if known. Alignment from source, reindexed to representative</TD></TR>\n");
               break;        
             case 4:
               fprintf(table,"checkpoint/PSSM only</TD></TR>\n");
+	      bProfileOnly = TRUE;
               break;        
             default:
               fprintf(table,"unknown</TD></TR>\n");
@@ -556,46 +620,47 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
                          (int)dtp->data[1]+1900);
           break;
         case CddDescr_tax_source:
-          TaxArchInit();
-          orp  = pCddesc->data.ptrvalue;
-          dbtp = orp->db->data.ptrvalue;
-          oidp = dbtp->tag;
-          iParent = oidp->id;
-          cParentTaxName = orp->taxname;
-          if (thisTax > 0) {
-            iParent = thisTax;
-            t1dp = tax1_getbyid(iParent);
-            cParentTaxName = t1dp->org->taxname;
-          }
-          txtnpp = NULL;
-          txtnpp = (TXC_TreeNodePtr *)txc_getChildren(iParent,&inChildren);
-          if (txtnpp && inChildren > 0) {
-            CddCountTaxLineage(txtnpp,inChildren,pcds);
-          }
-          if (iParent > 1) {
-            sprintf(cTax,"%s%d",TAXcgi,iParent);
-          } else {
-            sprintf(cTax,"%s%d",TAXcgi,0);
-          }
-          fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Taxonomy spanned:</FONT></STRONG></TD>");
-          fprintf(table, "<TD BGCOLOR=#FFFFCC><TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0><TR><TD VALIGN=TOP>");
-          fprintf(table, "<A HREF=\"%s\">%s&nbsp</A>->&nbsp</TD>\n",cTax,cParentTaxName);
-          if (txtnpp && inChildren > 0) {
-            fprintf(table, "<TD><TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0>");
-            for (i=0;i<inChildren;i++) {
-              if (txtnpp[i]->flags > 0) {
-                t1dp = tax1_getbyid(txtnpp[i]->tax_id);
-                sprintf(cTax,"%s%d",TAXcgi,txtnpp[i]->tax_id);
-                fprintf(table, "<TR><TD ALIGN=RIGHT>");
-                fprintf(table, "<A HREF=\"%scddsrv.cgi?uid=%s&tax=%d&version=%s\">[%3d]&nbsp</A> from&nbsp</TD>",
-                        URLBase,cCDDid,txtnpp[i]->tax_id,dbversion,(Int4)txtnpp[i]->flags);
-                fprintf(table, "<TD><A HREF=\"%s\">%s</A></TD></TR>\n",cTax,t1dp->org->taxname);
-              }            
+          if (TaxArchInit()) {
+            orp  = pCddesc->data.ptrvalue;
+            dbtp = orp->db->data.ptrvalue;
+            oidp = dbtp->tag;
+            iParent = oidp->id;
+            cParentTaxName = orp->taxname;
+            if (thisTax > 0) {
+              iParent = thisTax;
+              t1dp = tax1_getbyid(iParent);
+              cParentTaxName = t1dp->org->taxname;
             }
-            fprintf(table, "</TABLE></TD>\n");
+            txtnpp = NULL;
+            txtnpp = (TXC_TreeNodePtr *)txc_getChildren(iParent,&inChildren);
+            if (txtnpp && inChildren > 0) {
+              CddCountTaxLineage(txtnpp,inChildren,pcds);
+            }
+            if (iParent > 1) {
+              sprintf(cTax,"%s%d",TAXcgi,iParent);
+            } else {
+              sprintf(cTax,"%s%d",TAXcgi,0);
+            }
+            fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Taxonomy spanned:</FONT></STRONG></TD>");
+            fprintf(table, "<TD BGCOLOR=#FFFFCC><TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0><TR><TD VALIGN=TOP>");
+            fprintf(table, "<A HREF=\"%s\">%s&nbsp</A>->&nbsp</TD>\n",cTax,cParentTaxName);
+            if (txtnpp && inChildren > 0) {
+              fprintf(table, "<TD><TABLE BORDER=0 CELLPADDING=0 CELLSPACING=0>");
+              for (i=0;i<inChildren;i++) {
+                if (txtnpp[i]->flags > 0) {
+                  t1dp = tax1_getbyid(txtnpp[i]->tax_id);
+                  sprintf(cTax,"%s%d",TAXcgi,txtnpp[i]->tax_id);
+                  fprintf(table, "<TR><TD ALIGN=RIGHT>");
+                  fprintf(table, "<A HREF=\"%scddsrv.cgi?uid=%s&tax=%d&version=%s\">[%3d]&nbsp</A> from&nbsp</TD>",
+                          URLBase,cCDDid,txtnpp[i]->tax_id,dbversion,(Int4)txtnpp[i]->flags);
+                  fprintf(table, "<TD><A HREF=\"%s\">%s</A></TD></TR>\n",cTax,t1dp->org->taxname);
+                }            
+              }
+              fprintf(table, "</TABLE></TD>\n");
+            }
+            fprintf(table, "</TR></TABLE></TD></TR>\n");
+            TaxArchFini();
           }
-          fprintf(table, "</TR></TABLE></TD></TR>\n");
-          TaxArchFini();
           break;
 
         case CddDescr_othername:
@@ -634,6 +699,14 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
     bRefOpen = FALSE; MedArchFini();
   }
 
+  while (pcdsThis) {
+    iCount++;
+    pcdsThis = pcdsThis->next;
+  }
+  fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Aligned sequences:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>\n");
+  fprintf(table, "%d</TD></TR>\n",iCount);
+
+  pcdsThis = pcds;
   if (pcdsThis) {
     fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Representative:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>\n");
     if (pcdsThis->bIsPdb) {
@@ -644,9 +717,11 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
       } else {
         fprintf(table,"<FONT COLOR=#660000>%s</FONT> [<A HREF=\"%s%s%s\">CD</A>]\n",pcdsThis->cDefLine,WRPSBCALL,pcdsThis->cPdbId,pcdsThis->cChainId);
       }
-    } else {
+    } else if (!bHasConsensus) {
       fprintf(table, "gi|<A HREF=\"%s%d\">%d</A>|", ENTREZCALL, pcdsThis->uid,pcdsThis->uid);
       fprintf(table,"%s [<A HREF=\"%s%d\">CD</A>]\n",pcdsThis->cDefLine,WRPSBCALL,pcdsThis->uid);
+    } else {
+      fprintf(table,"Consensus sequence:");
     }
     fprintf(table, "</TD></TR>\n");
   }
@@ -655,15 +730,15 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
     fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Aligned range:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%d-%d</TD></TR>\n",
             sintp->from+1,sintp->to+1);
   } 
-/*
-  fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Sequence:</FONT></STRONG></TD><TD VALIGN=TOP NOWRAP BGCOLOR=#FFFFCC><PRE>\n");
-  spp = FastaSeqPort((BioseqPtr)pcdd->trunc_master,FALSE,FALSE,Seq_code_ncbieaa);
-  while (FastaSeqLine(spp,buf,60,FALSE)) {
-    fprintf(table, "%s\n",buf);
+  if (bHasConsensus || bProfileOnly) {
+    fprintf(table, "<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Sequence:</FONT></STRONG></TD><TD VALIGN=TOP NOWRAP BGCOLOR=#FFFFCC><PRE>\n");
+    spp = FastaSeqPort((BioseqPtr)pcdd->trunc_master,FALSE,FALSE,Seq_code_ncbieaa);
+    while (FastaSeqLine(spp,buf,60,FALSE)) {
+      fprintf(table, "%s\n",buf);
+    }
+    fprintf(table, "</TD></TR></PRE>\n");
+    SeqPortFree(spp);
   }
-  fprintf(table, "</TD></TR></PRE>\n");
-  SeqPortFree(spp);
-*/
   fprintf(table, "</TABLE>\n");
 
   if (pcdsThis) {
@@ -693,8 +768,7 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
     if (bHasPdb) {
       fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
       fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"chn\" VALUE=1 CHECKED> Aligned chains<BR>\n");
-      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"chn\" VALUE=0> All chains</TD>\n");  
-      fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"chn\" VALUE=0> All chains<BR>\n");  
       fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=0 CHECKED> Virtual Bonds<BR>\n");
       fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=1> All Atoms</TD>\n");  
       fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
@@ -717,25 +791,67 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
     fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=5> Phylip format<BR>\n");
     if (bHasPdb) fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=1> See ASN.1 file\n");
     fprintf(table, "</TD>\n");
+    fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+    fprintf(table, "Conservation color threshold:&nbsp\n");
+    fprintf(table, "<SELECT NAME=\"bit\">\n");
+    fprintf(table, "<OPTION VALUE=\"0.5\">0.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"1.0\">1.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"1.5\">1.5 bits\n");
+    fprintf(table, "<OPTION SELECTED VALUE=\"2.0\">2.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"2.5\">2.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"3.0\">3.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"3.5\">3.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"4.0\">4.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"0.0\">Identity\n");
+    fprintf(table, "</SELECT><BR>\n");
+    fprintf(table, "Alignment width:&nbsp\n");
+    fprintf(table, "<SELECT NAME=\"pwidth\">\n");
+    fprintf(table, "<OPTION VALUE=\"40\">40\n");
+    fprintf(table, "<OPTION SELECTED VALUE=\"60\">60\n");
+    fprintf(table, "<OPTION VALUE=\"80\">80\n");
+    fprintf(table, "<OPTION VALUE=\"100\">100\n");
+    fprintf(table, "</SELECT>\n");
+    fprintf(table, "</TD>\n");
     fprintf(table, "</TR></TABLE>\n");
     fprintf(table, "<TABLE BORDER=\"1\" CELLPADDING=\"2\" CELLSPACING=\"2\" WIDTH=100%%>\n");  
-    fprintf(table, "<TR><TD COLSPAN=3 ALIGN=CENTER VALIGN=TOP NOWRAP>pick aligned sequences (will be added to selection above)</TD></TR>");
+    if ((bHasPdb && bHasConsensus && bIsOasis) && bShowTax)
+      fprintf(table, "<TR><TD COLSPAN=5 ALIGN=CENTER VALIGN=TOP NOWRAP>pick aligned sequences (will be added to selection above)</TD></TR>");
+    else if ((bHasPdb && bHasConsensus && bIsOasis) || bShowTax)
+      fprintf(table, "<TR><TD COLSPAN=4 ALIGN=CENTER VALIGN=TOP NOWRAP>pick aligned sequences (will be added to selection above)</TD></TR>");
+    else fprintf(table, "<TR><TD COLSPAN=3 ALIGN=CENTER VALIGN=TOP NOWRAP>pick aligned sequences (will be added to selection above)</TD></TR>");
     pcdsThis = pcdsThis->next;
 
-    fprintf(table, "<TR><TH>&nbsp;</TH><TH>PDB-Id/gi</TH><TH ALIGN=\"LEFT\">Definition</TH></TR>\n");
+    fprintf(table, "<TR><TH>&nbsp;</TH>");
+    if (bHasConsensus && bHasPdb && bIsOasis) fprintf(table,"<TH>3D</TH>");
+    fprintf(table, "<TH>PDB-Id/gi</TH>");
+    if (bShowTax) fprintf(table,"<TH>Organism</TH>");
+    fprintf(table, "<TH ALIGN=\"LEFT\">Definition</TH></TR>\n");
+    
     while (pcdsThis) {
       fprintf(table, "<TR>\n");
       fprintf(table, "<TD>\n");
       fprintf(table, "<INPUT TYPE=\"CHECKBOX\" NAME=\"gi\" VALUE=\"%d\">\n",pcdsThis->iCddIdx);
       fprintf(table, "</TD>\n");
-      fprintf(table, "<TD NOWRAP>\n");
+      if (pcdsThis->bIsPdb && bHasConsensus && bIsOasis) {
+        if (pcdsThis->iCddIdx == 1) {
+          fprintf(table,"<TD><INPUT TYPE=\"RADIO\" NAME=\"Tdrep\" VALUE=%d CHECKED></TD>\n",pcdsThis->iCddIdx);
+	} else {
+          fprintf(table,"<TD><INPUT TYPE=\"RADIO\" NAME=\"Tdrep\" VALUE=%d></TD>\n",pcdsThis->iCddIdx);
+        }
+      }
       if (pcdsThis->bIsPdb) {
+        fprintf(table, "<TD NOWRAP>\n");
         fprintf(table, "<a href=\"%s%s\">%s %s</a>\n", MMDBCALL, pcdsThis->cPdbId, 
                         pcdsThis->cPdbId, pcdsThis->cChainId);
       } else {
+        if (bHasConsensus && bIsOasis && bHasPdb) fprintf(table,"<TD NOWRAP COLSPAN=2>\n");
+	else fprintf(table,"<TD NOWRAP>\n");    
         fprintf(table, "<A HREF=\"%s%d\">%d</a>\n", ENTREZCALL, pcdsThis->uid, pcdsThis->uid);
+        fprintf(table, "</TD>\n");
       }
-      fprintf(table, "</TD>\n");
+      if (bShowTax) {
+        fprintf(table,"<TD NOWRAP><A HREF=\"%s%d\">%s</A></TD>\n",TAXcgi,pcdsThis->iTaxId,pcdsThis->cTaxName);
+      }
       fprintf(table, "<TD>\n");
       if (pcdsThis->bIsPdb) {
         if (pcdsThis->cChainId[0] == '\0' || pcdsThis->cChainId[0] == ' ') {
@@ -824,7 +940,7 @@ static Boolean CddUseThisMMDBid(ValNodePtr location, CddSumPtr pcds)
 /*---------------------------------------------------------------------------*/
 static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
                                CharPtr QueryAlign, Boolean bHasPdb,
-			       CharPtr dbversion, Int2 iPDB)
+			       CharPtr dbversion, Int2 iPDB, Uint2 pwidth)
 {
   Uint4                disp_format;
   Char                 tableName[PATH_MAX]; 
@@ -886,7 +1002,7 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
 /* kludge to avoid including ddvcreate.h               */
 /*  ddo.RulerStyle        = RulerStyle_Continue_Start; */
   ddo.RulerStyle        = (Uint1)2;
-  pdob->LineSize   = 60;
+  pdob->LineSize   = pwidth;
   pdob->bUseLayout = TRUE;
   pdob->byteSpp = NULL;
   pdob->matrix = NULL;
@@ -902,7 +1018,7 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
   fprintf(table, "<IMG SRC=\"cdbrowse.gif\" BORDER=0 ISMAP></A>\n");
 
 /*---------------------------------------------------------------------------*/
-/* if necessary, write out menu for aligment redrawing                       */
+/* if necessary, write out menu for alignment redrawing                      */
 /*---------------------------------------------------------------------------*/
   if (QuerySeq && QueryAlign) {
 
@@ -960,7 +1076,7 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
     fprintf(table, "<OPTION VALUE=\"-1\">all\n");
     fprintf(table, "</SELECT>sequences\n");
     fprintf(table, "<SELECT NAME=\"seltype\">\n");
-    fprintf(table, "<OPTION VALUE=\"1\">from the top of the CD aligment\n"); 
+    fprintf(table, "<OPTION VALUE=\"1\">from the top of the CD alignment\n"); 
     fprintf(table, "<OPTION VALUE=\"2\">from the most diverse subset\n"); 
     fprintf(table, "<OPTION SELECTED VALUE=\"3\">most similar to the query \n"); 
     fprintf(table, "</SELECT>\n");
@@ -974,22 +1090,43 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
       fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=0 CHECKED> Virtual Bonds<BR>\n");
       fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=1> All Atoms</TD>\n");
     }
+    fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+    if (bHasPdb) {
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=0 CHECKED> Launch Cn3D<BR>\n");
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2> HTML Display<BR>\n");
+    } else {
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2 CHECKED> HTML Display<BR>\n");
+    }
+    fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=3> Text Display</TD>\n");
+    fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+    fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=4> FASTA with gaps<BR>\n");
+    fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=5> Phylip format</TD>\n");
+    if (CddGetStatus(pcdd)!=3) {
       fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
-      if (bHasPdb) {
-        fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=0 CHECKED> Launch Cn3D<BR>\n");
-        fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2> HTML Display<BR>\n");
-      } else {
-        fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2 CHECKED> HTML Display<BR>\n");
-      }
-      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=3> Text Display</TD>\n");
-      fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
-      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=4> FASTA with gaps<BR>\n");
-      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=5> Phylip format</TD>\n");
-      if (CddGetStatus(pcdd)!=3) {
-        fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
-        fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"v\" CHECKED> All in 3D<BR>\n");
-        fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"s\"> Representative in 3D</TD>\n");
-      }
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"v\" CHECKED> All in 3D<BR>\n");
+      fprintf(table, "<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"s\"> Representative in 3D</TD>\n");
+    }
+    fprintf(table, "<TD VALIGN=TOP NOWRAP>\n");
+    fprintf(table, "Conservation color threshold:&nbsp\n");
+    fprintf(table, "<SELECT NAME=\"bit\">\n");
+    fprintf(table, "<OPTION VALUE=\"0.5\">0.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"1.0\">1.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"1.5\">1.5 bits\n");
+    fprintf(table, "<OPTION SELECTED VALUE=\"2.0\">2.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"2.5\">2.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"3.0\">3.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"3.5\">3.5 bits\n");
+    fprintf(table, "<OPTION VALUE=\"4.0\">4.0 bits\n");
+    fprintf(table, "<OPTION VALUE=\"0.0\">Identity\n");
+    fprintf(table, "</SELECT><BR>\n");
+    fprintf(table, "Alignment width:&nbsp\n");
+    fprintf(table, "<SELECT NAME=\"pwidth\">\n");
+    fprintf(table, "<OPTION VALUE=\"40\">40\n");
+    fprintf(table, "<OPTION SELECTED VALUE=\"60\">60\n");
+    fprintf(table, "<OPTION VALUE=\"80\">80\n");
+    fprintf(table, "<OPTION VALUE=\"100\">100\n");
+    fprintf(table, "</SELECT>\n");
+    fprintf(table, "</TD>\n");
     fprintf(table, "</TR></TABLE>\n");
     fprintf(table, "</FORM>\n");
   }
@@ -1023,12 +1160,170 @@ static void CddDumpAlignAsHtml(SeqAlignPtr salp, CddPtr pcdd, CharPtr QuerySeq,
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* use Paul's function to output HTML or Text-formatted alignments           */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
+                           CharPtr QuerySeq, CharPtr QueryAlign, CharPtr dbversion,
+			   CddPtr pcdd, Boolean bHasPdb, FloatHi tbit, Uint2 pwidth)
+{
+  Uint4       size = FileLength(CDDalign);
+  Uint4       uCAVoptions = 0;
+  BytePtr     buf;
+  AsnIoMemPtr aimp;
+  CddDescrPtr pCddesc;
+  CharPtr     cCurrDesc;
+  Char        source[PATH_MAX];
+    
+#ifdef USE_CAV
+  buf = MemNew(size);
+  aimp = (AsnIoMemPtr) AsnIoMemOpen("wb",buf,size);
+  if (NULL == aimp) return(FALSE);
+  if (!NcbiMimeAsn1AsnWrite(pvnNcbi,aimp->aip,NULL)) return(FALSE);
+  AsnIoFlush(aimp->aip);
+  AsnIoMemClose(aimp);
+
+  uCAVoptions = CAV_TEXT;
+  if (iPDB == 2) uCAVoptions = CAV_HTML;
+  else if (iPDB == 4) uCAVoptions = CAV_FASTA;
+  if (tbit <= 0.0) uCAVoptions |= CAV_SHOW_IDENTITY;
+  printf("Content-type: text/html\n\n");
+  printf("<HTML><TITLE>CD multiple alignment for %s</TITLE><BODY BGCOLOR=\"ffffff\">\n",cCDDid);
+  printf("<A HREF=\"cdd_form.map\">\n");
+  printf("<IMG SRC=\"cdbrowse.gif\" BORDER=0 ISMAP></A>\n");
+/*---------------------------------------------------------------------------*/
+/* if necessary, write out menu for alignment redrawing                      */
+/*---------------------------------------------------------------------------*/
+  if (QuerySeq && QueryAlign) {
+
+    printf("<TABLE BORDER=0 CELLPADDING=3 CELLSPACING=0>\n");
+    printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><H2><FONT COLOR=#000000>CD:</FONT></H2></TD><TD VALIGN=TOP NOWRAP BGCOLOR=#FFFFCC><H2><A HREF=\"%scddsrv.cgi?uid=%s&version=%s\">%s</A><FONT size=-1>, &nbsp; CD-Search result with query-sequence added</FONT></H2></TD></TR>\n",
+            URLBase,cCDDid,dbversion,cCDDid);
+
+    pCddesc = (CddDescrPtr) pcdd->description;
+    while (pCddesc) {
+      switch(pCddesc->choice) {
+        case CddDescr_othername:
+          printf("\n");
+          printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Alternative Name:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TR>\n",pCddesc->data.ptrvalue);
+          break;
+        case CddDescr_category:
+          printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Category:</FONT></STRONG></TD><TD>%s</TD VALIGN=TOP BGCOLOR=#FFFFCC></TR>\n",pCddesc->data.ptrvalue);
+          break;
+        case CddDescr_comment:
+	  cCurrDesc = pCddesc->data.ptrvalue;
+	  if (strcmp(cCurrDesc,"linked to 3D-structure") != 0) 
+            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Description:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TR>\n",pCddesc->data.ptrvalue);
+          break;
+        case CddDescr_source:
+          strcpy(source,pCddesc->data.ptrvalue);
+          if (strcmp("Smart",source) == 0) {
+            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                    SMARTcgi,cCDDid,source);
+          } else if (strcmp("Pfam",source) == 0) {
+            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC><A HREF=\"%s%s\">%s</A></TD></TD>\n",
+                    PFAMcgi,&cCDDid[4],source);
+          } else {
+            printf("<TR><TD VALIGN=TOP ALIGN=RIGHT NOWRAP BGCOLOR=#99CCFF><STRONG><FONT COLOR=#000000>Source:</FONT></STRONG></TD><TD VALIGN=TOP BGCOLOR=#FFFFCC>%s</TD></TD>\n",source);
+          }
+          break;
+        default:
+          break;
+      }
+      pCddesc = pCddesc->next;
+    }
+    printf("</TABLE>\n");
+
+    if (bHasPdb) printf("<BR><IMG SRC=\"pinkb.gif\" ALIGN=TOP>&nbsp;<FONT COLOR=#660000>This CD alignment includes 3D structure.</FONT> To display structure, download <A HREF=\"http://www.ncbi.nlm.nih.gov/Structure/CN3D/cn3d.shtml\"><STRONG>Cn3D v3.0</STRONG></A>!\n");
+    printf("<FORM METHOD=\"POST\" ACTION=\"%scddsrv.cgi\">\n",URLBase);
+    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"uid\" VALUE=\"%s\">\n", cCDDid);
+    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"version\" VALUE=\"%s\">\n", dbversion);
+    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"query\" VALUE=\"%s\">\n", QuerySeq);
+    printf("<INPUT TYPE=\"HIDDEN\" NAME=\"aln\" VALUE=\"%s\">\n", QueryAlign);
+    printf("<INPUT TYPE=\"SUBMIT\" VALUE=\"Redisplay Alignment\"> showing\n");
+    printf("<SELECT NAME=\"maxaln\">\n");
+    printf("<OPTION VALUE=\"5\"> up to   5\n");
+    printf("<OPTION SELECTED VALUE=\"10\">up to  10\n");
+    printf("<OPTION VALUE=\"25\">up to  25\n");
+    printf("<OPTION VALUE=\"50\">up to  50\n");
+    printf("<OPTION VALUE=\"100\">up to 100\n");
+    printf("<OPTION VALUE=\"-1\">all\n");
+    printf("</SELECT>sequences\n");
+    printf("<SELECT NAME=\"seltype\">\n");
+    printf("<OPTION VALUE=\"1\">from the top of the CD alignment\n"); 
+    printf("<OPTION VALUE=\"2\">from the most diverse subset\n"); 
+    printf("<OPTION SELECTED VALUE=\"3\">most similar to the query \n"); 
+    printf("</SELECT>\n");
+    
+    printf("<TABLE BORDER=0 CELLPADDING=3 CELLSPACING=3> <TR><TD VALIGN=TOP NOWRAP>\n");
+    if (bHasPdb) {
+      printf("<TD VALIGN=TOP NOWRAP>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"chn\" VALUE=1 CHECKED> Aligned chains<BR>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"chn\" VALUE=0> All chains</TD>\n");  
+      printf("<TD VALIGN=TOP NOWRAP>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=0 CHECKED> Virtual Bonds<BR>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"ato\" VALUE=1> All Atoms</TD>\n");
+    }
+    printf("<TD VALIGN=TOP NOWRAP>\n");
+    if (bHasPdb) {
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=0 CHECKED> Launch Cn3D<BR>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2> HTML Display<BR>\n");
+    } else {
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=2 CHECKED> HTML Display<BR>\n");
+    }
+    printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=3> Text Display</TD>\n");
+    printf("<TD VALIGN=TOP NOWRAP>\n");
+    printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=4> FASTA with gaps<BR>\n");
+    printf("<INPUT TYPE=\"RADIO\" NAME=\"ascbin\" VALUE=5> Phylip format</TD>\n");
+    if (CddGetStatus(pcdd)!=3) {
+      printf("<TD VALIGN=TOP NOWRAP>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"v\" CHECKED> All in 3D<BR>\n");
+      printf("<INPUT TYPE=\"RADIO\" NAME=\"mode\" VALUE=\"s\"> Representative in 3D</TD>\n");
+    }
+    printf("<TD VALIGN=TOP NOWRAP>\n");
+    printf("Conservation color threshold:&nbsp\n");
+    printf("<SELECT NAME=\"bit\">\n");
+    printf("<OPTION VALUE=\"0.5\">0.5 bits\n");
+    printf("<OPTION VALUE=\"1.0\">1.0 bits\n");
+    printf("<OPTION VALUE=\"1.5\">1.5 bits\n");
+    printf("<OPTION SELECTED VALUE=\"2.0\">2.0 bits\n");
+    printf("<OPTION VALUE=\"2.5\">2.5 bits\n");
+    printf("<OPTION VALUE=\"3.0\">3.0 bits\n");
+    printf("<OPTION VALUE=\"3.5\">3.5 bits\n");
+    printf("<OPTION VALUE=\"4.0\">4.0 bits\n");
+    printf("<OPTION VALUE=\"0.0\">Identity\n");
+    printf("</SELECT><BR>\n");
+    printf("Alignment width:&nbsp\n");
+    printf("<SELECT NAME=\"pwidth\">\n");
+    printf("<OPTION VALUE=\"40\">40\n");
+    printf("<OPTION SELECTED VALUE=\"60\">60\n");
+    printf("<OPTION VALUE=\"80\">80\n");
+    printf("<OPTION VALUE=\"100\">100\n");
+    printf("</SELECT>\n");
+    printf("</TD>\n");
+    printf("</TR></TABLE>\n");
+    printf("</FORM>\n");
+  }
+
+
+  if (iPDB != 2) printf("<PRE>\n");
+  CAV_DisplayMultiple(buf, uCAVoptions, pwidth, tbit, NULL);
+  MemFree(buf);
+  if (iPDB != 2) printf("</PRE>\n");
+  printf("</BODY></HTML>\n");
+#endif
+  return(TRUE);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* MAIN Function for cddserver                                               */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 Int2 Main()
 {
-  AsnIoPtr                 paiFile, aip       = NULL;
+  AsnIoPtr                 paiFile;
+  AsnIoMemPtr              aimp;
   BioseqPtr                bsp, bspQuery;
   BioseqSetPtr             bssp;
   BiostrucAlignPtr         pbsaStruct;
@@ -1041,6 +1336,7 @@ Int2 Main()
   BiostrucPtr              pbsSlaveHead       = NULL;
   BiostrucPtr              pbsSlaveTail, pbsTemp;
   BiostrucSeqsPtr          pbsaStrSeq;
+  BytePtr                  buf;
   CddPtr                   pcdd               = NULL;
   CddSumPtr                pcds               = NULL;
   CddSumPtr                pcdsCopy, pcdsTail, pcdsHead;
@@ -1075,12 +1371,21 @@ Int2 Main()
   Boolean                  bChain             = TRUE;
   Boolean                  bFix               = TRUE;
   Boolean                  bHaveMaster        = FALSE;
+  Boolean                  bHave3dRep         = FALSE;
   Boolean                  bMode              = CDDSUMMARY;
   Boolean                  bTax               = FALSE;
   Boolean                  bBlast             = FALSE;
   Boolean                  bIsOasis           = FALSE;
   Boolean                  bWantedPick        = FALSE;
+  Boolean                  bHasPdb            = FALSE;
   Boolean                  is_network, bRemove;
+  Boolean                  bHasConsensus      = FALSE;
+#ifdef CAV_DEFAULT
+  Boolean                  bUseCddAlignView   = TRUE;
+#else
+  Boolean                  bUseCddAlignView   = FALSE;
+#endif
+  Boolean                  bShowTax           = FALSE;
   Char                     CDDalign[PATH_MAX];
   Char                     CDDfile[PATH_MAX];
   Char                     chain[2], cChain;
@@ -1089,6 +1394,7 @@ Int2 Main()
   Char                     szName[5];
   Int2                     iPDB               = 0;
   Int2                     iSeqStrMode        = NOALIGN; 
+  Int4                     i3dRepIndex        = 1;
   Int4                     Gi, i;
   Int4                     iCddSize           = 0;
   Int4                     iIndex;
@@ -1101,8 +1407,10 @@ Int2 Main()
   Int4                     NumLabels          = 0;
   Int4                     nGi                = 0;
   Int4                     nPdb               = 0;
-  struct rlimit            rl;
-
+  struct rlimit            rl;\
+  FILE                    *fp;
+  FloatHi                  tbit               = 2.0;
+  Uint2                    pwidth             = 60;
 
 /*---------------------------------------------------------------------------*/
 /* Yanli's fix for making binary reading work                                */
@@ -1171,15 +1479,17 @@ Int2 Main()
 #ifdef DEBUG
   printf(" DEBUG: CDD data searched in: %s\n",CDDalign);
 #endif 
+  
 
 /*---------------------------------------------------------------------------*/
-/* changed reading of the CD asn.1 to BINARY, 6/12/00, as v1.00 is near, Aron*/
+/* changed reading of the CD asn.1 to BINARY, 6/12/00, as v1.00 is near      */
 /*---------------------------------------------------------------------------*/
   pcdd = (CddPtr) CddReadFromFile(CDDalign,TRUE);
 /*  aip = AsnIoOpen(CDDalign,"rb");  */
 /*  pcdd = CddAsnRead(aip,NULL);     */
 /*  AsnIoClose(aip);                 */
   if (!pcdd) CddHtmlError("Could not access CDD data!");
+  bHasConsensus = CddHasConsensus(pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* retrieve data required for using cddserver as a rps-blast output formatter*/
@@ -1199,7 +1509,11 @@ Int2 Main()
      MemFree(sipQuery->data.ptrvalue);
     sipQuery->data.ptrvalue = oidp;
     sipQuery->next = NULL;
-
+/*---------------------------------------------------------------------------*/
+/* add query sequence to the linked list of bioseqs in the CD                */
+/*---------------------------------------------------------------------------*/
+    bssp = (BioseqSetPtr) pcdd->sequences->data.ptrvalue;
+    ValNodeLink(&(bssp->seq_set),sepQuery);
     SeqMgrAdd(OBJ_BIOSEQ,bspQuery);
     bBlast = TRUE;
   } else {
@@ -1297,6 +1611,16 @@ Int2 Main()
   }
 
 /*---------------------------------------------------------------------------*/
+/* retrieve, if present, the indicator for which structure to use as master  */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "Tdrep")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    if (isdigit(www_arg[0])) {
+      i3dRepIndex = (Int4) atoi(www_arg);
+    } else CddHtmlError("Non numerical parameter supplied for \"3drep\"");
+  }
+
+/*---------------------------------------------------------------------------*/
 /* retrieve the boolean specifying whether the aligned chain only should be  */
 /* displayed                                                                 */
 /*---------------------------------------------------------------------------*/
@@ -1333,6 +1657,26 @@ Int2 Main()
   }
 
 /*---------------------------------------------------------------------------*/
+/* retrieve the informativeness threshold for alignment column coloring      */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "bit")) >= 0) {
+    www_arg =  WWWGetValueByIndex(www_info, indx);
+    if (isdigit(www_arg[0])) {
+      tbit = (FloatHi) atof(www_arg);  
+    } else CddHtmlError("Non numerical parameter supplied for \"bit\"");
+  }
+
+/*---------------------------------------------------------------------------*/
+/* retrieve the alignment display width                                      */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "pwidth")) >= 0) {
+    www_arg =  WWWGetValueByIndex(www_info, indx);
+    if (isdigit(www_arg[0])) {
+      pwidth = (Uint2) atoi(www_arg);  
+    } else CddHtmlError("Non numerical parameter supplied for \"pwidth\"");
+  }
+
+/*---------------------------------------------------------------------------*/
 /* retrieve the boolean specifying whether the results shall be dumped as    */
 /* binary or ascii data                                                      */
 /*---------------------------------------------------------------------------*/
@@ -1342,8 +1686,37 @@ Int2 Main()
       iPDB = (Int2) atoi(www_arg); 
       if (iPDB < 0) iPDB=0;
       if (iPDB > 5) iPDB=5;
+/*---------------------------------------------------------------------------*/
+/* kludge to use Paul's CddAlignView by default, if possible                 */
+/*---------------------------------------------------------------------------*/
+#ifdef CAV_DEFAULT
+      if (iPDB == 2 || iPDB == 3 || iPDB == 4) bUseCddAlignView = TRUE;
+#endif
     } else CddHtmlError("Non numerical parameter supplied for \"ascbin\"");
   }
+  
+/*---------------------------------------------------------------------------*/
+/* retrieve the boolean specifying whether HTML/Text results shall be dumped */
+/* by CddAlignView, to explicitly reset to using DDV if iPDB is 2 or 3       */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "usecav")) >= 0) {
+    www_arg =  WWWGetValueByIndex(www_info, indx);
+    if (isdigit(www_arg[0])) {
+      bUseCddAlignView = (Boolean) atoi(www_arg); 
+    } else CddHtmlError("Non numerical parameter supplied for \"usecav\"");
+  }
+  
+/*---------------------------------------------------------------------------*/
+/* retrieve the boolean specifying whether tax. should be displayed explic.  */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "showtax")) >= 0) {
+    www_arg =  WWWGetValueByIndex(www_info, indx);
+    if (isdigit(www_arg[0])) {
+      bShowTax = (Boolean) atoi(www_arg); 
+    } else CddHtmlError("Non numerical parameter supplied for \"showtax\"");
+  }
+  
+  
 /*---------------------------------------------------------------------------*/
 /* end of WWW-parameter parsing block                                        */
 /* the only parameter retrieved later is cMode, overrides default alignment  */
@@ -1363,24 +1736,32 @@ Int2 Main()
       while(sip) {
         if (iIndex > 0 || !bHaveMaster) {
           pcdsThis = CddSumNew();
-          pcdsThis->sip = sip;
+	  if (!bHaveMaster) pcdsThis->sip = SeqIdDup(sip);
+          else pcdsThis->sip = sip;
 	  pcdsThis->salp = salpHead;
+	  pcdsThis->iCddIdx = iCddSize++;
           if (sip->choice == SEQID_PDB) {
+	    bHasPdb = TRUE;
             pcdsThis->bIsPdb = TRUE;
             pdb_seq_id = (PDBSeqIdPtr) GetPdbSeqId(sip);
             pcdsThis->cChainId[0] = pdb_seq_id->chain; pcdsThis->cChainId[1] = '\0';
             pcdsThis->cPdbId[0] = pdb_seq_id->mol[0]; pcdsThis->cPdbId[1] = pdb_seq_id->mol[1];
             pcdsThis->cPdbId[2] = pdb_seq_id->mol[2]; pcdsThis->cPdbId[3] = pdb_seq_id->mol[3];
             pcdsThis->cPdbId[4] = '\0';
+	    if (!bHave3dRep && pcdsThis->iCddIdx == i3dRepIndex) {
+	      pcdsThis->bIs3dRep = TRUE; /* first 3D-seq is 3D representative*/
+	      bHave3dRep = TRUE;
+	    }
           } else {
             pcdsThis->bIsPdb = FALSE;
-            pcdsThis->uid = sip->data.intvalue;
+            if (pcdsThis->sip->choice == SEQID_GI)
+	      pcdsThis->uid = sip->data.intvalue;
+	    else pcdsThis->uid = -1;
           }
           if (!bHaveMaster && iIndex == 0) {
             bHaveMaster = TRUE;
             pcdsThis->bIsMaster = TRUE;
           }
-          pcdsThis->iCddIdx = iCddSize++;
           CddSumLink(&(pcds),pcdsThis);
         } 
         iIndex++;
@@ -1411,13 +1792,13 @@ Int2 Main()
     while (ddp) {                     /* need to properly allocate SeqIdPtrs */
       sipMaster = SeqIdDup(pcds->sip);
       sipNew = SeqIdDup(sipQuery);
+      ASSERT(FALSE == CddSameSip(sipMaster,sipNew));
       sipMaster->next = sipNew;
       sipNew->next = NULL;
       ddp->id = sipMaster;
       ddp = ddp->next; 
     }
     salpQuery->next = (SeqAlignPtr) pcdd->seqannot->data;
-/*    pcdd->seqannot->data = salpQuery; */
     pcdsThis->salp = salpQuery;
   }
 
@@ -1502,6 +1883,14 @@ Int2 Main()
   }
   
 /*---------------------------------------------------------------------------*/
+/* check whether the 3D representative is needed and included in the Gi list */
+/*---------------------------------------------------------------------------*/
+  if (iPDB < 2 && !UseThisGi(i3dRepIndex,pvnGis)) {
+    nGi ++;
+    pvnGi = ValNodeAddInt(&pvnGis, 0, i3dRepIndex);
+  }
+
+/*---------------------------------------------------------------------------*/
 /* default mode if more than one gi present is to show alignments, at least  */
 /*---------------------------------------------------------------------------*/
   if ((nGi >= 2 || bBlast) && bMode) {
@@ -1517,11 +1906,13 @@ Int2 Main()
   salpCopy = NULL; salpTail = NULL; 
   nPdb = 0; iCddSize = 0;
   if (pcdd->seqannot) {
-    if (bTax) TaxArchInit();
+    if (bTax) {
+      if (!TaxArchInit()) bTax = FALSE;
+    }
     while (pcdsThis) {
       if (((UseThisGi(pcdsThis->iCddIdx,pvnGis) || !bMode) && 
           (!bTax || CddSameTaxLineage(pcdsThis->sip,iTaxId,bssp->seq_set))) ||
-	  pcdsThis->bIsMaster) {
+	  pcdsThis->bIsMaster || pcdsThis->bIs3dRep) {
 	if (iCddSize < iMaxAln || bSelect || iMaxAln==0) {
           iCddSize++;
 	  if (pcdsThis->bIsPdb) nPdb++;
@@ -1585,17 +1976,17 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (!bMode) {
     if (pcds) {
-      CddServerShowTracks(pcds,pcdd,iTaxId,pcds->bIsPdb,dbversion);
+      CddServerShowTracks(pcds,pcdd,iTaxId,nPdb > 0,dbversion,bHasConsensus,bShowTax);
     } else {
-      CddServerShowTracks(pcds,pcdd,iTaxId,FALSE,dbversion);
+      CddServerShowTracks(pcds,pcdd,iTaxId,FALSE,dbversion,bHasConsensus,bShowTax);
     }
   }
 
 /*---------------------------------------------------------------------------*/
 /* If HTML display is selected, call Patrick's Function and exit             */
 /*---------------------------------------------------------------------------*/
-  if (iPDB > 1) {
-    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, pcds->bIsPdb,dbversion,iPDB);
+  if ((iPDB > 1 && !bUseCddAlignView) || iPDB == 5) {
+    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb,dbversion,iPDB,pwidth);
   }
 
 /*---------------------------------------------------------------------------*/
@@ -1634,23 +2025,34 @@ Int2 Main()
     if (nPdb > 1 && CddGetStatus(pcdd)!=3) {
       if (iSeqStrMode==CDDONESTRUC) iSeqStrMode = CDDSEVSTRUC;
     }
-  } else {
+  } else if (!bUseCddAlignView) {
 /*---------------------------------------------------------------------------*/
 /* if no PDB structure is available, the alignment is dumped as HTML by def. */
 /*---------------------------------------------------------------------------*/
     iPDB = 2;
-    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, pcds->bIsPdb,dbversion, iPDB);
+    CddDumpAlignAsHtml(salpCopy, pcdd, QuerySeq, QueryAlign, bHasPdb, dbversion, iPDB, pwidth);
   }
 
 /*---------------------------------------------------------------------------*/
 /* retrieve Master structure in the case of a single-structure CD            */
 /*---------------------------------------------------------------------------*/
   if (bMode && nPdb) { 
-    strcpy(szName,pcds->cPdbId);
+    if (!bHasConsensus) {
+      strcpy(szName,pcds->cPdbId);
+    } else {
+      pcdsThis = pcds; while (pcdsThis) {
+        if (pcdsThis->bIsPdb && pcdsThis->bIs3dRep) {
+          strcpy(szName,pcdsThis->cPdbId);
+	  break;
+	}
+        pcdsThis = pcdsThis->next;
+      }
+    }
     pbsMaster = FetchBiostrucPDB(szName,iModelComplexity,1);
     if (!pbsMaster) CddHtmlError("Unable to load Master structure!");
     if (bChain) {
-      strcpy(chain,pcds->cChainId);
+      if (!bHasConsensus) strcpy(chain,pcds->cChainId);
+      else strcpy(chain,pcdsThis->cChainId);
       if (chain[0] != ' ') {
         pbsTemp = (BiostrucPtr)PruneBiostruc(pbsMaster,chain);
         pbsMaster = NULL;
@@ -1667,7 +2069,7 @@ Int2 Main()
   if (iSeqStrMode == CDDSEVSTRUC) {
     pcdsThis = pcds->next;
     while (pcdsThis) {
-      if (pcdsThis->bIsPdb) {
+      if (pcdsThis->bIsPdb && !pcdsThis->bIs3dRep) {
         strcpy(szName,pcdsThis->cPdbId);
         if (!pbsSlaveHead) {
           pbsSlaveHead = FetchBiostrucPDB(szName,iModelComplexity,1);
@@ -1725,16 +2127,19 @@ Int2 Main()
                       iSeqStrMode = CDDSEVSTRUC;
                     }
     } else if (cMode == 'c' || cMode == 'C') bMode = CDDSUMMARY;       
-
 #ifdef DEBUG
     printf(" DEBUG: mode selected as %c, interpreted as %d\n",cMode,bMode);
 #endif
+  }
+  if (bMode != CDDSUMMARY && iPDB > 1) {
+    bMode = CDDALIGNMENT;
+    iSeqStrMode = CDDSEQUONLY;
   }
 
 /*---------------------------------------------------------------------------*/
 /* if more than one structure present, VAST results have to be retrieved     */
 /*---------------------------------------------------------------------------*/
-  if (nPdb > 1) {
+  if (nPdb > 1 && iSeqStrMode != CDDSEQUONLY) {
     pbsa = (BiostrucAnnotSetPtr) pcdd->features;
     pbsfCopy = NULL;
     pbsfTail = NULL;
@@ -1761,7 +2166,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
     pcdsThis = pcds; nPdb = 1;
     while (pcdsThis) {
-      if (pcdsThis->bIsPdb && !pcdsThis->bIsMaster) {
+      if (pcdsThis->bIsPdb && !pcdsThis->bIsMaster && !pcdsThis->bIs3dRep) {
         if (pcdsThis->iMMDBId != -1) {
           pbsSlaveHead = pbsaStruct->slaves;
           pbsSlave = pbsSlaveHead;
@@ -1817,7 +2222,22 @@ Int2 Main()
     sep = sep->next;
   }
 
-
+/*---------------------------------------------------------------------------*/
+/* if CD has consensus, and 3D visualization is selected, need to reindex    */
+/* alignment to use the 3D representative as the master!                     */
+/*---------------------------------------------------------------------------*/
+  if (bHasConsensus && iPDB < 2) {
+    salpCopy = psaCAlignHead->data;
+    pcdsThis = pcds; while (pcdsThis) {
+      if (pcdsThis->bIs3dRep) {
+        sipMaster = pcdsThis->sip;
+        break;
+      }
+      pcdsThis = pcdsThis->next;
+    }
+    psaCAlignHead->data = CddReindexSeqAlign(salpCopy, sipMaster, bssp);
+  }
+  
 /*---------------------------------------------------------------------------*/
 /* prepare data for output                                                   */
 /*---------------------------------------------------------------------------*/
@@ -1838,6 +2258,17 @@ Int2 Main()
     case CDDONESTRUC: pvnNcbi->data.ptrvalue = pbsaStrSeq; break;
     case CDDSEVSTRUC: pvnNcbi->data.ptrvalue = pbsaStruct; break;
   }
+
+/*---------------------------------------------------------------------------*/
+/* use Paul's CddAlignView, write data into a buffer                         */
+/*---------------------------------------------------------------------------*/
+#ifdef USE_CAV
+  if (iSeqStrMode == CDDSEQUONLY && bUseCddAlignView) {
+    if (!CddInvokeAlignView(pvnNcbi,CDDalign,iPDB,QuerySeq,QueryAlign,dbversion,pcdd,bHasPdb,tbit,pwidth)) 
+      CddHtmlError("Could not display alignment");
+    return 0;  
+  }
+#endif
 
 /*---------------------------------------------------------------------------*/
 /* Insert local Id's instead of duplicate sequence Id's                      */ 
@@ -1861,7 +2292,7 @@ Int2 Main()
   } else fprintf(OutputFile, "Content-type: application/octet-stream\n\n");
   fflush(OutputFile);
   if (OutputFile != stdout) {
-    if (iPDB != 1)
+    if (iPDB == 0)
       paiFile = AsnIoNew(ASNIO_BIN_OUT, OutputFile, NULL, NULL, NULL);
     else
       paiFile = AsnIoNew(ASNIO_TEXT_OUT, OutputFile, NULL, NULL, NULL);

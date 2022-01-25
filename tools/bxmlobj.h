@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-BlastOutput
-*    Generated using ASNCODE Revision: 6.9 at Oct 23, 2000  4:18 PM
+*    Generated using ASNCODE Revision: 6.9 at Nov 24, 2000 11:42 AM
 *
 **************************************************/
 
@@ -39,11 +39,8 @@ typedef struct struct_BlastOutput {
    CharPtr   query_def;
    Int4   query_len;
    CharPtr   query_seq;
-   Int4   iter_num;
-   struct struct_Hit PNTR   hits;
    struct struct_Parameters PNTR   param;
-   struct struct_Statistics PNTR   stat;
-   CharPtr   message;
+   struct struct_Iteration PNTR   iterations;
 } BlastOutput, PNTR BlastOutputPtr;
 
 
@@ -51,29 +48,6 @@ NLM_EXTERN BlastOutputPtr LIBCALL BlastOutputFree PROTO ((BlastOutputPtr ));
 NLM_EXTERN BlastOutputPtr LIBCALL BlastOutputNew PROTO (( void ));
 NLM_EXTERN BlastOutputPtr LIBCALL BlastOutputAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastOutputAsnWrite PROTO (( BlastOutputPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    Hit
-*
-**************************************************/
-typedef struct struct_Hit {
-   struct struct_Hit PNTR next;
-   Int4   num;
-   CharPtr   id;
-   CharPtr   def;
-   CharPtr   accession;
-   Int4   len;
-   struct struct_Hsp PNTR   hsps;
-} Hit, PNTR HitPtr;
-
-
-NLM_EXTERN HitPtr LIBCALL HitFree PROTO ((HitPtr ));
-NLM_EXTERN HitPtr LIBCALL HitNew PROTO (( void ));
-NLM_EXTERN HitPtr LIBCALL HitAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL HitAsnWrite PROTO (( HitPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -100,6 +74,50 @@ NLM_EXTERN ParametersPtr LIBCALL ParametersFree PROTO ((ParametersPtr ));
 NLM_EXTERN ParametersPtr LIBCALL ParametersNew PROTO (( void ));
 NLM_EXTERN ParametersPtr LIBCALL ParametersAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ParametersAsnWrite PROTO (( ParametersPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Iteration
+*
+**************************************************/
+typedef struct struct_Iteration {
+   struct struct_Iteration PNTR next;
+   Int4   iter_num;
+   struct struct_Hit PNTR   hits;
+   struct struct_Statistics PNTR   stat;
+   CharPtr   message;
+} Iteration, PNTR IterationPtr;
+
+
+NLM_EXTERN IterationPtr LIBCALL IterationFree PROTO ((IterationPtr ));
+NLM_EXTERN IterationPtr LIBCALL IterationNew PROTO (( void ));
+NLM_EXTERN IterationPtr LIBCALL IterationAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL IterationAsnWrite PROTO (( IterationPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    Hit
+*
+**************************************************/
+typedef struct struct_Hit {
+   struct struct_Hit PNTR next;
+   Int4   num;
+   CharPtr   id;
+   CharPtr   def;
+   CharPtr   accession;
+   Int4   len;
+   struct struct_Hsp PNTR   hsps;
+} Hit, PNTR HitPtr;
+
+
+NLM_EXTERN HitPtr LIBCALL HitFree PROTO ((HitPtr ));
+NLM_EXTERN HitPtr LIBCALL HitNew PROTO (( void ));
+NLM_EXTERN HitPtr LIBCALL HitAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL HitAsnWrite PROTO (( HitPtr , AsnIoPtr, AsnTypePtr));
 
 
 
@@ -134,6 +152,7 @@ NLM_EXTERN Boolean LIBCALL StatisticsAsnWrite PROTO (( StatisticsPtr , AsnIoPtr,
 typedef struct struct_Hsp {
    struct struct_Hsp PNTR next;
    Int4   num;
+   FloatHi   bit_score;
    FloatHi   score;
    FloatHi   evalue;
    Int4   query_from;
@@ -147,6 +166,7 @@ typedef struct struct_Hsp {
    Int4   identity;
    Int4   positive;
    Int4   gaps;
+   Int4   align_len;
    Int4   density;
    CharPtr   qseq;
    CharPtr   hseq;

@@ -1,4 +1,4 @@
-/* $Id: thrdspea.c,v 1.1 2000/08/16 20:45:21 hurwitz Exp $
+/* $Id: thrdspea.c,v 1.2 2001/03/02 23:14:12 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdspea.c,v $
+* Revision 1.2  2001/03/02 23:14:12  hurwitz
+* run threading faster for PSSM weight=1, bug fix
+*
 * Revision 1.1  2000/08/16 20:45:21  hurwitz
 * initial check in of threading routines
 *
@@ -156,7 +159,7 @@ for(j=mn;j<=mx;j++) {
 	if(t1<0) continue;
 	ms+=psm->ww[j][t1];
 
-	for(k=0;k<nrt;k++){
+	for(k=0;k<psm->AlphabetSize;k++){
 	s0+=psm->ww[j][k]*spc->rt[k]; }
 
 	}

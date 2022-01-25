@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.6  2001/03/08 12:47:44  ostell
+* made FixPub work if no medline uid returned, but pmid is returned.
+*
 * Revision 6.5  2000/08/18 17:01:02  kans
 * added FetchPubPmId, enhanced FixPubEquiv to handle records with pmid but no muid
 *
@@ -403,7 +406,7 @@ void FindPub(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 ValNodePtr FixPub (ValNodePtr pub, FindPubOptionPtr fpop)
 {
 	ValNodePtr newpub, tmp;
-	Int4 		muid;
+	Int4 		muid, pmid;
 	CitArtPtr	cit;
 	
 
@@ -461,6 +464,48 @@ ValNodePtr FixPub (ValNodePtr pub, FindPubOptionPtr fpop)
 				else
 				{
 					print_pub(pub, FALSE, FALSE, muid);
+					newpub = pub;
+					MedlineToISO(pub);
+				}
+				break; /* got muid, done */
+			}
+
+			pmid = MedArchCitMatchPmId(pub);
+			if (pmid)              /* matched it */
+			{
+				print_pub(pub, TRUE, FALSE, muid);
+				fpop->lookups_succeeded++;
+				if (fpop->replace_cit)
+				{
+					fpop->fetches_attempted++;
+					tmp = FetchPubPmId(pmid);
+				
+					if (tmp != NULL)
+					{
+						if (ten_authors(pub->data.ptrvalue,
+									tmp->data.ptrvalue)) 
+						{
+
+							fpop->fetches_succeeded++;
+							PubFree(pub);
+							pub = ValNodeNew(tmp);
+							pub->choice = PUB_PMid;
+							pub->data.intvalue = pmid;
+							newpub = ValNodeNew(NULL);
+							newpub->choice = PUB_Equiv;
+							newpub->data.ptrvalue = tmp;
+						}
+						else 
+						{
+							print_pub(pub, FALSE, TRUE, muid);
+							newpub = pub;
+							MedlineToISO(pub);
+						}
+					}
+				}
+				else
+				{
+					print_pub(pub, FALSE, FALSE, pmid);
 					newpub = pub;
 					MedlineToISO(pub);
 				}

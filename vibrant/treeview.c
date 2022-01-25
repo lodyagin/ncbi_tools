@@ -31,6 +31,15 @@
 *
 *
 * $Log: treeview.c,v $
+* Revision 1.13  2001/03/28 14:05:47  beloslyu
+* fix the comments to C style
+*
+* Revision 1.12  2001/03/28 01:37:40  juran
+* *** empty log message ***
+*
+* Revision 1.11  2000/11/06 21:51:15  soussov
+* adds code to prevent infinite loop in getNodeCoordinates
+*
 * Revision 1.10  1999/08/12 18:31:10  soussov
 * fixed bug in allocNewSegm
 *
@@ -275,7 +284,7 @@ static _tnSegmPtr allocNewSegm(TreeCursorPtr cursor)
     _tnSegmPtr ts;
     _tnSegmPtr tsn;
     TreeViewPtr tv;
-    Int4 i, j;
+    /* Int4 i, j; */
 
     /*find free room */
     tv= (TreeViewPtr) getTree4Cursor(cursor);
@@ -1918,7 +1927,7 @@ TreeViewPtr tview_create(GrouP parent, Int2 width, Int2 height,
 			 TreeNodeCmpFunc NodeCmp)
 {
     TreeViewPtr tv;
-    int i;
+    /* int i; */
     _tnSegmPtr tns;
 
     if((tv= (TreeViewPtr) MemNew(sizeof(TreeView))) == NULL) return NULL;
@@ -2024,7 +2033,7 @@ TreeViewPtr tview_createCustom(Int2 left, Int2 top, Int2 width, Int2 height,
 			 TreeNodeCmpFunc NodeCmp)
 {
     TreeViewPtr tv;
-    int i;
+    /* int i; */
     _tnSegmPtr tns;
 
     if((tv= (TreeViewPtr) MemNew(sizeof(TreeView))) == NULL) return NULL;
@@ -2375,6 +2384,9 @@ static void getNodeCoordinates(TreeViewPtr tv, Int4Ptr node_x, Int4Ptr node_y)
 		    y= my_box.yb;
 		}
 	    }
+	}
+	else {
+	    break;
 	}
     }
 

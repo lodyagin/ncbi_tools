@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.9 at Sep 15, 2000  3:06 PM
+*    Generated using ASNCODE Revision: 6.10 at Jan 5, 2001 12:44 PM
 *
 **************************************************/
 
@@ -149,6 +149,8 @@ typedef struct struct_Blast_parameters {
    Uint1   is_megablast;
    ValNodePtr   query_lcase_mask;
    Int4   is_ooframe;
+   Uint1   endpoint_results;
+   FloatHi   percent_identity;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -511,18 +513,18 @@ NLM_EXTERN Boolean LIBCALL MegaBlastHitAsnWrite PROTO (( MegaBlastHitPtr , AsnIo
 
 /**************************************************
 *
-*    SeqAlignSetList
+*    MegaBlastResults
 *
 **************************************************/
-typedef struct struct_Seq_align_set_list {
-   struct struct_Seq_align PNTR   align;
-} SeqAlignSetList, PNTR SeqAlignSetListPtr;
+typedef struct struct_MegaBlast_results {
+   struct struct_MegaBlast_hit PNTR   mbhits;
+} MegaBlastResults, PNTR MegaBlastResultsPtr;
 
 
-NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListFree PROTO ((SeqAlignSetListPtr ));
-NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListNew PROTO (( void ));
-NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL SeqAlignSetListAsnWrite PROTO (( SeqAlignSetListPtr , AsnIoPtr, AsnTypePtr));
+NLM_EXTERN MegaBlastResultsPtr LIBCALL MegaBlastResultsFree PROTO ((MegaBlastResultsPtr ));
+NLM_EXTERN MegaBlastResultsPtr LIBCALL MegaBlastResultsNew PROTO (( void ));
+NLM_EXTERN MegaBlastResultsPtr LIBCALL MegaBlastResultsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MegaBlastResultsAsnWrite PROTO (( MegaBlastResultsPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

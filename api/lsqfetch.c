@@ -37,6 +37,15 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.10  2001/03/13 16:48:58  kans
+* fixes to saving path, binary search results
+*
+* Revision 6.9  2001/03/12 23:19:33  kans
+* added IndexedFastaLib functions - currently uses genome contig naming conventions
+*
+* Revision 6.8  2001/01/09 00:12:39  kans
+* now handles SEQID_GI
+*
 * Revision 6.7  1999/10/07 16:21:13  kans
 * removed static AddSeqId and SeqIdDupList which were identical to public sequtil functions
 *
@@ -59,6 +68,15 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.10  2001/03/13 16:48:58  kans
+* fixes to saving path, binary search results
+*
+* Revision 6.9  2001/03/12 23:19:33  kans
+* added IndexedFastaLib functions - currently uses genome contig naming conventions
+*
+* Revision 6.8  2001/01/09 00:12:39  kans
+* now handles SEQID_GI
+*
 * Revision 6.7  1999/10/07 16:21:13  kans
 * removed static AddSeqId and SeqIdDupList which were identical to public sequtil functions
 *
@@ -119,6 +137,8 @@
 #ifndef _LSQFETCH_
 #include <lsqfetch.h>
 #endif
+
+#include <sqnutils.h>
 
 /* #include <accentr.h> */
 
@@ -423,8 +443,8 @@ static Int2 LIBCALLBACK FastaLibBioseqFetchFunc (Pointer data)
 	sip = (SeqIdPtr)(ompcp->input_data);
 	if(sip == NULL)
 		return OM_MSG_RET_ERROR;
-	if(sip->choice == SEQID_GI)
-		return OM_MSG_RET_OK;
+	/* if(sip->choice == SEQID_GI)
+		return OM_MSG_RET_OK; */
 
 	if(ompcp->input_entityID)
 	{
@@ -667,8 +687,8 @@ static Int2 LIBCALLBACK FileBioseqFetchFunc (Pointer data)
 	sip = (SeqIdPtr)(ompcp->input_data);
 	if(sip == NULL)
 		return OM_MSG_RET_ERROR;
-	if(sip->choice == SEQID_GI)
-		return OM_MSG_RET_OK;
+	/* if(sip->choice == SEQID_GI)
+		return OM_MSG_RET_OK; */
 	while(sbfp && sep==NULL)
 	{
 		fbp = sbfp->data.ptrvalue;
@@ -1012,4 +1032,386 @@ NLM_EXTERN void BioseqFetchDisable(void)
 	LocalSeqFetchDisable();
 	/*EntrezBioseqFetchDisable();*/
 }
+
+
+/**********************************************************************/
+
+typedef struct fastaidx {
+  CharPtr       image;
+  CharPtr PNTR  seqids;
+  CharPtr PNTR  offsets;
+  Int4          numlines;
+  CharPtr       path;
+  CharPtr       file;
+} FastaIndex, PNTR FastaIndexPtr;
+
+static Int4 SearchFastaIndex (
+  FastaIndexPtr fip,
+  CharPtr seqid
+)
+
+{
+  int       compare;
+  Int4      L, R, mid;
+  long int  val;
+
+  if (fip == NULL || fip->seqids == NULL || fip->offsets == NULL) return -1;
+  if (StringHasNoText (seqid)) return -1;
+
+  L = 0;
+  R = fip->numlines - 1;
+  while (L < R) {
+    mid = (L + R) / 2;
+    compare = StringICmp (fip->seqids [mid], seqid);
+    if (compare < 0) {
+      L = mid + 1;
+    } else {
+      R = mid;
+    }
+  }
+
+  if (StringICmp (fip->seqids [R], seqid) == 0) {
+    if (fip->offsets [R] != NULL &&
+        sscanf (fip->offsets [R], "%ld", &val) == 1) {
+      return (Int4) val;
+    }
+  }
+
+  return -1;
+}
+
+static FastaIndexPtr FreeFastaIndex (
+  FastaIndexPtr fip
+)
+
+{
+  if (fip == NULL) return NULL;
+
+  MemFree (fip->seqids);
+  MemFree (fip->offsets);
+  MemFree (fip->image);
+  MemFree (fip->path);
+  MemFree (fip->file);
+  MemFree (fip);
+
+  return NULL;
+}
+
+static FastaIndexPtr ReadFastaIndex (
+  CharPtr file
+)
+
+{
+  Char           ch;
+  FastaIndexPtr  fip;
+  FILE           *fp;
+  Int4           idx, len;
+  CharPtr        last, ptr, tmp;
+  Boolean        outOfOrder;
+  Char           path [PATH_MAX];
+
+  if (StringHasNoText (file)) return NULL;
+  len = FileLength (file);
+  if (len < 1) return NULL;
+
+  fip = (FastaIndexPtr) MemNew (sizeof (FastaIndex));
+  if (fip == NULL) return NULL;
+  
+  fp = FileOpen (file, "r");
+  if (fp == NULL) {
+    MemFree (fip);
+    return NULL;
+  }
+
+  fip->image = MemNew ((size_t) (len + 5));
+  if (fip->image == NULL) {
+    FileClose (fp);
+    MemFree (fip);
+    return NULL;
+  }
+
+  /* read already sorted file into allocated buffer */
+
+  FileRead (fip->image, (size_t) len, 1, fp);
+
+  FileClose (fp);
+
+  /* count lines */
+
+  fip->numlines = 0;
+  tmp = fip->image;
+  ch = *tmp;
+  while (ch != '\0') {
+    if (ch == '\n') {
+      (fip->numlines++);
+    }
+    tmp++;
+    ch = *tmp;
+  }
+
+  fip->seqids = MemNew (sizeof (CharPtr) * (size_t) (fip->numlines + 2));
+  fip->offsets = MemNew (sizeof (CharPtr) * (size_t) (fip->numlines + 2));
+  if (fip->seqids == NULL || fip->offsets == NULL) {
+    return FreeFastaIndex (fip);
+  }
+
+  /* initialize seqids and offsets arrays */
+
+  idx = 0;
+  tmp = fip->image;
+  ch = *tmp;
+  fip->seqids [idx] = tmp;
+  while (ch != '\0') {
+    if (ch == '\n') {
+      *tmp = '\0';
+      tmp++;
+      ch = *tmp;
+      idx++;
+      fip->seqids [idx] = tmp;
+    } else if (ch == '\t') {
+      *tmp = '\0';
+      tmp++;
+      ch = *tmp;
+      fip->offsets [idx] = tmp;
+    } else {
+      tmp++;
+      ch = *tmp;
+    }
+  }
+
+  /* confirm sorted order and uniqueness */
+
+  outOfOrder = FALSE;
+  last = fip->seqids [0];
+  for (idx = 1; idx < fip->numlines; idx++) {
+    if (StringCmp (last, fip->seqids [idx]) >= 0) {
+      outOfOrder = TRUE;
+    }
+    last = fip->seqids [idx];
+  }
+
+  if (outOfOrder) {
+    ErrPostEx (SEV_ERROR, 0, 0, "FASTA index file out of order");
+  }
+
+  /* multi-FASTA file is in same directory as .idx file */
+
+  StringNCpy_0 (path, file, sizeof (path));
+  ptr = StringRChr (path, DIRDELIMCHR);
+  if (ptr != NULL) {
+    *ptr = '\0';
+    if (! StringHasNoText (path)) {
+      fip->path = StringSave (path);
+    }
+    ptr++;
+    if (! StringHasNoText (ptr)) {
+      fip->file = StringSave (ptr);
+    }
+  }
+
+  return fip;
+}
+
+/* object manager registerable fetch function */
+
+static CharPtr fastalibfetchproc = "IndexedFastaLibBioseqFetch";
+
+typedef struct flibftch {
+  CharPtr        path;
+  FastaIndexPtr  currentfip;
+} FastaLibFetchData, PNTR FastaLibFetchPtr;
+
+static Int2 LIBCALLBACK IndexedFastaLibBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Pointer           dataptr = NULL;
+  Uint2             datatype, entityID = 0;
+  Char              file [FILENAME_MAX], path [PATH_MAX], id [41], tmp [41];
+  FastaLibFetchPtr  flfp;
+  FILE              *fp;
+  Int4              offset;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  CharPtr           ptr;
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  flfp = (FastaLibFetchPtr) ompp->procdata;
+  if (flfp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice == SEQID_LOCAL) {
+
+    SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
+    if (StringNICmp (id, "Hs", 2) == 0) {
+      StringCpy (tmp, id + 2);
+      ptr = StringChr (tmp, '_');
+      if (ptr != NULL) {
+        *ptr = '\0';
+        sprintf (file, "chr%s.idx", tmp);
+
+        if (flfp->currentfip == NULL ||
+            StringICmp (file, flfp->currentfip->file) != 0) {
+          flfp->currentfip = FreeFastaIndex (flfp->currentfip);
+          StringNCpy_0 (path, flfp->path, sizeof (path));
+          FileBuildPath (path, NULL, file);
+          flfp->currentfip = ReadFastaIndex (path);
+        }
+
+        if (flfp->currentfip != NULL) {
+          offset = SearchFastaIndex (flfp->currentfip, id);
+          if (offset < 0) return OM_MSG_RET_ERROR;
+          sprintf (file, "chr%s.fa", tmp);
+          StringNCpy_0 (path, flfp->path, sizeof (path));
+          FileBuildPath (path, NULL, file);
+          fp = FileOpen (path, "r");
+          if (fp == NULL) return OM_MSG_RET_ERROR;
+          fseek (fp, offset, SEEK_SET);
+          dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,
+                                            FALSE, FALSE, TRUE, FALSE);
+          if (dataptr != NULL) {
+            sep = GetTopSeqEntryForEntityID (entityID);
+          }
+          FileClose (fp);
+        }
+      }
+    }
+  }
+
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+NLM_EXTERN Boolean IndexedFastaLibFetchEnable (CharPtr path)
+
+{
+  FastaLibFetchPtr  flfp;
+  Char              str [PATH_MAX];
+
+  StringNCpy_0 (str, path, sizeof (str));
+  TrimSpacesAroundString (str);
+  flfp = (FastaLibFetchPtr) MemNew (sizeof (FastaLibFetchData));
+  if (flfp != NULL) {
+    flfp->path = StringSave (str);
+    flfp->currentfip = NULL;
+  }
+  ObjMgrProcLoad (OMPROC_FETCH, fastalibfetchproc, fastalibfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, (Pointer) flfp,
+                  IndexedFastaLibBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
+NLM_EXTERN void IndexedFastaLibFetchDisable (void)
+
+{
+  FastaLibFetchPtr  flfp;
+  ObjMgrPtr         omp;
+  ObjMgrProcPtr     ompp;
+
+  omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, fastalibfetchproc, OMPROC_FETCH);
+  if (ompp == NULL) return;
+  ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
+  flfp = (FastaLibFetchPtr) ompp->procdata;
+  if (flfp == NULL) return;
+  MemFree (flfp->path);
+  FreeFastaIndex (flfp->currentfip);
+  MemFree (flfp);
+}
+
+NLM_EXTERN void CreateFastaIndex (
+  CharPtr file
+)
+
+{
+  BioseqPtr    bsp;
+  Pointer      dataptr = NULL;
+  Uint2        datatype, entityID = 0;
+  ValNodePtr   head = NULL, last = NULL, vnp;
+  Char         id [41], path [PATH_MAX], tmp [64];
+  FILE         *ifp, *ofp;
+  Int4         offset;
+  CharPtr      ptr;
+  SeqEntryPtr  sep;
+
+  if (StringHasNoText (file)) return;
+
+  /* replace extension by .idx for index file */
+
+  StringNCpy_0 (path, file, sizeof (path));
+  ptr = StringRChr (path, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
+  }
+  StringCat (path, ".idx");
+
+  ifp = FileOpen (file, "r");
+  if (ifp == NULL) return;
+
+  ofp = FileOpen (path, "w");
+  if (ofp != NULL) {
+
+    /* get initial file offset */
+
+    offset = ftell (ifp);
+
+    /* read next FASTA component */
+
+    while ((dataptr = ReadAsnFastaOrFlatFile (ifp, &datatype, &entityID,
+                                              FALSE, FALSE, TRUE, FALSE)) != NULL) {
+
+      sep = GetTopSeqEntryForEntityID (entityID);
+      if (sep != NULL) {
+        bsp = FindNucBioseq (sep);
+        if (bsp != NULL && bsp->length > 0) {
+          SeqIdWrite (bsp->id, id, PRINTID_REPORT, sizeof (id));
+          if (! StringHasNoText (id)) {
+
+            /* save ID and offset separated by tab character */
+
+            sprintf (tmp, "%s\t%ld", id, (long) offset);
+            last = ValNodeNew (last);
+            if (head == NULL) {
+              head = last;
+            }
+            if (last != NULL) {
+              last->data.ptrvalue = StringSave (tmp);
+            }
+          }
+        }
+      }
+
+      ObjMgrFreeByEntityID (entityID);
+
+      /* get file offset of next FASTA component */
+
+      offset = ftell (ifp);
+    }
+
+    /* sort by ID */
+
+    head = ValNodeSort (head, SortVnpByString);
+    head = UniqueValNode (head);
+
+    /* write ID and offset index */
+
+    for (vnp = head; vnp != NULL; vnp = vnp->next) {
+      fprintf (ofp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+    }
+
+    FileClose (ofp);
+  }
+
+  FileClose (ifp);
+}
+
 

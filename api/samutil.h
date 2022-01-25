@@ -1,4 +1,4 @@
-/*   $Id: samutil.h,v 1.57 2000/10/05 21:27:42 hurwitz Exp $
+/*   $Id: samutil.h,v 1.59 2001/01/24 23:04:01 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,25 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.h,v 1.57 2000/10/05 21:27:42 hurwitz Exp $
+* File Name:  $Id: samutil.h,v 1.59 2001/01/24 23:04:01 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.57 $
+* $Revision: 1.59 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.h,v $
+* Revision 1.59  2001/01/24 23:04:01  hurwitz
+* added a couple utility functions
+*
+* Revision 1.58  2000/11/01 20:50:22  hurwitz
+* made functions for get block starts and stops from populated paraGs
+*
 * Revision 1.57  2000/10/05 21:27:42  hurwitz
 * bug fix for making ruler, added functions to get bioseq start and len of each aligned block
 *
@@ -377,7 +383,9 @@ NLM_EXTERN Boolean DDE_AtEndOfStack(DDE_StackPtr pStack);
 NLM_EXTERN void DDE_GetOriginal(DDE_StackPtr pStack, Boolean Save);
 NLM_EXTERN Int4 DDE_GetIndexOfMaster(DDE_StackPtr pStack);
 NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Int4 DDE_GetAlignStart2(MsaParaGPopListPtr pPopList, Int4 BlockIndex);
 NLM_EXTERN Int4 DDE_GetAlignStop(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
+NLM_EXTERN Int4 DDE_GetAlignStop2(MsaParaGPopListPtr pPopList, Int4 BlockIndex);
 NLM_EXTERN Int4 DDE_GetBlockWidth(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
 NLM_EXTERN Int4 DDE_GetNumBlocks(DDE_InfoPtr pEditInfo);
 NLM_EXTERN Int4 DDE_GetNumBlocks2(MsaParaGPopListPtr pPopList);
@@ -399,6 +407,9 @@ NLM_EXTERN Boolean DDE_FirstColumnIsAligned(DDE_InfoPtr pEditInfo);
 NLM_EXTERN Boolean DDE_LastColumnIsAligned(DDE_InfoPtr pEditInfo);
 NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN ValNodePtr  DDE_GetMsaTxtNode(ValNodePtr head, Int4 DispCoord, Int4 PNTR pOffset);
+NLM_EXTERN ValNodePtr  DDE_GetMsaTxtNode2(ValNodePtr pg_head, Int4 DispCoord, Int4 PNTR pOffset);
+NLM_EXTERN ValNodePtr  DDE_GetMsaTxtNodeGivenBioseqCoord(MsaParaGPopListPtr pPopList,
+                                                         Int4 BioseqCoord, Int4 Row);
 NLM_EXTERN Int4 DDE_GetStart(MsaParaGPopListPtr pPopList, Int4 BlockIndex, Int4 Row);
 NLM_EXTERN Int4 DDE_GetLen(MsaParaGPopListPtr pPopList, Int4 BlockIndex);
 

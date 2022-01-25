@@ -1,5 +1,5 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.5 2000/06/23 18:31:44 beloslyu Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.8 2001/02/12 17:28:44 beloslyu Exp $
 #
 # If you want to use gcc on solaris you need to copy this
 # file to solaris.ncbi.mk
@@ -65,7 +65,7 @@ NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -
 #NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/netopt/SUNWmotif/include -L/usr/openwin/lib -L/netopt/SUNWmotif/lib -DWIN_MOTIF
 NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)
 NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/usr/dt/lib -DWIN_MOTIF
-NCBI_DBUGEXTRA = -xsb
+NCBI_DBUGEXTRA = -g
 
 #
 #FastCGI library for Sun C compilers ver 4.2 and ver 5.0

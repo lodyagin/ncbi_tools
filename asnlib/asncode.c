@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -47,6 +47,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asncode.c,v $
+* Revision 6.10  2000/12/12 15:56:09  ostell
+* added support BigInt
+*
 * Revision 6.9  2000/05/05 19:28:31  kans
 * type for OCTET STRING really is ByteStorePtr, so this is now used instead of Pointer (KS)
 *
@@ -118,7 +121,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.9 $";
+static char     RCS_Rev [] = "$Revision: 6.10 $";
 
 /*******************
  * Interator structure
@@ -339,6 +342,7 @@ static void AsnCodeShowStack PROTO ((AsnIterPtr iter));
 
 static CharPtr  defptr = "ASNCODE_PTRVAL_SLOT";
 static CharPtr  defint = "ASNCODE_INTVAL_SLOT";
+static CharPtr  defbigint = "ASNCODE_BIGINTVAL_SLOT";
 static CharPtr  defreal = "ASNCODE_REALVAL_SLOT";
 static CharPtr  defbool = "ASNCODE_BOOLVAL_SLOT";
 static CharPtr  defbyte = "ASNCODE_BYTEVAL_SLOT";
@@ -3111,6 +3115,9 @@ AsnCodeLookupType (AsnTypePtr atp)
       	 case INTEGER_TYPE:
       	    retval = "Int4";
       	    break;
+	 case BIGINT_TYPE:
+	    retval = "Int8";
+	    break;
       	 case OCTETS_TYPE:
       	    retval = "ByteStorePtr";
       	    break;
@@ -3198,6 +3205,7 @@ AsnCodeNeedFree (AsnTypePtr atp)
 	 case BOOLEAN_TYPE:
 	 case BITS_TYPE:
 	 case INTEGER_TYPE:
+         case BIGINT_TYPE:
 	 case NULL_TYPE:
 	 case REAL_TYPE:
 	 case ENUM_TYPE:
@@ -3931,6 +3939,7 @@ AsnCodeWhichValSlot (AsnTypePtr atp, CharPtr PNTR valdefine)
    CharPtr         retval = NULL;
    static CharPtr  defptr = "ASNCODE_PTRVAL_SLOT";
    static CharPtr  defint = "ASNCODE_INTVAL_SLOT";
+   static CharPtr  defbigint = "ASNCODE_BIGINTVAL_SLOT";
    static CharPtr  defreal = "ASNCODE_REALVAL_SLOT";
    static CharPtr  defbool = "ASNCODE_BOOLVAL_SLOT";
    static CharPtr  defbyte = "ASNCODE_BYTEVAL_SLOT";
@@ -3956,6 +3965,13 @@ AsnCodeWhichValSlot (AsnTypePtr atp, CharPtr PNTR valdefine)
          retval = "intvalue";
          if (valdefine != NULL) {
 	    *valdefine = defint;
+         }
+         break;
+         /********Int8**********/
+      case BIGINT_TYPE:
+         retval = "bigintvalue";
+         if (valdefine != NULL) {
+	    *valdefine = defbigint;
          }
          break;
          /*------Uint2---------*/

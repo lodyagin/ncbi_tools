@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description: 
 *
@@ -929,6 +929,17 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
               xref->data.choice = SEQFEAT_GENE;
               xref->data.value.ptrvalue = (Pointer) grp;
             }
+          }
+        }
+      } else if (usexref == 3) {
+        /* protein feature can now suppress gene on GenBank view */
+        grp = GeneRefNew ();
+        if (grp != NULL) {
+          xref = SeqFeatXrefNew ();
+          sfp->xref = xref;
+          if (xref != NULL) {
+            xref->data.choice = SEQFEAT_GENE;
+            xref->data.value.ptrvalue = (Pointer) grp;
           }
         }
       }

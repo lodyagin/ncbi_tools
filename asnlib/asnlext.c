@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   Routines for parsing ASN.1 module definitions.  Extends asnlex.c
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlext.c,v $
+* Revision 6.8  2000/12/12 15:56:13  ostell
+* added support BigInt
+*
 * Revision 6.7  2000/06/29 20:15:16  ostell
 * minor typos fixed
 *
@@ -94,7 +97,7 @@
 
 #include "asnbuild.h"
 
-#define NUMASNWORD 58         /* number of asnwords */
+#define NUMASNWORD 59         /* number of asnwords */
 
 static CharPtr asnwords[NUMASNWORD] = {     /* primitives from asn.1 */
 	"BOOLEAN",				 /*  1 */
@@ -154,7 +157,8 @@ static CharPtr asnwords[NUMASNWORD] = {     /* primitives from asn.1 */
 	"WITH",                 /* 55 */
 	"IDENTIFIER",			 /* 56 */
 	"StringStore",           /* 57 */      /* NCBI application type */
-	"$Revision:"             /* 58 */       /* NCBI asn versions */
+	"$Revision:",            /* 58 */       /* NCBI asn versions */
+	"BigInt"                 /* 59 */       /* NCBI application type */
 	};
 
 static AsnPrimType asnprimtypes[] = {    
@@ -187,7 +191,8 @@ static AsnPrimType asnprimtypes[] = {
 	{UTCTIME_TYPE, "UTCTime", 0, 23 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL}};
 
 static AsnPrimType asnapptypes[] = {         /* application wide types */
-	{STRSTORE_TYPE, "StringStore", 64, 1 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL}
+	{STRSTORE_TYPE, "StringStore", 64, 1 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL},
+	{BIGINT_TYPE, "BigInt", 64, 2 , 0, 0, 0, 0, 0, 0, NULL, NULL,NULL,0,NULL, NULL}
 	};
 
 
@@ -1305,6 +1310,8 @@ NLM_EXTERN Int2 AsnLexTWord (AsnIoPtr aip)
 				}
 				else if (asntype == 57)    /* StringStore */
 					token = STRSTORE_TYPE;
+				else if (asntype == 59)    /* BitInt */
+					token = BIGINT_TYPE;
 				else
 				{
 					switch (asntype)

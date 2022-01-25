@@ -3,10 +3,6 @@
 #ifndef _DOTVIEWER_
 #define _DOTVIEWER_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
   /****************************************************************************
 
@@ -32,6 +28,11 @@ extern "C" {
 #include <alignmgr.h>
 #include <actutils.h>
 #include <dotseq.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /****************************************************************************

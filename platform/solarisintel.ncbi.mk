@@ -1,12 +1,12 @@
 #
-# $Id: solarisintel.ncbi.mk,v 1.6 2000/06/23 18:31:44 beloslyu Exp $
+# $Id: solarisintel.ncbi.mk,v 1.13 2001/02/12 17:28:45 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = sin
 NCBI_MAKE_SHELL = /usr/bin/sh
-NCBI_CC = cc -xildoff
-NCBI_CFLAGS1 = -c -Xa
-NCBI_LDFLAGS1 = -fast
-NCBI_OPTFLAG = -fast
+NCBI_CC = cc
+NCBI_CFLAGS1 = -c
+NCBI_LDFLAGS1 = -O
+NCBI_OPTFLAG = -O
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib
@@ -20,7 +20,7 @@ NCBI_VIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/us
 NCBI_VIBLIBS = -R/usr/dt/lib -R/usr/openwin/lib -lXm -lXmu -lXt -lX11 -lXext
 #PRE-CDE NCBI_DISTVIBLIBS = -Bstatic -lXm -Bdynamic -lXmu -lXt -lX11 -lXext
 NCBI_DISTVIBLIBS = -R/usr/dt/lib:/usr/openwin/lib -lXm -lXmu -lXt -lX11 -lXext
-NCBI_OTHERLIBS = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lm
+NCBI_OTHERLIBS = -lposix4 -lresolv -lsocket -lrpcsvc -lnsl -lgen -lm
 # NCBI_MT_OTHERLIBS & NCBI_THREAD_OBJ are only used by master makefiles
 # (i.e., coremake's "make.master"), and are not intended to be used by
 # users' makefiles
@@ -29,7 +29,7 @@ NCBI_MT_OTHERLIBS = -lpthread
 NCBI_OPTIONAL_LIBS = BLIB42=libctutils.a BLIB43=libosutils.a
 
 NCBI_THREAD_OBJ = ncbithr.o
-NCBI_OTHERLIBS_MT = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lpthread -lm
+NCBI_OTHERLIBS_MT = -lposix4 -lresolv -lsocket -lrpcsvc -lnsl -lgen -lpthread -lm
 NCBI_THR_OBJ = $(NCBI_LIBDIR)/ncbithr.o
 NCBI_THR_ALTOBJ = $(NCBI_ALTLIB)/ncbithr.o
 # CodeCenter can't handle the thread library; J. Epstein 5/22/96
@@ -62,5 +62,5 @@ NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -
 #NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/netopt/SUNWmotif/include -L/usr/openwin/lib -L/netopt/SUNWmotif/lib -DWIN_MOTIF
 NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)
 NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/usr/dt/lib -DWIN_MOTIF
-NCBI_DBUGEXTRA = -xsb
+NCBI_DBUGEXTRA = -g
 NETENTREZVERSION = 2.02c2ASN1SPEC6 

@@ -25,6 +25,12 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
+ Revision 1.17  2001/02/12 21:57:11  butanaev
+ Made 3 retries to EntrezSynchronousQuery() when the NULL is returned.
+
+ Revision 1.16  2001/02/08 16:13:46  yaschenk
+ fixing wrong check for missing version in _PIR and SP
+
  Revision 1.15  2000/10/06 22:59:44  yaschenk
  strncpy not setting \0 bug
 
@@ -111,6 +117,12 @@
  *
  * RCS Modification History:
  * $Log: idfetch.c,v $
+ * Revision 1.17  2001/02/12 21:57:11  butanaev
+ * Made 3 retries to EntrezSynchronousQuery() when the NULL is returned.
+ *
+ * Revision 1.16  2001/02/08 16:13:46  yaschenk
+ * fixing wrong check for missing version in _PIR and SP
+ *
  * Revision 1.15  2000/10/06 22:59:44  yaschenk
  * strncpy not setting \0 bug
  *
@@ -771,7 +783,7 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
                           myargs[entarg].intvalue,
                           myargs[maxplexarg].intvalue);
 
-    if(ver != INT2_MIN &&
+    if(ver == INT2_MIN &&
        (
         (gi = TryGetGi(SEQID_PIR, acc, NULL, ver)) ||
         (gi = TryGetGi(SEQID_SWISSPROT, acc, NULL, ver)) ||
@@ -787,6 +799,18 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
   }
   else
     return IdFetch_func(atoi(data), NULL, 0, maxplex);
+}
+
+static Entrez2ReplyPtr MyEntrezSynchronousQuery(Entrez2RequestPtr e2rq)
+{
+  int i;
+  for(i = 0; i < 3; ++i)
+  {
+    Entrez2ReplyPtr reply = EntrezSynchronousQuery(e2rq);
+    if(reply != NULL)
+      return reply;
+  }
+  return NULL;
 }
 
 static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
@@ -808,9 +832,10 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
   e2rq = EntrezCreateDocSumRequest (db, 0, num, uids, NULL);
   if (e2rq == NULL) return FALSE;
 
-  e2ry = EntrezSynchronousQuery (e2rq);
-  e2rq = Entrez2RequestFree (e2rq);
+  e2ry = MyEntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree(e2rq);
   e2dl = EntrezExtractDocsumReply (e2ry);
+
   if (e2dl == NULL)
     return FALSE;
 
@@ -1079,7 +1104,7 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
                                     is_na? "Nucleotide" : "Protein",
                                     query, 0, 0, NULL, 0, 0);
 
-  e2ry = EntrezSynchronousQuery(e2rq);
+  e2ry = MyEntrezSynchronousQuery(e2rq);
 
   if(e2ry == NULL)
   {

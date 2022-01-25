@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.32 2000/11/01 20:03:15 shavirin Exp $
+/* $Id: rpsblast.c,v 6.34 2001/03/26 14:28:53 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.34  2001/03/26 14:28:53  madden
+* Fix XML problems
+*
+* Revision 6.33  2000/11/07 18:32:38  shavirin
+* Added program version to the output.
+*
 * Revision 6.32  2000/11/01 20:03:15  shavirin
 * Removed not-used option -f for threshold.
 *
@@ -277,6 +283,7 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     rpsbop = MemNew(sizeof(RPSBlastOptions));
 
     if (myargs [5].strvalue != NULL) {
+	rpsbop->out_filename = StringSave(myargs [5].strvalue);
         if ((rpsbop->outfp = FileOpen(myargs [5].strvalue, "a")) == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
                       "file %s\n", myargs [5].strvalue);
@@ -396,7 +403,7 @@ static void RPSViewSeqAlign(BioseqPtr query_bsp,
     free_buff();    
     init_buff_ex(128);
     
-    BlastPrintReference(FALSE, 90, rpsbop->outfp);
+    /* BlastPrintReference(FALSE, 90, rpsbop->outfp); */
     fprintf(rpsbop->outfp, "\n");
 
     AcknowledgeBlastQuery(query_bsp, 70, rpsbop->outfp, 
@@ -594,8 +601,7 @@ static Boolean LIBCALLBACK RPSResultsCallback(BioseqPtr query_bsp,
        BXMLPrintOutput(aip, seqalign, rpsbop->options, 
                        rpsbop->query_is_protein ? 
                        "blastp" : "tblastn", rpsbop->rps_database, 
-                       BioseqLockById(TxGetQueryIdFromSeqAlign(seqalign)),
-                       other_returns, 0, NULL);
+                       query_bsp, other_returns, 0, NULL);
        AsnIoClose(aip);
     } else {
         RPSViewSeqAlign(query_bsp, seqalign, rpsbop, other_returns);
@@ -648,6 +654,8 @@ Int2 Main(void)
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to create RPS Blast options");
         return 1;
     }
+
+    BlastPrintVersionInfo("RPS-BLAST", rpsbop->html, rpsbop->outfp);
     
     /* VoidPtr bsp_data = NULL, print_data = NULL; */
     RPSBlastSearchMT(rpsbop, RPSGetNextSeqEntry, NULL, 

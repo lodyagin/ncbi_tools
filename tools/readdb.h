@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.68 $
+* $Revision: 6.76 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,32 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.76  2001/03/29 20:15:59  madden
+* Removed unneeded #define
+*
+* Revision 6.75  2001/03/23 17:23:54  madden
+* Move FDGetDeflineAsnFromBioseq to txalign.[ch]
+*
+* Revision 6.74  2001/02/05 18:52:01  shavirin
+* Blast database size was changed from Uint4 to Uint8 - this corrected
+* invalidly printed database size for large databases.
+*
+* Revision 6.73  2000/12/12 23:14:42  shavirin
+* Added functions to initialize taxonomy names database and search functions
+* to get all taxonomy names given tax_id using this database.
+*
+* Revision 6.72  2000/12/08 22:25:01  shavirin
+* Added code for creation Taxonomy lookup database using formatdb API.
+*
+* Revision 6.71  2000/11/28 18:20:40  madden
+* Comments from Sergei on FDB_options
+*
+* Revision 6.70  2000/11/24 15:41:58  shavirin
+* Added parameter tax_id into function FDBAddBioseq().
+*
+* Revision 6.69  2000/11/22 19:52:44  shavirin
+* Added definition of the new function FDGetDeflineAsnFromBioseq()
+*
 * Revision 6.68  2000/10/26 18:30:50  dondosha
 * Added gifile member to ReadDBFILE structure
 *
@@ -405,7 +431,6 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 #define NLM_GENERATED_CODE_PROTO 
 #endif
 
-#define struct_Blast_def_line struct_BlastDefLine
 
 #include <fdlobj.h>
 
@@ -592,6 +617,61 @@ typedef struct read_db_shared_info {
    NlmMFILEPtr headerfp, sequencefp;
 } ReadDBSharedInfo, *ReadDBSharedInfoPtr;
 
+/* ---------------------------------------------------------------------*/
+/* -- Here is set of definitions used with taxonomy info database ----- */
+/* ---------------------------------------------------------------------*/
+
+typedef	struct _RDBTaxId {
+    Uint4 taxid;
+    Uint4 offset;
+} RDBTaxId, PNTR RDBTaxIdPtr;
+
+typedef	struct _RDBTaxInfo {
+    Int4        all_taxid_count; /* Total number of taxids in the database */
+    Int4        reserved[4];     /* reserved */
+    NlmMFILEPtr taxfp;           /* Memory mapped index file */
+    RDBTaxIdPtr taxdata;         /* Index tax_id/file offset */
+    FILE        *name_fd;        /* Pointer to the file with taxonomy names */
+} RDBTaxInfo, *RDBTaxInfoPtr;
+
+typedef	struct _RDBTaxNames {
+    Int4 tax_id;
+    CharPtr sci_name;
+    CharPtr common_name;
+    CharPtr blast_name;
+    Char  s_king[3];
+} RDBTaxNames, *RDBTaxNamesPtr;
+
+typedef	struct _RDBTaxLookup {
+    Int4 all_taxid_count; /* Total number of taxids in the database */
+    Int4 taxids_in_db;
+    RDBTaxNamesPtr *tax_array; /* This array's index correspond to tax_id and
+                                  value of the cell corresponds to tax names 
+                                  if  any */
+    VoidPtr tax_data;      /* This data may be set and used by the callback */
+} RDBTaxLookup, *RDBTaxLookupPtr;
+    
+typedef Boolean (*TaxCallbackFunc) (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
+
+/*    ----
+      Here are functions for run-time blast in relation to the
+      Taxonomy blast database 
+      ----  */
+
+/* Initialize taxonomy lookup database. returns NULL if failure or
+   this database do not exists */
+RDBTaxInfoPtr  RDBTaxInfoInit(CharPtr base_filename, Boolean is_prot);
+
+/* Free memory, unmap files etc. related to the taxonomy database */
+void RDBTaxInfoClose(RDBTaxInfoPtr tip);
+
+/* Main function to get taxonomy names for given tax_id from
+   blast taxonomy database. Returns NULL if tax_id is not in the database */
+RDBTaxNamesPtr RDBGetTaxNames(RDBTaxInfoPtr tip, Int4 tax_id);
+void RDBTaxNamesFree(RDBTaxNamesPtr tnames);
+
+#define TAX_DB_MAGIC_NUMBER 0x8739
+
 typedef struct read_db_file {
 	struct read_db_file PNTR next;
         Int4 parameters; /* All boolean parameters */
@@ -619,8 +699,8 @@ containing the headers, and the sequence file. */
 	      formatdb_ver;	/* Version of formatdb used. */
 	Int4 	start,	/* 1st ordinal id in this file. */
 		stop;	/* last ordinal id in this file. */
-	Uint4 totlen,	/* Total length of database. */
-	      maxlen;	/* Length of longest sequence in database. */
+	Int8 totlen;	/* Total length of database. */
+	Uint4 maxlen;	/* Length of longest sequence in database. */
 	Int8 aliaslen;	/* Length of the database as read from alias file */
 	Uint4 aliasnseq;/* Number of seqs of the database as read from alias file */
 /* The "index" arrays specify the offsets (in files) of the header and 
@@ -632,6 +712,8 @@ NULL (i.e., NOT USED) if mem-mapping is used; only used to store sequence
 if there is no mem-mapping or it failed. */
         ISAMObjectPtr nisam_opt;  /* Object for numeric search */
         ISAMObjectPtr sisam_opt;  /* Object for string search */
+        RDBTaxInfoPtr taxinfo;    /* This object if not NULL - pointer to
+                                     the taxonomy names database */
 	Uint1Ptr buffer;
 	Int4 allocated_length;
 	CommonIndexHeadPtr  cih;       /* head of the common index */
@@ -644,7 +726,7 @@ if there is no mem-mapping or it failed. */
 	Int4 	            gi_target; /* only this gi should be retrieved if non-zero. */
         CharPtr             gifile;    /* Path to a file with the gi list */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
-
+    
 /* Function prototypes */
 Int4    GI2OID(CommonIndexHeadPtr cih, Int4 gi, Int4 dbmask, Int4 alias_dbmask,
 	Int2Ptr dbid, Int2Ptr alias_dbid, ReadDBFILEPtr rdfp);
@@ -662,6 +744,7 @@ Int2	bit_engine_numofbits(Int4 word);
 Int2	ParseDBConfigFile(DataBaseIDPtr *dbidsp, CharPtr path);
 CharPtr	FindBlastDBFile (CharPtr filename);
 CharPtr	FindDBbyGI(CommonIndexHeadPtr cih, Int4 gi, Uint1 *is_prot);
+RDBTaxNamesPtr readdb_get_taxnames(ReadDBFILEPtr rdfp, Int4 tax_id);
 
 /* mmap's */
  
@@ -928,22 +1011,35 @@ typedef struct FASTALookup {
 } FASTALookup, PNTR FASTALookupPtr;
 
 typedef struct _FDB_options {
-    Int4  version;
-    CharPtr db_title;
-    CharPtr db_file;
-    CharPtr LogFileName;
-    Int4 is_protein;
-    Int4 parse_mode;
-    Int4 isASN;
-    Int4 asnbin;
-    Int4 is_seqentry;
-    CharPtr base_name;
-    Int4  dump_info;
-    Int4  sparse_idx;
-    Int4  test_non_unique;    /* Print messages if FASTA database has 
+    Int4  version;   /* Version of the database created by formatdb program
+	    	 	currently supported are 3 - FORMATDV_VER_TEXT and
+	    	 	4 - FORMATDB_VER - for ASN.1 structured deflines */
+    CharPtr db_title;    /* Title for the database to be created */
+    CharPtr db_file;     /* Name for input data file - 'IN' name */
+    CharPtr LogFileName; /* Used only in formatdb.c */
+    Int4 is_protein;     /* Is this protein database ? */
+    Int4 parse_mode;     /* Do we assume, that deflines are started from 
+                             valif SeqIds ? */
+    Int4 isASN;          /* read from file or ASN - used only in formatdb.c */
+    Int4 asnbin;         /* What is this type of ASN? used only 
+                            in formatdb.c */
+    Int4 is_seqentry;    /* What is this type of ASN? used only 
+                             in formatdb.c */
+    CharPtr base_name;   /* Name for db files to be created 'OUT' name */
+    Int4  dump_info;     /* To printout file with information about tax_id,
+                             owner, hash etc. - used for dump from ID */
+                             
+    Int4  sparse_idx;    /* To use only limited set of text ids to dump for
+                             usage in indexes */
+    Int4  test_non_unique;    /* Print messages if FASTA database has
                                  non-unique string ids - accessions, locuses*/
-} FDB_options, PNTR FDB_optionsPtr;
+    
+    RDBTaxLookupPtr tax_lookup; /* taxonomy lookup table - should be initialized in the main program to be used for creating of taxonomy information*/
 
+    TaxCallbackFunc tax_callback; /* Function to retrieve taxonomy names from
+                                     Taxonomy server */
+} FDB_options, PNTR FDB_optionsPtr;
+    
 typedef struct formatdb 
 {
     /* CharPtr	dbname;	(db_file)  name of input database */
@@ -967,7 +1063,8 @@ typedef struct formatdb
     AsnIoPtr aip_def;
     
     Int4 num_of_seqs;  /* number of parsed sequences */
-    Int4 TotalLen, MaxSeqLen;
+    Int8 TotalLen;
+    Int4 MaxSeqLen;
     
     /* offset tables */
     Int4Ptr	DefOffsetTable,	/* definitions */
@@ -1000,7 +1097,7 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, CharPtr seq_id,
                      CharPtr title, Int4 tax_id, CharPtr div, 
                      Int4 owner, Uint1 seq_data_type, 
                      ByteStorePtr *seq_data, Int4 SequenceLen, Int4 date);
-Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp);
+Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp, Int4 tax_id);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
 void FDB_FreeCLOptions(FDB_optionsPtr options);

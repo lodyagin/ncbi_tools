@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.33 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: entrez.c,v $
+* Revision 6.34  2000/12/05 17:52:58  kans
+* removed cn3d, which caused ddv link problem
+*
 * Revision 6.33  2000/04/21 23:13:56  kans
 * added qualPageData
 *
@@ -197,9 +200,11 @@
 
 #include <objmime.h>
 #include <mmdbapi.h>
+/*
 #ifndef WIN16
 #include <cn3dentr.h>
 #endif
+*/
 
 #include <entrez.h>
 
@@ -819,6 +824,7 @@ static void StyleManagerProc (IteM i)
 }
 
 
+/*
 #ifndef WIN16
 static void Cn3DWinShowProc (IteM i)
 {
@@ -830,6 +836,7 @@ static void Cn3DWinShowProc (IteM i)
   Select (w);
 }
 #endif
+*/
 
 
 #ifndef WIN_MAC
@@ -935,10 +942,12 @@ static void TermListFormMenus (WindoW w)
     VSMAddToMenu (m, VSM_DESKTOP);
     SeparatorItem (m);
     CommandItem (m, "Style Manager...", StyleManagerProc);
+/*
 #ifndef WIN16
     SeparatorItem (m);
     CommandItem (m, "Cn3D Window...", Cn3DWinShowProc);
 #endif
+*/
   }
 }
 
@@ -1460,10 +1469,12 @@ static void SetupMacMenus (void)
   VSMAddToMenu (m, VSM_DESKTOP);
   SeparatorItem (m);
   CommandItem (m, "Style Manager...", StyleManagerProc);
+/*
 #ifndef WIN16
   SeparatorItem (m);
   CommandItem (m, "Cn3D Window...", Cn3DWinShowProc);
 #endif
+*/
 }
 #endif
 
@@ -1543,10 +1554,12 @@ Int2 Main (void)
   Char           str [16];
   Int2           val;
   WindoW         w;
+/*
 #if defined(WIN16)
 #else
   PRGD           prgdDict;
 #endif
+*/
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
@@ -1685,6 +1698,7 @@ Int2 Main (void)
     return 0;
   }
 
+/*
 #ifndef WIN16
   SetTitle (w, "Loading structure dictionary");
   if (OpenMMDBAPI ((POWER_VIEW ^ FETCH_ENTREZ), NULL)) {
@@ -1692,6 +1706,7 @@ Int2 Main (void)
     Cn3DWin_Entrez(NULL, TRUE);
   }
 #endif
+*/
 
   SetTitle (w, "Creating menus");
 

@@ -1,7 +1,7 @@
 #ifndef NI_LIB___H
 #define NI_LIB___H
 
-/*  $Id: ni_lib_.h,v 4.6 2000/09/27 21:05:08 vakatov Exp $
+/*  $Id: ni_lib_.h,v 4.7 2001/02/21 22:09:27 lavr Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_lib_.h,v $
+* Revision 4.7  2001/02/21 22:09:27  lavr
+* SERVICE connector included
+*
 * Revision 4.6  2000/09/27 21:05:08  vakatov
 * [WWW/LB-specific]  NI_WWW_SetNcbidPort() to set port of the NCBID to connect
 *
@@ -156,6 +159,7 @@ extern const NIInterface *g_NII_Dispatcher;  /* "ni_lib.c"   */
 extern const NIInterface *g_NII_WWW;         /* "ni_www.c"   */
 extern const NIInterface *g_NII_WWWFirewall; /* "ni_www.c"   */
 extern const NIInterface *g_NII_WWWDirect;   /* "ni_www.c"   */
+extern const NIInterface *g_NII_Service;     /* "ni_serv.c"  */
 extern const NIInterface *g_NII_Debug;       /* "ni_debug.c" */
 
 

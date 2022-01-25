@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -975,6 +975,15 @@ static void PopulateFasta (BioseqViewPtr bvp)
   Update ();
 }
 
+static void PrintQualProc (CharPtr buf, Uint4 buflen, Pointer userdata)
+
+{
+  FILE  *fp;
+
+  fp = (FILE*) userdata;
+  fprintf (fp, "%s", buf);
+}
+
 static void PrintQualScoresProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -985,7 +994,20 @@ static void PrintQualScoresProc (SeqEntryPtr sep, Pointer mydata, Int4 index, In
   bsp = (BioseqPtr) sep->data.ptrvalue;
   if (bsp == NULL) return;
   fp = (FILE*) mydata;
-  PrintQualityScores (bsp, fp);
+  PrintQualityScoresToBuffer (bsp, FALSE, fp, PrintQualProc);
+}
+
+static void PrintFarQualScoresProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr  bsp;
+  FILE       *fp;
+
+  if (! IS_Bioseq (sep)) return;
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL) return;
+  fp = (FILE*) mydata;
+  PrintQualityScoresForContig (bsp, FALSE, fp);
 }
 
 static void PopulateQuality (BioseqViewPtr bvp)
@@ -1048,7 +1070,13 @@ static void PopulateQuality (BioseqViewPtr bvp)
     if (bvp != NULL && bvp->displayFont != NULL) {
       fnt = bvp->displayFont;
     }
-    SeqEntryExplore (sep, (Pointer) fp, PrintQualScoresProc);
+    if (VisitGraphsInSep (sep, NULL, NULL) > 0) {
+      SeqEntryExplore (sep, (Pointer) fp, PrintQualScoresProc);
+    } else if (bsp->repr == Seq_repr_delta) {
+      SeqEntryExplore (sep, (Pointer) fp, PrintFarQualScoresProc);
+    } else {
+      SeqEntryExplore (sep, (Pointer) fp, PrintQualScoresProc);
+    }
     FileClose (fp);
     if (bvp->useScrollText) {
       if (! FileToScrollText (txt, path)) {

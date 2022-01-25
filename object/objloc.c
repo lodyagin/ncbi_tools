@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objloc.c,v $
+* Revision 6.5  2001/01/31 15:24:20  kans
+* PatentSeqId.seqid is now an Int4 (JO)
+*
 * Revision 6.4  2000/04/05 21:42:33  hurwitz
 * made SeqIdSetDup consistent with declaration
 *
@@ -1074,7 +1077,7 @@ NLM_EXTERN PatentSeqIdPtr LIBCALL PatentSeqIdAsnRead (AsnIoPtr aip, AsnTypePtr o
         goto erret;
     if (AsnReadVal(aip, atp, &av) <= 0)
         goto erret;
-    psip->seqid = (Int2)av.intvalue;
+    psip->seqid = av.intvalue;
     atp = AsnReadId(aip, amp, atp);   /* read the cit */
     if (atp == NULL)
         goto erret;
@@ -2759,6 +2762,4 @@ erret:
     sbp = SeqBondFree(sbp);
     goto ret;
 }
-
-
 

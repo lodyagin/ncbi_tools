@@ -31,6 +31,9 @@
 *
 *
 * $Log: imagelst.c,v $
+* Revision 1.4  2001/03/28 01:33:52  juran
+* Added "continue" to "for (...);" to avoid warnings.
+*
 * Revision 1.3  1998/07/02 18:24:32  vakatov
 * Cleaned the code & made it pass through the C++ compilation
 *
@@ -75,7 +78,7 @@ _ImageListPtr ilst_new(Uint2 n, Uint2 size_x, Uint2 size_y)
     il->img_size_x= size_x;
     il->img_size_y= size_y;
 
-    for(i= 0; i < n; il->icon[i++]= NULL);
+    for (i = 0; i < n; il->icon[i++] = NULL) continue;
 
     return il;
 }
@@ -113,8 +116,8 @@ Uint2 ilst_add(_ImageListPtr il, Image img, CharPtr fileName, ImageFileFormat f)
 	/* we need more memory */
 	i= il->nof_images;
 	il->nof_images+= i/2;
-	if((il->icon= (Image*) MemMore(il->icon, il->nof_images*sizeof(Image))) == NULL) return 0xFFFF;
-	for(k= i; k < il->nof_images; il->icon[k++]= NULL);
+	if ((il->icon= (Image*) MemMore(il->icon, il->nof_images*sizeof(Image))) == NULL) return 0xFFFF;
+	for(k= i; k < il->nof_images; il->icon[k++]= NULL) continue;
     }
 
 

@@ -29,17 +29,28 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.29 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date	   Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: sequtil.h,v $
+* Revision 6.29  2001/01/04 15:05:33  sicotte
+* fix ACCN_IS_AMBIGOUSDB macro
+*
+* Revision 6.28  2000/12/07 16:34:43  sicotte
+* Updated WHICH_db_accession and corresponding macros: I* accessions can no longer be proteins (they were PIR) and have completed hardcoding of N000?? accessions which can belong to twoDB. Added SeqIdFromAccessionEx, ACCN_PIR_FORMAT, and AccnIsSWISSPROT functions
+*
+* Revision 6.27  2000/11/16 17:23:26  sicotte
+* IS_protdb_accession is now true for any 3 letter accession and IS_ntdb_accession is now also true for any unknown accession-looking accession number
+*
+* Revision 6.26  2000/11/14 20:49:48  sicotte
+* add XM_ refseq prefix
+*
+* Revision 6.25  2000/10/31 21:20:06  vakatov
+* [WIN32] DLL'zation
+*
 * Revision 6.24  2000/10/27 20:10:58  shavirin
 * Added new function MakeNewProteinSeqIdExMT for MT save operation.
 *
@@ -199,14 +210,9 @@
  *
  * Revision 2.28  1995/05/19  04:02:08  ostell
  * added SeqLocAinB()
- *
- * Revision 2.27  1995/05/15  21:46:05  ostell
- * added Log line
- *
-*
-*
-* ==========================================================================
-*/
+ * ==========================================================================
+ */
+
 #ifndef _NCBI_SeqUtil_
 #define _NCBI_SeqUtil_
 
@@ -246,37 +252,37 @@ extern "C" {
 *   What am I?
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 Bioseq_repr PROTO((BioseqPtr bsp));
-NLM_EXTERN Uint1 BioseqGetCode PROTO((BioseqPtr bsp));
+NLM_EXTERN Uint1 Bioseq_repr(BioseqPtr bsp);
+NLM_EXTERN Uint1 BioseqGetCode(BioseqPtr bsp);
 
-NLM_EXTERN ValNodePtr BioseqGetSeqDescr PROTO((BioseqPtr bsp, Int2 type, ValNodePtr curr));
-NLM_EXTERN CharPtr BioseqGetTitle PROTO((BioseqPtr bsp));
-NLM_EXTERN NumberingPtr BioseqGetNumbering PROTO((BioseqPtr bsp));
+NLM_EXTERN ValNodePtr BioseqGetSeqDescr(BioseqPtr bsp, Int2 type, ValNodePtr curr);
+NLM_EXTERN CharPtr BioseqGetTitle(BioseqPtr bsp);
+NLM_EXTERN NumberingPtr BioseqGetNumbering(BioseqPtr bsp);
 
-NLM_EXTERN Int4 BioseqGetLen PROTO((BioseqPtr bsp));
-NLM_EXTERN Int4 BioseqGetGaps PROTO((BioseqPtr bsp));
-NLM_EXTERN Int4 BioseqGetSegLens PROTO((BioseqPtr bsp, Int4Ptr lens));
+NLM_EXTERN Int4 BioseqGetLen(BioseqPtr bsp);
+NLM_EXTERN Int4 BioseqGetGaps(BioseqPtr bsp);
+NLM_EXTERN Int4 BioseqGetSegLens(BioseqPtr bsp, Int4Ptr lens);
 #define BioseqCountSegs(x) BioseqGetSegLens(x, NULL)
 
-NLM_EXTERN Boolean BioseqConvert PROTO((BioseqPtr bsp, Uint1 newcode));
-NLM_EXTERN Boolean BioseqPack PROTO((BioseqPtr bsp));
-NLM_EXTERN Boolean SeqLitPack PROTO((SeqLitPtr slp));
-NLM_EXTERN Boolean BioseqRawConvert PROTO((BioseqPtr bsp, Uint1 newcode));
-NLM_EXTERN Boolean BioseqRawPack PROTO((BioseqPtr bsp));
-NLM_EXTERN ByteStorePtr BSConvertSeq PROTO((ByteStorePtr bsp, Uint1 newcode, Uint1 oldcode, Int4 seqlen));
-NLM_EXTERN ByteStorePtr BSPack PROTO((ByteStorePtr from, Uint1 oldcode, Int4 length, Uint1Ptr newcodeptr));
+NLM_EXTERN Boolean BioseqConvert(BioseqPtr bsp, Uint1 newcode);
+NLM_EXTERN Boolean BioseqPack(BioseqPtr bsp);
+NLM_EXTERN Boolean SeqLitPack(SeqLitPtr slp);
+NLM_EXTERN Boolean BioseqRawConvert(BioseqPtr bsp, Uint1 newcode);
+NLM_EXTERN Boolean BioseqRawPack(BioseqPtr bsp);
+NLM_EXTERN ByteStorePtr BSConvertSeq(ByteStorePtr bsp, Uint1 newcode, Uint1 oldcode, Int4 seqlen);
+NLM_EXTERN ByteStorePtr BSPack(ByteStorePtr from, Uint1 oldcode, Int4 length, Uint1Ptr newcodeptr);
 
-NLM_EXTERN CharPtr StringForSeqMethod PROTO((Int2 method));
+NLM_EXTERN CharPtr StringForSeqMethod(Int2 method);
 
-NLM_EXTERN CharPtr StringForSeqTech PROTO((Int2 tech));
+NLM_EXTERN CharPtr StringForSeqTech(Int2 tech);
 
 /*****************************************************************************
 *
 *  Hook function definition for DNA Compression
 *
 *****************************************************************************/
-typedef Int4 (*CompressRWFunc) PROTO ((Pointer data,
-                                       Uint1Ptr buf, Int4 length));
+typedef Int4 (*CompressRWFunc)(Pointer data,
+                                       Uint1Ptr buf, Int4 length);
 
 /*****************************************************************************
 *
@@ -293,7 +299,7 @@ typedef Int4 (*CompressRWFunc) PROTO ((Pointer data,
 *   	Sequence codes defined in objseq.h
 *
 *****************************************************************************/
-NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableFind PROTO((Uint1 code));
+NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableFind(Uint1 code);
 
 /*****************************************************************************
 *
@@ -303,7 +309,7 @@ NLM_EXTERN SeqCodeTablePtr LIBCALL SeqCodeTableFind PROTO((Uint1 code));
 *       assumes residue is in the same code as sctp
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 SeqCodeTableComp PROTO((SeqCodeTablePtr sctp, Uint1 residue));
+NLM_EXTERN Uint1 SeqCodeTableComp(SeqCodeTablePtr sctp, Uint1 residue);
 
 /*****************************************************************************
 *
@@ -311,7 +317,7 @@ NLM_EXTERN Uint1 SeqCodeTableComp PROTO((SeqCodeTablePtr sctp, Uint1 residue));
 *   	returns TRUE if sequence code table sctp uses one letter symbols
 *
 *****************************************************************************/
-NLM_EXTERN Boolean OneLetterCode PROTO((SeqCodeTablePtr sctp));
+NLM_EXTERN Boolean OneLetterCode(SeqCodeTablePtr sctp);
 
 /*****************************************************************************
 *
@@ -319,7 +325,7 @@ NLM_EXTERN Boolean OneLetterCode PROTO((SeqCodeTablePtr sctp));
 *   	returns first valid residue code in sequence code table
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 FirstResidueInCode PROTO((SeqCodeTablePtr sctp));
+NLM_EXTERN Uint1 FirstResidueInCode(SeqCodeTablePtr sctp);
 
 /*****************************************************************************
 *
@@ -329,7 +335,7 @@ NLM_EXTERN Uint1 FirstResidueInCode PROTO((SeqCodeTablePtr sctp));
 *      and last.
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 LastResidueInCode PROTO((SeqCodeTablePtr sctp));
+NLM_EXTERN Uint1 LastResidueInCode(SeqCodeTablePtr sctp);
 
 /*****************************************************************************
 *
@@ -339,7 +345,7 @@ NLM_EXTERN Uint1 LastResidueInCode PROTO((SeqCodeTablePtr sctp));
 *       sequence code uses multi-letter symbols
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 GetSymbolForResidue PROTO((SeqCodeTablePtr sctp, Uint1 residue));
+NLM_EXTERN Uint1 GetSymbolForResidue(SeqCodeTablePtr sctp, Uint1 residue);
 
 /*****************************************************************************
 *
@@ -350,7 +356,7 @@ NLM_EXTERN Uint1 GetSymbolForResidue PROTO((SeqCodeTablePtr sctp, Uint1 residue)
 *       CASE matters
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 GetResidueForSymbol PROTO((SeqCodeTablePtr sctp, Uint1 symbol));
+NLM_EXTERN Uint1 GetResidueForSymbol(SeqCodeTablePtr sctp, Uint1 symbol);
 
 /*****************************************************************************
 *
@@ -360,7 +366,7 @@ NLM_EXTERN Uint1 GetResidueForSymbol PROTO((SeqCodeTablePtr sctp, Uint1 symbol))
 *       sequence code uses One letter symbols
 *
 *****************************************************************************/
-NLM_EXTERN const char * GetLongSymbolForResidue PROTO((SeqCodeTablePtr sctp, Uint1 residue));
+NLM_EXTERN const char * GetLongSymbolForResidue(SeqCodeTablePtr sctp, Uint1 residue);
 
 /*****************************************************************************
 *
@@ -371,7 +377,7 @@ NLM_EXTERN const char * GetLongSymbolForResidue PROTO((SeqCodeTablePtr sctp, Uin
 *       CASE matters
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 GetResidueForLongSymbol PROTO((SeqCodeTablePtr sctp, CharPtr symbol));
+NLM_EXTERN Uint1 GetResidueForLongSymbol(SeqCodeTablePtr sctp, CharPtr symbol);
 
 /*****************************************************************************
 *
@@ -383,7 +389,7 @@ NLM_EXTERN Uint1 GetResidueForLongSymbol PROTO((SeqCodeTablePtr sctp, CharPtr sy
 *       invalid.
 *
 *****************************************************************************/
-NLM_EXTERN const char * GetNameForResidue PROTO((SeqCodeTablePtr sctp, Uint1 residue));
+NLM_EXTERN const char * GetNameForResidue(SeqCodeTablePtr sctp, Uint1 residue);
 
 /*****************************************************************************
 *
@@ -392,7 +398,7 @@ NLM_EXTERN const char * GetNameForResidue PROTO((SeqCodeTablePtr sctp, Uint1 res
 *      Sequence codes defined in objseq.h
 *
 *****************************************************************************/
-NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableFind PROTO((Uint1 to, Uint1 from));
+NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableFind(Uint1 to, Uint1 from);
 
 /*****************************************************************************
 *
@@ -400,7 +406,7 @@ NLM_EXTERN SeqMapTablePtr LIBCALL SeqMapTableFind PROTO((Uint1 to, Uint1 from));
 *       returns conversion of "from" using SeqMapTable smtp
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 SeqMapTableConvert PROTO((SeqMapTablePtr smtp, Uint1 residue));
+NLM_EXTERN Uint1 SeqMapTableConvert(SeqMapTablePtr smtp, Uint1 residue);
 
 /*****************************************************************************
 *
@@ -409,7 +415,7 @@ NLM_EXTERN Uint1 SeqMapTableConvert PROTO((SeqMapTablePtr smtp, Uint1 residue));
 *       with random conversions
 *       Return TRUE if conversion done without randomization
 *****************************************************************************/
-NLM_EXTERN Boolean Convert4NaRandom PROTO((Uint1 from, Uint1 PNTR to));
+NLM_EXTERN Boolean Convert4NaRandom(Uint1 from, Uint1 PNTR to);
 
 /*****************************************************************************
 *
@@ -422,11 +428,11 @@ NLM_EXTERN Boolean Convert4NaRandom PROTO((Uint1 from, Uint1 PNTR to));
 *       len is residues
 *
 *****************************************************************************/
-NLM_EXTERN ByteStorePtr BSCompressDNA PROTO((ByteStorePtr from, Int4 len, 
-                                  Uint4Ptr PNTR lbytes));
+NLM_EXTERN ByteStorePtr BSCompressDNA(ByteStorePtr from, Int4 len, 
+                                  Uint4Ptr PNTR lbytes);
   /* To be removed */
-NLM_EXTERN ByteStorePtr BSCompressDNAOld PROTO((ByteStorePtr from, Int4 len, 
-                                     Uint4Ptr PNTR lbytes));
+NLM_EXTERN ByteStorePtr BSCompressDNAOld(ByteStorePtr from, Int4 len, 
+                                     Uint4Ptr PNTR lbytes);
 
 /*****************************************************************************
 *
@@ -446,12 +452,12 @@ NLM_EXTERN ByteStorePtr BSCompressDNAOld PROTO((ByteStorePtr from, Int4 len,
 *             byte may have only one residue and this will be handled by
 *             seq_len value or returned value from read_func()    
 *****************************************************************************/
-NLM_EXTERN Boolean GenericCompressDNA PROTO((VoidPtr from, 
+NLM_EXTERN Boolean GenericCompressDNA(VoidPtr from, 
                                   VoidPtr to,
                                   Uint4 length,
                                   CompressRWFunc read_func, 
                                   CompressRWFunc write_func,
-                                  Uint4Ptr PNTR lbytes));
+                                  Uint4Ptr PNTR lbytes);
 
 /*****************************************************************************
 *
@@ -464,8 +470,8 @@ NLM_EXTERN Boolean GenericCompressDNA PROTO((VoidPtr from,
 *       lbytes is pointer to ambiguity storage
 *
 *****************************************************************************/
-NLM_EXTERN ByteStorePtr BSRebuildDNA PROTO((ByteStorePtr from, Int4 len, 
-                                 Uint4Ptr PNTR lbytes));
+NLM_EXTERN ByteStorePtr BSRebuildDNA(ByteStorePtr from, Int4 len, 
+                                 Uint4Ptr PNTR lbytes);
 
 /*****************************************************************************
 *
@@ -494,13 +500,13 @@ NLM_EXTERN void NaI2TableFree(void);
 *
 *****************************************************************************/
                               /* convert any numbering value to seq offset */
-NLM_EXTERN Int4 NumberingOffset PROTO((NumberingPtr np, DataValPtr avp));
+NLM_EXTERN Int4 NumberingOffset(NumberingPtr np, DataValPtr avp);
                               /* convert seq offset to numbering value */
-NLM_EXTERN Int2 NumberingValue PROTO((NumberingPtr np, Int4 offset, DataValPtr avp));
-NLM_EXTERN Int2 NumberingValueBySeqId PROTO((SeqIdPtr sip, Int4 offset, DataValPtr avp));
+NLM_EXTERN Int2 NumberingValue(NumberingPtr np, Int4 offset, DataValPtr avp);
+NLM_EXTERN Int2 NumberingValueBySeqId(SeqIdPtr sip, Int4 offset, DataValPtr avp);
 
-NLM_EXTERN void NumberingDefaultLoad PROTO((void));
-NLM_EXTERN NumberingPtr NumberingDefaultGet PROTO((void));
+NLM_EXTERN void NumberingDefaultLoad(void);
+NLM_EXTERN NumberingPtr NumberingDefaultGet(void);
 
 /*****************************************************************************
 *
@@ -508,7 +514,7 @@ NLM_EXTERN NumberingPtr NumberingDefaultGet PROTO((void));
 *
 *****************************************************************************/
 
-NLM_EXTERN Uint1 Bioseq_set_class PROTO((SeqEntryPtr sep));
+NLM_EXTERN Uint1 Bioseq_set_class(SeqEntryPtr sep);
 
 /*****************************************************************************
 *
@@ -516,8 +522,8 @@ NLM_EXTERN Uint1 Bioseq_set_class PROTO((SeqEntryPtr sep));
 *       SeqEntry - any type
 *
 *****************************************************************************/
-typedef void (* SeqEntryFunc) PROTO((SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent));
-NLM_EXTERN Int4 SeqEntryList PROTO((SeqEntryPtr sep, Pointer mydata, SeqEntryFunc mycallback, Int4 index, Int2 indent));
+typedef void (* SeqEntryFunc)(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent);
+NLM_EXTERN Int4 SeqEntryList(SeqEntryPtr sep, Pointer mydata, SeqEntryFunc mycallback, Int4 index, Int2 indent);
 
 #define SeqEntryCount( a )  SeqEntryList( a ,NULL,NULL,0,0)
 #define SeqEntryExplore(a,b,c) SeqEntryList(a, b, c, 0L, 0)
@@ -540,7 +546,7 @@ NLM_EXTERN void CorrectGeneFeatLocation(SeqEntryPtr sep, Pointer data,
 *       do NOT traverse component parts of seqmented or constructed types
 *
 *****************************************************************************/
-NLM_EXTERN Int4 BioseqList PROTO((SeqEntryPtr sep, Pointer mydata, SeqEntryFunc mycallback, Int4 index, Int2 indent));
+NLM_EXTERN Int4 BioseqList(SeqEntryPtr sep, Pointer mydata, SeqEntryFunc mycallback, Int4 index, Int2 indent);
 
 #define BioseqCount( a )  BioseqList( a ,NULL,NULL,0,0)
 #define BioseqExplore(a,b,c) BioseqList(a, b, c, 0L, 0)
@@ -551,9 +557,9 @@ NLM_EXTERN Int4 BioseqList PROTO((SeqEntryPtr sep, Pointer mydata, SeqEntryFunc 
 *
 *****************************************************************************/
                        /* gets next Seqdescr after curr in sep of type type */
-NLM_EXTERN ValNodePtr SeqEntryGetSeqDescr PROTO((SeqEntryPtr sep, Int2 type, ValNodePtr curr));
+NLM_EXTERN ValNodePtr SeqEntryGetSeqDescr(SeqEntryPtr sep, Int2 type, ValNodePtr curr);
                        /* gets first title from sep */
-NLM_EXTERN CharPtr SeqEntryGetTitle PROTO((SeqEntryPtr sep));
+NLM_EXTERN CharPtr SeqEntryGetTitle(SeqEntryPtr sep);
 
 /*****************************************************************************
 *
@@ -561,7 +567,7 @@ NLM_EXTERN CharPtr SeqEntryGetTitle PROTO((SeqEntryPtr sep));
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean SeqEntryConvert PROTO((SeqEntryPtr sep, Uint1 newcode));
+NLM_EXTERN Boolean SeqEntryConvert(SeqEntryPtr sep, Uint1 newcode);
 #define SeqEntryPack(x) SeqEntryConvert(x, (Uint1)0)
 
 
@@ -589,7 +595,7 @@ NLM_EXTERN Boolean SeqEntryConvert PROTO((SeqEntryPtr sep, Uint1 newcode));
 *             SeqId type you want.
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr SeqIdLocate PROTO((SeqIdPtr sip, Uint1Ptr order, Int2 num));
+NLM_EXTERN SeqIdPtr SeqIdLocate(SeqIdPtr sip, Uint1Ptr order, Int2 num);
 
 /*****************************************************************************
 *
@@ -602,16 +608,16 @@ NLM_EXTERN SeqIdPtr SeqIdLocate PROTO((SeqIdPtr sip, Uint1Ptr order, Int2 num));
 *   	ErrorMessage if sip->choice >= num
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr SeqIdSelect PROTO((SeqIdPtr sip, Uint1Ptr order, Int2 num));
+NLM_EXTERN SeqIdPtr SeqIdSelect(SeqIdPtr sip, Uint1Ptr order, Int2 num);
 
-NLM_EXTERN Int2 SeqIdBestRank PROTO((Uint1Ptr buf, Int2 num));
-NLM_EXTERN SeqIdPtr SeqIdFindBest PROTO(( SeqIdPtr sip, Uint1 target));
+NLM_EXTERN Int2 SeqIdBestRank(Uint1Ptr buf, Int2 num);
+NLM_EXTERN SeqIdPtr SeqIdFindBest(SeqIdPtr sip, Uint1 target);
 NLM_EXTERN SeqIdPtr SeqIdFindBestAccession (SeqIdPtr sip);
-NLM_EXTERN CharPtr SeqIdPrint PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format));
-NLM_EXTERN CharPtr SeqIdWrite PROTO((SeqIdPtr sip, CharPtr buf, Uint1 format, Int2 buflen));
-NLM_EXTERN Boolean GetAccessionFromSeqId PROTO((SeqIdPtr sip, Int4Ptr gi, 
-				     CharPtr PNTR id));
-NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
+NLM_EXTERN CharPtr SeqIdPrint(SeqIdPtr sip, CharPtr buf, Uint1 format);
+NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Int2 buflen);
+NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+				     CharPtr PNTR id);
+NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
 
 /*****************************************************************************
 *
@@ -633,10 +639,10 @@ NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
 *       the next count for improved speed when allocating many protein bioseqs
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT PROTO((SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe));
-NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx PROTO((SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr));
-NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId PROTO((SeqLocPtr slp, SeqIdPtr sip));
-ObjectIdPtr UniqueLocalId PROTO(());
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT(SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe);
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx(SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr);
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId(SeqLocPtr slp, SeqIdPtr sip);
+NLM_EXTERN ObjectIdPtr UniqueLocalId(void);
 
 /*****************************************************************************
 *
@@ -644,9 +650,9 @@ ObjectIdPtr UniqueLocalId PROTO(());
 *       returns TRUE if bsp points to the Bioseq identified by seqid
 *
 *****************************************************************************/
-NLM_EXTERN Boolean BioseqMatch PROTO((BioseqPtr bsp, SeqIdPtr sip));
+NLM_EXTERN Boolean BioseqMatch(BioseqPtr bsp, SeqIdPtr sip);
 
-NLM_EXTERN BioseqPtr BioseqFindInSeqEntry PROTO((SeqIdPtr sip, SeqEntryPtr sep));
+NLM_EXTERN BioseqPtr BioseqFindInSeqEntry(SeqIdPtr sip, SeqEntryPtr sep);
 
 /*****************************************************************************
 *
@@ -662,7 +668,7 @@ NLM_EXTERN BioseqPtr BioseqFindInSeqEntry PROTO((SeqIdPtr sip, SeqEntryPtr sep))
 *  and proc id_id_flatten_seq_obj
 *
 *****************************************************************************/
-NLM_EXTERN Boolean SeqIdMatch PROTO((SeqIdPtr a, SeqIdPtr b));
+NLM_EXTERN Boolean SeqIdMatch(SeqIdPtr a, SeqIdPtr b);
 
 /*****************************************************************************
 *
@@ -674,7 +680,7 @@ NLM_EXTERN Boolean SeqIdMatch PROTO((SeqIdPtr a, SeqIdPtr b));
 *   SIC_YES    = types could be compared, and ids are the same
 *
 *****************************************************************************/
-NLM_EXTERN Uint1 SeqIdComp PROTO((SeqIdPtr a, SeqIdPtr b));
+NLM_EXTERN Uint1 SeqIdComp(SeqIdPtr a, SeqIdPtr b);
 #define SIC_DIFF 1
 #define SIC_NO 0
 #define SIC_YES 2
@@ -684,13 +690,13 @@ NLM_EXTERN Uint1 SeqIdComp PROTO((SeqIdPtr a, SeqIdPtr b));
    trys to locate all ids for a or b and determine
    if (a and b refer the the same Bioseq)
 **************************/
-NLM_EXTERN Boolean SeqIdForSameBioseq PROTO((SeqIdPtr a, SeqIdPtr b));
+NLM_EXTERN Boolean SeqIdForSameBioseq(SeqIdPtr a, SeqIdPtr b);
 
 /*************************
  *      Boolean SeqIdIn (a,b)
  *   returns TRUE if a in list of b
  ******************/
-NLM_EXTERN Boolean SeqIdIn PROTO((SeqIdPtr a, SeqIdPtr b));
+NLM_EXTERN Boolean SeqIdIn(SeqIdPtr a, SeqIdPtr b);
 
 
 /*****************************************************************************
@@ -699,7 +705,7 @@ NLM_EXTERN Boolean SeqIdIn PROTO((SeqIdPtr a, SeqIdPtr b));
 *     just calls SeqLocFindPart(seqlochead, currseqloc, EQUIV_IS_MANY)
 *
 *****************************************************************************/
-NLM_EXTERN SeqLocPtr SeqLocFindNext PROTO((SeqLocPtr seqlochead, SeqLocPtr currseqloc));
+NLM_EXTERN SeqLocPtr SeqLocFindNext(SeqLocPtr seqlochead, SeqLocPtr currseqloc);
 
 /*****************************************************************************
 *
@@ -714,24 +720,24 @@ NLM_EXTERN SeqLocPtr SeqLocFindNext PROTO((SeqLocPtr seqlochead, SeqLocPtr currs
 *            EQUIV_IS_ONE.
 *
 *****************************************************************************/
-NLM_EXTERN SeqLocPtr SeqLocFindPart PROTO((SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 equiv_status));
+NLM_EXTERN SeqLocPtr SeqLocFindPart(SeqLocPtr seqlochead, SeqLocPtr currseqloc, Uint1 equiv_status);
 
 #define EQUIV_IS_MANY 0   /* treat SEQLOC_EQUIV same as SEQLOC_MIX */
 #define EQUIV_IS_ONE 1	  /* treat SEQLOC_EQUIV as one Seq-loc */
 #define FIRST_EQUIV_IS_MANY 2 /* treat only first EQUIV as SEQ_LOC_MIX */
 
-NLM_EXTERN Boolean IS_one_loc PROTO((SeqLocPtr anp, Boolean equiv_is_one));  /* for SeqLoc */
+NLM_EXTERN Boolean IS_one_loc(SeqLocPtr anp, Boolean equiv_is_one);  /* for SeqLoc */
 
-NLM_EXTERN Int4 SeqLocStart PROTO((SeqLocPtr seqloc));
-NLM_EXTERN Int4 SeqLocStop PROTO((SeqLocPtr seqloc));
-NLM_EXTERN Uint1 SeqLocStrand PROTO((SeqLocPtr seqloc));
-NLM_EXTERN Int4 SeqLocLen PROTO((SeqLocPtr seqloc));
-NLM_EXTERN Int4 SeqLocGetSegLens PROTO((SeqLocPtr slp, Int4Ptr lens, Int4 ctr, Boolean gaps));
+NLM_EXTERN Int4 SeqLocStart(SeqLocPtr seqloc);
+NLM_EXTERN Int4 SeqLocStop(SeqLocPtr seqloc);
+NLM_EXTERN Uint1 SeqLocStrand(SeqLocPtr seqloc);
+NLM_EXTERN Int4 SeqLocLen(SeqLocPtr seqloc);
+NLM_EXTERN Int4 SeqLocGetSegLens(SeqLocPtr slp, Int4Ptr lens, Int4 ctr, Boolean gaps);
 #define SeqLocCountSegs(x) SeqLocGetSegLens(x, NULL,0,FALSE)
 #define SeqLocGetGaps(x) SeqLocGetSegLens(x,NULL,0,TRUE)
-NLM_EXTERN SeqIdPtr SeqLocId PROTO((SeqLocPtr seqloc));
-NLM_EXTERN Uint1 StrandCmp PROTO((Uint1 strand));
-NLM_EXTERN Boolean SeqLocRevCmp PROTO((SeqLocPtr anp));
+NLM_EXTERN SeqIdPtr SeqLocId(SeqLocPtr seqloc);
+NLM_EXTERN Uint1 StrandCmp(Uint1 strand);
+NLM_EXTERN Boolean SeqLocRevCmp(SeqLocPtr anp);
 
 /**** defines for "which_end" below ****/
 
@@ -740,13 +746,13 @@ NLM_EXTERN Boolean SeqLocRevCmp PROTO((SeqLocPtr anp));
 #define SEQLOC_START     3	  /* beginning of SeqLoc (low on plus, high on minus)  */
 #define SEQLOC_STOP      4	  /* end of SeqLoc (high on plus, low on minus)  */
 
-NLM_EXTERN Int4 GetOffsetInLoc PROTO((SeqLocPtr of, SeqLocPtr in, Uint1 which_end));
-NLM_EXTERN Int4 GetOffsetInBioseq PROTO((SeqLocPtr of, BioseqPtr in, Uint1 which_end));
-NLM_EXTERN Int2 SeqLocOrder PROTO((SeqLocPtr a, SeqLocPtr b, BioseqPtr in));
+NLM_EXTERN Int4 GetOffsetInLoc(SeqLocPtr of, SeqLocPtr in, Uint1 which_end);
+NLM_EXTERN Int4 GetOffsetInBioseq(SeqLocPtr of, BioseqPtr in, Uint1 which_end);
+NLM_EXTERN Int2 SeqLocOrder(SeqLocPtr a, SeqLocPtr b, BioseqPtr in);
 
-NLM_EXTERN Int2 SeqLocMol PROTO((SeqLocPtr seqloc));
+NLM_EXTERN Int2 SeqLocMol(SeqLocPtr seqloc);
 
-NLM_EXTERN CharPtr SeqLocPrint PROTO((SeqLocPtr slp));
+NLM_EXTERN CharPtr SeqLocPrint(SeqLocPtr slp);
 
 
 /*****************************************************************************
@@ -760,7 +766,7 @@ NLM_EXTERN CharPtr SeqLocPrint PROTO((SeqLocPtr slp));
 *   	4 = a and b overlap, but neither completely contained in the other
 *
 *****************************************************************************/
-NLM_EXTERN Int2 SeqLocCompare PROTO((SeqLocPtr a, SeqLocPtr b));
+NLM_EXTERN Int2 SeqLocCompare(SeqLocPtr a, SeqLocPtr b);
 #define SLC_NO_MATCH 0
 #define SLC_A_IN_B 1
 #define SLC_B_IN_A 2
@@ -779,12 +785,12 @@ NLM_EXTERN Int2 SeqLocCompare PROTO((SeqLocPtr a, SeqLocPtr b));
 *      used to find features contained in genes
 *
 *****************************************************************************/
-NLM_EXTERN Int4 SeqLocAinB PROTO((SeqLocPtr a, SeqLocPtr b));
+NLM_EXTERN Int4 SeqLocAinB(SeqLocPtr a, SeqLocPtr b);
 
-NLM_EXTERN Boolean SeqIntCheck PROTO((SeqIntPtr sip));   /* checks for valid interval */
-NLM_EXTERN Boolean SeqPntCheck PROTO((SeqPntPtr spp));  /* checks valid pnt */
-NLM_EXTERN Boolean PackSeqPntCheck PROTO ((PackSeqPntPtr pspp));
-NLM_EXTERN Uint1 SeqLocCheck PROTO ((SeqLocPtr slp));
+NLM_EXTERN Boolean SeqIntCheck(SeqIntPtr sip);   /* checks for valid interval */
+NLM_EXTERN Boolean SeqPntCheck(SeqPntPtr spp);  /* checks valid pnt */
+NLM_EXTERN Boolean PackSeqPntCheck(PackSeqPntPtr pspp);
+NLM_EXTERN Uint1 SeqLocCheck(SeqLocPtr slp);
 #define SEQLOCCHECK_OK 2      /* location is fine */
 #define SEQLOCCHECK_WARNING 1   /* location ok, but has mixed strands */
 #define SEQLOCCHECK_ERROR 0     /* error in location */
@@ -821,9 +827,9 @@ NLM_EXTERN Uint1 SeqLocCheck PROTO ((SeqLocPtr slp));
 
 #define SLP_HAD_ERROR   240
 
-NLM_EXTERN Uint2 SeqLocPartialCheck PROTO((SeqLocPtr head));
+NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head);
 
-NLM_EXTERN CharPtr TaxNameFromCommon PROTO((CharPtr common));
+NLM_EXTERN CharPtr TaxNameFromCommon(CharPtr common);
 
 /*****************************************************************************
 *
@@ -838,7 +844,7 @@ NLM_EXTERN CharPtr TaxNameFromCommon PROTO((CharPtr common));
 *       Intended to go on SeqFeat.ext
 *
 *****************************************************************************/
-NLM_EXTERN UserObjectPtr QualLocCreate PROTO((Int4 from, Int4 to));
+NLM_EXTERN UserObjectPtr QualLocCreate(Int4 from, Int4 to);
 
 /*****************************************************************************
 *
@@ -854,7 +860,7 @@ NLM_EXTERN UserObjectPtr QualLocCreate PROTO((Int4 from, Int4 to));
 *       If any of the above fail, returns NULL
 *
 *****************************************************************************/
-NLM_EXTERN CharPtr QualLocWrite PROTO((UserObjectPtr uop, CharPtr buf));
+NLM_EXTERN CharPtr QualLocWrite(UserObjectPtr uop, CharPtr buf);
 
 /*****************************************************************************
 *
@@ -927,16 +933,16 @@ NLM_EXTERN Int2 LIBCALL MolTypeForGI(SeqEntryPtr sep, Int4 uid);
 
 /* moved from jzmisc.h */
 NLM_EXTERN Boolean seqid_name(SeqIdPtr, CharPtr, Boolean, Boolean);
-NLM_EXTERN Boolean MuskSeqIdWrite PROTO((SeqIdPtr sip, CharPtr buf, Int2 buflen, Uint1 format, Boolean do_find, Boolean do_entrez_find));
+NLM_EXTERN Boolean MuskSeqIdWrite(SeqIdPtr sip, CharPtr buf, Int2 buflen, Uint1 format, Boolean do_find, Boolean do_entrez_find);
 NLM_EXTERN SeqIdPtr local_id_make(CharPtr);
 NLM_EXTERN SeqLocPtr update_seq_loc(Int4, Int4, Uint1, SeqLocPtr );
-NLM_EXTERN SeqIdPtr LIBCALL TxGetSubjectIdFromSeqAlign PROTO((SeqAlignPtr seqalign));
-NLM_EXTERN SeqIdPtr LIBCALL TxGetQueryIdFromSeqAlign PROTO((SeqAlignPtr seqalign));
-NLM_EXTERN Boolean LIBCALL GetScoreAndEvalue PROTO((
+NLM_EXTERN SeqIdPtr LIBCALL TxGetSubjectIdFromSeqAlign(SeqAlignPtr seqalign);
+NLM_EXTERN SeqIdPtr LIBCALL TxGetQueryIdFromSeqAlign(SeqAlignPtr seqalign);
+NLM_EXTERN Boolean LIBCALL GetScoreAndEvalue(
                     SeqAlignPtr seqalign, Int4 *score, 
                     Nlm_FloatHi *bit_score, 
                     Nlm_FloatHi *evalue, Int4 *number
-                    ));
+);
 
 /***********************************************************************
 *
@@ -945,12 +951,12 @@ NLM_EXTERN Boolean LIBCALL GetScoreAndEvalue PROTO((
 *
 **********************************************************************/
 
-NLM_EXTERN void LIBCALL AdjustOffSetsInSeqAlign PROTO((SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2));
+NLM_EXTERN void LIBCALL AdjustOffSetsInSeqAlign(SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2);
 
 
 /* Used with SeqEntryExplore to find Bioseq's in a SeqEntry. */
-NLM_EXTERN void FindNuc PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
-NLM_EXTERN void FindProt PROTO((SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent));
+NLM_EXTERN void FindNuc(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
+NLM_EXTERN void FindProt(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
 
 /*****************************************************************************
 *
@@ -977,6 +983,8 @@ NLM_EXTERN Uint4 LIBCALL SeqIdOrderInBioseqIdList (SeqIdPtr a, SeqIdPtr list);
    */
 NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr version);
 
+
+
 /*
   Function to make a proper type SeqId given a string that represents
   an accession Number 
@@ -985,6 +993,10 @@ NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr 
 */
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version,CharPtr name);
 
+    /* Variant that also work with PIR accessions and LOCUS names 
+       .. and can resolve conflict with network access (if pre-enabled)
+     */
+    NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccessionEx(CharPtr accession, Uint4 version,CharPtr name,Boolean Permissive, Boolean AllowPIR,Boolean UseNetwork,Boolean FavorNucleotide);
 
 /* Variant of SeqIdFromAccession that works on accession.version string */
 
@@ -997,6 +1009,9 @@ NLM_EXTERN SeqIdPtr SeqIdFromAccessionDotVersion (CharPtr accession);
 NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s);
 NLM_EXTERN Boolean LIBCALL IS_ntdb_accession (CharPtr s);
 NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
+NLM_EXTERN Boolean LIBCALL ACCN_PIR_FORMAT( CharPtr s);
+NLM_EXTERN Boolean LIBCALL ACCN_1_5_FORMAT( CharPtr s);
+NLM_EXTERN Boolean LIBCALL AccnIsSWISSPROT( CharPtr s);
 
 
 /*
@@ -1032,7 +1047,7 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 #define ACCN_NCBI_STS 15
 #define ACCN_NCBI_BACKBONE 16 /* "S" record, typed from publications */
 #define ACCN_NCBI_SEGSET 17
-#define ACCN_NCBI_OTHER 18
+#define ACCN_NCBI_OTHER 18 /* unknown or 'other' nucleotide division */
 
 #define ACCN_EMBL_EST 19
 #define ACCN_EMBL_DIRSUB 20
@@ -1040,7 +1055,7 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 #define ACCN_EMBL_PATENT 22
 #define ACCN_EMBL_HTGS 23 /* Not defined yet */
 #define ACCN_EMBL_CON 24
-#define ACCN_EMBL_OTHER 25 /* Not defined*/
+#define ACCN_EMBL_OTHER 25 /* unknown or 'other' nucleotide division */
 
 #define ACCN_DDBJ_EST 26
 #define ACCN_DDBJ_DIRSUB 27
@@ -1048,50 +1063,88 @@ NLM_EXTERN Boolean LIBCALL IS_protdb_accession (CharPtr s);
 #define ACCN_DDBJ_PATENT 29
 #define ACCN_DDBJ_HTGS 30
 #define ACCN_DDBJ_CON 31 /* Not defined*/
-#define ACCN_DDBJ_OTHER 32 /* Not defined*/
+#define ACCN_DDBJ_OTHER 32 /* unknown or 'other' nucleotide division */
 
 #define ACCN_REFSEQ_PROT 33
 #define ACCN_REFSEQ_mRNA 34
 #define ACCN_REFSEQ_CONTIG 35
 #define ACCN_REFSEQ_CHROMOSOME 36
-#define ACCN_NCBI_cDNA 37 
+#define ACCN_REFSEQ_mRNA_PREDICTED 37
+#define ACCN_REFSEQ_PROT_PREDICTED 38
+#define ACCN_REFSEQ_GENOMIC 39
+
+#define ACCN_NCBI_cDNA 40 
+#define ACCN_IS_PROTEIN 41 /* unreserved 3 letter code .. must be protein*/
+#define ACCN_IS_NT 42  /* unreserved 1 or 2 letter code .. must be nuc */
+#define ACCN_REFSEQ 43  /* unreserved refseq-type two_letters and underscore*/
+#define ACCN_EMBL_GB 44
+#define ACCN_EMBL_DDBJ 45
+#define ACCN_GB_DDBJ 46
+#define ACCN_EMBL_GB_DDBJ 47
+
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
 */
 #define ACCN_AMBIGOUS_MOL 65536 /* Ambigous Molecule */
 
-/* Macro to interpret above #defines */
-/* Accession definitively points to a protein record */
-#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT))
+/* 
+   Macros to interpret above #defines codes returned by
+   WHICH_db_accession
+*/
 
-/* Accession definitively points to a nucleotide record */
-#define ACCN_IS_NUC(c) ((((c)&ACCN_AMBIGOUS_MOL)==0) && ((c)!=ACCN_UNKNOWN) && (!ACCN_IS_PROT(c)))
+
+/*
+ Accession definitively points to a protein record 
+*/
+#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED))
+
+/*
+  Accession definitively points to a nucleotide record 
+   . note that ACCN_dbname_OTHER is a nucleotide.
+*/
+#define ACCN_IS_NUC(c) ((((c)&ACCN_AMBIGOUS_MOL)==0) && ((c)!=ACCN_UNKNOWN) && (!ACCN_IS_PROT(c)) )
+
 #define ACCN_IS_AMBIGOUS_MOL(c) (((c)&ACCN_AMBIGOUS_MOL) == ACCN_AMBIGOUS_MOL)
 
 /* 
    Define to detect Genbank's accessions: Genbank-subsumed GSDB accession numbers
    are defined to be Genbank's as well as GSDB DIRSUB records.
 */
-#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA))
+#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_GB_DDBJ || (((c)&65535) == ACCN_GB_DDBJ)) )
 
-/* NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
+/* XM_,NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
    REFSEQ project
 */
-#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) )
+#define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || (((c)&65535)== ACCN_REFSEQ) )
 
 #define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)))
 
-/* Macro to detect EMBL accession numbers */
-#define ACCN_IS_EMBL(c) ( (((c)&65535) ==  ACCN_EMBL_EST) ||  (((c)&65535) == ACCN_EMBL_DIRSUB) ||  (((c)&65535) == ACCN_EMBL_GENOME) ||  (((c)&65535) == ACCN_EMBL_PATENT) ||  (((c)&65535) == ACCN_EMBL_HTGS) ||  (((c)&65535) == ACCN_EMBL_CON) ||  (((c)&65535) == ACCN_EMBL_OTHER)  || (((c)&65535) == ACCN_EMBL_PROT))
+/*
+  Macro to detect EMBL accession numbers  (can also belong to another DB)
+ */
+#define ACCN_IS_EMBL(c) ( (((c)&65535) ==  ACCN_EMBL_EST) ||  (((c)&65535) == ACCN_EMBL_DIRSUB) ||  (((c)&65535) == ACCN_EMBL_GENOME) ||  (((c)&65535) == ACCN_EMBL_PATENT) ||  (((c)&65535) == ACCN_EMBL_HTGS) ||  (((c)&65535) == ACCN_EMBL_CON) ||  (((c)&65535) == ACCN_EMBL_OTHER)  || (((c)&65535) == ACCN_EMBL_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ))
 
-#define ACCN_IS_DDBJ(c) ((((c)&65535) ==  ACCN_DDBJ_EST) ||  (((c)&65535) == ACCN_DDBJ_DIRSUB) ||  (((c)&65535) == ACCN_DDBJ_GENOME) ||  (((c)&65535) == ACCN_DDBJ_PATENT) ||  (((c)&65535) == ACCN_DDBJ_HTGS) ||  (((c)&65535) == ACCN_DDBJ_CON) ||  (((c)&65535) == ACCN_DDBJ_OTHER) || (((c)&65535) == ACCN_DDBJ_PROT))
+#define ACCN_IS_DDBJ(c) ((((c)&65535) ==  ACCN_DDBJ_EST) ||  (((c)&65535) == ACCN_DDBJ_DIRSUB) ||  (((c)&65535) == ACCN_DDBJ_GENOME) ||  (((c)&65535) == ACCN_DDBJ_PATENT) ||  (((c)&65535) == ACCN_DDBJ_HTGS) ||  (((c)&65535) == ACCN_DDBJ_CON) ||  (((c)&65535) == ACCN_DDBJ_OTHER) || (((c)&65535) == ACCN_DDBJ_PROT) || (((c)&65535) == ACCN_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ))
 
 #define ACCN_IS_SWISSPROT(c) ((c)== ACCN_SWISSPROT)
-/* A few accessions numbers (N0*-N1*) have been assigned to many databases 
+/* 
+   detect the few accessions numbers (N000*-N1*) have been assigned to many databases 
+   .. as well as unnasigned accessions.
 */
-#define ACCN_IS_AMBIGOUSDB(c) (((c)&65535)==ACCN_AMBIGOUS_DB)
-#define ACCN_IS_UNKNOWN(c) (((c)&65535)==ACCN_UNKNOWN)
+#define ACCN_IS_AMBIGOUSDB(c) (((c)&65535)==ACCN_AMBIGOUS_DB || (c)== ACCN_IS_PROTEIN || (c)== ACCN_IS_NT || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ))
+    /*
+      does not ressemble any accession types. (with the possible exception
+      of PIR.. but must call ACCN_PIR_FORMAT() to check that.
+     */
+#define ACCN_IS_UNKNOWN(c) (c==ACCN_UNKNOWN)
+    /* Unassigned : is of 3+5 (proteins) OR
+                          2+5 (amino acids) OR
+                          [A-Z][A-Z]_ (refseq type)
+                          , but
+       has not been formally been formally assigned (hardcoded)
+    */
+#define ACCN_IS_UNASSIGNED(c) ((c)== ACCN_IS_PROTEIN || (c)== ACCN_IS_NT || (c) == ACCN_UNKNOWN || (c)==ACCN_REFSEQ)
 
 /*
   Try to Find if the Bioseq represented by a SeqId is a SeqLoc List;

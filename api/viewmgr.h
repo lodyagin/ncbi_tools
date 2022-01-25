@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.h,v 1.17 2000/08/30 13:43:11 lewisg Exp $
+/*   $Id: viewmgr.h,v 1.18 2001/01/18 22:28:06 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.h,v 1.17 2000/08/30 13:43:11 lewisg Exp $
+* File Name:  $Id: viewmgr.h,v 1.18 2001/01/18 22:28:06 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.17 $
+* $Revision: 1.18 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.h,v $
+* Revision 1.18  2001/01/18 22:28:06  hurwitz
+* added fast option for ViewMgr_Update
+*
 * Revision 1.17  2000/08/30 13:43:11  lewisg
 * change seqalign state when made into multiple
 *
@@ -385,6 +388,7 @@ Returns: 1 on success
 
 *****************************************************************************/
 NLM_EXTERN Int4 ViewMgr_Update(SeqAlign *salp);
+NLM_EXTERN Int4 ViewMgr_Update2(SeqAlign *salp, Boolean Fast);
 
 /*****************************************************************************
 

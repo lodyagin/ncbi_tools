@@ -1,5 +1,5 @@
 #
-# $Id: hpux.ncbi.mk,v 1.1 2000/01/13 23:37:13 beloslyu Exp $
+# $Id: hpux.ncbi.mk,v 1.3 2001/02/02 14:52:02 beloslyu Exp $
 #
 # testded on:
 # HP-UX heart B.11.00 U 9000/800 71355 unlimited-user license

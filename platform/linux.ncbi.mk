@@ -1,5 +1,5 @@
 #
-# $Id: linux.ncbi.mk,v 1.15 2000/07/31 02:25:13 beloslyu Exp $
+# $Id: linux.ncbi.mk,v 1.19 2001/04/03 11:01:18 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -7,6 +7,8 @@ NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2
 NCBI_OPTFLAG = -O2
+#untested, try on your own risk on Linux/Intel
+#NCBI_OPTFLAG = -O3 -march=pentiumpro -funroll-loops
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include
@@ -22,6 +24,7 @@ NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh
 NCBI_MT_OTHERLIBS = -lpthread
+NCBI_OTHERLIBS_MT = $(NCBI_MT_OTHERLIBS) -lm
 NCBI_THREAD_OBJ = ncbithr.o
 NETENTREZVERSION = 2.02c2ASN1SPEC6 
 

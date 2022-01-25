@@ -1,4 +1,4 @@
-/*  $RCSfile: dumpfasta.c,v $  $Revision: 6.3 $  $Date: 2000/03/15 21:35:45 $
+/*  $RCSfile: dumpfasta.c,v $  $Revision: 6.6 $  $Date: 2001/03/26 16:49:43 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,15 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: dumpfasta.c,v $
+* Revision 6.6  2001/03/26 16:49:43  dondosha
+* Allow databases without common index
+*
+* Revision 6.5  2001/03/05 13:36:09  egorov
+* Clean up
+*
+* Revision 6.4  2001/02/27 21:51:10  madden
+* Call BioseqToFastaDump instead of BioseqToFasta
+*
 * Revision 6.3  2000/03/15 21:35:45  egorov
 * Use readdb_get_bioseq_ex()
 *
@@ -80,7 +89,6 @@ Int2 Main (void)
 {
     Boolean		is_prot;
     CharPtr		database;
-    CharPtr		commonindex_file;
     BioseqPtr		bsp;
     CharPtr		filename;
     FILE		*fp;
@@ -115,8 +123,12 @@ Int2 Main (void)
     }
 
     printf("\nStart dumping...\n");
-
-    total = rdfp->cih->maxgi + 1;
+    if (rdfp->cih)
+       total = rdfp->cih->maxgi + 1;
+    else {
+       Int8 tot_len;
+       readdb_get_totals(rdfp, &tot_len, &total);
+    }
 
     /* create oid mask to mark those oid which are already being dumped */
     oidmask = (Uint4Ptr) MemNew(total/(sizeof(Uint4)) + 4);
@@ -126,8 +138,10 @@ Int2 Main (void)
 	    printf("\b\b\b\b%3d%%", (int)((100*gi)/total));
 	    fflush(stdout);
 	}
-
-	oid = readdb_gi2seq(rdfp, gi, &start);
+        if (rdfp->cih)
+           oid = readdb_gi2seq(rdfp, gi, &start);
+        else 
+           oid = gi;
 
 	if (oid >= 0) {
 	    countall++;
@@ -137,7 +151,7 @@ Int2 Main (void)
 
 	    if (!dumped_already) {
 		bsp = readdb_get_bioseq_ex(rdfp, oid, TRUE, TRUE);
-		if (!BioseqToFasta (bsp, fp, !is_prot)) {
+		if (!BioseqToFastaDump (bsp, fp, !is_prot)) {
 		    ErrPostEx(SEV_ERROR, 0, 0, "Could not convert Bioseq to FASTA");
 		}
 		BioseqFree(bsp);

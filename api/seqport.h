@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.28 $
+* $Revision: 6.30 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.30  2001/02/18 20:58:52  kans
+* added GetSequenceByBsp
+*
+* Revision 6.29  2000/12/18 18:03:26  kans
+* added GetScoresbySeqId
+*
 * Revision 6.28  2000/09/24 23:31:18  kans
 * added GetSequenceByFeature
 *
@@ -723,6 +729,10 @@ NLM_EXTERN SeqSearchPtr SeqSearchFree (
    or local server must be enabled, or sequences must already be in memory.
 */
 
+NLM_EXTERN CharPtr GetSequenceByBsp (
+  BioseqPtr bsp
+);
+
 NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (
   SeqIdPtr sip,
   CharPtr accession,
@@ -739,6 +749,11 @@ NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (
 
 NLM_EXTERN BytePtr GetScoresbyAccessionDotVersion (
   CharPtr accession,
+  Int4Ptr bsplength
+);
+
+NLM_EXTERN BytePtr GetScoresbySeqId (
+  SeqIdPtr sip,
   Int4Ptr bsplength
 );
 

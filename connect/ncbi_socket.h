@@ -1,7 +1,7 @@
 #ifndef NCBI_SOCKET__H
 #define NCBI_SOCKET__H
 
-/*  $Id: ncbi_socket.h,v 6.2 2000/02/23 22:33:38 vakatov Exp $
+/*  $Id: ncbi_socket.h,v 6.11 2001/03/22 17:44:14 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,11 +40,10 @@
  *
  *  SOCK, LSOCK
  *
- *  SOCK_SetLOCK
+ *  SOCK_AllowSigPipeAPI
  *
  *  SOCK_InitializeAPI
  *  SOCK_ShutdownAPI
- *  SOCK_SetLOG
  *
  * Listening socket (handle LSOCK):
  *
@@ -56,6 +55,7 @@
  *
  *  SOCK_Create (see also LSOCK_Accept)
  *  SOCK_Reconnect
+ *  SOCK_Shutdown
  *  SOCK_Close
  *  SOCK_Wait
  *  SOCK_SetTimeout
@@ -63,18 +63,54 @@
  *  SOCK_GetWriteTimeout
  *  SOCK_Read (including "peek" and "persistent read")
  *  SOCK_PushBack
- *  SOCK_Eof
+ *  SOCK_Status
  *  SOCK_Write
  *  SOCK_GetAddress
+ *
+ * Data logging:
+ *
+ *  SOCK_SetDataLoggingAPI
+ *  SOCK_SetDataLogging
  *
  * Auxiliary:
  *
  *  SOCK_gethostname
- *  SOCK_host2inaddr
+ *  SOCK_ntoa
  *  SOCK_htonl
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_socket.h,v $
+ * Revision 6.11  2001/03/22 17:44:14  vakatov
+ * + SOCK_AllowSigPipeAPI()
+ *
+ * Revision 6.10  2001/03/06 23:54:10  lavr
+ * Renamed: SOCK_gethostaddr -> SOCK_gethostbyname
+ * Added:   SOCK_gethostbyaddr
+ *
+ * Revision 6.9  2001/03/02 20:05:15  lavr
+ * Typos fixed
+ *
+ * Revision 6.8  2000/12/26 21:40:01  lavr
+ * SOCK_Read modified to handle properly the case of 0 byte reading
+ *
+ * Revision 6.7  2000/12/05 23:27:44  lavr
+ * Added SOCK_gethostaddr
+ *
+ * Revision 6.6  2000/11/15 18:51:05  vakatov
+ * Add SOCK_Shutdown() and SOCK_Status().  Remove SOCK_Eof().
+ *
+ * Revision 6.5  2000/06/23 19:34:41  vakatov
+ * Added means to log binary data
+ *
+ * Revision 6.4  2000/05/30 23:31:37  vakatov
+ * SOCK_host2inaddr() renamed to SOCK_ntoa(), the home-made out-of-scratch
+ * implementation to work properly with GCC on IRIX64 platforms
+ *
+ * Revision 6.3  2000/03/24 23:12:04  vakatov
+ * Starting the development quasi-branch to implement CONN API.
+ * All development is performed in the NCBI C++ tree only, while
+ * the NCBI C tree still contains "frozen" (see the last revision) code.
+ *
  * Revision 6.2  2000/02/23 22:33:38  vakatov
  * Can work both "standalone" and as a part of NCBI C++ or C toolkits
  *
@@ -85,7 +121,6 @@
  */
 
 #include <connect/ncbi_core.h>
-#include <stddef.h>
 
 
 #ifdef __cplusplus
@@ -115,68 +150,63 @@ struct LSOCK_tag;                /* listening socket:  internal storage  */
 typedef struct LSOCK_tag* LSOCK; /* listening socket:  handle */
 
 struct SOCK_tag;                 /* socket:  internal storage  */
-typedef struct SOCK_tag* SOCK;   /* socket:  handle */
+typedef struct SOCK_tag*  SOCK;  /* socket:  handle */
 
 
 
 /******************************************************************************
- *  Multi-Thread SAFETY
+ *  Multi-Thread safety
  *
- * SOCK_InitializeAPI(), SOCK_ShutdownAPI(),  and SOCK_SetLOG()
- * manipulate with the API-wide static data, and thus you must take a
- * special care to avoid different threads to call these functions at
- * the same moment of time.
+ * If you are using this API in a multi-thread application, and there is
+ * more than one thread using this API, it is safe to call SOCK_InitializeAPI()
+ * explicitly in the beginning of your main thread, before you run any other
+ * threads, and to call SOCK_ShutdownAPI() after all threads are exited.
  *
- * For this reason, in multi-thread applications where there are more than
- * one thread using this API, it is usually better to call
- * SOCK_InitializeAPI() explicitely in the beginning of your main thread,
- * before you run any other threads, and to call SOCK_ShutdownAPI() after
- * all threads are exited.  SOCK_SetLOG() should be called under
- * the critical section protection as well.
- *
- * As soon as the API is initialized it becomes relatively MT-safe, but
- * you must not handle the same LSOCK or SOCK from different threads
- * simultaneously.
+ * As soon as the API is initialized it becomes relatively MT-safe, however
+ * you still must not operate with the same LSOCK or SOCK objects from
+ * different threads simultaneously.
  *
  * A MUCH BETTER WAY of dealing with this issue is to provide your own MT
- * locking callback (see SOCK_SetLOCK). This will also
+ * locking callback (see CORE_SetLOCK in "ncbi_core.h"). This will also
  * guarantee the proper MT protection should some other SOCK functions
  * start to access any static data in the future.
  */
 
 
-/* Set the MT critical section lock/unlock callback function (and its data).
- * This function will be used to protect the package's static variables
- * used by SOCK_InitializeAPI(), SOCK_ShutdownAPI(), and  SOCK_SetLOG()
- * from being accessed/changed by several threads simultaneously. It 'll
- * also protect your error posting callback and its cleanup func.
- * NOTES:
- * This function itself is so NOT MT-safe!
- * If there is an active MT-lock handler set already, and it is different from
- * the new one, then MT_LOCK_Delete() is called for the old(replaced) handler;
- * MT_LOCK_Delete() will also be called for this handler by SOCK_ShutdownAPI().
- */
-extern void SOCK_SetLOCK(MT_LOCK lk);
-
-
 
 /******************************************************************************
- *  ERROR HANDLING
+ *   Error Logging
+ *
+ * NOTE:  Use CORE_SetLOG() from "ncbi_core.h" to setup the log handler.
  */
 
 
-/* Set global error handling callback (no err.handling if "lg" is passed zero).
- * If there is an active err.handler set already, and it is different from
- * the new one, then LOG_Delete() is called for the old(replaced) handler.
- * LOG_Delete() will also be called for this handler by SOCK_ShutdownAPI().
+/* By default("log_data" == eDefault), the data is not logged.
+ * To start logging the data, call this func with "log_data" == eOn.
+ * To stop  logging the data, call this func with "log_data" == eOff.
  */
-extern void SOCK_SetLOG(LOG lg);
+extern void SOCK_SetDataLoggingAPI(ESwitch log_data);
+
+
+/* Control the data logging for socket "sock" individually.
+ * To reset to the global default behavior (as set by SOCK_SetDataLoggingAPI),
+ * call this function with "log_data" == eDefault.
+ */
+extern void SOCK_SetDataLogging(SOCK sock, ESwitch log_data);
 
 
 
 /******************************************************************************
  *  API Initialization and Shutdown/Cleanup
  */
+
+
+/* By default (on UNIX platforms) the SOCK API functions automagically call
+ * "signal(SIGPIPE, SIG_IGN)" on initialization.  To prohibit this feature,
+ * you must call SOCK_AllowSigPipeAPI() before you call any other
+ * function from the SOCK API.
+ */
+extern void SOCK_AllowSigPipeAPI(void);
 
 
 /* Initialize all internal/system data & resources to be used by the SOCK API.
@@ -186,14 +216,13 @@ extern void SOCK_SetLOG(LOG lg);
  * NOTE:
  *  Usually, SOCK API does not require an explicit initialization -- as it is
  *  guaranteed to initialize itself automagically, in one of API functions,
- *  when necessary. Also, see the "MultiThread-SAFETY" remark above.
+ *  when necessary. Yet, see the "Multi Thread safety" remark above.
  */
 extern EIO_Status SOCK_InitializeAPI(void);
 
 
 /* Cleanup; destroy all internal/system data & resources used by the SOCK API.
  * ATTENTION:  no function from the SOCK API should be called after this call!
- * NOTE: it also calls SOCK_SetLOG(0) and then SOCK_SetLOCK(0).
  * NOTE: you can safely call it more than once; just, all calls after the first
  *       one will have no result. 
  */
@@ -276,7 +305,17 @@ extern EIO_Status SOCK_Reconnect
  );
 
 
-/* [CLIENT-side]  Close the connection, destroy relevant internal data.
+/* Shutdown the connection in only one direction (specified by "direction").
+ * Later attempts to I/O (or to wait) in the shutdown direction will
+ * do nothing, and immediately return with "eIO_Closed" status.
+ */
+extern EIO_Status SOCK_Shutdown
+(SOCK      sock,
+ EIO_Event how   /* [in] one of:  eIO_Read, eIO_Write, eIO_ReadWrite */
+ );
+
+
+/* Close the connection, destroy relevant internal data.
  * The "sock" handle goes invalid after this function call, regardless
  * of whether the call was successful or not.
  * NOTE: if eIO_Close timeout was specified then it blocks until
@@ -318,12 +357,15 @@ extern const STimeout* SOCK_GetTimeout
 
 
 /* Read up to "size" bytes from "sock" to the mem.buffer pointed by "buf".
- * In "*n_read", return the number of succesfully read bytes.
+ * In "*n_read", return the number of successfully read bytes.
  * If there is no data available to read (also, if eIO_Persist and cannot
  * read exactly "size" bytes) and the timeout(see SOCK_SetTimeout) is expired
- * then return eSOCK_ETimeout.
- * NOTE: Theoretically, eSOCK_Closed may indicate an empty message
- *       rather than a real closure of the connection...
+ * then return eIO_Timeout.
+ * NOTE1: Theoretically, eIO_Closed may indicate an empty message
+ *        rather than a real closure of the connection...
+ * NOTE2: If on input "size" == 0, then "*n_read" is set to 0, and
+ *        return value can be either of eIO_Success, eIO_Closed and
+ *        eIO_Unknown depending on connection status of the socket.
  */
 extern EIO_Status SOCK_Read
 (SOCK           sock,
@@ -345,26 +387,35 @@ extern EIO_Status SOCK_PushBack
  );
 
 
-/* Return a non-zero value if EOF was hit (detected) during the last
- * call to SOCK_Read("sock", ...).
- * NOTE:  the input operations do not return SOCK_eClosed unless there
- *        is no more data to read/peek;  thus, in the case of Peek, this is
- *        the only "non-destructive" way to check whether we already hit
- *        the EOF or there is still more data to come.
+/* Return (for the specified "direction"):
+ *   eIO_Closed     -- if the connection was shutdown by SOCK_Shutdown(), or
+ *                     (for "eIO_Read" only) if EOF was detected
+ *   eIO_Unknown    -- if an error was detected during the last I/O
+ *   eIO_InvalidArg -- if "direction" is not one of:  eIO_Read, eIO_Write
+ *   eIO_Success    -- otherwise (incl. eIO_Timeout on last I/O)
+ *
+ * NOTE:  The SOCK_Read() and SOCK_Wait(eIO_Read) will not return any error
+ *        as long as there is any unread (buffered) data left.
+ *        Thus, when you are "peeking" data instead of actually reading it,
+ *        then this is the only "non-destructive" way to check whether EOF
+ *        or an error has occurred on read.
  */
-extern int SOCK_Eof(SOCK sock);
+extern EIO_Status SOCK_Status
+(SOCK      sock,
+ EIO_Event direction  /* [in] one of:  eIO_Read, eIO_Write */
+ );
 
 
 /* Write "size" bytes from the mem.buffer "buf" to "sock".
  * In "*n_written", return the number of successfully written bytes.
  * If cannot write all data and the timeout(see SOCK_SetTimeout()) is expired
- * then return eSOCK_ETimeout.
+ * then return eIO_Timeout.
  */
 extern EIO_Status SOCK_Write
 (SOCK        sock,
- const void* buf,       /* [in]  data to write to the socket             */
- size_t      size,      /* [in]  # of bytes (starting at "buf") to write */
- size_t*     n_written  /* [out] # of successfully written bytes         */
+ const void* buf,       /* [in]  data to write to the socket                */
+ size_t      size,      /* [in]  # of bytes (starting at "buf") to write    */
+ size_t*     n_written  /* [out] # of successf. written bytes (can be NULL) */
  );
 
 
@@ -386,7 +437,7 @@ extern void SOCK_GetAddress
 extern EIO_Status SOCK_GetOSHandle
 (SOCK   sock,
  void*  handle_buf,  /* pointer to a memory area to put the OS handle at */
- size_t handle_size  /* the exact(!) size of the expected OS handle */
+ size_t handle_size  /* the exact(!) size of the expected OS handle      */
  );
 
 
@@ -406,11 +457,12 @@ extern int SOCK_gethostname
 
 /* Return zero on success.  Vaguely related to the BSD inet_ntoa().
  */
-extern int SOCK_host2inaddr
-(unsigned int host,   /* [in]  must be in the network byte-order           */
- char*        buf,    /* [out] to be filled by smth. like "123.45.67.89\0" */
- size_t       buflen  /* [in]  max # of bytes allowed to put to "buf"      */
+extern int SOCK_ntoa
+(unsigned int host,     /* [in]  must be in the network byte-order           */
+ char*        buf,      /* [out] to be filled by smth. like "123.45.67.89\0" */
+ size_t       buf_size  /* [in]  max # of bytes to put to "buf", >= 16       */
  );
+
 
 /* See man for the BSD htonl().
  */
@@ -418,6 +470,27 @@ extern unsigned int SOCK_htonl
 (unsigned int value
  );
 
+
+/* Return INET host address (in network byte order) of the
+ * specified host (or local host, if hostname is passed as NULL),
+ * which can be either domain name or an IP address in
+ * dotted notation (e.g. "123.45.67.89\0"). Return 0 on error.
+ */
+extern unsigned int SOCK_gethostbyname
+(const char* hostname  /* [in]  return current host address if hostname is 0 */
+ );
+
+
+/* Take INET host address (in network byte order) and fill out the
+ * the provided buffer with the name, which the address corresponds to
+ * (in case of multiple names the primary name is used). Return value 0
+ * means error, while success is denoted by the 'name' argument returned.
+ */
+extern char* SOCK_gethostbyaddr
+(unsigned int host,    /* [in]  host address in network byte order           */
+ char*        name,    /* [out] buffer to put the name to                    */
+ size_t       namelen  /* [in]  size (bytes) of the buffer above             */
+ );
 
 #ifdef __cplusplus
 } /* extern "C" */

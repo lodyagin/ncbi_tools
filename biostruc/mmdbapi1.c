@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.39 $
+* $Revision: 6.41 $
 *
 * File Description: 
 *
@@ -44,6 +44,12 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.41  2001/01/26 15:06:39  lewisg
+* use entrez2 to retrieve structures
+*
+* Revision 6.40  2000/12/05 22:13:06  ywang
+* fix bugs for MakePDBSeqId2
+*
 * Revision 6.39  2000/07/21 18:56:41  thiessen
 * allow dynamic slave->master transformation
 *
@@ -1206,7 +1212,7 @@ BiostrucPtr LIBCALL FetchBS(CharPtr pcFetch,  Int2 iType, Int4 mdlLvl,
     AsnIoPtr paioAIP = NULL; /* aip */
     BiostrucPtr pbsThe = NULL;
     Boolean bIsNetwork = FALSE;
-    LinkSetPtr plsLink = NULL;
+    /* LinkSetPtr plsLink = NULL; */
     DocUid duUID = 0;
   /* StrToLong stuff */
   Nlm_Char     ch;
@@ -1370,7 +1376,7 @@ printf("MaxModels=%d ModelLevel=%d\n",(int) maxModels,(int) mdlLvl);
 			    ErrClear(); /* toolkit fatal */
 		      	    ErrPostEx(SEV_ERROR,0,0, "Unable to find UID = %ld \nin database.", (long)duUID);
 			    ErrShow();
-			    LinkSetFree(plsLink);
+			    /* LinkSetFree(plsLink); */
 			    if (bExtent & (Byte) FETCH_ENTREZ) MMDBFini();  
 			    return NULL;
 			}
@@ -2973,7 +2979,7 @@ SeqAnnotPtr LIBCALL BiosToSeq (BiostrucAnnotSetPtr set, Boolean usePValue,
     if (mastersip == NULL) {
       pcPDB = StringSave (PDBNAME_DEFAULT);
       iDomain = 0;
-      cChain = '-';
+      cChain = ' ';
       pcPDB[0] = feature->name[0];
       pcPDB[1] = feature->name[1];
       pcPDB[2] = feature->name[2];

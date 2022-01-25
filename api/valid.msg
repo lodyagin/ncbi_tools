@@ -109,6 +109,13 @@ $^   DuplicateSegmentReferences, 29
 The segmented sequence refers multiple times to the same Seq-id. This may be due
 to a software error. Please consult with the database staff to fix this record.
 
+$^   TrailingX, 30
+The protein sequence ends with one or more X (unknown) amino acids.
+
+$^   BadSeqIdFormat, 31
+A nucleotide sequence identifier should be 1 letter plus 5 digits or 2 letters
+plus 6 digits, and a protein sequence identifer should be 3 letters plus 5 digits.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -176,6 +183,10 @@ BioSource feature with a different organism name.
 $^   BadOrganelle, 15
 Note that only Kinetoplastida have kinetoplasts, and that only Chlorarchniophyta
 and Cryptophyta have nucleomorphs.
+
+$^   MultipleChromosomes, 16
+There are multiple chromosome qualifiers on this Bioseq.  With the exception of
+some pseudoautosomal genes, this is likely to be a biological annotation error.
 
 $$ GENERIC, 3
 
@@ -416,6 +427,18 @@ for more information.
 $^ MultipleMRNAproducts, 43
 More than one mRNA feature points to the same cDNA product.  This is an error in the
 genomic product set.  Each mRNA feature should have a unique product Bioseq.
+
+$^   mRNAgeneRange, 44
+An mRNA is overlapped by a gene feature, but is not completely contained by it.
+This may be an annotation error.
+
+$^   TranscriptLen, 45
+The mRNA sequence that was supplied is not the same length as the
+transcription of the mRNA feature. Please determine why they are different.
+
+$^   TranscriptMismatches, 46
+The mRNA sequence and the transcription of the mRNA feature are different.
+If the number is large, it may indicate incorrect intron/exon boundaries.
 
 $$ SEQ_ALIGN, 6
 

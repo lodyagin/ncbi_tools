@@ -1,4 +1,4 @@
-/* $Id: thrdttbi.c,v 1.2 2000/08/16 21:18:57 hurwitz Exp $
+/* $Id: thrdttbi.c,v 1.3 2000/12/20 18:56:41 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdttbi.c,v $
+* Revision 1.3  2000/12/20 18:56:41  hurwitz
+* new random num gen, more debug printing
+*
 * Revision 1.2  2000/08/16 21:18:57  hurwitz
 * fix dangerous warnings found by MS Visual C++, replace rand48 functions with toolkit functions
 *
@@ -85,9 +88,11 @@ float	cg;		/* Energy of current thread */
 /* whose score is equal to or lower than that of the new thread. Also flag */
 /* whether the new thread is identical to this one. */
 
-if(tdg->dg<ttb->tg[ttb->mn]) { ct=-1; sm=0; } else { 
+if(tdg->dg<ttb->tg[ttb->mn]) {
+  ct=-1; sm=0;
+}
 
-
+else { 
 	/* Decend linked list from the top-scoring thread */
 	ct=ttb->mx; for(i=0; i<ttb->n; i++) {
 
@@ -204,6 +209,7 @@ if(ct!=in) {
 	ttb->nx[in]=ct;
 	ttb->pr[ct]=in; }
 
+return(1);
 }
 
 

@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.3 2000/07/28 17:58:50 bauer Exp $
+/* $Id: cddsrv.h,v 1.5 2001/02/01 17:52:35 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.3 $
+* $Revision: 1.5 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.5  2001/02/01 17:52:35  bauer
+* changes for consensus CDDsrv
+*
+* Revision 1.4  2001/01/11 22:14:14  bauer
+* added RealInd data structure
+*
 * Revision 1.3  2000/07/28 17:58:50  bauer
 * added DomainComposition hotlinks in CD summary pages
 *
@@ -53,8 +59,8 @@
 /*  ONESTRUC applies if a single (master) PDB-derived sequence is present    */
 /*  SEVSTRUC applies for more than one PDB-derived sequence + VAST data      */
 /* prefix CDD indicates that only one (the final CDD) alignment is to be     */
-/* reported.                                                                 */
-/*--------------------------------------------------------------------------*/
+/* reported (this mechanism is not used anymore)                             */
+/*---------------------------------------------------------------------------*/
 #define NOALIGN      0
 #define SEQUONLY     1
 #define ONESTRUC     2
@@ -62,6 +68,7 @@
 #define CDDSEQUONLY  4
 #define CDDONESTRUC  5
 #define CDDSEVSTRUC  6
+#define CDDUPDATE    7  /* in cddumper: import a CD and recalculate tax. etc */
 
 /*---------------------------------------------------------------------------*/
 /* Options for iMode in cddsrv. Determines whether a summary is produced or  */
@@ -92,16 +99,19 @@ typedef struct cddsum {
   BiostrucAnnotSetPtr pbsaShort;
   Boolean             bIsPdb;
   Boolean             bIsMaster;
+  Boolean             bIs3dRep;
   Char                cPdbId[5];
   Char                cChainId[2];
   Char                cPKBMDom[7];
   Char                cPKBDom[9];
   Char                cDefLine[256];
+  CharPtr             cTaxName;
   Int4                iFsid;
   Int4                iFid;
   Int4                iMMDBId;
   Int4                uid;
   Int4                iCddIdx;
+  Int4                iTaxId;
   SeqIdPtr            sip;
   SeqAlignPtr         salp;
   struct cddsum  PNTR next;
@@ -113,6 +123,13 @@ typedef struct cdddesc {
   Char                cSourc[PATH_MAX];
   struct cdddesc PNTR next;
 } CddDesc, PNTR CddDescPtr;
+
+typedef struct realind {
+  Int4                aid, mgi, sgi, mstart, mstop, sstart, sstop;
+  SeqIdPtr            msip, ssip;
+  Boolean             mIsPdb, sIsPdb;
+  struct realind PNTR next;
+} RealInd, PNTR RealIndPtr;
 
 /*---------------------------------------------------------------------------*/
 /* static global variables                                                   */

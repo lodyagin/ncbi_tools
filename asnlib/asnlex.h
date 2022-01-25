@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   Typedefs and prototypes used internally by asnlex.c
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        AsnLexReadBoolean returns Boolean
 *
 * $Log: asnlex.h,v $
+* Revision 6.1  2000/12/12 15:56:13  ostell
+* added support BigInt
+*
 * Revision 6.0  1997/08/25 18:10:07  madden
 * Revision changed to 6.0
 *
@@ -88,6 +91,7 @@ NLM_EXTERN AsnTypePtr AsnLexFindType PROTO((AsnIoPtr aip, AsnModulePtr amp));
 NLM_EXTERN AsnTypePtr AsnLexFindElement PROTO((AsnIoPtr aip, AsnTypePtr atp));
 
 NLM_EXTERN Int4 AsnLexReadInteger PROTO((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Int8 AsnLexReadBigInt PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean AsnLexReadBoolean PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Pointer AsnLexReadString PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean AsnLexSkipString PROTO((AsnIoPtr aip, AsnTypePtr atp));
@@ -98,6 +102,7 @@ NLM_EXTERN void AsnLexSkipOctets PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN CharPtr AsnLexSaveWord PROTO((AsnIoPtr aip));
 NLM_EXTERN void AsnLexSkipStruct PROTO((AsnIoPtr aip));
 NLM_EXTERN Int4 AsnLexInteger PROTO((AsnIoPtr aip));
+NLM_EXTERN Int8 AsnLexBigInt PROTO((AsnIoPtr aip));
 NLM_EXTERN Int2 AsnLexWord PROTO((AsnIoPtr aip));
 NLM_EXTERN Boolean StrMatch PROTO((CharPtr a, CharPtr b, Int2 len));
 

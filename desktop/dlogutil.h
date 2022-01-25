@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -162,6 +162,9 @@ extern DialoG CreateExtProceedingsDialog (GrouP prnt, CharPtr title,
 extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
                                        SeqFeatPtr sfp, Boolean hasGeneControl,
                                        Boolean hasCitationTab);
+extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
+                                         SeqFeatPtr sfp, Boolean hasGeneControl,
+                                         Boolean hasCitationTab, Boolean hasGeneSuppress);
 extern void PopulateGenePopup (FeatureFormPtr ffp);
 extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp);
 extern void SetNewFeatureDefaultInterval (FeatureFormPtr ffp);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.5 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
@@ -37,6 +37,16 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.h,v $
+* Revision 1.8  2001/02/21 22:07:34  lavr
+* Changes for use new CONN interface
+*
+* Revision 1.7  2000/12/06 17:53:46  madden
+* Add prototype for QBBioseqToFasta
+*
+* Revision 1.6  2000/11/07 21:57:18  shavirin
+* Added definition of the new function BLASTGetQueryBioseqByRID()
+* Added few connection -oriented defines in the header.
+*
 * Revision 1.5  2000/07/19 15:17:15  shavirin
 * Added loging for this file.
 *
@@ -50,6 +60,7 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <objseq.h>
+#include <urlquery.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -90,7 +101,7 @@ NLM_EXTERN CONN QBlastOpenConnection (
   void
 );
 
-NLM_EXTERN EConnStatus QBlastWaitForReply (
+NLM_EXTERN EIO_Status QBlastWaitForReply (
   CONN conn
 );
 
@@ -150,13 +161,22 @@ NLM_EXTERN Int4 PrintQBlastQueue (
   FILE *fp
 );
 
+
+/* produce fasta for qblast queries. */
+Boolean QBBioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na);
 /* 
-   Function to get SeqAnnot for RID. We suupose, that search already
+   Function to get SeqAnnot for RID. We suppose, that search already
    finished and results are exists on the Qblast repository 
 */
 NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID);
 
-/* Function to get BlastObject for RID. We suupose, that search already
+/* 
+   Function to get Query Bioseq for RID. We suppose, that search already
+   finished and results are exists on the Qblast repository 
+*/
+NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID);
+
+/* Function to get BlastObject for RID. We suppose, that search already
    finished and results are exists on the Qblast repository. Blast Object
    ASN.1 will be returned as CharPtr buffer
 */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.3 $
+* $Revision: 1.7 $
 *
 * File Description: 
 *
@@ -49,13 +49,15 @@
 /* low-level connection functions */
 
 NLM_EXTERN CONN StrucOpenConnection (
-  Int4 uid
+  Int4 uid,
+  Int4 modelLevel,
+  Int4 maxModels
 )
 
 {
-  CONN   conn;
-  Uint4  n_written;
-  Char   query [64];
+  CONN    conn;
+  size_t  n_written;
+  Char    query [256];
 
   if (uid < 1) return NULL;
 
@@ -65,7 +67,8 @@ NLM_EXTERN CONN StrucOpenConnection (
 
   if (conn == NULL) return NULL;
 
-  sprintf (query, "uid=%ld&save=asntext&form=6&db=t&Dopt=i", (long) uid);
+  sprintf (query, "uid=%ld&save=asntext&form=6&db=t&Dopt=i&mdlLvl=%ld&MaxModels=%ld",
+           (long) uid, (long) modelLevel, (long) maxModels);
   CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
 
   return conn;
@@ -80,7 +83,7 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
   BiostrucPtr   bsp = NULL;
   time_t        currtime, starttime;
   Int2          max = 0;
-  EConnStatus   status;
+  EIO_Status    status;
   STimeout      timeout;
 
   if (conn == NULL) return NULL;
@@ -94,14 +97,14 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
     QUERY_WaitForNextMacEvent ();
 #endif
   }
-  if (status == eCONN_Success) {
+  if (status == eIO_Success) {
     /*
     {
       FILE *fp = FileOpen ("dummy", "w");
@@ -121,14 +124,16 @@ NLM_EXTERN BiostrucPtr StrucWaitForReply (
 /* high-level connection functions */
 
 NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
-  Int4 uid
+  Int4 uid,
+  Int4 modelLevel,
+  Int4 maxModels
 )
 
 {
   BiostrucPtr  bsp;
   CONN         conn;
 
-  conn = StrucOpenConnection (uid);
+  conn = StrucOpenConnection (uid, modelLevel, maxModels);
 
   if (conn == NULL) return NULL;
 
@@ -141,6 +146,8 @@ NLM_EXTERN BiostrucPtr StrucSynchronousQuery (
 
 NLM_EXTERN Boolean StrucAsynchronousQuery (
   Int4 uid,
+  Int4 modelLevel,
+  Int4 maxModels,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -149,7 +156,7 @@ NLM_EXTERN Boolean StrucAsynchronousQuery (
 {
   CONN  conn;
 
-  conn = StrucOpenConnection (uid);
+  conn = StrucOpenConnection (uid, modelLevel, maxModels);
 
   if (conn == NULL) return FALSE;
 
@@ -170,14 +177,14 @@ NLM_EXTERN Int4 StrucCheckQueue (
 
 NLM_EXTERN BiostrucPtr StrucReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 )
 
 {
   AsnIoConnPtr  aicp;
   BiostrucPtr   bsp = NULL;
 
-  if (conn != NULL && status == eCONN_Success) {
+  if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
     bsp = BiostrucAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);

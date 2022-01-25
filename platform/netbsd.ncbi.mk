@@ -1,5 +1,5 @@
 #
-# $Id: netbsd.ncbi.mk,v 1.3 2000/10/30 18:11:21 beloslyu Exp $
+# $Id: netbsd.ncbi.mk,v 1.5 2001/02/02 14:52:02 beloslyu Exp $
 #
 # That platform is not supported and is contributed to NCBI by 
 #                     Brook Milligan <brook@trillium.NMSU.Edu>

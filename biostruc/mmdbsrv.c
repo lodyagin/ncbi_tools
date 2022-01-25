@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.26 2000/08/21 16:12:42 lewisg Exp $
+/* $Id: mmdbsrv.c,v 6.27 2001/01/25 23:02:56 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.26 $
+* $Revision: 6.27 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.27  2001/01/25 23:02:56  lewisg
+* get rid of content-disp, add mdlLvl and maxModels args
+*
 * Revision 6.26  2000/08/21 16:12:42  lewisg
 * add save=asntext option
 *
@@ -376,7 +379,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.26 2000/08/21 16:12:42 lewisg Exp $";
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.27 2001/01/25 23:02:56 lewisg Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 
@@ -1280,8 +1283,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
      */
     switch (Mime) {
     case LAUNCH_VIEWER:
-      printf ("Content-type: chemical/ncbi-asn1-binary\r\n");
-      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
+      printf ("Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
+      /* printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);*/
       aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
       DumpMime_v1(aip, "MIME", Entrez_style_report, Data_data_structure, bsp);
       break;
@@ -1305,8 +1308,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
   else if (Filetype == 'r') {
     /* RasMol format */
     if (Mime == LAUNCH_VIEWER)
-      printf ("Content-type: chemical/x-pdb\r\n");
-      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
+      printf ("Content-type: chemical/x-pdb\r\n\r\n");
+    /*      printf ("Content-disposition: filename=\"%d.pdb\"\r\n\r\n", uid);*/
     
     ModelStruc = MakeAModelstruc(bsp);
     bssp->structure = NULL;  /* already linked into modelstruc */
@@ -1316,8 +1319,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
   else if (Filetype == 'k') {
     /* Mage format */
     if (Mime == LAUNCH_VIEWER)
-      printf ("Content-type: chemical/x-kinemage\r\n");
-      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
+      printf ("Content-type: chemical/x-kinemage\r\n\r\n");
+    /* printf ("Content-disposition: filename=\"%d.kin\"\r\n\r\n", uid);*/
     
     ModelStruc = MakeAModelstruc(bsp);
     bssp->structure = NULL;  /* already linked into modelstruc */
@@ -1820,7 +1823,19 @@ Int2 Main ()
 	    }    
     }  
 
+  IndexArgs = -1;
+  if ((IndexArgs = WWWFindName(info, "mdlLvl")) >= 0)
+    {
+      pcThis = WWWGetValueByIndex(info, IndexArgs);
+      Complex = atoi(pcThis);
+    }
 
+  IndexArgs = -1;
+  if ((IndexArgs = WWWFindName(info, "maxModels")) >= 0)
+    {
+      pcThis = WWWGetValueByIndex(info, IndexArgs);
+      MaxModels = atoi(pcThis);
+    }
   
   IndexArgs = -1;
   if ((IndexArgs = WWWFindName(info, "KinemageColor")) >= 0)

@@ -1,5 +1,5 @@
 #
-# $Id: r6k.ncbi.mk,v 1.1 2000/01/11 17:03:10 beloslyu Exp $
+# $Id: r6k.ncbi.mk,v 1.3 2001/02/02 14:52:02 beloslyu Exp $
 #
 # As per ddas@us.ibm.com 08/19/1999
 #

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.15 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -45,6 +45,18 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.19  2001/03/17 00:51:14  tatiana
+ * GeneID added to dbxref array, DBNUM increased
+ *
+ * Revision 6.18  2001/01/26 19:26:37  kans
+ * added niaEST, increased DBNUM
+ *
+ * Revision 6.17  2001/01/18 23:57:02  kans
+ * add GO (gene ontology) to list of legal dbxrefs
+ *
+ * Revision 6.16  2000/12/05 01:21:23  tatiana
+ * DBNUM increased for COG
+ *
  * Revision 6.15  2000/10/16 19:10:18  kans
  * added UniSTS and InterimID to legal dbxrefs
  *
@@ -147,6 +159,18 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.19  2001/03/17 00:51:14  tatiana
+* GeneID added to dbxref array, DBNUM increased
+*
+* Revision 6.18  2001/01/26 19:26:37  kans
+* added niaEST, increased DBNUM
+*
+* Revision 6.17  2001/01/18 23:57:02  kans
+* add GO (gene ontology) to list of legal dbxrefs
+*
+* Revision 6.16  2000/12/05 01:21:23  tatiana
+* DBNUM increased for COG
+*
 * Revision 6.15  2000/10/16 19:10:18  kans
 * added UniSTS and InterimID to legal dbxrefs
 *
@@ -279,7 +303,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 30
+#define DBNUM 34
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

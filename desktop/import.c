@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.22 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -103,7 +103,10 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
         if (notJustImpFeats || curr->seqfeat_key == SEQFEAT_IMP) {
           subtype = curr->featdef_key;
           if (subtype != FEATDEF_Imp_CDS &&
-               subtype != FEATDEF_source &&
+              subtype != FEATDEF_source &&
+              subtype != FEATDEF_virion &&
+              subtype != FEATDEF_mutation &&
+              subtype != FEATDEF_allele &&
               subtype != FEATDEF_site_ref) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
@@ -2557,6 +2560,8 @@ typedef struct gbblockpage {
   TexT          div;
   TexT          taxonomy;
   ButtoN        htgsDraft;
+  ButtoN        htgsFulltop;
+  ButtoN        htgsActivefin;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2574,7 +2579,9 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
   GBBlockPtr      gbp;
   GenBankPagePtr  gpp;
   ValNodePtr      head;
-  Boolean         isDraft;
+  Boolean         isActivefin = FALSE;
+  Boolean         isDraft = FALSE;
+  Boolean         isFulltop = FALSE;
   CharPtr         str;
   ValNodePtr      vnp;
 
@@ -2588,7 +2595,9 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
     SetTitle (gpp->taxonomy, gbp->taxonomy);
     for (head = NULL, vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
       str = (CharPtr) vnp->data.ptrvalue;
-      if (StringICmp (str, "HTGS_DRAFT") != 0) {
+      if (StringICmp (str, "HTGS_DRAFT") != 0 &&
+          StringICmp (str, "HTGS_FULLTOP") != 0 &&
+          StringICmp (str, "HTGS_ACTIVEFIN") != 0) {
         ValNodeCopyStr (&head, 0, str);
       }
     }
@@ -2600,9 +2609,15 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
     for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
       if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
         isDraft = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_FULLTOP") == 0) {
+        isFulltop = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") == 0) {
+        isActivefin = TRUE;
       }
     }
     SafeSetStatus (gpp->htgsDraft, isDraft);
+    SafeSetStatus (gpp->htgsFulltop, isFulltop);
+    SafeSetStatus (gpp->htgsActivefin, isActivefin);
   }
 }
 
@@ -2611,7 +2626,9 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
 {
   GBBlockPtr      gbp;
   GenBankPagePtr  gpp;
+  Boolean         noActivefin;
   Boolean         noDraft;
+  Boolean         noFulltop;
   ValNodePtr      vnp;
 
   gbp = NULL;
@@ -2638,6 +2655,28 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
           ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_DRAFT");
         }
       }
+      if (GetStatus (gpp->htgsFulltop)) {
+        noFulltop = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_FULLTOP") == 0) {
+            noFulltop = FALSE;
+          }
+        }
+        if (noFulltop) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_FULLTOP");
+        }
+      }
+      if (GetStatus (gpp->htgsActivefin)) {
+        noActivefin = TRUE;
+        for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") == 0) {
+            noActivefin = FALSE;
+          }
+        }
+        if (noActivefin) {
+          ValNodeCopyStr (&(gbp->keywords), 0, "HTGS_ACTIVEFIN");
+        }
+      }
     }
   }
   return (Pointer) gbp;
@@ -2652,6 +2691,8 @@ static void DeleteKeywordProc (ButtoN b)
   if (gpp != NULL) {
     PointerToDialog (gpp->kywds, NULL);
     SafeSetStatus (gpp->htgsDraft, FALSE);
+    SafeSetStatus (gpp->htgsFulltop, FALSE);
+    SafeSetStatus (gpp->htgsActivefin, FALSE);
   }
 }
 
@@ -2659,7 +2700,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
 
 {
   ButtoN          b;
-  GrouP           f1, f2, f3, f4;
+  GrouP           f1, f2, f3, f4, f5;
   GBBlockPtr      gbp;
   Boolean         genome;
   GenBankPagePtr  gpp;
@@ -2745,7 +2786,10 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
     showKeywords = FALSE;
     if (gbp != NULL && gbp->keywords != NULL) {
       vnp = gbp->keywords;
-      if (vnp->next != NULL || StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") != 0) {
+      if (vnp->next != NULL ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_FULLTOP") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_ACTIVEFIN") != 0) {
         showKeywords = TRUE;
       }
     }
@@ -2754,7 +2798,10 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       gpp->kywds = CreateVisibleStringDialog (f2, 3, -1, 15);
     }
     if (internal || genome || (gbp != NULL && gbp->keywords != NULL)) {
-      gpp->htgsDraft = CheckBox (f2, "HTGS_DRAFT", NULL);
+      f5 = HiddenGroup (f2, 3, 0, NULL);
+      gpp->htgsDraft = CheckBox (f5, "HTGS_DRAFT", NULL);
+      gpp->htgsFulltop = CheckBox (f5, "HTGS_FULLTOP", NULL);
+      gpp->htgsActivefin = CheckBox (f5, "HTGS_ACTIVEFIN", NULL);
     }
     if (internal) {
       b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);

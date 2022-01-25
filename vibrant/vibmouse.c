@@ -1,4 +1,4 @@
-/*  $Id: vibmouse.c,v 6.3 1999/04/06 14:23:25 lewisg Exp $
+/*  $Id: vibmouse.c,v 6.4 2001/03/28 01:40:48 juran Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * ===========================================================================
 * $Log: vibmouse.c,v $
+* Revision 6.4  2001/03/28 01:40:48  juran
+* "for (...) { continue; }", squelch warning
+*
 * Revision 6.3  1999/04/06 14:23:25  lewisg
 * add opengl replacement for viewer3d
 *
@@ -587,7 +590,10 @@ extern Boolean MA_UnsetGroup(MA_GroupPtr group)
     NodePtr node;
     for (node = ma->active_groups;
          node  &&  node->elem != group;
-         node = ListGetNext( node ));
+         node = ListGetNext( node ))
+    {
+      continue;
+    }
 
     if ( !node )
       return FALSE;

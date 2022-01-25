@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.31 $
+* $Revision: 6.34 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.34  2001/02/16 21:34:49  ostell
+* changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
+*
+* Revision 6.33  2000/11/28 22:58:08  kans
+* removed omdp->lockcnt == 0 debugging breakpoint statement
+*
+* Revision 6.32  2000/11/28 21:43:54  kans
+* added ObjMgrReportFunc for debugging
+*
 * Revision 6.31  2000/10/30 21:26:08  shavirin
 * Changes and fixes for some MT-safety related problems.
 *
@@ -257,12 +266,12 @@ static char *this_file = __FILE__;
 ***/
 
 
-
 /*****************************************************************************
 *
 *   Data Object local functions
 *
 *****************************************************************************/
+static Uint4 NEAR ObjMgrTouchCnt PROTO((void));
 static Boolean NEAR ObjMgrExtend PROTO((ObjMgrPtr omp));
 static ObjMgrDataPtr NEAR ObjMgrFindByEntityID PROTO((ObjMgrPtr omp, Uint2 entityID, ObjMgrDataPtr PNTR prev));
 static Boolean NEAR ObjMgrFreeClipBoardFunc PROTO((ObjMgrPtr omp));
@@ -315,6 +324,47 @@ static Pointer NEAR ObjMgrFreeFunc PROTO((ObjMgrPtr omp, Uint2 type, Pointer ptr
 *   ObjMgr Functions
 *
 *****************************************************************************/
+static TNlmMutex omctr_mutex = NULL;
+static Uint4 NEAR ObjMgrTouchCnt (void)
+{
+	static Uint4 ObjMgrTouchCtr = 1; /* start at 1 to avoid rollover signal */
+	Int4 ret, imax, i;
+	ObjMgrPtr omp;
+	ObjMgrDataPtr PNTR omdpp;
+	Uint4 tmpctr;
+
+	if (! ObjMgrTouchCtr)  /* rolled over */
+	{
+		ret = NlmMutexLockEx(&omctr_mutex); /* protect this section */
+		if (ret)  /* error */
+		{
+			ErrPostEx(SEV_FATAL,0,0,"ObjMgrTouchCnt failed [%ld]", (long)ret);
+			return ObjMgrTouchCtr;
+		}
+		
+		/**** reset the touch values *****/
+		/** all calls to this function should already have ObjMgrWriteLock **/
+
+		if (! ObjMgrTouchCtr) /* check that this was not a stalled thread */
+		{
+			tmpctr = 0;
+			omp = ObjMgrGet();
+			imax = omp->currobj;
+			omdpp = omp->datalist;
+			for (i = 0; i < imax; i++)
+			{
+				if (omdpp[i]->parentptr == NULL)
+					omdpp[i]->touch = ++tmpctr;
+			}
+			ObjMgrTouchCtr = tmpctr;
+		}
+		NlmMutexUnlock(omctr_mutex);
+	}
+
+	return ++ObjMgrTouchCtr;
+
+}
+
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrGetData (Uint2 entityID)
 {
 	ObjMgrDataPtr prev, retval=NULL;
@@ -1103,7 +1153,7 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 
 	omdp->dataptr = data;  /* fill in the values */
 	omdp->datatype = type;
-	omdp->touch = GetSecs();   /* stamp with time */
+	omdp->touch = ObjMgrTouchCnt();   /* stamp with time */
 
 #ifdef DEBUG_OBJMGR
 	FileClose(fp);
@@ -2292,8 +2342,9 @@ static Int4 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolea
 	}
 	else
 	{
-		if (omdp->lockcnt)
+		if (omdp->lockcnt) {
 			omdp->lockcnt--;
+		}
 		else
 		{
 			ErrPostEx(SEV_ERROR, 0,0,"ObjMgrLock: unlocking 0 lockcnt");
@@ -2307,7 +2358,7 @@ static Int4 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolea
 	{
 		if ((omdp->tempload != TL_NOT_TEMP) && (! omdp->lockcnt))
 		{
-			omdp->touch = GetSecs();   /* stamp with time */
+			omdp->touch = ObjMgrTouchCnt();   /* stamp with time */
 			/*
 			omp->tempcnt++;
 			*/
@@ -2349,7 +2400,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad (ObjMgrPtr omp, Pointer ptr)
 		omdp->tempload = TL_LOADED;
 		omp->tempcnt++;
 	}
-	omdp->touch = GetSecs();
+	omdp->touch = ObjMgrTouchCnt();
 
 	omdp->lockcnt++;    /* protect against reaping this one */
 	ObjMgrReap (omp);   /* check to see if we need to reap */
@@ -2366,7 +2417,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad (ObjMgrPtr omp, Pointer ptr)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 {
-	time_t lowest;
+	Uint4 lowest;
 	Int4 num, j;
 	ObjMgrDataPtr tmp, ditch, PNTR omdpp;
 	Boolean is_write_locked, did_one = FALSE;
@@ -2379,12 +2430,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 
 	while (omp->tempcnt > omp->maxtemp)   /* time to reap */
 	{
-		/* this was INT4_MAX to cover cases where time_t is signed, but
-		   is now returned to UINT4_MAX because the number of seconds since
-		   1900 has overflowed Int4 size! */
-		lowest = (time_t) UINT4_MAX;
-		if (lowest < 0)     /* oops, they used a signed int */
-			lowest = (time_t) INT4_MAX;
+		lowest = UINT4_MAX;
 		
 		num = omp->currobj;
 		omdpp = omp->datalist;
@@ -2583,11 +2629,11 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
 	for (i = 0; i < (Int4)(omp->currobj); i++)
 	{
 		omdp = omp->datalist[i];
-		fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %ld\n", (int)i,
+		fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %uld\n", (int)i,
 		    (int)omdp->EntityID, (int)(omdp->datatype),
 			(long)(omdp->dataptr), (int)(omdp->parenttype),
 			(long)(omdp->parentptr), (long)(omdp->choice), (int)(omdp->lockcnt),
-			(long)(omdp->touch));
+			(unsigned long)(omdp->touch));
 		if ((omdp->datatype == OBJ_BIOSEQ) && (omdp->dataptr != NULL))
 		{
 			bsp = (BioseqPtr)(omdp->dataptr);
@@ -4322,7 +4368,6 @@ static Pointer NEAR ObjMgrFreeFunc (ObjMgrPtr omp, Uint2 type, Pointer ptr, Bool
 NLM_EXTERN void LIBCALL ObjMgrResetAll (void)
 {
     Int4 ret;
-    ObjMgrPtr omp;
     
     if (global_omp == NULL)
         return;
@@ -4341,3 +4386,135 @@ NLM_EXTERN void LIBCALL ObjMgrResetAll (void)
     
     return;
 }
+
+static CharPtr objmgrtypestrs [] = {
+  "OBJ_ALL", "OBJ_SEQENTRY", "OBJ_BIOSEQ", "OBJ_BIOSEQSET", "OBJ_SEQDESC",
+  "OBJ_SEQANNOT", "OBJ_ANNOTDESC", "OBJ_SEQFEAT", "OBJ_SEQALIGN", "OBJ_SEQGRAPH",
+  "OBJ_SEQSUB", "OBJ_SUBMIT_BLOCK", "OBJ_SEQSUB_CONTACT", "13", "OBJ_BIOSEQ_MAPFEAT",
+  "OBJ_BIOSEQ_SEG", "OBJ_SEQHIST", "OBJ_SEQHIST_ALIGN", "OBJ_BIOSEQ_DELTA", "19",
+  "OBJ_PUB", "OBJ_SEQFEAT_CIT", "OBJ_SEQSUB_CIT", "OBJ_MEDLINE_ENTRY", "OBJ_PUB_SET",
+  "OBJ_SEQLOC", "OBJ_SEQID", "OBJ_SEQCODE", "OBJ_SEQCODE_SET", "OBJ_GENETIC_CODE",
+  "OBJ_GENETIC_CODE_SET", "OBJ_TEXT_REPORT", "OBJ_FASTA", "OBJ_VIBRANT_PICTURE", "OBJ_PROJECT"
+};
+
+static CharPtr temploadstrs [] = {
+  "TL_NOT_TEMP", "TL_LOADED", "TL_CACHED"
+};
+
+static CharPtr proctypestrs [] = {
+  "0", "OMPROC_OPEN", "OMPROC_DELETE", "OMPROC_VIEW", "OMPROC_EDIT",
+  "OMPROC_SAVE", "OMPROC_CUT", "OMPROC_COPY", "OMPROC_PASTE", "OMPROC_ANALYZE",
+  "OMPROC_FIND", "OMPROC_REPLACE", "OMPROC_FILTER", "OMPROC_FETCH",
+};
+
+static void PrintABool (FILE *fp, CharPtr str, Boolean val)
+
+{
+  if (val) {
+    fprintf (fp, "%s TRUE\n", str);
+  } else {
+    fprintf (fp, "%s FALSE\n", str);
+  }
+}
+
+static void ReportOnEntity (ObjMgrDataPtr omdp, ObjMgrPtr omp, Boolean selected,
+                            Uint2 itemID, Uint2 itemtype, Int2 index, FILE *fp)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  Char           buf [50];
+  OMUserDataPtr  omudp;
+
+  if (omdp == NULL || fp == NULL) return;
+  if (selected) {
+    fprintf (fp, "Data Element\n\n");
+    fprintf (fp, "  EntityID %d selected\n", (int) omdp->EntityID);
+    fprintf (fp, "  ItemID %d, Itemtype %d\n", (int) itemID, (int) itemtype);
+  } else if (omdp->parentptr == NULL) {
+    fprintf (fp, "Top Data Element %d\n\n", (int) index);
+    fprintf (fp, "  EntityID %d\n", (int) omdp->EntityID);
+  } else {
+    fprintf (fp, "Inner Data Element %d\n\n", (int) index);
+    fprintf (fp, "  EntityID %d\n", (int) omdp->EntityID);
+  }
+  if (omdp->datatype < OBJ_MAX) {
+    fprintf (fp, "  Datatype %s", objmgrtypestrs [omdp->datatype]);
+    if (omdp->datatype == OBJ_BIOSEQ) {
+      bsp = (BioseqPtr) omdp->dataptr;
+      if (bsp != NULL) {
+        SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf) - 1);
+        fprintf (fp, " %s, length %ld", buf, (long) bsp->length);
+      }
+    } else if (omdp->datatype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) omdp->dataptr;
+      if (bssp != NULL) {
+        fprintf (fp, " class %d", (int) bssp->_class);
+      }
+    }
+    fprintf (fp, "\n");
+  } else {
+    fprintf (fp, "  Unregistered datatype %d\n", (int) omdp->datatype);
+  }
+  fprintf (fp, "  Lockcnt %d\n", (int) omdp->lockcnt);
+  if (omdp->tempload < 3) {
+    fprintf (fp, "  Tempload %s\n", temploadstrs [omdp->tempload]);
+  } else {
+    fprintf (fp, "  Unrecognized tempload %d\n", (int) omdp->tempload);
+  }
+  PrintABool (fp, "  Clipboard", omdp->clipboard);
+  PrintABool (fp, "  Dirty", omdp->dirty);
+  PrintABool (fp, "  Being_freed", omdp->being_freed);
+  PrintABool (fp, "  Free", omdp->free);
+  fprintf (fp, "\n");
+  for (omudp = omdp->userdata; omudp != NULL; omudp = omudp->next) {
+    if (omudp->proctype <= OMPROC_MAX) {
+      fprintf (fp, "    Proctype %s\n", proctypestrs [omudp->proctype]);
+    } else {
+      fprintf (fp, "    Unrecognized proctype %d\n", (int) omudp->proctype);
+    }
+    fprintf (fp, "    Procid %d\n", (int) omudp->procid);
+    fprintf (fp, "    Userkey %d\n", (int) omudp->userkey);
+    fprintf (fp, "\n");
+  }
+}
+
+NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename)
+
+{
+  FILE           *fp;
+  Int2           j;
+  Int2           num;
+  ObjMgrPtr      omp;
+  ObjMgrDataPtr  omdp;
+  ObjMgrDataPtr  PNTR omdpp;
+
+  omp = ObjMgrGet ();
+  if (omp == NULL) return;
+  fp = FileOpen (filename, "w");
+  fprintf (fp, "Object Manager\n\n");
+  fprintf (fp, "  HighestEntityID %d\n", (int) omp->HighestEntityID);
+  fprintf (fp, "  Totobj %d\n", (int) omp->totobj);
+  fprintf (fp, "  Currobj %d\n", (int) omp->currobj);
+  fprintf (fp, "  Maxtemp %d\n", (int) omp->maxtemp);
+  fprintf (fp, "  Tempcnt %d\n", (int) omp->tempcnt);
+  fprintf (fp, "  Hold %d\n", (int) omp->hold);
+  PrintABool (fp, "  Reaping", omp->reaping);
+  PrintABool (fp, "  Is_write_locked", omp->is_write_locked);
+  fprintf (fp, "\n");
+  num = omp->currobj;
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr == NULL) {
+      ReportOnEntity (omdp, omp, FALSE, 0, 0, j + 1, fp);
+    }
+  }
+  for (j = 0, omdpp = omp->datalist; j < num && omdpp != NULL; j++, omdpp++) {
+    omdp = *omdpp;
+    if (omdp->parentptr != NULL) {
+      ReportOnEntity (omdp, omp, FALSE, 0, 0, j + 1, fp);
+    }
+  }
+  FileClose (fp);
+}
+

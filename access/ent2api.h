@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.14 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -45,7 +45,6 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <objent2.h>
-#include <connectn.h>
 #include <urlquery.h>
 
 #undef NLM_EXTERN
@@ -124,7 +123,7 @@ NLM_EXTERN Int4 EntrezCheckQueue (
 
 NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 );
 
 /* request creation functions */
@@ -161,6 +160,7 @@ NLM_EXTERN Entrez2RequestPtr EntrezCreateBooleanRequest (
   Int4 offset_uids
 );
 
+#define ENTREZ_OP_NONE        0
 #define ENTREZ_OP_AND         1
 #define ENTREZ_OP_OR          2
 #define ENTREZ_OP_BUTNOT      3
@@ -307,7 +307,7 @@ callback (completion routine):
   static Boolean LIBCALLBACK MyQueryResultProc (
     CONN conn,
     VoidPtr userdata,
-    EConnStatus status
+    EIO_Status status
   )
 
   {

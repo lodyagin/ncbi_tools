@@ -32,8 +32,17 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.22 $ 
+/* $Revision: 6.25 $ 
 * $Log: blastkar.h,v $
+* Revision 6.25  2000/12/28 16:23:24  madden
+* Function getAlphaBeta from AS
+*
+* Revision 6.24  2000/12/26 17:46:20  madden
+* Add function BlastKarlinGetMatrixValuesEx2 to return alpha and beta
+*
+* Revision 6.23  2000/11/24 22:07:33  shavirin
+* Added new function BlastResFreqFree().
+*
 * Revision 6.22  2000/09/27 21:27:15  dondosha
 * Added original_matrix member to BLAST_Matrix structure
 *
@@ -490,6 +499,7 @@ CharPtr  LIBCALL BlastRepresentativeResidues PROTO((Int2 length));
 Int2 LIBCALL BlastResFreqNormalize PROTO((BLAST_ScoreBlkPtr sbp, BLAST_ResFreqPtr rfp, Nlm_FloatHi norm));
 
 BLAST_ResFreqPtr LIBCALL BlastResFreqNew PROTO((BLAST_ScoreBlkPtr sbp));
+void LIBCALL BlastResFreqFree PROTO((BLAST_ResFreqPtr rfp));
 
 BLAST_ResFreqPtr LIBCALL BlastResFreqDestruct PROTO((BLAST_ResFreqPtr rfp));
 
@@ -539,7 +549,12 @@ Int2 LIBCALL BlastKarlinGetMatrixValues PROTO((CharPtr matrix, Int4Ptr PNTR open
 
 Int2 LIBCALL BlastKarlinGetMatrixValuesEx PROTO((CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, Int4Ptr PNTR decline_align, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, Int4Ptr PNTR pref_flags));
 
-Int2 LIBCALL BlastKarlinGetDefaultMatrixValues(CharPtr matrix, Int4Ptr open, Int4Ptr extension, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H);
+Int2 LIBCALL BlastKarlinGetMatrixValuesEx2 PROTO((CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, Int4Ptr PNTR decline_align, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, FloatHiPtr PNTR alpha, FloatHiPtr PNTR beta, Int4Ptr PNTR pref_flags));
+
+void LIBCALL getAlphaBeta PROTO((CharPtr matrixName, Nlm_FloatHi *alpha,
+Nlm_FloatHi *beta, Boolean gapped, Int4 gap_open, Int4 gap_extend));
+
+Int2 LIBCALL BlastKarlinGetDefaultMatrixValues PROTO((CharPtr matrix, Int4Ptr open, Int4Ptr extension, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H));
 
 Int4Ptr PNTR LIBCALL BlastMatrixToTxMatrix PROTO((BLAST_MatrixPtr matrix));
 Int4Ptr PNTR LIBCALL TxMatrixDestruct PROTO((Int4Ptr PNTR txmatrix)); 

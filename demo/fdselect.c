@@ -1,4 +1,4 @@
-/* $Id: fdselect.c,v 6.2 2000/03/13 18:37:37 madden Exp $ */
+/* $Id: fdselect.c,v 6.3 2000/11/22 21:10:12 shavirin Exp $ */
 /*****************************************************************************
 
   
@@ -31,11 +31,14 @@
    
    Version Creation Date: 09/13/99
 
-   $Revision: 6.2 $
+   $Revision: 6.3 $
 
    File Description:  Create few subsets of FASTA database.
 
    $Log: fdselect.c,v $
+   Revision 6.3  2000/11/22 21:10:12  shavirin
+   Added tax_id parameter into function FDBAddBioseq.
+
    Revision 6.2  2000/03/13 18:37:37  madden
    Added insert_ctrlA Boolean to readdb_get_bioseq_ex
 
@@ -440,7 +443,7 @@ VoidPtr NewDBThread(VoidPtr data)
             continue;
         
         bsp = readdb_get_bioseq_ex(rdfp, seqnum, FALSE, FALSE);        
-        FDBAddBioseq(fdbp, bsp);
+        FDBAddBioseq(fdbp, bsp, 0);
 
         SeqIdSetFree(bsp->id);
         BioseqFreeComponents(bsp);

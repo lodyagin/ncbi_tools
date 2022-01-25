@@ -2,16 +2,21 @@ BLASTCLUST - BLAST score-based single-linkage clustering.
 
 1. Clustering procedure.
 
-BLASTCLUST automatically and systematically clusters protein sequences
-based on pairwise matches found using the BLAST algorithm. BLASTCLUST 
-finds pairs of sequences that have statistically significant matches 
-and clusters them using single-linkage clustering.
+BLASTCLUST automatically and systematically clusters protein or DNA sequences
+based on pairwise matches found using the BLAST algorithm in case of proteins or 
+Mega BLAST algorithm for DNA. In the latter case a single Mega BLAST search is
+performed for all the sequences combined against a database created from the
+same sequences. BLASTCLUST finds pairs of sequences that have statistically
+significant matches and clusters them using single-linkage clustering. 
 
-BLAST parameters used by BLASTCLUST are the default values for protein
-sequences (matrix BLOSUM62; gap opening cost 11; gap extension cost 1;
-no low-complexity filtering); e-value threshold is 1e-6. For each pair
-of sequences the top-scoring alignment is evaluated according to the 
-following criteria:
+BLASTCLUST uses the default values for the BLAST and Mega BLAST parameters.
+For protein sequences these are: matrix BLOSUM62; gap opening cost 11; gap
+extension cost 1; no low-complexity filtering.
+For DNA sequences: match reward 1, mismatch penalty -3, non-affine gapping costs 
+(see README.mbl document for explanation), wordsize 28.
+In both cases e-value threshold is set to 1e-6. 
+For each pair of sequences the top-scoring alignment is evaluated according to
+the following criteria: 
 
        x1                   x2      HSP length on seqX: Hx = x2-x1+1 
         |                    |      gaps in seqX: Gx
@@ -61,10 +66,11 @@ the previously computed hit-list file.
 
 3. Output format.
 
-BLASTCLUST prints out clusters sorted from largest to smallest (by ID of
-the first sequence if of the same size), separating clusters by a newline
-character. Sequence identifiers within a cluster are space-separated and
-sorted from longest to shortest sequence (by IDs if of the same length).
+BLASTCLUST prints out clusters of sequence IDs, sorted from largest to
+smallest cluster (alphabetically by ID of the first sequence if of the
+same size), separating clusters by a newline character. Sequence
+identifiers within a cluster are space-separated and sorted from
+longest to shortest sequence (alphabetically by IDs if of the same length).
 
 4. Crash recovery.
 
@@ -112,6 +118,8 @@ Output:
  -o <file> file to save cluster list (default = stdout)
  -s <file> file to save hit-list (this file may be not portable across
     platforms)
+ -p <T|F> protein (T) or nucleotide (F) sequences in the input
+    (default = TRUE)
 
 Misc:
 
@@ -144,7 +152,7 @@ are true for most UNIX platforms.
 
 A.1. Header.
 
-	1-byte boolean	IDtype	1 if numeric IDs; 0 is string IDs
+	1-byte boolean	IDtype	1 if numeric IDs; 0 if string IDs
 	4-byte integer	ListSz	size of the ID list; if IDs are numeric this
 				is the number of SeqID records, otherwise this
 				is the length of the ID list (in bytes)

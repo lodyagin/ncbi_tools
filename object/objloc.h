@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager interface for module NCBI-Seqloc
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objloc.h,v $
+* Revision 6.2  2001/01/31 15:24:20  kans
+* PatentSeqId.seqid is now an Int4 (JO)
+*
 * Revision 6.1  2000/04/05 18:11:41  dondosha
 * Moved SeqIdSetDup from mblast.h
 *
@@ -178,7 +181,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdSetFree PROTO((SeqIdPtr anp));
 *
 *****************************************************************************/
 typedef struct patentseqid {
-    Int2 seqid;
+    Int4 seqid;
     IdPatPtr cit;
 } PatentSeqId, PNTR PatentSeqIdPtr;
 

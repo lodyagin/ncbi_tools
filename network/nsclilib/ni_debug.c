@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_debug.c,v $  $Revision: 6.2 $  $Date: 1999/03/11 15:20:22 $
+/*  $RCSfile: ni_debug.c,v $  $Revision: 6.3 $  $Date: 2001/02/21 22:09:27 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_debug.c,v $
+* Revision 6.3  2001/02/21 22:09:27  lavr
+* SERVICE connector included
+*
 * Revision 6.2  1999/03/11 15:20:22  vakatov
 * Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
 *
@@ -42,7 +45,7 @@
 
 #include <ncbi.h>
 #include <ncbinet.h>
-#include <ncbicli.h>
+#include <ncbisock.h>
 
 
 /*********************************

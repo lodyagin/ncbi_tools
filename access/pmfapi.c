@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.6 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
@@ -43,7 +43,11 @@
 #include <urlquery.h>
 #include <pmfapi.h>
 #include <objmedli.h>
+#include <objpubme.h>
 #include <objsset.h>
+#include <objmgr.h>
+#include <sequtil.h>
+#include <ent2api.h>
 
 #ifdef OS_MAC
 #include <Events.h>
@@ -266,20 +270,20 @@ NLM_EXTERN CONN PMFetchOpenConnection (
                              eMIME_AsnText, eENCOD_None, 0);
 }
 
-static EConnStatus CommonWaitForReply (
+static EIO_Status CommonWaitForReply (
   CONN conn
 )
 
 {
   time_t           currtime, starttime;
   Int2             max = 0;
-  EConnStatus      status;
+  EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
   EventRecord      currEvent;
 #endif
 
-  if (conn == NULL) return eCONN_Unknown;
+  if (conn == NULL) return eIO_Unknown;
 
 #ifdef OS_MAC
   timeout.sec = 0;
@@ -290,7 +294,7 @@ static EConnStatus CommonWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
@@ -301,26 +305,26 @@ static EConnStatus CommonWaitForReply (
   return status;
 }
 
-NLM_EXTERN MedlineEntryPtr PubMedWaitForReply (
+NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
   CONN conn
 )
 
 {
-  AsnIoConnPtr     aicp;
-  MedlineEntryPtr  mep = NULL;
+  AsnIoConnPtr    aicp;
+  PubmedEntryPtr  pep = NULL;
 
   if (conn == NULL) return NULL;
 
-  if (CommonWaitForReply (conn) == eCONN_Success) {
+  if (CommonWaitForReply (conn) == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
-    mep = MedlineEntryAsnRead (aicp->aip, NULL);
+    pep = PubmedEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
   CONN_Close (conn);
 
-  ChangeMedlineAuthorsToISO (mep);
+  ChangeMedlineAuthorsToISO ((MedlineEntryPtr) pep->medent);
 
-  return mep;
+  return pep;
 }
 
 NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
@@ -333,7 +337,7 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
 
   if (conn == NULL) return NULL;
 
-  if (CommonWaitForReply (conn) == eCONN_Success) {
+  if (CommonWaitForReply (conn) == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
     sep = SeqEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
@@ -343,13 +347,13 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
   return sep;
 }
 
-NLM_EXTERN MedlineEntryPtr PubMedSynchronousQuery (
+NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   Int4 uid
 )
 
 {
-  CONN             conn;
-  MedlineEntryPtr  mep;
+  CONN            conn;
+  PubmedEntryPtr  pep;
 
   conn = PMFetchOpenConnection ("PubMed", uid);
 
@@ -357,9 +361,9 @@ NLM_EXTERN MedlineEntryPtr PubMedSynchronousQuery (
 
   QUERY_SendQuery (conn);
 
-  mep = PubMedWaitForReply (conn);
+  pep = PubMedWaitForReply (conn);
 
-  return mep;
+  return pep;
 }
 
 NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
@@ -411,21 +415,21 @@ NLM_EXTERN Int4 PubMedCheckQueue (
   return QUERY_CheckQueue (queue);
 }
 
-NLM_EXTERN MedlineEntryPtr PubMedReadReply (
+NLM_EXTERN PubmedEntryPtr PubMedReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 )
 
 {
-  AsnIoConnPtr     aicp;
-  MedlineEntryPtr  mep = NULL;
+  AsnIoConnPtr    aicp;
+  PubmedEntryPtr  pep = NULL;
 
-  if (conn != NULL && status == eCONN_Success) {
+  if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("rb", conn);
-    mep = MedlineEntryAsnRead (aicp->aip, NULL);
+    pep = PubmedEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
-  return mep;
+  return pep;
 }
 
 NLM_EXTERN Boolean PubSeqAsynchronousQuery (
@@ -460,18 +464,95 @@ NLM_EXTERN Int4 PubSeqCheckQueue (
 
 NLM_EXTERN SeqEntryPtr PubSeqReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 )
 
 {
   AsnIoConnPtr  aicp;
   SeqEntryPtr   sep = NULL;
 
-  if (conn != NULL && status == eCONN_Success) {
+  if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("rb", conn);
     sep = SeqEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
   return sep;
+}
+
+/* object manager registerable fetch function */
+
+static CharPtr pubseqfetchproc = "PubSeqBioseqFetch";
+
+static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              id [41];
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sid;
+  SeqIdPtr          sip;
+  Int4              uid;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice == SEQID_GI) {
+
+    uid = sip->data.intvalue;
+    if (uid == 0) return OM_MSG_RET_ERROR;
+
+    sep = PubSeqSynchronousQuery ("nucleotide", uid);
+    if (sep == NULL) {
+      sep = PubSeqSynchronousQuery ("protein", uid);
+    }
+
+  } else {
+
+    sid = SeqIdDup (sip);
+    SeqIdWrite (sid, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
+    SeqIdFree (sid);
+
+    uid = EntrezGetUIDforSeqIdString ("nucleotide", id);
+    if (uid != 0) {
+      sep = PubSeqSynchronousQuery ("nucleotide", uid);
+    } else {
+      uid = EntrezGetUIDforSeqIdString ("protein", id);
+      if (uid == 0) return OM_MSG_RET_ERROR;
+      sep = PubSeqSynchronousQuery ("protein", uid);
+    }
+  }
+
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+NLM_EXTERN Boolean PubSeqFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, pubseqfetchproc, pubseqfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  PubSeqBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
+NLM_EXTERN void PubSeqFetchDisable (void)
+
+{
+  ObjMgrPtr      omp;
+  ObjMgrProcPtr  ompp;
+
+  omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, pubseqfetchproc, OMPROC_FETCH);
+  if (ompp == NULL) return;
+  ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
 }
 

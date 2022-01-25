@@ -1,4 +1,4 @@
-/*  $RCSfile: ncbicli.c,v $  $Revision: 4.19 $  $Date: 2000/02/09 15:54:31 $
+/*  $RCSfile: ncbicli.c,v $  $Revision: 4.20 $  $Date: 2000/12/01 23:06:07 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbicli.c,v $
+* Revision 4.20  2000/12/01 23:06:07  vakatov
+* s_SendHeaderWWW() -- added missing \r before \n (HTTP requirement)
+*
 * Revision 4.19  2000/02/09 15:54:31  vakatov
 * NIC_GetService() -- Changed error message format
 *
@@ -119,7 +122,7 @@ static Boolean s_SendHeaderWWW
   static char X_POST_2[] = "?service=";
   static char X_POST_3[] = "&address=";
   static char X_POST_4[] = "&platform=";
-  static char X_POST_E[] = " HTTP/1.0\n";
+  static char X_POST_E[] = " HTTP/1.0\r\n";
   static char X_AGENT_1[] = "User-Agent: ";
   static char X_AGENT_2[] = " from ";
 
@@ -152,8 +155,8 @@ static Boolean s_SendHeaderWWW
       SOCK_Write(sock, (const void *)client_host,
                  StrLen(client_host), 0)
       != eSOCK_ESuccess  ||
-      sprintf(buffer, "\nContent-type: application/x-www-form-urlencoded"
-              "\nContent-Length: %lu\n\n", (unsigned long)content_length)
+      sprintf(buffer, "\r\nContent-type: application/x-www-form-urlencoded"
+              "\r\nContent-Length: %lu\r\n\r\n", (unsigned long)content_length)
       <= 0  ||
       SOCK_Write(sock, (const void *)buffer,    StrLen(buffer   ), 0)
       != eSOCK_ESuccess) {

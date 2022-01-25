@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  1/1/90
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   misc portable routines for
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbitime.c,v $
+* Revision 6.2  2001/01/19 20:26:12  kans
+* support for OS_UNIX_DARWIN (contributed by William Van Etten)
+*
 * Revision 6.1  1997/10/29 02:45:09  vakatov
 * Type castings to pass through the C++ compiler
 *
@@ -102,7 +105,7 @@ NLM_EXTERN time_t LIBCALL  Nlm_GetSecs (void)
 *****************************************************************************/
 NLM_EXTERN Nlm_Boolean LIBCALL  Nlm_GetDayTime (Nlm_DayTimePtr dtp)
 {
-#if defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)  ||  defined(WIN32)
+#if (defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)  ||  defined(WIN32)) && !defined(OS_UNIX_DARWIN)
   time_t t = time( NULL );
 #ifdef WIN32
   static TNlmMutex localtime_lock;

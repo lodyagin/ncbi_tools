@@ -22,7 +22,7 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.h,v 6.14 1999/11/24 21:24:26 vakatov Exp $
+ * $Id: salpacc.h,v 6.15 2000/11/16 22:13:45 shavirin Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
@@ -119,12 +119,6 @@ NLM_EXTERN FloatHi LIBCALL ScoreRead(ScorePtr score);
   Quick SeqAlign Output function: Can be used while Debugging 
  */
 NLM_EXTERN void LIBCALL SeqAlignWrite(SeqAlignPtr salp,CharPtr file);
-
-/* Simple printing function:
-   Can be used while debugging.. options kept to a minimum 
-   fp==NULL ==> stdout 
-*/
-NLM_EXTERN void LIBCALL SeqAlignPrint(SeqAlignPtr salp,FILE* fp);
 
 /*
   Subroutine to return the order of a Bioseq in the SeqId List of

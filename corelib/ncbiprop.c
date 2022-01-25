@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06-04-93
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:		Application Property Functions.
 *
@@ -58,10 +58,12 @@
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
 * $Log: ncbiprop.c,v $
+* Revision 6.3  2001/03/02 19:52:34  vakatov
+* Do not use "pid" in the app.context anymore.
+* It was needed for 16-bit MS-Win DLLs, a long time ago, and now it's
+* just eating resources...
+*
 * Revision 6.2  1998/08/24 17:42:02  kans
 * fixed old style function definition warnings
 *
@@ -93,18 +95,6 @@
  *
  * Revision 5.1  1996/06/12  20:18:29  shavirin
  * Added multy-thread ability of toolkit to handle error posting
- *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
- * Revision 2.14  1995/05/15  18:45:58  ostell
- * added Log line
- *
-*
-*
 * ==========================================================================
 */
 
@@ -193,8 +183,7 @@ typedef struct _AppContext_
 {
 	struct _AppContext_ 	*next;
 	struct _AppProperty_	*proplist;
-	long 	pid;
-  TNlmThread tid;
+   TNlmThread tid;
 
 	unsigned	enums	:15; /* number of nested enumerations in-progress */
 	unsigned	lock	:1;  /* if TRUE, property list is locked */
@@ -206,14 +195,14 @@ AppContext;
 		/* this is the only global variable in this file: */
 static AppContext * g_appList;	/* Application Context List */
 
-static AppContext * new_AppContext PROTO((long pid, TNlmThread thread_id));
+static AppContext * new_AppContext(TNlmThread thread_id);
 static void delete_AppContext PROTO((AppContext *prop));
 INLINE static void  AppContext_Lock PROTO((AppContext *context));
 INLINE static void  AppContext_Unlock PROTO((AppContext *context));
 INLINE static unsigned  AppContext_IsLocked PROTO((AppContext *context));
 
 
-static AppContext * new_AppContext (long pid, TNlmThread thread_id)
+static AppContext * new_AppContext(TNlmThread thread_id)
 {
 	AppContext *context = (AppContext *)dll_Malloc(sizeof(AppContext));
 	
@@ -221,8 +210,7 @@ static AppContext * new_AppContext (long pid, TNlmThread thread_id)
 		AbnormalExit(1);
 		
 	memset((void*)context,0,sizeof(struct _AppContext_));
-	context->pid = pid;
-        context->tid = thread_id; /* thread id for thread-capable OS */
+   context->tid = thread_id; /* thread id for thread-capable OS */
 	context->scratch_size = 0;
 	context->scratch = NULL;
 	return context;
@@ -287,7 +275,6 @@ static INLINE unsigned AppContext_IsLocked (AppContext *context)
 
 static AppContext *GetAppContext (void)
 {
-  long pid = Nlm_GetAppProcessID();
   AppContext *p1, *p2;
   AppContext *app;
   TNlmThread thread_id = NlmThreadSelf(); /* thread ID */
@@ -300,7 +287,7 @@ static AppContext *GetAppContext (void)
    */
   for (p1=g_appList,p2=NULL; p1; p1=p1->next)
     {
-      if ((p1->pid == pid) && (NlmThreadCompare(p1->tid, thread_id)))
+      if ( NlmThreadCompare(p1->tid, thread_id) )
         {
           NlmMutexUnlock( corelibMutex );
           return p1;
@@ -312,7 +299,7 @@ static AppContext *GetAppContext (void)
    *	If we reach this point, the context for current does not 
    *	exist yet, so we need to create one and link it into the list.
    */
-  app = new_AppContext(pid, thread_id);
+  app = new_AppContext(thread_id);
 
   if (p2 == NULL)	 
     g_appList = app;
@@ -386,7 +373,6 @@ NLM_EXTERN char * LIBCALL Nlm_GetScratchBuffer(size_t size)
 
 NLM_EXTERN void LIBCALL Nlm_ReleaseAppContext (void)
 {
-  long pid = Nlm_GetAppProcessID();
   AppContext *p1, *p2;
   TNlmThread thread_id = NlmThreadSelf();
 
@@ -397,7 +383,7 @@ NLM_EXTERN void LIBCALL Nlm_ReleaseAppContext (void)
    */
   for (p1=g_appList,p2=NULL; p1; p1=p1->next)
     {
-      if ((p1->pid == pid) && (NlmThreadCompare(p1->tid, thread_id)))
+      if ( NlmThreadCompare(p1->tid, thread_id) )
         break;
       p2 = p1;
     }

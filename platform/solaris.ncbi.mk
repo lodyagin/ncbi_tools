@@ -1,5 +1,5 @@
 #
-# $Id: solaris.ncbi.mk,v 1.10 2000/07/31 02:25:13 beloslyu Exp $
+# $Id: solaris.ncbi.mk,v 1.14 2001/02/12 17:28:45 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
@@ -20,7 +20,7 @@ NCBI_VIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/us
 NCBI_VIBLIBS = -R/usr/dt/lib -R/usr/openwin/lib -lXm -lXmu -lXt -lX11 -lXext
 #PRE-CDE NCBI_DISTVIBLIBS = -Bstatic -lXm -Bdynamic -lXmu -lXt -lX11 -lXext
 NCBI_DISTVIBLIBS = -R/usr/dt/lib:/usr/openwin/lib -lXm -lXmu -lXt -lX11 -lXext
-NCBI_OTHERLIBS = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lm
+NCBI_OTHERLIBS = -lposix4 -lresolv -lsocket -lrpcsvc -lnsl -lgen -lm
 # NCBI_MT_OTHERLIBS & NCBI_THREAD_OBJ are only used by master makefiles
 # (i.e., coremake's "make.master"), and are not intended to be used by
 # users' makefiles
@@ -29,7 +29,7 @@ NCBI_MT_OTHERLIBS = -lpthread
 NCBI_OPTIONAL_LIBS = BLIB42=libctutils.a BLIB43=libosutils.a
 
 NCBI_THREAD_OBJ = ncbithr.o
-NCBI_OTHERLIBS_MT = -lresolv -lsocket -lrpcsvc -lnsl -lgen -lpthread -lm
+NCBI_OTHERLIBS_MT = -lposix4 -lresolv -lsocket -lrpcsvc -lnsl -lgen -lpthread -lm
 NCBI_THR_OBJ = $(NCBI_LIBDIR)/ncbithr.o
 NCBI_THR_ALTOBJ = $(NCBI_ALTLIB)/ncbithr.o
 # CodeCenter can't handle the thread library; J. Epstein 5/22/96
@@ -62,7 +62,7 @@ NCBI_SYBLIBS_OS_r = -L$(NCBI_SYBASE)/lib  -R$(NCBI_SYBASE)/lib -lsrv_r -lblk_r -
 #NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/netopt/SUNWmotif/include -L/usr/openwin/lib -L/netopt/SUNWmotif/lib -DWIN_MOTIF
 NCBI_LAGOTHERLIBS = $(NCBI_OTHERLIBS)
 NCBI_LAGVIBFLAG = -I/usr/openwin/include -I/usr/dt/include -L/usr/openwin/lib -L/usr/dt/lib -DWIN_MOTIF
-NCBI_DBUGEXTRA = -xsb
+NCBI_DBUGEXTRA = -g
 
 #
 #FastCGI library for Sun C compilers ver 4.2 and ver 5.0

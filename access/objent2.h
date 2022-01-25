@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.8 at May 5, 2000  3:06 PM
+*    Generated using ASNCODE Revision: 6.10 at Mar 28, 2001 11:38 AM
 *
 **************************************************/
 
@@ -67,6 +67,7 @@ typedef ValNode Entrez2BooleanElement;
 #define Entrez2BooleanElement_op 2
 #define Entrez2BooleanElement_term 3
 #define Entrez2BooleanElement_ids 4
+#define Entrez2BooleanElement_key 5
 
 
 NLM_EXTERN Entrez2BooleanElementPtr LIBCALL Entrez2BooleanElementFree PROTO ((Entrez2BooleanElementPtr ));
@@ -124,6 +125,7 @@ typedef struct struct_Entrez2_request {
    ValNodePtr   request;
    Int4   version;
    CharPtr   tool;
+   CharPtr   cookie;
 } Entrez2Request, PNTR Entrez2RequestPtr;
 
 
@@ -297,6 +299,7 @@ typedef struct struct_Entrez2_reply {
    Int4   dt;
    CharPtr   server;
    CharPtr   msg;
+   CharPtr   cookie;
 } Entrez2Reply, PNTR Entrez2ReplyPtr;
 
 

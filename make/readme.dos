@@ -1,9 +1,20 @@
-# $Id: readme.dos,v 6.9 2000/01/24 17:48:05 vakatov Exp $
+# $Id: readme.dos,v 6.10 2001/02/22 18:57:31 vakatov Exp $
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 DIRECTIONS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Building the NCBI toolkit
+Getting the NCBI C Toolkit sources
+------------------------------------
+
+Outside users can download self-extracting archive from:
+    ftp://ncbi.nlm.nih.gov/toolbox/ncbi_tools/CURRENT/ncbiz.exe
+
+Insiders can always retrieve the latest Toolkit sources from CVS using script:
+    $CVSROOT/scripts/makedist_pc
+
+
+
+Building the NCBI C Toolkit
 -----------------------------
 
 1) go to MAKE directory

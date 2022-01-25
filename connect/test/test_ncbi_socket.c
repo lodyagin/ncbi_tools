@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.5 2000/02/24 23:09:42 vakatov Exp $
+/*  $Id: test_ncbi_socket.c,v 6.9 2001/01/26 23:55:10 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,21 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_socket.c,v $
+ * Revision 6.9  2001/01/26 23:55:10  vakatov
+ * [NCBI_OS_MAC]  Do not do server write shutdown for MAC client
+ *
+ * Revision 6.8  2000/11/15 18:51:44  vakatov
+ * Add tests for SOCK_Shutdown() and SOCK_Status().
+ * Use SOCK_Status() instead of SOCK_Eof().
+ *
+ * Revision 6.7  2000/06/23 19:39:22  vakatov
+ * Test the logging of socket I/O (incl. binary data)
+ *
+ * Revision 6.6  2000/03/24 23:12:13  vakatov
+ * Starting the development quasi-branch to implement CONN API.
+ * All development is performed in the NCBI C++ tree only, while
+ * the NCBI C tree still contains "frozen" (see the last revision) code.
+ *
  * Revision 6.5  2000/02/24 23:09:42  vakatov
  * Use C++ Toolkit specific wrapper "test_ncbi_socket_.c" for
  * "test_ncbi_socket.c"
@@ -102,6 +117,7 @@ static FILE* log_fp;
  */
 
 static const char s_C1[] = "C1";
+static const char s_M1[] = "M1";
 static const char s_S1[] = "S1";
 
 #define N_SUB_BLOB    10
@@ -118,10 +134,26 @@ static void TEST__client_1(SOCK sock)
     fprintf(log_fp, "[INFO] TEST__client_1(TC1)\n");
 
     /* Send a short string */
-    n_io = strlen(s_C1) + 1;
-    status = SOCK_Write(sock, s_C1, n_io, &n_io_done);
+    SOCK_SetDataLoggingAPI(eOn);
+    {{
+#if defined(NCBI_OS_MAC)
+        /* Special treatment for MAC clients -- server not to
+         * shutdown the socket on writing. MAC library
+         * mistakingly assumes that if server is shutdown on writing then
+         * it is shutdown on reading, too (?!). 
+         */
+        const char* x_C1 = s_M1;
+#else
+        const char* x_C1 = s_C1;
+#endif
+        n_io = strlen(x_C1) + 1;
+        status = SOCK_Write(sock, x_C1, n_io, &n_io_done);
+    }}
     assert(status == eIO_Success  &&  n_io == n_io_done);
 
+    /* Read the string back (it must be bounced by the server) */
+    SOCK_SetDataLoggingAPI(eOff);
+    SOCK_SetDataLogging(sock, eOn);
     n_io = strlen(s_S1) + 1;
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_Peek);
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_Plain);
@@ -135,13 +167,41 @@ static void TEST__client_1(SOCK sock)
     memset(buf, '\xFF', n_io_done);
     assert(SOCK_Read(sock, buf, n_io_done, &n_io_done, eIO_Plain)
            == eIO_Success);
+    assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
     assert(strcmp(buf, s_S1) == 0);
+
+    SOCK_SetDataLoggingAPI(eDefault);
+    SOCK_SetDataLogging(sock, eDefault);
+
+    /* Try to read more data (must hit EOF as the peer is shutdown) */
+#if !defined(NCBI_OS_MAC)
+    assert(SOCK_Read(sock, buf, 1, &n_io_done, eIO_Peek)
+           == eIO_Closed);
+    assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
+    assert(SOCK_Read(sock, buf, 1, &n_io_done, eIO_Plain)
+           == eIO_Closed);
+    assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
+#endif
+
+    /* Shutdown on read */
+    assert(SOCK_Shutdown(sock, eIO_Read)  == eIO_Success);
+    assert(SOCK_Status  (sock, eIO_Write) == eIO_Success);
+    assert(SOCK_Status  (sock, eIO_Read)  == eIO_Closed);
+    assert(SOCK_Read    (sock, 0, 0, &n_io_done, eIO_Plain) == eIO_Closed);
+    assert(SOCK_Read    (sock, 0, 0, &n_io_done, eIO_Peek)  == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Read)  == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write) == eIO_Success);
+    assert(SOCK_Read    (sock, buf, 1, &n_io_done, eIO_Plain) == eIO_Closed);
+    assert(SOCK_Read    (sock, buf, 1, &n_io_done, eIO_Peek)  == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Read)  == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write) == eIO_Success);
+
 
     /* Send a very big binary blob */
     {{
         size_t i;
-        char* blob = (char*) malloc(BIG_BLOB_SIZE);
-        for (i = 0;  i < BIG_BLOB_SIZE;  blob[i] = (char)i, i++)
+        unsigned char* blob = (unsigned char*) malloc(BIG_BLOB_SIZE);
+        for (i = 0;  i < BIG_BLOB_SIZE;  blob[i] = (unsigned char) i, i++)
             continue;
         for (i = 0;  i < 10;  i++) {
             status = SOCK_Write(sock, blob + i * SUB_BLOB_SIZE, SUB_BLOB_SIZE,
@@ -150,6 +210,22 @@ static void TEST__client_1(SOCK sock)
         }
         free(blob);
     }}
+
+    /* Shutdown on write */
+    assert(SOCK_Shutdown(sock, eIO_Write)          == eIO_Success);
+    assert(SOCK_Status  (sock, eIO_Write)          == eIO_Closed);
+    assert(SOCK_Write   (sock, 0, 0, &n_io_done)   == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write)          == eIO_Closed);
+    assert(SOCK_Write   (sock, buf, 1, &n_io_done) == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write)          == eIO_Closed);
+
+    /* Double shutdown should be okay */
+    assert(SOCK_Shutdown(sock, eIO_Read)      == eIO_Success);
+    assert(SOCK_Shutdown(sock, eIO_ReadWrite) == eIO_Success);
+    assert(SOCK_Shutdown(sock, eIO_Write)     == eIO_Success);
+    assert(SOCK_Status  (sock, eIO_Read)      == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_Write)     == eIO_Closed);
+    assert(SOCK_Status  (sock, eIO_ReadWrite) == eIO_InvalidArg);
 }
 
 
@@ -162,26 +238,50 @@ static void TEST__server_1(SOCK sock)
     fprintf(log_fp, "[INFO] TEST__server_1(TS1)\n");
 
     /* Receive and send back a short string */
+    SOCK_SetDataLogging(sock, eOn);
     n_io = strlen(s_C1) + 1;
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_Plain);
     assert(status == eIO_Success  &&  n_io == n_io_done);
-    assert(strcmp(buf, s_C1) == 0);
+    assert(strcmp(buf, s_C1) == 0  ||  strcmp(buf, s_M1) == 0);
 
 #ifdef TEST_SRV1_SHUTDOWN
     return 212;
 #endif
 
+    SOCK_SetDataLogging(sock, eDefault);
+    SOCK_SetDataLoggingAPI(eOn);
     n_io = strlen(s_S1) + 1;
     status = SOCK_Write(sock, s_S1, n_io, &n_io_done);
     assert(status == eIO_Success  &&  n_io == n_io_done);
+    SOCK_SetDataLoggingAPI(eOff);
+
+    /* Shutdown on write */
+    if (strcmp(buf, s_C1) == 0) {
+        assert(SOCK_Shutdown(sock, eIO_Write)        == eIO_Success);
+        assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
+        assert(SOCK_Write   (sock, 0, 0, &n_io_done) == eIO_Closed);
+        assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
+        assert(SOCK_Status  (sock, eIO_Read)         == eIO_Success);
+    }
 
     /* Receive a very big binary blob, and check its content */
     {{
-        char* blob = (char*) malloc(BIG_BLOB_SIZE);
-        status = SOCK_Read(sock, blob, BIG_BLOB_SIZE, &n_io_done, eIO_Persist);
-        assert(status == eIO_Success  &&  n_io_done == BIG_BLOB_SIZE);
+#define DO_LOG_SIZE    300
+#define DONT_LOG_SIZE  BIG_BLOB_SIZE - DO_LOG_SIZE
+        unsigned char* blob = (unsigned char*) malloc(BIG_BLOB_SIZE);
+
+        status = SOCK_Read(sock, blob, DONT_LOG_SIZE, &n_io_done, eIO_Persist);
+        assert(status == eIO_Success  &&  n_io_done == DONT_LOG_SIZE);
+
+        SOCK_SetDataLogging(sock, eOn);
+        status = SOCK_Read(sock, blob + DONT_LOG_SIZE, DO_LOG_SIZE,
+                           &n_io_done, eIO_Persist);
+        assert(status == eIO_Success  &&  n_io_done == DO_LOG_SIZE);
+        SOCK_SetDataLogging(sock, eDefault);
+        SOCK_SetDataLoggingAPI(eDefault);
+
         for (n_io = 0;  n_io < BIG_BLOB_SIZE;  n_io++)
-            assert( blob[n_io] == (char)n_io );
+            assert(blob[n_io] == (unsigned char) n_io);
         free(blob);
     }}
 }
@@ -200,6 +300,7 @@ static void s_DoubleTimeout(STimeout *to) {
         to->usec = (2 * to->usec) % 1000000;
     }
 }
+
 
 static void TEST__client_2(SOCK sock)
 {
@@ -243,7 +344,8 @@ static void TEST__client_2(SOCK sock)
                         "[INFO] TEST__client_2::reconnect: i=%lu, status=%s\n",
                         (unsigned long)i, IO_StatusStr(status));
                 assert(status == eIO_Success);
-                assert(!SOCK_Eof(sock));
+                assert(SOCK_Status(sock, eIO_Read)  == eIO_Success);
+                assert(SOCK_Status(sock, eIO_Write) == eIO_Success);
 
                 /* give a break to let server reset the listening socket */
                 X_SLEEP(1);
@@ -311,7 +413,7 @@ static void TEST__client_2(SOCK sock)
             if (status == eIO_Closed) {
                 fprintf(log_fp,
                         "[ERROR] TC2::read: connection closed\n");
-                assert(SOCK_Eof(sock));
+                assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
                 assert(0);
             }
             fprintf(log_fp, "[INFO] TC2::read: "
@@ -382,7 +484,7 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
 
         case eIO_Closed:
             fprintf(log_fp, "[INFO] TS2::read: connection closed\n");
-            assert(SOCK_Eof(sock));
+            assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
 
             /* reconnect */
             if ( !lsock )
@@ -392,7 +494,7 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             SOCK_Close(sock);
             status = LSOCK_Accept(lsock, NULL, &sock);
             assert(status == eIO_Success);
-            assert(!SOCK_Eof(sock));
+            assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
             /* !!! */ 
             goto l_reconnect;
 
@@ -404,7 +506,7 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
             s_DoubleTimeout(&r_to);
             status = SOCK_SetTimeout(sock, eIO_Read, &r_to);
             assert(status == eIO_Success);
-            assert( !SOCK_Eof(sock) );
+            assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
             break;
 
         default:
@@ -609,19 +711,16 @@ extern int main(int argc, char** argv)
 
     /* Try to set various fake MT safety locks
      */
-    SOCK_SetLOCK( MT_LOCK_Create(0, TEST_LockHandler, TEST_LockCleanup) );
-    SOCK_SetLOCK(0);
-    SOCK_SetLOCK(0);
-    SOCK_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
+    CORE_SetLOCK( MT_LOCK_Create(0, TEST_LockHandler, TEST_LockCleanup) );
+    CORE_SetLOCK(0);
+    CORE_SetLOCK(0);
+    CORE_SetLOCK( MT_LOCK_Create(&TEST_LockUserData,
                                  TEST_LockHandler, TEST_LockCleanup) );
 
-    /* Setup the SOCK error post stream
+    /* Setup log stream
      */
-    {{
-      LOG lg = LOG_Create(0, 0, 0, 0);
-      LOG_ToFILE(lg, log_fp, 0/*false*/);
-      SOCK_SetLOG(lg);
-    }}
+    CORE_SetLOGFILE(stderr, 0/*false*/);
+
 
     /* Printout local hostname
      */
@@ -648,6 +747,8 @@ extern int main(int argc, char** argv)
 
         TEST__server((unsigned short) port);
         assert(SOCK_ShutdownAPI() == eIO_Success);
+        CORE_SetLOG(0);
+        CORE_SetLOCK(0);
         return 0;
     }
 
@@ -683,6 +784,8 @@ extern int main(int argc, char** argv)
 
         TEST__client(server_host, (unsigned short)server_port, timeout);
         assert(SOCK_ShutdownAPI() == eIO_Success);
+        CORE_SetLOG(0);
+        CORE_SetLOCK(0);
         return 0;
     }
     } /* switch */
@@ -696,5 +799,7 @@ extern int main(int argc, char** argv)
             "  Server: %s <port>\n"
             " where <port> is greater than %d, and [conn_timeout] is double\n",
             argv[0], argv[0], (int)MIN_PORT);
+    CORE_SetLOG(0);
+    CORE_SetLOCK(0);
     return 1;
 }

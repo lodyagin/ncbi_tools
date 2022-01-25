@@ -9,7 +9,7 @@
 #include <objsub.h>
 #include <valid.h>
 
-#define NUMARG 13
+#define NUMARG 14
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -23,7 +23,8 @@ Args myargs[NUMARG] = {
 	{"Patch invalid sequence residues?","F",NULL,NULL,TRUE,'p',ARG_BOOLEAN,0.0,0,NULL},
 	{"Lowest severity of error to show","3","0","4",FALSE,'q',ARG_INT,0.0,0,NULL},
 	{"ASN.1 spec level to filter","0","0","3",FALSE,'l',ARG_INT,0.0,0,NULL},
-	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL}};
+	{"Use SeqMgr indexing?","F",NULL,NULL,TRUE,'d',ARG_BOOLEAN,0.0,0,NULL},
+	{"Validate alignments?","F",NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL}};
 
 CharPtr AsnIoGets PROTO((AsnIoPtr aip));  /* from asnio.h */
 void LIBCALLBACK error_ret PROTO((Int2 value, CharPtr msg));
@@ -130,6 +131,8 @@ Int2 Main(void)
 
 	vsp->cutoff = (Int2)(myargs[10].intvalue);
 	vsp->useSeqMgrIndexes = (Boolean)(myargs[12].intvalue); /* indexed validate */
+	vsp->validateAlignments = (Boolean)(myargs[13].intvalue);
+	vsp->farIDsInAlignments = (Boolean)(myargs[13].intvalue);
 
 	if (myargs[8].intvalue)   /* continue on ASN.1 error */
 		AsnIoSetErrorMsg(aip, error_ret);

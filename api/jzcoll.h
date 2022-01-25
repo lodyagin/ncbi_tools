@@ -1,4 +1,4 @@
-/* $Id: jzcoll.h,v 6.5 1999/08/06 17:58:22 egorov Exp $
+/* $Id: jzcoll.h,v 6.7 2000/11/16 22:10:38 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,19 @@
 *
 * Initial Version Creation Date: 03/24/97
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.7  2000/11/16 22:10:38  shavirin
+* Moved many functions from txalign.c - due to move of txalign.c to
+* distrib/tools directory and libncbitool.a library.
+*
+* Revision 6.6  2000/11/01 14:43:12  madden
+* Changes from Futamura for psitblastn
+*
 * Revision 6.5  1999/08/06 17:58:22  egorov
 * Print correct GI in formated output when user has specified list of gi's in blast search
 *
@@ -56,12 +63,19 @@
 * Revision 5.13  1997/08/13 18:45:33  zjing
 * add support for tblastx
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         File for various alignments
 *
 * $Log: jzcoll.h,v $
+* Revision 6.7  2000/11/16 22:10:38  shavirin
+* Moved many functions from txalign.c - due to move of txalign.c to
+* distrib/tools directory and libncbitool.a library.
+*
+* Revision 6.6  2000/11/01 14:43:12  madden
+* Changes from Futamura for psitblastn
+*
 * Revision 6.5  1999/08/06 17:58:22  egorov
 * Print correct GI in formated output when user has specified list of gi's in blast search
 *
@@ -362,6 +376,7 @@ typedef struct alignblock{
 #define ALIGN_BLASTX    3
 #define ALIGN_TBLASTN   4
 #define ALIGN_TBLASTX	5
+#define ALIGN_PSITBLASTN   6
 
 typedef struct annotinfo {	/*information stored in Seq-annot*/
 	Uint1 displayOrder;
@@ -631,6 +646,49 @@ NLM_EXTERN void AddOffsetToAlignNode PROTO((AlignNodePtr anp, Int4 offset));
 */
 NLM_EXTERN void CleanUpAmbiguousYAC PROTO((ValNodePtr PNTR anp_node, Uint1 db, SeqIdPtr chr_id));
 
+/***********************************************************************
+*
+*	ProcessTextAlignNode(anp, left, right, p_stop, m_buf, locus)
+*	process an AlignNode to generate a list of text buffer
+*
+*	anp: the AlignNode
+*	left, right: the range of alignment in process. mapped to 
+*	anp->extremes.left, and anp->extremes.right
+*	p_stop: the previous stop position in the sequence. It is used 
+*	to label the position of line which is a gap
+*	m_buf: the buffer of the master sequence. Can be used to compare
+*	mismatches
+*	locus: if TRUE, use the locus name for sequence
+*
+*
+*
+************************************************************************/
+NLM_EXTERN ValNodePtr ProcessTextAlignNode PROTO((
+                    AlignNodePtr anp, Int4 m_left, 
+                    Int4 m_right, Int4Ptr p_stop, 
+                    CharPtr m_buf, Int4 line_len, 
+                    Int1 m_frame, 
+                    Uint4 option, Int4Ptr PNTR matrix
+                    ));
+NLM_EXTERN ValNodePtr ProcessTextAlignNode2 PROTO((
+                    AlignNodePtr anp, Int4 m_left, 
+                    Int4 m_right, Int4Ptr p_stop, 
+                    CharPtr m_buf, Int4 line_len, 
+                    Int1 m_frame, 
+                    Uint4 option, Int4Ptr PNTR matrix,
+                    Int4Ptr PNTR posMatrix, Int4 q_start
+                    ));
+
+NLM_EXTERN ValNodePtr FreeTextAlignList PROTO((ValNodePtr tdp_list));
+
+NLM_EXTERN SeqIdPtr LIBCALL GetUseThisGi PROTO((SeqAlignPtr seqalign));
+NLM_EXTERN SeqIdPtr LIBCALL ScorePtrUseThisGi PROTO((ScorePtr sp));
+
+
+/* setting up the matrix for the positive residue of the alignment */
+
+NLM_EXTERN Int4Ptr PNTR load_default_matrix PROTO((void));
+NLM_EXTERN void free_default_matrix PROTO((Int4Ptr PNTR matrix));
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.21 $
+* $Revision: 1.23 $
 *
 * File Description: 
 *
@@ -152,7 +152,7 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
   time_t           currtime, starttime;
   Entrez2ReplyPtr  e2ry = NULL;
   Int2             max = 0;
-  EConnStatus      status;
+  EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
   EventRecord      currEvent;
@@ -169,14 +169,14 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
     WaitNextEvent (0, &currEvent, 0, NULL);
 #endif
   }
-  if (status == eCONN_Success) {
+  if (status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("rb", conn);
     e2ry = Entrez2ReplyAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
@@ -185,6 +185,10 @@ NLM_EXTERN Entrez2ReplyPtr EntrezWaitForReply (
 
   return e2ry;
 }
+
+/* ent2api silently maintains entrez2 server session cookie */
+
+static CharPtr e2cookie = NULL;
 
 /* high-level connection functions */
 
@@ -196,19 +200,33 @@ NLM_EXTERN Entrez2ReplyPtr EntrezSynchronousQuery (
   AsnIoConnPtr     aicp;
   CONN             conn;
   Entrez2ReplyPtr  e2ry;
+  CharPtr          tempcookie = NULL;
 
   if (e2rq == NULL) return NULL;
 
   conn = EntrezOpenConnection ();
 
   aicp = QUERY_AsnIoConnOpen ("wb", conn);
+
+  tempcookie = e2rq->cookie;
+  if (e2rq->cookie == NULL && e2cookie != NULL) {
+    e2rq->cookie = e2cookie;
+  }
+
   Entrez2RequestAsnWrite (e2rq, aicp->aip, NULL);
+
+  e2rq->cookie = tempcookie;
+
   AsnIoFlush (aicp->aip);
   QUERY_AsnIoConnClose (aicp);
 
   QUERY_SendQuery (conn);
 
   e2ry = EntrezWaitForReply (conn);
+
+  if (e2ry != NULL && e2cookie == NULL && e2ry->cookie != NULL) {
+    e2cookie = StringSave (e2ry->cookie);
+  }
 
   return e2ry;
 }
@@ -223,13 +241,23 @@ NLM_EXTERN Boolean EntrezAsynchronousQuery (
 {
   AsnIoConnPtr  aicp;
   CONN          conn;
+  CharPtr       tempcookie = NULL;
 
   if (e2rq == NULL) return FALSE;
 
   conn = EntrezOpenConnection ();
 
   aicp = QUERY_AsnIoConnOpen ("wb", conn);
+
+  tempcookie = e2rq->cookie;
+  if (e2rq->cookie == NULL && e2cookie != NULL) {
+    e2rq->cookie = e2cookie;
+  }
+
   Entrez2RequestAsnWrite (e2rq, aicp->aip, NULL);
+
+  e2rq->cookie = tempcookie;
+
   AsnIoFlush (aicp->aip);
   QUERY_AsnIoConnClose (aicp);
 
@@ -248,18 +276,23 @@ NLM_EXTERN Int4 EntrezCheckQueue (QUEUE* queue)
 
 NLM_EXTERN Entrez2ReplyPtr EntrezReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 )
 
 {
   AsnIoConnPtr     aicp;
   Entrez2ReplyPtr  e2ry = NULL;
 
-  if (conn != NULL && status == eCONN_Success) {
+  if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("rb", conn);
     e2ry = Entrez2ReplyAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
   }
+
+  if (e2ry != NULL && e2cookie == NULL && e2ry->cookie != NULL) {
+    e2cookie = StringSave (e2ry->cookie);
+  }
+
   return e2ry;
 }
 

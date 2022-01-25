@@ -302,7 +302,8 @@ well as the format of the sequence.
 
 #Sequin can process single nuceotide sequences as well as sets of "related"
 sequences.  If the sequences are closely related on a sequence level, they may
-be part of a phylogenetic, population, or mutation study.  If the sequences are
+be part of a phylogenetic, population, or mutation study or from environmental
+samples of unknown organisms.  If the sequences are
 related in terms of coming from the same publication, or the same organism,
 they may be candidates for a Batch submission.  Segmented sets consist of a
 collection of non-overlapping sequences covering a specific genetic region.  In
@@ -311,7 +312,8 @@ sequence in a set will receive its own database accession number and can be
 annotated independently.
 
 #Sequin can display the alignments of sequences which are submitted as part of
-an aligned phylogenetic, population, or mutation set.  Such sequences can be
+an aligned phylogenetic, population, or mutation study or an environmental sample
+set.  Such sequences can be
 submitted in FASTA, Contiguous (FASTA+GAP, NEXUS, MACAW), or Interleaved
 (PHYLIP, NEXUS) formats.  If the sequences are in FASTA format, Sequin will
 generate an alignment. If the sequences have already been aligned in FASTA+GAP,
@@ -334,11 +336,10 @@ send each file in a separate email message.
 
 #-Segmented sequence:  A segmented set of nucleotide sequences is a
 collection of non-overlapping sequences which cover a specified genetic
-region.  A standard example is a set of genomic DNA sequences which
-encode exons from a gene along with fragments of their flanking introns.  If
-the
+region.  A standard example is a set of genomic DNA sequences which encode
+exons from a gene along with fragments of their flanking introns.  If the
 segmented set is part of an alignment, however, select the appropriate
-Population, Phylogenetic, or Mutation study button.
+Population, Phylogenetic, or Mutation study or Environmental samples button.
 
 #-Population study:  Select this option if you are submitting a set of
 sequences which make up a population study, that is, if the sequences
@@ -356,6 +357,12 @@ them in a pre-aligned format, or ask Sequin to align them.
 #-Mutation study:  Select this option if you are submitting a set of
 sequences which make up a mutation study, that is, if the sequences were
 derived by sequencing multiple mutations in a single gene.  If you want
+the sequences to be part of an alignment, you can either import them in
+a pre-aligned format, or ask Sequin to align them.
+
+#-Environmental samples:  Select this option if you are submitting a set of
+sequences which are from environmental samples, that is, if the sequences
+were derived by sequencing the same gene from unknown organisms.  If you want
 the sequences to be part of an alignment, you can either import them in
 a pre-aligned format, or ask Sequin to align them.
 

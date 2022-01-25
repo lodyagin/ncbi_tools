@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.10 $
+* $Revision: 1.16 $
 *
 * File Description: 
 *
@@ -37,6 +37,21 @@
 * --------------------------------------------------------------------------
 *
 * $Log: qblastapi.c,v $
+* Revision 1.16  2001/02/25 21:50:41  kans
+* changes from Uint4 to size_t due to connection type changes
+*
+* Revision 1.15  2001/02/21 22:07:34  lavr
+* Changes for use new CONN interface
+*
+* Revision 1.14  2000/12/06 17:53:31  madden
+* make QBBioseqToFasta non-static, fix UMR
+*
+* Revision 1.13  2000/12/04 18:07:31  madden
+* BLASTGetBOByRID uses Blast.cgi
+*
+* Revision 1.12  2000/11/07 21:54:52  shavirin
+* Added new function BLASTGetQueryBioseqByRID().
+*
 * Revision 1.10  2000/08/30 14:55:08  kans
 * parentheses around cast of currtime - curr->initialTime in printf
 *
@@ -89,20 +104,20 @@ NLM_EXTERN CONN QBlastOpenConnection (
                              eMIME_WwwForm, eENCOD_Url, 0);
 }
 
-NLM_EXTERN EConnStatus QBlastWaitForReply (
+NLM_EXTERN EIO_Status QBlastWaitForReply (
   CONN conn
 )
 
 {
   time_t           currtime, starttime;
   Int2             max = 0;
-  EConnStatus      status;
+  EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
   EventRecord      currEvent;
 #endif
 
-  if (conn == NULL) return eCONN_Unknown;
+  if (conn == NULL) return eIO_Unknown;
 
 #ifdef OS_MAC
   timeout.sec = 0;
@@ -113,7 +128,7 @@ NLM_EXTERN EConnStatus QBlastWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
@@ -144,7 +159,7 @@ typedef struct QBQueueTag {
 static Boolean LIBCALLBACK ThirdQBlastCallback (
   CONN conn,
   Nlm_VoidPtr userdata,
-  EConnStatus status
+  EIO_Status  status
 )
 
 {
@@ -170,7 +185,7 @@ static Boolean LIBCALLBACK ThirdQBlastCallback (
 static Boolean LIBCALLBACK SecondQBlastCallback (
   CONN conn,
   Nlm_VoidPtr userdata,
-  EConnStatus status
+  EIO_Status  status
 )
 
 {
@@ -223,7 +238,7 @@ static Boolean LIBCALLBACK SecondQBlastCallback (
 static Boolean LIBCALLBACK FirstQBlastCallback (
   CONN conn,
   Nlm_VoidPtr userdata,
-  EConnStatus status
+  EIO_Status  status
 )
 
 {
@@ -375,7 +390,7 @@ static Boolean QBlastFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
   FILE * fp;
   CharPtr bufr;
   size_t len, bufsize;
-  Uint4 src_read, dst_written;
+  size_t src_read, dst_written;
 
   fp = (FILE *)data;
 
@@ -421,13 +436,15 @@ static Boolean QBlastFastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 
 #define QB_FASTA_BUFFER_LEN 400
 
-static Boolean QBBioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
+Boolean QBBioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 
 {
   MyFsa mfa;
   Char buf [QB_FASTA_BUFFER_LEN + 1];
 
   if (bsp == NULL || fp == NULL) return FALSE;
+
+  MemSet(&mfa, 0, sizeof(MyFsa));
 
   mfa.buf = buf;
   mfa.buflen = QB_FASTA_BUFFER_LEN;
@@ -457,11 +474,11 @@ NLM_EXTERN Boolean QBlastAsynchronousRequest (
 )
 
 {
-  CONN   conn;
-  FILE   *fp;
-  Uint4  n_written;
-  Char   path [PATH_MAX];
-  Char   str [256];
+  CONN    conn;
+  FILE    *fp;
+  size_t  n_written;
+  Char    path [PATH_MAX];
+  Char    str [256];
 
   if (bsp == NULL || queue == NULL || resultproc == NULL) return FALSE;
 
@@ -535,7 +552,7 @@ NLM_EXTERN Int4 QBlastCheckQueue (
   QBQueuePtr       curr;
   time_t           currtime;
   QBQueuePtr       next;
-  Uint4            n_written;
+  size_t           n_written;
   QBQueuePtr PNTR  qptr;
   Char             str [80];
 
@@ -628,9 +645,9 @@ NLM_EXTERN Boolean QBlastCheckRequest (
 )
 
 {
-  CONN   conn;
-  Uint4  n_written;
-  Char   str [256];
+  CONN    conn;
+  size_t  n_written;
+  Char    str [256];
 
   if (StringHasNoText (rid) || queue == NULL || resultproc == NULL) return FALSE;
 
@@ -715,23 +732,27 @@ static void LIBCALLBACK AsnIoErrorFunc(Int2 type, CharPtr message)
 
 NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
 {
-    Char query_string[256];
+    Char         query_string[256];
     CONN         conn;
     SeqAnnotPtr  annot;
-    Uint4       n_written;
-    Int4        length;
-    AsnIoConnPtr     aicp;
-    EConnStatus  status;
+    size_t       n_written;
+    Int4         length;
+    AsnIoConnPtr aicp;
+    EIO_Status   status;
 
-    sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID);
+    /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
     
+    sprintf(query_string, "FORMAT_TYPE=ASN.1&CMD=Get&RID=%s&"
+            "FORMAT_OBJECT=Alignment", RID);
+    
+    /*    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
-                               "/blast/blast.cgi", NULL, 
+                               "/blast/Blast.cgi", NULL,  
                                "BLASTGetSeqAnnotByRID()", 
-                               30, eMIME_T_NcbiData, 
-                               eMIME_AsnBinary, eENCOD_None, 0);
-
-    length = StringLen(query_string);
+                               30, eMIME_T_Application, 
+                               eMIME_WwwForm, eENCOD_Url, 0);
+    
+    length = StringLen(query_string)+1;
     status = CONN_Write (conn, query_string, length , &n_written);    
     QUERY_SendQuery (conn);
     
@@ -744,29 +765,71 @@ NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
     CONN_Close(conn);
     return annot;
 }
+/* Function to get SeqAnnot for RID. We suupose, that search already
+   finished and results are exists on the Qblast repository */
+
+NLM_EXTERN BioseqPtr BLASTGetQueryBioseqByRID(CharPtr RID)
+{
+    Char         query_string[256];
+    CONN         conn;
+    BioseqPtr    bsp;
+    size_t       n_written;
+    Int4         length;
+    AsnIoConnPtr aicp;
+    EIO_Status   status;
+    
+    /* sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID); */
+    
+    sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=Bioseq&"
+            "FORMAT_TYPE=ASN.1", RID);
+    
+    /* conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80,  */
+    
+    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
+                               "/blast/Blast.cgi", NULL, 
+                               "BLASTGetQueryBioseqByRID()", 
+                               30, eMIME_T_Application, 
+                               eMIME_WwwForm, eENCOD_Url, 0);
+
+    length = StringLen(query_string);
+    status = CONN_Write (conn, query_string, length , &n_written);    
+    QUERY_SendQuery (conn);
+    
+    aicp = QUERY_AsnIoConnOpen ("r", conn);
+    AsnIoSetErrorMsg(aicp->aip, AsnIoErrorFunc);
+
+    bsp = BioseqAsnRead (aicp->aip, NULL);
+    QUERY_AsnIoConnClose (aicp);
+
+    CONN_Close(conn);
+    return bsp;
+}
 
 /* Function to get BlastObject for RID. We suupose, that search already
    finished and results are exists on the Qblast repository. Blast Object
    ASN.1 will be returned as CharPtr buffer*/
 NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 {
-    Char query_string[256];
+    Char         query_string[256];
     CONN         conn;
-    Uint4        n_written;
-    Uint4        bytes;
+    size_t       n_written;
+    size_t       bytes;
     Int4         length, buff_len, new_size;
-    EConnStatus  status;
+    EIO_Status   status;
     CharPtr      in_buff;
     
+/*
     sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=13", RID);
+*/
+    sprintf(query_string, "CMD=Get&RID=%s&FORMAT_OBJECT=BlastObject&FORMAT_TYPE=ASN.1", RID);
     
     conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
-                               "/blast/blast.cgi", NULL, 
-                               "BLASTGetSeqAnnotByRID()", 
-                               30, eMIME_T_NcbiData, 
-                               eMIME_AsnBinary, eENCOD_None, 0);
+                               "/blast/Blast.cgi", NULL, 
+                               "BLASTGetBOByRID()", 
+                               30, eMIME_T_Application, 
+                               eMIME_WwwForm, eENCOD_Url, 0);
 
-    length = StringLen(query_string);
+    length = StringLen(query_string) + 1;
     status = CONN_Write (conn, query_string, length , &n_written);    
     QUERY_SendQuery (conn);
     
@@ -778,7 +841,7 @@ NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
 
     buff_len = 0;
     while ((status = CONN_Read(conn, in_buff + buff_len, 
-                               1024, &bytes, eCR_Read)) == eCONN_Success) {
+                               1024, &bytes, eIO_Plain)) == eIO_Success) {
         
         if(bytes == 0) 
             break;

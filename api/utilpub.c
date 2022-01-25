@@ -188,6 +188,7 @@ static DatePtr GetPubDate (ValNodePtr pub)
 				case (PUB_Muid):
 				case (PUB_Man):
 				case (PUB_Proc):
+				case (PUB_PMid):
 				default:
 					break;
 			}
@@ -237,6 +238,7 @@ static DatePtr GetPubDate (ValNodePtr pub)
 			case (PUB_Muid):
 			case (PUB_Man):
 			case (PUB_Proc):
+			case (PUB_PMid):
 			default:
 				break;
 		}
@@ -583,10 +585,10 @@ static Int2 GetPubScore (ValNodePtr pub)
 Sirotkin's FlatRefBest.  Here 0 (not set) is given a score of 0, 1
 (gen) a score of 6, 2 (sub) a score of 11 etc. The higher the score
 the better the pub. */
-	static Int2 scores[12] = 
-	{0, 6, 11, 7, 1, 8, 4, 3, 5, 9, 2, 10};
+	static Int2 scores[14] = 
+	{0, 6, 11, 7, 1, 8, 4, 3, 5, 9, 2, 10, 12, 1};
 
-	if (pub == NULL)
+	if (pub == NULL || pub->choice > 13)
 		return 0;
 
 	return scores[pub->choice];
@@ -792,6 +794,26 @@ NLM_EXTERN Int2 PubLabelMatch (ValNodePtr pub1, ValNodePtr pub2)
 		ValNodeFree(m1);
 		ValNodeFree(m2);
 		return -1;
+	} else if (m1->choice == PUB_PMid) {
+		if (m2->choice != PUB_PMid) {
+			PubFree(m2);
+			ValNodeFree(m1);
+			return -1;
+		}
+		if (m1->data.intvalue == m2->data.intvalue) {
+			res = 0;
+			if (m1->data.intvalue == 0) {
+				if (PubMatch(pub1, pub2) != 0) {
+					res = -1;
+				}
+			}
+			ValNodeFree(m1);
+			ValNodeFree(m2);
+			return res;
+		}
+		ValNodeFree(m1);
+		ValNodeFree(m2);
+		return -1;
 	} else if (m1->choice == PUB_Gen) {
 		if (m2->choice != PUB_Gen) {
 			PubFree(m1);
@@ -871,7 +893,7 @@ NLM_EXTERN ValNodePtr MinimizePub(ValNodePtr pub)
 	}
 	if (pub->choice == PUB_Equiv) {
 		for (v = pub->data.ptrvalue; v != NULL; v= v->next) {
-			if (v->choice == PUB_Muid) {
+			if (v->choice == PUB_Muid || v->choice == PUB_PMid) {
 				min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
 											(AsnWriteFunc) PubAsnWrite);
 				return min_pub;
@@ -881,7 +903,7 @@ NLM_EXTERN ValNodePtr MinimizePub(ValNodePtr pub)
 	} else {
 		v = pub;
 	}
-	if (v->choice == PUB_Muid) {
+	if (v->choice == PUB_Muid || v->choice == PUB_PMid) {
 		min_pub = AsnIoMemCopy(v, (AsnReadFunc) PubAsnRead,
 			(AsnWriteFunc) PubAsnWrite);
 			return min_pub;

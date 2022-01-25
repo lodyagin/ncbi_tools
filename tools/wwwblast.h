@@ -1,4 +1,4 @@
-/* $Id: wwwblast.h,v 6.7 2000/09/27 22:18:04 shavirin Exp $
+/* $Id: wwwblast.h,v 6.8 2000/10/31 20:17:13 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *        Definitions for standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.h,v $
+* Revision 6.8  2000/10/31 20:17:13  shavirin
+* Added definition of the function TestSTDOut(void);
+*
 * Revision 6.7  2000/09/27 22:18:04  shavirin
 * Added possibility to limit search to results of entrez query.
 *
@@ -195,6 +198,8 @@ Boolean BLAST_Time(CharPtr string, Int4 len, time_t seconds);
 Boolean WWWValidateOptions(WWWBlastInfoPtr theInfo);
 
 Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo);
+
+Boolean TestSTDOut(void);
 
 /* PSI/PHI Blast-related function */
 

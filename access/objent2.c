@@ -31,7 +31,7 @@ objent2AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrez2
-*    Generated using ASNCODE Revision: 6.8 at Apr 6, 2000  5:13 PM
+*    Generated using ASNCODE Revision: 6.10 at Mar 28, 2001 11:38 AM
 *    Manual addition to swap bytes in id list if IS_LITTLE_ENDIAN
 *
 **************************************************/
@@ -431,6 +431,9 @@ Entrez2BooleanElementFree(ValNodePtr anp)
    case Entrez2BooleanElement_ids:
       Entrez2IdListFree(anp -> data.ptrvalue);
       break;
+   case Entrez2BooleanElement_key:
+      MemFree(anp -> data.ptrvalue);
+      break;
    }
    return MemFree(anp);
 }
@@ -509,6 +512,13 @@ Entrez2BooleanElementAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       choice = Entrez2BooleanElement_ids;
       func = (AsnReadFunc) Entrez2IdListAsnRead;
    }
+   else if (atp == ENTREZ2_BOOLEAN_ELEMENT_key) {
+      choice = Entrez2BooleanElement_key;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.ptrvalue = av.ptrvalue;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -585,6 +595,10 @@ Entrez2BooleanElementAsnWrite(Entrez2BooleanElementPtr anp, AsnIoPtr aip, AsnTyp
    case Entrez2BooleanElement_ids:
       writetype = ENTREZ2_BOOLEAN_ELEMENT_ids;
       func = (AsnWriteFunc) Entrez2IdListAsnWrite;
+      break;
+   case Entrez2BooleanElement_key:
+      av.ptrvalue = anp->data.ptrvalue;
+      retval = AsnWrite(aip, ENTREZ2_BOOLEAN_ELEMENT_key, &av);
       break;
    }
    if (writetype != NULL) {
@@ -1002,6 +1016,7 @@ Entrez2RequestFree(Entrez2RequestPtr ptr)
    }
    E2RequestFree(ptr -> request);
    MemFree(ptr -> tool);
+   MemFree(ptr -> cookie);
    return MemFree(ptr);
 }
 
@@ -1074,6 +1089,13 @@ Entrez2RequestAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> tool = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_REQUEST_cookie) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> cookie = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1135,6 +1157,10 @@ Entrez2RequestAsnWrite(Entrez2RequestPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> tool != NULL) {
       av.ptrvalue = ptr -> tool;
       retval = AsnWrite(aip, ENTREZ2_REQUEST_tool,  &av);
+   }
+   if (ptr -> cookie != NULL) {
+      av.ptrvalue = ptr -> cookie;
+      retval = AsnWrite(aip, ENTREZ2_REQUEST_cookie,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -2691,6 +2717,7 @@ Entrez2ReplyFree(Entrez2ReplyPtr ptr)
    E2ReplyFree(ptr -> reply);
    MemFree(ptr -> server);
    MemFree(ptr -> msg);
+   MemFree(ptr -> cookie);
    return MemFree(ptr);
 }
 
@@ -2770,6 +2797,13 @@ Entrez2ReplyAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> msg = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ENTREZ2_REPLY_cookie) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> cookie = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -2835,6 +2869,10 @@ Entrez2ReplyAsnWrite(Entrez2ReplyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> msg != NULL) {
       av.ptrvalue = ptr -> msg;
       retval = AsnWrite(aip, ENTREZ2_REPLY_msg,  &av);
+   }
+   if (ptr -> cookie != NULL) {
+      av.ptrvalue = ptr -> cookie;
+      retval = AsnWrite(aip, ENTREZ2_REPLY_cookie,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

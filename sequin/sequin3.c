@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.154 $
+* $Revision: 6.163 $
 *
 * File Description: 
 *
@@ -62,6 +62,7 @@
 #include <explore.h>
 #include <utilpub.h>
 #include <tofasta.h>
+#include <rpsutil.h>
 
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
 /*#ifdef NEW_TAXON_SERVICE*/
@@ -260,8 +261,8 @@ extern void DoFixupLocus (SeqEntryPtr sep)
 
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoFixupLocus (sep);
       }
@@ -933,6 +934,44 @@ static void RemoveGeneXrefs (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void RemoveCDDRegions (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  FreeCDDRegions (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void RemoveCDDDups (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  RemoveDuplicateCDDs (sep);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static void LastDitchLookup (BioSourcePtr biop)
 
 {
@@ -1272,10 +1311,13 @@ static void SegToRawCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 
   if (sep == NULL) return;
   if (! IS_Bioseq (sep)) return;
   bsp = (BioseqPtr) sep->data.ptrvalue;
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return;
+  if (bsp == NULL || (bsp->repr != Seq_repr_seg && bsp->repr != Seq_repr_delta)) return;
   if (! ISA_na (bsp->mol)) return;
   spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
   if (spp == NULL) return;
+  if (bsp->repr == Seq_repr_delta) {
+    SeqPortSet_do_virtual (spp, TRUE);
+  }
   bs = BSNew (bsp->length);
   j = 0;
   buf [0] = '\0';
@@ -1295,8 +1337,11 @@ static void SegToRawCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 
 	  BSWrite (bs, buf, j * sizeof (Char));
 	  j = 0;
     }
-    if (bsp->seq_ext_type == 1) {
+    if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1) {
       bsp->seq_ext = SeqLocSetFree ((ValNodePtr) bsp->seq_ext);
+      bsp->seq_ext_type = 0;
+    } else if (bsp->repr == Seq_repr_delta && bsp->seq_ext_type == 4) {
+      bsp->seq_ext = NULL; /* for now just NULL out */
       bsp->seq_ext_type = 0;
     }
     bsp->seq_data = BSFree (bsp->seq_data);
@@ -1618,8 +1663,8 @@ static void ProtToImpFeatProc (SeqEntryPtr sep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
+    if (bssp->_class == 7 ||
+        (bssp->_class >= 13 && bssp->_class <= 16)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ProtToImpFeatProc (sep);
       }
@@ -4792,8 +4837,8 @@ static void DoApplyMolInfo (SeqEntryPtr sep, MolInfoEditPtr miep)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
 /* this also delves into nuc-prot sets */
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15 ||
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16) ||
                          bssp->_class == 1)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoApplyMolInfo (sep, miep);
@@ -4915,6 +4960,70 @@ static void ApplyMolInfo (IteM i)
   Update ();
 }
 
+static void GenePseudoOn (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  GeneRefPtr  grp;
+
+  if (sfp->data.choice != SEQFEAT_GENE) return;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return;
+  grp->pseudo = TRUE;
+}
+
+static void AddGenePseudo (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitFeaturesInSep (sep, NULL, GenePseudoOn);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void GenePseudoOff (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  GeneRefPtr  grp;
+
+  if (sfp->data.choice != SEQFEAT_GENE) return;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return;
+  grp->pseudo = FALSE;
+}
+
+static void ClearGenePseudo (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitFeaturesInSep (sep, NULL, GenePseudoOff);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 static Boolean ClearOrfCallback (GatherContextPtr gcp)
 
 {
@@ -5027,6 +5136,8 @@ static ENUM_ALIST(bioseqset_class_alist)
   {"Mut-set",               13},
   {"Pop-set",               14},
   {"Phy-set",               15},
+  {"Eco-set",               16},
+  {"Gen-prod-set",          17},
   {"Other",                255},
 END_ENUM_ALIST
 
@@ -5794,6 +5905,54 @@ static void RemoveLocalIDs (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void RemoveLocusProc (BioseqPtr bsp, Pointer userdata)
+
+{
+  Boolean       reindex = FALSE;
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_OTHER :
+      case SEQID_DDBJ :
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          tsip->name = MemFree (tsip->name);
+          reindex = TRUE;
+        }
+        break;
+      default :
+        break;
+    }
+  }
+  if (reindex) {
+    SeqMgrReplaceInBioseqIndex (bsp);
+  }
+}
+
+static void RemoveLocusFromParts (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  if (Message (MSG_OKC, "Are you SURE you want to do this?") == ANS_CANCEL) return;
+  VisitSequencesInSep (sep, NULL, VISIT_PARTS, RemoveLocusProc);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 typedef struct recondata {
   BioseqPtr   prod;
   SeqFeatPtr  cds;
@@ -5858,8 +6017,8 @@ static void ReconnectCDSProc (Uint2 entityID, SeqEntryPtr sep)
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ReconnectCDSProc (entityID, sep);
       }
@@ -6375,8 +6534,8 @@ static void EditSeqEndsCallback (Uint2 entityID, EditSeqPtr esp, SeqEntryPtr sep
   if (sep == NULL || esp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         EditSeqEndsCallback (entityID, esp, sep);
       }
@@ -6576,81 +6735,10 @@ static void EditSeqEndsProc (IteM i)
   Update ();
 }
 
-static Boolean ResynchronizeCallback (GatherContextPtr gcp)
-
-{
-  SeqFeatPtr   bestprot;
-  BioseqPtr    bsp;
-  MolInfoPtr   mip;
-  Boolean      partial5;
-  Boolean      partial3;
-  SeqEntryPtr  sep;
-  SeqFeatPtr   sfp;
-  SeqIdPtr     sip;
-  SeqLocPtr    slp;
-  ValNodePtr   vnp;
-
-  if (gcp == NULL) return TRUE;
-  if (gcp->thistype != OBJ_SEQFEAT) return TRUE;
-  sfp = (SeqFeatPtr) gcp->thisitem;
-  if (sfp == NULL) return TRUE;
-  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
-  sfp->partial = (Boolean) (sfp->partial || partial5 || partial3);
-  if (sfp->data.choice != SEQFEAT_CDREGION) return TRUE;
-  slp = SeqLocFindNext (sfp->location, NULL);
-  if (slp == NULL) return TRUE;
-  sip = SeqLocId (sfp->product);
-  if (sip == NULL) return TRUE;
-  bsp = BioseqFind (sip);
-  if (bsp != NULL && ISA_aa (bsp->mol) && bsp->repr == Seq_repr_raw) {
-    bestprot = FindBestProtein (gcp->entityID, sfp->product);
-    if (bestprot != NULL) {
-      sep = SeqMgrGetSeqEntryForData (bsp);
-      if (sep == NULL) return TRUE;
-      bestprot->location = SeqLocFree (bestprot->location);
-      bestprot->location = CreateWholeInterval (sep);
-      SetSeqLocPartial (bestprot->location, partial5, partial3);
-      bestprot->partial = (partial5 || partial3);
-      vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
-      if (vnp == NULL) {
-        vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
-        if (vnp != NULL) {
-          mip = MolInfoNew ();
-          vnp->data.ptrvalue = (Pointer) mip;
-          if (mip != NULL) {
-            mip->biomol = 8;
-            mip->tech = 13;
-          }
-        }
-      }
-      if (vnp != NULL) {
-        mip = (MolInfoPtr) vnp->data.ptrvalue;
-        if (mip != NULL) {
-          if (partial5 && partial3) {
-            mip->completeness = 5;
-          } else if (partial5) {
-            mip->completeness = 3;
-          } else if (partial3) {
-            mip->completeness = 4;
-          /*
-          } else if (partial) {
-            mip->completeness = 2;
-          */
-          } else {
-            mip->completeness = 0;
-          }
-        }
-      }
-    }
-  }
-  return TRUE;
-}
-
-static void ResynchronizePartials (IteM i)
+static void ResynchronizeCDSPartials (IteM i)
 
 {
   BaseFormPtr  bfp;
-  GatherScope  gs;
   SeqEntryPtr  sep;
 
 #ifdef WIN_MAC
@@ -6663,15 +6751,30 @@ static void ResynchronizePartials (IteM i)
   if (sep == NULL) return;
   WatchCursor ();
   Update ();
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQFEAT] = FALSE;
-  gs.ignore[OBJ_SEQANNOT] = FALSE;
-  GatherEntity (bfp->input_entityID, NULL, ResynchronizeCallback, &gs);
+  ResynchCodingRegionPartials (sep);
+  ArrowCursor ();
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void ResynchronizeMRNAPartials (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  WatchCursor ();
+  Update ();
+  ResynchMessengerRNAPartials (sep);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -7390,6 +7493,58 @@ static void DoNCCleanup (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
 }
 
+static void DoSSECleanup (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  SeriousSeqEntryCleanup (sep, NULL, NULL);
+
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void MakePhrap (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  BioseqPtr    bsp;
+  SeqAnnotPtr  sap;
+  SeqEntryPtr  sep, nsep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  nsep = FindNucSeqEntry (sep);
+  if (nsep == NULL) return;
+  bsp = (BioseqPtr) nsep->data.ptrvalue;
+  if (bsp == NULL) return;
+  sap = PhrapGraphForContig (bsp);
+  if (sap == NULL) return;
+  sap->next = bsp->annot;
+  bsp->annot = sap;
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 extern void LookupAllPubs (IteM i);
 extern void ResolveExistingLocalIDs (IteM i);
 extern void PromoteAlignsToBestIDProc (IteM i);
@@ -7445,6 +7600,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SeparatorItem (s);
   i = CommandItem (s, "NC_Cleanup", DoNCCleanup);
   SetObjectExtra (i, bfp, NULL);
+  if (indexerVersion) {
+    SeparatorItem (s);
+    i = CommandItem (s, "SeriousSeqEntryCleanup", DoSSECleanup);
+    SetObjectExtra (i, bfp, NULL);
+  }
 
 
   s = SubMenu (m, "Apply/ A");
@@ -7465,6 +7625,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Add Molecule Information", ApplyMolInfo);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "Add Gene Pseudo", AddGenePseudo);
   SetObjectExtra (i, bfp, NULL);
 
   s = SubMenu (m, "Remove/ R");
@@ -7503,6 +7666,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove Unnecessary Gene Xrefs", RemoveGeneXrefs);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Remove CDD Regions", RemoveCDDRegions);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Remove Duplicate CDDs", RemoveCDDDups);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
   i = CommandItem (s, "Clear CDS Products", ClearCdsProducts);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Clear mRNA Products", ClearMrnaProducts);
@@ -7515,6 +7683,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Clear transl-except in CDSs", ClearTranslExceptInCDS);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Clear Gene Pseudo", ClearGenePseudo);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
   i = CommandItem (s, "Remove BankIt Comments", RemoveBankitComments);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
@@ -7523,6 +7694,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   if (indexerVersion) {
     SeparatorItem (s);
     i = CommandItem (s, "Remove Local IDs", RemoveLocalIDs);
+    SetObjectExtra (i, bfp, NULL);
+    SeparatorItem (s);
+    i = CommandItem (s, "Remove LOCUS from Parts", RemoveLocusFromParts);
     SetObjectExtra (i, bfp, NULL);
   }
 
@@ -7657,7 +7831,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Retranslate Coding Regions", RetranslateCdRegions);
   SetObjectExtra (i, bfp, NULL);
-  i = CommandItem (s, "Resynchronize Partials", ResynchronizePartials);
+  i = CommandItem (s, "Resynchronize CDS Partials", ResynchronizeCDSPartials);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Resynchronize mRNA Partials", ResynchronizeMRNAPartials);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
   i = CommandItem (s, "Map Feature Intervals to Parts", MergeToParts);
@@ -7718,6 +7894,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
     SeparatorItem (s);
     i = CommandItem (s, "Add Genomes User Object", AddGenomesUserObject);
     SetObjectExtra (i, bfp, NULL);
+    SeparatorItem (s);
+    i = CommandItem (s, "Add Genomic Phrap Graphs", MakePhrap);
     SeparatorItem (s);
     x = SubMenu (s, "Add BLAST tag to Seq-annot");
     i = CommandItem (x, "BLASTN", AddBlastNToSeqAnnot);

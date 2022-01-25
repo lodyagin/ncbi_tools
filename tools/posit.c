@@ -1,4 +1,4 @@
-/* $Id: posit.c,v 6.49 2000/11/13 14:00:39 madden Exp $
+/* $Id: posit.c,v 6.53 2001/02/16 16:11:50 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,30 @@
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.49 $ 
+  $Revision: 6.53 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.53  2001/02/16 16:11:50  dondosha
+ * In WposComputation, compute posMatrix from posFreqs if seqalign argument is NULL
+ *
+ * Revision 6.52  2001/01/03 01:49:38  bauer
+ * Changed from static to "LIBCALL":
+ *  posAllocateMemory
+ *  posPurgeMatches
+ *  posCancel
+ *  posComputeExtents
+ *  posComputeSequenceWeights
+ *  posCheckWeights
+ *  posComputePseudoFreqs
+ *  posScaling
+ *
+ * Revision 6.51  2000/11/24 22:07:51  shavirin
+ * Fixed some memory leaks.
+ *
+ * Revision 6.50  2000/11/20 14:35:51  madden
+ * Changed FileOpen mode for byte-encoded checkpoint files from "r" to "rb" or from "w" to "wb" to solve a problem on Windows NT.
+ *
  * Revision 6.49  2000/11/13 14:00:39  madden
  * Added frequency ratios for * in all standard matrices
  *
@@ -283,7 +303,7 @@ extern BLAST_ScoreFreqPtr BlastScoreFreqDestruct (BLAST_ScoreFreqPtr sfp);
 * alphabetSize -- number of distinct characters used in the sequences
 * querySize -- number of characters in the query sequence
 * numSequences -- number of matching sequences potentially in the model */
-static void posAllocateMemory(posSearchItems * posSearch, 
+void LIBCALL posAllocateMemory(posSearchItems * posSearch, 
 		       Int4 alphabetSize, Int4 querySize, Int4 numSequences)
 {
   Int4 i, j;  /*loop indices*/
@@ -702,7 +722,7 @@ void LIBCALL posConvergenceTest(posSearchItems *posSearch, BlastSearchBlkPtr sea
 
 /*Eliminate the matches from sequence second starting at position
 matchStart and extending for intervalLength characters */
-static void posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch, Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength)
+void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch, Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength)
 {
   Int4 c, i;
   Boolean stillNeeded;
@@ -722,10 +742,13 @@ static void posCancel(posSearchItems *posSearch, compactSearchItems * compactSea
 }
 
 /*Eliminate sequences that are identical to the query and partial alignments
-  that are identical in two matching sequences*/
-static void  posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch)
+  that are identical in two matching sequences
+  Modified by Natsuhiko Futamura to change order in which
+  pairs of sequences are compared*/
+void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
   Int4 i, j; /*index over sequences*/
+  Int4 k; /*difference between pair of sequence indices*/
   Boolean matchesQuery; /*Is a matching sequence identical to the query?*/
   Int4 c; /*index over demographics of matching sequence*/
   Int4 state; /*state of checking for a match*/
@@ -788,12 +811,15 @@ static void  posPurgeMatches(posSearchItems *posSearch, compactSearchItems * com
       if ((intervalLength > 0) && (matchNumber == intervalLength))
 	posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
   }
-  for (i = 1; i < posSearch->posNumSequences; i++) {
-    if (!posSearch->posUseSequences[i])
-      continue;
-    for(j = i+1; j <= posSearch->posNumSequences; j++) {
+  
+  for (k=1; k <= posSearch->posNumSequences -1; k++){
+    for (i = 1; (i+k) <= posSearch->posNumSequences; i++) {
+      if (!posSearch->posUseSequences[i])
+	continue;
+      j = i+k;
       if (!posSearch->posUseSequences[j])
 	continue;
+
       state = POS_COUNTING;
       c = 0;
       matchStart = 0;
@@ -951,7 +977,7 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
    } /*closes the for loop over seqAligns*/
 }
 
-static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * compactSearch)
+void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
    Int4 seqIndex; /*index of sequence*/
    Int4 length; /*length of query*/
@@ -1020,7 +1046,7 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
  }
  
 /*Compute weight of each sequence and letter in each position*/
-static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi weightExponent)
+void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi weightExponent)
 {
    Int4 length; /*length of query*/
    Int4 numseq, seqIndex; /*number of matches, index for them*/
@@ -1166,7 +1192,7 @@ static Nlm_FloatHi posit_rounddown(Nlm_FloatHi value)
 }
 
 /*check that weights add to 1 in each column */
-static void posCheckWeights(posSearchItems *posSearch, compactSearchItems * compactSearch)
+void LIBCALL posCheckWeights(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
    Uint1Ptr q;  /*pointer to query*/
    Int4 length, alphabetSize; /*length of query and number of characters in alphabet*/
@@ -1322,7 +1348,7 @@ Nlm_FloatHi ** LIBCALL allocatePosFreqs(Int4 length, Int4 alphabetSize)
   return(returnArray); 
 }
 
-static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSearchItems * compactSearch, Boolean Cpos)
+Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactSearchItems * compactSearch, Boolean Cpos)
 {
    Uint1Ptr q;  /*pointer to the query*/
    Int4 length;  /*length of the query*/
@@ -1462,7 +1488,7 @@ static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSe
   return(posFreqs);
 }
 
-static void posScaling(posSearchItems *posSearch, compactSearchItems * compactSearch)
+void LIBCALL posScaling(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
 	BlastMatrixRescalePtr matrix_rescale;
 
@@ -1522,48 +1548,72 @@ the Web, one round at a time*/
 Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Nlm_FloatHi ** posFreqs)
 {
     posSearchItems *posSearch;
-    Int4 i, numSeqAligns, numseq;
+    Int4 i, numSeqAligns, numseq, qlength;
+    Int2 alphabetSize;
     Int4Ptr *posMatrix;
     
     posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
-    numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
-    posAllocateMemory(posSearch, compactSearch->alphabetSize, 
-                      compactSearch->qlength, numseq);
-    posDemographics(posSearch, compactSearch, listOfSeqAligns);
-    posPurgeMatches(posSearch, compactSearch);
-    posComputeExtents(posSearch, compactSearch);
-    posComputeSequenceWeights(posSearch, compactSearch, 1.0);
-    posCheckWeights(posSearch, compactSearch);
-    posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, 
-                                                FALSE);
-    copyPosFreqs(posSearch->posFreqs,posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
+    qlength = compactSearch->qlength;
+    alphabetSize = compactSearch->alphabetSize;
+
+    if (listOfSeqAligns != NULL) {
+       numSeqAligns = countSeqAligns(listOfSeqAligns, &numseq, FALSE, 0.0);
+       posAllocateMemory(posSearch, alphabetSize, 
+                         qlength, numseq);
+       posDemographics(posSearch, compactSearch, listOfSeqAligns);
+       posPurgeMatches(posSearch, compactSearch);
+       posComputeExtents(posSearch, compactSearch);
+       posComputeSequenceWeights(posSearch, compactSearch, 1.0);
+       posCheckWeights(posSearch, compactSearch);
+       posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, 
+                                                   FALSE);
+       copyPosFreqs(posSearch->posFreqs,posFreqs, qlength, alphabetSize);
+    } else {
+       /* Assume that posFreqs are already filled, use them to calculate
+          posMatrix.
+          If listOfSeqAligns is NULL as a result of search, all frequencies are
+          0 anyway, so there is no need to compute them. However if it is
+          deliberately passed as NULL before search, this means that posFreqs
+          are passed as input from PSSM.
+       */
+       posSearch->posFreqs = posFreqs;
+       posSearch->posMatrix = (BLAST_Score **) MemNew((qlength + 1) * sizeof(BLAST_Score *));
+       posSearch->posPrivateMatrix = (BLAST_Score **) MemNew((qlength + 1) * sizeof(BLAST_Score *));
+       for(i = 0; i <= qlength; i++) {
+          posSearch->posMatrix[i] = (BLAST_Score *) MemNew(alphabetSize * sizeof(BLAST_Score));
+          posSearch->posPrivateMatrix[i] = (BLAST_Score *) MemNew(alphabetSize * sizeof(BLAST_Score));
+       }
+    }
     posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
     posScaling(posSearch, compactSearch);
     posMatrix = posSearch->posMatrix;
     
-    for(i = 0; i <= compactSearch->qlength ; i++) {
-        MemFree(posSearch->posMatchWeights[i]);
-        MemFree(posSearch->posFreqs[i]);
-        MemFree(posSearch->posC[i]);
-        MemFree(posSearch->posPrivateMatrix[i]);
+    if (listOfSeqAligns != NULL) {
+       for(i = 0; i <= qlength ; i++) {
+          MemFree(posSearch->posFreqs[i]);
+          MemFree(posSearch->posMatchWeights[i]);
+          MemFree(posSearch->posC[i]);
+       }
+       
+       MemFree(posSearch->posFreqs);
+       MemFree(posSearch->posMatchWeights);
+       MemFree(posSearch->posC);
+       MemFree(posSearch->posA);
+       MemFree(posSearch->posExtents);
+       MemFree(posSearch->posSigma);
+       MemFree(posSearch->posRowSigma);
+       MemFree(posSearch->posIntervalSizes);
+       MemFree(posSearch->posCount);
+       
+       for(i = 0; i <= posSearch->posDescMatrixLength; i++) {
+          MemFree(posSearch->posDescMatrix[i]);
+       }
+       MemFree(posSearch->posDescMatrix);
     }
 
-    MemFree(posSearch->posMatchWeights);
-    MemFree(posSearch->posFreqs);
-    MemFree(posSearch->posC);
-    MemFree(posSearch->posA);
+    for(i = 0; i <= qlength ; i++)
+       MemFree(posSearch->posPrivateMatrix[i]);
     MemFree(posSearch->posPrivateMatrix);
-    MemFree(posSearch->posExtents);
-    MemFree(posSearch->posSigma);
-    MemFree(posSearch->posRowSigma);
-    MemFree(posSearch->posIntervalSizes);
-    MemFree(posSearch->posCount);
-
-    for(i = 0; i <= posSearch->posDescMatrixLength; i++) {
-        MemFree(posSearch->posDescMatrix[i]);
-    }
-    MemFree(posSearch->posDescMatrix);
-    
     MemFree(posSearch);
 
     return posMatrix;
@@ -1849,6 +1899,7 @@ void LIBCALL posInitializeInformation(posSearchItems *posSearch, BlastSearchBlkP
       }
     posSearch->posInformation[c] = infoSum;
   }
+  BlastResFreqFree(stdrfp);
 }
 
 /*
@@ -2063,7 +2114,7 @@ Boolean LIBCALL posTakeCheckpoint(posSearchItems * posSearch, compactSearchItems
   Int4 i; /*indices to position and alphabet */
   Char localChar; /*temporary character*/
 
-  checkFile = FileOpen(fileName, "w");
+  checkFile = FileOpen(fileName, "wb");
   if (NULL == checkFile) {
     BlastConstructErrorMessage("posTakeCheckpoint", "Could not open checkpoint file", 1, error_return);
     return(FALSE);
@@ -2091,7 +2142,7 @@ Boolean LIBCALL  posReadCheckpoint(posSearchItems * posSearch, compactSearchItem
   Int4 i,j; /*indices for position and character in alphabet*/
 
   BlastConstructErrorMessage("posReadCheckpoint", "Attempting to recover data from previous checkpoint\n", 1, error_return);
-  checkFile = FileOpen(fileName, "r");  
+  checkFile = FileOpen(fileName, "rb");  
   if (NULL == checkFile) {
     BlastConstructErrorMessage("posReadCheckpoint", "Could not open checkpoint file\n", 1, error_return);
     return(FALSE);
@@ -2222,7 +2273,7 @@ static Int4 posFindAlignmentDimensions(char * fileName, Int4 *numSeqs, ValNodePt
                         number of sequences*/
    
   BlastConstructErrorMessage("posFindAlignmentDimensions", "Attempting to recover data from multiple alignment file\n", 1, error_return);
-  checkFile = FileOpen(fileName, "r");  
+  checkFile = FileOpen(fileName, "rb");  
   if (NULL == checkFile) {
     ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");
     BlastConstructErrorMessage("posFindAlignmentDimensions", "Could not open alignment checkpoint file\n", 1, error_return);
@@ -2291,7 +2342,7 @@ static Int4 posPreprocessAlignment(char * fileName, Int4 numSeqs, Int4 numBlocks
   Int4 blockIndex; /*index for the blocks in the alignment file*/
   Int4 seqIndex;
    
-  checkFile = FileOpen(fileName, "r");  
+  checkFile = FileOpen(fileName, "rb");  
   if (NULL == checkFile) {
     ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");
     BlastConstructErrorMessage("posPreprocessAlignment", "Could not open alignment checkpoint file\n", 1, error_return);
@@ -2389,7 +2440,7 @@ ValNodePtr * error_return)
   Int4 temp; /*temporary character for swapping sequences*/
   Int4 queryIndex; /*which sequnec in the alignment is the query*/
 
-  checkFile = FileOpen(fileName, "r");  
+  checkFile = FileOpen(fileName, "rb");  
   if (NULL == checkFile) {
     BlastConstructErrorMessage("posReadAlignment", "Could not open alignment checkpoint file\n", 1, error_return);
     ErrPostEx(SEV_WARNING, 0, 0, "\nCould not open alignment checkpoint file");

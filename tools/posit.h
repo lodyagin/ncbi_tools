@@ -1,4 +1,4 @@
-/* $Id: posit.h,v 6.19 2000/11/13 14:00:39 madden Exp $
+/* $Id: posit.h,v 6.21 2001/01/03 01:49:38 bauer Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,25 @@ Author: Alejandro Schaffer
 
 Contents: header file for position-based BLAST.
 
-$Revision: 6.19 $
+$Revision: 6.21 $
 
 *****************************************************************************/
 /*
 * $Log: posit.h,v $
+* Revision 6.21  2001/01/03 01:49:38  bauer
+* Changed from static to "LIBCALL":
+*  posAllocateMemory
+*  posPurgeMatches
+*  posCancel
+*  posComputeExtents
+*  posComputeSequenceWeights
+*  posCheckWeights
+*  posComputePseudoFreqs
+*  posScaling
+*
+* Revision 6.20  2000/12/29 00:39:00  hurwitz
+* added ints for freeing of posSearchItems
+*
 * Revision 6.19  2000/11/13 14:00:39  madden
 * Added frequency ratios for * in all standard matrices
 *
@@ -195,6 +209,8 @@ typedef struct posSearchItems {
   Int2Ptr posRepeatSequences;
   Boolean *posUseSequences;
   Nlm_FloatHi *posInformation;
+  Int4 QuerySize;
+  Int4 NumSequences;
 } posSearchItems;
 
 typedef struct compactSearchItems {
@@ -231,6 +247,10 @@ void LIBCALL posFreeInformation PROTO((posSearchItems *posSearch));
 
 void LIBCALL posConvergenceTest PROTO((posSearchItems *posSearch, BlastSearchBlkPtr search, SeqAlignPtr listOfSeqAligns, Int4 thisPassNum));
 
+void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch, Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength);
+
+void LIBCALL posPurgeMatches(posSearchItems *posSearch, compactSearchItems * compactSearch);
+
 /*Cleanup position-specific  data structures after one pass*/
 void LIBCALL posCleanup PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch));
 
@@ -244,7 +264,15 @@ Boolean LIBCALL posTakeCheckpoint(posSearchItems * posSearch, compactSearchItems
 
 Boolean LIBCALL posReadCheckpoint(posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, ValNodePtr * error_return);
 
+void LIBCALL posAllocateMemory(posSearchItems * posSearch, Int4 alphabetSize, Int4 querySize, Int4 numSequences);
+
 void LIBCALL posCheckpointFreeMemory(posSearchItems *posSearch, Int4 querySize);
+
+void LIBCALL posComputeExtents(posSearchItems *posSearch, compactSearchItems * compactSearch);
+
+void LIBCALL posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi weightExponent);
+
+void LIBCALL posCheckWeights(posSearchItems *posSearch, compactSearchItems * compactSearch);
 
 void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi **standardFreqRatios, Int4 multiplier);
 
@@ -257,6 +285,11 @@ void  LIBCALL getCkptNumber(void * numberPtr, Int4 numberSize, FILE * ckptFile )
 void LIBCALL copyPosFreqs(Nlm_FloatHi **posFreqsFrom, Nlm_FloatHi **posFreqsTo, Int4 qlength, Int4 alphabetSize);
 
 Nlm_FloatHi ** LIBCALL allocatePosFreqs(Int4 length, Int4 alphabetSize);
+
+Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactSearchItems * compactSearch, Boolean Cpos);
+
+void LIBCALL posScaling(posSearchItems *posSearch, compactSearchItems * compactSearch);
+
 
 #define PROTEIN_ALPHABET 26
 

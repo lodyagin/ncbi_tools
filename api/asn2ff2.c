@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.26 $
+ * $Revision: 6.28 $
  *
  * File Description: 
  *
@@ -39,6 +39,12 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.28  2000/12/27 19:43:20  kans
+ * empty comment could lead to original dsp->vnp being freed twice, corrupting memory on Mac
+ *
+ * Revision 6.27  2000/12/04 20:16:25  tatiana
+ * mrna evidence comments added
+ *
  * Revision 6.26  2000/08/10 13:54:32  tatiana
  * predicted refseq comment added
  *
@@ -184,6 +190,7 @@
 NLM_EXTERN Int2 GetGenDate PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, CharPtr buffer));
 NLM_EXTERN void PrintComment PROTO ((CharPtr string, Boolean identifier, Uint1 format));
 NLM_EXTERN CharPtr DateToGB PROTO ((CharPtr buf, NCBI_DatePtr ndp));
+NLM_EXTERN CharPtr mRNAEvidenceComment PROTO ((UserObjectPtr obj, Boolean add));
 static ValNodePtr AddToUniqueList PROTO ((SeqIdPtr sid, ValNodePtr list));
 static ValNodePtr GetDBSourceForNuclDB PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp));
 
@@ -618,6 +625,71 @@ static CharPtr GetStrForMap(DbtagPtr dbtag)
 	return NULL;
 }
 
+static CharPtr GetEvidence(Asn2ffJobPtr ajp, GBEntryPtr gbp)
+{
+	SeqDescrPtr		descr;
+	UserObjectPtr	uop=NULL;
+    ObjectIdPtr		oip;
+	ValNodePtr tvnp, ds_vnp, vnp;
+	DescrStructPtr dsp;
+
+	if (gbp == NULL || gbp->bsp == NULL) {
+		return NULL;
+	}
+	tvnp = GatherDescrListByChoice(ajp, gbp, Seq_descr_user); 
+	for (ds_vnp= tvnp;
+				ds_vnp; ds_vnp=ds_vnp->next) {
+		dsp = (DescrStructPtr) ds_vnp->data.ptrvalue;
+		if ((vnp = dsp->vnp) == NULL)
+			continue;
+		uop = (UserObjectPtr) vnp->data.ptrvalue;
+		return (mRNAEvidenceComment(uop, FALSE));
+	}
+	return NULL;
+}
+
+static CharPtr GetAnnotationComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
+{
+	SeqDescrPtr		descr;
+	UserObjectPtr	uop=NULL;
+    ObjectIdPtr		oip;
+	UserFieldPtr	ufp, tmp, u, urf;
+	CharPtr 		retval = NULL, name, method;
+	
+	ValNodePtr tvnp, ds_vnp, vnp;
+	DescrStructPtr dsp;
+
+	if (gbp == NULL || gbp->bsp == NULL) {
+		return NULL;
+	}
+	tvnp = GatherDescrListByChoice(ajp, gbp, Seq_descr_user); 
+	for (ds_vnp= tvnp;
+				ds_vnp; ds_vnp=ds_vnp->next) {
+		dsp = (DescrStructPtr) ds_vnp->data.ptrvalue;
+		if ((vnp = dsp->vnp) == NULL)
+			continue;
+		uop = (UserObjectPtr) vnp->data.ptrvalue;
+	}
+	if (uop == NULL) return retval;
+	if ((oip = uop->type) == NULL) return retval;
+	if (StringCmp(oip->str, "TranscriptModelGeneration") != 0) return retval;
+	for (ufp=uop->data; ufp; ufp=ufp->next) {
+		oip = ufp->label;
+		if (StringCmp(oip->str, "contig name") == 0) {
+			name = (CharPtr) ufp->data.ptrvalue;
+		}
+		if (StringCmp(oip->str, "Method") == 0) {
+			if (ufp->data.ptrvalue) {
+				method = StringSave((CharPtr) ufp->data.ptrvalue);
+			}
+		}
+	}
+	retval = MemNew(StringLen("GENOME ANNOTATION REFSEQ:  This reference sequence was derived by automated computational analysis of NCBI genomic sequence contig using gene prediction method: ") + StringLen(name) + StringLen(method) + 5);
+	sprintf(retval, "GENOME ANNOTATION REFSEQ:  This reference sequence was derived by automated computational analysis of NCBI genomic sequence contig %s using gene prediction method: %s", name, method);
+	return retval;
+	
+}
+
 static void GetCommentByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, Uint1 choice)
 {
 	ValNodePtr ds_vnp, tvnp, vnp = NULL;
@@ -803,14 +875,45 @@ NLM_EXTERN Int2 GB_GetSeqDescrComms(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	ComStructPtr csp;
     DbtagPtr	DBtag = NULL;
-	static Char buf[128], tmp[28];
+	static Char buf[1001], tmp[28];
 	SeqIdPtr sid = NULL;
 	SeqHistPtr hist;
 	Int2 num_gi;
 	DatePtr dat;
 	CharPtr strd = NULL;
+	TextSeqIdPtr tsip = NULL;
+	Boolean is_contig = FALSE;
 	
 	gbp->comm_num = 0;
+/*  Get  NT_ contig comment */
+	for (sid = gbp->bsp->id; sid; sid=sid->next) {
+		if (sid->choice == SEQID_OTHER) {
+			tsip = (TextSeqIdPtr) sid->data.ptrvalue;
+			break;
+		}
+	}
+	if (tsip != NULL) {
+		if (StringNCmp(tsip->accession, "NT", 2) == 0) {
+			is_contig = TRUE;			
+			csp = ComStructNew();
+			csp->string = StringSave("GENOME ANNOTATION REFSEQ:  NCBI contigs are derived from assembled genomic sequence data. They may include both draft and finished sequence.");
+		} else if (StringNCmp(tsip->accession, "XP_", 3) == 0 || StringNCmp(tsip->accession, "XM_", 3) == 0) {
+			is_contig = TRUE;			
+			csp = ComStructNew();
+			csp->string = GetAnnotationComment(ajp, gbp);
+		}
+		if (is_contig) {			
+			gbp->comm = tie_next_comm(gbp->comm, csp);
+			gbp->comm_num++;
+		}
+		if ((strd = GetEvidence(ajp, gbp)) != NULL) {
+			csp = ComStructNew();
+			csp->string =StringSave( strd);
+			gbp->comm = tie_next_comm(gbp->comm, csp);
+			gbp->comm_num++;
+		}
+	}
+
 	GetCommentByChoice(ajp, gbp, Seq_descr_user);
 
 /*  Get GSDB Id */
@@ -1771,7 +1874,9 @@ NLM_EXTERN ValNodePtr GatherDescrListByChoice(Asn2ffJobPtr ajp, GBEntryPtr gbp, 
 	if (vnp && vnp->data.ptrvalue) {
 		return ds_vnp;
 	}
+	/*
 	ValNodeFree(vnp0);
+	*/
 	ValNodeFreeData(ds_vnp);
 	return NULL;
 }

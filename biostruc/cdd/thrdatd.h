@@ -1,4 +1,4 @@
-/* $Id: thrdatd.h,v 1.5 2000/09/22 22:31:33 hurwitz Exp $
+/* $Id: thrdatd.h,v 1.7 2001/03/02 23:14:12 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.5 $
+* $Revision: 1.7 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.h,v $
+* Revision 1.7  2001/03/02 23:14:12  hurwitz
+* run threading faster for PSSM weight=1, bug fix
+*
+* Revision 1.6  2001/01/18 22:33:00  hurwitz
+* fix for print PSSM routine, small change to Gib_Scd
+*
 * Revision 1.5  2000/09/22 22:31:33  hurwitz
 * added memory management of ThdTbl (results structure)
 *
@@ -130,6 +136,7 @@ typedef struct _Rcx_Ptl {		/* Pairwise contact potential */
 
 
 typedef struct _Gib_Scd { 		/* Gibbs schedule parameters */
+  int ntp;    /* number of trajectory points */
   int	nrs;		/* Number of random starts */
   int	nts;		/* Number of temperature steps */
   int	crs;		/* Number of starts before convergence test */
@@ -336,6 +343,7 @@ typedef struct _Seq_Mtf {		/* Sequence motif parameters */
   int	**ww;	        /* Weights */
   int **freqs;      /* residue frequencies */
   int	n;		        /* Number of residues in structure */
+  int AlphabetSize; /* Number of letters in alphabet */
 } Seq_Mtf;
 
 

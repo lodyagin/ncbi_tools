@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.34 $
+* $Revision: 6.35 $
 *
 * File Description: 
 *
@@ -4064,7 +4064,7 @@ extern ForM CreateProtForm (Int2 left, Int2 top, CharPtr title,
     Hide (pfp->pages [PROT_PAGE]);
 
     s = HiddenGroup (h, -1, 0, NULL);
-    CreateCommonFeatureGroup (s, (FeatureFormPtr) pfp, sfp, FALSE, TRUE);
+    CreateCommonFeatureGroupEx (s, (FeatureFormPtr) pfp, sfp, FALSE, TRUE, TRUE);
     pfp->pages [COMMON_PAGE] = s;
     Hide (pfp->pages [COMMON_PAGE]);
 

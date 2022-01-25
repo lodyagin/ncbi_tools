@@ -1,6 +1,6 @@
 	
 			README for stand-alone BLAST
-			   (last updated 10/19/2000)
+			   (last updated 4/2/2001)
 
 
 
@@ -21,7 +21,7 @@ Setting up Standalone BLAST for UNIX:
 -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 Basically, there are three steps needed to setup the Standalone BLAST
-executable for the UINIX platform.
+executable for the UNIX platform.
 
 1) Download the UNIX binary, uncompress and untar the file. It is
 suggested that you do this in a separate directory, perhaps called
@@ -261,186 +261,8 @@ BLAST OPTIONS
 Formatdb
 --------
 
-Formatdb, should be used to format the FASTA databases for both protein and
-DNA databases for BLAST 2.0 and 2.1. This must be done before blastall or blastpgp
-can be run locally. The format of the databases has been changed
-substantially from the BLAST 1.4 release. A major improvement in this format
-over the old one is that ambiguity information for DNA sequences is now
-retrieved from the files produced by formatdb, rather than from the original
-FASTA file. The original FASTA file is no longer needed for the BLAST runs.
-This saves both disk-space and improves performance as the large FASTA file
-no longer needs to be accessed by BLAST.
-
-The input for formatdb may be either ASN.1 or FASTA.  Use of ASN.1 is 
-advantageous for those sites that might also wish to format the ASN.1 
-in different ways, such as a GenBank report. Usage of formatdb may be 
-obtained by executing formatdb and a dash (note that additional comments
-have been added here as indented paragraphs):
-
-formatdb   arguments:
-
-  -t  Title for database file [String]  Optional
-  -i  Input file for formatting (this parameter must be set) [File In]
-  -l  Logfile name: [File Out]  Optional
-    default = formatdb.log
-  -p  Type of file
-         T - protein
-         F - nucleotide [T/F]  Optional
-
-    default = T
-
-         The "-p" option has two different meaning depending on whether input
-         database is in FASTA or ASN.1 format. In case of FASTA, the "-p" specifies
-         type of input database. In case of ASN.1, the option specifies the type of
-         sequence to be indexed for BLAST.
-
-  -o  Parse options
-         T - True: Parse SeqId and create indexes.
-         F - False: Do not parse SeqId. Do not create indexes.
-
-         If the "-o" option is TRUE (and the input database is in FASTA format), then
-         the database identifiers in the FASTA definition line must follow the
-         convention described in the appendices of
-         ftp://ncbi.nlm.nih.gov/blast/db/README.  Also, see further explanation below.
-
- [T/F]  Optional
-    default = F
-  -a  Input file is database in ASN.1 format (otherwise FASTA is expected)
-         T - True,
-         F - False.
- [T/F]  Optional
-    default = F
-  -b  ASN.1 database in binary mode
-         T - binary,
-         F - text mode.
-
-         An input ASN.1 database may be represented in two formats - ascii text and
-         binary. The "-b" option, if TRUE, specifies that input ASN.1 database is in
-         binary format. The option is ignored in case of FASTA input database.
-
- [T/F]  Optional
-    default = F
-  -e  Input is a Seq-entry [T/F]  Optional
-    default = F
-
-         An input ASN.1 database (either text ascii or binary) may contains
-         Bioseq-set or just one Bioseq. In the latter case the "-e" switch should be
-         set to TRUE.
-
-  -n  Base name for BLAST files [String]  Optional
-
-         This options allows one to produce BLAST databases with a different name
-         than the original FASTA file.  One could have a file named 'nt' and
-         and format it as 'nr':
-
-         formatdb -i nt -p F -o T -n nr
-
-         One could also uncompress the original FASTA file on the fly and send it to
-         formatdb through the 'stdin' (under UNIX):
-
-         uncompress -c nr.z | formatdb -i stdin -o T -n nr
-
-	This can be used in situations where the original FASTA file is not required
-	other than by formatdb.  This can help in a situation where disk-space is tight.
-
-  -v  Number of sequence bases to be created in the volume [Integer]  Optional
-    default = 0
-	This option breaks up large FASTA files into 'volumes' (each with a maximum 
-	size of 2 billion letters).  As part of the creation of a volume formatdb 
-	writes a new type of BLAST database file, called an alias file, with the 
-	extension 'nal' or 'pal', is written.
-
-  -s  Create indexes limited only to accessions - sparse [T/F]  Optional
-    default = F
-
-	This option limits the indices for the string identifiers (used by formatdb) 
-	to accessions (i.e., no locus names).  This is especially useful for sequences sets 
-	like the EST's where the accession and locus names are identical.  Formatdb runs 
-	faster and produces smaller temporary files if this option is used.  It is strongly 
-	recommended for EST's, STS's, GSS's, and HTGS's.
-
-
-
-
-FORMATDB NOTES:
----------------
-
-
-A.) Note on -o identifiers:
-
-It is always advantageous to use the '-o' option if the database identifiers
-are in the format specified at ftp://ncbi.nlm.nih.gov/blast/db/README.  If 
-the database identifiers are in the parseable formatdb produces additional 
-indices allowing retrieval from the databases by identifier. The databases 
-on the NCBI FTP site contain parseable identifiers. It is sufficient if the 
-first word on the FASTA defintion line is a unique identifier (e.g., 
-">3091 Alcoho de..."). It is necessary to use parseable identifiers for the following 
-cases:
-
-1.) If ASN.1 is to be produced from blastall or blastpgp, then "-o" must be TRUE.
-
-2.) query-anchored alignments are desired (i.e., the '-m' option with a non-zero value is used).
-
-3.) The gi's are desired as part of the output (i.e., '-I' is used).
-
-4.) fastacmd is used to fetch sequences from the database by accession or gi.
-
-
-B.) Note on "SORTFiles failed" message:
-
-Formatdb will use the 'standard' temporary directory to sort the string indices on disk.
-Under UNIX this is often /var/tmp and if there is not enough space there, then
-the error message: "ERROR: [000.000] SORTFiles failed" will be issued.  This can
-be avoided by setting the TMPDIR environment variable to a partition with
-more free space.  This message may also often be avoided by using the sparse
-option (-s) for formatdb described above.
-
-
-C.) Note on formatting large (4 Gig and larger) FASTA files:
-
-A single BLAST database can contain up to 4 billion letters.  If one
-wishes to formatdb a FASTA file containing more letters than this, then
-it is necessary to use the '-v' (volume) option to produce a number
-of BLAST databases, each containing 4 billion or fewer letters.  An example
-usage of formatdb for this would be:
-
-formatdb -i hugefasta -p F -v 2000000000
-
-Formatdb is run on the FASTA file 'hugefasta' and multiple BLAST
-databases, as well as an alias file that describes to BLAST how to search
-these databases, are produced.  Each BLAST database contains at most
-2000000000 letters.  Note that 2000000000 is the current limitation on
-the NCBI toolkit command-line parser, explaining why 2000000000 rather
-than 4000000000 is used.
-
-The reason for using database volumes, as opposed to simply making the 
-indices in the BLAST databases large enough to handle all conceivable databases 
-with an eight-byte 'integer', is that this would have doubled the size of the indices 
-for all searches no matter how small the database.  Hence very large FASTA files 
-are broken down into a couple of databases.  This process can also
-be inverted; a user could manually write an alias file (with a name like
-'ntest.nal') to combine two databases formatted with separate runs of formatdb.
-Look at the *.nal file that is produced when formatdb is run to see the syntax.
-
-Formatdb must be able to open files larger than 2 Gig in order to work on very
-large files.  This is not a problem on a 64-bit OS and on certain 32-bit
-OS that allows binaries to be made large-file aware.  The 32-bit Solaris
-formatdb binary on the NCBI FTP site is now compiled large file aware.
-
-D.) Note on running formatdb on a database without uncompressing it:
-
-Under UNIX it is possible to uncompress a database on the fly and
-pipe it to formatdb.  This can reduce the disk-space needed
-for running formatdb on a large database.  To run formatdb without
-uncompressing the 'nt' database one should execute:
-
-uncompress -c nt.Z | formatdb -i stdin -p F -o T -n 'nt'
-
-Note the use of the '-n' option that specifies the name of the
-resulting BLAST database.  Note also that 'stdin' specifies that
-input will be coming from 'standard input'.  The nt FASTA file
-is not needed for running BLAST searches and nt.Z may be deleted
-after formatdb has been run.
+There is now a separate document describing formatdb (README.formatdb).  Please
+refer to it for information on formatting FASTA files for BLAST searches.
 
 
 Blastall
@@ -524,6 +346,61 @@ blastall   arguments:
 
         This option specifies that any lower-case letters in the input FASTA file
         should be masked.  
+
+
+   Documentation for PSI-TBLASTN
+
+PSI-BLASTN is a variant of blastall that searches a protein query
+sequence against a nucleotide sequence database using a position
+specific matrix created by PSI-BLAST. The nucleotide sequence database
+is dynamically translated in all reading frames during PSI-TBLASTN
+search. Using a position specific matrix may enable finding more
+distantly related sequences.
+
+Programs: 
+blastpgp 	[takes a protein query and perform PSI-BLAST search to 
+		creates a position specific matrix using a protein 
+		database]
+
+blastall 	[reads position specific matrix and performs PSI-TBLASTN 
+		search]
+
+Usage:
+A user would typically run blastpgp to create and save a position
+specific matrix, followed by a run of blastall for PSI-TBLASTN search.
+
+blastpgp must be executed with -C option followed by a file name to
+save position specific score matrix.
+
+blastall with "-p psitblastn" option executes PSI-TBLASTSN search, and
+-R option followed by a file name specifying the file that contains
+position specific score matrix. All other options that apply when
+using "blastall -p tblastn ..." also apply when using "blastall -p
+psitblastn ...", but there are some restrictions to parameters: 1) The
+query must be the same as the one used in blastpgp for creating a
+position specific matrix. 2) By default, blastpgp has filtering off
+(-F F) and blastall has filtering on (-F T). To ensure consistent
+usage of the blastpgp/psitblastn combination, the -F option should be
+explicitly set in one or the other run.
+
+
+Example: 
+One may run PSI-BLST to create and save a position specific score matrix
+as follows: 
+
+	blastpgp -d nr -i ff.chd -j 2 -C ff.chd.ckp
+
+Position specific score matrix is saved in ff.chd.ckp. Then, using 
+this matrix, one may run PSI-TBLASTN search:
+
+	blastall -i ff.chd -d yeast -p psitblastn -R ff.chd.ckp
+
+Note that this allows the score matrix to be constructed using one
+database (nr in the example) and then used to search a second database
+(yeast in the example). Even if the two database names are the same,
+blastpgp uses the protein version while "blastall -p psitblastn" uses
+the DNA version.
+
 
 
 Blastpgp
@@ -1125,6 +1002,59 @@ References
 
 Release History
 ---------------
+
+Notes for 2.1.3 release:
+
+Enhancements:
+
+1.) Addition of PSI-TBLASTN ability to blastall, see description in 
+README.bls.
+
+2.) Database sequences over 5 million bases in length are now broken
+into chunks to keep memory usage reasonable.
+
+3.) Blastall now allows one to enter a location if it is desired
+to search a subsequence of the query.
+
+4.) Formatdb can produce a new BLAST database format using the -A option.
+The BLAST programs can read this format as well as the current format (the
+program automatically identifies which version it should work with).  This 
+new format stores the sequence definition lines in a structured manner
+(as ASN.1), this will allow future versions of BLAST to better present
+taxonomic information as well as information about other resources (e.g., 
+UniGene, LocusLink) for a database sequence.  
+
+5.) Blastall can now produce tab-delimited, use "-m 8" to specify this.
+
+6.) Improved Karlin-Altschul parameters are now being used, they were 
+calculated using the "island" method
+
+7.) A "gapped" check was added to BLASTN to ensure that if a hit is low-scoring
+after an ungapped extension, but high-scoring after a gapped extension, it will 
+not be missed.
+
+8.) The formatdb error messages have been improved for the case of illegal
+characters in the sequence.
+
+9.) The number of HSP's saved in an ungapped search has been increased to 400 from 200.
+
+Bug fixes:
+
+1.) A problem with XML output was fixed.
+
+2.) A problem with the seg filtering under LINUX was
+fixed (many thanks to Eric Cabot at GCG for pointing this out).
+
+3.) A problem with format of BLAST reports if the "-o" flag
+was not used when the database was produced was fixed 
+(thanks again to Eric Cabot).
+
+4.) A problem with reading the BLAST database caused by a 4-byte signed integer 
+than should have been unsigned was fixed (thanks to Haruna Cofer at SGI
+for pointing this out).
+
+5.) A problem with copymat under NT and IRIX was fixed.
+
 
 Notes for 2.1.2 release:
 

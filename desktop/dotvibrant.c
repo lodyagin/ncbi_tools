@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/5/00
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.11  2000/10/31 22:39:14  vakatov
+* Get rid of the erroneous casts to HANDLE in the Nlm_Enable/Disable calls
+*
 * Revision 6.10  2000/08/07 16:34:51  kans
 * added public domain notice
 *
@@ -5476,7 +5479,7 @@ static void DOT_OpenSeqAlignASN(IteM i)
               return;
           } 
           AlnMgrIndexSeqAlign(sap);
-          Enable((HANDLE)vdp->displayOpts1);
+          Enable(vdp->displayOpts1);
           if (vdp->alp){ /* previous alignment*/
             vdp->alp->pict=NULL;
             DOT_ExitAlign(vdp->alp);
@@ -5546,7 +5549,8 @@ extern void DOT_MakeMainViewer (DOTMainDataPtr mip, SeqAlignPtr sap)
   
   m2 = PulldownMenu (w, "Options"); 
   vdp->displayOpts1=SubMenu(m2,"Display");
-  if (!sap) Disable((HANDLE)vdp->displayOpts1);
+  if (!sap)
+      Disable(vdp->displayOpts1);
   vdp->displayOpts2=ChoiceGroup (vdp->displayOpts1, DOT_DisplayOptsProc);
   ChoiceItem (vdp->displayOpts2, "Dots ONLY");
   ChoiceItem (vdp->displayOpts2, "Dots & Aligns"); 

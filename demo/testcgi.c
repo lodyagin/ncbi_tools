@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -56,6 +56,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+/* for development on Mac, need to define popen and pclose */
+
+#if defined(__POWERPC__) || defined(powerc) || defined(__powerc) || defined(__POWERPC)
+#define popen fopen
+#define pclose fclose
+#endif
 
 /* convenient defines and typedefs from NCBI toolkit */
 
@@ -616,13 +623,20 @@ static void RunTrnaScan (CharPtr tempfile)
   long int  intronStop;
   Int2      numFields = 0;
   CharPtr   ptr;
+  CharPtr   speed;
   long int  start;
   long int  stop;
   Char      str [80];
 
 /* launch tRNAscan-SE with -q parameter and name of data file */
 
-  sprintf (cmmd, "/am/MolBio/trnascan-SE/bin/tRNAscan-SE -q %s", tempfile);
+  speed = FindByName ("speed");
+  if (speed != NULL && strcmp (speed, "slow") == 0) {
+    sprintf (cmmd, "/am/MolBio/trnascan-SE/bin/tRNAscan-SE -q -C %s", tempfile);
+  } else {
+    sprintf (cmmd, "/am/MolBio/trnascan-SE/bin/tRNAscan-SE -q %s", tempfile);
+  }
+
   fp = popen (cmmd, "r");
   if (fp == NULL) return;
 

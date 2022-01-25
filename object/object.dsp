@@ -383,6 +383,10 @@ SOURCE=..\api\sqnutil3.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\strucapi.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\subutil.c
 # End Source File
 # Begin Source File
@@ -396,10 +400,6 @@ SOURCE=..\api\tofile.c
 # Begin Source File
 
 SOURCE=..\api\tomedlin.c
-# End Source File
-# Begin Source File
-
-SOURCE=..\api\txalign.c
 # End Source File
 # Begin Source File
 
@@ -883,6 +883,10 @@ SOURCE=..\api\sqnutils.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\strucapi.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\subutil.h
 # End Source File
 # Begin Source File
@@ -904,10 +908,6 @@ SOURCE=..\api\tofile.h
 # Begin Source File
 
 SOURCE=..\api\tomedlin.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\api\txalign.h
 # End Source File
 # Begin Source File
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   Routines for outputing ASN.1 parse trees from asntool
@@ -41,6 +41,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnout.c,v $
+* Revision 6.2  2001/01/10 17:42:47  beloslyu
+* fix to resolve the problem with buggy optimizer of Forte compiler on Solaris/Intel
+*
 * Revision 6.1  1999/03/11 23:43:17  kans
 * fprintf casts
 *
@@ -669,6 +672,7 @@ NLM_EXTERN AsnTypePtr AsnOutAddType (AsnProcPtr app, AsnTypePtr atp)
 
 {
 	AsnTypePtr atp2;
+	AsnTypePtr next;
 
 	if (atp == NULL)        /* protection */
 		return NULL;
@@ -712,7 +716,8 @@ NLM_EXTERN AsnTypePtr AsnOutAddType (AsnProcPtr app, AsnTypePtr atp)
 
 	AsnOutAddType(app, atp->type);
 
-	return atp->next;
+	next = atp->next;
+	return next;
 }
 
 

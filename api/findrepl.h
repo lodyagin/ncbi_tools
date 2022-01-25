@@ -25,15 +25,12 @@
 *
 * File Name: findrepl.h
 *
-* Author:  Yuri Sadykov
+* Author:  Jonathan Kans, Tim Ford
 *
-* Version Creation Date:   10/17/95
-*
-* $Id: findrepl.h,v 6.0 1997/08/25 18:05:40 madden Exp $
-* $Revision: 6.0 $
+* Version Creation Date:   10/17/00
 *
 * File Description:
-*	Interface to find/replace.
+*   Complete redesign of find/replace from original of Yuri Sadykov
 *
 *
 * Modifications:  
@@ -47,6 +44,9 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.h,v $
+* Revision 6.1  2000/11/03 20:36:00  kans
+* FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign, no longer using AsnExpOptExplore because of the difficulty of replacing with a larger string (TF + JK)
+*
 * Revision 6.0  1997/08/25 18:05:40  madden
 * Revision changed to 6.0
 *
@@ -78,7 +78,6 @@
 #define __FINDREPL_H__
 
 #include <ncbi.h>
-#include <gather.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -92,34 +91,27 @@ extern "C" {
 #endif	/* __cplusplus */
 
 
-typedef Uint2 (LIBCALLBACK *FindStructFunc) PROTO ((Pointer findstruct));
-
-#define FS_FLAG_CONTINUE    1	/* keep looking */
-#define FS_FLAG_REPLACE     2   /* replace it? */
-
-#define FS_CONTINUE	    1
-#define FS_STOP		    0
-#define FS_REPLACE_CONTINUE 3
-#define FS_REPLACE_STOP     2
-
-typedef struct _FindStruct {
-    GatherContextPtr	gcp;
-    Pointer		udp;	    /* Data supplied by user */
-    CharPtr		findstr;    /* String to find */
-	CharPtr     replstr;    /* String to replace with */
-} FindStruct, PNTR FindStructPtr;
-
 /*** defines for send_update parameter below ***/
 
-#define UPDATE_NEVER 0		/* never send ObjMgrMessage (OM_MSG_UPDATE... */
-#define UPDATE_EACH 1		/* send it on each replace */
-#define UPDATE_ONCE 2		/* send once for whole entityID, if any replacements occur */
+#define UPDATE_NEVER 0  /* never send ObjMgrMessage (OM_MSG_UPDATE... */
+#define UPDATE_EACH  1  /* send it on each replace */
+#define UPDATE_ONCE  2  /* send once for whole entityID, if any replacements occur */
 
-NLM_EXTERN Int4 LIBCALL FindInEntity(Uint2 EntityID, CharPtr findstr, CharPtr replstr, Boolean select_item,
-						  Int2 send_update, Boolean case_counts, Boolean whole_word, Boolean replace_all);
+NLM_EXTERN void FindReplaceInEntity (
+  Uint2 entityID,
+  CharPtr find_string,
+  CharPtr replace_string,
+  Boolean case_counts,
+  Boolean whole_word,
+  Boolean do_replace,
+  Boolean select_item,
+  Int2 send_update,
+  BoolPtr descFilter,
+  BoolPtr featFilter,
+  BoolPtr seqidFilter,
+  Boolean do_seqid_local
+);
 
-NLM_EXTERN Int4 LIBCALL FindInEntityX(Uint2 EntityID, CharPtr findstr, CharPtr replstr, FindStructFunc userfunc,
-	      Pointer userdata, Boolean select_item, Int2 send_update, Boolean case_counts, Boolean whole_word);
 
 #ifdef __cplusplus
 extern "C" }

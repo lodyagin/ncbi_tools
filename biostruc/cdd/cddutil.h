@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.10 2000/09/08 21:43:51 hurwitz Exp $
+/* $Id: cddutil.h,v 1.21 2001/03/07 16:30:33 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,46 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.10 $
+* $Revision: 1.21 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.21  2001/03/07 16:30:33  bauer
+* fixed alignment reindexing bug
+*
+* Revision 1.20  2001/02/14 17:11:03  bauer
+* relaced calls to BioseqCopy with CddBioseqCopy
+*
+* Revision 1.19  2001/02/13 20:55:10  bauer
+* fixed bug when comparing local ids
+*
+* Revision 1.18  2001/02/06 22:55:35  bauer
+* Scoring Matrix now a function parameter in CddDenDiagCposComp2
+*
+* Revision 1.17  2001/02/05 22:58:47  bauer
+* added alignment reindexing function
+*
+* Revision 1.16  2001/01/17 21:32:02  bauer
+* changes to PSSM calculation
+*
+* Revision 1.15  2001/01/12 01:31:30  bauer
+* added data structures for alignment reindexing
+*
+* Revision 1.14  2001/01/12 00:17:01  bauer
+* added routines for information content calculation
+*
+* Revision 1.13  2001/01/11 23:48:25  bauer
+* added check for consensus-Cd
+*
+* Revision 1.12  2000/12/01 19:36:57  hurwitz
+* added scale factor to PSSM calcs
+*
+* Revision 1.11  2000/11/14 22:08:44  hurwitz
+* added weighting for pssm calculation
+*
 * Revision 1.10  2000/09/08 21:43:51  hurwitz
 * adding PSSM calculation to DDE
 *
@@ -94,19 +127,22 @@ extern "C" {
 typedef struct _cdd_ext_alignment_cell {
   Uint1     aatype;
   Int4      seqpos;
-  BioseqPtr bsp;
-  Int4      typefreq;
 } CddExtAlignCell, PNTR CddExtAlignCellPtr;
 
 typedef struct _cdd_ext_alignment_column {
-  Int4      maxpos;
+  Int4      conpos;
   Int4      occpos;
+  Int4      ntypes;
+  Int4      *typecount;
+  FloatHi   *wtypefreq;
   FloatHi   w_occpos;
+  Uint4     aatype;
 } CddExtAlignCol, PNTR CddExtAlignColPtr;
 
 typedef struct _cdd_alignment_weight {
   FloatHi   weight;
   Int4      nposaligned;
+  BioseqPtr bsp;
 } CddAlignWeight, PNTR CddAlignWeightPtr;
 
 /*---------------------------------------------------------------------------*/
@@ -115,6 +151,7 @@ typedef struct _cdd_alignment_weight {
 /*---------------------------------------------------------------------------*/
 typedef struct _cdd_explicit_alignment {
   SeqIdPtr     ids;
+  Boolean      bIdAlloc;
   Int4         length;
   Int4         *adata;
 } CddExpAlign, PNTR CddExpAlignPtr;
@@ -124,14 +161,15 @@ typedef struct _cdd_explicit_alignment {
 /*---------------------------------------------------------------------------*/
 typedef struct _pgp_blast_options {
     BLAST_OptionsBlkPtr options;
-    CharPtr             blast_database;
-    BioseqPtr           query_bsp, fake_bsp;
-    Int4                number_of_descriptions, number_of_alignments;
-    FILE                *infp, *outfp;
-    AsnIoPtr            aip_out;
-    Boolean             html;
-    Boolean             believe_query;
-    Uint4               align_options, print_options;
+    CharPtr blast_database;
+    BioseqPtr query_bsp, fake_bsp;
+    Int4 number_of_descriptions, number_of_alignments;
+    FILE *infp, *outfp;
+    AsnIoPtr aip_out;
+    Boolean html;
+    Boolean believe_query;
+    Uint4 align_options, print_options;
+    Boolean is_xml_output;
 } PGPBlastOptions, PNTR PGPBlastOptionsPtr;
 
 /*---------------------------------------------------------------------------*/
@@ -152,8 +190,10 @@ CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
 /*---------------------------------------------------------------------------*/
 /* Cdd Data manipulations and queries                                        */
 /*---------------------------------------------------------------------------*/
-void LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
-Int4 LIBCALL CddGetStatus(CddPtr pcdd);
+void    LIBCALL CddAssignDescr(CddPtr pcdd, Pointer pThis, Int4 iWhat, Int4 iIval);
+Int4    LIBCALL CddGetStatus(CddPtr pcdd);
+Boolean LIBCALL SeqAlignHasConsensus(SeqAlignPtr salp);
+Boolean LIBCALL CddHasConsensus(CddPtr pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
@@ -165,25 +205,40 @@ void LIBCALL CddSevError(CharPtr cErrTxt);
 /* extract BioSeqs from the list stored in the CD                            */
 /*---------------------------------------------------------------------------*/
 BioseqPtr LIBCALL CddFindSip(SeqIdPtr sip, SeqEntryPtr sep);
+BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
+                                 Int4 to, Uint1 strand, Boolean do_feat);
 BioseqPtr LIBCALL CddExtractBioseq(SeqEntryPtr sep, SeqIdPtr sip);
 
 /*---------------------------------------------------------------------------*/
 /* Cdd specific sequence alignment format converters                         */
 /*---------------------------------------------------------------------------*/
 SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp);
+SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp);
 SeqAlignPtr LIBCALL CddMSLDenDiagToMULDenDiag(SeqAlignPtr salp);
+
+/*---------------------------------------------------------------------------*/
+/* various routines for calculating PSSM/Alignment information content       */
+/*---------------------------------------------------------------------------*/
+Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,Boolean bHasConsensus);
+Nlm_FloatHiPtr LIBCALL CddAlignInform(CddPtr pcdd, Nlm_FloatHi * Niobs);
+Nlm_FloatHiPtr LIBCALL CddPssmInform(CddPtr pcdd);
+Nlm_FloatHiPtr LIBCALL CddPosFreqInform(Nlm_FloatHi **posFreq, Int4 ncol, Int4 nrow);
 
 /*---------------------------------------------------------------------------*/
 /* Create a BlastOptionsPtr for the PSSM Computations                        */
 /*---------------------------------------------------------------------------*/
-PGPBlastOptionsPtr LIBCALL CddGetBlastOptions(BioseqPtr bsp);
+static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharPtr matrix_name);
 
 /*---------------------------------------------------------------------------*/
 /* Calculate PSSMs for DenseDiag (or DenseSeg) Master_Slave alignment sets   */
 /*---------------------------------------------------------------------------*/
 void LIBCALL CddDenDiagCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
-                                       BioseqPtr bspF, CddPtr pcdd);
+                                       BioseqPtr bspF, CddPtr pcdd, Int4 pseudoCnt);
 void LIBCALL CddCposComputation(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd);
+Seq_Mtf * LIBCALL CddDenDiagCposComp2(BioseqPtr bspFake, Int4 iPseudo,
+                                      SeqAlignPtr salp, CddPtr pcdd,
+				      BioseqPtr bspOut, double Weight,
+				      double ScaleFactor, CharPtr matrix_name);
 
 /*---------------------------------------------------------------------------*/
 /* this function combines CddCposComputation and CddDenDiagCposComputation   */
@@ -194,7 +249,8 @@ void LIBCALL CddCposComp(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp, CddPtr pcdd
 /*---------------------------------------------------------------------------*/
 /* same as CddCposComp, except pssm is put in a Seq_Mtf instead of a Cdd     */
 /*---------------------------------------------------------------------------*/
-Seq_Mtf* LIBCALL CddCalcPSSM(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp);
+Seq_Mtf* LIBCALL CddCalcPSSM(SeqAlignPtr listOfSeqAligns, BioseqPtr bsp,
+                             double Weight, double ScaleFactor);
 Int4     LIBCALL CddGetNewIndexForThreading(char InChar, char* Output);
 
 /*---------------------------------------------------------------------------*/
@@ -225,6 +281,12 @@ void LIBCALL CddReindexMSLDenSegMaster(SeqAlignPtr salp, Int4 offset);
 void LIBCALL CddReindexMSLDenDiagMaster(SeqAlignPtr salp, Int4 offset);
 
 /*---------------------------------------------------------------------------*/
+/* reindex a Seqalign to a new "Master"                                      */
+/*---------------------------------------------------------------------------*/
+SeqAlignPtr LIBCALL CddReindexSeqAlign(SeqAlignPtr salp, SeqIdPtr sipMaster,
+                                       BioseqSetPtr bssp);
+
+/*---------------------------------------------------------------------------*/
 /* Make a copy of a DenDiag Master-Slave list alignment                      */
 /*---------------------------------------------------------------------------*/
 SeqAlignPtr LIBCALL CddCopyMSLDenDiag(SeqAlignPtr salp);
@@ -250,9 +312,9 @@ ScorePtr       CddCalculateQuerySim(CddPtr pcdd, SeqAlignPtr salp);
 PDBSeqIdPtr LIBCALL CddGetPdbSeqId(SeqIdPtr sip);
 
 /*---------------------------------------------------------------------------*/
-/* Calculate a weighted 50/50 consensus sequence and make it new master      */
+/* Make a Consensus Sequence and reindex alignment                           */
 /*---------------------------------------------------------------------------*/
-SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp, SeqEntryPtr sep, BioseqPtr bsp);
+SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp, SeqEntryPtr sep, BioseqPtr bsp, SeqIntPtr range, BioseqPtr *bspCons, SeqAlignPtr *salpCons);
 
 #ifdef __cplusplus
 }

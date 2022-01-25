@@ -4278,6 +4278,8 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDup (SeqAlignPtr salp)
   }
   if (next != NULL)
      salp->next = next;
+  sap->data = NULL;
+  SeqAnnotFree (sap);
   return salp2;
 }
 
@@ -4286,13 +4288,17 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignListDup (SeqAlignPtr salp)
   SeqAnnotPtr sap, 
               sap2;
   SeqAlignPtr salp2 = NULL; 
+  if (salp == NULL) return(NULL);
   sap = SeqAnnotForSeqAlign (salp);
+  if (sap == NULL) return(NULL);
   sap2 = (SeqAnnotPtr) AsnIoMemCopy ((Pointer) sap, (AsnReadFunc) SeqAnnotAsnRead, (AsnWriteFunc) SeqAnnotAsnWrite);
   if (sap2!=NULL) {
      salp2 = sap2->data;
      sap2->data = NULL;
      SeqAnnotFree (sap2);
   }
+  sap->data = NULL;
+  SeqAnnotFree (sap);
   return salp2;
 }
 

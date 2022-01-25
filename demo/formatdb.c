@@ -30,11 +30,37 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.39 $
+   $Revision: 6.47 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.47  2001/03/27 21:11:40  dondosha
+   Allow multiple input files for formatting
+
+   Revision 6.46  2001/02/01 22:25:50  shavirin
+   Added (uncommented) option to create ASN.1 structured deflines in
+   BLAST databases.
+
+   Revision 6.45  2001/01/25 21:08:09  madden
+   Fix an ABR
+
+   Revision 6.44  2000/12/12 23:12:09  shavirin
+   Fixed some FMR error.
+
+   Revision 6.43  2000/12/08 22:34:35  shavirin
+   Added possibility to create Taxonomy lookup database.
+
+   Revision 6.42  2000/11/22 20:53:19  shavirin
+   Added possibility to use Taxonomy client/server for creation of ASN.1
+   structured deflines with taxonomy ID (Using define TAX_CS_LOOKUP).
+
+   Revision 6.41  2000/11/13 21:37:23  madden
+   Use ErrPostEx
+
+   Revision 6.40  2000/11/03 18:13:22  madden
+   Print list of bad characters in FASTA input
+
    Revision 6.39  2000/09/29 16:40:16  shavirin
    Fixed problem with multivolume database creation.
 
@@ -205,6 +231,7 @@
 #include <sequtil.h>
 #include <readdb.h>
 #include <sqnutils.h>
+#include <taxblast.h>
 
 /* program's arguments */
 
@@ -213,7 +240,7 @@
 Args dump_args[] = {
     { "Title for database file", /* 0 */
       NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
-    {"Input file for formatting (this parameter must be set)", /* 1 */
+    {"Input file(s) for formatting (this parameter must be set)", /* 1 */
      NULL, NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
     {"Logfile name:",           /* 2 */
      "formatdb.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
@@ -242,7 +269,9 @@ Args dump_args[] = {
     { "Create indexes limited only to accessions - sparse", /* 10 */
       "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Verbose: check for non-unique string ids in the database", /* 11 */
-      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}
+      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Create ASN.1 structured deflines",                  /* 12 */
+      "F", NULL, NULL, TRUE, 'A', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 /*#define db_title	(const CharPtr) dump_args[0].strvalue 
@@ -291,13 +320,19 @@ static FDB_optionsPtr FDB_CreateCLOptions(void)
     options->dump_info = FALSE;
     options->sparse_idx = dump_args[10].intvalue;
     options->test_non_unique = dump_args[11].intvalue;
+
+    if(dump_args[12].intvalue)
+        options->version = FORMATDB_VER;
+    else 
+        options->version = FORMATDB_VER_TEXT;
     
     return options;
 }
 
-
-static Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
-                           Int4 volumes, Boolean is_protein)
+static Boolean FD_CreateAliasFileEx(CharPtr title, CharPtr basename, 
+                                    Int4 volumes, Boolean is_protein,
+                                    CharPtr parent,
+                                    Int4 first_oid, Int4 last_oid)
 {
     Char filenamebuf[128];
     time_t tnow;
@@ -319,23 +354,53 @@ static Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename,
     else
         fprintf(fd, "#TITLE\n#\n");
     
-    /* Now printing volume databases */
+    /* Now printing volume databases, or the parent database */
     fprintf(fd, "DBLIST ");
     
-    for(i = 0; i < volumes; i++) {
-        fprintf(fd, "%s.%02ld ", basename, i);
+    if (volumes == 0 && parent != NULL)
+       fprintf(fd, "%s", parent);
+    else {
+       for(i = 0; i < volumes; i++) {
+          fprintf(fd, "%s.%02ld ", basename, i);
+       }
     }
     fprintf(fd, "\n#\n");
     
     fprintf(fd, "#GILIST\n#\n");
     fprintf(fd, "#OIDLIST\n#\n");
     
+    if (first_oid > 0 && last_oid >= first_oid) {
+       fprintf(fd, "FIRST_OID %ld\n#\n", first_oid);
+       fprintf(fd, "LAST_OID %ld\n#\n", last_oid);
+    }
     FileClose(fd);
     
     return TRUE;
 }
+
+static Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
+                           Int4 volumes, Boolean is_protein)
+{
+   return FD_CreateAliasFileEx(title, basename, volumes, is_protein,
+                               NULL, 0, 0);
+}
+
 /* main() */
 
+static Int4 GetGiFromSeqId(SeqIdPtr sip)
+{
+    SeqIdPtr sip_tmp;
+    Int4 gi;
+    
+    gi = -1;
+    for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
+        if(sip_tmp->choice == SEQID_GI) {
+            gi = sip_tmp->data.intvalue;
+            break;
+        }
+    }
+    return gi;
+}
 Int2 Main(void) 
 {
     SeqEntryPtr sep;
@@ -343,14 +408,28 @@ Int2 Main(void)
     FDB_optionsPtr options;
     BioseqPtr bsp;
     Int2 id_ctr=1;
-    Int4 count = 0, volume = 0;
+    Int4 count = 0, volume = 0, tax_id, gi, sequence_count=0, first_oid;
     Char basename[128], filenamebuf[128];
+    CharPtr error_msg=NULL;
+    Char buffer[42];
     FILE *fd;
+    CharPtr next_db = NULL;
+    Boolean multiple_inputs = FALSE;
     /* get arguments */
 
     if((options = FDB_CreateCLOptions()) == NULL)
         return 1;
     
+    options->db_file = StringTokMT(options->db_file, " ", &next_db);
+    if (next_db) {
+       if (!options->base_name) {
+          ErrPostEx(SEV_FATAL, 0, 0, "Database base name must be provided with multiple input files\n");
+          return 1;
+       } 
+       multiple_inputs = TRUE;
+       first_oid = 1;
+    }
+
     if(options->base_name != NULL)
         StringCpy(basename, options->base_name);
     else
@@ -362,14 +441,23 @@ Int2 Main(void)
         options->base_name = StringSave(filenamebuf);
         volume++;
     }
-    
+
+#ifdef TAX_CS_LOOKUP
+    if(dump_args[12].intvalue && options->parse_mode) {
+        /* These functions will create taxonomy lookup database */
+        options->tax_lookup = RDTaxLookupInit();
+        options->tax_callback = FDBTaxCallback;
+    }
+#endif    
     
     /* Initialize formatdb structure */
     if ((fdbp = FormatDBInit(options)) == NULL)
         return 2;        
     
+    /* Loop on input files */
+    while (options->db_file) {
+
     /* Input database file maybe either in ASN.1 or in FASTA format */
-    
     if (!options->isASN) {
         /* FASTA format of input database */
 
@@ -379,8 +467,9 @@ Int2 Main(void)
         /* Get sequences */
         while ((sep = FastaToSeqEntryForDb(fd, 
                                         (Boolean)!options->is_protein,
-                                        NULL, options->parse_mode, basename, &id_ctr,NULL)) != NULL) {
+                                        &error_msg, options->parse_mode, basename, &id_ctr,NULL)) != NULL) {
             
+	    sequence_count++;
             if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
                 ErrLogPrintf("Error in readind Bioseq Formating failed.\n");
                 return 4;
@@ -388,6 +477,14 @@ Int2 Main(void)
             
             SeqEntrySetScope(sep);
             bsp = (BioseqPtr) sep->data.ptrvalue;            
+
+	    if (error_msg)
+      	    {
+        	SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, 41);
+         	ErrPostEx(SEV_WARNING, 0, 0, "Sequence number %ld (%s), %s\n", 
+			sequence_count, buffer, error_msg);
+		error_msg = MemFree(error_msg);
+      	    }
             
             if(Bases_In_Volume >= 1) {
                 if(count > Bases_In_Volume) { 
@@ -408,9 +505,18 @@ Int2 Main(void)
                 }
                 count += bsp->length;
             }
-            
-            FDBAddBioseq(fdbp, bsp);            
 
+#ifdef TAX_CS_LOOKUP     
+            if(dump_args[12].intvalue && 
+               options->parse_mode && (gi = GetGiFromSeqId(bsp->id)) > 0)
+                tax_id = tax1_getTaxId4GI(gi); 
+            else 
+                tax_id = 0;
+#else
+            tax_id = 0;
+#endif
+            FDBAddBioseq(fdbp, bsp, tax_id);            
+            
             SeqEntryFree(sep);
         }
         FileClose(fd);
@@ -483,13 +589,29 @@ Int2 Main(void)
 
     } /* end "if FASTA or ASN.1" */
     
+    if (multiple_inputs) {
+       FD_CreateAliasFileEx(NULL, options->db_file, 0, 
+                            options->is_protein, basename, 
+                            first_oid, sequence_count);
+       first_oid = sequence_count + 1;
+    }
+    options->db_file = StringTokMT(next_db, " ", &next_db);
+    
+    } /* Loop on input files */
+
     /* Dump indexes, deallocate structure, arrays, etc. */
 
     if(FormatDBClose(fdbp))
         return 9;
 
+#ifdef TAX_CS_LOOKUP
+    if(dump_args[12].intvalue && options->parse_mode) {
+        RDTaxLookupClose(options->tax_lookup);
+    }
+#endif    
+
     FDB_FreeCLOptions(options);
-    
+
     return 0;
     
 } /* main()*/

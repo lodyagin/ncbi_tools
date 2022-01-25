@@ -1,5 +1,8 @@
 #ifndef _objcdd_ 
 #define _objcdd_ 
+#ifndef NLM_GENERATED_CODE_PROTO
+#define NLM_GENERATED_CODE_PROTO
+#endif
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -17,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.9 at May 12, 2000  4:52 PM
+*    Generated using ASNCODE Revision: 6.10 at Feb 5, 2001  5:11 PM
 *
 **************************************************/
 
@@ -230,7 +233,7 @@ NLM_EXTERN Boolean LIBCALL MatrixAsnWrite PROTO (( MatrixPtr , AsnIoPtr, AsnType
 **************************************************/
 typedef struct struct_Triangle {
    Int4   nelements;
-   struct score PNTR   scores;
+   ScorePtr   scores;
 } Triangle, PNTR TrianglePtr;
 
 

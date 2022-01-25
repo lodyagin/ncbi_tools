@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: 
 *
@@ -76,7 +76,7 @@ NLM_EXTERN MimEntryPtr MimWaitForReply (
   time_t        currtime, starttime;
   Int2          max = 0;
   MimEntryPtr   mep = NULL;
-  EConnStatus   status;
+  EIO_Status    status;
   STimeout      timeout;
 #ifdef OS_MAC
   EventRecord   currEvent;
@@ -93,14 +93,14 @@ NLM_EXTERN MimEntryPtr MimWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
     WaitNextEvent (0, &currEvent, 0, NULL);
 #endif
   }
-  if (status == eCONN_Success) {
+  if (status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
     mep = MimEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);
@@ -162,14 +162,14 @@ NLM_EXTERN Int4 MimCheckQueue (
 
 NLM_EXTERN MimEntryPtr MimReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 )
 
 {
   AsnIoConnPtr  aicp;
   MimEntryPtr   mep = NULL;
 
-  if (conn != NULL && status == eCONN_Success) {
+  if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
     mep = MimEntryAsnRead (aicp->aip, NULL);
     QUERY_AsnIoConnClose (aicp);

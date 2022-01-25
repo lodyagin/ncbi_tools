@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -668,7 +668,7 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"misc_signal\" , menulabel \"Miscellaneous signal sequence\" , featdef-key 36 , seqfeat-key 8 , entrygroup 0 , displaygroup 5 , molgroup na } ,\n" \
 "{ typelabel \"misc_structure\" , menulabel \"Miscellaneous secondary structure\" , featdef-key 37 , seqfeat-key 8 , entrygroup 0 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"modified_base\" , menulabel \"Modified base\" , featdef-key 38 , seqfeat-key 8 , entrygroup 0 , displaygroup 5 , molgroup na } ,\n" \
-"{ typelabel \"mutation\" , menulabel \"site of mutation in related strain\" , featdef-key 39 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na } ,\n" \
+"{ typelabel \"mutation\" , menulabel \"site of mutation in related strain\" , featdef-key 39 , seqfeat-key 8 , entrygroup 0 , displaygroup 5 , molgroup na } ,\n" \
 "{ typelabel \"N_region\" , menulabel \"Extra na in rearranged IG\" , featdef-key 40 , seqfeat-key 8 , entrygroup 0 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"old_sequence\" , menulabel \"Location of sequence revision\" , featdef-key 41 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } ,\n" \
 "{ typelabel \"polyA_signal\" , menulabel \"PolyA addition recognition signal\" , featdef-key 42 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na } ,\n" \
@@ -806,7 +806,7 @@ static Boolean LoadFeatDefFromLocalString (void)
 
 NLM_EXTERN FeatDefPtr LIBCALL FeatDefSetLoad (void)
 {
-    Char buf[80];
+    Char buf[256];
     AsnIoPtr aip;
 
 	if (featdefp != NULL)

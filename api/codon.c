@@ -479,7 +479,7 @@ NLM_EXTERN Int4 print_protein_for_cds(SeqFeatPtr sfp, CharPtr buf, SeqLocPtr loc
 	Boolean reverse;
 	Int4 cd_len;
 	GatherRange gr;
-	Int2 p_pos;
+	Int2 p_pos, buf_len;
 	Int4 a_left, a_right;
 	Int4 aa, val;
 	SeqLocPtr slp;
@@ -543,9 +543,11 @@ NLM_EXTERN Int4 print_protein_for_cds(SeqFeatPtr sfp, CharPtr buf, SeqLocPtr loc
 	cd_len = 0;
 	aa = 0;
 
+        buf_len = SeqLocLen(loc);
+
 	if(reverse_order)
 	{
-		p_pos = SeqLocLen(loc) -1;
+		p_pos = buf_len -1;
 		if(seal_ends)
 		{
 			buf[p_pos+1] = '\0';
@@ -554,6 +556,7 @@ NLM_EXTERN Int4 print_protein_for_cds(SeqFeatPtr sfp, CharPtr buf, SeqLocPtr loc
 	}
 	else
 		p_pos = 0;
+
 	while((slp = SeqLocFindNext(sfp->location, slp))!=NULL)
 	{
 	   if(SeqLocOffset(loc, slp, &gr, 0))
@@ -613,8 +616,11 @@ NLM_EXTERN Int4 print_protein_for_cds(SeqFeatPtr sfp, CharPtr buf, SeqLocPtr loc
 			}
 			if(reverse_order)
 				-- p_pos;
-			else
+			else {
 				++p_pos;
+                                if (p_pos > buf_len)
+                                   break;
+                        }
 		}
 	     }
 	     cd_len += SeqLocLen(slp);
@@ -633,7 +639,7 @@ NLM_EXTERN Int4 print_protein_for_cds(SeqFeatPtr sfp, CharPtr buf, SeqLocPtr loc
 	{
 		if(seal_ends)
 		{
-			end_pos = SeqLocLen(loc);
+			end_pos = buf_len;
 			MemSet((Pointer)buf, '~', (size_t)(end_pos) * sizeof(Char));
 			buf[end_pos] = '\0';
 		}

@@ -32,8 +32,104 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.97 $
+* $Revision: 6.128 $
 * $Log: blastool.c,v $
+* Revision 6.128  2001/04/06 18:15:08  madden
+* Move UNIX-specific stuff (HeyIAmInMemory) to bqueue.[ch]
+*
+* Revision 6.127  2001/04/04 20:32:40  dondosha
+* Correction for tabulated output from bl2seq for translated searches
+*
+* Revision 6.126  2001/04/03 22:35:24  kans
+* include simutil.h to get prototype for Change_Loc_Strand for Mac compiler
+*
+* Revision 6.125  2001/04/03 21:59:49  dondosha
+* Implemented tabulated output for non-megablast bl2seq
+*
+* Revision 6.124  2001/03/27 15:46:16  madden
+* Fix problem in BlastSetUserErrorString
+*
+* Revision 6.123  2001/03/22 21:37:41  madden
+* Raise hsp_num_max to 400
+*
+* Revision 6.122  2001/03/19 22:39:24  dondosha
+* Allow location on the first query sequence for megablast
+*
+* Revision 6.121  2001/03/19 18:54:16  madden
+* Added BlastSeqLocFillDoubleIntEx, changed BlastSeqLocFillDoubleIntRev
+*
+* Revision 6.120  2001/03/13 14:00:24  madden
+* Make ungapped case consistent with stand-alone binary
+*
+* Revision 6.119  2001/03/07 14:09:35  madden
+* Default window size for blastn is 30
+*
+* Revision 6.118  2001/02/28 19:55:30  dondosha
+* Corrected handling of local query IDs for megablast tabulated output
+*
+* Revision 6.117  2001/02/21 15:05:31  dondosha
+* Round scaled matrix values to nearest integer instead of integer cast
+*
+* Revision 6.116  2001/02/16 22:16:22  dondosha
+* BlastScaleMatrix: if new lambda is -1, stop changing factor
+*
+* Revision 6.115  2001/02/16 18:45:40  dondosha
+* Fixed minor purify errors
+*
+* Revision 6.114  2001/02/08 20:41:15  dondosha
+* Implemented tabulated output for all translated programs
+*
+* Revision 6.113  2001/02/08 16:33:03  kans
+* include mblast.h for Mac compiler
+*
+* Revision 6.112  2001/02/07 21:16:05  dondosha
+* Added callbacks to produce tabulated output
+*
+* Revision 6.111  2001/01/25 14:34:46  madden
+* Fix for ungapped blastn
+*
+* Revision 6.110  2001/01/23 21:01:01  dondosha
+* Change double quotes to single quotes in previous change
+*
+* Revision 6.109  2001/01/23 20:25:42  dondosha
+* 1. Renamed BlastParceInputString to BlastParseInputString
+* 2. Recognize a double quoted string as an option value in
+*    BlastParseInputString
+*
+* Revision 6.108  2001/01/17 17:44:34  madden
+* Set default blastn window size to zero
+*
+* Revision 6.107  2001/01/16 14:03:54  madden
+* Enable gapped check for blastn immediately after finding hits
+*
+* Revision 6.106  2001/01/12 16:57:29  shavirin
+* Checked for NULL score frequencies to avoid coredump in case of empty
+* sequence.
+*
+* Revision 6.105  2000/12/19 18:39:50  madden
+* Add function BlastSetUserErrorString and BlastDeleteUserErrorString
+*
+* Revision 6.104  2000/12/15 19:27:17  dondosha
+* Corrected the reference link and display for Mega BLAST
+*
+* Revision 6.103  2000/12/04 18:51:24  madden
+* Fix memory leaks
+*
+* Revision 6.102  2000/11/29 16:32:59  dondosha
+* Fixed minor memory leak in MegaBlastPrintReference
+*
+* Revision 6.101  2000/11/21 18:46:18  madden
+* Remove settings for blosum62_20[ab]
+*
+* Revision 6.100  2000/11/09 16:12:36  madden
+* Set do_sum_stats TRUE for ungapped blastp
+*
+* Revision 6.99  2000/11/07 16:30:26  madden
+* Introduce intermediate score (before linking of HSPs) for blastx and tblastn
+*
+* Revision 6.98  2000/11/01 16:25:56  madden
+* Changes from Futamura for psitblastn
+*
 * Revision 6.97  2000/10/26 18:52:56  dondosha
 * Added function MegaBlastPrintReference
 *
@@ -150,7 +246,7 @@ Contents: Utilities for BLAST
 * made sum_stats default again, rolling back rev 6.61
 *
 * Revision 6.62  1999/11/02 15:22:18  madden
-* Add BlastParceInputString and BlastGetLetterIndex
+* Add BlastParseInputString and BlastGetLetterIndex
 *
 * Revision 6.61  1999/10/27 21:01:32  madden
 * made do_sum_stats not default
@@ -342,6 +438,12 @@ Contents: Utilities for BLAST
 #include <posit.h>
 #include <seed.h>
 #include <xmlblast.h>
+#include <mblast.h>
+#include <simutil.h>
+
+
+/* Mutex for assignment of db seqs to search. */
+TNlmMutex err_message_mutex=NULL;
 
 typedef struct _FilterAlign {
     SeqAlignPtr  sap;
@@ -355,66 +457,6 @@ typedef struct _SappSet {
     FilterAlignPtr PNTR fapp;
 } SappSet, PNTR SappSetPtr;
 
-
-#ifdef OS_UNIX
-/* Here is function to calculate number of BLAST jobs running on spesific
-   computer. This function uses array of 5 semaphores with the single key
-   0xACACACAC. Each semaphore in this array represents spesific BLAST
-   program, so at any given time we know exactly number of processes for
-   each BLAST program. Function will increase specific semaphore by one
-   and OS will reset this back whenever process will exit from memory */
-
-#include <sys/types.h>
-#if defined(__linux__)
-/* that is needed because of the bug in Linux Red Hat v5.2 */
-#define __USE_XOPEN
-typedef __key_t key_t;
-#endif
-#include <sys/ipc.h>
-#include <sys/sem.h>
-
-#define BLAST_SERVER_KEY 0xACACACAC
-
-static struct sembuf BLASTSemaCmd[5] =
-{
-    {blast_type_blastn - 1,  1, SEM_UNDO},  /* Increase 0 semaphore by one  - blastn  */
-    {blast_type_blastp - 1,  1, SEM_UNDO},  /* Increase 1 semaphore by one  - blastp  */
-    {blast_type_blastx - 1,  1, SEM_UNDO},  /* Increase 2 semaphore by one  - blastx  */
-    {blast_type_tblastn - 1, 1, SEM_UNDO},  /* Increase 3 semaphore by one  - tblastn */
-    {blast_type_tblastx - 1, 1, SEM_UNDO}  /* Increase 4 semaphore by one  - tblastx */
-};
-
-
-static Boolean HeyAlreadyCalled = FALSE;
-
-Boolean HeyIAmInMemory(Int4 program)
-{
-    register int id;
-    
-    if(HeyAlreadyCalled)
-        return TRUE;
-
-    if(program < blast_type_blastn || program > blast_type_tblastx)
-        return FALSE;
-    
-    if ((id = semget (BLAST_SERVER_KEY, 5, 0666 | IPC_CREAT)) < 0) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Cannot create semaphore\n");
-        return FALSE;     /* permission problem or tables full */
-    }
-    
-    /* Increasing "program" semaphore by one */
-    
-    if(semop(id, &BLASTSemaCmd[program - 1], 1) < 0) {
-        ErrPostEx(SEV_ERROR, errno, 0, "semop: cannot increase by one");
-        return FALSE;
-    }
-    
-    HeyAlreadyCalled = TRUE;
-    
-    return TRUE;
-}
-
-#endif
 
 #define BUFFER_LENGTH 255
 
@@ -578,8 +620,10 @@ FormatBlastParameters(BlastSearchBlkPtr search)
 	sprintf(buffer, "effective search space used: %8.0f", (Nlm_FloatHi) search->searchsp_eff);
 	add_string_to_buffer(buffer, &ret_buffer, &ret_buffer_length);
 
-
-	if (StringCmp(search->prog_name, "blastx") == 0 || StringCmp(search->prog_name, "tblastn") == 0 || StringCmp(search->prog_name, "tblastx") == 0)
+        if (StringCmp(search->prog_name, "blastx") == 0
+            || StringCmp(search->prog_name, "tblastn") == 0
+            || StringCmp(search->prog_name, "tblastx") == 0
+            || StringCmp(search->prog_name, "psitblastn") == 0 )
 	{
 		sprintf(buffer, "frameshift window, decay const: %ld, %4.1f",
 			(long) pbp->gap_size, pbp->gap_decay_rate);
@@ -1062,17 +1106,17 @@ MegaBlastPrintReference(Boolean html, Int4 line_length, FILE *outfp)
 		return FALSE;
 	
 	if (html) {
-           add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=9254694&form=6&db=m&Dopt=r\">Reference</a>:</b>", &ret_buffer, &ret_buffer_length, TRUE);
-           add_string_to_bufferEx("Zhang Z., Schwartz S., Wagner L., Miller W., ", &ret_buffer, &ret_buffer_length, TRUE);
+           add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=10890397&form=6&db=m&Dopt=r\">Reference</a>:</b>", &ret_buffer, &ret_buffer_length, TRUE);
+           add_string_to_bufferEx("Zheng Zhang, Scott Schwartz, Lukas Wagner, and Webb Miller (2000),", &ret_buffer, &ret_buffer_length, TRUE);
 	} else
-           add_string_to_bufferEx("Reference: Zhang Z., Schwartz S., Wagner L., Miller W., ", &ret_buffer, &ret_buffer_length, TRUE);
-	add_string_to_bufferEx("Zheng Zhang, Scott Schwartz, Lukas Wagner, and Webb Miller (2000), ", &ret_buffer, &ret_buffer_length, TRUE);
+           add_string_to_bufferEx("Reference: Zheng Zhang, Scott Schwartz, Lukas Wagner, and Webb Miller (2000), ", &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("\"A greedy algorithm for aligning DNA sequences\", ", 
                                &ret_buffer, &ret_buffer_length, TRUE);
 	add_string_to_bufferEx("J Comput Biol 2000; 7(1-2):203-14.", 
                                &ret_buffer, &ret_buffer_length, TRUE);
 	
         PrintTildeSepLines(ret_buffer, line_length, outfp);
+        ret_buffer = MemFree(ret_buffer);
 	return TRUE;
 }
 
@@ -1201,6 +1245,7 @@ BlastPrintFilterWarning (CharPtr filter_string, Int4 line_length, FILE *outfp, B
 
 }
 
+#define BLAST_SMALLEST_EVALUE 1.0e-300
 /*
 	Initialize the options structure.
 
@@ -1234,16 +1279,13 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 	if (gapped)
 	{
 		options->gapped_calculation = TRUE;
-/* for testing
 		options->do_sum_stats = FALSE;
-*/
-		options->do_sum_stats = TRUE;
 	}
 	else
 	{
 		options->gapped_calculation = FALSE;
 		options->do_sum_stats = TRUE;
-		options->hsp_num_max = 100;
+		options->hsp_num_max = 400;
 	}
 
 	options->discontinuous = FALSE;	/* discontinuous is default. */
@@ -1252,7 +1294,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->gap_decay_rate = 0.5;
 		options->gap_prob = 0.5;
 		options->gap_size = 50;
-		options->window_size = 0;
+		options->window_size = 30;
 		options->threshold_first = 0;
 		options->threshold_second = 0;
 		options->expect_value  = 10;
@@ -1272,11 +1314,15 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->gap_open  = 5;
 		options->gap_extend  = 2;
                 options->decline_align = INT2_MAX;
-		options->gap_x_dropoff  = 20;
+		options->gap_x_dropoff  = 30;
 		options->gap_x_dropoff_final  = 50;
 		options->gap_trigger  = 25.0;
 		options->strand_option  = BLAST_BOTH_STRAND;
 		options->no_check_score  = FALSE;
+		if (gapped)
+			options->do_sum_stats = FALSE;
+		else
+			options->do_sum_stats = TRUE;
 	}
 	else
 	{
@@ -1284,8 +1330,8 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		options->window_size = 40;
 		options->expect_value  = 10;
 		options->hitlist_size = 500;
-		options->two_pass_method  = TRUE;
-		options->multiple_hits_only  = FALSE;
+		options->two_pass_method  = FALSE;
+		options->multiple_hits_only  = TRUE;
 		options->number_of_bits  = 0.0;
 		options->dropoff_1st_pass  = 7;
 		options->dropoff_2nd_pass  = 10;
@@ -1315,22 +1361,24 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 
 		if (StringICmp(progname, "blastp") == 0)
 		{
-			options->e2 = 0.5;
+			options->e2 = BLAST_SMALLEST_EVALUE;
 			options->threshold_first = 11;
 			options->threshold_second = 11;
 		}
 		else if (StringICmp(progname, "blastx") == 0)
 		{
-			options->e2 = 0.25;
+			options->e2 = 1.0;
 			options->genetic_code = 1;
 			options->threshold_first = 12;
 			options->threshold_second = 12;
 			options->do_sum_stats = TRUE;
 			options->strand_option  = BLAST_BOTH_STRAND;
 		}
-		else if (StringICmp(progname, "tblastn") == 0)
+
+               else if ( StringICmp(progname, "tblastn") == 0
+			 || StringICmp(progname, "psitblastn") == 0 )
 		{
-			options->e2 = 0.15;
+			options->e2 = 1.0;
 			options->db_genetic_code = 1;
 			options->threshold_first = 13;
 			options->threshold_second = 13;
@@ -1338,7 +1386,7 @@ BLASTOptionNew(CharPtr progname, Boolean gapped)
 		}
 		else if (StringICmp(progname, "tblastx") == 0)
 		{
-			options->e2 = 0.1;
+			options->e2 = BLAST_SMALLEST_EVALUE;
 			options->genetic_code = 1;
 			options->db_genetic_code = 1;
 			options->threshold_first = 13;
@@ -1528,6 +1576,12 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 		BlastConstructErrorMessage("BLASTOptionValidateEx", "locally optimal alignments not supported with ungapped alignments", 1, error_return);
 		return 1;
 	    }
+        if ((StringICmp(progname, "psitblastn") != 0) && (options->CheckpointFileName !=NULL))
+	  {
+              BlastConstructErrorMessage("BLASTOptionValidateEx",
+                                         "-R option is available only for psitblastn", 1, error_return);
+              return 1;
+	  }
 
 	return status;
 }
@@ -1583,20 +1637,8 @@ BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options,
         options->gap_extend  = 2;
         found_matrix = TRUE;
     } else if (StringICmp(matrix_name, "BLOSUM62_20") == 0) {
-        options->gap_open  = 11;
-        options->gap_extend  = 1;
-        options->threshold_first = 100;
-        options->threshold_second = 100;
-        found_matrix = TRUE;
-    } else if (StringICmp(matrix_name, "BLOSUM62_20A") == 0) {
-        options->gap_open  = 11;
-        options->gap_extend  = 1;
-        options->threshold_first = 100;
-        options->threshold_second = 100;
-        found_matrix = TRUE;
-    } else if (StringICmp(matrix_name, "BLOSUM62_20B") == 0) {
-        options->gap_open  = 11;
-        options->gap_extend  = 1;
+        options->gap_open  = 100;
+        options->gap_extend  = 10;
         options->threshold_first = 100;
         options->threshold_second = 100;
         found_matrix = TRUE;
@@ -1648,7 +1690,10 @@ BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options,
         if (StringICmp(options->program_name, "blastx") == 0) {
             options->threshold_first++;
             options->threshold_second++;
-        } else if (StringICmp(options->program_name, "tblastn") == 0 || StringICmp(options->program_name, "tblastx") == 0) {
+
+        } else if (StringICmp(options->program_name, "tblastn") == 0
+                   || StringICmp(options->program_name, "tblastx") == 0
+                   || StringICmp(options->program_name, "psitblastn") == 0) {
             options->threshold_first += 2;
             options->threshold_second += 2;
         }
@@ -1864,7 +1909,13 @@ BlastComputeProbs(BlastMatrixRescalePtr matrix_rescale, Boolean position_depende
 	 if (matrix[p][std_alphabet[c]] > (score_max))
 	   (score_max) = matrix[p][std_alphabet[c]];
        }
-   sfp = BlastScoreFreqNew(score_min, score_max);
+
+   if((sfp = BlastScoreFreqNew(score_min, score_max)) == NULL) {
+       ErrPostEx(SEV_ERROR, 0, 0, 
+                 "BlastComputeProbs(): Unable to create Score Frequencies");
+       return NULL;
+   }
+
    sfp->obs_min = sfp->score_min;
    sfp->obs_max = sfp->score_max;
    numberOfScores = (sfp->score_max) - (sfp->score_min) + 1;
@@ -1889,7 +1940,9 @@ updateLambdaK(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependent)
 {
   BLAST_ScoreFreqPtr sfp;
  
-  sfp = BlastComputeProbs(matrix_rescale, position_dependent);
+  if((sfp = BlastComputeProbs(matrix_rescale, position_dependent)) == NULL)
+      return;
+
   BlastKarlinBlkCalc(matrix_rescale->kbp_psi[0], sfp);
   matrix_rescale->kbp_gap_psi[0]->K = (matrix_rescale->kbp_psi[0]->K)*(matrix_rescale->kbp_gap_std[0]->K)/matrix_rescale->K_ideal;
   matrix_rescale->kbp_gap_psi[0]->logK = log(matrix_rescale->kbp_gap_psi[0]->K);
@@ -1901,7 +1954,7 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 {
    Int4 dim1, dim2;
    Int4 a,c; /*loop indices*/
-   Boolean too_high=TRUE, done, first_time;
+   Boolean too_high=TRUE, first_time;
    Nlm_FloatHi factor, factor_low=1.0, factor_high=1.0;
    Nlm_FloatHi lambda, new_lambda; /*Karlin-Altschul parameter*/
    Int4 index; /*loop index for binary search*/
@@ -1925,10 +1978,9 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
    }
    lambda = matrix_rescale->lambda_ideal;
 
-   done = FALSE;
    first_time = TRUE;
    factor = 1.0;
-   while (done != TRUE)
+   while (1)
    {
    	for(c = 0; c < dim1; c++)
    	{
@@ -1940,13 +1992,18 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 		}
 		else
 		{
-			matrix[c][a] = (factor*private_matrix[c][a])/POSIT_SCALE_FACTOR;
+			matrix[c][a] = Nlm_Nint(((FloatHi)(factor*private_matrix[c][a]))/POSIT_SCALE_FACTOR);
 		}
 	    }
         }
 
         updateLambdaK(matrix_rescale, position_dependent);
-	new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
+
+        if(matrix_rescale->kbp_psi[0] != NULL)
+            new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
+        else
+            return 0.0;
+
 	if (new_lambda > lambda)
 	{
 		if (first_time)
@@ -1965,7 +2022,7 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 			factor = factor_high;
 		}
 	}
-	else 
+	else if (new_lambda > 0) 
 	{
 		if (first_time)
 		{
@@ -1982,7 +2039,11 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 			factor_low += (factor_low-1.0);
 			factor = factor_low;
 		}
-	}
+	} else {
+           ErrPostEx(SEV_FATAL, 0, 0, "Matrix has positive average score");
+           return 0.0;
+        }
+                
    }
 
 /* binary search for ten times. */
@@ -1999,12 +2060,17 @@ BlastScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Boolean position_dependen
 		}
 		else
 		{
-			matrix[c][a] = (factor*private_matrix[c][a])/POSIT_SCALE_FACTOR;
+			matrix[c][a] = Nlm_Nint(((FloatHi)(factor*private_matrix[c][a]))/POSIT_SCALE_FACTOR);
 		}
 	    }
    	}
         updateLambdaK(matrix_rescale, position_dependent);
-	new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
+
+        if(matrix_rescale->kbp_psi[0] != NULL)
+            new_lambda = matrix_rescale->kbp_psi[0]->Lambda;
+        else
+            return 0.0;
+
 	if (new_lambda > lambda)
 	{
 		factor_low = factor;
@@ -2171,6 +2237,25 @@ ValNodePtr
 BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
 
 {
+	return BlastSeqLocFillDoubleIntEx(mask_slp, 0, max_length, reverse, 0);
+
+}
+
+/*
+	SeqLocPtr mask_slp: location to be masked
+	Int4 full_query_length: length of the query, not just portion being blasted.
+	Int4 max_length: length of query being blasted.
+	Boolean reverse: do minus strand.
+	Int4 offset: offset in full query to portion being blasted.
+
+	the coordinates reported here are in terms of the portion of the query
+	being blasted for use by the function that makes up words.
+*/
+
+ValNodePtr
+BlastSeqLocFillDoubleIntEx (SeqLocPtr mask_slp, Int4 full_query_length, Int4 max_length, Boolean reverse, Int4 offset)
+
+{
 	Int4 count, index, start, stop;
 	BlastDoubleInt4Ptr list_pri, *list_ptr_pri;
 	SeqLocPtr slp;
@@ -2184,6 +2269,10 @@ BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
 		return vnp;
 	}
 
+	/* use length of segment if full_query_length no set. */
+	if (full_query_length == 0)
+		full_query_length = max_length;
+
 	count = BlastSeqLocCount (mask_slp);
 	list_pri = (BlastDoubleInt4Ptr) MemNew(count*sizeof(BlastDoubleInt4)); 
 	list_ptr_pri = (BlastDoubleInt4Ptr PNTR) MemNew(count*sizeof(BlastDoubleInt4Ptr)); 
@@ -2196,8 +2285,8 @@ BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
         	{
 			if (reverse)
 			{
-				start = max_length - 1 - SeqLocStop(slp);
-				stop = max_length - 1 - SeqLocStart(slp);
+				start = full_query_length - 1 - SeqLocStop(slp);
+				stop = full_query_length - 1 - SeqLocStart(slp);
 			}
 			else
 			{
@@ -2205,8 +2294,8 @@ BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
               			stop = SeqLocStop(slp);
 			}
 
-			list_pri[index].gi = start;
-			list_pri[index].ordinal_id = stop;
+			list_pri[index].gi = start - offset;
+			list_pri[index].ordinal_id = stop -offset;
 			list_ptr_pri[index] = &(list_pri[index]);
 			index++;
         	}
@@ -2219,11 +2308,14 @@ BlastSeqLocFillDoubleInt (SeqLocPtr mask_slp, Int4 max_length, Boolean reverse)
 	ValNodeAddInt(&vnp, 1, -1);
 	BlastIntervalSort(list_ptr_pri, 0, count, slp_callback, (VoidPtr) &vnp);
 
+	list_pri = MemFree(list_pri);
+	list_ptr_pri = MemFree(list_ptr_pri);
+
 	return vnp;
 }
 
 ValNodePtr
-BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_length)
+BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_length, Int4 full_query_length, Int4 offset)
 
 {
    Int4 count, index, start, stop;
@@ -2239,6 +2331,11 @@ BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_l
       }
       return vnp;
    }
+
+   /* use length of segment if full_query_length no set. */
+   if (full_query_length == 0)
+	full_query_length = max_length;
+
    
    count = BlastSeqLocCount (mask_slp);
    list_pri = (BlastDoubleInt4Ptr) MemNew(count*sizeof(BlastDoubleInt4)); 
@@ -2248,11 +2345,11 @@ BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_l
    while (mask_slp) {
       slp=NULL;
       while((slp = SeqLocFindNext(mask_slp, slp))!=NULL) {
-	 start = 2*max_length - SeqLocStop(slp);
-	 stop = 2*max_length - SeqLocStart(slp);
+	 start = full_query_length + max_length - SeqLocStop(slp);
+	 stop = full_query_length + max_length - SeqLocStart(slp);
 	 
-	 list_pri[index].gi = start;
-	 list_pri[index].ordinal_id = stop;
+	 list_pri[index].gi = start - offset;
+	 list_pri[index].ordinal_id = stop - offset;
 	 list_ptr_pri[index] = &(list_pri[index]);
 	 index++;
       }
@@ -2262,6 +2359,9 @@ BlastSeqLocFillDoubleIntRev (ValNodePtr location, SeqLocPtr mask_slp, Int4 max_l
    HeapSort(list_ptr_pri, count, sizeof(BlastHitRangePtr PNTR), list_ptr_compare);
    BlastIntervalSort(list_ptr_pri, 0, count, slp_callback, (VoidPtr) &vnp);
    
+	list_pri = MemFree(list_pri);
+	list_ptr_pri = MemFree(list_ptr_pri);
+
    return vnp;
 }
 
@@ -2890,7 +2990,7 @@ fillCandLambda(seedSearchItems * seedSearch, Char *matrixName, BLAST_OptionsBlkP
 }
 
 /* 
-	Used by BlastParceInputString to get the 'index' of the
+	Used by BlastParseInputString to get the 'index' of the
 	option and to check it's validity.
 */
 Int4 BlastGetLetterIndex(CharPtr letters, Char ch)
@@ -2911,7 +3011,7 @@ Int4 BlastGetLetterIndex(CharPtr letters, Char ch)
 	Not for use in command-line programs - use GetArgs.
 */
 
-Boolean BlastParceInputString(CharPtr string, 
+Boolean BlastParseInputString(CharPtr string, 
 	CharPtr letters, 
 	CharPtr PNTR *values_in,
 	CharPtr PNTR ErrorMessage)
@@ -2970,10 +3070,17 @@ Boolean BlastParceInputString(CharPtr string,
 	if(*chptr == NULLB)   /* Check for NULLB */
 	    break;
 
-	for(i=0; !IS_WHITESP(*chptr) && *chptr != NULLB; i++, chptr++) {
-	    option[i] = *chptr;
-	}
-
+        /* If option is in double quotes, get the entire string between the
+           quotes */
+        if (*chptr == '\'') {
+           for (i=0; *++chptr != NULLB && *chptr != '\''; i++)
+              option[i] = *chptr;
+           if (*chptr == '\'')
+              chptr++;
+        } else {
+           for(i=0; !IS_WHITESP(*chptr) && *chptr != NULLB; i++, chptr++)
+              option[i] = *chptr;
+        }
 	option[i] = NULLB;
 
 	MemFree(values[index]);
@@ -3343,4 +3450,744 @@ SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct,
     SappSetFree(ssp);
     
     return head;
+}
+
+#define BLAST_ERROR_BULEN 50
+/*
+	The following functions fill a the Error user string with
+	text to identify BLAST and the entry being worked on.
+	The SeqIdPtr is used to make a FASTA id, which is appended
+	to string.
+
+	A Uint1 is returned, which allows Nlm_ErrUserDelete to delete
+	this error string when it's done.
+*/
+
+Uint1
+BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id)
+
+{
+	BioseqPtr bsp;
+	Char buffer[2*BLAST_ERROR_BULEN+1], textid[BLAST_ERROR_BULEN+1];
+	CharPtr buf_start, ptr, title;
+	Int2 length=0, index;
+	Uint1 retval=0;
+
+	buffer[0] = NULLB;
+	ptr = buf_start = &buffer[0];
+
+	if (string)
+		StringNCpy(ptr, string, BLAST_ERROR_BULEN);
+
+	if (sip != NULL)
+	{
+	    bsp = BioseqLockById(sip);
+	    if(bsp)
+	    {
+		if (use_id)
+			sip = bsp->id;
+		else
+			title = BioseqGetTitle(bsp);
+	    }
+
+	    if (string)
+	    {
+	    	length = StringLen(string);
+	    	if (length > BLAST_ERROR_BULEN)
+			length = BLAST_ERROR_BULEN;
+	    }
+
+	    ptr += length;
+
+	    if (use_id)
+	    {
+    	    	SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, BLAST_ERROR_BULEN-1);
+	    	StringNCpy(ptr, textid, BLAST_ERROR_BULEN-1);
+	    }
+	    else if (title)
+	    {
+		for (index=0; index<BLAST_ERROR_BULEN-1; index++)
+		{
+			if (title[index] == ' ')
+			{
+				break;
+			}
+			*ptr = title[index];
+			ptr++;
+		}
+		*ptr = NULLB;
+	    }
+	    BioseqUnlock(bsp);
+	    StringCpy(ptr+StringLen(ptr), ":");
+	}
+	NlmMutexLockEx(&err_message_mutex);
+	retval = Nlm_ErrUserInstall (buf_start, 0);
+	NlmMutexUnlock(err_message_mutex);
+
+	return retval;
+}
+
+void
+BlastDeleteUserErrorString(Uint1 err_id)
+
+{
+	NlmMutexLockEx(&err_message_mutex);
+	Nlm_ErrUserDelete(err_id);
+	NlmMutexUnlock(err_message_mutex);
+	return;
+}
+
+Int4
+BlastGetNumIdentical(Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
+                         Int4 s_start, Int4 length, Boolean reverse)
+{
+   Int4 i, ident = 0;
+   Uint1Ptr q, s;
+
+   q = &query[q_start];
+   if (!reverse) 
+      s = &subject[s_start];
+   else
+      s = &subject[s_start + length - 1];
+
+   for (i=0; i<length; i++) {
+      if (*q == *s)
+	 ident++;
+      q++;
+      if (!reverse)
+         s++;
+      else
+         s--;
+   }
+
+   return ident;
+}
+
+int LIBCALLBACK BlastPrintAlignInfo(VoidPtr srch)
+{
+   BlastSearchBlkPtr search = (BlastSearchBlkPtr) srch;
+   BLAST_HSPPtr hsp, PNTR hsp_array; 
+   Int4 i, subject_gi;
+   Int2 context;
+   CharPtr query_buffer, title;
+   SeqIdPtr sip, subject_id, query_id; 
+   Int4 descr_len;
+   Int4 index, hsp_index, score;
+   Int4 num_mismatches, num_gap_opens, align_length, num_ident;
+   BLAST_KarlinBlkPtr kbp;
+   Uint1Ptr query_seq, subject_start=NULL, subject_seq, rev_subject=NULL;
+   FloatHi perc_ident, bit_score, evalue;
+   Char eval_buff[10], bit_score_buff[10];
+   GapXEditScriptPtr esp;
+   Int4 length, query_length, subject_length=0, rev_subject_length=0;
+   Int4 q_start, q_end, s_start, s_end, q_shift=0, s_shift=0;
+   CharPtr subject_descr = NULL, subject_buffer, buffer;
+   Int4 buffer_size, cutoff_s;
+   Boolean numeric_sip_type = FALSE, is_na, is_translated;
+   Int4 hspcnt, new_hspcnt, number, numseg;
+   SeqAlignPtr seqalign = NULL, sap;
+   FILE *fp = (FILE *)search->output;
+   BioseqPtr bsp = NULL;
+   SeqPortPtr spp;
+   SeqLocPtr subject_slp = NULL;
+   Uint1 residue;
+   AlignSumPtr asp = NULL;
+
+   if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
+      search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
+      return 0;
+   }
+
+   hspcnt = search->current_hitlist->hspcnt;
+   is_na = (search->prog_number == blast_type_blastn);
+   is_translated = (search->prog_number != blast_type_blastn &&
+                    search->prog_number != blast_type_blastp);
+
+   subject_slp = search->query_slp->next;
+   /* Only for the two sequences case, get offset shift if subject 
+      is a subsequence */
+   if (!search->rdfp && subject_slp)
+       s_shift = SeqLocStart(subject_slp);
+   /* Check if query is a subsequence */
+   q_shift = SeqLocStart(search->query_slp);
+
+   if (is_na)
+      cutoff_s = search->pbp->cutoff_s;
+   else
+      cutoff_s = 0;
+   
+   if (search->rdfp)
+      readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
+                            &subject_descr);
+   else
+      sip = SeqIdSetDup(search->subject_info->sip);
+
+   if (search->prog_number == blast_type_tblastn) {
+      if (subject_slp) {
+         spp = SeqPortNewByLoc(subject_slp, Seq_code_ncbi4na);
+         subject_length = SeqLocLen(subject_slp);
+      } else {
+         if (search->rdfp)
+            bsp = readdb_get_bioseq(search->rdfp, search->subject_id);
+         else
+            bsp = BioseqLockById(sip);
+         spp = SeqPortNew(bsp, 0, -1, Seq_strand_plus, Seq_code_ncbi4na);
+         subject_length = bsp->length;
+      }
+      /* make one longer to "protect" ALIGN. */
+      subject_start = subject_seq = 
+         MemNew((1+subject_length)*sizeof(Uint1));
+      for (index=0; index<subject_length; index++) {
+         subject_seq[index] = SeqPortGetResidue(spp);
+      }
+      /* Gap character in last space. */
+      subject_seq[subject_length] = NULLB;
+      spp = SeqPortFree(spp);
+      
+      if (subject_slp && !bsp) {
+         Change_Loc_Strand(subject_slp, Seq_strand_minus);
+         spp = SeqPortNewByLoc(subject_slp, Seq_code_ncbi4na);
+         Change_Loc_Strand(subject_slp, Seq_strand_both);
+      } else if (bsp)
+         spp = SeqPortNew(bsp, 0, -1, Seq_strand_minus, Seq_code_ncbi4na);
+
+      /* make one longer to "protect" ALIGN. */
+      rev_subject = MemNew((1+subject_length)*sizeof(Uint1));
+      for (index=0; index<subject_length; index++)
+         rev_subject[index] = SeqPortGetResidue(spp);
+      /* Gap character in last space. */
+      rev_subject[subject_length] = NULLB;
+      rev_subject_length = subject_length;
+      spp = SeqPortFree(spp);
+      if (search->rdfp)
+         bsp = BioseqFree(bsp);
+      else if (bsp) 
+         BioseqUnlock(bsp);
+   } else if (search->rdfp) {
+      if (is_na) {
+         subject_length = 
+            readdb_get_sequence_ex(search->rdfp, search->subject_id, 
+                                   &subject_start, &length, TRUE);
+         subject_seq = subject_start + 1;
+      } else {
+         subject_length = 
+            readdb_get_sequence(search->rdfp, search->subject_id, 
+                                &subject_seq);
+      }
+   } else if (search->prog_number == blast_type_blastn) {
+      bsp = BioseqLockById(sip);
+      if (subject_slp) {
+         spp = SeqPortNewByLoc(subject_slp, Seq_code_ncbi4na);
+         subject_length = SeqLocLen(subject_slp);
+      } else {
+         spp = SeqPortNew(bsp, 0, -1, Seq_strand_plus, Seq_code_ncbi4na);
+         subject_length = bsp->length;
+      }
+      if (bsp->repr == Seq_repr_delta) 
+         SeqPortSet_do_virtual(spp, TRUE);
+      /* make one longer to "protect" ALIGN. */
+      subject_start = MemNew((2+subject_length)*sizeof(Uint1));
+      subject_start[0] = ncbi4na_to_blastna[0];
+      subject_seq = subject_start+1;
+      index=0;
+      while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+         if (IS_residue(residue))
+            subject_seq[index++] = ncbi4na_to_blastna[residue];
+      }
+      /* Gap character in last space. */
+      subject_seq[index] = ncbi4na_to_blastna[0];
+      spp = SeqPortFree(spp);
+      BioseqUnlock(bsp);
+   } else {
+      if (subject_slp) {
+         subject_length = SeqLocLen(subject_slp);
+         spp = SeqPortNewByLoc(subject_slp, Seq_code_ncbistdaa);
+      } else {
+         bsp = BioseqLockById(sip);
+         subject_length = bsp->length;
+         spp = SeqPortNew(bsp, 0, -1, Seq_strand_unknown, 
+                          Seq_code_ncbistdaa);
+         BioseqUnlock(bsp);
+      }
+      subject_start = (Uint1Ptr) MemNew(((subject_length)+2)*sizeof(Uint1));
+      /* The first residue is the sentinel. */
+      subject_start[0] = NULLB;
+      subject_seq = subject_start+1;
+      index = 0;
+      while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+         if (IS_residue(residue))
+            subject_seq[index++] = residue;
+      }
+      subject_seq[index] = NULLB;
+      spp = SeqPortFree(spp);
+   }
+
+   if (sip->choice == SEQID_LOCAL) {
+      bsp = BioseqLockById(sip);
+      title = StringSave(BioseqGetTitle(bsp));
+      if (title)
+         subject_buffer = StringTokMT(title, " ", &title);
+      else
+         numeric_sip_type = GetAccessionFromSeqId(bsp->id, &subject_gi, 
+                                                  &subject_buffer);
+      BioseqUnlock(bsp);
+   } else if (sip->choice != SEQID_GENERAL ||
+              StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
+      numeric_sip_type = GetAccessionFromSeqId(SeqIdFindBestAccession(sip), 
+                                               &subject_gi, &subject_buffer);
+   } else {
+      subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
+      subject_descr = subject_buffer;
+   }
+   if (numeric_sip_type) {
+      subject_buffer = (CharPtr) Malloc(16);
+      sprintf(subject_buffer, "%ld", subject_gi);
+   }
+
+   buffer = (CharPtr) Malloc(LARGE_BUFFER_LENGTH);
+
+   query_id = search->query_id;
+   if (is_na) 
+      query_length = search->query_context_offsets[search->first_context+1] -
+         search->query_context_offsets[search->first_context] - 1;
+   else
+      query_length = search->context[0].query->length;
+
+   if (query_id->choice == SEQID_LOCAL) {
+      BioseqPtr query_bsp = BioseqLockById(query_id);
+      title = StringSave(BioseqGetTitle(query_bsp));
+      if (title)
+         query_buffer = StringTokMT(title, " ", &title);
+      else {
+         Int4 query_gi;
+         Boolean numeric_query_id =
+            GetAccessionFromSeqId(query_bsp->id, &query_gi,
+                                  &query_buffer);
+         if (numeric_query_id) {
+            query_buffer = (CharPtr) Malloc(16);
+            sprintf(query_buffer, "%ld", query_gi);
+         }
+      }  
+      BioseqUnlock(query_bsp);
+   } else {
+      query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
+      SeqIdWrite(SeqIdFindBestAccession(query_id), query_buffer,
+                 PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
+   }
+
+   if (is_na) {
+      kbp = search->sbp->kbp_gap[search->first_context];
+      search->sbp->kbp_gap[search->first_context] = 
+         search->sbp->kbp[search->first_context];
+   }
+
+   hsp_array = search->current_hitlist->hsp_array;
+
+   subject_id = GetTheSeqAlignID(sip);
+   sip = SeqIdSetFree(sip);
+   if (search->prog_number != blast_type_tblastx && 
+       search->pbp->gapped_calculation)
+      new_hspcnt = RealBlastGetGappedAlignmentTraceback(search, subject_seq, subject_length, rev_subject, rev_subject_length, subject_id, hsp_array, hspcnt, &seqalign, NULL, cutoff_s, FALSE, search->subject_id, TRUE);
+   else {
+      SeqIdPtr new_sip, gi_list=NULL;
+      StdSegPtr ssp, ssp_head = NULL;
+
+      gi_list = BlastGetAllowedGis(search, search->subject_id, &new_sip);
+      sip = SeqIdDup(query_id);
+      if (new_sip)
+         sip->next = new_sip;
+      else
+         sip->next = subject_id;
+      for (index=0; index<hspcnt; index++) {
+         hsp = hsp_array[index];
+         ssp = BLASTHspToStdSeg(search, subject_length, hsp, sip, 
+                                FALSE, gi_list);
+         ssp->ids = SeqIdSetDup(sip);
+         if (!seqalign)
+            sap = seqalign = SeqAlignNew();
+         else {
+            sap->next = SeqAlignNew();
+            sap = sap->next;
+         }
+         sap->type = 2;
+         sap->segtype = 3;
+         sap->segs = ssp;
+      }
+      SeqIdFree(sip);
+   }
+
+   subject_id = SeqIdSetFree(subject_id);
+
+   for (index=0; index<hspcnt; index++) {
+      if (search->current_hitlist->hsp_array[index] != NULL)
+         GapXEditBlockDelete(search->current_hitlist->hsp_array[index]->gap_info);
+   }
+
+   if (is_na)
+      search->sbp->kbp_gap[search->first_context] = kbp;
+
+   if (is_translated) {
+      asp = MemNew(sizeof(AlignSum));
+      asp->matrix = NULL;
+      asp->matrix = load_default_matrix();
+      asp->is_aa = !is_na;
+      AdjustOffSetsInSeqAlign(seqalign, search->query_slp, subject_slp);
+   }
+
+   /* Now print the tab-delimited fields, using seqalign */
+   for (sap = seqalign; sap; sap = sap->next) {
+      perc_ident = 0;
+      align_length = 0;
+      num_gap_opens = 0;
+      num_mismatches = 0;
+
+      GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
+
+      if (evalue < 1.0e-180)
+         sprintf(eval_buff, "0.0");
+      else if (evalue < 1.0e-99)
+         sprintf(eval_buff, "%2.0le", evalue);
+      else if (evalue < 0.0009) 
+         sprintf(eval_buff, "%3.1le", evalue);
+      else if (evalue < 1.0) 
+         sprintf(eval_buff, "%4.3lf", evalue);
+      else 
+         sprintf(eval_buff, "%5.1lf", evalue);
+      
+      if (bit_score > 9999)
+         sprintf(bit_score_buff, "%4.3le", bit_score);
+      else if (bit_score > 99.9)
+         sprintf(bit_score_buff, "%4.1lf", bit_score);
+      else
+         sprintf(bit_score_buff, "%4.2lf", bit_score);
+
+      query_seq = search->context[search->first_context].query->sequence;
+
+      if (!is_translated) {
+         DenseSegPtr dsp = (DenseSegPtr) sap->segs;
+         numseg = dsp->numseg;
+         
+         for (i=0; i<numseg; i++) {
+            align_length += dsp->lens[i];
+            if (dsp->starts[2*i] != -1 && dsp->starts[2*i+1] != -1) {
+               num_ident = BlastGetNumIdentical(query_seq, subject_seq, 
+                                                dsp->starts[2*i], dsp->starts[2*i+1], 
+                                                dsp->lens[i], FALSE);
+               perc_ident += num_ident;
+               num_mismatches += dsp->lens[i] - num_ident;
+            } else
+               num_gap_opens++;
+         }
+         perc_ident = perc_ident / align_length * 100;
+         
+         /* Adjust offsets for (concatenated) minus strand */
+         if (is_na && dsp->starts[0] >= query_length) {
+            q_start = 2*query_length - dsp->starts[2*numseg-2] - 
+               dsp->lens[numseg-1] + 2;
+            q_end = 2*query_length - dsp->starts[0] + 1;
+            s_start = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+            s_end = dsp->starts[1]+1;
+         } else {
+            q_start = dsp->starts[0] + 1;
+            q_end = dsp->starts[2*numseg-2] + dsp->lens[numseg-1];
+            s_start = dsp->starts[1] + 1;
+            s_end = dsp->starts[2*numseg-1] + dsp->lens[numseg-1];
+         }
+      } else {
+         StdSegPtr ssp = (StdSegPtr) sap->segs;
+         
+         find_score_in_align(sap, 1, asp);
+
+         if (asp->m_frame < 0)
+            q_start = SeqLocStop(ssp->loc) + 1;
+         else
+            q_start = SeqLocStart(ssp->loc) + 1;
+
+         if (asp->t_frame < 0)
+            s_start = SeqLocStop(ssp->loc->next) + 1;
+         else
+            s_start = SeqLocStart(ssp->loc->next) + 1;
+         
+         for (index=1; ssp->next; index++)
+            ssp = ssp->next;
+         
+         if (asp->m_frame < 0)
+            q_end = SeqLocStart(ssp->loc) + 1;
+         else
+            q_end = SeqLocStop(ssp->loc) + 1;
+
+         if (asp->t_frame < 0)
+            s_end = SeqLocStart(ssp->loc->next) + 1;
+         else
+            s_end = SeqLocStop(ssp->loc->next) + 1;
+
+         align_length = asp->totlen;
+         num_gap_opens = index / 2;
+         num_mismatches = asp->totlen - asp->gaps - asp->identical;
+         perc_ident = ((FloatHi) 100*asp->identical)/ (asp->totlen);
+      }
+
+      if (!is_translated) {
+         /* Adjust coordinates if query and/or subject is a subsequence */
+         q_start += q_shift;
+         q_end += q_shift;
+         s_start += s_shift;
+         s_end += s_shift;
+      }
+
+      fprintf(fp, 
+              "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+              query_buffer, subject_buffer, perc_ident, align_length, 
+              num_mismatches, num_gap_opens, q_start, 
+              q_end, s_start, s_end, eval_buff, bit_score_buff);
+   }
+
+   if (is_translated) {
+      free_default_matrix(asp->matrix);
+      MemFree(asp);
+   }
+
+   MemFree(subject_start);
+   MemFree(rev_subject);
+   SeqAlignSetFree(seqalign);
+
+   if (!numeric_sip_type && subject_buffer != subject_descr)
+      MemFree(subject_buffer);
+   MemFree(subject_descr);
+   MemFree(buffer);
+   MemFree(query_buffer);
+   fflush(fp);
+   return 0;
+}
+
+
+int LIBCALLBACK
+MegaBlastPrintAlignInfo(VoidPtr ptr)
+{
+   BlastSearchBlkPtr search = (BlastSearchBlkPtr) ptr;
+   ReadDBFILEPtr rdfp = search->rdfp;
+   BLAST_HSPPtr hsp; 
+   Int4 i, subject_gi;
+   Int2 context;
+   CharPtr query_buffer, title;
+   SeqIdPtr sip, subject_id, query_id; 
+   Int4 descr_len;
+   Int4 index, hsp_index, score;
+   Int4 num_mismatches, num_gap_opens, align_length, num_ident;
+   BLAST_KarlinBlkPtr kbp;
+   Uint1Ptr query_seq, subject_seq = NULL;
+   FloatHi perc_ident, bit_score;
+   Char eval_buff[10], bit_score_buff[10];
+   GapXEditScriptPtr esp;
+   Int4 q_start, q_end, s_start, s_end, query_length, subj_length, numseg;
+   Int4 q_off, q_shift = 0, s_shift = 0;
+   Int4Ptr length, start;
+   Uint1Ptr strands;
+   CharPtr subject_descr=NULL, subject_buffer, buffer;
+   Int4 buffer_size;
+   Boolean numeric_sip_type = FALSE;
+   FILE *fp = (FILE *) search->output;
+
+   if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
+      search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
+      return 0;
+   }
+
+   subject_seq = search->subject->sequence_start;
+
+   if (search->rdfp) {
+      readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
+                            &subject_descr);
+   } else 
+      sip = SeqIdSetDup(search->subject_info->sip);
+
+   subject_id = SeqIdFindBestAccession(sip);
+
+   if (subject_id->choice == SEQID_LOCAL) {
+      BioseqPtr bsp = BioseqLockById(sip);
+      title = StringSave(BioseqGetTitle(bsp));
+      if (title)
+         subject_buffer = StringTokMT(title, " ", &title);
+      else
+         numeric_sip_type = GetAccessionFromSeqId(bsp->id, &subject_gi, 
+                                                  &subject_buffer);
+      BioseqUnlock(bsp);
+   } else if (subject_id->choice != SEQID_GENERAL ||
+      StringCmp(((DbtagPtr)subject_id->data.ptrvalue)->db, "BL_ORD_ID")) {
+      if (search->pbp->megablast_full_deflines) { 
+         subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
+         SeqIdWrite(subject_id, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+      } else
+         numeric_sip_type = GetAccessionFromSeqId(subject_id, &subject_gi, 
+                                                  &subject_buffer);
+   } else {
+      subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
+      subject_descr = subject_buffer;
+   }
+
+   buffer = (CharPtr) Malloc(LARGE_BUFFER_LENGTH);
+
+   /* Only for the two sequences case, get offset shift if subject 
+      is a subsequence */
+   if (!search->rdfp && search->query_slp->next)
+       s_shift = SeqLocStart(search->query_slp->next);
+   /* Get offset shift if query is a subsequence */
+   q_shift = SeqLocStart(search->query_slp);
+
+   for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
+      hsp = search->current_hitlist->hsp_array[hsp_index];
+      if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
+                        hsp->evalue > search->pbp->cutoff_e)) {
+         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
+	 continue;
+      }
+      context = hsp->context;
+      query_id = search->qid_array[context/2];
+
+     
+      if (query_id == NULL) /* Bad hsp, something wrong */
+	 continue; 
+      hsp->context = context & 1;
+
+      kbp = search->sbp->kbp[context];
+      bit_score = (hsp->score*kbp->Lambda - kbp->logK) / NCBIMATH_LN2;
+
+      query_length = search->query_context_offsets[context+1] -
+         search->query_context_offsets[context] - 1;
+
+      q_off = hsp->query.offset;
+      if (hsp->context) {
+	 hsp->query.end = query_length - hsp->query.offset;
+	 hsp->query.offset = 
+	    hsp->query.end - hsp->query.length;
+         s_end = hsp->subject.offset + 1;
+         s_start = hsp->subject.end;
+      } else {
+	 hsp->query.end = hsp->query.offset + hsp->query.length;
+         s_start = hsp->subject.offset + 1;
+         s_end = hsp->subject.end;
+      }
+
+      q_start = hsp->query.offset + 1;
+      q_end = hsp->query.end;
+         
+      /* Adjust offsets if query is a subsequence, only for first query */
+      if (context < 2) {
+          q_start += q_shift;
+          q_end += q_shift;
+      }
+
+      s_start += s_shift;
+      s_end += s_shift;
+
+      if (query_id->choice == SEQID_LOCAL && 
+       search->pbp->megablast_full_deflines) {
+         BioseqPtr query_bsp = BioseqLockById(query_id);
+         title = StringSave(BioseqGetTitle(query_bsp));
+         if (title)
+            query_buffer = StringTokMT(title, " ", &title);
+         else {
+            Int4 query_gi;
+            Boolean numeric_query_id =
+               GetAccessionFromSeqId(query_bsp->id, &query_gi,
+                                     &query_buffer);
+            if (numeric_query_id) {
+               query_buffer = (CharPtr) Malloc(16);
+               sprintf(query_buffer, "%ld", query_gi);
+            }
+         }  
+         BioseqUnlock(query_bsp);
+      } else {
+         query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
+         if (!search->pbp->megablast_full_deflines) {
+            SeqIdWrite(SeqIdFindBestAccession(query_id), query_buffer,
+                       PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
+         } else 
+            SeqIdWrite(query_id, query_buffer, PRINTID_FASTA_LONG,
+                       BUFFER_LENGTH);
+      }
+
+      query_seq = search->context[context].query->sequence;
+
+      esp = hsp->gap_info->esp;
+        
+      for (numseg=0; esp; esp = esp->next, numseg++);
+
+      GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
+				&start, &length, &strands, 
+				&q_off, &hsp->subject.offset);
+      GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
+
+      if (start[0] < 0) {
+         length[0] += start[0];
+         start[1] -= start[0];
+         start[0] = 0;
+      } 
+      if (start[2*(numseg-1)] + length[numseg-1] > query_length) 
+         length[numseg-1] = query_length - start[2*(numseg-1)];
+      
+      perc_ident = 0;
+      align_length = 0;
+      num_gap_opens = 0;
+      num_mismatches = 0;
+      for (i=0; i<numseg; i++) {
+         align_length += length[i];
+	 if (start[2*i] != -1 && start[2*i+1] != -1) {
+	    num_ident = MegaBlastGetNumIdentical(query_seq, subject_seq, 
+                                                 start[2*i], start[2*i+1], 
+                                                 length[i], FALSE);
+            perc_ident += num_ident;
+            num_mismatches += length[i] - num_ident;
+	 } else
+            num_gap_opens++;
+      }
+      perc_ident = perc_ident / align_length * 100;
+
+      if (perc_ident < search->pbp->perc_identity) {
+         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
+         continue;
+      }
+      if (hsp->evalue < 1.0e-180)
+         sprintf(eval_buff, "0.0");
+      else if (hsp->evalue < 1.0e-99)
+         sprintf(eval_buff, "%2.0le", hsp->evalue);
+      else if (hsp->evalue < 0.0009) 
+         sprintf(eval_buff, "%3.1le", hsp->evalue);
+      else if (hsp->evalue < 1.0) 
+         sprintf(eval_buff, "%4.3lf", hsp->evalue);
+      else 
+         sprintf(eval_buff, "%5.1lf", hsp->evalue);
+      
+      if (bit_score > 9999)
+         sprintf(bit_score_buff, "%4.3le", bit_score);
+      else if (bit_score > 99.9)
+         sprintf(bit_score_buff, "%4.1lf", bit_score);
+      else
+         sprintf(bit_score_buff, "%4.2lf", bit_score);
+
+      if (numeric_sip_type)
+         fprintf(fp, 
+                 "%s\t%ld\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+                 query_buffer, subject_gi, perc_ident, align_length, 
+                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
+                 s_end, eval_buff, bit_score_buff);
+      else 
+	 fprintf(fp, 
+                 "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
+                 query_buffer, subject_buffer, perc_ident, align_length, 
+                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
+                 s_end, eval_buff, bit_score_buff);
+
+      MemFree(start);
+      MemFree(length);
+      MemFree(strands);
+      MemFree(query_buffer);
+   } /* End loop on hsp's */
+   if (!numeric_sip_type && subject_buffer != subject_descr)
+      MemFree(subject_buffer);
+   MemFree(subject_descr);
+   MemFree(buffer);
+   sip = SeqIdSetFree(sip);
+   fflush(fp);
+   return 0;
 }

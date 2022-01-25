@@ -6,6 +6,9 @@
 --    readability at the suggestion of Peter Rice, EMBL
 --  Later additions by Taxonomy Group staff at NCBI
 --
+--  Version 3.8
+--     Added GTG start to Echinoderm mitochondrial code, code 9
+--
 --  Version 3.7
 --     Added code 23 Thraustochytrium mitochondrial code
 --        formerly OGMP code 93
@@ -121,7 +124,7 @@ Genetic-code-table ::= {
   name "SGC8" ,
   id 9 ,
   ncbieaa  "FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNNKSSSSVVVVAAAADDEEGGGG",
-  sncbieaa "-----------------------------------M----------------------------"
+  sncbieaa "-----------------------------------M---------------M------------"
   -- Base1  TTTTTTTTTTTTTTTTCCCCCCCCCCCCCCCCAAAAAAAAAAAAAAAAGGGGGGGGGGGGGGGG
   -- Base2  TTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGGTTTTCCCCAAAAGGGG
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
@@ -137,7 +140,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  },
  {
-  name "Bacterial" ,
+  name "Bacterial and Plant Plastid" ,
   id 11 ,
   ncbieaa  "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "---M---------------M------------MMMM---------------M------------"
@@ -200,7 +203,7 @@ Genetic-code-table ::= {
   -- Base3  TCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAGTCAG
  } ,
  {
-  name "TAG-Leu,TCA-stop" ,
+  name "Scenedesmus obliquus mitochondrial" ,
   id 22 ,
   ncbieaa  "FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG",
   sncbieaa "-----------------------------------M----------------------------"

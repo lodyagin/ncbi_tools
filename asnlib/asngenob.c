@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 4/21/94
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   Generic routines shared by object loaders which are automatically
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: asngenob.c,v $
+* Revision 6.2  2000/12/12 15:56:12  ostell
+* added support BigInt
+*
 * Revision 6.1  1997/10/29 02:40:56  vakatov
 * Type castings to pass through the C++ compiler
 *
@@ -114,6 +117,11 @@ NLM_EXTERN ValNodePtr LIBCALL AsnGenericBaseSeqOfAsnRead (AsnIoPtr aip, AsnModul
 	    goto erret;
 	 current->data.intvalue = av.intvalue;
 	 break;
+      case ASNCODE_BIGINTVAL_SLOT:
+	 if (AsnReadVal (aip, atp, &av) <= 0)
+	    goto erret;
+	 current->data.bigintvalue = av.bigintvalue;
+	 break;
       case ASNCODE_BOOLVAL_SLOT:
 	 if (AsnReadVal (aip, atp, &av) <= 0)
 	    goto erret;
@@ -159,6 +167,7 @@ NLM_EXTERN Boolean LIBCALL AsnGenericBaseSeqOfAsnWrite (ValNodePtr ptr, int whic
 	 case ASNCODE_BYTEVAL_SLOT:
 	 case ASNCODE_REALVAL_SLOT:
 	 case ASNCODE_INTVAL_SLOT:
+	 case ASNCODE_BIGINTVAL_SLOT:
 	 case ASNCODE_BOOLVAL_SLOT:
 	    if (AsnWrite (aip, element_atp, &(current->data)) <= 0)
 	       goto ret;
@@ -194,6 +203,7 @@ NLM_EXTERN Boolean LIBCALL AsnGenericBaseSeqOfFree (ValNodePtr ptr, int whichval
 	 break;
       case ASNCODE_REALVAL_SLOT:
       case ASNCODE_INTVAL_SLOT:
+      case ASNCODE_BIGINTVAL_SLOT:
       case ASNCODE_BOOLVAL_SLOT:
 	 /* No-op */
 	 break;

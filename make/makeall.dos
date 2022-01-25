@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.119 2000/10/31 19:50:46 beloslyu Exp $
+# $Id: makeall.dos,v 6.130 2001/03/23 21:13:12 madden Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -21,11 +21,14 @@ OBJ1  = \
 	+asnbufo.obj +asndebin.obj +asnenbin.obj +asngen.obj +asngenob.obj \
 	+asnio.obj +asnlex.obj +asnlext.obj +asnout.obj +asnprint.obj \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
-	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
-	+ncbibuf.obj +connectn.obj +connutil.obj \
-	+con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj \
-	+binary.obj  +ncbi_socket_.obj +ncbi_buffer.obj \
-	+ncbi_core.obj +ncbi_util.obj
+	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +ncbi_socket_.obj +matrix.obj \
+	+ncbibuf.obj +ncbi_buffer.obj +ncbi_core.obj +ncbi_util.obj +ncbi_priv.obj \
+	+ncbi_ansi_ext.obj +ncbi_connection.obj +ncbi_connector.obj +ncbi_connutil.obj \
+        +ncbi_file_connector.obj +ncbi_http_connector.obj \
+        +ncbi_server_info.obj +ncbi_service.obj \
+        +ncbi_service_connector.obj +ncbi_service_dispd.obj \
+	+ncbi_service_lbsmd_stub.obj +ncbi_socket_connector.obj \
+	+urlquery.obj +binary.obj +ncbi_sendmail_.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
@@ -42,11 +45,12 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
 	+accmmdbs.obj +acccn3ds.obj +lsqfetch.obj +findrepl.obj \
 	+jzcoll.obj +jzmisc.obj +maputil.obj +mconsist.obj +codon.obj \
-	+txalign.obj +sqnutil1.obj +sqnutil2.obj +sqnutil3.obj +salpacc.obj +salprop.obj \
+	+sqnutil1.obj +sqnutil2.obj +sqnutil3.obj +salpacc.obj +salprop.obj \
 	+udvseq.obj \
 	+salsap.obj +salstruc.obj +salutil.obj +salpedit.obj +salpstat.obj \
 	+blocks.obj +pgppop.obj +samutil.obj +objalignloc.obj +ddvcolor.obj \
-	+viewmgr.obj +ddvcreate.obj +jsavlt.obj +needleman.obj
+	+viewmgr.obj +ddvcreate.obj +jsavlt.obj +needleman.obj +txalign.obj \
+	+fdlobj.obj
 
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
@@ -103,7 +107,7 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
 	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj \
 	+vecscrn.obj +mblast.obj +rpsutil.obj +kappa.obj  \
-	+xmlblast.obj +bxmlobj.obj +fdlobj.obj +dotseq.obj
+	+xmlblast.obj +bxmlobj.obj +dotseq.obj 
 
 OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
 	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
@@ -117,6 +121,7 @@ OBJ45 = +ddvclick.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
 
 
 ### OpenGL versions of LIB4(vibrant.lib) and LIB30(ncbicn3d.lib)
+!ifndef CONSOLE
 !ifdef OPENGL
 .c.ogl:
 	copy $*.c $*_ogl.c
@@ -136,6 +141,7 @@ PNG_INCLUDES = -D_PNG -I$(LIBPNG_DIR) -I$(ZLIB_DIR)
 !endif
 !endif
 
+!endif
 !endif
 
 
@@ -187,6 +193,11 @@ copy_reg:
 	$(DEL) asn.h
 	copy ..\asnlib\*.c .
 	copy ..\connect\*.c .
+	copy ..\connect\ncbi_priv.h .
+	copy ..\connect\ncbi_comm.h .
+	copy ..\connect\ncbi_servicep.h .
+	copy ..\connect\ncbi_servicep_dispd.h .
+	copy ..\connect\ncbi_servicep_lbsmd.h .
 	copy ..\connect\*.h $(INCPATH)
 	$(DEL) ..\include\ncbi_*.h
 	copy ..\connect\ncbi_*.h $(INCPATH)\connect

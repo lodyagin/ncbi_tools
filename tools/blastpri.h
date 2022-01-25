@@ -32,8 +32,29 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.71 $ 
+/* $Revision: 6.77 $ 
 * $Log: blastpri.h,v $
+* Revision 6.77  2001/03/19 18:54:50  madden
+* Added BlastSeqLocFillDoubleIntEx, changed BlastSeqLocFillDoubleIntRev
+*
+* Revision 6.76  2001/02/08 20:38:30  dondosha
+* Added prototype for BLASTHspToStdSeg
+*
+* Revision 6.75  2001/02/07 21:08:33  dondosha
+* 1. Added prototypes of callback functions to handle results
+* 2. Two private auxiliary functions made public
+*
+* Revision 6.74  2001/01/23 20:25:43  dondosha
+* 1. Renamed BlastParceInputString to BlastParseInputString
+* 2. Recognize a double quoted string as an option value in
+*    BlastParseInputString
+*
+* Revision 6.73  2000/12/19 18:39:50  madden
+* Add function BlastSetUserErrorString and BlastDeleteUserErrorString
+*
+* Revision 6.72  2000/11/17 17:51:59  dondosha
+* Removed is_megablast argument from BLASTSetUpSearchWithReadDbInternalEx since it is part of options
+*
 * Revision 6.71  2000/10/12 21:40:36  shavirin
 * Added is_oofalign to definition of the function BLASTFilterOverlapRegions().
 *
@@ -89,7 +110,7 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 * Added prototypes for BlastNTGetGappedScore, BlastNTPreliminaryGappedScore and BlastNtSaveCurrentHsp
 *
 * Revision 6.53  1999/11/02 15:24:03  madden
-* Add BlastParceInputString and BlastGetLetterIndex
+* Add BlastParseInputString and BlastGetLetterIndex
 *
 * Revision 6.52  1999/10/05 18:16:07  shavirin
 * Functions tick_proc and get_db_chunk were renamed and become public.
@@ -539,7 +560,6 @@ typedef struct _txdbinfo {
 #define TXPARAMETERS 14
 #define TXMATRIX 15
 #define EFF_SEARCH_SPACE 16
-
 	
 /*
 	Allocates memory for TxDfDbInfoPtr.
@@ -633,7 +653,7 @@ BLASTSetUpSearchWithReadDbInternalEx PROTO((SeqLocPtr query_slp, BioseqPtr query
 								    positives)),
 				      SeqIdPtr seqid_list, BlastDoubleInt4Ptr
 				      gi_list, Int4 gi_list_total, ReadDBFILEPtr
-				      rdfp, Boolean is_megablast));
+				      rdfp));
 
 Int4 LIBCALL BlastTranslateUnambiguousSequence PROTO((BlastSearchBlkPtr search, Int4 length, Uint1Ptr prot_seq, Uint1Ptr nt_seq, Int2 frame));
 
@@ -783,7 +803,8 @@ SeqLocPtr HitRangeToSeqLoc PROTO((BlastHitRangePtr bhrp, Int4 link_value, Boolea
 
 
 ValNodePtr BlastSeqLocFillDoubleInt PROTO((SeqLocPtr mask_slp, Int4 max_length, Boolean reverse));
-ValNodePtr BlastSeqLocFillDoubleIntRev PROTO((ValNodePtr location, SeqLocPtr mask_slp, Int4 max_length));
+ValNodePtr BlastSeqLocFillDoubleIntEx PROTO((SeqLocPtr mask_slp, Int4 full_query_length, Int4 max_length, Boolean reverse, Int4 offset));
+ValNodePtr BlastSeqLocFillDoubleIntRev PROTO((ValNodePtr location, SeqLocPtr mask_slp, Int4 full_query_length, Int4 max_length, Int4 offset));
 
 
 Int2 BlastInsertList2Heap PROTO((BlastSearchBlkPtr search, BLASTResultHitlistPtr result_hitlist));
@@ -809,13 +830,20 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
                         BlastThrInfoPtr thr_info);
 void BlastTickProc(Int4 sequence_number, BlastThrInfoPtr thr_info);
 
-Boolean BlastParceInputString(CharPtr string, CharPtr letters, CharPtr PNTR *values_in, CharPtr PNTR ErrorMessage);
+Boolean BlastParseInputString(CharPtr string, CharPtr letters, CharPtr PNTR *values_in, CharPtr PNTR ErrorMessage);
 
 Int4 BlastGetLetterIndex(CharPtr letters, Char ch);
 
 SeqIdPtr BlastGetAllowedGis PROTO((BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seqid));
 
 Int4 BlastDeleteHeap PROTO((BLASTHeapPtr which_heap, Int4 position));
+
+/* Functions used for printing error messages. */
+
+Uint1 BlastSetUserErrorString(CharPtr string, SeqIdPtr sip, Boolean use_id);
+void BlastDeleteUserErrorString(Uint1 err_id);
+
+
 
 /* Functions used in OOF calculations */
 
@@ -839,6 +867,20 @@ SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct,
                                       Boolean sort_array);
 
 /* End of functions used in OOF calculations */
+
+Int4
+BlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
+                         Int4 s_start, Int4 length, Boolean reverse));
+
+SeqIdPtr GetTheSeqAlignID PROTO((SeqIdPtr seq_id));
+StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length, BLAST_HSPPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list));
+
+/* Callbacks to handle results instead of saving hit lists */
+#define BUFFER_LENGTH 255
+#define LARGE_BUFFER_LENGTH 1024
+
+int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
+int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
 
 #ifdef __cplusplus
 }

@@ -667,11 +667,11 @@ void   id_print_gi_state(Int4 state,CharPtr buf,Uint1 len)
         }
         dlen = strlen(buf);
         if(state & GI_IS_SUPPRESSED){
-                strncpy(buf+dlen,"|SUPPRESSED BY RULE",len - dlen - 1);
+                strncpy(buf+dlen,"|SUPPRESSED",len - dlen - 1);
         }
         dlen = strlen(buf);
         if(state & GI_IS_OVERRIDEN){
-                strncpy(buf+dlen,"|MANUALLY SUPPRESSED",len - dlen - 1);
+                strncpy(buf+dlen,"|WITHDRAWN",len - dlen - 1);
         }
         dlen = strlen(buf);
         if(state & GI_IS_CONFIDENTIAL){

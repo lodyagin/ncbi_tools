@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:
 *   Typedefs and prototypes for internal routines of asndebin.c
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        AsnDeBinReadBoolean returns Boolean
 *
 * $Log: asndebin.h,v $
+* Revision 6.1  2000/12/12 15:56:11  ostell
+* added support BigInt
+*
 * Revision 6.0  1997/08/25 18:09:48  madden
 * Revision changed to 6.0
 *
@@ -88,6 +91,7 @@ NLM_EXTERN AsnTypePtr AsnDeBinFindType PROTO((AsnIoPtr aip, AsnModulePtr amp));
 NLM_EXTERN AsnTypePtr AsnDeBinFindElement PROTO((AsnIoPtr aip, AsnTypePtr atp));
 
 NLM_EXTERN Int4 AsnDeBinReadInteger PROTO((AsnIoPtr aip, AsnTypePtr atp));
+NLM_EXTERN Int8 AsnDeBinReadBigInt PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN Boolean AsnDeBinReadBoolean PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN CharPtr AsnDeBinReadString PROTO((AsnIoPtr aip, AsnTypePtr atp));
 NLM_EXTERN void AsnDeBinSkipString PROTO((AsnIoPtr aip));

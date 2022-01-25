@@ -46,6 +46,12 @@
  *       GIF drawing functions
  *
  * $Log: gifgen.c,v $
+ * Revision 6.15  2001/03/21 18:54:57  juran
+ * Fix "for (...);" warnings by adding a space before the semicolon.
+ *
+ * Revision 6.14  2001/01/05 20:10:29  vakatov
+ * s_ComposeEffClip() -- fixed a typo (".lt" -> ".rb")
+ *
  * Revision 6.13  2000/04/06 17:12:54  chetvern
  * gdImageFilledPolygon
  * zero section width case fixed
@@ -822,8 +828,8 @@ static void s_ComposeEffClip(gdImagePtr im)
 
   im->eff_clip.lt.x = MAX(im->clip.lt.x, 0);
   im->eff_clip.lt.y = MAX(im->clip.lt.y, 0);
-  im->eff_clip.rb.x = MIN(im->clip.lt.x + 1, im->sx);
-  im->eff_clip.rb.y = MIN(im->clip.lt.y + 1, im->sy);
+  im->eff_clip.rb.x = MIN(im->clip.rb.x + 1, im->sx);
+  im->eff_clip.rb.y = MIN(im->clip.rb.y + 1, im->sy);
 }
 
 
@@ -1873,7 +1879,7 @@ NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect)
 
   /* find upper colored pixel (CP);  background is zero */
   for (y = 0, base_ptr = im->pixels;  y < height;  y++, base_ptr += width) {
-    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++);
+    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++) ;
     if (x < width)
       break;
   }
@@ -1890,7 +1896,7 @@ NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect)
   /* find lower CP */
   base_ptr = im->pixels + width * (height - 1);
   for (y = height-1;  y > yb;  y--, base_ptr -= width) {
-    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++);
+    for (x = 0, ptr = base_ptr;  x < width  &&  !*ptr;  x++, ptr++) ;
     if (x < width)
       break;
   }
@@ -1899,7 +1905,7 @@ NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect)
   /* find left CP */
   base_ptr = im->pixels + width * yb;
   for (x = 0;  x < width;  x++, base_ptr++) {
-    for (y = yb, ptr = base_ptr;  y <= ye  &&  !*ptr;  y++, ptr += width);
+    for (y = yb, ptr = base_ptr;  y <= ye  &&  !*ptr;  y++, ptr += width) ;
     if (y <= ye)
       break;
   }
@@ -1908,7 +1914,7 @@ NLM_EXTERN void gdImageGetAutoCropRectangle(gdImagePtr im, gdRect* rect)
   /* find right CP */
   base_ptr = im->pixels + width * (ye + 1) - 1;
   for (x = width-1;  x > xb;  x--, base_ptr--) {
-    for (y = ye, ptr = base_ptr;  y >= yb  &&  !*ptr;  y--, ptr -= width);
+    for (y = ye, ptr = base_ptr;  y >= yb  &&  !*ptr;  y--, ptr -= width) ;
     if (y >= yb)
       break;
   }

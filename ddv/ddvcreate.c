@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.c,v 1.61 2000/09/08 21:50:38 hurwitz Exp $
+/*  $Id: ddvcreate.c,v 1.66 2001/02/01 00:39:53 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.61 $
+* $Revision: 1.66 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.c,v $
+* Revision 1.66  2001/02/01 00:39:53  lewisg
+* fix leak
+*
+* Revision 1.65  2001/01/29 20:35:49  hurwitz
+* make gap between aligned blocks optional
+*
+* Revision 1.64  2001/01/25 21:49:14  hurwitz
+* added option for extra gap char (tilde) between aligned blocks
+*
+* Revision 1.63  2001/01/19 22:05:40  wheelan
+* took out small spaces created by UABuildDescriptor
+*
+* Revision 1.62  2001/01/10 23:38:39  lewisg
+* fix seqid and various memory leaks
+*
 * Revision 1.61  2000/09/08 21:50:38  hurwitz
 * made DDV_ReadSeqBin public
 *
@@ -468,7 +483,8 @@ static Boolean DDV_CreateDisplayFromIndex_1(SeqAlignPtr sap, MsaParaGPopListPtr 
             pgp->StopLetter = amp->to_m = to - 1;
          else
             pgp->StopLetter = amp->to_m = i + LineSize -1;
-         pgp->sip = sip;
+         if(i == from) pgp->sip = sip;
+         else pgp->sip = SeqIdDup(sip);
          pgp->ScaleStyle = SCALE_POS_NONE;
          amp->which_bsq = NULL;
          amp->row_num = n;
@@ -554,7 +570,8 @@ static Boolean DDV_CreateDisplayFromIndex_2(SeqAlignPtr sap, MsaParaGPopListPtr 
          }
          else
             pgp->StopLetter = i + LineSize -1;
-         pgp->sip = sip;
+         if(i == 0) pgp->sip = sip;
+         else pgp->sip = SeqIdDup(sip);
          pgp->ScaleStyle = SCALE_POS_NONE;
          amp->which_master = 0;
          if (amp->to_m != 0)
@@ -639,8 +656,18 @@ static Boolean DDV_CreateDisplayFromIndex_2(SeqAlignPtr sap, MsaParaGPopListPtr 
    return TRUE;
 }
 
+
 NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
-		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop)
+		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop) {
+/*******************************************************************************
+*  same as DDV_CreateDisplayFromIndex_EX2, but by default no extra gap char.
+*******************************************************************************/
+  return(DDV_CreateDisplayFromIndex_EX2(sap, mpplp, LineSize, ddop, start, stop, FALSE));
+}
+
+
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX2(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop, Boolean WantExtraGapChar)
 {
    AMAlignIndexPtr  amaip;
    AlnMsgPtr        amp;
@@ -677,7 +704,7 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopLis
                                            amaip->mstype == AM_NULL ||
                                            amaip->mstype == AM_MASTERSLAVE)))
       {
-         return(DDV_CreateDisplay_DiscAlign(sap,mpplp,LineSize,ddop));
+         return(DDV_CreateDisplay_DiscAlign2(sap,mpplp,LineSize,ddop,WantExtraGapChar));
       } 
       else if (sap->type == SAT_MASTERSLAVE && amaip->mstype == AM_MASTERSLAVE)
       {
@@ -734,7 +761,8 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopLis
          }
          else
             pgp->StopLetter = i + LineSize -1;
-         pgp->sip = sip;
+         if(i == from) pgp->sip = sip;
+         else pgp->sip = SeqIdDup(sip);
          pgp->ScaleStyle = SCALE_POS_NONE;
          amp->which_master = 0;
          if (amp->to_m != 0)
@@ -779,11 +807,21 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopLis
    return TRUE;
 }
 
+
 NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
-		Int2 LineSize, DDV_Disp_OptPtr ddop)
+		Int2 LineSize, DDV_Disp_OptPtr ddop) {
+/*******************************************************************************
+*  same as DDV_CreateDisplayFromIndex2, but by default no extra gap char.
+*******************************************************************************/
+  return(DDV_CreateDisplayFromIndex2(sap, mpplp, LineSize, ddop, FALSE));
+}
+
+
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex2(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop, Boolean WantExtraGapChar)
 {
-	return(DDV_CreateDisplayFromIndex_EX( sap,  mpplp, 
-		 LineSize,  ddop, (Int4) -1,  (Int4) -1));
+	return(DDV_CreateDisplayFromIndex_EX2(sap,  mpplp, 
+		 LineSize,  ddop, (Int4) -1,  (Int4) -1, WantExtraGapChar));
 }
 
 
@@ -989,7 +1027,7 @@ Int4            PassCount;
 				pgp->nLines=1;
 				pgp->StartLetter=nPgp*LineSize;
 				pgp->StopLetter=_min_(pgp->StartLetter+LineSize-1,mpplp->LengthAli-1);
-				pgp->sip=sip;
+				pgp->sip=SeqIdDup(sip);
 				pgp->ScaleStyle=SCALE_POS_NONE;
 				pgp->ptxtList=vnp_mtdp;
 				if (bFirstPgp){
@@ -1008,6 +1046,7 @@ Int4            PassCount;
       PassCount++;
 		}/*while() on the descriptor list*/
 		vnp_list[n-1]=vnp_para;
+        SeqIdFree(sip);
 	}/*for() on the bsp */
 	
 	/*delete the descriptor*/
@@ -1022,25 +1061,34 @@ Int4            PassCount;
 	return(TRUE);
 }
 
+NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop) {
+/*******************************************************************************
+*  same as DDV_CreateDisplay_DiscAlign2, but by default no extra gap char.
+*******************************************************************************/
+  return(DDV_CreateDisplay_DiscAlign2(sap, mpplp, LineSize, ddop, FALSE));
+}
+
+
 /*******************************************************************************
 
-  Function : DDV_CreateDisplay_DiscAlign()
+  Function : DDV_CreateDisplay_DiscAlign2()
   
   Purpose : create a display for a Disc. SeqAlign
 
   Return value : FALSE if failure
 
 *******************************************************************************/
-NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
-		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop)
+NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign2(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop, Boolean WantExtraGapChar)
 {
 Int4 nBsp,TotLength;
 ValNodePtr vnp_head;
 
 	/*descriptor*/
 	nBsp = AlnMgrGetNumRows(sap);
-	vnp_head=UABuildDescriptor(sap,nBsp,LineSize,ddop,&TotLength,
-		ddop->ShowLeftTail,ddop->ShowRightTail);
+	vnp_head=UABuildDescriptor2(sap,nBsp,LineSize,ddop,&TotLength,
+		ddop->ShowLeftTail,ddop->ShowRightTail, WantExtraGapChar);
 	if (vnp_head==NULL)
 		return(FALSE);
 
@@ -1400,9 +1448,20 @@ Uint1           strand;
 	return(vnp_head);
 }
 
+NLM_EXTERN ValNodePtr UABuildDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
+	DDV_Disp_OptPtr ddop, Int4Ptr TotLength,Boolean AddLeftUAPart,
+  Boolean AddRightUAPart) {
+/*******************************************************************************
+*  same as UABuildDescriptor2, but by default no extra gap char.
+*******************************************************************************/
+  return(UABuildDescriptor2(sap, nBsp, LineSize, ddop, TotLength,
+         AddLeftUAPart, AddRightUAPart, FALSE));
+}
+
+
 /*******************************************************************************
 
-  Function : UABuildDescriptor()
+  Function : UABuildDescriptor2()
   
   Purpose : build the descriptor of a SeqAlign. This function is ONLY designed 
             for discontinuous SeqAlign. The descriptor is a valnodelist. For
@@ -1418,9 +1477,9 @@ Uint1           strand;
 	  display coordinates)
 
 *******************************************************************************/
-NLM_EXTERN ValNodePtr UABuildDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
+NLM_EXTERN ValNodePtr UABuildDescriptor2(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
 	DDV_Disp_OptPtr ddop, Int4Ptr TotLength,Boolean AddLeftUAPart,
-	Boolean AddRightUAPart)
+	Boolean AddRightUAPart, Boolean WantExtraGapChar)
 {
 Int4            length,r,cumulpop,StartLetter,startcopy,stopcopy,pop,UAnum;
 Boolean         bUnAligned,bError;
@@ -1465,7 +1524,11 @@ DescriDispPtr   ddp;
 				case MSA_TXT_STYLE_2:/*put sequence between 2 align blocks*/
 					stopcopy=ABS(length);
           /* give a small space no matter what */
-          if (stopcopy==0) stopcopy=1;
+          /* took out small spaces SW 1/19/01 */
+          /* put it back in optionally, DIH, 1/25/01 */
+          if (WantExtraGapChar) {
+            if (stopcopy==0) stopcopy=1; 
+          }
 					break;
 			}
 			UAnum++;

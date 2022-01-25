@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/20/99
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #include <objall.h>
 #include <objsset.h>
 #include <objsub.h>
+#include <objfdef.h>
 #include <sequtil.h>
 #include <edutil.h>
 #include <seqport.h>
@@ -633,6 +634,10 @@ Int2 Main (void)
   }
   if (! GeneticCodeTableLoad ()) {
     Message (MSG_FATAL, "GeneticCodeTableLoad failed");
+    return 1;
+  }
+  if (! FeatDefSetLoad ()) {
+    Message (MSG_FATAL, "FeatDefSetLoad failed");
     return 1;
   }
 

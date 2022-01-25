@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.26 2000/05/16 20:26:01 vakatov Exp $ */
+/* $Id: ncbithr.c,v 6.29 2001/01/19 20:23:34 kans Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,18 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.29  2001/01/19 20:23:34  kans
+* support for OS_UNIX_DARWIN (contributed by William Van Etten)
+*
+* Revision 6.28  2001/01/08 19:52:26  vakatov
+* NlmThreadCreateEx() -- by default, to use BOUND scope scheduling (if
+* found) or PROCESS scope scheduling (the last default).
+* Use "-DPOSIX_BOUND_THREADS_AVAIL" to enforce SYSTEM scope scheduling.
+* {By Haruna N. Cofer;  Applications - Chem/Bio, SGI; haruna@sgi.com}
+*
+* Revision 6.27  2000/11/06 17:09:20  vakatov
+* RW_HISTORY, RW_TRACE -- To gather and printout info on the RW-lock history
+*
 * Revision 6.26  2000/05/16 20:26:01  vakatov
 * [WIN32_THREADS_AVAIL] Changed the locking policy for nested RW-locks.
 * // Fully tested on Solaris(native and POSIX), Win-NT, IRIX, and Linux
@@ -274,6 +286,10 @@
 #if !defined(WIN32)  &&  !defined(WIN16)  &&  !defined(WIN_MAC)
 #include <unistd.h>
 #endif /* ndef WIN32, WIN16, WIN_MAC */
+
+#if defined(OS_UNIX_IRIX)
+#define PTHREAD_SCOPE_BOUND_NP 2
+#endif
 
 #if   defined(SOLARIS_THREADS_AVAIL)
 #define NCBI_THREADS_AVAIL
@@ -632,6 +648,9 @@ static int prio_value(EThreadPriority priority)
 #ifdef OS_UNIX_OSF1
   const int min = PRI_OTHER_MIN;
   const int max = PRI_OTHER_MAX;
+#elif defined(OS_UNIX_DARWIN)
+  const int min = -20;
+  const int max = 20;
 #else
   int min = sched_get_priority_min(SCHED_OTHER);
   int max = sched_get_priority_max(SCHED_OTHER);
@@ -738,6 +757,12 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
     if (flags & THREAD_BOUND)
       pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
     else
+#elif defined(OS_UNIX_IRIX)
+    if (flags & THREAD_BOUND)
+      /* SGI-HNC: Check for PTHREAD_SCOPE_BOUND (IRIX 6.5.8)
+         or PTHREAD_SCOPE_BOUND_NP (IRIX 6.5.9 and higher) */
+     if (pthread_attr_setscope(&attr, PTHREAD_SCOPE_BOUND_NP) != 0)
+       /* SGI-HNC: Otherwise default to PTHREAD_SCOPE_PROCESS */
 #endif
       if (!pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS)  &&
           !pthread_attr_setschedpolicy(&attr, SCHED_OTHER)  &&
@@ -1088,8 +1113,51 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore)
  *   U after W -- only if the W-lock is owned by the same thread
  */
 
+
 #define RW_UNKNOWN_OWNER ((TNlmThread)(~0))
 
+
+/******************************************************************
+ * DEBUG-only feature -- keep track of the RW-locks
+ */
+
+#if defined(POSIX_THREADS_AVAIL)  ||  defined(WIN32_THREADS_AVAIL)
+#  if defined(_DEBUG_HARD)
+#    define RW_HISTORY
+#  endif
+#endif
+
+#if defined(RW_HISTORY)
+
+#  define RW_HISTORY_SIZE 256
+#  define RW_HISTORY_DECL SRWHistoryArray rw_history;
+#  define RW_HISTORY_UPDATE(RW,thread,file,line) \
+      s_RWHistoryUpdate(RW,thread,file,line)
+
+typedef struct {
+    const char* file;
+    int         line;
+    int         readers;  /* "readers" value *after* the change */
+    TNlmThread  thread;   /* ID of the thread caused this change */
+} SRWHistory;
+
+typedef struct {
+    size_t     size;
+    SRWHistory elem[RW_HISTORY_SIZE];
+} SRWHistoryArray;
+
+#else   /* def RW_HISTORY */
+
+#  define RW_HISTORY_DECL
+#  define RW_HISTORY_UPDATE(RW,thread,file,line) ((void)0)
+
+#endif  /* else RW_HISTORY */
+
+
+
+/******************************************************************
+ * Internal structure of RW-locks
+ */
 
 #if defined(SOLARIS_THREADS_AVAIL)
 
@@ -1120,6 +1188,8 @@ typedef struct TNlmRWlockTag {
 
     pthread_cond_t   cond_r;  /* condition variable for readers  */
     pthread_cond_t   cond_w;  /* condition variable for writers  */
+
+    RW_HISTORY_DECL  /* for DEBUG purposes only! */
 } structRWlock;
 
 #elif defined(WIN32_THREADS_AVAIL)
@@ -1130,12 +1200,49 @@ typedef struct TNlmRWlockTag {
     HANDLE     mutex;   /* mutex to protect "readers" variable */
     HANDLE     sema_rw; /* semaphore for readers and writers   */
     HANDLE     sema_w;  /* semaphore for writers               */
+    RW_HISTORY_DECL     /* for DEBUG purposes only! */
 } structRWlock;
 
 #else
 #  define NO_RWLOCK
 #endif
 
+
+static char* s_RWprintout(TNlmRWlock RW, int/*bool*/ do_mutex);
+
+
+#if defined(RW_HISTORY)
+static void s_RWHistoryUpdate
+(TNlmRWlock  RW,
+ TNlmThread  thread,
+ const char* file,
+ int         line)
+{
+    SRWHistoryArray* arr = &RW->rw_history;
+    SRWHistory*      rec = arr->elem + (arr->size % RW_HISTORY_SIZE);
+
+    rec->file    = file;
+    rec->line    = line;
+    rec->readers = RW->readers;
+    rec->thread  = thread;
+    arr->size++;
+#if defined(RW_TRACE)
+    if (RW->readers == 0  ||  (arr->size % RW_HISTORY_SIZE) == 0) {
+        char* str = s_RWprintout(RW, 0/*no_mutex*/);
+        fprintf(stderr, "%s", str);
+        free(str);
+    }
+#endif
+    if (RW->readers == 0) {
+        arr->size = 0;
+    }
+}
+#endif
+
+
+/******************************************************************
+ * RW-lock functions
+ */
 
 NLM_EXTERN TNlmRWlock NlmRWinit(void)
 {
@@ -1234,7 +1341,8 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW)
 }
 
 
-NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
+NLM_EXTERN Int4 NlmRWrdlockEx(TNlmRWlock RW,
+                              const char* file, int line)
 {
 #if defined(NO_RWLOCK)
     return 0;
@@ -1277,6 +1385,7 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return 0;
 
@@ -1292,6 +1401,7 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
     /* treate R-lock as W-lock if W-locked by this the same thread already */
     if (RW->readers < 0  &&  RW->owner == this_thread) {
         RW->readers--;
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
         X_VERIFY(ReleaseMutex(RW->mutex));
         return 0;
     }
@@ -1329,13 +1439,15 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW)
     RW->readers++;
 
     /* release the "*RW" protective mutex */
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(ReleaseMutex(RW->mutex));
     return 0;
 #endif
 }
 
 
-NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
+NLM_EXTERN Int4 NlmRWwrlockEx(TNlmRWlock RW,
+                              const char* file, int line)
 {
 #if defined(NO_RWLOCK)
     return 0;
@@ -1375,6 +1487,7 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return 0;
 
@@ -1392,6 +1505,7 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
     /* already W-locked by this the same thread already */
     if (RW->readers < 0  &&  RW->owner == this_thread) {
         RW->readers--;
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
         X_VERIFY(ReleaseMutex(RW->mutex));
         return 0;
     }
@@ -1413,6 +1527,7 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
         }
         RW->readers = -1;
         RW->owner = this_thread;
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
         X_VERIFY(ReleaseMutex(RW->mutex));
         return 0;
     }
@@ -1427,13 +1542,15 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW)
     X_ASSERT(RW->readers == 0);
     RW->readers = -1;
     RW->owner = this_thread;
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(ReleaseMutex(RW->mutex));
     return 0;
 #endif
 }
 
 
-NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
+NLM_EXTERN Int4 NlmRWunlockEx(TNlmRWlock RW,
+                              const char* file, int line)
 {
 #if !defined (NO_RWLOCK)
 #  ifdef _TRACE_HARD
@@ -1490,6 +1607,7 @@ NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     ASSERT(err_code == 0);
     return err_code ? -1 : 0;
@@ -1533,13 +1651,15 @@ NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
     X_VERIFY(ReleaseMutex(RW->mutex));
     return 0;
 #endif
 }
 
 
-NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
+NLM_EXTERN Int4 NlmRWtryrdlockEx(TNlmRWlock RW,
+                                 const char* file, int line)
 {
 #if defined(NO_RWLOCK)
     return 0;
@@ -1586,6 +1706,9 @@ NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    if (err_code == 0) {
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
+    }
     X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return err_code;
 
@@ -1627,13 +1750,17 @@ NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    if (err_code == 0) {
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
+    }
     X_VERIFY(ReleaseMutex(RW->mutex));
     return err_code;
 #endif
 }
 
 
-NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
+NLM_EXTERN Int4 NlmRWtrywrlockEx(TNlmRWlock RW,
+                                 const char* file, int line)
 {
 #if defined(NO_RWLOCK)
     return 0;
@@ -1679,6 +1806,9 @@ NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    if (err_code == 0) {
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
+    }
     X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
     return err_code;
 
@@ -1726,9 +1856,101 @@ NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW)
     }
 
     /* release the "*RW" protective mutex */
+    if (err_code == 0) {
+        RW_HISTORY_UPDATE(RW, this_thread, file, line); /* DEBUG */
+    }
     X_VERIFY(ReleaseMutex(RW->mutex));
     return err_code;
 #endif
+}
+
+
+NLM_EXTERN char* NlmRWprintout(TNlmRWlock RW)
+{
+    return s_RWprintout(RW, 1/*true*/);
+}
+
+
+static char* s_RWprintout(TNlmRWlock RW, int/*bool*/ do_mutex)
+{
+    char* str;
+
+    /* Lock the protective mutex */
+    if ( do_mutex ) {
+#if defined(POSIX_THREADS_AVAIL)
+        X_VERIFY(pthread_mutex_lock(&RW->mutex) == 0);
+#elif defined(WIN32_THREADS_AVAIL)
+        X_VERIFY(WaitForSingleObject(RW->mutex, INFINITE) == WAIT_OBJECT_0);
+#endif
+    }
+
+    /* Allocate string and print to it */
+#if defined(RW_HISTORY)
+    if (RW->rw_history.size == 0) {
+        ASSERT(RW->readers == 0);
+        str = (char*) malloc(64);
+        sprintf(str, "#%p UNLOCKED\n", (void*) RW);
+    } else {
+        /* <file>:<line>:  #<RW-lock>  <readers>  @<thread> */
+        SRWHistoryArray* arr = &RW->rw_history;
+        size_t len;
+        size_t i, i_start, i_stop;
+        char*  s;
+
+        if (arr->size <= RW_HISTORY_SIZE) {
+            i_start = 0;
+            i_stop  = arr->size - 1;
+        } else {
+            i_start = arr->size;
+            i_stop  = i_start + RW_HISTORY_SIZE - 1;
+        }
+
+        /* roughly count the message length */
+        len = 0;
+        for (i = i_start;  i <= i_stop;  i++) {
+            SRWHistory* rec = arr->elem + (i % RW_HISTORY_SIZE);
+            len += 110;
+            len += rec->file ? strlen(rec->file) : 0;
+        }
+        /* allocate and print */
+        str = (char*) malloc(len);
+        s = str;
+        for (i = i_start;  i <= i_stop;  i++) {
+            SRWHistory* rec = arr->elem + (i % RW_HISTORY_SIZE);
+            if ( rec->file ) {
+                sprintf(s, "%s:%5d: (%3lu) #%p %-+4d @%p\n",
+                        rec->file, rec->line, (unsigned long) i,
+                        (void*) RW, (int) rec->readers, (void*) rec->thread);
+            } else {
+                sprintf(s, "line %5d: (%3lu) #%p %-+4d @%p\n",
+                        rec->line, (unsigned long) i,
+                        (void*) RW, (int) rec->readers, (void*) rec->thread);
+            }
+            s += strlen(s);
+        } 
+        *s = '\n';  s++;  *s = '\0';
+        ASSERT(strlen(str) < len);
+    }
+#elif defined(POSIX_THREADS_AVAIL)  ||  defined(WIN32_THREADS_AVAIL)
+    str = (char*) malloc(128);
+    sprintf(str, "#%p:  readers =%4d,  owner = %p\n",
+            (void*) RW, (int) RW->readers,  (void*) RW->owner);
+#else
+    str = Nlm_StringSave("NlmRWprintout():  "
+                         "NOT IMPLEMENTED for Solaris native threads!\n");
+#endif
+
+    /* Unlock the protective mutex */
+    if ( do_mutex ) {
+#if defined(POSIX_THREADS_AVAIL)
+        X_VERIFY(!pthread_mutex_unlock(&RW->mutex));
+#elif defined(WIN32_THREADS_AVAIL)
+        X_VERIFY(ReleaseMutex(RW->mutex));
+#endif
+    }
+
+    /* Done */
+    return str;
 }
 
 

@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.61 2000/10/18 21:47:15 vakatov Exp $
+# $Id: makenet.dos,v 6.63 2001/02/21 22:08:35 lavr Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -14,7 +14,7 @@
 ##################################################
 # Library object lists
 
-OBJ6  = +ni_lib_.obj +ncbicli.obj +ncbiurl.obj +ni_www.obj \
+OBJ6  = +ni_lib_.obj +ncbicli.obj +ncbiurl.obj +ni_www.obj +ni_serv.obj \
 	+ni_debug.obj +ni_disp.obj +ni_msg.obj +ni_error.obj +ni_encrs.obj
 OBJ7  = +netentr.obj +netlib.obj +objneten.obj
 OBJ8  = +naccentr.obj +accutils.obj
@@ -107,10 +107,6 @@ copy :
 	copy ..\network\entrez\client\*.c .
 	copy ..\network\nsclilib\*.h $(INCPATH)
 	copy ..\network\nsclilib\*.c .
-!ifndef CONSOLE
-	copy ..\network\vibnet\*.c .
-	copy ..\network\vibnet\*.h $(INCPATH)
-!endif
 	copy ..\network\medarch\client\*.h $(INCPATH)
 	copy ..\network\medarch\client\*.c .
 	copy ..\network\taxon1\common\*.h $(INCPATH)
@@ -149,9 +145,13 @@ copy :
 	copy ..\network\encrypt\ripem\rsaref\source\*.c .
 	copy ..\network\encrypt\ripem\rsaref\source\*.h $(INCPATH)
 !endif
+!ifndef CONSOLE
+	copy ..\network\vibnet\*.c .
+	copy ..\network\vibnet\*.h $(INCPATH)
 !ifdef OPENGL
 	copy nentrez.rc nentrez_ogl.rc
 	copy sequin.rc sequin_ogl.rc
+!endif
 !endif
 !endif
 ##########################################################

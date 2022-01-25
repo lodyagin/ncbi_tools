@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ni_types.h,v $
+* Revision 6.4  2001/02/21 22:09:27  lavr
+* SERVICE connector included
+*
 * Revision 6.3  1998/09/08 17:59:07  vakatov
 * Added WWW/Firewall network interface
 *
@@ -220,11 +223,12 @@ typedef struct NI_Uid {
 typedef enum {
   /* Refer to "s_NII" in "ni_lib_.c" when changing the enumerator ordering
    * or adding new interfaces */
-  eNII_Dispatcher = 0,  /* old-fashioned NCBI dispatched-based connection */
-  eNII_WWW,             /* WWW-based connection */
+  eNII_Dispatcher = 0,  /* old-fashioned NCBI dispatched-based connection   */
+  eNII_WWW,             /* WWW-based connection                             */
   eNII_WWWFirewall,     /* eNII_WWW + pass through the NCBI firewall daemon */
-  eNII_WWWDirect,       /* WWW-based stateless connection */
-  eNII_Debug,           /* direct client-server connection */
+  eNII_WWWDirect,       /* WWW-based stateless connection                   */
+  eNII_Service,         /* SERVICE-based connection                         */
+  eNII_Debug,           /* direct client-server connection                  */
 
   /* FEATURE: add new interfaces *above* this point(i.e. above eNII_Default),
    * so that eNII_Default be equal to the number of avail. interfaces */

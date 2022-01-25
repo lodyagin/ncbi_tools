@@ -32,8 +32,24 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.38 $ 
+/* $Revision: 6.43 $ 
 * $Log: blast.h,v $
+* Revision 6.43  2001/04/06 18:15:08  madden
+* Move UNIX-specific stuff (HeyIAmInMemory) to bqueue.[ch]
+*
+* Revision 6.42  2001/02/07 21:10:10  dondosha
+* Added prototypes of Blast Engine functions with callback
+*
+* Revision 6.41  2001/01/16 23:16:51  dondosha
+* Added 2 arguments and several options to parse_blast_options
+*
+* Revision 6.40  2001/01/09 20:10:39  shavirin
+* Added sorting of all hits in result_struct for every element in
+* results. Added function RPSResultHspScoreCmp.
+*
+* Revision 6.39  2000/11/02 20:16:34  dondosha
+* Added prototypes for BlastTwoSequencesByLocWithCallback and BlastTwoSequencesWithCallback
+*
 * Revision 6.38  2000/10/31 16:30:58  shavirin
 * Function BLASTSetUpSearchInternalByLoc became external.
 *
@@ -408,7 +424,11 @@ SeqAlignPtr LIBCALL BlastTwoSequencesByLoc PROTO((SeqLocPtr slp1, SeqLocPtr slp2
 
 SeqAlignPtr LIBCALL BlastTwoSequencesByLocEx PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
 
+SeqAlignPtr LIBCALL BlastTwoSequencesByLocWithCallback PROTO((SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
+
 SeqAlignPtr LIBCALL BlastTwoSequencesEx PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns));
+
+SeqAlignPtr LIBCALL BlastTwoSequencesWithCallback PROTO((BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
 
 SeqAlignPtr LIBCALL BlastSequencesOnTheFly PROTO((BlastSearchBlkPtr search, BioseqPtr subject_bsp));
 
@@ -430,11 +450,15 @@ SeqAlignPtr LIBCALL SumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr
 
 SeqAlignPtr LIBCALL BioseqBlastEngine PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives))));
 
+SeqAlignPtr LIBCALL BioseqBlastEngineWithCallback PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
+
 SeqAlignPtr LIBCALL BioseqBlastEngineEx PROTO((BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
 
 SeqAlignPtr LIBCALL BioseqBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives))));
 
 SeqAlignPtr LIBCALL BioseqBlastEngineByLocEx PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total));
+
+SeqAlignPtr LIBCALL BioseqBlastEngineByLocWithCallback PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch))));
 /*
 	Prints error messages. 
 */
@@ -485,8 +509,7 @@ void LIBCALL updateLambdaK PROTO((BlastMatrixRescalePtr matrix_rescale, Boolean 
 
 BlastSearchBlkPtr GreedyAlignMemAlloc PROTO((BlastSearchBlkPtr search));
 
-Boolean parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options,
-	CharPtr PNTR error_message, CharPtr PNTR database);
+Boolean parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, CharPtr PNTR error_message, CharPtr PNTR database, Int4Ptr descriptions, Int4Ptr alignments);
 
 Int2
 BlastNtWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST_Diag real_diag, Int2 context));
@@ -501,9 +524,7 @@ void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot,
 
 Int4 reverse_seq (Uint1 *seq, Uint1 *pos, Uint1 *target);
 
-#ifdef OS_UNIX
-Boolean HeyIAmInMemory(Int4 program);
-#endif
+int LIBCALLBACK RPSResultHspScoreCmp(VoidPtr v1, VoidPtr v2);
 
 /* DEBUG */
 /* time mesuaring utilities */

@@ -30,9 +30,41 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-
-/* $Revision: 6.106 $ 
+/* $Revision: 6.117 $ 
 * $Log: blastdef.h,v $
+* Revision 6.117  2001/03/30 21:58:18  madden
+* Change release date and version
+*
+* Revision 6.116  2001/03/27 21:27:01  madden
+* Minor efficiency in how lookup table is made
+*
+* Revision 6.115  2001/03/19 18:52:57  madden
+* Add base_offset element to structure for BlastHitRange
+*
+* Revision 6.114  2001/02/07 21:05:33  dondosha
+* Added an output stream to BlastOptionsBlk
+*
+* Revision 6.113  2000/12/21 22:28:17  dondosha
+* Added option and parameter for percent identity cutoff
+*
+* Revision 6.112  2000/11/29 16:17:56  dondosha
+* Added a definition of small structure BLASTHSPSegment
+*
+* Revision 6.111  2000/11/14 18:14:00  madden
+* release date to Nov-13-2000
+*
+* Revision 6.110  2000/11/08 22:18:05  dondosha
+* Added longest_intron integer option and parameter
+*
+* Revision 6.109  2000/11/07 16:30:25  madden
+* Introduce intermediate score (before linking of HSPs) for blastx and tblastn
+*
+* Revision 6.108  2000/11/03 20:16:24  dondosha
+* Changed one_line_results option and parameter to more meaningful no_traceback
+*
+* Revision 6.107  2000/11/01 16:25:56  madden
+* Changes from Futamura for psitblastn
+*
 * Revision 6.106  2000/10/18 19:53:19  shavirin
 * Empty log message.
 *
@@ -725,8 +757,8 @@ extern "C" {
 #endif
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.1.2"
-#define BLAST_RELEASE_DATE "Nov-13-2000"
+#define BLAST_ENGINE_VERSION "2.1.3"
+#define BLAST_RELEASE_DATE "Apr-1-2001"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -735,6 +767,8 @@ extern "C" {
 #define blast_type_blastx 3
 #define blast_type_tblastn 4
 #define blast_type_tblastx 5
+#define blast_type_psitblastn 6
+
 
 /* defines for strand_option, determines which strand of query to compare. */
 #define BLAST_TOP_STRAND 1
@@ -814,6 +848,8 @@ typedef struct _blast_prune_hits_from_sap {
 
 #define BLAST_SMALL_GAPS 0
 #define BLAST_LARGE_GAPS 1
+#define MAX_INTRON_LENGTH 4000
+#define MAX_DBSEQ_LEN 5000000
 
 /*********************************************************************
     Filter types definitions
@@ -910,8 +946,7 @@ typedef struct _blast_optionsblk {
         Int4            max_num_patterns; /* Maximum number of patterns to be used in PHI-Blast search */
 	Boolean         no_check_score;
         Boolean         is_megablast_search; /* Is this a MegaBlast search? */
-        Boolean         one_line_results; /* Print simple one line results for
-				      megablast */
+        Boolean         no_traceback;    /* No traceback in MegaBLAST extension */
         Boolean         is_rps_blast;     /* If this RPS Blast ? */
         SeqLocPtr       query_lcase_mask; /* Masking of input DNA regions */
         Boolean         sort_gi_list;     /* Should the gi list be sorted? */
@@ -925,6 +960,12 @@ typedef struct _blast_optionsblk {
         Boolean         is_ooframe;  /* Use Out-Of-Frame gapping algorithm */
         Int4            shift_pen;   /* Out-Of-Frame shift penalty */
 	Boolean		gilist_already_calculated; /* translation of gis to ordinalID's already done (used for neighboring). */
+        Boolean  recoverCheckpoint;  /* For psitblastn */
+        Boolean  freqCheckpoint;     /* For psitblastn */
+        CharPtr  CheckpointFileName; /* For psitblastn */
+        Int4     longest_intron;     /* the length of longest intron for linking HSPs */
+        FloatLo  perc_identity;      /* Identity percentage cut-off */
+        VoidPtr  output;             /* Output stream to put results to */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -941,8 +982,9 @@ typedef struct _blast_parameterblk {
                         X,              /* drop-off score for extension. */
 			dropoff_1st_pass, /* dropoff ("X") used for 1st pass. */
 			dropoff_2nd_pass, /* dropoff ("X") used for 2nd pass. */
-                        cutoff_s,	/* Score to report a hit. */
-                        cutoff_s2,	/* Score to report a hsp. */
+                        cutoff_s,	/* Final Score to report a hit. */
+                        cutoff_s1,	/* Score to save an HSP after a gapped extension. */
+                        cutoff_s2,	/* Score to save an HSP after an ungapped extension. */
 			cutoff_s_first, /* Score (S2) to use on 1st pass */
 			cutoff_s_second, /* Score (S2) to use on 2nd pass and
 			   for "small" gaps in link_hsps (in blast.c) */
@@ -1004,8 +1046,7 @@ typedef struct _blast_parameterblk {
         Boolean   use_best_align;   /* option is to use alignments choosen by user in PSM computation API (used in WWW PSI-Blast); */
 	Boolean no_check_score;
         Boolean is_megablast_search;  /* Is this a MegaBlast search? */
-        Boolean one_line_results;  /* Print simple one line results for
-				      megablast */
+        Boolean         no_traceback;    /* No traceback in MegaBLAST extension */
         CharPtr filter_string;  /* String specifying the type of filtering and filter options. - used with Translated RPS Blast */
         Boolean is_rps_blast;      /* If this RPS Blast ? */
         SeqLocPtr  query_lcase_mask; /* Masking of input DNA regions */
@@ -1015,6 +1056,8 @@ typedef struct _blast_parameterblk {
         Boolean megablast_full_deflines;
         Boolean         is_ooframe;  /* Use Out-Of-Frame gapping algorithm */
         Int4            shift_pen;  /* Out-Of-Frame shift penalty */
+        Int4    longest_intron;     /* the length of longest intron for linking HSPs */
+        FloatLo  perc_identity;     /* Identity percentage cut-off */
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
@@ -1267,7 +1310,8 @@ typedef struct _blast_results_struct {
 */
 
 typedef struct _blast_all_words {
-		Uint1Ptr *array;	/* All the possible words */
+		Uint1Ptr *array,	/* All the possible words */
+			 array_storage; /* Storage for the words in array. */
 		Int4 	num_of_cols, 
 			wordsize;
 		Boolean rows_allocated,	/* are the rows (of length the wordsize) alloc.*/
@@ -1308,6 +1352,8 @@ typedef struct _blast_hit_range {
 	Int4		current,	/* current position in list. */
 			total;		/* total number in list. */
 	SeqIdPtr	query_id;	/* ID to be put on SeqLoc's that are produced. */
+	Int4		base_offset;	/* used if a SeqLoc is searched and it does not start at begining
+					of sequence. */
 	} BlastHitRange, *BlastHitRangePtr;
 
 /*
@@ -1695,9 +1741,14 @@ a field is allocated, then it's bit is non-zero.
     SeqIdPtr PNTR qid_array; /* Ids of all queries in Mega BLAST search */
     BLASTResultsStructPtr PNTR mb_result_struct; /* one result struct per query
                                                     for Mega BLAST */
+    ValNodePtr mb_endpoint_results; /* Points to linked list of results  */
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
     
-
+typedef struct _blast_hsp_segment {
+   Int4 q_start, q_end;
+   Int4 s_start, s_end;
+   struct _blast_hsp_segment PNTR next;
+} BLASTHSPSegment, PNTR BLASTHSPSegmentPtr;
 
 #ifdef __cplusplus
 }

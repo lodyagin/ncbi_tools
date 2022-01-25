@@ -1,5 +1,5 @@
 #
-# $Id: sgi.ncbi.mk,v 1.14 2000/10/23 11:32:27 beloslyu Exp $
+# $Id: sgi.ncbi.mk,v 1.16 2001/02/02 14:52:02 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi

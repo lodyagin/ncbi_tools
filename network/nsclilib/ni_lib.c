@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -266,6 +266,9 @@
 *
 * RCS Modification History:
 * $Log: ni_lib.c,v $
+* Revision 6.14  2001/01/04 22:35:02  vakatov
+* NI_ServerACK(), NI_ServerNACK() -- to do nothing, always return 0.
+*
 * Revision 6.13  2000/10/30 18:12:01  beloslyu
 * FreeBSD was added
 *
@@ -1603,7 +1606,6 @@ NLM_EXTERN NICatalogPtr NI_GetCatalog(NI_DispatcherPtr disp)
             ni_errno = NIE_NO_ERROR;
             MsgDestroy(imp);
             return catp;
-            break;
 
           case NI_NACK:
             ni_errno = (enum ni_error) imp->msun.nack->code;
@@ -3068,6 +3070,7 @@ static Int2 StandAlonePort(void)
 
 NLM_EXTERN int NI_ServerACK(void)
 {
+#if 0
     int         wstat;
     Char        temp_buf[TEMP_BUF_SIZ];
     Int2        port;
@@ -3144,6 +3147,8 @@ NLM_EXTERN int NI_ServerACK(void)
         }
 #endif /* OS_UNIX */
     }
+#endif /* 0 */
+
     return 0;
 } /* NI_ServerACK */
 
@@ -3175,6 +3180,7 @@ NLM_EXTERN int NI_ServerACK(void)
 
 NLM_EXTERN int NI_ServerNACK(CharPtr err_text)
 {
+#if 0
     int         wstat;
     Char        temp_buf[TEMP_BUF_SIZ];
 
@@ -3190,6 +3196,8 @@ NLM_EXTERN int NI_ServerNACK(CharPtr err_text)
         ErrPostEx(SEV_FATAL,0,0, "Stand-alone server failed startup {%s}", temp_buf);
         return -1;
     }
+#endif /* 0 */
+
     return 0;
 } /* NI_ServerNACK */
 
@@ -3752,8 +3760,7 @@ NLM_EXTERN NI_NetServHook NI_ActivityHook (void)
  *              data structures
  */
 
-static void
-InitLogSocket()
+static void InitLogSocket(void)
 {
     static Boolean inited = FALSE;
 

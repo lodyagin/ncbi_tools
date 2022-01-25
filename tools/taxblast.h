@@ -1,4 +1,4 @@
-/* $Id: taxblast.h,v 6.1 2000/05/17 15:54:39 shavirin Exp $
+/* $Id: taxblast.h,v 6.2 2000/12/08 22:30:57 shavirin Exp $
  * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *         Header file for Tax-Blast program
 *
 * $Log: taxblast.h,v $
+* Revision 6.2  2000/12/08 22:30:57  shavirin
+* Added set of functions for creation of Taxonomy lookup database using
+* formatdb API.
+*
 * Revision 6.1  2000/05/17 15:54:39  shavirin
 * Initial revision in new location.
 *
@@ -51,6 +55,9 @@
 #ifndef TAXBLAST__H
 #define TAXBLAST__H
 
+#include <ncbi.h>
+#include <readdb.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -63,50 +70,13 @@ extern "C" {
                        CharPtr link_href, /* Link to the regular BLAST results */
                        CharPtr window_name, /* Window name for output */
                        Boolean show_gi); /* Show gis in the organism report */
+
+    Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id);
+    RDBTaxLookupPtr RDTaxLookupInit(void);
+    void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup);
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif /*TAXBLAST__H */
-
-#if 0
-
-Int4 CountAligns (SeqAlignPtr sap);
-Boolean GetDbMolType (SeqAnnotPtr sap);
-HitObjPtr GetAlignData (SeqAlignPtr sap);
-Int4 FindTaxid (Int4 taxid, OrgObjPtr orgobj);
-OrgObjPtr GetOrgData (HitObjPtr hitobj);
-CnamesPtr GetCommonNames (Int4 taxid);
-BnamePtr GetBlastName (Int4 taxid, TreePtr tree);
-TreePtr GetTreeData (OrgObjPtr orgobj);
-LinObjPtr GetLinData (TreePtr tree, Int4 focus);
-
-void TXBPrintReport (FILE *outfile, Uint1 format, Uint1 numhits, Int4 focus,
-                     HitObjPtr hitobj, OrgObjPtr orgobj, TreePtr tree);
-
-HitObjPtr HitObjNew (void);
-void HitObjFree (HitObjPtr hitobj);
-OrgObjPtr OrgObjNew (void);
-void OrgObjFree (OrgObjPtr orgobj);
-CnamesPtr CnamesNew (void);
-void CnamesFree (CnamesPtr cnames);
-BnamePtr BnameNew (void);
-void BnameFree (BnamePtr bname);
-NodeObjPtr NodeObjNew (void);
-void NodeObjFree (NodeObjPtr nodeobj);
-LinObjPtr LinObjNew (void);
-void LinObjFree (LinObjPtr linobj);
-
-void taxreport_maxlen (TreeCursorPtr cursor, Int2 depth, Int2Ptr maxlen);
-void taxreport_fn (FILE* outfile, TreeCursorPtr cursor, Int2 depth,
-		   Int2 maxlen, Int2 maxhits, Int2 maxorgs);
-
-void traverse_tree (TreePtr tree, void tree_fn());
-void traverse_tree_internal (TreeCursorPtr cursor, void tree_fn());
-void tree_fnDel (TreeCursorPtr cursor);
-ValNodePtr ValNodeDiff (ValNodePtr vnp1, ValNodePtr vnp2);
-static int LIBCALLBACK vn_sortfn (VoidPtr ptr1, VoidPtr ptr2);
-void ValNodeIntCpy (ValNodePtr PNTR to, ValNodePtr from);
-void pad_left (CharPtr line, Int4 depth);
-void pad_right (CharPtr line, Int4 max, Char c);
-#endif

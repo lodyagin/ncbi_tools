@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.52  2001/02/15 18:06:55  kans
+* FileToString fixed for PC
+*
+* Revision 6.51  2000/11/17 22:58:57  kans
+* BioseqFindEntityByGi and others clear vn.next, LaunchSequenceViewer clears scope - somehow remains set on PC - and FetchDocSum dynamically allocates str, since pfam records overflowed the 1K buffer
+*
 * Revision 6.50  2000/08/18 19:53:52  kans
 * do not remove file sent to Cn3D on any platform
 *
@@ -444,6 +450,7 @@ static BioseqPtr BioseqLockByGi (Int4 uid)
   if (uid <= 0) return NULL;
   vn.choice = SEQID_GI;
   vn.data.intvalue = uid;
+  vn.next = NULL;
   return BioseqLockById (&vn);
 }
 
@@ -455,6 +462,7 @@ static Boolean BioseqUnlockByGi (Int4 uid)
   if (uid <= 0) return FALSE;
   vn.choice = SEQID_GI;
   vn.data.intvalue = uid;
+  vn.next = NULL;
   return BioseqUnlockById (&vn);
 }
 
@@ -481,6 +489,7 @@ static Uint2 BioseqFindEntityByGi (Int4 uid, Uint2Ptr itemIDptr)
   if (uid <= 0) return 0;
   vn.choice = SEQID_GI;
   vn.data.intvalue = uid;
+  vn.next = NULL;
   return BioseqFindEntity (&vn, itemIDptr);
 }
 
@@ -672,9 +681,10 @@ static CharPtr FetchDocSum (DoC d, Int2 item, Pointer ptr)
 {
   DocSumPtr    dsp;
   CharPtr      failed;
+  size_t       len;
   Int2         j;
   SummFormPtr  sfp;
-  Char         str [1024];
+  CharPtr      str;
   Int4         uid;
 
   sfp = (SummFormPtr) GetObjectExtra (d);
@@ -689,7 +699,9 @@ static CharPtr FetchDocSum (DoC d, Int2 item, Pointer ptr)
     return failed;
   }
   MemFree (failed);
-  str [0] = '\0';
+  len = StringLen (dsp->caption) + StringLen (dsp->title) + StringLen (dsp->extra) + 20;
+  str = MemNew (sizeof (Char) * len);
+  if (str == NULL) return failed;
   if (dsp->caption != NULL) {
     StringCat (str, dsp->caption);
   }
@@ -730,7 +742,7 @@ static CharPtr FetchDocSum (DoC d, Int2 item, Pointer ptr)
   StringCat (str, "\n");
   sfp->state [item - 1].hasAbstract = (Boolean) (! dsp->no_abstract);
   DocSumFree (dsp);
-  return StringSave (str);
+  return /* StringSave (str) */ str;
 }
 
 static CharPtr FetchUid (DoC d, Int2 item, Pointer ptr)
@@ -755,6 +767,7 @@ static CharPtr FetchUid (DoC d, Int2 item, Pointer ptr)
 static CharPtr FileToString (CharPtr path)
 
 {
+  Int2     actual;
   FILE     *fp;
   Int4     len;
   CharPtr  ptr;
@@ -767,9 +780,14 @@ static CharPtr FileToString (CharPtr path)
     if (fp != NULL) {
       ptr = MemNew (sizeof (Char) * (size_t) (len + 4));
       if (ptr != NULL) {
-        FileRead (ptr, 1, (size_t) len, fp);
-        ptr [len] = '\n';
-        ptr [len + 1] = '\0';
+        actual = FileRead (ptr, 1, (size_t) len, fp);
+        if (actual > 0 && actual <= len) {
+          /*
+          ptr [actual] = '\n';
+          ptr [actual + 1] = '\0';
+          */
+          ptr [actual] = '\0';
+        }
       }
       FileClose (fp);
     }
@@ -3898,6 +3916,7 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, In
 
   WatchCursor ();
   Update ();
+  SeqEntrySetScope (NULL);
   /* retcode = GetSequenceComplexity (); */
   bsp = BioseqLockByGi (uid);
   if (bsp == NULL) {
@@ -3909,6 +3928,9 @@ static void LaunchSequenceViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, In
   entityID = BioseqFindEntityByGi (uid, &itemID);
   if (entityID == 0 || itemID == 0) {
     BioseqUnlockByGi (uid);
+    ArrowCursor ();
+    Update ();
+    Message (MSG_OK, "BioseqFindEntityByGi failed.");
     return;
   }
   egp = (EntrezGlobalsPtr) GetAppProperty ("EntrezGlobals");

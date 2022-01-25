@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.20  2001/01/19 20:14:44  kans
+* added checks for OS_UNIX_DARWIN (contributed by William Van Etten)
+*
 * Revision 6.19  2000/10/30 18:11:41  beloslyu
 * FreeBSD was added
 *
@@ -492,7 +495,7 @@ static Nlm_Boolean s_GetHomeByUID(Nlm_Char* buf, size_t buf_size)
     struct passwd* pwd_ptr = 0;
 
     /* Get the info using user ID */
-#if  (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+#if  (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
     struct passwd pwd;
     Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
 
@@ -522,7 +525,7 @@ static Nlm_Boolean s_GetHomeByLOGIN(Nlm_Char* buf, Nlm_Int2 buf_size)
     struct passwd* pwd_ptr = 0;
 
     /* Get the user login name */
-#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
     struct passwd pwd;
     Nlm_Char      login_name[LOGNAME_MAX + 1];
     Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
@@ -542,7 +545,7 @@ static Nlm_Boolean s_GetHomeByLOGIN(Nlm_Char* buf, Nlm_Int2 buf_size)
     if ( !ok )
         return FALSE;
 
-#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
     pwd_ptr = &pwd;
 #  if NLM_POSIX1B
     if (getpwnam_r(login_name, &pwd, pwd_buffer, sizeof(pwd_buffer),

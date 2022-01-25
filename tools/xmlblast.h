@@ -1,4 +1,4 @@
-/* $Id: xmlblast.h,v 6.6 2000/10/24 17:49:42 egorov Exp $ */
+/* $Id: xmlblast.h,v 6.9 2000/11/28 20:51:58 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +30,22 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.6 $
+* $Revision: 6.9 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.h,v $
+* Revision 6.9  2000/11/28 20:51:58  shavirin
+* Adopted for usage with mani-iterational XML definition.
+*
+* Revision 6.8  2000/11/22 21:55:49  shavirin
+* Added function BXMLPrintOutputEx() with new parameter iteration_number
+* for usage with PSI-Blast.
+*
+* Revision 6.7  2000/11/07 21:50:52  shavirin
+* Added external definition of the function  BXMLSeqAlignToHits().
+*
 * Revision 6.6  2000/10/24 17:49:42  egorov
 * Remove blstxml.h because it makes impossible to use this ASN.1 spec together
 * with another ASN.1 spec
@@ -72,15 +82,50 @@
 extern "C" { /* } */
 #endif
 
+typedef struct PSIXml {
+    BlastOutputPtr boutp;
+    AsnIoPtr   aip;
+    AsnTypePtr atp;
+    AsnTypePtr BlastOutput;
+    AsnTypePtr BlastOutput_iterations;
+} PSIXml, PNTR PSIXmlPtr;
+
 #define BXML_INCLUDE_QUERY 0x1
+
+#define MACRO_atp_find(atp,name)\
+        if((atp = AsnTypeFind(amp, #name))==NULL){\
+                ErrPostEx(SEV_ERROR,0,0,\
+                        "Could not find type <%s>", #name);\
+                return NULL; \
+        }
 
 Boolean BXMLPrintOutput(AsnIoPtr aip, SeqAlignPtr seqalign, 
                         BLAST_OptionsBlkPtr options, CharPtr program,
                         CharPtr database, BioseqPtr query, 
-                        ValNodePtr other_returns, Int4 option, CharPtr message);
+                        ValNodePtr other_returns, Int4 option, 
+                        CharPtr message);
+
+BlastOutputPtr BXMLCreateBlastOutputHead(CharPtr program, CharPtr database, 
+                                         BLAST_OptionsBlkPtr options, 
+                                         BioseqPtr query, Int4 flags);
+
+IterationPtr BXMLBuildOneIteration(SeqAlignPtr seqalign, 
+                                   ValNodePtr other_returns,
+                                   Boolean is_ooframe, Boolean ungapped,
+                                   Int4 iter_num, CharPtr message);
 
 HspPtr BXMLGetHspFromSeqAlign(SeqAlignPtr sap, Boolean is_aa, Int4 chain,
                               Boolean is_ooframe);
+
+HitPtr BXMLSeqAlignToHits(SeqAlignPtr seqalign, Boolean ungapped, 
+                          Boolean is_ooframe);
+
+PSIXmlPtr PSIXmlInit(AsnIoPtr aip, CharPtr program, CharPtr database, 
+                     BLAST_OptionsBlkPtr options, 
+                     BioseqPtr query, Int4 flags);
+    
+void PSIXmlClose(PSIXmlPtr psixp);
+
 
 #ifdef __cplusplus
 /* { */ }

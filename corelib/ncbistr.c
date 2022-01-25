@@ -25,11 +25,11 @@
 *
 * File Name:  ncbistr.c
 *
-* Author:  Gish, Kans, Ostell, Schuler, Brylawski, Vakatov
+* Author:  Gish, Kans, Ostell, Schuler, Brylawski, Vakatov, Lavrentiev
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,18 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.10  2001/01/05 22:43:58  shavirin
+* Added functions, that transfer Uint8 values to platform-independent
+* objects and back.
+*
+* Revision 6.9  2000/12/04 23:48:02  kans
+* trim spaces around string now handles trailing tabs, newlines, etc.
+*
+* Revision 6.8  2000/11/30 22:46:07  lavr
+* Added the following functions for conversions of Int8 and Uint8
+* to strings and back; test suite attached at the end of the file.
+* Nlm_Int8ToString, Nlm_Uint8ToString, Nlm_StringToInt8, Nlm_StringToUint8
+*
 * Revision 6.7  2000/08/28 18:36:25  vakatov
 * un-const casts in some functions to pass C++ compilation
 *
@@ -511,7 +523,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString (Nlm_CharPtr str)
     ptr = str;
     ch = *ptr;
     while (ch != '\0') {
-      if (ch != ' ') {
+      if (ch > ' ') {
         dst = NULL;
       } else if (dst == NULL) {
         dst = ptr;
@@ -696,6 +708,160 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch (const char FAR *str, const cha
 {
   return Nlm_FindSubString (str, sub, FALSE);
 }
+
+NLM_EXTERN Nlm_Uint1Ptr LIBCALL Uint8ToBytes(Nlm_Uint8 value)
+{
+    Nlm_Uint1Ptr out_bytes;
+    Nlm_Int4 i, mask = 0xFF;
+    
+    out_bytes = MemNew(8);
+    
+    for(i = 0; i < 8; i++) {
+        out_bytes[i] = value & mask;
+        value >>= 8;
+    }
+    
+    return out_bytes;
+}
+
+NLM_EXTERN Nlm_Uint8 LIBCALL BytesToUint8(Nlm_Uint1Ptr bytes)
+{
+    Nlm_Uint8 value;
+    Nlm_Int4 i;
+
+    value = 0;
+    for(i = 7; i >= 0; i--) {
+        value += bytes[i];
+        if(i) value <<= 8;
+    }
+    
+    return value;
+}
+static Nlm_Uint8 s_StringToUint8(const char *str, const char **endptr, int *sgn)
+{
+    int sign = 0;  /* actual sign */
+    Nlm_Uint8 limdiv, limoff, result;
+    const char *s, *save;
+    char c;
+
+    /* assume error */
+    *endptr = 0;
+    if (!str)
+        return 0;
+
+    s = str;
+    while (IS_WHITESP(*s))
+        s++;
+    /* empty string - error */
+    if (*s == '\0')
+        return 0;
+
+    if (*sgn == 1) {
+        if (*s == '-') {
+            sign = 1;
+            s++;
+        } else if (*s == '+') {
+            s++;
+        }        
+    }
+    save = s;
+
+    limdiv = UINT8_MAX / 10;
+    limoff = UINT8_MAX % 10;
+    result = 0;
+    
+    for (c = *s; c; c = *++s) {
+        if (!IS_DIGIT(c)) {
+            break;
+        }
+        c -= '0';
+        if (result > limdiv || (result == limdiv && c > limoff)) {
+            /* overflow */
+            return 0;
+        }
+        result *= 10;
+        result += c;
+    }
+
+    /* there was no conversion - error */
+    if (save == s)
+        return 0;
+
+    *sgn = sign;
+    *endptr = s;
+    return result;
+}
+
+
+NLM_EXTERN Nlm_Uint8 LIBCALL Nlm_StringToUint8(const char* str, const char** endptr)
+{
+    int sign = 0; /* no sign allowed */
+    return s_StringToUint8(str, endptr, &sign);
+}
+
+
+NLM_EXTERN Nlm_Int8  LIBCALL Nlm_StringToInt8(const char* str, const char** endptr)
+{
+    int sign = 1; /* sign allowed */
+    Nlm_Uint8 result = s_StringToUint8(str, endptr, &sign);
+    if (*endptr) {
+        /* Check for overflow */
+        if (result > (sign
+                      ? -((Nlm_Uint8)(INT8_MIN + 1)) + 1
+                      : (Nlm_Uint8)(INT8_MAX)))
+            *endptr = 0;            
+    }
+    if (!*endptr)
+        return 0;
+    return sign ? -result : result;
+}
+
+
+static char *s_Uint8ToString(Nlm_Uint8 value, char *str, size_t str_size)
+{
+    char buf[32];
+    size_t i, j;
+
+    if (!str || str_size < 2)
+        return 0;
+
+    for (i = sizeof(buf) - 1; i > 0; i--) {
+        buf[i] = (char)(value % 10 + '0');
+        value /= 10;
+        if (!value)
+            break;
+    }
+    if (!i || (j = sizeof(buf) - i) >= str_size)
+        return 0;
+    memcpy(str, buf + i, j);
+    str[j] = '\0';
+    return str;
+}
+
+
+NLM_EXTERN char* LIBCALL Nlm_Uint8ToString(Nlm_Uint8 value, char* str, size_t str_size)
+{
+    return s_Uint8ToString(value, str, str_size);
+}
+
+
+NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t str_size)
+{
+    Nlm_Uint8 val;
+    char *save = str;
+
+    if (value < 0) {
+        if (!str || !str_size)
+            return 0;
+        *str++ = '-';
+        str_size--;
+        val = -(Nlm_Uint8)(value + 1) + 1;
+    } else
+        val = value;
+
+    return s_Uint8ToString(val, str, str_size) ? save : 0;
+}
+
 
 /*****************************************************************************
 *
@@ -1743,3 +1909,133 @@ Nlm_Int2 Nlm_Main( void )
   return 0;
 }
 #endif  /* TEST_TEXT_FMT */
+
+
+#ifdef TEST_INT8_CONVERSION
+Nlm_Int2 Nlm_Main( void )
+{
+    char buffer[100];
+    char *s;
+    const char *p;
+    Nlm_Int8 i;
+    Nlm_Uint8 j;
+
+    s = Nlm_Int8ToString(0, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("0 = %s\n", s);
+    s = Nlm_Int8ToString(1, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("1 = %s\n", s);
+    s = Nlm_Int8ToString(1222222, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("1222222 = %s\n", s);
+    s = Nlm_Int8ToString(-15, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("-15 = %s\n", s);
+    s = Nlm_Int8ToString(-15555555, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("-15555555 = %s\n", s);
+    s = Nlm_Int8ToString(INT8_MAX, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("INT8_MAX = %s\n", s);
+    s = Nlm_Int8ToString(INT8_MIN, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("INT8_MIN = %s\n", s);
+    s = Nlm_Int8ToString(UINT8_MAX, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("UINT8_MAX = %s\n", s);
+    s = Nlm_Uint8ToString(UINT8_MAX, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("UINT8_MAX = %s\n", s);
+
+    strcpy(buffer, "9223372036854775807");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p == buffer + strlen(buffer));
+    s = Nlm_Int8ToString(i, buffer + strlen(buffer) + 1,
+                         sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    assert(strcmp(buffer, s) == 0);
+    printf("INT8_MAX input Ok\n");
+    i++;
+    s = Nlm_Int8ToString(i, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("INT8_MAX+1 = %s\n", s);
+
+    strcpy(buffer, "-9223372036854775808");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p == buffer + strlen(buffer));
+    s = Nlm_Int8ToString(i, buffer + strlen(buffer) + 1,
+                         sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    assert(strcmp(buffer, s) == 0);
+    printf("INT8_MIN input Ok\n");
+    i--;
+    s = Nlm_Int8ToString(i, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("INT8_MIN-1 = %s\n", s);
+
+    strcpy(buffer, "18446744073709551615");
+    j = Nlm_StringToUint8(buffer, &p);
+    assert(p == buffer + strlen(buffer));
+    s = Nlm_Uint8ToString(j, buffer + strlen(buffer) + 1,
+                          sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    assert(strcmp(buffer, s) == 0);
+    printf("UINT8_MAX input Ok\n");
+    j++;
+    s = Nlm_Uint8ToString(j, buffer, sizeof(buffer));
+    assert(s != 0);
+    printf("UINT8_MAX+1 = %s\n", s);
+
+    strcpy(buffer, "1234567890abcdef0123546");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p != 0);
+    s = Nlm_Int8ToString(i, buffer + strlen(buffer) + 1,
+                         sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    printf("Out of %s only %.*s was accepted as input for Int8 %s\n",
+           buffer, (int)(p - buffer), buffer, s);
+
+    strcpy(buffer, "-987654321234567890abcdef0123546");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p != 0);
+    s = Nlm_Int8ToString(i, buffer + strlen(buffer) + 1,
+                         sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    printf("Out of %s only %.*s was accepted as input for Int8 %s\n",
+           buffer, (int)(p - buffer), buffer, s);
+
+    strcpy(buffer, "987654321234567890abcdef0123546");
+    j = Nlm_StringToUint8(buffer, &p);
+    assert(p != 0);
+    s = Nlm_Uint8ToString(j, buffer + strlen(buffer) + 1,
+                          sizeof(buffer) - strlen(buffer) - 1);
+    assert(s != 0);
+    printf("Out of %s only %.*s was accepted as input for Uint8 %s\n",
+           buffer, (int)(p - buffer), buffer, s);
+
+    strcpy(buffer, "-987654321234567890abcdef0123546");
+    j = Nlm_StringToUint8(buffer, &p);
+    assert(p == 0);
+    printf("Conversion of %s (negative) to Uint8 caused error\n", buffer);
+
+    strcpy(buffer, "9223372036854775808");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p == 0);
+    printf("Conversion of %s (INT8_MAX + 1) to Int8 caused error\n", buffer);
+
+    strcpy(buffer, "-9223372036854775809");
+    i = Nlm_StringToInt8(buffer, &p);
+    assert(p == 0);
+    printf("Conversion of %s (INT8_MIN - 1) to Int8 caused error\n", buffer);
+
+    strcpy(buffer, "18446744073709551616");
+    j = Nlm_StringToUint8(buffer, &p);
+    assert(p == 0);
+    printf("Conversion of %s (UINT8_MAX + 1) to Uint8 caused error\n", buffer);
+
+    printf("All tests succeeded\n");
+
+    return 0;
+}
+#endif /* TEST_INT8_CONVERSION */

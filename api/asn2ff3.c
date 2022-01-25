@@ -35,6 +35,45 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.87  2001/03/17 00:51:30  tatiana
+* GeneID added to dbxref array
+*
+* Revision 6.86  2001/02/13 23:31:58  kans
+* allow trans splicing exception, do not change sfp_in->excpt
+*
+* Revision 6.85  2001/01/30 16:25:54  kans
+* precursor_RNA now has /product as legal qualifier
+*
+* Revision 6.84  2001/01/26 19:26:36  kans
+* added niaEST, increased DBNUM
+*
+* Revision 6.83  2001/01/26 19:21:45  kans
+* extrachromosomal into source note, removed macronuclear, extrachrom, plasmid from organism line
+*
+* Revision 6.82  2001/01/18 23:57:01  kans
+* add GO (gene ontology) to list of legal dbxrefs
+*
+* Revision 6.81  2001/01/02 19:56:48  kans
+* Get3LetterSymbol protects against empty string
+*
+* Revision 6.80  2000/12/07 19:03:53  tatiana
+* transcript_id shows for NT only
+*
+* Revision 6.79  2000/12/06 22:00:46  tatiana
+* ifdef removed
+*
+* Revision 6.78  2000/12/06 20:56:24  tatiana
+* AceView link added
+*
+* Revision 6.76  2000/12/04 22:23:47  tatiana
+* contig comments added
+*
+* Revision 6.75  2000/11/22 16:48:18  tatiana
+* remove debugging error printing
+*
+* Revision 6.74  2000/11/10 00:37:13  tatiana
+* changes in AddPID
+*
 * Revision 6.73  2000/10/25 15:57:57  kans
 * sfp_in->excpt set to FALSE, not NULL, UNIX compiler does not know the difference, but Mac and PC compilers do
 *
@@ -498,6 +537,7 @@
 
 #define METHOD_concept_transl_a 6
 
+NLM_EXTERN CharPtr mRNAEvidenceComment PROTO ((UserObjectPtr obj, Boolean add));
 NLM_EXTERN Int2 ConvertToNAImpFeat PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp_in, SeqFeatPtr PNTR sfp_out, SortStructPtr p));
 NLM_EXTERN Int2 ConvertToAAImpFeat PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp_in, SeqFeatPtr PNTR sfp_out, SortStructPtr p));
 NLM_EXTERN Int2 ValidateAAImpFeat PROTO ((SeqFeatPtr sfp, Boolean use_product));
@@ -507,6 +547,7 @@ static void GetGeneticCode PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 NLM_EXTERN void ComposeGBQuals PROTO((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr gbp, SortStructPtr p, Boolean note_pseudo));
 NLM_EXTERN CharPtr ComposeNoteFromNoteStruct PROTO ((NoteStructPtr nsp, GeneStructPtr gsp));
 NLM_EXTERN void AddPID PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out));
+NLM_EXTERN void Add_trid PROTO ((Asn2ffJobPtr ajp, SeqFeatPtr sfp_out));
 NLM_EXTERN Int2 MakeGBSelectNote PROTO ((CharPtr ptr, SeqFeatPtr sfp));
 static void GetProtRefComment PROTO ((SeqFeatPtr sfp, BioseqPtr bsp, Asn2ffJobPtr ajp, OrganizeProtPtr opp, NoteStructPtr nsp, Uint1 method));
 NLM_EXTERN Int2 MiscFeatOrphanGenes PROTO ((Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp, Int2 index));
@@ -571,7 +612,9 @@ CharPtr dbtag[DBNUM] = {
   "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon",
   "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR",
   "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP",
-  "RATMAP", "RGD", "CDD", "UniSTS", "InterimID"};
+  "RATMAP", "RGD", "CDD", "UniSTS", "InterimID", "COG", "GO", "niaEST",
+  "GeneID", 
+  };
 
 
 /*************************************************************************
@@ -879,7 +922,7 @@ static CharPtr Get3LetterSymbol (Uint1 seq_code, SeqCodeTablePtr table, Uint1 re
 		ptr = SeqCodeNameGet(table, residue, error_msgs);
 		
 		table_3aa=SeqCodeTableFind (Seq_code_iupacaa3);
-		if (ptr != NULL && table_3aa != NULL)
+		if (ptr != NULL && *ptr != '\0' && table_3aa != NULL)
 		{
 			for (index=0; index < (int) table->num; index++)
 			{
@@ -1507,12 +1550,144 @@ static void PutTranslationLast(SeqFeatPtr sfp)
 	return;
 }	/* PutTranslationLast */
 
+NLM_EXTERN CharPtr mRNAEvidenceComment(UserObjectPtr uop, Boolean add)
+{
+    ObjectIdPtr		oip;
+	UserFieldPtr	ufp, uf, u, uu;
+	CharPtr			method, ptr, ne_name;
+	static Char		temp[20];
+	Int2			ptrlen=0, np=0, nd=0, nm=0, ne=0;
+	Boolean			is_evidence = FALSE;
+	Int4			Locus_id = 0;
+
+	if (uop == NULL) return NULL;
+	if ((oip = uop->type) == NULL) return NULL;
+	if (StringCmp(oip->str, "TranscriptModelGeneration") != 0) return NULL;
+	for (ufp=uop->data; ufp; ufp=ufp->next) {
+		oip = ufp->label;
+		if (StringCmp(oip->str, "Method") == 0) {
+			if (ufp->data.ptrvalue) {
+				method = StringSave((CharPtr) ufp->data.ptrvalue);
+			}
+		}
+		if (StringCmp(oip->str, "Supporting mRNA, protein, and motif")==0) {
+			is_evidence = TRUE;
+			for (u = (UserFieldPtr) ufp->data.ptrvalue;u; u=u->next) {
+				for (uu = (UserFieldPtr) u->data.ptrvalue; uu; uu=uu->next) {
+				oip = uu->label;
+				if (StringCmp(oip->str, "protein accession") == 0) {
+					np++;
+				}
+				if (StringCmp(oip->str, "mRNA accession") == 0) {
+					nm++;
+				}
+				if (StringCmp(oip->str, "Locus_id") == 0) {
+					Locus_id = uu->data.intvalue;
+				}
+				}
+			}
+		}
+		if (StringCmp(oip->str, "Supporting EST")==0) {
+			is_evidence = TRUE;
+			for (u = (UserFieldPtr) ufp->data.ptrvalue;u; u=u->next) {
+				for (uu = (UserFieldPtr) u->data.ptrvalue;uu; uu=uu->next) {
+					oip = uu->label;
+					if (StringCmp(oip->str, "count") == 0) {
+						ne = uu->data.intvalue;
+					}
+					if (StringCmp(oip->str, "organism") == 0) {
+						ne_name = StringSave(( CharPtr) uu->data.ptrvalue);
+					}
+				}
+			}
+		}
+	}
+	if (add) {
+		ptrlen = (StringLen("derived by automated computational analysis using gene prediction method: ") + StringLen(method) + 1);
+	} else {
+/*		ptrlen = (StringLen("using gene prediction method: ") + StringLen(method) + 1);*/
+	}
+	if (is_evidence) {
+	 ptrlen += StringLen(" Supporting evidence includes similarity to: ") + 1;
+	}
+	if (np > 0) {
+		ptrlen += StringLen("proteins") + 5;
+	}
+	if (nd > 0) {
+		ptrlen += StringLen("domains") + 5;
+	}
+	if (nm > 0) {
+		ptrlen += StringLen("mRNAs") + 5;
+	}
+	if (ne > 0) {
+		ptrlen += StringLen("ESTs") + StringLen(ne_name) + 10;
+	}
+	ptrlen += StringLen("See details in AceView") + 8;
+	ptr = (CharPtr) MemNew(ptrlen) + 1;
+	if (add) {
+		sprintf(ptr, "derived by automated computational analysis using gene prediction method: %s.", method);
+	} else {
+/*		sprintf(ptr, " using gene prediction method: %s.", method);*/
+	}
+	if (is_evidence) {
+		if (add)  StringCat(ptr, " ");
+	 StringCat(ptr, "Supporting evidence includes similarity to:");
+	} 
+	if (np > 0) {
+	 sprintf(temp, " %d proteins", np);
+	 StringCat(ptr, temp);
+	}
+	if (nd > 0) {
+		if (np > 0)
+	 		StringCat(ptr, ",");
+	 sprintf(temp, " %d domains", np);
+	 StringCat(ptr, temp);
+	}
+	if (nm > 0) {
+		if (np > 0 || nd > 0)
+	 	StringCat(ptr, ",");
+	 sprintf(temp, " %d mRNAs", nm);
+	 StringCat(ptr, temp);
+	}
+	if (ne > 0) {
+	if ( np > 0 || nm > 0 || nd > 0)
+	 	StringCat(ptr, ",");
+	 sprintf(temp, " %d %s ESTs", ne, ne_name);
+	 StringCat(ptr, temp);
+	}
+	 sprintf(temp, " See details in AceView:%d", Locus_id);
+	 StringCat(ptr, temp);
+	return ptr;
+}
+
+static CharPtr mRNAFeatEvidenceComment(SeqFeatPtr sfp_in)
+{
+	RnaRefPtr		rfp;
+	UserObjectPtr	uop, obj;
+    ObjectIdPtr		oip;
+	UserFieldPtr	uf;
+	
+	rfp = (RnaRefPtr) sfp_in->data.value.ptrvalue;
+	if (rfp->type != 2) { /* mRNA */
+		return NULL;
+	}
+	if ((uop = sfp_in->ext) == NULL)
+		return NULL;
+	if ((oip = uop->type) == NULL) return NULL;
+	if (StringCmp(oip->str, "CombinedFeatureUserObjects") != 0) return NULL;
+	for (uf=uop->data; uf; uf=uf->next) {
+		obj = (UserObjectPtr) uf->data.ptrvalue;
+		return( mRNAEvidenceComment(obj, TRUE));
+	}
+	return NULL;
+}
+
 NLM_EXTERN void PrintNAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	
 	Boolean loc_ok;
 	Char genetic_code[3];
-	CharPtr ptr=NULL;
+	CharPtr ptr=NULL, sptr;
 	ImpFeatPtr ifp;
 	SeqFeatPtr sfp_in, sfp_out=NULL;
 	Int4 status, total_feats, feat_index;
@@ -1612,10 +1787,14 @@ NLM_EXTERN void PrintNAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 			PutTranslationLast(sfp_out);
 		} else if (sfp_in->data.choice == SEQFEAT_GENE) {
 			PutGeneFirst(sfp_out);
+		} else if (sfp_in->data.choice == SEQFEAT_RNA) {
+			if ((sptr = mRNAFeatEvidenceComment(sfp_in)) != NULL) {
+				sfp_out->qual =
+				     AddGBQual(sfp_out->qual, "note", sptr);
+			}
 		}
 		if (status >= 0 || ASN2FF_VALIDATE_FEATURES == FALSE) {
 			PrintImpFeatEx(ajp, gbp->bsp, sfp_out, gbp->gi, p->entityID, p->itemID);
-		/*	PrintImpFeat(ajp, gbp->bsp, sfp_out);*/
 		}
 		flat2asn_delete_feature_user_string();
 	}
@@ -2494,8 +2673,12 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
 		}
 		if (sfp_in->excpt) {
-			if (StringCmp("ribosomal slippage", sfp_in->except_text) == 0) {
-				sfp_in->excpt = FALSE;
+			if (StringCmp("ribosomal slippage", sfp_in->except_text) == 0 ||
+				StringCmp("ribosome slippage", sfp_in->except_text) == 0) {
+				sfp_out->excpt = FALSE;
+			} else if (StringCmp("trans splicing", sfp_in->except_text) == 0 ||
+						StringCmp("trans-splicing", sfp_in->except_text) == 0) {
+				sfp_out->excpt = FALSE;
 			} else if (sfp_in->except_text) {
 				sfp_out->qual = AddGBQual(sfp_out->qual, 
 									"exception", sfp_in->except_text);
@@ -2568,6 +2751,16 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			case 4:
 				break;
 			case 1:
+				if (rrp->ext.choice == 1) {
+					if ((GBQualPresent("product", sfp_in->qual)) == FALSE) {
+						sfp_out->qual = AddGBQual(sfp_out->qual, 
+								"product", (CharPtr) rrp->ext.value.ptrvalue);
+					}
+				} else if (rrp->ext.choice == 0 ||
+					rrp->ext.choice == 2) {
+					DotRNAQuals(ajp, gbp, sfp_in, sfp_out,
+							gp->nsp, gp->extra_loc, gp->extra_loc_cnt);
+				}
 				break;
 			case 5:
 				break;
@@ -2886,6 +3079,25 @@ static GBQualPtr RemoveQual(GBQualPtr head, GBQualPtr x)
 /*______________________________________________________________________
 */
 
+static void Add_gene_id (GeneStructPtr gsp, SeqFeatPtr sfp_out)
+{
+	ImpFeatPtr ifp;
+	GeneRefPtr grp;
+	ValNodePtr vnp;
+	Char val[40];
+	
+	if ((grp = gsp->grp) == NULL)
+		return;
+	ifp = sfp_out->data.value.ptrvalue;
+	if (StringCmp(ifp->key, "CDS") != 0) {
+		return;
+	}
+	if ((vnp = grp->syn) == NULL)  /* no synonyms */
+		return;
+	sprintf(val, "GeneID:%s", vnp->data.ptrvalue);
+	sfp_out->qual = AddGBQual(sfp_out->qual, "db_xref", val);
+}
+
 /****************************************************************************
 *	Composes the GBQuals for sfp_out using the information in the
 *	GeneStructPtr (gsp), and then the quals already on sfp_out.
@@ -2911,9 +3123,26 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 	ValNodePtr vnp, vnp1;
 	ValNodePtr pub, pubq, pubset;
 	ImpFeatPtr ifp;
+	BioseqPtr bsp;
+	Boolean is_contig = FALSE, is_NC = FALSE;
+	SeqIdPtr sid;
+	TextSeqIdPtr tsip;
 
 	if (gbp == NULL || gbp->feat == NULL || p == NULL) {
 		return;
+	}
+	bsp = gbp->bsp;
+	for (sid=bsp->id; sid; sid=sid->next) {
+		if (sid->choice == SEQID_OTHER) {
+			tsip = (TextSeqIdPtr) sid->data.ptrvalue;
+			if (StringNCmp(tsip->accession, "NT", 2) == 0) {
+				is_contig = TRUE;
+			}
+			if (StringNCmp(tsip->accession, "NC", 2) == 0 
+					|| StringNCmp(tsip->accession, "NP", 2) == 0) {
+				is_NC = TRUE;
+			}
+		}
 	}
 	gsp=p->gsp;
 	nsp = p->nsp;
@@ -2998,6 +3227,9 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 		if (status > 0)
 			SaveNoteToCharPtrStack(nsp, NULL, ptr);
 		ptr=NULL;
+		if (is_NC) {
+			Add_gene_id(gsp, sfp_out); 
+		}
 	}
 	if (nsp && nsp->note[0])
 	{
@@ -3008,7 +3240,14 @@ NLM_EXTERN void ComposeGBQuals (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out, GBEntryPtr
 			note = MemFree(note);
 		}
 	}
-	AddPID(ajp, sfp_out);
+	if (ajp->mode != DIRSUB_MODE) {
+		AddPID(ajp, sfp_out);
+	}
+	if (is_contig) {
+		if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA) {
+			Add_trid(ajp, sfp_out); 
+		}
+	}
 	Add_dbxref(ajp, sfp_out, sfp); 
 	vnp = gbp->Pub;
 	if (sfp && sfp->cit) {
@@ -3252,6 +3491,39 @@ static Int2 CheckForExtraChars(CharPtr note)
 
 }	/* CheckForExtraChars */
 
+NLM_EXTERN void Add_trid (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
+
+{
+	ImpFeatPtr ifp;
+	Int4 gi = -1;
+	SeqIdPtr sip, newid=NULL;
+	ValNodePtr product, vnp;
+	BioseqPtr p_bsp;
+	DbtagPtr db;
+	Char val[20];
+	Char buf[MAX_ACCESSION_LEN+5];
+	
+	ifp = sfp_out->data.value.ptrvalue;
+	if (StringCmp(ifp->key, "mRNA") != 0) {
+		return;
+	}
+	product = sfp_out->product; 
+	if (product == NULL) {
+		return;
+	}
+	sip = GetProductSeqId(product);
+	if (sip->choice == SEQID_GI) {
+		if ((newid = GetSeqIdForGI(sip->data.intvalue)) != NULL) {
+			SeqIdWrite(newid, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
+		} else {
+			sprintf(buf, "%ld", sip->data.intvalue);
+		}
+	} else {	
+		SeqIdWrite(sip, buf, PRINTID_TEXTID_ACC_VER, MAX_ACCESSION_LEN+1);
+	}
+	sfp_out->qual = AddGBQual(sfp_out->qual, "transcript_id", buf);
+}
+
 /*************************************************************************
 *	sfp_out: synthetic SeqFeatPtr of type ImpFeat for use in printing.
 *
@@ -3265,7 +3537,7 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 {
 	ImpFeatPtr ifp;
 	Int4 gi = -1;
-	SeqIdPtr sip, new_id;
+	SeqIdPtr sip, new_id=NULL;
 	ValNodePtr product, vnp;
 	BioseqPtr p_bsp;
 	DbtagPtr db;
@@ -3283,9 +3555,10 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 	sip = GetProductSeqId(product);
 	if (sip) {	/* Get protein bsp	*/
 		if ((p_bsp = BioseqFind(sip)) != NULL) {
-			if ((new_id = GetSeqIdChoice(p_bsp->id)) == NULL) {
+			new_id = GetSeqIdChoice(p_bsp->id);
+			if (ajp->forgbrel && new_id == NULL) {
 				ErrPostStr(SEV_ERROR, ERR_ACCESSION_NoAccessNum, "");
-			} else {
+			} else if (new_id) {
 				SeqIdWrite(new_id, buf, PRINTID_TEXTID_ACC_VER,
 														MAX_ACCESSION_LEN+1);
 				sfp_out->qual = AddGBQual(sfp_out->qual, "protein_id", buf);
@@ -4023,6 +4296,8 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 					} else {
 						gbqual = AddGBQual(gbqual, qual, val);
 					}
+				} else if (qual && i == 8) {
+					gbqual = AddGBQual(gbqual, "note", "extrachromosomal");
 				}
 			}
 		}
@@ -4235,7 +4510,8 @@ NLM_EXTERN Int2 PrintImpFeatEx (Asn2ffJobPtr ajp, BioseqPtr bsp, SeqFeatPtr sfp,
 					www_gcode(buf);
 				} else if (StringCmp(gbqp->qual, "db_xref") == 0) {
 					www_db_xref(buf);
-				} else if (StringCmp(gbqp->qual, "protein_id") == 0) {
+				} else if (StringCmp(gbqp->qual, "protein_id") == 0 ||
+					StringCmp(gbqp->qual, "transcript_id") == 0) {
 					www_protein_id(buf);
 				} else {
 					ff_AddString(buf);

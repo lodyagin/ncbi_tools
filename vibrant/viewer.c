@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   10/25/92
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewer.c,v $
+* Revision 6.10  2001/03/04 21:50:59  kans
+* CorrectScrollBar numLines, visLines calculation changed slightly
+*
 * Revision 6.9  1999/08/06 19:28:17  vakatov
 * Restored "NormalizeBox()" as "s_NormalizeBoxUpsideDown()" -- because
 * this particular moduleby some reason assumes that:  top >= bottom
@@ -782,8 +785,12 @@ static void CorrectScrollbar(BaR sb, Boolean align_to_min, Int4 lineSize,
     return;
 
   {{
+    /*
     Int4 numLines = (world_max - world_min) / lineSize + 1;
     Int4 visLines = (port_max - port_min + 1) / lineSize;
+    */
+    Int4 numLines = (world_max - world_min + lineSize - 1) / lineSize;
+    Int4 visLines = (port_max - port_min + lineSize - 1) / lineSize;
     Int4 max = MAX((numLines - visLines), 0);
     Int4 val = (align_to_min ? (port_min - world_min) : (world_max - port_max))
       / lineSize;

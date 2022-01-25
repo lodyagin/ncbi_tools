@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.64 2000/10/16 23:45:02 hurwitz Exp $
+/*   $Id: samutil.c,v 1.72 2001/02/07 16:51:36 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,43 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.64 2000/10/16 23:45:02 hurwitz Exp $
+* File Name:  $Id: samutil.c,v 1.72 2001/02/07 16:51:36 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.64 $
+* $Revision: 1.72 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.c,v $
+* Revision 1.72  2001/02/07 16:51:36  hurwitz
+* bug fix
+*
+* Revision 1.71  2001/02/06 20:52:01  hurwitz
+* memory leak fix
+*
+* Revision 1.70  2001/01/26 23:26:17  hurwitz
+* bug fix for DDE_GetMsaTxtNodeGivenBioseqCoord
+*
+* Revision 1.69  2001/01/24 23:04:01  hurwitz
+* added a couple utility functions
+*
+* Revision 1.68  2001/01/10 23:38:39  lewisg
+* fix seqid and various memory leaks
+*
+* Revision 1.67  2001/01/03 22:16:52  hurwitz
+* fix potential memory leak
+*
+* Revision 1.66  2000/12/29 00:43:20  hurwitz
+* got rid of some asserts
+*
+* Revision 1.65  2000/11/01 20:50:21  hurwitz
+* made functions for get block starts and stops from populated paraGs
+*
 * Revision 1.64  2000/10/16 23:45:02  hurwitz
 * fixed DDE_GetStart for case of no left tail
 *
@@ -1121,17 +1145,24 @@ NLM_EXTERN ParaGPtr DDE_ParaGFree(ParaGPtr pParaG) {
   /* free the whole ptxtList linked list */
   /* each MsaTxtDisp is free'd here (no need to call UDV_MsaTxtDispFree()) */
   if (pParaG->ptxtList != NULL) {
-    ASSERT(ValNodeFreeData(pParaG->ptxtList) == NULL);
+    ValNodeFreeData(pParaG->ptxtList);
   }
 
   /* free the szEditSeq char array */
   if (pParaG->szEditSeq != NULL) {
-    ASSERT(MemFree(pParaG->szEditSeq) == NULL);
+    MemFree(pParaG->szEditSeq);
   }
+
+  /* free the SeqId -- actually, it's not safe to free it */
+/*
+  if (pParaG->sip != NULL) {
+    SeqIdFree(pParaG->sip);
+  }
+*/
 
   /* free the ParaG */
   if (pParaG != NULL) {
-    ASSERT(MemFree(pParaG) == NULL);
+    MemFree(pParaG);
   }
 
   return(NULL);
@@ -1205,36 +1236,41 @@ NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList, Int4 
 *  frees all memory allocated for an MsaParaGPopList in DDE_PopListNew().
 *  returns NULL for successful completion.
 *---------------------------------------------------------------------------*/
-  Int4  i;
+  Int4        i;
+  ValNodePtr  vnp;
 
-  /* for each ValNodePtr, free the ParaG the ValNode points to, free the ValNode */
+  /* for each ValNodePtr, free the linked list of ParaG's the ValNode points to, free the ValNode */
   for (i=0; i<TotalNumRows; i++) {
-    if (pPopList->TableHead[i]->data.ptrvalue != NULL) {
-      ASSERT(DDE_ParaGFree(pPopList->TableHead[i]->data.ptrvalue) == NULL);
+    vnp = pPopList->TableHead[i];
+    while (vnp != NULL) {
+      if (vnp->data.ptrvalue != NULL) {
+        DDE_ParaGFree(vnp->data.ptrvalue);
+      }
+      vnp = vnp->next;
     }
     if (pPopList->TableHead[i] != NULL) {
-      ASSERT(ValNodeFree(pPopList->TableHead[i]) == NULL);
+      ValNodeFree(pPopList->TableHead[i]);
     }
   }
 
   /* now free the array of ValNodePtr's (i.e. the TableHead array) */
   ASSERT(pPopList->TableHead != NULL);
-  ASSERT(MemFree(pPopList->TableHead) == NULL);
+  MemFree(pPopList->TableHead);
 
   /* free the whole RulerDescr linked list */
   /* each DDVRulerDescr is free'd here (no need to call DDV_RulerDescrFree()) */
   if (pPopList->RulerDescr != NULL) {
-    ASSERT(ValNodeFreeData(pPopList->RulerDescr) == NULL);
+    ValNodeFreeData(pPopList->RulerDescr);
   }
 
   /* free the entitiesTbl array */
   if (pPopList->entitiesTbl != NULL) {
-    ASSERT(MemFree(pPopList->entitiesTbl) == NULL);
+    MemFree(pPopList->entitiesTbl);
   }
 
   /* free the PopList */
   ASSERT(pPopList != NULL);
-  ASSERT(MemFree(pPopList) == NULL);
+  MemFree(pPopList);
   return(NULL);
 }
 
@@ -1746,6 +1782,7 @@ NLM_EXTERN DDE_StackPtr DDE_FreeStack(DDE_StackPtr pStack) {
   /* let DDV free the one being edited */
 /*  DDE_Free(pStack->pEdit, pStack->pEdit->TotalNumRows); */
 
+  MemFree(pStack->pArray);
   /* now free the stack */
   return(MemFree(pStack));
 }
@@ -2607,6 +2644,63 @@ NLM_EXTERN Int4 DDE_GetGapIndex(ValNodePtr ptxtList, ValNodePtr pMidtxtList, Boo
     vnp = vnp->next;
   }
   return(Before ? DispCoordStart : DispCoordStop + 1);
+}
+
+
+NLM_EXTERN ValNodePtr DDE_GetMsaTxtNodeGivenBioseqCoord(MsaParaGPopListPtr pPopList,
+                                                        Int4 BioseqCoord, Int4 Row) {
+/*----------------------------------------------------------------------------
+*  looked through linked list of ParaG's and linked list of MsaTxtDisp's
+*  for the MsaTxtDisp that contains BioseqCoord.
+*---------------------------------------------------------------------------*/
+  ValNodePtr     pg_vnp, msa_vnp;
+  ParaGPtr       pgp;
+  MsaTxtDispPtr  msap;
+
+  pg_vnp =  (ValNodePtr) (pPopList->TableHead[Row]);
+  while (pg_vnp != NULL) {
+    pgp =       (ParaGPtr) (pg_vnp->data.ptrvalue);
+    msa_vnp = (ValNodePtr) (pgp->ptxtList);
+    while (msa_vnp != NULL) {
+      msap = (MsaTxtDispPtr) msa_vnp->data.ptrvalue;
+      if (!msap->IsGap) {
+        if ((BioseqCoord >= msap->from) && (BioseqCoord <= msap->to)) {
+          return(msa_vnp);
+        }
+      }
+      msa_vnp = msa_vnp->next;
+    }
+    pg_vnp = pg_vnp->next;
+  }
+  return(NULL);
+}
+
+
+NLM_EXTERN ValNodePtr DDE_GetMsaTxtNode2(ValNodePtr pg_head, Int4 DispCoord, Int4 PNTR pOffset) {
+/*----------------------------------------------------------------------------
+*  v.similar to DDE_GetMsaTxtNode, except...
+*
+*  the ValNodePtr passed to this routine is to a linked-list of ParaG's.
+*  each ParaG contains a linked-list of MsaTxtDisp's.
+*
+*  Basically, this routine accomplishes the same as DDE_GetMsaTxtNode,
+*  except it's more general, and can handle the case when a sequence is
+*  more than 1 ParaG long.
+*---------------------------------------------------------------------------*/
+  ValNodePtr  vnp, msa_vnp, msa_node;
+  ParaGPtr    pgp;
+
+  vnp = pg_head;
+  while (vnp != NULL) {
+    pgp =       (ParaGPtr) (vnp->data.ptrvalue);
+    msa_vnp = (ValNodePtr) (pgp->ptxtList);
+    msa_node = DDE_GetMsaTxtNode(msa_vnp, DispCoord, pOffset);
+    if (*pOffset != -1) {
+      return(msa_node);
+    }
+    vnp = vnp->next;
+  }
+  return(NULL);
 }
 
 
@@ -4222,11 +4316,20 @@ NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex) {
 *  return the display coordinate index for the start of the
 *  BlockIndex alignment block.  return -1 if BlockIndex not found.
 *---------------------------------------------------------------------------*/
+  return(DDE_GetAlignStart2(pEditInfo->pPopList, BlockIndex));
+}
+
+
+NLM_EXTERN Int4 DDE_GetAlignStart2(MsaParaGPopListPtr pPopList, Int4 BlockIndex) {
+/*----------------------------------------------------------------------------
+*  return the display coordinate index for the start of the
+*  BlockIndex alignment block.  return -1 if BlockIndex not found.
+*---------------------------------------------------------------------------*/
   MsaTxtDispPtr  msap;
   ValNodePtr     head, vnp;
   Int4           Count=0;
 
-  head = vnp = DDE_GetTxtListPtr(pEditInfo, 0);
+  head = vnp = DDE_GetTxtListPtr2(pPopList, 0);
   if (head == NULL) return(-1);
 
   msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
@@ -4260,13 +4363,22 @@ NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex) {
 
 NLM_EXTERN Int4 DDE_GetAlignStop(DDE_InfoPtr pEditInfo, Int4 BlockIndex) {
 /*----------------------------------------------------------------------------
+*  return the display coordinate index for the start of the
+*  BlockIndex alignment block.  return -1 if BlockIndex not found.
+*---------------------------------------------------------------------------*/
+  return(DDE_GetAlignStop2(pEditInfo->pPopList, BlockIndex));
+}
+
+
+NLM_EXTERN Int4 DDE_GetAlignStop2(MsaParaGPopListPtr pPopList, Int4 BlockIndex) {
+/*----------------------------------------------------------------------------
 *  return the display coordinate index for the end of the
 *  BlockIndex alignment block.  return -1 if BlockIndex not found.
 *---------------------------------------------------------------------------*/
   ValNodePtr  head, vnp;
   Int4        Count=0;
 
-  head = vnp = DDE_GetTxtListPtr(pEditInfo, 0);
+  head = vnp = DDE_GetTxtListPtr2(pPopList, 0);
 
   /* look through the linked list of MsaTxtDisp's */
   while (vnp!= NULL) {

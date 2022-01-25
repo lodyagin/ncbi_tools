@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.9 at Sep 15, 2000  3:06 PM
+*    Generated using ASNCODE Revision: 6.10 at Jan 5, 2001 12:44 PM
 *
 **************************************************/
 
@@ -621,7 +621,7 @@ BlastResponseFree(ValNodePtr anp)
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) BlastPartsFree);
       break;
    case BlastResponse_mbalign:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) MegaBlastHitFree);
+      MegaBlastResultsFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -786,11 +786,7 @@ BlastResponseAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    }
    else if (atp == BLAST_RESPONSE_mbalign) {
       choice = BlastResponse_mbalign;
-      anp -> data.ptrvalue =
-      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) MegaBlastHitAsnRead,             (AsnOptFreeFunc) MegaBlastHitFree);
-      if (isError && anp -> data.ptrvalue == NULL) {
-         goto erret;
-      }
+      func = (AsnReadFunc) MegaBlastResultsAsnRead;
    }
    anp->choice = choice;
    if (func != NULL)
@@ -930,7 +926,8 @@ BlastResponseAsnWrite(BlastResponsePtr anp, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) BlastPartsAsnWrite, aip, BLAST_RESPONSE_parts, BLAST_RESPONSE_parts_E);
       break;
    case BlastResponse_mbalign:
-      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) MegaBlastHitAsnWrite, aip, BLAST_RESPONSE_mbalign, BLAST_RESPONSE_mbalign_E);
+      writetype = BLAST_RESPONSE_mbalign;
+      func = (AsnWriteFunc) MegaBlastResultsAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -1342,6 +1339,20 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> is_ooframe = av.intvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_endpoint_results) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> endpoint_results = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_percent_identity) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> percent_identity = av.realvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1576,6 +1587,10 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    AsnGenericChoiceSeqOfAsnWrite(ptr -> query_lcase_mask, (AsnWriteFunc) SeqLocAsnWrite, aip, BLAST_PARAMETERS_query_lcase_mask, BLAST_PARAMETERS_query_lcase_mask_E);
    av.intvalue = ptr -> is_ooframe;
    retval = AsnWrite(aip, BLAST_PARAMETERS_is_ooframe,  &av);
+   av.boolvalue = ptr -> endpoint_results;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_endpoint_results,  &av);
+   av.realvalue = ptr -> percent_identity;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_percent_identity,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4439,14 +4454,14 @@ erret:
 
 /**************************************************
 *
-*    SeqAlignSetListNew()
+*    MegaBlastResultsNew()
 *
 **************************************************/
 NLM_EXTERN 
-SeqAlignSetListPtr LIBCALL
-SeqAlignSetListNew(void)
+MegaBlastResultsPtr LIBCALL
+MegaBlastResultsNew(void)
 {
-   SeqAlignSetListPtr ptr = MemNew((size_t) sizeof(SeqAlignSetList));
+   MegaBlastResultsPtr ptr = MemNew((size_t) sizeof(MegaBlastResults));
 
    return ptr;
 
@@ -4455,36 +4470,36 @@ SeqAlignSetListNew(void)
 
 /**************************************************
 *
-*    SeqAlignSetListFree()
+*    MegaBlastResultsFree()
 *
 **************************************************/
 NLM_EXTERN 
-SeqAlignSetListPtr LIBCALL
-SeqAlignSetListFree(SeqAlignSetListPtr ptr)
+MegaBlastResultsPtr LIBCALL
+MegaBlastResultsFree(MegaBlastResultsPtr ptr)
 {
 
    if(ptr == NULL) {
       return NULL;
    }
-   SeqAlignSetFree(ptr -> align);
+   AsnGenericUserSeqOfFree(ptr -> mbhits, (AsnOptFreeFunc) MegaBlastHitFree);
    return MemFree(ptr);
 }
 
 
 /**************************************************
 *
-*    SeqAlignSetListAsnRead()
+*    MegaBlastResultsAsnRead()
 *
 **************************************************/
 NLM_EXTERN 
-SeqAlignSetListPtr LIBCALL
-SeqAlignSetListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+MegaBlastResultsPtr LIBCALL
+MegaBlastResultsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
-   SeqAlignSetListPtr ptr;
+   MegaBlastResultsPtr ptr;
 
    if (! loaded)
    {
@@ -4497,17 +4512,17 @@ SeqAlignSetListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       return NULL;
    }
 
-   if (orig == NULL) {         /* SeqAlignSetList ::= (self contained) */
-      atp = AsnReadId(aip, amp, SEQ_ALIGN_SET_LIST);
+   if (orig == NULL) {         /* MegaBlastResults ::= (self contained) */
+      atp = AsnReadId(aip, amp, MEGABLAST_RESULTS);
    } else {
-      atp = AsnLinkType(orig, SEQ_ALIGN_SET_LIST);
+      atp = AsnLinkType(orig, MEGABLAST_RESULTS);
    }
    /* link in local tree */
    if (atp == NULL) {
       return NULL;
    }
 
-   ptr = SeqAlignSetListNew();
+   ptr = MegaBlastResultsNew();
    if (ptr == NULL) {
       goto erret;
    }
@@ -4518,9 +4533,9 @@ SeqAlignSetListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    atp = AsnReadId(aip,amp, atp);
    func = NULL;
 
-   if (atp == SEQ_ALIGN_SET_LIST_align) {
-      ptr -> align = SeqAlignSetAsnRead(aip, atp);
-      if (aip -> io_failure) {
+   if (atp == MEGABLAST_RESULTS_mbhits) {
+      ptr -> mbhits = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) MegaBlastHitAsnRead, (AsnOptFreeFunc) MegaBlastHitFree);
+      if (isError && ptr -> mbhits == NULL) {
          goto erret;
       }
       atp = AsnReadId(aip,amp, atp);
@@ -4537,7 +4552,7 @@ ret:
 
 erret:
    aip -> io_failure = TRUE;
-   ptr = SeqAlignSetListFree(ptr);
+   ptr = MegaBlastResultsFree(ptr);
    goto ret;
 }
 
@@ -4545,11 +4560,11 @@ erret:
 
 /**************************************************
 *
-*    SeqAlignSetListAsnWrite()
+*    MegaBlastResultsAsnWrite()
 *
 **************************************************/
 NLM_EXTERN Boolean LIBCALL 
-SeqAlignSetListAsnWrite(SeqAlignSetListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+MegaBlastResultsAsnWrite(MegaBlastResultsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
@@ -4566,7 +4581,7 @@ SeqAlignSetListAsnWrite(SeqAlignSetListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       return FALSE;
    }
 
-   atp = AsnLinkType(orig, SEQ_ALIGN_SET_LIST);   /* link local tree */
+   atp = AsnLinkType(orig, MEGABLAST_RESULTS);   /* link local tree */
    if (atp == NULL) {
       return FALSE;
    }
@@ -4576,11 +4591,7 @@ SeqAlignSetListAsnWrite(SeqAlignSetListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       goto erret;
    }
 
-   if (ptr -> align != NULL) {
-      if ( ! SeqAlignSetAsnWrite(ptr -> align, aip, SEQ_ALIGN_SET_LIST_align)) {
-         goto erret;
-      }
-   }
+   AsnGenericUserSeqOfAsnWrite(ptr -> mbhits, (AsnWriteFunc) MegaBlastHitAsnWrite, aip, MEGABLAST_RESULTS_mbhits, MEGABLAST_RESULTS_mbhits_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

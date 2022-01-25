@@ -1,4 +1,4 @@
---$Revision: 1.20 $
+--$Revision: 1.22 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -164,21 +164,23 @@ Blast-parameters ::= SEQUENCE {
 	filter-string	VisibleString OPTIONAL,	-- filtering commands to be executed
 	entrez-query	VisibleString OPTIONAL,	-- query to Entrez
 	word-size	INTEGER OPTIONAL,	-- word-size used in BLAST search.
-	db-length	INTEGER OPTIONAL,	-- lenght of the db for statistics purposes
+	db-length	INTEGER OPTIONAL,	-- length of the db for statistics purposes
 	searchsp-eff	REAL OPTIONAL,		-- effective search space to be used
 	hsp-range-max	INTEGER OPTIONAL,	-- range for keeping HSPs in culling
 	block-width	INTEGER OPTIONAL,	-- width of block to be used in culling
 	perform-culling	BOOLEAN OPTIONAL,	-- perform culling?
 	strand-option	INTEGER OPTIONAL,	-- indicates strand to use.
 	phi-pattern	VisibleString OPTIONAL,	-- indicates, that this is phi-blast search and supplies pattern
-	use-real-db-size BOOLEAN OPTIONAL,  -- db size not to be adjusted for list of gis'.
-        use-best-align  BOOLEAN OPTIONAL,   -- option is to use alignments choosen by user in PSM computation API
-        is-rps-blast    BOOLEAN OPTIONAL,   -- option to set RPS BLAST search
+	use-real-db-size BOOLEAN OPTIONAL, -- db size not to be adjusted for list of gis'.
+        use-best-align  BOOLEAN OPTIONAL,  -- option is to use alignments chosen by user in PSM computation API
+        is-rps-blast    BOOLEAN OPTIONAL,  -- option to set RPS BLAST search
         tweak-parameters BOOLEAN OPTIONAL, -- Tweak Lambda, K, and score matrix for each match  
         smith-waterman  BOOLEAN OPTIONAL,  -- Compute locally optimal Smith-Waterman alignments
 	is-megablast    BOOLEAN OPTIONAL,  -- option to set MegaBLAST search.
 	query-lcase-mask SEQUENCE OF Seq-loc OPTIONAL, -- locations for lower case masking.
-	is-ooframe      INTEGER OPTIONAL   -- option to do outer frame. 
+	is-ooframe      INTEGER OPTIONAL,  -- option to do outer frame. 
+        endpoint-results BOOLEAN OPTIONAL, -- return only endpoints and scores, no seqalign.
+        percent-identity   REAL OPTIONAL   -- percent of identical residues in individual hit.   
 }
 
 				-- series of these when the request is queued
@@ -250,9 +252,10 @@ MegaBlast-hit ::= SEQUENCE {
 	score          INTEGER
 } 
 
-Seq-align-set-list ::= SEQUENCE {
-	align          Seq-align-set OPTIONAL
+MegaBlast-results ::= SEQUENCE {
+	mbhits        SEQUENCE OF MegaBlast-hit
 }
+
 
 Blast-response ::= CHOICE {
 	init Blast-version ,		-- acknowledges init
@@ -293,7 +296,7 @@ Blast-response ::= CHOICE {
 	fini NULL,               -- acknowledge fini
 	phialign Blast-phialign, -- The result of PHI-Blast
 	parts		SEQUENCE OF Blast-parts, -- the resutls in the Blast-parts format, rather than a Seq-align.
-	mbalign SEQUENCE OF MegaBlast-hit -- one-line MegaBlast results.
+	mbalign MegaBlast-results -- one-line MegaBlast results.
 }
 
 END

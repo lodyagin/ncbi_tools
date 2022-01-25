@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -369,6 +369,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignFree (SeqAlignPtr sap)
     }
     ScoreSetFree(sap->score);
 	SeqLocSetFree(sap->bounds);
+        SeqIdFree(sap->master);
 
 	ObjMgrDelete(OBJ_SEQALIGN, (Pointer)sap);
 

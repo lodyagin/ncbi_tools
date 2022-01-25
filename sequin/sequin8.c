@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.125 $
+* $Revision: 6.128 $
 *
 * File Description: 
 *
@@ -350,8 +350,10 @@ typedef struct exceptionformdata {
   Uint2          subtype;
   GrouP          xception;
   TexT           xceptText;
+  ButtoN         rescueExpl;
   Boolean        excpt;
   CharPtr        except_text;
+  Boolean        rescue;
   ObjMgrPtr      omp;
   ObjMgrTypePtr  omtp;
   ValNodePtr     head;
@@ -396,6 +398,7 @@ static void ExceptionCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2
   ObjMgrTypePtr     omtp;
   SeqAnnotPtr       sap;
   SeqFeatPtr        sfp;
+  CharPtr           str;
   Uint2             subtype;
 
   if (mydata == NULL) return;
@@ -434,7 +437,23 @@ static void ExceptionCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2
                 sfp->except_text = StringSave (efp->except_text);
               }
             } else {
-              sfp->except_text = MemFree (sfp->except_text);
+              if (efp->rescue) {
+                if (sfp->comment == NULL) {
+                  sfp->comment = sfp->except_text;
+                } else {
+                  str = MemNew (StringLen (sfp->comment) + StringLen (sfp->except_text) + 5);
+                  if (str != NULL) {
+                    StringCpy (str, sfp->comment);
+                    StringCat (str, "; ");
+                    StringCat (str, sfp->except_text);
+                    sfp->comment = MemFree (sfp->comment);
+                    sfp->comment = str;
+                  }
+                }
+                sfp->except_text = NULL;
+              } else {
+                sfp->except_text = MemFree (sfp->except_text);
+              }
             }
           }
         }
@@ -488,6 +507,7 @@ static void DoException (ButtoN b)
   } else {
     efp->except_text = NULL;
   }
+  efp->rescue = GetStatus (efp->rescueExpl);
   if (efp->itemtype != 0 && efp->omtp != NULL) {
     SeqEntryExplore (sep, (Pointer) efp, ExceptionCallback);
   }
@@ -620,12 +640,14 @@ extern void EditExceptionFlag (IteM i)
   q = HiddenGroup (h, -2, 0, NULL);
   ppt = StaticPrompt (q, "Exception  ", 0, stdLineHeight, programFont, 'l');
   efp->xception = HiddenGroup (q, -2, 0, NULL);
+  SetObjectExtra (efp->xception, efp, NULL);
   RadioButton (efp->xception, "Clear");
   RadioButton (efp->xception, "Set");
   SetValue (efp->xception, 1);
   StaticPrompt (q, "Explanation", 0, dialogTextHeight, programFont, 'l');
   efp->xceptText = DialogText (q, "", 12, NULL);
   AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) efp->xception, NULL);
+  efp->rescueExpl = CheckBox (q, "Move explanation to comment", NULL);
 
   k = HiddenGroup (h, 0, 2, NULL);
   StaticPrompt (k, "Optional string constraint", 0, dialogTextHeight, programFont, 'c');
@@ -1217,8 +1239,8 @@ extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         CorrectGenCodes (sep, entityID);
       }
@@ -4169,7 +4191,7 @@ static QUEUE  urlquerylist = NULL;
 
 static Int4 pendingqueries = 0;
 
-static Boolean LIBCALLBACK SubmitToNCBIResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
+static Boolean LIBCALLBACK SubmitToNCBIResultProc (CONN conn, VoidPtr userdata, EIO_Status status)
 
 {
   AsnIoPtr     aop;
@@ -4225,8 +4247,9 @@ extern void SubmitToNCBI (IteM i)
 
   conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 80,
                              "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
-                             progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary, eENCOD_Url,
-                             URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+                             progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary,
+                             eENCOD_Url,
+                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
 
   fp = FileOpen (path, "rb");
   QUERY_CopyFileToQuery (conn, fp);
@@ -4255,7 +4278,7 @@ extern void SequinCheckSocketsProc (void)
   remaining = QBlastCheckQueue (&qbquerylist);
 }
 
-static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
+static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EIO_Status status)
 
 {
   FILE  *fp;
@@ -4270,7 +4293,7 @@ static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, ECon
   return TRUE;
 }
 
-static Boolean LIBCALLBACK SequinHandleURLResults (CONN conn, VoidPtr userdata, EConnStatus status)
+static Boolean LIBCALLBACK SequinHandleURLResults (CONN conn, VoidPtr userdata, EIO_Status status)
 
 {
   FILE  *fp;
@@ -4315,7 +4338,7 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
                              nop->host_path, arguments,
                              progname, nop->timeoutsec,
                              eMIME_T_NcbiData, subtype, eENCOD_Url,
-                             URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
   if (conn == NULL) return;
 
   fp = FileOpen (path, "r");

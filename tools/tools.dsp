@@ -299,6 +299,10 @@ SOURCE=.\toporg.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\txalign.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\urkbias.c
 # End Source File
 # Begin Source File
@@ -512,6 +516,10 @@ SOURCE=.\toasn3.h
 # Begin Source File
 
 SOURCE=.\toporg.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\txalign.h
 # End Source File
 # Begin Source File
 

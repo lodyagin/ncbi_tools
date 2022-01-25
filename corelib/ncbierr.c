@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.16 2000/06/14 22:27:52 vakatov Exp $
+* $Id: ncbierr.c,v 6.17 2001/02/08 22:27:04 vakatov Exp $
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,10 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.17  2001/02/08 22:27:04  vakatov
+* + Nlm_CallErrHandlerOnly() -- to allow processing of posted
+* err.messages by the hook only.
+*
 * Revision 6.16  2000/06/14 22:27:52  vakatov
 * Nlm_AbnormalExit() -- print message only if called for the first time
 *
@@ -246,6 +250,9 @@ static AppErrInfoPtr GetAppErrInfo PROTO((void));
 
 #define FUSE_BITS(inf)  ( ((inf)->ini_bits & (inf)->ini_mask) | ((inf)->opts.flags & ~((inf)->ini_mask)) )
 #define TEST_BITS(inf,x)  (FUSE_BITS(inf) & (x))
+
+
+static Nlm_Boolean s_HookOnly = FALSE;
 
 
 
@@ -445,7 +452,7 @@ NLM_EXTERN int LIBCALL Nlm_ErrPostStr (ErrSev sev, int lev1, int lev2, const cha
 
 
   /* ----- Log the error according to the current options ----- */
-  if (severity >= info->opts.log_level)
+  if (!s_HookOnly  &&  severity >= info->opts.log_level)
     {
       NlmMutexLockEx( &corelibMutex );
 
@@ -500,12 +507,18 @@ NLM_EXTERN int LIBCALL Nlm_ErrPostStr (ErrSev sev, int lev1, int lev2, const cha
   if (info->hook != NULL)
     {
       int retval;
-      if ((retval = (*info->hook)(&(info->desc))) != 0)
+      if ((retval = (*info->hook)(&info->desc)) != 0)
         {
           ErrClear();
           return retval;
         }
     }
+
+  if ( s_HookOnly ) {
+      die_if_necessary(sev, info);
+      ErrClear();
+      return ANS_NONE;
+  }
 
   /* ----- Workaround for obsolete ERR_IGNORE option ----- */
   if (info->opts.actopt == ERR_IGNORE)
@@ -1342,6 +1355,17 @@ NLM_EXTERN ErrHookProc LIBCALL Nlm_ErrSetHandler (ErrHookProc hookNew)
 	ErrHookProc hookOld =info->hook;
 	info->hook = hookNew;
 	return hookOld;
+}
+
+
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CallErrHandlerOnly(Nlm_Boolean hook_only)
+{
+    Nlm_Boolean prev;
+    NlmMutexLockEx(&corelibMutex);
+    prev       = s_HookOnly;
+    s_HookOnly = hook_only;
+    NlmMutexUnlock(corelibMutex);
+    return prev;
 }
 
 

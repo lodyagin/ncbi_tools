@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.21  2001/03/26 16:45:57  wheelan
+* fixed uninitialized variables
+*
+* Revision 6.20  2001/01/09 23:18:55  lewisg
+* fix memory leaks
+*
 * Revision 6.19  2000/10/23 18:43:30  wheelan
 * minor bug fix
 *
@@ -747,6 +753,7 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
    else
       nuc = FALSE;
    BioseqUnlockById(sip);
+   sip = SeqIdFree(sip);
    amp = AlnMsgNew();
    amp->to_m = -1;
    amp->row_num = 1;
@@ -811,6 +818,7 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
       amp->to_m = -1;
       amp->row_num = i;
       app = app_head;
+
       sip = AlnMgrGetNthSeqIdPtr(sap, i);
       bsp = BioseqLockById(sip);
       count = 0;
@@ -825,6 +833,7 @@ NLM_EXTERN ACTProfilePtr ACT_MakeProfileFromSA(SeqAlignPtr sap)
             ACT_BuildProfile(NULL, &app, &count, (amp->to_b - amp->from_b + 1));
       }
       BioseqUnlockById(sip);
+      sip = SeqIdFree(sip);
    }
    ACT_EstimateConfidence(app_head);
    AlnMsgFree(amp);
@@ -2139,6 +2148,7 @@ NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwise(SeqAlignPtr sap_global,Seq
     AlnMgrGetNthSeqRangeInSA(salp2, which_master, &startm2, &stopm2);
     
     strand_subject = AlnMgrGetNthStrand(salp1, 3-which_master);
+    strand_master = AlnMgrGetNthStrand(salp1, which_master);
     if (strand_subject != Seq_strand_minus)
         strand_subject = Seq_strand_plus;
 
@@ -2217,6 +2227,7 @@ NLM_EXTERN Int4 AlnMgrSeqAlignMergePairwiseSet(SeqAlignPtr PNTR sap_ptr ) {
        if ((saip1 = (SAIndexPtr)amaip->saps[0]->saip)==NULL) 
            return 0;
        strand = AlnMgrGetNthStrand(amaip->saps[tiparray[0]->numsap], 3-saip1->master);
+       strand_master = AlnMgrGetNthStrand(amaip->saps[tiparray[0]->numsap], saip1->master);
        if (strand != Seq_strand_minus)
            strand = Seq_strand_plus;
        numsegs=0;

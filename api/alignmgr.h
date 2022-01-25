@@ -28,13 +28,19 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.69 $
+* $Revision: 6.71 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.71  2001/03/08 17:07:11  wheelan
+* added AlnMgrGetParent and structure to support it
+*
+* Revision 6.70  2001/02/16 13:29:49  wheelan
+* Added AMFreeAllIndexes
+*
 * Revision 6.69  2000/09/26 14:23:49  lewisg
 * use AlnMgrSortbyID instead of AlnMgrSortSeqAligns
 *
@@ -326,9 +332,10 @@ typedef struct saindex{
    Uint1 indextype;
    SeqAlignIndexFreeFunc freefunc;
    Uint4Ptr     aligncoords;
-   Int4 master;
-   SASeqDatPtr PNTR  ssdp;
-   Int4  numseqs;
+   Int4         master;
+   SASeqDatPtr  PNTR ssdp;
+   Int4         numseqs;
+   SeqAlignPtr  parent;
 } SAIndex, PNTR SAIndexPtr;
 
 NLM_EXTERN SASeqDatPtr SASeqDatNew(void);
@@ -397,6 +404,7 @@ NLM_EXTERN Boolean AMAlignIndexFree(VoidPtr index);
 NLM_EXTERN AMAlignDatPtr AMAlignDatNew(void);
 NLM_EXTERN AMAlignDatPtr AMAlignDatFree(AMAlignDatPtr amadp);
 
+NLM_EXTERN void AMFreeAllIndexes(SeqAlignPtr sap);
 
 /***************************************************************************
 *
@@ -537,6 +545,8 @@ NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap);
 *
 **********************************************************************/
 NLM_EXTERN Boolean AlnMgrIndexLite(SeqAlignPtr sap);
+
+NLM_EXTERN SeqAlignPtr AlnMgrGetParent(SeqAlignPtr sap);
 
 /***************************************************************************
 *

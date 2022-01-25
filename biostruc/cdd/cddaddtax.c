@@ -1,4 +1,4 @@
-/* $Id: cddaddtax.c,v 1.2 2000/07/19 19:51:32 bauer Exp $
+/* $Id: cddaddtax.c,v 1.3 2001/01/11 21:54:29 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 3/21/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: add taxonomy information to an existing CD
 *
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddaddtax.c,v $
+* Revision 1.3  2001/01/11 21:54:29  bauer
+* removed unused code
+*
 * Revision 1.2  2000/07/19 19:51:32  bauer
 * added modification logging
 *
@@ -166,9 +169,6 @@ Int2 Main()
      if (descr->choice == CddDescr_tax_source) {
        if (myargs[4].intvalue == 0) {
          CddSevError("Cdd already has taxonomy assignments! Aborting ..");
-       } else {
-
-       }
      }
      descr = descr->next;
    }

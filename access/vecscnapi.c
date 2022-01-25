@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description: 
 *
@@ -79,23 +79,23 @@ NLM_EXTERN CONN VecScreenOpenConnection (
   return QUERY_OpenUrlQuery ("ray.nlm.nih.gov", 6224, "/VecScreen/vecscreenQB.cgi",
                              query, "vecscreenapp",
                              30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
-                             URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
 }
 
-NLM_EXTERN EConnStatus VecScreenWaitForReply (
+NLM_EXTERN EIO_Status VecScreenWaitForReply (
   CONN conn
 )
 
 {
   time_t           currtime, starttime;
   Int2             max = 0;
-  EConnStatus      status;
+  EIO_Status       status;
   STimeout         timeout;
 #ifdef OS_MAC
   EventRecord      currEvent;
 #endif
 
-  if (conn == NULL) return eCONN_Unknown;
+  if (conn == NULL) return eIO_Unknown;
 
 #ifdef OS_MAC
   timeout.sec = 0;
@@ -106,7 +106,7 @@ NLM_EXTERN EConnStatus VecScreenWaitForReply (
 #endif
 
   starttime = GetSecs ();
-  while ((status = CONN_Wait (conn, eCONN_Read, &timeout)) != eCONN_Success && max < 300) {
+  while ((status = CONN_Wait (conn, eIO_Read, &timeout)) != eIO_Success && max < 300) {
     currtime = GetSecs ();
     max = currtime - starttime;
 #ifdef OS_MAC
@@ -135,7 +135,7 @@ typedef struct VQueueTag {
 static Boolean LIBCALLBACK SecondVecScreenCallback (
   CONN conn,
   Nlm_VoidPtr userdata,
-  EConnStatus status
+  EIO_Status  status
 )
 
 {
@@ -221,7 +221,7 @@ static Boolean LIBCALLBACK SecondVecScreenCallback (
 static Boolean LIBCALLBACK FirstVecScreenCallback (
   CONN conn,
   Nlm_VoidPtr userdata,
-  EConnStatus status
+  EIO_Status  status
 )
 
 {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -45,6 +45,9 @@
 * 08-01-93 Gish        AsnDeBinReadString calls MemGet instead of MemNew
 *
 * $Log: asndebin.c,v $
+* Revision 6.4  2000/12/12 15:56:10  ostell
+* added support BigInt
+*
 * Revision 6.3  1999/12/23 14:18:06  beloslyu
 * fix the AsnBinReadVal function if the atp is NULL
 *
@@ -687,6 +690,9 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 				case ENUM_TYPE:
 					valueptr->intvalue = AsnDeBinReadInteger(aip, atp);
 					break;
+				case BIGINT_TYPE: 
+                                        valueptr->bigintvalue = AsnDeBinReadBigInt(aip, atp);
+                                        break;
 				case REAL_TYPE:
 					valueptr->realvalue = AsnDeBinReadReal(aip);
 					break;
@@ -878,6 +884,64 @@ NLM_EXTERN Int4 AsnDeBinReadInteger (AsnIoPtr aip, AsnTypePtr atp)
 	AsnIoErrorMsg(aip, 12, value, AsnErrGetTypeName(atp->name));
 
 	return 0;
+}
+
+/*****************************************************************************
+*
+*   Int8 AsnDeBinReadBigInt(aip, atp)
+*   	expects an INTEGER next
+*   	assumes none of it has already been read
+*   	does not advance to next token
+*   	atp points to the definition of this integer for named values
+*
+*****************************************************************************/
+NLM_EXTERN Int8 AsnDeBinReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
+{
+	Int2 bytes, len;
+	Uint8 number;
+	BytePtr bp;
+	Int8 value;
+
+	bytes = aip->bytes - aip->offset;
+	bp = aip->buf + aip->offset;
+	len = (Int2) aip->length;
+	aip->tagsaved = FALSE;
+
+	if ((*bp & 0x80) != 0)      /* negative number */
+		number = (Uint8)(-1);
+	else
+		number = 0;
+
+	while (len)
+	{
+		number = (number << 8) | (*bp & 0xff);
+		bp++; bytes--; len--;
+		if (! bytes)
+		{
+			bytes = AsnIoReadBlock(aip);
+            if (! bytes)
+                {AsnIoErrorMsg(aip, 17); return 0;}
+			bp = aip->buf;
+		}
+	}
+
+	value = (Int8) number;
+
+	if (! AsnDeBinDecr(aip->length, aip))
+		return 0;
+	aip->offset = aip->bytes - bytes;
+
+	if (AsnFindBaseIsa(atp) != ENUM_TYPE)
+		return value;
+
+			/******************** read a named integer value *********/
+
+	   /* named value not supported for BigInt ****/
+
+
+	AsnIoErrorMsg(aip, 12, value, AsnErrGetTypeName(atp->name));
+
+	return (Int8)0;
 }
 
 /*****************************************************************************

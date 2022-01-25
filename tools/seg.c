@@ -866,16 +866,31 @@ void trim(SequencePtr seq, Int4Ptr leftend, Int4Ptr rightend,
 FloatHi getprob(Int4Ptr sv, Int4 total, AlphaPtr palpha)
 
   {
-   FloatHi ans, totseq;
+   FloatHi ans, ans1, ans2, totseq;
 
    /* #define LN20	2.9957322735539909 */
    /* #define LN4	1.3862943611198906 */
 
    totseq = ((double) total) * palpha->lnalphasize;
 
+/*
    ans = lnass(sv, palpha->alphasize) + lnperm(sv, total) - totseq;
+*/
+   ans1 = lnass(sv, palpha->alphasize);
+   if (ans1 > -100000.0 && sv[0] != INT4_MIN)
+   {
+	ans2 = lnperm(sv, total);
+   }
+   else
+   {
+        ErrPostEx (SEV_ERROR, 0, 0, "Illegal value returned by lnass");
+   }
+   ans = ans1 + ans2 - totseq;
+/*
+fprintf(stderr, "%lf %lf %lf\n", ans, ans1, ans2);
+*/
 
-   return(ans);
+   return ans;
   }
 
 /*---------------------------------------------------------------(lnperm)---*/

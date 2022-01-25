@@ -1,4 +1,4 @@
-/*  $Id: debug_server.c,v 6.6 2000/04/07 15:49:17 vakatov Exp $
+/*  $Id: debug_server.c,v 6.7 2001/01/02 21:17:47 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -41,6 +41,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: debug_server.c,v $
+* Revision 6.7  2001/01/02 21:17:47  vakatov
+* Keep in-sync with the CONNECT API:  SOCK_SetLOG --> CORE_SetLOG
+*
 * Revision 6.6  2000/04/07 15:49:17  vakatov
 * Fixed a typo in the USAGE info
 *
@@ -712,7 +715,7 @@ extern int main(int argc, char* argv[], char* envp[])
   {{
     LOG lg = LOG_Create(0, 0, 0, 0);
     LOG_ToFILE(lg, stderr, 0/*false*/);
-    SOCK_SetLOG(lg);
+    CORE_SetLOG(lg);
   }}
 
 

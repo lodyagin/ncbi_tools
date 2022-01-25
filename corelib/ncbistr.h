@@ -25,11 +25,11 @@
 *
 * File Name:  ncbistr.h
 *
-* Author:  Gish, Kans, Ostell, Schuler
+* Author:  Gish, Kans, Ostell, Schuler, Vakatov, Lavrentiev
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistr.h,v $
+* Revision 6.6  2001/01/05 22:43:58  shavirin
+* Added functions, that transfer Uint8 values to platform-independent
+* objects and back.
+*
+* Revision 6.5  2000/11/30 22:46:08  lavr
+* Added the following functions for conversions of Int8 and Uint8
+* to strings and back; test suite attached at the end of the file.
+* Nlm_Int8ToString, Nlm_Uint8ToString, Nlm_StringToInt8, Nlm_StringToUint8
+*
 * Revision 6.4  1999/04/15 20:24:07  vakatov
 * Dont use "list" name as it can clash with the standard "list<>" template
 * on some raw C++ compilers
@@ -161,6 +170,29 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch PROTO((const char FAR *str, con
 
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((Nlm_CharPtr str));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString PROTO((Nlm_CharPtr str));
+
+/* Printing 8-byte integer into platform-independent array of 8 bytes
+   memory allocated for this storage */
+NLM_EXTERN Nlm_Uint1Ptr LIBCALL Uint8ToBytes(Nlm_Uint8 value);
+
+/* Reading platform-independent array of 8 bytes and transfer it to
+   8-bytes integer */
+NLM_EXTERN Nlm_Uint8 LIBCALL BytesToUint8(Nlm_Uint1Ptr bytes);
+
+/* Retrieve integer value from "str".
+ * On success, "*endptr" will point to the symbol of "str" that
+ * appears right after the read number.
+ * On conversion error, "*endptr" will be assigned NULL.
+ */
+NLM_EXTERN Nlm_Int8  LIBCALL Nlm_StringToInt8 (const char* str, const char** endptr);
+NLM_EXTERN Nlm_Uint8 LIBCALL Nlm_StringToUint8(const char* str, const char** endptr);
+
+/* Print "value" to "str".
+ * Return '\0'-terminated "str" on success.
+ * Return NULL if "str_size" is not enough to put the number and '\0'.
+ */
+NLM_EXTERN char* LIBCALL Nlm_Int8ToString (Nlm_Int8  value, char* str, size_t str_size);
+NLM_EXTERN char* LIBCALL Nlm_Uint8ToString(Nlm_Uint8 value, char* str, size_t str_size);
 
 /*****************************************************************************
 *
@@ -380,6 +412,11 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 
 #define LabelCopy Nlm_LabelCopy
 #define LabelCopyExtra Nlm_LabelCopyExtra
+
+#define StringToInt8  Nlm_StringToInt8
+#define StringToUint8 Nlm_StringToUint8
+#define Int8ToString  Nlm_Int8ToString
+#define Uint8ToString Nlm_Uint8ToString
 
 /*----------------------------------------*/
 /*      Misc Text Oriented Macros         */

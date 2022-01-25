@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.32 2000/10/18 18:45:18 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.33 2000/12/29 17:26:28 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.33  2000/12/29 17:26:28  kimelman
+ * PDQBACH -> BACH
+ *
  * Revision 6.32  2000/10/18 18:45:18  kimelman
  * bugfix
  *
@@ -153,7 +156,7 @@
 
 #include <assert.h>
 
-#define DEF_SRV "PDQBACH:PubStruct=anyone,allowed"
+#define DEF_SRV "BACH:PubStruct=anyone,allowed"
 
 typedef enum {
   PS_NEW,

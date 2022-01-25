@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlex.c,v $
+* Revision 6.5  2000/12/12 15:56:12  ostell
+* added support BigInt
+*
 * Revision 6.4  2000/03/10 18:02:05  kans
 * increased size of tbuf in AsnLexReadOctets to handle long lines in hand-edited (?) ASN.1 records being submitted
 *
@@ -416,6 +419,9 @@ NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 		case ENUM_TYPE:
 			valueptr->intvalue = AsnLexReadInteger(aip, atp);
 			break;
+		case BIGINT_TYPE:
+			valueptr->bigintvalue = AsnLexReadBigInt(aip, atp);
+			break;
 		case REAL_TYPE:
 			valueptr->realvalue = AsnLexReadReal(aip, atp);
 			break;
@@ -566,6 +572,42 @@ NLM_EXTERN Int4 AsnLexReadInteger (AsnIoPtr aip, AsnTypePtr atp)
 	AsnIoErrorMsg(aip, 41, AsnErrGetTypeName(atp->name), aip->linenumber);
 
 	return 0;
+}
+
+/*****************************************************************************
+*
+*   Int8 AsnLexReadBigInt(aip, atp)
+*   	expects an INTEGER next
+*   	assumes none of it has already been read
+*   	does not advance to next token
+*   	atp points to the definition of this integer for named values
+*
+*****************************************************************************/
+NLM_EXTERN Int8 AsnLexReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
+{
+	Int2 token;
+
+	token = AsnLexWord(aip);      /* read the integer */
+
+	if (token == NUMBER)    /* just a number */
+	{
+		return AsnLexBigInt(aip);
+	}
+
+	if (token != IDENT)    /* not number or named value */
+	{
+		AsnIoErrorMsg(aip, 39, AsnErrGetTypeName(atp->name), aip->linenumber);
+		return 0;
+	}
+
+			/******************** read a named integer value *********/
+			/**** not supported for bigint *****/
+
+		   /******************* could it be a previously defined value? ***/
+
+	AsnIoErrorMsg(aip, 41, AsnErrGetTypeName(atp->name), aip->linenumber);
+
+	return (Int8)0;
 }
 
 /*****************************************************************************
@@ -958,6 +1000,23 @@ NLM_EXTERN Int4 AsnLexInteger (AsnIoPtr aip)
 	MemCopy(tbuf, aip->word, (size_t)aip->wordlen);
 	tbuf[aip->wordlen] = '\0';
 	value = atol(tbuf);
+	return value;
+}
+
+/*****************************************************************************
+*
+*   Int8 AsnLexBigInt(aip)
+*
+*****************************************************************************/
+NLM_EXTERN Int8 AsnLexBigInt (AsnIoPtr aip)
+{
+	char tbuf[40];
+	Int8 value;
+	const char * result;
+
+	MemCopy(tbuf, aip->word, (size_t)aip->wordlen);
+	tbuf[aip->wordlen] = '\0';
+	value = Nlm_StringToInt8 (tbuf, &result);
 	return value;
 }
 

@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.148 $
+* $Revision: 6.154 $
 *
 * File Description: 
 *
@@ -65,6 +65,7 @@
 #include <salpacc.h>
 #include <salpedit.h>
 #include <salptool.h>
+#include <alignmgr.h>
 
 /******/
 #include <pgppop.h>
@@ -2715,6 +2716,9 @@ static void SalsaNewFeaturesMenu (MenU m, Boolean is_na)
                     subtype != FEATDEF_sig_peptide &&
                     subtype != FEATDEF_transit_peptide &&
                     subtype != FEATDEF_source &&
+                    subtype != FEATDEF_virion &&
+                    subtype != FEATDEF_mutation &&
+                    subtype != FEATDEF_allele &&
                     subtype != FEATDEF_site_ref) {
                   i = CommandItem (sub, ompp->proclabel, SalsaNewFeatureMenuProc);
                   nfp = (NewFeaturePtr) MemNew (sizeof (NewFeatureData));
@@ -4422,7 +4426,8 @@ static Int2 what_seqalign (SeqAlignPtr salp)
      return 1;
   } else  if(start1 && start4) { /* start3==TRUE already */
       return 5; /* nothing new, just take sequence from new one */
-  }
+  } else if (start1 && start3)
+      return 6;
   return 0;
 }
 
@@ -4467,11 +4472,47 @@ static Boolean get_bestpos_formerge (SeqAlignPtr salp, Int4Ptr from, Int4Ptr to)
   Int2          j;
   Boolean       insert_before=FALSE,
                 insert_after=FALSE;
+  Int4          from1, to1, from2, to2;
+  BioseqPtr     bsp;
+  SeqIdPtr      sip;
 
   *from = -1;
   *to = -1;
   if (salp == NULL)
      return FALSE;
+  AlnMgrIndexSingleChildSeqAlign(salp);
+  AlnMgrGetNthSeqRangeInSA(salp, 1, &from1, &to1);
+  AlnMgrGetNthSeqRangeInSA(salp, 2, &from2, &to2);
+  if (from1 == 0)
+  {
+     if (from2 != 0)
+     {
+        *from = 0;
+        *to = from2 - 1;
+     } else
+     {
+        *from = from2;
+        *to = to2;
+     }
+  } else if (from2 == 0)
+  {
+     if (from1 != 0)
+     {
+        *from = to2 + 1;
+        sip = AlnMgrGetNthSeqIdPtr(salp, 2);
+        bsp = BioseqLockById(sip);
+        if (bsp != NULL)
+           *to = bsp->length -1;
+        BioseqUnlock(bsp);
+        SeqIdFree(sip);
+     } else
+     {
+        *from = from2;
+        *to = to2;
+     }
+  }
+  *to+=1; /* create a bug to fix a bug -- SW */
+  return; /* above fix put in 1/29/01 since coordinates were not correct -- SW */
   j=what_seqalign(salp);
   if (j==1 || j==3) 
   { /* when j==3, there is also a bit afterwards that could be merged.*/
@@ -4487,7 +4528,7 @@ static Boolean get_bestpos_formerge (SeqAlignPtr salp, Int4Ptr from, Int4Ptr to)
      *to = SeqAlignStop (salp, 1);
      return TRUE;
   }
-  if (j==5) { /* copy over the whole seqalign. .. nothing new */
+  if (j==5 || j==6) { /* copy over the whole seqalign. .. nothing new */
       *from = SeqAlignStart(salp,1);
       *to = SeqAlignStop(salp,1);
   }

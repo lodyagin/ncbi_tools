@@ -1,4 +1,4 @@
-/* $Id: psiblast.c,v 6.4 2000/08/10 18:18:26 shavirin Exp $
+/* $Id: psiblast.c,v 6.6 2000/11/03 20:38:41 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.4 $
+* $Revision: 6.6 $
 *
 * File Description:
 *         WWW PSI BLAST Main file
 *
 * $Log: psiblast.c,v $
+* Revision 6.6  2000/11/03 20:38:41  shavirin
+* Minor formating change.
+*
+* Revision 6.5  2000/10/31 20:19:39  shavirin
+* Added printing progeress messages to avoid browser timeout.
+*
 * Revision 6.4  2000/08/10 18:18:26  shavirin
 * Fixed problem with printing PHI Blast output.
 *
@@ -260,7 +266,7 @@ Int2 Main (void)
     if (theInfo->is_phi_blast == FALSE) {
         if((print_data = PSIBlastSearch(theInfo)) == NULL ||
            print_data->seqalign == NULL) {
-
+            fprintf(stdout, "<PRE>\n");
             fprintf(stdout, "\n\nNo hit found...\n\n");
 
             if(print_data != NULL) {
@@ -278,6 +284,8 @@ Int2 Main (void)
                 PrintTildeSepLines(print_data->buffer, 70, stdout);
                 free_buff();
             }
+            fprintf(stdout, "</PRE></BODY></HTML>\n");
+
             FileClose(stdout);
             return(0);
         }
@@ -286,7 +294,8 @@ Int2 Main (void)
 	theInfo->options->number_of_cpus = 1;
     	if((print_data = PHIBlastSearch(theInfo)) == NULL ||
            print_data->vnp == NULL || print_data->seqloc == NULL) {
-            
+
+            fprintf(stdout, "<PRE>\n");
             fprintf(stdout, "\n<BR>No hit found...<BR>\n");
             
             if(print_data != NULL) {
@@ -303,6 +312,9 @@ Int2 Main (void)
                 PrintTildeSepLines(print_data->buffer, 70, stdout);
                 free_buff();
             }
+
+            fprintf(stdout, "</PRE></BODY></HTML>\n");
+
             FileClose(stdout);
             return(0);
         }
@@ -337,7 +349,7 @@ Int2 Main (void)
     
     scale = theInfo->query_bsp->length/450.0;
     
-    fprintf(stdout, "</PRE><FORM NAME=\"PSI_BLAST\" METHOD=\"POST\" "
+    fprintf(stdout, "<FORM NAME=\"PSI_BLAST\" METHOD=\"POST\" "
             "ACTION=\"%s/step%d\" ENCTYPE= \"multipart/form-data\">\n", 
             getenv("SCRIPT_NAME") == NULL ? "" : getenv("SCRIPT_NAME"),
             /* WWWGetPort(theInfo->info), */ psidata->StepNumber);

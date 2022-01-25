@@ -391,7 +391,7 @@ FeatDefGroupSet ::= {
     menulabel "site of mutation in related strain" ,
     featdef-key 39 ,
     seqfeat-key 8 ,
-    entrygroup 5 ,
+    entrygroup 0 ,
     displaygroup 5 ,
     molgroup na
   } ,

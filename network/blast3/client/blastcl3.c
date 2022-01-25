@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.23 $
+* $Revision: 1.24 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.24  2001/01/19 21:30:09  dondosha
+* Call readdb...._ex functions to possibly save some time when finding db length
+*
 * Revision 1.23  2000/10/25 16:41:26  madden
 * Add BioSource to query_bsp
 *
@@ -422,8 +425,11 @@ Int2 Main (void)
     options->genetic_code = myargs[17].intvalue;
     options->db_genetic_code = myargs[18].intvalue;
     options->number_of_cpus = myargs[19].intvalue;
-    if (myargs[22].intvalue != 0)
+    if (myargs[22].intvalue != 0) {
         options->wordsize = myargs[22].intvalue;
+        if (options->is_megablast_search)
+           options->wordsize += 4;
+    }
     
     print_options = 0;
     align_options = 0;

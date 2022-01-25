@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,9 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.7  2000/12/12 15:56:08  ostell
+* added support BigInt
+*
 * Revision 6.6  2000/07/25 20:30:59  ostell
 * added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
 *
@@ -541,6 +544,7 @@ NLM_EXTERN Boolean LIBCALL AsnTxtBufWrite PROTO ((AsnIoPtr aip, AsnTypePtr atp, 
 #define UTCTIME_TYPE			327
 
 #define STRSTORE_TYPE			351		/* Application: StringStore */
+#define BIGINT_TYPE                     352             /* Application: Int8 */
 
 /******* grouping macros on ISA defines above ********************/
 
@@ -554,6 +558,7 @@ NLM_EXTERN Boolean LIBCALL AsnTxtBufWrite PROTO ((AsnIoPtr aip, AsnTypePtr atp, 
 #define ASNCODE_INTVAL_SLOT 3
 #define ASNCODE_BOOLVAL_SLOT 4
 #define ASNCODE_BYTEVAL_SLOT 5
+#define ASNCODE_BIGINTVAL_SLOT 6
 
 #ifdef __cplusplus
 }

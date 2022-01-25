@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.11 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.13  2001/02/25 21:42:27  kans
+* changed several Uint4s to size_t due to new prototypes
+*
+* Revision 6.12  2001/02/21 22:02:04  lavr
+* Changes for use new CONN interface
+*
 * Revision 6.11  2000/08/18 19:08:58  kans
 * added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
 *
@@ -78,14 +84,14 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   Nlm_CharPtr host_path, Nlm_CharPtr arguments,
   Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
   EMIME_Type type, EMIME_SubType subtype,
-  EMIME_Encoding encoding, URLC_Flags flags)
+  EMIME_Encoding encoding, THCC_Flags flags)
 {
-  CONN            conn = NULL;
+  CONN            conn = 0;
   CONNECTOR       connector;
   Nlm_Char        contentType[MAX_CONTENT_TYPE_LEN];
-  SNetConnInfo*   info;
+  SConnNetInfo*   info;
   Nlm_Char        path [PATH_MAX];
-  EConnStatus     status;
+  EIO_Status      status;
   Nlm_CharPtr     userAgentName = NULL;
   Nlm_Char        user_header[sizeof(contentType) + 256];
 
@@ -108,7 +114,7 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 
   /* was set content type from parameters - now explicit parameter */
   /*
-  if ((flags & URLC_URL_ENCODE_OUT) != 0) {
+  if ((flags & fHCC_UrlEncodeOutput) != 0) {
     encoding = eENCOD_Url;
   }
   */
@@ -119,29 +125,29 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   sprintf (user_header, "%sUser-Agent: %s\r\n", contentType, userAgentName);
 
   /* fill in connection info fields and create the connection */
-  info = NetConnInfo_Create(0, 0);
+  info = ConnNetInfo_Create(0);
   ASSERT( info );
 
   if ( host_machine ) {
-    MemFree(info->host);  info->host = StringSave(host_machine);
+      StringNCpy_0(info->host, host_machine, sizeof(info->host));
   }
   info->port = host_port;
   if ( !StringHasNoText(arguments) ) {
-    MemFree(info->args);  info->args = StringSave(arguments);
+      StringNCpy_0(info->args, arguments, sizeof(info->args));
   }
-  MemFree(info->path);    info->path = StringSave(host_path);
+  StringNCpy_0(info->path, host_path, sizeof(info->path));
 
   info->timeout.sec  = timeoutsec;
   info->timeout.usec = 0;
 
-  connector = URL_CreateConnector(info, user_header, flags);
+  connector = HTTP_CreateConnector(info, user_header, flags);
   status = CONN_Create(connector, &conn);
-  if (status != eCONN_Success) {
+  if (status != eIO_Success) {
     ErrPostEx(SEV_ERROR, 0, 0, "QUERY_OpenUrlQuery failed in CONN_Create");
   }
 
   /* cleanup & return */
-  NetConnInfo_Destroy(&info);
+  ConnNetInfo_Destroy(info);
   return conn;
 }
 
@@ -153,13 +159,13 @@ NLM_EXTERN void QUERY_SendQuery (
 {
   STimeout  timeout;
 
-  if (conn == NULL) return;
+  if (conn == 0) return;
 
   /* flush buffer, sending query, without waiting for response */
 
   timeout.sec  = 0;
   timeout.usec = 0;
-  CONN_Wait (conn, eCONN_Read, &timeout);
+  CONN_Wait (conn, eIO_Read, &timeout);
 }
 
 #define URL_QUERY_BUFLEN  4096
@@ -171,8 +177,8 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
 {
   Nlm_CharPtr  buffer;
   size_t       ct;
-  Nlm_Uint4    n_written;
-  EConnStatus  status;
+  size_t       n_written;
+  EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
@@ -191,16 +197,17 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
 
 {
   Nlm_CharPtr  buffer;
-  Nlm_Uint4    n_read;
-  EConnStatus  status;
+  size_t       n_read;
+  EIO_Status   status;
 
   if (conn == NULL || fp == NULL) return;
 
   buffer = (Nlm_CharPtr) MemNew(URL_QUERY_BUFLEN + 1);
   if (buffer != NULL) {
-    while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read, eCR_Read)) == eCONN_Success) {
-      FileWrite (buffer, 1, n_read, fp);
-    }
+      while ((status = CONN_Read (conn, buffer, URL_QUERY_BUFLEN, &n_read,
+                                  eIO_Plain)) == eIO_Success) {
+          FileWrite (buffer, 1, n_read, fp);
+      }
   }
   MemFree (buffer);
 }
@@ -208,7 +215,7 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
 static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 count)
 
 {
-	Nlm_Uint4     bytes;
+	size_t        bytes;
 	AsnIoConnPtr  aicp;
 
 	aicp = (AsnIoConnPtr) ptr;
@@ -219,11 +226,11 @@ static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 
 static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count)
 
 {
-	Nlm_Uint4     bytes;
+	size_t        bytes;
 	AsnIoConnPtr  aicp;
 
 	aicp = (AsnIoConnPtr) ptr;
-	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eCR_Read);
+	CONN_Read (aicp->conn, (Pointer) buf, (Int4) count, &bytes, eIO_Plain);
 	return (Nlm_Int2) bytes;
 }
 
@@ -348,7 +355,7 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   QueuePtr       curr;
   QueuePtr       next;
   QueuePtr PNTR  qptr;
-  EConnStatus    status;
+  EIO_Status     status;
   STimeout       timeout;
 
   qptr = (QueuePtr PNTR) queue;
@@ -362,9 +369,9 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
     if (curr->conn != NULL && (! curr->protect)) {
       timeout.sec  = 0;
       timeout.usec = 0;
-      status = CONN_Wait (curr->conn, eCONN_Read, &timeout);
+      status = CONN_Wait (curr->conn, eIO_Read, &timeout);
 
-      if (status == eCONN_Success) {
+      if (status == eIO_Success) {
         /* protect against reentrant calls if resultproc is GUI and processes timer */
         curr->protect = TRUE;
         if (curr->resultproc != NULL) {

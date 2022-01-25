@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -45,6 +45,12 @@
 * 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
 *
 * $Log: asnio.c,v $
+* Revision 6.9  2001/03/13 13:11:46  ostell
+* made AsnIoBSOpen() and AsnIoMemOpen() XML aware
+*
+* Revision 6.8  2001/02/02 22:08:47  shavirin
+* Fixed case of opening AsnIoPtr in case of XML output for Linux.
+*
 * Revision 6.7  2000/05/10 03:12:37  ostell
 * added support for XML DTD and XML data output
 *
@@ -170,7 +176,11 @@ NLM_EXTERN AsnIoPtr LIBCALL  AsnIoOpen (CharPtr file_name, CharPtr mode)
 		return NULL;
 	}
 
-	fp = FileOpen(file_name, mode);
+        if (!StringCmp(mode, "wx")) {
+            fp = FileOpen(file_name, "w");            
+        } else {
+            fp = FileOpen(file_name, mode);
+        }
 
 	if (fp == NULL)
 	{
@@ -1201,6 +1211,11 @@ NLM_EXTERN AsnIoMemPtr LIBCALL  AsnIoMemOpen (CharPtr mode, BytePtr buf, Int4 si
 		type = (ASNIO_OUT | ASNIO_TEXT);
 	else if (! StringCmp(mode, "wb"))
 		type = (ASNIO_OUT | ASNIO_BIN);
+	else if (! StringCmp(mode, "wx"))
+	{
+		type = (ASNIO_OUT | ASNIO_TEXT);
+		type |= ASNIO_XML;
+	}
 	else
 	{
 		AsnIoErrorMsg(NULL, 81, mode);
@@ -1298,6 +1313,11 @@ NLM_EXTERN AsnIoBSPtr LIBCALL  AsnIoBSOpen (CharPtr mode, ByteStorePtr bsp)
 		type = (ASNIO_OUT | ASNIO_TEXT);
 	else if (! StringCmp(mode, "wb"))
 		type = (ASNIO_OUT | ASNIO_BIN);
+	else if (! StringCmp(mode, "wx"))
+	{
+		type = (ASNIO_OUT | ASNIO_TEXT);
+		type |= ASNIO_XML;
+	}
 	else
 	{
 		AsnIoErrorMsg(NULL, 81, mode);

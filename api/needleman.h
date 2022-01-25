@@ -21,8 +21,11 @@
   
   if Kappa || Lambda ==0, defaults are provided.. appropriate for nucleotides.
 
-$Revision: 6.6 $
+$Revision: 6.7 $
 $Log: needleman.h,v $
+Revision 6.7  2000/10/31 21:20:05  vakatov
+[WIN32] DLL'zation
+
 Revision 6.6  2000/08/28 19:36:52  kans
 moved revision log into comment section
 
@@ -33,14 +36,39 @@ added revision log
 
 #ifndef _NEEDLEMAN_
 #define _NEEDLEMAN_
+
 #include <ncbi.h>
 #include <objseq.h>
 #include <objsset.h>
 
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 /* BLAST_Score must be a signed datatype 
 typedef Int4    BLAST_Score, PNTR BLAST_ScorePtr;
 */
-SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqLocPtr slp2, Int4 **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *score, Nlm_FloatHi Kappa, Nlm_FloatHi Lambda);
+NLM_EXTERN SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqLocPtr slp2, Int4 **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *score, Nlm_FloatHi Kappa, Nlm_FloatHi Lambda);
 Uint1Ptr FetchSequenceByLoc(SeqLocPtr slp,Int4* length,Int4* BspLength);
+
+
+#ifdef __cplusplus
+}
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
 #endif

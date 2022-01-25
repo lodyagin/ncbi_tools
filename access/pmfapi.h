@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.2 $
+* $Revision: 1.6 $
 *
 * File Description: 
 *
@@ -45,6 +45,7 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <objmedli.h>
+#include <objpubme.h>
 #include <objsset.h>
 
 #undef NLM_EXTERN
@@ -69,7 +70,7 @@ NLM_EXTERN CONN PMFetchOpenConnection (
   Int4 uid
 );
 
-NLM_EXTERN MedlineEntryPtr PubMedWaitForReply (
+NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
   CONN conn
 );
 
@@ -84,7 +85,7 @@ NLM_EXTERN SeqEntryPtr PubSeqWaitForReply (
 
 /* db "PubMed" is implied */
 
-NLM_EXTERN MedlineEntryPtr PubMedSynchronousQuery (
+NLM_EXTERN PubmedEntryPtr PubMedSynchronousQuery (
   Int4 uid
 );
 
@@ -107,7 +108,7 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuery (
  afterwards.
 
  PubMedReadReply and PubSeqReadReply take conn and status
- parameters from completion routine and reads MedlineEntryPtr
+ parameters from completion routine and reads PubmedEntryPtr
  or SeqEntryPtr.
 */
 
@@ -122,9 +123,9 @@ NLM_EXTERN Int4 PubMedCheckQueue (
   QUEUE* queue
 );
 
-NLM_EXTERN MedlineEntryPtr PubMedReadReply (
+NLM_EXTERN PubmedEntryPtr PubMedReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 );
 
 NLM_EXTERN Boolean PubSeqAsynchronousQuery (
@@ -141,7 +142,16 @@ NLM_EXTERN Int4 PubSeqCheckQueue (
 
 NLM_EXTERN SeqEntryPtr PubSeqReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
+);
+
+/* SeqId fetch function */
+
+NLM_EXTERN Boolean PubSeqFetchEnable (
+  void
+);
+NLM_EXTERN void PubSeqFetchDisable (
+  void
 );
 
 

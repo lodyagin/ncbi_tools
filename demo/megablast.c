@@ -1,4 +1,4 @@
-/* $Id: megablast.c,v 6.54 2000/10/31 15:08:05 dondosha Exp $
+/* $Id: megablast.c,v 6.69 2001/03/19 22:39:25 dondosha Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,51 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.69  2001/03/19 22:39:25  dondosha
+ * Allow location on the first query sequence for megablast
+ *
+ * Revision 6.68  2001/02/21 21:26:54  dondosha
+ * Prefer gi to accession in -D[01] outputs
+ *
+ * Revision 6.67  2001/02/07 21:18:42  dondosha
+ * Moved the MegaBlastPrintAlignInfo callback to blastool.c
+ *
+ * Revision 6.66  2001/02/05 16:48:34  dondosha
+ * Parse all database general ids except BL_ORD_ID
+ *
+ * Revision 6.65  2001/01/12 17:48:05  dondosha
+ * Check for NULL seqalign array on return from engine
+ *
+ * Revision 6.64  2001/01/05 17:12:49  dondosha
+ * Correction in previous memory leak fix
+ *
+ * Revision 6.63  2001/01/03 21:45:31  dondosha
+ * Fixed a memory leak - some edit blocks not freed in megablast
+ *
+ * Revision 6.62  2000/12/22 19:50:37  dondosha
+ * Enabled percent identity cutoff for -D1 output format
+ *
+ * Revision 6.61  2000/12/21 22:33:05  dondosha
+ * Added option to cut off results by identity percentage
+ *
+ * Revision 6.60  2000/11/29 16:28:06  dondosha
+ * No need to extract ncbi4na-encoded subject from readdb any more
+ *
+ * Revision 6.59  2000/11/21 21:37:09  dondosha
+ * Make -J option default FALSE for traditional output
+ *
+ * Revision 6.58  2000/11/20 22:13:37  shavirin
+ * Changed name of the program to "megablast" for XML output.
+ *
+ * Revision 6.57  2000/11/20 17:02:06  dondosha
+ * Minor corrections in command line option descriptions
+ *
+ * Revision 6.56  2000/11/08 18:30:20  kans
+ * includes <sqnutils.h> for Mac compiler
+ *
+ * Revision 6.55  2000/11/03 20:18:12  dondosha
+ * The adjustment of offsets and sorting of HSP array done before printing results in callbacks
+ *
  * Revision 6.54  2000/10/31 15:08:05  dondosha
  * With -Q option print all query sequences
  *
@@ -198,6 +243,7 @@
 #include <txalign.h>
 #include <mblast.h>
 #include <xmlblast.h>
+#include <sqnutils.h>
 
 #define DEFLINE_BUF 255
 
@@ -234,8 +280,6 @@ enum {
    MBLAST_ALIGN_INFO
 };
 
-#define BUFFER_LENGTH 255
-
 static int LIBCALLBACK
 MegaBlastPrintEndpoints(VoidPtr ptr)
 {
@@ -244,7 +288,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
    SeqIdPtr sip, query_id;
    CharPtr query_buffer, title;
    CharPtr subject_buffer;
-   Int4 query_length, q_start, q_end;
+   Int4 query_length, q_start, q_end, q_shift=0, s_shift=0;
    Int4 hsp_index;
    Boolean numeric_sip_type = FALSE;
    BLAST_HSPPtr hsp; 
@@ -252,6 +296,7 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
    Char context_sign;
    Uint4 header_index = 0;
    Int4 subject_gi, score;
+   FILE *fp = (FILE *) search->output;
 
    if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
       search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
@@ -260,23 +305,37 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
 
    readdb_get_descriptor(search->rdfp, search->subject_id, &sip,
 			 &subject_descr);
-   if (sip->choice != SEQID_GENERAL) {
+   if (sip->choice != SEQID_GENERAL ||
+       StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
       if (search->pbp->megablast_full_deflines) {
          subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(sip, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
       } else
-         numeric_sip_type = GetAccessionFromSeqId(sip, &subject_gi,
-					       &subject_buffer);
+         numeric_sip_type = GetAccessionFromSeqId(SeqIdFindBest(sip, SEQID_GI), 
+                                                  &subject_gi, &subject_buffer);
    } else {
-      subject_buffer = StringTokMT(subject_descr, " ", &subject_descr);
-      subject_descr = subject_buffer;
+      DbtagPtr db_tag = (DbtagPtr) sip->data.ptrvalue;
+      if (db_tag->db && 
+          (!StringCmp(db_tag->db, "THC") || 
+           !StringICmp(db_tag->db, "TI")) && 
+          db_tag->tag->id != 0) {
+         subject_buffer = (CharPtr) Malloc(16);
+         sprintf(subject_buffer, "%ld", db_tag->tag->id);
+      } else {
+         subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
+         subject_descr = subject_buffer;
+      }
    }
-   
-   if (search->current_hitlist->hspcnt > 1)
-      BlastSortUniqHspArray(search->current_hitlist);
 
    search->current_hitlist->hspcnt_max = search->current_hitlist->hspcnt;
 
+   /* Only for the two sequences case, get offset shift if subject 
+      is a subsequence */
+   if (!search->rdfp && search->query_slp->next)
+       s_shift = SeqLocStart(search->query_slp->next);
+   /* Get offset shift if query is a subsequence */
+   q_shift = SeqLocStart(search->query_slp);
+   
    for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
       hsp = search->current_hitlist->hsp_array[hsp_index];
       if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
@@ -290,7 +349,6 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
 
       if (query_id == NULL) /* Bad hsp, something wrong */
 	 continue; 
-      hsp->query.offset -= search->query_context_offsets[context];
       hsp->context = context & 1;      
       query_length = search->query_context_offsets[context+1] -
          search->query_context_offsets[context] - 1;
@@ -337,18 +395,6 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
       else 
 	 score = hsp->score;
 
-      /* Check if hsp goes beyond query end(s) - this might happen if 
-         the subject sequence contains letter 'w' which has the same 
-         value in blastna encoding as the separator between queries */
-      if (hsp->query.offset < 0) {
-         hsp->subject.offset -= hsp->query.offset;
-         hsp->query.offset = 0;
-      }
-      if (hsp->query.end > query_length) {
-         hsp->subject.end -= (hsp->query.end - query_length);
-         hsp->query.end = query_length;
-      }
-      
       if (context_sign == '+') {
 	 q_start = hsp->query.offset;
 	 q_end = hsp->query.end;
@@ -357,12 +403,21 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
 	 q_end = hsp->query.offset;
       }
 
+      /* Adjust offsets if query is a subsequence, only for first query */
+      if (context < 2) {
+          q_start += q_shift;
+          q_end += q_shift;
+      }
+
+      hsp->subject.offset += s_shift;
+      hsp->subject.end += s_shift;
+
       if (numeric_sip_type)
-	 fprintf(global_fp, "'%ld'=='%c%s' (%d %d %d %d) %d\n", subject_gi, 
+	 fprintf(fp, "'%ld'=='%c%s' (%d %d %d %d) %d\n", subject_gi, 
 		 context_sign, query_buffer, hsp->subject.offset, q_start, 
 		 hsp->subject.end, q_end, score);
       else 
-	 fprintf(global_fp, "'%s'=='%c%s' (%d %d %d %d) %d\n", 
+	 fprintf(fp, "'%s'=='%c%s' (%d %d %d %d) %d\n", 
 		 subject_buffer, context_sign, query_buffer, 
 		 hsp->subject.offset, q_start, 
 		 hsp->subject.end, q_end, score);
@@ -375,7 +430,6 @@ MegaBlastPrintEndpoints(VoidPtr ptr)
    return 0;
 }
 
-#define LARGE_BUFFER_LENGTH 1024
 static int LIBCALLBACK
 MegaBlastPrintSegments(VoidPtr ptr)
 {
@@ -393,52 +447,59 @@ MegaBlastPrintSegments(VoidPtr ptr)
    Char strand;
    GapXEditScriptPtr esp;
    Int4 q_start, q_end, s_start, s_end, query_length, subj_length, numseg;
-   Int4 q_off, num_ident;
+   Int4 q_off, num_ident, align_length, total_ident, q_shift=0, s_shift=0;
    Int4Ptr length, start;
    Uint1Ptr strands;
    CharPtr subject_descr, subject_buffer, buffer;
    Char tmp_buffer[BUFFER_LENGTH];
    Int4 buffer_size, max_buffer_size = LARGE_BUFFER_LENGTH;
    Boolean numeric_sip_type = FALSE;
+   FILE *fp = (FILE *) search->output;
 
    if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
       search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
       return 0;
    }
 
-   subj_length = readdb_get_sequence_ex(rdfp, search->subject_id, &subject_seq, 
-                                        &buffer_size, FALSE);
+   subject_seq = search->subject->sequence_start;
+
+
    readdb_get_descriptor(search->rdfp, search->subject_id, &sip, &subject_descr);
-   if (sip->choice != SEQID_GENERAL) {
+   if (sip->choice != SEQID_GENERAL ||
+       StringCmp(((DbtagPtr)sip->data.ptrvalue)->db, "BL_ORD_ID")) {
       if (search->pbp->megablast_full_deflines) { 
          subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
          SeqIdWrite(sip, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
       } else
-         numeric_sip_type = GetAccessionFromSeqId(sip, &subject_gi,
-					       &subject_buffer);
+         numeric_sip_type = GetAccessionFromSeqId(SeqIdFindBest(sip, SEQID_GI), 
+                                                  &subject_gi, &subject_buffer);
    } else {
-      subject_buffer = StringTokMT(subject_descr, " ", &subject_descr);
+      subject_buffer = StringTokMT(subject_descr, " \t", &subject_descr);
       subject_descr = subject_buffer;
    }
 
-   /* Find the correct query by comparing the hit start with query offsets */
-   if (search->current_hitlist->hspcnt > 1)
-      BlastSortUniqHspArray(search->current_hitlist);
-
    buffer = (CharPtr) Malloc(LARGE_BUFFER_LENGTH);
 
+   /* Only for the two sequences case, get offset shift if subject 
+      is a subsequence */
+   if (!search->rdfp && search->query_slp->next)
+       s_shift = SeqLocStart(search->query_slp->next);
+   /* Get offset shift if query is a subsequence */
+   q_shift = SeqLocStart(search->query_slp);
+   
    for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
       hsp = search->current_hitlist->hsp_array[hsp_index];
       if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
-	  hsp->evalue > search->pbp->cutoff_e))
+                        hsp->evalue > search->pbp->cutoff_e)) {
+         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 	 continue;
+      }
       context = hsp->context;
       query_id = search->qid_array[context/2];
 
      
       if (query_id == NULL) /* Bad hsp, something wrong */
 	 continue; 
-      hsp->query.offset -= search->query_context_offsets[context];
       hsp->context = context & 1;
 
       if (search->pbp->gap_open==0 && search->pbp->gap_extend==0)
@@ -462,18 +523,6 @@ MegaBlastPrintSegments(VoidPtr ptr)
 	 hsp->query.end = hsp->query.offset + hsp->query.length;
       }
 
-      /* Check if hsp goes beyond query end(s) - this might happen if 
-         the subject sequence contains letter 'w' which has the same 
-         value in blastna encoding as the separator between queries */
-      if (hsp->query.offset < 0) {
-         hsp->subject.offset -= hsp->query.offset;
-         hsp->query.offset = 0;
-      }
-      if (hsp->query.end > query_length) {
-         hsp->subject.end -= (hsp->query.end - query_length);
-         hsp->query.end = query_length;
-      }
-
       if (strand == '+') {
 	 q_start = hsp->query.offset + 1;
 	 q_end = hsp->query.end;
@@ -483,6 +532,15 @@ MegaBlastPrintSegments(VoidPtr ptr)
       }
       s_start = hsp->subject.offset + 1;
       s_end = hsp->subject.end;
+
+      /* Adjust offsets if query is a subsequence, only for first query */
+      if (context < 2) {
+          q_start += q_shift;
+          q_end += q_shift;
+      }
+
+      s_start += s_shift;
+      s_end += s_shift;
 
       if (query_id->choice == SEQID_LOCAL && 
           search->pbp->megablast_full_deflines) {
@@ -528,7 +586,6 @@ MegaBlastPrintSegments(VoidPtr ptr)
       GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
 				&start, &length, &strands, 
 				&q_off, &hsp->subject.offset);
-
       GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
 
       if (start[0] < 0) {
@@ -539,7 +596,10 @@ MegaBlastPrintSegments(VoidPtr ptr)
       if (start[2*(numseg-1)] + length[numseg-1] > query_length) 
          length[numseg-1] = query_length - start[2*(numseg-1)];
       
+      total_ident = 0;
+      align_length = 0;
       for (i=0; i<numseg; i++) {
+         align_length += length[i];
 	 if (strand == '+') {
 	    q_start = start[2*i] + 1;
 	    q_end = q_start + length[i] - 1;
@@ -552,6 +612,7 @@ MegaBlastPrintSegments(VoidPtr ptr)
                                                  start[2*i], start[2*i+1], 
                                                  length[i], FALSE);
             perc_ident = (FloatHi) num_ident / length[i] * 100;
+            total_ident += num_ident;
 	    sprintf(tmp_buffer, "  l %d %d %d %d (%.0f)\n", start[2*i+1]+1, 
 		    q_start, start[2*i+1]+length[i],
 		    q_end, perc_ident);	 
@@ -562,223 +623,23 @@ MegaBlastPrintSegments(VoidPtr ptr)
 	    StringCat(buffer, tmp_buffer);
 	 }
       }
+      if (100*total_ident < align_length*search->pbp->perc_identity) {
+         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
+         continue;
+      }
       StringCat(buffer, "}");
-      fprintf(global_fp, "%s\n", buffer);
+      fprintf(fp, "%s\n", buffer);
       MemFree(start);
       MemFree(length);
       MemFree(strands);
       MemFree(query_buffer);
    } /* End loop on hsp's */
-   MemFree(subject_seq);
    if (!numeric_sip_type && subject_buffer != subject_descr)
       MemFree(subject_buffer);
    MemFree(subject_descr);
    MemFree(buffer);
    sip = SeqIdSetFree(sip);
-   fflush(global_fp);
-   return 1;
-}
-
-static int LIBCALLBACK
-MegaBlastPrintAlignInfo(VoidPtr ptr)
-{
-   BlastSearchBlkPtr search = (BlastSearchBlkPtr) ptr;
-   ReadDBFILEPtr rdfp = search->rdfp;
-   BLAST_HSPPtr hsp; 
-   Int4 i, subject_gi;
-   Int2 context;
-   CharPtr query_buffer, title;
-   SeqIdPtr sip, query_id; 
-   Int4 descr_len;
-   Int4 index, hsp_index, score;
-   Int4 num_mismatches, num_gap_opens, align_length, num_ident;
-   BLAST_KarlinBlkPtr kbp;
-   Uint1Ptr query_seq, subject_seq = NULL;
-   FloatHi perc_ident, bit_score;
-   Char eval_buff[10], bit_score_buff[10];
-   GapXEditScriptPtr esp;
-   Int4 q_start, q_end, s_start, s_end, query_length, subj_length, numseg;
-   Int4 q_off;
-   Int4Ptr length, start;
-   Uint1Ptr strands;
-   CharPtr subject_descr, subject_buffer, buffer;
-   Int4 buffer_size;
-   Boolean numeric_sip_type = FALSE;
-
-   if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
-      search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
-      return 0;
-   }
-
-   subj_length = readdb_get_sequence_ex(rdfp, search->subject_id, &subject_seq, 
-                                        &buffer_size, FALSE);
-   readdb_get_descriptor(search->rdfp, search->subject_id, &sip, &subject_descr);
-   if (sip->choice != SEQID_GENERAL) {
-      if (search->pbp->megablast_full_deflines) { 
-         subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
-         SeqIdWrite(sip, subject_buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
-      } else if (!sip->next)
-         numeric_sip_type = GetAccessionFromSeqId(sip, &subject_gi,
-                                                  &subject_buffer);
-      else
-         numeric_sip_type = GetAccessionFromSeqId(sip->next, &subject_gi,
-                                                  &subject_buffer);
-   } else {
-      subject_buffer = StringTokMT(subject_descr, " ", &subject_descr);
-      subject_descr = subject_buffer;
-   }
-
-   /* Find the correct query by comparing the hit start with query offsets */
-   if (search->current_hitlist->hspcnt > 1)
-      BlastSortUniqHspArray(search->current_hitlist);
-
-   buffer = (CharPtr) Malloc(LARGE_BUFFER_LENGTH);
-
-   for (hsp_index=0; hsp_index<search->current_hitlist->hspcnt; hsp_index++) {
-      hsp = search->current_hitlist->hsp_array[hsp_index];
-      if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
-	  hsp->evalue > search->pbp->cutoff_e))
-	 continue;
-      context = hsp->context;
-      query_id = search->qid_array[context/2];
-
-     
-      if (query_id == NULL) /* Bad hsp, something wrong */
-	 continue; 
-      hsp->query.offset -= search->query_context_offsets[context];
-      hsp->context = context & 1;
-
-      kbp = search->sbp->kbp[context];
-      bit_score = (hsp->score*kbp->Lambda - kbp->logK) / NCBIMATH_LN2;
-
-      query_length = search->query_context_offsets[context+1] -
-         search->query_context_offsets[context] - 1;
-
-      q_off = hsp->query.offset;
-      if (hsp->context) {
-	 hsp->query.end = query_length - hsp->query.offset;
-	 hsp->query.offset = 
-	    hsp->query.end - hsp->query.length;
-         s_end = hsp->subject.offset + 1;
-         s_start = hsp->subject.end;
-      } else {
-	 hsp->query.end = hsp->query.offset + hsp->query.length;
-         s_start = hsp->subject.offset + 1;
-         s_end = hsp->subject.end;
-      }
-
-      q_start = hsp->query.offset + 1;
-      q_end = hsp->query.end;
-         
-      if (query_id->choice == SEQID_LOCAL && 
-          search->pbp->megablast_full_deflines) {
-         BioseqPtr query_bsp = BioseqLockById(query_id);
-         title = StringSave(BioseqGetTitle(query_bsp));
-         if (title)
-            query_buffer = StringTokMT(title, " ", &title);
-         else {
-            Int4 query_gi;
-            Boolean numeric_query_id =
-               GetAccessionFromSeqId(query_bsp->id, &query_gi,
-                                     &query_buffer);
-         }  
-         BioseqUnlock(query_bsp);
-      } else {
-         query_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
-         if (!search->pbp->megablast_full_deflines) {
-            if (query_id->next)
-               SeqIdWrite(query_id->next, query_buffer,
-                          PRINTID_TEXTID_ACC_ONLY, BUFFER_LENGTH);
-            else
-               SeqIdWrite(query_id, query_buffer,
-                          PRINTID_TEXTID_ACC_ONLY, BUFFER_LENGTH);
-         } else 
-            SeqIdWrite(query_id, query_buffer, PRINTID_FASTA_LONG,
-                    BUFFER_LENGTH);
-      }
-
-      query_seq = search->context[context].query->sequence;
-
-      esp = hsp->gap_info->esp;
-        
-      for (numseg=0; esp; esp = esp->next, numseg++);
-
-      GXECollectDataForSeqalign(hsp->gap_info, hsp->gap_info->esp, numseg,
-				&start, &length, &strands, 
-				&q_off, &hsp->subject.offset);
-
-      GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
-
-      if (start[0] < 0) {
-         length[0] += start[0];
-         start[1] -= start[0];
-         start[0] = 0;
-      } 
-      if (start[2*(numseg-1)] + length[numseg-1] > query_length) 
-         length[numseg-1] = query_length - start[2*(numseg-1)];
-      
-      perc_ident = 0;
-      align_length = 0;
-      num_gap_opens = 0;
-      num_mismatches = 0;
-      for (i=0; i<numseg; i++) {
-         align_length += length[i];
-	 if (start[2*i] != -1 && start[2*i+1] != -1) {
-	    num_ident = MegaBlastGetNumIdentical(query_seq, subject_seq, 
-						     start[2*i], 
-						     start[2*i+1], length[i],
-						     FALSE);
-            perc_ident += num_ident;
-            num_mismatches += length[i] - num_ident;
-	 } else
-            num_gap_opens++;
-      }
-
-      perc_ident = perc_ident / align_length * 100;
-
-      if (hsp->evalue < 1.0e-180)
-         sprintf(eval_buff, "0.0");
-      else if (hsp->evalue < 1.0e-99)
-         sprintf(eval_buff, "%2.0le", hsp->evalue);
-      else if (hsp->evalue < 0.0009) 
-         sprintf(eval_buff, "%3.1le", hsp->evalue);
-      else if (hsp->evalue < 1.0) 
-         sprintf(eval_buff, "%4.3lf", hsp->evalue);
-      else 
-         sprintf(eval_buff, "%5.1lf", hsp->evalue);
-      
-      if (bit_score > 9999)
-         sprintf(bit_score_buff, "%4.3le", bit_score);
-      else if (bit_score > 99.9)
-         sprintf(bit_score_buff, "%4.1lf", bit_score);
-      else
-         sprintf(bit_score_buff, "%4.2lf", bit_score);
-
-      if (numeric_sip_type)
-         fprintf(global_fp, 
-                 "%s\t%ld\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
-                 query_buffer, subject_gi, perc_ident, align_length, 
-                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
-                 s_end, eval_buff, bit_score_buff);
-      else 
-	 fprintf(global_fp, 
-                 "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
-                 query_buffer, subject_buffer, perc_ident, align_length, 
-                 num_mismatches, num_gap_opens, q_start, q_end, s_start, 
-                 s_end, eval_buff, bit_score_buff);
-
-      MemFree(start);
-      MemFree(length);
-      MemFree(strands);
-      MemFree(query_buffer);
-   } /* End loop on hsp's */
-   MemFree(subject_seq);
-   if (!numeric_sip_type && subject_buffer != subject_descr)
-      MemFree(subject_buffer);
-   MemFree(subject_descr);
-   MemFree(buffer);
-   sip = SeqIdSetFree(sip);
-   fflush(global_fp);
+   fflush(fp);
    return 1;
 }
 
@@ -786,67 +647,69 @@ MegaBlastPrintAlignInfo(VoidPtr ptr)
 
 static Args myargs [] = {
   { "Database", 
-    "nr", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL}, /* 0 */
+    "nr", NULL, NULL, FALSE, 'd', ARG_STRING, 0.0, 0, NULL},       /* 0 */
   { "Query File", 
 	"stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},/* 1 */
   { "Expectation value", 
 	"1000000.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},/* 2 */
   { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", 
-        "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},/* 3 */
+        "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},       /* 3 */
   { "BLAST report Output File", 
 	"stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},/* 4 */
-  { "Filter query sequence (DUST with blastn, SEG with others)",
-        "T", NULL, NULL, FALSE, 'F', ARG_STRING, 0.0, 0, NULL},/* 5 */
+  { "Filter query sequence",
+        "T", NULL, NULL, FALSE, 'F', ARG_STRING, 0.0, 0, NULL},    /* 5 */
   { "X dropoff value for gapped alignment (in bits)",
-	"20", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},/* 6 */
+	"20", NULL, NULL, FALSE, 'X', ARG_INT, 0.0, 0, NULL},      /* 6 */
   { "Show GI's in deflines",
-        "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},/* 7 */
+        "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},   /* 7 */
   { "Penalty for a nucleotide mismatch",
-	"-3", NULL, NULL, FALSE, 'q', ARG_INT, 0.0, 0, NULL},/* 8 */
+	"-3", NULL, NULL, FALSE, 'q', ARG_INT, 0.0, 0, NULL},      /* 8 */
   { "Reward for a nucleotide match",
-	"1", NULL, NULL, FALSE, 'r', ARG_INT, 0.0, 0, NULL},/* 9 */
+	"1", NULL, NULL, FALSE, 'r', ARG_INT, 0.0, 0, NULL},       /* 9 */
   { "Number of database sequences to show one-line descriptions for (V)",
-        "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},/* 10 */
+        "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},     /* 10 */
   { "Number of database sequence to show alignments for (B)",
-        "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},/* 11 */
-  { "Level of details in alignment output (0 - alignment endpoints, 1 - all \
- ungapped segment endpoints, 2 - full alignments, 3 - extended one line format)",
-        "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},/* 12 */
+        "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},     /* 11 */
+  { "Type of output:\n0 - alignment endpoints and score,\n1 - all ungapped segments endpoints,\n2 - traditional BLAST output,\n3 - tab-delimited one line format",
+        "0", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL},       /* 12 */
   { "Number of processors to use",
-        "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},/* 13 */
-  { "SeqAlign file", 
-	NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},/* 14 */
+        "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},       /* 13 */
+  { "ASN.1 SeqAlign file", 
+	NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},  /* 14 */
   { "Believe the query defline",
-        "T", NULL, NULL, FALSE, 'J', ARG_BOOLEAN, 0.0, 0, NULL},/* 15 */
-  { "Maximal total length of queries for a single search iteration",
+        NULL, NULL, NULL, TRUE, 'J', ARG_STRING, 0.0, 0, NULL},    /* 15 */
+  { "Maximal total length of queries for a single search",
         "20000000", NULL, NULL, FALSE, 'M', ARG_INT, 0.0, 0, NULL},/* 16 */
   { "Word size (length of best perfect match)", 
-        "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},/* 17 */
+        "28", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},      /* 17 */
   { "Effective length of the database (use zero for the real size)", 
-        "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},/* 18 */
+        "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},     /* 18 */
   { "Maximal number of positions for a hash value (set to 0 to ignore)",
-        "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},/* 19 */
+        "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},       /* 19 */
   { "Query strands to search against database: 3 is both, 1 is top, 2 is bottom",
-        "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},/* 20 */
+        "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},       /* 20 */
   { "Produce HTML output",
-        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},/* 21 */
+        "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},   /* 21 */
   { "Restrict search of database to list of GI's",
-	NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},/* 22 */
-  { "Cost to open a gap (zero invokes default behavior)", /* 23 */
+	NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},    /* 22 */
+  { "Cost to open a gap (zero invokes default behavior)",          /* 23 */
         "0", NULL, NULL, FALSE, 'G', ARG_INT, 0.0, 0, NULL},
-  { "Cost to extend a gap (zero invokes default behavior)", /* 24 */
+  { "Cost to extend a gap (zero invokes default behavior)",        /* 24 */
         "0", NULL, NULL, FALSE, 'E', ARG_INT, 0.0, 0, NULL},
-  { "Minimal hit score to report (0 for default behavior)", /* 25 */
+  { "Minimal hit score to report (0 for default behavior)",        /* 25 */
         "0", NULL, NULL, FALSE, 's', ARG_INT, 0.0, 0, NULL},
   { "Masked query output", 
-	NULL, NULL, NULL, TRUE, 'Q', ARG_FILE_OUT, 0.0, 0, NULL}, /* 26 */
+	NULL, NULL, NULL, TRUE, 'Q', ARG_FILE_OUT, 0.0, 0, NULL},  /* 26 */
   { "Show full IDs in the output (default - only GIs or accessions)",
-        "F", NULL, NULL, FALSE, 'f', ARG_BOOLEAN, 0.0, 0, NULL},  /* 27 */
+        "F", NULL, NULL, FALSE, 'f', ARG_BOOLEAN, 0.0, 0, NULL},   /* 27 */
   {"Use lower case filtering of FASTA sequence",                   
-     "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},      /* 28 */
+        "F", NULL, NULL, TRUE, 'U', ARG_BOOLEAN, 0.0, 0, NULL},    /* 28 */
   {"Report the log information at the end of output",
-     "F", NULL, NULL, TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL}       /* 29 */
-
+        "F", NULL, NULL, TRUE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},    /* 29 */
+  {"Identity percentage cut-off", 
+        "0", NULL, NULL, FALSE, 'p', ARG_FLOAT, 0.0, 0, NULL},     /* 30 */
+  { "Location on query sequence",                             
+        NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL}     /* 31 */
 };
 
 #define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
@@ -879,7 +742,7 @@ Int2 Main (void)
 	Int2 ctr = 1;
 	Char prefix[2];
 	SeqLocPtr last_mask, mask_slp;
-	Boolean done, first_seq = TRUE;
+	Boolean done, first_seq = TRUE, hits_found;
 	CharPtr masked_query_file;
 
         if (! GetArgs ("megablast", NUMARG, myargs))
@@ -916,8 +779,19 @@ Int2 Main (void)
 
 	align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
  
-        believe_query = (Boolean) myargs[15].intvalue; 
-
+        if (myargs[15].strvalue) {
+           if (myargs[15].strvalue[0] == 'f' || myargs[15].strvalue[0] == 'F' ||
+               myargs[15].strvalue[0] == '0')
+              believe_query = FALSE;
+           else
+              believe_query = TRUE;
+        } else if (myargs[12].intvalue == MBLAST_ALIGNMENTS && 
+                   !myargs[14].strvalue)
+           believe_query = FALSE;
+        else
+           believe_query = TRUE;
+        
+        
 	if (believe_query == FALSE && myargs[14].strvalue) 
 	   ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
 
@@ -1003,11 +877,12 @@ Int2 Main (void)
    
 	options->is_megablast_search = TRUE;
 	if (myargs[12].intvalue == MBLAST_ENDPOINTS)
-	   options->one_line_results = TRUE;
+	   options->no_traceback = TRUE;
 	else
-	   options->one_line_results = FALSE;
+	   options->no_traceback = FALSE;
 
 	options->megablast_full_deflines = (Boolean) myargs[27].intvalue;
+        options->perc_identity = (FloatLo) myargs[30].floatvalue;
         if (!believe_query)
            options->megablast_full_deflines = TRUE;
         /*if (options->megablast_full_deflines)
@@ -1019,6 +894,9 @@ Int2 Main (void)
 	StrCpy(prefix, "");
 
 	global_fp = outfp;
+        if (myargs[12].intvalue != MBLAST_ALIGNMENTS)
+           options->output = outfp;
+
 	if (myargs[12].intvalue==MBLAST_ALIGNMENTS) {
 	   if (align_view != 7) {
               if (html) {
@@ -1054,6 +932,15 @@ Int2 Main (void)
 
         if (align_view == 7)
            xml_aip = AsnIoOpen(blast_outputfile, "wx");
+
+        if (myargs[31].strvalue) {       
+            CharPtr delimiters = " ,;";
+            CharPtr location;
+            location = myargs[31].strvalue;
+            options->required_start = 
+                atoi(StringTokMT(location, delimiters, &location)) - 1;
+            options->required_end = atoi(location) - 1;
+        }
 
 	done = FALSE;
 	while (!done) {
@@ -1175,111 +1062,115 @@ Int2 Main (void)
 	      }	
 	      
 #ifdef OS_UNIX
-        if(align_view != 7) {
-	      fprintf(global_fp, "%s\n", "done");
-        }
+              if(align_view != 7) {
+                 fprintf(global_fp, "%s\n", " done");
+              }
 #endif
 	      
-	      ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
-	      masked_query_file = myargs[26].strvalue;
+              ReadDBBioseqFetchEnable ("megablast", blast_database, db_is_na, TRUE);
+              masked_query_file = myargs[26].strvalue;
+              hits_found = FALSE;
 
-	      for (index=0; index<num_bsps; index++) {
-		 if (seqalign_array[index]==NULL) continue;
-                 if (align_view != 7) {
-                    init_buff_ex(70);
-                    AcknowledgeBlastQuery(query_bsp_array[index], 70, outfp, 
-                                          believe_query, html);
-                    free_buff();
-		 }
-		 seqalign = seqalign_array[index];
-		 if (seqalign) {
-		    if (masked_query_file) {
-		       SeqLocPtr query_slp = NULL;
-		       ValNodeAddPointer(&query_slp, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(query_bsp_array[index]->id, SEQID_GI)));
-		       mask_slp = MaskSeqLocFromSeqAlign(seqalign);
-		       PrintMaskedSequence(query_bsp_array[index], mask_slp,
-					   masked_query_file, first_seq);
+              if (seqalign_array) {
+                 for (index=0; index<num_bsps; index++) {
+                    if (seqalign_array[index]==NULL) continue;
+                    hits_found = TRUE;
+                    if (align_view != 7) {
+                       init_buff_ex(70);
+                       AcknowledgeBlastQuery(query_bsp_array[index], 70, outfp, 
+                                             believe_query, html);
+                       free_buff();
+                    }
+                    seqalign = seqalign_array[index];
+                    if (masked_query_file) {
+                       SeqLocPtr query_slp = NULL;
+                       ValNodeAddPointer(&query_slp, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(query_bsp_array[index]->id, SEQID_GI)));
+                       mask_slp = MaskSeqLocFromSeqAlign(seqalign);
+                       PrintMaskedSequence(query_bsp_array[index], mask_slp,
+                                           masked_query_file, first_seq);
                        first_seq = FALSE;
-		       SeqLocSetFree(mask_slp);
-		    }
+                       SeqLocSetFree(mask_slp);
+                    }
                     if(align_view == 7) {
                        BXMLPrintOutput(xml_aip, seqalign, 
-                                         options, blast_program, blast_database, 
-                                         query_bsp_array[index], other_returns, 0, NULL);
-		       AsnIoReset(xml_aip);
+                                       options, "megablast", blast_database, 
+                                       query_bsp_array[index], other_returns, 0, NULL);
+                       AsnIoReset(xml_aip);
                        SeqAlignSetFree(seqalign);
                        continue;
                     }
-		    seqannot = SeqAnnotNew();
-		    seqannot->type = 2;
-		    AddAlignInfoToSeqAnnot(seqannot, align_type);
-		    seqannot->data = seqalign;
-		    if (aip) {
-		       SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
-		       AsnIoReset(aip);
-		    }
-		    if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
-		       prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
-		       ObjMgrSetHold();
-		       init_buff_ex(85);
-		       PrintDefLinesFromSeqAlign(prune->sap, 80,
-						 outfp, print_options, FIRST_PASS, NULL);
-		       free_buff();
-		       
-		       prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
-		       seqannot->data = prune->sap;
-		       if (align_view != 0)
-			  ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL,
-						 NULL, align_options, NULL, 
-						 mask_loc, NULL);
-		       else
-			  ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, NULL, mask_loc, FormatScoreFunc);
-		       seqannot->data = seqalign;
-		       prune = BlastPruneSapStructDestruct(prune);
-		       ObjMgrClearHold();
-		       ObjMgrFreeCache(0);
-		    }
-		    seqannot = SeqAnnotFree(seqannot);
-		 } else 
-		    fprintf(outfp, "\n\n ***** No hits found ******\n\n");
-	      } /* End loop on seqaligns for different queries */
-	      
-	      matrix = BLAST_MatrixDestruct(matrix);
+                    seqannot = SeqAnnotNew();
+                    seqannot->type = 2;
+                    AddAlignInfoToSeqAnnot(seqannot, align_type);
+                    seqannot->data = seqalign;
+                    if (aip) {
+                       SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
+                       AsnIoReset(aip);
+                    }
+                    if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
+                       prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
+                       ObjMgrSetHold();
+                       init_buff_ex(85);
+                       PrintDefLinesFromSeqAlign(prune->sap, 80,
+                                                 outfp, print_options, FIRST_PASS, NULL);
+                       free_buff();
+                       
+                       prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
+                       seqannot->data = prune->sap;
+                       if (align_view != 0)
+                          ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL,
+                                                 NULL, align_options, NULL, 
+                                                 mask_loc, NULL);
+                       else
+                          ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, NULL, mask_loc, FormatScoreFunc);
+                       seqannot->data = seqalign;
+                       prune = BlastPruneSapStructDestruct(prune);
+                       ObjMgrClearHold();
+                       ObjMgrFreeCache(0);
+                    }
+                    seqannot = SeqAnnotFree(seqannot);
+                 } /* End loop on seqaligns for different queries */
+              } 
+
+              if (!hits_found)
+                 fprintf(outfp, "\n\n ***** No hits found ******\n\n");
+
+              matrix = BLAST_MatrixDestruct(matrix);
 	      
               if(html) 
                  fprintf(outfp, "<PRE>\n");
-	      init_buff_ex(85);
-	      dbinfo_head = dbinfo;
+              init_buff_ex(85);
+              dbinfo_head = dbinfo;
               if(align_view != 7) {
                  while (dbinfo) {
                     PrintDbReport(dbinfo, 70, outfp);
                     dbinfo = dbinfo->next;
                  }
               }
-	      dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
-	      
+              dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
+              
               if (ka_params) {
                  if(align_view != 7)
                     PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
                  MemFree(ka_params);
-	      }
-	      if (ka_params_gap) {
+              }
+              if (ka_params_gap) {
                  if(align_view != 7)
                     PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
                  MemFree(ka_params_gap);
-	      }
+              }
               if(align_view != 7)
                  PrintTildeSepLines(params_buffer, 70, outfp);
-	      MemFree(params_buffer);
-	      free_buff();
-	      mask_loc_start = mask_loc;
-	      while (mask_loc) {
-		 SeqLocSetFree(mask_loc->data.ptrvalue);
-		 mask_loc = mask_loc->next;
-	      }
-	      ValNodeFree(mask_loc_start);
-	      
-	      ReadDBBioseqFetchDisable();
+              MemFree(params_buffer);
+              free_buff();
+              mask_loc_start = mask_loc;
+              while (mask_loc) {
+                 SeqLocSetFree(mask_loc->data.ptrvalue);
+                 mask_loc = mask_loc->next;
+              }
+              ValNodeFree(mask_loc_start);
+              
+              ReadDBBioseqFetchDisable();
 	   } else {
 	      /* Just destruct all other_returns parts */
 	      for (vnp=other_returns; vnp; vnp = vnp->next) {
@@ -1302,6 +1193,8 @@ Int2 Main (void)
 	   }
 	   other_returns = ValNodeFree(other_returns);
 	   MemFree(seqalign_array);
+           options->query_lcase_mask = 
+              SeqLocSetFree(options->query_lcase_mask);
 	   /* Freeing SeqEntries can be very expensive, do this only if 
 	      this is not the last iteration of search */
 	   if (!done) { 
@@ -1309,7 +1202,7 @@ Int2 Main (void)
 		 sepp[index] = SeqEntryFree(sepp[index]);
 		 query_bsp_array[index] = NULL;
 	      }	   
-	   }
+           }
            total_processed += num_bsps;
 	} /* End of loop on complete searches */
         

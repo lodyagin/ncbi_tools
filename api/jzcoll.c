@@ -1,7 +1,1306 @@
+/* $Id: jzcoll.c,v 6.16 2000/11/16 22:10:37 shavirin Exp $
+* ===========================================================================
+*
+*                            PUBLIC DOMAIN NOTICE
+*               National Center for Biotechnology Information
+*
+*  This software/database is a "United States Government Work" under the
+*  terms of the United States Copyright Act.  It was written as part of
+*  the author's official duties as a United States Government employee and
+*  thus cannot be copyrighted.  This software/database is freely available
+*  to the public for use. The National Library of Medicine and the U.S.
+*  Government have not placed any restriction on its use or reproduction.
+*
+*  Although all reasonable efforts have been taken to ensure the accuracy
+*  and reliability of the software and data, the NLM and the U.S.
+*  Government do not and cannot warrant the performance or results that
+*  may be obtained by using this software or data. The NLM and the U.S.
+*  Government disclaim all warranties, express or implied, including
+*  warranties of performance, merchantability or fitness for any particular
+*  purpose.
+*
+*  Please cite the author in any work or product based on this material.
+*
+* ===========================================================================
+*
+* File Name:  $RCSfile: jzcoll.c,v $
+*
+* Author:  Jinghui Zhang
+*
+* Initial Version Creation Date: 03/24/97
+*
+* $Revision: 6.16 $
+*
+* File Description:
+*         File for various alignments
+*
+* $Log: jzcoll.c,v $
+* Revision 6.16  2000/11/16 22:10:37  shavirin
+* Moved many functions from txalign.c - due to move of txalign.c to
+* distrib/tools directory and libncbitool.a library.
+*
+*
+* ==========================================================================
+*/
+
 #include <jzcoll.h>
 #include <txalign.h>
+#include <codon.h>
+
+static Char pchars[] = "ARNDCQEGHILKMFPSTWYVBZX";	/* amino acid names */
+static Int4 webb_blosum62[WEBB_asize][WEBB_asize] = {
+   { 4,-1,-2,-2, 0,-1,-1, 0,-2,-1,-1,-1,-1,-2,-1, 1, 0,-3,-2, 0,-2,-1, 0 },
+   {-1, 5, 0,-2,-3, 1, 0,-2, 0,-3,-2, 2,-1,-3,-2,-1,-1,-3,-2,-3,-1, 0,-1 },
+   {-2, 0, 6, 1,-3, 0, 0, 0, 1,-3,-3, 0,-2,-3,-2, 1, 0,-4,-2,-3, 3, 0,-1 },
+   {-2,-2, 1, 6,-3, 0, 2,-1,-1,-3,-4,-1,-3,-3,-1, 0,-1,-4,-3,-3, 4, 1,-1 },
+   { 0,-3,-3,-3, 9,-3,-4,-3,-3,-1,-1,-3,-1,-2,-3,-1,-1,-2,-2,-1,-3,-3,-2 },
+   {-1, 1, 0, 0,-3, 5, 2,-2, 0,-3,-2, 1, 0,-3,-1, 0,-1,-2,-1,-2, 0, 3,-1 },
+   {-1, 0, 0, 2,-4, 2, 5,-2, 0,-3,-3, 1,-2,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1 },
+   { 0,-2, 0,-1,-3,-2,-2, 6,-2,-4,-4,-2,-3,-3,-2, 0,-2,-2,-3,-3,-1,-2,-1 },
+   {-2, 0, 1,-1,-3, 0, 0,-2, 8,-3,-3,-1,-2,-1,-2,-1,-2,-2, 2,-3, 0, 0,-1 },
+   {-1,-3,-3,-3,-1,-3,-3,-4,-3, 4, 2,-3, 1, 0,-3,-2,-1,-3,-1, 3,-3,-3,-1 },
+   {-1,-2,-3,-4,-1,-2,-3,-4,-3, 2, 4,-2, 2, 0,-3,-2,-1,-2,-1, 1,-4,-3,-1 },
+   {-1, 2, 0,-1,-3, 1, 1,-2,-1,-3,-2, 5,-1,-3,-1, 0,-1,-3,-2,-2, 0, 1,-1 },
+   {-1,-1,-2,-3,-1, 0,-2,-3,-2, 1, 2,-1, 5, 0,-2,-1,-1,-1,-1, 1,-3,-1,-1 },
+   {-2,-3,-3,-3,-2,-3,-3,-3,-1, 0, 0,-3, 0, 6,-4,-2,-2, 1, 3,-1,-3,-3,-1 },
+   {-1,-2,-2,-1,-3,-1,-1,-2,-2,-3,-3,-1,-2,-4, 7,-1,-1,-4,-3,-2,-2,-1,-2 },
+   { 1,-1, 1, 0,-1, 0, 0, 0,-1,-2,-2, 0,-1,-2,-1, 4, 1,-3,-2,-2, 0, 0, 0 },
+   { 0,-1, 0,-1,-1,-1,-1,-2,-2,-1,-1,-1,-1,-2,-1, 1, 5,-2,-2, 0,-1,-1, 0 },
+   {-3,-3,-4,-4,-2,-2,-3,-2,-2,-3,-2,-3,-1, 1,-4,-3,-2,11, 2,-3,-4,-3,-2 },
+   {-2,-2,-2,-3,-2,-1,-2,-3, 2,-1,-1,-2,-1, 3,-3,-2,-2, 2, 7,-1,-3,-2,-1 },
+   { 0,-3,-3,-3,-1,-2,-2,-3,-3, 3, 1,-2, 1,-1,-2,-2, 0,-3,-1, 4,-3,-2,-1 },
+   {-2,-1, 3, 4,-3, 0, 1,-1, 0,-3,-4, 0,-3,-3,-2, 0,-1,-4,-3,-3, 4, 1,-1 },
+   {-1, 0, 0, 1,-3, 3, 4,-2, 0,-3,-3, 1,-1,-3,-1, 0,-1,-3,-2,-2, 1, 4,-1 },
+   { 0,-1,-1,-1,-2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-2, 0, 0,-2,-1,-1,-1,-1,-1 },
+ };
+
+NLM_EXTERN Int4Ptr PNTR load_default_matrix (void)
+{
+	Int4Ptr PNTR ss;
+	Int2 i, j;
+
+	ss = (Int4Ptr PNTR) MemNew((size_t)TX_MATRIX_SIZE * sizeof (Int4Ptr));
+	for(i = 0; i<TX_MATRIX_SIZE; ++i)
+		ss[i] = (Int4Ptr) MemNew((size_t)TX_MATRIX_SIZE * sizeof (Int4));
+
+	for(i = 0; i < TX_MATRIX_SIZE; i++) 
+		for(j = 0; j < TX_MATRIX_SIZE;j++) 
+			ss[i][j] = -1000;
+	for(i = 0; i < WEBB_asize; ++i)
+		for(j = 0; j < WEBB_asize; ++j)
+			ss[pchars[i]][pchars[j]] = webb_blosum62[i][j];
+	for(i = 0; i < WEBB_asize; ++i)
+		ss[pchars[i]]['*'] = ss['*'][pchars[i]] = -4;
+	ss['*']['*'] = 1;
+	return ss;
+}
+
+NLM_EXTERN void free_default_matrix (Int4Ptr PNTR matrix)
+{
+	Int2 i;
+
+	for(i = 0; i<TX_MATRIX_SIZE; ++i)
+		MemFree(matrix[i]);
+	MemFree(matrix);
+}
+
+NLM_EXTERN SeqIdPtr LIBCALL
+ScorePtrUseThisGi (ScorePtr sp)
+
+{
+    ObjectIdPtr obid;
+    ScorePtr scrp;
+    SeqIdPtr gilist=NULL;
+    
+    for (scrp=sp; scrp; scrp = scrp->next) {
+        obid = scrp->id;
+        if(obid && obid->str) {
+            if (StringICmp(obid->str, "use_this_gi") == 0) {
+                ValNodeAddInt(&gilist, SEQID_GI, scrp->value.intvalue);
+            }
+        }
+    }
+    
+    return gilist;
+}
+
+/*
+  GetUseThisGi(SeqAlignPtr) looks for the "use_this_gi" flag in the ScorePtr.
+*/
+
+NLM_EXTERN SeqIdPtr LIBCALL
+GetUseThisGi(SeqAlignPtr seqalign)
+
+{
+	Boolean retval=FALSE;
+        DenseDiagPtr ddp;
+        DenseSegPtr dsp;
+        ScorePtr sp;
+	SeqIdPtr gilist=NULL;
+        StdSegPtr ssp;
+	
+	sp = seqalign->score;
+	if (sp == NULL)
+	{
+		switch (seqalign->segtype)
+		{
+			case 1: /*Dense-diag*/
+				ddp = (DenseDiagPtr) seqalign->segs;
+				while (ddp)
+				{
+					sp = ddp->scores;
+					if (sp)
+						break;
+					ddp = ddp->next;
+				}
+				break;
+			case 2:
+				dsp = ( DenseSegPtr) seqalign->segs;
+				if (dsp)
+				{
+					sp = dsp->scores;
+				}
+				break;
+			case 3:
+				ssp = (StdSegPtr) seqalign->segs;
+				while (ssp)
+				{
+					sp = ssp->scores;
+					if (sp)
+						break;
+					ssp = ssp->next;
+				}
+				break;
+			default:
+				break;
+		}
+	}
 
 
+	gilist = ScorePtrUseThisGi(sp);
+	return gilist;
+}
+
+/*************************************************************************
+*
+*	functions and structure related to create a text buffer for the 
+*	alignment
+*
+*************************************************************************/
+
+NLM_EXTERN ValNodePtr FreeTextAlignList(ValNodePtr tdp_list)
+{
+	TextAlignBufPtr tdp;
+	ValNodePtr next;
+	Int2 i;
+
+	while(tdp_list)
+	{
+		next = tdp_list->next;
+		tdp_list->next = NULL;
+		tdp = (TextAlignBufPtr) tdp_list->data.ptrvalue;
+		if(tdp->label)
+			MemFree(tdp->label);
+		if(tdp->buf)
+			MemFree(tdp->buf);
+		if(tdp->matrix_val)
+			MemFree(tdp->matrix_val);
+		if(tdp->exonCount > 0)
+		{
+			for(i =0; i<3; ++i)
+				MemFree(tdp->codon[i]);
+		}
+		MemFree(tdp);
+		MemFree(tdp_list);
+		tdp_list = next;
+	}
+
+	return NULL;
+}
+
+
+/*######################################################################
+#
+#	functions related to ProcessTextAlignNode
+#
+#######################################################################*/
+
+
+/******************************************************************************
+*
+*	load_text(bsp, pos1, pos2, l_seq, l_pos, mbuf, maxlen)
+*	load the sequence into text
+*	bsp: the Bioseq
+*	pos1: the first position on the sequence. 
+*	pos2: the second position on the sequence. 
+*		if(pos1 and pos2 are negative val, indicate the region in on the*	minus strand
+*	l_seq: the buffer for loading the sequence
+*	l_pos: the current position in l_seq. Will be updated after the sequence
+*		is loaded
+*	mbuf: buffer from the master sequence. For checking mismatches and positive scores
+*	maxlen: the maximum length per line. Used to determine the special 
+*	format used for long insertions
+*	spacing is the space between the two adjacent residues
+*	mismatch: if TRUE, show the identical residue with 
+*
+*****************************************************************************/
+
+static Boolean load_text(BioseqPtr bsp, Int4 pos1, Int4 pos2, CharPtr l_seq, Int4Ptr l_pos, CharPtr mbuf, Int2 maxlen, Int2 spacing, Boolean translate, Boolean mismatch, Int2Ptr matrix_val, Int4Ptr PNTR matrix, Uint1 strand, Int4Ptr PNTR posMatrix, Int4 q_start)
+{
+    SeqPortPtr spp = NULL;
+    ByteStorePtr b_store = NULL;
+    Uint1 code;
+    Int4 start, stop;
+    Uint1 m_res, t_res, stdaa_res;
+    Int2 i;
+    Int2 val;
+    Int4 length, s_len;
+    Int2 c_pos;
+    Char temp[100];
+    Boolean protein;
+    Boolean overflow;
+    Boolean reverse;
+    Boolean is_real;
+    SeqFeatPtr fake_cds;
+    Boolean check_neg;	/*if aa is negative, load it as lower case char*/
+    SeqMapTablePtr smtp;
+    
+    if(*l_pos >= maxlen )
+        return FALSE;
+
+    /* posMatrix uses NCBIstdaa encoding */
+    
+    if(posMatrix != NULL) { 
+        if((smtp = SeqMapTableFindObj(Seq_code_ncbistdaa, 
+                                      Seq_code_ncbieaa)) == NULL)
+            return FALSE;
+    }
+
+    protein = (bsp->mol == Seq_mol_aa);
+    reverse = FALSE;
+    if(protein)
+        code = Seq_code_ncbieaa;
+    else
+        code = Seq_code_iupacna;
+    check_neg = (matrix_val == NULL && matrix != NULL);
+    if(strand == Seq_strand_minus) {	/*on the minus strand*/
+
+        start = -pos2;
+        stop = -pos1;
+        
+        if(protein) {
+            strand = Seq_strand_plus;
+            reverse = TRUE;
+        }
+        
+    } else {
+        start = pos1;
+        stop = pos2;
+    }
+    if(translate) {
+        fake_cds = make_fake_cds(bsp, start, stop, strand);
+        b_store = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
+        SeqFeatFree(fake_cds);
+        if(b_store == NULL)
+            return FALSE;
+        length = (stop - start +1)/3;
+        BSSeek(b_store, 0, SEEK_SET);
+    } else {
+        spp = SeqPortNew(bsp, start, stop, strand, code);
+        length = stop - start +1;
+    }
+    c_pos = (Int2)(*l_pos);
+    overflow = (c_pos >= maxlen);
+    if(maxlen>0 && (length > maxlen)) {	/*large insertions*/
+	
+        for(i =0; i<5 && !overflow; ++i) {
+            if(translate)
+                l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
+            else {
+                if(reverse)
+                    SeqPortSeek(spp, length-1 -i, SEEK_SET);
+                l_seq[c_pos++] = SeqPortGetResidue(spp);
+            }
+            overflow = (c_pos >= maxlen);
+        }
+        for(i =0; i<3 && !overflow; ++i) {
+            l_seq[c_pos++] = '.';
+            overflow = (c_pos >= maxlen);
+        }
+        if(!overflow) {
+            if(translate)
+                BSSeek(b_store, length-1, SEEK_SET);
+            else if(!reverse)
+                SeqPortSeek(spp, length-5, SEEK_SET);
+            for(i =0; i<5 && !overflow; ++i) {
+                if(translate)
+                    l_seq[c_pos++] = (Uint1)BSGetByte(b_store);
+                else {
+                    if(reverse)
+                        SeqPortSeek(spp, 4-i, SEEK_SET);
+                    l_seq[c_pos++] = SeqPortGetResidue(spp);
+                }
+                overflow = (c_pos >= maxlen);
+            }
+        }
+        if(overflow)
+            l_seq[maxlen-1] = '\0';
+        else
+            l_seq[c_pos] = '\0';
+        sprintf(temp, "(length=%ld)", (long) length);
+        s_len = StringLen(temp);
+        StringCat(l_seq, temp);
+        *l_pos = c_pos+s_len;
+    } else {
+        if(translate) {
+            while((val = BSGetByte(b_store)) != EOF) {
+                t_res = (Uint1)val;
+                l_seq[c_pos]= t_res;
+                if(mbuf != NULL) {
+                    m_res = mbuf[c_pos];
+                    if(matrix_val && matrix)
+                        matrix_val[c_pos] = (Int2)matrix[m_res][t_res];
+                    if(mismatch && t_res == m_res)
+                        l_seq[c_pos] = '.';
+                    else if(check_neg && matrix[t_res][m_res] < 0)
+                        l_seq[c_pos] = TO_LOWER(t_res);
+                }
+                c_pos += spacing;
+                if(c_pos >= maxlen) {
+                    c_pos = maxlen;
+                    break;
+                }
+            }
+        } else {
+            if(reverse)
+                SeqPortSeek(spp, length-1, SEEK_SET);
+            s_len = 0;
+            while((t_res = SeqPortGetResidue(spp)) != SEQPORT_EOF) {
+                is_real = IS_ALPHA(t_res);
+                if(is_real || t_res == '*' || t_res == '-') {
+                    if(is_real && !protein)
+                        t_res = TO_LOWER(t_res);
+                    l_seq[c_pos] = t_res;
+                    if(mbuf != NULL) {
+                        m_res = mbuf[c_pos];
+                        if(matrix_val) {
+                            if(matrix) {
+                                if(posMatrix != NULL) {
+                                    if(t_res == m_res) /* complete match */
+                                        matrix_val[c_pos] = INT2_MAX;
+                                    else {
+                                        stdaa_res = SeqMapTableConvert(smtp, t_res);
+                                        matrix_val[c_pos] = (Int2)posMatrix[c_pos + q_start][stdaa_res];
+
+                                        /* 
+                                     if(posMatrix[c_pos + q_start][t_res] == 
+                                     matrix[t_res][t_res]) {
+                                     printf("Got it!");
+                                     } */
+
+                                    }
+                                } else {
+                                    matrix_val[c_pos] = (Int2)matrix[m_res][t_res];
+                                }
+                                
+                            } else if(t_res == m_res)
+                                matrix_val[c_pos] = '|';
+                        }
+                        
+                        if(mismatch && t_res == m_res)
+                            l_seq[c_pos] = '.';
+                        else if(posMatrix != NULL) {
+                            stdaa_res = SeqMapTableConvert(smtp, m_res);
+                            if(check_neg && posMatrix[c_pos + q_start][stdaa_res] < 0)
+                                l_seq[c_pos] = TO_LOWER(t_res);
+                        } else { /*regular BLOSSUM62*/
+                            if(check_neg && matrix[t_res][m_res] < 0)
+                                l_seq[c_pos] = TO_LOWER(t_res);
+                        }
+                    }
+                    c_pos += spacing;
+                    if(c_pos >= maxlen) {
+                        c_pos = maxlen;
+                        break;
+                    }
+                    ++s_len;
+                }
+                if(reverse) {
+                    if(s_len == length)
+                        break;
+                    else
+                        SeqPortSeek(spp, length -1 - s_len, SEEK_SET);
+                }
+            }
+        }
+        *l_pos = c_pos;
+    }
+    
+    if(translate)
+        BSFree(b_store);
+    else
+        SeqPortFree(spp);
+    return TRUE;
+}
+
+/*##########################################################################
+#
+#	functions related to add the features to the alignment
+#
+###########################################################################*/
+
+
+typedef struct protbuf{	/*for loading the translation of a CDs*/
+	CharPtr buf;	/*load the protein sequence*/
+	Int4 start;	/*start position in CDs*/
+	Int4 stop;	/*stop position in CDs*/
+	Int4 pos;	/*position for the feature*/
+	Boolean load_codon;	/*load the codon data for aa sequence*/
+	ValNodePtr cvp_list;	/*list for loading the codon of an aa*/
+}ProtBuf, PNTR ProtBufPtr;
+
+		
+			
+/************************************************************************
+*
+*	check the protein sequence from CDs feature into the buffer
+*
+*************************************************************************/
+static Boolean load_prot_seq(GatherContextPtr gcp)
+{
+	SeqFeatPtr sfp;
+	ProtBufPtr pbp;
+	SeqLocPtr loc;
+
+	if(gcp->thistype != OBJ_SEQFEAT)
+		return FALSE;
+	sfp = (SeqFeatPtr)(gcp->thisitem);
+	if(sfp->data.choice !=3)
+		return FALSE;
+
+	pbp = (ProtBufPtr)(gcp->userdata);
+	if(pbp->load_codon)	/*looking for codon in aa sequence*/
+	{
+		pbp->cvp_list = aa_to_codon(sfp, pbp->start, pbp->stop);
+		return (pbp->cvp_list !=NULL);
+	}
+		
+
+	if(pbp->start <0)/*minus strand*/
+		loc = SeqLocIntNew((-pbp->stop), (-pbp->start), Seq_strand_minus, SeqLocId(sfp->location));
+	else
+		loc = SeqLocIntNew(pbp->start, pbp->stop, Seq_strand_plus, SeqLocId(sfp->location));
+
+	pbp->pos = print_protein_for_cds(sfp, pbp->buf, loc, TRUE);
+	SeqLocFree(loc);
+	return (pbp->pos != -1);
+}
+
+
+
+static Boolean buffer_for_feature(Int4 c_left, Int4 c_right, Int4 seq_start, Int4 seq_stop, ValNodePtr fnp_node, Boolean load_codon, ProtBufPtr pbp)
+{
+	FeatNodePtr fnp;
+	Uint2 itemtype;
+	CharPtr buf = NULL;
+	Int2 i=0;
+	Char symbol;
+	ValNodePtr curr;
+	IvalNodePtr inp;
+	Int4 i_left, i_right;
+	Int4 f_len;
+
+
+	itemtype = (Uint2)(fnp_node->choice);
+
+	if(itemtype!= OBJ_SEQFEAT)
+		return FALSE;
+	fnp = (FeatNodePtr) fnp_node->data.ptrvalue;
+	f_len = seq_stop - seq_start +1; 
+	if(load_codon)
+		pbp->buf = NULL;
+	else
+		pbp->buf = (CharPtr) MemNew((size_t)(f_len +1)*sizeof(Char));
+	pbp->start = seq_start;
+	pbp->stop = seq_stop;
+	pbp->pos = -1;
+	pbp->load_codon= load_codon;
+	pbp->cvp_list = NULL;
+
+	buf = pbp->buf;
+	if(buf !=NULL)
+		MemSet((Pointer)buf,  '~', (size_t)(f_len) * sizeof(Char));
+	switch(fnp->feattype)/*check symbol for different features*/
+	{
+		case FEATDEF_GENE:
+			symbol = '+';
+			break;
+		case FEATDEF_mRNA:
+			symbol = '^';
+			break;
+		case FEATDEF_CDS:
+			symbol = '$';
+			break;
+		default:
+			symbol = '*';
+			break;
+	}
+	if(fnp->feattype ==FEATDEF_CDS)
+
+		GatherItem(fnp->entityID, fnp->itemID, itemtype, (Pointer)(pbp), load_prot_seq);
+	else
+	{
+		if(fnp->interval !=NULL)
+		{
+			for(curr = fnp->interval; curr !=NULL; curr = curr->next)
+			{
+				inp = (IvalNodePtr) curr->data.ptrvalue;
+				i_left = inp->gr.left;
+				i_right = inp->gr.right;
+				if(!(i_left > c_right || i_right < c_left))
+				{
+					i_left = MAX(i_left, c_left);
+					i_right = MIN(i_right, c_right);
+					i_left -= c_left;
+					i_right -=c_left;
+					for(; i_left<=i_right; ++i_left)
+						buf[i_left] = symbol;
+				}
+			}
+		}
+		else
+		{
+			i_left = fnp->extremes.left;
+			i_right = fnp->extremes.right;
+			if(!(i_left > c_right || i_right < c_left))
+			{
+				i_left = MAX(i_left, c_left);
+				i_right = MIN(i_right, c_right);
+				i_left -= c_left;
+				i_right -=c_left;
+				for(; i_left<=i_right; ++i_left)
+					buf[i_left] = symbol;
+			}
+		}
+			
+	}
+	if(buf!=NULL)
+		buf[f_len]= '\0';
+	if(pbp->pos == -1)
+		pbp->pos = ABS(seq_start);
+
+	if(pbp->buf != NULL || pbp->cvp_list !=NULL)
+		return TRUE;
+	else
+		return FALSE;
+}
+
+
+	
+static Boolean load_feature_data(ProtBufPtr pbp, FeatNodePtr fnp, Int4 pos, Int4 maxlen, ValNodePtr PNTR fbp_head)
+{
+	Boolean found;
+	TextAlignBufPtr fbp;
+	ValNodePtr curr, pcvp;
+	CodonVectorPtr cvp;
+	Boolean load_codon;
+	CharPtr PNTR codon;
+	Int2 i;
+	Int4 f_len;
+	Char label[100];
+	CharPtr buf;
+	Boolean locus = FALSE;
+	
+	if(pbp == NULL)
+		return FALSE;
+	if(pbp->buf == NULL && pbp->cvp_list == NULL)
+		return FALSE;
+	load_codon = (pbp->cvp_list !=NULL);
+	f_len = pbp->stop - pbp->start +1;
+	
+	found = FALSE;
+	for(curr = *fbp_head; curr !=NULL; curr = curr->next)
+	{
+	   fbp = (TextAlignBufPtr) curr->data.ptrvalue;
+	   if(fbp->itemID == fnp->itemID)
+	   {
+	     if(load_codon)
+	     {
+		for(pcvp = pbp->cvp_list; pcvp!=NULL; pcvp= pcvp->next)
+		{
+		   cvp = (CodonVectorPtr) pcvp->data.ptrvalue;
+		   if(cvp->exonCount == fbp->exonCount)
+		   {
+			codon = fbp->codon;
+			for(i =0; i<3; ++i)
+			{
+			   if(pos > fbp->f_pos)
+				make_empty(codon[i] + fbp->f_pos, (Int2)(pos - fbp->f_pos));
+			   StringCat(codon[i], (cvp->buf[i]+cvp->aa_index));
+			}
+			cvp->exonCount = 0;
+			fbp->f_pos = pos + f_len;
+		   }
+		}/*end of for*/
+	     }
+	     else
+	     {
+		if(fbp->pos == -1)
+		   fbp->pos = pbp->pos+1;
+		if(pos > fbp->f_pos)
+		   make_empty(fbp->buf+fbp->f_pos, (Int2)(pos - fbp->f_pos));	
+		StringCat(fbp->buf, pbp->buf);
+		fbp->f_pos = pos + f_len;
+		found = TRUE;
+	     }
+	   }
+	}
+
+
+	if(load_codon)
+	{
+	   for(pcvp = pbp->cvp_list; pcvp!=NULL; pcvp= pcvp->next)
+	   {
+		cvp = (CodonVectorPtr) pcvp->data.ptrvalue;
+		if(cvp->exonCount !=0)
+		{
+		   fbp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+		   fbp->seqEntityID = fnp->entityID;
+		   fbp->pos = cvp->dna_pos +1;
+		   fbp->strand = cvp->strand;
+		   seqid_name(cvp->sip, label, locus, FALSE);
+		   fbp->label = StringSave(label);
+		   fbp->buf = NULL;
+		   for(i =0; i<3; ++i)
+		   {
+		   	buf = (CharPtr) MemNew((size_t)(maxlen+1+1+1) * sizeof(Char));
+			/*1 for partial start, 1 for partial stop*/
+			if(pos > 0)
+				make_empty(buf, (Int2)pos);
+			StringCat(buf, cvp->buf[i]+cvp->aa_index);
+			fbp->codon[i] = buf;
+		   }
+		   fbp->frame = cvp->frame;
+		   fbp->f_pos = pos+f_len;
+		   fbp->exonCount = cvp->exonCount;
+		   fbp->itemID = fnp->itemID;
+		   fbp->itemID = fnp->itemID;
+		   fbp->feattype = fnp->feattype;
+		   fbp->subtype = fnp->subtype;
+		   fbp->entityID = fnp->entityID;
+		   fbp->extra_space = (cvp->aa_index == 0);
+		   ValNodeAddPointer(fbp_head, 0, fbp);
+		
+		}
+	     }
+	}
+	else
+	{
+	   	if(!found)	/*create a new node*/
+		{
+		   fbp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+		   buf = (CharPtr) MemNew((size_t)(maxlen+1) * sizeof(Char));
+		   if(pos > 0)
+			make_empty(buf, (Int2)pos);
+		   StringCat(buf, pbp->buf);
+		   fbp->seqEntityID = fnp->entityID;
+		   fbp->f_pos = pos + f_len;
+		   fbp->itemID = fnp->itemID;
+		   fbp->buf = buf;
+		   fbp->pos = pbp->pos+1;
+		   if(fnp->label !=NULL)
+			fbp->label = StringSave(fnp->label);
+		   fbp->strand = fnp->extremes.strand;
+		   fbp->itemID = fnp->itemID;
+		   fbp->feattype = fnp->feattype;
+		   fbp->subtype = fnp->subtype;
+		   fbp->entityID = fnp->entityID;
+		   fbp->exonCount = 0;
+		   ValNodeAddPointer(fbp_head, 0, fbp);
+		}
+	}
+	if(pbp->buf)
+		MemFree(pbp->buf);
+	if(pbp->cvp_list)
+		free_cvp_list(pbp->cvp_list);
+	return TRUE;
+}
+
+
+	
+/**************************************************************************
+*
+*	collect_feature_buf(fnp_list, g_left, g_right, seq_start, l_pos, 
+*	fbp_head, max_len)
+*	collect the features to be shown together with the alignment
+*	fnp_list: a list of FeatNode associated with the current segment
+*	g_left: the left position 
+*
+***************************************************************************/
+static ValNodePtr collect_feature_buf(ValNodePtr fnp_list, Int4 g_left, Int4 g_right, Int4 seq_start, Int4 l_pos, ValNodePtr fbp_head, Int4 maxlen, Boolean is_aa)
+{
+	ProtBuf pb;
+	FeatNodePtr fnp;
+	Int4 c_left, c_right;
+	Int4 pos;
+	Int4 fseq_start, fseq_stop;	/*map sequence start stop to the feature*/
+	Int4 f_len;		/*length of the feature*/
+	Boolean load_codon;
+
+	if(fnp_list == NULL)
+		return fbp_head;
+
+	
+	while(fnp_list)
+	{
+	   fnp = (FeatNodePtr) fnp_list->data.ptrvalue;
+	   c_left = fnp->extremes.left;
+	   c_right = fnp->extremes.right;
+	   load_codon = (is_aa && fnp->feattype == FEATDEF_CDS);
+	   if(!(c_left > g_right || c_right < g_left))
+	   {
+		if(c_left > g_left)	/*map the seq pos from the graphic pos*/
+			fseq_start = seq_start + (c_left-g_left);
+		else
+			fseq_start = seq_start;
+		c_left = MAX(c_left, g_left);
+		c_right = MIN(c_right, g_right);
+		f_len = c_right - c_left+1;
+		fseq_stop = fseq_start+f_len-1;
+
+		if(c_left > g_left)
+		   pos = l_pos + (c_left - g_left);
+		else
+		   pos = l_pos;
+
+		if(buffer_for_feature(c_left, c_right, fseq_start, fseq_stop, fnp_list, load_codon, &pb))
+		
+			load_feature_data(&pb, fnp, pos, maxlen, &fbp_head);
+	   }
+	   fnp_list = fnp_list->next;
+	}
+
+	return fbp_head;
+}
+	
+static Int4 map_position_by_spacing(Int4 distance, Int4 spacing, Boolean is_head)
+{
+	Int4 pos, left_over;
+
+	if(spacing == 1)
+		return distance;
+
+	pos = distance/spacing;
+	left_over = distance%spacing;
+
+	if(left_over == 0 && !is_head)
+		pos = MAX(pos-1, 0);
+	else if(left_over == 2 && is_head)
+		++pos;
+	return pos;
+}
+
+static void add_empty_space(CharPtr buf, Int4 maxlen)
+{
+	Int4 buf_len;
+
+	buf_len = StringLen(buf);	
+	if(buf_len < maxlen)
+		make_empty(buf+buf_len, (Int2)(maxlen-buf_len));
+}
+static void copy_insertion_bar(CharPtr buf, CharPtr ins_2, Int2 sym_pos, Int4 len)
+{
+	Int2 k;
+
+	if(buf == NULL || ins_2 == NULL)
+		return;
+	add_empty_space(buf, len);
+	for(k = 0; k<sym_pos; ++k)
+		if(ins_2[k] == '|' && buf[k] == ' ')
+			buf[k] = '|';
+}
+
+static Int4 get_long_insert_len(Int4 length)
+{
+	Char temp[50];
+
+	sprintf(temp, "(length=%ld)", (long) length);
+	return (StringLen(temp) + 13);
+}
+
+static ValNodePtr load_tdp_data(ValNodePtr PNTR head, CharPtr label, CharPtr text, Uint2 itemID, Uint2 entityID, Uint2 seqEntityID, Uint2 bsp_itemID)
+{
+	TextAlignBufPtr tdp;
+
+	tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+	tdp->pos = -1;
+	tdp->label = label;
+	tdp->buf= text;
+	tdp->itemID = itemID;
+	tdp->entityID = entityID;
+	tdp->seqEntityID = seqEntityID;
+	tdp->bsp_itemID = bsp_itemID;
+
+	return ValNodeAddPointer(head, 0, (Pointer)tdp);
+}
+			 
+/******************************************************************************
+*
+*	ProcessTextInsertion(anp, m_left, m_right, bsp)
+*	convert the insertions that are located within [m_left, m_right] into
+*	text buffer (a list of TextDrawPtr)
+*	anp: AlignNodePtr
+*	m_left, m_right: the current region for selection
+*	bsp: the BioseqPtr for this anp
+*
+*	return a list of TextDrawPtr
+*
+******************************************************************************/
+static ValNodePtr ProcessTextInsertion(AlignNodePtr anp, Int4 m_left, Int4 m_right, BioseqPtr bsp, Int4 line_len, Int1 m_frame)
+{
+	AlignSegPtr asp;
+	Int4 inslen;		/*length of insertion*/
+	Int2 insnum;		/*the number of insertions*/
+	Int2 i, j;
+	Int4Ptr inslevel;	/*for layout the level of insertions*/
+	Int4 level;
+	Int4 inspos;		/*position for insertion*/
+	Int4 left;
+	Int4 len;
+	Int4 last_ins;
+
+	CharPtr ins_1;	/* \ symbols for insertions*/
+	CharPtr ins_2;	/*| symbols for insertion*/
+	CharPtr ins_seq;
+	Int4 sym_pos;
+	Int4 l_pos;
+	Int4 seq_offset, seq_start, seq_stop;
+	ValNodePtr head = NULL;
+	ValNodePtr fbuf_list = NULL, curr;
+	TextAlignBufPtr fbp;
+	Int4 g_left, g_right;
+	Boolean is_aa;
+	Int4 seq_expand;
+	Int4 spacing;
+	Boolean translate;
+	Uint1 strand;
+
+	strand = Seq_strand_plus;
+	if(anp->seqpos < 0)
+		strand = Seq_strand_minus;
+	else if(anp->seqpos == 0 && anp->extremes.strand == Seq_strand_minus)
+		strand = Seq_strand_minus;
+	spacing = 1;
+	if(m_frame > 0)
+		spacing = 3;
+	if(m_frame  == -1)
+	{
+		translate = TRUE;
+		seq_expand = 3;
+	}
+	else
+	{
+		seq_expand = 1;
+		translate = FALSE;
+	}
+	is_aa = (bsp->mol == Seq_mol_aa);
+	insnum = 0;
+	for(asp = anp->segs; asp !=NULL; asp = asp->next)
+	/*checking the insertion numbers*/
+	{ 
+	   if(asp->type == INS_SEG)
+	   {
+	   	inspos = asp->ins_pos;
+		if (inspos >= m_left && inspos<=m_right)
+		{
+			++insnum;
+			asp->line = 0;
+		}
+		else
+			asp->line = -1;
+	   }
+	}
+	if(insnum == 0)
+		return head;
+
+	/*layout the insertions*/
+	inslevel = (Int4Ptr) MemNew((size_t)(2*insnum) * sizeof(Int4));	/*layout insert*/
+	level = 0;
+	len = MAX(m_right - m_left +1, line_len);
+	for(asp = anp->segs; asp !=NULL; asp = asp->next)
+	{
+	   if(asp->type == INS_SEG && asp->line == 0)
+	   {
+	   	inspos = asp->ins_pos;
+		inslen = asp->gr.right/seq_expand;
+		/* if(inslen > (m_right-m_left+1)) */
+		if(inslen > len)
+			inslen = get_long_insert_len(inslen);
+		inspos -= m_left;
+		asp->line = find_insert_ypos(&left, inslen, inspos, 0, len-1, inslevel, 2, insnum);
+		asp->gr.left = left;
+		level = MAX(asp->line, level);
+	   }	
+	}
+	MemFree(inslevel);
+	
+
+	/*comput the insertion text*/
+	for(j = 0; j< (level+1); ++j)
+	{
+	   l_pos = 0;
+	   sym_pos = 0;
+	   fbuf_list = NULL;
+	   ins_seq = (CharPtr) MemNew((size_t)(len+1) * sizeof(Char));
+	   ins_2 = (CharPtr) MemNew((size_t)(len+1) * sizeof(Char));
+	   if(j == 0)
+		ins_1 = (CharPtr) MemNew((size_t)(len+1) * sizeof(Char));
+	   seq_offset = 0;
+	   for(asp = anp->segs; asp !=NULL; asp = asp->next)
+	   {
+	   	if(asp->type == INS_SEG && asp->line >=j)
+		{
+	
+			inspos = asp->ins_pos - m_left;
+			if(inspos > sym_pos)
+			{
+			   if(j == 0)	/*the first level*/
+				make_empty(ins_1+sym_pos, (Int2)(inspos-sym_pos));
+			   make_empty(ins_2+sym_pos, (Int2)(inspos-sym_pos));
+			   sym_pos = inspos;
+			}
+			if(j == 0)
+				ins_1[sym_pos] = '\\';
+			ins_2[sym_pos] = '|';
+			if(asp->line == j)
+				last_ins = inspos+1;
+			++sym_pos;
+			
+			if(asp->line == j)
+			{
+			   seq_start = anp->seqpos + seq_offset;
+			   seq_stop = seq_start + asp->gr.right -1;
+			   /* seq_stop = seq_start + map_position_by_spacing(asp->gr.right, spacing, FALSE) * seq_expand + seq_expand -1; */
+			   if(asp->gr.left > l_pos)
+			   {
+				make_empty(ins_seq+l_pos, (Int2)(asp->gr.left-l_pos));
+				l_pos = asp->gr.left;
+			   }
+
+			   g_left = asp->ins_pos;
+			   g_right = asp->ins_pos + asp->gr.right -1;
+			   /* g_left = asp->gr.left;
+			   g_right = g_left + asp->gr.right -1;*/
+
+			   if((seq_stop - seq_start+1)>len)/*long insertions*/
+			   {
+		   	      fbuf_list = collect_feature_buf(asp->cnp, g_left, (g_left+4), seq_start, l_pos, fbuf_list, len, is_aa);	/*check the features first*/
+		   	      fbuf_list = collect_feature_buf(asp->cnp, g_left, (g_left+4), seq_stop-4, l_pos+8, fbuf_list, len, is_aa);	/*check the features ffirst. 3 is the 3 dots*/
+			   }
+			   else
+			      fbuf_list = collect_feature_buf(asp->cnp, g_left, g_right, seq_start, l_pos, fbuf_list, len, is_aa);
+
+			   load_text(bsp, seq_start, seq_stop, ins_seq, &l_pos, NULL, (Int2)len, 1, translate, FALSE, NULL, NULL, strand, NULL, 0);
+			}
+
+		}
+		if(asp->type == INS_SEG)
+			seq_offset += asp->gr.right;
+		if(asp->type == DIAG_SEG || asp->type == REG_SEG || asp->type == STD_SEG)
+			seq_offset += map_position_by_spacing(asp->gr.right - asp->gr.left +1, 
+				spacing, TRUE) * seq_expand; 
+			/* seq_offset += (asp->gr.right - asp->gr.left +1) * seq_expand; */
+	   }
+
+	   ins_2[sym_pos] = '\0';
+	   ins_seq[l_pos] = '\0';
+	   if(j == 0)
+	   {
+		ins_1[sym_pos] = '\0';	
+		load_tdp_data(&head, NULL, ins_1, 0, 0, 0, 0);
+	   }
+
+	   for(curr = head; curr !=NULL; curr = curr->next)
+	   /*for(curr = fbuf_list; curr !=NULL; curr = curr->next)*/
+	   {
+		fbp = (TextAlignBufPtr) curr->data.ptrvalue;
+		if(fbp->buf != NULL)
+			copy_insertion_bar(fbp->buf, ins_2, (Int2)sym_pos, len);
+		else
+		{
+			for(i =0; i<3; ++i)
+				copy_insertion_bar(fbp->codon[i], ins_2, (Int2)sym_pos, len);
+		}
+	   }
+
+	   copy_insertion_bar(ins_seq, ins_2, (Int2)sym_pos, len);
+	   load_tdp_data(&head, NULL, ins_2, 0, 0, 0, 0);
+	   load_tdp_data(&head, NULL, ins_seq, anp->itemID, anp->entityID, anp->seq_entityID, anp->bsp_itemID);
+	   ValNodeLink(&head, fbuf_list);
+	   fbuf_list = head;
+	}
+
+	return head;
+
+}	
+
+/***********************************************************************
+*
+*	ProcessTextAlignNode(anp, m_left, m_right, p_stop, m_buf, locus)
+*	Process the AlignNode to make a list of text buffer on the 
+*	current region
+*	anp: AlignNodePtr
+*	m_left, m_right: the region on the alignment. Mapped in response
+*	to anp->extremes.left, and anp->extremes.right
+*	p_stop: the stop position of the previous segment. Used to label
+*	the position of a line composed entirely of gaps
+*	m_buf: buffer for the master sequence. Used to compare mismatches
+*	locus: if TRUE, show the locus name of the alignment
+*
+*	frame: frame >0, those are the hits from blastx. So, the 
+*	protein need to be displayed to the proper frame
+*	frame 1-3: match to the plus strand of the master
+*	frame 4-6: match to the minus strand of the master
+*	frame 0:   no tranlsation, no frame match to the master
+*	frame -1:  translate the DNA sequence
+*	option:    option for display the alignments
+*   matrix:	   the protein alignment matrix
+*
+*
+************************************************************************/
+
+NLM_EXTERN ValNodePtr ProcessTextAlignNode2(AlignNodePtr anp, Int4 m_left, Int4 m_right, Int4Ptr p_stop, CharPtr m_buf, Int4 line_len, Int1 m_frame, Uint4 option, Int4Ptr PNTR matrix, Int4Ptr PNTR posMatrix, Int4 q_start)
+{
+    Int4 maxlen;
+    Int4 g_left, g_right;
+    Int4 len;		/*length of the segment*/
+    CharPtr l_seq;	/*the buffer for the sequence*/
+    Int2Ptr matrix_val;	/*value of each residue in alignment matrix*/
+    Int4 l_pos;		/*the start position on the line*/	
+    Int4 offset;
+    BioseqPtr bsp;
+    SeqEntryPtr sep;
+    
+    AlignSegPtr asp;
+    Int4 seq_offset, off_len;
+    Int4 seq_start, seq_stop;
+    Int4 s_start, s_stop;	/*for marking the position on one line*/
+    CharPtr str;
+    
+    ValNodePtr head = NULL, ins_node;
+    ValNodePtr fbuf_list = NULL;
+    TextAlignBufPtr tdp;
+    Boolean is_aa;
+    Int4 spacing;
+    Boolean translate;
+    Int4 seq_expand;
+    Boolean show_mismatch;
+    Boolean set_matrix;
+    Uint1 strand;
+    
+    
+    if(m_frame > 6 || m_frame < -1)	/*check the m_frame. -1 for translate the hits*/
+        return NULL;
+    
+    
+    g_left = anp->extremes.left;
+    g_right = anp->extremes.right;
+    if(m_left > g_right || m_right < g_left)/*no overlap*/ {
+        if(m_frame > 0) {
+            if(anp->m_frame != m_frame)
+                return NULL;
+            if(m_buf == NULL)
+                return NULL;
+        }
+        if(option & TXALIGN_BLUNT_END) {
+            maxlen = m_right - m_left +1;
+            l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), MGET_ERRPOST);
+            MemSet((Pointer)l_seq, '-',(size_t)(maxlen) * sizeof(Char));
+            l_seq[maxlen] = '\0';
+            tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+            tdp->pos = *p_stop;
+            tdp->strand = anp->extremes.strand;
+            tdp->label = StringSave(anp->label);
+            tdp->buf = l_seq;
+            tdp->matrix_val = NULL;
+            tdp->itemID = anp->itemID;
+            tdp->feattype = 0;
+            tdp->subtype = 0;
+            tdp->entityID = anp->entityID;
+            tdp->seqEntityID = anp->seq_entityID;
+            tdp->bsp_itemID = anp->bsp_itemID;
+            ValNodeAddPointer(&head, 0, tdp);
+            return head;
+        }
+        else
+            return NULL;
+    }
+    
+    strand = Seq_strand_plus;
+    if(anp->seqpos < 0)
+        strand = Seq_strand_minus;
+    else if(anp->seqpos == 0 && anp->extremes.strand == Seq_strand_minus)
+        strand = Seq_strand_minus;
+    
+    l_pos = 0;
+    spacing = 1;
+    offset = 0;
+    if(m_frame > 0) {
+        if(anp->m_frame != m_frame)
+            return NULL;
+        if(m_buf == NULL)
+            return NULL;
+        /*add the empty space to reflect the reading frame*/
+        for(str = m_buf; *str != '\n' && *str != '\0'; ++str) {
+            if(IS_WHITESP(*str))
+                ++offset;
+            else
+                break;
+        }
+        spacing = 3;
+    }
+    if(m_left < g_left) {
+        l_pos += (g_left - m_left);
+        if(m_frame > 0)
+            ++l_pos;
+    } else
+        l_pos += offset;
+    
+    bsp = BioseqLockById(anp->sip);
+    if(bsp == NULL)
+        return NULL;
+    is_aa = (bsp->mol == Seq_mol_aa);
+    if((m_frame > 0 && !is_aa) || (m_frame == -1 && is_aa)) {
+        BioseqUnlock(bsp);
+        return NULL;
+    }
+    if(anp->seq_entityID == 0) {
+        sep = SeqEntryFind(bsp->id);
+        anp->seq_entityID = SeqMgrGetEntityIDForSeqEntry(sep);
+    }
+    if(anp->bsp_itemID == 0)
+        anp->bsp_itemID = get_bioseq_itemID(bsp, anp->seq_entityID);
+    
+    if(m_frame == -1) {
+        translate = TRUE;
+        seq_expand = 3;
+    } else {
+        translate = FALSE;
+        seq_expand = 1;
+    }
+    
+    maxlen = m_right - m_left +1;
+    l_seq = (CharPtr) MemGet((size_t)(maxlen+1)*sizeof(Char), 
+                             MGET_ERRPOST);
+    if(option & TXALIGN_BLUNT_END)
+        MemSet((Pointer)l_seq, '-',(size_t)maxlen * sizeof(Char));
+    else
+        MemSet((Pointer)l_seq, ' ',(size_t)maxlen * sizeof(Char));
+    l_seq[maxlen] = '\0';
+    
+    
+    set_matrix = FALSE;
+    if(m_frame == 0 && bsp->mol != Seq_mol_aa) { /*DNA-DNA alignment*/
+        if(option & TXALIGN_MATRIX_VAL)
+            set_matrix = TRUE;
+    } else {
+        if(matrix != NULL && (option & TXALIGN_MATRIX_VAL))
+            set_matrix = TRUE;
+    }
+    if(set_matrix) {
+        matrix_val = (Int2Ptr) MemGet((size_t)(maxlen+1)*sizeof(Int2), MGET_ERRPOST);
+        MemSet((Pointer)matrix_val, 0,(size_t)maxlen * sizeof(Int2));
+    } else
+        matrix_val = NULL;
+    show_mismatch = (Boolean)(option & TXALIGN_MISMATCH);
+    
+    
+    /*process  the GAPs and the DIAGs segs*/
+    s_start = -1;
+    s_stop = -1;
+    off_len = 0;
+    for(asp = anp->segs; asp !=NULL; asp = asp->next) { 
+        g_left = asp->gr.left;
+        g_right = asp->gr.right;
+        if(!(g_left > m_right || g_right < m_left)) {
+            switch(asp->type) {
+            case GAP_SEG:
+                g_left = MAX(m_left, g_left);
+                g_right = MIN(m_right, g_right);
+                len = g_right - g_left +1;
+                MemSet((Pointer)(l_seq +l_pos), '-',(size_t)len * sizeof(Char));
+                l_pos += len;
+                break;
+                
+            case REG_SEG:
+            case DIAG_SEG:
+            case STD_SEG:	/* Std-seg only works if the m_frame != 0 */
+                if(m_left > g_left)
+                    len = off_len + m_left - g_left;
+                else
+                    len = off_len;
+                seq_offset = map_position_by_spacing(len, spacing, TRUE) * seq_expand;
+                seq_start = anp->seqpos + seq_offset;
+                g_left = MAX(m_left, g_left);
+                g_right = MIN(m_right, g_right);
+                len += (g_right - g_left);
+                seq_stop = anp->seqpos + map_position_by_spacing(len, spacing, FALSE) * seq_expand + seq_expand -1;
+                
+                if(seq_start <= seq_stop) {	/*the order of start and stop is reversed*/
+                    if(s_start == -1)	/*record the end point*/
+                        s_start = ABS(seq_start);
+                    s_stop = ABS(seq_stop);
+                    
+                    if(m_frame == 0)
+                        fbuf_list = collect_feature_buf(asp->cnp, g_left, g_right, seq_start, l_pos, fbuf_list, maxlen, is_aa);	/*check the features first*/
+                    load_text(bsp, seq_start, seq_stop, l_seq, &l_pos, m_buf, (Int2)maxlen, 
+                              (Int2)spacing, translate, show_mismatch, matrix_val, matrix, strand, posMatrix, q_start);
+                    
+                }
+                break;
+                
+            default:
+                break;
+            }
+        }
+        if(asp->type == INS_SEG)
+            off_len += (asp->gr.right * spacing);
+        if(asp->type == REG_SEG || asp->type == DIAG_SEG || asp->type == STD_SEG)
+            off_len+=(asp->gr.right - asp->gr.left +1);
+    }
+    
+    
+    /*the first segment in the layout is a gap segment*/
+    if(s_start == -1)
+        s_start = *p_stop;
+    if(s_stop == -1)	/*gap across the entire region*/
+        s_stop = *p_stop;
+    *p_stop = s_stop	/*update the stop value*/;
+    tdp = (TextAlignBufPtr) MemNew(sizeof(TextAlignBuf));
+    tdp->pos = s_start+1;
+    tdp->strand = anp->extremes.strand;
+    tdp->label = StringSave(anp->label);
+    tdp->buf = l_seq;
+    tdp->matrix_val = matrix_val;
+    tdp->itemID = anp->itemID;
+    tdp->feattype = 0;
+    tdp->subtype = 0;
+    tdp->entityID = anp->entityID;
+    tdp->seqEntityID = anp->seq_entityID;
+    tdp->bsp_itemID = anp->bsp_itemID;
+    ValNodeAddPointer(&head, 0, tdp);
+    ValNodeLink(&head, fbuf_list);
+    
+    ins_node = ProcessTextInsertion(anp, m_left, m_right, bsp, line_len, m_frame);
+    ValNodeLink(&head, ins_node);
+    BioseqUnlock(bsp);
+    return head;
+}
+
+NLM_EXTERN ValNodePtr ProcessTextAlignNode(AlignNodePtr anp, Int4 m_left, Int4 m_right, Int4Ptr p_stop, CharPtr m_buf, Int4 line_len, Int1 m_frame, Uint4 option, Int4Ptr PNTR matrix)
+{
+    return ProcessTextAlignNode2(anp, m_left, m_right, p_stop, m_buf, line_len, m_frame, option, matrix, NULL, 0);
+}
 
 NLM_EXTERN ValNodePtr clean_annot_for_anp(ValNodePtr PNTR head)
 {
@@ -186,6 +1485,8 @@ NLM_EXTERN Uint1 get_alignment_type(AnnotInfoPtr annot_info)
 		return ALIGN_DNA_TO_PROT;
 	if(annot_info->blast_type == ALIGN_TBLASTN)
 		return ALIGN_PROT_TO_DNA;
+        if(annot_info->blast_type == ALIGN_PSITBLASTN)
+                return ALIGN_PROT_TO_DNA;
 	if(annot_info->blast_type == ALIGN_TBLASTX)
 		return ALIGN_TDNA_TO_TDNA;
 	return 0;

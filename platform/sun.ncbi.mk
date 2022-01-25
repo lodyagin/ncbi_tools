@@ -1,5 +1,5 @@
 #
-# $Id: sun.ncbi.mk,v 1.5 1999/08/12 18:32:41 beloslyu Exp $
+# $Id: sun.ncbi.mk,v 1.7 2001/02/02 14:52:02 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = acc

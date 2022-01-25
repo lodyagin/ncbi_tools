@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.79 $
+* $Revision: 6.83 $
 *
 * File Description: 
 *
@@ -65,12 +65,14 @@
 #include <blast.h>
 #include <blastpri.h>
 #include <explore.h>
+/*
 #include <udviewer.h>
 #include <udvdef.h>
 #include <udvseq.h>
 #include <ddvmain.h>
 #include <ddvpanel.h>
 #include <ddvgraph.h>
+*/
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -111,6 +113,8 @@ typedef struct bioseqviewform {
 
   Boolean         cleanupObjectPtr;
   WndActnProc     activateForm;
+
+  ValNodePtr      bsplist;
 
   ForM            toolForm;
 } BioseqViewForm, PNTR BioseqViewFormPtr;
@@ -1091,6 +1095,7 @@ static void ResizeViewForm (WindoW w)
     SetPosition (bfp->bvd.pnl, &s);
     AdjustPrnt (bfp->bvd.pnl, &s, FALSE);
   }
+  /*
   if (bfp->bvd.udv != NULL) {
     GetPosition (bfp->bvd.udv, &s);
     s.right = width - 10;
@@ -1105,6 +1110,7 @@ static void ResizeViewForm (WindoW w)
     SetPosition (bfp->bvd.ddv, &s);
     AdjustPrnt (bfp->bvd.ddv, &s, FALSE);
   }
+  */
   /*
   if (bfp->bvd.vwr != NULL) {
     if (Visible (bfp->bvd.vwr) && AllParentsVisible (bfp->bvd.vwr)) {
@@ -2058,6 +2064,7 @@ static void CleanupBioseqForm (GraphiC g, VoidPtr data)
         }
       }
     }
+    bfp->bsplist = UnlockFarComponents (bfp->bsplist);
     bfp->bvd.pict = DeletePicture (bfp->bvd.pict);
     if (bfp->bvd.slp_list != NULL) {
       bfp->bvd.slp_list = free_slp_list (bfp->bvd.slp_list);
@@ -2883,6 +2890,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     Hide (bfp->bvd.pnl);
     Hide (bfp->bvd.pnlParentGrp);
 
+    /*
     bfp->bvd.udvParentGrp = HiddenGroup (h, -1, 0, NULL);
     bfp->bvd.udv = AutonomousPanel4 (bfp->bvd.udvParentGrp, pixwidth, pixheight,
                                      UDV_draw_viewer, UnDViewerVScrlProc, NULL,
@@ -2896,6 +2904,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
                                      sizeof (DdvMainPtr), DDVResetProc, NULL);
     SetObjectExtra (bfp->bvd.ddvParentGrp, (Pointer) &(bfp->bvd), NULL);
     Hide (bfp->bvd.ddvParentGrp);
+    */
 
     if (makeControls != NULL) {
       if (bsp == NULL) {
@@ -2954,6 +2963,12 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     SetActivate (w, BioseqViewFormActivate);
     Update ();
     BioseqViewFormActivate ((WindoW) bfp->form);
+
+    if (svpp != NULL && svpp->lockFarComponents) {
+      entityID = ObjMgrGetEntityIDForPointer (bsp);
+      sep = GetTopSeqEntryForEntityID (entityID);
+      bfp->bsplist = LockFarComponents (sep);
+    }
 
     SendMessageToForm (bfp->form, VIB_MSG_INIT);
     SetCurrentPagePointers (bfp);
@@ -3297,6 +3312,7 @@ static void CleanSmartViewer (BioseqViewFormPtr bfp)
         }
       }
     }
+    bfp->bsplist = UnlockFarComponents (bfp->bsplist);
     bfp->bvd.pict = DeletePicture (bfp->bvd.pict);
     if (bfp->bvd.slp_list != NULL) {
       bfp->bvd.slp_list = free_slp_list (bfp->bvd.slp_list);
@@ -3422,7 +3438,7 @@ extern Int2 LIBCALLBACK NewSeqEntryViewGenFunc (Pointer data)
   if (sip == NULL) return OM_MSG_RET_ERROR;
   SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
-  if (IsAGenomeRecord (sep)) {
+  if (sep != NULL && IsAGenomeRecord (sep)) {
     bcp = BioseqContextNew (bsp);
     ttl = NULL;
     sdp = BioseqContextGetSeqDescr (bcp, Seq_descr_title, NULL, NULL);

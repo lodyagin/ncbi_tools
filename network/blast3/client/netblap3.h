@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.26  2000/11/16 22:25:39  dondosha
+* Added other_returns argument to BlastBioseq
+*
 * Revision 1.25  2000/09/28 16:44:31  dondosha
 * Changed prototype for MegaBlastSeqLocNetCore to return SeqAlignPtr
 *
@@ -163,7 +166,7 @@ NLM_EXTERN Boolean LIBCALL BlastInit(CharPtr program_name, BlastNet3Hptr PNTR bl
 
 
 
-NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseq(BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status);
+NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseq(BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status, ValNodePtr *other_returns);
 
 /*
 The BlastNet3Hptr returned by BlastInitMt must be passed in.

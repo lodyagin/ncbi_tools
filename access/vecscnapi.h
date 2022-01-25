@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.2 $
+* $Revision: 1.3 $
 *
 * File Description: 
 *
@@ -85,7 +85,7 @@ NLM_EXTERN CONN VecScreenOpenConnection (
   CharPtr query
 );
 
-NLM_EXTERN EConnStatus VecScreenWaitForReply (
+NLM_EXTERN EIO_Status VecScreenWaitForReply (
   CONN conn
 );
 

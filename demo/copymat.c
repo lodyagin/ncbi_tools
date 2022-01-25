@@ -34,6 +34,17 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.19  2000/11/14 23:17:52  shavirin
+Removed serious bug under NT platform related to diffence in "w" and "wb"
+flag when opening file on PC NT computer. Removed unused header files.
+
+Revision 6.18  2000/11/13 21:25:22  shavirin
+Fixed possible bug in the function RPSUpdatePointers (64 bit architecture
+specific).
+
+Revision 6.17  2000/11/08 18:34:19  kans
+commented out UNIX-specific headers, included by ncbilcl.h for UNIX anyway
+
 Revision 6.16  2000/10/20 21:46:37  shavirin
 Added additional parameters for creating RPS database.
 
@@ -72,22 +83,14 @@ Changed a little format of RPS lookup tables file.
 *****************************************************************************/
 
 
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
 #include <ncbi.h>
-#include <objseq.h>
-#include <objsset.h>
 #include <sequtil.h>
 #include <seqport.h>
 #include <tofasta.h>
 #include <blast.h>
 #include <blastpri.h>
-#include <txalign.h>
-#include <simutil.h>
 #include <posit.h>
 #include <profiles.h>
-#include <gapxdrop.h>
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
@@ -97,7 +100,7 @@ static Args myargs [] = {
     { "Print help; overrides all other arguments", /* 1 */
       "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create RPS mem map file(s)", /* 2 */
-      "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+      "T", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Threshold for extending hits for RPS database", /* 3 */
       "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Word size for RPS database", /* 4 */
@@ -326,24 +329,31 @@ Boolean RPSUpdatePointers(LookupTablePtr lookup)
     Uint4 len;
     Int4 index;
     ModLookupPositionPtr start_address;
+    long mlpp_address;
+    ModLookupPositionPtr *lpp;
 
     len = lookup->array_size;
     mod_lt=lookup->mod_lt;
-    start_address = lookup->mod_lookup_table_memory;
-    
+    start_address = (ModLookupPositionPtr) lookup->mod_lookup_table_memory;
+
     /* Walk through table, copying info into mod_lt[] */
     for(index = 0; index < len; index++) {
-
+        
         if(mod_lt[index].num_used <= 3)
             continue;
 
-        /* Changing value, that lpp now has relative pointer */
-        mod_lt[index].entries[1] -= (int) start_address;
-        mod_lt[index].entries[2] = 0; /* Not used */
+        /* Taking pointer to 4/8 bytes address */        
+        lpp= (ModLookupPositionPtr *) &mod_lt[index].entries[1];
+        
+        mlpp_address = (long) *lpp;
+        mlpp_address -= (long) start_address;
+        
+        /* Now this is new relative address - usually small  */
+        *lpp  = (ModLookupPositionPtr) mlpp_address;         
     }
-    
     return TRUE;
 }
+
 /* -- SSH --
    Write lookup table to the disk into file "*.loo", which will be
    used memory-mapped during RPS Blast search 
@@ -379,7 +389,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     BLAST_ScorePtr PNTR posMatrix;
     Int4 num_lookups;
 
-    if((fd = FileOpen(filename, "w")) == NULL)
+    if((fd = FileOpen(filename, "wb")) == NULL)
         return FALSE;
     
     num_lookups = 1; /* Single lookup table for all set */
@@ -565,8 +575,8 @@ Int2  Main(void)
         sprintf(bigFileName, "%s.rps", profilesFileName);
     }
     
-    if ((bigmatrixfile = FileOpen(bigFileName, "w")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open big matrix file %s\n", bigFileName);
+    if ((bigmatrixfile = FileOpen(bigFileName, "wb")) == NULL) {
+        ErrPostEx(SEV_FATAL, 0, 0, "rps-blast: Unable to open big matrix file %s\n", bigFileName);
         return (1);
     }
     
@@ -613,7 +623,7 @@ Int2  Main(void)
         
     }
     
-    FileWrite((void *) &(combinedMatrix[0]), sizeof(ScoreRow), 
+    FileWrite((void *) combinedMatrix[0], sizeof(ScoreRow), 
               (size_t) totalProfileLength, bigmatrixfile);
     freeMatrix(combinedMatrix); 
     FileClose(bigmatrixfile);

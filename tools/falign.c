@@ -56,6 +56,9 @@
 * Date     Name        Description of modification
 *
 * $Log: falign.c,v $
+* Revision 6.2  2000/11/02 20:56:17  vakatov
+* Renamed "join()" to "static s_Join()" to avoid name conflicts
+*
 * Revision 6.1  1998/06/16 18:30:55  kans
 * fixed unix compiler warnings
 *
@@ -220,7 +223,7 @@ void bfound(Int4, Int4);
 void setup(void);
 void global_setup(fragment PNTR, fragment PNTR);
 void global(fragment PNTR, fragment PNTR, Int4,  SeqLocPtr,  SeqLocPtr, SeqAlignPtr);
-Int4 join(fragment PNTR, fragment PNTR);
+static Int4 s_Join(fragment PNTR, fragment PNTR);
 void recom_setup(kbclass PNTR);
 void recompute(kbclass PNTR);
 Int4 disjoint(void);
@@ -1119,7 +1122,7 @@ void global(fragment PNTR bf, fragment PNTR ef, Int4 gs, SeqLocPtr slp1,  SeqLoc
 		if (cut[pff->j]) {
 			fdf = cut[pff->j]->ff;
 			bdf = cut[pff->j]->bf;
-			js = join(fdf,bdf)- (Int4) (DIGIT*(bdf->k));
+			js = s_Join(fdf,bdf)- (Int4) (DIGIT*(bdf->k));
 
 			if (js == gs) {
 				mf = fdf;
@@ -1136,7 +1139,7 @@ void global(fragment PNTR bf, fragment PNTR ef, Int4 gs, SeqLocPtr slp1,  SeqLoc
 		db_reset_pos(li_d);
 		malign(pfo,diag_prev,ri,li_c,li_d,pff);
 		malign(pbo,bdiag_prev,bri,bli_c,bli_d,pbf);
-		js = join(pff,pbf);
+		js = s_Join(pff,pbf);
 		if ((pff->j-pff->i != (pff->bgf)->j-(pff->bgf)->i) &&
 			(pbf->j-pbf->i != (pbf->bgf)->j-(pbf->bgf)->i))
 				js = js + IO;
@@ -1163,7 +1166,7 @@ void global(fragment PNTR bf, fragment PNTR ef, Int4 gs, SeqLocPtr slp1,  SeqLoc
 			db_reset_pos(li_d);
 			malign1(pfo,ri,li_c,li_d,pff);
 			malign1(pbo,bri,bli_c,bli_d,pbf);
-			js = join(pff,pbf);
+			js = s_Join(pff,pbf);
 			if ((pff->j-pff->i != (pff->bgf)->j-(pff->bgf)->i) &&
 				(pbf->j-pbf->i != (pbf->bgf)->j-(pbf->bgf)->i))
 					js = js + IO;
@@ -1238,7 +1241,7 @@ void global(fragment PNTR bf, fragment PNTR ef, Int4 gs, SeqLocPtr slp1,  SeqLoc
 }
 
 /* join - return the cost after join */
-Int4 join(fragment PNTR ff, fragment PNTR bf)
+static Int4 s_Join(fragment PNTR ff, fragment PNTR bf)
 {
 	return(ff->score + bf->score);
 }

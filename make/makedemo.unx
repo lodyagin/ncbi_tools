@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.56 2000/08/16 23:01:05 kans Exp $
+#	$Id: makedemo.unx,v 6.57 2001/03/05 16:58:53 beloslyu Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -94,7 +94,8 @@ EXE1 = testcore makeset \
 	entrcmd errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
 	testval seedtop fmerge makemat copymat impala bl2seq \
-	megablast vecscreen gil2bin tbl2asn blastclust rpsblast
+	megablast vecscreen gil2bin tbl2asn blastclust rpsblast \
+	asn2xml
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
@@ -102,7 +103,8 @@ SRC1 = testcore.c makeset.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
     testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c bl2seq.c \
-	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c
+	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c \
+	asn2xml.c
 
 INTERNAL = testgen
 
@@ -346,4 +348,9 @@ blastclust : blastclust.c $(THREAD_OBJ)
 rpsblast : rpsblast.c $(THREAD_OBJ)
 	$(CC) -o rpsblast $(LDFLAGS) rpsblast.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
+
+# asn2xml
+
+asn2xml : asn2xml.c $(THREAD_OBJ)
+	$(CC) -o asn2xml $(LDFLAGS) asn2xml.c $(LIB2) $(LIB1) $(OTHERLIBS)
 

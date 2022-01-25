@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.115 2000/10/18 21:47:16 vakatov Exp $
+#	$Id: makenet.unx,v 6.125 2001/02/21 22:08:36 lavr Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -272,7 +272,7 @@ LDFLAGS = $(LDFLAGS1) -I$(NCBI_INCDIR) $(NCBI_OTHERLINKOPTIONS) -L$(NCBI_LINKING
 ## sources for libraries
 
 SRC6  = ni_lib_.c ni_www.c ni_debug.c ncbicli.c ncbiurl.c \
-        ni_disp.c ni_msg.c ni_error.c ni_encrs.c
+        ni_disp.c ni_msg.c ni_error.c ni_encrs.c ni_serv.c
 SRC6_ = ni_lib.c ni_msg.c ni_error.c ni_encrs.c
 
 SRC7 =	netentr.c netlib.c objneten.c
@@ -335,7 +335,7 @@ NET_LIBS_SRC = $(SRC6) $(SRC6_) $(SRC7) $(SRC8) $(SRC9)
 # objects for libraries
 
 OBJ6  = ni_lib_.o ncbicli.o ncbiurl.o ni_www.o ni_debug.o \
-        ni_disp.o ni_msg.o ni_error.o ni_encrs.o
+        ni_disp.o ni_msg.o ni_error.o ni_encrs.o ni_serv.o
 OBJ6_ = ni_lib.o ni_msg.o ni_error.o ni_encrs.o
 
 OBJ7 =	netentr.o netlib.o objneten.o
@@ -506,7 +506,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server rtestval rasn2ff
 
 .WAIT:
 	echo Waiting...go
@@ -644,8 +644,11 @@ copy :
 	$(SRCCOPY) ../demo/qbatch.c .
 	$(SRCCOPY) ../demo/elecpcr.c .
 	$(SRCCOPY) ../demo/asn2fast.c .
+	$(SRCCOPY) ../demo/asn2asn.c .
 	$(SRCCOPY) ../demo/fetchent.c .
 	$(SRCCOPY) ../demo/udvmain.c .
+	$(SRCCOPY) ../demo/rtestval.c .
+	$(SRCCOPY) ../demo/asn2ff.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -1140,6 +1143,14 @@ Nbatch2 : nbatch.c
 Nbatch3 : qbatch.c
 	$(CC) -o Nbatch3 $(LDFLAGS) qbatch.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# demo program (rtestval)
+rtestval :	rtestval.c
+	$(CC) -o rtestval $(LDFLAGS) rtestval.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# remote asn2ff program (rasn2ff)
+rasn2ff :	asn2ff.c
+	$(CC) -o rasn2ff -DENABLE_ENTREZ -DENABLE_ID1 $(LDFLAGS) asn2ff.c $(LIB8) $(LIB3) $(LIB7) $(LIB6) $(LIB41) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # demo program (electronic PCR)
 
 elecpcr : elecpcr.c
@@ -1149,6 +1160,11 @@ elecpcr : elecpcr.c
 
 asn2fast : asn2fast.c
 	$(CC) -o asn2fast $(LDFLAGS) asn2fast.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# demo program (asn2asn)
+
+asn2asn : asn2asn.c
+	$(CC) -o asn2asn $(LDFLAGS) asn2asn.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # demo program (fetchent)
 
@@ -1164,8 +1180,10 @@ idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
 	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # gapped BLAST client
+# blastcl3 now has the same source code as blastall but should be compiled
+# with -DBLAST_CS_API flag
 blastcl3: blastcl3.c $(BNETCLILIB) $(BLIB36)
-	$(CC) -g -o blastcl3 $(LDFLAGS) blastcl3.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o blastcl3 $(LDFLAGS) -DBLAST_CS_API blastall.c $(LIB36) $(LIB23) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # test client for the suggest network service
 suggcli: suggcli.c $(BNETCLILIB) $(BLIB24)

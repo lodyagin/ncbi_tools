@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.1 $
+* $Revision: 1.2 $
 *
 * File Description: 
 *
@@ -49,7 +49,6 @@
 #include <ncbi.h>
 #include <asn.h>
 #include <objmim.h>
-#include <connectn.h>
 #include <urlquery.h>
 
 #undef NLM_EXTERN
@@ -113,7 +112,7 @@ NLM_EXTERN Int4 MimCheckQueue (
 
 NLM_EXTERN MimEntryPtr MimReadReply (
   CONN conn,
-  EConnStatus status
+  EIO_Status status
 );
 
 

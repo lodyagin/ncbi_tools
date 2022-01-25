@@ -31,6 +31,8 @@
 #define ERR_SEQ_INST_SeqIdNameHasSpace  1,27
 #define ERR_SEQ_INST_IdOnMultipleBioseqs  1,28
 #define ERR_SEQ_INST_DuplicateSegmentReferences  1,29
+#define ERR_SEQ_INST_TrailingX  1,30
+#define ERR_SEQ_INST_BadSeqIdFormat  1,31
 #define ERR_SEQ_DESCR  2,0
 #define ERR_SEQ_DESCR_BioSourceMissing  2,1
 #define ERR_SEQ_DESCR_InvalidForType  2,2
@@ -47,6 +49,7 @@
 #define ERR_SEQ_DESCR_SerialInComment  2,13
 #define ERR_SEQ_DESCR_BioSourceNeedsFocus  2,14
 #define ERR_SEQ_DESCR_BadOrganelle  2,15
+#define ERR_SEQ_DESCR_MultipleChromosomes  2,16
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -108,6 +111,9 @@
 #define ERR_SEQ_FEAT_PeptideFeatOutOfFrame  5,41
 #define ERR_SEQ_FEAT_InvalidQualifierValue  5,42
 #define ERR_SEQ_FEAT_MultipleMRNAproducts  5,43
+#define ERR_SEQ_FEAT_mRNAgeneRange  5,44
+#define ERR_SEQ_FEAT_TranscriptLen  5,45
+#define ERR_SEQ_FEAT_TranscriptMismatches  5,46
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

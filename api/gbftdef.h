@@ -3,6 +3,9 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.8  2000/11/29 20:34:29  tatiana
+* virion key removed, GBQUAL_transcript_id added
+*
 * Revision 6.7  2000/02/02 21:02:41  tatiana
 * new type for /number added
 *
@@ -148,13 +151,14 @@
 #define GBQUAL_protein_id	     73
 #define GBQUAL_country		     74
 #define GBQUAL_organelle		 75
+#define GBQUAL_transcript_id	 76
 
-#define ParFlat_TOTAL_GBQUAL     76
+#define ParFlat_TOTAL_GBQUAL     77
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
 #define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     64
+#define ParFlat_TOTAL_GBFEAT     63
 
 #define  Class_pos_aa             1
 #define  Class_text               2

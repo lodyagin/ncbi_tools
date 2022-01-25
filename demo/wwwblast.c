@@ -1,4 +1,4 @@
-/* $Id: wwwblast.c,v 6.25 2000/10/23 20:19:57 dondosha Exp $
+/* $Id: wwwblast.c,v 6.29 2000/11/29 16:11:31 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,25 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.25 $
+* $Revision: 6.29 $
 *
 * File Description:
 *        Standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.c,v $
+* Revision 6.29  2000/11/29 16:11:31  dondosha
+* If multiple queries, send proper lower case mask to the search engine
+*
+* Revision 6.28  2000/11/17 14:40:04  dondosha
+* Changed MegaBlastResultsNew call to MemNew
+*
+* Revision 6.27  2000/11/16 22:37:07  dondosha
+* Added endpoint Mega BLAST results handling
+*
+* Revision 6.26  2000/10/31 20:18:52  shavirin
+* Added printing of correct XML output when no hits found
+* Added printing progeress messages to avoid browser timeout.
+*
 * Revision 6.25  2000/10/23 20:19:57  dondosha
 * Open and close AsnIo outside calls to BXMLPrintOutput function
 *
@@ -116,15 +129,23 @@
 
 #include <wwwblast.h>
 
-static int LIBCALLBACK
-tick_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 
+static int LIBCALLBACK WWWTickCallback(Int4 sequence_number, 
+                                       Int4 number_of_positive_hits)
 {
+    if(!TestSTDOut()) {
+	return -1;
+    }
+    
+    /*    fprintf(stdout, "."); */
 
-    /* do nothing */
-    return 0;
+    printf("<!-- Progress msg from the server %d %d-->\n", 
+           sequence_number, number_of_positive_hits);
+
+    fflush(stdout);
+    
+    return 1;
 }
-
 static Int4 get_number_alignment(SeqAlignPtr align)
 {
     Int4 num = 0;
@@ -210,13 +231,14 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     Uint1 f_order[FEATDEF_ANY], g_order[FEATDEF_ANY];
     /* Variables for multiple query output */
     SeqLocPtr tmp_slp;
-    Boolean done = FALSE;
+    Boolean done = TRUE;
     BLAST_OptionsBlkPtr options = theInfo->options;
     CharPtr program = theInfo->program, database = theInfo->database;
     Uint4 align_options = theInfo->align_options;
     DenseSegPtr dsp, next_dsp;
     AsnIoPtr xml_aip;
-
+    MegaBlastResultsPtr mb_results = NULL;
+    
     MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     
@@ -227,22 +249,22 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         return FALSE;
     
     align_type = BlastGetTypes(program, &query_is_na, &db_is_na);
-
+    
     init_buff_ex(85);
     dbinfo = BlastRequestDbInfo(bl3hp, database, !db_is_na);
-
-    if (dbinfo)
+    
+    if (dbinfo && !(options->is_megablast_search && options->no_traceback))
         PrintDbInformationBasic(database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, stdout, TRUE);
     dbinfo = BlastDbinfoFree(dbinfo);
     free_buff();
-
+    
     if (bsp) 
         seqalign = BlastBioseqNetCore(bl3hp, bsp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
     else if (options->is_megablast_search) {
-       seqalign = MegaBlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, &status);
+        seqalign = MegaBlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, &status);
     } else
         seqalign = BlastSeqLocNetCore(bl3hp, slp, program, database, options, &other_returns, &error_returns, callback, NULL, &status);
-
+    
     
     BlastErrorPrintExtra(error_returns, TRUE, stdout);
     
@@ -251,6 +273,9 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
     txmatrix = NULL;
     for (vnp=other_returns; vnp; vnp = vnp->next) {
         switch (vnp->choice) {
+           case BlastResponse_mbalign:
+           mb_results = (MegaBlastResultsPtr) vnp->data.ptrvalue;
+           break;
         case TXDBINFO:
 	    tx_dbinfo = (TxDfDbInfoPtr) vnp->data.ptrvalue;
             break;
@@ -266,7 +291,7 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         case TXMATRIX:
             matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
             if (matrix)
-               txmatrix = BlastMatrixToTxMatrix(matrix);
+                txmatrix = BlastMatrixToTxMatrix(matrix);
             /*BLAST_MatrixDestruct(matrix);*/
             break;
         case SEQLOC_MASKING_NOTSET:
@@ -277,153 +302,193 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
         case SEQLOC_MASKING_MINUS2:
         case SEQLOC_MASKING_MINUS3:
 	    if (!options->is_megablast_search)
-	       ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
+                ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
 	    break;
         default:
             break;
         }
     }	
     
+    /* If results come as alignment endpoints only from Mega BLAST */
+    if (mb_results) {
+       MegaBlastHitPtr mb_hit = mb_results->mbhits, next_hit;
+
+       while (mb_hit) {
+          fprintf(stdout, "%s\t%s\t%d\t%d\t%d\t%d\t%d\n", mb_hit->id1,
+                  mb_hit->id2, mb_hit->query_offset, mb_hit->subject_offset,
+                  mb_hit->query_end, mb_hit->subject_end, mb_hit->score);
+          mb_hit = mb_hit->next;
+       }
+       MegaBlastResultsFree(mb_results);
+    } else if (!seqalign) 
+       done = FALSE;
+
     
     ReadDBBioseqFetchEnable ("blastall", database, db_is_na, TRUE);
-
+    
     tmp_slp = slp;
-
-    if(theInfo->xml_output)
-       xml_aip = AsnIoOpen("stdout", "wx");
-
-    while (seqalign) {
-       if (!options->is_megablast_search)
-          next_seqalign = NULL;
-       else {
-          sap = seqalign;
-          while (sap != NULL) { 
-             if (sap->next != NULL) {
-                dsp = (DenseSegPtr) (sap->segs);
-                next_dsp = (DenseSegPtr) (sap->next->segs);
-                
-                if (SeqIdComp(dsp->ids, next_dsp->ids) != SIC_YES) {
-                   next_seqalign = sap->next;
-                   sap->next = NULL;
-                }
-             } else
-                next_seqalign = NULL;
-             sap = sap->next;
-          }
-      
-          dsp = (DenseSegPtr) (seqalign->segs);
-          while (tmp_slp && SeqIdComp(dsp->ids, SeqLocId(tmp_slp)) != SIC_YES)
-             tmp_slp = tmp_slp->next;
-          if (tmp_slp == NULL) /* Should never happen */
-             break;
-          bsp = BioseqLockById(SeqLocId(tmp_slp));
-          init_buff_ex(85);
-          fprintf(stdout, "<HR><BR>");
-          AcknowledgeBlastQuery(bsp, 70, stdout, FALSE, TRUE);
-          free_buff();
-          BioseqUnlock(bsp);
-       }
-
-       if(theInfo->xml_output) {
-          printf("<PRE>");
-          BXMLPrintOutput(xml_aip, seqalign, options, 
-                          program, database, 
-                          bsp, other_returns, 0, 0, NULL);
-          AsnIoReset(xml_aip);
-          printf("</PRE>");
-          
-       } else {
-          
-          seqannot = SeqAnnotNew();
-          seqannot->type = 2;
-          AddAlignInfoToSeqAnnot(seqannot, align_type);
-          seqannot->data = seqalign;
-          
-          if(theInfo->show_overview) {
-             Char f_name[64], title[1024], href[64];
-             Int4 align_num;       
-             
-             sprintf(f_name, "%ld%ld.gif", (long)random(), (long)getpid());
-             sprintf(href, "nph-viewgif.cgi?");
-             
-             align_num = get_number_alignment(seqalign); 
-             sprintf(title, 
-                     "<H3><a href=\"docs/newoptions.html#graphical-overview\"> "
-                     "Distribution of %ld Blast Hits on the Query Sequence</a> "
-                     "</H3>\n", (long)align_num);  
-             
-             
-             /* Open HTML form */
-             fprintf(stdout, "<FORM NAME=\"BLASTFORM\">\n");
-             fflush(stdout);
-             
-             PrintAlignmentOverview(seqannot, stdout, 
-                                    "BLASTFORM", href, f_name, title); 
-          }
-          
-          prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_descriptions, NULL);
-          ObjMgrSetHold();
-          init_buff_ex(85);
-          
-          PrintDefLinesFromSeqAlignEx2(prune->sap, 80, stdout, theInfo->print_options, FIRST_PASS, NULL, theInfo->number_of_descriptions, database, theInfo->blast_type);
-          free_buff();
-          
-          prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_alignments, prune);
-          seqannot->data = prune->sap;
-          
-          if(theInfo->color_schema != 0 && 
-             (!StringICmp(program, "blastn") || 
-              !StringICmp(program, "blastp"))) {
-             
-             if(!DDV_DisplayBlastPairList(prune->sap, mask_loc, stdout, 
-                                          query_is_na, align_options, 
-                                          theInfo->color_schema)) { 
-                fprintf(stdout, 
-                        "\n\n!!!\n   "
-                        "    --------  Failure to print alignment...  --------"
-                        "\n!!!\n\n");
-                fflush(stdout);
-             }
-          } else {
-             
-              if(options->is_ooframe) {
-                  printf("<PRE>");
-                  OOFShowBlastAlignment(seqalign, /*mask*/ NULL,
-                                        stdout, align_options, txmatrix);
-              } else {
-                  if (align_options & TXALIGN_MASTER)
-                      ShowTextAlignFromAnnot(seqannot, 60, stdout, f_order,
-                                             g_order, align_options, txmatrix, 
-                                             mask_loc, NULL);
-                  else
-                      ShowTextAlignFromAnnot(seqannot, 60, stdout, f_order, 
-                                             g_order, align_options, txmatrix, 
-                                             mask_loc, FormatScoreFunc);
-              }
-          }
-          
-          seqannot->data = seqalign;
-          number_of_hits_private = prune->original_number; 
-          prune = BlastPruneSapStructDestruct(prune);
-          ObjMgrClearHold();
-          ObjMgrFreeCache(0);
-       }
-
-       if (options->is_megablast_search)
-          tmp_slp = tmp_slp->next;
-       if (seqannot)
-           seqannot = SeqAnnotFree(seqannot);
-       seqalign = next_seqalign;
-       fprintf(stdout, "<PRE>\n");
-    }
     
     if(theInfo->xml_output)
-       xml_aip = AsnIoClose(xml_aip);
+        xml_aip = AsnIoOpen("stdout", "wx");
 
+    while (seqalign) {
+        if (!options->is_megablast_search)
+            next_seqalign = NULL;
+        else {
+            sap = seqalign;
+            while (sap != NULL) { 
+                if (sap->next != NULL) {
+                    dsp = (DenseSegPtr) (sap->segs);
+                    next_dsp = (DenseSegPtr) (sap->next->segs);
+                    
+                    if (SeqIdComp(dsp->ids, next_dsp->ids) != SIC_YES) {
+                        next_seqalign = sap->next;
+                        sap->next = NULL;
+                    }
+                } else
+                    next_seqalign = NULL;
+                sap = sap->next;
+            }
+            
+            dsp = (DenseSegPtr) (seqalign->segs);
+            while (tmp_slp && SeqIdComp(dsp->ids, SeqLocId(tmp_slp)) != SIC_YES)
+                tmp_slp = tmp_slp->next;
+            if (tmp_slp == NULL) /* Should never happen */
+                break;
+            bsp = BioseqLockById(SeqLocId(tmp_slp));
+            init_buff_ex(85);
+            fprintf(stdout, "<HR><BR>");
+            AcknowledgeBlastQuery(bsp, 70, stdout, FALSE, TRUE);
+            free_buff();
+            BioseqUnlock(bsp);
+        }
+        
+        if(theInfo->xml_output) {
+            printf("<PRE>");
+            BXMLPrintOutput(xml_aip, seqalign, options, 
+                            program, database, 
+                            bsp, other_returns, 0, 0, NULL);
+            AsnIoReset(xml_aip);
+            printf("</PRE>");
+            
+        } else {
+            
+            seqannot = SeqAnnotNew();
+            seqannot->type = 2;
+            AddAlignInfoToSeqAnnot(seqannot, align_type);
+            seqannot->data = seqalign;
+            
+            if(theInfo->show_overview) {
+                Char f_name[64], title[1024], href[64];
+                Int4 align_num;       
+                
+                sprintf(f_name, "%ld%ld.gif", (long)random(), (long)getpid());
+                sprintf(href, "nph-viewgif.cgi?");
+                
+                align_num = get_number_alignment(seqalign); 
+                sprintf(title, 
+                        "<H3><a href=\"docs/newoptions.html#graphical-overview\"> "
+                        "Distribution of %ld Blast Hits on the Query Sequence</a> "
+                        "</H3>\n", (long)align_num);  
+                
+                
+                /* Open HTML form */
+                fprintf(stdout, "<FORM NAME=\"BLASTFORM\">\n");
+                fflush(stdout);
+                
+                PrintAlignmentOverview(seqannot, stdout, 
+                                       "BLASTFORM", href, f_name, title); 
+            }
+            
+            prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_descriptions, NULL);
+            ObjMgrSetHold();
+            init_buff_ex(85);
+            
+            PrintDefLinesFromSeqAlignEx2(prune->sap, 80, stdout, theInfo->print_options, FIRST_PASS, NULL, theInfo->number_of_descriptions, database, theInfo->blast_type);
+            free_buff();
+            
+            prune = BlastPruneHitsFromSeqAlign(seqalign, theInfo->number_of_alignments, prune);
+            seqannot->data = prune->sap;
+            
+            if(theInfo->color_schema != 0 && 
+               (!StringICmp(program, "blastn") || 
+                !StringICmp(program, "blastp"))) {
+                
+                if(!DDV_DisplayBlastPairList(prune->sap, mask_loc, stdout, 
+                                             query_is_na, align_options, 
+                                             theInfo->color_schema)) { 
+                    fprintf(stdout, 
+                            "\n\n!!!\n   "
+                            "    --------  Failure to print alignment...  --------"
+                            "\n!!!\n\n");
+                    fflush(stdout);
+                }
+            } else {
+                
+                if(options->is_ooframe) {
+                    printf("<PRE>");
+                    OOFShowBlastAlignment(seqalign, /*mask*/ NULL,
+                                          stdout, align_options, txmatrix);
+                } else {
+                    if (align_options & TXALIGN_MASTER)
+                        ShowTextAlignFromAnnot(seqannot, 60, stdout, f_order,
+                                               g_order, align_options, txmatrix, 
+                                               mask_loc, NULL);
+                    else
+                        ShowTextAlignFromAnnot(seqannot, 60, stdout, f_order, 
+                                               g_order, align_options, txmatrix, 
+                                               mask_loc, FormatScoreFunc);
+                }
+            }
+            
+            seqannot->data = seqalign;
+            number_of_hits_private = prune->original_number; 
+            prune = BlastPruneSapStructDestruct(prune);
+            ObjMgrClearHold();
+            ObjMgrFreeCache(0);
+        } /* If else xml_output */
+        
+        if (options->is_megablast_search)
+            tmp_slp = tmp_slp->next;
+        if (seqannot)
+            seqannot = SeqAnnotFree(seqannot);
+        seqalign = next_seqalign;
+        fprintf(stdout, "<PRE>\n");
+    } 
+    if (!done) { /* seqalign == NULL */
+    if(theInfo->xml_output && !options->is_ooframe) {
+       BlastErrorMsgPtr error_msg;
+       CharPtr message;
+       
+       if (error_returns == NULL) {
+                message = "No hits found";
+       } else {
+          error_msg = error_returns->data.ptrvalue;
+          message = error_msg->msg;
+       }
+       
+       BXMLPrintOutput(xml_aip, NULL, 
+                       options, program, database, 
+                       bsp, other_returns, 0, message);
+       
+       if (error_returns != NULL) {
+          MemFree(error_msg->msg);
+          MemFree(error_msg);
+          MemFree(error_returns);
+       }
+       
+       AsnIoReset(xml_aip);
+    } else {
+       fprintf(stdout, "\n\n ***** No hits found ******\n\n");
+    }
+    }
+    if(theInfo->xml_output)
+        xml_aip = AsnIoClose(xml_aip);
+    
     BLAST_MatrixDestruct(matrix);
     if (txmatrix)
-       txmatrix = TxMatrixDestruct(txmatrix);
-
+        txmatrix = TxMatrixDestruct(txmatrix);
+    
     mask_loc_start = mask_loc;
     while (mask_loc) {
         SeqLocSetFree(mask_loc->data.ptrvalue);
@@ -433,31 +498,34 @@ TraditionalBlastReportEngineWithImage(SeqLocPtr slp, BioseqPtr bsp, BlastNet3Hpt
                
     init_buff_ex(85);
     tx_dbinfo_head = tx_dbinfo;
-    while (tx_dbinfo) {
-        PrintDbReport(tx_dbinfo, 70, stdout);
-        tx_dbinfo = tx_dbinfo->next;
+    if (!(options->is_megablast_search && options->no_traceback)) {
+        while (tx_dbinfo) {
+            PrintDbReport(tx_dbinfo, 70, stdout);
+            tx_dbinfo = tx_dbinfo->next;
+        }
     }
     tx_dbinfo_head = TxDfDbInfoDestruct(tx_dbinfo_head);
     
     if (ka_params) {
-        PrintKAParameters(ka_params->lambda, ka_params->k, ka_params->h, 
-                          70, stdout, FALSE);
-        MemFree(ka_params);
+        if (!(options->is_megablast_search && options->no_traceback))
+            PrintKAParameters(ka_params->lambda, ka_params->k, ka_params->h, 
+                              70, stdout, FALSE);
+            MemFree(ka_params);
     }
-    
     if (ka_params_gap) {
-        PrintKAParameters(ka_params_gap->lambda, ka_params_gap->k, ka_params_gap->h, 70, stdout, TRUE);
+        if (!(options->is_megablast_search && options->no_traceback))
+            PrintKAParameters(ka_params_gap->lambda, ka_params_gap->k, ka_params_gap->h, 70, stdout, TRUE);
         MemFree(ka_params_gap);
     }
     
-    PrintTildeSepLines(params_buffer, 70, stdout);
-
+    if (!(options->is_megablast_search && options->no_traceback))
+        PrintTildeSepLines(params_buffer, 70, stdout);
+    
     printf("</PRE></BODY></HTML>\n");
     MemFree(params_buffer);
     free_buff();
     
     other_returns = ValNodeFree(other_returns);
-    
     
     return status;
 }
@@ -522,6 +590,106 @@ Boolean WWWBlastDoClientSearch(WWWBlastInfoPtr theInfo)
 }
 #endif
 
+#define BUFFER_LENGTH 255
+
+static int LIBCALLBACK
+AppendMegaBlastHit(VoidPtr ptr)
+{
+   BlastSearchBlkPtr search = (BlastSearchBlkPtr) ptr;
+   SeqIdPtr subject_id, query_id;
+   CharPtr subject_descr, subject_buffer;
+   Int4 index, query_length;
+   Int2 context;
+   BLAST_HSPPtr hsp;
+   MegaBlastResultsPtr mb_results;
+   MegaBlastHitPtr new_hit, last_hit = NULL;
+
+   if (search->current_hitlist == NULL || search->current_hitlist->hspcnt <= 0) {
+      search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
+      return 0;
+   }
+
+   mb_results = (MegaBlastResultsPtr)
+      search->mb_endpoint_results->data.ptrvalue;
+   if (mb_results) {
+       for (last_hit = mb_results->mbhits; last_hit->next; 
+            last_hit = last_hit->next);
+   }
+   readdb_get_descriptor(search->rdfp, search->subject_id, &subject_id,
+			 &subject_descr);
+   if (subject_id->choice != SEQID_GENERAL) {
+      subject_buffer = (CharPtr) Malloc(BUFFER_LENGTH + 1);
+      SeqIdWrite(SeqIdFindBestAccession(subject_id), subject_buffer,
+                 PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
+   } else {
+      subject_buffer = StringTokMT(subject_descr, " ", &subject_descr);
+      subject_descr = subject_buffer;
+   }
+
+   for (index=0; index<search->current_hitlist->hspcnt; index++) {
+      hsp = search->current_hitlist->hsp_array[index];
+      if (hsp==NULL || (search->pbp->cutoff_e > 0 && 
+	  hsp->evalue > search->pbp->cutoff_e)) 
+	 continue;
+      new_hit = Malloc(sizeof(MegaBlastHit));
+      new_hit->next = NULL;
+      context = hsp->context; 
+      query_id = search->qid_array[context/2];
+
+      new_hit->id2 = StringSave(subject_buffer);
+      if (query_id->choice == SEQID_LOCAL) {
+         BioseqPtr query_bsp = BioseqLockById(query_id);
+         CharPtr title = StringSave(BioseqGetTitle(query_bsp));
+         if (title) {
+            new_hit->id1 = StringTokMT(title, " ", &title);
+         } else {
+            Int4 query_gi;
+            Boolean numeric_query_id =
+                GetAccessionFromSeqId(query_bsp->id, &query_gi,
+                                      &new_hit->id1);
+            if (numeric_query_id) {
+                new_hit->id1 = Malloc(10);
+                sprintf(new_hit->id1, "%d", query_gi);
+            }
+         }  
+         BioseqUnlock(query_bsp);
+      } else {
+          new_hit->id1 = (CharPtr) Malloc(BUFFER_LENGTH + 1);
+          SeqIdWrite(SeqIdFindBestAccession(query_id), new_hit->id1,
+                     PRINTID_TEXTID_ACC_VER, BUFFER_LENGTH);
+      }
+      query_length = search->query_context_offsets[context+1] -
+         search->query_context_offsets[context] - 1;
+      if (context & 1) {
+	 new_hit->query_end = query_length - hsp->query.offset;
+	 new_hit->query_offset = 
+	    new_hit->query_end - hsp->query.length + 1;
+      } else {
+         new_hit->query_offset = hsp->query.offset + 1;
+	 new_hit->query_end = new_hit->query_offset + hsp->query.length - 1;
+      }
+
+      new_hit->subject_offset = hsp->subject.offset + 1;
+      new_hit->subject_end = hsp->subject.end;
+      
+      if (search->pbp->gap_open==0 && search->pbp->gap_extend==0)
+	 new_hit->score = ((hsp->subject.length + hsp->query.length)*
+		   search->sbp->reward / 2 - hsp->score) / 
+	    (search->sbp->reward - search->sbp->penalty);
+      else 
+	 new_hit->score = hsp->score;
+      if (last_hit == NULL) {
+         last_hit = new_hit;
+         mb_results = MemNew(sizeof(MegaBlastResults));
+         mb_results->mbhits = last_hit;
+         search->mb_endpoint_results->data.ptrvalue = mb_results;
+      } else {
+         last_hit->next = new_hit;
+         last_hit = last_hit->next;
+      }
+   }
+}
+
 Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
 {
     SeqAlignPtr  seqalign = NULL;
@@ -535,28 +703,32 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
     BlastPruneSapStructPtr prune;
     SeqAlignPtr PNTR seqalignp = NULL;
     Boolean is_megablast, done = FALSE, all_done = FALSE;
-    SeqLocPtr query_slp;
+    SeqLocPtr query_slp, query_lcase_mask, lcase_mask;
     Int4 index;
     AsnIoPtr xml_aip;
+    MegaBlastResultsPtr mb_results = NULL;
+    BLAST_OptionsBlkPtr options = theInfo->options;
 
     if(theInfo == NULL)
 	return FALSE;
     
-    is_megablast = theInfo->options->is_megablast_search;
+    is_megablast = options->is_megablast_search;
 
     query_slp = theInfo->query_slp;
+    lcase_mask = query_lcase_mask = options->query_lcase_mask;
 
-    if(!theInfo->xml_output) {
+    if(!theInfo->xml_output && 
+       !(is_megablast && options->no_traceback)) {
         PrintDbInformation(theInfo->database, !theInfo->db_is_na, 
                            70, stdout, TRUE);
     }
 
-    if(theInfo->options->entrez_query != NULL && 
+    if(options->entrez_query != NULL && 
        theInfo->gi_list_total > 0) {
 
         printf("Your search was limited by an Entrez query: '%s'\n"
                "<!-- %d sequences-->\n<P>\n",
-               theInfo->options->entrez_query, 
+               options->entrez_query, 
                theInfo->gi_list_total);
     }
     
@@ -565,7 +737,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
     
     if(theInfo->xml_output)
        xml_aip = AsnIoOpen("stdout", "wx");
-
+    
     while (!all_done) { /* Loop on complete BLAST searches */
         if (!query_slp || is_megablast)
             all_done = TRUE;
@@ -573,15 +745,31 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         other_returns = NULL;
         error_returns = NULL;
         
+        if(!theInfo->xml_output)
+            printf("</PRE>\n");
+
         if (!is_megablast) {
+            if (SeqIdComp(SeqLocId(lcase_mask), SeqLocId(query_slp)) == 
+                SIC_YES) {
+                options->query_lcase_mask = (SeqLocPtr) ValNodeNew(NULL);
+                MemCpy(options->query_lcase_mask, lcase_mask, sizeof(SeqLoc));
+                options->query_lcase_mask->next = NULL;
+                lcase_mask = lcase_mask->next;
+            }
             if (query_slp) {
-                seqalign = BioseqBlastEngineByLocEx(query_slp, theInfo->program, theInfo->database, theInfo->options, &other_returns, &error_returns, tick_callback, NULL, theInfo->gi_list, theInfo->gi_list_total);
+                seqalign = BioseqBlastEngineByLocEx(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total);
             } else {
-                seqalign = BioseqBlastEngineEx(theInfo->fake_bsp, theInfo->program, theInfo->database, theInfo->options, &other_returns, &error_returns, tick_callback, NULL, theInfo->gi_list, theInfo->gi_list_total);
+                seqalign = BioseqBlastEngineEx(theInfo->fake_bsp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total);
             }
         } else {
-            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, theInfo->options, &other_returns, &error_returns, tick_callback, NULL, theInfo->gi_list, theInfo->gi_list_total, NULL);
+           if (options->no_traceback)
+            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total, AppendMegaBlastHit);
+           else
+            seqalignp = BioseqMegaBlastEngineByLoc(query_slp, theInfo->program, theInfo->database, options, &other_returns, &error_returns, WWWTickCallback, NULL, theInfo->gi_list, theInfo->gi_list_total, NULL);
         }
+
+        if(!theInfo->xml_output)
+            printf("<PRE>");
         
         BlastErrorPrint(error_returns);
         
@@ -621,15 +809,38 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                 if (!is_megablast)
                     ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
                 break;
+            case BlastResponse_mbalign:
+               mb_results = (MegaBlastResultsPtr) vnp->data.ptrvalue;
+               break;
             default:
                 break;
             }
         }	
         
-        
         fflush(stdout);
         
-        done = FALSE;
+        if (mb_results) {
+           /* Results come as alignment endpoints only from Mega BLAST */
+           MegaBlastHitPtr mb_hit = mb_results->mbhits, next_hit;
+           SeqIdPtr sid, qid;
+           CharPtr query_buffer, subject_buffer;
+           Int4 subject_gi;
+           
+           
+           while (mb_hit) {
+              fprintf(stdout, "%s\t%s\t%d\t%d\t%d\t%d\t%d\n", mb_hit->id1,
+                      mb_hit->id2, mb_hit->query_offset, mb_hit->subject_offset,
+                      mb_hit->query_end, mb_hit->subject_end, mb_hit->score);
+              next_hit = mb_hit->next;
+              MemFree(mb_hit->id1);
+              MemFree(mb_hit->id2);
+              MemFree(mb_hit);
+              mb_hit = next_hit;
+           }
+           MemFree(mb_results);
+           done = TRUE;
+        } else
+           done = FALSE;
         
         for (index=0; !done; index++) {
             if (is_megablast)
@@ -639,7 +850,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             if (seqalign) {
                 if(theInfo->xml_output) {
                     /* printf("<XM>"); */
-                   BXMLPrintOutput(xml_aip, seqalign, theInfo->options, 
+                   BXMLPrintOutput(xml_aip, seqalign, options, 
                                    theInfo->program, theInfo->database, 
                                    theInfo->fake_bsp, other_returns, 0, 0, NULL);
                    AsnIoReset(xml_aip);
@@ -715,7 +926,7 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                         }
                     } else {
 
-                        if(theInfo->options->is_ooframe) {
+                        if(options->is_ooframe) {
                             printf("<PRE>");
                             OOFShowBlastAlignment(seqalign, /*mask*/ NULL,
                                                   stdout, theInfo->align_options, txmatrix);
@@ -735,8 +946,36 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                     ObjMgrClearHold();
                     ObjMgrFreeCache(0);
                 }
-            } else if (!is_megablast) {
-                fprintf(stdout, "\n\n ***** No hits found ******\n\n");
+            } else if (!is_megablast) { /* while(seqalign) */
+                /* seqalign == NULL */
+        
+                if(theInfo->xml_output && !options->is_ooframe) {
+                    BlastErrorMsgPtr error_msg;
+                    CharPtr message;
+                    
+                    if (error_returns == NULL) {
+                        message = "No hits found";
+                    } else {
+                        error_msg = error_returns->data.ptrvalue;
+                        message = error_msg->msg;
+                    }
+                    
+                    BXMLPrintOutput(xml_aip, NULL, 
+                                    options, theInfo->program, 
+                                    theInfo->database, 
+                                    theInfo->fake_bsp, other_returns, 
+                                    0, message);
+                    
+                    if (error_returns != NULL) {
+                        MemFree(error_msg->msg);
+                        MemFree(error_msg);
+                        MemFree(error_returns);
+                    }
+                    
+                    AsnIoReset(xml_aip);
+                } else {
+                    fprintf(stdout, "\n\n ***** No hits found ******\n\n");
+                }
             }
             
             if (is_megablast) { 
@@ -753,7 +992,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
             txmatrix = (Int4Ptr PNTR) TxMatrixDestruct(txmatrix);
         
         dbinfo_head = dbinfo;
-        if(!theInfo->xml_output) {        
+        if(!theInfo->xml_output && 
+           !(is_megablast && options->no_traceback)) {        
             fprintf(stdout, "<PRE>");
             init_buff_ex(85);
             while (dbinfo) {
@@ -765,22 +1005,25 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
         dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
         
         if (ka_params) {
-            if(!theInfo->xml_output) {        
-                PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70,
-                                  stdout, FALSE);
+            if(!theInfo->xml_output && 
+               !(is_megablast && options->no_traceback)) {        
+                PrintKAParameters(ka_params->Lambda, ka_params->K, 
+                                  ka_params->H, 70, stdout, FALSE);
             }
             MemFree(ka_params);
         }
         
         if (ka_params_gap) {
-            if(!theInfo->xml_output) {        
+            if(!theInfo->xml_output && 
+               !(is_megablast && options->no_traceback)) {        
                 PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K,
                                   ka_params_gap->H, 70, stdout, TRUE);
             }
             MemFree(ka_params_gap);
         }
         
-        if(!theInfo->xml_output) {        
+        if(!theInfo->xml_output && 
+           !(is_megablast && options->no_traceback)) {        
             
             PrintTildeSepLines(params_buffer, 70, stdout);
             
@@ -823,6 +1066,8 @@ Boolean WWWBlastDoSearch(WWWBlastInfoPtr theInfo)
                 all_done = TRUE;
         }
     } /* End of loop over all searches */
+
+    SeqLocSetFree(query_lcase_mask);
 
     if (theInfo->xml_output)
        AsnIoClose(xml_aip);

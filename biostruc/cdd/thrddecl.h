@@ -1,4 +1,4 @@
-/* $Id: thrddecl.h,v 1.5 2000/09/22 22:31:33 hurwitz Exp $
+/* $Id: thrddecl.h,v 1.12 2001/03/02 23:14:12 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,34 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.5 $
+* $Revision: 1.12 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrddecl.h,v $
+* Revision 1.12  2001/03/02 23:14:12  hurwitz
+* run threading faster for PSSM weight=1, bug fix
+*
+* Revision 1.11  2001/01/16 17:17:58  hurwitz
+* changed Int4s to ints, added PrintSeqMtf
+*
+* Revision 1.10  2000/12/20 18:56:41  hurwitz
+* new random num gen, more debug printing
+*
+* Revision 1.9  2000/12/14 21:07:58  hurwitz
+* adding debugging routines, scaling-factor fixes
+*
+* Revision 1.8  2000/12/06 23:36:50  hurwitz
+* sort the results by score in atd
+*
+* Revision 1.7  2000/12/05 20:52:21  hurwitz
+* put threading results in order
+*
+* Revision 1.6  2000/11/02 20:54:16  hurwitz
+* added options for z-score calculations, fixed initialization prob
+*
 * Revision 1.5  2000/09/22 22:31:33  hurwitz
 * added memory management of ThdTbl (results structure)
 *
@@ -57,12 +78,15 @@
 #if !defined(THRDDECL_H)
 #define THRDDECL_H
 
+#include <stdio.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 int atd(Fld_Mtf* mtf, Cor_Def* cdf, Qry_Seq* qsq, Rcx_Ptl* pmf,
-        Gib_Scd* gsp, Thd_Tbl* ttb, Seq_Mtf* psm, float* trg);
+        Gib_Scd* gsp, Thd_Tbl* ttb, Seq_Mtf* psm, float* trg, int zscs,
+        double ScalingFactor, float PSSM_Weight);
 
 int cprl(Fld_Mtf* mtf, Cor_Def* cdf, Rcx_Ptl* pmf, Cxl_Los** cpr, int ct);
 
@@ -74,6 +98,7 @@ int slo0(Fld_Mtf* mtf, Cor_Def* cdf, Qry_Seq* qsq, Cur_Loc* sli,
          int cs, int ct, int* mn, int* mx);
 
 int rsmp(Rnd_Smp* pvl);
+float Rand01(int* idum);
 
 int sal0(Cor_Def* cdf, Qry_Seq* qsq, Cur_Loc* sli, Cur_Aln* sai,
          int cs, int* mn, int* mx);
@@ -115,7 +140,8 @@ int slou(Fld_Mtf* mtf, Cor_Def* cdf, int cs, int ct, int of, Cur_Loc* sli);
 float bwfi(Thd_Tbl* ttb, Gib_Scd* gsp, Thd_Tst* tts);
 
 float zsc(Thd_Tbl* ttb, Seq_Mtf* psm, Qry_Seq* qsq, Cxl_Los** cpr,
-          Cor_Def* cdf, Rcx_Ptl* pmf, Seg_Gsm* spe, Cur_Aln* sai, Rnd_Smp* pvl);
+          Cor_Def* cdf, Rcx_Ptl* pmf, Seg_Gsm* spe, Cur_Aln* sai, Rnd_Smp* pvl,
+          double ScalingFactor);
 
 int g(Seg_Gsm* spe, Seq_Mtf* psm, Thd_Gsm* tdg, Seg_Cmp* spc);
 
@@ -126,12 +152,15 @@ float dgri(Seg_Gsm* spe, Seg_Nsm* spn, Thd_Cxe* cxe, Thd_Gsm* tdg,
 
 Cor_Def*  NewCorDef(int NumBlocks);
 Cor_Def*  FreeCorDef(Cor_Def* cdf);
+void      PrintCorDef(Cor_Def* cdf, FILE* pFile);
 
 Seq_Mtf*  NewSeqMtf(int NumResidues, int AlphabetSize);
 Seq_Mtf*  FreeSeqMtf(Seq_Mtf* psm);
+void      PrintSeqMtf(Seq_Mtf* psm, FILE* pFile);
 
 Qry_Seq*  NewQrySeq(int NumResidues, int NumBlocks);
 Qry_Seq*  FreeQrySeq(Qry_Seq* qsq);
+void      PrintQrySeq(Qry_Seq* qsq, FILE* pFile);
 
 Rcx_Ptl*  NewRcxPtl(int NumResTypes, int NumDistances, int PeptideIndex);
 Rcx_Ptl*  FreeRcxPtl(Rcx_Ptl* pmf);
@@ -141,9 +170,16 @@ Gib_Scd*  FreeGibScd(Gib_Scd* gsp);
 
 Fld_Mtf*  NewFldMtf(int NumResidues, int NumResResContacts, int NumResPepContacts);
 Fld_Mtf*  FreeFldMtf(Fld_Mtf* mtf);
+void      PrintFldMtf(Fld_Mtf* mtf, FILE* pFile);
 
 Thd_Tbl*  NewThdTbl(int NumResults, int NumCoreElements);
 Thd_Tbl*  FreeThdTbl(Thd_Tbl* ttb);
+void      OrderThdTbl(Thd_Tbl* pResults);
+int       CopyResult(Thd_Tbl* pFromResults, Thd_Tbl* pToResults, int from, int to);
+void      PrintThdTbl(Thd_Tbl* ttb, FILE* pFile);
+void      ScaleThdTbl(Thd_Tbl* ttb, double ScalingFactor);
+
+int       ThrdRound(double Num);
 
 #ifdef __cplusplus
 }

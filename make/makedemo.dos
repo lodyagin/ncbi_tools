@@ -50,6 +50,7 @@ GIL2BIN_EXE   = gil2bin.___
 TBL2ASN_EXE   = tbl2asn.___
 BLASTCLUST_EXE   = blastclust.___
 RPSBLAST_EXE	= rpsblast.___
+ASN2XML_EXE   = asn2xml.___
 !endif
 
 
@@ -87,7 +88,8 @@ $(VECSCREEN_EXE) \
 $(GIL2BIN_EXE) \
 $(TBL2ASN_EXE) \
 $(BLASTCLUST_EXE) \
-$(RPSBLAST_EXE)
+$(RPSBLAST_EXE) \
+$(ASN2XML_EXE)
 
 
 ##################################################
@@ -496,6 +498,18 @@ $(INCLUDE_GEN)
 TEST_NAME = rpsblast
 TEST_OBJ = rpsblast.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef ASN2XML_EXE
+$(ASN2XML_EXE):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+TEST_NAME = asn2xml
+TEST_OBJ = asn2xml.obj
+TEST_LIB = $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
 <<

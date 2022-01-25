@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.27 $
+* $Revision: 6.28 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -312,7 +312,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
   Char     buf[256], 
            buf3[64],
            string1[64],
-           string2[252];
+           string2[552];
   GatherContextPtr gcp;
   Int4     pos;
 
@@ -1956,6 +1956,17 @@ static void ValidateSeqAlignInAnnot (SeqAnnotPtr sap, SaValPtr svp)
   }
 }
 
+static void ValidateSeqAlignInHist (SeqHistPtr hist, SaValPtr svp)
+
+{
+  SeqAlignPtr  salp;
+
+  if (hist == NULL) return;
+  for (salp = hist->assembly; salp != NULL; salp = salp->next) {
+    ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
+  }
+}
+
 static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
 {
@@ -1969,6 +1980,7 @@ static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp!=NULL) {
            ValidateSeqAlignInAnnot (bsp->annot, svp);
+           ValidateSeqAlignInHist (bsp->hist, svp);
         }
      }   
      else if(IS_Bioseq_set(sep)) {
@@ -2031,6 +2043,8 @@ NLM_EXTERN Boolean ValidateSeqAlignWithinValidator (ValidStructPtr vsp, SeqEntry
   useValErr = TRUE;
   useVsp = vsp;
   vsp->gcp = &gc;
+  vsp->sfp = NULL;
+  vsp->descr = NULL;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
   rsult = ValidateSeqAlignInSeqEntry (sep, FALSE, FALSE, TRUE, FALSE, FALSE);
   useLockByID = TRUE;

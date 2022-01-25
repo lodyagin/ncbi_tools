@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.65 2000/10/27 19:14:40 madden Exp $
+/* $Id: blastall.c,v 6.87 2001/04/02 13:52:15 madden Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,72 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.87  2001/04/02 13:52:15  madden
+ * Fix for last checkin, properly suppress some options
+ *
+ * Revision 6.85  2001/03/19 22:39:24  dondosha
+ * Allow location on the first query sequence for megablast
+ *
+ * Revision 6.84  2001/03/13 21:58:23  madden
+ * add support for multiple hits blastn, add option for window size
+ *
+ * Revision 6.83  2001/02/22 20:26:03  dondosha
+ * If location stop is -1, make it end of sequence
+ *
+ * Revision 6.82  2001/02/22 20:11:58  dondosha
+ * Previous change reversed; added option to set location on query sequence
+ *
+ * Revision 6.81  2001/02/22 16:16:43  shavirin
+ * Added options for required start and required stop of the query to be
+ * used in the Blast search.
+ *
+ * Revision 6.80  2001/02/22 15:38:48  dondosha
+ * Corrected the argument number for longest intron length
+ *
+ * Revision 6.79  2001/02/09 22:22:36  madden
+ * Do not use BlastPruneHitsFromSeqAlign for printing DefLines
+ *
+ * Revision 6.78  2001/02/08 20:41:17  dondosha
+ * Implemented tabulated output for all translated programs
+ *
+ * Revision 6.77  2001/02/07 21:17:22  dondosha
+ * Added support to produce tabulated output (-m 8 option)
+ *
+ * Revision 6.76  2001/01/19 20:03:47  dondosha
+ * Uninitialized variable seqannot caused core dump with XML output
+ *
+ * Revision 6.75  2000/12/19 18:40:47  madden
+ * Add calls to BlastSetUserErrorString and BlastDeleteUserErrorString
+ *
+ * Revision 6.74  2000/12/15 21:32:12  dondosha
+ * Appended getargs explanation of new tblastn (-t) option
+ *
+ * Revision 6.73  2000/11/21 15:47:21  dondosha
+ * Corrected default wordsize for megablast option
+ *
+ * Revision 6.72  2000/11/17 21:56:26  dondosha
+ * Do not free query_lcase_mask in client-server case - already freed
+ *
+ * Revision 6.71  2000/11/17 20:56:50  dondosha
+ * Returned Mega BLAST option which existed in blastcl3 and was removed
+ *
+ * Revision 6.70  2000/11/17 17:54:50  dondosha
+ * Added argument to allow greedy (a la Mega BLAST) extension in blastn
+ *
+ * Revision 6.69  2000/11/15 15:10:27  shavirin
+ * This revision is result of merge between blastall.c and blastcl3.c
+ * programs. Using define BLAST_CS_API - client/server version may be
+ * created.
+ *
+ * Revision 6.68  2000/11/09 15:01:00  dondosha
+ * Set longest intron length in options in nucleotide coordinates
+ *
+ * Revision 6.67  2000/11/08 22:24:07  dondosha
+ * Enabled new tblastn by adding longest intron option
+ *
+ * Revision 6.66  2000/11/01 16:26:50  madden
+ * Changes from Futamura for psitblastn
+ *
  * Revision 6.65  2000/10/27 19:14:40  madden
  * Change description of -b option
  *
@@ -262,6 +328,11 @@
 #include <gapxdrop.h>
 #include <sqnutils.h>
 #include <xmlblast.h>
+#include <mblast.h>
+#ifdef BLAST_CS_API
+#include <objblst3.h>
+#include <netblap3.h>
+#endif
 
 #define DEFLINE_BUF 255
 
@@ -273,18 +344,33 @@ FILE *global_fp=NULL;
 	portability issues.
 */
 
+#ifdef BLAST_CS_API
+static  Boolean LIBCALLBACK
+tick_callback (BlastResponsePtr brp, Boolean PNTR cancel)
+{
+    
+#if 0
+    fprintf(global_fp, ".");
+    fflush(global_fp);
+#endif
+
+    return TRUE;    
+}
+
+#else
 static int LIBCALLBACK
 tick_callback(Int4 sequence_number, Int4 number_of_positive_hits)
 
 {
-
 #ifdef OS_UNIX
-
-	fprintf(global_fp, "%s", ".");
-	fflush(global_fp);
+    /* #ifndef BLAST_CS_API */
+    fprintf(global_fp, "%s", ".");
+    fflush(global_fp);
+    /* #endif */
 #endif
-	return 0;
+    return 0;
 }
+#endif
 
 static Int2
 BlastGetMaskingLoc(FILE *infp, FILE *outfp, CharPtr instructions)
@@ -406,7 +492,7 @@ static Args myargs [] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output,\n8 = tab-delimited fields", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -458,19 +544,83 @@ static Args myargs [] = {
       "3", NULL, NULL, FALSE, 'S', ARG_INT, 0.0, 0, NULL},
     { "Produce HTML output",    /* 29 */
       "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
-    { "Restrict search of database to list of GI's", /* 30 */
+#ifdef BLAST_CS_API
+    { "Restrict search of database to results of Entrez2 lookup", /* 30 */
+      NULL, NULL, NULL, TRUE, 'u', ARG_STRING, 0.0, 0, NULL},
+#else
+    { "Restrict search of database to list of GI's",              /* 30 */
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
+#endif
     {"Use lower case filtering of FASTA sequence", /* 31 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
     { "Dropoff (X) for blast extensions in bits (0.0 invokes default behavior)", /* 32 */
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
     { "X dropoff value for final gapped alignment (in bits)", /* 33 */
       "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
-#ifdef OOF_ALIGNMENT
-    { "Frame shift penalty (OOF algorithm for blastx)", /* 34 */
+#ifdef BLAST_CS_API
+    { "RPS Blast search",            /* 34 */
+      "F", NULL, NULL, FALSE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
+#else
+    { "PSI-TBLASTN checkpoint file", /* 34 */
+      NULL, NULL, NULL, TRUE, 'R', ARG_FILE_IN, 0.0, 0, NULL},
+#endif
+    { "MegaBlast search",       /* 35 */
+      "F", NULL, NULL, FALSE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Location on query sequence",/* 36 */
+      NULL, NULL, NULL, TRUE, 'L', ARG_STRING, 0.0, 0, NULL},
+    { "Multiple Hits window size (zero for single hit algorithm)", /* 37 */
+      "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL}
+#ifdef DO_NOT_SUPPRESS_BLAST_OP
+    { "Frame shift penalty (OOF algorithm for blastx)", /* 38 */
       "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL},
+    { "Length of the largest intron allowed in tblastn for linking HSPs (0 disables linking)", /* 39 */
+      "0", NULL, NULL, FALSE, 't', ARG_INT, 0.0, 0, NULL}, 
 #endif
 };
+
+#ifdef BLAST_CS_API
+BlastNet3Hptr BNETInitializeBlast(CharPtr database, CharPtr program, 
+                                  FILE *outfp, Boolean db_is_na,
+                                  Boolean is_rps_blast, Boolean html)
+{
+    BlastNet3Hptr    bl3hp;
+    BlastResponsePtr response = NULL;
+    BlastVersionPtr	blast_version;
+
+    if (! BlastInit("blastcl3", &bl3hp, &response)) {
+        ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
+        return NULL;
+    }
+    if (response && response->choice == BlastResponse_init) {
+        blast_version = response->data.ptrvalue;
+    } else {
+        ErrPostEx(SEV_FATAL, 0, 0, "Unable to connect to the BLAST service");
+        return NULL;
+    }
+    
+    BlastNetBioseqFetchEnable(bl3hp, database, db_is_na, TRUE);
+    
+    if(is_rps_blast == TRUE)
+        BlastPrintVersionInfoEx("RPS-BLAST", html, blast_version->version, 
+                                blast_version->date, outfp);
+    
+    else {
+	init_buff_ex(90);
+        BlastPrintVersionInfoEx(program, html, blast_version->version, 
+                                blast_version->date, outfp);
+        fprintf(outfp, "\n");
+        BlastPrintReference(html, 80, outfp);
+	free_buff();
+    }
+
+    BlastResponseFree(response);
+
+    return bl3hp;
+}
+#endif
+
+/* Needed for Mega BLAST only */
+#define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
 
 Int2 Main (void)
  
@@ -488,19 +638,38 @@ Int2 Main (void)
     CharPtr params_buffer=NULL;
     Int4 number_of_descriptions, number_of_alignments;
     SeqAlignPtr  seqalign;
-    SeqAnnotPtr seqannot;
+    SeqAnnotPtr seqannot = NULL;
     SeqEntryPtr sep;
     TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
-    Uint1 align_type, align_view;
+    Uint1 align_type, align_view, err_ticket;
     Uint4 align_options, print_options;
     ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
-    
     CharPtr blast_program, blast_database, blast_inputfile, blast_outputfile;
     FILE *infp, *outfp;
+    /* Mega BLAST related variables */
+    SeqAlignPtr sap, next_seqalign, PNTR seqalignp;
+    Int4 num_bsps, index;
+    SeqLocPtr last_mask, mask_slp, slp = NULL, tmp_slp;
+    Int2 ctr = 1;
+    Char prefix[2];
+    Boolean done = TRUE;
+    int (LIBCALLBACK *handle_results)(VoidPtr srch);       
+    Int4 from = 0, to = -1;
+
+#ifdef BLAST_CS_API
+    BlastNet3Hptr    bl3hp;
+    Boolean status;
+#endif
     
+#ifdef BLAST_CS_API
+    if (! GetArgs ("blastcl3", NUMARG, myargs)) {
+        return (1);
+    }
+#else    
     if (! GetArgs ("blastall", NUMARG, myargs)) {
         return (1);
     }
+#endif
     
     UseLocalAsnloadDataAndErrMsg ();
     
@@ -510,9 +679,20 @@ Int2 Main (void)
     ErrSetMessageLevel(SEV_WARNING);
     
     blast_program = myargs [0].strvalue;
+
+#ifdef BLAST_CS_API
+    /* For RPS Blast - anything not "blastp" - is "tblastn" */    
+    if(myargs[34].intvalue) {
+        if(StringICmp(blast_program, "blastp")) {
+            StringCpy(blast_program, "blastx");
+        }
+    }
+#endif
+
     blast_database = myargs [1].strvalue;
     blast_inputfile = myargs [2].strvalue;
     blast_outputfile = myargs [5].strvalue;
+
     if (myargs[29].intvalue)
         html = TRUE;
     
@@ -539,7 +719,7 @@ Int2 Main (void)
     
     align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
 
-    if(align_view != 7) {
+    if(align_view < 7) {
         if (StringICmp("blastx", blast_program) == 0) {
             if (align_view != 0) {
                 ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with blastx");
@@ -564,7 +744,27 @@ Int2 Main (void)
     options = BLASTOptionNew(blast_program, (Boolean) myargs [16].intvalue);
     if (options == NULL)
         return 3;
+
+#ifdef BLAST_CS_API
+    if(myargs[34].intvalue) 
+        options->is_rps_blast = TRUE;
+#endif
+    options->is_megablast_search = (Boolean) myargs[35].intvalue;
     
+    if (options->is_megablast_search) {
+       options->wordsize = 28;
+       options->block_width = 0;
+    }
+    
+    if (align_view == 8) {
+       options->output = (VoidPtr) outfp;
+       if (options->is_megablast_search)
+          handle_results = MegaBlastPrintAlignInfo;
+       else
+          handle_results = BlastPrintAlignInfo;
+    } else 
+       handle_results = NULL;
+
     BLASTOptionSetGapParams(options, myargs[22].strvalue, 0, 0); 
     options->expect_value  = (Nlm_FloatHi) myargs [3].floatvalue;
     number_of_descriptions = myargs[13].intvalue;	
@@ -589,6 +789,16 @@ Int2 Main (void)
             options->two_pass_method  = TRUE;
             options->multiple_hits_only  = FALSE;
     	}
+    }
+    else
+    { /* Reverse these for blastn for now. */
+        if (myargs[26].intvalue == 1) {
+            options->two_pass_method  = FALSE;
+            options->multiple_hits_only  = TRUE;
+        } else if (myargs[26].intvalue == 0) {
+            options->two_pass_method  = FALSE;
+            options->multiple_hits_only  = FALSE;
+        }
     }
 
     if(myargs[33].intvalue != 0) 
@@ -617,8 +827,16 @@ Int2 Main (void)
     options->genetic_code = myargs[17].intvalue;
     options->db_genetic_code = myargs[18].intvalue;
     options->number_of_cpus = myargs[19].intvalue;
-    if (myargs[23].intvalue != 0)
+    if (myargs[23].intvalue != 0) {
         options->wordsize = myargs[23].intvalue;
+    }
+    
+    if (options->is_megablast_search) {
+       options->cutoff_s2 = options->wordsize;
+       options->wordsize += 4;
+       options->cutoff_s = options->wordsize;
+    }
+
     if (myargs[24].floatvalue != 0)
         options->db_length = (Int8) myargs[24].floatvalue;
     
@@ -635,7 +853,9 @@ Int2 Main (void)
         if(options->dropoff_1st_pass > options->dropoff_2nd_pass)
             options->dropoff_1st_pass = options->dropoff_2nd_pass;
     }
-    
+
+    options->window_size = myargs [37].intvalue;
+
     print_options = 0;
     align_options = 0;
     align_options += TXALIGN_COMPRESS;
@@ -667,28 +887,41 @@ Int2 Main (void)
         align_options += TXALIGN_HTML;
         print_options += TXALIGN_HTML;
     }
-    
+
+#ifdef BLAST_CS_API
+    if(myargs[30].strvalue)
+        options->entrez_query = StringSave(myargs[30].strvalue);
+#else    
     if (myargs[30].strvalue) {
         options->gifile = StringSave(myargs[30].strvalue);
     }
+#endif
     
-    options->is_megablast_search = FALSE;
-
-#ifdef OOF_ALIGNMENT
-
     /* 
-       Out-of-frame option is valid only for blastx and tblastn searches
+       Out-of-frame option is valid only for blastx, tblastn and 
+       psitblastnsearches
     */
 
-    if(myargs[34].intvalue > 0) {
-        if (!StringICmp("blastx", blast_program)) {
-            options->is_ooframe = TRUE;
-            options->shift_pen = myargs[34].intvalue;
+#ifdef DO_NOT_SUPPRESS_BLAST_OP
+    if(myargs[38].intvalue > 0) {
+        if (!StringICmp("blastx", blast_program) || 
+            !StringICmp("tblastn", blast_program)||
+	    !StringICmp("psitblastn", blast_program)) {
+           if (!StringICmp("blastx", blast_program)) {
+              options->is_ooframe = TRUE;
+              options->shift_pen = myargs[38].intvalue;
+           }
         }
     }
-    
 #endif
         
+#ifdef DO_NOT_SUPPRESS_BLAST_OP
+    /* Input longest intron length is in nucleotide scale; in the lower level
+       code it will be used in protein scale */
+    if (myargs[39].intvalue > 0) 
+       options->longest_intron = MAX(myargs[39].intvalue, MAX_INTRON_LENGTH);
+#endif
+
     aip = NULL;
     if (myargs[20].strvalue != NULL) {
         if ((aip = AsnIoOpen (myargs[20].strvalue,"w")) == NULL) {
@@ -697,81 +930,256 @@ Int2 Main (void)
         }
     }
 
-    if(align_view != 7) {
+    if(align_view < 7) {
        if (html) {
           fprintf(outfp, "<HTML>\n<TITLE>BLAST Search Results</TITLE>\n");
           fprintf(outfp, "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
                   "VLINK=\"#660099\" ALINK=\"#660099\">\n");
           fprintf(outfp, "<PRE>\n");
        }
-    } else      
+    } else if (align_view == 7)     
        xml_aip = AsnIoOpen(blast_outputfile, "wx");
 
-    while (TRUE) {
-        if(myargs[31].intvalue) {
-            sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
-       
-        } else {
-            sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query);
-        }
-        
-        if(sep == NULL)
-            break;
-        
-        query_bsp = NULL;
-        if (query_is_na) {
-            SeqEntryExplore(sep, &query_bsp, FindNuc);
-        } else {
-            SeqEntryExplore(sep, &query_bsp, FindProt);
-        }
-        
-        if (query_bsp == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
-            return 2;
-        }
-        
-        if(believe_query)
-            fake_bsp = query_bsp;
-        else 
-            fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
-        
-        /* If fake_bsp created mask should be updated to use it's id */
-        BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, fake_bsp->id);
-        
-        source = BioSourceNew();
-        source->org = OrgRefNew();
-        source->org->orgname = OrgNameNew();
-        source->org->orgname->gcode = options->genetic_code;
-        ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
-        
-        global_fp = outfp;
 
-        if(align_view != 7) {
+                  /* Futamura: Setting up the psitblastn options */
+#ifndef BLAST_CS_API
+    if (NULL != myargs[34].strvalue) {
+          options->recoverCheckpoint = TRUE;
+          options->freqCheckpoint = TRUE;
+    }
+    options->CheckpointFileName=myargs[34].strvalue;
+#endif
+
+#ifdef BLAST_CS_API
+    bl3hp = BNETInitializeBlast(blast_database, blast_program, outfp, 
+                                db_is_na, options->is_rps_blast, html);
+#else
+    ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
+#endif
+    
+    /* --- Main loop over all FASTA entries in the input file ---- */
+
+    if (myargs[36].strvalue) {       
+        CharPtr delimiters = " ,;";
+        CharPtr location;
+        location = myargs[36].strvalue;
+        from = atoi(StringTokMT(location, delimiters, &location)) - 1;
+        to = atoi(location) - 1;
+        from = MAX(from, 0);
+    }
+
+    while (TRUE) {
+       if (options->is_megablast_search) {
+          StrCpy(prefix, "");
+          slp = NULL;
+	  num_bsps = 0;
+          done = TRUE;
+	  SeqMgrHoldIndexing(TRUE);
+	  mask_slp = last_mask = NULL;
+	  while ((sep=FastaToSeqEntryForDb(infp, query_is_na, NULL,
+					   believe_query, prefix, &ctr, 
+					   &mask_slp)) != NULL) {
+	     
+	     if (mask_slp) {
+		if (!last_mask)
+		   options->query_lcase_mask = last_mask = mask_slp;
+		else {
+		   last_mask->next = mask_slp;
+		   last_mask = last_mask->next;
+		}
+		mask_slp = NULL;
+	     }
+	     query_bsp = NULL;
+	     if (query_is_na) 
+		SeqEntryExplore(sep, &query_bsp, FindNuc);
+	     else
+		SeqEntryExplore(sep, &query_bsp, FindProt);
+	     
+	     if (query_bsp == NULL) {
+		ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		return 2;
+	     }
+	     
+             /* Only for the first query */
+             if (num_bsps == 0) {
+                 to = MIN(to, query_bsp->length - 1);
+                 
+                 /* -1 means end of sequence */
+                 if (to < 0)
+                     to = query_bsp->length - 1;
+                 if (from >= query_bsp->length || to < 0) {
+                     ErrPostEx(SEV_FATAL, 0, 0, 
+                               "Location outside of the query sequence range\n");
+                     return 3;
+                 }
+                 slp = SeqLocIntNew(from, to, options->strand_option, 
+                                    SeqIdFindBest(query_bsp->id, SEQID_GI));
+             } else 
+                 ValNodeAddPointer(&slp, SEQLOC_WHOLE,
+                                   SeqIdDup(SeqIdFindBest(query_bsp->id,
+                                                          SEQID_GI)));
+	     num_bsps++;
+	     if (num_bsps >= MAX_NUM_QUERIES) {
+                done = FALSE;
+		break;
+	     }
+	     /*sep = MemFree(sep);*/ /* Do not free the underlying Bioseq */
+	  }
+	  SeqMgrHoldIndexing(FALSE);
+          if (num_bsps == 0) 
+             break;
+       } else {
+          if(myargs[31].intvalue) {
+             sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
+             
+          } else {
+             sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query);
+          }
+          
+          if(sep == NULL)
+             break;
+          
+          query_bsp = NULL;
+          if (query_is_na) {
+             SeqEntryExplore(sep, &query_bsp, FindNuc);
+          } else {
+             SeqEntryExplore(sep, &query_bsp, FindProt);
+          }
+          
+          if (query_bsp == NULL) {
+             ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+             return 2;
+          }
+        
+          if(believe_query)
+             fake_bsp = query_bsp;
+          else 
+             fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
+
+	  err_ticket = BlastSetUserErrorString(NULL, query_bsp->id, believe_query);
+        
+          /* If fake_bsp created mask should be updated to use it's id */
+          BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, fake_bsp->id);
+        
+          source = BioSourceNew();
+          source->org = OrgRefNew();
+          source->org->orgname = OrgNameNew();
+          source->org->orgname->gcode = options->genetic_code;
+          ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
+       }
+
+       global_fp = outfp;
+          
+       if(align_view < 7) {
+#ifndef BLAST_CS_API
            init_buff_ex(90);
            BlastPrintVersionInfo(blast_program, html, outfp);
            fprintf(outfp, "\n");
            BlastPrintReference(html, 90, outfp);
            fprintf(outfp, "\n");
-            
-            AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+#else
+           fprintf(outfp, "\n");
+#endif            
+           if (!options->is_megablast_search)
+              AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
 
             /* Here we first check, that database do no exists */
 
-            if(!PrintDbInformation(blast_database, !db_is_na, 70, outfp, html))
+#ifndef BLAST_CS_API
+           if(!PrintDbInformation(blast_database, !db_is_na, 70, outfp, html))
                 return 1;
-            
+#else
+
+            {{
+                BlastDbinfoPtr dbinfo;
+                static Boolean not_first_time;
+
+                /* For CS version we will print database info ones to 
+                   decrease network traffic */                
+
+                if(!not_first_time) {
+                    dbinfo = BlastRequestDbInfo(bl3hp, blast_database, !db_is_na);
+                    if (dbinfo)
+                        PrintDbInformationBasic(blast_database, !db_is_na, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, outfp, html);
+                    dbinfo = BlastDbinfoFree(dbinfo);
+                    not_first_time = TRUE;
+                }
+            }}
+#endif    /* BLAST_CS_API */        
             free_buff();
         }
 #ifdef OS_UNIX
-        if(align_view != 7) {
+        if(align_view < 7) {
+#ifdef BLAST_CS_API
+            fprintf(global_fp, "%s", "Searching... please wait.. ");
+#else
             fprintf(global_fp, "%s", "Searching");
+#endif
         }
 #endif
         other_returns = NULL;
         error_returns = NULL;
-        
-        seqalign = BioseqBlastEngine(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, align_view != 7 ? tick_callback : NULL);
-        
+
+        if (options->is_megablast_search) {
+#ifdef BLAST_CS_API
+           seqalign = MegaBlastSeqLocNetCore(bl3hp, slp, blast_program, 
+                                   blast_database, options, 
+                                   &other_returns, &error_returns,
+                                   align_view < 7 ? tick_callback : NULL,
+                                   &status);
+#else
+           seqalignp = BioseqMegaBlastEngineByLoc(slp, blast_program,
+			           blast_database, options, &other_returns, 
+                                   &error_returns, 
+                                   align_view < 7 ? tick_callback : NULL,
+                                   NULL, NULL, 0, handle_results);
+           seqalign = NULL;
+	   for (index=0; index<num_bsps; index++) { 
+	      if (seqalignp[index]) {
+                 if (seqalign == NULL) 
+                    sap = seqalign = seqalignp[index];
+                 else
+                    sap->next = seqalignp[index];
+                 while (sap->next != NULL)
+                    sap = sap->next;
+              }
+           }
+           seqalignp = MemFree(seqalignp);
+#endif
+        } else if (!myargs[36].strvalue) {       
+#ifdef BLAST_CS_API
+           seqalign = BlastBioseqNetCore(bl3hp, fake_bsp, blast_program, 
+                                      blast_database, options,
+				      &other_returns, &error_returns,
+                                      align_view < 7 ? tick_callback : NULL,
+				      NULL, &status);
+#else
+           seqalign = BioseqBlastEngineWithCallback(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, handle_results);
+#endif
+        } else { /* Location on query provided */
+           to = MIN(to, fake_bsp->length - 1);
+           
+           /* -1 means end of sequence */
+           if (to < 0)
+              to = fake_bsp->length - 1;
+           if (from >= fake_bsp->length || to < 0) {
+              ErrPostEx(SEV_FATAL, 0, 0, 
+                        "Location outside of the query sequence range\n");
+              return 3;
+           }
+           slp = SeqLocIntNew(from, to, options->strand_option, 
+                              fake_bsp->id);
+#ifdef BLAST_CS_API
+           seqalign = BlastSeqLocNetCore(bl3hp, slp, blast_program, 
+                                         blast_database, options,
+                                         &other_returns, &error_returns,
+                                         align_view < 7 ? tick_callback : NULL,
+                                         NULL, &status);
+#else
+           seqalign = BioseqBlastEngineByLocWithCallback(slp, blast_program, blast_database, options, &other_returns, &error_returns, align_view < 7 ? tick_callback : NULL, NULL, NULL, 0, handle_results);
+#endif
+           
+        }
 #if 0
         seqalign = BLASTFilterOverlapRegions(seqalign, 0, !db_is_na, 
                                              options->is_ooframe, FALSE);
@@ -779,8 +1187,6 @@ Int2 Main (void)
         
         BlastErrorPrint(error_returns);
 
-        ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
-    
         dbinfo = NULL;
         ka_params = NULL;
         ka_params_gap = NULL;
@@ -827,39 +1233,72 @@ Int2 Main (void)
 #endif
         
 #ifdef OS_UNIX
-        if(align_view != 7) {
+        if(align_view < 7) {
             fprintf(global_fp, "%s", "done");
         }
 #endif
         
         ReadDBBioseqSetDbGeneticCode(options->db_genetic_code);
 
+        tmp_slp = slp;
         if (seqalign) {
-            if(align_view == 7 && !options->is_ooframe) {
-                BXMLPrintOutput(xml_aip, seqalign, 
-                                options, blast_program, blast_database, 
-                                fake_bsp, other_returns, 0, NULL);
-                AsnIoReset(xml_aip);
-                SeqAlignSetFree(seqalign);
-            } else {
-
-
-                seqannot = SeqAnnotNew();
-                seqannot->type = 2;
-                AddAlignInfoToSeqAnnot(seqannot, align_type);
-                seqannot->data = seqalign;
-                if (aip) {
+           while (seqalign) {
+              if (!options->is_megablast_search)
+                 next_seqalign = NULL;
+              else {
+                 DenseSegPtr dsp, next_dsp;
+                 BioseqPtr bsp;
+                 
+                 sap = seqalign;
+                 while (sap != NULL) { 
+                    if (sap->next != NULL) {
+                       dsp = (DenseSegPtr) (sap->segs);
+                       next_dsp = (DenseSegPtr) (sap->next->segs);
+                       
+                       if (SeqIdComp(dsp->ids, next_dsp->ids) != SIC_YES) {
+                          next_seqalign = sap->next;
+                          sap->next = NULL;
+                       }
+                    } else
+                       next_seqalign = NULL;
+                    sap = sap->next;
+                 }
+                 
+                 dsp = (DenseSegPtr) (seqalign->segs);
+                 while (tmp_slp && SeqIdComp(dsp->ids, SeqLocId(tmp_slp)) != SIC_YES)
+                    tmp_slp = tmp_slp->next;
+                 if (tmp_slp == NULL) /* Should never happen */
+                    break;
+                 bsp = BioseqLockById(SeqLocId(tmp_slp));
+                 init_buff_ex(85);
+                 fprintf(outfp, "\n");
+                 AcknowledgeBlastQuery(bsp, 70, outfp, FALSE, html);
+                 free_buff();
+                 BioseqUnlock(bsp);
+              }
+              if(align_view == 7 && !options->is_ooframe) {
+                 BXMLPrintOutput(xml_aip, seqalign, 
+                                 options, blast_program, blast_database, 
+                                 fake_bsp, other_returns, 0, NULL);
+                 AsnIoReset(xml_aip);
+                 SeqAlignSetFree(seqalign);
+              } else {
+                 seqannot = SeqAnnotNew();
+                 seqannot->type = 2;
+                 AddAlignInfoToSeqAnnot(seqannot, align_type);
+                 seqannot->data = seqalign;
+                 if (aip) {
                     SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
                     AsnIoReset(aip);
-                }
-                if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
-                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
+                 }
+                 if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
                     ObjMgrSetHold();
                     init_buff_ex(85);
-                    PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
+                    PrintDefLinesFromSeqAlignEx2(seqalign, 80, outfp, print_options, FIRST_PASS, 
+			NULL, number_of_descriptions, NULL, NULL);
                     free_buff();
                     
-                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
+                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, NULL);
                     seqannot->data = prune->sap;
 
                     if(options->is_ooframe) {
@@ -878,106 +1317,125 @@ Int2 Main (void)
                     
                     ObjMgrFreeCache(0);
                     
-                }
-                seqannot = SeqAnnotFree(seqannot);
-            } /* if XML Printing */
+                 }
+                 seqannot = SeqAnnotFree(seqannot);
+              } /* if XML Printing */
+              if (options->is_megablast_search)
+                 tmp_slp = tmp_slp->next;
+              if (seqannot)
+                 seqannot = SeqAnnotFree(seqannot);
+              seqalign = next_seqalign;
+           }
         } else {         /* seqalign is NULL */
-            if(align_view == 7 && !options->is_ooframe) {
-                BlastErrorMsgPtr error_msg;
-                CharPtr message;
-                
-                if (error_returns == NULL) {
-                    message = "No hits found";
-                } else {
-                    error_msg = error_returns->data.ptrvalue;
-                    message = error_msg->msg;
-                }
-                
-                BXMLPrintOutput(xml_aip, NULL, 
-                                options, blast_program, blast_database, 
-                                fake_bsp, other_returns, 0, message);
-
-                if (error_returns != NULL) {
-                    MemFree(error_msg->msg);
-                    MemFree(error_msg);
-                    MemFree(error_returns);
-                }
-
-                AsnIoReset(xml_aip);
-            } else {
-                fprintf(outfp, "\n\n ***** No hits found ******\n\n");
-            }
+           if(align_view == 7 && !options->is_ooframe) {
+              BlastErrorMsgPtr error_msg;
+              CharPtr message;
+              
+              if (error_returns == NULL) {
+                 message = "No hits found";
+              } else {
+                 error_msg = error_returns->data.ptrvalue;
+                 message = error_msg->msg;
+              }
+              
+              BXMLPrintOutput(xml_aip, NULL, 
+                              options, blast_program, blast_database, 
+                              fake_bsp, other_returns, 0, message);
+              
+              if (error_returns != NULL) {
+                 MemFree(error_msg->msg);
+                 MemFree(error_msg);
+                 MemFree(error_returns);
+              }
+              
+              AsnIoReset(xml_aip);
+           } else if (align_view < 8) {
+              fprintf(outfp, "\n\n ***** No hits found ******\n\n");
+           }
         }
         
+        slp = SeqLocSetFree(slp);
         matrix = BLAST_MatrixDestruct(matrix);
         if (txmatrix)
            txmatrix = TxMatrixDestruct(txmatrix);
         
         if(html) {
-            fprintf(outfp, "<PRE>\n");
+           fprintf(outfp, "<PRE>\n");
         }
         
         init_buff_ex(85);
         dbinfo_head = dbinfo;
-
-        if(align_view != 7) {
-            while (dbinfo) {
-                PrintDbReport(dbinfo, 70, outfp);
-                dbinfo = dbinfo->next;
-            }
+        
+        if(align_view < 7 && done) {
+           while (dbinfo) {
+              PrintDbReport(dbinfo, 70, outfp);
+              dbinfo = dbinfo->next;
+           }
         }
         dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
         
         if (ka_params) {
-            if(align_view != 7) {
-                PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
-            }
-            MemFree(ka_params);
+           if(align_view < 7 && done) {
+              PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
+           }
+           MemFree(ka_params);
         }
         
         if (ka_params_gap) {
-            if(align_view != 7) {
-                PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
-            }
-            MemFree(ka_params_gap);
+           if(align_view < 7 && done) {
+              PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
+           }
+           MemFree(ka_params_gap);
         }
-
-        if(align_view != 7) {
-            PrintTildeSepLines(params_buffer, 70, outfp);
+        
+        if(align_view < 7 && done) {
+           PrintTildeSepLines(params_buffer, 70, outfp);
         }
-
+        
         MemFree(params_buffer);
         free_buff();
         mask_loc_start = mask_loc;
         while (mask_loc) {
-            SeqLocSetFree(mask_loc->data.ptrvalue);
-            mask_loc = mask_loc->next;
+           SeqLocSetFree(mask_loc->data.ptrvalue);
+           mask_loc = mask_loc->next;
         }
         ValNodeFree(mask_loc_start);
         
         if(!believe_query)
-            fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+           fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
         
-        ReadDBBioseqFetchDisable();
         other_returns = ValNodeFree(other_returns);
-        sep = SeqEntryFree(sep);
-	options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
+        if (done) 
+           sep = SeqEntryFree(sep);
+#ifndef BLAST_CS_API
+        /* This is freed earlier in client-server case */
+        options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
+#endif
         if (html)
            fprintf(outfp, "</PRE>\n<P><HR><BR>\n<PRE>");
-    }
+        
+        if (!options->is_megablast_search) 
+           BlastDeleteUserErrorString(err_ticket);
+    } /* while(TRUE)  - main loop of the program over all FASTA entries */
+    
+#ifdef BLAST_CS_API
+    BlastNetBioseqFetchDisable(bl3hp, blast_database, db_is_na);
+    BlastFini(bl3hp);
+#else
+    ReadDBBioseqFetchDisable();
+#endif
+    
     aip = AsnIoClose(aip);
-
-    if(align_view != 7) {
+    
+    if(align_view < 7) {
         if (html) {
             fprintf(outfp, "</PRE>\n</BODY>\n</HTML>\n");
         }
-    } else
-       xml_aip = AsnIoClose(xml_aip);
-
+    } else if (align_view == 7)
+        xml_aip = AsnIoClose(xml_aip);
+    
     options = BLASTOptionDelete(options);
     FileClose(infp);
     
     return 0;
 }
-	
-

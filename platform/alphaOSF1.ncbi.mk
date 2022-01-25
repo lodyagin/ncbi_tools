@@ -1,12 +1,12 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.4 1999/08/12 18:32:41 beloslyu Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.7 2001/03/16 13:27:05 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
 NCBI_CC = cc
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -fast
-NCBI_OPTFLAG = -fast
+NCBI_LDFLAGS1 = -O
+NCBI_OPTFLAG = -O
 NCBI_BIN_MASTER = /usr/home/coremake/ncbi/bin
 NCBI_BIN_COPY = /usr/home/coremake/ncbi/bin
 NCBI_INCDIR = /usr/home/coremake/ncbi/include

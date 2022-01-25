@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnprint.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnprint.h,v $
+* Revision 6.3  2000/12/12 15:56:14  ostell
+* added support BigInt
+*
 * Revision 6.2  2000/07/25 20:30:58  ostell
 * added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
 *
@@ -90,6 +93,7 @@ NLM_EXTERN void AsnPrintType PROTO((AsnTypePtr atp, AsnIoPtr aip));
 NLM_EXTERN Boolean AsnPrintStrStore PROTO((ByteStorePtr bsp, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintReal PROTO((FloatHi realvalue, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintInteger PROTO((Int4 theInt, AsnIoPtr aip));
+NLM_EXTERN void AsnPrintBigInt PROTO((Int8 theInt, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintBoolean PROTO((Boolean value, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintOctets PROTO((ByteStorePtr ssp, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintChar PROTO((char theChar, AsnIoPtr aip));

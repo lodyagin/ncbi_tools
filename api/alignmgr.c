@@ -28,13 +28,64 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.154 $
+* $Revision: 6.171 $
 *
 * File Description: SeqAlign indexing and messaging functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.c,v $
+* Revision 6.171  2001/03/21 19:59:21  hurwitz
+* remove AlnMgrMergeNeighbors call from AlnMgrMakeMultByIntersectOnMaster
+*
+* Revision 6.170  2001/03/08 21:04:39  hurwitz
+* rolled back AlnMgrMakeMultByIntersectOnMaster to rev 6.156
+*
+* Revision 6.169  2001/03/08 17:07:10  wheelan
+* added AlnMgrGetParent and structure to support it
+*
+* Revision 6.168  2001/03/01 19:15:15  wheelan
+* fixed bug in MapBioseqToSeqAlign
+*
+* Revision 6.167  2001/02/16 13:29:38  wheelan
+* Added AMFreeAllIndexes
+*
+* Revision 6.166  2001/02/07 12:04:19  wheelan
+* bug fix in AlnMgrGetNthUnalignedForNthRow
+*
+* Revision 6.165  2001/02/05 13:21:17  wheelan
+* bug fix in AlnMgrGetNthUnalignedForNthRow
+*
+* Revision 6.164  2001/02/01 00:39:18  lewisg
+* fix uninitialized variable bugs
+*
+* Revision 6.163  2001/01/29 12:29:16  wheelan
+* fixed bug which missed residues in AlnMgrGetNthUnalignedForNthRow
+*
+* Revision 6.162  2001/01/25 14:05:11  wheelan
+* fixed bug in AlnMgrSetUnalignedLengths
+*
+* Revision 6.161  2001/01/23 13:35:20  wheelan
+* bug fix in AlnMgrConstructOverlaps
+*
+* Revision 6.160  2001/01/19 03:08:15  bauer
+* commented-out debug printfs
+*
+* Revision 6.159  2001/01/18 19:09:00  wheelan
+* added functions to better handle jagged-edged segmented master-slave alignments
+*
+* Revision 6.158  2001/01/12 20:58:25  wheelan
+* backed out prev changes
+*
+* Revision 6.157  2001/01/12 19:00:29  wheelan
+* changes in AlnMgrGetNthUnalignedForNthRow to avoid problems when flanking seqalign regions are NULL for that row
+*
+* Revision 6.156  2001/01/09 23:18:55  lewisg
+* fix memory leaks
+*
+* Revision 6.155  2001/01/05 20:02:32  wheelan
+* fixed some memory leaks
+*
 * Revision 6.154  2000/10/06 10:34:20  wheelan
 * changed behavior of AlnMgrGetSubAlign
 *
@@ -539,6 +590,10 @@ static Boolean am_is_ok_block(DenseSegPtr dsp);
 static void am_do_merge (AMAlignIndexPtr amaip, Int4 left, Int4 right);
 static Boolean am_merge_after_edit (SeqAlignPtr sap);
 static Boolean am_same_ids(SeqIdPtr sip1, SeqIdPtr sip2);
+static AMmsmsPtr AlnMgrConstructOverlaps(AMmsmsPtr ams_head);
+static Boolean AlnMgrJaggedIndex(SeqAlignPtr sap, AMmsmsPtr ams_head, AMmsmsPtr *ams_mhead, Int4 numrows);
+
+
 
 
 
@@ -619,6 +674,7 @@ NLM_EXTERN RowSourcePtr RowSourceFree(RowSourcePtr rsp)
    rsp->id = SeqIdSetFree(rsp->id);
    MemFree(rsp->which_saps);
    MemFree(rsp->num_in_sap);
+   MemFree(rsp);
    return NULL;
 }
 
@@ -654,6 +710,7 @@ NLM_EXTERN Boolean AMAlignIndexFree(VoidPtr index)
    if (amaip->mstype == AM_NEATINDEX)
    {
        MemFree(amaip->saps);
+       MemFree(amaip);
        return TRUE;
    }
    amaip->ids = SeqIdSetFree(amaip->ids);
@@ -681,6 +738,7 @@ NLM_EXTERN Boolean AMAlignIndexFree(VoidPtr index)
       }
       MemFree(amaip->rowsource);
    }
+   MemFree(amaip);
    retval = TRUE;
    return retval;
 }
@@ -697,7 +755,34 @@ NLM_EXTERN AMAlignDatPtr AMAlignDatFree(AMAlignDatPtr amadp)
    SeqIdFree(amadp->sip);
    MemFree(amadp->saps);
    MemFree(amadp->segments);
+   MemFree(amadp);
    return NULL;
+}
+
+NLM_EXTERN void AMFreeAllIndexes(SeqAlignPtr sap)
+{
+   SeqAlignPtr  salp;
+
+   if (sap->saip->indextype == INDEX_PARENT)
+   {
+      salp = (SeqAlignPtr)(sap->segs);
+      while (salp != NULL)
+      {
+         SAIndexFree((Pointer)(salp->saip));
+         salp->saip = NULL;
+         salp = salp->next;
+      }
+      AMAlignIndexFree((Pointer)(sap->saip));
+      sap->saip = NULL;
+   } else
+   {
+      while (sap != NULL)
+      {
+         SAIndexFree((Pointer)(sap->saip));
+         sap->saip = NULL;
+         sap = sap->next;
+      }
+   }
 }
 
 NLM_EXTERN AlnMsgPtr AlnMsgNew(void)
@@ -711,6 +796,7 @@ NLM_EXTERN AlnMsgPtr AlnMsgNew(void)
    amp->prev_sap = -2;
    amp->place = 0;
    amp->flag = FALSE;
+   amp->which_bsq = NULL;
    return amp;
 }
 
@@ -727,6 +813,7 @@ NLM_EXTERN AlnMsgPtr AlnMsgReNew(AlnMsgPtr amp)
    amp->prev_sap = -2;
    amp->place = 0;
    amp->flag = FALSE;
+   amp->which_bsq = NULL;
    return amp;
 }
 
@@ -830,6 +917,9 @@ NLM_EXTERN Boolean AlnMgrReIndexSeqAlign(SeqAlignPtr sap)
 ********************************************************************************/
 NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap)
 {
+   SAIndexPtr   saip;
+   SeqAlignPtr  salp;
+
    if (!sap)
       return FALSE;
    if (sap->saip != NULL)
@@ -846,6 +936,13 @@ NLM_EXTERN Boolean AlnMgrIndexSeqAlign(SeqAlignPtr sap)
       return FALSE;
    if (!AlnMgrMakeFakeMultiple(sap))
       return FALSE;
+   salp = (SeqAlignPtr)(sap->segs);
+   while (salp != NULL)
+   {
+      saip = (SAIndexPtr)(salp->saip);
+      saip->parent = sap;
+      salp = salp->next;
+   }
    return TRUE;
 }
 
@@ -865,6 +962,7 @@ NLM_EXTERN Boolean AlnMgrIndexLite(SeqAlignPtr sap)
 {
    AMAlignIndexPtr  amaip;
    Int4             i;
+   SAIndexPtr       saip;
    SeqAlignPtr      sap_tmp;
 
    if (!sap)
@@ -895,10 +993,22 @@ NLM_EXTERN Boolean AlnMgrIndexLite(SeqAlignPtr sap)
    for (i=0; i<amaip->numsaps; i++)
    {
       amaip->saps[i] = sap_tmp;
+      saip = (SAIndexPtr)(sap_tmp->saip);
+      saip->parent = sap;
       sap_tmp = sap_tmp->next;
    }
    sap->saip = (Pointer)amaip;
    return TRUE;
+}
+
+NLM_EXTERN SeqAlignPtr AlnMgrGetParent(SeqAlignPtr sap)
+{
+   SAIndexPtr  saip;
+
+   if (sap->saip->indextype == INDEX_PARENT)
+      return sap;
+   saip = (SAIndexPtr)sap->saip;
+   return saip->parent;
 }
 
 
@@ -2034,7 +2144,7 @@ NLM_EXTERN Boolean AlnMgrMakeMultipleByScoreExEx(SeqAlignPtr sap, Int4 fuzz,SeqA
    amaip->rowsource[0]->which_saps = (Uint4Ptr)MemNew((amaip->alnsaps+1)*sizeof(Uint4));
    amaip->rowsource[0]->num_in_sap = (Uint4Ptr)MemNew((amaip->alnsaps+1)*sizeof(Uint4));
    amaip->rowsource[1] = (RowSourcePtr)MemNew(sizeof(RowSource));
-   sip = SeqIdDup(AlnMgrGetNthSeqIdPtr(amaip->saps[0], 3-((SAIndexPtr)amaip->saps[0]->saip)->master));
+   sip = AlnMgrGetNthSeqIdPtr(amaip->saps[0], 3-((SAIndexPtr)amaip->saps[0]->saip)->master);
    amaip->rowsource[1]->id = sip;
    amaip->rowsource[1]->which_saps = (Uint4Ptr)MemNew((amaip->alnsaps+1)*sizeof(Uint4));
    amaip->rowsource[1]->num_in_sap = (Uint4Ptr)MemNew((amaip->alnsaps+1)*sizeof(Uint4));
@@ -2874,6 +2984,7 @@ NLM_EXTERN Int4 AlnMgrGetMaxUnalignedLength(SeqAlignPtr sap1, SeqAlignPtr sap2)
    Int4         start2;
    Int4         stop1;
    Int4         stop2;
+   SeqId *sip1, *sip2;
 
    if (sap1 == NULL || sap2 == NULL)
       return 0;
@@ -2882,8 +2993,15 @@ NLM_EXTERN Int4 AlnMgrGetMaxUnalignedLength(SeqAlignPtr sap1, SeqAlignPtr sap2)
    if(n1max != AlnMgrGetNumRows(sap2)) return 0;
    for (n1 = 1; n1 <= n1max; n1++)
    {
-      if(SeqIdComp(AlnMgrGetNthSeqIdPtr(sap1, n1),AlnMgrGetNthSeqIdPtr(sap2, n1)) != SIC_YES)
-        return 0;
+       sip1 = AlnMgrGetNthSeqIdPtr(sap1, n1);
+       sip2 = AlnMgrGetNthSeqIdPtr(sap2, n1);
+       if(SeqIdComp(sip1, sip2) != SIC_YES) {
+           SeqIdFree(sip1);
+           SeqIdFree(sip2);
+           return 0;
+           }
+      SeqIdFree(sip1);
+      SeqIdFree(sip2);
       AlnMgrGetNthSeqRangeInSA(sap1, n1, &start1, &stop1);
       if (n1 >= 0)
       {
@@ -2923,7 +3041,7 @@ static void AlnMgrSetUnalignedLengths(SeqAlignPtr sap)
    if (amaip->ulens != NULL)
       MemFree(amaip->ulens);
    amaip->ulens = (Int4Ptr)MemNew((amaip->numsaps)*sizeof(Int4));
-   for (i=1; i<amaip->numsaps; i++)
+   for (i=1; i<amaip->numseg; i++)
    {
       max = 0;
       for (n=0; n<amaip->numrows; n++)
@@ -3743,7 +3861,7 @@ NLM_EXTERN SeqIdPtr AlnMgrGetNthSeqIdPtr(SeqAlignPtr sap, Int4 n)
                sip = sip->next;
                count++;
             }
-            return sip;
+            return SeqIdDup(sip);
          } else
             return NULL;
       }
@@ -4216,7 +4334,7 @@ static Boolean am_get_nth_range_for_partial(SeqAlignPtr sap, Int4 n, Int4Ptr sta
 NLM_EXTERN Boolean AlnMgrGetNthRowTail(SeqAlignPtr sap, Int4 n, Uint1 which_tail, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand)
 {
    BioseqPtr  bsp;
-   SeqIdPtr   sip;
+   SeqIdPtr   sip = NULL;
    Int4       tmp_start;
    Int4       tmp_stop;
    Uint1      tmp_strand;
@@ -4314,6 +4432,7 @@ NLM_EXTERN Boolean AlnMgrGetNthRowTail(SeqAlignPtr sap, Int4 n, Uint1 which_tail
       }
    } else
       return FALSE;
+   SeqIdFree(sip);
    return TRUE;
 }
 
@@ -4342,8 +4461,10 @@ NLM_EXTERN Int4 AlnMgrGetMaxTailLength (SeqAlignPtr sap, Uint1 which_tail)
 NLM_EXTERN Boolean AlnMgrGetNthUnalignedForNthRow(SeqAlignPtr sap, Int4 unaligned, Int4 row, Int4Ptr start, Int4Ptr stop)
 {
    AMAlignIndexPtr  amaip;
+   Int4             beg;
    BioseqPtr        bsp;
-   Boolean          go;
+   Int4             end;
+   Boolean          go = TRUE;
    Int4             i;
    Int4             j;
    RowSourcePtr     rsp;
@@ -4383,20 +4504,33 @@ NLM_EXTERN Boolean AlnMgrGetNthUnalignedForNthRow(SeqAlignPtr sap, Int4 unaligne
          tmp_start = tmp_stop = 0;
          rsp = amaip->rowsource[row-1];
          if (rsp->which_saps[unaligned-1] == 0 || rsp->which_saps[unaligned] == 0)
-            go = FALSE;
-         else
-            go = TRUE;
+         {
+            beg = unaligned-1;
+            while (rsp->which_saps[beg] == 0 && beg >= 0)
+            {
+               beg--;
+            }
+            if (beg<0)
+               go = FALSE;
+            end = unaligned;
+            if (rsp->which_saps[end] == 0)
+               go = FALSE;
+         } else
+         {
+            beg = unaligned-1;
+            end = unaligned;
+         }
          if (go)
-            strand = AlnMgrGetNthStrand(amaip->saps[rsp->which_saps[unaligned]-1], row);
+            strand = AlnMgrGetNthStrand(amaip->saps[rsp->which_saps[end]-1], row);
          if (start && go)
          {
             if (strand == Seq_strand_minus)
             {
-               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[unaligned]-1], rsp->num_in_sap[unaligned], NULL, &tmp_start);
+               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[end]-1], rsp->num_in_sap[end], NULL, &tmp_start);
                *start = tmp_start + 1;
             } else
             {
-               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[unaligned-1]-1], rsp->num_in_sap[unaligned-1], NULL, &tmp_start);
+               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[beg]-1], rsp->num_in_sap[beg], NULL, &tmp_start);
                *start = tmp_start + 1;
             }
          }
@@ -4404,11 +4538,11 @@ NLM_EXTERN Boolean AlnMgrGetNthUnalignedForNthRow(SeqAlignPtr sap, Int4 unaligne
          {
             if (strand == Seq_strand_minus)
             {
-               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[unaligned-1]-1], rsp->num_in_sap[unaligned-1], &tmp_stop, NULL);
+               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[beg]-1], rsp->num_in_sap[beg], &tmp_stop, NULL);
                *stop = tmp_stop - 1;
             } else
             {
-               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[unaligned]-1], rsp->num_in_sap[unaligned], &tmp_stop, NULL);
+               AlnMgrGetNthSeqRangeInSA(amaip->saps[rsp->which_saps[end]-1], rsp->num_in_sap[end], &tmp_stop, NULL);
                *stop = tmp_stop - 1;
             }
          }
@@ -4838,7 +4972,7 @@ NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlignEx(SeqAlignPtr sap, Int4 pos, Int4 row_
             while (L < R)
             {
                mid = (L + R)/2;
-               if (dsp->starts[dsp->dim*ssdp->sect[mid]+row_num-1] >= pos)
+               if (dsp->starts[dsp->dim*ssdp->sect[mid]+row_num-1] > pos)
                   L = mid+1;
                else
                   R = mid;
@@ -5324,6 +5458,7 @@ NLM_EXTERN Boolean AlnMgrMakeMultByIntersectOnMaster(SeqAlignPtr sap, Boolean al
    Int4         numrows;
    Int4Ptr      rowarray;
    SeqAlignPtr  salp;
+   SeqIdPtr     sip_tmp;
 
    if (sap == NULL)
       return FALSE;
@@ -5341,7 +5476,7 @@ NLM_EXTERN Boolean AlnMgrMakeMultByIntersectOnMaster(SeqAlignPtr sap, Boolean al
       salp = sap;
    while (salp != NULL)
    {
-      AlnMgrMergeNeighbors(salp);
+      /* AlnMgrMergeNeighbors(salp); */   /* dih - 3/21/01 */
       salp = salp->next;
    }
    rowarray = NULL;
@@ -5358,10 +5493,11 @@ NLM_EXTERN Boolean AlnMgrMakeMultByIntersectOnMaster(SeqAlignPtr sap, Boolean al
    if (!AlnMgrIndexLinkedSegs((SeqAlignPtr)(sap->segs)))
       return FALSE;
    if (sap->master == NULL)  /* if a master is already set, believe it */
-      sap->master = am_find_master(sap);  /* if not, find it */
-   if (sap->master == NULL)
+      sip_tmp = am_find_master(sap);  /* if not, find it */
+   if (sip_tmp == NULL)
       return FALSE;
-   am_set_master(sap, sap->master);
+   am_set_master(sap, sip_tmp);
+   SeqIdFree(sip_tmp);
    ams = AlnMgrFindOverlapOnMaster(sap);
    if (ams == NULL)
       return FALSE;
@@ -5588,13 +5724,16 @@ static void am_set_master(SeqAlignPtr sap, SeqIdPtr sip)
       return;
    if (sap->segtype == SAS_DISC)
    {
-      if (sap->master == NULL)
-         sap->master = SeqIdDup(sip);
+      if (sap->master != NULL)
+         SeqIdSetFree(sap->master);
+      sap->master = SeqIdDup(sip);
       salp = (SeqAlignPtr)(sap->segs);
    } else
       salp = sap;
    while (salp)
    {
+      if (salp->master != NULL)
+         SeqIdSetFree(salp->master);
       salp->master = SeqIdDup(sip);
       salp = salp->next;
    }
@@ -5887,6 +6026,143 @@ static void am_densediag_reverse(DenseDiagPtr ddp)
       else
          ddp->strands[i] = Seq_strand_minus;
    }
+}
+
+static AMmsmsPtr AlnMgrConstructOverlaps(AMmsmsPtr ams_head)
+{
+   AMmsmsPtr      ams;
+   AMmsmsPtr      ams_master;
+   AMmsmsPtr      ams_mhead;
+   AMmsmsPtr      ams_mprev;
+   AMmsmsPtr      ams_new;
+   Boolean        found;
+   Int4           i;
+   Int4           n;
+   Int4           open;
+   Int4           start;
+   AMTinyInfoPtr  tip;
+   AMTinyInfoPtr  PNTR tiparray;
+   AMTinyInfoPtr  tip_head;
+   AMTinyInfoPtr  tip_prev;
+
+   if (ams_head == NULL)
+      return NULL;
+   n = 0;
+   tip_head = NULL;
+   ams = ams_head;
+   while (ams != NULL)
+   {
+      tip = (AMTinyInfoPtr)MemNew(sizeof(AMTinyInfo));
+      tip->start = ams->sstart;
+      tip->which = 1;
+      if (tip_head != NULL)
+      {
+         tip_prev->next = tip;
+         tip_prev = tip;
+      } else
+         tip_prev = tip_head = tip;
+      tip = (AMTinyInfoPtr)MemNew(sizeof(AMTinyInfo));
+      tip->start = ams->sstop;
+      tip->which = 2;
+      tip_prev->next = tip;
+      tip_prev = tip;
+      n += 2;
+      ams = ams->next;
+   }
+   tiparray = (AMTinyInfoPtr PNTR)MemNew(n*sizeof(AMTinyInfoPtr));
+   tip = tip_head;
+   i = 0;
+   while (tip != NULL)
+   {
+      tiparray[i] = tip;
+      tip = tip->next;
+      i++;
+   }
+   HeapSort((Pointer)tiparray, (size_t)n, sizeof(AMTinyInfoPtr), AlnMgrCompareTips);
+   tip_head = tip_prev = tiparray[0];
+   tip_head->numsap = 1;
+   for (i=1; i<n; i++)
+   {
+      if (tiparray[i]->start == tip_prev->start && tiparray[i]->which == tip_prev->which)
+      {
+         tip_prev->numsap++;
+         MemFree(tiparray[i]);
+      } else
+      {
+         tip_prev->next = tiparray[i];
+         tiparray[i]->numsap = 1;
+         tip_prev = tiparray[i];
+      }
+   }
+   tip_prev->next = NULL;
+   MemFree(tiparray);
+   open = 0;
+   ams_mhead = NULL;
+   tip = tip_head;
+   while (tip != NULL)
+   {
+      if (open > 0 && ((tip->which==1 && start <=tip->start-1)||(tip->which==2 && start <=tip->start)))
+      {
+         ams_master = (AMmsmsPtr)MemNew(sizeof(AMmsms));
+         ams_master->sstart = start;
+         if (tip->which == 1)
+            ams_master->sstop = tip->start-1;
+         else
+            ams_master->sstop = tip->start;
+         if (ams_mhead != NULL)
+         {
+            ams_mprev->next = ams_master;
+            ams_mprev = ams_master;
+         } else
+            ams_mhead = ams_mprev = ams_master;
+      }
+      if (tip->which == 1)
+      {
+         start = tip->start;
+         open += tip->numsap;
+      } else
+      {
+         start = tip->start+1;
+         open -= tip->numsap;
+      }
+      tip = tip->next;
+   }
+   while (tip_head != NULL)
+   {
+      tip = tip_head->next;
+      MemFree(tip_head);
+      tip_head = tip;
+   }
+   ams = ams_head;
+   while (ams)
+   {
+      ams_master = ams_mhead;
+      found = FALSE;
+      while (ams_master != NULL && !found)
+      {
+         if (ams->sstart >= ams_master->sstart && ams->sstart <= ams_master->sstop)
+         {
+            found = TRUE;
+            ams->sstop = ams_master->sstop;
+            if (AlnMgrTruncateSAP(ams->sap, ams_master->sstart, ams_master->sstop, ams->n))
+            {
+               ams_new = (AMmsmsPtr)MemNew(sizeof(AMmsms));
+               ams_new->sap = ams->sap->next;
+               ams->sap->next = NULL;
+               AlnMgrGetNthSeqRangeInSA(ams_new->sap, ams->n, &ams_new->sstart, &ams_new->sstop);
+               ams_new->next = ams->next;
+               ams->next = ams_new;
+               ams_new->n = ams->n;
+               ams_new->count = ams->count;
+            }
+            ams_master->sap = ams->sap;
+            ams_master->n = ams->n;
+         }
+         ams_master = ams_master->next;
+      }
+      ams = ams->next;
+   }
+   return ams_mhead;
 }
 
 static AMmsmsPtr AlnMgrTruncateByOverlap(SeqAlignPtr sap, AMmsmsPtr ams_head)
@@ -6279,6 +6555,168 @@ static void am_compare_alignids(AMmsmsPtr ams_prev, AMmsmsPtr ams)
    return;
 }
 
+static Boolean AlnMgrJaggedIndex(SeqAlignPtr sap, AMmsmsPtr ams_head, AMmsmsPtr *ams_mhead, Int4 numrows)
+{
+   AMAlignIndexPtr  amaip;
+   AMmsmsPtr        ams;
+   AMmsmsPtr        ams_master;
+   AMmsmsPtr        ams_prev;
+   Boolean          found;
+   Int4             i;
+   Int4             j;
+   Int4             n;
+   Int4             numblocks;
+   RowSourcePtr     rsp;
+   RowSourcePtr     rsp_curr_head;
+   RowSourcePtr     rsp_head;
+   RowSourcePtr     rsp_prev;
+   SeqAlignPtr      PNTR saparray;
+   Boolean          usethis;
+
+   if (sap == NULL || ams_head == NULL || ams_mhead == NULL)
+      return FALSE;
+   if (!AlnMgrIndexParentSA(sap))
+      return FALSE;
+   AlnMgrSetMaster(sap, sap->master);
+   ams_master = *ams_mhead;
+   numblocks = 0;
+   while (ams_master != NULL)
+   {
+      numblocks++;
+      ams_master->count = numblocks;
+      ams_master = ams_master->next;
+   }
+   ams = ams_head;
+   j = 0;
+   while (ams != NULL)
+   {
+      ams->count = j;
+      ams = ams->next;
+      j++;
+   }
+   saparray = (SeqAlignPtr PNTR)MemNew(j*sizeof(SeqAlignPtr));
+   ams = ams_head;
+   j = 0;
+   while (ams != NULL)
+   {
+      saparray[j] = ams->sap;
+      ams = ams->next;
+      j++;
+   }
+   ams_master = *ams_mhead;
+   rsp_head = RowSourceNew();
+   rsp_head->which_saps = (Uint4Ptr)MemNew(numblocks*sizeof(Uint4));
+   rsp_head->num_in_sap = (Uint4Ptr)MemNew(numblocks*sizeof(Uint4));
+   rsp_head->id = SeqIdDup(sap->master);
+   rsp_head->strand = Seq_strand_plus;
+   rsp_head->numsaps = 0;
+   while (ams_master != NULL)
+   {
+      found = FALSE;
+      for (i=0; i<j && !found; i++)
+      {
+         if (saparray[i] == ams_master->sap)
+            found = TRUE;
+      }
+      if (!found)
+         return FALSE;
+      rsp_head->which_saps[rsp_head->numsaps] = i;
+      rsp_head->num_in_sap[rsp_head->numsaps] = ams_master->n;
+      rsp_head->numsaps++;
+      ams_master = ams_master->next;
+   }
+   rsp_prev = rsp_head;
+   ams = ams_head;
+   amaip = (AMAlignIndexPtr)(sap->saip);
+   amaip->numsaps = amaip->alnsaps = j;
+   amaip->saps = saparray;
+   amaip->mstype = AM_SEGMENTED_MASTERSLAVE;
+   amaip->numrows = 1;
+   sap->type = SAT_MASTERSLAVE;
+   ams_prev = ams_head = NULL;
+   while (ams)
+   {
+      ams_master = *ams_mhead;
+      n = AlnMgrGetNumRows(ams->sap);
+      usethis = FALSE;
+      while (!usethis && ams_master != NULL)
+      {
+         if (ams->sstart == ams_master->sstart && ams->sstop == ams_master->sstop)
+            usethis = TRUE;
+         else
+            ams_master = ams_master->next;
+      }
+      if (usethis)
+      {
+         if (ams_prev != NULL && ams->sstart > ams_prev->sstart && ams->stop != 1)
+         {
+            rsp = rsp_curr_head;
+            for (i=0; i<n; i++)
+            {
+               if (i+1 != ams->n)
+               {
+                  if (rsp == NULL)
+                     return FALSE;
+                  rsp->which_saps[ams_master->count-1] = ams->count+1;
+                  rsp->num_in_sap[ams_master->count-1] = i+1;
+                  rsp = rsp->next;
+               }
+            }
+         } else  /* new row */
+         {
+            found = FALSE;
+            for (i=0; i<n; i++)
+            {
+               if (i+1 != ams->n)
+               {
+                  rsp = RowSourceNew();
+                  amaip->numrows++;
+                  rsp->which_saps = (Uint4Ptr)MemNew(numblocks*sizeof(Uint4));
+                  rsp->num_in_sap = (Uint4Ptr)MemNew(numblocks*sizeof(Uint4));
+                  rsp->id = AlnMgrGetNthSeqIdPtr(ams->sap, i+1);
+                  rsp->strand = AlnMgrGetNthStrand(ams->sap, i+1);
+                  rsp->which_saps[ams_master->count-1] = ams->count + 1;
+                  rsp->num_in_sap[ams_master->count-1] = i+1;
+                  rsp->numsaps = numblocks;
+                  rsp_prev->next = rsp;
+                  rsp_prev = rsp;
+                  if (!found)
+                  {
+                     rsp_curr_head = rsp;
+                     found = TRUE;
+                  }
+               }
+            }
+         }
+         ams_prev = ams;
+      }
+      ams = ams->next;
+   }
+   amaip->master = 1;
+   amaip->rowsource = (RowSourcePtr PNTR)MemNew((amaip->numrows)*sizeof(RowSourcePtr));
+   rsp = rsp_head;
+   for (i=0; i<amaip->numrows; i++)
+   {
+      if (rsp == NULL)
+         return FALSE;
+      amaip->rowsource[i] = rsp;
+      rsp = rsp->next;
+   }
+   rsp = rsp_head;
+   amaip->numseg = rsp->numsaps;
+   amaip->lens = (Int4Ptr)MemNew((amaip->numseg)*sizeof(Int4));
+   amaip->aligncoords = (Uint4Ptr)MemNew((amaip->numseg+1)*sizeof(Uint4));
+   amaip->aligncoords[0] = 0;
+   for (i=0; i<amaip->numseg; i++)
+   {
+      sap = amaip->saps[rsp->which_saps[i]-1];
+      amaip->lens[i] = AlnMgrGetAlnLength(sap, FALSE);
+      amaip->aligncoords[i+1] = amaip->aligncoords[i] + amaip->lens[i];
+   }
+   amaip->parent = sap;
+   return TRUE;
+}
+
 static Boolean AlnMgrCarefulIndex(SeqAlignPtr sap, AMmsmsPtr ams_head, AMmsmsPtr *ams_mhead, Boolean allinblock, Int4 numrows)
 {
    AMAlignIndexPtr  amaip;
@@ -6444,7 +6882,6 @@ static Boolean AlnMgrCarefulIndex(SeqAlignPtr sap, AMmsmsPtr ams_head, AMmsmsPtr
    amaip->lens = (Int4Ptr)MemNew((amaip->numseg)*sizeof(Int4));
    amaip->aligncoords = (Uint4Ptr)MemNew((amaip->numseg+1)*sizeof(Uint4));
    amaip->aligncoords[0] = 0;
-   amaip->ids = AlnMgrPropagateSeqIdsByRow(amaip);
    for (i=0; i<amaip->numseg; i++)
    {
       sap = amaip->saps[rsp->which_saps[i]-1];
@@ -7472,27 +7909,9 @@ NLM_EXTERN SeqIdPtr AlnMgrFindMaster(SeqAlignPtr sap)
       while (salp && !done)
       {
          if (salp->master)
-         {
-            if (sip)
-            {
-               if (SeqIdComp(sip, salp->master) != SIC_YES)
-               {
-                  done = TRUE;
-                  sip = SeqIdFree(sip);
-               }
-            } else
-            {
-               sip = SeqIdDup(salp->master);
-            }
-         } else
-         {
-            sip = SeqIdFree(sip);
-            done = TRUE;
-         }
+            return (SeqIdDup(salp->master));
          salp = salp->next;
       }
-      if (sip)
-         return sip;
       amaip = (AMAlignIndexPtr)(sap->saip);
       sip = amaip->ids;
       for (i=0; i<(amaip->numbsqs); i++)
@@ -8160,7 +8579,9 @@ NLM_EXTERN void AlnMgrSetMaster(SeqAlignPtr sap, SeqIdPtr master)
    {
       if (!salp->saip)
          return;
-      salp->master = master;
+      if (salp->master != NULL)
+         SeqIdFree(salp->master);
+      salp->master = SeqIdDup(master);
       if (salp->saip != NULL)
       {
          saip = (SAIndexPtr)(salp->saip);
@@ -8809,6 +9230,7 @@ NLM_EXTERN SeqAlignIndexPtr AlnMgrCopyIndexesForChildSeqAlign(SeqAlignPtr sap)
    {
       saip_new->ssdp[i] = AlnMgrCopySASeqDat(saip->ssdp[i]);
    }
+   saip_new->numseqs = dsp->dim;
    return (SeqAlignIndexPtr)saip_new;
 }
 
@@ -9052,6 +9474,17 @@ NLM_EXTERN Boolean AlnMgrDeleteChildByPointer(SeqAlignPtr parent, SeqAlignPtr ch
    return TRUE;
 }
 
+static AMBittyPtr AlnMgrFreeBitty(AMBittyPtr abp)
+{
+    AMBitty *abp_temp;
+    while(abp) {
+        abp_temp = abp->next;
+        MemFree(abp);
+        abp = abp_temp;
+    }
+    return NULL;
+}
+
 /**********************************************************************
 *
 *  AlnMgrDeleteNthRow deletes the specified row from either a parent
@@ -9148,15 +9581,20 @@ NLM_EXTERN Boolean AlnMgrDeleteNthRow(SeqAlignPtr sap, Int4 row)
       {
          if (AlnMgrGetNumRows(amaip->saps[abp->num1]) > 2)
          {
-            if (!AlnMgrDeleteNthRow(amaip->saps[abp->num1], abp->num2))
+             if (!AlnMgrDeleteNthRow(amaip->saps[abp->num1], abp->num2)) {
+               abp = AlnMgrFreeBitty(abp);
                return FALSE;
+             }
          } else
          {
-            if (!AlnMgrDeleteChildByPointer(sap, amaip->saps[abp->num1]))
+             if (!AlnMgrDeleteChildByPointer(sap, amaip->saps[abp->num1])) {
+               abp = AlnMgrFreeBitty(abp);
                return FALSE;
+             }
          }
          abp = abp->next;
       }
+      abp = AlnMgrFreeBitty(abp);
       return TRUE;
    } else if (i == AM_CHILD)
    {
@@ -9293,13 +9731,7 @@ NLM_EXTERN Boolean AlnMgrDeleteNthRow(SeqAlignPtr sap, Int4 row)
       SAIndexFree(sap->saip);
       sap->saip = NULL;
       abp = abp_head;
-      while (abp_head)
-      {
-         abp = abp_head->next;
-         abp_head->next = NULL;
-         MemFree(abp_head);
-         abp_head = abp;
-      }
+      abp_head = AlnMgrFreeBitty(abp_head);
       return TRUE;
    }
    return FALSE;

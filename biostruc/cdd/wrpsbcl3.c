@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.6 2000/10/12 20:48:26 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.16 2001/03/21 17:00:48 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.6 $
+* $Revision: 1.16 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,36 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.16  2001/03/21 17:00:48  bauer
+* fixes for changes in LOAD accessions
+*
+* Revision 1.15  2001/03/10 21:37:44  bauer
+* JavaScript only for Mozilla 4.x and higher
+*
+* Revision 1.14  2001/03/09 22:52:01  bauer
+* use JavaScript to embed graphics in results page
+*
+* Revision 1.13  2001/03/03 00:12:08  bauer
+* added scaleable graphics
+*
+* Revision 1.12  2001/02/28 19:46:08  bauer
+* fixes for public version
+*
+* Revision 1.11  2001/02/22 15:53:22  bauer
+* support for jagged edge blocks
+*
+* Revision 1.10  2001/02/14 15:16:11  bauer
+* changed interface to lexington
+*
+* Revision 1.9  2001/02/09 15:17:05  bauer
+* added switch for DB-test
+*
+* Revision 1.8  2001/02/05 23:01:32  bauer
+* added support for domain composition neighboring
+*
+* Revision 1.7  2000/12/08 20:13:38  bauer
+* call to RPSBgetCddHits commented out
+*
 * Revision 1.6  2000/10/12 20:48:26  bauer
 * added absolute URLs for graphics elements on the CD-search results pages
 *
@@ -57,6 +87,9 @@
 */
 
 #define  BLASTCLI_BUF_SIZE 255
+
+#define  CDSEARCH_TEST
+
 #include <sequtil.h>
 #include <prtutil.h>
 #include <tofasta.h>
@@ -71,6 +104,7 @@
 #include <accid1.h>
 #include <ddvcreate.h>
 #include <wrpsbtool.h>
+#include <ncbiwww.h>
 #include <www.h>
 
 /*---------------------------------------------------------------------------*/
@@ -622,6 +656,15 @@ static Boolean WRPSBDrawPage()
   printf("<OPTION VALUE=\"0\">Color Scheme 1\n");
   printf("<OPTION VALUE=\"1\">Color Scheme 2\n");
   printf("<OPTION SELECTED VALUE=\"2\">Color Scheme 3\n");
+  printf("</SELECT><BR>\n");
+  printf("Print Graphics using&nbsp<SELECT NAME=\"GWIDTH\">\n");
+  printf("<OPTION VALUE=\"-5\">5 pixels per residue\n");
+  printf("<OPTION VALUE=\"-2\">2 pixels per residue\n");
+  printf("<OPTION SELECTED VALUE=\"-1\">Default Width\n");
+  printf("<OPTION VALUE=\"1\">1 residue per pixel\n");
+  printf("<OPTION VALUE=\"2\">2 residues per pixel\n");
+  printf("<OPTION VALUE=\"5\">5 residues per pixel\n");
+  printf("<OPTION VALUE=\"10\">10 residues per pixel\n");
   printf("</SELECT>\n");
 
   printf("</FORM>\n");
@@ -761,16 +804,17 @@ static CharPtr FixStringForWWW(CharPtr oldstring)
 /*---------------------------------------------------------------------------*/
 static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 maxrow,
                                   BioseqPtr query_bsp, ValNodePtr mask,
-                                  Int4 iGraphMode)
+                                  Int4 iGraphMode, Int4 GraphWidth, Boolean bIsNetscape)
 {
   gdImagePtr           im;
-  FILE                 *pngout;
+  gdPoint              points[3];
+  FILE                *pngout;
   Int4                 gystep = WRPSB_GRAPH_HEIGHT+WRPSB_GRAPH_SPACER;
   Int4                 colidx, qlen, white, black, lblue;
   Int4                 ulx, uly, lrx, lry, swidth, i;
   Int4                 tick, ntick, dont, sky, missg;
   Char                 cTmp[16];
-  Int4                 right = WRPSB_GRAPH_WIDTH - 1;
+  Int4                 right = GraphWidth - 1;
   Char                 path[PATH_MAX], dstring[PATH_MAX];
   AlignmentAbstractPtr aapThis;
   SeqLocPtr            slp, slpThis;
@@ -778,6 +822,11 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
   ValNodePtr           vnp, vnpThis;
   static Int4          ticksteps[14] = {5,10,20,25,50,100,200,250,500,1000,
                                         2000,2500,5000,10000};
+  borkIOCtx*           bio;
+  Int4                 pos;
+  Char                 octstr[8];
+  Char                 octet;
+  Uint4                uintvalue;
 
   if (aap)
     srandom((unsigned int) (query_bsp->length + aap->gstart + (Int4)getpid()));
@@ -794,7 +843,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 /*---------------------------------------------------------------------------*/
 /* create and save the png file                                              */
 /*---------------------------------------------------------------------------*/
-  im = gdImageCreate(WRPSB_GRAPH_WIDTH,gystep*(min(maxrow,WRPSB_GRAPH_MAXROW))+30);
+  im = gdImageCreate(GraphWidth,gystep*(min(maxrow,WRPSB_GRAPH_MAXROW))+30);
   white = gdImageColorAllocate(im, 255, 255, 255); 
   black = gdImageColorAllocate(im,   0,   0,   0);
   lblue = gdImageColorAllocate(im,  51, 102, 255);     
@@ -807,8 +856,8 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
     while (slp) {
       if (slp->choice == 4) {      
         sintp = slp->data.ptrvalue;
-        ulx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->from) / qlen;
-        lrx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->to)   / qlen;
+        ulx = 5 + ((GraphWidth-10)*sintp->from) / qlen;
+        lrx = 5 + ((GraphWidth-10)*sintp->to)   / qlen;
         gdImageFilledRectangle(im,ulx,20,lrx,25,sky);
         fprintf(table,"<area shape=rect coords=%d,%d,%d,%d href=\"http://www.ncbi.nlm.nih.gov/BLAST/filtered.html\" ONMOUSEOVER=\'document.BLASTFORM.defline.value=\"Masked-out region, low complexity\"\' ONMOUSEOUT=\'document.BLASTFORM.defline.value=\"Mouse-over boxes to display more information\"\'>\n",
                 ulx+1,21,lrx+1,26);
@@ -817,8 +866,8 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
         while (slpThis) {
           if (slpThis->choice == 4) {
             sintp = slpThis->data.ptrvalue;
-            ulx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->from) / qlen;
-            lrx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->to)   / qlen;
+            ulx = 5 + ((GraphWidth-10)*sintp->from) / qlen;
+            lrx = 5 + ((GraphWidth-10)*sintp->to)   / qlen;
             gdImageFilledRectangle(im,ulx,20,lrx,25,sky);
             fprintf(table,"<area shape=rect coords=%d,%d,%d,%d href=\"http://www.ncbi.nlm.nih.gov/BLAST/filtered.html\" ONMOUSEOVER=\'document.BLASTFORM.defline.value=\"Masked-out region, low complexity\"\' ONMOUSEOUT=\'document.BLASTFORM.defline.value=\"Mouse-over boxes to display more information\"\'>\n",
                     ulx+1,21,lrx+1,26);
@@ -846,7 +895,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
     }
   }
   for (i=1;i<=ntick;i++) {
-    ulx = 5 + ((i*tick-1)*(WRPSB_GRAPH_WIDTH-10))/qlen;
+    ulx = 5 + ((i*tick-1)*(GraphWidth-10))/qlen;
     if (ulx > (right-5)) ulx=right-5;
     gdImageLine(im,ulx,20,ulx,15,lblue);
     cTmp[0] = '\0'; sprintf(cTmp,"%d",i*tick);
@@ -885,6 +934,40 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
       ulx++; uly++; lrx--; lry--;
       if (ulx <= lrx) {
         gdImageFilledRectangle(im,ulx,uly,lrx,lry,colidx);
+        if (lrx-ulx > 8) {
+  	  if (aapThis->nmissg>=0.2) {
+	    points[0].x = ulx - 1;
+	    points[0].y = uly - 1;
+	    points[1].x = ulx - 1;
+	    points[1].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 2;
+	    points[2].x = ulx + 3;
+	    points[2].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 4;
+	    gdImageFilledPolygon(im,points,3,white);
+	    points[0].x = ulx - 1;
+	    points[0].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 2;
+	    points[1].x = ulx - 1;
+	    points[1].y = lry;
+	    points[2].x = ulx + 4;
+	    points[2].y = lry + 1 - WRPSB_GRAPH_HEIGHT / 4;
+	    gdImageFilledPolygon(im,points,3,white);
+	  }
+	  if (aapThis->cmissg>=0.2) {
+	    points[0].x = lrx + 1;
+	    points[0].y = uly - 1;
+	    points[1].x = lrx + 1;
+	    points[1].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 2;
+	    points[2].x = lrx - 4;
+	    points[2].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 4;
+	    gdImageFilledPolygon(im,points,3,white);
+	    points[0].x = lrx + 1;
+	    points[0].y = uly - 1 + WRPSB_GRAPH_HEIGHT / 2;
+	    points[1].x = lrx + 1;
+	    points[1].y = lry + 1;
+	    points[2].x = lrx - 3;
+	    points[2].y = lry + 1 - WRPSB_GRAPH_HEIGHT / 4;
+	    gdImageFilledPolygon(im,points,3,white);
+	  }
+	}
         swidth = lrx-ulx+1;
         ulx = 5+(aapThis->gstart+aapThis->gstop)/2;
         uly = WRPSB_GRAPH_SPACER+(2*WRPSB_GRAPH_SPACER+WRPSB_GRAPH_HEIGHT)/2+gystep*aapThis->row;
@@ -904,14 +987,40 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
     }
     aapThis = aapThis->next;
   }
-  pngout = fopen(path, "wb");
-  gdImagePng(im, pngout);
-  fflush(pngout);
-  fclose(pngout);
-  gdImageDestroy(im);
+  if (!bIsNetscape) {
+    pngout = fopen(path, "wb");
+    gdImagePng(im, pngout);
+    fflush(pngout);
+    fclose(pngout);
+  }
   fprintf(table,"</map>\n");
-  fprintf(table,"<img src=\"%snph-viewpng.cgi?%s\" usemap=\"#img_map\" border=0 ISMAP>\n",
-          URLcgi,path);
+  if (bIsNetscape) {
+    bio = (borkIOCtx*) gdNewBorkCtx ();
+    gdImagePngCtx(im, (gdIOCtx*) bio);
+  }
+  gdImageDestroy(im);
+  if (bIsNetscape) {
+    fprintf(table,"<SCRIPT LANGUAGE=\"JavaScript\">\n");
+    fprintf(table,"function GenerateBorkogramImage() {\n");
+    fprintf(table,"return '");
+    for (pos=0;pos < bio->len; pos++) {
+      octet = ((bio->buffer))[pos];
+      if (octet < 0) {
+        uintvalue = octet+256;
+      } else {
+        uintvalue = octet;
+      }
+      sprintf(octstr,"\\%03o", uintvalue);
+      fprintf(table,"%s",octstr);
+    }
+      fprintf(table,"';\n");
+      fprintf(table,"}\n");
+      fprintf(table,"</SCRIPT>\n");
+    fprintf(table,"<img src=\"javascript:GenerateBorkogramImage();\" usemap=\"#img_map\" border=0 ISMAP>\n");
+  } else {
+    fprintf(table,"<img src=\"%snph-viewpng.cgi?%s\" usemap=\"#img_map\" border=0 ISMAP>\n",
+            URLcgi,path);
+  }
   fprintf(table,"</CENTER>\n");
 }
 
@@ -925,7 +1034,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 /*---------------------------------------------------------------------------*/
 static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 maxrow,
                                   BioseqPtr query_bsp, ValNodePtr mask,
-                                  Int4 iGraphMode)
+                                  Int4 iGraphMode, Int4 GraphWidth, Boolean bIsNetscape)
 {
   gdImagePtr           im;
   FILE                 *gifout;
@@ -934,7 +1043,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
   Int4                 ulx, uly, lrx, lry, swidth, i;
   Int4                 tick, ntick, dont, sky, missg;
   Char                 cTmp[16];
-  Int4                 right = WRPSB_GRAPH_WIDTH - 1;
+  Int4                 right = GraphWidth - 1;
   Char                 path[PATH_MAX], dstring[PATH_MAX];
   AlignmentAbstractPtr aapThis;
   SeqLocPtr            slp, slpThis;
@@ -958,7 +1067,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 /*---------------------------------------------------------------------------*/
 /* create and save the gif file                                              */
 /*---------------------------------------------------------------------------*/
-  im = gdImageCreate(WRPSB_GRAPH_WIDTH,gystep*(min(maxrow,WRPSB_GRAPH_MAXROW))+30);
+  im = gdImageCreate(GraphWidth,gystep*(min(maxrow,WRPSB_GRAPH_MAXROW))+30);
   white = gdImageColorAllocate(im, 255, 255, 255); 
   black = gdImageColorAllocate(im,   0,   0,   0);
   lblue = gdImageColorAllocate(im,  51, 102, 255);     
@@ -971,8 +1080,8 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
     while (slp) {
       if (slp->choice == 4) {      
         sintp = slp->data.ptrvalue;
-        ulx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->from) / qlen;
-        lrx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->to)   / qlen;
+        ulx = 5 + ((GraphWidth-10)*sintp->from) / qlen;
+        lrx = 5 + ((GraphWidth-10)*sintp->to)   / qlen;
         gdImageFilledRectangle(im,ulx,20,lrx,25,sky);
         fprintf(table,"<area shape=rect coords=%d,%d,%d,%d href=\"http://www.ncbi.nlm.nih.gov/BLAST/filtered.html\" ONMOUSEOVER=\'document.BLASTFORM.defline.value=\"Masked-out region, low complexity\"\' ONMOUSEOUT=\'document.BLASTFORM.defline.value=\"Mouse-over boxes to display more information\"\'>\n",
                 ulx+1,21,lrx+1,26);
@@ -981,8 +1090,8 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
         while (slpThis) {
           if (slpThis->choice == 4) {
             sintp = slpThis->data.ptrvalue;
-            ulx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->from) / qlen;
-            lrx = 5 + ((WRPSB_GRAPH_WIDTH-10)*sintp->to)   / qlen;
+            ulx = 5 + ((GraphWidth-10)*sintp->from) / qlen;
+            lrx = 5 + ((GraphWidth-10)*sintp->to)   / qlen;
             gdImageFilledRectangle(im,ulx,20,lrx,25,sky);
             fprintf(table,"<area shape=rect coords=%d,%d,%d,%d href=\"http://www.ncbi.nlm.nih.gov/BLAST/filtered.html\" ONMOUSEOVER=\'document.BLASTFORM.defline.value=\"Masked-out region, low complexity\"\' ONMOUSEOUT=\'document.BLASTFORM.defline.value=\"Mouse-over boxes to display more information\"\'>\n",
                     ulx+1,21,lrx+1,26);
@@ -1010,7 +1119,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
     }
   }
   for (i=1;i<=ntick;i++) {
-    ulx = (Int4) (5.0 + (((float)(i*tick)-1.0)*(WRPSB_GRAPH_WIDTH-10))/(float)qlen);
+    ulx = (Int4) (5.0 + (((float)(i*tick)-1.0)*(GraphWidth-10))/(float)qlen);
     if (ulx > (right-5)) ulx=right-5;
     gdImageLine(im,ulx,20,ulx,15,lblue);
     cTmp[0] = '\0'; sprintf(cTmp,"%d",i*tick);
@@ -1085,7 +1194,7 @@ static void WRPSBCl3PrintGraphics(AlignmentAbstractPtr aap, FILE *table, Int4 ma
 /*---------------------------------------------------------------------------*/
 /* fill in the CDD hit data structure                                        */
 /*---------------------------------------------------------------------------*/
-/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------
 CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
 {
   CddHitPtr         cdhThis, cdhHead = NULL, cdhTail = NULL;
@@ -1165,6 +1274,7 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
   }
   return(cdhHead);
 }
+ ---------------------------------------------------------------------------*/
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1216,12 +1326,14 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     for (i=0;i<dsp->numseg;i++) {
       if (dsp->starts[2*i] > -1) {
         aapThis->mstart = dsp->starts[2*i];
+	aapThis->nmissg = (Nlm_FloatHi) dsp->starts[2*i+1];
         break;
       }
     }
     for (i=0;i<dsp->numseg;i++) {
       if (dsp->starts[2*i] > -1) {
         aapThis->mstop = dsp->starts[2*i]+dsp->lens[i]-1;
+	aapThis->cmissg = (Nlm_FloatHi) (dsp->starts[2*i+1]+dsp->lens[i]-1);
       }
     }
     aapThis->gstart = (aapThis->mstart * iGraphWidth) / (query_bsp->length-1);
@@ -1236,6 +1348,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     else if (evalue >    0.0001) iColValue =  51;
     else                         iColValue =   0;
     bsp = BioseqLockById(sip);
+    aapThis->nmissg = aapThis->nmissg/(Nlm_FloatHi)bsp->length;
+    aapThis->cmissg = ((Nlm_FloatHi)bsp->length-1.0-aapThis->cmissg)/(Nlm_FloatHi) bsp->length;
     txsp = (TxDfLineStructPtr) MemNew(sizeof(TxDfLineStruct));
     txsp->segs_str = NULL;
     txsp->segs_buflen = 0;
@@ -1300,8 +1414,13 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
       cTemp = strdup(aapThis->cCDDid);
-      strtok(cTemp,":");
-      aapThis->cGraphId = strdup(strtok(NULL,":"));
+      if (strstr(cTemp,":")) {
+        strtok(cTemp,":");
+        aapThis->cGraphId = strdup(strtok(NULL,":"));
+      } else {
+        strtok(cTemp,"_");
+        aapThis->cGraphId = strdup(strtok(NULL,"_"));
+      }
     } else {
       aapThis->green = iColValue;
       aapThis->red = aapThis->blue = 255;    
@@ -1449,21 +1568,27 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                  BLAST_OptionsBlkPtr options, Boolean believe_query,
                                  Uint4 print_options, CharPtr version,
                                  CharPtr date, BlastNet3Hptr bl3hp,
-                                 CharPtr database, CharPtr dbversion, Boolean bIsPrecalc)
+                                 CharPtr database, CharPtr dbversion, Boolean bIsPrecalc,
+				 Int4 GraphWidth, Boolean bIsNetscape)
 {
-  BlastDbinfoPtr         dbinfo;
-  SeqAnnotPtr            seqannot;
+  AlignmentAbstractPtr   aap, aapThis;
   AsnIoPtr               aip;
+  BlastDbinfoPtr         dbinfo;
   BlastPruneSapStructPtr prune;
+  CharPtr                title = NULL, cPtr;
+  SeqAnnotPtr            seqannot;
   Boolean                bAnyPdb;
-  Char                   tableName[PATH_MAX]; 
-  FILE                   *table = NULL;
-  AlignmentAbstractPtr   aap;
-  Int4                   maxrow;
+  Boolean                found_score;
   Boolean                is_na = FALSE;
   Uint1                  ColorSchema;
-  CharPtr                title = NULL, cPtr;
-  CddHitPtr              cdh;
+  Int4                   score, number;
+  Int4                   maxrow;
+  Int4                   nhits = 0;
+  Nlm_FloatHi            evalue, bit_score;
+  Char                   cTmp[16];
+  Char                   tableName[PATH_MAX]; 
+  FILE                   *table = NULL;
+/*  CddHitPtr              cdh; */
     
 
   switch (iPairMode) {
@@ -1530,19 +1655,39 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                          options->expect_value, NULL);
   if (prune->number == 0) {
     if (iGraphMode) {
-      WRPSBCl3PrintGraphics(NULL,table,0,query_bsp,mask, iGraphMode);
+      WRPSBCl3PrintGraphics(NULL,table,0,query_bsp,mask, iGraphMode, GraphWidth, bIsNetscape);
     }
     fprintf(table, "<br><strong>...No hits found!</strong>\n");
   } else {
-    cdh = RPSBgetCddHits(prune->sap);
-    aap = WRPSBCl3AbstractAlignment(prune,query_bsp,WRPSB_GRAPH_WIDTH-10,&maxrow,iGraphMode,dbversion, &bAnyPdb);
+/*    cdh = RPSBgetCddHits(prune->sap); */
+    aap = WRPSBCl3AbstractAlignment(prune,query_bsp,GraphWidth-10,&maxrow,iGraphMode,dbversion, &bAnyPdb);
+    if (iGraphMode) {
+      WRPSBCl3PrintGraphics(aap,table,maxrow,query_bsp,mask, iGraphMode, GraphWidth, bIsNetscape);
+    }
+/*---------------------------------------------------------------------------*/
+/* print form for submitting results to Lewis' Domain Composition neighboring*/
+/*---------------------------------------------------------------------------*/
+/*    if (strcmp(CDDlocat,"inhouse")==0) { */
+      fprintf(table,"<FORM ACTION=\"/Structure/lexington/lexington.cgi\" METHOD=\"POST\">\n");
+      fprintf(table,"<INPUT TYPE=\"HIDDEN\" NAME=\"l\" VALUE=\"%d\">\n",query_bsp->length);
+      fprintf(table,"<INPUT TYPE=\"HIDDEN\" NAME=\"cmd\" VALUE=\"seq\">\n");
+      aapThis = aap;
+      while (aapThis) {
+        found_score = GetScoreAndEvalue(aapThis->salp, &score, &bit_score, &evalue, &number);
+        print_score_eonly(evalue,cTmp);
+        fprintf(table,"<INPUT NAME=\"c\" VALUE=\"%s,%d,%d,%s\" TYPE=\"HIDDEN\">\n",
+	               aapThis->cCDDid,aapThis->mstart,aapThis->mstop,cTmp);
+        nhits++;
+        aapThis = aapThis->next;
+      }
+      /* fprintf(table,"<INPUT TYPE=\"HIDDEN\" NAME=\"nhits\" VALUE=\"%d\">\n",nhits); */
+      fprintf(table,"<IMG src=\"/Structure/new.gif\"><INPUT TYPE=\"SUBMIT\" VALUE=\"Show\">&nbsp;other proteins containing these domains\n");
+      fprintf(table,"</FORM>\n");
+/*    } */
     if (bAnyPdb) {
       fprintf(table, "&nbsp;<A HREF=\"cdd_help.shtml#RPSBPinkdot\"><IMG SRC=\"%spinkb.gif\" BORDER=0></A>&nbsp;&nbsp; .. This CD alignment includes 3D structure. To display structure, download \n",URLcgi);
       fprintf(table, "<STRONG><A HREF=\"/Structure/CN3D/cn3d.shtml\">Cn3D v3.00</A></STRONG>!\n");
       
-    }
-    if (iGraphMode) {
-      WRPSBCl3PrintGraphics(aap,table,maxrow,query_bsp,mask, iGraphMode);
     }
     WRPSBPrintDefLinesFromSeqAlign(aap,table,bAnyPdb,query_bsp,URLcgi);
     if (ISA_na(query_bsp->mol)) is_na = TRUE;
@@ -1576,6 +1721,7 @@ Int2 Main (void)
 {
   AsnIoPtr            aip;
   BioseqPtr           query_bsp, bsp;
+  BlastErrorMsgPtr    pBEM;
   BLAST_OptionsBlkPtr options;
   BLAST_KarlinBlkPtr  ka_params=NULL, ka_params_gap=NULL;
   BlastResponsePtr    response;
@@ -1610,6 +1756,7 @@ Int2 Main (void)
   Boolean             is_network;
   Boolean             bIsPrecalc      = FALSE;
   Boolean             bDbFromSeqAnnot = FALSE;
+  Boolean             bIsNetscape     = FALSE;
   Char                blast_program[32];
   Char                dbversion[6], dbname[16];
   Char                path[PATH_MAX];
@@ -1621,6 +1768,7 @@ Int2 Main (void)
   Int4                startloc, endloc;
   Int4                number_of_descriptions, number_of_alignments;
   Int4                iGraphMode      = 1;
+  Int4                GraphWidth      = WRPSB_GRAPH_WIDTH;
   Int4                iPairMode       = 2;
   FILE                *infp, *outfp, *fp;
     
@@ -1655,12 +1803,19 @@ Int2 Main (void)
 
 
 /*---------------------------------------------------------------------------*/
-/* Have to deal with the environment                                         */
+/* Have to deal with the environment CHANGE here from development server to  */
+/* using the production servers! (cdsearch_test vs. rpsblast)                */
 /*---------------------------------------------------------------------------*/
   if (getenv("NI_SERVICE_NAME_NETBLAST")==NULL) {
+#ifdef CDSEARCH_TEST
+    if (putenv("NI_SERVICE_NAME_NETBLAST=cdsearch_test")) {
+      WRPSBHtmlError("Error setting environment");
+    }
+#else
     if (putenv("NI_SERVICE_NAME_NETBLAST=rpsblast")) {
       WRPSBHtmlError("Error setting environment");
     }
+#endif
   }
 
 /*---------------------------------------------------------------------------*/
@@ -1698,6 +1853,10 @@ Int2 Main (void)
 
   if (!bMode)
     if (!WRPSBDrawPage()) WRPSBHtmlError("Could not draw initial page...");
+  info = (WWWInfoDataPtr) www_info;
+  if (StringStr(info->agent,"Mozilla/4")) bIsNetscape = TRUE;
+  if (StringStr(info->agent,"MSIE")) bIsNetscape = FALSE;
+/*  WRPSBHtmlError(info->agent); */
 /*---------------------------------------------------------------------------*/
 /* anything beyond this point assumes that a search is launched and results  */
 /* are being formatted                                                       */
@@ -1834,6 +1993,15 @@ Int2 Main (void)
     if (iGraphMode > 2) iGraphMode = 2;
     if (iGraphMode < 0) iGraphMode = 0;
   }
+  if ((indx = WWWFindName(www_info,"GWIDTH")) >= 0) {
+    www_arg = WWWGetValueByIndex(www_info, indx);
+    GraphWidth = (Int4) atoi(www_arg);
+    if (GraphWidth == -1) GraphWidth = WRPSB_GRAPH_WIDTH;
+    else {
+      if (GraphWidth > 50) GraphWidth = 50;
+      if (GraphWidth ==0 || GraphWidth < -5) GraphWidth = 1;
+    }
+  }
   if ((indx = WWWFindName(www_info,"PAIR")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
     iPairMode = (Int4) atoi(www_arg);
@@ -1897,6 +2065,13 @@ Int2 Main (void)
     }
     if ((query_bsp = bsp) == NULL || bsp->length <= 0)
       WRPSBHtmlError("Conversion to BioSeq failed!");         
+  }
+  
+  if (GraphWidth != WRPSB_GRAPH_WIDTH) {
+    if (GraphWidth > 0) GraphWidth = bsp->length / GraphWidth;
+    else GraphWidth = bsp->length * -1 * GraphWidth;
+    if (GraphWidth < 10) GraphWidth = 10;
+    if (GraphWidth > 10000) GraphWidth = 10000;
   }
 
   if (query_is_na) {
@@ -2025,8 +2200,12 @@ Int2 Main (void)
   }
   if (!salp) {
     if (error_returns) {
-      ErrPostEx(SEV_ERROR, 0, 0, "An error has occurred on the server\n");
-      WRPSBHtmlError("An error has occurred on the server!");
+      while (error_returns) {
+        pBEM = error_returns->data.ptrvalue;
+          ErrPostEx(SEV_ERROR, 0, 0, pBEM->msg);
+        error_returns = error_returns->next;
+      }
+      WRPSBHtmlError(pBEM->msg);
     }
   } 
 
@@ -2050,7 +2229,8 @@ Int2 Main (void)
   }
   WRPSBCl3ViewSeqAlign(salp, query_bsp, mask_loc, iGraphMode, iPairMode, options,
                        believe_query, print_options, version, date, bl3hp,
-                       blast_database, dbversion, bIsPrecalc);
+                       blast_database, dbversion, bIsPrecalc, GraphWidth,
+		       bIsNetscape);
 
   if (sep) sep = SeqEntryFree(sep);
   options = BLASTOptionDelete(options);

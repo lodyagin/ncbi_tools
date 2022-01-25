@@ -1,4 +1,4 @@
-/* $Id: posit2.c,v 6.4 2000/07/31 16:41:02 shavirin Exp $
+/* $Id: posit2.c,v 6.5 2000/11/20 14:35:51 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +32,15 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
-$Revision: 6.4 $
+$Revision: 6.5 $
 
 *****************************************************************************/
 
 /*
  * $Log: posit2.c,v $
+ * Revision 6.5  2000/11/20 14:35:51  madden
+ * Changed FileOpen mode for byte-encoded checkpoint files from "r" to "rb" or from "w" to "wb" to solve a problem on Windows NT.
+ *
  * Revision 6.4  2000/07/31 16:41:02  shavirin
  * Reduced POSIT_SCALE_FACTOR from 1000 to 200 to avoid overflow
  * with BLOSUM80; moved declaration os POSIT_SCALE_FACTOR to posit.h
@@ -362,7 +365,7 @@ Nlm_FloatHi scalingFactor)
   Int4 i,j; /*indices for position and character in alphabet*/
 
   BlastConstructErrorMessage("posReadCheckpoint", "Attempting to recover data from previous checkpoint\n", 1, error_return);
-  checkFile = FileOpen(fileName, "r");  
+  checkFile = FileOpen(fileName, "rb");  
   if (NULL == checkFile) {
     BlastConstructErrorMessage("posReadCheckpoint", "Could not open checkpoint file\n", 1, error_return);
     return(FALSE);

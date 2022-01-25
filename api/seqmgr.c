@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.132 $
+* $Revision: 6.141 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,33 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.141  2001/03/29 23:42:51  kans
+* added descriptor indexing - needed by large popset of segsets
+*
+* Revision 6.140  2001/03/26 18:58:16  kans
+* added INTERVAL_OVERLAP choice for SeqMgrGetOverlappingFeature, if CDS completely within mRNA introns using this test, do not report validator error
+*
+* Revision 6.139  2001/01/23 22:06:26  kans
+* SeqMgrExploreSegments now handles delta seqs as well as segmented seqs
+*
+* Revision 6.138  2000/11/28 18:33:53  kans
+* locking far components no longer needs feature indexing, does not reload if already on list
+*
+* Revision 6.137  2000/11/21 14:35:10  kans
+* feature sort order now uses coding region frame, if necessary, deals with intervals if both features are genes, RNAs, or CDSs
+*
+* Revision 6.136  2000/11/06 22:10:07  kans
+* only seg parentBioseq and lastsegbsp if segmented, not delta
+*
+* Revision 6.135  2000/11/03 00:13:00  kans
+* added from and to parameters to GenomePartToSegmentMap, needed because delta contig can refer to the same accession multiple times
+*
+* Revision 6.134  2000/11/02 16:14:27  kans
+* RecordSegmentInBioseq makes fake loc for seqlit, same as DeltaSeqsToSeqLocs
+*
+* Revision 6.133  2000/11/01 23:48:30  kans
+* far delta now works like segmented sequence for recording segments, mapping
+*
 * Revision 6.132  2000/10/31 16:16:25  madden
 * Remove extra & for MemSet
 *
@@ -3587,15 +3614,25 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
 
   /* free sorted arrays of pointers into data blocks */
 
+  bspextra->descrsByID = MemFree (bspextra->descrsByID);
+  bspextra->descrsBySdp = MemFree (bspextra->descrsBySdp);
+  bspextra->descrsByIndex = MemFree (bspextra->descrsByIndex);
+
   bspextra->alignsByID = MemFree (bspextra->alignsByID);
+
   bspextra->featsByID = MemFree (bspextra->featsByID);
   bspextra->featsBySfp = MemFree (bspextra->featsBySfp);
   bspextra->featsByPos = MemFree (bspextra->featsByPos);
+
   bspextra->genesByPos = MemFree (bspextra->genesByPos);
   bspextra->mRNAsByPos = MemFree (bspextra->mRNAsByPos);
   bspextra->CDSsByPos = MemFree (bspextra->CDSsByPos);
   bspextra->pubsByPos = MemFree (bspextra->pubsByPos);
   bspextra->orgsByPos = MemFree (bspextra->orgsByPos);
+
+  /* free list of descriptor information */
+
+  bspextra->desclisthead = ValNodeFree (bspextra->desclisthead);
 
   /* free arrays to speed mapping from parts to segmented bioseq */
 
@@ -3693,6 +3730,8 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrReapBioseqExtraFunc (Pointer data)
   Int2            i;
   SMFeatItemPtr   item;
   ObjMgrDataPtr   omdp;
+  SMDescItemPtr   sdip;
+  ValNodePtr      vnp;
 
   omdp = (ObjMgrDataPtr) data;
   if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return NULL;
@@ -3721,6 +3760,16 @@ NLM_EXTERN Pointer LIBCALLBACK SeqMgrReapBioseqExtraFunc (Pointer data)
 
   bspextra->protFeat = NULL;
   bspextra->cdsOrRnaFeat = NULL;
+
+  /* NULL out pointers to cached out descriptors */
+
+  for (vnp = bspextra->desclisthead; vnp != NULL; vnp = vnp->next) {
+    sdip = (SMDescItemPtr) vnp->data.ptrvalue;
+    if (sdip != NULL) {
+      sdip->sdp = NULL;
+      sdip->sep = NULL;
+    }
+  }
 
   return NULL;
 }
@@ -4436,6 +4485,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (Uint2 entityID, BioseqPtr
   return curr;
 }
 
+/*
 static ValNodePtr DesiredDescriptorPerBioseq (SeqEntryPtr sep, BioseqPtr bsp,
                                               Uint2 itemID, Uint2 index, ValNodePtr sdp,
                                               SeqMgrDescContext PNTR context)
@@ -4496,6 +4546,158 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor (Uint2 entityID, Bioseq
 
   return NULL;
 }
+*/
+
+static SMDescItemPtr SeqMgrFindSMDescItemByID (BioseqExtraPtr bspextra, Uint2 itemID)
+
+{
+  SMDescItemPtr PNTR  array;
+  SMDescItemPtr       item;
+  Int4                L;
+  Int4                mid;
+  Int4                R;
+
+  if (bspextra == NULL) return NULL;
+
+  array = bspextra->descrsByID;
+  if (array != NULL && bspextra->numdescs > 0) {
+    L = 0;
+    R = bspextra->numdescs - 1;
+    while (L < R) {
+      mid = (L + R) / 2;
+      item = array [mid];
+      if (item != NULL && item->itemID < itemID) {
+        L = mid + 1;
+      } else {
+        R = mid;
+      }
+    }
+
+    item = array [R];
+    if (item->itemID == itemID) return item;
+  }
+
+  return NULL;
+}
+
+static SMDescItemPtr SeqMgrFindSMDescItemBySdp (BioseqExtraPtr bspextra, SeqDescrPtr sdp)
+
+{
+  SMDescItemPtr PNTR  array;
+  SMDescItemPtr       item;
+  Int4                L;
+  Int4                mid;
+  Int4                R;
+
+  if (bspextra == NULL) return NULL;
+
+  array = bspextra->descrsBySdp;
+  if (array != NULL && bspextra->numdescs > 0) {
+    L = 0;
+    R = bspextra->numdescs - 1;
+    while (L < R) {
+      mid = (L + R) / 2;
+      item = array [mid];
+      if (item != NULL && item->sdp < sdp) {
+        L = mid + 1;
+      } else {
+        R = mid;
+      }
+    }
+
+    item = array [R];
+    if (item->sdp == sdp) return item;
+  }
+
+  return NULL;
+}
+
+static SMDescItemPtr SeqMgrFindSMDescItemByIndex (BioseqExtraPtr bspextra, Uint2 index)
+
+{
+  SMDescItemPtr PNTR  array;
+  SMDescItemPtr       item;
+  Int4                L;
+  Int4                mid;
+  Int4                R;
+
+  if (bspextra == NULL) return NULL;
+
+  array = bspextra->descrsByIndex;
+  if (array != NULL && bspextra->numdescs > 0) {
+    L = 0;
+    R = bspextra->numdescs - 1;
+    while (L < R) {
+      mid = (L + R) / 2;
+      item = array [mid];
+      if (item != NULL && item->index < index) {
+        L = mid + 1;
+      } else {
+        R = mid;
+      }
+    }
+
+    item = array [R];
+    if (item->index == index) return item;
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor (Uint2 entityID, BioseqPtr bsp,
+                                                          Uint2 itemID, Uint2 index, ValNodePtr sdp,
+                                                          SeqMgrDescContext PNTR context)
+
+{
+  BioseqExtraPtr     bspextra;
+  SeqMgrDescContext  dfaultcontext;
+  ObjMgrDataPtr      omdp = NULL;
+  SMDescItemPtr      sdip = NULL;
+  SeqEntryPtr        sep;
+
+  if (context == NULL) {
+    context = &dfaultcontext;
+  }
+  if (context != NULL) {
+    MemSet ((Pointer) context, 0, sizeof (SeqMgrDescContext));
+  }
+
+  if (entityID > 0) {
+    sep = SeqMgrGetTopSeqEntryForEntity (entityID);
+    if (sep != NULL) {
+      omdp = SeqMgrGetOmdpForPointer (sep->data.ptrvalue);
+    }
+  } else if (bsp != NULL) {
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+    entityID = ObjMgrGetEntityIDForPointer (bsp);
+  }
+
+  if (omdp == NULL) return NULL;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return NULL;
+
+  if (itemID > 0) {
+    sdip = SeqMgrFindSMDescItemByID (bspextra, itemID);
+  } else if (index > 0) {
+    sdip = SeqMgrFindSMDescItemByIndex (bspextra, index);
+  } else if (sdp != NULL) {
+    sdip = SeqMgrFindSMDescItemBySdp (bspextra, sdp);
+  }
+
+  if (sdip == NULL) return NULL;
+
+  context->entityID = entityID;
+  context->itemID = sdip->itemID;
+  context->sdp = sdip->sdp;
+  context->sep = sdip->sep;
+  context->level = sdip->level;
+  context->seqdesctype = sdip->seqdesctype;
+  context->userdata = NULL;
+  context->omdp = omdp;
+  context->index = sdip->index;
+
+  return sdip->sdp;
+}
 
 /*****************************************************************************
 *
@@ -4516,6 +4718,7 @@ typedef struct extraindex {
   Uint2           aligncount;
   Uint2           descrcount;
   Uint2           featcount;
+  Int4            seqlitid;
   Boolean         flip;
 } ExtraIndex, PNTR ExtraIndexPtr;
 
@@ -4609,6 +4812,7 @@ NLM_EXTERN void LIBCALL SeqMgrIndexAlignments (Uint2 entityID)
   exind.aligncount = 0;
   exind.descrcount = 0;
   exind.featcount = 0;
+  exind.seqlitid = 0;
 
   MemSet ((Pointer) objMgrFilter, 0, sizeof (objMgrFilter));
   objMgrFilter [OBJ_SEQALIGN] = TRUE;
@@ -5188,15 +5392,26 @@ static Boolean RecordSegmentsInBioseqs (GatherObjectPtr gop)
   BioseqPtr       bsp = NULL;
   BioseqExtraPtr  bspextra;
   Char            buf [80];
+  Dbtag           db;
+  DeltaSeqPtr     dsp;
   ExtraIndexPtr   exindx;
   Int4            from;
+  Boolean         isSeg = FALSE;
+  ObjectId        oi;
   ObjMgrDataPtr   omdp;
   SMSeqIdxPtr     segpartptr;
+  SeqId           si;
   SeqIdPtr        sid;
+  SeqInt          sint;
   SeqIntPtr       sipp;
+  SeqLoc          sl;
+  SeqLitPtr       slitp;
   SeqLocPtr       slp = NULL;
   Uint1           strand;
   Int4            to;
+
+  exindx = (ExtraIndexPtr) gop->userdata;
+  if (exindx == NULL) return FALSE;
 
   switch (gop->itemtype) {
     case OBJ_BIOSEQ :
@@ -5204,18 +5419,47 @@ static Boolean RecordSegmentsInBioseqs (GatherObjectPtr gop)
       if (bsp == NULL) return TRUE;
       break;
     case OBJ_BIOSEQ_SEG :
+      isSeg = TRUE;
       slp = (SeqLocPtr) gop->dataptr;
       if (slp == NULL) return TRUE;
+      break;
+    case OBJ_BIOSEQ_DELTA :
+      dsp = (DeltaSeqPtr) gop->dataptr;
+      if (dsp == NULL) return TRUE;
+      if (dsp->choice == 1) {
+        slp = (SeqLocPtr) dsp->data.ptrvalue;
+      } else if (dsp->choice == 2) {
+        slitp = (SeqLitPtr) dsp->data.ptrvalue;
+        if (slitp != NULL) {
+          /* fake seqloc, same as in DeltaSeqsToSeqLocs */
+          MemSet ((Pointer) &sl, 0, sizeof (SeqLoc));
+          MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+          MemSet ((Pointer) &si, 0, sizeof (SeqId));
+          MemSet ((Pointer) &db, 0, sizeof (Dbtag));
+          MemSet ((Pointer) &oi, 0, sizeof (ObjectId));
+          sl.choice = SEQLOC_INT;
+          sl.data.ptrvalue = (Pointer) &sint;
+          sint.from = 0;
+          sint.to = slitp->length - 1;
+          si.choice = SEQID_GENERAL;
+          si.data.ptrvalue = (Pointer) &db;
+          db.db = "SeqLit";
+          db.tag = &oi;
+          (exindx->seqlitid)++;
+          oi.id = exindx->seqlitid;
+          sint.id = &si;
+          slp = &sl;
+        }
+      }
       break;
     default :
       return TRUE;
   }
 
-  exindx = (ExtraIndexPtr) gop->userdata;
-  if (exindx == NULL) return FALSE;
-
   if (bsp != NULL) {
     if (bsp->repr == Seq_repr_seg) {
+      exindx->lastbsp = bsp;
+    } else if (bsp->repr == Seq_repr_delta) {
       exindx->lastbsp = bsp;
     } else {
       exindx->lastbsp = NULL;
@@ -5262,7 +5506,14 @@ static Boolean RecordSegmentsInBioseqs (GatherObjectPtr gop)
                                       (AsnReadFunc) SeqLocAsnRead,
                                       (AsnWriteFunc) SeqLocAsnWrite);
       segpartptr->seqIdOfPart = StringSave (buf);
-      segpartptr->parentBioseq = bsp;
+      if (isSeg) {
+
+        /* only annotate parentBioseq for segmented, not delta bioseq */
+
+        segpartptr->parentBioseq = bsp;
+      } else {
+        segpartptr->parentBioseq = NULL;
+      }
       segpartptr->cumOffset = exindx->cumulative;
       segpartptr->from = from;
       segpartptr->to = to;
@@ -5360,6 +5611,8 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
 
 {
   Int2                compare;
+  CdRegionPtr         crp1;
+  CdRegionPtr         crp2;
   Int2                i;
   Int2                j;
   Int2                numivals;
@@ -5367,6 +5620,10 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
   SMFeatItemPtr PNTR  spp2 = vp2;
   SMFeatItemPtr       sp1;
   SMFeatItemPtr       sp2;
+  SeqFeatPtr          sfp1;
+  SeqFeatPtr          sfp2;
+  Uint1               subtype1;
+  Uint1               subtype2;
 
   if (spp1 == NULL || spp2 == NULL) return 0;
   sp1 = *((SMFeatItemPtr PNTR) spp1);
@@ -5389,23 +5646,28 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
 
   /* given identical extremes, put gene features first */
 
-  } else if (sp1->subtype == FEATDEF_GENE) {
+  } else if (sp1->subtype == FEATDEF_GENE && sp2->subtype != FEATDEF_GENE) {
     return -1;
-  } else if (sp2->subtype == FEATDEF_GENE) {
+  } else if (sp2->subtype == FEATDEF_GENE && sp1->subtype != FEATDEF_GENE) {
     return 1;
+  }
 
   /* then rna features */
 
-  } else if (FindFeatFromFeatDefType (sp1->subtype) == SEQFEAT_RNA) {
+  subtype1 = FindFeatFromFeatDefType (sp1->subtype);
+  subtype2 = FindFeatFromFeatDefType (sp2->subtype);
+
+  if (subtype1 == SEQFEAT_RNA && subtype2 != SEQFEAT_RNA) {
     return -1;
-  } else if (FindFeatFromFeatDefType (sp2->subtype) == SEQFEAT_RNA) {
+  } else if (subtype2 == SEQFEAT_RNA && subtype1 != SEQFEAT_RNA) {
     return 1;
+  }
 
   /* then cds features */
 
-  } else if (sp1->subtype == FEATDEF_CDS) {
+  if (sp1->subtype == FEATDEF_CDS && sp2->subtype != FEATDEF_CDS) {
     return -1;
-  } else if (sp2->subtype == FEATDEF_CDS) {
+  } else if (sp2->subtype == FEATDEF_CDS && sp1->subtype != FEATDEF_CDS) {
     return 1;
   }
 
@@ -5441,6 +5703,26 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
     return -1;
   } else if (sp1->subtype > sp2->subtype) {
     return 1;
+  }
+
+  /* if identical cds ranges, compare codon_start */
+
+  if (sp1->subtype == FEATDEF_CDS && sp2->subtype == FEATDEF_CDS) {
+    sfp1 = sp1->sfp;
+    sfp2 = sp2->sfp;
+    if (sfp1 != NULL && sfp2 != NULL) {
+      crp1 = (CdRegionPtr) sfp1->data.value.ptrvalue;
+      crp2 = (CdRegionPtr) sfp2->data.value.ptrvalue;
+      if (crp1 != NULL && crp2 != NULL) {
+        if (crp1->frame > 1 || crp2->frame > 1) {
+          if (crp1->frame < crp2->frame) {
+            return -1;
+          } else if (crp1->frame < crp2->frame) {
+            return 1;
+          }
+        }
+      }
+    }
   }
 
   /* then compare feature label */
@@ -5486,6 +5768,11 @@ static int LIBCALLBACK SortSeqIdxArray (VoidPtr ptr1, VoidPtr ptr2)
   if (compare > 0) {
     return 1;
   } else if (compare < 0) {
+    return -1;
+  }
+  if (part1->cumOffset > part2->cumOffset) {
+    return 1;
+  } else if (part1->cumOffset < part2->cumOffset) {
     return -1;
   }
   return 0;
@@ -5541,7 +5828,7 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
     return;
   }
 
-  if (bsp->repr != Seq_repr_seg) return;
+  if (bsp->repr != Seq_repr_seg && bsp->repr != Seq_repr_delta) return;
 
   omdp = SeqMgrGetOmdpForBioseq (bsp);
   if (omdp == NULL) return;
@@ -5553,7 +5840,7 @@ static void IndexSegmentedParts (SeqEntryPtr sep, BioseqPtr PNTR lastsegbsp)
   }
   if (bspextra == NULL) return;
 
-  if (lastsegbsp != NULL) {
+  if (lastsegbsp != NULL && bsp->repr == Seq_repr_seg) {
     *lastsegbsp = bsp;
   }
 
@@ -5811,6 +6098,308 @@ static void IndexFeaturesOnEntity (SeqEntryPtr sep, SMFeatItemPtr PNTR featsByID
 
 /*****************************************************************************
 *
+*   SortDescItemListByID callback sorts by descriptor itemID
+*   SortDescItemListBySdp sorts by descriptor pointer
+*   SortDescItemListByIndex sorts by descriptor index
+*
+*****************************************************************************/
+
+static int LIBCALLBACK SortDescItemListByID (VoidPtr vp1, VoidPtr vp2)
+
+{
+  SMDescItemPtr PNTR  spp1 = vp1;
+  SMDescItemPtr PNTR  spp2 = vp2;
+  SMDescItemPtr       sp1;
+  SMDescItemPtr       sp2;
+
+  if (spp1 == NULL || spp2 == NULL) return 0;
+  sp1 = *((SMDescItemPtr PNTR) spp1);
+  sp2 = *((SMDescItemPtr PNTR) spp2);
+  if (sp1 == NULL || sp2 == NULL) return 0;
+
+  /* sort by descriptor itemID */
+
+  if (sp1->itemID > sp2->itemID) {
+    return 1;
+  } else if (sp1->itemID < sp2->itemID) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static int LIBCALLBACK SortDescItemListBySdp (VoidPtr vp1, VoidPtr vp2)
+
+{
+  SMDescItemPtr PNTR  spp1 = vp1;
+  SMDescItemPtr PNTR  spp2 = vp2;
+  SMDescItemPtr       sp1;
+  SMDescItemPtr       sp2;
+
+  if (spp1 == NULL || spp2 == NULL) return 0;
+  sp1 = *((SMDescItemPtr PNTR) spp1);
+  sp2 = *((SMDescItemPtr PNTR) spp2);
+  if (sp1 == NULL || sp2 == NULL) return 0;
+
+  /* sort by SeqDescrPtr value */
+
+  if (sp1->sdp > sp2->sdp) {
+    return 1;
+  } else if (sp1->sdp < sp2->sdp) {
+    return -1;
+  }
+
+  return 0;
+}
+
+static int LIBCALLBACK SortDescItemListByIndex (VoidPtr vp1, VoidPtr vp2)
+
+{
+  SMDescItemPtr PNTR  spp1 = vp1;
+  SMDescItemPtr PNTR  spp2 = vp2;
+  SMDescItemPtr       sp1;
+  SMDescItemPtr       sp2;
+
+  if (spp1 == NULL || spp2 == NULL) return 0;
+  sp1 = *((SMDescItemPtr PNTR) spp1);
+  sp2 = *((SMDescItemPtr PNTR) spp2);
+  if (sp1 == NULL || sp2 == NULL) return 0;
+
+  /* sort by descriptor index */
+
+  if (sp1->index > sp2->index) {
+    return 1;
+  } else if (sp1->index < sp2->index) {
+    return -1;
+  }
+
+  return 0;
+}
+
+/*****************************************************************************
+*
+*   RecordDescriptorsInBioseqs callback records list of relevant descriptors
+*
+*****************************************************************************/
+
+static void RecordDescriptorsInBioseqs (BioseqPtr bsp, Pointer userdata)
+
+{
+  BioseqExtraPtr      bspextra;
+  SeqMgrDescContext   context;
+  ValNodePtr          head = NULL;
+  ValNodePtr          last = NULL;
+  Int4                numdescs = 0;
+  ObjMgrDataPtr       omdp;
+  SMDescItemPtr       sdip;
+  SeqDescrPtr         sdp;
+  ValNodePtr          vnp;
+
+  if (bsp == NULL) return;
+
+  omdp = SeqMgrGetOmdpForBioseq (bsp);
+  if (omdp == NULL) return;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, 0, &context);
+  while (sdp != NULL) {
+
+    numdescs++;
+    sdip = (SMDescItemPtr) MemNew (sizeof (SMDescItem));
+    if (sdip != NULL) {
+      vnp = ValNodeNew (last);
+      if (head == NULL) {
+        head = vnp;
+      }
+      last = vnp;
+      if (vnp != NULL) {
+        vnp->data.ptrvalue = (Pointer) sdip;
+      }
+      sdip->sdp = sdp;
+      sdip->sep = context.sep;
+      sdip->itemID = context.itemID;
+      sdip->index = context.index;
+      sdip->level = context.level;
+      sdip->seqdesctype = context.seqdesctype;
+    }
+
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, 0, &context);
+  }
+
+  bspextra->desclisthead = head;
+  bspextra->numdescs = numdescs;
+}
+
+/*****************************************************************************
+*
+*   RecordDescriptorsOnTopSet callback records list of all descriptors
+*
+*****************************************************************************/
+
+typedef struct descindex {
+  ValNodePtr  deschead;
+  ValNodePtr  lastdesc;
+  Int4        numdescs;
+} DescIndex, PNTR DescIndexPtr;
+
+static void RecordAllDescsCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr      bsp;
+  BioseqSetPtr   bssp;
+  DescIndexPtr   dxp;
+  ObjValNodePtr  ovp;
+  SMDescItemPtr  sdip;
+  SeqDescrPtr    sdp = NULL;
+  ValNodePtr     vnp;
+
+  if (sep == NULL || mydata == NULL) return;
+  dxp = (DescIndexPtr) mydata;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    sdp = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    sdp = bssp->descr;
+  } else return;
+
+  while (sdp != NULL) {
+    (dxp->numdescs)++;
+    sdip = (SMDescItemPtr) MemNew (sizeof (SMDescItem));
+    if (sdip != NULL) {
+      vnp = ValNodeNew (dxp->lastdesc);
+      if (dxp->deschead == NULL) {
+        dxp->deschead = vnp;
+      }
+      dxp->lastdesc = vnp;
+      if (vnp != NULL) {
+        vnp->data.ptrvalue = (Pointer) sdip;
+      }
+      sdip->sdp = sdp;
+      sdip->sep = sep;
+      if (sdp->extended != 0) {
+        ovp = (ObjValNodePtr) sdp;
+        sdip->itemID = ovp->idx.itemID;
+      }
+      sdip->index = 0;
+      sdip->level = indent;
+      sdip->seqdesctype = sdp->choice;
+    }
+    sdp = sdp->next;
+  }
+}
+
+static void RecordDescriptorsOnTopSet (SeqEntryPtr sep)
+
+{
+  BioseqExtraPtr  bspextra;
+  BioseqSetPtr    bssp;
+  DescIndex       dx;
+  ObjMgrDataPtr   omdp;
+
+  if (sep == NULL) return;
+  if (! IS_Bioseq_set (sep)) return;
+
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return;
+
+  omdp = SeqMgrGetOmdpForPointer (bssp);
+  if (omdp == NULL) return;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) {
+    CreateBioseqExtraBlock (omdp, NULL);
+    bspextra = (BioseqExtraPtr) omdp->extradata;
+  }
+  if (bspextra == NULL) return;
+
+  dx.deschead = NULL;
+  dx.lastdesc = NULL;
+  dx.numdescs = 0;
+
+  SeqEntryExplore (sep, (Pointer) &dx, RecordAllDescsCallback);
+
+  bspextra->desclisthead = dx.deschead;
+  bspextra->numdescs = dx.numdescs;
+}
+
+/*****************************************************************************
+*
+*   IndexRecordedDescriptors callback builds sorted arrays of descriptors
+*
+*****************************************************************************/
+
+static void IndexRecordedDescriptors (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr           bsp;
+  BioseqExtraPtr      bspextra;
+  BioseqSetPtr        bssp;
+  SMDescItemPtr PNTR  descrsByID;
+  SMDescItemPtr PNTR  descrsBySdp;
+  SMDescItemPtr PNTR  descrsByIndex;
+  ValNodePtr          head;
+  Int4                i;
+  Int4                numdescs;
+  ObjMgrDataPtr       omdp = NULL;
+  SMDescItemPtr       sdip;
+  ValNodePtr          vnp;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    omdp = SeqMgrGetOmdpForBioseq (bsp);
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    omdp = SeqMgrGetOmdpForPointer (bssp);
+  } else return;
+
+  if (omdp == NULL) return;
+  bspextra = (BioseqExtraPtr) omdp->extradata;
+  if (bspextra == NULL) return;
+
+  head = bspextra->desclisthead;
+  numdescs = bspextra->numdescs;
+
+  if (head != NULL && numdescs > 0) {
+
+    /* build array of pointers into descriptor items */
+
+    descrsByID = (SMDescItemPtr PNTR) MemNew (sizeof (SMDescItemPtr) * (numdescs + 1));
+    bspextra->descrsByID = descrsByID;
+
+    descrsBySdp = (SMDescItemPtr PNTR) MemNew (sizeof (SMDescItemPtr) * (numdescs + 1));
+    bspextra->descrsBySdp = descrsBySdp;
+
+    descrsByIndex = (SMDescItemPtr PNTR) MemNew (sizeof (SMDescItemPtr) * (numdescs + 1));
+    bspextra->descrsByIndex = descrsByIndex;
+
+    if (descrsByID != NULL && descrsBySdp != NULL && descrsByIndex != NULL) {
+      for (i = 0, vnp = head; i < numdescs && vnp != NULL; i++, vnp = vnp->next) {
+        sdip = (SMDescItemPtr) vnp->data.ptrvalue;
+        if (sdip != NULL) {
+          descrsByID [i] = sdip;
+          descrsBySdp [i] = sdip;
+          descrsByIndex [i] = sdip;
+        }
+      }
+
+      /* sort all descriptors by itemID, SeqDescrPtr value, or index */
+
+      HeapSort ((VoidPtr) descrsByID, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByID);
+      HeapSort ((VoidPtr) descrsBySdp, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListBySdp);
+      HeapSort ((VoidPtr) descrsByIndex, (size_t) numdescs, sizeof (SMDescItemPtr), SortDescItemListByIndex);
+    }
+  }
+}
+
+/*****************************************************************************
+*
 *   SeqMgrReindexBioseqExtraData refreshes internal indices for rapid retrieval
 *
 *****************************************************************************/
@@ -5889,12 +6478,14 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (Uint2 entityID, Pointer ptr, Boo
   exind.aligncount = 0;
   exind.descrcount = 0;
   exind.featcount = 0;
+  exind.seqlitid = 0;
   exind.flip = flip;
 
   MemSet ((Pointer) objMgrFilter, 0, sizeof (objMgrFilter));
   objMgrFilter [OBJ_BIOSEQ] = TRUE;
   /* objMgrFilter [OBJ_BIOSEQSET] = TRUE not needed */
   objMgrFilter [OBJ_BIOSEQ_SEG] = TRUE;
+  objMgrFilter [OBJ_BIOSEQ_DELTA] = TRUE;
   GatherObjectsInEntity (entityID, 0, NULL, RecordSegmentsInBioseqs, (Pointer) &exind, objMgrFilter);
 
   /* build indexes to speed mapping of parts to segmented bioseq */
@@ -5915,6 +6506,7 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (Uint2 entityID, Pointer ptr, Boo
   exind.aligncount = 0;
   exind.descrcount = 0;
   exind.featcount = 0;
+  exind.seqlitid = 0;
   exind.flip = flip;
 
   MemSet ((Pointer) objMgrFilter, 0, sizeof (objMgrFilter));
@@ -5970,6 +6562,16 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (Uint2 entityID, Pointer ptr, Boo
       }
     }
   }
+
+  /* finish indexing list of descriptors on each indexed bioseq */
+
+  VisitBioseqsInSep (sep, NULL, RecordDescriptorsInBioseqs);
+
+  if (IS_Bioseq_set (sep)) {
+    RecordDescriptorsOnTopSet (sep);
+  }
+
+  SeqEntryExplore (sep, NULL, IndexRecordedDescriptors);
 
   /* free chain of SeqAlignPtr now that index is built */
 
@@ -6193,6 +6795,7 @@ static Boolean TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
                                Int4 left, Int4 right, Int2 overlapType)
 
 {
+  SeqLocPtr   a, b;
   SeqFeatPtr  sfp;
 
   if (overlapType == SIMPLE_OVERLAP) {
@@ -6221,6 +6824,28 @@ static Boolean TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
       if (sfp != NULL) {
         if (SeqLocAinB (slp, sfp->location) >= 0) {
           return TRUE;
+        }
+      }
+    }
+
+  } else if (overlapType == INTERVAL_OVERLAP) {
+
+    /* requires overlap between at least one pair of intervals */
+
+    if ((feat->left <= left && feat->right > left) ||
+        (feat->left < right && feat->right >= right)) {
+      sfp = feat->sfp;
+      if (sfp != NULL) {
+        a = SeqLocFindNext (slp, NULL);
+        while (a != NULL) {
+          b = SeqLocFindNext (sfp->location, NULL);
+          while (b != NULL) {
+            if (SeqLocCompare (a, b) != SLC_NO_MATCH) {
+              return TRUE;
+            }
+            b = SeqLocFindNext (sfp->location, b);
+          }
+          a = SeqLocFindNext (slp, a);
         }
       }
     }
@@ -6723,6 +7348,7 @@ NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetNextDescriptor (BioseqPtr bsp, ValNodePtr
     }
 
     sep = ObjMgrGetChoiceForData (omdp->dataptr);
+    
     (context->level)++;
 
     /* now look for first appropriate descriptor in current chain */
@@ -6942,7 +7568,8 @@ NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments (BioseqPtr bsp, Pointer userdata,
   SMSeqIdxPtr           segpartptr;
   SeqLocPtr             slp;
 
-  if (bsp == NULL || bsp->repr != Seq_repr_seg) return 0;
+  if (bsp == NULL) return 0;
+  if (bsp->repr != Seq_repr_seg && bsp->repr != Seq_repr_delta) return 0;
   omdp = SeqMgrGetOmdpForBioseq (bsp);
   if (omdp == NULL || omdp->datatype != OBJ_BIOSEQ) return 0;
   if (userfunc == NULL) return 0;
@@ -7305,7 +7932,7 @@ NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures (Uint2 entityID, Pointer userdata,
 *
 *****************************************************************************/
 
-static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, Boolean relaxed)
+static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip, Boolean relaxed, Int4 from, Int4 to)
 
 {
   BioseqExtraPtr    bspextra;
@@ -7314,6 +7941,7 @@ static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqP
   ObjMgrDataPtr     omdp;
   SMSeqIdxPtr PNTR  partsBySeqId;
   SMSeqIdxPtr       segpartptr;
+  CharPtr           seqIdOfPart;
   Int2              L, R, mid;
 
   if (in == NULL) return NULL;
@@ -7346,19 +7974,37 @@ static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqP
           R = mid;
         }
       }
+
+      /* loop through all components with same seqID, get appropriate segment */
+
       segpartptr = partsBySeqId [R];
-      if (StringCmp (segpartptr->seqIdOfPart, buf) == 0) {
+      seqIdOfPart = segpartptr->seqIdOfPart;
+      while (R < bspextra->numsegs && StringCmp (seqIdOfPart, buf) == 0) {
         if (relaxed) {
 
           /* for genome mapping of portion not included in contig */
 
-          return segpartptr;
+          if ((from >= segpartptr->from && from <= segpartptr->to) ||
+              (to >= segpartptr->from && to <= segpartptr->to) ||
+              (from < segpartptr->from && to > segpartptr->to) ||
+              (to < segpartptr->from && from > segpartptr->to)) {
+
+            return segpartptr;
+          }
 
         } else if (pos >= segpartptr->from && pos <= segpartptr->to) {
 
           /* otherwise only map portion included in contig */
 
           return segpartptr;
+        }
+
+        R++;
+        if (R < bspextra->numsegs) {
+          segpartptr = partsBySeqId [R];
+          seqIdOfPart = segpartptr->seqIdOfPart;
+        } else {
+          seqIdOfPart = NULL;
         }
       }
     }
@@ -7368,10 +8014,10 @@ static SMSeqIdxPtr BinarySearchPartToSegmentMap (BioseqPtr in, Int4 pos, BioseqP
   return NULL;
 }
 
-NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp)
+NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp, Int4 from, Int4 to)
 
 {
-  return BinarySearchPartToSegmentMap (in, 0, bsp, NULL, TRUE);
+  return BinarySearchPartToSegmentMap (in, 0, bsp, NULL, TRUE, from, to);
 }
 
 NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, BioseqPtr bsp, SeqIdPtr sip)
@@ -7415,7 +8061,7 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
 
   /* otherwise do binary search on segmented bioseq mapping data */
 
-  segpartptr = BinarySearchPartToSegmentMap (in, pos, bsp, sip, FALSE);
+  segpartptr = BinarySearchPartToSegmentMap (in, pos, bsp, sip, FALSE, 0, 0);
   if (segpartptr == NULL) return -1;
 
   if (pos >= segpartptr->from && pos <= segpartptr->to) {
@@ -7478,17 +8124,15 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq (BioseqPtr in, Int4 pos, 
   return -1;
 }
 
-static Boolean LIBCALLBACK LockAllSegments (SeqLocPtr slp, SeqMgrSegmentContextPtr context)
+static void LockAllSegments (SeqLocPtr slp, ValNodePtr PNTR vnpp)
 
 {
-  BioseqPtr        bsp;
-  SeqLocPtr        loc;
-  SeqIdPtr         sip;
-  ValNodePtr PNTR  vnpp;
+  BioseqPtr   bsp;
+  SeqLocPtr   loc;
+  SeqIdPtr    sip;
+  ValNodePtr  vnp;
 
-  if (slp == NULL || context == NULL) return FALSE;
-  vnpp = (ValNodePtr PNTR) context->userdata;
-  if (vnpp == NULL) return TRUE;
+  if (slp == NULL || vnpp == NULL) return;
 
   sip = SeqLocId (slp);
   if (sip == NULL) {
@@ -7497,52 +8141,56 @@ static Boolean LIBCALLBACK LockAllSegments (SeqLocPtr slp, SeqMgrSegmentContextP
       sip = SeqLocId (loc);
     }
   }
-  if (sip == NULL) return TRUE;
+  if (sip == NULL) return;
 
   /* if packaged in record, no need to fetch it */
 
-  if (BioseqFindCore (sip) != NULL) return TRUE;
+  if (BioseqFindCore (sip) != NULL) return;
+
+  /* check against currently locked records */
+
+  for (vnp = *vnpp; vnp != NULL; vnp = vnp->next) {
+    bsp = (BioseqPtr) vnp->data.ptrvalue;
+    if (bsp == NULL) continue;
+    if (SeqIdIn (sip, bsp->id)) return;
+  }
 
   bsp = BioseqLockById (sip);
   ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
-
-  return TRUE;
 }
 
-static Boolean LIBCALLBACK LockAllBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr context)
+static void LockAllBioseqs (BioseqPtr bsp, Pointer userdata)
 
 {
-  DeltaSeqPtr           dsp;
-  SeqMgrSegmentContext  segcontext;
-  SeqLocPtr             slp;
-  ValNodePtr PNTR       vnpp;
+  DeltaSeqPtr      dsp;
+  SeqLocPtr        slp = NULL;
+  ValNode          vn;
+  ValNodePtr PNTR  vnpp;
 
-  if (bsp == NULL || context == NULL) return FALSE;
-  vnpp = (ValNodePtr PNTR) context->userdata;
-  if (vnpp == NULL) return TRUE;
-
-  /*
-  BioseqLock (bsp);
-  ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
-  */
-
-  MemSet ((Pointer) &segcontext, 0, sizeof (SeqMgrSegmentContext));
-  segcontext.userdata = (Pointer) vnpp; /* to use seg callback for delta seq */
+  if (bsp == NULL) return;
+  vnpp = (ValNodePtr PNTR) userdata;
+  if (vnpp == NULL) return;
 
   if (bsp->repr == Seq_repr_seg) {
-    SeqMgrExploreSegments (bsp, (Pointer) vnpp, LockAllSegments);
+    vn.choice = SEQLOC_MIX;
+    vn.extended = 0;
+    vn.data.ptrvalue = bsp->seq_ext;
+    vn.next = NULL;
+    while ((slp = SeqLocFindNext (&vn, slp)) != NULL) {
+      if (slp != NULL && slp->choice != SEQLOC_NULL) {
+        LockAllSegments (slp, vnpp);
+      }
+    }
   } else if (bsp->repr == Seq_repr_delta) {
     for (dsp = (DeltaSeqPtr) (bsp->seq_ext); dsp != NULL; dsp = dsp->next) {
       if (dsp->choice == 1) {
         slp = (SeqLocPtr) dsp->data.ptrvalue;
         if (slp != NULL && slp->choice != SEQLOC_NULL) {
-          LockAllSegments (slp, &segcontext);
+          LockAllSegments (slp, vnpp);
         }
       }
     }
   }
-
-  return TRUE;
 }
 
 NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep)
@@ -7553,7 +8201,7 @@ NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep)
 
   if (sep == NULL) return NULL;
   oldsep = SeqEntrySetScope (sep);
-  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &bsplist, LockAllBioseqs, TRUE, FALSE, FALSE);
+  VisitBioseqsInSep (sep, (Pointer) &bsplist, LockAllBioseqs);
   SeqEntrySetScope (oldsep);
   return bsplist;
 }
@@ -7571,7 +8219,6 @@ NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist)
       BioseqUnlock (bsp);
     }
   }
-  bsplist = ValNodeFree (bsplist);
-  return bsplist;
+  return ValNodeFree (bsplist);
 }
 

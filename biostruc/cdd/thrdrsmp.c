@@ -1,4 +1,4 @@
-/* $Id: thrdrsmp.c,v 1.2 2000/08/16 21:18:57 hurwitz Exp $
+/* $Id: thrdrsmp.c,v 1.4 2000/12/21 14:14:41 beloslyu Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdrsmp.c,v $
+* Revision 1.4  2000/12/21 14:14:41  beloslyu
+* c++ comments are not allowed in c code
+*
+* Revision 1.3  2000/12/20 18:56:41  hurwitz
+* new random num gen, more debug printing
+*
 * Revision 1.2  2000/08/16 21:18:57  hurwitz
 * fix dangerous warnings found by MS Visual C++, replace rand48 functions with toolkit functions
 *
@@ -63,15 +69,13 @@ int rsmp(Rnd_Smp* pvl) {
 int	i;		/* The i-th offset parameter value will be the choice */
 float	c;		/* Cumulative probabilites across parameter values */
 float	r;		/* A uniform random number on the interval 0 - 1 */
+int idum = 1;
 
 /* for(i=0;i<pvl->n;i++) printf("%.4f ",pvl->p[i]); printf("pvl->p\n");  */
 
 /* r=drand48(); c=0.; */
-
-  /* 0 <= RandomNum() <= 2**31 - 1 */
-  /* 0x7fffffff = 2**31 - 1 */
-  r = (float) ((double)RandomNum()/(double)0x7fffffff);
-  c = 0.;
+r = Rand01(&idum);
+c = 0.0;
 
 /* printf("r: %.4f\n",r); */
 
@@ -81,5 +85,54 @@ for(i=0; i<pvl->n; i++) {
 	if(c>=r) return(i); }
 
 return(i-1);
+}
 
+
+#define  M1  259200
+#define IA1    7141
+#define IC1   54773
+#define RM1 (1.0/M1)
+#define  M2  134456
+#define IA2    8121
+#define IC2   28411
+#define RM2 (1.0/M2)
+#define  M3  243000
+#define IA3    4561
+#define IC3   51349
+
+float Rand01(int* idum) {
+/*----------------------------------------------------------------------------
+// Returns a uniform deviate between 0.0 and 1.0.
+// Set idum to any negative value to initialize or reinitialize the sequence.
+//
+// This is copied from Numerical Recipes, chapter 7.1, 1988.
+// (ISBN 0-521-35465-X)
+//--------------------------------------------------------------------------*/
+  static long   ix1,ix2,ix3;
+  static float  r[98];
+  float         temp;
+  static int    iff=0;
+  int           j;
+
+  if (*idum<0 || iff==0) {
+    iff=1;
+    ix1=(IC1-*idum) % M1;
+    ix1=(IA1*ix1+IC1) % M1;
+    ix2=ix1 % M2;
+    ix1=(IA1*ix1+IC1) % M1;
+    ix3=ix1 % M3;
+    for (j=1; j<=97; j++) {
+      ix1=(IA1*ix1+IC1) % M1;
+      ix2=(IA2*ix2+IC2) % M2;
+      r[j]=(ix1+ix2*RM2)*RM1;
+    }
+    *idum=1;
+  }
+  ix1=(IA1*ix1+IC1) % M1;
+  ix2=(IA2*ix2+IC2) % M2;
+  ix3=(IA3*ix3+IC3) % M3;
+  j=1 + ((97*ix3)/M3);
+  temp=r[j];
+  r[j]=(ix1+ix2*RM2)*RM1;
+  return(temp);
 }

@@ -1,4 +1,4 @@
-/*  $Id: pgppop.h,v 6.38 2000/10/13 19:48:16 hurwitz Exp $
+/*  $Id: pgppop.h,v 6.39 2001/01/16 17:15:54 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: pgppop.h,v $
+* Revision 6.39  2001/01/16 17:15:54  hurwitz
+* modified DDV_GetBspCoordGivenDispCoord
+*
 * Revision 6.38  2000/10/13 19:48:16  hurwitz
 * added functions for getting first VALID disp coord in range of bsp coords
 *
@@ -462,7 +465,8 @@ NLM_EXTERN void PrintSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
                                    Int4 index, Int2 indent);
 NLM_EXTERN ByteStorePtr SeqAlignToBS (Uint2 entity);
 
-NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp,Int4 disp_pos);
+NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord(ParaGPtr pgp, Int4 disp_pos);
+NLM_EXTERN Int4 DDV_GetBspCoordGivenDispCoord2(ParaGPtr pgp, Int4 disp_pos, Boolean* pUnAligned);
 NLM_EXTERN Int4 DDV_GetBspCoordGivenPgpList(ValNodePtr ParaG_List,Int4 disp_pos);
 NLM_EXTERN Int4 DDV_GetDispCoordGivenBspCoord(ValNodePtr vnp_head,Int4 bsp_pos);
 NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrNew(DDVRulerDescrPtr pRulerDescr);

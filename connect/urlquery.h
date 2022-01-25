@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.9  2001/02/21 22:02:04  lavr
+* Changes for use new CONN interface
+*
 * Revision 6.8  2000/08/18 19:08:58  kans
 * added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
 *
@@ -58,7 +61,7 @@
 #define _URLQUERY_
 
 #include <ncbi.h>
-#include <con_url.h>
+#include <connect/ncbi_http_connector.h>
 #include <asn.h>
 
 
@@ -85,7 +88,7 @@ extern "C" {
     "/cgi-bin/Sequin/testcgi.cgi",
     "request=seg&window=12&lowcut=2.3&hicut=2.6",
     "Sequin", 30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
-    URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT
+    fHCC_SureFlush | fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput
   );
 
   The returned CONN value is then passed data before being sent to the cgi.
@@ -100,7 +103,7 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   EMIME_Type type,
   EMIME_SubType subtype,
   EMIME_Encoding encoding,
-  URLC_Flags flags
+  THCC_Flags flags
 );
 
 /*
@@ -162,7 +165,7 @@ NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (
 
 /* Callback type for queued queries */
 typedef Nlm_Boolean (LIBCALLBACK *QueryResultProc) (
-  CONN conn, Nlm_VoidPtr userdata, EConnStatus status
+  CONN conn, Nlm_VoidPtr userdata, EIO_Status status
 );
 
 /* Opaque handle type.  Variable must be kept by application and initialized

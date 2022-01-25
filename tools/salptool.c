@@ -9,6 +9,7 @@
 #include <txalign.h>
 #include <sqnutils.h>
 #include <satutil.h>
+#include <alignmgr.h>
 
 #define MIN_SEG_SIZE 10 /* used by MergeTwoDspBySIM4 , check_align_match_diagnol<-ModFilterDenseSegAlign<-ModifyAlignList<-SeqAlignConsistentDiagFilter */
 
@@ -865,6 +866,159 @@ static Boolean is_bad_blast_alignment(SeqAlignPtr align, SeqLocPtr slp1, SeqLocP
 		min_align_len, MIN(SeqLocLen(slp1), SeqLocLen(slp2)));
 }
 
+/*
+  Blindly reverse the left-right order of the seqalign... to maintain
+  'display' order.
+ */
+NLM_EXTERN void SeqAlignReverseOrder(SeqAlignPtr align)
+{
+	Int2 numseg, i, j;
+
+	if(align->segtype == SAS_DENSEG) {
+	    DenseSegPtr dsp;
+	    dsp = (DenseSegPtr) align->segs;
+	    if(dsp) {
+		numseg = dsp->numseg;
+		for(i = 0, j = numseg-1; i<(numseg+1)/2 && i!=j; i++, --j)
+		    {
+			Int4 tmp_start,k;
+			Uint1 tmp_strand;
+			for(k=0;k<dsp->dim;k++) {
+			    tmp_start = dsp->starts[2*i+k];
+			    dsp->starts[2*i+k] = dsp->starts[2*j+k];
+			    dsp->starts[2*j+k] = tmp_start;
+			    tmp_strand = dsp->strands[2*i+k];
+			    dsp->strands[2*i+k] = dsp->strands[2*j+k];
+			    dsp->strands[2*j+k] = tmp_strand;
+			}
+			dsp->lens[j] = dsp->lens[i];
+		    }
+	    }
+	} else if (align->segtype == SAS_DENDIAG) {
+	    DenseDiagPtr ddp,ddp_last,ddp_next;
+	    ddp = (DenseDiagPtr) align->segs;
+	    ddp_last =NULL;
+	    while(ddp) {
+		{
+		    ddp_next = ddp->next;
+		    ddp->next = ddp_last;
+		    ddp_last = ddp;
+		    ddp = ddp_next;
+		}
+		align->segs = ddp_last;
+	    }
+	} else if (align->segtype == SAS_STD) {
+	    StdSegPtr ssp,ssp_last,ssp_next;
+	    ssp = (StdSegPtr) align->segs;
+	    ssp_last =NULL;
+	    while(ssp) {
+		{
+		    ssp_next = ssp->next;
+		    ssp->next = ssp_last;
+		    ssp_last = ssp;
+		    ssp = ssp_next;
+		}
+		align->segs = ssp_last;
+	    }	    
+	} else {
+	    ErrPostEx(SEV_WARNING,0,0,"SeqAlignReverse order : unsupported seqalign type %d\n",align->segtype);
+	}
+}
+
+NLM_EXTERN void SeqAlignSwapSeqs(SeqAlignPtr align) {
+    if(align->segtype == SAS_DENSEG) {
+	DenseSegPtr dsp;
+	dsp = (DenseSegPtr) align->segs;
+	if(dsp) {
+	    SeqIdPtr sip;
+	    Int4 i;
+	    sip = dsp->ids;
+	    dsp->ids = dsp->ids->next;
+	    sip->next = NULL;
+	    dsp->ids->next = sip;
+	    for(i=0;i<dsp->numseg;i++) {
+		Int4 tmp_start;
+		Uint1 tmp_strand;
+		tmp_start = dsp->starts[2*i];
+		dsp->starts[2*i] = dsp->starts[2*i+1];
+		dsp->starts[2*i+1] = tmp_start;
+		tmp_strand = dsp->strands[2*i];
+		dsp->strands[2*i] = dsp->strands[2*i+1];
+		dsp->strands[2*i+1] = tmp_strand;
+	    }
+	}
+    } else if (align->segtype == SAS_DENDIAG) {
+	DenseDiagPtr ddp;
+	ddp = (DenseDiagPtr) align->segs;
+	while(ddp) {
+	    SeqIdPtr sip;
+	    sip = ddp->id;
+	    ddp->id = ddp->id->next;
+	    sip->next = NULL;
+	    ddp->id->next = sip;
+	    {
+		Int4 tmp_start;
+		Uint1 tmp_strand;
+		tmp_start = ddp->starts[0];
+		ddp->starts[0] = ddp->starts[1];
+		ddp->starts[1] = tmp_start;
+		tmp_strand = ddp->strands[0];
+		ddp->strands[0] = ddp->strands[1];
+		ddp->strands[1] = tmp_strand;
+	    }
+	    ddp = ddp->next;
+	}		
+    } else if (align->segtype == SAS_STD) {
+	StdSegPtr ssp;
+	ssp = (StdSegPtr) align->segs;
+	while(ssp) {
+	    SeqIdPtr sip;
+	    sip = ssp->ids;
+	    if(sip) {
+		ssp->ids = ssp->ids->next;
+		sip->next = NULL;
+		ssp->ids->next = sip;
+	    }
+	    {
+		SeqLocPtr tmp_slp;
+		tmp_slp = ssp->loc;
+		ssp->loc = ssp->loc->next;
+		ssp->loc->next = tmp_slp;
+		tmp_slp->next = NULL;
+	    }
+	    ssp = ssp->next;
+	}				
+    } else {
+	ErrPostEx(SEV_WARNING,0,0,"SeqAlignSwapSeqs: Do not know how to reverse SeqAlign of this type\n");
+    }
+    return;
+}
+
+NLM_EXTERN SeqAlignPtr BlastTwoSequencesByLocBOTH(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr program, BLAST_OptionsBlkPtr options) {
+    Uint1 strand1,strand2;
+    strand1 = SeqLocStrand(slp1);
+    strand2 = SeqLocStrand(slp2);
+    if(strand2 == Seq_strand_both && strand1!= Seq_strand_both) {
+	/* cases + BOTH or -BOTH */
+	SeqAlignPtr align,align_head;
+	align = BlastTwoSequencesByLoc(slp2, slp1, program, options);
+	align_head = align;
+	while(align) {
+	    SeqAlignSwapSeqs(align);
+	    /* Make Sure seqalign remains in 'display' order */
+	    if((strand1 = SeqAlignStrand(align,0)) != (strand2=SeqAlignStrand(align,1))) {
+	       if(strand1 == Seq_strand_minus)
+		   SeqAlignReverseOrder(align);
+	       else if (strand2 == Seq_strand_minus) 
+		   SeqAlignReverseOrder(align);
+	    }
+	    align = align->next;
+	}
+	return align_head;
+    } else 
+	return BlastTwoSequencesByLoc(slp1, slp2, program, options);
+
+}
 NLM_EXTERN SeqAlignPtr SeqAlignSplitBlastTwoSeq(SeqLocPtr slp1, SeqLocPtr slp2, 
 		Int4 split_len, Int4 overlap_len, BLAST_OptionsBlkPtr options)
 {
@@ -913,7 +1067,7 @@ NLM_EXTERN SeqAlignPtr SeqAlignSplitBlastTwoSeq(SeqLocPtr slp1, SeqLocPtr slp2,
 			if(i == num -1)
 				sint->to = SeqLocStop(slp1);
 			sint->strand = SeqLocStrand(slp1);
-			t_align = BlastTwoSequencesByLoc(slp, slp2, "blastn", options);
+			t_align = BlastTwoSequencesByLocBOTH(slp, slp2, options->program_name, options);
 			if(t_align != NULL)
 			{
 				if(align == NULL)
@@ -930,7 +1084,7 @@ NLM_EXTERN SeqAlignPtr SeqAlignSplitBlastTwoSeq(SeqLocPtr slp1, SeqLocPtr slp2,
 		}
 		SeqLocFree(slp);
 	} else
-	    align = BlastTwoSequencesByLoc(slp1, slp2, "blastn", options);
+	    align = BlastTwoSequencesByLocBOTH(slp1, slp2, options->program_name, options);
 
 	return align;
 }
@@ -1845,7 +1999,7 @@ static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, Int4 length, Int4 
   return ret;
 }
 
-static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 offset, Uint1 strand)
+static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 offset, Int4 len, Uint1 strand)
 {
   SeqAlignPtr salptmp;
   DenseSegPtr dsp;
@@ -1875,30 +2029,40 @@ static void SeqAlignStartUpdate (SeqAlignPtr salp, SeqIdPtr target_sip, Int4 off
               if (strand == Seq_strand_minus)
               {
                  strandp=dsp->strands;
-                 strandp+=index;
-                 for (j=0; j < dsp->numseg && strandp!=NULL; j++)
-                 {
-                    if (*strandp == Seq_strand_minus)
-                       *strandp = Seq_strand_plus;
-                    else if (*strandp == Seq_strand_plus)
-                       *strandp = Seq_strand_minus;
-                    strandp+=dsp->dim;
-                 }
+                 if (strandp != NULL) {
+                   strandp+=index;
+                   for (j=0; j < dsp->numseg; j++)
+                   {
+                      if (*strandp == Seq_strand_minus)
+                         *strandp = Seq_strand_plus;
+                      else if (*strandp == Seq_strand_plus)
+                         *strandp = Seq_strand_minus;
+                      strandp+=dsp->dim;
+                   }
+                } else
+                {
+                   dsp->strands = (Uint1Ptr)MemNew(dsp->dim*dsp->numseg*sizeof(Uint1));
+                   for (j=0; j<dsp->dim*dsp->numseg; j++)
+                      dsp->strands[j] = Seq_strand_plus;
+                   for(j=0; j<dsp->numseg; j++)
+                      dsp->strands[j*dsp->dim + index] = Seq_strand_minus;
+                }
                  lenp=dsp->lens;
                  startp=dsp->starts;
                  start=startp[index];
                  len_sum=0;
                  j=dsp->dim*dsp->numseg-dsp->dim;
                  k=dsp->numseg-1;
-                 for (; j>=0; j-=dsp->dim) {
-                    startp[j+index]=start+len_sum;
-                    len_sum+=lenp[k];
-                    k--;
+                 for (j=0; j<dsp->numseg; j++) {
+                    if (startp[j*dsp->dim + index]>=0)
+                       startp[j*dsp->dim + index]=len-startp[j*dsp->dim + index]-dsp->lens[j]+1;
                  }
-              }
-              for (j=0; j<dsp->numseg; j++) {
-                 if (dsp->starts[dsp->dim*j+index] != -1)
-                    dsp->starts[dsp->dim*j+index] += offset;
+              } else
+              {
+                 for (j=0; j<dsp->numseg; j++) {
+                    if (dsp->starts[dsp->dim*j+index] != -1)
+                        dsp->starts[dsp->dim*j+index] += offset;
+                 }
               }
            }
            pre=sip;
@@ -1949,7 +2113,6 @@ static void showtextalign_fromalign (SeqAlignPtr salp, CharPtr path, FILE *fp)
 static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
 {
   BLAST_OptionsBlkPtr options;
-  SeqLocPtr           slp1, slp2;
   MsgAnswer           ans;
   DenseSegPtr         dsp;
   SeqIdPtr            sip,
@@ -1963,14 +2126,16 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
   Char                str [52];
   Int4                gi = 0,
                       offset,
-                      totlenlcl, totlendb;
-  Int4                j, k;
+                      totlenlcl = 0, totlendb = 0;
+  Int4                j, k, len;
   Int2                index;
   Uint1               strand;
   Boolean             ok, 
                       found;
   
   Char                strLog[50];
+  BioseqPtr           bsp1, bsp2;
+  Int4                start1, start2, stop1, stop2;
 
   if (salp!=NULL) {
      if (salp->segtype == 2) {
@@ -2023,20 +2188,20 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                  }
               }
               if (dbsip!=NULL) {
-                 totlendb = getlengthforid(dbsip); 
-                 totlenlcl = getlengthforid(lclsip);
-                 if (totlendb > 0 && totlenlcl > 0) {
-                  
-                 slp1 = SeqLocIntNew (0, totlenlcl-1, Seq_strand_both, lclsip);
-                 slp2 = SeqLocIntNew (0, totlendb-1, Seq_strand_both, dbsip);
+                 bsp1 = BioseqLockById(lclsip);
+                 bsp2 = BioseqLockById(dbsip);
+                 if ( bsp1 != NULL && bsp2 != NULL && bsp1->length > 0 && bsp2->length > 0) {
                  options = BLASTOptionNew("blastn", FALSE);
 /*
                  options->penalty = -5; 
                  options->cutoff_s = totlenlcl; 
 */
-                 seqalign = BlastTwoSequencesByLoc (slp1, slp2, NULL, options);
-                 
-                 bestsalp = SeqAlignBestHit (seqalign, totlenlcl, 100);
+                 options->filter_string = "";
+                 seqalign = BlastTwoSequences (bsp1, bsp2, "blastn", options);
+                 len = bsp2->length;
+                 BioseqUnlock(bsp1);
+                 BioseqUnlock(bsp2);
+                 bestsalp = SeqAlignBestHit (seqalign, bsp1->length, 100);
                  if (bestsalp) 
                  {
                     SeqIdWrite (dbsip, strLog, PRINTID_TEXTID_ACCESSION, 50);
@@ -2044,11 +2209,16 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                     if (ans != ANS_CANCEL) 
                     {
                        offset = SeqAlignStart(bestsalp, 1)-SeqAlignStart(bestsalp, 0);
-                       if (SeqAlignStrand(bestsalp, 0)==Seq_strand_minus || SeqAlignStrand(bestsalp, 1)==Seq_strand_minus)
+                       if ((SeqAlignStrand(bestsalp, 0)==Seq_strand_minus && SeqAlignStrand(bestsalp, 1) != Seq_strand_minus) || (SeqAlignStrand(bestsalp, 1)==Seq_strand_minus && SeqAlignStrand(bestsalp, 0) != Seq_strand_minus))
+                       {
                           strand=Seq_strand_minus;
-                       else
+                          AlnMgrIndexSingleChildSeqAlign(bestsalp);
+                          AlnMgrGetNthSeqRangeInSA(bestsalp, 1, &start1, &stop1);
+                          AlnMgrGetNthSeqRangeInSA(bestsalp, 2, &start2, &stop2);
+                          len = stop2 + start1;
+                       } else
                           strand=Seq_strand_plus;
-                       SeqAlignStartUpdate (salp, lclsip, offset, strand);
+                       SeqAlignStartUpdate (salp, lclsip, offset, len, strand);
                        dsp->ids = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
                        if (presip)
                           sip = presip->next;
@@ -2071,7 +2241,7 @@ static ValNodePtr CCNormalizeSeqAlignId (SeqAlignPtr salp, ValNodePtr vnp)
                           strand=Seq_strand_minus;
                        else
                           strand=Seq_strand_plus;
-                       SeqAlignStartUpdate (salp, lclsip, offset, strand);
+                       SeqAlignStartUpdate (salp, lclsip, offset, len, strand);
                        dsp->ids = SeqIdReplaceID(dsp->ids, presip, dbsip, next); 
                        if (presip)
                           sip = presip->next;

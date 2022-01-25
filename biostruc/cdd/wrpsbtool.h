@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.4 2000/10/12 20:48:26 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.5 2001/03/09 22:52:01 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.5  2001/03/09 22:52:01  bauer
+* use JavaScript to embed graphics in results page
+*
 * Revision 1.4  2000/10/12 20:48:26  bauer
 * added absolute URLs for graphics elements on the CD-search results pages
 *
@@ -75,6 +78,19 @@
 #define DDVCOL_BROWN 21
 #define DDV_COLOR_MAX 33
 
+#include <gd_io.h>
+
+typedef struct borkIOCtx {
+  gdIOCtx	ctx;
+  CharPtr	buffer;
+  Int4	len;
+  Int4	bufsz;
+} borkIOCtx;
+
+gdIOCtx* newBorkCtx(FILE *f);
+static     Int4                   borkPutbuf(gdIOCtx*, const void *, Int4);
+static     void                   borkPutchar(gdIOCtx*, Int4 );
+static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                OverlapInterval(Int4 from1, Int4 to1, Int4 from2, Int4 to2);
            void                   WRPSBHtmlError(CharPtr cErrTxt); 
            Int4                   max(Int4 i1, Int4 i2);

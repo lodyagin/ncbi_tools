@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.3 2000/09/18 17:26:46 bauer Exp $
+/* $Id: wrpsb.h,v 1.5 2001/02/22 15:53:22 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.3 $
+* $Revision: 1.5 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.5  2001/02/22 15:53:22  bauer
+* support for jagged edge blocks
+*
+* Revision 1.4  2000/12/08 20:15:22  bauer
+* added support for Queued RPS-Blast
+*
 * Revision 1.3  2000/09/18 17:26:46  bauer
 * CddHitPtr now extracted from pruned seqalign
 *
@@ -53,6 +59,7 @@
 
 #define CPUTIME_MAX        480
 #define RPSBNAME           "wrpsb.cgi"
+#define QRPSBNAME          "qrpsb.cgi"
 #define DEFAULT_DATALIB    "oasis_sap"
 #define DEFAULT_EVALUE     "0.01"
 #define DEFAULT_NHITS      "50"
@@ -117,6 +124,7 @@ typedef struct _alignment_abstract {
   ScorePtr                        score;
   Int4                            red, green, blue;
   Int4                            mstart, mstop, gstart, gstop;
+  Nlm_FloatHi                     nmissg, cmissg;
   Int4                            row;
   SeqAlignPtr                     salp;
   Char                            name[16];

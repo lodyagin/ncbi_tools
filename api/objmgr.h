@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.24 $
+* $Revision: 6.27 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.27  2001/02/16 21:34:49  ostell
+* changed GetSecs() to ObjMgrTouchCnt() to reduce system calls
+*
+* Revision 6.26  2000/11/28 22:59:02  kans
+* omdp->lockcnt now a Uint2 to avoid overflow when locking accessions repeatedly referenced by genomic contig
+*
+* Revision 6.25  2000/11/28 21:43:55  kans
+* added ObjMgrReportFunc for debugging
+*
 * Revision 6.24  2000/10/30 21:26:09  shavirin
 * Changes and fixes for some MT-safety related problems.
 *
@@ -416,9 +425,9 @@ typedef struct objmgrdata {
 	Pointer parentptr;
 	Uint2 choicetype;
 	ValNodePtr choice;           /* CHOICE wrapper (if datatype=Bioseq or Set) */
-	Uint1 lockcnt;             /* count of locks */
+	Uint2 lockcnt;             /* count of locks */
 	Uint1 tempload;
-	time_t touch;                /* last time this was unlocked */
+	Uint4 touch;                /* last time this was unlocked */
 	Uint2 EntityID;             /* arbitrary ID assigned to complete entity */
 	Boolean clipboard;         /* is this in the clipboard? */
 	Boolean dirty;             /* updated without a save? */
@@ -1271,6 +1280,11 @@ NLM_EXTERN Pointer LIBCALL ObjMgrFree PROTO((Uint2 type, Pointer ptr));
 NLM_EXTERN Pointer LIBCALL ObjMgrFreeByEntityID PROTO((Uint2 entityID));
 
 NLM_EXTERN void LIBCALL ObjMgrResetAll PROTO((void));
+
+/* debugging function */
+
+NLM_EXTERN void LIBCALL ObjMgrReportFunc (CharPtr filename);
+
 
 
 #ifdef __cplusplus

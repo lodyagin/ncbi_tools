@@ -9,7 +9,7 @@
 #include <accid1.h>
 #include <lsqfetch.h>
 
-#define NUMARG 16
+#define NUMARG 17
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'a',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -27,7 +27,17 @@ Args myargs[NUMARG] = {
 	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
 	{"Far Genomic Contig function for Quality Scores","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
 	{"Remote fetching", "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+	{"Gap is -1", "F", NULL, NULL, FALSE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
 };
+
+static void PrintQualProc (CharPtr buf, Uint4 buflen, Pointer userdata)
+
+{
+  FILE  *fp;
+
+  fp = (FILE*) userdata;
+  fprintf (fp, "%s", buf);
+}
 
 static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
@@ -46,7 +56,11 @@ static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
 		  return;
 
 		fp = (FILE*) data;
-		PrintQualityScores (bsp, fp);
+		if (myargs [16].intvalue) {
+		  PrintQualityScoresToBuffer (bsp, FALSE, fp, PrintQualProc);
+		} else {
+		  PrintQualityScoresToBuffer (bsp, TRUE, fp, PrintQualProc);
+		}
 	}
 }
 
@@ -67,7 +81,11 @@ static void PrintFarQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 
 		  return;
 
 		fp = (FILE*) data;
-		PrintQualityScoresForContig (bsp, fp);
+		if (myargs [16].intvalue) {
+		  PrintQualityScoresForContig (bsp, FALSE, fp);
+		} else {
+		  PrintQualityScoresForContig (bsp, TRUE, fp);
+		}
 	}
 }
 

@@ -4,6 +4,12 @@
 *   -- all the defined variables in the gbfeat.h
 *
 * $Log: gbftglob.c,v $
+* Revision 6.15  2001/01/30 16:20:02  kans
+* precursor_RNA allows /product
+*
+* Revision 6.14  2000/11/29 20:37:00  tatiana
+* virion key removed, GBQUAL_transcript_id added
+*
 * Revision 6.13  2000/10/20 16:59:47  tatiana
 * evidence qualifier is legal on all features
 *
@@ -141,7 +147,7 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"usedin", Class_token}, {"variety", Class_text}, {"virion", Class_none},
  {"focus", Class_none}, { "specimen_voucher", Class_text},
  {"protein_id", Class_text}, { "country", Class_text},
- {"organelle", Class_text},
+ {"organelle", Class_text}, {"transcript_id", Class_text}, 
  };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -343,12 +349,12 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"mRNA",  0, {-1, -1, -1, -1, -1}, 13,
+   {"mRNA",  0, {-1, -1, -1, -1, -1}, 14,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function, 
      GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 	
      GBQUAL_product, GBQUAL_pseudo, GBQUAL_standard_name, GBQUAL_usedin,
+      GBQUAL_transcript_id, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"mutation",  0, {-1, -1, -1, -1}, 13,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_frequency,
@@ -385,8 +391,8 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
    {"precursor_RNA",  0, {-1, -1, -1, -1, -1}, 11,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial,
-      GBQUAL_standard_name, GBQUAL_usedin,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      GBQUAL_product, GBQUAL_standard_name, GBQUAL_usedin,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"prim_transcript",  0, {-1, -1, -1, -1, -1}, 11,
@@ -575,13 +581,6 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1}},
-   {"virion",  0, {-1, -1, -1, -1},10,
-     {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_gene,
-     GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_organism, GBQUAL_partial,
-     GBQUAL_usedin, 
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1, -1, -1, -1, -1, -1}},
    {"3'clip",  0, {-1, -1, -1, -1, -1}, 11,
      {GBQUAL_citation, GBQUAL_db_xref, GBQUAL_evidence, GBQUAL_function,
       GBQUAL_gene, GBQUAL_label, GBQUAL_map, GBQUAL_note, GBQUAL_partial, 

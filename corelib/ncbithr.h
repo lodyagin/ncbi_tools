@@ -1,4 +1,4 @@
-/* $Id: ncbithr.h,v 6.9 1999/10/14 18:44:36 vakatov Exp $ */
+/* $Id: ncbithr.h,v 6.10 2000/11/06 17:09:21 vakatov Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.h
@@ -35,6 +35,9 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.h,v $
+* Revision 6.10  2000/11/06 17:09:21  vakatov
+* RW_HISTORY, RW_TRACE -- To gather and printout info on the RW-lock history
+*
 * Revision 6.9  1999/10/14 18:44:36  vakatov
 * For better consistency, include <ncbilcl.h> to <ncbistd.h>
 *
@@ -324,6 +327,28 @@ NLM_EXTERN Int4 NlmSemaPost(TNlmSemaphore theSemaphore);
 /*                                                                  */
 /********************************************************************/
 
+/* [POSIX and WIN32]  Nested locking policy:
+ *   W after R -- never allowed;
+ *   W after W -- allowed if the W-lock is owned by the same thread;
+ *   R after W -- allowed if the W-lock is owned by the same thread (and,
+ *                then this R is treated as if it was W);
+ *   R after R -- always allowed (unless there already was a "R after W"
+ *                performed in another thread)
+ *   U after W -- only if the W-lock is owned by the same thread
+ */
+
+
+/* Do not pass the file name in the non-debug mode to avoid having
+ * numerous strings in the static data segment.
+ */
+#if defined(_DEBUG)
+#  define RW_FILE __FILE__
+#else
+#  define RW_FILE 0
+#endif
+#define RW_LINE __LINE__
+
+
 /* ---------------------  NlmRWlock  --------------------------------
    Purpose:  Initialize readers/writer lock
    Returns:  Handle of the new RW-lock(NULL on error)
@@ -353,7 +378,9 @@ NLM_EXTERN Int4 NlmRWdestroy(TNlmRWlock RW);
    NOTE:         More than one thread may hold a read lock on a RW lock
                  at any one time.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW);
+NLM_EXTERN Int4 NlmRWrdlockEx(TNlmRWlock RW,
+                              const char* file, int line);
+#define NlmRWrdlock(RW)  NlmRWrdlockEx(RW, RW_FILE, RW_LINE)
 
 
 /* ---------------------  NlmRWwrlock  ------------------------------
@@ -367,7 +394,9 @@ NLM_EXTERN Int4 NlmRWrdlock(TNlmRWlock RW);
    NOTE:         Only one thread may hold a write lock on a RW lock
                  at any one time.
   -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW);
+NLM_EXTERN Int4 NlmRWwrlockEx(TNlmRWlock RW,
+                              const char* file, int line);
+#define NlmRWwrlock(RW)  NlmRWwrlockEx(RW, RW_FILE, RW_LINE)
 
 
 /* ---------------------  NlmRWunlock  ------------------------------
@@ -382,7 +411,9 @@ NLM_EXTERN Int4 NlmRWwrlock(TNlmRWlock RW);
                  reading or writing no error status is returned and the
                  behavior of the program is undefined.
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW);
+NLM_EXTERN Int4 NlmRWunlockEx(TNlmRWlock RW,
+                              const char* file, int line);
+#define NlmRWunlock(RW)  NlmRWunlockEx(RW, RW_FILE, RW_LINE)
 
 
 /* ---------------------  NlmRWtryrdlock  ---------------------------
@@ -394,7 +425,9 @@ NLM_EXTERN Int4 NlmRWunlock(TNlmRWlock RW);
                  locked for writing, it returns an error. Otherwise
                  the read lock is acquired
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW);
+NLM_EXTERN Int4 NlmRWtryrdlockEx(TNlmRWlock RW,
+                                 const char* file, int line);
+#define NlmRWtryrdlock(RW)  NlmRWtryrdlockEx(RW, RW_FILE, RW_LINE)
 
 
 /* ---------------------  NlmRWtrywrlock  ---------------------------
@@ -406,7 +439,21 @@ NLM_EXTERN Int4 NlmRWtryrdlock(TNlmRWlock RW);
                   locked for reading or writing, it returnes an error.
                   Otherwise the write lock is acquired
    -----------------------------------------------------------------*/
-NLM_EXTERN Int4 NlmRWtrywrlock(TNlmRWlock RW);
+NLM_EXTERN Int4 NlmRWtrywrlockEx(TNlmRWlock RW,
+                                 const char* file, int line);
+#define NlmRWtrywrlock(RW)  NlmRWtrywrlockEx(RW, RW_FILE, RW_LINE)
+
+
+/* ---------------------  NlmRWprintout  ---------------------------
+   Purpose:       Printout the latest RW-lock activity
+   Parameters:    Handle of RW-lock
+   Returns:       non-NULL dynamically allocated string (caller must free it)
+   Description:   Print the latest RW-lock activity (starting from the
+                  latest "Unlocked" state), if the "ncbithr.c" was compiled
+                  in the RW-lock history tracking mode.
+                  Otherwise, just print the current state of RW-lock.
+   -----------------------------------------------------------------*/
+NLM_EXTERN char* NlmRWprintout(TNlmRWlock RW);
 
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.59 $
+* $Revision: 6.72 $
 *
 * File Description: 
 *
@@ -76,6 +76,7 @@ NLM_EXTERN SeqEntryPtr LIBCALL FindNthSeqEntry (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNthBioseq (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNthSequinEntry (SeqEntryPtr sep, Int2 seq);
 NLM_EXTERN SeqEntryPtr LIBCALL FindNucSeqEntry (SeqEntryPtr sep);
+NLM_EXTERN BioseqPtr LIBCALL FindNucBioseq (SeqEntryPtr sep);
 NLM_EXTERN SeqEntryPtr LIBCALL FindBioseqSetByClass (SeqEntryPtr sep, Uint1 _class);
 
 NLM_EXTERN Boolean LIBCALL SeqEntryHasNucs (SeqEntryPtr sep);
@@ -178,6 +179,14 @@ NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype);
 
 NLM_EXTERN SeqFeatPtr LIBCALL GetBestProteinFeatureUnindexed (SeqLocPtr product);
 
+/* resynchronizes coding regions with product protein bioseq and protein feature */
+
+NLM_EXTERN void ResynchCodingRegionPartials (SeqEntryPtr sep);
+
+/* resynchronizes mRNAs with product cDNA bioseq */
+
+NLM_EXTERN void ResynchMessengerRNAPartials (SeqEntryPtr sep);
+
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
 
@@ -211,6 +220,16 @@ NLM_EXTERN MolInfoPtr ParseTitleIntoMolInfo (
 NLM_EXTERN BioseqPtr ParseTitleIntoBioseq (
   SqnTagPtr stp,
   BioseqPtr bsp
+);
+
+NLM_EXTERN GeneRefPtr ParseTitleIntoGeneRef (
+  SqnTagPtr stp,
+  GeneRefPtr grp
+);
+
+NLM_EXTERN ProtRefPtr ParseTitleIntoProtRef (
+  SqnTagPtr stp,
+  ProtRefPtr prp
 );
 
 /* UseLocalAsnloadDataAndErrMsg transiently sets paths to asnload, data, and errmsg
@@ -289,11 +308,15 @@ NLM_EXTERN void PrintQualityScores (BioseqPtr bsp, FILE *fp);
 
 typedef void (*QualityWriteFunc) (CharPtr buf, Uint4 buflen, Pointer userdata);
 
-NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, QualityWriteFunc callback);
+NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Boolean gapIsZero, Pointer userdata, QualityWriteFunc callback);
 
 /* special function for genome contig delta sequences with far pointers */
 
-NLM_EXTERN void PrintQualityScoresForContig (BioseqPtr bsp, FILE* fp);
+NLM_EXTERN void PrintQualityScoresForContig (BioseqPtr bsp, Boolean gapIsZero, FILE* fp);
+
+/* more efficient function for far genomic contig, makes separate graphs */
+
+NLM_EXTERN SeqAnnotPtr PhrapGraphForContig (BioseqPtr bsp);
 
 /* ReadContigList builds a far segmented bioseq from a table of accessions, starts, stops,
 lengths, and (optional) strands.  Gaps of a given length (with 0 start and stop) are also
@@ -332,6 +355,11 @@ turn these special cases into the appropriate structures in fully expanded recor
 
 NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val);
 
+/* specialized string trimming functions */
+
+NLM_EXTERN CharPtr TrimSpacesAndSemicolons (CharPtr str);
+NLM_EXTERN CharPtr TrimSpacesAndJunkFromEnds (CharPtr str, Boolean allowEllipsis);
+
 /* BasicSeqEntryCleanup cleans up strings, moves gbquals to the appropriate field, and
 does several other conversions, all without changing the itemID structure (which would
 require reindexing) */
@@ -354,68 +382,89 @@ NLM_EXTERN void TextFsaAdd (TextFsaPtr tbl, CharPtr word);
 NLM_EXTERN Int2 TextFsaNext (TextFsaPtr tbl, Int2 currState, Char ch, ValNodePtr PNTR matches);
 NLM_EXTERN TextFsaPtr TextFsaFree (TextFsaPtr tbl);
 
-/* very simple explore functions - VisitOn only does one chain, VisitIn goes into set components */
+/*
+   very simple explore functions - VisitOn only does one chain, VisitIn goes into set components,
+   they now return a count of the number of nodes visited, and the callback can be NULL if the purpose
+   is simply to count nodes
+*/
 
 typedef void (*VisitDescriptorsFunc) (SeqDescrPtr sdp, Pointer userdata);
-NLM_EXTERN void VisitDescriptorsOnBsp (BioseqPtr bsp, Pointer userdata, VisitDescriptorsFunc callback);
-NLM_EXTERN void VisitDescriptorsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
-NLM_EXTERN void VisitDescriptorsInSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
-NLM_EXTERN void VisitDescriptorsOnSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
-NLM_EXTERN void VisitDescriptorsInSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN Int4 VisitDescriptorsOnBsp (BioseqPtr bsp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN Int4 VisitDescriptorsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN Int4 VisitDescriptorsInSet (BioseqSetPtr bssp, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN Int4 VisitDescriptorsOnSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
+NLM_EXTERN Int4 VisitDescriptorsInSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
 
 typedef void (*VisitFeaturesFunc) (SeqFeatPtr sfp, Pointer userdata);
-NLM_EXTERN void VisitFeaturesOnSap (SeqAnnotPtr sap, Pointer userdata, VisitFeaturesFunc callback);
-NLM_EXTERN void VisitFeaturesOnBsp (BioseqPtr bsp, Pointer userdata, VisitFeaturesFunc callback);
-NLM_EXTERN void VisitFeaturesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
-NLM_EXTERN void VisitFeaturesInSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
-NLM_EXTERN void VisitFeaturesOnSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
-NLM_EXTERN void VisitFeaturesInSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesOnSap (SeqAnnotPtr sap, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesOnBsp (BioseqPtr bsp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesInSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesOnSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
+NLM_EXTERN Int4 VisitFeaturesInSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
 
 typedef void (*VisitAlignmentsFunc) (SeqAlignPtr sap, Pointer userdata);
-NLM_EXTERN void VisitAlignmentsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitAlignmentsFunc callback);
-NLM_EXTERN void VisitAlignmentsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAlignmentsFunc callback);
-NLM_EXTERN void VisitAlignmentsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
-NLM_EXTERN void VisitAlignmentsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
-NLM_EXTERN void VisitAlignmentsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
-NLM_EXTERN void VisitAlignmentsInSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
+NLM_EXTERN Int4 VisitAlignmentsInSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
 
 typedef void (*VisitGraphsFunc) (SeqGraphPtr sgp, Pointer userdata);
-NLM_EXTERN void VisitGraphsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitGraphsFunc callback);
-NLM_EXTERN void VisitGraphsOnBsp (BioseqPtr bsp, Pointer userdata, VisitGraphsFunc callback);
-NLM_EXTERN void VisitGraphsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
-NLM_EXTERN void VisitGraphsInSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
-NLM_EXTERN void VisitGraphsOnSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
-NLM_EXTERN void VisitGraphsInSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsOnBsp (BioseqPtr bsp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsInSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsOnSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
+NLM_EXTERN Int4 VisitGraphsInSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
 
 typedef void (*VisitAnnotsFunc) (SeqAnnotPtr sap, Pointer userdata);
-NLM_EXTERN void VisitAnnotsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAnnotsFunc callback);
-NLM_EXTERN void VisitAnnotsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
-NLM_EXTERN void VisitAnnotsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
-NLM_EXTERN void VisitAnnotsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
-NLM_EXTERN void VisitAnnotsInSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN Int4 VisitAnnotsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN Int4 VisitAnnotsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN Int4 VisitAnnotsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN Int4 VisitAnnotsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN Int4 VisitAnnotsInSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
 
 typedef void (*VisitBioseqsFunc) (BioseqPtr bsp, Pointer userdata);
-NLM_EXTERN void VisitBioseqsInSep (SeqEntryPtr sep, Pointer userdata, VisitBioseqsFunc callback);
-NLM_EXTERN void VisitBioseqsInSet (BioseqSetPtr bssp, Pointer userdata, VisitBioseqsFunc callback);
+NLM_EXTERN Int4 VisitBioseqsInSet (BioseqSetPtr bssp, Pointer userdata, VisitBioseqsFunc callback);
+NLM_EXTERN Int4 VisitBioseqsInSep (SeqEntryPtr sep, Pointer userdata, VisitBioseqsFunc callback);
+
+/* VisitSequences allows you to limit visitation to nucs or prots that aren't parts, or just to parts */
+
+#define VISIT_MAINS 1
+#define VISIT_NUCS  2
+#define VISIT_PROTS 3
+#define VISIT_PARTS 4
+
+typedef void (*VisitSequencesFunc) (BioseqPtr bsp, Pointer userdata);
+NLM_EXTERN Int4 VisitSequencesInSet (BioseqSetPtr bssp, Pointer userdata, Int2 filter, VisitSequencesFunc callback);
+NLM_EXTERN Int4 VisitSequencesInSep (SeqEntryPtr sep, Pointer userdata, Int2 filter, VisitSequencesFunc callback);
 
 typedef void (*VisitSetsFunc) (BioseqSetPtr bssp, Pointer userdata);
-NLM_EXTERN void VisitSetsInSep (SeqEntryPtr sep, Pointer userdata, VisitSetsFunc callback);
-NLM_EXTERN void VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFunc callback);
+NLM_EXTERN Int4 VisitSetsInSep (SeqEntryPtr sep, Pointer userdata, VisitSetsFunc callback);
+NLM_EXTERN Int4 VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFunc callback);
 
 /* visits components of pop/phy/mut/genbank sets, callback is at most nuc-prot set, can then call above functions */
 
 typedef void (*VisitElementsFunc) (SeqEntryPtr sep, Pointer userdata);
-NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback);
+NLM_EXTERN Int4 VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback);
 
 /* visits all SeqIds within a SeqLoc */
 
 typedef void (*VisitSeqIdFunc) (SeqIdPtr sip, Pointer userdata);
-NLM_EXTERN void VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
+NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
+
+/* visits all sub UserFields - if the data type is 11, VisitUserFieldsInUfp recurses */
+
+typedef void (*VisitUserFieldsFunc) (UserFieldPtr ufp, Pointer userdata);
+NLM_EXTERN Int4 VisitUserFieldsInUfp (UserFieldPtr ufp, Pointer userdata, VisitUserFieldsFunc callback);
+NLM_EXTERN Int4 VisitUserFieldsInUop (UserObjectPtr uop, Pointer userdata, VisitUserFieldsFunc callback);
 
 /* visits all sub UserObjects if the data type is 12 - needed to pack multiple user objects on a single feature */
 
 typedef void (*VisitUserObjectFunc) (UserObjectPtr uop, Pointer userdata);
-NLM_EXTERN void VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, VisitUserObjectFunc callback);
+NLM_EXTERN Int4 VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, VisitUserObjectFunc callback);
 
 /* creates "CombinedFeatureUserObjects" sfp->ext to combine two user objects */
 
@@ -424,17 +473,27 @@ NLM_EXTERN UserObjectPtr CombineUserObjects (UserObjectPtr origuop, UserObjectPt
 /* visits all publication descriptors or features */
 
 typedef void (*VisitPubdescsFunc) (PubdescPtr pdp, Pointer userdata);
-NLM_EXTERN void VisitPubdescsOnBsp (BioseqPtr bsp, Pointer userdata, VisitPubdescsFunc callback);
-NLM_EXTERN void VisitPubdescsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
-NLM_EXTERN void VisitPubdescsInSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
-NLM_EXTERN void VisitPubdescsOnSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
-NLM_EXTERN void VisitPubdescsInSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN Int4 VisitPubdescsOnBsp (BioseqPtr bsp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN Int4 VisitPubdescsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN Int4 VisitPubdescsInSet (BioseqSetPtr bssp, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN Int4 VisitPubdescsOnSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
+NLM_EXTERN Int4 VisitPubdescsInSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
+
+/* visits all biosource descriptors or features */
+
+typedef void (*VisitBioSourcesFunc) (BioSourcePtr biop, Pointer userdata);
+NLM_EXTERN Int4 VisitBioSourcesOnBsp (BioseqPtr bsp, Pointer userdata, VisitBioSourcesFunc callback);
+NLM_EXTERN Int4 VisitBioSourcesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitBioSourcesFunc callback);
+NLM_EXTERN Int4 VisitBioSourcesInSet (BioseqSetPtr bssp, Pointer userdata, VisitBioSourcesFunc callback);
+NLM_EXTERN Int4 VisitBioSourcesOnSep (SeqEntryPtr sep, Pointer userdata, VisitBioSourcesFunc callback);
+NLM_EXTERN Int4 VisitBioSourcesInSep (SeqEntryPtr sep, Pointer userdata, VisitBioSourcesFunc callback);
 
 /* function to scan binary ASN.1 file of entire release as Bioseq-set, simple explore from successive top seps */
 /* compressed can be TRUE only on UNIX, where it does a popen on zcat to decompress on-the-fly */
+/* although it now returns a count of components visited, the callback cannot be NULL for this function */
 
 typedef void (*ScanBioseqSetFunc) (SeqEntryPtr sep, Pointer userdata);
-NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean compressed, Pointer userdata, ScanBioseqSetFunc callback);
+NLM_EXTERN Int4 ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean compressed, Pointer userdata, ScanBioseqSetFunc callback);
 
 
 #ifdef __cplusplus

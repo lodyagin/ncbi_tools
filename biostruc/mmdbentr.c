@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  14 Jan 1997  
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: Used to provide Biostrucs data using
 * Conventional Entrez subsystems (Network or CDRom) 
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
 * $Log: mmdbentr.c,v $
+* Revision 6.2  2001/01/26 15:06:39  lewisg
+* use entrez2 to retrieve structures
+*
 * Revision 6.1  1999/04/22 01:59:18  kimelman
 * MMDB_configuration added
 *
@@ -59,21 +62,26 @@
 #include <ncbi.h>
 #include <mmdbapi.h>
 #include <mmdbdata.h>
-#include <accentr.h>
-#include <accutils.h>
+#include <ent2api.h>
+#include <strucapi.h>
 
 
 Boolean LIBCALL MMDBInit (void)
 {
+   /*
    Boolean bIsNetwork = FALSE;
    return EntrezInit("MMDBAPI client", FALSE, &bIsNetwork);
+   */
+   return TRUE;
 }
 
 
 void LIBCALL MMDBFini (void)
 {
+   /*
    EntrezFini();
    return;
+   */
 }
 
 
@@ -82,7 +90,10 @@ BiostrucPtr LIBCALL MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
 
 /* MMDB - Caching would check here for matching file first */
 
+   /*
    return EntrezBiostrucGet(uid,  mdlLvl, maxModels);
+   */
+   return StrucSynchronousQuery (uid,  mdlLvl, maxModels);
 
 /* Caching would also save file here */
 
@@ -91,6 +102,41 @@ BiostrucPtr LIBCALL MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
 
 DocUid LIBCALL MMDBEvalPDB(CharPtr str)
 {
+  Entrez2BooleanReplyPtr  e2br;
+  Entrez2IdListPtr        e2id;
+  Entrez2RequestPtr       e2rq;
+  Entrez2ReplyPtr         e2ry;
+  Char                    tmp [61];
+  Uint4                   uid = 0;
+
+  if (str == NULL) return 0;
+
+  StringNCpy_0 (tmp, str, sizeof (tmp) - 10);
+  if (StringStr (tmp, "[ACCN]") == NULL) {
+    StringCat (tmp, " [ACCN]");
+  }
+
+  e2rq = EntrezCreateBooleanRequest (TRUE, FALSE, "Structure", tmp,
+                                     0, 0, NULL, 1, 0);
+  if (e2rq == NULL) return 0;
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry == NULL) return 0;
+  e2br = EntrezExtractBooleanReply (e2ry);
+  if (e2br == NULL) return 0;
+
+  if (e2br->count > 0) {
+    e2id = e2br->uids;
+    if (e2id != NULL && e2id->num > 0 && e2id->uids != NULL) {
+      BSSeek (e2id->uids, 0, SEEK_SET);
+      uid = Nlm_BSGetUint4 (e2id->uids);
+    }
+  }
+
+  Entrez2BooleanReplyFree (e2br);
+
+  return uid;
+   /*
    LinkSetPtr plsLink = NULL;
    DocUid duUID = 0;
  
@@ -105,12 +151,13 @@ DocUid LIBCALL MMDBEvalPDB(CharPtr str)
    LinkSetFree(plsLink); 
 
    return duUID;
+   */
 }
 
 CharPtr  LIBCALL MMDB_configuration(void)
 {
   return
-    "Version:\t$Id: mmdbentr.c,v 6.1 1999/04/22 01:59:18 kimelman Exp $\nConfiguration:"
+    "Version:\t$Id: mmdbentr.c,v 6.2 2001/01/26 15:06:39 lewisg Exp $\nConfiguration:"
     " Entrez"
     "\n";
 }

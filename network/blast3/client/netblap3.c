@@ -34,6 +34,33 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.85  2001/04/02 18:49:13  dondosha
+* Removed readdb_new_ex call
+*
+* Revision 1.84  2001/03/01 17:42:51  madden
+* Removed unneeded line
+*
+* Revision 1.83  2001/03/01 15:16:46  dondosha
+* Do pass matrix as well as pseudo frequences, if the former is provided
+*
+* Revision 1.82  2001/02/16 16:13:08  dondosha
+* If posFreqs are present, do not copy matrix to and from net matrix
+*
+* Revision 1.81  2001/01/19 21:30:09  dondosha
+* Call readdb...._ex functions to possibly save some time when finding db length
+*
+* Revision 1.80  2001/01/19 20:56:46  dondosha
+* In NetDbinfo2TxDbinfo get database total length information from readdb
+*
+* Revision 1.79  2001/01/04 15:54:17  dondosha
+* Added percent identity to the search parameters
+*
+* Revision 1.78  2000/12/19 18:41:37  madden
+* Calls to BlastSetUserErrorString and BlastDeleteUserErrorString moved to blastool.c
+*
+* Revision 1.77  2000/11/16 22:26:31  dondosha
+* Add endpoint results from Mega BLAST to search response
+*
 * Revision 1.76  2000/09/28 16:46:40  dondosha
 * Changed MegaBlast related code to get a single SeqAlignPtr from server
 *
@@ -351,49 +378,6 @@ BlastResetOldHook(void)
 
 {
 	Nlm_ErrSetHandler(old_error_hook);
-	return;
-}
-
-/*
-	The following functions fill a the Error user string with
-	text to identify BLAST and the entry being worked on.
-	The SeqIdPtr is used to make a FASTA id, which is appended
-	to string.
-
-	A Uint1 is returned, which allows Nlm_ErrUserDelete to delete
-	this error string when it's done.
-*/
-
-static Uint1
-BlastSetUserErrorString(CharPtr string, SeqIdPtr sip)
-
-{
-	Char buffer[2*BLASTNET_SHORT_BUFLEN], textid[BLASTNET_SHORT_BUFLEN];
-	CharPtr buf_start, ptr;
-	Int2 length;
-
-	ptr = buf_start = &buffer[0];
-
-	StringNCpy(ptr, string, BLASTNET_SHORT_BUFLEN);
-	if (sip != NULL)
-	{
-	    length = StringLen(string);
-	    if (length > BLASTNET_SHORT_BUFLEN)
-		length = BLASTNET_SHORT_BUFLEN;
-
-	    ptr += length;
-
-    	    SeqIdWrite(sip, textid, PRINTID_FASTA_LONG, BLASTNET_SHORT_BUFLEN-1);
-	    StringNCpy(ptr, textid, BLASTNET_SHORT_BUFLEN-1);
-	}
-	return Nlm_ErrUserInstall (buf_start, 0);
-}
-
-static void
-BlastDeleteUserErrorString(Uint1 err_id)
-
-{
-	Nlm_ErrUserDelete(err_id);
 	return;
 }
 
@@ -759,7 +743,8 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->smith_waterman = options->smith_waterman;
         parameters->is_megablast = options->is_megablast_search;
         parameters->query_lcase_mask = (ValNodePtr) options->query_lcase_mask;
-        
+        parameters->endpoint_results = options->no_traceback;
+        parameters->percent_identity = (FloatHi) options->perc_identity;
 	return parameters;
 }
 
@@ -780,8 +765,11 @@ NetDbinfo2TxDbinfo(BlastDbinfoPtr net_dbinfo)
 		dbinfo->name = StringSave(net_dbinfo->name);
 		dbinfo->definition = StringSave(net_dbinfo->definition);
 		dbinfo->date = StringSave(net_dbinfo->date);
-		dbinfo->total_length = net_dbinfo->total_length;
-		dbinfo->number_seqs = net_dbinfo->number_seqs;
+                dbinfo->total_length = net_dbinfo->total_length;
+                /* total length in net_dbinfo is Int4, might be incorrect */
+                if (dbinfo->total_length < 0)
+                   dbinfo->total_length += sizeof(Int4);
+                dbinfo->number_seqs = net_dbinfo->number_seqs;
 		if (dbinfo_head == NULL)
 			dbinfo_head = dbinfo;
 		net_dbinfo = net_dbinfo->next;
@@ -1035,17 +1023,6 @@ BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
     net_matrix->column_length = matrix->columns;
     net_matrix->karlinK = matrix->karlinK;
     
-    for (vnp=NULL,index1 = matrix->rows-1; index1 >= 0; index1--) {
-        for (index2 = matrix->columns-1; index2 >= 0; index2--) {
-            newvnp = (ValNodePtr) Nlm_MemNew(sizeof(ValNode));
-            newvnp->data.intvalue =  matrix->matrix[index1][index2];
-            newvnp->next = vnp;
-            vnp = newvnp;
-        }
-    }
-    
-    net_matrix->scores = vnp;
-
     if(matrix->posFreqs != NULL) {
         for (vnp=NULL,index1 = matrix->rows-1; index1 >= 0; index1--) {
             for (index2 = matrix->columns-1; index2 >= 0; index2--) {
@@ -1057,7 +1034,17 @@ BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
         }
         net_matrix->posFreqs = vnp;
     }
-    
+    if (matrix->matrix != NULL) {
+       for (vnp=NULL,index1 = matrix->rows-1; index1 >= 0; index1--) {
+          for (index2 = matrix->columns-1; index2 >= 0; index2--) {
+             newvnp = (ValNodePtr) Nlm_MemNew(sizeof(ValNode));
+             newvnp->data.intvalue =  matrix->matrix[index1][index2];
+             newvnp->next = vnp;
+             vnp = newvnp;
+          }
+       }
+       net_matrix->scores = vnp;
+    }
     return net_matrix;
     
 }
@@ -1086,17 +1073,6 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
     blast_matrix->columns = net_matrix->column_length;
     blast_matrix->karlinK = net_matrix->karlinK;
     
-    vnp = net_matrix->scores;
-    matrix = (Int4Ptr PNTR) MemNew(blast_matrix->rows*sizeof(Int4Ptr));
-    for (index1=0; index1<blast_matrix->rows; index1++) {
-        matrix[index1] = (Int4Ptr) MemNew(blast_matrix->columns*sizeof(Int4));
-        for (index2=0; index2<blast_matrix->columns; index2++) {
-            matrix[index1][index2] = (Int4) vnp->data.intvalue;
-            vnp = vnp->next;
-        }
-    }
-    blast_matrix->matrix = matrix;
-
     if(net_matrix->posFreqs != NULL) {
         vnp = net_matrix->posFreqs;
         posFreqs = (Nlm_FloatHi **) 
@@ -1110,7 +1086,20 @@ BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
             }
         }
         blast_matrix->posFreqs = posFreqs;
+    } 
+    if (net_matrix->scores != NULL) {
+       vnp = net_matrix->scores;
+       matrix = (Int4Ptr PNTR) MemNew(blast_matrix->rows*sizeof(Int4Ptr));
+       for (index1=0; index1<blast_matrix->rows; index1++) {
+          matrix[index1] = (Int4Ptr) MemNew(blast_matrix->columns*sizeof(Int4));
+          for (index2=0; index2<blast_matrix->columns; index2++) {
+             matrix[index1][index2] = (Int4) vnp->data.intvalue;
+             vnp = vnp->next;
+          }
+       }
+       blast_matrix->matrix = matrix;
     }
+
 
     return blast_matrix;
 }
@@ -1135,7 +1124,6 @@ BlastGetMaskedLoc (BlastNet3BlockPtr blnet3blkptr)
 			ValNodeAddPointer(&mask_loc, blast_mask->frame, blast_mask->location);
 			blast_mask->location = NULL;
 			BlastMaskFree(blast_mask);
-			response->data.ptrvalue;
 			response = response->next;	
 		}
 	}
@@ -1192,7 +1180,8 @@ BlastGetBioseq(BlastNet3BlockPtr blnet3blkptr, SeqIdPtr sip)
 */
 
 NLM_EXTERN SeqAlignPtr LIBCALL
-BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean PNTR status)
+BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean
+             PNTR status, ValNodePtr *other_returns)
 
 {
 	BlastRequestPtr request = NULL;
@@ -1203,7 +1192,7 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean 
 	Uint1 err_id;
 
 #if 0        
-	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id);
+	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id, TRUE);
 #endif        
 
 	search = BlastSearchNew();
@@ -1225,7 +1214,13 @@ BlastBioseq (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, Boolean 
 	node = GetResponsePtr(response, BlastResponse_alignment);
 	if (node)
             seqalign = (SeqAlignPtr) node->data.ptrvalue;
-	
+
+        if (other_returns) { 
+           /* MegaBLAST endpoint returns */
+           node = GetResponsePtr(response, BlastResponse_mbalign);
+           if (node)
+              ValNodeAddPointer(other_returns, BlastResponse_mbalign, node->data.ptrvalue);
+        }
 	if (error_returns)
 	{
 	    node = GetResponsePtr(response, BlastResponse_error);
@@ -1264,7 +1259,7 @@ BlastBioseqByParts (BlastNet3BlockPtr blnet3blkptr, ValNodePtr *error_returns, B
 	Uint1 err_id;
 
 #if 0        
-	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id);
+	err_id = BlastSetUserErrorString("netblast:", blnet3blkptr->bsp->id, TRUE);
 #endif        
 
 	search = BlastSearchNew();
@@ -1942,10 +1937,14 @@ MegaBlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, Char
 	blnet->callback = callback;
 	blnet->bl3hptr = bl3hp;
 
-	seqalign = BlastBioseq(blnet, error_returns, ret_status);
+	seqalign = BlastBioseq(blnet, error_returns, ret_status, other_returns);
+
+        /* BlastBioseq saves the MegaBLAST endpoint alignments in error_returns
+           since there is nowhere else to save them */
+
+
 	if (other_returns)
 	{
-		*other_returns = NULL;
 		mask = BlastGetMaskedLoc(blnet);
 		if (mask)
 			ValNodeLink(other_returns, mask);
@@ -2031,7 +2030,7 @@ BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr 
 	blnet->bl3hptr = bl3hp;
 	blnet->blast_matrix = blast_matrix;
 
-	seqalign = BlastBioseq(blnet, error_returns, ret_status);
+	seqalign = BlastBioseq(blnet, error_returns, ret_status, NULL);
 	dbinfo = BlastGetDbInfo(blnet);
 	net_matrix = NetBlastGetMatrix(blnet);
 	params_buffer = BlastGetParameterBuffer(blnet);
@@ -2303,6 +2302,7 @@ TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr o
 
     SeqLocPtr tmp_slp;
     DenseSegPtr dsp, next_dsp;
+    MegaBlastResultsPtr mb_results = NULL;
     
     MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
@@ -2385,6 +2385,9 @@ TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr o
 	   if (!options->is_megablast_search)
 	      ValNodeAddPointer(&mask_loc, vnp->choice, vnp->data.ptrvalue);
             break;
+        case BlastResponse_mbalign:
+           mb_results = (MegaBlastResultsPtr) vnp->data.ptrvalue;
+           break;
         default:
             break;
         }
@@ -2393,6 +2396,24 @@ TraditionalBlastReportEngine(SeqLocPtr slp, BioseqPtr bsp, BLAST_OptionsBlkPtr o
     NlmMutexLockEx(&formating_mutex);
     
     ReadDBBioseqFetchEnable ("blastcl3", database, db_is_na, TRUE);
+
+    if (mb_results) {
+       /* Results come as alignment endpoints only from Mega BLAST */
+       MegaBlastHitPtr mb_hit = mb_results->mbhits, next_hit;
+       SeqIdPtr sid, qid;
+       CharPtr query_buffer, subject_buffer;
+       Int4 subject_gi;
+
+
+       while (mb_hit) {
+          fprintf(outfp, "%s\t%s\t%d\t%d\t%d\t%d\t%d\n", mb_hit->id1,
+                  mb_hit->id2, mb_hit->query_offset, mb_hit->subject_offset,
+                  mb_hit->query_end, mb_hit->subject_end, mb_hit->score);
+          mb_hit = mb_hit->next;
+       }
+       MegaBlastResultsFree(mb_results);
+    }
+
 
     tmp_slp = slp;
 
@@ -2642,7 +2663,10 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
                 options->tweak_parameters = parameters->tweak_parameters;
                 options->smith_waterman = parameters->smith_waterman;
 		options->is_megablast_search = parameters->is_megablast;
-                options->query_lcase_mask = (SeqLocPtr) parameters->query_lcase_mask;
+                options->query_lcase_mask = 
+                   (SeqLocPtr) parameters->query_lcase_mask;
+                options->no_traceback = parameters->endpoint_results;
+                options->perc_identity = (FloatLo) parameters->percent_identity;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {

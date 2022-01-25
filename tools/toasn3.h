@@ -173,6 +173,7 @@ extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master);
 extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep);
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep);
+extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep);
 
 /* SeriousSeqEntryCleanup combines many of the above cleanups */
 

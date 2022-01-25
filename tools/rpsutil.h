@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.12 2000/10/27 15:39:33 kans Exp $
+/* $Id: rpsutil.h,v 6.13 2000/11/03 22:38:18 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.13  2000/11/03 22:38:18  kans
+* added RemoveDuplicateCDDs - just removes CDDs with identical locations and identical dbxrefs, keeping one with highest score - later will want to fuse overlapping CDDs with identical dbxrefs
+*
 * Revision 6.12  2000/10/27 15:39:33  kans
 * added AnnotateRegionsFromCDD and FreeCDDRegions for common use by ripen, Sequin, and RefSeq processor
 *
@@ -253,6 +256,7 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap);
 /* functions to take BlastBioseqNet result and annotate region features on proteins */
 
 NLM_EXTERN void AnnotateRegionsFromCDD (BioseqPtr bsp, SeqAlignPtr salp, FloatHi expectValue);
+NLM_EXTERN void RemoveDuplicateCDDs (SeqEntryPtr topsep);
 NLM_EXTERN void FreeCDDRegions (SeqEntryPtr topsep);
 
 

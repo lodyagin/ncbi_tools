@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.34 2000/10/27 19:44:05 shavirin Exp $
+/* $Id: rpsutil.c,v 6.37 2001/01/09 20:11:41 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,23 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.37  2001/01/09 20:11:41  shavirin
+* Function RPSResultHspScoreCmp() moved to blast.[c,h].
+*
+* Revision 6.36  2000/11/03 22:38:17  kans
+* added RemoveDuplicateCDDs - just removes CDDs with identical locations and identical dbxrefs, keeping one with highest score - later will want to fuse overlapping CDDs with identical dbxrefs
+*
+* Revision 6.35  2000/11/01 17:27:56  shavirin
+* Added additional sorting of HSPs in RPSAlignTraceBack()
+* Fixed some memory leaks
+* Added correct handling of non-MT compiled binaries.
+*
 * Revision 6.34  2000/10/27 19:44:05  shavirin
 * ObjMgrFreeCache() now called more rare. Fixed memory leaks.
 *
@@ -146,6 +157,7 @@
 
 #include <rpsutil.h>
 #include <sqnutils.h>
+#include <explore.h>
 #include <mblast.h>
 
 #define RPS_MAGIC_NUMBER 7702
@@ -1003,6 +1015,7 @@ RPSimpalaStatCorrections(RPSequencePtr rpseq, Nlm_FloatHiPtr LambdaRatio, Nlm_Fl
 
     return TRUE;
 }
+
 SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
                               Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
                               subject_bsp)
@@ -1020,16 +1033,21 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 
     result_struct = search->result_struct;
 
-    if(result_struct->hitlist_count == 0) /* No brain no pain */
+    if(result_struct->hitlist_count == 0 || 
+       result_struct->results[0]->hspcnt == 0) /* No brain no pain */
         return NULL;
     
-    result_struct_new = BLASTResultsStructNew(search->result_size, search->pbp->max_pieces, search->pbp->hsp_range_max);
+    result_struct_new = BLASTResultsStructNew( result_struct->results[0]->hspcnt, search->pbp->max_pieces, search->pbp->hsp_range_max);
     
     if(result_struct->hitlist_count != 1) {
         ErrPostEx(SEV_ERROR, 0,0, "RPSUpdateResult: This function works only for hitlist_count == 1 (%d)", result_struct->hitlist_count);
         return NULL;
     }
 
+    HeapSort(result_struct->results[0]->hsp_array, 
+             result_struct->results[0]->hspcnt, 
+             sizeof(BLASTResultHsp), RPSResultHspScoreCmp);
+    
     subject_length = SeqLocLen(slp);
 
     search->result_struct = result_struct_new;
@@ -1650,6 +1668,12 @@ static VoidPtr RPSEngineThread(VoidPtr data)
         
         sep = SeqEntryFree(sep);
 
+        /* Now deleting lower case mask if any */
+
+        if(query_lcase_mask != NULL) {
+            query_lcase_mask = SeqLocSetFree(query_lcase_mask);
+        }
+
         NlmMutexUnlock(print_mutex); 
         
         if(glb_sequence_count++ > MAX_NUMBER_SEQS_FOR_OBJ_MGR)
@@ -1697,9 +1721,12 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
 
     while(!search_is_done) {
     
-        if(rpsbop->num_threads > 1) {
+        if(rpsbop->num_threads > 1 && NlmThreadsAvailable()) {
             for(i = 0; i < rpsbop->num_threads; i++) {
-                NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata);
+                if(NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata) == NULL_thread) {
+                    ErrPostEx(SEV_ERROR, 0, errno, "Failure to create thread");
+                    return FALSE;
+                }
             }
         } else {
             RPSEngineThread((VoidPtr) mtdata);
@@ -1973,6 +2000,153 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
   /* clean up */
 
   CddHitDestruct (cdd_head);
+}
+
+/* returns 0 if no user object, 1 if no score happens to be present */
+
+static Int4 GetCddUserObjectScore (
+  SeqFeatPtr sfp
+)
+
+{
+  UserFieldPtr   curr;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (sfp == NULL) return 0;
+  uop = sfp->ext;
+  if (uop == NULL) return 0;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "cddScoreData") != 0) return 0;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "score") == 0) {
+      if (curr->choice == 2) {
+        if (curr->data.intvalue > 0) return curr->data.intvalue;
+        return 1;
+      }
+    }
+  }
+
+  return 1;
+}
+
+static Boolean DbxrefsAreTheSame (
+  ValNodePtr dbxref1,
+  ValNodePtr dbxref2
+)
+
+{
+  DbtagPtr     dbt1, dbt2;
+  ObjectIdPtr  oip1, oip2;
+
+  if (dbxref1 == NULL || dbxref2 == NULL) return FALSE;
+  dbt1 = (DbtagPtr) dbxref1->data.ptrvalue;
+  dbt2 = (DbtagPtr) dbxref2->data.ptrvalue;
+  if (dbt1 == NULL || dbt2 == NULL) return FALSE;
+  if (StringICmp (dbt1->db, dbt2->db) != 0) return FALSE;
+  oip1 = dbt1->tag;
+  oip2 = dbt2->tag;
+  if (oip1 == NULL || oip2 == NULL) return FALSE;
+  if (oip1->str == NULL && oip2->str == NULL) {
+    if (oip1->id == oip2->id) return TRUE;
+  } else {
+    if (StringICmp (oip1->str, oip2->str) == 0) return TRUE;
+  }
+  return FALSE;
+}
+
+static SeqFeatPtr GetNextCDDFeature (
+  BioseqPtr bsp,
+  SeqFeatPtr curr,
+  SeqMgrFeatContext PNTR context
+)
+
+{
+  SeqFeatPtr  sfp;
+
+  sfp = SeqMgrGetNextFeature (bsp, curr, SEQFEAT_REGION, 0, context);
+  while (sfp != NULL) {
+    if (GetCddUserObjectScore (sfp) > 0) return sfp;
+    sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_REGION, 0, context);
+  }
+
+  return NULL;
+}
+
+static void RemoveCDDBioseqProc (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  SeqMgrFeatContext  fcontext;
+  Int4               left = 0;
+  Int4               right = 0;
+  Uint1              strand = 0;
+  Int2               numivals = 0;
+  Int2               i, j;
+  Int4Ptr            ivals = NULL;
+  Boolean            ivalssame;
+  SeqFeatPtr         last = NULL;
+  Int4               score1, score2;
+  SeqFeatPtr         sfp = NULL;
+
+  sfp = GetNextCDDFeature (bsp, NULL, &fcontext);
+  while (sfp != NULL) {
+    if (last != NULL) {
+      if (fcontext.left == left && fcontext.right == right) {
+        if (fcontext.strand == strand ||
+            strand == Seq_strand_unknown ||
+            fcontext.strand == Seq_strand_unknown) {
+          ivalssame = TRUE;
+          if (fcontext.numivals != numivals || fcontext.ivals == NULL || ivals == NULL) {
+            ivalssame = FALSE;
+          } else {
+            for (i = 0, j = 0; i < numivals; i++, j += 2) {
+              if (fcontext.ivals [j] != ivals [j]) {
+                ivalssame = FALSE;
+              }
+              if (fcontext.ivals [j + 1] != ivals [j + 1]) {
+                ivalssame = FALSE;
+              }
+            }
+          }
+          if (ivalssame) {
+            if (DbxrefsAreTheSame (sfp->dbxref, last->dbxref)) {
+              score1 = GetCddUserObjectScore (last);
+              score2 = GetCddUserObjectScore (sfp);
+              if (score1 >= score2) {
+                sfp->idx.deleteme = TRUE;
+              } else {
+                last->idx.deleteme = TRUE;
+              }
+            }
+          }
+        }
+      }
+    }
+    last = sfp;
+    left = fcontext.left;
+    right = fcontext.right;
+    strand = fcontext.strand;
+    numivals = fcontext.numivals;
+    ivals = fcontext.ivals;
+    sfp = GetNextCDDFeature (bsp, sfp, &fcontext);
+  }
+}
+
+NLM_EXTERN void RemoveDuplicateCDDs (
+  SeqEntryPtr topsep
+)
+
+{
+  if (topsep == NULL) return;
+
+  SeqMgrIndexFeatures (0, topsep->data.ptrvalue);
+  VisitBioseqsInSep (topsep, NULL, RemoveCDDBioseqProc);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
 }
 
 static void FreeCDDProc (

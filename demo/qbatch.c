@@ -1,4 +1,4 @@
-/* $Id: qbatch.c,v 6.8 2000/08/25 21:02:15 shavirin Exp $
+/* $Id: qbatch.c,v 6.9 2001/03/19 16:18:17 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 05/04/2000
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         WWW and Command-line Batch Entrez using Entre2 and ID1
 *
 * $Log: qbatch.c,v $
+* Revision 6.9  2001/03/19 16:18:17  beloslyu
+* fix the args for ctime_r for OSF1 on alpha
+*
 * Revision 6.8  2000/08/25 21:02:15  shavirin
 * Changed Flat file printing from DUMP_MODE to RELEASE_MODE.
 *
@@ -885,7 +888,7 @@ Boolean QSRV_Time(CharPtr string, Int4 len, time_t seconds)
         seconds = GetSecs();
     }
     
-#if defined(OS_UNIX_IRIX) || defined(OS_UNIX_LINUX)
+#if defined(OS_UNIX_IRIX) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_OSF1)
     ctime_r(&seconds, string);
 #else
     ctime_r(&seconds, string, len);

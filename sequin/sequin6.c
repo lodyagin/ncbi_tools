@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.52 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -709,8 +709,8 @@ static void DoOneConvert (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, M
   if (sep == NULL || cfp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoOneConvert (entityID, sep, cfp, mon);
       }
@@ -997,8 +997,8 @@ static void DoOneRemoveText (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp
   if (sep == NULL || cfp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoOneRemoveText (entityID, sep, cfp, mon);
       }
@@ -1601,8 +1601,8 @@ static void CountComponentFunc (SeqEntryPtr sep, Int2Ptr cp)
   if (sep == NULL || cp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         CountComponentFunc (sep, cp);
       }
@@ -2045,8 +2045,8 @@ static void ApplyBioFeatToAll (Uint2 entityID, SeqEntryPtr sep, ApplyFormPtr afp
   if (sep == NULL || afp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ApplyBioFeatToAll (entityID, sep, afp);
       }
@@ -3590,17 +3590,17 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     q = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (q, 10, 20);
     m = HiddenGroup (q, -1, 0, NULL);
-    g = HiddenGroup (m, 3, 0, NULL);
+    g = HiddenGroup (m, 0, -4, NULL);
     SetGroupSpacing (g, 3, 10);
-    StaticPrompt (g, "May we release this record before publication?",
+    StaticPrompt (g, "When may we release your sequence record?",
                   0, stdLineHeight, programFont, 'l');
-    sbfp->hup = HiddenGroup (g, 3, 0, ChangeHup);
+    sbfp->hup = HiddenGroup (g, 0, -2, ChangeHup);
     SetObjectExtra (sbfp->hup, sbfp, NULL);
-    RadioButton (sbfp->hup, "Yes");
-    RadioButton (sbfp->hup, "No");
+    RadioButton (sbfp->hup, "Immediately After Processing");
+    RadioButton (sbfp->hup, "Release Date:");
     SetValue (sbfp->hup, 1);
     sbfp->dateGrp = HiddenGroup (m, 10, 0, NULL);
-    StaticPrompt (sbfp->dateGrp, "Release Date: ", 0, popupMenuHeight, programFont, 'l');
+    /* StaticPrompt (sbfp->dateGrp, "Release Date: ", 0, popupMenuHeight, programFont, 'l'); */
     sbfp->reldate = CreateDateDialog (sbfp->dateGrp, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) sbfp->dateGrp, NULL);
     Hide (sbfp->dateGrp);
@@ -4479,8 +4479,8 @@ static void DoOneParse (Uint2 entityID, SeqEntryPtr sep, ParseFormPtr pfp, BioSo
   }
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         DoOneParse (entityID, tmp, pfp, topbiop);
       }
@@ -5062,7 +5062,8 @@ static CharPtr segClassList [] = {
   " ", "Nucleotide-Protein Set", "Segmented Nucleotide Set",
   "conset", "parts", "gibb", "gi", "genbank", "pir", "pub-set",
   "equiv", "swissprot", "pdb-entry", "MUTATION SET",
-  "POPULATION SET", "PHYLOGENETIC SET", "other", NULL
+  "POPULATION SET", "PHYLOGENETIC SET", "ENVIRONMENTAL SAMPLES",
+  "genomic product set", "other", NULL
 };
 
 static Int4 AllButPartsList (SeqEntryPtr sep, Pointer mydata,
@@ -5130,10 +5131,10 @@ static void PopTargetProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 ind
     } else if (sep->choice == 2) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
       _class = bssp->_class;
-      if (_class > 15) {
-        _class = 16;
+      if (_class > 17) {
+        _class = 18;
       }
-      if (_class == 7 || (_class >= 13 && _class <= 15)) {
+      if (_class == 7 || (_class >= 13 && _class <= 16)) {
         dfp->hasMutPopPhySet = TRUE;
       }
       if (! dfp->hasMutPopPhySet) {
@@ -5699,6 +5700,9 @@ extern void SetupNewFeaturesMenu (MenU m, BaseFormPtr bfp)
                       subtype != FEATDEF_sig_peptide &&
                       subtype != FEATDEF_transit_peptide &&
                       subtype != FEATDEF_source &&
+                      subtype != FEATDEF_virion &&
+                      subtype != FEATDEF_mutation &&
+                      subtype != FEATDEF_allele &&
                       subtype != FEATDEF_site_ref) {
                     i = CommandItem (sub, ompp->proclabel, NewFeatureMenuProc);
                     nop = (NewObjectPtr) MemNew (sizeof (NewObjectData));

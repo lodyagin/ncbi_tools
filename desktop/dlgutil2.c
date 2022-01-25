@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.24 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -1248,6 +1248,10 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "ribosomal slippage");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 5 :
+      SetTitle (ffp->exceptText, "trans splicing");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1284,9 +1288,9 @@ static CharPtr  commonNoCitFormTabs [] = {
 };
 
 extern void Nlm_LaunchGeneFeatEd (ButtoN b);
-extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
-                                       SeqFeatPtr sfp, Boolean hasGeneControl,
-                                       Boolean hasCitationTab)
+extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
+                                         SeqFeatPtr sfp, Boolean hasGeneControl,
+                                         Boolean hasCitationTab, Boolean hasGeneSuppress)
 
 {
   ButtoN   b;
@@ -1375,6 +1379,7 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "RNA editing");
       PopupItem (canned, "reasons cited in publication");
       PopupItem (canned, "ribosomal slippage");
+      PopupItem (canned, "trans splicing");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
@@ -1384,6 +1389,10 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
           SetValue (canned, 4);
         } else if (StringICmp (sfp->except_text, "ribosome slippage") == 0) {
           SetValue (canned, 4);
+        } else if (StringICmp (sfp->except_text, "trans splicing") == 0) {
+          SetValue (canned, 5);
+        } else if (StringICmp (sfp->except_text, "trans-splicing") == 0) {
+          SetValue (canned, 5);
         }
       } else {
         SetValue (canned, 1);
@@ -1445,6 +1454,17 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
       ffp->editGeneBtn = PushButton (y, "Edit Gene Feature", Nlm_LaunchGeneFeatEd);
       SetObjectExtra (ffp->editGeneBtn, ffp, NULL);
       Hide (ffp->editGeneBtn);
+    } else if (hasGeneSuppress) {
+      k = HiddenGroup (c, 3, 0, NULL);
+      StaticPrompt (k, "Map by", 0, stdLineHeight, programFont, 'l');
+      ffp->useGeneXref = HiddenGroup (k, 3, 0, GeneXrefWarn);
+      SetObjectExtra (ffp->useGeneXref, ffp, NULL);
+      RadioButton (ffp->useGeneXref, "Overlap");
+      b = RadioButton (ffp->useGeneXref, "Cross-reference");
+      Disable (b);
+      RadioButton (ffp->useGeneXref, "Suppress");
+      SetValue (ffp->useGeneXref, 1);
+      y = HiddenGroup (c, 0, 0, NULL);
     }
     ffp->commonSubGrp [page] = c;
     page++;
@@ -1518,6 +1538,14 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
                   (HANDLE) ffp->gbquals, NULL);
   }
   return c;
+}
+
+extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
+                                       SeqFeatPtr sfp, Boolean hasGeneControl,
+                                       Boolean hasCitationTab)
+
+{
+  return CreateCommonFeatureGroupEx (h, ffp, sfp, hasGeneControl, hasCitationTab, FALSE);
 }
 
 static Boolean DlgutilFindBspItem (GatherContextPtr gcp)

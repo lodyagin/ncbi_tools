@@ -1,4 +1,4 @@
-/* $Id: netscape.c,v 6.6 2000/01/13 23:37:14 beloslyu Exp $
+/* $Id: netscape.c,v 6.7 2001/03/19 23:15:46 vakatov Exp $
  * Copyright © 1996 Netscape Communications Corporation, all rights reserved.
 * ===========================================================================
 *
@@ -30,12 +30,16 @@
 *
 * Initial Version Creation Date: 11/08/1997
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *        API to remote-control Netscape(run Netscape browsers, open URLs)
 *
 * $Log: netscape.c,v $
+* Revision 6.7  2001/03/19 23:15:46  vakatov
+* NS_LoadNetscape() -- try execlp() in addition to execl(), and do not forget
+* to exit on error. The bug was caught by H.Feldman <feldman@mshri.on.ca>.
+*
 * Revision 6.6  2000/01/13 23:37:14  beloslyu
 * changes because of port to HP-UX 11.0
 *
@@ -530,13 +534,13 @@ static Boolean NS_Init(NS_WindowPtr window)
 
 static Boolean NS_LoadNetscape(const char *url)
 {
-    int childpid;
+    int childpid = fork();
     
-    if ((childpid = fork()) < 0) { 
+    if (childpid < 0) { 
         return FALSE;
     }
     
-    if(childpid > 0) {
+    if (childpid > 0) {
         /* ----- parent process  ---------- */
         /* Nothing much to be done here ... */
         return TRUE;
@@ -544,7 +548,14 @@ static Boolean NS_LoadNetscape(const char *url)
     }
 
     /* ---------- child process ------------ */
-    execl(NETSCAPE_PATH, NETSCAPE_PATH, url, NULL);
+    if (execlp("netscape", "netscape", url, NULL) < 0  &&
+        execl(NETSCAPE_PATH, NETSCAPE_PATH, url, NULL) < 0) {
+        Message(MSG_ERROR, "Failure to open URL in netscape window");
+        exit(1);
+    }
+
+    /* ----- must never get to this code! ----- */
+    ASSERT(0);
     return FALSE;
 }
 

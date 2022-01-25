@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.33 $
+* $Revision: 6.35 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -63,8 +63,8 @@ extern "C" {
 /*****************************************************************************
 *
 *   SeqMgrBioseqContext, SeqMgrSegmentContext, SeqMgrDescContext and SeqMgrFeatContext
-*     are data structures supporting the collection of bioseqs, parts of segmented bioseqs,
-*     descriptors, and features, respectively
+*     are data structures supporting the collection of bioseqs, parts of segmented
+*     bioseqs, descriptors, and features, respectively
 *
 *****************************************************************************/
 
@@ -142,7 +142,10 @@ typedef struct seqmgrfeatcontext {
 *
 *****************************************************************************/
 
-NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr));
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures (
+  Uint2 entityID,
+  Pointer ptr
+);
 
 
 /*****************************************************************************
@@ -156,16 +159,24 @@ NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeatures PROTO((Uint2 entityID, Pointer ptr)
 *
 *****************************************************************************/
 
-NLM_EXTERN ProtRefPtr LIBCALL SeqMgrGetProtXref PROTO((SeqFeatPtr sfp));
+NLM_EXTERN ProtRefPtr LIBCALL SeqMgrGetProtXref (
+  SeqFeatPtr sfp
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetBestProteinFeature PROTO((BioseqPtr bsp,
-                                                                 SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetBestProteinFeature (
+  BioseqPtr bsp,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetCDSgivenProduct PROTO((BioseqPtr bsp,
-                                                              SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetCDSgivenProduct (
+  BioseqPtr bsp,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct PROTO((BioseqPtr bsp,
-                                                              SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct (
+  BioseqPtr bsp,
+  SeqMgrFeatContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -177,12 +188,18 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetRNAgivenProduct PROTO((BioseqPtr bsp,
 *
 *****************************************************************************/
 
-NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXref PROTO((SeqFeatPtr sfp));
+NLM_EXTERN GeneRefPtr LIBCALL SeqMgrGetGeneXref (
+  SeqFeatPtr sfp
+);
 
-NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed PROTO((GeneRefPtr grp));
+NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed (
+  GeneRefPtr grp
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene PROTO((SeqLocPtr slp,
-                                                              SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -193,17 +210,25 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene PROTO((SeqLocPtr slp,
 *
 *****************************************************************************/
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA PROTO((SeqLocPtr slp,
-                                                              SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingmRNA (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS PROTO((SeqLocPtr slp,
-                                                             SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingCDS (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub PROTO((SeqLocPtr slp,
-                                                             SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingPub (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource PROTO((SeqLocPtr slp,
-                                                                SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -221,13 +246,20 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource PROTO((SeqLocPtr slp,
 *
 *****************************************************************************/
 
-NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetNextDescriptor PROTO((BioseqPtr bsp, ValNodePtr curr,
-                                                             Uint1 seqDescChoice,
-                                                             SeqMgrDescContext PNTR context));
+NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetNextDescriptor (
+  BioseqPtr bsp,
+  ValNodePtr curr,
+  Uint1 seqDescChoice,
+  SeqMgrDescContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature PROTO((BioseqPtr bsp, SeqFeatPtr curr,
-                                                          Uint1 seqFeatChoice, Uint1 featDefChoice,
-                                                          SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature (
+  BioseqPtr bsp,
+  SeqFeatPtr curr,
+  Uint1 seqFeatChoice,
+  Uint1 featDefChoice,
+  SeqMgrFeatContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -236,13 +268,25 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetNextFeature PROTO((BioseqPtr bsp, SeqFeat
 *
 *****************************************************************************/
 
-typedef Boolean (LIBCALLBACK *SeqMgrBioseqExploreProc) PROTO((BioseqPtr bsp, SeqMgrBioseqContextPtr context));
+typedef Boolean (LIBCALLBACK *SeqMgrBioseqExploreProc) (
+  BioseqPtr bsp,
+  SeqMgrBioseqContextPtr context
+);
 
-typedef Boolean (LIBCALLBACK *SeqMgrSegmentExploreProc) PROTO((SeqLocPtr slp, SeqMgrSegmentContextPtr context));
+typedef Boolean (LIBCALLBACK *SeqMgrSegmentExploreProc) (
+  SeqLocPtr slp,
+  SeqMgrSegmentContextPtr context
+);
 
-typedef Boolean (LIBCALLBACK *SeqMgrDescExploreProc) PROTO((ValNodePtr sdp, SeqMgrDescContextPtr context));
+typedef Boolean (LIBCALLBACK *SeqMgrDescExploreProc) (
+  ValNodePtr sdp,
+  SeqMgrDescContextPtr context
+);
 
-typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) PROTO((SeqFeatPtr sfp, SeqMgrFeatContextPtr context));
+typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+);
 
 /*****************************************************************************
 *
@@ -250,12 +294,13 @@ typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) PROTO((SeqFeatPtr sfp, SeqM
 *     SeqMgrExploreFeatures use the bioseq feature indices to quickly present
 *     desired items to the user-supplied callback function, stopping if the callback
 *     returns FALSE
-*   In contrast to the SeqMgrGetNext functions, the SeqMgrExplore function callbacks pass
-*     a pointer to the SeqMgr[Bioseq/Segment/Desc/Feat]Context data structures held by the
-*     explore function, not on the calling function's stack
-*   If the filter parameters are NULL, every feature or descriptor is returned, otherwise
-*     the array lengths should be SEQDESCR_MAX, SEQFEAT_MAX, and FEATDEF_MAX, and the
-*     elements are from the Seq_descr_, SEQFEAT_, and FEATDEF_ lists
+*   In contrast to the SeqMgrGetNext functions, the SeqMgrExplore function callbacks
+*     pass a pointer to the SeqMgr[Bioseq/Segment/Desc/Feat]Context data structures
+*     held by the explore function, not on the calling function's stack
+*   If the filter parameters are NULL, every feature or descriptor is returned,
+*     otherwise the array lengths should be SEQDESCR_MAX, SEQFEAT_MAX, and
+*     FEATDEF_MAX, and the elements are from the Seq_descr_, SEQFEAT_, and FEATDEF_
+*     lists
 *   It is expected that these calls would be flanked by BioseqLock and BioseqUnlock,
 *     so object manager reload could ensure that pointers are valid within the loop,
 *     but these explore functions can work on cached-out records
@@ -263,21 +308,37 @@ typedef Boolean (LIBCALLBACK *SeqMgrFeatExploreProc) PROTO((SeqFeatPtr sfp, SeqM
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs PROTO((Uint2 entityID, Pointer ptr, Pointer userdata,
-                                                    SeqMgrBioseqExploreProc userfunc,
-                                                    Boolean nucs, Boolean prots, Boolean parts));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreBioseqs (
+  Uint2 entityID,
+  Pointer ptr,
+  Pointer userdata,
+  SeqMgrBioseqExploreProc userfunc,
+  Boolean nucs,
+  Boolean prots,
+  Boolean parts
+);
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments PROTO((BioseqPtr bsp, Pointer userdata,
-                                                     SeqMgrSegmentExploreProc userfunc));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreSegments (
+  BioseqPtr bsp,
+  Pointer userdata,
+  SeqMgrSegmentExploreProc userfunc
+);
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreDescriptors PROTO((BioseqPtr bsp, Pointer userdata,
-                                                       SeqMgrDescExploreProc userfunc,
-                                                       BoolPtr seqDescFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreDescriptors (
+  BioseqPtr bsp,
+  Pointer userdata,
+  SeqMgrDescExploreProc userfunc,
+  BoolPtr seqDescFilter
+);
 
-NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures PROTO((BioseqPtr bsp, Pointer userdata,
-                                                     SeqMgrFeatExploreProc userfunc,
-                                                     SeqLocPtr locationFilter,
-                                                     BoolPtr seqFeatFilter, BoolPtr featDefFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures (
+  BioseqPtr bsp,
+  Pointer userdata,
+  SeqMgrFeatExploreProc userfunc,
+  SeqLocPtr locationFilter,
+  BoolPtr seqFeatFilter,
+  BoolPtr featDefFilter
+);
 
 /*****************************************************************************
 *
@@ -290,13 +351,23 @@ NLM_EXTERN Int2 LIBCALL SeqMgrExploreFeatures PROTO((BioseqPtr bsp, Pointer user
 *
 *****************************************************************************/
 
-NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor PROTO((Uint2 entityID, BioseqPtr bsp,
-                                                                Uint2 itemID, Uint2 index, ValNodePtr sdp,
-                                                                SeqMgrDescContext PNTR context));
+NLM_EXTERN ValNodePtr LIBCALL SeqMgrGetDesiredDescriptor (
+  Uint2 entityID,
+  BioseqPtr bsp,
+  Uint2 itemID,
+  Uint2 index,
+  ValNodePtr sdp,
+  SeqMgrDescContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, BioseqPtr bsp,
-                                                             Uint2 itemID, Uint2 index, SeqFeatPtr sfp,
-                                                             SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature (
+  Uint2 entityID,
+  BioseqPtr bsp,
+  Uint2 itemID,
+  Uint2 index,
+  SeqFeatPtr sfp,
+  SeqMgrFeatContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -307,13 +378,20 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetDesiredFeature PROTO((Uint2 entityID, Bio
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL SeqMgrVisitDescriptors PROTO((Uint2 entityID, Pointer userdata,
-                                                      SeqMgrDescExploreProc userfunc,
-                                                      BoolPtr seqDescFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrVisitDescriptors (
+  Uint2 entityID,
+  Pointer userdata,
+  SeqMgrDescExploreProc userfunc,
+  BoolPtr seqDescFilter
+);
 
-NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures PROTO((Uint2 entityID, Pointer userdata,
-                                                   SeqMgrFeatExploreProc userfunc,
-                                                   BoolPtr seqFeatFilter, BoolPtr featDefFilter));
+NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures (
+  Uint2 entityID,
+  Pointer userdata,
+  SeqMgrFeatExploreProc userfunc,
+  BoolPtr seqFeatFilter,
+  BoolPtr featDefFilter
+);
 
 /*****************************************************************************
 *
@@ -322,7 +400,9 @@ NLM_EXTERN Int2 LIBCALL SeqMgrVisitFeatures PROTO((Uint2 entityID, Pointer userd
 *
 *****************************************************************************/
 
-NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc PROTO((SeqLocPtr loc));
+NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc (
+  SeqLocPtr loc
+);
 
 /*****************************************************************************
 *
@@ -331,8 +411,10 @@ NLM_EXTERN BioseqPtr BioseqFindFromSeqLoc PROTO((SeqLocPtr loc));
 *
 *****************************************************************************/
 
-NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart PROTO((BioseqPtr bsp,
-                                                          SeqMgrSegmentContext PNTR context));
+NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart (
+  BioseqPtr bsp,
+  SeqMgrSegmentContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -340,8 +422,10 @@ NLM_EXTERN BioseqPtr LIBCALL SeqMgrGetParentOfPart PROTO((BioseqPtr bsp,
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext PROTO((BioseqPtr bsp,
-                                                         SeqMgrBioseqContext PNTR context));
+NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext (
+  BioseqPtr bsp,
+  SeqMgrBioseqContext PNTR context
+);
 
 /*****************************************************************************
 *
@@ -359,18 +443,32 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext PROTO((BioseqPtr bsp,
 #define SIMPLE_OVERLAP   0
 #define CONTAINED_WITHIN 1
 #define CHECK_INTERVALS  2
+#define INTERVAL_OVERLAP 3
 
-NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex PROTO((BioseqPtr bsp, Int4Ptr num,
-                                                          Uint1 seqFeatChoice, Uint1 featDefChoice));
+NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex (
+  BioseqPtr bsp,
+  Int4Ptr num,
+  Uint1 seqFeatChoice,
+  Uint1 featDefChoice
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature PROTO((SeqLocPtr slp, Uint2 subtype,
-                                                                 VoidPtr featarray, Int4 numfeats,
-                                                                 Int4Ptr position, Int2 overlapType,
-                                                                 SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingFeature (
+  SeqLocPtr slp,
+  Uint2 subtype,
+  VoidPtr featarray,
+  Int4 numfeats,
+  Int4Ptr position,
+  Int2 overlapType,
+  SeqMgrFeatContext PNTR context
+);
 
-NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex PROTO((BioseqPtr bsp, VoidPtr featarray,
-                                                             Int4 numfeats, Uint2 index,
-                                                             SeqMgrFeatContext PNTR context));
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex (
+  BioseqPtr bsp,
+  VoidPtr featarray,
+  Int4 numfeats,
+  Uint2 index,
+  SeqMgrFeatContext PNTR context
+);
 
 /* the following functions are not frequently called by applications */
 
@@ -381,7 +479,9 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetFeatureInIndex PROTO((BioseqPtr bsp, Void
 *
 *****************************************************************************/
 
-NLM_EXTERN time_t LIBCALL SeqMgrFeaturesAreIndexed PROTO((Uint2 entityID));
+NLM_EXTERN time_t LIBCALL SeqMgrFeaturesAreIndexed (
+  Uint2 entityID
+);
 
 /*****************************************************************************
 *
@@ -390,7 +490,10 @@ NLM_EXTERN time_t LIBCALL SeqMgrFeaturesAreIndexed PROTO((Uint2 entityID));
 *
 *****************************************************************************/
 
-NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes PROTO((Uint2 entityID, Pointer ptr));
+NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes (
+  Uint2 entityID,
+  Pointer ptr
+);
 
 /*****************************************************************************
 *
@@ -398,7 +501,11 @@ NLM_EXTERN Boolean LIBCALL SeqMgrClearFeatureIndexes PROTO((Uint2 entityID, Poin
 *
 *****************************************************************************/
 
-NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (Uint2 entityID, Pointer ptr, Boolean flip);
+NLM_EXTERN Uint2 LIBCALL SeqMgrIndexFeaturesEx (
+  Uint2 entityID,
+  Pointer ptr,
+  Boolean flip
+);
 
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.4 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -38,6 +38,15 @@
 * --------------------------------------------------------------------------
 *
  * $Log: tsprintf.c,v $
+ * Revision 6.7  2001/03/23 14:04:14  beloslyu
+ * fix the name of strnlen to my_strnlen. It appears IBM's AIX has it's own function with this name
+ *
+ * Revision 6.6  2000/12/28 21:25:14  vakatov
+ * Comment fixed
+ *
+ * Revision 6.5  2000/12/28 21:16:44  vakatov
+ * va_args():  use "int" to fetch a "short int" argument
+ *
  * Revision 6.4  2000/07/19 20:54:48  vakatov
  * minor cleanup
  *
@@ -87,7 +96,7 @@
  *  INTERNAL
  ***********************************************************************/
 
-static size_t strnlen(const char * s, size_t count)
+static size_t my_strnlen(const char * s, size_t count)
 {
   const char *sc;
 
@@ -334,7 +343,7 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
             va_end( args );
             return counter;
           }
-          len = strnlen(s, precision);
+          len = my_strnlen(s, precision);
           if (len < field_width)
             len = field_width;
           counter += len;
@@ -401,9 +410,9 @@ static size_t vsprintf_count_args(const Char PNTR fmt, va_list args,
         num = va_arg(args, unsigned long);
       else if (qualifier == 'h')
         if (flags & SIGNED)
-          num = va_arg(args, short);
+          num = va_arg(args, int);  /* sic! -- not a "short"! */
         else
-          num = va_arg(args, unsigned short);
+          num = va_arg(args, unsigned int);
       else if (flags & SIGNED)
         num = va_arg(args, int);
       else

@@ -1,4 +1,4 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.17 $  $Date: 2000/09/01 18:30:55 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.24 $  $Date: 2001/02/13 16:26:03 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,27 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.24  2001/02/13 16:26:03  dondosha
+* Bug fix: memory freed in the wrong place
+*
+* Revision 6.23  2001/01/31 19:48:14  dondosha
+* Change #define TMPDIR to environment variable
+*
+* Revision 6.22  2001/01/26 20:13:05  dondosha
+* If at least one sequence id non-numeric, make them all non-numeric
+*
+* Revision 6.21  2000/12/19 18:52:38  dondosha
+* Added option to disallow id parsing when formatting database
+*
+* Revision 6.20  2000/12/14 20:51:14  dondosha
+* Do several Mega BLAST searches if more than 16383 sequences in input
+*
+* Revision 6.19  2000/12/07 22:57:34  dondosha
+* Implemented nucleotide version using Mega BLAST
+*
+* Revision 6.18  2000/12/01 17:57:04  dondosha
+* Handle local and general ids differently to avoid non-informative output
+*
 * Revision 6.17  2000/09/01 18:30:55  dondosha
 * Create database memory map only once for all searches
 *
@@ -257,8 +278,6 @@ static int BlastClusterNeighbours(Int4 num_queries, Int4Ptr seq_len,
        }
     }
 
-    MemFree(seq_len);
-
     /* Sort each cluster in decreasing order of sequence lengths */
     for (index=0; index<num_clusters; index++) 
        HeapSort(cluster[index]->elements, cluster[index]->size, 
@@ -467,7 +486,7 @@ GapAlignPercentIdentity(GapAlignBlkPtr gabp)
    an almost identical match of two sequences */
 #define BUFFER_SIZE 80
 static int LIBCALLBACK
-PrintProteinNeighbors(VoidPtr ptr)
+PrintNeighbors(VoidPtr ptr)
 {
     BLAST_HitListPtr current_hitlist;
     BLAST_HSPPtr hsp; 
@@ -479,7 +498,6 @@ PrintProteinNeighbors(VoidPtr ptr)
     Int4 subject_length;
     Uint1Ptr subject, query;
     ClusterLogInfoPtr loginfo = NULL;
-    
     
     if (ptr == NULL)
         return 0;	
@@ -493,15 +511,19 @@ PrintProteinNeighbors(VoidPtr ptr)
     }
     
     current_hitlist = search->current_hitlist;
-    if (search->prog_number == blast_type_blastn) 
-        return 0;
     
-    subject_length = readdb_get_sequence(search->rdfp, search->subject_id, &subject);
-    
+    if (search->prog_number == blast_type_blastp)
+        subject_length = readdb_get_sequence(search->rdfp, search->subject_id, &subject);
+    else { /* Mega BLAST saves ncbi4na-encoded sequence */
+        subject = search->subject->sequence_start;
+        subject_length = search->subject->length;
+    }
     hspcnt = current_hitlist->hspcnt;
     
-    id1 = SeqId2OrdinalId(search->rdfp, search->query_id);
-    
+    if (search->prog_number == blast_type_blastp)
+       id1 = SeqId2OrdinalId(search->rdfp, search->query_id);
+    else 
+       id1 = -1;
     id2 = search->subject_id;
     
     if (id1 < id2) { /* Must be always true */
@@ -510,10 +532,12 @@ PrintProteinNeighbors(VoidPtr ptr)
         FloatHi length_coverage, bit_score, score_coverage, perc_identity; 
 	BLAST_KarlinBlkPtr kbp;
         GapAlignBlkPtr gap_align = search->gap_align;
+        Int2 context;
 
-        query = search->context[0].query->sequence;
-        query_length = search->context[0].query->length;
-
+        if (search->prog_number == blast_type_blastp) {
+           query = search->context[0].query->sequence;
+           query_length = search->context[0].query->length;
+        }
 	if (global_parameters->logfp)
 	   loginfo = (ClusterLogInfoPtr) MemNew(hspcnt*sizeof(ClusterLogInfo));
         
@@ -521,8 +545,19 @@ PrintProteinNeighbors(VoidPtr ptr)
             hsp = current_hitlist->hsp_array[index];
             if (hsp) {
                 /* Test if this hsp corresponds to an almost identical hit */
-                q_length = hsp->query.end - hsp->query.offset;
-                s_length = hsp->subject.end - hsp->subject.offset;
+                if (search->prog_number == blast_type_blastn) {
+                    SeqIdPtr query_id;
+                    context = hsp->context;
+                    query_id = search->qid_array[context/2];
+                    id1 = SeqId2OrdinalId(search->rdfp, query_id);
+                    if (id1 >= id2) /* Process only the upper triangle */
+                        continue;
+                    query_length = 
+                        search->query_context_offsets[context+1] -
+                        search->query_context_offsets[context] - 1;
+                }
+                q_length = hsp->query.length;
+                s_length = hsp->subject.length;
 		
 		if (global_parameters->bidirectional)
 		   length_coverage = MIN(((FloatHi)q_length) / query_length, 
@@ -531,24 +566,47 @@ PrintProteinNeighbors(VoidPtr ptr)
 		   length_coverage = MAX(((FloatHi)q_length) / query_length, 
                                       ((FloatHi)s_length) / subject_length);
 		   
-		if (search->pbp->gapped_calculation)
-		   kbp = search->sbp->kbp_gap[search->first_context];
+		if (search->prog_number == blast_type_blastp)
+                    kbp = search->sbp->kbp_gap[search->first_context];
 		else
-		   kbp = search->sbp->kbp[search->first_context];
+                    kbp = search->sbp->kbp[context];
 		bit_score = ((hsp->score*kbp->Lambda) -
 			     kbp->logK)/NCBIMATH_LN2;
 
-                gap_align->query_frame = ContextToFrame(search,
-                                                        hsp->context);
-                gap_align->subject_frame = hsp->subject.frame;
-                gap_align->q_start = hsp->query.gapped_start;
-                gap_align->s_start = hsp->subject.gapped_start;
-                PerformGappedAlignmentWithTraceback(gap_align);
-                perc_identity = GapAlignPercentIdentity(gap_align);
-                gap_align->state_struct = 
-                   GapXDropStateDestroy(gap_align->state_struct);
-                gap_align->edit_block = 
-                   GapXEditBlockDelete(gap_align->edit_block);
+		if (search->prog_number == blast_type_blastp) {
+                    gap_align->query_frame = ContextToFrame(search,
+                                                            hsp->context);
+                    gap_align->subject_frame = hsp->subject.frame;
+                    gap_align->q_start = hsp->query.gapped_start;
+                    gap_align->s_start = hsp->subject.gapped_start;
+                    PerformGappedAlignmentWithTraceback(gap_align);
+                    perc_identity = GapAlignPercentIdentity(gap_align);
+                    gap_align->state_struct = 
+                        GapXDropStateDestroy(gap_align->state_struct);
+                    gap_align->edit_block = 
+                        GapXEditBlockDelete(gap_align->edit_block);
+                } else {
+                    Int4Ptr length, start;
+                    Uint1Ptr strands;
+                    Int4 align_length = 0, numseg, i;
+                    GapXEditScriptPtr esp;
+                    query = search->context[context].query->sequence;
+                    esp = hsp->gap_info->esp;
+                    for (numseg=0; esp; esp = esp->next, numseg++);
+                    GXECollectDataForSeqalign(hsp->gap_info, 
+                                              hsp->gap_info->esp, numseg,
+                                              &start, &length, &strands, 
+                                              &hsp->query.offset, 
+                                              &hsp->subject.offset);
+                    GapXEditBlockDelete(hsp->gap_info);
+                    perc_identity = 0;
+                    for (i=0; i<numseg; i++) {
+                        align_length += length[i];
+                        if (start[2*i] != -1 && start[2*i+1] != -1)
+                            perc_identity += MegaBlastGetNumIdentical(query, subject, start[2*i], start[2*i+1], length[i], FALSE);
+                    }
+                    perc_identity = perc_identity / align_length * 100;
+                }
                 if (global_parameters->score_threshold < 3.0)
                    score_coverage = bit_score / (MAX(q_length, s_length));
                 else
@@ -602,7 +660,7 @@ PrintProteinNeighbors(VoidPtr ptr)
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs [] = {
-   { "FASTA input file (program will format the database and remove files in the end)",                                                               /* 0 */
+   { "FASTA input file (program will format the database and remove files in the end)",                                                         /* 0 */
      "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
    { "Number of CPU's to use",                                   /* 1 */
       "1", NULL, NULL, FALSE, 'a', ARG_INT, 0.0, 0, NULL},       
@@ -625,16 +683,17 @@ static Args myargs [] = {
    { "Complete unfinished clustering",                           /* 10 */
      "FALSE", NULL, NULL, FALSE, 'C', ARG_BOOLEAN, 0.0, 0, NULL},   
    { "Restrict reclustering to id list",                         /* 11 */
-     NULL, NULL, NULL, TRUE, 'l', ARG_FILE_IN, 0.0, 0, NULL}   
+     NULL, NULL, NULL, TRUE, 'l', ARG_FILE_IN, 0.0, 0, NULL},   
+   { "Is input proteins?",                                       /* 12 */
+      "TRUE", NULL, NULL, FALSE, 'p', ARG_BOOLEAN, 0.0, 0, NULL},
+   { "Enable id parsing in database formatting?",                /* 13 */
+      "TRUE", NULL, NULL, FALSE, 'e', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 #define MAX_DB_SIZE 100000
 #define MAX_GI_LENGTH 9
 #define PROGRESS_INTERVAL 1000
-
-#ifndef TMPDIR
-#define TMPDIR "/tmp"
-#endif
+#define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
 
 Int2 Main (void)
 {
@@ -645,26 +704,34 @@ Int2 Main (void)
     ReadDBFILEPtr rdfp, rdfp_var;
     Uint1 align_type;
     SeqIdPtr sip;
-    BioseqPtr query_bsp = NULL;
+    BioseqPtr query_bsp = NULL, PNTR query_bsp_array;
     CharPtr blast_program, blast_inputfile, blast_outputfile, blast_database,
        progress_file = NULL;
-    CharPtr logfile, info_file, defline, input_name;
+    CharPtr logfile, info_file, input_name;
     Int4 total_id_len = 0;
     FILE *outfp, *infofp, *progressfp, *idfp;
-    Int4 index, i, num_queries;
+    Int4 index, i, num_queries, num_bsps, num_left;
     Int8 total_length;
     Int4Ptr gi_list = NULL, seq_len = NULL;
     CharPtr PNTR id_list = NULL, id_string = NULL;
     Boolean db_formatted = FALSE, numeric_id_type = TRUE;
     Char db_file[BUFFER_SIZE];
     ClusterLogHeader header;
-    Boolean print_progress, finish_incomplete;
+    Boolean print_progress, finish_incomplete, is_prot, parse_mode;
     FDB_optionsPtr fdb_options;
     Char timestr[24];
-    
+    CharPtr tmpdir;
+
     if (! GetArgs ("blastclust", NUMARG, myargs))
        return (1);
     
+    UseLocalAsnloadDataAndErrMsg ();
+    
+    if (! SeqEntryLoad())
+       return 1;
+    
+    ErrSetMessageLevel(SEV_WARNING);
+
     global_parameters = (ClusterParametersPtr) MemNew(sizeof(ClusterParameters));
 
     global_parameters->length_threshold = myargs[3].floatvalue;
@@ -718,7 +785,13 @@ Int2 Main (void)
     } else
        infofp = NULL;
 
-    blast_program = StringSave("blastp");
+    is_prot = (Boolean) myargs[12].intvalue;
+    parse_mode = (Boolean) myargs[13].intvalue;
+    if (is_prot)
+       blast_program = StringSave("blastp");
+    else 
+       blast_program = StringSave("blastn");
+
     if (*myargs[8].strvalue)
        db_formatted = TRUE;
 
@@ -728,18 +801,18 @@ Int2 Main (void)
        /* Need to format the database */
        blast_inputfile = myargs[0].strvalue;
        input_name = FileNameFind(blast_inputfile);
-#ifdef TMPDIR
-       blast_database = 
-	  Malloc(StringLen(input_name) + StringLen(TMPDIR) + 2);
-       sprintf(blast_database, "%s/%s", TMPDIR, input_name);
-#else
-       blast_database = blast_inputfile;
-#endif
+
+       if (tmpdir = getenv("TMPDIR")) {
+          blast_database = 
+             Malloc(StringLen(input_name) + StringLen(tmpdir) + 2);
+          sprintf(blast_database, "%s/%s", tmpdir, input_name);
+       } else
+          blast_database = blast_inputfile;
 
        fdb_options = MemNew(sizeof(FDB_options));
        fdb_options->db_file = StringSave(blast_inputfile);
-       fdb_options->is_protein = 1; /* TRUE */
-       fdb_options->parse_mode = 1; /* TRUE */
+       fdb_options->is_protein = (Int4) is_prot; 
+       fdb_options->parse_mode = (Int4) parse_mode; 
        fdb_options->base_name = StringSave(blast_database);
        FastaToBlastDB(fdb_options, blast_database, 0);
 
@@ -766,7 +839,7 @@ Int2 Main (void)
 
     align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
     
-    rdfp = readdb_new(blast_database, READDB_DB_IS_PROT);
+    rdfp = readdb_new(blast_database, is_prot);
     
     options = BLASTOptionNew(blast_program, TRUE);
     
@@ -791,7 +864,7 @@ Int2 Main (void)
 
     ReadDBBioseqFetchEnable ("blastclust", blast_database, db_is_na, TRUE);
        
-    if (finish_incomplete) {
+    if (is_prot && finish_incomplete) {
        first_seq = ReclusterFromFile(global_parameters->logfp, NULL, &gi_list,
 				    &id_list, &seq_len, NULL);
     } else {
@@ -804,13 +877,39 @@ Int2 Main (void)
        seq_len = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
        
        for (index=0; index<num_queries; index++) {
-	  readdb_get_descriptor(rdfp, index, &sip, &defline);
+	  readdb_get_descriptor(rdfp, index, &sip, NULL);
 	  seq_len[index] = readdb_get_sequence_length(rdfp, index);
 	  
-	  if (!GetAccessionFromSeqId(sip, &gi_list[index], &id_list[index])) 
-	     numeric_id_type = FALSE;
+          if (sip->choice == SEQID_LOCAL) {
+             BioseqPtr bsp = BioseqLockById(sip);
+             CharPtr title = StringSave(BioseqGetTitle(bsp));
+             if (title) {
+                numeric_id_type = FALSE;
+                id_list[index] = StringTokMT(title, " ", &title);
+             } else {
+                numeric_id_type &=
+                   GetAccessionFromSeqId(bsp->id, &gi_list[index], 
+                                         &id_list[index]);
+             }
+             BioseqUnlock(bsp);
+          } else if (sip->choice != SEQID_GENERAL)
+             numeric_id_type &= 
+                GetAccessionFromSeqId(sip, &gi_list[index], 
+                                      &id_list[index]); 
+          else {
+             BioseqPtr bsp = BioseqLockById(sip);
+             CharPtr title = StringSave(BioseqGetTitle(bsp));
+             if (title) {
+                numeric_id_type = FALSE;
+                id_list[index] = StringTokMT(title, " ", &title);
+             } else {
+                numeric_id_type = FALSE;
+                id_list[index] = (CharPtr) Malloc(BUFFER_SIZE+1);
+                SeqIdWrite(sip, id_list[index],
+                           PRINTID_FASTA_SHORT, BUFFER_SIZE);
+             }
+          }
 	  sip = SeqIdSetFree(sip);
-	  defline = MemFree(defline);
        }
        header.numeric_id_type = numeric_id_type;
        
@@ -862,6 +961,32 @@ Int2 Main (void)
 	  fprintf(progressfp, "%s Start clustering of %ld queries\n", 
 		  timestr, num_queries);
     }
+
+    if (!is_prot) {
+       SeqAlignPtr PNTR head; /* Will not be used */
+       options->is_megablast_search = TRUE;
+       options->wordsize = 32;
+       options->gap_open = options->gap_extend = 0;
+       options->block_width = 0;
+
+       query_bsp_array = (BioseqPtr PNTR) 
+          Malloc((MIN(num_queries, MAX_NUM_QUERIES)+1)*sizeof(BioseqPtr));
+       num_left = num_queries;
+       while (num_left>0) {
+          num_bsps = MIN(num_left, MAX_NUM_QUERIES);
+          for (index=0; index<num_bsps; index++)
+             query_bsp_array[index] = readdb_get_bioseq(rdfp, index);
+          query_bsp_array[num_bsps] = NULL;
+          
+          head = BioseqMegaBlastEngine(query_bsp_array, blast_program, 
+                                       blast_database, options, NULL, NULL,
+                                       NULL, NULL, NULL, 0, PrintNeighbors);
+          for (index=0; index<num_bsps; index++)
+             query_bsp_array[index] = BioseqFree(query_bsp_array[index]);
+          num_left -= num_bsps;
+       }
+       MemFree(query_bsp_array);
+    } else { 
     for (index=first_seq; index<num_queries; index++) {
        query_bsp = readdb_get_bioseq(rdfp, index);
        /* Set up the search */
@@ -869,7 +994,7 @@ Int2 Main (void)
 
        search = BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp, blast_program, seq_len[index], blast_database, options, NULL, NULL, NULL, 0, rdfp);
        if (search != NULL && !search->query_invalid) {
-	  search->handle_results = PrintProteinNeighbors;
+	  search->handle_results = PrintNeighbors;
             
 	  /* Run BLAST. */
 	  search->queue_callback = NULL;
@@ -886,11 +1011,11 @@ Int2 Main (void)
 		  timestr, index+1);
        }
     } /* End of loop on queries */
-
+    }
     rdfp = readdb_destruct(rdfp);
     BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, NULL);
 
-
+    MemFree(seq_len);
     if (numeric_id_type)
        MemFree(gi_list);
     else {
@@ -908,20 +1033,23 @@ Int2 Main (void)
        FileClose(global_parameters->logfp);
 
     if (!db_formatted && StringLen(blast_database) > 0) {
-       sprintf(db_file, "%s.phr", blast_database);
+       Char p_or_n = (is_prot) ? 'p' : 'n';
+       sprintf(db_file, "%s.%chr", blast_database, p_or_n);
        FileRemove(db_file);
-       sprintf(db_file, "%s.pin", blast_database);
+       sprintf(db_file, "%s.%cin", blast_database, p_or_n);
        FileRemove(db_file);
-       sprintf(db_file, "%s.pnd", blast_database);
+       sprintf(db_file, "%s.%csq", blast_database, p_or_n);
        FileRemove(db_file);
-       sprintf(db_file, "%s.pni", blast_database);
-       FileRemove(db_file);
-       sprintf(db_file, "%s.psd", blast_database);
-       FileRemove(db_file);
-       sprintf(db_file, "%s.psi", blast_database);
-       FileRemove(db_file);
-       sprintf(db_file, "%s.psq", blast_database);
-       FileRemove(db_file);
+       if (parse_mode) {
+          sprintf(db_file, "%s.%cnd", blast_database, p_or_n);
+          FileRemove(db_file);
+          sprintf(db_file, "%s.%cni", blast_database, p_or_n);
+          FileRemove(db_file);
+          sprintf(db_file, "%s.%csd", blast_database, p_or_n);
+          FileRemove(db_file);
+          sprintf(db_file, "%s.%csi", blast_database, p_or_n);
+          FileRemove(db_file);
+       }
     }
     MemFree(blast_database);
     return 0;

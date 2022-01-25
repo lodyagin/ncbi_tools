@@ -31,6 +31,9 @@
 *
 *
 * $Log: treeview.h,v $
+* Revision 1.6  2001/03/28 16:06:10  kans
+* added prototype for tview_setPlusColor
+*
 * Revision 1.5  1998/04/08 16:51:52  soussov
 * typo in function name fixed
 *
@@ -142,6 +145,7 @@ void tview_delete(TreeViewPtr tv, Boolean do_hide);
  */
 Boolean tview_setTextColor(TreeViewPtr tv, Uint4 color);
 Boolean tview_setLineColor(TreeViewPtr tv, Uint4 color);
+Boolean tview_setPlusColor(TreeViewPtr tv, Uint4 color);
 Boolean tview_setSelBGColor(TreeViewPtr tv, Uint4 color);
 Boolean tview_setSelFGColor(TreeViewPtr tv, Uint4 color);
 

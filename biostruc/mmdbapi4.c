@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/18/95
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: Code for Modelstruc -> Biostruc conversion
 *                   And User-feature handling.
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: mmdbapi4.c,v $
+* Revision 6.7  2000/12/05 22:13:07  ywang
+* fix bugs for MakePDBSeqId2
+*
 * Revision 6.6  1999/03/12 18:37:08  kans
 * fixed ErrPostEx problem
 *
@@ -1698,9 +1701,7 @@ SeqIdPtr MakePDBSeqId2 (CharPtr pcPDB, Char cChain, int iDomain, Boolean getgi)
   Int4 gi;
 
   psip = PDBSeqIdNew ();
-  if (cChain == '-' || cChain == '_') {
-    cChain = ' ';
-  }
+
   psip->chain = cChain;
   psip->rel = NULL;
   psip->mol = StringSave (pcPDB);

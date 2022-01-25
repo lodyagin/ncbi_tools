@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.62 $
+* $Revision: 6.64 $
 *
 * File Description: 
 *
@@ -99,8 +99,9 @@ extern "C" {
 #define SEQ_PKG_POPULATION    4
 #define SEQ_PKG_PHYLOGENETIC  5
 #define SEQ_PKG_MUTATION      6
-#define SEQ_PKG_GENBANK       7
-#define NUM_SEQ_PKG           8
+#define SEQ_PKG_ENVIRONMENT   7
+#define SEQ_PKG_GENBANK       8
+#define NUM_SEQ_PKG           9
 
 #define SEQ_FMT_FASTA         1
 #define SEQ_FMT_CONTIGUOUS    2 
@@ -331,6 +332,7 @@ extern void NetConfigureProc (IteM i);
 extern void EntrezQueryProc (IteM i);
 extern void SetupEditSecondary (MenU m, BaseFormPtr bfp);
 extern void SimplePowerBlastProc (IteM i);
+extern void SimpleCDDBlastProc (IteM i);
 extern void VectorScreenProc (IteM i);
 extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean smartMods, ButtoN b);
 extern void ForceTaxonFixupBtn (IteM i, ButtoN b);

@@ -32,8 +32,11 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.32 $ 
+/* $Revision: 6.33 $ 
 * $Log: mblast.h,v $
+* Revision 6.33  2000/12/21 22:29:29  dondosha
+* Added prototype for MegaBlastGetHspPercentIdentity
+*
 * Revision 6.32  2000/10/31 15:06:16  dondosha
 * Added Boolean parameter to PrintMaskedSequence function
 *
@@ -303,6 +306,9 @@ void PrintMaskedSequence PROTO((BioseqPtr query_bsp, SeqLocPtr mask_slp,
 				CharPtr file_name, Boolean first));
 Int4 LIBCALL 
 MegaBlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
+
+FloatLo 
+MegaBlastGetHspPercentIdentity PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp));
 
 #ifdef __cplusplus
 }

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.75 $
+* $Revision: 6.78 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.78  2001/02/27 21:52:37  madden
+* Added BioseqToFastaDump and FastaDumpFileFunc for dumping BLAST db in FASTA
+*
+* Revision 6.77  2001/01/31 23:08:08  dondosha
+* Allow tab as well as space to be a separator between id and description
+*
+* Revision 6.76  2000/12/01 00:17:04  kans
+* MakeCompleteChromTitle uses completeness flag to say complete or partial sequence, complete genome or just genome
+*
 * Revision 6.75  2000/10/27 20:15:04  shavirin
 * Changed creation of Protein SeqIds to MT-safe function.
 *
@@ -779,6 +788,56 @@ NLM_EXTERN Boolean FastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 
 /*****************************************************************************
 *
+*   FastaFileFunc(key, buf, data)
+*   	standard "write to file" callback
+*
+*	Used for BLAST (FASTA) databases.  If the defline is
+*	longer than buflen, then check that an ID is not
+*	truncated in the middle.
+*
+*****************************************************************************/
+NLM_EXTERN Boolean FastaDumpFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
+                                  Uint4 buflen, Pointer data)
+{
+	FILE * fp;
+
+	fp = (FILE *)data;
+
+	switch (key)
+	{
+		case FASTA_ID:
+			fprintf(fp, ">%s ", buf);
+			break;
+		case FASTA_DEFLINE:
+
+			if (buflen >= FASTA_BUFFER_LEN-1)
+			{
+				Int4 index=buflen;
+				while (index > 0 && buf[index] != ' ')
+				{
+					if (buf[index] == '\001')
+					{
+						buf[index] = NULLB;
+						break;
+					}
+					index--;
+				}
+			}
+			fprintf(fp, "%s\n", buf);
+			break;
+		case FASTA_SEQLINE:
+			fprintf(fp, "%s\n", buf);
+			break;
+		case FASTA_EOS:   /* end of sequence */
+			break;
+		default:
+			break;
+	}
+	return TRUE;
+}
+
+/*****************************************************************************
+*
 *   SeqEntrysToFasta(sep, fp, is_na, group_segs)
 *
 *   	group_segs = 0 ... take only raw Bioseqs
@@ -994,6 +1053,38 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 	mfa.seqlen = 80;
 	mfa.mydata = (Pointer)fp;
 	mfa.myfunc = FastaFileFunc;
+	mfa.bad_asn1 = FALSE;
+	mfa.order = 0;
+	mfa.accession = NULL;
+	mfa.organism = NULL;
+	mfa.do_virtual = FALSE;
+	mfa.tech = 0;
+	mfa.no_sequence = FALSE;
+	mfa.formatdb = FALSE;
+	mfa.printid_general = FALSE;
+
+	return BioseqToFastaX(bsp, &mfa, is_na);
+}
+
+/*****************************************************************************
+*
+*   Boolean BioseqToFastaDump(bsp, fp, is_na)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean BioseqToFastaDump (BioseqPtr bsp, FILE *fp, Boolean is_na)
+
+{
+	MyFsa mfa;
+	Char buf[FASTA_BUFFER_LEN+1];
+
+    if ((bsp == NULL) || (fp == NULL))
+        return FALSE;
+
+	mfa.buf = buf;
+	mfa.buflen = FASTA_BUFFER_LEN;
+	mfa.seqlen = 80;
+	mfa.mydata = (Pointer)fp;
+	mfa.myfunc = FastaDumpFileFunc;
 	mfa.bad_asn1 = FALSE;
 	mfa.order = 0;
 	mfa.accession = NULL;
@@ -1925,7 +2016,10 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
                     ptr++;
                     chptr = StringChr (ptr, '"');
                 } else {
-                    chptr = StringChr (ptr, ' ');
+                   for (chptr = ptr; *chptr != NULLB && !IS_WHITESP(*chptr);
+                        chptr++);
+                   if (*chptr == NULLB)
+                      chptr = NULL;
                 }
             }
             if (!parseSeqId) {
@@ -2852,9 +2946,11 @@ static void LowercasePlasmidOrElement (CharPtr def)
   }
 }
 
-static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
+static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol, Uint1 completeness)
 
 {
+	CharPtr       completeseq = ", complete sequence";
+	CharPtr       completegen = ", complete genome";
 	ItemInfoPtr   iip = NULL;
 	ValNodePtr    vnp;
 	BioSourcePtr  biop;
@@ -2917,10 +3013,19 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 		}
 	}
 
+	if (completeness == 2 ||
+		completeness == 3 ||
+		completeness == 4 ||
+		completeness == 5) {
+		/* remove "complete" component */
+		completeseq = ", partial sequence";
+		completegen = ", genome";
+	}
+
 	def = (CharPtr) MemNew(deflen+1);
 	if (StringISearch (name, "plasmid") != NULL) {
 		StringCat(def, name);
-		StringCat (def, ", complete sequence");
+		StringCat (def, completeseq);
 		ch = *def;
 		*def = TO_UPPER (ch);
 		LowercasePlasmidOrElement (def);
@@ -2928,7 +3033,8 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 	} else if (plasmid) {
 		if (name && (! pls)) {
 			StringCat (def, name);
-			StringCat (def, " unnamed plasmid, complete sequence");
+			StringCat (def, " unnamed plasmid");
+			StringCat (def, completeseq);
 			ch = *def;
 			*def = TO_UPPER (ch);
 			return def;
@@ -2942,7 +3048,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 				StringCat(def, "plasmid ");
 			}
 			StringCat (def, pls);
-			StringCat (def, ", complete sequence");
+			StringCat (def, completeseq);
 			ch = *def;
 			*def = TO_UPPER (ch);
 			LowercasePlasmidOrElement (def);
@@ -2961,7 +3067,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 			StringCat (def, "plasmid ");
 		}
 		StringCat (def, pls);
-		StringCat (def, ", complete sequence");
+		StringCat (def, completeseq);
 		ch = *def;
 		*def = TO_UPPER (ch);
 		LowercasePlasmidOrElement (def);
@@ -2972,7 +3078,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 	if (orgnl != NULL) {
 		StringCat (def, " ");
 		StringCat (def, orgnl);
-		StringCat (def, ", complete genome");
+		StringCat (def, completegen);
 		ch = *def;
 		*def = TO_UPPER (ch);
 		return def;
@@ -2980,7 +3086,7 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 	if (seg != NULL) {
 		StringCat (def, " ");
 		StringCat(def, seg);
-		StringCat (def, ", complete sequence");
+		StringCat (def, completeseq);
 		ch = *def;
 		*def = TO_UPPER (ch);
 		return def;
@@ -2988,12 +3094,12 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 	if (chr != NULL) {
 		StringCat (def, " chromosome ");
 		StringCat(def, chr);
-		StringCat (def, ", complete sequence");
+		StringCat (def, completeseq);
 		ch = *def;
 		*def = TO_UPPER (ch);
 		return def;
 	}
-	StringCat (def, ", complete genome");
+	StringCat (def, completegen);
 	ch = *def;
 	*def = TO_UPPER (ch);
 	return def;
@@ -3093,7 +3199,7 @@ NLM_EXTERN Boolean CreateDefLine (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf, I
 			mip = (MolInfoPtr) vnp->data.ptrvalue;
 			if (mip != NULL &&
 			    (mip->biomol == MOLECULE_TYPE_GENOMIC || mip->biomol == MOLECULE_TYPE_OTHER_GENETIC_MATERIAL) /* && mip->completeness == 1 */) {
-				title = MakeCompleteChromTitle (bsp, mip->biomol);
+				title = MakeCompleteChromTitle (bsp, mip->biomol, mip->completeness);
 				organism = NULL;
 				if (iip != NULL) {
 					iip->entityID = ii.entityID;

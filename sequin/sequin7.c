@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.78 $
+* $Revision: 6.83 $
 *
 * File Description: 
 *
@@ -588,11 +588,8 @@ extern ForM CreateFormatForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (ffp->package, "Population study");
     RadioButton (ffp->package, "Phylogenetic study");
     RadioButton (ffp->package, "Mutation study");
-/*#ifdef INTERNAL_NCBI_SEQUIN*/
-    /* if (indexerVersion) { */
-      RadioButton (ffp->package, "Batch submission");
-    /* } */
-/*#endif*/
+    RadioButton (ffp->package, "Environmental samples");
+    RadioButton (ffp->package, "Batch submission");
     SetValue (ffp->package, SEQ_PKG_SINGLE);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt, (HANDLE) ffp->package, NULL);
 
@@ -1236,6 +1233,8 @@ typedef struct fa2htgsform {
   EnumFieldAssocPtr  alists [1];
   GrouP              htgsphase;
   ButtoN             draft;
+  ButtoN             fulltop;
+  ButtoN             activefin;
   TexT               orgname;
   TexT               seqname;
   ButtoN             update;
@@ -1288,7 +1287,7 @@ static SeqIdPtr  SqnMakeAc2GBSeqId(CharPtr accession)
 *   AddExtraAc2Entry:
 *                                             Hsiu-Chuan 4-11-97, modified by JK
 ****************************************************************/
-static void SqnAddDraft2Entry (SeqEntryPtr entry)
+static void SqnAddDraft2Entry (SeqEntryPtr entry, CharPtr keyword)
 
 {
    BioseqPtr  bsp;
@@ -1316,7 +1315,7 @@ static void SqnAddDraft2Entry (SeqEntryPtr entry)
    }
 
    if (gbp != NULL) {
-      ValNodeCopyStr (&gbp->keywords, 0, "HTGS_DRAFT");
+      ValNodeCopyStr (&gbp->keywords, 0, keyword);
    }
 }
 
@@ -1547,7 +1546,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   BioseqSetPtr bssp;
   SeqLitPtr slp;
   ValNodePtr vnp, PNTR prevpnt, next, extra_accs;
-  Boolean lastwasraw, draft, usedelta = FALSE;
+  Boolean lastwasraw, draft, fulltop, activefin, usedelta = FALSE;
   Char str [64];
   long int val;
   Int2 index = 0;
@@ -1574,6 +1573,8 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
   title = SaveStringFromText (ffp->title);
   extra_accs = DialogToPointer (ffp->secondaries);
   draft = GetStatus (ffp->draft);
+  fulltop = GetStatus (ffp->fulltop);
+  activefin = GetStatus (ffp->activefin);
 
   length = 0;
 /* may need to really calculate length */
@@ -1799,7 +1800,13 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
    }
 
    if (draft) {
-      SqnAddDraft2Entry(the_entry);
+      SqnAddDraft2Entry(the_entry, "HTGS_DRAFT");
+   }
+   if (fulltop) {
+      SqnAddDraft2Entry(the_entry, "HTGS_FULLTOP");
+   }
+   if (activefin) {
+      SqnAddDraft2Entry(the_entry, "HTGS_ACTIVEFIN");
    }
 
    AddBiomolToEntry(nsp, the_entry, 1);
@@ -2536,8 +2543,11 @@ extern ForM CreateGenomeCenterForm (Int2 left, Int2 top, CharPtr title,
     RadioButton (ffp->htgsphase, "HTGS-1");
     RadioButton (ffp->htgsphase, "HTGS-2");
     RadioButton (ffp->htgsphase, "HTGS-3");
-    ffp->draft = CheckBox (g, "Draft", NULL);
-    StaticPrompt (g, "", 0, stdLineHeight, programFont, 'l');
+    StaticPrompt (g, "HTGS_", 0, stdLineHeight, programFont, 'l');
+    q = HiddenGroup (g, 3, 0, NULL);
+    ffp->draft = CheckBox (q, "Draft", NULL);
+    ffp->fulltop = CheckBox (q, "Fulltop", NULL);
+    ffp->activefin = CheckBox (q, "Activefin", NULL);
   }
 
   StaticPrompt (g, "Organism", 0, dialogTextHeight, programFont, 'l');
@@ -2905,8 +2915,8 @@ static void ConvertToCDSCallback (SeqEntryPtr sep, Uint2 entityID, ConvCdsPtr cc
   if (sep == NULL || ccp == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ConvertToCDSCallback (sep, entityID, ccp);
       }
@@ -4676,6 +4686,7 @@ typedef struct findform {
   TexT            replaceTxt;
   ButtoN          caseCounts;
   ButtoN          wholeWord;
+  ButtoN          doSeqIdLocal;
   ButtoN          findAllBtn;
   ButtoN          replaceAllBtn;
 } FindForm, PNTR FindFormPtr;
@@ -4890,6 +4901,7 @@ static void CommonFindReplaceProc (ButtoN b, Boolean replace, Boolean replaceAll
 {
   Boolean      caseCounts;
   CharPtr      changeme;
+  Boolean      doSeqIdLocal;
   FindFormPtr  ffp;
   CharPtr      findme;
   Boolean      wholeWord;
@@ -4900,15 +4912,18 @@ static void CommonFindReplaceProc (ButtoN b, Boolean replace, Boolean replaceAll
     ObjMgrDeSelect (0, 0, 0, 0, NULL);
     caseCounts = GetStatus (ffp->caseCounts);
     wholeWord = GetStatus (ffp->wholeWord);
+    doSeqIdLocal = GetStatus (ffp->doSeqIdLocal);
     if (replace) {
       changeme = SaveStringFromText (ffp->replaceTxt);
-      FindInEntity (ffp->input_entityID, findme, changeme, TRUE, UPDATE_NEVER, caseCounts, wholeWord, replaceAll);
+      FindReplaceInEntity (ffp->input_entityID, findme, changeme, caseCounts, wholeWord, replaceAll,
+                           TRUE, UPDATE_ONCE, NULL, NULL, NULL, doSeqIdLocal);
       GetRidOfEmptyFeatsDescStrings (ffp->input_entityID, NULL);
       ObjMgrSetDirtyFlag (ffp->input_entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, ffp->input_entityID, 0, 0);
       MemFree (changeme);
     } else {
-      FindInEntity (ffp->input_entityID, findme, NULL, TRUE, UPDATE_ONCE, caseCounts, wholeWord, FALSE);
+      FindReplaceInEntity (ffp->input_entityID, findme, NULL, caseCounts, wholeWord, FALSE,
+                           TRUE, UPDATE_ONCE, NULL, NULL, NULL, doSeqIdLocal);
     }
     MemFree (findme);
     Update ();
@@ -5019,9 +5034,12 @@ static ForM CreateFindForm (Int2 left, Int2 top, CharPtr title,
       SetObjectExtra (ffp->replaceTxt, ffp, NULL);
     }
 
-    q = HiddenGroup (w, 2, 0, NULL);
+    q = HiddenGroup (w, 3, 0, NULL);
     ffp->caseCounts = CheckBox (q, "Case Sensitive", NULL);
     ffp->wholeWord = CheckBox (q, "Entire Word", NULL);
+    if (indexerVersion) {
+      ffp->doSeqIdLocal = CheckBox (q, "SeqID LOCAL", NULL);
+    }
 
     c = HiddenGroup (w, 4, 0, NULL);
     SetGroupSpacing (c, 10, 2);
@@ -5587,8 +5605,8 @@ static Int4 DoSeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct,
   rsult = 0;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         rsult += DoSeqEntryToAsn3 (sep, strip, correct, force, dotaxon, mon);
       }
@@ -5858,6 +5876,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   }
   if ((! force) && (! needstaxfix)) {
     ConvertFullLenSourceFeatToDesc (sep);
+    ConvertFullLenPubFeatToDesc (sep);
     /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
     EntryChangeGBSource (sep);   /* at least remove redundant information in GBBlocks */
     EntryCheckGBBlock (sep);
@@ -5913,6 +5932,7 @@ extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct,
   }
 /*#endif*/
   ConvertFullLenSourceFeatToDesc (sep);
+  ConvertFullLenPubFeatToDesc (sep);
   /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
   MovePopPhyMutPubs (sep);
   EntryChangeGBSource (sep);   /* remove redundant information in GBBlocks again */
@@ -6540,8 +6560,8 @@ static void AddOrgToDef (Uint2 entityID, SeqEntryPtr sep, Int2 orgmod, Int2 subs
   if (sep == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         AddOrgToDef (entityID, sep, orgmod, subsource);
       }

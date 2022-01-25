@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.13  2001/02/27 21:52:37  madden
+* Added BioseqToFastaDump and FastaDumpFileFunc for dumping BLAST db in FASTA
+*
 * Revision 6.12  2000/10/12 16:03:58  kans
 * added SeqEntryToFastaEx, printid_general field to MyFsa structure, to support processing software that requires gnl ID in FASTA defline even in the presence of higher-priority ref ID
 *
@@ -188,6 +191,9 @@ NLM_EXTERN Boolean BioseqRawToFasta PROTO((BioseqPtr bsp, FILE * fp, Boolean is_
 NLM_EXTERN Boolean SeqEntryToFasta PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na));
 NLM_EXTERN Boolean SeqEntryToFastaEx PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na, Boolean printid_general));
 NLM_EXTERN Boolean BioseqToFasta PROTO((BioseqPtr bsp, FILE *fp, Boolean is_na));
+NLM_EXTERN Boolean BioseqToFastaDump PROTO((BioseqPtr bsp, FILE *fp, Boolean is_na));
+
+
 
 NLM_EXTERN void	SeqEntryFasta PROTO ((SeqEntryPtr sep, Pointer data,
                                      Int4 index, Int2 indent));
@@ -220,6 +226,18 @@ NLM_EXTERN Boolean BioseqToFastaX PROTO((BioseqPtr bsp, MyFsaPtr mfp, Boolean is
 NLM_EXTERN Boolean FastaFileFunc PROTO((BioseqPtr bsp, Int2 key,
                                         CharPtr buf, Uint4 buflen, Pointer data));
 
+
+/*****************************************************************************
+*
+*   FastaDumpFileFunc(key, buf, data)
+*       standard "write to file" callback
+*
+*       Used for BLAST (FASTA) databases.  If the defline is
+*       longer than buflen, then check that an ID is not
+*       truncated in the middle.
+*
+*****************************************************************************/
+NLM_EXTERN Boolean FastaDumpFileFunc PROTO((BioseqPtr bsp, Int2 key, CharPtr buf, Uint4 buflen, Pointer data));
 
 /*****************************************************************************
 *

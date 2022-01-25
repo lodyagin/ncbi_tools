@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.9 2000/10/26 01:55:54 bauer Exp $
+/* $Id: cddposutil.c,v 1.14 2001/02/06 20:54:43 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.9 $
+* $Revision: 1.14 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.14  2001/02/06 20:54:43  hurwitz
+* added a couple asserts
+*
+* Revision 1.13  2001/01/19 23:34:55  bauer
+* fixed memory leaks
+*
+* Revision 1.12  2001/01/17 20:21:54  bauer
+* merged in changes for PSSM calculation
+*
+* Revision 1.11  2001/01/03 11:11:49  bauer
+* renamed posCancel to CddposCancel
+*
+* Revision 1.10  2000/12/29 00:52:21  hurwitz
+* cleaning memory leaks
+*
 * Revision 1.9  2000/10/26 01:55:54  bauer
 * renamed BLASTSetUpSearchInternalByLoc to CddSetUpSearchInternalByLoc
 *
@@ -98,7 +113,7 @@ static Uint1Ptr LIBCALL CddGetSequenceWithDenseDiag(DenseDiagPtr ddp, Boolean qu
                                                     Int4Ptr start, Int4Ptr stop);
 static Uint1Ptr LIBCALL CddGetSequenceWithDenseSeg(DenseSegPtr dsp, Boolean query,
                                                    Int4Ptr start, Int4Ptr length);
-static void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch,
+static void LIBCALL CddposCancel(posSearchItems *posSearch, compactSearchItems * compactSearch,
                               Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength);
 static Nlm_FloatHi ** LIBCALL CddallocatePosFreqs(Int4 length, Int4 alphabetSize);
 static Nlm_FloatHi LIBCALL countsFunction(Nlm_FloatHi Sigma, Int4 intervalLength);
@@ -123,6 +138,9 @@ static void LIBCALL putCkptFreqMatrix (Nlm_FloatHi **theMatrix, Int4 length, Int
 void LIBCALL CddposAllocateMemory(posSearchItems * posSearch, Int4 alphabetSize, Int4 querySize, Int4 numSequences)
 {
   Int4 i, j;                                                   /*loop indices*/
+
+  posSearch->QuerySize = querySize;
+  posSearch->NumSequences = numSequences;
 
   posSearch->posCount = (Int4 *) MemNew(querySize * sizeof(Int4));
   if (NULL == posSearch->posCount)
@@ -152,15 +170,21 @@ void LIBCALL CddposAllocateMemory(posSearchItems * posSearch, Int4 alphabetSize,
   }  
   posSearch->posMatrix = (BLAST_Score **) MemNew((querySize + 1) * sizeof(BLAST_Score *));
   posSearch->posPrivateMatrix = (BLAST_Score **) MemNew((querySize + 1) * sizeof(BLAST_Score *));
-  if (NULL == posSearch->posMatrix)
-    exit(EXIT_FAILURE);
+  posSearch->posFreqs = (Nlm_FloatHi **) MemNew((querySize + 1) * sizeof(Nlm_FloatHi *));
+  if (NULL == posSearch->posMatrix) exit(EXIT_FAILURE);
+  if (NULL == posSearch->posPrivateMatrix) exit(EXIT_FAILURE);
+  if (NULL == posSearch->posFreqs) exit(EXIT_FAILURE);
   for(i = 0; i <= querySize; i++) {
     posSearch->posMatrix[i] = (BLAST_Score *) MemNew(alphabetSize * sizeof(BLAST_Score));
     posSearch->posPrivateMatrix[i] = (BLAST_Score *) MemNew(alphabetSize * sizeof(BLAST_Score));
-    if (NULL == posSearch->posMatrix[i])
-      exit(EXIT_FAILURE);   
-    for(j = 0; j < alphabetSize; j++)
+    posSearch->posFreqs[i] = (Nlm_FloatHi *) MemNew(alphabetSize * sizeof(Nlm_FloatHi));
+    if (NULL == posSearch->posMatrix[i]) exit(EXIT_FAILURE);
+    if (NULL == posSearch->posPrivateMatrix[i]) exit(EXIT_FAILURE);
+    if (NULL == posSearch->posFreqs[i]) exit(EXIT_FAILURE);
+    for(j = 0; j < alphabetSize; j++) {
       posSearch->posMatrix[i][j] = 0;
+      posSearch->posFreqs[i][j] = 0;
+    }
   }
   posSearch->posSigma = (Nlm_FloatHi *) MemNew((querySize) * sizeof(Nlm_FloatHi));
   if (NULL == posSearch->posSigma)
@@ -203,6 +227,46 @@ void LIBCALL CddposAllocateMemory(posSearchItems * posSearch, Int4 alphabetSize,
    posSearch->posRowSigma = (Nlm_FloatHi *) MemNew((numSequences + 1) * sizeof(Nlm_FloatHi));
    if (NULL == posSearch->posRowSigma)
      exit(EXIT_FAILURE);
+}
+
+
+void LIBCALL CddposFreeMemory2(compactSearchItems * compactSearch)
+{
+  MemFree(compactSearch->standardProb);
+}
+
+void LIBCALL CddposFreeMemory(posSearchItems * posSearch) {
+/*---------------------------------------------------------------------------*/
+/*  free memory that was allocated in posAllocateMemory.                     */
+/*---------------------------------------------------------------------------*/
+  Int4  i;
+
+  MemFree(posSearch->posCount);
+  for (i=0; i<=posSearch->QuerySize; i++) {
+    MemFree(posSearch->posMatchWeights[i]);
+    MemFree(posSearch->posFreqs[i]);
+    MemFree(posSearch->posMatrix[i]);
+    MemFree(posSearch->posPrivateMatrix[i]);
+    MemFree(posSearch->posC[i]);
+  }
+  MemFree(posSearch->posC);
+  MemFree(posSearch->posMatchWeights);
+  MemFree(posSearch->posMatrix);
+  MemFree(posSearch->posPrivateMatrix);
+  MemFree(posSearch->posFreqs);
+
+  for (i=0; i<=posSearch->posDescMatrixLength; i++) {
+    MemFree(posSearch->posDescMatrix[i]);
+  }
+  MemFree(posSearch->posDescMatrix);
+
+  MemFree(posSearch->posSigma);
+  MemFree(posSearch->posIntervalSizes);
+  MemFree(posSearch->posExtents);
+  MemFree(posSearch->posA);
+  MemFree(posSearch->posRowSigma);
+  MemFree(posSearch->posInformation);
+  MemFree(posSearch->posUseSequences);
 }
 
 
@@ -433,7 +497,7 @@ static Uint1Ptr LIBCALL CddGetSequenceWithDenseSeg(DenseSegPtr dsp, Boolean quer
 /* Eliminate the matches from sequence second starting at position           */
 /* matchStart and extending for intervalLength characters                    */
 /*---------------------------------------------------------------------------*/
-static void LIBCALL posCancel(posSearchItems *posSearch, compactSearchItems * compactSearch,
+static void LIBCALL CddposCancel(posSearchItems *posSearch, compactSearchItems * compactSearch,
                               Int4 first, Int4 second, Int4 matchStart, Int4 intervalLength)
 {
   Int4 c, i;
@@ -508,7 +572,7 @@ void LIBCALL CddposPurgeMatches(posSearchItems *posSearch, compactSearchItems * 
       } else {
 	      if (state == POS_COUNTING) {
 	        if ((intervalLength > 0) && (matchNumber == intervalLength))
-	          posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
+	          CddposCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
 	        state = POS_RESTING;
 	      }
       }
@@ -516,7 +580,7 @@ void LIBCALL CddposPurgeMatches(posSearchItems *posSearch, compactSearchItems * 
     }
     if (state == POS_COUNTING) /*at end of sequence i*/
       if ((intervalLength > 0) && (matchNumber == intervalLength))
-	posCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
+	CddposCancel(posSearch,compactSearch,0,j,matchStart,intervalLength);
   }
   for (i = 1; i < posSearch->posNumSequences; i++) {
     if (!posSearch->posUseSequences[i])
@@ -551,7 +615,7 @@ void LIBCALL CddposPurgeMatches(posSearchItems *posSearch, compactSearchItems * 
 	else {
 	  if (state == POS_COUNTING) {
 	    if ((intervalLength > 0) && ((((Nlm_FloatHi) matchNumber)/intervalLength) >= IDENTITY_RATIO))
-	      posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
+	      CddposCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
 	    state = POS_RESTING;
 	  }
 	}
@@ -559,7 +623,7 @@ void LIBCALL CddposPurgeMatches(posSearchItems *posSearch, compactSearchItems * 
       }
       if (state == POS_COUNTING) /*at end of sequence i*/
 	if ((intervalLength > 0) && ((((Nlm_FloatHi) matchNumber)/intervalLength) >= IDENTITY_RATIO))
-	  posCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
+	  CddposCancel(posSearch,compactSearch,i,j,matchStart,intervalLength);
     }
   }
 }
@@ -863,6 +927,22 @@ Nlm_FloatHi ** LIBCALL CddposComputePseudoFreqs(posSearchItems *posSearch, compa
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* from posit.c as of 12/29/2000                                             */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddfreePosFreqs(Nlm_FloatHi ** posFreqs, Int4 length)
+{
+  Int4 i;
+
+  for (i = 0; i <= length; i++)
+    MemFree(posFreqs[i]);
+  MemFree(posFreqs); 
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 static Nlm_FloatHi LIBCALL posit_rounddown(Nlm_FloatHi value)
 {
   return (Nlm_FloatHi) Nlm_Nint(value);
@@ -871,17 +951,17 @@ static Nlm_FloatHi LIBCALL posit_rounddown(Nlm_FloatHi value)
 
 
 /*---------------------------------------------------------------------------*/
-/*Convert pseudo-count frequencies to a score matrix */
+/*Convert pseudo-count frequencies to a score matrix                         */
 /*---------------------------------------------------------------------------*/
 void LIBCALL CddposFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch)
 {
-   Uint1Ptr q;  /*pointer to the query*/
-   Int4 length;  /*length of the query*/
-   Int4 c; /*loop index*/
-   Int4 a, alphabetSize; /*loop index and size of alphabet*/
-   Nlm_FloatHi lambda; /*Karlin-Altschul parameter*/
-   Nlm_FloatHi  qOverPEstimate, value; /*intermediate terms*/
-   Boolean allZeros; /*are all frequencies in a column 0?*/
+   Uint1Ptr q;                                         /*pointer to the query*/
+   Int4 length;                                         /*length of the query*/
+   Int4 c;                                                       /*loop index*/
+   Int4 a, alphabetSize;                    /*loop index and size of alphabet*/
+   Nlm_FloatHi lambda;                            /*Karlin-Altschul parameter*/
+   Nlm_FloatHi  qOverPEstimate, value;                   /*intermediate terms*/
+   Boolean allZeros;                     /*are all frequencies in a column 0?*/
 
    q = compactSearch->query;
    length = compactSearch->qlength;
@@ -949,9 +1029,11 @@ void LIBCALL CddposScaling(posSearchItems *posSearch, compactSearchItems * compa
 
 
 /*---------------------------------------------------------------------------*/
-/*Compute general information about the sequences that matched on the
-  i-th pass such as how many matched at each query position and what letter
-  matched*/
+/*---------------------------------------------------------------------------*/
+/* Compute general information about the sequences that matched on the       */
+/* i-th pass such as how many matched at each query position and what letter */
+/* matched                                                                   */
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 void LIBCALL CddposDenseDiagDemographics(posSearchItems     *posSearch,
                                          compactSearchItems *compactSearch,
@@ -1108,6 +1190,7 @@ void LIBCALL CddposDemographics(posSearchItems *posSearch,
 
 
 /*---------------------------------------------------------------------------*/
+/* copied from BLASTSetUpSearchInternalByLoc                                 */
 /*---------------------------------------------------------------------------*/
 #define DROPOFF_NUMBER_OF_BITS 10.0
 #define INDEX_THR_MIN_SIZE 20000
@@ -2086,4 +2169,143 @@ Boolean LIBCALL CddposTakeCheckpoint(posSearchItems * posSearch, compactSearchIt
   return(TRUE);
 }
 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* modelled after posReadAlignment (posit.c, as of 12/28/2000)               */
+/* instead of reading in a text alignment from a file, the posDesc array is  */
+/* populated from the DenseDiag alignment                                    */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static posDesc** CddposReadAlignment(compactSearchItems *compactSearch,
+                                     SeqAlignPtr salp, Int4 numSeqs,
+				     Int4 alignLength, BioseqPtr bsp)
+{
+  posDesc    **returnArray;                    /*array of sequences to return*/
+  SeqAlignPtr  salpThis;
+  DenseDiagPtr ddp;
+  SeqPortPtr   spp;
+  Int4         i,j,c;                                          /*loop indices*/
+  Int4         alignPos, queryOffset, subjectOffset, matchLength;
+  Int4         index, splace, qplace, retrievalOffset, subjectLength;
+  Uint1Ptr     s;
+
+  returnArray = (posDesc**) MemNew(numSeqs * sizeof(posDesc *));
+  if (NULL == returnArray) exit(EXIT_FAILURE);
+  for (i = 0; i < numSeqs; i++) {
+    returnArray[i] = (posDesc *) MemNew(alignLength * sizeof(posDesc));
+    if (NULL == returnArray[i]) exit(EXIT_FAILURE);
+    for(j = 0; j < alignLength; j++) {
+      returnArray[i][j].letter = GAP_CHAR;
+      returnArray[i][j].used = TRUE;
+    }
+  }  
+
+  alignPos = 0; i = 0;
+  ASSERT(NULL != bsp);
+  spp = SeqPortNew(bsp,0,bsp->length-1,Seq_strand_unknown,Seq_code_ncbistdaa);
+  for (index=0; index<alignLength; index++) {
+    returnArray[i][index].letter = SeqPortGetResidue(spp);
+    returnArray[i][index].used   = TRUE;
+  }
+  spp = SeqPortFree(spp);
+  salpThis = salp;
+
+  while (salpThis) {
+    i++;
+    ddp = (DenseDiagPtr) salpThis->segs;
+    s = CddGetSequenceWithDenseDiag(ddp,FALSE, &retrievalOffset, &subjectLength);
+    while (ddp) {
+      queryOffset = ddp->starts[0];
+      subjectOffset = ddp->starts[1] - retrievalOffset;
+      matchLength = ddp->len;
+      for(c = 0, qplace = queryOffset, splace = subjectOffset; c < matchLength; c++, qplace++, splace++) {
+        ASSERT(qplace < alignLength);
+        ASSERT(i < numSeqs);
+        returnArray[i][qplace].letter = (Int1) s[splace]; 
+        returnArray[i][qplace].used = TRUE; 
+      }
+      ddp = ddp->next;
+    }
+    s = MemFree(s);
+    salpThis = salpThis->next;
+  }
+  return(returnArray);
+}
+
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* modelled after posProcessAlignment (posit.c, as of 12/28/2000)            */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+void LIBCALL CddposProcessAlignment(posSearchItems *posSearch, 
+                                    compactSearchItems *compactSearch,
+				    SeqAlignPtr salp, Int4 numSeqs,
+				    Int4 alignLength, BioseqPtr bsp)
+{
+  Int4 queryPos, alignPos, linePos; /*placeholder for pos. in query & alignmt*/
+  Int4 *queryDesc;      /*position correspondence between alignment and query*/
+  Int4 seqIndex;                                      /*counter for sequences*/
+  posDesc ** alignArray;
+  Int4 queryLength;                                /*length of query sequence*/
+
+  alignArray = CddposReadAlignment(compactSearch,salp,numSeqs,alignLength,bsp);
+  queryDesc = (Int4 *) MemNew(alignLength * sizeof(Int4));
+  if (NULL == queryDesc) exit(EXIT_FAILURE);
+  for(alignPos = 0; alignPos < alignLength; alignPos++) queryDesc[alignPos] = GAP_HERE;
+  alignPos = 0;
+  queryPos = 0;
+  for(linePos = 0; linePos < alignLength; linePos++) {
+    queryDesc[alignPos] = queryPos;
+    posSearch->posDescMatrix[0][queryPos].letter = alignArray[0][linePos].letter;
+    posSearch->posDescMatrix[0][queryPos].used = TRUE;
+    posSearch->posDescMatrix[0][queryPos].e_value = compactSearch->ethresh/2;
+    posSearch->posDescMatrix[0][queryPos].leftExtent = 0;
+    posSearch->posDescMatrix[0][queryPos].rightExtent = compactSearch->qlength - 1;
+    posSearch->posC[queryPos][alignArray[0][linePos].letter]++;
+    posSearch->posCount[queryPos]++;
+    queryPos++;
+    alignPos++;
+  }
+
+
+  queryLength = queryPos;
+  for(seqIndex = 1; seqIndex < numSeqs; seqIndex++) {
+    for(linePos = 0; linePos < alignLength; linePos++) {
+      if (!(posSearch->posDescMatrix[0][queryDesc[linePos]].used)) {
+        /*mark column as not participating*/
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].used = FALSE;
+      }
+      else {
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].letter = alignArray[seqIndex][linePos].letter;
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].used = TRUE;
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].e_value = compactSearch->ethresh/2;
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].leftExtent = 0;
+        posSearch->posDescMatrix[seqIndex][queryDesc[linePos]].rightExtent = compactSearch->qlength;
+      }
+    }
+  }
+
+  /*make terminal gaps unused*/
+  for(seqIndex = 1; seqIndex < numSeqs; seqIndex++) {
+    linePos = 0;
+    while((linePos < queryLength) && (posSearch->posDescMatrix[seqIndex][linePos].letter == GAP_CHAR)) {
+      posSearch->posDescMatrix[seqIndex][linePos].used = FALSE;
+      linePos++;
+    }
+    linePos = queryLength - 1;
+    while((linePos >= 0) && (posSearch->posDescMatrix[seqIndex][linePos].letter == GAP_CHAR)) {
+      posSearch->posDescMatrix[seqIndex][linePos].used = FALSE;
+      linePos--;
+    }
+  }
+
+/* clean up */
+  for (seqIndex=0;seqIndex<numSeqs;seqIndex++) {
+    MemFree(alignArray[seqIndex]);
+  }
+  MemFree(alignArray);
+  MemFree(queryDesc);
+}
 

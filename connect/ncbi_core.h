@@ -1,7 +1,7 @@
 #ifndef NCBI_CORE__H
 #define NCBI_CORE__H
 
-/*  $Id: ncbi_core.h,v 6.1 2000/02/23 22:30:40 vakatov Exp $
+/*  $Id: ncbi_core.h,v 6.8 2001/03/02 20:06:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,9 +36,9 @@
  *    struct STimeout
  *
  * I/O status and direction:
- *    enum:  EIO_ReadMethod
- *    enum:  EIO_Status,  verbal: IO_StatusStr()
- *    enum:  EIO_Event
+ *    enum:       EIO_ReadMethod
+ *    enum:       EIO_Status,  verbal: IO_StatusStr()
+ *    enum:       EIO_Event
  *
  * Critical section (basic multi-thread synchronization):
  *    handle:     MT_LOCK
@@ -52,17 +52,50 @@
  *    enum:       ELOG_Level,  verbal: LOG_LevelStr()
  *    flags:      TLOG_FormatFlags, ELOG_FormatFlags
  *    callbacks:  (*FLOG_Handler)(),  (*FLOG_Cleanup)()
- *    methods:    LOG_Greate(),  LOG_Reset(),
- *                LOG_AddRef(),  LOG_Delete(),  LOG_Write()
- *    macro:      LOG_WRITE(),  THIS_FILE, THIS_MODULE
+ *    methods:    LOG_Create(),  LOG_Reset(),  LOG_AddRef(),  LOG_Delete(),
+ *                LOG_Write(), LOG_Data(),
+ *    macro:      LOG_WRITE(), LOG_DATA(),  THIS_FILE, THIS_MODULE
+ *
+ * Registry:
+ *    handle:     REG
+ *    enum:       EREG_Storage
+ *    callbacks:  (*FREG_Get)(),  (*FREG_Set)(),  (*FREG_Cleanup)()
+ *    methods:    REG_Create(),  REG_Reset(),  REG_AddRef(),  REG_Delete(),
+ *                REG_Get(),  REG_Set()
+ *
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core.h,v $
+ * Revision 6.8  2001/03/02 20:06:54  lavr
+ * Typos fixed
+ *
+ * Revision 6.7  2001/01/23 23:07:30  lavr
+ * A make-up change
+ *
+ * Revision 6.6  2001/01/11 16:41:18  lavr
+ * Registry Get/Set methods got the 'user_data' argument, forgotten earlier
+ *
+ * Revision 6.5  2000/10/18 20:29:41  vakatov
+ * REG_Get::  pass in the default value (rather than '\0')
+ *
+ * Revision 6.4  2000/06/23 19:34:41  vakatov
+ * Added means to log binary data
+ *
+ * Revision 6.3  2000/04/07 19:55:14  vakatov
+ * Standard indentation
+ *
+ * Revision 6.2  2000/03/24 23:12:03  vakatov
+ * Starting the development quasi-branch to implement CONN API.
+ * All development is performed in the NCBI C++ tree only, while
+ * the NCBI C tree still contains "frozen" (see the last revision) code.
+ *
  * Revision 6.1  2000/02/23 22:30:40  vakatov
  * Initial revision
  *
  * ===========================================================================
  */
+
+#include <stddef.h>
 
 #include <assert.h>
 #if defined(NDEBUG)
@@ -80,9 +113,18 @@ extern "C" {
 /* Timeout structure
  */
 typedef struct {
-  unsigned int sec;  /* seconds (gets truncated to platform-dep. max. limit) */
-  unsigned int usec; /* microseconds (always get truncated by mod 1,000,000) */
+    unsigned int sec;  /* seconds (truncated to the platf.-dep. max. limit) */
+    unsigned int usec; /* microseconds (always truncated by mod. 1,000,000) */
 } STimeout;
+
+
+/* Aux. enum to set/unset/default various features
+ */
+typedef enum {
+    eOff = 0,
+    eOn,
+    eDefault
+} ESwitch;
 
 
 
@@ -94,33 +136,33 @@ typedef struct {
 /* I/O read method
  */
 typedef enum {
-  eIO_Plain,  /* read the presently available data only */
-  eIO_Peek,   /* eREAD_Plain, but dont discard the data from input queue */
-  eIO_Persist /* try to read exactly "size" bytes;  wait for enough data */
+    eIO_Plain,  /* read the presently available data only */
+    eIO_Peek,   /* eREAD_Plain, but dont discard the data from input queue */
+    eIO_Persist /* try to read exactly "size" bytes;  wait for enough data */
 } EIO_ReadMethod;
 
 
 /* I/O event (or direction)
  */
 typedef enum {
-  eIO_Open,
-  eIO_Read,
-  eIO_Write,
-  eIO_ReadWrite,
-  eIO_Close
+    eIO_Open,
+    eIO_Read,
+    eIO_Write,
+    eIO_ReadWrite,
+    eIO_Close
 } EIO_Event;
 
 
 /* I/O status
  */
 typedef enum {
-  eIO_Success = 0,  /* everything is fine, no errors occured          */
-  eIO_Timeout,      /* timeout expired before the data could be i/o'd */
-  eIO_Closed,       /* peer has closed the connection                 */
-  eIO_InvalidArg,   /* bad argument value(s)                          */
-  eIO_NotSupported, /* the requested operation is not supported       */
+    eIO_Success = 0,  /* everything is fine, no errors occurred         */
+    eIO_Timeout,      /* timeout expired before the data could be i/o'd */
+    eIO_Closed,       /* peer has closed the connection                 */
+    eIO_InvalidArg,   /* bad argument value(s)                          */
+    eIO_NotSupported, /* the requested operation is not supported       */
 
-  eIO_Unknown       /* unknown (most probably -- fatal) error         */
+    eIO_Unknown       /* unknown (most probably -- fatal) error         */
 } EIO_Status;
 
 
@@ -135,7 +177,7 @@ extern const char* IO_StatusStr(EIO_Status status);
  */
 
 
-/* Lock handle (keeps all data needed for the locking and for the cleanup)
+/* Lock handle -- keeps all data needed for the locking and for the cleanup
  */
 struct MT_LOCK_tag;
 typedef struct MT_LOCK_tag* MT_LOCK;
@@ -146,9 +188,9 @@ typedef struct MT_LOCK_tag* MT_LOCK;
  *   eMT_LockRead <==> eMT_Lock
  */
 typedef enum {
-  eMT_Lock,      /* lock    critical section             */
-  eMT_LockRead,  /* lock    critical section for reading */
-  eMT_Unlock     /* unlock  critical section             */
+    eMT_Lock,      /* lock    critical section             */
+    eMT_LockRead,  /* lock    critical section for reading */
+    eMT_Unlock     /* unlock  critical section             */
 } EMT_Lock;
 
 
@@ -180,7 +222,7 @@ extern MT_LOCK MT_LOCK_Create
  );
 
 
-/* Increment ref.counter by 1,  then return "lk". 
+/* Increment ref.counter by 1,  then return "lk"
  */
 extern MT_LOCK MT_LOCK_AddRef(MT_LOCK lk);
 
@@ -210,7 +252,7 @@ extern int/*bool*/ MT_LOCK_DoInternal
  */
 
 
-/* Log handle (keeps all data needed for the logging and for the cleanup).
+/* Log handle -- keeps all data needed for the logging and for the cleanup
  */
 struct LOG_tag;
 typedef struct LOG_tag* LOG;
@@ -219,17 +261,16 @@ typedef struct LOG_tag* LOG;
 /* Log severity level
  */
 typedef enum {
-  eLOG_Trace = 0,
-  eLOG_Note,
-  eLOG_Warning,
-  eLOG_Error,
-  eLOG_Critical,
-
-  eLOG_Fatal
+    eLOG_Trace = 0,
+    eLOG_Note,
+    eLOG_Warning,
+    eLOG_Error,
+    eLOG_Critical,
+    eLOG_Fatal
 } ELOG_Level;
 
 
-/* Return verbal description of the log level.
+/* Return verbal description of the log level
  */
 extern const char* LOG_LevelStr(ELOG_Level level);
 
@@ -238,11 +279,13 @@ extern const char* LOG_LevelStr(ELOG_Level level);
  * For more details, see LOG_Write().
  */
 typedef struct {
-  const char* message;  /* can be NULL */
-  ELOG_Level  level;
-  const char* module;   /* can be NULL */
-  const char* file;     /* can be NULL */
-  int         line;
+    const char* message;   /* can be NULL */
+    ELOG_Level  level;
+    const char* module;    /* can be NULL */
+    const char* file;      /* can be NULL */
+    int         line;
+    const void* raw_data;  /* raw data to log (usually NULL)*/
+    size_t      raw_size;  /* size of the raw data (usually zero)*/
 } SLOG_Handler;
 
 
@@ -254,7 +297,7 @@ typedef void (*FLOG_Handler)
  );
 
 
-/* Log cleanup function;  see "LOG_Reset()" for more details.
+/* Log cleanup function;  see "LOG_Reset()" for more details
  */
 typedef void (*FLOG_Cleanup)
 (void* user_data  /* see "user_data" in LOG_Create() or LOG_Reset() */
@@ -281,11 +324,11 @@ extern void LOG_Reset
  void*        user_data,  /* new user data */
  FLOG_Handler handler,    /* new handler */
  FLOG_Cleanup cleanup,    /* new cleanup */
- int/*bool*/  do_cleanup  /* call cleanup(if any specified) for the old data */
+ int/*bool*/  do_cleanup  /* call old cleanup (if any) for the old data */
  );
 
 
-/* Increment ref.counter by 1,  then return "lg". 
+/* Increment ref.counter by 1,  then return "lg"
  */
 extern LOG LOG_AddRef(LOG lg);
 
@@ -298,25 +341,34 @@ extern LOG LOG_AddRef(LOG lg);
 extern LOG LOG_Delete(LOG lg);
 
 
-/* Write message to the log -- e.g. call:
+/* Write message (maybe, with raw data attached) to the log -- e.g. call:
  *   "lg->handler(lg->user_data, SLOG_Handler*)"
- * NOTE: use the LOG_Write()  to avoid overhead!
+ * NOTE:  use LOG_WRITE() and LOG_DATA() macros if possible!
  */
-#define LOG_Write(lg,level,module,file,line,message) \
-  (void)(lg ? (LOG_WriteInternal(lg,level,module,file,line,message),0) : 1)
 extern void LOG_WriteInternal
-(LOG         lg,      /* created by LOG_Create() */
- ELOG_Level  level,   /* severity */
- const char* module,  /* module name */
- const char* file,    /* source file */
- int         line,    /* source line */
- const char* message  /* message content */
+(LOG         lg,        /* created by LOG_Create() */
+ ELOG_Level  level,     /* severity */
+ const char* module,    /* module name */
+ const char* file,      /* source file */
+ int         line,      /* source line */
+ const char* message,   /* message content */
+ const void* raw_data,  /* raw data to log (can be NULL)*/
+ size_t      raw_size   /* size of the raw data (can be zero)*/
  );
 
-/* Auxiliary plain macro to write message to the log
+#define LOG_Write(lg,level,module,file,line,message) (void) (lg ? \
+  (LOG_WriteInternal(lg,level,module,file,line,message,0,0), 0) : 1)
+#define LOG_Data(lg,level,module,file,line,data,size,message) (void) (lg ? \
+  (LOG_WriteInternal(lg,level,module,file,line,message,data,size), 0) : 1)
+
+
+/* Auxiliary plain macro to write message (maybe, with raw data) to the log
  */
 #define LOG_WRITE(lg, level, message) \
   LOG_Write(lg, level, THIS_MODULE, THIS_FILE, __LINE__, message)
+
+#define LOG_DATA(lg, data, size, message) \
+  LOG_Data(lg, eLOG_Trace, 0, 0, 0, data, size, message)
 
 
 /* Defaults for the THIS_FILE and THIS_MODULE macros (used by LOG_WRITE)
@@ -328,6 +380,131 @@ extern void LOG_WriteInternal
 #if !defined(THIS_MODULE)
 #  define THIS_MODULE 0
 #endif
+
+
+/******************************************************************************
+ *  REGISTRY
+ */
+
+
+/* Registry handle (keeps all data needed for the registry get/set/cleanup)
+ */
+struct REG_tag;
+typedef struct REG_tag* REG;
+
+
+/* Transient/Persistent storage
+ */
+typedef enum {
+    eREG_Transient = 0,
+    eREG_Persistent
+} EREG_Storage;
+
+
+/* Copy the registry value stored in "section" under name "name"
+ * to buffer "value". Look for the matching entry first in the transient
+ * storage, and then in the persistent storage.
+ * If the specified entry is not found in the registry then just do not
+ * modify "value" (leave it "as is", i.e. default).
+ * Note:  always terminate value by '\0'.
+ * Note:  do not put more than "value_size" bytes to "value".
+ */
+typedef void (*FREG_Get)
+(void*       user_data,
+ const char* section,
+ const char* name,
+ char*       value,      /* passed a default value, cut to "value_size" syms */
+ size_t      value_size  /* always > 0 */
+ );
+
+
+/* Store the "value" to  the registry section "section" under name "name",
+ * in storage "storage".
+ */
+typedef void (*FREG_Set)
+(void*        user_data,
+ const char*  section,
+ const char*  name,
+ const char*  value,
+ EREG_Storage storage
+ );
+
+
+/* Registry cleanup function;  see "REG_Reset()" for more details
+ */
+typedef void (*FREG_Cleanup)
+(void* user_data  /* see "user_data" in REG_Create() or REG_Reset() */
+ );
+
+
+/* Create new REG (with reference counter := 1).
+ * ATTENTION:  if non-NULL "mt_lock" is specified then MT_LOCK_Delete() will be
+ *             called when this REG is destroyed -- be aware of it!
+ */
+extern REG REG_Create
+(void*        user_data, /* the data to call "set", "get" and "cleanup" with */
+ FREG_Get     get,       /* the get method */
+ FREG_Set     set,       /* the set method */
+ FREG_Cleanup cleanup,   /* cleanup */
+ MT_LOCK      mt_lock    /* protective MT lock (can be NULL) */
+ );
+
+
+/* Reset the "rg" to use the new "user_data", "set", "get" and "cleanup".
+ * NOTE:  it does not change ref.counter.
+ */
+extern void REG_Reset
+(REG          rg,         /* created by REG_Create() */
+ void*        user_data,  /* new user data */
+ FREG_Get     get,        /* the get method */
+ FREG_Set     set,        /* the set method */
+ FREG_Cleanup cleanup,    /* cleanup */
+ int/*bool*/  do_cleanup  /* call old cleanup(if any specified) for old data */
+ );
+
+
+/* Increment ref.counter by 1,  then return "rg"
+ */
+extern REG REG_AddRef(REG rg);
+
+
+/* Decrement ref.counter by 1.
+ * Now, if ref.counter becomes 0, then
+ * call "rg->cleanup(rg->user_data)", destroy the handle, and return NULL.
+ * Otherwise (if ref.counter is still > 0), return "rg".
+ */
+extern REG REG_Delete(REG rg);
+
+
+/* Copy the registry value stored in "section" under name "name"
+ * to buffer "value";  if the entry is found in both transient and persistent
+ * storages, then copy the one from the transient storage.
+ * If the specified entry is not found in the registry (or if there is
+ * no registry defined), and "def_value" is not NULL, then copy "def_value"
+ * to "value".
+ * Return "value" (however, if "value_size" is zero, then return NULL).
+ * If non-NULL, the returned "value" will be terminated by '\0'.
+ */
+extern char* REG_Get
+(REG         rg,         /* created by REG_Create() */
+ const char* section,    /* registry section name */
+ const char* name,       /* registry entry name  */
+ char*       value,      /* buffer to put the value of the requested entry to*/
+ size_t      value_size, /* max. size of buffer "value" */
+ const char* def_value   /* default value (none if passed NULL) */
+ );
+
+
+/* Store the "value" to  the registry section "section" under name "name",
+ * in storage "storage".
+ */
+extern void REG_Set
+(REG          rg,        /* created by REG_Create() */
+ const char*  section,
+ const char*  name,
+ const char*  value,
+ EREG_Storage storage
+ );
 
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,12 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.14  2001/03/28 01:25:38  juran
+* Removed unused variable.
+*
+* Revision 6.13  2000/12/12 15:56:14  ostell
+* added support BigInt
+*
 * Revision 6.12  2000/07/27 12:28:04  ostell
 * fixed PUBLIC identifier for DTDs in XML
 *
@@ -164,7 +170,6 @@ static CharPtr GetXMLModuleName(AsnTypePtr atp, CharPtr buf)
 {
 	AsnModulePtr currmod;
 	AsnTypePtr curratp, baseatp;
-	CharPtr ptr;
 
 	currmod = AsnAllModPtr();  /* get loaded modules */
 	baseatp = AsnFindBaseType(atp);
@@ -227,6 +232,7 @@ static Boolean AsnXMLTag(AsnIoPtr aip, AsnTypePtr atp, Boolean term)
 			case BOOLEAN_TYPE:
 			case ENUM_TYPE:
 			case INTEGER_TYPE:
+			case BIGINT_TYPE:
 				noend = TRUE;
 				break;
 			default:
@@ -460,6 +466,7 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			break;
 		case INTEGER_TYPE:
 		case ENUM_TYPE:
+		case BIGINT_TYPE:
 			atp2 = AsnFindBaseType(atp);  /* check for names */
 			avnp = (AsnValxNodePtr) atp2->branch;
 			done = FALSE;
@@ -493,7 +500,10 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			{
 				if (isXML)
 					AsnPrintCharBlock(">", aip);
-				AsnPrintInteger(dvp->intvalue, aip);
+				if (isa == BIGINT_TYPE)
+					AsnPrintBigInt(dvp->bigintvalue, aip);
+				else
+					AsnPrintInteger(dvp->intvalue, aip);
 				if(isXML) AsnXMLTerm(aip, atp);
 			}
 			break;
@@ -913,6 +923,24 @@ NLM_EXTERN void AsnPrintInteger (Int4 theInt, AsnIoPtr aip)
 		return;
 
 	sprintf(tbuf, "%ld", (long)theInt);
+	AsnPrintString(tbuf, aip);
+	return;
+}
+
+/*****************************************************************************
+*
+*   void AsnPrintBigInt(theInt, aip)
+*
+*****************************************************************************/
+NLM_EXTERN void AsnPrintBigInt (Int8 theInt, AsnIoPtr aip)
+
+{
+	char tbuf[40];
+
+	if (aip->type & ASNIO_CARRIER)           /* pure iterator */
+		return;
+
+	Int8ToString (theInt, tbuf, (size_t) 40);
 	AsnPrintString(tbuf, aip);
 	return;
 }
@@ -2157,6 +2185,9 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip)
 						retval = FALSE;
 						break;
 					case INTEGER_TYPE:
+						tmp = StringMove(tmp, "%INTEGER;");
+						break;
+					case BIGINT_TYPE:
 						tmp = StringMove(tmp, "%INTEGER;");
 						break;
 					case REAL_TYPE:

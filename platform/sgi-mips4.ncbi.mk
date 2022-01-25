@@ -1,5 +1,5 @@
 #
-# $Id: sgi-mips4.ncbi.mk,v 1.3 2000/10/05 16:06:58 beloslyu Exp $
+# $Id: sgi-mips4.ncbi.mk,v 1.5 2001/02/02 14:52:02 beloslyu Exp $
 #
 # The SGI IRIX 6.* in 64-bit mode
 #

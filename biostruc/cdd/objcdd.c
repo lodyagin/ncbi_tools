@@ -34,7 +34,7 @@ objcddAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.9 at May 12, 2000  4:52 PM
+*    Generated using ASNCODE Revision: 6.10 at Feb 5, 2001  5:11 PM
 *
 **************************************************/
 
@@ -359,7 +359,7 @@ CddFree(CddPtr ptr)
    MemFree(ptr -> name);
    CddIdSetFree(ptr -> id);
    CddDescrSetFree(ptr -> description);
-   AsnGenericUserSeqOfFree(ptr -> seqannot, (AsnOptFreeFunc) SeqAnnotFree);
+   { SeqAnnotPtr sap, next; sap = ptr -> seqannot; while(sap) { next = sap->next; sap->next = NULL; sap = SeqAnnotFree(sap); sap = next; } }
    BiostrucAnnotSetFree(ptr -> features);
    SeqEntryFree(ptr -> sequences);
    SeqIntFree(ptr -> profile_range);
@@ -560,7 +560,7 @@ CddAsnWrite(CddPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   AsnGenericUserSeqOfAsnWrite(ptr -> seqannot, (AsnWriteFunc) SeqAnnotAsnWrite, aip, CDD_seqannot, CDD_seqannot_E);
+   if (ptr->seqannot != NULL) if (SeqAnnotSetAsnWrite(ptr->seqannot,aip,CDD_seqannot,CDD_seqannot_E)==FALSE) goto erret;
    if (ptr -> features != NULL) {
       if ( ! BiostrucAnnotSetAsnWrite(ptr -> features, aip, CDD_features)) {
          goto erret;

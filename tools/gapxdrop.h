@@ -31,8 +31,14 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.12 $ 
+/* $Revision: 6.14 $
 * $Log: gapxdrop.h,v $
+* Revision 6.14  2000/11/30 21:37:39  madden
+* Roll back before GapXDropSetAlignMask changes
+*
+* Revision 6.13  2000/11/15 15:15:57  madden
+* Add GapXDrop_dp, align_mask, and x_align_mask
+*
 * Revision 6.12  2000/08/08 21:46:20  shavirin
 * Added boolean discontinuous to GapAlignBlk and GapXEditBlock
 *

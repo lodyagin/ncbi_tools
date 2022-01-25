@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.h,v 1.29 2000/09/08 21:50:39 hurwitz Exp $
+/*  $Id: ddvcreate.h,v 1.31 2001/01/29 20:35:49 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.29 $
+* $Revision: 1.31 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.h,v $
+* Revision 1.31  2001/01/29 20:35:49  hurwitz
+* make gap between aligned blocks optional
+*
+* Revision 1.30  2001/01/25 21:49:14  hurwitz
+* added option for extra gap char (tilde) between aligned blocks
+*
 * Revision 1.29  2000/09/08 21:50:39  hurwitz
 * made DDV_ReadSeqBin public
 *
@@ -212,10 +218,19 @@ typedef struct descridisp {
 *******************************************************************************/
 NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
 		Int2 LineSize, DDV_Disp_OptPtr ddop);
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex2(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop, Boolean WantExtraGapChar);
+
 NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
 		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop);
+NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX2(SeqAlignPtr sap, MsaParaGPopListPtr mpplp, 
+		Int2 LineSize, DDV_Disp_OptPtr ddop,Int4 start, Int4 stop, Boolean WantExtraGapChar);
+
 NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign(SeqAlignPtr sap, 
 		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop);
+NLM_EXTERN Boolean DDV_CreateDisplay_DiscAlign2(SeqAlignPtr sap, 
+		MsaParaGPopListPtr mpplp, Int2 LineSize,DDV_Disp_OptPtr ddop, Boolean WantExtraGapChar);
+
 NLM_EXTERN Boolean DDV_BuildDisp_BlockEditor(SeqAlignPtr sap, 
 		MsaParaGPopListPtr mpplp, Int4 block_num);
 NLM_EXTERN UAMsgPtr UAMgrIntUAMsg( Int4 MaxLength, Int4 BspLength,
@@ -224,9 +239,14 @@ NLM_EXTERN UAMsgPtr UAMgrDelUAMsg(UAMsgPtr PNTR uamp);
 NLM_EXTERN void UAMgrUAMsgGetInfo(UAMsgPtr uamp,Int4Ptr from_bsp, Int4Ptr to_bsp, 
 		BoolPtr IsGap);
 NLM_EXTERN Boolean UAMgrGetNextUAbit(UAMsgPtr uamp,Int4 BspStart,Int4 BspStop);
+
 NLM_EXTERN ValNodePtr UABuildDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
 	DDV_Disp_OptPtr ddop, Int4Ptr TotLength,Boolean AddLeftUAPart,
 	Boolean AddRightUAPart);
+NLM_EXTERN ValNodePtr UABuildDescriptor2(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,
+	DDV_Disp_OptPtr ddop, Int4Ptr TotLength,Boolean AddLeftUAPart,
+	Boolean AddRightUAPart, Boolean WantExtraGapChar);
+
 NLM_EXTERN ValNodePtr UABuildDescriptorForBlockEditor(SeqAlignPtr sap, Int4 nBsp, 
 	Int4 block_num,Int4 LineSize,Int4Ptr TotLength);
 NLM_EXTERN ValNodePtr DDV_BuildTailDescriptor(SeqAlignPtr sap, Int4 nBsp, Int2 LineSize,

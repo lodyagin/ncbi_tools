@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.3 2000/08/10 14:52:44 shavirin Exp $
+/* $Id: taxblast.c,v 6.6 2001/02/06 22:28:00 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,22 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.3 $
+* $Revision: 6.6 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.6  2001/02/06 22:28:00  shavirin
+* Default output was set to "stdout".
+*
+* Revision 6.5  2000/12/12 23:13:11  shavirin
+* Fixed some memory leaks.
+*
+* Revision 6.4  2000/12/08 22:30:57  shavirin
+* Added set of functions for creation of Taxonomy lookup database using
+* formatdb API.
+*
 * Revision 6.3  2000/08/10 14:52:44  shavirin
 * Fixed typo.
 *
@@ -1491,6 +1501,220 @@ void TXBHtmlReport(SeqAlignPtr sap, FILE *outfile, Boolean query_is_na,
     return;
 }
 
+/* -----------------------------------------------------------
+   Here is list of functions used to create taxonomy names database as
+   part of Blast database 
+   ----------------------------------------------------------- */
+
+#define CODE_NAME_SCI           0 
+#define CODE_NAME_PREF_COMMON   7 
+#define CODE_NAME_COMMON        8 
+#define CODE_NAME_PREF_ACRONYM  11 
+#define CODE_NAME_ACRONYM       3 
+#define CODE_NAME_BLAST         13 
+
+static Int2 SpeciesRank= 26;
+
+typedef struct TAXData {
+    TreePtr tax_tree;
+    TreeCursorPtr cursor;
+} TAXData, PNTR TAXDataPtr;
+
+
+Boolean GetSuperKingdom(TreeCursorPtr cursor, Int4 tax_id, CharPtr s_king)
+{
+    TreeNodeId nid= tree_getId(cursor);
+    TXC_TreeNodePtr tnp;
+    CharPtr super_name;
+    Uint2 s;
+    Int2 rank;
+
+    tax_ptree_toTaxId (cursor, tax_id, FALSE);
+    super_name = NULL;
+    s_king[0] = NULLB;
+
+    while(tree_parent(cursor)) {
+	if((tnp= tree_getNodeData(cursor, &s)) != NULL) {
+	    rank= tnp->flags & 0xFF;
+
+	    if(rank > SpeciesRank) {
+		continue;
+	    }
+            
+	    if(tnp->tax_id < 2) break;
+            
+	    if((tnp->flags & TXC_GBHIDE) == 0) {
+		super_name = tnp->node_label;                
+	    }
+	}
+    }
+
+    if(super_name == NULL) {
+        StringCpy(s_king, "-");
+        return FALSE;
+    }
+
+    if(!StringICmp(super_name, "Eukaryota")) {
+        StringCpy(s_king, "E");
+    } else if (!StringICmp(super_name, "Bacteria")) {
+        StringCpy(s_king, "B");
+    } else if (!StringICmp(super_name, "Archaea")) {
+        StringCpy(s_king, "A");
+    } else if (!StringICmp(super_name, "Viruses") || 
+               !StringICmp(super_name, "Viroids")) {
+        StringCpy(s_king, "V");
+    } else {
+        StringCpy(s_king, "-");
+    }
+
+    return TRUE;
+}
+
+Boolean FDBTaxCallback (RDBTaxLookupPtr tax_lookup, Int4 tax_id)
+{
+    RDBTaxNamesPtr tnames;
+    TreePtr tax_tree;
+    TreeCursorPtr cursor;
+    TAXDataPtr tdp;
+    TaxNamePtr res_names, tnp;
+    Int4 count, i;
+
+    if(tax_lookup == NULL)
+        return FALSE;
+
+    if(tax_id == 0) {
+        /* For unresolved tax_id we will eventually create some
+           entry */
+        tnames = MemNew(sizeof(RDBTaxNames));
+        tnames->sci_name = StringSave("Unknown");
+        tnames->common_name = StringSave("Unknown");
+        tnames->blast_name = StringSave("Unknown");
+        StringCpy(tnames->s_king, "-");
+        tax_lookup->tax_array[0] = tnames;
+
+        return TRUE;
+    }
+
+    /* If this tax id already exist just return OK */
+    if(tax_lookup->tax_array[tax_id] != NULL)
+        return TRUE;
+    
+    tax_lookup->taxids_in_db++;
+    tdp = (TAXDataPtr) tax_lookup->tax_data;
+    
+    tax_tree= tdp->tax_tree;
+    cursor= tdp->cursor;
+
+    tnames = MemNew(sizeof(RDBTaxNames));
+
+    count = tax_getOrgNames(tax_id, &res_names);
+
+    for(i = 0; i < count; i++) {
+        switch(res_names[i].class_cde) {
+            
+        case CODE_NAME_SCI:
+            tnames->sci_name = StringSave(res_names[i].name_txt);
+            break;
+        case CODE_NAME_PREF_COMMON:
+        case CODE_NAME_COMMON:
+        case CODE_NAME_PREF_ACRONYM:
+        case CODE_NAME_ACRONYM:
+            if(tnames->common_name == NULL) /* Only first will be stored */
+                tnames->common_name = StringSave(res_names[i].name_txt);
+            break;
+        case CODE_NAME_BLAST:
+            tnames->blast_name = StringSave(res_names[i].name_txt);
+            break;
+        }
+    }
+
+    TaxNameFree(res_names, count);
+
+    if(tnames->blast_name == NULL) {
+        BnamePtr bname;
+
+        if((bname = GetBlastName(tax_id, tax_tree)) != NULL) {
+            tnames->blast_name = bname->name;
+            MemFree(bname);
+        }
+    }
+
+    if(tnames->sci_name == NULL) {
+        MemFree(tnames);
+        return FALSE;
+    }
+
+    if(tnames->common_name == NULL)
+        tnames->common_name = StringSave(tnames->sci_name);
+    if(tnames->blast_name == NULL)
+        tnames->blast_name = StringSave("Unknown");
+
+    GetSuperKingdom(cursor, tax_id, tnames->s_king);
+
+    tnames->tax_id = tax_id;
+    tax_lookup->tax_array[tax_id] = tnames;
+
+    return TRUE;
+}
+static Int4 getTotalTaxIdCount(TreeCursorPtr cursor)
+{
+    TreePtr tax_tree;
+    Int4 total_taxids_count, count;
+    
+    if(cursor == NULL) {
+        tax_tree = tax1e_getTaxTreePtr();  /* get pointer to taxonomy tree */
+        cursor = tree_openCursor(tax_tree, NULL, NULL);  /* open cursor */
+    }
+    
+    /* Total recursive walk with conting all nodes */
+    total_taxids_count = 0;
+    if(tree_child(cursor)) {
+
+	do {
+            total_taxids_count++;
+	    count = getTotalTaxIdCount(cursor);
+            total_taxids_count += count;
+	} while(tree_sibling(cursor));
+
+	tree_parent(cursor);
+    }
+
+    return total_taxids_count;
+}
+
+RDBTaxLookupPtr RDTaxLookupInit(void)
+{
+    RDBTaxLookupPtr tax_lookup;
+    TAXDataPtr tax_data;
+
+    /* connect to taxonomy service */
+    tax1_init();   
+    
+    /* download all the taxonomy tree from the server */
+    tax1e_invokeChildren(-1); 
+    
+    tax_lookup = MemNew(sizeof(RDBTaxLookup));
+    tax_lookup->all_taxid_count = getTotalTaxIdCount(NULL);
+    
+    tax_lookup->tax_array = MemNew(sizeof(RDBTaxNamesPtr)*tax_lookup->all_taxid_count);
+
+    tax_data = MemNew(sizeof(TAXData));
+    tax_data->tax_tree = tax1e_getTaxTreePtr();  /* get pointer to taxonomy tree */
+    tax_data->cursor = tree_openCursor(tax_data->tax_tree, NULL, NULL);  /* open cursor */
+    tax_lookup->tax_data = (VoidPtr) tax_data;
+
+    return tax_lookup;
+}
+
+void RDTaxLookupClose(RDBTaxLookupPtr tax_lookup)
+{
+    MemFree(tax_lookup->tax_data);
+    MemFree(tax_lookup);
+    
+    tax1_fini();
+    return;
+}
+
 #if defined (TAX_BLAST_MAIN)
 
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
@@ -1503,7 +1727,7 @@ static Args myargs [] = {
     { "Database used to get SeqAnnot ASN.1",     /* 2 */
       "nr", NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL },
     { "Output file name",                        /* 3 */
-      NULL, NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL }
+      "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL }
 };
 
 Int2 Main (void)
@@ -1531,7 +1755,7 @@ Int2 Main (void)
         return 1;
     }
 
-    if(myargs[3].strvalue == NULL) {
+    if(StringCmp(myargs[3].strvalue, "stdout")) {
         sprintf (ofile, "%s.html", myargs[0].strvalue);
         outfile = FileOpen(ofile, "w");
     } else {

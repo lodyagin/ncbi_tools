@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.93 $
-* $Revision: 6.93 $
+* $Revision: 6.99 $
+* $Revision: 6.99 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -52,6 +52,7 @@
 #include <explore.h>
 #include <objfdef.h>
 #include <sqnutils.h>
+#include <lsqfetch.h>
 
 #ifdef ENABLE_ENTREZ
 #include <accentr.h>
@@ -450,6 +451,101 @@ NLM_EXTERN LinkStrPtr asn2ff_print_to_mem(Asn2ffJobPtr ajp, LinkStrPtr lsp)
     return(lsp);
 }
 
+/***********************************************************************
+*
+*	SeqEntryToFlatEx is a stand-alone function works as SeqEntryToFlat
+*	takes SeqIdPtr and various types of the output
+*
+*	successful, TRUE is returned; otherwise FALSE is returned.
+*
+*	display =0,1 - generates CONTIG view only
+*	display = 2	- generates CONTIG and all parts regardless of seqid
+*
+**************************************************************************/
+NLM_EXTERN Boolean SeqEntryToEntrez (SeqEntryPtr sep, FILE *fp, SeqIdPtr seqid,  Uint1 display, Int4 from, Int4 to)
+{
+	Boolean				rsult=FALSE;
+	Asn2ffJobPtr		ajp;
+	StdPrintOptionsPtr	Spop = NULL;
+	BioseqPtr 			bsp;
+	BioseqSetPtr		bssp;
+	SeqLocPtr 			slp;
+	SeqIntPtr			sip;
+	Int2				format;
+
+	if (seqid == NULL) {  /*should never happen */
+		if (IS_Bioseq(sep)) {
+			if ((bsp = (BioseqPtr) sep->data.ptrvalue) == NULL) {
+				return rsult;
+			}
+			format = (bsp->mol == Seq_mol_aa) ? GENPEPT_FMT : GENBANK_FMT;
+			return (SeqEntryToFlat(sep, fp, format, RELEASE_MODE));
+		} else {
+    		if ((bssp = (BioseqSetPtr) sep->data.ptrvalue) == NULL) {
+				return rsult;
+    		}
+    		if (bssp->_class == 7 ||
+    	                 (bssp->_class >= 13 && bssp->_class <= 16)) {
+      			for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
+        			rsult = SeqEntryToFlat (sep, fp, GENBANK_FMT, RELEASE_MODE);
+				}
+				return rsult;
+			} else if (bssp->_class == 2) { /*segmented set*/
+				bsp = find_big_bioseq(sep);
+				if (bsp->mol == Seq_mol_aa)	{
+					return (SeqEntryToFlatEx(sep, fp, GENPEPT_FMT, 
+							RELEASE_MODE, seqid, FF_TOP_COMPLETE));
+				} else {
+					return (SeqEntryToFlatEx(sep, fp, GENBANK_FMT, 
+							RELEASE_MODE, seqid, FF_TOP_CONTIG));
+				}	
+			}
+		}
+		return rsult;
+	}
+	if ((bsp = BioseqFind(seqid)) == NULL) {
+		return FALSE;
+	}
+	format = (bsp->mol == Seq_mol_aa) ? GENPEPT_FMT : GENBANK_FMT;
+	if (from > 0 && to > 0) {
+		sip = SeqIntNew();
+		sip->from = from;
+		sip->to = to;
+		ValNodeAddPointer(&slp, SEQLOC_INT, sip);
+		return (SeqLocToFlat(slp, fp, format, RELEASE_MODE));
+	}
+	ajp = Asn2ffJobCreate(sep, NULL, NULL, fp, format, RELEASE_MODE, NULL);
+	if (ajp == NULL) {
+		return FALSE;
+	}
+	ajp->show_version = TRUE;
+	ajp->show_gi = FALSE;
+	ajp->gb_style = FALSE;
+	ajp->id_print = seqid;
+	ajp->sep = sep;
+	if (bsp->repr == Seq_repr_seg) {    /* always print CONTIG view first */
+		if ((slp = bsp->seq_ext) != NULL) {
+    		ajp->only_one = TRUE;				
+			ajp->genome_view = TRUE;
+			ajp->gb_style = FALSE;
+			ajp->sep = sep;
+			rsult = asn2ff_print(ajp);
+			if (BioseqFindCore(SeqLocId(slp)) == NULL || display < 2) { 
+				MemFree(ajp);
+				return rsult;
+			} else if (display == 2) { /* contig and parts */
+				ajp->gb_style = TRUE;
+				ajp->id_print = NULL;
+				ajp->only_one = FALSE;
+	 			rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
+			}
+		}
+	} else {
+	 rsult = SeqEntryToFlatAjp(ajp, sep, fp, format, RELEASE_MODE);
+	}
+	return rsult;
+}
+
 /**********************************************************/
 static LinkStrPtr SeqEntryToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
                                     LinkStrPtr lsp, Uint1 format, Uint1 mode)
@@ -491,8 +587,8 @@ static LinkStrPtr SeqEntryToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
     if(IS_Bioseq_set(sep) != 0 && ajp->id_print == NULL)
     {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-           bssp->_class == 14 || bssp->_class == 15))
+        if(bssp != NULL && (bssp->_class == 7 ||
+                            (bssp->_class >= 13 && bssp->_class <= 16)))
         {
             for(sep = bssp->seq_set; sep != NULL; sep = sep->next)
             {
@@ -561,8 +657,8 @@ static LinkStrPtr AjpToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
     if(IS_Bioseq_set(sep) != 0 && ajp->id_print == NULL)
     {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-           bssp->_class == 14 || bssp->_class == 15))
+        if(bssp != NULL && (bssp->_class == 7 ||
+                            (bssp->_class >= 13 && bssp->_class <= 16)))
         {
             for(sep = bssp->seq_set; sep != NULL; sep = sep->next)
             {
@@ -581,7 +677,7 @@ static LinkStrPtr AjpToLinkStr(Asn2ffJobPtr ajp, SeqEntryPtr sep,
     return(lsp);
 }
 
-/**********************************************************/
+/***********************************************************/
 NLM_EXTERN CharPtr PNTR AjpToStrArray(Asn2ffJobPtr ajp)
 {
     StdPrintOptionsPtr Spop = NULL;
@@ -652,8 +748,8 @@ static LinkStrPtr SeqEntryToLinkStrEx(Asn2ffJobPtr ajp, SeqEntryPtr sep, LinkStr
 
     if(IS_Bioseq_set(sep) != 0) {
         bssp = (BioseqSetPtr) sep->data.ptrvalue;
-        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-           bssp->_class == 14 || bssp->_class == 15)) {
+        if(bssp != NULL && (bssp->_class == 7 ||
+                            (bssp->_class >= 13 && bssp->_class <= 16))) {
             for(sep = bssp->seq_set; sep != NULL; sep = sep->next) {
                 lsp = SeqEntryToLinkStrEx(ajp, sep, lsp, format);
             }
@@ -947,8 +1043,8 @@ NLM_EXTERN ByteStorePtr AjpToByteStore(Asn2ffJobPtr ajp)
     if(ajp->sep != NULL && ajp->sep->choice == 2)
     {
         bssp = (BioseqSetPtr) ajp->sep->data.ptrvalue;
-        if(bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-           bssp->_class == 14 || bssp->_class == 15))
+        if(bssp != NULL && (bssp->_class == 7 ||
+                            (bssp->_class >= 13 && bssp->_class <= 16)))
         {
             for(tsep = bssp->seq_set; tsep != NULL; tsep = tsep->next)
             {
@@ -1030,8 +1126,8 @@ NLM_EXTERN Boolean SeqEntryToFlat (SeqEntryPtr sep, FILE *fp, Uint1 format, Uint
 	}
 	if (IS_Bioseq_set (sep)) {
     	bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    	if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    	if (bssp != NULL && (bssp->_class == 7 ||
+    	                     (bssp->_class >= 13 && bssp->_class <= 16))) {
       		for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         		rsult = SeqEntryToFlat (sep, fp, format, mode);
 			}
@@ -1081,8 +1177,8 @@ NLM_EXTERN Boolean SeqEntryToFlatAjp (Asn2ffJobPtr ajp, SeqEntryPtr sep, FILE *f
 	}
 	if (IS_Bioseq_set (sep)) {
     	bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    	if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    	if (bssp != NULL && (bssp->_class == 7 ||
+    	                     (bssp->_class >= 13 && bssp->_class <= 16))) {
       		for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         		rsult = SeqEntryToFlatAjp (ajp, sep, fp, format, mode);
 			}
@@ -1138,8 +1234,8 @@ NLM_EXTERN Boolean SeqEntryToGBFlatNoSeq(SeqEntryPtr sep, FILE *fp,
 
     if (IS_Bioseq_set (sep)) {
     	bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    	if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                             bssp->_class == 14 || bssp->_class == 15)) {
+    	if (bssp != NULL && (bssp->_class == 7 ||
+    	                     (bssp->_class >= 13 && bssp->_class <= 16))) {
             for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
                 rsult = SeqEntryToGBFlatNoSeq(sep, fp, mode, show_gi);
             }
@@ -1245,8 +1341,8 @@ NLM_EXTERN Boolean SeqEntryToFlatEx (SeqEntryPtr sep, FILE *fp, Uint1 format, Ui
 	} 
 	if (IS_Bioseq_set (sep)) {
 	    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-	    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-			 bssp->_class == 14 || bssp->_class == 15)) {
+	    if (bssp != NULL && (bssp->_class == 7 ||
+	                         (bssp->_class >= 13 && bssp->_class <= 16))) {
 		      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
 			rsult = SeqEntryToFlatEx (sep, fp, format, mode, seqid, type);
 			}
@@ -2005,6 +2101,62 @@ static void GetFeatDefinitionLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	MemFree(buf);
 }
 
+static Boolean find_user_object(BioseqPtr bsp)
+{
+	UserObjectPtr uop;
+    ObjectIdPtr		oip;
+    ValNodePtr desc;
+	
+	for (desc=bsp->descr; desc; desc=desc->next) {
+		if (desc->choice == Seq_descr_user) {
+			uop = desc->data.ptrvalue;
+			if ((oip = uop->type) == NULL) return FALSE;
+			if (StringCmp(oip->str, "RefGeneTracking") != 0) return FALSE;
+			
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
+static void PrintStatusLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
+{
+
+	BioseqPtr bsp;
+	ValNodePtr desc;
+	UserObjectPtr uop;
+    ObjectIdPtr		oip;
+	UserFieldPtr	ufp;
+	CharPtr			u, ptr=NULL;
+	
+	if (gbp == NULL)
+		return;
+	bsp = gbp->bsp;
+	for (desc=bsp->descr; desc; desc=desc->next) {
+		if (desc->choice == Seq_descr_user) {
+				uop = desc->data.ptrvalue;
+			if ((oip = uop->type) == NULL) return;
+			if (StringCmp(oip->str, "RefGeneTracking") != 0) return;
+			for (ufp=uop->data; ufp; ufp=ufp->next) {
+				oip = ufp->label;
+					printf("%s\n", oip->str);
+				if (StringCmp(oip->str, "Status") == 0) {
+					u = (CharPtr) ufp->data.ptrvalue;
+					printf("%s\n", u);
+					if (StringCmp(u, "Provisional") == 0) {
+						ff_StartPrint(0, 0, ASN2FF_GB_MAX, NULL);
+						ff_AddString("PROVISIONAL");
+						TabToColumn(13);
+						ff_AddString("This is a provisional reference sequence record that has record may be somewhat different from this one.");
+						ff_EndPrint();
+			}
+					break;
+				}
+			}
+		}
+	}
+}
+
 Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 {
 	FFPrintArrayPtr pap;
@@ -2038,8 +2190,9 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	}
 	total=0;
 	for (gbp=ajp->asn2ffwep->gbp; gbp; gbp = gbp->next) {
-		if ((bsp=gbp->bsp) == NULL)
+		if ((bsp=gbp->bsp) == NULL) {
 			continue;
+		}
 		if (gbp->bsp && ajp->id_print) {
 			sip = SeqIdFindBest(gbp->bsp->id, SEQID_GI);
 			if (SeqIdComp(sip, ajp->id_print) != SIC_YES) {
@@ -2195,16 +2348,22 @@ Int4 asn2gb_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 					line_estimate[0], A2F_OTHER, gbp);
 				LoadPap(pap, PrintOriginLine, ajp, 0, (Uint1)0, (Uint1)0, 
 					line_estimate[0], A2F_OTHER, gbp);
-				seqblks_num = GetNumOfSeqBlks(ajp, gbp);
-				for (index=0; index < seqblks_num; index++) {
-					if (seqblks_num == index+1) {
-						LoadPap(pap, PrintSeqBlk, ajp, index, 
-						(Uint1)1, (Uint1)0, line_estimate[9], 
-								A2F_SEQUENCE, gbp);
-					} else {
-						LoadPap(pap, PrintSeqBlk, ajp, index, 
-						(Uint1)0, (Uint1)0, line_estimate[9], 
-								A2F_SEQUENCE, gbp);
+				if (ajp->slp) {
+					LoadPap(pap, PrintSeqRegion, ajp, index, 
+							(Uint1)1, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+				} else {
+					seqblks_num = GetNumOfSeqBlks(ajp, gbp);
+					for (index=0; index < seqblks_num; index++) {
+						if (seqblks_num == index+1) {
+							LoadPap(pap, PrintSeqBlk, ajp, index, 
+							(Uint1)1, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+						} else {
+							LoadPap(pap, PrintSeqBlk, ajp, index, 
+							(Uint1)0, (Uint1)0, line_estimate[9], 
+									A2F_SEQUENCE, gbp);
+						}
 					}
 				}
 			} else {
@@ -2575,12 +2734,7 @@ Int4 asn2gp_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	GBEntryPtr gbp;
 	SeqIdPtr sip;
 
-	if (ajp->mode == SEQUIN_MODE) {
-		GetLocusPartsAwp(ajp);
-	} else {
-		GetLocusPartsAwp(ajp);
-		/*UseGIforLocus(ajp);*/
-	}
+	GetLocusPartsAwp(ajp);
 	GetSeqFeat(ajp);
 
 	total=0;
@@ -3609,6 +3763,12 @@ ValNodePtr GetKeywordLine(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	{
 		mfp = (MolInfoPtr) block->data.ptrvalue;
 			switch (mfp->tech) {
+				case MI_TECH_htc:
+					if (ajp->forgbrel == FALSE) {
+						keyword = ValNodeNew(NULL);
+						keyword->data.ptrvalue = StringSave("HTC");
+					}
+				break;
 				case MI_TECH_htgs_0:
 					keyword = ValNodeNew(NULL);
 					keyword->data.ptrvalue = StringSave("HTG");
@@ -4250,7 +4410,7 @@ void PrintTaxonomy (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
 	{
 		biosp = (BioSourcePtr)vnp->data.ptrvalue;
-		if (biosp->genome == 5) is_mito = TRUE;
+		if (biosp->genome == 5 || biosp->genome == 4) is_mito = TRUE;
 		orp = (OrgRefPtr) biosp->org;
 		if (orp && orp->orgname) {
 			lineage = orp->orgname->lineage;

@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   09/18/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: General Header for MMDB-data fetch operations.
 *
@@ -38,6 +38,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdbdata.h,v $
+* Revision 6.1  2001/01/26 15:06:39  lewisg
+* use entrez2 to retrieve structures
+*
 * Revision 6.0  1997/08/25 18:11:21  madden
 * Revision changed to 6.0
 *
@@ -56,17 +59,24 @@
 
 #include <asn.h>
 #include <objall.h>
-#include <accentr.h>
+#include <mmdbapi1.h>
+#include <mmdbapi2.h>
+#include <mmdbapi3.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
+#ifndef DocUid
+#define DocUid Int4
+#endif
+
 Boolean     LIBCALL MMDBInit (void);
 void        LIBCALL MMDBFini (void);
 BiostrucPtr LIBCALL MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels);
 DocUid      LIBCALL MMDBEvalPDB (CharPtr str);
+CharPtr     LIBCALL MMDB_configuration(void);
 
 #ifdef __cplusplus
 }

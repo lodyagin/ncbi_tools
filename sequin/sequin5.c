@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/26/97
 *
-* $Revision: 6.130 $
+* $Revision: 6.135 $
 *
 * File Description:
 *
@@ -72,6 +72,7 @@
 #include <satutil.h>
 #include <salpedit.h>
 #include <salptool.h>
+#include <rpsutil.h>
 
 static void CommonLaunchBioseqViewer (SeqEntryPtr sep, CharPtr path, Boolean directToEditor)
 
@@ -451,8 +452,8 @@ static void ProcessOligo (SeqEntryPtr sep, CharPtr sequence, CharPtr title)
   if (sep == NULL || sequence == NULL) return;
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (bssp->_class >= 13 && bssp->_class <= 16))) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         ProcessOligo (sep, sequence, title);
       }
@@ -3093,6 +3094,102 @@ void SimplePowerBlastProc (IteM i)
   Show (f);
   Select (f);
 }
+
+typedef struct blastfields {
+  BlastNet3Hptr        bl3hp;
+  BLAST_OptionsBlkPtr  options;
+} BlastFields, PNTR BlastFieldsPtr;
+
+#define EXPECT_VALUE 0.01
+
+static void SearchCDD (BioseqPtr bsp, Pointer userdata)
+
+{
+  BlastFieldsPtr       bfp;
+  BlastNet3Hptr        bl3hp;
+  BLAST_OptionsBlkPtr  options;
+  ValNodePtr           error_returns = NULL;
+  SeqAlignPtr          salp;
+
+  if (! ISA_aa (bsp->mol)) return;
+  bfp = (BlastFieldsPtr) userdata;
+  bl3hp = bfp->bl3hp;
+  options = bfp->options;
+  if (bl3hp == NULL) return;
+
+  /* do blast search */
+
+  salp = BlastBioseqNet (bl3hp, bsp, "blastp", "oasis_sap", options,
+                         NULL, &error_returns, NULL);
+
+  /* BlastErrorPrintExtra (error_returns, TRUE, stdout); */
+
+  /* annotation function now moved to rpsutil in toolkit for common use */
+
+  AnnotateRegionsFromCDD (bsp, salp, EXPECT_VALUE);
+
+  /* clean up */
+
+  SeqAlignSetFree (salp);
+}
+
+void SimpleCDDBlastProc (IteM i)
+
+{
+  BaseFormPtr          bfp;
+  SeqEntryPtr          sep;
+  BlastFields          bf;
+  BlastNet3Hptr        bl3hp = NULL;
+  BLAST_OptionsBlkPtr  options = NULL;
+  BlastResponsePtr     response = NULL;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  TransientSetAppParam ("NCBI", "NETBLAST", "SERVICE_NAME", "rpsblast");
+
+  if (! BlastInit ("Sequin", &bl3hp, &response)) return;
+
+  response = BlastResponseFree (response); 
+  options = BLASTOptionNew ("blastp", TRUE);
+  if (options == NULL) return;
+
+  options->is_rps_blast = TRUE;
+  options->filter = FILTER_SEG;
+  options->expect_value  = (Nlm_FloatHi) EXPECT_VALUE;
+  options->hitlist_size = 5000;
+
+  /* blast fetch enable needed to retrieve by general SeqID */
+
+  BlastNetBioseqFetchEnable (bl3hp, "oasis_sap", FALSE, TRUE);
+
+  bf.bl3hp = bl3hp;
+  bf.options = options;
+
+  WatchCursor ();
+  Update ();
+
+  FreeCDDRegions (sep);
+
+  VisitBioseqsInSep (sep, (Pointer) &bf, SearchCDD);
+
+  RemoveDuplicateCDDs (sep);
+
+  BlastFini (bl3hp);
+  options = BLASTOptionDelete (options);
+  BlastNetBioseqFetchDisable (bl3hp, "oasis_sap", FALSE);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+}
 /*#endif*/
 
 typedef struct autoparseform {
@@ -3742,6 +3839,9 @@ static SeqFeatPtr AddImpFeat (CharPtr featType, CharPtr qualType, CharPtr qualVa
           subtype != FEATDEF_transit_peptide &&
           */
           subtype != FEATDEF_source &&
+          subtype != FEATDEF_virion &&
+          subtype != FEATDEF_mutation &&
+          subtype != FEATDEF_allele &&
           subtype != FEATDEF_site_ref) {
         if (StringICmp (featType, curr->typelabel) == 0) {
           str = curr->typelabel;
@@ -4190,6 +4290,9 @@ static ValNodePtr QualProcessOneLine (AutoParseFormPtr afp, ValNodePtr line, Int
         if (key != FEATDEF_BAD) {
           subtype = curr->featdef_key;
           if (subtype != FEATDEF_source &&
+              subtype != FEATDEF_virion &&
+              subtype != FEATDEF_mutation &&
+              subtype != FEATDEF_allele &&
               subtype != FEATDEF_site_ref) {
             if (StringICmp (feat, curr->typelabel) == 0) {
               found = curr;

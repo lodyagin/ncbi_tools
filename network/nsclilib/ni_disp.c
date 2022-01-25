@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.7 $
+* $Revision: 4.8 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.8  2001/01/04 22:42:50  vakatov
+* NI_ServerACK(), NI_ServerNACK() -- to do nothing, always return 0.
+*
 * Revision 4.7  2000/10/30 18:12:01  beloslyu
 * FreeBSD was added
 *
@@ -3059,6 +3062,7 @@ static Int2 StandAlonePort(void)
 
 NLM_EXTERN int NI_ServerACK(void)
 {
+#if 0
     int         wstat;
     Char        temp_buf[TEMP_BUF_SIZ];
     Int2        port;
@@ -3135,6 +3139,8 @@ NLM_EXTERN int NI_ServerACK(void)
         }
 #endif /* OS_UNIX */
     }
+#endif /* 0 */
+
     return 0;
 } /* NI_ServerACK */
 
@@ -3166,6 +3172,7 @@ NLM_EXTERN int NI_ServerACK(void)
 
 NLM_EXTERN int NI_ServerNACK(CharPtr err_text)
 {
+#if 0
     int         wstat;
     Char        temp_buf[TEMP_BUF_SIZ];
 
@@ -3181,6 +3188,8 @@ NLM_EXTERN int NI_ServerNACK(CharPtr err_text)
         ErrPostEx(SEV_FATAL,0,0, "Stand-alone server failed startup {%s}", temp_buf);
         return -1;
     }
+#endif /* 0 */
+
     return 0;
 } /* NI_ServerNACK */
 

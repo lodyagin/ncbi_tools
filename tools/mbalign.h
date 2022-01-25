@@ -34,14 +34,24 @@ typedef struct space_struct {
     Int4 used, size;
 } space_type, *space_ptr;
 
+typedef struct mb_space_struct {
+    ThreeValPtr space_array;
+    Int4 used, size;
+    struct mb_space_struct *next;
+} MBSpace, *MBSpacePtr;
+
 #define EDIT_VAL(op) (op >> 2)
 
 #define EDIT_OPC(op) (op & EDIT_OP_MASK)
 
 space_ptr new_space(Int4 MAX_D);
+MBSpacePtr new_mb_space();
 void refresh_space(space_ptr sp);
 void free_space(space_ptr sp);
+void refresh_mb_space(MBSpacePtr sp);
+void free_mb_space(MBSpacePtr sp);
 ThreeValPtr get_space(space_ptr S, Int4 amount);
+ThreeValPtr get_mb_space(MBSpacePtr S, Int4 amount);
 Int4 get_last(Int4 **flast_d, Int4 d, Int4 diag, Int4 *row1);
 
 typedef struct greedy_align_mem {
@@ -49,7 +59,7 @@ typedef struct greedy_align_mem {
    Int4Ptr max_row_free;
    ThreeValPtr PNTR flast_d_affine;
    Int4Ptr uplow_free;
-   space_ptr space;
+   MBSpacePtr space;
 } GreedyAlignMem, PNTR GreedyAlignMemPtr;
 
 Int4 

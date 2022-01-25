@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.4 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *
@@ -67,6 +67,12 @@ static FILE* OpenOneFile (
 {
   Char  file [FILENAME_MAX], path [PATH_MAX];
 
+  if (base == NULL) {
+    base = "";
+  }
+  if (suffix == NULL) {
+    suffix = "";
+  }
   StringNCpy_0 (path, directory, sizeof (path));
   sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
@@ -233,25 +239,29 @@ static void LIBCALLBACK LookForOrfs (
   }
 }
 
-static void AnnotateBestOrf (
+static SeqFeatPtr AnnotateBestOrf (
   BioseqPtr bsp,
   Int2 genCode,
-  Boolean altstart
+  Boolean altstart,
+  SqnTagPtr stp
   
 )
 
 {
+  SeqFeatPtr      cds = NULL;
   CdRegionPtr     crp;
+  GeneRefPtr      grp;
   Int2            i, best, idx;
   OrfData         od;
   ProtRefPtr      prp;
   SeqFeatPtr      sfp;
   SeqInt          sint;
+  CharPtr         str;
   TransTablePtr   tbl;
   ValNode         vn;
   SeqFeatXrefPtr  xref;
 
-  if (bsp == NULL) return;
+  if (bsp == NULL) return NULL;
   for (i = 0; i < 6; i++) {
     od.curlen [i] = INT4_MIN;
     od.bestlen [i] = 0;
@@ -264,11 +274,11 @@ static void AnnotateBestOrf (
 
   /* use simultaneous 6-frame translation finite state machine */
 
-  tbl = TransTableNew (genCode);
+  tbl = PersistentTransTableByGenCode (genCode);
   if (tbl != NULL) {
     TransTableProcessBioseq (tbl, LookForOrfs, (Pointer) &od, bsp);
   }
-  TransTableFree (tbl);
+  /* TransTableFree (tbl); - now using persistent tables, free at end */
   best = -1;
   idx = -1;
   for (i = 0; i < 6; i++) {
@@ -277,7 +287,7 @@ static void AnnotateBestOrf (
       idx = i;
     }
   }
-  if (idx == -1) return;
+  if (idx == -1) return NULL;
 
   /* make feature location on largest ORF */
 
@@ -303,24 +313,54 @@ static void AnnotateBestOrf (
     vn.next = NULL;
   }
 
-  /* make CDS feature with unknown product */
+  /* make CDS feature with unknown product - now check [protein=...] */
 
-  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_CDREGION, &vn);
-  if (sfp == NULL) return;
+  cds = CreateNewFeatureOnBioseq (bsp, SEQFEAT_CDREGION, &vn);
+  if (cds == NULL) return NULL;
   crp = CreateNewCdRgn (1, FALSE, genCode);
-  if (crp == NULL) return;
+  if (crp == NULL) return NULL;
   crp->frame = 1;
-  sfp->data.value.ptrvalue = (Pointer) crp;
+  cds->data.value.ptrvalue = (Pointer) crp;
 
   prp = ProtRefNew ();
-  if (prp == NULL) return;
+  if (prp == NULL) return cds;
   xref = SeqFeatXrefNew ();
-  if (xref == NULL) return;
+  if (xref == NULL) return cds;
   xref->data.choice = SEQFEAT_PROT;
   xref->data.value.ptrvalue = (Pointer) prp;
-  xref->next = sfp->xref;
-  sfp->xref = xref;
-  prp->name = ValNodeCopyStr (NULL, 0, "unknown");
+  xref->next = cds->xref;
+  cds->xref = xref;
+  prp = ParseTitleIntoProtRef (stp, prp);
+  if (prp->name == NULL) {
+    prp->name = ValNodeCopyStr (NULL, 0, "unknown");
+  }
+
+  /* parse CDS comment ("note" goes to biosource) and experimental evidence */
+
+  str = SqnTagFind (stp, "comment");
+  if (! StringHasNoText (str)) {
+    cds->comment = StringSave (str);
+  }
+
+  str = SqnTagFind (stp, "evidence");
+  if (StringICmp (str, "experimental") == 0) {
+    cds->exp_ev = 1;
+  }
+
+  /* now check [gene=...], make gene feature if locus or synonym present */
+
+  grp = GeneRefNew ();
+  if (grp == NULL) return cds;
+  grp = ParseTitleIntoGeneRef (stp, grp);
+  if (grp->locus == NULL && grp->syn == NULL) {
+    GeneRefFree (grp);
+    return cds;
+  }
+  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_GENE, NULL);
+  if (sfp == NULL) return cds;
+  sfp->data.value.ptrvalue = (Pointer) grp;
+
+  return cds;
 }
 
 /* change all feature IDs to entered accession */
@@ -373,17 +413,17 @@ typedef struct orgstuff {
 static OrgStuff commonOrgStuff [] = {
   {
     "Saccharomyces cerevisiae",
-    "Eukaryota; Fungi; Ascomycota; Hemiascomycetes; Saccharomycetales; Saccharomycetaceae; Saccharomyces",
+    "Eukaryota; Fungi; Ascomycota; Saccharomycetes; Saccharomycetales; Saccharomycetaceae; Saccharomyces",
     "PLN", 1, 3, 4932
   },
   {
     "Drosophila melanogaster",
-    "Eukaryota; Metazoa; Arthropoda; Tracheata; Hexapoda; Insecta; Pterygota; Diptera; Brachycera; Muscomorpha; Ephydroidea; Drosophilidae; Drosophila",
+    "Eukaryota; Metazoa; Arthropoda; Tracheata; Hexapoda; Insecta; Pterygota; Neoptera; Endopterygota; Diptera; Brachycera; Muscomorpha; Ephydroidea; Drosophilidae; Drosophila",
     "INV", 1, 5, 7227
   },
   {
     "Homo sapiens",
-    "Eukaryota; Metazoa; Chordata; Vertebrata; Mammalia; Eutheria; Primates; Catarrhini; Hominidae; Homo",
+    "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Primates; Catarrhini; Hominidae; Homo",
     "PRI", 1, 2, 9606
   },
   {
@@ -395,6 +435,31 @@ static OrgStuff commonOrgStuff [] = {
     "Helicobacter pylori",
     "Bacteria; Proteobacteria; epsilon subdivision; Helicobacter group; Helicobacter",
     "BCT", 11, 0, 210
+  },
+  {
+    "Arabidopsis thaliana",
+    "Eukaryota; Viridiplantae; Embryophyta; Tracheophyta; Spermatophyta; Magnoliophyta; eudicotyledons; core eudicots; Rosidae; eurosids II; Brassicales; Brassicaceae; Arabidopsis",
+    "PLN", 1, 1, 3702
+  },
+  {
+    "Mus musculus",
+    "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Rodentia; Sciurognathi; Muridae; Murinae; Mus",
+    "ROD", 1, 2, 10090
+  },
+  {
+    "Rattus norvegicus",
+    "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Mammalia; Eutheria; Rodentia; Sciurognathi; Muridae; Murinae; Rattus",
+    "ROD", 1, 2, 10116
+  },
+  {
+    "Danio rerio",
+    "Eukaryota; Metazoa; Chordata; Craniata; Vertebrata; Euteleostomi; Actinopterygii; Neopterygii; Teleostei; Euteleostei; Ostariophysi; Cypriniformes; Cyprinidae; Rasborinae; Danio",
+    "VRT", 1, 2, 7955
+  },
+  {
+    "Zea mays",
+    "Eukaryota; Viridiplantae; Embryophyta; Tracheophyta; Spermatophyta; Magnoliophyta; Liliopsida; Poales; Poaceae; Zea",
+    "PLN", 1, 1, 4577
   },
   {
     NULL, NULL, NULL, 0, 0, 0
@@ -618,54 +683,32 @@ static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap)
   return bsp;
 }
 
-static void ProcessOneRecord (
-  SubmitBlockPtr sbp,
+static void ProcessOneNuc (
+  Uint2 entityID,
+  BioseqPtr bsp,
   BioSourcePtr src,
-  CharPtr directory,
-  CharPtr results,
-  CharPtr base,
-  CharPtr suffix,
-  CharPtr accn,
   CharPtr organism,
   Boolean findorf,
-  Boolean altstart,
-  Boolean validate,
-  Boolean flatfile
+  Boolean altstart
 )
 
 {
   BioSourcePtr  biop = NULL;
-  BioseqPtr     bsp = NULL;
-  Pointer       dataptr;
-  Uint2         datatype, entityID;
-  FILE          *fp;
+  SeqFeatPtr    cds;
   Int2          genCode;
   MolInfoPtr    mip;
-  SeqAnnotPtr   sap;
-  SeqEntryPtr   nsep, sep;
-  SeqFeatPtr    sfp;
-  SeqIdPtr      sip;
-  SqnTagPtr     stp;
+  Boolean       mito;
+  OrgNamePtr    onp;
+  OrgRefPtr     orp;
+  SeqEntryPtr   sep;
+  SqnTagPtr     stp = NULL;
   CharPtr       ttl;
   ValNodePtr    vnp;
 
-  fp = OpenOneFile (directory, base, suffix);
-  if (fp == NULL) return;
+  if (bsp == NULL) return;
 
-  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
-  FileClose (fp);
-
-  if (dataptr == NULL) return;
-
-  sep = GetTopSeqEntryForEntityID (entityID);
-  nsep = FindNucSeqEntry (sep);
-  if (nsep != NULL && IS_Bioseq (nsep)) {
-    bsp = (BioseqPtr) nsep->data.ptrvalue;
-  }
-  if (bsp == NULL) {
-    ObjMgrFreeByEntityID (entityID);
-    return;
-  }
+  sep = GetBestTopParentForData (entityID, bsp);
+  genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
 
   if (bsp->mol == Seq_mol_na) {
     bsp->mol = Seq_mol_dna;
@@ -682,13 +725,12 @@ static void ProcessOneRecord (
     ttl = (CharPtr) vnp->data.ptrvalue;
     if (ttl != NULL) {
       stp = SqnTagParse (ttl);
-      if (stp != NULL) {
-        biop = ParseTitleIntoBioSource (stp, organism, src);
-        ParseTitleIntoBioseq (stp, bsp);
-      }
-      SqnTagFree (stp);
     }
-    ValNodeFreeData (vnp);
+  }
+
+  if (stp != NULL) {
+    biop = ParseTitleIntoBioSource (stp, organism, src);
+    ParseTitleIntoBioseq (stp, bsp);
   }
   if (biop == NULL) {
     biop = ParseTitleIntoBioSource (NULL, organism, src);
@@ -701,17 +743,208 @@ static void ProcessOneRecord (
   if (BioseqGetSeqDescr (bsp, Seq_descr_molinfo, NULL) == NULL) {
     mip = MolInfoNew ();
     if (mip != NULL) {
-      mip->biomol = MOLECULE_TYPE_GENOMIC;
+      if (stp != NULL) {
+        mip = ParseTitleIntoMolInfo (stp, mip);
+      }
+      if (mip->biomol == 0) {
+        mip->biomol = MOLECULE_TYPE_GENOMIC;
+      }
       SeqDescrAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
     }
   }
 
+  if (genCode == 0 && biop != NULL) {
+    orp = biop->org;
+    if (orp != NULL) {
+      onp = orp->orgname;
+      if (onp != NULL) {
+        mito = (Boolean) (biop->genome == 4 || biop->genome == 5);
+        if (mito) {
+          genCode = onp->mgcode;
+        } else {
+          genCode = onp->gcode;
+        }
+      }
+    }
+  }
+
+  if (findorf) {
+    cds = AnnotateBestOrf (bsp, genCode, altstart, stp);
+    if (cds != NULL) {
+      PromoteXrefs (cds, bsp, entityID);
+    }
+  }
+
+  if (stp != NULL) {
+    SqnTagFree (stp);
+  }
+  ValNodeFreeData (vnp);
+}
+
+static void ProcessOneAnnot (
+  SeqAnnotPtr sap,
+  Uint2 entityID,
+  CharPtr accn
+)
+
+{
+  BioseqPtr    bsp;
+  Int2         genCode;
+  SeqEntryPtr  sep;
+  SeqFeatPtr   sfp;
+  SeqIdPtr     sip;
+
+  if (sap == NULL) return;
+
+  bsp = AttachSeqAnnotEntity (entityID, sap);
+  if (bsp == NULL) return;
+
   sep = GetBestTopParentForData (entityID, bsp);
   genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
 
-  if (findorf) {
-    AnnotateBestOrf (bsp, genCode, altstart);
+  /* if existing accession, coerce all SeqIds */
+
+  if (! StringHasNoText (accn)) {
+    sip = SeqIdFromAccession (accn, 0, NULL);
+    if (sip != NULL) {
+      bsp->id = SeqIdSetFree (bsp->id);
+      bsp->id = sip;
+      SeqMgrReplaceInBioseqIndex (bsp);
+      VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
+    }
   }
+
+  /* for parsed in features or best ORF, promote CDS products to protein bioseq */
+
+  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+    if (sap->type == 1) {
+      SetEmptyGeneticCodes (sap, genCode);
+      sfp = (SeqFeatPtr) sap->data;
+      PromoteXrefs (sfp, bsp, entityID);
+    }
+  }
+}
+
+static Uint2 ProcessOneAsn (
+  FILE* fp,
+  BioSourcePtr src,
+  CharPtr organism,
+  Boolean findorf,
+  Boolean altstart
+)
+
+{
+  BioseqPtr    bsp = NULL;
+  Pointer      dataptr;
+  Uint2        datatype, entityID;
+  SeqEntryPtr  sep;
+
+  if (fp == NULL) return 0;
+
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  if (dataptr == NULL) return 0;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  bsp = FindNucBioseq (sep);
+  if (bsp == NULL) {
+    ObjMgrFreeByEntityID (entityID);
+    return 0;
+  }
+
+  ProcessOneNuc (entityID, bsp, src, organism, findorf, altstart);
+
+  return entityID;
+}
+
+static Uint2 ProcessAsnSet (
+  FILE* fp,
+  BioSourcePtr src,
+  CharPtr organism,
+  Boolean findorf,
+  Boolean altstart
+)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  Pointer       dataptr;
+  Uint2         datatype, entityID;
+  SeqEntryPtr   sep, topsep;
+
+  bssp = BioseqSetNew ();
+  if (bssp == NULL) return 0;
+  bssp->_class = BioseqseqSet_class_genbank;
+
+  topsep = SeqEntryNew ();
+  if (topsep == NULL) return 0;
+  topsep->choice = 2;
+  topsep->data.ptrvalue = (Pointer) bssp;
+
+  entityID = ObjMgrRegister (OBJ_BIOSEQSET, (Pointer) bssp);
+
+  while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+    if (datatype == OBJ_BIOSEQ) {
+
+      sep = SeqMgrGetSeqEntryForData (dataptr);
+      AddSeqEntryToSeqEntry (topsep, sep, FALSE);
+
+      bsp = (BioseqPtr) dataptr;
+      ProcessOneNuc (entityID, bsp, src, organism, findorf, altstart);
+
+    } else {
+      ObjMgrFree (datatype, dataptr);
+    }
+  }
+
+  SeqMgrLinkSeqEntry (topsep, 0, NULL);
+
+  return entityID;
+}
+
+static void ProcessOneRecord (
+  SubmitBlockPtr sbp,
+  PubdescPtr pdp,
+  BioSourcePtr src,
+  CharPtr directory,
+  CharPtr results,
+  CharPtr base,
+  CharPtr suffix,
+  Boolean fastaset,
+  CharPtr accn,
+  CharPtr organism,
+  SeqDescrPtr sdphead,
+  Boolean findorf,
+  Boolean altstart,
+  Boolean validate,
+  Boolean flatfile
+)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+  Pointer       dataptr;
+  Uint2         datatype, entityID;
+  DatePtr       dp;
+  FILE          *fp;
+  SeqAnnotPtr   sap;
+  SeqDescrPtr   sdp;
+  SeqEntryPtr   sep;
+
+  fp = OpenOneFile (directory, base, suffix);
+  if (fp == NULL) return;
+
+  /* read one or more ASN.1 or FASTA sequence files */
+
+  if (fastaset) {
+    entityID = ProcessAsnSet (fp, src, organism, findorf, altstart);
+  } else {
+    entityID = ProcessOneAsn (fp, src, organism, findorf, altstart);
+  }
+  FileClose (fp);
+
+  if (entityID == 0) return;
+
+  /* read one or more feature tables from .tbl file */
 
   fp = OpenOneFile (directory, base, ".tbl");
   if (fp != NULL) {
@@ -720,31 +953,7 @@ static void ProcessOneRecord (
       if (datatype == OBJ_SEQANNOT) {
 
         sap = (SeqAnnotPtr) dataptr;
-        bsp = AttachSeqAnnotEntity (entityID, sap);
-        if (bsp != NULL) {
-
-          /* if existing accession, coerce all SeqIds */
-
-          if (! StringHasNoText (accn)) {
-            sip = SeqIdFromAccession (accn, 0, NULL);
-            if (sip != NULL) {
-              bsp->id = SeqIdSetFree (bsp->id);
-              bsp->id = sip;
-              SeqMgrReplaceInBioseqIndex (bsp);
-              VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
-            }
-          }
-
-          /* for parsed in features or best ORF, promote CDS products to protein bioseq */
-
-          for (sap = bsp->annot; sap != NULL; sap = sap->next) {
-            if (sap->type == 1) {
-              SetEmptyGeneticCodes (sap, genCode);
-              sfp = (SeqFeatPtr) sap->data;
-              PromoteXrefs (sfp, bsp, entityID);
-            }
-          }
-        }
+        ProcessOneAnnot (sap, entityID, accn);
 
       } else {
         ObjMgrFree (datatype, dataptr);
@@ -755,9 +964,43 @@ static void ProcessOneRecord (
 
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
+    if (sdphead != NULL) {
+      if (IS_Bioseq (sep)) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        ValNodeLink (&(bsp->descr),
+                     AsnIoMemCopy ((Pointer) sdphead,
+                                   (AsnReadFunc) SeqDescrAsnRead,
+                                   (AsnWriteFunc) SeqDescrAsnWrite));
+      } else if (IS_Bioseq_set (sep)) {
+        bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        ValNodeLink (&(bssp->descr),
+                     AsnIoMemCopy ((Pointer) sdphead,
+                                   (AsnReadFunc) SeqDescrAsnRead,
+                                   (AsnWriteFunc) SeqDescrAsnWrite));
+      }
+    }
+    dp = DateCurr ();
+    if (dp != NULL) {
+      sdp = CreateNewDescriptor (sep, Seq_descr_create_date);
+      if (sdp != NULL) {
+        sdp->data.ptrvalue = (Pointer) dp;
+      }
+    }
     SeriousSeqEntryCleanup (sep, NULL, NULL);
     WriteOneFile (results, base, ".sqn", sep, sbp);
+
     if (validate || flatfile) {
+      if (pdp != NULL) {
+
+        /* copy in citsub as publication for validator and flatfile */
+
+        sdp = CreateNewDescriptor (sep, Seq_descr_pub);
+        if (sdp != NULL) {
+          sdp->data.ptrvalue = AsnIoMemCopy ((Pointer) pdp,
+                                             (AsnReadFunc) PubdescAsnRead,
+                                             (AsnWriteFunc) PubdescAsnWrite);
+        }
+      }
       SeqMgrIndexFeatures (entityID, 0);
     }
     if (validate) {
@@ -774,19 +1017,74 @@ static void ProcessOneRecord (
   ObjMgrFreeByEntityID (entityID);
 }
 
-/* command-line argument list */
+static void GetFirstBiop (
+  BioSourcePtr biop,
+  Pointer userdata
+)
+
+{
+  BioSourcePtr PNTR biopp;
+
+  biopp = (BioSourcePtr PNTR) userdata;
+  if (biop == NULL || biopp == NULL) return;
+  if (*biopp != NULL) return;
+  *biopp = biop;
+}
+
+static CharPtr overwriteMsg = "Your template with a .sqn suffix will be overwritten.  Do you wish to continue?";
+
+static Boolean TemplateOverwriteRisk (
+  CharPtr tmplate,
+  CharPtr single,
+  CharPtr directory,
+  CharPtr suffix
+)
+
+{
+  Char     file [FILENAME_MAX], path [PATH_MAX];
+  CharPtr  ptr;
+
+
+  if (StringStr (tmplate, ".sqn") == NULL) return FALSE;
+  if (! StringHasNoText (single)) {
+    StringNCpy_0 (file, tmplate, sizeof (file));
+    ptr = StringStr (file, ".");
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    ptr = StringStr (single, ".");
+    if (ptr != NULL) {
+      StringCat (file, ptr);
+    }
+    if (StringCmp (file, single) == 0) return TRUE;
+  } else if (! StringHasNoText (directory)) {
+    StringNCpy_0 (path, directory, sizeof (path));
+    StringNCpy_0 (file, tmplate, sizeof (file));
+    ptr = StringStr (file, ".");
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    StringCat (file, suffix);
+    FileBuildPath (path, NULL, file);
+    if (FileLength (path) > 0) return TRUE;
+  }
+  return FALSE;
+}
+
+/* Args structure contains command-line arguments */
 
 #define p_argInputPath  0
 #define r_argOutputPath 1
 #define f_argSingleFile 2
 #define x_argSuffix     3
 #define t_argTemplate   4
-#define a_argAccession  5
-#define n_argOrgName    6
-#define c_argFindOrf    7
-#define m_argAltStart   8
-#define v_argValidate   9
-#define b_argGenBank   10
+#define s_argFastaSet   5
+#define a_argAccession  6
+#define n_argOrgName    7
+#define c_argFindOrf    8
+#define m_argAltStart   9
+#define v_argValidate  10
+#define b_argGenBank   11
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
@@ -799,6 +1097,8 @@ Args myargs [] = {
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
   {"Template file", NULL, NULL, NULL,
     TRUE, 't', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Read Set of FASTAs", "F", NULL, NULL,
+    TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Organism name", NULL, NULL, NULL,
@@ -810,25 +1110,37 @@ Args myargs [] = {
   {"Validate", "F", NULL, NULL,
     TRUE, 'v', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Generate GenBank file", "F", NULL, NULL,
-    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL}
+    TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
-  AsnIoPtr        aip;
+  Boolean         altstart, fastaset, findorf, flatfile, validate;
   CharPtr         base, directory, results, suffix, accn, organism, ptr, tmplate;
-  Boolean         altstart, findorf, flatfile, validate;
+  Pointer         dataptr;
+  Uint2           datatype;
+  CitSubPtr       csp;
+  FILE            *fp;
   ValNodePtr      head, vnp;
+  Pubdesc         pd;
+  PubdescPtr      pdp = NULL;
+  ValNode         pb;
   SubmitBlockPtr  sbp = NULL;
+  SeqDescrPtr     sdphead = NULL;
   SeqEntryPtr     sep;
+  Char            sfx [32];
   BioSourcePtr    src = NULL;
   SeqSubmitPtr    ssp = NULL;
+
+  /* standard setup */
 
   ErrSetFatalLevel (SEV_MAX);
   ErrClearOptFlags (EO_SHOW_USERSTR);
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
+
+  /* finish resolving internal connections in ASN.1 parse tables */
 
   if (! AllObjLoad ()) {
     Message (MSG_FATAL, "AllObjLoad failed");
@@ -836,6 +1148,10 @@ Int2 Main (void)
   }
   if (! SubmitAsnLoad ()) {
     Message (MSG_FATAL, "SubmitAsnLoad failed");
+    return 1;
+  }
+  if (! FeatDefSetLoad ()) {
+    Message (MSG_FATAL, "FeatDefSetLoad failed");
     return 1;
   }
   if (! SeqCodeSetLoad ()) {
@@ -846,10 +1162,8 @@ Int2 Main (void)
     Message (MSG_FATAL, "GeneticCodeTableLoad failed");
     return 1;
   }
-  if (! FeatDefSetLoad ()) {
-    Message (MSG_FATAL, "FeatDefSetLoad failed");
-    return 1;
-  }
+
+  /* process command line arguments */
 
   if (! GetArgs ("tbl2asn", sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
@@ -863,6 +1177,7 @@ Int2 Main (void)
   suffix = (CharPtr) myargs [x_argSuffix].strvalue;
   base = (CharPtr) myargs [f_argSingleFile].strvalue;
   tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
+  fastaset = (Boolean) myargs [s_argFastaSet].intvalue;
   accn = (CharPtr) myargs [a_argAccession].strvalue;
   organism = (CharPtr) myargs [n_argOrgName].strvalue;
   findorf = (Boolean) myargs [c_argFindOrf].intvalue;
@@ -875,47 +1190,97 @@ Int2 Main (void)
     return 1;
   }
 
+  /* Seq-submit or Submit-block template is optional */
+
   if (! StringHasNoText (tmplate)) {
-    aip = AsnIoOpen (tmplate, "r");
-    if (aip != NULL) {
-      ssp = SeqSubmitAsnRead (aip, NULL);
-      AsnIoClose (aip);
+    if (TemplateOverwriteRisk (tmplate, base, directory, suffix)) {
+      if (Message (MSG_YN, overwriteMsg) == ANS_NO) return 0;
+    }
+    fp = FileOpen (tmplate, "r");
+    if (fp != NULL) {
+      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+        if (datatype == OBJ_SEQSUB) {
+          ssp = (SeqSubmitPtr) dataptr;
+        } else if (datatype == OBJ_SUBMIT_BLOCK) {
+          sbp = (SubmitBlockPtr) dataptr;
+        } else if (datatype == OBJ_SEQDESC) {
+          ValNodeLink (&sdphead, (SeqDescrPtr) dataptr);
+        } else {
+          ObjMgrFree (datatype, dataptr);
+        }
+      }
+      FileClose (fp);
     }
 
-    if (ssp == NULL) {
+    if (ssp != NULL && sbp == NULL) {
+      sbp = ssp->sub;
+    }
+    if (sbp == NULL) {
       Message (MSG_FATAL, "Unable to read required template file");
       return 1;
     }
 
-    sbp = ssp->sub;
-    if (sbp == NULL) {
-      Message (MSG_FATAL, "Unable to read submit block within required template file");
-      ssp = SeqSubmitFree (ssp);
-      return 1;
-    }
-
     if (sbp != NULL) {
+      if (ssp != NULL) {
+
+        /* copy submit block, will free SeqSubmit before processing */
+
+        sbp = AsnIoMemCopy ((Pointer) sbp,
+                            (AsnReadFunc) SubmitBlockAsnRead,
+                            (AsnWriteFunc) SubmitBlockAsnWrite);
+      }
       sbp->tool = MemFree (sbp->tool);
       sbp->tool = StringSave ("tbl2asn");
       sbp->hup = FALSE;
       sbp->reldate = DateFree (sbp->reldate);
+      csp = sbp->cit;
+      if (csp != NULL) {
+        csp->date = DateFree (csp->date);
+        csp->date = DateCurr ();
+        MemSet ((Pointer) &pd, 0, sizeof (Pubdesc));
+        MemSet ((Pointer) &pb, 0, sizeof (ValNode));
+        pb.choice = PUB_Sub;
+        pb.data.ptrvalue = (Pointer) csp;
+        pd.pub = &pb;
+        pdp = &pd;
+      }
     }
-    if (ssp->datatype == 1) {
+    if (ssp != NULL && ssp->datatype == 1) {
       sep = (SeqEntryPtr) ssp->data;
       if (sep != NULL) {
-        SeqEntryToBioSource (sep, NULL, NULL, 0, &src);
+        VisitBioSourcesInSep (sep, (Pointer) &src, GetFirstBiop);
+        if (src != NULL) {
+
+          /* copy top biosource */
+
+          src = AsnIoMemCopy ((Pointer) src,
+                              (AsnReadFunc) BioSourceAsnRead,
+                              (AsnWriteFunc) BioSourceAsnWrite);
+        }
       }
+
+      /* in case template has colliding ID, free it now */
+
+      SeqSubmitFree (ssp);
     }
   }
 
+  /* process one or more records */
+
   if (! StringHasNoText (base)) {
-    ptr = StringStr (base, suffix);
+    ptr = StringStr (base, ".");
     if (ptr != NULL) {
+      StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';
-      ProcessOneRecord (sbp, src, directory, results, base, suffix, accn, organism, findorf, altstart, validate, flatfile);
     }
+    ProcessOneRecord (sbp, pdp, src, directory, results, base, sfx, fastaset, accn,
+                      organism, sdphead, findorf, altstart, validate, flatfile);
   } else {
+
+    /* get list of all files in source directory */
+
     head = DirCatalog (directory);
+
     for (vnp = head; vnp != NULL; vnp = vnp->next) {
       if (vnp->choice == 0) {
         base = (CharPtr) vnp->data.ptrvalue;
@@ -924,15 +1289,26 @@ Int2 Main (void)
           if (ptr != NULL) {
             *ptr = '\0';
             Message (MSG_POST, "Processing %s\n", base);
-            ProcessOneRecord (sbp, src, directory, results, base, suffix, NULL, organism, findorf, altstart, validate, flatfile);
+            ProcessOneRecord (sbp, pdp, src, directory, results, base, suffix, fastaset, NULL,
+                              organism, sdphead, findorf, altstart, validate, flatfile);
           }
         }
       }
     }
+
+    /* clean up file list */
+
     ValNodeFreeData (head);
   }
 
-  ssp = SeqSubmitFree (ssp);
+  if (sbp != NULL) {
+    SubmitBlockFree (sbp);
+  }
+  if (src != NULL) {
+    BioSourceFree (src);
+  }
+
+  TransTableFreeAll ();
 
   return 0;
 }

@@ -3876,6 +3876,17 @@ static void CleanVisString (CharPtr PNTR strp)
   }
 }
 
+static void CleanVisStringJunk (CharPtr PNTR strp)
+
+{
+  if (strp == NULL) return;
+  if (*strp == NULL) return;
+  TrimSpacesAndJunkFromEnds (*strp, TRUE);
+  if (TASNStringHasNoText (*strp)) {
+    *strp = MemFree (*strp);
+  }
+}
+
 static void CleanVisStringList (ValNodePtr PNTR vnpp)
 
 {
@@ -5196,8 +5207,8 @@ void StripTitleFromProtsInNucProts (SeqEntryPtr sep)
   if (! IS_Bioseq_set (sep)) return;
   bssp = (BioseqSetPtr) sep->data.ptrvalue;
   if (bssp == NULL) return;
-  if (bssp->_class == 7 || bssp->_class == 13 ||
-      bssp->_class == 14 || bssp->_class == 15) {
+  if (bssp->_class == 7 ||
+      (bssp->_class >= 13 && bssp->_class <= 16)) {
     for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
       StripTitleFromProtsInNucProts (sep);
     }
@@ -5381,6 +5392,24 @@ static void CleanFeatStrings (SeqFeatPtr sfp)
   }
 }
 
+static Boolean OnlyPunctuation (CharPtr str)
+
+{
+  Uchar  ch;	/* to use 8bit characters in multibyte languages */
+
+  if (str != NULL) {
+    ch = *str;
+    while (ch != '\0') {
+      if (ch > ' ' && ch != '.' && ch != ',' && ch != '~' && ch != ';') {
+        return FALSE;
+      }
+      str++;
+      ch = *str;
+    }
+  }
+  return TRUE;
+}
+
 static void CleanDescStrings (ValNodePtr sdp)
 
 {
@@ -5412,13 +5441,19 @@ static void CleanDescStrings (ValNodePtr sdp)
     case Seq_descr_method :
       break;
     case Seq_descr_name :
+      CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
       break;
     case Seq_descr_title :
+      CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
       break;
     case Seq_descr_org :
       orp = (OrgRefPtr) sdp->data.ptrvalue;
       break;
     case Seq_descr_comment :
+      CleanVisStringJunk ((CharPtr PNTR) &sdp->data.ptrvalue);
+      if (OnlyPunctuation ((CharPtr) sdp->data.ptrvalue)) {
+        sdp->data.ptrvalue = MemFree (sdp->data.ptrvalue);
+      }
       break;
     case Seq_descr_num :
       break;
@@ -5441,6 +5476,7 @@ static void CleanDescStrings (ValNodePtr sdp)
       CleanVisString (&(pdp->comment));
       break;
     case Seq_descr_region :
+      CleanVisString ((CharPtr PNTR) &sdp->data.ptrvalue);
       break;
     case Seq_descr_user :
       break;
@@ -5491,11 +5527,14 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
-  SeqAnnotPtr   firstsap;
   SeqAnnotPtr   nextsap;
+  SeqDescrPtr   nextsdp;
+  SeqFeatPtr    nextsfp;
   Pointer PNTR  prevsap;
+  Pointer PNTR  prevsdp;
+  Pointer PNTR  prevsfp;
   SeqAnnotPtr   sap;
-  ValNodePtr    sdp;
+  SeqDescrPtr   sdp;
   SeqFeatPtr    sfp;
 
   if (sep == NULL || sep->data.ptrvalue == NULL) return;
@@ -5504,33 +5543,38 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
     sap = bsp->annot;
-    firstsap = bsp->annot;
     prevsap = (Pointer PNTR) &(bsp->annot);
     sdp = bsp->descr;
+    prevsdp = (Pointer PNTR) &(bsp->descr);
   } else if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     sap = bssp->annot;
-    firstsap = bssp->annot;
     prevsap = (Pointer PNTR) &(bssp->annot);
     sdp = bssp->descr;
+    prevsdp = (Pointer PNTR) &(bssp->descr);
   } else return;
   while (sap != NULL) {
+    nextsap = sap->next;
     if (sap->type == 1 && sap->data != NULL) {
       sfp = (SeqFeatPtr) sap->data;
+      prevsfp = (Pointer PNTR) &(sap->data);
       while (sfp != NULL) {
+        nextsfp = sfp->next;
         CleanFeatStrings (sfp);
-        sfp = sfp->next;
+        if (sfp->data.choice != SEQFEAT_BOND &&
+            sfp->data.choice != SEQFEAT_SITE &&
+            sfp->data.choice != SEQFEAT_PSEC_STR &&
+            sfp->data.choice != SEQFEAT_COMMENT &&
+            sfp->data.value.ptrvalue == NULL) {
+          *(prevsfp) = sfp->next;
+          sfp->next = NULL;
+          SeqFeatFree (sfp);
+        } else {
+          prevsfp = (Pointer PNTR) &(sfp->next);
+        }
+        sfp = nextsfp;
       }
     }
-    sap = sap->next;
-  }
-  while (sdp != NULL) {
-    CleanDescStrings (sdp);
-    sdp = sdp->next;
-  }
-  sap = firstsap;
-  while (sap != NULL) {
-    nextsap = sap->next;
     if (sap->data == NULL) {
       *(prevsap) = sap->next;
       sap->next = NULL;
@@ -5539,6 +5583,20 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
       prevsap = (Pointer PNTR) &(sap->next);
     }
     sap = nextsap;
+  }
+  while (sdp != NULL) {
+    nextsdp = sdp->next;
+    CleanDescStrings (sdp);
+    if (sdp->choice != Seq_descr_mol_type &&
+        sdp->choice != Seq_descr_method &&
+        sdp->data.ptrvalue == NULL) {
+      *(prevsdp) = sdp->next;
+      sdp->next = NULL;
+      SeqDescrFree (sdp);
+    } else {
+      prevsdp = (Pointer PNTR) &(sdp->next);
+    }
+    sdp = nextsdp;
   }
 }
 
@@ -5663,8 +5721,8 @@ Uint2 move_cds(SeqEntryPtr sep)
     if (! IS_Bioseq_set (sep)) return 0;
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return 0;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
+    if (bssp->_class == 7 ||
+        (bssp->_class >= 13 && bssp->_class <= 16)) {
         found = 0;
     	for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
     	  found += move_cds (sep);

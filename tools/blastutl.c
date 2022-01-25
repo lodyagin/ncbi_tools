@@ -30,12 +30,156 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.267 $
+$Revision: 6.314 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.314  2001/03/28 21:05:23  dondosha
+* Set dbinfo->is_protein in other returns
+*
+* Revision 6.313  2001/03/27 21:27:01  madden
+* Minor efficiency in how lookup table is made
+*
+* Revision 6.312  2001/03/27 21:13:56  dondosha
+* Do not print error if OID list exists without CommonIndex
+*
+* Revision 6.311  2001/03/27 20:35:10  dondosha
+* Small bug fix
+*
+* Revision 6.310  2001/03/26 15:03:25  madden
+* Fix number warnings and two bugs found by PC compiler
+*
+* Revision 6.309  2001/03/21 15:46:32  dondosha
+* Added missing parentheses in previous change
+*
+* Revision 6.308  2001/03/20 20:06:13  dondosha
+* Added protection from crossing strand boundary for blastn
+*
+* Revision 6.307  2001/03/19 18:51:39  madden
+* HitRangeToSeqLoc returns values appropriate for subsequences
+*
+* Revision 6.306  2001/03/12 14:53:46  dondosha
+* Uninitialized variable corrections
+*
+* Revision 6.305  2001/03/08 22:05:48  dondosha
+* Split very long database sequences in all BLAST programs
+*
+* Revision 6.304  2001/02/16 18:45:39  dondosha
+* Fixed minor purify errors
+*
+* Revision 6.303  2001/02/08 20:41:16  dondosha
+* Implemented tabulated output for all translated programs
+*
+* Revision 6.302  2001/02/07 21:12:05  dondosha
+* 1. Added Blast Engine functions with callback argument
+* 2. Pass output stream from options block to search
+*
+* Revision 6.301  2001/01/29 22:23:00  madden
+* Do not recreate hsp_array
+*
+* Revision 6.300  2001/01/26 17:43:09  madden
+* Comment out unneeded memset
+*
+* Revision 6.299  2001/01/23 20:25:43  dondosha
+* 1. Renamed BlastParceInputString to BlastParseInputString
+* 2. Recognize a double quoted string as an option value in
+*    BlastParseInputString
+*
+* Revision 6.298  2001/01/23 18:23:57  madden
+* Fix memory leak
+*
+* Revision 6.297  2001/01/19 16:49:37  madden
+* Added helper array to BlastNtGappedScoreInternal
+*
+* Revision 6.296  2001/01/16 23:16:51  dondosha
+* Added 2 arguments and several options to parse_blast_options
+*
+* Revision 6.295  2001/01/16 20:32:46  kans
+* included simutil.h to suppress Mac error
+*
+* Revision 6.294  2001/01/12 17:10:04  dondosha
+* If subject SeqLoc is on a single strand and query on both, swap the strands
+*
+* Revision 6.293  2001/01/11 18:34:20  dondosha
+* Changed error level for nonexistent database from ERROR to FATAL
+*
+* Revision 6.292  2001/01/09 20:16:27  dondosha
+* Implemented from-to location options for both sequences in bl2seq
+*
+* Revision 6.291  2001/01/05 17:12:48  dondosha
+* Correction in previous memory leak fix
+*
+* Revision 6.290  2001/01/04 15:01:25  dondosha
+* Fix for tblastx in blast two sequences engine
+*
+* Revision 6.289  2001/01/03 21:45:30  dondosha
+* Fixed a memory leak - some edit blocks not freed in megablast
+*
+* Revision 6.288  2000/12/28 18:23:05  madden
+* Add -P and -A to parse_blast_options
+*
+* Revision 6.287  2000/12/19 15:52:47  dondosha
+* Forbid reversing query and subject for two sequences megablast
+*
+* Revision 6.286  2000/12/19 14:52:59  dondosha
+* Previous change wrong
+*
+* Revision 6.285  2000/12/15 15:38:38  dondosha
+* Call AdjustOffSetsInSeqAlign with correct query and subject SeqLocs
+*
+* Revision 6.284  2000/12/15 14:25:41  madden
+* Optimization to BlastTranslateUnambiguousSequence
+*
+* Revision 6.283  2000/12/15 14:23:34  madden
+* Use readdb_get_sequence_ex to get sequence faster
+*
+* Revision 6.282  2000/12/13 22:26:44  dondosha
+* Free the ncbi4na-encoded subject sequence after search in two sequences megablast engine
+*
+* Revision 6.281  2000/12/13 13:51:35  madden
+* Free SeqLocPtr in BlastSequencesOnTheFly
+*
+* Revision 6.280  2000/12/07 17:46:56  dondosha
+* Call AdjustOffSetsInSeqAlign for for megablast too
+*
+* Revision 6.279  2000/12/04 18:51:24  madden
+* Fix memory leaks
+*
+* Revision 6.278  2000/11/29 23:05:00  dondosha
+* Keep ncbi4na-encoded subject sequence in search->subject for megablast
+*
+* Revision 6.277  2000/11/16 19:15:31  dondosha
+* Pass back endpoint results in other_returus for Mega BLAST with no traceback
+*
+* Revision 6.276  2000/11/09 17:28:35  dondosha
+* Set block_width to 0 for Mega BLAST in BlastTwoSequences engine
+*
+* Revision 6.275  2000/11/08 22:21:33  dondosha
+* Enabled new tblastn by adding a longest_intron option
+*
+* Revision 6.274  2000/11/08 20:20:31  dondosha
+* Do not free subject in BlastTwoSequencesCore for new tblastn - done elsewhere
+*
+* Revision 6.273  2000/11/07 16:30:27  madden
+* Introduce intermediate score (before linking of HSPs) for blastx and tblastn
+*
+* Revision 6.272  2000/11/03 20:15:19  dondosha
+* Pass the subject sequence to new_link_hsps from two sequences engine
+*
+* Revision 6.271  2000/11/02 20:15:38  dondosha
+* Added functions BlastTwoSequencesByLocWithCallback and BlastTwoSequencesWithCallback
+*
+* Revision 6.270  2000/11/02 16:36:12  madden
+* Fixed another minor problem from merge
+*
+* Revision 6.269  2000/11/02 16:12:37  madden
+* fix Errors during merge of code
+*
+* Revision 6.268  2000/11/01 16:25:57  madden
+* Changes from Futamura for psitblastn
+*
 * Revision 6.267  2000/10/31 17:51:44  dondosha
 * Copy the necessary search block data for multi-threaded megablast
 *
@@ -1190,6 +1334,28 @@ $Revision: 6.267 $
 #include <mblast.h>
 #include <vecscrn.h>
 #include <rpsutil.h>
+#include <simutil.h>
+
+
+typedef struct _pgp_blast_options {
+    BLAST_OptionsBlkPtr options;
+    CharPtr blast_database;
+    BioseqPtr query_bsp, fake_bsp;
+    Int4 number_of_descriptions, number_of_alignments;
+    FILE *infp, *outfp;
+    AsnIoPtr aip_out;
+    Boolean html;
+    Boolean believe_query;
+    Uint4 align_options, print_options;
+  /* PHI-PSI Blast variables */
+    Uint1 featureOrder[FEATDEF_ANY];
+    Uint1 groupOrder[FEATDEF_ANY];
+    Int4 program_flag;
+    CharPtr patfile;
+    FILE *patfp;
+    seedSearchItems *seedSearch;
+} PGPBlastOptions, PNTR PGPBlastOptionsPtr;
+
 
 /* Window size used to scan HSP for highest score region, where gapped
 extension starts. */
@@ -1285,7 +1451,6 @@ BlastGetAllowedGis (BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seq
     Boolean found=FALSE;
     BlastDoubleInt4Ptr *gi_list_pointer;
     Int4 index, total, first, last, current;
-    SeqIdPtr tmp_seqid;
     ValNodePtr gi_list=NULL;
     
     if (seqid)
@@ -1342,7 +1507,7 @@ BlastGetAllowedGis (BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seq
         BlastDefLinePtr bdfp, bdfp_head;
         
         if (!rdfp->cih) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Database mask cannot be used without CommonIndex");
+           /*ErrPostEx(SEV_ERROR, 0, 0, "Database mask cannot be used without CommonIndex");*/
             return NULL;
         }
         
@@ -1439,7 +1604,7 @@ BlastGetAllowedGis (BlastSearchBlkPtr search, Int4 ordinal_id, SeqIdPtr PNTR seq
 	found at all.
 *****************************************************************************/
 
-static SeqIdPtr
+SeqIdPtr
 GetTheSeqAlignID(SeqIdPtr seq_id)
 {
 	SeqIdPtr new_id, ret_id;
@@ -1602,9 +1767,8 @@ FillInDenseDiagInfo(DenseDiagPtr PNTR old, BLASTResultHspPtr hsp, Boolean revers
 *	The newest StdSegPtr is returned.
 *
 ************************************************************************/
-
 static StdSegPtr
-FillInStdSegInfo(BlastSearchBlkPtr search, BLASTResultHitlistPtr hitlist, StdSegPtr PNTR old, BLASTResultHspPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list)
+FillInStdSegInfo(BlastSearchBlkPtr search, Int4 subject_id, Int4 length, StdSegPtr PNTR old, BLASTResultHspPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list)
 
 {
 	Int4			subject_length;
@@ -1649,11 +1813,10 @@ FillInStdSegInfo(BlastSearchBlkPtr search, BLASTResultHitlistPtr hitlist, StdSeg
 	else if (hsp->subject_frame < 0)
 	{
 	    	if (search->rdfp)
-			subject_length = readdb_get_sequence_length(search->rdfp, hitlist->subject_id);
-	    else if (hitlist->subject_info)
-			subject_length = hitlist->subject_info->length;
-	    else
-			subject_length = 0;
+			subject_length = readdb_get_sequence_length(search->rdfp, subject_id);
+                else
+                   subject_length = length;
+
 		seq_int2->from = subject_length - CODON_LENGTH*(hsp->subject_offset + hsp->subject_length) + hsp->subject_frame + 1;
 		seq_int2->to = subject_length - CODON_LENGTH*(hsp->subject_offset) + hsp->subject_frame;
 		seq_int2->strand = Seq_strand_minus;
@@ -1697,7 +1860,6 @@ FillInStdSegInfo(BlastSearchBlkPtr search, BLASTResultHitlistPtr hitlist, StdSeg
 	return new;
 }
 
-
 /************************************************************************
 *
 *	This function assembles all the components of the Seq-align from
@@ -1725,7 +1887,6 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 	   sip_subject_start, query_id, new_sip;
 	StdSegPtr		ssp_head=NULL, ssp;
 	SeqAlignPtr		last, seqalign_head, seqalign, sap_head;
-	SeqIdPtr		new_subject_seqid;
 	Int4 			hsp_cnt, index, index2, hspset_cnt_old, i;
 	Int4			hitlist_count;
 	Int4			subject_length;
@@ -1850,8 +2011,13 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 			}
 			else
 			{
-		    		ssp = FillInStdSegInfo(search, results, &ssp_head, hsp, sip, reverse, gi_list);
-		    		ssp->ids = sip;
+                            Int4 length = 0;
+
+                            if (results->subject_info)
+                                length = results->subject_info->length;
+
+                            ssp = FillInStdSegInfo(search, results->subject_id, length, &ssp_head, hsp, sip, reverse, gi_list);
+                            ssp->ids = sip;
 			}
 			sip = NULL; /* This SeqIdPtr is now on the SeqAlign. */
 		}
@@ -1910,21 +2076,44 @@ GetSeqAlignForResultHitList(BlastSearchBlkPtr search, Boolean getdensediag, Bool
 	extracted from the subject_bsp for BlastTwoSequences anyway, while
 	the title and ID are needed from subject_bsp.
 */
-
 static BlastSearchBlkPtr
 BlastTwoSequencesCoreEx (BlastSearchBlkPtr search, BioseqPtr subject_bsp, Uint1Ptr subject_seq, Int4 subject_length)
 {
 	Int2 status;
-	Int4 index, hitlist_count;
+	Int4 index;
 	SeqAlignPtr seqalign=NULL;
-	SeqPortPtr spp;
-	Uint1 residue;
-	Uint1Ptr sequence, sequence_start;
 
 	search->subject_info = BLASTSubjectInfoDestruct(search->subject_info);
-	search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);
+        if (!search->handle_results)
+           search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);
+        else
+           search->subject_info = BLASTSubjectInfoNew(SeqIdSetDup(subject_bsp->id), StringSave(BioseqGetTitle(subject_bsp)), subject_length);
 
 	search = BLASTPerformSearch(search, subject_length, subject_seq);
+        
+        if (search->prog_number == blast_type_tblastn &&
+            search->pbp->longest_intron > 0) {
+           Uint1 rem;
+           Uint1Ptr seq_4na, seq_2na, subject;
+           Int4 i;
+           /* Need to convert from ncbi2na to ncbi4na encoding */
+           subject = (Uint1Ptr) MemNew(subject_length + 1);
+           seq_4na = subject;
+           seq_2na = subject_seq;
+           rem = 3;
+           for (i=0; i<subject_length; i++) {
+              *seq_4na = (Uint1) (1 << READDB_UNPACK_BASE_N(*seq_2na, rem));
+              seq_4na++;
+              if (rem>0) rem--;
+              else {
+                 rem = 3;
+                 seq_2na++;
+              }
+           }
+           BlastSequenceAddSequence(search->subject, NULL, subject-1, subject_length, subject_length, 0);
+           status = BlastLinkHsps(search);
+        }
+
 	if (StringCmp(search->prog_name, "blastn") == 0 || search->pbp->gapped_calculation == FALSE)
 	{
             if (search->pbp->do_sum_stats == TRUE && 
@@ -1934,18 +2123,25 @@ BlastTwoSequencesCoreEx (BlastSearchBlkPtr search, BioseqPtr subject_bsp, Uint1P
                 status = BlastGetNonSumStatsEvalue(search);
 	}
         if (search->pbp->is_megablast_search) {
-           BlastSequenceAddSequence(search->subject, NULL, subject_seq-1, subject_length, subject_length, 0);
+           search->subject->sequence = subject_seq;
            MegaBlastReevaluateWithAmbiguities(search, 0);
-           search->subject->sequence = NULL;
-           search->subject->sequence_start = NULL;
         }
         status = BlastReapHitlistByEvalue(search);
 
         if (!search->pbp->is_megablast_search)
            BlastSaveCurrentHitlist(search);
-        else
-           MegaBlastSaveCurrentHitlist(search);
+        else {
+           if (search->handle_results)
+              search->handle_results((VoidPtr) search);
+           else
+              MegaBlastSaveCurrentHitlist(search);
+           /* Free the ncbi4na-encoded sequence */
+           search->subject->sequence_start = (Uint1Ptr)
+              MemFree(search->subject->sequence_start);
+        }
 
+        search->subject->sequence = NULL;
+        search->subject->sequence_start = NULL;
 	if (search->prog_number==blast_type_blastn) {
 	   /* Unconcatenate the strands by adjusting the query offsets in
 	      all hsps */
@@ -1974,6 +2170,10 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
 
 	sip = SeqLocId(slp);
 	subject_bsp = BioseqLockById(sip);
+
+        /* Save subject sequence location if it does not start from 0 */
+        if (SeqLocStart(slp) > 0)
+           search->query_slp->next = slp;
 
 	search = BlastTwoSequencesCoreEx(search, subject_bsp, subject_seq,
 					 subject_length);
@@ -2021,7 +2221,9 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
                 result_struct = search->result_struct;
                 hitlist_count = result_struct->hitlist_count;
 		if (hitlist_count > 0) {
-                   if (!StringCmp(search->prog_name, "tblastn")) {
+
+                   if (!StringCmp(search->prog_name, "tblastn")
+                       || !StringCmp(search->prog_name, "psitblastn")) {
                       Uint1Ptr subject = NULL;
                       SeqPortPtr rev_spp;
                       if (slp->choice == SEQLOC_WHOLE) {
@@ -2055,7 +2257,9 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
                       seqalign = BlastGetGapAlgnTbck(search, 0, reverse,
                           FALSE, subject, subject_length, 
                           rev_subject, rev_subject_length);
-                      MemFree(subject);
+
+                      if (search->pbp->longest_intron <= 0)
+                         MemFree(subject);
                       MemFree(rev_subject);
                    } else {
                       seqalign = BlastGetGapAlgnTbck(search, 0, reverse,
@@ -2066,7 +2270,15 @@ BlastTwoSequencesCore (BlastSearchBlkPtr search, SeqLocPtr slp, Uint1Ptr subject
 	}
 	else /* Ungapped case, any program */
 	{
-		seqalign = GetSeqAlignForResultHitList(search, TRUE, FALSE, search->pbp->discontinuous, reverse, FALSE);
+           if (search->prog_number == blast_type_blastn || 
+               search->prog_number == blast_type_blastp)
+              seqalign = GetSeqAlignForResultHitList(search, TRUE, FALSE,
+                                                     search->pbp->discontinuous,
+                                                     reverse, FALSE);
+           else
+              seqalign = GetSeqAlignForResultHitList(search, FALSE, FALSE,
+                                                     search->pbp->discontinuous,
+                                                     reverse, FALSE); 
 	}
 
 	BioseqUnlock(subject_bsp);
@@ -2079,11 +2291,7 @@ BlastQuerySequenceSetUp(BioseqPtr bsp, CharPtr progname,
 			    BLAST_OptionsBlkPtr options)
 {
    BlastSearchBlkPtr search;
-   Boolean complement=FALSE, reverse, reverse_forbidden, options_alloc;
-   Int4 index, subject_length, num_of_cols;
-   SeqPortPtr spp;
-   SPCompressPtr spc=NULL;
-   Uint1 residue;
+   Int4 subject_length;
    SeqLocPtr slp=NULL;
 
    if (bsp == NULL)
@@ -2120,6 +2328,12 @@ BlastQuerySequenceSetUp(BioseqPtr bsp, CharPtr progname,
 SeqAlignPtr LIBCALL
 BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns)
 {
+   return BlastTwoSequencesByLocWithCallback(slp1, slp2, progname, options, other_returns, error_returns, NULL);
+}
+
+SeqAlignPtr LIBCALL
+BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)))
+{
 	BlastAllWordPtr all_words;
 	BlastSearchBlkPtr search;
 	BioseqPtr subject_bsp;
@@ -2146,10 +2360,15 @@ BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST
 		*other_returns = NULL;
 	}
 
-	/* If filtering is performed, do not reverse the sequence.  In this case
-		the wrong sequence would be filtered. */
+	if (progname == NULL && options == NULL)
+		return NULL;
+
+	/* If filtering is performed, do not reverse the sequence.  
+           In this case the wrong sequence would be filtered. */
 	reverse_forbidden = FALSE;
-	if (options && options->filter_string && StringCmp(options->filter_string, "F"))
+	if (options && ((options->filter_string &&
+                        StringCmp(options->filter_string, "F")) ||
+                        options->is_megablast_search))
 	{
 		reverse_forbidden = TRUE;
 	}
@@ -2170,8 +2389,13 @@ BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST
 		reverse = TRUE;
 	}
 
-	if (progname == NULL && options == NULL)
-		return NULL;
+        /* Make sure strands are handled correctly */
+        if (!StringCmp(progname, "blastn") &&
+            SeqLocStrand(query_slp) != Seq_strand_both && 
+            SeqLocStrand(subject_slp) == Seq_strand_both) {
+           Change_Loc_Strand(subject_slp, SeqLocStrand(query_slp));
+           Change_Loc_Strand(query_slp, Seq_strand_both);
+        }
 
 	if (progname == NULL)
 	{
@@ -2239,6 +2463,7 @@ BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST
 	}
 	else if (!StringCmp(progname, "blastn") || 
 		 !StringCmp(progname, "tblastn") ||
+                 !StringCmp(progname, "psitblastn") ||
 		 !StringCmp(progname, "tblastx"))
 	{
 		spp = SeqPortNewByLoc(subject_slp, Seq_code_ncbi4na);
@@ -2256,17 +2481,24 @@ BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST
 	        return NULL;
 	}
 	
+        if (options->is_megablast_search)
+           /* This has a different meaning in Mega BLAST and must be 0 */
+           options->block_width = 0;
+        
 	search = BLASTSetUpSearchByLoc(query_slp, progname, SeqLocLen(query_slp), subject_length, all_words, options, NULL);
 
 	if (search == NULL)
 		return NULL;
-	
-	if (!StringCmp(progname, "tblastn") || 
-	    !StringCmp(progname, "tblastx")) {
+        if (!StringCmp(progname, "tblastn") ||
+            !StringCmp(progname, "tblastx") ||
+            !StringCmp(progname, "psitblastn")) {
 	   MemFree(search->translation_buffer);
 	   search->translation_buffer = MemNew((3+(subject_length/3))*sizeof(Uint1));
 	   search->translation_buffer_size = 1+(subject_length/3);
 	}
+
+        search->handle_results = handle_results;
+        search->output = options->output;
 
 	seqalign = BlastTwoSequencesCore(search, subject_slp, subject_seq, subject_length, reverse);
 
@@ -2298,12 +2530,10 @@ BlastTwoSequencesByLocEx(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST
 		*other_returns = BlastOtherReturnsPrepare(search);
 	}
 
-
         if (options_alloc)
                 options = BLASTOptionDelete(options);
 
-	if (!search->pbp->is_megablast_search)
-	   AdjustOffSetsInSeqAlign(seqalign, slp1, slp2);
+        AdjustOffSetsInSeqAlign(seqalign, slp1, slp2);
 
 	search = BlastSearchBlkDestruct(search);
 
@@ -2319,6 +2549,13 @@ BlastTwoSequencesByLoc(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr progname, BLAST_O
 SeqAlignPtr LIBCALL
 BlastTwoSequencesEx(BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns)
 {
+   return BlastTwoSequencesWithCallback(bsp1, bsp2, progname, options, other_returns, error_returns, NULL);
+
+}
+
+SeqAlignPtr LIBCALL
+BlastTwoSequencesWithCallback(BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *handle_results)PROTO((VoidPtr search)))
+{
 	SeqAlignPtr seqalign;
 	SeqLocPtr slp1=NULL, slp2=NULL;
 
@@ -2326,12 +2563,17 @@ BlastTwoSequencesEx(BioseqPtr bsp1, BioseqPtr bsp2, CharPtr progname, BLAST_Opti
 		return NULL;
 
 	slp1 = NULL;
-	ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(bsp1->id, SEQID_GI)));
-
 	slp2 = NULL;
-	ValNodeAddPointer(&slp2, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(bsp2->id, SEQID_GI)));
-
-	seqalign = BlastTwoSequencesByLocEx(slp1, slp2, progname, options, other_returns, error_returns);
+        if (!handle_results) {
+           ValNodeAddPointer(&slp1, SEQLOC_WHOLE,
+                             SeqIdSetDup(SeqIdFindBest(bsp1->id, SEQID_GI)));
+           ValNodeAddPointer(&slp2, SEQLOC_WHOLE,
+                             SeqIdSetDup(SeqIdFindBest(bsp2->id, SEQID_GI)));
+        } else {
+           ValNodeAddPointer(&slp1, SEQLOC_WHOLE, SeqIdSetDup(bsp1->id));
+           ValNodeAddPointer(&slp2, SEQLOC_WHOLE, SeqIdSetDup(bsp2->id));
+        }
+	seqalign = BlastTwoSequencesByLocWithCallback(slp1, slp2, progname, options, other_returns, error_returns, handle_results);
 
 	slp1 = SeqLocFree(slp1);
 	slp2 = SeqLocFree(slp2);
@@ -2376,7 +2618,7 @@ BlastSequencesOnTheFlyEx(BlastSearchBlkPtr search, BioseqPtr subject_bsp)
         } else {
            if (search->mb_result_struct && search->mb_result_struct[0])
               search->mb_result_struct[0] = 
-                 BLASTResultsStructDelete(search->mb_result_struct[index]);
+                 BLASTResultsStructDelete(search->mb_result_struct[0]);
            if (!search->mb_result_struct)
               search->mb_result_struct = (BLASTResultsStructPtr PNTR) 
                  MemNew(sizeof(BLASTResultsStructPtr));
@@ -2463,7 +2705,7 @@ BlastSequencesOnTheFlyByLoc(BlastSearchBlkPtr search, SeqLocPtr subject_slp)
         } else {
            if (search->mb_result_struct && search->mb_result_struct[0])
               search->mb_result_struct[0] = 
-                 BLASTResultsStructDelete(search->mb_result_struct[index]);
+                 BLASTResultsStructDelete(search->mb_result_struct[0]);
            if (!search->mb_result_struct)
               search->mb_result_struct = (BLASTResultsStructPtr PNTR) 
                  MemNew(sizeof(BLASTResultsStructPtr));
@@ -2525,11 +2767,14 @@ BlastSequencesOnTheFlyByLoc(BlastSearchBlkPtr search, SeqLocPtr subject_slp)
 SeqAlignPtr LIBCALL
 BlastSequencesOnTheFly(BlastSearchBlkPtr search, BioseqPtr subject_bsp)
 {
+	SeqAlignPtr seqalign;
 	SeqLocPtr slp;
 
 	slp = NULL;
 	ValNodeAddPointer(&slp, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)));
-	return BlastSequencesOnTheFlyByLoc(search, slp);
+	seqalign = BlastSequencesOnTheFlyByLoc(search, slp);
+	SeqLocFree(slp);
+	return seqalign;
 }
 /*
 	Translate a nucleotide sequence without ambiguity codes.
@@ -2555,6 +2800,13 @@ BlastSequencesOnTheFly(BlastSearchBlkPtr search, BioseqPtr subject_bsp)
 	A codon that starts at the beginning of the above sequence starts in
 	state "0" and includes basepairs 0, 1, and 2.  The next codon, in the
 	same frame, after that starts in state "3" and includes 3, 0, and 1.
+
+	** Optimization:
+	  changed the single main loop to 
+	     - advance to state 0, 
+	     - optimized inner loop does two (3 byte->4 codon) translation per iteration
+	           (loads are moved earlier so they can be done in advance.)
+	     - do remainder
 */
 
 Int4 LIBCALL
@@ -2564,10 +2816,11 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 	register int state;
 	Int2 total_remainder;
 	Int4 prot_length;
-	register Uint1 byte_value, codon;
+	register int byte_value, codon;
 	Uint1 last_remainder, last_byte, remainder;
 	register Uint1Ptr translation, nt_seq_end, nt_seq_start;
 	Uint1Ptr prot_seq_start;
+	int byte_value1,byte_value2,byte_value3,byte_value4,byte_value5;
   
 	prot_length=0;
 	if (nt_seq == NULL || prot_seq == NULL || (length-ABS(frame)+1) < CODON_LENGTH)
@@ -2594,6 +2847,8 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 			
 		state = frame-1;
 		byte_value = *nt_seq;
+
+		/* If there's lots to do, advance to state 0, then enter fast loop */
 		while (nt_seq < nt_seq_end)
 		{
 			switch (state)
@@ -2637,8 +2892,65 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 					byte_value = *nt_seq;	
 					state = 0;
 					break;
-			}
-		}
+			} /* end switch */
+			/* switch ends at state 0, except when at end */
+
+
+			/********************************************/
+			/* optimized loop: start in state 0. continue til near end */
+			while (nt_seq < (nt_seq_end-10))
+			  {
+			    byte_value1 = *(++nt_seq);
+			    byte_value2 = *(++nt_seq);
+			    byte_value3 = *(++nt_seq);
+			    /* case 0: */
+			    codon = (byte_value >> 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+
+			    /* case 3: */
+			    codon = ((byte_value & 3) << 4);
+			    codon += (byte_value1 >> 4);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+
+			    byte_value4 = *(++nt_seq);
+			    /* case 2: */
+			    codon = ((byte_value1 & 15) << 2);
+
+			    codon += (byte_value2 >> 6);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    /* case 1: */
+			    codon = byte_value2 & 63;
+			    byte_value5 = *(++nt_seq);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+
+			    /* case 0: */
+			    codon = (byte_value3 >> 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    /* case 3: */
+			    byte_value = *(++nt_seq);
+			    codon = ((byte_value3 & 3) << 4);
+			    codon += (byte_value4 >> 4);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    /* case 2: */
+			    codon = ((byte_value4 & 15) << 2);
+			    codon += (byte_value5 >> 6);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    /* case 1: */
+			    codon = byte_value5 & 63;
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    state=0;
+			  } /* end optimized while */
+		/********************************************/
+		} /* end while */
+
 
 		if (state == 1)
 		{ 
@@ -2723,6 +3035,8 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 		}
 
 		byte_value = *nt_seq;	
+
+		/* If there's lots to do, advance to state 3, then enter fast loop */
 		while (nt_seq > nt_seq_start)
 		{
 			switch (state)
@@ -2766,9 +3080,55 @@ BlastTranslateUnambiguousSequence(BlastSearchBlkPtr search, Int4 length, Uint1Pt
 					byte_value = *nt_seq;	
 					state = 3;
 					break;
-			}
-		}
-		
+			} /* end switch */
+			/* switch ends at state 3, except when at end */
+
+
+			/********************************************/
+			/* optimized area: start in state 0. continue til near end */
+			while (nt_seq > (nt_seq_start+10))
+			  {
+			    byte_value1 = *(--nt_seq);	
+			    byte_value2 = *(--nt_seq);
+			    byte_value3 = *(--nt_seq);
+
+			    codon = (byte_value & 63);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    codon = (byte_value >> 6);
+			    codon += ((byte_value1 & 15) << 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    byte_value4 = *(--nt_seq);
+			    codon = (byte_value1 >> 4);
+			    codon += ((byte_value2 & 3) << 4);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    codon = (byte_value2 >> 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    byte_value5 = *(--nt_seq);
+
+			    codon = (byte_value3 & 63);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    byte_value = *(--nt_seq);
+			    codon = (byte_value3 >> 6);
+			    codon += ((byte_value4 & 15) << 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    codon = (byte_value4 >> 4);
+			    codon += ((byte_value5 & 3) << 4);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			    codon = (byte_value5 >> 2);
+			    *prot_seq = translation[codon];
+			    prot_seq++;
+			  } /* end optimized while */
+			/********************************************/
+
+		} /* end while */
+
 		byte_value = *nt_seq;
 		if (state == 3)
 		{
@@ -2834,7 +3194,7 @@ BlastGetSubjectId(BlastSearchBlkPtr search, Int4 hit_number, Boolean ordinal_num
                 
                 bdfp_head = FDReadDeflineAsn(search->rdfp, results->subject_id);
                 
-                if(bdfp == NULL) {
+                if(bdfp_head == NULL) {
                     ErrPostEx(SEV_ERROR, 0, 0, "Failure to read defline ASN for %d", results->subject_id);
                     return NULL;
                 }
@@ -2948,7 +3308,7 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int
 	Int4 length, sequence_length;
 	Int4 q_overlap;
 	SeqAlignPtr sap, head, seqalign, seqalign_var, PNTR seqalignp;
-	SeqIdPtr gi_list=NULL, subject_id, sip1, sip2;
+	SeqIdPtr gi_list=NULL, subject_id;
 	Uint1Ptr sequence;
 	StdSegPtr ssp;
 	BioseqPtr bsp1, bsp2, PNTR bspp; 
@@ -2993,11 +3353,8 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int
                  	BlastNewFindWords(search, 0, search->context[search->first_context].query->length, search->pbp->threshold_first, (Uint1) 0);
 		 else
                  	BlastNewFindWords(search, search->required_start, search->required_end, search->pbp->threshold_first, (Uint1) 0);
-		 if (StrCmp(search->prog_name, "blastn"))
-		    lookup_position_aux_destruct(search->wfp->lookup);
-		 else
-		     mb_lookup_position_aux_destruct(search->wfp->lookup);
-		 if (search->pbp->threshold_first != search->pbp->threshold_second)
+                 lookup_position_aux_destruct(search->wfp->lookup);
+                 if (search->pbp->threshold_first != search->pbp->threshold_second)
 		 {
                  	search->wfp = search->wfp_second;
 			if (search->whole_query == TRUE)
@@ -3017,7 +3374,9 @@ BioseqBlastEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int
 	if (search->searchsp_eff > AWAKE_THR_MIN_SIZE)
 		BlastStartAwakeThread(search->thr_info);
 
+        /* THE BLAST SEARCH IS HERE */
 	do_the_blast_run(search);
+
 #if 0
 	cluster_hits = TRUE;
 #endif
@@ -3417,12 +3776,11 @@ BlastHitRangePtr LIBCALL
 BioseqHitRangeEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options)
 
 {
-	BioseqPtr subject_bsp;
 	BlastHitRangePtr bhrp=NULL;
 	BLASTResultsStructPtr result_struct;
-	Int4 hitlist_count, index, index1, total_hsps;
-	SeqPortPtr spp;
-	Uint1Ptr sequence, sequence_start;
+	Int4 hitlist_count, index, total_hsps;
+	Int4 sequence_length, length;
+	Uint1Ptr sequence;
 
 	if (search == NULL || search->query_invalid)
 		return NULL;
@@ -3467,25 +3825,15 @@ BioseqHitRangeEngineCore(BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options)
 		result_struct = search->result_struct;
        		hitlist_count = result_struct->hitlist_count;
 
+		sequence=NULL;
+		sequence_length=0;
+		
 		for (index=0; index<hitlist_count; index++)
 		{
-			subject_bsp = readdb_get_bioseq(search->rdfp, result_struct->results[index]->subject_id);
-    			spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_plus, Seq_code_ncbi4na);
-			/* make one longer to "protect" ALIGN. */
-			sequence_start = Nlm_Malloc((2+subject_bsp->length)*sizeof(Uint1));
-			sequence_start[0] = ncbi4na_to_blastna[0];
-			sequence = sequence_start+1;
-			for (index1=0; index1<subject_bsp->length; index1++)
-			{
-				sequence[index1] = ncbi4na_to_blastna[SeqPortGetResidue(spp)];
-			}
-			/* Gap character in last space. */
-			sequence[subject_bsp->length] = ncbi4na_to_blastna[0];
-			SumBlastGetGappedAlignmentEx(search, index, FALSE, FALSE, sequence, subject_bsp->length, FALSE, NULL, bhrp);
-			sequence_start = MemFree(sequence_start);
-			subject_bsp = BioseqFree(subject_bsp);
-    			spp = SeqPortFree(spp);
+			length = readdb_get_sequence_ex(search->rdfp, result_struct->results[index]->subject_id, &sequence, &sequence_length, TRUE);
+			SumBlastGetGappedAlignmentEx(search, index, FALSE, FALSE, sequence+1, length, FALSE, NULL, bhrp);
 		}
+		sequence = MemFree(sequence);
 		search->sbp->kbp_gap[search->first_context] = NULL;
 	}
 	else if (search->pbp->gapped_calculation)
@@ -3529,14 +3877,19 @@ BioseqBlastEngineEx(BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_Opt
 
 SeqAlignPtr LIBCALL
 BioseqBlastEngine(BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)))
+{
+   return BioseqBlastEngineWithCallback(bsp, progname, database, options, other_returns, error_returns, callback, NULL);
+}
 
+SeqAlignPtr LIBCALL 
+BioseqBlastEngineWithCallback(BioseqPtr bsp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)))
 {
 	SeqLocPtr slp;
 	SeqAlignPtr seqalign;
 
 	slp = NULL;
 	ValNodeAddPointer(&slp, SEQLOC_WHOLE, SeqIdDup(SeqIdFindBest(bsp->id, SEQID_GI)));
-	seqalign = BioseqBlastEngineByLoc(slp, progname, database, options, other_returns, error_returns, callback);
+	seqalign = BioseqBlastEngineByLocWithCallback(slp, progname, database, options, other_returns, error_returns, callback, NULL, NULL, 0, handle_results);
 	SeqLocFree(slp);
 	
 	return seqalign;
@@ -3556,38 +3909,53 @@ SeqAlignPtr LIBCALL
 BioseqBlastEngineByLocEx(SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total)
 
 {
-    Boolean options_allocated=FALSE;
-    BlastSearchBlkPtr search;
-    Int2 status;
-    SeqAlignPtr head;
-    SeqLocPtr whole_slp=NULL;
+   return BioseqBlastEngineByLocWithCallback(slp, progname, database, options, other_returns, error_returns, callback, seqid_list, gi_list, gi_list_total, NULL);
+}
 
-    head = NULL;
-    
-    if (error_returns) {
-        *error_returns = NULL;
-    }
-    
-    if (other_returns) {
-        *other_returns = NULL;
-    }
-    
-    if (progname == NULL)
-        return NULL;
 
-    /* If no options, use default. */
-    if (options == NULL) {
-        options = BLASTOptionNew(progname, FALSE);
-        options_allocated = TRUE;
-    }
-    
-    status = BLASTOptionValidateEx(options, progname, error_returns);
-    if (status != 0) {	/* error messages in other_returns? */
-        return NULL;
-    }
-    
-    if (slp == NULL || database == NULL)
-        return NULL;
+SeqAlignPtr LIBCALL
+BioseqBlastEngineByLocWithCallback(SeqLocPtr slp, CharPtr progname, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, int (LIBCALLBACK *handle_results)PROTO((VoidPtr srch)))
+{
+	Boolean options_allocated=FALSE;
+	BlastSearchBlkPtr search;
+	Int2 status;
+	SeqAlignPtr head;
+	SeqLocPtr whole_slp=NULL;
+		/* Futamura */
+        posSearchItems *posSearch;
+        compactSearchItems *compactSearch = NULL;
+        Boolean  checkReturn = FALSE;
+
+	head = NULL;
+
+	if (error_returns)
+	{
+		*error_returns = NULL;
+	}
+
+	if (other_returns)
+	{
+		*other_returns = NULL;
+	}
+
+	if (progname == NULL)
+		return NULL;
+
+	/* If no options, use default. */
+	if (options == NULL)
+	{
+		options = BLASTOptionNew(progname, FALSE);
+		options_allocated = TRUE;
+	}
+
+	status = BLASTOptionValidateEx(options, progname, error_returns);
+	if (status != 0)
+	{	/* error messages in other_returns? */
+		return NULL;
+	}
+
+	if (slp == NULL || database == NULL)
+		return NULL;
 
     if(options->is_rps_blast) {
         RPSInfoPtr rpsinfo;
@@ -3607,14 +3975,12 @@ BioseqBlastEngineByLocEx(SeqLocPtr slp, CharPtr progname, CharPtr database, BLAS
             query_is_na = TRUE;
             progname = "tblastn";
         }
-
         if((rpsinfo = RPSInit(database, !query_is_na)) == NULL) {
         
             ErrPostEx(SEV_ERROR, 0, 0, "Failure to initialize RPS: %s %s",
                       progname, database);
             return NULL;
         }
-
         /* Update size of the database in accordance with RPS Database size */
         RPSUpdateDbSize(options, rpsinfo, bsp->length);
         
@@ -3624,7 +3990,6 @@ BioseqBlastEngineByLocEx(SeqLocPtr slp, CharPtr progname, CharPtr database, BLAS
             options->db_genetic_code = options->genetic_code;
             fake_bsp = createFakeProtein();
         }
-
         search = BLASTSetUpSearch (fake_bsp, progname, fake_bsp->length, 0, 
                                    NULL, options, NULL);
         
@@ -3638,50 +4003,88 @@ BioseqBlastEngineByLocEx(SeqLocPtr slp, CharPtr progname, CharPtr database, BLAS
         
         if(query_is_na)
             BioseqFree(fake_bsp);
-
         BioseqUnlock(bsp);
         RPSClose(rpsinfo);
-
     } else {
         
         search = BLASTSetUpSearchByLocWithReadDbEx(slp, progname, SeqLocLen(slp), database, options, NULL, seqid_list, gi_list, gi_list_total);
         
         if (search == NULL) {
-            /* We need to veryfy if danabase name is wrong and to set error
+           /* We need to veryfy if database name is wrong and to set error
                returns correctly */
             Boolean is_prot;
             BlastErrorMsgPtr error_msg;
             CharPtr chptr;
             ReadDBFILEPtr rdfp=NULL;
 
-            if(!StringICmp(progname, "blastp") || 
+            if(!StringICmp(progname, "blastp") ||
                !StringICmp(progname, "blastx")) {
                 is_prot = TRUE;
             } else {
                 is_prot = FALSE;
             }
-            
+
             rdfp = readdb_new(database, is_prot);
             if(rdfp == NULL) {
                 error_msg = MemNew(sizeof(BlastErrorMsg));
                 chptr = MemNew(StringLen(database) + 256);
-                sprintf(chptr, "Database %s was not found or does not exists",
+                sprintf(chptr, "Database %s was not found or does not exist",
                         database);
                 error_msg->msg = chptr;
-                error_msg->level = 2; /* FATAL */
-
+                error_msg->level = 3; /* FATAL */
                 ValNodeAddPointer(error_returns, 0, error_msg);
             }
-            
+
             readdb_destruct(rdfp);
             return NULL;
         }
-
+        
         search->thr_info->tick_callback = callback;
         search->thr_info->star_callback = callback;
-        
-        head = BioseqBlastEngineCore(search, options, NULL);
+        search->handle_results = handle_results;
+        search->output = options->output;
 
+        /* Futamura psitblastn */
+        if (options->recoverCheckpoint)
+          search->positionBased = TRUE;
+        else
+          search->positionBased = FALSE;
+
+        if (options->recoverCheckpoint) {
+          posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
+          compactSearch = compactSearchNew(compactSearch);
+          copySearchItems(compactSearch, search, options->matrix);
+          posInitializeInformation(posSearch,search);
+          /*AAS*/
+
+          checkReturn = posReadCheckpoint(posSearch, compactSearch,
+                                          options->CheckpointFileName,
+                                          &(search->error_return));
+          search->sbp->posMatrix = posSearch->posMatrix;
+          if (NULL == search->sbp->posFreqs)
+            search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength,
+                                                      compactSearch->alphabetSize);
+          copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs,
+                       compactSearch->qlength, compactSearch->alphabetSize);
+
+          if (!checkReturn) {
+		BlastConstructErrorMessage("BioseqBlastEngineByLocEx",
+			"Error recovering from checkpoint", 3, error_returns);
+		return NULL;
+          }
+        }
+
+        /* ----- Here is real BLAST search done ------- */
+        if (search->positionBased)
+          head = BioseqBlastEngineCore(search, options, search->sbp->posMatrix);
+        else if (options->is_megablast_search) {
+           SeqAlignPtr PNTR seqalignp;
+           seqalignp = BioseqMegaBlastEngineCore(search, options, NULL);
+           head = *seqalignp;
+        } else
+	  head = BioseqBlastEngineCore(search, options, NULL);
+	/* end Futamura */
+	
     }
 
     if (search->error_return) {
@@ -3745,24 +4148,24 @@ HitRangeToSeqLoc(BlastHitRangePtr bhrp, Int4 link_value, Boolean combine)
 	   {
 		if (start == TRUE)
 		{
-			start_pos = bhrp->range_list_pointer[index]->gi;
+			start_pos = bhrp->range_list_pointer[index]->gi + bhrp->base_offset;
 			start = FALSE;
 			largest_stop_pos = 0;
 		}
 		else
 		{
 			/* Keep track of largest stop position. */
-			largest_stop_pos = MAX(largest_stop_pos, bhrp->range_list_pointer[index]->ordinal_id);
+			largest_stop_pos = MAX(largest_stop_pos, bhrp->range_list_pointer[index]->ordinal_id + bhrp->base_offset);
 			make_seqloc = FALSE;
 			if (index == total-1)	/* Last one. */
 			{
-				stop_pos = bhrp->range_list_pointer[index]->ordinal_id;
+				stop_pos = bhrp->range_list_pointer[index]->ordinal_id + bhrp->base_offset;
 				start = TRUE;
 				make_seqloc = TRUE;
 			}
-			else if (largest_stop_pos+link_value < bhrp->range_list_pointer[index+1]->gi)
+			else if (largest_stop_pos+link_value < bhrp->range_list_pointer[index+1]->gi + bhrp->base_offset)
 			{ /* Check overlap with next one. */
-				stop_pos = bhrp->range_list_pointer[index]->ordinal_id;
+				stop_pos = bhrp->range_list_pointer[index]->ordinal_id + bhrp->base_offset;
 				start = TRUE;
 				make_seqloc = TRUE;
 			}
@@ -3782,8 +4185,8 @@ HitRangeToSeqLoc(BlastHitRangePtr bhrp, Int4 link_value, Boolean combine)
 	   else
 	   {
 		sint = SeqIntNew();
-		sint->from = bhrp->range_list_pointer[index]->gi;
-		sint->to = bhrp->range_list_pointer[index]->ordinal_id;
+		sint->from = bhrp->range_list_pointer[index]->gi + bhrp->base_offset;
+		sint->to = bhrp->range_list_pointer[index]->ordinal_id + bhrp->base_offset;
 		sint->strand = Seq_strand_plus;
 		sint->id = SeqIdDup(SeqIdFindBest(bhrp->query_id, SEQID_GI));
 		ValNodeAddPointer(&retval, SEQLOC_INT, sint);
@@ -3804,7 +4207,7 @@ BioseqHitRangeEngineByLoc(SeqLocPtr slp, CharPtr progname, CharPtr database, BLA
 	BlastHitRangePtr bhrp;
 	BlastSearchBlkPtr search;
 	Int2 status;
-	SeqLocPtr seqloc;
+	SeqLocPtr seqloc, whole_slp=NULL;
 
 	if (error_returns)
 	{
@@ -3846,6 +4249,12 @@ BioseqHitRangeEngineByLoc(SeqLocPtr slp, CharPtr progname, CharPtr database, BLA
 	search->thr_info->star_callback = callback;
 
 	bhrp = BioseqHitRangeEngineCore(search, options);
+
+        if (slp->choice != SEQLOC_WHOLE) {
+        	ValNodeAddPointer(&whole_slp, SEQLOC_WHOLE, SeqIdFindBest(SeqLocId(slp), SEQID_GI));
+		bhrp->base_offset = GetOffsetInLoc(slp, whole_slp, SEQLOC_START);
+		ValNodeFree(whole_slp);
+	}
 	
 	seqloc = HitRangeToSeqLoc(bhrp, HITRANGE_LINKVALUE, TRUE);
 	bhrp = BlastHitRangeDestruct(bhrp);
@@ -3874,7 +4283,6 @@ void LIBCALL BlastOtherReturnsFree(ValNodePtr other_returns)
     BLAST_KarlinBlkPtr ka_params;
     BLAST_MatrixPtr matrix;
     CharPtr params_buffer;
-    ReadDBFILEPtr rdfp_var;
     TxDfDbInfoPtr dbinfo;
     ValNodePtr  mask_loc, mask_loc_start, vnp;
     
@@ -3960,6 +4368,9 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
         dbinfo->definition = StringSave(chptr);	
         
         dbinfo->date = StringSave(readdb_get_date(rdfp_var));	
+
+        dbinfo->is_protein = readdb_is_prot(rdfp_var);
+
         if (rdfp_var->aliaslen)
             dbinfo->total_length = rdfp_var->aliaslen;
         else
@@ -4023,6 +4434,13 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
                     ((Nlm_FloatHi) search->dblen_eff)*
                     ((Nlm_FloatHi) search->context[search->first_context].query->effective_length));
     
+    /* If Mega BLAST endpoint results, save them here */
+    if (search->pbp->no_traceback && 
+        search->mb_endpoint_results != NULL)
+       /* Here 21 = BlastResponse_mbalign (see file objblst3.h) */
+       ValNodeAddPointer(&other_returns, 21, 
+                         search->mb_endpoint_results->data.ptrvalue);
+       
     return other_returns;
 }
 
@@ -4302,8 +4720,7 @@ BlastSearchBlkDuplicate (BlastSearchBlkPtr search)
 {
 
 	BlastSearchBlkPtr new_search;
-	Int2 index, last_context;
-	SeqIdPtr qid;
+	Int2 index;
 
 	if (search == NULL)
 		return NULL;
@@ -4441,6 +4858,7 @@ BlastSearchBlkDuplicate (BlastSearchBlkPtr search)
 	if (search->abmp)
 	   new_search = GreedyAlignMemAlloc(new_search);
 
+        new_search->mb_endpoint_results = search->mb_endpoint_results;
 	return new_search;
 }
 /* 
@@ -4608,7 +5026,6 @@ BlastSearchBlkNewExtra (Int2 wordsize, Int4 qlen, CharPtr dbname, Boolean multip
 		search->all_words = all_words;
 
                 search->thr_info = BlastThrInfoNew();
-
 #ifdef BLAST_COLLECT_STATS
 		search->first_pass_hits = 0;
 		search->second_pass_hits = 0;
@@ -4748,6 +5165,7 @@ BlastSearchBlkDestruct (BlastSearchBlkPtr search)
         
         search->query_context_offsets = MemFree(search->query_context_offsets);
         
+        MemFree(search->mb_endpoint_results);
         search = MemFree(search);
     }
     
@@ -4763,25 +5181,17 @@ BlastAllWordPtr LIBCALL
 BlastAllWordDestruct(BlastAllWordPtr all_words)
 
 {
-	Int4 index1, num_of_cols;
-	Uint1Ptr *array;
-
 	if (all_words == NULL)
 		return NULL;
 
 	if (all_words->array)
 	{
-		array = all_words->array;
-		num_of_cols = all_words->num_of_cols;
+		all_words->array = MemFree(all_words->array);
+	}
 
-		if (all_words->rows_allocated)
-		{
-			for (index1=0; index1<num_of_cols; index1++)
-			{
-				array[index1] = MemFree(array[index1]);
-			}
-		}
-		array = MemFree(array);
+	if (all_words->rows_allocated && all_words->array_storage)
+	{
+		all_words->array_storage = MemFree(all_words->array_storage);
 	}
 
 	MemFree(all_words);
@@ -4824,7 +5234,7 @@ BlastHitListDestruct(BLAST_HitListPtr hitlist)
 
         for (index=0; index<hspcnt_max; index++)
         {
-                hsp_array[index] = MemFree(hsp_array[index]);
+           hsp_array[index] = MemFree(hsp_array[index]);
         }
 
         hitlist->hsp_array = MemFree(hsp_array);
@@ -4898,7 +5308,9 @@ ContextToFrame(BlastSearchBlkPtr search, Int2 context_number)
 		else
 			frame = -1;
 	}
-	else if (prog_number == blast_type_blastp || prog_number == blast_type_tblastn)
+        else if (prog_number == blast_type_blastp ||
+                 prog_number == blast_type_tblastn ||
+                 prog_number == blast_type_psitblastn)
 	{	/* Query and subject are protein, no frame. */
 		frame = 0;
 	}
@@ -5393,16 +5805,18 @@ MyBioseqSeg(BioseqPtr bsp_unfilter)
 #define BLASTSEQLOC_BUFFER_SIZE 128
 
 Boolean
-parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, CharPtr PNTR error_message, CharPtr PNTR database)
+parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, 
+                    CharPtr PNTR error_message, CharPtr PNTR database, 
+                    Int4Ptr descriptions, Int4Ptr alignments)
 
 {
-    	CharPtr opt_str = "GErqeWdyXZ", *values;
+    	CharPtr opt_str = "GErqeWdyXZPAIvbYzcF", *values;
 	Int4 index;
 
 	if (options == NULL)
 		return FALSE;
 
-	if(!BlastParceInputString(string_options, opt_str, &values, error_message)) 
+	if(!BlastParseInputString(string_options, opt_str, &values, error_message)) 
 	{
 	    return FALSE;
 	}
@@ -5449,13 +5863,14 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, CharPtr
 	    options->wordsize = atoi(values[index]);
 	}
 
-	/* -d wordsize. */
-
-	index = BlastGetLetterIndex(opt_str, 'd');
-	if(values[index] != NULL) {
-		*database = values[index];
-		values[index] = NULL;
-	}
+	/* -d database. */
+        if (database) {
+           index = BlastGetLetterIndex(opt_str, 'd');
+           if(values[index] != NULL) {
+              *database = values[index];
+              values[index] = NULL;
+           }
+        }
 
 	/* -y  Dropoff (X) for blast extensions in bits (default if zero) */
 
@@ -5478,7 +5893,81 @@ parse_blast_options(BLAST_OptionsBlkPtr options, CharPtr string_options, CharPtr
 	    options->gap_x_dropoff_final = atof(values[index]);
 	}
 
+	/* -P multiple hits/two-pass. */
 
+	index = BlastGetLetterIndex(opt_str, 'P');
+	if(values[index] != NULL) {
+		if (atoi(values[index]) == 0)
+		{
+			options->two_pass_method  = FALSE;
+            		options->multiple_hits_only  = TRUE;
+		}
+		else if (atoi(values[index]) == 1)
+		{
+			options->two_pass_method  = FALSE;
+            		options->multiple_hits_only  = FALSE;
+		}
+		else
+		{
+			options->two_pass_method  = TRUE;
+            		options->multiple_hits_only  = FALSE;
+		}
+	}
+
+	/* -A window size. */
+
+	index = BlastGetLetterIndex(opt_str, 'A');
+	if(values[index] != NULL) {
+	    options->window_size = atoi(values[index]);
+	}
+
+        /* -I Hitlist size */
+        index = BlastGetLetterIndex(opt_str, 'I');
+        if (values[index] != NULL)
+           options->hitlist_size = atoi(values[index]);
+
+        /* -v Number of descriptions */
+        if (descriptions) {
+           *descriptions = -1;
+           index = BlastGetLetterIndex(opt_str, 'v');
+           if (values[index] != NULL) {
+              *descriptions = atoi(values[index]);
+              options->hitlist_size = 
+                 MAX(options->hitlist_size, *descriptions);
+           }
+        }
+
+        /* -b Number of alignments */
+        if (alignments) {
+           *alignments = -1;
+           index = BlastGetLetterIndex(opt_str, 'b');
+           if (values[index] != NULL) {
+              *alignments = atoi(values[index]);
+              options->hitlist_size = 
+                 MAX(options->hitlist_size, *alignments);
+           }
+        }
+
+        /* -Y Effective search space */
+        index = BlastGetLetterIndex(opt_str, 'Y');
+        if (values[index] != NULL)
+           options->searchsp_eff = atof(values[index]);
+
+        /* -z Effective database length */
+        index = BlastGetLetterIndex(opt_str, 'z');
+        if (values[index] != NULL)
+           options->db_length = atof(values[index]);
+
+        /* -c Constant in pseudocounts for multipass version */
+        index = BlastGetLetterIndex(opt_str, 'c');
+        if (values[index] != NULL)
+           options->pseudoCountConst = atoi(values[index]);
+        
+        /* -F Filter string */
+        index = BlastGetLetterIndex(opt_str, 'F');
+        if (values[index] != NULL)
+           options->filter_string = values[index];
+        
 	values = MemFree(values);
 
 	return TRUE;
@@ -5552,7 +6041,7 @@ parse_seg_options(CharPtr ptr, Int4Ptr window, FloatHiPtr locut, FloatHiPtr hicu
 	Char buffer[BLASTSEQLOC_BUFFER_SIZE];
 	Int4 arg, index, index1, window_pri; 
 	long	tmplong;
-	double	tmpdouble;
+	FloatHi	tmpdouble;
 	FloatHi locut_pri, hicut_pri;
 
 	arg = 0;
@@ -5609,7 +6098,7 @@ parse_cc_options(CharPtr ptr, Int4Ptr window, FloatHiPtr cutoff, Int4Ptr linker)
 	Char buffer[BLASTSEQLOC_BUFFER_SIZE];
 	Int4 arg, index, index1, window_pri, linker_pri;
 	long	tmplong;
-	double	tmpdouble;
+	FloatHi	tmpdouble;
 	Nlm_FloatHi cutoff_pri;
 
 	arg = 0;
@@ -5833,9 +6322,11 @@ BlastSeqLocFilterEx(SeqLocPtr slp, CharPtr instructions, BoolPtr mask_at_hash)
 				repeat_options->gap_extend = 1;
 				ptr = load_options_to_buffer(ptr+1, buffer);
 				if (buffer[0] != NULLB)
-					parse_blast_options(repeat_options, buffer, &error_msg, &repeat_database);
+                                   parse_blast_options(repeat_options,
+                                      buffer, &error_msg, &repeat_database,
+                                      NULL, NULL);
 				if (repeat_database == NULL)
-					repeat_database = StringSave("humlines.lib  humsines.lib  retrovir.lib");
+                                   repeat_database = StringSave("humlines.lib  humsines.lib  retrovir.lib");
 				do_repeats = TRUE;
 			}
 			else if (*ptr == 'V')
@@ -5843,10 +6334,11 @@ BlastSeqLocFilterEx(SeqLocPtr slp, CharPtr instructions, BoolPtr mask_at_hash)
 				vs_options = VSBlastOptionNew();
 				ptr = load_options_to_buffer(ptr+1, buffer);
 				if (buffer[0] != NULLB)
-					parse_blast_options(vs_options, buffer, &error_msg, &vs_database);
+                                   parse_blast_options(vs_options, buffer,
+                                      &error_msg, &vs_database, NULL, NULL); 
 				vs_options = BLASTOptionDelete(vs_options);
 				if (vs_database == NULL)
-					vs_database = StringSave("UniVec_Core");
+                                   vs_database = StringSave("UniVec_Core");
 				do_vecscreen = TRUE;
 			}
 			else if (*ptr == 'L')
@@ -5915,8 +6407,11 @@ one strand).  In that case we make up a double-stranded one as we wish to look a
 			{
 				myslp = slp;
 			}
+start_timer;
 			repeat_slp = BioseqHitRangeEngineByLoc(myslp, "blastn", repeat_database, repeat_options, NULL, NULL, NULL, NULL, NULL, 0);
+stop_timer("after repeat filtering");
 			repeat_options = BLASTOptionDelete(repeat_options);
+			repeat_database = MemFree(repeat_database);
 			if (myslp_allocated)
 				SeqLocFree(myslp);
 			seqloc_num++;
@@ -5956,6 +6451,7 @@ one strand).  In that case we make up a double-stranded one as we wish to look a
 			}
 			vnp = ValNodeFree(vnp);
 			seqalign = SeqAlignSetFree(seqalign);
+			vs_database = MemFree(vs_database);
 			if (myslp_allocated)
 				SeqLocFree(myslp);
 			seqloc_num++;
@@ -6133,8 +6629,7 @@ BLASTResultHitlistFreeEx(BlastSearchBlkPtr search, BLASTResultHitlistPtr result)
 {
         BLASTHeapPtr hp;
         Int4 number, index;
-  	BLASTResultHspPtr hsp;
-  	register Int4 i, subject_id;
+  	register Int4 subject_id;
 	
 	if (result == NULL)
 		return NULL;
@@ -6257,6 +6752,22 @@ CopyResultHspToHSP(BLASTResultHspPtr result_hsp, BLAST_HSPPtr hsp)
 	return TRUE;
 }
 
+/* Same as FillInStdSegInfo, only taking BLAST_HSPPtr argument instead of
+   BlastResultHspPtr */
+StdSegPtr
+BLASTHspToStdSeg(BlastSearchBlkPtr search, Int4 subject_length, BLAST_HSPPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list)
+{
+   StdSegPtr ssp = NULL;
+   BLASTResultHspPtr result_hsp = 
+      (BLASTResultHspPtr) Malloc(sizeof(BLASTResultHsp));
+
+   CopyHSPToResultHsp(search->sbp->kbp[search->first_context], 
+                      hsp, result_hsp);
+   ssp = FillInStdSegInfo(search, search->subject_id, subject_length, &ssp, 
+                             result_hsp, sip, reverse, gi_list);
+   MemFree(result_hsp);   
+   return ssp;
+}
 
 /*
 	Sort the HSP's by score.
@@ -6382,7 +6893,9 @@ GetDbSubjRatio(BlastSearchBlkPtr search, Int4 subject_length)
 	Nlm_FloatHi db_subj_ratio;
 
 	db_subj_ratio = (search->context_factor)*(search->dblen)/(subject_length);
-       	if (StringCmp(search->prog_name, "tblastn") == 0 || StringCmp(search->prog_name, "tblastx") == 0)
+        if (StringCmp(search->prog_name, "tblastn") == 0 ||
+            StringCmp(search->prog_name, "tblastx") == 0 ||
+            StringCmp(search->prog_name, "psitblastn") == 0)
 	{
 		db_subj_ratio *= 3;
 	}
@@ -6404,7 +6917,8 @@ BlastGetGapAlgnTbckWithReaddb (BlastSearchBlkPtr search, Int4 hit_number, Boolea
 
         result_hitlist = search->result_struct->results[hit_number];
 
-	if (StringCmp(search->prog_name, "tblastn") == 0)
+        if (StringCmp(search->prog_name, "tblastn") == 0 ||
+            StringCmp(search->prog_name, "psitblastn") == 0)
 	{
 		subject_bsp = readdb_get_bioseq(search->rdfp, result_hitlist->subject_id);
     		spp = SeqPortNew(subject_bsp, 0, -1, Seq_strand_plus, Seq_code_ncbi4na);
@@ -6508,7 +7022,6 @@ static Int4
 CheckGappedAlignmentsForOverlap(BlastSearchBlkPtr search, BLAST_HSPPtr *hsp_array, Int4 hsp_count, Int2 frame)
 
 {
-	BLAST_HSPPtr hsp, hsp1;
 	Int4 index1, index, increment;
 
 	if (search == NULL || *hsp_array == NULL || hsp_count == 0)
@@ -6825,19 +7338,19 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
 
                         } else {
                             gap_align->query = search->context[hsp->context].query->sequence;
-                            gap_align->subject = subject;
                             gap_align->query_length = search->context[hsp->context].query->length;
-                            gap_align->subject_length = subject_length;
                             gap_align->q_start = max_offset;
-                            gap_align->s_start = (hsp->subject.offset - hsp->query.offset) + max_offset;
+                            gap_align->s_start = 
+                               (hsp->subject.offset - hsp->query.offset) + max_offset;
                             hsp->query.gapped_start = gap_align->q_start;
                             hsp->subject.gapped_start = gap_align->s_start;
+
+                               gap_align->subject = subject;
+                               gap_align->subject_length = subject_length;
                         }
                                                
                         /* For out-of frame gapping - query is protein
                            and subject is DNA translated into 3 frames */
-
-                        
 
 			PerformGappedAlignment(gap_align);
 
@@ -6849,10 +7362,10 @@ BlastGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subjec
                             hsp->subject.end = gap_align->query_stop + 1;
                         } else {
                             hsp->query.offset = gap_align->query_start;
-                            hsp->subject.offset = gap_align->subject_start;
-                            /* The end is one further for BLAST than for the gapped align. */
                             hsp->query.end = gap_align->query_stop + 1;
+                            hsp->subject.offset = gap_align->subject_start;
                             hsp->subject.end = gap_align->subject_stop + 1;
+                            /* The end is one further for BLAST than for the gapped align. */
                         }
 
                         hsp->query.length = hsp->query.end - hsp->query.offset;
@@ -6913,15 +7426,20 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 
 {
 	BLAST_HSPPtr hsp, hsp1;
-	BLAST_HSPPtr PNTR hsp_array_new;
+	BLAST_HSP_helperPtr helper;
 	Boolean hsp_start_is_contained, hsp_end_is_contained;
-	Int4 hsp_cnt=0, index, index1;
+	Int4 hsp_cnt=0, index, index1, next_offset, query_length;
+
+	/* helper contains most frequently used information to speed up access. */
+        helper = Malloc((*hspcnt)*sizeof(BLAST_HSP_helper));
 
 	for (index=0; index<(*hspcnt); index++)
 	{
 		hsp_start_is_contained = FALSE;
 		hsp_end_is_contained = FALSE;
 		hsp = hsp_array[index];
+        /* This prefetches this value for the test below. */
+                next_offset = hsp->query.offset;
 
 		for (index1=0; index1<index; index1++)
 		{
@@ -6931,6 +7449,14 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 			hsp1 = hsp_array[index1];
 			if (hsp1 == NULL)
 				continue;
+
+
+                        /* Check with the helper array whether further
+                                tests are warranted.  Having only two ints
+                                in the helper array speeds up access. */
+                        if (helper[index1].qoffset <= next_offset &&
+                                helper[index1].qend >= next_offset)
+                        {
 
 			if (CONTAINED_IN_HSP(hsp1->query.offset, hsp1->query.end, hsp->query.offset, hsp1->subject.offset, hsp1->subject.end, hsp->subject.offset) == TRUE)
 			{	/* Check that it's on diff. strands. */
@@ -6944,6 +7470,7 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 			{
 				break;
 			}
+			}
 		}
 
 		if (hsp_start_is_contained == FALSE ||
@@ -6954,20 +7481,41 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 #ifdef BLAST_COLLECT_STATS
 			search->real_gap_number_of_hsps++;
 #endif
+/*
 			Nlm_MemSet((VoidPtr) &(hsp_array[index]->hsp_link), 0, sizeof(BLAST_HSP_LINK));
 			hsp_array[index]->linked_set = FALSE;
 			hsp_array[index]->start_of_chain = FALSE;
 			hsp_array[index]->num = 0;
 			hsp_array[index]->sumscore = 0;
+*/
 
 			gap_align->query = search->context[hsp->context].query->sequence;
-			gap_align->subject = subject;
 			gap_align->query_length = search->context[hsp->context].query->length;
-			gap_align->subject_length = subject_length;
 			gap_align->q_start = hsp->query.gapped_start;
 			gap_align->s_start = hsp->subject.gapped_start;
+
+                        gap_align->subject = subject;
+                        gap_align->subject_length = subject_length;
+
 			if (hsp->subject.gapped_start >= 0)
 				PerformNtGappedAlignment(gap_align);
+
+                        query_length =
+                           search->query_context_offsets[search->first_context+1] - 1;
+                        if (gap_align->query_start / query_length != 
+                            (gap_align->query_stop - 1) / query_length) {
+                           if (query_length - gap_align->query_start > 
+                               gap_align->query_stop - query_length) {
+                              gap_align->subject_stop -= 
+                                 (gap_align->query_stop - query_length + 1);
+                              gap_align->query_stop = query_length - 1;
+                           } else {
+                              gap_align->subject_start += 
+                                 (query_length + 1 - gap_align->query_start);
+                              gap_align->query_start = query_length + 1;
+                           }
+                        }
+
 			hsp->query.offset = gap_align->query_start;
 			hsp->subject.offset = gap_align->subject_start;
 	/* The end is one further for BLAST than for the gapped align. */
@@ -6979,34 +7527,32 @@ BlastNtGappedScoreInternal(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subj
 /* TLM */
 			hsp->evalue = BlastKarlinStoE_simple(hsp->score, search->sbp->kbp[search->first_context], search->searchsp_eff);
 			hsp_cnt++;
+                        /* Fill in the helper structure. */
+                        helper[index].qoffset = hsp->query.offset;
+                        helper[index].qend = hsp->query.end;
 		}
 		else
 		{ /* Contained within another HSP, delete. */
 			hsp_array[index] = MemFree(hsp_array[index]);
 		}
 	}
+	helper = MemFree(helper);
 
 	hsp_cnt = CheckGappedAlignmentsForOverlap(search, hsp_array, *hspcnt, 0);
 
 	if (hsp_cnt < (*hspcnt))
 	{
 /* Save HSP's again, discarding those that have been NULLed out. */
-		hsp_array_new = MemNew(hspmax*sizeof(BLAST_HSPPtr));
 		index1 = 0;
-		for (index=0; index<(*hspcnt_max); index++)
+		for (index=0; index<(*hspcnt); index++)
 		{
 			if (hsp_array[index] != NULL)
 			{
-				hsp_array_new[index1] = hsp_array[index];
+				hsp_array[index1] = hsp_array[index];
 				index1++;
 			}
 		}
 
-		hsp_array = MemFree(hsp_array);
-
-		*hspcnt = index1;	
-		*hspcnt_max = index1;	
-		hsp_array = hsp_array_new;
 	}
 	*hspcnt = hsp_cnt;
 
@@ -7136,10 +7682,6 @@ static void BLASTCheckHSPInclusion(BLAST_HSPPtr *hsp_array, Int4 hspcnt,
 	Take a BLAST_HSPPtr (array of HSP's) and get a traceback for them.
 */
 
-#ifndef ENABLE_NEW_TBLASTN
-#define ENABLE_NEW_TBLASTN 0
-#endif
-
 Int4
 RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject, Int4 subject_length, Uint1Ptr rev_subject, Int4 rev_subject_length, SeqIdPtr subject_id, BLAST_HSPPtr *hsp_array, Int4 hspcnt, SeqAlignPtr *head, BlastHitRangePtr bhrp, Int4 min_score_to_keep, Boolean reverse, Int4 ordinal_id, Boolean do_traceback)
 
@@ -7162,6 +7704,7 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     BLAST_HitListPtr real_hitlist;
     SeqIdPtr query_id, new_subject_seqid, seqid_tmp;
     Int4 i;
+    Int4 max_start = MAX_DBSEQ_LEN / 2, start_shift;
     
     pbp = search->pbp;
     MemSet(&result_hsp, 0, sizeof(BLASTResultHsp));
@@ -7286,7 +7829,9 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                 gap_align->translate1 = TRUE;
                 gap_align->translate2 = FALSE;
             }
-            if (StringCmp(search->prog_name, "tblastn") == 0) {
+
+            if (StringCmp(search->prog_name, "tblastn") == 0 ||
+                StringCmp(search->prog_name, "psitblastn") == 0) {
                 gap_align->translate1 = FALSE;
                 gap_align->translate2 = TRUE;
                 if (translated_subject == NULL) {
@@ -7313,7 +7858,7 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
             }
             
             /* these should both only be zero for blastn. */
-            if (!search->pbp->is_ooframe && ( !search->pbp->is_megablast_search && ((hsp->query.gapped_start == 0 && hsp->subject.gapped_start == 0) ||
+            if (!search->pbp->is_ooframe && (!search->pbp->is_megablast_search && ((hsp->query.gapped_start == 0 && hsp->subject.gapped_start == 0) ||
                 CheckStartForGappedAlignment(search, hsp, gap_align->query, gap_align->subject, search->sbp->matrix) == FALSE))) {
                 max_offset = GetStartForGappedAlignment(search, hsp, gap_align->query, gap_align->subject, search->sbp->matrix);
                 gap_align->q_start = max_offset;
@@ -7334,27 +7879,45 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
                 }
             }
             
+            if (gap_align->s_start > max_start) {
+               start_shift = (gap_align->s_start / max_start) * max_start;
+               gap_align->subject = gap_align->subject + start_shift;
+               
+               gap_align->s_start %= max_start;
+            } else
+               start_shift = 0;
+
+            gap_align->subject_length =
+               MIN(gap_align->subject_length - start_shift, 
+                   gap_align->s_start + hsp->subject.length + max_start);
+
+
+
             if (do_traceback)
                 PerformGappedAlignmentWithTraceback(gap_align);
             else
                 PerformGappedAlignment(gap_align);
-            
+           
             if (gap_align->score >= min_score_to_keep) {
                 
                 if(search->pbp->is_ooframe) {
-                    hsp->query.offset = gap_align->subject_start;
+                    hsp->query.offset = gap_align->subject_start + start_shift;
                     hsp->subject.offset = gap_align->query_start;
                     /* The end is one further for BLAST than for the gapped align. */
-                    hsp->query.end = gap_align->subject_stop + 1;
+                    hsp->query.end = gap_align->subject_stop + 1 + start_shift;
                     hsp->subject.end = gap_align->query_stop + 1;
                 } else {
                     hsp->query.offset = gap_align->query_start;
-                    hsp->subject.offset = gap_align->subject_start;
+                    hsp->subject.offset = gap_align->subject_start + start_shift;
                     /* The end is one further for BLAST than for the gapped align. */
                     hsp->query.end = gap_align->query_stop + 1;
-                    hsp->subject.end = gap_align->subject_stop + 1;
+                    hsp->subject.end = gap_align->subject_stop + 1 + start_shift;
                 }
                 
+                if (gap_align->edit_block && start_shift > 0) {
+                   gap_align->edit_block->start2 += start_shift;
+                   gap_align->edit_block->length2 += start_shift;
+                }
                 hsp->query.length = hsp->query.end - hsp->query.offset;
                 hsp->subject.length = hsp->subject.end - hsp->subject.offset;
                 hsp->score = gap_align->score;
@@ -7372,17 +7935,17 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 				/* only one alignment considered for blast[np]. */
 				/* This may be changed by LinkHsps for blastx or tblastn. */
                 hsp->num = 1;
-		if (search->prog_number == blast_type_tblastn && 
-                    ENABLE_NEW_TBLASTN) 
+		if ((search->prog_number == blast_type_tblastn ||
+		     search->prog_number == blast_type_psitblastn) && 
+                    search->pbp->longest_intron > 0) 
                    hsp->evalue = BlastKarlinStoE_simple(hsp->score, search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
-
 
                 for (index2=0; index2<index && keep == TRUE; index2++) {
                     hsp2 = hsp_array[index2];
                     if (hsp2 == NULL)
                         continue;
                     
-                    /* Check if both HSP's start on or end on the same digonal (and are on same strands). */
+                    /* Check if both HSP's start or end on the same diagonal (and are on same strands). */
                     if (((hsp->query.offset == hsp2->query.offset &&
                           hsp->subject.offset == hsp2->subject.offset) ||
                          (hsp->query.end == hsp2->query.end &&
@@ -7426,8 +7989,10 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     BLASTCheckHSPInclusion(hsp_array, hspcnt, pbp->is_ooframe);
     
     /* Make up fake hitlist, relink and rereap. */
-    if (StringCmp(search->prog_name, "blastx") == 0 || 
-        StringCmp(search->prog_name, "tblastn") == 0) {
+
+    if (StringCmp(search->prog_name, "blastx") == 0 ||
+        StringCmp(search->prog_name, "tblastn") == 0 ||
+        StringCmp(search->prog_name, "psitblastn") == 0) {
         hspcnt = HspArrayPurge(hsp_array, hspcnt, FALSE);
         tmp_hitlist = (BLAST_HitListPtr) MemNew(sizeof(BLAST_HitList));
         real_hitlist = search->current_hitlist;
@@ -7441,10 +8006,19 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
            the functions that need it */
         search->subject->length = subject_length;
         
+        if (search->prog_number == blast_type_tblastn &&
+            search->pbp->longest_intron > 0)
+           BlastSequenceAddSequence(search->subject, NULL, subject-1, 
+                                    subject_length, subject_length, 0);
+        
         if (search->pbp->do_sum_stats == TRUE)
             BlastLinkHsps(search);
         else
             BlastGetNonSumStatsEvalue(search);
+        
+        if (search->prog_number == blast_type_tblastn &&
+            search->pbp->longest_intron > 0)
+           search->subject->sequence_start = search->subject->sequence = NULL;
         
         BlastReapHitlistByEvalue(search);
         
@@ -7534,7 +8108,8 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
     
     gi_list = SeqIdSetFree(gi_list);
     
-    if (StringCmp(search->prog_name, "tblastn") == 0 && 
+    if ((StringCmp(search->prog_name, "tblastn") == 0 ||
+         StringCmp(search->prog_name, "psitblastn") == 0)&&
         translated_subject_orig) {
         for (index=0; index<8; index++) {
             MemFree(translated_subject_orig[index]);
@@ -7828,8 +8403,7 @@ BlastPreliminaryGappedScore (BlastSearchBlkPtr search, Uint1Ptr subject, Int4 su
 	GapAlignBlkPtr gap_align;
 	Int2 status;
 	Int4 hspcnt_max;
-	Int4 index, max_offset = 0, query_length;
-	Nlm_FloatHi e_value;
+	Int4 index, max_offset = 0, query_length, min_score;
 	BLAST_ParameterBlkPtr pbp;
 
 	if (search == NULL)
@@ -7842,6 +8416,8 @@ BlastPreliminaryGappedScore (BlastSearchBlkPtr search, Uint1Ptr subject, Int4 su
 		search->gap_align = GapAlignBlkNew(1, 1);
 	}
 	gap_align = search->gap_align;
+
+	min_score = search->pbp->cutoff_s1;
 
 	status = 0;
 	hitlist = search->current_hitlist;
@@ -7869,8 +8445,10 @@ BlastPreliminaryGappedScore (BlastSearchBlkPtr search, Uint1Ptr subject, Int4 su
 		}
 
 		/* The first HSP has the highest score. */
+/*
 		e_value = BlastKarlinStoE_simple(hsp->score, search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
-		if (e_value <= pbp->cutoff_e)
+*/
+		if (hsp->score >= min_score)
 		{
 #ifdef BLAST_COLLECT_STATS
 			search->prelim_gap_no_contest++;
@@ -7945,8 +8523,10 @@ BlastPreliminaryGappedScore (BlastSearchBlkPtr search, Uint1Ptr subject, Int4 su
 	/* Perform only if the query's required start corresponds to a point after the start of the subject. */
 			if (gap_align->s_start >= 0)
 				PerformGappedAlignment(gap_align);
+/*
 			e_value = BlastKarlinStoE_simple(gap_align->score, search->sbp->kbp_gap[search->first_context], search->searchsp_eff);
-			if (e_value <= pbp->cutoff_e)
+*/
+			if (gap_align->score >= min_score)
 			{	/* Found one, stop looking. */
 				hitlist->further_process = TRUE;
 				status = 1;
@@ -8340,9 +8920,10 @@ BlastHitListPurge(BLAST_HitListPtr hitlist)
 	else
 		hspcnt_max = hitlist->hspcnt_max;
 
-	for (index=0; index<hspcnt_max; index++) 
-	   hsp_array[index] = MemFree(hsp_array[index]);
-	
+	for (index=0; index<hspcnt_max; index++) {
+           hsp_array[index] = MemFree(hsp_array[index]);
+        }	
+
 	hitlist->hspcnt = 0;
 	hitlist->hspcnt_max = 0;
 	hitlist->further_process = FALSE;
@@ -8464,8 +9045,7 @@ CheckHspOverlap (BLAST_HSPPtr PNTR hsp_array, BLAST_HSPPtr hsp2, Int4 hspcnt, Bo
 
 static void OOF_TranslateHspToDNAP(BLAST_HSPPtr hspp, Int4 length)
 {
-    BLAST_HitListPtr hlst;
-    Int4 i, from, to, frame;
+    Int4 from, to, frame;
             
     from = hspp->query.offset;
     to = hspp->query.end;
@@ -8491,7 +9071,7 @@ BlastSaveCurrentHsp(BlastSearchBlkPtr search, BLAST_Score score, Int4 q_offset, 
 
 {
 	BLAST_HitListPtr current_hitlist;
-	BLAST_HSPPtr PNTR hsp_array, PNTR hsp_array_new, new_hsp;
+	BLAST_HSPPtr PNTR hsp_array, new_hsp;
 	BLAST_Score highscore, lowscore;
 	Int4 hspcnt, hspmax, index, new_index, high_index, old_index, low_index;
 
@@ -8642,10 +9222,9 @@ BlastSaveCurrentHspGapped(BlastSearchBlkPtr search, BLAST_Score score,
 
 {
 	BLAST_HitListPtr current_hitlist;
-	BLAST_HSPPtr PNTR hsp_array, PNTR hsp_array_new, new_hsp;
+	BLAST_HSPPtr PNTR hsp_array, new_hsp;
 	BLAST_Score highscore, lowscore;
 	Int4 hspcnt, hspmax, index, new_index, high_index, old_index, low_index;
-
 	current_hitlist = search->current_hitlist;
 	hsp_array = current_hitlist->hsp_array;
 	hspcnt = current_hitlist->hspcnt;
@@ -9274,6 +9853,9 @@ BlastGetProgramName(Uint1 number)
 		case blast_type_tblastx:
 			string = StringSave("tblastx");
 		break;
+	        case blast_type_psitblastn:
+                        string = StringSave("psitblastn");
+		break;
 		default:
 			string = NULL;
 		break;
@@ -9310,6 +9892,10 @@ BlastGetProgramNumber(CharPtr blast_program)
 	{
 		return blast_type_tblastn;
 	}
+        else if (StringICmp("psitblastn", blast_program) == 0)
+	  {
+                return blast_type_psitblastn;
+	  }
 	else if (StringICmp("tblastx", blast_program) == 0)
 	{
 		return blast_type_tblastx;
@@ -9358,6 +9944,11 @@ BlastGetTypes(CharPtr blast_program, Boolean PNTR query_is_na, Boolean PNTR db_i
 	{
 		*query_is_na = FALSE;
 		*db_is_na = TRUE;
+	}
+        else if (align_type == blast_type_psitblastn)
+	{
+                *query_is_na = FALSE;
+                *db_is_na = TRUE;
 	}
 	else if (align_type == blast_type_tblastx)
 	{
@@ -10199,14 +10790,16 @@ BlastPopulateAllWordArrays(Int4 wordsize, Int4 alphabet_size)
 {
 	BlastAllWordPtr all_words;
 	Uint1Ptr *array_ptr, *array;
+	Uint1Ptr array_storage;
 	register Int4 index, index1, index3, num_of_cols, times, repeat_num;
 	register Int1 index2;
 	num_of_cols = (Int4) Nlm_Powi((Nlm_FloatHi)alphabet_size, wordsize-1);
 	array = (Uint1Ptr *) MemNew(num_of_cols*sizeof(Uint1Ptr));
 
+	array_storage = (Uint1Ptr) MemNew(num_of_cols*(wordsize-1)*sizeof(Uint1));
 	for (index=0; index<num_of_cols; index++)
 	{
-	    array[index] = (Uint1Ptr) MemNew((wordsize-1)*sizeof(Uint1));
+	    array[index] = array_storage+(index*(wordsize-1));
 	}
 
 	for (index=0; index<wordsize-1; index++)
@@ -10231,6 +10824,7 @@ BlastPopulateAllWordArrays(Int4 wordsize, Int4 alphabet_size)
 	if (all_words)
 	{
 		all_words->array = array;
+		all_words->array_storage = array_storage;
 	}
 
 	return all_words;

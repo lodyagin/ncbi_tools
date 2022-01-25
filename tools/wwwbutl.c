@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 6.20 2000/10/16 22:18:35 shavirin Exp $
+/* $Id: wwwbutl.c,v 6.25 2001/02/16 15:53:17 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,27 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.20 $
+* $Revision: 6.25 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 6.25  2001/02/16 15:53:17  dondosha
+* Cosmetic change
+*
+* Revision 6.24  2001/01/05 18:18:28  dondosha
+* Change reward and penalty scores depending on percent identity
+*
+* Revision 6.23  2001/01/05 18:07:15  dondosha
+* Added handling of word size and percent identity fields for options creation
+*
+* Revision 6.22  2000/11/16 22:35:40  dondosha
+* Added lower case masking option and endpoints results option
+*
+* Revision 6.21  2000/10/31 20:21:26  shavirin
+* Fixed bug with RedoAlignmentCore filtering.
+*
 * Revision 6.20  2000/10/16 22:18:35  shavirin
 * Added possibility to perform OOF blastx
 *
@@ -735,9 +750,9 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     BLAST_OptionsBlkPtr options;
     Char tmp[128];
     Int4 i, value;
-    Boolean is_megablast = FALSE;
+    Boolean is_megablast = FALSE, mask_lower_case = FALSE;
     SeqLocPtr query_slp = NULL, query_lcase_mask = NULL;
-
+    
     /* PROGRAM */
     
     if((chptr = WWWGetValueByName(theInfo->info, "PROGRAM")) != NULL) {
@@ -803,10 +818,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
         
 	chptr = sequence;
         theInfo->query_slp = NULL;
-        StrCpy(delimiters, " \t\n,;");
-        delimiters[5] = '\015'; /* ^M that appears at the end of the line in the 
-                                   browser */
-        delimiters[6] = '\0';
+        StrCpy(delimiters, " \t\n,;\r");
 
         while (outptr = StringTokMT(chptr, delimiters, &chptr)) {
 
@@ -912,6 +924,11 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     }
 #endif
     
+    /* LCASE_MASK */
+    if (WWWGetValueByName(theInfo->info, "LCASE_MASK") != NULL)
+       mask_lower_case = TRUE;
+
+
     /* Creating Bioseq */
         
     if (theInfo->query_bsp == NULL) {
@@ -932,7 +949,9 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
                                           prefix, &ctr, &mask_slp)) != NULL) {
              sequence = outptr;
 	     if (mask_slp) {
-		if (!last_mask)
+                if (!mask_lower_case)
+                   SeqLocFree(mask_slp);
+		else if (!last_mask)
 		   query_lcase_mask = last_mask = mask_slp;
 		else {
 		   last_mask->next = mask_slp;
@@ -1004,10 +1023,21 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if (is_megablast) {
        options->is_megablast_search = TRUE;
        options->query_lcase_mask = query_lcase_mask;
-       options->wordsize = 28; /* Default different from other BLAST programs */
+       /* WORD SIZE */
+       options->wordsize = 28;
+       if((chptr = WWWGetValueByName(theInfo->info, "WORD_SIZE")) != NULL &&
+          StringStr(chptr, "default") == NULL) {
+          options->wordsize = atoi(chptr);
+       }
        options->gap_open = 0;
        options->gap_extend = 0;
        options->block_width = 0;
+       /* Mega BLAST with no traceback (endpoints only)? */
+       if (WWWGetValueByName(theInfo->info, "ENDPOINTS") != NULL)
+          options->no_traceback = TRUE;
+       if ((chptr = WWWGetValueByName(theInfo->info, "PERC_IDENT")) != NULL && 
+           StringStr(chptr, "default") == NULL)
+          options->perc_identity = (FloatLo) atof(chptr);
     }
 
     theInfo->options = options;
@@ -1055,8 +1085,28 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     }
 
     if (!StringICmp(theInfo->program, "blastn")) {
-	options->penalty = -3;
-	options->reward = 1;
+       if (options->perc_identity > 98.0 || options->perc_identity <= 0) {
+          options->reward = 1;
+          options->penalty = -3;
+       } else if (options->perc_identity > 95.0) {
+          options->reward = 2;
+          options->penalty = -5;
+       } else if (options->perc_identity > 90.0) {
+          options->reward = 1;
+          options->penalty = -2;
+       } else if (options->perc_identity > 85.0) {
+          options->reward = 2;
+          options->penalty = -3;
+       } else if (options->perc_identity > 80.0) {
+          options->reward = 3;
+          options->penalty = -4;
+       } else if (options->perc_identity > 75.0) {
+          options->reward = 5;
+          options->penalty = -6;
+       } else {
+          options->reward = 1;
+          options->penalty = -1;
+       } 
     }
 
     if((chptr = WWWGetValueByName(theInfo->info, "GAP_SIZE")) != NULL &&
@@ -1816,7 +1866,7 @@ SplitSeqAlign(SeqAlignPtr seqalign, SeqAlignPtr *GoodSeqAlignment_ptr,
     return TRUE;
 }
 
-static Boolean TestSTDOut(void)
+Boolean TestSTDOut(void)
 {
     if(write(1, "", 0) < 0) {
 	return FALSE;
@@ -1831,7 +1881,11 @@ static int LIBCALLBACK WWWTickCallback(Int4 sequence_number,
 	return -1;
     }
     
-    fprintf(stdout, ".");
+    /*    fprintf(stdout, "."); */
+
+    printf("<!-- Progress msg from the server %d %d-->\n", 
+           sequence_number, number_of_positive_hits);
+
     fflush(stdout);
     
     return 1;
@@ -1882,7 +1936,7 @@ static void PrintRequestHeader(WWWBlastInfoPtr theInfo)
                        stdout, TRUE);
     free_buff();
 
-    fprintf(stdout, "Searching");
+    fprintf(stdout, "Searching please wait...");
     
     fflush(stdout);
     
@@ -2000,7 +2054,7 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
     SeqIdPtr   sip, all_sip = NULL;
 
     BlastSearchBlkPtr search;
-    BLAST_ScorePtr PNTR posMatrix;
+    BLAST_ScorePtr PNTR posMatrix = NULL;
     compactSearchItems *compactSearch = NULL;
     posSearchItems *posSearch;
     CharPtr CHARPosFreqs_last;
@@ -2295,8 +2349,13 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
     search->sbp->posMatrix = posMatrix;
     
     search->thr_info->tick_callback = WWWTickCallback;
-    
+
+    ReadDBBioseqFetchEnable("psiblast", theInfo->database, 
+                            FALSE, TRUE);    
+    printf("</PRE>\n");
     print_data->seqalign = BioseqBlastEngineCore(search, theInfo->options, posMatrix);
+
+    ReadDBBioseqFetchDisable();
 
 #if 0
     if(seqalign) {
@@ -2319,7 +2378,6 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
         MemFree(compactSearch->standardProb);
         MemFree(compactSearch);
 
-        ReadDBBioseqFetchDisable();
         
 	/* Encode matrix for the use in the next step*/
     }

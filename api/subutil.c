@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.34 $
+* $Revision: 6.37 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.37  2001/02/14 23:58:42  kans
+* handle BioseqseqSet_class_eco_set
+*
+* Revision 6.36  2001/01/25 19:55:13  kans
+* added AddGenBankSetToSubmission for patents and other bulk submissions of unrelated sequences
+*
+* Revision 6.35  2000/11/15 23:17:59  kans
+* gene ontology user object functions
+*
 * Revision 6.34  2000/09/25 23:19:52  kans
 * mrna prot link user object now uses fasta long on the single best id, preferring refseq
 *
@@ -860,7 +869,7 @@ NLM_EXTERN SeqEntryPtr AddSeqOnlyToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 15)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -1101,7 +1110,7 @@ NLM_EXTERN SeqEntryPtr AddSegmentedSeqToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 15)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -1498,6 +1507,13 @@ NLM_EXTERN SeqEntryPtr AddMutSetToSubmission (
 	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_mut_set);
 }
 
+NLM_EXTERN SeqEntryPtr AddGenBankSetToSubmission (
+	NCBISubPtr submission )
+
+{
+	return AddPopPhyMutSetToSubmission (submission, BioseqseqSet_class_genbank);
+}
+
 /*****************************************************************************
 *
 *   Build nuc-prot sets
@@ -1524,7 +1540,7 @@ NLM_EXTERN SeqEntryPtr AddNucProtToSubmission (
 		if (tmp != NULL && tmp->choice == 2 && tmp->data.ptrvalue != NULL) {
 			targetbssp = (BioseqSetPtr) tmp->data.ptrvalue;
 			if (targetbssp->_class == 7 ||
-			    (targetbssp->_class >= 13 && targetbssp->_class <= 15)) {
+			    (targetbssp->_class >= 13 && targetbssp->_class <= 16)) {
 				tmp = targetbssp->seq_set;
 			}
 		}
@@ -4525,5 +4541,131 @@ NLM_EXTERN UserObjectPtr CreateContigCloneUserObject (CharPtr name, Int4 ID)
   last->next = ufp;
 
   return uop;
+}
+
+/* gene ontology user object manipulation */
+
+NLM_EXTERN UserObjectPtr CreateGeneOntologyUserObject (
+  void
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("GeneOntology");
+  uop->type = oip;
+
+  return uop;
+}
+
+NLM_EXTERN void AddToGeneOntologyUserObject (
+  UserObjectPtr uop,
+  CharPtr type,
+  CharPtr text,
+  Int4 goid,
+  Int4 pmid,
+  CharPtr evidence
+)
+
+{
+  UserFieldPtr  curr;
+  UserFieldPtr  entry;
+  UserFieldPtr  last;
+  UserFieldPtr  prev = NULL;
+  ObjectIdPtr   oip;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL || type == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "GeneOntology") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, type) == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave (type);
+    curr->label = oip;
+    curr->choice = 11; /* user fields */
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 11) return;
+
+  /* curr is now the top level Process, Component, or Function */
+
+  entry = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  entry->label = oip;
+  entry->choice = 11;
+
+  if (curr->data.ptrvalue == NULL) {
+    curr->data.ptrvalue = (Pointer) entry;
+  } else {
+    for (prev = (UserFieldPtr) curr->data.ptrvalue; prev->next != NULL; prev = prev->next) continue;
+    prev->next = entry;
+  }
+
+  /* entry is now in the appropriate list */
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("text string");
+  ufp->label = oip;
+  ufp->choice = 1; /* visible string */
+  ufp->data.ptrvalue = (Pointer) StringSave (text);
+
+  entry->data.ptrvalue = (Pointer) ufp;
+  last = ufp;
+
+  if (goid > 0) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("go id");
+    ufp->label = oip;
+    ufp->choice = 2; /* integer */
+    ufp->data.intvalue = goid;
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (pmid > 0) {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("pubmed id");
+    ufp->label = oip;
+    ufp->choice = 2; /* integer */
+    ufp->data.intvalue = pmid;
+    last->next = ufp;
+    last = ufp;
+  }
+
+  if (evidence != NULL && *evidence != '\0') {
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("evidence");
+    ufp->label = oip;
+    ufp->choice = 1; /* visible string */
+    ufp->data.ptrvalue = (Pointer) StringSave (evidence);
+    last->next = ufp;
+    last = ufp;
+  }
 }
 

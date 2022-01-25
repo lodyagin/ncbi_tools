@@ -1,4 +1,4 @@
-/* $Id: ncbisock.c,v 6.2 2000/02/25 16:45:54 vakatov Exp $
+/* $Id: ncbisock.c,v 6.3 2000/12/07 19:16:59 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,9 @@
  *
  * ---------------------------------------------------------------------------
  * $Log: ncbisock.c,v $
+ * Revision 6.3  2000/12/07 19:16:59  vakatov
+ * Use new NCBI_SOCKET API imported from the C++ Toolkit
+ *
  * Revision 6.2  2000/02/25 16:45:54  vakatov
  * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
  * the C++ toolkits, and even to use them in a "standalone" fashion
@@ -90,6 +93,7 @@
 #undef NCBISOCK__H
 
 #include <connect/ncbi_socket.h>
+#include <connect/ncbi_util.h>
 
 
 /* EIO_Status <--> ESOCK_ErrCode
@@ -199,12 +203,12 @@ static int/*fake*/ s_Initialize(void)
         MT_LOCK lk =
           MT_LOCK_Create(rw_lock, s_MT_LOCK_Handler, s_MT_LOCK_Cleanup);
         ASSERT(lk);
-        SOCK_SetLOCK(lk);
+        CORE_SetLOCK(lk);
       }
     }
 
     /* Error posting */
-    SOCK_SetLOG( LOG_Create(0, s_LOG_Handler, 0, 0) );
+    CORE_SetLOG( LOG_Create(0, s_LOG_Handler, 0, 0) );
 
     /* API initialization */
     {{
@@ -429,7 +433,7 @@ NLM_EXTERN ESOCK_ErrCode Nlm_SOCK_PushBack
 
 NLM_EXTERN Nlm_Boolean Nlm_SOCK_Eof(SOCK sock)
 {
-    return SOCK_Eof(sock) ? TRUE : FALSE;
+    return (SOCK_Status(sock, eIO_Read) == eIO_Closed);
 }
 
 
@@ -496,7 +500,7 @@ NLM_EXTERN Nlm_Boolean Nlm_Uint4toInaddr
  Nlm_Uint4 buf_len)
 {
   INITIALIZE;
-  return SOCK_host2inaddr((unsigned int) ui4_addr, buf, (size_t) buf_len) ?
+  return SOCK_ntoa((unsigned int) ui4_addr, buf, (size_t) buf_len) ?
     FALSE : TRUE;
 }
 

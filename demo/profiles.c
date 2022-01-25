@@ -1,4 +1,4 @@
-/* $Id: profiles.c,v 6.30 2000/10/04 13:11:57 madden Exp $
+/* $Id: profiles.c,v 6.32 2000/11/20 14:37:20 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +34,15 @@ Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
 
 =======
- $Revision: 6.30 $
+ $Revision: 6.32 $
 
  $Log: profiles.c,v $
+ Revision 6.32  2000/11/20 14:37:20  madden
+ Changed FileOpen mode for byte-encoded checkpoint files from "r" to "rb" or from "w" to "wb" to solve a problem on Windows NT.
+
+ Revision 6.31  2000/11/08 18:39:52  kans
+ added <sqnutils.h> for Mac compiler, removed UNIX-only headers that are already included by ncbilcl.h for UNIX
+
  Revision 6.30  2000/10/04 13:11:57  madden
  put query translation before call to BlastMaskTheResidues
 
@@ -69,10 +75,13 @@ Contents: main routines for impala program to search a database of
 #include <posit.h>
 #include <profiles.h>
 #include <gapxdrop.h>
-#include <sys/types.h>
 #include <stdlib.h>
+/*
+#include <sys/types.h>
 #include <sys/stat.h>
+*/
 #include <fcntl.h>
+#include <sqnutils.h>
 
 
 /* Used by the callback function. */
@@ -1037,7 +1046,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
      ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open file with all matrices %s\n", matrixListFileName);
 	return (NULL);
    }
-   if ((matrixFileDesc = FileOpen(bigMatrixFileName, "r")) == NULL)  {
+   if ((matrixFileDesc = FileOpen(bigMatrixFileName, "rb")) == NULL)  {
      ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open file with all matrices %s\n", bigMatrixFileName);
 	return (NULL);
    }
@@ -1630,6 +1639,7 @@ Int2  Main(void)
 
 
           search->sbp = BLAST_ScoreBlkNew(Seq_code_ncbistdaa, 1);
+          search->sbp->read_in_matrix = TRUE;
           BlastScoreBlkMatFill(search->sbp, myargs[ARG_MATRIX].strvalue);
 
 	  search->gap_align = GapAlignBlkNew(1,1);
@@ -1739,9 +1749,9 @@ Int2  Main(void)
 		  seqannot->data = prune->sap;
 		  /*need to fix penultimate argument*/
 		  if (myargs[ARG_ALIGN_VIEW].intvalue != 0)
-		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, NULL);
+		    ShowTextAlignFromAnnot2(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, NULL, NULL, NULL);
 		  else
-		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, FormatScoreFunc);
+		    ShowTextAlignFromAnnot2(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, FormatScoreFunc, NULL, NULL);
 		}
 	      seqannot->data = head;
 	      prune = BlastPruneSapStructDestruct(prune);

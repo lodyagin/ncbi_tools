@@ -30,7 +30,7 @@
 #include <tofasta.h>
 #include <sqnutils.h>
 
-#define NUMARG 31
+#define NUMARG 33
 Args myargs[NUMARG] = {
    {"Filename for fasta input","stdin",NULL,NULL,TRUE,'i',ARG_FILE_IN,0.0,0,NULL},
    {"Filename for Seq-submit template","template.sub",NULL,NULL,FALSE,'t',ARG_FILE_IN,0.0,0,NULL},
@@ -63,6 +63,8 @@ Args myargs[NUMARG] = {
    {"SP6 clone (e.g., Contig1,left)",NULL, NULL ,NULL ,TRUE,'6',ARG_STRING,0.0,0,NULL},
    {"T7 clone (e.g., Contig2,right)",NULL, NULL ,NULL ,TRUE,'7',ARG_STRING,0.0,0,NULL},
    {"Filename for phrap contig order",NULL,NULL,NULL,TRUE,'L',ARG_FILE_IN,0.0,0,NULL},
+   {"htgs_fulltop keyword","F", NULL ,NULL ,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
+   {"htgs_activefin keyword","F", NULL ,NULL ,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
 };
 
 /*------------- MakeAc2GBSeqId() -----------------------*/
@@ -525,7 +527,8 @@ Int2 Main(void)
    BioseqSetPtr bssp;
    ValNodePtr vnp, vnp2, PNTR prevpnt, next;
    Boolean   temp_org, temp_comment, lastwasraw, coordsOnMaster,
-      htgsDraft, usedelta = FALSE, do_contig, left_end, right_end;
+      htgsDraft, usedelta = FALSE, do_contig, left_end, right_end,
+      htgsFulltop, htgsActivefin;
    Int2 index = 0;
    ValNodePtr rescuedsgps = NULL, rescuedcontigs = NULL, fragmentgroups = NULL;
    ValNodePtr seqlitlist = NULL;
@@ -534,6 +537,8 @@ Int2 Main(void)
    ResqSeqgphPtr rsp;
    ResqContigPtr rcp;
    CharPtr tool_ver = "fa2htgs 2.1";
+   CharPtr keywords [3];
+   Int2 currkeyword = 0;
 
                /* check command line arguments */
 
@@ -574,6 +579,8 @@ Int2 Main(void)
    sp6_clone = myargs [28].strvalue;
    t7_clone = myargs [29].strvalue;
    contig_table = myargs [30].strvalue;
+   htgsFulltop = (Boolean) myargs[31].intvalue;
+   htgsActivefin = (Boolean) myargs[32].intvalue;
 
    dumsp6 [0] = '\0';
    dumt7 [0] = '\0';
@@ -1058,8 +1065,23 @@ Int2 Main(void)
    if (title != NULL)
       AddTitleToEntry(nsp, the_entry, title);
 
+   keywords [0] = NULL;
+   keywords [1] = NULL;
+   keywords [2] = NULL;
    if (htgsDraft) {
-      AddGenBankBlockToEntry (nsp, the_entry, NULL, NULL, "HTGS_DRAFT", NULL, NULL);
+      keywords [currkeyword] = "HTGS_DRAFT";
+      currkeyword++;
+   }
+   if (htgsFulltop) {
+      keywords [currkeyword] = "HTGS_FULLTOP";
+      currkeyword++;
+   }
+   if (htgsActivefin) {
+      keywords [currkeyword] = "HTGS_ACTIVEFIN";
+      currkeyword++;
+   }
+   if (currkeyword > 0) {
+      AddGenBankBlockToEntry (nsp, the_entry, NULL, NULL, keywords [0], keywords [1], keywords [2]);
    }
 
    if (extra_ac != NULL)

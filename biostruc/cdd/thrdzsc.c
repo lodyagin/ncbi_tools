@@ -1,4 +1,4 @@
-/* $Id: thrdzsc.c,v 1.2 2000/08/16 21:18:57 hurwitz Exp $
+/* $Id: thrdzsc.c,v 1.4 2000/12/14 21:07:58 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.2 $
+* $Revision: 1.4 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdzsc.c,v $
+* Revision 1.4  2000/12/14 21:07:58  hurwitz
+* adding debugging routines, scaling-factor fixes
+*
+* Revision 1.3  2000/11/02 20:54:16  hurwitz
+* added options for z-score calculations, fixed initialization prob
+*
 * Revision 1.2  2000/08/16 21:18:57  hurwitz
 * fix dangerous warnings found by MS Visual C++, replace rand48 functions with toolkit functions
 *
@@ -56,7 +62,7 @@
 Calculates the Z-score by shuffling the aliged region 10000 times. */
 
 float zsc(Thd_Tbl* ttb, Seq_Mtf* psm, Qry_Seq* qsq, Cxl_Los** cpr, Cor_Def* cdf,
-          Rcx_Ptl* pmf, Seg_Gsm* spe, Cur_Aln* sai, Rnd_Smp* pvl) {
+          Rcx_Ptl* pmf, Seg_Gsm* spe, Cur_Aln* sai, Rnd_Smp* pvl, double ScalingFactor) {
 /*---------------------------------------------------------*/
 /* ttb:  Tables to hold Results of Gibbs sampled threading */
 /* qsq:  Sequence to thread with alignment contraints      */
@@ -122,7 +128,8 @@ lsg=pvl->lsg;
 i_max=ttb->mx;
 for(ii=0;ii<n_thr;ii++){
 
-avg=0; avg2=0; ntr=0;
+  avg = avg2 = avgm = avgp = avgm2 = avgp2 = 0.0;
+  ntr=0;
 
 	for(jj=0;jj<qsq->n;jj++)sq[jj]=qsq->sq[jj];
 
@@ -318,12 +325,13 @@ for(i=0;i<nsc;i++) {
 /* Entire energy for a current permutation */
 
 	if(k!=0) {
-		tg=((float)(g+ms+cs+ls))/100000;
-		tgm=((float)(ms))/100000;
-		tgp=((float)(g))/100000;}
+		tg=((float)(g+ms+cs+ls))/ScalingFactor;
+		tgm=((float)(ms))/ScalingFactor;
+		tgp=((float)(g))/ScalingFactor;}
 
-	else
-		tg_max=((float)(g+ms+cs+ls))/100000;
+  else {
+    tg = tgm = tgp = 0.0;
+		tg_max=((float)(g+ms+cs+ls))/ScalingFactor;}
 
 	 avg+=tg;
 	 avg2+=tg*tg;
@@ -346,11 +354,11 @@ for(i=0;i<nsc;i++) {
 	avgm=avgm/n_perm;
 	avgp=avgp/n_perm;
 
-	ttb->zsc[i_max]=100000*(tg_max-avg)/disp;
-	ttb->g0[i_max]=avg*100000;
-	ttb->m0[i_max]=avgm*100000;
-	ttb->errm[i_max]=dispm*100000;
-	ttb->errp[i_max]=dispp*100000;
+	ttb->zsc[i_max]=ScalingFactor*(tg_max-avg)/disp;
+	ttb->g0[i_max]=avg*ScalingFactor;
+	ttb->m0[i_max]=avgm*ScalingFactor;
+	ttb->errm[i_max]=dispm*ScalingFactor;
+	ttb->errp[i_max]=dispp*ScalingFactor;
 
 	i_max=ttb->nx[i_max];
 

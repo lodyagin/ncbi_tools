@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   typedefs and prototypes for routines used internally by asntypes.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asntypes.h,v $
+* Revision 6.2  2000/12/12 15:56:14  ostell
+* added support BigInt
+*
 * Revision 6.1  1997/12/16 14:51:54  kans
 * header needed for asntool/asncode merge
 *
@@ -158,7 +161,7 @@
 #define VALUE_ISA_DEFAULT(x)	(((x) >= VALUE_ISA_PTR) && ((x) <= VALUE_ISA_REAL))
 #define VALUE_ISA_SUBTYPE	10		/* subtype chain */
 #define VALUE_ISA_NAMED_INT 20		/* named int chain */
-
+#define VALUE_ISA_BIGINT 5
 
 /*--
  *

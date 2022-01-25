@@ -1,5 +1,40 @@
 RPS Blast: Reversed Position Specific Blast
 
+
+RPS-BLAST (Reverse PSI-BLAST) searches a query sequence against a database 
+of profiles.  This is the opposite of PSI-BLAST that searches a profile 
+against a database of sequences, hence the 'Reverse'.  RPS-BLAST
+uses a BLAST-like algorithm, finding single- or double-word hits
+and then performing an ungapped extension on these candidate matches.
+If a sufficiently high-scoring ungapped alignment is produced, a gapped
+extension is performed and those (gapped) alignments with sufficiently
+low expect value are reported.  This procedure is in contrast to IMPALA
+that performs a Smith-Waterman calculation between the query and 
+each profile, rather than using a word-hit approach to identify
+matches that should be extended.
+
+RPS-BLAST uses a BLAST database, but also has some other files that
+contain a precomputed lookup table for the profiles to allow the search
+to proceed faster.  Unfortunately it was not possible to make this
+lookup table architecture independent (like the BLAST databases themselves)
+and one cannot take a RPS-BLAST databases prepared on a big-endian
+system (e.g., Solaris Sparc) and run it on a small-endian system
+(e.g., NT).  The RPS-BLAST database must be prepared again for the small-endian
+system.
+
+The CD-Search databases for RPS-BLAST can be found at:
+
+ ftp://ftp.ncbi.nlm.nih.gov/pub/mmdb/cdd/
+
+It is necessary to untar the archive and run copymat and formatdb. 
+It is not necessary to run makemat on the databases from this
+directory.
+
+RPS-BLAST was coded by Sergei Shavirin with some help from Tom Madden.
+RPS-BLAST reuses some of the IMPALA code for precomputing the lookup tables 
+and all of the IMPALA code for evaluating the statistical significance of a match.  
+
+
 1. Binary files used in RPS Blast:
 
 The following binary files are used to setup and run RPS Blast:
@@ -131,13 +166,18 @@ Arguments to copymat
 ATTENTION: "-r" parameter have to be set to TRUE to format data for
            RPS Blast at this step.
 
+NOTE: copymat requires a fair amount of memory as it first constructs
+the the lookup table in memory before writing it to disk.  Users have
+found that they require a machine with at least 500 Meg of memory for this
+task.
+
 2.3 Creating of BLAST database from <database_name> file containing
     all "profile master sequences".
 
 "formatdb" program should be run to create regular BLAST database of all
 "profile master sequences":
 
-    formatdb -i <database_name>    
+    formatdb -i <database_name>    -o T
 
 3. Search
 
@@ -156,40 +196,6 @@ Arguments to RPS Blast
        -1 = length given via -z option to makemat
        default (0) implies  length is actual length of profile library
           adjusted for end effects
-
-4. Directory convention
-
-  Since RPS Blast requires a large number of files, it may be convenient
-to store your RPS Blast files in various directories. For copymat,
-makemat, and rpsblast the following parsing convention applies
-to the string that follows the -P argument.
-If the string starts with a '/', then it is deemed to be a full
-path name. Whatever prefix occurs upto and including the rightmost
-'/' is deemed to be a prefix that should be prepended to all
-file names in the .sn, .pn, and .mn files.
-
-Example: If you call any of the 3 programs including the
-   argument -P /foo/bar/wolf1187
-then
-   /foo/bar/ is prepended to every filename listed in 
-       wolf1187.pn
-       wolf1187.sn
-       wolf1187.mn
-   before opening the file, but the files
-       wolf1187.pn
-       wolf1187.sn
-       wolf1187.mn
-   themselves are not changed.
-
-5. Output
-
-RPS Blast output closely mimics output of BLASTP family programs and
-should be compatible with SEALS BLAST parsers.
-
-Send suggestions, comments, complaints to blast-help@ncbi.nlm.nih.gov
-
-
-
 
 
 

@@ -1,4 +1,4 @@
-/* $Id: thrdatd.c,v 1.8 2000/09/22 22:31:33 hurwitz Exp $
+/* $Id: thrdatd.c,v 1.18 2001/03/02 23:14:12 hurwitz Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,43 @@
 *
 * Initial Version Creation Date: 08/16/2000
 *
-* $Revision: 1.8 $
+* $Revision: 1.18 $
 *
 * File Description: threader
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: thrdatd.c,v $
+* Revision 1.18  2001/03/02 23:14:12  hurwitz
+* run threading faster for PSSM weight=1, bug fix
+*
+* Revision 1.17  2001/01/18 22:33:00  hurwitz
+* fix for print PSSM routine, small change to Gib_Scd
+*
+* Revision 1.16  2001/01/16 17:17:58  hurwitz
+* changed Int4s to ints, added PrintSeqMtf
+*
+* Revision 1.15  2000/12/20 18:56:41  hurwitz
+* new random num gen, more debug printing
+*
+* Revision 1.14  2000/12/14 21:07:58  hurwitz
+* adding debugging routines, scaling-factor fixes
+*
+* Revision 1.13  2000/12/07 14:21:46  hurwitz
+* no return value needed for OrderThdTbl
+*
+* Revision 1.12  2000/12/06 23:36:49  hurwitz
+* sort the results by score in atd
+*
+* Revision 1.11  2000/12/05 20:52:21  hurwitz
+* put threading results in order
+*
+* Revision 1.10  2000/11/22 22:35:54  hurwitz
+* under certain circumstances, relax loop constraints
+*
+* Revision 1.9  2000/11/02 20:54:16  hurwitz
+* added options for z-score calculations, fixed initialization prob
+*
 * Revision 1.8  2000/09/22 22:31:33  hurwitz
 * added memory management of ThdTbl (results structure)
 *
@@ -88,17 +118,19 @@
 #include <ncbimath.h>
 
 int atd(Fld_Mtf* mtf, Cor_Def* cdf, Qry_Seq* qsq, Rcx_Ptl* pmf,
-        Gib_Scd* gsp, Thd_Tbl* ttb, Seq_Mtf* psm, float* trg) {
-/*----------------------------------------------------------*/
-/* mtf:  Contact matrices defining the folding motif        */
-/* cdf:  Core segment locations and loop length limits      */
-/* qsq:  Sequence to thread with alignment contraints       */
-/* pmf:  Potential of mean force as a 3-d lookup table      */
-/* gsp:  Various control parameters for Gibb's sampling     */
-/* ttb:  Tables to hold Results of Gibbs sampled threading  */
-/* psm:  Motif matching parameters                          */
-/* trg:  Will store trajectory energy values                */
-/*----------------------------------------------------------*/
+        Gib_Scd* gsp, Thd_Tbl* ttb, Seq_Mtf* psm, float* trg, int zscs,
+        double ScalingFactor, float PSSM_Weight) {
+/*------------------------------------------------------------------*/
+/* mtf:  Contact matrices defining the folding motif                */
+/* cdf:  Core segment locations and loop length limits              */
+/* qsq:  Sequence to thread with alignment contraints               */
+/* pmf:  Potential of mean force as a 3-d lookup table              */
+/* gsp:  Various control parameters for Gibb's sampling             */
+/* ttb:  Tables to hold Results of Gibbs sampled threading          */
+/* psm:  Motif matching parameters                                  */
+/* trg:  Will store trajectory energy values                        */
+/* zscs: which z scores calculated? 0=none, 1=lowest energy, 2=all  */
+/*------------------------------------------------------------------*/
 
   Cur_Loc *sli;	/* Current locations of core segments in the motif    */
   Cur_Aln *sai;	/* Current alignment of query sequence with core      */
@@ -149,12 +181,62 @@ int atd(Fld_Mtf* mtf, Cor_Def* cdf, Qry_Seq* qsq, Rcx_Ptl* pmf,
  int	al;		/* Current alignment of a core segment                */
  int	of;		/* Current terminus offset from reference position    */
  int	rf;		/* Reference position for a core element              */
+ int  tmp;  /* temp holder for ttb->mx */
+ int  dist, dist2; /* for loop distances */
  float hh;
 
 /*----------------------------------------------------------------------------*/
 /* Function declarations for routines returning non-integer values            */
 /*----------------------------------------------------------------------------*/
 /* float  dgri(); */
+
+
+/*----------------------------------------------------------------------------*/
+/*  if 2 aligned regions on the query sequence are constrained to match       */
+/*  2 adjacent core regions, then make sure the loop constraints are          */
+/*  sufficiently big.                                                         */
+/*  this over-rides the automatically determined loop constraints.            */
+/*----------------------------------------------------------------------------*/
+  /* for each loop between core blocks */
+  for (i=0; i<(cdf->sll.n-1); i++) {
+    /* if 2 aligned blocks on query sequence are constrained to adjacent core blocks */
+    if ((qsq->sac.mn[i] > 0) && (qsq->sac.mn[i+1] > 0)) {
+      /* calculate loop distance of query sequence */
+      dist = (qsq->sac.mn[i+1] - cdf->sll.nomn[i+1]) - (qsq->sac.mn[i] + cdf->sll.comn[i]) - 1;
+      /* if 1.5 times this dist is greater than the loop constraint, then relax the loop constraint */
+      dist = (int) ((double)dist * 1.5);
+      if (dist > cdf->lll.llmx[i+1]) {
+        cdf->lll.llmx[i+1] = dist;
+      }
+    }
+  }
+
+
+/*----------------------------------------------------------------------------*/
+/*  if 2 adjacent aligned regions on the query sequence are constrained to    */
+/*  match 2 core regions that are separated by one intervening core region,   */
+/*  then make sure the loop constraints are sufficiently big.                 */
+/*  this over-rides the automatically determined loop constraints.            */
+/*----------------------------------------------------------------------------*/
+  /* for each pair of core blocks separated by a core block */
+  for (i=0; i<(cdf->sll.n-2); i++) {
+    /* if 2 adjacent aligned blocks on the query sequence are constrained */
+    /* to 2 core blocks separated by an intervening core block */
+    if ((qsq->sac.mn[i] > 0) && (qsq->sac.mn[i+1] <= 0) && (qsq->sac.mn[i+2] > 0)) {
+      /* calculate loop distance of query sequence */
+      dist = (qsq->sac.mn[i+2] - cdf->sll.nomn[i+2]) - (qsq->sac.mn[i] + cdf->sll.comn[i]) - 1;
+      /* calculate length of intervening aligned block */
+      dist2 = cdf->sll.nomn[i+1] + cdf->sll.comn[i+1] + 1;
+      /* relax loop constraints between 2 core blocks and intervening core block */
+      if ((dist - dist2) > cdf->lll.llmx[i+1]) {
+        cdf->lll.llmx[i+1] = dist - dist2;
+      }
+      if ((dist - dist2) > cdf->lll.llmx[i+2]) {
+        cdf->lll.llmx[i+2] = dist - dist2;
+      }
+    }
+  }
+
 
 /*----------------------------------------------------------------------------*/
 /* Retrieve parameters                                                        */
@@ -439,7 +521,8 @@ for(i=0; i<nsc; i++) {
 
 /* Initialize pseudo-random number generation. */
 /* srand48((long)gsp->rsd); */
-RandomSeed((long)gsp->rsd);
+/* RandomSeed((long)gsp->rsd); */
+Rand01(&gsp->rsd);
 
 /* Initialize linked list for storage of top threads */
 ttb0(ttb);
@@ -941,7 +1024,9 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 				spci(cdf,qsq,sli,sai,cs,spc);
 
 				/* Update contact counts. */
-				spni(cpl,sli,cs,spn);
+        if (PSSM_Weight < 0.9999999) {
+  				spni(cpl,sli,cs,spn);
+        }
 
 				/* Update expected contact energy. */
                                 cxei(spn,spc,pmf,cxe);
@@ -965,7 +1050,9 @@ for(i=0;i<nmt;i++) printf("%d ",sli->cr[i]); printf("sli->cr\n");
 			spci(cdf,qsq,sli,sai,cs,spc);
 
 			/* Update contact counts. */
-			spni(cpl,sli,cs,spn);
+      if (PSSM_Weight < 0.9999999) {
+  			spni(cpl,sli,cs,spn);
+      }
 
 			/* Update expected contact energy. */
 			cxei(spn,spc,pmf,cxe);
@@ -1076,9 +1163,31 @@ if(nrs>=gsp->crs) {
 /* End of loop over random starts */
 }
 
-/* Calculate the z_score for a top alignment */
+/* put results in order, from highest score to lowest */
+OrderThdTbl(ttb);
 
-zsc(ttb,psm,qsq,cpr,cdf,pmf,spe,sai,pvl);
+/* Calculate z_scores */
+switch(zscs) {
+  case 0:
+    /* don't calculate any z-scores */
+    break;
+  case 1:
+    /* calculate z-score for top alignment */
+    zsc(ttb,psm,qsq,cpr,cdf,pmf,spe,sai,pvl,ScalingFactor);
+    break;
+  default:
+    /* calculate z-scores for all top alignments */
+    tmp = ttb->mx;
+    for (i=0; i<ttb->n; i++) {
+      ttb->mx = i;
+      zsc(ttb,psm,qsq,cpr,cdf,pmf,spe,sai,pvl,ScalingFactor);
+    }
+    ttb->mx = tmp;
+    break;
+}
+
+/* scale energies back down */
+ScaleThdTbl(ttb, 1.0/ScalingFactor);
 
 /*
 
@@ -1266,15 +1375,47 @@ Cor_Def*  FreeCorDef(Cor_Def* cdfp) {
 }
 
 
+void PrintCorDef(Cor_Def* cdf, FILE* pFile) {
+/*----------------------------------------------------------*/
+/* for debugging.  Print CorDef.                            */
+/*----------------------------------------------------------*/
+  int    i;
+  static Boolean FirstPass = TRUE;
+
+  if (FirstPass == FALSE) return;
+  FirstPass = FALSE;
+
+  fprintf(pFile, "Core Definition:\n");
+  fprintf(pFile, "number of core segments: %4d\n", cdf->sll.n);
+  fprintf(pFile, "   nomx   nomn   rfpt   comn   comx\n");
+  for (i=0; i<cdf->sll.n; i++) {
+    fprintf(pFile, " %6d %6d %6d %6d %6d\n",
+      cdf->sll.nomx[i], cdf->sll.nomn[i], cdf->sll.rfpt[i], cdf->sll.comn[i], cdf->sll.comx[i]);
+  }
+  fprintf(pFile, "number of loops (one more than core segs): %4d\n", cdf->lll.n);
+  fprintf(pFile, "   llmn   llmx   lrfs\n");
+  for (i=0; i<cdf->lll.n; i++) {
+    fprintf(pFile, " %6d %6d %6d\n", cdf->lll.llmn[i], cdf->lll.llmx[i], cdf->lll.lrfs[i]);
+  }
+  fprintf(pFile, "number of fixed segments: %4d\n", cdf->fll.n);
+  fprintf(pFile, "     nt     ct     sq\n");
+  for (i=0; i<cdf->fll.n; i++) {
+    fprintf(pFile, " %6d %6d %6d\n", cdf->fll.nt[i], cdf->fll.ct[i], cdf->fll.sq[i]);
+  }
+  fprintf(pFile, "\n");
+}
+
+
 Seq_Mtf*  NewSeqMtf(int NumResidues, int AlphabetSize) {
 /*----------------------------------------------------------*/
 /*  allocate space for a new pssm.                          */
 /*----------------------------------------------------------*/
-  Int4      i;
+  int       i;
   Seq_Mtf*  pssm;
 
   pssm = (Seq_Mtf*) MemNew(sizeof(Seq_Mtf));
   pssm->n = NumResidues;
+  pssm->AlphabetSize = AlphabetSize;
   pssm->ww =    (int**) MemNew(NumResidues * sizeof(int*));
   pssm->freqs = (int**) MemNew(NumResidues * sizeof(int*));
   for (i=0; i<NumResidues; i++) {
@@ -1289,7 +1430,7 @@ Seq_Mtf*  FreeSeqMtf(Seq_Mtf* pssm) {
 /*----------------------------------------------------------*/
 /*  free pssm.                                              */
 /*----------------------------------------------------------*/
-  Int4  i;
+  int  i;
   
   for (i=0; i<pssm->n; i++) {
     MemFree(pssm->ww[i]);
@@ -1298,6 +1439,41 @@ Seq_Mtf*  FreeSeqMtf(Seq_Mtf* pssm) {
   MemFree(pssm->ww);
   MemFree(pssm->freqs);
   return(MemFree(pssm));
+}
+
+
+void PrintSeqMtf(Seq_Mtf* psm, FILE* pFile) {
+/*----------------------------------------------------------*/
+/*  print the pssm.                                         */
+/*----------------------------------------------------------*/
+  char OutputOrder[] = "ARNDCQEGHILKMFPSTWYV";
+  int  i, j;
+
+  fprintf(pFile, "PSSM:\n");
+  fprintf(pFile, "Number of residues: %4d\n", psm->n);
+  fprintf(pFile, "Weights:\n");
+  for (i=0; i<strlen(OutputOrder); i++) {
+    fprintf(pFile, "%8c ", OutputOrder[i]);
+  }
+  fprintf(pFile, "\n");
+  for (i=0; i<psm->n; i++) {
+    for (j=0; j<strlen(OutputOrder); j++) {
+      fprintf(pFile, "%8d ", psm->ww[i][j]);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "Frequencies:\n");
+  for (i=0; i<strlen(OutputOrder); i++) {
+    fprintf(pFile, "%8c ", OutputOrder[i]);
+  }
+  fprintf(pFile, "\n");
+  for (i=0; i<psm->n; i++) {
+    for (j=0; j<strlen(OutputOrder); j++) {
+      fprintf(pFile, "%8d ", psm->freqs[i][j]);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "\n");
 }
 
 
@@ -1335,12 +1511,47 @@ Qry_Seq*  FreeQrySeq(Qry_Seq* qsqp) {
 }
 
 
+void PrintQrySeq(Qry_Seq* qsqp, FILE* pFile) {
+/*----------------------------------------------------------*/
+/*  for debugging. print query sequence.                    */
+/*----------------------------------------------------------*/
+  int    i, j, Count;
+  char   ResLetters[32];
+
+  /* lookup to give one-letter names of residues */
+  StrCpy(ResLetters, "ARNDCQEGHILKMFPSTWYV");
+
+  fprintf(pFile, "Query Sequence:\n");
+  fprintf(pFile, "number of residues: %4d\n", qsqp->n);
+  Count = 0;
+  for (i=0; i<=qsqp->n/30; i++) {
+    for (j=0; j<30; j++) {
+      fprintf(pFile, "%c ", ResLetters[qsqp->sq[i*30 + j]]);
+      Count++;
+      if (Count == qsqp->n) {
+        fprintf(pFile, "\n");
+        goto Here;
+      }
+    }
+    fprintf(pFile, "\n");
+  }
+
+Here:
+  fprintf(pFile, "number of constraints: %4d\n", qsqp->sac.n);
+  fprintf(pFile, "     mn     mx\n");
+  for (i=0; i<qsqp->sac.n; i++) {
+    fprintf(pFile, " %6d %6d\n", qsqp->sac.mn[i], qsqp->sac.mx[i]);
+  }
+  fprintf(pFile, "\n");
+}
+
+
 Rcx_Ptl*  NewRcxPtl(int NumResTypes, int NumDistances, int PeptideIndex) {
 /*----------------------------------------------------------*/
 /*  allocate space for the contact potential                */
 /*----------------------------------------------------------*/
   Rcx_Ptl*  pmf;
-  Int4      i, j;
+  int       i, j;
 
   pmf = (Rcx_Ptl*) MemNew(sizeof(Rcx_Ptl));
   pmf->rre = (int***) MemNew(NumDistances * sizeof(int**));
@@ -1366,7 +1577,7 @@ Rcx_Ptl*  FreeRcxPtl(Rcx_Ptl* pmf) {
 /*----------------------------------------------------------*/
 /*  free contact potential.                                 */
 /*----------------------------------------------------------*/
-  Int4  i, j;
+  int  i, j;
 
   for (i=0; i<pmf->ndi; i++) {
     for (j=0; j<pmf->nrt; j++) {
@@ -1424,7 +1635,7 @@ Fld_Mtf*  NewFldMtf(int NumResidues, int NumResResContacts, int NumResPepContact
 /*-------------------------------------------------------------*/
 /*  allocate space for contact lists and minimum loop lengths  */
 /*-------------------------------------------------------------*/
-  Int4      i;
+  int       i;
   Fld_Mtf*  mtf;
 
   mtf = (Fld_Mtf*) MemNew(sizeof(Fld_Mtf));
@@ -1449,7 +1660,7 @@ Fld_Mtf*  FreeFldMtf(Fld_Mtf* mtf) {
 /*----------------------------------------------------------*/
 /*  free contact lists and loop lengths                     */
 /*----------------------------------------------------------*/
-  Int4  i;
+  int  i;
 
   MemFree(mtf->rrc.r1);
   MemFree(mtf->rrc.r2);
@@ -1465,11 +1676,40 @@ Fld_Mtf*  FreeFldMtf(Fld_Mtf* mtf) {
 }
 
 
+void PrintFldMtf(Fld_Mtf* mtf, FILE* pFile) {
+/*----------------------------------------------------------*/
+/*  print contact lists and loop lengths.                   */
+/*----------------------------------------------------------*/
+  int    i, j;
+
+  fprintf(pFile, "Contact Lists, Loop Lengths:\n");
+  fprintf(pFile, "Number of residues: %4d\n", mtf->n);
+  fprintf(pFile, "Number of residue-residue contacts: %6d\n", mtf->rrc.n);
+  fprintf(pFile, "res index 1,  res index 2,  Distance interval\n");
+  for (i=0; i<mtf->rrc.n; i++) {
+    fprintf(pFile, "  %9d  %12d  %18d\n", mtf->rrc.r1[i], mtf->rrc.r2[i], mtf->rrc.d[i]);
+  }
+  fprintf(pFile, "Number of residue-peptide contacts: %6d\n", mtf->rpc.n);
+  fprintf(pFile, "res index,  peptide index,  Distance interval\n");
+  for (i=0; i<mtf->rpc.n; i++) {
+    fprintf(pFile, "  %7d  %14d  %18d\n", mtf->rpc.r1[i], mtf->rpc.p2[i], mtf->rpc.d[i]);
+  }
+  fprintf(pFile, "Minimum loop lengths:\n");
+  for (i=0; i<mtf->n; i++) {
+    for (j=0; j<mtf->n; j++) {
+      fprintf(pFile, " %4d", mtf->mll[i][j]);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "\n");
+}
+
+
 Thd_Tbl*  NewThdTbl(int NumResults, int NumCoreElements) {
 /*----------------------------------------------------------*/
 /*  allocate space for results.                             */
 /*----------------------------------------------------------*/
-  Int4      i;
+  int       i;
   Thd_Tbl*  ttb;
 
   ttb = (Thd_Tbl*) MemNew(sizeof(Thd_Tbl));
@@ -1506,7 +1746,7 @@ Thd_Tbl*  FreeThdTbl(Thd_Tbl* ttb) {
 /*----------------------------------------------------------*/
 /*  free results.                                           */
 /*----------------------------------------------------------*/
-  Int4  i;
+  int  i;
 
   MemFree(ttb->tg);
   MemFree(ttb->ps);
@@ -1532,4 +1772,194 @@ Thd_Tbl*  FreeThdTbl(Thd_Tbl* ttb) {
   MemFree(ttb->no);
   MemFree(ttb->co);
   return(MemFree(ttb));
+}
+
+
+void PrintThdTbl(Thd_Tbl* ttb, FILE* pFile) {
+/*------------------------------------------------------------------------------*/
+/* print the results.                                                           */
+/*------------------------------------------------------------------------------*/
+  int    i, j;
+
+  fprintf(pFile, "Threading Results:\n");
+  fprintf(pFile, "number of threads: %6d\n", ttb->n);
+  fprintf(pFile, "number of core segments:  %6d\n", ttb->nsc);
+  fprintf(pFile, "index of lowest energy thread:  %6d\n", ttb->mn);
+  fprintf(pFile, "index of highest energy thread: %6d\n", ttb->mx);
+  fprintf(pFile, "for each thread:\n", ttb->n);
+  fprintf(pFile, "           tg           ps           ms           cs          lps          zsc\n");
+  for (i=0; i<ttb->n; i++) {
+    fprintf(pFile, " %12.5e %12.5e %12.5e %12.5e %12.5e %12.5e\n",
+      ttb->tg[i], ttb->ps[i], ttb->ms[i], ttb->cs[i], ttb->lps[i], ttb->zsc[i]);
+  }
+  fprintf(pFile, "           g0           m0         errm         errp\n");
+  for (i=0; i<ttb->n; i++) {
+    fprintf(pFile, " %12.5e %12.5e %12.5e %12.5e\n",
+      ttb->g0[i], ttb->m0[i], ttb->errm[i], ttb->errp[i]);
+  }
+  fprintf(pFile, "     tf     ts     ls     pr     nx\n");
+  for (i=0; i<ttb->n; i++) {
+    fprintf(pFile, " %6d %6d %6d %6d %6d\n",
+      ttb->tf[i], ttb->ts[i], ttb->ls[i], ttb->pr[i], ttb->nx[i]);
+  }
+  fprintf(pFile, "threading alignments: %6d\n", i+1);
+  fprintf(pFile, "Centers:\n");
+  for (i=0; i<ttb->n; i++) {
+    for (j=0; j<ttb->nsc; j++) {
+      fprintf(pFile, " %4d", ttb->al[j][i] + 1);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "N offsets:\n");
+  for (i=0; i<ttb->n; i++) {
+    for (j=0; j<ttb->nsc; j++) {
+      fprintf(pFile, " %4d", ttb->no[j][i]);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "C offsets:\n");
+  for (i=0; i<ttb->n; i++) {
+    for (j=0; j<ttb->nsc; j++) {
+      fprintf(pFile, " %4d", ttb->co[j][i]);
+    }
+    fprintf(pFile, "\n");
+  }
+  fprintf(pFile, "\n");
+}
+
+
+int CopyResult(Thd_Tbl* pFromResults, Thd_Tbl* pToResults, int from, int to) {
+/*------------------------------------------------------------------------------*/
+/* copy the from-th result of pFromResults to the to-th result of pToResults.   */
+/*------------------------------------------------------------------------------*/
+  int  i;
+
+  pToResults->tg[to] =   pFromResults->tg[from];
+  pToResults->ps[to] =   pFromResults->ps[from];
+  pToResults->ms[to] =   pFromResults->ms[from];
+  pToResults->cs[to] =   pFromResults->cs[from];
+  pToResults->lps[to] =  pFromResults->lps[from];
+  pToResults->zsc[to] =  pFromResults->zsc[from];
+  pToResults->g0[to] =   pFromResults->g0[from];
+  pToResults->m0[to] =   pFromResults->m0[from];
+  pToResults->errm[to] = pFromResults->errm[from];
+  pToResults->errp[to] = pFromResults->errp[from];
+  pToResults->tf[to] =   pFromResults->tf[from];
+  pToResults->ts[to] =   pFromResults->ts[from];
+  pToResults->ls[to] =   pFromResults->ls[from];
+  pToResults->pr[to] =   pFromResults->pr[from];
+  pToResults->nx[to] =   pFromResults->nx[from];
+  for (i=0; i<pFromResults->nsc; i++) {
+    pToResults->al[i][to] = pFromResults->al[i][from];
+    pToResults->no[i][to] = pFromResults->no[i][from];
+    pToResults->co[i][to] = pFromResults->co[i][from];
+  }
+  return(1);
+}
+
+
+void OrderThdTbl(Thd_Tbl* pResults) {
+/*----------------------------------------------------------*/
+/*  put the results in order of highest score to lowest.    */
+/*  it's O(n**2), but that's ok because n is very small.    */
+/*  return the new ordered results, free original results.  */
+/*----------------------------------------------------------*/
+  int*      Order;
+  Boolean*  CheckList;
+  int       i, j, SaveIndex, Index;
+  double    HighestScore;
+  Thd_Tbl*  pOrderedResults;
+
+  /* mem allocation for array where order of results is stored */
+  Order = (int*) MemNew(sizeof(int) * pResults->n);
+  /* mem allocation for checklist to tell which results have been ordered */
+  CheckList = (Boolean*) MemNew(sizeof(int) * pResults->n);
+
+  /* look through the list n times */
+  for (i=0; i<pResults->n; i++) {
+    HighestScore = -9999999999;
+    SaveIndex = -1;
+    /* each time, find the highest remaining score */
+    for (j=0; j<pResults->n; j++) {
+      if (CheckList[j] == FALSE) {
+        if (pResults->tg[j] > HighestScore) {
+          HighestScore = pResults->tg[j];
+          SaveIndex = j;
+        }
+      }
+    }
+    /* save the index, and mark that the score has been ordered */
+    Order[i] = SaveIndex;
+    CheckList[SaveIndex] = TRUE;
+  }
+
+  /* now that the order is determined, do the re-ordering */
+  pOrderedResults = NewThdTbl(pResults->n, pResults->nsc);
+  for (i=0; i<pResults->n; i++) {
+    CopyResult(pResults, pOrderedResults, Order[i], i);
+  }
+  pOrderedResults->mx = 0;
+  pOrderedResults->mn = pResults->n - 1;
+
+  /* now copy results back to original structure */
+  for (i=0; i<pResults->n; i++) {
+    CopyResult(pOrderedResults, pResults, i, i);
+  }
+
+  /* update next and previous arrays to match new order */
+  for (i=0; i<pResults->n; i++) {
+    /* point to next-lower energy thread */
+    pResults->nx[i] = i+1 < pResults->n ? i+1 : 0;
+    /* point to next-higher energy thread */
+    Index = pResults->n - i - 1;
+    pResults->pr[Index] = Index-1 < 0 ? 0 : Index-1;
+  }
+
+  /* update min and max indices to match new order */
+  pResults->mx = pOrderedResults->mx;
+  pResults->mn = pOrderedResults->mn;
+
+  /* free memory allocated for this routine */
+  MemFree(Order);
+  MemFree(CheckList);
+  FreeThdTbl(pOrderedResults);
+
+  return;
+}
+
+
+void ScaleThdTbl(Thd_Tbl* ttb, double ScalingFactor) {
+/*----------------------------------------------------------*/
+/*  scale the energies in ttb by ScalingFactor              */
+/*----------------------------------------------------------*/
+  int    i;
+  float  SF;
+  
+  SF = (float) ScalingFactor;
+
+  for (i=0; i<ttb->n; i++) {
+    ttb->tg[i]   *= SF;
+    ttb->ps[i]   *= SF;
+    ttb->ms[i]   *= SF;
+    ttb->cs[i]   *= SF;
+    ttb->lps[i]  *= SF;
+    ttb->zsc[i]  *= SF;
+    ttb->g0[i]   *= SF;
+    ttb->m0[i]   *= SF;
+    ttb->errm[i] *= SF;
+    ttb->errp[i] *= SF;
+  }
+}
+
+
+int ThrdRound(double Num) {
+/*----------------------------------------------------------*/
+/*  round fp to nearest int                                 */
+/*----------------------------------------------------------*/
+  if (Num > 0) {
+    return((int)(Num + 0.5));
+  }
+  else {
+    return((int)(Num - 0.5));
+  }
 }

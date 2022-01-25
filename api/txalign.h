@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.28 2000/10/06 17:55:46 shavirin Exp $
+/* $Id: txalign.h,v 6.3 2001/03/23 17:24:44 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.28 $
+* $Revision: 6.3 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,16 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.3  2001/03/23 17:24:44  madden
+* Add FDGetDeflineAsnFromBioseq from readdb.[ch]
+*
+* Revision 6.2  2000/12/14 17:08:53  shavirin
+* Added additinal label "<name=" for the single alignment. This link will
+* be shown only in Human Genome viewer.
+*
+* Revision 6.1  2000/11/16 22:20:16  shavirin
+* File moved to distrib/tools from distrib/api .
+*
 * Revision 6.28  2000/10/06 17:55:46  shavirin
 * Added usage of correct matrix in OOF case.
 *
@@ -160,6 +170,7 @@
 
 #include <jzcoll.h>
 #include <ffprint.h>
+#include <fdlobj.h>
 
 /****************************************************************************/
 /* DEFINES */
@@ -202,6 +213,8 @@
 #define FIRST_PASS 1
 #define NOT_FIRST_PASS_REPEATS 2
 #define NOT_FIRST_PASS_NEW  3
+
+#define ASN_DEFLINE_OBJ_LABEL "ASN1_BlastDefLine"
 
 /****************************************************************************/
 /* TYPEDEFS */
@@ -251,29 +264,39 @@ typedef struct align_summary {
 }AlignSum, PNTR AlignSumPtr;
 
 typedef struct align_stat_option { /*options for printing the statistics*/
-	Int2 line_len;
-	Int2 indent_len;
-	Boolean html_hot_link;			/* Prepare HTML output. */
-	Boolean html_hot_link_relative;		/* Make the HTML link relative. */
-	Boolean show_gi;
-	Boolean no_entrez;			/* Do not use Entrez format for HTML links. */
-	Boolean no_dumpgnl;			/* Do not use dumpgnl format even if GNL. */
-	FILE *fp;
-	CharPtr buf;
-	BioseqPtr bsp;
-	ScorePtr sp;
-	Int4 identical;         /*number of identical residues*/
-	Int4 gaps;		/*number of the gaps*/
-	Int4 positive;	        /*number of the positive residues*/
-	Int4 align_len;	  /*the length of the alignment. EXCLUDE the GAPS*/
-	Boolean follower; /* If TRUE, this is NOT the first alignment for this sequences. */
-	Uint1 	m_strand,	/* strand of the query. */
-		t_strand;	/* strand of the database sequence. */
-	Int2	m_frame,	/* Frame of the query. */
-		t_frame;	/* Frame of the database sequence. */
-	CharPtr segs; /* <start> "-" <stop> ("," <start> "-" <stop>)* */
-	CharPtr db_name; /* searched databases list */
-	CharPtr blast_type; /* string used to choose proper config parms */
+    Int2 line_len;
+    Int2 indent_len;
+    Boolean html_hot_link;			/* Prepare HTML output. */
+    Boolean html_hot_link_relative;		/* Make the HTML link relative. */
+    Boolean show_gi;
+    Boolean no_entrez;			/* Do not use Entrez format for HTML links. */
+    Boolean no_dumpgnl;			/* Do not use dumpgnl format even if GNL. */
+    FILE *fp;
+    CharPtr buf;
+    BioseqPtr bsp;
+    ScorePtr sp;
+    Int4 identical;             /*number of identical residues*/
+    Int4 gaps;		        /*number of the gaps*/
+    Int4 positive;	        /*number of the positive residues*/
+    Int4 align_len;	        /*the length of the alignment. EXCLUDE the GAPS*/
+    Boolean follower;           /* If TRUE, this is NOT the first alignment for this sequences. */
+    Uint1 	m_strand,	/* strand of the query. */
+        t_strand;	        /* strand of the database sequence. */
+    Int2	m_frame,	/* Frame of the query. */
+        t_frame;	        /* Frame of the database sequence. */
+
+    /* This information was added first only for creation of very
+       specific links to the single alignment. However - may be it will
+       be used later for something else */
+
+    Int4 master_from;           /* from for master sequence */
+    Int4 master_to;             /* to for master sequence */
+    Int4 target_from;           /* from for target sequence */
+    Int4 target_to;             /* to region for master sequence */
+
+    CharPtr segs; /* <start> "-" <stop> ("," <start> "-" <stop>)* */
+    CharPtr db_name; /* searched databases list */
+    CharPtr blast_type; /* string used to choose proper config parms */
 }AlignStatOption, PNTR AlignStatOptionPtr;
 
 /****************************************************************************/
@@ -377,6 +400,12 @@ NLM_EXTERN Boolean ShowTextAlignFromAnnot3 PROTO((
                     ));
 
 
+/* Simple printing function:
+   Can be used while debugging.. options kept to a minimum 
+   fp==NULL ==> stdout 
+*/
+NLM_EXTERN void LIBCALL SeqAlignPrint(SeqAlignPtr salp,FILE* fp);
+
 /***********************************************************************
 *
 *	ShowAlignNodeText(anp_list, num_node, line_len, locus,
@@ -419,42 +448,6 @@ NLM_EXTERN Boolean ShowAlignNodeText2 PROTO((
                      CharPtr blast_type,
                      Int4Ptr PNTR posMatrix
                      ));
-
-/***********************************************************************
-*
-*	ProcessTextAlignNode(anp, left, right, p_stop, m_buf, locus)
-*	process an AlignNode to generate a list of text buffer
-*
-*	anp: the AlignNode
-*	left, right: the range of alignment in process. mapped to 
-*	anp->extremes.left, and anp->extremes.right
-*	p_stop: the previous stop position in the sequence. It is used 
-*	to label the position of line which is a gap
-*	m_buf: the buffer of the master sequence. Can be used to compare
-*	mismatches
-*	locus: if TRUE, use the locus name for sequence
-*
-*
-*
-************************************************************************/
-NLM_EXTERN ValNodePtr ProcessTextAlignNode PROTO((
-                    AlignNodePtr anp, Int4 m_left, 
-                    Int4 m_right, Int4Ptr p_stop, 
-                    CharPtr m_buf, Int4 line_len, 
-                    Int1 m_frame, 
-                    Uint4 option, Int4Ptr PNTR matrix
-                    ));
-NLM_EXTERN ValNodePtr ProcessTextAlignNode2 PROTO((
-                    AlignNodePtr anp, Int4 m_left, 
-                    Int4 m_right, Int4Ptr p_stop, 
-                    CharPtr m_buf, Int4 line_len, 
-                    Int1 m_frame, 
-                    Uint4 option, Int4Ptr PNTR matrix,
-                    Int4Ptr PNTR posMatrix, Int4 q_start
-                    ));
-
-
-NLM_EXTERN ValNodePtr FreeTextAlignList PROTO((ValNodePtr tdp_list));
 
 /*
   Print a summary of the Sequences producing significant alignments.
@@ -505,13 +498,6 @@ NLM_EXTERN Boolean LIBCALL PrintDefLinesFromSeqAlignEx2 PROTO((
 	Fills in the slots with score, bit_score, etc. from the SeqAlign.
 */
 
-
-/* setting up the matrix for the positive residue of the alignment */
-
-NLM_EXTERN Int4Ptr PNTR load_default_matrix PROTO((void));
-NLM_EXTERN void free_default_matrix PROTO((Int4Ptr PNTR matrix));
-
-
 /*options for display of the text alignment*/
 #define TEXT_MP_MISMATCH	1	/*multiple pairwise alignment with mismatch*/
 #define TEXT_MP			2	/*multiple pairwise without mismatch*/
@@ -551,13 +537,7 @@ typedef struct MarkSeqAlign {
 } MarkSeqAlign, PNTR MarkSeqAlignPtr;
 
 
-NLM_EXTERN SeqIdPtr LIBCALL GetUseThisGi PROTO((SeqAlignPtr seqalign));
 NLM_EXTERN Boolean LIBCALL FilterTheDefline PROTO((BioseqPtr bsp, SeqIdPtr gi_list_head, CharPtr buffer_id, Int4 buffer_id_length, CharPtr PNTR titlepp));
-
-
-/* Printoverview stuff. */
-NLM_EXTERN Boolean LIBCALL MakeDisplaySeqLoc PROTO((SeqAlignPtr PNTR seqalign_ptr, ValNodePtr PNTR vnp, Int4 length));
-NLM_EXTERN Boolean LIBCALL PrintOverviewFromSeqLocs PROTO((ValNodePtr vnp, Int4 query_length, FILE *outfp));
 
 NLM_EXTERN Boolean FormatScoreFromSeqAlign
 (SeqAlignPtr sap, Uint4 option, FILE *fp,
@@ -605,6 +585,8 @@ NLM_EXTERN void OOFDisplayTraceBack1(Int4Ptr a, CharPtr dna,
 NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro, 
                                      Int4 ld, Int4 lp, 
                                      Int4 q_start, Int4 p_start);
+
+BlastDefLinePtr FDGetDeflineAsnFromBioseq(BioseqPtr bsp);
 
 #ifdef __cplusplus
 }

@@ -37,12 +37,44 @@ SRV_HTTP_PROXY_PORT:    [default = 80]
 Value:
    Address of an HTTP proxy server (host:port)
 Note:
-   SRV_HTTP_PROXY_PORT is ignored if SRV_PROXY_HOST is not specified
+   SRV_HTTP_PROXY_PORT is ignored if SRV_HTTP_PROXY_HOST is not specified
+
+| The "SRV_HTTP_PROXY_*" are used in the dispatching stage, which engages
+| WWW-based NCBI dispatcher (nph-dispd.cgi).
+| If "SRV_HTTP_PROXY_*" are specified, then client sends the dispatching
+| HTTP request to NCBI through your HTTP proxy server at:
+| 		  http://SRV_HTTP_PROXY_HOST:SRV_HTTP_PROXY_PORT/
+| rather than directly to:
+| 		  www.ncbi.nlm.nih.gov:80/Service/nph-dispd.cgi
+
 
 
 SRV_PROXY_HOST:         [default = n/a]
 Value:
    Host name of a non-transparent CERN-like firewall proxy server
+
+| SRV_PROXY_HOST can be used to establish a connection to transfer the data
+| between client & server (after the dispatching).
+| If "SRV_PROXY_HOST" is specified, then client connects to your
+| non-transparent firewall server at the specified (by "SRV_PROXY_HOST")
+| host rather than directly to the NCBI server.
+| In this case, you must work in the FIREWALL connection mode
+| (set SRV_CONN_MODE=FIREWALL), and map the well-known ports
+| on your proxy firewall server to those of NCBI
+| (see in http://www.ncbi.nlm.nih.gov/cpp/network/firewall.html).
+| Thus the mapping on your non-transparent firewall server
+| shoul look like this:
+| 
+| SRV_PROXY_HOST:5853    -->    130.14.22.1:5853
+| SRV_PROXY_HOST:5859    -->    130.14.22.2:5859
+| SRV_PROXY_HOST:5840    -->    130.14.22.8:5840
+| SRV_PROXY_HOST:5810    -->    130.14.22.30:5810
+| SRV_PROXY_HOST:5812    -->    130.14.22.31:5812
+| SRV_PROXY_HOST:5811    -->    130.14.22.32:5811
+| 
+| NOTE:  It's pretty rare (if ever) when you have to use
+|        "SRV_PROXY_HOST" as most of firewalls are "transparent"
+|        nowdays.
 
 
 SRV_DEBUG_PRINTOUT:  to printout messages sent by dispatcher when
@@ -58,9 +90,10 @@ Value:
    otherwise -- try to use local load-balancing [default]
 
 
-SRV_CONN_TIMEOUT:  to set timeout for the connection establishment
+SRV_CONN_TIMEOUT:  timeout to use in the dispatcherization stage, and to
+                   connect (only to connect, not for the I/O) to the server.
 Value:
-   a positive integer or floating-point value(in sec.)  [default = 30]
+   a positive integer or floating-point value (in sec.)  [default = 30]
 
 
 SRV_CONN_TRY:  maximum number of attempts to establish the connection
@@ -136,4 +169,4 @@ Solaris or IRIX. Then, the client must run on the host that:
 a) belongs to one of NCBI subnets and
 b) has "lbdaemon"(load-balance daemon) application running on it.
 
-$Date: 1999/06/24 17:59:37 $
+$Date: 2001/02/20 20:15:52 $

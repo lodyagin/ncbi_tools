@@ -1,5 +1,5 @@
 @echo off
-rem  $Revision: 6.11 $
+rem  $Revision: 6.12 $
 rem  +++++ Denis Vakatov, NCBI // vakatov@peony.nlm.nih.gov +++++
 
 echo  *** Running:  %0  ***
@@ -83,6 +83,7 @@ goto end_COMP
 set __COMP=BOR
 set BASE_PATH=%__PATH_BOR%
 set __MAKE=make -N
+set OPENGL=
 goto end_COMP
 
 :end_COMP

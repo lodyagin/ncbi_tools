@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.h,v 6.5 1999/10/01 14:41:39 kans Exp $
+* $Id: ncbierr.h,v 6.6 2001/02/08 22:27:04 vakatov Exp $
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -44,6 +44,10 @@
 *                       of functions from int to ErrSev to eliminate warnings
 *
 * $Log: ncbierr.h,v $
+* Revision 6.6  2001/02/08 22:27:04  vakatov
+* + Nlm_CallErrHandlerOnly() -- to allow processing of posted
+* err.messages by the hook only.
+*
 * Revision 6.5  1999/10/01 14:41:39  kans
 * added SEV_REJECT between SEV_ERROR and SEV_FATAL
 *
@@ -194,7 +198,7 @@ typedef const ErrOpts *ErrOptsPtr;
 
 
 /* prototype for user-supplied error handler */
-typedef int (LIBCALLBACK *ErrHookProc) PROTO((const ErrDesc *err));
+typedef int (LIBCALLBACK *ErrHookProc)(const ErrDesc *err);
 
 /***************************************************************************\
 |                           POSTING AN ERROR                                |
@@ -275,6 +279,7 @@ typedef Nlm_Uint1 ErrStrId;
 NLM_EXTERN int LIBCALL Nlm_ErrSetLogfile PROTO((const char *filename, unsigned long flags));
 NLM_EXTERN const char* LIBCALL Nlm_ErrGetLogfile PROTO(( void ));
 NLM_EXTERN ErrHookProc LIBCALL Nlm_ErrSetHandler PROTO((ErrHookProc));
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_CallErrHandlerOnly(Nlm_Boolean hook_only);
 NLM_EXTERN ErrStrId LIBCALL Nlm_ErrUserInstall PROTO((const char *msg, ErrStrId magic_cookie));
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_ErrUserDelete PROTO((ErrStrId magic_cookie));
 NLM_EXTERN void LIBCALL Nlm_ErrUserClear PROTO((void));

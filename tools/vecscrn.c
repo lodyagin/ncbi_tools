@@ -31,9 +31,12 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.131 $
+ * $Revision: 6.132 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.132  2001/01/09 17:30:03  madden
+ * Fix memory leaks
+ *
  * Revision 6.131  2000/09/01 18:29:13  dondosha
  * Removed calls to ReadDBFreeSharedInfo and ReadDBCloseMHdrAndSeqFiles
  *
@@ -1035,6 +1038,11 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		fprintf(outfp, "FF0000(%s)", buffer50);
 	if (buffer15)
 		fprintf(outfp, "FFFF00(%s)", buffer15);
+
+	MemFree(buffer20);
+	MemFree(buffer25);
+	MemFree(buffer50);
+	MemFree(buffer15);
 
 	fprintf(outfp, ">\n");
 	fprintf(outfp, "   <B>Match to Vector: </B>");

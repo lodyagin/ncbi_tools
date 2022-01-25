@@ -21,7 +21,7 @@
  *  Please cite the author in any work or product based on this material.
  *
  * ===========================================================================
- * $Id: salpacc.c,v 6.26 1999/11/24 21:24:25 vakatov Exp $
+ * $Id: salpacc.c,v 6.27 2000/11/16 22:13:44 shavirin Exp $
  Collection of SeqAlign Accession utilities.
  Maintainer: Hugues Sicotte
  Authors of the original routines: Hugues Sicotte, Colombe Chappey, Tom Madden, Jinghui Zhang
@@ -829,31 +829,6 @@ NLM_EXTERN void LIBCALL SeqAlignWrite(SeqAlignPtr salp,CharPtr file) {
             ErrPostEx(SEV_WARNING,0,0,"NULL SeqAnnot from Non-NULL SeqAlign\n");
         }
         AsnIoClose(aip);
-    }
-}
-
-/* Simple SeqAlign printing function:
-   Can be used while debugging.. options kept to a minimum 
-   fp==NULL ==> stdout 
-*/
-NLM_EXTERN void LIBCALL SeqAlignPrint(SeqAlignPtr salp,FILE* fp) {
-    SeqAnnotPtr sap;
-    Int4 align_options;
-    if(salp) {
-        if(salp->segtype==5) {
-            sap = SeqAnnotForSeqAlign((SeqAlignPtr)salp->segs);
-        } else{
-            sap = SeqAnnotForSeqAlign(salp);
-        }
-        if(sap) {
-            align_options =TXALIGN_COMPRESS+TXALIGN_END_NUM+TXALIGN_MASTER+TXALIGN_MISMATCH;
-            ShowTextAlignFromAnnot(sap, 70, fp==NULL ? stdout : fp, NULL, NULL, align_options, NULL, NULL, FormatScoreFunc);
-
-            sap->data=NULL;
-            SeqAnnotFree(sap);
-        } else {
-            ErrPostEx(SEV_WARNING,0,0,"NULL SeqAnnot from Non-NULL SeqAlign\n");
-        }
     }
 }
 

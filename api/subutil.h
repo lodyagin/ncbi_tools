@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,12 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.32  2001/01/25 19:55:14  kans
+* added AddGenBankSetToSubmission for patents and other bulk submissions of unrelated sequences
+*
+* Revision 6.31  2000/11/15 23:18:00  kans
+* gene ontology user object functions
+*
 * Revision 6.30  2000/10/10 15:06:01  kans
 * added SUBSRC_endogenous_virus_name
 *
@@ -507,6 +513,9 @@ NLM_EXTERN SeqEntryPtr AddPhySetToSubmission (
 	NCBISubPtr submission );
 
 NLM_EXTERN SeqEntryPtr AddMutSetToSubmission (
+	NCBISubPtr submission );
+
+NLM_EXTERN SeqEntryPtr AddGenBankSetToSubmission (
 	NCBISubPtr submission );
 
 			/*** Entry contains nucleotide and translated proteins ***/
@@ -1501,6 +1510,19 @@ NLM_EXTERN UserObjectPtr CreateSubmissionUserObject (CharPtr univecComment,
 
 /* clone name and ID for genomic contig RefSeq records */
 NLM_EXTERN UserObjectPtr CreateContigCloneUserObject (CharPtr name, Int4 ID);
+
+/* gene ontology process, component, and function user object */
+NLM_EXTERN UserObjectPtr CreateGeneOntologyUserObject (
+  void
+);
+NLM_EXTERN void AddToGeneOntologyUserObject (
+  UserObjectPtr uop,
+  CharPtr type,
+  CharPtr text,
+  Int4 goid,
+  Int4 pmid,
+  CharPtr evidence
+);
 
 
 #ifdef __cplusplus

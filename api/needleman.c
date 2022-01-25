@@ -32,8 +32,11 @@ Author: Hugues Sicotte
 
 Content Basic Global Needleman Wunsch Global Alignment Function with
 restriction on the ends.
-$Revision: 6.5 $
+$Revision: 6.6 $
 $Log: needleman.c,v $
+Revision 6.6  2000/10/31 21:20:04  vakatov
+[WIN32] DLL'zation
+
 Revision 6.5  2000/09/07 04:53:43  sicotte
 fix alignment calls, bad matrix calls, and misc alignments problems for sequence update
 
@@ -266,7 +269,7 @@ typedef struct SWpairs {
 } SWpairs;
 
 
-SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqLocPtr slp2, Int4 **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *score, Nlm_FloatHi Kappa, Nlm_FloatHi Lambda) 
+NLM_EXTERN SeqAlignPtr LIBCALL NeedlemanWunschQuadraticByLoc(SeqLocPtr slp1,SeqLocPtr slp2, Int4 **matrix, Int4 gapOpen, Int4 gapExtend,  Int4 *score, Nlm_FloatHi Kappa, Nlm_FloatHi Lambda) 
 {
     Int4 bestScore; /*best score seen so far*/
     Int4 newScore,tmpScore;  /* score of next entry*/

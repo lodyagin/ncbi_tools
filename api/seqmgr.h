@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.34 $
+* $Revision: 6.36 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.36  2001/03/29 22:31:12  kans
+* added fields for descriptor indexing
+*
+* Revision 6.35  2000/11/03 00:13:01  kans
+* added from and to parameters to GenomePartToSegmentMap, needed because delta contig can refer to the same accession multiple times
+*
 * Revision 6.34  2000/09/28 20:57:08  kans
 * added LockFarComponents and UnlockFarComponents
 *
@@ -799,6 +805,15 @@ typedef struct segpartsmap {
   Uint2                    itemID;         /* OBJ_BIOSEQ_SEG itemID */
 } SMSeqIdx, PNTR SMSeqIdxPtr;
 
+typedef struct smdescitem {
+  SeqDescrPtr  sdp;         /* freed when TL_CACHED, later will implement reassignment when reloaded */
+  SeqEntryPtr  sep;         /* SeqEntry containing SeqDescr, same reap/reload criteria as above */
+  Uint2        itemID;      /* storing itemID so no need to gather again */
+  Uint2        index;       /* position index needed for SeqMgrGetDesiredDescriptor */
+  Uint2        level;       /* packaging level - 0 is on Bioseq itself */
+  Uint1        seqdesctype; /* seqdesc subtype */
+} SMDescItem, PNTR SMDescItemPtr;
+
 typedef struct bioseqextra {
   BioseqPtr           bsp;
   ObjMgrDataPtr       omdp;
@@ -808,6 +823,12 @@ typedef struct bioseqextra {
 
   SMFeatBlockPtr      featlisthead;   /* linked list of SMFeatItem chunks, arrays point to elements */
   SMFeatBlockPtr      featlisttail;   /* current block in linked list of SMFeatItem chunks */
+
+  ValNodePtr          desclisthead;   /* linked list of ValNodes pointing to SMDescItem structures */
+
+  SMDescItemPtr PNTR  descrsByID;     /* array of all descriptors on bioseq in original itemID order */
+  SMDescItemPtr PNTR  descrsBySdp;    /* array of all features on bioseq sorted by SeqDescrPtr */
+  SMDescItemPtr PNTR  descrsByIndex;  /* array of all features on bioseq sorted by order of presentation */
 
   SeqAlignPtr PNTR    alignsByID;     /* array of all alignments (on entity) in original itemID order */
 
@@ -827,8 +848,9 @@ typedef struct bioseqextra {
   SMSeqIdxPtr PNTR    partsByLoc;     /* array of parts on segmented bioseq sorted by location */
   SMSeqIdxPtr PNTR    partsBySeqId;   /* array of parts on segmented bioseq sorted by reverse uppercase seqID */
 
+  Int4                numdescs;       /* number of elements in descrsByID, descrsBySdp, and descrsByIndex arrays */
   Int4                numaligns;      /* number of elements in alignsByID array */
-  Int4                numfeats;       /* number of elements in featsByID, featsByPos and featsBySfp arrays */
+  Int4                numfeats;       /* number of elements in featsByID, featsBySfp and featsByPos arrays */
   Int4                numgenes;       /* number of elements in genesByPos array */
   Int4                nummRNAs;       /* number of elements in mRNAsByPos array */
   Int4                numCDSs;        /* number of elements in CDSsByPos array */
@@ -889,7 +911,7 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4
 *
 *****************************************************************************/
 
-NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp);
+NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp, Int4 from, Int4 to);
 
 /*****************************************************************************
 *

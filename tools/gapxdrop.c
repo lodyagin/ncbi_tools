@@ -32,8 +32,23 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.52 $ 
+/* $Revision: 6.57 $
 * $Log: gapxdrop.c,v $
+* Revision 6.57  2000/12/29 20:45:38  madden
+* Fix for ALIGN_packed_nucl
+*
+* Revision 6.56  2000/11/30 21:37:39  madden
+* Roll back before GapXDropSetAlignMask changes
+*
+* Revision 6.55  2000/11/29 21:01:39  madden
+* Use shorter length for dp_ptr rather than value from X
+*
+* Revision 6.54  2000/11/15 15:16:41  madden
+* Changes to recycle dynamic programming structure
+*
+* Revision 6.53  2000/11/09 15:15:52  shavirin
+* Removed #include <txalign.h>
+*
 * Revision 6.52  2000/10/13 21:23:48  shavirin
 * Fixed OOF problem with truncated alignments.
 *
@@ -291,9 +306,8 @@ Contents: Functions to perform a gapped alignment on two sequences.
 */
 
 
-#include "gapxdrop.h"
+#include <gapxdrop.h>
 #include <blast.h>
-#include <txalign.h>
 
 
 /* A PACKAGE FOR LOCALLY ALIGNING TWO SEQUENCES WITHIN A BAND:
@@ -460,7 +474,7 @@ GapXDropStateDestroy(GapXDropStateArrayStructPtr state_struct)
 */
 
 static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M, 
-		Int4Ptr pei, Int4Ptr pej, GapAlignBlkPtr gap_align,
+		Int4Ptr pej, Int4Ptr pei, GapAlignBlkPtr gap_align,
 		Int4 query_offset, Boolean reverse_sequence)
 { 
   dp_ptr dyn_prog;
@@ -495,7 +509,7 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
     if(c < -X) break;
     dyn_prog[i].CC = c;
     dyn_prog[i].DD = c - m; 
-    dyn_prog[i].FF = c-m;
+    dyn_prog[i].FF = c - m - decline_penalty;
     c -= h;
   }
 

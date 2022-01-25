@@ -86,6 +86,14 @@ LIB32=link.exe -lib
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
+SOURCE=..\..\connect\ncbi_misc.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\connect\ncbi_priv.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\ncbicli.c
 # End Source File
 # Begin Source File
@@ -124,6 +132,14 @@ SOURCE=.\ni_www.c
 # Begin Group "Header Files"
 
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
+# Begin Source File
+
+SOURCE=..\..\connect\ncbi_misc.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\connect\ncbi_priv.h
+# End Source File
 # Begin Source File
 
 SOURCE=.\ncbicli.h

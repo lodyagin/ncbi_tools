@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.36 $
+* $Revision: 6.41 $
 *
 * File Description: 
 *
@@ -47,6 +47,21 @@
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.41  2001/02/01 23:06:32  tatiana
+* check for NULL added in MatchNAGeneToFeat
+*
+* Revision 6.40  2001/01/19 17:32:23  yaschenk
+* Removed BioseqLockById when only GetSeqIdForGI is needed
+*
+* Revision 6.39  2000/12/05 22:24:34  tatiana
+* bug fixed in FeatMatch
+*
+* Revision 6.38  2000/11/21 20:52:44  tatiana
+* fixes in CreateImpFeatFromProt
+*
+* Revision 6.37  2000/11/02 01:53:07  tatiana
+* static CompXref() added in FeatMatch
+*
 * Revision 6.36  2000/06/05 17:52:18  tatiana
 * increase size of feature arrays to Int4
 *
@@ -426,10 +441,12 @@ if ( ! order_initialized){
 		if ( ! SeqIdIn ( pointIdPtr, this_sidp)){
 			use_id = pointIdPtr;
             bs = BioseqFind(use_id);
+#if 0
             if (bs == NULL) {
             	bs = BioseqLockById(use_id);
             	was_lock = TRUE;
             }
+#endif
 			if ( bs ){
 				use_id = SeqIdSelect ( bs -> id, order, 18);
 			} else if (pointIdPtr->choice == SEQID_GI) {
@@ -1320,11 +1337,48 @@ static CmpImpFeat (ImpFeatPtr f1, ImpFeatPtr f2)
     return 1;
 }
 
+static Int2 CompXref (ValNodePtr x1, ValNodePtr x2)
+{
+	DbtagPtr db1 = NULL, db2;
+	CharPtr s1=NULL, s2=NULL;
+	
+    if (x1 == NULL && x2)
+		return 0;
+    if (x2 == NULL && x1)
+		return 0;
+	db1 = x1->data.ptrvalue;
+	db2 = x2->data.ptrvalue;
+	if (StringCmp(db1->db, db2->db) != 0) {
+		return 0;
+	}
+	if (db1->tag && db1->tag->str) {
+		s1 = db1->tag->str;
+	}
+	if (db2->tag && db2->tag->str) {
+		s2 = db2->tag->str;
+	}
+    if (s1 == NULL && s2)
+		return 0;
+    if (s2 == NULL && s1)
+		return 0;
+	if (s1 && s2) {
+		if (StringCmp(s1, s2) == 0) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} else {
+		if (db1->tag->id == db2->tag->id) {
+			return 1;
+		}
+	}
+	return 0;
+}
 /*****************************************************************************
 *	compare features by location and choice 
 *
 ******************************************************************************/
-static FeatMatch (SeqFeatPtr f1, SeqFeatPtr f2)
+static Int2 FeatMatch (SeqFeatPtr f1, SeqFeatPtr f2)
 {
 	Int2 retval = 0;
 	
@@ -1341,6 +1395,11 @@ static FeatMatch (SeqFeatPtr f1, SeqFeatPtr f2)
 		case SEQFEAT_IMP:
 			retval = 
 			CmpImpFeat(f1->data.value.ptrvalue, f2->data.value.ptrvalue);
+			break;
+		case SEQFEAT_REGION:
+			if (f1->dbxref != NULL || f2->dbxref != NULL) { 
+				retval = CompXref(f1->dbxref, f2->dbxref);
+			}
 			break;
 		default:
 			break;
@@ -1576,25 +1635,32 @@ static SeqFeatPtr CreateImpFeatFromProt(Uint1 format, SeqFeatPtr psfp, SeqFeatPt
 	GeneRefPtr		grp;
 	SeqFeatXrefPtr	xrp;
 	
+	if (psfp->data.choice == SEQFEAT_PSEC_STR) {
+		return NULL;
+	}
 	sfp = SeqFeatNew();
 	ifp = ImpFeatNew();
 	sfp->data.choice = SEQFEAT_IMP;
 	sfp->data.value.ptrvalue = ifp;
+	ifp->key = StringSave("misc_feature");
 	if (psfp->data.choice == SEQFEAT_PROT) { 
 		prot = psfp->data.value.ptrvalue;
 		if (prot->processed == 0 || prot->processed == 1) {
 			SeqFeatFree(sfp);
 			return NULL;
 		}
-		if (prot->processed == 2)
+		if (prot->processed == 2) {
+			MemFree(ifp->key);
 			ifp->key = StringSave("mat_peptide");
-		else if (prot->processed == 3)
+		} else if (prot->processed == 3) {
+			MemFree(ifp->key);
 			ifp->key = StringSave("sig_peptide");
-		else if (prot->processed == 4)
+		} else if (prot->processed == 4) {
+			MemFree(ifp->key);
 			ifp->key = StringSave("transit_peptide");
+		}
 		sfp = AddProtRefInfo(sfp, prot);
 	} else if (psfp->data.choice == SEQFEAT_BOND) {
-		ifp->key = StringSave("misc_feature");
 		if (psfp->data.value.intvalue == 1) {
 			sfp->qual = AddGBQual(sfp->qual, "note", "disulfide bond");
 		} else if (psfp->data.value.intvalue == 2) {
@@ -1607,14 +1673,15 @@ static SeqFeatPtr CreateImpFeatFromProt(Uint1 format, SeqFeatPtr psfp, SeqFeatPt
 			sfp->qual = AddGBQual(sfp->qual, "note", "bond");
 		}
 	} else if (psfp->data.choice == SEQFEAT_SITE) {
-			ifp->key = StringSave("misc_feature");
 			AddSiteNoteQual(psfp, sfp);
 	} else if (psfp->data.choice == SEQFEAT_REGION) {
 		tmp = MemNew(StringLen(psfp->data.value.ptrvalue) + 9);
 		sprintf(tmp, "Region: %s", (CharPtr) psfp->data.value.ptrvalue);
-		ifp->key = StringSave("misc_feature");
-				sfp->qual = AddGBQual(sfp->qual, "note", tmp);
+		sfp->qual = AddGBQual(sfp->qual, "note", tmp);
 		tmp = MemFree(tmp);
+	} else {
+		SeqFeatFree(sfp);
+		return NULL;
 	}
 	sfp->excpt = psfp->excpt;
 	for (xrp=psfp->xref; xrp; xrp=xrp->next) {
@@ -2028,6 +2095,7 @@ static void GeneRefInfoToGsp (GeneStructPtr gsp, GeneRefPtr grp, SeqFeatPtr sfp)
 		gsp->pseudo = FALSE;
 	}
 
+	gsp->grp = AsnIoMemCopy((GeneRefPtr)grp, (AsnReadFunc) GeneRefAsnRead, (AsnWriteFunc) GeneRefAsnWrite);
 	return;
 }
 
@@ -2141,7 +2209,9 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	diff_lowest = -1;
 	p = ofp->Genelist;
 	for (index=0; index < ofp->sfpGenesize; index++, p++) {
-		gene = p->sfp;
+		if ((gene = p->sfp) == NULL) {
+			continue;
+		}
 		sg = SeqLocStrand(gene->location);
 		sf = SeqLocStrand(sfp->location);
 		if (sf == sg ||
@@ -2469,6 +2539,7 @@ NLM_EXTERN void OrganizeSeqFeat(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	gsc.get_feats_location = TRUE;
 	if (ajp->ignore_top)
 		gsc.ignore_top = TRUE;
+		gsc.seglevels = 1;
 	if (ajp->format == GENPEPT_FMT) {
 		gsc.get_feats_product = TRUE;
 	}

@@ -27,8 +27,11 @@
 *
 *
 
-$Revision: 6.5 $
+$Revision: 6.6 $
 $Log: dotseq.c,v $
+Revision 6.6  2001/01/19 20:11:31  kans
+minor changes to work with MacOS X compiler (contributed by William Van Etten)
+
 Revision 6.5  2000/09/19 21:36:09  kans
 commented out printf
 
@@ -1226,7 +1229,8 @@ static void DOT_ScoreCount (DOTMainDataPtr mip, DOTDiagPtr PNTR hitlist, Int4 in
 
   while (i<index)
     {
-      if (score>(Score=hitlist[i]->score))
+      Score=hitlist[i]->score;
+      if (score>Score)
         {
           score=Score;
           unique++;
@@ -1248,7 +1252,8 @@ static void DOT_ScoreCount (DOTMainDataPtr mip, DOTDiagPtr PNTR hitlist, Int4 in
   
   while (i<index)
     {
-      if (score>(Score=hitlist[i]->score))
+      Score=hitlist[i]->score;
+      if (score>Score)
         {
           score=Score;
           score_array[j]=i;

@@ -1,4 +1,4 @@
-/*   gather.c
+/*
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.c,v $
+* Revision 6.33  2000/12/18 14:48:07  tatiana
+* turn off reordering
+*
 * Revision 6.32  2000/02/07 16:48:34  kans
 * fixed setting of context->index in SeqMgrGetNextFeatureByID
 *
@@ -983,6 +986,7 @@ NLM_EXTERN SeqLocPtr SeqLocReMap (SeqIdPtr newid, SeqLocPtr seq_loc, SeqLocPtr h
 							newhead->choice = SEQLOC_MIX;
 					}
 
+					rev = FALSE; /* KLUDGE: turn off reordering */
 					if (! rev)
 						newhead->data.ptrvalue = (Pointer)thead;
 					else                            /* reverse order */
