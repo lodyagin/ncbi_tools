@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: vecscrn.c,v 6.135 2003/05/30 17:25:38 coulouri Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +33,12 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.134 $
+ * $Revision: 6.135 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.135  2003/05/30 17:25:38  coulouri
+ * add rcsid
+ *
  * Revision 6.134  2002/07/24 21:11:39  kans
  * reverted ncbi URL
  *

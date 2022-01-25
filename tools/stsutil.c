@@ -1,4 +1,6 @@
-/* $Id: stsutil.c,v 6.7 1999/07/27 18:44:01 shavirin Exp $
+static char const rcsid[] = "$Id: stsutil.c,v 6.8 2003/05/30 17:25:38 coulouri Exp $";
+
+/* $Id: stsutil.c,v 6.8 2003/05/30 17:25:38 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,11 +31,14 @@
 *
 * Version Creation Date: 12/18/1996
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  NCBI STS Search Tool utilities
 *   
 * $Log: stsutil.c,v $
+* Revision 6.8  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.7  1999/07/27 18:44:01  shavirin
 * Fixed problems found on PC NT computer.
 *

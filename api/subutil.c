@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.52 $
+* $Revision: 6.55 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,17 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.55  2003/10/16 17:16:33  mjohnson
+*
+* Added ORG_* and IS_ORG_* defines for origins. Use these constants
+* and macros instead of small integers.
+*
+* Revision 6.54  2003/10/08 16:46:44  kans
+* fix in AddCompleteness (KT)
+*
+* Revision 6.53  2003/07/11 18:22:45  kans
+* AddSourceToRefGeneTrackUserObject
+*
 * Revision 6.52  2002/11/05 17:01:55  kans
 * refgene tracking user object uses comment as name if accession is empty
 *
@@ -2570,7 +2581,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 		bio = BioSourceNew();
 	}
 	bio->genome = (Uint1)type;
-	bio->origin = 0;               /* unknown */
+	bio->origin = ORG_DEFAULT;	/* unknown */
 	vnp->data.ptrvalue = (Pointer) bio;
 	
 	return TRUE;
@@ -2732,19 +2743,19 @@ NLM_EXTERN void AddCompleteness(NCBISubPtr submission, SeqEntryPtr sep, SeqFeatP
 	Boolean	partial = FALSE;
 
 	retval = SeqLocPartialCheck(sfp->location);
-	if (retval & SLP_START) {
+	if ((retval & SLP_START) && (retval & SLP_STOP)) {
+		AddCompleteToEntry(submission, sep, 5);   /* no_ends */
+		partial = TRUE;
+	} else if (retval & SLP_START) {
 		AddCompleteToEntry(submission, sep, 3);   /* no_left */
 		partial = TRUE;
-	}
-	if (retval & SLP_STOP) {
+	} else if (retval & SLP_STOP) {
 		AddCompleteToEntry(submission, sep, 4);  /* no_right */
 		partial = TRUE;
-	}
-	if (retval & (SLP_OTHER | SLP_INTERNAL)) {
+	} else if (retval & (SLP_OTHER | SLP_INTERNAL)) {
 		AddCompleteToEntry(submission, sep, 2);  /* partial */
 		partial = TRUE;
-	}
-	if (!partial && sfp->partial) {
+	} else if (!partial && sfp->partial) {
 		AddCompleteToEntry(submission, sep, 2);  /* partial */
 	}
 }
@@ -4420,6 +4431,7 @@ NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr c
 {
   UserFieldPtr  curr;
   ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
 
   if (uop == NULL || collaborator == NULL) return;
   oip = uop->type;
@@ -4430,6 +4442,7 @@ NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr c
     if (oip != NULL && StringICmp (oip->str, "Collaborator") == 0) {
       break;
     }
+    prev = curr;
   }
 
   if (curr == NULL) {
@@ -4439,10 +4452,13 @@ NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr c
     curr->label = oip;
     curr->choice = 1; /* visible string */
 
-    /* link status at beginning of list */
+    /* link curator at end of list */
 
-    curr->next = uop->data;
-    uop->data = curr;
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
   }
 
   if (curr == NULL || curr->choice != 1) return;
@@ -4452,6 +4468,50 @@ NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr c
   curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
 
   curr->data.ptrvalue = (Pointer) StringSave (collaborator);
+}
+
+NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr genomicSource)
+
+{
+  UserFieldPtr  curr;
+  ObjectIdPtr   oip;
+  UserFieldPtr  prev = NULL;
+
+  if (uop == NULL || genomicSource == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "RefGeneTracking") != 0) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, "GenomicSource") == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave ("GenomicSource");
+    curr->label = oip;
+    curr->choice = 1; /* visible string */
+
+    /* link source at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+
+  if (curr == NULL || curr->choice != 1) return;
+
+  /* replace any existing source indication */
+
+  curr->data.ptrvalue = MemFree (curr->data.ptrvalue);
+
+  curr->data.ptrvalue = (Pointer) StringSave (genomicSource);
 }
 
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,

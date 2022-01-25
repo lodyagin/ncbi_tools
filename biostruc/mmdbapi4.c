@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/18/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: Code for Modelstruc -> Biostruc conversion
 *                   And User-feature handling.
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: mmdbapi4.c,v $
+* Revision 6.8  2003/05/13 13:48:20  bauer
+* changed iCountAtoms in RefreshModelAsnMem from Int2 to Int4
+*
 * Revision 6.7  2000/12/05 22:13:07  ywang
 * fix bugs for MakePDBSeqId2
 *
@@ -466,7 +469,7 @@ Boolean LIBCALL RefreshModelAsnMem(PDNMS pdnmsThis,  Int2 iModel)
   /*  DensityCoordinatesPtr		pdcThis = NULL; 
   */   
     CharPtr				pcTemp = NULL;
-    Int2				iCountAtoms = 0;
+    Int4				iCountAtoms = 0;
     Int4				iX,  iY,  iZ;
     Int4				iCoordSets = 0;
     Boolean				bFirst = TRUE;

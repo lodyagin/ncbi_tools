@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.144 $
+* $Revision: 6.152 $
 *
 * File Description: 
 *
@@ -3054,14 +3054,17 @@ static SimpleSeqPtr ByteStoreToSimpleSeq (ByteStorePtr bs, CharPtr seqid, CharPt
 #define strandStr  field [STRAND_TAG]
 
 static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
-                                   BoolPtr partial5P, BoolPtr partial3P,
-                                   CharPtr PNTR featP, CharPtr PNTR qualP,
+                                   BoolPtr partial5P, BoolPtr partial3P, BoolPtr ispointP,
+                                   BoolPtr isminusP, CharPtr PNTR featP, CharPtr PNTR qualP,
                                    CharPtr PNTR valP, Int4 offset)
 
 {
   Boolean     badNumber;
   CharPtr     field [NUM_FTABLE_COLUMNS];
   Int2        i;
+  Boolean     isminus = FALSE;
+  Boolean     ispoint = FALSE;
+  size_t      len;
   ValNodePtr  parsed;
   Boolean     partial5 = FALSE;
   Boolean     partial3 = FALSE;
@@ -3098,6 +3101,11 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
     partial5 = TRUE;
     str++;
   }
+  len = StringLen (str);
+  if (len > 1 && str [len - 1] == '^') {
+    ispoint = TRUE;
+    str [len - 1] = '\0';
+  }
   if (str != NULL && sscanf (str, "%ld", &val) == 1) {
     start = val;
   } else {
@@ -3131,6 +3139,7 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
           start = stop;
           stop = tmp;
         }
+        isminus = TRUE;
       }
     }
   }
@@ -3139,6 +3148,8 @@ static Boolean ParseFeatTableLine (CharPtr line, Int4Ptr startP, Int4Ptr stopP,
   *stopP = stop + offset;
   *partial5P = partial5;
   *partial3P = partial3;
+  *ispointP = ispoint;
+  *isminusP = isminus;
   *featP = featType;
   *qualP = qualType;
   *valP = qualVal;
@@ -3297,7 +3308,8 @@ NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr c
       }
     } else if (StringICmp ("tRNA", str) != 0 &&
                StringICmp ("transfer", str) != 0 &&
-               StringICmp ("RNA", str) != 0) {
+               StringICmp ("RNA", str) != 0 &&
+               StringICmp ("product", str) != 0) {
       if (cdP != NULL && StringLen (str) == 3) {
         StringCpy (codon, str);
         for (i = 0; i < 3; i++) {
@@ -3323,7 +3335,8 @@ NLM_EXTERN Uint1 ParseTRnaString (CharPtr strx, BoolPtr justTrnaText, Uint1Ptr c
     if (curraa != 0) {
     } else if (StringICmp ("tRNA", str) != 0 &&
                StringICmp ("transfer", str) != 0 &&
-               StringICmp ("RNA", str) != 0) {
+               StringICmp ("RNA", str) != 0 &&
+               StringICmp ("product", str) != 0) {
       if (cdP != NULL && StringLen (str) == 3) {
         StringCpy (codon, str);
         for (i = 0; i < 3; i++) {
@@ -4127,6 +4140,12 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
       prp->desc = StringSaveNoNull (val);
     } else if (sfp->data.choice == SEQFEAT_CDREGION && StringCmp (qual, "prot_note") == 0) {
       bail = FALSE;
+    } else if (sfp->data.choice == SEQFEAT_PROT && StringCmp (qual, "prot_desc") == 0) {
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+      if (prp != NULL) {
+        prp->desc = MemFree (prp->desc);
+        prp->desc = StringSaveNoNull (val);
+      }
     } else if (ifp != NULL && StringICmp (ifp->key, "variation") == 0 && ParseQualIntoSnpUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "STS") == 0 && ParseQualIntoStsUserObject (sfp, qual, val)) {
     } else if (ifp != NULL && StringICmp (ifp->key, "misc_feature") == 0 && ParseQualIntoCloneUserObject (sfp, qual, val)) {
@@ -4313,6 +4332,20 @@ NLM_EXTERN void AddQualifierToFeature (SeqFeatPtr sfp, CharPtr qual, CharPtr val
         }
       }
     }
+  } else if (sfp->data.choice == SEQFEAT_PROT) {
+    if (qnum == GBQUAL_function || qnum == GBQUAL_EC_number || qnum == GBQUAL_product) {
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+      if (prp != NULL) {
+        if (qnum == GBQUAL_function) {
+          ValNodeCopyStr (&(prp->activity), 0, val);
+        } else if (qnum == GBQUAL_EC_number) {
+          ValNodeCopyStr (&(prp->ec), 0, val);
+        } else if (qnum == GBQUAL_product) {
+          ValNodeCopyStr (&(prp->name), 0, val);
+        }
+        return;
+      }
+    }
   } else if (sfp->data.choice == SEQFEAT_RNA) {
     if (qnum == GBQUAL_product) {
       rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
@@ -4485,16 +4518,94 @@ NLM_EXTERN SeqLocPtr AddIntervalToLocation (SeqLocPtr loc, SeqIdPtr sip,
   return rsult;
 }
 
+static CharPtr TokenizeAtWhiteSpace (CharPtr str)
+
+{
+  Char     ch;
+  CharPtr  ptr;
+
+  if (str == NULL) return NULL;
+  ptr = str;
+  ch = *ptr;
+
+  while (ch != '\0' && (IS_WHITESP (ch))) {
+    ptr++;
+    ch = *ptr;
+  }
+  while (ch != '\0' && (! IS_WHITESP (ch))) {
+    ptr++;
+    ch = *ptr;
+  }
+  if (ch != '\0') {
+    *ptr = '\0';
+    ptr++;
+  }
+
+  return ptr;
+}
+
+static void ParseWhitespaceIntoTabs (CharPtr line)
+
+{
+  Char     ch;
+  size_t   len;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (StringHasNoText (line)) return;
+  len = StringLen (line) + 10;
+
+  str = MemNew (len);
+  if (str == NULL) return;
+
+  ptr = line;
+  ch = *ptr;
+  if (IS_WHITESP (ch)) {
+    /* qualifier value line */
+    StringCat (str, "\t\t\t");
+    TrimSpacesAroundString (ptr);
+    tmp = TokenizeAtWhiteSpace (ptr);
+    StringCat (str, ptr);
+    StringCat (str, "\t");
+    StringCat (str, tmp);
+  } else {
+    /* location and possible feature key line */
+    TrimSpacesAroundString (ptr);
+    tmp = TokenizeAtWhiteSpace (ptr);
+    StringCat (str, ptr);
+    StringCat (str, "\t");
+    ptr = tmp;
+    tmp = TokenizeAtWhiteSpace (ptr);
+    StringCat (str, ptr);
+    ptr = tmp;
+    if (! StringHasNoText (ptr)) {
+      tmp = TokenizeAtWhiteSpace (ptr);
+      StringCat (str, "\t");
+      StringCat (str, ptr);
+    }
+  }
+
+  /* replace original with tab-delimited table */
+  StringCpy (line, str);
+
+  MemFree (str);
+}
+
 static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
 
 {
+  Boolean        allowWhitesp  = TRUE;
   BioSourcePtr   biop;
   CdRegionPtr    crp;
   AnnotDescrPtr  desc;
   CharPtr        feat;
+  IntFuzzPtr     fuzz;
   GeneRefPtr     grp;
   Int2           idx;
   ImpFeatPtr     ifp;
+  Boolean        isminus;
+  Boolean        ispoint;
   Int2           j;
   CharPtr        label;
   Char           line [2047];
@@ -4508,12 +4619,15 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
   PubdescPtr     pdp;
   Int4           pos;
   SeqFeatPtr     prev = NULL;
+  ProtRefPtr     prp;
   CharPtr        qual;
   Uint1          rnatype;
   RnaRefPtr      rrp;
   SeqAnnotPtr    sap = NULL;
   SeqFeatPtr     sfp = NULL;
   SeqIdPtr       sip;
+  SeqLocPtr      slp;
+  SeqPntPtr      spp;
   Int4           start;
   Int4           stop;
   SqnTagPtr      stp;
@@ -4543,7 +4657,11 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
         return sap;
       }
 
-      if (ParseFeatTableLine (line, &start, &stop, &partial5, &partial3, &feat, &qual, &val, offset)) {
+      if (allowWhitesp) {
+        ParseWhitespaceIntoTabs (line);
+      }
+
+      if (ParseFeatTableLine (line, &start, &stop, &partial5, &partial3, &ispoint, &isminus, &feat, &qual, &val, offset)) {
         if (feat != NULL && start >= 0 && stop >= 0) {
 
           if (sap == NULL) {
@@ -4620,6 +4738,23 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
                 rrp->type = rnatype;
               }
 
+            } else if (StringCmp (feat, "Protein") == 0) {
+
+              sfp->data.choice = SEQFEAT_PROT;
+              prp = ProtRefNew ();
+              if (prp != NULL) {
+                sfp->data.value.ptrvalue = (Pointer) prp;
+              }
+
+            } else if (StringCmp (feat, "proprotein") == 0) {
+
+              sfp->data.choice = SEQFEAT_PROT;
+              prp = ProtRefNew ();
+              if (prp != NULL) {
+                sfp->data.value.ptrvalue = (Pointer) prp;
+                prp->processed = 1;
+              }
+
             } else if (StringCmp (feat, "source") == 0) {
 
               sfp->data.choice = SEQFEAT_BIOSRC;
@@ -4672,7 +4807,30 @@ static SeqAnnotPtr ReadFeatureTable (FILE *fp, CharPtr seqid, CharPtr annotname)
               }
             }
 
-            sfp->location = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);
+            if (ispoint) {
+              spp = SeqPntNew ();
+              if (spp != NULL) {
+                spp->point = start;
+                if (isminus) {
+                  spp->strand = Seq_strand_minus;
+                }
+                spp->id = SeqIdDup (sip);
+                fuzz = IntFuzzNew ();
+                if (fuzz != NULL) {
+                  fuzz->choice = 4;
+                  fuzz->a = 3;
+                  spp->fuzz = fuzz;
+                }
+                slp = ValNodeNew (NULL);
+                if (slp != NULL) {
+                  slp->choice = SEQLOC_PNT;
+                  slp->data.ptrvalue = (Pointer) spp;
+                  sfp->location = slp;
+                }
+              }
+            } else {
+              sfp->location = AddIntervalToLocation (NULL, sip, start, stop, partial5, partial3);
+            }
 
             if (partial5 || partial3) {
               sfp->partial = TRUE;
@@ -5250,7 +5408,7 @@ NLM_EXTERN Pointer ReadAsnFastaOrFlatFile (FILE *fp, Uint2Ptr datatypeptr, Uint2
   Boolean        inLetters;
   Boolean        isProt = FALSE;
   Int4           j;
-  Char           line [1023];
+  Char           line [4096];
   Boolean        mayBeAccessionList = TRUE;
   Boolean        mayBePlainFasta = TRUE;
   SeqFeatPtr     nextsfp;

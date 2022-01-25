@@ -1096,22 +1096,28 @@ You will have to set the paths appropriately for your machine yourself.
 <p>The location in which these files must reside is also platform dependent,
 and the functions that manipulate the contents may look in several places
 to find these files.
-<p>On the Macintosh, the function first looks in the System Folder, then
-in the Preferences folder within the System Folder.&nbsp; Under Microsoft
-Windows, the file must be in the Windows directory, along with all of the
-other .INI files.&nbsp; Under DOS without Windows, the function first looks
-in the current working directory, then in the directory whose path is specified
-in the NCBI environment variable. Under UNIX and VMS, the current working
-directory is first checked, then the user's home directory, and finally
-the directory specified by the NCBI environment variable.&nbsp; (Under
+<p>On the Macintosh, the function first looks in the System Folder, then in the
+Preferences folder within the System Folder.  (See the Mac OS X addendum in the
+next paragraph).  Under Microsoft Windows, the file must be in the Windows
+directory, along with all of the other .INI files.  Under DOS without Windows,
+the function first looks in the current working directory, then in the directory
+whose path is specified in the NCBI environment variable. Under UNIX and VMS,
+the current working directory is first checked, then the user's home directory,
+and finally the directory specified by the NCBI environment variable.  (Under
 UNIX, when it uses the environment variable, it will check for configuration
-files first without and then with the initial dot.) On the multi-user platforms
-(UNIX and VMS), the use of the NCBI environment variable allows a common
-settings file to be used&nbsp; as the default by multiple users. If such
-a settings file is&nbsp; changed under program control, it is copied over
-into the user's home directory, and the new copy is modified.&nbsp; The&nbsp;
-order of searching for settings files ensures that this new copy is used
-in all subsequent operations.
+files first without and then with the initial dot.)  On the multi- user
+platforms (UNIX and VMS), the use of the NCBI environment variable allows a
+common settings file to be used  as the default by multiple users.  If such a
+settings file is  changed under program control, it is copied over into the
+user's home directory, and the new copy is modified.  The  order of searching
+for settings files ensures that this new copy is used in all subsequent
+operations.
+<p>On Mac OS X, it first looks for xxx.cnf in username/Library/Preferences,
+then in package/Contents/Resources, where username is the user's home directory
+and package is the application package.  If it does not find the configuration
+file, it then switches to UNIX style, looking for .xxxrc in the home directory
+and then in the current directory.  This way Mac OS X applications retain the
+traditional Mac behavior but can also UNIX style configuration files.
 <p>contents of <b>ASNLOAD</b> are in <b>ncbi/asnload</b>
 <br>contents of <b>DATA </b>are in <b>ncbi/data</b>
 <p>Automatic Generation of code to read and write new ASN.1 messages.

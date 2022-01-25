@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: sim4.c,v 6.5 2003/05/30 17:25:38 coulouri Exp $";
+
 /* sim4.c - an algorithm to align a cDNA sequence with a genomic sequence. 
 
    *Note:  
@@ -242,7 +244,7 @@ SeqAlignPtr SIM4ALN_choice(SeqLocPtr cslp1, SeqLocPtr cslp2, Int4 limit, Int4 wo
 static Int4 power2(Int4 n)
 { 
   if(n < 0) {
-     ErrPostEx(SEV_FATAL, 0, 0,
+     ErrPostEx(SEV_FATAL, 1, 0,
 	       "Positive integer power only. Perhaps invalid data.");
      exit(1);
   }
@@ -941,7 +943,7 @@ static void lisseq(Int4 M, Int4 N, Int4 W, Links **Lkptr, SIM4GlobalPtr sgp, Val
 
       /* find k */
       if(!(k = btfind(mptr->mblock, Thresh, thr_size))) {
-	ErrPostEx(SEV_FATAL, 0, 0, "Invalid data!");
+	ErrPostEx(SEV_FATAL, 1, 0, "Invalid data!");
 	exit(1);
       }
       if((mptr->mblock<Thresh[k].tblock) ||

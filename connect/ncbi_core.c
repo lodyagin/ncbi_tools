@@ -1,4 +1,4 @@
-/*  $Id: ncbi_core.c,v 6.11 2003/02/20 17:52:12 lavr Exp $
+/*  $Id: ncbi_core.c,v 6.14 2003/08/28 18:47:51 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -267,7 +267,7 @@ extern void LOG_WriteInternal
     if ( lg ) {
         LOG_LOCK_READ;
         LOG_VALID;
-        assert((raw_data == 0) == (raw_size == 0));
+        assert(!raw_size || raw_data);
 
         if ( lg->handler ) {
             SLOG_Handler call_data;
@@ -461,6 +461,15 @@ extern void REG_Set
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_core.c,v $
+ * Revision 6.14  2003/08/28 18:47:51  ucko
+ * Revert previous hack (now handled another way)
+ *
+ * Revision 6.13  2003/08/27 12:32:30  ucko
+ * Yet another attempt to work around the WorkShop lossage with k*Timeout.
+ *
+ * Revision 6.12  2003/05/05 20:17:17  lavr
+ * LOG_WriteInternal() to require data ptr only if data size is not zero
+ *
  * Revision 6.11  2003/02/20 17:52:12  lavr
  * Status verbal names changed not to have caps in the middle
  *

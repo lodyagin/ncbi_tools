@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: suggslp.c,v 6.2 2003/05/30 17:25:38 coulouri Exp $";
+
 /* suggslp.c
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date:   11/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *	Implementation of Suggest standalone prediction function. Here it

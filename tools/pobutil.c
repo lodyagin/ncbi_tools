@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: pobutil.c,v 6.9 2003/05/30 17:25:37 coulouri Exp $";
+
 #include <pobutil.h>
 #include <gather.h>
 #include <edutil.h>

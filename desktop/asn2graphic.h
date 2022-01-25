@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
@@ -58,19 +58,27 @@
 extern "C" {
 #endif
 
+typedef struct graphicViewExtras {
+    CharPtr alignScoreName;
+    CharPtr alignScoreCutoff;
+} GraphicViewExtras, PNTR GraphicViewExtrasPtr;
+
 NLM_EXTERN SegmenT CreateGraphicView (
   BioseqPtr bsp,
   SeqLocPtr location,
   Int4 scale,
   CharPtr styleName,
   CharPtr filterName,
-  CharPtr overrideLayout
+  CharPtr overrideLayout,
+  GraphicViewExtrasPtr extras
 );
 
 /* These return a NULL-Pointer-terminated array of CharPtrs parsed from the configuration file */
 
 NLM_EXTERN CharPtr PNTR GetStyleNameList (void);
 NLM_EXTERN CharPtr PNTR GetFilterNameList (void);
+NLM_EXTERN CharPtr PNTR GetAlnScoreNameList (void);
+NLM_EXTERN CharPtr PNTR GetAlnScoreCutoffList (void);
 NLM_EXTERN CharPtr PNTR GetLayoutNameList (void);
 
 

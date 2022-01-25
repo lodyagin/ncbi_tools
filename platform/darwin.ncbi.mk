@@ -1,5 +1,5 @@
 #
-# $Id: darwin.ncbi.mk,v 1.9 2002/10/29 01:20:12 lavr Exp $
+# $Id: darwin.ncbi.mk,v 1.10 2003/05/07 17:40:12 beloslyu Exp $
 #
 # Tested on Darwin localhost 1.2 Darwin Kernel Version 1.2: Wed Aug 30 23:32:53 PDT 2000;
 # root:xnu/xnu-103.obj~1/RELEASE_PPC  Power Macintosh powerpc
@@ -7,6 +7,7 @@
 
 NCBI_DEFAULT_LCL = dwn
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = cc -pipe
 #NCBI_CFLAGS1 = -c -g -no-cpp-precomp
 NCBI_CFLAGS1 = -c -no-cpp-precomp -Wno-long-double -g

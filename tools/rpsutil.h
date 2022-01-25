@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.23 2003/03/20 14:46:12 madden Exp $
+/* $Id: rpsutil.h,v 6.27 2003/10/07 15:24:10 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,24 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.23 $
+* $Revision: 6.27 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.27  2003/10/07 15:24:10  kans
+* added FreeCDDAligns
+*
+* Revision 6.26  2003/09/23 15:59:20  dondosha
+* Initialize global variable search_is_done; allow to reset it
+*
+* Revision 6.25  2003/09/22 16:24:17  merezhuk
+* made RPSBlastSearchEx public.
+*
+* Revision 6.24  2003/09/15 18:34:33  merezhuk
+* made RPSBlastSearchLight public  and declared in rpsutil.h
+*
 * Revision 6.23  2003/03/20 14:46:12  madden
 * C++ comment to C comment
 *
@@ -283,7 +295,27 @@ void RPSequenceFree(RPSequencePtr rpseqp);
   ------------------------------------------------------------------*/
 SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo);
+/* ---------------------- RPSBlastSearchLight ----------------------
+   Purpose:     create an alignment based on the passed result structure,
+                will not make rps search at this point. used in SPLITD.
 
+   Parameters:  search - main Blast search structure
+                query_bsp - input query sequence Bioseq
+                rpsinfo - main object of RPS database
+                ready_result_struct - BLAST results structure
+   -----------------------------------------------------------------*/ 
+SeqAlignPtr RPSBlastSearchLight (BlastSearchBlkPtr search,
+                                 BioseqPtr query_bsp, RPSInfoPtr rpsinfo,
+                                 BLASTResultsStructPtr   ready_result_struct);
+/* -----------------------------------------------------------------
+   Purpose:     support RPS searches with Net-result-struct type of results 
+   Parameters:  search    - main Blast search structure
+                query_bsp - input query sequence Bioseq
+                rpsinfo   - main object of RPS database
+                partial   - weather search is partial or not
+   -----------------------------------------------------------------*/
+SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
+                              BioseqPtr query_bsp, RPSInfoPtr rpsinfo, Boolean partial);
 
 RPSInfoPtr RPSInfoAttach(RPSInfoPtr rpsinfo);
 void RPSInfoDetach(RPSInfoPtr rpsinfo);
@@ -304,7 +336,10 @@ CddHitPtr RPSBgetCddHits(SeqAlignPtr sap);
 NLM_EXTERN void AnnotateRegionsFromCDD (BioseqPtr bsp, SeqAlignPtr salp, FloatHi expectValue);
 NLM_EXTERN void RemoveDuplicateCDDs (SeqEntryPtr topsep);
 NLM_EXTERN void FreeCDDRegions (SeqEntryPtr topsep);
+NLM_EXTERN void FreeCDDAligns (SeqEntryPtr topsep);
 
+/* Reset the global variable responsible for testing whether search is done */
+NLM_EXTERN void ResetRPS(void);
 
 #ifdef __cplusplus
 }

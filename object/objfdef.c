@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -719,7 +719,10 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"mat_peptide\" , menulabel \"Mature Peptide\" , featdef-key 87 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"sig_peptide\" , menulabel \"Signal Peptide\" , featdef-key 88 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"transit_peptide\" , menulabel \"Transit Peptide\" , featdef-key 89 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
-"{ typelabel \"snoRNA\" , menulabel \"Small Nucleolar RNA\" , featdef-key 90 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } } };\n";
+"{ typelabel \"snoRNA\" , menulabel \"Small Nucleolar RNA\" , featdef-key 90 , seqfeat-key 5 , entrygroup 3 , displaygroup 3 , molgroup na } ,\n" \
+"{ typelabel \"gap\" , menulabel \"Gap\" , featdef-key 91 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } ,\n" \
+"{ typelabel \"operon\" , menulabel \"Operon\" , featdef-key 92 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
+"{ typelabel \"oriT\" , menulabel \"Origin of Transcription\" , featdef-key 93 , seqfeat-key 8 , entrygroup 5 , displaygroup 5 , molgroup na  } } };\n";
 #endif
 
 /*****************************************************************************

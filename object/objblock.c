@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/10/92
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager for module GenBank-General,
 *   					EMBL-General, PIR-General, SWISSPROT-General
@@ -43,6 +43,9 @@
 *                      class is a C++ keyword.
 *
 * $Log: objblock.c,v $
+* Revision 6.2  2003/05/16 17:21:05  bazhin
+* Fixed bug in PrfBlockAsnWrite().
+*
 * Revision 6.1  1998/08/24 18:27:59  kans
 * removed solaris -v -fd warnings
 *
@@ -1238,8 +1241,8 @@ NLM_EXTERN Boolean	LIBCALL PrfBlockAsnWrite (PrfBlockPtr pbp, AsnIoPtr aip, AsnT
 	if ( ! AsnOpenStruct( aip, atp, (Pointer)pbp ) )  goto erret;
 
 	pxsp = pbp->extra_src;
-	if ( pxsp || pxsp->host || pxsp->part || pxsp->state ||
-	     pxsp->strain || pxsp->taxon ) {
+	if ( pxsp && ( pxsp->host || pxsp->part || pxsp->state ||
+	     pxsp->strain || pxsp->taxon ) ) {
 		if ( ! AsnOpenStruct( aip, PRF_BLOCK_extra_src,
 		     (Pointer)pxsp ) )
 			goto erret;

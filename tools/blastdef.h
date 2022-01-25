@@ -30,8 +30,11 @@ Author: Tom Madden
 Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
-/* $Revision: 6.148 $ 
+/* $Revision: 6.149 $ 
 * $Log: blastdef.h,v $
+* Revision 6.149  2003/10/02 19:30:11  madden
+* add field seAlign to SWResults for use in kappa.c
+*
 * Revision 6.148  2003/04/09 14:18:34  madden
 * Update version and release-date
 *
@@ -1691,6 +1694,7 @@ typedef struct SWResults {
     struct SWResults *next;
     Boolean isFirstAlignment;
     Int4 subject_index;  /* needed to break ties on rare occasions */
+    SeqAlignPtr seqAlign; /*needed when seqAlign is already computed*/
 } SWResults;
     
 /* Average sizes of protein and nucl. sequences. */

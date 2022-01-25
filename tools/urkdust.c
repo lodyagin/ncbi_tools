@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkdust.c,v 6.10 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: urkdust
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkdust.c,v $
+* Revision 6.10  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.9  1999/03/12 17:11:24  kuzio
 * cast
 *

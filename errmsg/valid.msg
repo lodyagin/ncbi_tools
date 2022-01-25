@@ -152,6 +152,13 @@ $^   UnexpectedIdentifierChange, 41
 The set of sequence identifiers on a Bioseq are not consistent with the previous version
 of the record in the database.
 
+$^   InternalNsInSeqLit, 42
+There are runs of many Ns inside the SeqLit component of a delta Bioseq.
+
+$^   SeqLitGapLength0, 43
+A SeqLit component of a delta Bioseq can specify a gap, but it should not be a gap
+of 0 length.
+
 $$ SEQ_DESCR, 2
 
 $^   BioSourceMissing, 1
@@ -252,6 +259,9 @@ $^   UnnecessaryBioSourceFocus, 24
 Focus should not be set on a BioSource descriptor in records where there is no
 BioSource feature.
 
+$^   RefGeneTrackingWithoutStatus, 25
+The RefGeneTracking user object does not have the required Status field set.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -317,6 +327,12 @@ however be referenced remotely.
 
 $^   InconsistentMolInfoBiomols, 12
 Mol-info.biomol is inconsistent within a segset or parts set.
+
+$^   ArchaicFeatureLocation, 13
+A feature location should refer to the accession or gi number, not a local or general ID.
+
+$^   ArchaicFeatureProduct, 14
+A feature product should refer to the accession or gi number, not a local or general ID.
 
 $$ SEQ_FEAT, 5
 
@@ -572,6 +588,25 @@ This is probably an error in parsing of a submission.
 $^   RnaProductMismatch, 61
 The RNA feature product type does not correspond to the RNA feature type.  These
 need to be consistent.
+
+$^   MissingCDSproduct, 62
+The CDS should have a product, but does not.  Pseudo or short CDSs (less than 6
+amino acids), or those marked with a rearrangement required for product exception,
+are exempt from needing a product.
+
+$^   BadTrnaCodon, 63
+The tRNA codon recognized is an illegal value.
+
+$^   BadTrnaAA, 64
+The tRNA encoded amino acid is an illegal value.
+
+$^   OnlyGeneXrefs, 65
+There are gene xrefs but no gene features.  Records should normally have single-interval
+gene features covering other biological features.  Gene xrefs are used only to override
+the inheritance by overlap.
+
+$^   UTRdoesNotAbutCDS, 66
+The 5'UTR and 3'UTR features should exactly abut the CDS feature.
 
 $$ SEQ_ALIGN, 6
 

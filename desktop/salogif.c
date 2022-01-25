@@ -1,4 +1,4 @@
-/*  $RCSfile: salogif.c,v $  $Revision: 6.2 $  $Date: 2000/05/12 19:21:45 $
+/*  $RCSfile: salogif.c,v $  $Revision: 6.3 $  $Date: 2003/07/15 14:36:31 $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -25,13 +25,16 @@
 *
 * Author:	Jinghui Zhang
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *	 The Blast Search result visualization utilities  
 *
 * --------------------------------------------------------------------------
 * $Log: salogif.c,v $
+* Revision 6.3  2003/07/15 14:36:31  dondosha
+* Added #defines for substitutes to fprintf and fflush, needed for gzip compression of Web BLAST results
+*
 * Revision 6.2  2000/05/12 19:21:45  shavirin
 * Fixed memory leak in print_defline_for_sequence().
 *
@@ -72,6 +75,10 @@
 #include <seqmgr.h>
 #include <salogif.h>
 
+int (*gif_fprintf)(FILE*, const char *, ...) = fprintf;
+int (*gif_fflush)(FILE*) = fflush;
+#define fprintf gif_fprintf
+#define fflush gif_fflush
 
 /*******************************************************************
  *  STATIC

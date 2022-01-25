@@ -1,12 +1,13 @@
 #
-# $Id: solaris.ncbi.mk,v 1.19 2002/10/29 01:20:13 lavr Exp $
+# $Id: solaris.ncbi.mk,v 1.23 2003/06/27 17:04:03 coulouri Exp $
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
+NCBI_AR=ar
 NCBI_CC = cc -xildoff
-NCBI_CFLAGS1 = -c -Xa
-NCBI_LDFLAGS1 = -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
-NCBI_OPTFLAG = -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+NCBI_CFLAGS1 = -c -Xa -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+NCBI_LDFLAGS1 = -fast -xchip=ultra3 -xarch=v8plusa -xcache=64/32/4:8192/512/1 -xprefetch -xdepend -xcode=pic32
+NCBI_OPTFLAG = -fast -xchip=ultra3 -xarch=v8plusa -xcache=64/32/4:8192/512/1 -xprefetch -xdepend -xcode=pic32
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib

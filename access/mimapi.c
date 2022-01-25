@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/16/00
 *
-* $Revision: 1.7 $
+* $Revision: 1.9 $
 *
 * File Description: 
 *
@@ -53,10 +53,7 @@ NLM_EXTERN CONN MimOpenConnection (
 )
 
 {
-  CONN        conn;
-  size_t      n_written;
-  Char        query [64];
-  EIO_Status  status;
+  Char  query [64];
 
   if (uid < 1) return NULL;
 
@@ -68,13 +65,7 @@ NLM_EXTERN CONN MimOpenConnection (
   */
 
   sprintf (query, "id=%ld", (long) uid);
-  conn = QUERY_OpenServiceQuery ("MimFetch", NULL, 30);
-  if (conn == NULL) return NULL;
-
-  status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
-  if (status != eIO_Success) return NULL;
-
-  return conn;
+  return QUERY_OpenServiceQuery ("MimFetch", query, 30);
 }
 
 #ifdef OS_MAC

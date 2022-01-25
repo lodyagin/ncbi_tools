@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: toporg.c,v 6.87 2003/06/18 21:52:21 kans Exp $";
+
 #include <stdio.h>
 #include <ncbi.h>
 #include <sequtil.h>
@@ -548,6 +550,9 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		return;
 	}
 	seqsep = bssp->seq_set;
+	if (seqsep == NULL) {
+		return;
+	}
 	if (seqsep->choice == 1) {
 		bsp = seqsep->data.ptrvalue;
 		descr = bsp->descr;
@@ -650,6 +655,9 @@ void MoveNPPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 		return;
 	}
 	seqsep = bssp->seq_set;
+	if (seqsep == NULL) {
+		return;
+	}
 	if (seqsep->choice == 1) {
 		bsp = seqsep->data.ptrvalue;
 		descr = bsp->descr;

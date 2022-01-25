@@ -1,18 +1,21 @@
 #
-# $Id: ibm_auto.ncbi.mk,v 1.5 2002/10/29 01:20:13 lavr Exp $
+# $Id: ibm_auto.ncbi.mk,v 1.8 2003/05/22 18:22:14 beloslyu Exp $
 #
 # Initial version ddas@us.ibm.com 08/19/1999
 # Replace r6k with ibm_auto or ibm_pwr3:  cpsosa@us.ibm.com Jun-2001
 # -D_LARGE_FILES flag added: F. Parpia, K. Tzeng, C. Strauss Aug-2001
 # OPENGL Targets to build CN3D: K. Tzeng and C. Strauss Aug-2001
+# 64-bit version added: C. P. Sosa and D. Beloslyudtsev May-2003
+#
+# Add -DIBM_DISABLE_MMAP flag to NCBI_OPTFLAG if you wish 
+# to use read instead of mmap
 #
 NCBI_DEFAULT_LCL = ibm
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR = ar
 NCBI_CC = xlc_r
-#NCBI_CFLAGS1 = -c
 NCBI_CFLAGS1 = -c -qcpluscmt
-NCBI_LDFLAGS1 = -bmaxdata:0x40000000 -bmaxstack:0x10000000 -D_LARGE_FILES
-NCBI_OPTFLAG = -g
+NCBI_LDFLAGS1 = -bmaxdata:0x40000000 -bmaxstack:0x10000000 -DPOSIX_THREADS_AVAIL -D_LARGE_FILES
 NCBI_OPTFLAG = -O3 -qmaxmem=-1 -qarch=auto -qcache=auto -DPOSIX_THREADS_AVAIL -D_LARGE_FILES
 NCBI_INCDIR = /usr/ncbi/include
 NCBI_LIBDIR = /usr/ncbi/lib

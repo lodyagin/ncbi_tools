@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.46 $
+* $Revision: 1.57 $
 *
 * File Description: 
 *
@@ -304,6 +304,8 @@ NLM_EXTERN Boolean EntrezAsynchronousQuery (
   if (e2rq == NULL) return FALSE;
 
   conn = EntrezOpenConnection ();
+
+  if (conn == NULL) return FALSE;
 
   aicp = QUERY_AsnIoConnOpen ("wb", conn);
 
@@ -759,6 +761,14 @@ static Pointer GeneralEntrezExtractReply (
   return result;
 }
 
+NLM_EXTERN CharPtr EntrezExtractErrorReply (
+  Entrez2ReplyPtr e2ry
+)
+
+{
+  return (CharPtr) GeneralEntrezExtractReply (e2ry, E2Reply_error, NULL);
+}
+
 NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
   Entrez2ReplyPtr e2ry
 )
@@ -998,7 +1008,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
       rsult = FALSE;
     }
     if (e2db->link_count < 1 || e2db->links == NULL) {
-      if (StringICmp (db, "books") != 0) {
+      if (StringICmp (db, "books") != 0 && StringICmp (db, "mesh") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -1211,6 +1221,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
             } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference Author") == 0) {
             } else if (StringICmp (last, "Reference") == 0 && StringICmp (str, "Reference SNP ID") == 0) {
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title/Abstract") == 0) {
+            } else if (StringICmp (last, "Rank") == 0 && StringICmp (str, "Ranked standard deviation") == 0) {
+            } else if (StringICmp (last, "Book") == 0 && StringICmp (str, "Book's Topic") == 0) {
             } else {
               sprintf (buf, "Menu names %s and %s may be unintended variants", last, str);
               ValNodeCopyStr (head, 0, buf);
@@ -1229,5 +1241,83 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtr (
   ValNodeFreeData (menuhead);
 
   return rsult;
+}
+
+/* network connection test functions */
+
+static CONN NetTestOpenConnection (void)
+
+{
+  Char        buffer [64];
+  CONN        conn;
+  size_t      n_written;
+  EIO_Status  status;
+
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Service/bounce.cgi",
+                             NULL, "Entrez2Tool", 0, eMIME_T_Text,
+                             eMIME_Plain, eENCOD_None, 0);
+  if (conn == NULL) return NULL;
+
+  sprintf (buffer, "test\n");
+  buffer [4] = '\012';
+  status = CONN_Write (conn, (const void *) buffer, StringLen (buffer), &n_written);
+  if (status != eIO_Success) {
+    CONN_Close (conn);
+    return NULL;
+  }
+
+  return conn;
+}
+
+NLM_EXTERN Boolean NetTestAsynchronousQuery (
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+)
+
+{
+  CONN  conn;
+
+  conn = NetTestOpenConnection ();
+
+  if (conn == NULL) return FALSE;
+
+  QUERY_SendQuery (conn);
+
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean NetTestReadReply (
+  CONN conn,
+  EIO_Status status
+)
+
+{
+  Char         buffer [64];
+  size_t       n_read;
+  ErrSev       oldsev;
+  Boolean      res = FALSE;
+
+  if (conn != NULL && status == eIO_Success) {
+    oldsev = ErrSetMessageLevel (SEV_MAX);
+    status = CONN_Read (conn, buffer, sizeof (buffer), &n_read, eIO_ReadPlain);
+    if (status == eIO_Success) {
+      if (StringNCmp (buffer, "test", 4) == 0) {
+        res = TRUE;
+      }
+    }
+    ErrSetMessageLevel (oldsev);
+  }
+  return res;
+}
+
+NLM_EXTERN Int4 NetTestCheckQueue (
+  QUEUE* queue
+)
+
+{
+  return QUERY_CheckQueue (queue);
 }
 

@@ -35,6 +35,16 @@
 		 <1>	 1/25/02	JL		MoreFilesX 1.0
 */
 
+/*
+     This file has been slightly modified from the original by
+     the National Center for Biotechnology Information, National
+     Institutes of Health, Bethesda, Maryland, USA.
+*/
+
+
+#ifndef WIN32
+
+
 #if 0
 	#include <Carbon/Carbon.h>
 #else
@@ -2780,3 +2790,5 @@ BadParameter:
 }
 
 /*****************************************************************************/
+
+#endif  /* WIN32 */

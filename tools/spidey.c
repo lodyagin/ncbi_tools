@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: spidey.c,v 6.64 2003/10/21 15:26:17 kans Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,13 +30,48 @@
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.53 $
+* $Revision: 6.64 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.64  2003/10/21 15:26:17  kans
+* fixed typo of SPI_IvalPt to SPI_IvalPtr
+*
+* Revision 6.63  2003/10/21 15:14:19  kskatz
+* Added SPI_CheckMrnaOrder(): Called by GetRegionForSAP() after the ivals for building a region are sorted in genomic order, this function merely checks that the mrna invterals are minimally colinear.
+*
+* Revision 6.62  2003/10/06 14:11:20  kskatz
+* Changed the 'version' number printed by SPI_PrintResult() to '1.40' since it has been '1.35' for so long - mostly to avoid confusion when users report the version number
+*
+* Revision 6.61  2003/10/06 14:04:09  kskatz
+* Correctly! commented out a temporary fix in SPI_AlignInWindows() [line 3880]
+*
+* Revision 6.60  2003/09/17 20:39:01  kskatz
+* Commented out a temporary fix in SPI_AlignInWindows() [line 3880]
+*
+* Revision 6.59  2003/09/17 19:53:27  kskatz
+* Added a check in SPI_FindBestAlnByDotPlot() that both seqs be 2-bit encoded (ncbi2na) in order to meet that implicit requirement of DOT_. If either one is not ncbi2na, SPI_FindBestAlnByDotPlot() will simply return NULL.
+*
+* Revision 6.58  2003/08/18 18:17:51  kskatz
+* Just removing some unused vars
+*
+* Revision 6.57  2003/08/18 18:11:39  kskatz
+* Fixed dynamic allocation of buf in SPI_AdjustOverlaps() - 'ovl' can be negative
+*
+* Revision 6.56  2003/08/15 15:23:50  kskatz
+* Created Choose2LooseMrnaOvLap(), called by SPI_AdjustForSplice(): returns the SeqAlignPtr * to delete *. The choice is based on score + splice donor/acceptor existencefor that 'exon'. Also made buf2 in SPI_AdjustOverlaps() dynamically allocated as it was (obviously) crashing when the overlaps was > 200 bases.
+*
+* Revision 6.55  2003/06/30 15:01:29  whlavina
+* Correct minus strand handling in CreaeContinuousAln functions; previous
+* code could corrupt alignments (stop2-start1>1 would imply len<-2 if
+* ExtendAlnRight ever gets called).
+*
+* Revision 6.54  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.53  2003/04/04 19:42:56  kskatz
 * Added a new command line option (-R) to allow external users to point spidey to a repeat database that it can pass on to blast for filtering repeats
 *
@@ -290,6 +327,8 @@ static ACTProfilePtr SPI_ProfileSetFree(ACTProfilePtr app);
 static void SPI_BuildProfile(SeqLocPtr slp, ACTProfilePtr PNTR app, Int4Ptr count, Int4 length);
 static FloatHi SPI_ScoreProfile(BioseqPtr bsp, Int4 pos, Uint1 strand, ACTProfilePtr app);
 static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap);
+static int SPI_Choose2LooseMrnaOvLap (const SeqAlignPtr sap1, const SeqAlignPtr sap2, const SPI_mRNAPtr smp, const int ptr1offset);     
+static void SPI_CheckMrnaOrder(SPI_IvalPtr PNTR spi_pp, const int num);
 
 
 /***************************************************************************
@@ -419,7 +458,7 @@ NLM_EXTERN SPI_mRNAPtr SPI_AlignmRNAToGenomic(BioseqPtr bsp_genomic, BioseqPtr b
 ***************************************************************************/
 NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsinfoPtr spim, FILE *ofp, FILE *ofp2, SPI_OptionsPtr spot)
 {
-    Char                 rep_buf[1024] = "m L;R";
+   Char                 rep_buf[1024] = "m L;R";
    Int4                 i;
    BLAST_OptionsBlkPtr  options;
    SPI_Progress         progress;
@@ -498,6 +537,7 @@ NLM_EXTERN SPI_RegionInfoPtr SPI_AlnSinglemRNAToGen(SPI_bsinfoPtr spig, SPI_bsin
    /* slp2 = SeqLocIntNew(0, spig->bsp->length-1, spot->strand, spig->bsp->id); */
    sap = BlastTwoSequencesByLoc(slp1, slp2, "blastn", options);
    /* } */
+    
    if (spot->callback != NULL)
    {
       progress.percentdone = 30;
@@ -1796,7 +1836,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
    if (spot->printaln != 2)
    {
       if (spot->printheader)
-         fprintf(ofp, "--SPIDEY version 1.35--\n");
+         fprintf(ofp, "--SPIDEY version 1.40--\n");
       fprintf(ofp, "Genomic: %s ", textid1);
       fprintf(ofp, "%s, ", text1);
       fprintf(ofp, "%d bp\n", bsp_genomic->length);
@@ -2596,7 +2636,7 @@ static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
       strand = AlnMgr2GetNthStrand(saps[i], 2);
       if (strand == Seq_strand_minus)
       {
-         if (stop2 - start1 > 1)
+         if (start1 - stop2 > 1)
             SPI_ExtendAlnRight(saps[i], 2, stop2+1, start1-1);
       } else
       {
@@ -3619,6 +3659,7 @@ static SPI_RegionInfoPtr SPI_AssembleRegions(SPI_AlnInfoPtr PNTR spip_list, Int4
    return srip;
 }
 
+
 /***************************************************************************
 *
 *  SPI_GetRegionForSAP takes a list of SPI_IvalPtrs, each of which carries
@@ -3634,7 +3675,7 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
    Boolean            done;
    Boolean            found;
    Int4               i;
-   Int2               j;
+   Int2               j = SPI_UNKNOWN;
    Int4               n;
    SPI_RegionInfoPtr  srip;
 
@@ -3642,6 +3683,7 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
       return NULL;
    /* sort the alignments along the genomic sequence */
    HeapSort(siip_list, num, sizeof(SPI_IvalPtr), SPI_compare_genomic_loc);
+   SPI_CheckMrnaOrder(siip_list, num);
    found = FALSE;
    n = 0;
    /* figure out which one is the anchor alignment */
@@ -3671,7 +3713,8 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
          srip->coverage = abs(siip_list[i]->mstop - siip_list[i]->mstart) + srip->coverage + 1;
          siip_list[i]->used = 1;
          srip->score += siip_list[i]->score;
-      } else if (j == SPI_IMPOSSIBLE)
+      } 
+      else if (j == SPI_IMPOSSIBLE)
          siip_list[i]->used = -1;
       else if (j == SPI_DONE1)
       {
@@ -3690,7 +3733,8 @@ static SPI_RegionInfoPtr SPI_GetRegionForSAP(SPI_IvalPtr PNTR siip_list, Int4 nu
          srip->coverage = abs(siip_list[i]->mstop - siip_list[i]->mstart) + srip->coverage + 1;
          siip_list[i]->used = 1;
          srip->score += siip_list[i]->score;
-      } else if (j == SPI_IMPOSSIBLE)
+      }
+      else if (j == SPI_IMPOSSIBLE)
          siip_list[i]->used = -1;
       else if (j == SPI_DONE1)
       {
@@ -3822,7 +3866,7 @@ static void SPI_ExcludeOverlaps(SPI_IvalPtr PNTR siip_list, Int4 num, SPI_Region
 
    for (i=0; i<num; i++)
    {
-      if (siip_list[i] == 0)
+       if (siip_list[i] == 0) /* KSK changed from '==' to '!=' */
       {
          if ((siip_list[i]->gstart >= srip->gstart && siip_list[i]->gstart <= srip->gstop) || (siip_list[i]->gstop >= srip->gstart && siip_list[i]->gstop <= srip->gstop))
             siip_list[i]->used = -1;
@@ -3853,12 +3897,14 @@ static void SPI_AlignInWindows(SPI_RegionInfoPtr PNTR head_srip, BioseqPtr bsp_g
    srip = *head_srip;
    score = srip->coverage;
    nalign = 0;
-   while (srip != NULL && (nalign < spot->numreturns+1 || srip->coverage >= score/2))
-   {
-      SPI_DoAln(srip, bsp_genomic, bsp_mrna, spot);
-      if (srip->smp != NULL)
-         nalign++;
-      srip = srip->next;
+   /* KSK temp fix was to go through all srips regardless ***
+    *  '(while (srip!= NULL)) but the increased time is too much */   
+   while (srip != NULL && (nalign < spot->numreturns+1 || srip->coverage >= score/2)){
+       SPI_DoAln(srip, bsp_genomic, bsp_mrna, spot);
+       if (srip->smp != NULL){
+           nalign++;
+       }
+       srip = srip->next;
    }
    srip_head = srip_prev = NULL;
    /* make a linked list of regions that have alignments */
@@ -4202,6 +4248,7 @@ static void SPI_DoAln(SPI_RegionInfoPtr srip, BioseqPtr bsp_genomic, BioseqPtr b
       ErrPostEx(SEV_ERROR, 0, 0, "Error in SPI_DoAln\n");
       return;
    }
+   
    if (!AlnMgr2IndexLite(sap))
       return;
    /* flip alignments so genomic sequence is the first row */
@@ -4748,6 +4795,8 @@ static SeqAlignPtr SPI_FillInIntron(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start1, I
       options->penalty = -1;
    }
    sap = BlastTwoSequencesByLoc(slp2, slp1, "blastn", options);
+  
+
    SeqLocFree(slp1);
    SeqLocFree(slp2);
    AlnMgr2IndexLite(sap);
@@ -5178,6 +5227,50 @@ static SeqAlignPtr SPI_FindPiece(SeqIdPtr sip1, SeqIdPtr sip2, Int4 start_m, Int
    return NULL;
 }
 
+
+/* added by KSK for SPI_AdjustForSplice() when mRNA regions overlap */
+static int SPI_Choose2LooseMrnaOvLap (const SeqAlignPtr sap1, const SeqAlignPtr sap2, 
+                                      const SPI_mRNAPtr smp, const int ptr1offset)
+{
+    Int4 p1_sites = 0, p2_sites = 0;
+    Int4 score1 = 0, score2 = 0;
+    float margin = 0;
+    
+    if (sap1 == NULL || sap2 == NULL || smp == NULL){
+        return -1;
+    }
+   
+    score1 = AlnMgr2ComputeScoreForSeqAlign(sap1);
+    score2 = AlnMgr2ComputeScoreForSeqAlign(sap2);
+    
+    if (score1 >= score2){
+        margin = (float)score1/5;
+        if ((float)score1 >= (((float)(score2)) + margin)){
+            return ptr1offset + 1;
+        }
+    }
+    else if (score1 <= score2){
+        margin = (float)score2/5;
+        if ((float)score2 >= (((float)(score1)) + margin)){
+            return ptr1offset;
+        }
+    }
+
+    p1_sites = smp->splicedon[ptr1offset] + smp->spliceacc[ptr1offset];
+    p2_sites = smp->splicedon[ptr1offset + 1] + smp->spliceacc[ptr1offset + 1];
+    
+    if (p1_sites > p2_sites){
+        return ptr1offset + 1;
+    }
+    else if (p2_sites > p1_sites){
+        return ptr1offset;
+    }
+    return (score1 >= score2 ? ptr1offset + 1 : ptr1offset);
+}
+
+
+
+
 /***************************************************************************
 *
 *  SPI_AdjustForSplice adjusts the boundaries of all the alignments in
@@ -5203,7 +5296,7 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    Int4             b;
    BioseqPtr        bsp;
    Int4             c;
-   Int4             count;
+   Int4             count, sap2delete = 0;
    Int4             gstart1;
    Int4             gstart2;
    Int4             gstop1;
@@ -5229,7 +5322,6 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
 
    if (sap == NULL || sap->saip == NULL || sap->saip->indextype != INDEX_PARENT)
       return NULL;
-   /*KSK*/
    if (spot->bigintron){
        intronsize = (spot->bigintron_size > SPI_INTRONSIZEXL 
                      ? spot->bigintron_size : SPI_INTRONSIZEXL);
@@ -5310,23 +5402,63 @@ static SPI_mRNAPtr SPI_AdjustForSplice(SeqAlignPtr sap, SPI_OptionsPtr spot, SPI
    n = 0;
    for (i=0; i<amaip->numsaps-1; i++) /* merge adjacent alignments */
    {
+      
       amaip->saps[i]->next = NULL;
       amaip->saps[i+1]->next = NULL;
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 1, &gstart1, &gstop1);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 1, &gstart2, &gstop2);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i], 2, &mstart1, &mstop1);
       AlnMgr2GetNthSeqRangeInSA(amaip->saps[i+1], 2, &mstart2, &mstop2);
-      if (gstart2 >= gstop1 - SPI_EXONMERGESIZE && gstart2 <= gstop1 + SPI_EXONMERGESIZE)
-      {
-         if ((mstart2 >= mstop1 - SPI_EXONMERGESIZE && mstart2 <= mstop1 + SPI_EXONMERGESIZE) ||  (mstart1 >= mstop2 - SPI_EXONMERGESIZE && mstart1 <= mstop2 + SPI_EXONMERGESIZE))
-         {
-            amaip->saps[i+1] = SPI_MergeAlignments(amaip->saps[i], amaip->saps[i+1]);
-            SeqAlignFree(amaip->saps[i]);
-            amaip->saps[i] = NULL;
-            n++;
-         }
+      /* if (gstart2 >= gstop1 - SPI_EXONMERGESIZE && gstart2 <= gstop1 + SPI_EXONMERGESIZE) */
+      if (gstart2 >= gstop1 - SPI_EXONMERGESIZE && gstart2 <= gstop1 + SPI_EXONMERGESIZE){
+          if ((mstart2 >= mstop1 - SPI_EXONMERGESIZE && mstart2 <= mstop1 + SPI_EXONMERGESIZE) 
+              || (mstart1 >= mstop2 - SPI_EXONMERGESIZE && mstart1 <= mstop2 + SPI_EXONMERGESIZE)){
+              amaip->saps[i+1] = SPI_MergeAlignments(amaip->saps[i], amaip->saps[i+1]);
+              SeqAlignFree(amaip->saps[i]);
+              amaip->saps[i] = NULL;
+              n++;
+          }
       }
-   }
+      /** KSK added this 'else if' block in case there are overlapping **
+       ** mrna sequences shared by these seqaligns **/
+
+      else if ((strand == Seq_strand_minus && (mstop2 <= mstop1 && mstop2 >= mstart1))
+               || (strand == Seq_strand_plus && (mstop1 <= mstop2 && mstop1 >= mstart2))){
+          /* fixes in case the MRNA portion of different regions overlap */
+          /* first, if one is subsumed */
+          if (mstart1 >= mstart2 && mstop1 <= mstop2){
+              SeqAlignFree(amaip->saps[i]);
+              amaip->saps[i] = NULL;
+              n++;
+          }
+          else if (mstart2 <= mstart1 && mstop2 >= mstop1){
+              SeqAlignFree(amaip->saps[i+1]);
+              amaip->saps[i+1] = amaip->saps[i];
+              amaip->saps[i] = NULL;
+              n++;
+          }
+          /* now if mRNA region overlaps - simply choose the highest score */
+          /* unless the lower has splice donor & acceptor and the higher */
+          /* does not */
+          else {
+              if ((sap2delete = SPI_Choose2LooseMrnaOvLap(amaip->saps[i], amaip->saps[i+1],
+                                                          smp, i)) != -1) {
+                  if (sap2delete == i){
+                      SeqAlignFree(amaip->saps[i]);
+                      amaip->saps[i] = NULL;
+                      n++;
+                  }
+                  else if (sap2delete == (i+1)){
+                      SeqAlignFree(amaip->saps[i+1]);
+                      amaip->saps[i+1] = amaip->saps[i];
+                      amaip->saps[i] = NULL;
+                      n++;
+                  }
+              }
+          }
+      }
+   }             
+   
    if (n > 0) /* some alignments were merged; need a new smp */
    {
       saparray = (SeqAlignPtr PNTR)MemNew((amaip->numsaps-n)*sizeof(SeqAlignPtr));
@@ -5613,7 +5745,8 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
    Int4        boundary_a;
    BioseqPtr   bsp;
    Uint1Ptr    buf;
-   Uint1       buf2[200];
+   /** Uint1       buf2[200]; **/
+   Uint1Ptr    buf2;
    Uint1Ptr    buf3;
    Int4        c;
    Int4        f;
@@ -5708,6 +5841,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
       }
       i = 0;
       buf = (Uint1Ptr)MemNew((2*fluff+ovl+spllen+2)*sizeof(Uint1));
+      buf2 = (Uint1Ptr)MemNew((2*fluff+(abs(ovl))+spllen+2)*sizeof(Uint1));
       SeqPortRead(spp, buf2, 2*fluff+ovl+spllen+2);
       for (f=0; f<SPI_NUMSITES; f++)
       {
@@ -5729,6 +5863,7 @@ static void SPI_AdjustOverlaps(SeqAlignPtr sap1, SeqAlignPtr sap2, Int4 n, SPI_m
          i++;
       }
       SeqPortFree(spp);
+      MemFree(buf2);
       for (i=0; i<2*fluff+ovl+1; i++)
       {
          if (spot->dsplicejunc > 0)
@@ -6779,6 +6914,37 @@ static SeqAlignPtr SPI_FindBestAlnByDotPlot(SeqLocPtr slp1, SeqLocPtr slp2)
    Int4            start1;
    Int4            start2;
    Uint1           strand;
+
+   BioseqPtr      bsp1 = NULL, bsp2 = NULL;
+   SeqIdPtr       sidp1 = NULL, sidp2 = NULL;
+
+   /** KSK: this protects spidey from the implicit requirement of DOT_
+       that *BOTH* seqs are ncbi2na encoded ****/
+   
+   if (slp1 != NULL && slp2 != NULL){
+       sidp1 = SeqLocId(slp1);
+       sidp2 = SeqLocId(slp2);
+       if (sidp1 != NULL && sidp2 != NULL){
+           bsp1 = BioseqFind(sidp1);
+           bsp2 = BioseqFind(sidp2);
+           if (bsp1 != NULL && bsp2 != NULL){
+               if (bsp1->seq_data_type != Seq_code_ncbi2na
+                   || bsp2->seq_data_type !=  Seq_code_ncbi2na){
+                   return NULL;
+               }
+           }
+           else {
+               return NULL;
+           }
+       }
+       else {
+           return NULL;
+       }
+   }
+   else {
+       return NULL;
+   }
+   
 
    mip = DOT_CreateAndStorebyLoc (slp1, slp2, SPI_TEENYEXON, 10);
    sap = sap_head = sap_prev = NULL;
@@ -10144,15 +10310,15 @@ static void SPI_CheckSplicesForRevComp(SPI_RegionInfoPtr srip_head, SPI_OptionsP
          }
          if ((sites*100)/srip->smp->numexons < SPI_REVCOMPTHRESH)
          {
-            BioseqRevComp(bsp_mrna);
-            ErrSetMessageLevel(SEV_MAX);
-            sbp1 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfo));
-            sbp1->bsp = bsp_genomic;
-            sbp2 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfo));
-            sbp2->bsp = bsp_mrna;
-            if (spot->lcaseloc){ /* fixes an ABW ? */
+             BioseqRevComp(bsp_mrna);
+             ErrSetMessageLevel(SEV_MAX);
+             sbp1 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfo));
+             sbp1->bsp = bsp_genomic;
+             sbp2 = (SPI_bsinfoPtr)MemNew(sizeof(SPI_bsinfo));
+             sbp2->bsp = bsp_mrna;
+             if (spot->lcaseloc){ /* fixes an ABW ? */
                 sbp2->lcaseloc = spot->lcaseloc;
-            }
+             }
             /* sbp2->lcaseloc = spot->lcaseloc; */
             spot->revcomp = TRUE;
             revcmp = SPI_AlnSinglemRNAToGen(sbp1, sbp2, NULL, NULL, spot);
@@ -10508,4 +10674,54 @@ static ACTProfilePtr SPI_MakeProfileFromSA(SeqAlignPtr sap)
    return app_head;
 }
 
-
+/***********************************************************
+* SPI_CheckMrnaOrder
+* 
+* After the ivals for building a region are sorted in genomic 
+* order this function merely checks that the mrna invterals 
+* are minimally colinear: if the stop of one interval overlaps
+* or 'jumps' by more than 20 bases the start of the next interval,
+* the one with greatest score is retained and the one with lesser
+* score set to 'impossible.
+ ***********************************************************/
+static void SPI_CheckMrnaOrder(SPI_IvalPtr PNTR spi_pp, const int num)
+{
+    SPI_IvalPtr  ival = 0, ival2 = 0, ival3 = 0;
+    int x = 0;
+  
+    for (x = 0, ival = spi_pp[x], ival2 = spi_pp[x + 1]; 
+         x < num && ival != 0 && ival2 != 0; 
+         ++x, ival = spi_pp[x], ival2 = spi_pp[x + 1]){
+        if (x < num - 2){ /* three to window */
+            ival3 = spi_pp[x + 2];
+            if ((ival->strand == Seq_strand_plus == ival2->strand
+                 && ival3->strand == ival->strand 
+                 && (ival->mstop > ival2->mstart + SPI_FUZZ
+                     && ival->mstop < ival3->mstart + SPI_FUZZ))
+                || (ival->strand == Seq_strand_minus == ival2->strand
+                    && ival3->strand == ival->strand 
+                    && (ival->mstop + SPI_FUZZ < ival2->mstart  
+                        && ival->mstop + SPI_FUZZ > ival3->mstart))){
+                if (ival->score > ival2->score){
+                    ival2->used = -1;
+                }
+                else if (ival2->score > ival->score){
+                    ival->used = -1;
+                }
+            }
+        }
+        else if (x < num - 1){ /* two to window */
+            if ((ival->strand == Seq_strand_plus == ival2->strand
+                 && ival->mstop > ival2->mstart) 
+                || (ival->strand == Seq_strand_plus == ival2->strand
+                    && ival->mstop < ival2->mstart)){
+                if (ival2->score > ival->score){
+                    ival->used = -1;
+                }
+                else if (ival->score > ival2->score){
+                    ival2->used = -1;
+                }
+            }
+        }
+    }
+}

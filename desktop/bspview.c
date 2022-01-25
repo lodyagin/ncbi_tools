@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.111 $
+* $Revision: 6.117 $
 *
 * File Description: 
 *
@@ -444,8 +444,10 @@ static Boolean LaunchSequenceViewer (SeqIdPtr sip, BioseqPtr query)
   SeqViewProcsPtr  svpp;
 
   if (sip == NULL) return FALSE;
+  SeqEntrySetScope (NULL);
   bsp = BioseqLockById (sip);
   if (bsp == NULL) return FALSE;
+  SeqEntrySetScope (NULL);
   entityID = BioseqFindEntity (sip, &itemID);
   if (entityID == 0) return FALSE;
   WatchCursor ();
@@ -1906,8 +1908,11 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
 {
   EnumFieldAssocPtr  ap;
   BioseqViewFormPtr  bfp;
+  BioseqPtr          bsp;
   CharPtr            ptr;
+  SeqIdPtr           sip;
   Char               str [128];
+  Char               tmp [128];
   Boolean            tryJustAccn = TRUE;
   Int2               val;
 
@@ -1934,6 +1939,27 @@ extern void SetBioseqViewTarget (BaseFormPtr fp, CharPtr seqId)
           return;
         }
       }
+    }
+  }
+  /* try local ID */
+  sip = MakeSeqID (seqId);
+  bsp = BioseqFind (sip);
+  SeqIdFree (sip);
+  if (bsp == NULL) return;
+  sip = SeqIdFindWorst (bsp->id);
+  SeqIdWrite (sip, tmp, PRINTID_REPORT, sizeof (tmp));
+  seqId = StringChr (tmp, '|');
+  if (seqId == NULL) {
+    seqId = tmp;
+  } else {
+    seqId++;
+  }
+  for (ap = bfp->targetAlist, val = 1; ap != NULL && ap->name != NULL; ap++, val++) {
+    StringNCpy (str, ap->name, sizeof (str));
+    if (StringICmp (str, seqId) == 0) {
+      SetValue (bfp->targetControl, val);
+      ChangeTarget ((Handle) bfp->targetControl);
+      return;
     }
   }
 }
@@ -2559,6 +2585,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   GrouP                h;
   Boolean              hasAlignments;
   Int2                 i;
+  Boolean              is_nc = FALSE;
   Int2                 j;
   GrouP                k;
   Int4                 length;
@@ -2581,8 +2608,10 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   RecT                 r3;
   GrouP                s;
   SeqEntryPtr          sep;
+  SeqIdPtr             sip;
   CharPtr              str;
   CharPtr              styleName;
+  TextSeqIdPtr         tsip;
   Int4                 val;
   WindoW               w;
   PopuP                x;
@@ -2614,6 +2643,14 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     bfp->this_itemtype = OBJ_BIOSEQ;
     if (bsp != NULL) {
       bfp->this_subtype = bsp->repr;
+      for (sip = bsp->id; sip != NULL; sip = sip->next) {
+        if (sip->choice != SEQID_OTHER) continue;
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip == NULL) continue;
+        if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+          is_nc = TRUE;
+        }
+      }
     } else {
       bfp->this_subtype = Seq_repr_raw;
     }
@@ -2765,13 +2802,20 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
         if (svpp->initGenomeLabel != NULL) {
           bpp = bfp->bioseqNucPageList;
           str = svpp->initGenomeLabel;
+          if (is_nc) {
+            str = "GenBank";
+          }
         }
       } else {
         if (svpp->initNucLabel != NULL) {
           bpp = bfp->bioseqNucPageList;
           str = svpp->initNucLabel;
           if (bsp->length > 350000) {
-            str = "Graphic";
+            if (is_nc) {
+              str = "GenBank";
+            } else {
+              str = "Graphic";
+            }
           }
         }
       }
@@ -2909,7 +2953,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     z = PushButton (bfp->bvd.findGeneGrp, "Find by Gene or Product", ShowGeneList);
     SetObjectExtra (z, (Pointer) &(bfp->bvd), NULL);
 
-    bfp->bvd.newGphControlGrp = HiddenGroup (h, -8, 0, NULL);
+    bfp->bvd.newGphControlGrp = HiddenGroup (h, -6, 0, NULL);
 
 #ifdef NEW_GRAPHICAL_VIEWER
     newGraphicalViewer = TRUE;
@@ -2947,6 +2991,21 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       StaticPrompt (bfp->bvd.newGphControlGrp, "Scale", 0, popupMenuHeight, programFont, 'l');
       bfp->bvd.newGphScale = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewScale);
       SetObjectExtra (bfp->bvd.newGphScale, bfp, NULL);
+
+      if (GetAppProperty("GPHVIEWSCOREALIGNS") != NULL) {
+      /*
+        StaticPrompt (bfp->bvd.newGphControlGrp, "Alignments: Score Type", 0, popupMenuHeight, programFont, 'l');
+        bfp->bvd.newGphAlnScore = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewFilter);
+        SetObjectExtra (bfp->bvd.newGphAlnScore, bfp, NULL);
+        PopupItems (bfp->bvd.newGphAlnScore, GetAlnScoreNameList ());
+        SetValue (bfp->bvd.newGphAlnScore, 1);
+      */
+        StaticPrompt (bfp->bvd.newGphControlGrp, "Alignments: Score Cutoff", 0, popupMenuHeight, programFont, 'l');
+        bfp->bvd.newGphAlnCutoff = PopupList (bfp->bvd.newGphControlGrp, TRUE, ChangeNewFilter);
+        SetObjectExtra (bfp->bvd.newGphAlnCutoff, bfp, NULL);
+        PopupItems (bfp->bvd.newGphAlnCutoff, GetAlnScoreCutoffList ());
+        SetValue (bfp->bvd.newGphAlnCutoff, 1);
+      }
     }
 
     Hide (bfp->bvd.styleControlGrp);

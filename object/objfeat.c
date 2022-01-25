@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1886,7 +1886,7 @@ static Boolean LoadGenCodeFromLocalString (void)
 
 NLM_EXTERN GeneticCodePtr LIBCALL GeneticCodeTableLoad (void)
 {
-    Char buf[80];
+    Char buf[PATH_MAX];
     AsnIoPtr aip;
 
 	if (genetic_codes != NULL)

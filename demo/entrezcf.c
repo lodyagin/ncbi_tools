@@ -23,7 +23,7 @@
 *
 * ===========================================================================
 *
-* $Id: entrezcf.c,v 6.1 1998/03/31 21:39:19 vakatov Exp $
+* $Id: entrezcf.c,v 6.2 2003/05/13 16:02:42 coulouri Exp $
 *
 * File Name:  entrezcf.c
 *
@@ -64,6 +64,9 @@
 * 1.92  12-23-94  Epstein   Completed network configuration
 *
 * $Log: entrezcf.c,v $
+* Revision 6.2  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.1  1998/03/31 21:39:19  vakatov
 * Check for the old-fashioned NCBI dispatcher interface availability
 * and forcibly set networking interface to "eNII_Dispatcher"
@@ -120,7 +123,7 @@
 * ==========================================================================
 */
 
-#define REVISION_STR  "$Revision: 6.1 $"
+#define REVISION_STR  "$Revision: 6.2 $"
 
 
 
@@ -651,7 +654,7 @@ Int2 Main ()
 #ifdef NETWORK_SUPPORTED
     /* It is valid for the old-fashioned NCBI dispatcher only... */
     if ( !NI_IsInterfaceSupported(eNII_Dispatcher) ) {
-      ErrPostEx(SEV_FATAL, 0, 0,
+      ErrPostEx(SEV_FATAL, 1, 0,
                 "The eNII_Dispatcher interface is not supported.\n"
                 "Please quit the configuration program and report.");
     }

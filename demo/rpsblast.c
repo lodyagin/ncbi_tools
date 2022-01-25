@@ -1,4 +1,6 @@
-/* $Id: rpsblast.c,v 6.50 2003/03/20 14:47:16 madden Exp $
+static char const rcsid[] = "$Id: rpsblast.c,v 6.52 2003/05/30 17:31:10 coulouri Exp $";
+
+/* $Id: rpsblast.c,v 6.52 2003/05/30 17:31:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,18 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.52  2003/05/30 17:31:10  coulouri
+* add rcsid
+*
+* Revision 6.51  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.50  2003/03/20 14:47:16  madden
 * StringSave on asn1_mode
 *
@@ -390,19 +398,19 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     
 
     if (!rpsbop->is_xml_output && !rpsbop->is_asn1_output && (rpsbop->outfp = FileOpen(rpsbop->out_filename, "a")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "rpsblast: Unable to open output "
+            ErrPostEx(SEV_FATAL, 1, 0, "rpsblast: Unable to open output "
                       "file %s\n", rpsbop->out_filename);
             return NULL;
     }
 
     if (myargs[16].strvalue != NULL) {
         if (myargs[14].intvalue == 0) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
+            ErrPostEx(SEV_FATAL, 1, 0, 
                       "-J option must be TRUE to use this option");
             return NULL;
         } else  {
             if ((rpsbop->aip = AsnIoOpen (myargs[16].strvalue,"w")) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
                           "file %s\n", myargs[16].strvalue);
                 return NULL;
             }
@@ -411,7 +419,7 @@ static RPSBlastOptionsPtr RPSReadBlastOptions(void)
     else if (rpsbop->is_asn1_output)
     {
             if ((rpsbop->aip = AsnIoOpen (rpsbop->out_filename, rpsbop->asn1_mode)) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
                           "file %s\n", rpsbop->out_filename);
                 return NULL;
             }
@@ -666,7 +674,7 @@ static SeqEntryPtr LIBCALLBACK RPSGetNextSeqEntry(SeqLocPtr PNTR slp, VoidPtr da
     /* Opening file with input sequences */
     if(infp == NULL) {
         if ((infp = FileOpen(myargs[0].strvalue, "r")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
+            ErrPostEx(SEV_FATAL, 1, 0, 
                       "rpsblast: Unable to open input file %s\n", 
                       myargs[0].strvalue);
             end_of_data = TRUE;
@@ -753,7 +761,7 @@ Int2 Main(void)
         FileClose(fd);
     
     if((rpsbop = RPSReadBlastOptions()) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to create RPS Blast options");
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to create RPS Blast options");
         return 1;
     }
 

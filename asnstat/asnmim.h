@@ -10,15 +10,17 @@
 #endif
 
 static char * asnfilename = "asnmim.h";
-static AsnValxNode avnx[9] = {
+static AsnValxNode avnx[11] = {
     {20,"none" ,0,0.0,&avnx[1] } ,
     {20,"star" ,1,0.0,&avnx[2] } ,
     {20,"caret" ,2,0.0,&avnx[3] } ,
-    {20,"pound" ,3,0.0,NULL } ,
-    {20,"not-set" ,0,0.0,&avnx[5] } ,
-    {20,"citation" ,1,0.0,&avnx[6] } ,
-    {20,"book" ,2,0.0,&avnx[7] } ,
-    {20,"personal-communication" ,3,0.0,&avnx[8] } ,
+    {20,"pound" ,3,0.0,&avnx[4] } ,
+    {20,"plus" ,4,0.0,&avnx[5] } ,
+    {20,"perc" ,5,0.0,NULL } ,
+    {20,"not-set" ,0,0.0,&avnx[7] } ,
+    {20,"citation" ,1,0.0,&avnx[8] } ,
+    {20,"book" ,2,0.0,&avnx[9] } ,
+    {20,"personal-communication" ,3,0.0,&avnx[10] } ,
     {20,"book-citation" ,4,0.0,NULL } };
 
 static AsnType atx[126] = {
@@ -109,7 +111,7 @@ static AsnType atx[126] = {
   {409, "Mim-reference" ,1,0,0,0,0,0,0,0,NULL,&atx[7],&atx[85],0,&atx[38]} ,
   {0, "number" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[86]} ,
   {0, "origNumber" ,128,1,0,1,0,0,0,0,NULL,&atx[4],NULL,0,&atx[87]} ,
-  {0, "type" ,128,2,0,1,0,0,0,0,NULL,&atx[88],&avnx[4],0,&atx[89]} ,
+  {0, "type" ,128,2,0,1,0,0,0,0,NULL,&atx[88],&avnx[6],0,&atx[89]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "authors" ,128,3,0,0,0,0,0,0,NULL,&atx[20],&atx[90],0,&atx[94]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[91],NULL,0,NULL} ,

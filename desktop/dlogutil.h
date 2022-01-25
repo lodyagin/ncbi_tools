@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -100,6 +100,7 @@ extern ValNodePtr AddStringToValNodeChain (ValNodePtr head, CharPtr str, Uint1 c
   GrouP           useGeneXref;      \
   GrouP           newGeneGrp;       \
   TexT            geneSymbol;       \
+  TexT            geneAllele;       \
   TexT            geneDesc;         \
   TexT            locusTag;         \
   ButtoN          editGeneBtn;      \

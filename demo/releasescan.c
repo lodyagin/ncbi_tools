@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/6/00
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -309,10 +309,10 @@ Int2 Main (void)
 
 {
   Boolean     binary, compressed = FALSE;
+  CharPtr     dir, progname, str, subfile;
   FILE        *fp;
   ValNodePtr  head, vnp;
   Char        path [PATH_MAX];
-  CharPtr     progname, str, subfile;
 
   ErrSetFatalLevel (SEV_FATAL);
   ErrClearOptFlags (EO_SHOW_USERSTR);
@@ -352,6 +352,7 @@ Int2 Main (void)
     return 0;
   }
 
+  dir = myargs [p_argInputPath].strvalue;
   binary = (Boolean) myargs [b_argBinaryFile].intvalue;
 #ifdef OS_UNIX
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
@@ -370,7 +371,7 @@ Int2 Main (void)
     return 1;
   }
 
-  head = DirCatalog (myargs [p_argInputPath].strvalue);
+  head = DirCatalog (dir);
 
   /* process appropriate files within specified directory */
 
@@ -392,7 +393,10 @@ Int2 Main (void)
 
           /* open a file, read one record at a time, present it to callback */
 
-          ScanBioseqSetRelease (str, binary, compressed, (Pointer) fp, DoRecord);
+          StringNCpy_0 (path, dir, sizeof (path));
+          FileBuildPath (path, NULL, str);
+
+          ScanBioseqSetRelease (path, binary, compressed, (Pointer) fp, DoRecord);
         }
       }
     }

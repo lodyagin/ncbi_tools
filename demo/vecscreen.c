@@ -25,6 +25,9 @@
 **************************************************************************/
 /* $Revision 1.0 $  
 * $Log: vecscreen.c,v $
+* Revision 6.6  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.5  2001/01/09 17:30:51  madden
 * Fix umr
 *
@@ -123,7 +126,7 @@ Int2 Main (void)
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
-		ErrPostEx(SEV_FATAL, 0, 0, "vecscreen: Unable to open input file %s\n", blast_inputfile);
+		ErrPostEx(SEV_FATAL, 1, 0, "vecscreen: Unable to open input file %s\n", blast_inputfile);
 		return (1);
 	}
 
@@ -132,7 +135,7 @@ Int2 Main (void)
 		outfp = FileOpen(blast_outputfile, "w");
 	if (outfp == NULL)
 	{
-		ErrPostEx(SEV_FATAL, 0, 0, "vecscreen: Unable to open output file %s\n", blast_outputfile);
+		ErrPostEx(SEV_FATAL, 1, 0, "vecscreen: Unable to open output file %s\n", blast_outputfile);
 		return (1);
 	}
 
@@ -158,7 +161,7 @@ Int2 Main (void)
 		SeqEntryExplore(sep, &query_bsp, FindNuc);
 		if (query_bsp == NULL)
 		{
-			ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+			ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 			sep = SeqEntryFree(sep);
 			return 2;
 		}

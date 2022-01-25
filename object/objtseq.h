@@ -84,6 +84,7 @@ NLM_EXTERN Boolean LIBCALL TSeqSetAsnWrite PROTO (( TSeqSetPtr , AsnIoPtr, AsnTy
 #include <objseq.h>
 
 NLM_EXTERN TSeqPtr BioseqToTSeq (BioseqPtr bsp);
+NLM_EXTERN Boolean BioseqAsnWriteAsTSeq (BioseqPtr bsp, AsnIoPtr aip, AsnTypePtr orig);
 
 #ifdef __cplusplus
 /* { */ }

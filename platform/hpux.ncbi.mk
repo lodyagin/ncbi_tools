@@ -1,5 +1,5 @@
 #
-# $Id: hpux.ncbi.mk,v 1.8 2002/10/29 01:20:13 lavr Exp $
+# $Id: hpux.ncbi.mk,v 1.9 2003/05/07 17:40:12 beloslyu Exp $
 #
 # testded on:
 # HP-UX heart B.11.00 U 9000/800 71355 unlimited-user license
@@ -8,6 +8,7 @@
 #
 NCBI_DEFAULT_LCL = hp_pa
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = cc -Ae +DA2.0 -fast -DHPUX -Wl,-aarchive_shared -ldld -Wl,-E
 NCBI_CFLAGS1 = -c -z -Wp,-H500000
 NCBI_LDFLAGS1 = 

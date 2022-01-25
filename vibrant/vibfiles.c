@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *       Vibrant file functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibfiles.c,v $
+* Revision 6.3  2003/09/02 21:26:56  kans
+* ReadChar and CloseString do not rely on feof, which does not work on Mac OS X
+*
 * Revision 6.2  2002/06/13 16:15:13  kans
 * fix includes for OS_UNIX_DARWIN with WIN_MAC (EN) - still bug in vibutils.c file dialog
 *
@@ -141,7 +144,7 @@ extern Nlm_Char Nlm_ReadChar (FILE *f)
   if (f != NULL) {
     getcrsult = fgetc (f);
     ch = (Nlm_Char) getcrsult;
-    if (getcrsult == EOF && feof (f)) {
+    if (getcrsult == EOF /* && feof (f) */) {
       ch = '\0';
     }
   } else {
@@ -208,7 +211,7 @@ static void Nlm_CloseString (FILE *f, Nlm_CharPtr str, size_t maxsize)
   if (charCount <= (Nlm_Int2) maxsize) {
     str [charCount] = '\0';
   }
-  Nlm_fileDone = (Nlm_Boolean) (! feof (f));
+  Nlm_fileDone = (Nlm_Boolean) /* (! feof (f)) */ (Nlm_termCH != '\0');
 }
 
 extern void Nlm_ReadString (FILE *f, Nlm_CharPtr str, size_t maxsize)

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.8 $
+* $Revision: 1.13 $
 *
 * File Description: 
 *
@@ -76,10 +76,16 @@ NLM_EXTERN CONN VecScreenOpenConnection (
 )
 
 {
-  return QUERY_OpenUrlQuery ("yar.nlm.nih.gov", 6224, "/VecScreen/vecscreenQB.cgi",
+  /*
+  return QUERY_OpenUrlQuery ("yar.ncbi.nlm.nih.gov", 6224,
+                             "/VecScreen/vecscreenQB.cgi",
                              query, "vecscreenapp",
                              30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
                              fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
+  */
+
+  StringCat (query, "\n");
+  return QUERY_OpenServiceQuery ("VecScreen", query, 30);
 }
 
 NLM_EXTERN EIO_Status VecScreenWaitForReply (
@@ -172,9 +178,12 @@ static Boolean LIBCALLBACK SecondVecScreenCallback (
               *sttus = '\0';
               sttus += 9;
               if (StringCmp (cqp->rid, rid) != 0) {
-                ErrPostEx (SEV_ERROR, 0, 0, "RID mismatch '%s' vs '%s", cqp->rid, rid);
+                ErrPostEx (SEV_ERROR, 0, 0, "RID mismatch '%s' vs '%s'", cqp->rid, rid);
                 cqp->done = TRUE;
               } else if (StringStr (sttus, "FAILED") != NULL) {
+                cqp->done = TRUE;
+              } else if (StringStr (sttus, "unknown") != NULL) {
+                ErrPostEx (SEV_ERROR, 0, 0, "RID unknown '%s'", rid);
                 cqp->done = TRUE;
               } else if (StringStr (sttus, "SUCCESS") != NULL) {
                 success = TRUE;
@@ -189,14 +198,12 @@ static Boolean LIBCALLBACK SecondVecScreenCallback (
         } else if (StringNICmp (line, ">Message", 8) == 0) {
           str = ReadALine (line, sizeof (line), fp);
           while (str != NULL && StringNCmp (line, "//", 2) != 0) {
-            /*
             Message (MSG_POST, "%s\n", str);
             if (StringStr (line, "FAILURE") != NULL) {
               if (! waiting) {
                 cqp->done = TRUE;
               }
             }
-            */
             str = ReadALine (line, sizeof (line), fp);
           }
         }
@@ -279,12 +286,10 @@ static Boolean LIBCALLBACK FirstVecScreenCallback (
         } else if (StringNICmp (line, ">Message", 8) == 0) {
           str = ReadALine (line, sizeof (line), fp);
           while (str != NULL && StringNCmp (line, "//", 2) != 0) {
-            /*
             Message (MSG_POST, "%s\n", str);
             if (StringStr (line, "FAILURE") != NULL) {
               cqp->done = TRUE;
             }
-            */
             str = ReadALine (line, sizeof (line), fp);
           }
         }
@@ -367,7 +372,7 @@ NLM_EXTERN Boolean VecScreenAsynchronousRequest (
   CONN  conn;
   FILE  *fp;
   Char  path [PATH_MAX];
-  Char  str [64];
+  Char  str [128];
 
   if (bsp == NULL || queue == NULL || resultproc == NULL) return FALSE;
 
@@ -437,7 +442,7 @@ NLM_EXTERN Int4 VecScreenCheckQueue (
   time_t          currtime;
   VQueuePtr       next;
   VQueuePtr PNTR  qptr;
-  Char            str [80];
+  Char            str [128];
 
   qptr = (VQueuePtr PNTR) queue;
   if (qptr == NULL || *qptr == NULL) return 0;

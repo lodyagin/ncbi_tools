@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -935,6 +935,7 @@ static Boolean ShouldBeAGBQual (SeqFeatPtr sfp, Int2 qual, Boolean allowProductG
     return FALSE;
   }
   if (qual == GBQUAL_map && (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region)) return FALSE;
+  if (qual == GBQUAL_operon && (sfp == NULL || sfp->idx.subtype != FEATDEF_operon)) return FALSE;
   if (Nlm_GetAppProperty ("SequinUseEMBLFeatures") == NULL) {
     if (qual == GBQUAL_usedin) {
       return FALSE;
@@ -1127,6 +1128,12 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
             seen [qual] = LEGAL_FEATURE;
           }
         }
+        if (StringCmp (name, "repeat_region") == 0) {
+          seen [GBQUAL_map] = TRUE;
+        }
+        if (StringCmp (name, "operon") == 0) {
+          seen [GBQUAL_operon] = TRUE;
+        }
         for (i = 0; i < sefp->opt_num; i++) {
           qual = sefp->opt_qual [i];
           if (qual > -1 && ShouldBeAGBQual (sfp, qual, allowProductGBQual)) {
@@ -1268,6 +1275,10 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "nonconsensus splice site");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 8 :
+      SetTitle (ffp->exceptText, "rearrangement required for product");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1403,6 +1414,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "trans splicing");
       PopupItem (canned, "artificial frameshift");
       PopupItem (canned, "nonconsensus splice site");
+      PopupItem (canned, "rearrangement required");
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
@@ -1420,6 +1432,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
         } else if (StringICmp (sfp->except_text, "non-consensus splice site") == 0 ||
                    StringICmp (sfp->except_text, "nonconsensus splice site") == 0) {
           SetValue (canned, 7);
+        } else if (StringICmp (sfp->except_text, "rearrangement required for product") == 0) {
+          SetValue (canned, 8);
         }
       } else {
         SetValue (canned, 1);
@@ -1441,6 +1455,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     ffp->useGeneXref = NULL;
     ffp->newGeneGrp = NULL;
     ffp->geneSymbol = NULL;
+    ffp->geneAllele = NULL;
     ffp->geneDesc = NULL;
     ffp->locusTag = NULL;
     for (page = 0; page < 5; page++) {
@@ -1476,6 +1491,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       ffp->newGeneGrp = HiddenGroup (y, 2, 0, NULL);
       StaticPrompt (ffp->newGeneGrp, "Gene Symbol", 0, dialogTextHeight, programFont, 'l');
       ffp->geneSymbol = DialogText (ffp->newGeneGrp, "", 20, NULL);
+      StaticPrompt (ffp->newGeneGrp, "Allele", 0, dialogTextHeight, programFont, 'l');
+      ffp->geneAllele = DialogText (ffp->newGeneGrp, "", 20, NULL);
       StaticPrompt (ffp->newGeneGrp, "Description", 0, dialogTextHeight, programFont, 'l');
       ffp->geneDesc = DialogText (ffp->newGeneGrp, "", 20, NULL);
       StaticPrompt (ffp->newGeneGrp, "Locus Tag", 0, dialogTextHeight, programFont, 'l');

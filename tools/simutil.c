@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: simutil.c,v 6.8 2003/05/30 17:25:38 coulouri Exp $";
+
 /*  simutil.c
 * ===========================================================================
 *
@@ -37,6 +39,12 @@
 * Date     Name        Description of modification
 *
 * $Log: simutil.c,v $
+* Revision 6.8  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
+* Revision 6.7  2003/05/13 16:02:54  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.6  2000/04/28 19:10:47  kans
 * check_strand_mol protected against bsp == NULL
 *
@@ -699,7 +707,7 @@ CharPtr ckalloc(Int4 amount)
                    
         if ((Uint4)amount > (Uint4)SIZE_MAX)
         {
-                ErrPostEx(SEV_FATAL,0,0,"Sorry. Can't allocate that much (%ld), %ld", (long) amount, (long) SIZE_MAX);
+                ErrPostEx(SEV_FATAL, 1,0,"Sorry. Can't allocate that much (%ld), %ld", (long) amount, (long) SIZE_MAX);
 		exit(1);
         }
  

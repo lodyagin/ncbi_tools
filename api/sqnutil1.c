@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.271 $
+* $Revision: 6.283 $
 *
 * File Description: 
 *
@@ -1643,12 +1643,9 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   Char                 ch;
   CdRegionPtr          crp;
   Int2                 ctr = 1;
-  DbtagPtr             dbt;
   ValNodePtr           descr;
   SeqFeatPtr           first;
   GBQualPtr            gbq;
-  SeqFeatPtr           gene;
-  GeneRefPtr           grp;
   Int4                 i;
   Char                 id [64];
   SeqEntryPtr          last;
@@ -1680,6 +1677,11 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
   long int             val;
   ValNodePtr           vnp;
   SeqFeatXrefPtr       xref;
+  /*
+  DbtagPtr             dbt;
+  SeqFeatPtr           gene;
+  GeneRefPtr           grp;
+  */
 
   if (sfp == NULL || bsp == NULL) return;
 
@@ -1693,8 +1695,9 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
     sfp = sfp->next;
   }
 
-  /* expand genes specified by qualifiers on other features (except repeat_region) */
+  /* no longer expand genes specified by qualifiers on other features (except repeat_region) */
 
+  /*
   sfp = first;
   while (sfp != NULL) {
     prev = &(sfp->xref);
@@ -1720,7 +1723,6 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
                 gene->location = AsnIoMemCopy (sfp->location,
                                                (AsnReadFunc) SeqLocAsnRead,
                                                (AsnWriteFunc) SeqLocAsnWrite);
-                /* copy dbxrefs from parent feature */
                 for (vnp = sfp->dbxref; vnp != NULL; vnp = vnp->next) {
                   dbt = (DbtagPtr) vnp->data.ptrvalue;
                   if (dbt == NULL) continue;
@@ -1741,6 +1743,7 @@ NLM_EXTERN void PromoteXrefsEx (SeqFeatPtr sfp, BioseqPtr bsp, Uint2 entityID, B
     }
     sfp = sfp->next;
   }
+  */
 
   /* expand mRNA features into cDNA product sequences */
 
@@ -2739,7 +2742,7 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
     if (aa == 0 && curraa != 0) {
       aa = curraa;
       trp->aa = curraa;
-      trp->aatype = Seq_code_ncbieaa;
+      trp->aatype = 2;
     }
     if (aa != 0 && aa == curraa) {
       if (justTrnaText) {
@@ -2758,7 +2761,7 @@ static void CleanupTrna (SeqFeatPtr sfp, tRNAPtr trp)
   aa = ParseTRnaString (sfp->comment, &justTrnaText, trpcodon, TRUE);
   if (aa == 0) return;
   trp->aa = aa;
-  trp->aatype = Seq_code_ncbieaa;
+  trp->aatype = 2;
   if (justTrnaText) {
     for (j = 0; j < 6; j++) {
       if (trp->codon [j] == 255) {
@@ -3241,7 +3244,7 @@ static Boolean HandledGBQualOnImp (SeqFeatPtr sfp, GBQualPtr gbq)
       ptr++;
       ch = *ptr;
     }
-    return TRUE;
+    /* return TRUE; */
   }
   return FALSE;
 }
@@ -5468,6 +5471,27 @@ static void CopyProtXrefToProtFeat (ProtRefPtr prp, ProtRefPtr prx)
   }
 }
 
+static Boolean InGpsGenomic (SeqFeatPtr sfp)
+
+{
+  BioseqPtr     bsp;
+  BioseqSetPtr  bssp;
+
+  if (sfp == NULL) return FALSE;
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return FALSE;
+  if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) bsp->idx.parentptr;
+    while (bssp != NULL) {
+      if (bssp->_class == BioseqseqSet_class_nuc_prot) return FALSE;
+      if (bssp->_class == BioseqseqSet_class_gen_prod_set) return TRUE;
+      if (bssp->idx.parenttype != OBJ_BIOSEQSET) return FALSE;
+      bssp = (BioseqSetPtr) bssp->idx.parentptr;
+    }
+  }
+  return FALSE;
+}
+
 static void HandleXrefOnCDS (SeqFeatPtr sfp)
 
 {
@@ -5479,6 +5503,7 @@ static void HandleXrefOnCDS (SeqFeatPtr sfp)
   SeqFeatXrefPtr       xref;
 
   if (sfp != NULL && sfp->product != NULL) {
+    if (InGpsGenomic (sfp)) return;
     prot = GetBestProteinFeatureUnindexed (sfp->product);
     if (prot != NULL) {
       prp = (ProtRefPtr) prot->data.value.ptrvalue;
@@ -5737,6 +5762,10 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
       CleanDoubleQuoteList (grp->syn);
       grp->db = ValNodeSort (grp->db, SortDbxref);
       CleanupDuplicateDbxrefs (&(grp->db));
+      /* now move grp->dbxref to sfp->dbxref */
+      vnp = grp->db;
+      grp->db = NULL;
+      ValNodeLink ((&sfp->dbxref), vnp);
       if (grp->locus != NULL && grp->syn != NULL) {
         vnp = grp->syn;
         str = (CharPtr) vnp->data.ptrvalue;
@@ -5772,6 +5801,10 @@ static void CleanupFeatureStrings (SeqFeatPtr sfp, Boolean stripSerial, ValNodeP
       CleanDoubleQuoteList (prp->activity);
       prp->db = ValNodeSort (prp->db, SortDbxref);
       CleanupDuplicateDbxrefs (&(prp->db));
+      /* now move prp->dbxref to sfp->dbxref */
+      vnp = prp->db;
+      prp->db = NULL;
+      ValNodeLink ((&sfp->dbxref), vnp);
       if (prp->processed != 3 && prp->processed != 4 &&
           prp->name == NULL && sfp->comment != NULL) {
         if (StringICmp (sfp->comment, "putative") != 0) {
@@ -6563,6 +6596,8 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
   OrgRefPtr     orp;
   Boolean       partial5;
   Boolean       partial3;
+  Uint1         processed;
+  ProtRefPtr    prp;
   ValNodePtr    psp;
   RnaRefPtr     rrp;
   Uint1         rrptype;
@@ -6659,6 +6694,28 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
                 sfp->data.value.ptrvalue = rrp;
                 rrp->type = rrptype;
                 sfp->idx.subtype = FindFeatDefType (sfp);
+              } else {
+                processed = 0;
+                if (StringCmp (ifp->key, "proprotein") == 0 || StringCmp (ifp->key, "preprotein") == 0) {
+                  processed = 1;
+                } else if (StringCmp (ifp->key, "mat_peptide") == 0) {
+                  processed = 2;
+                } else if (StringCmp (ifp->key, "sig_peptide") == 0) {
+                  processed = 3;
+                } else if (StringCmp (ifp->key, "transit_peptide") == 0) {
+                  processed = 4;
+                }
+                if (processed != 0 || StringCmp (ifp->key, "Protein") == 0) {
+                  bsp = BioseqFind (SeqLocId (sfp->location));
+                  if (bsp != NULL && ISA_aa (bsp->mol)) {
+                    sfp->data.value.ptrvalue = ImpFeatFree (ifp);
+                    sfp->data.choice = SEQFEAT_PROT;
+                    prp = ProtRefNew ();
+                    sfp->data.value.ptrvalue = prp;
+                    prp->processed = processed;
+                    sfp->idx.subtype = FindFeatDefType (sfp);
+                  }
+                }
               }
             }
           }
@@ -7267,6 +7324,83 @@ NLM_EXTERN void ResynchMessengerRNAPartials (SeqEntryPtr sep)
   VisitFeaturesInSep (sep, NULL, ResynchMRNAPartials);
 }
 
+NLM_EXTERN void ResynchPeptidePartials (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  SeqFeatPtr   bestprot;
+  BioseqPtr    bsp;
+  MolInfoPtr   mip;
+  Boolean      partial5;
+  Boolean      partial3;
+  ProtRefPtr   prp;
+  SeqEntryPtr  sep;
+  SeqIdPtr     sip;
+  SeqLocPtr    slp;
+  ValNodePtr   vnp;
+
+  if (sfp->data.choice != SEQFEAT_PROT) return;
+  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+  if (prp == NULL) return;
+  if (prp->processed < 1 || prp->processed > 4) return;
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  sfp->partial = (Boolean) (sfp->partial || partial5 || partial3);
+  slp = SeqLocFindNext (sfp->location, NULL);
+  if (slp == NULL) return;
+  sip = SeqLocId (sfp->product);
+  if (sip == NULL) return;
+  bsp = BioseqFind (sip);
+  if (bsp != NULL && ISA_aa (bsp->mol) && bsp->repr == Seq_repr_raw) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    if (sep == NULL) return;
+    bestprot = SeqMgrGetBestProteinFeature (bsp, NULL);
+    if (bestprot == NULL) {
+      bestprot = GetBestProteinFeatureUnindexed (sfp->product);
+    }
+    if (bestprot != NULL) {
+      bestprot->location = SeqLocFree (bestprot->location);
+      bestprot->location = CreateWholeInterval (sep);
+      SetSeqLocPartial (bestprot->location, partial5, partial3);
+      bestprot->partial = (partial5 || partial3);
+    }
+    vnp = SeqEntryGetSeqDescr (sep, Seq_descr_molinfo, NULL);
+    if (vnp == NULL) {
+      vnp = CreateNewDescriptor (sep, Seq_descr_molinfo);
+      if (vnp != NULL) {
+        mip = MolInfoNew ();
+        vnp->data.ptrvalue = (Pointer) mip;
+        if (mip != NULL) {
+          mip->biomol = 8;
+          mip->tech = 13;
+        }
+      }
+    }
+    if (vnp != NULL) {
+      mip = (MolInfoPtr) vnp->data.ptrvalue;
+      if (mip != NULL) {
+        if (partial5 && partial3) {
+          mip->completeness = 5;
+        } else if (partial5) {
+          mip->completeness = 3;
+        } else if (partial3) {
+          mip->completeness = 4;
+        /*
+        } else if (partial) {
+          mip->completeness = 2;
+        */
+        } else {
+          mip->completeness = 0;
+        }
+      }
+    }
+  }
+}
+
+NLM_EXTERN void ResynchProteinPartials (SeqEntryPtr sep)
+
+{
+  VisitFeaturesInSep (sep, NULL, ResynchPeptidePartials);
+}
+
 /* SeqIdStripLocus removes the SeqId.name field if accession is set */
 
 NLM_EXTERN SeqIdPtr SeqIdStripLocus (SeqIdPtr sip)
@@ -7479,9 +7613,12 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
 {
   Boolean  dataFound;
   Char     path [PATH_MAX];
+  Char     appPath[PATH_MAX];
   CharPtr  ptr;
 
-  ProgramPath (path, sizeof (path));
+  ProgramPath (appPath, sizeof (path));
+  StrCpy(path, appPath);
+  /* data a sibling of our application? */
   ptr = StringRChr (path, DIRDELIMCHR);
   if (ptr != NULL) {
     ptr++;
@@ -7489,6 +7626,7 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
   }
   dataFound = CheckDataPath (path, "data");
   if (! (dataFound)) {
+  /* data an uncle of our application? */
     if (ptr != NULL) {
       ptr--;
       *ptr = '\0';
@@ -7501,50 +7639,12 @@ NLM_EXTERN Boolean UseLocalAsnloadDataAndErrMsg (void)
     }
   }
 #ifdef OS_UNIX_DARWIN
-  /* Mac OS X package has application in Programname.app/Contents/MacOS/Programname */
-  if (! (dataFound)) {
-    if (ptr != NULL) {
-      /* check within Contents/Resources */
+  if (! (dataFound) &&  IsApplicationPackage(appPath)) {
+      /* is data inside our application within Contents/Resources? */
+      StrCpy(path, appPath);
+      FileBuildPath(path, "Contents", NULL);
       FileBuildPath (path, "Resources", NULL);
       dataFound = CheckDataPath (path, "data");
-      /* did not change ptr, so if it failed just go up to next higher level */
-    }
-  }
-  if (! (dataFound)) {
-    if (ptr != NULL) {
-      ptr--;
-      *ptr = '\0';
-      ptr = StringRChr (path, DIRDELIMCHR);
-      if (ptr != NULL) {
-        ptr++;
-        *ptr = '\0';
-      }
-      dataFound = CheckDataPath (path, "data");
-    }
-  }
-  if (! (dataFound)) {
-    if (ptr != NULL) {
-      ptr--;
-      *ptr = '\0';
-      ptr = StringRChr (path, DIRDELIMCHR);
-      if (ptr != NULL) {
-        ptr++;
-        *ptr = '\0';
-      }
-      dataFound = CheckDataPath (path, "data");
-    }
-  }
-  if (! (dataFound)) {
-    if (ptr != NULL) {
-      ptr--;
-      *ptr = '\0';
-      ptr = StringRChr (path, DIRDELIMCHR);
-      if (ptr != NULL) {
-        ptr++;
-        *ptr = '\0';
-      }
-      dataFound = CheckDataPath (path, "data");
-    }
   }
 #endif
   if (dataFound) {
@@ -7941,8 +8041,17 @@ NLM_EXTERN Uint2 FindFeatFromFeatDefType (Uint2 subtype)
       if (subtype >= FEATDEF_IMP && subtype <= FEATDEF_site_ref) {
         return SEQFEAT_IMP;
       }
+      if (subtype == FEATDEF_oriT) {
+        return SEQFEAT_IMP;
+      }
       if (subtype >= FEATDEF_preprotein && subtype <= FEATDEF_transit_peptide_aa) {
         return SEQFEAT_PROT;
+      }
+      if (subtype == FEATDEF_operon) {
+        return SEQFEAT_IMP;
+      }
+      if (subtype == FEATDEF_gap) {
+        return SEQFEAT_IMP;
       }
   }
   return 0;
@@ -8263,6 +8372,7 @@ NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqId
   SeqPntPtr      spp;
 
   if (slp == NULL) return index;
+
   while (slp != NULL) {
     switch (slp->choice) {
       case SEQLOC_NULL :
@@ -8324,6 +8434,155 @@ NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqId
     }
     slp = slp->next;
   }
+
+  return index;
+}
+
+NLM_EXTERN Int4 VisitSeqIdsInSeqFeat (SeqFeatPtr sfp, Pointer userdata, VisitSeqIdFunc callback)
+
+{
+  CodeBreakPtr  cbp;
+  CdRegionPtr   crp;
+  Int4          index = 0;
+  RnaRefPtr     rrp;
+  tRNAPtr       trp;
+
+  if (sfp == NULL) return index;
+
+  index += VisitSeqIdsInSeqLoc (sfp->location, userdata, callback);
+  index += VisitSeqIdsInSeqLoc (sfp->product, userdata, callback);
+
+  switch (sfp->data.choice) {
+    case SEQFEAT_CDREGION :
+      crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+      if (crp != NULL) {
+        for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+          index += VisitSeqIdsInSeqLoc (cbp->loc, userdata, callback);
+        }
+      }
+      break;
+    case SEQFEAT_RNA :
+      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+      if (rrp != NULL && rrp->ext.choice == 2) {
+        trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+        if (trp != NULL && trp->anticodon != NULL) {
+          index += VisitSeqIdsInSeqLoc (trp->anticodon, userdata, callback);
+        }
+      }
+      break;
+    default :
+      break;
+  }
+
+  return index;
+}
+
+NLM_EXTERN Int4 VisitSeqIdsInSeqAlign (SeqAlignPtr sap, Pointer userdata, VisitSeqIdFunc callback)
+
+{
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  Int4          index = 0;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp = NULL;
+  StdSegPtr     ssp;
+
+  if (sap == NULL) return index;
+
+  if (sap->bounds != NULL) {
+    sip = SeqLocId (sap->bounds);
+    index += VisitSeqIdList (sip, userdata, callback);
+  }
+
+  if (sap->segs == NULL) return index;
+
+  switch (sap->segtype) {
+    case SAS_DENDIAG :
+      ddp = (DenseDiagPtr) sap->segs;
+      if (ddp != NULL) {
+        for (sip = ddp->id; sip != NULL; sip = sip->next) {
+          index += VisitSeqIdList (sip, userdata, callback);
+        }
+      }
+      break;
+    case SAS_DENSEG :
+      dsp = (DenseSegPtr) sap->segs;
+      if (dsp != NULL) {
+        for (sip = dsp->ids; sip != NULL; sip = sip->next) {
+          index += VisitSeqIdList (sip, userdata, callback);
+        }
+      }
+      break;
+    case SAS_STD :
+      ssp = (StdSegPtr) sap->segs;
+      for (slp = ssp->loc; slp != NULL; slp = slp->next) {
+        sip = SeqLocId (slp);
+        index += VisitSeqIdList (sip, userdata, callback);
+      }
+      break;
+    case SAS_DISC :
+      /* recursive */
+      for (sap = (SeqAlignPtr) sap->segs; sap != NULL; sap = sap->next) {
+        index += VisitSeqIdsInSeqAlign (sap, userdata, callback);
+      }
+      break;
+    default :
+      break;
+  }
+
+  return index;
+}
+
+NLM_EXTERN Int4 VisitSeqIdsInSeqGraph (SeqGraphPtr sgp, Pointer userdata, VisitSeqIdFunc callback)
+
+{
+  Int4      index = 0;
+  SeqIdPtr  sip;
+
+  if (sgp == NULL) return index;
+
+  if (sgp->loc != NULL) {
+    sip = SeqLocId (sgp->loc);
+    index += VisitSeqIdList (sip, userdata, callback);
+  }
+
+  return index;
+}
+
+NLM_EXTERN Int4 VisitSeqIdsInSeqAnnot (SeqAnnotPtr annot, Pointer userdata, VisitSeqIdFunc callback)
+
+{
+  Int4         index = 0;
+  SeqAlignPtr  sap;
+  SeqFeatPtr   sfp;
+  SeqGraphPtr  sgp;
+
+  if (annot == NULL || annot->data == NULL) return index;
+
+  switch (annot->type) {
+
+    case 1 :
+      for (sfp = (SeqFeatPtr) annot->data; sfp != NULL; sfp = sfp->next) {
+        index += VisitSeqIdsInSeqFeat (sfp, userdata, callback);
+      }
+      break;
+
+    case 2 :
+      for (sap = (SeqAlignPtr) annot->data; sap != NULL; sap = sap->next) {
+        index += VisitSeqIdsInSeqAlign (sap, userdata, callback);
+      }
+      break;
+
+    case 3 :
+      for (sgp = (SeqGraphPtr) annot->data; sgp != NULL; sgp = sgp->next) {
+        index += VisitSeqIdsInSeqGraph (sgp, userdata, callback);
+      }
+      break;
+
+    default :
+      break;
+  }
+
   return index;
 }
 

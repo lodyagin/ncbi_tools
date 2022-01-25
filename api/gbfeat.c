@@ -3,9 +3,13 @@
 *   -- all routines for checking genbank feature table
 *   -- all extern variables are in gbftglob.c
 *                                                                  10-11-93
-$Revision: 6.8 $
+$Revision: 6.9 $
 *
 * $Log: gbfeat.c,v $
+* Revision 6.9  2003/10/09 15:35:51  bazhin
+* Qualifier "rpt_unit" is removed from the list of ones to be splitted
+* by commas.
+*
 * Revision 6.8  2001/12/06 17:00:41  kans
 * TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
 *
@@ -74,9 +78,9 @@ $Revision: 6.8 $
 #include <gbfeat.h>
 #include <errdefn.h>
 
-#define ParFlat_SPLIT_IGNORE 5
+#define ParFlat_SPLIT_IGNORE 4
 CharPtr GBQual_names_split_ignore[ParFlat_SPLIT_IGNORE] = {
-"citation", "EC_number", "rpt_type", "rpt_unit", "usedin"};
+"citation", "EC_number", "rpt_type", "usedin"};
 
 /*------------------------- GBQualNameValid() ------------------------*/
 /****************************************************************************

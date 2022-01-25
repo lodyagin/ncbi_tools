@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
  * $Log: ffprint.c,v $
+ * Revision 6.8  2003/07/15 14:35:56  dondosha
+ * Added #defines for substitutes to fprintf and fflush, needed for gzip compression of Web BLAST results
+ *
  * Revision 6.7  2002/08/26 22:06:57  kans
  * ff_RecalculateLinks (MS) to fix hotlink artifact
  *
@@ -125,6 +128,11 @@ parameters combined into Asn2ffJobPtr structure
 #include <ffprint.h>
 #include <ncbithr.h>
 
+int (*ff_fprintf)(FILE*, const char *, ...) = fprintf;
+int (*ff_fflush)(FILE*) = fflush;
+
+#define fprintf ff_fprintf
+#define fflush ff_fflush
 
 static TNlmTls ffprint_tls = NULL;
 

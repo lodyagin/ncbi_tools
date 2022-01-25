@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: sim3.c,v 6.2 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * sim3.c - compare two very similar sequences with affine gap penalties
 *

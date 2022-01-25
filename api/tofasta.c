@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.114 $
+* $Revision: 6.121 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.121  2003/08/04 19:51:02  kans
+* for complete chromosome title, if > 3 clones (by counting semicolons) then just display count, not full text of clones
+*
+* Revision 6.120  2003/07/25 16:15:25  kans
+* FindProtDefLine of hypothetical protein only needs to look for locus_tag
+*
+* Revision 6.119  2003/07/25 15:34:07  kans
+* protect FindProtDefLine against no parent CDS (e.g., SWISS-PROT segmented record P33072)
+*
+* Revision 6.118  2003/07/24 21:51:04  kans
+* if hypothetical protein, find gene and add to name
+*
+* Revision 6.117  2003/07/23 20:37:02  kans
+* if making htgs title, do not set iip values
+*
+* Revision 6.116  2003/07/22 18:31:44  kans
+* Added support for EMBLBlockPtr keywords in addition to GBBlockPtr keywords in suppressing sequencing in progress message
+*
+* Revision 6.115  2003/05/02 16:22:24  kans
+* added FindNRDefLine to make NR_ deflines on the fly
+*
 * Revision 6.114  2003/03/25 17:00:53  kans
 * CreateDefLine htgs suffix only shows if delta seq with more than 0 gaps
 *
@@ -2603,6 +2624,7 @@ static ValNodePtr IndexedGatherDescrOnBioseq (ItemInfoPtr iip, BioseqPtr bsp, Ui
 	SeqDescrPtr        sdp;
 
 	sdp = SeqMgrGetNextDescriptor (bsp, NULL, choice, &dcontext);
+	if (sdp == NULL) return NULL;
 	if (ISA_aa(bsp->mol) && !is_pdb(bsp)) {
 		if (dcontext.level != 0) return NULL;
 	}
@@ -2836,6 +2858,89 @@ static CharPtr FindNMDefLine (BioseqPtr bsp)
   return str;
 }
 
+static CharPtr FindNRDefLine (BioseqPtr bsp)
+
+{
+  BioSourcePtr  biop;
+  Char          buf [512];
+  Uint2         entityID;
+  CharPtr       gene;
+  size_t        len;
+  MolInfoPtr    mip;
+  NMDef         nd;
+  OrgRefPtr     orp;
+  CharPtr       rna = "miscRNA";
+  SeqEntryPtr   sep;
+  CharPtr       str;
+  ValNodePtr    vnp;
+
+  MemSet ((Pointer) &nd, 0, sizeof (NMDef));
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  sep = GetBestTopParentForDataEx (entityID, bsp, TRUE);
+
+  VisitFeaturesInSep (sep, (Pointer) &nd, FindNMFeats);
+  if (nd.numgenes < 1) return NULL;
+
+  vnp = GatherDescrOnBioseq (NULL, bsp, Seq_descr_source, FALSE);
+  if (vnp == NULL) return NULL;
+  biop = (BioSourcePtr) vnp->data.ptrvalue;
+  orp = biop->org;
+  if (orp == NULL || StringHasNoText (orp->taxname)) return NULL;
+
+  FeatDefLabel (nd.gene, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
+  gene = StringSaveNoNull (buf);
+
+  vnp = GatherDescrOnBioseq (NULL, bsp, Seq_descr_molinfo,TRUE);
+  if (vnp != NULL) {
+    mip = (MolInfoPtr) vnp->data.ptrvalue;
+    if (mip != NULL) {
+      switch (mip->biomol) {
+        case MOLECULE_TYPE_PRE_MRNA :
+          rna = "precursorRNA";
+          break;
+        case MOLECULE_TYPE_MRNA :
+          rna = "mRNA";
+          break;
+        case MOLECULE_TYPE_RRNA :
+          rna = "rRNA";
+          break;
+        case MOLECULE_TYPE_TRNA :
+          rna = "tRNA";
+          break;
+        case MOLECULE_TYPE_SNRNA :
+          rna = "snRNA";
+          break;
+        case MOLECULE_TYPE_SCRNA :
+          rna = "scRNA";
+          break;
+        case MOLECULE_TYPE_CRNA :
+          rna = "cRNA";
+          break;
+        case MOLECULE_TYPE_SNORNA :
+          rna = "snoRNA";
+          break;
+        case MOLECULE_TYPE_TRANSCRIBED_RNA :
+          rna = "miscRNA";
+          break;
+        default :
+          break;
+      }
+    }
+  }
+
+  len = StringLen (orp->taxname) + StringLen (gene) +
+        StringLen (", ") + 30;
+
+  str = (CharPtr) MemNew (len);
+  if (str != NULL) {
+    sprintf (str, "%s %s, %s", orp->taxname, gene, rna);
+  }
+
+  MemFree (gene);
+
+  return str;
+}
+
 static CharPtr FindProtDefLine(BioseqPtr bsp)
 {
 	SeqFeatPtr sfp = NULL, f;
@@ -2879,6 +2984,58 @@ static CharPtr FindProtDefLine(BioseqPtr bsp)
 				sprintf(s, "; %s", 
                                         (CharPtr) vnp->data.ptrvalue);
 				s += StringLen((CharPtr)vnp->data.ptrvalue) + 2;
+			}
+			/* if hypothetical protein, append locus_tag */
+			if (StringICmp (title, "hypothetical protein") == 0) {
+				sfp = NULL;
+				if (indexed) {
+					sfp = SeqMgrGetCDSgivenProduct (bsp, NULL);
+				} else {
+					sfp = GatherProtCDS(bsp);
+				}
+				if (sfp != NULL) {
+					grp = SeqMgrGetGeneXref (sfp);
+					if (grp == NULL) {
+						loc = sfp->location;
+						best_gene = NULL;
+						if (indexed) {
+							best_gene = SeqMgrGetOverlappingGene (loc, NULL);
+						} else {
+							vnp = GatherGenesForCDS(loc);
+							for (v=vnp; v; v=v->next) {
+								f = (SeqFeatPtr) v->data.ptrvalue;
+								diff_current = SeqLocAinB(loc, f->location);
+								if (! diff_current) {
+									best_gene = f;
+									break;
+								} else if (diff_current > 0) {
+									if ((diff_lowest == -1) || (diff_current<diff_lowest)) {
+										diff_lowest = diff_current;
+										best_gene = f;
+									}
+								}
+							}
+							ValNodeFree(vnp);
+						}
+						if (best_gene != NULL) {
+							grp = (GeneRefPtr) best_gene->data.value.ptrvalue;
+						}
+					}
+				}
+				if (grp != NULL) {
+					geneprod = NULL;
+					if (grp->locus_tag != NULL) {
+						geneprod = grp->locus_tag;
+					}
+					if (geneprod != NULL) {
+						s = (CharPtr) MemNew (StringLen (geneprod) + StringLen (title) + 20);
+						if (s != NULL) {
+							sprintf (s, "%s %s", title, geneprod);
+							MemFree (title);
+							title = s;
+						}
+					}
+				}
 			}
 		} else if (prp->desc) {
 			title = StringSave(prp->desc);
@@ -3084,6 +3241,27 @@ static Boolean StrainNotAtEndOfTaxname (CharPtr name, CharPtr strain)
   return FALSE;
 }
 
+static Int2 GetNumClones (CharPtr str)
+
+{
+  Char  ch;
+  Int2  count;
+
+  if (StringHasNoText (str)) return 0;
+
+  count = 1;
+  ch = *str;
+  while (ch != '\0') {
+    if (ch == ';') {
+      count++;
+    }
+    str++;
+    ch = *str;
+  }
+
+  return count;
+}
+
 static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 {
 	ItemInfoPtr 		iip = NULL;
@@ -3096,6 +3274,7 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 	CharPtr				name = NULL, chr = NULL, str = NULL,
 						cln = NULL, map = NULL, def=NULL;
 	Int2 				deflen = 0;
+	Int2                numclones;
 		
 	if (bsp == NULL) {
 		return NULL;
@@ -3119,9 +3298,16 @@ static CharPtr UseOrgMods(BioseqPtr bsp, CharPtr suffix)
 		}
 		if (ssp->subtype == 3) { /* clone */
 			if (ssp->name != NULL) {
-				cln = (CharPtr) MemNew(StringLen(ssp->name) + 8);
-				deflen += StringLen(ssp->name) + 8;
-				sprintf(cln, " clone %s", ssp->name);		
+				numclones = GetNumClones (ssp->name);
+				if (numclones > 3) {
+					cln = (CharPtr) MemNew (20);
+					sprintf (cln, ", %d clones,", (int) numclones);
+					deflen += StringLen (cln) + 2;
+				} else {
+					cln = (CharPtr) MemNew(StringLen(ssp->name) + 8);
+					deflen += StringLen(ssp->name) + 8;
+					sprintf(cln, " clone %s", ssp->name);
+				}		
 			}
 		}
 		if (ssp->subtype == 2) { /* map */
@@ -3446,9 +3632,11 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		"WORKING DRAFT SEQUENCE",
 		"*** SEQUENCING IN PROGRESS ***" };
 	Boolean htg_tech = FALSE, htgs_draft = FALSE, htgs_cancelled = FALSE,
-	        is_nc = FALSE, is_nm = FALSE, is_tpa = FALSE;
+	        is_nc = FALSE, is_nm = FALSE, is_nr = FALSE, is_tpa = FALSE;
 	MolInfoPtr mip;
 	GBBlockPtr gbp = NULL;
+	EMBLBlockPtr ebp = NULL;
+	ValNodePtr keywords = NULL;
 	Boolean wgsmaster = FALSE;
 	CharPtr suffix = NULL;
 	SeqIdPtr sip;
@@ -3474,6 +3662,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 						is_nc = TRUE;
 					} else if (StringNICmp (tsip->accession, "NM_", 3) == 0) {
 						is_nm = TRUE;
+					} else if (StringNICmp (tsip->accession, "NR_", 3) == 0) {
+						is_nr = TRUE;
 					}
 				}
 				break;
@@ -3519,6 +3709,16 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_genbank,TRUE);
 		if (vnp != NULL) {
 			gbp = (GBBlockPtr) vnp->data.ptrvalue;
+			if (gbp != NULL) {
+			  keywords = gbp->keywords;
+			}
+		}
+		vnp=GatherDescrOnBioseq(iip, bsp, Seq_descr_embl,TRUE);
+		if (vnp != NULL) {
+			ebp = (EMBLBlockPtr) vnp->data.ptrvalue;
+			if (ebp != NULL) {
+			  keywords = ebp->keywords;
+			}
 		}
 	}
 	if (! ignoreTitle)
@@ -3528,8 +3728,13 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
               title = StringSaveNoNull((CharPtr)vnp->data.ptrvalue);
           }
 	if (tech == MI_TECH_htgs_0 || tech == MI_TECH_htgs_1 || tech == MI_TECH_htgs_2) {
-                MemFree(title);  /* manufacture all HTG titles */
-                title = NULL;
+        MemFree(title);  /* manufacture all HTG titles */
+        title = NULL;
+        if (iip != NULL) {
+          iip->entityID = 0;
+          iip->itemID = 0;
+          iip->itemtype = 0;
+        }
 		if (title == NULL || *title == '\0') {
 			title = UseOrgMods(bsp, NULL);
 			organism = NULL;
@@ -3573,6 +3778,13 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 		}
 	} else if (is_nm && title == NULL) {
 	  title = FindNMDefLine (bsp);
+	  if (title != NULL && iip != NULL) {
+        iip->entityID = 0;
+        iip->itemID = 0;
+        iip->itemtype = 0;
+	  }
+	} else if (is_nr && title == NULL) {
+	  title = FindNRDefLine (bsp);
 	  if (title != NULL && iip != NULL) {
         iip->entityID = 0;
         iip->itemID = 0;
@@ -3736,8 +3948,8 @@ NLM_EXTERN Boolean CreateDefLineEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr buf,
 					i = 0;
 				}
 			} else {
-				if (gbp != NULL) {
-					for (vnp = gbp->keywords; vnp != NULL; vnp = vnp->next) {
+				if (keywords != NULL) {
+					for (vnp = keywords; vnp != NULL; vnp = vnp->next) {
 						if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_DRAFT") == 0) {
 							htgs_draft = TRUE;
 						} else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "HTGS_CANCELLED") == 0) {

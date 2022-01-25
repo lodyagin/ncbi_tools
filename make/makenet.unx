@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.153 2003/01/16 22:39:47 dondosha Exp $
+#	$Id: makenet.unx,v 6.159 2003/09/03 14:41:54 kans Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -465,7 +465,7 @@ EXEUTIL = srchnt srchaa mts sigme dst ccp epi twop cnsrt cnsgn
 EXEUTILVIB = ccpv dustv epiv sigmev twopv cnsrtv cnsgnv searchv
 
 SRCSEQUIN = sequin1.c sequin2.c sequin3.c sequin4.c sequin5.c sequin6.c \
-	sequin7.c sequin8.c sequin9.c sequinx.c
+	sequin7.c sequin8.c sequin9.c sequin10.c sequinx.c
 
 SRCSESSION =	session.c
 
@@ -505,7 +505,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast asn2asn Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbi_dsock test_ncbisock debug_server rtestval rasn2ff asn2gb asn2gb_psf gbseqget testent2 entrez2 spidey dotmatrix ingenue condense bl2seq
 
 .WAIT:
 	echo Waiting...go
@@ -631,6 +631,8 @@ copy :
 	$(SRCCOPY) ../network/vibnet/*.c .
 	$(SRCCOPY) ../network/vibnet/*.h ../include
 	$(SRCCOPY) ../cdromlib/*.h ../include
+	-$(SRCCOPY) ../network/wwwblast/Src/*.c .
+	-$(SRCCOPY) ../network/wwwblast/Src/*.h ../include
 	$(SRCCOPY) ../cdromlib/accentr.c .
 	$(SRCCOPY) ../cdromlib/accutils.c .
 	-$(SRCCOPY) ../sequin/*.* .
@@ -656,6 +658,7 @@ copy :
 	$(SRCCOPY) ../demo/spideymain.c .
 	$(SRCCOPY) ../demo/dotmain.c .
 	$(SRCCOPY) ../demo/ingenmain.c .
+	$(SRCCOPY) ../demo/bl2seq.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -1400,3 +1403,39 @@ test_ncbisock : test_ncbisock.c
 
 debug_server : debug_server.c
 	$(CC) -o debug_server $(LDFLAGS) debug_server.c $(LIB1) $(OTHERLIBS)
+
+# blast www server
+
+psiblast.REAL : psiblast.c wwwbutl.c
+	$(CC) -o psiblast.REAL $(LDFLAGS) psiblast.c wwwbutl.c $(THREAD_OBJ) \
+	$(LIB20) $(LIB23) -lvibgif $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+psiblast_cs.REAL : psiblast.c wwwbutl.c
+	$(CC) -o psiblast_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT psiblast.c wwwbutl.c \
+	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB23) -lvibgif \
+	$(LIB2) $(LIB1) $(OTHERLIBS) 	$(THREAD_OTHERLIBS)
+
+blast.REAL : wwwblast.c wwwbutl.c
+	$(CC) -o blast.REAL $(LDFLAGS) wwwblast.c wwwbutl.c $(THREAD_OBJ) \
+	$(LIB20) $(LIB23) -lvibgif $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+blast_cs.REAL : wwwblast.c wwwbutl.c
+	$(CC) -o blast_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT wwwblast.c wwwbutl.c \
+	$(THREAD_OBJ) $(LIB40) $(LIB41) $(LIB36) $(LIB6) $(LIB20) $(LIB23) -lvibgif \
+	$(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+nph-viewgif.cgi : viewgif.c
+	$(CC) -o nph-viewgif.cgi $(LDFLAGS) viewgif.c 
+
+wblast2.REAL : wblast2.c
+	$(CC) -o wblast2.REAL $(LDFLAGS) -DBL2SEQ_STANDALONE wblast2.c \
+	$(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+wblast2_cs.REAL : wblast2.c
+	$(CC) -o wblast2_cs.REAL $(LDFLAGS) -DNCBI_ENTREZ_CLIENT -DBL2SEQ_STANDALONE \
+	wblast2.c $(LIB41) $(LIB6) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+bl2bag.cgi : bl2bag.c
+	$(CC) -o bl2bag.cgi $(LDFLAGS) bl2bag.c $(LIB1) $(OTHERLIBS)
+
+##

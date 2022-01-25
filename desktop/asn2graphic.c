@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.96 $
+* $Revision: 6.119 $
 *
 * File Description:
 *
@@ -44,6 +44,26 @@
 #include <explore.h>
 #include <drawingp.h>
 #include <alignmgr2.h>
+
+/* type used to accumulate align score weights, should be small to save space, but large enough we do not overflow. */
+typedef Uint2 AccumValue_t;
+typedef AccumValue_t PNTR AccumValuePtr_t;
+#define ACCUMVALUE_MAX  UINT2_MAX
+
+/*
+  Given a sequence alignment, look at its score
+  and return a suitable integer (AccumValue_t) weight.'
+  scoretype gives which part of the score to use.
+*/
+enum {
+  NLM_SCORE_COUNT = 0,
+  NLM_SCORE_SCORE,
+  NLM_SCORE_BIT,
+  NLM_SCORE_EVALUE,
+  NLM_SCORE_NUMBER,
+  NLM_SCORE_TOOBIG
+};
+
 
 #define RELEVANT_FEATS_PER_CHUNK 128
 
@@ -89,6 +109,7 @@ typedef struct viewerInstanceData {
   Int4            from;
   Int4            to;
   Boolean         allFeatures;
+  GraphicViewExtrasPtr extras;
 } ViewerContext, PNTR ViewerContextPtr;
 
 typedef struct featureFilterState {
@@ -97,9 +118,25 @@ typedef struct featureFilterState {
   Uint2            indexInBlock;
 } FeatureFilterState, PNTR FeatureFilterStatePtr;
 
+#define MAX_ALIGN_SORT_LABEL  20
+typedef struct seq_align_sort_info {
+  SeqAlignPtr sap;
+  Int4  start, stop;
+  Uint1 strand;
+  Char  label[MAX_ALIGN_SORT_LABEL + 1];
+  AccumValue_t  normScore;
+} SeqAlignSortInfo, PNTR SeqAlignSortInfoPtr;
+
 typedef struct AlignmentFilterState {
-  SeqAlignPtr      SAPhead, SAPcurrent;
-  Uint2            align;  
+ /* SeqAlignPtr      SAPhead, SAPcurrent; /* obsolete */
+  SeqAlignSortInfoPtr alignSorted;  /* array of SeqAlignPtrs & Info about them, sorted */
+  Int4             alignSortedLen;  /* len of alignSorted */
+  Int4             alignIndex;      /* index of current alignment in alignSorted */
+  Uint1            scoreType;       /* what kind of score will we filter and weight by? */
+  Int2             cutoffPercent;   /* include alignments in alignSorted only if their score is in the top cutoffPercent */
+  AccumValue_t     cutoffScore;     /* normalised score Below which aligns won't get into alignSorted. */
+  AccumValue_t     cutoffScoreHi;   /* normalised score Above which aligns won't get into alignSorted. */
+  Int4             minScore, maxScore;  /* un-normalised min & max scores seen on these alignments */
 } AlignmentFilterState, PNTR AlignmentFilterStatePtr;
 
 /*
@@ -171,6 +208,66 @@ static LayoutAlgorithm LayoutValues [] = {
   Layout_PackUpward,
   Layout_GroupCorrespondingFeats,
   Layout_GroupCorrespondingFeatsRepeat
+};
+
+static CharPtr AlnScoreStrings [] = {
+    "None",
+    "Score",
+    "Bit Score",
+    "E-value",
+    "Number",
+    NULL
+};
+
+/*
+static CharPtr AlnScoreCutoffStrings[] = {
+    "100%",
+    "50%",
+    "20%",
+    "10%",
+    "5%",
+    "2%",
+    "1%",
+    NULL
+};
+
+static Int2 AlnScoreCutoffValues [] = {
+    100, 
+    50,
+    20, 
+    10, 
+    5, 
+    2, 
+    1, 
+    0
+};
+*/
+
+
+static CharPtr AlnScoreCutoffStrings[] = {
+    "None",
+    "40",
+    "50",
+    "60",
+    "70",
+    "80",
+    "100",
+    "200",
+    "400",
+    NULL
+};
+
+static Int2 AlnScoreCutoffValues [] = {
+    -1,
+    40,
+    50,
+    60,
+    70,
+    80,
+    100,
+    200,
+    400,
+    0
 };
 
 static CharPtr  LlocStrings [] = {
@@ -339,6 +436,44 @@ static Uint1 ColorValues[][3] = {
 
 static Char  config_filename [] = "asn2gph";
 
+/*** Static function declarations ****/
+
+static Int4 PixelsBetweenSeqCoords(Int4 left, Int4 right, Uint4 viewScale);
+static Boolean IsInsertTic(RelevantFeatureItemPtr RFIP);
+static void render_insert_tics(RenderInputPtr RIP);
+
+/* functions for working with alignments */
+/* perhaps some of these should be moved to the alignment manager. */
+static Boolean SeqAlignContentLabel(SeqAlignPtr sap, SeqIdPtr notThisSID, CharPtr buf, Int4 buflen, Uint1 format);
+AccumValue_t NormaliseScore(Int4 rawscore, Int4 min, Int4 max);
+static Int4 WeightFromAlignScore(SeqAlignPtr sap, Uint1 scoreType);
+static void FindCutoffScore(SeqAlignPtr sap, Int4 alignCnt, AlignmentFilterStatePtr afsp);
+static void GatherAlignInfo(
+  SeqAlignPtr sap, 
+  Int4        alignCnt,
+  SeqIdPtr    bioSeqId,
+  AlignmentFilterStatePtr afsp
+);
+static Boolean AlignmentFilterStateInit(SeqAlignPtr sap, SeqIdPtr sid, AlignmentFilterStatePtr afsp, GraphicViewExtrasPtr extras);
+static Boolean AlignmentFilterStateDone(AlignmentFilterStatePtr afsp);
+static void AlignmentFilterStateFree( AlignmentFilterStatePtr afsp);
+
+typedef struct align_seg_iterator {
+  SeqAlignPtr sap;
+  SeqIdPtr sip;
+  
+  Int4    nsegs;
+  Int4    start, stop;  /* left and rightmost bioseq coords for this alignment. */
+  Uint1   strand;   /* so we iterate the right direction */
+  Int4    alignRow; /* from sip on non-stdseg aligns */
+  Int4    currentSeg; /* for indexed aligns */
+  StdSegPtr currentStdSeg;  /* for std seg aligns */
+} AlignSegIterator, PNTR AlignSegIteratorPtr;
+
+static Int4 AlignSegIteratorCreate(SeqAlignPtr sap, SeqIdPtr sip,  AlignSegIteratorPtr asi);
+static Boolean AlignSegIteratorNext(AlignSegIteratorPtr asip, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand, Uint1Ptr segType);
+
+
 static Int1 StringIndexInStringList (CharPtr testString, CharPtr PNTR stringList) {
 
   Int1  i;
@@ -503,7 +638,7 @@ NLM_EXTERN LayoutAlgorithm FindLayoutByName (
 {
   Int1  i;
 
-  if (StringHasNoText (name)) return 0;
+  if (StringHasNoText (name)) return Layout_Inherit;
   i = StringIndexInStringList (name, LayoutStrings);
   if (i >= 0 && i < DIM (LayoutValues)) {
     return LayoutValues [i];
@@ -1733,6 +1868,23 @@ static void getDim_render_with_line (
   *height = 1;
 }
 
+static void render_wrap_around_markers(
+  RenderInputPtr RIP,
+  ViewerContextPtr vContext
+)
+{
+  Uint4      StartY;
+  RelevantFeatureItemPtr RFIP;
+  AppearanceItemPtr       AIP;
+
+  RFIP = RIP->RFIP;
+  AIP = RIP->AIP;
+  StartY = RIP->yStart - (RIP->featureOffset) - AIP->Height / 2 - 1;
+
+  AddSymbol(RIP->drawSeg, RFIP->Left - 3 * vContext->viewScale,  StartY, LEFT_TRIANGLE_SYMBOL,  FALSE, MIDDLE_LEFT, 0);
+  AddSymbol(RIP->drawSeg, RFIP->Right + 3 * vContext->viewScale, StartY, RIGHT_TRIANGLE_SYMBOL, FALSE, MIDDLE_RIGHT, 0);
+}
+
 static void render_with_line (
   RenderInputPtr RIP,
   ViewerContextPtr vContext
@@ -1757,8 +1909,21 @@ static void render_with_line (
     stop = MAX (RFIP->Right, vContext->to);
   }
 
-  thisPrim = AddLine (RIP->drawSeg, start, StartY, stop, StartY, 0, 0);
+  if (!RFIP->circularSpanningOrigin || RFIP->numivals < 2) {
+    thisPrim = AddLine (RIP->drawSeg, start, StartY, stop, StartY, 0, 0);
   SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+  } else { 
+    /* feature spans the origin. draw specially */
+    if (RFIP->ivals[0] < stop) {
+      thisPrim = AddLine (RIP->drawSeg, RFIP->ivals[0], StartY, stop, StartY, 0, 0); 
+      SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+    }
+    if (RFIP->ivals[2* RFIP->numivals - 1] > start) {
+      thisPrim = AddLine (RIP->drawSeg, start, StartY, RFIP->ivals[2* RFIP->numivals - 1], StartY, 0, 0); 
+      SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+    }
+    render_wrap_around_markers(RIP, vContext);
+  }
 }
 
 static void getDim_render_with_capped_line (
@@ -1802,10 +1967,20 @@ static void render_with_capped_line (
   render_with_line (RIP, vContext);
   RFIP = RIP->RFIP;
   AIP = RIP->AIP;
-  thisPrim = AddLine (RIP->drawSeg, RFIP->Left, StartY, RFIP->Left, StartY - AIP->Height, 0, 0);
-  SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
-  thisPrim = AddLine (RIP->drawSeg, RFIP->Right, StartY, RFIP->Right, StartY - AIP->Height, 0, 0);
-  SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+
+
+  if (!RFIP->circularSpanningOrigin || RFIP->numivals < 2) {
+    thisPrim = AddLine (RIP->drawSeg, RFIP->Left, StartY, RFIP->Left, StartY - AIP->Height, 0, 0);
+    SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+    thisPrim = AddLine (RIP->drawSeg, RFIP->Right, StartY, RFIP->Right, StartY - AIP->Height, 0, 0);
+    SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+  } else {
+    /* origin spanning feature */
+    thisPrim = AddLine (RIP->drawSeg, RFIP->ivals[0], StartY, RFIP->ivals[0], StartY - AIP->Height, 0, 0);
+    SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+    thisPrim = AddLine (RIP->drawSeg, RFIP->ivals[2* RFIP->numivals - 1], StartY, RFIP->ivals[2* RFIP->numivals - 1], StartY - AIP->Height, 0, 0);
+    SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);    
+  }
 }
 
 static void getDim_render_with_box (
@@ -1815,7 +1990,6 @@ static void getDim_render_with_box (
   Uint2Ptr height,
   ViewerContextPtr vContext
 )
-
 {
   RelevantFeatureItemPtr RFIP;
   AppearanceItemPtr AIP;
@@ -1825,66 +1999,75 @@ static void getDim_render_with_box (
   *Start = RFIP->Left;
   *Stop = RFIP->Right;
   *height = AIP->Height;
+  if (IsInsertTic(RFIP))
+    *height += AIP->Height; 
 }
 
+static Boolean IsInsertTic(RelevantFeatureItemPtr RFIP)
+{
+  int   iival;
+  
+  /* Insert Tics only on alignments with more than one segment */
+  if (RFIP->featdeftype != APPEARANCEITEM_Alignment || RFIP->numivals < 2)
+    return FALSE;
+
+  for (iival = 0; iival < RFIP->numivals; ++iival) {
+    /* a segment with beginning and end the same is an insert */
+    if (RFIP->ivals [2 * iival] == RFIP->ivals [2 * iival + 1] ) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+#if 0 /* TestForSmearOverlap was replaced by PixelsBetweenSeqCoords everwhere it was used */
 static Boolean TestForSmearOverlap (
   Int4 PrevEnd,
   Int4 NewStart,
   ViewerContextPtr vContext
 )
-
 {
-  Int4 PrevPixelStart;
-  /* base-pair coordinates of the beginning of the last occupied pixel*/
-  PrevPixelStart = PrevEnd - PrevEnd % vContext->viewScale;
-  if (PrevPixelStart + vContext->viewScale > NewStart) return TRUE;
-  return FALSE;
+  return PixelsBetweenSeqCoords(PrevEnd, NewStart, vContext->viewScale) < 1;
 }
+#endif
 
-static Boolean TestForVisibleGap (
+/* returns TRUE if no visible gap. */
+static Boolean NoVisibleGap (
   Int4 x1,
   Int4 x2,
-  ViewerContextPtr vContext
+  Uint4 viewScale
 )
-
 {
-  Int4 xmin, xmax;
-
-  if (x1 == x2) return FALSE;
-  if (x1 > x2) {
-    xmin = x2;
-    xmax = x1;
-  } else {
-    xmin = x1;
-    xmax = x2;
-  }
-
-  xmin -= xmin % vContext->viewScale; /* xmin is now the _beginning_ of the pixel it occupies in _base pair_ coordinates (I hope) */
-  if (abs (xmax - xmin) < 2 * vContext->viewScale) return TRUE;
-  return FALSE;
+  return abs(PixelsBetweenSeqCoords(x1, x2, viewScale)) < 2;
 }
 
 static Boolean TestForSmear (
   RelevantFeatureItemPtr RFIP1,
   RelevantFeatureItemPtr RFIP2,
-  ViewerContextPtr vContext
+  Uint4  viewScale
 )
-
 {
   Uint4  minSeperation;
+  
+  minSeperation = 5;  /* do not smear a feature more than 5 pixels wide */
 
-  minSeperation = 5 * vContext->viewScale;  /* do not smear a feature more than 5 pixels wide */
+  if (abs(PixelsBetweenSeqCoords(RFIP1->Right, RFIP1->Left, viewScale)) >= minSeperation) return FALSE;
+  if (abs(PixelsBetweenSeqCoords(RFIP2->Right, RFIP2->Left, viewScale)) >= minSeperation) return FALSE;
 
-  if (abs (RFIP1->Right - RFIP1->Left) >= minSeperation) return FALSE;
-  if (abs (RFIP2->Right - RFIP2->Left) >= minSeperation) return FALSE;
-
-  return (TestForVisibleGap (RFIP1->Right, RFIP2->Left, vContext)
-          || TestForVisibleGap (RFIP1->Right, RFIP2->Right, vContext)
-          || TestForVisibleGap (RFIP1->Left, RFIP2->Right, vContext)
-          || TestForVisibleGap (RFIP1->Left, RFIP2->Left, vContext) );
+  return (NoVisibleGap (RFIP1->Right, RFIP2->Left, viewScale)
+          || NoVisibleGap (RFIP1->Right, RFIP2->Right, viewScale)
+          || NoVisibleGap (RFIP1->Left, RFIP2->Right, viewScale)
+          || NoVisibleGap (RFIP1->Left, RFIP2->Left, viewScale) );
 
 }
 
+static Int4 PixelsBetweenSeqCoords(Int4 left, Int4 right, Uint4 viewScale)
+{
+  /* Will be negative if right is really not right of left. */
+  /* 0 if they fall on the same pixel. */
+  /* Do NOT change this to (right - left)/viewScale. NOT the same. */
+  return (right/viewScale - left/viewScale);
+}
 
 static void render_with_box_master (
   RenderInputPtr RIP,
@@ -1930,15 +2113,15 @@ static void render_with_box_master (
 
     } else { /* nope */
       arrow = NO_ARROW;
-      if (RFIP->plusstrand) {
+      if (RFIP->featstrand == Seq_strand_plus) {
         arrow = RIGHT_ARROW;
-      } else {
+      } else if (RFIP->featstrand == Seq_strand_minus) {
         arrow = LEFT_ARROW;
       }
       if (! AIP->ShowArrow) {
         arrow = NO_ARROW;
       }
-      if (ABS (RFIP->Right - RFIP->Left) / vContext->viewScale < AP->MinPixelsForArrow) {
+      if (abs(PixelsBetweenSeqCoords( RFIP->Left, RFIP->Right, vContext->viewScale)) < AP->MinPixelsForArrow) {
         arrow = NO_ARROW;
       }
       if (vContext->viewScale > AP->MaxScaleForArrow) {
@@ -1954,31 +2137,68 @@ static void render_with_box_master (
       /* collect a group of interval(s) which do not contain any pixels between them */
       pieceIValStart = i;
       /* this tests is the i-plus-1th feature is part of the smear, which goes from pieceIValStart to i, inclusive */
-      while (i + 1 < RFIP->numivals &&
-             TestForVisibleGap (vContext->viewScale + RFIP->ivals [2 * i + 1], RFIP->ivals [2 * i + 2], vContext)) {
-        i++;
+      /* On alignments only smear away the gaps caused by inserts. */
+      if (RFIP->featdeftype == APPEARANCEITEM_Alignment) {
+        while (i + 1 < RFIP->numivals &&
+               NoVisibleGap (RFIP->ivals [2 * i + 1], RFIP->ivals [2 * i + 2], vContext->viewScale) &&
+               (RFIP->ivals [2 * i] == RFIP->ivals [2 * i + 1]  ||  RFIP->ivals [2 * i + 2] == RFIP->ivals [2 * i + 3])) {
+          i++;
+        }
+      } else {
+        while (i + 1 < RFIP->numivals &&
+               NoVisibleGap (RFIP->ivals [2 * i + 1], RFIP->ivals [2 * i + 2], vContext->viewScale)) {
+          i++;
+        }
       }
 
       /* draw the segment and the gap -- drawing the gap first, so that it is overdrawn by the segment */
       if (i + 1 < RFIP->numivals) { /* a gap is present if there are more ivals to consider after i*/
-        if (AIP->GapChoice == LineGap) {
-          thisPrim = AddLine (RIP->drawSeg, RFIP->ivals [2 * i + 1], StartY - AIP->Height / 2, RFIP->ivals [2 * i + 2], StartY - AIP->Height / 2, 0, 0);
-          SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
-        } else if (AIP->GapChoice == AngleGap) {
-          mid = (RFIP->ivals [2 * i + 2] + RFIP->ivals [2 * i + 1]) / 2;
-          thisPrim = AddLine (RIP->drawSeg, RFIP->ivals [2 * i + 1], StartY - AIP->Height / 2, mid, StartY, 0, 0);
-          SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
-          thisPrim = AddLine (RIP->drawSeg, mid, StartY, RFIP->ivals [2 * i + 2], StartY - AIP->Height / 2, 0, 0);
-          SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+        if (RFIP->circularSpanningOrigin && RFIP->ivals [2 * i + 1] > RFIP->ivals [2 * i + 2]) {
+          /* on a circular bioseq, this gap spans the origin and has to be drawn specially */
+          /* RFIP->Left will be 0, RFIP->Right will be the length of the Bioseq */
+          if (RFIP->ivals [2 * i + 1] < RFIP->Right - 1) {
+            /* Draw the part of the gap at the right end. Might not be any. */
+            thisPrim = AddLine (RIP->drawSeg, RFIP->ivals[2 * i + 1], StartY - AIP->Height / 2, RFIP->Right, StartY - AIP->Height / 2, 0, 0);
+            SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+          }
+          if (RFIP->Left <  RFIP->ivals [2 * i + 2]) {
+            /* draw the part of the gap at the left end. */
+            thisPrim = AddLine (RIP->drawSeg, RFIP->Left, StartY - AIP->Height / 2, RFIP->ivals[2 * i + 2], StartY - AIP->Height / 2, 0, 0);
+            SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+          }
+          /* No. I didn't put in code to make those lines 'Angle Gap' style. Figured it wouldn't show up very well. You can if you want. */
+          
+          /* draw markers to show that this wraps around */
+          render_wrap_around_markers(RIP, vContext);
+
+        } else {
+          /* ordinary gap */
+          if (AIP->GapChoice == LineGap) {
+            thisPrim = AddLine (RIP->drawSeg, RFIP->ivals [2 * i + 1],                       StartY - AIP->Height / 2, 
+                                              RFIP->ivals [2 * i + 2] - vContext->viewScale, StartY - AIP->Height / 2, 0, 0);
+            SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+          } else if (AIP->GapChoice == AngleGap) {
+            mid = (RFIP->ivals [2 * i + 2] + RFIP->ivals [2 * i + 1]) / 2;
+            thisPrim = AddLine (RIP->drawSeg, RFIP->ivals [2 * i + 1], StartY - AIP->Height / 2, 
+                                              mid,                     StartY, 0, 0);
+            SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+            thisPrim = AddLine (RIP->drawSeg, mid,                                           StartY, 
+                                              RFIP->ivals [2 * i + 2] - vContext->viewScale, StartY - AIP->Height / 2, 0, 0);
+            SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+          }
         }
       }
       arrow = NO_ARROW;
-      if (i == RFIP->numivals - 1) {
-        if (RFIP->plusstrand) {
-          arrow = RIGHT_ARROW;
-        } else {
+      if (i == RFIP->numivals - 1  &&  RFIP->featstrand == Seq_strand_plus) {
+        arrow = RIGHT_ARROW;
+      } else if (RFIP->featstrand == Seq_strand_minus) {
+        /* on minus strands, Alignments put their intervals in coordinate order.
+          Other features put theirs in biological order (right to  left),
+          so we have to draw the arrow differently (or we could sort the intervals so they 
+          ended up the same. */
+        if ((pieceIValStart == 0 && RFIP->featdeftype == APPEARANCEITEM_Alignment) ||
+          (i == RFIP->numivals - 1  &&   RFIP->featdeftype != APPEARANCEITEM_Alignment))
           arrow = LEFT_ARROW;
-        }
       }
       if (! AIP->ShowArrow) {
         arrow = NO_ARROW;
@@ -1993,8 +2213,37 @@ static void render_with_box_master (
       SetPrimitiveIDs (thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
       i++;
     }
+    if (RFIP->featdeftype == APPEARANCEITEM_Alignment) {
+      render_insert_tics(RIP);
+    }
   }
 }
+
+
+static void render_insert_tics(RenderInputPtr RIP)
+{
+  AppearanceItemPtr       AIP;
+  RelevantFeatureItemPtr  RFIP;
+  PrimitivE               thisPrim;
+  Int4                    StartY;
+  Int4                    i;
+
+  RFIP = RIP->RFIP;
+  AIP = RIP->AIP;
+  StartY = RIP->yStart - (RIP->featureOffset);
+
+  /* if we are drawing an aligment, and the interval is zero length, It is an insert. 
+     Draw a vertical line the height of the bar under the bar to show this.  */
+  for (i = 0; i < RFIP->numivals; ++i) {
+    /* a segment with beginning and end the same is an insert */
+    if (RFIP->ivals [2 * i] == RFIP->ivals [2 * i + 1] ) {
+      thisPrim = AddLine(RIP->drawSeg, RFIP->ivals [2 * i], StartY - AIP->Height, 
+                                       RFIP->ivals [2 * i], StartY - AIP->Height * 2, FALSE, 0);
+      SetPrimitiveIDs(thisPrim, RFIP->entityID, RFIP->itemID, RFIP->itemType, 0);
+    }
+  }
+}
+
 
 static void render_with_box (
   RenderInputPtr   RIP,
@@ -2558,9 +2807,11 @@ static Boolean GetAndCountFeatures (
     rFeats [i].itemType = OBJ_SEQFEAT;
     rFeats [i].numivals = fContext.numivals;
     rFeats [i].ivals = fContext.ivals;
-    rFeats [i].plusstrand = (Boolean) (fContext.strand != Seq_strand_minus);
+    rFeats [i].featstrand = fContext.strand;
+    rFeats [i].circularSpanningOrigin = FALSE;
     if (rFeats [i].Left < 0 && fContext.bsp != NULL) {
       /* !!! for features that span origin JK !!! */
+      rFeats [i].circularSpanningOrigin = TRUE;
       rFeats [i].Left = 0;
       rFeats [i].Right = fContext.bsp->length;
     }
@@ -2569,6 +2820,20 @@ static Boolean GetAndCountFeatures (
       swap = rFeats [i].Right;
       rFeats [i].Right = rFeats [i].Left;
       rFeats [i].Left = swap;
+    }
+    /* with trans-spliced genes the left and right values might not span all the intervals. */
+    /* we will fix that */
+    {
+      int ivali;
+      Int4  val;
+      for (ivali = 0; ivali < rFeats [i].numivals; ++ivali) {
+        val = rFeats[i].ivals[2*ivali];
+        rFeats[i].Left  = MIN( rFeats[i].Left,  val );
+        rFeats[i].Right = MAX( rFeats[i].Right, val );
+        val = rFeats[i].ivals[2*ivali+1];
+        rFeats[i].Left  = MIN( rFeats[i].Left,  val );
+        rFeats[i].Right = MAX( rFeats[i].Right, val );
+      }
     }
     if (GetSeqAnnotName(fContext.sap)) { /* save this feature's Annot Ptr if it is a named Seq Annot. */
       rFeats [i].sap = fContext.sap;
@@ -2657,7 +2922,7 @@ static Boolean EnsureFeatureHasSegment (
   except for the one in 'notthisRow' which ordinarly will be the bioseq.
 */
 
-static Boolean SeqAlignContentLabel(SeqAlignPtr sap, Int4 notThisRow, CharPtr buf, Int4 buflen, Uint1 format)
+static Boolean SeqAlignContentLabel(SeqAlignPtr sap, SeqIdPtr notThisSID, CharPtr buf, Int4 buflen, Uint1 format)
 {
   Int4      r, rows, slen;
   Char      localbuf[100];
@@ -2676,13 +2941,14 @@ static Boolean SeqAlignContentLabel(SeqAlignPtr sap, Int4 notThisRow, CharPtr bu
  
   for (r = 1; r <= rows; ++r)
   {
-    if (r == notThisRow)
-      continue;
     sid = AlnMgr2GetNthSeqIdPtr(sap, r);
     if (sid == NULL) {
      sid = AlnMgr2GetNthSeqIdPtrStdSeg(sap, r);
     }
-    if (sid == NULL) return FALSE;
+    if (sid == NULL) 
+      continue;
+    if (SeqIdIn(sid, notThisSID))
+      continue;
 
     SeqIdWrite (sid, localbuf, format, sizeof (localbuf) - 1);
     slen = StringLen(localbuf);
@@ -2691,8 +2957,8 @@ static Boolean SeqAlignContentLabel(SeqAlignPtr sap, Int4 notThisRow, CharPtr bu
       if (!firstTime) {
         StringNCat(buf, rowDelim, buflen);
         buflen -= sizeof(rowDelim) - 1;
-        firstTime = FALSE;
       }
+      firstTime = FALSE;
       StringNCat(buf, localbuf, buflen);
       buflen -= slen + 1;
      }
@@ -2703,120 +2969,470 @@ static Boolean SeqAlignContentLabel(SeqAlignPtr sap, Int4 notThisRow, CharPtr bu
   return TRUE;
 }
 
+#define _DEBUG
+
+static void AccumIvals(Int1* accumulator, Int4 accumBegin, Int4 accumLen, RelevantFeatureItemPtr RFIP);
+Int4  CountIvals(Int1* accumulator, Int4 accumLen);
+void  MakeIvals(Int1* accumulator, Int4 accumBegin, Int4 accumLen, Int4Ptr ivalsOut, Int4 ivalsLen);
+
 static RelevantFeatureItemPtr GetNextRFIPinAlignmentFilter (
   FilterProcessStatePtr FPSP
 )
 
 {
-  AlignmentFilterStatePtr alignSP;
-  SeqAlignPtr             SAlnP;
-  Int4                    alignRow, start, stop;
-  Int4                    alignStart, alignStop;
-  Int4                    nsegs, iseg, i;
-  Int4                    row2, seq2Start;
-  SeqIdPtr                SID;
-  BioseqPtr               BSP;
-  RelevantFeatureItemPtr  RFIP;
-  ViewerContextPtr        vContext;
-  FilterItemPtr           currentFIP;
-  Boolean                 stdSeg = FALSE;
-  AppearanceItemPtr       AIP;
-  Char                    labelbuf[150];
-
-  if (FPSP == NULL) return NULL;
-  vContext = FPSP->vContext;
-  currentFIP = FPSP->currentFIP;
-  if (vContext == NULL || currentFIP == NULL) return NULL;
-
-  AIP = vContext->AppPtr->FeaturesAppearanceItem[APPEARANCEITEM_Alignment];
-
-  alignSP = &FPSP->state.align;
-
-  if (alignSP->SAPcurrent == NULL) return NULL;      
-  SAlnP = alignSP->SAPcurrent;
-  alignSP->SAPcurrent = alignSP->SAPcurrent->next;
-  RFIP = MemNew (sizeof (RelevantFeatureItem));
-  if (RFIP == NULL || (ValNodeAddPointer (&FPSP->needFreeList, 0, RFIP)) == NULL) {
-    MemFree (RFIP);
-    return NULL;
-  }
-  /* make sure the alignment is indexed */
-  if (!AlnMgr2IndexSingleChildSeqAlign (SAlnP)) return NULL;
-  BSP = vContext->BSP;
-  SID = BSP->id;
-  /* which row in the alignment is the BioSeq? */
-  alignRow = AlnMgr2GetFirstNForSip (SAlnP, SID);
-  if (alignRow == -1)
-  {
-    alignRow = AlignMgr2GetFirstNForStdSeg (SAlnP, SID);
-    if (alignRow == -1)  return NULL;
-    stdSeg = TRUE;
-  }
-  
-  /* where does this alignment start & stop in bioseq coords? */
-  if (!stdSeg)
-    AlnMgr2GetNthSeqRangeInSA (SAlnP, alignRow, &start, &stop);
-  else
-    AlnMgr2GetNthSeqRangeInSAStdSeg (SAlnP, alignRow, &start, &stop);
-
-  if (start < 0 || stop < 0) return NULL;
-  RFIP->Left = MIN (start, stop);
-  RFIP->Right = MAX (start, stop);
-  RFIP->plusstrand = (start < stop);
-  RFIP->numivals = 1;
-  RFIP->featdeftype = APPEARANCEITEM_Alignment;
-  RFIP->entityID = SAlnP->idx.entityID;
-  RFIP->itemID = SAlnP->idx.itemID;
-  RFIP->itemType = SAlnP->idx.itemtype;
-  labelbuf[0] = 0;
-  if (SeqAlignContentLabel(SAlnP, alignRow, labelbuf, sizeof(labelbuf) - 1, AIP->format))
-  {
-    RFIP->ContentLabel = StringSave(labelbuf);
-  }
-  
-  if (stdSeg)
-    return RFIP;
+    AlignmentFilterStatePtr alignSP;
+    SeqAlignSortInfoPtr     alignSorted;
+    SeqAlignPtr             SAlnP;
+    Int4                    start, stop;
+    Uint1                   segType;
+    Int4                    nsegs, i;
+    SeqIdPtr                SID;
+    BioseqPtr               BSP;
+    RelevantFeatureItem     RFI;       /* holder for intermediate values we will merge together */
+    RelevantFeatureItemPtr  finalRFIP;  /* Our return value. */
+    ViewerContextPtr        vContext;
+    FilterItemPtr           currentFIP;
+    Boolean                 stdSeg = FALSE;
+    AppearanceItemPtr       AIP;
+    Char                    labelbuf[150];
+    Uint1                   strand;
+    AlignSegIterator        asi;
     
-  nsegs = AlnMgr2GetNumSegs(SAlnP);
-  if (nsegs <= 1)
-    return RFIP;
-    
-  RFIP->ivals = MemNew (2 * nsegs * sizeof (Int4));
-  if (RFIP->ivals != NULL) 
-  {
-      RFIP->numivals = 0;
-      i = 0;
-      for (iseg = 1; iseg <= nsegs; ++iseg)
-      {
-        /* get segment location in alignment coordinates */
-        AlnMgr2GetNthSegmentRange(SAlnP, iseg, &alignStart, &alignStop);
-        /* convert to bioseq coordinates */
-        start = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStart, alignRow);
-        if (alignStart != alignStop)
-          stop  = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStop , alignRow);
-        else
-          stop = start;
-          
-        /* ignore gaps on the bioseq, zero length segments & errors */
-        /* hence we may have less than nsegs ivals */
-        if (start < 0 || stop < 0 || stop == start) 
-          continue;
+    if (FPSP == NULL) return NULL;
+    vContext = FPSP->vContext;
+    currentFIP = FPSP->currentFIP;
+    if (vContext == NULL || currentFIP == NULL) return NULL;
 
-        /* Is this a gap on the BioSeq ? */
-        row2 = 3 - alignRow; /* alignRow == 1 then row2 == 2; & vice versa. dim must be 2! */
-        seq2Start = AlnMgr2MapSeqAlignToBioseq(SAlnP, alignStart, row2);
+    BSP = vContext->BSP;
+    SID = BSP->id;
+    AIP = vContext->AppPtr->FeaturesAppearanceItem[APPEARANCEITEM_Alignment];
+
+    
+    alignSP = &FPSP->state.align;
+    alignSorted = alignSP->alignSorted;
+
+    SAlnP = alignSorted[alignSP->alignIndex].sap;
+
+    /* create new RFIP based on this SeqAlignPtr */
+    finalRFIP = MemNew (sizeof (RelevantFeatureItem));
+    if (finalRFIP == NULL || (ValNodeAddPointer (&FPSP->needFreeList, 0, finalRFIP)) == NULL) {
+        MemFree (finalRFIP);
+        return NULL;
+    }
+
+   /* where does this alignment start & stop in bioseq coords? */
+    nsegs = AlignSegIteratorCreate(SAlnP, SID, &asi);
+    strand = asi.strand;
+    if (strand == Seq_strand_unknown)
+        strand = Seq_strand_plus;
+
+    if (asi.start < 0 || asi.stop < 0) 
+      return NULL;
+    finalRFIP->Left = asi.start;
+    finalRFIP->Right = asi.stop;
+    finalRFIP->featstrand = strand;
+    finalRFIP->numivals = 1;
+    finalRFIP->ivals = NULL;
+    finalRFIP->featdeftype = APPEARANCEITEM_Alignment;
+    finalRFIP->circularSpanningOrigin = FALSE;
+    finalRFIP->entityID = SAlnP->idx.entityID;
+    finalRFIP->itemID = SAlnP->idx.itemID;
+    finalRFIP->itemType = SAlnP->idx.itemtype;
+    labelbuf[0] = 0;
+    if (SeqAlignContentLabel(SAlnP, SID, labelbuf, sizeof(labelbuf) - 1, AIP->format))
+    {
+        finalRFIP->ContentLabel = StringSave(labelbuf);
+    }
+
+    if (nsegs > 1) {
+        finalRFIP->ivals = MemNew (2 * nsegs * sizeof (Int4));
+        if (finalRFIP->ivals == NULL) 
+        {
+            MemFree(finalRFIP->ContentLabel);
+            return NULL;
+        } else {
+            finalRFIP->numivals = 0;
+            i = 0;
+            while (AlignSegIteratorNext(&asi, &start, &stop, NULL, &segType))
+            {
+                /* ignore gaps on the bioseq */
+                /* hence we may have less than nsegs ivals */
+                if (segType == AM_GAP) 
+                    continue;
+                
+                if (segType == AM_INSERT) {
+                  if (i == 0)
+                    start = stop = finalRFIP->Left;
+                  else
+                    start = stop = finalRFIP->ivals[i - 1];
+                }
+                finalRFIP->ivals[i++] = start;
+                finalRFIP->ivals[i++] = stop;
+                finalRFIP->numivals++;
+            }
+        }
+    }
+                
+    ++alignSP->alignIndex;
+    /*
+        if we are not done with all the alignments and
+        the next alignment(s) has the same accession and strand as this one does
+        merge their segments together.
+    */
+    if (! AlignmentFilterStateDone(alignSP) && 
+        alignSorted[alignSP->alignIndex - 1].strand ==  alignSorted[alignSP->alignIndex].strand &&
+        StrNCmp(alignSorted[alignSP->alignIndex - 1].label, 
+                alignSorted[alignSP->alignIndex].label, MAX_ALIGN_SORT_LABEL) == 0) {
+        Int4                    *newIvals;  /* pointer to merged ivals */
+        Int4                    newIvalsNum;
+        Int1                    *accumulator;
+        Int4                    accumBegin, accumEnd, accumLen;
         
-        if (seq2Start == -2 ) 
-          continue; /* a gap */
+        /* keep track of where the segments fall in this array */
+        /* 0 - a gap. 1 - a segment. 2 - an insert */
+        accumBegin = finalRFIP->Left; 
+        accumEnd   = vContext->seqLength;
+        accumLen = accumEnd - accumBegin;
+        accumulator = MemNew( accumLen * sizeof(Int1) );
+        if (accumulator == NULL) {
+            return NULL;
+        }
+        
+        AccumIvals(accumulator, accumBegin, accumLen, finalRFIP);
+        for ( ;
+              ! AlignmentFilterStateDone(alignSP) && 
+              alignSorted[alignSP->alignIndex - 1].strand ==  alignSorted[alignSP->alignIndex].strand &&
+              StrNCmp(alignSorted[alignSP->alignIndex - 1].label, 
+                      alignSorted[alignSP->alignIndex].label, MAX_ALIGN_SORT_LABEL) == 0;
+              ++alignSP->alignIndex ) {
+        
+            SAlnP = alignSorted[alignSP->alignIndex].sap;
 
-        RFIP->ivals[i++] = MIN(start, stop);
-        RFIP->ivals[i++] = MAX(start, stop);
-        RFIP->numivals++;
-      }
-  }
-  return RFIP;
+          /* where does this alignment start & stop in bioseq coords? */
+            nsegs = AlignSegIteratorCreate(SAlnP, SID, &asi);
+
+            if (asi.start < 0 || asi.stop < 0) 
+                continue;
+            RFI.Left = asi.start;
+            finalRFIP->Left = MIN(finalRFIP->Left, RFI.Left);
+            RFI.Right = asi.stop;
+            finalRFIP->Right = MAX(finalRFIP->Right, RFI.Right);
+            RFI.numivals = 1;
+            RFI.ivals =  NULL;
+            
+#ifdef _DEBUG
+            if (finalRFIP->Right > vContext->seqLength) { 
+                printf("finalRFIP->Right too big: %d\n", finalRFIP->Right); /* put a breakpoint here! */
+                return NULL;
+            }
+#endif            
+
+            if (nsegs > 1) {
+                RFI.ivals = MemNew (2 * nsegs * sizeof (Int4));
+                if (RFI.ivals == NULL) 
+                {
+                    MemFree(RFI.ivals);
+                } else {
+                    RFI.numivals = 0;
+                    i = 0;
+                    while (AlignSegIteratorNext(&asi, &start, &stop, NULL, &segType))
+                    {
+                        /* ignore gaps on the bioseq */
+                        /* hence we may have less than nsegs ivals */
+                        if (segType == AM_GAP) 
+                            continue;
+                        
+                        if (segType == AM_INSERT) {
+                          if (i == 0)
+                            start = stop = RFI.Left;
+                          else
+                            start = stop = RFI.ivals[i - 1];
+                        }
+                        RFI.ivals[i++] = start;
+                        RFI.ivals[i++] = stop;
+                        RFI.numivals++;
+                    }
+                }
+            }
+            AccumIvals(accumulator, accumBegin, accumLen, &RFI);
+            if (RFI.ivals != NULL)
+                MemFree(RFI.ivals);
+        }
+        newIvalsNum = CountIvals(accumulator, accumLen);
+        newIvals = MemNew( 2 * newIvalsNum * sizeof(Int4) );
+        if (newIvals == NULL) {
+            MemFree(accumulator);
+            return NULL;
+        }
+        MakeIvals(accumulator, accumBegin, accumLen, newIvals, newIvalsNum);
+        MemFree(accumulator);
+        
+        if (finalRFIP->ivals != NULL)
+            MemFree(finalRFIP->ivals);
+        finalRFIP->numivals = newIvalsNum;
+            
+        if (newIvalsNum > 1) {
+            finalRFIP->ivals = newIvals;
+        } else {
+            MemFree(newIvals);
+            finalRFIP->ivals = NULL;
+        }
+    }
+
+    /* remember to delete the final ivals array & label space */
+    if (finalRFIP->numivals > 1 && ValNodeAddPointer(&FPSP->needFreeList, 0, finalRFIP->ivals) == NULL)
+    {
+        MemFree(finalRFIP->ContentLabel);
+        MemFree(finalRFIP->ivals);
+        return NULL;
+    }
+    if (ValNodeAddPointer(&FPSP->needFreeList, 0, finalRFIP->ContentLabel) == NULL)
+    {
+        MemFree(finalRFIP->ContentLabel);
+        return NULL;
+    }
+            
+    return finalRFIP;
 }
 
+
+void AccumIvals(Int1* accumulator, Int4 accumBegin, Int4 accumLen, RelevantFeatureItemPtr RFIP)
+{
+    Int4    i, ai;
+    Int4    blockstart, blockend;
+    
+    /* mark everywhere segments spans. 0 in gaps, 1 in blocks, 2 at inserts */
+    if (RFIP->numivals == 1) {
+        blockstart = RFIP->Left  - accumBegin;
+        blockend   = RFIP->Right - accumBegin;
+    
+        for (ai = blockstart; ai <= blockend; ++ai)
+            if (accumulator[ai] == 0)
+                accumulator[ai] = 1;
+    }
+    else {
+        for (i = 0; i < RFIP->numivals; ++i) {
+            blockstart = RFIP->ivals[2*i] - accumBegin;
+            blockend   = RFIP->ivals[2*i + 1] - accumBegin;
+            
+#ifdef _DEBUG
+            if (blockstart < 0 || accumLen < blockstart || blockend < 0 || accumLen < blockend) {
+                printf("AccumIvals problem!"); /* put a breakpoint here! */
+                return;
+            }
+#endif                
+            if (blockstart == blockend) {
+                accumulator[blockstart] = 2;
+            } else {
+                for (ai = blockstart; ai <= blockend; ++ai)
+                    if (accumulator[ai] == 0)
+                        accumulator[ai] = 1;
+            }
+        }
+    }
+}
+
+Int4  CountIvals(Int1* accumulator, Int4 accumLen)
+{
+    Int4    numivalsOut;
+    Int4    ai;
+    
+    /* make new ivals */
+    numivalsOut = 0;
+    
+    for (ai = 0; ai < accumLen; ++ai) {
+        if (accumulator[ai] == 0)
+            continue;
+    /* if it is an insert, add it */
+        if (accumulator[ai] == 2) {
+            ++numivalsOut;
+        } else if (accumulator[ai] == 1) { /* beginning of a block */
+            /* find end of block */
+            for (; ai < accumLen; ++ai) {
+                if (accumulator[ai] != 1)
+                    break;
+            }
+            --ai;
+            ++numivalsOut;
+        }
+    }
+    return numivalsOut;
+}
+
+void  MakeIvals(Int1* accumulator, Int4 accumBegin, Int4 accumLen, Int4Ptr ivalsOut, Int4 ivalsLen)
+{
+    Int4    numivalsOut;
+    Int4    ai, blocklen;
+    
+    /* make new ivals */
+    numivalsOut = 0;
+    
+    for (ai = 0; ai < accumLen  &&  numivalsOut < ivalsLen; ++ai) {
+    /* ignore spots in gaps. */
+        if (accumulator[ai] == 0)
+            continue;
+    /* if it is an insert, add it */
+        if (accumulator[ai] == 2) {
+            ivalsOut[numivalsOut * 2]     = accumBegin + ai;
+            ivalsOut[numivalsOut * 2 + 1] = accumBegin + ai;
+            ++numivalsOut;
+        } else if (accumulator[ai] == 1) { /* beginning of a block */
+            /* find end of block */
+            for (blocklen = 0; ai + blocklen < accumLen; ++blocklen) {
+                if (accumulator[ai + blocklen] != 1)
+                    break;
+            }
+            ivalsOut[numivalsOut * 2]     = accumBegin + ai;
+            if (accumulator[ai + blocklen] == 2)
+                ivalsOut[numivalsOut * 2 + 1] = accumBegin + ai + blocklen;
+            else
+                ivalsOut[numivalsOut * 2 + 1] = accumBegin + ai + blocklen - 1;
+            ++numivalsOut;
+            ai += blocklen - 1;
+        }
+    }
+}
+
+/*
+  For a given SeqAlign and a given SeqId for a Seq that participates in that SeqAlign,
+  keep track of where we are in that alignment so we can iterate through all of that 
+  alignment's segments, returning information about each segment.
+  Hides the differences between normal/indexable and StdSeg alignments.
+*/
+
+/* 
+  Create an structure to iterate through all of an alignment's segments.
+  return a pointer to that iterator struct that must be deallocated.
+   return the number of segments.
+*/
+static Int4 AlignSegIteratorCreate(SeqAlignPtr sap, SeqIdPtr sip,  AlignSegIteratorPtr asip)
+{
+  Boolean             stdSeg;
+  Int4                swap;
+  
+  if (sap == NULL || sip == NULL  || asip == NULL)
+    return 0;
+      
+  AlnMgr2IndexSingleChildSeqAlign(sap);
+  asip->sap = sap;
+  asip->sip = sip;
+  
+  stdSeg = (sap->segtype == SAS_STD);
+  if ( ! stdSeg) {
+    asip->nsegs = AlnMgr2GetNumSegs(sap);
+    asip->alignRow = AlnMgr2GetFirstNForSipList (sap, sip);
+    if (asip->alignRow == -1) {
+      return 0;
+    }
+    AlnMgr2GetNthSeqRangeInSA(sap, asip->alignRow, &asip->start, &asip->stop);
+    asip->strand = AlnMgr2GetNthStrand(sap, asip->alignRow);
+  }
+  else {
+    asip->nsegs = AlnMgr2GetNumStdSegs(sap);
+    asip->alignRow = 0;
+    AlnMgr2GetSeqRangeForSipInSAStdSeg(sap, sip, &asip->start, &asip->stop, &asip->strand);
+  }
+
+  if (asip->stop < asip->start) {
+    swap = asip->stop;
+    asip->stop = asip->start;
+    asip->start = swap;
+  }
+  
+  asip->currentStdSeg = NULL;
+  asip->currentSeg = 0;
+  
+  return asip->nsegs;
+}
+
+/*
+  Given an AlignSegIterator return the information about the current segment
+  in the pointer arguments, and advance the iterator to the next segment.
+  Return false if there are no more segments in which case the output arguments
+  will not be changed.
+*/
+static Boolean AlignSegIteratorNext(
+  AlignSegIteratorPtr asip, 
+  Int4Ptr       startOut, 
+  Int4Ptr       stopOut, 
+  Uint1Ptr      strandOut,
+  Uint1Ptr      segTypeOut
+)
+{
+  Int4    start, stop, swap;
+  Uint1   strand, segType;
+  Boolean stdSeg;
+  Int4    iseg;
+  
+  
+  if (asip == NULL) 
+    return FALSE; /* bad argument */
+
+  /* iterate */
+  asip->currentSeg++;  
+  if (asip->currentSeg > asip->nsegs) /* no more segments */
+    return FALSE;
+    
+  if (asip->strand == Seq_strand_minus)
+      iseg = asip->nsegs - asip->currentSeg + 1;
+  else
+      iseg = asip->currentSeg;
+  
+  stdSeg = (asip->sap->segtype == SAS_STD);
+  if ( ! stdSeg) {
+    Int4    alignStart, alignStop;
+    Int4    row2, seq2Start;
+ 
+    strand = asip->strand; /* all segments have the same strand */
+    /* get segment location in alignment coordinates */
+    AlnMgr2GetNthSegmentRange(asip->sap, iseg, &alignStart, &alignStop);
+    /* convert to bioseq coordinates */
+    start = AlnMgr2MapSeqAlignToBioseq(asip->sap, alignStart, asip->alignRow);
+    if (alignStart != alignStop)
+        stop  = AlnMgr2MapSeqAlignToBioseq(asip->sap, alignStop , asip->alignRow);
+    else
+        stop = start;
+
+    /* Is this a insert (a gap on the bioseq)? */
+    if (start == -2) {
+        segType = AM_INSERT;
+    } else {
+      /* check the other sequence to see if there is a gap there. */
+      if (asip->alignRow == 1)
+        row2 = 2;
+      else 
+        row2 = 1;
+      seq2Start = AlnMgr2MapSeqAlignToBioseq(asip->sap, alignStart, row2);
+
+      if (seq2Start == -2 ) 
+        segType = AM_GAP;
+       else
+        segType = AM_SEQ;
+    }
+  }
+  else { /* stdSeg */   
+    asip->currentStdSeg = AlnMgr2GetNthStdSeg(asip->sap, iseg);
+    if (asip->currentStdSeg == NULL)
+        return FALSE;    /* Logic Error. should not happen. */
+        
+    AlnMgr2GetSeqRangeForSipInStdSeg(asip->currentStdSeg, asip->sip, &start, &stop, &strand, &segType);
+  }
+  if (stop < start) {
+    swap = start;
+    start = stop;
+    stop = swap;
+  }
+  
+  /* take care of output arguments */
+  if (startOut)   *startOut   = start;
+  if (stopOut)    *stopOut    = stop;
+  if (strandOut)  *strandOut  = strand;
+  if (segTypeOut) *segTypeOut = segType;
+  
+  return TRUE;
+}
+
+ 
 static RelevantFeatureItemPtr GetNextRFIPinFeatureFilter (
   FilterProcessStatePtr FPSP
 )
@@ -2856,8 +3472,8 @@ static RelevantFeatureItemPtr GetNextRFIPinFeatureFilter (
     if (FPSP->featuresProcessed [featSP->featureBlockOffset + featSP->indexInBlock]
         || (! currentFIP->IncludeFeature [RFIP->featdeftype])) continue;
     if (currentFIP->MatchStrand != BothStrands) {
-      if (currentFIP->MatchStrand == MinusStrand && RFIP->plusstrand) continue;
-      if (currentFIP->MatchStrand == PlusStrand && !RFIP->plusstrand) continue;
+      if (currentFIP->MatchStrand == MinusStrand && RFIP->featstrand != Seq_strand_minus) continue;
+      if (currentFIP->MatchStrand == PlusStrand  && RFIP->featstrand != Seq_strand_plus) continue;
     }
     FPSP->featuresProcessed [featSP->featureBlockOffset + featSP->indexInBlock] = TRUE;
     break;
@@ -2874,7 +3490,7 @@ static RelevantFeatureItemPtr GetNextRFIPinFilterItem (
 
 {
   AlignmentFilterStatePtr alignSP;
-  RelevantFeatureItemPtr  RFIP;
+  RelevantFeatureItemPtr  RFIP = NULL;
   ViewerContextPtr        vContext;
   FilterItemPtr           currentFIP;
 
@@ -2890,10 +3506,11 @@ static RelevantFeatureItemPtr GetNextRFIPinFilterItem (
     return NULL;
   case AlignmentFilter:
     alignSP = &FPSP->state.align;
-    do {
+    while (!AlignmentFilterStateDone(alignSP)) {
       RFIP = GetNextRFIPinAlignmentFilter (FPSP);
-      if (RFIP != NULL) return RFIP;
-    } while (alignSP->SAPcurrent != NULL);
+      if (RFIP != NULL) 
+        return RFIP;
+    } 
     /* note: if control reaches here, then RFIP == NULL */
     break;
   case FeatureFilter:
@@ -2924,7 +3541,7 @@ static Boolean AddFeatureToRow (
   if (row == NULL || RFIP == NULL) return FALSE;
 
   if (!SkipSmearTest && row->rowFeatureCount &&
-      TestForSmear (RFIP, (RelevantFeatureItemPtr) row->feats->data.ptrvalue, vContext)) {
+      TestForSmear (RFIP, (RelevantFeatureItemPtr) row->feats->data.ptrvalue, vContext->viewScale)) {
     /* if the last feature was not a smear-in-progress, allocate newRFIP, else re-use the current one */
     oldRFIP = (RelevantFeatureItemPtr) row->feats->data.ptrvalue;
     if (oldRFIP->entityID == 0 && oldRFIP->itemID == 0) {
@@ -3033,7 +3650,7 @@ static Boolean mRNAmatchesCDS (
   /* the mRNA must be the larger feature */
   if (CDS->Left < mRNA->Left || CDS->Right > mRNA->Right) return FALSE;
   /* check strands */
-  if (CDS->plusstrand != mRNA->plusstrand) return FALSE;
+  if (CDS->featstrand != mRNA->featstrand) return FALSE;
   /* trivial case */
   if (CDS->numivals == 1 && mRNA->numivals == 1) return TRUE;
   /* . . . and the intervals must line up */
@@ -3082,6 +3699,9 @@ static Uint2 GeneProductsLayoutInternal (
   Int4                    newLeft, featureStart, rowMaxRight;
   RenderInput             dummyRI;
   RFIPgroupPtr            currentGroup;
+  Uint4                   viewScale;
+  
+  viewScale =  FPSP->vContext->viewScale;
 
   if (firstRow == NULL) return 0;
 
@@ -3250,7 +3870,8 @@ static Uint2 GeneProductsLayoutInternal (
             break;
           }
           rowMaxRight = thisRow2->layoutData.intvalue;
-          if (tRFIPentry->decorationLeft < rowMaxRight) {
+          if ( tRFIPentry->decorationLeft <= rowMaxRight  ||   
+                NoVisibleGap(tRFIPentry->decorationLeft, rowMaxRight, viewScale) ) {
             foundRows = FALSE;
             if (thisRow2->next == NULL) {
               rows++;
@@ -3331,6 +3952,9 @@ static Uint2 BubbleUpLayout (
   RelevantFeatureItemPtr  RFIP;
   InternalRowPtr          thisRow, lastRow;
   RenderInput             dummyRI;
+  Uint4                   viewScale;
+  
+  viewScale =  FPSP->vContext->viewScale;
   /*
      This uses InternalRow.layoutData as an Int4, which stores the (x) offset of the last used pixel.
      so a feature starting at (internalRow.layoutData + 1) or greater can be placed in the same row
@@ -3354,7 +3978,8 @@ static Uint2 BubbleUpLayout (
     featureStart = dummyRI.decorationLeft;
     for (thisRow = firstRow; thisRow != NULL; thisRow = thisRow->next) {
       rowMaxRight = thisRow->layoutData.intvalue;
-      if (featureStart >= rowMaxRight) {
+      if (featureStart >= rowMaxRight  &&  
+            ! NoVisibleGap(featureStart, rowMaxRight, viewScale) ) {
         AddFeatureToRow (thisRow, RFIP, FALSE, FPSP);
         rowMaxRight = MAX (rowMaxRight, dummyRI.decorationRight);
         thisRow->layoutData.intvalue = rowMaxRight;
@@ -3384,23 +4009,27 @@ static Uint2 SingleRowLayout (
   Uint4            smearStart, smearStop;
   Uint1            smearFeatdeftype;
   ViewerContextPtr vContext;
+  Uint4            viewScale;
   Boolean          adjacentNoGap;
   Boolean          tooNarrow;
   Boolean          smearing = FALSE, justSmeared = FALSE;
 
   vContext = FPSP->vContext;
-
+  viewScale = vContext->viewScale;
   lastRFIP = GetNextRFIPinFilterItem (FPSP);
   if (lastRFIP == NULL)
     return 0;
   smearFeatdeftype = lastRFIP->featdeftype;
 
   while ((RFIP = GetNextRFIPinFilterItem (FPSP)) != NULL) {
-    adjacentNoGap = TestForSmearOverlap (lastRFIP->Right + 2 * vContext->viewScale, RFIP->Left, vContext);
-    tooNarrow = TestForSmearOverlap (RFIP->Left + 4 * vContext->viewScale, RFIP->Right, vContext);
+    adjacentNoGap =  PixelsBetweenSeqCoords(lastRFIP->Right, RFIP->Left, viewScale) < 2; /* was 3 */
+    /* TestForSmearOverlap (lastRFIP->Right + 2 * vContext->viewScale, RFIP->Left, vContext); */
+    tooNarrow = PixelsBetweenSeqCoords(RFIP->Left,  RFIP->Right, viewScale) < 5;
+    /* TestForSmearOverlap (RFIP->Left + 4 * vContext->viewScale, RFIP->Right, vContext); */
     if (adjacentNoGap && tooNarrow) {
       if (smearing == FALSE) {
-        tooNarrow = TestForSmearOverlap (lastRFIP->Left + 4 * vContext->viewScale, lastRFIP->Right, vContext);
+        tooNarrow = PixelsBetweenSeqCoords(lastRFIP->Left, lastRFIP->Right, viewScale) < 5;
+        /* TestForSmearOverlap (lastRFIP->Left + 4 * vContext->viewScale, lastRFIP->Right, vContext); */
         if (tooNarrow) {
           smearStart = lastRFIP->Left;
         } else {
@@ -3426,8 +4055,10 @@ static Uint2 SingleRowLayout (
       if (lastRFIP == NULL) return 1;
       lastRFIP->Left = smearStart;
       lastRFIP->Right = smearStop;
-      lastRFIP->plusstrand = TRUE;
+      lastRFIP->featstrand = Seq_strand_unknown;
+      lastRFIP->circularSpanningOrigin = FALSE;
       lastRFIP->LeftEnd = lastRFIP->RightEnd = EndAbsolute;
+      lastRFIP->circularSpanningOrigin = FALSE;
       lastRFIP->featdeftype = smearFeatdeftype;
       lastRFIP->numivals = 1;
       ValNodeAddPointer (&FPSP->needFreeList, 0, lastRFIP);
@@ -3444,7 +4075,9 @@ static Uint2 SingleRowLayout (
     if (RFIP == NULL) return 1;
     RFIP->Left = smearStart;
     RFIP->Right = smearStop;
-    RFIP->plusstrand = TRUE;
+    RFIP->featstrand = Seq_strand_unknown;
+    RFIP->circularSpanningOrigin = FALSE;
+    
     RFIP->LeftEnd = RFIP->RightEnd = EndAbsolute;
     RFIP->featdeftype = smearFeatdeftype;
     RFIP->numivals = 1;
@@ -3944,7 +4577,8 @@ static Boolean LIBCALLBACK Asn2gphSegmentExploreProc (
   }
   RFIP->numivals = 1;
   RFIP->featdeftype = 0;
-  RFIP->plusstrand = (context->strand == Seq_strand_plus);
+  RFIP->featstrand = context->strand;
+  RFIP->circularSpanningOrigin = FALSE;
   return TRUE;
 }
 
@@ -4396,7 +5030,7 @@ static void CleanGSP (BigScalar calldata)
 static GphSentPtr AddGphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
                                            SegmenT pict, Int4 scaleX,
                                            Int4 top, Int2 start,
-                                           Uint1Ptr uRGB)
+                                           Uint1Ptr uRGB, Boolean drawScale)
 {
   Int4        axis;
   GphSentPtr  gsp;
@@ -4482,13 +5116,15 @@ static GphSentPtr AddGphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
   }
   gsp->seg = seg = CreateSegment (pict, 0, 0);
   gsp->bottom = top - (max - min) - 20;
-  AddSegRect (seg, FALSE, 0);
 
-  if (sgp->title != NULL)  /* StringHasNoText -- vibforms */
+  if (drawScale && sgp->title != NULL)  /* StringHasNoText -- vibforms */
   {
     if (StringLen (sgp->title) > 0)
     {
-      AddLabel (seg, (gsp->box.left + gsp->box.right) / 2, top,
+      AddLabel (seg, 
+                /* (gsp->box.left + gsp->box.right) / 2, */
+                (start + bsp->length) / 2, 
+                top,
                 sgp->title, SMALL_TEXT, 0, MIDDLE_CENTER, 0);
     }
   }
@@ -4501,28 +5137,31 @@ static GphSentPtr AddGphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
   gsp->axis = axis;
   gsp->bottom += 10;
 
-  if (is_phrap)
+  if (drawScale)
   {
-    for (i = 0; i <=100; i += 20) {
-      sprintf (str, "%ld", (long) i);
-      AddLabel (seg, gsp->box.left, gsp->bottom + i, str,
-                SMALL_TEXT, 5, MIDDLE_LEFT, 0);
-    }
-  }
-  else
-  {
-    sprintf (str, "%ld", (long) max);
-    AddLabel (seg, gsp->box.left, top-10, str,
-              SMALL_TEXT, 5, MIDDLE_LEFT, 0);
-    sprintf (str, "%ld", (long) min);
-    AddLabel (seg, gsp->box.left, gsp->bottom-10, str,
-              SMALL_TEXT, 5, MIDDLE_LEFT, 0);
-    if (min < 0 && max > 0)
-    {
-      sprintf (str, "%ld", 0L);
-      AddLabel (seg, gsp->box.left, gsp->bottom-min-10, str,
-                SMALL_TEXT, 5, MIDDLE_LEFT, 0);
-    }
+      if (is_phrap)
+      {
+        for (i = 0; i <=100; i += 20) {
+          sprintf (str, "%ld", (long) i);
+          AddLabel (seg, gsp->box.left, gsp->bottom + i, str,
+                    SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+        }
+      }
+      else
+      {
+        sprintf (str, "%ld", (long) max);
+        AddLabel (seg, gsp->box.left, top-10, str,
+                  SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+        sprintf (str, "%ld", (long) min);
+        AddLabel (seg, gsp->box.left, gsp->bottom-10, str,
+                  SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+        if (min < 0 && max > 0)
+        {
+          sprintf (str, "%ld", 0L);
+          AddLabel (seg, gsp->box.left, gsp->bottom-min-10, str,
+                    SMALL_TEXT, 5, MIDDLE_LEFT, 0);
+        }
+     }
   }
 
   gsp->snt = AddSntRectangle (seg, gsp->box.left, gsp->box.top,
@@ -4536,17 +5175,26 @@ static void VisitAndListGraphs (SeqGraphPtr sgp, Pointer userdata)
 {
   GphSentPtr        gsp;
   ViewerContextPtr  vContext;
-
+  Boolean           drawScale = FALSE;
+  
   vContext = (ViewerContextPtr) userdata;
   if (vContext == NULL) return;
 
   if (vContext->gphseg == NULL) {
     vContext->gphseg = CreateSegment (vContext->drawOnMe, 0, 0);
+    
+    /* 
+       this first time 'drawScale' stuff here and in AddGphSentinelToPicture
+       assumes that all the graphs on this bioseq are the same type
+       use the same legend and have the same label. 
+    */
+    AddSegRect (vContext->gphseg, FALSE, 0); /* draw box around all the graphs, not each one individually */
+    drawScale = TRUE;   /* only draw scale on the first graph */
   }
 
   gsp = AddGphSentinelToPicture (sgp, vContext->BSP, vContext->gphseg,
                                  vContext->viewScale, vContext->gphyOffset,
-                                 0, NULL);
+                                 0, NULL, drawScale);
   if (gsp == NULL) return;
   vContext->gphheight = MAX (vContext->gphheight, gsp->box.top - gsp->box.bottom);
 }
@@ -4584,6 +5232,671 @@ static void ResetFilterState (
   }
 }
 
+
+/*
+  Order by accession (label), strand and location
+  for sorting.
+*/
+static int LIBCALLBACK CompareAlignNameLoc(VoidPtr ptr1, VoidPtr ptr2)
+{
+  SeqAlignSortInfoPtr saip1, saip2;
+  Int2                  labelcomp;
+  
+  if (ptr1 != NULL && ptr2 != NULL) {
+    saip1 = (SeqAlignSortInfoPtr) ptr1;
+    saip2 = (SeqAlignSortInfoPtr) ptr2;
+
+    labelcomp = StrNCmp(saip1->label, saip2->label, MAX_ALIGN_SORT_LABEL);
+    if (labelcomp != 0)
+      return labelcomp;
+      
+    if (saip1->strand < saip2->strand)
+      return -1;
+    if (saip1->strand > saip2->strand)
+      return 1;
+      
+    if (saip1->start < saip2->start)
+      return -1;
+    if (saip1->start > saip2->start)
+      return 1;
+    if (saip1->stop < saip2->stop)
+      return -1;
+    if (saip1->stop > saip2->stop)
+      return 1;
+  }
+  return 0; 
+}
+
+static int LIBCALLBACK ScoreCompare( VoidPtr p1, VoidPtr p2)
+{
+  if (p1 != NULL  &&  p2 != NULL) {
+    Int4 i1 = * (Int4Ptr) p1;
+    Int4 i2 = * (Int4Ptr) p2;
+    
+    return i1 - i2;
+  }
+  return 0;
+}
+
+/*
+  Take a number (rawscore) between min and max (inclusive) 
+  and linearly scale it into a number from 1 to ACCUMVALUE_MAX/256.
+  We divide by 256 since we will be adding these numbers together when smearing.
+  Hopefully we won't have more than 256 with large scores at any one point  :)
+  Do not call if min >= max.
+*/
+AccumValue_t NormaliseScore(Int4 rawscore, Int4 min, Int4 max)
+{
+    AccumValue_t retval;
+    FloatHi fscore = rawscore - min;
+    fscore *=  ACCUMVALUE_MAX / 256 - 1;
+    fscore /= (max - min);
+    retval = fscore + 1; 
+    return retval;
+}
+
+
+static void FindCutoffScore(SeqAlignPtr sap, Int4 alignCnt, AlignmentFilterStatePtr afsp)
+{
+  SeqAlignPtr sapIter;
+  Int4Ptr     allScores;
+  Int4        i;
+  /* Int4        cutoffScore;  /* not normalized */
+  
+  /* make array to hold all the scores. */
+  allScores = MemNew(alignCnt * sizeof(Int4));
+  if (allScores == NULL)
+      return;
+
+  /* get all the scores */
+  i = 0;
+  for (sapIter = sap; sapIter != NULL; sapIter = sapIter->next) {
+    allScores[i++] = WeightFromAlignScore(sapIter, afsp->scoreType);
+  }
+    
+  /* sort them */
+  HeapSort ( allScores, alignCnt, sizeof(Int4), ScoreCompare);
+  
+  /* find, normalise and return the cutoffPercent score 
+     and the min & max scores so we can normalise the rest of the scores later.
+  */
+  afsp->minScore = allScores[0];
+  afsp->maxScore = allScores[alignCnt - 1];
+  afsp->cutoffScoreHi = ACCUMVALUE_MAX; /* could add other controls to set this. */
+/* Cutoff by actual score, not by percentage.
+  if (afsp->cutoffPercent == 100  ||  
+      afsp->scoreType == NLM_SCORE_COUNT ||
+      afsp->minScore >= afsp->maxScore ) {
+    afsp->cutoffScore = 0;
+  }
+  else {
+    cutoffScore = allScores[ (100 - afsp->cutoffPercent) * alignCnt/100 ];
+    afsp->cutoffScore = NormaliseScore(cutoffScore, afsp->minScore, afsp->maxScore);
+  }
+*/  
+  MemFree(allScores);
+}
+
+
+/* Gather all the SeqAligns whose normalised score is less than the cutoff score */
+static void GatherAlignInfo(
+  SeqAlignPtr sap, 
+  Int4        alignCnt,
+  SeqIdPtr    bioSeqId,
+  AlignmentFilterStatePtr afsp
+)
+{
+  SeqAlignSortInfoPtr  infoArray = NULL;
+  Int4        infoIndex;
+  SeqAlignPtr sapIter;
+  Int4        nrows, alignRow;
+  Int4        start, stop, swap;
+  Uint1       strand;
+  Int4        rawScore;
+  AccumValue_t  normScore;
+  
+  infoArray = MemNew(alignCnt * sizeof(SeqAlignSortInfo));
+  if (infoArray == NULL)
+    return;
+  
+  infoIndex = 0;
+  for (sapIter = sap; sapIter != NULL; sapIter = sapIter->next) 
+  {
+    /* is this alignment in the top percentile? */
+    if (afsp->scoreType != NLM_SCORE_COUNT  &&  afsp->minScore < afsp->maxScore ) {
+      rawScore = WeightFromAlignScore(sapIter, afsp->scoreType);
+      normScore = NormaliseScore( rawScore, afsp->minScore, afsp->maxScore);
+  /*    if (normScore < afsp->cutoffScore ||  afsp->cutoffScoreHi < normScore) */
+      if (rawScore < afsp->cutoffScore ||  afsp->cutoffScoreHi < rawScore)
+      {
+        continue;
+      }
+    } else {
+      normScore = 1;
+    }
+    
+    if (!AlnMgr2IndexSingleChildSeqAlign (sapIter)) continue; /* make sure we are indexed */ 
+
+    /* get dimensions of this alignment (number of sequences aligned) */   
+    nrows = AlnMgr2GetNumRows(sapIter);
+    if (nrows < 1) {
+      nrows = sapIter->dim; 
+    }     
+    if (nrows != 2) {  /* can't handle 3+ dimension alignments */
+      continue;
+    }
+    
+    /* Get the beginning and end points of this alignment in Bioseq coords. */
+    if (sapIter->segtype != SAS_STD) {  
+      /* not Std Seg alignment, use indexed functions */
+      alignRow = AlnMgr2GetFirstNForSipList (sapIter, bioSeqId);
+      if (alignRow == -1) {
+        continue;
+      }
+      AlnMgr2GetNthSeqRangeInSA(sapIter, alignRow, &start, &stop);
+      strand = AlnMgr2GetNthStrand(sapIter, alignRow);
+    } else { 
+      /* Std Seg alignment. Use special function */
+      AlnMgr2GetSeqRangeForSipInSAStdSeg(sapIter, bioSeqId, &start, &stop, &strand);
+    }
+    if (start < 0) {
+      continue;
+    }
+    if (stop < start) {
+      swap = stop;
+      stop = start;
+      start = swap;
+    }
+
+    /* populate the structure we will use to sort on. */
+    infoArray[infoIndex].start = start;
+    infoArray[infoIndex].stop  = stop;
+    infoArray[infoIndex].strand = strand;
+    infoArray[infoIndex].sap   = sapIter;
+    infoArray[infoIndex].normScore = normScore;
+    if (!SeqAlignContentLabel(sapIter, bioSeqId, infoArray[infoIndex].label, MAX_ALIGN_SORT_LABEL, PRINTID_TEXTID_ACC_VER)) {
+      infoArray[infoIndex].label[0] = 0;
+    }
+    ++infoIndex;
+  }
+  
+  afsp->alignSortedLen = infoIndex;
+    
+  if (infoIndex == 0) {
+    MemFree(infoArray);
+    infoArray = NULL;
+  }
+  afsp->alignSorted = infoArray;
+}
+
+static Boolean AlignmentFilterStateInit(
+    SeqAlignPtr sap,                /* the head of hte chain of sequence alignments from the bioseq */
+    SeqIdPtr sid,                   /* the id of the bioseq so we know how we are viewing the alignments */
+    AlignmentFilterStatePtr afsp,   /* What we are initializing. */
+    GraphicViewExtrasPtr extras     /* contains the score cuttoff percentage and the kind of scores we use */
+)
+{  
+  SeqAlignPtr   sapIter;
+  Int4  alignCnt;
+  Uint1 scoreType = NLM_SCORE_COUNT;
+  Int2  i = 0;
+  
+  if (sap == NULL ||  sid == NULL  ||  afsp == NULL)
+    return FALSE;
+    
+  /* what kind of score will we use to weight the alignments? */
+  if (extras  &&  extras->alignScoreName) {
+    scoreType = StringIndexInStringList (extras->alignScoreName, AlnScoreStrings);
+    if (scoreType >= NLM_SCORE_TOOBIG)
+        scoreType = NLM_SCORE_COUNT;
+  }
+  afsp->scoreType = scoreType;
+  
+  /* what percentile does an alignments score have to be to be displayed? */
+  if (extras  && extras->alignScoreCutoff) {
+    i = StringIndexInStringList (extras->alignScoreCutoff, AlnScoreCutoffStrings);
+    if (i < 0  ||  DIM (AlnScoreCutoffValues) <= i )
+        i = 0;
+  }
+    /*  afsp->cutoffPercent = AlnScoreCutoffValues[i]; */
+  if (AlnScoreCutoffValues[i] < 0) {
+    afsp->scoreType = NLM_SCORE_COUNT;
+  } else {
+    afsp->scoreType = NLM_SCORE_BIT;
+    afsp->cutoffScore = AlnScoreCutoffValues[i];
+  }
+  
+  /* how many alignments? Count one time now */
+  alignCnt = 0;
+  for (sapIter = sap; sapIter != NULL; sapIter = sapIter->next) {
+    ++alignCnt;
+  }
+
+  FindCutoffScore(sap, alignCnt, afsp);
+  
+  GatherAlignInfo(sap, alignCnt, sid, afsp);
+  if (afsp->alignSorted == NULL || afsp->alignSortedLen == 0) {
+    /* couldn't allocate memory, or no alignments - nothing to do. */
+    return FALSE;
+  }
+  /* sort the alignments, first by accession, then by location on the bioseq. */
+  HeapSort(afsp->alignSorted, afsp->alignSortedLen, sizeof(SeqAlignSortInfo), CompareAlignNameLoc);
+  afsp->alignIndex = 0;
+  
+  return TRUE;
+}
+
+static Boolean AlignmentFilterStateDone(AlignmentFilterStatePtr afsp)
+{
+  if (afsp->alignSorted != NULL &&
+      afsp->alignIndex < afsp->alignSortedLen)
+    return FALSE;
+  return TRUE;
+}
+
+
+static void AlignmentFilterStateFree( AlignmentFilterStatePtr afsp)
+{
+  if (afsp->alignSorted != NULL)
+    MemFree(afsp->alignSorted);
+  afsp->alignSorted = NULL;
+  afsp->alignSortedLen = 0;
+}
+
+
+  
+static Int4 WeightFromAlignScore(SeqAlignPtr sap, Uint1 scoreType)
+{
+  Int4        weight = 1;
+  Int4        score, number;
+  Nlm_FloatHi bit_score, evalue;
+  
+  if (GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number)) {
+    /* evaluate scores and get weight */
+    switch (scoreType) {
+    case NLM_SCORE_SCORE :
+      weight = score;
+      break;
+    case NLM_SCORE_BIT :
+      weight = bit_score;
+      break;
+    case NLM_SCORE_EVALUE :
+      if (evalue > 0) {
+        weight = -log(evalue);
+      }
+      else {  /* 0 is the best value. */
+        /*
+            We can't use the maxScore here since we do not know it yet
+            since this is where we collect the values.
+            Our sample data has -log(evalue) ranging from 25 - 429
+            so 500 just has to be bigger than anything else we will encounter.
+            It will get normalised latter with it as the maxScore.
+            
+            We could put a special sentinel value (very large or negative) here 
+            that gets replaced with the real maxScore later. 
+            (But then make sure it gets skipped when calculating the max and min).
+        */
+        weight = 500;
+      }
+      break;
+    case NLM_SCORE_NUMBER :
+      weight = number;
+      break;
+    case NLM_SCORE_COUNT :
+    default:
+      weight = 1;
+    }
+  }
+  
+  return weight;
+}
+
+/* uncomment to use 'chunked' arrays (all allocations in 64K chunks) for making the Alignment Smear */
+/* #define CHUNKED_ACCUMULATOR 1 /* */
+
+#ifdef CHUNKED_ACCUMULATOR
+/*
+  ChunkedArray 
+  An array allocated, not continguously in memory, but in chunks to reduce
+  the memory allocation strain.
+  Use AccumValue_t as the data type of the array elements.
+  memory accesses are unchecked.
+*/
+/* should be a power of 8 so as to be evenly divisble by sizeof(AccumValue_t) */
+#define CA_CHUNK_SIZE   (64*1024) 
+#define CA_ITEMSPERCHUNK  (CA_CHUNK_SIZE/sizeof(AccumValue_t))
+
+typedef struct ChunkedArray_struct { 
+  AccumValuePtr_t  PNTR chunks;   /* for data access */
+  ValNodePtr    chunkList;  /* for memory management */
+  size_t        nchunks;
+} PNTR ChunkedArray;
+
+
+static void FreeChunkedArray(ChunkedArray* ca);
+
+static ChunkedArray
+NewChunkedArray(size_t size)
+{
+  ChunkedArray    newca;
+  AccumValuePtr_t   aChunk;
+  size_t itemsPerChunk = CA_ITEMSPERCHUNK;
+  size_t nchunks = 1 + size / itemsPerChunk;
+  Int4    i;
+  
+  newca = MemNew(sizeof(struct ChunkedArray_struct));
+  if (newca == NULL)
+    return NULL;
+    
+  newca->nchunks = nchunks;
+  newca->chunks = MemNew(sizeof(AccumValuePtr_t) * nchunks);
+  if ( newca->chunks == NULL) {
+    FreeChunkedArray(&newca);
+    return NULL;
+  }
+  
+  for (i = 0; i < nchunks; ++i) {
+    aChunk = MemNew(CA_CHUNK_SIZE);
+    if (aChunk == NULL || ValNodeAddPointer (&newca->chunkList, 0, aChunk) == NULL) {
+      FreeChunkedArray(&newca);
+      return NULL;
+    }
+    newca->chunks[i] = aChunk;
+  }
+  
+  return newca;
+}
+
+static void
+FreeChunkedArray(ChunkedArray* ca)
+{
+     
+  if (ca == NULL || *ca == NULL)
+    return;
+
+  ValNodeFreeData((*ca)->chunkList);
+  MemFree((*ca)->chunks);
+  MemFree(*ca);
+  *ca = NULL;
+}
+
+static void 
+SetCA(ChunkedArray ca, size_t index, AccumValue_t value)
+{
+  size_t  chunk_index = index / CA_ITEMSPERCHUNK;
+  size_t  val_index = index % CA_ITEMSPERCHUNK;
+  
+  if (chunk_index > ca->nchunks)
+    return;
+  ca->chunks[chunk_index][val_index] = value;
+}
+
+static AccumValue_t 
+GetCA(ChunkedArray ca, size_t index)
+{
+  size_t  chunk_index = index / CA_ITEMSPERCHUNK;
+  size_t  val_index = index % CA_ITEMSPERCHUNK;
+  
+  if (chunk_index > ca->nchunks)
+    return 0;
+  return ca->chunks[chunk_index][val_index];
+}
+
+#endif /* CHUNKED_ACCUMULATOR */
+
+/*
+  Interval Accumulator
+  An object which can add or in some way (specified by accumop) intervals on a sequence,
+  then from which can be extracted the resulting intervals.
+*/
+typedef enum AccumlatorOp {
+ NLM_SUM_WEIGHT = 0,
+ NLM_MAX_WEIGHT
+} AccumulatorOp;
+
+typedef struct IntervalAccumulator {
+#ifdef CHUNKED_ACCUMULATOR
+  ChunkedArray        densities;
+  ChunkedArray        gapDensities;
+#else
+  AccumValuePtr_t     densities;
+  BoolPtr             gapDensities;
+#endif
+  Uint4               densitiesLength;
+  AccumulatorOp       accumOp;
+  Uint2               minDensity;
+} IntervalAccumulator, PNTR IntervalAccumulatorPtr;
+
+static IntervalAccumulatorPtr
+NewIntervalAccumulator(Uint4 length, AccumulatorOp accumOp, AccumValue_t minDensity)
+{
+  IntervalAccumulatorPtr iap = NULL;
+  
+  iap = MemNew(sizeof(IntervalAccumulator));
+  if (NULL == iap) 
+    return NULL;
+    
+  iap->accumOp = accumOp;
+  iap->densitiesLength = length;
+  if (minDensity == 0)
+    minDensity = 1;
+  iap->minDensity = minDensity; /* the smallest density we will report as an interval */
+#ifdef CHUNKED_ACCUMULATOR
+  iap->densities = NewChunkedArray(length);
+#else
+  iap->densities = MemNew(length * sizeof(AccumValue_t));
+#endif
+  if (NULL == iap->densities) {
+    MemFree(iap);
+    return NULL;
+  }
+#ifdef CHUNKED_ACCUMULATOR
+  iap->gapDensities = NewChunkedArray(length);
+  if (NULL == iap->gapDensities) {
+    FreeChunkedArray(&iap->densities);
+    MemFree(iap);
+    iap = NULL;
+  }
+#else
+  iap->gapDensities = MemNew(length * sizeof(Boolean));
+  if (NULL == iap->gapDensities) {
+    MemFree(iap->densities);
+    MemFree(iap);
+    iap = NULL;
+  }
+#endif
+  return iap;
+} 
+
+static void
+FreeIntervalAccumulator(IntervalAccumulatorPtr PNTR iapp)
+{
+  IntervalAccumulatorPtr iap;
+  
+  if (iapp == NULL || *iapp == NULL) return;
+  iap = *iapp;
+#ifdef CHUNKED_ACCUMULATOR
+  FreeChunkedArray(&iap->gapDensities);
+  FreeChunkedArray(&iap->densities);
+#else
+  MemFree(iap->gapDensities);
+  MemFree(iap->densities);
+#endif
+  MemFree(iap);
+  *iapp = NULL;
+}
+
+static void
+AccumulateInterval(IntervalAccumulatorPtr iap, Uint4 start, Uint4 stop, AccumValue_t weight, Boolean isGap)
+{
+  Int4  i;
+#ifdef CHUNKED_ACCUMULATOR
+  AccumValue_t  av;
+#endif
+  
+  if (NULL == iap) return;
+  if (iap->densitiesLength <= start) return;
+  if (weight <= 0) return;
+  
+  stop = MIN(stop, iap->densitiesLength - 1);
+
+  if (!isGap) {
+    switch (iap->accumOp)  {
+    case NLM_MAX_WEIGHT :
+      for (i = start; i <= stop; i++) {
+#ifdef CHUNKED_ACCUMULATOR
+        if (weight > GetCA(iap->densities, i))
+          SetCA(iap->densities, i, weight);
+#else
+        if (weight > iap->densities[i])
+          iap->densities[i] = weight;
+#endif
+      }
+      break;
+    case NLM_SUM_WEIGHT :
+    default :
+      for (i = start; i <= stop; i++) {
+#ifdef CHUNKED_ACCUMULATOR
+        av = GetCA(iap->densities, i) + weight;
+        if (av < ACCUMVALUE_MAX)
+          SetCA(iap->densities, i, av);
+#else
+        if (iap->densities[i] + weight < ACCUMVALUE_MAX)
+          iap->densities[i] += weight;
+#endif
+      }
+      break;
+    }
+  }
+  else {
+    /* ignore weight in gaps */
+    for (i = start; i <= stop; i++) {
+#ifdef CHUNKED_ACCUMULATOR
+      SetCA(iap->gapDensities, i, TRUE);
+#else
+      iap->gapDensities[i] = TRUE;  
+#endif
+    }
+  }
+}
+
+static Uint2 GetMaxDensity(IntervalAccumulatorPtr iap)
+{
+  AccumValue_t maxDensity = 0, av;
+  Int4  i;
+  
+  if (NULL == iap) return 0;
+  for (i = 0; i < iap->densitiesLength; i++) {
+#ifdef CHUNKED_ACCUMULATOR
+    av = GetCA(iap->densities, i);
+#else
+    av = iap->densities[i];
+#endif
+    if (av > maxDensity)
+      maxDensity = av;
+  }
+  return maxDensity;
+}
+
+static Uint4
+GetIntervalFromAccumulator(
+  IntervalAccumulatorPtr iap, 
+  Uint4 n, 
+  Uint4Ptr startp, 
+  Uint4Ptr stopp, 
+  AccumValuePtr_t densityp, 
+  BoolPtr isGapp
+)
+{
+  Uint4             start, stop;
+  AccumValue_t      density = 0;
+  Boolean           isGap = FALSE;
+  
+  if (NULL == iap) return FALSE;
+
+  /* skip over empty spaces */
+/* Don't skip over them. Report them as an interval with gap = false and density = 0.
+  for ( ; n < iap->densitiesLength; n++) {
+#ifdef CHUNKED_ACCUMULATOR
+    if (GetCA(iap->densities, n) >= iap->minDensity ||
+        GetCA(iap->gapDensities, n))
+#else
+    if (iap->densities[n] >= iap->minDensity ||
+        iap->gapDensities[n]) 
+#endif
+      break;
+  }
+*/
+  if (n >= iap->densitiesLength)
+    return 0;
+    
+  start = n;
+#ifdef CHUNKED_ACCUMULATOR
+  if (GetCA(iap->densities, start) >= iap->minDensity)
+#else
+  if (iap->densities[start] >= iap->minDensity) 
+#endif
+  { 
+    /* an block */
+#ifdef CHUNKED_ACCUMULATOR
+    density = GetCA(iap->densities, start);
+#else
+    density = iap->densities[start];
+#endif
+    isGap = FALSE;
+    /* scan for end of block */ 
+    for ( ; n < iap->densitiesLength; n++) {
+#ifdef CHUNKED_ACCUMULATOR
+      if (GetCA(iap->densities, start) != GetCA(iap->densities, n))
+#else
+      if (iap->densities[start] != iap->densities[n]) 
+#endif
+        break;
+    }
+  }
+#ifdef CHUNKED_ACCUMULATOR
+  else if (GetCA(iap->gapDensities, start))
+#else
+  else if (iap->gapDensities[start])
+#endif
+  {  /* assert gapDensities[n] ==  TRUE && densities[n] < minDensity */
+    /* a gap */
+    density = 0;
+    isGap = TRUE;
+    /* scan for end of the gap */ 
+    for ( ; n < iap->densitiesLength; n++) {
+#ifdef CHUNKED_ACCUMULATOR
+      if (! GetCA(iap->gapDensities, n) || GetCA(iap->densities, n) > 0)
+#else
+      if (!iap->gapDensities[n] || iap->densities[n] > 0) 
+#endif
+        break;
+    }
+  } else { /* a space, not a gap or a block */
+    density = 0;
+    isGap = FALSE;
+    /* scan for end of space */
+    for ( ; n < iap->densitiesLength; n++) {
+#ifdef CHUNKED_ACCUMULATOR
+      if (GetCA(iap->gapDensities, n) || GetCA(iap->densities, n) > 0)
+#else
+      if (iap->gapDensities[n] || iap->densities[n] > 0) 
+#endif
+        break;
+    }
+  }
+  
+  stop = n;
+  
+  if (startp) *startp = start;
+  if (stopp)  *stopp  = stop;
+  if (densityp) *densityp = density;
+  if (isGapp) *isGapp = isGap;
+  
+  return n;
+}
+
+
 static Uint2 SmearAlignments (
   FilterProcessStatePtr FPSP,
   ViewerContextPtr vContext  
@@ -4597,166 +5910,255 @@ static Uint2 SmearAlignments (
   FilterItemPtr            FIP;
   
   AlignmentFilterStatePtr  alignSP;
-  Int4                     alignRow, start, stop, weight, swap, maxDensity, i, length;
+  SeqAlignSortInfoPtr      alignSorted;
+  Int4                     alignSortedLen;
+  Int4                     alignIndex;
+  Int4                     start, stop, maxDensity;
   Uint1                    color[3], col;
   Uint1                    minCol = 224; /* density == min -> light gray */
   Uint1                    maxCol = 0;   /* density == max -> black */
-  Uint2Ptr                 densities, gapDensities;
+  
+  IntervalAccumulatorPtr   plusIAP = NULL, minusIAP = NULL;
+  Uint4                    accumPos;
+  Uint4                    begin, end;
+  Int4                     space_pixs;
+  Boolean                  isGap;
+  AccumValue_t             weight;
+  AccumValue_t             density;
+
+  Boolean                  smearedAlignsPlus = FALSE, smearedAlignsMinus = FALSE;
+  AccumulatorOp            sumOrMax = NLM_SUM_WEIGHT;
+  Uint1                    scoreType = NLM_SCORE_COUNT;
+  Boolean                  separateStrands;
   const Uint1              minDensity = 1;  /* minimum density we will display. */
   SegmenT                  seg;
-  Boolean                  empty = TRUE;
+  CharPtr                  annotName;
+  Int4                     height = 0;
+  Uint2                    space_line_height = 2;
   
   if (FPSP == NULL || vContext == NULL) return 0;
   alignSP = &FPSP->state.align;
-  
-  /* get the Appearance item for alignments */
+  alignSorted  = alignSP->alignSorted;
+  alignSortedLen = alignSP->alignSortedLen;
+ 
+   /* get the Appearance item for alignments */
   AIP = vContext->AppPtr->FeaturesAppearanceItem[APPEARANCEITEM_Alignment];
 
+  /* get the bioseq's id for picking out the right part of the alignments */
   BSP = vContext->BSP;
   SID = BSP->id;
-  densities = MemNew (sizeof (Uint2) * vContext->seqLength / vContext->viewScale);
-  if (densities == NULL) return 0;
-  gapDensities = MemNew (sizeof (Uint2) * vContext->seqLength / vContext->viewScale);
-  if (gapDensities == NULL) return 0;
-  
-  /* for all the alignments in this list (from a single annotation in this BioSeq) */
-  for (SAP = alignSP->SAPhead; SAP != NULL; SAP = SAP->next) 
-  {
-    Int4  nrows;
-    Int4  row2;
-    Int4  nsegs;
-    Int4  iseg;
-    Int4  alignStart, alignStop;
-    Int4  seq2Start;
-    Boolean stdSeg = FALSE;
    
-    if (!AlnMgr2IndexSingleChildSeqAlign (SAP)) continue; /* make sure we are indexed */
+  /* Get this annotation's name to decide how to display this. */ 
+  annotName = GetSeqAnnotName(vContext->currentSAP);
+  separateStrands = FALSE;
+  if (StringStr(annotName, "BLASTX - swissprot"))
+    separateStrands = TRUE;
+  else if (StringStr(annotName, "BLASTN - mrna"))
+    separateStrands = TRUE;
+  else if (StringStr(annotName, "BLASTN - est"))
+    separateStrands = FALSE;
+  else if (StringStr(annotName, "BLASTN - nr"))
+    separateStrands = FALSE;
+
+  plusIAP =  NewIntervalAccumulator(vContext->seqLength, sumOrMax, minDensity);
+  if (plusIAP == NULL)  goto smearAlignmentsDone;
+  minusIAP = NewIntervalAccumulator(vContext->seqLength, sumOrMax, minDensity);
+  if (minusIAP == NULL)  goto smearAlignmentsDone;
     
-    nrows = AlnMgr2GetNumRows(SAP);
-    if (nrows < 1)
-      nrows = SAP->dim;
+  /* 
+    for all the sorted alignments (from a single annotation in this BioSeq)
+    treat all alignments with the same accession as one alignment
+  */   
+  for (alignIndex = 0; 
+       alignIndex < alignSortedLen; 
+       ++alignIndex) 
+  {
+    AlignSegIterator asi;
+    Int4  nsegs;
+    Uint1 segType;
+    Uint1 strand;
+    
+    SAP = alignSorted[alignIndex].sap;
+    
+    /* sanity checks */
+    if (alignSorted[alignIndex].start < 0 || alignSorted[alignIndex].stop < 0)
+      continue;
       
-    if (nrows != 2) continue;  /* can't handle 3+ dimension alignments */
-    
-    /* which row in the alignment is this BioSeq */
-    alignRow = AlnMgr2GetFirstNForSip (SAP, SID);
-    if (alignRow == -1) 
+    weight = alignSorted[alignIndex].normScore;
+    /* if (weight == 0)
+      continue;
+    */  
+    /*
+      at the begining of an alignment
+      if there was another alignment before this one, 
+      with the same accession, strand and that alignment ended before this one begins, 
+      treat that space as a gap.
+    */
+    if (alignIndex > 0 && 
+        StrNCmp(alignSorted[alignIndex - 1].label, alignSorted[alignIndex].label, MAX_ALIGN_SORT_LABEL) == 0 &&
+        alignSorted[alignIndex - 1].strand == alignSorted[alignIndex].strand &&
+        alignSorted[alignIndex - 1].stop < alignSorted[alignIndex].start)
     {
-      alignRow = AlignMgr2GetFirstNForStdSeg (SAP, SID);
-      if (alignRow == -1) continue;
-      stdSeg = TRUE;
+      start = alignSorted[alignIndex - 1].stop;
+      stop  = alignSorted[alignIndex].start;
+
+      if (strand != Seq_strand_minus || !separateStrands)
+        AccumulateInterval(plusIAP, start, stop, alignSorted[alignIndex].normScore, TRUE);
+      else
+        AccumulateInterval(minusIAP, start, stop, alignSorted[alignIndex].normScore, TRUE);
     }
-
-    /* iterate through all the segments of this Alignment. */
-    if (!stdSeg) {
-      nsegs = AlnMgr2GetNumSegs(SAP);
-      for (iseg = 1; iseg <= nsegs; ++iseg)
-      {
-        /* get segment location in alignment coordinates */
-        AlnMgr2GetNthSegmentRange(SAP, iseg, &alignStart, &alignStop);
-        /* convert to bioseq coordinates */
-        start = AlnMgr2MapSeqAlignToBioseq(SAP, alignStart, alignRow);
-        if (alignStart != alignStop)
-          stop  = AlnMgr2MapSeqAlignToBioseq(SAP, alignStop , alignRow);
-        else
-          stop = start;
-        if (start < 0 || stop < 0) /* ignore gaps on the bioseq & errors */
-          continue;
-        if (stop < start) {
-          swap = stop;
-          stop = start;
-          start = swap;
-        }
-        start /= vContext->viewScale;
-        stop /= vContext->viewScale;
         
-        /* Is this a gap or an alignment segment? */
-        row2 = 3 - alignRow; /* alignRow == 1 then row2 == 2; & vice versa. dim must be 2! */
-        seq2Start = AlnMgr2MapSeqAlignToBioseq(SAP, alignStart, row2);
-
-        weight = 1; /* make this based on alignment score !?? */
-        
-        if (seq2Start == -2 ) 
-        {  /* a gap */
-          for (i = start; i <= stop; i++) 
-            gapDensities[i] += weight;
-        }
-        else if (seq2Start >= 0)
-        { /* a real alignment. */
-          weight = 1; /* do this correctly based on the alignment score !!!!! */
-          for (i = start; i <= stop; i++)
-            densities[i] += weight;
-        }
-        
-        empty = FALSE;
-      } /* for iseg <= nsegs */
-    } else { /* std segs */
-      AlnMgr2GetNthSeqRangeInSAStdSeg (SAP, alignRow, &start, &stop);
-
-      if (start < 0 || stop < 0) /* ignore gaps on the bioseq & errors */
+    /*
+      for each segment in an alignment
+      if the segment is block or a gap map it appropriately in the density arrays.
+    */ 
+    nsegs = AlignSegIteratorCreate(SAP, SID, &asi);
+    if (nsegs == 0)
+      continue;
+    while (AlignSegIteratorNext(&asi, &start, &stop, &strand, &segType))
+    {
+      if (segType == AM_INSERT || start < 0 || stop < 0)
         continue;
-      if (stop < start) {
-        swap = stop;
-        stop = start;
-        start = swap;
-      }
-      start /= vContext->viewScale;
-      stop /= vContext->viewScale;
-
-      weight = 1; /* make this based on alignment score !?? */
-
-      for (i = start; i <= stop; i++)
-        densities[i] += weight;
         
-      empty = FALSE;
-    } /* if std segs */
-  } /* for SAP != NULL */
+      if (segType == AM_GAP ) 
+      {  /* a gap */
+        if (strand != Seq_strand_minus || !separateStrands)
+          AccumulateInterval(plusIAP, start, stop, weight, TRUE);
+        else
+          AccumulateInterval(minusIAP, start, stop, weight, TRUE);
+      }
+      else if (segType == AM_SEQ)
+      { /* a real alignment. */
+        if (strand != Seq_strand_minus || !separateStrands) {
+          smearedAlignsPlus = TRUE;
+          AccumulateInterval(plusIAP, start, stop, weight, FALSE);
+        }
+        else {
+          smearedAlignsMinus = TRUE;
+          AccumulateInterval(minusIAP, start, stop, weight, FALSE);
+        }
+      }
+        
+    } /* for all segments in an alignment */
+  } /* for all alignments in an annotation */
 
-  if (empty) 
-    return 0; /* there was nothing to show. */
+  if (!smearedAlignsPlus && !smearedAlignsMinus) 
+    goto smearAlignmentsDone; /* there was nothing to show. */
   
   DrawNamedAnnotBox(FPSP);
   FIP = (FilterItemPtr) FPSP->currentFilterVNP->data.ptrvalue;
   DrawFilterItemBoxLabel(FPSP, FIP);
-
   
-  maxDensity = 0;
-  for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
-    maxDensity = MAX (maxDensity, densities[i]);
-  }
-
   seg = CreateSegment ( vContext->drawOnMe, 0, 0);
 
-  for (i = 0; i < vContext->seqLength / vContext->viewScale; i++) {
+  if (smearedAlignsPlus || !separateStrands) {
+    height += space_line_height;
+    maxDensity = GetMaxDensity(plusIAP);
 
-    for (length = 0; i + length < vContext->seqLength; length++) {
-      if (densities [i] != densities [i + length]) break;
+    accumPos = GetIntervalFromAccumulator(plusIAP, 0, &begin, &end, &density, &isGap);
+    while (accumPos > 0) {
+    
+      if (density > 0) {
+          /* convert  (1 - maxDensity) to "color" number (224 - 0) */
+        if (maxDensity == minDensity) {
+          col = minCol;
+        } else {
+          col = (Uint1) (minCol + (density - minDensity)*(maxCol - minCol)/(maxDensity - minDensity));
+        }
+        color [2] = color [1] = color [0] = col;  /* set to shade of grey. (minCol = 224) */
+        AddAttribute (seg, COLOR_ATT, color, 0, 0, 1, 0);
+        AddRectangle (seg, begin, FPSP->ceiling - height, 
+                           end,   FPSP->ceiling - height - (AIP->Height), NO_ARROW, TRUE, 0);
+      }
+      else if (isGap) {
+        AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+        AddLine (seg, begin, FPSP->ceiling - height - (AIP->Height)/2, 
+                      end,   FPSP->ceiling - height - (AIP->Height)/2, NO_ARROW, 0);
+      } else { 
+        /* put a small line above spaces between blocks we draw */
+        if (0 < begin  &&  end < vContext->seqLength) { /* ignore gaps at beginning and end of bioseq */
+          ASSERT(!isGap && density == 0);
+          space_pixs = (end - begin)/vContext->viewScale;
+          /* if (3 <= space_pixs  &&  space_pixs <= 10  &&  end < vContext->seqLength) { */
+          if (space_pixs <= 20) { /* don't draw this line if it is more than 20 pixels long. */
+            if (space_pixs < 3) { /* make sure bar is always at least 3 pixels long */
+              int mid_point = end + begin;
+              end = (mid_point + 3 * vContext->viewScale) /2;
+              begin = (mid_point - 3 * vContext->viewScale) /2;
+            }
+            AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+            AddLine (seg, begin,                     FPSP->ceiling + space_line_height, 
+                          end - vContext->viewScale, FPSP->ceiling + space_line_height, NO_ARROW, 0);
+          }
+        }
+      }
+      accumPos = GetIntervalFromAccumulator(plusIAP, accumPos, &begin, &end, &density, &isGap);
     }
-    /* convert density (1 - maxDensity) to "color" number (224 - 0) */
-    if (densities [i] < minDensity) {
-      col = 255;
-    } else if (maxDensity == minDensity) {
-      col = 224;
-    } else {
-      col = (Uint1) (minCol + (densities[i] - minDensity)*(maxCol - minCol)/(maxDensity - minDensity));
-      /* col = (Uint1) (224 - ((densities [i] * 192) / 256)); */
-    }
-    color [2] = color [1] = color [0] = col;  /* set to shade of grey. (minCol = 224) */
-    if (col < 255) {
-      AddAttribute (seg, COLOR_ATT, color, 0, 0, 1, 0);
-      AddRectangle (seg, i * vContext->viewScale, FPSP->ceiling, (i + length) * vContext->viewScale, FPSP->ceiling - (AIP->Height), NO_ARROW, TRUE, 0);
-    }
-    else if (gapDensities[i] > 0) {
+    /* put a little arrow to show this is the plus strand */
+    if (separateStrands) {
       AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
-      AddLine (seg, i * vContext->viewScale, FPSP->ceiling - (AIP->Height)/2, (i + length) * vContext->viewScale, FPSP->ceiling - (AIP->Height)/2, NO_ARROW, 0);
+      AddTextLabel (seg, 0 * vContext->viewScale, FPSP->ceiling - height - (AIP->Height)/2, 
+                   ">", FIP->GroupLabelFont, 1, MIDDLE_LEFT, 0);
     }
-    i += length - 1;
+    height += AIP->Height + FIP->IntraRowPaddingPixels;
   }
   
-  MemFree (densities);
-  MemFree (gapDensities);
-  
-  return AIP->Height;
+  if (smearedAlignsMinus) {
+    maxDensity = GetMaxDensity(minusIAP);
+
+    accumPos = GetIntervalFromAccumulator(minusIAP, 0, &begin, &end, &density, &isGap);
+    while (accumPos > 0) {
+    
+      if (density > 0) {
+          /* convert  (1 - maxDensity) to "color" number (224 - 0) */
+        if (maxDensity == minDensity) {
+          col = minCol;
+        } else {
+          col = (Uint1) (minCol + (density - minDensity)*(maxCol - minCol)/(maxDensity - minDensity));
+        }
+        color [2] = color [1] = color [0] = col;  /* set to shade of grey. (minCol = 224) */
+        AddAttribute (seg, COLOR_ATT, color, 0, 0, 1, 0);
+        AddRectangle (seg, begin, FPSP->ceiling - height, 
+                           end,   FPSP->ceiling - height - (AIP->Height), NO_ARROW, TRUE, 0);
+      }
+      else if (isGap) {
+        AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+        AddLine (seg, begin, FPSP->ceiling - height - (AIP->Height)/2, 
+                      end,   FPSP->ceiling - height - (AIP->Height)/2, NO_ARROW, 0);
+      } else { 
+        /* put a small line above spaces between blocks we draw */
+        if (0 < begin  &&  end < vContext->seqLength) { /* ignore gaps at beginning and end of bioseq */
+          ASSERT(!isGap && density == 0);
+          space_pixs = (end - begin)/vContext->viewScale;
+          /* if (3 <= space_pixs  &&  space_pixs <= 10  &&  end < vContext->seqLength) { */
+          if (space_pixs <= 20) { /* don't draw this line if it is more than 20 pixels long. */
+            if (space_pixs < 3) { /* make sure bar is always at least 3 pixels long */
+              int mid_point = end + begin;
+              end = (mid_point + 3 * vContext->viewScale) /2;
+              begin = (mid_point - 3 * vContext->viewScale) /2;
+            }
+            AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+            AddLine (seg, begin,                     FPSP->ceiling - height - (AIP->Height) - space_line_height - 1, 
+                          end - vContext->viewScale, FPSP->ceiling - height - (AIP->Height) - space_line_height - 1, NO_ARROW, 0);
+          }
+        }
+      }
+      accumPos = GetIntervalFromAccumulator(minusIAP, accumPos, &begin, &end, &density, &isGap);
+    }
+    AddAttribute (seg, COLOR_ATT, NULL, 0, 0, 1, 0);
+    AddTextLabel (seg, 0, FPSP->ceiling - height - (AIP->Height)/2, 
+                 "<", FIP->GroupLabelFont, 1, MIDDLE_LEFT, 0);
+
+    height += space_line_height;
+    height += AIP->Height + FIP->IntraRowPaddingPixels;
+  }
+    
+smearAlignmentsDone:
+
+  FreeIntervalAccumulator(&plusIAP);
+  FreeIntervalAccumulator(&minusIAP);
+
+  return height;
 }
 
 
@@ -4867,7 +6269,8 @@ static Boolean FilterAndLayout (
          */
         for (SAnnP = BSP->annot; SAnnP != NULL; SAnnP = SAnnP->next) 
         {
-          if (SAnnP->type != 2) continue;  /* type 2 annotation is an alignment */
+          if (SAnnP->type != 2) 
+            continue;  /* type 2 annotation is an alignment */
           
           if (FP->GroupByAnnot) /* are we grouping by named annotations? */
           {
@@ -4882,22 +6285,25 @@ static Boolean FilterAndLayout (
                    
           emptyFilterGroup = FALSE;
           SAlnP = (SeqAlignPtr) SAnnP->data;
+                    
           ResetFilterState (&FPS);
-          FPS.state.align.SAPhead = FPS.state.align.SAPcurrent = SAlnP;
+          if ( ! AlignmentFilterStateInit(SAlnP, BSP->id ,&FPS.state.align, vContext->extras))
+            continue;
 
-         switch (layoutC) {
+          switch (layoutC) {
             case Layout_FeatTypePerLine:
-             height = SmearAlignments (&FPS, vContext);
-              height += FIP->IntraRowPaddingPixels;
+              height = SmearAlignments (&FPS, vContext);
               break;
             default:
               height = ProcessRows (layoutC, &FPS, vContext);
               break;
           }
+          AlignmentFilterStateFree(&FPS.state.align);
+          
           totalheight += height;
           if (height > 0)
             FPS.ceiling -= height;
-        }
+        } /* SAnnp, cycle through all SeqAnnots on this Bioseq */
         height = 0;
         break;
       case FeatureFilter:
@@ -5076,7 +6482,8 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
   SegmenT topLevel,
   AppearancePtr AP,
   FilterPtr FP,
-  LayoutAlgorithm overrideLayout
+  LayoutAlgorithm overrideLayout,
+  GraphicViewExtrasPtr extras
 )
 
 {
@@ -5109,6 +6516,7 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
   VC.FltPtr = FP;
   VC.overrideLayout = overrideLayout;
   VC.seqLength = bsp->length;
+  VC.extras = extras;
   
   if (NULL == ceiling)
     VC.ceiling = &theCeiling;
@@ -5137,7 +6545,8 @@ NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
   SegmenT topLevel,
   AppearancePtr AP,
   FilterPtr FP,
-  LayoutAlgorithm overrideLayout
+  LayoutAlgorithm overrideLayout,
+  GraphicViewExtrasPtr extras
 )
 
 {
@@ -5180,7 +6589,7 @@ NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
   }
   RFP = CollectFeatures (bsp);
   if (RFP == NULL) return NULL;
-  seg = CreateGraphicViewInternal (bsp, from, to, allFeatures, RFP, scale, ceiling, topLevel, AP, FP, overrideLayout);
+  seg = CreateGraphicViewInternal (bsp, from, to, allFeatures, RFP, scale, ceiling, topLevel, AP, FP, overrideLayout, extras);
   FreeCollectedFeatures (RFP);
   return seg;
 }
@@ -5191,7 +6600,8 @@ NLM_EXTERN SegmenT CreateGraphicView (
   Int4 scale,
   CharPtr styleName,
   CharPtr filterName,
-  CharPtr overrideLayoutName
+  CharPtr overrideLayoutName,
+  GraphicViewExtrasPtr extras
 )
 
 {
@@ -5212,7 +6622,8 @@ NLM_EXTERN SegmenT CreateGraphicView (
   } else {
     overrideLayout = Layout_Inherit;
   }
-  return CreateGraphicViewFromBsp (bsp, location, scale, NULL, NULL, AP, FP, overrideLayout);
+      
+  return CreateGraphicViewFromBsp (bsp, location, scale, NULL, NULL, AP, FP, overrideLayout, extras);
 }
 
 NLM_EXTERN Uint2 GetAppearanceCount (void)
@@ -5241,6 +6652,16 @@ NLM_EXTERN Uint2 GetLayoutCount (void)
   return DIM (LayoutStrings);
 }
 
+NLM_EXTERN Uint2 GetAlnScoreCount (void)
+{
+  return DIM (AlnScoreStrings);
+}
+
+NLM_EXTERN Uint2 GetAlnScoreCutoffCount (void)
+{
+  return DIM (AlnScoreCutoffStrings);
+}
+
 NLM_EXTERN CharPtr PNTR GetStyleNameList (void)
 
 {
@@ -5259,6 +6680,16 @@ NLM_EXTERN CharPtr PNTR GetFilterNameList (void)
   VCP = GetGraphicConfigParseResults ();
   if (VCP == NULL) return NULL;
   return VCP->FilterNameArray;
+}
+
+NLM_EXTERN CharPtr PNTR GetAlnScoreNameList(void)
+{
+    return AlnScoreStrings;
+}
+
+NLM_EXTERN CharPtr PNTR GetAlnScoreCutoffList(void)
+{
+    return AlnScoreCutoffStrings;
 }
 
 NLM_EXTERN CharPtr PNTR GetLayoutNameList (void)
@@ -5413,6 +6844,7 @@ static ConfigFileLine defaultStyleLines12 [] = {
   {"showtype", "no"},
   {"showcontent", "yes"},
   {"format", "accession"},
+  {"displaywith", "outlinebox"},
   {NULL, NULL}
 };
 
@@ -5490,6 +6922,7 @@ static ConfigFileLine defaultStyleLines19 [] = {
   {"showtype", "no"},
   {"showcontent", "yes"},
   {"format", "accession"},
+  {"displaywith", "outlinebox"},
   {NULL, NULL}
 };
 

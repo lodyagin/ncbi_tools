@@ -1,4 +1,4 @@
-/* $Id: wrpsb.h,v 1.13 2003/01/09 21:56:29 bauer Exp $
+/* $Id: wrpsb.h,v 1.15 2003/10/07 21:15:15 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 1/19/2000
 *
-* $Revision: 1.13 $
+* $Revision: 1.15 $
 *
 * File Description:
 *         Header file for WWW-RPS BLAST client
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsb.h,v $
+* Revision 1.15  2003/10/07 21:15:15  bauer
+* support generation of Sequence Annotation from CD-Search results
+*
+* Revision 1.14  2003/07/25 21:00:28  bauer
+* changes to accomodate KOGs
+*
 * Revision 1.13  2003/01/09 21:56:29  bauer
 * reduced default number of hits to 25
 *
@@ -168,6 +174,7 @@ typedef struct _alignment_abstract {
   Boolean                         bIsProfile;
   Boolean                         bHasStructure;
   Boolean                         bIsArch;
+  Boolean                         bIsArchComplete;
   TxDfLineStructPtr               defline;
   CharPtr                         long_defline;
   CharPtr                         cCDDid;
@@ -230,8 +237,6 @@ static Char    CDDSname5[PATH_MAX];
 static Char    CDDSname6[PATH_MAX];
 static Char    CDDSname7[PATH_MAX];
 static Char    CDDlocat[PATH_MAX];
-static Char    CDDhuman[PATH_MAX];
-static Char    CDDhumsq[PATH_MAX];
 static Char    ODBCINI[PATH_MAX];
 static Char    DARTUSER[PATH_MAX];
 static Char    DARTPASS[PATH_MAX];

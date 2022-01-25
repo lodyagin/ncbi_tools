@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.72 2003/01/23 23:31:58 dondosha Exp $
+/* $Id: txalign.c,v 6.79 2003/09/26 20:54:10 dondosha Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,34 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.72 $
+* $Revision: 6.79 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.79  2003/09/26 20:54:10  dondosha
+* Revert change in revision 6.77, as it turned trace.cgi links should have stayed as they were
+*
+* Revision 6.78  2003/08/20 21:29:13  dondosha
+* Correction for OOF alignments with nucleotide coordinates starting at 1
+*
+* Revision 6.77  2003/07/30 14:07:36  dondosha
+* Changed hrefs to trace.cgi in accordance with the new taxonomy web interface
+*
+* Revision 6.76  2003/07/21 22:15:23  dondosha
+* Added support for out-of-frame tblastn alignments
+*
+* Revision 6.75  2003/07/15 14:36:06  dondosha
+* Added a #define for fprintf substitute, needed for gzip compression of Web BLAST results
+*
+* Revision 6.74  2003/06/11 20:15:35  jianye
+* changed unigene linkout
+*
+* Revision 6.73  2003/06/02 20:02:15  jianye
+* Added geo linkout
+*
 * Revision 6.72  2003/01/23 23:31:58  dondosha
 * Added a global variable for the query number, needed in make_dumpgnl_links
 *
@@ -511,6 +532,9 @@ int query_number_glb;
 /*Indicate if db contains sequence with gi*/
 Boolean DbHasGi=FALSE;
 
+int (*tx_fprintf)(FILE*, const char *, ...) = fprintf;
+#define fprintf tx_fprintf
+
 /*
 	Used by the functions that format the one-line descriptions.
 */
@@ -643,6 +667,7 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	/*add space in front of linkout*/
 	fprintf(fp, " ");
 	bdlpTemp=bdlp;
+	
 	while(bdlpTemp){
 	  if(checkLinkoutType(bdlpTemp, linkout_locuslink)){
 	    hasLinkout=TRUE;
@@ -654,20 +679,10 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	}
 	bdlpTemp=bdlp;
 	while(bdlpTemp){ 	
-	  if(checkLinkoutType(bdlpTemp, linkout_unigene)){
-         
+	  if(checkLinkoutType(bdlpTemp, linkout_unigene)){         
 	    hasLinkout=TRUE;
 	    gi=GetGIForSeqId(bdlpTemp->seqid);
-	    rnp=FDGetTaxNamesFromBioseq(bsp, bdlpTemp->taxid);
-	    if(rnp&&rnp->sci_name){
-	      unigeneName=getNameInitials(rnp->sci_name);
-	      if(unigeneName){
-		fprintf(fp, URL_Unigene, unigeneName, gi);
-	      }
-	      MemFree(unigeneName);
-	    }
-	    
-	    RDBTaxNamesFree(rnp);
+	    fprintf(fp, URL_Unigene,  gi); 
 	    break;
 	  }
 	  bdlpTemp=bdlpTemp->next;
@@ -682,6 +697,16 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 	  }
 	  bdlpTemp=bdlpTemp->next;
 	}
+	bdlpTemp=bdlp;
+	while(bdlpTemp){
+	  if(checkLinkoutType(bdlpTemp, linkout_geo)){
+	    gi=GetGIForSeqId(bdlpTemp->seqid);
+	    fprintf(fp, URL_Geo, gi);
+	    break;
+	  }
+	  bdlpTemp=bdlpTemp->next;
+	}
+	
       }
       BlastDefLineSetFree(bdlp);
     }
@@ -722,20 +747,15 @@ static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, 
 	
 	if(checkLinkoutType(actualBdlp, linkout_unigene)){	
 	  hasLinkout=TRUE;	
-	  rnp=FDGetTaxNamesFromBioseq(bsp, actualBdlp->taxid);
-	  if(rnp&&rnp->sci_name){
-	    unigeneName=getNameInitials(rnp->sci_name);
-	    if(unigeneName){
-	      fprintf(fp, URL_Unigene, unigeneName, gi);
-	    }
-	    MemFree(unigeneName);
-	  }
-	 
-	  RDBTaxNamesFree(rnp);
+	  fprintf(fp, URL_Unigene,  gi);
 	}
 	if(checkLinkoutType(actualBdlp, linkout_structure)){
 	  hasLinkout=TRUE;
 	  fprintf(fp, URL_Structure, RID_glb, firstGi, gi, CDD_RID_glb, "onepair", StringCmp(Entrez_Query_Term, "") ? Entrez_Query_Term:"none");
+	}
+	
+	if(checkLinkoutType(actualBdlp, linkout_geo)){
+	  fprintf(fp, URL_Geo, gi);
 	}
       }
       BlastDefLineSetFree(bdlp);
@@ -1722,7 +1742,7 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 					    		tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
                                             load = TRUE;
                                          } else if (!StringICmp(db_tag->db, "TI")) {
-                                            sprintf(HTML_buffer, "<a name = TI%ld></a><a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?val=%ld&cmd=retrieve&dopt=fasta\">", (long) oip->id, (long) oip->id);
+                                            sprintf(HTML_buffer, "<a name = TI%ld></a><a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?cmd=retrieve&dopt=fasta&val=%ld\">", (long) oip->id, (long) oip->id);
                                             
                                             html_len = StringLen(HTML_buffer);
                                             sprintf(docbuf+pos, HTML_buffer);
@@ -2616,8 +2636,13 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
         return FALSE;
 
     if(asp->ooframe) {
-        master_is_translated = TRUE;
-        target_is_translated = FALSE;	
+       if (SeqLocStrand(ssp->loc) != Seq_strand_unknown) {
+          master_is_translated = TRUE;
+          target_is_translated = FALSE;	
+       } else {
+          master_is_translated = FALSE;
+          target_is_translated = TRUE;	
+       }
     } else {
         /* Check for valid sequence. */
         if (SeqLocLen(ssp->loc) == 3*SeqLocLen(ssp->loc->next))
@@ -2748,10 +2773,17 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
         }
 
         if(asp->ooframe) {
-            if(ssp->loc->next->choice != SEQLOC_EMPTY)
-                asp->totlen += SeqLocLen(ssp->loc->next);
-            else
-                asp->totlen += SeqLocLen(ssp->loc)/3;
+           if (master_is_translated) {
+              if(ssp->loc->next->choice != SEQLOC_EMPTY)
+                 asp->totlen += SeqLocLen(ssp->loc->next);
+              else
+                 asp->totlen += SeqLocLen(ssp->loc)/3;
+           } else {
+              if(ssp->loc->choice != SEQLOC_EMPTY)
+                 asp->totlen += SeqLocLen(ssp->loc);
+              else
+                 asp->totlen += SeqLocLen(ssp->loc->next)/3;
+           }
         } else {
         
             if (ssp->loc->choice != SEQLOC_EMPTY) {
@@ -4589,7 +4621,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
 #endif
     
     if(!StringICmp(blast_type, "fruitfly")) {
-        fprintf(stdout, "<IMG SRC=\"/BLAST/images/map_mark.gif\" BORDER=0> - please follow this image for the map location of the sequence<P>\n");
+        fprintf(outfp, "<IMG SRC=\"/BLAST/images/map_mark.gif\" BORDER=0> - please follow this image for the map location of the sequence<P>\n");
     }
     
     asn2ff_set_output(outfp, NULL);
@@ -4884,7 +4916,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                         } else if (db_tag->db && StringICmp(db_tag->db, "TI") == 0) {
                            oip = db_tag->tag;
                            if(oip->id != 0) {
-                              fprintf(outfp, "<a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?val=%ld&cmd=retrieve&dopt=fasta\">", (long) oip->id);
+                              fprintf(outfp, "<a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?cmd=retrieve&dopt=fasta&val=%ld\">", (long) oip->id);
                            }
                         } else {
                             make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, txsp->is_na, outfp, txsp->buffer_id, FALSE);
@@ -5417,7 +5449,7 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
                     } else if (db_tag->db && StringICmp(db_tag->db, "TI") == 0) {
                        oip = db_tag->tag;
                        if(oip->id != 0) {
-                          fprintf(asop->fp, "<a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?val=%ld&cmd=retrieve&dopt=fasta\">", (long) oip->id);
+                          fprintf(asop->fp, "<a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?cmd=retrieve&dopt=fasta&val=%ld\">", (long) oip->id);
                        }
                     } else {
                         /** * links to incomplete genomes */
@@ -5960,22 +5992,27 @@ NLM_EXTERN Uint4 GetTxAlignOptionValue (Uint1 tx_option, BoolPtr hide_feature,
 	return option;
 }
 
-Int4 OOFGetDNAStrand(StdSegPtr sseg)
+/** The following function assumes that neither of the locations in
+ * the first link in StdSeg is empty.
+ * @param sseg Alignment segments [in]
+ * @param dna_strand The strand of the nucleotide sequence [out]
+ * @return TRUE for tblastn, FALSE for blastx.
+ */
+static Boolean OOFGetDNAStrand(StdSegPtr sseg, Int4Ptr dna_strand)
 {
-    Int4 dna_strand;
-    SeqIntPtr seq_int1;
-    SeqLocPtr slp1;
+    Uint1 strand;
+    Boolean reverse;
 
-    for(; sseg != NULL; sseg= sseg->next) {
-        slp1 = sseg->loc;
-        
-        if(slp1->choice == SEQLOC_INT) {
-            seq_int1 = (SeqIntPtr) slp1->data.ptrvalue;
-            return seq_int1->strand;
-        }
+    if ((strand = SeqLocStrand(sseg->loc)) != Seq_strand_unknown) {
+       *dna_strand = (Int4) strand;
+       reverse = FALSE;
+    } else {
+       *dna_strand = (Int4) SeqLocStrand(sseg->loc->next);
+       reverse = TRUE;
     }
-    return Seq_strand_unknown;
+    return reverse;
 }
+
 static Int4 SetDNALineEnd(Int4 dna_index, Int4 dna_strand)
 {
     Int4 dna_line_end;
@@ -6041,6 +6078,7 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
     Int4 i, lines, k, shift_info = 0;
     Char  c1, c2, c3;
     Int4 dna_strand, max_digits, num_pad;
+    Boolean reverse = FALSE;
 
     if(sap == NULL || sap->segtype != 3) /* Should be StdSeg here! */
         return FALSE;
@@ -6051,8 +6089,8 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
     pro_index = 0;
     pro_line_end = 0;
     dna_line_end = 0;
-    
-    dna_strand = OOFGetDNAStrand((StdSegPtr) sap->segs);
+   
+    reverse = OOFGetDNAStrand((StdSegPtr) sap->segs, &dna_strand);
 
     /* Needed for printing nice alignment with normal spacing */
     max_digits = GetMaxFROMDigits((StdSegPtr) sap->segs);
@@ -6065,8 +6103,18 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
         length_pro = 0;
         b_store = NULL;
         
-        slp1 = sseg->loc;
-        
+        if (reverse) {
+           slp2 = sseg->loc;
+           slp1 = sseg->loc->next;
+           sip2 = sseg->ids;       /* Protein */
+           sip1 = sseg->ids->next; /* DNA */
+        } else {
+           slp1 = sseg->loc;
+           slp2 = sseg->loc->next;
+           sip1 = sseg->ids;       /* DNA */
+           sip2 = sseg->ids->next; /* Protein */
+        }
+
         if(slp1->choice == SEQLOC_INT) 
             seq_int1 = (SeqIntPtr) slp1->data.ptrvalue;
         else if (slp1->choice == SEQLOC_EMPTY)
@@ -6074,7 +6122,6 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
         else
             return FALSE;       /* Invalid SeqLoc */
         
-        slp2 = sseg->loc->next;
         
         if(slp2->choice == SEQLOC_INT)
             seq_int2 = (SeqIntPtr) slp2->data.ptrvalue;
@@ -6087,9 +6134,6 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
         if(seq_int1 == NULL && seq_int2 == NULL)
             continue;
         
-        sip1 = sseg->ids;       /* DNA */
-        sip2 = sseg->ids->next; /* Protein */
-
         /* printf("shift_info = %d\n", shift_info); */
 
         if(shift_info%3)
@@ -6171,12 +6215,12 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
         }
 
         if(line_index == 0) {
-            dna_line_start = dna_index; 
+            dna_line_start = dna_index + 1; 
             pro_line_start = pro_index + 1;
         }
 
         if (dna_line_start == 0)
-            dna_line_start = dna_index; 
+            dna_line_start = dna_index + 1; 
         
         if(pro_line_start == 0)
             pro_line_start = pro_index + 1;
@@ -6293,37 +6337,64 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
 
                 /* ------- Printout of the alignment ------------- */ 
 
-                fprintf(fp, "Query: %d", dna_line_start+1);
+                if (reverse) {
+                   fprintf(fp, "Query: %d", pro_line_start);
+                   num_pad = 
+                      max_digits - GetDigitsInINT(pro_line_start) + 1;
+
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
+                   
+                   fprintf(fp, "%s %d\n", line2, pro_line_end);
                 
-                num_pad = max_digits - GetDigitsInINT(dna_line_start+1) + 1;
+                   num_pad = 8 + max_digits;
+                   
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
 
-                for(k=0; k < num_pad; k++)
-                    fprintf(fp, " ");
+                   fprintf(fp, "%s\nSbjct: %d", line3, dna_line_start);
 
-                fprintf(fp, "%s %d\n", line1, dna_line_end+3);
+                   num_pad = 
+                      max_digits - GetDigitsInINT(dna_line_start) + 1;
+
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
+                   
+                   fprintf(fp, "%s %d\n\n", line1, dna_line_end+3);
+
+                } else {
+                   fprintf(fp, "Query: %d", dna_line_start);
+                   num_pad = 
+                      max_digits - GetDigitsInINT(dna_line_start) + 1;
+
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
+                   
+                   fprintf(fp, "%s %d\n", line1, dna_line_end+3);
                 
-                num_pad = 8 + max_digits;
-                
-                for(k=0; k < num_pad; k++)
-                    fprintf(fp, " ");
+                   num_pad = 8 + max_digits;
+                   
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
 
-                fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
+                   fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
 
-                num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
+                   num_pad = 
+                      max_digits - GetDigitsInINT(pro_line_start) + 1;
 
-                for(k=0; k < num_pad; k++)
-                    fprintf(fp, " ");
-
-                fprintf(fp, "%s %d\n\n", line2, pro_line_end);
-
+                   for(k=0; k < num_pad; k++)
+                      fprintf(fp, " ");
+                   
+                   fprintf(fp, "%s %d\n\n", line2, pro_line_end);
+                }
                 /* --------------------------------------------------- */
 
                 if(dna_line_end != 0) {
 
                     if(dna_strand != Seq_strand_minus)
-                        dna_line_start = dna_line_end+3; /*takes 3 bases*/
+                        dna_line_start = dna_line_end+4; /*takes 3 bases*/
                     else
-                        dna_line_start = dna_line_end+1; /*takes 3 bases*/
+                        dna_line_start = dna_line_end+2; /*takes 3 bases*/
                 }
                 if(pro_line_end != 0) 
                     pro_line_start = pro_line_end+1;
@@ -6357,35 +6428,58 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
 
 
     /* ------- Printout of the alignment remainder ------- */ 
+    if (reverse) {
+       fprintf(fp, "Query: %d", pro_line_start);
     
-    fprintf(fp, "Query: %d", dna_line_start+1);
+       num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s %d\n", line2, pro_line_end);
+       
+       num_pad = 8 + max_digits;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s\nSbjct: %d", line3, dna_line_start);
+       
+       num_pad = max_digits - GetDigitsInINT(dna_line_start) + 1;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s %d\n\n\n", line1, dna_line_end+3);
+    } else {
+       fprintf(fp, "Query: %d", dna_line_start);
     
-    num_pad = max_digits - GetDigitsInINT(dna_line_start+1) + 1;
-    
-    for(k=0; k < num_pad; k++)
-        fprintf(fp, " ");
-    
-    fprintf(fp, "%s %d\n", line1, dna_line_end+3);
-    
-    num_pad = 8 + max_digits;
-    
-    for(k=0; k < num_pad; k++)
-        fprintf(fp, " ");
-    
-    fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
-    
-    num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
-    
-    for(k=0; k < num_pad; k++)
-        fprintf(fp, " ");
-    
-    fprintf(fp, "%s %d\n\n\n", line2, pro_line_end);
-    
+       num_pad = max_digits - GetDigitsInINT(dna_line_start) + 1;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s %d\n", line1, dna_line_end+3);
+       
+       num_pad = 8 + max_digits;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
+       
+       num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
+       
+       for(k=0; k < num_pad; k++)
+          fprintf(fp, " ");
+       
+       fprintf(fp, "%s %d\n\n\n", line2, pro_line_end);
+    }
     /* --------------------------------------------------- */
     
     /*    fprintf(fp, "\nQuery: %-5d %s %-5d\n             "
           "%s\nSbjct: %-5d %s %-5d\n\n", 
-          dna_line_start+1, line1, dna_line_end+3, line3, 
+          dna_line_start, line1, dna_line_end+3, line3, 
           pro_line_start, line2, pro_line_end); */
     
     return TRUE;

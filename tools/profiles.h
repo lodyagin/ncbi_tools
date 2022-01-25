@@ -1,4 +1,4 @@
-/* $Id: profiles.h,v 6.13 2000/07/25 18:13:42 shavirin Exp $
+/* $Id: profiles.h,v 6.14 2003/04/25 12:55:13 thiessen Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -114,7 +114,7 @@ Boolean LIBCALL IMPALAPrintReference PROTO((Boolean html, Int4 line_length, FILE
 Nlm_FloatHi LIBCALL
 impalaKarlinLambdaNR PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda));
 
-void LIBCALL impalaScaling PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch));
+Boolean LIBCALL impalaScaling PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch));
 
 Boolean LIBCALL  impalaReadCheckpoint PROTO((posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, ValNodePtr * error_return,
 Nlm_FloatHi scalingFactor));

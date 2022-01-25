@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.158 $
+* $Revision: 6.159 $
 *
 * File Description: 
 *
@@ -2728,7 +2728,8 @@ static void SalsaNewFeaturesMenu (MenU m, Boolean is_na)
                     subtype != FEATDEF_virion &&
                     subtype != FEATDEF_mutation &&
                     subtype != FEATDEF_allele &&
-                    subtype != FEATDEF_site_ref) {
+                    subtype != FEATDEF_site_ref &&
+                    subtype != FEATDEF_gap) {
                   i = CommandItem (sub, ompp->proclabel, SalsaNewFeatureMenuProc);
                   nfp = (NewFeaturePtr) MemNew (sizeof (NewFeatureData));
                   if (nfp != NULL) {

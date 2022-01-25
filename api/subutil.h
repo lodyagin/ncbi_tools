@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,17 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.46  2003/10/21 18:16:05  bazhin
+* Replaced C++ comments with C ones.
+*
+* Revision 6.45  2003/10/16 17:16:33  mjohnson
+*
+* Added ORG_* and IS_ORG_* defines for origins. Use these constants
+* and macros instead of small integers.
+*
+* Revision 6.44  2003/07/11 18:22:45  kans
+* AddSourceToRefGeneTrackUserObject
+*
 * Revision 6.43  2002/07/09 16:17:35  kans
 * AddAccessionToTpaAssemblyUserObject takes from and to parameters
 *
@@ -949,6 +960,26 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
 
+/* Defines for BioSrc.origin
+ */
+#define ORG_UNKNOWN 0
+#define ORG_NATURAL 1
+#define ORG_NATMUT 2
+#define ORG_MUT 3
+#define ORG_ARTIFICIAL 4
+#define ORG_SYNTHETIC 5
+#define ORG_OTHER 255
+#define ORG_DEFAULT ORG_UNKNOWN
+
+#define IS_ORG_UNKNOWN(S) ((S).origin == ORG_UNKNOWN)
+#define IS_ORG_NATURAL(S) ((S).origin == ORG_NATURAL)
+#define IS_ORG_NATMUT(S) ((S).origin == ORG_NATMUT)
+#define IS_ORG_MUT(S) ((S).origin == ORG_MUT)
+#define IS_ORG_ARTIFICIAL(S) ((S).origin == ORG_ARTIFICIAL)
+#define IS_ORG_SYNTHETIC(S) ((S).origin == ORG_SYNTHETIC)
+#define IS_ORG_OTHER(S) ((S).origin == ORG_OTHER)
+
+
 /*********************************************
 *  OrgMod defines subclasses of organism names
 *    (also see SubSource above for subclasses of source material)
@@ -1557,6 +1588,7 @@ NLM_EXTERN Boolean AddPhrapGraphToSeqLit (
 NLM_EXTERN UserObjectPtr CreateRefGeneTrackUserObject (void);
 NLM_EXTERN void AddStatusToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr status);
 NLM_EXTERN void AddCuratorToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr collaborator);
+NLM_EXTERN void AddSourceToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr genomicSource);
 NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr field,
                                                       CharPtr accn, Int4 gi,
                                                       Boolean sequenceChange,

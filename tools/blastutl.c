@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: blastutl.c,v 6.417 2003/08/20 22:14:08 dondosha Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +32,27 @@ Author: Tom Madden
 
 Contents: Utilities for BLAST
 
-$Revision: 6.412 $
+$Revision: 6.417 $
 
 ******************************************************************************/
 /*
  *
 * $Log: blastutl.c,v $
+* Revision 6.417  2003/08/20 22:14:08  dondosha
+* Little correction in call to OOFBlastHSPGetNumIdentical
+*
+* Revision 6.416  2003/08/04 16:19:16  dondosha
+* Added effective HSP length (length adjustment) to other returns, so it can be reported in XML output
+*
+* Revision 6.415  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
+* Revision 6.414  2003/05/23 22:12:11  camacho
+* Fix memory leak in PsiBlast2Sequences
+*
+* Revision 6.413  2003/04/22 21:52:13  dondosha
+* Added function OOFBlastHSPGetNumIdentical
+*
 * Revision 6.412  2003/04/10 19:21:16  dondosha
 * Memory leak fix for megablast with limited number of HSPs per hit
 *
@@ -3173,8 +3190,8 @@ Boolean LIBCALL B2SPssmCleanUpSearch(BlastSearchBlkPtr search,
     if (!matrix)
         return FALSE;
     
-    if (matrix->matrix == NULL) { 
-        /* B2SPssmSetupSearch created PSSM */
+    if ((matrix->matrix == NULL) || /* B2SPssmSetupSearch created PSSM */
+        (posMatrix != matrix->matrix)) { /* B2SVerifyPSSM trimmed PSSM */
         for (i = 0; i < rows; i++)
             posMatrix[i] = MemFree(posMatrix[i]);
         posMatrix = MemFree(posMatrix);
@@ -3476,9 +3493,6 @@ BlastTwoSequencesByLocWithCallback(SeqLocPtr slp1, SeqLocPtr slp2, CharPtr
 
 	if (search == NULL) 
         return NULL;
-
-	/* The SearchBlk does not own the database sequence here. */
-	search->allocated -= BLAST_SEARCH_ALLOC_SUBJECT;;
 
     if (search->query_invalid) {
         search = BlastSearchBlkDestruct(search);
@@ -5301,7 +5315,8 @@ BlastOtherReturnsPrepare(BlastSearchBlkPtr search)
             ((Nlm_FloatHi) search->dblen_eff)*
             ((Nlm_FloatHi) search->context[search->first_context].query->effective_length));
     }
-    
+    ValNodeAddInt(&other_returns, EFF_HSP_LENGTH, search->length_adjustment);
+ 
     /* If Mega BLAST endpoint results, save them here */
     if (search->mb_endpoint_results && search->pbp->mb_params && 
         search->pbp->mb_params->no_traceback)
@@ -8970,13 +8985,16 @@ RealBlastGetGappedAlignmentTraceback(BlastSearchBlkPtr search, Uint1Ptr subject,
 #endif
                 }
 
-                if (search->pbp->is_ooframe)
-                  search->subject->sequence_start = gap_align->query - 1;
-                else 
-                  search->subject->sequence_start = 
-                    gap_align->subject - start_shift - 1;
-
-                BlastHSPGetNumIdentical(search, hsp, NULL, &hsp->num_ident, &align_length);
+                if (search->pbp->is_ooframe) {
+                   OOFBlastHSPGetNumIdentical(gap_align->query, 
+                      gap_align->subject-start_shift, hsp, NULL, 
+                      &hsp->num_ident, &align_length);
+                } else {
+                   search->subject->sequence_start = 
+                      gap_align->subject - start_shift - 1;
+                   BlastHSPGetNumIdentical(search, hsp, NULL, &hsp->num_ident,
+                                           &align_length);
+                }
                 if (search->pbp->mb_params &&
                     search->pbp->mb_params->use_dyn_prog) {
                    if (hsp->num_ident * 100 < 

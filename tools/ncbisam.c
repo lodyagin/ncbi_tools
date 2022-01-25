@@ -1,4 +1,6 @@
-/* $Id: ncbisam.c,v 6.29 2003/04/14 19:52:31 camacho Exp $
+static char const rcsid[] = "$Id: ncbisam.c,v 6.30 2003/05/30 17:25:37 coulouri Exp $";
+
+/* $Id: ncbisam.c,v 6.30 2003/05/30 17:25:37 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,15 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.29 $
+* $Revision: 6.30 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.30  2003/05/30 17:25:37  coulouri
+* add rcsid
+*
 * Revision 6.29  2003/04/14 19:52:31  camacho
 * Added ISAMUninitSearch
 *

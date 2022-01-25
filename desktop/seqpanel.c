@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.25 2003/03/31 17:06:33 lebedev Exp $
+/* $Id: seqpanel.c,v 6.26 2003/04/22 17:33:17 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -893,7 +893,7 @@ static void DrawFeature(Int2 x, Int2 y, Int4 line, Int4 row, Int2 itemID,
         DrawLineEx(x1+1, y-bvp->LineHeight/2-1, x2, y-bvp->LineHeight/2-1, 1);
         DrawLineEx(x1+1, y-bvp->LineHeight/2+7, x2, y-bvp->LineHeight/2+7, 1);
       }
-#elif defined(WIN_MSWIN)  // should be verified
+#elif defined(WIN_MSWIN)  /* should be verified */
       DrawLineEx(x1+1, y-bvp->LineHeight/2+2, x2, y-bvp->LineHeight/2+2, 3);
       if (isSelected(itemID, bvp)) {
         Black();

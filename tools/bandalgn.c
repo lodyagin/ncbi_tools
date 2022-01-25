@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: bandalgn.c,v 6.17 2003/05/30 17:25:36 coulouri Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,9 +32,12 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform both local and global banded alignments.
 
 ****************************************************************************/
-/* $Revision: 6.16 $
+/* $Revision: 6.17 $
  *
  * $Log: bandalgn.c,v $
+ * Revision 6.17  2003/05/30 17:25:36  coulouri
+ * add rcsid
+ *
  * Revision 6.16  2001/05/25 19:32:48  vakatov
  * Nested comment typo fixed
  *

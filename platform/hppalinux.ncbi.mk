@@ -1,10 +1,11 @@
 #
-# $Id: hppalinux.ncbi.mk,v 1.2 2002/10/29 01:20:13 lavr Exp $
+# $Id: hppalinux.ncbi.mk,v 1.3 2003/05/07 17:40:12 beloslyu Exp $
 #
 # Untested. Contributed by Howard Feldman <feldman@mshri.on.ca>
 #
 NCBI_DEFAULT_LCL = hlx
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2

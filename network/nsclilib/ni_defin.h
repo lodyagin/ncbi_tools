@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *
@@ -48,6 +48,9 @@
 *
 * RCS Modification History:
 * $Log: ni_defin.h,v $
+* Revision 6.3  2003/05/05 12:24:26  rsmith
+* range of socket errors is from WSABASEERR to WSABASEERR + 2000, not + sys_nerr. Allows cross compilation by Codewarrior.
+*
 * Revision 6.2  2001/05/08 16:43:57  juran
 * Use errno, not errno_long.
 *
@@ -241,7 +244,8 @@
 #define errno                                   WSAGetLastError()
 #define _INVALID_SOCKET_DEFINED_
 #define NI_BLOCK_WITH_FUNCTION
-#define SOCK_INDEX_ERRNO                        ((errno <= WSABASEERR || errno >= sys_nerr + WSABASEERR) ? 0 : (errno - WSABASEERR))
+/* see WinSock2.h and winerror.h for why 2000 */
+#define SOCK_INDEX_ERRNO                        ((errno <= WSABASEERR || errno >= 2000 + WSABASEERR) ? 0 : (errno - WSABASEERR))
 #endif /* NETP_INET_WINSOCK */
 
 /* TGV's Multinet TCP/IP suite for OpenVMS */

@@ -37,7 +37,7 @@ Q. I have Macintosh PowerBook with Mac OS 10, what archive should I download?
 A. For Mac OS 10 you should download the sources of NCBI toolkit for Unix
    located at:
     ftp://ftp.ncbi.nih.gov/toolbox/ncbi_tools/ncbi.tar.Z
-   The Darwin is supported, you should have GNU tar and other GNU utils
+   The Darwin is supported, you should have GNU tar, GNU make and other GNU utils
    installed. Please follow unix instructions in file ./ncbi/make/readme.unx
 
 Q. How to find the version of the toolkit?
@@ -136,7 +136,7 @@ Q. On Mandrake 9.* I got the following error on compilation of toolkit:
     make: *** [asntool] Error 1
    So how can I solve this problem?
 A. Seems you do not have static MATH library (-lm).
-   You can try to build toolkit with dinamic libraries. Please change the line
+   You can try to build toolkit with dynamic libraries. Please change the line
    in ./ncbi/platform/linux.ncbi.mk file from:
      NCBI_CC = gcc -static -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
    to:

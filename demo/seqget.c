@@ -74,21 +74,21 @@ Int2 Main(void)
 	{
 		if (gi)
 		{
-			ErrPostEx(SEV_FATAL,0,0, "Use only one of -g or -s");
+			ErrPostEx(SEV_FATAL, 1,0, "Use only one of -g or -s");
 			return 1;
 		}
 
 		sip = SeqIdParse((CharPtr)(myargs[4].strvalue));
 		if (sip == NULL)
 		{
-			ErrPostEx(SEV_FATAL,0,0, "Can't parse [%s]",
+			ErrPostEx(SEV_FATAL, 1,0, "Can't parse [%s]",
 				(CharPtr)(myargs[4].strvalue));
 			return 1;
 		}
 	}
         else if (! gi)
 	{
-		ErrPostEx(SEV_FATAL,0,0, "Must supply one of -g or -s");
+		ErrPostEx(SEV_FATAL, 1,0, "Must supply one of -g or -s");
 		return 1;
 	}
 
@@ -97,7 +97,7 @@ Int2 Main(void)
 	*/
 
 	if ( !EntrezInit("SeqGet", FALSE, &is_network) ) {
-		ErrPostEx(SEV_FATAL,0,0, "Can't initialize Entrez");
+		ErrPostEx(SEV_FATAL, 1,0, "Can't initialize Entrez");
 		return 1;
 	}
 
@@ -108,7 +108,7 @@ Int2 Main(void)
 		{
 			EntrezFini();
 			SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
-			ErrPostEx(SEV_FATAL,0,0, "Couldn't find SeqId [%s]", tbuf);
+			ErrPostEx(SEV_FATAL, 1,0, "Couldn't find SeqId [%s]", tbuf);
 			return 1;
 		}
 		SeqIdFree(sip);
@@ -119,7 +119,7 @@ Int2 Main(void)
 
 	if (sep == NULL)
 	{
-		ErrPostEx(SEV_FATAL,0,0,"Could not retrieve entry for GI %ld", (long)gi);
+		ErrPostEx(SEV_FATAL, 1,0,"Could not retrieve entry for GI %ld", (long)gi);
 		return 1;
 	}
 
@@ -132,7 +132,7 @@ Int2 Main(void)
 			asnout = AsnIoOpen((CharPtr)myargs[0].strvalue, outmode);
 			if (asnout == NULL)
 			{
-		         ErrPostEx(SEV_FATAL,0,0, "Could not open [%s] for asn output",
+		         ErrPostEx(SEV_FATAL, 1,0, "Could not open [%s] for asn output",
 		            myargs[0].strvalue);
 		         return 1;
 			}
@@ -143,7 +143,7 @@ Int2 Main(void)
 			fp = FileOpen((CharPtr)myargs[0].strvalue, outmode);
 			if (fp == NULL)
 			{
-		         ErrPostEx(SEV_FATAL,0,0, "Could not open [%s] for asn output",
+		         ErrPostEx(SEV_FATAL, 1,0, "Could not open [%s] for asn output",
 		            myargs[0].strvalue);
 		         return 1;
 			}

@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: bandalg5.c,v 6.3 2003/05/30 17:25:36 coulouri Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE

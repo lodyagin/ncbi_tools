@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.87 $
+* $Revision: 6.92 $
 *
 * File Description: 
 *
@@ -47,6 +47,7 @@
 
 #include <ncbi.h>
 #include <sequtil.h>
+#include <objpubme.h>
 
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
@@ -195,10 +196,15 @@ NLM_EXTERN void ResynchCodingRegionPartials (SeqEntryPtr sep);
 
 NLM_EXTERN void ResynchMessengerRNAPartials (SeqEntryPtr sep);
 
+/* resynchronizes protein feature with product peptide bioseq */
+
+NLM_EXTERN void ResynchProteinPartials (SeqEntryPtr sep);
+
 /* individual feature callbacks for above functions */
 
 NLM_EXTERN void ResynchMRNAPartials (SeqFeatPtr sfp, Pointer userdata);
 NLM_EXTERN void ResynchCDSPartials (SeqFeatPtr sfp, Pointer userdata);
+NLM_EXTERN void ResynchPeptidePartials (SeqFeatPtr sfp, Pointer userdata);
 
 /* functions to parse [org=Drosophila melanogaster] and [gene=lacZ] from titles */
 /* for example, passing "gene" to SqnTagFind returns "lacZ" */
@@ -493,10 +499,15 @@ NLM_EXTERN Int4 VisitSetsInSet (BioseqSetPtr bssp, Pointer userdata, VisitSetsFu
 typedef void (*VisitElementsFunc) (SeqEntryPtr sep, Pointer userdata);
 NLM_EXTERN Int4 VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElementsFunc callback);
 
-/* visits all SeqIds within a SeqLoc */
+/* visits all SeqIds within a SeqLoc, or within features, alignments, graphs, or annots */
 
 typedef void (*VisitSeqIdFunc) (SeqIdPtr sip, Pointer userdata);
 NLM_EXTERN Int4 VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
+
+NLM_EXTERN Int4 VisitSeqIdsInSeqFeat (SeqFeatPtr sfp, Pointer userdata, VisitSeqIdFunc callback);
+NLM_EXTERN Int4 VisitSeqIdsInSeqAlign (SeqAlignPtr sap, Pointer userdata, VisitSeqIdFunc callback);
+NLM_EXTERN Int4 VisitSeqIdsInSeqGraph (SeqGraphPtr sgp, Pointer userdata, VisitSeqIdFunc callback);
+NLM_EXTERN Int4 VisitSeqIdsInSeqAnnot (SeqAnnotPtr annot, Pointer userdata, VisitSeqIdFunc callback);
 
 /* visits all sub UserFields - if the data type is 11, VisitUserFieldsInUfp recurses */
 
@@ -537,6 +548,17 @@ NLM_EXTERN Int4 VisitBioSourcesInSep (SeqEntryPtr sep, Pointer userdata, VisitBi
 
 typedef void (*ScanBioseqSetFunc) (SeqEntryPtr sep, Pointer userdata);
 NLM_EXTERN Int4 ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean compressed, Pointer userdata, ScanBioseqSetFunc callback);
+
+/* PubMed registered fetch functionality */
+
+NLM_EXTERN PubmedEntryPtr LIBCALL GetPubMedForUid (Int4 uid);
+
+/* internal support type, registration function */
+
+typedef PubmedEntryPtr (LIBCALLBACK * PubMedFetchFunc) (Int4 uid);
+
+NLM_EXTERN void LIBCALL PubMedSetFetchFunc (PubMedFetchFunc func);
+
 
 
 #ifdef __cplusplus

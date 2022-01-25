@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: salptool.c,v 6.31 2003/05/30 17:25:37 coulouri Exp $";
+
 #include <sequtil.h> /* SeqIdDupList */
 #include <salpedit.h>
 #include <salptool.h>

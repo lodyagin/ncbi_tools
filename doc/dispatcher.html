@@ -84,7 +84,7 @@ and instructions on how to set an existing application to use the new dispatcher
 code without rebuilding.
 
 <p>
-Although the dispatcher should work behind the scenes completely transparently
+Although the dispatcher should work behind the scenes absolutely transparently
 for the user, some applications may fail if for example there
 are on-site configurational discrepancies between the two dispatchers.
 In fact, every attempt was made to keep the configurations consistent
@@ -103,12 +103,12 @@ in <tt>[t]csh</tt>, or "<tt>export</tt>" command in [ba]sh), or in the section
 <tt>[NET_SERV]</tt> of the <tt>.rc</tt> (or <tt>.ini</tt>) file, also known as
 a configuration (or registry) file of the application.<br>
 <u>Note</u>: Settings in the environment always take precedence and override those read from the registry file.<br>
-<u>Note</u>: On MS-Windows, the registry file should go into the master Windows directory, which is either
+<u>Note</u>: On MS-Windows, the registry file usually resides in the master Windows directory, which is either
 <tt>WINDOWS</tt> or <tt>WINNT</tt>.
 
 <p>
-A dispatcher to use can be controlled by the following environment
-variable, <tt>SRV_CONN_MODE</tt>, as follows:
+A dispatcher to use can be controlled by the environment
+variable <tt>SRV_CONN_MODE</tt> as follows:
 <p>
 <table border="1" cellspacing="1">
 <tr>
@@ -131,8 +131,8 @@ variable, <tt>SRV_CONN_MODE</tt>, as follows:
 <h2><a name="OldDispatcher">Parameters of the OLD dispatcher</a></h2>
 
 The parameters, which control the OLD dispatcher (both with and without firewall), are in the table below.
-Please note that they can appear both in the environment or in the registry file, with those found
-in the environment taking the precedence.
+Please note that they can appear both in the environment or in the registry file (section <tt>[NET_SERV]</tt>),
+with those found in the environment taking the precedence.
 <p>
 <table border="1" cellspacing="1">
 <tr>
@@ -186,9 +186,10 @@ e.g. "Entrez" becomes <tt>ENTREZ</tt>.</td>
 </table>
 
 <p>
-Atlernate service name can be specified via the registry file, too, by defining <tt>SERVICE_NAME</tt>
-key with the desired value, which should be located in the section having the service name in
-all capitals. The following registry fragment changes the name of the <tt>Entrez</tt> service:
+Atlernate service name can also be specified via the registry file by defining they key
+<tt>SERVICE_NAME</tt> with desired value, which should be located in the section having the
+service name in all capitals. The following registry fragment changes the name of the
+<tt>Entrez</tt> service:
 <pre>
 [ENTREZ]
 SERVICE_NAME=EntrezTest
@@ -214,8 +215,8 @@ FIREWALL=TRUE
 </pre>
 
 <p>
-There are also per-service settings, taking the form <tt>&lt;<i>name</i>&gt;_CONN_&lt;<i>parameter</i>&gt;</tt>
-in the environment, or just like printed below if found in the section <tt>[&lt;<i>name</i>&gt;]</tt>
+There are also per-service settings, taking the form <tt>&lt;<i>NAME</i>&gt;_CONN_&lt;<i>PARAMETER</i>&gt;</tt>
+in the environment, or just like printed below if found in the section <tt>[&lt;<i>NAME</i>&gt;]</tt>
 in the registry file. For example, the following settings of <tt>FIREWALL</tt> in the
 environment and the registry file are equivalent, and affect <tt>Bounce</tt> service only (leaving
 all other services with default or their individual settings, if any):
@@ -309,10 +310,10 @@ the old dispatcher into firewall  mode by specifying <tt>FIREWALL</tt> in <tt>SR
 </table>
 
 <p>
-When intermixed with older (<tt>SRV_...</tt>) parameters, the order of consideration is:
-the new parameters (<tt>CONN_...</tt>) first as described above the table, then <tt>SRV_...</tt>
+When intermixed with older (<tt>SRV_...</tt>) parameters, the order of consideration is the following:
+the new parameters (<tt>CONN_...</tt>) first as described in the table above, then <tt>SRV_...</tt>
 parameters, thus all <tt>SRV_...</tt> parameters taking precedence over all <tt>CONN_...</tt> parameters.
-The only exception is the service name override (<tt>{CONN|NI}_SERVICE_NAME_...</tt>), which works the following way:
+The only exception is the service name override (<tt>{CONN|NI}_SERVICE_NAME_...</tt>), which works the different way:
 <ul>
 <li>All other parameters loaded, first <tt>CONN_...</tt> using the original service name as specified in the application
 (e.g. <tt>Entrez</tt>) from the registry/environment, followed by <tt>SRV_...</tt> found in the registry/environment.
@@ -340,7 +341,7 @@ SERVICE_NAME=Entrez2
 </ul>
 
 <p>
-<u>Note</u> that if a client connects to NCBI with the new dispatcher, then
+<u>Note</u> that if a client connects to new NCBI dispatcher, then
 the dispatcher might be able to switch the client into pseudo-firewall
 mode, should the dispatcher notice that this might be needed for the
 client to further succeed with the service requested. This however
@@ -361,7 +362,8 @@ was recently added to the toolkit, and applications built before mid August 2002
 For applications linked against C++ toolkit, <i>environment</i> settings
 <tt>DIAG_POST_LEVEL=0</tt> and <tt>DIAG_TRACE=1</tt> would enable the debugging printouts
 regardless of the in-core settings. You may also use these keys in the <tt>[DEBUG]</tt>
-section of the registry file (but <i>not</i> in the <tt>[NET_SERV]</tt> section).
+section of the registry file (but <i>not</i> in the <tt>[NET_SERV]</tt> or
+<tt>[CONN]</tt> sections).
 
 <p>
 <hr>
@@ -385,10 +387,20 @@ your firewall. The ports to open are:
 <pre>
 Firewall Port        IP Address
 --------------------------------
- 5860..5870         130.14.29.112 (range reserved for future extensions)
-    5812            130.14.22.31
-    5811            130.14.22.32
+ 5860..5870         130.14.29.112
     5845            130.14.22.12  (no access from outside NCBI!)
+</pre>
+
+<p>
+Please also note obsolescent settings that still should be provided
+but will be removed in the nearest future:
+
+<p align="center">
+<pre>
+Firewall Port        IP Address
+--------------------------------
+    5811            130.14.22.32
+    5812            130.14.22.31
 </pre>
 
 <p>
@@ -396,25 +408,23 @@ If your firewall is not transparent, the firewall port number
 should be mapped to the same port number on the external host.
 
 <p>
-Please note that there is a range that we reserved for future
-extensions of connection library and NCBI servers and clients.
-While this range might not be presently used, we strongly recommend
-you to be prepared and have these ports configured on your firewalls.
+While the not every port from the table above might be currently in use,
+we stongly recommend you to have them all configured on your firewall.
 
 <p>
 <u>TROUBLESHOOTING</u>:  You can test whether these ports are accessible from
 your host by just running, for example (see the "Ports to open" list above):
 <pre>
-  telnet 130.14.22.31 5812
+  telnet 130.14.29.112 5861
 </pre>
 and entering a line of arbitrary text in the telnet session.
 If everything is fine, your TELNET session would look as follows
 (the line "test" is your input there):
 
 <pre>
-| > telnet 130.14.22.31 5812
-| Trying 130.14.22.31...
-| Connected to 130.14.22.31.
+| > telnet 130.14.29.112 5861
+| Trying 130.14.29.112...
+| Connected to 130.14.29.112.
 | Escape character is '^]'.
 | test
 | NCBI Firewall Daemon:  Invalid ticket. Connection closed.
@@ -549,7 +559,7 @@ you have a question, please contact <a href="mailto:info@ncbi.nlm.nih.gov">
 <p>
 <hr>
 <table border="0" cellspasing="0">
-<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2003/02/07 19:25:03 $</td><td>$Revision: 6.19 $</td></tr>
+<tr><td>Source: distrib/doc/dispatcher.html</td><td>$Date: 2003/09/29 15:04:00 $</td><td>$Revision: 6.23 $</td></tr>
 </table>
 
 

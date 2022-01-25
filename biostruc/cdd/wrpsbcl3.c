@@ -1,4 +1,4 @@
-/* $Id: wrpsbcl3.c,v 1.31 2003/01/10 14:47:47 bauer Exp $
+/* $Id: wrpsbcl3.c,v 1.35 2003/10/07 21:15:15 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.31 $
+* $Revision: 1.35 $
 *
 * File Description:
 *         WWW-RPS BLAST client
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbcl3.c,v $
+* Revision 1.35  2003/10/07 21:15:15  bauer
+* support generation of Sequence Annotation from CD-Search results
+*
+* Revision 1.34  2003/07/25 21:00:28  bauer
+* changes to accomodate KOGs
+*
+* Revision 1.33  2003/05/12 15:23:38  bauer
+* dealing with format changes in BlastRequestDbInfo output
+*
+* Revision 1.32  2003/04/25 14:42:12  bauer
+* changes to BLAST database interface
+*
 * Revision 1.31  2003/01/10 14:47:47  bauer
 * fixed problem with CDART connectivity
 *
@@ -133,9 +145,7 @@
 
 #define  BLASTCLI_BUF_SIZE 255
 
-#undef  CDSEARCH_TEST  /* use iblast1 instead of public service rpsblast */
-#undef  DART_TEST      /* will only be used for inhouse locations, uses
-                          iblast21 instead of iblast1 or public rpsblast */
+#undef   CDSEARCH_TEST  /* use iblast1 instead of public service rpsblast */
 #define  WIN_GIF
 
 #define DARTSIZELIMIT 1500
@@ -166,8 +176,10 @@
 #include <pmfapi.h>
 #include <entrez2.h>
 
-unsigned iDartFam[DARTFAMILYNUM];
-Int4     iDartFamNum = 0;
+unsigned      iDartFam[DARTFAMILYNUM];
+Int4          iDartFamNum = 0;
+
+ReadDBFILEPtr rdfp        = NULL;
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -628,7 +640,7 @@ static Boolean WRPSBDrawSearchPage()
 
 
 
-  WRPSBSearchHead(NULL,NULL);
+  WRPSBSearchHead(NULL,NULL,FALSE,FALSE);
 
   printf("<br><H4>Search the <A HREF=\"cdd.shtml\">Conserved Domain Database</A> with Reverse Position Specific BLAST</H4>\n");
 
@@ -721,7 +733,7 @@ static Boolean WRPSBDrawSearchPage()
   printf("\"Gapped BLAST and PSI-BLAST: a new generation of protein database search\n");
   printf("programs\",  Nucleic Acids Res. 25:3389-3402.\n");
 
-  WRPSBSearchFoot();
+  WRPSBSearchFoot(FALSE,FALSE);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1273,7 +1285,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
   Nlm_StrCpy(CDDidx,DATApath);
   Nlm_StrCat(CDDidx,"/cdd.idx");
 
-  if (Nlm_StrCmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE;
+/*  if (Nlm_StrCmp(myargs[1].strvalue,"cdd_prop")==0) bDbIsOasis = FALSE; */
   
   sap = prune->sap;
   *bAnyPdb = FALSE;
@@ -1441,6 +1453,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapThis->cGraphId = aapThis->cCDDid;
     }
     aapThis->bIsArch = FALSE;
+    aapThis->bIsArchComplete = FALSE;
     if (WRPSBHitIsNew(aapThis,aapHead,Connection)) {
       if (!aapThis->bIsArch) {
         aapThis->colcyc = lastcol + 1;
@@ -1448,6 +1461,8 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
           aapThis->colcyc -= iNcolors;
         }
         lastcol = aapThis->colcyc;
+      } else {
+        aapThis->bIsArchComplete = (aapThis->nmissg + aapThis->cmissg < 0.1);
       }
     }
 
@@ -1477,7 +1492,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     aapThis->bIsOasis = bDbIsOasis;
     if (bDbIsOasis) {
       Nlm_StrCpy(path,CDDPrefix);
-      if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0) {
+      if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
         strcat(path,CDDefault);
       } else strcat(path,dbversion);
       strcat(path,CDDPost_O);
@@ -1491,7 +1506,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     strcat(path,"/"); strcat(path,aapThis->cCDDid); strcat(path,TREextens);
     strcat(hpath,aapThis->cCDDid);
     strcat(hpath,"&version=");
-    if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0) {
+    if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
       strcat(hpath,CDDefault);
     } else strcat(hpath,dbversion);
     aapThis->cHtmlLink = StringSave(hpath);
@@ -1539,7 +1554,7 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
     aapThis->cSeqFile = MemNew(PATH_MAX*sizeof(Char));
     if (bDbIsOasis) {
       Nlm_StrCpy(aapThis->cSeqFile,CDDPrefix);
-      if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0) {
+      if (Nlm_StrNCmp(aapThis->cCDDid,"COG",3) == 0 || Nlm_StrNCmp(aapThis->cCDDid,"KOG",3) == 0) {
         strcat(aapThis->cSeqFile,CDDefault);
       } else {
         strcat(aapThis->cSeqFile,dbversion);
@@ -1564,11 +1579,19 @@ static AlignmentAbstractPtr WRPSBCl3AbstractAlignment(BlastPruneSapStructPtr pru
       aapTmp = aapHead;
       while (aapTmp) {
         if (aapTmp->bDrawThisOne) {
-          if (OverlapInterval(aapTmp->mstart,aapTmp->mstop,
-                              aapThis->mstart,aapThis->mstop)) iOvrlap[aapTmp->row-1] = 1;
+          if (OverlapInterval(aapTmp->mstart,aapTmp->mstop, aapThis->mstart,aapThis->mstop))
+            iOvrlap[aapTmp->row-1] = 1;
           if (iGraphMode == 1 || iGraphMode == 3) {
-            if (OverlapMutual(aapTmp->mstart,aapTmp->mstop,
-                              aapThis->mstart,aapThis->mstop)) iMutual[aapTmp->row-1] = 1;
+            if (OverlapMutual(aapTmp->mstart,aapTmp->mstop,aapThis->mstart,aapThis->mstop)) {
+              iMutual[aapTmp->row-1] = 1;
+	      if (aapThis->bIsArch) {
+	        if (aapThis->bIsArchComplete) {
+		  if (!aapTmp->bIsArch || !aapTmp->bIsArchComplete) iMutual[aapTmp->row-1] = 0; 
+		}
+	      } else {
+	        if (aapTmp->bIsArch) iMutual[aapTmp->row-1] = 0;
+	      }
+            }
           }
         }
         aapTmp = aapTmp->next;
@@ -1638,6 +1661,169 @@ static Boolean WRPSBPrintDbInformationBasic (CharPtr database, Boolean is_aa, In
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void WRPSBCl3SeqAnnot(AlignmentAbstractPtr aapIn, FILE *table,
+                             Boolean bSeqAlign)
+{
+  AsnIoPtr              aip;
+  AlignmentAbstractPtr  aap;
+  SeqAnnotPtr           sap;
+  SeqLocPtr             slp;
+  SeqFeatPtr            sfp, sfpHead = NULL, sfpTail = NULL;
+  DenseSegPtr           dsp;
+  SeqIdPtr              sipQuery;
+  SeqIntPtr             sintp;
+  DbtagPtr              dbtp;
+  ObjectIdPtr           oidp;
+  Char                  dupstr[PATH_MAX];
+  CharPtr               part1, rest, thispart;
+  UserObjectPtr         uop;
+  UserFieldPtr          ufp, ufpTail;
+  Nlm_FloatHi           evalue, bit_score;
+  Int4                  score, number, i, icnt;
+  Boolean               found_score;
+  AnnotDescPtr          adp, adp2;
+  DatePtr               dp;
+  SeqAlignPtr           salpTail = NULL, salpHead = NULL;
+
+  sap = SeqAnnotNew();
+  if (bSeqAlign) {
+    sap->type = 2; /* Sequence Alignment */
+  } else sap->type = 1; /* feature table */
+  adp = (AnnotDescPtr) ValNodeNew(NULL);
+  adp->choice = Annot_descr_name;
+  adp->data.ptrvalue = StringSave("CDDSearch");
+  sap->desc = adp;
+  adp2 = (AnnotDescPtr) ValNodeNew(NULL);
+  dp = DateCurr();
+  adp2->choice = Annot_descr_create_date;
+  adp2->data.ptrvalue = dp;
+  adp->next = adp2;
+  aap = aapIn;
+  while (aap) {
+    if (aap->bDrawThisOne) {
+      sfp = SeqFeatNew();
+      if (bSeqAlign) {
+        if (!salpHead) {
+	  salpHead = aap->salp;
+	} else salpTail->next = aap->salp;
+	  salpTail = aap->salp;
+	  salpTail->next = NULL;
+      } else {
+        sfp->data.choice = 9;
+        strncpy(dupstr,aap->long_defline,PATH_MAX);
+        part1 = strtok(dupstr," ");
+        if (part1) {
+          rest = dupstr + strlen(part1) + 1;
+        } else {
+          rest = StringSave(aap->long_defline);
+        }
+        icnt = 0;
+        for (i=0;i<Nlm_StrLen(rest);i++) {
+          if (rest[i] == ',') icnt++;
+	  if (icnt > 1) break;
+        }
+        if (icnt > 1) {
+          i = i+2;
+        } else i = 0;
+        thispart = &rest[i];
+        for (i=0;i<Nlm_StrLen(thispart);i++) {
+          if (thispart[i] == '.' || thispart[i] == ';') {
+	    thispart[i] = '\0';
+	    break;
+	  }
+        }
+        sfp->data.value.ptrvalue = StringSave(thispart);
+        sfp->comment = StringSave(aap->cGraphId);   /* comment is short name */
+        if (aap->nmissg >= 0.2 || aap->cmissg >= 0.2) sfp->partial = TRUE;
+        dsp = aap->salp->segs;
+        sipQuery = dsp->ids;
+        slp = (SeqLocPtr) ValNodeNew(NULL); slp->choice = SEQLOC_INT;
+        sintp=SeqIntNew(); sintp->from = aap->mstart; sintp->to = aap->mstop;
+        sintp->id = SeqIdDup(sipQuery); slp->data.ptrvalue = sintp;
+        sfp->location = slp;
+        if (sfp->partial) {
+          SetSeqLocPartial(sfp->location, aap->nmissg >= 0.2, aap->cmissg >= 0.2);
+        }
+        uop = UserObjectNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("cddScoreData");
+        uop->type = oidp;
+        ufp = UserFieldNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("definition");
+        ufp->label = oidp;
+        ufp->choice = 1;
+        ufp->data.ptrvalue =  StringSave(aap->cCDDid);
+        uop->data = ufp;
+        ufpTail = ufp;
+        ufp = UserFieldNew();
+        oidp = ObjectIdNew();
+        oidp->str = StringSave("short_name");
+        ufp->label = oidp;
+        ufp->choice = 1;
+        ufp->data.ptrvalue = StringSave(aap->cGraphId);     
+        ufpTail->next = ufp;
+        ufpTail = ufp;
+        found_score = GetScoreAndEvalue(aap->salp, &score, &bit_score, &evalue, &number);
+        if (found_score) {
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("score");
+          ufp->label = oidp;
+          ufp->choice = 2;
+          ufp->data.intvalue = score;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("evalue");
+          ufp->label = oidp;
+          ufp->choice = 3;
+          ufp->data.realvalue = score;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+          ufp = UserFieldNew();
+          oidp = ObjectIdNew();
+          oidp->str = StringSave("bit_score");
+          ufp->label = oidp;
+          ufp->choice = 3;
+          ufp->data.realvalue = bit_score;     
+          ufpTail->next = ufp;
+          ufpTail = ufp;
+        }
+        sfp->ext = uop;
+        dbtp = DbtagNew();
+        dbtp->db = StringSave(aap->cDatabase);
+        oidp = ObjectIdNew();
+        oidp->id = aap->pssmid;
+        dbtp->tag = oidp;
+        sfp->dbxref = ValNodeNew(NULL);
+        sfp->dbxref->data.ptrvalue = dbtp;
+        if (!sfpHead) {
+          sfpHead = sfp;
+        } else {
+          sfpTail->next = sfp;
+        }
+        sfpTail = sfp;
+      }
+    }
+    aap = aap->next;
+  }
+  if (bSeqAlign) {
+    sap->data = salpHead;
+  } else sap->data = sfpHead;
+  strcpy(OutputName,GetTempName("wrpsbcl3"));
+  aip = AsnIoOpen(OutputName, "w");
+  SeqAnnotAsnWrite((SeqAnnotPtr) sap, aip, NULL);
+  AsnIoClose(aip);
+  PrintFile(OutputName);
+  RemoveTempFiles();   
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* this is the main wrapper routine for formatting html-rps-blast-output     */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
@@ -1648,7 +1834,8 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                                  CharPtr date, BlastNet3Hptr bl3hp,
                                  CharPtr database, CharPtr dbversion, Boolean bIsPrecalc,
 				 Int4 GraphWidth, Dart_Connect *Connection, Int4 querygi,
-				 CharPtr dbname, Boolean bFullResults)
+				 CharPtr dbname, Boolean bFullResults,
+				 Boolean bAnnotOnly, Boolean bNoWrap, Boolean bSeqAlign)
 {
   AlignmentAbstractPtr   aap, aapThis;
   AsnIoPtr               aip;
@@ -1700,55 +1887,63 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
 
   if (iGraphMode < 3) {
     if (!bIsPrecalc) {
-      WRPSBSearchHead(NULL,NULL);
+      WRPSBSearchHead(NULL,NULL,bAnnotOnly, bNoWrap);
     } else {
-      WRPSBSearchHead("NCBI CD Summary","NCBI Conserved Domain Summary");
+      WRPSBSearchHead("NCBI CD Summary","NCBI Conserved Domain Summary",bAnnotOnly, bNoWrap);
     }
     if (bIsPrecalc && bFullResults) bIsPrecalc = FALSE;
   
-    fprintf(table,"<PRE>\n");
-  
-    fprintf(table,"<BR>\n");
-    if (!bIsPrecalc) BlastPrintVersionInfoEx("RPS-BLAST", TRUE, version, date, table);
-    fprintf(table, "\n");
-    WRPSBAcknowledgeBlastQuery(query_bsp, 70, table, believe_query, TRUE);
-    fprintf(table,"\n");
-    init_buff_ex(85);
+    if (!bAnnotOnly) {
+      fprintf(table,"<PRE>\n");
+      fprintf(table,"<BR>\n");
+      if (!bIsPrecalc) BlastPrintVersionInfoEx("RPS-BLAST", TRUE, version, date, table);
+      fprintf(table, "\n");
+      WRPSBAcknowledgeBlastQuery(query_bsp, 70, table, believe_query, TRUE);
+      fprintf(table,"\n");
+      init_buff_ex(85);
 /*---------------------------------------------------------------------------*/
 /* if connected to a Blast database, get the version information there!      */
 /*---------------------------------------------------------------------------*/
-    if (!bIsPrecalc && bl3hp) {
-      dbinfo = BlastRequestDbInfo(bl3hp, database, TRUE);
-      if (dbinfo) {
-        WRPSBPrintDbInformationBasic(database, TRUE, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, table, TRUE);
-        title = StringSave(dbinfo->definition);
-      }
-      dbinfo = BlastDbinfoFree(dbinfo);
-      if (title) {
-        cPtr = strstr(title,".v");
-        if (cPtr) {
-          cPtr++; StrCpy(dbversion,cPtr);
+      if (!bIsPrecalc && bl3hp) {
+        dbinfo = BlastRequestDbInfo(bl3hp, database, TRUE);
+        if (dbinfo) {
+          WRPSBPrintDbInformationBasic(database, TRUE, 70, dbinfo->definition, dbinfo->number_seqs, dbinfo->total_length, table, TRUE);
+          title = StringSave(dbinfo->definition);
+        }
+        dbinfo = BlastDbinfoFree(dbinfo);
+        if (title) {
+          cPtr = strstr(title,".v");
+          if (cPtr) {
+            cPtr++; StrCpy(dbversion,cPtr);
+          } else StrCpy(dbversion, CDDefault);
         } else StrCpy(dbversion, CDDefault);
-      } else StrCpy(dbversion, CDDefault);
-    } else {
-      if (dbversion[0] != '\0' && dbname[0] != '\0') {
-        fprintf(table,"<strong>Database:</strong> %s.%s\n",dbname,dbversion);
+      } else {
+        if (dbversion[0] != '\0' && dbname[0] != '\0') {
+          fprintf(table,"<strong>Database:</strong> %s.%s\n",dbname,dbversion);
+        }
       }
+      fprintf(table,"</PRE>\n");
     }
-    fprintf(table,"</PRE>\n");
   } else bDirect = TRUE;
   free_buff();
+  if (dbversion[Nlm_StrLen(dbversion)-1] == ' ') {
+    dbversion[Nlm_StrLen(dbversion)-1] = '\0';
+  }
 
   prune = WRPSBlastPruneHitsFromSeqAlign(seqalign,options->hitlist_size,
                                          options->expect_value, NULL);
   if (prune->number == 0) {
-    if (iGraphMode) {
+    if (iGraphMode && !bAnnotOnly) {
       WRPSBCl3PrintGraphics(NULL,table,0,query_bsp,mask, iGraphMode, GraphWidth, bDirect, bIsPrecalc, querygi);
     }
     fprintf(table, "<br><strong>...No hits found!</strong>\n");
   } else {
     aap = WRPSBCl3AbstractAlignment(prune,query_bsp,GraphWidth-10,&maxrow,iGraphMode,dbversion, &bAnyPdb, Connection);
-    if (iGraphMode) {
+    if (bAnnotOnly) {
+      WRPSBCl3SeqAnnot(aap, table, bSeqAlign);
+      WRPSBSearchFoot(bAnnotOnly, bNoWrap);
+    }
+    if (iGraphMode && !bAnnotOnly) {
       WRPSBCl3PrintGraphics(aap,table,maxrow,query_bsp,mask, iGraphMode, GraphWidth, bDirect, bIsPrecalc, querygi);
     }
 /*---------------------------------------------------------------------------*/
@@ -1822,7 +2017,7 @@ static void WRPSBCl3ViewSeqAlign(SeqAlignPtr seqalign, BioseqPtr query_bsp,
     PrintFile(tableName);
     RemoveTempFiles();
   }
-  WRPSBSearchFoot();
+  WRPSBSearchFoot(bAnnotOnly,bNoWrap);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -1836,7 +2031,7 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
   
   cTitle = MemNew(sizeof(char) * 50);
   sprintf(cTitle,"CD-Search request %s",rid);
-  WRPSBSearchHead(cTitle,"Pending Conserved Domain Search Request");
+  WRPSBSearchHead(cTitle,"Pending Conserved Domain Search Request",FALSE, FALSE);
   printf("<BR>\n");
   HowLong += 5;
   if (HowLong <= 60) {
@@ -1861,7 +2056,7 @@ void QRPSBWait(CharPtr rid, Int4 iGraphMode, Int4 iPairMode, Int4 HowLong, Nlm_F
   }
   printf("</FORM>\n");
 
-  WRPSBSearchFoot();
+  WRPSBSearchFoot(FALSE,FALSE);
   fflush(stdout);
   MemFree(cTitle);
 }
@@ -1878,7 +2073,10 @@ static AlignmentAbstractPtr WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued
 					 Boolean *bIsPic, Boolean *bIsPrecalc,
 					 Boolean *bQueryIsFasta, CharPtr *sequence,
 					 CharPtr *rid, Int4 *iHowLong,
-					 Boolean *bFullResults)
+					 Boolean *bFullResults,
+					 Boolean *bAnnotOnly,
+					 Boolean *bNoWrap,
+					 Boolean *bSeqAlign)
 {
   CharPtr              www_arg;
   Int4                 indx, i, j;
@@ -1900,6 +2098,19 @@ static AlignmentAbstractPtr WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued
     *bMode = TRUE;
   } else *bMode = FALSE;
 
+/*---------------------------------------------------------------------------*/
+/* see if wrpsb.cgi should return a SeqAnnot instead of HTML-formatted data  */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info,"AONLY")) >= 0) {
+    *bAnnotOnly = TRUE;
+  }
+  if ((indx = WWWFindName(www_info,"LONLY")) >= 0) {
+    *bSeqAlign = TRUE;
+    *bAnnotOnly = TRUE;
+  }
+  if ((indx = WWWFindName(www_info,"NOHTML")) >= 0) {
+    *bNoWrap = TRUE;
+  }
 /*---------------------------------------------------------------------------*/
 /* parse data refering to queued RPS-Blast searches                          */
 /*---------------------------------------------------------------------------*/
@@ -2018,11 +2229,15 @@ static AlignmentAbstractPtr WRPSBWWWargs(WWWInfoPtr www_info, Boolean *bIsQueued
     if (*iPairMode > 2) *iPairMode = 2;
     if (*iPairMode < 0) *iPairMode = 0;
   }
-  if ((indx = WWWFindName(www_info,"NHITS")) >= 0) {
+  if (*bAnnotOnly && !(*bSeqAlign)) {
+    myargs[13].intvalue = (Int4) 1000;
+    myargs[14].intvalue = (Int4) 1000;
+  } else if ((indx = WWWFindName(www_info,"NHITS")) >= 0) {
     www_arg = WWWGetValueByIndex(www_info, indx);
     myargs[13].intvalue = (Int4) atoi(www_arg);
     myargs[14].intvalue = (Int4) atoi(www_arg);
   }
+
 
 /*---------------------------------------------------------------------------*/
 /* CD-search parameters like E-value cutoff                                  */
@@ -2207,7 +2422,11 @@ static BioseqPtr WRPSBGetSequence(CharPtr pcsq, Int4 *gi)
         *gi = giptr[0];
         if (*gi > 0) ValNodeAddInt(&sip,SEQID_GI,*gi);
       } else bIsFasta = TRUE;
-      if (sip) bsp = BioseqLockById(sip);
+      if (sip) bsp = CddReadDBGetBioseq(sip, -1, rdfp);
+      if (sip && !bsp) bsp = BioseqLockById(sip);
+      if (sip && !bsp) {
+        bsp = BioseqLockById(sip);
+      }
       if (!bsp) bIsFasta = TRUE;
     }
   }
@@ -2383,15 +2602,17 @@ Int2 Main (void)
   Boolean              bIsPic                 = FALSE;
   Boolean              bFullResults           = FALSE;
   Boolean              bEntrez                = FALSE;
+  Boolean              bAnnotOnly             = FALSE;
+  Boolean              bSeqAlign              = FALSE;
+  Boolean              bNoWrap                = FALSE;
   CharPtr              blast_program;
-  Char                 dbversion[6], dbname[16];
+  Char                 dbversion[6], dbname[16], dbtemp[128];
   Char                 path[PATH_MAX];
   Uint1                align_type, align_view;
   Uint1                iRunMode               = DRAWSEARCHPAGE;
   Int2                 retval, Qstatus        = 1;
   Uint4                align_options, print_options;
   Int4                 iPassHit               = 0;
-  Int4                 initcountdown          = 5;
   Int4                 indx, gi = 0, numgi, mxr = 0;
   Int4                 qlength, startloc, endloc;
   Int4                 iGraphMode             = 2;
@@ -2438,7 +2659,7 @@ Int2 Main (void)
   aap = WRPSBWWWargs(www_info, &bIsQueued, &qlength, &bMode, &iGraphMode,
                      &GraphWidth,&iPairMode, &mask_loc, &bIsPic,
 		     &bIsPrecalc, &bQueryIsFasta, &sequence, &rid, &iHowLong,
-		     &bFullResults);
+		     &bFullResults, &bAnnotOnly, &bNoWrap, &bSeqAlign);
   if (rid) {
    if (Nlm_StrLen(rid) < 10 || rid[0]==' ') rid = NULL;
   }
@@ -2472,21 +2693,13 @@ Int2 Main (void)
   if (! SeqEntryLoad()) return 1;
     
 /*---------------------------------------------------------------------------*/
-/* Initialize Entrez                                                         */
+/* Initialize Entrez, PubSeq, and  blast sequence database access            */
 /*---------------------------------------------------------------------------*/
   if (!rid) {
-/*
-    while (initcountdown) {
-      if (EntrezInit("WWW_NEW_BLAST",FALSE,&is_network)) {
-        bEntrez = TRUE;
-	break;
-      } else initcountdown --;
-    }
-    if (!bEntrez) WRPSBHtmlError("Cannot initialize Entrez!");
-    EntrezBioseqFetchEnable("blast_2.0MT",TRUE);
-*/
     EntrezSetService ("Entrez2");
     if (!PubSeqFetchEnable()) WRPSBHtmlError("Cannot initialize PubSeqFetch!");
+    if(!(rdfp = readdb_new_ex("nr", READDB_DB_IS_PROT, FALSE)))
+     WRPSBHtmlError("Readdb init failed");
   }
     
 /*---------------------------------------------------------------------------*/
@@ -2495,23 +2708,16 @@ Int2 Main (void)
 /* not affect the queued version of RPS-Blast                                */
 /*---------------------------------------------------------------------------*/
   if (getenv("NI_SERVICE_NAME_NETBLAST")==NULL) {
-#ifdef CDSEARCH_TEST
+/* #ifdef CDSEARCH_TEST
     if (putenv("NI_SERVICE_NAME_NETBLAST=cdsearch_test")) {
       WRPSBHtmlError("Error setting environment");
     }
-#else
+#else */
     if (putenv("NI_SERVICE_NAME_NETBLAST=rpsblast")) {
       WRPSBHtmlError("Error setting environment");
     }
-#endif
+/* #endif */
   }
-#ifdef DART_TEST
-    if (Nlm_StrCmp(CDDlocat,"inhouse") == 0) {
-      if (putenv("NI_SERVICE_NAME_NETBLAST=dart_test")) {
-        WRPSBHtmlError("Error setting environment");
-      }
-    }
-#endif
 
 /*---------------------------------------------------------------------------*/
 /* For RPS Blast - anything not "blastp" - is "tblastn"                      */
@@ -2596,6 +2802,11 @@ Int2 Main (void)
     myargs[1].strvalue = StringSave(www_arg);
   }
   Nlm_StrCpy(dbname, myargs[1].strvalue);
+#ifdef CDSEARCH_TEST
+  Nlm_StrCpy(dbtemp,"cdsearch_test/");
+  Nlm_StrCat(dbtemp,myargs[1].strvalue);
+  myargs[1].strvalue = dbtemp;
+#endif
   blast_database = myargs[1].strvalue;
   
   options->expect_value  = (Nlm_FloatHi) myargs [3].floatvalue;
@@ -2709,7 +2920,7 @@ Int2 Main (void)
 /*---------------------------------------------------------------------------*/
 /* need to initialize BLAST service if not a request for the BLAST queue     */
 /*---------------------------------------------------------------------------*/
-  if (!rid && !bIsQueued) {
+  if (!rid && !bIsQueued /* && !bIsPrecalc */) {
     if (! BlastInit("blastcl3", &bl3hp, &response)) {
       ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
       WRPSBHtmlError("Unable to initialize BLAST service!");
@@ -2745,7 +2956,8 @@ Int2 Main (void)
       return (1);
 #endif
     }
-    BlastNetBioseqFetchEnable(bl3hp, blast_database, db_is_na, TRUE);
+    if (!BlastNetBioseqFetchEnable(bl3hp, blast_database, db_is_na, TRUE)) 
+      WRPSBHtmlError("Unable to connect to Blast Database!");
   }
 
   retval=0;
@@ -2886,7 +3098,7 @@ Int2 Main (void)
       } else {
         if (dbname[0] == '\0') {   /* worst case - don't know a thing about db */
           Nlm_StrCpy(dbname,"cdd");
-          Nlm_StrCpy(dbversion,"v1.60");
+          Nlm_StrCpy(dbversion,"v1.62");
         }
       }
     }
@@ -2913,12 +3125,13 @@ Int2 Main (void)
   WRPSBCl3ViewSeqAlign(salp, query_bsp, mask_loc, iGraphMode, iPairMode, options,
                        believe_query, print_options, version, date, bl3hp,
                        blast_database, dbversion, bIsPrecalc, GraphWidth,
-		       Connection,gi,dbname,bFullResults);
+		       Connection,gi,dbname,bFullResults,bAnnotOnly,bNoWrap,bSeqAlign);
 
   if (sep) sep = SeqEntryFree(sep);
   options = BLASTOptionDelete(options);
   if (bl3hp) BlastFini(bl3hp);
-/*  if (!rid) EntrezFini(); */
+
   if (Connection) WRPSBDisConnectDart(Connection);
+  if (rdfp) rdfp = readdb_destruct(rdfp);
   return(retval);
 }

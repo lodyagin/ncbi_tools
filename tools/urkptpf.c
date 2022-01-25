@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkptpf.c,v 6.33 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.32 $
+* $Revision: 6.33 $
 *
 * File Description: patterns and profiles
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkptpf.c,v $
+* Revision 6.33  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.32  1999/07/13 14:08:46  sicotte
 * prefix functions SeqAlignSort* with URK to resolve toolkit conflicts
 *

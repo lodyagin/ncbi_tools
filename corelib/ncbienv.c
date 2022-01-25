@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.35 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.35  2003/09/19 15:49:20  coulouri
+* NetBSD fixes
+*
+* Revision 6.34  2003/06/24 19:45:39  ucko
+* GCC/Darwin: Restore Nlm_IsApplicationPackage and the skeleton of
+* Nlm_SetupArguments_ST_Mac.
+*
+* Revision 6.33  2003/06/24 15:39:42  ucko
+* Switch back to the generic Unix ProgramPath code when building Darwin
+* binaries with GCC until we find a framework that defines the relevant
+* symbols without breaking support for remote execution.
+*
+* Revision 6.32  2003/06/06 15:01:03  rsmith
+* fixed ProgramPath for OS Darwin & Mac, Added IsApplicationPackage for Darwin. ProgramPath on Darwin now returns the seen application not the executable buried in the package.
+*
 * Revision 6.31  2003/01/29 20:57:36  kans
 * added linux, sgi, and solaris intel to GetOpSysString
 *
@@ -539,7 +554,7 @@ static Nlm_Boolean s_GetHomeByUID(Nlm_Char* buf, size_t buf_size)
     struct passwd* pwd_ptr = 0;
 
     /* Get the info using user ID */
-#if  (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
+#if  (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN) && !defined(OS_UNIX_NETBSD)
     struct passwd pwd;
     Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
 
@@ -569,7 +584,7 @@ static Nlm_Boolean s_GetHomeByLOGIN(Nlm_Char* buf, Nlm_Int2 buf_size)
     struct passwd* pwd_ptr = 0;
 
     /* Get the user login name */
-#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN) && !defined(OS_UNIX_NETBSD)
     struct passwd pwd;
     Nlm_Char      login_name[LOGNAME_MAX + 1];
     Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
@@ -589,7 +604,7 @@ static Nlm_Boolean s_GetHomeByLOGIN(Nlm_Char* buf, Nlm_Int2 buf_size)
     if ( !ok )
         return FALSE;
 
-#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN)
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD) && !defined(OS_UNIX_DARWIN) && !defined(OS_UNIX_NETBSD)
     pwd_ptr = &pwd;
 #  if NLM_POSIX1B
     if (getpwnam_r(login_name, &pwd, pwd_buffer, sizeof(pwd_buffer),
@@ -707,18 +722,13 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     }
     /* also check within Contents/Resources of Mac OS X package */
     ProgramPath (path, sizeof (path));
-    pth = StringRChr (path, DIRDELIMCHR);
-    if (pth != NULL) {
-      *pth = '\0';
-      pth = StringRChr (path, DIRDELIMCHR);
-      if (pth != NULL) {
-        *pth = '\0';
-        FileBuildPath (path, "Resources", NULL);
-        Nlm_FileBuildPath (path, NULL, str);
-        fp = Nlm_FileOpen (path, "r");
-        if (fp != NULL) {
-          return fp;
-        }
+    if (IsApplicationPackage(path)) {
+      FileBuildPath(path, "Contents", NULL);
+      FileBuildPath (path, "Resources", NULL);
+      Nlm_FileBuildPath (path, NULL, str);
+      fp = Nlm_FileOpen (path, "r");
+      if (fp != NULL) {
+        return fp;
       }
     }
 #endif
@@ -1851,7 +1861,7 @@ static int    targc = 0;
 static char **targv = NULL;
 
 
-#if defined(WIN_MAC) && !defined(OS_UNIX_DARWIN)
+#if defined(WIN_MAC)
 static FSSpec       apFileSpec;
 static Str255       apName;
 static Handle       apParam;
@@ -1859,21 +1869,67 @@ static short        apRefNum;
 
 static Nlm_Boolean Nlm_SetupArguments_ST_Mac(void)
 {
+#ifndef __GNUC__
+/* At least in 10.1, this seems to introduce an unwanted dep. on Carbon. */
   ProcessInfoRec       pirec;
   ProcessSerialNumber  psn;
 
   GetCurrentProcess (&psn);
   pirec.processInfoLength = sizeof (ProcessInfoRec);
-  pirec.processName = NULL;
+  pirec.processName = apName;
   pirec.processAppSpec = &apFileSpec;
   GetProcessInformation (&psn, &pirec);
   Nlm_PtoCstr ((Nlm_Char*) apFileSpec.name);
+  Nlm_PtoCstr ((Nlm_Char*) apName);
 
   SetAppProperty("ProgramName",(void*)apName);
+#endif
   return TRUE;
 }
 
+#if defined(OS_UNIX_DARWIN)
+#ifndef __GNUC__
+/* At least in 10.1, this seems to introduce an unwanted dep. on Carbon. */
+static void Nlm_ProgramPath_ST(Nlm_Char* appPath, size_t pathSize)
+{
+    OSErr               err;
+    ProcessSerialNumber psn;
+    
+    if (appPath != NULL) {
+        FSRef       fsRef;
+        appPath[0] = '\0';
+        GetCurrentProcess (&psn);
+        err = GetProcessBundleLocation (&psn, &fsRef);
+        if (err == noErr) {
+            FSRefMakePath (&fsRef, (UInt8 *) appPath, pathSize);
+        }
+    }
+}
+#endif
 
+/*
+  is the application at filePath actually a application bundle/package?
+  i.e. a folder containing subfolders, resource files and the actual executable.
+  Pass the value returned by ProgramPath for best results.
+*/
+NLM_EXTERN Nlm_Boolean Nlm_IsApplicationPackage(char *filePath)
+{
+    OSErr   err;
+    char    aPath[1024];
+    FSRef   contentsFRef;
+    Boolean isDirectory;
+    
+    StrCpy(aPath, filePath);
+    FileBuildPath(aPath, "Contents", NULL);
+    err = FSPathMakeRef ((unsigned char *) aPath, &contentsFRef, &isDirectory);
+    if (err == noErr  &&  isDirectory) {
+        return TRUE;   
+    }
+    /* else gets err == -120, no such directory. */
+    return FALSE;
+}
+
+#else
 static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
   CInfoPBRec  block;
@@ -1906,7 +1962,8 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
     }
   }
 }
-#endif /* defined(WIN_MAC) && !defined(OS_UNIX_DARWIN) */
+#endif /* defined(OS_UNIX_DARWIN) */
+#endif /* defined(WIN_MAC) */
 
 
 #if defined(OS_MSWIN) || defined(OS_VMS)
@@ -1922,7 +1979,7 @@ static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 #endif  /* OS_MSWIN || OS_VMS */
 
 
-#ifdef OS_UNIX
+#if defined(OS_UNIX)  &&  (defined(__GNUC__)  ||  !defined(OS_UNIX_DARWIN))
 static void Nlm_ProgramPath_ST(Nlm_Char* buf, size_t maxsize)
 {
   Nlm_Char     path [PATH_MAX];
@@ -2029,8 +2086,8 @@ NLM_EXTERN Nlm_Boolean Nlm_ParseCmdLineArguments
     size_t size = strlen(prog_name) + strlen(cmd_line) + 2;
     str = (char*) Nlm_MemNew(size);
 
-    strcpy(str, prog_name);
-    strcpy(str + strlen(prog_name) + 1, cmd_line);
+    StrCpy(str, prog_name);
+    StrCpy(str + strlen(prog_name) + 1, cmd_line);
   }}
 
   /* Count command-line arguments and separate them by '\0' */
@@ -2099,7 +2156,9 @@ NLM_EXTERN void Nlm_SetupArguments(int argc, char *argv[])
 {
   NlmMutexLockEx( &corelibMutex );
   wasSetup = TRUE;
-#if defined(OS_UNIX)
+#if defined(WIN_MAC)
+  wasSetup = Nlm_SetupArguments_ST_Mac();
+#elif defined(OS_UNIX)
   {{
     char *p;
     if ((p = strrchr(argv[0],DIRDELIMCHR)) != NULL)  p++;
@@ -2107,8 +2166,6 @@ NLM_EXTERN void Nlm_SetupArguments(int argc, char *argv[])
       p = argv[0];
     SetAppProperty("ProgramName", (void*)p);  
   }}
-#elif defined(WIN_MAC)
-  wasSetup = Nlm_SetupArguments_ST_Mac();
 #endif
   targc = argc;
   targv = argv;

@@ -1,4 +1,6 @@
-/* $Id: fastacmd.c,v 6.28 2003/04/15 19:09:41 camacho Exp $
+static char const rcsid[] = "$Id: fastacmd.c,v 6.29 2003/05/30 17:31:09 coulouri Exp $";
+
+/* $Id: fastacmd.c,v 6.29 2003/05/30 17:31:09 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.28 $
+* $Revision: 6.29 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.29  2003/05/30 17:31:09  coulouri
+* add rcsid
+*
 * Revision 6.28  2003/04/15 19:09:41  camacho
 * Added option to retrieve sequences by PIG
 *

@@ -32,7 +32,7 @@ id1genAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-ID1Access
-*    Generated using ASNCODE Revision: 6.0 at Mar 18, 2003 12:08 PM
+*    Generated using ASNCODE Revision: 6.0 at Jul 9, 2003  4:55 PM
 *
 **************************************************/
 

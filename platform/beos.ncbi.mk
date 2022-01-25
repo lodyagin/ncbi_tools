@@ -1,5 +1,5 @@
 #
-# $Id: beos.ncbi.mk,v 1.2 2002/10/29 01:20:12 lavr Exp $
+# $Id: beos.ncbi.mk,v 1.3 2003/05/07 17:40:12 beloslyu Exp $
 #
 # Untested. Contributed by Howard Feldman <feldman@mshri.on.ca>
 #
@@ -11,6 +11,7 @@ NCBI_MAKE_SHELL = /bin/sh
 #NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
+NCBI_AR=ar
 NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2

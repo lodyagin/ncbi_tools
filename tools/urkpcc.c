@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkpcc.c,v 6.13 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: coiled-coils
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkpcc.c,v $
+* Revision 6.13  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.12  1998/11/16 14:29:49  kuzio
 * flagBoundaryCondition
 *

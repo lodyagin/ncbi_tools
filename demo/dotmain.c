@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  contains main function for dot matrix viewer
 
@@ -299,7 +299,7 @@ static void DOT_RunRequest(WindoW w, BioseqPtr qbsp, BioseqPtr sbsp, DOTStartDat
     s_stop=DOT_GetValue(sdata->subjectstop);
   if (qbsp->length<q_start || sbsp->length<s_start || q_start>q_stop|| s_start>s_stop || s_start<0 || q_start<0)
     {
-      ErrPostEx(SEV_FATAL, 0, 0, "Bad sequence offset values");
+      ErrPostEx(SEV_FATAL, 1, 0, "Bad sequence offset values");
       return;
     }
   
@@ -932,7 +932,7 @@ Int2 Main ()
 
   if (!ID1BioseqFetchEnable("DotMatrix", FALSE))
     {
-      ErrPostEx(SEV_FATAL, 0, 0, "Bad sequence offset values");
+      ErrPostEx(SEV_FATAL, 1, 0, "Bad sequence offset values");
       return -1;
     }
   LocalSeqFetchInit (FALSE);

@@ -1,4 +1,6 @@
-/* $Id: profiles.c,v 6.34 2002/10/01 20:46:34 madden Exp $
+static char const rcsid[] = "$Id: profiles.c,v 6.36 2003/05/30 17:31:10 coulouri Exp $";
+
+/* $Id: profiles.c,v 6.36 2003/05/30 17:31:10 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,9 +36,15 @@ Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
 
 =======
- $Revision: 6.34 $
+ $Revision: 6.36 $
 
  $Log: profiles.c,v $
+ Revision 6.36  2003/05/30 17:31:10  coulouri
+ add rcsid
+
+ Revision 6.35  2003/05/13 16:02:42  coulouri
+ make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
  Revision 6.34  2002/10/01 20:46:34  madden
  Comment out call to SeqEntryFree that generates warning from ObjMgr when -J is set to T
 
@@ -196,7 +204,7 @@ static Uint1 *  readSequence(FILE * sequenceFile, Int4 * sequenceLength, SeqIdPt
        query_bsp = NULL;
        SeqEntryExplore(sep, &query_bsp, FindProt);
        if (query_bsp == NULL) {
-	 ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+	 ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 	 return NULL;
        }
        fake_bsp = BioseqNew();
@@ -282,7 +290,7 @@ static void readkbp(FILE * thisMatrixFile, Int4 dbSequenceLength,
 
   fscanf(thisMatrixFile, "%d", &lengthInFile);
   if (dbSequenceLength != lengthInFile) {
-    ErrPostEx(SEV_FATAL, 0, 0, "profile: for file %s length in sequence file is %ld, length in matrix file is %ld, probably due to a blank in sequence file\n", sequenceFileName, (long) dbSequenceLength, (long) lengthInFile);
+    ErrPostEx(SEV_FATAL, 1, 0, "profile: for file %s length in sequence file is %ld, length in matrix file is %ld, probably due to a blank in sequence file\n", sequenceFileName, (long) dbSequenceLength, (long) lengthInFile);
     return;
   }
   sequence = (Char *) MemNew((dbSequenceLength+1) * sizeof(Char));
@@ -1050,11 +1058,11 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    return_sfp = (BLAST_ScoreFreqPtr) MemNew(1 * sizeof(BLAST_ScoreFreq));
 
    if ((matricesFile = FileOpen(matrixListFileName, "r")) == NULL)  {
-     ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open file with all matrices %s\n", matrixListFileName);
+     ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open file with all matrices %s\n", matrixListFileName);
 	return (NULL);
    }
    if ((matrixFileDesc = FileOpen(bigMatrixFileName, "rb")) == NULL)  {
-     ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open file with all matrices %s\n", bigMatrixFileName);
+     ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open file with all matrices %s\n", bigMatrixFileName);
 	return (NULL);
    }
    FileClose(matrixFileDesc);
@@ -1079,12 +1087,12 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
    /* addressForMatrix = mmap((caddr_t) 0, totalLength * sizeof(ScoreRow), PROT_READ,
               MAP_PRIVATE, matrixFileDesc, 0);
    if (addressForMatrix == MAP_FAILED) {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: mmap failed\n");
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: mmap failed\n");
 	return (NULL);
    } */
    mmapResult =  Nlm_MemMapInit(bigMatrixFileName);
    if (NULL == mmapResult) {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: mmap failed\n");
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: mmap failed\n");
 	return (NULL);
    } 
    addressForMatrix = mmapResult -> mmp_begin;
@@ -1126,7 +1134,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
        oneSequenceFileName[c1] = '\0';
      }
      if ((thisSequenceFile = FileOpen(oneSequenceFileName, "r")) == NULL)  {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open sequence file %s\n", oneSequenceFileName);
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open sequence file %s\n", oneSequenceFileName);
 	return (NULL);
      }
      if ('\0' == directoryPrefix[0])
@@ -1139,7 +1147,7 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
        oneMatrixFileName[c1] = '\0';
      }
      if ((thisMatrixFile = FileOpen(oneMatrixFileName, "r")) == NULL)  {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
 	return (NULL);
      }
      dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
@@ -1490,7 +1498,7 @@ Int2  Main(void)
    blast_outputfile = myargs [ARG_OUTPUT_FILE].strvalue;
    if ((infp = FileOpen(blast_inputfile, "r")) == NULL)
      {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open input file %s\n", blast_inputfile);
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open input file %s\n", blast_inputfile);
        return (1);
      }
 
@@ -1499,7 +1507,7 @@ Int2  Main(void)
      {
        if ((outfp = FileOpen(blast_outputfile, "w")) == NULL)
 	 {
-	    ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open output file %s\n", blast_outputfile);
+	    ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open output file %s\n", blast_outputfile);
 	    return (1);
 	 }
      }
@@ -1512,12 +1520,12 @@ Int2  Main(void)
 
    if ((auxiliaryfp = FileOpen(auxiliaryFileName, "r")) == NULL)
      {
-       ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open auxiliary file %s\n", auxiliaryFileName);
+       ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open auxiliary file %s\n", auxiliaryFileName);
        return (1);
      }
 
    if ((sequencesfp = FileOpen(seqFileName, "r")) == NULL)  {
-     ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open file with all sequences %s\n", seqFileName);
+     ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open file with all sequences %s\n", seqFileName);
 	return (1);
    }
 
@@ -1529,12 +1537,12 @@ Int2  Main(void)
      {
        if (believe_query == FALSE)
 	 {
-	   ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to use this option");
+	   ErrPostEx(SEV_FATAL, 1, 0, "-J option must be TRUE to use this option");
 	   return (1);
 	 }
        if ((aip = AsnIoOpen (myargs[ARG_SEQALIGN_FILE].strvalue,"w")) == NULL)
 	 {
-	   ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open output file %s\n", myargs[ARG_SEQALIGN_FILE].strvalue);
+	   ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open output file %s\n", myargs[ARG_SEQALIGN_FILE].strvalue);
 	   return 1;
 	 }
      }
@@ -1546,7 +1554,7 @@ Int2  Main(void)
 	SeqEntryExplore(sep, &query_bsp, FindProt);
 	if (query_bsp == NULL)
           {
-	    ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+	    ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 	    return 2;
 	  }
 		
@@ -1673,7 +1681,7 @@ Int2  Main(void)
 			   myargs[ARG_DB_LENGTH].intvalue);
           targetUngappedLambda = IMPALAfindUngappedLambda(matrixName);
 	  if (0.0 == targetUngappedLambda) {
-	    ErrPostEx(SEV_FATAL, 0, 0, "Cannot identify matrix %s",matrixName);
+	    ErrPostEx(SEV_FATAL, 1, 0, "Cannot identify matrix %s",matrixName);
 	    return (1);
           }
 

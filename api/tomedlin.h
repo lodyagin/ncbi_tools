@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tomedlin.h,v $
+* Revision 6.2  2003/09/28 20:22:47  kans
+* added PubmedEntryToXXXFile functions
+*
 * Revision 6.1  1997/12/22 18:51:23  grisha
 * update unit-record number for PmId to 969
 *
@@ -78,6 +81,7 @@
 
 #include <objmedli.h>
 #include <objmdrs.h>
+#include <objpubme.h>
 
 #define MEDLINE_BADCODE 0 /* BAD                             */
 #define MEDLINE_EOF -1  /* END OF ENTRY                      */
@@ -162,6 +166,10 @@ NLM_EXTERN Boolean MedlineEntryToAbsFile PROTO((MedlineEntryPtr mep, FILE *fp));
 NLM_EXTERN Boolean MedlarsEntryToDataFile PROTO((MedlarsEntryPtr mep, FILE *fp));
 NLM_EXTERN Boolean MedlarsEntryToDocFile PROTO((MedlarsEntryPtr mep, FILE *fp));
 NLM_EXTERN Boolean MedlarsEntryToAbsFile PROTO((MedlarsEntryPtr mep, FILE *fp));
+
+NLM_EXTERN Boolean PubmedEntryToDataFile PROTO((PubmedEntryPtr pep, FILE *fp));
+NLM_EXTERN Boolean PubmedEntryToDocFile PROTO((PubmedEntryPtr pep, FILE *fp));
+NLM_EXTERN Boolean PubmedEntryToAbsFile PROTO((PubmedEntryPtr pep, FILE *fp));
 
 NLM_EXTERN MedlinePtr ParseMedline PROTO((MedlineEntryPtr mep));
 NLM_EXTERN MedlinePtr FreeMedline PROTO((MedlinePtr mPtr));

@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: db_slist.c,v 6.2 2003/05/30 17:25:36 coulouri Exp $";
+
 /*  db_slist.c
 * ===========================================================================
 *
@@ -67,6 +69,9 @@
 * Date     Name        Description of modification
 *
 * $Log: db_slist.c,v $
+* Revision 6.2  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.1  1998/08/24 21:19:37  kans
 * fixed -v -fd warnings
 *

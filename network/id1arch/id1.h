@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "id1.h18";
+static char * asnfilename = "id1.h10";
 static AsnValxNode avnx[5] = {
     {20,"entry" ,0,0.0,&avnx[1] } ,
     {20,"bioseq" ,1,0.0,&avnx[2] } ,
@@ -80,7 +80,7 @@ static AsnType atx[60] = {
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[27],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-ID1Access" , "id1.h18",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-ID1Access" , "id1.h10",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;

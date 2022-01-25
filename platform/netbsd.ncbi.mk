@@ -1,11 +1,12 @@
 #
-# $Id: netbsd.ncbi.mk,v 1.7 2002/10/29 01:20:13 lavr Exp $
+# $Id: netbsd.ncbi.mk,v 1.8 2003/05/07 17:40:12 beloslyu Exp $
 #
 # That platform is not supported and is contributed to NCBI by 
 #                     Brook Milligan <brook@trillium.NMSU.Edu>
 #
 NCBI_DEFAULT_LCL = bsd
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O

@@ -1,21 +1,20 @@
 #
-# $Id: linux_icc.ncbi.mk,v 1.2 2002/10/29 01:20:13 lavr Exp $
+# $Id: linux_icc.ncbi.mk,v 1.5 2003/09/04 17:30:40 beloslyu Exp $
 #
 # ICC 6.0 with optimization options for Pentium 4 processor
 
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
-#warning, the flags -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64 will allow
-#you to work with large (>4Gb) files only if you have glibc version >= 2.1
-#NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
-#it appears the flags above do not working anymore with newer libc,
-#the new flags should work. Dima. 08/23/01
+NCBI_AR=ar
 NCBI_CC = icc -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -Xlinker -rpath -Xlinker /opt/intel/compiler60/ia32/lib -O2
+NCBI_LDFLAGS1 = -static-libcxa -O3 -unroll -tpp7
 NCBI_OPTFLAG = -O3 -unroll -tpp7
-#untested, try on your own risk on Linux/Intel
-#NCBI_OPTFLAG = -O3 -march=pentiumpro -funroll-loops
+#
+#for Pentium4 you can try:
+#NCBI_LDFLAGS1 = -static-libcxa -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
+#NCBI_OPTFLAG = -O3 -tpp7 -mcpu=pentium4 -xW -march=pentium4
+#
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin
 NCBI_BIN_COPY = /home/coremake/ncbi/bin
 NCBI_INCDIR = /home/coremake/ncbi/include

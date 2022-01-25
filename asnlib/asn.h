@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,9 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.10  2003/09/15 16:16:32  kans
+* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
+*
 * Revision 6.9  2002/05/20 23:13:39  ivanov
 * Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
 * buffers reserved room
@@ -349,6 +352,8 @@ typedef struct asniobs {    /* for AsnIo to and from a memory ByteStore */
 typedef Pointer (LIBCALL *AsnReadFunc) PROTO((AsnIoPtr aip, AsnTypePtr atp));
 typedef Boolean (LIBCALL *AsnWriteFunc) PROTO((Pointer object, AsnIoPtr aip, AsnTypePtr atp));
 
+typedef Boolean (LIBCALLBACK *AsnStreamStringFunc) (Pointer object, AsnIoPtr aip);
+
 /*****************************************************************************
 *
 *   prototypes
@@ -359,6 +364,7 @@ typedef Boolean (LIBCALL *AsnWriteFunc) PROTO((Pointer object, AsnIoPtr aip, Asn
 NLM_EXTERN AsnTypePtr LIBCALL AsnReadId PROTO((AsnIoPtr aip, AsnModulePtr amp, AsnTypePtr atp));
 NLM_EXTERN Int2  LIBCALL AsnReadVal PROTO((AsnIoPtr aip, AsnTypePtr atp, DataValPtr vp));
 NLM_EXTERN Boolean LIBCALL AsnWrite PROTO((AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp));
+NLM_EXTERN Boolean LIBCALL AsnWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp, AsnStreamStringFunc stream);
 NLM_EXTERN Boolean LIBCALL AsnSkipValue PROTO((AsnIoPtr aip, AsnTypePtr atp));
 
 NLM_EXTERN Boolean LIBCALL AsnOpenStruct PROTO((AsnIoPtr aip, AsnTypePtr atp,
@@ -479,6 +485,7 @@ NLM_EXTERN Int2 LIBCALL AsnTxtReadVal PROTO((AsnIoPtr aip, AsnTypePtr atp, DataV
 /*** asnprint.c ***/
 
 NLM_EXTERN Boolean LIBCALL AsnTxtWrite PROTO((AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp));
+NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp, AsnStreamStringFunc stream);
 
 /*** asnlext.c ***/
 

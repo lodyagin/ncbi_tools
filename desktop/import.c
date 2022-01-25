@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -107,7 +107,8 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               subtype != FEATDEF_virion &&
               subtype != FEATDEF_mutation &&
               subtype != FEATDEF_allele &&
-              subtype != FEATDEF_site_ref) {
+              subtype != FEATDEF_site_ref &&
+              subtype != FEATDEF_gap) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
                  subtype != FEATDEF_sig_peptide &&
@@ -561,6 +562,7 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
   GrouP              c;
   GrouP              g;
   GrouP              h;
+  Boolean            hasGeneControl;
   ImprtFormPtr       ifp;
   GrouP              s;
   StdEditorProcsPtr  sepp;
@@ -649,7 +651,11 @@ extern ForM CreateImportForm (Int2 left, Int2 top, CharPtr title,
     importFormTabs [0] = NULL;
 
     s = HiddenGroup (h, -1, 0, NULL);
-    CreateCommonFeatureGroup (s, (FeatureFormPtr) ifp, sfp, TRUE, TRUE);
+    hasGeneControl = TRUE;
+    if (StringICmp (title, "operon") == 0) {
+      hasGeneControl = FALSE;
+    }
+    CreateCommonFeatureGroup (s, (FeatureFormPtr) ifp, sfp, hasGeneControl, TRUE);
     ifp->pages [COMMON_PAGE] = s;
     Hide (ifp->pages [COMMON_PAGE]);
 

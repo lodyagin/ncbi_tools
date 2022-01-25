@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: copymat.c,v 6.25 2003/05/30 17:31:09 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -34,6 +36,12 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.25  2003/05/30 17:31:09  coulouri
+add rcsid
+
+Revision 6.24  2003/05/13 16:02:42  coulouri
+make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
 Revision 6.23  2002/11/06 21:26:47  ucko
 RPSConcatSequences: provide useful error messages, ignore all trailing space.
 
@@ -138,7 +146,7 @@ static Int4 countProfiles(FILE *sequencesFile, FILE *matricesFile)
     if (sequencesCount == matricesCount)
         return(sequencesCount);
     else {
-        ErrPostEx(SEV_FATAL, 0, 0, "copymatrices: Sequences file has %d entries; Matrices file has %d entries; these should be equal\n", sequencesCount,matricesCount);
+        ErrPostEx(SEV_FATAL, 1, 0, "copymatrices: Sequences file has %d entries; Matrices file has %d entries; these should be equal\n", sequencesCount,matricesCount);
         return(0);
     }
 }
@@ -270,7 +278,7 @@ static void readAllMatrices(FILE *matrixnamefp, ScoreRow *combinedMatrix,
         }
         
         if ((thisMatrixFile = FileOpen(oneMatrixFileName, "r")) == NULL)  {
-            ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
+            ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open matrix file %s\n", oneMatrixFileName);
             return;
         }
         readNextMatrix(thisMatrixFile, startPos, &endPos,
@@ -513,7 +521,7 @@ Boolean RPSConcatSequences(FILE *sfp, CharPtr fastaname)
     CharPtr chptr, last_non_space;
 
     if((fasta_fp = FileOpen(fastaname, "w")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "concatenate sequences: "
+        ErrPostEx(SEV_FATAL, 1, 0, "concatenate sequences: "
                   "Unable to open target fasta file %s: %s\n",
                   fastaname, strerror(errno));
         return FALSE;
@@ -533,7 +541,7 @@ Boolean RPSConcatSequences(FILE *sfp, CharPtr fastaname)
             last_non_space[1] = NULLB;
         
         if((fd = FileOpen(oneFileName, "r")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "concatenate sequences: "
+            ErrPostEx(SEV_FATAL, 1, 0, "concatenate sequences: "
                       "Unable to open source fasta file %s: %s\n",
                       oneFileName, strerror(errno));
             FileClose(fasta_fp);
@@ -591,17 +599,17 @@ Int2  Main(void)
                         directoryPrefix);
     
     if ((matrixnamefp = FileOpen(matrixFileName, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "copymatrices: Unable to open file with matrix file names %s\n", matrixFileName);
+        ErrPostEx(SEV_FATAL, 1, 0, "copymatrices: Unable to open file with matrix file names %s\n", matrixFileName);
         return (1);
     }
     
     if ((sequencesfp = FileOpen(sequencesFileName, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "copymatrices: Unable to open file with sequence file names %s\n", sequencesFileName);
+        ErrPostEx(SEV_FATAL, 1, 0, "copymatrices: Unable to open file with sequence file names %s\n", sequencesFileName);
         return (1);
     }
     
     if ((auxiliaryfp = FileOpen(auxFileName, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "profiles: Unable to open auxiliary file %s\n", auxFileName);
+        ErrPostEx(SEV_FATAL, 1, 0, "profiles: Unable to open auxiliary file %s\n", auxFileName);
         return (1);
     }
 
@@ -612,7 +620,7 @@ Int2  Main(void)
     }
     
     if ((bigmatrixfile = FileOpen(bigFileName, "wb")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "rps-blast: Unable to open big matrix file %s\n", bigFileName);
+        ErrPostEx(SEV_FATAL, 1, 0, "rps-blast: Unable to open big matrix file %s\n", bigFileName);
         return (1);
     }
     
@@ -627,7 +635,7 @@ Int2  Main(void)
 
     combinedMatrix = allocateMatrix(totalProfileLength);
     if (NULL == combinedMatrix) {
-        ErrPostEx(SEV_FATAL, 0, 0, "copymatrices: Unable to allocate matrix with%d rows\n", totalProfileLength);
+        ErrPostEx(SEV_FATAL, 1, 0, "copymatrices: Unable to allocate matrix with%d rows\n", totalProfileLength);
         return (1);
         
     }

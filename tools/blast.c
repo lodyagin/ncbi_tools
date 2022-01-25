@@ -1,4 +1,6 @@
-/* $Id: blast.c,v 6.384 2003/03/24 19:42:13 madden Exp $
+static char const rcsid[] = "$Id: blast.c,v 6.391 2003/10/23 17:46:17 dondosha Exp $";
+
+/* $Id: blast.c,v 6.391 2003/10/23 17:46:17 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +49,31 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.384 $
+ * $Revision: 6.391 $
  *
  * $Log: blast.c,v $
+ * Revision 6.391  2003/10/23 17:46:17  dondosha
+ * Fix in BlastGetDbChunk for looking up ordinal ids within a range
+ *
+ * Revision 6.390  2003/08/08 16:36:21  dondosha
+ * 1. Treat final_db_seq as 1 beyond the final sequence; 0 is an exception, meaning end of database.
+ * 2. Added more meaningful error message when query length is less than wordsize.
+ *
+ * Revision 6.389  2003/05/30 17:20:10  coulouri
+ * add rcsid
+ *
+ * Revision 6.388  2003/05/14 20:35:58  camacho
+ * Allow searching empty databases
+ *
+ * Revision 6.387  2003/05/13 16:02:53  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
+ * Revision 6.386  2003/05/12 12:23:43  camacho
+ * Sanity check for number of sequences & db length
+ *
+ * Revision 6.385  2003/04/23 15:15:36  camacho
+ * Moved reading of gi list to readdb
+ *
  * Revision 6.384  2003/03/24 19:42:13  madden
  * Changes to support query concatenation for blastn and tblastn
  *
@@ -2987,7 +3011,7 @@ Boolean BlastGetDbChunk(ReadDBFILEPtr rdfp, Int4Ptr start, Int4Ptr stop,
 		Int4 gi;
 		
 		for(gi = gi_start; (gi < gi_end) && (oidindex < thr_info->db_chunk_size);) {
-		    Int4 bit_end = ((gi_end - gi) < MASK_WORD_SIZE) ? (gi_end - gi) : MASK_WORD_SIZE;
+		    Int4 bit_end = ((gi_end - gi + bit_start) < MASK_WORD_SIZE) ? (gi_end - gi) : MASK_WORD_SIZE;
 		    Int4 bit;
 		    
 		    Uint4 mask_index = gi / MASK_WORD_SIZE;
@@ -3345,7 +3369,7 @@ do_the_blast_run(BlastSearchBlkPtr search)
     
     num_entries_total      = readdb_get_num_entries_total     (search->rdfp);
     num_entries_total_real = readdb_get_num_entries_total_real(search->rdfp);
-    
+
     /* Set 'done with read db' according to whether real databases are present */
     
     if (num_entries_total_real) {
@@ -3356,11 +3380,13 @@ do_the_blast_run(BlastSearchBlkPtr search)
     
     /* Make sure first, last sequence indices are in-range (0, NUM-1) */
     
-    /* NOTE: search->pbp->final_seq is an 'inclusive' range, but the */
+    /* NOTE: search->pbp->final_seq is 1 beyond the last sequence ordinal id,
+       except when it's <=0, which means search to the last sequence in the 
+       database. */
     /* search->thr_info versions are not. */
     
     if (search->pbp->final_db_seq > 0) {
-	end_seq = MIN(search->pbp->final_db_seq + 1, num_entries_total);
+	end_seq = MIN(search->pbp->final_db_seq, num_entries_total);
     } else {
 	end_seq = num_entries_total;
     }
@@ -4064,13 +4090,13 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 
 	if (options == NULL)
 	{
-	  	ErrPostEx(SEV_FATAL, 0, 0, "BLAST_OptionsBlkPtr is NULL\n");
+	  	ErrPostEx(SEV_FATAL, 1, 0, "BLAST_OptionsBlkPtr is NULL\n");
 		return 1;
 	}
 
 	if (query_slp == NULL && query_bsp == NULL)
 	{
-	  	ErrPostEx(SEV_FATAL, 0, 0, "Query is NULL\n");
+	  	ErrPostEx(SEV_FATAL, 1, 0, "Query is NULL\n");
 		return 1;
 	}
 
@@ -4354,7 +4380,7 @@ Int2 LIBCALL BLASTSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr 
 	}
 	else
 	{
-	  	ErrPostEx(SEV_FATAL, 0, 0, "Only blastn, blastp, blastx, tblastn tblastx is allowed\n");
+	  	ErrPostEx(SEV_FATAL, 1, 0, "Only blastn, blastp, blastx, tblastn tblastx is allowed\n");
                 retval = 1;
 		goto BlastSetUpReturn;
 	}
@@ -5143,11 +5169,17 @@ available) this needs to be set higher up. */
 	{
 		if (search->context[search->first_context].query->length < options->wordsize)
 		{
-			BlastConstructErrorMessage("Blast", buffer, 2, &(search->error_return));
-			BlastConstructErrorMessage("Blast", 
-				"Query must be at least wordsize", 2, &(search->error_return));
-                        retval = 1;
-			goto BlastSetUpReturn;
+                   Char tmp_buffer[128];
+                   sprintf(tmp_buffer, 
+                           "Query length %ld is less than wordsize %ld",
+                       search->context[search->first_context].query->length,
+                           options->wordsize);
+                   BlastConstructErrorMessage("Blast", buffer, 2,
+                                              &(search->error_return));
+                   BlastConstructErrorMessage("Blast", 
+                      tmp_buffer, 2, &(search->error_return));
+                   retval = 1;
+                   goto BlastSetUpReturn;
 		}
 	}
 		
@@ -5298,118 +5330,29 @@ BlastGetFirstAndLastContext(CharPtr prog_name, SeqLocPtr query_slp, Int2Ptr firs
 	return TRUE;
 }
 
-
-/*
-	This function reads in a list of gi's from a file.
-The file may be either in binary or text format.  
-
-The binary gilist format has the following construction:
-
-1.) 1st 4 bytes: a 'magic' number: UINT4_MAX
-2.) 2nd 4 bytes: total number of gi's in the file (call this value 'number').
-3.) 'number' set of 4 bytes, allowing 4 bytes for each gi.
-
-The function GetGisFromFile first checks what the first 4 bytes
-of a file are, if they are the 'magic' number, then it proceeds
-to read values assuming a binary format.  If they are not the
-'magic' number, then a text format is assumed.
-
-The binary gilist can be produced from a text gilist using the
-function readdb_MakeGiFileBinary.
-
-*/
-
-#define	LINE_LEN	1024
 BlastDoubleInt4Ptr 
 GetGisFromFile (CharPtr gifile, Int4Ptr gi_list_size)
-
 {
-    BlastDoubleInt4Ptr	gi_list;
-    FILE		*gifp = NULL;
-    Int4		index = 0, value, chunk_size = 24, number;
-    Int2		status;
-    Char		line[LINE_LEN];
-    long		tmplong;
-    NlmMFILEPtr		mfp;
-    Uint4		tmp_value;
-    Char	        file_name[PATH_MAX], blast_dir[PATH_MAX];
-    
-    /**
-     * first looking in current directory, then checking .ncbirc,
-     * then $BLASTDB and then assuming BLASTDB_DIR
-     */
-    if (FileLength(gifile) > 0) {
-       char *path = Nlm_FilePathFind(gifile);
-       if (StringLen(path) > 0) {
-          StringCpy(blast_dir, path);
-       } else {
-          StringCpy(blast_dir, ".");
-       }
-       MemFree(path);
-    } else {
-#ifdef OS_UNIX
-       if (getenv("BLASTDB"))
-          Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
-       else
-#endif
-          Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
-    }
-    sprintf(file_name, "%s%s%s", blast_dir, DIRDELIMSTR, FileNameFind(gifile));
+    BlastDoubleInt4Ptr retval = NULL;
+    Int4ListPtr gilist = NULL;
+    register Int4 i;
 
-
-    
-    mfp = NlmOpenMFILE(file_name);
-    if (mfp == NULL) {
-        ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
+    if ( !(gilist = Int4ListReadFromFile(gifile)))
         return NULL;
-    }
-    
-    NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
-    if (SwapUint4(tmp_value) == READDB_MAGIC_NUMBER) {
-        NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
-        number = SwapUint4(tmp_value);
-        gi_list = MemNew(number * sizeof(BlastDoubleInt4));
-        index = 0;
-        while (index<number) {
-            NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
-            gi_list[index++].gi = SwapUint4(tmp_value);
-        }
-        *gi_list_size = number;
-        mfp = NlmCloseMFILE(mfp);
-    } else {
-        mfp = NlmCloseMFILE(mfp);
-        if (!(gifp = FileOpen(file_name, "r"))) {
-            ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
-            return NULL;
-        }
-	
-        gi_list = MemNew(chunk_size * sizeof(BlastDoubleInt4));
-        
-        while (FileGets(line, LINE_LEN, gifp)) {
-            
-            /* do correct casting */
-            status = sscanf(line, "%ld", &tmplong);
-            value = tmplong;
-            
-            /* skip non-valid lines */
-            if (status > 0) {
-				/* do we have enough space in gi_list ? */
-                if (chunk_size < index + 1) {
-                    chunk_size *= 2;
-                    gi_list = Realloc(gi_list, chunk_size * sizeof(BlastDoubleInt4));
-                }
-                
-                gi_list[index++].gi = value;
-            }
-        }
-        
-        *gi_list_size = index;
-    }
 
-    if(gifp != NULL)
-        FileClose(gifp);
+    retval = (BlastDoubleInt4Ptr) MemNew(sizeof(BlastDoubleInt4)*gilist->count);
+    if (!retval)
+        return retval;
 
-    return gi_list;
+    if (gi_list_size)
+        *gi_list_size = gilist->count;
+
+    for (i = 0; i < gilist->count; i++)
+        retval[i].gi = gilist->i[i];
+
+    gilist = Int4ListFree(gilist);
+
+    return retval;
 }
 
 BlastSearchBlkPtr LIBCALL
@@ -5546,7 +5489,7 @@ BLASTSetUpSearchWithReadDbInternalMult (SeqLocPtr query_slp, BioseqPtr query_bsp
             ErrPostEx(SEV_WARNING, 0, 0, "SetUpBlastSearch failed.");
             search->query_invalid = TRUE;
         }
-        
+
         if (search->pbp->mb_params) 
             search = GreedyAlignMemAlloc(search);
         else 
@@ -6364,7 +6307,7 @@ BLASTPerform2PassSearch (BlastSearchBlkPtr search, Int4 subject_length, Uint1Ptr
 
 		if (status < 0)
 		{		/* Error */
-			ErrPostEx(SEV_FATAL, 0, 0, "BlastExtendWordSearch returned non-zero status");
+			ErrPostEx(SEV_FATAL, 1, 0, "BlastExtendWordSearch returned non-zero status");
 			return 1;
 		}
 	}

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.54 $
+* $Revision: 6.55 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.55  2003/05/05 12:38:07  rsmith
+* casts to make call to RegQueryValueEx safer in Nlm_GetExecPath. Needed by Codewarrior when compiling to Win32.
+*
 * Revision 6.54  2003/03/06 21:55:14  rsmith
 * for OS_UNIX_DARWIN update Nlm_LaunchAppEx and Nlm_SendURLAppleEvent to use new LaunchServices calls.
 *
@@ -5903,10 +5906,10 @@ extern void Nlm_GetExecPath(char *filetype, char *buf, int buflen)
         return;
     }
 
-    RegQueryValueEx(hkResult,"", NULL, NULL, buf, &buflen);
+    RegQueryValueEx(hkResult,"", NULL, NULL, (LPBYTE) buf, (LPDWORD) &buflen);
     RegCloseKey(hkResult);
 
-    for (i=1; i<buflen && buf[i] != '"'; i++);
+    for (i=1; i<buflen && buf[i] != '"'; i++) {}
     buf[i-1] = '\0';
 }
 

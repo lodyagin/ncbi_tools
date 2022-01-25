@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netcnfg.c,v 6.14 1999/08/31 22:25:23 kans Exp $
+ * RCS $Id: netcnfg.c,v 6.15 2003/09/11 05:28:02 kans Exp $
  *
  * Author:  Kans, Epstein
  *
@@ -148,7 +148,8 @@ static void AcceptNetConfigForm (ButtoN b)
     Update ();
     return;
   } else if (val == 3) {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "FIREWALL");
+    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "SERVICE");
+    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", "TRUE");
     GetTitle (ncp->proxyHost, str, sizeof (str));
     if (! StringHasNoText (str)) {
       SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", str);
@@ -173,6 +174,7 @@ static void AcceptNetConfigForm (ButtoN b)
     }
   } else {
     SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
@@ -212,6 +214,7 @@ static void AcceptNetConfigForm (ButtoN b)
   }
 
   if (NoEntryExists ("SRV_CONN_MODE") &&
+      NoEntryExists ("FIREWALL") &&
       NoEntryExists ("SRV_CONN_TIMEOUT") &&
       NoEntryExists ("SRV_ENGINE_HOST") &&
       NoEntryExists ("SRV_ENGINE_PORT") &&
@@ -420,6 +423,12 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     } else if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "WWW", str, sizeof (str))) {
       if (StringICmp (str, "FIREWALL") == 0) {
         SafeSetValue (ncp->srvConnMode, 3);
+      } else if (StringICmp (str, "SERVICE") == 0) {
+        if (GetAppParam ("NCBI", "NET_SERV", "FIREWALL", "WWW", str, sizeof (str))) {
+          if (StringICmp (str, "TRUE") == 0) {
+            SafeSetValue (ncp->srvConnMode, 3);
+          }
+        }
       }
     }
     if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL, str, sizeof (str))) {

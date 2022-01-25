@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnprint.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnprint.h,v $
+* Revision 6.5  2003/09/15 16:16:32  kans
+* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
+*
 * Revision 6.4  2001/06/26 22:02:42  juran
 * Make C++-compatible.
 *
@@ -107,6 +110,7 @@ NLM_EXTERN void AsnPrintChar PROTO((char theChar, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintIndent PROTO((Boolean increase, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
 NLM_EXTERN Boolean AsnPrintString PROTO((CharPtr str, AsnIoPtr aip));
+NLM_EXTERN Boolean AsnPrintStream (Pointer object, AsnIoPtr aip, AsnStreamStringFunc stream);
 NLM_EXTERN void AsnPrintCharBlock PROTO((CharPtr str, AsnIoPtr aip));
 NLM_EXTERN int AsnPrintGetWordBreak PROTO((CharPtr str, int maxlen));
 NLM_EXTERN void AsnPrintOpenStruct PROTO((AsnIoPtr aip, AsnTypePtr atp));

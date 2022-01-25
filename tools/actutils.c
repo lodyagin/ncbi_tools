@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: actutils.c,v 6.34 2003/06/30 15:01:29 whlavina Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -28,13 +30,21 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.c,v $
+* Revision 6.34  2003/06/30 15:01:29  whlavina
+* Correct minus strand handling in CreaeContinuousAln functions; previous
+* code could corrupt alignments (stop2-start1>1 would imply len<-2 if
+* ExtendAlnRight ever gets called).
+*
+* Revision 6.33  2003/05/30 17:25:35  coulouri
+* add rcsid
+*
 * Revision 6.32  2002/12/19 14:02:28  johnson
 * change c++-style comments to c-style
 *
@@ -1885,7 +1895,7 @@ static SeqAlignPtr ACT_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
       strand = AlnMgr2GetNthStrand(saps[i], 2);
       if (strand == Seq_strand_minus)
       {
-         if (stop2 - start1 > 1)
+         if (start1 - stop2 > 1)
             ACT_ExtendAlnRight(saps[i], 2, stop2+1, start1-1);
       } else
       {

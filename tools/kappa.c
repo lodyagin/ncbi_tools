@@ -1,4 +1,6 @@
-/* $Id: kappa.c,v 6.28 2002/12/19 14:40:35 kans Exp $ 
+static char const rcsid[] = "$Id: kappa.c,v 6.34 2003/10/22 20:37:19 madden Exp $";
+
+/* $Id: kappa.c,v 6.34 2003/10/22 20:37:19 madden Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +34,29 @@ Author: Alejandro Schaffer
 Contents: Utilities for doing Smith-Waterman alignments and adjusting
     the scoring system for each match in blastpgp
 
- $Revision: 6.28 $
+ $Revision: 6.34 $
 
  $Log: kappa.c,v $
+ Revision 6.34  2003/10/22 20:37:19  madden
+ Set kbp to rescaled values, use upper-case for SCALING_FACTOR define
+
+ Revision 6.33  2003/10/02 19:59:34  kans
+ BlastGetGapAlgnTbck needed FALSE instead of NULL in two parameters - Mac compiler complaint
+
+ Revision 6.32  2003/10/02 19:31:24  madden
+ In RedoAlignmentCore, call procedure BlastGetGapAlgnTbck instead of ALIGN
+ to redo alignments; this allows the endpoints of the alignment to change.
+ Because  BlastGetGapAlgnTbck returns a list of SeqAlign's while ALIGN
+ passes back a single-alignment, the post-processing of the redone
+ alignments is changed including the addition of the procedure
+ concatenateListOfSeqaligns.
+
+ Revision 6.30  2003/05/30 17:25:36  coulouri
+ add rcsid
+
+ Revision 6.29  2003/05/13 16:02:53  coulouri
+ make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
  Revision 6.28  2002/12/19 14:40:35  kans
  changed C++-style comment to C-style
 
@@ -291,7 +313,7 @@ static Nlm_FloatHi convertListToHeap(SWResults * SWAligns, SWheapRecord *HeapArr
   curAlignment->next = NULL;
   for(i = 2; i <= numMatches; i++) {
     if (NULL == nextAlignment) {
-      ErrPostEx(SEV_FATAL, 0, 0, "blast: nextAlignment NULL for index %d in convertListToHeap\n", i);
+      ErrPostEx(SEV_FATAL, 1, 0, "blast: nextAlignment NULL for index %d in convertListToHeap\n", i);
     }
     HeapArray[i].theseAlignments = nextAlignment;
     HeapArray[i].bestEvalue = nextAlignment->eValue;
@@ -340,6 +362,52 @@ static SWResults *convertFromHeapToList(SWheapRecord *HeapArray, Int4 ActualSize
   return(returnAlignList);
 }
 
+SeqAlignPtr concatenateListOfSeqAligns(SWResults * SWAligns)
+{
+    SeqAlignPtr seqAlignList =NULL; /*list of SeqAligns to return*/
+    SeqAlignPtr nextSeqAlign; /*new one to add*/
+    SeqAlignPtr lastSeqAlign = NULL; /*last one on list*/
+    SWResults *curSW, *oldSW; /*used to iterate down list*/
+    ScorePtr thisScorePtr;
+    Nlm_FloatHi bitScoreUnrounded; /*used to adjust bit score to unscaled 
+				     Lambda*/
+
+    curSW = SWAligns;
+    while (curSW != NULL) {
+      nextSeqAlign = curSW->seqAlign;
+      thisScorePtr = nextSeqAlign->score;
+      while ((thisScorePtr != NULL) &&
+	     (StringICmp(thisScorePtr->id->str, "score") != 0))
+	thisScorePtr = thisScorePtr->next;
+      if(NULL == thisScorePtr)
+	fprintf(stderr,"Could not find score\n");
+      else
+	thisScorePtr->value.intvalue = curSW->scoreThisAlign; 
+      bitScoreUnrounded = ((curSW->scoreThisAlign * curSW->Lambda) 
+			   - curSW->logK)/NCBIMATH_LN2;
+      thisScorePtr = nextSeqAlign->score;
+      while ((thisScorePtr != NULL) &&
+	     (StringICmp(thisScorePtr->id->str, "bit_score") != 0))
+	thisScorePtr = thisScorePtr->next;
+      if(NULL == thisScorePtr)
+	fprintf(stderr,"Could not find bit score\n");
+      else
+	thisScorePtr->value.realvalue = bitScoreUnrounded; 
+      if (NULL == seqAlignList)
+	seqAlignList = nextSeqAlign;
+      else
+	lastSeqAlign->next = nextSeqAlign;
+      lastSeqAlign = nextSeqAlign;
+      MemFree(curSW->reverseAlignScript);
+      oldSW = curSW;
+      curSW = curSW->next;
+      
+      SeqIdSetFree(oldSW->subject_id);
+      MemFree(oldSW);
+    }
+
+    return(seqAlignList);
+}
 
 /*take as input an amino acid  string and its length; compute a filtered
   amino acid string and return the filtered string*/
@@ -352,7 +420,7 @@ void segResult(BioseqPtr bsp, Uint1 * inputString, Uint1 * resultString, Int4 le
 
    if (bsp->length != length)
    {
-   	ErrPostEx(SEV_FATAL, 0, 0, "segResult: length and bsp->length are different");
+   	ErrPostEx(SEV_FATAL, 1, 0, "segResult: length and bsp->length are different");
 	return;
    }
 
@@ -866,19 +934,11 @@ static SeqAlignPtr newConvertSWalignsToSeqAligns(SWResults * SWAligns,
         nextSeqAlign->score = addScoresToSeqAlign(curSW->scoreThisAlign, 
                                                   curSW->eValueThisAlign, curSW->Lambda, curSW->logK);
         
-        num_ident = SWAlignGetNumIdentical(curSW, query, nextEditBlock);
-	
-        if (num_ident > 0)
-           MakeBlastScore(&nextSeqAlign->score, "num_ident", 0.0, num_ident);
-
-        nextEditBlock = GapXEditBlockDelete(nextEditBlock);
-        
         if (NULL == seqAlignList)
             seqAlignList = nextSeqAlign;
         else
             lastSeqAlign->next = nextSeqAlign;
         lastSeqAlign = nextSeqAlign;
-        MemFree(curSW->reverseAlignScript);
         oldSW = curSW;
         curSW = curSW->next;
 
@@ -1217,7 +1277,7 @@ static void scaleMatrix(BLAST_Score **matrix, BLAST_Score **startMatrix,
    }
 }
 
-#define scalingFactor 32
+#define SCALING_FACTOR 32
 /************************************************************************
 Compute a scaled up version of the standard matrix encoded by matrix
 name. Standard matrices are in half-bit units.
@@ -1348,7 +1408,7 @@ static void  computeScaledStandardMatrix(BLAST_Score **matrix, Char *matrixName,
        }
      return;
    }
-   ErrPostEx(SEV_FATAL, 0, 0, "blastpgp: Cannot adjust parameters for matrix %s\n", matrixName);
+   ErrPostEx(SEV_FATAL, 1, 0, "blastpgp: Cannot adjust parameters for matrix %s\n", matrixName);
 }
 
 /************************************************************
@@ -1466,7 +1526,7 @@ void scalePosMatrix(BLAST_Score **fillPosMatrix, BLAST_Score **nonposMatrix, Cha
      }
 
      posFreqsToMatrix(posSearch,compactSearch, standardFreqRatios, multiplier);
-     impalaScaling(posSearch, compactSearch, ((Nlm_FloatHi) scalingFactor), FALSE);
+     impalaScaling(posSearch, compactSearch, ((Nlm_FloatHi) SCALING_FACTOR), FALSE);
 
      for(i = 0; i <= queryLength; i++)
        MemFree(posSearch->posMatrix[i]);
@@ -1582,15 +1642,21 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
    Int4 heapSize; /*number of entries in the heap*/
    BioseqPtr bsp_db; /* Bioseq for a database sequence, used for filtering. */
    Boolean bioseq_unlock = FALSE; /* should bsp_db be unlocked or freed? */
-   
+   Int4 numNewAlignments; /*number of seqAligns for this match after realignment*/
+   Int4 alignIndex; /*index over alignments in non-SW case*/
+   SeqAlignPtr  oneListOfSeqAligns, remainingSeqAligns; /*returned list
+                       of realign seqAligns for non-SW case*/
+
+
    query = search->context[0].query->sequence;
    queryLength = search->context[0].query->length;
+
    gapOpen = search->pbp->gap_open;
    gapExtend = search->pbp->gap_extend;
    gapDecline = search->pbp->decline_align;
-
-   if (adjustParameters)
-     localScalingFactor = scalingFactor;
+   if (adjustParameters) {
+     localScalingFactor = SCALING_FACTOR;
+   }
    else
      localScalingFactor = 1.0;
    if ((0 == strcmp(options->matrix,"BLOSUM62_20")))
@@ -1602,17 +1668,18 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 
    gap_align = search->gap_align;
 
-   gap_align->gap_open = Nlm_Nint(gapOpen * localScalingFactor);
-   gap_align->gap_extend =  Nlm_Nint(gapExtend * localScalingFactor);
+   search->pbp->gap_open = gap_align->gap_open = Nlm_Nint(gapOpen * localScalingFactor);
+   search->pbp->gap_extend = gap_align->gap_extend =  Nlm_Nint(gapExtend * localScalingFactor);
    /*gap_align->decline_align = (-(BLAST_SCORE_MIN)); */
    if (gapDecline != INT2_MAX)
-     gap_align->decline_align = Nlm_Nint(gapDecline *localScalingFactor);
+     search->pbp->decline_align = gap_align->decline_align = Nlm_Nint(gapDecline *localScalingFactor);
    else
-     gap_align->decline_align = gapDecline;
+     search->pbp->decline_align = gap_align->decline_align = gapDecline;
    gap_align->matrix = NULL;
    gap_align->positionBased = search->positionBased;
    if (search->positionBased) {
-       matrix = gap_align->posMatrix = gap_align->matrix = search->sbp->posMatrix;
+       matrix = gap_align->posMatrix =  search->sbp->posMatrix;
+       gap_align->matrix = search->sbp->matrix;
        kbp = search->sbp->kbp_gap_psi[0];
        
        if(search->sbp->posFreqs == NULL) {
@@ -1656,7 +1723,7 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
        startMatrix = allocateScaledMatrix(PROTEIN_ALPHABET);
        startFreqRatios = getStartFreqRatios(search, query,options->matrix, 
 					NULL,PROTEIN_ALPHABET,FALSE);
-       initialUngappedLambda = search->sbp->kbp_std[0]->Lambda;
+       initialUngappedLambda = search->sbp->kbp_ideal->Lambda;
        scaledInitialUngappedLambda = initialUngappedLambda/localScalingFactor;
        computeScaledStandardMatrix(matrix,options->matrix, scaledInitialUngappedLambda);
        for(i = 0; i < PROTEIN_ALPHABET; i++)
@@ -1671,9 +1738,15 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      kbp->logK = log(kbp->K);
      kbp->H = holdkbp->H;
      if (search->positionBased) 
+     {
        search->sbp->kbp_gap_psi[0] = kbp;
+       search->sbp->kbp_gap[0] = kbp;
+     }
      else 
+     {
        search->sbp->kbp_gap_std[0] = kbp;
+       search->sbp->kbp_gap[0] = kbp;
+     }
 
      resProb = (Nlm_FloatHi *) MemNew (PROTEIN_ALPHABET * sizeof(Nlm_FloatHi));
      if (!(search->positionBased)) {
@@ -1760,51 +1833,12 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      do {     
        if (foundFirstAlignment && (doThis || (!adjustParameters))) {
          if (SmithWaterman) {
+           /*in non-Smith-Waterman case, all alignments found in one call*/
 	   newEvalue = BLspecialSmithWatermanScoreOnly(filteredMatchingSequence, 
 		       matchingSequenceLength, query, queryLength, matrix, 
                        gap_align->gap_open, gap_align->gap_extend,  &matchEnd, &queryEnd, &score,
                        kbp,  search->searchsp_eff, numForbidden, forbiddenRanges, 
                        search->positionBased);
-	 }
-	 else {
-	   gap_align->x_parameter = options->gap_x_dropoff_final * 
-	     NCBIMATH_LN2/kbp->Lambda;
-	   alignScript = (Int4 *) MemNew((matchingSequenceLength + queryLength + 3) * sizeof(Int4));
-	   reverseAlignScript = alignScript;
-           /*identify queryStart, matchStart, lengths, finalQueryEnd,
-               finalMatchEnd*/
-           queryStart = thisHSP.query_offset;
-	   queryEnd = queryStart + thisHSP.query_length -1;
-           matchStart = thisHSP.subject_offset;
-	   matchEnd = matchStart + thisHSP.subject_length -1;
-	   if (Xchar == filteredMatchingSequence[matchStart]) {
-	     filteredMatchingSequence[matchStart] = matchingSequence[matchStart];
-	     filteredMatchingSequence[matchStart+1] = matchingSequence[matchStart+1];
-	   }
-	   skipThis = FALSE;
-           XdropAlignScore = ALIGN(&(query[queryStart]) - 1, 
-			   &(filteredMatchingSequence[matchStart]) -1, 
-			   queryEnd - queryStart + 1,
-			   matchEnd - matchStart + 1,
-			   reverseAlignScript , &finalQueryEnd, 
-			   &finalMatchEnd, &alignScript,
-			   gap_align, queryStart - 1, FALSE); 
-           if (0 == reverseAlignScript[0]) {
-	     newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
-						search->searchsp_eff);
-             newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
-	   }
-	   else
-	     skipThis = TRUE;
-
-	   if ((newEvalue > search->pbp->cutoff_e) ||
-               (0 != reverseAlignScript[0])) {
-	     MemFree(reverseAlignScript);
-	   }
-	   if (newEvalue < bestEvalue)
-	     bestEvalue = newEvalue;
-	   if (newScore > bestScore)
-	     bestScore = newScore;
 	 }
        }
        else {
@@ -1831,8 +1865,10 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	     else
 	       scaleMatrix(matrix,startMatrix,startFreqRatios,PROTEIN_ALPHABET,
 			   scaledInitialUngappedLambda,LambdaRatio);
-	     if (search->positionBased) 
-	       gap_align->posMatrix = gap_align->matrix = search->sbp->posMatrix = matrix;
+	     if (search->positionBased) { 
+	       gap_align->posMatrix =  search->sbp->posMatrix = matrix;
+	       gap_align->matrix = search->sbp->matrix;
+	     }
 	     else 
 	       gap_align->matrix = search->sbp->matrix = matrix;
 	   }
@@ -1849,45 +1885,27 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 						     kbp, search->searchsp_eff, search->positionBased);
 	   }
 	   else {
-	     gap_align->x_parameter = options->gap_x_dropoff_final * 
+	     search->pbp->gap_x_dropoff_final = 
+	       options->gap_x_dropoff_final * 
 	       NCBIMATH_LN2/kbp->Lambda;
-	     alignScript = (Int4 *) MemNew((matchingSequenceLength + queryLength + 3) * sizeof(Int4));
-	     reverseAlignScript = alignScript;
-	     /*identify queryStart, matchStart, lengths, finalQueryEnd,
-               finalMatchEnd*/
-	     queryStart = thisHSP.query_offset;
-	     queryEnd = queryStart + thisHSP.query_length -1;
-	     matchStart = thisHSP.subject_offset;
-	     matchEnd = matchStart + thisHSP.subject_length -1;
-	     if (Xchar == filteredMatchingSequence[matchStart]) {
-	       filteredMatchingSequence[matchStart] = matchingSequence[matchStart];
-	       filteredMatchingSequence[matchStart+1] = matchingSequence[matchStart+1];
-	     }
-	     skipThis = FALSE;
-	     XdropAlignScore = ALIGN(&(query[queryStart]) - 1, 
-		     &(filteredMatchingSequence[matchStart]) -1, 
-			   queryEnd - queryStart + 1,
-			   matchEnd - matchStart + 1,
-			   reverseAlignScript , &finalQueryEnd, 
-			   &finalMatchEnd, &alignScript,
-			   gap_align, queryStart - 1, FALSE); 
-	     newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
-					      search->searchsp_eff);
-	     if (0 == reverseAlignScript[0]) {
-	       newEvalue = BlastKarlinStoE_simple(XdropAlignScore,kbp, 
-						  search->searchsp_eff);
-               newScore = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / localScalingFactor);
-	     }
+	     if (search->positionBased)
+	       search->sbp->posMatrix = matrix;
 	     else
-	       skipThis = TRUE;
-
-	     if ((newEvalue > search->pbp->cutoff_e) ||
-		 (0 != reverseAlignScript[0])) {
-	       MemFree(reverseAlignScript);
+	       search->sbp->matrix = matrix;
+             oneListOfSeqAligns = BlastGetGapAlgnTbck(search, index, FALSE, FALSE, 
+                     filteredMatchingSequence, matchingSequenceLength, NULL, 0);
+	     remainingSeqAligns = oneListOfSeqAligns;
+	     if(oneListOfSeqAligns) {
+	       newEvalue =  search->result_struct->results[index]->best_evalue;
+               newScore = Nlm_Nint(((Nlm_FloatHi) search->result_struct->results[index]->hsp_array[0].score)/localScalingFactor);               
+	     }
+	     else {
+	       newEvalue = 2 * search->pbp->cutoff_e;
+	       newScore = 0;
 	     }
            }
-	   bestEvalue = newEvalue;
-	   bestScore = newScore;
+	   bestEvalue = newEvalue; 
+	   bestScore = newScore; 
 	 }
        }
 
@@ -1929,94 +1947,102 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
 	   if (!foundFirstAlignment)
 	     bestScore = newScore;
 	 }
-	 newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
-	 newSW->seq = matchingSequence;
-	 newSW->seqStart = matchStart;
-	 newSW->seqEnd = matchStart + finalMatchEnd;
-	 newSW->queryStart = queryStart;
-	 newSW->queryEnd = queryStart + finalQueryEnd;
-	 newSW->reverseAlignScript = reverseAlignScript;
-	 newSW->score = bestScore;
-	 newSW->scoreThisAlign = newScore;
-	 newSW->eValue = bestEvalue;
-	 newSW->eValueThisAlign = newEvalue;
-	 newSW->isFirstAlignment = (!foundFirstAlignment);
-	 newSW->Lambda = kbp-> Lambda * localScalingFactor;
-	 newSW->logK = kbp->logK;
-	 newSW->subject_index = thisMatch->subject_id;
-         newSW->subject_id = SeqIdSetDup(bsp_db->id);
-         
-	 if (SWPurging != currentState) {
-	   numAligns++;
-	   if (!foundFirstAlignment) {
-	     numMatches++;
-	     firstAlignmentThisMatch = newSW;
+	 if (SmithWaterman)
+	   numNewAlignments = 1;
+	 else
+	   numNewAlignments = search->result_struct->results[index]->hspcnt;
+         for(alignIndex = 0; alignIndex < numNewAlignments; alignIndex++) {
+	   newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
+	   newSW->seq = matchingSequence;
+	   if (SmithWaterman) {
+	     newSW->seqStart = matchStart;
+	     newSW->seqEnd = matchStart + finalMatchEnd;
+	     newSW->queryStart = queryStart;
+	     newSW->queryEnd = queryStart + finalQueryEnd;
+	     newSW->reverseAlignScript = reverseAlignScript;
 	   }
-	   if (newSW->eValue > worstEvalue)
-	     worstEvalue = newSW->eValue;
-	   newSW->next = NULL;
-	   if (NULL == SWAligns) {
-	     SWAligns = newSW;
-	     lastAlign = newSW;
+	   if (alignIndex > 0) {
+	     newScore = Nlm_Nint(((Nlm_FloatHi) search->result_struct->results[index]->hsp_array[alignIndex].score)/localScalingFactor);               
+	     newEvalue = search->result_struct->results[index]->hsp_array[alignIndex].e_value;               
 	   }
-	   else {
-	     lastAlign->next = newSW;
-	     lastAlign = lastAlign->next;
+	   newSW->score = bestScore;
+	   newSW->scoreThisAlign = newScore;
+	   newSW->eValue = bestEvalue;
+	   newSW->eValueThisAlign = newEvalue;
+	   newSW->isFirstAlignment = ((!foundFirstAlignment) || (alignIndex > 0));
+	   newSW->Lambda = kbp-> Lambda * localScalingFactor;
+	   newSW->logK = kbp->logK;
+	   newSW->subject_index = thisMatch->subject_id;
+	   newSW->subject_id = SeqIdSetDup(bsp_db->id);
+	   if (!SmithWaterman) {
+	     newSW->seqAlign = remainingSeqAligns;
+	     remainingSeqAligns = remainingSeqAligns->next;
+	     newSW->seqAlign->next = NULL;
 	   }
-	 }
-	 else {   /*SWPurging is current state*/
-	   if (!foundFirstAlignment) {
-	     OneMatchSWAligns = newSW;
-	     firstAlignmentThisMatch = newSW;
-	     lastAlign = newSW;
-	     lastAlign->next = NULL;
-	   }
-	   else {
-	     lastAlign->next = newSW;
-	     lastAlign = lastAlign->next;
-	     lastAlign->next = NULL;
-	   }
-	 }
-	 /*alignments may not be in order of Evalue*/
-	 if (foundFirstAlignment && (!SmithWaterman))
-	   for(thisAlignment = firstAlignmentThisMatch; 
-	       thisAlignment != NULL; thisAlignment = thisAlignment->next)
-	     thisAlignment->eValue = bestEvalue;
-	 foundFirstAlignment = TRUE;
-	 if (SmithWaterman && ((SWPurging != currentState) || (bestEvalue < maxEInHeap))) {
-	   for(f = queryStart; f < (queryStart+ finalQueryEnd); f++) {
-	     if (0 == numForbidden[f] ) {
-	       numForbidden[f] = 1;
-	       forbiddenRanges[f][0] = matchStart;
-	       forbiddenRanges[f][1] = matchStart + finalMatchEnd - 1;
+	   if (SWPurging != currentState) {
+	     numAligns++;
+	     if (newSW->isFirstAlignment) {
+	       numMatches++;
+	       firstAlignmentThisMatch = newSW;
+	     }
+	     if (newSW->eValue > worstEvalue)
+	       worstEvalue = newSW->eValue;
+	     newSW->next = NULL;
+	     if (NULL == SWAligns) {
+	       SWAligns = newSW;
+	       lastAlign = newSW;
 	     }
 	     else {
-	       tempForbidden = (Int4*) MemNew(2 * (numForbidden[f] + 1) * sizeof(Int4));
-	       for(tempIndex = 0; tempIndex < (2 * numForbidden[f]); tempIndex++)
-		 tempForbidden[tempIndex] = forbiddenRanges[f][tempIndex];
-	       tempForbidden[tempIndex] = matchStart;
-	       tempForbidden[tempIndex + 1] = matchStart + finalMatchEnd;
-	       numForbidden[f]++;
-	       MemFree(forbiddenRanges[f]);
-	       forbiddenRanges[f] = tempForbidden;
+	       lastAlign->next = newSW;
+	       lastAlign = lastAlign->next;
 	     }
-	   }    
-	 }
-       }  /*end E test*/
+	   }
+	   else {   /*SWPurging is current state*/
+	     if (newSW->isFirstAlignment) {
+	       OneMatchSWAligns = newSW;
+	       firstAlignmentThisMatch = newSW;
+	       lastAlign = newSW;
+	       lastAlign->next = NULL;
+	     }
+	     else {
+	       lastAlign->next = newSW;
+	       lastAlign = lastAlign->next;
+	       lastAlign->next = NULL;
+	     }
+	   }
+	   /*alignments may not be in order of Evalue*/
+	   /*if (foundFirstAlignment && (!SmithWaterman))
+	     for(thisAlignment = firstAlignmentThisMatch; 
+	     thisAlignment != NULL; thisAlignment = thisAlignment->next)
+	     thisAlignment->eValue = bestEvalue;*/
+	   foundFirstAlignment = TRUE;
+	   if (SmithWaterman && ((SWPurging != currentState) || (bestEvalue < maxEInHeap))) {
+	     for(f = queryStart; f < (queryStart+ finalQueryEnd); f++) {
+	       if (0 == numForbidden[f] ) {
+		 numForbidden[f] = 1;
+		 forbiddenRanges[f][0] = matchStart;
+		 forbiddenRanges[f][1] = matchStart + finalMatchEnd - 1;
+	       }
+	       else {
+		 tempForbidden = (Int4*) MemNew(2 * (numForbidden[f] + 1) * sizeof(Int4));
+		 for(tempIndex = 0; tempIndex < (2 * numForbidden[f]); tempIndex++)
+		   tempForbidden[tempIndex] = forbiddenRanges[f][tempIndex];
+		 tempForbidden[tempIndex] = matchStart;
+		 tempForbidden[tempIndex + 1] = matchStart + finalMatchEnd;
+		 numForbidden[f]++;
+		 MemFree(forbiddenRanges[f]);
+		 forbiddenRanges[f] = tempForbidden;
+	       }
+	     }
+	   }
+	 } /*end for loop on alignments*/
+       }   /*end E test*/
        terminationTest = FALSE;
        if (SmithWaterman) {
 	 /*continue to look for multiple matches only if there is > 1
 	   hsp*/
 	 terminationTest = ((newEvalue <= search->pbp->cutoff_e) && 
 			    (thisMatch->hspcnt > 1)
-	    && ((currentState != SWPurging) || (bestEvalue < maxEInHeap)));
-       }
-       else {
-	 hspIndex++;
-	 if (hspIndex < thisMatch->hspcnt)
-	   thisHSP = search->result_struct->results[index]->hsp_array[hspIndex];
-	 terminationTest = ((newEvalue <= search->pbp->cutoff_e) && 
-			    (hspIndex < thisMatch->hspcnt)
 	    && ((currentState != SWPurging) || (bestEvalue < maxEInHeap)));
        }
      } while (terminationTest);
@@ -2064,8 +2090,11 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      SWAligns = convertFromHeapToList(HeapArray, heapSize, &numAligns);
    if (SWAligns != NULL) {
      pro_quicksort_hits(numAligns, &SWAligns);
-     results = newConvertSWalignsToSeqAligns(SWAligns, query, search->query_id,
+     if (SmithWaterman)
+       results = newConvertSWalignsToSeqAligns(SWAligns, query, search->query_id,
                                              search->pbp->discontinuous);
+     else
+       results = concatenateListOfSeqAligns(SWAligns);
    }
    if (HeapArray != NULL)
      MemFree(HeapArray);
@@ -2076,6 +2105,12 @@ SeqAlignPtr RedoAlignmentCore(BlastSearchBlkPtr search,
      MemFree(numForbidden);
    }
    if (adjustParameters) {
+     if (!SmithWaterman)
+       search->pbp->gap_x_dropoff_final =  options->gap_x_dropoff_final *
+	 	       NCBIMATH_LN2/holdkbp->Lambda;;
+     search->pbp->gap_open = gapOpen;
+     search->pbp->gap_extend = gapExtend;
+     search->pbp->decline_align = gapDecline;
      if (search->positionBased) {
        search->sbp->posMatrix = holdMatrix;
        search->sbp->kbp_gap_psi[0] = holdkbp;

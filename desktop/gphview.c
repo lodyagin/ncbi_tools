@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.59 $
+* $Revision: 6.62 $
 *
 * File Description:
 *
@@ -3839,7 +3839,7 @@ static void VisitAndDrawBioseqs (
   if (state == NULL) return;
   CreateGraphicViewFromBsp (bsp, NULL, state->scale, &state->ceiling,
                             state->topLevelSegment, state->AP,
-                            state->FP, state->overrideLayout);
+                            state->FP, state->overrideLayout, NULL);
   state->ceiling -= 25;
 }
 
@@ -3875,6 +3875,10 @@ static void PopulateAsn2GphGraphic (
   CharPtr      appearanceName;
   CharPtr      filterName;
   CharPtr      layoutName;
+  CharPtr      alignScoreName;
+  CharPtr      alignScoreCutoff;
+  GraphicViewExtras gvExtras;
+
   ViewerConfigsPtr  myVCP;
 
   MultiBioseqDrawState drawState;
@@ -3972,6 +3976,31 @@ static void PopulateAsn2GphGraphic (
     layoutName = NULL; /* no need to pass a dummy string for an optional value */
   }
 
+  MemSet ((Pointer) &gvExtras, 0, sizeof (GraphicViewExtras));
+  if (GetAppProperty("GPHVIEWSCOREALIGNS") != NULL) {
+  /*
+    i = GetValue (bvp->newGphAlnScore) - 1;
+    nameList = GetAlnScoreNameList ();
+    if (i < GetAlnScoreCount ()) {
+      alignScoreName = nameList [i];
+    } else {
+      alignScoreName = nameList[0];
+    }
+    gvExtras.alignScoreName = alignScoreName;
+  */
+    i = GetValue (bvp->newGphAlnCutoff) - 1;
+    nameList = GetAlnScoreCutoffList ();
+    if (i < GetAlnScoreCutoffCount ()) {
+      alignScoreCutoff = nameList [i];
+    } else {
+      alignScoreCutoff = nameList[0];
+    }
+    gvExtras.alignScoreCutoff = alignScoreCutoff;
+  } else {
+    gvExtras.alignScoreName = "";
+    gvExtras.alignScoreCutoff = "";
+  }
+
   if (!bvp->viewWholeEntity) {
     sep = SeqMgrGetSeqEntryForData (bsp);
     entityID = ObjMgrGetEntityIDForChoice (sep);
@@ -3996,10 +4025,10 @@ static void PopulateAsn2GphGraphic (
      vn.choice = SEQLOC_INT;
      vn.data.ptrvalue = &si;
 
-     bvp->pict = CreateGraphicView (bsp, &vn, scaleX, appearanceName, filterName, layoutName);
+     bvp->pict = CreateGraphicView (bsp, &vn, scaleX, appearanceName, filterName, layoutName, &gvExtras);
 }
 #else
-     bvp->pict = CreateGraphicView (bsp, NULL, scaleX, appearanceName, filterName, layoutName);
+     bvp->pict = CreateGraphicView (bsp, NULL, scaleX, appearanceName, filterName, layoutName, &gvExtras);
 #endif
 
      if (entityID > 0) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -705,7 +705,8 @@ Boolean LIBCALL VSMAddMenu (WindoW w, Int2 menutype)
                           subtype != FEATDEF_virion &&
                           subtype != FEATDEF_mutation &&
                           subtype != FEATDEF_allele &&
-                          subtype != FEATDEF_site_ref) {
+                          subtype != FEATDEF_site_ref &&
+                          subtype != FEATDEF_gap) {
                         i = CommandItem (sub2, ompp->proclabel, VSeqMgrStdMenuProc);
                         SetObjectExtra(i, (VoidPtr)ompp, NULL);
                         ctr++;

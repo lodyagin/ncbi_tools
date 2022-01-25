@@ -1,4 +1,6 @@
-/* $Id: pattern1.c,v 6.14 2003/03/06 21:33:13 madden Exp $
+static char const rcsid[] = "$Id: pattern1.c,v 6.17 2003/08/06 15:11:17 dondosha Exp $";
+
+/* $Id: pattern1.c,v 6.17 2003/08/06 15:11:17 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +33,18 @@ Original Author: Zheng Zhang
  
 Contents: central pattern matching routines for PHI-BLAST and pseed3
 
-$Revision: 6.14 $ 
+$Revision: 6.17 $ 
 
 $Log: pattern1.c,v $
+Revision 6.17  2003/08/06 15:11:17  dondosha
+Fixed search for pattern remainder when it starts from a base non-divisible by 4
+
+Revision 6.16  2003/05/30 17:25:37  coulouri
+add rcsid
+
+Revision 6.15  2003/05/13 16:02:53  coulouri
+make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
 Revision 6.14  2003/03/06 21:33:13  madden
 Move big arrays from stack to heap
 
@@ -220,7 +231,7 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
 		patternSearch->inputPatternMasked[j++] = allone; 
 		if (j >= MaxP) {
                   BlastConstructErrorMessage("init_pattern", "pattern too long", 1, error_return);
-		  /*ErrPostEx(SEV_FATAL, 0, 0, "pattern too long\n");*/
+		  /*ErrPostEx(SEV_FATAL, 1, 0, "pattern too long\n");*/
 		  return(-1);
 		}
 	      }
@@ -266,7 +277,7 @@ Int4 LIBCALL init_pattern(Uint1 *pattern, Boolean is_dna, patternSearchItems * p
             add its probability to positionProbability*/
 	  while ((c=pattern[++i]) != ']') { /*end of set*/
             if ((c < 'A') || (c > 'Z') || (c == '\0')) {
-	      /* ErrPostEx(SEV_FATAL, 0, 0, "your pattern description has a non-alphabetic character inside a bracket\n"); */
+	      /* ErrPostEx(SEV_FATAL, 1, 0, "your pattern description has a non-alphabetic character inside a bracket\n"); */
               BlastConstructErrorMessage("init_pattern", "your pattern description has a non-alphabetic character inside a bracket", 1, error_return);
               return(-1);
 	    }
@@ -376,7 +387,7 @@ static Int4 lenof(Int4 s, Int4 mask)
 	if ((mask >> rightOne) %2  == 1) 
 	  rightMaskOnly = rightOne;
     }
-    ErrPostEx(SEV_FATAL, 0, 0, "wrong\n");
+    ErrPostEx(SEV_FATAL, 1, 0, "wrong\n");
     return(-1);
 }
 
@@ -486,25 +497,28 @@ static Int4 find_hitsS_DNA(Int4Ptr hitArray, Uint1Ptr seq, Char pos, Int4 len,
   Int4 j; /*index on suffixRemnant*/
   Int4 twiceNumHits = 0; /*twice the number of hits*/
 
-
   mask2 = patternSearch->match_mask*BITS_PACKED_PER_WORD+15; 
   maskShiftPlus1 = (patternSearch->match_mask << 1)+1;
+
   if (pos != 0) {
+    pos = 4 - pos;
     prefixMatchedBitPattern = ((patternSearch->match_mask * ((1 << (pos+1))-1)*2) +
 	 (1 << (pos+1))-1)& patternSearch->DNAwhichSuffixPosPtr[seq[0]];
     seq++;
+    end = (len-pos)/4; 
+    remain = (len-pos) % 4;
   } 
   else {
     prefixMatchedBitPattern = maskShiftPlus1;
+    end = len/4; 
+    remain = len % 4;
   }
-  end = (len-pos)/4; 
-  remain = (len-pos) % 4;
   for (i = 0; i < end; i++) {
     if (tmp = (prefixMatchedBitPattern & patternSearch->DNAwhichPrefixPosPtr[seq[i]])) {
       for (j = 0; j < 4; j++) {
 	if (tmp & patternSearch->match_mask) {
-	  hitArray[twiceNumHits++] = pos+i*4+j;
-	  hitArray[twiceNumHits++] = pos+i*4+j-lenof(tmp & patternSearch->match_mask, 
+	  hitArray[twiceNumHits++] = i*4+j + pos;
+	  hitArray[twiceNumHits++] = i*4+j + pos -lenof(tmp & patternSearch->match_mask, 
 					  patternSearch->match_mask)+1;
 	}
 	tmp = (tmp << 1);
@@ -512,16 +526,15 @@ static Int4 find_hitsS_DNA(Int4Ptr hitArray, Uint1Ptr seq, Char pos, Int4 len,
     }
     prefixMatchedBitPattern = (((prefixMatchedBitPattern << 4) | mask2) & patternSearch->DNAwhichSuffixPosPtr[seq[i]]);
   }
-  suffixRemnant = seq[i]; 
-  j = 0; 
-  while (j < remain) {
-    prefixMatchedBitPattern =  ((prefixMatchedBitPattern << 1) | maskShiftPlus1) & patternSearch->whichPositionPtr[seq[i]];
-    if (prefixMatchedBitPattern & patternSearch->match_mask) { 
-      hitArray[twiceNumHits++] = pos+i*4+j;
-      hitArray[twiceNumHits++] = pos+i*4+j-lenof(prefixMatchedBitPattern, patternSearch->match_mask)+1;
-    }
-    j++;
-    suffixRemnant <<= 2;
+  /* In the last byte check bits only up to 'remain' */
+  if (tmp = (prefixMatchedBitPattern & patternSearch->DNAwhichPrefixPosPtr[seq[i]])) {
+     for (j = 0; j < remain; j++) {
+        if (tmp & patternSearch->match_mask) {
+           hitArray[twiceNumHits++] = i*4+j + pos;
+           hitArray[twiceNumHits++] = i*4+j + pos - lenof(tmp & patternSearch->match_mask, patternSearch->match_mask)+1;
+        }
+        tmp = (tmp << 1);
+     }
   }
   return twiceNumHits;
 }
@@ -678,7 +691,7 @@ static Int4 lenofL(Int4 *s, Int4 *mask, patternSearchItems *patternSearch)
 	  firstOneInMask = wordIndex*BITS_PACKED_PER_WORD+bitIndex;
       }
     }
-    ErrPostEx(SEV_FATAL, 0, 0, "wrong\n");
+    ErrPostEx(SEV_FATAL, 1, 0, "wrong\n");
     return(-1);
 }
 
@@ -1372,7 +1385,7 @@ static void get_patLL(Uint1 *seq, Int4 len, Int4 *hitArray,
 	hitArray[i] = hitArray[i+j];
       return;
     }
-    ErrPostEx(SEV_FATAL, 0, 0, "getLL wrong\n");
+    ErrPostEx(SEV_FATAL, 1, 0, "getLL wrong\n");
     exit(1);
 }
 

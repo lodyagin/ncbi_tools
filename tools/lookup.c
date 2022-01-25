@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: lookup.c,v 6.56 2003/05/30 17:25:36 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -51,7 +53,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +69,9 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.56  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.55  2002/10/03 14:43:44  dondosha
 * Bug fix for 2 sequences megablast
 *

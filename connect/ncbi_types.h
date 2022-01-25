@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/*  $Id: ncbi_types.h,v 6.3 2003/04/09 19:05:58 siyan Exp $
+/*  $Id: ncbi_types.h,v 6.9 2003/08/28 19:28:47 ucko Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,6 +47,11 @@
  *
  */
 
+/* In the C++ Toolkit, this includes ncbiconf.h and lets us know
+ * whether we need to hack around WorkShop's stupidity.
+ */
+#include <connect/connect_export.h>
+
 #include <stddef.h>
 
 
@@ -67,6 +72,14 @@ typedef struct {
     unsigned int sec;  /* seconds (truncated to the platf.-dep. max. limit) */
     unsigned int usec; /* microseconds (always truncated by mod. 1,000,000) */
 } STimeout;
+
+#if defined(__cplusplus)  &&  !defined(NCBI_COMPILER_WORKSHOP)  &&  0
+static const STimeout *const kDefaultTimeout  = (const STimeout*)(-1);
+static const STimeout *const kInfiniteTimeout = (const STimeout*)( 0);
+#else
+#  define                    kDefaultTimeout   ((const STimeout*)(-1))
+#  define                    kInfiniteTimeout  ((const STimeout*)( 0))
+#endif /*__cplusplus*/
 
 
 /* Aux. enum to set/unset/default various features
@@ -95,6 +108,27 @@ typedef unsigned int TNCBI_Time;
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_types.h,v $
+ * Revision 6.9  2003/08/28 19:28:47  ucko
+ * Use macros for kXxxTimeout on all platforms (safer, inasmuch as the C
+ * include directory may be first).
+ *
+ * Revision 6.8  2003/08/28 18:47:25  ucko
+ * Go back to previous WorkShop hack, but include connect_export.h (for
+ * ncbiconf.h) so that it actually works reliably this time around.
+ *
+ * Revision 6.7  2003/08/27 12:32:25  ucko
+ * Yet another attempt to work around the WorkShop lossage with k*Timeout.
+ *
+ * Revision 6.6  2003/08/27 02:00:11  ucko
+ * Sigh... WorkShop still mishandles kXxxTimeout in some cases, so fall
+ * back to making them macros.
+ *
+ * Revision 6.5  2003/08/26 18:55:13  lavr
+ * Added "static" to k...Timeout to make Sun WorkShop compiler happier
+ *
+ * Revision 6.4  2003/08/25 14:36:26  lavr
+ * +kDefaultTimeout, +kInfiniteTimeout
+ *
  * Revision 6.3  2003/04/09 19:05:58  siyan
  * Added doxygen support
  *

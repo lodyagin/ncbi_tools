@@ -1,4 +1,4 @@
-/*  $Id: ncbi_memory_connector.c,v 6.3 2002/10/22 15:11:24 lavr Exp $
+/*  $Id: ncbi_memory_connector.c,v 6.5 2003/05/31 05:15:39 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,18 +31,6 @@
  *   See <connect/ncbi_connector.h> for the detailed specification of
  *   the connector's methods and structures.
  *
- * --------------------------------------------------------------------------
- * $Log: ncbi_memory_connector.c,v $
- * Revision 6.3  2002/10/22 15:11:24  lavr
- * Zero connector's handle to crash if revisited
- *
- * Revision 6.2  2002/04/26 16:32:49  lavr
- * Added setting of default timeout in meta-connector's setup routine
- *
- * Revision 6.1  2002/02/20 19:14:08  lavr
- * Initial revision
- *
- * ==========================================================================
  */
 
 #include <connect/ncbi_buffer.h>
@@ -71,31 +59,29 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-    static const char* s_VT_GetType(CONNECTOR       connector);
-    static EIO_Status  s_VT_Open   (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Wait   (CONNECTOR       connector,
-                                    EIO_Event       event,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Write  (CONNECTOR       connector,
-                                    const void*     buf,
-                                    size_t          size,
-                                    size_t*         n_written,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Flush  (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Read   (CONNECTOR       connector,
-                                    void*           buf,
-                                    size_t          size,
-                                    size_t*         n_read,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Status (CONNECTOR       connector,
-                                    EIO_Event       dir);
-    static EIO_Status  s_VT_Close  (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static void        s_Setup     (SMetaConnector* meta,
-                                    CONNECTOR       connector);
-    static void        s_Destroy   (CONNECTOR       connector);
+    static const char* s_VT_GetType (CONNECTOR       connector);
+    static EIO_Status  s_VT_Open    (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Wait    (CONNECTOR       connector,
+                                     EIO_Event       event,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Write   (CONNECTOR       connector,
+                                     const void*     buf,
+                                     size_t          size,
+                                     size_t*         n_written,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Read    (CONNECTOR       connector,
+                                     void*           buf,
+                                     size_t          size,
+                                     size_t*         n_read,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Status  (CONNECTOR       connector,
+                                     EIO_Event       dir);
+    static EIO_Status  s_VT_Close   (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static void        s_Setup      (SMetaConnector* meta,
+                                     CONNECTOR       connector);
+    static void        s_Destroy    (CONNECTOR       connector);
 #  ifdef IMPLEMENTED__CONN_WaitAsync
     static EIO_Status s_VT_WaitAsync(void*                   connector,
                                      FConnectorAsyncHandler  func,
@@ -106,6 +92,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 
+/*ARGSUSED*/
 static const char* s_VT_GetType
 (CONNECTOR connector)
 {
@@ -113,6 +100,7 @@ static const char* s_VT_GetType
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Open
 (CONNECTOR       connector,
  const STimeout* timeout)
@@ -125,6 +113,7 @@ static EIO_Status s_VT_Open
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Write
 (CONNECTOR       connector,
  const void*     buf,
@@ -152,6 +141,7 @@ static EIO_Status s_VT_Write
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Read
 (CONNECTOR       connector,
  void*           buf,
@@ -177,17 +167,10 @@ static EIO_Status s_VT_Read
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Wait
 (CONNECTOR       connector,
  EIO_Event       event,
- const STimeout* timeout)
-{
-    return eIO_Success;
-}
-
-
-static EIO_Status s_VT_Flush
-(CONNECTOR       connector,
  const STimeout* timeout)
 {
     return eIO_Success;
@@ -212,6 +195,7 @@ static EIO_Status s_VT_Status
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Close
 (CONNECTOR       connector,
  const STimeout* timeout)
@@ -231,7 +215,7 @@ static void s_Setup
     CONN_SET_METHOD(meta, open,       s_VT_Open,      connector);
     CONN_SET_METHOD(meta, wait,       s_VT_Wait,      connector);
     CONN_SET_METHOD(meta, write,      s_VT_Write,     connector);
-    CONN_SET_METHOD(meta, flush,      s_VT_Flush,     connector);
+    CONN_SET_METHOD(meta, flush,      0,              0);
     CONN_SET_METHOD(meta, read,       s_VT_Read,      connector);
     CONN_SET_METHOD(meta, status,     s_VT_Status,    connector);
     CONN_SET_METHOD(meta, close,      s_VT_Close,     connector);
@@ -274,3 +258,25 @@ extern CONNECTOR MEMORY_CreateConnector(MT_LOCK lock)
 
     return ccc;
 }
+
+
+/*
+ * --------------------------------------------------------------------------
+ * $Log: ncbi_memory_connector.c,v $
+ * Revision 6.5  2003/05/31 05:15:39  lavr
+ * Add ARGSUSED where args are meant to be unused, remove Flush
+ *
+ * Revision 6.4  2003/05/14 03:53:13  lavr
+ * Log moved to end
+ *
+ * Revision 6.3  2002/10/22 15:11:24  lavr
+ * Zero connector's handle to crash if revisited
+ *
+ * Revision 6.2  2002/04/26 16:32:49  lavr
+ * Added setting of default timeout in meta-connector's setup routine
+ *
+ * Revision 6.1  2002/02/20 19:14:08  lavr
+ * Initial revision
+ *
+ * ==========================================================================
+ */

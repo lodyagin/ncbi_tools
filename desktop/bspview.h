@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.48 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
@@ -100,7 +100,7 @@ typedef struct bioseqviewdata {
   PopuP           newNumControl;
   PopuP           newGridControl;
 
-  // for new sequence and alignment viewers
+  /* for new sequence and alignment viewers */
   Int4            LineHeight, LineSpace, CharHeight, CharWidth, BlocksAtLine, CharsAtLine, TotalLines, TargetRow;
   Int2            SeqStartPosX;  /* Draw Sequence from this x pos */
   SeqAlignPtr     salp;
@@ -144,6 +144,8 @@ typedef struct bioseqviewdata {
   PopuP           newGphStyle;
   PopuP           newGphFilter;
   PopuP           newGphScale;
+  PopuP           newGphAlnScore;
+  PopuP           newGphAlnCutoff;
   ChoicE          newGphLayout;
 
   ValNodePtr      slp_list;

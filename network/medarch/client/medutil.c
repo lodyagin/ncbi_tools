@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,12 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.10  2003/10/01 13:08:33  bazhin
+* Modified ten_authors() function to handle consortiums properly.
+*
+* Revision 6.9  2003/09/10 18:47:28  bazhin
+* "print_pub()" function now is aware of consortiums.
+*
 * Revision 6.8  2003/03/25 19:14:59  bazhin
 * Function "ten_authors()" became public (from static).
 *
@@ -171,14 +177,22 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
 	      
 	      if (art->authors->choice == 1) {
 		 	aup = v->data.ptrvalue;
-		 	if (aup != NULL) {
-		    	namestd = aup->name->data;
-		    	if (namestd->names[0]) {
-		    		last = namestd->names[0];
-		    	}
-		    	if (namestd->names[4]) {
-		    		first = namestd->names[4];
-		    	}
+		 	if (aup != NULL)
+			{
+				if(aup->name->choice == 2)
+				{
+			    		namestd = aup->name->data;
+				    	if (namestd->names[0])
+					{
+			    			last = namestd->names[0];
+				    	}
+			    		if (namestd->names[4])
+					{
+				    		first = namestd->names[4];
+				    	}
+				}
+				else if(aup->name->choice == 5)
+					last = aup->name->data;
 		 	}
 	      } else  {
 		 	first = "";
@@ -219,7 +233,7 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
 		vol = "no volume number";
 	}
 	if (auth) {
-		ErrPostEx(SEV_WARNING, ERR_REFERENCE_MedlineMatchIgnored,  
+		ErrPostEx(SEV_ERROR, ERR_REFERENCE_MedlineMatchIgnored,  
     	"Too many author name differences: %ld|%s %s|%s|(%d)|%s|%s", 
     				(long) muid, last, first, s_title, (int) year, vol, page);
     	return;
@@ -248,93 +262,188 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
     return;
 }
 
-/*--------------------------- ten_authors() ---------------------------*/
-
-/****************************************************************************
-*    ten_authors   
-* 											
-****************************************************************************/
-Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp) 
+/**********************************************************/
+static Boolean ten_authors_compare(CitArtPtr capold, CitArtPtr capnew)
 {
-	Int2 num, numnew, i, match, n;
-	ValNodePtr v;
-	CharPtr ptr, mu[10];
-	AuthorPtr	aup;
-    NameStdPtr  namestd;
-    Boolean		no_compare = TRUE, ret = TRUE;
-		
-		if (art == NULL || art_tmp == NULL) {
-			return TRUE;
-		}
-		numnew = 0;
-		num = 0;
-		match = 0;
-		if (art->authors != NULL)
-		{
-			for (v = art->authors->names; v != NULL;
-									v = v->next, num++);
-		}
-		if (art_tmp->authors != NULL)
-		{
-			for (v = art_tmp->authors->names; v != NULL && numnew < 10;
-								v = v->next, numnew++) {
-				aup = v->data.ptrvalue;
-				if(aup->name->choice == 2)
-				{
-					namestd = aup->name->data;
-					mu[numnew] = namestd->names[0];
-				}
-				else if(aup->name->choice == 5)
-					mu[numnew] = aup->name->data;
-			}
-		}
+    ValNodePtr old;
+    ValNodePtr new;
+    ValNodePtr vnp;
+    CharPtr    namesnew[10];
+    Int4       numold;
+    Int4       numnew;
+    Int4       match;
+    Int4       i;
 
-		if (art->authors != NULL && art_tmp->authors != NULL) {
-			if (art->authors->choice == 1 && art_tmp->authors->choice == 1) {
-				no_compare = FALSE;
-				for (v = art->authors->names; v != NULL; v = v->next) {
-					aup = v->data.ptrvalue;
-					if(aup->name->choice == 2)
-					{
-						namestd = aup->name->data;
-						ptr = namestd->names[0];
-					}
-					else if(aup->name->choice == 5)
-						ptr = aup->name->data;
-					else
-						continue;
-					for (i = 0; i < numnew; i++) {
-						if (StringICmp(ptr, mu[i]) == 0) {
-							match++;
-							break;
-						}
-					}	
-				}
-			} 
-		}
-		if (no_compare) {
-			ret = TRUE;  /* replace */
-			if (num == 0 && numnew == 0) {
-					ret = TRUE;			/* replace */
-			} else if (num == 0) {   /* no original authors - replace*/
-				ret = TRUE;
-			} else if (numnew == 0) { /* no Medline authors -  don't replace*/
-				ret = FALSE;
-			}
-		} else {
-				n = num < numnew?num:numnew;
-				if (n > 3*match) { 
-					ret = FALSE;
-				}
-		}
-		if (ret && (num > 10 || numnew == 0))     /* original article has > 10 authors */
-		{
-			AuthListFree(art_tmp->authors);  /* keep original authors */
-			art_tmp->authors = art->authors;
-			art->authors = NULL;
-		}
-		return ret;
+    if(capold == NULL || capold->authors == NULL ||
+       capold->authors->names == NULL)
+        return(TRUE);
+    if(capnew == NULL || capnew->authors == NULL ||
+       capnew->authors->names == NULL)
+        return(FALSE);
+    if(capold->authors->choice != capnew->authors->choice ||
+       capold->authors->choice == 1)
+        return(TRUE);
+
+    old = capold->authors->names;
+    new = capnew->authors->names;
+
+    for(numnew = 0, vnp = old; vnp != NULL; vnp = vnp->next)
+        if(vnp->data.ptrvalue != NULL)
+            numnew++;
+
+    for(numold = 0, vnp = new; vnp != NULL && numold < 10; vnp = vnp->next)
+        if(vnp->data.ptrvalue != NULL)
+            namesnew[numold++] = vnp->data.ptrvalue;
+
+    for(match = 0, vnp = old; vnp != NULL; vnp = vnp->next)
+    {
+        if(vnp->data.ptrvalue == NULL)
+            continue;
+
+        for(i = 0; i < numnew; i++)
+        {
+            if(StringICmp(vnp->data.ptrvalue, namesnew[i]) == 0)
+            {
+                match++;
+                break;
+            }
+        }
+    }
+
+    i = (numold < numnew) ? numold : numnew;
+    if(i > 3 * match)
+        return(FALSE);
+
+    if(numold > 10)
+    {
+        AuthListFree(capnew->authors);
+        capnew->authors = capold->authors;
+        capold->authors = NULL;
+    }
+    return(TRUE);
 }
+
+/**********************************************************/
+Boolean ten_authors(CitArtPtr art, CitArtPtr art_tmp)
+{
+    NameStdPtr namestd;
+    ValNodePtr v;
+    AuthorPtr  aup;
+    CharPtr    mu[10];
+    CharPtr    oldcon;
+    CharPtr    newcon;
+    Int2       num;
+    Int2       numnew;
+    Int2       i;
+    Int2       match;
+
+    if(art_tmp == NULL)
+        return(FALSE);
+    if(art_tmp->authors == NULL || art_tmp->authors->names == NULL)
+    {
+        if(art != NULL && art->authors != NULL)
+        {
+            if(art_tmp->authors != NULL)
+                AuthListFree(art_tmp->authors);
+            art_tmp->authors = art->authors;
+            art->authors = NULL;
+        }
+        return(TRUE);
+    }
+    if(art == NULL || art->authors == NULL || art->authors->names == NULL ||
+       art->authors->choice != art_tmp->authors->choice)
+        return(TRUE);
+
+    if(art->authors->choice != 1)
+        return(ten_authors_compare(art, art_tmp));
+
+    oldcon = NULL;
+    for(num = 0, v = art->authors->names; v != NULL; v = v->next)
+    {
+        aup = v->data.ptrvalue;
+        if(aup->name->choice == 2)
+            num++;
+        else if(aup->name->choice == 5)
+            oldcon = aup->name->data;
+    }
+
+    for(newcon = NULL, v = art_tmp->authors->names; v != NULL; v = v->next)
+    {
+        aup = v->data.ptrvalue;
+        if(aup->name->choice == 5)
+        {
+            newcon = aup->name->data;
+            break;
+        }
+    }
+
+    if(oldcon != NULL)
+    {
+        if(newcon == NULL)
+        {
+            ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoConsortAuthors,
+                      "Publication as returned by MedArch lacks consortium authors of the original publication: \"%s\".",
+                      oldcon);
+            aup = AuthorNew();
+            aup->name = PersonIdNew();
+            aup->name->choice = 5;
+            aup->name->data = StringSave(oldcon);
+            v = ValNodeNew(NULL);
+            v->data.ptrvalue = aup;
+            v->next = art_tmp->authors->names;
+            art_tmp->authors->names = v;
+            newcon = oldcon;
+        }
+        else if(StringICmp(oldcon, newcon) != 0)
+        {
+            ErrPostEx(SEV_WARNING, ERR_REFERENCE_DiffConsortAuthors,
+                      "Consortium author names differ. Original is \"%s\". MedArch's is \"%s\".",
+                      oldcon, newcon);
+        }
+        if(num == 0)
+            return(TRUE);
+    }
+
+    numnew = 0;
+    for(v = art_tmp->authors->names; v != NULL && numnew < 10; v = v->next)
+    {
+        aup = v->data.ptrvalue;
+        if(aup->name->choice != 2)
+            continue;
+        namestd = aup->name->data;
+        mu[numnew++] = namestd->names[0];
+    }
+
+    for(match = 0, v = art->authors->names; v != NULL; v = v->next)
+    {
+        aup = v->data.ptrvalue;
+        if(aup->name->choice != 2)
+            continue;
+
+        namestd = aup->name->data;
+        for(i = 0; i < numnew; i++)
+        {
+            if(StringICmp(namestd->names[0], mu[i]) == 0)
+            {
+                match++;
+                break;
+            }
+        }
+    }
+
+    i = (num < numnew) ? num : numnew;
+    if(i > 3 * match)
+        return(FALSE);
+
+    if(num > 10 || numnew == 0)
+    {
+        AuthListFree(art_tmp->authors);
+        art_tmp->authors = art->authors;
+        art->authors = NULL;
+    }
+    return(TRUE);
+}
+
 /*****************************************************************************
 *
 *   FindPub

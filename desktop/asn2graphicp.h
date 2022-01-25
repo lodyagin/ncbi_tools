@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.37 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -227,7 +227,7 @@ typedef enum endPointType {
 
 typedef struct relevantFeatureItem {
   Int4            Left, Right;
-  Boolean         plusstrand;
+  Uint1           featstrand;
   EndPointType    LeftEnd;
   EndPointType    RightEnd;
   CharPtr         ContentLabel;
@@ -236,6 +236,7 @@ typedef struct relevantFeatureItem {
   Int2            numivals;
   Uint2           entityID, itemType;
   Uint4           itemID;
+  Uint1           circularSpanningOrigin;   /* on a bioseq w/ Circular topology, this feature crosses the origin */
   SeqAnnotPtr     sap; /* was this feature found in a named SeqAnnot table?  0 if not, else a pointer to the SeqAnnot */
 } RelevantFeatureItem, PNTR RelevantFeatureItemPtr;
 
@@ -281,7 +282,8 @@ NLM_EXTERN SegmenT CreateGraphicViewFromBsp (
   SegmenT topLevel,
   AppearancePtr AP,
   FilterPtr FP,
-  LayoutAlgorithm overrideLayout
+  LayoutAlgorithm overrideLayout,
+  GraphicViewExtrasPtr extras
 );
 
 /* If the same Bioseq will be rendered multiple times, it will be more efficient to use these functions */
@@ -297,7 +299,8 @@ NLM_EXTERN SegmenT CreateGraphicViewInternal (
   SegmenT topLevel,
   AppearancePtr AP,
   FilterPtr FP,
-  LayoutAlgorithm overrideLayout
+  LayoutAlgorithm overrideLayout,
+  GraphicViewExtrasPtr extras
 );
 
 NLM_EXTERN RelevantFeaturesPtr CollectFeatures (BioseqPtr bsp);
@@ -322,6 +325,8 @@ NLM_EXTERN void AddAppearanceItemToAppearance (AppearanceItemPtr AIP, Appearance
 NLM_EXTERN Uint2 GetAppearanceCount (void);
 NLM_EXTERN Uint2 GetFilterCount (void);
 NLM_EXTERN Uint2 GetLayoutCount (void);
+NLM_EXTERN Uint2 GetAlnScoreCount (void);
+NLM_EXTERN Uint2 GetAlnScoreCutoffCount (void);
 
 
 #ifdef __cplusplus

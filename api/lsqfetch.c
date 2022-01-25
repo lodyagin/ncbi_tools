@@ -37,6 +37,12 @@
 * Date     Name        Description of modification
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.16  2003/08/27 21:24:05  kans
+* enable alt indexed fasta looks up previously registered function, changes settings for new path
+*
+* Revision 6.15  2003/08/27 19:27:43  kans
+* added AltIndexedFastaLibFetch functions for chimpanzee genome project
+*
 * Revision 6.14  2002/11/13 23:07:37  johnson
 * Changed make_lib such that it looks to see if it matches the *whole* seq-id
 * (defined by the next character being non-alphanumeric).
@@ -81,6 +87,12 @@
 * Revision changed to 6.0
 *
 * $Log: lsqfetch.c,v $
+* Revision 6.16  2003/08/27 21:24:05  kans
+* enable alt indexed fasta looks up previously registered function, changes settings for new path
+*
+* Revision 6.15  2003/08/27 19:27:43  kans
+* added AltIndexedFastaLibFetch functions for chimpanzee genome project
+*
 * Revision 6.14  2002/11/13 23:07:37  johnson
 * Changed make_lib such that it looks to see if it matches the *whole* seq-id
 * (defined by the next character being non-alphanumeric).
@@ -1240,12 +1252,13 @@ static FastaIndexPtr ReadFastaIndex (
   return fip;
 }
 
-/* object manager registerable fetch function */
+/* human genome object manager registerable fetch function */
 
 static CharPtr fastalibfetchproc = "IndexedFastaLibBioseqFetch";
 
 typedef struct flibftch {
   CharPtr        path;
+  CharPtr        fastaname;
   FastaIndexPtr  currentfip;
 } FastaLibFetchData, PNTR FastaLibFetchPtr;
 
@@ -1352,9 +1365,144 @@ NLM_EXTERN void IndexedFastaLibFetchDisable (void)
   flfp = (FastaLibFetchPtr) ompp->procdata;
   if (flfp == NULL) return;
   MemFree (flfp->path);
+  /* MemFree (flfp->fastaname); */
   FreeFastaIndex (flfp->currentfip);
   MemFree (flfp);
 }
+
+/* chimpanzee genome object manager registerable fetch function */
+
+static CharPtr altfastalibfetchproc = "AltIndexedFastaLibBioseqFetch";
+
+static void ChangeLocalToGenbank (BioseqPtr bsp, Pointer userdata)
+
+{
+  Char      id [41], tmp [41];
+  SeqIdPtr  sip;
+
+  for (sip = bsp->id; sip != NULL && sip->choice != SEQID_LOCAL; sip = sip->next) continue;
+  if (sip == NULL) return;
+  SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
+  sprintf (tmp, "gb|%s", id);
+  sip = SeqIdParse (tmp);
+  bsp->id = SeqIdSetFree (bsp->id);
+  bsp->id = sip;
+  SeqMgrReplaceInBioseqIndex (bsp);
+}
+
+static Int2 LIBCALLBACK AltIndexedFastaLibBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Pointer           dataptr = NULL;
+  Uint2             datatype, entityID = 0;
+  Char              file [FILENAME_MAX], path [PATH_MAX], id [41];
+  FastaLibFetchPtr  flfp;
+  FILE              *fp;
+  Int4              offset;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  flfp = (FastaLibFetchPtr) ompp->procdata;
+  if (flfp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice == SEQID_GENBANK) {
+
+    SeqIdWrite (sip, id, PRINTID_REPORT, sizeof (id));
+    if (flfp->currentfip != NULL) {
+      offset = SearchFastaIndex (flfp->currentfip, id);
+      if (offset < 0) return OM_MSG_RET_ERROR;
+      sprintf (file, "%s.fsa", flfp->fastaname);
+      StringNCpy_0 (path, flfp->path, sizeof (path));
+      FileBuildPath (path, NULL, file);
+      fp = FileOpen (path, "r");
+      if (fp == NULL) return OM_MSG_RET_ERROR;
+      fseek (fp, offset, SEEK_SET);
+      dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID,
+                                        FALSE, FALSE, TRUE, FALSE);
+      if (dataptr != NULL) {
+        sep = GetTopSeqEntryForEntityID (entityID);
+      }
+      FileClose (fp);
+    }
+  }
+
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  VisitBioseqsInSep (sep, NULL, ChangeLocalToGenbank);
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+NLM_EXTERN Boolean AltIndexedFastaLibFetchEnable (CharPtr path, CharPtr fastaname)
+
+{
+  Char              file [FILENAME_MAX];
+  FastaLibFetchPtr  flfp = NULL;
+  Boolean           is_new = FALSE;
+  ObjMgrPtr         omp;
+  ObjMgrProcPtr     ompp;
+  Char              str [PATH_MAX];
+
+  StringNCpy_0 (str, path, sizeof (str));
+  TrimSpacesAroundString (str);
+  omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, altfastalibfetchproc, OMPROC_FETCH);
+  if (ompp != NULL) {
+    flfp = (FastaLibFetchPtr) ompp->procdata;
+    if (flfp != NULL) {
+      flfp->path = MemFree (flfp->path);
+      flfp->fastaname = MemFree (flfp->fastaname);
+      flfp->currentfip = FreeFastaIndex (flfp->currentfip);
+    }
+  } else {
+    flfp = (FastaLibFetchPtr) MemNew (sizeof (FastaLibFetchData));
+    is_new = TRUE;
+  }
+  if (flfp != NULL) {
+    flfp->path = StringSave (str);
+    flfp->fastaname = StringSave (fastaname);
+    sprintf (file, "%s.idx", fastaname);
+    FileBuildPath (str, NULL, file);
+    flfp->currentfip = ReadFastaIndex (str);
+  }
+  if (is_new) {
+    ObjMgrProcLoad (OMPROC_FETCH, altfastalibfetchproc, altfastalibfetchproc,
+                    OBJ_SEQID, 0, OBJ_BIOSEQ, 0, (Pointer) flfp,
+                    AltIndexedFastaLibBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  }
+  return TRUE;
+}
+
+NLM_EXTERN void AltIndexedFastaLibFetchDisable (void)
+
+{
+  FastaLibFetchPtr  flfp;
+  ObjMgrPtr         omp;
+  ObjMgrProcPtr     ompp;
+
+  omp = ObjMgrGet ();
+  ompp = ObjMgrProcFind (omp, 0, altfastalibfetchproc, OMPROC_FETCH);
+  if (ompp == NULL) return;
+  ObjMgrFreeUserData (0, ompp->procid, OMPROC_FETCH, 0);
+  flfp = (FastaLibFetchPtr) ompp->procdata;
+  if (flfp == NULL) return;
+  MemFree (flfp->path);
+  MemFree (flfp->fastaname);
+  FreeFastaIndex (flfp->currentfip);
+  MemFree (flfp);
+}
+
+/* common function for creating indexes of fasta library files */
 
 NLM_EXTERN void CreateFastaIndex (
   CharPtr file

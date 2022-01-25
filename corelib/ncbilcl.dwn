@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/1/94
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------    ---------------------------------------------------
 *
 * $Log: ncbilcl.dwn,v $
+* Revision 6.6  2003/09/05 21:22:58  beloslyu
+* add DARWIN def
+*
 * Revision 6.5  2003/02/28 14:59:40  kans
 * changed PROC_POWERPC to correct PROC_PPC platform symbol
 *
@@ -77,6 +80,7 @@
 
 #define COMP_BSD
 #define OS_UNIX
+#define DARWIN
 #define OS_UNIX_DARWIN
 #define PROC_PPC
 #define WIN_DUMB

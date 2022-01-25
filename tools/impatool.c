@@ -1,4 +1,6 @@
-/* $Id: impatool.c,v 6.10 2001/12/28 18:01:54 dondosha Exp $
+static char const rcsid[] = "$Id: impatool.c,v 6.11 2003/05/30 17:25:36 coulouri Exp $";
+
+/* $Id: impatool.c,v 6.11 2003/05/30 17:25:36 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +34,12 @@ Author: Alejandro Schaffer
 
 Contents: utility routines for IMPALA.
 
- $Revision: 6.10 $
+ $Revision: 6.11 $
 
  $Log: impatool.c,v $
+ Revision 6.11  2003/05/30 17:25:36  coulouri
+ add rcsid
+
  Revision 6.10  2001/12/28 18:01:54  dondosha
  Modified sorting routines to break ties by score when E-value is (mis)-reported as 0.0 due to underflow in BlastKarlinStoE_simple
 

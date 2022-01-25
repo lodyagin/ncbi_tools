@@ -1,10 +1,11 @@
 #
-# $Id: sgi-mips4.ncbi.mk,v 1.9 2002/10/29 01:20:13 lavr Exp $
+# $Id: sgi-mips4.ncbi.mk,v 1.10 2003/05/07 17:40:12 beloslyu Exp $
 #
 # The SGI IRIX 6.* in 64-bit mode
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
+NCBI_AR=ar
 NCBI_CC = cc -mips4 -64 -G0
 NCBI_SYBASE = /usr/people/sybase_10.0.3
 NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb

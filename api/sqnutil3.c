@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/7/00
 *
-* $Revision: 6.23 $
+* $Revision: 6.28 $
 *
 * File Description: 
 *
@@ -977,6 +977,7 @@ static FeatdefNameData featdefWithName [] = {
   { FEATDEF_D_segment ,          "D_segment"          },
   { FEATDEF_enhancer ,           "enhancer"           },
   { FEATDEF_exon ,               "exon"               },
+  { FEATDEF_gap ,                "gap"                },
   { FEATDEF_GC_signal ,          "GC_signal"          },
   { FEATDEF_GENE ,               "Gene"               },
   { FEATDEF_HET ,                "Het"                },
@@ -1001,6 +1002,8 @@ static FeatdefNameData featdefWithName [] = {
   { FEATDEF_NUM ,                "Num"                },
   { FEATDEF_N_region ,           "N_region"           },
   { FEATDEF_old_sequence ,       "old_sequence"       },
+  { FEATDEF_operon ,             "operon"             },
+  { FEATDEF_oriT ,               "oriT"               },
   { FEATDEF_polyA_signal ,       "polyA_signal"       },
   { FEATDEF_polyA_site ,         "polyA_site"         },
   { FEATDEF_preRNA ,             "precursor_RNA"      },
@@ -1159,11 +1162,14 @@ static CharPtr featurekeys [] = {
   "NonStdRes" ,
   "Het" ,
   "Src" ,
-  "pro_peptide" ,
+  "proprotein" ,
   "mat_peptide" ,
   "sig_peptide" ,
   "transit_peptide",
-  "snoRNA"
+  "snoRNA",
+  "gap",
+  "operon",
+  "oriT"
 };
 
 NLM_EXTERN CharPtr FindKeyFromFeatDefType (Uint1 type, Boolean forGBFF)
@@ -1525,5 +1531,25 @@ NLM_EXTERN void SegOrDeltaBioseqToRaw (BioseqPtr bsp)
   bsp->length = BSLen (bs);
   bsp->repr = Seq_repr_raw;
   bsp->seq_data_type = Seq_code_iupacna;
+}
+
+
+static PubMedFetchFunc pmf_pubfetch = NULL;
+
+NLM_EXTERN void LIBCALL PubMedSetFetchFunc (PubMedFetchFunc func)
+
+{
+  pmf_pubfetch = func;
+}
+
+NLM_EXTERN PubmedEntryPtr LIBCALL GetPubMedForUid (Int4 uid)
+
+{
+  PubMedFetchFunc  func;
+
+  if (uid < 1) return NULL;
+  func = pmf_pubfetch;
+  if (func == NULL) return NULL;
+  return func (uid);
 }
 

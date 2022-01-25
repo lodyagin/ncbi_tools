@@ -1,5 +1,5 @@
 
-/*  $Id: ncbienv.h,v 6.3 2003/01/29 19:37:14 kans Exp $
+/*  $Id: ncbienv.h,v 6.4 2003/06/06 15:01:03 rsmith Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   	protokeys for portable string routines
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.h,v $
+* Revision 6.4  2003/06/06 15:01:03  rsmith
+* fixed ProgramPath for OS Darwin & Mac, Added IsApplicationPackage for Darwin. ProgramPath on Darwin now returns the seen application not the executable buried in the package.
+*
 * Revision 6.3  2003/01/29 19:37:14  kans
 * added GetOpSysString to return allocated string describing operating system running the program
 *
@@ -84,6 +87,9 @@ NLM_EXTERN Nlm_Boolean Nlm_FindPath(const Nlm_Char* file, const Nlm_Char* sectio
 NLM_EXTERN Nlm_Boolean Nlm_TransientSetAppParam(const Nlm_Char* file, const Nlm_Char* section, const Nlm_Char* type, const Nlm_Char* value);
 NLM_EXTERN void Nlm_FreeConfigStruct(void);
 NLM_EXTERN void Nlm_ProgramPath(Nlm_Char* buf, size_t maxsize);
+#ifdef OS_UNIX_DARWIN
+NLM_EXTERN Nlm_Boolean Nlm_IsApplicationPackage(char *filePath);
+#endif
 
 NLM_EXTERN void Nlm_FlushAppParam(void);
 NLM_EXTERN Nlm_Boolean Nlm_CacheAppParam(Nlm_Boolean value);
@@ -167,7 +173,9 @@ NLM_EXTERN Nlm_CharPtr Nlm_GetOpSysString (void);
 #define ParseCmdLineArguments Nlm_ParseCmdLineArguments
 #define FreeCmdLineArguments  Nlm_FreeCmdLineArguments
 #define GetOpSysString Nlm_GetOpSysString
-
+#ifdef OS_UNIX_DARWIN
+#define IsApplicationPackage Nlm_IsApplicationPackage
+#endif
 
 #ifdef __cplusplus
 }

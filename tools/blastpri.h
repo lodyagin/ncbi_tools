@@ -32,8 +32,17 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.106 $ 
+/* $Revision: 6.109 $ 
 * $Log: blastpri.h,v $
+* Revision 6.109  2003/08/20 22:12:56  dondosha
+* Added BlastPrintTabularResults with an extra boolean parameter for OOF alignments
+*
+* Revision 6.108  2003/08/04 16:19:16  dondosha
+* Added effective HSP length (length adjustment) to other returns, so it can be reported in XML output
+*
+* Revision 6.107  2003/04/22 21:52:13  dondosha
+* Added function OOFBlastHSPGetNumIdentical
+*
 * Revision 6.106  2003/03/24 19:42:14  madden
 * Changes to support query concatenation for blastn and tblastn
 *
@@ -651,6 +660,7 @@ typedef struct _txdbinfo {
 #define TXPARAMETERS 14
 #define TXMATRIX 15
 #define EFF_SEARCH_SPACE 16
+#define EFF_HSP_LENGTH 17
 	
 /*
 	Allocates memory for TxDfDbInfoPtr.
@@ -980,6 +990,10 @@ BlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject, Int4 q_start,
 Int2
 BlastHSPGetNumIdentical PROTO((BlastSearchBlkPtr search, BLAST_HSPPtr hsp,
    BLASTResultHspPtr result_hsp, Int4Ptr num_ident, Int4Ptr align_length));
+Int2
+OOFBlastHSPGetNumIdentical PROTO((Uint1Ptr query_seq, Uint1Ptr subject_seq,
+   BLAST_HSPPtr hsp, BLASTResultHspPtr result_hsp, Int4Ptr num_ident, 
+   Int4Ptr align_length));
 
 SeqIdPtr GetTheSeqAlignID PROTO((SeqIdPtr seq_id));
 StdSegPtr BLASTHspToStdSeg PROTO((BlastSearchBlkPtr search, Int4 subject_length, BLAST_HSPPtr hsp, SeqIdPtr sip, Boolean reverse, SeqIdPtr gi_list));
@@ -992,6 +1006,13 @@ int LIBCALLBACK BlastPrintAlignInfo PROTO((VoidPtr srch));
 int LIBCALLBACK MegaBlastPrintAlignInfo PROTO((VoidPtr srch));
 void BlastPrintTabulatedResults PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, Boolean print_query_info));
 void BlastPrintTabulatedResultsEx PROTO((SeqAlignPtr seqalign, BioseqPtr query_bsp, SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, Boolean is_ungapped, Boolean believe_query, Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, Boolean print_query_info));
+
+void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
+        SeqLocPtr query_slp, Int4 num_alignments, CharPtr blast_program, 
+        Boolean is_ungapped, Boolean is_ooframe, Boolean believe_query, 
+        Int4 q_shift, Int4 s_shift, FILE *fp, int *num_formatted, 
+        Boolean print_query_info);
+
 void
 BlastProcessGiLists PROTO((BlastSearchBlkPtr search, 
             BLAST_OptionsBlkPtr options, BlastDoubleInt4Ptr gi_list, 

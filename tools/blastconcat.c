@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: blastconcat.c,v 1.4 2003/05/30 17:25:36 coulouri Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,8 +33,11 @@ Contents: implementation of functions needed for query multiplexing
           functionality.
 
 ******************************************************************************/
-/* $Revision: 1.3 $ 
+/* $Revision: 1.4 $ 
 *  $Log: blastconcat.c,v $
+*  Revision 1.4  2003/05/30 17:25:36  coulouri
+*  add rcsid
+*
 *  Revision 1.3  2003/03/25 15:02:11  madden
 *  Code cleanup from A. Morgulis
 *

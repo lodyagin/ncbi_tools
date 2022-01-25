@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: mblast.c,v 6.190 2003/05/30 17:25:36 coulouri Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -38,9 +40,30 @@ Detailed Contents:
 	- Functions specific to Mega BLAST
 
 ******************************************************************************
- * $Revision: 6.183 $
+ * $Revision: 6.190 $
  *
  * $Log: mblast.c,v $
+ * Revision 6.190  2003/05/30 17:25:36  coulouri
+ * add rcsid
+ *
+ * Revision 6.189  2003/05/20 21:56:34  dondosha
+ * Use correct X-dropoff for preliminary dynamic programming gapped extension
+ *
+ * Revision 6.188  2003/05/14 20:35:58  camacho
+ * Allow searching empty databases
+ *
+ * Revision 6.187  2003/05/13 16:02:53  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
+ * Revision 6.186  2003/05/12 12:23:44  camacho
+ * Sanity check for number of sequences & db length
+ *
+ * Revision 6.185  2003/05/02 23:02:11  dondosha
+ * Fix for dynamic programming gapped extension
+ *
+ * Revision 6.184  2003/04/24 14:58:20  dondosha
+ * Fixed a minor bug in MegaBlastExtendHit found by A. Morgulis
+ *
  * Revision 6.183  2003/04/04 17:16:31  dondosha
  * Previous change reversed, was incorrect
  *
@@ -682,11 +705,11 @@ BioseqMegaBlastEngine (BioseqPtr PNTR bspp, CharPtr progname, CharPtr database,
       if (to < 0)
          to = bspp[0]->length - 1;
       if (from >= bspp[0]->length || to < 0) {
-         ErrPostEx(SEV_FATAL, 0, 0,
+         ErrPostEx(SEV_FATAL, 1, 0,
                    "Location outside of the query sequence range\n");
          return NULL;
       } else if (to <= from) {
-         ErrPostEx(SEV_FATAL, 0, 0, "Empty query location provided\n");
+         ErrPostEx(SEV_FATAL, 1, 0, "Empty query location provided\n");
          return NULL;
       }
       slp = SeqLocIntNew(from, to, options->strand_option, bspp[0]->id);
@@ -1094,12 +1117,12 @@ MegaBlastSetUpSearchInternalByLoc (BlastSearchBlkPtr search, SeqLocPtr
    SeqPortPtr spp = NULL;
    
    if (options == NULL) {
-      ErrPostEx(SEV_FATAL, 0, 0, "BLAST_OptionsBlkPtr is NULL\n");
+      ErrPostEx(SEV_FATAL, 1, 0, "BLAST_OptionsBlkPtr is NULL\n");
       return 1;
    }
    
    if (query_slp == NULL && query_bsp == NULL) {
-      ErrPostEx(SEV_FATAL, 0, 0, "Query is NULL\n");
+      ErrPostEx(SEV_FATAL, 1, 0, "Query is NULL\n");
       return 1;
    }
    
@@ -2791,13 +2814,15 @@ Int2 MegaBlastGappedAlign(BlastSearchBlkPtr search)
       gap_align = search->gap_align;
       gap_align->gap_open = search->pbp->gap_open;
       gap_align->gap_extend = search->pbp->gap_extend;
-      gap_align->x_parameter = search->pbp->gap_x_dropoff_final;
+      gap_align->x_parameter = search->pbp->gap_x_dropoff;
       gap_align->matrix = search->sbp->matrix;
       gap_align->query =
          search->context[search->first_context].query->sequence;
       gap_align->subject = subject0;
+      /* Subtract 1 because the concatenated length includes the last 
+         sentinel byte */
       gap_align->query_length = 
-         search->context[search->first_context].query->length;
+         search->context[search->first_context].query->length - 1;
       gap_align->subject_length = search->subject->length;
    }
 
@@ -2937,10 +2962,11 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
          hit_ready = ((!two_hits && one_word) || 
                               estack[index].length > min_hit_length);
          if (two_hits && step < mb_two_hit_min_step && step > step_unit
-             && one_word)
+             && one_word) {
+            lookup->mb_lt->stack_index[index1] = stack_top + 1;
             /* Skip words that are too close to each other (experimental) */
             return 0;
-         else if (step == step_unit || 
+         } else if (step == step_unit || 
                   (step > step_unit && step <= window && 
                    one_word && !hit_ready)) {
             estack[index].length += step;
@@ -2963,6 +2989,7 @@ MegaBlastExtendHit(BlastSearchBlkPtr search, LookupTablePtr lookup,
             if (!two_hits && (len >= min_hit_length))
                MegaBlastSaveExactMatch(search, q_off, s_off);
          }
+         lookup->mb_lt->stack_index[index1] = stack_top + 1;
          return 0;
       } else if (step <= step_unit || (step <= window && one_word)) {
          /* Hit from a different diagonal, and it can potentially continue */

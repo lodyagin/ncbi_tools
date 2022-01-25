@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibtexts.c,v $
+* Revision 6.14  2003/07/30 13:51:42  johnson
+* MSWIN: multi-line text boxes now respond to 'enter' key
+*
 * Revision 6.13  2003/03/28 21:27:18  rsmith
 * on Mac OS took out ClearCurrentScrap after Cut/Copy. It only erased whatever was copied.
 *
@@ -2148,6 +2151,7 @@ static void MyCls_OnChar (HWND hwnd, UINT ch, int cRepeat)
     Nlm_DoReturnCallback (t);
   } else if (ch == '\n' || ch == '\r') {
     Nlm_DoSendFocus ((Nlm_GraphiC) t, (Nlm_Char) ch);
+    handlechar = TRUE;
   } else {
     handlechar = TRUE;
   }

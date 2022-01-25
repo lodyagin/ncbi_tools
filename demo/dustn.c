@@ -86,7 +86,7 @@ Int2 Main (void)
     
     if ((infp = FileOpen(inputfile, "r")) == NULL)
 	{
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", inputfile);
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", inputfile);
             return (1);
 	}
     is_na = (Boolean) myargs [2].intvalue;
@@ -110,7 +110,7 @@ Int2 Main (void)
 
 		if (query == NULL)
 		{
-	  	 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+	  	 	ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 	   		return 2;
 		}
 	}

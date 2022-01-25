@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/00
 *
-* $Revision: 6.21 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -61,7 +61,7 @@
 
 #include <entrez2.h>
 
-#define ENTREZ_APP_VERSION "9.00"
+#define ENTREZ_APP_VERSION "9.30"
 
 #define MAX_QUERY_FORMS 256
 
@@ -829,19 +829,41 @@ static CharPtr getInfoFailed =
 debugging, or use -c command line argument\n\
 for firewall configuration dialog";
 
+static QUEUE bouncequeue = NULL;
+
+static Boolean LIBCALLBACK BounceProc (
+  CONN conn, VoidPtr userdata, EIO_Status status
+)
+
+{
+  BoolPtr  bp;
+
+  if (NetTestReadReply (conn, status)) {
+    bp = (BoolPtr) userdata;
+    *bp = TRUE;
+  }
+  return TRUE;
+}
+
 Int2 Main (void)
 
 {
   Boolean  advancedQueryToggle;
+  Boolean  bouncefound = FALSE;
+  time_t   currsecs = 0;
   Boolean  delayedNeighbor;
   Boolean  explodeToggle;
   Int2     i;
+  ErrSev   oldsev;
   PaneL    p;
   CharPtr  path = "/entrez/utils/entrez2server.fcgi";
   Uint2    port = 2441;
+  time_t   prevsecs = 0;
   CharPtr  server = "www.ncbi.nlm.nih.gov";
   Boolean  showConfigForm = FALSE;
-  Char     str [32];
+  time_t   starttime = 0;
+  time_t   stoptime = 0;
+  Char     str [64];
   Boolean  useNormalServ = FALSE;
   Boolean  useTestServ = FALSE;
   Boolean  useURL = FALSE;
@@ -890,6 +912,7 @@ Int2 Main (void)
   /*----------------------------------------------*/
 
   SetTitle (w, "Loading parse tables");
+  Update ();
 
   if (! AllObjLoad ()) {
     ArrowCursor ();
@@ -1005,11 +1028,49 @@ Int2 Main (void)
     EntrezSetServer (server, port, path);
   }
 
+  /*---------------------------------------*/
+  /* Check for connection to NCBI services */
+  /*---------------------------------------*/
+
+  SetTitle (w, "Checking Internet connection to NCBI");
+  Update ();
+
+  bouncefound = FALSE;
+  starttime = GetSecs ();
+  oldsev = ErrSetMessageLevel (SEV_FATAL);
+  if (! NetTestAsynchronousQuery (&bouncequeue, BounceProc, (Pointer) &bouncefound)) {
+    ArrowCursor ();
+    ErrSetMessageLevel (oldsev);
+    Message (MSG_FATAL, "NetTestAsynchronousQuery failed");
+    return 1;
+  }
+
+  /* busy wait here, would normally call NetTestCheckQueue from event loop timer */
+  while (! bouncefound) {
+    stoptime = GetSecs ();
+    currsecs = stoptime - starttime;
+    if (currsecs != prevsecs && currsecs > 5) {
+      sprintf (str, "Checking connection - %ld seconds", (long) currsecs);
+      SetTitle (w, str);
+      Update ();
+      prevsecs = currsecs;
+    }
+    if (stoptime - starttime >= 30) {
+      ArrowCursor ();
+      Message (MSG_OK, "Internet connection attempt timed out, exiting");
+      return 1;
+    }
+    NetTestCheckQueue (&bouncequeue);
+  }
+  QUERY_CloseQueue (&bouncequeue);
+  ErrSetMessageLevel (oldsev);
+
   /*---------------------------------*/
   /* Get info about the DB server(s) */
   /*---------------------------------*/
 
   SetTitle (w, "Finding Entrez2 Server");
+  Update ();
 
   if (Query_GetInfo () == NULL) {
     ArrowCursor ();
@@ -1027,6 +1088,7 @@ Int2 Main (void)
   /*--------------------------------*/
 
   SetTitle (w, "Registering Viewers");
+  Update ();
 
   REGISTER_MEDLINE_VIEW;
   REGISTER_NEW_SEQENTRY_VIEW;
@@ -1071,6 +1133,7 @@ Int2 Main (void)
   s_currFormNum = GetNewMainFormKey ();
 
   SetTitle (w, "Creating Query Window");
+  Update ();
 
   s_mainForm [s_currFormNum] = CreateTermlistForm (-50, -33,
                                                    "Query",
@@ -1084,6 +1147,7 @@ Int2 Main (void)
   /*------------------------------------*/
 
   SetTitle (w, "Creating Document Window");
+  Update ();
 
   s_docSumForm [s_currFormNum] = CreateDocsumForm (-10, -90, "Document",
                                                    DocumentSummaryActivate_Callback,

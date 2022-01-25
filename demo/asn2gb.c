@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.51 $
+* $Revision: 6.56 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -125,6 +125,22 @@ static void SaveTinySeqs (
   TSeqFree (tsp);
 }
 
+static void SaveTinyStreams (
+  BioseqPtr bsp,
+  Pointer userdata
+)
+
+{
+  AsnIoPtr  aip;
+
+  if (bsp == NULL) return;
+  aip = (AsnIoPtr) userdata;
+
+  BioseqAsnWriteAsTSeq (bsp, aip, NULL);
+  AsnPrintNewLine (aip);
+  AsnIoFlush (aip);
+}
+
 static Int2 HandleSingleRecord (
   CharPtr inputFile,
   CharPtr outputFile,
@@ -136,11 +152,14 @@ static Int2 HandleSingleRecord (
   CstType custom,
   XtraPtr extra,
   Int2 type,
+  Boolean binary,
+  Boolean compressed,
   Int4 from,
   Int4 to,
   Uint1 strand,
   Int4 itemID,
-  Boolean do_tiny_seq
+  Boolean do_tiny_seq,
+  Boolean do_fasta_stream
 )
 
 {
@@ -172,7 +191,7 @@ static Int2 HandleSingleRecord (
     entityID = ObjMgrRegister (datatype, dataptr);
 
   } else if (type >= 2 && type <= 5) {
-    aip = AsnIoOpen (inputFile, "r");
+    aip = AsnIoOpen (inputFile, binary? "rb" : "r");
     if (aip == NULL) {
       Message (MSG_POSTERR, "AsnIoOpen failed for input file '%s'", inputFile);
       return 1;
@@ -282,7 +301,7 @@ static Int2 HandleSingleRecord (
           sint.from = from - 1;
           sint.to = to - 1;
           sint.strand = strand;
-          sint.id = bsp->id;
+          sint.id = SeqIdFindBest (bsp->id, 0);
           vn.choice = SEQLOC_INT;
           vn.data.ptrvalue = (Pointer) &sint;
           slp = &vn;
@@ -297,6 +316,10 @@ static Int2 HandleSingleRecord (
       if (do_tiny_seq) {
         aip = AsnIoNew (ASNIO_TEXT_OUT | ASNIO_XML, ofp, NULL, NULL, NULL);
         VisitBioseqsInSep (sep, (Pointer) aip, SaveTinySeqs);
+        AsnIoFree (aip, FALSE);
+      } else if (do_fasta_stream) {
+        aip = AsnIoNew (ASNIO_TEXT_OUT | ASNIO_XML, ofp, NULL, NULL, NULL);
+        VisitBioseqsInSep (sep, (Pointer) aip, SaveTinyStreams);
         AsnIoFree (aip, FALSE);
       } else {
         SeqEntryToGnbk (sep, slp, format, mode, style, flags, locks, custom, extra, ofp);
@@ -979,17 +1002,18 @@ Args myargs [] = {
     TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Feature itemID", "0", NULL, NULL,
     TRUE, 'y', ARG_INT, 0.0, 0, NULL},
+#ifdef ENABLE_ARG_X
   {"Accession to extract", NULL, NULL, NULL,
     TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
+#endif
 #endif
 };
 
 
 #include <lsqfetch.h>
+#include <pmfapi.h>
 #ifdef INTERNAL_NCBI_ASN2GB
 #include <accpubseq.h>
-#else
-#include <pmfapi.h>
 #endif
 
 #define HTML_XML_ASN_MASK (CREATE_HTML_FLATFILE | CREATE_XML_GBSEQ_FILE | CREATE_ASN_GBSEQ_FILE)
@@ -1008,6 +1032,7 @@ Int2 Main (
   CstType     custom;
   Boolean     do_gbseq = FALSE;
   Boolean     do_tiny_seq = FALSE;
+  Boolean     do_fasta_stream = FALSE;
   XtraPtr     extra = NULL;
   FlgType     flags;
   FmtType     format = GENBANK_FMT;
@@ -1089,11 +1114,6 @@ Int2 Main (
     compressed = FALSE;
   }
 
-  if ((binary || compressed) && batch == 0) {
-    Message (MSG_FATAL, "-b or -c cannot be used without -t");
-    return 1;
-  }
-
   if (myargs [p_argPropagate].intvalue) {
     propOK = TRUE;
   } else {
@@ -1112,8 +1132,11 @@ Int2 Main (
   } else if (StringICmp (str, "x") == 0) {
     do_gbseq = TRUE;
     format = GENBANK_FMT;
-  } else if (StringICmp (str, "y") == 0) {
+  } else if (StringCmp (str, "y") == 0) {
     do_tiny_seq = TRUE;
+    format = GENBANK_FMT;
+  } else if (StringCmp (str, "Y") == 0) {
+    do_fasta_stream = TRUE;
     format = GENBANK_FMT;
   } else if (StringICmp (str, "z") == 0) {
     do_gbseq = TRUE;
@@ -1169,6 +1192,13 @@ Int2 Main (
     type = 1;
   }
 
+  if ((binary || compressed) && batch == 0) {
+    if (type == 1) {
+      Message (MSG_FATAL, "-b or -c cannot be used without -t or -a");
+      return 1;
+    }
+  }
+
   if (myargs [r_argRemote].intvalue) {
 #ifdef INTERNAL_NCBI_ASN2GB
     if (! PUBSEQBioseqFetchEnable ("asn2gb", FALSE)) {
@@ -1178,6 +1208,7 @@ Int2 Main (
 #else
     PubSeqFetchEnable ();
 #endif
+    PubMedFetchEnable ();
     LocalSeqFetchInit (FALSE);
   }
 
@@ -1250,8 +1281,8 @@ Int2 Main (
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,
                                 format, mode, style, flags, locks,
-                                custom, extra, type, from, to, strand,
-                                itemID, do_tiny_seq);
+                                custom, extra, type, binary, compressed,
+                                from, to, strand, itemID, do_tiny_seq, do_fasta_stream);
   }
 
   if (aip != NULL) {

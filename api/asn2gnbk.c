@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.660 $
+* $Revision: 6.729 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -44,6 +44,7 @@
 #include <objsset.h>
 #include <objsub.h>
 #include <objfdef.h>
+#include <objpubme.h>
 #include <seqport.h>
 #include <sequtil.h>
 #include <sqnutils.h>
@@ -98,6 +99,7 @@ typedef struct asn2gbflags {
   Boolean             hideEmptySource;
   Boolean             goQualsToNote;
   Boolean             geneSynsToNote;
+  Boolean             selenocysteineToNote;
   Boolean             forGbRelease;
 } Asn2gbFlags, PNTR Asn2gbFlagsPtr;
 
@@ -137,6 +139,8 @@ typedef struct int_asn2gb_job {
   Boolean        newSourceOrg;
   ValNodePtr     lockedBspList;
   Boolean        relModeError;
+  Boolean        skipProts;
+  Boolean        skipMrnas;
   IndxPtr        index;
   GBSeqPtr       gbseq;
   StringItemPtr  pool;
@@ -195,6 +199,7 @@ typedef struct asn2gbwork {
   Boolean          citSubsFirst;
   Boolean          hideGeneFeats;
   Boolean          newLocusLine;
+  Boolean          showBaseCount;
 
   Boolean          hideImpFeats;
   Boolean          hideRemImpFeats;
@@ -208,6 +213,8 @@ typedef struct asn2gbwork {
   Boolean          hideGeneRIFs;
   Boolean          onlyGeneRIFs;
   Boolean          latestGeneRIFs;
+
+  Boolean          showRefs;
 
   Boolean          isGPS;
   Boolean          copyGpsCdsUp;
@@ -516,6 +523,7 @@ static Uint1 source_qual_order [] = {
   SCQUAL_tissue_type,
   SCQUAL_clone_lib,
   SCQUAL_dev_stage,
+  SCQUAL_ecotype,
   SCQUAL_frequency,
 
   SCQUAL_germline,
@@ -565,7 +573,6 @@ static Uint1 source_desc_note_order [] = {
   SCQUAL_authority,
   SCQUAL_forma,
   SCQUAL_forma_specialis,
-  SCQUAL_ecotype,
   SCQUAL_synonym,
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
@@ -607,7 +614,6 @@ static Uint1 source_feat_note_order [] = {
   SCQUAL_authority,
   SCQUAL_forma,
   SCQUAL_forma_specialis,
-  SCQUAL_ecotype,
   SCQUAL_synonym,
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
@@ -805,6 +811,7 @@ typedef enum {
   FTQUAL_modelev,
   FTQUAL_note,
   FTQUAL_number,
+  FTQUAL_operon,
   FTQUAL_organism,
   FTQUAL_partial,
   FTQUAL_PCR_conditions,
@@ -833,12 +840,14 @@ typedef enum {
   FTQUAL_rrna_its,
   FTQUAL_sec_str_type,
   FTQUAL_selenocysteine,
+  FTQUAL_selenocysteine_note,
   FTQUAL_seqfeat_note,
   FTQUAL_site,
   FTQUAL_site_type,
   FTQUAL_standard_name,
   FTQUAL_transcription,
   FTQUAL_transcript_id,
+  FTQUAL_transcript_id_note, /* !!! remove October 15, 2003 !!! */
   FTQUAL_transl_except,
   FTQUAL_transl_table,
   FTQUAL_translation,
@@ -858,6 +867,10 @@ static Uint1 feat_qual_order [] = {
 
   FTQUAL_locus_tag,
   FTQUAL_gene_syn_refseq,
+
+  FTQUAL_gene_allele,
+
+  FTQUAL_operon,
 
   FTQUAL_product,
 
@@ -881,6 +894,7 @@ static Uint1 feat_qual_order [] = {
   FTQUAL_number,
 
   FTQUAL_pseudo,
+  FTQUAL_selenocysteine,
 
   FTQUAL_codon_start,
 
@@ -895,7 +909,6 @@ static Uint1 feat_qual_order [] = {
   FTQUAL_frequency,
   FTQUAL_EC_number,
   FTQUAL_gene_map,
-  FTQUAL_gene_allele,
   FTQUAL_allele,
   FTQUAL_map,
   FTQUAL_mod_base,
@@ -944,6 +957,7 @@ pseudo after note - gi|6598562|gb|AC006419.3|AC006419
 */
 
 static Uint1 feat_note_order [] = {
+  FTQUAL_transcript_id_note, /* !!! remove October 15, 2003 !!! */
   FTQUAL_gene_desc,
   FTQUAL_gene_syn,
   FTQUAL_trna_codons,
@@ -958,7 +972,7 @@ static Uint1 feat_note_order [] = {
   FTQUAL_seqfeat_note,
   FTQUAL_exception_note,
   FTQUAL_region,
-  /* FTQUAL_selenocysteine, */
+  FTQUAL_selenocysteine_note,
   FTQUAL_prot_names,
   FTQUAL_bond,
   FTQUAL_site,
@@ -1023,6 +1037,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "model_evidence", Qual_class_model_ev      },
   { "note",           Qual_class_note          },
   { "number",         Qual_class_number        },
+  { "operon",         Qual_class_quote         },
   { "organism",       Qual_class_quote         },
   { "partial",        Qual_class_boolean       },
   { "PCR_conditions", Qual_class_quote         },
@@ -1050,6 +1065,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "rpt_unit",       Qual_class_rpt_unit      },
   { "rrna_its",       Qual_class_its           },
   { "sec_str_type",   Qual_class_sec_str       },
+  { "selenocysteine", Qual_class_boolean       },
   { "selenocysteine", Qual_class_string        },
   { "seqfeat_note",   Qual_class_string        },
   { "site",           Qual_class_site          },
@@ -1057,6 +1073,7 @@ static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "standard_name",  Qual_class_quote         },
   { "transcription",  Qual_class_transcription },
   { "transcript_id",  Qual_class_seq_id        },
+  { "tscpt_id_note",  Qual_class_seq_id        }, /* !!! remove October 15, 2003 !!! */
   { "transl_except",  Qual_class_code_break    },
   { "transl_table",   Qual_class_int           },
   { "translation",    Qual_class_translation   },
@@ -1098,7 +1115,7 @@ static Char doc_link [MAX_WWWBUF];
 #define DEF_LINK_DOC  "http://www.ncbi.nlm.nih.gov/genome/guide/build.html"
 
 static Char ev_link [MAX_WWWBUF];
-#define DEF_LINK_EV  "http://www.ncbi.nlm.nih.gov/cgi-bin/Entrez/evv.cgi?"
+#define DEF_LINK_EV  "http://www.ncbi.nlm.nih.gov/sutils/evv.cgi?"
 
 static Char ec_link [MAX_WWWBUF];
 #define DEF_LINK_EC "http://www.expasy.ch/cgi-bin/nicezyme.pl?"
@@ -1106,108 +1123,119 @@ static Char ec_link [MAX_WWWBUF];
 static Char link_tax [MAX_WWWBUF];
 #define DEF_LINK_TAX "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"
 
-static Char link_ff[MAX_WWWBUF];
+static Char link_ff [MAX_WWWBUF];
 #define DEF_LINK_FF  "/cgi-bin/Entrez/getfeat?"
 
-static Char link_muid[MAX_WWWBUF];
+static Char link_muid [MAX_WWWBUF];
 #define DEF_LINK_MUID  "/entrez/utils/qmap.cgi?"
 
-static Char link_ace[MAX_WWWBUF];
+static Char link_ace [MAX_WWWBUF];
 #define DEF_LINK_ACE  "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="
 
-static Char link_code[MAX_WWWBUF];
+static Char link_code [MAX_WWWBUF];
 #define DEF_LINK_CODE "http://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi?"
 
-static Char link_fly[MAX_WWWBUF];
+static Char link_fly [MAX_WWWBUF];
 #define DEF_LINK_FLY "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 
-static Char link_fly_fban[MAX_WWWBUF];
+static Char link_fly_fban [MAX_WWWBUF];
 #define DEF_LINK_FBAN "http://www.fruitfly.org/cgi-bin/annot/fban?"
 
-static Char link_fly_fbgn[MAX_WWWBUF];
+static Char link_fly_fbgn [MAX_WWWBUF];
 #define DEF_LINK_FBGN "http://flybase.bio.indiana.edu/.bin/fbidq.html?"
 
-static Char link_cog[MAX_WWWBUF];
+static Char link_cog [MAX_WWWBUF];
 #define DEF_LINK_COG "http://www.ncbi.nlm.nih.gov/cgi-bin/COG/palox?"
 
-static Char link_sgd[MAX_WWWBUF];
+static Char link_sgd [MAX_WWWBUF];
 #define DEF_LINK_SGD "/cgi-bin/Entrez/referer?http://genome-www4.stanford.edu/cgi-bin/SGD/locus.pl?locus="
 
-static Char link_gdb[MAX_WWWBUF];
+static Char link_gdb [MAX_WWWBUF];
 #define DEF_LINK_GDB "http://gdbwww.gdb.org/gdb-bin/genera/genera/hgd/DBObject/GDB:"
 
-static Char link_ck[MAX_WWWBUF];
+static Char link_ck [MAX_WWWBUF];
 #define DEF_LINK_CK "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="
 
-static Char link_rice[MAX_WWWBUF];
+static Char link_rice [MAX_WWWBUF];
 #define DEF_LINK_RICE "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="
 
-static Char link_sp[MAX_WWWBUF];
+static Char link_sp [MAX_WWWBUF];
 #define DEF_LINK_SP "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/sprot-search-ac%3f"
 
-static Char link_pdb[MAX_WWWBUF];
+static Char link_pdb [MAX_WWWBUF];
 #define DEF_LINK_PDB "/cgi-bin/Entrez/referer?http://expasy.hcuge.ch/cgi-bin/get-pdb-entry%3f"
 
-static Char link_UniSTS[MAX_WWWBUF];
+static Char link_UniSTS [MAX_WWWBUF];
 #define DEF_LINK_UniSTS "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="
 
-static Char link_dbSTS[MAX_WWWBUF];
+static Char link_dbSTS [MAX_WWWBUF];
 #define DEF_LINK_dbSTS "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 
-static Char link_dbEST[MAX_WWWBUF];
+static Char link_dbEST [MAX_WWWBUF];
 #define DEF_LINK_dbEST "http://www.ncbi.nlm.nih.gov/entrez/viewer.fcgi?"
 
-static Char link_omim[MAX_WWWBUF];
+static Char link_omim [MAX_WWWBUF];
 #define DEF_LINK_OMIM "http://www.ncbi.nlm.nih.gov/entrez/dispomim.cgi?id="
 
-static Char link_locus[MAX_WWWBUF];
+static Char link_locus [MAX_WWWBUF];
 #define DEF_LINK_LOCUS "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="
 
-static Char link_snp[MAX_WWWBUF];
+static Char link_snp [MAX_WWWBUF];
 #define DEF_LINK_SNP "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="
 
-static Char link_ratmap[MAX_WWWBUF];
+static Char link_ratmap [MAX_WWWBUF];
 #define DEF_LINK_RATMAP "http://ratmap.gen.gu.se/action.lasso?-database=RATMAPfmPro&-layout=Detail&-response=/RM/Detail+Format.html&-search&-recid="
 
-static Char link_rgd[MAX_WWWBUF];
+static Char link_rgd [MAX_WWWBUF];
 #define DEF_LINK_RGD "http://rgd.mcw.edu/query/query.cgi?id="
 
-static Char link_mgd[MAX_WWWBUF];
+static Char link_mgd [MAX_WWWBUF];
 #define DEF_LINK_MGD "http://www.informatics.jax.org/searches/accession_report.cgi?id=MGI:"
 
-static Char link_cdd[MAX_WWWBUF];
+static Char link_cdd [MAX_WWWBUF];
 #define DEF_LINK_CDD "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="
 
-static Char link_niaest[MAX_WWWBUF];
+static Char link_niaest [MAX_WWWBUF];
 #define DEF_LINK_NIAEST "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="
 
-static Char link_worm_base[MAX_WWWBUF];
+static Char link_worm_base [MAX_WWWBUF];
 #define DEF_LINK_WORM_BASE "http://www.wormbase.org/db/get?class=Sequence;name="
 
-static Char link_worfdb[MAX_WWWBUF];
+static Char link_worfdb [MAX_WWWBUF];
 #define DEF_LINK_WORFDB "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="
 
-static Char link_nextdb[MAX_WWWBUF];
+static Char link_nextdb [MAX_WWWBUF];
 #define DEF_LINK_NEXTDB "http://nematode.lab.nig.ac.jp/cgi-bin/db/ShowGeneInfo.sh?celk="
 
-static Char link_imgt[MAX_WWWBUF];
+static Char link_imgt [MAX_WWWBUF];
 #define DEF_LINK_IMGT "http://imgt.cines.fr:8104/cgi-bin/IMGTlect.jv?query=202+"
 
-static Char link_ifo[MAX_WWWBUF];
+static Char link_ifo [MAX_WWWBUF];
 #define DEF_LINK_IFO "http://www.ifo.or.jp/index_e.html"
 
-static Char link_jcm[MAX_WWWBUF];
+static Char link_jcm [MAX_WWWBUF];
 #define DEF_LINK_JCM "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="
 
-static Char link_isfinder[MAX_WWWBUF];
+static Char link_isfinder [MAX_WWWBUF];
 #define DEF_LINK_ISFINDER "http://www-is.biotoul.fr/scripts/is/is_spec.idc?name="
 
-static Char link_gabi[MAX_WWWBUF];
+static Char link_gabi [MAX_WWWBUF];
 #define DEF_LINK_GABI "https://gabi.rzpd.de/cgi-bin-protected/GreenCards.pl.cgi?Mode=ShowBioObject&BioObjectName="
 
-static Char link_fantom[MAX_WWWBUF];
+static Char link_fantom [MAX_WWWBUF];
 #define DEF_LINK_FANTOM "http://fantom.gsc.riken.go.jp/db/view/main.cgi?masterid="
 
+static Char link_interpro [MAX_WWWBUF];
+#define DEF_LINK_INTERPRO "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="
+
+static Char link_genedb [MAX_WWWBUF];
+#define DEF_LINK_GENEDB "http://www.genedb.org/genedb/Dispatcher?formType=navBar&submit=Search+for&organism=All%3Apombe%3Acerevisiae%3Adicty%3Aasp%3Atryp%3Aleish%3Amalaria%3Astyphi%3Aglossina&desc=yes&ohmr=%2F&name="
+
+static Char link_zfin [MAX_WWWBUF];
+#define DEF_LINK_ZFIN "http://zfin.org/cgi-bin/webdriver?MIval=aa-markerview.apg&OID="
+
+static Char link_rebase [MAX_WWWBUF];
+#define DEF_LINK_REBASE "http://rebase.neb.com/rebase/enz/"
 
 /* utility functions */
 
@@ -1447,7 +1475,7 @@ static void FFAddPeriod (StringItemPtr sip) {
             FFRecycleString(ajp, riter);
             riter = prev;
             riter->next = NULL;
-	          sip->curr = riter;
+              sip->curr = riter;
             break;
           }
         }
@@ -2185,7 +2213,7 @@ static Int4 FFStringSearch (
       return shift;
     } else {
         shift += MAX( (Int4)good_suffix[j],
-		      (Int4)(j - last_occurance[FFCharAt(text,shift + j)]));
+              (Int4)(j - last_occurance[FFCharAt(text,shift + j)]));
     }
   }
 
@@ -2205,27 +2233,27 @@ static Boolean IsWholeWordSubstr (
   CharPtr subStr
 )
 {
-	Boolean left, right;
-	Char ch;
+    Boolean left, right;
+    Char ch;
 
 
-	/* check on the left only if there is a character there */
-	if (foundPos > 0) {
-		ch = FFCharAt(searchStr, foundPos - 1);
-		left = IS_WHITESP(ch) || ispunct(ch);
-	} else {
-		left = TRUE;
-	}
+    /* check on the left only if there is a character there */
+    if (foundPos > 0) {
+        ch = FFCharAt(searchStr, foundPos - 1);
+        left = IS_WHITESP(ch) || ispunct(ch);
+    } else {
+        left = TRUE;
+    }
 
-	foundPos += StringLen(subStr);
+    foundPos += StringLen(subStr);
   if ( foundPos == FFLength(searchStr) ) {
     right = TRUE;
   } else {
     ch = FFCharAt(searchStr, foundPos);
-	  right = IS_WHITESP(ch) || ispunct(ch);
+      right = IS_WHITESP(ch) || ispunct(ch);
   }
 
-	return left; /* see comment above */
+    return left; /* see comment above */
   /* return left && right;  this is how it should be!*/
 }
 
@@ -2297,6 +2325,10 @@ static void InitWWW (IntAsn2gbJobPtr ajp)
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_ISFINDER", DEF_LINK_ISFINDER, link_isfinder, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_GABI", DEF_LINK_GABI, link_gabi, MAX_WWWBUF);
   GetAppParam ("NCBI", "WWWENTREZ", "LINK_FANTOM", DEF_LINK_FANTOM, link_fantom, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_INTERPRO", DEF_LINK_INTERPRO, link_interpro, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_GENEDB", DEF_LINK_GENEDB, link_genedb, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_ZFIN", DEF_LINK_ZFIN, link_zfin, MAX_WWWBUF);
+  GetAppParam ("NCBI", "WWWENTREZ", "LINK_REBASE", DEF_LINK_REBASE, link_rebase, MAX_WWWBUF);
 }
 
 
@@ -2525,6 +2557,19 @@ static void FF_www_db_xref_gdb(
   }
 }
 
+static void FF_www_db_xref_rebase (
+  StringItemPtr ffstring,
+  CharPtr db,
+  CharPtr identifier
+)
+{
+  while (*identifier == ' ')
+    identifier++;
+
+  FFAddTextToString(ffstring, NULL, db, ":", FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, "<a href=", link_rebase, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddTextToString(ffstring, ".html>", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+}
 
 
 static void Do_www_db_xref(
@@ -2536,67 +2581,75 @@ static void Do_www_db_xref(
   if ( ffstring == NULL || db == NULL || identifier == NULL ) return;
 
   if ( StringCmp(db, "FLYBASE") == 0) {
-	FF_www_db_xref_fly(ffstring, db, identifier);
+    FF_www_db_xref_fly(ffstring, db, identifier);
   } else if ( StringCmp(db , "COG") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_cog);
+    FF_www_db_xref_std(ffstring, db, identifier, link_cog);
   } else if ( StringCmp(db , "UniSTS") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_UniSTS);
+    FF_www_db_xref_std(ffstring, db, identifier, link_UniSTS);
   } else if ( StringCmp(db , "LocusID") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_locus);
+    FF_www_db_xref_std(ffstring, db, identifier, link_locus);
   } else if ( StringCmp(db , "InterimID") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_locus);
+    FF_www_db_xref_std(ffstring, db, identifier, link_locus);
   } else if ( StringCmp(db , "MIM") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_omim);
+    FF_www_db_xref_std(ffstring, db, identifier, link_omim);
   } else if ( StringCmp(db , "SGD") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_sgd);
+    FF_www_db_xref_std(ffstring, db, identifier, link_sgd);
   } else if ( StringCmp(db , "IMGT/LIGM") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_imgt);
+    FF_www_db_xref_std(ffstring, db, identifier, link_imgt);
   } else if ( StringCmp(db , "CK") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_ck);
+    FF_www_db_xref_std(ffstring, db, identifier, link_ck);
   } else if ( StringCmp(db , "RiceGenes") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_rice);
+    FF_www_db_xref_std(ffstring, db, identifier, link_rice);
   } else if ( StringCmp(db , "dbSNP") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_snp);
+    FF_www_db_xref_std(ffstring, db, identifier, link_snp);
   } else if ( StringCmp(db , "RATMAP") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_ratmap);
+    FF_www_db_xref_std(ffstring, db, identifier, link_ratmap);
   } else if ( StringCmp(db , "RGD") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_rgd);
+    FF_www_db_xref_std(ffstring, db, identifier, link_rgd);
   } else if ( StringCmp(db , "MGD") == 0) {
-	FF_www_db_xref_mgd(ffstring, db, identifier);
+    FF_www_db_xref_mgd(ffstring, db, identifier);
   } else if ( StringCmp(db , "CDD") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_cdd);
+    FF_www_db_xref_std(ffstring, db, identifier, link_cdd);
   } else if ( StringCmp(db , "JCM") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_jcm);
+    FF_www_db_xref_std(ffstring, db, identifier, link_jcm);
   } else if ( StringCmp(db , "ISFinder") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_isfinder);
+    FF_www_db_xref_std(ffstring, db, identifier, link_isfinder);
   } else if ( StringCmp(db , "GABI") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_gabi);
+    FF_www_db_xref_std(ffstring, db, identifier, link_gabi);
+  } else if ( StringCmp(db , "ZFIN") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_zfin);
   } else if ( StringCmp(db , "FANTOM_DB") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_fantom);
+    FF_www_db_xref_std(ffstring, db, identifier, link_fantom);
+  } else if ( StringCmp(db , "Interpro") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_interpro);
+  } else if ( StringCmp(db , "GeneDB") == 0) {
+    FF_www_db_xref_std(ffstring, db, identifier, link_genedb);
   } else if ( StringCmp(db , "PID") == 0) {
-	FF_www_db_xref_pid(ffstring, db, identifier);
+    FF_www_db_xref_pid(ffstring, db, identifier);
   } else if ( StringCmp(db , "dbEST") == 0) {
-	FF_www_db_xref_dbEST(ffstring, db, identifier);
+    FF_www_db_xref_dbEST(ffstring, db, identifier);
   } else if ( StringCmp(db , "dbSTS") == 0) {
-	FF_www_db_xref_dbSTS(ffstring, db, identifier);
+    FF_www_db_xref_dbSTS(ffstring, db, identifier);
   } else if ( StringCmp(db , "niaEST") == 0) {
-	FF_www_db_xref_niaEST(ffstring, db, identifier);
+    FF_www_db_xref_niaEST(ffstring, db, identifier);
   } else if ( StringCmp(db , "WormBase") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_worm_base);
+    FF_www_db_xref_std(ffstring, db, identifier, link_worm_base);
   } else if ( StringCmp(db , "AceView/WormGenes") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_ace);
+    FF_www_db_xref_std(ffstring, db, identifier, link_ace);
   } else if ( StringCmp(db , "WorfDB") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_worfdb);
+    FF_www_db_xref_std(ffstring, db, identifier, link_worfdb);
   } else if ( StringCmp(db , "NextDB") == 0) {
-	FF_www_db_xref_std(ffstring, db, identifier, link_nextdb);
+    FF_www_db_xref_std(ffstring, db, identifier, link_nextdb);
   } else if ( StringCmp(db , "IFO") == 0) {
-	FF_www_db_xref_ifo(ffstring, db, identifier);
+    FF_www_db_xref_ifo(ffstring, db, identifier);
   } else if ( StringCmp(db , "GDB") == 0) {
-	FF_www_db_xref_gdb(ffstring, db, identifier);
+    FF_www_db_xref_gdb(ffstring, db, identifier);
+  } else if ( StringCmp(db , "REBASE") == 0) {
+    FF_www_db_xref_rebase(ffstring, db, identifier);
 
   } else {  
-	/* default: no link just the text */
-	FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+    /* default: no link just the text */
+    FFAddTextToString(ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
   }             
 }
 
@@ -2968,7 +3021,7 @@ static void FFAddString_NoRedund (
 
   if (StringNICmp (string, "tRNA-", 5) == 0) {
     str = string+5;
-	}
+    }
 
   while ( foundPos >= 0 && !wholeWord ) {
     foundPos = FFStringSearch(unique, str, foundPos);
@@ -3190,6 +3243,7 @@ static CharPtr legalDbXrefs [] = {
   "FLYBASE",
   "GABI",
   "GDB",
+  "GeneDB",
   "GeneID",
   "GI",
   "GO",
@@ -3224,10 +3278,12 @@ static CharPtr legalDbXrefs [] = {
   "UniSTS",
   "WorfDB",
   "WormBase",
+  "ZFIN",
   NULL
 };
 
 static CharPtr legalRefSeqDbXrefs [] = {
+  "REBASE",
   NULL
 };
 
@@ -3523,6 +3579,7 @@ static CharPtr FormatOrganismBlock (
   IntAsn2gbJobPtr    ajp;
   Asn2gbSectPtr      asp;
   BioSourcePtr       biop = NULL;
+  Char               ch;
   CharPtr            common = NULL;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
@@ -3539,6 +3596,8 @@ static CharPtr FormatOrganismBlock (
   CharPtr            str;
   Int4               taxid = -1;
   CharPtr            taxname = NULL;
+  CharPtr            tmp;
+  CharPtr            ptr;
   ValNodePtr         vnp;
   StringItemPtr      ffstring, temp;
   Char               buf [16];
@@ -3631,8 +3690,20 @@ static CharPtr FormatOrganismBlock (
           FFAddOneString(temp, "<a href=", FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(temp, link_tax, FALSE, FALSE, TILDE_IGNORE);
           FFAddOneString(temp, "name=", FALSE, FALSE, TILDE_IGNORE);
-          sprintf (buf, "%ld", (long) taxid);
-          FFAddOneString(temp, taxname, FALSE, FALSE, TILDE_IGNORE);
+          tmp = StringSave (taxname);
+          if (tmp != NULL) {
+            ptr = tmp;
+            ch = *ptr;
+            while (ch != '\0') {
+              if (IS_WHITESP (ch)) {
+                *ptr = '+';
+              }
+              ptr++;
+              ch = *ptr;
+            }
+            FFAddOneString(temp, tmp, FALSE, FALSE, TILDE_IGNORE);
+            MemFree (tmp);
+          }
           FFAddOneString(temp, ">", FALSE, FALSE, TILDE_IGNORE);
         }
         FFAddOneString(temp, taxname, FALSE, FALSE, TILDE_IGNORE);
@@ -5583,7 +5654,7 @@ static CharPtr FormatCitSub (
       affil = GetAffil (afp);
       if (format == EMBL_FMT || format == EMBLPEPT_FMT) {
         if (StringNCmp(affil, " to the EMBL/GenBank/DDBJ databases.", 36) != 0) {
-          ValNodeCopyStr (&head, 0, " to the EMBL/GenBank/DDBJ databases\n");
+          ValNodeCopyStr (&head, 0, " to the EMBL/GenBank/DDBJ databases.\n");
         } else {
           ValNodeCopyStr (&head, 0, " ");
         }
@@ -5593,7 +5664,7 @@ static CharPtr FormatCitSub (
       ValNodeCopyStr (&head, 0, affil);
       MemFree (affil);
     } else if (format == EMBL_FMT || format == EMBLPEPT_FMT) {
-      ValNodeCopyStr (&head, 0, " to the EMBL/GenBank/DDBJ databases\n");
+      ValNodeCopyStr (&head, 0, " to the EMBL/GenBank/DDBJ databases.\n");
     }
   }
 
@@ -5929,6 +6000,21 @@ static void AddReferenceToGbseq (
   MemFree (copy);
 }
 
+static Boolean IsCitSub (
+  PubdescPtr pdp,
+  CitSubPtr csp
+)
+
+{
+  ValNodePtr  vnp;
+
+  if (csp != NULL) return TRUE;
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_Sub) return TRUE;
+  }
+  return FALSE;
+}
+
 static CharPtr FormatReferenceBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -5958,12 +6044,15 @@ static CharPtr FormatReferenceBlock (
   IntRefBlockPtr     irp;
   size_t             len;
   SeqLocPtr          loc = NULL;
+  MedlineEntryPtr    mep;
   Int4               muid = 0;
   Boolean            needsPeriod = FALSE;
   SeqLocPtr          nextslp;
   Boolean            notFound;
   ObjMgrDataPtr      omdp;
   PubdescPtr         pdp = NULL;
+  PubdescPtr         pdpcopy = NULL;
+  PubmedEntryPtr     pep = NULL;
   Int4               pmid = 0;
   CharPtr            prefix = NULL;
   RefBlockPtr        rbp;
@@ -6045,6 +6134,30 @@ static CharPtr FormatReferenceBlock (
   if ( temp == NULL ) {
     FFRecycleString(ajp, ffstring);
     return NULL;
+  }
+
+  /* any justuids left at this point is RefSeq protein, and should be fetched */
+
+  irp = (IntRefBlockPtr) rbp;
+  if (irp->justuids) {
+    if (rbp->pmid != 0) {
+      pep = GetPubMedForUid (rbp->pmid);
+    } else if (rbp->muid != 0) {
+      pep = GetPubMedForUid (rbp->muid);
+    }
+    if (pep != NULL) {
+      mep = (MedlineEntryPtr) pep->medent;
+      if (mep != NULL && mep->cit != NULL) {
+        pdpcopy = AsnIoMemCopy ((Pointer) pdp,
+                                 (AsnReadFunc) PubdescAsnRead,
+                                 (AsnWriteFunc) PubdescAsnWrite);
+        cap = AsnIoMemCopy ((Pointer) mep->cit,
+                            (AsnReadFunc) CitArtAsnRead,
+                            (AsnWriteFunc) CitArtAsnWrite);
+        vnp = ValNodeAddPointer (&(pdpcopy->pub), PUB_Article, (Pointer) cap);
+        pdp = pdpcopy;
+      }
+    }
   }
 
   /* print serial number */
@@ -6304,7 +6417,9 @@ static CharPtr FormatReferenceBlock (
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     needsPeriod = FALSE;
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
-    needsPeriod = TRUE;
+    if (! IsCitSub (pdp, csp)) {
+      needsPeriod = TRUE;
+    }
   }
 
   FFAddOneString (temp, str, FALSE, FALSE, TILDE_IGNORE);
@@ -6386,6 +6501,13 @@ static CharPtr FormatReferenceBlock (
 
     FFRecycleString(ajp, ffstring);
     FFRecycleString(ajp, temp);
+    if (pep != NULL) {
+      PubmedEntryFree (pep);
+    }
+    if (pdpcopy != NULL) {
+      PubdescFree (pdpcopy);
+    }
+
     return str;
   }
 
@@ -6536,6 +6658,13 @@ static CharPtr FormatReferenceBlock (
 
   FFRecycleString(ajp, ffstring);
   FFRecycleString(ajp, temp);
+  if (pep != NULL) {
+    PubmedEntryFree (pep);
+  }
+  if (pdpcopy != NULL) {
+    PubdescFree (pdpcopy);
+  }
+
   return str;
 }
 
@@ -6552,8 +6681,8 @@ static Boolean IsTildeEOL(CharPtr str) {
 
   
   for ( ptr = str; 
-	IS_ALPHANUM(*ptr) || *ptr == '_' || *ptr == '-' || *ptr == '.';
-	++ptr) continue;
+    IS_ALPHANUM(*ptr) || *ptr == '_' || *ptr == '-' || *ptr == '.';
+    ++ptr) continue;
 
   return *ptr == '/' ? FALSE : TRUE;
 }
@@ -7455,7 +7584,6 @@ static CharPtr FlatLoc (
     order [SEQID_GENBANK] = num++;
     order [SEQID_EMBL] = num++;
     order [SEQID_DDBJ] = num++;
-    order [SEQID_LOCAL] = num++;
     order [SEQID_OTHER] = num++;
     order [SEQID_TPG] = num++;
     order [SEQID_TPE] = num++;
@@ -7469,6 +7597,7 @@ static CharPtr FlatLoc (
     order [SEQID_PATENT] = num++;
     order [SEQID_GI] = num++;;
     order [SEQID_GENERAL] = num++;
+    order [SEQID_LOCAL] = num++;
     order [SEQID_GIIM] = num++;
     order_initialized = TRUE;
   }
@@ -7518,6 +7647,114 @@ static CharPtr FlatLoc (
   str = FFToCharPtr(ffstring);
   FFRecycleString(ajp, ffstring);
   return str;
+}
+
+
+
+
+static void PromoteSeqId (SeqIdPtr sip, Pointer userdata)
+
+{
+  SeqIdPtr  bestid, newid, oldid;
+
+  bestid = (SeqIdPtr) userdata;
+
+  newid = SeqIdDup (bestid);
+  if (newid == NULL) return;
+
+  oldid = ValNodeNew (NULL);
+  if (oldid == NULL) return;
+
+  MemCopy (oldid, sip, sizeof (ValNode));
+  oldid->next = NULL;
+
+  sip->choice = newid->choice;
+  sip->data.ptrvalue = newid->data.ptrvalue;
+
+  SeqIdFree (oldid);
+  ValNodeFree (newid);
+
+  SeqIdStripLocus (sip);
+}
+
+static SeqLocPtr SeqLocReMapEx (SeqIdPtr newid, SeqLocPtr seq_loc, SeqLocPtr location, Int4 offset, Boolean rev, Boolean masterStyle)
+
+{
+  BioseqPtr    bsp;
+  Boolean      hasNulls;
+  IntFuzzPtr   fuzz = NULL;
+  SeqLocPtr    loc;
+  Boolean      noLeft;
+  Boolean      noRight;
+  Uint1        num = 1;
+  SeqEntryPtr  scope;
+  SeqIdPtr     sip;
+  SeqLocPtr    slp = NULL;
+  SeqPntPtr    spp;
+  SeqLocPtr    tmp;
+
+  if (newid == NULL || seq_loc == NULL || location == NULL) return NULL;
+
+  if (masterStyle) {
+
+    sip = SeqLocId (seq_loc);
+    if (sip == NULL) return NULL;
+    bsp = BioseqFind (sip);
+    if (bsp == NULL) {
+      scope = SeqEntrySetScope (NULL);
+      bsp = BioseqFind (sip);
+      SeqEntrySetScope (scope);
+    }
+    if (bsp == NULL) return NULL;
+    sip = SeqIdFindBest (bsp->id, 0);
+
+    /* map location from parts to segmented bioseq */
+
+    if (location->choice == SEQLOC_PNT) {
+      spp = (SeqPntPtr) location->data.ptrvalue;
+      if (spp != NULL) {
+        fuzz = spp->fuzz;
+      }
+    }
+
+    CheckSeqLocForPartial (location, &noLeft, &noRight);
+    hasNulls = LocationHasNullsBetween (location);
+    loc = SeqLocMerge (bsp, location, NULL, FALSE, TRUE, hasNulls);
+    if (loc == NULL) {
+      tmp = TrimLocInSegment (bsp, location, &noLeft, &noRight);
+      loc = SeqLocMerge (bsp, tmp, NULL, FALSE, TRUE, hasNulls);
+      SeqLocFree (tmp);
+    }
+    if (loc == NULL) {
+      return NULL;
+    }
+    FreeAllFuzz (loc);
+    SetSeqLocPartial (loc, noLeft, noRight);
+
+    if (loc->choice == SEQLOC_PNT && fuzz != NULL) {
+      spp = (SeqPntPtr) loc->data.ptrvalue;
+      if (spp != NULL && spp->fuzz == NULL) {
+        spp->fuzz = AsnIoMemCopy ((Pointer) fuzz,
+                                  (AsnReadFunc) IntFuzzAsnRead,
+                                  (AsnWriteFunc) IntFuzzAsnWrite);
+      }
+    }
+
+    scope = SeqEntrySetScope (NULL);
+    slp = SeqLocReMap (newid, seq_loc, loc, offset, rev);
+    SeqEntrySetScope (scope);
+
+    SeqLocFree (loc);
+
+    VisitSeqIdsInSeqLoc (slp, (Pointer) sip, PromoteSeqId);
+  } else {
+
+    scope = SeqEntrySetScope (NULL);
+    slp = SeqLocReMap (newid, seq_loc, location, offset, rev);
+    SeqEntrySetScope (scope);
+  }
+
+  return slp;
 }
 
 
@@ -7836,7 +8073,7 @@ static CharPtr GetMolTypeQual (
       }
       break;
     case MOLECULE_TYPE_PRE_MRNA :
-      return "pre-mRNA";
+      return "pre-RNA";
     case MOLECULE_TYPE_MRNA :
       return "mRNA";
     case MOLECULE_TYPE_RRNA :
@@ -8038,7 +8275,23 @@ static CharPtr FormatSourceFeatBlock (
     qvp [SCQUAL_focus].ble = TRUE;
   }
 
-  qvp [SCQUAL_mol_type].str = GetMolTypeQual (bsp);
+  str = GetMolTypeQual (bsp);
+  if (str == NULL) {
+    switch (bsp->mol) {
+      case Seq_mol_dna :
+        str = "unassigned DNA";
+        break;
+      case Seq_mol_rna :
+        str = "unassigned RNA";
+        break;
+      case Seq_mol_aa :
+        break;
+      default :
+        str = "unassigned DNA";
+        break;
+    }
+  }
+  qvp [SCQUAL_mol_type].str = str;
 
   SubSourceToQualArray (biop->subtype, qvp);
 
@@ -8450,7 +8703,7 @@ typedef struct qualfeatur {
   Uint1       featurclass;
 } QualFeatur, PNTR QualFeaturPtr;
 
-#define NUM_GB_QUALS 25
+#define NUM_GB_QUALS 26
 
 static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "allele",         FTQUAL_allele         },
@@ -8467,6 +8720,7 @@ static QualFeatur qualToFeature [NUM_GB_QUALS] = {
   { "map",            FTQUAL_map            },
   { "mod_base",       FTQUAL_mod_base       },
   { "number",         FTQUAL_number         },
+  { "operon",         FTQUAL_operon         },
   { "organism",       FTQUAL_organism       },
   { "PCR_conditions", FTQUAL_PCR_conditions },
   { "phenotype",      FTQUAL_phenotype      },
@@ -8581,6 +8835,7 @@ static CharPtr trnaList [] = {
   "tRNA-OTHER",
   "tRNA-Tyr",
   "tRNA-Glx",
+  "tRNA-TERM",
   NULL
 };
 
@@ -8908,441 +9163,525 @@ typedef struct valqualstruc {
 
 static ValQual legalGbqualList [] = {
 
-  {FEATDEF_GENE ,  FTQUAL_allele},
-  {FEATDEF_GENE ,  FTQUAL_function},
-  {FEATDEF_GENE ,  FTQUAL_label},
-  {FEATDEF_GENE ,  FTQUAL_map},
-  {FEATDEF_GENE ,  FTQUAL_phenotype},
-  {FEATDEF_GENE ,  FTQUAL_product},
-  {FEATDEF_GENE ,  FTQUAL_standard_name},
-  {FEATDEF_GENE ,  FTQUAL_usedin},
-
-  {FEATDEF_CDS ,  FTQUAL_allele},
-  {FEATDEF_CDS ,  FTQUAL_codon},
-  {FEATDEF_CDS ,  FTQUAL_label},
-  {FEATDEF_CDS ,  FTQUAL_map},
-  {FEATDEF_CDS ,  FTQUAL_number},
-  {FEATDEF_CDS ,  FTQUAL_standard_name},
-  {FEATDEF_CDS ,  FTQUAL_usedin},
-
-  {FEATDEF_PROT ,  FTQUAL_product},
-
-  {FEATDEF_preRNA ,  FTQUAL_allele},
-  {FEATDEF_preRNA ,  FTQUAL_function},
-  {FEATDEF_preRNA ,  FTQUAL_label},
-  {FEATDEF_preRNA ,  FTQUAL_map},
-  {FEATDEF_preRNA ,  FTQUAL_product},
-  {FEATDEF_preRNA ,  FTQUAL_standard_name},
-  {FEATDEF_preRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_mRNA ,  FTQUAL_allele},
-  {FEATDEF_mRNA ,  FTQUAL_function},
-  {FEATDEF_mRNA ,  FTQUAL_label},
-  {FEATDEF_mRNA ,  FTQUAL_map},
-  {FEATDEF_mRNA ,  FTQUAL_product},
-  {FEATDEF_mRNA ,  FTQUAL_standard_name},
-  {FEATDEF_mRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_tRNA ,  FTQUAL_function},
-  {FEATDEF_tRNA ,  FTQUAL_label},
-  {FEATDEF_tRNA ,  FTQUAL_map},
-  {FEATDEF_tRNA ,  FTQUAL_product},
-  {FEATDEF_tRNA ,  FTQUAL_standard_name},
-  {FEATDEF_tRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_rRNA ,  FTQUAL_function},
-  {FEATDEF_rRNA ,  FTQUAL_label},
-  {FEATDEF_rRNA ,  FTQUAL_map},
-  {FEATDEF_rRNA ,  FTQUAL_product},
-  {FEATDEF_rRNA ,  FTQUAL_standard_name},
-  {FEATDEF_rRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_snRNA ,  FTQUAL_function},
-  {FEATDEF_snRNA ,  FTQUAL_label},
-  {FEATDEF_snRNA ,  FTQUAL_map},
-  {FEATDEF_snRNA ,  FTQUAL_product},
-  {FEATDEF_snRNA ,  FTQUAL_standard_name},
-  {FEATDEF_snRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_scRNA ,  FTQUAL_function},
-  {FEATDEF_scRNA ,  FTQUAL_label},
-  {FEATDEF_scRNA ,  FTQUAL_map},
-  {FEATDEF_scRNA ,  FTQUAL_product},
-  {FEATDEF_scRNA ,  FTQUAL_standard_name},
-  {FEATDEF_scRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_otherRNA ,  FTQUAL_function},
-  {FEATDEF_otherRNA ,  FTQUAL_label},
-  {FEATDEF_otherRNA ,  FTQUAL_map},
-  {FEATDEF_otherRNA ,  FTQUAL_product},
-  {FEATDEF_otherRNA ,  FTQUAL_standard_name},
-  {FEATDEF_otherRNA ,  FTQUAL_usedin},
-
-  {FEATDEF_attenuator ,  FTQUAL_label},
-  {FEATDEF_attenuator ,  FTQUAL_map},
-  {FEATDEF_attenuator ,  FTQUAL_phenotype},
-  {FEATDEF_attenuator ,  FTQUAL_usedin},
-
-  {FEATDEF_C_region ,  FTQUAL_label},
-  {FEATDEF_C_region ,  FTQUAL_map},
-  {FEATDEF_C_region ,  FTQUAL_product},
-  {FEATDEF_C_region ,  FTQUAL_standard_name},
-  {FEATDEF_C_region ,  FTQUAL_usedin},
-
-  {FEATDEF_CAAT_signal ,  FTQUAL_label},
-  {FEATDEF_CAAT_signal ,  FTQUAL_map},
-  {FEATDEF_CAAT_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_Imp_CDS ,  FTQUAL_codon},
-  {FEATDEF_Imp_CDS ,  FTQUAL_EC_number},
-  {FEATDEF_Imp_CDS ,  FTQUAL_function},
-  {FEATDEF_Imp_CDS ,  FTQUAL_label},
-  {FEATDEF_Imp_CDS ,  FTQUAL_map},
-  {FEATDEF_Imp_CDS ,  FTQUAL_number},
-  {FEATDEF_Imp_CDS ,  FTQUAL_product},
-  {FEATDEF_Imp_CDS ,  FTQUAL_standard_name},
-  {FEATDEF_Imp_CDS ,  FTQUAL_usedin},
-
-  {FEATDEF_conflict ,  FTQUAL_label},
-  {FEATDEF_conflict ,  FTQUAL_map},
-  {FEATDEF_conflict ,  FTQUAL_replace},
-  {FEATDEF_conflict ,  FTQUAL_usedin},
-
-  {FEATDEF_D_loop ,  FTQUAL_label},
-  {FEATDEF_D_loop ,  FTQUAL_map},
-  {FEATDEF_D_loop ,  FTQUAL_usedin},
-
-  {FEATDEF_D_segment ,  FTQUAL_label},
-  {FEATDEF_D_segment ,  FTQUAL_map},
-  {FEATDEF_D_segment ,  FTQUAL_product},
-  {FEATDEF_D_segment ,  FTQUAL_standard_name},
-  {FEATDEF_D_segment ,  FTQUAL_usedin},
-
-  {FEATDEF_enhancer ,  FTQUAL_label},
-  {FEATDEF_enhancer ,  FTQUAL_map},
-  {FEATDEF_enhancer ,  FTQUAL_standard_name},
-  {FEATDEF_enhancer ,  FTQUAL_usedin},
-
-  {FEATDEF_exon ,  FTQUAL_allele},
-  {FEATDEF_exon ,  FTQUAL_EC_number},
-  {FEATDEF_exon ,  FTQUAL_function},
-  {FEATDEF_exon ,  FTQUAL_label},
-  {FEATDEF_exon ,  FTQUAL_map},
-  {FEATDEF_exon ,  FTQUAL_number},
-  {FEATDEF_exon ,  FTQUAL_product},
-  {FEATDEF_exon ,  FTQUAL_standard_name},
-  {FEATDEF_exon ,  FTQUAL_usedin},
-
-  {FEATDEF_GC_signal ,  FTQUAL_label},
-  {FEATDEF_GC_signal ,  FTQUAL_map},
-  {FEATDEF_GC_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_iDNA ,  FTQUAL_function},
-  {FEATDEF_iDNA ,  FTQUAL_label},
-  {FEATDEF_iDNA ,  FTQUAL_map},
-  {FEATDEF_iDNA ,  FTQUAL_number},
-  {FEATDEF_iDNA ,  FTQUAL_standard_name},
-  {FEATDEF_iDNA ,  FTQUAL_usedin},
-
-  {FEATDEF_intron ,  FTQUAL_allele},
-  {FEATDEF_intron ,  FTQUAL_cons_splice},
-  {FEATDEF_intron ,  FTQUAL_function},
-  {FEATDEF_intron ,  FTQUAL_label},
-  {FEATDEF_intron ,  FTQUAL_map},
-  {FEATDEF_intron ,  FTQUAL_number},
-  {FEATDEF_intron ,  FTQUAL_standard_name},
-  {FEATDEF_intron ,  FTQUAL_usedin},
-
-  {FEATDEF_J_segment ,  FTQUAL_label},
-  {FEATDEF_J_segment ,  FTQUAL_map},
-  {FEATDEF_J_segment ,  FTQUAL_product},
-  {FEATDEF_J_segment ,  FTQUAL_standard_name},
-  {FEATDEF_J_segment ,  FTQUAL_usedin},
-
-  {FEATDEF_LTR ,  FTQUAL_function},
-  {FEATDEF_LTR ,  FTQUAL_label},
-  {FEATDEF_LTR ,  FTQUAL_map},
-  {FEATDEF_LTR ,  FTQUAL_standard_name},
-  {FEATDEF_LTR ,  FTQUAL_usedin},
-
-  {FEATDEF_mat_peptide ,  FTQUAL_EC_number},
-  {FEATDEF_mat_peptide ,  FTQUAL_function},
-  {FEATDEF_mat_peptide ,  FTQUAL_label},
-  {FEATDEF_mat_peptide ,  FTQUAL_map},
-  {FEATDEF_mat_peptide ,  FTQUAL_product},
-  {FEATDEF_mat_peptide ,  FTQUAL_standard_name},
-  {FEATDEF_mat_peptide ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_binding ,  FTQUAL_bound_moiety},
-  {FEATDEF_misc_binding ,  FTQUAL_function},
-  {FEATDEF_misc_binding ,  FTQUAL_label},
-  {FEATDEF_misc_binding ,  FTQUAL_map},
-  {FEATDEF_misc_binding ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_difference ,  FTQUAL_clone},
-  {FEATDEF_misc_difference ,  FTQUAL_label},
-  {FEATDEF_misc_difference ,  FTQUAL_map},
-  {FEATDEF_misc_difference ,  FTQUAL_phenotype},
-  {FEATDEF_misc_difference ,  FTQUAL_replace},
-  {FEATDEF_misc_difference ,  FTQUAL_standard_name},
-  {FEATDEF_misc_difference ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_feature ,  FTQUAL_function},
-  {FEATDEF_misc_feature ,  FTQUAL_label},
-  {FEATDEF_misc_feature ,  FTQUAL_map},
-  {FEATDEF_misc_feature ,  FTQUAL_number},
-  {FEATDEF_misc_feature ,  FTQUAL_phenotype},
-  {FEATDEF_misc_feature ,  FTQUAL_product},
-  {FEATDEF_misc_feature ,  FTQUAL_standard_name},
-  {FEATDEF_misc_feature ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_recomb ,  FTQUAL_label},
-  {FEATDEF_misc_recomb ,  FTQUAL_map},
-  {FEATDEF_misc_recomb ,  FTQUAL_organism},
-  {FEATDEF_misc_recomb ,  FTQUAL_standard_name},
-  {FEATDEF_misc_recomb ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_signal ,  FTQUAL_function},
-  {FEATDEF_misc_signal ,  FTQUAL_label},
-  {FEATDEF_misc_signal ,  FTQUAL_map},
-  {FEATDEF_misc_signal ,  FTQUAL_phenotype},
-  {FEATDEF_misc_signal ,  FTQUAL_standard_name},
-  {FEATDEF_misc_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_misc_structure ,  FTQUAL_function},
-  {FEATDEF_misc_structure ,  FTQUAL_label},
-  {FEATDEF_misc_structure ,  FTQUAL_map},
-  {FEATDEF_misc_structure ,  FTQUAL_standard_name},
-  {FEATDEF_misc_structure ,  FTQUAL_usedin},
-
-  {FEATDEF_modified_base ,  FTQUAL_frequency},
-  {FEATDEF_modified_base ,  FTQUAL_label},
-  {FEATDEF_modified_base ,  FTQUAL_map},
-  {FEATDEF_modified_base ,  FTQUAL_mod_base},
-  {FEATDEF_modified_base ,  FTQUAL_usedin},
-
-  {FEATDEF_N_region ,  FTQUAL_label},
-  {FEATDEF_N_region ,  FTQUAL_map},
-  {FEATDEF_N_region ,  FTQUAL_product},
-  {FEATDEF_N_region ,  FTQUAL_standard_name},
-  {FEATDEF_N_region ,  FTQUAL_usedin},
-
-  {FEATDEF_old_sequence ,  FTQUAL_label},
-  {FEATDEF_old_sequence ,  FTQUAL_map},
-  {FEATDEF_old_sequence ,  FTQUAL_replace},
-  {FEATDEF_old_sequence ,  FTQUAL_usedin},
-
-  {FEATDEF_polyA_signal ,  FTQUAL_label},
-  {FEATDEF_polyA_signal ,  FTQUAL_map},
-  {FEATDEF_polyA_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_polyA_site ,  FTQUAL_label},
-  {FEATDEF_polyA_site ,  FTQUAL_map},
-  {FEATDEF_polyA_site ,  FTQUAL_usedin},
-
-  {FEATDEF_prim_transcript ,  FTQUAL_allele},
-  {FEATDEF_prim_transcript ,  FTQUAL_function},
-  {FEATDEF_prim_transcript ,  FTQUAL_label},
-  {FEATDEF_prim_transcript ,  FTQUAL_map},
-  {FEATDEF_prim_transcript ,  FTQUAL_standard_name},
-  {FEATDEF_prim_transcript ,  FTQUAL_usedin},
-
-  {FEATDEF_primer_bind ,  FTQUAL_label},
-  {FEATDEF_primer_bind ,  FTQUAL_map},
-  {FEATDEF_primer_bind ,  FTQUAL_PCR_conditions},
-  {FEATDEF_primer_bind ,  FTQUAL_standard_name},
-  {FEATDEF_primer_bind ,  FTQUAL_usedin},
-
-  {FEATDEF_promoter ,  FTQUAL_function},
-  {FEATDEF_promoter ,  FTQUAL_label},
-  {FEATDEF_promoter ,  FTQUAL_map},
-  {FEATDEF_promoter ,  FTQUAL_phenotype},
-  {FEATDEF_promoter ,  FTQUAL_standard_name},
-  {FEATDEF_promoter ,  FTQUAL_usedin},
-
-  {FEATDEF_protein_bind ,  FTQUAL_bound_moiety},
-  {FEATDEF_protein_bind ,  FTQUAL_function},
-  {FEATDEF_protein_bind ,  FTQUAL_label},
-  {FEATDEF_protein_bind ,  FTQUAL_map},
-  {FEATDEF_protein_bind ,  FTQUAL_standard_name},
-  {FEATDEF_protein_bind ,  FTQUAL_usedin},
-
-  {FEATDEF_RBS ,  FTQUAL_label},
-  {FEATDEF_RBS ,  FTQUAL_map},
-  {FEATDEF_RBS ,  FTQUAL_standard_name},
-  {FEATDEF_RBS ,  FTQUAL_usedin},
-
-  {FEATDEF_repeat_region ,  FTQUAL_function},
-  {FEATDEF_repeat_region ,  FTQUAL_insertion_seq},
-  {FEATDEF_repeat_region ,  FTQUAL_label},
-  {FEATDEF_repeat_region ,  FTQUAL_map},
-  {FEATDEF_repeat_region ,  FTQUAL_rpt_family},
-  {FEATDEF_repeat_region ,  FTQUAL_rpt_type},
-  {FEATDEF_repeat_region ,  FTQUAL_rpt_unit},
-  {FEATDEF_repeat_region ,  FTQUAL_standard_name},
-  {FEATDEF_repeat_region ,  FTQUAL_transposon},
-  {FEATDEF_repeat_region ,  FTQUAL_usedin},
-
-  {FEATDEF_repeat_unit ,  FTQUAL_function},
-  {FEATDEF_repeat_unit ,  FTQUAL_label},
-  {FEATDEF_repeat_unit ,  FTQUAL_map},
-  {FEATDEF_repeat_unit ,  FTQUAL_rpt_family},
-  {FEATDEF_repeat_unit ,  FTQUAL_rpt_type},
-  {FEATDEF_repeat_unit ,  FTQUAL_usedin},
-
-  {FEATDEF_rep_origin ,  FTQUAL_direction},
-  {FEATDEF_rep_origin ,  FTQUAL_label},
-  {FEATDEF_rep_origin ,  FTQUAL_map},
-  {FEATDEF_rep_origin ,  FTQUAL_standard_name},
-  {FEATDEF_rep_origin ,  FTQUAL_usedin},
-
-  {FEATDEF_S_region ,  FTQUAL_label},
-  {FEATDEF_S_region ,  FTQUAL_map},
-  {FEATDEF_S_region ,  FTQUAL_product},
-  {FEATDEF_S_region ,  FTQUAL_standard_name},
-  {FEATDEF_S_region ,  FTQUAL_usedin},
-
-  {FEATDEF_satellite ,  FTQUAL_label},
-  {FEATDEF_satellite ,  FTQUAL_map},
-  {FEATDEF_satellite ,  FTQUAL_rpt_family},
-  {FEATDEF_satellite ,  FTQUAL_rpt_type},
-  {FEATDEF_satellite ,  FTQUAL_rpt_unit},
-  {FEATDEF_satellite ,  FTQUAL_standard_name},
-  {FEATDEF_satellite ,  FTQUAL_usedin},
-
-  {FEATDEF_sig_peptide ,  FTQUAL_function},
-  {FEATDEF_sig_peptide ,  FTQUAL_label},
-  {FEATDEF_sig_peptide ,  FTQUAL_map},
-  {FEATDEF_sig_peptide ,  FTQUAL_product},
-  {FEATDEF_sig_peptide ,  FTQUAL_standard_name},
-  {FEATDEF_sig_peptide ,  FTQUAL_usedin},
-
-  {FEATDEF_stem_loop ,  FTQUAL_function},
-  {FEATDEF_stem_loop ,  FTQUAL_label},
-  {FEATDEF_stem_loop ,  FTQUAL_map},
-  {FEATDEF_stem_loop ,  FTQUAL_standard_name},
-  {FEATDEF_stem_loop ,  FTQUAL_usedin},
-
-  {FEATDEF_STS ,  FTQUAL_label},
-  {FEATDEF_STS ,  FTQUAL_map},
-  {FEATDEF_STS ,  FTQUAL_standard_name},
-  {FEATDEF_STS ,  FTQUAL_usedin},
-
-  {FEATDEF_TATA_signal ,  FTQUAL_label},
-  {FEATDEF_TATA_signal ,  FTQUAL_map},
-  {FEATDEF_TATA_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_terminator ,  FTQUAL_label},
-  {FEATDEF_terminator ,  FTQUAL_map},
-  {FEATDEF_terminator ,  FTQUAL_standard_name},
-  {FEATDEF_terminator ,  FTQUAL_usedin},
-
-  {FEATDEF_transit_peptide ,  FTQUAL_function},
-  {FEATDEF_transit_peptide ,  FTQUAL_label},
-  {FEATDEF_transit_peptide ,  FTQUAL_map},
-  {FEATDEF_transit_peptide ,  FTQUAL_product},
-  {FEATDEF_transit_peptide ,  FTQUAL_standard_name},
-  {FEATDEF_transit_peptide ,  FTQUAL_usedin},
-
-  {FEATDEF_unsure ,  FTQUAL_label},
-  {FEATDEF_unsure ,  FTQUAL_map},
-  {FEATDEF_unsure ,  FTQUAL_replace},
-  {FEATDEF_unsure ,  FTQUAL_usedin},
-
-  {FEATDEF_V_region ,  FTQUAL_label},
-  {FEATDEF_V_region ,  FTQUAL_map},
-  {FEATDEF_V_region ,  FTQUAL_product},
-  {FEATDEF_V_region ,  FTQUAL_standard_name},
-  {FEATDEF_V_region ,  FTQUAL_usedin},
-
-  {FEATDEF_V_segment ,  FTQUAL_label},
-  {FEATDEF_V_segment ,  FTQUAL_map},
-  {FEATDEF_V_segment ,  FTQUAL_product},
-  {FEATDEF_V_segment ,  FTQUAL_standard_name},
-  {FEATDEF_V_segment ,  FTQUAL_usedin},
-
-  {FEATDEF_variation ,  FTQUAL_allele},
-  {FEATDEF_variation ,  FTQUAL_frequency},
-  {FEATDEF_variation ,  FTQUAL_label},
-  {FEATDEF_variation ,  FTQUAL_map},
-  {FEATDEF_variation ,  FTQUAL_phenotype},
-  {FEATDEF_variation ,  FTQUAL_product},
-  {FEATDEF_variation ,  FTQUAL_replace},
-  {FEATDEF_variation ,  FTQUAL_standard_name},
-  {FEATDEF_variation ,  FTQUAL_usedin},
-
-  {FEATDEF_3clip ,  FTQUAL_allele},
-  {FEATDEF_3clip ,  FTQUAL_function},
-  {FEATDEF_3clip ,  FTQUAL_label},
-  {FEATDEF_3clip ,  FTQUAL_map},
-  {FEATDEF_3clip ,  FTQUAL_standard_name},
-  {FEATDEF_3clip ,  FTQUAL_usedin},
-
-  {FEATDEF_3UTR ,  FTQUAL_allele},
-  {FEATDEF_3UTR ,  FTQUAL_function},
-  {FEATDEF_3UTR ,  FTQUAL_label},
-  {FEATDEF_3UTR ,  FTQUAL_map},
-  {FEATDEF_3UTR ,  FTQUAL_standard_name},
-  {FEATDEF_3UTR ,  FTQUAL_usedin},
-
-  {FEATDEF_5clip ,  FTQUAL_allele},
-  {FEATDEF_5clip ,  FTQUAL_function},
-  {FEATDEF_5clip ,  FTQUAL_label},
-  {FEATDEF_5clip ,  FTQUAL_map},
-  {FEATDEF_5clip ,  FTQUAL_standard_name},
-  {FEATDEF_5clip ,  FTQUAL_usedin},
-
-  {FEATDEF_5UTR ,  FTQUAL_allele},
-  {FEATDEF_5UTR ,  FTQUAL_function},
-  {FEATDEF_5UTR ,  FTQUAL_label},
-  {FEATDEF_5UTR ,  FTQUAL_map},
-  {FEATDEF_5UTR ,  FTQUAL_standard_name},
-  {FEATDEF_5UTR ,  FTQUAL_usedin},
-
-  {FEATDEF_10_signal ,  FTQUAL_label},
-  {FEATDEF_10_signal ,  FTQUAL_map},
-  {FEATDEF_10_signal ,  FTQUAL_standard_name},
-  {FEATDEF_10_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_35_signal ,  FTQUAL_label},
-  {FEATDEF_35_signal ,  FTQUAL_map},
-  {FEATDEF_35_signal ,  FTQUAL_standard_name},
-  {FEATDEF_35_signal ,  FTQUAL_usedin},
-
-  {FEATDEF_REGION ,  FTQUAL_function},
-  {FEATDEF_REGION ,  FTQUAL_label},
-  {FEATDEF_REGION ,  FTQUAL_map},
-  {FEATDEF_REGION ,  FTQUAL_number},
-  {FEATDEF_REGION ,  FTQUAL_phenotype},
-  {FEATDEF_REGION ,  FTQUAL_product},
-  {FEATDEF_REGION ,  FTQUAL_standard_name},
-  {FEATDEF_REGION ,  FTQUAL_usedin},
-
-  {FEATDEF_mat_peptide_aa ,  FTQUAL_label},
-  {FEATDEF_mat_peptide_aa ,  FTQUAL_map},
-  {FEATDEF_mat_peptide_aa ,  FTQUAL_product},
-  {FEATDEF_mat_peptide_aa ,  FTQUAL_standard_name},
-  {FEATDEF_mat_peptide_aa ,  FTQUAL_usedin},
-
-  {FEATDEF_sig_peptide_aa ,  FTQUAL_label},
-  {FEATDEF_sig_peptide_aa ,  FTQUAL_map},
-  {FEATDEF_sig_peptide_aa ,  FTQUAL_product},
-  {FEATDEF_sig_peptide_aa ,  FTQUAL_standard_name},
-  {FEATDEF_sig_peptide_aa ,  FTQUAL_usedin},
-
-  {FEATDEF_transit_peptide_aa ,  FTQUAL_label},
-  {FEATDEF_transit_peptide_aa ,  FTQUAL_map},
-  {FEATDEF_transit_peptide_aa ,  FTQUAL_product},
-  {FEATDEF_transit_peptide_aa ,  FTQUAL_standard_name},
-  {FEATDEF_transit_peptide_aa ,  FTQUAL_usedin},
-
-  {FEATDEF_snoRNA ,  FTQUAL_function},
-  {FEATDEF_snoRNA ,  FTQUAL_label},
-  {FEATDEF_snoRNA ,  FTQUAL_map},
-  {FEATDEF_snoRNA ,  FTQUAL_product},
-  {FEATDEF_snoRNA ,  FTQUAL_standard_name},
-  {FEATDEF_snoRNA ,  FTQUAL_usedin}
-
+  { FEATDEF_GENE , FTQUAL_allele },
+  { FEATDEF_GENE , FTQUAL_function },
+  { FEATDEF_GENE , FTQUAL_label },
+  { FEATDEF_GENE , FTQUAL_map },
+  { FEATDEF_GENE , FTQUAL_operon },
+  { FEATDEF_GENE , FTQUAL_phenotype },
+  { FEATDEF_GENE , FTQUAL_product },
+  { FEATDEF_GENE , FTQUAL_standard_name },
+  { FEATDEF_GENE , FTQUAL_usedin },
+
+  { FEATDEF_CDS , FTQUAL_allele },
+  { FEATDEF_CDS , FTQUAL_codon },
+  { FEATDEF_CDS , FTQUAL_label },
+  { FEATDEF_CDS , FTQUAL_map },
+  { FEATDEF_CDS , FTQUAL_number },
+  { FEATDEF_CDS , FTQUAL_operon },
+  { FEATDEF_CDS , FTQUAL_standard_name },
+  { FEATDEF_CDS , FTQUAL_usedin },
+
+  { FEATDEF_PROT , FTQUAL_product },
+
+  { FEATDEF_preRNA , FTQUAL_allele },
+  { FEATDEF_preRNA , FTQUAL_function },
+  { FEATDEF_preRNA , FTQUAL_label },
+  { FEATDEF_preRNA , FTQUAL_map },
+  { FEATDEF_preRNA , FTQUAL_operon },
+  { FEATDEF_preRNA , FTQUAL_product },
+  { FEATDEF_preRNA , FTQUAL_standard_name },
+  { FEATDEF_preRNA , FTQUAL_usedin },
+
+  { FEATDEF_mRNA , FTQUAL_allele },
+  { FEATDEF_mRNA , FTQUAL_function },
+  { FEATDEF_mRNA , FTQUAL_label },
+  { FEATDEF_mRNA , FTQUAL_map },
+  { FEATDEF_mRNA , FTQUAL_operon },
+  { FEATDEF_mRNA , FTQUAL_product },
+  { FEATDEF_mRNA , FTQUAL_standard_name },
+  { FEATDEF_mRNA , FTQUAL_usedin },
+
+  { FEATDEF_tRNA , FTQUAL_allele },
+  { FEATDEF_tRNA , FTQUAL_function },
+  { FEATDEF_tRNA , FTQUAL_label },
+  { FEATDEF_tRNA , FTQUAL_map },
+  { FEATDEF_tRNA , FTQUAL_product },
+  { FEATDEF_tRNA , FTQUAL_standard_name },
+  { FEATDEF_tRNA , FTQUAL_usedin },
+
+  { FEATDEF_rRNA , FTQUAL_allele },
+  { FEATDEF_rRNA , FTQUAL_function },
+  { FEATDEF_rRNA , FTQUAL_label },
+  { FEATDEF_rRNA , FTQUAL_map },
+  { FEATDEF_rRNA , FTQUAL_product },
+  { FEATDEF_rRNA , FTQUAL_standard_name },
+  { FEATDEF_rRNA , FTQUAL_usedin },
+
+  { FEATDEF_snRNA , FTQUAL_allele },
+  { FEATDEF_snRNA , FTQUAL_function },
+  { FEATDEF_snRNA , FTQUAL_label },
+  { FEATDEF_snRNA , FTQUAL_map },
+  { FEATDEF_snRNA , FTQUAL_product },
+  { FEATDEF_snRNA , FTQUAL_standard_name },
+  { FEATDEF_snRNA , FTQUAL_usedin },
+
+  { FEATDEF_scRNA , FTQUAL_allele },
+  { FEATDEF_scRNA , FTQUAL_function },
+  { FEATDEF_scRNA , FTQUAL_label },
+  { FEATDEF_scRNA , FTQUAL_map },
+  { FEATDEF_scRNA , FTQUAL_product },
+  { FEATDEF_scRNA , FTQUAL_standard_name },
+  { FEATDEF_scRNA , FTQUAL_usedin },
+
+  { FEATDEF_otherRNA , FTQUAL_allele },
+  { FEATDEF_otherRNA , FTQUAL_function },
+  { FEATDEF_otherRNA , FTQUAL_label },
+  { FEATDEF_otherRNA , FTQUAL_map },
+  { FEATDEF_otherRNA , FTQUAL_operon },
+  { FEATDEF_otherRNA , FTQUAL_product },
+  { FEATDEF_otherRNA , FTQUAL_standard_name },
+  { FEATDEF_otherRNA , FTQUAL_usedin },
+
+  { FEATDEF_attenuator , FTQUAL_allele },
+  { FEATDEF_attenuator , FTQUAL_label },
+  { FEATDEF_attenuator , FTQUAL_map },
+  { FEATDEF_attenuator , FTQUAL_operon },
+  { FEATDEF_attenuator , FTQUAL_phenotype },
+  { FEATDEF_attenuator , FTQUAL_usedin },
+
+  { FEATDEF_C_region , FTQUAL_allele },
+  { FEATDEF_C_region , FTQUAL_label },
+  { FEATDEF_C_region , FTQUAL_map },
+  { FEATDEF_C_region , FTQUAL_product },
+  { FEATDEF_C_region , FTQUAL_standard_name },
+  { FEATDEF_C_region , FTQUAL_usedin },
+
+  { FEATDEF_CAAT_signal , FTQUAL_allele },
+  { FEATDEF_CAAT_signal , FTQUAL_label },
+  { FEATDEF_CAAT_signal , FTQUAL_map },
+  { FEATDEF_CAAT_signal , FTQUAL_usedin },
+
+  { FEATDEF_Imp_CDS , FTQUAL_codon },
+  { FEATDEF_Imp_CDS , FTQUAL_EC_number },
+  { FEATDEF_Imp_CDS , FTQUAL_function },
+  { FEATDEF_Imp_CDS , FTQUAL_label },
+  { FEATDEF_Imp_CDS , FTQUAL_map },
+  { FEATDEF_Imp_CDS , FTQUAL_number },
+  { FEATDEF_Imp_CDS , FTQUAL_operon },
+  { FEATDEF_Imp_CDS , FTQUAL_product },
+  { FEATDEF_Imp_CDS , FTQUAL_standard_name },
+  { FEATDEF_Imp_CDS , FTQUAL_usedin },
+
+  { FEATDEF_conflict , FTQUAL_allele },
+  { FEATDEF_conflict , FTQUAL_label },
+  { FEATDEF_conflict , FTQUAL_map },
+  { FEATDEF_conflict , FTQUAL_replace },
+  { FEATDEF_conflict , FTQUAL_usedin },
+
+  { FEATDEF_D_loop , FTQUAL_allele },
+  { FEATDEF_D_loop , FTQUAL_label },
+  { FEATDEF_D_loop , FTQUAL_map },
+  { FEATDEF_D_loop , FTQUAL_usedin },
+
+  { FEATDEF_D_segment , FTQUAL_allele },
+  { FEATDEF_D_segment , FTQUAL_label },
+  { FEATDEF_D_segment , FTQUAL_map },
+  { FEATDEF_D_segment , FTQUAL_product },
+  { FEATDEF_D_segment , FTQUAL_standard_name },
+  { FEATDEF_D_segment , FTQUAL_usedin },
+
+  { FEATDEF_enhancer , FTQUAL_allele },
+  { FEATDEF_enhancer , FTQUAL_label },
+  { FEATDEF_enhancer , FTQUAL_map },
+  { FEATDEF_enhancer , FTQUAL_standard_name },
+  { FEATDEF_enhancer , FTQUAL_usedin },
+
+  { FEATDEF_exon , FTQUAL_allele },
+  { FEATDEF_exon , FTQUAL_EC_number },
+  { FEATDEF_exon , FTQUAL_function },
+  { FEATDEF_exon , FTQUAL_label },
+  { FEATDEF_exon , FTQUAL_map },
+  { FEATDEF_exon , FTQUAL_number },
+  { FEATDEF_exon , FTQUAL_product },
+  { FEATDEF_exon , FTQUAL_standard_name },
+  { FEATDEF_exon , FTQUAL_usedin },
+
+  { FEATDEF_GC_signal , FTQUAL_allele },
+  { FEATDEF_GC_signal , FTQUAL_label },
+  { FEATDEF_GC_signal , FTQUAL_map },
+  { FEATDEF_GC_signal , FTQUAL_usedin },
+
+  { FEATDEF_iDNA , FTQUAL_allele },
+  { FEATDEF_iDNA , FTQUAL_function },
+  { FEATDEF_iDNA , FTQUAL_label },
+  { FEATDEF_iDNA , FTQUAL_map },
+  { FEATDEF_iDNA , FTQUAL_number },
+  { FEATDEF_iDNA , FTQUAL_standard_name },
+  { FEATDEF_iDNA , FTQUAL_usedin },
+
+  { FEATDEF_intron , FTQUAL_allele },
+  { FEATDEF_intron , FTQUAL_cons_splice },
+  { FEATDEF_intron , FTQUAL_function },
+  { FEATDEF_intron , FTQUAL_label },
+  { FEATDEF_intron , FTQUAL_map },
+  { FEATDEF_intron , FTQUAL_number },
+  { FEATDEF_intron , FTQUAL_standard_name },
+  { FEATDEF_intron , FTQUAL_usedin },
+
+  { FEATDEF_J_segment , FTQUAL_allele },
+  { FEATDEF_J_segment , FTQUAL_label },
+  { FEATDEF_J_segment , FTQUAL_map },
+  { FEATDEF_J_segment , FTQUAL_product },
+  { FEATDEF_J_segment , FTQUAL_standard_name },
+  { FEATDEF_J_segment , FTQUAL_usedin },
+
+  { FEATDEF_LTR , FTQUAL_allele },
+  { FEATDEF_LTR , FTQUAL_function },
+  { FEATDEF_LTR , FTQUAL_label },
+  { FEATDEF_LTR , FTQUAL_map },
+  { FEATDEF_LTR , FTQUAL_standard_name },
+  { FEATDEF_LTR , FTQUAL_usedin },
+
+  { FEATDEF_mat_peptide , FTQUAL_allele },
+  { FEATDEF_mat_peptide , FTQUAL_EC_number },
+  { FEATDEF_mat_peptide , FTQUAL_function },
+  { FEATDEF_mat_peptide , FTQUAL_label },
+  { FEATDEF_mat_peptide , FTQUAL_map },
+  { FEATDEF_mat_peptide , FTQUAL_product },
+  { FEATDEF_mat_peptide , FTQUAL_standard_name },
+  { FEATDEF_mat_peptide , FTQUAL_usedin },
+
+  { FEATDEF_misc_binding , FTQUAL_allele },
+  { FEATDEF_misc_binding , FTQUAL_bound_moiety },
+  { FEATDEF_misc_binding , FTQUAL_function },
+  { FEATDEF_misc_binding , FTQUAL_label },
+  { FEATDEF_misc_binding , FTQUAL_map },
+  { FEATDEF_misc_binding , FTQUAL_usedin },
+
+  { FEATDEF_misc_difference , FTQUAL_allele },
+  { FEATDEF_misc_difference , FTQUAL_clone },
+  { FEATDEF_misc_difference , FTQUAL_label },
+  { FEATDEF_misc_difference , FTQUAL_map },
+  { FEATDEF_misc_difference , FTQUAL_phenotype },
+  { FEATDEF_misc_difference , FTQUAL_replace },
+  { FEATDEF_misc_difference , FTQUAL_standard_name },
+  { FEATDEF_misc_difference , FTQUAL_usedin },
+
+  { FEATDEF_misc_feature , FTQUAL_allele },
+  { FEATDEF_misc_feature , FTQUAL_function },
+  { FEATDEF_misc_feature , FTQUAL_label },
+  { FEATDEF_misc_feature , FTQUAL_map },
+  { FEATDEF_misc_feature , FTQUAL_number },
+  { FEATDEF_misc_feature , FTQUAL_phenotype },
+  { FEATDEF_misc_feature , FTQUAL_product },
+  { FEATDEF_misc_feature , FTQUAL_standard_name },
+  { FEATDEF_misc_feature , FTQUAL_usedin },
+
+  { FEATDEF_misc_recomb , FTQUAL_allele },
+  { FEATDEF_misc_recomb , FTQUAL_label },
+  { FEATDEF_misc_recomb , FTQUAL_map },
+  { FEATDEF_misc_recomb , FTQUAL_organism },
+  { FEATDEF_misc_recomb , FTQUAL_standard_name },
+  { FEATDEF_misc_recomb , FTQUAL_usedin },
+
+  { FEATDEF_misc_signal , FTQUAL_allele },
+  { FEATDEF_misc_signal , FTQUAL_function },
+  { FEATDEF_misc_signal , FTQUAL_label },
+  { FEATDEF_misc_signal , FTQUAL_map },
+  { FEATDEF_misc_signal , FTQUAL_operon },
+  { FEATDEF_misc_signal , FTQUAL_phenotype },
+  { FEATDEF_misc_signal , FTQUAL_standard_name },
+  { FEATDEF_misc_signal , FTQUAL_usedin },
+
+  { FEATDEF_misc_structure , FTQUAL_allele },
+  { FEATDEF_misc_structure , FTQUAL_function },
+  { FEATDEF_misc_structure , FTQUAL_label },
+  { FEATDEF_misc_structure , FTQUAL_map },
+  { FEATDEF_misc_structure , FTQUAL_standard_name },
+  { FEATDEF_misc_structure , FTQUAL_usedin },
+
+  { FEATDEF_modified_base , FTQUAL_allele },
+  { FEATDEF_modified_base , FTQUAL_frequency },
+  { FEATDEF_modified_base , FTQUAL_label },
+  { FEATDEF_modified_base , FTQUAL_map },
+  { FEATDEF_modified_base , FTQUAL_mod_base },
+  { FEATDEF_modified_base , FTQUAL_usedin },
+
+  { FEATDEF_N_region , FTQUAL_allele },
+  { FEATDEF_N_region , FTQUAL_label },
+  { FEATDEF_N_region , FTQUAL_map },
+  { FEATDEF_N_region , FTQUAL_product },
+  { FEATDEF_N_region , FTQUAL_standard_name },
+  { FEATDEF_N_region , FTQUAL_usedin },
+
+  { FEATDEF_old_sequence , FTQUAL_allele },
+  { FEATDEF_old_sequence , FTQUAL_label },
+  { FEATDEF_old_sequence , FTQUAL_map },
+  { FEATDEF_old_sequence , FTQUAL_replace },
+  { FEATDEF_old_sequence , FTQUAL_usedin },
+
+  { FEATDEF_polyA_signal , FTQUAL_allele },
+  { FEATDEF_polyA_signal , FTQUAL_label },
+  { FEATDEF_polyA_signal , FTQUAL_map },
+  { FEATDEF_polyA_signal , FTQUAL_usedin },
+
+  { FEATDEF_polyA_site , FTQUAL_allele },
+  { FEATDEF_polyA_site , FTQUAL_label },
+  { FEATDEF_polyA_site , FTQUAL_map },
+  { FEATDEF_polyA_site , FTQUAL_usedin },
+
+  { FEATDEF_prim_transcript , FTQUAL_allele },
+  { FEATDEF_prim_transcript , FTQUAL_function },
+  { FEATDEF_prim_transcript , FTQUAL_label },
+  { FEATDEF_prim_transcript , FTQUAL_map },
+  { FEATDEF_prim_transcript , FTQUAL_operon },
+  { FEATDEF_prim_transcript , FTQUAL_standard_name },
+  { FEATDEF_prim_transcript , FTQUAL_usedin },
+
+  { FEATDEF_primer_bind , FTQUAL_allele },
+  { FEATDEF_primer_bind , FTQUAL_label },
+  { FEATDEF_primer_bind , FTQUAL_map },
+  { FEATDEF_primer_bind , FTQUAL_PCR_conditions },
+  { FEATDEF_primer_bind , FTQUAL_standard_name },
+  { FEATDEF_primer_bind , FTQUAL_usedin },
+
+  { FEATDEF_promoter , FTQUAL_allele },
+  { FEATDEF_promoter , FTQUAL_function },
+  { FEATDEF_promoter , FTQUAL_label },
+  { FEATDEF_promoter , FTQUAL_map },
+  { FEATDEF_promoter , FTQUAL_operon },
+  { FEATDEF_promoter , FTQUAL_phenotype },
+  { FEATDEF_promoter , FTQUAL_standard_name },
+  { FEATDEF_promoter , FTQUAL_usedin },
+
+  { FEATDEF_protein_bind , FTQUAL_allele },
+  { FEATDEF_protein_bind , FTQUAL_bound_moiety },
+  { FEATDEF_protein_bind , FTQUAL_function },
+  { FEATDEF_protein_bind , FTQUAL_label },
+  { FEATDEF_protein_bind , FTQUAL_map },
+  { FEATDEF_protein_bind , FTQUAL_standard_name },
+  { FEATDEF_protein_bind , FTQUAL_usedin },
+
+  { FEATDEF_RBS , FTQUAL_allele },
+  { FEATDEF_RBS , FTQUAL_label },
+  { FEATDEF_RBS , FTQUAL_map },
+  { FEATDEF_RBS , FTQUAL_standard_name },
+  { FEATDEF_RBS , FTQUAL_usedin },
+
+  { FEATDEF_repeat_region , FTQUAL_allele },
+  { FEATDEF_repeat_region , FTQUAL_function },
+  { FEATDEF_repeat_region , FTQUAL_insertion_seq },
+  { FEATDEF_repeat_region , FTQUAL_label },
+  { FEATDEF_repeat_region , FTQUAL_map },
+  { FEATDEF_repeat_region , FTQUAL_rpt_family },
+  { FEATDEF_repeat_region , FTQUAL_rpt_type },
+  { FEATDEF_repeat_region , FTQUAL_rpt_unit },
+  { FEATDEF_repeat_region , FTQUAL_standard_name },
+  { FEATDEF_repeat_region , FTQUAL_transposon },
+  { FEATDEF_repeat_region , FTQUAL_usedin },
+
+  { FEATDEF_repeat_unit , FTQUAL_allele },
+  { FEATDEF_repeat_unit , FTQUAL_function },
+  { FEATDEF_repeat_unit , FTQUAL_label },
+  { FEATDEF_repeat_unit , FTQUAL_map },
+  { FEATDEF_repeat_unit , FTQUAL_rpt_family },
+  { FEATDEF_repeat_unit , FTQUAL_rpt_type },
+  { FEATDEF_repeat_unit , FTQUAL_usedin },
+
+  { FEATDEF_rep_origin , FTQUAL_allele },
+  { FEATDEF_rep_origin , FTQUAL_direction },
+  { FEATDEF_rep_origin , FTQUAL_label },
+  { FEATDEF_rep_origin , FTQUAL_map },
+  { FEATDEF_rep_origin , FTQUAL_standard_name },
+  { FEATDEF_rep_origin , FTQUAL_usedin },
+
+  { FEATDEF_S_region , FTQUAL_allele },
+  { FEATDEF_S_region , FTQUAL_label },
+  { FEATDEF_S_region , FTQUAL_map },
+  { FEATDEF_S_region , FTQUAL_product },
+  { FEATDEF_S_region , FTQUAL_standard_name },
+  { FEATDEF_S_region , FTQUAL_usedin },
+
+  { FEATDEF_satellite , FTQUAL_allele },
+  { FEATDEF_satellite , FTQUAL_label },
+  { FEATDEF_satellite , FTQUAL_map },
+  { FEATDEF_satellite , FTQUAL_rpt_family },
+  { FEATDEF_satellite , FTQUAL_rpt_type },
+  { FEATDEF_satellite , FTQUAL_rpt_unit },
+  { FEATDEF_satellite , FTQUAL_standard_name },
+  { FEATDEF_satellite , FTQUAL_usedin },
+
+  { FEATDEF_sig_peptide , FTQUAL_allele },
+  { FEATDEF_sig_peptide , FTQUAL_function },
+  { FEATDEF_sig_peptide , FTQUAL_label },
+  { FEATDEF_sig_peptide , FTQUAL_map },
+  { FEATDEF_sig_peptide , FTQUAL_product },
+  { FEATDEF_sig_peptide , FTQUAL_standard_name },
+  { FEATDEF_sig_peptide , FTQUAL_usedin },
+
+  { FEATDEF_stem_loop , FTQUAL_allele },
+  { FEATDEF_stem_loop , FTQUAL_function },
+  { FEATDEF_stem_loop , FTQUAL_label },
+  { FEATDEF_stem_loop , FTQUAL_map },
+  { FEATDEF_stem_loop , FTQUAL_operon },
+  { FEATDEF_stem_loop , FTQUAL_standard_name },
+  { FEATDEF_stem_loop , FTQUAL_usedin },
+
+  { FEATDEF_STS , FTQUAL_allele },
+  { FEATDEF_STS , FTQUAL_label },
+  { FEATDEF_STS , FTQUAL_map },
+  { FEATDEF_STS , FTQUAL_standard_name },
+  { FEATDEF_STS , FTQUAL_usedin },
+
+  { FEATDEF_TATA_signal , FTQUAL_allele },
+  { FEATDEF_TATA_signal , FTQUAL_label },
+  { FEATDEF_TATA_signal , FTQUAL_map },
+  { FEATDEF_TATA_signal , FTQUAL_usedin },
+
+  { FEATDEF_terminator , FTQUAL_allele },
+  { FEATDEF_terminator , FTQUAL_label },
+  { FEATDEF_terminator , FTQUAL_map },
+  { FEATDEF_terminator , FTQUAL_operon },
+  { FEATDEF_terminator , FTQUAL_standard_name },
+  { FEATDEF_terminator , FTQUAL_usedin },
+
+  { FEATDEF_transit_peptide , FTQUAL_allele },
+  { FEATDEF_transit_peptide , FTQUAL_function },
+  { FEATDEF_transit_peptide , FTQUAL_label },
+  { FEATDEF_transit_peptide , FTQUAL_map },
+  { FEATDEF_transit_peptide , FTQUAL_product },
+  { FEATDEF_transit_peptide , FTQUAL_standard_name },
+  { FEATDEF_transit_peptide , FTQUAL_usedin },
+
+  { FEATDEF_unsure , FTQUAL_allele },
+  { FEATDEF_unsure , FTQUAL_label },
+  { FEATDEF_unsure , FTQUAL_map },
+  { FEATDEF_unsure , FTQUAL_replace },
+  { FEATDEF_unsure , FTQUAL_usedin },
+
+  { FEATDEF_V_region , FTQUAL_allele },
+  { FEATDEF_V_region , FTQUAL_label },
+  { FEATDEF_V_region , FTQUAL_map },
+  { FEATDEF_V_region , FTQUAL_product },
+  { FEATDEF_V_region , FTQUAL_standard_name },
+  { FEATDEF_V_region , FTQUAL_usedin },
+
+  { FEATDEF_V_segment , FTQUAL_allele },
+  { FEATDEF_V_segment , FTQUAL_label },
+  { FEATDEF_V_segment , FTQUAL_map },
+  { FEATDEF_V_segment , FTQUAL_product },
+  { FEATDEF_V_segment , FTQUAL_standard_name },
+  { FEATDEF_V_segment , FTQUAL_usedin },
+
+  { FEATDEF_variation , FTQUAL_allele },
+  { FEATDEF_variation , FTQUAL_frequency },
+  { FEATDEF_variation , FTQUAL_label },
+  { FEATDEF_variation , FTQUAL_map },
+  { FEATDEF_variation , FTQUAL_phenotype },
+  { FEATDEF_variation , FTQUAL_product },
+  { FEATDEF_variation , FTQUAL_replace },
+  { FEATDEF_variation , FTQUAL_standard_name },
+  { FEATDEF_variation , FTQUAL_usedin },
+
+  { FEATDEF_3clip , FTQUAL_allele },
+  { FEATDEF_3clip , FTQUAL_function },
+  { FEATDEF_3clip , FTQUAL_label },
+  { FEATDEF_3clip , FTQUAL_map },
+  { FEATDEF_3clip , FTQUAL_standard_name },
+  { FEATDEF_3clip , FTQUAL_usedin },
+
+  { FEATDEF_3UTR , FTQUAL_allele },
+  { FEATDEF_3UTR , FTQUAL_function },
+  { FEATDEF_3UTR , FTQUAL_label },
+  { FEATDEF_3UTR , FTQUAL_map },
+  { FEATDEF_3UTR , FTQUAL_standard_name },
+  { FEATDEF_3UTR , FTQUAL_usedin },
+
+  { FEATDEF_5clip , FTQUAL_allele },
+  { FEATDEF_5clip , FTQUAL_function },
+  { FEATDEF_5clip , FTQUAL_label },
+  { FEATDEF_5clip , FTQUAL_map },
+  { FEATDEF_5clip , FTQUAL_standard_name },
+  { FEATDEF_5clip , FTQUAL_usedin },
+
+  { FEATDEF_5UTR , FTQUAL_allele },
+  { FEATDEF_5UTR , FTQUAL_function },
+  { FEATDEF_5UTR , FTQUAL_label },
+  { FEATDEF_5UTR , FTQUAL_map },
+  { FEATDEF_5UTR , FTQUAL_standard_name },
+  { FEATDEF_5UTR , FTQUAL_usedin },
+
+  { FEATDEF_10_signal , FTQUAL_allele },
+  { FEATDEF_10_signal , FTQUAL_label },
+  { FEATDEF_10_signal , FTQUAL_map },
+  { FEATDEF_10_signal , FTQUAL_operon },
+  { FEATDEF_10_signal , FTQUAL_standard_name },
+  { FEATDEF_10_signal , FTQUAL_usedin },
+
+  { FEATDEF_35_signal , FTQUAL_allele },
+  { FEATDEF_35_signal , FTQUAL_label },
+  { FEATDEF_35_signal , FTQUAL_map },
+  { FEATDEF_35_signal , FTQUAL_operon },
+  { FEATDEF_35_signal , FTQUAL_standard_name },
+  { FEATDEF_35_signal , FTQUAL_usedin },
+
+  { FEATDEF_REGION , FTQUAL_function },
+  { FEATDEF_REGION , FTQUAL_label },
+  { FEATDEF_REGION , FTQUAL_map },
+  { FEATDEF_REGION , FTQUAL_number },
+  { FEATDEF_REGION , FTQUAL_phenotype },
+  { FEATDEF_REGION , FTQUAL_product },
+  { FEATDEF_REGION , FTQUAL_standard_name },
+  { FEATDEF_REGION , FTQUAL_usedin },
+
+  { FEATDEF_mat_peptide_aa , FTQUAL_allele },
+  { FEATDEF_mat_peptide_aa , FTQUAL_label },
+  { FEATDEF_mat_peptide_aa , FTQUAL_map },
+  { FEATDEF_mat_peptide_aa , FTQUAL_product },
+  { FEATDEF_mat_peptide_aa , FTQUAL_standard_name },
+  { FEATDEF_mat_peptide_aa , FTQUAL_usedin },
+
+  { FEATDEF_sig_peptide_aa , FTQUAL_allele },
+  { FEATDEF_sig_peptide_aa , FTQUAL_label },
+  { FEATDEF_sig_peptide_aa , FTQUAL_map },
+  { FEATDEF_sig_peptide_aa , FTQUAL_product },
+  { FEATDEF_sig_peptide_aa , FTQUAL_standard_name },
+  { FEATDEF_sig_peptide_aa , FTQUAL_usedin },
+
+  { FEATDEF_transit_peptide_aa , FTQUAL_allele },
+  { FEATDEF_transit_peptide_aa , FTQUAL_label },
+  { FEATDEF_transit_peptide_aa , FTQUAL_map },
+  { FEATDEF_transit_peptide_aa , FTQUAL_product },
+  { FEATDEF_transit_peptide_aa , FTQUAL_standard_name },
+  { FEATDEF_transit_peptide_aa , FTQUAL_usedin },
+
+  { FEATDEF_snoRNA , FTQUAL_allele },
+  { FEATDEF_snoRNA , FTQUAL_function },
+  { FEATDEF_snoRNA , FTQUAL_label },
+  { FEATDEF_snoRNA , FTQUAL_map },
+  { FEATDEF_snoRNA , FTQUAL_product },
+  { FEATDEF_snoRNA , FTQUAL_standard_name },
+  { FEATDEF_snoRNA , FTQUAL_usedin },
+
+  { FEATDEF_operon , FTQUAL_allele },
+  { FEATDEF_operon , FTQUAL_function },
+  { FEATDEF_operon , FTQUAL_label },
+  { FEATDEF_operon , FTQUAL_map },
+  { FEATDEF_operon , FTQUAL_operon },
+  { FEATDEF_operon , FTQUAL_phenotype },
+  { FEATDEF_operon , FTQUAL_standard_name },
+  { FEATDEF_operon , FTQUAL_usedin },
+
+  { FEATDEF_oriT , FTQUAL_allele },
+  { FEATDEF_oriT , FTQUAL_direction },
+  { FEATDEF_oriT , FTQUAL_label },
+  { FEATDEF_oriT , FTQUAL_map },
+  { FEATDEF_oriT , FTQUAL_rpt_type },
+  { FEATDEF_oriT , FTQUAL_rpt_type },
+  { FEATDEF_oriT , FTQUAL_rpt_unit },
+  { FEATDEF_oriT , FTQUAL_standard_name },
+  { FEATDEF_oriT , FTQUAL_usedin }
 };
 
 /* comparison of ValQual's -- first compare featdef then ftqual */
@@ -9406,7 +9745,27 @@ static CharPtr validConsSpliceString [] = {
 };
 
 static CharPtr validExceptionString [] = {
-  "RNA editing", "reasons given in citation", NULL
+  "RNA editing",
+  "reasons given in citation",
+  NULL
+};
+
+static CharPtr validRefSeqExceptionString [] = {
+  "RNA editing",
+  "reasons given in citation",
+  "ribosomal slippage",
+  "ribosome slippage",
+  "trans splicing",
+  "trans-splicing",
+  "alternative processing",
+  "alternate processing",
+  "artificial frameshift",
+  "non-consensus splice site",
+  "nonconsensus splice site",
+  "rearrangement required for product",
+  "unclassified transcription discrepancy",
+  "unclassified translation discrepancy",
+  NULL
 };
 
 static Boolean StringInStringList (CharPtr testString, CharPtr PNTR stringList) {
@@ -9580,6 +9939,7 @@ static Boolean ValidateRptUnit (
 )
 
 {
+#if 0
   CharPtr  str;
   Char     tmp [255];
 
@@ -9607,6 +9967,7 @@ static Boolean ValidateRptUnit (
     while (IS_DIGIT (*str)) str++;
     if (*str != '\0') return FALSE;  /* mustn't be anything after the yyy */
   }
+#endif
   return TRUE;
 }
 
@@ -10796,6 +11157,7 @@ static void AddLocusBlock (
 )
 
 {
+  size_t             acclen;
   IntAsn2gbJobPtr    ajp;
   Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
@@ -10822,9 +11184,11 @@ static void AddLocusBlock (
   Int2               istrand;
   Boolean            is_nm = FALSE;
   Boolean            is_np = FALSE;
+  Boolean            is_nz = FALSE;
   Boolean            is_transgenic = FALSE;
   Char               len [32];
   Int4               length;
+  size_t             loclen;
   Char               locus [41];
   MolInfoPtr         mip;
   Char               mol [30];
@@ -10887,6 +11251,8 @@ static void AddLocusBlock (
         } else if (StringNCmp (tsip->accession, "NP_", 3) == 0  ||
                    StringNCmp (tsip->accession, "XP_", 3) == 0) {
           is_np = TRUE;
+        } else if (StringNCmp (tsip->accession, "NZ_", 3) == 0) {
+          is_nz = TRUE;
         }
       }
       break;
@@ -10936,6 +11302,7 @@ static void AddLocusBlock (
     }
   }
   if (nm != NULL) {
+    /*
     sfp = SeqMgrGetNextFeature (nm, NULL, SEQFEAT_GENE, 0, &fcontext);
     if (sfp != NULL) {
       StringNCpy_0 (gene, fcontext.label, sizeof (gene));
@@ -10946,6 +11313,7 @@ static void AddLocusBlock (
         gene [0] = '\0';
       }
     }
+    */
   }
 
   /* more complicated code to get parent locus, if segmented, goes here */
@@ -10992,8 +11360,13 @@ static void AddLocusBlock (
             case SEQID_DDBJ :
               tsip = (TextSeqIdPtr) sip->data.ptrvalue;
               if (tsip != NULL && tsip->accession != NULL) {
-                if (StringLen (tsip->accession) == 12) {
+                acclen = StringLen (tsip->accession);
+                if (acclen == 12) {
                   if (StringCmp (tsip->accession + 6, "000000") == 0) {
+                    wgsmaster = TRUE;
+                  }
+                } else if (acclen == 13) {
+                  if (StringCmp (tsip->accession + 6, "0000000") == 0) {
                     wgsmaster = TRUE;
                   }
                 }
@@ -11060,7 +11433,7 @@ static void AddLocusBlock (
 
     if (awp->newLocusLine) {
 
-      if (wgsmaster) {
+      if (wgsmaster && (! is_nz)) {
         sprintf (len, "%ld rc", (long) length);
       } else {
         sprintf (len, "%ld bp", (long) length);
@@ -11333,7 +11706,10 @@ static void AddLocusBlock (
   } else if (awp->format == EMBL_FMT || awp->format == EMBLPEPT_FMT) {
     FFStartPrint (ffstring, awp->format, 0, 0, NULL, 0, 5, 0, "ID", FALSE);
     FFAddOneString (ffstring, locus, FALSE, FALSE, TILDE_IGNORE);
-    FFAddNChar(ffstring, ' ', 15 - 5 - StringLen(locus), FALSE);
+    loclen = StringLen(locus);
+    if (14 - 5 - loclen > 0) {
+      FFAddNChar(ffstring, ' ', 14 - 5 - loclen, FALSE);
+    }
     if (awp->hup) {
       FFAddOneString (ffstring, " confidential; ", FALSE, FALSE, TILDE_IGNORE);
     } else {
@@ -11428,9 +11804,9 @@ static void AddDeflineBlock (
   Asn2gbSectPtr      asp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
-  Char               buf[1024]; 
+  Char               buf[4096]; 
   /*CharPtr          buf;
-  size_t             buflen = 1024;*/ 
+  size_t             buflen = 4096;*/ 
   SeqMgrDescContext  dcontext;
   GBSeqPtr           gbseq;
   ItemInfo           ii;
@@ -11506,6 +11882,7 @@ static void AddAccessionBlock (
 )
 
 {
+  size_t             acclen;
   SeqIdPtr           accn = NULL;
   IntAsn2gbJobPtr    ajp;
   Asn2gbSectPtr      asp;
@@ -11554,9 +11931,13 @@ static void AddAccessionBlock (
         accn = sip;
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL) {
-          if (StringLen (tsip->accession) == 12) {
+          acclen = StringLen (tsip->accession);
+          if (acclen == 12) {
             wgsaccn = tsip->accession;
             len = 12;
+          } else if (acclen == 13) {
+            wgsaccn = tsip->accession;
+            len = 13;
           }
         }
         break;
@@ -11661,9 +12042,12 @@ static void AddAccessionBlock (
       mip = (MolInfoPtr) sdp->data.ptrvalue;
       if (mip != NULL && mip->tech == MI_TECH_wgs) {
         StringNCpy_0 (buf, wgsaccn, sizeof (buf));
-        if (StringCmp (buf + len - 6, "000000") != 0) {
+        acclen = StringLen (buf);
+        if (acclen == 12 && StringCmp (buf + len - 6, "000000") != 0) {
           StringCpy (buf + len - 6, "000000");
-        } else if (StringCmp (buf + len - 8, "00000000") != 0) {
+        } else if (acclen == 13 && StringCmp (buf + len - 7, "0000000") != 0) {
+          StringCpy (buf + len - 7, "0000000");
+        } else if (acclen == 15 && StringCmp (buf + len - 8, "00000000") != 0) {
           StringCpy (buf + len - 8, "00000000");
         } else {
           buf [0] = '\0';
@@ -13253,7 +13637,9 @@ static void AddSourceBlock (
   IntAsn2gbJobPtr    ajp;
   BaseBlockPtr       bbp;
   BioseqPtr          bsp;
+  SeqFeatPtr         cds;
   SeqMgrDescContext  dcontext;
+  BioseqPtr          dna;
   SeqMgrFeatContext  fcontext;
   GBBlockPtr         gbp;
   SeqDescrPtr        sdp;
@@ -13290,6 +13676,29 @@ static void AddSourceBlock (
       bbp->entityID = fcontext.entityID;
       bbp->itemID = fcontext.itemID;
       bbp->itemtype = OBJ_SEQFEAT;
+    } else if (ISA_aa (bsp->mol)) {
+
+      /* if protein with no sources, get sources applicable to DNA location of CDS */
+
+      cds = SeqMgrGetCDSgivenProduct (bsp, &fcontext);
+      if (cds != NULL) {
+        sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
+        if (sfp != NULL) {
+          bbp->entityID = fcontext.entityID;
+          bbp->itemID = fcontext.itemID;
+          bbp->itemtype = OBJ_SEQFEAT;
+        } else {
+          dna = BioseqFindFromSeqLoc (cds->location);
+          if (dna != NULL) {
+            sdp = SeqMgrGetNextDescriptor (dna, NULL, Seq_descr_source, &dcontext);
+            if (sdp != NULL) {
+              bbp->entityID = dcontext.entityID;
+              bbp->itemID = dcontext.itemID;
+              bbp->itemtype = OBJ_SEQDESC;
+            }
+          }
+        }
+      }
     }
   }
 }
@@ -13360,7 +13769,7 @@ static RefBlockPtr AddPub (
 )
 
 {
-  Char            buf [121];
+  Char            buf [521]; /* increased for consortium in citsub */
   CitArtPtr       cap;
   CitBookPtr      cbp;
   CitGenPtr       cgp;
@@ -13665,6 +14074,7 @@ static int LIBCALLBACK SortReferences (
     rbp1 = rbp2;
     rbp2 = temp;
   }
+
   /* if same uid, one with just uids goes last to be excised but remembered */
 
   if ((rbp1->pmid != 0 && rbp2->pmid != 0) || (rbp1->muid != 0 && rbp2->muid != 0)) {
@@ -13794,6 +14204,20 @@ static CharPtr GetAuthorsPlusConsortium (
   return tmp;
 }
 
+static Boolean HasNoPmidOrMuid (
+  PubdescPtr pdp
+)
+
+{
+  ValNodePtr  vnp;
+
+  if (pdp == NULL) return TRUE;
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_PMid || vnp->choice == PUB_Muid) return FALSE;
+  }
+  return TRUE;
+}
+
 typedef struct cdspubs {
   Asn2gbWorkPtr  awp;
   BioseqPtr      target;
@@ -13810,6 +14234,7 @@ static Boolean LIBCALLBACK GetRefsOnCDS (
   Asn2gbWorkPtr   awp;
   CdsPubsPtr      cpp;
   IntRefBlockPtr  irp;
+  Boolean         okay;
   PubdescPtr      pdp;
   RefBlockPtr     rbp;
 
@@ -13818,21 +14243,30 @@ static Boolean LIBCALLBACK GetRefsOnCDS (
   awp = cpp->awp;
   if (awp == NULL) return TRUE;
 
+  okay = TRUE;
   pdp = (PubdescPtr) sfp->data.value.ptrvalue;
-  rbp = AddPub (awp, &(awp->pubhead), pdp);
-  if (rbp != NULL) {
-
-    rbp->entityID = context->entityID;
-    rbp->itemID = context->itemID;
-    rbp->itemtype = OBJ_SEQFEAT;
-
-    irp = (IntRefBlockPtr) rbp;
-    irp->loc = SeqLocMerge (cpp->target, cpp->vnp, NULL, FALSE, TRUE, FALSE);
-    alp = GetAuthListPtr (pdp, NULL);
-    if (alp != NULL) {
-      irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
+  if (awp->format == FTABLE_FMT) {
+    if (HasNoPmidOrMuid (pdp)) {
+      okay = FALSE;
     }
-    irp->index = 0;
+  }
+
+  if (okay) {
+    rbp = AddPub (awp, &(awp->pubhead), pdp);
+    if (rbp != NULL) {
+
+      rbp->entityID = context->entityID;
+      rbp->itemID = context->itemID;
+      rbp->itemtype = OBJ_SEQFEAT;
+
+      irp = (IntRefBlockPtr) rbp;
+      irp->loc = SeqLocMerge (cpp->target, cpp->vnp, NULL, FALSE, TRUE, FALSE);
+      alp = GetAuthListPtr (pdp, NULL);
+      if (alp != NULL) {
+        irp->authstr = GetAuthorsPlusConsortium (awp->format, alp);
+      }
+      irp->index = 0;
+    }
   }
 
   return TRUE;
@@ -13917,6 +14351,12 @@ static void GetRefsOnBioseq (
         }
       }
     }
+    if (awp->format == FTABLE_FMT) {
+      pdp = (PubdescPtr) sdp->data.ptrvalue;
+      if (HasNoPmidOrMuid (pdp)) {
+        okay = FALSE;
+      }
+    }
 
     if (okay) {
       pdp = (PubdescPtr) sdp->data.ptrvalue;
@@ -13939,8 +14379,6 @@ static void GetRefsOnBioseq (
     sdp = SeqMgrGetNextDescriptor (target, sdp, Seq_descr_pub, &dcontext);
   }
 
-  SeqIdFree (sint.id);
-
   /* if protein with no pubs, get pubs applicable to DNA location of CDS */
 
   if (cdsloc != NULL) {
@@ -13949,6 +14387,8 @@ static void GetRefsOnBioseq (
     cp.vnp = &vn;
     SeqMgrGetAllOverlappingFeatures (cdsloc, FEATDEF_PUB, NULL, 0, LOCATION_SUBSET, (Pointer) &cp, GetRefsOnCDS);
   }
+
+  SeqIdFree (sint.id);
 
   /* features are indexed on parent if segmented */
 
@@ -13976,6 +14416,12 @@ static void GetRefsOnBioseq (
           takeIt = TRUE;
         }
       }
+      if (awp->format == FTABLE_FMT) {
+        pdp = (PubdescPtr) sdp->data.ptrvalue;
+        if (HasNoPmidOrMuid (pdp)) {
+          takeIt = FALSE;
+        }
+      }
 
       if (takeIt /* stop >= from && stop <= to */) {
 
@@ -13999,7 +14445,7 @@ static void GetRefsOnBioseq (
             right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
             strand = SeqLocStrand (ajp->ajp.slp);
             split = FALSE;
-            newloc = SeqLocReMap (sip, ajp->ajp.slp, irp->loc, 0, FALSE);
+            newloc = SeqLocReMapEx (sip, ajp->ajp.slp, irp->loc, 0, FALSE, ajp->masterStyle);
             /*
             newloc = SeqLocCopyRegion (sip, irp->loc, bsp, left, right, strand, &split);
             */
@@ -14089,6 +14535,7 @@ static Boolean AddReferenceBlock (
   ValNodePtr         head = NULL;
   Int2               i;
   IntRefBlockPtr     irp;
+  Boolean            is_aa;
   Boolean            is_embl = FALSE;
   Boolean            is_patent = FALSE;
   IntRefBlockPtr     lastirp;
@@ -14127,6 +14574,8 @@ static Boolean AddReferenceBlock (
       is_patent = TRUE;
     }
   }
+
+  is_aa = (Boolean) ISA_aa (bsp->mol);
 
   if (bsp->repr == Seq_repr_seg) {
 
@@ -14254,9 +14703,14 @@ static Boolean AddReferenceBlock (
     if (rbp != NULL) {
       irp = (IntRefBlockPtr) rbp;
       if (irp->justuids) {
-        /* do not allow justuids reference to appear by itself - S79174.1 */
-        excise = TRUE;
-        /* justuids should still combine, even if no authors - S67070.1 */
+        if (isRefSeq && is_aa) {
+          /* if allowing justuid in protein RefSeq, try to look up dynamically */
+          excise = TRUE; /* Back to old behavior, do not fetch */
+        } else {
+          /* do not allow justuids reference to appear by itself - S79174.1 */
+          excise = TRUE;
+          /* justuids should still combine, even if no authors - S67070.1 */
+        }
       } else if (is_embl && is_patent) {
         /* EMBL patent records do not need author or title - A29528.1 */
       } else if (StringHasNoText (irp->authstr)) {
@@ -14563,6 +15017,7 @@ static void AddWGSMasterCommentString (
 )
 
 {
+  size_t             acclen;
   BioSourcePtr       biop;
   Char               buf [256];
   SeqMgrDescContext  dcontext;
@@ -14618,10 +15073,14 @@ static void AddWGSMasterCommentString (
     last = "?";
   }
   ver [0] = '\0';
-  if (StringLen (wgsname) == 12) {
+  acclen = StringLen (wgsname);
+  if (acclen == 12) {
     StringCpy (ver, wgsname + 4);
     ver [2] = '\0';
-  } else if (StringLen (wgsname) == 15) {
+  } else if (acclen == 13) {
+    StringCpy (ver, wgsname + 4);
+    ver [2] = '\0';
+  } else if (acclen == 15) {
     StringCpy (ver, wgsname + 7);
     ver [2] = '\0';
   }
@@ -14630,7 +15089,7 @@ static void AddWGSMasterCommentString (
   FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
 
   sprintf (buf, "  This version of the project (%s) has the accession number %s,", ver, wgsname);
-  FFAddOneString(ffstring, buf, TRUE, FALSE, TILDE_EXPAND);
+  FFAddOneString(ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
 
   if (StringCmp (first, last) != 0) {
     sprintf (buf, " and consists of sequences %s-%s.", first, last);
@@ -14736,13 +15195,15 @@ static CharPtr GetStrForBankit (
   return ptr;
 }
 
-static CharPtr reftxt0 = "The reference sequence was derived from ";
-static CharPtr reftxt1 = " This record is predicted by genome sequence analysis and is not yet supported by experimental evidence. ";
-static CharPtr reftxt2 = " This record has not yet been subject to final NCBI review. ";
-static CharPtr reftxt3 = " The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ";
-static CharPtr reftxt4 = " This record has undergone preliminary review of the sequence, but has not yet been subject to final NCBI review. ";
+static CharPtr reftxt0 = " The reference sequence was derived from ";
+static CharPtr reftxt1 = " This record is predicted by genome sequence analysis and is not yet supported by experimental evidence.";
+static CharPtr reftxt2 = " This record has not yet been subject to final NCBI review.";
+static CharPtr reftxt3 = " The mRNA record is supported by experimental evidence; however, the coding sequence is predicted.";
+static CharPtr reftxt4 = " This record has undergone preliminary review of the sequence, but has not yet been subject to final review.";
 static CharPtr reftxt5 = " This record has been curated by ";
-static CharPtr reftxt6 = " This RefSeq record is provided to represent a collection of whole genome shotgun sequences. ";
+static CharPtr reftxt6 = " This record is predicted by automated computational analysis.";
+static CharPtr reftxt7 = " This record is provided to represent a collection of whole genome shotgun sequences.";
+static CharPtr reftxt8 = " This record is derived from an annotated genomic sequence (";
 
 static CharPtr GetStatusForRefTrack (
   UserObjectPtr uop
@@ -14762,7 +15223,7 @@ static CharPtr GetStatusForRefTrack (
       urf = ufp;
     }
   }
-  if (urf == NULL || urf->choice != 11) return NULL;
+  /* if (urf == NULL || urf->choice != 11) return NULL; */
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
     oip = ufp->label;
     if (StringCmp (oip->str, "Status") == 0) {
@@ -14777,6 +15238,8 @@ static CharPtr GetStatusForRefTrack (
         return "VALIDATED ";
       } else if (StringICmp (st, "Reviewed") == 0) {
         return "REVIEWED ";
+      } else if (StringICmp (st, "Model") == 0) {
+        return "MODEL ";
       } else if (StringICmp (st, "WGS") == 0) {
         return "WGS ";
       }
@@ -14793,7 +15256,7 @@ static void AddStrForRefTrack (
 )
 
 {
-  CharPtr       accn, curator = NULL, st;
+  CharPtr       accn, curator = NULL, source = NULL, st;
   ObjectIdPtr   oip;
   UserFieldPtr  ufp, tmp, u, urf = NULL;
   Int2          i = 0;
@@ -14822,13 +15285,20 @@ static void AddStrForRefTrack (
         review = 4;
       } else if (StringICmp (st, "Reviewed") == 0) {
         review = 5;
-      } else if (StringICmp (st, "WGS") == 0) {
+      } else if (StringICmp (st, "Model") == 0) {
         review = 6;
+      } else if (StringICmp (st, "WGS") == 0) {
+        review = 7;
       }
     } else if (StringCmp (oip->str, "Collaborator") == 0) {
       st = (CharPtr) ufp->data.ptrvalue;
       if (! StringHasNoText (st)) {
         curator = st;
+      }
+    } else if (StringCmp (oip->str, "GenomicSource") == 0) {
+      st = (CharPtr) ufp->data.ptrvalue;
+      if (! StringHasNoText (st)) {
+        source = st;
       }
     }
   }
@@ -14842,74 +15312,120 @@ static void AddStrForRefTrack (
         }
       }
     }
-    if ( GetWWW(ajp) ) {
-      FFAddTextToString(ffstring, "<a href=", ref_link, ">", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-    } else {
-      FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+  }
+  if ( GetWWW(ajp) ) {
+    FFAddTextToString(ffstring, "<a href=", ref_link, ">", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  } else {
+    FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
+  if (review == 1) {
+    FFAddOneString (ffstring, reftxt1, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 2) {
+    FFAddOneString (ffstring, reftxt2, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 3) {
+    FFAddOneString (ffstring, reftxt3, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 4) {
+    FFAddOneString (ffstring, reftxt4, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 5) {
+    if (curator == NULL) {
+      curator = "NCBI staff";
     }
-    FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
-    if (review == 1) {
-      FFAddOneString (ffstring, reftxt1, FALSE, FALSE, TILDE_IGNORE);
-    } else if (review == 2) {
-      FFAddOneString (ffstring, reftxt2, FALSE, FALSE, TILDE_IGNORE);
-    } else if (review == 3) {
-      FFAddOneString (ffstring, reftxt3, FALSE, FALSE, TILDE_IGNORE);
-    } else if (review == 4) {
-      FFAddOneString (ffstring, reftxt4, FALSE, FALSE, TILDE_IGNORE);
-    } else if (review == 5) {
-      if (curator == NULL) {
-        curator = "NCBI staff";
-      }
-      FFAddOneString (ffstring, reftxt5, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString (ffstring, curator, FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString (ffstring, ". ", FALSE, FALSE, TILDE_IGNORE);
-    } else if (review == 6) {
-      FFAddOneString (ffstring, reftxt6, FALSE, FALSE, TILDE_IGNORE);
-    }
-    if (i > 0) {
-      FFAddOneString (ffstring, reftxt0, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, reftxt5, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, curator, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, ".", FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 6) {
+    FFAddOneString (ffstring, reftxt6, FALSE, FALSE, TILDE_IGNORE);
+  } else if (review == 7) {
+    FFAddOneString (ffstring, reftxt7, FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (review != 5 && curator != NULL) {
+    FFAddOneString (ffstring, reftxt5, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, curator, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, ".", FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (source != NULL) {
+    FFAddOneString (ffstring, reftxt8, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, source, FALSE, FALSE, TILDE_IGNORE);
+    FFAddOneString (ffstring, ").", FALSE, FALSE, TILDE_IGNORE);
+  }
+  if (i > 0) {
+    FFAddOneString (ffstring, reftxt0, FALSE, FALSE, TILDE_IGNORE);
 
-      for (tmp = urf->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
-        is_accn = TRUE;
-        for (u = tmp->data.ptrvalue; u != NULL; u = u->next) {
-          oip = u->label;
-          if (StringCmp (oip->str, "accession") == 0) break;
-          if (StringCmp (oip->str, "name") == 0) {
-            is_accn = FALSE;
-            break;
-          }
-        }
-        if (u == NULL) continue;
-        accn = (CharPtr) u->data.ptrvalue;
-        if (StringHasNoText (accn)) continue;
-        if (is_accn && GetWWW(ajp) ) {
-          FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
-          FFAddTextToString(ffstring, "val=", accn, ">", FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
-          FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
-        } else {
-          FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
-        }
-        if (tmp->next != NULL) {
-          ufp = tmp->next;
-          if (ufp->next != NULL) {
-            FFAddOneString (ffstring, ", ", FALSE, FALSE, TILDE_IGNORE);
-          } else {
-            FFAddOneString (ffstring, " and ", FALSE, FALSE, TILDE_IGNORE);
-          }
+    for (tmp = urf->data.ptrvalue; tmp != NULL; tmp = tmp->next) {
+      is_accn = TRUE;
+      for (u = tmp->data.ptrvalue; u != NULL; u = u->next) {
+        oip = u->label;
+        if (StringCmp (oip->str, "accession") == 0) break;
+        if (StringCmp (oip->str, "name") == 0) {
+          is_accn = FALSE;
+          break;
         }
       }
-      FFAddOneString (ffstring, ".", FALSE, FALSE, TILDE_EXPAND);
+      if (u == NULL) continue;
+      accn = (CharPtr) u->data.ptrvalue;
+      if (StringHasNoText (accn)) continue;
+      if (is_accn && GetWWW(ajp) ) {
+        FFAddTextToString(ffstring, "<a href=", link_seq, NULL, FALSE, FALSE, TILDE_IGNORE);
+        FFAddTextToString(ffstring, "val=", accn, ">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+      } else {
+        FFAddOneString (ffstring, accn, FALSE, FALSE, TILDE_IGNORE);
+      }
+      if (tmp->next != NULL) {
+        ufp = tmp->next;
+        if (ufp->next != NULL) {
+          FFAddOneString (ffstring, ", ", FALSE, FALSE, TILDE_IGNORE);
+        } else {
+          FFAddOneString (ffstring, " and ", FALSE, FALSE, TILDE_IGNORE);
+        }
+      }
     }
+    FFAddOneString (ffstring, ".", FALSE, FALSE, TILDE_EXPAND);
   }
 }
 
+static CharPtr GetGenomeBuildNumber (
+  UserObjectPtr uop
+)
 
-static CharPtr reftxt11 = "This model reference sequence was predicted from NCBI contig";
-static CharPtr reftxt12 = "by automated computational analysis";
-static CharPtr reftxt13 = "using gene prediction method:";
+{
+  ObjectIdPtr   oip;
+  CharPtr       str;
+  UserFieldPtr  ufp;
+
+  if (uop == NULL) return NULL;
+  if ((oip = uop->type) == NULL) return NULL;
+  if (StringCmp (oip->str, "GenomeBuild") != 0) return NULL;
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    oip = ufp->label;
+    if (StringCmp(oip->str, "NcbiAnnotation") == 0) {
+      if (ufp->choice == 1) { /* string */
+        str = ufp->data.ptrvalue;
+        if (! StringHasNoText (str)) return str;
+      }
+    } else if (StringCmp (oip->str, "Annotation") == 0) {
+      if (ufp->choice == 1) { /* string */
+        str = ufp->data.ptrvalue;
+        if (! StringHasNoText (str)) {
+          if (StringNICmp (str, "NCBI build ", 11) == 0) {
+            if (! StringHasNoText (str + 11)) {
+              return (str + 11);
+            }
+          }
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+
+static CharPtr reftxt11 = "This record is predicted by automated computational analysis. This record is derived from an annotated genomic sequence";
+static CharPtr reftxt12 = "using gene prediction method:";
 
 static void FindModelEvidenceUop (
   UserObjectPtr uop,
@@ -15113,7 +15629,10 @@ static Boolean GetGeneAndLocus (
   return TRUE;
 }
 
-static CharPtr reftxt21 = "GENOME ANNOTATION REFSEQ:  NCBI contigs are derived from assembled genomic sequence data. They may include both draft and finished sequence.";
+static CharPtr reftxt21 = "NCBI contigs are derived from assembled genomic sequence data.";
+
+static CharPtr reftxt22 = "Features on this sequence have been produced for build ";
+static CharPtr reftxt23 = " of the NCBI's genome annotation";
 
 static CharPtr nsAreGapsString = "The strings of n's in this record represent gaps between contigs, and the length of each string corresponds to the length of the gap.";
 
@@ -15492,6 +16011,7 @@ static void AddCommentBlock (
 )
 
 {
+  size_t             acclen;
   IntAsn2gbJobPtr    ajp;
   BioseqPtr          bsp;
   Char               buf [128];
@@ -15508,15 +16028,19 @@ static void AddCommentBlock (
   Boolean            first = TRUE;
   GBBlockPtr         gbp;
   CharPtr            geneName = NULL;
+  CharPtr            genomeBuildNumber = NULL;
   Int4               gi = 0;
   CommentBlockPtr    gsdbcbp = NULL;
   Int4               gsdbid = 0;
   Boolean            has_gaps = FALSE;
+  Boolean            hasRefTrackStatus = FALSE;
   SeqHistPtr         hist;
+  Boolean            is_collab = FALSE;
   Boolean            is_other = FALSE;
   Boolean            is_tpa = FALSE;
   Boolean            is_wgs = FALSE;
   SeqLitPtr          litp;
+  ObjectIdPtr        localID = NULL;
   Char               locusID [32];
   CharPtr            method = NULL;
   MolInfoPtr         mip;
@@ -15545,31 +16069,137 @@ static void AddCommentBlock (
   ffstring = FFGetString(ajp);
   if ( ffstring ==  NULL ) return;
 
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &dcontext);
+  while (sdp != NULL) {
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop != NULL) {
+      str = GetStatusForRefTrack (uop);
+      if (str != NULL) {
+        hasRefTrackStatus = TRUE;
+      }
+      if (genomeBuildNumber == NULL) {
+        genomeBuildNumber = GetGenomeBuildNumber (uop);
+      }
+    }
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &dcontext);
+  }
+
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_OTHER) {
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
 
       if (tsip != NULL) {
         is_other = TRUE;
-        if (StringNCmp(tsip->accession, "NT_", 3) == 0 || StringNCmp(tsip->accession, "NW_", 3) == 0) {
+        if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+          if (! StringHasNoText (genomeBuildNumber)) {
+            cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+            if (cbp != NULL) {
 
-          cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
-          if (cbp != NULL) {
+              cbp->first = first;
+              first = FALSE;
 
-            cbp->first = first;
-            first = FALSE;
+              if (cbp->first) {
+                FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+              } else {
+                FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+              }
 
-            if (cbp->first) {
-              FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
-            } else {
-              FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+              FFAddOneString (ffstring, "GENOME ANNOTATION ", FALSE, FALSE, TILDE_IGNORE);
+
+              if ( GetWWW(ajp) ) {
+                FFAddTextToString (ffstring, "<a href=", ref_link, ">", FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+              if ( GetWWW(ajp) ) {
+                FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString (ffstring, ":  ", FALSE, FALSE, TILDE_IGNORE);
+
+              FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
+              FFAddOneString (ffstring, genomeBuildNumber, FALSE, FALSE, TILDE_EXPAND);
+              FFAddOneString (ffstring, reftxt23, FALSE, FALSE, TILDE_EXPAND);
+
+              FFAddOneString (ffstring, " [see ", FALSE, FALSE, TILDE_EXPAND);
+
+              if ( GetWWW(ajp) ) {
+                FFAddTextToString (ffstring, "<a href=", doc_link, ">", FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString (ffstring, "documentation", FALSE, FALSE, TILDE_IGNORE);
+              if ( GetWWW(ajp) ) {
+                FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              }
+
+              FFAddOneString (ffstring, "].", FALSE, FALSE, TILDE_EXPAND);
+
+              cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+              FFRecycleString(ajp, ffstring);
+              ffstring = FFGetString(ajp);
             }
+          }
 
-            FFAddOneString (ffstring, reftxt21, TRUE, FALSE, TILDE_EXPAND);
+        } else if (StringNCmp(tsip->accession, "NT_", 3) == 0 || StringNCmp(tsip->accession, "NW_", 3) == 0) {
 
-            cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
-            FFRecycleString(ajp, ffstring);
-            ffstring = FFGetString(ajp);
+          if (! hasRefTrackStatus) {
+            cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+            if (cbp != NULL) {
+
+              cbp->first = first;
+              first = FALSE;
+
+              if (cbp->first) {
+                FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+              } else {
+                FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+              }
+
+              FFAddOneString (ffstring, "GENOME ANNOTATION ", FALSE, FALSE, TILDE_IGNORE);
+
+              if ( GetWWW(ajp) ) {
+                FFAddTextToString (ffstring, "<a href=", ref_link, ">", FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString (ffstring, "REFSEQ", FALSE, FALSE, TILDE_IGNORE);
+              if ( GetWWW(ajp) ) {
+                FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+              }
+              FFAddOneString (ffstring, ":  ", FALSE, FALSE, TILDE_IGNORE);
+
+              if (! StringHasNoText (genomeBuildNumber)) {
+                FFAddOneString (ffstring, reftxt22, FALSE, FALSE, TILDE_EXPAND);
+                FFAddOneString (ffstring, genomeBuildNumber, FALSE, FALSE, TILDE_EXPAND);
+                FFAddOneString (ffstring, reftxt23, FALSE, FALSE, TILDE_EXPAND);
+
+                FFAddOneString (ffstring, " [see ", FALSE, FALSE, TILDE_EXPAND);
+
+                if ( GetWWW(ajp) ) {
+                  FFAddTextToString (ffstring, "<a href=", doc_link, ">", FALSE, FALSE, TILDE_IGNORE);
+                }
+                FFAddOneString (ffstring, "documentation", FALSE, FALSE, TILDE_IGNORE);
+                if ( GetWWW(ajp) ) {
+                  FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+                }
+
+                FFAddOneString (ffstring, "].", FALSE, FALSE, TILDE_EXPAND);
+              } else {
+
+                FFAddOneString (ffstring, reftxt21, TRUE, FALSE, TILDE_EXPAND);
+
+                FFAddOneString (ffstring, "~Also see:~    ", FALSE, FALSE, TILDE_EXPAND);
+
+                if ( GetWWW(ajp) ) {
+                  FFAddTextToString (ffstring, "<a href=", doc_link, ">", FALSE, FALSE, TILDE_IGNORE);
+                }
+                FFAddOneString (ffstring, "Documentation", FALSE, FALSE, TILDE_IGNORE);
+                if ( GetWWW(ajp) ) {
+                  FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+                }
+
+                FFAddOneString (ffstring, " of NCBI's Annotation Process~    ", FALSE, FALSE, TILDE_EXPAND);
+              }
+
+              cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12, 5, 5, "CC");
+              FFRecycleString(ajp, ffstring);
+              ffstring = FFGetString(ajp);
+            }
           }
 
         } else if (StringNCmp(tsip->accession, "XP_", 3) == 0 ||
@@ -15595,7 +16225,7 @@ static void AddCommentBlock (
                 FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
               }
 
-              FFAddOneString (ffstring, "GENOME ANNOTATION ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddOneString (ffstring, "MODEL ", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
                 FFAddTextToString (ffstring, "<a href=", ref_link, ">", FALSE, FALSE, TILDE_IGNORE);
@@ -15606,7 +16236,7 @@ static void AddCommentBlock (
               }
               FFAddOneString (ffstring, ":  ", FALSE, FALSE, TILDE_IGNORE);
 
-              FFAddTextToString (ffstring, NULL, reftxt11, " ", FALSE, FALSE, TILDE_IGNORE);
+              FFAddTextToString (ffstring, NULL, reftxt11, " (", FALSE, FALSE, TILDE_IGNORE);
 
               if ( GetWWW(ajp) ) {
                 FFAddTextToString (ffstring, "<a href=", nt_link, name, FALSE, FALSE, TILDE_IGNORE);
@@ -15617,12 +16247,11 @@ static void AddCommentBlock (
                 FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
               }
 
-              FFAddOneString (ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
-              FFAddOneString (ffstring, reftxt12, FALSE, FALSE, TILDE_IGNORE);
-
+              FFAddOneString (ffstring, ")", FALSE, FALSE, TILDE_IGNORE);
+ 
               if (method != NULL) {
                 FFAddOneString (ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
-                FFAddOneString (ffstring, reftxt13, FALSE, FALSE, TILDE_IGNORE);
+                FFAddOneString (ffstring, reftxt12, FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, " ", FALSE, FALSE, TILDE_IGNORE);
                 FFAddOneString (ffstring, method, FALSE, FALSE, TILDE_IGNORE);
               }
@@ -15691,13 +16320,22 @@ static void AddCommentBlock (
 
     } else if (sip->choice == SEQID_GENBANK || sip->choice == SEQID_EMBL || sip->choice == SEQID_DDBJ) {
 
+      is_collab = TRUE;
+
       tsip = (TextSeqIdPtr) sip->data.ptrvalue;
       if (tsip != NULL && tsip->accession != NULL) {
-        if (StringLen (tsip->accession) == 12) {
+        acclen = StringLen (tsip->accession);
+        if (acclen == 12) {
           is_wgs = TRUE;
           if (StringCmp (tsip->accession + 6, "000000") == 0) {
             wgsaccn = tsip->accession;
             wgsname = tsip->name; /* master accession has 8 zeroes, name has project version plus 6 zeroes */
+          }
+        } else if (acclen == 13) {
+          is_wgs = TRUE;
+          if (StringCmp (tsip->accession + 6, "0000000") == 0) {
+            wgsaccn = tsip->accession;
+            wgsname = tsip->name; /* master accession has 9 zeroes, name has project version plus 7 zeroes */
           }
         } else if (ajp->newSourceOrg && StringLen (tsip->accession) == 6) {
           ch = tsip->accession [0];
@@ -15726,6 +16364,45 @@ static void AddCommentBlock (
 
     } else if (sip->choice == SEQID_GI) {
       gi = (Int4) sip->data.intvalue;
+
+    } else if (sip->choice == SEQID_LOCAL) {
+      localID = (ObjectIdPtr) sip->data.ptrvalue;
+    }
+  }
+
+  if (localID != NULL) {
+    if (is_tpa || is_collab) {
+      if (awp->mode == SEQUIN_MODE || awp->mode == DUMP_MODE) {
+        buf [0] = '\0';
+        if (! StringHasNoText (localID->str)) {
+          if (StringLen (localID->str) < 100) {
+            sprintf (buf, "LocalID: %s", localID->str);
+          } else {
+            sprintf (buf, "LocalID string too large");
+          }
+        } else {
+          sprintf (buf, "LocalID: %ld", (long) localID->id);
+        }
+
+        cbp = (CommentBlockPtr) Asn2gbAddBlock (awp, COMMENT_BLOCK, sizeof (CommentBlock));
+        if (cbp != NULL) {
+
+          cbp->first = first;
+          first = FALSE;
+
+          if (cbp->first) {
+            FFStartPrint (ffstring, awp->format, 0, 12, "COMMENT", 12, 5, 5, "CC", TRUE);
+          } else {
+            FFStartPrint (ffstring, awp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
+          }
+
+          FFAddOneString (ffstring, buf, FALSE, FALSE, TILDE_EXPAND);
+
+          cbp->string = FFEndPrint(ajp, ffstring, awp->format, 12, 12,5, 5, "CC");
+          FFRecycleString(ajp, ffstring);
+          ffstring = FFGetString(ajp);
+        }
+      }
     }
   }
 
@@ -15933,7 +16610,7 @@ static void AddCommentBlock (
       }
     }
 
-    if (hist->replace_ids != NULL && hist->replace_date != NULL) {
+    if (hist->replace_ids != NULL && hist->replace_date != NULL && awp->mode != SEQUIN_MODE) {
 
       okay = TRUE;
       for (sip = hist->replace_ids; sip != NULL; sip = sip->next) {
@@ -16713,7 +17390,7 @@ static void GetSourcesOnBioseq (
               right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
               strand = SeqLocStrand (ajp->ajp.slp);
               split = FALSE;
-              newloc = SeqLocReMap (sip, ajp->ajp.slp, isp->loc, 0, FALSE);
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, isp->loc, 0, FALSE, ajp->masterStyle);
               /*
               newloc = SeqLocCopyRegion (sip, isp->loc, bsp, left, right, strand, &split);
               */
@@ -17066,6 +17743,27 @@ static void AddSourceFeatBlock (
 #endif
     }
 
+    str = GetMolTypeQual (bsp);
+    if (str == NULL) {
+      switch (bsp->mol) {
+        case Seq_mol_dna :
+          str = "unassigned DNA";
+          break;
+        case Seq_mol_rna :
+          str = "unassigned RNA";
+          break;
+        case Seq_mol_aa :
+          break;
+        default :
+          str = "unassigned DNA";
+          break;
+      }
+    }
+    if (str != NULL) {
+      FFAddNewLine(ffstring);
+      FFAddTextToString (ffstring, "/mol_type=\"", str, "\"", FALSE, TRUE, TILDE_TO_SPACES);
+    }
+
     str = FFEndPrint(ajp, ffstring, awp->format, 5, 21, 5, 21, "FT");
 
     bbp = (BaseBlockPtr) Asn2gbAddBlock (awp, SOURCEFEAT_BLOCK, sizeof (IntSrcBlock));
@@ -17303,7 +18001,7 @@ static void GetFeatsOnCdsProduct (
             slp = SeqLocMerge (nbsp, location, NULL, FALSE, TRUE, FALSE);
             if (slp != NULL) {
               sip = SeqIdParse ("lcl|dummy");
-              newloc = SeqLocReMap (sip, ajp->ajp.slp, slp, 0, FALSE);
+              newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
               SeqIdFree (sip);
               SeqLocFree (slp);
               if (newloc == NULL) {
@@ -17532,7 +18230,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
       slp = SeqLocMerge (bsp, sfp->location, NULL, FALSE, TRUE, FALSE);
       if (slp == NULL) return TRUE;
       sip = SeqIdParse ("lcl|dummy");
-      newloc = SeqLocReMap (sip, ajp->ajp.slp, slp, 0, FALSE);
+      newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
       SeqIdFree (sip);
       SeqLocFree (slp);
       if (newloc == NULL) return TRUE;
@@ -17600,7 +18298,8 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
         } else if (sfp->product != NULL) {
           sip = SeqLocIdForProduct (sfp->product);
           if (sip != NULL) {
-            if (sip->choice == SEQID_GI && sip->data.intvalue > 0) {
+            if ((sip->choice == SEQID_GI && sip->data.intvalue > 0) ||
+                sip->choice == SEQID_LOCAL) {
               sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
               oldscope = SeqEntrySetScope (sep);
               prod = BioseqFind (sip);
@@ -17622,7 +18321,7 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                     }
                   }
                 }
-              } else {
+              } else if (sip->choice == SEQID_GI && sip->data.intvalue > 0) {
                 /* RELEASE_MODE requires that /protein_id is an accession */
                 gi = sip->data.intvalue;
                 if (GetAccnVerFromServer (gi, buf)) {
@@ -17647,6 +18346,12 @@ static Boolean LIBCALLBACK GetFeatsOnBioseq (
                 if (ValidateAccn (tsip->accession) == 0)
                 okay = TRUE;
               }
+            }
+          }
+        } else {
+          if (sfp->excpt && (! StringHasNoText (sfp->except_text))) {
+            if (StringStr (sfp->except_text, "rearrangement required for product") != NULL) {
+              okay = TRUE;
             }
           }
         }
@@ -17863,17 +18568,36 @@ static Boolean LIBCALLBACK GetFeatsOnSeg (
 )
 
 {
-  Asn2gbWorkPtr  awp;
-  BioseqPtr      bsp;
-  Uint2          entityID;
-  Int4           from;
-  SeqLocPtr      loc;
-  SeqIdPtr       sip;
-  Int4           to;
+  IntAsn2gbJobPtr  ajp;
+  Asn2gbWorkPtr    awp;
+  BioseqPtr        bsp;
+  Uint2            entityID;
+  Int4             from;
+  Int4             left;
+  SeqLocPtr        loc;
+  Int4             right;
+  SeqIdPtr         sip;
+  Int4             to;
 
   if (slp == NULL || context == NULL) return FALSE;
   awp = (Asn2gbWorkPtr) context->userdata;
+  if (awp == NULL) return FALSE;
+  ajp = awp->ajp;
+  if (ajp == NULL) return FALSE;
 
+  /* do not fetch outside of desired component */
+
+  if (ajp->ajp.slp != NULL) {
+    left = GetOffsetInBioseq (ajp->ajp.slp, awp->parent, SEQLOC_LEFT_END);
+    right = GetOffsetInBioseq (ajp->ajp.slp, awp->parent, SEQLOC_RIGHT_END);
+
+    from = context->cumOffset;
+    to = from + context->to - context->from;
+
+    if (left > to) return TRUE;
+    if (right < from) return TRUE;
+  }
+ 
   from = awp->from;
   to = awp->to;
 
@@ -18684,6 +19408,7 @@ static void DoOneSection (
 )
 
 {
+  size_t               acclen;
   IntAsn2gbJobPtr      ajp;
   Asn2gbSectPtr        asp;
   CharPtr              bases = NULL;
@@ -18785,8 +19510,13 @@ static void DoOneSection (
           sip->choice == SEQID_DDBJ) {
         tsip = (TextSeqIdPtr) sip->data.ptrvalue;
         if (tsip != NULL && tsip->accession != NULL) {
-          if (StringLen (tsip->accession) == 12) {
+          acclen = StringLen (tsip->accession);
+          if (acclen == 12) {
             if (StringCmp (tsip->accession + 6, "000000") == 0) {
+              wgsmaster = TRUE;
+            }
+          } else if (acclen == 13) {
+            if (StringCmp (tsip->accession + 6, "0000000") == 0) {
               wgsmaster = TRUE;
             }
           }
@@ -18818,11 +19548,20 @@ static void DoOneSection (
     }
   }
 
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_OTHER) {
+      isRefSeq = TRUE;
+    }
+  }
+
   /* start exploring and populating paragraphs */
 
   if (awp->format == FTABLE_FMT) {
 
     AddFeatHeaderBlock (awp);
+    if (awp->showRefs) {
+      AddReferenceBlock (awp, isRefSeq);
+    }
     AddFeatureBlock (awp);
 
   } else {
@@ -18875,11 +19614,6 @@ static void DoOneSection (
 
     /* !!! RELEASE_MODE should check return value of AddReferenceBlock !!! */
 
-    for (sip = bsp->id; sip != NULL; sip = sip->next) {
-      if (sip->choice == SEQID_OTHER) {
-        isRefSeq = TRUE;
-      }
-    }
     hasRefs = AddReferenceBlock (awp, isRefSeq);
     if (! hasRefs) {
       if (ajp->flags.needAtLeastOneRef) {
@@ -18916,7 +19650,9 @@ static void DoOneSection (
         }
 
         if (ISA_na (bsp->mol) && ajp->gbseq == NULL) {
-          AddBasecountBlock (awp, bases);
+          if (awp->showBaseCount) {
+            AddBasecountBlock (awp, bases);
+          }
         }
         AddOriginBlock (awp);
 
@@ -18941,7 +19677,9 @@ static void DoOneSection (
       }
 
       if (ISA_na (bsp->mol) && ajp->gbseq == NULL) {
-        AddBasecountBlock (awp, bases);
+        if (awp->showBaseCount) {
+          AddBasecountBlock (awp, bases);
+        }
       }
       AddOriginBlock (awp);
 
@@ -19125,6 +19863,7 @@ static void DoOneBioseq (
 {
   IntAsn2gbJobPtr       ajp;
   Asn2gbWorkPtr         awp;
+  BioseqSetPtr          bssp;
   SeqMgrSegmentContext  context;
   Boolean               contig = FALSE;
   Int4                  from;
@@ -19145,8 +19884,29 @@ static void DoOneBioseq (
 
   if (ISA_na (bsp->mol)) {
     if (ajp->format == GENPEPT_FMT || ajp->format == EMBLPEPT_FMT) return;
+
+    /* only do mRNA feature tables in GPS if targeted to a specific mRNA */
+
+    if (ajp->format == FTABLE_FMT && ajp->skipMrnas) {
+      if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+        bssp = (BioseqSetPtr) bsp->idx.parentptr;
+        if (bssp != NULL && bssp->_class == BioseqseqSet_class_nuc_prot) {
+          if (bsp->idx.parenttype == OBJ_BIOSEQSET) {
+            bssp = (BioseqSetPtr) bsp->idx.parentptr;
+            if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+              return;
+            }
+          }
+        }
+      }
+    }
+
   } else if (ISA_aa (bsp->mol)) {
     if (ajp->format == GENBANK_FMT || ajp->format == EMBL_FMT) return;
+
+    /* only do protein feature tables if targeted to a specific protein */
+
+    if (ajp->format == FTABLE_FMT && ajp->skipProts) return;
   }
 
   if (awp->style == SEGMENT_STYLE) {
@@ -19376,7 +20136,7 @@ static CharPtr GetGOtext (
         break;
     }
   }
-  if (StringHasNoText (textstr)) return NULL;
+  /* if (StringHasNoText (textstr)) return NULL; */
 
   str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) + 50);
   if (str == NULL) return NULL;
@@ -19397,8 +20157,29 @@ static CharPtr GetGOtext (
     StringCat (str, tmp);
     StringCat (str, "]");
   }
+  TrimSpacesAroundString (str);
 
   return str;
+}
+
+static Boolean DbxrefAlreadyInGeneXref (
+  DbtagPtr dbt,
+  ValNodePtr dbxref
+)
+
+{
+  DbtagPtr    gdbt;
+  ValNodePtr  vnp;
+
+  if (dbt == NULL) return FALSE;
+
+  for (vnp = dbxref; vnp != NULL; vnp = vnp->next) {
+    gdbt = (DbtagPtr) vnp->data.ptrvalue;
+    if (gdbt == NULL) continue;
+    if (DbtagMatch (dbt, gdbt)) return TRUE;
+  }
+
+  return FALSE;
 }
 
 /* FormatFeatureblockQuals should not be called directly,
@@ -19460,6 +20241,7 @@ static void FormatFeatureBlockQuals (
   ObjectIdPtr        oip;
   Boolean            okay;
   Boolean            only_digits;
+  BioseqPtr          pbsp;
   ValNodePtr         ppr;
   CharPtr            prefix;
   CharPtr            protein_seq = NULL;
@@ -19908,7 +20690,7 @@ static void FormatFeatureBlockQuals (
         }
 
         /* in release_mode, must be of the form 123..4567 or a single-token label,
-           or (technically illegal but common) letters and semicolons */
+           or (technically illegal but common) letters and semicolons - NO LONGER CHECKED */
 
         while (gbq != NULL && StringICmp (gbq->qual, lasttype) == 0) {
           if (! StringHasNoText (gbq->val)) {
@@ -19927,18 +20709,22 @@ static void FormatFeatureBlockQuals (
                   ptr++;
                 }
                 if ((! ajp->flags.checkQualSyntax) || (ValidateRptUnit (str))) {
-                  FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=",
+                  TrimSpacesAroundString (str);
+                  FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=\"",
                                     FALSE, TRUE, TILDE_IGNORE);
                   FFAddOneString(ffstring, str, FALSE, TRUE, TILDE_TO_SPACES);
+                  FFAddOneChar(ffstring, '\"', FALSE);
                   FFAddOneChar(ffstring, '\n', FALSE);
                 }
                 str = ptr;
               }
             } else {
               if ((! ajp->flags.checkQualSyntax) || (ValidateRptUnit (str))) {
-                FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=",
+                TrimSpacesAroundString (str);
+                FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals[idx].name, "=\"",
                                   FALSE, TRUE, TILDE_IGNORE);
                 FFAddOneString(ffstring, str, FALSE, TRUE, TILDE_TO_SPACES);
+                FFAddOneChar(ffstring, '\"', FALSE);
                 FFAddOneChar(ffstring, '\n', FALSE);
               }
             }
@@ -20081,7 +20867,7 @@ static void FormatFeatureBlockQuals (
                 if (ajp->ajp.slp != NULL) {
                   sip = SeqIdParse ("lcl|dummy");
                   split = FALSE;
-                  newloc = SeqLocReMap (sip, ajp->ajp.slp, slp, 0, FALSE);
+                  newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
  
                   SeqIdFree (sip);
                   if (newloc != NULL) {
@@ -20114,10 +20900,10 @@ static void FormatFeatureBlockQuals (
       case Qual_class_anti_codon :
         slp = qvp [FTQUAL_anticodon].slp;
         newloc = NULL;
-        if (ajp->ajp.slp != NULL) {
+        if (slp != NULL && ajp->ajp.slp != NULL) {
           sip = SeqIdParse ("lcl|dummy");
           split = FALSE;
-          newloc = SeqLocReMap (sip, ajp->ajp.slp, slp, 0, FALSE);
+          newloc = SeqLocReMapEx (sip, ajp->ajp.slp, slp, 0, FALSE, ajp->masterStyle);
           /*
           newloc = SeqLocCopyRegion (sip, slp, bsp, left, right, strand, &split);
           */
@@ -20211,6 +20997,11 @@ static void FormatFeatureBlockQuals (
                   }
                 }
               }
+              if (okay && idx == FTQUAL_db_xref && qvp [FTQUAL_gene_xref].vnp != NULL) {
+                if (DbxrefAlreadyInGeneXref (dbt, qvp [FTQUAL_gene_xref].vnp)) {
+                  okay = FALSE;
+                }
+              }
 
               if (okay) {
                 if (! StringHasNoText (oip->str)) {
@@ -20290,6 +21081,16 @@ static void FormatFeatureBlockQuals (
                     }
                   }
                   */
+                } else if (dbt != NULL) {
+                  pbsp = BioseqFind (sip);
+                  if (pbsp != NULL && pbsp->id != NULL && pbsp->id->next == NULL) {
+                    if (SeqIdWrite (sip, seqid, PRINTID_REPORT, sizeof (seqid)) != NULL) {
+                      FFAddTextToString(ffstring, "/", asn2gnbk_featur_quals [idx].name, "=\"",
+                                        FALSE, FALSE, TILDE_IGNORE);
+                      FF_www_protein_id(ajp, ffstring, seqid);
+                      FFAddOneString(ffstring, "\"\n", FALSE, FALSE, TILDE_IGNORE);
+                    }
+                  }
                 }
               }
             }
@@ -20497,7 +21298,7 @@ static void FormatFeatureBlockQuals (
               case Qual_class_go :
                 if (qvp [jdx].ufp != NULL) {
                   for (entry = qvp [jdx].ufp; entry != NULL; entry = entry->next) {
-	                if (entry == NULL || entry->choice != 11) break;
+                    if (entry == NULL || entry->choice != 11) break;
                     ufp = (UserFieldPtr)  entry->data.ptrvalue;
                     str = GetGOtext (ufp);
                     if (! StringHasNoText (str)) {
@@ -20806,10 +21607,73 @@ static void FormatFeatureBlockQuals (
               }
               break;
 
+            case Qual_class_seq_id :
+              sip = qvp [jdx].sip;
+              if (sip != NULL) {
+                /* should always be found above for protein_id or transcript_id
+                prod = BioseqFind (sip);
+                */
+                if (prod != NULL) {
+                  choice = 0;
+                  for (sip = prod->id; sip != NULL; sip = sip->next) {
+                    if (sip->choice == SEQID_GENBANK ||
+                        sip->choice == SEQID_EMBL ||
+                        sip->choice == SEQID_DDBJ ||
+                        sip->choice == SEQID_OTHER ||
+                        sip->choice == SEQID_TPG ||
+                        sip->choice == SEQID_TPE ||
+                        sip->choice == SEQID_TPD) {
+                      choice = sip->choice;
+                      if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+                        FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                      }
+                    } else if (sip->choice == SEQID_GI) {
+                      if (choice == 0) {
+                        sprintf (seqid, "%ld", (long) sip->data.intvalue);
+                        FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                      }
+                    }
+                  }
+                } else {
+                  if (sip->choice == SEQID_GI) {
+                    gi = sip->data.intvalue;
+                    if (GetAccnVerFromServer (gi, seqid)) {
+                      if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
+                        FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                      }
+                    } else {
+                      sip = GetSeqIdForGI(gi);
+                      if (sip != NULL && SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+                        if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
+                          FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                        }
+                      } else if (! ajp->flags.dropIllegalQuals) {
+                        sprintf (seqid, "%ld", (long) gi);
+                          FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                      }
+                    }
+                  } else if (SeqIdWrite (sip, seqid, PRINTID_TEXTID_ACC_VER, sizeof (seqid)) != NULL) {
+                    if ((! ajp->flags.dropIllegalQuals) || ValidateAccn (seqid) == 0) {
+                          FFAddTextToString(unique, prefix, "transcript found in: ", seqid,
+                                          FALSE, FALSE, TILDE_IGNORE);
+                    }
+                  }
+                }
+                prefix = "; ";
+                add_period = FALSE;
+              }
+              break;
+
             default :
               break;
           }
         }
+
         if ( !FFEmpty(unique) ) {
           notestr = FFToCharPtr(unique);
           TrimSpacesAroundString (notestr);
@@ -20947,7 +21811,9 @@ static CharPtr FormatFeatureBlock (
   SeqLocPtr          newloc;
   Boolean            noLeft;
   Boolean            noRight;
+  SeqMgrFeatContext  ocontext;
   SeqEntryPtr        oldscope;
+  SeqFeatPtr         operon = NULL;
   Uint2              partial;
   SeqMgrFeatContext  pcontext;
   BioseqPtr          prd;
@@ -21135,7 +22001,7 @@ static CharPtr FormatFeatureBlock (
     }
   }
 
-  FFStartPrint(ffstring, afp->format, 5, 21, NULL, 0, 5, 21, "FT", ifp->firstfeat);
+  FFStartPrint(ffstring, afp->format, 5, 21, NULL, 0, 5, 21, "FT", /* ifp->firstfeat */ FALSE);
   if (ajp->ajp.slp != NULL) {
     FFAddOneString(ffstring, key, FALSE, FALSE, TILDE_IGNORE);
   } else if ( GetWWW(ajp) /* && SeqMgrGetParentOfPart (bsp, NULL) == NULL */ ) {
@@ -21161,7 +22027,7 @@ static CharPtr FormatFeatureBlock (
       right = GetOffsetInBioseq (ajp->ajp.slp, bsp, SEQLOC_RIGHT_END);
       strand = SeqLocStrand (ajp->ajp.slp);
       split = FALSE;
-      newloc = SeqLocReMap (sip, ajp->ajp.slp, location, 0, FALSE);
+      newloc = SeqLocReMapEx (sip, ajp->ajp.slp, location, 0, FALSE, ajp->masterStyle);
       /*
       newloc = SeqLocCopyRegion (sip, location, bsp, left, right, strand, &split);
       */
@@ -21216,8 +22082,12 @@ static CharPtr FormatFeatureBlock (
       }
     }
 
-    /* a few features cannot show /partial in RELEASE_MODE - later no features will */
+    /* hide unclassified /partial in RELEASE_MODE and ENTREZ_MODE */
 
+    if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+      qvp [FTQUAL_partial].ble = FALSE;
+    }
+    /*
     if (ajp->flags.checkQualSyntax) {
       switch (featdeftype) {
       case FEATDEF_conflict:
@@ -21230,6 +22100,7 @@ static CharPtr FormatFeatureBlock (
         break;
       }
     }
+    */
   }
   if (ifp->mapToProt) {
     qvp [FTQUAL_partial].ble = FALSE;
@@ -21270,6 +22141,14 @@ static CharPtr FormatFeatureBlock (
     if (! ajp->flags.geneSynsToNote) {
       qvp [FTQUAL_gene_syn_refseq].vnp = qvp [FTQUAL_gene_syn].vnp;
       qvp [FTQUAL_gene_syn].vnp = NULL;
+    }
+    operon = SeqMgrGetOverlappingOperon (locforgene, &ocontext);
+    if (operon != NULL) {
+      for (gbq = operon->qual; gbq != NULL; gbq = gbq->next) {
+        if (StringCmp (gbq->qual, "operon") == 0) {
+          qvp [FTQUAL_operon].gbq = gbq;
+        }
+      }
     }
 
   } else {
@@ -21318,9 +22197,25 @@ static CharPtr FormatFeatureBlock (
         gene_syn = vnp;
       }
     }
+    if (grp != NULL && fcontext.featdeftype != FEATDEF_variation) {
+      qvp [FTQUAL_gene_allele].str = grp->allele; /* now propagating /allele */
+    }
     if (fcontext.seqfeattype != SEQFEAT_CDREGION &&
         fcontext.seqfeattype != SEQFEAT_RNA) {
       qvp [FTQUAL_gene_xref].vnp = NULL;
+    }
+    if (fcontext.featdeftype != FEATDEF_operon) {
+      grp = SeqMgrGetGeneXref (sfp);
+      if (grp == NULL || (! SeqMgrGeneIsSuppressed (grp))) {
+        operon = SeqMgrGetOverlappingOperon (locforgene, &ocontext);
+        if (operon != NULL) {
+          for (gbq = operon->qual; gbq != NULL; gbq = gbq->next) {
+            if (StringCmp (gbq->qual, "operon") == 0) {
+              qvp [FTQUAL_operon].gbq = gbq;
+            }
+          }
+        }
+      }
     }
 
     /* specific fields set here */
@@ -21363,7 +22258,11 @@ static CharPtr FormatFeatureBlock (
                       residue = SeqMapTableConvert (smtp, residue);
                     }
                     if (residue == 'U') {
-                      qvp [FTQUAL_selenocysteine].str = "selenocysteine";
+                      if (ajp->flags.selenocysteineToNote) {
+                        qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
+                      } else {
+                        qvp [FTQUAL_selenocysteine].ble = TRUE;
+                      }
                     }
                   }
                 }
@@ -21504,6 +22403,43 @@ static CharPtr FormatFeatureBlock (
                 qvp [FTQUAL_transl_table].num = 0;
               }
             }
+            for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+              seqcode = 0;
+              sctp = NULL;
+              cbaa = cbp->aa;
+              switch (cbaa.choice) {
+                case 1 :
+                  seqcode = Seq_code_ncbieaa;
+                  break;
+                case 2 :
+                  seqcode = Seq_code_ncbi8aa;
+                  break;
+                case 3 :
+                  seqcode = Seq_code_ncbistdaa;
+                  break;
+                default :
+                  break;
+              }
+              if (seqcode != 0) {
+                sctp = SeqCodeTableFind (seqcode);
+                if (sctp != NULL) {
+                  residue = cbaa.value.intvalue;
+                  if (residue != 42) {
+                    if (seqcode != Seq_code_ncbieaa) {
+                      smtp = SeqMapTableFind (seqcode, Seq_code_ncbieaa);
+                      residue = SeqMapTableConvert (smtp, residue);
+                    }
+                    if (residue == 'U') {
+                      if (ajp->flags.selenocysteineToNote) {
+                        qvp [FTQUAL_selenocysteine_note].str = "selenocysteine";
+                      } else {
+                        qvp [FTQUAL_selenocysteine].ble = TRUE;
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
         break;
@@ -21574,9 +22510,12 @@ static CharPtr FormatFeatureBlock (
           if (rrp->type == 2) {
             sip = SeqLocIdForProduct (sfp->product);
             if (sip != NULL) {
-              /* for RefSeq records or GenBank not release_mode */
-              if (is_other || (! ajp->flags.forGbRelease)) {
+              /* for RefSeq records or GenBank not release_mode or entrez_mode */
+              if (is_other || (ajp->mode == SEQUIN_MODE || ajp->mode == DUMP_MODE)) {
                 qvp [FTQUAL_transcript_id].sip = sip;
+              } else {
+                /* otherwise now goes in note */
+                qvp [FTQUAL_transcript_id_note].sip = sip; /* !!! remove October 15, 2003 !!! */
               }
               prod = BioseqFind (sip);
             }
@@ -21651,8 +22590,12 @@ static CharPtr FormatFeatureBlock (
                   } else {
                     shift = 1;
                   }
-                  idx = aa - (64 + shift);
-                  if (idx > 0 && idx < 25) {
+                  if (aa != '*') {
+                    idx = aa - (64 + shift);
+                  } else {
+                    idx = 25;
+                  }
+                  if (idx > 0 && idx < 26) {
                     str = trnaList [idx];
                     qvp [FTQUAL_product].str = str;
                     if (StringNICmp (str, "tRNA-", 5) == 0) {
@@ -21830,14 +22773,22 @@ static CharPtr FormatFeatureBlock (
 
       /* !!! if ajp->flags.dropIllegalQuals, check CDS list here as well !!! */
       if (ajp->flags.dropIllegalQuals &&
-          (! StringInStringList (qvp [FTQUAL_seqfeat_note].str, validExceptionString)) ) {
+          (! StringInStringList (qvp [FTQUAL_seqfeat_note].str, validExceptionString))) {
         qvp [FTQUAL_exception].str = NULL;
       }
     }
-    if (ajp->flags.dropIllegalQuals &&
-        (! StringInStringList (qvp [FTQUAL_exception].str, validExceptionString))) {
-      qvp [FTQUAL_exception_note].str = qvp [FTQUAL_exception].str;
-      qvp [FTQUAL_exception].str = NULL;
+    if (ajp->flags.dropIllegalQuals) {
+      if (is_other) {
+        if (! StringInStringList (qvp [FTQUAL_exception].str, validRefSeqExceptionString)) {
+          qvp [FTQUAL_exception_note].str = qvp [FTQUAL_exception].str;
+          qvp [FTQUAL_exception].str = NULL;
+        }
+      } else {
+        if (! StringInStringList (qvp [FTQUAL_exception].str, validExceptionString)) {
+          qvp [FTQUAL_exception_note].str = qvp [FTQUAL_exception].str;
+          qvp [FTQUAL_exception].str = NULL;
+        }
+      }
     }
   } else {
     qvp [FTQUAL_exception_note].str = sfp->except_text;
@@ -22041,7 +22992,13 @@ static CharPtr FormatFeatureBlock (
   /* suppress selenocysteine note if already in comment */
 
   if (StringStr (sfp->comment, "selenocysteine") != NULL) {
-    qvp [FTQUAL_selenocysteine].str = NULL;
+    qvp [FTQUAL_selenocysteine_note].str = NULL;
+  }
+
+  /* if /allele inherited from gene, suppress allele gbqual on feature */
+
+  if (qvp [FTQUAL_gene_allele].str != NULL) {
+    qvp [FTQUAL_allele].gbq = NULL;
   }
 
   /* now print qualifiers from table */
@@ -22443,7 +23400,7 @@ static Boolean IsSepRefseq (
 }
 
 typedef struct modeflags {
-  Boolean  flags [24];
+  Boolean  flags [25];
 } ModeFlags, PNTR ModeFlagsPtr;
 
 static ModeFlags flagTable [] = {
@@ -22453,28 +23410,28 @@ static ModeFlags flagTable [] = {
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  TRUE,  TRUE,  TRUE,
-   TRUE,  TRUE,  TRUE,  TRUE},
+   TRUE,  TRUE,  TRUE,  TRUE,  TRUE},
 
   /* ENTREZ_MODE */
   {FALSE, TRUE,  TRUE,  TRUE,  TRUE,
    FALSE, TRUE,  TRUE,  TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, TRUE,  TRUE,
    TRUE,  TRUE,  FALSE, FALSE, TRUE,
-   TRUE,  TRUE,  TRUE,  FALSE},
+   TRUE,  TRUE,  TRUE,  TRUE,  FALSE},
 
   /* SEQUIN_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, TRUE,  FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE, FALSE, FALSE},
+   FALSE, FALSE, FALSE, FALSE, FALSE},
 
   /* DUMP_MODE */
   {FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
    FALSE, FALSE, FALSE, FALSE, FALSE,
-   FALSE, FALSE, FALSE, FALSE}
+   FALSE, FALSE, FALSE, FALSE, FALSE}
 };
 
 static void SetFlagsFromMode (
@@ -22521,6 +23478,7 @@ static void SetFlagsFromMode (
   ajp->flags.hideEmptySource = *(bp++);
   ajp->flags.goQualsToNote = *(bp++);
   ajp->flags.geneSynsToNote = *(bp++);
+  ajp->flags.selenocysteineToNote = *(bp++);
   ajp->flags.forGbRelease = *(bp++);
 
   /* unapproved qualifiers suppressed for flatfile, okay for GBSeq XML */
@@ -22537,7 +23495,13 @@ static void SetFlagsFromMode (
     */
 
     sep = GetTopSeqEntryForEntityID (ajp->ajp.entityID);
-    if (! IsSepRefseq (sep)) {
+    if (IsSepRefseq (sep)) {
+
+      /* selenocysteine always a separate qualifier for RefSeq */
+
+      ajp->flags.selenocysteineToNote = FALSE;
+
+    } else {
 
       /* collaboration unapproved Gene Ontology quals on their own line only for RefSeq */
 
@@ -22583,6 +23547,82 @@ static void CheckVersionWithGi (BioseqPtr bsp, Pointer userdata)
 }
 
 
+typedef struct lookforids {
+  Boolean isGED;
+  Boolean isNTorNW;
+  Boolean isNC;
+  Boolean isTPA;
+  Boolean isNuc;
+  Boolean isProt;
+} LookForIDs, PNTR LookForIDsPtr;
+
+static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
+
+{
+  LookForIDsPtr  lfip;
+  SeqIdPtr       sip;
+  TextSeqIdPtr   tsip;
+
+  lfip = (LookForIDsPtr) userdata;
+  if (ISA_na (bsp->mol)) {
+    lfip->isNuc = TRUE;
+  }
+  if (ISA_aa (bsp->mol)) {
+    lfip->isProt = TRUE;
+  }
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+        lfip->isGED = TRUE;
+        break;
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+        lfip->isTPA = TRUE;
+        break;
+      case SEQID_OTHER :
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+            lfip->isNC = TRUE;
+          } else if (StringNCmp (tsip->accession, "NT_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          } else if (StringNCmp (tsip->accession, "NW_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          }
+        }
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static void LookForGEDetc (
+  SeqEntryPtr topsep,
+  BoolPtr isGED,
+  BoolPtr isNTorNW,
+  BoolPtr isNC,
+  BoolPtr isTPA,
+  BoolPtr isNuc,
+  BoolPtr isProt
+)
+
+{
+  LookForIDs  lfi;
+
+  MemSet ((Pointer) &lfi, 0, sizeof (LookForIDs));
+  VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
+  *isGED = lfi.isGED;
+  *isNTorNW = lfi.isNTorNW;
+  *isNC = lfi.isNC;
+  *isTPA = lfi.isTPA;
+  *isNuc = lfi.isNuc;
+  *isProt = lfi.isProt;
+}
+
 #define FEAT_FETCH_MASK (ONLY_NEAR_FEATURES | FAR_FEATURES_SUPPRESS | NEAR_FEATURES_SUPPRESS)
 #define HTML_XML_ASN_MASK (CREATE_HTML_FLATFILE | CREATE_XML_GBSEQ_FILE | CREATE_ASN_GBSEQ_FILE)
 #define GENE_RIF_MASK (HIDE_GENE_RIFS | ONLY_GENE_RIFS | LATEST_GENE_RIFS)
@@ -22610,6 +23650,12 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   GBSeqPtr         gbseq = NULL;
   Int4             i;
   IndxPtr          index = NULL;
+  Boolean          isGED;
+  Boolean          isNTorNW;
+  Boolean          isNC;
+  Boolean          isNuc;
+  Boolean          isProt;
+  Boolean          isTPA;
   Int4             j;
   Int4             k;
   Boolean          lockFarComp;
@@ -22631,6 +23677,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   SubmitBlockPtr   sbp;
   SeqEntryPtr      sep;
   SeqIntPtr        sintp;
+  Boolean          skipMrnas = FALSE;
+  Boolean          skipProts = FALSE;
   SeqSubmitPtr     ssp;
   BioseqSetPtr     topbssp;
   ValNodePtr       vnp;
@@ -22668,6 +23716,14 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
     entityID = ObjMgrGetEntityIDForPointer (bsp);
   } else if (bssp != NULL) {
     entityID = ObjMgrGetEntityIDForPointer (bssp);
+    if (format == FTABLE_FMT) {
+      skipProts = TRUE;
+      skipMrnas = TRUE;
+    }
+  }
+  if ((Boolean) ((custom & SHOW_PROT_FTABLE) != 0)) {
+    skipProts = FALSE;
+    skipMrnas = FALSE;
   }
 
   if (entityID == 0) return NULL;
@@ -22727,7 +23783,11 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
     /* lock all bioseqs in advance, including remote genome components */
 
     sep = GetTopSeqEntryForEntityID (entityID);
-    ajp->lockedBspList = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd);
+    if (ajp->ajp.slp != NULL && lockFarComp) {
+      ajp->lockedBspList = LockFarComponentsEx (sep, FALSE, lockFarLocs, lockFarProd, ajp->ajp.slp);
+    } else {
+      ajp->lockedBspList = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd, NULL);
+    }
   }
 
   lookupFarComp = (Boolean) ((locks & LOOKUP_FAR_COMPONENTS) != 0);
@@ -22753,6 +23813,8 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   }
 
   ajp->relModeError = FALSE;
+  ajp->skipProts = skipProts;
+  ajp->skipMrnas = skipMrnas;
 
   MemSet ((Pointer) (&aw), 0, sizeof (Asn2gbWork));
   aw.ajp = ajp;
@@ -22767,9 +23829,40 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   aw.showconfeats = (Boolean) ((flags & SHOW_CONTIG_FEATURES) != 0);
   aw.showconsource = (Boolean) ((flags & SHOW_CONTIG_SOURCES) != 0);
 
-  aw.onlyNearFeats = (Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES);
-  aw.farFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == FAR_FEATURES_SUPPRESS);
-  aw.nearFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == NEAR_FEATURES_SUPPRESS);
+  aw.format = format;
+  aw.mode = mode;
+  aw.style = style;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+
+  /* special types of records override feature fetching parameters */
+
+  aw.onlyNearFeats = FALSE;
+  aw.farFeatsSuppress = FALSE;
+  aw.nearFeatsSuppress = FALSE;
+  LookForGEDetc (sep, &isGED, &isNTorNW, &isNC, &isTPA, &isNuc, &isProt);
+  if (ajp->ajp.slp != NULL) {
+    /* specified location obeys fetching parameters, for now */
+    aw.onlyNearFeats = (Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES);
+    aw.farFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == FAR_FEATURES_SUPPRESS);
+    aw.nearFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == NEAR_FEATURES_SUPPRESS);
+  } else if (mode == ENTREZ_MODE) {
+    /* entrez_mode overrides settings to avoid far fetches */
+    aw.onlyNearFeats = TRUE;
+    aw.showconfeats = TRUE;
+  } else if (isNTorNW || isTPA) {
+    aw.onlyNearFeats = TRUE;
+  } else if (isNC) {
+    if ((Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES)) {
+      aw.onlyNearFeats = TRUE;
+    } else {
+      aw.nearFeatsSuppress = TRUE;
+    }
+  } else {
+    aw.onlyNearFeats = (Boolean) ((flags & FEAT_FETCH_MASK) == ONLY_NEAR_FEATURES);
+    aw.farFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == FAR_FEATURES_SUPPRESS);
+    aw.nearFeatsSuppress = (Boolean) ((flags & FEAT_FETCH_MASK) == NEAR_FEATURES_SUPPRESS);
+  }
 
   aw.hideImpFeats = (Boolean) ((custom & HIDE_IMP_FEATS) != 0);
   aw.hideRemImpFeats = (Boolean) ((custom & HIDE_REM_IMP_FEATS) != 0);
@@ -22789,8 +23882,9 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   aw.onlyGeneRIFs = (Boolean) ((custom & GENE_RIF_MASK) == ONLY_GENE_RIFS);
   aw.latestGeneRIFs = (Boolean) ((custom & GENE_RIF_MASK) == LATEST_GENE_RIFS);
 
+  aw.showRefs = (Boolean) ((custom & SHOW_FTABLE_REFS) != 0);
+
   aw.isGPS = FALSE;
-  sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL && IS_Bioseq_set (sep)) {
     topbssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (topbssp != NULL && topbssp->_class == BioseqseqSet_class_gen_prod_set) {
@@ -22808,17 +23902,18 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
   */
 
   aw.newLocusLine = TRUE;
+  aw.showBaseCount = FALSE;
 
-  if ((Boolean) (flags & DDBJ_VARIANT_FORMAT) != 0) {
+  if ((Boolean) ((flags & DDBJ_VARIANT_FORMAT) != 0)) {
     aw.citSubsFirst = TRUE;
     aw.hideGeneFeats = TRUE;
     aw.newLocusLine = FALSE;
+    aw.showBaseCount = TRUE;
     ajp->newSourceOrg = FALSE;
   }
-
-  aw.format = format;
-  aw.mode = mode;
-  aw.style = style;
+  if (mode == SEQUIN_MODE || mode == DUMP_MODE) {
+    aw.showBaseCount = TRUE;
+  }
 
   aw.hup = FALSE;
   aw.ssp = NULL;
@@ -22952,16 +24047,31 @@ static void PrintFtableIntervals (
 )
 
 {
-  Boolean    partial5;
-  Boolean    partial3;
-  SeqLocPtr  slp;
-  Int4       start;
-  Int4       stop;
-  Char       str [64];
-  Char       str1 [32];
-  Char       str2 [32];
+  IntFuzzPtr  ifp;
+  Boolean     partial5;
+  Boolean     partial3;
+  SeqLocPtr   slp;
+  SeqPntPtr   spp;
+  Int4        start;
+  Int4        stop;
+  Char        str [64];
+  Char        str1 [32];
+  Char        str2 [32];
 
   if (head == NULL || target == NULL || location == NULL || label == NULL) return;
+
+  if (location->choice == SEQLOC_PNT) {
+    spp = (SeqPntPtr) location->data.ptrvalue;
+    if (spp != NULL) {
+      ifp = spp->fuzz;
+      if (ifp != NULL && ifp->choice == 4 && ifp->a == 3) {
+        sprintf (str, "%ld^\t%ld\t%s\n", (long) (spp->point + 1),
+                 (long) (spp->point + 2), label);
+        ValNodeCopyStr (head, 0, str);
+        return;
+      }
+    }
+  }
 
   slp = SeqLocFindNext (location, NULL);
   if (slp == NULL) return;
@@ -23074,7 +24184,7 @@ static void PrintFTUserFld (
           break;
       }
     }
-    if (StringHasNoText (textstr)) break;
+    /* if (StringHasNoText (textstr)) break; */
   
     str = (CharPtr) MemNew (StringLen (textstr) + StringLen (goid) + StringLen (evidence) + 40);
     if (str == NULL) return;
@@ -23182,6 +24292,33 @@ static void PrintFTCodeBreak (
   }
 }
 
+static SeqIdPtr SeqIdFindForTable (SeqIdPtr sip)
+
+{
+  Uint1  order [NUM_SEQID];
+
+  SeqIdBestRank (order, NUM_SEQID);
+  order [SEQID_LOCAL] = 20;
+  order [SEQID_GENBANK] = 5;
+  order [SEQID_EMBL] = 5;
+  order [SEQID_PIR] = 5;
+  order [SEQID_SWISSPROT] = 5;
+  order [SEQID_DDBJ] = 5;
+  order [SEQID_PRF] = 5;
+  order [SEQID_PDB] = 5;
+  order [SEQID_TPG] = 5;
+  order [SEQID_TPE] = 5;
+  order [SEQID_TPD] = 5;
+  order [SEQID_PATENT] = 10;
+  order [SEQID_OTHER] = 8;
+  order [SEQID_GENERAL] = 15;
+  order [SEQID_GIBBSQ] = 15;
+  order [SEQID_GIBBMT] = 15;
+  order [SEQID_GIIM] = 20;
+  order [SEQID_GI] = 20;
+  return SeqIdSelect (sip, order, NUM_SEQID);
+}
+
 /* #define MAKE_MRNA_GPS_FEAT */
 
 static void PrintFtableLocAndQuals (
@@ -23193,28 +24330,39 @@ static void PrintFtableLocAndQuals (
 )
 
 {
-  CodeBreakPtr  cbp;
-  CdRegionPtr   crp;
-  DbtagPtr      dbt;
-  GBQualPtr     gbq;
-  ValNodePtr    geneorprotdb;
-  GeneRefPtr    grp;
-  CharPtr       label;
-  ObjectIdPtr   oip;
-  BioseqPtr     prod;
-  SeqFeatPtr    prot;
-  ProtRefPtr    prp;
-  Boolean       pseudo;
-  RnaRefPtr     rrp;
-  SeqIdPtr      sip;
-  SeqIdPtr      sip2;
-  Char          str [256];
-  Char          tmp [300];
-  tRNAPtr       trp;
-  ValNodePtr    vnp;
+  Int2               bondidx;
+  BioseqSetPtr       bssp;
+  CodeBreakPtr       cbp;
+  BioseqPtr          cdna;
+  SeqFeatPtr         cds;
+  CdRegionPtr        crp;
+  SeqMgrDescContext  dcontext;
+  DbtagPtr           dbt;
+  SeqMgrFeatContext  fcontext;
+  GBQualPtr          gbq;
+  ValNodePtr         geneorprotdb;
+  GeneRefPtr         grp;
+  Boolean            is_gps_genomic = FALSE;
+  CharPtr            label;
+  MolInfoPtr         mip;
+  ObjectIdPtr        oip;
+  BioseqPtr          prod;
+  SeqFeatPtr         prot;
+  ProtRefPtr         prp;
+  Boolean            pseudo;
+  RnaRefPtr          rrp;
+  SeqDescrPtr        sdp;
+  Int4               sec_str;
+  SeqIdPtr           sip;
+  SeqIdPtr           sip2;
+  Int2               siteidx;
+  Char               str [256];
+  Char               tmp [300];
+  tRNAPtr            trp;
+  ValNodePtr         vnp;
 #ifdef MAKE_MRNA_GPS_FEAT
-  CharPtr       rnaid;
-  CharPtr       rnaprod;
+  CharPtr            rnaid;
+  CharPtr            rnaprod;
 #endif
 
   if (head == NULL || target == NULL || sfp == NULL || context == NULL) return;
@@ -23225,6 +24373,23 @@ static void PrintFtableLocAndQuals (
   }
   if (StringHasNoText (label)) {
     label = "???";
+  }
+
+  /* check if genomic sequence in genomic product set */
+
+  if (target->idx.parenttype == OBJ_BIOSEQSET) {
+    bssp = (BioseqSetPtr) target->idx.parentptr;
+    if (bssp != NULL && bssp->_class == BioseqseqSet_class_gen_prod_set) {
+      sdp = SeqMgrGetNextDescriptor (target, NULL, Seq_descr_molinfo, &dcontext);
+      if (sdp != NULL) {
+        mip = (MolInfoPtr) sdp->data.ptrvalue;
+        if (mip != NULL && mip->biomol == MOLECULE_TYPE_GENOMIC) {
+#ifndef MAKE_MRNA_GPS_FEAT
+          is_gps_genomic = TRUE;
+#endif
+        }
+      }
+    }
   }
 
   PrintFtableIntervals (head, target, sfp->location, label);
@@ -23335,7 +24500,8 @@ static void PrintFtableLocAndQuals (
         }
       }
       if (prod != NULL) {
-        for (sip = prod->id; sip != NULL; sip = sip->next) {
+        sip = SeqIdFindForTable (prod->id);
+        if (sip != NULL) {
           if (sip->choice == SEQID_GENBANK ||
               sip->choice == SEQID_EMBL ||
               sip->choice == SEQID_DDBJ ||
@@ -23377,6 +24543,39 @@ static void PrintFtableLocAndQuals (
                 rnaid = StringSave (str);
               }
 #endif
+            }
+          }
+        }
+        if (is_gps_genomic) {
+          cds = SeqMgrGetCDSgivenProduct (prod, NULL);
+          if (cds != NULL) {
+            cdna = BioseqFindFromSeqLoc (cds->location);
+            if (cdna != NULL) {
+              sip = SeqIdFindWorst (cdna->id);
+              if (sip != NULL) {
+                if (sip->choice == SEQID_GENBANK ||
+                    sip->choice == SEQID_EMBL ||
+                    sip->choice == SEQID_DDBJ ||
+                    sip->choice == SEQID_OTHER ||
+                    sip->choice == SEQID_TPG ||
+                    sip->choice == SEQID_TPE ||
+                    sip->choice == SEQID_TPD) {
+                  if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\ttranscript_id\t%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                } else if (sip->choice == SEQID_LOCAL && (! ajp->flags.suppressLocalID)) {
+                  if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\ttranscript_id\tlcl|%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                } else if (sip->choice == SEQID_GENERAL) {
+                  if (SeqIdWrite (sip, str, PRINTID_FASTA_GENERAL, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\ttranscript_id\t%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                }
+              }
             }
           }
         }
@@ -23441,7 +24640,8 @@ static void PrintFtableLocAndQuals (
         }
       }
       if (prod != NULL) {
-        for (sip = prod->id; sip != NULL; sip = sip->next) {
+        sip = SeqIdFindForTable (prod->id);
+        if (sip != NULL) {
           if (sip->choice == SEQID_GENBANK ||
               sip->choice == SEQID_EMBL ||
               sip->choice == SEQID_DDBJ ||
@@ -23462,6 +24662,39 @@ static void PrintFtableLocAndQuals (
             if (SeqIdWrite (sip, str, PRINTID_FASTA_GENERAL, sizeof (str)) != NULL) {
               sprintf (tmp, "\t\t\ttranscript_id\t%s\n", str);
               ValNodeCopyStr (head, 0, tmp);
+            }
+          }
+        }
+        if (is_gps_genomic) {
+          cds = SeqMgrGetNextFeature (prod, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+          if (cds != NULL && SeqMgrGetNextFeature (prod, cds, SEQFEAT_CDREGION, 0, &fcontext) == NULL) {
+            prod = BioseqFindFromSeqLoc (cds->product);
+            if (prod != NULL) {
+              sip = SeqIdFindWorst (prod->id);
+              if (sip != NULL) {
+                if (sip->choice == SEQID_GENBANK ||
+                    sip->choice == SEQID_EMBL ||
+                    sip->choice == SEQID_DDBJ ||
+                    sip->choice == SEQID_OTHER ||
+                    sip->choice == SEQID_TPG ||
+                    sip->choice == SEQID_TPE ||
+                    sip->choice == SEQID_TPD) {
+                  if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\tprotein_id\t%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                } else if (sip->choice == SEQID_LOCAL && (! ajp->flags.suppressLocalID)) {
+                  if (SeqIdWrite (sip, str, PRINTID_TEXTID_ACC_VER, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\tprotein_id\tlcl|%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                } else if (sip->choice == SEQID_GENERAL) {
+                  if (SeqIdWrite (sip, str, PRINTID_FASTA_GENERAL, sizeof (str)) != NULL) {
+                    sprintf (tmp, "\t\t\tprotein_id\t%s\n", str);
+                    ValNodeCopyStr (head, 0, tmp);
+                  }
+                }
+              }
             }
           }
         }
@@ -23497,6 +24730,87 @@ static void PrintFtableLocAndQuals (
             }
           }
         }
+      }
+      break;
+    case SEQFEAT_PROT :
+      prp = (ProtRefPtr) sfp->data.value.ptrvalue;
+      if (prp != NULL) {
+        if (prp->name != NULL) {
+          for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
+            StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+            if (! StringHasNoText (str)) {
+              sprintf (tmp, "\t\t\tproduct\t%s\n", str);
+              ValNodeCopyStr (head, 0, tmp);
+            }
+          }
+        }
+        if (prp->desc != NULL) {
+          StringNCpy_0 (str, prp->desc, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tprot_desc\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+        for (vnp = prp->activity; vnp != NULL; vnp = vnp->next) {
+          StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tfunction\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+        for (vnp = prp->ec; vnp != NULL; vnp = vnp->next) {
+          StringNCpy_0 (str, (CharPtr) vnp->data.ptrvalue, sizeof (str));
+          if (! StringHasNoText (str)) {
+            sprintf (tmp, "\t\t\tEC_number\t%s\n", str);
+            ValNodeCopyStr (head, 0, tmp);
+          }
+        }
+      }
+      StringNCpy_0 (str, sfp->comment, sizeof (str));
+      if (! StringHasNoText (str)) {
+        sprintf (tmp, "\t\t\tprot_note\t%s\n", str);
+        ValNodeCopyStr (head, 0, tmp);
+      }
+      break;
+    case SEQFEAT_REGION :
+      StringNCpy_0 (str, (CharPtr) sfp->data.value.ptrvalue, sizeof (str));
+      if (! StringHasNoText (str)) {
+        sprintf (tmp, "\t\t\tregion\t%s\n", str);
+        ValNodeCopyStr (head, 0, tmp);
+      }
+      break;
+    case SEQFEAT_BOND :
+      bondidx = (Int2) sfp->data.value.intvalue;
+      if (bondidx == 255) {
+        bondidx = 5;
+      }
+      if (bondidx > 0 && bondidx < 6) {
+        sprintf (tmp, "\t\t\tbond_type\t%s\n", bondList [bondidx]);
+        ValNodeCopyStr (head, 0, tmp);
+      }
+      break;
+    case SEQFEAT_SITE :
+      siteidx = (Int2) sfp->data.value.intvalue;
+      if (siteidx == 255) {
+        siteidx = 26;
+      }
+      if (siteidx > 0 && siteidx < 27) {
+        sprintf (tmp, "\t\t\tsite_type\t%s\n", siteList [siteidx]);
+        ValNodeCopyStr (head, 0, tmp);
+      }
+      break;
+    case SEQFEAT_PSEC_STR :
+      sec_str = (Int2) sfp->data.value.intvalue;
+      if (sec_str > 0 && sec_str <= 3) {
+        sprintf (tmp, "\t\t\tsec_str_type\t%s\n", secStrText [sec_str]);
+        ValNodeCopyStr (head, 0, tmp);
+      }
+      break;
+    case SEQFEAT_HET :
+      StringNCpy_0 (str, (CharPtr) sfp->data.value.ptrvalue, sizeof (str));
+      if (! StringHasNoText (str)) {
+        sprintf (tmp, "\t\t\theterogen\t%s\n", str);
+        ValNodeCopyStr (head, 0, tmp);
       }
       break;
     default :
@@ -23655,6 +24969,7 @@ NLM_EXTERN CharPtr asn2gnbk_format (
   ValNodePtr         head;
   IntAsn2gbJobPtr    iajp;
   Char               id [42];
+  IntRefBlockPtr     irp;
   size_t             max;
   SeqEntryPtr        oldscope;
   QualValPtr         qv;
@@ -23662,6 +24977,7 @@ NLM_EXTERN CharPtr asn2gnbk_format (
   SeqEntryPtr        sep;
   SeqFeatPtr         sfp;
   SeqIdPtr           sip;
+  SeqIdPtr           sip2;
   CharPtr            str = NULL;
   BioseqPtr          target;
   Char               tmp [53];
@@ -23717,10 +25033,35 @@ NLM_EXTERN CharPtr asn2gnbk_format (
 
       if (blocktype == FEATHEADER_BLOCK) {
         sip = SeqIdFindBest (target->id, 0);
+        if (sip != NULL && sip->choice == SEQID_GI) {
+          sip2 = GetSeqIdForGI (sip->data.intvalue);
+          if (sip2 != NULL) {
+            sip = sip2;
+          }
+        }
         SeqIdWrite (sip, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
         if (! StringHasNoText (id)) {
           sprintf (tmp, ">Feature %s\n", id);
           str = StringSave (tmp);
+        }
+
+      } else if (blocktype == REFERENCE_BLOCK) {
+
+        irp = (IntRefBlockPtr) bbp;
+        if (irp->loc != NULL) {
+          if (irp->rb.pmid != 0 || irp->rb.muid != 0) {
+            head = NULL;
+            PrintFtableIntervals (&head, target, irp->loc, "REFERENCE");
+            if (irp->rb.pmid != 0) {
+              sprintf (tmp, "\t\t\tpmid\t%ld\n", (long) irp->rb.pmid);
+              ValNodeCopyStr (&head, 0, tmp);
+            } else if (irp->rb.muid != 0) {
+              sprintf (tmp, "\t\t\tmuid\t%ld\n", (long) irp->rb.muid);
+              ValNodeCopyStr (&head, 0, tmp);
+            }
+            str = MergeValNodeStrings (head);
+            ValNodeFreeData (head);
+          }
         }
 
       } else if (blocktype == FEATURE_BLOCK) {
@@ -23968,7 +25309,11 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
 
   if (lockFarComp || lockFarLocs || lockFarProd) {
     locks = locks ^ (LOCK_FAR_COMPONENTS | LOCK_FAR_LOCATIONS | LOCK_FAR_PRODUCTS);
-    bsplist = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd);
+    if (slp != NULL && lockFarComp) {
+      bsplist = LockFarComponentsEx (sep, FALSE, lockFarLocs, lockFarProd, slp);
+    } else {
+      bsplist = LockFarComponentsEx (sep, lockFarComp, lockFarLocs, lockFarProd, NULL);
+    }
   }
 
   lookupFarComp = (Boolean) ((locks & LOOKUP_FAR_COMPONENTS) != 0);

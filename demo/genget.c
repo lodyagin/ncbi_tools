@@ -193,7 +193,7 @@ Int2 Main()
 	if ( !GetArgs("GenGet 1.0", argcount, myargs) ) return 1;
 
 	if ( !EntrezInit("GenGet", FALSE, &is_network) ) {
-			ErrPostEx(SEV_FATAL,0,0, "Can't initialize Entrez");
+			ErrPostEx(SEV_FATAL, 1,0, "Can't initialize Entrez");
 			return 1;
 	}
 	SeqEntryLoad();
@@ -207,7 +207,7 @@ Int2 Main()
 		retcode = -1;
 		sep = EntrezSeqEntryGet(gi, retcode);
 		if (sep == NULL) {
-			ErrPostEx(SEV_FATAL,0,0,
+			ErrPostEx(SEV_FATAL, 1,0,
 				"Could not retrieve entry for GI %ld", 	(long)gi);
 			return 1;
 		} else {
@@ -218,7 +218,7 @@ Int2 Main()
 	} else {
 		if ((aip = 
 		AsnIoOpen (myargs[1].strvalue, myargs[2].intvalue?"rb":"r")) == NULL) {
-			ErrPostEx(SEV_FATAL,0,0,"Could not open file %s", 	myargs[1].strvalue);
+			ErrPostEx(SEV_FATAL, 1,0,"Could not open file %s", 	myargs[1].strvalue);
 			return 1;
 		}
 		if (myargs[8].intvalue) {
@@ -235,7 +235,7 @@ Int2 Main()
 			sep->choice = 2;
 		}
 		if (sep == NULL) {
-			ErrPostEx(SEV_FATAL,0,0,"SeqEntryAsnRead failed");
+			ErrPostEx(SEV_FATAL, 1,0,"SeqEntryAsnRead failed");
 			return 1;
 		} else {
 			ErrPostEx(SEV_INFO,0,0,
@@ -481,13 +481,13 @@ Int2 Main()
 
 	if (tarfile && gbk && fsa) {
 	/*	if ((aop = AsnIoOpen (dfile, "w")) == NULL) {
-			ErrPostEx(SEV_FATAL,0,0,"Could not open file %s", dfile);
+			ErrPostEx(SEV_FATAL, 1,0,"Could not open file %s", dfile);
 		} else {
 			SeqEntryAsnWrite(sep, aop, NULL);
 			AsnIoClose(aop);
 		}
 		if ((aop = AsnIoOpen (efile, "wb")) == NULL) {
-			ErrPostEx(SEV_FATAL,0,0,"Could not open file %s", efile);
+			ErrPostEx(SEV_FATAL, 1,0,"Could not open file %s", efile);
 		} else {
 			SeqEntryAsnWrite(sep, aop, NULL);
 			AsnIoClose(aop);

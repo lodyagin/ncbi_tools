@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.52  2003/10/23 17:40:01  kans
+* added SeqMgrGetOverlappingOperon and bspextra operonsByPos and numoperons fields
+*
+* Revision 6.51  2003/09/22 16:13:20  kans
+* LockFarComponentsEx takes new SeqLocPtr parameter
+*
 * Revision 6.50  2003/02/12 14:20:47  kans
 * added IsNonGappedLiteral, used to allow compressed deltas as (previously always raw) parts of segsets
 *
@@ -931,6 +937,7 @@ typedef struct bioseqextra {
   SMFeatItemPtr PNTR  CDSsByPos;      /* subset of featsByPos array containing only CDS features */
   SMFeatItemPtr PNTR  pubsByPos;      /* subset of featsByPos array containing only publication features */
   SMFeatItemPtr PNTR  orgsByPos;      /* subset of featsByPos array containing only biosource features */
+  SMFeatItemPtr PNTR  operonsByPos;   /* subset of featsByPos array containing only operon features */
 
   BioseqPtr           parentBioseq;   /* segmented parent of this raw part all packaged together */
   SMSeqIdxPtr         segparthead;    /* linked list to speed mapping from parts to segmented bioseq */
@@ -946,6 +953,7 @@ typedef struct bioseqextra {
   Int4                numCDSs;        /* number of elements in CDSsByPos array */
   Int4                numpubs;        /* number of elements in pubsByPos array */
   Int4                numorgs;        /* number of elements in orgsByPos array */
+  Int4                numoperons;     /* number of elements in operonsByPos array */
 
   Int4                numsegs;        /* number of segments in partslist array */
 
@@ -1048,7 +1056,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uin
 
 NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
 
-NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products);
+NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, SeqLocPtr loc);
 
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
 

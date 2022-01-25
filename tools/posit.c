@@ -1,4 +1,6 @@
-/* $Id: posit.c,v 6.58 2001/12/11 14:48:54 madden Exp $
+static char const rcsid[] = "$Id: posit.c,v 6.61 2003/08/04 20:43:55 dondosha Exp $";
+
+/* $Id: posit.c,v 6.61 2003/08/04 20:43:55 dondosha Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +32,19 @@
 
   Contents: utilities for position-based BLAST.
 
-  $Revision: 6.58 $ 
+  $Revision: 6.61 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.61  2003/08/04 20:43:55  dondosha
+ * Test for selenocysteines when comparing checkpoint sequences with query
+ *
+ * Revision 6.60  2003/05/30 17:25:37  coulouri
+ * add rcsid
+ *
+ * Revision 6.59  2003/05/13 16:02:53  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
  * Revision 6.58  2001/12/11 14:48:54  madden
  * Fix for ABW (reset Xcount to zero in some cases)
  *
@@ -1476,7 +1487,7 @@ Nlm_FloatHi ** LIBCALL posComputePseudoFreqs(posSearchItems *posSearch, compactS
 		     }
 		   }
 		   else
-		     ErrPostEx(SEV_FATAL, 0, 0, "blastpgp: Cannot find aa frequencies for matrix %s\n", compactSearch->standardMatrixName);
+		     ErrPostEx(SEV_FATAL, 1, 0, "blastpgp: Cannot find aa frequencies for matrix %s\n", compactSearch->standardMatrixName);
 		 }
 	       }
 	     }
@@ -1803,7 +1814,7 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
    charOrder[3] =  4;  /*D*/ 
    charOrder[4] =  3;  /*C*/
    charOrder[5] =  15; /*Q*/
-   charOrder[6] =  5; /*E*/ 
+   charOrder[6] =  5;  /*E*/ 
    charOrder[7] =  7;  /*G*/
    charOrder[8] =  8;  /*H*/
    charOrder[9] =  9;  /*I*/
@@ -2459,8 +2470,15 @@ static Int4 findQuery(posDesc ** alignArray, compactSearchItems * compactSearch,
        else {
          /*Need to keep lower-case letters*/
          thisRes = getRes(query[queryIndex]);
+         /* Selenocysteines are replaced by X's in query; test for this
+            possibility */
+         if ((alignArray[seqIndex][i].letter == 'U' ||
+             alignArray[seqIndex][i].letter == 'u') &&
+             thisRes == 'X')
+            thisRes = alignArray[seqIndex][i].letter;
+            
          if ((thisRes != (alignArray[seqIndex][i].letter + 'A' - 'a')) &&
-            (thisRes != alignArray[seqIndex][i].letter))
+             (thisRes != alignArray[seqIndex][i].letter))
            /*character mismatch*/
            break;
          else {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.35 $
+* $Revision: 6.37 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -443,7 +443,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Segs");
-      sprintf(string2, "Segment %ld (near alignment position %ld) contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.", (long) Intvalue, (long) pos);
+      sprintf(string2, "Segment %ld (near alignment position %ld) in the context of %s contains only gaps.  Each segment must contain at least one actual sequence -- look for columns with all gaps and delete them.", (long) Intvalue, (long) pos, buf3);
       break;
 
     case Err_Segs_Dim_One:
@@ -1495,7 +1495,7 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
 		  /*if no more positive start value is found after the initial -1 start value, then it's  fasta like */
 		  if(k==dsp->numseg-1&&gap)
 		    {
-		      ValMessage (salp, Err_Fastalike, SEV_ERROR, siptemp, dsp->ids, 0); 
+		      ValMessage (salp, Err_Fastalike, SEV_WARNING, siptemp, dsp->ids, 0); 
 		      return TRUE;
 		    }
 		}
@@ -1541,7 +1541,7 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
 		     /*if no more segment is found for this sequence, then it's  fasta like */
 		     if(k==psp->numseg-1&&gap)
 		       {
-			 ValMessage (salp, Err_Fastalike, SEV_ERROR, siptemp, psp->ids, 0); 
+			 ValMessage (salp, Err_Fastalike, SEV_WARNING, siptemp, psp->ids, 0); 
 			 return TRUE;
 		       }
 		   
@@ -1598,7 +1598,7 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
 			      break;
 			    if(!ssptemp2->next&&gap)
 			      {
-				ValMessage (salp, Err_Fastalike, SEV_ERROR, sip, SipInSegs, 0);  
+				ValMessage (salp, Err_Fastalike, SEV_WARNING, sip, SipInSegs, 0);  
 				ValNodeFree(FinishedSip);
 				SeqIdSetFree(SipInSegs);
 				return TRUE;

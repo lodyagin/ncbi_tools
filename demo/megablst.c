@@ -1,4 +1,4 @@
-/* $Id: megablst.c,v 6.6 1999/11/26 19:42:49 shavirin Exp $
+/* $Id: megablst.c,v 6.7 2003/05/13 16:02:42 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         Main file for Mega Blast program
 *
 * $Log: megablst.c,v $
+* Revision 6.7  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.6  1999/11/26 19:42:49  shavirin
 * Fixed warnings of windows compiler.
 *
@@ -137,7 +140,7 @@ align_params_t *MBCreateAlignParameters(void)
     mbap->mismatch_penalty_mb = - myargs[7].intvalue;
 
     if (mbap->mismatch_penalty_mb <= 0) {
-        ErrPostEx(SEV_FATAL, 0, 0, "mismatch must be negative");
+        ErrPostEx(SEV_FATAL, 1, 0, "mismatch must be negative");
         MBFreeAlignParameters(mbap);
         return NULL;
     }
@@ -189,7 +192,7 @@ align_params_t *MBCreateAlignParameters(void)
 
     if (myargs[20].strvalue != NULL) {
         if ((mbap->outfp = FileOpen(myargs [20].strvalue, "w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "megablast: Unable to open output "
+            ErrPostEx(SEV_FATAL, 1, 0, "megablast: Unable to open output "
                       "file %s\n", myargs [20].strvalue);
             return NULL;
         }
@@ -230,7 +233,7 @@ Int2 Main(void)
         return 1;
     
     if ((infp = FileOpen(myargs[1].strvalue, "r")) == NULL) {
-	ErrPostEx(SEV_FATAL, 0, 0,
+	ErrPostEx(SEV_FATAL, 1, 0,
                   "blast: Unable to open input file %s\n", myargs[1].strvalue);
 	return (1);
     }

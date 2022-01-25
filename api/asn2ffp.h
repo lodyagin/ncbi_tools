@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.30 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
@@ -45,6 +45,15 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.33  2003/07/22 16:18:27  kans
+ * added ZFIN as legal db_xref
+ *
+ * Revision 6.32  2003/06/10 18:44:10  kans
+ * added GeneDB to list of legal db_xrefs
+ *
+ * Revision 6.31  2003/05/29 20:25:19  kans
+ * added Interpro to list of legal dbxrefs
+ *
  * Revision 6.30  2002/11/30 20:18:27  kans
  * added GOA to list of legal db_xrefs
  *
@@ -192,6 +201,15 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.33  2003/07/22 16:18:27  kans
+* added ZFIN as legal db_xref
+*
+* Revision 6.32  2003/06/10 18:44:10  kans
+* added GeneDB to list of legal db_xrefs
+*
+* Revision 6.31  2003/05/29 20:25:19  kans
+* added Interpro to list of legal dbxrefs
+*
 * Revision 6.30  2002/11/30 20:18:27  kans
 * added GOA to list of legal db_xrefs
 *
@@ -369,7 +387,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 55
+#define DBNUM 58
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

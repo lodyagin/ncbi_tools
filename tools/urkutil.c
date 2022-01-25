@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkutil.c,v 6.5 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: urk utilities
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkutil.c,v $
+* Revision 6.5  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.4  1999/10/18 18:03:40  madden
 * Remove Entrez calls from tools lib function
 *

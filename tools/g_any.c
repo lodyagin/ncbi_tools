@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: g_any.c,v 6.5 2003/05/30 17:25:36 coulouri Exp $";
+
 /*  g_any.c
 * ===========================================================================
 *
@@ -51,6 +53,9 @@
 * Date     Name        Description of modification
 *
 * $Log: g_any.c,v $
+* Revision 6.5  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.4  1998/08/24 21:19:38  kans
 * fixed -v -fd warnings
 *

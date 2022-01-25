@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE__H
 #define CONNECT___NCBI_SERVICE__H
 
-/*  $Id: ncbi_service.h,v 6.29 2003/04/09 19:05:50 siyan Exp $
+/*  $Id: ncbi_service.h,v 6.31 2003/08/11 19:05:54 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -108,9 +108,13 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenEx
  * host information is allocated, and pointer to it is stored in 'host_info'.
  * Using this information, various host parameters like load, host
  * environment, number of CPUs can be retrieved (see ncbi_host_info.h).
- * NOTE that an application program should NOT destroy returned server info:
- * it will be freed automatically upon iterator destruction. On the other hand,
- * host information has to be explicitly free()'d when no longer needed.
+ * NOTE:  Application program should NOT destroy returned server info:
+ *        it will be freed automatically upon iterator destruction.
+ *        On the other hand, host information has to be explicitly free()'d
+ *        when no longer needed.
+ * NOTE:  Returned server info is valid only until either of the two events:
+ *        1) SERV_GetNextInfo[Ex] is called for the same iterator again;
+ *        2) iterator closed (SERV_Close() called).
  */
 extern NCBI_XCONNECT_EXPORT const SSERV_Info* SERV_GetNextInfoEx
 (SERV_ITER           iter,          /* handle obtained via 'SERV_Open*' call */
@@ -168,6 +172,17 @@ extern NCBI_XCONNECT_EXPORT void SERV_Close
  );
 
 
+/* Set message hook procedure for messages originating from NCBI network
+ * dispatcher (if used).  Any hook will be called not more than once.
+ * If no hook is installed, warning message will be generated in the
+ * standard log file, not more than once.
+ */
+
+typedef void (*FDISP_MessageHook)(const char* message);
+
+extern NCBI_XCONNECT_EXPORT void DISP_SetMessageHook(FDISP_MessageHook);
+
+
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
@@ -179,6 +194,12 @@ extern NCBI_XCONNECT_EXPORT void SERV_Close
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service.h,v $
+ * Revision 6.31  2003/08/11 19:05:54  lavr
+ * +DISP_SetMessageHook()
+ *
+ * Revision 6.30  2003/06/12 13:20:59  lavr
+ * Added notes for SERV_GetNextInfoEx()
+ *
  * Revision 6.29  2003/04/09 19:05:50  siyan
  * Added doxygen support
  *

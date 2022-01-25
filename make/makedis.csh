@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.83 2003/03/05 22:00:46 beloslyu Exp $
+# $Id: makedis.csh,v 1.90 2003/11/12 20:39:54 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -142,6 +142,13 @@ case Linux:
     echo "libs version is:"
 	ls -l /lib/libc.so*
 	switch (`uname -m`)
+	case "ia64":
+		if (-e `which ecc`) then
+			set platform=linux_ecc
+		else
+			set platform=linux
+		endif
+		breaksw
 	case "ppc":
 		set platform=ppclinux
 		breaksw
@@ -159,6 +166,7 @@ case Linux:
 		if (-d $i/Xm) then
 			set HAVE_MOTIF=1
 			echo Motif found at $i/Xm
+			echo "Warning: Motif version 1.2 is recommended"
 			break
 		endif
 	end
@@ -203,12 +211,15 @@ case NetBSD:
 	end
 	breaksw
 case AIX:
-	set arch=`uname -M | sed 's/.*-//'`
-	if ($arch == 150 || $arch == 170 || $arch == 260 || $arch == 270 ) then
-		set platform=ibm_pwr3
-	else
-		set platform=ibm_auto
+	set arch=`uname -M`
+	set platform=ibm_auto
+	if ("$?AIX_MODE" == 1) then
+		if ("$AIX_MODE" == "64") then
+			echo "64-bit mode build was selected for AIX"
+			set platform=ibm_auto64
+		endif
 	endif
+	echo "AIX machine is $arch"
 	set HAVE_MOTIF=0
 	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
 		/usr/include/X11 )
@@ -301,6 +312,10 @@ else
     set PNG_LIBS=""
 endif
 
+set VIBWWWBLAST=(psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL)
+set NONVIBWWWBLAST=(nph-viewgif.cgi wblast2_cs.REAL bl2bag.cgi)
+set WWWBLAST=($VIBWWWBLAST $NONVIBWWWBLAST)
+
 if ( "$HAVE_MOTIF" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
 		LIB28=libvibgif.a \
@@ -321,7 +336,8 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez udv ddv blastcl3 \
-		idfetch asn2xml asn2gb entrez2 gbseqget $OGL_TARGETS\") 
+		idfetch bl2seq asn2xml asn2gb entrez2 gbseqget \
+		$WWWBLAST $OGL_TARGETS\") 
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
 		LIB28=libvibgif.a \
@@ -342,7 +358,7 @@ else if ( "$HAVE_MAC" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin udv ddv blastcl3 \
-                idfetch asn2xml asn2gb entrez2 gbseqget\") 
+		idfetch bl2seq asn2xml asn2gb entrez2 gbseqget $WWWBLAST \") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -351,14 +367,14 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 idfetch asn2xml asn2gb \") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch bl2seq asn2xml asn2gb $NONVIBWWWBLAST \") 
 endif
 
 set CMD='make $MFLG \
    CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE $PNG_INCLUDE\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
-   RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" $ALL_VIB all'
+   RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" $ALL_VIB all'
 eval echo $CMD
 eval echo $CMD | sh 
 
@@ -369,7 +385,7 @@ if ( $make_stat != 0 ) then
 
 Fatal error building NCBI core libraries.
 Please be sure that you have X11 and Motif libraries installed.
-The NCBI toolkit FAQ at ftp://ncbi.nlm.nih.gov/toolbox/FAQ.html may be helpful.
+The NCBI toolkit FAQ at ftp://ftp.ncbi.nih.gov/toolbox/FAQ.html may be helpful.
 
 EoF
 	exit 1
@@ -377,7 +393,7 @@ endif
 
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\" $DEMO_VIB'
+   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" $DEMO_VIB'
 eval echo $CMD
 eval echo $CMD | sh 
 
@@ -396,7 +412,7 @@ rm -f $mtapps
 
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\"  \
+   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\"  \
    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
    $DEMO_VIB $mtapps'
 eval echo $CMD
@@ -408,14 +424,14 @@ if ("$?THREAD_OTHERLIBS" == "1") then
 	set CMD='make $MFLG -f makenet.unx \
 		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
 		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-		CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+		AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
 		THREAD_OTHERLIBS=\"$NCBI_THREAD_OTHERLIBS\" \
 		NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
 else
 	set CMD='make $MFLG -f makenet.unx \
 		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
 		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
-		CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+		AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
 		NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
 endif
 eval echo $CMD
@@ -448,7 +464,8 @@ else
 	errhdr fa2htgs fastacmd findspl fmerge formatdb getfeat getmesh \
 	getpub getseq gil2bin idfetch impala indexpub makemat makeset \
 	megablast ncbisort netentcf rpsblast seedtop seqtest sequin entrez2 \
-	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D )
+	tbl2asn test_regexp testcore testobj testval udv vecscreen Cn3D \
+	$WWWBLAST )
 	if ( -x ./$i ) then
 		rm -f ../bin/$i
 		if ( $os == "Darwin" ) then

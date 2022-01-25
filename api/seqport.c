@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.79 $
+* $Revision: 6.82 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,15 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.82  2003/08/18 21:07:35  kans
+* RevCompStr was stepping on str variable
+*
+* Revision 6.81  2003/08/18 20:09:46  kans
+* SeqPortStreamLoc calls SeqPortStream recursively to local buffer, reverse complements if necessary, and passes appropriate subsequence to callback - speeds up far deltas that point to other far deltas
+*
+* Revision 6.80  2003/08/07 19:54:33  kans
+* TransTableTranslateCommon turns on no_start only if CDS location is 5prime partial, not if product is missing the amino end
+*
 * Revision 6.79  2002/11/11 18:02:40  kans
 * added SeqPortStream to efficiently stream through a sequence
 *
@@ -2202,6 +2211,84 @@ static void SeqPortStreamLit (
   BioseqFree (bsp);
 }
 
+static void RevCompStr (
+  CharPtr str
+)
+
+{
+  Char     ch;
+  CharPtr  complementBase = " TVGH  CD  M KN   YSAABW R ";
+  Int2     i;
+  Uint1    letterToComp [256];
+  Char     lttr;
+  CharPtr  nd;
+  CharPtr  tmp;
+
+  if (str == NULL) return;
+
+  /* set up complementation lookup table */
+
+  for (i = 0; i < 256; i++) {
+    letterToComp [i] = '\0';
+  }
+  for (ch = 'A', i = 1; ch <= 'Z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+  for (ch = 'a', i = 1; ch <= 'z'; ch++, i++) {
+    lttr = complementBase [i];
+    if (lttr != ' ') {
+      letterToComp [(int) (Uint1) ch] = lttr;
+    }
+  }
+
+  /* reverse string */
+
+  nd = str;
+  while (*nd != '\0') {
+    nd++;
+  }
+  nd--;
+
+  tmp = str;
+  while (nd > tmp) {
+    ch = *nd;
+    *nd = *tmp;
+    *tmp = ch;
+    nd--;
+    tmp++;
+  }
+
+  /* complement string */
+
+  nd = str;
+  ch = *nd;
+  while (ch != '\0') {
+    *nd = letterToComp [(int) (Uint1) ch];
+    nd++;
+    ch = *nd;
+  }
+}
+
+static void LIBCALLBACK SaveLocStream (
+  CharPtr sequence,
+  Pointer userdata
+)
+
+{
+  CharPtr       tmp;
+  CharPtr PNTR  tmpp;
+
+  tmpp = (CharPtr PNTR) userdata;
+  tmp = *tmpp;
+
+  tmp = StringMove (tmp, sequence);
+
+  *tmpp = tmp;
+}
+
 static void SeqPortStreamLoc (
   SeqLocPtr slp,
   Boolean expandGaps,
@@ -2212,7 +2299,9 @@ static void SeqPortStreamLoc (
 {
   BioseqPtr  bsp;
   Int4       from;
+  CharPtr    str;
   Uint1      strand;
+  CharPtr    tmp;
   Int4       to;
 
   if (slp == NULL || proc == NULL) return;
@@ -2224,7 +2313,28 @@ static void SeqPortStreamLoc (
   to = SeqLocStop (slp);
   strand = SeqLocStrand (slp);
 
-  SeqPortStreamRaw (bsp, from, to, strand, expandGaps, userdata, proc);
+  str = str = MemNew (sizeof (Char) * (bsp->length + 10));
+  if (str != NULL) {
+    tmp = str;
+    SeqPortStream (bsp, TRUE, (Pointer) &tmp, SaveLocStream);
+
+    if (to > 0 && to < bsp->length) {
+      str [to + 1] = '\0';
+    }
+    tmp = str;
+    if (from > 0 && from < bsp->length) {
+      tmp += from;
+    }
+    if (strand == Seq_strand_minus && ISA_na (bsp->mol)) {
+      RevCompStr (tmp);
+    }
+
+    proc (tmp, userdata);
+
+    MemFree (str);
+  }
+
+  /* SeqPortStreamRaw (bsp, from, to, strand, expandGaps, userdata, proc); */
 
   BioseqUnlock (bsp);
 }
@@ -4906,7 +5016,7 @@ static ByteStorePtr TransTableTranslateCommon (
   no_start = FALSE;
   part_loc = SeqLocPartialCheck (location);
   part_prod = SeqLocPartialCheck (product);
-  if ((part_loc & SLP_START) || (part_prod & SLP_START)) {
+  if ((part_loc & SLP_START) /* || (part_prod & SLP_START) */) {
     no_start = TRUE;
   }
   if (StringHasNoText (tbl->sncbieaa) || no_start || frame > 1) {

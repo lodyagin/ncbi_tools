@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.18 $
+* $Revision: 1.22 $
 *
 * File Description: 
 *
@@ -88,6 +88,9 @@ NLM_EXTERN CONN GiSeqIdSetOpenConnection (
   Int4 gi
 );
 
+NLM_EXTERN CONN AccnListOpenConnection (
+  CharPtr PNTR accns
+);
 
 NLM_EXTERN PubmedEntryPtr PubMedWaitForReply (
   CONN conn
@@ -106,6 +109,10 @@ NLM_EXTERN Int4 AccnRevHistWaitForReply (
 );
 
 NLM_EXTERN SeqIdPtr GiSeqIdSetWaitForReply (
+  CONN conn
+);
+
+NLM_EXTERN CharPtr AccnListWaitForReply (
   CONN conn
 );
 
@@ -136,6 +143,10 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
 
 NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
   Int4 gi
+);
+
+NLM_EXTERN CharPtr AccnListSynchronousQuery (
+  CharPtr PNTR accns
 );
 
 /*
@@ -238,11 +249,38 @@ NLM_EXTERN SeqIdPtr GiSeqIdSetReadReply (
   EIO_Status status
 );
 
+NLM_EXTERN Boolean AccnListAsynchronousQuery (
+  CharPtr PNTR accns,
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Int4 AccnListCheckQueue (
+  QUEUE* queue
+);
+
+NLM_EXTERN CharPtr AccnListReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
+/* PMID fetch registration function */
+
+NLM_EXTERN Boolean PubMedFetchEnable (
+  void
+);
+
+NLM_EXTERN void PubMedFetchDisable (
+  void
+);
+
 /* SeqId fetch registration function */
 
 NLM_EXTERN Boolean PubSeqFetchEnable (
   void
 );
+
 NLM_EXTERN void PubSeqFetchDisable (
   void
 );
@@ -267,6 +305,24 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
 
 NLM_EXTERN SeqIdPtr LIBCALLBACK GiRevHistLookupSeqIdSet (
   Int4 gi
+);
+
+/* multiple Accession bulk lookup or preload section */
+
+typedef void (LIBCALLBACK *CacheAccnListProc) (
+  Int4 gi,
+  CharPtr accnver
+);
+
+/*
+ CacheAccnList takes the AccnList query result, and calls the
+ user callback if it is not NULL, otherwise it preloads the
+ sequence manager gi/accession lookup cache
+*/
+
+NLM_EXTERN Int4 CacheAccnList (
+  CharPtr str,
+  CacheAccnListProc userfunc
 );
 
 

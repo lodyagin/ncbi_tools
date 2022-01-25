@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkfltr.c,v 6.8 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: filter
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkfltr.c,v $
+* Revision 6.8  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.7  1998/12/23 21:34:04  kuzio
 * SeqPortStuff
 *

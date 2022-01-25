@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkgraph.c,v 6.7 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: graph utilities
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkgraph.c,v $
+* Revision 6.7  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.6  1998/12/09 20:38:45  kans
 * changed compl to compr to avoid new c++ symbol collision
 *

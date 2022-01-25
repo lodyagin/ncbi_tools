@@ -246,21 +246,21 @@ Int2 Main(void)
 	{
 		if (gi)
 		{
-			ErrPostEx(SEV_FATAL,0,0, "Use only one of -g or -s");
+			ErrPostEx(SEV_FATAL, 1,0, "Use only one of -g or -s");
 			return 1;
 		}
 
 		sip = SeqIdParse((CharPtr)(myargs[3].strvalue));
 		if (sip == NULL)
 		{
-			ErrPostEx(SEV_FATAL,0,0, "Can't parse [%s]",
+			ErrPostEx(SEV_FATAL, 1,0, "Can't parse [%s]",
 				(CharPtr)(myargs[3].strvalue));
 			return 1;
 		}
 	}
         else if (! gi)
 	{
-		ErrPostEx(SEV_FATAL,0,0, "Must supply one of -g or -s");
+		ErrPostEx(SEV_FATAL, 1,0, "Must supply one of -g or -s");
 		return 1;
 	}
 
@@ -269,7 +269,7 @@ Int2 Main(void)
 	*/
 
 	if ( !PUBSEQBioseqFetchEnable("Condense", TRUE) ) {
-		ErrPostEx(SEV_FATAL,0,0, "Can't initialize PUBSEQ");
+		ErrPostEx(SEV_FATAL, 1,0, "Can't initialize PUBSEQ");
 		return 1;
 	}
 
@@ -280,7 +280,7 @@ Int2 Main(void)
 		{
 			PUBSEQFini();
 			SeqIdWrite(sip, tbuf, PRINTID_FASTA_SHORT,40);
-			ErrPostEx(SEV_FATAL,0,0, "Couldn't find SeqId [%s]", tbuf);
+			ErrPostEx(SEV_FATAL, 1,0, "Couldn't find SeqId [%s]", tbuf);
 			return 1;
 		}
 		SeqIdFree(sip);
@@ -295,7 +295,7 @@ Int2 Main(void)
 
 	if (query == NULL)
 	{
-		ErrPostEx(SEV_FATAL,0,0,"Could not retrieve entry for GI %ld", (long)gi);
+		ErrPostEx(SEV_FATAL, 1,0,"Could not retrieve entry for GI %ld", (long)gi);
 		return 1;
 	}
 

@@ -1,5 +1,5 @@
 /*----------------*/
-/* $Id: tc2proc.c,v 1.28 2003/03/05 21:32:00 soussov Exp $           */
+/* $Id: tc2proc.c,v 1.33 2003/07/29 20:06:05 soussov Exp $           */
 /*----------------*/
 
 #include <stdlib.h>
@@ -38,6 +38,7 @@ static Int2 GB_COMMON= 0;
 static Int2 GB_ACRONYM= 0;
 static Int2 GB_SYNONYM= 0;
 static Int2 GB_ANAMORPH= 0;
+static Int2 ANAMORPH= 0;
 
 static int my_timer= 0;
 
@@ -63,6 +64,7 @@ static Boolean we_want_synonyms= 0;
 static OrgRefPtr getFromBuff(Int4 id, int* is_sp, int* is_uncult, NameListPtr* bnl);
 static void loadInBuff(Int4 id);
 static void bldOrgRefOut(OrgRefPtr dst, OrgRefPtr src, Int4 tax_id);
+static int nof_tokens(char* s);
 
 Boolean tax1_setSynonyms(Boolean on_off)
 {
@@ -161,6 +163,7 @@ int InitTaxDB(void)
     GB_ACRONYM= tax_getClass_cde("genbank acronym");
     GB_SYNONYM= tax_getClass_cde("genbank synonym");
     GB_ANAMORPH= tax_getClass_cde("genbank anamorph");
+    ANAMORPH= tax_getClass_cde("anamorph");
 
     initBuff();
     tax_tree= tax_ptree_new();
@@ -778,12 +781,12 @@ static Int2 getSubtypeFromName(CharPtr name)
     c= StringStr(name, "subsp.");
     if(c == name) {
         rmWord(name, c, 6);
-        return 22;
+        return (nof_tokens(c) == 1)? 22 : 0;
     }
     c= StringStr(name, "ssp.");
     if(c == name) {
         rmWord(name, c, 4);
-        return 22;
+        return (nof_tokens(c) == 1)? 22 : 0;
     }
     c= StringStr(name, "f. sp.");
     if(c == name) {
@@ -882,9 +885,12 @@ static OrgModPtr bldOrgMod(TreeCursorPtr cursor)
 
     orgMdf->subtype= getSubtypeFromName(orgMdf->subname);
 
+    if(orgMdf->subtype == 22 && rank != SubspeciesRank + 1) 
+        orgMdf->subtype= 0;
+
     if(orgMdf->subtype <= 0) {
         if(--rank == SubspeciesRank) {
-            orgMdf->subtype= 22; /* subspecies */
+            if(nof_tokens(me->node_label) == 3) orgMdf->subtype= 22; /* subspecies */
         }
         else if(rank == tax_getRankId("varietas")) {
             orgMdf->subtype= 6; /* variety */
@@ -896,10 +902,15 @@ static OrgModPtr bldOrgMod(TreeCursorPtr cursor)
             orgMdf->subtype= 2; /* strain */
         }
         else {
-            orgMdf->subtype= 255; /* other */
+            orgMdf->subtype= 0; /* other */
         }
     }
     orgMdf->attrib= NULL;
+
+    if(orgMdf->subtype == 0) {
+        OrgModFree(orgMdf);
+        orgMdf= 0;
+    }
     
     return orgMdf;
 }
@@ -1541,8 +1552,9 @@ static int subtypeConflict(Int2 t1, Int2 t2)
     switch(t2) {
     case 2:
     case 6:
-    case 22:
-        if((t1 >= 2 && t1 <= 17) || (t1 == 22)) return 1;
+    /*case 22:*/
+/*        if((t1 >= 2 && t1 <= 17) || (t1 == 22)) return 1;*/
+        if((t1 >= 2 && t1 <= 17)) return 1;
         break;
     case 255:
         return 1;
@@ -2205,4 +2217,60 @@ CharPtr tax1m_getBlastName(Int4 tax_id)
 Boolean tax1_inited()
 {
     return (tax_tree != NULL)? TRUE : FALSE;
+}
+
+static char* next_token(char* s)
+{
+    if(s == NULL) return NULL;
+
+    while(*s && (isspace(*s) || iscntrl(*s))) {
+        ++s;
+    }
+    
+    if(*s == '\0') return NULL;
+    else {
+        char last;
+        char first= *s;
+        int j= 0;
+
+        switch(first) {
+        case '"': last= '"'; break;
+        case '(': last= ')'; break;
+        case '{': last= '}'; break;
+        case '[': last= ']'; break;
+        default:  last= '\0';
+        }
+
+        for(++s; *s != '\0'; s++) {
+            if(!isalnum(*s)) {
+                if(last) {
+                    if(first == *s && first != '"') ++j;
+                    if(last == *s && (!j--)) {
+                        ++s;
+                        break;
+                    }
+                }
+                else {
+                    if(*s == '.' || isspace(*s) || iscntrl(*s)) {
+                        ++s;
+                        break;
+                    }
+                }
+            }
+        }
+            
+    }
+
+    return s;
+}
+
+
+static int nof_tokens(char* s)
+{
+    int n;
+    char* nt= s;
+
+    for(n= 0; (nt= next_token(nt)) != NULL; n++);
+
+    return n;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.c,v $
+* Revision 6.25  2003/08/11 19:43:27  rsmith
+* Memory Handle functions apply to Mac OS Darwin (OSX) not just to OS_MAC (OS9)
+*
 * Revision 6.24  2002/11/06 21:24:35  ucko
 * Make sure MADV_NORMAL is actually defined before trying to use madvise.
 *
@@ -515,7 +518,7 @@ NLM_EXTERN size_t LIBCALL Nlm_MemSearch(const void* where, size_t where_size,
 }
 
 
-#if defined(OS_MAC) || defined(OS_MSWIN) || defined(MSC_VIRT)
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN) || defined(OS_MSWIN) || defined(MSC_VIRT)
 /***** Handle functions are for Macintosh and Windows only *****/
 /***** or Microsoft virtual memory manager ****/
 
@@ -541,7 +544,7 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandGet (size_t size, Nlm_Boolean clear_out)
 
     if (size == 0) return NULL;
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
     hnd = (Nlm_Handle) NewHandle (size);
 #endif
 
@@ -609,7 +612,7 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandMore (Nlm_Handle hnd, size_t size)
 		return NULL;
     }
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
     SetHandleSize ((Handle)hnd, (Size)size);
     hnd2 = hnd;
     if (MemError() != noErr)
@@ -645,7 +648,7 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandFree (Nlm_Handle hnd)
 
     if (hnd) {
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
         DisposeHandle ((Handle) hnd);
 #endif
 
@@ -682,7 +685,7 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_HandLock (Nlm_Handle hnd)
         return NULL;
     }
 
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
     HLock ((Handle) hnd);
     ptr = *((Handle) hnd);
 #endif
@@ -713,7 +716,7 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_HandUnlock (Nlm_Handle hnd)
     if (hnd == NULL)
     	ErrPostEx(SEV_WARNING,E_Programmer,0,"HandUnlock: %s", _msgNullHnd);
     else {
-#ifdef OS_MAC
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN)
         HUnlock ((Handle) hnd);
 #endif
 

@@ -20,7 +20,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Cdd
-*    Generated using ASNCODE Revision: 6.14 at Feb 6, 2003 12:10 PM
+*    Generated using ASNCODE Revision: 6.14 at Aug 14, 2003 10:05 AM
 *
 **************************************************/
 
@@ -86,6 +86,9 @@ typedef struct struct_Cdd {
    struct struct_Align_annot PNTR   alignannot;
    struct struct_Cn3d_style_dictionary PNTR   style_dictionary;
    struct struct_Cn3d_user_annotations PNTR   user_annotations;
+   ValNodePtr   ancestors;
+   struct struct_Score_matrix_parameters PNTR   scoreparams;
+   struct struct_Sequence_tree PNTR   seqtree;
 } Cdd, PNTR CddPtr;
 
 
@@ -197,6 +200,38 @@ NLM_EXTERN CddRepeatPtr LIBCALL CddRepeatNew PROTO (( void ));
 NLM_EXTERN CddRepeatPtr LIBCALL CddRepeatAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL CddRepeatAsnWrite PROTO (( CddRepeatPtr , AsnIoPtr, AsnTypePtr));
 
+
+
+/**************************************************
+*
+*    CddBookRef
+*
+**************************************************/
+typedef struct struct_Cdd_book_ref {
+   CharPtr   bookname;
+   Uint2   textelement;
+   /* following #defines are for enumerated type, not used by object loaders */
+#define Cdd_book_ref_textelement_unassigned 0
+#define Cdd_book_ref_textelement_section 1
+#define Cdd_book_ref_textelement_figgrp 2
+#define Cdd_book_ref_textelement_table 3
+#define Cdd_book_ref_textelement_chapter 4
+#define Cdd_book_ref_textelement_biblist 5
+#define Cdd_book_ref_textelement_box 6
+#define Cdd_book_ref_textelement_glossary 7
+#define Cdd_book_ref_textelement_appendix 8
+#define Cdd_book_ref_textelement_other 255
+
+   Int4   elementid;
+   Int4   subelementid;
+} CddBookRef, PNTR CddBookRefPtr;
+
+
+NLM_EXTERN CddBookRefPtr LIBCALL CddBookRefFree PROTO ((CddBookRefPtr ));
+NLM_EXTERN CddBookRefPtr LIBCALL CddBookRefNew PROTO (( void ));
+NLM_EXTERN CddBookRefPtr LIBCALL CddBookRefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL CddBookRefAsnWrite PROTO (( CddBookRefPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr CddDescrPtr;
 typedef ValNode CddDescr;
 #define CddDescr_othername 1
@@ -214,6 +249,7 @@ typedef ValNode CddDescr;
 #define CddDescr_old_root 13
 #define CddDescr_curation_status 14
 #define CddDescr_readonly_status 15
+#define CddDescr_book_ref 16
 
 
 NLM_EXTERN CddDescrPtr LIBCALL CddDescrFree PROTO ((CddDescrPtr ));
@@ -338,6 +374,7 @@ typedef ValNode FeatureEvidence;
 #define FeatureEvidence_reference 2
 #define FeatureEvidence_bsannot 3
 #define FeatureEvidence_seqfeat 4
+#define FeatureEvidence_book_ref 5
 
 
 NLM_EXTERN FeatureEvidencePtr LIBCALL FeatureEvidenceFree PROTO ((FeatureEvidencePtr ));
@@ -383,6 +420,188 @@ NLM_EXTERN AlignAnnotSetPtr LIBCALL AlignAnnotSetAsnRead PROTO (( AsnIoPtr, AsnT
 NLM_EXTERN Boolean LIBCALL AlignAnnotSetAsnWrite PROTO (( AlignAnnotSetPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    DomainParent
+*
+**************************************************/
+typedef struct struct_Domain_parent {
+   struct struct_Domain_parent PNTR next;
+   ValNodePtr   parentid;
+   struct seqannot PNTR   seqannot;
+} DomainParent, PNTR DomainParentPtr;
+
+
+NLM_EXTERN DomainParentPtr LIBCALL DomainParentFree PROTO ((DomainParentPtr ));
+NLM_EXTERN DomainParentPtr LIBCALL DomainParentNew PROTO (( void ));
+NLM_EXTERN DomainParentPtr LIBCALL DomainParentAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL DomainParentAsnWrite PROTO (( DomainParentPtr , AsnIoPtr, AsnTypePtr));
+
+typedef ValNodePtr LineageInfoPtr;
+typedef ValNode LineageInfo;
+#define LineageInfo_simpleparent 1
+#define LineageInfo_LineageInfo_Complexparents 2
+
+
+NLM_EXTERN LineageInfoPtr LIBCALL LineageInfoFree PROTO ((LineageInfoPtr ));
+NLM_EXTERN LineageInfoPtr LIBCALL LineageInfoAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL LineageInfoAsnWrite PROTO (( LineageInfoPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    LineageInfo_complexparents
+*
+**************************************************/
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+typedef struct struct_LineageInfo_Complexparents {
+   struct struct_Domain_parent PNTR   fusionparents;
+   struct struct_Domain_parent PNTR   deletionparent;
+} LineageInfo_complexparents, PNTR LineageInfo_complexparentsPtr;
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsFree PROTO ((LineageInfo_complexparentsPtr ));
+static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsNew PROTO (( void ));
+static LineageInfo_complexparentsPtr LIBCALL LineageInfo_complexparentsAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL LineageInfo_complexparentsAsnWrite PROTO (( LineageInfo_complexparentsPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    SequenceTree
+*
+**************************************************/
+typedef struct struct_Sequence_tree {
+   CharPtr   cdAccession;
+   struct struct_Algorithm_type PNTR   algorithm;
+   Uint1   isAnnotated;
+   struct struct_SeqTree_node PNTR   root;
+} SequenceTree, PNTR SequenceTreePtr;
+
+
+NLM_EXTERN SequenceTreePtr LIBCALL SequenceTreeFree PROTO ((SequenceTreePtr ));
+NLM_EXTERN SequenceTreePtr LIBCALL SequenceTreeNew PROTO (( void ));
+NLM_EXTERN SequenceTreePtr LIBCALL SequenceTreeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SequenceTreeAsnWrite PROTO (( SequenceTreePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    AlgorithmType
+*
+**************************************************/
+typedef struct struct_Algorithm_type {
+   Int4   scoring_Scheme;
+   Int4   clustering_Method;
+   Int4   score_Matrix;
+   Int4   gapOpen;
+   Int4   gapExtend;
+   Int4   gapScaleFactor;
+   Int4   nTerminalExt;
+   Int4   cTerminalExt;
+} AlgorithmType, PNTR AlgorithmTypePtr;
+
+
+NLM_EXTERN AlgorithmTypePtr LIBCALL AlgorithmTypeFree PROTO ((AlgorithmTypePtr ));
+NLM_EXTERN AlgorithmTypePtr LIBCALL AlgorithmTypeNew PROTO (( void ));
+NLM_EXTERN AlgorithmTypePtr LIBCALL AlgorithmTypeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AlgorithmTypeAsnWrite PROTO (( AlgorithmTypePtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SeqTreeNode
+*
+**************************************************/
+typedef struct struct_SeqTree_node {
+   struct struct_SeqTree_node PNTR next;
+   Uint1   isAnnotated;
+   CharPtr   name;
+   FloatHi   distance;
+   ValNodePtr   Children_children;
+   struct struct_Node_annotation PNTR   annotation;
+} SeqTreeNode, PNTR SeqTreeNodePtr;
+
+
+NLM_EXTERN SeqTreeNodePtr LIBCALL SeqTreeNodeFree PROTO ((SeqTreeNodePtr ));
+NLM_EXTERN SeqTreeNodePtr LIBCALL SeqTreeNodeNew PROTO (( void ));
+NLM_EXTERN SeqTreeNodePtr LIBCALL SeqTreeNodeAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SeqTreeNodeAsnWrite PROTO (( SeqTreeNodePtr , AsnIoPtr, AsnTypePtr));
+
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+typedef ValNodePtr Children_childrenPtr;
+typedef ValNode Children_children;
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+#define Children_children_children 1
+#define Children_children_Children_Footprint 2
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+static Children_childrenPtr LIBCALL Children_childrenFree PROTO ((Children_childrenPtr ));
+static Children_childrenPtr LIBCALL Children_childrenAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL Children_childrenAsnWrite PROTO (( Children_childrenPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    Children_footprint
+*
+**************************************************/
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+typedef struct struct_Children_Footprint {
+   struct seqint PNTR   seqRange;
+   Int4   rowId;
+} Children_footprint, PNTR Children_footprintPtr;
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+static Children_footprintPtr LIBCALL Children_footprintFree PROTO ((Children_footprintPtr ));
+static Children_footprintPtr LIBCALL Children_footprintNew PROTO (( void ));
+static Children_footprintPtr LIBCALL Children_footprintAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+static Boolean LIBCALL Children_footprintAsnWrite PROTO (( Children_footprintPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    NodeAnnotation
+*
+**************************************************/
+typedef struct struct_Node_annotation {
+   CharPtr   presentInChildCD;
+   CharPtr   note;
+} NodeAnnotation, PNTR NodeAnnotationPtr;
+
+
+NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationFree PROTO ((NodeAnnotationPtr ));
+NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationNew PROTO (( void ));
+NLM_EXTERN NodeAnnotationPtr LIBCALL NodeAnnotationAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL NodeAnnotationAsnWrite PROTO (( NodeAnnotationPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

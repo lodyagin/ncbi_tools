@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/31/94
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *		system dependent header
@@ -41,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: ncbilcl.met,v $
+* Revision 6.10  2003/05/05 15:01:53  rsmith
+* support for targeting Win32 systems with Codewarrior on Mac.
+*
 * Revision 6.9  2003/02/28 15:53:32  kans
 * initial consolidation of ncbilcl.met and ncbilcl.dwn
 *
@@ -130,14 +133,60 @@
 /* PLATFORM DEFINITION FOR MACINTOSH UNDER METROWERKS C/C++ */
 
 #define COMP_METRO
-#ifdef __MACH__
+#ifdef __MACH__         /* Mach-O Executable */
 #define OS_UNIX
 #define OS_UNIX_DARWIN
+
+#elif defined(__INTEL__)    /* MS Windows Executable */
+#ifndef WIN32
+#define WIN32
+#endif
+
+#define OS_MSWIN
+#define WIN_MSWIN
+#define WIN_DUMB
+#define OS_NT
+
+#ifndef FAR
+#define FAR
+#define NEAR
+#endif
+
+#ifndef EXPORT
+#define EXPORT
+#endif
+
+
+#if defined(i386) || defined(X86) || defined(_X86_) || defined(_M_IX86)
+/* INTEL processor */
+#define PLATFORM_NAME "Win32i"
+#define PROC_I80X86
+#define PROC_I80_386
+#ifndef PASCAL
+#define PASCAL __stdcall
+#define CDECL  __cdecl
+#endif
+
 #else
+#error Unknown processor
+#endif
+
+#ifdef _MT
+#define WIN32_THREADS_AVAIL
+#endif
+#ifdef OS_NT
+#define OS_WINNT
+#endif
+
+#else               /* PEF (Carbon) Executable */
+
 #define OS_MAC
 #endif
+
+#ifndef OS_MSWIN
 #define PROC_PPC
 #define WIN_MAC
+#endif
 
 #else /* APPLE DEVELOPMENT SYSTEM GCC COMPILER */
 
@@ -156,17 +205,15 @@
 /*----------------------------------------------------------------------*/
 /*      Desired or available feature list                               */
 /*----------------------------------------------------------------------*/
+#ifdef OS_MSWIN
+#define HAVE_STRDUP 1
+#endif
 
 /*----------------------------------------------------------------------*/
 /*      #includes                                                       */
 /*----------------------------------------------------------------------*/
 
 /* needed to make ctype.h work when including it from /usr/include (not the MW version) */
-/*
-#ifndef _USE_CTYPE_INLINE_
-#define _USE_CTYPE_INLINE_
-#endif
-*/
 #define _USE_CTYPE_INLINE_
 #include <ctype.h>
 
@@ -190,6 +237,10 @@ places not in the ncbi tree or in the Metroworks tree
 #include <memory.h>
 #include <unistd.h>
 #include <fcntl.h>
+#elif   defined(OS_MSWIN)
+#include <stddef.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 #else /* OS_MAC */
 #include <MacMemory.h>
 #endif /* OS_UNIX_DARWIN */
@@ -214,26 +265,35 @@ places not in the ncbi tree or in the Metroworks tree
 #define SEEK_END	2	/* Set file pointer to EOF plus offset */
 #endif
 
-#ifdef __MWERKS__
+#ifdef COMP_METRO
 
-#ifndef FILENAME_MAX
-#define FILENAME_MAX 255
-#endif
-#ifndef PATH_MAX
-#define PATH_MAX 255
-#endif
+    #ifdef  OS_MSWIN
+        #ifndef FILENAME_MAX
+        #define FILENAME_MAX 63
+        #endif
+        #ifndef PATH_MAX
+        #define PATH_MAX 256
+        #endif
+    #else
+        #ifndef FILENAME_MAX
+        #define FILENAME_MAX 255
+        #endif
+        #ifndef PATH_MAX
+        #define PATH_MAX 255
+        #endif
+    #endif
 
 #else
 
-#ifndef FILENAME_MAX
-#define FILENAME_MAX 1024
-#endif
-#ifndef LOGNAME_MAX
-#define LOGNAME_MAX	MAXLOGNAME
-#endif
-#ifndef PATH_MAX
-#define PATH_MAX 1024
-#endif
+    #ifndef FILENAME_MAX
+    #define FILENAME_MAX 1024
+    #endif
+    #ifndef LOGNAME_MAX
+    #define LOGNAME_MAX	MAXLOGNAME
+    #endif
+    #ifndef PATH_MAX
+    #define PATH_MAX 1024
+    #endif
 
 #endif /* __MWERKS__ */
 
@@ -258,6 +318,14 @@ our function in gapxdrop.c/h
 #define NULL ((void *)0)
 #endif
 
+#ifdef OS_MSWIN
+#define PNTR FAR *
+#define HNDL NEAR *
+
+typedef int (FAR PASCAL *Nlm_FnPtr)();
+#define FnPtr Nlm_FnPtr
+#endif /* OS_MSWIN */
+
 #endif /* __MWERKS__ */
 
 #ifndef sigset
@@ -273,6 +341,9 @@ our function in gapxdrop.c/h
 #ifdef OS_UNIX
 #define DIRDELIMCHR	'/'
 #define DIRDELIMSTR	"/"
+#elif defined(OS_MSWIN)
+#define DIRDELIMCHR     '\\'
+#define DIRDELIMSTR     "\\"
 #else
 #define DIRDELIMCHR	':'
 #define DIRDELIMSTR	":"
@@ -282,15 +353,27 @@ our function in gapxdrop.c/h
 #define KBYTE	(1024)
 #define MBYTE	(1048576)
 
+#ifdef OS_MSWIN
+#ifndef IS_BIG_ENDIAN
+#define IS_LITTLE_ENDIAN
+#endif
+#else
 #define IS_BIG_ENDIAN
+#endif
 
-#ifdef OS_UNIX_DARWIN
+#if defined(OS_UNIX_DARWIN) || ( defined(OS_MSWIN) && ! defined(COMP_METRO) )
 #define TEMPNAM_AVAIL
+#endif
+
+#ifdef OS_MSWIN
+/* get rid of some of the defines from dlgs.h */
+
 #endif
 
 /*----------------------------------------------------------------------*/
 /*      For importing MS_DOS code                                       */
 /*----------------------------------------------------------------------*/
+#ifndef OS_MSWIN
 #define near
 #define far
 #define huge
@@ -301,6 +384,7 @@ our function in gapxdrop.c/h
 #define _far
 #define _huge
 #define _cdecl
+#endif
 
 /*----------------------------------------------------------------------*/
 /*      Macros for Floating Point                                       */
@@ -310,9 +394,16 @@ our function in gapxdrop.c/h
 #define EXP10(x) exp((x)*LN10)
 #define LOG10(x) log10(x)
 
+#ifndef TIME_MAX
+#define TIME_MAX  INT4_MAX
+#endif
 /*----------------------------------------------------------------------*/
 /*      Macros Defining Limits                                          */
 /*----------------------------------------------------------------------*/
+#ifdef OS_MSWIN
+#define MAXALLOC        0x7F000000 /* Largest permissible memory request */
+#else
 #define MAXALLOC	0x40000000 /* Largest permissible memory request */
+#endif
 
 #endif

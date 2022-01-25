@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: csim.c,v 6.2 2003/05/30 17:25:36 coulouri Exp $";
+
 /*  csim.c
 * ===========================================================================
 *
@@ -37,6 +39,9 @@
 * Date     Name        Description of modification
 *
 * $Log: csim.c,v $
+* Revision 6.2  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.1  1998/09/09 11:47:43  sirotkin
 * MAXSEG to NLM_MAX_SEG to avoid RS6000 occasional conflict
 *

@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: bxmlobj.c,v 6.10 2003/05/30 17:25:36 coulouri Exp $";
+
 #include <asn.h>
 
 #define NLM_GENERATED_CODE_PROTO

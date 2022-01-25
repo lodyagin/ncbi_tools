@@ -44,6 +44,15 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.c,v $
+* Revision 6.10  2003/07/31 20:54:54  kans
+* FindReplaceString does not need do_replace argument
+*
+* Revision 6.9  2003/07/31 18:18:03  kans
+* added FindReplaceString
+*
+* Revision 6.8  2003/05/11 21:12:50  kans
+* FindReplAligns loops through StdSegPtr chain, also does ssp->ids within
+*
 * Revision 6.7  2002/06/11 14:41:20  kans
 * added support for locus_tag
 *
@@ -1214,9 +1223,13 @@ static void FindReplAligns (
       }
       break;
     case SAS_STD :
-      ssp = (StdSegPtr) sap->segs;
-      for (slp = ssp->loc; slp != NULL; slp = slp->next) {
-        VisitSeqIdsInSeqLoc (slp, userdata, FindReplSeqId);
+      for (ssp = (StdSegPtr) sap->segs; ssp != NULL; ssp = ssp->next) {
+        for (sip = ssp->ids; sip != NULL; sip = sip->next) {
+          FindReplSeqId (sip, userdata);
+        }
+        for (slp = ssp->loc; slp != NULL; slp = slp->next) {
+          VisitSeqIdsInSeqLoc (slp, userdata, FindReplSeqId);
+        }
       }
       break;
     case SAS_DISC :
@@ -1697,5 +1710,58 @@ NLM_EXTERN void FindReplaceInEntity (
     ObjMgrSetDirtyFlag (entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
   }
+}
+
+/*=======================================================================*/
+/*                                                                       */
+/*  FindReplaceString() - find/replace just one string.                  */
+/*                                                                       */
+/*=======================================================================*/
+
+NLM_EXTERN void FindReplaceString (
+  CharPtr PNTR strp,
+  CharPtr find_string,
+  CharPtr replace_string,
+  Boolean case_counts,
+  Boolean whole_word
+)
+
+{
+  int         ch;
+  FindStruct  fs;
+  int         j;
+
+  if (strp == NULL || StringHasNoText (find_string)) return;
+
+  MemSet ((Pointer) &fs, 0, sizeof (FindStruct));
+
+  fs.entityID = 0;
+  fs.find_string = find_string;
+  fs.replace_string = replace_string;
+  fs.case_counts = case_counts;
+  fs.whole_word = whole_word;
+  fs.do_replace = TRUE;
+  fs.select_item = FALSE;
+  fs.send_update = FALSE;
+
+  fs.did_find = FALSE;
+  fs.did_replace = FALSE;
+  fs.dirty = FALSE;
+
+  /* build Boyer-Moore displacement array in advance */
+
+  fs.subLen = StringLen (find_string);
+
+  for (ch = 0; ch < 256; ch++) {
+    fs.d [ch] = fs.subLen;
+  }
+  for (j = 0; j < (int) (fs.subLen - 1); j++) {
+    ch = (int) (case_counts ? find_string [j] : TO_UPPER (find_string [j]));
+    if (ch >= 0 && ch <= 255) {
+      fs.d [ch] = fs.subLen - j - 1;
+    }
+  }
+
+  FindReplString (strp, &fs);
 }
 

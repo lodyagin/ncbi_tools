@@ -29,7 +29,6 @@
 		(JL)	Jim Luther
 
 	Change History (most recent first):
-
 		 <2>	  2/7/01	JL		Added standard header. Updated names of includes. Updated
 									various routines to use new calling convention of the
 									MoreFilesExtras accessor functions.
@@ -37,10 +36,19 @@
 */
 
 /*
+     This file has been slightly modified from the original by
+     the National Center for Biotechnology Information, National
+     Institutes of Health, Bethesda, Maryland, USA.
+*/
+
+
+/*
 **	If building application 68K code, set GENERATENODATA to 0 for faster code.
 **	If building stand-alone 68K code, set GENERATENODATA to 1 so globals
 **		(static variables) are not used.
 */
+#ifndef WIN32
+
 #ifndef GENERATENODATA
 #define GENERATENODATA 0
 #endif
@@ -944,3 +952,5 @@ pascal	void	FSpCreateResFileCompat(const FSSpec *spec,
 }
 
 /*****************************************************************************/
+
+#endif /*  WIN32 */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *   General application interface routines for ASNlib
@@ -46,6 +46,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asngen.c,v $
+* Revision 6.3  2003/09/15 16:16:33  kans
+* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
+*
 * Revision 6.2  1997/10/29 02:40:40  vakatov
 * Type castings to pass through the C++ compiler
 *
@@ -141,6 +144,30 @@ NLM_EXTERN Boolean LIBCALL AsnWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dv
 		retval = AsnTxtWrite(aip, atp, dvp);
 	else if (aip->type & ASNIO_BIN)
 		retval = AsnBinWrite(aip, atp, dvp);
+
+	if (aip->io_failure)
+		return FALSE;
+	return retval;
+}
+
+/*****************************************************************************
+*
+*   AsnWriteEx()
+*   	specialized write value
+*
+*****************************************************************************/
+NLM_EXTERN Boolean LIBCALL AsnWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp, AsnStreamStringFunc stream)
+
+{
+	Boolean retval = FALSE;
+
+	if (aip->aeop != NULL)
+		AsnCheckExpOpt(aip, atp, dvp);
+
+	if (aip->type & ASNIO_TEXT)
+		retval = AsnTxtWriteEx(aip, atp, dvp, stream);
+	else if (aip->type & ASNIO_BIN)
+		return FALSE;
 
 	if (aip->io_failure)
 		return FALSE;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: dotvibrant.c,v $
+* Revision 6.15  2003/05/05 12:34:47  rsmith
+* type of DOTVibDataPtr displayOpts1 is Nlm_Handle, not HANDLE. Needed to compile under Codewarrior for Win32
+*
 * Revision 6.14  2002/08/07 18:14:23  kans
 * itemID is Uint4, minor cleanup
 *
@@ -6526,7 +6529,7 @@ static void DOT_OpenSeqAnnotFile(IteM i)
           AlnMgr2IndexLite(sap);
           AlnMgr2SortAlnSetByNthRowPos(sap, 1);
 
-          Enable((HANDLE)vdp->displayOpts1);
+          Enable((Nlm_Handle)vdp->displayOpts1);
           if (vdp->alp){ /* discard previous alignment*/
             vdp->alp->pict=NULL;
             DOT_ExitAlign(vdp->alp);
@@ -6627,7 +6630,7 @@ NLM_EXTERN Boolean DOT_MakeMainViewer (DOTMainDataPtr mip, DOTAlignInfoPtr alp)
 #endif
   m2 = PulldownMenu (w, "Options"); 
   vdp->displayOpts1=SubMenu(m2,"Display");
-  if (!sap) Disable((HANDLE)vdp->displayOpts1);
+  if (!sap) Disable((Nlm_Handle)vdp->displayOpts1);
   vdp->displayOpts2=ChoiceGroup (vdp->displayOpts1, DOT_DisplayOptsProc);
   ChoiceItem (vdp->displayOpts2, "Dots ONLY");
   ChoiceItem (vdp->displayOpts2, "Dots & Aligns"); 

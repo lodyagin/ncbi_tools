@@ -35,6 +35,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.118  2003/07/22 16:18:27  kans
+* added ZFIN as legal db_xref
+*
+* Revision 6.117  2003/06/10 18:44:10  kans
+* added GeneDB to list of legal db_xrefs
+*
+* Revision 6.116  2003/05/29 20:25:19  kans
+* added Interpro to list of legal dbxrefs
+*
 * Revision 6.115  2002/11/30 20:18:27  kans
 * added GOA to list of legal db_xrefs
 *
@@ -723,6 +732,7 @@ CharPtr dbtag[DBNUM] = {
   "FLYBASE",
   "GABI",
   "GDB",
+  "GeneDB",
   "GeneID",
   "GI",
   "GO",
@@ -731,6 +741,7 @@ CharPtr dbtag[DBNUM] = {
   "IMGT/LIGM",
   "IMGT/HLA",
   "InterimID",
+  "Interpro",
   "ISFinder",
   "JCM",
   "LocusID",
@@ -756,6 +767,7 @@ CharPtr dbtag[DBNUM] = {
   "UniSTS",
   "WorfDB",
   "WormBase",
+  "ZFIN",
   };
 
 

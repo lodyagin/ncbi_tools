@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.163 $
+* $Revision: 6.187 $
 *
 * File Description: 
 *
@@ -55,6 +55,8 @@
 #include <dotseq.h>
 #include <edutil.h>
 #include <actutils.h>
+#include <findrepl.h>
+#include <rpsutil.h>
 #include "sequin.h"
 
 /*-------------------*/
@@ -91,7 +93,7 @@ typedef struct upsdata {
   VieweR              details;
   Boolean             diffOrgs;
   SegmenT             dtpict;
-  FILE               *fp;
+  FILE                *fp;
   ValNodePtr          indels;
   Boolean             isSet;
   ButtoN              keepProteinIDs;
@@ -125,6 +127,8 @@ typedef struct upsdata {
   Uint1               strandnew;
   Uint1               strandold;
   Boolean             useGUI;
+  Boolean             do_update;
+  ButtoN              add_cit_subs;
 } UpsData, PNTR UpsDataPtr;
 
 /*---------------------*/
@@ -137,10 +141,11 @@ static void FreeUdpFields (UpsDataPtr udp);
 
 extern void SubmitToNCBI (IteM i);
 extern void QuitProc (void);
-extern void NewUpdateSequence (IteM i);
 extern void NewFeaturePropagate (IteM i);
 extern void FixCdsAfterPropagate (IteM i);
-extern void MakeRedundantGPS (IteM i);
+extern void MakeRedundantGPSwithProp (IteM i);
+extern void MakeRedundantGPSnoProp (IteM i);
+extern void MakeRedundantGPSjustXref (IteM i);
 extern void FuseSlpJoins (IteM i);
 
 /*-----------*/
@@ -664,6 +669,139 @@ extern void SubmitToNCBI (IteM i)
   FileRemove (path);
 }
 
+static QUEUE  cddquerylist = NULL;
+
+#include <cddapi.h>
+
+#define CDD_EXPECT_VALUE 0.01
+
+static Boolean LIBCALLBACK CddProc (
+  CONN conn,
+  VoidPtr userdata,
+  EIO_Status status
+)
+
+{
+  BioseqPtr    bsp;
+  SeqAnnotPtr  prev;
+  SeqAnnotPtr  sap;
+
+  if (conn == NULL || userdata == NULL) return TRUE;
+  if (status != eIO_Success) return TRUE;
+  sap = CddReadReply (conn, status);
+  if (sap == NULL) return FALSE;
+
+  bsp = (BioseqPtr) userdata;
+  CddCorrectIDs (bsp, sap);
+
+  prev = bsp->annot;
+  if (prev == NULL) {
+    bsp->annot = sap;
+  } else {
+    while (prev->next != NULL) {
+      prev = prev->next;
+    }
+    prev->next = sap;
+  }
+
+  ObjMgrSetDirtyFlag (bsp->idx.entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bsp->idx.entityID, 0, 0);
+
+  return TRUE;
+}
+
+static void SearchCDD (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr  dofeats;
+
+  if (bsp == NULL) return;
+  if (! ISA_aa (bsp->mol)) return;
+
+  dofeats = (BoolPtr) userdata;
+  if (! CddAsynchronousQuery (bsp, CDD_EXPECT_VALUE, TRUE, TRUE, *dofeats, "cdd", &cddquerylist, CddProc, (Pointer) bsp)) {
+    ErrPostEx (SEV_ERROR, 0, 0, "Unable to run CDD search");
+  }
+}
+
+/*
+static void SearchCDD (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr      dofeats;
+  SeqAnnotPtr  prev;
+  SeqAnnotPtr  sap;
+
+  if (bsp == NULL) return;
+  if (! ISA_aa (bsp->mol)) return;
+
+  dofeats = (BoolPtr) userdata;
+  sap = CddSynchronousQuery (bsp, CDD_EXPECT_VALUE, TRUE, TRUE, *dofeats, "cdd");
+  if (sap == NULL) return;
+  CddCorrectIDs (bsp, sap);
+
+  prev = bsp->annot;
+  if (prev == NULL) {
+    bsp->annot = sap;
+  } else {
+    while (prev->next != NULL) {
+      prev = prev->next;
+    }
+    prev->next = sap;
+  }
+}
+*/
+
+static void SimpleCDDSearchCommonProc (IteM i, Boolean makeFeats)
+
+{
+  BaseFormPtr  bfp;
+  Boolean      dofeats;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  WatchCursor ();
+  Update ();
+
+  if (makeFeats) {
+    FreeCDDRegions (sep);
+  } else {
+    FreeCDDAligns (sep);
+  }
+
+  dofeats = makeFeats;
+  VisitBioseqsInSep (sep, (Pointer) &dofeats, SearchCDD);
+
+  /*
+  RemoveDuplicateCDDs (sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  */
+  ArrowCursor ();
+  Update ();
+ }
+
+void SimpleCDDSearchFeatProc (IteM i)
+
+{
+  SimpleCDDSearchCommonProc (i, TRUE);
+}
+
+void SimpleCDDSearchAlignProc (IteM i)
+
+{
+  SimpleCDDSearchCommonProc (i, FALSE);
+}
+
 extern void SequinCheckSocketsProc (void)
 
 {
@@ -676,6 +814,7 @@ extern void SequinCheckSocketsProc (void)
   }
   remaining = VecScreenCheckQueue (&vsquerylist);
   remaining = QBlastCheckQueue (&qbquerylist);
+  remaining = CddCheckQueue (&cddquerylist);
 }
 
 static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EIO_Status status)
@@ -2032,13 +2171,10 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
 
 {
   Char          ch;
-  ValNodePtr    choicelist = NULL;
   Boolean       demomode = FALSE;
-  ValNodePtr    dfaultlist = NULL;
   Int2          format = 1;
   FILE          *fp;
   Boolean       goOn = TRUE;
-  ValNodePtr    helplist = NULL;
   Char          host [128];
   Boolean       keepGoing;
   ValNodePtr    list = NULL;
@@ -2046,7 +2182,6 @@ static void ReadServiceConfigFile (CharPtr pathbase, ValNodePtr config,
   Boolean       onlyBspTarget = FALSE;
   ValNodePtr    paramlist = NULL;
   Char          program [128];
-  ValNodePtr    promptlist = NULL;
   Char          path [PATH_MAX];
   Uint2         port = 80;
   Char          prefix [128];
@@ -2231,7 +2366,7 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
                      NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                      "Restriction Search", "Search",
                      SimpleRsiteProc, &first);
-    if (indexerVersion) {
+    if (useEntrez) {
       AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
                        NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                        "Vector Screen - UniVec", "Search",
@@ -2240,6 +2375,8 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
                        NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                        "Vector Screen - UniVec Core", "Search",
                        SimpleUniVecCoreScreenProc, &first);
+    }
+    if (indexerVersion) {
       AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
                        NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                        "QBlast Test", "Search",
@@ -3006,6 +3143,8 @@ static Boolean ReplaceSequence (UpsDataPtr udp)
     sfp = SeqMgrGetNextFeature (oldbsp, sfp, 0, 0, &context);
   }
 
+  /* switch bioseqs to finish update */
+
   bs = oldbsp->seq_data;
   oldbsp->seq_data = newbsp->seq_data;
   newbsp->seq_data = bs;
@@ -3028,21 +3167,23 @@ static Boolean Merge5Prime (UpsDataPtr udp)
   BioseqPtr     newbsp;
   CharPtr       ptr, str, tmp;
 
-  newlen = udp->new5 + udp->newa + udp->old3;
-  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
-  if (str == NULL) return FALSE;
-
   /* construct replacement sequence by recombining between old and overlap */
-  ptr = str;
 
   tmp = udp->seq2;
+
+  newlen = udp->new5 + udp->newa + udp->old3;
+  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
+  if (str == NULL)
+    return FALSE;
+  ptr = str;
+
   for (i = 0; i < udp->new5 + udp->newa; i++) {
     ch = *tmp;
     *ptr = ch;
     tmp++;
     ptr++;
   }
-
+    
   tmp = udp->seq1 + udp->old5 + udp->olda;
   for (i = 0; i < udp->old3; i++) {
     ch = *tmp;
@@ -3089,11 +3230,12 @@ static Boolean Merge3Prime (UpsDataPtr udp)
   BioseqPtr     newbsp;
   CharPtr       ptr, str, tmp;
 
+  /* construct replacement sequence by recombining between old and overlap */
+
   newlen = udp->old5 + udp->newa + udp->new3;
   str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
-  if (str == NULL) return FALSE;
-
-  /* construct replacement sequence by recombining between old and overlap */
+  if (str == NULL)
+    return FALSE;
   ptr = str;
 
   tmp = udp->seq1;
@@ -3103,7 +3245,7 @@ static Boolean Merge3Prime (UpsDataPtr udp)
     tmp++;
     ptr++;
   }
-
+    
   tmp = udp->seq2 + udp->new5;
   for (i = 0; i < udp->newa + udp->new3; i++) {
     ch = *tmp;
@@ -3140,6 +3282,8 @@ static Boolean Merge3Prime (UpsDataPtr udp)
 
   return ReplaceSequence (udp);
 }
+
+static Boolean ExtendFeatures (UpsDataPtr udp, Int4 offset);
 
 /*------------------------------------------------------------------*/
 /*                                                                  */
@@ -3189,7 +3333,7 @@ static Boolean Merge5PrimeNoOverlap (UpsDataPtr udp)
 
   /* Replace the merged sequence and return */
 
-  return ReplaceSequence (udp);
+  return ExtendFeatures (udp, StringLen (newSeqStr));
 }
 
 /*------------------------------------------------------------------*/
@@ -3240,7 +3384,7 @@ static Boolean Merge3PrimeNoOverlap (UpsDataPtr udp)
 
   /* Replace the merged sequence and return */
 
-  return ReplaceSequence (udp);
+  return ExtendFeatures (udp, 0);
 }
 
 static Boolean PatchSequence (UpsDataPtr udp)
@@ -3587,21 +3731,516 @@ static void ResolveDuplicateFeats (
   }
 }
 
-static void AcceptRMC (ButtoN b)
+static void AddCitSubToUpdatedSequence (
+  BioseqPtr upd_bsp,
+  Uint2     input_entityID
+)
+{
+  SeqEntryPtr top_sep, upd_sep;
+
+  upd_sep = SeqMgrGetSeqEntryForData (upd_bsp);
+  if (upd_sep == NULL) return;
+  top_sep = GetTopSeqEntryForEntityID ( input_entityID);
+  if (top_sep == NULL) return;
+  CreateUpdateCitSubFromBestTemplate (top_sep, upd_sep);
+}
+
+static Boolean ExtendFeatures (UpsDataPtr udp, Int4 offset)
 
 {
+  MsgAnswer          ans;
+  ByteStorePtr       bs;
+  CodeBreakPtr       cbp;
+  SeqMgrFeatContext  context;
+  CdRegionPtr        crp;
+  Int4               len;
+  BioseqPtr          newbsp;
+  BioseqPtr          oldbsp;
+  RnaRefPtr          rrp;
+  Uint1              seq_data_type;
+  SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
+  tRNAPtr            trp;
+
+  if (udp->salp != NULL)
+    if (FALSE == udp->isSet)
+      if (StringICmp (udp->seq1, udp->seq2) == 0) {
+	ans = Message (MSG_OKC, "Replacement sequence is identical to"
+		       " original - possible error");
+	if (ans == ANS_CANCEL) return FALSE;
+      }
+
+  oldbsp = udp->oldbsp;
+  newbsp = udp->newbsp;
+
+  sip = SeqIdFindBest (oldbsp->id, 0);
+  if (sip == NULL) return FALSE;
+
+  if (offset > 0) {
+    sfp = SeqMgrGetNextFeature (oldbsp, NULL, 0, 0, &context);
+    while (sfp != NULL) {
+      OffsetLocation (sfp->location, offset, sip);
+      switch (sfp->data.choice) {
+        case SEQFEAT_CDREGION :
+          crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+          if (crp != NULL) {
+            for (cbp = crp->code_break; cbp != NULL; cbp = cbp->next) {
+              OffsetLocation (cbp->loc, offset, sip);
+            }
+          }
+          break;
+        case SEQFEAT_RNA :
+          rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
+          if (rrp != NULL && rrp->ext.choice == 2) {
+            trp = (tRNAPtr) rrp->ext.value.ptrvalue;
+            if (trp != NULL && trp->anticodon != NULL) {
+              OffsetLocation (trp->anticodon, offset, sip);
+            }
+          }
+          break;
+        default :
+          break;
+      }
+      sfp = SeqMgrGetNextFeature (oldbsp, sfp, 0, 0, &context);
+    }
+  }
+
+  /* switch bioseqs to finish extension */
+
+  bs = oldbsp->seq_data;
+  oldbsp->seq_data = newbsp->seq_data;
+  newbsp->seq_data = bs;
+  len = oldbsp->length;
+  oldbsp->length = newbsp->length;
+  newbsp->length = len;
+  seq_data_type = oldbsp->seq_data_type;
+  oldbsp->seq_data_type = newbsp->seq_data_type;
+  newbsp->seq_data_type = seq_data_type;
+
+  return TRUE;
+}
+
+static Boolean ExtendBothEnds (UpsDataPtr udp)
+
+{
+  ByteStorePtr  bs;
+  Char          ch;
+  Int4          i, newlen;
+  BioseqPtr     newbsp;
+  BioseqPtr     oldbsp;
+  CharPtr       ptr, str, tmp;
+
+  /* construct replacement sequence by extending old sequence */
+
+  newlen = udp->new5 + udp->olda + udp->new3;
+  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
+  if (str == NULL)
+    return FALSE;
+  ptr = str;
+
+  tmp = udp->seq2;
+  for (i = 0; i < udp->new5; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+    
+  tmp = udp->seq1 + udp->old5;
+  for (i = 0; i < udp->olda; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+
+  tmp = udp->seq2 + udp->new5 + udp->newa;
+  for (i = 0; i < udp->new3; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+
+  *ptr = '\0';
+  bs = BSNew (newlen);
+  BSWrite (bs, (VoidPtr) str, newlen);
+
+  udp->seq2 = MemFree (udp->seq2);
+  udp->seq2 = str;
+
+  if (bs != NULL && BSLen (bs) < 1) {
+    bs = BSFree (bs);
+  }
+  if (bs == NULL) return FALSE;
+
+  /* overlap turned into replacement sequence */
+
+  oldbsp = udp->oldbsp;
+  newbsp = udp->newbsp;
+  newbsp->seq_data = BSFree (newbsp->seq_data);
+  newbsp->seq_data = bs;
+  newbsp->seq_data_type = Seq_code_iupacna;
+  newbsp->length = newlen;
+
+  /* then finish by offsetting features */
+
+  return ExtendFeatures (udp, udp->new5);
+}
+
+static Boolean Extend5Prime (UpsDataPtr udp)
+
+{
+  ByteStorePtr  bs;
+  Char          ch;
+  Int4          i, newlen;
+  BioseqPtr     newbsp;
+  BioseqPtr     oldbsp;
+  CharPtr       ptr, str, tmp;
+
+  /* construct replacement sequence by extending old sequence */
+
+  newlen = udp->new5 + udp->olda + udp->old3;
+  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
+  if (str == NULL)
+    return FALSE;
+  ptr = str;
+
+  tmp = udp->seq2;
+  for (i = 0; i < udp->new5; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+    
+  tmp = udp->seq1 + udp->old5;
+  for (i = 0; i < udp->olda + udp->old3; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+
+  *ptr = '\0';
+  bs = BSNew (newlen);
+  BSWrite (bs, (VoidPtr) str, newlen);
+
+  udp->seq2 = MemFree (udp->seq2);
+  udp->seq2 = str;
+
+  if (bs != NULL && BSLen (bs) < 1) {
+    bs = BSFree (bs);
+  }
+  if (bs == NULL) return FALSE;
+
+  /* overlap turned into replacement sequence */
+
+  oldbsp = udp->oldbsp;
+  newbsp = udp->newbsp;
+  newbsp->seq_data = BSFree (newbsp->seq_data);
+  newbsp->seq_data = bs;
+  newbsp->seq_data_type = Seq_code_iupacna;
+  newbsp->length = newlen;
+
+  /* then finish by offsetting features */
+
+  return ExtendFeatures (udp, udp->new5);
+}
+
+static Boolean Extend3Prime (UpsDataPtr udp)
+
+{
+  ByteStorePtr  bs;
+  Char          ch;
+  Int4          i, newlen;
+  BioseqPtr     newbsp;
+  BioseqPtr     oldbsp;
+  CharPtr       ptr, str, tmp;
+
+  /* construct replacement sequence by extending old sequence */
+
+  newlen = udp->old5 + udp->olda + udp->new3;
+  str = (CharPtr) MemNew (sizeof (Char) * (size_t) (newlen + 5));
+  if (str == NULL)
+    return FALSE;
+  ptr = str;
+
+  tmp = udp->seq1;
+  for (i = 0; i < udp->old5 + udp->olda; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+    
+  tmp = udp->seq2 + udp->new5 + udp->newa;
+  for (i = 0; i < udp->new3; i++) {
+    ch = *tmp;
+    *ptr = ch;
+    tmp++;
+    ptr++;
+  }
+
+  *ptr = '\0';
+  bs = BSNew (newlen);
+  BSWrite (bs, (VoidPtr) str, newlen);
+
+  udp->seq2 = MemFree (udp->seq2);
+  udp->seq2 = str;
+
+  if (bs != NULL && BSLen (bs) < 1) {
+    bs = BSFree (bs);
+  }
+  if (bs == NULL) return FALSE;
+
+  /* overlap turned into replacement sequence */
+
+  oldbsp = udp->oldbsp;
+  newbsp = udp->newbsp;
+  newbsp->seq_data = BSFree (newbsp->seq_data);
+  newbsp->seq_data = bs;
+  newbsp->seq_data_type = Seq_code_iupacna;
+  newbsp->length = newlen;
+
+  /* no offset, but ExtendFeatures finishes switch */
+
+  return ExtendFeatures (udp, 0);
+}
+
+static void AcceptExtend (ButtoN b)
+
+{
+  MsgAnswer    ans;
   Uint2        entityID;
-  Int2         rmcval, sfbval;
-  SeqAnnotPtr  sap = NULL;
-  SeqEntryPtr  sep;
+  CharPtr      errmsg = NULL;
+  Int2         rmcval;
   UpsDataPtr   udp;
   Boolean      update = FALSE;
 
   udp = (UpsDataPtr) GetObjectExtra (b);
   if (udp == NULL) return;
   SafeHide (udp->form);
+
+  rmcval = GetValue (udp->rmc);
+  switch (rmcval) {
+    case 1 :
+      if (udp->old5 > 0 && udp->old3 > 0) {
+        errmsg = "Unaligned sequence at 5' and 3' ends.  Do you wish to proceed?";
+      } else if (udp->old5 > 0) {
+        errmsg = "Unaligned sequence at 5' end.  Do you wish to proceed?";
+      } else if (udp->old3 > 0) {
+        errmsg = "Unaligned sequence at 3' end.  Do you wish to proceed?";
+      }
+      break;
+    case 2 :
+      if (udp->old5 > 0) {
+        errmsg = "Unaligned sequence at 5' end.  Do you wish to proceed?";
+      }
+      break;
+    case 3 :
+      if (udp->old3 > 0) {
+        errmsg = "Unaligned sequence at 3' end.  Do you wish to proceed?";
+      }
+      break;
+    default :
+      break;
+  }
+  if (errmsg != NULL) {
+    ans = Message (MSG_YN, "%s", errmsg);
+    if (ans == ANS_NO) {
+      Remove (udp->form);
+      return;
+    }
+  }
+
+  switch (rmcval) {
+    case 1 :
+      if (ExtendBothEnds (udp)) {
+        update = TRUE;
+      }
+      break;
+    case 2 :
+      if (udp->salp == NULL) {
+        if (Merge5PrimeNoOverlap (udp)) {
+          update = TRUE;
+        }
+      } else if (Extend5Prime (udp)) {
+        update = TRUE;
+      }
+      break;
+    case 3 :
+      if (udp->salp == NULL) {
+        if (Merge3PrimeNoOverlap (udp)) {
+          update = TRUE;
+        }
+      } else if (Extend3Prime (udp)) {
+        update = TRUE;
+      }
+      break;
+    default :
+      break;
+  }
+
+  if (update) {
+      
+    entityID = ObjMgrGetEntityIDForPointer (udp->oldbsp);
+    if (GetStatus (udp->add_cit_subs))
+    {
+      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID);
+    }
+    ObjMgrSetDirtyFlag (entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+  }
+  Remove (udp->form);
+}
+
+static void PrepareToUpdateSequences (UpsDataPtr udp);
+
+static void UpdateOneProtein (SeqFeatPtr sfp, Pointer userdata)
+{
+  BaseFormPtr   bfp;
+  BioseqPtr     protBsp;  /* This will point to the old version of the
+                           * protein bioseq
+                           */
+  ByteStorePtr  bs;
+  BioseqPtr     newBsp;
+  CharPtr       newprot, ptr;
+  Char          ch;
+  UpsDataPtr    udp_copy;
+  Boolean       star_at_end;
+  SeqEntryPtr   nwsep;
+  
+  bfp = (BaseFormPtr) userdata;
+  if ( bfp == NULL
+    || sfp == NULL
+    || sfp->idx.subtype != FEATDEF_CDS
+    || sfp->product == NULL
+    || (protBsp = BioseqFindFromSeqLoc (sfp->product)) == NULL)
+  {
+    return;
+  }
+ 
+  newprot = NULL;
+  bs = ProteinFromCdRegionEx (sfp, TRUE, FALSE);
+  if (bs != NULL)
+  {
+    newprot = BSMerge (bs, NULL);
+    bs = BSFree (bs);
+    if (newprot != NULL)
+    {
+      ptr = newprot;
+      ch = *ptr;
+      while (ch != '\0')
+      {
+        *ptr = TO_UPPER (ch);
+        if (ch == '*') {
+          star_at_end = 1;
+        } else {
+          star_at_end = 0;
+        }
+        ptr++;
+        ch = *ptr;
+      }
+      if (star_at_end) 
+      {
+        ptr [ StringLen (ptr) - 1] = 0;
+      }
+      bs = BSNew (1000);
+      if (bs != NULL)
+      {
+        ptr = newprot;
+        BSWrite (bs, (VoidPtr) ptr, (Int4) StringLen (ptr));
+      } 
+      MemFree (newprot);
+    }
+    newBsp = BioseqNew ();
+    if (newBsp != NULL)
+    {
+      newBsp->id = SeqIdParse ("lcl|CdRgnTransl");
+      newBsp->repr = Seq_repr_raw;
+      newBsp->mol = Seq_mol_aa;
+      newBsp->seq_data_type = Seq_code_ncbieaa;
+      newBsp->seq_data = bs;
+      newBsp->length = BSLen (bs);
+
+      /* create SeqEntry for temporary protein bioseq to live in */
+      nwsep = SeqEntryNew ();
+      nwsep->choice = 1;
+      nwsep->data.ptrvalue = newBsp;
+      SeqMgrSeqEntry (SM_BIOSEQ, (Pointer) newBsp, nwsep);
+
+      udp_copy = MemNew (sizeof (UpsData));
+      if (udp_copy == NULL) return;
+      udp_copy->input_entityID = bfp->input_entityID;
+      udp_copy->input_itemID   = bfp->input_itemID;
+      udp_copy->input_itemtype = bfp->input_itemtype;
+      udp_copy->fp             = NULL;
+      udp_copy->isSet          = FALSE;
+      udp_copy->useGUI         = TRUE;
+      udp_copy->convertPubs    = CONVERTPUBS_NO; /* was CONVERTPUBS_NOT_SET */
+      udp_copy->do_update      = TRUE;
+      udp_copy->newbsp = newBsp;
+      udp_copy->oldbsp = protBsp;
+      udp_copy->seq1 = GetSequenceByBsp (protBsp);
+      udp_copy->seq2 = GetSequenceByBsp (newBsp);
+      if (StringCmp (udp_copy->seq1, udp_copy->seq2) == 0
+        || (star_at_end == 1
+          && StringNCmp (udp_copy->seq1,
+                         udp_copy->seq2,
+                         StringLen (udp_copy->seq1)) == 0))
+      {
+        SeqEntryFree (nwsep);
+        MemFree (udp_copy->seq1);
+        MemFree (udp_copy->seq2);
+        MemFree (udp_copy);
+      }
+      else
+      {
+        PrepareToUpdateSequences (udp_copy);
+      }
+    }
+  }
+}
+
+extern void UpdateProteinsFromCDS ( IteM i)
+{
+  BaseFormPtr bfp;
+  SeqEntryPtr sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+
+  if (bfp == NULL)
+    return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  VisitFeaturesInSep (sep, (Pointer) bfp, UpdateOneProtein);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+static void AcceptRMC (ButtoN b)
+{
+  UpsDataPtr   udp;
+  Uint2        entityID;
+  Int2         rmcval, sfbval;
+  SeqAnnotPtr  sap = NULL;
+  SeqEntryPtr  sep;
+  Boolean      update = FALSE;
+
+  udp = (UpsDataPtr) GetObjectExtra (b);
+  if (udp == NULL) return;
+  SafeHide (udp->form);
+
   sfbval = GetValue (udp->sfb);
   rmcval = GetValue (udp->rmc);
+
   if (sfbval == 1 || sfbval == 3) {
     switch (rmcval) {
       case 1 :
@@ -3702,9 +4341,14 @@ static void AcceptRMC (ButtoN b)
   }
   if (update) {
     entityID = ObjMgrGetEntityIDForPointer (udp->oldbsp);
+    if (GetStatus (udp->add_cit_subs))
+    {
+      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID);
+    }
     ObjMgrSetDirtyFlag (entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
   }
+
   Remove (udp->form);
 }
 
@@ -3768,12 +4412,12 @@ static void AcceptRMCAll (ButtoN b)
 static void DoAcceptRMCSet (UpsDataPtr udp)
 {
   Uint2        entityID;
-  SeqEntryPtr  nwsep = NULL;
   Int2         rmcval;
   SeqAnnotPtr  sap = NULL;
   SeqEntryPtr  sep;
   Int2         sfbval;
   Boolean      update = FALSE;
+  Boolean      feature_update = FALSE;
 
   SafeHide (udp->form);
 
@@ -3788,26 +4432,36 @@ static void DoAcceptRMCSet (UpsDataPtr udp)
       case 2 :
 	if (NULL == udp->salp) {
 	  if (Merge5PrimeNoOverlap (udp))
+          {
 	    update = TRUE;
+          }
 	}
 	else {
 	  if (Merge5Prime (udp))
+          {
 	    update = TRUE;
+          }
         }
         break;
       case 3 :
 	if (NULL == udp->salp) {
 	  if (Merge3PrimeNoOverlap (udp))
+          {
 	    update = TRUE;
+          }
 	}
 	else {
 	  if (Merge3Prime (udp))
+          {
 	    update = TRUE;
+          }
         }
         break;
       case 4 :
         if (PatchSequence (udp))
+        {
           update = TRUE;
+        }
         break;
       default :
         break;
@@ -3816,19 +4470,31 @@ static void DoAcceptRMCSet (UpsDataPtr udp)
       switch (rmcval) {
         case 1 :
           if (DoFeaturePropWithOffset (udp, 0, &sap, FALSE))
+          {
             update = TRUE;
+            feature_update = TRUE;
+          }
           break;
         case 2 :
           if (DoFeaturePropWithOffset (udp, 0, &sap, FALSE))
+          {
             update = TRUE;
+            feature_update = TRUE;
+          }
           break;
         case 3 :
           if (DoFeaturePropWithOffset (udp, udp->old5 - udp->new5, &sap, FALSE))
+          {
             update = TRUE;
+            feature_update = TRUE;
+          }
           break;
         case 4 :
           if (DoFeaturePropWithOffset (udp, udp->old5 - udp->new5, &sap, TRUE))
+          {
             update = TRUE;
+            feature_update = TRUE;
+          }
           break;
         default :
           break;
@@ -3838,19 +4504,31 @@ static void DoAcceptRMCSet (UpsDataPtr udp)
     switch (rmcval) {
       case 1 :
         if (DoFeaturePropThruAlign (udp, &sap))
+        {
           update = TRUE;
+          feature_update = TRUE;
+        }
         break;
       case 2 :
         if (DoFeaturePropThruAlign (udp, &sap))
+        {
           update = TRUE;
+          feature_update = TRUE;
+        }
         break;
       case 3 :
         if (DoFeaturePropThruAlign (udp, &sap))
+        {
           update = TRUE;
+          feature_update = TRUE;
+        }
         break;
       case 4 :
         if (DoFeaturePropThruAlign (udp, &sap))
+        {
           update = TRUE;
+          feature_update = TRUE;
+        }
         break;
       default :
         break;
@@ -3871,6 +4549,11 @@ static void DoAcceptRMCSet (UpsDataPtr udp)
 
   if (update) {
     entityID = ObjMgrGetEntityIDForPointer (udp->oldbsp);
+    if (GetStatus (udp->add_cit_subs) 
+      && (feature_update || StringCmp (udp->seq1, udp->seq2) != 0))
+    {
+      AddCitSubToUpdatedSequence ( udp->oldbsp, entityID);
+    }
     ObjMgrSetDirtyFlag (entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
   }
@@ -3901,29 +4584,74 @@ static void UpdateAccept (GrouP g)
 
   udp = (UpsDataPtr) GetObjectExtra (g);
   if (udp == NULL) return;
+
   rmcval = GetValue (udp->rmc);
+  sfbval = GetValue (udp->sfb);
+  nobmval = GetValue (udp->nobm);
+
   if (rmcval == 0) {
     SafeDisable (udp->accept);
     return;
   }
-  sfbval = GetValue (udp->sfb);
+  if (! udp->do_update) {
+    SafeEnable (udp->accept);
+    return;
+  }
+    
   if (sfbval == 0 || sfbval == 1 || udp->diffOrgs) {
     SafeDisable (udp->keepProteinIDs);
+    if (sfbval == 0 || sfbval == 1) {
+      SafeDisable (udp->nobm);
+    } else {
+      SafeEnable (udp->nobm);
+    }
   } else if (sfbval == 2 || sfbval == 3) {
     SafeEnable (udp->keepProteinIDs);
+    SafeEnable (udp->nobm);
   }
   if (sfbval == 0) {
     SafeDisable (udp->accept);
     return;
   }
-  nobmval = GetValue (udp->nobm);
   if (sfbval == 2 || sfbval == 3) {
     if (nobmval == 0) {
       SafeDisable (udp->accept);
       return;
     }
   }
+
   SafeEnable (udp->accept);
+}
+
+static void UpdateButtons (GrouP g)
+{
+  UpsDataPtr  udp;
+  Int2         rmcval;
+
+  udp = (UpsDataPtr) GetObjectExtra (g);
+  if (udp == NULL) return;
+
+  rmcval = GetValue (udp->rmc);
+
+  if (udp->new5 <= udp->old5 && udp->new3 <= udp->old3) 
+  {
+    if (rmcval == 4)
+    {
+      /* If patch sequence matches, must be feature propagation only */
+
+      if (StringNICmp (udp->seq1 + udp->old5 - udp->new5,
+                       udp->seq2,
+                       StringLen (udp->seq2)) == 0) {
+        SetValue (udp->sfb, 2);
+        Disable (udp->sfb);
+      }
+    }
+    else if (rmcval == 1)
+    {
+      Enable (udp->sfb);
+    }
+  }
+  UpdateAccept (g);
 }
 
 static void DrawAlignBlock (
@@ -4762,6 +5490,7 @@ static CharPtr txt4 =
 /*------------------------------------------------------------------*/
 
 static void DetermineButtonState (UpsDataPtr   udp,
+				  ButtoN PNTR  replaceButtonPtr,
 				  ButtoN PNTR  extend5ButtonPtr,
 				  ButtoN PNTR  extend3ButtonPtr,
 				  ButtoN PNTR  patchButtonPtr)
@@ -4778,16 +5507,21 @@ static void DetermineButtonState (UpsDataPtr   udp,
 
   /* If no alignment then disable the patch button */
 
-  if (udp->salp == NULL)
-    Disable (*patchButtonPtr);
+  if (udp->salp == NULL) {
+    if (udp->do_update && patchButtonPtr != NULL && *patchButtonPtr != NULL) {
+      Disable (*patchButtonPtr);
+    }
+  }
 
   /* Extend 5' */
 
   else if (udp->new5 > udp->old5 && udp->new3 < udp->old3) {
     SetValue (udp->rmc, 2);
     Disable (*extend3ButtonPtr);
-    /* Disable (*patchButtonPtr); */
     udp->recomb2 = udp->aln_length;
+    if (! udp->do_update) {
+      Disable (*replaceButtonPtr);
+    }
   }
 
   /* Extend 3' */
@@ -4795,15 +5529,16 @@ static void DetermineButtonState (UpsDataPtr   udp,
   else if (udp->new5 < udp->old5 && udp->new3 > udp->old3) {
     SetValue (udp->rmc, 3);
     Disable (*extend5ButtonPtr);
-    /* Disable (*patchButtonPtr); */
     udp->recomb1 = 0;
+    if (! udp->do_update) {
+      Disable (*replaceButtonPtr);
+    }
   }
 
   /* Replace */
 
   else if (udp->new5 >= udp->old5 && udp->new3 >= udp->old3) {
     SetValue (udp->rmc, 1);
-    /* Disable (udp->rmc); */
     Disable (*extend5ButtonPtr);
     Disable (*extend3ButtonPtr);
     udp->recomb1 = 0;
@@ -5015,9 +5750,9 @@ static void DetermineRMCState (UpsDataPtr   udp)
 /*                                                                  */
 /*------------------------------------------------------------------*/
 
-static ForM UpdateSequenceForm (UpsDataPtr  udp)
+static ForM UpdateSequenceForm (UpsDataPtr udp)
 {
-  ButtoN             b2, b3, b4;
+  ButtoN             b1, b2, b3, b4;
   GrouP              c, g, y, z = NULL;
   Uint2              hgt;
   GrouP              gp1, gp2, gp3, ppt0, ppt1, ppt2, ppt3, ppt4 = NULL;
@@ -5027,6 +5762,7 @@ static ForM UpdateSequenceForm (UpsDataPtr  udp)
   Boolean            sidebyside = FALSE;
   SeqIdPtr           sip;
   Char               strid1 [MAX_ID_LEN], strid2 [MAX_ID_LEN], txt0 [256];
+  CharPtr            title;
   WindoW             w;
 
   /* Check parameters */
@@ -5036,7 +5772,12 @@ static ForM UpdateSequenceForm (UpsDataPtr  udp)
 
   /* Create window */
 
-  w = FixedWindow (-50, -33, -10, -10, "Update Sequence", NULL);
+  if (udp->do_update) {
+    title = "Update Sequence";
+  } else {
+    title = "Extend Sequence";
+  }
+  w = FixedWindow (-50, -33, -10, -10, title, NULL);
 
   if (w == NULL)
     return NULL;
@@ -5130,38 +5871,52 @@ static ForM UpdateSequenceForm (UpsDataPtr  udp)
   SetGroupSpacing (g, 5, 5);
   
   gp1 = NormalGroup (g, 4, 0, "Alignment Relationship", programFont, NULL);
-  udp->rmc = HiddenGroup (gp1, 4, 0, UpdateAccept);
+  udp->rmc = HiddenGroup (gp1, 4, 0, UpdateButtons);
   SetObjectExtra (udp->rmc, (Pointer) udp, NULL);
   SetGroupSpacing (udp->rmc, 10, 5);
-  RadioButton (udp->rmc, "Replace");
+  if (udp->do_update) {
+    b1 = RadioButton (udp->rmc, "Replace");
+  } else {
+    b1= RadioButton (udp->rmc, "Extend Both Ends");
+  }
   b2 = RadioButton (udp->rmc, "Extend 5'");
   b3 = RadioButton (udp->rmc, "Extend 3'");
-  b4 = RadioButton (udp->rmc, "Patch");
+  if (udp->do_update) {
+    b4 = RadioButton (udp->rmc, "Patch");
+  } else {
+    b4 = NULL;
+  }
+
+  if (udp->do_update) {
+    gp2 = NormalGroup (g, 4, 0, "Update Operation", programFont, NULL);
+    udp->sfb = HiddenGroup (gp2, 4, 0, UpdateAccept);
+    SetObjectExtra (udp->sfb, (Pointer) udp, NULL);
+    SetGroupSpacing (udp->sfb, 10, 5);
+    RadioButton (udp->sfb, "Sequence");
+    RadioButton (udp->sfb, "Features");
+    RadioButton (udp->sfb, "Sequence + Features");
   
-  gp2 = NormalGroup (g, 4, 0, "Update Operation", programFont, NULL);
-  udp->sfb = HiddenGroup (gp2, 4, 0, UpdateAccept);
-  SetObjectExtra (udp->sfb, (Pointer) udp, NULL);
-  SetGroupSpacing (udp->sfb, 10, 5);
-  RadioButton (udp->sfb, "Sequence");
-  RadioButton (udp->sfb, "Features");
-  RadioButton (udp->sfb, "Sequence + Features");
+    udp->keepProteinIDs = CheckBox (g, "Keep Protein IDs", NULL);
   
-  udp->keepProteinIDs = CheckBox (g, "Keep Protein IDs", NULL);
+    gp3 = NormalGroup (g, 4, 0, "Duplicate Feature Policy", programFont, NULL);
+    udp->nobm = HiddenGroup (gp3, 4, 0, UpdateAccept);
+    SetObjectExtra (udp->nobm, (Pointer) udp, NULL);
+    SetGroupSpacing (udp->nobm, 10, 5);
+    RadioButton (udp->nobm, "New");
+    RadioButton (udp->nobm, "Old");
+    RadioButton (udp->nobm, "Both");
+    RadioButton (udp->nobm, "Merge");
   
-  gp3 = NormalGroup (g, 4, 0, "Duplicate Feature Policy", programFont, NULL);
-  udp->nobm = HiddenGroup (gp3, 4, 0, UpdateAccept);
-  SetObjectExtra (udp->nobm, (Pointer) udp, NULL);
-  SetGroupSpacing (udp->nobm, 10, 5);
-  RadioButton (udp->nobm, "New");
-  RadioButton (udp->nobm, "Old");
-  RadioButton (udp->nobm, "Both");
-  RadioButton (udp->nobm, "Merge");
-  
-  AlignObjects (ALIGN_CENTER, (HANDLE) gp1, (HANDLE) gp2, (HANDLE) gp3,
-		(HANDLE) udp->keepProteinIDs, NULL);
-  
-  
-  if (TRUE == udp->isSet) {
+    AlignObjects (ALIGN_CENTER, (HANDLE) gp1, (HANDLE) gp2,
+                  (HANDLE) gp3, (HANDLE) udp->keepProteinIDs, NULL);
+  }
+  udp->add_cit_subs = CheckBox (g, "Add Cit-subs for Updated Sequences", NULL);
+
+  if (! udp->do_update) {
+    c = HiddenGroup (w, 4, 0, NULL);
+    udp->accept = PushButton (c, "Accept", AcceptExtend);
+    SetObjectExtra (udp->accept, (Pointer) udp, NULL);
+  } else if (TRUE == udp->isSet) {
     c = HiddenGroup (w, 5, 0, NULL);
     udp->accept = PushButton (c, "Accept", AcceptRMCSet);
     SetObjectExtra (udp->accept, (Pointer) udp, NULL);
@@ -5181,14 +5936,15 @@ static ForM UpdateSequenceForm (UpsDataPtr  udp)
 		  (HANDLE) udp->details, (HANDLE) ppt1, (HANDLE) ppt2,
 		  (HANDLE) ppt3, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) udp->letters, (HANDLE) ppt4,
-		  (HANDLE) g, (HANDLE) z, NULL);
+		  (HANDLE) g, (HANDLE) udp->add_cit_subs, (HANDLE) z, NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) ppt0, (HANDLE) y, (HANDLE) c, NULL);
   }
   else
     AlignObjects (ALIGN_CENTER, (HANDLE) udp->overview,
 		  (HANDLE) udp->details, (HANDLE) udp->letters,
 		  (HANDLE) ppt0, (HANDLE) ppt1, (HANDLE) ppt2,
-		  (HANDLE) ppt3, (HANDLE) g, (HANDLE) c, (HANDLE) z, NULL);
+		  (HANDLE) ppt3, (HANDLE) g, (HANDLE) udp->add_cit_subs,
+                  (HANDLE) c, (HANDLE) z, NULL);
   RealizeWindow (w);
   
   udp->ovpict = MakeAlignPicture (udp, strid1, strid2, udp->salp);
@@ -5224,7 +5980,7 @@ static ForM UpdateSequenceForm (UpsDataPtr  udp)
   
   /* Enable/disable buttons based on the nature of the alignment */
     
-  DetermineButtonState (udp, &b2, &b3, &b4);
+  DetermineButtonState (udp, &b1, &b2, &b3, &b4);
   return (ForM) w;
 }
 
@@ -5268,7 +6024,8 @@ static Boolean LIBCALL SeqEntryHasPubs (SeqEntryPtr sep)
 
 static Boolean CheckForIDCollision (
   BioseqPtr oldbsp,
-  BioseqPtr newbsp
+  BioseqPtr newbsp,
+  BoolPtr islocal
 )
 
 {
@@ -5276,7 +6033,12 @@ static Boolean CheckForIDCollision (
 
   if (oldbsp == NULL || newbsp == NULL) return FALSE;
   for (sip = newbsp->id; sip != NULL; sip = sip->next) {
-    if (SeqIdIn (sip, oldbsp->id)) return TRUE;
+    if (SeqIdIn (sip, oldbsp->id)) {
+      if (sip->choice == SEQID_LOCAL) {
+        *islocal = TRUE;
+      }
+      return TRUE;
+    }
   }
   return FALSE;
 }
@@ -5292,8 +6054,13 @@ static CharPtr convPubDescMssg =
 
 static void PrepareToUpdateSequences (UpsDataPtr udp)
 {
+  Char         buf [64];
+  Boolean      descfilt [SEQDESCR_MAX];
+  Boolean      featfilt [SEQFEAT_MAX];
   Uint2        entityID;
   ForM         f;
+  Boolean      islocal = FALSE;
+  SeqIdPtr     lclid = NULL;
   SeqEntryPtr  oldsep;
   SeqEntryPtr  newsep;
   Boolean      revcomp = FALSE;
@@ -5338,13 +6105,29 @@ static void PrepareToUpdateSequences (UpsDataPtr udp)
   */
 
   tempid = NULL;
-  if (CheckForIDCollision (udp->oldbsp, udp->newbsp)) {
+  if (CheckForIDCollision (udp->oldbsp, udp->newbsp, &islocal)) {
     sip = SeqIdParse ("lcl|SequinUpdateSequence");
     if (sip != NULL) {
-      /* unlink colliding id, temporarily replace */
-      tempid = udp->newbsp->id;
-      udp->newbsp->id = sip;
-      SeqMgrReplaceInBioseqIndex (udp->newbsp);
+      if (islocal) {
+        entityID = ObjMgrGetEntityIDForPointer (udp->newbsp);
+        for (lclid = udp->newbsp->id;
+             lclid != NULL && lclid->choice != SEQID_LOCAL;
+             lclid = lclid->next) continue;
+        if (lclid != NULL) {
+          SeqIdWrite (lclid, buf, PRINTID_REPORT, sizeof (buf) - 1);
+          FindReplaceInEntity (entityID, buf, "SequinUpdateSequence", TRUE, FALSE, TRUE,
+                               FALSE, UPDATE_NEVER, descfilt, featfilt, NULL, TRUE);
+          SeqMgrReplaceInBioseqIndex (udp->newbsp);
+        } else {
+          Message (MSG_OK, "Unable to find colliding local id");
+          return;
+        }
+      } else {
+        /* unlink colliding id, temporarily replace */
+        tempid = udp->newbsp->id;
+        udp->newbsp->id = sip;
+        SeqMgrReplaceInBioseqIndex (udp->newbsp);
+      }
     }
   }
   salp = Sqn_GlobalAlign2Seq (udp->oldbsp, udp->newbsp, &revcomp);
@@ -5579,6 +6362,7 @@ extern void UpdateFastaSet (IteM i)
   udp->useGUI         = TRUE;
   udp->isSet          = TRUE;
   udp->convertPubs    = CONVERTPUBS_NO; /* was CONVERTPUBS_NOT_SET */
+  udp->do_update      = TRUE;
 
   /* Update one Bioseq from the file.  Note that this chains */
   /* to the processing of the Bioseq after that, so that     */
@@ -5606,7 +6390,7 @@ static Boolean DeltaLitOnly (BioseqPtr bsp)
   return TRUE;
 }
 
-extern void NewUpdateSequence (IteM i)
+static void NewUpdateOrExtendSequence (IteM i, Boolean do_update)
 {
   MsgAnswer     ans;
   BaseFormPtr   bfp;
@@ -5720,17 +6504,25 @@ extern void NewUpdateSequence (IteM i)
   udp->isSet          = FALSE;
   udp->useGUI         = TRUE;
   udp->convertPubs    = CONVERTPUBS_NO; /* was CONVERTPUBS_NOT_SET */
+  udp->do_update      = do_update;
 
   /* Do the updating of the sequences */
 
   PrepareToUpdateSequences (udp);
 }
 
-extern void UpdateSeqAfterDownload (
-  BaseFormPtr bfp,
-  BioseqPtr oldbsp,
-  BioseqPtr newbsp
-);
+extern void NewUpdateSequence (IteM i)
+
+{
+  NewUpdateOrExtendSequence (i, TRUE);
+}
+
+extern void NewExtendSequence (IteM i)
+
+{
+  NewUpdateOrExtendSequence (i, FALSE);
+}
+
 extern void UpdateSeqAfterDownload (
   BaseFormPtr bfp,
   BioseqPtr oldbsp,
@@ -5755,6 +6547,38 @@ extern void UpdateSeqAfterDownload (
   udp->isSet          = FALSE;
   udp->useGUI         = TRUE;
   udp->convertPubs    = CONVERTPUBS_NO; /* was CONVERTPUBS_NOT_SET */
+  udp->do_update      = TRUE;
+
+  /* Do the updating of the sequences */
+
+  PrepareToUpdateSequences (udp);
+}
+
+extern void ExtendSeqAfterDownload (
+  BaseFormPtr bfp,
+  BioseqPtr oldbsp,
+  BioseqPtr newbsp
+)
+
+{
+  UpsDataPtr  udp;
+
+  /* Create data ptr */
+
+  udp = (UpsDataPtr) MemNew (sizeof (UpsData));
+  if (udp == NULL)
+    return;
+
+  udp->input_entityID = bfp->input_entityID;
+  udp->input_itemID   = bfp->input_itemID;
+  udp->input_itemtype = bfp->input_itemtype;
+  udp->oldbsp         = oldbsp;
+  udp->newbsp         = newbsp;
+  udp->fp             = NULL;
+  udp->isSet          = FALSE;
+  udp->useGUI         = TRUE;
+  udp->convertPubs    = CONVERTPUBS_NO; /* was CONVERTPUBS_NOT_SET */
+  udp->do_update      = FALSE;
 
   /* Do the updating of the sequences */
 
@@ -6028,6 +6852,7 @@ static void ExtendLocToEnd (
 
 static void TruncateCDS (
   SeqFeatPtr sfp,
+  Uint1 frame,
   BioseqPtr pbsp
 )
 
@@ -6037,11 +6862,14 @@ static void TruncateCDS (
   SeqLocPtr  slp;
   Int4       total = 0;
 
+  if (frame > 0) {
+    frame--;
+  }
   slp = SeqLocFindNext (sfp->location, NULL);
   while (slp != NULL) {
     len = SeqLocLen (slp);
 
-    if (len + total <= (pbsp->length + 1) * 3) {
+    if (len + total - frame <= (pbsp->length + 1) * 3) {
       total += len;
     } else {
       if (slp->choice == SEQLOC_INT) {
@@ -6075,6 +6903,7 @@ static void PropagateCDS (SeqFeatPtr dup,
 			  Boolean    stopCDS,
 			  Boolean    transPast,
 			  Boolean    cds3end,
+			  Uint1      frame,
 			  Uint1      strand)
 {
   Uint2           entityID;
@@ -6141,7 +6970,7 @@ static void PropagateCDS (SeqFeatPtr dup,
   if (pbsp == NULL)
     return;
 
-  TruncateCDS (dup, pbsp);
+  TruncateCDS (dup, frame, pbsp);
 
   /**/
 
@@ -6238,8 +7067,11 @@ static void DoFeatProp (BioseqPtr   bsp,
   CodeBreakPtr    cbp, prevcbp, nextcbp;
   CdRegionPtr     crp;
   SeqFeatPtr      dup;
+  Uint1           frame = 0;
   BioseqPtr       newbsp;
   SeqLocPtr       newloc;
+  Boolean         partial5;
+  Boolean         partial3;
   RnaRefPtr       rrp;
   SeqEntryPtr     sep;
   SeqIdPtr        sip;
@@ -6256,17 +7088,21 @@ static void DoFeatProp (BioseqPtr   bsp,
   if (newloc == NULL)
     return;
 
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+
   dup = AsnIoMemCopy ((Pointer) sfp,
                       (AsnReadFunc) SeqFeatAsnRead,
                       (AsnWriteFunc) SeqFeatAsnWrite);
   SeqLocFree (dup->location);
   dup->location = newloc;
+  SetSeqLocPartial (dup->location, partial5, partial3);
 
   switch (dup->data.choice) {
     case SEQFEAT_CDREGION :
       crp = (CdRegionPtr) dup->data.value.ptrvalue;
       if (crp != NULL) {
-	crp->frame = CalculateReadingFrame (dup);
+        crp->frame = CalculateReadingFrame (dup);
+        frame = crp->frame;
         prevcbp = NULL;
         for (cbp = crp->code_break; cbp != NULL; cbp = nextcbp) {
           nextcbp = cbp->next;
@@ -6319,7 +7155,7 @@ static void DoFeatProp (BioseqPtr   bsp,
   /* do the extra stuff related to that.    */
 
   if (SEQFEAT_CDREGION == dup->data.choice)
-    PropagateCDS (dup, sfp, newbsp, stopCDS, transPast, cds3end, strand);
+    PropagateCDS (dup, sfp, newbsp, stopCDS, transPast, cds3end, frame, strand);
 }
 
 static Boolean CDSgoesToEnd (
@@ -6519,7 +7355,7 @@ static void AcceptFeatProp (
     if (SeqIdComp(sip_tmp, bsp->id) == SIC_YES)
        sip_new = SeqIdDup(sip);
     else
-       sip_new = SeqIdFindBest(sip_tmp, 0);
+       sip_new = SeqIdDup(sip_tmp);
     if (sip_head != NULL)
     {
        sip_prev->next = sip_new;
@@ -6845,6 +7681,11 @@ static void CopyGene (SeqFeatPtr sfp, Pointer userdata)
   bsp = BioseqFindFromSeqLoc (sfp->product);
   if (bsp == NULL) return;
 
+  /* make sure gene feature doesn't already exist on cDNA */
+
+  temp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_GENE, 0, &gcontext);
+  if (temp != NULL) return;
+
   /* copy gene feature fields to paste into new gene feature */
 
   temp = AsnIoMemCopy (gene,
@@ -6982,13 +7823,57 @@ static void CopyCDS (SeqFeatPtr sfp, Pointer userdata)
   }
 }
 
-extern void MakeRedundantGPS (
-  IteM i
+static void MakeProtRefXref (SeqFeatPtr sfp)
+
+{
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  pcontext;
+  SeqFeatPtr         prot;
+  ProtRefPtr         prp;
+  SeqFeatXrefPtr     xref;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->data.choice == SEQFEAT_PROT) return;
+  }
+
+  bsp = BioseqFindFromSeqLoc (sfp->product);
+  if (bsp == NULL) return;
+
+  prot = SeqMgrGetBestProteinFeature (bsp, &pcontext);
+  if (prot != NULL && prot->data.choice == SEQFEAT_PROT) {
+    prp = (ProtRefPtr) prot->data.value.ptrvalue;
+    if (prp != NULL) {
+      xref = SeqFeatXrefNew ();
+      if (xref != NULL) {
+        xref->data.choice = SEQFEAT_PROT;
+        xref->data.value.ptrvalue = AsnIoMemCopy ((Pointer) prp,
+                                                  (AsnReadFunc) ProtRefAsnRead,
+                                                  (AsnWriteFunc) ProtRefAsnWrite);
+        xref->next = sfp->xref;
+        sfp->xref = xref;
+      }
+    }
+  }
+
+}
+
+static void RemoveSfpTitle (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  if (sfp->title == NULL) return;
+  sfp->title = MemFree (sfp->title);
+}
+
+static void MakeRedundantGPS (
+  IteM i, Boolean doprop, Boolean justprotxref
 )
 
 {
   BaseFormPtr        bfp;
+  BioseqPtr          bsp;
+  SeqMgrFeatContext  fcontext;
   SeqEntryPtr        sep;
+  SeqFeatPtr         sfp;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -6999,13 +7884,58 @@ extern void MakeRedundantGPS (
   sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
   if (sep == NULL) return;
 
-  VisitFeaturesInSep (sep, NULL, CopyGene);
-  VisitFeaturesInSep (sep, NULL, CopyUserObject);
-  PropagateFromGenomicProductSet (sep);
-  VisitFeaturesInSep (sep, NULL, CopyCDS);
+  if (! justprotxref) {  	
+    VisitFeaturesInSep (sep, NULL, CopyGene);
+    VisitFeaturesInSep (sep, NULL, CopyUserObject);
+  }
+
+  /* find genomic sequence */
+  bsp = FindNucBioseq (sep);
+  if (bsp != NULL) {
+    if (! justprotxref) {
+      sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+      if (sfp == NULL) {
+        /* only copy CDS features up if none already on genomic */
+        VisitFeaturesInSep (sep, NULL, CopyCDS);
+        /* reindex with new CDS features */
+        SeqMgrIndexFeatures (bfp->input_entityID, NULL);
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, 0, &fcontext);
+    while (sfp != NULL) {
+      MakeProtRefXref (sfp);
+      sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, 0, &fcontext);
+    }
+  }
+  VisitFeaturesInSep (sep, NULL, RemoveSfpTitle);
+  if (doprop) {
+    PropagateFromGenomicProductSet (sep);
+  }
 
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void MakeRedundantGPSwithProp (
+  IteM i
+)
+
+{
+  MakeRedundantGPS (i, TRUE, FALSE);
+}
+
+extern void MakeRedundantGPSnoProp (
+  IteM i
+)
+
+{
+  MakeRedundantGPS (i, FALSE, FALSE);
+}
+
+extern void MakeRedundantGPSjustXref (IteM i)
+
+{
+  MakeRedundantGPS (i, FALSE, TRUE);
 }
 
 static void FuseFeatJoins (SeqFeatPtr sfp, Pointer userdata)

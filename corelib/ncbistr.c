@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.12  2003/09/15 16:21:32  kans
+* moved StringDoesHaveText from sqnutils3.c
+*
 * Revision 6.11  2002/01/16 16:58:38  camacho
 * Changed type of buflen parameter in LabelCopy from Int2 to Uint4
 *
@@ -497,6 +500,13 @@ NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText (Nlm_CharPtr str)
       ch = *str;
     }
   }
+  return TRUE;
+}
+
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText (Nlm_CharPtr str)
+
+{
+  if (Nlm_StringHasNoText (str)) return FALSE;
   return TRUE;
 }
 

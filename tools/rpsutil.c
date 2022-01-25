@@ -1,4 +1,6 @@
-/* $Id: rpsutil.c,v 6.61 2003/01/24 22:26:03 camacho Exp $
+static char const rcsid[] = "$Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp $";
+
+/* $Id: rpsutil.c,v 6.68 2003/10/07 15:24:10 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,33 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.61 $
+* $Revision: 6.68 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.68  2003/10/07 15:24:10  kans
+* added FreeCDDAligns
+*
+* Revision 6.67  2003/09/23 15:59:20  dondosha
+* Initialize global variable search_is_done; allow to reset it
+*
+* Revision 6.66  2003/09/22 16:24:17  merezhuk
+* made RPSBlastSearchEx public.
+*
+* Revision 6.65  2003/09/15 18:34:33  merezhuk
+* made RPSBlastSearchLight public  and declared in rpsutil.h
+*
+* Revision 6.64  2003/09/12 20:07:05  kans
+* AnnotateRegionsFromCDD puts CDDs into their own SeqAnnot with a create date AnnotDescr
+*
+* Revision 6.63  2003/05/30 17:25:37  coulouri
+* add rcsid
+*
+* Revision 6.62  2003/05/13 16:02:54  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.61  2003/01/24 22:26:03  camacho
 * RPSInit is deprecated, use RPSInitEx instead
 *
@@ -258,17 +281,20 @@ typedef struct _RPS_MTDataStruct {
     VoidPtr print_user_data;
 } RPS_MTDataStruct, PNTR RPS_MTDataStructPtr;
 
-static Boolean search_is_done;
+static Boolean search_is_done=FALSE;
 static Int4 glb_sequence_count=0;
 
-
+void ResetRPS(void)
+{
+   search_is_done = FALSE;
+}
 
 int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 	       Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr subject_bsp);
 
 
 
-void RPSFreeLookup(RPSLookupPtr lookup)
+static void RPSFreeLookup(RPSLookupPtr lookup)
 {
     Nlm_MemMapFini(lookup->mmLookup);
     MemFree(lookup);
@@ -276,14 +302,14 @@ void RPSFreeLookup(RPSLookupPtr lookup)
     return;
 }
 
-RPSLookupPtr RPSInitLookup(CharPtr LookupFile)
+static RPSLookupPtr RPSInitLookup(CharPtr LookupFile)
 {
     RPSLookupPtr lookup;
     
     lookup = MemNew(sizeof(RPSLookup));
 
     if((lookup->mmLookup = Nlm_MemMapInit(LookupFile)) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: mmap of lookup failed");
+        ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: mmap of lookup failed");
         return NULL;
     }
     
@@ -292,11 +318,11 @@ RPSLookupPtr RPSInitLookup(CharPtr LookupFile)
     if(lookup->header[0] != RPS_MAGIC_NUMBER) {
         /* Checking for wrong architecture */
         if(Nlm_SwapUint4(lookup->header[0]) == RPS_MAGIC_NUMBER) {
-            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: database formated on "
+            ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: database formated on "
                       "opposite big/little endian architecture. Sorry.");
             return NULL;
         } else {
-            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid lookup file");
+            ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: invalid lookup file");
             return NULL;
         }
     }
@@ -408,7 +434,7 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
     
     
     if((rpsinfo->mmMatrix = Nlm_MemMapInit(rps_matrix)) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: mmap of matrix failed");
+        ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: mmap of matrix failed");
         return (NULL);
     }
 
@@ -416,11 +442,11 @@ RPSInfoPtr RPSInitEx(CharPtr dbname, Int4 query_is_prot, BLAST_OptionsBlkPtr bla
     
     if(header[0] != RPS_MAGIC_NUMBER) {
         if(Nlm_SwapUint4(header[0]) == RPS_MAGIC_NUMBER) {
-            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: database formated on "
+            ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: database formated on "
                       "opposite big/little endian architecture. Sorry.");
             return NULL;
         } else {
-            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid matrix memmap file");
+            ErrPostEx(SEV_FATAL, 1, 0, "RPSInit: invalid matrix memmap file");
             return NULL;
         }
     }
@@ -498,8 +524,8 @@ static Int4 RPSBinary_Search(Int4 n, Uint4Ptr A, Int4 i)
     return b;
 }
 
-Int4 RPSFindSequence(ReadDBFILEPtr rdfp, Int4 start, Int4Ptr sequence_start,
-                     Int4Ptr seq_length)
+static Int4 RPSFindSequence(ReadDBFILEPtr rdfp, Int4 start, Int4Ptr sequence_start,
+                            Int4Ptr seq_length)
 {
     Int4 seq_num, num_seqs;
     
@@ -514,7 +540,7 @@ Int4 RPSFindSequence(ReadDBFILEPtr rdfp, Int4 start, Int4Ptr sequence_start,
     return seq_num;
 }
 
-RPSequencePtr RPSGetSequenceEx(RPSInfoPtr rpsinfo, Int4 seqnum, Boolean all_seqs)
+static RPSequencePtr RPSGetSequenceEx(RPSInfoPtr rpsinfo, Int4 seqnum, Boolean all_seqs)
 {
     RPSequencePtr rpsp;
     Int4 offset, seqlength, i, row, num_seqs;
@@ -574,11 +600,13 @@ RPSequencePtr RPSGetSequence(RPSInfoPtr rpsinfo, Int4 seqnum)
     return RPSGetSequenceEx(rpsinfo, seqnum, FALSE);
 }
 
-RPSequencePtr RPSGetBIGSequence(RPSInfoPtr rpsinfo, BioseqPtr PNTR bsp_out)
+static RPSequencePtr RPSGetBIGSequence(RPSInfoPtr rpsinfo, BioseqPtr PNTR bsp_out)
 {
     RPSequencePtr rpsp;
+#if 0
     ValNodePtr vnp;
     BioseqPtr bsp;
+#endif
 
     rpsp = RPSGetSequenceEx(rpsinfo, 0, TRUE);
     
@@ -629,8 +657,7 @@ void RPSequenceFree(RPSequencePtr rpseqp)
 
 void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query_length)
 {
-    Int4 length_adjustment, effective_query_length;
-    Int8 dblen, dblen_eff; 
+    Int8 dblen;
     FloatHi searchsp;
 
     if (options == NULL)
@@ -755,8 +782,8 @@ static void RPSapSortFree(RPSapSortPtr ssp)
     return;
 }
 
-Boolean RPSReturnQuery(BlastSearchBlkPtr search, BioseqPtr query_bsp,
-                       Uint1Ptr query_seq_start)
+static Boolean RPSReturnQuery(BlastSearchBlkPtr search, BioseqPtr query_bsp,
+                              Uint1Ptr query_seq_start)
 {
     Int4 query_length;
   
@@ -783,8 +810,8 @@ Boolean RPSReturnQuery(BlastSearchBlkPtr search, BioseqPtr query_bsp,
     return TRUE;
 }
 
-Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search, 
-                                RPSequencePtr rpseq, Boolean update_lookup)
+static Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search, 
+                                       RPSequencePtr rpseq, Boolean update_lookup)
 {
     Int4 hitlist_max;
     LookupTablePtr lookup;
@@ -861,7 +888,7 @@ Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search,
     return TRUE;
 }
 
-void RPSLookupCleanUp(LookupTablePtr lookup)
+static void RPSLookupCleanUp(LookupTablePtr lookup)
 {
     MemFree(lookup->pv_array);
     lookup->pv_array = NULL;
@@ -882,7 +909,7 @@ void RPSLookupCleanUp(LookupTablePtr lookup)
 
     return;
 }
-void RPSExchangeInt(Int4 *a, Int4 *b)
+static void RPSExchangeInt(Int4 *a, Int4 *b)
 {
     Int4 value;
     
@@ -893,8 +920,8 @@ void RPSExchangeInt(Int4 *a, Int4 *b)
     return;
 }
 
-Boolean RPSUpdateCoordinates(ReadDBFILEPtr rdfp, BLASTResultHitlistPtr result,
-                             Boolean reverse)
+static Boolean RPSUpdateCoordinates(ReadDBFILEPtr rdfp, BLASTResultHitlistPtr result,
+                                    Boolean reverse)
 {
     Int4 hspcnt, index;
     BLASTResultHspPtr hsp_array;
@@ -993,7 +1020,7 @@ Boolean RPSUpdateCoordinates(ReadDBFILEPtr rdfp, BLASTResultHitlistPtr result,
     return TRUE;
 }
 
-BLASTResultHitlistPtr RPSExtractNewResult(BLASTResultHitlistPtr result)
+static BLASTResultHitlistPtr RPSExtractNewResult(BLASTResultHitlistPtr result)
 {
     BLASTResultHitlistPtr new_result;
     Int4 i, index, hspcnt, seq_no;
@@ -1065,7 +1092,7 @@ static Nlm_FloatHi getEvalueFromSeqAlign(SeqAlignPtr thisSeqAlign)
 }
 
 
-Boolean RPSUpdateResult(BlastSearchBlkPtr search, ReadDBFILEPtr rdfp)
+static Boolean RPSUpdateResult(BlastSearchBlkPtr search, ReadDBFILEPtr rdfp)
 {
     BLASTResultsStructPtr result_struct, result_struct_new;
     Int4 index;
@@ -1192,12 +1219,11 @@ RPSimpalaStatCorrections(RPSequencePtr rpseq, Nlm_FloatHiPtr LambdaRatio, Nlm_Fl
  * modify BlastResults structure.
  *
  */
-int RPSSearchPartialPrepare( BlastSearchBlkPtr search, 
+static int RPSSearchPartialPrepare( BlastSearchBlkPtr search, 
 			 RPSInfoPtr rpsinfo, 
 			 Uint1Ptr subject_seq,  
 			 SeqLocPtr slp,
 			 BioseqPtr subject_bsp){
-  RPSapSortPtr rpssp;
   Int4 subject_length = 0;
 
   if(search->result_struct->hitlist_count == 0 || 
@@ -1237,7 +1263,7 @@ int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
   /*   BLASTResultHspPtr hsp_array, hsp; */
   /* BLASTResultHsp *hsp_array; */
   BLASTResultHsp *hsp;
-  Int4 hspcnt, index, index1;
+  Int4 hspcnt, index /* , index1 */ ;
   BLAST_KarlinBlkPtr PNTR kbp;
   Nlm_FloatHi searchsp_eff;
   RPSequencePtr rpseq;  
@@ -1344,9 +1370,9 @@ int RPSCalcEValue(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 
 
 
-SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
-                              Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
-                              subject_bsp)
+static SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
+                                     Uint1Ptr subject_seq, SeqLocPtr slp, BioseqPtr
+                                     subject_bsp)
 {
     SeqAlignPtr seqalign;
     BLASTResultsStructPtr result_struct, result_struct_new;
@@ -1805,10 +1831,10 @@ RPS_FIX(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
 
 /* \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ */
 /*
- *
+ * support RPS searches with Net-result-struct type of results
  */
 SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
-                            BioseqPtr query_bsp, RPSInfoPtr rpsinfo, Boolean partial)
+                                    BioseqPtr query_bsp, RPSInfoPtr rpsinfo, Boolean partial)
 {
     Int2 status;
     Int4 index;
@@ -1822,8 +1848,6 @@ SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
     RPSequencePtr rpseq;
     BioseqPtr bsp = NULL;
     SPCompressPtr spc = NULL;
-    ValNodePtr vnp;
-    SeqLocPtr filter_slp;
 
     /* call normal RPS search if this is not SPLITDB */
     if( !partial ) return  RPSBlastSearch(search,query_bsp,rpsinfo);
@@ -1934,7 +1958,7 @@ SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
     
     BlastSaveCurrentHitlist(search);
 
-    /* experimental. call this function to re-arrange results to be more
+    /* call this function to re-arrange results to be more
        compatible with BLASTResultHitlistToNetResultHitlist
      */
     search->rdfp = rpsinfo->rdfp;
@@ -1944,8 +1968,10 @@ SeqAlignPtr RPSBlastSearchEx (BlastSearchBlkPtr search,
     return seqalign;
 
 }
-
-/*^^^ EXPERIMENTAL.START  */
+/* 
+ * bypass RPS search and use passed results structure. 
+ * used in SPLITD
+ */
 SeqAlignPtr RPSBlastSearchLight (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo, 
 				 BLASTResultsStructPtr   ready_result_struct){
@@ -2098,7 +2124,6 @@ SeqAlignPtr RPSBlastSearchLight (BlastSearchBlkPtr search,
     return seqalign;  
 }
 
-/*^^^ EXPERIMENTAL.END    */
 
 SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
                             BioseqPtr query_bsp, RPSInfoPtr rpsinfo)
@@ -2463,7 +2488,7 @@ static VoidPtr RPSEngineThread(VoidPtr data)
                         rpsbop->query_is_protein ? FindProt : FindNuc); 
         
         if (query_bsp == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
             return NULL;
         }  
 
@@ -2668,7 +2693,7 @@ Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop,
 }
 
 /* These functions may be never be used ... */
-Int4Ptr PNTR RPSReadPSMatrix(CharPtr filename, Int4Ptr mat_len)
+static Int4Ptr PNTR RPSReadPSMatrix(CharPtr filename, Int4Ptr mat_len)
 {
     Int4Ptr PNTR psmatrix;
     FILE *fd;
@@ -2710,7 +2735,7 @@ Int4Ptr PNTR RPSReadPSMatrix(CharPtr filename, Int4Ptr mat_len)
 
     return psmatrix;
 }
-BioseqPtr RPSGetBioseqFromMatrix(Int4Ptr PNTR psmatrix, Int4 length)
+static BioseqPtr RPSGetBioseqFromMatrix(Int4Ptr PNTR psmatrix, Int4 length)
 {
     BioseqPtr bsp;
     CharPtr buffer;
@@ -2831,6 +2856,31 @@ static void AddFieldToCddUserObject (UserObjectPtr uop, CharPtr label, CharPtr s
   }
 }
 
+static SeqFeatPtr CreateNewFeatureOnSeqAnnot (SeqAnnotPtr sap, Uint1 choice, SeqLocPtr slp)
+
+{
+  SeqFeatPtr  prev;
+  SeqFeatPtr  sfp;
+
+  if (sap == NULL || slp == NULL) return NULL;
+  sfp = SeqFeatNew ();
+  if (sfp == NULL) return NULL;
+  if (sap->data != NULL) {
+    prev = sap->data;
+    while (prev->next != NULL) {
+      prev = prev->next;
+    }
+    prev->next = sfp;
+  } else {
+    sap->data = (Pointer) sfp;
+  }
+  sfp->data.choice = choice;
+  sfp->location = SeqLocFree (sfp->location);
+  sfp->location = AsnIoMemCopy (slp, (AsnReadFunc) SeqLocAsnRead,
+                                (AsnWriteFunc) SeqLocAsnWrite);
+  return sfp;
+}
+
 NLM_EXTERN void AnnotateRegionsFromCDD (
   BioseqPtr bsp,
   SeqAlignPtr salp,
@@ -2839,9 +2889,13 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
 
 {
   DbtagPtr       db;
+  AnnotDescrPtr  desc;
+  DatePtr        dp;
   CddHitPtr      cdd_head, cdd;
+  SeqAnnotPtr    lastsap;
   size_t         len;
   ObjectIdPtr    oip;
+  SeqAnnotPtr    sap = NULL;
   SeqFeatPtr     sfp;
   SeqInt         sint;
   SeqIdPtr       sip;
@@ -2875,7 +2929,31 @@ NLM_EXTERN void AnnotateRegionsFromCDD (
       vn.extended = 0;
       vn.data.ptrvalue = &sint;
       vn.next = NULL;
-      sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_REGION, &vn);
+      if (sap == NULL) {
+        sap = SeqAnnotNew ();
+        if (sap != NULL) {
+          sap->type = 1;
+          dp = DateCurr ();
+          if (dp != NULL) {
+            desc = ValNodeNew (NULL);
+            if (desc != NULL) {
+              desc->choice = Annot_descr_create_date;
+              desc->data.ptrvalue = DateCurr ();
+              sap->desc = desc;
+            }
+          }
+          if (bsp->annot != NULL) {
+            lastsap = bsp->annot;
+            while (lastsap->next != NULL) {
+              lastsap = lastsap->next;
+            }
+            lastsap->next = sap;
+          } else {
+            bsp->annot = sap;
+          }
+        }
+      }
+      sfp = CreateNewFeatureOnSeqAnnot (sap, SEQFEAT_REGION, &vn);
       if (sfp != NULL) {
 
         if (! StringHasNoText (cdd->Definition)) {
@@ -3073,7 +3151,7 @@ NLM_EXTERN void RemoveDuplicateCDDs (
   DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
 }
 
-static void FreeCDDProc (
+static void FreeCDDFeatProc (
   SeqFeatPtr sfp,
   Pointer userdata
 )
@@ -3094,9 +3172,47 @@ NLM_EXTERN void FreeCDDRegions (
 )
 
 {
-  VisitFeaturesInSep (topsep, NULL, FreeCDDProc);
+  VisitFeaturesInSep (topsep, NULL, FreeCDDFeatProc);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
+}
+
+static void IsCDDSeqId (SeqIdPtr sip, Pointer userdata)
+
+{
+  BoolPtr   cddIDp;
+  DbtagPtr  dbt;
+
+  cddIDp = (BoolPtr) userdata;
+  if (sip == NULL || cddIDp == NULL) return;
+  if (sip->choice != SEQID_GENERAL) return;
+  dbt = (DbtagPtr) sip->data.ptrvalue;
+  if (dbt == NULL) return;
+  if (StringCmp (dbt->db, "CDD") != 0) return;
+  *cddIDp = TRUE;
+}
+ 
+static void FreeCDDAlignProc (
+  SeqAlignPtr sap,
+  Pointer userdata
+)
+
+{
+  Boolean  cddID = FALSE;
+
+  VisitSeqIdsInSeqAlign (sap, (Pointer) &cddID, IsCDDSeqId);
+  if (cddID) {
+    sap->idx.deleteme = TRUE;
+  }
+}
+
+NLM_EXTERN void FreeCDDAligns (
+  SeqEntryPtr topsep
+)
+
+{
+  VisitAlignmentsInSep (topsep, NULL, FreeCDDAlignProc);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
 }
 
  
- 
+

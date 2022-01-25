@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.138 $
+* $Revision: 6.143 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,22 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.143  2003/07/08 18:42:40  camacho
+* Elaborated fastacmd return values
+*
+* Revision 6.142  2003/06/13 19:56:48  dondosha
+* Removed unneeded argument in FastaToBlastDB
+*
+* Revision 6.141  2003/04/25 18:55:27  camacho
+* 1. Added readdb_merge_gifiles to deal with Microbial blast database issues.
+* 2. Minor fixes to Int4List functions.
+*
+* Revision 6.140  2003/04/22 21:30:14  camacho
+* Added Int4 list utilities
+*
+* Revision 6.139  2003/04/22 19:04:57  camacho
+* Moved GiList structure to generic list of 4-byte integers
+*
 * Revision 6.138  2003/04/16 15:39:37  coulouri
 * fix compiler warning
 *
@@ -770,6 +786,59 @@ Int4 LIBCALL NlmSeekInMFILE PROTO((NlmMFILEPtr mfp, long offset, Int4 ptrname));
 */
 Int4 LIBCALL NlmTellMFILE PROTO((NlmMFILEPtr mfp));
 
+/* Generic 4-byte integer list */
+typedef struct _gilist {
+    Int4    count, allocated;
+    Int4Ptr i;
+} Int4List, *Int4ListPtr;
+
+/* Creates a new list of 4-byte integers */
+Int4ListPtr LIBCALL 
+Int4ListNew PROTO((void));
+
+/* Creates a new list of 4-byte integers of size s */
+Int4ListPtr LIBCALL 
+Int4ListNewEx PROTO((Int4 s));
+
+/* Deallocates the list of 4-byte integers */
+Int4ListPtr LIBCALL 
+Int4ListFree PROTO((Int4ListPtr lp));
+
+/* Reads a list of newline separated 4-byte integers.
+ * Caller is responsible for deallocating the return value */
+Int4ListPtr LIBCALL 
+Int4ListReadFromFile PROTO((CharPtr filename));
+
+/* Appends i to the end of the list, reallocating memory if necessary. Returns
+ * FALSE if it cannot allocate more memory */
+Boolean LIBCALL 
+Int4ListAdd PROTO((Int4ListPtr lp, Int4 i));
+
+/* Returns the concatenation of list1 and list2, freeing both parameters. It
+ * returns NULL if both lists are empty and if it cannot allocate more memory */
+Int4ListPtr LIBCALL
+Int4ListConcat PROTO((Int4ListPtr *list1, Int4ListPtr *list2));
+
+/* Attempts to reallocate new_size elements to the list. Returns NULL on
+ * incorrect arguments or if it cannot allocate more memory */
+Int4ListPtr LIBCALL
+Int4ListResize PROTO((Int4ListPtr listp, Int4 new_size));
+
+/* Performs a binary search for key on lp.
+   Returns the index into lp->i where key is located or -1 if key is not found
+ */
+Int4 LIBCALL
+Int4ListBSearch PROTO((Int4ListPtr lp, Int4 key));
+
+/* Ascendingly sorts the list and removes repeated entries */
+Int4ListPtr LIBCALL
+Int4ListMakeUnique PROTO((Int4ListPtr list));
+
+/* Returns the ascending sorted intersection of list1 and list2, freeing the
+ * both parameters */
+Int4ListPtr LIBCALL
+Int4ListIntersect PROTO((Int4ListPtr *list1, Int4ListPtr *list2));
+
 
 /*
 	Common index structures
@@ -939,9 +1008,11 @@ if there is no mem-mapping or it failed. */
         ReadDBSharedInfoPtr shared_info;
 	Int4 	            gi_target; /* only this gi should be retrieved */
                                        /* if non-zero. */
-        CharPtr             gifile;    /* Path to a file with the gi list */
-        Int4		    preferred_gi; /* this gi should be listed first */
-                                          /* in the bioseq if non-zero */
+    CharPtr             gifile;   /* Path to a file with the gi list, should 
+									 always be NULL after readdb_new* calls */
+    Int4ListPtr     gilist; 	  /* storage for the above file in memory */
+    Int4		    preferred_gi; /* this gi should be listed first */
+                                  /* in the bioseq if non-zero */
 	Int4    last_preloaded; /* starting ordinal id of the last preloaded file block */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
     
@@ -1028,6 +1099,7 @@ Boolean LIBCALL readdb_copy PROTO((ReadDBFILEPtr rdfp));
 	database.
 */
 Boolean LIBCALL readdb_compare PROTO((ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2));
+
 
 /*
         Get total length and number of sequences in multiple databases.
@@ -1249,15 +1321,10 @@ typedef struct FASTALookup {
     Int4    used;           /* Number of Uint4 used      */
 } FASTALookup, PNTR FASTALookupPtr;
 
-typedef struct _gilist {
-    Int4    count, allocated;
-    Int4Ptr gis;
-} GiList, *GiListPtr;
-
 /* Structure that holds the link information as read from the file */
 typedef struct _linkinfo {
-    Int4 bit_number;    /* indicates the position in links bit array */
-    GiListPtr gi_list;  /* update links bit array for gis in this list */
+    Int4 bit_number;      /* indicates the position in links bit array */
+    Int4ListPtr gi_list;  /* update links bit array for gis in this list */
 } LinkInfo, *LinkInfoPtr;
 
 /* Structure that holds the membership information */
@@ -1590,6 +1657,14 @@ typedef struct FCMDAccList {
 FCMDAccListPtr LIBCALL GetAccList(CharPtr file, Int4Ptr TotalItems);
 void LIBCALL FCMDAccListFree(FCMDAccListPtr falp);
 
+#define FASTACMD_DEFAULT_DB "nr"
+
+#define FASTACMD_SUCCESS 0
+#define FASTACMD_ERROR 1
+#define FASTACMD_DB_NOT_FOUND 2
+#define FASTACMD_FAILED_SEARCH 3
+#define FASTACMD_NO_TAXDB 4
+
 /* Fastacmd_Search and Fastacmd_Search_ex return non-zero on failure */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
@@ -1598,14 +1673,14 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
 	Boolean use_target, Boolean use_ctrlAs, Boolean dump_db, 
     CharPtr seqlocstr, Uint1 strand, Boolean taxonomy_info_only, 
     Boolean dbinfo_only, Int4 pig);
+
 Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 line_length, 
 		    Boolean use_ctrlAs);
 
 Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 					    output_file));
 
-Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, CharPtr basename, 
-			   Int4 Bases_In_Volume));
+Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, Int4 Bases_In_Volume));
 
 BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number);
 

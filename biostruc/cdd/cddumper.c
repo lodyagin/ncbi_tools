@@ -1,4 +1,4 @@
-/* $Id: cddumper.c,v 1.24 2002/10/10 20:38:19 bauer Exp $
+/* $Id: cddumper.c,v 1.25 2003/05/21 17:24:28 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 10/30/2000
 *
-* $Revision: 1.24 $
+* $Revision: 1.25 $
 *
 * File Description: CD-dumper, rebuilt from scrap parts       
 *         
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddumper.c,v $
+* Revision 1.25  2003/05/21 17:24:28  bauer
+* fixes to Blast DB access
+*
 * Revision 1.24  2002/10/10 20:38:19  bauer
 * changes to accomodate new spec items
 * - old-root node
@@ -1717,7 +1720,7 @@ static void CddAddTax(CddPtr pcdd, Boolean bVerbose)
   SeqIdPtr                sip;
   Taxon1DataPtr           t1dp;
   ValNodePtr              descr, vnpTail = NULL, vnp;
-  Int4                    iTxid1 = -1, iTxid2, gi;
+  Int4                    iTxid1 = -1, iTxid2 = -1, gi;
   
   descr = pcdd->description; /* assumes that Tax-node is not 1st description*/
   while (descr) {            /* and that there's no 2 consecutive Tax-nodes */
@@ -1913,7 +1916,7 @@ Int2 Main()
       CddSevError("Unable to initialize PUBSEQ");
  #endif
     if (myargs[25].intvalue) {
-      if(!(rdfp = readdb_new_ex("nr", READDB_DB_IS_PROT, FALSE)))
+      if(!(rdfp = readdb_new_ex2("nr",READDB_DB_IS_PROT,READDB_NEW_DO_TAXDB,NULL,NULL)))
       CddSevError("Readdb init failed");
     }
 #ifndef DBNTWIN32

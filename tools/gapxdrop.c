@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: gapxdrop.c,v 6.75 2003/08/20 22:11:49 dondosha Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,8 +34,29 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.68 $
+/* $Revision: 6.75 $
 * $Log: gapxdrop.c,v $
+* Revision 6.75  2003/08/20 22:11:49  dondosha
+* Removed some garbage code
+*
+* Revision 6.74  2003/06/23 21:09:23  dondosha
+* Allow left extension from offset 0, since the starting point must be part of the left extension
+*
+* Revision 6.73  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
+* Revision 6.72  2003/05/27 20:29:57  dondosha
+* Fix for OOF alignments starting at offsets 1 or 2 in query
+*
+* Revision 6.71  2003/05/15 21:50:08  dondosha
+* The break in previous change was put in a wrong place; fixed
+*
+* Revision 6.70  2003/05/06 18:56:12  dondosha
+* In ALIGN_packed_nucl: break out of loop if matrix score is MININT, to avoid gapping through sentinel bytes
+*
+* Revision 6.69  2003/04/22 17:50:07  dondosha
+* Correction in OOFGapXEditBlockToSeqAlign for case when gap is followed by a frame shift
+*
 * Revision 6.68  2002/08/22 12:26:42  madden
 * Removed unused variables
 *
@@ -508,7 +531,7 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
   GapXDPPtr dyn_prog;
   Int4 i, j, cb, j_r, g, decline_penalty;
   register Int4 c, d, e, m, tt, h, X, f;
-  Int4 best_score = 0;
+  Int4 best_score = 0, new_score;
   Int4Ptr *matrix;
   register Int4Ptr wa;
   register GapXDPPtr dp;
@@ -573,7 +596,9 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
       Bptr += B_increment;
 */
       for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
-	Bptr += B_increment;
+	 Bptr += B_increment;
+         new_score = wa[*Bptr];
+
 	  d = dp->DD;
 	  if (e < f) e = f;
 	  if (d < f) d = f;
@@ -584,7 +609,7 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
 		  c = d; 
 	      }
 	      if (best_score - c > X) {
-		  c = dp->CC+wa[*Bptr]; f = dp->FF;
+		  c = dp->CC+new_score; f = dp->FF;
 		  if (tt == i) tt++;
 		  else { dp->CC =dp->FF= MININT;}
 	      } else {
@@ -598,12 +623,12 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
                       e = c;
                   }
                   c+=m;
-		  d = dp->CC+wa[*Bptr]; dp->CC = c; c=d;
+		  d = dp->CC+new_score; dp->CC = c; c=d;
 		  d = dp->FF; dp->FF = f-decline_penalty; f = d;
 	      }
 	  } else {
 	      if (best_score - c > X){
-		  c = dp->CC+wa[*Bptr]; f= dp->FF;
+		  c = dp->CC+new_score; f= dp->FF;
 		  if (tt == i) tt++;
 		  else { dp->CC =dp->FF= MININT;}
 	      } else {
@@ -624,9 +649,11 @@ static Int4 ALIGN_packed_nucl(Uint1Ptr B, Uint1Ptr A, Int4 N, Int4 M,
 		  d = dp->FF;
 		  if (c-g>f) dp->FF = c-g-decline_penalty; else dp->FF = f-decline_penalty;
 		  f = d;
-		  d = dp->CC+wa[*Bptr]; dp->CC = c; c = d;
+		  d = dp->CC+new_score; dp->CC = c; c = d;
 	      }
 	  }
+          if (new_score == MININT)
+             break;
 	  dp++;
       }
       if (tt == j) break;
@@ -960,7 +987,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
       if(reverse_sequence)
 	Bptr = &B[N-tt];
       for (cb = i = tt, dp = &dyn_prog[i]; i < j; i++) {
-	Bptr += B_increment;
+	 Bptr += B_increment;
 	  d = dp->DD;
 	  if (e < f) e = f;
 	  if (d < f) d = f;
@@ -1677,25 +1704,6 @@ OOFTracebackToGapXEditBlock(Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2)
         } else {
             index2 += 3;
         }
-        
-        switch (current_val) {
-        case 0: /* deletion of three nucleotides. */
-            break;
-        case 3: /* Substitution. */
-            break;
-        case 1:	/* gap of two nucleotides. */
-            break;
-        case 2: /* Gap of one nucleotide. */
-            break;
-        case 4: /* Insertion of one nucleotide. */
-            break;
-        case 5: /* Insertion of two nucleotides. */
-            break;
-        case 6: /* insertion of three nucleotides. */
-            break;
-        default:
-            break;
-        }
     }
     /* Get the last one. */    
     e_script->num = number;
@@ -1767,8 +1775,8 @@ PerformNtGappedAlignment(GapAlignBlkPtr gap_align)
 	if (gap_align->q_start != 0 && gap_align->s_start != 0)
 	{
 		found_start = TRUE;
-		q_length = (gap_align->q_start+1);
-		s_length = (gap_align->s_start+1);
+		q_length = (gap_align->q_start + 1);
+		s_length = (gap_align->s_start + 1);
 		score_left = ALIGN_packed_nucl(query, subject, q_length, s_length, &private_q_start, &private_s_start, gap_align, gap_align->q_start, TRUE);
                 if (score_left < 0) 
                    return FALSE;
@@ -1842,11 +1850,6 @@ PerformGappedAlignment(GapAlignBlkPtr gap_align)
     query = gap_align->query;
     subject = gap_align->subject;
     include_query = gap_align->include_query;
-
-#if 0
-    printf("No traceback: q_start = %d, s_start = %d\n", gap_align->q_start, 
-           gap_align->s_start); 
-#endif
 
     /* Looking for "left" score */
     score_left = 0;
@@ -1957,53 +1960,49 @@ PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 
     gap_align->tback = tback;
 
-#if 0
-    printf("With traceback: q_start = %d, s_start = %d\n", gap_align->q_start, gap_align->s_start); 
-#endif
-    
+    /* Note: the starting point [q_start,s_start] is included in the left
+       extension, but not in the right extension */
     score_left = 0; prev = 3;
-    if (gap_align->q_start != 0 && gap_align->s_start != 0) {
-        found_start = TRUE;
+    found_start = TRUE;
         
-        if(gap_align->is_ooframe) {
-            q_left = (Uint1Ptr) MemNew((gap_align->q_start+3)*sizeof(Uint1));
-            s_left = (Uint1Ptr) MemNew((gap_align->s_start+5)*sizeof(Uint1));
+    if(gap_align->is_ooframe) {
+       q_left = (Uint1Ptr) MemNew((gap_align->q_start+3)*sizeof(Uint1));
+       s_left = (Uint1Ptr) MemNew((gap_align->s_start+5)*sizeof(Uint1));
             
-            q_length = reverse_seq(query, 
-                                   query+gap_align->q_start-1, q_left+1);
-            s_length = reverse_seq(subject, 
-                                   subject+gap_align->s_start-3, s_left+3);
-
-            score_left = OOF_SEMI_G_ALIGN(q_left, s_left+2, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, TRUE);
+       q_length = reverse_seq(query, 
+                              query+gap_align->q_start-1, q_left+1);
+       if (gap_align->s_start >= 3) {
+          s_length = reverse_seq(subject, 
+                                 subject+gap_align->s_start-3, s_left+3);
+       } else {
+          s_length = gap_align->s_start - 2;
+       }
+       score_left = OOF_SEMI_G_ALIGN(q_left, s_left+2, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, TRUE);
             
-            q_left = MemFree(q_left);
-            s_left = MemFree(s_left);
-        } else {        
-            q_length = (gap_align->q_start+1);
-            s_length = (gap_align->s_start+1);
-        
-            score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, FALSE, TRUE);
-        }
-
-        for(p = tback, q = tback1 - 1; p < q; p++, q--)  {
-            tmp = *p;
-            *p = *q;
-            *q = tmp;
-        }
-
-        if(gap_align->is_ooframe){
-            for (prev = 3, p = tback; p < tback1; p++) {
-                if (*p == 0 || *p ==  6) continue;
-                tmp = *p; *p = prev; prev = tmp;
-            }
-        }
-        gap_align->query_start = q_length - private_q_length;
-        gap_align->subject_start = s_length - private_s_length;
-    } else {
-        q_length = gap_align->q_start;
-        s_length = gap_align->s_start;
+       q_left = MemFree(q_left);
+       s_left = MemFree(s_left);
+    } else {        
+       q_length = (gap_align->q_start+1);
+       s_length = (gap_align->s_start+1);
+       
+       score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, FALSE, TRUE);
     }
-    
+
+    for(p = tback, q = tback1 - 1; p < q; p++, q--)  {
+       tmp = *p;
+       *p = *q;
+       *q = tmp;
+    }
+
+    if(gap_align->is_ooframe){
+       for (prev = 3, p = tback; p < tback1; p++) {
+          if (*p == 0 || *p ==  6) continue;
+          tmp = *p; *p = prev; prev = tmp;
+       }
+    }
+    gap_align->query_start = q_length - private_q_length;
+    gap_align->subject_start = s_length - private_s_length;
+
     middle_score = 0;
     query_var = query+gap_align->q_start;
     subject_var = subject+gap_align->s_start;
@@ -2667,7 +2666,8 @@ SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqI
             ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(query_id));
             
             seq_int1_last = seq_int1;
-            seq_int2_last = NULL;
+            /* Keep previous seq_int2_last, in case there is a frame shift
+               immediately after this gap */
             
             break;
 

@@ -1,10 +1,11 @@
 #
-# $Id: freebsd.ncbi.mk,v 1.8 2002/10/29 01:20:12 lavr Exp $
+# $Id: freebsd.ncbi.mk,v 1.9 2003/05/07 17:40:12 beloslyu Exp $
 #
 # This platform is not supported. Tested on FreeBSD 4.5-RELEASE
 #
 NCBI_DEFAULT_LCL = fbd
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = gcc -pipe -pthread
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O

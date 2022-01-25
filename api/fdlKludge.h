@@ -28,13 +28,22 @@
 *
 * Version Creation Date:   10/15/01
 *
-* $Revision: 6.9 $
+* $Revision: 6.12 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: fdlKludge.h,v $
+* Revision 6.12  2003/06/11 20:15:45  jianye
+* changed unigene linkout
+*
+* Revision 6.11  2003/06/02 20:02:23  jianye
+* Added geo linkout
+*
+* Revision 6.10  2003/05/05 19:33:54  jianye
+* Change url for structure linkout
+*
 * Revision 6.9  2003/04/21 21:49:37  jianye
 * changed some url
 *
@@ -74,12 +83,12 @@
 
 /* url for linkout*/
 #define URL_LocusLink "<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>"
-#define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/UniGene/query.cgi?ORG=%s&TEXT=@gi(%d)\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
+#define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=unigene&cmd=search&term=%d[Nucleotide+UID]\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
 
-#define URL_Structure "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\"><img border=0 height=16 width=16 src=\"http://ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
+#define URL_Structure "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\"><img border=0 height=16 width=16 src=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
 
 #define URL_Structure_Overview "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\">Related Structures</a>"
 
-/*#define URL_Geo "<a href=\"http://boris.ncbi.nlm.nih.gov:2441/entrez/testers/edgar/query.fcgi?term=%d[gi]&db=geo\"><img border=0 height=16 width=16 src=\"/blast/images/G.gif\" alt=\"Geo\"></a>"
- */
+#define URL_Geo "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=geo&term=%d[gi]\"><img border=0 height=16 width=16 src=\"/blast/images/G.gif\" alt=\"Geo\"></a>"
+ 
 #endif

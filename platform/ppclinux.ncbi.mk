@@ -1,10 +1,11 @@
 #
-# $Id: ppclinux.ncbi.mk,v 1.4 2002/10/29 01:20:13 lavr Exp $
+# $Id: ppclinux.ncbi.mk,v 1.5 2003/05/07 17:40:12 beloslyu Exp $
 #
 # Untested. Contributed by Gary Bader <gary.bader@utoronto.ca>
 #
 NCBI_DEFAULT_LCL = plx
 NCBI_MAKE_SHELL = /bin/sh
+NCBI_AR=ar
 NCBI_CC = gcc -pipe
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2

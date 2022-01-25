@@ -1,8 +1,9 @@
 #
-# $Id: alphaOSF1.ncbi.mk,v 1.12 2002/11/07 21:41:57 beloslyu Exp $
+# $Id: alphaOSF1.ncbi.mk,v 1.13 2003/05/07 17:40:12 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = alf
+NCBI_AR=ar
 NCBI_CC = cc
 NCBI_CFLAGS1 = -c -pthread
 NCBI_LDFLAGS1 = -O -pthread

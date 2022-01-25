@@ -1,4 +1,4 @@
-/*  $Id: ncbi_util.c,v 6.26 2003/01/17 15:55:13 lavr Exp $
+/*  $Id: ncbi_util.c,v 6.29 2003/09/02 21:05:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -44,6 +44,9 @@
 #  include <time.h>
 #endif
 
+#if defined(OS_MSWIN)  &&  defined(COMP_METRO)
+char *_strtime( char *timestr );
+#endif
 
 /* Static function pre-declarations to avoid C++ compiler warnings
  */
@@ -136,7 +139,7 @@ extern char* LOG_ComposeMessage
  TLOG_FormatFlags    format_flags)
 {
     static const char s_RawData_Begin[] =
-        "\n#################### [BEGIN] Raw Data (%lu bytes):\n";
+        "\n#################### [BEGIN] Raw Data (%lu byte%s):\n";
     static const char s_RawData_End[] =
         "\n#################### [END] Raw Data\n";
 
@@ -168,7 +171,8 @@ extern char* LOG_ComposeMessage
 
     /* Pre-calculate total message length */
     if ((format_flags & fLOG_DateTime) != 0) {
-#ifdef NCBI_OS_MSWIN/*Should be compiler-dependent, but C-Toolkit lacks it*/
+#if  defined(NCBI_OS_MSWIN)  &&  !defined(COMP_METRO) 
+/*Should be compiler-dependent, but C-Toolkit lacks it*/
         _strdate(&datetime[datetime_len]);
         datetime_len += strlen(&datetime[datetime_len]);
         datetime[datetime_len++] = ' ';
@@ -179,20 +183,20 @@ extern char* LOG_ComposeMessage
 #else /*NCBI_OS_MSWIN*/
         static const char timefmt[] = "%D %T ";
         struct tm* tm;
-#ifdef NCBI_CXX_TOOLKIT
+#  ifdef NCBI_CXX_TOOLKIT
         time_t t = time(0);
-#  ifdef HAVE_LOCALTIME_R
+#    ifdef HAVE_LOCALTIME_R
         struct tm temp;
         localtime_r(&t, &temp);
         tm = &temp;
-#  else /*HAVE_LOCALTIME_R*/
+#    else /*HAVE_LOCALTIME_R*/
         tm = localtime(&t);
-#  endif/*HAVE_LOCALTIME_R*/
-#else /*NCBI_CXX_TOOLKIT*/
+#    endif/*HAVE_LOCALTIME_R*/
+#  else /*NCBI_CXX_TOOLKIT*/
         struct tm temp;
         Nlm_GetDayTime(&temp);
         tm = &temp;
-#endif/*NCBI_CXX_TOOLKIT*/
+#  endif/*NCBI_CXX_TOOLKIT*/
         datetime_len = strftime(datetime, sizeof(datetime), timefmt, tm);
 #endif/*NCBI_OS_MSWIN*/
     }
@@ -213,7 +217,7 @@ extern char* LOG_ComposeMessage
         message_len = strlen(call_data->message);
     }
 
-    if ( call_data->raw_data ) {
+    if ( call_data->raw_size ) {
         const unsigned char* d = (const unsigned char*) call_data->raw_data;
         size_t      i = call_data->raw_size;
         for (data_len = 0;  i;  i--, d++) {
@@ -263,7 +267,8 @@ extern char* LOG_ComposeMessage
         const unsigned char* d;
 
         s = str + strlen(str);
-        sprintf(s, s_RawData_Begin, (unsigned long) call_data->raw_size);
+        sprintf(s, s_RawData_Begin, (unsigned long) call_data->raw_size,
+                call_data->raw_size == 1 ? "" : "s");
         s += strlen(s);
 
         d = (const unsigned char*) call_data->raw_data;
@@ -499,6 +504,16 @@ extern const char* CORE_GetPlatform(void)
 /*
  * ---------------------------------------------------------------------------
  * $Log: ncbi_util.c,v $
+ * Revision 6.29  2003/09/02 21:05:14  lavr
+ * Proper indentation of compilation conditionals
+ *
+ * Revision 6.28  2003/05/05 20:19:13  lavr
+ * LOG_ComposeMessage() to check raw_size instead of raw_data ptr
+ *
+ * Revision 6.27  2003/05/05 11:41:09  rsmith
+ * added defines and declarations to allow cross compilation Mac->Win32
+ * using Metrowerks Codewarrior.
+ *
  * Revision 6.26  2003/01/17 15:55:13  lavr
  * Fix errno reporting (comma was missing if errno == 0)
  *

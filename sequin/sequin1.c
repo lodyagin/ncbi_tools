@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.389 $
+* $Revision: 6.409 $
 *
 * File Description: 
 *
@@ -125,7 +125,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "4.50"
+#define SEQ_APP_VER "5.00"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -165,6 +165,8 @@ static SequinBlockPtr  globalsbp = NULL;
 static Boolean useOldGraphicView = FALSE;
 static Boolean useOldSequenceView = FALSE;
 /* static Boolean useUdv = FALSE; */
+
+static Boolean gphviewscorealigns = FALSE;
 
 ForM  startupForm = NULL;
 
@@ -209,13 +211,17 @@ static IteM  spellItem = NULL;
 static IteM  vectorScreenItem = NULL;
 static IteM  powerBlastItem = NULL;
 static IteM  cddBlastItem = NULL;
+static MenU  cddSearchMenu = NULL;
+static IteM  cddSearchItem = NULL;
 static IteM  editsequenceitem = NULL;
 static IteM  editseqalignitem = NULL;
 static IteM  editseqsubitem = NULL;
 static IteM  edithistoryitem = NULL;
 static MenU  updateSeqMenu = NULL;
+static MenU  extendSeqMenu = NULL;
 static MenU  addSeqMenu = NULL;
 static IteM  featPropItem = NULL;
+static IteM  parseFileItem = NULL;
 static IteM  updalignitem = NULL;
 
 static IteM  docsumfontItem = NULL;
@@ -3063,10 +3069,12 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   IteM          editdup;
   IteM          editfeatprop;
   IteM          editupwthaln;
+  IteM          editextendwthaln;
   Int2          mssgalign;
   Int2          mssgdup;
   Int2          mssgfeatprop;
   Int2          mssgupwthaln;
+  Int2          mssgextendwthaln;
   Int4          num;
   SeqEntryPtr   sep;
   SelStructPtr  sel;
@@ -3076,10 +3084,12 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
   mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
   mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
+  mssgextendwthaln = RegisterFormMenuItemName ("SequinExtendWithAlignment");
   editalign = FindFormMenuItem (bfp, mssgalign);
   editdup = FindFormMenuItem (bfp, mssgdup);
   editfeatprop = FindFormMenuItem (bfp, mssgfeatprop);
   editupwthaln = FindFormMenuItem (bfp, mssgupwthaln);
+  editextendwthaln = FindFormMenuItem (bfp, mssgextendwthaln);
   sel = ObjMgrGetSelected ();
   sep = NULL;
   /*
@@ -3145,11 +3155,13 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   IteM           editseq;
   IteM           editsub;
   MenU           editupd;
+  MenU           editext;
   MenU           editadd;
   Int2           mssgadd;
   Int2           mssgseq;
   Int2           mssgsub;
   Int2           mssgupd;
+  Int2           mssgext;
   ObjMgrDataPtr  omdp;
   SeqEntryPtr    sep;
 
@@ -3157,15 +3169,18 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   mssgseq = RegisterFormMenuItemName ("SequinEditSequenceItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
   mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editseq = FindFormMenuItem (bfp, mssgseq);
   editsub = FindFormMenuItem (bfp, mssgsub);
   editupd = (MenU) FindFormMenuItem (bfp, mssgupd);
+  editext = (MenU) FindFormMenuItem (bfp, mssgext);
   editadd = (MenU) FindFormMenuItem (bfp, mssgadd);
   bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
   if (bsp != NULL) {
     Enable (editseq);
     Enable (editupd);
+    Enable (editext);
     sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
     if (sep != NULL && IS_Bioseq_set (sep)) {
       bssp = (BioseqSetPtr) sep->data.ptrvalue;
@@ -3183,6 +3198,7 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   } else {
     Disable (editseq);
     Disable (editupd);
+    Disable (editext);
     Disable (editadd);
 #ifdef WIN_MAC
     Disable (featPropItem);
@@ -3261,6 +3277,9 @@ static void BioseqViewFormActivated (WindoW w)
   Enable (vectorScreenItem);
   Enable (powerBlastItem);
   Enable (cddBlastItem);
+  Enable (cddSearchMenu);
+  Enable (cddSearchItem);
+  Enable (parseFileItem);
   Enable (spellItem);
   Enable (addSecondaryItem);
   Disable (importItem);
@@ -3540,6 +3559,7 @@ static void MacDeactProc (WindoW w)
                    (HANDLE) editseqsubitem,
                    (HANDLE) edithistoryitem,
                    (HANDLE) updateSeqMenu,
+                   (HANDLE) extendSeqMenu,
                    (HANDLE) addSeqMenu,
                    (HANDLE) featPropItem,
                    (HANDLE) updalignitem,
@@ -3549,6 +3569,9 @@ static void MacDeactProc (WindoW w)
   Disable (vectorScreenItem);
   Disable (powerBlastItem);
   Disable (cddBlastItem);
+  Disable (cddSearchMenu);
+  Disable (cddSearchItem);
+  Disable (parseFileItem);
   Disable (spellItem);
   Disable (docsumfontItem);
   Disable (queryChoice);
@@ -4777,7 +4800,7 @@ static SeqAlignPtr SPI_CreateContinuousAln(SeqAlignPtr PNTR saps, Int4 numsaps)
       strand = AlnMgr2GetNthStrand(saps[i], 2);
       if (strand == Seq_strand_minus)
       {
-         if (stop2 - start1 > 1)
+         if (start1 - stop2 > 1)
             SQN_ExtendAlnRight(saps[i], 2, stop2+1, start1-1);
       } else
       {
@@ -5631,12 +5654,7 @@ static void SqnReadAlignViewEx (BioseqPtr target_bsp, SeqEntryPtr source_sep, In
 }
 
 
-extern void UpdateSeqAfterDownload (
-  BaseFormPtr bfp,
-  BioseqPtr oldbsp,
-  BioseqPtr newbsp
-);
-extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep)
+extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep, Boolean do_update)
 
 {
   BioseqPtr  nbsp;
@@ -5648,79 +5666,39 @@ extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr
   nbsp = FindNucBioseq (source_sep);
   if (nbsp == NULL) return;
 
-  UpdateSeqAfterDownload (bfp, target_bsp, nbsp);
+  if (do_update) {
+    UpdateSeqAfterDownload (bfp, target_bsp, nbsp);
+  } else {
+    ExtendSeqAfterDownload (bfp, target_bsp, nbsp);
+  }
 }
-
-
-/*
-static void DoUpdateSeq (IteM i, Uint2 import_format)
-
-{
-  BaseFormPtr  bfp;
-  BioseqPtr    bsp;
-  BioseqPtr    nbsp;
-  SeqEntryPtr  sep;
-  SeqEntryPtr  source_sep = NULL;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  SendHelpScrollMessage (helpForm, "Edit Menu", "Update Sequence");
-  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp == NULL) return;
-  switch (import_format) { 
-     case SALSA_FASTA:   
-        source_sep = FastaRead (NULL, Seq_mol_na);
-        break; 
-     case SALSA_ASN1: 
-        source_sep = AsnReadForSalsa (NULL);
-        break;    
-     default: 
-        break; 
-  }  
-  nbsp = FindNucBioseq (source_sep);
-  if (nbsp == NULL) return;
-  UpdateSeqAfterDownload (bfp, bsp, nbsp);
-}
-*/
-
-extern void NewUpdateSequence (
-  IteM i
-);
 
 extern void NewFeaturePropagate (
   IteM i
 );
 
-/*
-static void UpdateSeqTEST (IteM i)
-
-{
-  NewUpdateSequence (i);
-}
-*/
-
 static void UpdateSeqWithFASTA (IteM i)
 
 {
-  /*
-  DoUpdateSeq (i, SALSA_FASTA);
-  */
   NewUpdateSequence (i);
 }
 
 static void UpdateSeqWithRec (IteM i)
 
 {
-  /*
-  DoUpdateSeq (i, SALSA_ASN1);
-  */
   NewUpdateSequence (i);
+}
+
+static void ExtendSeqWithFASTA (IteM i)
+
+{
+  NewExtendSequence (i);
+}
+
+static void ExtendSeqWithRec (IteM i)
+
+{
+  NewExtendSequence (i);
 }
 
 /*******COLOMBE ***********/
@@ -6130,6 +6108,28 @@ static void UpdateSeqWithAcc (IteM i)
   updateTargetBspKludge = bsp;
   CommonFetchFromNet (DownloadAndUpdateProc, StdCancelButtonProc);
 }
+
+static void ExtendSeqWithAcc (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  BioseqPtr    bsp;
+  SeqEntryPtr  sep;
+  SeqEntryPtr  source_sep = NULL;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp == NULL) return;
+  updateTargetBspKludge = bsp;
+  CommonFetchFromNet (DownloadAndExtendProc, StdCancelButtonProc);
+}
 /*#endif*/
 
 static CharPtr obsoletemsg =
@@ -6188,6 +6188,7 @@ static void BioseqViewFormMenus (WindoW w)
   Int2           mssgseq;
   Int2           mssgsub;
   Int2           mssgupd;
+  Int2           mssgext;
   Int2           mssgupwthaln;
   ObjMgrDataPtr  omdp;
   MenU           sub;
@@ -6321,6 +6322,7 @@ static void BioseqViewFormMenus (WindoW w)
     mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
     mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
     mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+    mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
     mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
     mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
     FormCommandItem (m, "Edit Sequence...", bfp, mssgseq);
@@ -6334,23 +6336,6 @@ static void BioseqViewFormMenus (WindoW w)
     SeparatorItem (m);
     sub = SubMenu (m, "Update Sequence");
     SetFormMenuItem (bfp, mssgupd, (IteM) sub);
-    /*
-    i = CommandItem (sub, "Replace Sequence...", ReplaceSeq);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Extend Sequence 5'...", ExtendSeq5);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Extend Sequence 3'...", ExtendSeq3);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Combine Records...", CombineRecs);
-    SetObjectExtra (i, bfp, NULL);
-    */
-    /*
-    if (indexerVersion) {
-      i = CommandItem (sub, "Read File, New Algorithm...", UpdateSeqTEST);
-      SetObjectExtra (i, bfp, NULL);
-      SeparatorItem (sub);
-    }
-    */
     i = CommandItem (sub, "Read FASTA File...", UpdateSeqWithFASTA);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (sub, "Read Sequence Record...", UpdateSeqWithRec);
@@ -6369,6 +6354,16 @@ static void BioseqViewFormMenus (WindoW w)
       */
       SetObjectExtra (i, bfp, NULL);
     }
+    sub = SubMenu (m, "Extend Sequence");
+    SetFormMenuItem (bfp, mssgext, (IteM) sub);
+    i = CommandItem (sub, "Read FASTA File...", ExtendSeqWithFASTA);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (sub, "Read Sequence Record...", ExtendSeqWithRec);
+    SetObjectExtra (i, bfp, NULL);
+    if (useEntrez) {
+      i = CommandItem (sub, "Download Accession...", ExtendSeqWithAcc);
+      SetObjectExtra (i, bfp, NULL);
+    }
     SeparatorItem (m);
     i = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
     SetObjectExtra (i, bfp, NULL);
@@ -6380,6 +6375,11 @@ static void BioseqViewFormMenus (WindoW w)
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (sub, "Add Sequence Record...", AddSeqWithRec);
     SetObjectExtra (i, bfp, NULL);
+    if (! extraServices) {
+      SeparatorItem (m);
+      i = CommandItem (m, "Parse File to Source", ParseFileToSource);
+      SetObjectExtra (i, bfp, NULL);
+    }
 
     m = PulldownMenu (w, "Search/ R");
     i = CommandItem (m, "Find ASN.1.../ F", FindStringProc);
@@ -6411,8 +6411,20 @@ static void BioseqViewFormMenus (WindoW w)
       SetObjectExtra (i, bfp, NULL);
       */
       SeparatorItem (m);
-      i = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
-      SetObjectExtra (i, bfp, NULL);
+      if (indexerVersion) {
+        i = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
+        SetObjectExtra (i, bfp, NULL);
+      }
+      if (extraServices) {
+        sub = SubMenu (m, "CDD Search");
+        i = CommandItem (sub, "Features", SimpleCDDSearchFeatProc);
+        SetObjectExtra (i, bfp, NULL);
+        i = CommandItem (sub, "Alignments", SimpleCDDSearchAlignProc);
+        SetObjectExtra (i, bfp, NULL);
+      } else {
+        i = CommandItem (m, "CDD Search", SimpleCDDSearchFeatProc);
+        SetObjectExtra (i, bfp, NULL);
+      }
       /*
       i = CommandItem (m, "Vector Screen...", VectorScreenProc);
       SetObjectExtra (i, bfp, NULL);
@@ -6478,7 +6490,7 @@ static void BioseqViewFormMenus (WindoW w)
     sub = SubMenu (m, "Descriptors");
     SetupNewDescriptorsMenu (sub, bfp);
     SeparatorItem (m);
-    i = CommandItem (m, "Generate Definition Line", GenerateAutoDefLinesSmartMods);
+    i = CommandItem (m, "Generate Definition Line", testAutoDef);
     SetObjectExtra (i, bfp, NULL);
 
     if (indexerVersion) {
@@ -6499,7 +6511,6 @@ static void TermListFormMenus (WindoW w)
 
 {
   BaseFormPtr  bfp;
-  IteM         i;
   MenU         m;
   MenU         sub;
 
@@ -7022,7 +7033,7 @@ static void SequinMedlineFormMessage (ForM f, Int2 mssg)
   }
 }
 
-static Boolean UpdateWithAln (GatherContextPtr gcp)
+static Boolean UpdateOrExtendWithAln (GatherContextPtr gcp, Boolean do_update)
 
 {
   SeqAlignPtr   align;
@@ -7102,7 +7113,7 @@ static Boolean UpdateWithAln (GatherContextPtr gcp)
             /*
             SqnReadAlignViewEx (updateTargetBspKludge, sep, PRGALIGNALL);
             */
-            SqnReadAlignView (bfp, updateTargetBspKludge, sep);
+            SqnReadAlignView (bfp, updateTargetBspKludge, sep, do_update);
           }
           BioseqUnlockById (sip);
         }
@@ -7112,6 +7123,18 @@ static Boolean UpdateWithAln (GatherContextPtr gcp)
       break;
   }
   return FALSE;
+}
+
+static Boolean UpdateWithAln (GatherContextPtr gcp)
+
+{
+  return UpdateOrExtendWithAln (gcp, TRUE);
+}
+
+static Boolean ExtendWithAln (GatherContextPtr gcp)
+
+{
+  return UpdateOrExtendWithAln (gcp, TRUE);
 }
 
 typedef struct seltbl {
@@ -7295,6 +7318,7 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
   Int2          mssgseq;
   Int2          mssgsub;
   Int2          mssgupwthaln;
+  Int2          mssgextendwthaln;
   SeqEntryPtr   oldsep;
   OMProcControl  ompc;
 /******** COLOMBE
@@ -7439,6 +7463,7 @@ static void SequinSeqViewFormMessage (ForM f, Int2 mssg)
         mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
         mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
         mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
+        mssgextendwthaln = RegisterFormMenuItemName ("SequinExtendWithAlignment");
         if (mssg == mssgseq) {
           bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
           if (bsp != NULL) {
@@ -7512,6 +7537,13 @@ COLOMBE END *******************/
               (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
             SeqEntrySetScope (NULL);
             GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) bfp, UpdateWithAln);
+          }
+        } else if (mssg == mssgextendwthaln) {
+          sel = ObjMgrGetSelected ();
+          if (sel != NULL &&
+              (sel->itemtype == OBJ_SEQALIGN || sel->itemtype == OBJ_SEQHIST_ALIGN)) {
+            SeqEntrySetScope (NULL);
+            GatherItem (sel->entityID, sel->itemID, sel->itemtype, (Pointer) bfp, ExtendWithAln);
           }
         }
         break;
@@ -8602,6 +8634,15 @@ static void SetupDesktop (void)
     }
   }
 
+  if (GetSequinAppParam ("PREFERENCES", "GPHVIEWSCOREALIGNS", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      gphviewscorealigns = TRUE;
+    }
+  }
+  if (gphviewscorealigns) {
+    SetAppProperty("GPHVIEWSCOREALIGNS", (void *) 1);
+  }
+
   MemSet ((Pointer) (&entrezglobals), 0, sizeof (EntrezGlobals));
   entrezglobals.retrieveDocsProc = DoRetrieveDocuments;
   entrezglobals.retrieveProjectProc = DoRetrieveProject;
@@ -8941,6 +8982,7 @@ static void SetupMacMenus (void)
   Int2  mssgseq;
   Int2  mssgsub;
   Int2  mssgupd;
+  Int2  mssgext;
   Int2  mssgupwthaln;
   MenU  sub;
 
@@ -9000,6 +9042,7 @@ static void SetupMacMenus (void)
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
+  mssgext = RegisterFormMenuItemName ("SequinExtendSeqSubmenu");
   mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
   mssgadd = RegisterFormMenuItemName ("SequinAddSeqSubmenu");
   editsequenceitem = FormCommandItem (m, "Edit Sequence...", NULL, mssgseq);
@@ -9012,18 +9055,6 @@ static void SetupMacMenus (void)
   SeparatorItem (m);
   updateSeqMenu = SubMenu (m, "Update Sequence");
   SetFormMenuItem (NULL, mssgupd, (IteM) updateSeqMenu);
-  /*
-  CommandItem (updateSeqMenu, "Replace Sequence...", ReplaceSeq);
-  CommandItem (updateSeqMenu, "Extend Sequence 5'...", ExtendSeq5);
-  CommandItem (updateSeqMenu, "Extend Sequence 3'...", ExtendSeq3);
-  CommandItem (updateSeqMenu, "Combine Records...", CombineRecs);
-  */
-  /*
-  if (indexerVersion) {
-    CommandItem (updateSeqMenu, "Read File, New Algorithm...", UpdateSeqTEST);
-    SeparatorItem (updateSeqMenu);
-  }
-  */
   CommandItem (updateSeqMenu, "Read FASTA File...", UpdateSeqWithFASTA);
   CommandItem (updateSeqMenu, "Read Sequence Record...", UpdateSeqWithRec);
   if (useEntrez) {
@@ -9035,6 +9066,14 @@ static void SetupMacMenus (void)
     SeparatorItem (updateSeqMenu);
     CommandItem (updateSeqMenu, "FASTA Set", DoUpdatesSeq);
   }
+  extendSeqMenu = SubMenu (m, "Extend Sequence");
+  SetFormMenuItem (NULL, mssgext, (IteM) extendSeqMenu);
+  CommandItem (extendSeqMenu, "Read FASTA File...", ExtendSeqWithFASTA);
+  CommandItem (extendSeqMenu, "Read Sequence Record...", ExtendSeqWithRec);
+  if (useEntrez) {
+    CommandItem (extendSeqMenu, "Download Accession...", ExtendSeqWithAcc);
+    mssgupwthaln = RegisterFormMenuItemName ("SequinUpdateWithAlignment");
+  }
   SeparatorItem (m);
   featPropItem = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
   SetFormMenuItem (NULL, mssgfeatprop, featPropItem);
@@ -9043,6 +9082,10 @@ static void SetupMacMenus (void)
   SetFormMenuItem (NULL, mssgadd, (IteM) addSeqMenu);
   CommandItem (addSeqMenu, "Add FASTA File...", AddSeqWithFASTA);
   CommandItem (addSeqMenu, "Add Sequence Record...", AddSeqWithRec);
+  if (! extraServices) {
+    SeparatorItem (m);
+    parseFileItem = CommandItem (m, "Parse File to Source", ParseFileToSource);
+  }
 
   m = PulldownMenu (NULL, "Search");
   findItem = CommandItem (m, "Find ASN.1.../F", FindStringProc);
@@ -9066,7 +9109,16 @@ static void SetupMacMenus (void)
     powerBlastItem = CommandItem (m, "Power BLAST...", SimplePowerBlastProc);
     */
     SeparatorItem (m);
-    cddBlastItem = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
+    if (indexerVersion) {
+      cddBlastItem = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
+    }
+    if (extraServices) {
+      cddSearchMenu = SubMenu (m, "CDD Search");
+      CommandItem (cddSearchMenu, "Features", SimpleCDDSearchFeatProc);
+      CommandItem (cddSearchMenu, "Alignments", SimpleCDDSearchAlignProc);
+    } else {
+      cddSearchItem = CommandItem (m, "CDD Search", SimpleCDDSearchFeatProc);
+    }
     /*
     vectorScreenItem = CommandItem (m, "Vector Screen...", VectorScreenProc);
     */
@@ -9155,7 +9207,7 @@ static void SetupMacMenus (void)
   newDescMenu = SubMenu (newFeatMenu, "Descriptors");
   SetupNewDescriptorsMenu (newDescMenu, NULL);
   SeparatorItem (newFeatMenu);
-  CommandItem (newFeatMenu, "Generate Definition Line", GenerateAutoDefLinesSmartMods);
+  CommandItem (newFeatMenu, "Generate Definition Line", testAutoDef);
 }
 #endif
 
@@ -10077,6 +10129,117 @@ static Boolean SmartFetchEnable (void)
   return TRUE;
 }
 
+static CharPtr tpasmartfetchproc = "TPASmartBioseqFetch";
+
+static CharPtr tpasmartfetchcmd = NULL;
+
+extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID)
+
+{
+  Char     cmmd [256];
+  Pointer  dataptr;
+  FILE*    fp;
+  Char     path [PATH_MAX];
+
+  if (datatype != NULL) {
+    *datatype = 0;
+  }
+  if (entityID != NULL) {
+    *entityID = 0;
+  }
+  if (! dirsubMode) return NULL;
+  if (StringHasNoText (accn)) return NULL;
+
+  if (tpasmartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (tpasmartfetchcmd == NULL) return NULL;
+
+  TmpNam (path);
+
+  sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, accn, path);
+  system (cmmd);
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return NULL;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+  return dataptr;
+}
+
+
+static Int2 LIBCALLBACK TPASmartBioseqFetchFunc (Pointer data)
+
+{
+  BioseqPtr         bsp;
+  Char              cmmd [256];
+  Pointer           dataptr;
+  Uint2             datatype;
+  Uint2             entityID;
+  FILE*             fp;
+  OMProcControlPtr  ompcp;
+  ObjMgrProcPtr     ompp;
+  Char              path [PATH_MAX];
+  SeqEntryPtr       sep = NULL;
+  SeqIdPtr          sip;
+  TextSeqIdPtr      tsip;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL) return OM_MSG_RET_ERROR;
+  ompp = ompcp->proc;
+  if (ompp == NULL) return OM_MSG_RET_ERROR;
+  sip = (SeqIdPtr) ompcp->input_data;
+  if (sip == NULL) return OM_MSG_RET_ERROR;
+
+  if (sip->choice != SEQID_TPG) return OM_MSG_RET_ERROR;
+  tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+  if (tsip == NULL || StringHasNoText (tsip->accession)) return OM_MSG_RET_ERROR;
+
+  if (tpasmartfetchcmd == NULL) {
+    if (GetAppParam ("SEQUIN", "TPASMART", "FETCHSCRIPT", NULL, cmmd, sizeof (cmmd))) {
+    	tpasmartfetchcmd = StringSaveNoNull (cmmd);
+    }
+  }
+  if (tpasmartfetchcmd == NULL) return OM_MSG_RET_ERROR;
+
+  TmpNam (path);
+
+  sprintf (cmmd, "csh %s %s > %s", tpasmartfetchcmd, tsip->accession, path);
+  system (cmmd);
+  fp = FileOpen (path, "r");
+  if (fp == NULL) {
+    FileRemove (path);
+    return OM_MSG_RET_ERROR;
+  }
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+  FileRemove (path);
+
+  if (dataptr == NULL) return OM_MSG_RET_OK;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  if (sep == NULL) return OM_MSG_RET_ERROR;
+  bsp = BioseqFindInSeqEntry (sip, sep);
+  ompcp->output_data = (Pointer) bsp;
+  ompcp->output_entityID = ObjMgrGetEntityIDForChoice (sep);
+  return OM_MSG_RET_DONE;
+}
+
+static Boolean TPASmartFetchEnable (void)
+
+{
+  ObjMgrProcLoad (OMPROC_FETCH, tpasmartfetchproc, tpasmartfetchproc,
+                  OBJ_SEQID, 0, OBJ_BIOSEQ, 0, NULL,
+                  TPASmartBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
+  return TRUE;
+}
+
 static VoidPtr LIBCALLBACK SmartUserDataFree (VoidPtr Pointer)
 {
     SMUserDataPtr sm_user_data = (SMUserDataPtr) Pointer;
@@ -10532,6 +10695,8 @@ Int2 Main (void)
           leaveAsOldAsn = TRUE;
         } else if (StringCmp (argv[i], "-oldsource") == 0) {
           SetAppProperty ("OldFlatfileSource", (void *) 1024);
+        } else if (StringCmp (argv[i], "-a") == 0) {
+          gphviewscorealigns = TRUE;
         }
 #ifdef USE_SMARTNET
         else if (StringCmp (argv[i], "-ds") == 0) {
@@ -10697,6 +10862,7 @@ Int2 Main (void)
   if (dirsubMode) {
     DirSubFetchEnable ();
     SmartFetchEnable ();
+    TPASmartFetchEnable ();
   }
 #endif
 
@@ -10705,6 +10871,7 @@ Int2 Main (void)
     /* EntrezBioseqFetchEnable ("Sequin", FALSE); */
     /* ID1BioseqFetchEnable ("Sequin", FALSE); */
     PubSeqFetchEnable ();
+    PubMedFetchEnable ();
   }
 /*#endif*/
 

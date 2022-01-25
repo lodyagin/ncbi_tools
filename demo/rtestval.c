@@ -5,7 +5,7 @@
 *       check for stop codons
 *       Check for and fix non 3.0 asn spec things
 *
-* $Id: rtestval.c,v 1.9 2003/02/20 14:29:22 kans Exp $
+* $Id: rtestval.c,v 1.10 2003/05/13 16:02:42 coulouri Exp $
 *
 *****************************************************************************/
 #include <accid1.h>
@@ -76,7 +76,7 @@ Int2 Main(void)
 	if (myargs[2].intvalue)  /* Seq-submit */
 	{
 	    if (! SubmitAsnLoad())
-    	    ErrPostEx(SEV_FATAL,0,0, "Unable to SeqSubmitLoad.");
+    	    ErrPostEx(SEV_FATAL, 1,0, "Unable to SeqSubmitLoad.");
 
 		atp = AsnFind("Seq-submit");    /* get the initial type pointers */
 		if (atp == NULL)
@@ -144,7 +144,7 @@ Int2 Main(void)
 	if (myargs[15].intvalue)  /* enable remote fetch */
 	{
 		if ( !ID1BioseqFetchEnable("rtestval", TRUE) ) {
-			ErrPostEx(SEV_FATAL,0,0, "Can't initialize ID1");
+			ErrPostEx(SEV_FATAL, 1,0, "Can't initialize ID1");
 			return 1;
 		}
 		if (myargs[17].intvalue) /* enable seqid set fetching */

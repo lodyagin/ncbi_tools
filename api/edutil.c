@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.20  2003/06/03 20:25:34  kans
+* SeqLocReplaceID works on bonds if both ends bonded to the same Seq-id
+*
 * Revision 6.19  2003/02/10 22:57:45  kans
 * added BioseqCopyEx, which takes a BioseqPtr instead of a SeqIdPtr for the source
 *
@@ -3490,6 +3493,7 @@ NLM_EXTERN SeqLocPtr SeqLocReplaceID (SeqLocPtr slp, SeqIdPtr new_sip)
   SeqLocPtr        curr;
   PackSeqPntPtr    pspp;
   SeqIntPtr        target_sit;
+  SeqBondPtr       sbp;
   SeqPntPtr        spp;
 
   switch (slp->choice) {
@@ -3519,9 +3523,22 @@ NLM_EXTERN SeqLocPtr SeqLocReplaceID (SeqLocPtr slp, SeqIdPtr new_sip)
         target_sit->id = SeqIdDup (new_sip);
         break;
      case SEQLOC_PNT :
-        spp = (SeqPntPtr)slp->data.ptrvalue;
+        spp = (SeqPntPtr) slp->data.ptrvalue;
         SeqIdFree(spp->id);
         spp->id = SeqIdDup(new_sip);
+        break;
+     case SEQLOC_BOND :
+        sbp = (SeqBondPtr) slp->data.ptrvalue;
+        if (sbp == NULL || sbp->a == NULL || sbp->b == NULL) break;
+        /* only do this if both ends bonded to same Seq-id */
+        if (SeqIdMatch (sbp->a->id, sbp->b->id)) {
+          spp = sbp->a;
+          SeqIdFree(spp->id);
+          spp->id = SeqIdDup(new_sip);
+          spp = sbp->b;
+          SeqIdFree(spp->id);
+          spp->id = SeqIdDup(new_sip);
+        }
         break;
      default :
         break;

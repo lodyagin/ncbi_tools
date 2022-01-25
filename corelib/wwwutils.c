@@ -1,4 +1,4 @@
-/* $Id: wwwutils.c,v 6.17 2002/02/07 14:48:22 ivanov Exp $
+/* $Id: wwwutils.c,v 6.18 2003/05/05 12:17:32 rsmith Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 11/03/1996
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *   This file contains functions to read and process HTTP 
@@ -38,6 +38,9 @@
 *   
 *---------------------------------------------------------------------------
 * $Log: wwwutils.c,v $
+* Revision 6.18  2003/05/05 12:17:32  rsmith
+* Codewarrior compiling for Win32 does not know about setmode
+*
 * Revision 6.17  2002/02/07 14:48:22  ivanov
 * Added WWWGetEntriesEx(), WWWGetEntriesFormDataEx(), WWWReadFileInMemoryEx(),
 * WWWGetValueSizeByIndex() -- support binary files in the multipart form-data.
@@ -439,7 +442,7 @@ static WWWErrorCode WWWGetArgsInternal(WWWInfoPtr PNTR info_out,
     Int4  WWWargc;
     Int4  rsize;
 
-#ifdef WIN32
+#if defined(WIN32)  &&  ! defined(COMP_METRO) 
     setmode(fileno(stdin), _O_BINARY);
 #endif
 

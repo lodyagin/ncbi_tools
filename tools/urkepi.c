@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkepi.c,v 6.19 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: epi - low complexity
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkepi.c,v $
+* Revision 6.19  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.18  1999/02/25 15:06:48  kuzio
 * commutative prob func optimization
 *

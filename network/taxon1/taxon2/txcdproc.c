@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/15/97
 *
-* $Revision: 1.14 $
+* $Revision: 1.15 $
 *
 * File Description: 
 *       API for Taxonomy service
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: txcdproc.c,v $
+* Revision 1.15  2003/06/12 16:46:25  soussov
+* changes severity for AsnRead failures
+*
 * Revision 1.14  2003/03/06 16:30:32  kans
 * tdp->org needed a cast to (OrgRefPtr) due to Mac compiler complaint
 *
@@ -133,7 +136,7 @@ static clock_t tax_time1;
 static void report_service_error(CharPtr proc_name, Taxon1RespPtr taxbp)
 {
     if(taxbp == NULL) {
-	ErrPostEx(SEV_ERROR, 0, 0, "%s got NULL responce from service");
+	ErrPostEx(SEV_ERROR, 0, 0, "%s got NULL responce from service", proc_name);
     }
     else if(taxbp->choice == Taxon1Resp_error) {
 	Taxon1ErrorPtr tep= taxbp->data.ptrvalue;
@@ -163,7 +166,7 @@ static Taxon1RespPtr NetTaxArchReadAsn(void)
 
     if ((taxbp == NULL) || ErrFetch(&err))
     {
-        ErrPost (CTX_UNKNOWN, 1, "Null message read from server");
+        ErrPostEx (SEV_WARNING, 1, 1, "Null message read from server");
     }
     ErrSetOpts(erract, 0);
 
@@ -1201,7 +1204,7 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs)
 	    retval = myNetInit();
 	}
         else {
-            ErrPost(CTX_UNKNOWN, 1, "Unable to re-contact dispatcher");
+            ErrPostEx(SEV_ERROR, 1,2, "Unable to re-contact dispatcher");
             if (showErrs) {
                 ErrShow();
             }
@@ -1212,8 +1215,8 @@ static Boolean GenericReestablishNet(CharPtr svcName, Boolean showErrs)
 
     if (! retval )
     {
-        sprintf (buf, "Unable to re-establish %s service", svcName);
-        ErrPost(CTX_UNKNOWN, 1, buf);
+        /*sprintf (buf, "Unable to re-establish %s service", svcName);*/
+        ErrPostEx(SEV_ERROR, 1, 3, "Unable to re-establish %s service", svcName);
         if (showErrs) {
             ErrShow();
         }

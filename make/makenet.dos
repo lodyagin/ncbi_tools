@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.66 2002/04/19 18:06:40 kans Exp $
+# $Id: makenet.dos,v 6.67 2003/04/25 15:59:57 dondosha Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -119,6 +119,7 @@ copy :
 	copy ..\network\id1arch\*.h $(INCPATH)
 	copy ..\network\id1arch\*.c .
 	copy ..\network\nsdemocl\*.* .
+	copy ..\demo\bl2seq.c .
 	copy ..\demo\entrez.c .
 	copy ..\demo\entrez2.c .
 	copy ..\demo\entrezcf.c .

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.203 $
+* $Revision: 6.210 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,27 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.210  2003/10/24 19:49:11  kans
+* operon feature of equal range sorted before gene, mRNA, CDS
+*
+* Revision 6.209  2003/10/23 17:40:01  kans
+* added SeqMgrGetOverlappingOperon and bspextra operonsByPos and numoperons fields
+*
+* Revision 6.208  2003/10/02 16:12:31  bollin
+* added COMMON_INTERVAL overlap type to TestForOverlap
+*
+* Revision 6.207  2003/09/22 17:27:29  kans
+* strip RNA- prefix, not just - on RNAs
+*
+* Revision 6.206  2003/09/22 16:13:20  kans
+* LockFarComponentsEx takes new SeqLocPtr parameter
+*
+* Revision 6.205  2003/09/22 15:55:06  kans
+* all rna context labels were searched for dash, now just trna
+*
+* Revision 6.204  2003/08/04 20:41:20  kans
+* SeqMgrProcessNonIndexedBioseq needed to reset version to 0 each time through outer loop (EY)
+*
 * Revision 6.203  2003/04/03 22:40:09  kans
 * feature index location problem now reports latest identifier in record to make it easier to find problem
 *
@@ -3420,7 +3441,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 	Boolean indexed;
 	TextSeqIdPtr tsip;
 	SeqMgrPtr smp;
-	Int2 version = 0;
+	Int2 version;
 	Boolean sort_now = TRUE;
 
 	smp = SeqMgrReadLock();
@@ -3456,6 +3477,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 			if (bsp->id != NULL)
 			{
 				indexed = TRUE;
+				version = 0;
 				for (sip = bsp->id; sip != NULL; sip = sip->next)
 				{
 					oldchoice = 0;
@@ -4041,6 +4063,7 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
   bspextra->CDSsByPos = MemFree (bspextra->CDSsByPos);
   bspextra->pubsByPos = MemFree (bspextra->pubsByPos);
   bspextra->orgsByPos = MemFree (bspextra->orgsByPos);
+  bspextra->operonsByPos = MemFree (bspextra->operonsByPos);
 
   /* free list of descriptor information */
 
@@ -4104,6 +4127,7 @@ static Boolean SeqMgrClearBioseqExtraData (ObjMgrDataPtr omdp)
   bspextra->numCDSs = 0;
   bspextra->numpubs = 0;
   bspextra->numorgs = 0;
+  bspextra->numoperons = 0;
   bspextra->numsegs = 0;
 
   bspextra->min = INT4_MAX;
@@ -5467,9 +5491,9 @@ static void RecordOneFeature (BioseqExtraPtr bspextra, ObjMgrDataPtr omdp,
         FeatDefLabel (sfp, buf, sizeof (buf) - 1, OM_LABEL_CONTENT);
         ptr = buf;
         if (sfp->data.choice == SEQFEAT_RNA) {
-          ptr = StringChr (buf, '-');
+          ptr = StringStr (buf, "RNA-");
           if (ptr != NULL) {
-            ptr++;
+            ptr += 4;
           } else {
             ptr = buf;
           }
@@ -6163,10 +6187,19 @@ static int LIBCALLBACK SortFeatItemListByPos (VoidPtr vp1, VoidPtr vp2)
     return -1; /* was 1 */
   } else if (sp1->right < sp2->right) {
     return 1; /* was -1 */
+  }
 
-  /* given identical extremes, put gene features first */
+  /* given identical extremes, put operon features first */
 
-  } else if (sp1->subtype == FEATDEF_GENE && sp2->subtype != FEATDEF_GENE) {
+  if (sp1->subtype == FEATDEF_operon && sp2->subtype != FEATDEF_operon) {
+    return -1;
+  } else if (sp2->subtype == FEATDEF_operon && sp1->subtype != FEATDEF_operon) {
+    return 1;
+  }
+
+  /* then gene features */
+
+  if (sp1->subtype == FEATDEF_GENE && sp2->subtype != FEATDEF_GENE) {
     return -1;
   } else if (sp2->subtype == FEATDEF_GENE && sp1->subtype != FEATDEF_GENE) {
     return 1;
@@ -6324,10 +6357,19 @@ static int LIBCALLBACK SortFeatItemListByRev (VoidPtr vp1, VoidPtr vp2)
     return -1;
   } else if (sp1->left > sp2->left) {
     return 1;
+  }
 
-  /* given identical extremes, put gene features first */
+  /* given identical extremes, put operon features first */
 
-  } else if (sp1->subtype == FEATDEF_GENE && sp2->subtype != FEATDEF_GENE) {
+  if (sp1->subtype == FEATDEF_operon && sp2->subtype != FEATDEF_operon) {
+    return -1;
+  } else if (sp2->subtype == FEATDEF_operon && sp1->subtype != FEATDEF_operon) {
+    return 1;
+  }
+
+  /* then gene features */
+
+  if (sp1->subtype == FEATDEF_GENE && sp2->subtype != FEATDEF_GENE) {
     return -1;
   } else if (sp2->subtype == FEATDEF_GENE && sp1->subtype != FEATDEF_GENE) {
     return 1;
@@ -6703,6 +6745,7 @@ static void IndexRecordedFeatures (SeqEntryPtr sep, Boolean dorevfeats)
         bspextra->CDSsByPos = SeqMgrBuildFeatureIndex (bsp, &(bspextra->numCDSs), 0, FEATDEF_CDS);
         bspextra->pubsByPos = SeqMgrBuildFeatureIndex (bsp, &(bspextra->numpubs), 0, FEATDEF_PUB);
         bspextra->orgsByPos = SeqMgrBuildFeatureIndex (bsp, &(bspextra->numorgs), 0, FEATDEF_BIOSRC);
+        bspextra->operonsByPos = SeqMgrBuildFeatureIndex (bsp, &(bspextra->numoperons), 0, FEATDEF_operon);
       }
 
       if (dorevfeats) {
@@ -7679,9 +7722,10 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
       }
     }
 
-  } else if (overlapType == INTERVAL_OVERLAP) {
+  } else if (overlapType == INTERVAL_OVERLAP || overlapType == COMMON_INTERVAL) {
 
-    /* requires overlap between at least one pair of intervals */
+    /* requires overlap between at least one pair of intervals (INTERVAL_OVERLAP) */
+    /* or one complete shared interval (COMMON_INTERVAL) */
 
     if (feat->right >= left && feat->left <= right) {
       sfp = feat->sfp;
@@ -7690,7 +7734,11 @@ static Int4 TestForOverlap (SMFeatItemPtr feat, SeqLocPtr slp,
         while (a != NULL) {
           b = SeqLocFindNext (sfp->location, NULL);
           while (b != NULL) {
-            if (SeqLocCompare (a, b) != SLC_NO_MATCH) {
+            if ((overlapType == INTERVAL_OVERLAP
+                && SeqLocCompare (a, b) != SLC_NO_MATCH) 
+              || (overlapType == COMMON_INTERVAL
+                && SeqLocCompare (a, b) == SLC_A_EQ_B))
+            {
               diff = ABS (left - feat->left) + ABS (feat->right - right);
               return diff;
             }
@@ -7825,6 +7873,9 @@ static SeqFeatPtr SeqMgrGetBestOverlappingFeat (SeqLocPtr slp, Uint2 subtype,
       array = bspextra->orgsByPos;
       num = bspextra->numorgs;
       break;
+  	case FEATDEF_operon :
+      array = bspextra->operonsByPos;
+      num = bspextra->numoperons;
     default :
       break;
   }
@@ -8056,6 +8107,12 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingSource (SeqLocPtr slp, SeqMgrF
 
 {
   return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_BIOSRC, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
+}
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingOperon (SeqLocPtr slp, SeqMgrFeatContext PNTR context)
+
+{
+  return SeqMgrGetBestOverlappingFeat (slp, FEATDEF_operon, NULL, 0, NULL, CONTAINED_WITHIN, context, NULL, NULL, NULL);
 }
 
 /*****************************************************************************
@@ -9542,7 +9599,24 @@ static void LockAllProducts (SeqFeatPtr sfp, Pointer userdata)
   }
 }
 
-NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products)
+static void LockAllSublocs (SeqLocPtr loc, Pointer userdata)
+
+{
+  SeqLocPtr        slp = NULL;
+  ValNodePtr PNTR  vnpp;
+
+  if (loc == NULL) return;
+  vnpp = (ValNodePtr PNTR) userdata;
+  if (vnpp == NULL) return;
+
+  while ((slp = SeqLocFindNext (loc, slp)) != NULL) {
+    if (slp != NULL && slp->choice != SEQLOC_NULL) {
+      LockAllSegments (slp, vnpp);
+    }
+  }
+}
+
+NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, SeqLocPtr loc)
 
 {
   ValNodePtr   bsplist = NULL;
@@ -9559,6 +9633,9 @@ NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, 
   if (products) {
     VisitFeaturesInSep (sep, (Pointer) &bsplist, LockAllProducts);
   }
+  if (loc != NULL) {
+    LockAllSublocs (sep, (Pointer) &bsplist);
+  }
   SeqEntrySetScope (oldsep);
   return bsplist;
 }
@@ -9566,7 +9643,7 @@ NLM_EXTERN ValNodePtr LockFarComponentsEx (SeqEntryPtr sep, Boolean components, 
 NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep)
 
 {
-  return LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+  return LockFarComponentsEx (sep, TRUE, FALSE, FALSE, NULL);
 }
 
 NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist)

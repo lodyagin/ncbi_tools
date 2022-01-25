@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: install.sh,v 1.26 2003/01/31 14:45:06 lavr Exp $
+# $Id: install.sh,v 1.29 2003/10/09 18:46:48 ivanov Exp $
 # Authors:  Denis Vakatov    (vakatov@ncbi.nlm.nih.gov)
 #           Vladimir Ivanov  (ivanov@ncbi.nlm.nih.gov)
 #           Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
@@ -37,8 +37,6 @@ sleep 2
 # Derive the destination dirs
 incdir="$target"/include
 srcdir="$target"/src
-dbgdir="$target"/Debug
-libdir="$target"/Release
 bindir="$target"/bin
 datdir="$target"/data
 
@@ -92,10 +90,6 @@ makedir "$srcdir"/object
 makedir "$srcdir"/sequin
 makedir "$srcdir"/tools
 makedir "$srcdir"/vibrant
-for i in '' 'DLL' ; do
-  makedir "$dbgdir$i" -p
-  makedir "$libdir$i" -p
-done
 makedir "$bindir"   -p
 makedir "$datdir"   -p
 makedir "$srcdir_a" -p
@@ -105,128 +99,111 @@ makedir "$libdir_a" -p
 
 # Copy files
 
-bd="$builddir"
-
-cp -p "$bd"/corelib/tsprintf.h            "$incdir"
-cp -p "$bd"/corelib/gifgen.h              "$incdir"
-cp -p "$bd"/corelib/ncbi*.h               "$incdir"
-cp -p "$bd"/corelib/tree*.h               "$incdir"
-cp -p "$bd"/corelib/matrix.h              "$incdir"
-cp -p "$bd"/corelib/binary.h              "$incdir"
-cp -p "$bd"/corelib/*.c                   "$srcdir"/corelib
-cp -p "$bd"/corelib/core*.h               "$srcdir"/corelib
-cp -p "$bd"/corelib/regex.h               "$incdir"
-cp -p "$bd"/asnlib/*.h                    "$srcdir"/asnlib
+cp -p "$builddir"/corelib/tsprintf.h            "$incdir"
+cp -p "$builddir"/corelib/gifgen.h              "$incdir"
+cp -p "$builddir"/corelib/ncbi*.h               "$incdir"
+cp -p "$builddir"/corelib/tree*.h               "$incdir"
+cp -p "$builddir"/corelib/matrix.h              "$incdir"
+cp -p "$builddir"/corelib/binary.h              "$incdir"
+cp -p "$builddir"/corelib/*.c                   "$srcdir"/corelib
+cp -p "$builddir"/corelib/core*.h               "$srcdir"/corelib
+cp -p "$builddir"/corelib/regex.h               "$incdir"
+cp -p "$builddir"/asnlib/*.h                    "$srcdir"/asnlib
 mv "$srcdir"/asnlib/asn.h                 "$incdir"
-cp -p "$bd"/asnlib/*.c                    "$srcdir"/asnlib
-cp -p "$bd"/connect/*.c                   "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_priv.h           "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_comm.h           "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_host_infop.h     "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_server_infop.h   "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_servicep.h       "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_dispd.h          "$srcdir"/connect
-cp -p "$bd"/connect/ncbi_lbsmd.h          "$srcdir"/connect
-cp -p "$bd"/connect/*.h                   "$incdir"
-mv "$incdir"/ncbi_*.h                     "$incdir"/connect
-mv "$incdir"/connect_export.h             "$incdir"/connect
-cp -p "$bd"/connect/test/*.[ch]           "$srcdir"/connect/test
-cp -p "$bd"/ctools/*.c                    "$srcdir"/ctools
-cp -p "$bd"/ctools/*.h                    "$incdir"/ctools
-cp -p "$bd"/object/*.c                    "$srcdir"/object
-cp -p "$bd"/object/*.h                    "$incdir"
-cp -p "$bd"/access/*.c                    "$srcdir"/access
-cp -p "$bd"/access/*.h                    "$incdir"
-cp -p "$bd"/asnstat/*.h                   "$incdir"
-cp -p "$bd"/api/*.c                       "$srcdir"/api
-cp -p "$bd"/api/*.h                       "$incdir"
-cp -p "$bd"/cdromlib/*.c                  "$srcdir"/cdromlib
-cp -p "$bd"/cdromlib/*.h                  "$incdir"
-cp -p "$bd"/biostruc/*.c                  "$srcdir"/biostruc
-cp -p "$bd"/biostruc/*.h                  "$incdir"
-cp -p "$bd"/biostruc/cdd/*.c              "$srcdir"/biostruc/cdd
-cp -p "$bd"/biostruc/cdd/*.h              "$incdir"
-cp -p "$bd"/biostruc/cn3d/*.c             "$srcdir"/biostruc/cn3d
-cp -p "$bd"/biostruc/cn3d/*.h             "$incdir"
-cp -p "$bd"/tools/*.c                     "$srcdir"/tools
-cp -p "$bd"/tools/*.h                     "$incdir"
-cp -p "$bd"/link/mswin/ncbirc.h           "$srcdir"
-cp -p "$bd"/vibrant/*.c                   "$srcdir"/vibrant
-cp -p "$bd"/vibrant/*.h                   "$incdir"
-cp -p "$bd"/desktop/*.c                   "$srcdir"/desktop
-cp -p "$bd"/desktop/*.h                   "$incdir"
-cp -p "$bd"/gif/*.c                       "$srcdir"/gif
-cp -p "$bd"/gif/*.h                       "$incdir"
-cp -p "$bd"/cn3d/*.c                      "$srcdir"/cn3d
-cp -p "$bd"/cn3d/*.h                      "$incdir"
-cp -p "$bd"/ddv/*.c                       "$srcdir"/ddv
-cp -p "$bd"/ddv/*.h                       "$incdir"
+cp -p "$builddir"/asnlib/*.c                    "$srcdir"/asnlib
+cp -p "$builddir"/connect/*.c                   "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_priv.h           "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_comm.h           "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_host_infop.h     "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_server_infop.h   "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_servicep.h       "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_dispd.h          "$srcdir"/connect
+cp -p "$builddir"/connect/ncbi_lbsmd.h          "$srcdir"/connect
+cp -p "$builddir"/connect/*.h                   "$incdir"
+mv "$incdir"/ncbi_*.h                           "$incdir"/connect
+mv "$incdir"/connect_export.h                   "$incdir"/connect
+cp -p "$builddir"/connect/test/*.[ch]           "$srcdir"/connect/test
+cp -p "$builddir"/ctools/*.c                    "$srcdir"/ctools
+cp -p "$builddir"/ctools/*.h                    "$incdir"/ctools
+cp -p "$builddir"/object/*.c                    "$srcdir"/object
+cp -p "$builddir"/object/*.h                    "$incdir"
+cp -p "$builddir"/access/*.c                    "$srcdir"/access
+cp -p "$builddir"/access/*.h                    "$incdir"
+cp -p "$builddir"/asnstat/*.h                   "$incdir"
+cp -p "$builddir"/api/*.c                       "$srcdir"/api
+cp -p "$builddir"/api/*.h                       "$incdir"
+cp -p "$builddir"/cdromlib/*.c                  "$srcdir"/cdromlib
+cp -p "$builddir"/cdromlib/*.h                  "$incdir"
+cp -p "$builddir"/biostruc/*.c                  "$srcdir"/biostruc
+cp -p "$builddir"/biostruc/*.h                  "$incdir"
+cp -p "$builddir"/biostruc/cdd/*.c              "$srcdir"/biostruc/cdd
+cp -p "$builddir"/biostruc/cdd/*.h              "$incdir"
+cp -p "$builddir"/biostruc/cn3d/*.c             "$srcdir"/biostruc/cn3d
+cp -p "$builddir"/biostruc/cn3d/*.h             "$incdir"
+cp -p "$builddir"/tools/*.c                     "$srcdir"/tools
+cp -p "$builddir"/tools/*.h                     "$incdir"
+cp -p "$builddir"/link/mswin/ncbirc.h           "$srcdir"
+cp -p "$builddir"/vibrant/*.c                   "$srcdir"/vibrant
+cp -p "$builddir"/vibrant/*.h                   "$incdir"
+cp -p "$builddir"/desktop/*.c                   "$srcdir"/desktop
+cp -p "$builddir"/desktop/*.h                   "$incdir"
+cp -p "$builddir"/gif/*.c                       "$srcdir"/gif
+cp -p "$builddir"/gif/*.h                       "$incdir"
+cp -p "$builddir"/cn3d/*.c                      "$srcdir"/cn3d
+cp -p "$builddir"/cn3d/*.h                      "$incdir"
+cp -p "$builddir"/ddv/*.c                       "$srcdir"/ddv
+cp -p "$builddir"/ddv/*.h                       "$incdir"
 
 
 # Copy network files
 
-cp -p "$bd"/network/entrez/client/*.c     "$srcdir"/network/entrez/client
-cp -p "$bd"/network/entrez/client/*.h     "$incdir"
-cp -p "$bd"/network/nsclilib/*.c          "$srcdir"/network/nsclilib
-cp -p "$bd"/network/nsclilib/*.h          "$incdir"
-cp -p "$bd"/network/medarch/client/*.c    "$srcdir"/network/medarch/client
-cp -p "$bd"/network/medarch/client/*.h    "$incdir"
-cp -p "$bd"/network/taxon1/common/*.c     "$srcdir"/network/taxon1/common
-cp -p "$bd"/network/taxon1/common/*.h     "$incdir"
-cp -p "$bd"/network/taxon1/taxon2/*.c     "$srcdir"/network/taxon1/taxon2
-cp -p "$bd"/network/taxon1/taxon2/*.h     "$incdir"
-cp -p "$bd"/network/blast3/client/*.c     "$srcdir"/network/blast3/client
-cp -p "$bd"/network/blast3/client/*.h     "$incdir"
-cp -p "$bd"/network/id1arch/*.c           "$srcdir"/network/id1arch
-cp -p "$bd"/network/id1arch/*.h           "$incdir"
-cp -p "$bd"/network/nsdemocl/*.[hc]       "$srcdir"/network/nsdemocl
-cp -p "$bd"/demo/entrez.c                 "$srcdir"/demo
-cp -p "$bd"/demo/entrezcf.c               "$srcdir"/demo
-cp -p "$bd"/demo/netentcf.c               "$srcdir"/demo
-cp -p "$bd"/demo/ccpv.c                   "$srcdir"/demo
-cp -p "$bd"/demo/ccp.c                    "$srcdir"/demo
-cp -p "$bd"/demo/dustv.c                  "$srcdir"/demo
-cp -p "$bd"/demo/dst.c                    "$srcdir"/demo
-cp -p "$bd"/demo/epiv.c                   "$srcdir"/demo
-cp -p "$bd"/demo/epi.c                    "$srcdir"/demo
-cp -p "$bd"/demo/sigmev.c                 "$srcdir"/demo
-cp -p "$bd"/demo/sigme.c                  "$srcdir"/demo
-cp -p "$bd"/demo/searchv.c                "$srcdir"/demo
-cp -p "$bd"/demo/srchaa.c                 "$srcdir"/demo
-cp -p "$bd"/demo/srchnt.c                 "$srcdir"/demo
-cp -p "$bd"/demo/twopv.c                  "$srcdir"/demo
-cp -p "$bd"/demo/twop.c                   "$srcdir"/demo
-cp -p "$bd"/demo/cnsrtv.c                 "$srcdir"/demo
-cp -p "$bd"/demo/cnsrt.c                  "$srcdir"/demo
-cp -p "$bd"/demo/cnsgnv.c                 "$srcdir"/demo
-cp -p "$bd"/demo/cnsgn.c                  "$srcdir"/demo
-cp -p "$bd"/demo/udvmain.c                "$srcdir"/demo
-cp -p "$bd"/sequin/*.c                    "$srcdir"/sequin
-cp -p "$bd"/sequin/*.h                    "$incdir"
-cp -p "$bd"/network/vibnet/*.c            "$srcdir"/network/vibnet
-cp -p "$bd"/network/vibnet/*.h            "$incdir"
+cp -p "$builddir"/network/entrez/client/*.c     "$srcdir"/network/entrez/client
+cp -p "$builddir"/network/entrez/client/*.h     "$incdir"
+cp -p "$builddir"/network/nsclilib/*.c          "$srcdir"/network/nsclilib
+cp -p "$builddir"/network/nsclilib/*.h          "$incdir"
+cp -p "$builddir"/network/medarch/client/*.c    "$srcdir"/network/medarch/client
+cp -p "$builddir"/network/medarch/client/*.h    "$incdir"
+cp -p "$builddir"/network/taxon1/common/*.c     "$srcdir"/network/taxon1/common
+cp -p "$builddir"/network/taxon1/common/*.h     "$incdir"
+cp -p "$builddir"/network/taxon1/taxon2/*.c     "$srcdir"/network/taxon1/taxon2
+cp -p "$builddir"/network/taxon1/taxon2/*.h     "$incdir"
+cp -p "$builddir"/network/blast3/client/*.c     "$srcdir"/network/blast3/client
+cp -p "$builddir"/network/blast3/client/*.h     "$incdir"
+cp -p "$builddir"/network/id1arch/*.c           "$srcdir"/network/id1arch
+cp -p "$builddir"/network/id1arch/*.h           "$incdir"
+cp -p "$builddir"/network/nsdemocl/*.[hc]       "$srcdir"/network/nsdemocl
+cp -p "$builddir"/demo/*.c                      "$srcdir"/demo
+cp -p "$builddir"/sequin/*.c                    "$srcdir"/sequin
+cp -p "$builddir"/sequin/*.h                    "$incdir"
+cp -p "$builddir"/network/vibnet/*.c            "$srcdir"/network/vibnet
+cp -p "$builddir"/network/vibnet/*.h            "$incdir"
 
 
-# Object files
-for i in '' 'DLL' ; do
-  cp -p "$bd"/make/msvc_prj/corelib/ncbimain/"Debug$i"/ncbimain.obj   "$dbgdir$i"
-  cp -p "$bd"/make/msvc_prj/corelib/ncbi/"Debug$i"/ncbithr.obj        "$dbgdir$i"
-  cp -p "$bd"/make/msvc_prj/corelib/ncbimain/"Release$i"/ncbimain.obj "$libdir$i"
-  cp -p "$bd"/make/msvc_prj/corelib/ncbi/"Release$i"/ncbithr.obj      "$libdir$i"
+# Copy generated files
+
+for i in 'Debug' 'Release' ; do
+  for j in '' 'DLL' ; do
+    if test -d "$builddir"/make/msvc_prj/corelib/ncbi/$i$j ; then
+
+      # Object files
+      makedir "$target/$i$j" -p
+      cp -p "$builddir"/make/msvc_prj/corelib/ncbimain/$i$j/ncbimain.obj "$target/$i$j"
+      cp -p "$builddir"/make/msvc_prj/corelib/ncbi/$i$j/ncbithr.obj      "$target/$i$j"
+
+      # Libraries
+      cp -p `find "$builddir" -name '*.lib' | grep "$i$j/"` "$target/$i$j"
+
+    fi
+  done
 done
 
-for i in '' 'DLL' ; do
-  # Debug libs
-  cp -p `find $buiddir -name '*.lib' | grep "Debug$i/"` "$dbgdir$i"
-
-  # Release libs
-  cp -p `find $buiddir -name '*.lib' | grep "Release$i/"` "$libdir$i"
+# Executables (one of ReleaseDLL, Release)
+for i in 'DLL' '' ; do
+  if test -d "$builddir"/make/msvc_prj/corelib/ncbi/Release$i ; then
+    cp -p `find "$builddir" -name '*.exe' | grep "Release$i/"` "$bindir"
+    break
+  fi
 done
-
-
-# Executables
-cp -p `find $buiddir -name '*.exe' | grep "ReleaseDLL/"` "$bindir"
-
 
 # Data
 cp -pr "$builddir"/data/* "$datdir"
@@ -242,8 +219,16 @@ done
 
 
 # Fill mirror dirs
-cp -p "${dbgdir}DLL"/*.* "$dbgdir_a"
-cp -p "${libdir}DLL"/*.* "$libdir_a"
+if test -d "$target"/DebugDLL ; then
+  cp -p "$target"/DebugDLL/*.* "$dbgdir_a"
+fi
+if test -d "$target"/ReleaseDLL ; then
+  cp -p "$target"/ReleaseDLL/*.* "$libdir_a"
+fi
+
+
+# CVS checkout info file
+cp -p "$builddir"/cvs_info "$target"
 
 
 exit 0

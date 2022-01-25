@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.84 $
+* $Revision: 6.99 $
 *
 * File Description: 
 *
@@ -160,6 +160,8 @@ extern Boolean  docSumUp;
 extern Boolean  bioseqViewUp;
 #endif
 
+extern void SwapQualifiers (IteM i);
+extern void EditFeatureStrand (IteM i);
 extern void PrefixAuthorityWithOrganism (IteM i);
 extern void UpdateFastaSet (IteM i);
 extern void SeqLocAdjustByOffset (SeqLocPtr slp, Int4 offset);
@@ -348,6 +350,8 @@ extern void Entrez2QueryProc (IteM i);
 extern void SetupEditSecondary (MenU m, BaseFormPtr bfp);
 extern void SimplePowerBlastProc (IteM i);
 extern void SimpleCDDBlastProc (IteM i);
+extern void SimpleCDDSearchFeatProc (IteM i);
+extern void SimpleCDDSearchAlignProc (IteM i);
 extern void VectorScreenProc (IteM i);
 extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean smartMods, ButtoN b);
 extern void ForceTaxonFixupBtn (IteM i, ButtoN b);
@@ -391,6 +395,10 @@ extern void ApplyTitle (IteM i);
 extern void ApplyCDS (IteM i);
 extern void ApplyRRNA (IteM i);
 extern void ApplyImpFeat (IteM i);
+extern void LoadTPAAccessionNumbersFromFile (IteM i);
+extern void LoadSecondaryAccessionNumbersFromFile (IteM i);
+extern void LoadHistoryAccessionNumbersFromFile (IteM i);
+extern void LoadOrganismModifierTable (IteM i);
 
 extern void RemoveRNA (IteM i);
 extern void ConvertRNA (IteM i);
@@ -400,9 +408,7 @@ extern void EditRNA (IteM i);
 extern void ParseDefToSource (IteM i);
 extern void ParseLocalIDToSource (IteM i);
 extern void ParseFileToSource (IteM i);
-extern void AddStrainToOrg (IteM i);
-extern void AddCloneToOrg (IteM i);
-extern void AddSubspeciesToOrg (IteM i);
+extern void AddModToOrg (IteM i);
 
 extern void ParseInMoreProteins (IteM i);
 extern void ParseInNucUpdates (IteM i);
@@ -419,10 +425,14 @@ extern void AddGlobalCodeBreak (IteM i);
 extern void CorrectCDSGenCodes (IteM i);
 /* extern void CorrectCDSStartCodon (IteM i); */
 /* extern Boolean RetranslateOneCDS (SeqFeatPtr sfp, Uint2 entityID, Boolean include_stop); */
+extern void UpdateProteinsFromCDS (IteM i);
 
 extern void GenerateAutoDefLinesNoMods (IteM i);
 extern void GenerateAutoDefLinesWithMods (IteM i);
 extern void GenerateAutoDefLinesSmartMods (IteM i);
+extern void testAutoDef (IteM i);
+extern void testAutoDefWithOptions (IteM i);
+extern void AutoDefBaseFormCommon (BaseFormPtr bfp, Boolean use_form);
 
 extern void EditEvidenceFlag (IteM i);
 extern void EditExceptionFlag (IteM i);
@@ -446,6 +456,7 @@ extern void FuseFeature (IteM i);
 
 extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data);
 extern void ParseAsnOrFlatfileToAnywhere (IteM i);
+extern void ParseCommentToAnywhere (IteM i);
 extern void RemoveTextInsideString (IteM i);
 extern void RemoveTextOutsideString (IteM i);
 
@@ -485,8 +496,14 @@ extern Boolean SequinEntrezInit (CharPtr appl_id, Boolean no_warnings, BoolPtr i
 extern void JustRegisterSeqEntry (BaseFormPtr bfp, Boolean freeit);
 extern void JustRegisterSeqEntryBtn (ButtoN b);
 extern void AddSubmitBlockToSeqEntry (ForM f);
-extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep);
+
+extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr source_sep, Boolean do_update);
 extern void DownloadAndUpdateProc (ButtoN b);
+extern void DownloadAndExtendProc (ButtoN b);
+extern void UpdateSeqAfterDownload (BaseFormPtr bfp, BioseqPtr oldbsp, BioseqPtr newbsp);
+extern void ExtendSeqAfterDownload (BaseFormPtr bfp, BioseqPtr oldbsp, BioseqPtr newbsp);
+extern void NewUpdateSequence (IteM i);
+extern void NewExtendSequence (IteM i);
 
 extern void FastaNucDirectToSeqEdProc (IteM i);
 
@@ -497,6 +514,7 @@ extern void RemoveProteins (IteM i);
 extern SeqAlignPtr Sqn_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp);
 extern SeqAlignPtr Sequin_GlobalAlignTwoSeq (BioseqPtr bsp1, BioseqPtr bsp2, Int4Ptr endsfixed);
 
+extern Boolean CreateUpdateCitSubFromBestTemplate (SeqEntryPtr top_sep, SeqEntryPtr upd_sep);
 
 #ifndef WIN_MAC
 extern void CreateSqnInitialFormMenus (WindoW w);

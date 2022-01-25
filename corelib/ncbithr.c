@@ -1,4 +1,4 @@
-/* $Id: ncbithr.c,v 6.35 2003/03/06 15:12:27 coulouri Exp $ */
+/* $Id: ncbithr.c,v 6.37 2003/09/19 22:58:38 coulouri Exp $ */
 /*****************************************************************************
 
     Name: ncbithr.c
@@ -35,6 +35,12 @@
  Modification History:
 -----------------------------------------------------------------------------
 * $Log: ncbithr.c,v $
+* Revision 6.37  2003/09/19 22:58:38  coulouri
+* NetBSD does not (yet?) have pthread_attr_setschedpolicy()
+*
+* Revision 6.36  2003/05/05 11:57:34  rsmith
+* Codewarrior and MSC compilers use the same declaration for thread_exit_arr and thread_self.
+*
 * Revision 6.35  2003/03/06 15:12:27  coulouri
 * add mach/mach.h header for codewarrior
 *
@@ -424,7 +430,7 @@ static  thread_key_t thread_exit_key;
 #elif defined (POSIX_THREADS_AVAIL)
 static pthread_key_t thread_exit_key;
 #elif defined (WIN32_THREADS_AVAIL)
-#ifdef _MSC_VER
+#if defined(_MSC_VER)  || defined(COMP_METRO)
 static __declspec( thread ) TOnExitArrayPtr thread_exit_arr = NULL;
 static __declspec( thread ) HANDLE          thread_self     = NULL;
 #else
@@ -786,6 +792,7 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
      if (pthread_attr_setscope(&attr, PTHREAD_SCOPE_BOUND_NP) != 0)
        /* SGI-HNC: Otherwise default to PTHREAD_SCOPE_PROCESS */
 #endif
+#ifndef OS_UNIX_NETBSD
       if (!pthread_attr_setscope(&attr, PTHREAD_SCOPE_PROCESS)  &&
           !pthread_attr_setschedpolicy(&attr, SCHED_OTHER)  &&
           priority != eTP_Default) { /* adjust the thread priority */
@@ -799,6 +806,7 @@ NLM_EXTERN TNlmThread NlmThreadCreateEx(TNlmThreadStart  theStartFunction,
         }
 #endif
       }
+#endif
 
     if (pthread_create(&thread_id, &attr,
                        NlmThreadWrapper, (void *)wrapper_data) == 0) {

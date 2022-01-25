@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -357,11 +357,57 @@ extern DialoG CreateContactDialog (GrouP h, CharPtr title)
 typedef struct citsubpage {
   DIALOG_MESSAGE_BLOCK
   DialoG          authors;
+  TexT            consortium;
   DialoG          date;
   DialoG          affil;
   TexT            descr;
   GrouP           citsubGrp [5];
 } CitsubPage, PNTR CitsubPagePtr;
+
+static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+
+  if (TextHasNoText (consortium)) return alp;
+  if (alp == NULL) {
+    alp = AuthListNew ();
+    alp->choice = 1;
+  }
+  pid = PersonIdNew ();
+  if (pid == NULL) return NULL;
+  pid->choice = 5;
+  pid->data = SaveStringFromText (consortium);
+  ap = AuthorNew ();
+  if (ap == NULL) return NULL;
+  ap->name = pid;
+  names = ValNodeAdd (&(alp->names));
+  names->choice = 1;
+  names->data.ptrvalue = ap;
+  return alp;
+}
+
+static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+  CharPtr      str;
+
+  if (alp == NULL || consortium == NULL) return;
+  if (alp->choice != 1) return;
+  for (names = alp->names; names != NULL; names = names->next) {
+    ap = names->data.ptrvalue;
+    if (ap == NULL) continue;
+    pid = ap->name;
+    if (pid == NULL || pid->choice != 5) continue;
+    str = (CharPtr) pid->data;
+    SafeSetTitle (consortium, str);
+  }
+}
 
 static void CitSubPtrToCitsubPage (DialoG d, Pointer data)
 
@@ -382,6 +428,7 @@ static void CitSubPtrToCitsubPage (DialoG d, Pointer data)
     if (csp != NULL) {
       alp = csp->authors;
       PointerToDialog (cpp->authors, (Pointer) alp);
+      AuthListToConsortium (alp, cpp->consortium);
       if (alp != NULL) {
         PointerToDialog (cpp->affil, alp->affil);
       }
@@ -409,6 +456,7 @@ static Pointer CitsubPageToCitSubPtr (DialoG d)
     csp = CitSubNew ();
     if (csp != NULL) {
       alp = (AuthListPtr) DialogToPointer (cpp->authors);
+      alp = AddConsortiumToAuthList (alp, cpp->consortium);
       if (alp != NULL) {
         alp->affil = DialogToPointer (cpp->affil);
       }
@@ -540,6 +588,7 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
   GrouP          k;
   GrouP          m;
   GrouP          p;
+  GrouP          q;
   GrouP          s;
   DialoG         tbs;
 
@@ -583,6 +632,9 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
 
     cpp->citsubGrp [0] = HiddenGroup (k, -1, 0, NULL);
     cpp->authors = CreateAuthorDialog (cpp->citsubGrp [0], 3, -1);
+    q = HiddenGroup (cpp->citsubGrp [0], 2, 0, NULL);
+    StaticPrompt (q, "Consortium", 0, stdLineHeight, programFont, 'l');
+    cpp->consortium = DialogText (q, "", 16, NULL);
 
     cpp->affil = CreateExtAffilDialog (k, NULL,
                                        &(cpp->citsubGrp [1]),
@@ -598,8 +650,8 @@ extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp)
     Hide (cpp->citsubGrp [4]);
 
     AlignObjects (ALIGN_CENTER, (HANDLE) tbs, (HANDLE) cpp->authors,
-                  (HANDLE) cpp->citsubGrp [3], (HANDLE) cpp->date,
-                  (HANDLE) cpp->affil, NULL);
+                  (HANDLE) q, (HANDLE) cpp->citsubGrp [3],
+                  (HANDLE) cpp->date, (HANDLE) cpp->affil, NULL);
   }
 
   return (DialoG) p;
@@ -722,6 +774,7 @@ static Pointer SubmitPageToSubmitBlockPtr (DialoG d)
 {
   Char            ch;
   Int2            i;
+  CharPtr         os;
   CharPtr         ptr;
   SubmitBlockPtr  sbp;
   CharPtr         sequin_app_version;
@@ -761,7 +814,12 @@ static Pointer SubmitPageToSubmitBlockPtr (DialoG d)
       if (StringHasNoText (spp->tool)) {
         sequin_app_version = (CharPtr) GetAppProperty ("SequinAppVersion");
         if (sequin_app_version != NULL) {
-          sprintf (tmp, "Sequin %s", sequin_app_version);
+          os = GetOpSysString ();
+          if (os != NULL) {
+            sprintf (tmp, "Sequin %s - %s", sequin_app_version, os);
+          } else {
+            sprintf (tmp, "Sequin %s", sequin_app_version);
+          }
         } else {
           StringCpy (tmp, "Sequin");
         }

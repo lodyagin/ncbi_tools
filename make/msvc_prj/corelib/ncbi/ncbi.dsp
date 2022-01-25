@@ -274,6 +274,10 @@ SOURCE=..\..\..\..\corelib\ncbitime.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\util\tables\raw_scoremat.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\corelib\regex.c
 # ADD CPP /D "REGEX_NCBI" /D "REGEX_MALLOC"
 # End Source File
@@ -527,7 +531,15 @@ SOURCE=..\..\..\..\corelib\ncbiwin.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\..\util\tables\raw_scoremat.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\..\corelib\regex.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\..\util\tables\tables_export.h
 # End Source File
 # Begin Source File
 

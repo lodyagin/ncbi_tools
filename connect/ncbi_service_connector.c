@@ -1,4 +1,4 @@
-/*  $Id: ncbi_service_connector.c,v 6.52 2002/12/19 17:34:58 lavr Exp $
+/*  $Id: ncbi_service_connector.c,v 6.60 2003/08/25 14:41:53 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,6 @@
 #include "ncbi_comm.h"
 #include "ncbi_priv.h"
 #include "ncbi_servicep.h"
-#include <connect/ncbi_connection.h>
 #include <connect/ncbi_http_connector.h>
 #include <connect/ncbi_service_connector.h>
 #include <connect/ncbi_socket_connector.h>
@@ -44,49 +43,42 @@
 
 
 typedef struct SServiceConnectorTag {
-    const char*        name;            /* Verbal connector type             */
-    const char*        service;         /* Service name (final) to use       */
-    TSERV_Type         types;           /* Server types, record keeping only */
-    SConnNetInfo*      net_info;        /* Connection information            */
-    const char*        user_header;     /* User header currently set         */
-    SERV_ITER          iter;            /* Dispatcher information            */
-    SMetaConnector     meta;            /* Low level comm.conn and its VT    */
-    EIO_Status         status;          /* Status of last op                 */
-    unsigned int       host;            /* Parsed connection info...         */
-    unsigned short     port;
-    ticket_t           ticket;
-    SSERVICE_Extra     params;
-    char               args[1];         /* Additional CGI parameters         */
+    const char*     name;               /* Verbal connector type             */
+    const char*     service;            /* Service name (final) to use       */
+    TSERV_Type      types;              /* Server types, record keeping only */
+    SConnNetInfo*   net_info;           /* Connection information            */
+    const char*     user_header;        /* User header currently set         */
+    SERV_ITER       iter;               /* Dispatcher information            */
+    SMetaConnector  meta;               /* Low level comm.conn and its VT    */
+    EIO_Status      status;             /* Status of last op                 */
+    unsigned int    host;               /* Parsed connection info...         */
+    unsigned short  port;
+    ticket_t        ticket;
+    SSERVICE_Extra  params;
+    char            args[1];            /* Additional CGI parameters         */
 } SServiceConnector;
 
 
-/*
- * INTERNALS: Implementation of virtual functions
- */
+/***********************************************************************
+ *  INTERNAL -- "s_VT_*" functions for the "virt. table" of connector methods
+ ***********************************************************************/
 
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-    static const char* s_VT_GetType(CONNECTOR       connector);
-    static EIO_Status  s_VT_Open   (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Status (CONNECTOR       connector,
-                                    EIO_Event       dir);
-    static EIO_Status  s_VT_Close  (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static void        s_Setup     (SMetaConnector* meta,
-                                    CONNECTOR       connector);
-    static void        s_Destroy   (CONNECTOR       connector);
+    static const char* s_VT_GetType (CONNECTOR       connector);
+    static EIO_Status  s_VT_Open    (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Status  (CONNECTOR       connector,
+                                     EIO_Event       dir);
+    static EIO_Status  s_VT_Close   (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static void        s_Setup      (SMetaConnector* meta,
+                                     CONNECTOR       connector);
+    static void        s_Destroy    (CONNECTOR       connector);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /* __cplusplus */
-
-
-static const char* s_VT_GetType(CONNECTOR connector)
-{
-    SServiceConnector* uuu = (SServiceConnector*) connector->handle;
-    return uuu->name ? uuu->name : "SERVICE";
-}
 
 
 static char* s_GetArgs(const char* client_host)
@@ -95,12 +87,20 @@ static char* s_GetArgs(const char* client_host)
     static const char address[]  = "address=";
     size_t nodelen, archlen, buflen;
     const char* arch;
+    unsigned int ip;
+    char addr[80];
     char* p;
 
     buflen = 0;
     if (*client_host) {
         nodelen = strlen(client_host);
         buflen += sizeof(address) - 1 + nodelen;
+        if (!strchr(client_host, '.')                   &&
+            (ip = SOCK_gethostbyname(client_host)) != 0 &&
+            SOCK_ntoa(ip, addr, sizeof(addr))      == 0) {
+            buflen += strlen(addr) + 2;
+        } else
+            *addr = 0;
     } else
         nodelen = 0;
     if ((arch = CORE_GetPlatform()) != 0 && *arch) {
@@ -116,6 +116,8 @@ static char* s_GetArgs(const char* client_host)
         buflen += sizeof(address) - 1;
         strcpy(&p[buflen], client_host);
         buflen += nodelen;
+        if (*addr)
+            buflen += sprintf(&p[buflen], "(%s)", addr);
     }
     if (archlen) {
         strcpy(&p[buflen], nodelen ? platform : platform + 1);
@@ -153,13 +155,14 @@ static void s_CloseDispatcher(SServiceConnector* uuu)
  */
 static void s_Reset(SMetaConnector *meta)
 {
-    CONN_SET_METHOD(meta, wait,       0,           0);
-    CONN_SET_METHOD(meta, write,      0,           0);
-    CONN_SET_METHOD(meta, flush,      0,           0);
-    CONN_SET_METHOD(meta, read,       0,           0);
-    CONN_SET_METHOD(meta, status,     s_VT_Status, 0);
+    CONN_SET_METHOD(meta, descr,      0,             0);
+    CONN_SET_METHOD(meta, wait,       0,             0);
+    CONN_SET_METHOD(meta, write,      0,             0);
+    CONN_SET_METHOD(meta, flush,      0,             0);
+    CONN_SET_METHOD(meta, read,       0,             0);
+    CONN_SET_METHOD(meta, status,     s_VT_Status,   0);
 #ifdef IMPLEMENTED__CONN_WaitAsync
-    CONN_SET_METHOD(meta, wait_async, 0,           0);
+    CONN_SET_METHOD(meta, wait_async, 0,             0);
 #endif
 }
 
@@ -644,6 +647,13 @@ static EIO_Status s_Close(CONNECTOR       connector,
 }
 
 
+static const char* s_VT_GetType(CONNECTOR connector)
+{
+    SServiceConnector* uuu = (SServiceConnector*) connector->handle;
+    return uuu->name ? uuu->name : "SERVICE";
+}
+
+
 static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
 {
     SServiceConnector* uuu = (SServiceConnector*) connector->handle;
@@ -681,12 +691,14 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
         }
 
         /* Setup the new connector on a temporary meta-connector... */
+        memset(&uuu->meta, 0, sizeof(uuu->meta));
         METACONN_Add(&uuu->meta, conn);
         /* ...then link the new connector in using current connection's meta */
         conn->meta = meta;
         conn->next = meta->list;
         meta->list = conn;
 
+        CONN_SET_METHOD(meta, descr,  uuu->meta.descr,  uuu->meta.c_descr);
         CONN_SET_METHOD(meta, wait,   uuu->meta.wait,   uuu->meta.c_wait);
         CONN_SET_METHOD(meta, write,  uuu->meta.write,  uuu->meta.c_write);
         CONN_SET_METHOD(meta, flush,  uuu->meta.flush,  uuu->meta.c_flush);
@@ -722,6 +734,7 @@ static EIO_Status s_VT_Open(CONNECTOR connector, const STimeout* timeout)
 }
 
 
+/*ARGSUSED*/
 static EIO_Status s_VT_Status(CONNECTOR connector, EIO_Event dir)
 {
     return ((SServiceConnector*) connector->handle)->status;
@@ -798,11 +811,8 @@ extern CONNECTOR SERVICE_CreateConnectorEx
     xxx->status   = eIO_Success;
     xxx->types    = types;
     xxx->iter     = 0;
-    if (params)
-        memcpy(&xxx->params, params, sizeof(xxx->params));
-    else
-        memset(&xxx->params, 0, sizeof(xxx->params));
-    memset(&xxx->meta, 0, sizeof(xxx->meta));
+    memset(&xxx->params, 0, sizeof(xxx->params));
+    memset(&xxx->meta,   0, sizeof(xxx->meta));
 
     if (x_args) {
         strcpy(xxx->args, x_args);
@@ -817,7 +827,7 @@ extern CONNECTOR SERVICE_CreateConnectorEx
     ccc->setup   = s_Setup;
     ccc->destroy = s_Destroy;
 
-    /* Now make the first probe dispatching */
+    /* now make the first probe dispatching */
     if (!s_OpenDispatcher(xxx)) {
         s_CloseDispatcher(xxx);
         s_Destroy(ccc);
@@ -825,7 +835,11 @@ extern CONNECTOR SERVICE_CreateConnectorEx
     }
     assert(xxx->iter != 0);
 
-    /* Done */
+    /* finally, store all callback parameters */
+    if (params)
+        memcpy(&xxx->params, params, sizeof(xxx->params));
+
+    /* done */
     return ccc;
 }
 
@@ -833,6 +847,30 @@ extern CONNECTOR SERVICE_CreateConnectorEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_service_connector.c,v $
+ * Revision 6.60  2003/08/25 14:41:53  lavr
+ * Employ new k..Timeout constants  --  log modification only
+ *
+ * Revision 6.59  2003/05/31 05:16:45  lavr
+ * Add ARGSUSED where args are meant to be unused
+ *
+ * Revision 6.58  2003/05/29 20:13:48  lavr
+ * -#include <connect/ncbi_connection.h>
+ *
+ * Revision 6.57  2003/05/22 20:31:28  lavr
+ * Callbacks in the constructor had to be set after successful init only
+ *
+ * Revision 6.56  2003/05/14 15:43:45  lavr
+ * Modify format of host address in dispatcher's CGI query
+ *
+ * Revision 6.55  2003/05/14 13:55:06  lavr
+ * BUGFIX: Buffer overrun in s_GetArgs()
+ *
+ * Revision 6.54  2003/05/14 04:19:48  lavr
+ * BUGFIX: Actually add IP address in "address=" CGI argument
+ *
+ * Revision 6.53  2003/05/14 03:55:28  lavr
+ * Arguments to include host address (for statistics purposes on backends)
+ *
  * Revision 6.52  2002/12/19 17:34:58  lavr
  * Do not initiate STATEFUL_CAPABLE challenge with HTTP servers in relay mode
  *
@@ -884,7 +922,7 @@ extern CONNECTOR SERVICE_CreateConnectorEx
  *
  * Revision 6.36  2002/04/26 16:28:51  lavr
  * SSERVICE_Params: reset added for use in open/close pairs
- * No checks for CONN_DEFAULT_TIMEOUT: now real timeouts always go from CONN
+ * No checks for kDefaultTimeout: now real timeouts always go from CONN
  *
  * Revision 6.35  2002/03/30 03:34:32  lavr
  * BUGFIX: Memory leak from SERV_ITER in usused connector

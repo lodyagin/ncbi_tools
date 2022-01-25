@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   	prototypes for portable string routines
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbistr.h,v $
+* Revision 6.8  2003/09/15 16:21:32  kans
+* moved StringDoesHaveText from sqnutils3.c
+*
 * Revision 6.7  2002/01/16 16:58:38  camacho
 * Changed type of buflen parameter in LabelCopy from Int2 to Uint4
 *
@@ -172,6 +175,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringSearch PROTO((const char FAR *str, cons
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_StringISearch PROTO((const char FAR *str, const char FAR *sub));
 
 NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringHasNoText PROTO((Nlm_CharPtr str));
+NLM_EXTERN Nlm_Boolean LIBCALL Nlm_StringDoesHaveText PROTO((Nlm_CharPtr str));
 NLM_EXTERN Nlm_CharPtr LIBCALL Nlm_TrimSpacesAroundString PROTO((Nlm_CharPtr str));
 
 /* Printing 8-byte integer into platform-independent array of 8 bytes
@@ -411,6 +415,7 @@ NLM_EXTERN char * LIBCALL Nlm_StrLower PROTO((char *string));
 #define StringISearch Nlm_StringISearch
 
 #define StringHasNoText Nlm_StringHasNoText
+#define StringDoesHaveText Nlm_StringDoesHaveText
 #define TrimSpacesAroundString Nlm_TrimSpacesAroundString
 
 #define LabelCopy Nlm_LabelCopy

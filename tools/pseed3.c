@@ -1,4 +1,6 @@
-/* $Id: pseed3.c,v 6.37 2002/08/28 13:38:06 madden Exp $ */
+static char const rcsid[] = "$Id: pseed3.c,v 6.41 2003/08/04 19:47:56 dondosha Exp $";
+
+/* $Id: pseed3.c,v 6.41 2003/08/04 19:47:56 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +35,21 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.37 $
+$Revision: 6.41 $
 
 $Log: pseed3.c,v $
+Revision 6.41  2003/08/04 19:47:56  dondosha
+Correct alignment endpoints after traceback in PHI BLAST
+
+Revision 6.40  2003/07/15 20:17:39  coulouri
+remove signal() and setrlimit() calls
+
+Revision 6.39  2003/05/30 17:25:37  coulouri
+add rcsid
+
+Revision 6.38  2003/05/13 16:02:53  coulouri
+make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
 Revision 6.37  2002/08/28 13:38:06  madden
 Do not double close patfp, fix memory leaks
 
@@ -133,11 +147,6 @@ Now functions will collect messages in ValNodePtr before printing out.
 #include <ncbithr.h>
 #include <seed.h> 
 
-#if defined(OS_UNIX) && !defined(OS_UNIX_SUN) && !defined(OS_UNIX_LINUX)
-#include <sys/resource.h>
-#include <signal.h>
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -152,8 +161,6 @@ static Uint1Ptr reverseSequence PROTO((Uint1Ptr seqFromDb, Int4 lenSeqFromDb));
 static seedParallelItems * seedParallelFill(ReadDBFILEPtr rdpt, qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, seedSearchItems * seedSearch, BlastThrInfoPtr thr_info);
 
 static void do_the_seed_search PROTO((BlastSearchBlkPtr search, Int4 num_seq, qseq_ptr query_seq, Int4 lenPatMatch, Boolean is_dna, GapAlignBlkPtr gap_align, patternSearchItems * patternSearch, seedSearchItems * seedSearch, Int4 * matchIndex, Int4 * totalOccurrences, seedResultItems * seedResults));
-
-static Boolean BlastSetLimits PROTO((Int4 cpu_limit, Int2 num_cpu));
 
 void PGPOutTextMessages(ValNodePtr info_vnp, FILE *fd)
 {
@@ -783,7 +790,7 @@ Int4 LIBCALL convertProgramToFlag(Char * program, Boolean * is_dna)
 		if (strsame(program, "patmatchp")) 
 		  program_flag = PAT_MATCH_FLAG;
 		else {
-		  ErrPostEx(SEV_FATAL, 0, 0, "name of program not recognized %s \n", program);
+		  ErrPostEx(SEV_FATAL, 1, 0, "name of program not recognized %s \n", program);
 		  return(1);
 		}
   return(program_flag);
@@ -973,7 +980,7 @@ hit_ptr LIBCALL get_hits(qseq_ptr qp, Int4 len_of_pat,
     twiceNumMatches = find_hits(hitL, seq_db, len_seq_db, is_dna, patternSearch);
     if (twiceNumMatches > 0 && is_dna) {
       if (len_seq_db > MAXDNA) {
-	ErrPostEx(SEV_FATAL, 0, 0, "MAX DNA Sequence length exceeded %d \n",
+	ErrPostEx(SEV_FATAL, 1, 0, "MAX DNA Sequence length exceeded %d \n",
 MAXDNA);
         exit(1);
       }
@@ -1242,10 +1249,16 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	      *revASptr = *ASptr; 
 	      *ASptr = temp;
 	    }
+       oneHit->bi = llen - endPosQuery;
+       oneHit->bj = lenPrefix - endPosDbSeq;
+
 	    align_of_pattern(sseq, &oneMatch->seq[oneHit->hit_pos-1], len,
 			     oneHit->hit_end-oneHit->hit_pos+2, alignScript, &alignScript, 
 			     gap_align, &patWildcardScore, &mul, patternSearch,
 			     seedSearch);
+       oneHit->ei = llen + len;
+       oneHit->ej = lenPrefix + len;
+
 	    SEMI_G_ALIGN((Uchar *) (rseq-1), (Uchar *) &oneMatch->seq[oneHit->hit_end], rlen, 
 			 lenDbSequence-oneHit->hit_end-1, 
 			 alignScript,  &endPosQuery, &endPosDbSeq, FALSE, &alignScript,gap_align,0, FALSE);
@@ -1253,7 +1266,8 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
 	       oneHit->ei-oneHit->bi,
 	       oneHit->ej-oneHit->bj, reverseAlignScript, oneHit->bi+1, 
 	       oneHit->bj+1, is_dna); */
-	    
+	    oneHit->ei += endPosQuery;
+       oneHit->ej += endPosDbSeq;
 	    nextEditBlock = TracebackToGapXEditBlock(seq1 - 1 + oneHit->bi,
 						     oneMatch->seq-1 + oneHit->bj, oneHit->ei - oneHit->bi,
 						     oneHit->ej - oneHit->bj, reverseAlignScript, oneHit->bi,
@@ -1589,8 +1603,6 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
     else
         search->thr_info->realdb_done = FALSE;
     
-    BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
-    
     if (NlmThreadsAvailable() && search->pbp->process_num > 1) {
         number_of_entries = INT4_MAX;
         /* Look for smallest database. */
@@ -1686,50 +1698,7 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
     }
     MemFree(seedParallelArray); 
 
-#ifdef RLIMIT_CPU
-    signal(SIGXCPU, SIG_IGN);
-#endif
     return;
-}
-
-Boolean  my_time_out_boolean;
-
-/* Called by UNIX signal for timeouts. */
-#ifdef RLIMIT_CPU
-static void 
-timeout_shutdown(int flag)
-
-{
-	my_time_out_boolean = TRUE;
-	signal(SIGXCPU, SIG_IGN);
-}
-#endif
-
-static Boolean BlastSetLimits(Int4 cpu_limit, Int2 num_cpu)
-
-{
-
-#ifdef RLIMIT_CPU
-	struct rlimit   rl;
-
-	if (cpu_limit <= 0)
-		return TRUE;
-
-	if (getrlimit(RLIMIT_CPU, &rl) != -1 )
-	{
-		if (rl.rlim_cur == RLIM_INFINITY)
-			rl.rlim_cur = 0;
-		rl.rlim_cur += cpu_limit/num_cpu;
-		setrlimit(RLIMIT_CPU, &rl);
-#ifdef SIGXCPU
-		sigset(SIGXCPU, timeout_shutdown);
-#endif
-	}
-#endif
-	my_time_out_boolean = FALSE;
-
-	return TRUE;
-
 }
 
 #ifdef __cplusplus

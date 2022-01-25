@@ -1,16 +1,21 @@
 #
-# $Id: solaris-gcc.ncbi.mk,v 1.15 2002/10/29 01:20:13 lavr Exp $
+# $Id: solaris-gcc.ncbi.mk,v 1.17 2003/05/07 20:54:09 beloslyu Exp $
 #
 # If you want to use gcc on solaris you need to copy this
 # file to solaris.ncbi.mk
 #
 NCBI_DEFAULT_LCL = sol
 NCBI_MAKE_SHELL = /usr/bin/sh
+NCBI_AR=ar
 NCBI_CC = gcc
 NCBI_CFLAGS1 = -c 
 #The gcc3.0.3 fails on some files if -O2 is used
 NCBI_LDFLAGS1 = -O -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 NCBI_OPTFLAG = -O -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+# Sun recommends to use these flags for BLAST. NCBI didn't test them,
+# so if you have any questions please send them to bogdan.vasiliu@sun.com
+#NCBI_LDFLAGS1 = -O3 -ffast-math -funroll-loops -fstrict-aliasing -mcpu=v9 -mtune=ultrasparc -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
+#NCBI_OPTFLAG = -O3 -ffast-math -funroll-loops -fstrict-aliasing -mcpu=v9 -mtune=ultrasparc -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64
 # following 2 lines are temporary; J. Epstein, 8/11/97
 NCBI_INCDIR = /netopt/ncbi_tools/ver0.0/ncbi/include
 NCBI_LIBDIR = /netopt/ncbi_tools/ver0.0/ncbi/lib

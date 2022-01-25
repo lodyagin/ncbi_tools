@@ -1,92 +1,108 @@
-/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.10 $  $Date: 2002/04/16 21:34:20 $
-* ==========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ==========================================================================
-*
-* Author:  Denis Vakatov
-*
-* File Description:
-*   Wraparound the old NCBI network client API.
-*   Now provides new mechanisms to connect clients to the NCBI network 
-*   services
-*
-* --------------------------------------------------------------------------
-* $Log: ni_lib_.c,v $
-* Revision 4.10  2002/04/16 21:34:20  lavr
-* Disable old dispatcher completely and unconditionally
-*
-* Revision 4.9  2001/02/21 22:09:27  lavr
-* SERVICE connector included
-*
-* Revision 4.8  1998/09/08 17:59:06  vakatov
-* Added WWW/Firewall network interface
-*
-* Revision 4.7  1998/05/05 22:45:37  vakatov
-* Added "eNII_Debug" network interface
-*
-* Revision 4.6  1998/04/15 20:01:20  vakatov
-* [OS_MAC, ALLOW_STATELESS]  Stateless mode now available on Mac
-*
-* Revision 4.5  1998/04/10 19:24:47  vakatov
-* NI_SetInterface():  return the overridden(old) interface value; check
-* for the validity of the new interface
-*
-* Revision 4.4  1998/04/03 22:54:46  vakatov
-* Support *stateless* WWW connection only if #ALLOW_STATELESS is defined
-* (thus, disable it by default)
-*
-* Revision 4.3  1998/03/31 00:27:04  kans
-* for Mac, define NI_WWW_SUPPORTED
-*
-* Revision 4.2  1998/03/30 17:50:17  vakatov
-* Ingrafted to the main NCBI CVS tree
-*
-* ==========================================================================
-*/
+/*  $RCSfile: ni_lib_.c,v $  $Revision: 4.12 $  $Date: 2003/10/27 14:11:10 $
+ * ==========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ==========================================================================
+ *
+ * Author:  Denis Vakatov
+ *
+ * File Description:
+ *   Wraparound the old NCBI network client API.
+ *   Now provides new mechanisms to connect clients to the NCBI network 
+ *   services
+ *
+ * --------------------------------------------------------------------------
+ * $Log: ni_lib_.c,v $
+ * Revision 4.12  2003/10/27 14:11:10  lavr
+ * Old (Shavirin's) dispatchers disabled unconditionally
+ *
+ * Revision 4.11  2003/10/16 15:11:52  lavr
+ * SRV_CONN_MODE made case-insensitive
+ *
+ * Revision 4.10  2002/04/16 21:34:20  lavr
+ * Disable old dispatcher completely and unconditionally
+ *
+ * Revision 4.9  2001/02/21 22:09:27  lavr
+ * SERVICE connector added
+ *
+ * Revision 4.8  1998/09/08 17:59:06  vakatov
+ * Added WWW/Firewall network interface
+ *
+ * Revision 4.7  1998/05/05 22:45:37  vakatov
+ * Added "eNII_Debug" network interface
+ *
+ * Revision 4.6  1998/04/15 20:01:20  vakatov
+ * [OS_MAC, ALLOW_STATELESS]  Stateless mode now available on Mac
+ *
+ * Revision 4.5  1998/04/10 19:24:47  vakatov
+ * NI_SetInterface():  return the overridden(old) interface value; check
+ * for the validity of the new interface
+ *
+ * Revision 4.4  1998/04/03 22:54:46  vakatov
+ * Support *stateless* WWW connection only if #ALLOW_STATELESS is defined
+ * (thus, disable it by default)
+ *
+ * Revision 4.3  1998/03/31 00:27:04  kans
+ * for Mac, define NI_WWW_SUPPORTED
+ *
+ * Revision 4.2  1998/03/30 17:50:17  vakatov
+ * Ingrafted to the main NCBI CVS tree
+ *
+ * ==========================================================================
+ */
 
 #include <ncbinet.h>
 #include <ncbithr.h>
 
-/* From now on, the old-fashioned interface is NOT supported for all platforms
- */
-#undef NI_DISP_SUPPORTED
-
 /* WWW(HTTPD)-based interfaces are supported on selected platforms
  */
 #if defined(OS_UNIX) || defined(OS_MSWIN) || defined(OS_MAC)
-#define NI_WWW_SUPPORTED
-#define NI_WWWFIREWALL_SUPPORTED
-#ifdef ALLOW_STATELESS 
-#define NI_WWWDIRECT_SUPPORTED
-#endif
-#define NI_SERVICE_SUPPORTED
-#define NI_DEBUG_SUPPORTED
+#  define NI_WWW_SUPPORTED
+#  define NI_WWWFIREWALL_SUPPORTED
+#  ifdef ALLOW_STATELESS 
+#    define NI_WWWDIRECT_SUPPORTED
+#  endif
+#  define NI_SERVICE_SUPPORTED
+#  define NI_DEBUG_SUPPORTED
 #endif /* OS_UNIX | OS_MSWIN | OS_MAC */
 
+/* From now on the old-fashioned interfaces are NOT supported for all platforms
+ */
+#ifdef NI_DISP_SUPPORTED
+#  undef NI_DISP_SUPPORTED
+#endif
+#ifdef NI_WWW_SUPPORTED
+#  undef NI_WWW_SUPPORTED
+#endif
+#ifdef NI_WWWFIREWALL_SUPPORTED
+#  undef NI_WWWFIREWALL_SUPPORTED
+#endif
+#ifdef NI_WWWDIRECT_SUPPORTED
+#  undef NI_WWWDIRECT_SUPPORTED
+#endif
 
 /* Override config-file value by the environment variable's value, if any */
 #if defined(OS_UNIX) || defined(OS_MSWIN)
-#define USE_GETENV
+#  define USE_GETENV
 #endif /* OS_UNIX | OS_MSWIN */
 
 
@@ -184,17 +200,17 @@ static NIOptions* s_GetNIOptions
 
   NI_GetEnvParam(conf_file, conf_section, ENV_CONN_MODE,
                  conn_mode, sizeof(conn_mode), "");
-  if (StringCmp(conn_mode, DISPATCHER_MODE) == 0)
+  if (StringICmp(conn_mode, DISPATCHER_MODE) == 0)
     nio->interface = eNII_Dispatcher;
-  else if (StringCmp(conn_mode, WWW_CLIENT_MODE) == 0)
+  else if (StringICmp(conn_mode, WWW_CLIENT_MODE) == 0)
     nio->interface = eNII_WWW;
-  else if (StringCmp(conn_mode, WWW_FIREWALL_MODE) == 0)
+  else if (StringICmp(conn_mode, WWW_FIREWALL_MODE) == 0)
     nio->interface = eNII_WWWFirewall;
-  else if (StringCmp(conn_mode, WWW_DIRECT_MODE) == 0)
+  else if (StringICmp(conn_mode, WWW_DIRECT_MODE) == 0)
     nio->interface = eNII_WWWDirect;
-  else if (StringCmp(conn_mode, SERVICE_MODE) == 0)
+  else if (StringICmp(conn_mode, SERVICE_MODE) == 0)
     nio->interface = eNII_Service;
-  else if (StringCmp(conn_mode, DEBUG_MODE) == 0)
+  else if (StringICmp(conn_mode, DEBUG_MODE) == 0)
     nio->interface = eNII_Debug;
   else
     nio->interface = NII_DEFAULT;

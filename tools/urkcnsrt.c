@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urkcnsrt.c,v 6.21 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.20 $
+* $Revision: 6.21 $
 *
 * File Description: consort
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urkcnsrt.c,v $
+* Revision 6.21  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.20  2000/02/09 20:29:04  kans
 * changed FindNuc to avoid linker conflicts on newer alpha compiler
 *

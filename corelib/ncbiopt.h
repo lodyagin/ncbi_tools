@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.11 2002/12/18 22:11:27 kans Exp $
+/*  $Id: ncbiopt.h,v 6.12 2003/05/05 11:55:22 rsmith Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.12  2003/05/05 11:55:22  rsmith
+* Codewarrior compiling for Win32 already has definitions for INT8 min and max.
+*
 * Revision 6.11  2002/12/18 22:11:27  kans
 * a couple more C++ comments slipped by, changed to C style
 *
@@ -214,11 +217,10 @@ by including it first.
 #      define INT8_MAX  LONG_LONG_MAX
 #      define UINT8_MAX ULONG_LONG_MAX
 
-#    elif defined(OS_NT)
-#      define INT8_MIN  _I64_MIN
-#      define INT8_MAX  _I64_MAX
-#      define UINT8_MAX _UI64_MAX
-
+#    elif defined(OS_NT) && ! defined(COMP_METRO)
+#        define INT8_MIN  _I64_MIN
+#        define INT8_MAX  _I64_MAX
+#        define UINT8_MAX _UI64_MAX
 #    else /* def GNUC, LONG_BIT==64 */
 #      ifdef LLONG_MIN
 #        define INT8_MIN LLONG_MIN

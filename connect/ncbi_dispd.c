@@ -1,4 +1,4 @@
-/*  $Id: ncbi_dispd.c,v 6.55 2003/02/13 21:38:22 lavr Exp $
+/*  $Id: ncbi_dispd.c,v 6.61 2003/10/14 14:40:07 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,6 +48,11 @@
 #define SERV_DISPD_LOCAL_SVC_BONUS 1.2
 
 
+/* Dispatcher messaging support */
+static int               s_MessageIssued = 0;
+static FDISP_MessageHook s_MessageHook = 0;
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -86,7 +91,7 @@ static int/*bool*/ s_AddServerInfo(SDISPD_Data* data, SSERV_Info* info)
 {
     size_t i;
 
-    /* First check that the new server info is updating existing one */
+    /* First check that the new server info updates an existing one */
     for (i = 0; i < data->n_node; i++) {
         if (SERV_EqualInfo(data->s_node[i].info, info)) {
             /* Replace older version */
@@ -123,6 +128,7 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
+/*ARGSUSED*/
 static int/*bool*/ s_ParseHeader(const char* header, void *iter,
                                  int/*ignored*/ server_error)
 {
@@ -137,6 +143,7 @@ extern "C" {
 }
 #endif /* __cplusplus */
 
+/*ARGSUSED*/
 /* This callback is only for services called via direct HTTP */
 static int/*bool*/ s_Adjust(SConnNetInfo* net_info,
                             void*         iter,
@@ -156,13 +163,27 @@ static int/*bool*/ s_Resolve(SERV_ITER iter)
     SConnNetInfo *net_info = data->net_info;
     CONNECTOR conn = 0;
     const char *arch;
+    unsigned int ip;
+    char addr[64];
     char* s;
     CONN c;
 
     /* Dispatcher CGI arguments (sacrifice some if they all do not fit) */
     if ((arch = CORE_GetPlatform()) != 0 && *arch)
         ConnNetInfo_PreOverrideArg(net_info, platform, arch);
-    ConnNetInfo_PreOverrideArg(net_info, address, net_info->client_host);
+    if (*net_info->client_host && !strchr(net_info->client_host, '.') &&
+        (ip = SOCK_gethostbyname(net_info->client_host)) != 0 &&
+        SOCK_ntoa(ip, addr, sizeof(addr)) == 0) {
+        if ((s= malloc(strlen(net_info->client_host) + strlen(addr) + 3)) != 0)
+            sprintf(s, "%s(%s)", net_info->client_host, addr);
+        else
+            s = net_info->client_host;
+    } else
+        s = net_info->client_host;
+    if (s && *s)
+        ConnNetInfo_PreOverrideArg(net_info, address, s);
+    if (s != net_info->client_host)
+        free(s);
     if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
         ConnNetInfo_DeleteArg(net_info, platform);
         if (!ConnNetInfo_PreOverrideArg(net_info, service, iter->service)) {
@@ -216,8 +237,10 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
 {
     static const char server_info[] = "Server-Info-";
     SDISPD_Data* data = (SDISPD_Data*) iter->data;
+    size_t len = strlen(text);
 
-    if (strncasecmp(text, server_info, sizeof(server_info) - 1) == 0) {
+    if (len >= sizeof(server_info) &&
+        strncasecmp(text, server_info, sizeof(server_info) - 1) == 0) {
         const char* p = text + sizeof(server_info) - 1;
         SSERV_Info* info;
         unsigned int d1;
@@ -232,7 +255,8 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
                 return 1/*updated*/;
             free(info);
         }
-    } else if (strncasecmp(text, HTTP_DISP_FAILURES,
+    } else if (len >= sizeof(HTTP_DISP_FAILURES) &&
+               strncasecmp(text, HTTP_DISP_FAILURES,
                            sizeof(HTTP_DISP_FAILURES) - 1) == 0) {
 #if defined(_DEBUG) && !defined(NDEBUG)
         const char* p = text + sizeof(HTTP_DISP_FAILURES) - 1;
@@ -243,6 +267,21 @@ static int/*bool*/ s_Update(SERV_ITER iter, TNCBI_Time now, const char* text)
 #endif
         data->disp_fail = 1;
         return 1/*updated*/;
+    } else if (len >= sizeof(HTTP_DISP_MESSAGE) &&
+               strncasecmp(text, HTTP_DISP_MESSAGE,
+                           sizeof(HTTP_DISP_MESSAGE) - 1) == 0) {
+        const char* p = text + sizeof(HTTP_DISP_MESSAGE) - 1;
+        while (*p && isspace((unsigned char)(*p)))
+            p++;
+        if (s_MessageHook) {
+            if (s_MessageIssued <= 0) {
+                s_MessageIssued = 1;
+                s_MessageHook(p);
+            }
+        } else {
+            s_MessageIssued = -1;
+            CORE_LOGF(eLOG_Warning, ("[DISPATCHER]  %s", p));
+        }
     }
 
     return 0/*not updated*/;
@@ -378,6 +417,7 @@ static void s_Close(SERV_ITER iter)
  *  EXTERNAL
  ***********************************************************************/
 
+/*ARGSUSED*/
 const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
                                     const SConnNetInfo* net_info,
                                     SSERV_Info** info, HOST_INFO* u/*unused*/)
@@ -412,9 +452,38 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
 }
 
 
+void DISP_SetMessageHook(FDISP_MessageHook hook)
+{
+    if (hook) {
+        if (hook != s_MessageHook)
+            s_MessageIssued = s_MessageIssued ? -1 : -2;
+    } else if (s_MessageIssued < -1)
+        s_MessageIssued = 0;
+    s_MessageHook = hook;
+}
+
+
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_dispd.c,v $
+ * Revision 6.61  2003/10/14 14:40:07  lavr
+ * Fix to avoid resolving empty client's host name
+ *
+ * Revision 6.60  2003/10/10 19:33:24  lavr
+ * Do not generate address CGI parameter if host address is unknown
+ *
+ * Revision 6.59  2003/08/11 19:07:03  lavr
+ * +DISP_SetMessageHook() and implementation of message delivery
+ *
+ * Revision 6.58  2003/05/31 05:14:38  lavr
+ * Add ARGSUSED where args are meant to be unused
+ *
+ * Revision 6.57  2003/05/22 20:31:40  lavr
+ * Comment change
+ *
+ * Revision 6.56  2003/05/14 15:43:31  lavr
+ * Add host address in dispatcher's CGI query
+ *
  * Revision 6.55  2003/02/13 21:38:22  lavr
  * Comply with new SERV_Preference() prototype
  *

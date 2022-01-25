@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.10 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,12 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.10  2003/09/28 20:22:47  kans
+* added PubmedEntryToXXXFile functions
+*
+* Revision 6.9  2003/09/26 18:57:51  kans
+* MedlineEntryToDataFile calls MakeMLAuthString for structured author
+*
 * Revision 6.8  2001/10/29 20:37:06  kans
 * MakeAuthorString for structured authors
 *
@@ -187,15 +193,66 @@ static ColData table [2] = {{0, 6, 0, 'l', TRUE, TRUE, FALSE},
 static Char *months[13] = {"", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
                            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
+static CharPtr MakeMLAuthString (
+  CharPtr name,
+  CharPtr initials,
+  CharPtr suffix
+)
+
+{
+  Char     ch;
+  size_t   len;
+  CharPtr  ptr;
+  CharPtr  str;
+  CharPtr  tmp;
+
+  if (name == NULL) return NULL;
+
+  len = StringLen (name) + StringLen (initials) * 3 + StringLen (suffix);
+  str = MemNew (sizeof (Char) * (len + 4));
+  if (str == NULL) return NULL;
+
+  tmp = str;
+
+  tmp = StringMove (tmp, name);
+
+  ptr = initials;
+  if (! StringHasNoText (initials)) {
+    tmp = StringMove (tmp, " ");
+    ch = *ptr;
+    while (ch != '\0') {
+      if (ch == '-') {
+        *tmp = '-';
+        tmp++;
+      } else if (ch != '.') {
+        *tmp = ch;
+        tmp++;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    *tmp = '\0';
+  }
+
+  if (! StringHasNoText (suffix)) {
+    tmp = StringMove (tmp, " ");
+    tmp = StringMove (tmp, suffix);
+  }
+
+  return str;
+}
+
+static Boolean MedlineEntryToDataFileEx (MedlineEntryPtr mep, Int4 pmid, FILE *fp)
 
 {
   CharPtr         abstract;
   AffilPtr        affil;
+  AuthorPtr       ap;
   AuthListPtr     authors = NULL;
   CitArtPtr       cit;
   CitJourPtr      citjour;
   Int2            count;
+  CharPtr         curr;
   DatePtr         date = NULL;
   ValNodePtr      gene;
   Int2            i;
@@ -204,9 +261,11 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
   size_t          len;
   MedlineMeshPtr  mesh;
   ValNodePtr      names;
+  NameStdPtr      nsp;
   CharPtr         p;
   CharPtr         pages = NULL;
   ParData         para;
+  PersonIdPtr     pid;
   CharPtr         ptr;
   ValNodePtr      qual;
   Boolean         rsult;
@@ -255,20 +314,59 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     cit = mep->cit;
     if (cit != NULL) {
       authors = cit->authors;
-      if (authors != NULL && (authors->choice == 2 || authors->choice == 3)) {
-        names = authors->names;
-        count = 0;
-        while (names != NULL) {
-          if (count >= 20) {
-            rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
-            ClearString ();
-            count = 0;
+      if (authors != NULL) {
+        if (authors->choice == 1) {
+          names = authors->names;
+          count = 0;
+          while (names != NULL) {
+            if (count >= 20) {
+              rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+              ClearString ();
+              count = 0;
+            }
+            curr = NULL;
+            ap = (AuthorPtr) names->data.ptrvalue;
+            if (ap != NULL) {
+              pid = ap->name;
+              if (pid != NULL) {
+                if (pid->choice == 2) {
+                  nsp = (NameStdPtr) pid->data;
+                  if (nsp != NULL) {
+                    if (! StringHasNoText (nsp->names [0])) {
+                      curr = MakeMLAuthString (nsp->names [0], nsp->names [4], nsp->names [5]);
+                    } else if (! StringHasNoText (nsp->names [3])) {
+                      curr = MakeMLAuthString (nsp->names [3], NULL, NULL);
+                    }
+                  }
+                } else if (pid->choice == 3 || pid->choice == 4) {
+                  curr = MakeMLAuthString ((CharPtr) pid->data, NULL, NULL);
+                }
+              }
+            }
+            if (curr != NULL) {
+              AddString ("AU  -\t");
+              AddString (curr);
+              AddString ("\n");
+              curr = MemFree (curr);
+            }
+            names = names->next;
+            count++;
           }
-          AddString ("AU  -\t");
-          AddString (names->data.ptrvalue);
-          AddString ("\n");
-          names = names->next;
-          count++;
+        } else if (authors->choice == 2 || authors->choice == 3) {
+          names = authors->names;
+          count = 0;
+          while (names != NULL) {
+            if (count >= 20) {
+              rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
+              ClearString ();
+              count = 0;
+            }
+            AddString ("AU  -\t");
+            AddString (names->data.ptrvalue);
+            AddString ("\n");
+            names = names->next;
+            count++;
+          }
         }
       }
       rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
@@ -579,6 +677,23 @@ NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
     buffer = MemFree (buffer);
   }
   return rsult;
+}
+
+NLM_EXTERN Boolean MedlineEntryToDataFile (MedlineEntryPtr mep, FILE *fp)
+
+{
+  return MedlineEntryToDataFileEx (mep, 0, fp);
+}
+
+NLM_EXTERN Boolean PubmedEntryToDataFile (PubmedEntryPtr pep, FILE *fp)
+
+{
+  MedlineEntryPtr  mep;
+
+  if (pep == NULL || fp == NULL) return FALSE;
+  mep = (MedlineEntryPtr) pep->medent;
+  if (mep == NULL) return FALSE;
+  return MedlineEntryToDataFileEx (mep, pep->pmid, fp);
 }
 
 #ifdef VAR_ARGS
@@ -1036,7 +1151,7 @@ static ColData  colFmt [3] = {{0, 0, 0, 'l', TRUE, TRUE, FALSE},
 
 static ColData  mshFmt [1] = {{0, 80, 0, 'l', FALSE, FALSE, TRUE}};
 
-static Boolean MedlineEntryToDocOrAbsFile (MedlineEntryPtr mep, FILE *fp, Boolean showMesh)
+static Boolean MedlineEntryToDocOrAbsFile (MedlineEntryPtr mep, Int4 pmid, FILE *fp, Boolean showMesh)
 
 {
   size_t      len;
@@ -1122,13 +1237,35 @@ static Boolean MedlineEntryToDocOrAbsFile (MedlineEntryPtr mep, FILE *fp, Boolea
 NLM_EXTERN Boolean MedlineEntryToDocFile (MedlineEntryPtr mep, FILE *fp)
 
 {
-  return MedlineEntryToDocOrAbsFile (mep, fp, TRUE);
+  return MedlineEntryToDocOrAbsFile (mep, 0, fp, TRUE);
 }
 
 NLM_EXTERN Boolean MedlineEntryToAbsFile (MedlineEntryPtr mep, FILE *fp)
 
 {
-  return MedlineEntryToDocOrAbsFile (mep, fp, FALSE);
+  return MedlineEntryToDocOrAbsFile (mep, 0, fp, FALSE);
+}
+
+NLM_EXTERN Boolean PubmedEntryToDocFile (PubmedEntryPtr pep, FILE *fp)
+
+{
+  MedlineEntryPtr  mep;
+
+  if (pep == NULL || fp == NULL) return FALSE;
+  mep = (MedlineEntryPtr) pep->medent;
+  if (mep == NULL) return FALSE;
+  return MedlineEntryToDocOrAbsFile (mep, pep->pmid, fp, TRUE);
+}
+
+NLM_EXTERN Boolean PubmedEntryToAbsFile (PubmedEntryPtr pep, FILE *fp)
+
+{
+  MedlineEntryPtr  mep;
+
+  if (pep == NULL || fp == NULL) return FALSE;
+  mep = (MedlineEntryPtr) pep->medent;
+  if (mep == NULL) return FALSE;
+  return MedlineEntryToDocOrAbsFile (mep, pep->pmid, fp, FALSE);
 }
 
 #define IBM_MEDLINE_DIVSS '$'

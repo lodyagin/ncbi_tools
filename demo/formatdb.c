@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: formatdb.c,v 6.91 2003/10/01 18:59:56 camacho Exp $";
+
 /*****************************************************************************
 
   
@@ -30,11 +32,27 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.86 $
+   $Revision: 6.91 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.91  2003/10/01 18:59:56  camacho
+   Fix to creation of custom databases using a gi list and alias files when the
+   source database spans multiple volumes.
+
+   Revision 6.90  2003/09/12 20:18:55  camacho
+   This change enables the generation of alias files for multiple ASN.1 inputs.
+
+   Revision 6.89  2003/05/30 17:31:09  coulouri
+   add rcsid
+
+   Revision 6.88  2003/05/13 16:02:42  coulouri
+   make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
+   Revision 6.87  2003/05/08 16:02:17  camacho
+   Use conditional compilation for reading .formatdbrc
+
    Revision 6.86  2003/04/03 19:10:59  camacho
    Fixed typo
 
@@ -565,6 +583,21 @@ Boolean FDBUpdateTaxIdInBdp(BlastDefLinePtr bdp_in)
     return TRUE;
 }
 
+void SeqEntryGetLength(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+{
+    Int8* length = (Int8*) data;
+
+    if (IS_Bioseq(sep)) {
+        BioseqPtr bsp = (BioseqPtr) sep->data.ptrvalue;
+        *length += (Int8)bsp->length;
+        return;
+    } else {
+        BioseqSetPtr bssp = (BioseqSetPtr) sep->data.ptrvalue;
+        SeqEntryGetLength(bssp->seq_set, data, index, indent);
+    }
+    return;
+}
+
 Int2 Main(void) 
 {
     SeqEntryPtr sep;
@@ -605,7 +638,7 @@ Int2 Main(void)
     tmp = StringTokMT(file_inputs, DELIM, &next_db); 
     if (next_db) {
        if (!dump_args[basename_arg].strvalue) {
-          ErrPostEx(SEV_FATAL, 0, 0, "Database base name must be provided "
+          ErrPostEx(SEV_FATAL, 1, 0, "Database base name must be provided "
                   "with multiple input files\n");
           return 1;
        } 
@@ -616,7 +649,7 @@ Int2 Main(void)
         * the new database */
        do {
            if (!StringCmp(dump_args[basename_arg].strvalue, tmp)) {
-               ErrPostEx(SEV_FATAL, 0, 0, "Database base name cannot have the "
+               ErrPostEx(SEV_FATAL, 1, 0, "Database base name cannot have the "
                        "same name as one of the input files\n");
                return 1;
            }
@@ -649,22 +682,22 @@ Int2 Main(void)
 
     if (options->gi_file && dump_args[alias_fn_arg].strvalue == NULL &&
             options->gi_file_bin == NULL) {
-        ErrPostEx(SEV_FATAL,0,0,"The -F option must be used with either "
+        ErrPostEx(SEV_FATAL, 1,0,"The -F option must be used with either "
                 "the -L or -B option\n");
         FDBOptionsFree(options);
         return 1;
     } else if (dump_args[alias_fn_arg].strvalue && options->gi_file_bin) {
-        ErrPostEx(SEV_FATAL, 0, 0, "The -L and -B options may not be "
+        ErrPostEx(SEV_FATAL, 1, 0, "The -L and -B options may not be "
                 "specified together");
         FDBOptionsFree(options);
         return 1;
     } else if (options->gi_file_bin && options->gi_file == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "The -B option may not be specified "
+        ErrPostEx(SEV_FATAL, 1, 0, "The -B option may not be specified "
                 "without the -F option");
         FDBOptionsFree(options);
         return 1;
     } else if (dump_args[alias_fn_arg].strvalue && options->gi_file == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "The -L option must be specified "
+        ErrPostEx(SEV_FATAL, 1, 0, "The -L option must be specified "
                 "with the -F option\n");
         FDBOptionsFree(options);
         return 1;
@@ -683,13 +716,13 @@ Int2 Main(void)
     
         rdfp = rdfp_tmp = readdb_new(options->db_file, options->is_protein);
         if (rdfp == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to open BLAST db %s\n", 
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to open BLAST db %s\n", 
                     options->db_file);
             FDBOptionsFree(options);
             return 1;
         }
         if ((gifile = FindBlastDBFile(options->gi_file)) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to find %s\n", options->gi_file);
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to find %s\n", options->gi_file);
             rdfp = readdb_destruct(rdfp);
             FDBOptionsFree(options);
             return 1;
@@ -699,6 +732,12 @@ Int2 Main(void)
 
         /* Iterate through the rdfp's (there might be many) */
         for (; rdfp; rdfp = rdfp->next, rdfp_ctr++) {
+
+            /* Isolate the current rdfp so that we restrict the search for gis
+             * to this volume only! */
+            ReadDBFILEPtr next = rdfp->next;
+            rdfp->next = NULL;
+
             nseqs = nletters = 0;
             for (i = 0; i < gi_list_total; i++) {
                 ordinal_id = readdb_gi2seq(rdfp, gi_list[i].gi, NULL);
@@ -707,6 +746,8 @@ Int2 Main(void)
                     nletters += readdb_get_sequence_length(rdfp, ordinal_id);
                 }
             }
+            rdfp->next = next;  /* restore the next rdfp */
+
             sprintf(alias_fn, "%s.%02d", options->alias_file_name, rdfp_ctr);
             /* For the base name (DBLIST field in alias file) append the
              * volume number if there are multiple volumes in this database */
@@ -721,10 +762,11 @@ Int2 Main(void)
                     alias_fn, nseqs, Nlm_Int8tostr(nletters,0), 
                     options->is_protein ? "residues" : "bases");
             nseqs_tot += nseqs; nletters_tot += nletters;
+
         }
         /* Sanity check: Don't write 'ghost' alias files */
         if (nletters_tot == 0 || nseqs_tot == 0) {
-            ErrPostEx(SEV_FATAL, 0, 0, "No gis from %s were found in the %s "
+            ErrPostEx(SEV_FATAL, 1, 0, "No gis from %s were found in the %s "
                 "database", options->gi_file, options->db_file);
             for (i = 0; i <= rdfp_ctr; i++) {
                 sprintf(alias_fn,"%s.%02d.%cal", options->alias_file_name, i,
@@ -746,10 +788,13 @@ Int2 Main(void)
         } else { /* multi-volume database */
             Char *p = FD_ConstructMultivolumeDBList(options->alias_file_name,
                     rdfp_ctr);
-            /* Create wrapper alias file */
+            /* Create wrapper alias file
+             * Note that the total number of sequences and letters is not needed
+             * because these will be calculated by readdb when reading the alias
+             * files.
+             */
             FD_CreateAliasFileEx(options->db_title, options->alias_file_name,
-                    0, options->is_protein, p, 0, 0, nletters_tot, nseqs_tot,
-                    NULL, NULL);
+                    0, options->is_protein, p, 0, 0, 0, 0, NULL, NULL);
             ErrLogPrintf("Created wrapper alias file %s for %s\n",
                     options->alias_file_name, p);
             p = MemFree(p);
@@ -801,12 +846,14 @@ Int2 Main(void)
     if ((fdbp = FormatDBInit(options)) == NULL)
         return 2;        
     
+#ifdef SET_ASN1_DEFLINE_BITS
     /* Allow users to set their own membership and link bits using a
      * .formatdbrc file. Useful for formatting purposes */
     if (options->version >= FORMATDB_VER) {
         options->linkbit_listp = FDBLoadLinksTable();
         options->memb_tblp = FDBLoadMembershipsTable();
     }
+#endif
 
     /* Loop on input files */
     while (options->db_file) {
@@ -825,7 +872,6 @@ Int2 Main(void)
                                              (Boolean)!options->is_protein,
                                              &error_msg, options->parse_mode, options->base_name, &id_ctr,NULL)) != NULL) {
              
-             sequence_count++;
              if(!IS_Bioseq(sep)) { /* Not Bioseq - failure */
                 ErrLogPrintf("Error in readind Bioseq Formating failed.\n");
                 return 4;
@@ -835,6 +881,7 @@ Int2 Main(void)
              bsp = (BioseqPtr) sep->data.ptrvalue;            
              
              total_length += bsp->length;
+             sequence_count++;
              
              if (error_msg) {
                  Char buffer[42];
@@ -893,19 +940,27 @@ Int2 Main(void)
           }
           
           if (options->is_seqentry) {
+             Int8 len = 0;
              /* Seq entry */
              sep = SeqEntryAsnRead(fdbp->aip, NULL);
              FDBAddSeqEntry(fdbp, sep); 
+             SeqEntryExplore(sep, (Pointer)&len, SeqEntryGetLength);
              SeqEntryFree(sep);
+             sequence_count++;
+             total_length += len;
           } else {
              /* Bioseq-set */
              
              while ((atp = AsnReadId(fdbp->aip, amp, atp)) != NULL) {
                 if (atp == atp2) {   /* top level Seq-entry */
+                   Int8 len = 0;
                    sep = SeqEntryAsnRead(fdbp->aip, atp);
                    
                    FDBAddSeqEntry(fdbp, sep);
+                   SeqEntryExplore(sep, (Pointer)&len, SeqEntryGetLength);
                    SeqEntryFree(sep);
+                   sequence_count++;
+                   total_length += len;
                 } else {
                    AsnReadVal(fdbp->aip, atp, NULL);
                 }
@@ -948,7 +1003,7 @@ Int2 Main(void)
         rdfp = rdfp_tmp = readdb_new(dump_args[basename_arg].strvalue, 
                                      options->is_protein);
         if (rdfp == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
+            ErrPostEx(SEV_FATAL, 1, 0, 
                     "Cannot create alias files for multiple inputs");
             FDBOptionsFree(options);
             return 1;
@@ -1028,10 +1083,12 @@ Int2 Main(void)
     }
 #endif    
 
+#ifdef SET_ASN1_DEFLINE_BITS
     if (options->version >= FORMATDB_VER) {
         options->linkbit_listp = FDBDestroyLinksTable(options->linkbit_listp);
         options->memb_tblp = FDBDestroyMembershipsTable(options->memb_tblp);
     }
+#endif
     FDBOptionsFree(options);
 
     return 0;

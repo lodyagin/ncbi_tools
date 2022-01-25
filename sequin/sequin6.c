@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.100 $
+* $Revision: 6.116 $
 *
 * File Description: 
 *
@@ -297,6 +297,7 @@ typedef struct convertformdata {
   GrouP              ifNotFoundGroup;
   Int2               ifNotFound;
   Int2               index;
+  Boolean            isCommentConvert;
 } ConvertFormData, PNTR ConvertFormPtr;
 
 /* Values for ifNotFound field */
@@ -402,9 +403,12 @@ static void SetConvertAcceptButton (Handle a)
           return;
         }
       }
-      if (cfp->asnOrFlat == NULL) {
+      if (cfp->asnOrFlat == NULL)
+      {
         if ((! TextHasNoText (cfp->atleft)) ||
-	    (! TextHasNoText (cfp->atright))) {
+          (! TextHasNoText (cfp->atright)) ||
+          cfp->isCommentConvert)
+        {
           SafeEnable (cfp->accept);
           return;
         }
@@ -1221,6 +1225,7 @@ extern Int2 LIBCALLBACK CreateDeleteByTextWindow (Pointer data)
   cfp = (ConvertFormPtr) MemNew (sizeof (ConvertFormData));
   if (cfp == NULL)
     return OM_MSG_RET_ERROR;
+  cfp->isCommentConvert = FALSE;
 
   w = FixedWindow (-50, -33, -10, -10, "Delete By Text String",
 		   StdCloseWindowProc);
@@ -1734,6 +1739,118 @@ static void FoundStringForConversion (Uint2 entityID, SeqEntryPtr sep, ConvertFo
   }
 }
 
+typedef struct commentconvertdata {
+  ConvertFormPtr cfp;
+  SeqEntryPtr    sep;
+  Uint2          entityID;
+} CommentConvertData, PNTR CommentConvertPtr;
+
+static CharPtr FindStringForConversion (CharPtr string, ConvertFormPtr cfp)
+{
+  CharPtr           lft = NULL;
+  Boolean           okay;
+  CharPtr           rgt = NULL;
+  CharPtr           tmp;
+
+  if (string == NULL || *string == '\0') return NULL;
+
+  CompressSpaces (string);
+  okay = TRUE;
+  tmp = string;
+  if (cfp->leftstr != NULL && cfp->leftstr [0] != '\0') {
+    lft = SearchForString (string, cfp->leftstr, FALSE, FALSE);
+    if (lft != NULL) {
+      if (! cfp->includeleft) {
+        lft += StringLen (cfp->leftstr);
+      }
+      tmp = lft;
+    } else {
+      okay = FALSE;
+    }
+  }
+  if (cfp->rightstr != NULL && cfp->rightstr [0] != '\0') {
+    rgt = SearchForString (tmp, cfp->rightstr, FALSE, FALSE);
+    if (rgt != NULL) {
+      if (cfp->includeright) {
+        rgt += StringLen (cfp->rightstr);
+      }
+      *rgt = '\0';
+    } else {
+      okay = FALSE;
+    }
+  }
+  else if (TRUE == cfp->endQuotesFlag) {
+    rgt = SearchForString (tmp, "\"", FALSE, FALSE);
+    if (rgt != NULL) {
+      if (cfp->includeright) {
+        rgt += StringLen (cfp->rightstr);
+      }
+      *rgt = '\0';
+    } else {
+      okay = FALSE;
+    }
+  }
+  if (okay) {
+    if (lft != NULL) {
+      lft = tmp;
+    } else {
+      lft = string;
+    }
+    if (! StringHasNoText (lft)) {
+      return lft;
+    }
+  }
+  return NULL;
+}
+
+static void ConvertOneComment (SeqDescrPtr sdp, Pointer userdata)
+{
+  CharPtr           string;
+  CommentConvertPtr ccp;
+  ConvertFormPtr    cfp;
+  CharPtr           result;
+
+  if (sdp == NULL
+    || sdp->choice != Seq_descr_comment
+    || sdp->data.ptrvalue == NULL
+    || (ccp = (CommentConvertPtr) userdata) == NULL
+    || (cfp = ccp->cfp) == NULL)
+  {
+    return;
+  }
+  string = StringSave (sdp->data.ptrvalue);
+
+  if (string == NULL || *string == '\0') 
+  {
+    MemFree (string);
+    return;
+  }
+
+  if ((result = FindStringForConversion (string, cfp)) != NULL)
+  {
+    FoundStringForConversion (ccp->entityID, ccp->sep, cfp, result);
+  }
+  MemFree (string);
+}
+
+static void ConvertFromComment (
+  Uint2 entityID,
+  SeqEntryPtr sep,
+  ConvertFormPtr cfp
+)
+{
+  CommentConvertData ccd;
+  ErrSev           level;
+
+  level = ErrSetMessageLevel (SEV_MAX);
+
+  ccd.entityID = entityID;
+  ccd.sep = sep;
+  ccd.cfp = cfp;
+  VisitDescriptorsOnSep (sep, &ccd, ConvertOneComment);
+  ErrSetMessageLevel (level);
+}
+
 static void ConvertFromFlatFile (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, Uint1 format)
 
 {
@@ -1827,6 +1944,10 @@ static void DoOneConvert (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, M
 
   if (sep == NULL || cfp == NULL) return;
   if (IS_Bioseq_set (sep)) {
+    if (cfp->report == 3)
+    {
+      ConvertFromComment (entityID, sep, cfp);
+    }
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 ||
                          (IsPopPhyEtcSet (bssp->_class)))) {
@@ -1847,6 +1968,9 @@ static void DoOneConvert (Uint2 entityID, SeqEntryPtr sep, ConvertFormPtr cfp, M
       break;
     case 2 :
       ConvertFromFlatFile (entityID, sep, cfp, EMBL_FMT);
+      break;
+    case 3 :
+      ConvertFromComment (entityID, sep, cfp);
       break;
     default :
       break;
@@ -2232,7 +2356,14 @@ static void DoConvertProc (ButtoN b)
     cfp->type = (Int2) val;
     if (GetEnumPopup (cfp->subtarget [cfp->type], cfp->alists [cfp->type], &val) && val > 0) {
       cfp->subtype = (Int2) val;
-      cfp->report = GetValue (cfp->asnOrFlat);
+      if (cfp->asnOrFlat == NULL)
+      {
+        cfp->report = 3;
+      }
+      else
+      {
+        cfp->report = GetValue (cfp->asnOrFlat);
+      }
       if (cfp->report > 0) {
         cfp->leftstr = SaveStringFromTextNoStripSpaces (cfp->atleft);
         cfp->rightstr = SaveStringFromTextNoStripSpaces (cfp->atright);
@@ -2243,7 +2374,14 @@ static void DoConvertProc (ButtoN b)
 	  cfp->endQuotesFlag = FALSE;
         cfp->includeleft = (Boolean) (GetValue (cfp->leftbehav) == 2);
         cfp->includeright = (Boolean) (GetValue (cfp->rightbehav) == 2);
-        mon = MonitorStrNewEx ("Parsing Text From FlatFile", 20, FALSE);
+        if (cfp->report == 3)
+        {
+          mon = MonitorStrNewEx ("Parsing Text From Comments", 20, FALSE);
+        }
+        else
+        {
+          mon = MonitorStrNewEx ("Parsing Text From FlatFile", 20, FALSE);
+        }
         cfp->index = 0;
         DoOneConvert (cfp->input_entityID, sep, cfp, mon);
         MonitorFree (mon);
@@ -2368,7 +2506,7 @@ static void CleanupParseForm (GraphiC g, VoidPtr data)
   StdCleanupFormProc (g, data);
 }
 
-extern void ParseAsnOrFlatfileToAnywhere (IteM i)
+static void BuildParseToAnywhereDialog (IteM i, Boolean use_files)
 
 {
   EnumFieldAssocPtr  ap;
@@ -2395,6 +2533,15 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   if (sep == NULL) return;
   cfp = (ConvertFormPtr) MemNew (sizeof (ConvertFormData));
   if (cfp == NULL) return;
+
+  if (use_files)
+  {
+    cfp->isCommentConvert = FALSE;
+  }
+  else
+  {
+    cfp->isCommentConvert = TRUE;
+  }
   w = FixedWindow (-50, -33, -10, -10, "General Field Conversion", StdCloseWindowProc);
   SetObjectExtra (w, cfp, CleanupParseForm);
   cfp->form = (ForM) w;
@@ -2413,13 +2560,20 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  q = HiddenGroup (h, 4, 0, NULL);
-  StaticPrompt (q, "File format to parse", 0, stdLineHeight, programFont, 'l');
-  cfp->asnOrFlat = HiddenGroup (q, 3, 0, (GrpActnProc) SetConvertAcceptButton);
-  SetObjectExtra (cfp->asnOrFlat, cfp, NULL);
-  RadioButton (cfp->asnOrFlat, "GenBank");
-  RadioButton (cfp->asnOrFlat, "EMBL");
-  SetValue (cfp->asnOrFlat, 1);
+  if (use_files)
+  {
+    q = HiddenGroup (h, 4, 0, NULL);
+    StaticPrompt (q, "File format to parse", 0, stdLineHeight, programFont, 'l');
+    cfp->asnOrFlat = HiddenGroup (q, 3, 0, (GrpActnProc) SetConvertAcceptButton);
+    SetObjectExtra (cfp->asnOrFlat, cfp, NULL);
+    RadioButton (cfp->asnOrFlat, "GenBank");
+    RadioButton (cfp->asnOrFlat, "EMBL");
+    SetValue (cfp->asnOrFlat, 1);
+  }
+  else
+  {
+    cfp->asnOrFlat = NULL;
+  }
 
   g = HiddenGroup (h, 3, 0, NULL);
   StaticPrompt (g, "Get text between", 0, dialogTextHeight, programFont, 'l');
@@ -2489,6 +2643,18 @@ extern void ParseAsnOrFlatfileToAnywhere (IteM i)
   Select (w);
   Select (cfp->atleft);
   Update ();
+}
+
+extern void ParseAsnOrFlatfileToAnywhere (IteM i)
+
+{
+  BuildParseToAnywhereDialog (i, TRUE);
+}
+
+extern void ParseCommentToAnywhere (IteM i)
+
+{
+  BuildParseToAnywhereDialog (i, FALSE);
 }
 
 /*---------------------------------------------------------------------*/
@@ -2635,7 +2801,6 @@ static void RemOutTxt_SearchAndExcise (CharPtr        sourceStr,
 {
   CharPtr  leftEnd = NULL;
   CharPtr  rightEnd = NULL;
-  CharPtr  newStr = NULL;
   Int4     strLen;
   Int4     i;
 
@@ -2655,12 +2820,17 @@ static void RemOutTxt_SearchAndExcise (CharPtr        sourceStr,
   if (cfp->leftstr != NULL && cfp->leftstr [0] != '\0') {
     leftEnd = SearchForString (sourceStr, cfp->leftstr, FALSE, FALSE);
     if (NULL == leftEnd)  /* String not found */
+    {
       if (DO_NOTHING == cfp->ifNotFound)
+      {
 	return;
-      else {
+      }
+      else
+      {
 	sourceStr [0] = '\0';
 	return;
       }
+    }
     if (cfp->includeleft)
       leftEnd += StringLen (cfp->leftstr);
   }
@@ -2672,12 +2842,17 @@ static void RemOutTxt_SearchAndExcise (CharPtr        sourceStr,
   if (cfp->rightstr != NULL && cfp->rightstr [0] != '\0') {
     rightEnd = SearchForString (leftEnd, cfp->rightstr, FALSE, FALSE);
     if (NULL == rightEnd) /* String not found */
+    {
       if (DO_NOTHING == cfp->ifNotFound)
+      {
 	return;
-      else {
+      }
+      else
+      {
 	sourceStr [0] = '\0';
 	return;
       }
+    }
     if (!cfp->includeright)
       rightEnd += StringLen (cfp->rightstr);
   }
@@ -3460,6 +3635,8 @@ extern void RemoveTextOutsideString (IteM i)
   if (cfp == NULL)
     return;
 
+  cfp->isCommentConvert = FALSE;
+
   /* Create a window for getting user input */
 
   w = FixedWindow (-50, -33, -10, -10, "Remove Text Outside String",
@@ -3636,6 +3813,9 @@ extern void RemoveTextInsideString (IteM i)
   if (sep == NULL) return;
   cfp = (ConvertFormPtr) MemNew (sizeof (ConvertFormData));
   if (cfp == NULL) return;
+
+  cfp->isCommentConvert = FALSE;
+
   w = FixedWindow (-50, -33, -10, -10, "General Text Excision", StdCloseWindowProc);
   SetObjectExtra (w, cfp, StdCleanupFormProc);
   cfp->form = (ForM) w;
@@ -3942,6 +4122,7 @@ typedef struct applyformdata {
 
   Int2           type;
   Int2           errcount;
+  ValNodePtr     ambigList;
   Boolean        noLeft;
   Boolean        noRight;
   ButtoN         applyToParts;
@@ -3958,6 +4139,7 @@ typedef struct applyformdata {
   Uint1          rnatype;
   EnumFieldAssoc PNTR realalist;
   EnumFieldAssoc PNTR alist;
+  GrouP          strand_group;
 } ApplyFormData, PNTR ApplyFormPtr;
 
 typedef struct alreadyhas {
@@ -4043,6 +4225,20 @@ static Boolean AlreadyHasFeatOrDesc (SeqEntryPtr sep, Uint1 featchoice, Uint1 de
   return ah.rsult;
 }
 
+static void setSeqFeatStrand(SeqFeatPtr sfp, Uint1 strand)
+{
+  SeqIntPtr          sqip;
+
+  if (sfp == NULL) return;
+  if (sfp->location == NULL) return;
+  if (sfp->location->choice != SEQLOC_INT) return;
+  sqip = (SeqIntPtr) sfp->location->data.ptrvalue;
+  if (sqip != NULL)
+  {
+    sqip->strand = Seq_strand_minus;
+  }
+}
+
 /*---------------------------------------------------------------------*/
 /*                                                                     */
 /* Apply_AddCDS () --                                                  */
@@ -4074,8 +4270,11 @@ static void Apply_AddCDS (Uint2        entityID,
   SeqEntryPtr        psep;
   CharPtr            ptr;
   SeqFeatPtr         sfp;
+  SeqIdPtr           sip;
   Char               str [128];
   ValNodePtr         vnp;
+  SeqEntryPtr        parent_sep;
+  SeqEntryPtr        gene_sep;
 
   /* If necessary then check for duplication before adding */
 
@@ -4084,9 +4283,20 @@ static void Apply_AddCDS (Uint2        entityID,
       AlreadyHasFeatOrDesc (sep, SEQFEAT_CDREGION, 0, 0))
     return;
 
+  /* determine the parent of this sequence (for use when segmented) */
+  parent_sep = NULL;
+  if (IS_Bioseq (sep))
+  {
+    parent_sep = GetBestTopParentForData (entityID, sep->data.ptrvalue);
+  }
+  if (parent_sep == NULL)
+  {
+    parent_sep = sep;
+  }
+
   /*Create a new CDS feature */
 
-  genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+  genCode = SeqEntryToGeneticCode (parent_sep, NULL, NULL, 0);
   crp = CreateNewCdRgn (1, FALSE, genCode);
   if (NULL == crp)
     return;
@@ -4100,6 +4310,10 @@ static void Apply_AddCDS (Uint2        entityID,
   /* Fill in the fields of the new CDS feature */
 
   SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+  if (GetValue (afp->strand_group) == 2) {
+    /* reverse strand direction - strand direction is plus by default */
+    setSeqFeatStrand (sfp, Seq_strand_minus);
+  }
   sfp->partial = (afp->noLeft || afp->noRight);
   if (! TextHasNoText (afp->featcomment)) {
     sfp->comment = SaveStringFromTextAndStripNewlines (afp->featcomment);
@@ -4117,9 +4331,18 @@ static void Apply_AddCDS (Uint2        entityID,
       frame = (Uint1) i;
     }
   }
+  str [0] = '\0';
+  if (IS_Bioseq (nsep)) {
+    bsp = (BioseqPtr) nsep->data.ptrvalue;
+    if (bsp != NULL) {
+      sip = SeqIdFindBest (bsp->id, 0);
+      SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str) - 1);
+    }
+  }
   for (i = 1; i <= 3; i++) {
     if (lens [i] == max && i != frame) {
       (afp->errcount)++;
+      ValNodeCopyStr (&(afp->ambigList), 0, str);
     }
   }
   crp->frame = frame;
@@ -4202,10 +4425,11 @@ static void Apply_AddCDS (Uint2        entityID,
   
   /**/
   
-  descr = ExtractBioSourceAndPubs (sep);
-  AddSeqEntryToSeqEntry (sep, psep, TRUE);
-  nsep = FindNucSeqEntry (sep);
-  ReplaceBioSourceAndPubs (sep, descr);
+  descr = ExtractBioSourceAndPubs (parent_sep);
+
+  AddSeqEntryToSeqEntry (parent_sep, psep, TRUE);
+  nsep = FindNucSeqEntry (parent_sep);
+  ReplaceBioSourceAndPubs (parent_sep, descr);
   SetSeqFeatProduct (sfp, bsp);
   GetTitle (afp->protName, str, sizeof (str));
   if (! StringHasNoText (str)) {
@@ -4220,23 +4444,36 @@ static void Apply_AddCDS (Uint2        entityID,
     }
   }
 
-  /*  Create a Gene ref feature on the nuc seq */
+  /* Create a Gene ref feature on the nuc seq or segment */
+  /* we can only create a feature where the sep->choice is 1 */
+  if (sep->choice == 1)
+  {
+    gene_sep = sep;
+  }
+  else
+  {
+    gene_sep = nsep;
+  }
 
   GetTitle (afp->geneName, str, sizeof (str));
   if (! StringHasNoText (str)) {
-    if (entityID > 0 && AlreadyHasFeatOrDesc (sep, SEQFEAT_GENE, 0, 0))
+    if (entityID > 0 && AlreadyHasFeatOrDesc (gene_sep, SEQFEAT_GENE, 0, 0))
       return;
 
     grp = CreateNewGeneRef (str, NULL, NULL, FALSE);
     if (NULL == grp)
       return;
 
-    sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
+    sfp = CreateNewFeature (gene_sep, NULL, SEQFEAT_GENE, NULL);
     if (NULL == sfp)
       return;
 
     sfp->data.value.ptrvalue = (Pointer) grp;
     SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+    if (GetValue (afp->strand_group) == 2) {
+      /* reverse strand direction - strand direction is plus by default */
+      setSeqFeatStrand (sfp, Seq_strand_minus);
+    }
 
     sfp->partial = (afp->noLeft || afp->noRight);
   }
@@ -4316,6 +4553,10 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
       if (sfp != NULL) {
         sfp->data.value.ptrvalue = (Pointer) rrp;
         SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+        if (GetValue (afp->strand_group) == 2) {
+          /* reverse strand direction - strand direction is plus by default */
+          setSeqFeatStrand (sfp, Seq_strand_minus);
+        }
         sfp->partial = (afp->noLeft || afp->noRight);
         if (! TextHasNoText (afp->featcomment)) {
           sfp->comment =
@@ -4333,6 +4574,10 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
         if (sfp != NULL) {
           sfp->data.value.ptrvalue = (Pointer) grp;
           SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+          if (GetValue (afp->strand_group) == 2) {
+            /* reverse strand direction - strand direction is plus by default */
+            setSeqFeatStrand (sfp, Seq_strand_minus);
+          }
           sfp->partial = (afp->noLeft || afp->noRight);
         }
       }
@@ -4359,6 +4604,10 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
         if (sfp != NULL) {
           sfp->data.value.ptrvalue = (Pointer) ifp;
           SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+          if (GetValue (afp->strand_group) == 2) {
+            /* reverse strand direction - strand direction is plus by default */
+            setSeqFeatStrand (sfp, Seq_strand_minus);
+          }
           sfp->partial = (afp->noLeft || afp->noRight);
           if (! TextHasNoText (afp->featcomment)) {
             sfp->comment =
@@ -4378,6 +4627,10 @@ static void RealApplyBioFeatToAll (Uint2        entityID,
         if (sfp != NULL) {
           sfp->data.value.ptrvalue = (Pointer) grp;
           SetSeqLocPartial (sfp->location, afp->noLeft, afp->noRight);
+          if (GetValue (afp->strand_group) == 2) {
+            /* reverse strand direction - strand direction is plus by default */
+            setSeqFeatStrand (sfp, Seq_strand_minus);
+          }
           sfp->partial = (afp->noLeft || afp->noRight);
           if (val == 0 && (! TextHasNoText (afp->featcomment))) {
             sfp->comment = 
@@ -4520,6 +4773,7 @@ Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
   if (ADD_RRNA == type)
     afd.rnatype = 4;
   afd.errcount = 0;
+  afd.ambigList = NULL;
   afd.partial5 = partialLft;
   afd.partial3 = partialRgt;
   afd.noLeft = GetStatus (afd.partial5);
@@ -4539,12 +4793,16 @@ Int2 ApplyAnnotationToAll (Int2 type, SeqEntryPtr sep,
 static void NowReadyToApplyToAll (ApplyFormPtr afp, DialoG gbquals)
 
 {
+  Char         buf [256];
+  Int2         i;
   Uint2        parenttype;
   Pointer      parentptr;
   CharPtr      plural;
   SeqEntryPtr  sep;
+  CharPtr      tmp;
   SeqEntryPtr  top;
   UIEnum       val;
+  ValNodePtr   vnp;
 
   if (afp == NULL) return;
   afp->gbquals = gbquals;
@@ -4569,13 +4827,23 @@ static void NowReadyToApplyToAll (ApplyFormPtr afp, DialoG gbquals)
   ArrowCursor ();
   Update ();
   if (afp->errcount > 0 && afp->type == ADD_CDS) {
-    if (afp->errcount > 1) {
+    if (afp->errcount > 5) {
+      plural = "records, first five are";
+    } else if (afp->errcount > 1) {
       plural = "records";
     } else {
       plural = "record";
     }
-    Message (MSG_ERROR, "Possible ambiguous frames detected in %d %s",
-             (int) afp->errcount, plural);
+    buf [0] = '\0';
+    for (vnp = afp->ambigList, i = 0; vnp != NULL && i < 5; vnp = vnp->next) {
+      tmp = (CharPtr) vnp->data.ptrvalue;
+      if (buf [0] != '\0') {
+        StringCat (buf, ", ");
+      }
+      StringCat (buf, tmp);
+    }
+    Message (MSG_ERROR, "Possible ambiguous frames detected in %d %s\n%s",
+             (int) afp->errcount, plural, buf);
   }
   if (indexerVersion) {
     if (CountSeqEntryComponents (sep) == 1) {
@@ -4741,6 +5009,7 @@ static void CleanupApplyToAllForm (GraphiC g, VoidPtr data)
       }
     }
     MemFree (afp->realalist);
+    ValNodeFreeData (afp->ambigList);
   }
   StdCleanupFormProc (g, data);
 }
@@ -4753,7 +5022,7 @@ static void CommonApplyToAllProc (IteM i, Int2 type)
   BaseFormPtr        bfp;
   ButtoN             b;
   GrouP              c;
-  GrouP              g;
+  GrouP              g = NULL;
   GrouP              h;
   GrouP              p;
   GrouP              q;
@@ -4804,10 +5073,17 @@ static void CommonApplyToAllProc (IteM i, Int2 type)
     Disable (afp->onlyThisPart);
   }
 
-  g = HiddenGroup (h, 2, 0, NULL);
+  afp->strand_group = NULL;
+
   if (type == ADD_CDS || type == ADD_RRNA || type == ADD_IMP) {
+    g = HiddenGroup (h, 2, 0, NULL);
     afp->partial5 = CheckBox (g, "Incomplete at 5' end", NULL);
     afp->partial3 = CheckBox (g, "Incomplete at 3' end", NULL);
+    afp->strand_group = HiddenGroup (h, 2, 0, NULL);
+    SetObjectExtra (afp->strand_group, afp, NULL);
+    RadioButton (afp->strand_group, "Plus Strand");
+    RadioButton (afp->strand_group, "Minus Strand");
+    SetValue (afp->strand_group, 1);
   }
 
   if (type == ADD_TITLE) {
@@ -4859,7 +5135,8 @@ static void CommonApplyToAllProc (IteM i, Int2 type)
   SetObjectExtra (b, afp, NULL);
   PushButton (c, "Cancel", StdCancelButtonProc);
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) p, (HANDLE) c, (HANDLE) z, (HANDLE) q, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, (HANDLE) z,
+                (HANDLE) g, (HANDLE) afp->strand_group, (HANDLE) q, NULL);
   RealizeWindow (w);
   Show (w);
   if (type == ADD_TITLE) {
@@ -4918,6 +5195,7 @@ typedef struct submitform {
   PopuP           suffix;
   DialoG          phonefaxemail;
   DialoG          authors;
+  TexT            consortium;
   DialoG          affil;
 
   Boolean         visitedContact;
@@ -4928,6 +5206,51 @@ typedef struct submitform {
   BtnActnProc     goToNext;
   BtnActnProc     goToPrev;
 } SubmitForm, PNTR SubmitFormPtr;
+
+static AuthListPtr AddConsortiumToAuthList (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+
+  if (TextHasNoText (consortium)) return alp;
+  if (alp == NULL) {
+    alp = AuthListNew ();
+    alp->choice = 1;
+  }
+  pid = PersonIdNew ();
+  if (pid == NULL) return NULL;
+  pid->choice = 5;
+  pid->data = SaveStringFromText (consortium);
+  ap = AuthorNew ();
+  if (ap == NULL) return NULL;
+  ap->name = pid;
+  names = ValNodeAdd (&(alp->names));
+  names->choice = 1;
+  names->data.ptrvalue = ap;
+  return alp;
+}
+
+static void AuthListToConsortium (AuthListPtr alp, TexT consortium)
+
+{
+  AuthorPtr    ap;
+  ValNodePtr   names;
+  PersonIdPtr  pid;
+  CharPtr      str;
+
+  if (alp == NULL || consortium == NULL) return;
+  if (alp->choice != 1) return;
+  for (names = alp->names; names != NULL; names = names->next) {
+    ap = names->data.ptrvalue;
+    if (ap == NULL) continue;
+    pid = ap->name;
+    if (pid == NULL || pid->choice != 5) continue;
+    str = (CharPtr) pid->data;
+    SafeSetTitle (consortium, str);
+  }
+}
 
 static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
 
@@ -4979,6 +5302,7 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
         PointerToDialog (sbfp->phonefaxemail, (Pointer) ap->affil);
       }
       PointerToDialog (sbfp->authors, (Pointer) sbp->citsubauthors);
+      AuthListToConsortium (sbp->citsubauthors, sbfp->consortium);
       PointerToDialog (sbfp->affil, (Pointer) sbp->citsubaffil);
       if (sbp->holduntilpublished) {
         SafeSetValue (sbfp->hup, 2);
@@ -5011,6 +5335,7 @@ static void SequinBlockPtrToSubmitForm (ForM f, Pointer data)
       SafeSetTitle (sbfp->lastname, "");
       PointerToDialog (sbfp->phonefaxemail, NULL);
       PointerToDialog (sbfp->authors, NULL);
+      SafeSetTitle (sbfp->consortium, "");
       PointerToDialog (sbfp->affil, NULL);
       SafeSetValue (sbfp->hup, 1);
       SafeHide (sbfp->dateGrp);
@@ -5059,7 +5384,7 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
           StringCat (str, "\t");
           MemFree (txt);
           suffixVal = GetValue (sbfp->suffix);
-	  sprintf (sfx, "%d", (int) (suffixVal - 1));
+          sprintf (sfx, "%d", (int) (suffixVal - 1));
           StringCat (str, sfx);
           StringCat (str, "\n");
           txt = StringSave (str);
@@ -5094,6 +5419,7 @@ static Pointer SubmitFormToSequinBlockPtr (ForM f)
       }
       sbp->contactperson = ap;
       sbp->citsubauthors = (AuthListPtr) DialogToPointer (sbfp->authors);
+      sbp->citsubauthors = AddConsortiumToAuthList (sbp->citsubauthors, sbfp->consortium);
       sbp->citsubaffil = (AffilPtr) DialogToPointer (sbfp->affil);
       if (GetValue (sbfp->hup) == 2) {
         sbp->holduntilpublished = TRUE;
@@ -5168,6 +5494,7 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
         authors = csp->authors;
         if (authors != NULL) {
           PointerToDialog (sbfp->authors, (Pointer) authors);
+          AuthListToConsortium (authors, sbfp->consortium);
           PointerToDialog (sbfp->affil, (Pointer) authors->affil);
         }
       }
@@ -5197,6 +5524,7 @@ static void SubmitBlockPtrToSubmitForm (ForM f, Pointer data)
       SafeSetValue (sbfp->suffix, 0);
       PointerToDialog (sbfp->phonefaxemail, NULL);
       PointerToDialog (sbfp->authors, NULL);
+      SafeSetTitle (sbfp->consortium, "");
       PointerToDialog (sbfp->affil, NULL);
       SafeSetValue (sbfp->hup, 1);
       SafeHide (sbfp->dateGrp);
@@ -5255,6 +5583,7 @@ static ValNodePtr TestSubmitForm (ForM f)
     }
 
     authors = DialogToPointer (sbfp->authors);
+    authors = AddConsortiumToAuthList (authors, sbfp->consortium);
     if (authors == NULL) {
       head = AddStringToValNodeChain (head, "author names", 1);
     }
@@ -5340,6 +5669,112 @@ static Boolean ReadSubmitBlock (ForM f, CharPtr filename)
         if (sbp != NULL) {
           Update ();
           return TRUE;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+static SeqDescrPtr MakeUnpubPub (CharPtr title, AuthListPtr alp, AffilPtr affil)
+
+{
+  CitGenPtr    cgp;
+  PubdescPtr   pdp;
+  ValNodePtr   pep;
+  SeqDescrPtr  vnp;
+
+  if (StringHasNoText (title) || alp == NULL) return NULL;
+  pdp = PubdescNew ();
+  if (pdp == NULL) return NULL;
+  vnp = SeqDescrNew (NULL);
+  if (vnp == NULL) return NULL;
+  vnp->choice = Seq_descr_pub;
+  vnp->data.ptrvalue = (Pointer) pdp;
+  pdp->reftype = 0;
+  pep = ValNodeNew (NULL);
+  pdp->pub = pep;
+  if (pep != NULL) {
+    cgp = CitGenNew ();
+    if (cgp != NULL) {
+      pep->choice = PUB_Gen;
+      pep->data.ptrvalue = cgp;
+      cgp->cit = StringSave ("unpublished");
+      cgp->authors = alp;
+      if (alp != NULL) {
+        alp->affil = affil;
+        if (affil != NULL) {
+          affil->phone = MemFree (affil->phone);
+          affil->fax = MemFree (affil->fax);
+          affil->email = MemFree (affil->email);
+        }
+      }
+      cgp->title = StringSave (title);
+    }
+  }
+  return vnp;
+}
+
+extern SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp);
+
+NLM_EXTERN void AsnPrintNewLine PROTO((AsnIoPtr aip));
+
+static Boolean WriteSubmitBlock (ForM f, CharPtr filename)
+
+{
+  AffilPtr        affil;
+  AsnIoPtr        aip;
+  AuthListPtr     alp;
+  Char            path [PATH_MAX];
+  SubmitFormPtr   sbfp;
+  SubmitBlockPtr  sbp;
+  SeqDescrPtr     sdp;
+  SequinBlockPtr  sqp;
+  CharPtr         title;
+#ifdef WIN_MAC
+  FILE            *fp;
+#endif
+
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
+  sbfp = (SubmitFormPtr) GetObjectExtra (f);
+  if (sbfp != NULL) {
+    if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+      fp = FileOpen (path, "r");
+      if (fp != NULL) {
+        FileClose (fp);
+      } else {
+        FileCreate (path, "TEXT", "ttxt");
+      }
+#endif
+      sqp = (SequinBlockPtr) SubmitFormToSequinBlockPtr (f);
+      if (sqp != NULL) {
+        title = StringSaveNoNull (sqp->citsubtitle);
+        alp = AsnIoMemCopy ((Pointer) sqp->citsubauthors,
+                            (AsnReadFunc) AuthListAsnRead,
+                            (AsnWriteFunc) AuthListAsnWrite);
+        affil = AsnIoMemCopy ((Pointer) sqp->citsubaffil,
+                              (AsnReadFunc) AffilAsnRead,
+                              (AsnWriteFunc) AffilAsnWrite);
+        sbp = ConvertSequinBlockToSubmitBlock (sqp);
+        if (sbp != NULL) {
+          aip = AsnIoOpen (path, "w");
+          if (aip != NULL) {
+            sbp->tool = MemFree (sbp->tool);
+            SubmitBlockAsnWrite (sbp, aip, NULL);
+            AsnPrintNewLine (aip);
+            sdp = MakeUnpubPub (title, alp, affil);
+            if (sdp != NULL) {
+              AsnIoReset (aip);
+              SeqDescAsnWrite (sdp, aip, NULL);
+              AsnPrintNewLine (aip);
+              SeqDescFree (sdp);
+            }
+            AsnIoClose (aip);
+            sbp = SubmitBlockFree (sbp);
+            return TRUE;
+          }
         }
       }
     }
@@ -5528,6 +5963,7 @@ static Boolean ReadAuthListPage (ForM f, CharPtr filename)
         AsnIoClose (aip);
         if (alp != NULL) {
           PointerToDialog (sbfp->authors, alp);
+          AuthListToConsortium (alp, sbfp->consortium);
           alp = AuthListFree (alp);
           Update ();
           return TRUE;
@@ -5565,6 +6001,7 @@ static Boolean WriteAuthListPage (ForM f, CharPtr filename)
       aip = AsnIoOpen (path, "w");
       if (aip != NULL) {
         alp = DialogToPointer (sbfp->authors);
+        alp = AddConsortiumToAuthList (alp, sbfp->consortium);
         AuthListAsnWrite (alp, aip, NULL);
         AsnIoClose (aip);
         alp = AuthListFree (alp);
@@ -5679,7 +6116,7 @@ static Boolean ExportSubmitForm (ForM f, CharPtr filename)
   if (sbfp != NULL) {
     switch (sbfp->currentPage) {
       case SUBMISSION_PAGE :
-        return FALSE;
+        return WriteSubmitBlock (f, filename);
       case CONTACT_PAGE :
         return WriteContactPage (f, filename);
       case AUTHOR_PAGE :
@@ -5761,6 +6198,7 @@ static void CopyContactToAuthors (SubmitFormPtr sbfp)
     }
     if (alp != NULL) {
        PointerToDialog (sbfp->authors, (Pointer) alp);
+       AuthListToConsortium (alp, sbfp->consortium);
     }
   }
   alp = AuthListFree (alp);
@@ -5778,9 +6216,9 @@ static void SetSubmitterImportExportItems (SubmitFormPtr sbfp)
     switch (sbfp->currentPage) {
       case SUBMISSION_PAGE :
         SafeSetTitle (importItm, "Import Submitter Info...");
-        SafeSetTitle (exportItm, "Export...");
+        SafeSetTitle (exportItm, "Export Submitter Info...");
         SafeEnable (importItm);
-        SafeDisable (exportItm);
+        SafeEnable (exportItm);
         break;
       case CONTACT_PAGE :
         SafeSetTitle (importItm, "Import Contact...");
@@ -5826,6 +6264,7 @@ static void EnterSubmitPage (SubmitFormPtr sbfp, Int2 page)
         break;
       case AUTHOR_PAGE :
         alp = (AuthListPtr) DialogToPointer (sbfp->authors);
+        alp = AddConsortiumToAuthList (alp, sbfp->consortium);
         if (sbfp->visitedContact && alp == NULL) {
           CopyContactToAuthors (sbfp);
         }
@@ -6007,6 +6446,7 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
   GrouP              t;
   WindoW             w;
   GrouP              x;
+  GrouP              z;
 
   w = NULL;
   sbfp = MemNew (sizeof (SubmitForm));
@@ -6100,6 +6540,10 @@ extern ForM CreateInitSubmitterForm (Int2 left, Int2 top, CharPtr title,
     q = HiddenGroup (h, -1, 0, NULL);
     SetGroupSpacing (q, 10, 20);
     sbfp->authors = CreateAuthorDialog (q, 3, -1);
+    z = HiddenGroup (q, 2, 0, NULL);
+    StaticPrompt (z, "Consortium", 0, stdLineHeight, programFont, 'l');
+    sbfp->consortium = DialogText (z, "", 16, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) sbfp->authors, (HANDLE) z, NULL);
     sbfp->pages [AUTHOR_PAGE] = q;
     Hide (sbfp->pages [AUTHOR_PAGE]);
 
@@ -6270,6 +6714,33 @@ static void EditRnaString (CharPtr PNTR strptr, RnaFormPtr rfp, CharPtr findStr,
 
 } /* EditRnaString */
 
+static Boolean SatisfiesRNAStringConstraint (
+  RnaFormPtr  rfp,
+  RnaRefPtr   rrp,
+  SeqFeatPtr  sfp
+)
+{
+  GetTitle (rfp->findthis, rfp->findStr, sizeof (rfp->findStr) - 1);
+  if (! StringHasNoText (rfp->findStr))
+  {
+    if (rrp == NULL)
+      return FALSE;
+    if ((rrp->ext.choice != 1
+      || rrp->ext.value.ptrvalue == NULL
+      || StringISearch (rrp->ext.value.ptrvalue, rfp->findStr) == NULL)
+      && (sfp->comment == NULL
+        || StringISearch (sfp->comment, rfp->findStr ) == NULL))
+    {
+      return FALSE;
+    }
+  }
+  else
+  {
+    /* if the string constraint isn't filled in, don't need to check for it */
+  }
+  return TRUE;
+}
+
 static Boolean ProcessEachRNAFunc (GatherContextPtr gcp)
 
 {
@@ -6299,6 +6770,14 @@ static Boolean ProcessEachRNAFunc (GatherContextPtr gcp)
     }
   }
   if (rrp == NULL) return TRUE;
+
+  /* Perform string constraint check for CONVERT_RNA */
+  if (rfp->type == CONVERT_RNA)
+  {
+    if ( ! SatisfiesRNAStringConstraint (rfp, rrp, sfp))
+      return TRUE;
+  }
+
   switch (rfp->type) {
     case REMOVE_RNA :
       break;
@@ -6422,6 +6901,14 @@ static Boolean CleanupEachRNAFunc (GatherContextPtr gcp)
       }
     }
   }
+
+  /* check for optional string constraint */
+  if (rfp->type == REMOVE_RNA || rfp->type == CONVERT_RNA)
+  {
+    if ( ! SatisfiesRNAStringConstraint (rfp, rrp, sfp))
+      return TRUE;
+  }
+
   switch (rfp->type) {
     case REMOVE_RNA :
     case CONVERT_RNA :
@@ -6662,6 +7149,12 @@ static void ProcessRNA (IteM i, Int2 type)
     rfp->findthis = DialogText (rfp->txtGrp, "", 14, NULL);
     StaticPrompt (rfp->txtGrp, "Replace", 0, dialogTextHeight, programFont, 'l');
     rfp->replacewith = DialogText (rfp->txtGrp, "", 14, NULL);
+  }
+
+  if (type == REMOVE_RNA || type == CONVERT_RNA) {
+    rfp->txtGrp = HiddenGroup (h, 2, 0, NULL);
+    StaticPrompt (rfp->txtGrp, "Optional string constraint", 0, dialogTextHeight, programFont, 'l');
+    rfp->findthis = DialogText (rfp->txtGrp, "", 14, NULL);
   }
 
   c = HiddenGroup (h, 4, 0, NULL);
@@ -7112,351 +7605,158 @@ extern void ParseFileToSource (IteM i)
   }
 }
 
-static Boolean AddStrainGatherFunc (GatherContextPtr gcp)
+typedef struct addmodinfo {
+  Boolean isOrgMod;
+  Uint1 subtype;
+} AddModInfo, PNTR AddModInfoPtr;
 
+typedef struct addmodlistitem {
+  Boolean isOrgMod;
+  Uint1 subtype;
+  CharPtr name;
+} AddModListItem, PNTR AddModListItemPtr;
+
+static AddModListItem mods_list[] = {
+{ TRUE, 24, "Authority" },
+{ FALSE, 3, "Clone" },
+{ FALSE, 6, "Genotype" },
+{ FALSE, 5, "Haplotype" },
+{ TRUE, 17, "Isolate" },
+{ TRUE, 23, "Specimen-voucher" },
+{ TRUE, 2, "Strain" },
+{ TRUE, 22, "Sub-species" },
+{ TRUE, 6, "Variety" }
+};
+
+static void AddModToOrgProc (BioSourcePtr biop, Pointer userdata)
 {
-  BioSourcePtr  biop;
+  OrgRefPtr     orp;
+  OrgModPtr     mod;
+  OrgNamePtr    onp;
   Boolean       influenza;
+  CharPtr	str_to_add;
   size_t        len;
-  OrgModPtr     mod;
-  OrgNamePtr    onp;
-  OrgRefPtr     orp;
-  CharPtr       ptr;
-  ValNodePtr    sdp;
-  SeqFeatPtr    sfp;
-  CharPtr       str;
-  CharPtr       strain;
-
-  if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
-  if (gcp->thistype != OBJ_SEQFEAT  && gcp->thistype != OBJ_SEQDESC) return TRUE;
-
-  orp = NULL;
-  biop = NULL;
-  switch (gcp->thistype) {
-    case OBJ_SEQFEAT :
-      sfp = (SeqFeatPtr) gcp->thisitem;
-      switch (sfp->data.choice) {
-        case SEQFEAT_ORG :
-          orp = (OrgRefPtr) sfp->data.value.ptrvalue;
-          break;
-        case SEQFEAT_BIOSRC :
-          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-          break;
-        default :
-          break;
-      }
-      break;
-    case OBJ_SEQDESC :
-      sdp = (ValNodePtr) gcp->thisitem;
-      switch (sdp->choice) {
-        case Seq_descr_org :
-          orp = (OrgRefPtr) sdp->data.ptrvalue;
-          break;
-        case Seq_descr_source :
-          biop = (BioSourcePtr) sdp->data.ptrvalue;
-          break;
-        default :
-          break;
-      }
-      break;
-    default :
-      break;
-  }
-  if (orp == NULL && biop != NULL) {
-    orp = biop->org;
-  }
-  if (orp != NULL) {
-    onp = orp->orgname;
-    if (onp != NULL) {
-      mod = onp->mod;
-      strain = NULL;
-      while (mod != NULL) {
-        if (mod->subtype == 2) {
-          strain = mod->subname;
-        }
-        mod = mod->next;
-      }
-      if (strain != NULL) {
-        ptr = StringStr (orp->taxname, " (");
-        if (ptr != NULL) {
-          *ptr = '\0';
-        } else {
-          ptr = StringStr (orp->taxname, " (");
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
-        influenza = FALSE;
-        if (StringICmp (orp->taxname, "Influenza A virus") == 0 ||
-            StringICmp (orp->taxname, "Influenza B virus") == 0) {
-          influenza = TRUE;
-        }
-        len = StringLen (orp->taxname) + StringLen (strain) + 6;
-        if (influenza) {
-          len += 2;
-        }
-        str = MemNew (len);
-        if (str != NULL) {
-          StringCpy (str, orp->taxname);
-          StringCat (str, " ");
-          if (influenza) {
-            StringCat (str, "(");
-          }
-          StringCat (str, strain);
-          if (influenza) {
-            StringCat (str, ")");
-          }
-          orp->taxname = MemFree (orp->taxname);
-          orp->taxname = str;
-        }
-      }
-    }
-  }
-  return TRUE;
-}
-
-extern void AddStrainToOrg (IteM i)
-
-{
-  BaseFormPtr  bfp;
-  GatherScope  gs;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQFEAT] = FALSE;
-  gs.ignore[OBJ_SEQANNOT] = FALSE;
-  gs.ignore[OBJ_SEQDESC] = FALSE;
-  GatherEntity (bfp->input_entityID, (Pointer) NULL, AddStrainGatherFunc, &gs);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();
-}
-
-static Boolean AddSubspeciesGatherFunc (GatherContextPtr gcp)
-
-{
-  BioSourcePtr  biop;
-  size_t        len;
-  OrgModPtr     mod;
-  OrgNamePtr    onp;
-  OrgRefPtr     orp;
-  CharPtr       ptr;
-  ValNodePtr    sdp;
-  SeqFeatPtr    sfp;
-  CharPtr       str;
-  CharPtr       subspecies;
-
-  if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
-  if (gcp->thistype != OBJ_SEQFEAT  && gcp->thistype != OBJ_SEQDESC) return TRUE;
-
-  orp = NULL;
-  biop = NULL;
-  switch (gcp->thistype) {
-    case OBJ_SEQFEAT :
-      sfp = (SeqFeatPtr) gcp->thisitem;
-      switch (sfp->data.choice) {
-        case SEQFEAT_ORG :
-          orp = (OrgRefPtr) sfp->data.value.ptrvalue;
-          break;
-        case SEQFEAT_BIOSRC :
-          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-          break;
-        default :
-          break;
-      }
-      break;
-    case OBJ_SEQDESC :
-      sdp = (ValNodePtr) gcp->thisitem;
-      switch (sdp->choice) {
-        case Seq_descr_org :
-          orp = (OrgRefPtr) sdp->data.ptrvalue;
-          break;
-        case Seq_descr_source :
-          biop = (BioSourcePtr) sdp->data.ptrvalue;
-          break;
-        default :
-          break;
-      }
-      break;
-    default :
-      break;
-  }
-  if (orp == NULL && biop != NULL) {
-    orp = biop->org;
-  }
-  if (orp != NULL) {
-    onp = orp->orgname;
-    if (onp != NULL) {
-      mod = onp->mod;
-      subspecies = NULL;
-      while (mod != NULL) {
-        if (mod->subtype == 22) {
-          subspecies = mod->subname;
-        }
-        mod = mod->next;
-      }
-      if (subspecies != NULL) {
-        ptr = StringStr (orp->taxname, " (");
-        if (ptr != NULL) {
-          *ptr = '\0';
-        } else {
-          ptr = StringStr (orp->taxname, " (");
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
-        len = StringLen (orp->taxname) + StringLen (subspecies) + 6;
-        str = MemNew (len);
-        if (str != NULL) {
-          StringCpy (str, orp->taxname);
-          StringCat (str, " ");
-          StringCat (str, subspecies);
-          orp->taxname = MemFree (orp->taxname);
-          orp->taxname = str;
-        }
-      }
-    }
-  }
-  return TRUE;
-}
-
-extern void AddSubspeciesToOrg (IteM i)
-
-{
-  BaseFormPtr  bfp;
-  GatherScope  gs;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQFEAT] = FALSE;
-  gs.ignore[OBJ_SEQANNOT] = FALSE;
-  gs.ignore[OBJ_SEQDESC] = FALSE;
-  GatherEntity (bfp->input_entityID, (Pointer) NULL, AddSubspeciesGatherFunc, &gs);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();
-}
-
-static Boolean AddCloneGatherFunc (GatherContextPtr gcp)
-
-{
-  BioSourcePtr  biop;
-  CharPtr       clone;
-  size_t        len;
-  OrgRefPtr     orp;
-  CharPtr       ptr;
-  ValNodePtr    sdp;
-  SeqFeatPtr    sfp;
+  CharPtr	ptr;
+  CharPtr	str;
+  AddModInfoPtr	ami;
   SubSourcePtr  ssp;
-  CharPtr       str;
 
-  if (gcp == NULL || gcp->thisitem == NULL) return TRUE;
-  if (gcp->thistype != OBJ_SEQFEAT  && gcp->thistype != OBJ_SEQDESC) return TRUE;
+  if (biop == NULL) return;
 
-  orp = NULL;
-  biop = NULL;
-  switch (gcp->thistype) {
-    case OBJ_SEQFEAT :
-      sfp = (SeqFeatPtr) gcp->thisitem;
-      switch (sfp->data.choice) {
-        case SEQFEAT_ORG :
-          orp = (OrgRefPtr) sfp->data.value.ptrvalue;
-          break;
-        case SEQFEAT_BIOSRC :
-          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-          break;
-        default :
-          break;
+  ami = (AddModInfoPtr) userdata;
+
+  orp = biop->org;
+  if (orp == NULL) return;
+
+  onp = orp->orgname;
+  if (onp == NULL) return;
+
+  str_to_add = NULL;
+
+  if (ami->isOrgMod)
+  {
+    mod = onp->mod;
+    str_to_add = NULL;
+    while (mod != NULL) {
+      if (mod->subtype == ami->subtype) {
+        str_to_add = mod->subname;
       }
-      break;
-    case OBJ_SEQDESC :
-      sdp = (ValNodePtr) gcp->thisitem;
-      switch (sdp->choice) {
-        case Seq_descr_org :
-          orp = (OrgRefPtr) sdp->data.ptrvalue;
-          break;
-        case Seq_descr_source :
-          biop = (BioSourcePtr) sdp->data.ptrvalue;
-          break;
-        default :
-          break;
-      }
-      break;
-    default :
-      break;
-  }
-  if (orp == NULL && biop != NULL) {
-    orp = biop->org;
-  }
-  if (orp != NULL && biop != NULL) {
+      mod = mod->next;
+    }
+  } else {
     if (biop->subtype != NULL) {
       ssp = biop->subtype;
-      clone = NULL;
       while (ssp != NULL) {
-        if (ssp->subtype == 3) {
-          clone = ssp->name;
+        if (ssp->subtype == ami->subtype) {
+          str_to_add = ssp->name;
         }
         ssp = ssp->next;
       }
-      if (clone != NULL) {
-        ptr = StringStr (orp->taxname, " (");
-        if (ptr != NULL) {
-          *ptr = '\0';
-        } else {
-          ptr = StringStr (orp->taxname, " (");
-          if (ptr != NULL) {
-            *ptr = '\0';
-          }
-        }
-        len = StringLen (orp->taxname) + StringLen (clone) + 6;
-        str = MemNew (len);
-        if (str != NULL) {
-          StringCpy (str, orp->taxname);
-          /* StringCat (str, " ("); */
-          StringCat (str, " ");
-          StringCat (str, clone);
-          /* StringCat (str, ")"); */
-          orp->taxname = MemFree (orp->taxname);
-          orp->taxname = str;
-        }
-      }
     }
   }
-  return TRUE;
+  if (str_to_add != NULL) {
+    ptr = StringStr (orp->taxname, " (");
+    if (ptr != NULL) {
+      *ptr = '\0';
+    } else {
+      ptr = StringStr (orp->taxname, " (");
+      if (ptr != NULL) {
+        *ptr = '\0';
+      }
+    }
+    influenza = FALSE;
+    if (ami->subtype == 2 && 
+	(StringICmp (orp->taxname, "Influenza A virus") == 0 ||
+        StringICmp (orp->taxname, "Influenza B virus") == 0)) {
+      influenza = TRUE;
+    }
+    len = StringLen (orp->taxname) + StringLen (str_to_add) + 6;
+    if (influenza) {
+      len += 2;
+    }
+    str = MemNew (len);
+    if (str != NULL) {
+      StringCpy (str, orp->taxname);
+      StringCat (str, " ");
+      if (influenza) {
+        StringCat (str, "(");
+      }
+      StringCat (str, str_to_add);
+      if (influenza) {
+        StringCat (str, ")");
+      }
+      orp->taxname = MemFree (orp->taxname);
+      orp->taxname = str;
+    }
+  }
 }
 
-extern void AddCloneToOrg (IteM i)
+typedef struct addmodformptr {
+  FEATURE_FORM_BLOCK
 
+  PopuP modifier_to_add;
+
+} AddModFormData, PNTR AddModFormPtr;
+
+static void DoAddModToOrg (ButtoN b)
+{
+  AddModFormPtr	amfp;
+  AddModInfoPtr ami;
+  SeqEntryPtr  sep;
+  Int4		mod_index;
+
+  amfp = GetObjectExtra (b);
+  if (amfp == NULL) return;
+  Hide (amfp->form);
+
+  sep = GetTopSeqEntryForEntityID (amfp->input_entityID);
+  if (sep == NULL) return;
+  ami = (AddModInfoPtr) MemNew (sizeof (AddModInfo));
+  mod_index = GetValue (amfp->modifier_to_add);
+  if (mod_index < 1
+    || mod_index > sizeof (mods_list) / sizeof (AddModListItem))
+    return;
+  mod_index = mod_index - 1;
+
+  ami->isOrgMod = mods_list[mod_index].isOrgMod;
+  ami->subtype = mods_list[mod_index].subtype;
+  VisitBioSourcesInSep (sep, ami, AddModToOrgProc);
+  Update ();
+  ObjMgrSetDirtyFlag (amfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, amfp->input_entityID, 0, 0);
+  Remove (amfp->form);
+}
+
+extern void AddModToOrg (IteM i)
 {
   BaseFormPtr  bfp;
-  GatherScope  gs;
-  SeqEntryPtr  sep;
+  AddModFormPtr amfp;
+  WindoW w;
+  GrouP	g;
+  GrouP	h;
+  GrouP c;
+  Int2 index;
+  ButtoN b;
 
 #ifdef WIN_MAC
   bfp = currentFormDataPtr;
@@ -7464,21 +7764,38 @@ extern void AddCloneToOrg (IteM i)
   bfp = GetObjectExtra (i);
 #endif
   if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-  gs.seglevels = 1;
-  gs.get_feats_location = FALSE;
-  MemSet ((Pointer) (gs.ignore), (int)(TRUE), (size_t) (OBJ_MAX * sizeof(Boolean)));
-  gs.ignore[OBJ_BIOSEQ] = FALSE;
-  gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-  gs.ignore[OBJ_SEQFEAT] = FALSE;
-  gs.ignore[OBJ_SEQANNOT] = FALSE;
-  gs.ignore[OBJ_SEQDESC] = FALSE;
-  GatherEntity (bfp->input_entityID, (Pointer) NULL, AddCloneGatherFunc, &gs);
-  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
-  Update ();
+
+  amfp = (AddModFormPtr) MemNew (sizeof (AddModFormData));
+  if (amfp == NULL) return;
+  w = FixedWindow (-50, -33, -20, -10, "Append to Organism Name",
+	StdCloseWindowProc);
+  SetObjectExtra (w, amfp, StdCleanupFormProc);
+  amfp->form = (ForM) w;
+
+  amfp->input_entityID = bfp->input_entityID;
+  amfp->input_itemID = bfp->input_itemID;
+
+  g = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+
+  h = HiddenGroup (g, 0, 1, NULL);
+  amfp->modifier_to_add = PopupList (h, TRUE, NULL);
+  for (index=0; index< sizeof (mods_list) / sizeof (AddModListItem); index++)
+  {
+    PopupItem (amfp->modifier_to_add, mods_list[index].name);
+  }
+  SetValue (amfp->modifier_to_add, 1);
+
+  c = HiddenGroup (g, 2, 0, NULL);
+  b = PushButton(c, "Accept", DoAddModToOrg);
+  SetObjectExtra(b, amfp, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
+  RealizeWindow(w);
+  Show(w);
+  Update();
+  
 }
 
 typedef struct descformdata {
@@ -8170,7 +8487,8 @@ extern void SetupNewFeaturesMenu (MenU m, BaseFormPtr bfp)
                       subtype != FEATDEF_virion &&
                       subtype != FEATDEF_mutation &&
                       subtype != FEATDEF_allele &&
-                      subtype != FEATDEF_site_ref) {
+                      subtype != FEATDEF_site_ref &&
+                      subtype != FEATDEF_gap) {
                     i = CommandItem (sub, ompp->proclabel, NewFeatureMenuProc);
                     nop = (NewObjectPtr) MemNew (sizeof (NewObjectData));
                     if (nop != NULL) {

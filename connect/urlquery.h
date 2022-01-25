@@ -29,13 +29,17 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.12  2003/09/03 21:15:29  lavr
+* Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
+* (formely it was to modify the dispatcher and was not really used anywhere)
+*
 * Revision 6.11  2002/11/21 15:24:31  johnson
 * changed 'queue' vars to 'q' to avoid stl conflict
 *
@@ -114,7 +118,8 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 );
 
 /*
-   Returns connection to NCBI named service.
+  Returns connection to NCBI named service.  Pass arguments (if any)
+  via the connection to the service (if successful).  Return NULL on error.
 */
 
 NLM_EXTERN CONN QUERY_OpenServiceQuery (

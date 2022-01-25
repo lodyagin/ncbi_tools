@@ -1,4 +1,4 @@
-/* $Id: cddutil.c,v 1.81 2003/02/06 21:04:27 bauer Exp $
+/* $Id: cddutil.c,v 1.89 2003/10/07 21:19:39 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,37 @@
 *
 * Initial Version Creation Date: 10/18/1999
 *
-* $Revision: 1.81 $
+* $Revision: 1.89 $
 *
 * File Description: CDD utility routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.c,v $
+* Revision 1.89  2003/10/07 21:19:39  bauer
+* made CddMasterIs3D more general
+*
+* Revision 1.88  2003/08/25 19:09:47  bauer
+* added SeqAlignReadFromFile
+*
+* Revision 1.87  2003/05/22 18:39:14  bauer
+* list txids in Cdd XML dumper
+*
+* Revision 1.86  2003/05/21 17:25:21  bauer
+* optional ObjMgr in CddReadDBGetBioseq
+*
+* Revision 1.85  2003/05/09 20:38:12  bauer
+* report invalid intervals in CddRelocateSeqLoc
+*
+* Revision 1.84  2003/05/08 14:40:09  bauer
+* bugfix in CddConsensus
+*
+* Revision 1.83  2003/04/25 17:17:32  thiessen
+* fix return value type
+*
+* Revision 1.82  2003/04/25 14:36:20  bauer
+* impalaScaling now returns boolean value
+*
 * Revision 1.81  2003/02/06 21:04:27  bauer
 * fixed bug in reindexing to consensus
 *
@@ -365,6 +389,21 @@ SeqAnnotPtr LIBCALL SeqAnnotReadFromFile(CharPtr cFile, Boolean bBin)
   sap = SeqAnnotAsnRead(aip, NULL);
   AsnIoClose(aip);
   return(sap);
+}
+
+SeqAlignPtr LIBCALL SeqAlignReadFromFile(CharPtr cFile, Boolean bBin)
+{
+  AsnIoPtr    aip = NULL;
+  SeqAlignPtr salp;
+
+  if (bBin) {
+    aip = AsnIoOpen(cFile,"rb");
+  } else {
+    aip = AsnIoOpen(cFile,"r");
+  }
+  salp = SeqAlignAsnRead(aip, NULL);
+  AsnIoClose(aip);
+  return(salp);
 }
 
 /*---------------------------------------------------------------------------*/
@@ -736,8 +775,7 @@ Int4Ptr LIBCALL GetAlignmentSize(SeqAlignPtr salp)
 ValNodePtr LIBCALL CddGetAnnotNames(CddPtr pcdd)
 {
   AlignAnnotPtr   aap;
-  ValNodePtr    vnpHead = NULL;
-  ValNodePtr    vnp, thisid;
+  ValNodePtr      vnp, vnpHead = NULL;
  
   aap = pcdd->alignannot;
   while (aap) {
@@ -815,6 +853,10 @@ Boolean LIBCALL CddMasterIs3D(CddPtr pcdd)
   ddp = salp->segs;
   sip = ddp->id;
   if (sip->choice == SEQID_PDB) return TRUE;
+  if (sip->choice == SEQID_LOCAL) {
+    sip = ddp->id->next;
+    if (sip->choice == SEQID_PDB) return TRUE;
+  }
   return FALSE;
 }
 
@@ -836,7 +878,7 @@ Int4 LIBCALL CddCount3DAlignments(CddPtr pcdd)
   bHasConsensus = CddHasConsensus(pcdd);
   bHas3DMaster = CddMasterIs3D(pcdd);
 
-  if (!bHasConsensus && !bHas3DMaster) return(0);
+  if (!bHas3DMaster) return(0);
   salp = pcdd->seqannot->data;
   while (salp) {
     ddp = salp->segs;
@@ -885,7 +927,6 @@ Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
 {
   SeqIntPtr     sintp;
   SeqIdPtr      sip;
-  ObjectIdPtr   oidp;
   SeqAlignPtr   salp;
   DenseDiagPtr  ddp;
   
@@ -909,8 +950,6 @@ Boolean LIBCALL CddHasConsensus(CddPtr pcdd)
 void LIBCALL CddRegularizeFileName(CharPtr cIn, CharPtr cAcc, CharPtr cFn,
                                    CharPtr cEx)
 {
-  CharPtr   cWhere;
-  
   if (Nlm_StrStr(cIn, cEx) != 0) {
     Nlm_StrCpy(cFn,cIn);
     Nlm_StrNCpy(cAcc,cIn,Nlm_StrLen(cIn)-Nlm_StrLen(cEx));
@@ -941,7 +980,7 @@ Boolean LIBCALL CddCheckForRepeats(CddPtr pcdd, Int4 width, Int4 GapI, Int4 GapE
   BioseqPtr           bsp;
   Int4                len, winner = 1;
   Int4                **iscore, repct = 0;
-  Int4                **fscore, wfac, bst, pnum, plen;
+  Int4                **fscore, bst, pnum, plen;
   Int2                iStatus;
   Int4                i, j, k, l, m, n, t1, t2, laststart;
   SeqPortPtr          spp;
@@ -1129,9 +1168,6 @@ Boolean LIBCALL CddCheckForRepeats(CddPtr pcdd, Int4 width, Int4 GapI, Int4 GapE
 }
 
 
-
-
-
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 /* retrieve the accession of a CD as a character string                      */
@@ -1214,8 +1250,7 @@ BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
   Uint1       seqtype;
   ValNodePtr  tmp;
   ObjectIdPtr oid;
-  Int4        len, i;
-  Int2        residue;
+  Int4        len;
   ValNode     fake;
   SeqLocPtr   the_segs, head, curr;
   Boolean     handled = FALSE, split;
@@ -1258,8 +1293,6 @@ BioseqPtr LIBCALL CddBioseqCopy (SeqIdPtr newid, BioseqPtr oldbsp, Int4 from,
 
   if ((newbsp->repr == Seq_repr_raw) ||
     (newbsp->repr == Seq_repr_const)) {
-      AsnTypePtr  atp;
-      AsnIoPtr  aip;
     if (ISA_aa(newbsp->mol)) {
       seqtype = Seq_code_ncbieaa;
     } else {
@@ -1422,7 +1455,7 @@ SeqAlignPtr LIBCALL CddMSLMixedToMSLDenDiag(SeqAlignPtr salp)
 	    ddp->starts[0] = s1;
 	    ddp->starts[1] = s2;
 	    ddp->len=dsp->lens[i];
-            ddp->id = dsp->ids;
+            ddp->id = SeqIdDupList(dsp->ids);
 	    ddp->dim = 2;
             if (!ddphead) {
 	      ddphead = ddp;
@@ -1450,7 +1483,7 @@ SeqAlignPtr LIBCALL CddMSLMixedToMSLDenDiag(SeqAlignPtr salp)
 	  ddp->starts[0] = s1;
 	  ddp->starts[1] = s2;
 	  ddp->len=dsp->lens[i];
-          ddp->id = dsp->ids;
+          ddp->id = SeqIdDupList(dsp->ids);
 	  ddp->dim = 2;
           if (!ddphead) {
 	    ddphead = ddp;
@@ -1538,7 +1571,7 @@ SeqAlignPtr LIBCALL CddMSLDenSegToMSLDenDiag(SeqAlignPtr salp)
 	ddp->starts[0] = s1;
 	ddp->starts[1] = s2;
 	ddp->len=dsp->lens[i];
-        ddp->id = dsp->ids;
+        ddp->id = SeqIdDupList(dsp->ids);
 	ddp->dim = 2;
         if (!ddphead) {
 	  ddphead = ddp;
@@ -1625,7 +1658,7 @@ SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp)
       salpnew->segs = dsp;
       dsp->dim = 2;
       dsp->numseg = 1;
-      dsp->ids = ddp->id;
+      dsp->ids = SeqIdDupList(ddp->id);
       dsp->starts = ddp->starts;
       dsp->lens = &(ddp->len);
       dsp->strands = ddp->strands;
@@ -1640,9 +1673,11 @@ SeqAlignPtr LIBCALL CddMSLDenDiagToMSLDenSeg(SeqAlignPtr salp)
 }
 
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* convert a dendiag pairwise alignment set into a multiple dendiag alignment*/
 /* if possible - i.e. check that the number of segments and their extents on */
 /* the common master is the same for all pairwise alignments                 */
+/*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 SeqAlignPtr LIBCALL CddMSLDenDiagToMULDenDiag(SeqAlignPtr salp)
 {
@@ -1772,8 +1807,98 @@ SeqAlignPtr LIBCALL CddMSLDenDiagToMULDenDiag(SeqAlignPtr salp)
 /* Calculate per column information content for a SeqAlign                   */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+Nlm_FloatHi LIBCALL SeqAlignConservation(SeqAlignPtr salp, Nlm_FloatHi fract,
+                                         BioseqPtr bsp_master, Boolean bHasConsensus, Int4 offset)
+{
+  Int4               i, c, a;
+  Int4               qlength, nover = 0;
+  Int4               alphabetSize = 26;
+  Int4               nColumns;
+  Int4               *ntypes;
+  Nlm_FloatHi        **typefreq, sumfreq;
+  DenseDiagPtr       ddp;
+  BioseqPtr          bsp;
+  SeqIdPtr           sip;
+  SeqPortPtr         spp;
+  Uint1Ptr           buffer;
+  
+  if (!salp) return(0.0);
+  if (!bsp_master) return(0.0);
+  qlength = bsp_master->length;
+  ntypes = (Int4 *) MemNew(qlength*sizeof(Int4));
+  for (i=0;i<qlength;i++) ntypes[i] = 0;
+  typefreq = (Nlm_FloatHi**) MemNew(qlength * sizeof(Nlm_FloatHi *));
+  for (i=0;i<qlength;i++) {
+    typefreq[i] = (Nlm_FloatHi *)MemNew(alphabetSize * sizeof(Nlm_FloatHi));
+    for (a=0;a<alphabetSize;a++) typefreq[i][a] = 0.0;
+  }
+  if (!bHasConsensus) {   /* count residues in the master/representative too */
+    ddp = salp->segs;
+    sip = ddp->id;
+    bsp = bsp_master;
+    buffer = MemNew((bsp->length)*sizeof(Uint1));
+    spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown, Seq_code_ncbistdaa);
+    for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
+    spp = SeqPortFree(spp);
+    while (ddp) {
+      for (c=ddp->starts[0]-offset;c<ddp->starts[0]-offset+ddp->len;c++) {
+        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
+          typefreq[c][buffer[c]] += 1.0;
+      }
+      ddp = ddp->next;
+    }
+    MemFree(buffer);
+  }  
+  while (salp) {
+    ddp = salp->segs;
+    sip = ddp->id->next;
+    bsp = BioseqLockById(sip);
+    buffer = MemNew((bsp->length)*sizeof(Uint1));
+    spp = SeqPortNew(bsp, 0, bsp->length-1, Seq_strand_unknown, Seq_code_ncbistdaa);
+    for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
+    spp = SeqPortFree(spp);
+    BioseqUnlock(bsp);
+    while (ddp) {
+      for (c=ddp->starts[1];c<ddp->starts[1]+ddp->len;c++) {
+        i = ddp->starts[0]-offset+c-ddp->starts[1];
+        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
+	  typefreq[i][buffer[c]] += 1.0;
+      }
+      ddp = ddp->next;
+    }
+    MemFree(buffer);
+    salp = salp->next;
+  }
+  for (i=0;i<qlength;i++) {
+    sumfreq = 0.0;
+    for (a=0;a<alphabetSize;a++) {
+      if (typefreq[i][a] > 0.0) {
+        ntypes[i]++;
+	sumfreq += typefreq[i][a];
+      }
+    }
+    if (sumfreq > 0.0) for (a=0;a<alphabetSize;a++) {
+      typefreq[i][a] /= sumfreq;
+    }
+    for (a=0;a<alphabetSize;a++) {
+      if (typefreq[i][a] >= fract) {
+        nover++; break;
+      } 
+    }
+  }
+  for (i=0;i<qlength;i++) MemFree(typefreq[i]);
+  MemFree(typefreq);
+  MemFree(ntypes);
+  return((Nlm_FloatHi)nover/(Nlm_FloatHi)qlength);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* Calculate per column information content for a SeqAlign                   */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
-                                      Boolean bHasConsensus)
+                                      Boolean bHasConsensus, Int4 offset)
 {
   BLAST_ScoreBlkPtr  sbp;
   BLAST_ResFreqPtr   stdrfp;
@@ -1783,9 +1908,6 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
   Int4               i, c, a;
   Int4               qlength;
   Int4               alphabetSize = 26;
-  MatrixPtr          posfreq;
-  ValNodePtr         vnp;
-  Int4               nColumns;
   Nlm_FloatHi        posEpsilon = 0.0001;
   Nlm_FloatHi        QoverPest;
   Int4               *ntypes;
@@ -1830,8 +1952,8 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
     for (i=0; i<bsp->length;i++) buffer[i] = SeqPortGetResidue(spp);
     spp = SeqPortFree(spp);
     while (ddp) {
-      for (c=ddp->starts[0];c<ddp->starts[0]+ddp->len;c++) {
-        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
+      for (c=ddp->starts[0]-offset;c<ddp->starts[0]-offset+ddp->len;c++) {
+        if (buffer[c] < (Uint1) alphabetSize)
           typefreq[c][buffer[c]] += 1.0;
       }
       ddp = ddp->next;
@@ -1849,8 +1971,8 @@ Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,
     BioseqUnlock(bsp);
     while (ddp) {
       for (c=ddp->starts[1];c<ddp->starts[1]+ddp->len;c++) {
-        i = ddp->starts[0]+c-ddp->starts[1];
-        if (buffer[c] >= 0 && buffer[c] < (Uint1) alphabetSize)
+        i = ddp->starts[0]-offset+c-ddp->starts[1];
+        if (buffer[c] < (Uint1) alphabetSize)
 	  typefreq[i][buffer[c]] += 1.0;
       }
       ddp = ddp->next;
@@ -1906,9 +2028,6 @@ Nlm_FloatHiPtr LIBCALL CddAlignInform(CddPtr pcdd, Nlm_FloatHi * Niobs)
   Int4               i, c, a;
   Int4               qlength;
   Int4               alphabetSize = 26;
-  MatrixPtr          posfreq;
-  ValNodePtr         vnp;
-  Int4               nColumns;
   Nlm_FloatHi        posEpsilon = 0.0001;
   Nlm_FloatHi        QoverPest;
   Int4               *ntypes;
@@ -2029,12 +2148,11 @@ Nlm_FloatHiPtr LIBCALL CddPssmInform(CddPtr pcdd)
   Nlm_FloatHiPtr     Informativeness;
   Nlm_FloatHi        thisposFreq;
   Int2               iStatus;
-  Int4               i, c, a;
+  Int4               c, a;
   Int4               qlength;
   Int4               alphabetSize = 26;
   MatrixPtr          posfreq;
   ValNodePtr         vnp;
-  Int4               nColumns;
   Nlm_FloatHi        posEpsilon = 0.0001;
   Nlm_FloatHi        QoverPest;
 
@@ -2088,10 +2206,9 @@ Nlm_FloatHiPtr LIBCALL CddPosFreqInform(Nlm_FloatHi **posFreq, Int4 ncol, Int4 n
   Nlm_FloatHiPtr     Informativeness;
   Nlm_FloatHi        thisposFreq;
   Int2               iStatus;
-  Int4               i, c, a;
+  Int4               c, a;
   Int4               qlength;
   Int4               alphabetSize = 26;
-  Int4               nColumns;
   Nlm_FloatHi        posEpsilon = 0.0001;
   Nlm_FloatHi        QoverPest;
 
@@ -2840,8 +2957,6 @@ CddExpAlignPtr CddExpAlignNew()
 
 CddExpAlignPtr CddExpAlignFree(CddExpAlignPtr pCDea)
 {
-  SeqIdPtr sip, sipNext;
-
   if (!pCDea) return NULL;
   if (NULL != pCDea->adata) free(pCDea->adata);
   pCDea->ids = SeqIdSetFree(pCDea->ids);
@@ -2928,7 +3043,7 @@ SeqAlignPtr CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter)
 {
   SeqAlignPtr   salp;
   DenseDiagPtr  ddp, ddplast = NULL;
-  Int4          i, last;
+  Int4          i;
   
   if (!pCDea->ids || !pCDea->ids->next)
    CddSevError("Missing Sequence ID in CddExpAlignToSeqAlign");
@@ -3626,11 +3741,10 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
   DenseDiagPtr        ddp;
   Int4Ptr             trunc_on_virtual;
   Int4Ptr             trunc_aligned;
-  Int4Ptr             virtual_on_trunc;
   ObjectIdPtr         oidp;
   SeqAlignPtr         salpThis, salpNew, salpTail;
   SeqEntryPtr         sepNew;
-  SeqIdPtr            sipThis;
+  SeqIdPtr            sipThis, sipCopy;
   SeqMapTablePtr      smtp;
   SeqPortPtr          spp;
   Uint1Ptr            buffer;
@@ -3640,7 +3754,6 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
   Int4                offset, i, j , k, ipt, seqpos;
   Int4                m_last, m_frst, s_insert, m_end;
   Int4                s_last, s_frst, maxpos = 0;
-  Uint1               aatype;
   
   if (!salp) return (NULL);
   if (salp->type != SAT_PARTIAL || salp->segtype != SAS_DENDIAG) return(NULL);
@@ -3756,8 +3869,9 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
   i = 0;
   salpThis = salp;
   ddp = salpThis->segs;
-  sipThis = ddp->id;
-  bspThis = CddRetrieveBioseqById(sipThis,sep);
+  sipCopy = SeqIdDup(ddp->id); sipCopy->next = NULL;
+  bspThis = CddRetrieveBioseqById(sipCopy,sep);
+  SeqIdFree(sipCopy);
   pCAW[i].bsp = bspThis;
   spp = SeqPortNew(bspThis, 0, LAST_RESIDUE, Seq_strand_unknown,
                    Seq_code_ncbistdaa);
@@ -3771,7 +3885,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
     ASSERT (k>=0 && k<maxextlen);
     pCEACell[i][k].seqpos = seqpos;
     pCEACell[i][k].aatype = buffer[seqpos];
-    if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
+    if (pCEACell[i][k].aatype > (Uint1) 26) {
       pCEACell[i][k].aatype = 26;
     }
   }
@@ -3798,7 +3912,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
         ASSERT (k>=0 && k<maxextlen);
 	pCEACell[i][k].seqpos = ddp->starts[1] + j - ddp->starts[0];
 	pCEACell[i][k].aatype = buffer[pCEACell[i][k].seqpos];
-        if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
+        if (pCEACell[i][k].aatype > (Uint1) 26) {
           pCEACell[i][k].aatype = 26;
         }
       }
@@ -3814,7 +3928,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
             ASSERT (k>=0 && k<maxextlen);
 	    pCEACell[i][k].seqpos = j;
 	    pCEACell[i][k].aatype = buffer[j];
-            if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
+            if (pCEACell[i][k].aatype > (Uint1) 26) {
               pCEACell[i][k].aatype = 26;
             }
 	  }
@@ -3823,7 +3937,7 @@ SeqAlignPtr LIBCALL CddConsensus(SeqAlignPtr salp,
             ASSERT (k>=0 && k<maxextlen);
 	    pCEACell[i][k].seqpos = j;
 	    pCEACell[i][k].aatype = buffer[j];
-            if (pCEACell[i][k].aatype < (Uint1) 0 || pCEACell[i][k].aatype > (Uint1) 26) {
+            if (pCEACell[i][k].aatype > (Uint1) 26) {
               pCEACell[i][k].aatype = 26;
             }
 	  }	
@@ -4334,9 +4448,6 @@ static PGPBlastOptionsPtr CddReadBlastOptions(BioseqPtr bsp, Int4 iPseudo, CharP
 {
     PGPBlastOptionsPtr  bop;
     BLAST_OptionsBlkPtr options;
-    SeqEntryPtr         sep;
-    Boolean             is_dna;
-    ObjectIdPtr         obidp;
 
     bop = MemNew(sizeof(PGPBlastOptions));
     bop->blast_database   = StringSave("nr");
@@ -4535,7 +4646,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   ValNodePtr              ColumnHead, LetterHead, newRow, RowHead, newLetter;
   SeqCodeTablePtr         sctp;
   Int4                    numSeqs, numASeqs, alignLength, index, a, iNew, i;
-  Int4                    scale_factor, j, OutLen, jj, c;
+  Int4                    scale_factor, j, OutLen, jj;
   Char                    ckptFileName[PATH_MAX];
   Char                    cseqFileName[PATH_MAX];
   Char                    mtrxFileName[PATH_MAX];
@@ -4548,6 +4659,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   Boolean*                Coverage; /* for making sure all columns are filled*/
   Seq_Mtf*                pssm;
   CharPtr                 cAccession;
+  Boolean                 scalingOkay = TRUE;
 
   cAccession = CddGetAccession(pcdd);
   if (pcdd) {
@@ -4557,7 +4669,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
     bHasConsensus = SeqAlignHasConsensus(salp);
   }
   if (iPseudo <= 0) {                             /* need to determine first */
-    AInf = SeqAlignInform(salp, bspFake, bHasConsensus); 
+    AInf = SeqAlignInform(salp, bspFake, bHasConsensus, 0); 
     for (i=0;i<bspFake->length;i++) SumAInf += AInf[i];
     if (SumAInf > 84) iPseudo = 10;                    /* purely empirical   */
     else if (SumAInf > 55) iPseudo = 7;
@@ -4636,7 +4748,8 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   }
 */
 /*  posScaling(posSearch, compactSearch); */
-  impalaScaling(posSearch, compactSearch, 1.0, TRUE);
+  scalingOkay = impalaScaling(posSearch, compactSearch, 1.0, TRUE);
+  if (!scalingOkay) goto cleanup;
 
   if (pcdd) {
 /*---------------------------------------------------------------------------*/
@@ -4738,6 +4851,7 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
 /*---------------------------------------------------------------------------*/
 /* clean up                                                                  */
 /*---------------------------------------------------------------------------*/
+cleanup:
   MemFree(cAccession);
   posSearch->NumSequences = posSearch->posNumSequences;
   posSearch->QuerySize = alignLength;
@@ -4752,8 +4866,12 @@ Seq_Mtf * LIBCALL CddDenDiagCposComp2KBP(BioseqPtr bspFake, Int4 iPseudo,
   bop->options = BLASTOptionDelete(bop->options);
   MemFree(bop->blast_database);
   MemFree(bop);
-  if (NULL == pcdd) {        /* return pssm if used from within the threader */
+  if (NULL == pcdd && scalingOkay) {  /* return pssm if from within threader */
     return(pssm);
+  }
+  if (NULL != pcdd && !scalingOkay) { /* fields are empty if scaling failed  */
+    pcdd->posfreq = NULL;
+    pcdd->scoremat = NULL;
   }
   return NULL;
 }
@@ -4875,14 +4993,14 @@ Int4Ptr LIBCALL CddGetFeatLocList(SeqLocPtr location, Int4 *nres)
   SeqIntPtr     sintp;
   PackSeqPntPtr pspp;
   SeqPntPtr     spp;
-  Int4Ptr       presnum;
+  Int4Ptr       presnum = NULL;
   Int4          i;
   Int4          nSubLoc;
   Int4Ptr       pSubLoc;
 
   presnum = MemNew(100 * sizeof(Int4));
   *nres = 0;
-  if (!location) return;
+  if (!location) return NULL;
   switch (location->choice) {
     case SEQLOC_NULL:
     case SEQLOC_FEAT:
@@ -5017,12 +5135,14 @@ static void CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali)
       sintp->id = SeqIdDup(sip);
       sintp->from = ali[sintp->from];
       sintp->to   = ali[sintp->to];
+      if (sintp->from < 0 || sintp->to < 0) CddSevError("Invalid SeqLoc Interval!");
       break;
     case SEQLOC_PNT:
       spp = location->data.ptrvalue;
       SeqIdFree(spp->id);
       spp->id = (SeqIdPtr) SeqIdDup(sip);
       spp->point = ali[spp->point];
+      if (spp->point < 0) CddSevError("Invalid SeqLoc Interval!");
       break;
     case SEQLOC_PACKED_PNT:
       pspp = location->data.ptrvalue;
@@ -5031,6 +5151,7 @@ static void CddRelocateSeqLoc(SeqLocPtr location, SeqIdPtr sip, Int4 *ali)
         pspp->id = (SeqIdPtr) SeqIdDup(sip);
 	for (i=0;i<pspp->used;i++) {
           pspp->pnts[i] = ali[pspp->pnts[i]];	
+          if (pspp->pnts[i] < 0) CddSevError("Invalid SeqLoc Interval!");
 	}
         pspp = pspp->next;
       }
@@ -5069,16 +5190,36 @@ void LIBCALL CddTransferAlignAnnot(AlignAnnotPtr oldannot,
 {
   CddExpAlignPtr    pCDeaO= NULL, pCDeaN = NULL, pCDeaON = NULL;
   SeqLocPtr         slp;
-  SeqIdPtr          oldMaster, sip;
+  SeqIdPtr          oldMaster, sip, sipTmp;
   Boolean           bOldIsTop = FALSE;
   Boolean           bNewIsTop = FALSE;
   DenseDiagPtr      ddp;
   SeqAlignPtr       salpThis;
   BioseqPtr         bsp;
+  SeqEntryPtr       sep;
   AlignAnnotPtr     aap;
   
   slp = (SeqLocPtr) oldannot->location;
   oldMaster = CddFindSeqIdInAlignAnnot(oldannot);
+  if (oldMaster->choice == SEQID_GI) {
+    sep = bssp->seq_set; while (sep) {
+      if (sep->choice == 1) {
+        bsp = sep->data.ptrvalue;
+	if (CddSameSip(oldMaster, bsp->id)) {
+	  sipTmp = bsp->id;
+	  while (sipTmp) {
+            if (sipTmp->choice == SEQID_PDB) {
+	      oldMaster = sipTmp;
+	      break;	  
+	    }
+	    sipTmp = sipTmp->next;
+	  }
+	  break;
+	}
+      }
+      sep = sep->next;
+    }
+  }
   ddp = salp->segs;
   sip = SeqIdDup(ddp->id);  SeqIdFree(sip->next);
   if (CddSameSip(oldMaster,sip)) bOldIsTop = TRUE;
@@ -5185,8 +5326,6 @@ void LIBCALL CddShrinkBioseq(BioseqPtr bsp)
 {
   SeqDescrPtr next, sdp, sdp2              = NULL;
   SeqAnnotPtr sap, sap_next, thissap, sap2 = NULL;
-  ValNodePtr  vnp;
-  SeqFeatPtr  sfp;
 
   sdp=bsp->descr;
   while (sdp != NULL) {
@@ -5531,15 +5670,18 @@ void LIBCALL CddDumpTaxLinks(CddPtr pcdd, FILE *FP)
 /*---------------------------------------------------------------------------*/
 void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
 {
-  ValNodePtr    pdescr, vnp, cid;
+  ValNodePtr    pdescr, cid;
   CharPtr       cShortName  = NULL, cAbstract = NULL, cPubDate  = NULL;
   CharPtr       cEntrezDate = NULL, cFilter   = NULL, cOrganism = NULL;
   CharPtr       cAccession  = NULL, cDatabase = NULL;
-  Int4          gi = 0;
+  Int4          gi = 0, txid = -1;
   Boolean       bHaveAbstract = FALSE, bAllocDatabase = FALSE;
   GlobalIdPtr   pGid;
   OrgRefPtr     pOrgRef;
   DatePtr       pDate;
+  ObjectIdPtr   oidp;
+  ValNodePtr    vnp;
+  DbtagPtr      dbtp;
 
   cEntrezDate = MemNew(11 * sizeof(Char));
   cid = (CddIdPtr) pcdd->id;
@@ -5571,6 +5713,17 @@ void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
       case CddDescr_tax_source:
         pOrgRef = (OrgRefPtr) pdescr->data.ptrvalue;
 	cOrganism = pOrgRef->taxname; 
+	vnp = pOrgRef->db;
+	while (vnp) {
+	  dbtp = (DbtagPtr) vnp->data.ptrvalue;
+	  if (dbtp && Nlm_StrCmp(dbtp->db,"taxon") == 0) {
+	    oidp = dbtp->tag;
+	    if (oidp && oidp->id >= 0) {
+              txid = oidp->id;	      
+	    } 
+	  }
+	  vnp = vnp->next;
+	}
         break;
       case CddDescr_create_date:
       case CddDescr_update_date:
@@ -5646,6 +5799,8 @@ void LIBCALL CddDumpXML(CddPtr pcdd, FILE *FP)
     fprintf(FP,"            <Title>%s</Title>\n",cShortName);
   if (cAbstract) 
     fprintf(FP,"            <Text>%s</Text>\n",cAbstract);
+  if (txid >= 0) 
+    fprintf(FP,"            <Organism>txid%d</Organism>\n",txid);
   if (cOrganism)
     fprintf(FP,"            <Organism>%s</Organism>\n",cOrganism);
   if (cPubDate)
@@ -5833,6 +5988,7 @@ Boolean LIBCALL CddRemoveConsensus(CddPtr pcdd)
   pcdd->posfreq = NULL;
   pcdd->scoremat = NULL;
   pcdd->distance = NULL;
+  return TRUE;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -6003,6 +6159,25 @@ Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/* check 
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+Boolean LIBCALL SeqHasTax(BioseqPtr bsp)
+{
+  ValNodePtr  descr;
+
+  descr = bsp->descr;
+  while (descr) {
+    if (descr->choice == Seq_descr_source) {
+      return(TRUE);
+    }
+    descr = descr->next;
+  }
+  return(FALSE);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* Fetch bioseq using BLAST dB, removing ids redundant to query.             */
 /* index is the NR index in the dB -- if you don't have it, use -1.          */
 /*---------------------------------------------------------------------------*/
@@ -6010,7 +6185,13 @@ Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd)
 NLM_EXTERN BlastDefLineSetPtr LIBCALL BlastDefLineSetFree PROTO ((BlastDefLineSetPtr ));
 
 BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,
-				     ReadDBFILEPtr rdfp)
+                                     ReadDBFILEPtr rdfp)
+{
+  return CddReadDBGetBioseqEx(query,index,rdfp,TRUE);
+}
+
+BioseqPtr LIBCALL CddReadDBGetBioseqEx(SeqIdPtr query, Int4 index,
+				       ReadDBFILEPtr rdfp, Boolean bUseObjMgr)
 {
     BioseqPtr		bsp;
     BlastDefLinePtr	bdp,tbdp;
@@ -6020,7 +6201,7 @@ BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,
     if(query == NULL) return NULL;
     if(index < 0 && (index = SeqId2OrdinalId(rdfp, query)) < 0)
 	return NULL;
-    if(!(bsp = readdb_get_bioseq(rdfp, index))) return NULL;
+    if(!(bsp = readdb_get_bioseq_ex(rdfp, index, bUseObjMgr, FALSE))) return NULL;
     if(!(tbdp = FDGetDeflineAsnFromBioseq(bsp))) return NULL;
 
     for(bdp=tbdp; bdp; bdp=bdp->next) {
@@ -6070,6 +6251,12 @@ BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,
     }
     RDBTaxNamesFree(tnames);
 
+/*    if (!SeqHasTax(bsp)) {
+      printf("Warning: Bioseq without taxonomy!");
+      if (query->choice == SEQID_GI) {
+        printf("GI: %d\n",query->data.intvalue);
+      } else printf("\n");
+    } */
     return bsp;
 }
 

@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: splutil.c,v 6.7 2003/05/30 17:25:38 coulouri Exp $";
+
 /*   splutil.c
 * ===========================================================================
 *
@@ -27,13 +29,16 @@
 *
 * Author:  Sarah Wheelan
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * Contents:  splice site matrices and associated utilites 
 *
 * ==========================================================================
 *
 * $Log: splutil.c,v $
+* Revision 6.7  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.6  2000/04/22 15:56:04  wheelan
 * changed is_donor to take a FloatHiPtr instead of returning a FloatHi
 *

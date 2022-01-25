@@ -1,4 +1,4 @@
-/*  $Id: ncbi_socket_connector.c,v 6.15 2003/01/17 19:44:47 lavr Exp $
+/*  $Id: ncbi_socket_connector.c,v 6.19 2003/08/25 14:42:14 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,7 @@
 
 #include "ncbi_ansi_ext.h"
 #include <connect/ncbi_socket_connector.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #define MAX_IP_ADDR_LEN       16 /* sizeof("255.255.255.255") */
@@ -64,31 +65,30 @@ typedef struct {
 #ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
-    static const char* s_VT_GetType(CONNECTOR       connector);
-    static EIO_Status  s_VT_Open   (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Wait   (CONNECTOR       connector,
-                                    EIO_Event       event,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Write  (CONNECTOR       connector,
-                                    const void*     buf,
-                                    size_t          size,
-                                    size_t*         n_written,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Flush  (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Read   (CONNECTOR       connector,
-                                    void*           buf,
-                                    size_t          size,
-                                    size_t*         n_read,
-                                    const STimeout* timeout);
-    static EIO_Status  s_VT_Status (CONNECTOR       connector,
-                                    EIO_Event       dir);
-    static EIO_Status  s_VT_Close  (CONNECTOR       connector,
-                                    const STimeout* timeout);
-    static void        s_Setup     (SMetaConnector* meta,
-                                    CONNECTOR       connector);
-    static void        s_Destroy   (CONNECTOR       connector);
+    static const char* s_VT_GetType (CONNECTOR       connector);
+    static char*       s_VT_Descr   (CONNECTOR       connector);
+    static EIO_Status  s_VT_Open    (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Wait    (CONNECTOR       connector,
+                                     EIO_Event       event,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Write   (CONNECTOR       connector,
+                                     const void*     buf,
+                                     size_t          size,
+                                     size_t*         n_written,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Read    (CONNECTOR       connector,
+                                     void*           buf,
+                                     size_t          size,
+                                     size_t*         n_read,
+                                     const STimeout* timeout);
+    static EIO_Status  s_VT_Status  (CONNECTOR       connector,
+                                     EIO_Event       dir);
+    static EIO_Status  s_VT_Close   (CONNECTOR       connector,
+                                     const STimeout* timeout);
+    static void        s_Setup      (SMetaConnector* meta,
+                                     CONNECTOR       connector);
+    static void        s_Destroy    (CONNECTOR       connector);
 #  ifdef IMPLEMENTED__CONN_WaitAsync
     static EIO_Status s_VT_WaitAsync(void*                   connector,
                                      FConnectorAsyncHandler  func,
@@ -99,10 +99,23 @@ extern "C" {
 #endif /* __cplusplus */
 
 
+/*ARGSUSED*/
 static const char* s_VT_GetType
 (CONNECTOR connector)
 {
     return "SOCK";
+}
+
+
+static char* s_VT_Descr
+(CONNECTOR connector)
+{
+    SSockConnector* xxx = (SSockConnector*) connector->handle;
+    size_t len = strlen(xxx->host) + 6/*:port*/ + 1/*EOL*/;
+    char* buf = (char*) malloc(len);
+    if (buf)
+        sprintf(buf, "%s:%hu", xxx->host, xxx->port);
+    return buf;
 }
 
 
@@ -128,37 +141,32 @@ static EIO_Status s_VT_Open
             xxx->port = port;
             status = eIO_Success;
         } else {
-            if (!xxx->max_try)
+            if ( !xxx->max_try )
                 break;
             /* connect/reconnect */
             status = xxx->sock ?
                 SOCK_Reconnect(xxx->sock, 0, 0, timeout) :
                 SOCK_CreateEx(xxx->host, xxx->port, timeout, &xxx->sock,
+                              xxx->init_data, xxx->init_size,
                               (xxx->flags & eSCC_DebugPrintout)
                               ? eOn : eDefault);
+            if (xxx->init_data) {
+                free(xxx->init_data);
+                xxx->init_data = 0;
+                xxx->init_size = 0;
+            }
             i++;
         }
 
         if (status == eIO_Success) {
-            /* set data logging and write init data, if any */
-            size_t n_written = 0;
-
             SOCK_SetReadOnWrite(xxx->sock,
                                 (xxx->flags & eSCC_SetReadOnWrite)
                                 ? eOn : eDefault);
-            if (!xxx->init_data)
-                return eIO_Success;
-            SOCK_SetTimeout(xxx->sock, eIO_Write, timeout);
-            status = SOCK_Write(xxx->sock, xxx->init_data, xxx->init_size,
-                                &n_written, eIO_WritePersist);
-            if (status == eIO_Success)
-                return eIO_Success;
+            break;
         }
-
         /* error: continue trying */
     } while (i < xxx->max_try);
 
-    /* error: return status */
     return status;
 }
 
@@ -196,14 +204,6 @@ static EIO_Status s_VT_Write
         return eIO_Closed;
     SOCK_SetTimeout(xxx->sock, eIO_Write, timeout);
     return SOCK_Write(xxx->sock, buf, size, n_written, eIO_WritePlain);
-}
-
-
-static EIO_Status s_VT_Flush
-(CONNECTOR       connector,
- const STimeout* timeout)
-{
-    return eIO_Success;
 }
 
 
@@ -255,10 +255,11 @@ static void s_Setup
 {
     /* initialize virtual table */
     CONN_SET_METHOD(meta, get_type,   s_VT_GetType,   connector);
+    CONN_SET_METHOD(meta, descr,      s_VT_Descr,     connector);
     CONN_SET_METHOD(meta, open,       s_VT_Open,      connector);
     CONN_SET_METHOD(meta, wait,       s_VT_Wait,      connector);
     CONN_SET_METHOD(meta, write,      s_VT_Write,     connector);
-    CONN_SET_METHOD(meta, flush,      s_VT_Flush,     connector);
+    CONN_SET_METHOD(meta, flush,      0,              0);
     CONN_SET_METHOD(meta, read,       s_VT_Read,      connector);
     CONN_SET_METHOD(meta, status,     s_VT_Status,    connector);
     CONN_SET_METHOD(meta, close,      s_VT_Close,     connector);
@@ -298,6 +299,7 @@ static CONNECTOR s_Init
 
     /* parameter check: either sock or host/port, not both */
     assert((!sock && host && port) || (sock && !host && !port));
+    assert(!init_size || init_data);
     /* initialize internal data structures */
     xxx->sock        = sock;
     xxx->host        = host ? strdup(host) : 0;
@@ -362,17 +364,28 @@ extern CONNECTOR SOCK_CreateConnectorOnTop
 extern CONNECTOR SOCK_CreateConnectorOnTopEx
 (SOCK         sock,
  unsigned int max_try,
- const void*  init_data,
- size_t       init_size,
  TSCC_Flags   flags)
 {
-    return s_Init(sock, 0, 0, max_try, init_data, init_size, flags);
+    return s_Init(sock, 0, 0, max_try, 0, 0, flags);
 }
 
 
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_socket_connector.c,v $
+ * Revision 6.19  2003/08/25 14:42:14  lavr
+ * Employ new k..Timeout constants  --  log modification only
+ *
+ * Revision 6.18  2003/05/31 05:15:45  lavr
+ * Add ARGSUSED where args are meant to be unused, remove Flush
+ *
+ * Revision 6.17  2003/05/27 15:04:31  lavr
+ * +#include <stdio.h> (to define sprint's prototype on Mac)
+ *
+ * Revision 6.16  2003/05/14 03:54:23  lavr
+ * SOCKET_CreateConnectorOnTopEx(): number of parameters changed
+ * Implementation of CONN_Description() added
+ *
  * Revision 6.15  2003/01/17 19:44:47  lavr
  * Reduce dependencies
  *
@@ -397,14 +410,14 @@ extern CONNECTOR SOCK_CreateConnectorOnTopEx
  *
  * Revision 6.8  2002/04/26 16:37:05  lavr
  * Added setting of default timeout in meta-connector's setup routine
- * Remove all checks for CONN_DEFAULT_TIMEOUT: now supplied good from CONN
+ * Remove all checks for kDefaultTimeout: now supplied good from CONN
  *
  * Revision 6.7  2001/12/04 15:55:07  lavr
  * +SOCK_CreateConnectorOnTop(), +SOCK_CreateConnectorOnTopEx()
  * Redesign of open-retry loop
  *
  * Revision 6.6  2001/04/24 21:30:27  lavr
- * Added treatment of CONN_DEFAULT_TIMEOUT
+ * Added treatment of kDefaultTimeout
  *
  * Revision 6.5  2001/01/25 17:04:44  lavr
  * Reversed:: DESTROY method calls free() to delete connector structure

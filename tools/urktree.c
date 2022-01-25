@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: urktree.c,v 6.6 2003/05/30 17:25:38 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: trees
 *
@@ -38,6 +40,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: urktree.c,v $
+* Revision 6.6  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.5  1998/09/16 18:03:37  kuzio
 * cvs logging
 *

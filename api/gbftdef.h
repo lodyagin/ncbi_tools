@@ -3,6 +3,15 @@
 *   -- GenBank Feature table define file
 *
 * $Log: gbftdef.h,v $
+* Revision 6.17  2003/10/07 13:50:36  kans
+* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
+*
+* Revision 6.16  2003/08/19 15:18:37  kans
+* added GBQUAL_segment, increased ParFlat_TOTAL_GBQUAL and opt_qual array size
+*
+* Revision 6.15  2003/05/07 22:03:31  kans
+* added GBQUAL_mol_type, raised opt_qual array to 51 elements
+*
 * Revision 6.14  2003/02/22 21:20:05  kans
 * added GBQUAL_locus_tag, legal for now in gene features
 *
@@ -175,13 +184,18 @@
 #define GBQUAL_isolation_source  79
 #define GBQUAL_serovar           80
 #define GBQUAL_locus_tag         81
+#define GBQUAL_mol_type          82
+#define GBQUAL_segment           83
+#define GBQUAL_ecotype           84
+#define GBQUAL_estimated_length  85
+#define GBQUAL_operon            86
 
-#define ParFlat_TOTAL_GBQUAL     82
+#define ParFlat_TOTAL_GBQUAL     87
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
 #define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     64
+#define ParFlat_TOTAL_GBFEAT     67
 
 #define  Class_pos_aa             1
 #define  Class_text               2
@@ -214,7 +228,7 @@ typedef struct sematic_gbfeature {
     Int2     mand_num;
     Int2     mand_qual[5];
     Int2     opt_num;
-    Int2     opt_qual[50];
+    Int2     opt_qual[55];
 } SematicFeat, PNTR SematicFeatPtr;
 
 typedef struct gbfeat_name {

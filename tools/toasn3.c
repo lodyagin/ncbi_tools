@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: toasn3.c,v 6.82 2003/06/18 21:52:21 kans Exp $";
+
 /*****************************************************************************
 *
 *   toasn3.c
@@ -259,6 +261,9 @@ static Boolean NOT_segment(SeqEntryPtr sep)
 	bssp = (BioseqSetPtr)(sep->data.ptrvalue);
 	if (bssp->_class == 1) {    /*  1 - nucprot set  */
 		seqsep = bssp->seq_set;
+		if (seqsep == NULL) {
+			return TRUE;
+		}
 		if (seqsep->choice == 1) { 
 			return TRUE;
 		}
@@ -2090,6 +2095,9 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
 		return retval;
 	}
 	seqsep = bssp->seq_set;
+	if (seqsep == NULL) {
+		return retval;
+	}
 	if (seqsep->choice == 1) {   /* single bioseq */
 		bsp = (BioseqPtr) seqsep->data.ptrvalue;
 		descr = bsp->descr;
@@ -6081,8 +6089,9 @@ Uint2 move_cds_ex (SeqEntryPtr sep, Boolean doPseudo)
     if (! IS_Bioseq_set (sep)) return 0;
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return 0;
-    if (bssp->_class == 7 ||
-        (bssp->_class >= 13 && bssp->_class <= 16) ||
+    if (bssp->_class == BioseqseqSet_class_genbank ||
+        (bssp->_class >= BioseqseqSet_class_mut_set && bssp->_class <= BioseqseqSet_class_eco_set) ||
+        bssp->_class == BioseqseqSet_class_gen_prod_set ||
         bssp->_class == BioseqseqSet_class_wgs_set) {
         found = 0;
     	for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {

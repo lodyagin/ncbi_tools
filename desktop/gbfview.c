@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.67 $
+* $Revision: 6.70 $
 *
 * File Description: 
 *
@@ -888,6 +888,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   BioseqPtr        bsp;
   CstType          custom = 0;
   DoC              doc;
+  Boolean          doLockFarComponents = FALSE;
   Uint2            entityID;
   FonT             fnt;
   FILE             *fp;
@@ -959,12 +960,26 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
         break;
     }
   }
+
+  bsp = bvp->bsp;
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  topsep = GetTopSeqEntryForEntityID (entityID);
+  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA);
+
   if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
-    lockFar = TRUE;
+    if (isNTorNW || isTPA) {
+      lockFar = FALSE;
+      lookupFar = TRUE;
+      if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+        doLockFarComponents = TRUE;
+      }
+    } else {
+      lockFar = TRUE;
+    }
   }
   if (bvp->hasTargetControl && bvp->ffCustomBtn != NULL) {
     if (GetStatus (bvp->ffCustomBtn)) {
-      custom = SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+      custom |= SHOW_TRANCRIPTION | SHOW_PEPTIDE;
     }
   }
   doc = NULL;
@@ -1001,11 +1016,16 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   }
 
   svpp = (SeqViewProcsPtr) GetAppProperty ("SeqDisplayForm");
-  if (svpp != NULL && svpp->lockFarComponents) {
+  if (svpp != NULL) {
+    if (svpp->lockFarComponents) {
+      doLockFarComponents = TRUE;
+    }
+  }
+  if (doLockFarComponents) {
     entityID = ObjMgrGetEntityIDForPointer (bsp);
     sep = GetTopSeqEntryForEntityID (entityID);
     if (bvp->bsplist == NULL && lockFar) {
-      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE, NULL);
     }
     if (lookupFar) {
       hastpaaligns = FALSE;
@@ -1020,6 +1040,9 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
     if (bvp->viewWholeEntity) {
       sep = GetTopSeqEntryForEntityID (entityID);
       usethetop = sep;
+      if (format == FTABLE_FMT) {
+        custom |= SHOW_PROT_FTABLE;
+      }
     } else if (ISA_na (bsp->mol) && bsp->repr == Seq_repr_seg) {
       sep = GetBestTopParentForData (entityID, bsp);
     } else if (ISA_aa (bsp->mol) && bsp->repr == Seq_repr_seg) {
@@ -1038,7 +1061,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, FmtType format, FlgType flags)
   WatchCursor ();
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
-  LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA);
+  /* LookForGEDetc (topsep, &isGED, &isNTorNW, &isNC, &isTPA); */
   if ((flags & SHOW_CONTIG_FEATURES) != 0 || (flags & SHOW_CONTIG_SOURCES) != 0) {
     if (isNTorNW || isTPA) {
       flags |= ONLY_NEAR_FEATURES;
@@ -1186,7 +1209,7 @@ static void PopulateFasta (BioseqViewPtr bvp)
     entityID = ObjMgrGetEntityIDForPointer (bsp);
     sep = GetTopSeqEntryForEntityID (entityID);
     if (bvp->bsplist == NULL) {
-      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE);
+      bvp->bsplist = LockFarComponentsEx (sep, TRUE, FALSE, FALSE, NULL);
     }
   }
 

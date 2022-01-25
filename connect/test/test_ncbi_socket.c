@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket.c,v 6.19 2002/12/04 16:58:13 lavr Exp $
+/*  $Id: test_ncbi_socket.c,v 6.21 2003/05/21 17:46:51 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -292,12 +292,20 @@ static void TEST__server_1(SOCK sock)
     }}
 
     /* Shutdown on write */
+#ifdef NCBI_OS_MSWIN
+    assert(SOCK_Shutdown(sock, eIO_ReadWrite)    == eIO_Success);
+#else
     assert(SOCK_Shutdown(sock, eIO_Write)        == eIO_Success);
+#endif
     assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
     assert(SOCK_Write   (sock, 0, 0, &n_io_done, eIO_WritePersist)
                                                  == eIO_Closed);
     assert(SOCK_Status  (sock, eIO_Write)        == eIO_Closed);
+#ifdef NCBI_OS_MSWIN
+    assert(SOCK_Status  (sock, eIO_Read)         == eIO_Closed);
+#else
     assert(SOCK_Status  (sock, eIO_Read)         == eIO_Success);
+#endif
 }
 
 
@@ -465,14 +473,17 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
     EIO_Status status;
     size_t     n_io, n_io_done;
     char       buf[TEST_BUFSIZE];
-    STimeout   r_to, w_to;
+    STimeout   r_to, w_to, rc_to;
     size_t     i;
 
     fprintf(log_fp, "[INFO] TEST__server_2(TS2)\n");
 
-    r_to.sec  = 0;
-    r_to.usec = 0;
+    r_to.sec   = 0;
+    r_to.usec  = 0;
     w_to = r_to;
+
+    rc_to.sec  = 30;
+    rc_to.usec = 123456;
 
     /* goto */
  l_reconnect: /* reconnection loopback */
@@ -500,17 +511,16 @@ static void TEST__server_2(SOCK sock, LSOCK lsock)
         case eIO_Closed:
             fprintf(log_fp, "[INFO] TS2::read: connection closed\n");
             assert(SOCK_Status(sock, eIO_Read) == eIO_Closed);
-
             /* reconnect */
             if ( !lsock )
                 return;
 
             fprintf(log_fp, "[INFO] TS2:: reconnect\n");
             SOCK_Close(sock);
-            status = LSOCK_Accept(lsock, NULL, &sock);
-            assert(status == eIO_Success);
+            if ((status = LSOCK_Accept(lsock, &rc_to, &sock)) != eIO_Success)
+                return;
             assert(SOCK_Status(sock, eIO_Read) == eIO_Success);
-            /* !!! */ 
+            /* !!! */
             goto l_reconnect;
 
         case eIO_Timeout:
@@ -833,6 +843,8 @@ extern int main(int argc, char** argv)
 
     /* Setup log stream
      */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
     /* Printout local hostname
@@ -923,6 +935,12 @@ extern int main(int argc, char** argv)
 /*
  * ---------------------------------------------------------------------------
  * $Log: test_ncbi_socket.c,v $
+ * Revision 6.21  2003/05/21 17:46:51  lavr
+ * Fix MSVC-related problems with SOCK_Shutdown()
+ *
+ * Revision 6.20  2003/05/14 03:58:43  lavr
+ * Match changes in respective APIs of the tests
+ *
  * Revision 6.19  2002/12/04 16:58:13  lavr
  * No changes
  *

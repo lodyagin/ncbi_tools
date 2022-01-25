@@ -1,4 +1,6 @@
-/* $Id: mbalign.c,v 6.38 2003/01/30 19:40:13 dondosha Exp $
+static char const rcsid[] = "$Id: mbalign.c,v 6.40 2003/05/30 17:25:36 coulouri Exp $";
+
+/* $Id: mbalign.c,v 6.40 2003/05/30 17:25:36 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +32,18 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.38 $
+* $Revision: 6.40 $
 *
 * File Description:
 *        Alignment functions for Mega Blast program
 *
 * $Log: mbalign.c,v $
+* Revision 6.40  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
+* Revision 6.39  2003/05/13 16:02:53  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.38  2003/01/30 19:40:13  dondosha
 * No need to add gap extension penalty to gap open in greedy alignment functions
 *
@@ -250,7 +258,7 @@ static edit_op_t *edit_script_next(edit_script_t *es, edit_op_t *op)
 static Int4 edit_script_more(edit_script_t *data, Uint4 op, Uint4 k)
 {
     if (op == EDIT_OP_ERR) {
-        ErrPostEx(SEV_FATAL, 0, 0, 
+        ErrPostEx(SEV_FATAL, 1, 0, 
                   "edit_script_more: bad opcode %d:%d", op, k);
         return -1;
     }

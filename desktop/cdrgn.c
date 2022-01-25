@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.53 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
@@ -56,6 +56,7 @@
 #include <toasn3.h>
 #include <subutil.h>
 #include <explore.h>
+#include <pmfapi.h>
 
 #define CODING_REGION_PAGE    0
 #define GENE_PAGE             0
@@ -1925,6 +1926,249 @@ static void ConvMiscFeatWarn (ButtoN b)
   }
 }
 
+static Int4 AccessionToGi (CharPtr string)
+{
+   /*
+   CharPtr str;
+   LinkSetPtr lsp;
+   Int4 gi;
+
+   str = MemNew (StringLen (string) + 10);
+   sprintf (str, "\"%s\" [ACCN]", string);
+   lsp = EntrezTLEvalString (str, TYP_NT, -1, NULL, NULL);
+   MemFree (str);
+   if (lsp == NULL) return 0;
+   if (lsp->num <= 0) {
+       LinkSetFree (lsp);
+       return 0;
+   }
+   gi = lsp->uids [0];
+   LinkSetFree (lsp);
+   return gi;
+   */
+   Int4      gi;
+   SeqIdPtr  sip;
+
+   sip = SeqIdFromAccessionDotVersion (string);
+   if (sip == NULL) return 0;
+   gi = GetGIForSeqId (sip);
+   SeqIdFree (sip);
+   return gi;
+}
+
+static void SetGeneAndProtFields (CdRgnFormPtr cfp, CharPtr title);
+
+static BioseqPtr GetProteinFromSep (SeqEntryPtr sep)
+{
+  BioseqPtr query_bsp;
+
+  query_bsp = NULL;
+  SeqEntryExplore(sep, &query_bsp, FindProt);
+  return query_bsp;
+}
+
+typedef struct proteinimportformdata {
+  CdRgnFormPtr cfp;
+  WindoW       w;
+  TexT         accession;
+  GrouP        accntype;
+  ButtoN       DownloadProtein;
+} ProteinImportFormData, PNTR ProteinImportFormPtr;
+
+static void AddProteinToCDSDialog (
+  BioseqPtr bsp,
+  CdRgnFormPtr  cfp
+)
+{
+  ValNodePtr vnp;
+  CharPtr    vnpstr;
+  SeqLocPtr  slp;
+  Char          str [128];
+
+  PointerToDialog (cfp->protseq, bsp);
+  SetProteinLengthDisplay (cfp->protlen, bsp->length);
+  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+  SafeSetTitle (cfp->protSeqIdTxt, str);
+  if (bsp->descr != NULL) {
+    vnp = ValNodeFindNext (bsp->descr, NULL, Seq_descr_title);
+    if (vnp != NULL && vnp->data.ptrvalue != NULL) {
+      vnpstr = (CharPtr) vnp->data.ptrvalue;
+      SetGeneAndProtFields (cfp, vnpstr);
+    }
+  }
+  slp = DialogToPointer (cfp->location);
+  if (slp == NULL || (! cfp->locvisited)) {
+    DoPredictCdRegion (cfp);
+  }
+  SeqLocFree (slp);
+}
+
+static void DownloadProteinFromEntrez (ButtoN b)
+{
+  SeqEntryPtr   sep;
+  Int4          uid;
+  BioseqPtr     bsp;
+  CdRgnFormPtr  cfp;
+  Char          str [128];
+  ProteinImportFormPtr pif;
+ 
+  pif = (ProteinImportFormPtr) GetObjectExtra (b);
+  if (pif == NULL) return; 
+  cfp = pif->cfp;
+  if (cfp == NULL) return;
+  GetTitle (pif->accession, str, sizeof (str));
+  if (StringHasNoText (str))
+  {
+    return;
+  }
+  WatchCursor ();
+  if (GetValue (pif->accntype) == 1) {
+    uid = AccessionToGi (str);
+  } else {
+    if (! StrToLong (str, &uid)) {
+     uid = 0;
+    }
+  }
+
+  if (uid > 0) {
+    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    if (sep == NULL) {
+      Message (MSG_OK, "Unable to find this record in the database.");
+      return;
+    }
+    if (IS_Bioseq (sep)) {
+    } else if (IS_Bioseq_set (sep)) {
+    } else {
+      Message (MSG_OK, "Unable to find this record in the database.");
+      return;
+    }
+  }
+  bsp = GetProteinFromSep (sep);
+  if (bsp == NULL)
+  {
+    Message (MSG_ERROR, "No protein in record!");
+  }
+  else
+  {
+    AddProteinToCDSDialog (bsp, cfp);
+  }
+  SeqEntryFree (sep);
+  Remove (pif->w);
+  ArrowCursor ();
+  Update ();
+}
+
+static void FetchTextProc (TexT t)
+
+{
+  Boolean       alldigits;
+  Char          ch;
+  ProteinImportFormPtr  pif;
+  CharPtr       ptr;
+  Char          str [32];
+
+  pif = (ProteinImportFormPtr) GetObjectExtra (t);
+  if (pif == NULL) return;
+  GetTitle (t, str, sizeof (str));
+  if (StringHasNoText (str)) {
+    SafeDisable (pif->DownloadProtein);
+  } else {
+    SafeEnable (pif->DownloadProtein);
+    TrimSpacesAroundString (str);
+    alldigits = TRUE;
+    ptr = str;
+    ch = *ptr;
+    while (ch != '\0') {
+      if (! IS_DIGIT (ch)) {
+        alldigits = FALSE;
+      }
+      ptr++;
+      ch = *ptr;
+    }
+    if (alldigits) {
+      SafeSetValue (pif->accntype, 2);
+    } else {
+      SafeSetValue (pif->accntype, 1);
+    }
+  }
+}
+
+static void LoadFASTAProteinFromFile (ButtoN b)
+{
+  CdRgnFormPtr  cfp;
+  CharPtr       extension;
+  FILE *        fp;
+  SeqEntryPtr   sep;
+  BioseqPtr     bsp;
+  Char          path [PATH_MAX];
+  ProteinImportFormPtr pif;
+ 
+  pif = (ProteinImportFormPtr) GetObjectExtra (b);
+  if (pif == NULL) return; 
+  cfp = pif->cfp;
+  if (cfp == NULL) return;
+
+  path [0] = 0;
+  extension = GetAppProperty ("FastaProtExtension");
+  if (GetInputFileName (path, sizeof (path), extension, "TEXT"))
+  {
+    fp = FileOpen (path, "r");
+    if (fp != NULL) {
+      sep = FastaToSeqEntry (fp, FALSE);
+      if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
+        bsp = (BioseqPtr) sep->data.ptrvalue;
+        AddProteinToCDSDialog (bsp, cfp);
+      }
+      SeqEntryFree (sep);
+    }
+    FileClose (fp);
+  }
+  Remove (pif->w);
+}
+
+static void ShowImportProteinDialog ( CdRgnFormPtr  cfp)
+{
+  WindoW w;
+  GrouP  c, f, g, h;
+  ButtoN b;
+  ProteinImportFormPtr pif;
+
+  pif = (ProteinImportFormPtr) MemNew ( sizeof (ProteinImportFormData));
+  if (pif == NULL) return;
+  pif->cfp = cfp;
+  w = FixedWindow (-50, -33, -10, -10, "Import Protein", StdCloseWindowProc);
+  pif->w = w;
+  SetObjectExtra (w, pif, NULL);
+
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  g = HiddenGroup (h, 4, 0, NULL);
+
+  pif->accntype = HiddenGroup (g, 4, 0, NULL);
+  RadioButton (pif->accntype, "Accession");
+  RadioButton (pif->accntype, "GI");
+  SetValue (pif->accntype, 1);
+  pif->accession = DialogText (g, "", 6, FetchTextProc);
+  SetObjectExtra (pif->accession, pif, NULL);
+  pif->DownloadProtein = PushButton (g, "Download Protein From Entrez",
+                                     DownloadProteinFromEntrez);
+  SetObjectExtra (pif->DownloadProtein, pif, NULL);
+  Disable (pif->DownloadProtein);
+
+  f = HiddenGroup (h, 4, 0, NULL);
+  b = PushButton (f, "Load FASTA Protein From File", LoadFASTAProteinFromFile);
+  SetObjectExtra (b, pif, NULL);
+
+  c = HiddenGroup (w, 2, 0, NULL);
+  PushButton (c, "Cancel", StdCancelButtonProc);
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) f, (HANDLE) c, NULL);
+  RealizeWindow (w);
+  Show (w);
+  Update ();
+
+}
+
 static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
                                  SeqFeatPtr sfp, CdRgnFormPtr cfp)
 
@@ -2234,20 +2478,11 @@ static void SetGeneAndProtFields (CdRgnFormPtr cfp, CharPtr title)
     }
   }
 }
-
 static Boolean ImportCdRgnForm (ForM f, CharPtr filename)
 
 {
-  BioseqPtr     bsp;
   CdRgnFormPtr  cfp;
-  CharPtr       extension;
-  FILE          *fp;
   Char          path [PATH_MAX];
-  SeqEntryPtr   sep;
-  SeqLocPtr     slp;
-  Char          str [128];
-  ValNodePtr    vnp;
-  CharPtr       vnpstr;
 
   path [0] = '\0';
   StringNCpy_0 (path, filename, sizeof (path));
@@ -2255,34 +2490,7 @@ static Boolean ImportCdRgnForm (ForM f, CharPtr filename)
   if (cfp != NULL) {
     switch (cfp->currentPage) {
       case CODING_REGION_PAGE :
-        extension = GetAppProperty ("FastaProtExtension");
-        if (path [0] != '\0' || GetInputFileName (path, sizeof (path), extension, "TEXT")) {
-          fp = FileOpen (path, "r");
-          if (fp != NULL) {
-            sep = FastaToSeqEntry (fp, FALSE);
-            if (sep != NULL && sep->choice == 1 && sep->data.ptrvalue != NULL) {
-              bsp = (BioseqPtr) sep->data.ptrvalue;
-              PointerToDialog (cfp->protseq, bsp);
-              SetProteinLengthDisplay (cfp->protlen, bsp->length);
-              SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
-              SafeSetTitle (cfp->protSeqIdTxt, str);
-              if (bsp->descr != NULL) {
-                vnp = ValNodeFindNext (bsp->descr, NULL, Seq_descr_title);
-                if (vnp != NULL && vnp->data.ptrvalue != NULL) {
-                  vnpstr = (CharPtr) vnp->data.ptrvalue;
-                  SetGeneAndProtFields (cfp, vnpstr);
-                }
-              }
-              slp = DialogToPointer (cfp->location);
-              if (slp == NULL || (! cfp->locvisited)) {
-                DoPredictCdRegion (cfp);
-              }
-              SeqLocFree (slp);
-            }
-            SeqEntryFree (sep);
-          }
-          FileClose (fp);
-        }
+        ShowImportProteinDialog ( cfp);
         break;
       case COMMON_PAGE :
         break;
@@ -4666,8 +4874,12 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
                 shift = 2;
               } else {
                 shift = 1;
-              } 
-              i = aa - (64 + shift);
+              }
+              if (aa != '*') {
+                i = aa - (64 + shift);
+              } else {
+                i = 25;
+              }
               SetValue (rpp->AAitem, (Int2) i + 1);
             }
             head = NULL;
@@ -4786,6 +4998,9 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
                 shift = 1;
               } 
               trna->aa = (Uint1) i + 64 + shift;
+              if (trna->aa == 91) {
+                trna->aa = (Uint1) '*';
+              }
             }
             for (j = 0; j < 6; j++) {
               trna->codon [j] = 255;
@@ -4996,7 +5211,12 @@ static void PopulateAAPopup (PopuP AAitem)
     str = (CharPtr) GetNameForResidue (sctp, i);
     sprintf (item, "%c    %s", ch, str);
     PopupItem (AAitem, item);
-  } 
+  }
+  i = '*';
+  ch = GetSymbolForResidue (sctp, i);
+  str = (CharPtr) GetNameForResidue (sctp, i);
+  sprintf (item, "%c    %s", ch, str);
+  PopupItem (AAitem, item);
   SetValue (AAitem, 1); 
 }
 

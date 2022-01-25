@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: dotseq.c,v 6.12 2003/09/17 20:55:12 kskatz Exp $";
+
 /* dotSeq.c */
 /* ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.9 $
+* $Revision: 6.12 $
 *
 * File Description: computes local alignments for dot matrix
 *
@@ -38,8 +40,17 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 
-$Revision: 6.9 $
+$Revision: 6.12 $
 $Log: dotseq.c,v $
+Revision 6.12  2003/09/17 20:55:12  kskatz
+Resetting to the way it was in revision 6.10; accidently checked in a kludge meant to be used only locally in DOT_GetNResidues
+
+Revision 6.11  2003/09/17 20:39:01  kskatz
+Commented out a temporary fix in SPI_AlignInWindows() [line 3880]
+
+Revision 6.10  2003/05/30 17:25:36  coulouri
+add rcsid
+
 Revision 6.9  2003/02/07 21:21:50  kans
 DOT_BuildPLookup was erroneously calling MemFree on elements of array
 
@@ -1448,7 +1459,7 @@ static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
   MemSet((Pointer)qbuffer, '\0', sizeof(Char)*101); 
   MemSet((Pointer)sbuffer, '\0', sizeof(Char)*101);
 
-
+  
   mip->matrix = DOT_DNAScoringMatrix(-3, 1, 4);
   qlen=mip->qlen;
   slen=mip->slen;
@@ -1459,13 +1470,12 @@ static Boolean DOT_GetNResidues (DOTMainDataPtr mip, Boolean is_byLoc)
   if (!(qseq = (Uint1Ptr) MemNew (sizeof(Uint1)*(qlen)))) return FALSE;
   if (!(sseq = (Uint1Ptr) MemNew (sizeof(Uint1)*(slen)))) return FALSE;
 
-  if (is_byLoc)
-    {
+  if (is_byLoc){
       qspp = SeqPortNewByLoc(mip->qslp, Seq_code_ncbi2na);
       sspp = SeqPortNewByLoc(mip->sslp, Seq_code_ncbi2na);
-    }
+  }
   else
-    {
+      {
       qspp = SeqPortNew (mip->qbsp, MIN(mip->q_start, mip->q_stop), MAX(mip->q_start, mip->q_stop), 0, Seq_code_ncbi2na); 
       sspp = SeqPortNew (mip->sbsp, mip->s_start, mip->s_stop, 0, Seq_code_ncbi2na);
     }

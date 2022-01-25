@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.41 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *
@@ -377,6 +377,34 @@ static Uint1  ncbisearchicon [] = {
   0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
 };
 
+static Uint1  meshicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
+static Uint1  geneicon [] = {
+  0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
+  0x40, 0x00, 0x00, 0x02, 0x7F, 0xFF, 0xFF, 0xFE
+};
+
 static Uint1  genericon [] = {
   0x7F, 0xFF, 0xFF, 0xFE, 0x40, 0x00, 0x00, 0x02,
   0x40, 0x00, 0x00, 0x02, 0x40, 0x00, 0x00, 0x02,
@@ -416,6 +444,8 @@ static CharPtr  journalsRadios [] = { "Summary", "Fields", "Journals ID", NULL }
 static CharPtr  unigeneRadios [] = { "Summary", "Fields", "UniGene ID", NULL };
 static CharPtr  pmcRadios [] = { "Summary", "Fields", "PMC ID", NULL };
 static CharPtr  ncbisearchRadios [] = { "Summary", "Fields", "Unique ID", NULL };
+static CharPtr  meshRadios [] = { "Summary", "Fields", "MeSH ID", NULL };
+static CharPtr  geneRadios [] = { "Summary", "Fields", "Gene ID", NULL };
 static CharPtr  localBioseqRadios [] = { "FASTA", NULL };
 
 static CharPtr  defaultLaunch [] = { "Web Entrez", NULL };
@@ -437,6 +467,8 @@ static CharPtr  journalsLaunch [] = { "Web Entrez", NULL };
 static CharPtr  unigeneLaunch [] = { "Web Entrez", NULL };
 static CharPtr  pmcLaunch [] = { "Web Entrez", NULL };
 static CharPtr  ncbisearchLaunch [] = { "Web Entrez", NULL };
+static CharPtr  meshLaunch [] = { "Web Entrez", NULL };
+static CharPtr  geneLaunch [] = { "Web Entrez", NULL };
 
 /*-----------------------------------*/
 /* Data structures used to keep info */
@@ -738,6 +770,10 @@ static void DrawIcon (SummFormPtr sfp, RectPtr r, Int2 item, Int2 frst)
     icon = pmcicon;
   else if (StringICmp (dbName, "ncbisearch") == 0)
     icon = ncbisearchicon;
+  else if (StringICmp (dbName, "mesh") == 0)
+    icon = meshicon;
+  else if (StringICmp (dbName, "gene") == 0)
+    icon = geneicon;
   else
     icon = genericon;
 
@@ -831,9 +867,13 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   CharPtr               marker;
   CharPtr               mrnasrc1;
   CharPtr               mrnasrc2;
+  CharPtr               name;
   CharPtr               oid;
+  CharPtr               pdbacc;
+  CharPtr               pdbdescr;
   CharPtr               rank;
   CharPtr               sciname;
+  CharPtr               scopenote;
   CharPtr               snpid;
   CharPtr               str;
   CharPtr               taxid;
@@ -861,6 +901,8 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   mrnasrc1 = NULL;
   mrnasrc2 = NULL;
   oid = NULL;
+  pdbacc = NULL;
+  pdbdescr = NULL;
   rank = NULL;
   sciname = NULL;
   taxid = NULL;
@@ -870,7 +912,9 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   dcsum = NULL;
   title = NULL;
   title1 = NULL;
+  name = NULL;
   description = NULL;
+  scopenote = NULL;
 
   for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
     if (StringHasNoText (e2DocsumDataPtr->field_value)) continue;
@@ -914,8 +958,16 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
       snpid = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "DOCSUM") == 0) {
       dcsum = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "Name") == 0) {
+      name = e2DocsumDataPtr->field_value;
     } else if (StringICmp (e2DocsumDataPtr->field_name, "Description") == 0) {
       description = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "ScopeNote") == 0) {
+      scopenote = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "PdbAcc") == 0) {
+      pdbacc = e2DocsumDataPtr->field_value;
+    } else if (StringICmp (e2DocsumDataPtr->field_name, "PdbDescr") == 0) {
+      pdbdescr = e2DocsumDataPtr->field_value;
     }
   }
 
@@ -951,6 +1003,13 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
     cpt = title;
     ttl = description;
   }
+  if (StringHasNoText (cpt) && (! StringHasNoText (name)) && (! StringHasNoText (description))) {
+    cpt = name;
+    ttl = description;
+  }
+  if (StringHasNoText (cpt)) {
+    cpt = pdbacc;
+  }
   if (StringHasNoText (cpt)) {
     sprintf (uidbuf, "%ld", uid);
     cpt = uidbuf;
@@ -973,6 +1032,12 @@ static CharPtr FormatDocsum (Entrez2DocsumPtr e2DocsumPtr)
   }
   if (StringHasNoText (ttl)) {
     ttl = dcsum;
+  }
+  if (StringHasNoText (ttl)) {
+    ttl = scopenote;
+  }
+  if (StringHasNoText (ttl)) {
+    ttl = pdbdescr;
   }
   if (StringHasNoText (ttl)) {
     ttl = "?";
@@ -1068,6 +1133,7 @@ typedef CharPtr (*FormatE2DSPProc) (Entrez2DocsumPtr e2DocsumPtr);
 static CharPtr Query_FetchDocSumCommon (DoC d, Int2 item, FormatE2DSPProc proc)
 
 {
+  Int2                  attributes;
   Entrez2RequestPtr     e2RequestPtr = NULL;
   Entrez2ReplyPtr       e2ReplyPtr;
   Entrez2DocsumDataPtr  e2DocsumDataPtr;
@@ -1113,9 +1179,11 @@ static CharPtr Query_FetchDocSumCommon (DoC d, Int2 item, FormatE2DSPProc proc)
         sfp->state [item - 1].hasAbstract = FALSE;
         for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
           if (StringHasNoText (e2DocsumDataPtr->field_value)) continue;
-          if (StringICmp (e2DocsumDataPtr->field_name, "HasAbstract") == 0) {
-            if (StringICmp (e2DocsumDataPtr->field_value, "1") == 0) {
-              sfp->state [item - 1].hasAbstract = TRUE;
+          if (StringICmp (e2DocsumDataPtr->field_name, "Attributes") == 0) {
+            if (StrToInt (e2DocsumDataPtr->field_value, &attributes)) {
+              if ((attributes & 1) != 0) {
+                sfp->state [item - 1].hasAbstract = TRUE;
+              }
             }
           }
         }
@@ -1187,9 +1255,11 @@ static CharPtr Query_FetchDocSumCommon (DoC d, Int2 item, FormatE2DSPProc proc)
         sfp->state [item - 1].hasAbstract = FALSE;
         for (e2DocsumDataPtr = e2DocsumPtr->docsum_data; e2DocsumDataPtr != NULL; e2DocsumDataPtr = e2DocsumDataPtr->next) {
           if (StringHasNoText (e2DocsumDataPtr->field_value)) continue;
-          if (StringICmp (e2DocsumDataPtr->field_name, "HasAbstract") == 0) {
-            if (StringICmp (e2DocsumDataPtr->field_value, "1") == 0) {
-              sfp->state [item - 1].hasAbstract = TRUE;
+          if (StringICmp (e2DocsumDataPtr->field_name, "Attributes") == 0) {
+            if (StrToInt (e2DocsumDataPtr->field_value, &attributes)) {
+              if ((attributes & 1) != 0) {
+                sfp->state [item - 1].hasAbstract = TRUE;
+              }
             }
           }
         }
@@ -1767,6 +1837,10 @@ static void SetDocSumImportExportItems (SummFormPtr sfp)
       labels = pmcRadios;
     else if (StringICmp (dbName, "ncbisearch") == 0)
       labels = ncbisearchRadios;
+    else if (StringICmp (dbName, "mesh") == 0)
+      labels = meshRadios;
+    else if (StringICmp (dbName, "gene") == 0)
+      labels = geneRadios;
     else
       labels = defaultRadios;
 
@@ -2053,6 +2127,8 @@ static DocPrntProc journalsDocProcs [] = { Query_FetchDocSum, Query_FetchFields,
 static DocPrntProc unigeneDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc pmcDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 static DocPrntProc ncbisearchDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc meshDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
+static DocPrntProc geneDocProcs [] = { Query_FetchDocSum, Query_FetchFields, FetchUid, NULL };
 
 static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
 
@@ -2174,6 +2250,10 @@ static void RepopulateDocSum (SummFormPtr sfp, Boolean needToReset)
         retrieveProc = pmcDocProcs [val - 1];
       else if (StringICmp (dbName, "ncbisearch") == 0)
         retrieveProc = ncbisearchDocProcs [val - 1];
+      else if (StringICmp (dbName, "mesh") == 0)
+        retrieveProc = meshDocProcs [val - 1];
+      else if (StringICmp (dbName, "gene") == 0)
+        retrieveProc = geneDocProcs [val - 1];
       else
         retrieveProc = defaultDocProcs [val - 1];
 
@@ -3112,6 +3192,17 @@ NLM_EXTERN void LaunchRecViewer (ForM f, Int4 uid, Int2 numAlign, Int4Ptr alignu
       if (launchType == 1) {
         LaunchEntrezURL ("ncbisearch", uid, "DocSum");
       }
+    } else if (StringICmp (dbName, "mesh") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("mesh", uid, "DocSum");
+      }
+    } else if (StringICmp (dbName, "gene") == 0) {
+      if (launchType == 1) {
+        LaunchEntrezURL ("gene", uid, "DocSum");
+      }
+    } else {
+      /* default so new databases work without code changes */
+      LaunchEntrezURL (dbName, uid, "DocSum");
     }
   }
 }
@@ -3685,6 +3776,10 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
       labels = pmcRadios;
     else if (StringICmp (dbName, "ncbisearch") == 0)
       labels = ncbisearchRadios;
+    else if (StringICmp (dbName, "mesh") == 0)
+      labels = meshRadios;
+    else if (StringICmp (dbName, "gene") == 0)
+      labels = geneRadios;
     else
       labels = defaultRadios;
 
@@ -3754,6 +3849,12 @@ static Boolean ExportDocSumForm (ForM f, CharPtr filename)
         break;
       case 17:
         fprintf (fp, ">NCBISearch\n");
+        break;
+      case 18:
+        fprintf (fp, ">MeSH\n");
+        break;
+      case 19:
+        fprintf (fp, ">Gene\n");
         break;
       default:
         fprintf (fp, ">?\n");
@@ -4898,6 +4999,10 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = pmcRadios;
     else if (StringICmp (e2db->db_name, "ncbisearch") == 0)
       labels = ncbisearchRadios;
+    else if (StringICmp (e2db->db_name, "mesh") == 0)
+      labels = meshRadios;
+    else if (StringICmp (e2db->db_name, "gene") == 0)
+      labels = geneRadios;
     else
       labels = defaultRadios;
 
@@ -4952,6 +5057,10 @@ NLM_EXTERN ForM CreateDocsumForm (
       labels = pmcLaunch;
     else if (StringICmp (e2db->db_name, "ncbisearch") == 0)
       labels = ncbisearchLaunch;
+    else if (StringICmp (e2db->db_name, "mesh") == 0)
+      labels = meshLaunch;
+    else if (StringICmp (e2db->db_name, "gene") == 0)
+      labels = geneLaunch;
     else
       labels = defaultLaunch;
 
@@ -5205,7 +5314,8 @@ static void AcceptNetConfigForm (ButtoN b)
     Update ();
     return;
   } else if (val == 3) {
-    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "FIREWALL");
+    SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "SERVICE");
+    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", "TRUE");
     GetTitle (ncp->proxyHost, str, sizeof (str));
     if (! StringHasNoText (str)) {
       SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", str);
@@ -5230,6 +5340,7 @@ static void AcceptNetConfigForm (ButtoN b)
     }
   } else {
     SetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", NULL);
+    SetAppParam ("NCBI", "NET_SERV", "FIREWALL", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_PORT", NULL);
     SetAppParam ("NCBI", "NET_SERV", "SRV_PROXY_HOST", NULL);
@@ -5269,6 +5380,7 @@ static void AcceptNetConfigForm (ButtoN b)
   }
 
   if (NoEntryExists ("SRV_CONN_MODE") &&
+      NoEntryExists ("FIREWALL") &&
       NoEntryExists ("SRV_CONN_TIMEOUT") &&
       NoEntryExists ("SRV_ENGINE_HOST") &&
       NoEntryExists ("SRV_ENGINE_PORT") &&
@@ -5483,6 +5595,12 @@ NLM_EXTERN void ShowNewNetConfigForm (
     } else if (GetAppParam ("NCBI", "NET_SERV", "SRV_CONN_MODE", "WWW", str, sizeof (str))) {
       if (StringICmp (str, "FIREWALL") == 0) {
         SafeSetValue (ncp->srvConnMode, 3);
+      } else if (StringICmp (str, "SERVICE") == 0) {
+        if (GetAppParam ("NCBI", "NET_SERV", "FIREWALL", "WWW", str, sizeof (str))) {
+          if (StringICmp (str, "TRUE") == 0) {
+            SafeSetValue (ncp->srvConnMode, 3);
+          }
+        }
       }
     }
     if (GetAppParam ("NCBI", "NET_SERV", "SRV_HTTP_PROXY_HOST", NULL, str, sizeof (str))) {

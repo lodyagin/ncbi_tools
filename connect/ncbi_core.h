@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE__H
 #define CONNECT___NCBI_CORE__H
 
-/*  $Id: ncbi_core.h,v 6.23 2003/04/09 17:58:48 siyan Exp $
+/*  $Id: ncbi_core.h,v 6.24 2003/09/02 20:45:45 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,7 +62,6 @@
  *
  */
 
-#include <connect/connect_export.h>
 #include <connect/ncbi_types.h>
 
 
@@ -481,6 +480,9 @@ extern NCBI_XCONNECT_EXPORT void REG_Set
  * ===========================================================================
  *
  * $Log: ncbi_core.h,v $
+ * Revision 6.24  2003/09/02 20:45:45  lavr
+ * -<connect/connect_export.h> -- now included from <connect/ncbi_types.h>
+ *
  * Revision 6.23  2003/04/09 17:58:48  siyan
  * Added doxygen support
  *

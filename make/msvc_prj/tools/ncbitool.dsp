@@ -175,6 +175,10 @@ SOURCE=..\..\..\tools\newkar.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\..\..\tools\objscoremat.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\..\..\tools\pattern1.c
 # End Source File
 # Begin Source File
@@ -428,6 +432,10 @@ SOURCE=..\..\..\tools\ncbisort.h
 # Begin Source File
 
 SOURCE=..\..\..\tools\ncbisrti.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\tools\objscoremat.h
 # End Source File
 # Begin Source File
 

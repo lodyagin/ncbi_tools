@@ -29,13 +29,37 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.131 $
+* $Revision: 6.139 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: sequtil.c,v $
+* Revision 6.139  2003/10/24 14:36:12  kans
+* added CH as GenBank CONN to WHICH_db_accession
+*
+* Revision 6.138  2003/09/09 20:08:18  kans
+* SeqLocPartialCheck locks bioseq if seqloc_whole and far
+*
+* Revision 6.137  2003/09/02 15:11:50  kans
+* WHICH_db_accession takes ZP_ with 8 digits as refseq_prot_predicted
+*
+* Revision 6.136  2003/08/11 13:45:18  kans
+* added CG as ncbi gss
+*
+* Revision 6.135  2003/07/14 20:17:53  kans
+* added CF as ncbi est to WHICH_db_accession
+*
+* Revision 6.134  2003/07/02 14:35:21  kans
+* added CE as ncbi gss
+*
+* Revision 6.133  2003/05/20 22:15:24  yaschenk
+* SeqIdSelect loops indefinitely on corrupted memory
+*
+* Revision 6.132  2003/04/30 16:40:41  kans
+* added CD as GenBank EST
+*
 * Revision 6.131  2003/03/25 13:32:22  kans
 * added CC as ncbi gss accession prefix
 *
@@ -3063,10 +3087,12 @@ NLM_EXTERN SeqIdPtr SeqIdSelect (SeqIdPtr sip, Uint1Ptr order, Int2 num)
 				else if (order[sip->choice] < order[bestid->choice])
 					bestid = sip;
 			}
-		}
-		else
+		} else {
 			ErrPostEx(SEV_ERROR, 0,0, "SeqIdSelect: choice [%d] out of range [%d]",
 				(int)(sip->choice), (int)num);
+			if(sip->choice > NUM_SEQID) /*** something is really wrong ***/
+				return NULL;
+		}
     }
 
     return bestid;
@@ -5974,68 +6000,82 @@ NLM_EXTERN Uint2 SeqLocPartialCheck(SeqLocPtr head)
 				break;
 			case SEQLOC_WHOLE:
 				found_molinfo = FALSE;
-				bsp = BioseqFind((SeqIdPtr)(slp->data.ptrvalue));
+				locked = FALSE;
+				bsp = BioseqFindCore((SeqIdPtr)(slp->data.ptrvalue));
+				if (bsp == NULL)
+				{
+					bsp = BioseqLockById((SeqIdPtr)(slp->data.ptrvalue));
+					if (bsp != NULL)
+						locked = TRUE;
+				}
 				if (bsp == NULL) break;
 				bcp = BioseqContextNew(bsp);
-				if (bcp == NULL) break;
-				vnp = NULL;
-				while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_molinfo, vnp, NULL)) != NULL)
-				{
-					found_molinfo = TRUE;
-					mip = (MolInfoPtr)(vnp->data.ptrvalue);
-					switch (mip->completeness)
+				if (bcp != NULL) {
+					vnp = NULL;
+					while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_molinfo, vnp, NULL)) != NULL)
 					{
-						case 3:	/* no left */
-							if (slp == first)
-								retval |= SLP_START;
-							else
-								retval |= SLP_INTERNAL;
-							break;
-						case 4:    /* no right */
-							if (slp == last)
-								retval |= SLP_STOP;
-							else
-								retval |= SLP_INTERNAL;
-							break;
-						case 2:    /* partial */
-							retval |= SLP_OTHER;
-							break;
-						case 5:    /* no ends */
-							retval |= SLP_START;
-							retval |= SLP_STOP;
-							break;
-						default:
-							break;
-					}
-				}
-				if (! found_molinfo)
-				{
-				while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_modif, vnp, NULL)) != NULL)
-				{
-					for (vnp2 = (ValNodePtr)(vnp->data.ptrvalue); vnp2 != NULL; vnp2 = vnp2->next)
-					{
-						switch (vnp2->data.intvalue)
+						found_molinfo = TRUE;
+						mip = (MolInfoPtr)(vnp->data.ptrvalue);
+						switch (mip->completeness)
 						{
-							case 16:	/* no left */
+							case 3:	/* no left */
 								if (slp == first)
 									retval |= SLP_START;
 								else
 									retval |= SLP_INTERNAL;
 								break;
-							case 17:    /* no right */
+							case 4:    /* no right */
 								if (slp == last)
 									retval |= SLP_STOP;
 								else
 									retval |= SLP_INTERNAL;
 								break;
-							case 10:    /* partial */
+							case 2:    /* partial */
 								retval |= SLP_OTHER;
+								break;
+							case 5:    /* no ends */
+								retval |= SLP_START;
+								retval |= SLP_STOP;
+								break;
+							default:
 								break;
 						}
 					}
+					if (! found_molinfo)
+					{
+						while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_modif, vnp, NULL)) != NULL)
+						{
+							for (vnp2 = (ValNodePtr)(vnp->data.ptrvalue); vnp2 != NULL; vnp2 = vnp2->next)
+							{
+								switch (vnp2->data.intvalue)
+								{
+						
+									case 16:	/* no left */
+							
+										if (slp == first)
+								
+											retval |= SLP_START;
+									
+										else
+											retval |= SLP_INTERNAL;
+										break;
+									case 17:    /* no right */
+										if (slp == last)
+											retval |= SLP_STOP;
+										else
+											retval |= SLP_INTERNAL;
+										break;
+									case 10:    /* partial */
+										retval |= SLP_OTHER;
+										break;
+								}
+							}
+						}
+					}
+					BioseqContextFree(bcp);
 				}
-				}
-				BioseqContextFree(bcp);
+				if (locked)
+					BioseqUnlock (bsp);
 				break;
 			default:
 				break;
@@ -8723,7 +8763,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
 	      (StringICmp(temp,"BQ") == 0) || 
 	      (StringICmp(temp,"BU") == 0) || 
 	      (StringICmp(temp,"CA") == 0) || 
-	      (StringICmp(temp,"CB") == 0) ) {             /* NCBI EST */
+	      (StringICmp(temp,"CB") == 0) || 
+	      (StringICmp(temp,"CD") == 0) || 
+	      (StringICmp(temp,"CF") == 0) ) {                /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"BV") == 0)) {      /* NCBI STS */
               retcode = ACCN_NCBI_STS;
@@ -8734,7 +8776,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_NCBI_DIRSUB;
           } else if ((StringICmp(temp,"AE") == 0)) {      /* NCBI genome project data */
               retcode = ACCN_NCBI_GENOME;
-          } else if ((StringICmp(temp,"AH") == 0)) {      /* NCBI segmented set header Bioseq */
+          } else if ((StringICmp(temp,"AH") == 0) ||
+                     (StringICmp(temp,"CH") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET | ACCN_AMBIGOUS_MOL; /* A few segmented
                                                                  proteins are AH */
           } else if ((StringICmp(temp,"AS") == 0)) {      /* NCBI "other" */
@@ -8745,7 +8788,9 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"AZ") == 0) ||
                      (StringICmp(temp,"BH") == 0) ||
                      (StringICmp(temp,"BZ") == 0) ||
-                     (StringICmp(temp,"CC") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"CC") == 0) ||
+                     (StringICmp(temp,"CE") == 0) ||
+                     (StringICmp(temp,"CG") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
@@ -8835,6 +8880,27 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           retcode = ACCN_REFSEQ_GENOMIC;
       } else if (IS_ALPHA(*temp) && IS_ALPHA(*(temp+1))) {
           retcode =ACCN_REFSEQ | ACCN_AMBIGOUS_MOL;
+      } else
+          retval = FALSE;
+      while (*s) {
+          if (! IS_DIGIT(*s)) {
+              retval = FALSE;
+              break;
+          }
+          s++;
+      }
+      break;
+    case 11: /* New 11-character accession, two letters +"_"+ 8 digits */
+      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)))
+          break;
+      if(*(s+2)!='_')
+          break;
+      temp[0] = *s; s++;
+      temp[1] = *s; s++;
+      temp[2] = NULLB; s++;
+      
+      if ((StringICmp(temp,"ZP") == 0)) { 
+          retcode = ACCN_REFSEQ_PROT_PREDICTED;
       } else
           retval = FALSE;
       while (*s) {

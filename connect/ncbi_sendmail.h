@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/*  $Id: ncbi_sendmail.h,v 6.13 2003/04/09 19:05:47 siyan Exp $
+/*  $Id: ncbi_sendmail.h,v 6.14 2003/09/02 20:45:45 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,7 +33,6 @@
  *
  */
 
-#include <connect/connect_export.h>
 #include <connect/ncbi_types.h>
 
 
@@ -131,6 +130,9 @@ extern NCBI_XCONNECT_EXPORT const char* CORE_SendMailEx
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_sendmail.h,v $
+ * Revision 6.14  2003/09/02 20:45:45  lavr
+ * -<connect/connect_export.h> -- now included from <connect/ncbi_types.h>
+ *
  * Revision 6.13  2003/04/09 19:05:47  siyan
  * Added doxygen support
  *

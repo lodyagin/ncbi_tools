@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: dust.c,v 6.5 2003/05/30 17:25:36 coulouri Exp $";
+
 /* dust.c
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *   
 * Version Creation Date: 5/26/95
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  a utility to find low complexity NA regions
 *
@@ -39,6 +41,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: dust.c,v $
+* Revision 6.5  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.4  1999/08/18 17:50:47  kans
 * include dust.h only after other headers are included to provide prototypes on Mac
 *

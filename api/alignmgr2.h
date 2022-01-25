@@ -28,13 +28,19 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.19 $
+* $Revision: 6.21 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.h,v $
+* Revision 6.21  2003/10/09 13:46:39  rsmith
+* Add AlnMgr2GetFirstNForSipList.
+*
+* Revision 6.20  2003/04/23 20:37:06  rsmith
+* Added four functions in section 11 to allow examination of Std-Seg alignments.
+*
 * Revision 6.19  2003/03/31 20:17:11  todorov
 * Added AlnMgr2IndexSeqAlignEx
 *
@@ -637,6 +643,17 @@ NLM_EXTERN Int4 AlnMgr2GetFirstNForSip(SeqAlignPtr sap, SeqIdPtr sip);
 
 /***************************************************************************
 *
+*  AlnMgr2GetFirstNForSipList returns the first row that one of a list of seqids occur on,
+*  or -1 if none of the seqids are in the alignment or if there is another
+*  error. 
+*  Handy if sip comes from a BioSeq, where it can point to a linked list
+*  of SeqIds.
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgr2GetFirstNForSipList(SeqAlignPtr sap, SeqIdPtr sip);
+
+/***************************************************************************
+*
 *  AlnMgr2GetParent returns the top-level seqalign associated with a given
 *  indexed alignment. It returns the actual pointer, not a copy.
 *
@@ -885,6 +902,62 @@ NLM_EXTERN SeqAlignPtr AlnMgr2FuseSet(SeqAlignPtr sap_head, Boolean returnall);
 NLM_EXTERN Int4 AlignMgr2GetFirstNForStdSeg(SeqAlignPtr sap, SeqIdPtr sip);
 NLM_EXTERN SeqIdPtr AlnMgr2GetNthSeqIdPtrStdSeg(SeqAlignPtr sap, Int4 n);
 NLM_EXTERN void AlnMgr2GetNthSeqRangeInSAStdSeg(SeqAlignPtr sap, Int4 n, Int4Ptr start, Int4Ptr stop);
+
+/***************************************************************************
+*
+*   AlnMgr2GetSeqRangeForSipInSAStdSeg  returns the smallest and largest sequence
+*  coordinates in in a Std-Seg seqalign for a given Sequence Id.  Also return the 
+*  strand type if it is the same on every segment, else set it to Seq_strand_unknown.
+*  Either start, stop or strand can be NULL to only retrieve some of them.
+*  If start and stop are -1, there is an error (not a std-seg), the SeqID does not participate in this
+*  alignment or the alignment is one big insert on that id.  Returns true if the sip was found
+*  in the alignment with real coordinates, i.e. *start would not be -1.  RANGE
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2GetSeqRangeForSipInSAStdSeg(SeqAlignPtr sap, SeqIdPtr sip, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand);
+
+/***************************************************************************
+*
+*   AlnMgr2GetSeqRangeForSipInStdSeg  returns the start and stop sequence
+*  coordinates in a Std-Segment for a given Sequence Id.  Also return the 
+*  strand type.  Either start, stop, strand or segType can be NULL to only retrieve some of them.
+*  Returns false if the SeqID was not found in this segment, so no meaningful 
+*    data was passed back in other arguments.  
+*  Returns true if the sip was found, even if it is a gap (start, stop = -1).
+*  segType is set to AM_SEQ if the SeqID Sequence is not empty and one of 
+*  the other sequences aligned with it is also not empty.  To AM_GAP if
+*  the other sequences are all empty, and to AM_INSERT if the main sequence
+*  is empty. 
+*  RANGE
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2GetSeqRangeForSipInStdSeg(
+    StdSegPtr   ssp, 
+    SeqIdPtr    sip, 
+    Int4Ptr     start, 
+    Int4Ptr     stop, 
+    Uint1Ptr    strand,
+    Uint1Ptr    segType); /* AM_SEQ, AM_GAP, AM_INSERT */
+
+/***************************************************************************
+*
+*   AlnMgr2GetNthStdSeg  returns the a pointer to the Nth segment of
+*   a standard segment alignment.
+*   returns NULL if not n segments or is not a std-seg aligment.
+*   Useful to pass its return value to AlnMgr2GetSeqRangeForSipInStdSeg()
+*
+***************************************************************************/
+NLM_EXTERN StdSegPtr AlnMgr2GetNthStdSeg(SeqAlignPtr sap, Int2 n);
+
+/***************************************************************************
+*
+*  AlnMgr2GetNumStdSegs returns the number of segments in a standar-seg alignment.
+*   returns -1 if sap is null or not a standard-seg alignment.
+*   the Std-Seg version of AlnMgr2GetNumSegs
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgr2GetNumStdSegs(SeqAlignPtr sap);
+
 /***************************************************************************
 *
 *  The two mapping functions act a little differently for std-segs. The

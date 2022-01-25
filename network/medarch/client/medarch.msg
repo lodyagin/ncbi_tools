@@ -6,8 +6,10 @@ $^   OldInPress, 3, SEV_WARNING
 $^   No_reference, 4, SEV_WARNING
 $^   Multiple_ref, 5, SEV_WARNING
 $^   Multiple_muid, 6, SEV_WARNING
-$^   MedlineMatchIgnored, 7, SEV_WARNING
+$^   MedlineMatchIgnored, 7, SEV_ERROR
 $^   MuidMissmatch, 8, SEV_WARNING
+$^   NoConsortAuthors, 9, SEV_WARNING
+$^   DiffConsortAuthors, 10, SEV_WARNING
 
 $$ PRINT, 2
 $^   Failed, 1, SEV_WARNING

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.43 $
+* $Revision: 6.45 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -204,6 +204,11 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGeneIsSuppressed (
 );
 
 NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingGene (
+  SeqLocPtr slp,
+  SeqMgrFeatContext PNTR context
+);
+
+NLM_EXTERN SeqFeatPtr LIBCALL SeqMgrGetOverlappingOperon (
   SeqLocPtr slp,
   SeqMgrFeatContext PNTR context
 );
@@ -482,6 +487,7 @@ NLM_EXTERN Boolean LIBCALL SeqMgrGetBioseqContext (
 #define LOCATION_SUBSET  2 /* SeqLocAinB must be satisfied, no boundary checking */
 #define CHECK_INTERVALS  3 /* SeqLocAinB plus internal exon-intron boundaries must match */
 #define INTERVAL_OVERLAP 4 /* at least one pair of intervals must overlap */
+#define COMMON_INTERVAL  5 /* at least one pair of intervals must match */
 
 NLM_EXTERN VoidPtr LIBCALL SeqMgrBuildFeatureIndex (
   BioseqPtr bsp,

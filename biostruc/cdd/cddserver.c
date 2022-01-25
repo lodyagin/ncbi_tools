@@ -1,4 +1,4 @@
-/* $Id: cddserver.c,v 1.40 2003/01/10 14:47:46 bauer Exp $
+/* $Id: cddserver.c,v 1.41 2003/10/07 21:21:09 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 2/10/2000
 *
-* $Revision: 1.40 $
+* $Revision: 1.41 $
 *
 * File Description:
 *         CD WWW-Server, Cd summary pages and alignments directly from the
@@ -38,6 +38,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddserver.c,v $
+* Revision 1.41  2003/10/07 21:21:09  bauer
+* initial changes to support drawing of hierarchies
+*
 * Revision 1.40  2003/01/10 14:47:46  bauer
 * fixed problem with CDART connectivity
 *
@@ -183,15 +186,25 @@
 #include "cddutil.h"
 #include "dart.h"
 #include <objcn3d.h>
-#include "cdtrkapi.h"
+#include <cdtrkapi.h>
 #include <qblastnet.h>
+#include <gifgen.h>
+
 
 #undef DEBUG
 #undef NOCN3D4
-
-#define USE_CDTRK
-#define DARTSIZELIMIT 1500
-#define DARTFAMILYNUM 5000
+#undef USE_CDTRK
+#undef DRAW_TREES
+  
+typedef struct _private_tree_node_ {
+  CdTreeNodePtr      pcdtree;
+  Int4               x, y, width;
+  Int4               iNChildren;
+  Boolean            bIsCurrent;
+  struct _private_tree_node_ *parent;
+  struct _private_tree_node_ **children;
+  struct _private_tree_node_ *next;
+} PrivateTreeNode, *PrivateTreeNodePtr;
 
 unsigned iDartFam[DARTFAMILYNUM];
 Int4     iDartFamNum = 0;
@@ -257,6 +270,11 @@ static Boolean CddGetParams()
   GetAppParam("cdd", "CDDSRV", "COGcgi", "", COGcgi, PATH_MAX);
   if (COGcgi[0] == '\0') {
                 ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no COGcgi...\n");
+                return FALSE;
+  }
+  GetAppParam("cdd", "CDDSRV", "KOGcgi", "", KOGcgi, PATH_MAX);
+  if (KOGcgi[0] == '\0') {
+                ErrPostEx(SEV_FATAL,0,0,"CDD config file\nCDDSRV section has no KOGcgi...\n");
                 return FALSE;
   }
   GetAppParam("cdd", "CDDSRV", "ENTREZurl", "", ENTREZurl, PATH_MAX);
@@ -1247,14 +1265,218 @@ static void CDDSrvFoot(FILE *table)
 
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+  static PrivateTreeNodePtr PrivateTreeNodeNew() {
+    PrivateTreeNodePtr ptnp;
+    ptnp = (PrivateTreeNodePtr) MemNew(sizeof(PrivateTreeNode));
+    ptnp->x = 0; ptnp->y = 0; ptnp->width = 0;
+    ptnp->pcdtree = NULL;
+    ptnp->bIsCurrent = FALSE;
+    ptnp->parent = NULL;
+    ptnp->next   = NULL;
+    ptnp->iNChildren = 0;
+    ptnp->children = MemNew(MAXTREELEVELS * sizeof(PrivateTreeNodePtr));
+    return (ptnp);
+  }
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* find a node in a hierarchical tree                                        */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static PrivateTreeNodePtr FindTreeNodeLinear(PrivateTreeNodePtr root, CharPtr acc)
+{
+  if (Nlm_StrCmp(acc,root->pcdtree->NodeAccession) == 0) {
+    return(root);
+  } else {
+    if (NULL != root->next) {
+      return(FindTreeNodeLinear(root->next, acc));
+    } else return NULL;
+  }
+}
+
+static PrivateTreeNodePtr FindTreeNode(PrivateTreeNodePtr root, CharPtr acc)
+{
+  PrivateTreeNodePtr child, found;
+  Int4               i;
+  
+  
+  if (Nlm_StrCmp(acc,root->pcdtree->NodeAccession) == 0) {
+    return(root);
+  } else {
+    for (i=0;i<root->iNChildren;i++) {
+      found = FindTreeNode(root->children[i], acc);
+      if (found) return (found);
+    }
+  }
+  return NULL;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* creates an image visualizing a family's hierarchical structure            */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static Boolean CDDSrvTreeViewIterator(Int4 iMode, PrivateTreeNodePtr ptnp,
+                                      Int4Ptr iLayerSize, Int4Ptr iUsedInLayer,
+				      Int4Ptr iLastPosInLayer, Int4 iSuggX,
+				      Int4 iImgWidth, Int4 iImgHeight, FILE *table,
+				      Int4 *iNBlocks, Int4 *iNLines)
+{
+  Int4               i, iLayer, iSuggChild;
+  Int4               iMinX, iMaxX, iY, iPreferredX, iX;
+  
+  
+  if (!ptnp) return FALSE;
+  switch (iMode) {
+    case 0:
+      iLayer = ptnp->pcdtree->NodeLevel - 1;
+      iPreferredX = (iUsedInLayer[iLayer] * iImgWidth / iLayerSize[iLayer]) +
+                    (iImgWidth / iLayerSize[iLayer]) / 2 - CDD_GRAPH_WIDTH / 2;
+      iMinX = iUsedInLayer[iLayer] * (CDD_GRAPH_WIDTH + CDD_GRAPH_SPACER_X) +
+              CDD_GRAPH_SPACER_X;
+      iMaxX = iImgWidth - (iLayerSize[iLayer]-iUsedInLayer[iLayer]) *
+              (CDD_GRAPH_WIDTH + CDD_GRAPH_SPACER_X);
+      if (iLastPosInLayer[iLayer]+CDD_GRAPH_WIDTH+CDD_GRAPH_SPACER_X > iMinX) {
+        iMinX = iLastPosInLayer[iLayer]+CDD_GRAPH_WIDTH+CDD_GRAPH_SPACER_X;
+      }
+      if (iPreferredX < iMinX) iPreferredX = iMinX;
+      if (iPreferredX > iMaxX) iPreferredX = iMaxX;
+      if (iSuggX >= 0 && iMaxX > iSuggX && iMinX < iSuggX) {
+	iX = (iSuggX + iPreferredX) / 2;
+      } else if (iMaxX >= iMinX) {
+        iX = iPreferredX;
+      } else CddHtmlError("Can not draw tree: error in block position");
+      iY = iLayer * (CDD_GRAPH_HEIGHT + CDD_GRAPH_SPACER_Y) + CDD_GRAPH_SPACER_Y;
+      ptnp->x = iX;
+      ptnp->y = iY;
+      ptnp->width = CDD_GRAPH_WIDTH;
+      
+      iUsedInLayer[iLayer]++;
+      iLastPosInLayer[iLayer] = iX;
+      fprintf(table,"<area shape=rect coords=%d,%d,%d,%d href=\"%scddsrv.cgi?uid=%s\">\n",
+              ptnp->x,ptnp->y,ptnp->x+CDD_GRAPH_WIDTH,ptnp->y+CDD_GRAPH_HEIGHT,URLBase,
+	      ptnp->pcdtree->NodeAccession);
+      (*iNBlocks)++;      
+      break;
+    case 1:
+      fprintf(table,",%d,%d,%d,%d,%s",ptnp->x,ptnp->y,
+              CDD_GRAPH_WIDTH,ptnp->bIsCurrent,ptnp->pcdtree->NodeAccession);
+      break;
+    case 2:
+      if (ptnp->parent) {
+        fprintf(table,",%d,%d,%d,%d",(ptnp->parent->x+CDD_GRAPH_WIDTH/2),
+	        ptnp->parent->y+CDD_GRAPH_HEIGHT,
+		(ptnp->x+CDD_GRAPH_WIDTH/2),ptnp->y);
+      }
+      break;
+    default: 
+      break;
+  }
+  if (ptnp->iNChildren > 0) {
+    for (i=0;i<ptnp->iNChildren;i++) {
+      if (iMode == 0) {
+        (*iNLines)++;
+        iSuggChild = ptnp->x - (ptnp->iNChildren * (CDD_GRAPH_WIDTH+CDD_GRAPH_SPACER_X) / 2) +
+	             i * (CDD_GRAPH_WIDTH+CDD_GRAPH_SPACER_X);
+      }
+      if (!CDDSrvTreeViewIterator(iMode,ptnp->children[i],iLayerSize,
+                                  iUsedInLayer,iLastPosInLayer,iSuggChild,
+				  iImgWidth, iImgHeight,table,iNBlocks,iNLines))
+        return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CDDSrvMakeTreeView(CdTreeNodePtr pcdtree, FILE *table)
+{
+  CdTreeNodePtr      pcdtreeThis, pcdtreeThat;
+  Int4               iNumLayers = 0, iLayerSize[MAXTREELEVELS];
+  Int4               i, iMaxLayerSize = 0;
+  Int4               iImgHeight = 0, iImgWidth = 0;
+  Int4               iUsedInLayer[MAXTREELEVELS];
+  Int4               iLastPosInLayer[MAXTREELEVELS];  
+  PrivateTreeNodePtr ptnp, ptnpRoot = NULL, ptnpFound, ptnpHead, ptnpTail;
+  Int4               iNBlocks = 0, iNLines = 0;
+
+  for (i=0;i<MAXTREELEVELS;i++) {
+    iLayerSize[i] = 0;
+    iUsedInLayer[i] = 0;
+  }
+/* create linear chain of PrivateTreeNodes */
+  ptnpHead = NULL; ptnpTail = NULL;
+  pcdtreeThis = pcdtree;
+  while (pcdtreeThis) {
+    ptnp = PrivateTreeNodeNew();
+    ptnp->pcdtree = pcdtreeThis;
+    i = pcdtreeThis->NodeLevel - 1;
+    if (i>=MAXTREELEVELS) CddHtmlError("Can not draw tree: too many levels");
+    if ((i+1) > iNumLayers) iNumLayers = i+1;
+    iLayerSize[i]++;
+    if (iLayerSize[i] > iMaxLayerSize) iMaxLayerSize = iLayerSize[i];
+    if (Nlm_StrCmp(pcdtreeThis->NodeAccession,cCDDid) == 0) ptnp->bIsCurrent = TRUE;
+    if (!ptnpRoot) {
+      if (Nlm_StrCmp(pcdtreeThis->RootAccession,"NoAcc")== 0) ptnpRoot = ptnp;
+/*      if (Nlm_StrCmp(pcdtreeThis->RootAccession,cCDDid)== 0) ptnpRoot = ptnp; */
+      if (Nlm_StrCmp(pcdtreeThis->RootAccession,pcdtreeThis->NodeAccession)== 0) ptnpRoot = ptnp;
+    }
+    if (!ptnpHead) ptnpHead = ptnp;
+    if (ptnpTail) ptnpTail->next = ptnp;
+    ptnpTail = ptnp;
+    pcdtreeThis = pcdtreeThis->next;
+  }
+  if (!ptnpRoot) CddHtmlError("Can not draw tree: no apparent root");
+/* discover hierarchical tree structure and record */
+  ptnp = ptnpHead;
+  while (ptnp) {
+    pcdtreeThis = ptnp->pcdtree;
+    if (pcdtreeThis->ParentAccession && Nlm_StrLen(pcdtreeThis->ParentAccession)) {
+      ptnpFound = FindTreeNodeLinear(ptnpHead, pcdtreeThis->ParentAccession);
+      if (ptnpFound) {
+        ptnpFound->children[ptnpFound->iNChildren]=ptnp;
+	ptnp->parent = ptnpFound;
+        ptnpFound->iNChildren++;
+      } else CddHtmlError("Can not draw tree: missing parent node");
+    
+
+    }
+    ptnp = ptnp->next;
+  }
+/* first iteration through tree - determine positions of blocks */
+  iImgWidth  = iMaxLayerSize * (CDD_GRAPH_WIDTH +  CDD_GRAPH_SPACER_X) + CDD_GRAPH_SPACER_X;
+  iImgHeight = iNumLayers    * (CDD_GRAPH_HEIGHT + CDD_GRAPH_SPACER_Y) + CDD_GRAPH_SPACER_Y;
+  fprintf(table,"<map name=\"img_map\">\n");
+  if (!CDDSrvTreeViewIterator(0,ptnpRoot,iLayerSize,iUsedInLayer,iLastPosInLayer,-1,iImgWidth,iImgHeight,table,&iNBlocks,&iNLines))
+    CddHtmlError("Cannot not draw tree: error in assigning positions");
+  fprintf(table,"</map>\n");
+/* second iteration through tree - draw blocks */
+  fprintf(table,"<img src=\"%scddsrv.cgi?PIC=%d,%d,%d",URLBase,iImgWidth,iImgHeight,iNBlocks);
+  if (!CDDSrvTreeViewIterator(1,ptnpRoot,iLayerSize,iUsedInLayer,iLastPosInLayer,-1,iImgWidth,iImgHeight,table,&iNBlocks,&iNLines))
+    CddHtmlError("Cannot not draw tree: error in drawing blocks");
+/* third iteration through tree - draw lines */
+  fprintf(table,",%d",iNLines);
+  if (!CDDSrvTreeViewIterator(2,ptnpRoot,iLayerSize,iUsedInLayer,iLastPosInLayer,-1,iImgWidth,iImgHeight,table,&iNBlocks,&iNLines))
+    CddHtmlError("Cannot not draw tree: error in drawing lines");
+  fprintf(table,"\" usemap=\"#img_map\" border=0 ISMAP>\n");
+
+}
+
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
 /* prints the table at the top of a CD-Server generated page                 */
 /*---------------------------------------------------------------------------*/
 /*---------------------------------------------------------------------------*/
 static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
                           Int4 thisTax, Boolean bHasPdb, Boolean bHasConsensus,
 			  CddSumPtr pcds, CharPtr QuerySeq, CharPtr QueryAlign,
-			  Int4 iQueryGi, CharPtr QueryName, ValNodePtr txids, Int2 iPDB,
-			  Int4 alen, Int4 nTaxIds, Int4Ptr iTaxids)
+			  Int4 iQueryGi, CharPtr QueryName, ValNodePtr txids,
+			  Int2 iPDB, Int4 alen, Int4 nTaxIds, Int4Ptr iTaxids,
+			  CdTreeNodePtr pcdtree)
 {
   CddDescrPtr       pcdsc;
   CddSumPtr         pcdsThis;
@@ -1282,6 +1504,9 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
 
 
   iPssmId = CddGetPssmId(pcdd);
+
+/* Start of yellow-colored info block */
+
   fprintf(table,"    <table border=\"0\" cellspacing=\"0\" cellpadding=\"2\" width=\"100%%\" bgcolor=\"#FFFFCC\">\n");
   fprintf(table,"      <tr>\n");
   fprintf(table,"        <td align=\"RIGHT\" class=\"TEXT\" NOWRAP><strong>CD:</strong></td>\n");
@@ -1319,13 +1544,22 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
             PFAMcgiUS,&source_id[4],source,PFAMcgiUK,&source_id[4],source);
   } else if (Nlm_StrCmp("Cog",source) == 0) {
       fprintf(table,"        <td align=\"LEFT\" class=\"TEXT\" NOWRAP><A HREF=\"%s%s\">%s</A></td>\n",COGcgi,source_id,source);
+  } else if (Nlm_StrCmp("Kog",source) == 0) {
+      fprintf(table,"        <td align=\"LEFT\" class=\"TEXT\" NOWRAP><A HREF=\"%s%s\">%s</A></td>\n",KOGcgi,source_id,source);
   } else {
     fprintf(table,"        <td align=\"LEFT\" class=\"TEXT\" NOWRAP>%s</td>\n",source);
   }
   fprintf(table,"      </tr>\n");
   fprintf(table,"      <tr VALIGN=\"TOP\">\n");
   fprintf(table,"        <td align=\"RIGHT\" class=\"medium1\" NOWRAP><strong>Description:</strong></td>\n");
-  fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" colspan=\"5\">%s</td>\n",CddGetDescr(pcdd));
+  if (pcdtree) {
+    fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"4\">%s</td>\n",CddGetDescr(pcdd));
+    fprintf(table,"        <td align=\"CENTER\" class=\"medium1\" COLSPAN=\"2\">\n");
+    CDDSrvMakeTreeView(pcdtree,table);
+    fprintf(table,"        </td>\n");
+  } else {
+    fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"5\">%s</td>\n",CddGetDescr(pcdd));
+  }
   fprintf(table,"      </tr>\n");
   iPMids = MemNew(100*sizeof(Int4));
   pcdsc = pcdd->description;
@@ -1394,9 +1628,9 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
       if (iNCit && orp) {
         fprintf(table,"        <td align=\"LEFT\" class=\"medium1\">");
       } else if (iNCit || orp) {
-        fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" colspan=\"3\">");
+        fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"3\">");
       } else {
-        fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" colspan=\"5\">");
+        fprintf(table,"        <td align=\"LEFT\" class=\"medium1\" COLSPAN=\"5\">");
       }
       while (vnp) {
         fprintf(table,"<A HREF=\"%scddsrv.cgi?uid=%s\">%s</A>",URLBase,vnp->data.ptrvalue,vnp->data.ptrvalue);
@@ -1496,6 +1730,9 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
     fprintf(table,"        </td></tr>\n");
   }
   fprintf(table,"    </table>\n");
+
+/* End of yellow-colored info-block */
+
   fprintf(table,"    <table border=\"0\" cellspacing=\"0\" cellpadding=\"2\" width=\"100%%\" bgcolor=\"#FFFFFF\" class=\"TEXT\">\n");
   fprintf(table,"      <tr class=\"TEXT\">\n");
   fprintf(table,"        <td align=\"LEFT\" class=\"TEXT\">\n");
@@ -1573,7 +1810,9 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
   fprintf(table,"            <INPUT TYPE=\"SUBMIT\" NAME=\"ALsub\" VALUE=\"View Alignment\">&nbsp;as&nbsp;\n");
   fprintf(table,"            <SELECT NAME=\"ALopt\">\n");
   fprintf(table,"              <OPTION SELECTED VALUE=\"2\">Hypertext\n");
+  fprintf(table,"              <OPTION VALUE=\"8\">Compact Hypertext\n");
   fprintf(table,"              <OPTION VALUE=\"3\">Plain Text\n");
+  fprintf(table,"              <OPTION VALUE=\"9\">Compact Text\n");
   fprintf(table,"              <OPTION VALUE=\"4\">mFasta\n");
   fprintf(table,"            </SELECT>\n");
   fprintf(table,"            <SELECT NAME=\"pwidth\">\n");
@@ -1644,7 +1883,7 @@ static void CDDSrvInfoBlk(CddPtr pcdd, FILE *table, CharPtr dbversion,
 static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
                                 Boolean bHasPdb, CharPtr dbversion, Boolean bHasConsensus,
 				Boolean bShowTax, ValNodePtr txids, Int2 iPDB, Int4 alen,
-				Int4 nTaxIds, Int4Ptr iTaxids)
+				Int4 nTaxIds, Int4Ptr iTaxids, CdTreeNodePtr pcdtree)
 {
   CddDescrPtr       pCddesc;
   CddSumPtr         pcdsThis;
@@ -1675,7 +1914,7 @@ static void CddServerShowTracks(CddSumPtr pcds, CddPtr pcdd, Int4 thisTax,
   table = stdout;
   sprintf(tableName, "NCBI CDD %s",cCDDid);
   CDDSrvHead(table, tableName);
-  CDDSrvInfoBlk(pcdd,table,dbversion,thisTax,bHasPdb,bHasConsensus,pcds,NULL,NULL,-1,NULL,txids,iPDB,alen,nTaxIds,iTaxids);
+  CDDSrvInfoBlk(pcdd,table,dbversion,thisTax,bHasPdb,bHasConsensus,pcds,NULL,NULL,-1,NULL,txids,iPDB,alen,nTaxIds,iTaxids,pcdtree);
   pcdsThis = pcds;
   if (pcdsThis) {
     fprintf(table, "<TABLE BORDER=\"1\" CELLPADDING=\"2\" CELLSPACING=\"2\" WIDTH=100%%>\n");  
@@ -1863,7 +2102,8 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
                            CharPtr QuerySeq, CharPtr QueryAlign, CharPtr dbversion,
 			   CddPtr pcdd, Boolean bHasPdb, FloatHi tbit, Uint2 pwidth,
                            Int4 iQueryGi, CharPtr QueryName, Int4 iFeatNum, CddSumPtr pcds,
-			   Int4 alen, Int4 nTaxIds, Int4Ptr iTaxids, ValNodePtr txids)
+			   Int4 alen, Int4 nTaxIds, Int4Ptr iTaxids, ValNodePtr txids,
+			   CdTreeNodePtr pcdtree)
 {
   Uint4                 size = 2 * FileLength(CDDalign);
   Uint4                 uCAVoptions = 0;
@@ -1922,13 +2162,14 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
   }
 
   uCAVoptions = CAV_TEXT;
-  if (iPDB == 2) uCAVoptions = CAV_HTML;
+  if (iPDB == 2 || iPDB == 8) uCAVoptions = CAV_HTML;
   else if (iPDB == 4) {
     uCAVoptions = CAV_FASTA;
     uCAVoptions |= CAV_LEFTTAILS;
     uCAVoptions |= CAV_RIGHTTAILS;
     uCAVoptions |= CAV_FASTA_LOWERCASE;
   }
+  if (iPDB ==8 || iPDB ==9) uCAVoptions |= CAV_CONDENSED;
   if (tbit <= 0.0) uCAVoptions |= CAV_SHOW_IDENTITY;
 /*  uCAVoptions |= CAV_ANNOT_BOTTOM; */
   if (QuerySeq || iQueryGi != -1) {
@@ -1937,12 +2178,12 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
   CDDSrvHead(stdout, tableName);
   
   if ((QuerySeq || iQueryGi != -1) && QueryAlign) { 
-    CDDSrvInfoBlk(pcdd,stdout,dbversion,0,bHasPdb,CddHasConsensus(pcdd),pcds,QuerySeq,QueryAlign,iQueryGi,QueryName,txids,iPDB,alen,nTaxIds,iTaxids);
+    CDDSrvInfoBlk(pcdd,stdout,dbversion,0,bHasPdb,CddHasConsensus(pcdd),pcds,QuerySeq,QueryAlign,iQueryGi,QueryName,txids,iPDB,alen,nTaxIds,iTaxids,pcdtree);
   } else {
-    CDDSrvInfoBlk(pcdd,stdout,dbversion,0,bHasPdb,CddHasConsensus(pcdd),pcds,QuerySeq,QueryAlign,iQueryGi,QueryName,txids,iPDB,alen,nTaxIds,iTaxids);
+    CDDSrvInfoBlk(pcdd,stdout,dbversion,0,bHasPdb,CddHasConsensus(pcdd),pcds,QuerySeq,QueryAlign,iQueryGi,QueryName,txids,iPDB,alen,nTaxIds,iTaxids,pcdtree);
   }
     printf("</FORM>\n");
-  if (iPDB != 2) {
+  if (iPDB != 2 && iPDB != 8) {
     if ((QuerySeq || iQueryGi != -1) && QueryAlign) {
       printf("         </td>\n");
       printf("      </tr>\n");
@@ -1953,7 +2194,7 @@ Boolean CddInvokeAlignView(NcbiMimeAsn1Ptr pvnNcbi, CharPtr CDDalign, Int2 iPDB,
   }
   CAV_DisplayMultiple(buf, uCAVoptions, pwidth, tbit, NULL, nFeatures, pafeat);
   MemFree(buf);
-  if (iPDB != 2) printf("</PRE>\n");
+  if (iPDB != 2 && iPDB != 8) printf("</PRE>\n");
   
   if (pevidence && iPDB != 4) {
     printf("<TABLE BORDER=\"0\" cellspacing=\"0\" cellpadding=\"2\" width=\"100%%\" bgcolor=\"#FFFFFF\">\n");
@@ -2289,14 +2530,85 @@ static CddPtr CddGetFromCDtrack(Int4 iPssmId, CharPtr cCDDId)
   Char            errmsg[1024];
 
   if (iPssmId > 0) {
-    pcdd=RetrievePublishedCdBlobByPssmId(CDTRKDBS,"bauer",(Uint4) iPssmId,errmsg,1024);
+    pcdd=RetrievePublishedCdBlobByPssmId(CDTRKDBS,"bauer",(Uint4) iPssmId,FALSE,TRUE,errmsg,1024);
   } else {
-    pcdd=RetrievePublishedCdBlobByAcc(CDTRKDBS,"bauer",cCDDid,0,errmsg,1024);
+    pcdd=RetrievePublishedCdBlobByAcc(CDTRKDBS,"bauer",cCDDid,0,FALSE,TRUE,errmsg,1024);
   }
-  if (!pcdd) CddHtmlError(errmsg);
-
-
+/*  if (!pcdd) CddHtmlError(errmsg); */
   return pcdd;
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* graphical display of family relationships for the CD-Server               */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddDrawFamilyTree(CharPtr pc)
+{
+  Int4                 gw, gh, numblks, numlines;
+  Int4                 white, black, red, blue;
+  Int4                 i, ulx, uly, lrx, lry, blwidth, self;
+  gdImagePtr           im;
+  CharPtr              name;
+  
+
+  gw      = (Int4) atoi(strtok(pc,","));
+  gh      = (Int4) atoi(strtok(NULL,","));
+  im = gdImageCreate(gw,gh);
+  white = gdImageColorAllocate(im, 255, 255, 255);
+  black = gdImageColorAllocate(im,   0,   0,   0);
+  red   = gdImageColorAllocate(im, 255,  51,  51);
+  blue  = gdImageColorAllocate(im, 102, 102, 255);
+  numblks = (Int4) atoi(strtok(NULL,","));
+  for (i=0;i<numblks;i++) {
+    ulx = (Int4) atoi(strtok(NULL,","));
+    uly = (Int4) atoi(strtok(NULL,","));
+    blwidth = (Int4) atoi(strtok(NULL,","));
+    self = (Int4) atoi(strtok(NULL,","));
+    name = StringSave(strtok(NULL,","));
+    lrx = ulx + blwidth;
+    lry = uly + CDD_GRAPH_HEIGHT;
+    if (self) {
+      gdImageRoundRectangle(im,ulx,uly,lrx,lry,5,3,red,1);    
+    } else {
+      gdImageRoundRectangle(im,ulx,uly,lrx,lry,5,3,blue,1);    
+    }
+    ulx = ulx + (lrx - ulx)/2;
+    uly = uly + (lry - uly)/2;
+    gdImageString(im,gdFont5X8,ulx-(strlen(name)*gdFont5X8->w/2),uly-gdFont5X8->h/2,name,white);
+  }
+  numlines = (Int4) atoi(strtok(NULL,","));
+  for (i=0;i<numlines;i++) {
+    ulx = (Int4) atoi(strtok(NULL,","));
+    uly = (Int4) atoi(strtok(NULL,","));
+    lrx = (Int4) atoi(strtok(NULL,","));
+    lry = (Int4) atoi(strtok(NULL,","));
+    gdImageLine(im,ulx,uly,lrx,lry,black);
+  }
+  printf("Content-type: image/gif\r\n\r\n");
+  gdImageGif(im,stdout);
+  gdImageDestroy(im);
+  exit(0);
+}
+
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* remove notes from a published CD                                          */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+static void CddSrvRemoveNotes(CddPtr pcdd)
+{
+  CddDescrPtr  pcddsc, pcddsc_last;
+  
+  pcddsc_last = NULL;
+  pcddsc = pcdd->description;
+  while (pcddsc) {
+    if (pcddsc->choice != CddDescr_scrapbook) {
+      if (pcddsc_last) pcddsc_last->next = pcddsc;
+      pcddsc_last = pcddsc;
+    }
+    pcddsc = pcddsc->next;
+  }
 }
 
 /*---------------------------------------------------------------------------*/
@@ -2327,7 +2639,8 @@ Int2 Main()
   CddSumPtr                pcds               = NULL;
   CddSumPtr                pcdsCopy, pcdsTail, pcdsHead;
   CddSumPtr                pcdsThis           = NULL;
-  CharPtr                  Name;
+  CdTreeNodePtr            pcdtree            = NULL;
+  CharPtr                  Name, tempchar;
   CharPtr                  outptr             = NULL;
   CharPtr                  www_arg, cPart, blast_program, blast_database;
   CharPtr                  QuerySeq           = NULL;
@@ -2453,6 +2766,15 @@ Int2 Main()
     CddHtmlError("No input - nothing to report.");
   }
 /*---------------------------------------------------------------------------*/
+/* CD-Server as image formatter for family relationships                     */
+/*---------------------------------------------------------------------------*/
+  if ((indx = WWWFindName(www_info, "PIC")) >= 0) {
+    www_arg =  WWWGetValueByIndex(www_info, indx);
+    CddDrawFamilyTree(www_arg);
+    exit(0);
+  }
+
+/*---------------------------------------------------------------------------*/
 /* retrieve the Cdd unique identifier                                        */
 /*---------------------------------------------------------------------------*/
   if ((indx = WWWFindName(www_info, "uid")) < 0) 
@@ -2462,16 +2784,18 @@ Int2 Main()
 /* check to see if identifier is entirely numerical - if so, convert to acc. */
 /*---------------------------------------------------------------------------*/
 #ifdef USE_CDTRK
+  CdTrkInitialize(TRUE);
 /*  sprintf(ErrMsg,"ODBCINI=%s",ODBCINI);
   putenv(ErrMsg); */
 #endif
   iPssmId = (Int4) atoi(www_arg);
   if (iPssmId > 0) {                 /* successful conversion, uid is PSSMid */
 #ifdef USE_CDTRK
-    PssmId2Accession(CDTRKDBS,"bauer",iPssmId,cCDDid,errmsg,1024);
+    PssmId2Accession(CDTRKDBS,"bauer",iPssmId,cCDDid,TRUE,errmsg,1024);
     if (errmsg[0] != '\0') {
-      sprintf(ErrMsg,"Got Accession %s from CDtrack via PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
-      CddHtmlError(ErrMsg);
+      /*sprintf(ErrMsg,"Got Accession %s from CDtrack via PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
+      CddHtmlError(ErrMsg); */
+      CddAccFromPssmId(iPssmId, cCDDid, CDDidx);     
     }
 #else
     CddAccFromPssmId(iPssmId, cCDDid, CDDidx);     
@@ -2479,10 +2803,11 @@ Int2 Main()
   } else {
     strcpy(cCDDid,www_arg);          /* uid was an accession, no PSSMid known*/
 #ifdef USE_CDTRK
-    iPssmId = Accession2PssmId(CDTRKDBS,"bauer",cCDDid,errmsg,1024);
+    iPssmId = Accession2PssmId(CDTRKDBS,"bauer",cCDDid,TRUE,errmsg,1024);
     if (errmsg[0] != '\0') {
-      sprintf(ErrMsg,"Used Accession %s in CDtrack to retrieve PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
-      CddHtmlError(ErrMsg);
+      /*sprintf(ErrMsg,"Used Accession %s in CDtrack to retrieve PSSMId %d: %s\n",cCDDid,iPssmId, errmsg);
+      CddHtmlError(ErrMsg); */
+      CddPssmIdFromAcc(&iPssmId, cCDDid, CDDidx);
     }
 #else
     CddPssmIdFromAcc(&iPssmId, cCDDid, CDDidx);
@@ -2505,12 +2830,15 @@ Int2 Main()
     if (StringNCmp(cCDDid,"pfam",4)) {
       if (StringNCmp(cCDDid,"LOAD_",5)) {
         if (StringNCmp(cCDDid,"COG",3)) {
-          if (StringNCmp(cCDDid,"cd0",3)) {
-            if (StringCmp(dbversion,"v1.51") &&
-	        StringCmp(dbversion,"v1.50") &&
-	        StringCmp(dbversion,"v1.01") &&
-	        StringCmp(dbversion,"v1.00")) {
-              Nlm_StrCpy(dbversion,"v1.51"); 
+          if (StringNCmp(cCDDid,"KOG",3)) {
+            if (StringNCmp(cCDDid,"cd0",3)) {
+              if (StringCmp(dbversion,"v1.51") &&
+	          StringCmp(dbversion,"v1.50") &&
+	          StringCmp(dbversion,"v1.01") &&
+	          StringCmp(dbversion,"v1.00")) {
+		CddHtmlError("This type of accession is not supported with newer versions of CDD!");
+                Nlm_StrCpy(dbversion,"v1.51"); 
+              }
             }
           }
         }
@@ -2541,11 +2869,23 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 #ifdef USE_CDTRK
   pcdd = CddGetFromCDtrack(iPssmId,cCDDid);
+  if (pcdd) {
+    tempchar = StringSave(cCDDid);
+    pcdtree = GetPublishedCDFamilyInfoForAcc(CDTRKDBS,"bauer",(char *) tempchar,TRUE,errmsg,1024);
+    MemFree(tempchar);
+    if (!pcdtree) CddHtmlError(errmsg);
+    if (NULL == pcdtree->next) pcdtree = NULL;
+  }
 #endif
+#ifndef DRAW_TREES
+  pcdtree = NULL;
+#endif
+
   if (!pcdd) {
     pcdd = (CddPtr) CddReadFromFile(CDDalign,TRUE);
     if (!pcdd) CddHtmlError("Could not access CDD data!");
   }
+  CddSrvRemoveNotes(pcdd);
   bHasConsensus = CddHasConsensus(pcdd);
   alen = CddGetAlignmentLength(pcdd);
 
@@ -2862,7 +3202,7 @@ Int2 Main()
       if (isdigit(www_arg[0])) {
         iPDB = (Int2) atoi(www_arg); 
         if (iPDB < 0) iPDB=0;
-        if (iPDB > 7) iPDB=7;
+        if (iPDB > 9) iPDB=9;
         if (iPDB == 5) {
 	  bMode = CDDSUMMARY;
 	  iSeqStrMode = NOALIGN; 
@@ -2881,7 +3221,7 @@ Int2 Main()
     if (isdigit(www_arg[0])) {
       iPDB = (Int2) atoi(www_arg); 
       if (iPDB < 0) iPDB=0;
-      if (iPDB > 7) iPDB=7;
+      if (iPDB > 9) iPDB=9;
       if (iPDB == 5) {
         bMode = CDDSUMMARY;
 	iSeqStrMode = NOALIGN;
@@ -3102,7 +3442,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* check whether the 3D representative is needed and included in the Gi list */
 /*---------------------------------------------------------------------------*/
-  if ((iPDB < 2 || iPDB >= 6) && !UseThisGi(i3dRepIndex,pvnGis)) {
+  if ((iPDB < 2 || iPDB == 6 || iPDB == 7) && !UseThisGi(i3dRepIndex,pvnGis)) {
     nGi ++;
     pvnGi = ValNodeAddInt(&pvnGis, 0, i3dRepIndex);
   }
@@ -3119,7 +3459,7 @@ Int2 Main()
 /* if CD has consensus, and 3D visualization is selected, need to transfer   */
 /* alignment annotations to new master                                       */
 /*---------------------------------------------------------------------------*/
-  if ((bHasConsensus || bEvidenceViewer) && (iPDB < 2 || iPDB >= 6)) {
+  if ((bHasConsensus || bEvidenceViewer) && (iPDB < 2 || iPDB == 6 || iPDB == 7)) {
     pcdsThis = pcds; while (pcdsThis) {
       if (pcdsThis->bIs3dRep) {
         sipMaster = pcdsThis->sip;
@@ -3205,9 +3545,9 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   if (bMode == CDDSUMMARY) {
     if (pcds) {
-      CddServerShowTracks(pcds,pcdd,iTaxId,bHasPdb,dbversion,bHasConsensus,bShowTax,txids,iPDB,alen,nTaxIds,iTaxids);
+      CddServerShowTracks(pcds,pcdd,iTaxId,bHasPdb,dbversion,bHasConsensus,bShowTax,txids,iPDB,alen,nTaxIds,iTaxids, pcdtree);
     } else {
-      CddServerShowTracks(pcds,pcdd,iTaxId,FALSE,dbversion,bHasConsensus,bShowTax,txids,iPDB,alen,nTaxIds,iTaxids);
+      CddServerShowTracks(pcds,pcdd,iTaxId,FALSE,dbversion,bHasConsensus,bShowTax,txids,iPDB,alen,nTaxIds,iTaxids, pcdtree);
     }
   }
 
@@ -3240,7 +3580,7 @@ Int2 Main()
 
   pcdsThis = pcds;
   while (pcdsThis) {
-    if (pcdsThis->bIsPdb && (iPDB < 2 || iPDB >= 6)) {
+    if (pcdsThis->bIsPdb && (iPDB < 2 || iPDB == 6 || iPDB == 7)) {
       pcdsThis->iMMDBId = ConvertMMDBUID(pcdsThis->cPdbId);
       if (pcdsThis->bIs3dRep) iRepId = pcdsThis->iMMDBId;
     }
@@ -3336,7 +3676,7 @@ Int2 Main()
     printf(" DEBUG: mode selected as %c, interpreted as %d\n",cMode,bMode);
 #endif
   } else cMode = '\0';
-  if (bMode != CDDSUMMARY && (iPDB > 1 && iPDB < 6)) {
+  if (bMode != CDDSUMMARY && ((iPDB > 1 && iPDB < 6) || iPDB == 8 || iPDB == 9)) {
     bMode = CDDALIGNMENT;
     iSeqStrMode = CDDSEQUONLY;
   }
@@ -3474,7 +3814,7 @@ Int2 Main()
 /* if CD has consensus, and 3D visualization is selected, need to reindex    */
 /* alignment to use the 3D representative as the master!                     */
 /*---------------------------------------------------------------------------*/
-  if ((bHasConsensus || bEvidenceViewer) && (iPDB < 2 || iPDB >= 6)) {
+  if ((bHasConsensus || bEvidenceViewer) && (iPDB < 2 || iPDB == 6 || iPDB == 7)) {
     salpCopy = psaCAlignHead->data;
     pcdsThis = pcds; while (pcdsThis) {
       if (pcdsThis->bIs3dRep) {
@@ -3492,7 +3832,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
   pvnNcbi=ValNodeNew(NULL);
   if (iSeqStrMode == CDDONESTRUC || iSeqStrMode == CDDSEVSTRUC) {
-    if (iPDB >= 6) iSeqStrMode = CDDASCDD;
+    if (iPDB == 6 || iPDB == 7) iSeqStrMode = CDDASCDD;
   }
   switch(iSeqStrMode) {
     case CDDSEQUONLY: pvnNcbi->choice=NcbiMimeAsn1_alignseq;      break;
@@ -3540,7 +3880,7 @@ Int2 Main()
     CddFixSequenceFormat(pbsaSeq->sequences);
     if (!CddInvokeAlignView(pvnNcbi,CDDalign,iPDB,QuerySeq,QueryAlign,dbversion,
                             pcdd,bHasPdb,tbit,pwidth,iQueryGi,QueryName,iFeatNum,
-			    pcds,alen,nTaxIds,iTaxids,txids)) 
+			    pcds,alen,nTaxIds,iTaxids,txids,pcdtree)) 
       CddHtmlError("Could not display alignment");
     return 0;  
   }
@@ -3559,7 +3899,7 @@ Int2 Main()
 /*---------------------------------------------------------------------------*/
 /* cn3d file generation                                                      */
 /*---------------------------------------------------------------------------*/
-  if (iPDB == 0 || iPDB >= 6)
+  if (iPDB == 0 || iPDB == 6 || iPDB == 7)
     fprintf(OutputFile, "Content-type: chemical/ncbi-asn1-binary\n\n");
   else if (iPDB == 1) {                         /* corresponds to "See File" */
     fprintf(OutputFile, "Content-type: text/html\n\n");
@@ -3567,7 +3907,7 @@ Int2 Main()
   } else fprintf(OutputFile, "Content-type: application/octet-stream\n\n");
   fflush(OutputFile);
   if (OutputFile != stdout) {
-    if (iPDB == 0 || iPDB >= 6)
+    if (iPDB == 0 || iPDB == 6 || iPDB == 7)
       paiFile = AsnIoNew(ASNIO_BIN_OUT, OutputFile, NULL, NULL, NULL);
     else
       paiFile = AsnIoNew(ASNIO_TEXT_OUT, OutputFile, NULL, NULL, NULL);

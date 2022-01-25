@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: blastkar.c,v 6.90 2003/06/30 20:01:32 dondosha Exp $";
+
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,8 +49,17 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.87 $
+ * $Revision: 6.90 $
  * $Log: blastkar.c,v $
+ * Revision 6.90  2003/06/30 20:01:32  dondosha
+ * Correction in logic of finding matrices by BLASTMAT environment variable
+ *
+ * Revision 6.89  2003/05/30 17:25:36  coulouri
+ * add rcsid
+ *
+ * Revision 6.88  2003/05/06 18:54:02  dondosha
+ * Set all gap/residue scores in blastn matrix to INT4_MIN/2
+ *
  * Revision 6.87  2003/03/07 22:33:25  bealer
  * - Fix UMR when alphabet_type is not set.
  *
@@ -1412,6 +1423,8 @@ BLAST_ScorePtr PNTR LIBCALL BlastScoreBlkMatCreateEx(BLAST_ScorePtr PNTR matrix,
            the ungapped extension algorithm */
 	for (index1=0; index1<BLASTNA_SIZE; index1++) /* blastna */
            matrix[BLASTNA_SIZE-1][index1] = INT4_MIN / 2;
+	for (index1=0; index1<BLASTNA_SIZE; index1++) /* blastna */
+           matrix[index1][BLASTNA_SIZE-1] = INT4_MIN / 2;
 
 	return matrix;
 }
@@ -1473,17 +1486,18 @@ BlastScoreBlkMatFill(BLAST_ScoreBlkPtr sbp, CharPtr matrix)
         
         /* 2. Try configuration file */
         if (fp == NULL) {
-            if(FindPath("ncbi", "ncbi", "data", string, PATH_MAX)) {
+           if (sbp->protein_alphabet)
+              Nlm_StringNCpy(alphabet_type, "aa", 2);
+           else
+              Nlm_StringNCpy(alphabet_type, "nt", 2);
+           alphabet_type[2] = NULLB;
+
+           if(FindPath("ncbi", "ncbi", "data", string, PATH_MAX)) {
                matrix_dir = StringSave(string);
                sprintf(string, "%s%s", matrix_dir, matrix);
                if(FileLength(string) > 0) {
                   fp = FileOpen(string, "r");
                } else {
-                  if (sbp->protein_alphabet)
-                     Nlm_StringNCpy(alphabet_type, "aa", 2);
-                  else
-                     Nlm_StringNCpy(alphabet_type, "nt", 2);
-                  alphabet_type[2] = NULLB;
                   sprintf(string, "%s%s%s%s", matrix_dir, 
                           alphabet_type, DIRDELIMSTR, matrix);
                   if(FileLength(string) > 0)

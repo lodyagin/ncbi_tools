@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description: 
 *
@@ -220,6 +220,7 @@ typedef struct genbiopage {
   TexT            orgcomment;
   DialoG          subsource;
   TexT            subcomment;
+  ButtoN          add_type_strain_to_subcomment;
   TexT            lineage;
   TexT            gbDiv;
   DialoG          db;
@@ -984,6 +985,63 @@ static CharPtr MergeValNodeStrings (ValNodePtr list)
   return ptr;
 }
 
+static void AddTypeStrainButtonProc (ButtoN b)
+{
+  GenBioPagePtr  gbp;
+  CharPtr        old_subcomment;
+  Int4           old_subcomment_len;
+  CharPtr        org_name;
+  Int4           org_name_len;
+  const CharPtr  ts = "type strain of ";
+  const CharPtr  sep = "; ";
+  CharPtr        new_subcomment;
+
+  gbp = GetObjectExtra(b);
+  if (gbp == NULL) return;
+  old_subcomment_len = TextLength (gbp->subcomment) + 1;
+  old_subcomment = MemNew (old_subcomment_len + 1);
+  if (old_subcomment == NULL) return;
+  org_name_len = TextLength (gbp->taxName) + 1;
+  org_name = MemNew (org_name_len + 1);
+  if (org_name == NULL) 
+  {
+    MemFree (old_subcomment);
+    return;
+  }
+  new_subcomment = MemNew (old_subcomment_len
+			+ StringLen (sep)
+			+ StringLen (ts)
+			+ org_name_len
+			+ 1);
+  if (new_subcomment == NULL)
+  {
+    MemFree (old_subcomment);
+    MemFree (org_name);
+  }
+
+  GetTitle (gbp->subcomment, old_subcomment, old_subcomment_len);
+  TrimSpacesAroundString (old_subcomment);
+  GetTitle (gbp->taxName, org_name, org_name_len);
+  TrimSpacesAroundString (org_name);
+  if (old_subcomment[0] != 0)
+  {
+    StringCpy(new_subcomment, old_subcomment);
+    StringCat(new_subcomment, sep);
+  }
+  else
+  {
+    new_subcomment[0] = 0;
+  }
+    
+  StringCat (new_subcomment, ts);
+  StringCat (new_subcomment, org_name);
+  SetTitle (gbp->subcomment, new_subcomment);
+  MemFree (org_name);
+  MemFree (old_subcomment);
+  MemFree (new_subcomment);
+  Disable (b);
+}
+
 static Char useGenomicText [] = "\
 (Use 'Genomic' for a sequence encoded by a nuclear gene.)\n";
 
@@ -1098,6 +1156,10 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
       if (head != NULL) {
         str = MergeValNodeStrings (head);
         SetTitle (gbp->subcomment, str);
+        if ( StringStr (str, "type strain of "))
+        {
+          Disable (gbp->add_type_strain_to_subcomment);
+        }
         MemFree (str);
       }
       ValNodeFree (head);
@@ -1369,6 +1431,17 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
           ssp->name = SaveStringFromTextAndStripNewlines (gbp->subcomment);
         }
       }
+      /* look for plasmid-name - if we find one, set the location to plasmid */
+      tmpssp = biop->subtype;
+      while (tmpssp != NULL)
+      {
+        if (tmpssp->subtype == SUBSRC_plasmid_name) {
+          biop->genome = GENOME_plasmid;
+          break;
+        }
+        tmpssp = tmpssp->next;
+      }
+ 
       if (orp != NULL) {
         if (orp->taxname == NULL && orp->common == NULL &&
             orp->mod == NULL && orp->db == NULL && orp->syn == NULL &&
@@ -1907,7 +1980,7 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
 {
   ButtoN         b;
   GrouP          c;
-  GrouP          f, f1, f2, f3;
+  GrouP          f, f1, f2, f3, f4;
   GrouP          g;
   GenBioPagePtr  gbp;
   Int2           height;
@@ -2103,7 +2176,10 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     x = MultiLinePrompt (f2, "Additional Source Information", max, programFont);
     gbp->subcomment = ScrollText (f2, 20, 3, programFont, TRUE, NULL);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) gbp->subcomment, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsource, (HANDLE) f2, NULL);
+    f4 = HiddenGroup (g, 1, 0, NULL);
+    gbp->add_type_strain_to_subcomment = PushButton (f4, "Add type strain to comment", AddTypeStrainButtonProc);
+    SetObjectExtra (gbp->add_type_strain_to_subcomment, gbp, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) gbp->subsource, (HANDLE) f2, (HANDLE) f4, NULL);
 
     gbp->modGrp [1] = HiddenGroup (k, -1, 0, NULL);
     SetGroupSpacing (gbp->modGrp [1], 10, 10);

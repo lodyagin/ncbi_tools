@@ -29,13 +29,29 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.22 $
+* $Revision: 6.27 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.27  2003/10/21 18:27:43  lavr
+* QUERY_OpenServiceQuery(): Timeout override changed
+*
+* Revision 6.26  2003/09/03 21:15:29  lavr
+* Reuse "arguments" in QUERY_OpenServiceQuery() to be real service argument
+* (formely it was to modify the dispatcher and was not really used anywhere)
+*
+* Revision 6.25  2003/05/29 21:54:20  kans
+* QUERY_CheckQueue calls callback and dequeues connection if status is eIO_Closed as well as eIO_Success  - callbacks already check status before trying to read
+*
+* Revision 6.24  2003/05/29 19:02:56  kans
+* badstatus only used for future debugging purposes, does not block further checks, also increments count of remaining queued connections for return value
+*
+* Revision 6.23  2003/05/29 18:39:54  kans
+* QUERY_CheckQueue sets new badstatus field, protects against further checks, if eIO_Timeout or eIO_Closed
+*
 * Revision 6.22  2002/11/21 20:35:41  kans
 * forgot to call ConnNetInfo_Destroy if bailing due to NULL connector
 *
@@ -107,11 +123,16 @@ NLM_EXTERN void QUERY_WaitForNextMacEvent (void)
 #endif
 
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
-  Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
-  Nlm_CharPtr host_path, Nlm_CharPtr arguments,
-  Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
-  EMIME_Type type, EMIME_SubType subtype,
-  EMIME_Encoding encoding, THCC_Flags flags)
+  Nlm_CharPtr host_machine,
+  Nlm_Uint2 host_port,
+  Nlm_CharPtr host_path,
+  Nlm_CharPtr arguments,
+  Nlm_CharPtr appName,
+  Nlm_Uint4 timeoutsec,
+  EMIME_Type type,
+  EMIME_SubType subtype,
+  EMIME_Encoding encoding,
+  THCC_Flags flags)
 {
   CONN            conn = 0;
   CONNECTOR       connector;
@@ -187,12 +208,16 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
 
 
 NLM_EXTERN CONN QUERY_OpenServiceQuery (
-  Nlm_CharPtr service, Nlm_CharPtr arguments, Nlm_Uint4 timeoutsec
+  Nlm_CharPtr service,
+  Nlm_CharPtr arguments,
+  Nlm_Uint4   timeoutsec
 )
 
 {
   CONN            conn = 0;
   CONNECTOR       connector;
+  size_t          n_written;
+  size_t          args_len;
   SConnNetInfo*   info;
   EIO_Status      status;
 
@@ -200,13 +225,12 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
   info = ConnNetInfo_Create (service);
   ASSERT( info );
 
-  if ( !StringHasNoText (arguments) ) {
-      StringNCpy_0 (info->args, arguments, sizeof(info->args));
-  }
-
-  if ( info->timeout ) {
-      info->timeout->sec  = timeoutsec;
-      info->timeout->usec = 0;
+  if (timeoutsec == (Nlm_Uint4)(-1)) {
+      info->timeout = 0;
+  } else if ( timeoutsec ) {
+      info->tmo.sec  = timeoutsec;
+      info->tmo.usec = 0;
+      info->timeout  = &info->tmo;
   }
 
   connector = SERVICE_CreateConnectorEx (service, fSERV_Any, info, 0);
@@ -215,9 +239,19 @@ NLM_EXTERN CONN QUERY_OpenServiceQuery (
     ConnNetInfo_Destroy (info);
     return NULL;
   }
+
   status = CONN_Create (connector, &conn);
   if (status != eIO_Success) {
     ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed in CONN_Create");
+    ASSERT( !conn );
+  } else if ( !StringHasNoText (arguments) ) {
+      args_len = StringLen (arguments);
+      status = CONN_Write (conn, arguments, args_len, &n_written);
+      if (status != eIO_Success  ||  n_written != args_len) {
+          ErrPostEx (SEV_ERROR, 0, 0, "QUERY_OpenServiceQuery failed to write arguments in CONN_Write");
+          CONN_Close (conn);
+          conn = 0;
+      }
   }
 
   /* cleanup & return */
@@ -245,7 +279,8 @@ NLM_EXTERN void QUERY_SendQuery (
 #define URL_QUERY_BUFLEN  4096
 
 NLM_EXTERN void QUERY_CopyFileToQuery (
-  CONN conn, FILE *fp
+  CONN conn,
+  FILE *fp
 )
 
 {
@@ -266,7 +301,8 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
 }
 
 NLM_EXTERN void QUERY_CopyResultsToFile (
-  CONN conn, FILE *fp
+  CONN conn,
+  FILE *fp
 )
 
 {
@@ -286,7 +322,11 @@ NLM_EXTERN void QUERY_CopyResultsToFile (
   MemFree (buffer);
 }
 
-static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 count)
+static Nlm_Int2 LIBCALL AsnIoConnWrite (
+  Pointer ptr,
+  Nlm_CharPtr buf,
+  Nlm_Uint2 count
+)
 
 {
 	size_t        bytes;
@@ -298,7 +338,11 @@ static Nlm_Int2 LIBCALL AsnIoConnWrite (Pointer ptr, Nlm_CharPtr buf, Nlm_Uint2 
 	return (Nlm_Int2) bytes;
 }
 
-static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count)
+static Nlm_Int2 LIBCALL AsnIoConnRead (
+  Pointer ptr,
+  CharPtr buf,
+  Nlm_Uint2 count
+)
 
 {
 	size_t        bytes;
@@ -310,7 +354,10 @@ static Nlm_Int2 LIBCALL AsnIoConnRead (Pointer ptr, CharPtr buf, Nlm_Uint2 count
 	return (Nlm_Int2) bytes;
 }
 
-NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (Nlm_CharPtr mode, CONN conn)
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (
+  Nlm_CharPtr mode,
+  CONN conn
+)
 
 {
   Int1          type;
@@ -336,7 +383,9 @@ NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (Nlm_CharPtr mode, CONN conn)
   return aicp;
 }
 
-NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (AsnIoConnPtr aicp)
+NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (
+  AsnIoConnPtr aicp
+)
 
 {
   if (aicp == NULL) return NULL;
@@ -354,7 +403,11 @@ typedef struct SQueueTag {
 } SConnQueue, PNTR QueuePtr;
 
 NLM_EXTERN void QUERY_AddToQueue (
-  QUEUE* queue, CONN conn, QueryResultProc resultproc, Nlm_VoidPtr userdata, Nlm_Boolean closeConn
+  QUEUE* queue,
+  CONN conn,
+  QueryResultProc resultproc,
+  Nlm_VoidPtr userdata,
+  Nlm_Boolean closeConn
 )
 
 {
@@ -394,7 +447,8 @@ NLM_EXTERN void QUERY_AddToQueue (
 }
 
 static void QUERY_RemoveFromQueue (
-  QUEUE* queue, CONN conn
+  QUEUE* queue,
+  CONN conn
 )
 
 {
@@ -447,7 +501,8 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
       timeout.usec = 0;
       status = CONN_Wait (curr->conn, eIO_Read, &timeout);
 
-      if (status == eIO_Success) {
+      if (status == eIO_Success || status == eIO_Closed) {
+
         /* protect against reentrant calls if resultproc is GUI and processes timer */
         curr->protect = TRUE;
         if (curr->resultproc != NULL) {

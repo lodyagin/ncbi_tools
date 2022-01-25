@@ -34,6 +34,15 @@
 		<1>		12/06/99	JL		MoreFiles 1.5.
 */
 
+/*
+     This file has been slightly modified from the original by
+     the National Center for Biotechnology Information, National
+     Institutes of Health, Bethesda, Maryland, USA.
+*/
+
+
+#ifndef WIN32
+
 #include <MacTypes.h>
 #include <MacErrors.h>
 #include <MacMemory.h>
@@ -280,3 +289,4 @@ pascal OSErr LocationFromFullPath(short fullPathLength,
 
 /*****************************************************************************/
 
+#endif /* WIN32 */

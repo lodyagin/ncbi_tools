@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *               underlying window toolbox import
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbiwin.h,v $
+* Revision 6.8  2003/05/05 12:00:10  rsmith
+* Change definitions before including windows.h when compiling with Codewarrior for Windows.
+*
 * Revision 6.7  2002/12/17 23:00:48  kans
 * support for OS_UNIX_DARWIN for Mach-O executables (RGS)
 *
@@ -187,6 +190,7 @@
 #ifndef WIN16
 #undef Beep
 #endif
+#ifndef COMP_METRO
 #undef TRUE
 #undef FALSE
 #undef NULL
@@ -194,13 +198,14 @@
 #undef NEAR
 #undef PASCAL
 #undef CDECL
+#define STRICT
+#endif
 #define NOKANJI
 #define NODBCS
 #define NOCOMM
 #define NOSOUND
 #define NOPROFILER
 #define NOKEYBOARDINFO
-#define STRICT
 #include <windows.h>
 #include <windowsx.h>
 #endif /* OS_MSWIN */

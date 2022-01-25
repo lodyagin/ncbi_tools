@@ -28,13 +28,28 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.44 $
+* $Revision: 6.49 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.49  2003/10/20 17:54:34  kans
+* AlnMgr2ComputeFreqMatrix protect against dereferencing NULL bsp
+*
+* Revision 6.48  2003/10/09 13:46:52  rsmith
+* Add AlnMgr2GetFirstNForSipList.
+*
+* Revision 6.47  2003/05/15 18:53:10  rsmith
+* in AlnMgr2GetSeqRangeForSipInStdSeg always return start & stop in coordinate order. Do not assume what minus strand will do or not.
+*
+* Revision 6.46  2003/04/24 20:28:48  rsmith
+* made AlnMgr2GetNthStdSeg use 1 based numbering like the other Nth functions.
+*
+* Revision 6.45  2003/04/23 20:36:13  rsmith
+* Added four functions in Section 11 to get information about Std-Seg alignments.
+*
 * Revision 6.44  2003/03/31 20:17:11  todorov
 * Added AlnMgr2IndexSeqAlignEx
 *
@@ -7159,6 +7174,29 @@ NLM_EXTERN Int4 AlnMgr2GetFirstNForSip(SeqAlignPtr sap, SeqIdPtr sip)
 
 /***************************************************************************
 *
+*  AlnMgr2GetFirstNForSipList returns the first row that one of a list of seqids occur on,
+*  or -1 if none of the seqids are in the alignment or if there is another
+*  error. 
+*  Handy if sip comes from a BioSeq, where it can point to a linked list
+*  of SeqIds.
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgr2GetFirstNForSipList(SeqAlignPtr sap, SeqIdPtr sip)
+{
+    Int4    i;
+    if (sap == NULL || sap->saip == NULL)
+        return -1;
+    
+    for (; sip; sip = sip->next) {
+        i = AlnMgr2GetFirstNForSip(sap, sip);
+        if (i != -1)
+            return i;
+    }
+    return -1;
+}
+
+/***************************************************************************
+*
 *  AlnMgr2GetParent returns the top-level seqalign associated with a given
 *  indexed alignment. It returns the actual pointer, not a copy.
 *
@@ -8392,30 +8430,32 @@ NLM_EXTERN AMFreqPtr AlnMgr2ComputeFreqMatrix(SeqAlignPtr sap, Int4 from, Int4 t
          {
             sip = AlnMgr2GetNthSeqIdPtr(sap, i+1);
             bsp = BioseqLockById(sip);
-            for (l=amp->from_row; l<=amp->to_row; l+=AM_SEQPORTSIZE)
-            {
-               counter = AlnMgr2SeqPortRead(&spp, buf, &bufpos, l, MIN(l+AM_SEQPORTSIZE, amp->to_row), amp->strand, code, bsp);
-               ctr = 0;
-               while (ctr < counter)
-               {
-                  res = buf[ctr];
-                  if (isna)
-                  {
-                     if (res == 1 || res == 2)
-                        afp->freq[res][j]++;
-                     else if (res == 4)
-                        afp->freq[3][j]++;
-                     else if (res == 8)
-                        afp->freq[4][j]++;
-                     else
-                        afp->freq[5][j]++;
-                  } else
-                     afp->freq[res][j]++;
-                  j++;
-                  ctr++;
-               }
+            if (bsp != NULL) {
+              for (l=amp->from_row; l<=amp->to_row; l+=AM_SEQPORTSIZE)
+              {
+                 counter = AlnMgr2SeqPortRead(&spp, buf, &bufpos, l, MIN(l+AM_SEQPORTSIZE, amp->to_row), amp->strand, code, bsp);
+                 ctr = 0;
+                 while (ctr < counter)
+                 {
+                    res = buf[ctr];
+                    if (isna)
+                    {
+                       if (res == 1 || res == 2)
+                          afp->freq[res][j]++;
+                       else if (res == 4)
+                          afp->freq[3][j]++;
+                       else if (res == 8)
+                          afp->freq[4][j]++;
+                       else
+                          afp->freq[5][j]++;
+                    } else
+                       afp->freq[res][j]++;
+                    j++;
+                    ctr++;
+                 }
+              }
+              BioseqUnlock(bsp);
             }
-            BioseqUnlock(bsp);
             SeqIdFree(sip);
          }
       }
@@ -9792,6 +9832,185 @@ NLM_EXTERN void AlnMgr2GetNthSeqRangeInSAStdSeg(SeqAlignPtr sap, Int4 n, Int4Ptr
       *stop = SeqLocStop(slp);
 }
 
+
+/***************************************************************************
+*
+*   AlnMgr2GetSeqRangeForSipInSAStdSeg  returns the smallest and largest sequence
+*  coordinates in in a Std-Seg seqalign for a given Sequence Id.  Also return the 
+*  strand type.  Either start, stop or strand can be NULL to only retrieve some of them.
+*  If start and stop are -1, there is an error (not a std-seg), the SeqID does not participate in this
+*  alignment or the alignment is one big insert on that id.  Returns true if the sip was found
+*  in the alignment with real coordinates, i.e. *start would not be -1.  RANGE
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2GetSeqRangeForSipInSAStdSeg(SeqAlignPtr sap, SeqIdPtr sip, Int4Ptr start, Int4Ptr stop, Uint1Ptr strand)
+{
+    Int4        c_start, c_stop;
+    Uint1       c_strand;
+    StdSegPtr   ssp;
+    Boolean     range_found = FALSE;
+    Boolean     strands_inconsistent = FALSE;
+
+    if (start) *start = -1;
+    if (stop)  *stop  = -1;
+    if (strand) *strand = Seq_strand_unknown;
+    
+    if (sap->segtype != SAS_STD)
+        return FALSE;
+
+    ssp = (StdSegPtr)(sap->segs);
+    while (ssp) { 
+        if (AlnMgr2GetSeqRangeForSipInStdSeg(ssp, sip, &c_start, &c_stop, &c_strand, NULL) &&
+            c_start != -1) /* skip inserts on our bioseq */
+        {
+             range_found = TRUE;
+                
+            if (start) {
+                if (*start == -1) {
+                    *start = c_start;
+                } else {
+                    *start = MIN(*start, c_start);
+                }
+            }
+            if (stop) {
+                *stop = MAX(*stop, c_stop);
+            }
+            if (strand && ! strands_inconsistent) {
+            /* if strands are different each time, ignore them. */
+                if (*strand != Seq_strand_unknown && *strand != c_strand) {
+                    *strand = Seq_strand_unknown;
+                    strands_inconsistent = TRUE;
+                } else {
+                    *strand = c_strand;
+                }
+            }
+        }
+        ssp = ssp->next;
+    }
+    return range_found;
+}
+
+
+/***************************************************************************
+*
+*   AlnMgr2GetSeqRangeForSipInStdSeg  returns the start and stop sequence
+*  coordinates in a Std-Segment for a given Sequence Id.  Also return the 
+*  strand type.  Either start, stop or strand can be NULL to only retrieve some of them.
+*  If start and stop are -1, the SeqID was not found in this segment.  
+*  Returns true if the sip was found, even if it is a gap (start, stop = -1).  RANGE
+*
+***************************************************************************/
+NLM_EXTERN Boolean AlnMgr2GetSeqRangeForSipInStdSeg(
+    StdSegPtr   ssp, 
+    SeqIdPtr    sip, 
+    Int4Ptr     start, 
+    Int4Ptr     stop, 
+    Uint1Ptr    strand,
+    Uint1Ptr    segType) /* AM_SEQ, AM_GAP, AM_INSERT */
+{
+    SeqLocPtr   loc;
+    Uint1       m_strand;
+    Int4        m_start, m_stop, m_swap;
+    Boolean     s_present = FALSE;
+    Boolean     m_present = FALSE;
+    Boolean     found_id = FALSE;
+    
+    for ( loc = ssp->loc;
+          loc != NULL;  
+          loc = loc->next ) {
+    /* One SeqLoc for each Sequence aligned by this segment. */
+        /* find the one that matches the sip parameter. */
+        if (SeqIdForSameBioseq(sip, SeqLocId(loc))) {
+            m_strand = SeqLocStrand(loc);
+            m_start  = SeqLocStart(loc);
+            m_stop   = SeqLocStop(loc);
+            /* Might have to reverse the order of start and stop on minus strands. 
+            /* so that start is less than stop. */
+            if (m_start > m_stop) {
+              m_swap  = m_start;
+              m_start = m_stop;
+              m_stop = m_swap;
+            }
+            if (start)  *start  = m_start;
+            if (stop)   *stop   = m_stop;
+            if (strand) *strand = m_strand;
+            if (m_start != -1)
+                m_present = TRUE;
+                
+            /* found our sequence in this segment. */
+            found_id = TRUE;
+        } else { /* a different sequence */
+            if (SeqLocStart(loc) != -1)
+                s_present = TRUE;
+        }
+    }
+    
+    if (segType) {
+        if (m_present && s_present)
+            *segType = AM_SEQ;
+        else if (!m_present && s_present)
+            *segType = AM_INSERT;
+        else if (m_present && !s_present)
+            *segType = AM_GAP;
+        else
+            *segType = AM_GAP; /* start will be -1 */
+    }
+    return found_id;
+}
+
+
+/***************************************************************************
+*
+*   AlnMgr2GetNthStdSeg  returns the a pointer to the Nth segment of
+*   a standard segment alignment.  Numbering starts with 1.
+*   returns NULL if not n segments or is not a std-seg aligment.
+*   Useful to pass its return value to AlnMgr2GetSeqRangeForSipInStdSeg()
+*
+***************************************************************************/
+NLM_EXTERN StdSegPtr AlnMgr2GetNthStdSeg(SeqAlignPtr sap, Int2 n)
+{
+    StdSegPtr   ssp;
+	Int2        i;
+
+    if (sap == NULL || sap->segtype != SAS_STD || n < 1)
+        return NULL;
+      
+    i = 1;
+    ssp = (StdSegPtr)(sap->segs);
+    while(ssp)
+    {
+        if (i == n)
+            return ssp;
+        ++i;
+        ssp = ssp->next;
+    }
+
+    return NULL;
+}
+
+/***************************************************************************
+*
+*  AlnMgr2GetNumStdSegs returns the number of segments in a standar-seg alignment.
+*   returns -1 if sap is null or not a standard-seg alignment.
+*
+***************************************************************************/
+NLM_EXTERN Int4 AlnMgr2GetNumStdSegs(SeqAlignPtr sap)
+{
+    Int4        seg_count = 0;
+    StdSegPtr   ssp;
+    
+    if (sap == NULL || sap->segtype != SAS_STD)
+        return -1;
+        
+    ssp = (StdSegPtr)(sap->segs);
+	while(ssp)
+	{
+		++seg_count;
+		ssp = ssp->next;
+	}
+	return seg_count;
+}   
+   
 static SeqLocPtr AlnMgr2GetLongestSeqLoc(SeqAlignPtr sap)
 {
    Int4       longest;

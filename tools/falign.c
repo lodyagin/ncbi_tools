@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: falign.c,v 6.3 2003/05/30 17:25:36 coulouri Exp $";
+
 /*  falign.c
 * ===========================================================================
 *
@@ -56,6 +58,9 @@
 * Date     Name        Description of modification
 *
 * $Log: falign.c,v $
+* Revision 6.3  2003/05/30 17:25:36  coulouri
+* add rcsid
+*
 * Revision 6.2  2000/11/02 20:56:17  vakatov
 * Renamed "join()" to "static s_Join()" to avoid name conflicts
 *

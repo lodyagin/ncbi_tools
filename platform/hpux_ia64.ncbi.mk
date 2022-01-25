@@ -1,17 +1,17 @@
+# $Id: hpux_ia64.ncbi.mk,v 1.5 2003/06/27 14:55:47 coulouri Exp $
 #
-# $Id: hpux_ia64.ncbi.mk,v 1.3 2002/10/29 01:20:13 lavr Exp $
+# tested on:
+# HP-UX spe175 B.11.22 U ia64 0319544412 unlimited-user license
 #
-# testded on:
-# HP-UX kiss B.11.20 U ia64 2374655775 unlimited-user license
-#
-# Contributed by: Balaji Veeraraghavan <balaji_veeraraghavan@hp.com>
+# originally contributed by balaji_veeraraghavan@hp.com
 #
 NCBI_DEFAULT_LCL = hp_ia64
 NCBI_MAKE_SHELL = /bin/sh
-NCBI_CC = cc -Ae +DD32 +DSitanium -fast -DHPUX -DHPUX_IA64 -Wl,-aarchive_shared
-NCBI_CFLAGS1 = -c -z -Wp,-H500000
-NCBI_LDFLAGS1 = 
-NCBI_OPTFLAG = -fast
+NCBI_AR=ar
+NCBI_CC = cc
+NCBI_CFLAGS1 = -c
+NCBI_LDFLAGS1 = -Ae +DD64 +DSmckinley -fast -DHPUX -DHPUX_IA64
+NCBI_OPTFLAG = -Ae +DD64 +DSmckinley -fast -DHPUX -DHPUX_IA64
 NCBI_INCDIR = /usr/ncbi/include
 NCBI_LIBDIR = /usr/ncbi/lib
 NCBI_ALTLIB = /usr/ncbi/altlib
@@ -28,4 +28,3 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 
 NCBI_LBSM_SRC = ncbi_lbsmd_stub.c
 NCBI_LBSM_OBJ = ncbi_lbsmd_stub.o
-

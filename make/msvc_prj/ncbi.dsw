@@ -1221,9 +1221,6 @@ Package=<4>
     Project_Dep_Name ncbitool
     End Project Dependency
     Begin Project Dependency
-    Project_Dep_Name vibrant
-    End Project Dependency
-    Begin Project Dependency
     Project_Dep_Name ncbinacc
     End Project Dependency
     Begin Project Dependency

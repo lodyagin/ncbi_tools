@@ -1,4 +1,4 @@
-/*  $Id: ncbi_server_info.c,v 6.48 2003/03/13 19:08:26 lavr Exp $
+/*  $Id: ncbi_server_info.c,v 6.53 2003/09/02 21:21:42 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,6 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_server_infop.h"
-#include <connect/ncbi_socket.h>
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
@@ -48,10 +47,10 @@
 /* Table of virtual functions
  */
 typedef struct {
-    char*       (*Write ) (size_t reserve, const USERV_Info* u);
-    SSERV_Info* (*Read  ) (const char** str);
-    size_t      (*SizeOf) (const USERV_Info *u);
-    int/*bool*/ (*Equal ) (const USERV_Info *u1, const USERV_Info *u2);
+    char*       (*Write )(size_t reserve, const USERV_Info* u);
+    SSERV_Info* (*Read  )(const char** str);
+    size_t      (*SizeOf)(const USERV_Info *u);
+    int/*bool*/ (*Equal )(const USERV_Info *u1, const USERV_Info *u2);
 } SSERV_Info_VTable;
 
 
@@ -93,7 +92,6 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag);
 const char* SERV_TypeStr(ESERV_Type type)
 {
     const SSERV_Attr* attr = s_GetAttrByType(type);
-
     if (attr)
         return attr->tag;
     return "";
@@ -103,7 +101,6 @@ const char* SERV_TypeStr(ESERV_Type type)
 const char* SERV_ReadType(const char* str, ESERV_Type* type)
 {
     const SSERV_Attr* attr = s_GetAttrByTag(str);
-
     if (!attr)
         return 0;
     *type = attr->type;
@@ -452,6 +449,7 @@ SSERV_Info* SERV_CreateNcbidInfo
  *  STANDALONE::   constructor and virtual functions
  */
 
+/*ARGSUSED*/
 static char* s_Standalone_Write(size_t reserve, const USERV_Info* u_info)
 {
     char* str = (char*) malloc(reserve + 1);
@@ -462,6 +460,7 @@ static char* s_Standalone_Write(size_t reserve, const USERV_Info* u_info)
 }
 
 
+/*ARGSUSED*/
 static SSERV_Info* s_Standalone_Read(const char** str)
 {
     return SERV_CreateStandaloneInfo(0, 0);
@@ -474,6 +473,7 @@ static size_t s_Standalone_SizeOf(const USERV_Info* u)
 }
 
 
+/*ARGSUSED*/
 static int/*bool*/ s_Standalone_Equal(const USERV_Info* u1,
                                       const USERV_Info* u2)
 {
@@ -647,7 +647,7 @@ static SSERV_Info* s_Firewall_Read(const char** str)
     ESERV_Type type;
     const char* s;
     if (!(s = SERV_ReadType(*str, &type)))
-        type = fSERV_Any;
+        type = (ESERV_Type) fSERV_Any;
     else
         *str = s;
     return SERV_CreateFirewallInfo(0, 0, type);
@@ -697,6 +697,7 @@ SSERV_Info* SERV_CreateFirewallInfo(unsigned int host, unsigned short port,
  *  DNS::   constructor and virtual functions
  */
 
+/*ARGSUSED*/
 static char* s_Dns_Write(size_t reserve, const USERV_Info* u_info)
 {
     char* str = (char*) malloc(reserve + 1);
@@ -707,6 +708,7 @@ static char* s_Dns_Write(size_t reserve, const USERV_Info* u_info)
 }
 
 
+/*ARGSUSED*/
 static SSERV_Info* s_Dns_Read(const char** str)
 {
     return SERV_CreateDnsInfo(0);
@@ -719,6 +721,7 @@ static size_t s_Dns_SizeOf(const USERV_Info* u)
 }
 
 
+/*ARGSUSED*/
 static int/*bool*/ s_Dns_Equal(const USERV_Info* u1, const USERV_Info* u2)
 {
     return 1;
@@ -734,7 +737,7 @@ SSERV_Info* SERV_CreateDnsInfo(unsigned int host)
         info->host   = host;
         info->port   = 0;
         info->sful   = 0;
-        info->locl   = 0x01;
+        info->locl   = s_LocalServerDefault & 0x0F;
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
@@ -835,6 +838,21 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_server_info.c,v $
+ * Revision 6.53  2003/09/02 21:21:42  lavr
+ * Cleanup included headers
+ *
+ * Revision 6.52  2003/06/26 15:21:43  lavr
+ * Use server's default locality for fSERV_Dns infos
+ *
+ * Revision 6.51  2003/06/16 15:58:50  lavr
+ * Minor code format changes
+ *
+ * Revision 6.50  2003/05/31 05:16:28  lavr
+ * Add ARGSUSED where args are meant to be unused
+ *
+ * Revision 6.49  2003/04/25 15:21:05  lavr
+ * Explicit cast to avoid int->enum warning
+ *
  * Revision 6.48  2003/03/13 19:08:26  lavr
  * Allow missing type in Firewall server info specification
  *

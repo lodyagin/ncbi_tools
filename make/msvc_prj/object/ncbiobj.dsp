@@ -435,6 +435,10 @@ SOURCE=..\..\..\api\viewmgr.c
 
 SOURCE=..\..\..\api\wprint.c
 # End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\cddapi.c
+# End Source File
 # End Group
 # Begin Group "Header Files"
 
@@ -978,6 +982,10 @@ SOURCE=..\..\..\access\vecscnapi.h
 # Begin Source File
 
 SOURCE=..\..\..\api\viewmgr.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\..\..\access\cddapi.h
 # End Source File
 # End Group
 # End Target

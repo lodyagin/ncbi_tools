@@ -44,6 +44,12 @@
 * RCS Modification History:
 * -------------------------
 * $Log: findrepl.h,v $
+* Revision 6.3  2003/07/31 20:54:54  kans
+* FindReplaceString does not need do_replace argument
+*
+* Revision 6.2  2003/07/31 18:18:03  kans
+* added FindReplaceString
+*
 * Revision 6.1  2000/11/03 20:36:00  kans
 * FindReplaceInEntity replaces FindInEntity and FindInEntityX - complete redesign, no longer using AsnExpOptExplore because of the difficulty of replacing with a larger string (TF + JK)
 *
@@ -110,6 +116,14 @@ NLM_EXTERN void FindReplaceInEntity (
   BoolPtr featFilter,
   BoolPtr seqidFilter,
   Boolean do_seqid_local
+);
+
+NLM_EXTERN void FindReplaceString (
+  CharPtr PNTR strp,
+  CharPtr find_string,
+  CharPtr replace_string,
+  Boolean case_counts,
+  Boolean whole_word
 );
 
 

@@ -1,4 +1,6 @@
-/* $Id: megablast.c,v 6.103 2003/03/20 13:44:24 madden Exp $
+static char const rcsid[] = "$Id: megablast.c,v 6.107 2003/05/30 17:31:09 coulouri Exp $";
+
+/* $Id: megablast.c,v 6.107 2003/05/30 17:31:09 coulouri Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +28,18 @@
 ************************************************************************** 
  * $Revision 6.13$ *  
  * $Log: megablast.c,v $
+ * Revision 6.107  2003/05/30 17:31:09  coulouri
+ * add rcsid
+ *
+ * Revision 6.106  2003/05/13 16:02:42  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
+ * Revision 6.105  2003/05/06 18:57:46  dondosha
+ * Do not set cutoff_s for megablast, it is not needed
+ *
+ * Revision 6.104  2003/05/06 15:18:22  dondosha
+ * Fix in callback function for the -D1 option
+ *
  * Revision 6.103  2003/03/20 13:44:24  madden
  * Fix -m 10/11 output to make them SeqAnnots
  *
@@ -752,12 +766,11 @@ MegaBlastPrintSegments(VoidPtr ptr)
 	    StringCat(buffer, tmp_buffer);
 	 }
       }
-      if (100*total_ident < align_length*search->pbp->mb_params->perc_identity) {
-         GapXEditBlockDelete(hsp->gap_info); /* Don't need it anymore */
-         continue;
+      if (100*total_ident >= 
+          align_length*search->pbp->mb_params->perc_identity) {
+        StringCat(buffer, "}");
+        fprintf(fp, "%s\n", buffer);
       }
-      StringCat(buffer, "}");
-      fprintf(fp, "%s\n", buffer);
       MemFree(start);
       MemFree(length);
       MemFree(strands);
@@ -920,7 +933,7 @@ Int2 Main (void)
 		html = TRUE;
 
 	if ((infp = FileOpen(blast_inputfile, "r")) == NULL) {
-	   ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", blast_inputfile);
+	   ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", blast_inputfile);
 	   return (1);
 	}
 
@@ -928,7 +941,7 @@ Int2 Main (void)
 	outfp = NULL;
 	if (align_view != 7 && align_view != 10 && align_view != 11 && blast_outputfile != NULL) {
 	   if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
-	      ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", blast_outputfile);
+	      ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", blast_outputfile);
 	      return (1);
 	   }
 	}
@@ -949,7 +962,7 @@ Int2 Main (void)
         
         
 	if (believe_query == FALSE && (myargs[14].strvalue || align_view == 10 || align_view == 11)) 
-	   ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
+	   ErrPostEx(SEV_FATAL, 1, 0, "-J option must be TRUE to produce a SeqAlign file");
 
 	options = BLASTOptionNewEx(blast_program, TRUE, TRUE);
 	if (options == NULL)
@@ -994,8 +1007,6 @@ Int2 Main (void)
            options->cutoff_s2 = options->wordsize*options->reward;
         else 
            options->cutoff_s2 = myargs[25].intvalue;
-
-        options->cutoff_s = (options->wordsize + 4)*options->reward;
 
         options->db_length = (Int8) myargs[18].floatvalue;
 
@@ -1097,7 +1108,7 @@ Int2 Main (void)
         aip = NULL;
         if (myargs[14].strvalue != NULL) {
            if ((aip = AsnIoOpen (myargs[14].strvalue,"w")) == NULL) {
-              ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", "blastngp.sat");
+              ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", "blastngp.sat");
               return 1;
            }
         }
@@ -1105,7 +1116,7 @@ Int2 Main (void)
     	{
         	const char* mode = (align_view == 10) ? "w" : "wb";
         	if ((aip = AsnIoOpen (blast_outputfile, (char*) mode)) == NULL) {
-                	ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                	ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
                 	return 1;
         	}
     	}
@@ -1150,7 +1161,7 @@ Int2 Main (void)
               SeqEntryExplore(sepp[num_bsps], &query_bsp, FindNuc);
 
 	      if (query_bsp == NULL) {
-		 ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		 ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 		 return 2;
 	      }
 	      

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.18  2003/09/15 16:16:32  kans
+* added AsnWriteEx, AsnTxtWriteEx, and AsnPrintStream
+*
 * Revision 6.17  2002/06/10 15:19:16  kans
 * AsnPrintString checks for NULL input string, reports error and returns FALSE
 *
@@ -326,7 +329,7 @@ static Boolean AsnPrintTypeXML (AsnTypePtr atp, AsnIoPtr aip);
 *   void AsnTxtWrite(aip, atp, valueptr)
 *
 *****************************************************************************/
-NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp)
+NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp, AsnStreamStringFunc stream)
 {
 	Int2 isa;
 	AsnTypePtr atp2;
@@ -515,8 +518,13 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			break;
 		case GENERALSTRING_TYPE:
 			if(!(isXML)) AsnPrintChar('\"', aip);
-			if (! AsnPrintString((CharPtr) dvp->ptrvalue, aip))
-				return FALSE;
+			if (stream != NULL) {
+				if (! AsnPrintStream (dvp->ptrvalue, aip, stream))
+					return FALSE;
+			} else {
+				if (! AsnPrintString((CharPtr) dvp->ptrvalue, aip))
+					return FALSE;
+			}
 			if(isXML) AsnXMLTerm(aip, atp);
 			else AsnPrintChar('\"', aip);
 			break;
@@ -569,6 +577,11 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 		}
 	}
 	return TRUE;														   
+}
+
+NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPtr dvp)
+{
+	return AsnTxtWriteEx (aip, atp, dvp, NULL);
 }
 
 /*****************************************************************************
@@ -1647,6 +1660,20 @@ ret:
         AsnIoErrorMsg(aip, 106, bad_char, the_string);
     }
 	return TRUE;
+}
+
+/*****************************************************************************
+*
+*   Boolean AsnPrintStream(str, aip, stream)
+*
+*****************************************************************************/
+NLM_EXTERN Boolean AsnPrintStream (Pointer object, AsnIoPtr aip, AsnStreamStringFunc stream)
+
+{
+	if (aip == NULL) return FALSE;
+	if (object == NULL || stream == NULL) return FALSE;
+
+	return stream (object, aip);
 }
 
 /*****************************************************************************

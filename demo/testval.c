@@ -68,7 +68,7 @@ Int2 Main(void)
 	if (myargs[2].intvalue)  /* Seq-submit */
 	{
 	    if (! SubmitAsnLoad())
-    	    ErrPostEx(SEV_FATAL,0,0, "Unable to SeqSubmitLoad.");
+    	    ErrPostEx(SEV_FATAL, 1,0, "Unable to SeqSubmitLoad.");
 
 		atp = AsnFind("Seq-submit");    /* get the initial type pointers */
 		if (atp == NULL)

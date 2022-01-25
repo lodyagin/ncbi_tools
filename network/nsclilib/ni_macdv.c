@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/13/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *   Determine which Macintosh MacTCP device is in-use (e.g., "Ethernet", "PPP")
@@ -51,6 +51,9 @@
 *
 * RCS Modification History:
 * $Log: ni_macdv.c,v $
+* Revision 6.4  2003/05/05 12:27:37  rsmith
+* add Mac OS guards so we can cross compile this project to Windows w/o changing files in the project.
+*
 * Revision 6.3  2001/04/20 18:31:58  juran
 * Bring obsolete preprocessor symbol up to date.
 *
@@ -86,6 +89,8 @@
  *
 */
 
+#if defined(OS_MAC)  ||  defined(OS_UNIX_DARWIN)
+ 
 #include <ncbi.h>
 #include <ncbiwin.h>
 
@@ -425,3 +430,5 @@ SearchFolderForRsrc( FSSpec *target, short vRefNum, long dirID,
     SetResLoad( oldResLoad );
     return err;
 }
+
+#endif  /* defined(OS_MAC)  ||  defined(OS_UNIX_DARWIN) */

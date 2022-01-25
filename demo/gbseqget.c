@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/4/02
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description:  Demo to fetch by accession, write GBSet XML
 *
@@ -78,6 +78,114 @@ static CharPtr ReadALine (
     *ptr = '\0';
   }
   return rsult;
+}
+
+typedef struct lookforids {
+  Boolean isGED;
+  Boolean isNTorNW;
+  Boolean isNC;
+  Boolean isTPA;
+  Boolean isNuc;
+  Boolean isProt;
+} LookForIDs, PNTR LookForIDsPtr;
+
+static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
+
+{
+  LookForIDsPtr  lfip;
+  SeqIdPtr       sip;
+  TextSeqIdPtr   tsip;
+
+  lfip = (LookForIDsPtr) userdata;
+  if (ISA_na (bsp->mol)) {
+    lfip->isNuc = TRUE;
+  }
+  if (ISA_aa (bsp->mol)) {
+    lfip->isProt = TRUE;
+  }
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+        lfip->isGED = TRUE;
+        break;
+      case SEQID_TPG :
+      case SEQID_TPE :
+      case SEQID_TPD :
+        lfip->isTPA = TRUE;
+        break;
+      case SEQID_OTHER :
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL) {
+          if (StringNCmp (tsip->accession, "NC_", 3) == 0) {
+            lfip->isNC = TRUE;
+          } else if (StringNCmp (tsip->accession, "NT_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          } else if (StringNCmp (tsip->accession, "NW_", 3) == 0) {
+            lfip->isNTorNW = TRUE;
+          }
+        }
+        break;
+      default :
+        break;
+    }
+  }
+}
+
+static void LookForGEDetc (
+  SeqEntryPtr topsep,
+  BoolPtr isGED,
+  BoolPtr isNTorNW,
+  BoolPtr isNC,
+  BoolPtr isTPA,
+  BoolPtr isNuc,
+  BoolPtr isProt
+)
+
+{
+  LookForIDs  lfi;
+
+  MemSet ((Pointer) &lfi, 0, sizeof (LookForIDs));
+  VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
+  *isGED = lfi.isGED;
+  *isNTorNW = lfi.isNTorNW;
+  *isNC = lfi.isNC;
+  *isTPA = lfi.isTPA;
+  *isNuc = lfi.isNuc;
+  *isProt = lfi.isProt;
+}
+
+static void DoSeqEntryToGnbk (
+  SeqEntryPtr sep,
+  FmtType fmt,
+  XtraPtr extra
+)
+
+{
+  CstType  cust = SHOW_TRANCRIPTION | SHOW_PEPTIDE;
+  FlgType  flags = SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ;
+  Boolean  isGED;
+  Boolean  isNTorNW;
+  Boolean  isNC;
+  Boolean  isNuc;
+  Boolean  isProt;
+  Boolean  isTPA;
+  LckType  locks = LOOKUP_FAR_COMPONENTS | LOOKUP_FAR_LOCATIONS | LOOKUP_FAR_PRODUCTS;
+
+  LookForGEDetc (sep, &isGED, &isNTorNW, &isNC, &isTPA, &isNuc, &isProt);
+
+  if (fmt == GENBANK_FMT && (! isNuc)) return;
+  if (fmt == GENPEPT_FMT && (! isProt)) return;
+
+  if (isNTorNW || isTPA) {
+    flags |= ONLY_NEAR_FEATURES;
+  } else if (isNC) {
+    flags |= NEAR_FEATURES_SUPPRESS;
+  }
+
+  SeqEntryToGnbk (sep, NULL, fmt, ENTREZ_MODE, SEGMENT_STYLE,
+                  flags, locks, cust, extra, NULL);
 }
 
 static void DoQuery (
@@ -165,14 +273,10 @@ static void DoQuery (
       if (sep == NULL) continue;
 
       if (do_nuc) {
-        SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                        SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
-                        LOCK_FAR_COMPONENTS, 0, extra, NULL);
+        DoSeqEntryToGnbk (sep, GENBANK_FMT, extra);
       }
       if (do_prot) {
-        SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                        SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
-                        LOCK_FAR_COMPONENTS, 0, extra, NULL);
+        DoSeqEntryToGnbk (sep, GENPEPT_FMT, extra);
       }
 
       SeqEntryFree (sep);
@@ -256,14 +360,10 @@ static void ProcessAccession (
   if (sep == NULL) return;
 
   if (do_nuc) {
-    SeqEntryToGnbk (sep, NULL, GENBANK_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                    SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
-                    LOCK_FAR_COMPONENTS, 0, extra, NULL);
+    DoSeqEntryToGnbk (sep, GENBANK_FMT, extra);
   }
   if (do_prot) {
-    SeqEntryToGnbk (sep, NULL, GENPEPT_FMT, ENTREZ_MODE, SEGMENT_STYLE,
-                    SHOW_FAR_TRANSLATION | SHOW_CONTIG_AND_SEQ,
-                    LOCK_FAR_COMPONENTS, 0, extra, NULL);
+    DoSeqEntryToGnbk (sep, GENPEPT_FMT, extra);
   }
 
   SeqEntryFree (sep);

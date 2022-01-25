@@ -265,7 +265,7 @@ init_syntax_once (void)
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-typedef char boolean;
+typedef unsigned char boolean;
 #define false 0
 #define true 1
 

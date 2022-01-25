@@ -1,4 +1,6 @@
-/* $Id: seedtop.c,v 6.6 1999/09/22 17:54:21 shavirin Exp $ */
+static char const rcsid[] = "$Id: seedtop.c,v 6.8 2003/05/30 17:31:10 coulouri Exp $";
+
+/* $Id: seedtop.c,v 6.8 2003/05/30 17:31:10 coulouri Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +35,15 @@ Maintainer: Alejandro Schaffer
  
 Contents: main routine for pseed3, stand-alone counterpart to PHI-BLAST.
  
-$Revision: 6.6 $
+$Revision: 6.8 $
 
 $Log: seedtop.c,v $
+Revision 6.8  2003/05/30 17:31:10  coulouri
+add rcsid
+
+Revision 6.7  2003/05/13 16:02:42  coulouri
+make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+
 Revision 6.6  1999/09/22 17:54:21  shavirin
 Now functions will collect messages in ValNodePtr before printing out.
  
@@ -179,14 +187,14 @@ Int2 Main(void)
 	queryfile = myargs[1].strvalue;
 	if ((infp = FileOpen(queryfile, "r")) == NULL)
 	{
-	  ErrPostEx(SEV_FATAL, 0, 0, "seed: Unable to open input file %s\n", queryfile);
+	  ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to open input file %s\n", queryfile);
 	  return (1);
 	}
 
 	patfile = myargs[2].strvalue;
 	if ((patfp = FileOpen(patfile, "r")) == NULL)
 	{
-	  ErrPostEx(SEV_FATAL, 0, 0, "seed: Unable to open pattern file %s\n", patfile);
+	  ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to open pattern file %s\n", patfile);
 	  return (1);
 	}
 	outputfile = myargs[3].strvalue;
@@ -195,7 +203,7 @@ Int2 Main(void)
 	{
 	  if ((outfp = FileOpen(outputfile, "w")) == NULL)
 	    {
-	      ErrPostEx(SEV_FATAL, 0, 0, "seed: Unable to open output file %s\n", outputfile);
+	      ErrPostEx(SEV_FATAL, 1, 0, "seed: Unable to open output file %s\n", outputfile);
 	      return (1);
 	    }
 	}
@@ -218,7 +226,7 @@ Int2 Main(void)
 	/* seedSearch->cutoffScore = myargs[8].intvalue; */
         eThresh = (Nlm_FloatHi) myargs[11].floatvalue;
         if (eThresh > MAX_EVALUE) {
-          ErrPostEx(SEV_FATAL, 0, 0, "E-value threshold is too high\n");
+          ErrPostEx(SEV_FATAL, 1, 0, "E-value threshold is too high\n");
           return 1;
         }
 
@@ -256,7 +264,7 @@ Int2 Main(void)
 		}
 	      if (query_bsp == NULL)
 		{
-		  ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		  ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 		  return 2;
 		}
               query = BlastGetSequenceFromBioseq(query_bsp, &queryLength);
@@ -330,7 +338,7 @@ Int2 Main(void)
 		if ((twiceNumMatches=find_hits(list, &query[seed-1], queryLength-seed+1, FALSE, patternSearch)) < 2 || 
 		    list[1] != 0) {
 		  fprintf(outfp,"twiceNumMatches=%d list[1]=%d\n", i, list[1]);
-		  ErrPostEx(SEV_FATAL, 0, 0, "pattern does not match the query at the place\n");
+		  ErrPostEx(SEV_FATAL, 1, 0, "pattern does not match the query at the place\n");
 		  return 1;
 		}
 		if (program_flag != PAT_MATCH_FLAG) {

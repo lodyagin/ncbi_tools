@@ -1,5 +1,5 @@
 #
-# $Id: linux_ecc.ncbi.mk,v 1.1 2003/01/13 14:19:07 beloslyu Exp $
+# $Id: linux_ecc.ncbi.mk,v 1.3 2003/09/23 20:30:36 beloslyu Exp $
 #
 # Linux/IA64 running on SGI Altix 3000
 # Supplied to NCBI by Haruna Cofer <haruna@sgi.com> on 01/07/2003
@@ -11,10 +11,11 @@ NCBI_MAKE_SHELL = /bin/sh
 #NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
+NCBI_AR=ar
 NCBI_CC = ecc
 NCBI_CFLAGS1 = -c
-NCBI_LDFLAGS1 = -O2 -ip -tpp2
-NCBI_OPTFLAG = -O2 -ip -tpp2
+NCBI_LDFLAGS1 = -O2 -ip -tpp2 -ftz
+NCBI_OPTFLAG = -O2 -ip -tpp2 -ftz
 #untested, try on your own risk on Linux/Intel
 #NCBI_OPTFLAG = -O3 -march=pentiumpro -funroll-loops
 NCBI_BIN_MASTER = /home/coremake/ncbi/bin

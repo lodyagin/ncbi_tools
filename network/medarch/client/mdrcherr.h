@@ -3,6 +3,11 @@
 *
 * RCS Modification History:
 * $Log: mdrcherr.h,v $
+* Revision 6.1  2003/10/01 13:07:50  bazhin
+* Added a couple of new warning messages ERR_REFERENCE_NoConsortAuthors
+* and ERR_REFERENCE_DiffConsortAuthors. The severity of message
+* ERR_REFERENCE_MedlineMatchIgnored changed from WARNING to ERROR.
+*
 * Revision 6.0  1997/08/25 18:35:37  madden
 * Revision changed to 6.0
 *
@@ -29,6 +34,8 @@
 #define ERR_REFERENCE_Multiple_muid  1,6
 #define ERR_REFERENCE_MedlineMatchIgnored  1,7
 #define ERR_REFERENCE_MuidMissmatch  1,8
+#define ERR_REFERENCE_NoConsortAuthors 1,9
+#define ERR_REFERENCE_DiffConsortAuthors 1,10
 #define ERR_PRINT  2,0
 #define ERR_PRINT_Failed  2,1
 

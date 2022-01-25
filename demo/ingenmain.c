@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/8/01
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  contains main function for ingenue
 *
@@ -363,7 +363,7 @@ Int2 Main()
 
   if (!ID1BioseqFetchEnable(szAppName, FALSE))
     {
-      ErrPostEx(SEV_FATAL, 0, 0, "Bad sequence offset values");
+      ErrPostEx(SEV_FATAL, 1, 0, "Bad sequence offset values");
       return -1;
     }
   LocalSeqFetchInit (FALSE);

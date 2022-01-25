@@ -1,4 +1,6 @@
-/* $Id: ncbisort.c,v 6.5 2003/02/26 17:48:09 kimelman Exp $
+static char const rcsid[] = "$Id: ncbisort.c,v 6.7 2003/07/15 20:17:39 coulouri Exp $";
+
+/* $Id: ncbisort.c,v 6.7 2003/07/15 20:17:39 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,18 @@
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.5 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         Main file for SORTing library
 *
 * $Log: ncbisort.c,v $
+* Revision 6.7  2003/07/15 20:17:39  coulouri
+* remove signal() and setrlimit() calls
+*
+* Revision 6.6  2003/05/30 17:25:37  coulouri
+* add rcsid
+*
 * Revision 6.5  2003/02/26 17:48:09  kimelman
 * bugfix: format/argument mismatch in error message
 *
@@ -122,12 +130,6 @@ SORTObjectPtr SORTObjectNew(CharPtr prefix, Uchar tab, Int4 linelength,
   sdp->tab = tab;
   sdp->reverse  = reverse;
   sdp->unique = unique;
-
-#ifdef OS_UNIX
-  signal(SIGINT,  inthandler);
-  signal(SIGTERM, inthandler);
-  /*  signal(SIGSEGV, inthandler); */
-#endif
 
   return (SORTObjectPtr) sdp;
 }
@@ -1244,17 +1246,3 @@ SORTErrorCode SORTInsertKey(SORTKeyFieldPtr key, SORTKeyFieldPtr keyhead)
 
   return SORTNoError;
 }
-
-#ifdef OS_UNIX
-#ifdef OS_UNIX_IRIX
-static void inthandler(void)
-#else
-static void inthandler(int i)
-#endif
-{
-  signal(SIGINT, SIG_DFL);
-  SORTCleanup(global_temphead);
-  ErrLogPrintf("ERROR: Program terminated by signal");
-  kill(Nlm_GetAppProcessID(), SIGINT);
-}
-#endif

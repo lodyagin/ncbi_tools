@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: bl2seq.c,v 6.59 2003/06/26 18:56:05 coulouri Exp $";
+
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -25,6 +27,21 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.59  2003/06/26 18:56:05  coulouri
+* remove unnecessary variables
+*
+* Revision 6.58  2003/05/30 17:31:09  coulouri
+* add rcsid
+*
+* Revision 6.57  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
+* Revision 6.56  2003/05/06 18:57:46  dondosha
+* Do not set cutoff_s for megablast, it is not needed
+*
+* Revision 6.55  2003/04/22 19:38:00  dondosha
+* Fix for ungapped search with tabular output
+*
 * Revision 6.54  2003/01/16 19:46:28  kans
 * include accid1.h to fix Mac compiler error on missing symbols
 *
@@ -205,7 +222,7 @@ static BioseqPtr
 BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na, 
                     Boolean believe_defline)
 {
-   CharPtr accession, new_defline, accver_var, version_str;
+   CharPtr accession, new_defline, version_str;
    Int4 version=0, gi, number, title_length, id_length;
    SeqIdPtr sip = NULL;
    TextSeqIdPtr tsip;
@@ -216,12 +233,10 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na,
    Int2 retval, buf_length=512;
    Uint1 buf[512];
    Char tmp[LOCAL_BUFLEN];
-   Int2 index;
 
    if (!ID1BioseqFetchEnable ("bl2seq", TRUE))
-      ErrPostEx(SEV_FATAL, 0, 0, 
+      ErrPostEx(SEV_FATAL, 1, 0, 
                 "Entrez access interface currently unavailable\n");
-   accver_var = StringSave(accver);
    if (!IS_DIGIT(*accver)) {
       accession = StringTokMT(accver, ".", &version_str);
       if (version_str)
@@ -298,11 +313,11 @@ BioseqFromAccession(CharPtr accver, Int2 id_num, Boolean is_na,
    if (ISA_na(bsp_tmp->mol) != is_na) {
       BioseqUnlock(bsp_tmp);
       if (is_na)
-         ErrPostEx(SEV_FATAL, 0, 0, 
+         ErrPostEx(SEV_FATAL, 1, 0, 
                    "%s is a protein sequence, program requires nucleotide", 
                    accver);
       else
-         ErrPostEx(SEV_FATAL, 0, 0, 
+         ErrPostEx(SEV_FATAL, 1, 0, 
                    "%s is a nucleotide sequence, program requires protein", 
                    accver);
       return NULL;
@@ -444,7 +459,7 @@ Int2 Main (void)
 	BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
 	BLAST_OptionsBlkPtr options;
 	Boolean seq1_is_na, seq2_is_na;
-	CharPtr ret_buffer=NULL, params_buffer=NULL;
+	CharPtr params_buffer=NULL;
         DbtagPtr        dbtagptr;
 	Uint1 align_type;
 	Uint4 align_options;
@@ -459,10 +474,10 @@ Int2 Main (void)
         int (LIBCALLBACK *handle_results)PROTO((VoidPtr search)) = NULL;
         Boolean entrez_lookup = FALSE;
         CharPtr query_accver = NULL, subject_accver = NULL;
-        const char *dummystr;
         Char buf[256] = { '\0' };
         Boolean html, seqannot_output, believe_query;
         Uint1 tabular_output;
+        Boolean gapped_calculation;
 
     StringCpy(buf, "bl2seq ");
     StringNCat(buf, BlastGetVersionNumber(), sizeof(buf)-StringLen(buf)-1);
@@ -495,7 +510,7 @@ Int2 Main (void)
 	    StringCmp(program_name, "blastx") && 
 	    StringCmp(program_name, "tblastn") && 
 	    StringCmp(program_name, "tblastx")) {
-		ErrPostEx(SEV_FATAL, 0, 0, "Program name must be blastn, blastp, blastx, tblastn or tblastx\n");
+		ErrPostEx(SEV_FATAL, 1, 0, "Program name must be blastn, blastp, blastx, tblastn or tblastx\n");
 		return (1);
 	}
 	   
@@ -503,24 +518,27 @@ Int2 Main (void)
 
 	if (!entrez_lookup && (infp = FileOpen(blast_inputfile, "r")) == NULL)
 	{
-		ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", blast_inputfile);
+		ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", blast_inputfile);
 		return (1);
 	}
 
 	if (!entrez_lookup && (infp1 = FileOpen(blast_inputfile1, "r")) == NULL)
 	{
-		ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", blast_inputfile1);
+		ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", blast_inputfile1);
 		return (1);
 	}
 
 	if ((outfp = FileOpen(blast_outputfile, "w")) == NULL)
 	{
-		ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", blast_outputfile);
+		ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", blast_outputfile);
 		return (1);
 	}
 
         global_fp = outfp;
-	options = BLASTOptionNewEx(program_name, (Boolean) myargs[3].intvalue, (Boolean) myargs[18].intvalue);
+        gapped_calculation = (Boolean) myargs[3].intvalue;
+
+	options = BLASTOptionNewEx(program_name, gapped_calculation,
+                                   (Boolean) myargs[18].intvalue);
         tabular_output = (Uint1) myargs[23].intvalue; 
         believe_query = (seqannot_output || entrez_lookup); 
         if (entrez_lookup) {
@@ -543,7 +561,7 @@ Int2 Main (void)
            }
         }
         if (query_bsp == NULL) {
-           ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+           ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
            return 2;
         }
 
@@ -569,7 +587,7 @@ Int2 Main (void)
         }
         
         if (subject_bsp == NULL) {
-           ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+           ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
            return 2;
         }
 
@@ -612,7 +630,6 @@ Int2 Main (void)
 
 	if (options->is_megablast_search) {
 	   options->cutoff_s2 = options->wordsize*options->reward;
-	   options->cutoff_s = (options->wordsize + 4)*options->reward;
         }
 	options->matrix = MemFree(options->matrix);
         BLASTOptionSetGapParams(options, myargs[11].strvalue, 0, 0); 
@@ -657,7 +674,7 @@ Int2 Main (void)
                  to = bsp1->length - 1;
               to = MIN(to, bsp1->length - 1);
               if (from >= bsp1->length) {
-                 ErrPostEx(SEV_FATAL, 0, 0, 
+                 ErrPostEx(SEV_FATAL, 1, 0, 
                            "Location outside of the first sequence range\n");
                  return 3;
               }
@@ -676,7 +693,7 @@ Int2 Main (void)
                  to = bsp2->length - 1;
               to = MIN(to, bsp2->length - 1);
               if (from >= bsp2->length) {
-                 ErrPostEx(SEV_FATAL, 0, 0, 
+                 ErrPostEx(SEV_FATAL, 1, 0, 
                            "Location outside of the second sequence range\n");
                  return 3;
               }
@@ -783,7 +800,7 @@ Int2 Main (void)
               program_name, 0, believe_query, outfp);
 
            BlastPrintTabulatedResults(seqalign, query_bsp, NULL, 
-              1, program_name, FALSE,
+              1, program_name, !gapped_calculation,
               believe_query, 0, 0, outfp, FALSE);
            SeqAlignSetFree(seqalign);
         }

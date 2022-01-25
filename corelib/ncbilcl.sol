@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.12  2003/09/05 21:24:16  beloslyu
+* reverse _LARGEFILE_SOURCE back
+*
+* Revision 6.11  2003/09/05 21:22:58  beloslyu
+* add DARWIN def
+*
 * Revision 6.10  2002/11/22 20:05:05  lavr
 * Configure HAVE_STRDUP and HAVE_STRCASECMP
 *
@@ -102,6 +108,10 @@
 #define MPROC_AVAIL
 #define SYSV_IPC_AVAIL	/* System V Interprocess Communication available */
 #define SYSV_STREAMS_AVAIL	/* System V STREAMS module available */
+/*
+#define _LARGEFILE_SOURCE
+#define _FILE_OFFSET_BITS	64
+*/
 #define HAVE_STRCASECMP 1
 #define HAVE_STRDUP 1
 

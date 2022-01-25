@@ -1,4 +1,4 @@
-/* $Id: cddsrv.h,v 1.15 2002/12/05 19:15:12 bauer Exp $
+/* $Id: cddsrv.h,v 1.16 2003/10/07 21:21:09 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 9/20/1999
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description:
 *         header file for the CD-server CGI-bin
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddsrv.h,v $
+* Revision 1.16  2003/10/07 21:21:09  bauer
+* initial changes to support drawing of hierarchies
+*
 * Revision 1.15  2002/12/05 19:15:12  bauer
 * fixed lint warning
 *
@@ -113,13 +116,19 @@
 /*---------------------------------------------------------------------------*/
 #undef  DEBUG
 
-#define CPUTIME_MAX   240
-#define MAX_MMDBIDS   4096
-#define CDD_MAX_DESCR 3072
+#define CPUTIME_MAX       240
+#define MAX_MMDBIDS      4096
+#define CDD_MAX_DESCR    3072
+#define CDD_GRAPH_HEIGHT   16
+#define CDD_GRAPH_SPACER_X  5
+#define CDD_GRAPH_SPACER_Y 25
+#define CDD_GRAPH_WIDTH    60
+#define DARTSIZELIMIT    1500
+#define DARTFAMILYNUM    5000
+#define MAXTREELEVELS      50
+#define MAXDIV            100
 
 #define MMDB_UNIXCOMPRESSED
-
-#define MAXDIV 100
 
 #define MMDBCALL   "http://www.ncbi.nlm.nih.gov/Structure/mmdb/mmdbsrv.cgi?uid="
 #define ENTREZCALL "http://www.ncbi.nlm.nih.gov/entrez/utils/qmap.cgi?db=Protein&form=6&Dopt=g&uid="
@@ -175,6 +184,7 @@ static Char    PFAMcgiUK[PATH_MAX];
 static Char    SMARTcgi[PATH_MAX];
 static Char    SMACCcgi[PATH_MAX];
 static Char    COGcgi[PATH_MAX];
+static Char    KOGcgi[PATH_MAX];
 static Char    TAXcgi[PATH_MAX];
 static Char    DATApath[PATH_MAX];
 static Char    REFpath[PATH_MAX];

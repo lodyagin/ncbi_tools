@@ -1,4 +1,4 @@
-/* $Id: wrpsbtool.h,v 1.9 2002/06/25 21:23:28 bauer Exp $
+/* $Id: wrpsbtool.h,v 1.10 2003/10/07 21:16:57 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 4/19/2000
 *
-* $Revision: 1.9 $
+* $Revision: 1.10 $
 *
 * File Description:
 *         header for WWW-RPS BLAST tools
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: wrpsbtool.h,v $
+* Revision 1.10  2003/10/07 21:16:57  bauer
+* support generation of Sequence Annotation from CD-Search results
+*
 * Revision 1.9  2002/06/25 21:23:28  bauer
 * revised Sequence retrieval interface
 *
@@ -104,8 +107,8 @@ static     Int4                   borkPutbuf(gdIOCtx*, const void *, Int4);
 static     void                   borkPutchar(gdIOCtx*, Int4 );
 static     void                   freeBorkCtx(gdIOCtx *ctx);
            Boolean                OverlapInterval(Int4 from1, Int4 to1, Int4 from2, Int4 to2);
-           void                   WRPSBSearchHead(CharPtr title, CharPtr banner);
-           void                   WRPSBSearchFoot();
+           void                   WRPSBSearchHead(CharPtr title, CharPtr banner, Boolean bAnnotOnly, Boolean bNoWrap);
+           void                   WRPSBSearchFoot(Boolean bAnnotOnly, Boolean bNoWrap);
            void                   WRPSBHtmlError(CharPtr cErrTxt); 
            Int4                   max(Int4 i1, Int4 i2);
            Int4                   min(Int4 i1, Int4 i2);

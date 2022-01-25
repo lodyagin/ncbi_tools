@@ -1,47 +1,50 @@
-/*  $RCSfile: ni_debug.c,v $  $Revision: 6.3 $  $Date: 2001/02/21 22:09:27 $
-* ==========================================================================
-*
-*                            PUBLIC DOMAIN NOTICE
-*               National Center for Biotechnology Information
-*
-*  This software/database is a "United States Government Work" under the
-*  terms of the United States Copyright Act.  It was written as part of
-*  the author's official duties as a United States Government employee and
-*  thus cannot be copyrighted.  This software/database is freely available
-*  to the public for use. The National Library of Medicine and the U.S.
-*  Government have not placed any restriction on its use or reproduction.
-*
-*  Although all reasonable efforts have been taken to ensure the accuracy
-*  and reliability of the software and data, the NLM and the U.S.
-*  Government do not and cannot warrant the performance or results that
-*  may be obtained by using this software or data. The NLM and the U.S.
-*  Government disclaim all warranties, express or implied, including
-*  warranties of performance, merchantability or fitness for any particular
-*  purpose.
-*
-*  Please cite the author in any work or product based on this material.
-*
-* ==========================================================================
-*
-* Author:  Denis Vakatov
-*
-* File Description:
-*   Basic client code for the debug NCBI client that connects
-*   directly to the standalone server(bypasses NCBI dispatchers)
-*
-* --------------------------------------------------------------------------
-* $Log: ni_debug.c,v $
-* Revision 6.3  2001/02/21 22:09:27  lavr
-* SERVICE connector included
-*
-* Revision 6.2  1999/03/11 15:20:22  vakatov
-* Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
-*
-* Revision 6.1  1998/05/05 22:23:35  vakatov
-* Initial revision
-*
-* ==========================================================================
-*/
+/* $Id: ni_debug.c,v 6.4 2003/10/27 14:11:10 lavr Exp $
+ * ==========================================================================
+ *
+ *                            PUBLIC DOMAIN NOTICE
+ *               National Center for Biotechnology Information
+ *
+ *  This software/database is a "United States Government Work" under the
+ *  terms of the United States Copyright Act.  It was written as part of
+ *  the author's official duties as a United States Government employee and
+ *  thus cannot be copyrighted.  This software/database is freely available
+ *  to the public for use. The National Library of Medicine and the U.S.
+ *  Government have not placed any restriction on its use or reproduction.
+ *
+ *  Although all reasonable efforts have been taken to ensure the accuracy
+ *  and reliability of the software and data, the NLM and the U.S.
+ *  Government do not and cannot warrant the performance or results that
+ *  may be obtained by using this software or data. The NLM and the U.S.
+ *  Government disclaim all warranties, express or implied, including
+ *  warranties of performance, merchantability or fitness for any particular
+ *  purpose.
+ *
+ *  Please cite the author in any work or product based on this material.
+ *
+ * ==========================================================================
+ *
+ * Author:  Denis Vakatov
+ *
+ * File Description:
+ *   Basic client code for the debug NCBI client that connects
+ *   directly to the standalone server (bypasses NCBI dispatchers)
+ *
+ * --------------------------------------------------------------------------
+ * $Log: ni_debug.c,v $
+ * Revision 6.4  2003/10/27 14:11:10  lavr
+ * Old (Shavirin's) dispatchers disabled unconditionally
+ *
+ * Revision 6.3  2001/02/21 22:09:27  lavr
+ * SERVICE connector added
+ *
+ * Revision 6.2  1999/03/11 15:20:22  vakatov
+ * Added "timeout" arg to SOCK_Create() and SOCK_Reconnect()
+ *
+ * Revision 6.1  1998/05/05 22:23:35  vakatov
+ * Initial revision
+ *
+ * ==========================================================================
+ */
 
 #include <ncbi.h>
 #include <ncbinet.h>

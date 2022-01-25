@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: cdrgn.h,v $
+* Revision 6.5  2003/10/23 16:43:56  kans
+* changed operon to import feature
+*
+* Revision 6.4  2003/10/07 13:52:01  kans
+* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
+*
 * Revision 6.3  2000/07/08 20:44:00  vakatov
 * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *

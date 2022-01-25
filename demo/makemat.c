@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: makemat.c,v 6.13 2003/05/30 17:31:09 coulouri Exp $";
+
 /*
 * ===========================================================================
 *
@@ -69,7 +71,7 @@ static Int4 countProfiles(FILE *sequencesFile, FILE *profilesFile)
     if (sequencesCount == matricesCount) {
         return(sequencesCount);
     } else {
-        ErrPostEx(SEV_FATAL, 0, 0, "profiles: Sequences file has %ld entries; Matrices file has %d entries; these should be equal\n", (long) sequencesCount,matricesCount);
+        ErrPostEx(SEV_FATAL, 1, 0, "profiles: Sequences file has %ld entries; Matrices file has %d entries; these should be equal\n", (long) sequencesCount,matricesCount);
         return(0);
     }
 }
@@ -279,7 +281,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
             profileFileName[c1] = '\0';
         }
         if ((thisProfileFile = FileOpen(profileFileName, "rb")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to open file %s\n", profileFileName);
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to open file %s\n", profileFileName);
             return (1);
         }
         if ('\0' == directoryPrefix[0])
@@ -292,7 +294,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
             sequenceFileName[c1] = '\0';
         }
         if ((thisSequenceFile = FileOpen(sequenceFileName, "r")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to open file %s\n", sequenceFileName);
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to open file %s\n", sequenceFileName);
             return (1);
         }
         
@@ -301,7 +303,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
             query_bsp = NULL;
             SeqEntryExplore(sep, &query_bsp, FindProt);
             if (query_bsp == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+                ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
                 return 2;
             }
             query = BlastGetSequenceFromBioseq(query_bsp, &queryLength);
@@ -383,7 +385,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
         posSearch->posInformation = NULL;
         success = impalaReadCheckpoint(posSearch, compactSearch, profileFileName, &error_return, scalingFactor);
         if (!success) {
-            ErrPostEx(SEV_FATAL,0,0, "Unable to recover checkpoint from %s\n",profileFileName);
+            ErrPostEx(SEV_FATAL, 1,0, "Unable to recover checkpoint from %s\n",profileFileName);
             return(1);
         }
         /*conversion to matrix and scaling is done in impalaReadCheckpopint*/
@@ -399,7 +401,7 @@ Nlm_FloatHi scalingFactor, Char *directoryPrefix)
         success = takeMatrixCheckpoint(compactSearch, posSearch, sbp, matrixFileName, &error_return, scaleScores, scalingFactor);
 
         if (!success) {
-            ErrPostEx(SEV_FATAL,0,0, "Unable to take matrix checkpoint from %s\n",profileFileName);
+            ErrPostEx(SEV_FATAL, 1,0, "Unable to take matrix checkpoint from %s\n",profileFileName);
             return(1);
         }
 
@@ -507,22 +509,22 @@ Int2 Main(void)
                         profilesFileName,  directoryPrefix);
     
     if ((profilesFile = FileOpen(profilesFileName, "r")) == NULL) {
-	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open profiles file %s\n", profilesFileName);
+	ErrPostEx(SEV_FATAL, 1, 0, "Unable to open profiles file %s\n", profilesFileName);
 	return (1);
     }
     
     if ((sequencesFile = FileOpen(sequencesFileName, "r")) == NULL) {
-	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open sequences file %s\n", sequencesFileName);
+	ErrPostEx(SEV_FATAL, 1, 0, "Unable to open sequences file %s\n", sequencesFileName);
 	return (1);
     }
     
     if ((matricesFile = FileOpen(matricesFileName, "w")) == NULL) {
-	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open matrices file %s\n", matricesFileName);
+	ErrPostEx(SEV_FATAL, 1, 0, "Unable to open matrices file %s\n", matricesFileName);
 	return (1);
     }
     
     if ((auxiliaryFile = FileOpen(auxiliaryFileName, "w")) == NULL) {
-	ErrPostEx(SEV_FATAL, 0, 0, "Unable to open auxiliary file %s\n", auxiliaryFileName);
+	ErrPostEx(SEV_FATAL, 1, 0, "Unable to open auxiliary file %s\n", auxiliaryFileName);
 	return (1);
     }
     

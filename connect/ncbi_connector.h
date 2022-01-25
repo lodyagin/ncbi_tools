@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNECTOR__H
 #define CONNECT___NCBI_CONNECTOR__H
 
-/*  $Id: ncbi_connector.h,v 6.13 2003/04/09 17:58:45 siyan Exp $
+/*  $Id: ncbi_connector.h,v 6.16 2003/08/25 14:47:59 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -45,10 +45,6 @@
  */
 
 
-#define CONN_DEFAULT_TIMEOUT  ((STimeout*) (-1))
-#define CONN_INFINITE_TIMEOUT ((STimeout*) 0)
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -71,9 +67,16 @@ typedef struct SConnectorTag* CONNECTOR;  /* connector handle */
  */
 
 
-/* Get the name of the connector (may not be NULL!)
+/* Get the name of the connector (may be NULL on error)
  */
 typedef const char* (*FConnectorGetType)
+(CONNECTOR       connector
+ );
+
+
+/* Get the human readable connector's description (may be NULL on error)
+ */
+typedef char* (*FConnectorDescr)
 (CONNECTOR       connector
  );
 
@@ -88,7 +91,7 @@ typedef EIO_Status (*FConnectorOpen)
 
 
 /* Wait until either read or write (dep. on the "direction" value) becomes
- * available, or until "timeout" is expired, or until error occurs.
+ * available, or until "timeout" expires, or until error occurs.
  * NOTE 1:  FConnectorWait is guaranteed to be called after FConnectorOpen,
  *          and only if FConnectorOpen returned "eIO_Success".
  * NOTE 2:  "event" is guaranteed to be either "eIO_Read" or "eIO_Write".
@@ -100,9 +103,9 @@ typedef EIO_Status (*FConnectorWait)
  );
 
 
-/* The passed "n_written" always non-NULL, and "*n_written" always zero.
- * It returns "eIO_Success" iff all requested data have been successfully
- * written.
+/* The passed "n_written" is always non-NULL, and "*n_written" is always zero.
+ * It returns "eIO_Success" if at least some data have been successfully
+ * written; other error code if no data at all have been written.
  * It returns the # of successfully written data (in bytes) in "*n_written".
  * NOTE:  FConnectorWrite is guaranteed to be called after FConnectorOpen,
  *        and only if the latter succeeded (returned "eIO_Success").
@@ -126,7 +129,10 @@ typedef EIO_Status (*FConnectorFlush)
  );
 
 
-/* The passed "n_read" always non-NULL, and "*n_read" always zero.
+/* The passed "n_read" is always non-NULL, and "*n_read" is always zero.
+ * It returns "eIO_Success" if at least some data have been successfully
+ * read; other error code if no data at all have been read.
+ * The number of successfully read bytes returned in "*n_read".
  * NOTE:  FConnectorRead is guaranteed to be called after FConnectorOpen,
  *        and only if the latter succeeded (returned "eIO_Success").
  */
@@ -167,6 +173,7 @@ typedef EIO_Status (*FConnectorClose)
  */
 typedef struct {
     FConnectorGetType   get_type;    CONNECTOR c_get_type;
+    FConnectorDescr     descr;       CONNECTOR c_descr;
     FConnectorOpen      open;        CONNECTOR c_open;
     FConnectorWait      wait;        CONNECTOR c_wait;
 #ifdef IMPLEMENTED__CONN_WaitAsync
@@ -282,6 +289,15 @@ typedef EIO_Status (*FConnectorWaitAsync)
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connector.h,v $
+ * Revision 6.16  2003/08/25 14:47:59  lavr
+ * Get rid of old ...TIMEOUT constants [now replaced with k...Timeout]
+ *
+ * Revision 6.15  2003/05/21 17:52:37  lavr
+ * Pre- and post-conditions clarified for read and write virtual methods
+ *
+ * Revision 6.14  2003/05/14 03:47:53  lavr
+ * +(*FConnectorDescr)()
+ *
  * Revision 6.13  2003/04/09 17:58:45  siyan
  * Added doxygen support
  *

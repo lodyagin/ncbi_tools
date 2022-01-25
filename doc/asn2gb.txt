@@ -184,6 +184,11 @@ displayed.
 #define ONLY_GENE_RIFS         2048
 #define LATEST_GENE_RIFS       3072
 
+Protein feature tables and References in feature tables can also be shown.
+
+#define SHOW_PROT_FTABLE       4096
+#define SHOW_FTABLE_REFS       8192
+
 
 EXTRA is an opaque pointer used for preparing internal NCBI indices.  Most
 programs will pass NULL for this parameter.

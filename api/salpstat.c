@@ -631,7 +631,7 @@ NLM_EXTERN Int4Ptr LIBCALL SeqAlignListGapList(SeqAlignPtr sap,Int4Ptr gap_num){
 
   /* Utility subroutine for SeqAlignWindowStats */
 
-static void LIBCALL UpdateWindow(Int4 win_size,Int4 cur_pos,Uint1Ptr win_buf1,Uint1Ptr win_buf2,Uint1 res_1,Uint1 res_2,Uint1 code,Int4Ptr win_gap,Int4Ptr win_gapmismatch,Int4Ptr win_mismatch,Int4Ptr win_match,Boolean N_are_not_mismatches){ 
+static void LIBCALL UpdateWindowStats(Int4 win_size,Int4 cur_pos,Uint1Ptr win_buf1,Uint1Ptr win_buf2,Uint1 res_1,Uint1 res_2,Uint1 code,Int4Ptr win_gap,Int4Ptr win_gapmismatch,Int4Ptr win_mismatch,Int4Ptr win_match,Boolean N_are_not_mismatches){ 
   Uint1 exit_char1,exit_char2;
   Int4 loc;
   if(win_size<=0) return; /* For case where user didn't care about window */
@@ -828,7 +828,7 @@ NLM_EXTERN Int4 LIBCALL SeqAlignWindowStats(SeqAlignPtr align, BioseqPtr bsp_1, 
 		  res_1 =  SeqPortGetResidue(spp_1);
 		  res_2= '-';
 		}
-	      UpdateWindow(win_size,cur_pos,win_buf1,win_buf2,res_1,res_2,code,&win_gap,&win_gapmismatch,&win_mismatch,&win_match,N_are_not_mismatches);
+	      UpdateWindowStats(win_size,cur_pos,win_buf1,win_buf2,res_1,res_2,code,&win_gap,&win_gapmismatch,&win_mismatch,&win_match,N_are_not_mismatches);
 	      CheckMinMax(win_size,cur_pos,win_gap,
 			  win_gapmismatch,win_mismatch,win_match,
 			  mmin_mismatch,mmax_mismatch,
@@ -864,7 +864,7 @@ NLM_EXTERN Int4 LIBCALL SeqAlignWindowStats(SeqAlignPtr align, BioseqPtr bsp_1, 
 		}
 	      else
 		++mismatches;
-	      UpdateWindow(win_size,cur_pos,win_buf1,win_buf2,res_1,res_2,code,&win_gap,&win_gapmismatch,&win_mismatch,&win_match,N_are_not_mismatches);
+	      UpdateWindowStats(win_size,cur_pos,win_buf1,win_buf2,res_1,res_2,code,&win_gap,&win_gapmismatch,&win_mismatch,&win_match,N_are_not_mismatches);
 	      CheckMinMax(win_size,cur_pos,win_gap,
 			  win_gapmismatch,win_mismatch,win_match,
 			  mmin_mismatch,mmax_mismatch,

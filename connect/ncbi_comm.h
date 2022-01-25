@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_COMM__H
 #define CONNECT___NCBI_COMM__H
 
-/*  $Id: ncbi_comm.h,v 6.7 2002/12/10 22:11:14 lavr Exp $
+/*  $Id: ncbi_comm.h,v 6.8 2003/08/11 19:06:23 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,6 +43,7 @@ extern "C" {
 #define NCBID_WEBPATH           "/Service/ncbid.cgi"
 #define HTTP_CONNECTION_INFO    "Connection-Info:"
 #define HTTP_DISP_FAILURES      "Dispatcher-Failures:"
+#define HTTP_DISP_MESSAGE       "NCBI-Message:"
 #define DISPATCHER_CFGPATH      "/var/etc/lbsmd/"
 #define DISPATCHER_CFGFILE      "servrc.cfg"
 #define DISP_PROTOCOL_VERSION   "1.0"
@@ -58,6 +59,9 @@ typedef unsigned int ticket_t;
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_comm.h,v $
+ * Revision 6.8  2003/08/11 19:06:23  lavr
+ * +HTTP_DISP_MESSAGE
+ *
  * Revision 6.7  2002/12/10 22:11:14  lavr
  * Add DISP_PROTOCOL_VERSION
  *

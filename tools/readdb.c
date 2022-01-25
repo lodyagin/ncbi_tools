@@ -1,4 +1,6 @@
-/* $Id: readdb.c,v 6.400 2003/04/17 21:10:54 camacho Exp $ */
+static char const rcsid[] = "$Id: readdb.c,v 6.424 2003/10/01 19:03:50 camacho Exp $";
+
+/* $Id: readdb.c,v 6.424 2003/10/01 19:03:50 camacho Exp $ */
 /*
 * ===========================================================================
 *
@@ -48,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.400 $
+* $Revision: 6.424 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -63,6 +65,84 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.424  2003/10/01 19:03:50  camacho
+* Fix in readdb_get_totals_ex2 to use the alias file length/number of entries when
+* gilist is populated.
+*
+* Revision 6.423  2003/09/02 18:32:10  dondosha
+* Changed http link for completed microbial genomes at genomes group request
+*
+* Revision 6.422  2003/08/08 19:31:37  camacho
+* Minor fix for formatdb
+*
+* Revision 6.421  2003/07/28 13:59:17  camacho
+* Bug fix
+*
+* Revision 6.420  2003/07/15 16:49:32  camacho
+* Skip whitespace in alias files
+*
+* Revision 6.419  2003/07/10 14:00:59  camacho
+* Fixed some memory leaks
+*
+* Revision 6.418  2003/07/08 18:42:39  camacho
+* Elaborated fastacmd return values
+*
+* Revision 6.417  2003/07/02 19:22:10  camacho
+* formatdb fix to remove stdin from database title
+*
+* Revision 6.416  2003/06/13 19:56:26  dondosha
+* Removed call to SeqEntrySetScope in FastaToBlastDB that caused purify errors
+*
+* Revision 6.415  2003/05/30 17:25:37  coulouri
+* add rcsid
+*
+* Revision 6.414  2003/05/21 21:33:36  camacho
+* Deprecated isCommonIndex global
+*
+* Revision 6.413  2003/05/15 14:45:48  dondosha
+* readdb_get_sequence_number returns -1 if rdfp is NULL
+*
+* Revision 6.412  2003/05/15 14:14:18  dondosha
+* Check if offset is larger than total length of all rdfps in readdb_get_sequence_number
+*
+* Revision 6.411  2003/05/13 16:02:53  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
+* Revision 6.410  2003/05/12 12:24:02  camacho
+* Fixed readdb_get_totals_ex2
+*
+* Revision 6.409  2003/05/01 14:10:03  camacho
+* 1. Fixed readdb_get_totals_ex2 to use alias length and number of sequences
+*    without an oidlist
+* 2. Fixed readdb_merge_gifiles to properly sort the rdfp linked list (rdfp_chain)
+* 3. Fixed readdb_gi2seq to look into subsequent rdfps if no isam indices are
+*    found in the first rdfp
+*
+* Revision 6.408  2003/04/28 19:50:10  camacho
+* Fixes to readdb_merge_gifiles
+*
+* Revision 6.407  2003/04/27 02:43:25  vakatov
+* Added missing LIBCALL -- for MS-Win compilation
+*
+* Revision 6.406  2003/04/25 18:55:27  camacho
+* 1. Added readdb_merge_gifiles to deal with Microbial blast database issues.
+* 2. Minor fixes to Int4List functions.
+*
+* Revision 6.405  2003/04/24 15:44:42  camacho
+* Fixes for windows build
+*
+* Revision 6.404  2003/04/24 13:16:25  camacho
+* Minor fix
+*
+* Revision 6.403  2003/04/23 15:15:36  camacho
+* Moved reading of gi list to readdb
+*
+* Revision 6.402  2003/04/22 21:30:13  camacho
+* Added Int4 list utilities
+*
+* Revision 6.401  2003/04/22 19:04:57  camacho
+* Moved GiList structure to generic list of 4-byte integers
+*
 * Revision 6.400  2003/04/17 21:10:54  camacho
 * Add PIGs only when removing redundancy
 *
@@ -1674,6 +1754,7 @@ static ValNodePtr readdb_encode_subset_asn1_defline(ReadDBFILEPtr, Int4);
 static ValNodePtr IntValNodeCopy(ValNodePtr vnp);
 static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j);
 static void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval);
+static ReadDBFILEPtr readdb_merge_gifiles (ReadDBFILEPtr rdfp_chain);
 
 #if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
 #ifdef  HAVE_MADVISE
@@ -1693,7 +1774,7 @@ static TNlmMutex isamsearch_mutex;    /* Mutex to regulate using ISAM;
 static TNlmMutex hdrseq_mutex;
 
 /* Common index global variables */
-Boolean    isCommonIndex = TRUE;
+Boolean    isCommonIndex = FALSE;   /* deprecated 05/21/2003 */
 
 /* Global to load the taxonomy databases only once per readdb_new invocation */
 static Boolean taxonomyDbLoaded = FALSE;
@@ -2048,62 +2129,273 @@ readdb_parse_db_names (CharPtr PNTR filenames, CharPtr buffer)
 /********** Auxiliary gi list structure *************/
 #define GI_ALLOC_CHUNK 4096
 
-static GiListPtr GiListNew(void)
+Int4ListPtr LIBCALL
+Int4ListNew PROTO((void))
 {
-    GiListPtr glp = NULL;
-
-    if ((glp = MemNew(sizeof(GiList))) == NULL)
-        return NULL;
-    glp->allocated = GI_ALLOC_CHUNK;
-    glp->gis = MemNew(sizeof(Int4) * glp->allocated);
-    glp->count = 0;
-    
-    return glp;
+    return Int4ListNewEx(GI_ALLOC_CHUNK);
 }
 
-static GiListPtr GiListFree(GiListPtr glp)
+Int4ListPtr LIBCALL
+Int4ListNewEx PROTO((Int4 init_size))
 {
-    if(glp == NULL)
+    Int4ListPtr lp = NULL;
+
+    if ((lp = MemNew(sizeof(Int4List))) == NULL)
         return NULL;
+    lp->allocated = init_size;
+    if ((lp->i = MemNew(sizeof(Int4) * lp->allocated)) == NULL) {
+        return MemFree(lp);
+    }
+    lp->count = 0;
     
-    MemFree(glp->gis);
-    MemFree(glp);
-    return NULL;
+    return lp;
 }
 
-/* This function reads a list of gis from a text file (one gi per line).
- * It assumes gis on filename are sorted numerically (ascending).
- * Caller is responsible for deallocating the return value.*/
-static GiListPtr FDBReadGiListFromFile(CharPtr filename)
+Int4ListPtr LIBCALL
+Int4ListFree PROTO((Int4ListPtr lp))
 {
-    FILE *fd;
-    Int4 gi, retvalue;
-    GiListPtr glp;
-
-    if ((fd = FileOpen(filename,"r")) == NULL)
+    if(lp == NULL)
         return NULL;
+    
+    MemFree(lp->i);
+    return MemFree(lp);
+}
 
-    if ((glp = GiListNew()) == NULL) {
-        ErrPostEx(SEV_ERROR,0,0,"FDBReadGiListFromFile: out of memory");
+Boolean LIBCALL
+Int4ListAdd PROTO((Int4ListPtr lp, Int4 i))
+{
+    if (!lp)
         return FALSE;
+
+    if (lp->count >= lp->allocated) {
+        lp->allocated *= 2;
+        if ( !(lp->i = Realloc(lp->i, sizeof(Int4) * lp->allocated)))
+            return FALSE;
     }
 
-    while ((retvalue = fscanf(fd, "%d", &gi)) != EOF) {
-        if (retvalue == 0) continue;
+    lp->i[lp->count++] = i;
 
-        if (glp->count >= glp->allocated) {
-            glp->allocated *= 2;
-            glp->gis= Realloc(glp->gis, sizeof(Int4) * glp->allocated);
-        }
-
-        glp->gis[glp->count] = gi;
-        glp->count++; 
-    }
-    FILECLOSE(fd);
-
-    return glp;
+    return TRUE;
 }
 
+Int4ListPtr LIBCALL
+Int4ListResize(Int4ListPtr listp, Int4 new_size)
+{
+    if (!listp || new_size < 0)
+        return NULL;
+
+    if (new_size == listp->allocated)
+        return listp;
+
+    if ( !(listp->i = (Int4Ptr) Realloc(listp->i, sizeof(Int4)*new_size)))
+        return NULL;
+    listp->allocated = new_size;
+
+    return listp;
+}
+
+/*
+	This function reads in a list of gi's from a file.
+The file may be either in binary or text format.  
+
+The binary gilist format has the following construction:
+
+1.) 1st 4 bytes: a 'magic' number: UINT4_MAX
+2.) 2nd 4 bytes: total number of gi's in the file (call this value 'number').
+3.) 'number' set of 4 bytes, allowing 4 bytes for each gi.
+
+The function GetGisFromFile first checks what the first 4 bytes
+of a file are, if they are the 'magic' number, then it proceeds
+to read values assuming a binary format.  If they are not the
+'magic' number, then a text format is assumed.
+
+The binary gilist can be produced from a text gilist using the
+function readdb_MakeGiFileBinary.
+
+*/
+
+#define	LINE_LEN	1024
+
+Int4ListPtr LIBCALL
+Int4ListReadFromFile PROTO((CharPtr fname))
+{
+    Int4ListPtr listp = NULL;
+    FILE		*fp = NULL;
+    Int4		index = 0, value, number;
+    Int2		status;
+    Char		line[LINE_LEN];
+    long		tmplong;
+    NlmMFILEPtr mfp;
+    Uint4		tmp_value;
+    Char	    file_name[PATH_MAX], blast_dir[PATH_MAX];
+    
+    /**
+     * first looking in current directory, then checking .ncbirc,
+     * then $BLASTDB and then assuming BLASTDB_DIR
+     */
+    if (FileLength(fname) > 0) {
+       char *path = Nlm_FilePathFind(fname);
+       if (StringLen(path) > 0) {
+          StringCpy(blast_dir, path);
+       } else {
+          StringCpy(blast_dir, ".");
+       }
+       MemFree(path);
+    } else {
+#ifdef OS_UNIX
+       if (getenv("BLASTDB"))
+          Nlm_GetAppParam("NCBI", "BLAST", "BLASTDB", getenv("BLASTDB"), blast_dir, PATH_MAX);
+       else
+#endif
+          Nlm_GetAppParam ("NCBI", "BLAST", "BLASTDB", BLASTDB_DIR, blast_dir, PATH_MAX);
+    }
+    sprintf(file_name, "%s%s%s", blast_dir, DIRDELIMSTR, FileNameFind(fname));
+
+    mfp = NlmOpenMFILE(file_name);
+    if (mfp == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
+        return NULL;
+    }
+    
+    NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+    if (SwapUint4(tmp_value) == READDB_MAGIC_NUMBER) {
+
+        /*** Binary gi list ***/
+        NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+        number = SwapUint4(tmp_value);
+        listp = Int4ListNewEx(number);
+        for (index = 0; index < number; index++) {
+            NlmReadMFILE((Uint1Ptr)&tmp_value, sizeof(Uint4), 1, mfp);
+            Int4ListAdd(listp, SwapUint4(tmp_value));
+        }
+        mfp = NlmCloseMFILE(mfp);
+
+    } else {
+
+        /*** Text gi list ***/
+        mfp = NlmCloseMFILE(mfp);
+        if (!(fp = FileOpen(file_name, "r"))) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Unable to open file %s", file_name);
+            return NULL;
+        }
+	
+        listp = Int4ListNew();
+        
+        while (FileGets(line, LINE_LEN, fp)) {
+            
+            /* do correct casting */
+            status = sscanf(line, "%ld", &tmplong);
+            value = tmplong;
+            
+            /* skip non-valid lines */
+            if (status > 0)
+                Int4ListAdd(listp, value);
+        }
+        
+        FileClose(fp);
+    }
+
+    return listp;
+}
+
+Int4ListPtr LIBCALL
+Int4ListMakeUnique PROTO((Int4ListPtr list))
+{
+    Int4 idx, i;
+
+    if (!list || list->count <= 0)
+        return list;
+
+    HeapSort(list->i, list->count, sizeof(Int4), ID_Compare);
+
+    for (i = 0, idx = 0; i < list->count - 1; i++) {
+        if (list->i[i] == list->i[i+1])
+            continue;
+        list->i[idx++] = list->i[i];
+    }
+    /* check the last element */
+    if (list->i[i] != list->i[idx-1])
+        list->i[idx++] = list->i[i];
+
+    list->count = idx;
+
+    return list;
+}
+
+Int4ListPtr LIBCALL
+Int4ListConcat PROTO((Int4ListPtr *list1, Int4ListPtr *list2))
+{
+    Int4ListPtr retval = NULL;
+    Int4 size;
+
+    if ((*list1) && !(*list2))
+        return (*list1);
+
+    if ((*list2) && !(*list1))
+        return (*list2);
+
+    if ( (size = (*list1)->count + (*list2)->count) <= 0) {
+        (*list1) = Int4ListFree((*list1));
+        (*list2) = Int4ListFree((*list2));
+        return NULL;
+    }
+
+    if ( !(retval = Int4ListNewEx(size)))
+        return NULL;
+
+    MemCpy(retval->i, (*list1)->i, sizeof(Int4)* (*list1)->count);
+    retval->count = (*list1)->count;
+    MemCpy(retval->i+retval->count, (*list2)->i, sizeof(Int4)* (*list2)->count);
+    retval->count += (*list2)->count;
+
+    (*list1) = Int4ListFree((*list1));
+    (*list2) = Int4ListFree((*list2));
+
+    return retval;
+}
+
+Int4ListPtr LIBCALL
+Int4ListIntersect PROTO((Int4ListPtr *list1, Int4ListPtr *list2))
+{
+    Int4 i, j, size, value;
+    Int4ListPtr retval = NULL;
+
+    if ((*list1) && !(*list2))
+        return (*list1);
+
+    if ((*list2) && !(*list1))
+        return (*list2);
+
+    (*list1) = Int4ListMakeUnique((*list1));
+    (*list2) = Int4ListMakeUnique((*list2));
+    size = MIN(((*list1))->count, ((*list2))->count);
+
+    if (size == 0) {
+        (*list1) = Int4ListFree((*list1));
+        (*list2) = Int4ListFree((*list2));
+        return NULL;
+    }
+
+    if ( !(retval = Int4ListNewEx(size)))
+        return NULL;
+
+    for (i = 0, j = 0; i < (*list1)->count; i++) {
+        value = (*list1)->i[i];
+
+        for (; j < (*list2)->count && (*list2)->i[j] < value; j++);
+
+        if (j < (*list2)->count && (*list2)->i[j] == value)
+            retval->i[retval->count++] = (*list1)->i[i];
+    }
+
+    if (retval->count == 0)
+        retval = Int4ListFree(retval);
+
+    (*list1) = Int4ListFree((*list1));
+    (*list2) = Int4ListFree((*list2));
+
+    return retval;
+}
 
 typedef struct _readdb_alias_file {
     CharPtr title,        /* title of the database. */
@@ -2169,7 +2461,7 @@ readdb_read_alias_file(CharPtr filename)
         if (StringNCmp(buffer, "TITLE", 5) == 0) {
             ptr = buffer;
             ptr += 5;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
@@ -2182,7 +2474,7 @@ readdb_read_alias_file(CharPtr filename)
         if (StringNCmp(buffer, "DBLIST", 6) == 0) {
             ptr = buffer;
             ptr += 6;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
@@ -2234,7 +2526,7 @@ readdb_read_alias_file(CharPtr filename)
         if (StringNCmp(buffer, "GILIST", 6) == 0) {
             ptr = buffer;
             ptr += 6;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
@@ -2254,7 +2546,7 @@ readdb_read_alias_file(CharPtr filename)
         if (StringNCmp(buffer, "OIDLIST", 7) == 0) {
             ptr = buffer;
             ptr += 7;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
@@ -2301,39 +2593,39 @@ readdb_read_alias_file(CharPtr filename)
 
         if (StringNCmp(buffer, "FIRST_OID", 9) == 0) {
            ptr = buffer + 9;
-           while (*ptr == ' ')
+           while (isspace((int)*ptr)) /* skip whitespace */
               ptr++;
            *Nlm_StrChr(ptr, '\n') = NULLB;
            sscanf(ptr, "%ld", &tmplong);
-       rdbap->first_oid = tmplong;
+           rdbap->first_oid = tmplong;
            continue;
         }
         if (StringNCmp(buffer, "LAST_OID", 8) == 0) {
            ptr = buffer + 8;
-           while (*ptr == ' ')
+           while (isspace((int)*ptr)) /* skip whitespace */
               ptr++;
            *Nlm_StrChr(ptr, '\n') = NULLB;
            sscanf(ptr, "%ld", &tmplong);
-       rdbap->last_oid = tmplong;
+           rdbap->last_oid = tmplong;
            continue;
         }
 
         if (StringNCmp(buffer, "LENGTH", 6) == 0) {
             ptr = buffer;
             ptr += 6;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
             if (*ptr != NULLB)
-        sscanf(ptr, "%lld", &(rdbap->len));
+                sscanf(ptr, "%lld", &(rdbap->len));
             
             continue;
         }
         if (StringNCmp(buffer, "MEMB_BIT", 8) == 0) {
             ptr = buffer;
             ptr += 8;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             *Nlm_StrChr(ptr, '\n') = NULLB;
             tmplong = 0;
@@ -2344,7 +2636,7 @@ readdb_read_alias_file(CharPtr filename)
         if (StringNCmp(buffer, "NSEQ", 4) == 0) {
             ptr = buffer;
             ptr += 4;
-            while (*ptr == ' ')
+            while (isspace((int)*ptr)) /* skip whitespace */
                 ptr++;
             
             *Nlm_StrChr(ptr, '\n') = NULLB;
@@ -2430,7 +2722,7 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
                 for (i=0; i<total; i++) {
                     oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
                 }
-                
+                oidlist->filename = StringSave(rdfp->aliasfilename);
                 rdfp->oidlist = oidlist;
             }
 
@@ -2498,6 +2790,7 @@ static    Int2    IndexFileExists(CharPtr full_filename, ReadDBFILEPtr PNTR rdfp
                 for (i=0; i<total; i++) {
                     oidlist->list[i] = Nlm_SwapUint4(oidlist->list[i]);
                 }
+                oidlist->filename = StringSave(rdfp->aliasfilename);
                 rdfp->oidlist = oidlist;
             }
 
@@ -2614,7 +2907,6 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
     Int2 status;
     Int4 length, num_seqs;
     CharPtr    charptr, envp = NULL;
-    ISAMErrorCode error;
     Boolean    localdb = FALSE;
     
     if (filename == NULL)
@@ -2931,22 +3223,10 @@ readdb_new_internal(CharPtr filename, Uint1 is_prot, Uint1 init_state, CommonInd
             return rdfp;
         }
         
-#if 1
-/*
-        if((error = ISAMGetIdxOption(rdfp->sisam_opt, 
-                                     &rdfp->sparse_idx)) < 0) {
-            ErrPostEx(SEV_WARNING, 0, 0, "Failed to access string index "
-                      "ISAM Error code is %d\n", error);
-            rdfp = readdb_destruct(rdfp);
-            return rdfp;
-        }
-*/
-#else
         /* This line may be given only for information - how to access
            this parameter. We need to intialize ISAM database before
            this parameter is available using function above */
         rdfp->sparse_idx = ((ISAMDataPtr) rdfp->sisam_opt)->idx_option;
-#endif
     }
     
     /* Now initializing PIG ISAM indexes */ 
@@ -3070,6 +3350,10 @@ readdb_new_ex (CharPtr filename, Uint1 is_prot, Boolean init_indices)
     return readdb_new_ex2(filename, is_prot, READDB_NEW_INDEX, NULL, NULL);
 }
 
+/* Maximum number of rdfp structures during calls to readdb_new_ex2 before we
+ * call readdb_merge_gifiles */
+#define RDFP_THRESHOLD 10
+
 ReadDBFILEPtr LIBCALL 
 readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidlist, CharPtr gilist)
 
@@ -3079,7 +3363,7 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
     Int4 start=0, old_start = 0;
     ReadDBFILEPtr new, tmp, var, var1, rdfp_w_oidlist, var2;
     CommonIndexHeadPtr    cih = NULL;
-    Int4 num_whole_db = 0, i;
+    Int4 num_whole_db = 0, i, rdfp_ctr = 0;
     
     new = NULL;
     rdfp_w_oidlist = NULL;
@@ -3151,17 +3435,27 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
                     var->next = tmp;
               }
            }
-           if (gilist)
-               tmp->gifile = StringSave(gilist);
+           if (gilist) {
+               /*tmp->gifile = StringSave(gilist); CC: No need for this */
+               tmp->gilist = Int4ListReadFromFile(gilist);
+           }
            var = tmp->next;
            tmp->next = NULL;
            tmp = var;
         }
         
+        /* If we have more than RDFP_THRESHOLD elements in new, try to
+         * compress merge rdfp's that have the same underlying blast database
+         * so that we don't mmap too many index files. This is not an issue if
+         * init_state is READDB_NEW_DO_REPORT. */
+        for (var2 = new, rdfp_ctr = 0; var2; var2 = var2->next, rdfp_ctr++) ;
+        if (rdfp_ctr > RDFP_THRESHOLD && !(init_state & READDB_NEW_DO_REPORT))
+            new = readdb_merge_gifiles(new);
     }
     
     /* Attach the RDFP's with an OID.
        Check if any of them are already present as complete databases */
+    {{
     if (rdfp_w_oidlist) {
         if (new == NULL) {
             num_whole_db = 0;
@@ -3197,6 +3491,17 @@ readdb_new_ex2 (CharPtr filename, Uint1 is_prot, Uint1 init_state, CharPtr oidli
             }
         }
     }
+    }}
+
+    /* For databases such as the Microbial blast databases, where the list of
+     * databases includes many of the same underlying database and different
+     * gi lists to specify a subset of the database, concatenate the gi lists
+     * and keep only one copy of the underlying rdfp structure (avoid mmap'ing
+     * the same index file multiple times). This is not an issue if init_state
+     * is READDB_NEW_DO_REPORT.  */
+    if (!(init_state & READDB_NEW_DO_REPORT))
+        new = readdb_merge_gifiles(new);
+
     /* adjust all the RDFP's. */
     tmp = new;
     start = 0;
@@ -3276,7 +3581,7 @@ readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
                     mask = SwapUint4(virtual_oidlist->list[maskindex]);
                     i = 0;
                     while (mask) {
-                        if ((mask & (((Uint4)0x1) << MASK_WORD_SIZE-1))) {
+                        if ((mask & (((Uint4)0x1) << (MASK_WORD_SIZE-1)))) {
                             (*total_num)++;
                             *total_len += readdb_get_sequence_length(rdfp_list,
                                     base+i);
@@ -3296,13 +3601,21 @@ readdb_get_totals_ex2 PROTO ((ReadDBFILEPtr rdfp_list, Int8Ptr total_len,
 
         while (rdfp_list) {
 
+            /* Note well: This assumes that the information in the alias file is
+             * accurate, if the aliaslen and aliasnseq fields are inaccurate, so
+             * will be the total number of sequences and database length
+             * returned */
             if (use_alias && rdfp_list->aliasfilename) {
-                if (rdfp_list->aliaslen >= 0 && rdfp_list->oidlist)
+                if (rdfp_list->aliaslen >= 0 
+                        && (rdfp_list->oidlist || rdfp_list->gifile ||
+                            rdfp_list->gilist))
                     *total_len += rdfp_list->aliaslen;
                 else
                     *total_len += readdb_get_dblen(rdfp_list);
 
-                if (rdfp_list->aliasnseq >= 0 && rdfp_list->oidlist)
+                if (rdfp_list->aliasnseq >= 0 
+                        && (rdfp_list->oidlist || rdfp_list->gifile ||
+                            rdfp_list->gilist))
                     *total_num += rdfp_list->aliasnseq;
                 else
                     *total_num += readdb_get_num_entries(rdfp_list);
@@ -3347,15 +3660,17 @@ readdb_copy (ReadDBFILEPtr rdfp)
     return TRUE;
 }
 
-/*
-    Check whether two different ReadDBFILEPtr refer to the
-    same database.
-
-    If they are, then TRUE is returned.
+/* Compare rdfp1 with rdfp2 for identical:
+   molecule type (prot/nucl)
+   total number of bases/residues
+   maximum sequence length
+   file name
+   date of creation
+   membership_bit
+   oidlist
 */
-Boolean LIBCALL
-readdb_compare(ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2)
-
+Boolean
+readdb_compare_basic(ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2)
 {
     if (rdfp1 == NULL || rdfp2 == NULL)
         return FALSE;
@@ -3377,13 +3692,138 @@ readdb_compare(ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2)
     if (StringCmp(rdfp1->filename, rdfp2->filename) != 0)
         return FALSE;
 
-    if (StringCmp(rdfp1->title, rdfp2->title) != 0)
-        return FALSE;
-
     if (StringCmp(rdfp1->date, rdfp2->date) != 0)
         return FALSE;
 
+    if (rdfp1->membership_bit != rdfp2->membership_bit)
+        return FALSE;
+
+    if ((rdfp1->oidlist!=NULL && rdfp2->oidlist==NULL) ||
+        (rdfp1->oidlist==NULL && rdfp2->oidlist!=NULL))
+        return FALSE;
+
+        /* If both have a valid oidlist ... */
+    if ((rdfp1->oidlist && rdfp2->oidlist) &&
+        (rdfp1->oidlist->filename && rdfp2->oidlist->filename) && 
+        /* but different filenames, then they must have different oidlists */
+        (StringCmp(rdfp1->oidlist->filename, rdfp2->oidlist->filename) != 0))
+            return FALSE;
+
     return TRUE;
+}
+
+/*
+    Check whether two different ReadDBFILEPtr refer to the
+    same database.
+
+    If they are, then TRUE is returned.
+*/
+Boolean LIBCALL
+readdb_compare(ReadDBFILEPtr rdfp1, ReadDBFILEPtr rdfp2)
+{
+    Boolean same_title = (StringCmp(rdfp1->title, rdfp2->title) == 0);
+
+    return (same_title && readdb_compare_basic(rdfp1, rdfp2));
+}
+
+
+/* This function attempts to merge the contents of rdfp->gilist(s) of those
+ * rdfp's in rdfp_chain that have the same underlying blast database. This is
+ * done so that we don't mmap the same index files multiple times. */
+static ReadDBFILEPtr readdb_merge_gifiles (ReadDBFILEPtr rdfp_chain)
+{
+    register ReadDBFILEPtr rdfp = NULL, temp = NULL, prev = NULL;
+    CharPtr title = NULL;
+    Int4 title_len = 0;
+
+    for (rdfp = prev = rdfp_chain; rdfp; rdfp = rdfp->next, prev = rdfp) {
+        
+        for (temp = rdfp->next; temp; prev = temp, temp = temp->next) {
+
+            if (!readdb_compare_basic(rdfp, temp))
+                continue;
+            /* rdfp and temp have the same underlying database, so we combine 
+               them */
+            prev->next = temp->next;
+            temp->next = NULL;
+
+            /*** Merge the gilists, if any ***/
+            if (temp->gilist) {
+                rdfp->gilist = Int4ListConcat(&rdfp->gilist, &temp->gilist);
+                ASSERT(rdfp->gifile == NULL && temp->gifile == NULL);
+            }
+
+            /*** Keep track of the length and number of sequences according to
+             * the gi lists ***/
+            rdfp->aliaslen += temp->aliaslen;
+            rdfp->aliasnseq += temp->aliasnseq;
+
+            /*** Concatenate the titles ***/
+            if (temp->title) {
+                title_len = StringLen(rdfp->title) + StringLen(temp->title) + 3;
+                title = (CharPtr) MemNew(sizeof(Char)*title_len);
+                if (rdfp->title) {
+                    title = StringCat(title, rdfp->title);
+                    title = StringCat(title, "; ");
+                }
+                title = StringCat(title, temp->title);
+                rdfp->title = MemFree(rdfp->title);
+                rdfp->title = title;
+            }
+
+            /*** Free temp ***/
+            temp = readdb_destruct(temp);
+            temp = prev;
+        }
+
+    }
+
+    /* In case new real databases have been found (i.e.: alias file referring to
+     * another alias file(s) along with real database(s)), arrange them so that 
+     * the real databases are at the front of the rdfp_chain */
+    {
+        ReadDBFILEPtr rdfp_w_gilist = NULL;
+
+        rdfp = rdfp_chain;
+        rdfp_chain = NULL;
+
+        /* separate rdfp's w/ gilists and real databases */
+        while (rdfp) {
+
+            if (rdfp->gilist) {
+                if (rdfp_w_gilist == NULL) {
+                    rdfp_w_gilist = rdfp;
+                } else {
+                    temp = rdfp_w_gilist;
+                    while (temp->next)
+                        temp = temp->next;
+                    temp->next = rdfp;
+                }
+            } else {
+                if (rdfp_chain == NULL) {
+                    rdfp_chain = rdfp;
+                } else {
+                    temp = rdfp_chain;
+                    while (temp->next)
+                        temp = temp->next;
+                    temp->next = rdfp;
+                }
+            }
+            temp = rdfp->next;
+            rdfp->next = NULL;
+            rdfp = temp;
+        }
+
+        /* append the rdfp_w_gilist to the rdfp_chain */
+        if ( (temp = rdfp_chain)) {
+            while (temp->next)
+                temp = temp->next;
+            temp->next = rdfp_w_gilist;
+        } else
+            rdfp_chain = rdfp_w_gilist;
+    }
+
+    return rdfp_chain;
 }
 
 /*
@@ -3532,8 +3972,10 @@ readdb_destruct_element (ReadDBFILEPtr rdfp)
         /* is it completely safe to have one rdfp->nisam_opt for all threads. */
         ISAMObjectFree(rdfp->nisam_opt); /* Terminating NISAM */
         ISAMObjectFree(rdfp->sisam_opt); /* Terminating NISAM */
+        ISAMObjectFree(rdfp->isam_pig);  /* Terminating PIG ISAM */
         OIDListFree(rdfp->oidlist);
         rdfp->gifile = MemFree(rdfp->gifile);
+        rdfp->gilist = Int4ListFree(rdfp->gilist);
 
     }
     rdfp->indexfp = NlmCloseMFILE(rdfp->indexfp);
@@ -3773,7 +4215,6 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
 
     Boolean    thereis_unknown_database = FALSE;
     ReadDBFILEPtr    rdfp_start = rdfp;
-    Boolean is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
 
     if (start)
     *start = 0;
@@ -3794,8 +4235,10 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
 
     while (rdfp)
     {
-        if(rdfp->nisam_opt == NULL)
-        return -1;
+        if(rdfp->nisam_opt == NULL) {
+            rdfp = rdfp->next;
+            continue;
+        }
 
         if((error = NISAMSearch(rdfp->nisam_opt, gi, 
             &Value, NULL)) < 0) {
@@ -3805,10 +4248,6 @@ readdb_gi2seq(ReadDBFILEPtr rdfp, Int4 gi, Int4Ptr start)
         }
 
         if(error != ISAMNotFound) {
-#if 0        
-           printf("\n%d\t-> %d\t in %s (%d)", gi, Value+rdfp->start,
-              rdfp->filename, is_prot);
-#endif        
         if (start)
             *start = rdfp->start;
 
@@ -4671,15 +5110,21 @@ readdb_get_sequence_number(ReadDBFILEPtr rdfp, Int4 first_seq, Int8 offset)
    Int4 m, b, e, val;
    Int2 compression_ratio;
 
+   if (!rdfp)
+      return -1;
+
    if (rdfp->parameters & READDB_IS_PROT)
       compression_ratio = 1;
    else 
       compression_ratio = READDB_COMPRESSION_RATIO;
 
-   while (rdfp->totlen <= offset) {
+   while (rdfp && rdfp->totlen <= offset) {
       offset -= rdfp->totlen;
       rdfp = rdfp->next;
    }
+   
+   if (!rdfp)
+      return -1;
 
    e = rdfp->stop;
    b = MAX(first_seq, rdfp->start); 
@@ -5114,7 +5559,7 @@ static CharPtr FDBuildOldStyleDefline(ReadDBFILEPtr rdfp, BlastDefLinePtr bdsp)
 
     count = 0;
     length = 0;
-    membership_mask = (0x1 << rdfp->membership_bit-1);
+    membership_mask = (0x1 << (rdfp->membership_bit-1));
 
     /* First calculating - how much memory do we need ? */
     for(bdsp_tmp = bdsp; bdsp_tmp != NULL; bdsp_tmp = bdsp_tmp->next) {
@@ -5201,7 +5646,8 @@ BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number)
         BlastDefLinePtr bdsp_last, bdsp_rv_tmp = NULL, bdsp_head = NULL;
         Boolean first = TRUE;
 
-        /* create the memberships mask */
+        /* create the memberships mask (this should be fixed to allow membership
+         * bits greater than 32) */
         memb_mask = 0x1 << (rdfp->membership_bit-1);
 
         /* build the new adjusted BlastDefLine structure */
@@ -5594,6 +6040,8 @@ readdb_get_header_ex (ReadDBFILEPtr rdfp, Int4 sequence_number,
                 if (links != NULL)       *links = NULL;
                 return retval;
             }
+            if (rdfp->blast_deflinep)
+                BlastDefLineSetFree(rdfp->blast_deflinep);
             rdfp->blast_deflinep = bdlp; /* cache the BlastDefLinePtr */
 
         } else if (*header_index == UINT4_MAX) { 
@@ -6341,7 +6789,7 @@ PrintDbInformationWithRID(CharPtr database, Boolean is_aa, Int4 line_length,
         if (rid && html && rdfp_var->aliasfilename && atoi(rdfp_var->aliasfilename) != 0) {
            if (!StrNCmp(chptr, "Completed", 9)) {
               sprintf(next_title, 
-                   "<a href=http://www.ncbi.nlm.nih.gov/cgi-bin/Entrez/genome_RID?"
+                   "<a href=http://www.ncbi.nlm.nih.gov/sutils/genomeRID.cgi?"
                    "taxid=%s&RID=%s>%s</a>; \n",
                    rdfp_var->aliasfilename, rid, chptr);
               with_links = TRUE;
@@ -6670,7 +7118,8 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
 
     options->db_file = StringSave(input);
     if (!title)
-        options->db_title = StringSave(options->db_file);
+        options->db_title = basename ? 
+            StringSave(basename) : StringSave(options->db_file);
     else 
         options->db_title = StringSave(title);
     options->is_protein = is_prot;
@@ -6681,7 +7130,7 @@ FDB_optionsPtr FDBOptionsNew(CharPtr input, Boolean is_prot, CharPtr title,
         options->base_name = StringSave(basename);
 
     if (!alias_file_name)
-        options->alias_file_name = StringSave(basename);
+        options->alias_file_name = StringSave(options->base_name);
     else
         options->alias_file_name = StringSave(alias_file_name);
 
@@ -7003,7 +7452,7 @@ ValNodePtr FDBLoadMembershipsTable(void)
 ValNodePtr FDBLoadLinksTable(void)
 {
     ValNodePtr retval = NULL;
-    GiListPtr gis = NULL;
+    Int4ListPtr gis = NULL;
     LinkInfoPtr lk_info = NULL;
     Int2 nbits, bit, nlists = 0;
     Char buffer[256], numstr[256], filename[FILENAME_MAX];
@@ -7029,7 +7478,7 @@ ValNodePtr FDBLoadLinksTable(void)
                       buffer);
             continue;
         }
-        if ((gis = FDBReadGiListFromFile(filename)) == NULL) {
+        if ((gis = Int4ListReadFromFile(filename)) == NULL) {
             ErrPostEx(SEV_ERROR,0,0,"Could not read %s", filename);
             continue;
         }
@@ -7080,27 +7529,27 @@ static void FDBBlastDefLineSetBit(Int2 bit_no, ValNodePtr PNTR retval)
     tmp->data.intvalue |= bit_mask;
 }
 
-static Boolean FDBSearchForGi(GiListPtr glp, Int4 gi)
+Int4 LIBCALL
+Int4ListBSearch PROTO((Int4ListPtr lp, Int4 key))
 {
     Int4 m, b, e;
 
-    if (!glp)
-        return FALSE;
+    if (!lp)
+        return -1;
 
     b = 0;
-    e = glp->count-1;
+    e = lp->count-1;
 
-    /* do a binary search on the ordered gi list */
     while (b <= e) {
         m = (b + e) / 2;
-        if (glp->gis[m] == gi)
-            return TRUE;
-        else if (glp->gis[m] < gi)
+        if (lp->i[m] == key)
+            return m;
+        else if (lp->i[m] < key)
             b = m + 1;
         else
             e = m - 1;
     }
-    return FALSE;
+    return -1;
 }
 
 Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, ValNodePtr links_tblp)
@@ -7120,7 +7569,7 @@ Boolean FDBAddLinksInformation(BlastDefLinePtr bdp, ValNodePtr links_tblp)
     for (vnp_list = links_tblp; vnp_list; vnp_list = vnp_list->next) {
 
         LinkInfoPtr lk_info = (LinkInfoPtr)vnp_list->data.ptrvalue;
-        if (FDBSearchForGi(lk_info->gi_list, gi) == TRUE)
+        if (Int4ListBSearch(lk_info->gi_list, gi) != -1)
             FDBBlastDefLineSetBit(lk_info->bit_number, &link_vnp);
     }
 
@@ -7163,7 +7612,7 @@ ValNodePtr FDBDestroyLinksTable(ValNodePtr list)
 
     for (tmp_vnp = list; tmp_vnp; tmp_vnp = tmp_vnp->next) {
         lk_info = (LinkInfoPtr) tmp_vnp->data.ptrvalue;
-        lk_info->gi_list = GiListFree(lk_info->gi_list);
+        lk_info->gi_list = Int4ListFree(lk_info->gi_list);
     }
     list = ValNodeFreeData(list);
 
@@ -7811,7 +8260,9 @@ static Boolean FDBDumpDeflineAsn(FormatDBPtr fdbp, BlastDefLinePtr bdp_in)
 {
     Char    buffer[128];
     BlastDefLinePtr bdp;
+#ifdef FDB_TAXONOMYDB
     SeqIdPtr sip;
+#endif
 
     BlastDefLineSetAsnWrite(bdp_in, fdbp->aip_def, NULL);
     AsnIoFlush(fdbp->aip_def);
@@ -10625,8 +11076,6 @@ static SeqLocPtr Fastacmd_ParseSeqLoc(CharPtr str, Uint1 strand, BioseqPtr bsp)
     return slp;
 }
 
-#define FASTACMD_DEFAULT_DB "nr"
-
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
     CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out)
 {
@@ -10652,7 +11101,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     Boolean          translateBlastDB2FASTA = dump_db;
     SeqLocPtr        slp = NULL;
     Uint1            init_state = 0;
-    Int2             retval = 0;
+    Int2             retval = FASTACMD_SUCCESS;
 
     if (searchstr)
         guess_gi = atol(searchstr);
@@ -10670,7 +11119,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     if (!(rdfp = readdb_new_ex2(dbname, is_prot, init_state, NULL, NULL))) {
         ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for "
              "%s database\n", dbname);
-        return 1;
+        return FASTACMD_DB_NOT_FOUND;
     }
 
     if (dbinfo_only) {
@@ -10682,7 +11131,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
     if (pig != PIG_NONE) {
         if ( (fid = readdb_pig2oid(rdfp, pig, NULL)) == -1) {
             ErrPostEx(SEV_ERROR, 0, 0, "PIG %ld not found", (long) pig);
-            return 1;
+            return FASTACMD_FAILED_SEARCH;
         }
         bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
         slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
@@ -10702,7 +11151,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
                     "blast database files (%s)\n", FORMATDB_VER_TEXT,
                     TAXDB_ON_FTP);
             readdb_destruct(rdfp);
-            return 1;
+            return FASTACMD_NO_TAXDB;
         }
         }
         if (rdfp->taxinfo == NULL) {
@@ -10710,7 +11159,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
             "available. Please download it from\n"
             "%s\n", TAXDB_ON_FTP);
             readdb_destruct(rdfp);
-            return 1;
+            return FASTACMD_NO_TAXDB;
         }
     }
 
@@ -10719,18 +11168,21 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
             if((falp =  GetAccList(searchstr, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
                 "found. Exiting...\n");
-                return 1;
+                return FASTACMD_FAILED_SEARCH;
             }
         } else if(batchfile != NULL){
-            if((fd = FileOpen(batchfile, "r")) == NULL)
-                return 1;
+            if((fd = FileOpen(batchfile, "r")) == NULL) {
+                ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Could not open %s",
+                        batchfile);
+                return FASTACMD_ERROR;
+            }
     
             buffer = WWWReadFileInMemory(fd, 0, TRUE);
     
             if((falp =  GetAccList(buffer, &TotalItems)) == NULL) {
                 ErrPostEx(SEV_ERROR, 0, 0, "ERROR: No valid Gis/Accessions "
                 "found. Exiting...\n");
-                return 1;
+                return FASTACMD_FAILED_SEARCH;
             }
         }
     }
@@ -10751,11 +11203,11 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
         if (fid < 0 && fid != -1) { 
             ErrPostEx(SEV_ERROR, 0, 0, "Accesion search failed for \"%s\" "
                 "with error code %d\n", falp_tmp->acc, fid);
-            return 1;
+            return FASTACMD_FAILED_SEARCH;
         } else if (fid == -1) {
             ErrPostEx(SEV_ERROR, 0, 0, "Entry \"%s\" not found\n", 
                         falp_tmp->acc);
-            retval = 1;
+            retval = FASTACMD_FAILED_SEARCH;
         } else if (ids == NULL) { /* gi or SeqId */
             if (use_target) {
                 ReadDBFILEPtr rdfp_tmp;
@@ -10764,7 +11216,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
             }
             if (taxonomy_info_only) {
                 if (!Fastacmd_PrintTaxonomyInfo(rdfp, fid, out, linelen))
-                    retval = 1;
+                    retval = FASTACMD_FAILED_SEARCH;
             } else {
                 bsp = readdb_get_bioseq_ex(rdfp, fid, TRUE, use_ctrlAs);
                 slp = Fastacmd_ParseSeqLoc(seqlocstr, strand, bsp);
@@ -10777,7 +11229,7 @@ Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database, Uint1 is_prot,
                 if (taxonomy_info_only) {
                     if (!Fastacmd_PrintTaxonomyInfo(rdfp, ids[i], out, 
                                 linelen))
-                        retval = 1;
+                        retval = FASTACMD_FAILED_SEARCH;
                 } else {
                     bsp = readdb_get_bioseq_ex(rdfp, ids[i], TRUE, 
                             use_ctrlAs);
@@ -10809,10 +11261,12 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
     register Int4 i;
     Int4 total = 0, dumped = 0, nseqs = 0;
     BioseqPtr bsp = NULL;
-    Int2 progress_chunk = 100;
     OIDListPtr oidlist = NULL;
     Int8 tot_len = 0;
     ReadDBFILEPtr rdfp_tmp = rdfp;
+#ifdef SHOW_PROGRESS
+    Int2 progress_chunk = 100;
+#endif
 
     /* Obtain the total length of this database */
     if (!(readdb_get_totals(rdfp,&tot_len,&total))) {
@@ -10868,14 +11322,14 @@ Int2 BlastDBToFasta(ReadDBFILEPtr rdfp, FILE *fp, Int4 linelen, Boolean ctrlA)
                 if (rdfp_tmp) {
                     oidlist = rdfp_tmp->oidlist;
                 } else {
-                    ErrPostEx(SEV_FATAL,0,0,
+                    ErrPostEx(SEV_FATAL, 1,0,
                             "BlastDBToFasta: Oid %d is not in this mask");
                     return -1;
                 }
 
                 /* Make sure we have an oidlist! */
                 if (!oidlist) {
-                    ErrPostEx(SEV_FATAL,0,0,
+                    ErrPostEx(SEV_FATAL, 1,0,
                             "This mask database does not have an oidlist!\n"
                             "There is probably a wrong ordering problem in "
                             "the ReadDBFILEPtrs");
@@ -11009,8 +11463,7 @@ readdb_MakeGiFileBinary (CharPtr input_file, CharPtr output_file)
     return gilist_size;
 }
 
-Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename, 
-            Int4 Bases_In_Volume)
+Int4 FastaToBlastDB(FDB_optionsPtr options, Int4 Bases_In_Volume)
 {
    FILE *fd;
    FormatDBPtr fdbp;
@@ -11033,26 +11486,26 @@ Int4 FastaToBlastDB(FDB_optionsPtr options, CharPtr basename,
      return 4;
       }
       
-      SeqEntrySetScope(sep);
       bsp = (BioseqPtr) sep->data.ptrvalue;
       
       if(Bases_In_Volume >= 1) {
-     if(count > Bases_In_Volume) {
-        /* starting new volume ? */
-        count = 0;
-        if(FormatDBClose(fdbp))
-           return 9;
-        
-        if(Bases_In_Volume > 1) {
-           sprintf(filenamebuf, "%s.%02ld", basename, (long) volume);
-           options->base_name = StringSave(filenamebuf);
-           volume++;
-        }
-        
-        if ((fdbp = FormatDBInit(options)) == NULL)
-           return 2;
-     }
-     count += bsp->length;
+         if(count > Bases_In_Volume) {
+            /* starting new volume ? */
+            count = 0;
+            if(FormatDBClose(fdbp))
+               return 9;
+            
+            if(Bases_In_Volume > 1) {
+               sprintf(filenamebuf, "%s.%02ld", 
+                       options->base_name, (long) volume);
+               options->base_name = StringSave(filenamebuf);
+               volume++;
+            }
+            
+            if ((fdbp = FormatDBInit(options)) == NULL)
+               return 2;
+         }
+         count += bsp->length;
       }
    
       FDBAddBioseq(fdbp, bsp, 0);
@@ -11187,6 +11640,7 @@ Boolean FD_MakeAliasFile(FDB_optionsPtr options)
    else
      return FALSE;
 }
+
 
 #if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
 #ifdef  HAVE_MADVISE

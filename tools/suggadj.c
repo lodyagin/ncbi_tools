@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: suggadj.c,v 6.3 2003/05/30 17:25:38 coulouri Exp $";
+
 /*   suggadj.c
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *

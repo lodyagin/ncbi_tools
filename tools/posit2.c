@@ -1,4 +1,6 @@
-/* $Id: posit2.c,v 6.7 2001/11/14 13:57:13 madden Exp $
+static char const rcsid[] = "$Id: posit2.c,v 6.9 2003/05/30 17:25:37 coulouri Exp $";
+
+/* $Id: posit2.c,v 6.9 2003/05/30 17:25:37 coulouri Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,12 +34,18 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
-$Revision: 6.7 $
+$Revision: 6.9 $
 
 *****************************************************************************/
 
 /*
  * $Log: posit2.c,v $
+ * Revision 6.9  2003/05/30 17:25:37  coulouri
+ * add rcsid
+ *
+ * Revision 6.8  2003/04/25 12:55:13  thiessen
+ * return Boolean value to indicate success/failure of impalaScaling()
+ *
  * Revision 6.7  2001/11/14 13:57:13  madden
  * Add warning if (maxScore - minScore) >= scoreRange
  *
@@ -101,6 +109,7 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
     return_sfp->obs_max = maxScore;
     if ((maxScore - minScore) >= scoreRange) {
       ErrPostEx(SEV_WARNING, 0, 0, "maxScore is %d, minScore is %d difference is >= allowed score range %d", maxScore, minScore, scoreRange);
+      return NULL;
     }
     for (i = 0; i < scoreRange; i++)
         scoreArray[i] = 0.0;
@@ -121,7 +130,7 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
 }
 
 
-static void 
+static Boolean
 impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFactor, Boolean doBinarySearch)
 {
     Int4 dim1, dim2; /*number of rows and number of columns*/
@@ -169,6 +178,11 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
             }
 
             this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
+            if (!this_sfp) {
+                MemFree(scoreArray);
+                MemFree(return_sfp);
+                return FALSE;
+            }
             new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
 
             if (new_lambda > lambda) {
@@ -214,6 +228,11 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
             }
             
             this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
+            if (!this_sfp) {
+                MemFree(scoreArray);
+                MemFree(return_sfp);
+                return FALSE;
+            }
             new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
             
             if (new_lambda > lambda) {
@@ -250,11 +269,13 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
     
     MemFree(scoreArray);
     MemFree(return_sfp);
+    return TRUE;
 }
 
-void LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch)
+Boolean LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch)
 {
     BlastMatrixRescalePtr matrix_rescale;
+    Boolean okay;   /* return value - whether impalaScaleMatrix succeeded */
     
     matrix_rescale = BlastMatrixRescaleNew(compactSearch->alphabetSize, 
                                            compactSearch->qlength,
@@ -269,11 +290,11 @@ void LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compa
                                            compactSearch->lambda_ideal,
                                            compactSearch->K_ideal);
     
-    impalaScaleMatrix(matrix_rescale, scalingFactor, doBinarySearch);
+    okay = impalaScaleMatrix(matrix_rescale, scalingFactor, doBinarySearch);
     
     matrix_rescale = BlastMatrixRescaleDestruct(matrix_rescale);
     
-    return;
+    return okay;
 }
 
 /*Some of the following checkpointing code is taken and adapted from

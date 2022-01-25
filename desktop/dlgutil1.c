@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.40 $
 *
 * File Description: 
 *
@@ -734,6 +734,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetTitle (ffp->exceptText, sfp->except_text);
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
+      SetTitle (ffp->geneAllele, "");
       SetTitle (ffp->geneDesc, "");
       SetTitle (ffp->locusTag, "");
       ggl.ffp = ffp;
@@ -784,6 +785,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->gene, 1);
         SetValue (ffp->useGeneXref, 3);
         SetTitle (ffp->geneSymbol, grp->locus);
+        SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
@@ -792,6 +794,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->gene, 2);
         SetValue (ffp->useGeneXref, 2);
         SetTitle (ffp->geneSymbol, grp->locus);
+        SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
@@ -800,6 +803,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
         SetValue (ffp->gene, 2);
         SetValue (ffp->useGeneXref, 2);
         SetTitle (ffp->geneSymbol, grp->locus);
+        SetTitle (ffp->geneAllele, grp->allele);
         SetTitle (ffp->geneDesc, grp->desc);
         SetTitle (ffp->locusTag, grp->locus_tag);
         SafeHide (ffp->editGeneBtn);
@@ -832,6 +836,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       SetValue (ffp->gene, 1);
       SetValue (ffp->useGeneXref, 1);
       SetTitle (ffp->geneSymbol, "");
+      SetTitle (ffp->geneAllele, "");
       SetTitle (ffp->geneDesc, "");
       SetTitle (ffp->locusTag, "");
       PointerToDialog (ffp->featcits, NULL);
@@ -973,6 +978,7 @@ static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName)
 extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
 
 {
+  Char            allele [128];
   MsgAnswer       ans;
   BioseqPtr       bsp;
   Char            ch;
@@ -1103,9 +1109,10 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
             grp = GeneRefNew ();
           } else if (val == 2) {
             GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
+            GetTitle (ffp->geneAllele, allele, sizeof (allele));
             GetTitle (ffp->geneDesc, desc, sizeof (desc));
             GetTitle (ffp->locusTag, locustag, sizeof (locustag));
-            grp = CreateNewGeneRef (symbol, NULL, desc, FALSE);
+            grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
             if (! StringHasNoText (locustag)) {
               if (grp == NULL) {
                 grp = GeneRefNew ();
@@ -1228,9 +1235,10 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
           }
           if (sep != NULL && sep->data.ptrvalue != NULL) {
             GetTitle (ffp->geneSymbol, symbol, sizeof (symbol));
+            GetTitle (ffp->geneAllele, allele, sizeof (allele));
             GetTitle (ffp->geneDesc, desc, sizeof (desc));
             GetTitle (ffp->locusTag, locustag, sizeof (locustag));
-            grp = CreateNewGeneRef (symbol, NULL, desc, FALSE);
+            grp = CreateNewGeneRef (symbol, allele, desc, FALSE);
             if (! StringHasNoText (locustag)) {
               if (grp == NULL) {
                 grp = GeneRefNew ();
@@ -1750,6 +1758,9 @@ extern NameStdPtr AuthorSpreadsheetStringToNameStdPtr (CharPtr txt)
     suffix = GetEnumName (atoi(suffixVal), name_suffix_alist);
     nsp->names [5] = StringSave (suffix);
     TrimLeadingSpaces (nsp->names [5]);
+    if (StringHasNoText (nsp->names [5])) {
+      nsp->names [5] = MemFree (nsp->names [5]);
+    }
   }
   if (StringCmp (nsp->names [0], "et al") == 0) {
     nsp->names [0] = MemFree (nsp->names [0]);

@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: motif.c,v 6.5 2003/05/30 17:25:37 coulouri Exp $";
+
 /*   motif.c
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date:   8/9/01
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  sequence motif search functions
 *

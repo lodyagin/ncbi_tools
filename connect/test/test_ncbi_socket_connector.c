@@ -1,4 +1,4 @@
-/*  $Id: test_ncbi_socket_connector.c,v 6.7 2002/12/04 19:50:31 lavr Exp $
+/*  $Id: test_ncbi_socket_connector.c,v 6.8 2003/05/14 03:58:43 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -92,13 +92,15 @@ int main(int argc, const char* argv[])
     /* bad args? -- Usage */
     if ( !host ) {
         fprintf(stderr,
-                "Usage: %s <host> <port> [max_try] [timeout]\n  where"
+                "Usage: %s <host> <port> [max_try [timeout]]\n  where"
                 "  <port> not less than %d; timeout is a float(in sec)\n",
                 argv[0], (int) MIN_PORT);
         return 1 /*error*/;
     }
 
     /* log and data log streams */
+    CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
+                           fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
     data_file = fopen("test_ncbi_socket_connector.log", "ab");
     assert(data_file);
@@ -146,6 +148,9 @@ int main(int argc, const char* argv[])
 /*
  * --------------------------------------------------------------------------
  * $Log: test_ncbi_socket_connector.c,v $
+ * Revision 6.8  2003/05/14 03:58:43  lavr
+ * Match changes in respective APIs of the tests
+ *
  * Revision 6.7  2002/12/04 19:50:31  lavr
  * #include "../ncbi_ansi_ext.h" instead of <string.h> to define strcasecmp()
  *

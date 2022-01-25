@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.12 $
+* $Revision: 4.15 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,15 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.15  2003/09/17 15:38:06  rsmith
+* include unistd.h for Windows (yes MS-Windows) when compiling with Codewarrior only.
+*
+* Revision 4.14  2003/09/17 13:38:48  ivanov
+* Include unistd.h only for OS_UNIX
+*
+* Revision 4.13  2003/09/15 18:45:55  rsmith
+* add unistd.h include for write and dup.
+*
 * Revision 4.12  2002/11/06 21:30:08  ucko
 * Don't assume MIPS is IRIX, or HPPA is HP/UX; allow Linux too, for both.
 *
@@ -384,6 +393,9 @@
 #include "ncbinet.h"
 #include "ni_lib.h"
 #include "ni_msg.h"
+#if defined(OS_MSWIN)  &&  defined(COMP_METRO)
+#  include <unistd.h> /* for write and dup with MW compiler. */
+#endif
 
 /* missing prototypes */
 #ifdef __cplusplus
@@ -689,11 +701,11 @@ NLM_EXTERN Int2 NI_InitServices(NI_DispatcherPtr disp, CharPtr user, CharPtr gro
 
         MemSet(&buffer, 0, sizeof(buffer));
 
-	if ((fp = popen("uname -a","r")) != NULL)
-	{
-	    FileRead (buffer, 1, sizeof (buffer), fp);
-	    stackDescription = StringSave(buffer);
-	    pclose(fp);
+        if ((fp = popen("uname -a","r")) != NULL)
+        {
+            FileRead (buffer, 1, sizeof (buffer), fp);
+            stackDescription = StringSave(buffer);
+            pclose(fp);
             for (status = StrLen(stackDescription) - 1; status >= 0; status--)
             {
                 /* convert characters which are incompatible with VisibleString */
@@ -2822,10 +2834,10 @@ NLM_EXTERN Int2 NI_GetPlatform (void)
 #endif
 #endif
 #ifdef OS_UNIX_NETBSD
-	retval = NI_PLATFORM_NETBSD;
+        retval = NI_PLATFORM_NETBSD;
 #endif
 #ifdef OS_UNIX_FREEBSD
-	retval = NI_PLATFORM_FREEBSD;
+        retval = NI_PLATFORM_FREEBSD;
 #endif
 #endif /* OS_UNIX */
 
@@ -3249,7 +3261,7 @@ static Int2 LIBCALLBACK NI_AsnWriteSTDOUT(Pointer p,CharPtr buf,Uint2 len)
 NLM_EXTERN NI_HandPtr NI_OpenASNIO(void)
 {
     NI_HandPtr  hp;
-    CharPtr	agent;
+    CharPtr     agent;
 
     if ((hp = MsgMakeHandle(FALSE)) == NULL)
         return NULL;
@@ -3263,7 +3275,7 @@ NLM_EXTERN NI_HandPtr NI_OpenASNIO(void)
 
     agent = getenv("HTTP_USER_AGENT");
     if(agent){
-	    hp->waip->writefunc=NI_AsnWriteSTDOUT;
+            hp->waip->writefunc=NI_AsnWriteSTDOUT;
     }
 
     LOG_SOCKET(hp->sok, TRUE);

@@ -1,4 +1,6 @@
-/* $Id: xmlblast.c,v 6.29 2003/03/21 21:01:16 camacho Exp $ */
+static char const rcsid[] = "$Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha Exp $";
+
+/* $Id: xmlblast.c,v 6.31 2003/08/04 16:19:16 dondosha Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -30,12 +32,18 @@
 *   
 * Version Creation Date: 05/17/2000
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description:  Functions to print simplified BLAST output (XML)
 *
 * 
 * $Log: xmlblast.c,v $
+* Revision 6.31  2003/08/04 16:19:16  dondosha
+* Added effective HSP length (length adjustment) to other returns, so it can be reported in XML output
+*
+* Revision 6.30  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
 * Revision 6.29  2003/03/21 21:01:16  camacho
 * Fixed inversion of subject and query sequences for tblastx
 *
@@ -862,6 +870,9 @@ BXMLBuildStatistics(ValNodePtr other_returns, Boolean ungapped)
          break;
       case EFF_SEARCH_SPACE:
          stat->eff_space = vnp->data.realvalue;
+         break;
+      case EFF_HSP_LENGTH:
+         stat->hsp_len = vnp->data.intvalue;
          break;
       default:
          break;

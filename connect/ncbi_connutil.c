@@ -1,4 +1,4 @@
-/*  $Id: ncbi_connutil.c,v 6.53 2003/03/06 21:55:31 lavr Exp $
+/*  $Id: ncbi_connutil.c,v 6.60 2003/08/27 16:27:37 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -123,7 +123,7 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
     /* dispatcher port number */
     REG_VALUE(REG_CONN_PORT, str, 0);
     val = atoi(str);
-    info->port = (unsigned short) (val > 0 ? val : DEF_CONN_PORT);
+    info->port = (unsigned short)(val > 0 ? val : DEF_CONN_PORT);
 
     /* service path */
     REG_VALUE(REG_CONN_PATH, info->path, DEF_CONN_PATH);
@@ -154,10 +154,10 @@ extern SConnNetInfo* ConnNetInfo_Create(const char* service)
             ((dbl - info->timeout->sec) * 1000000);
     }
 
-    /* max. # of attempts to establish a connection */
+    /* max. # of attempts to establish connection */
     REG_VALUE(REG_CONN_MAX_TRY, str, 0);
     val = atoi(str);
-    info->max_try = (unsigned int) (val > 0 ? val : DEF_CONN_MAX_TRY);
+    info->max_try = (unsigned short)(val > 0 ? val : DEF_CONN_MAX_TRY);
 
     /* HTTP proxy server? */
     REG_VALUE(REG_CONN_HTTP_PROXY_HOST, info->http_proxy_host,
@@ -275,27 +275,27 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
         info->http_proxy_adjusted = 0/*false*/;
     }
 
-    /* host & port first */
+    /* host & port first [both optional] */
     if ((s = strstr(url, "://")) != 0) {
         const char* h = s + 3; /* host starts here */
-        const char* p;         /* host ends here   */
 
         if (strncasecmp(url, "http://", 7) != 0)
             return 0/*failure*/;
         if (!(s = strchr(h, '/')))
             s = h + strlen(h);
-        if ((p = strchr(h, ':')) != 0 && p < s) {
+        /* host ends at "a" */
+        if ((a = strchr(h, ':')) != 0 && a < s) {
             unsigned short port;
             int n;
 
-            if (sscanf(p, ":%hu%n", &port, &n) < 1 || p + n != s)
+            if (sscanf(a, ":%hu%n", &port, &n) < 1 || a + n != s)
                 return 0/*failure*/;
             info->port = port;
         } else
-            p = s;
-        if ((size_t)(p - h) < sizeof(info->host)) {
-            memcpy(info->host, h, (size_t)(p - h));
-            info->host[(size_t)(p - h)] = '\0';
+            a = s;
+        if ((size_t)(a - h) < sizeof(info->host)) {
+            memcpy(info->host, h, (size_t)(a - h));
+            info->host[(size_t)(a - h)] = '\0';
         } else {
             memcpy(info->host, h, sizeof(info->host) - 1);
             info->host[sizeof(info->host) - 1] = '\0';
@@ -331,13 +331,17 @@ extern int/*bool*/ ConnNetInfo_ParseURL(SConnNetInfo* info, const char* url)
 }
 
 
-extern void ConnNetInfo_SetUserHeader(SConnNetInfo* info,
+extern int/*bool*/ ConnNetInfo_SetUserHeader(SConnNetInfo* info,
                                       const char*   user_header)
 {
     if (info->http_user_header)
         free((void*) info->http_user_header);
-    info->http_user_header =
-        user_header && *user_header ? strdup(user_header) : 0;
+    if (user_header && *user_header) {
+        info->http_user_header = strdup(user_header);
+        return info->http_user_header ? 1/*success*/ : 0/*failure*/;
+    } else
+        info->http_user_header = 0;
+    return 1/*success*/;
 }
 
 
@@ -347,10 +351,8 @@ extern int/*bool*/ ConnNetInfo_AppendUserHeader(SConnNetInfo* info,
     size_t oldlen, newlen;
     char* new_header;
 
-    if (!info->http_user_header || !(oldlen = strlen(info->http_user_header))){
-        ConnNetInfo_SetUserHeader(info, user_header);
-        return !!info->http_user_header == !!user_header ? 1/*ok*/ : 0/*fail*/;
-    }
+    if (!info->http_user_header || !(oldlen = strlen(info->http_user_header)))
+        return ConnNetInfo_SetUserHeader(info, user_header);
 
     if (!user_header || !(newlen = strlen(user_header)))
         return 1/*success*/;
@@ -367,9 +369,9 @@ extern int/*bool*/ ConnNetInfo_AppendUserHeader(SConnNetInfo* info,
 
 
 typedef enum {
-    eUserHeaderOp_Override,
+    eUserHeaderOp_Delete,
     eUserHeaderOp_Extend,
-    eUserHeaderOp_Delete
+    eUserHeaderOp_Override
 } EUserHeaderOp;
 
 
@@ -429,14 +431,14 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
                 break;
         }
         switch (op) {
-        case eUserHeaderOp_Override:
-            len = newtagval < newline + newlinelen ? newlinelen : 0;
+        case eUserHeaderOp_Delete:
+            len = 0;
             break;
         case eUserHeaderOp_Extend:
             len = newlinelen - (size_t)(newtagval - newline);
             break;
-        case eUserHeaderOp_Delete:
-            len = 0;
+        case eUserHeaderOp_Override:
+            len = newtagval < newline + newlinelen ? newlinelen : 0;
             break;
         default:
             assert(0);
@@ -466,9 +468,9 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
             } else
                 l = len;
             if (l != linelen) {
+                size_t off  = (size_t)(line - hdr);
                 if (l > linelen) {
-                    char*  temp = (char*)realloc(hdr, hdrlen + l - linelen +1);
-                    size_t off  = (size_t)(line - hdr);
+                    char* temp = (char*)realloc(hdr, hdrlen + l - linelen + 1);
                     if (!temp) {
                         retval = 0/*failure*/;
                         continue;
@@ -476,9 +478,8 @@ static int/*bool*/ s_ModifyUserHeader(SConnNetInfo* info,
                     hdr  = temp;
                     line = temp + off;
                 }
-                memmove(line + l, line + linelen,
-                        hdrlen - (size_t)(line - hdr) - linelen + 1);
                 hdrlen -= linelen;
+                memmove(line + l, line + linelen, hdrlen - off + 1);
                 hdrlen += l;
             }
 
@@ -571,9 +572,10 @@ extern int/*bool*/ ConnNetInfo_PrependArg(SConnNetInfo* info,
     if (!info->args[0])
         amp = '\0';
     off = strlen(arg) + (val && *val ? 1 + strlen(val) : 0) + (amp ? 1 : 0);
-    if (strlen(info->args) + off + 1 >= sizeof(info->args))
+    if (off + strlen(info->args) >= sizeof(info->args))
         return 0/*failure*/;
-    memmove(&info->args[off], info->args, strlen(info->args) + 1);
+    if (amp)
+        memmove(&info->args[off], info->args, strlen(info->args) + 1);
     strcpy(info->args, arg);
     if (val && *val) {
         strcat(info->args, "=");
@@ -641,7 +643,7 @@ extern SConnNetInfo* ConnNetInfo_Clone(const SConnNetInfo* info)
                                     (info->service
                                      ? strlen(info->service) + 1 : 0));
     *x_info = *info;
-    if (info->timeout  &&  info->timeout != CONN_DEFAULT_TIMEOUT) {
+    if (info->timeout  &&  info->timeout != kDefaultTimeout) {
         x_info->tmo     = *info->timeout;
         x_info->timeout = &x_info->tmo;
     }
@@ -755,14 +757,18 @@ extern SOCK URL_Connect
  int/*bool*/     encode_args,
  ESwitch         log)
 {
-    static const char *X_REQ_R; /* "POST "/"GET " */
-    static const char  X_REQ_Q[] = "?";
-    static const char  X_REQ_E[] = " HTTP/1.0\r\n";
+    static const char X_REQ_Q[] = "?";
+    static const char X_REQ_E[] = " HTTP/1.0\r\n";
+    static const char X_HOST[]  = "Host: ";
 
-    SOCK  sock;
-    char  buffer[80];
-    char* x_args = 0;
-    EIO_Status st;
+    EIO_Status  st;
+    BUF         buf;
+    SOCK        sock;
+    char*       header;
+    char        buffer[80];
+    size_t      headersize;
+    const char* x_args = 0;
+    const char* x_req_r; /* "POST "/"GET " */
 
     /* check the args */
     if (!host  ||  !*host  ||  !port  ||  !path  ||  !*path  ||
@@ -774,13 +780,13 @@ extern SOCK URL_Connect
 
     switch (req_method) {
     case eReqMethod_Any:
-        X_REQ_R = DEF_CONN_REQ_METHOD " ";
+        x_req_r = DEF_CONN_REQ_METHOD " ";
         break;
     case eReqMethod_Post:
-        X_REQ_R = "POST ";
+        x_req_r = "POST ";
         break;
     case eReqMethod_Get:
-        X_REQ_R = "GET ";
+        x_req_r = "GET ";
         break;
     default:
         CORE_LOGF(eLOG_Error, ("[URL_Connect]  Unrecognized request method"
@@ -788,25 +794,10 @@ extern SOCK URL_Connect
         assert(0);
         return 0/*error*/;
     }
-    if (strcasecmp(X_REQ_R, "GET ") == 0  &&  content_length) {
+    if (content_length  &&  strcasecmp(x_req_r, "GET ") == 0) {
         CORE_LOG(eLOG_Warning,
                  "[URL_Connect]  Content length ignored with GET");
         content_length = 0;
-    }
-
-    /* connect to HTTPD */
-    if ((st= SOCK_CreateEx(host, port, c_timeout, &sock, log)) != eIO_Success){
-        CORE_LOGF(eLOG_Error,
-                  ("[URL_Connect]  Socket connect to %s:%hu failed: %s",
-                   host, port, IO_StatusStr(st)));
-        return 0/*error*/;
-    }
-
-    /* setup i/o timeout for the connection */
-    if (SOCK_SetTimeout(sock, eIO_ReadWrite, rw_timeout) != eIO_Success) {
-        CORE_LOG(eLOG_Error, "[URL_Connect]  Cannot set connection timeout");
-        SOCK_Close(sock);
-        return 0;
     }
 
     /* URL-encode "args", if any specified */
@@ -815,69 +806,86 @@ extern SOCK URL_Connect
         if ( encode_args ) {
             size_t dst_size = 3 * src_size;
             size_t src_read, dst_written;
-            x_args = (char*) malloc(dst_size + 1);
-            URL_Encode(args,   src_size, &src_read,
-                       x_args, dst_size, &dst_written);
-            x_args[dst_written] = '\0';
+            char* xx_args = (char*) malloc(dst_size + 1);
+            if (!xx_args)
+                return 0/*failure: no memory*/;
+            URL_Encode(args,    src_size, &src_read,
+                       xx_args, dst_size, &dst_written);
+            xx_args[dst_written] = '\0';
             assert(src_read == src_size);
-        } else {
-            x_args = (char*) malloc(src_size + 1);
-            memcpy(x_args, args, src_size + 1);
-        }
+            x_args = xx_args;
+        } else
+            x_args = args;
     }
 
-    /* compose and send HTTP header */
-    if (
-        /* {POST|GET} <path>?<args> HTTP/1.0\r\n */
-        (st = SOCK_Write(sock, (const void*) X_REQ_R, strlen(X_REQ_R),
-                         0, eIO_WritePersist))
-        != eIO_Success  ||
-        (st = SOCK_Write(sock, (const void*) path, strlen(path),
-                         0, eIO_WritePersist))
-        != eIO_Success  ||
-        (x_args  &&
-         ((st = SOCK_Write(sock, (const void*) X_REQ_Q, strlen(X_REQ_Q),
-                           0, eIO_WritePersist))
-          != eIO_Success  ||
-          (st = SOCK_Write(sock, (const void*) x_args, strlen(x_args),
-                           0, eIO_WritePersist))
-          != eIO_Success
-          )
-         )  ||
-        (st = SOCK_Write(sock, (const void*) X_REQ_E, strlen(X_REQ_E),
-                         0, eIO_WritePersist))
-        != eIO_Success  ||
+    buf = 0;
+    errno = 0;
+    /* compose HTTP header */
+    if (/* {POST|GET} <path>?<args> HTTP/1.0\r\n */
+        !BUF_Write(&buf, x_req_r, strlen(x_req_r))            ||
+        !BUF_Write(&buf, path,    strlen(path))               ||
+        (x_args
+         &&  (!BUF_Write(&buf, X_REQ_Q, sizeof(X_REQ_Q) - 1)  ||
+              !BUF_Write(&buf, x_args,  strlen(x_args))))     ||
+        !BUF_Write(&buf,       X_REQ_E, sizeof(X_REQ_E) - 1)  ||
+
+        /* Host: host\r\n */
+        !BUF_Write(&buf, X_HOST, sizeof(X_HOST) - 1)          ||
+        !BUF_Write(&buf, host,   strlen(host))                ||
+        !BUF_Write(&buf, "\r\n", 2)                           ||
 
         /* <user_header> */
-        (user_hdr  &&
-         (st = SOCK_Write(sock, (const void*) user_hdr, strlen(user_hdr),
-                          0, eIO_WritePersist))
-         != eIO_Success)  ||
+        (user_hdr
+         &&  !BUF_Write(&buf, user_hdr, strlen(user_hdr)))    ||
 
         /* Content-Length: <content_length>\r\n\r\n */
-        (req_method != eReqMethod_Get  &&
-         (sprintf(buffer, "Content-Length: %lu\r\n",
-                  (unsigned long) content_length) <= 0  ||
-          (st = SOCK_Write(sock, (const void*) buffer, strlen(buffer),
-                           0, eIO_WritePersist))
-          != eIO_Success))  ||
-        (st = SOCK_Write(sock, (const void*) "\r\n", 2,
-                         0, eIO_WritePersist))
-        != eIO_Success)
-        {
-            CORE_LOGF(eLOG_Error,
-                      ("[URL_Connect]  Error sending HTTP header to"
-                       " %s:%hu: %s", host, port, st == eIO_Success
-                       ? strerror(errno) : IO_StatusStr(st)));
-            if (x_args)
-                free(x_args);
-            SOCK_Close(sock);
-            return 0/*error*/;
-        }
+        (req_method != eReqMethod_Get
+         &&  (sprintf(buffer, "Content-Length: %lu\r\n",
+                      (unsigned long) content_length) <= 0    ||
+              !BUF_Write(&buf, buffer, strlen(buffer))))      ||
+
+        !BUF_Write(&buf, "\r\n", 2)) {
+        CORE_LOGF(eLOG_Error, ("[URL_Connect]  Error composing HTTP header for"
+                               " %s:%hu%s%s", host, port, errno ? ": " : "",
+                               errno ? strerror(errno) : ""));
+        BUF_Destroy(buf);
+        if (x_args  &&  x_args != args)
+            free((void*) x_args);
+        return 0/*error*/;
+    }
+    if (x_args  &&  x_args != args)
+        free((void*) x_args);
+
+    if (!(header = (char*) malloc(headersize = BUF_Size(buf))) ||
+        BUF_Read(buf, header, headersize) != headersize) {
+        CORE_LOGF(eLOG_Error, ("[URL_Connect]  Error storing HTTP header for"
+                               " %s:%hu: %s", host, port,
+                               errno ? strerror(errno) : "Unknown error"));
+        if (header)
+            free(header);
+        BUF_Destroy(buf);
+        return 0/*error*/;
+    }
+    BUF_Destroy(buf);
+
+    /* connect to HTTPD */
+    st = SOCK_CreateEx(host, port, c_timeout, &sock, header, headersize, log);
+    free(header);
+    if (st != eIO_Success) {
+        CORE_LOGF(eLOG_Error,
+                  ("[URL_Connect]  Socket connect to %s:%hu failed: %s",
+                   host, port, IO_StatusStr(st)));
+        return 0/*error*/;
+    }
+
+    /* setup I/O timeout for the connection */
+    if (SOCK_SetTimeout(sock, eIO_ReadWrite, rw_timeout) != eIO_Success) {
+        CORE_LOG(eLOG_Error, "[URL_Connect]  Cannot set connection timeout");
+        SOCK_Close(sock);
+        return 0/*error*/;
+    }
 
     /* success */
-    if (x_args)
-        free(x_args);
     return sock;
 }
 
@@ -908,7 +916,7 @@ static EIO_Status s_StripToPattern
     /* check args */
     if ( n_discarded )
         *n_discarded = 0;
-    if (!stream  ||  (!!pattern ^ !!pattern_size))
+    if (!stream  ||  (pattern != 0) != (pattern_size != 0))
         return eIO_InvalidArg;
 
     /* allocate a temporary read buffer */
@@ -1476,6 +1484,29 @@ extern size_t HostPortToString(unsigned int   host,
 /*
  * --------------------------------------------------------------------------
  * $Log: ncbi_connutil.c,v $
+ * Revision 6.60  2003/08/27 16:27:37  lavr
+ * Add "Host:" tag to be able to take advantage of Apache VHosts
+ *
+ * Revision 6.59  2003/08/25 14:44:43  lavr
+ * Employ new k..Timeout constants
+ * URL_Connect():  get rid of one avoidable malloc()
+ * User header manipulation routines:  factor out some arithmetics for speed
+ *
+ * Revision 6.58  2003/05/31 05:13:38  lavr
+ * Replace bitwise XOR with inequality [of the same effect]
+ *
+ * Revision 6.57  2003/05/20 21:25:24  lavr
+ * Limit SConnNetInfo::max_try by reasonable "short" value
+ *
+ * Revision 6.56  2003/05/19 16:44:45  lavr
+ * Minor style adjustements
+ *
+ * Revision 6.55  2003/05/14 03:51:54  lavr
+ * URL_Connect() rewritten to submit HTTP header as SOCK's initial buffer
+ *
+ * Revision 6.54  2003/04/30 17:02:11  lavr
+ * Name collision resolved in ConnNetInfo_ParseURL()
+ *
  * Revision 6.53  2003/03/06 21:55:31  lavr
  * s_ModifyUserHeader(): Heed uninitted usage warning
  * HostPortToString():   Do not append :0 (for zero port) if host is not empty

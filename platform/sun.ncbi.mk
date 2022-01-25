@@ -1,8 +1,9 @@
 #
-# $Id: sun.ncbi.mk,v 1.9 2002/10/29 01:20:14 lavr Exp $
+# $Id: sun.ncbi.mk,v 1.10 2003/05/07 17:40:12 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /usr/bin/sh
 NCBI_DEFAULT_LCL = acc
+NCBI_AR=ar
 NCBI_CC = /usr/lang/acc
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O

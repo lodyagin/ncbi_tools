@@ -1,4 +1,6 @@
-/* $Id: taxblast.c,v 6.17 2002/11/06 21:31:47 ucko Exp $
+static char const rcsid[] = "$Id: taxblast.c,v 6.21 2003/09/16 16:03:19 rsmith Exp $";
+
+/* $Id: taxblast.c,v 6.21 2003/09/16 16:03:19 rsmith Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +31,24 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.17 $
+* $Revision: 6.21 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.21  2003/09/16 16:03:19  rsmith
+* guard include of unistd.h to only those platforms that need it and can use it.
+*
+* Revision 6.20  2003/09/15 18:46:29  rsmith
+* added unistd.h include for sleep
+*
+* Revision 6.19  2003/05/30 17:25:38  coulouri
+* add rcsid
+*
+* Revision 6.18  2003/05/13 16:02:54  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 * Revision 6.17  2002/11/06 21:31:47  ucko
 * TXBGetGiFromSeqId: Compare oip->id to 0 rather than NULL, as it is an integer.
 *
@@ -115,6 +129,9 @@
 */
 
 #include <ncbi.h>
+#if defined(OS_MAC)  ||  defined(COMP_METRO)
+#include <unistd.h> /* for sleep()  */
+#endif
 #include <sequtil.h>
 #include <treemgr.h>
 #include <taxinc.h>
@@ -1817,7 +1834,7 @@ RDBTaxLookupPtr RDTaxLookupInit(void)
     }
 
     if (!tax1_isAlive()) {
-        ErrPostEx(SEV_FATAL,0,0, 
+        ErrPostEx(SEV_FATAL, 1,0, 
                 "Could not initialize taxonomy service: RDTaxLookupInit");
         return NULL;
     }
@@ -1904,12 +1921,12 @@ Int2 Main (void)
         is_na = TRUE;
     
     if((aip = AsnIoOpen(myargs[0].strvalue, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0,0, "AsnIoOpen failure\n");
+        ErrPostEx(SEV_FATAL, 1,0, "AsnIoOpen failure\n");
         return 1;
     }
     
     if((sap = SeqAnnotAsnRead (aip, NULL)) == NULL) {
-        ErrPostEx(SEV_FATAL, 0,0,"SeqAlignAsnRead failure\n");
+        ErrPostEx(SEV_FATAL, 1,0,"SeqAlignAsnRead failure\n");
         return 1;
     }
 

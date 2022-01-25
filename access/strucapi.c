@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/18/00
 *
-* $Revision: 1.13 $
+* $Revision: 1.17 $
 *
 * File Description: 
 *
@@ -53,30 +53,35 @@ NLM_EXTERN CONN StrucOpenConnection (
 )
 
 {
+  Char        query [256];
+  /*
   CONN        conn;
   size_t      n_written;
-  Char        query [256];
   EIO_Status  status;
+  */
 
   if (uid < 1) return NULL;
 
   /*
-  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/mmdb/mmdbsrv.cgi",
-                             NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
-                             eMIME_WwwForm, eENCOD_Url, 0);
-  */
-
-  conn = QUERY_OpenServiceQuery ("StrucFetch", NULL, 30);
-
-  if (conn == NULL) return NULL;
-
   sprintf (query, "uid=%ld%s", (long) uid,
            "&save=asntext&form=6&db=t&Dopt=j&Complexity=Cn3D%20Subset");
 
+  conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/Structure/mmdb/mmdbsrv.cgi",
+                             NULL, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_WwwForm, eENCOD_Url, 0);
+ 
   status = CONN_Write (conn, (const void *) query, StringLen (query), &n_written);
-  if (status != eIO_Success) return NULL;
+  if (status != eIO_Success) {
+    CONN_Close (conn);
+    return NULL;
+  }
 
   return conn;
+  */
+
+  sprintf (query, "uid=%ld%s", (long) uid,
+           "&save=asntext&form=6&db=t&Dopt=j&Complexity=Cn3D%20Subset");
+  return QUERY_OpenServiceQuery ("StrucFetch", query, 30);
 }
 
 NLM_EXTERN BiostrucSeqPtr StrucWaitForReply (

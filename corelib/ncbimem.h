@@ -32,7 +32,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   	prototypes for ncbi memory functions
@@ -40,6 +40,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimem.h,v $
+* Revision 6.12  2003/08/11 19:43:27  rsmith
+* Memory Handle functions apply to Mac OS Darwin (OSX) not just to OS_MAC (OS9)
+*
+* Revision 6.11  2003/05/22 18:17:10  beloslyu
+* allow AIX people to disable mmap usage via IBM_DISABLE_MMAP flag
+*
 * Revision 6.10  2002/07/11 15:06:43  ivanov
 * Fixed C++ comments
 *
@@ -125,7 +131,7 @@ NLM_EXTERN void*  LIBCALL Nlm_MemDup(const void* orig, size_t size);
 NLM_EXTERN size_t LIBCALL Nlm_MemSearch(const void* where, size_t where_size,
                                         const void* what, size_t what_size);
 
-#if defined(OS_MAC) || defined(OS_MSWIN) || defined(MSC_VIRT)
+#if defined(OS_MAC) || defined(OS_UNIX_DARWIN) || defined(OS_MSWIN) || defined(MSC_VIRT)
 NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandNew(size_t size);
 NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandGet(size_t size, Nlm_Boolean clear_out);
 NLM_EXTERN Nlm_Handle  LIBCALL Nlm_HandMore(Nlm_Handle hnd, size_t size);
@@ -211,7 +217,7 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 
 /* Fake handle functions with pointer functions */
 
-#if !(defined(OS_MAC) || defined(OS_MSWIN) || defined(MSC_VIRT))
+#if !(defined(OS_MAC) || defined(OS_UNIX_DARWIN) || defined(OS_MSWIN) || defined(MSC_VIRT) )
 #define Nlm_HandNew(a)    Nlm_MemNew(a)
 #define Nlm_HandGet(a,b)  Nlm_MemGet(a,b)
 #define Nlm_HandMore(a,b) Nlm_MemMore(a,b)
@@ -239,7 +245,9 @@ NLM_EXTERN void* Nlm_CallocViaMalloc(size_t n_elem, size_t item_size);
 #define HandUnlock  Nlm_HandUnlock
 
 #if (defined(OS_UNIX_SYSV) || defined(OS_UNIX_SUN) || defined(OS_UNIX_OSF1) || defined(OS_UNIX_LINUX) || defined(OS_UNIX_AIX) || defined(OS_UNIX_DARWIN)) && !defined(OS_UNIX_ULTRIX) || defined(OS_UNIX_FREEBSD)
+#ifndef IBM_DISABLE_MMAP
 #define MMAP_AVAIL
+#endif
 #endif
 
 

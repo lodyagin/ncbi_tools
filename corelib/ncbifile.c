@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.32  2003/05/05 11:53:37  rsmith
+* Codewarrior compiling for Win32 does not know about setmode or tempnam.
+*
 * Revision 6.31  2003/03/11 14:26:42  rsmith
 * previous change to Nlm_DirCatalog made for only OS_UNIX_DARWIN, not all OS_UNIX
 *
@@ -583,7 +586,7 @@ NLM_EXTERN FILE * LIBCALL Nlm_FileOpen(const char *filename, const char *mode)
         else
           f = fopen(filename, mode);
 
-#ifdef WIN32
+#if defined(WIN32)  &&  ! defined(COMP_METRO) 
         if (strchr(mode, 'b')  &&
             (f == stdin  ||  f == stdout  ||  f == stderr))
           setmode(fileno(f), O_BINARY);
@@ -670,7 +673,7 @@ NLM_EXTERN void LIBCALL  Nlm_FileClose (FILE *stream)
 #ifdef WIN_DUMB    
   if (stream == stdin  ||  stream == stdout  ||  stream == stderr)
     {
-#ifdef WIN32
+#if defined(WIN32)  &&  ! defined(COMP_METRO) 
       setmode(fileno(stream), O_TEXT);
 #endif
       return;

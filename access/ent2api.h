@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.21 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
@@ -59,6 +59,8 @@
 extern "C" {
 #endif
 
+
+/* See network connection test functions at bottom of this header */
 
 /* See synchronous and asynchronous code examples at bottom of this header */
 
@@ -254,6 +256,10 @@ NLM_EXTERN void EntrezSetUseHistoryFlag (
 
 /* reply extraction functions - these free the enclosing Entrez2ReplyPtr */
 
+NLM_EXTERN CharPtr EntrezExtractErrorReply (
+  Entrez2ReplyPtr e2ry
+);
+
 NLM_EXTERN Entrez2InfoPtr EntrezExtractInfoReply (
   Entrez2ReplyPtr e2ry
 );
@@ -363,6 +369,24 @@ via timer call:
   }
 
 */
+
+/* network connection test functions */
+
+NLM_EXTERN Boolean NetTestAsynchronousQuery (
+  QUEUE* queue,
+  QueryResultProc resultproc,
+  VoidPtr userdata
+);
+
+NLM_EXTERN Boolean NetTestReadReply (
+  CONN conn,
+  EIO_Status status
+);
+
+NLM_EXTERN Int4 NetTestCheckQueue (
+  QUEUE* queue
+);
+
 
 
 #ifdef __cplusplus

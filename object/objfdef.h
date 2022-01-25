@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objfdef.h,v $
+* Revision 6.5  2003/10/07 13:51:04  kans
+* added gap, operon, oriT features and ecotype, estimated_length and operon qualifiers
+*
 * Revision 6.4  2003/02/12 14:15:03  rsmith
 * Undo last change adding FEATDEF_ALIGN
 *
@@ -339,8 +342,11 @@ NLM_EXTERN FeatDefPtr LIBCALL FeatDefFindNext PROTO((FeatDefPtr curr, Uint1Ptr k
 #define FEATDEF_sig_peptide_aa 88
 #define FEATDEF_transit_peptide_aa 89
 #define FEATDEF_snoRNA 90
+#define FEATDEF_gap 91
+#define FEATDEF_operon 92
+#define FEATDEF_oriT 93
 
-#define FEATDEF_MAX 91 /* size of array needed for featdef filter parameters */
+#define FEATDEF_MAX 94 /* size of array needed for featdef filter parameters */
 
 
 #ifdef __cplusplus

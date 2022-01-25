@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.132 $
+* $Revision: 6.146 $
 *
 * File Description: 
 *
@@ -1347,7 +1347,7 @@ static ENUM_ALIST(biomol_nucX_alist)
   {"Transfer RNA",             5},
   {"Small nuclear RNA",        6},
   {"Small cytoplasmic RNA",    7},
-  {"Other-Genetic [plasmid]",  9},
+  {"Other-Genetic",            9},
   {"cRNA",                    11},
   {"Small nucleolar RNA",     12},
 END_ENUM_ALIST
@@ -5487,7 +5487,9 @@ static void MakePubAndDefLine (SequinBlockPtr sbp, SeqEntryPtr sep)
   }
 }
 
-static SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp)
+extern SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp);
+
+extern SubmitBlockPtr ConvertSequinBlockToSubmitBlock (SequinBlockPtr sqp)
 
 {
   AffilPtr        affil;
@@ -6159,6 +6161,7 @@ static void LookForReplacedByCallback (SeqEntryPtr sep, Pointer mydata, Int4 ind
 #ifdef USE_SMARTNET
 extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
 extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromTPASmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
 #endif
 
 static void DownloadProc (ButtoN b)
@@ -6188,6 +6191,7 @@ static void DownloadProc (ButtoN b)
   WatchCursor ();
   Update ();
   GetTitle (ffp->accession, str, sizeof (str));
+  TrimSpacesAroundString (str);
   if (StringHasNoText (str)) {
     Message (MSG_OK, "Please enter an accession number or gi");
     Show (w);
@@ -6276,9 +6280,12 @@ static void DownloadProc (ButtoN b)
   } else if (! StringHasNoText (accn)) {
 #ifdef USE_SMARTNET
     if (accn != NULL) {
-      dataptr = ReadFromSmart (accn, &datatype, NULL);
+      dataptr = ReadFromTPASmart (accn, &datatype, NULL);
       if (dataptr == NULL) {
-        dataptr = ReadFromDirSub (accn, &datatype, NULL);
+        dataptr = ReadFromSmart (accn, &datatype, NULL);
+        if (dataptr == NULL) {
+          dataptr = ReadFromDirSub (accn, &datatype, NULL);
+        }
       }
     }
 #endif
@@ -6445,7 +6452,65 @@ extern void DownloadAndUpdateProc (ButtoN b)
     }
   }
 
-  SqnReadAlignView ((BaseFormPtr) ffp, updateTargetBspKludge, sep);
+  SqnReadAlignView ((BaseFormPtr) ffp, updateTargetBspKludge, sep, TRUE);
+}
+
+extern void DownloadAndExtendProc (ButtoN b)
+
+{
+  FetchFormPtr  ffp;
+  SeqEntryPtr   sep;
+  Char          str [32];
+  Int4          uid;
+
+  ffp = (FetchFormPtr) GetObjectExtra (b);
+  if (ffp == NULL) return;
+  Hide (ParentWindow (b));
+  WatchCursor ();
+  Update ();
+  GetTitle (ffp->accession, str, sizeof (str));
+  if (StringHasNoText (str)) {
+    Remove (ParentWindow (b));
+    ArrowCursor ();
+    return;
+  }
+  sep = NULL;
+  uid = 0;
+  /*
+  if (! EntrezIsInited ()) {
+    if (! SequinEntrezInit ("Sequin", FALSE, NULL)) {
+      Remove (ParentWindow (b));
+      ArrowCursor ();
+      return;
+    }
+  }
+  */
+  if (GetValue (ffp->accntype) == 1) {
+    uid = AccessionToGi (str);
+  } else {
+    if (! StrToLong (str, &uid)) {
+     uid = 0;
+    }
+  }
+  Remove (ParentWindow (b));
+  ArrowCursor ();
+  Update ();
+  if (uid > 0) {
+    sep = PubSeqSynchronousQuery (uid, 0, -1);
+    /* EntrezFini (); */
+    if (sep == NULL) {
+      Message (MSG_OK, "Unable to find this record in the database.");
+      return;
+    }
+    if (IS_Bioseq (sep)) {
+    } else if (IS_Bioseq_set (sep)) {
+    } else {
+      Message (MSG_OK, "Unable to find this record in the database.");
+      return;
+    }
+  }
+
+  SqnReadAlignView ((BaseFormPtr) ffp, updateTargetBspKludge, sep, FALSE);
 }
 
 static void CancelFetchProc (ButtoN b)
@@ -6794,4 +6859,465 @@ static SeqLocPtr FindSingleCodingInterval (BioseqPtr nuc, BioseqPtr prot, Int2 g
   return slp;
 }
 */
+
+static Boolean ReplaceTPAAccessionNumbers (
+  CharPtr    seqid,
+  ValNodePtr acc_list,
+  SeqEntryPtr sep
+)
+{
+  BioseqSetPtr      bssp;
+  BioseqPtr         bsp;
+  SeqDescrPtr       sdp;
+  Char              str [128];
+  SeqMgrDescContext context;
+  UserObjectPtr     uop;
+  ValNodePtr        vnp;
+
+  if (sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    /* this also delves into nuc-prot sets */
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (IsPopPhyEtcSet (bssp->_class)) ||
+                         bssp->_class == 1)) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+      {
+        if (ReplaceTPAAccessionNumbers (seqid, acc_list, sep))
+        {
+          return TRUE;
+        }
+      }
+      return FALSE;
+    }
+  }
+  if (!IS_Bioseq (sep)) return FALSE;
+
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL) return FALSE;
+  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+  if (StringCmp (str, seqid) != 0) return FALSE;
+
+  sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_user, &context);
+  while (sdp != NULL
+    && ((uop = (UserObjectPtr)sdp->data.ptrvalue) == NULL
+      || StringICmp (uop->type->str, "TpaAssembly") != 0))
+  {
+    sdp = SeqMgrGetNextDescriptor (bsp, sdp, Seq_descr_user, &context);
+  }
+  if (sdp == NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_user);
+    if (sdp == NULL) return FALSE;
+    uop = CreateTpaAssemblyUserObject ();
+    if (uop == NULL) return FALSE;
+    sdp->data.ptrvalue = uop;
+  }
+
+  for (vnp = acc_list; vnp != NULL; vnp = vnp->next)
+  {
+    AddAccessionToTpaAssemblyUserObject (uop, vnp->data.ptrvalue, 0, 0);
+  }
+  ValNodeFreeData (acc_list);
+  
+  return TRUE;
+}
+
+extern void LoadTPAAccessionNumbersFromFile (
+  IteM i
+)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+  Char          path [PATH_MAX];
+  FILE          *fp;
+  Char          str [8192];
+  size_t        len = 8192;
+  Boolean       need_seqid;
+  Char          seqid[100];
+  Int4          seqid_len;
+  CharPtr       cp;
+  CharPtr       acc_end;
+  Boolean       found_end;
+  ValNodePtr    acc_list;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  path [0] = '\0';
+  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return;
+  
+  fp = FileOpen (path, "r");
+  if (fp == NULL) return;
+
+  need_seqid = TRUE;
+  acc_list = NULL;
+  ReadLine (fp, str, len);
+  while (Nlm_fileDone) 
+  {
+    cp = str;
+    if (strlen (str) == 0)
+    {
+      ReadLine (fp, str, len);
+      continue;
+    }
+    if (need_seqid)
+    {
+      seqid_len = StringCSpn (str, " ");
+      if (seqid_len > 0)
+      {
+        StringNCpy (seqid, str, seqid_len);
+        seqid [seqid_len] = 0;
+        need_seqid = FALSE;
+      }
+      cp = str + seqid_len + 1;
+    }
+    if (need_seqid)
+    {
+      ReadLine (fp, str, len);
+      continue;
+    }
+    if (str [strlen (str) - 1] != ',')
+    {
+      need_seqid = TRUE;
+    }
+    
+    found_end = FALSE;
+    while (*cp != 0)
+    {
+      if (*cp == ' ' || *cp == ',')
+      {
+        cp++;
+      }
+      else
+      {
+        acc_end = cp + 1;
+        while (*acc_end != 0 && *acc_end != ',')
+        {
+          acc_end++;
+        }
+        if (*acc_end == 0)
+        {
+          found_end = TRUE;
+        }
+        else
+        {
+          *acc_end = 0;
+        }
+        ValNodeAddStr (&acc_list, 0, StringSave (cp));
+        if (found_end)
+        {
+          cp = acc_end;
+        }
+        else
+        {
+          cp = acc_end + 1;
+        }
+      }
+    }
+
+    if (need_seqid == TRUE)
+    {
+      /* do something with accession list */
+      if ( ! ReplaceTPAAccessionNumbers (seqid, acc_list, sep))
+      {
+        Message (MSG_ERROR,
+                 "Unable to update accession numbers for %s (not found)",
+                 seqid);
+      }
+      acc_list = NULL;
+    }
+      
+    ReadLine (fp, str, len);
+  }
+  if (acc_list != NULL
+    && ! ReplaceTPAAccessionNumbers (seqid, acc_list, sep))
+  {
+    Message (MSG_ERROR,
+             "Unable to update accession numbers for %s (not found)",
+             seqid);
+  }
+
+  FileClose (fp);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+  return;
+}
+
+static void AddHistory (
+  BioseqPtr  bsp,
+  ValNodePtr acc_list
+)
+{
+  SeqHistPtr      hist;
+  ValNodePtr      vnp;
+  SeqIdPtr        sip;
+  TextSeqIdPtr    tsip;
+  Uint4           whichdb;
+  Char            prefix [20];
+
+  if (bsp == NULL || acc_list == NULL) return;
+  hist = bsp->hist;
+  if (hist == NULL)
+  {
+    hist = SeqHistNew ();
+    if (hist == NULL) return;
+    bsp->hist = hist;
+  }
+  for (vnp = acc_list; vnp != NULL; vnp = vnp->next) {
+    tsip = TextSeqIdNew ();
+    if (tsip == NULL) return;
+    tsip->accession = StringSave (vnp->data.ptrvalue);
+
+    sip = ValNodeNew (hist->replace_ids);
+    if (hist->replace_ids == NULL) {
+      hist->replace_ids = sip;
+    }
+    if (sip == NULL) return;
+
+    sip->data.ptrvalue = (Pointer) tsip;
+
+    StringNCpy_0 (prefix, (CharPtr) vnp->data.ptrvalue, sizeof (prefix));
+    whichdb = WHICH_db_accession (prefix);
+    if (ACCN_IS_EMBL (whichdb)) {
+      sip->choice = SEQID_EMBL;
+    } else if (ACCN_IS_DDBJ (whichdb)) {
+      sip->choice = SEQID_DDBJ;
+    } else {
+      sip->choice = SEQID_GENBANK;
+    }
+  }
+  if (hist != NULL
+    && hist->assembly == NULL
+    && hist->replace_date == NULL
+    && hist->replace_ids == NULL
+    && hist->replaced_by_date == NULL
+    && hist->replaced_by_ids == NULL
+    && hist->deleted_date == NULL
+    && ! hist->deleted)
+  {
+      bsp->hist = SeqHistFree (bsp->hist);
+  }
+}
+
+static Boolean AddAccessionToGenbankBlock (
+  CharPtr     seqid,
+  ValNodePtr  acc_list,
+  SeqEntryPtr sep,
+  Boolean     add_hist
+)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  Int4         seqid_len;
+  GBBlockPtr   gbp;
+  ValNodePtr   last_one;
+  Char         str [128];
+  SeqDescrPtr       sdp;
+
+  if (seqid == NULL || acc_list == NULL
+    || sep == NULL || sep->data.ptrvalue == NULL) return FALSE;
+  if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    /* this also delves into nuc-prot sets */
+    if (bssp != NULL && (bssp->_class == 7 ||
+                         (IsPopPhyEtcSet (bssp->_class)) ||
+                         bssp->_class == 1)) {
+      for (sep = bssp->seq_set; sep != NULL; sep = sep->next)
+      {
+        if (AddAccessionToGenbankBlock (seqid, acc_list, sep, add_hist))
+        {
+          return TRUE;
+        }
+      }
+      return FALSE;
+    }
+  }
+  if (!IS_Bioseq (sep)) return FALSE;
+
+  bsp = (BioseqPtr) sep->data.ptrvalue;
+  if (bsp == NULL) return FALSE;
+  SeqIdWrite (bsp->id, str, PRINTID_REPORT, sizeof (str));
+  seqid_len = StringCSpn (str, ".");
+  if (seqid_len > 0)
+  {
+    str [ seqid_len ] = 0;
+  }
+  if (StringCmp (str, seqid) != 0) return FALSE;
+
+  sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
+
+  if (sdp == NULL)
+  {
+    sdp = CreateNewDescriptor (sep, Seq_descr_genbank);
+    if (sdp == NULL) return FALSE;
+  }
+ 
+  if (sdp->data.ptrvalue == NULL)
+  {
+    sdp->data.ptrvalue = GBBlockNew ();
+    if (sdp->data.ptrvalue == NULL) return FALSE;
+  }
+ 
+  gbp = (GBBlockPtr) sdp->data.ptrvalue;
+  
+  for (last_one = gbp->extra_accessions;
+       last_one != NULL && last_one->next != NULL;
+       last_one = last_one->next)
+  {}
+  if (last_one == NULL)
+  {
+    gbp->extra_accessions = acc_list;
+  }
+  else
+  {
+    last_one->next = acc_list;
+  }
+  if (add_hist)
+  {
+    AddHistory (bsp, acc_list);
+  }
+  return TRUE;
+}
+ 
+static void LoadSecondaryAccessionNumbersPlusHistFromFile (
+  IteM    i,
+  Boolean add_hist
+)
+{
+  BaseFormPtr   bfp;
+  SeqEntryPtr   sep;
+  Char          path [PATH_MAX];
+  FILE          *fp;
+  Char          str [8192];
+  size_t        len = 8192;
+  Boolean       need_seqid;
+  Char          seqid[100];
+  Int4          seqid_len;
+  CharPtr       cp;
+  CharPtr       acc_end;
+  Boolean       found_end;
+  ValNodePtr    acc_list;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  path [0] = '\0';
+  if (! GetInputFileName (path, sizeof (path), NULL, "TEXT")) return;
+  
+  fp = FileOpen (path, "r");
+  if (fp == NULL) return;
+
+  need_seqid = TRUE;
+  acc_list = NULL;
+  ReadLine (fp, str, len);
+  while (Nlm_fileDone || str[0] != 0) 
+  {
+    cp = str;
+    if (strlen (str) == 0)
+    {
+      ReadLine (fp, str, len);
+      continue;
+    }
+    seqid_len = StringCSpn (str, " \t");
+    if (seqid_len > 0)
+    {
+      StringNCpy (seqid, str, seqid_len);
+      seqid [seqid_len] = 0;
+      cp = str + seqid_len + 1;
+    }
+    else
+    {
+      ReadLine (fp, str, len);
+      continue;
+    }
+    
+    found_end = FALSE;
+    while (*cp != 0)
+    {
+      if (*cp == ' ' || *cp == ' ')
+      {
+        cp++;
+      }
+      else
+      {
+        acc_end = cp + 1;
+        while (*acc_end != 0 && *acc_end != ' ')
+        {
+          acc_end++;
+        }
+        if (*acc_end == 0)
+        {
+          found_end = TRUE;
+        }
+        else
+        {
+          *acc_end = 0;
+        }
+        ValNodeAddStr (&acc_list, 0, StringSave (cp));
+        if (found_end)
+        {
+          cp = acc_end;
+        }
+        else
+        {
+          cp = acc_end + 1;
+        }
+      }
+    }
+
+    /* do something with accession list */
+    if ( ! AddAccessionToGenbankBlock (seqid, acc_list, sep, add_hist))
+    {
+      Message (MSG_ERROR,
+               "Unable to update accession numbers for %s (not found)",
+               seqid);
+    }
+    acc_list = NULL;
+      
+    ReadLine (fp, str, len);
+  }
+  if (acc_list != NULL
+    && ! AddAccessionToGenbankBlock (seqid, acc_list, sep, add_hist))
+  {
+    Message (MSG_ERROR,
+             "Unable to update accession numbers for %s (not found)",
+             seqid);
+  }
+
+  FileClose (fp);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+  ArrowCursor ();
+  Update ();
+  return;
+}
+
+extern void LoadSecondaryAccessionNumbersFromFile (
+  IteM i
+)
+{
+  LoadSecondaryAccessionNumbersPlusHistFromFile (i, FALSE);
+}
+
+extern void LoadHistoryAccessionNumbersFromFile (
+  IteM i
+)
+{
+  LoadSecondaryAccessionNumbersPlusHistFromFile (i, TRUE);
+}
 

@@ -1,4 +1,4 @@
-/* $Id: cddposutil.c,v 1.15 2001/12/31 13:47:06 bauer Exp $
+/* $Id: cddposutil.c,v 1.16 2003/05/29 13:17:56 thiessen Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 12/21/1999
 *
-* $Revision: 1.15 $
+* $Revision: 1.16 $
 *
 * File Description: CDD utilities involving position-specific scoring 
 *                   matrices (PSSMs)
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddposutil.c,v $
+* Revision 1.16  2003/05/29 13:17:56  thiessen
+* fix memory leak in CddposFreeMemory()
+*
 * Revision 1.15  2001/12/31 13:47:06  bauer
 * made block_width a local variable in CddSetUpSearchInternalByLoc to deal with changes in blast data structures
 *
@@ -271,6 +274,7 @@ void LIBCALL CddposFreeMemory(posSearchItems * posSearch) {
   MemFree(posSearch->posRowSigma);
   MemFree(posSearch->posInformation);
   MemFree(posSearch->posUseSequences);
+  MemFree(posSearch->posGaplessColumnWeights);
 }
 
 

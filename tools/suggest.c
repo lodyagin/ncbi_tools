@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: suggest.c,v 6.11 2003/05/30 17:25:38 coulouri Exp $";
+
 /*   suggest.c
 * ===========================================================================
 *
@@ -29,7 +31,7 @@
 *
 * Version Creation Date:   3/17/94
 *
-* $Revision: 6.9 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
@@ -66,6 +68,12 @@
 *     
 *     A detailed change log follows:
 *     $Log: suggest.c,v $
+*     Revision 6.11  2003/05/30 17:25:38  coulouri
+*     add rcsid
+*
+*     Revision 6.10  2003/05/13 16:02:54  coulouri
+*     make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
 *     Revision 6.9  2002/02/06 21:10:38  kans
 *     PlusStrand and MinusStrand prefixed with Suggest to avoid collision with asn2graphic viewer symbols
 *
@@ -490,9 +498,9 @@ static	Int4	aori, ahz, aasc;
 
 Int4 Total_len;
 
-#define fatal(m)	{ErrPostEx(SEV_FATAL, 0, 0, "%s:  %s", module, m); goto Error;}
+#define fatal(m)	{ErrPostEx(SEV_FATAL, 1, 0, "%s:  %s", module, m); goto Error;}
 
-static char * suggest_revision = "$Revision: 6.9 $";
+static char * suggest_revision = "$Revision: 6.11 $";
 
 static Int4	suggest_get_frames_init = 1;
 

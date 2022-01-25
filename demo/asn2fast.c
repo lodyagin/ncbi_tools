@@ -9,7 +9,7 @@
 #include <accid1.h>
 #include <lsqfetch.h>
 
-#define NUMARG 17
+#define NUMARG 18
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'a',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -27,6 +27,7 @@ Args myargs[NUMARG] = {
 	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
 	{"Far Genomic Contig function for Quality Scores","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
 	{"Remote fetching", "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+	{"Local fetching", "F", NULL, NULL, FALSE, 'k', ARG_BOOLEAN, 0.0, 0, NULL},
 	{"Print Quality Score Gap as -1, false prints as 0", "F", NULL, NULL, FALSE, 'z', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
@@ -56,7 +57,7 @@ static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
 		  return;
 
 		fp = (FILE*) data;
-		if (myargs [16].intvalue) {
+		if (myargs [17].intvalue) {
 		  PrintQualityScoresToBuffer (bsp, FALSE, fp, PrintQualProc);
 		} else {
 		  PrintQualityScoresToBuffer (bsp, TRUE, fp, PrintQualProc);
@@ -81,7 +82,7 @@ static void PrintFarQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 
 		  return;
 
 		fp = (FILE*) data;
-		if (myargs [16].intvalue) {
+		if (myargs [17].intvalue) {
 		  PrintQualityScoresForContig (bsp, FALSE, fp);
 		} else {
 		  PrintQualityScoresForContig (bsp, TRUE, fp);
@@ -219,6 +220,8 @@ Int2 Main(void)
 
 	if (myargs [15].intvalue) {
 		ID1BioseqFetchEnable ("asn2fast", FALSE);
+	}
+	if (myargs [16].intvalue) {
 		LocalSeqFetchInit (FALSE);
 	}
 
@@ -322,8 +325,10 @@ Int2 Main(void)
 	if (make_quality)
 		FileClose (ql);
 
-	if (myargs [15].intvalue) {
+	if (myargs [16].intvalue) {
 		LocalSeqFetchDisable ();
+	}
+	if (myargs [15].intvalue) {
 		ID1BioseqFetchDisable ();
 	}
 

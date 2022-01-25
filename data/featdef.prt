@@ -853,7 +853,34 @@ FeatDefGroupSet ::= {
     entrygroup 3 ,
     displaygroup 3 ,
     molgroup na
-  }
+  } ,
+  {                   -- Gap
+    typelabel "gap" ,
+    menulabel "Gap" ,
+    featdef-key 91 ,
+    seqfeat-key 8 ,
+    entrygroup 0 ,
+    displaygroup 4 ,
+    molgroup na
+  } ,
+  {                   -- Operon
+    typelabel "operon" ,
+    menulabel "Operon" ,
+    featdef-key 92 ,
+    seqfeat-key 8 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup na
+  } ,
+  {                   -- OriT
+    typelabel "oriT" ,
+    menulabel "Origin of Transcription" ,
+    featdef-key 93 ,
+    seqfeat-key 8 ,
+    entrygroup 5 ,
+    displaygroup 5 ,
+    molgroup na
+  } ,
 
 }
 }

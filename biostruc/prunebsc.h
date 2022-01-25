@@ -14,6 +14,14 @@
 #include "strimprt.h"
 #define MAXNUM 50
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 BiostrucPtr LIBCALL PruneBiostruc(BiostrucPtr bsp, CharPtr chain);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

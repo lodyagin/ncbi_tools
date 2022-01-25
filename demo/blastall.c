@@ -1,4 +1,6 @@
-/* $Id: blastall.c,v 6.131 2003/04/08 17:33:42 dondosha Exp $
+static char const rcsid[] = "$Id: blastall.c,v 6.135 2003/08/21 15:37:54 dondosha Exp $";
+
+/* $Id: blastall.c,v 6.135 2003/08/21 15:37:54 dondosha Exp $
 **************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +28,18 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.135  2003/08/21 15:37:54  dondosha
+ * Corrections for out-of-frame tabular output and megablast XML output
+ *
+ * Revision 6.134  2003/05/30 17:31:09  coulouri
+ * add rcsid
+ *
+ * Revision 6.133  2003/05/09 18:44:49  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
+ * Revision 6.132  2003/05/06 18:57:46  dondosha
+ * Do not set cutoff_s for megablast, it is not needed
+ *
  * Revision 6.131  2003/04/08 17:33:42  dondosha
  * Scale the default values of gap costs if match reward is > 1
  *
@@ -524,7 +538,7 @@ BlastGetMaskingLoc(FILE *infp, FILE *outfp, CharPtr instructions)
 
 		if (bsp == NULL)
 		{
-	  	 	ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+	  	 	ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 	   		return 2;
 		}
 		SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, 50);
@@ -740,13 +754,13 @@ static BlastNet3Hptr BNETInitializeBlast(CharPtr database, CharPtr program,
     BlastVersionPtr	blast_version;
 
     if (! BlastInit("blastcl3", &bl3hp, &response)) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to initialize BLAST service");
         return NULL;
     }
     if (response && response->choice == BlastResponse_init) {
         blast_version = response->data.ptrvalue;
     } else {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to connect to the BLAST service");
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to connect to the BLAST service");
         return NULL;
     }
     
@@ -875,7 +889,7 @@ Int2 Main (void)
         html = TRUE;
     
     if ((infp = FileOpen(blast_inputfile, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", blast_inputfile);
+        ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", blast_inputfile);
         return (1);
     }
 
@@ -883,7 +897,7 @@ Int2 Main (void)
     outfp = NULL;
     if (align_view != 7 && align_view != 10 && align_view != 11 && blast_outputfile != NULL) {
         if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", blast_outputfile);
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", blast_outputfile);
             return (1);
         }
     }
@@ -900,12 +914,12 @@ Int2 Main (void)
     if(align_view < 7) {
         if (StringICmp("blastx", blast_program) == 0) {
             if (align_view != 0) {
-                ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with blastx");
+                ErrPostEx(SEV_FATAL, 1, 0, "This option is not available with blastx");
                 return 1;
             }
         } else if (StringICmp("tblastx", blast_program) == 0) {
             if (align_view != 0) {
-                ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with tblastx");
+                ErrPostEx(SEV_FATAL, 1, 0, "This option is not available with tblastx");
                 return 1;
             }
         }
@@ -916,7 +930,7 @@ Int2 Main (void)
         believe_query = TRUE;
     
     if (believe_query == FALSE && (myargs[20].strvalue || align_view == 10 || align_view ==11)) {
-        ErrPostEx(SEV_FATAL, 0, 0, "-J option must be TRUE to produce a SeqAlign file");
+        ErrPostEx(SEV_FATAL, 1, 0, "-J option must be TRUE to produce a SeqAlign file");
     }
     
     options = BLASTOptionNewEx(blast_program, (Boolean) myargs[16].intvalue, (Boolean) myargs[35].intvalue);
@@ -1007,7 +1021,6 @@ Int2 Main (void)
     
     if (options->is_megablast_search) {
        options->cutoff_s2 = options->wordsize*options->reward;
-       options->cutoff_s = (options->wordsize + 4)*options->reward;
     }
 
     options->db_length = (Int8) myargs[24].floatvalue;
@@ -1098,7 +1111,7 @@ Int2 Main (void)
     aip = NULL;
     if (myargs[20].strvalue != NULL) {
         if ((aip = AsnIoOpen (myargs[20].strvalue,"w")) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
                 return 1;
         }
     }
@@ -1106,7 +1119,7 @@ Int2 Main (void)
     {
         const char* mode = (align_view == 10) ? "w" : "wb";
         if ((aip = AsnIoOpen (blast_outputfile, (char*) mode)) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
                 return 1;
         }
     }
@@ -1124,7 +1137,7 @@ Int2 Main (void)
 
     if(align_view >= 7 && myargs[40].intvalue > 1)
     {
-      ErrPostEx( SEV_FATAL, 0, 0, 
+      ErrPostEx(SEV_FATAL, 1, 0, 
                  "blast: Query concatenation is currently not supported with -m > 7");
       return 1;
     }
@@ -1155,14 +1168,14 @@ Int2 Main (void)
 	!( (StringICmp("blastn",  blast_program) == 0) || 
 	   (StringICmp("tblastn", blast_program) == 0)   ) ) {
 
-	ErrPostEx(SEV_FATAL, 0, 0, "blast: Can't concat with program %s\n", myargs[0].strvalue);
+	ErrPostEx(SEV_FATAL, 1, 0, "blast: Can't concat with program %s\n", myargs[0].strvalue);
        return 1;
     }
     
     /* AM: Query concatenation is not consistent with ungapped search */
     if( num_queries > 0 && !myargs[16].intvalue )
     {
-      ErrPostEx( SEV_FATAL, 0, 0, 
+      ErrPostEx(SEV_FATAL, 1, 0, 
                  "blast: Query concatenation is inconsistent with ungapped search\n" );
       return 1;
     }
@@ -1218,7 +1231,7 @@ Int2 Main (void)
 		SeqEntryExplore(sep, &query_bsp, FindProt);
 	     
 	     if (query_bsp == NULL) {
-		ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
 		return 2;
 	     }
 	     
@@ -1230,7 +1243,7 @@ Int2 Main (void)
                  if (to < 0)
                      to = query_bsp->length - 1;
                  if (from >= query_bsp->length || to < 0) {
-                     ErrPostEx(SEV_FATAL, 0, 0, 
+                     ErrPostEx(SEV_FATAL, 1, 0, 
                                "Location outside of the query sequence range\n");
                      return 3;
                  }
@@ -1271,7 +1284,7 @@ Int2 Main (void)
           
              /* if concat and num_queries has not been reached and sep is NULL, crap out */
              if (sep == NULL && bsp_iter < num_queries) {   /* implies num_queries>0 */
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Only %n queries found!\n", bsp_iter); 
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Only %n queries found!\n", bsp_iter); 
                 return (1);
              }
                
@@ -1286,7 +1299,7 @@ Int2 Main (void)
              }
           
              if (query_bsp == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+                ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
                 return 2;
              }
 
@@ -1443,7 +1456,7 @@ Int2 Main (void)
            if (to < 0)
               to = fake_bsp->length - 1;
            if (from >= fake_bsp->length || to < 0) {
-              ErrPostEx(SEV_FATAL, 0, 0, 
+              ErrPostEx(SEV_FATAL, 1, 0, 
                         "Location outside of the query sequence range\n");
               return 3;
            }
@@ -1555,12 +1568,11 @@ Int2 Main (void)
 	      num_iters = (num_queries>0) ? num_queries : 1;
 	      for (sap_iter=0; sap_iter < num_iters; sap_iter++) {
 	         curr_seqalign = (num_queries>0) ? *(sap_array + sap_iter) : seqalign;
-	         BlastPrintTabulatedResults(curr_seqalign, query_bsp, slp, 
-                                         number_of_alignments,
-                                         blast_program, 
-                                         !options->gapped_calculation,
-                                         believe_query, from, 0, global_fp,
-                                         (align_view == 9));
+	         BlastPrintTabularResults(curr_seqalign, query_bsp, slp, 
+               number_of_alignments, blast_program, 
+               !options->gapped_calculation, options->is_ooframe,
+               believe_query, from, 0, global_fp, NULL, (align_view == 9));
+
 	         SeqAlignSetFree(curr_seqalign);
 	      }
            } else {
@@ -1613,13 +1625,15 @@ Int2 Main (void)
                        mask_loc->next = NULL;
                     }
                  }
-                 
-                 bsp = BioseqLockById(SeqLocId(tmp_slp));
-                 init_buff_ex(85);
-                 fprintf(outfp, "\n");
-                 AcknowledgeBlastQuery(bsp, 70, outfp, believe_query, html);
-                 free_buff();
-                 BioseqUnlock(bsp);
+                 if (align_view < 7) {
+                     bsp = BioseqLockById(SeqLocId(tmp_slp));
+                     init_buff_ex(85);
+                     fprintf(outfp, "\n");
+                     AcknowledgeBlastQuery(bsp, 70, outfp, believe_query, 
+                                           html);
+                     free_buff();
+                     BioseqUnlock(bsp);
+                 }
               }
               if((align_view == 7) && !options->is_ooframe) {
                  if (options->is_megablast_search) {

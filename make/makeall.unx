@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.211 2003/03/24 22:12:25 madden Exp $
+#	$Id: makeall.unx,v 6.215 2003/10/09 16:41:32 beloslyu Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -179,7 +179,7 @@ SRC1 =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_host_info.c ncbi_server_info.c ncbi_service.c \
 	ncbi_service_connector.c ncbi_dispd.c \
 	ncbi_socket_connector.c urlquery.c lbapi.c binary.c \
-	ncbi_sendmail.c ncbi_sendmail.c asn_connection.c \
+	ncbi_sendmail.c asn_connection.c raw_scoremat.c \
 	drwnflpt.c drwnfspc.c drwnmfls.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
@@ -188,7 +188,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objsub.c objprt.c objfdef.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objgbseq.c objtseq.c \
 	objent2.c ent2api.c pmfapi.c \
-	qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c \
+	qblastapi.c vecscnapi.c objmim.c mimapi.c cddapi.c seqport.c \
 	sequtil.c prtutil.c simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c aliparse.c aliread.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c \
 	subutil.c edutil.c asn2ff1.c asn2ff2.c asn2ff3.c asn2ff4.c \
@@ -253,7 +253,7 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
 	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c \
-	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c fdlobj.c \
+	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c objscoremat.c \
 	dotseq.c spidey.c motif.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
@@ -265,11 +265,11 @@ SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
 	cn3dstyl.c seqcons.c
 
 SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c \
-	pir_index.c
+	pir_index.c prf_index.c
 
 SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ftamain.c gb_ascii.c \
 	genref.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
-	utilfeat.c utilref.c fta_qscore.c pir_ascii.c fta_clup.c fta_src.c
+	utilfeat.c utilref.c fta_qscore.c pir_ascii.c fta_clup.c fta_src.c prf_ascii.c
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 
@@ -297,7 +297,7 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_host_info.o ncbi_server_info.o ncbi_service.o \
 	ncbi_service_connector.o ncbi_dispd.o \
 	ncbi_socket_connector.o urlquery.o lbapi.o binary.o \
-	ncbi_sendmail.o asn_connection.o \
+	ncbi_sendmail.o asn_connection.o raw_scoremat.o \
 	drwnflpt.o drwnfspc.o drwnmfls.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
@@ -306,7 +306,7 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objsub.o objprt.o objfdef.o objalignloc.o \
 	objpubme.o objmdrs.o objproj.o objgbseq.o objtseq.o \
 	objent2.o ent2api.o pmfapi.o \
-	qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o \
+	qblastapi.o vecscnapi.o objmim.o mimapi.o cddapi.o seqport.o \
 	sequtil.o prtutil.o simple.o tofasta.o tofile.o tomedlin.o \
 	valid.o alignmgr.o aliparse.o aliread.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o \
 	subutil.o edutil.o asn2ff1.o asn2ff2.o asn2ff3.o asn2ff4.o \
@@ -383,7 +383,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o \
-	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o \
+	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o objscoremat.o \
 	dotseq.o spidey.o motif.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
@@ -400,11 +400,11 @@ OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
 	cn3dstyl.glo seqcons.glo
 
 OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o \
-	pir_index.o
+	pir_index.o prf_index.o
 
 OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ftamain.o gb_ascii.o \
 	genref.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
-	utilfeat.o utilref.o fta_qscore.o pir_ascii.o fta_clup.o fta_src.o
+	utilfeat.o utilref.o fta_qscore.o pir_ascii.o fta_clup.o fta_src.o prf_ascii.o
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
@@ -486,6 +486,8 @@ sp_index.o: sp_index.c
 	$(CC) $(CFLAGS) $<
 pir_index.o: pir_index.c
 	$(CC) $(CFLAGS) $<
+prf_index.o: prf_index.c
+	$(CC) $(CFLAGS) $<
 add.o: add.c
 	$(CC) $(CFLAGS) $<
 asci_blk.o: asci_blk.c
@@ -495,6 +497,8 @@ em_ascii.o: em_ascii.c
 em_unorg.o: em_unorg.c
 	$(CC) $(CFLAGS) $<
 ftamain.o: ftamain.c
+	$(CC) $(CFLAGS) $<
+prf_ascii.o: prf_ascii.c
 	$(CC) $(CFLAGS) $<
 gb_ascii.o: gb_ascii.c
 	$(CC) $(CFLAGS) $<
@@ -647,6 +651,9 @@ copy :
 	-chmod ug+rw,o+r ../include/connect
 	-rm ../include/ncbi_*.h ../include/connect_export.h
 	cp -fp ../connect/ncbi_*.h ../connect/connect_export.h ../include/connect
+	$(SRCCOPY) ../util/tables/*.c .
+	-mkdir -p ../include/util/tables
+	cp -fp ../util/tables/*.h ../include/util/tables
 	$(SRCCOPY) ../ctools/*.c .
 	-mkdir ../include/ctools
 	-chmod ug+rw,o+r ../include/ctools

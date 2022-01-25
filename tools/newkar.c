@@ -1,3 +1,5 @@
+static char const rcsid[] = "$Id: newkar.c,v 6.3 2003/05/30 17:25:37 coulouri Exp $";
+
 #include <ncbi.h>
 #include <ncbimath.h>
 #include <objcode.h>

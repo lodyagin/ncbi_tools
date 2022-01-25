@@ -1,4 +1,6 @@
-/* $Id: blastpgp.c,v 6.115 2003/03/20 14:47:16 madden Exp $ */
+static char const rcsid[] = "$Id: blastpgp.c,v 6.118 2003/09/26 16:01:34 madden Exp $";
+
+/* $Id: blastpgp.c,v 6.118 2003/09/26 16:01:34 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +26,17 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.115 $ 
+ * $Revision: 6.118 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.118  2003/09/26 16:01:34  madden
+ * Change threshold to 0.002
+ *
+ * Revision 6.117  2003/05/30 17:31:09  coulouri
+ * add rcsid
+ *
+ * Revision 6.116  2003/05/13 16:02:42  coulouri
+ * make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+ *
  * Revision 6.115  2003/03/20 14:47:16  madden
  * StringSave on asn1_mode
  *
@@ -532,7 +543,7 @@ static Args myargs[] = {
     { "Show GI's in deflines",  /* 18 */
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
     { "e-value threshold for inclusion in multipass model", /* 19 */
-      "0.005", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
+      "0.002", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
     { "Constant in pseudocounts for multipass version", /* 20 */
       "9", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
     { "Maximum number of passes to use in  multipass version", /* 21 */
@@ -682,14 +693,14 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     bop->blast_database   = StringSave(myargs[0].strvalue);
 
     if ((bop->infp = FileOpen(myargs[1].strvalue, "r")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open input file %s\n", 
+        ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open input file %s\n", 
                   myargs[1].strvalue);
         return NULL;
     }
     
     if (align_view != 7 && align_view != 10 && align_view != 11 && myargs[6].strvalue != NULL) {
         if ((bop->outfp = FileOpen(myargs[6].strvalue, "w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
                       "file %s\n", myargs[6].strvalue);
             return NULL;
         }
@@ -704,13 +715,13 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     if (myargs[24].strvalue != NULL) {
         
         if (bop->believe_query == FALSE) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
+            ErrPostEx(SEV_FATAL, 1, 0, 
                       "-J option must be TRUE for ASN.1 output");
             return NULL;
         }
         
         if ((bop->aip_out = AsnIoOpen (myargs[24].strvalue,"w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output "
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output "
                       "file %s\n", myargs[24].strvalue);
             return NULL;
         }
@@ -719,12 +730,12 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     {
         const char* mode = (align_view == 10) ? "w" : "wb";
         if (bop->believe_query == FALSE) {
-            ErrPostEx(SEV_FATAL, 0, 0, 
+            ErrPostEx(SEV_FATAL, 1, 0, 
                       "-J option must be TRUE for ASN.1 output");
             return NULL;
         }
         if ((bop->aip_out = AsnIoOpen(myargs[6].strvalue, (char*) mode)) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[6].strvalue);
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open output file %s\n", myargs[6].strvalue);
                 return NULL;
         }
 	bop->is_asn1_output = TRUE;
@@ -739,12 +750,12 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
 
     if(myargs[41].intvalue) {
         if((sep = FastaToSeqEntryForDb (bop->infp, FALSE, NULL, bop->believe_query, NULL, NULL, &options->query_lcase_mask)) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
             return NULL;
         }
     } else {
         if((sep = FastaToSeqEntryEx(bop->infp, FALSE, NULL, bop->believe_query)) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "Unable to read input FASTA file\n");
+            ErrPostEx(SEV_FATAL, 1, 0, "Unable to read input FASTA file\n");
             return NULL;
         }
     }
@@ -754,7 +765,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
           SeqEntryFree(sep); */
     
     if (bop->query_bsp == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
         return NULL;
     }    
     
@@ -834,7 +845,7 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     if (options->isPatternSearch) {
         bop->patfile = StringSave(myargs[36].strvalue);
         if ((bop->patfp = FileOpen(bop->patfile, "r")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open pattern "
+            ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open pattern "
                       "file %s\n", bop->patfile);
             return NULL;
         }
@@ -929,7 +940,7 @@ Boolean PGPReadNextQuerySequence(PGPBlastOptionsPtr bop)
     SeqEntryExplore(sep, &bop->query_bsp, FindProt);    
     
     if (bop->query_bsp == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to obtain bioseq\n");
         return 0;
     }    
     
@@ -1055,7 +1066,7 @@ Boolean PGPrintPosMatrix(CharPtr filename, posSearchItems *posSearch,
     FILE *fp;
     
     if ((fp = FileOpen(filename, "w")) == NULL) {
-        ErrPostEx(SEV_FATAL, 0, 0, "Unable to open matrix output file %s\n", 
+        ErrPostEx(SEV_FATAL, 1, 0, "Unable to open matrix output file %s\n", 
                   filename);
         return FALSE;
     }
@@ -1500,7 +1511,7 @@ Int2 Main (void)
                search->error_return = ValNodeFree(search->error_return);
             }
             if (!checkReturn) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Error recovering from checkpoint");
+                ErrPostEx(SEV_FATAL, 1, 0, "blast: Error recovering from checkpoint");
                 return 1;
             }
         

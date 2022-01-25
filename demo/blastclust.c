@@ -1,4 +1,6 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.33 $  $Date: 2002/10/08 15:32:42 $
+static char const rcsid[] = "$Id: blastclust.c,v 6.39 2003/07/22 17:59:48 dondosha Exp $";
+
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.39 $  $Date: 2003/07/22 17:59:48 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +33,24 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.39  2003/07/22 17:59:48  dondosha
+* Added call to BlastErrorPrint to make warnings more informative
+*
+* Revision 6.38  2003/06/13 19:59:29  dondosha
+* Fixed 2 purify errors
+*
+* Revision 6.37  2003/05/30 17:31:09  coulouri
+* add rcsid
+*
+* Revision 6.36  2003/05/13 16:02:42  coulouri
+* make ErrPostEx(SEV_FATAL, ...) exit with nonzero status
+*
+* Revision 6.35  2003/05/06 20:21:13  dondosha
+* Typo correction
+*
+* Revision 6.34  2003/05/06 20:19:45  dondosha
+* Changed a confusing error message to a meaningful one
+*
 * Revision 6.33  2002/10/08 15:32:42  dondosha
 * Corrected file description comment in the NCBI header
 *
@@ -369,19 +389,20 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
    CharPtr PNTR id_list = NULL;
    CharPtr ptr, id_string;
    FloatHi length_coverage, score_coverage; 
-   ClusterLogHeader header;
+   ClusterLogHeaderPtr header;
    Int4 last_seq = -1;
    CharPtr id = NULL;
    Boolean PNTR used_id_index = NULL;
 
-   FileRead(&header, sizeof(ClusterLogHeader), 1, infofp);
+   header = (ClusterLogHeaderPtr) MemNew(sizeof(ClusterLogHeader));
+   FileRead(header, sizeof(ClusterLogHeader), 1, infofp);
 
-   if (header.numeric_id_type) {
-      num_queries = header.size;
+   if (header->numeric_id_type) {
+      num_queries = header->size;
       gi_list = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
       FileRead(gi_list, sizeof(Int4), num_queries, infofp);
    } else {
-      total_id_len = header.size;
+      total_id_len = header->size;
       num_queries = 0;
       id_string = (CharPtr) MemNew(total_id_len+1);
       FileRead(id_string, sizeof(Char), total_id_len, infofp);
@@ -573,8 +594,8 @@ PrintNeighbors(VoidPtr ptr)
     else 
        id1 = -1;
     id2 = search->subject_id;
-    
-    if (id1 < id2) { /* Must be always true */
+
+    if (id1 < id2) { 
 #define BUF_CHUNK_SIZE 1024
         Int4 query_length, q_length, s_length;
         FloatHi length_coverage, bit_score, score_coverage, perc_identity; 
@@ -605,6 +626,8 @@ PrintNeighbors(VoidPtr ptr)
            }
            HeapSort(hsp_info_array, hspcnt, sizeof(BlastClustHspInfoPtr), 
                     hsp_info_id_score_compare);
+           /* Leave only one highest scoring hsp per "query" sequence.
+              Deallocate memory for all others. */
            for (index=1; index<hspcnt; index++) {
               if (hsp_info_array[index]->id < id2 && 
                   hsp_info_array[index]->id != 
@@ -721,6 +744,9 @@ PrintNeighbors(VoidPtr ptr)
                  root[root1] = root2;
               NlmMutexUnlock(root_mutex);
            }
+
+           /* For blastn, get to the highest scoring hsp for the next 
+              "query" */
            if (search->prog_number == blast_type_blastn && 
                ++index < query_count)
               hsp =
@@ -729,21 +755,29 @@ PrintNeighbors(VoidPtr ptr)
               hsp = NULL;
         }
 
+        /* Deallocate memory for the auxiliary array of HSP info 
+           structures */
         if (search->prog_number == blast_type_blastn) {
            for (index=0; index<query_count; index++)
               MemFree(hsp_info_array[index]);
            hsp_info_array = MemFree(hsp_info_array);
         }
 
-	if (global_parameters->logfp) {
+	if (global_parameters->logfp && loginfo) {
 	   FileWrite(loginfo, sizeof(ClusterLogInfo), query_count, 
 		     global_parameters->logfp);
-           MemFree(loginfo);
-	   /*fflush(global_parameters->logfp);*/
+           loginfo = MemFree(loginfo);
+	   fflush(global_parameters->logfp);
 	}
-    } else
-       fprintf(stderr, "Error: this can't happen!\n");
-    return 1;
+    } else {
+       /* This can't happen in normal situation. If it does, the most likely
+          reason is presense of non-unique identifiers in the input file */
+       ErrPostEx(SEV_FATAL, 1, 0, "Blastclust cannot process input files with"
+                 " non-unique sequence identifiers\n");
+       return 1;
+    }
+       
+    return 0;
 }
 
 
@@ -817,12 +851,13 @@ Int2 Main (void)
     CharPtr PNTR id_list = NULL, id_string = NULL;
     Boolean db_formatted = FALSE, numeric_id_type = TRUE;
     Char db_file[BUFFER_SIZE];
-    ClusterLogHeader header;
+    ClusterLogHeaderPtr header;
     Boolean print_progress, finish_incomplete, is_prot, parse_mode;
     FDB_optionsPtr fdb_options;
     Char timestr[24];
     CharPtr tmpdir;
     Int4 total_query_length;
+    CharPtr title = NULL;
 
     if (! GetArgs ("blastclust", NUMARG, myargs))
        return (1);
@@ -847,7 +882,7 @@ Int2 Main (void)
 
     if (progress_file != NULL &&
 	(progressfp = FileOpen(progress_file, "w")) == NULL) {
-       ErrPostEx(SEV_FATAL, 0, 0, "blastclust: Unable to open progress file %s\n",
+       ErrPostEx(SEV_FATAL, 1, 0, "blastclust: Unable to open progress file %s\n",
 		 progress_file);
        return (1);
     }
@@ -856,7 +891,7 @@ Int2 Main (void)
     outfp = NULL;
     if (blast_outputfile != NULL) {
         if ((outfp = FileOpen(blast_outputfile, "w")) == NULL) {
-            ErrPostEx(SEV_FATAL, 0, 0, "blastclust: Unable to open output file %s\n", blast_outputfile);
+            ErrPostEx(SEV_FATAL, 1, 0, "blastclust: Unable to open output file %s\n", blast_outputfile);
             return (1);
         }
     }
@@ -865,12 +900,12 @@ Int2 Main (void)
     if (info_file) {
        /* Non-empty string means only retrieve neighbors for reclustering */
        if ((infofp = FileOpen(info_file, "rb")) == NULL) { 
-	  ErrPostEx(SEV_FATAL, 0, 0, "blastclust: Unable to open neighbors file %s for reading\n", info_file);
+	  ErrPostEx(SEV_FATAL, 1, 0, "blastclust: Unable to open neighbors file %s for reading\n", info_file);
 	  return (1);
        }
        if (myargs[11].strvalue) {
 	  if ((idfp = FileOpen(myargs[11].strvalue, "r")) == NULL) {
-	     ErrPostEx(SEV_FATAL, 0, 0, "blastclust: Unable to open id file %s for reading\n", myargs[11].strvalue);
+	     ErrPostEx(SEV_FATAL, 1, 0, "blastclust: Unable to open id file %s for reading\n", myargs[11].strvalue);
 	     return (1);
 	  }
        } else
@@ -911,28 +946,25 @@ Int2 Main (void)
        } else
           blast_database = blast_inputfile;
 
-       fdb_options = MemNew(sizeof(FDB_options));
-       fdb_options->db_file = StringSave(blast_inputfile);
-       fdb_options->is_protein = (Int4) is_prot; 
-       fdb_options->parse_mode = (Int4) parse_mode; 
-       fdb_options->base_name = StringSave(blast_database);
-       FastaToBlastDB(fdb_options, blast_database, 0);
+       fdb_options = FDBOptionsNew(blast_inputfile, is_prot, NULL, FALSE, 
+                                   FALSE, FALSE, FALSE, TRUE, parse_mode, 
+                                   blast_database, NULL, 0, 0, FORMATDB_VER,
+                                   FALSE, FALSE);
+       FastaToBlastDB(fdb_options, 0);
 
-       MemFree(fdb_options->db_file);
-       MemFree(fdb_options->base_name);
-       MemFree(fdb_options);
+       fdb_options = FDBOptionsFree(fdb_options);
     }
 
     logfile = myargs[6].strvalue;
     if (logfile) { /* Empty string means do not write log information */
        if (finish_incomplete) {
 	  if ((global_parameters->logfp = FileOpen(logfile, "ab+")) == NULL) { 
-	     ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open log file %s for appending\n", logfile);
+	     ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open log file %s for appending\n", logfile);
 	     return (1);
 	  }
        } else {
 	  if ((global_parameters->logfp = FileOpen(logfile, "wb+")) == NULL) { 
-	     ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open log file %s for writing\n", logfile);
+	     ErrPostEx(SEV_FATAL, 1, 0, "blast: Unable to open log file %s for writing\n", logfile);
 	     return (1);
 	  }
        }
@@ -978,7 +1010,7 @@ Int2 Main (void)
        Char opt_line[BUFFER_SIZE+1];
        
        if ((config_file = FileOpen(myargs[14].strvalue, "r")) == NULL) {
-          ErrPostEx(SEV_FATAL, 0, 0, 
+          ErrPostEx(SEV_FATAL, 1, 0, 
                     "Cannot open advanced options configuration file %s\n",
                     myargs[14].strvalue);
        }
@@ -1016,8 +1048,6 @@ Int2 Main (void)
 
     root = (Int4Ptr) Malloc(num_queries*sizeof(Int4));
 
-    ReadDBBioseqFetchEnable ("blastclust", blast_database, db_is_na, TRUE);
-       
     if (is_prot && finish_incomplete) {
        first_seq = ReclusterFromFile(global_parameters->logfp, NULL, &gi_list,
 				    &id_list, &seq_len, NULL);
@@ -1031,29 +1061,23 @@ Int2 Main (void)
        seq_len = (Int4Ptr) MemNew(num_queries*sizeof(Int4));
        
        for (index=0; index<num_queries; index++) {
-	  readdb_get_descriptor(rdfp, index, &sip, NULL);
+	  readdb_get_descriptor(rdfp, index, &sip, &title);
 	  seq_len[index] = readdb_get_sequence_length(rdfp, index);
 	  
           if (sip->choice == SEQID_LOCAL) {
-             BioseqPtr bsp = BioseqLockById(sip);
-             CharPtr title = StringSave(BioseqGetTitle(bsp));
              if (title) {
                 numeric_id_type = FALSE;
                 id_list[index] = StringTokMT(title, " ", &title);
              } else {
                 numeric_id_type &=
-                   GetAccessionFromSeqId(bsp->id, &gi_list[index], 
+                   GetAccessionFromSeqId(sip, &gi_list[index], 
                                          &id_list[index]);
              }
-             BioseqUnlock(bsp);
-             BioseqFree(bsp);
           } else if (sip->choice != SEQID_GENERAL) {
              numeric_id_type &= 
                 GetAccessionFromSeqId(sip, &gi_list[index], 
                                       &id_list[index]); 
           } else {
-             BioseqPtr bsp = BioseqLockById(sip);
-             CharPtr title = StringSave(BioseqGetTitle(bsp));
              if (title) {
                 numeric_id_type = FALSE;
                 id_list[index] = StringTokMT(title, " ", &title);
@@ -1063,16 +1087,17 @@ Int2 Main (void)
                 SeqIdWrite(sip, id_list[index],
                            PRINTID_FASTA_SHORT, BUFFER_SIZE);
              }
-             BioseqUnlock(bsp);
-             BioseqFree(bsp);
           }
-	  sip = SeqIdSetFree(sip);
+          title = MemFree(title);
+          sip = SeqIdSetFree(sip);
        }
-       header.numeric_id_type = numeric_id_type;
+
+       header = (ClusterLogHeaderPtr) MemNew(sizeof(ClusterLogHeader));
+       header->numeric_id_type = numeric_id_type;
        
        if (numeric_id_type) {
 	  id_list = MemFree(id_list);
-	  header.size = num_queries;
+	  header->size = num_queries;
        } else {
 	  total_id_len = 0;
 	  /* Check if some ids were gis and convert them to strings */
@@ -1089,12 +1114,14 @@ Int2 Main (void)
 	     StringCat(id_string, id_list[i]);
 	     StringCat(id_string, " ");
 	  }
-	  header.size = total_id_len;
+	  header->size = total_id_len;
        }
        
-       FileWrite(&header, sizeof(ClusterLogHeader), 1, 
+       FileWrite(header, sizeof(ClusterLogHeader), 1, 
 		 global_parameters->logfp);
-       
+
+       header = (ClusterLogHeaderPtr) MemFree(header);
+
        if (numeric_id_type) 
 	  FileWrite(gi_list, sizeof(Int4), num_queries, 
 		    global_parameters->logfp);
@@ -1105,7 +1132,7 @@ Int2 Main (void)
        }
        
        FileWrite(seq_len, sizeof(Int4), num_queries, global_parameters->logfp);
-       /*fflush(global_parameters->logfp);*/
+       fflush(global_parameters->logfp);
     }
 
     if (print_progress) {
@@ -1152,7 +1179,9 @@ Int2 Main (void)
           /* Set up the search */
           options->first_db_seq = index + 1;
           
-          search = BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp, blast_program, seq_len[index], blast_database, options, NULL, NULL, NULL, 0, rdfp);
+          search = BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp,
+                      blast_program, seq_len[index], blast_database, 
+                      options, NULL, NULL, NULL, 0, rdfp);
           if (search != NULL && !search->query_invalid) {
              search->handle_results = PrintNeighbors;
              
@@ -1161,10 +1190,11 @@ Int2 Main (void)
              search->thr_info->tick_callback = NULL;
              
              do_the_blast_run(search);
+          } else if (search) {
+             BlastErrorPrint(search->error_return);
           }
           search = BlastSearchBlkDestruct(search);
           query_bsp = BioseqFree(query_bsp);
-          ObjMgrFreeCache(0);
           
           if (print_progress && (index + 1)%PROGRESS_INTERVAL == 0) {
              DayTimeStr(timestr, TRUE, TRUE);
@@ -1173,6 +1203,7 @@ Int2 Main (void)
           }
        } /* End of loop on queries */
     }
+    /*ReadDBBioseqFetchDisable();*/
     rdfp = readdb_destruct(rdfp);
     BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, NULL);
 

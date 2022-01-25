@@ -1,4 +1,4 @@
-/* $Id: cddutil.h,v 1.48 2003/02/06 21:04:27 bauer Exp $
+/* $Id: cddutil.h,v 1.51 2003/08/25 19:09:47 bauer Exp $
 *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Initial Version Creation Date: 12/15/1999
 *
-* $Revision: 1.48 $
+* $Revision: 1.51 $
 *
 * File Description: Header file for cdd api utility functions  
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cddutil.h,v $
+* Revision 1.51  2003/08/25 19:09:47  bauer
+* added SeqAlignReadFromFile
+*
+* Revision 1.50  2003/05/21 17:25:21  bauer
+* optional ObjMgr in CddReadDBGetBioseq
+*
+* Revision 1.49  2003/04/25 14:36:20  bauer
+* impalaScaling now returns boolean value
+*
 * Revision 1.48  2003/02/06 21:04:27  bauer
 * fixed bug in reindexing to consensus
 *
@@ -410,12 +419,13 @@ Int4 cdd_evidence_style[] =
 /*---------------------------------------------------------------------------*/
 /* Cdd asn1 reader and writer wrappers                                       */
 /*---------------------------------------------------------------------------*/
-Boolean    LIBCALL CddWriteToFile(CddPtr pcdd, CharPtr cFile, Boolean bBin);
-CddPtr     LIBCALL CddReadFromFile(CharPtr cFile, Boolean bBin);
+Boolean     LIBCALL CddWriteToFile(CddPtr pcdd, CharPtr cFile, Boolean bBin);
+CddPtr      LIBCALL CddReadFromFile(CharPtr cFile, Boolean bBin);
 SeqAnnotPtr LIBCALL SeqAnnotReadFromFile(CharPtr cFile, Boolean bBin);
+SeqAlignPtr LIBCALL SeqAlignReadFromFile(CharPtr cFile, Boolean bBin);
 
-Boolean    LIBCALL CddTreeWriteToFile(CddTreePtr pcddt, CharPtr cFile, Boolean bBin);
-CddTreePtr LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
+Boolean     LIBCALL CddTreeWriteToFile(CddTreePtr pcddt, CharPtr cFile, Boolean bBin);
+CddTreePtr  LIBCALL CddTreeReadFromFile(CharPtr cFile, Boolean bBin);
 
 /*---------------------------------------------------------------------------*/
 /* Cdd Data manipulations and queries                                        */
@@ -451,6 +461,7 @@ void       LIBCALL CddFillBlanksInString(CharPtr pChar);
 Boolean    LIBCALL CddFeaturesAreConsistent(CddPtr pcdd, CharPtr errmsg);
 Boolean    LIBCALL CddHas3DSuperpos(CddPtr pcdd);
 Boolean    LIBCALL CddHasPendingAlignments(CddPtr pcdd);
+CddPtr     LIBCALL CddFreeCarefully(CddPtr pcdd);
 
 /*---------------------------------------------------------------------------*/
 /* report Errors in processing and exit immediately                          */
@@ -480,7 +491,8 @@ Int2        LIBCALL CddTrimSeqAligns(CddPtr pcdd);
 /*---------------------------------------------------------------------------*/
 /* various routines for calculating PSSM/Alignment information content       */
 /*---------------------------------------------------------------------------*/
-Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,Boolean bHasConsensus);
+Nlm_FloatHi    LIBCALL SeqAlignConservation(SeqAlignPtr salp, Nlm_FloatHi fract,BioseqPtr bsp_master, Boolean bHasConsensus, Int4 offset);
+Nlm_FloatHiPtr LIBCALL SeqAlignInform(SeqAlignPtr salp, BioseqPtr bsp_master,Boolean bHasConsensus,Int4 offset);
 Nlm_FloatHiPtr LIBCALL CddAlignInform(CddPtr pcdd, Nlm_FloatHi * Niobs);
 Nlm_FloatHiPtr LIBCALL CddPssmInform(CddPtr pcdd);
 Nlm_FloatHiPtr LIBCALL CddPosFreqInform(Nlm_FloatHi **posFreq, Int4 ncol, Int4 nrow);
@@ -600,6 +612,7 @@ void                   CddExpAlignAlloc(CddExpAlignPtr pCDea, Int4 iLength);
 CddExpAlignPtr         CddExpAlignRevert(CddExpAlignPtr pCDea, Int4 iLength);
 CddExpAlignPtr         CddReindexExpAlign(CddExpAlignPtr pCDea1, Int4 newlength, CddExpAlignPtr pCDea2, Int4 iOuter, Int4 iInner);
 CddExpAlignPtr LIBCALL SeqAlignToCddExpAlign(SeqAlignPtr salp, SeqEntryPtr sep);
+CddExpAlignPtr         InvertCddExpAlign(CddExpAlignPtr pCDea, SeqEntryPtr sep);
 SeqAlignPtr            CddExpAlignToSeqAlign(CddExpAlignPtr pCDea, Int4Ptr iBreakAfter);
 Int2           LIBCALL CddGetProperBlocks(CddPtr pcdd, Boolean modify, Int4Ptr *iBreakAfter);
 FloatHi                CddGetPairId(TrianglePtr pTri, Int4 idx1, Int4 idx2);
@@ -646,7 +659,9 @@ void LIBCALL CddPssmIdFromAcc(Int4 *iPssmId, CharPtr cAcc, CharPtr CDDidx);
 /*---------------------------------------------------------------------------*/
 /* Bioseq retrieval from BLAST db - contributed by Ben                       */
 /*---------------------------------------------------------------------------*/
-BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index,ReadDBFILEPtr rdfp);
+Boolean   LIBCALL SeqHasTax(BioseqPtr bsp);
+BioseqPtr LIBCALL CddReadDBGetBioseq(SeqIdPtr query, Int4 index, ReadDBFILEPtr rdfp);
+BioseqPtr LIBCALL CddReadDBGetBioseqEx(SeqIdPtr query, Int4 index, ReadDBFILEPtr rdfp, Boolean bUseObjMgr);
 
 /*---------------------------------------------------------------------------*/
 /* setting styles for Cn3D v4.x                                              */

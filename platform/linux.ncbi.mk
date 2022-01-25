@@ -1,5 +1,5 @@
 #
-# $Id: linux.ncbi.mk,v 1.28 2003/04/16 15:29:48 beloslyu Exp $
+# $Id: linux.ncbi.mk,v 1.29 2003/05/07 17:40:12 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -8,6 +8,7 @@ NCBI_MAKE_SHELL = /bin/sh
 #NCBI_CC = gcc -pipe -D__USE_FILE_OFFSET64 -D__USE_LARGEFILE64
 #it appears the flags above do not working anymore with newer libc,
 #the new flags should work. Dima. 08/23/01
+NCBI_AR=ar
 NCBI_CC = gcc -pipe -D_FILE_OFFSET_BITS=64 -D_LARGEFILE64_SOURCE
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O2
