@@ -1,4 +1,4 @@
-/* $Id: ncbisam.c,v 6.17 2000/02/11 21:14:07 madden Exp $
+/* $Id: ncbisam.c,v 6.21 2000/08/04 19:54:17 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,22 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.17 $
+* $Revision: 6.21 $
 *
 * File Description:
 *         Main file for ISAM library
 *
 * $Log: ncbisam.c,v $
+* Revision 6.21  2000/08/04 19:54:17  shavirin
+* Fixed problem with counting line when data not tested to be non- unique.
+*
+* Revision 6.20  2000/07/18 19:29:27  shavirin
+* Added new parameter test_non_unique to suppress check for non-unique
+* strings ids in the database - default - TRUE.
+*
+* Revision 6.19  2000/07/13 16:43:48  shavirin
+* Fixed checking of order in String index creation.
+*
 * Revision 6.17  2000/02/11 21:14:07  madden
 * Allocate MasterPos of correct (smaller) size
 *
@@ -273,7 +283,8 @@ ISAMObjectPtr ISAMObjectNew(ISAMType type,       /* Type of ISAM */
     data->initialized = FALSE;
     data->KeySamples = NULL;
     data->KeyDataSamples = NULL;
-    
+    data->test_non_unique = TRUE; /* default - to check non-unique data */
+
     return (ISAMObjectPtr) data;
 }
 /* ----------------------  ISAMSetUpCAInfo --------------------------
@@ -611,7 +622,8 @@ static Boolean ISAMCheckIfSorted(ISAMDataPtr data)
 {
     CharPtr prevline;
     Int4 length;
-    
+    CharPtr chptr;
+
     if(data == NULL || data->db_fd == NULL || data->max_line_size == 0)
         return FALSE;
     
@@ -623,15 +635,16 @@ static Boolean ISAMCheckIfSorted(ISAMDataPtr data)
     if(data->type == ISAMString || data->type == ISAMStringDatabase) {
         while(ISAMReadLine(data) > 0) {
             data->NumTerms++;
-            if (StringCmp(data->line, prevline) < 0) {
-
-                /* ErrLogPrintf("N Line: %s\nN-1 Line: %s\n", 
-                   data->line, prevline); */
-
-                MemFree(prevline);
-                return(FALSE);
-            } else {
-                length = StringLen(data->line);
+            
+            /* If not testing data - lines eventually should be counted */
+            if(data->test_non_unique) {
+                if((chptr = StringChr(data->line, ISAM_DATA_CHAR)) != NULL)
+                    *chptr = NULLB;
+                
+                if (StringCmp(data->line, prevline) <= 0) {
+                    ErrPostEx(SEV_WARNING, 0, 0, "Non-unique or not-sorted string IDs found %d line: '%s' %d line: '%s'", data->NumTerms, data->line, data->NumTerms-1, prevline);
+                }
+                length = StringLen(data->line)+1;
                 StringNCpy_0(prevline, data->line, 
                              length > LINE_SIZE_CHUNK ? LINE_SIZE_CHUNK : length);
             }
@@ -684,10 +697,10 @@ static ISAMErrorCode ISAMMakeStringIndex(
 
     /* This function will also split data if strings are
        identical and finaly count lines*/
-    
+
     if(!ISAMCheckIfSorted(data))
         return ISAMNoOrder;
-    
+
     /* Obtain the term offsets; select the sample terms. */
     
     MasterPos = (Int4 *)Nlm_Malloc(sizeof(Int4) * (((data->NumTerms+1)/(data->PageSize))+2));
@@ -1341,6 +1354,26 @@ ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option)
     return ISAMNoError;
 }
 
+/* ------------------------ ISAMGetIdxOption ------------------------
+   Purpose:     To set option to check or not check for non-unique
+                elements
+   Parameters:  ISAM object
+   Returns:     None
+   NOTE:        None
+  ------------------------------------------------------------------*/
+void ISAMSetCheckForNonUnique(ISAMObjectPtr object, Boolean test_non_unique)
+{
+    ISAMDataPtr data;
+
+    if(object == NULL)
+        return;
+
+    data = (ISAMDataPtr) object;
+
+    data->test_non_unique = test_non_unique;
+
+    return;
+}
 /* ---------------------- ISAMObjectFree --------------------------
    Purpose:     To terminate all allocated and used buffers
                 unmap and close all mapped/opened files

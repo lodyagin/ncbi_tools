@@ -3,6 +3,9 @@
 *   -- all common routines for main programs in this directory
 *
 * $Log: utilpars.c,v $
+* Revision 6.1  2000/10/26 16:45:23  kans
+* ValidAminoAcid also checks single letter abbreviation
+*
 * Revision 6.0  1997/08/25 18:08:16  madden
 * Revision changed to 6.0
 *
@@ -199,9 +202,19 @@ NLM_EXTERN Uint1 ValidAminoAcid(CharPtr aa)
 {
    Int2  i;
 
+   if (aa == NULL) (Uint1) 'X';
+
    for (i = 0; i < ParFlat_TOTAL_AA && aa != NULL; i++)
-       if (StringICmp(aa, ParFlat_AA_array[i].aa3) == 0)
+       if (StringICmp(aa, ParFlat_AA_array[i].aa3) == 0) {
           return (ParFlat_AA_array[i].aa1);
+       }
+
+   if (aa [1] != '\0') return (Uint1) 'X';
+
+   for (i = 0; i < ParFlat_TOTAL_AA && aa != NULL; i++)
+       if (aa [0] == ParFlat_AA_array[i].aa1) {
+          return (ParFlat_AA_array[i].aa1);
+       }
 
    return (Uint1) 'X';
 

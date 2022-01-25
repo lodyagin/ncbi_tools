@@ -34,6 +34,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: algorend.c,v $
+* Revision 6.166  2000/07/28 21:05:56  lewisg
+* more c++ fixes
+*
+* Revision 6.165  2000/07/27 13:37:32  lewisg
+* more c++ fixes
+*
+* Revision 6.164  2000/07/21 18:55:14  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.163  2000/05/19 18:19:09  thiessen
 * fix label bug on show/hide
 *
@@ -757,7 +766,8 @@ static ButtoN Cn3D_bLFontBold, Cn3D_bLFontItalic;
 #ifndef WIN_MOTIF
 static ButtoN Cn3D_bLFontUnderlined;
 #endif
-void Nlm_GetCurrentOGLFontMenuSettings(Nlm_Int2 *font, Nlm_Int2 *size,
+
+static void Nlm_GetCurrentOGLFontMenuSettings(Nlm_Int2 *font, Nlm_Int2 *size,
     Nlm_Boolean *isBold, Nlm_Boolean *isItalic, Nlm_Boolean *isUnderlined)
 {
     *font = GetValue(Cn3D_pupLabelFont);
@@ -770,6 +780,22 @@ void Nlm_GetCurrentOGLFontMenuSettings(Nlm_Int2 *font, Nlm_Int2 *size,
     *isUnderlined = 0;
 #endif
 }
+
+static void Cn3D_SetOGLFont(TOGL_Data *OGL_Data)
+{
+    static Nlm_Int2 currentIndex = -1, currentSize = -1;
+    static Nlm_Boolean currentBold = FALSE, currentItalic = FALSE,
+                       currentUnderlined = FALSE;
+    Nlm_Int2 fontNameIndex, fontSize;
+    Nlm_Boolean isBold, isItalic, isUnderlined;
+
+    Nlm_GetCurrentOGLFontMenuSettings(&fontNameIndex, &fontSize, &isBold,
+                                      &isItalic, &isUnderlined);
+    SetOGLFont(OGL_Data, fontNameIndex, fontSize, isBold,
+                                      isItalic, isUnderlined);
+}
+
+
 #endif
 
 static ButtoN Cn3D_bLRedraw;
@@ -3035,6 +3061,7 @@ void LIBCALL FreeRenderKeep(PRK prkThis)
     MemFree(prkThis);
 }
 
+/*
 static void RotTransScale(PMSD pmsdThis, FloatLo fX,
                           FloatLo fY,
                           FloatLo fZ,
@@ -3049,14 +3076,12 @@ static void RotTransScale(PMSD pmsdThis, FloatLo fX,
     *piY = 0;
     *piZ = 0;
     if (pmsdThis->pflTranslate)
-        /* do translation */
     {
         fX = fX - pmsdThis->pflTranslate[0];
         fY = fY - pmsdThis->pflTranslate[1];
         fZ = fZ - pmsdThis->pflTranslate[2];
     }
     if (pmsdThis->ppflRotate)
-        /* do rotation */
     {
         fXTemp = (FloatHi) (fX * pmsdThis->ppflRotate[0][0] +
                             fY * pmsdThis->ppflRotate[1][0] +
@@ -3071,14 +3096,12 @@ static void RotTransScale(PMSD pmsdThis, FloatLo fX,
         fY = (FloatLo) fYTemp;
         fZ = (FloatLo) fZTemp;
     }
-    /* scale */
-
     *piX = (Int4) (fX * VIEWSCALE);
     *piY = (Int4) (fY * VIEWSCALE);
     *piZ = (Int4) (fZ * VIEWSCALE);
     return;
 }
-
+*/
 
 /***********************************************************/
 /* These are the lowest-level calls to the 3D drawing      */
@@ -3191,23 +3214,27 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 
     switch (pmodThis->bWhat) {
     case OBJ_CYLINDER:
-        fXFrom = (FloatLo) (pmodThis->ppflObject[0][0]);
-        fYFrom = (FloatLo) (pmodThis->ppflObject[0][1]);
-        fZFrom = (FloatLo) (pmodThis->ppflObject[0][2]);
-        fXTo = (FloatLo) (pmodThis->ppflObject[1][0]);
-        fYTo = (FloatLo) (pmodThis->ppflObject[1][1]);
-        fZTo = (FloatLo) (pmodThis->ppflObject[1][2]);
+        /* switch to/from order, so that arrow is pointing from N to C */
+        fXTo = (FloatLo) (pmodThis->ppflObject[0][0]);
+        fYTo = (FloatLo) (pmodThis->ppflObject[0][1]);
+        fZTo = (FloatLo) (pmodThis->ppflObject[0][2]);
+        fXFrom = (FloatLo) (pmodThis->ppflObject[1][0]);
+        fYFrom = (FloatLo) (pmodThis->ppflObject[1][1]);
+        fZFrom = (FloatLo) (pmodThis->ppflObject[1][2]);
+        /*
         RotTransScale(pmsdThis, fXFrom, fYFrom, fZFrom, &iXFrom, &iYFrom, &iZFrom);
         RotTransScale(pmsdThis, fXTo, fYTo, fZTo, &iXTo, &iYTo, &iZTo);
+        */
 
 #ifdef _OPENGL
-        /* switch to/from order, so that arrow is pointing from N to C */
+        /*
         fXTo = iXFrom / VIEWSCALE;
         fYTo = iYFrom / VIEWSCALE;
         fZTo = iZFrom / VIEWSCALE;
         fXFrom = iXTo / VIEWSCALE;
         fYFrom = iYTo / VIEWSCALE;
         fZFrom = iZTo / VIEWSCALE;
+        */
         OGL_AddCylinder3D(Cn3D_ColorData.OGL_Data, &iColor,
                           (FloatHi) fXFrom, (FloatHi) fYFrom, (FloatHi) fZFrom, TRUE,
                           (FloatHi) fXTo, (FloatHi) fYTo, (FloatHi) fZTo, TRUE,
@@ -3228,21 +3255,24 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
 #ifdef _OPENGL
         {
             FloatHi Nterm[3], Cterm[3], norm[3];
-            Int4 xv, yv, zv;
+            /*Int4 xv, yv, zv;*/
             
-            RotTransScale(pmsdThis,
+            /*RotTransScale(pmsdThis,
                           pmodThis->ppflObject[0][0],
                           pmodThis->ppflObject[0][1],
                           pmodThis->ppflObject[0][2], &xv, &yv, &zv);
-            Nterm[0] = xv; Nterm[1] = yv; Nterm[2] = zv;
-            RotTransScale(pmsdThis,
+            Nterm[0] = xv; Nterm[1] = yv; Nterm[2] = zv;*/
+            /*RotTransScale(pmsdThis,
                           pmodThis->ppflObject[3][0],
                           pmodThis->ppflObject[3][1],
                           pmodThis->ppflObject[3][2], &xv, &yv, &zv);
             Nterm[0] += xv; Nterm[1] += yv; Nterm[2] += zv;
-            Nterm[0] /= 2000000.0; Nterm[1] /= 2000000.0; Nterm[2] /= 2000000.0;
+            Nterm[0] /= 2000000.0; Nterm[1] /= 2000000.0; Nterm[2] /= 2000000.0;*/
+            Nterm[0] = (pmodThis->ppflObject[0][0] + pmodThis->ppflObject[3][0]) / 2;
+            Nterm[1] = (pmodThis->ppflObject[0][1] + pmodThis->ppflObject[3][1]) / 2;
+            Nterm[2] = (pmodThis->ppflObject[0][2] + pmodThis->ppflObject[3][2]) / 2;
             
-            RotTransScale(pmsdThis,
+            /*RotTransScale(pmsdThis,
                           pmodThis->ppflObject[4][0],
                           pmodThis->ppflObject[4][1],
                           pmodThis->ppflObject[4][2], &xv, &yv, &zv);
@@ -3252,9 +3282,12 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
                           pmodThis->ppflObject[7][1],
                           pmodThis->ppflObject[7][2], &xv, &yv, &zv);
             Cterm[0] += xv; Cterm[1] += yv; Cterm[2] += zv;
-            Cterm[0] /= 2000000.0; Cterm[1] /= 2000000.0; Cterm[2] /= 2000000.0;
+            Cterm[0] /= 2000000.0; Cterm[1] /= 2000000.0; Cterm[2] /= 2000000.0;*/
+            Cterm[0] = (pmodThis->ppflObject[4][0] + pmodThis->ppflObject[7][0]) / 2;
+            Cterm[1] = (pmodThis->ppflObject[4][1] + pmodThis->ppflObject[7][1]) / 2;
+            Cterm[2] = (pmodThis->ppflObject[4][2] + pmodThis->ppflObject[7][2]) / 2;
             
-            RotTransScale(pmsdThis,
+            /*RotTransScale(pmsdThis,
                           pmodThis->ppflObject[2][0],
                           pmodThis->ppflObject[2][1],
                           pmodThis->ppflObject[2][2], &xv, &yv, &zv);
@@ -3263,7 +3296,10 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
                           pmodThis->ppflObject[0][0],
                           pmodThis->ppflObject[0][1],
                           pmodThis->ppflObject[0][2], &xv, &yv, &zv);
-            norm[0] -= xv; norm[1] -= yv; norm[2] -= zv;
+            norm[0] -= xv; norm[1] -= yv; norm[2] -= zv;*/
+            norm[0] = pmodThis->ppflObject[2][0] - pmodThis->ppflObject[0][0];
+            norm[1] = pmodThis->ppflObject[2][1] - pmodThis->ppflObject[0][1];
+            norm[2] = pmodThis->ppflObject[2][2] - pmodThis->ppflObject[0][2];
             
             OGL_AddBrick3D(Cn3D_ColorData.OGL_Data, &iColor,
                            Nterm, Cterm, norm, 2.0, 0.5,
@@ -3277,9 +3313,11 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
         fXTo = pmodThis->ppflObject[1][0];
         fYTo = pmodThis->ppflObject[1][1];
         fZTo = pmodThis->ppflObject[1][2];
+        /*
         RotTransScale(pmsdThis, fXFrom,
                       fYFrom, fZFrom, &iXFrom, &iYFrom, &iZFrom);
         RotTransScale(pmsdThis, fXTo, fYTo, fZTo, &iXTo, &iYTo, &iZTo);
+        */
         Cn3d_AnyPrim = TRUE;
         poly = AddPoly3D(pic, NULL, (BigScalar) pmodThis,
                          Cn3d_LayerNow,
@@ -3295,7 +3333,7 @@ void LIBCALL RenderObject(PVNMO pvnmoThis)
             fXTo = pmodThis->ppflObject[i][0];
             fYTo = pmodThis->ppflObject[i][1];
             fZTo = pmodThis->ppflObject[i][2];
-            RotTransScale(pmsdThis, fXTo, fYTo, fZTo, &iXTo, &iYTo, &iZTo);
+            /*RotTransScale(pmsdThis, fXTo, fYTo, fZTo, &iXTo, &iYTo, &iZTo);*/
             Cn3d_AnyPrim = TRUE;
             AddVertPoly3D(pic, poly, iXTo, iYTo, iZTo);
 #ifdef DEBUG_N
@@ -3405,7 +3443,7 @@ static void RenderLabel(PDNMS pdnmsThis, CharPtr pclabel,
         break;
     }
 
-    RotTransScale(pmsdThis, fXCen, fYCen, fZCen, &iX, &iY, &iZ);
+    /*RotTransScale(pmsdThis, fXCen, fYCen, fZCen, &iX, &iY, &iZ);*/
 
 #ifdef _OPENGL
     flags = 0;
@@ -3449,16 +3487,19 @@ static void RenderLabel(PDNMS pdnmsThis, CharPtr pclabel,
 
 }
 
+/*
 void ApplyTranslationRotationF(FloatLo * x, FloatLo * y, FloatLo * z,
                                PMSD pmsdParent)
 {
     if (pmsdParent->pflTranslate) {
+        Message(MSG_POST, "non-NULL pmsdParent->pflTranslate");
         *x = (*x) - pmsdParent->pflTranslate[0];
         *y = (*y) - pmsdParent->pflTranslate[1];
         *z = (*z) - pmsdParent->pflTranslate[2];
     }
     if (pmsdParent->ppflRotate) {
         FloatLo tx, ty, tz;
+        Message(MSG_POST, "non-NULL pmsdParent->ppflRotate");
         tx = (FloatLo) (*x * pmsdParent->ppflRotate[0][0] +
                         *y * pmsdParent->ppflRotate[1][0] +
                         *z * pmsdParent->ppflRotate[2][0]);
@@ -3473,6 +3514,7 @@ void ApplyTranslationRotationF(FloatLo * x, FloatLo * y, FloatLo * z,
         *z = tz;
     }
 }
+*/
 
 #ifdef _OPENGL
 static void RenderBond(PALD paldFrom, Boolean bCapFrom, PALD paldTo, Boolean bCapTo,
@@ -3518,8 +3560,10 @@ static void RenderBond(PALD paldFrom, PALD paldTo, DDV_ColorCell * iColor,
     fYTo = (FloatLo) (paldTo->pflvData[1]);
     fZTo = (FloatLo) (paldTo->pflvData[2]);
 
+/*
     ApplyTranslationRotationF(&fXFrom, &fYFrom, &fZFrom, pmsdParent);
     ApplyTranslationRotationF(&fXTo, &fYTo, &fZTo, pmsdParent);
+*/
 
     Cn3d_AnyPrim = TRUE;
     /* scale */
@@ -3620,11 +3664,13 @@ static void RenderHalfWormBond(PALD pald1, PALD pald2,
     fX1 = (FloatLo) (pald1->pflvData[0]);
     fY1 = (FloatLo) (pald1->pflvData[1]);
     fZ1 = (FloatLo) (pald1->pflvData[2]);
-    ApplyTranslationRotationF(&fX1, &fY1, &fZ1, pmsdParent);
     fX2 = (FloatLo) (pald2->pflvData[0]);
     fY2 = (FloatLo) (pald2->pflvData[1]);
     fZ2 = (FloatLo) (pald2->pflvData[2]);
+/*
+    ApplyTranslationRotationF(&fX1, &fY1, &fZ1, pmsdParent);
     ApplyTranslationRotationF(&fX2, &fY2, &fZ2, pmsdParent);
+*/
 
     pmad0 = GetAtomAfter(pald2, pald1);
     if (pmad0) {
@@ -3633,7 +3679,7 @@ static void RenderHalfWormBond(PALD pald1, PALD pald2,
         fX0 = (FloatLo) (pald0->pflvData[0]);
         fY0 = (FloatLo) (pald0->pflvData[1]);
         fZ0 = (FloatLo) (pald0->pflvData[2]);
-        ApplyTranslationRotationF(&fX0, &fY0, &fZ0, pmsdParent);
+        /*ApplyTranslationRotationF(&fX0, &fY0, &fZ0, pmsdParent);*/
     } else {
         fX0 = fX1;
         fY0 = fY1;
@@ -3646,7 +3692,7 @@ static void RenderHalfWormBond(PALD pald1, PALD pald2,
         fX3 = (FloatLo) (pald3->pflvData[0]);
         fY3 = (FloatLo) (pald3->pflvData[1]);
         fZ3 = (FloatLo) (pald3->pflvData[2]);
-        ApplyTranslationRotationF(&fX3, &fY3, &fZ3, pmsdParent);
+        /*ApplyTranslationRotationF(&fX3, &fY3, &fZ3, pmsdParent);*/
     } else {
         fX3 = fX2;
         fY3 = fY2;
@@ -3709,7 +3755,7 @@ void LIBCALL RenderAnAtom(PALD paldAtom, DDV_ColorCell * iColor,
     fYAtom = (FloatLo) (paldAtom->pflvData[1]);
     fZAtom = (FloatLo) (paldAtom->pflvData[2]);
 
-    ApplyTranslationRotationF(&fXAtom, &fYAtom, &fZAtom, pmsdParent);
+    /*ApplyTranslationRotationF(&fXAtom, &fYAtom, &fZAtom, pmsdParent);*/
 
 #ifdef _OPENGL
     OGL_AddSphere3D(Cn3D_ColorData.OGL_Data, (DDV_ColorCell *) iColor,
@@ -3717,7 +3763,7 @@ void LIBCALL RenderAnAtom(PALD paldAtom, DDV_ColorCell * iColor,
                     (FloatHi) fRadius,
                     GetValue(Cn3D_pupQualSphSlices) + QUAL_SIZE_MIN - 1,
                     GetValue(Cn3D_pupQualSphStacks) + QUAL_SIZE_MIN - 1,
-                    lfAlpha);
+                    lfAlpha, pmsdParent->pdnSlaveToMasterTransforms);
 
 #else                           /* _OPENGL */
     Cn3d_AnyPrim = TRUE;        /* this probably can be deleted */
@@ -5341,7 +5387,7 @@ static void Cn3D_MakeOGLPalette(TCn3D_ColorData * ColorData)
     blue[TotalColors] = OGL_Data->Background.rgb[2];
             
     Nlm_Set3DColorMap(OGL_Data->Panel, (Uint1) (TotalColors + 1),
-                        red, green, blue);
+                        red, green, blue, &OGL_Data->display);
     MemFree(red);
     MemFree(green);
     MemFree(blue);
@@ -5489,11 +5535,6 @@ skip_it:
     Cn3d_nEnsembles = Cn3d_currentEnsemble = 0;
 }
 
-#ifdef _OPENGL
-extern void SetOGLFont(TOGL_Data *);
-extern void OGL_ClearTransparentSpheres(void);
-#endif
-
 void LIBCALL fnARLoop(PDNMS pdnmsThis)
 {
     /* the rendering engine  */
@@ -5521,9 +5562,10 @@ void LIBCALL fnARLoop(PDNMS pdnmsThis)
             DDV_ColorCell Color;
 
             /* set font display lists according to current label control panel menu */
-            SetOGLFont(Cn3D_ColorData.OGL_Data);
+            Cn3D_SetOGLFont(Cn3D_ColorData.OGL_Data);
 
             OGL_Start(Cn3D_ColorData.OGL_Data, Cn3d_LayerNow);
+            OGL_PushTransformation(((PMSD) (pdnmsThis->data.ptrvalue))->pdnSlaveToMasterTransforms);
 
             if (MeshLoaded) {
                 Color.rgb[0] = 255;
@@ -5541,6 +5583,7 @@ void LIBCALL fnARLoop(PDNMS pdnmsThis)
             fnARModelLoop(pdnmsThis, pdnmlThis);
 
 #ifdef _OPENGL
+            OGL_PopTransformation();
             OGL_End();
 #endif                          /* _OPENGL */
 
@@ -5726,10 +5769,12 @@ Picture3D LIBCALL Do3DOrigin(Picture3D p3d)
     for (i = 0; i < 3; i++) {
         fFrom[i] = 5.0;
         fTo[i] = -5.0;
+        /*
         RotTransScale(pmsdThis, fFrom[0],
                       fFrom[1], fFrom[2], &iXFrom, &iYFrom, &iZFrom);
         RotTransScale(pmsdThis, fTo[0],
                       fTo[1], fTo[2], &iXTo, &iYTo, &iZTo);
+        */
         AddLine3D(p3d, NULL, (BigScalar) 0, Cn3d_LayerNow,
                   DDV_ColorIndex(Cn3D_ColorData.pDDVColorGlobal->Palette,
                                  &iColor), iXFrom, iYFrom, iZFrom, iXTo,

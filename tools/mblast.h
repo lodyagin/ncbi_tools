@@ -32,8 +32,32 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.24 $ 
+/* $Revision: 6.32 $ 
 * $Log: mblast.h,v $
+* Revision 6.32  2000/10/31 15:06:16  dondosha
+* Added Boolean parameter to PrintMaskedSequence function
+*
+* Revision 6.31  2000/10/24 18:56:45  dondosha
+* Moved prototype of UniqueLocalId() to blast.h
+*
+* Revision 6.30  2000/10/19 16:02:29  dondosha
+* Changed MegaBlastGetPercentIdentity to MegaBlastGetNumIdentical
+*
+* Revision 6.29  2000/10/05 19:47:51  dondosha
+* Added prototype for MegaBlastSaveCurrentHitlist
+*
+* Revision 6.28  2000/08/30 22:08:45  dondosha
+* Added function BioseqMegaBlastEngineByLoc
+*
+* Revision 6.27  2000/08/25 17:00:17  dondosha
+* Added prototype for MegaBlastReevaluateWithAmbiguities
+*
+* Revision 6.26  2000/07/11 16:45:39  dondosha
+* Removed mask SeqLocPtr array from all related prototypes
+*
+* Revision 6.25  2000/07/08 20:44:12  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.24  2000/06/30 17:52:45  madden
 * Move AWAKE_THR_MIN_SIZE to blastdef.h
 *
@@ -107,9 +131,6 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 #ifndef __MBLAST__
 #define __MBLAST__
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <ncbi.h>
 #include <blastpri.h>
@@ -125,6 +146,11 @@ extern "C" {
 #include <dust.h>
 #include <mbutils.h>
 #include <mbalign.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MB_DIAG_CLOSE 10
 #define MB_DIAG_NEAR 30
@@ -146,8 +172,7 @@ Int2 MegaBlastSetUpSearchInternalByLoc PROTO((BlastSearchBlkPtr search,
 					      int (LIBCALLBACK
 						   *callback)PROTO((Int4 done,
 								    Int4
-								    positives)), 
-					      SeqLocPtr PNTR mask_slpp));
+								    positives))));
 
 SeqAlignPtr PNTR 
 BioseqMegaBlastEngine PROTO((BioseqPtr PNTR bspp, CharPtr progname, CharPtr
@@ -156,8 +181,16 @@ BioseqMegaBlastEngine PROTO((BioseqPtr PNTR bspp, CharPtr progname, CharPtr
 			     (LIBCALLBACK *callback)PROTO((Int4 done, Int4
 							   positives)), 
 			     SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, 
-			     Int4 gi_list_total, SeqLocPtr PNTR mask_slpp, 
+			     Int4 gi_list_total, 
 			     int (LIBCALLBACK *results_callback)PROTO((VoidPtr Ptr))));
+SeqAlignPtr PNTR
+BioseqMegaBlastEngineByLoc PROTO((SeqLocPtr slp, CharPtr progname, CharPtr database,
+                            BLAST_OptionsBlkPtr options, ValNodePtr *other_returns,
+                            ValNodePtr *error_returns, 
+                            int (LIBCALLBACK *callback)(Int4 done, Int4 positives),
+                            SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, 
+                            Int4 gi_list_total, 
+                            int (LIBCALLBACK *results_callback)PROTO((VoidPtr Ptr))));
 
 SeqAlignPtr PNTR
 BioseqMegaBlastEngineCore PROTO((BlastSearchBlkPtr search, BLAST_OptionsBlkPtr options, Int4Ptr *pos_matrix));
@@ -179,7 +212,7 @@ BlastSearchBlkPtr MegaBlastSetUpSearchWithReadDbInternal PROTO((SeqLocPtr
 								prog_name, Int4
 								qlen, CharPtr
 								dbname,
-								BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp, SeqLocPtr PNTR mask_slpp));
+								BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
 
 SeqAlignPtr PNTR 
 MegaBlastPackAlignmentsByQuery PROTO((BlastSearchBlkPtr search,
@@ -198,8 +231,6 @@ BioseqPtr BlastMakeTempProteinBioseq PROTO((Uint1Ptr sequence, Int4 length, Uint
 VoidPtr index_proc PROTO((VoidPtr dummy));
 
 CharPtr BlastConstructFilterString PROTO((Int4 filter_value));
-
-ObjectIdPtr UniqueLocalId PROTO(());
 
 int LIBCALLBACK evalue_compare_hits PROTO((VoidPtr v1, VoidPtr v2));
 
@@ -250,10 +281,13 @@ Boolean
 BlastNeedHumanRepeatFiltering PROTO((BlastDoubleInt4Ptr gi_list, 
 				     Int4 gi_list_size, Uint4 query_gi));
 
-FloatHi
-MegaBlastGetPercentIdentity PROTO((Uint1Ptr query, Uint1Ptr subject, 
-				   Int4 q_start, Int4 s_start, Int4 length, 
-				   Boolean reverse));
+Int4
+MegaBlastGetNumIdentical PROTO((Uint1Ptr query, Uint1Ptr subject, 
+                                Int4 q_start, Int4 s_start, Int4 length, 
+                                Boolean reverse));
+
+Int2
+MegaBlastReevaluateWithAmbiguities PROTO((BlastSearchBlkPtr search, Int4 sequence_number));
 
 Int4 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
 
@@ -266,7 +300,9 @@ void BlastLCaseMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length,
 SeqLocPtr MaskSeqLocFromSeqAlign PROTO((SeqAlignPtr seqalign));
    
 void PrintMaskedSequence PROTO((BioseqPtr query_bsp, SeqLocPtr mask_slp, 
-				CharPtr file_name));
+				CharPtr file_name, Boolean first));
+Int4 LIBCALL 
+MegaBlastSaveCurrentHitlist PROTO((BlastSearchBlkPtr search));
 
 #ifdef __cplusplus
 }

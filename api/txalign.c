@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.124 2000/06/22 18:56:55 egorov Exp $
+/* $Id: txalign.c,v 6.148 2000/10/27 17:54:17 madden Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,87 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.124 $
+* $Revision: 6.148 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.148  2000/10/27 17:54:17  madden
+* Changes to make_dumpgnl_links for new hs genome page
+*
+* Revision 6.147  2000/10/12 21:37:32  shavirin
+* Adjusted calculation of ends of alignment in minus strand.
+*
+* Revision 6.146  2000/10/06 19:30:51  shavirin
+* Added printing of initial frame number in OOF case. Fixed some spacing
+* to be the same as in regular case.
+*
+* Revision 6.145  2000/10/06 17:55:44  shavirin
+* Added usage of correct matrix in OOF case.
+*
+* Revision 6.144  2000/10/06 17:23:21  shavirin
+* Added BioseqUnlock in printing OOF alignment.
+*
+* Revision 6.142  2000/10/02 22:03:26  shavirin
+* Changed function OOFShowSingleAlignment to have correct spacing.
+*
+* Revision 6.141  2000/09/28 15:51:44  dondosha
+* Open <PRE> block in PrintDefLinesFromSeqAlignEx2 - needed for PSI BLAST
+*
+* Revision 6.140  2000/09/28 15:03:15  dondosha
+* Added boolean splice_junction score type
+*
+* Revision 6.139  2000/09/27 20:57:55  shavirin
+* Fixed bug with printing DNA line ends in case of minus strand.
+*
+* Revision 6.138  2000/09/25 19:22:12  shavirin
+* Fixed start of protein sequencer in OOF alignment. Added check for NULL
+* return from BioseqLocById in FormatScoreFromSeqAlignEx() function.
+*
+* Revision 6.137  2000/09/13 22:24:30  dondosha
+* Corrected the printing of </PRE> at the end of PrintDefLinesFromSeqAlignEx2
+*
+* Revision 6.136  2000/09/13 21:15:39  dondosha
+* Removed opening <PRE> in PrintDefLinesFromSeqAlignEx2
+*
+* Revision 6.135  2000/09/01 18:43:38  shavirin
+* Adjusted start and stop of every line for OOF alignment printout.
+*
+* Revision 6.134  2000/08/31 16:53:10  shavirin
+* Fixed memory leak in OOFShowSingleAlignment().
+*
+* Revision 6.133  2000/08/30 14:18:42  shavirin
+* Fixed case for printing OOF alignment.
+*
+* Revision 6.132  2000/08/25 19:02:37  shavirin
+* Corrected calculation of number of mismatches, gaps,positives etc.
+* for discontinuous alignments.
+*
+* Revision 6.131  2000/08/24 18:14:54  shavirin
+* Added "<a name=..." links to every HSP Score for Greg's BLAST page.
+* This easyly may be changed for general Blast output case.
+*
+* Revision 6.130  2000/07/25 16:47:13  shavirin
+* Changed function to print OOF alignment.
+*
+* Revision 6.129  2000/07/18 22:37:22  shavirin
+* Adjusted end_of_line values in the function OOFShowSingleAlignment()
+*
+* Revision 6.128  2000/07/17 14:11:47  shavirin
+* Adjusted function OOFShowSingleAlignment()
+*
+* Revision 6.127  2000/07/14 16:02:41  shavirin
+* Initialixed variable ooframe to FALSE.
+*
+* Revision 6.126  2000/07/11 20:51:04  shavirin
+* Added major functions for displaying Out-Of-Frame alignments.
+*
+* Revision 6.125  2000/07/10 20:45:53  shavirin
+* Added parameter ooframe for Out-Of-frame alignment and corresponding changes
+* to accomodate this parameter.
+*
 * Revision 6.124  2000/06/22 18:56:55  egorov
 * Add a protection against empty deflines.
 *
@@ -179,6 +253,9 @@
 #define TXALIGN_HREF "http://www.ncbi.nlm.nih.gov"
 
 #define NEW_ENTREZ_HREF "http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi"
+
+/* Used in make_dumpgnl_links, set in getreq.cpp or getreqcmd.cpp */
+const char *RID_glb;
 
 /*
 	Used by the functions that format the one-line descriptions.
@@ -1517,7 +1594,7 @@ static Boolean get_current_master_frame(ValNodePtr list, Int4 m_left, Int4 m_rig
 	return retval;
 }
 
-static SeqFeatPtr make_fake_cds(BioseqPtr m_bsp, Int4 start, Int4 stop, Uint1 strand)
+NLM_EXTERN SeqFeatPtr make_fake_cds(BioseqPtr m_bsp, Int4 start, Int4 stop, Uint1 strand)
 {
 	SeqFeatPtr sfp;
 	CdRegionPtr crp;
@@ -2015,6 +2092,30 @@ GetGeneticCodeFromSeqId (SeqIdPtr sip)
 
 	return genetic_code;
 }
+NLM_EXTERN CharPtr OOFTranslateDNAInAllFrames(Uint1Ptr dna, Int4 length, 
+                                              SeqIdPtr query_id)
+{
+    CharPtr dnap;
+    CharPtr codes;
+    Int4 i;
+    Uint1 codon[3];
+
+    if(dna == NULL || length == 0)
+        return NULL;
+    
+    dnap = (CharPtr) MemNew(length+1);
+    codes = GetGeneticCodeFromSeqId(query_id);
+
+    dnap[0] = dnap[1] = dnap[2] = 0;
+    
+    for (i = 2; i < length; i++) {
+        codon[0] = dna[i-2];
+        codon[1] = dna[i-1];
+        codon[2] = dna[i];        
+        dnap[i+1] = AAForCodon(codon, codes);
+    }
+    return dnap;
+}
 
 NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 
@@ -2031,19 +2132,21 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
     
     if(ssp == NULL || asp == NULL)
         return FALSE;
-    
-    /* Check for valid sequence. */
-    if (SeqLocLen(ssp->loc) == 3*SeqLocLen(ssp->loc->next))
+
+    if(asp->ooframe) {
         master_is_translated = TRUE;
-    else if (3*SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
+        target_is_translated = FALSE;	
+    } else {
+        /* Check for valid sequence. */
+        if (SeqLocLen(ssp->loc) == 3*SeqLocLen(ssp->loc->next))
+            master_is_translated = TRUE;
+        else if (3*SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
             target_is_translated = TRUE;	
-    else if (SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
-        both_translated = TRUE;
-    else
-        return FALSE;
-    
-    asp->master_from = SeqLocStart(ssp->loc);
-    asp->target_from = SeqLocStart(ssp->loc->next);
+        else if (SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
+            both_translated = TRUE;
+        else
+            return FALSE;
+    }
     
     if (master_is_translated) {
         genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids);
@@ -2090,6 +2193,19 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
         }
     }
     
+    if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
+        asp->master_from = SeqLocStop(ssp->loc);
+    } else {
+        asp->master_from = SeqLocStart(ssp->loc);
+    }
+    
+    if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus) {
+        asp->target_from = SeqLocStop(ssp->loc->next);
+    } else {
+        asp->target_from = SeqLocStart(ssp->loc->next);
+    }
+    
+    
     while (ssp) {
         if (ssp->loc->choice != SEQLOC_EMPTY && ssp->loc->next->choice != SEQLOC_EMPTY) {
             if (both_translated) {
@@ -2132,7 +2248,7 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
             SeqPortFree(spp2);
             /* Check if this is an ungapped alignment;
                in this case do not go to next link */
-            if (ssp->next && 
+            if (!asp->ooframe && ssp->next && 
                 ssp->next->loc->choice != SEQLOC_EMPTY && 
                 ssp->next->loc->next->choice != SEQLOC_EMPTY)
                 ungapped_align = TRUE;
@@ -2145,17 +2261,25 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
                         asp->gaps += SeqLocLen(ssp->loc->next);
                 }
         }
-        
-        if (ssp->loc->choice != SEQLOC_EMPTY) {
-            if (master_is_translated || both_translated)
-                asp->totlen += SeqLocLen(ssp->loc)/3;
-            else
-                asp->totlen += SeqLocLen(ssp->loc);
-        } else {
-            if (target_is_translated || both_translated)
-                asp->totlen += SeqLocLen(ssp->loc->next)/3;
-            else
+
+        if(asp->ooframe) {
+            if(ssp->loc->next->choice != SEQLOC_EMPTY)
                 asp->totlen += SeqLocLen(ssp->loc->next);
+            else
+                asp->totlen += SeqLocLen(ssp->loc)/3;
+        } else {
+        
+            if (ssp->loc->choice != SEQLOC_EMPTY) {
+                if (master_is_translated || both_translated)
+                    asp->totlen += SeqLocLen(ssp->loc)/3;
+                else
+                    asp->totlen += SeqLocLen(ssp->loc);
+            } else {
+                if (target_is_translated || both_translated)
+                    asp->totlen += SeqLocLen(ssp->loc->next)/3;
+                else
+                    asp->totlen += SeqLocLen(ssp->loc->next);
+            }
         }
 
         ssp_last = ssp;
@@ -2167,8 +2291,17 @@ static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
         ssp = ssp->next;
     }
 
-    asp->master_to = SeqLocStop(ssp_last->loc);
-    asp->target_to = SeqLocStop(ssp_last->loc->next);
+    if (SeqLocStrand(ssp_last->loc) == Seq_strand_minus) {
+        asp->master_to = SeqLocStart(ssp_last->loc);
+    } else {
+        asp->master_to = SeqLocStop(ssp_last->loc);
+    }
+    
+    if (SeqLocStrand(ssp_last->loc->next) == Seq_strand_minus) {
+        asp->target_to = SeqLocStart(ssp_last->loc->next);
+    } else {
+        asp->target_to = SeqLocStop(ssp_last->loc->next);
+    }
     
     return TRUE;
 }
@@ -2969,6 +3102,7 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
                             as.master_sip = master_anp->sip;
                             as.target_sip = anp->sip;
                             as.is_aa = (m_bsp->mol == Seq_mol_aa);
+                            as.ooframe = FALSE; /* Not supported */
                             asp = &as;
                         } else
                             asp = NULL;
@@ -3266,8 +3400,10 @@ static Boolean load_text(BioseqPtr bsp, Int4 pos1, Int4 pos2, CharPtr l_seq, Int
         code = Seq_code_iupacna;
     check_neg = (matrix_val == NULL && matrix != NULL);
     if(strand == Seq_strand_minus) {	/*on the minus strand*/
+
         start = -pos2;
         stop = -pos1;
+        
         if(protein) {
             strand = Seq_strand_plus;
             reverse = TRUE;
@@ -4745,12 +4881,14 @@ SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size, size_t 
 static void
 make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer, Boolean nodb_path)
 {
+    BioseqPtr bsp;
     Char gnl[256];
     CharPtr str, chptr, dbtmp;
     Uchar buf[32];
-    Int4 i, j, length;
+    Int4 i, j, length, gi;
     MD5Context context;
     Char passwd[128], tool_url[128], tmpbuff[256];
+    SeqIdPtr bestid;
     
     /* We do need to make security protected link to BLAST gnl */
     if (StringStr(sip_buffer, "gnl|BL_ORD_ID") != NULL)
@@ -4815,34 +4953,71 @@ make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbnam
         dbtmp = dbname;
     }
     
+    bsp = BioseqLockById(sip);
+    if (bsp)
+	sip = bsp->id;
+
+    bestid = SeqIdFindBest(sip, SEQID_GENERAL);
+    if (bestid && bestid->choice != SEQID_GENERAL)
+    {
+    	bestid = SeqIdFindBest(sip, SEQID_OTHER);
+    }
     /*
      * Need to protect start and stop positions
      * to avoid web users sending us hand-made URLs
      * to retrive full sequences
      */
-    MD5Init(&context);
-    length = StringLen(passwd);
-    MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-    SeqIdWrite(sip, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
-    MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-    MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
-    MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-    MD5Final(&context, (UcharPtr)buf);
+    if (bestid && (bestid->choice == SEQID_GENERAL || bestid->choice == SEQID_OTHER))
+    {
+    	MD5Init(&context);
+    	length = StringLen(passwd);
+	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+	SeqIdWrite(bestid, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
+	MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
+	MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
+	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+	MD5Final(&context, (UcharPtr)buf);
+    }
+    else
+    {
+	gnl[0] = NULLB;
+    }
+
+    gi = -1;
+    bestid = SeqIdFindBest(sip, SEQID_GI);
+    if (bestid && bestid->choice == SEQID_GI)
+    {
+	gi = bestid->data.intvalue;
+    }
     
     str = MakeURLSafe(dbtmp == NULL ? "nr" : dbtmp);
     fprintf(fp, "<a href=\"%s?db=%s&na=%d&", tool_url, str, is_na);
     str = (CharPtr) MemFree(str);
-    str = MakeURLSafe(gnl);
+    if (gnl[0] != NULLB)
+    {
+    	str = MakeURLSafe(gnl);
+    	fprintf(fp, "gnl=%s&", str);
+    	str = (CharPtr) MemFree(str);
+    }
+    if (gi != -1)
+    {
+    	fprintf(fp, "gi=%ld&", (long) gi);
+    }
+    if (RID_glb)
+    {
+    	fprintf(fp, "RID=%s&", RID_glb);
+    }
+
     fprintf(fp,
-            "gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
+            "segs=%s&seal=%02X%02X%02X%02X"
             "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-            str, segs,
+            segs,
             buf[0], buf[1], buf[2], buf[3],
             buf[4], buf[5], buf[6], buf[7],
             buf[8], buf[9], buf[10], buf[11],
             buf[12], buf[13], buf[14], buf[15]);
-    str = (CharPtr) MemFree(str);
     
+    BioseqUnlock(bsp);
     if(nodb_path)
         MemFree(dbtmp);
     
@@ -4910,8 +5085,12 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     if(options & TXALIGN_NEW_GIF)
         titleIdAllocated += 3;
     
-    if (options & TXALIGN_HTML)
-        ff_AddString("<PRE>");
+    /* <PRE> block should be already opened outside of this function, 
+       but open it here just in case */
+    if (options & TXALIGN_HTML) {
+       ff_AddString("<PRE>");
+       NewContLine();
+    }
 
     /*AAS*/
     if (!(options & TXALIGN_DO_NOT_PRINT_TITLE)) {
@@ -5138,10 +5317,10 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                                 
                             }
                         } else {
-                            make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
+                            make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
                         }
                     } else
-                        make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
+                        make_dumpgnl_links(txsp->id, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
                     make_link = TRUE;
                 }
         }
@@ -5353,10 +5532,11 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
             countdescr--;
     }
     
-    if (options & TXALIGN_HTML)
+    if (options & TXALIGN_HTML) {
         ff_AddString("</PRE>");
-    
-    fprintf(outfp, "\n");
+        NewContLine();
+    } else
+       fprintf(outfp, "\n");
     
     /* blast_type (overwriting parameter) allocated before last while loop. */
     blast_type = (CharPtr) MemFree(blast_type);
@@ -5405,15 +5585,15 @@ NumToFrame(Int2 frame, CharPtr buffer)
 
 	return buffer;
 }
+
 /* This function transfer SeqAlignPtr into AlignStatOptionPtr */
 
-NLM_EXTERN Boolean FormatScoreFromSeqAlign
-(SeqAlignPtr sap, Uint4 option, FILE *fp,
- Int4Ptr PNTR matrix, Boolean follower)
+NLM_EXTERN Boolean FormatScoreFromSeqAlignEx(SeqAlignPtr sap, Uint4 option, FILE *fp, Int4Ptr PNTR matrix, Boolean follower, Boolean ooframe)
 {
     AlignStatOptionPtr asop;
     Int4 empty_space, line_len;
     AlignSum as;
+    SeqAlignPtr sap_tmp;
 
     asop = (AlignStatOptionPtr) MemNew(sizeof(AlignStatOption));
     MemSet(&as, 0, sizeof(AlignSum));
@@ -5454,33 +5634,102 @@ NLM_EXTERN Boolean FormatScoreFromSeqAlign
     as.master_sip = TxGetQueryIdFromSeqAlign(sap);
     as.target_sip = TxGetSubjectIdFromSeqAlign(sap);
 
-    asop->bsp = BioseqLockById(as.target_sip);
-    
+    if((asop->bsp = BioseqLockById(as.target_sip)) == NULL) {
+        Char tmp[128];
+        SeqIdWrite(as.target_sip, tmp, PRINTID_FASTA_LONG, sizeof(tmp));
+        ErrPostEx(SEV_ERROR, 0, 0, "Failure to get Bioseq for %s\n", tmp);
+        return FALSE;
+    }
+
     as.is_aa = (asop->bsp->mol == Seq_mol_aa);
+    as.ooframe = ooframe;
     
-    asop->sp = find_score_in_align(sap, 1, &as);
-    
+    asop->sp = NULL;
+    if(sap->segtype == SAS_DISC) {
+
+        Int4 last_m_to = 0, last_t_to = 0;
+        Int4 m_adj = 0, t_adj = 0;
+        for(sap_tmp = (SeqAlignPtr)sap->segs; sap_tmp != NULL; 
+            sap_tmp = sap_tmp->next) {
+            
+            /* We cannot find score this way .. :-) this fuction just
+               calculates number of positives,identities etc. */
+            
+            find_score_in_align(sap_tmp, 1, &as);
+            
+            asop->gaps += as.gaps;
+            asop->positive += as.positive;
+            asop->identical += as.identical;
+            asop->align_len += as.totlen;
+            
+            /* Adjustment for unaligned regions not counted in the
+               function above */
+            
+            if(last_m_to != 0) {
+                m_adj = as.master_from - last_m_to - 1;
+            }
+            
+            asop->align_len += m_adj;
+            asop->gaps += m_adj;
+            
+            last_m_to = as.master_to;            
+        }
+        asop->sp = sap->score;
+    } else {
+        asop->sp = find_score_in_align(sap, 1, &as);
+        asop->gaps = as.gaps;
+        asop->positive = as.positive;
+        asop->identical = as.identical;
+        asop->align_len = as.totlen;
+    }
+
     asop->db_name = NULL;
+
+    if (as.m_frame_set) {
+        asop->m_frame = as.m_frame;
+    } else {
+        asop->m_frame = 255;
+    }
     
-    asop->gaps = as.gaps;
-    asop->positive = as.positive;
-    asop->identical = as.identical;
-    asop->align_len = as.totlen;
+    if (as.t_frame_set) {
+        asop->t_frame = as.t_frame;
+    } else {
+        asop->t_frame = 255;
+    }
     
-    asop->m_frame = 255;
-    asop->t_frame = 255;
-    
-    asop->m_strand = Seq_strand_unknown;
-    asop->t_strand = Seq_strand_unknown;
+    asop->m_strand = as.m_strand;
+    asop->t_strand = as.t_strand;    
+
+    /*    if(!ooframe) {
+          asop->m_frame = 255;
+          asop->t_frame = 255;
+          } else {
+          asop->m_frame = as.m_frame;
+          asop->t_frame = as.t_frame;
+          } */
+
+    /* asop->m_strand = Seq_strand_unknown;
+       asop->t_strand = Seq_strand_unknown; */
+
     asop->follower = follower;
     
     init_buff_ex(255);
     FormatScoreFunc(asop);
     free_buff();
 
+    BioseqUnlock(asop->bsp);
+    
     MemFree(asop);
 
     return TRUE;
+}
+/* This function transfer SeqAlignPtr into AlignStatOptionPtr */
+
+NLM_EXTERN Boolean FormatScoreFromSeqAlign
+(SeqAlignPtr sap, Uint4 option, FILE *fp,
+ Int4Ptr PNTR matrix, Boolean follower)
+{
+    return FormatScoreFromSeqAlignEx(sap, option, fp, matrix, follower, FALSE);
 }
 
 static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na, 
@@ -5543,10 +5792,10 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
                         }
                     } else {
                         /** * links to incomplete genomes */
-                        make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
+                        make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
                     }
                 } else {
-                    make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
+                    make_dumpgnl_links(sip, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
                 }
                 make_link = TRUE;
             }
@@ -5617,12 +5866,14 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     Char buf1[5], buf2[5];
     Char buffer[BUFFER_LENGTH+1], eval_buff[10], bit_score_buff[10];
     Char HTML_buffer[BUFFER_LENGTH+1], seqid_buf[128];
+    Char id_buffer[BUFFER_LENGTH+1];
     Nlm_FloatHi bit_score, evalue; 
     Int4 percent_identical, percent_positive;
     Int4 number, score, gi, len, i;
     ObjectIdPtr obid;
     SeqIdPtr gilist, sip, new_sip, sip_tmp;
     ScorePtr	scrp, sp;
+    Boolean splice_junction = FALSE;
     
     sp = asop->sp;
     bsp = asop->bsp;
@@ -5633,6 +5884,8 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
     score = 0;
     evalue = 0.0;
     defline = NULL;
+    *id_buffer = NULLB;
+
     if (bsp && asop->follower == FALSE) {
         /* Is the defline and sip allocated? */
         allocated = FALSE;
@@ -5714,6 +5967,24 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
         
         dline_buf = (CharPtr) MemFree(dline_buf);
     }
+
+    if (asop->no_entrez == TRUE && 
+        asop->html_hot_link == TRUE && bsp != NULL) {
+        
+        /* For Gregs and Human Genome stuff we will add links to every
+           HSP */
+        SeqIdPtr bestid;
+        
+        gi = 0;
+        bestid = SeqIdFindBest(bsp->id, SEQID_GI);
+        
+        if (bestid != NULL) {
+            if (bestid->choice == SEQID_GI) {
+                gi = bestid->data.intvalue;
+                sprintf(id_buffer, "%ld", (long) gi);
+            }            
+        }
+    }
     
     number=1;
     for (scrp=sp; scrp; scrp = scrp->next) {
@@ -5732,6 +6003,8 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
             } else if (StringICmp(obid->str, "bit_score") == 0) {
                 bit_score = scrp->value.realvalue;
                 continue;
+            } else if (StringICmp(obid->str, "splice_junction") == 0) {
+               splice_junction = TRUE;
             }
         } else {
             if(scrp->choice == 1) {
@@ -5798,10 +6071,23 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
         sprintf(bit_score_buff, "%4.1lf", bit_score);
     }
 #endif
+
+    if(asop->html_hot_link == TRUE && *id_buffer != NULLB) {
+        sprintf(buffer, " <a name = %s_%ld></a>Score = %s bits (%ld), ", 
+                id_buffer, (long) score, bit_score_buff, (long) score);
+    } else {
+        sprintf(buffer, " Score = %s bits (%ld), ", 
+                bit_score_buff, (long) score);
+    }
+    ff_AddString(buffer);
+
     if (number == 1)
-        sprintf(buffer, " Score = %s bits (%ld), Expect = %s", bit_score_buff, (long) score, eval_buff_ptr);
+        sprintf(buffer, "Expect = %s", eval_buff_ptr);
+    else if (!splice_junction)
+        sprintf(buffer, "Expect(%ld) = %s", (long) number, eval_buff_ptr);
     else
-        sprintf(buffer, " Score = %s bits (%ld), Expect(%ld) = %s", bit_score_buff, (long) score, (long) number, eval_buff_ptr);
+        sprintf(buffer, "Expect(%ld+) = %s", (long) number, eval_buff_ptr);
+
     ff_AddString(buffer);
     NewContLine();
     if (asop->align_len > 0) {
@@ -5905,3 +6191,652 @@ NLM_EXTERN Uint4 GetTxAlignOptionValue (Uint1 tx_option, BoolPtr hide_feature,
 	return option;
 }
 
+Int4 OOFGetDNAStrand(StdSegPtr sseg)
+{
+    Int4 dna_strand;
+    SeqIntPtr seq_int1;
+    SeqLocPtr slp1;
+
+    for(; sseg != NULL; sseg= sseg->next) {
+        slp1 = sseg->loc;
+        
+        if(slp1->choice == SEQLOC_INT) {
+            seq_int1 = (SeqIntPtr) slp1->data.ptrvalue;
+            return seq_int1->strand;
+        }
+    }
+    return Seq_strand_unknown;
+}
+static SetDNALineEnd(Int4 dna_index, Int4 dna_strand)
+{
+    Int4 dna_line_end;
+    
+    if(dna_strand != Seq_strand_minus)
+        dna_line_end = dna_index == 0 ? 0 : dna_index -3;
+    else
+        dna_line_end = dna_index < 1 ? dna_index : dna_index -1;
+    
+    return dna_line_end;
+}
+
+static Int4 GetDigitsInINT(Int4 number)
+{
+    Int4 count;
+
+    for(count = 1; number > 9; count++) 
+        number = number/10;
+
+    return count;
+}
+
+static Int4 GetMaxFROMDigits(StdSegPtr sseg)
+{
+    StdSegPtr ssp, ssp_last;
+    Int4 master_from, target_from, master_to, target_to;
+    Int4 max_number, count;
+
+    master_from = SeqLocStart(sseg->loc);
+    target_from = SeqLocStart(sseg->loc->next);
+
+    for(ssp_last = ssp = sseg; ssp != NULL; ssp = ssp->next)
+        ssp_last = ssp;
+
+    master_to = SeqLocStop(ssp_last->loc);
+    target_to = SeqLocStop(ssp_last->loc->next);
+
+    max_number = MAX(MAX(master_from, master_to), 
+                     MAX(target_from, target_to));
+
+    count = GetDigitsInINT(max_number);
+
+    return count;
+}
+
+#define WIDTH 60
+static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
+                                      Int4Ptr PNTR matrix, FILE *fp)
+{
+    StdSegPtr sseg;
+    SeqIntPtr seq_int1, seq_int2;
+    SeqLocPtr slp, slp1, slp2;
+    SeqIdPtr sip1, sip2;
+    SeqFeatPtr fake_cds;
+    ByteStorePtr b_store = NULL;
+    Char line1[128], line2[128], line3[128];
+    Char tmpbuf[256];
+    Int4 line_index, length_dna, length_pro, length;
+    Int4 dna_index, pro_index, dna_line_start, pro_line_start;
+    Int4 dna_line_end, pro_line_end, dna_to, dna_from;
+    BioseqPtr bsp;
+    SeqPortPtr spp;
+    Int4 i, lines, k, shift_info = 0;
+    Char  c1, c2, c3;
+    Int4 dna_strand, max_digits, num_pad;
+
+    if(sap == NULL || sap->segtype != 3) /* Should be StdSeg here! */
+        return FALSE;
+    
+    line_index = 0;
+    lines = 0;
+    dna_index =0;
+    pro_index = 0;
+    pro_line_end = 0;
+    dna_line_end = 0;
+    
+    dna_strand = OOFGetDNAStrand((StdSegPtr) sap->segs);
+
+    /* Needed for printing nice alignment with normal spacing */
+    max_digits = GetMaxFROMDigits((StdSegPtr) sap->segs);
+
+    for(sseg = (StdSegPtr) sap->segs; sseg != NULL; sseg= sseg->next) {
+        
+        /* Now starting new alignment region */
+        
+        length_dna = 0;
+        length_pro = 0;
+        b_store = NULL;
+        
+        slp1 = sseg->loc;
+        
+        if(slp1->choice == SEQLOC_INT) 
+            seq_int1 = (SeqIntPtr) slp1->data.ptrvalue;
+        else if (slp1->choice == SEQLOC_EMPTY)
+            seq_int1 = NULL;
+        else
+            return FALSE;       /* Invalid SeqLoc */
+        
+        slp2 = sseg->loc->next;
+        
+        if(slp2->choice == SEQLOC_INT)
+            seq_int2 = (SeqIntPtr) slp2->data.ptrvalue;
+        else if (slp2->choice == SEQLOC_EMPTY)
+            seq_int2 = NULL;
+        else
+            return FALSE;       /* Invalid SeqLoc */
+
+        /* Ignore double gap */
+        if(seq_int1 == NULL && seq_int2 == NULL)
+            continue;
+        
+        sip1 = sseg->ids;       /* DNA */
+        sip2 = sseg->ids->next; /* Protein */
+
+        /* printf("shift_info = %d\n", shift_info); */
+
+        if(shift_info%3)
+            dna_index -= (3 - shift_info); /* adjustment for frameshift */
+
+        switch(shift_info) {
+        case 1:
+            line1[line_index] = '\\';
+            line2[line_index] = ' ';
+            line3[line_index] = ' ';
+            line_index++;
+
+            if(line_index == WIDTH) {
+                dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+                pro_line_end = pro_index;
+            }
+        case 2:
+            line1[line_index] = '\\';
+            line2[line_index] = ' ';
+            line3[line_index] = ' ';
+            line_index++;
+            
+            if(line_index == WIDTH) {
+                dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+                pro_line_end = pro_index;
+            }
+           break;
+        case 5:
+            line1[line_index] = '/';
+            line2[line_index] = ' ';
+            line3[line_index] = ' ';
+            line_index++;
+
+            if(line_index == WIDTH) {
+                dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+                pro_line_end = pro_index;
+            }
+
+        case 4:
+            line1[line_index] = '/';
+            line2[line_index] = ' ';
+            line3[line_index] = ' ';
+            line_index++;
+
+            if(line_index == WIDTH) {
+                dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+                pro_line_end = pro_index;
+            }
+
+            break;
+        case 0:
+        default:
+            break;
+        }
+  
+        /* Looking if any frame shift is followed next */
+        if(seq_int1 != NULL && seq_int2 != NULL) {            
+            shift_info = (seq_int1->to - seq_int1->from + 1) -
+                (seq_int2->to - seq_int2->from)*3;
+        } else if(seq_int1 != NULL) {
+            shift_info = (seq_int1->to - seq_int1->from + 1)%3 + 3;
+        } else {
+            shift_info = 0;
+        }
+
+        if(seq_int1 != NULL) {
+
+            if(dna_strand != Seq_strand_minus)
+                dna_index = seq_int1->from;
+            else 
+                dna_index = seq_int1->to;
+            
+            length_dna = (seq_int1->to - seq_int1->from + 1)/3; 
+        }        
+        
+        if(seq_int2 != NULL) {
+            pro_index = seq_int2->from;
+            length_pro = seq_int2->to - seq_int2->from + 1;
+        }
+
+        if(line_index == 0) {
+            dna_line_start = dna_index; 
+            pro_line_start = pro_index + 1;
+        }
+
+        if (dna_line_start == 0)
+            dna_line_start = dna_index; 
+        
+        if(pro_line_start == 0)
+            pro_line_start = pro_index + 1;
+
+        if(seq_int1 != NULL) {
+
+            /* if(length_dna == 0) insertion
+               continue; */
+            
+            /* Byte store for DNA */
+            bsp = BioseqLockById(sip1);
+
+
+            dna_from = seq_int1->from;
+            dna_to = seq_int1->to;
+            
+            if(0 < shift_info && shift_info < 3) {                
+                if(dna_strand != Seq_strand_minus)
+                    dna_to = seq_int1->to + 3 - shift_info;
+                else 
+                    dna_from = seq_int1->from - 3 + shift_info;
+            }
+
+            if(dna_from >= dna_to) {
+                BioseqUnlock(bsp);
+                continue;
+            }
+
+            fake_cds = make_fake_cds(bsp, dna_from, dna_to, 
+                                     seq_int1->strand);
+            BioseqUnlock(bsp);
+            
+            b_store = ProteinFromCdRegionEx(fake_cds, TRUE, FALSE);
+            SeqFeatFree(fake_cds);
+
+            if(b_store == NULL) {
+                return FALSE;
+            }
+
+            BSSeek(b_store, 0, SEEK_SET);
+
+            /* length_dna = BSLen(b_store); */
+        }
+
+        if(seq_int2 != NULL) {
+            /* Seq port for protein */
+            bsp = BioseqLockById(sip2);
+            spp = SeqPortNew(bsp, seq_int2->from, 
+                             seq_int2->to, 0, Seq_code_ncbieaa);
+            BioseqUnlock(bsp);
+        } else {
+            spp = NULL;
+        }
+        
+        if(length_dna == 0) length_dna = length_pro;
+        if(length_pro == 0) length_pro = length_dna;
+
+        length = MAX(length_pro, length_dna);
+        /* length = MIN(length_pro, length_dna); */
+        
+        /* printf("length = %d\n", length); */
+        for(i = 0; i < length; i++) {
+
+            if(seq_int1 != NULL) {
+                
+                /* This line should be checked for correctness */
+                if((line1[line_index] = BSGetByte(b_store)) == EOF)
+                    line1[line_index] = '?';
+                
+                if(dna_strand != Seq_strand_minus)
+                    dna_index += 3;
+                else
+                    dna_index -= 3;
+                
+            } else {
+                line1[line_index] = '-';
+            }
+            
+            if(seq_int2 != NULL) {
+                line2[line_index] = SeqPortGetResidue(spp);
+                pro_index++;
+            } else {
+                line2[line_index] = '-';
+            }
+
+            if(line1[line_index] == line2[line_index])
+                line3[line_index] = line1[line_index];
+            else if(matrix[line1[line_index]][line2[line_index]] > 0)
+                line3[line_index] = '+';
+            else
+                line3[line_index] = ' ';
+
+            line_index++;
+
+            if(line_index == WIDTH) {
+                dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+                pro_line_end = pro_index;
+            }
+            
+            if(line_index > WIDTH) { /* Printout */
+                
+                line1[line_index] = line2[line_index] = line3[line_index] = '\0';
+#ifdef SHOW_RULER
+                fprintf(fp, "%5d",
+ WIDTH*lines++);
+                
+                for (k = 10; k <= WIDTH; k+=10) 
+                    fprintf(fp, "    .    :");
+                if (k-5 < WIDTH) fprintf(fp, "    ."); 
+#endif
+                
+                c1 = line1[WIDTH]; c2 = line2[WIDTH]; c3 = line3[WIDTH];
+                line1[WIDTH] = line2[WIDTH] = line3[WIDTH] = '\0';
+
+                /* ------- Printout of the alignment ------------- */ 
+
+                fprintf(fp, "Query: %d", dna_line_start+1);
+                
+                num_pad = max_digits - GetDigitsInINT(dna_line_start+1) + 1;
+
+                for(k=0; k < num_pad; k++)
+                    fprintf(fp, " ");
+
+                fprintf(fp, "%s %d\n", line1, dna_line_end+3);
+                
+                num_pad = 8 + max_digits;
+                
+                for(k=0; k < num_pad; k++)
+                    fprintf(fp, " ");
+
+                fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
+
+                num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
+
+                for(k=0; k < num_pad; k++)
+                    fprintf(fp, " ");
+
+                fprintf(fp, "%s %d\n\n", line2, pro_line_end);
+
+                /* --------------------------------------------------- */
+
+                if(dna_line_end != 0) {
+
+                    if(dna_strand != Seq_strand_minus)
+                        dna_line_start = dna_line_end+3; /*takes 3 bases*/
+                    else
+                        dna_line_start = dna_line_end+1; /*takes 3 bases*/
+                }
+                if(pro_line_end != 0) 
+                    pro_line_start = pro_line_end+1;
+                
+                line1[WIDTH] = c1; line2[WIDTH] = c2; line3[WIDTH] = c3;
+                strcpy(line1, &line1[WIDTH]);
+                strcpy(line2, &line2[WIDTH]);
+                strcpy(line3, &line3[WIDTH]);
+                line_index = line_index - WIDTH;
+            }
+        }
+
+        SeqPortFree(spp);       /* Protein SeqPort */
+        BSFree(b_store);        /* DNA Byte store  */
+    }
+    
+    /* Printing out remaining tail ... if any */
+    line1[line_index] = line2[line_index] = line3[line_index] = '\0';
+
+#ifdef SHOW_RULER
+    fprintf(fp, "%5d", WIDTH*lines);
+
+    for (k = 10; k < line_index; k+=10) 
+        fprintf(fp, "    .    :");
+    
+    if (k-5 < line_index) fprintf(fp, "    .");
+#endif
+
+    dna_line_end = SetDNALineEnd(dna_index, dna_strand);
+    pro_line_end = pro_index;
+
+
+    /* ------- Printout of the alignment remainder ------- */ 
+    
+    fprintf(fp, "Query: %d", dna_line_start+1);
+    
+    num_pad = max_digits - GetDigitsInINT(dna_line_start+1) + 1;
+    
+    for(k=0; k < num_pad; k++)
+        fprintf(fp, " ");
+    
+    fprintf(fp, "%s %d\n", line1, dna_line_end+3);
+    
+    num_pad = 8 + max_digits;
+    
+    for(k=0; k < num_pad; k++)
+        fprintf(fp, " ");
+    
+    fprintf(fp, "%s\nSbjct: %d", line3, pro_line_start);
+    
+    num_pad = max_digits - GetDigitsInINT(pro_line_start) + 1;
+    
+    for(k=0; k < num_pad; k++)
+        fprintf(fp, " ");
+    
+    fprintf(fp, "%s %d\n\n\n", line2, pro_line_end);
+    
+    /* --------------------------------------------------- */
+    
+    /*    fprintf(fp, "\nQuery: %-5d %s %-5d\n             "
+          "%s\nSbjct: %-5d %s %-5d\n\n", 
+          dna_line_start+1, line1, dna_line_end+3, line3, 
+          pro_line_start, line2, pro_line_end); */
+    
+    return TRUE;
+}
+
+/*******************************************************************************
+
+  Function : OOFShowBlastAlignment();
+  
+  Purpose : function to display a BLAST output with Out-of-Frame
+            information
+  
+  Parameters : 	sap; seqalign
+                mask; list of masked regions in the query
+                fp; output file;
+                tx_option; some display options
+				
+  Return value : FALSE if failure
+
+*******************************************************************************/
+NLM_EXTERN Boolean OOFShowBlastAlignment(SeqAlignPtr sap, ValNodePtr mask,
+                                         FILE *fp, Uint4 tx_option, 
+                                         Int4Ptr PNTR matrix)
+{
+    SeqAlignPtr     sap4;
+    SeqIdPtr        new_id = NULL, old_id = NULL;    
+    Uint4           option,i;
+    Boolean         bRet, follower= FALSE, matrix_loaded = FALSE;
+    
+    if(sap == NULL || fp == NULL) 
+        return FALSE;
+    
+    bRet = TRUE;
+
+    /* get the matrix */
+    
+    if(matrix == NULL) { 
+        if((matrix = load_default_matrix()) == NULL)
+            return FALSE;
+        matrix_loaded = TRUE;
+    }
+
+    for(sap4 = sap; sap4 != NULL; sap4 = sap4->next) {
+        
+        /* Attempt to print score for the alignment */
+        new_id = TxGetSubjectIdFromSeqAlign(sap4);
+        if(old_id != NULL) {
+            if(SeqIdMatch(new_id, old_id))
+                follower = TRUE;
+        }
+        
+        old_id = new_id;
+        if(!FormatScoreFromSeqAlignEx(sap4, tx_option, fp, matrix, 
+                                      follower, TRUE)){
+            bRet=FALSE;
+            break;
+        }
+        
+        follower = FALSE;
+        
+        /*display a SeqAlign*/
+        if (!OOFShowSingleAlignment(sap4, mask, matrix, fp)) {
+            bRet=FALSE;
+            break;
+        }
+    }
+    
+    if (matrix_loaded){
+        for(i = 0; i<TX_MATRIX_SIZE; ++i)
+            MemFree(matrix[i]);
+        MemFree(matrix);
+    } 
+    
+    return(bRet);
+	
+}
+
+NLM_EXTERN void OOFDisplayTraceBack1(Int4Ptr a, CharPtr dna, 
+                                     CharPtr pro, Int4 ld, Int4 lp, 
+                                     Int4 q_start, Int4 p_start)
+{
+    int len = 0, i, j, x, y, lines, k;
+    static char line1[100], line2[100], line3[100],
+        tmp[10] = "         ", *st;
+    char *dna1, c1, c2, c3;
+
+    dna1 = Malloc(ld+2);
+    MemCpy(dna1+1, dna, ld);
+    dna1[0] = ' '; dna1[1] = ' ';
+    
+    line1[0] = line2[0] = line3[0] = '\0'; x= q_start; y = p_start;
+    printf("dna=%d pro=%d\n", y, x);
+    
+    for (len = 0, j = 0, lines = 0; x < lp && y < ld; j++) {
+        i = a[j];
+        switch(i) {
+        case 0: 
+            line1[len] = '-';
+            line3[len] = ' ';
+            line2[len++] = pro[x++];
+            break;
+        case 1:
+        case 5:
+            if (i == 1) line1[len]  = '\\';
+            else line1[len] = '/';
+            line2[len] = line3[len] = ' ';
+            len++;
+        case 2:
+        case 4:	  
+            if (i < 3) line1[len]  = '\\';
+            else line1[len] = '/';
+            line2[len] = line3[len] = ' ';
+            len++;
+        case 3:
+            line1[len] = dna1[y+i-2]; y+= i;
+            line2[len] = pro[x++];
+            if (line1[len] == line2[len]) line3[len++] = '|';
+            else line3[len++] = ' ';
+            break;
+        case 6:
+            line1[len] = dna1[y+1]; y+= 3;
+            line2[len] = '-';
+            line3[len++] = ' ';
+        }
+        if (len >= WIDTH) {
+            line1[len] = line2[len] = line3[len] = '\0';
+            printf("\n%5d", WIDTH*lines++);
+            for (k = 10; k <= WIDTH; k+=10) 
+                printf("    .    :");
+            if (k-5 < WIDTH) printf("    .");
+            c1 = line1[WIDTH]; c2 = line2[WIDTH]; c3 = line3[WIDTH];
+            line1[WIDTH] = line2[WIDTH] = line3[WIDTH] = '\0';
+            printf("\n     %s\n     %s\n     %s\n", line1, line3, line2);
+            line1[WIDTH] = c1; line2[WIDTH] = c2; line3[WIDTH] = c3;
+            strcpy(line1, &line1[WIDTH]);
+            strcpy(line2, &line2[WIDTH]);
+            strcpy(line3, &line3[WIDTH]);
+            len = len - WIDTH;
+        }
+    }
+    printf("\n%5d", WIDTH*lines);
+    line1[len] = line2[len] = line3[len] = '\0';
+    for (k = 10; k < len; k+=10) 
+        printf("    .    :");
+    if (k-5 < len) printf("    .");
+    printf("\n     %s\n     %s\n     %s\n", line1, line3, line2);
+
+    MemFree(dna1);
+
+    return;
+}
+NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro, 
+                                     Int4 ld, Int4 lp, 
+                                     Int4 q_start, Int4 p_start)
+{
+    int len = 0, i, j, x, y, lines, k;
+    static char line1[100], line2[100], line3[100],
+        tmp[10] = "         ", *st;
+    char *dna1, c1, c2, c3;
+    
+    dna1 = Malloc(ld+2);
+    printf("%d %d\n", q_start, p_start);
+    
+    dna1 = Malloc(ld+2);
+    MemCpy(dna1+1, dna, ld);
+    dna1[0] = ' '; dna1[1] = ' ';
+    
+    line1[0] = line2[0] = line3[0] = '\0'; 
+    x= q_start; 
+    y = p_start;
+    
+    for (len = 0, j = 0, lines = 0; x < lp && y < ld; j++) {
+        i = a[j];
+        /*printf("%d %d %d\n", i, len, b->j);*/
+        if (i > 0 && i < 6) {
+            if (i == 1) {
+                tmp[0] = pro[x++];
+                len--;
+                y--;
+                i++;
+            } else tmp[i-2] = pro[x++];
+        }
+        if (i == 6) {
+            i = 3; tmp[0] = tmp[1] = tmp[2] = '-';
+            if (a[j+1] == 2) tmp[2] = ' ';
+        }
+        if (i > 0) {
+            strncpy(&line1[len], &dna1[y], i); y+=i;
+        } else {line1[len] = '-'; i = 1; tmp[0] = pro[x++];}
+        strncpy(&line2[len], tmp, i);
+        for (k = 0; k < i; k++) {
+            if (tmp[k] != ' ' && tmp[k] != '-') {
+                if (k >= 2) tmp[k] = '\\';
+                else if (k == 1) tmp[k] = '|';
+                else tmp[k] = '/';
+            } else tmp[k] = ' ';
+        }
+        if (i == 1) tmp[0] = ' ';
+        strncpy(&line3[len], tmp, i); 
+        tmp[0] = tmp[1] =  tmp[2] = ' ';
+        len += i;
+        line1[len] = line2[len] =line3[len]  = '\0'; 
+        if (len >= WIDTH) {
+            printf("\n%5d", WIDTH*lines++);
+            for (k = 10; k <= WIDTH; k+=10) 
+                printf("    .    :");
+            if (k-5 < WIDTH) printf("    .");
+            c1 = line1[WIDTH]; c2 = line2[WIDTH]; c3 = line3[WIDTH];
+            line1[WIDTH] = line2[WIDTH] = line3[WIDTH] = '\0';
+            printf("\n     %s\n     %s\n     %s\n", line1, line3, line2);
+            line1[WIDTH] = c1; line2[WIDTH] = c2; line3[WIDTH] = c3;
+            strcpy(line1, &line1[WIDTH]);
+            strcpy(line2, &line2[WIDTH]);
+            strcpy(line3, &line3[WIDTH]);
+            len = len - WIDTH;
+        }
+    }
+    printf("\n%5d", WIDTH*lines);
+    for (k = 10; k < len; k+=10) 
+        printf("    .    :");
+    if (k-5 < len) printf("    .");
+    printf("\n     %s\n     %s\n     %s\n", line1, line3, line2);
+}

@@ -1,4 +1,4 @@
-/* $Id: wwwblast.h,v 6.1 2000/05/17 15:52:42 shavirin Exp $
+/* $Id: wwwblast.h,v 6.7 2000/09/27 22:18:04 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,30 @@
 *
 * Initial Creation Date: 03/15/2000
 *
-* $Revision: 6.1 $
+* $Revision: 6.7 $
 *
 * File Description:
 *        Definitions for standalone WWW Blast CGI program.
 *
 * $Log: wwwblast.h,v $
+* Revision 6.7  2000/09/27 22:18:04  shavirin
+* Added possibility to limit search to results of entrez query.
+*
+* Revision 6.6  2000/09/12 22:00:24  dondosha
+* Added matrix to BLASTPrintData structure
+*
+* Revision 6.5  2000/09/08 20:15:12  dondosha
+* Added WWWBlastErrMessageEx, taking a CharPtr seq_info argument
+*
+* Revision 6.4  2000/09/05 15:25:20  shavirin
+* Added #include <mblast.h> to remove warning.
+*
+* Revision 6.3  2000/08/28 20:20:21  dondosha
+* Added a SeqLoc linked list argument to WWWBlastInfo structure for multiple query search
+*
+* Revision 6.2  2000/08/09 20:29:16  shavirin
+* Added new parameters to the info structure xml_output and CHARPosFreqs
+*
 * Revision 6.1  2000/05/17 15:52:42  shavirin
 * Initial revision in new location.
 *
@@ -51,6 +69,7 @@
 #include <salogif.h>
 #include <ddvcreate.h>
 #include <objblst3.h>
+#include <mblast.h>
 
 #ifdef NCBI_CLIENT_SERVER
 #include <netblap3.h>
@@ -122,8 +141,13 @@ typedef struct _www_blast_info {
     Int4 align_view, input_type, color_schema;
     Boolean is_phi_blast;
     Boolean show_tax_blast;
+    Boolean xml_output;
     BLASTConfigPtr blast_config;
     CharPtr www_root_path;
+    SeqLocPtr query_slp; /* For multiple query search */
+    /* Limitation to list of gis - due to may be entrez query */
+    BlastDoubleInt4Ptr gi_list;
+    Int4 gi_list_total;
 } WWWBlastInfo, PNTR WWWBlastInfoPtr;
 
 
@@ -136,7 +160,7 @@ typedef struct GIList {
 
 typedef struct PSIData {
     CharPtr  matrix62;
-    /* BlastSearchBlkPtr search; */
+    CharPtr  CHARPosFreqs;
     GIListPtr	PrevCheckedGIs;
     GIListPtr	PrevGoodGIs;
     Int4 StepNumber;
@@ -153,10 +177,14 @@ typedef struct BLASTPrintData {
     SeqLocPtr          seqloc;
     ValNodePtr	       vnp;	/* PHI-BLAST output. */
     ValNodePtr         info_vnp; /* PHI-Blast info strings */
+    BLAST_MatrixPtr    matrix; /* Needed for the positives computation */
 } BLASTPrintData, PNTR BLASTPrintDataPtr;
 
 /* ------------------------------------------- */
 void WWWBlastInfoFree(WWWBlastInfoPtr theInfo);
+
+void WWWBlastErrMessageEx(BLASTErrCode error_code, CharPtr error_msg, 
+                          CharPtr seq_info);
 
 void WWWBlastErrMessage(BLASTErrCode error_code, CharPtr error_msg);
 

@@ -60,7 +60,7 @@ typing "fa2htgs -" will cause the program to show its command line
 arguments. Below we show these with additional comments (what we show
 within { } does not appear on the command line)
 
-fa2htgs 1.9   arguments:
+fa2htgs 2.0   arguments:
 
   -i  Filename for fasta input [File In]
     default = stdin

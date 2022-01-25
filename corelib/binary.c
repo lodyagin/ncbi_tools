@@ -1,4 +1,4 @@
-/*   $Id: binary.c,v 1.5 1999/11/23 22:02:29 vakatov Exp $
+/*   $Id: binary.c,v 1.6 2000/08/28 18:47:40 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,22 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: binary.c,v 1.5 1999/11/23 22:02:29 vakatov Exp $
+* File Name:  $Id: binary.c,v 1.6 2000/08/28 18:47:40 vakatov Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/24/99
 *
-* $Revision: 1.5 $
+* $Revision: 1.6 $
 *
 * File Description: Various binary search algorithms 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: binary.c,v $
+* Revision 1.6  2000/08/28 18:47:40  vakatov
+* Added missing type cast to pass C++ compilation
+*
 * Revision 1.5  1999/11/23 22:02:29  vakatov
 * Fixed for the MSVC DLL compilation
 *
@@ -72,7 +75,7 @@ NLM_EXTERN B_Global * B_NewGlobal(B_CompareFunc CompareFunc, Int4 AllocSize)
     B_Global * pGlobal;
 
     if (CompareFunc == NULL) return NULL;
-    pGlobal = MemNew(sizeof(B_Global));
+    pGlobal = (B_Global *) MemNew(sizeof(B_Global));
     if(pGlobal == NULL) return NULL;
 
 /*    pGlobal->RW = NlmRWinit(); */

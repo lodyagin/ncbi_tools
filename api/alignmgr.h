@@ -28,13 +28,46 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.58 $
+* $Revision: 6.69 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.69  2000/09/26 14:23:49  lewisg
+* use AlnMgrSortbyID instead of AlnMgrSortSeqAligns
+*
+* Revision 6.68  2000/09/20 12:18:31  wheelan
+* added new field to AM_msms structure
+*
+* Revision 6.67  2000/09/08 20:34:31  lewisg
+* hacks to speed up bioseq to align coord computation
+*
+* Revision 6.66  2000/08/29 20:12:09  lewisg
+* speed up color by alignment
+*
+* Revision 6.65  2000/08/28 16:18:21  sicotte
+* moved AlnMgrSeqAlignMergeTwoPairwiseEx AlnMgrSeqAlignMergeTwoPairwise AlnMgrSeqAlignMergePairwiseSet to actutils.c
+*
+* Revision 6.64  2000/08/25 19:24:32  sicotte
+* Add many functions to deal with merging alignment to go from pairwise sets to a single global (or local) alignment
+*
+* Revision 6.63  2000/08/18 14:20:51  lewisg
+* add startsize field to AMAlignIndex so that lnMgrCopyIndexedParentIntoSap knows how big starts is
+*
+* Revision 6.62  2000/07/26 17:26:26  lewisg
+* fix code for c++ inclusion
+*
+* Revision 6.61  2000/07/26 14:58:14  sicotte
+* bug fixes to AlnMgrGetNextAlnBit. bug fix (overlapping fuzz) in AlnMgrMakeMultipleByScore, Added AlnMgrMakeMultipleByScoreExEx and AlnMgrRemoveInconsistentEx and AlnMgrDeleteHiddenEx to allow optional deletion of sealigns when converting indexes to seqaligns
+*
+* Revision 6.60  2000/07/25 18:55:54  sicotte
+* Added AlnMgrDeleteHiddenEx and AlnMgrRemoveInconsistentFromPairwiseSetEx to make optional deleting of SeqAligns. Needed for Sequence Update
+*
+* Revision 6.59  2000/07/08 20:43:54  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.58  2000/06/01 14:17:55  wheelan
 * added AlnMgrCheckOrdered and AlnMgrMakeRowsForOrdered
 *
@@ -216,6 +249,13 @@
 #ifndef _ALIGNMGR_
 #define _ALIGNMGR_
 
+#include <ncbi.h>
+#include <seqmgr.h>
+#include <salutil.h>
+#include <sequtil.h>
+#include <salpedit.h>
+#include <samutil.h>
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -226,13 +266,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ncbi.h>
-#include <seqmgr.h>
-#include <salutil.h>
-#include <sequtil.h>
-#include <salpedit.h>
-#include <samutil.h>
 
 /* for SAIndex indextype field */
 #define INDEX_SEGS 1
@@ -347,6 +380,7 @@ typedef struct amalignindex {
    Int4Ptr lens;
    Int4Ptr ulens;
    Int4Ptr starts;
+   Int4 startsize;  /* length of the starts field in ints */
    Int4 alnsaps; /* the number of child seqaligns contained in the multiple */
    Int4 numsaps; /* the total number of child seqaligns */
    SeqIdPtr ids;
@@ -422,7 +456,7 @@ typedef struct am_aligninfo {
 
 typedef struct am_alignkeeper {
    SeqAlignPtr  align;
-   Boolean      delete;
+   Boolean      am_delete;
 } AMAlnKeeper, PNTR AMAlnKeeperPtr;
 
 
@@ -437,6 +471,7 @@ typedef struct am_msms {
    SeqAlignPtr  sap;
    Int4         nsap;
    Int4         n;
+   Int4         j;
    Int4         count;
    Int4         masternum;
    struct am_msms PNTR next;
@@ -572,10 +607,16 @@ NLM_EXTERN SeqIdPtr  AlnMgrPropagateSeqIdsByRow(AMAlignIndexPtr amaip);
 *  between alignments (not sure why someone would want to do that, but
 *  it is allowed).
 *
+*  The "Ex" version, also returns the rejected SeqAligns (in score order)
+*     in 3 different lists according to the reason for rejection.
+*
 ***************************************************************************/
 NLM_EXTERN void AlnMgrRemoveInconsistentFromPairwiseSet(SeqAlignPtr sap, Int4 fuzz);
+NLM_EXTERN void AlnMgrRemoveInconsistentFromPairwiseSetEx(SeqAlignPtr sap, Int4 fuzz, SeqAlignPtr PNTR wrong_strand, SeqAlignPtr PNTR overlaps_m,SeqAlignPtr PNTR overlaps_s);
+
 NLM_EXTERN Boolean AlnMgrMakeMultipleByScore(SeqAlignPtr sap);
 NLM_EXTERN Boolean AlnMgrMakeMultipleByScoreEx(SeqAlignPtr sap, Int4 fuzz);
+NLM_EXTERN Boolean AlnMgrMakeMultipleByScoreExEx(SeqAlignPtr sap, Int4 fuzz,SeqAlignPtr PNTR wrong_strand, SeqAlignPtr PNTR overlaps_m,SeqAlignPtr PNTR overlaps_s);
 NLM_EXTERN SeqAlignPtr AlnMgrDupTopNByScore(SeqAlignPtr sap, Int4 n);
 
 /***************************************************************************
@@ -619,6 +660,7 @@ NLM_EXTERN Int4 AlnMgrCheckAlignForParent(SeqAlignPtr sap);
 *
 ***********************************************************************/
 NLM_EXTERN SeqAlignPtr PNTR AlnMgrSortSeqAligns (SeqAlignPtr sap, int (LIBCALLBACK *compare)(VoidPtr, VoidPtr, VoidPtr), VoidPtr userdata, Int4Ptr numsap);
+NLM_EXTERN SeqAlignPtr PNTR AlnMgrSortbyID (SeqAlignPtr sap, SeqId *sip, Int4Ptr numsap);
 
 /**********************************************************************
 *
@@ -794,6 +836,8 @@ NLM_EXTERN Int4 AlnMgrMapRowCoords(SeqAlignPtr sap, Uint4 pos, Int4 row, SeqIdPt
 *
 ********************************************************************************/
 NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlign(SeqAlignPtr sap, Int4 pos, Int4 row_num, SeqIdPtr master);
+NLM_EXTERN Int4 AlnMgrMapBioseqToSeqAlignEx(SeqAlignPtr sap, Int4 pos, Int4 row_num,
+                                            SeqIdPtr master, Int4 *oldj);
 
 
 /***********************************************************************
@@ -976,7 +1020,21 @@ NLM_EXTERN Boolean AlnMgrDeleteChildByPointer(SeqAlignPtr parent, SeqAlignPtr ch
 *
 **********************************************************************/
 NLM_EXTERN Boolean AlnMgrDeleteNthRow(SeqAlignPtr sap, Int4 row);
+
+/***************************************************************************
+*  AlnMgrDeleteHiddenEx
+*
+*  Reads the Index, and updates the ->segs SeqAligns according
+*  to the content of the index. If DeleteSalp then either 
+*  Frees unused SeqAligns.. OR 
+*  deletes them from the Object Manager.
+*
+*  AlnMgrDeleteHidden  calls the EX function with DeleteSalp=TRUE;
+*  
+****************************************************************************/
+
 NLM_EXTERN void AlnMgrDeleteHidden(SeqAlignPtr sap, Boolean UseOM);
+NLM_EXTERN void AlnMgrDeleteHiddenEx(SeqAlignPtr sap, Boolean UseOM, Boolean DeleteSalp);
 
 /***************************************************************************
 *
@@ -1005,6 +1063,17 @@ NLM_EXTERN Boolean AlnMgrIsSAPNULL(SeqAlignPtr sap);
 NLM_EXTERN Int4 AlnMgrIsIBMable(SeqAlignPtr sap);
 NLM_EXTERN Int4 AlnMgrIsEditable(SeqAlignPtr sap);
 
+
+NLM_EXTERN Int4  AlnMgrMapBioseqToBioseq(SeqAlignPtr salp,Int4 pos,Int4 source_row,Int4 target_row,Boolean GetNextNonGap,Int4Ptr PostGap) ;
+
+/*********************************************************************************
+*
+*   Pairwise to Global Alignment Functions: AlnMgrSeqAlignMergeTwoPairwise
+*
+*********************************************************************************/
+NLM_EXTERN DenseSegPtr DenseDiagToGlobalDenseSeg(DenseDiagPtr ddp_head);
+NLM_EXTERN DenseDiagPtr AlnMgrSeqAlignToDDP(SeqAlignPtr salp,Int4 aln_cut_from,Int4 aln_cut_to,Int4Ptr numseg_ptr);
+NLM_EXTERN SeqAlignPtr AlnMgrMerge3OverlappingSeqAligns(SeqAlignPtr salp1,SeqAlignPtr salp_merging,SeqAlignPtr salp2,Int4 master_cut_pos1, Int4 master_cut_pos2);
 
 #ifdef __cplusplus
 }

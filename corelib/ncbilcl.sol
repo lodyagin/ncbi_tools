@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/16/93
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *		system dependent header
@@ -38,6 +38,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.sol,v $
+* Revision 6.8  2000/08/07 16:50:06  vakatov
+* From now on, use the "standard" Int4 (as defined in <ncbistd.h>)
+* for 32-bit, too.
+*
 * Revision 6.7  1999/08/24 18:04:02  vakatov
 * Switched the default thread lib from "Solaris native"(-lthread) to
 * "POSIX"(-lpthread)
@@ -149,17 +153,6 @@
 /*----------------------------------------------------------------------*/
 /*      Aliased Logicals, Datatypes                                     */
 /*----------------------------------------------------------------------*/
-#if LONG_BIT==32
-typedef signed   long  Nlm_Int4,  *Nlm_Int4Ptr;
-typedef unsigned long  Nlm_Uint4, *Nlm_Uint4Ptr;
-#define Int4           Nlm_Int4
-#define Int4Ptr        Nlm_Int4Ptr
-#define Uint4          Nlm_Uint4
-#define Uint4Ptr       Nlm_Uint4Ptr
-#define INT4_MIN       (-2147483647-1)
-#define INT4_MAX       2147483647
-#define UINT4_MAX      4294967295U
-#endif
 
 
 /*----------------------------------------------------------------------*/

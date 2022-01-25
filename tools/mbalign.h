@@ -1,11 +1,12 @@
 #ifndef _MBALIGN_H_
 #define _MBALIGN_H_
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <ncbi.h>
 #include <mbutils.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 enum {
     EDIT_OP_MASK = 0x3,
@@ -38,6 +39,7 @@ typedef struct space_struct {
 #define EDIT_OPC(op) (op & EDIT_OP_MASK)
 
 space_ptr new_space(Int4 MAX_D);
+void refresh_space(space_ptr sp);
 void free_space(space_ptr sp);
 ThreeValPtr get_space(space_ptr S, Int4 amount);
 Int4 get_last(Int4 **flast_d, Int4 d, Int4 diag, Int4 *row1);
@@ -47,6 +49,7 @@ typedef struct greedy_align_mem {
    Int4Ptr max_row_free;
    ThreeValPtr PNTR flast_d_affine;
    Int4Ptr uplow_free;
+   space_ptr space;
 } GreedyAlignMem, PNTR GreedyAlignMemPtr;
 
 Int4 

@@ -1,4 +1,4 @@
-/* $Id: rpsutil.h,v 6.5 2000/05/02 17:57:19 shavirin Exp $
+/* $Id: rpsutil.h,v 6.12 2000/10/27 15:39:33 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,33 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.5 $
+* $Revision: 6.12 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.h,v $
+* Revision 6.12  2000/10/27 15:39:33  kans
+* added AnnotateRegionsFromCDD and FreeCDDRegions for common use by ripen, Sequin, and RefSeq processor
+*
+* Revision 6.11  2000/10/16 19:35:18  shavirin
+* Function createFakeProtein() become external.
+*
+* Revision 6.10  2000/09/28 18:50:11  shavirin
+* Added parameter BioseqPtr query_bsp to print results callback.
+*
+* Revision 6.9  2000/09/27 19:09:41  shavirin
+* Significantly redesigned external interface to RPS Blast.
+*
+* Revision 6.8  2000/09/21 13:49:55  madden
+* Rename CddNew and CddDestruct to CddHitNew and CddHitDestruct
+*
+* Revision 6.7  2000/09/20 22:13:26  madden
+* Added code to get CddHit structure
+*
+* Revision 6.6  2000/09/13 21:26:11  lewisg
+* add RPSUpdateDbSize declaration
+*
 * Revision 6.5  2000/05/02 17:57:19  shavirin
 * Corrected path to RPS Databases changed definition of RPSInit() function.
 *
@@ -63,6 +84,7 @@
 #include <blastpri.h>
 #include <readdb.h>
 #include <profiles.h>
+#include <salpacc.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,6 +140,48 @@ typedef struct _RPSInfo {
     Boolean query_is_prot;      /* Do we need translate query sequence ? */
 } RPSInfo, PNTR RPSInfoPtr;
     
+/* Aron Bauer's structure used to save CDD hits. */
+typedef struct _cdd_hit {
+  CharPtr             CDDid;
+  CharPtr             ShortName;
+  CharPtr             Definition;
+  Int4                start;
+  Int4                stop;
+  Int4                score;
+  Nlm_FloatHi         evalue;
+  Nlm_FloatHi         bit_score;
+  struct _cdd_hit PNTR next;
+} CddHit, PNTR CddHitPtr;
+
+typedef struct _rps_blast_options {
+    Boolean query_is_protein;
+    CharPtr rps_database;
+    BLAST_OptionsBlkPtr options;
+    Int4 number_of_descriptions, number_of_alignments;
+    Boolean html;
+    Boolean believe_query;
+    Uint4 align_options, print_options;
+    Boolean is_xml_output;
+    Int4 num_threads;
+
+    /* These parameters are for foprmating convinience only */
+
+    ReadDBFILEPtr rdfp;         /* Handle of the sequence database */
+    FILE *outfp;                /* Output file opened descriptor */
+    CharPtr out_filename;       /* Output filename */
+
+} RPSBlastOptions, PNTR RPSBlastOptionsPtr;
+
+/* Definitions of multi-threaded batch RPS Blast search */    
+typedef SeqEntryPtr (LIBCALLBACK *RPSReadBSPCallback)(SeqLocPtr PNTR slp, 
+                                                      VoidPtr user_data);
+typedef Boolean   (LIBCALLBACK *RPSHandleResultsCallback)(BioseqPtr bsp, RPSBlastOptionsPtr rpsbop, SeqAlignPtr sap, ValNodePtr other_returns, ValNodePtr error_returns, VoidPtr user_data);
+Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop, 
+                         RPSReadBSPCallback bsp_callback, 
+                         VoidPtr bsp_user_data,
+                         RPSHandleResultsCallback print_callback, 
+                         VoidPtr print_user_data);
+
 /****************************************************************************/
 /* FINCTION DEFINITIONS */
 /****************************************************************************/
@@ -174,6 +238,22 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
 
 RPSInfoPtr RPSInfoAttach(RPSInfoPtr rpsinfo);
 void RPSInfoDetach(RPSInfoPtr rpsinfo);
+void RPSUpdateDbSize(BLAST_OptionsBlkPtr options, RPSInfoPtr rpsinfo, Int4 query_length);
+
+BioseqPtr createFakeProtein(void);
+
+/*
+	Functions to retrieve CDD hit information.
+*/
+
+CddHitPtr CddHitDestruct(CddHitPtr cdd); /* frees memory for every CddHitPtr in linked list. */
+CddHitPtr CddHitNew(void); /* produces only one CddHitPtr. */
+CddHitPtr RPSBgetCddHits(SeqAlignPtr sap);
+
+/* functions to take BlastBioseqNet result and annotate region features on proteins */
+
+NLM_EXTERN void AnnotateRegionsFromCDD (BioseqPtr bsp, SeqAlignPtr salp, FloatHi expectValue);
+NLM_EXTERN void FreeCDDRegions (SeqEntryPtr topsep);
 
 
 #ifdef __cplusplus

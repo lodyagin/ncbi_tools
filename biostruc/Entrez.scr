@@ -1,10 +1,13 @@
 /*
- * $Id: Entrez.scr,v 6.15 1999/10/22 17:50:35 kimelman Exp $
+ * $Id: Entrez.scr,v 6.16 2000/09/13 16:59:38 kimelman Exp $
  * 
  * This file contains the additions to PubStruct Database on Public 
  * Entrez Servers
  *
  * $Log: Entrez.scr,v $
+ * Revision 6.16  2000/09/13 16:59:38  kimelman
+ * enable retrival of dead mmdbs
+ *
  * Revision 6.15  1999/10/22 17:50:35  kimelman
  * synced to OS
  *
@@ -69,6 +72,44 @@ go
 USE PubStruct
 go
 
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'mmdb2acc'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.mmdb2acc
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    mmdb2acc                       *****/'
+/************************************************************************/
+go
+
+create proc
+mmdb2acc (
+          @mmdb  int,  /* mmdb */
+          @state int,
+          @acc   int output
+         )
+as
+   declare @stat int
+   declare @suppress int
+   select @stat = @state
+   if @stat < 0
+     begin
+       select @stat = max(state)
+       from Struct
+       where mmdb_id = @gi and suppressed = 0 and state <= -@stat-1
+     end
+   select @suppress = min(suppressed) from Struct where mmdb_id = @gi and state = @stat and datalength(blob)
+
+   select @acc=acc
+   from Struct
+   where mmdb_id = @gi and suppressed = @suppress and state = @stat
+go
+
+
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'id_find_gi'
     AND   uid = user_id('dbo')
@@ -108,9 +149,15 @@ as
        if @@rowcount = 0 /* looks to be removed */
          select @acc = -1
   end
-  select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0),0,0,"01/01/1900"
-  from Struct
-  where acc = @acc
+  if @acc = -1 
+    exec mmdb2acc @gi,@state, @acc=@acc output
+  if @acc > 0
+   begin 
+     if exists ( select * from Struct where acc = @acc and suppressed = 0 )
+       select sat=convert(smallint,10),sat_key=@acc,gi_state=convert(tinyint,100),0,0,"01/01/1900"
+     else
+       select sat=convert(smallint,10),sat_key=@acc,gi_state=convert(tinyint,125),0,0,"01/01/1900"
+  end
 go
 /*****        Grant and Revoke permissions id_find_gi               *****/
 GRANT EXECUTE ON id_find_gi  TO public
@@ -131,11 +178,17 @@ go
 create proc
 id_get_asnprop ( @sat_key int)
 as
-  select  state=100,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), 
+  declare @state tinyint
+
+  select @state = suppressed from  Struct where  acc = @sat_key
+  if @state > 0 
+     select @state = 125
+  else
+     select @state = 100
+  select  state=@state,confidential, suppress=convert(tinyint,0), override=convert(tinyint,0), 
           length=datalength(blob), owner=convert(smallint,0),"unknown","N/A",class=convert(tinyint,0)
     from  Struct
    where  acc = @sat_key
- 
 go
 /*****        Grant and Revoke permissions id_get_asnprop           *****/
 go
@@ -277,7 +330,14 @@ as
       from Struct s, EntrezControl..SatKeyFlags i
       where mmdb_id = @gi and state = 0 and s.acc = i.sat_key and i.sat = 10 and i.dumped4entrez =1
       if(@@rowcount = 0)
-        return 100
+        begin 
+          declare @acc int
+          exec mmdb2acc @gi,0, @acc=@acc output
+
+           select @sat_key = acc from Struct s where acc = @acc
+           if(@@rowcount = 0)
+             return 100
+      end
     end
 
   exec id_get_asnprop @sat_key

@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.h,v 1.28 2000/07/05 19:23:14 lewisg Exp $
+/*  $Id: ddvpanel.h,v 1.30 2000/07/12 22:22:42 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.28 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.h,v $
+* Revision 1.30  2000/07/12 22:22:42  hurwitz
+* added delete block to DDV
+*
+* Revision 1.29  2000/07/08 20:43:58  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.28  2000/07/05 19:23:14  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -140,12 +146,19 @@
 #ifndef _DDVPANEL_
 #define _DDVPANEL_
 
+#include <udviewer.h>
+#include <ddvmain.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <udviewer.h>
-#include <ddvmain.h>
 
 /******************************************************************************
 
@@ -195,11 +208,12 @@ typedef struct ddvexporttextemsg {/*used by the Display Styles Dlg box*/
 #define DDE_PREV                   6
 #define DDE_NEXT                   7
 #define DDE_ORIG                   8
-#define DDE_DELETE_BLOCK           9
+#define DDE_DELETE_BLOCK           9  /* for DDE */
 #define DDE_CREATE_BLOCK          10
 #define DDE_LAUNCH_EDITOR         11
 #define DDE_MERGE_BLOCKS          12
 #define DDE_SPLIT_BLOCK           13
+#define DDV_DELETE_BLOCK          14  /* for DDV */
 
 
 /******************************************************************************
@@ -254,6 +268,11 @@ NLM_EXTERN void DDV_SaveEdits(DdvMainPtr dmp, Boolean UpdateDDV);
 }
 #endif
 
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
+
 #endif /* ndef _DDVPANEL_ */
-
-

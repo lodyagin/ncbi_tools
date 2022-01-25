@@ -173,6 +173,10 @@ $^   BioSourceNeedsFocus, 14
 Focus must be set on a BioSource descriptor in records where there is a
 BioSource feature with a different organism name.
 
+$^   BadOrganelle, 15
+Note that only Kinetoplastida have kinetoplasts, and that only Chlorarchniophyta
+and Cryptophyta have nucleomorphs.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -222,7 +226,12 @@ $^   PartsSetHasSets, 9
 A parts set should not contain BioseqSets.
 
 $^   FeaturePackagingProblem, 10
-A feature should be packaged on its bioseq, or on a set containing the Bisoeq.
+A feature should be packaged on its bioseq, or on a set containing the Bioseq.
+
+$^   GenomicProductPackagingProblem, 11
+The product of an mRNA feature in a genomic product set should point to a cDNA
+Bioseq packaged in the set, perhaps within a nuc-prot set.  RefSeq records may
+however be referenced remotely.
 
 $$ SEQ_FEAT, 5
 
@@ -403,6 +412,10 @@ $^ InvalidQualifierValue, 42
 The value of this qualifier is constrained to a particular vocabulary of style.  This
 value does not conform to those constraints.  Please see the feature table documentation
 for more information.
+
+$^ MultipleMRNAproducts, 43
+More than one mRNA feature points to the same cDNA product.  This is an error in the
+genomic product set.  Each mRNA feature should have a unique product Bioseq.
 
 $$ SEQ_ALIGN, 6
 

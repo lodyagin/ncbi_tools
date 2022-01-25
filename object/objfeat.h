@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objfeat.h,v $
+* Revision 6.9  2000/09/28 11:40:19  ostell
+* added endogenous_virus (19) to MolInfo.genome
+*
 * Revision 6.8  2000/01/16 19:18:32  kans
 * added specialCleanupFlag field to SeqFeatXref structure
 *
@@ -593,7 +596,7 @@ NLM_EXTERN SubSourcePtr LIBCALL SubSourceSetFree PROTO((SubSourcePtr ssp));
     /* 16 apicoplast */
     /* 17 leucoplast */
     /* 18 proplastid */
-
+    /* 19 endogenous_virus */
 
 typedef struct biosource {
 	Uint1 genome,

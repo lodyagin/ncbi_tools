@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.h,v 1.21 2000/06/16 14:57:03 lewisg Exp $
+/*  $Id: ddvopen.h,v 1.23 2000/07/17 17:46:48 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.21 $
+* $Revision: 1.23 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.h,v $
+* Revision 1.23  2000/07/17 17:46:48  hurwitz
+* made it so show/hide dialog only updates view when ok is clicked
+*
+* Revision 1.22  2000/07/08 20:43:58  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.21  2000/06/16 14:57:03  lewisg
 * move entrez calls out of desktop
 *
@@ -128,17 +134,24 @@
 #ifndef _DDVOPEN_
 #define _DDVOPEN_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-
 #include <ncbi.h>
 #include <udviewer.h>
 #include <samutil.h>
 #include <accentr.h>
 #include <pgppop.h>
 #include <alignmgr.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 /******************************************************************************
 
@@ -267,6 +280,7 @@ typedef struct _DDV_HideDialog {
     void *userdata; /* for the update message */
     DDV_HideProcCB callback;  /* called on every show/hide */
     Int4 numrows;  /* true number of rows in target seqalign */
+    Int4 LastValidRow; /* must be 2 valid rows in list, this and master */
 } DDV_HideDialog;
 
 /******************************************************************************
@@ -312,5 +326,11 @@ NLM_EXTERN void DDV_SlaveQuit(WindoW w);
 }
 #endif
 
-#endif /* ndef _DDVOPEN_ */
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
+#endif /* ndef _DDVOPEN_ */

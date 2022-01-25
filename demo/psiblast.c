@@ -1,4 +1,4 @@
-/* $Id: psiblast.c,v 6.1 2000/05/17 15:49:40 shavirin Exp $
+/* $Id: psiblast.c,v 6.4 2000/08/10 18:18:26 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.1 $
+* $Revision: 6.4 $
 *
 * File Description:
 *         WWW PSI BLAST Main file
 *
 * $Log: psiblast.c,v $
+* Revision 6.4  2000/08/10 18:18:26  shavirin
+* Fixed problem with printing PHI Blast output.
+*
+* Revision 6.3  2000/08/10 14:40:50  shavirin
+* Fixed typo.
+*
+* Revision 6.2  2000/08/09 20:32:18  shavirin
+* Added hidden printing of posFreqs encoded array.
+*
 * Revision 6.1  2000/05/17 15:49:40  shavirin
 * Initial revision.
 *
@@ -277,28 +286,28 @@ Int2 Main (void)
 	theInfo->options->number_of_cpus = 1;
     	if((print_data = PHIBlastSearch(theInfo)) == NULL ||
            print_data->vnp == NULL || print_data->seqloc == NULL) {
-
+            
             fprintf(stdout, "\n<BR>No hit found...<BR>\n");
-
+            
             if(print_data != NULL) {
-
+                
                 /* We will print bottom of the page eventually */
-                init_buff();
-                if (print_data->ka_params_gap) {
+                init_buff();                
+                if (print_data->ka_params_gap) {                
                     PrintKAParameters(print_data->ka_params_gap->Lambda, 
                                       print_data->ka_params_gap->K, 
                                       print_data->ka_params_gap->H, 
                                       70, stdout, TRUE);
                 }
-
+                
                 PrintTildeSepLines(print_data->buffer, 70, stdout);
                 free_buff();
             }
             FileClose(stdout);
             return(0);
-	}
+        }
     }
-    
+
     /* At this point we have non-NULL seqalign and therefore can 
        print some results out */
     
@@ -371,7 +380,10 @@ Int2 Main (void)
     if (psidata->StepNumber > 0) {
         fprintf(stdout, "<INPUT TYPE=\"hidden\" "
                 "NAME= \"PSI_MATRIX\" VALUE = \"%s\">\n", 
-                psidata->matrix62); 
+                psidata->matrix62);
+        fprintf(stdout, "<INPUT TYPE=\"hidden\" "
+                "NAME= \"POS_FREQS\" VALUE = \"%s\">\n", 
+                psidata->CHARPosFreqs); 
         fprintf(stdout, "<INPUT TYPE=\"hidden\" "
                 "NAME= \"PSI_KARLIN_K\" VALUE = \"%lf\">", psidata->karlinK);
     }
@@ -392,3 +404,4 @@ Int2 Main (void)
     fflush(stdout);
     return 0;
 }
+

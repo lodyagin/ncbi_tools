@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -48,6 +48,9 @@
 * 02-24-94 Schuler     AsnTypeStringToHex moved here (from asntypes.h)
 *
 * $Log: asn.h,v $
+* Revision 6.6  2000/07/25 20:30:59  ostell
+* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
+*
 * Revision 6.5  2000/05/12 20:44:01  ostell
 * make changes to collect comments from spec and print in DTD
 *
@@ -375,6 +378,7 @@ NLM_EXTERN AsnTypePtr LIBCALL AsnLinkType PROTO((AsnTypePtr type, AsnTypePtr loc
 NLM_EXTERN void LIBCALL AsnUnlinkType PROTO((AsnTypePtr type));
 NLM_EXTERN CharPtr LIBCALL AsnTypeDumpStack PROTO((CharPtr str, AsnIoPtr aip));
 NLM_EXTERN Boolean LIBCALL AsnTreeLoad PROTO((char * file, AsnValxNodePtr * avnptr, AsnTypePtr * atptr, AsnModulePtr * ampptr));
+NLM_EXTERN void LIBCALL AsnStoreTree PROTO((CharPtr file, AsnModulePtr amp));
 #define AsnLoad() AsnTreeLoad(asnfilename, &avn, &at, &amp)   /* simple loader */
 NLM_EXTERN void LIBCALL AsnModuleLink PROTO((AsnModulePtr amp));
 NLM_EXTERN CharPtr LIBCALL AsnEnumStr PROTO((CharPtr str, Int2 val));

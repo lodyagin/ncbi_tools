@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/3/98
 *
-* $Revision: 6.73 $
+* $Revision: 6.78 $
 *
 * File Description: 
 *
@@ -768,6 +768,12 @@ extern Boolean ExtendGene (GeneRefPtr grp, SeqEntryPtr nsep, SeqLocPtr slp)
   return gel.rsult;
 }
 
+/*=====================================================================*/
+/*                                                                     */
+/* CreateGeneAndProtFeats() -                                          */
+/*                                                                     */
+/*=====================================================================*/
+
 static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
                                     SeqLocPtr slp, CdRegionPtr crp, CharPtr title,
                                     CharPtr best, size_t maxsize, CharPtr PNTR ttl)
@@ -777,7 +783,7 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
   CharPtr     allele = NULL;
   BioseqPtr   bsp;
   Char        ec [32];
-  GeneRefPtr  grp;
+  GeneRefPtr  grp = NULL;
   SeqLocPtr   gslp;
   Boolean     hasNulls;
   BioseqPtr   nbsp;
@@ -787,6 +793,8 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
   SeqFeatPtr  sfp;
   SeqIdPtr    sip;
   Char        str [256];
+  Char        str2 [256];
+  Char        geneSynStr[256];
 
   if (nsep != NULL && psep != NULL && slp != NULL && crp != NULL && title != NULL) {
     if (best != NULL) {
@@ -796,6 +804,12 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
       nbsp = (BioseqPtr) nsep->data.ptrvalue;
       pbsp = (BioseqPtr) psep->data.ptrvalue;
       if (nbsp != NULL && pbsp != NULL) {
+
+	/*---------------------------------*/
+	/* Parse the gene and gene-related */
+	/* fields from the title.          */
+	/*---------------------------------*/
+
         ptr = StringISearch (title, "[gene=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
@@ -816,44 +830,75 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             if (StringHasNoText (best)) {
               StringNCpy_0 (best, ptr, maxsize);
             }
+	    
+	    /*--------------------------------------*/
+	    /* Create a Gene Reference pointer with */
+	    /* the gene, gene description, allele,  */
+	    /* and gene_syn information.            */
+	    /*--------------------------------------*/
+
             grp = CreateNewGeneRef (str, allele, ptr, FALSE);
-            if (grp != NULL) {
-              if (ExtendGene (grp, nsep, slp)) {
-                grp = GeneRefFree (grp);
+          }
+        }
+
+	    /*-----------------------------------------*/
+	    /* Parse the gene_syn field from the title */
+	    /*-----------------------------------------*/
+
+        ptr = StringISearch (title, "[gene_syn=");
+        if (ptr != NULL) {
+          StringNCpy_0 (geneSynStr, ptr + 10, sizeof (str));
+          ptr = StringChr (geneSynStr, ']');
+          if (ptr != NULL) {
+            *ptr = '\0';
+          }
+
+          if (grp == NULL) {
+            grp = GeneRefNew ();
+          }
+          ValNodeCopyStr(&(grp->syn),0,geneSynStr);
+        }
+
+        if (grp != NULL) {
+          if (ExtendGene (grp, nsep, slp)) {
+            grp = GeneRefFree (grp);
+          } else {
+            sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
+            if (sfp != NULL) {
+              sfp->data.value.ptrvalue = (Pointer) grp;
+              sfp->location = SeqLocFree (sfp->location);
+              sfp->location = AsnIoMemCopy ((Pointer) slp,
+                                            (AsnReadFunc) SeqLocAsnRead,
+                                            (AsnWriteFunc) SeqLocAsnWrite);
+              sip = SeqLocId (sfp->location);
+              if (sip != NULL) {
+                bsp = BioseqFind (sip);
               } else {
-                sfp = CreateNewFeature (nsep, NULL, SEQFEAT_GENE, NULL);
-                if (sfp != NULL) {
-                  sfp->data.value.ptrvalue = (Pointer) grp;
+                bsp = nbsp;
+              }
+              if (bsp != NULL) {
+                gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
+                if (gslp != NULL) {
                   sfp->location = SeqLocFree (sfp->location);
-                  sfp->location = AsnIoMemCopy ((Pointer) slp,
-                                                (AsnReadFunc) SeqLocAsnRead,
-                                                (AsnWriteFunc) SeqLocAsnWrite);
-                  sip = SeqLocId (sfp->location);
-                  if (sip != NULL) {
-                    bsp = BioseqFind (sip);
-                  } else {
-                    bsp = nbsp;
+                  sfp->location = gslp;
+                  if (bsp->repr == Seq_repr_seg) {
+                    gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
+                    sfp->location = SeqLocFree (sfp->location);
+                    sfp->location = gslp;
+                    hasNulls = LocationHasNullsBetween (sfp->location);
+                    sfp->partial = (sfp->partial || hasNulls);
                   }
-                  if (bsp != NULL) {
-                    gslp = SeqLocMerge (bsp, sfp->location, NULL, TRUE, FALSE, FALSE);
-                    if (gslp != NULL) {
-                      sfp->location = SeqLocFree (sfp->location);
-                      sfp->location = gslp;
-                      if (bsp->repr == Seq_repr_seg) {
-                        gslp = SegLocToPartsEx (bsp, sfp->location, TRUE);
-                        sfp->location = SeqLocFree (sfp->location);
-                        sfp->location = gslp;
-                        hasNulls = LocationHasNullsBetween (sfp->location);
-                        sfp->partial = (sfp->partial || hasNulls);
-                      }
-                      FreeAllFuzz (gslp);
-                    }
-                  }
+                  FreeAllFuzz (gslp);
                 }
               }
             }
           }
         }
+
+	/*-----------------------------------------*/
+	/* Parse the function field from the title */
+	/*-----------------------------------------*/
+
         activity [0] = '\0';
         ec [0] = '\0';
         ptr = StringISearch (title, "[function=");
@@ -864,6 +909,11 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             *ptr = '\0';
           }
         }
+
+	/*------------------------------------------*/
+	/* Parse the EC_number field from the title */
+	/*------------------------------------------*/
+
         ptr = StringISearch (title, "[EC_number=");
         if (ptr != NULL) {
           StringNCpy_0 (ec, ptr + 11, sizeof (str));
@@ -872,6 +922,12 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             *ptr = '\0';
           }
         }
+
+	/*---------------------------------*/
+	/* Parse the protein and prot_desc */
+	/* fields from the title.          */
+	/*---------------------------------*/
+
         ptr = StringISearch (title, "[prot=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
@@ -883,29 +939,81 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             ptr = StringChr (str, ']');
           }
         }
-        if (ptr != NULL) {
-          *ptr = '\0';
-          ptr = StringChr (str, ';');
-          if (ptr != NULL) {
-            *ptr = '\0';
-            ptr++;
-          }
-          StringNCpy_0 (best, str, maxsize);
-          if (StringHasNoText (best)) {
-            StringNCpy_0 (best, ptr, maxsize);
-          }
-          prp = CreateNewProtRef (str, ptr, ec, activity);
-          if (prp != NULL) {
-            sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
-            if (sfp != NULL) {
-              sfp->data.value.ptrvalue = (Pointer) prp;
-            }
-          }
-        }
+
+	/*---------------------------------*/
+	/* If we found a protein value ... */
+	/*---------------------------------*/
+
+        if (ptr != NULL)
+	  {
+	    /*------------------------------------*/
+	    /* ... trim off extraneous characters */
+	    /*------------------------------------*/
+
+	    *ptr = '\0';
+
+	    /*----------------------------------------------*/
+	    /* ... search for a protein description, either */
+	    /*     in the prot field (seperated by a ';')   */
+	    /*     or in its own 'prot_desc' field.         */
+	    /*----------------------------------------------*/
+
+	    ptr = StringChr (str, ';');
+	    if (ptr != NULL)
+	      {
+		*ptr = '\0';
+		ptr++;
+	      }
+	    else
+	      {
+		ptr = StringISearch (title, "[prot_desc=");
+		if (ptr != NULL)
+		  {
+		    StringNCpy_0 (str2, ptr + 11, sizeof (str2));
+		    ptr = StringChr (str2, ']');
+		    if (ptr != NULL)
+		      {
+			*ptr = '\0';
+			ptr = str2;
+		      }
+		  }
+	      }
+
+	    /*-----------*/
+	    /*  ... ???  */
+	    /*-----------*/
+
+	    StringNCpy_0 (best, str, maxsize);
+	    if (StringHasNoText (best))
+	      StringNCpy_0 (best, ptr, maxsize);
+
+	    /*--------------------------------*/
+	    /* ... add the prot and prot_desc */
+	    /*     to the Seq Features.       */
+	    /*--------------------------------*/
+
+	    prp = CreateNewProtRef (str, ptr, ec, activity);
+	    if (prp != NULL)
+	      {
+		sfp = CreateNewFeature (psep, NULL, SEQFEAT_PROT, NULL);
+		if (sfp != NULL)
+		  sfp->data.value.ptrvalue = (Pointer) prp;
+	      }
+	  }
+
+	/*---------------------*/
+	/* Parse the ORF field */
+	/*---------------------*/
+
         ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
           crp->orf = TRUE;
         }
+
+	/*-------------------------*/
+	/* Parse the comment field */
+	/*-------------------------*/
+
         ptr = StringISearch (title, "[comment=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 9, sizeof (str));
@@ -917,6 +1025,11 @@ static void CreateGeneAndProtFeats (SeqEntryPtr nsep, SeqEntryPtr psep,
             }
           }
         }
+
+	/*----------------------*/
+	/* Parse the note field */
+	/*----------------------*/
+
         ptr = StringISearch (title, "[note=");
         if (ptr != NULL) {
           StringNCpy_0 (str, ptr + 6, sizeof (str));
@@ -1007,7 +1120,7 @@ static SeqLocPtr AskForInterval (SeqEntryPtr sep, BioseqPtr nuc, BioseqPtr prot)
 }
 
 extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
-                                        Int2 code, Boolean makeMRNA)
+                                        Int2 code, Boolean makeMRNA, BioseqPtr forceTarget)
 
 {
   SeqFeatPtr   cds;
@@ -1018,6 +1131,7 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
   BioseqPtr    pbsp;
   SeqFeatPtr   rna;
   RnaRefPtr    rrp;
+  SeqEntryPtr  sep;
   SeqLocPtr    slp;
   CharPtr      ttl;
   ValNodePtr   vnp;
@@ -1035,11 +1149,16 @@ extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
   cds = NULL;
   WatchCursor ();
   Update ();
-  slp = PredictCodingRegion (nbsp, pbsp, code);
-  if (slp == NULL) {
-    ArrowCursor ();
-    Update ();
-    slp = AskForInterval (nsep, nbsp, pbsp);
+  if (forceTarget == NULL) {
+    slp = PredictCodingRegion (nbsp, pbsp, code);
+    if (slp == NULL) {
+      ArrowCursor ();
+      Update ();
+      slp = AskForInterval (nsep, nbsp, pbsp);
+    }
+  } else {
+    sep = SeqMgrGetSeqEntryForData (forceTarget);
+    slp = CreateWholeInterval (sep);
   }
   if (slp == NULL) return FALSE;
 
@@ -1518,7 +1637,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
 
      if (IS_Bioseq (sep)) {
        bsp = (BioseqPtr) sep->data.ptrvalue;
-       vnp = ValNodeNew (NULL);
+       vnp = SeqDescrNew (NULL);
        vnp->choice = Seq_descr_user;
        vnp->data.ptrvalue = (Pointer) uop;
        vnp->next = bsp->descr;
@@ -1649,7 +1768,7 @@ static void ProcessFa2htgs (Fa2htgsFormPtr ffp, SeqSubmitPtr ssp)
          prevpnt = &(vnp->next);
    }
    if (remark != NULL) {
-     vnp = ValNodeNew (NULL);
+     vnp = SeqDescrNew (NULL);
      if (vnp != NULL) {
        vnp->choice = Seq_descr_comment;
        vnp->data.ptrvalue = remark;
@@ -4733,12 +4852,12 @@ static void FindFlatProc (ButtoN b)
 {
   Boolean      caseCounts;
   FindFormPtr  ffp;
-  Char         findme [256];
+  CharPtr      findme;
   Boolean      wholeWord;
 
   ffp = (FindFormPtr) GetObjectExtra (b);
   if (ffp == NULL) return;
-  GetTitle (ffp->findTxt, findme, sizeof (findme) - 1);
+  findme = SaveStringFromText (ffp->findTxt);
   ObjMgrDeSelect (0, 0, 0, 0, NULL);
   caseCounts = GetStatus (ffp->caseCounts);
   wholeWord = GetStatus (ffp->wholeWord);
@@ -4746,6 +4865,7 @@ static void FindFlatProc (ButtoN b)
   FindInFlatFile (ffp->input_entityID, ffp->input_itemID,
                   ffp->input_itemtype, GENBANK_FMT, SEQUIN_MODE,
                   findme, caseCounts, wholeWord);
+  MemFree (findme);
 }
 
 static void FindTextProc (TexT t)
@@ -4769,26 +4889,28 @@ static void CommonFindReplaceProc (ButtoN b, Boolean replace, Boolean replaceAll
 
 {
   Boolean      caseCounts;
-  Char         changeme [256];
+  CharPtr      changeme;
   FindFormPtr  ffp;
-  Char         findme [256];
+  CharPtr      findme;
   Boolean      wholeWord;
 
   ffp = (FindFormPtr) GetObjectExtra (b);
   if (ffp != NULL) {
-    GetTitle (ffp->findTxt, findme, sizeof (findme) - 1);
+    findme = SaveStringFromText (ffp->findTxt);
     ObjMgrDeSelect (0, 0, 0, 0, NULL);
     caseCounts = GetStatus (ffp->caseCounts);
     wholeWord = GetStatus (ffp->wholeWord);
     if (replace) {
-      GetTitle (ffp->replaceTxt, changeme, sizeof (changeme) - 1);
+      changeme = SaveStringFromText (ffp->replaceTxt);
       FindInEntity (ffp->input_entityID, findme, changeme, TRUE, UPDATE_NEVER, caseCounts, wholeWord, replaceAll);
       GetRidOfEmptyFeatsDescStrings (ffp->input_entityID, NULL);
       ObjMgrSetDirtyFlag (ffp->input_entityID, TRUE);
       ObjMgrSendMsg (OM_MSG_UPDATE, ffp->input_entityID, 0, 0);
+      MemFree (changeme);
     } else {
       FindInEntity (ffp->input_entityID, findme, NULL, TRUE, UPDATE_ONCE, caseCounts, wholeWord, FALSE);
     }
+    MemFree (findme);
     Update ();
   }
 }

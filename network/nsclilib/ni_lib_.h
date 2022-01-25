@@ -1,7 +1,7 @@
 #ifndef NI_LIB___H
 #define NI_LIB___H
 
-/*  $RCSfile: ni_lib_.h,v $  $Revision: 4.5 $  $Date: 1998/09/08 17:59:06 $
+/*  $Id: ni_lib_.h,v 4.6 2000/09/27 21:05:08 vakatov Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -35,6 +35,9 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_lib_.h,v $
+* Revision 4.6  2000/09/27 21:05:08  vakatov
+* [WWW/LB-specific]  NI_WWW_SetNcbidPort() to set port of the NCBID to connect
+*
 * Revision 4.5  1998/09/08 17:59:06  vakatov
 * Added WWW/Firewall network interface
 *
@@ -85,6 +88,12 @@ NLM_EXTERN ENIInterface NI_SetInterface(ENIInterface ni_interface);
  *        the only one call to NI_GenericGetService()
  */
 NLM_EXTERN void NI_SetAddress(const Char *address);
+
+/* WWW/LB-specific;  set port of the NCBID to connect (for this thread only).
+ * Return previously set port.
+ * HINT:  call it with zero "port" to get current port, without changing it.
+ */
+NLM_EXTERN Uint2 NI_WWW_SetNcbidPort(Uint2 port);
 
 
 /* The set of functions that are capable to work with different

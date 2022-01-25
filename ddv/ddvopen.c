@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.92 2000/07/05 19:23:13 lewisg Exp $
+/*  $Id: ddvopen.c,v 1.95 2000/07/17 17:46:48 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.92 $
+* $Revision: 1.95 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.95  2000/07/17 17:46:48  hurwitz
+* made it so show/hide dialog only updates view when ok is clicked
+*
+* Revision 1.94  2000/07/14 22:24:56  lewisg
+* fix scroll, click, visual c++ build bugs.  add command line arg parse to ddv
+*
 * Revision 1.92  2000/07/05 19:23:13  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -1321,7 +1327,6 @@ Boolean    Attached = FALSE;
   
   WatchCursor();
 
-#if defined(_LAUNCH_DDE)
   if (!dmp->bEditor) {
     mWin_d = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
     Enable(mWin_d->MainMenu.LaunchEditor);
@@ -1360,7 +1365,6 @@ Boolean    Attached = FALSE;
       }
     }
   }
-#endif
 
   if (!Attached) {
     if (ViewMgr_Attach(sap, FALSE, FALSE, *pInput_entityID, *pInput_itemID) < 1)
@@ -1639,7 +1643,7 @@ SAM_ViewGlobal      *vgp;
         
 		/*when the user will close DDV, DDV won't delete any data excepts
 		its internal data structure*/
-		mWin_d->dod.choice=DDV_OPENTYPE_NOTRESP;
+		dmp->dod.choice=DDV_OPENTYPE_NOTRESP;
 		
 		/*attach a Msg Func on the current seqalign*/
 		dmp->userkey=OMGetNextUserKey();
@@ -1954,7 +1958,7 @@ Int2				procval;
 			DDV_CleanupDDVPdata_g(dmp);
 			DDV_CloseData(mWin_d,FALSE);
 			
-			vnp_ali=DDV_GetAndCheckSeqAlign(fp,0,NULL,mWin_d->fetchSepProc,&(mWin_d->dod),
+			vnp_ali=DDV_GetAndCheckSeqAlign(fp,0,NULL,mWin_d->fetchSepProc,&(dmp->dod),
 				&The_entityID);
 			ArrowCursor();
 			if (vnp_ali && The_entityID!=0){
@@ -1962,7 +1966,7 @@ Int2				procval;
 				SeqAlignPtr sap;
 								
 				/*get the first SeqAlign in the list and load the viewer panel*/
-				mWin_d->vnp_ali=vnp_ali;
+				dmp->vnp_ali=vnp_ali;
 				
 				if(mWin_d->Show_logo){
 					mWin_d->Show_logo=FALSE;
@@ -2180,7 +2184,7 @@ Uint2           The_entityID;
 		Update ();
 
 		vnp_ali=DDV_GetAndCheckSeqAlign(NULL,uid,NULL,mWin_d->fetchSepProc,
-			&(mWin_d->dod),&The_entityID);
+			&(dmp->dod),&The_entityID);
 
 		ArrowCursor();
 
@@ -2191,7 +2195,7 @@ Uint2           The_entityID;
 			SeqAlignPtr sap;
 			
 			/*get the first SeqAlign in the list and load the viewer panel*/
-			mWin_d->vnp_ali=vnp_ali;
+			dmp->vnp_ali=vnp_ali;
 
 			if(mWin_d->Show_logo){
 				/*Hide(mWin_d->Logo_Panel);*/
@@ -2971,12 +2975,12 @@ Int2		  procval;
 		DDV_CleanupDDVPdata_g(dmp);
 		DDV_CloseData(mWin_d,FALSE);
 
-		vnp_ali=DDV_GetAndCheckSeqAlign(NULL,0,sep,mWin_d->fetchSepProc,&(mWin_d->dod),
+		vnp_ali=DDV_GetAndCheckSeqAlign(NULL,0,sep,mWin_d->fetchSepProc,&(dmp->dod),
 			&The_entityID);
 		if (vnp_ali && The_entityID!=0){
 
 			/*get the first SeqAlign in the list and load the viewer panel*/
-			mWin_d->vnp_ali=vnp_ali;
+			dmp->vnp_ali=vnp_ali;
 
 			if(mWin_d->Show_logo){
 				mWin_d->Show_logo=FALSE;
@@ -3007,6 +3011,18 @@ extern void DDV_ImportProtSeqAlign(IteM i)
 	DDV_ImportSeqAlign(TRUE,i);
 }
 
+static Int4 DDV_GetLastRow(DDV_HideDialog *hdp)
+{
+  int i, max=0;
+
+  for (i = 1; i <= hdp->numrows; i++) {
+    if (ViewMgr_TRow2VRow(hdp->salp, i) > 0) {
+      max = i;
+    }
+  }
+  return(max);
+}
+
 static void DDV_SetHideList(DDV_HideDialog *hdp)
 {
     int i;
@@ -3020,10 +3036,15 @@ static void DDV_SetHideList(DDV_HideDialog *hdp)
 }
 
 static void DDV_HideList(Nlm_LisT l)
+/*******************************************************************************
+*  this function is called each time an item from the list is clicked.
+*  it sets the status for each row, making sure not to allow the
+*  master to be hidden, nor the number of rows to be less than 2.
+*******************************************************************************/
 {
     WindoW hHideDlg;
     DDV_HideDialog *hdp;
-    Int4 i, count = 0;
+    Int4 i, LastRow, count = 0;
     Boolean status;
     Int2  HScroll, VScroll;
 
@@ -3032,41 +3053,59 @@ static void DDV_HideList(Nlm_LisT l)
     hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
     if(hdp == NULL) return;
 
-    /* get vertical scroll now */
-    GetOffset(hdp->DDV_lsip, &HScroll, &VScroll);
-    
-    for(i = 1; i <= hdp->numrows; i++)
-        if(GetItemStatus(hdp->DDV_lsip, i)) count++;
-        
-    if(count < 2 || !GetItemStatus(hdp->DDV_lsip, 1)) {
-        DDV_SetHideList(hdp);
-        goto Fin;
-    }
-        
+    /* get row count, and last displayed row */
     for(i = 1; i <= hdp->numrows; i++) {
-        status = GetItemStatus(hdp->DDV_lsip, i);
-    ViewMgr_SetHidden(hdp->salp, !status, i);
+      if (GetItemStatus(hdp->DDV_lsip, i)) {
+        count++;
+        LastRow = i;
+      }
     }
-    ViewMgr_Update(hdp->salp);
-    DDV_SetHideList(hdp);
 
-Fin:
-    /* keep the same vertical scroll */
-    SetOffset(hdp->DDV_lsip, 0, VScroll);
+    /* don't let number of rows fall below 2 */
+    if (count < 2) {
+      if (hdp->LastValidRow == -1) {
+        SetItemStatus(hdp->DDV_lsip, DDV_GetLastRow(hdp), TRUE);
+      }
+      else {
+        SetItemStatus(hdp->DDV_lsip, hdp->LastValidRow, TRUE);
+      }
+    }
+    else {
+      /* each time a row is clicked, update the last saved row */
+      hdp->LastValidRow = LastRow;
+    }
+
+    /* don't let master be hidden */
+    if (!GetItemStatus(hdp->DDV_lsip, 1)) {
+      SetItemStatus(hdp->DDV_lsip, 1, TRUE);
+    }
 }
+
 
 static void DDV_HideAcceptProc(ButtoN b)
 {
     WindoW hHideDlg;
     DDV_HideDialog *hdp;
+    Int4  i;
+    Boolean  status;
 
-	hHideDlg = (WindoW)ParentWindow(b);
-	if(hHideDlg == NULL) return;	
-	hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
-	if(hdp == NULL) return;
+    hHideDlg = (WindoW)ParentWindow(b);
+    if(hHideDlg == NULL) return;	
+    hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
+    if(hdp == NULL) return;
+
+    for(i = 1; i <= hdp->numrows; i++) {
+      status = GetItemStatus(hdp->DDV_lsip, i);
+      ViewMgr_SetHidden(hdp->salp, !status, i);
+    }
+    ViewMgr_Update(hdp->salp);
+    DDV_SetHideList(hdp);
+
     MemFree(hdp->userdata);
     Remove(hdp->DDV_wHide);
 }
+
+
 /*******************************************************************************
 
   Function : DDV_HideDlg
@@ -3105,7 +3144,7 @@ NLM_EXTERN void DDV_HideDlg(DDV_HideDialog *hdp)
     }
     hdp->userdata = dump;
     dump->data = NULL;
-	dump->type=UPDATE_TYPE_EDIT_DELBSP;
+    dump->type=UPDATE_TYPE_EDIT_DELBSP;
 
     hdp->DDV_wHide = MovableModalWindow(-30, -20, -10, -10,
         "Hide/Show Sequences", NULL);
@@ -3138,6 +3177,10 @@ NLM_EXTERN void DDV_HideDlg(DDV_HideDialog *hdp)
     b = DefaultButton(g, "OK", (BtnActnProc) DDV_HideAcceptProc);
 
     Show(hdp->DDV_wHide);
+
+    /* set scroll to upper left */
+    SetOffset(hdp->DDV_lsip, 0, 0);
+
     return;
 }
 
@@ -3151,14 +3194,17 @@ NLM_EXTERN void DDV_HideDlgItem(IteM i)
     hdp = MemNew(sizeof(DDV_HideDialog));
     if(hdp == NULL) return;
 
-	hWinMain=(WindoW)ParentWindow(i);
-	if (hWinMain==NULL) return;
-	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
-	if (mWin_d==NULL) return;
+    /* init LastValidRow to something illegal */
+    hdp->LastValidRow = -1;
 
-	if (mWin_d->hWndDDV==NULL) return;
-	dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
-	if (dmp==NULL) return;
+    hWinMain=(WindoW)ParentWindow(i);
+    if (hWinMain==NULL) return;
+    mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+    if (mWin_d==NULL) return;
+
+    if (mWin_d->hWndDDV==NULL) return;
+    dmp = (DdvMainPtr) GetObjectExtra(mWin_d->hWndDDV);
+    if (dmp==NULL) return;
 
     if(dmp->MSA_d.pgp_l.sap == NULL) return;
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -2542,6 +2542,9 @@ extern ForM CreateCdRgnForm (Int2 left, Int2 top, CharPtr title,
     Hide (cfp->pages [CODING_REGION_PAGE]);
 
     s = HiddenGroup (h, -1, 0, NULL);
+    /* tell dialog to have canned explanation popup */
+    cfp->this_itemtype = OBJ_SEQFEAT;
+    cfp->this_subtype = FEATDEF_CDS;
     CreateCommonFeatureGroup (s, (FeatureFormPtr) cfp, sfp, TRUE, TRUE);
     cfp->pages [COMMON_PAGE] = s;
     Hide (cfp->pages [COMMON_PAGE]);
@@ -3800,7 +3803,7 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp)
     StaticPrompt (r, "Processing", 0, dialogTextHeight, programFont, 'l');
     ppp->processed = PopupList (r, TRUE, NULL);
     PopupItem (ppp->processed, " ");
-    PopupItem (ppp->processed, "Pre-protein");
+    PopupItem (ppp->processed, "Proprotein");
     PopupItem (ppp->processed, "Mature");
     PopupItem (ppp->processed, "Signal peptide");
     PopupItem (ppp->processed, "Transit peptide");

@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.c,v 1.35 2000/05/16 19:43:00 hurwitz Exp $
+/*  $Id: ddvgraph.c,v 1.39 2000/07/24 22:00:08 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.35 $
+* $Revision: 1.39 $
 *
 * File Description: graphic engine of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.c,v $
+* Revision 1.39  2000/07/24 22:00:08  hurwitz
+* fixed bug that 1/2 characters were displayed sometimes
+*
+* Revision 1.38  2000/07/19 19:04:01  hurwitz
+* fixed bug that was causing overwrite of numbering over tick marks in DDE
+*
+* Revision 1.37  2000/07/07 22:43:55  lewisg
+* interface tweaks
+*
+* Revision 1.36  2000/07/07 22:31:14  lewisg
+* interface tweaks
+*
 * Revision 1.35  2000/05/16 19:43:00  hurwitz
 * grey out create block, delete block, undo, and redo as needed
 *
@@ -297,7 +309,7 @@ WindoW     temport;
 	ObjectRect(hWndDDV,&rcP);
 	InsetRect(&rcP,4,4);
 		/*drawing region:*/
-	DDV_AdjustDrawingRect(&rcP,&(GrData->udv_font));
+	DDV_AdjustDrawingRect(&rcP,&(GrData->udv_font),dmp);
 	
 	rcP.left+=GrData->udv_panel.cxName+GrData->udv_scale.cxLeftScale;
 	rcP.top+=3*GrData->udv_panel.cyScale/2;
@@ -368,14 +380,19 @@ extern void DDV_GetCurrentDispRange(PaneL hWndDDV,UnDViewerGraphDataPtr GrData,
 		Int4 LengthAli,Int4Ptr from_col,Int4Ptr to_col,Int4Ptr from_row,
 		Int4Ptr to_row)
 {
-RecT rcP;
+
+  RecT        rcP;
+  DdvMainPtr  dmp;
+
+  dmp = (DdvMainPtr) GetObjectExtra(hWndDDV);
+	if (dmp==NULL) return;
 
 	/*panel size*/
 	ObjectRect(hWndDDV,&rcP);
 	InsetRect(&rcP,4,4);
 
 	/*drawing region:*/
-	DDV_AdjustDrawingRect(&rcP,&(GrData->udv_font));
+	DDV_AdjustDrawingRect(&rcP,&(GrData->udv_font),dmp);
 	
 	rcP.left+=GrData->udv_panel.cxName+GrData->udv_scale.cxLeftScale;
 	rcP.top+=GrData->udv_panel.cyScale;
@@ -624,7 +641,7 @@ BioseqPtr bsp;
 	
 	/*draw name*/
 	size=StringWidth(szAccess);
-	x=left-GrData->udv_scale.cxLeftScale-size;
+	x=left/*-GrData->udv_scale.cxLeftScale*/-size;
 	y=top+decal*GrData->udv_font.LineHeight;
 	MoveTo(x,y);
 	if (cur_row==CurEditRow){
@@ -891,11 +908,19 @@ extern Int2 DDV_ComputeColWidth(Int2 cxChar)
   Return value : none
 
 *******************************************************************************/
-extern void	DDV_AdjustDrawingRect(RecT * rcP,UDVFontDataPtr udv_font)
+extern void	DDV_AdjustDrawingRect(RecT * rcP, UDVFontDataPtr udv_font, DdvMainPtr dmp)
 {	
-	rcP->left=(rcP->left/udv_font->ColWidth)*udv_font->ColWidth;
-	rcP->right=(rcP->right/udv_font->ColWidth)*udv_font->ColWidth-2;
-	rcP->top=(rcP->top/udv_font->LineHeight)*udv_font->LineHeight;
+  Int4  temp;
+
+	rcP->left=(rcP->left/udv_font->ColWidth)*udv_font->ColWidth + udv_font->ColWidth;
+
+/*	rcP->right=(rcP->right/udv_font->ColWidth)*udv_font->ColWidth-2; */
+  /* bug fix, DIH, 7/24/00 */
+  temp = rcP->right - (dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale);
+  temp = (temp/udv_font->ColWidth)*udv_font->ColWidth - 2;
+  rcP->right = temp + (dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale);
+
+	rcP->top=(rcP->top/udv_font->LineHeight)*udv_font->LineHeight + udv_font->LineHeight;
 	rcP->bottom=(rcP->bottom/udv_font->LineHeight)*udv_font->LineHeight;
 }
 
@@ -951,19 +976,19 @@ DDVRulerDescrPtr drdp;
 	
 	if (dmp->hParent){
 		mWin_d=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
-		if (mWin_d->Show_logo){
-			UDV_Logo_onDraw(p);
-			return;
-		}
+        if (mWin_d->Show_logo){
+            UDV_Logo_onDraw(p);
+            return;
+        }
 	}
 
 	/*some checks before a core dump...*/
 	if (!dmp->MSA_d.pgp_l.TableHead) return;
 	
 	/*restrict panel drawing area: 'add' little margins*/
-	ObjectRect(p,&rcP);
-	InsetRect(&rcP,4,4);
-	
+  ObjectRect((Handle) p, &rcP);
+  InsetRect(&rcP,4,4);
+
 	/*3D border to resize the cxName field*/
 	LtGray();
 	
@@ -982,13 +1007,16 @@ DDVRulerDescrPtr drdp;
 	LineTo((Int2)(dmp->GrData.udv_panel.cxName+3),rcP.bottom);
 
 	/*drawing region:*/
-	DDV_AdjustDrawingRect(&rcP,&(dmp->GrData.udv_font));
+	DDV_AdjustDrawingRect(&rcP,&(dmp->GrData.udv_font),dmp);
+
+  /* debugging */
+/*  UDV_draw_rectangle(rcP, TRUE); */
 	
 	rcD=rcI=rcP;
 	rcP.left+=dmp->GrData.udv_panel.cxName+dmp->GrData.udv_scale.cxLeftScale;
 	top_offset=dmp->GrData.udv_vscrl.ScrollPos*dmp->GrData.udv_font.LineHeight;
 	left_offset=dmp->GrData.udv_hscrl.ScrollPos*dmp->GrData.udv_font.ColWidth;
-			
+
 	/*set the font*/
 	SelectFont(dmp->GrData.udv_font.hFnt);
 	

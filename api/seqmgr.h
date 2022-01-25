@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.31 $
+* $Revision: 6.34 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,15 @@
 *
 *
 * $Log: seqmgr.h,v $
+* Revision 6.34  2000/09/28 20:57:08  kans
+* added LockFarComponents and UnlockFarComponents
+*
+* Revision 6.33  2000/07/10 23:28:49  kans
+* GenomePartToSegmentMap only takes two Bioseq parameters
+*
+* Revision 6.32  2000/07/10 15:17:08  kans
+* added GenomePartToSegmentMap for acc->contig remapping
+*
 * Revision 6.31  2000/05/24 21:13:49  ostell
 * added SeqMgrHoldIndexing() support
 *
@@ -876,6 +885,14 @@ NLM_EXTERN Int4 LIBCALL SeqMgrMapPartToSegmentedBioseq PROTO((BioseqPtr in, Int4
 
 /*****************************************************************************
 *
+*   GenomePartToSegmentMap used for mapping of part positions not used on a given contig
+*
+*****************************************************************************/
+
+NLM_EXTERN SMSeqIdxPtr GenomePartToSegmentMap (BioseqPtr in, BioseqPtr bsp);
+
+/*****************************************************************************
+*
 *   SeqMgrIndexAlignments called by SeqMgrIndexFeatures, can be called separately
 *
 *****************************************************************************/
@@ -889,6 +906,19 @@ NLM_EXTERN void LIBCALL SeqMgrIndexAlignments (Uint2 entityID);
 *****************************************************************************/
 
 NLM_EXTERN SeqAlignPtr LIBCALL SeqMgrFindSeqAlignByID PROTO((Uint2 entityID, Uint2 itemID));
+
+/*****************************************************************************
+*
+*   LockFarComponents takes a top SeqEntryPtr and locks the far Bioseq components of
+*     any segmented or delta sequences.  It turns a ValNode list of locked BioseqPtrs.
+*   UnlockFarComponents takes the ValNode list of locked BioseqPtrs, unlocks each
+*     Bioseq, frees the ValNode list, and returns NULL.
+*
+*****************************************************************************/
+
+NLM_EXTERN ValNodePtr LockFarComponents (SeqEntryPtr sep);
+
+NLM_EXTERN ValNodePtr UnlockFarComponents (ValNodePtr bsplist);
 
 
 #ifdef __cplusplus

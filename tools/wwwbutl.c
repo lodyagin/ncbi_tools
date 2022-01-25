@@ -1,4 +1,4 @@
-/* $Id: wwwbutl.c,v 6.1 2000/05/17 15:53:40 shavirin Exp $
+/* $Id: wwwbutl.c,v 6.20 2000/10/16 22:18:35 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,66 @@
 *
 * Initial Version Creation Date: 04/21/2000
 *
-* $Revision: 6.1 $
+* $Revision: 6.20 $
 *
 * File Description:
 *         WWW BLAST/PSI/PHI utilities
 *
 * $Log: wwwbutl.c,v $
+* Revision 6.20  2000/10/16 22:18:35  shavirin
+* Added possibility to perform OOF blastx
+*
+* Revision 6.19  2000/10/16 20:26:35  shavirin
+* Added possibility to rum RPS Blast.
+*
+* Revision 6.18  2000/09/28 16:32:53  dondosha
+* Compiler warning fix
+*
+* Revision 6.17  2000/09/27 22:18:03  shavirin
+* Added possibility to limit search to results of entrez query.
+*
+* Revision 6.16  2000/09/12 22:01:42  dondosha
+* Use matrix returned from search during formatting
+*
+* Revision 6.15  2000/09/08 20:16:59  dondosha
+* Print informative error messages for bad accessions, still do search if at least one accession is good
+*
+* Revision 6.14  2000/09/08 17:46:54  dondosha
+* Allow multiple accessions in input
+*
+* Revision 6.13  2000/09/07 18:02:58  dondosha
+* If query has many sequences, put them in a SeqLoc list
+*
+* Revision 6.12  2000/09/01 21:47:34  dondosha
+* Make check for wordsize too small; add 4 to user-supplied wordsize for megablast
+*
+* Revision 6.11  2000/09/01 17:50:59  dondosha
+* No part of SeqEntry can be freed before the very end
+*
+* Revision 6.10  2000/09/01 17:30:26  dondosha
+* Small corrections for megablast with Entrez client
+*
+* Revision 6.9  2000/08/30 22:20:24  dondosha
+* Small changes for megablast web page
+*
+* Revision 6.8  2000/08/28 20:17:42  dondosha
+* Added functionality for megablast web page
+*
+* Revision 6.7  2000/08/10 18:17:19  shavirin
+* Used correct (fake) Bioseq in printing alignmenets.
+*
+* Revision 6.6  2000/08/10 14:50:37  shavirin
+* Fixed 64 dependent bug
+*
+* Revision 6.4  2000/08/09 20:49:01  shavirin
+* Added support for S&W Blast and XML output.
+*
+* Revision 6.3  2000/07/31 20:39:23  shavirin
+* Some formating changes from Haruna Cofer (haruna@detroit.sgi.com)
+*
+* Revision 6.2  2000/07/26 02:26:16  shavirin
+* Changes in accordance to Alejandro's S&W Blast.
+*
 * Revision 6.1  2000/05/17 15:53:40  shavirin
 * Initial revision.
 *
@@ -64,33 +118,33 @@ void WWWBlastInfoFree(WWWBlastInfoPtr theInfo)
 
     MemFree(theInfo->blast_type);
     MemFree(theInfo->ConfigFile);
+    SeqLocSetFree(theInfo->query_slp);
     MemFree(theInfo);
 
     return;
 }
+
 void WWWBlastErrMessage(BLASTErrCode error_code, CharPtr error_msg)
+{
+   WWWBlastErrMessageEx(error_code, error_msg, NULL);
+}
+
+void WWWBlastErrMessageEx(BLASTErrCode error_code, CharPtr error_msg,
+                          CharPtr seq_info)
 {
     CharPtr delim = "<BR>";
 
     if(error_code == BLASTNoError)
 	return;
 
-    printf("<HTML>\n");
-    printf("<TITLE>BLAST Search Error</TITLE>\n"); 
-    fflush(stdout);
-    
-    printf("<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
-           "VLINK=\"#660099\" ALINK=\"#660099\">\n");
-    printf("<A HREF=\"blast_form.map\"> \r"
-           "<IMG SRC=\"images/blast_results.gif\" "
-           "BORDER=0 ISMAP>\r</A><P>\n");
-    
     fprintf(stdout, "<FONT color=red><h3>");
-    fprintf(stdout, "Error %d in submitting BLAST query", labs(error_code));
-
-    fprintf(stdout, "</h3></FONT><HR>\n<b>");
+    fprintf(stdout, "Error %ld in submitting BLAST query", labs(error_code));
+    if (seq_info)
+       fprintf(stdout, "</h3></FONT> <BR> <b> Accession: %s </b> <BR> <HR>\n<b>", seq_info);
+    else
+       fprintf(stdout, "</h3></FONT><HR>\n<b>");
     fprintf(stdout, "Short error description:");
-
+    
     fprintf(stdout, "</b><BR><BR>\n");
     switch(error_code) {
         
@@ -671,6 +725,7 @@ static Int4 AccessionToGi (CharPtr string)
 }
 #endif
 
+#define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
 Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 {
     CharPtr chptr, ptr, sequence, outptr;
@@ -679,16 +734,24 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     CharPtr opt_str = "GErqeWvbKLY";
     BLAST_OptionsBlkPtr options;
     Char tmp[128];
-    Int4 value;
+    Int4 i, value;
+    Boolean is_megablast = FALSE;
+    SeqLocPtr query_slp = NULL, query_lcase_mask = NULL;
 
     /* PROGRAM */
     
     if((chptr = WWWGetValueByName(theInfo->info, "PROGRAM")) != NULL) {
 	theInfo->program = StringSave(chptr);
     } else {
-        WWWBlastErrMessage(BLASTErrProgram, NULL);
-	return FALSE;
+        theInfo->program = StringSave("blastn");
+        /*WWWBlastErrMessage(BLASTErrProgram, NULL);
+          return FALSE;*/
     }
+
+    /* Is it MEGABLAST? */
+
+    if (WWWGetValueByName(theInfo->info, "MEGABLAST") != NULL)
+       is_megablast = TRUE;
 
     /* Configuration file set program/database relations */
 
@@ -719,15 +782,17 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if((chptr = WWWGetValueByName(theInfo->info, "INPUT_TYPE")) != NULL && 
        !StringNICmp(chptr, "Accession", 9)) {
 
-        Int4 gi, number, title_length, id_length;
+        Int4 i, gi, number, title_length, id_length, query_num = 0;
         CharPtr accession, new_defline;
-        BioseqPtr bsp_tmp;
+        BioseqPtr bsp_tmp, query_bsp;
         SeqIdPtr sip;
         ObjectIdPtr  oid;
         SeqPortPtr spp;
         Int2 retval, buf_length=512;
         Uint1 buf[512];
         Char tmp[255];
+        Boolean first_query = TRUE;
+        Char delimiters[7];
 
 	/* This is request by Accession/GI - asking ID */
         
@@ -737,109 +802,173 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
         }
         
 	chptr = sequence;
-        
-	/* Strip off blanks at beginning. */
-        while (IS_WHITESP(*chptr) && *chptr != NULLB)
-            chptr++;
-        outptr = chptr; /* Beginning of the valuable info */
-        
-	/* Strip off non-alphanumerics, except for '_' (used in SP) and '.' (soon to be used by  the collaboration. */
-        while (IS_ALPHANUM(*chptr) || *chptr == '_' || *chptr == '.')
-            chptr++;
-        *chptr = NULLB; 
-        
-	/* accession = sequence; */
-        accession = outptr;
+        theInfo->query_slp = NULL;
+        StrCpy(delimiters, " \t\n,;");
+        delimiters[5] = '\015'; /* ^M that appears at the end of the line in the 
+                                   browser */
+        delimiters[6] = '\0';
 
-	sip = NULL;
-	gi = AccessionToGi(accession);
-        
-	if (gi > 0) {
-	    ValNodeAddInt(&sip, SEQID_GI, gi);
-	} else {
-            WWWBlastErrMessage(BLASTEntrez, NULL);
-	    return FALSE;
-	}	
+        while (outptr = StringTokMT(chptr, delimiters, &chptr)) {
 
-        /* If is is not found - it is not found - ID1 is down? */
-        
-	if((bsp_tmp = BioseqLockById(sip)) == NULL) {
-            WWWBlastErrMessage(BLASTEntrez, NULL);
-	    return FALSE;
-        }
+           accession = outptr;
 
-	if (ISA_na(bsp_tmp->mol) != theInfo->query_is_na) {
-            WWWBlastErrMessage(BLASTErrAccType, NULL);
-            return FALSE;
-	}
+           /* Strip off non-alphanumerics, except for '_' (used in SP) and '.' (soon to be used by  the collaboration. */
+           while (IS_ALPHANUM(*outptr) || *outptr == '_' || *outptr == '.')
+              outptr++;
+           *outptr = NULLB; 
+           
+           sip = NULL;
+           gi = AccessionToGi(accession);
+           
+           if (gi > 0) {
+              ValNodeAddInt(&sip, SEQID_GI, gi);
+           } else {
+              WWWBlastErrMessageEx(BLASTEntrez, NULL, accession);
+              if (!theInfo->query_slp && !chptr) 
+                 return FALSE;
+              else continue;
+           }	
+           
+           /* If id is not found - it is not found - ID1 is down? */
+           
+           if((bsp_tmp = BioseqLockById(sip)) == NULL) {
+              WWWBlastErrMessageEx(BLASTEntrez, NULL, accession);
+              if (!theInfo->query_slp && !chptr) 
+                 return FALSE;
+              else continue;
+           }
+           
+           if (ISA_na(bsp_tmp->mol) != theInfo->query_is_na) {
+              WWWBlastErrMessageEx(BLASTErrAccType, NULL, accession);
+              if (!theInfo->query_slp && !chptr) 
+                 return FALSE;
+              else continue;
+           }
+           
+           query_bsp = BioseqNew();
+           query_bsp->length = bsp_tmp->length;
+           query_bsp->mol = bsp_tmp->mol;
+           query_bsp->repr = Seq_repr_raw;
+           query_bsp->seq_data = BSNew(query_bsp->length);
+           
+           if (ISA_na(query_bsp->mol)) {
+              spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_plus, 
+                               Seq_code_iupacna);
+              query_bsp->seq_data_type = Seq_code_iupacna;
+           } else {
+              spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_unknown, 
+                               Seq_code_ncbieaa);
+              query_bsp->seq_data_type = Seq_code_ncbieaa;
+           }
+           
+           SeqPortSet_do_virtual(spp, TRUE);
+           number = 0;
+           while (number < query_bsp->length) {
+              retval = SeqPortRead(spp, buf, buf_length);
+              if (retval <= 0)
+                 break;
+              BSWrite(query_bsp->seq_data, buf, retval);
+              number += retval;
+           }
+           
+           SeqPortFree(spp);
+           
+           title_length = StringLen(BioseqGetTitle(bsp_tmp));
+           SeqIdWrite(bsp_tmp->id, tmp, PRINTID_FASTA_LONG, 255);
+           id_length = StringLen(tmp);
+           title_length += id_length;
+           title_length +=3;
+           new_defline = (CharPtr) MemNew(title_length*sizeof(Char));
+           StringCpy(new_defline, tmp);
+           *(new_defline+id_length) = ' ';
+           StringCpy(new_defline+id_length+1, BioseqGetTitle(bsp_tmp)); 
+           *(new_defline+title_length-1) = NULLB;
+           query_bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, 
+                                            new_defline);
+           query_bsp->id = ValNodeNew(NULL);
+           oid = ObjectIdNew();
+           query_num++;
+           oid->str = (CharPtr) Malloc(6);
+           sprintf(oid->str, "%d", query_num);
+           query_bsp->id->choice = SEQID_LOCAL;
+           query_bsp->id->data.ptrvalue = (Pointer) oid;
         
-	theInfo->query_bsp = BioseqNew();
-	theInfo->query_bsp->length = bsp_tmp->length;
-	theInfo->query_bsp->mol = bsp_tmp->mol;
-	theInfo->query_bsp->repr = Seq_repr_raw;
-	theInfo->query_bsp->seq_data = BSNew(theInfo->query_bsp->length);
-
-	if (ISA_na(theInfo->query_bsp->mol)) {
-            spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_plus, 
-                             Seq_code_iupacna);
-            theInfo->query_bsp->seq_data_type = Seq_code_iupacna;
-	} else {
-            spp = SeqPortNew(bsp_tmp, 0, -1, Seq_strand_unknown, 
-                             Seq_code_ncbieaa);
-            theInfo->query_bsp->seq_data_type = Seq_code_ncbieaa;
-	}
-
-	SeqPortSet_do_virtual(spp, TRUE);
-	number = 0;
-	while (number < theInfo->query_bsp->length) {
-            retval = SeqPortRead(spp, buf, buf_length);
-            if (retval <= 0)
-                break;
-            BSWrite(theInfo->query_bsp->seq_data, buf, retval);
-            number += retval;
-	}
-
-        SeqPortFree(spp);
+           SeqMgrDeleteFromBioseqIndex(bsp_tmp);
+           
+           BioseqUnlock(bsp_tmp);
+           
+           BioseqPack(query_bsp);
+           if (first_query) {
+              theInfo->query_bsp = query_bsp;
+              first_query = FALSE;
+           }
         
-	title_length = StringLen(BioseqGetTitle(bsp_tmp));
-	SeqIdWrite(bsp_tmp->id, tmp, PRINTID_FASTA_LONG, 255);
-	id_length = StringLen(tmp);
-	title_length += id_length;
-	title_length +=3;
-	new_defline = (CharPtr) MemNew(title_length*sizeof(Char));
-	StringCpy(new_defline, tmp);
-	*(new_defline+id_length) = ' ';
-	StringCpy(new_defline+id_length+1, BioseqGetTitle(bsp_tmp)); 
-	*(new_defline+title_length-1) = NULLB;
-	theInfo->query_bsp->descr = ValNodeAddStr(NULL, Seq_descr_title, 
-                                                  new_defline);
-	theInfo->query_bsp->id = ValNodeNew(NULL);
-	oid = ObjectIdNew();
-	oid->str = StringSave("blast_tmp");
-	theInfo->query_bsp->id->choice = SEQID_LOCAL;
-	theInfo->query_bsp->id->data.ptrvalue = (Pointer) oid;
+           ValNodeAddPointer(&theInfo->query_slp, SEQLOC_WHOLE,
+                             SeqIdSetDup(SeqIdFindBest(query_bsp->id,
+                                                       SEQID_GI)));
+        }        
         
-	SeqMgrDeleteFromBioseqIndex(bsp_tmp);
-        
-	BioseqUnlock(bsp_tmp);
-        
-	BioseqPack(theInfo->query_bsp);
         ID1BioseqFetchDisable();
     }
 #endif
     
     /* Creating Bioseq */
         
-    if(theInfo->query_bsp == NULL) {
-        if((sep = FastaToSeqBuffEx(sequence, &outptr, theInfo->query_is_na, 
-                                   NULL, FALSE)) == NULL) {
-            WWWBlastErrMessage(BLASTFastaToSE, NULL);
-            return FALSE;
-        }
+    if (theInfo->query_bsp == NULL) {
+	  Int4 num_queries;
+	  BioseqPtr query_bsp = NULL;
+	  SeqLocPtr last_mask, mask_slp;
+	  Int2 ctr = 1;
+	  Char prefix[2];
+	  
+          outptr = NULL;
+	  StrCpy(prefix, "");
+	  SeqMgrHoldIndexing(TRUE);
+	  mask_slp = last_mask = NULL;
+	  num_queries = 0;
+	  while ((sep=FastaToSeqBuffForDb(sequence, &outptr,
+					  theInfo->query_is_na, NULL,
+					  theInfo->believe_query, 
+                                          prefix, &ctr, &mask_slp)) != NULL) {
+             sequence = outptr;
+	     if (mask_slp) {
+		if (!last_mask)
+		   query_lcase_mask = last_mask = mask_slp;
+		else {
+		   last_mask->next = mask_slp;
+		   last_mask = last_mask->next;
+		}
+		mask_slp = NULL;
+	     }
+	     query_bsp = NULL;
+	     if (theInfo->query_is_na) 
+		SeqEntryExplore(sep, &query_bsp, FindNuc);
+	     else
+		SeqEntryExplore(sep, &query_bsp, FindProt);
+	     
+	     if (query_bsp == NULL) {
+		ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		return 2;
+	     }
+	     num_queries++;
+	     if (num_queries > MAX_NUM_QUERIES) {
+		WWWBlastErrMessage(BLASTOptionStr, 
+				   "Maximal number of queries exceeded. At most 16383 are allowed");
+		break;
+	     }
+	     if (!theInfo->query_slp) /* I.e. if first query */
+		theInfo->query_bsp = query_bsp;
 
-        theInfo->query_bsp = (BioseqPtr) sep->data.ptrvalue;
-    }
-
+	     ValNodeAddPointer(&theInfo->query_slp, SEQLOC_WHOLE,
+			       SeqIdSetDup(SeqIdFindBest(query_bsp->id,
+                                                         SEQID_GI)));
+	  }
+	  SeqMgrHoldIndexing(FALSE);
+       } else if (is_megablast) 
+          ValNodeAddPointer(&theInfo->query_slp, SEQLOC_WHOLE,
+                            SeqIdSetDup(SeqIdFindBest(theInfo->query_bsp->id,
+                                                      SEQID_GI)));
+       
     /* The last check of Bioseq - if length of sequence too small ? */
     
     if(theInfo->query_bsp == NULL || 
@@ -849,7 +978,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     }
     
     /* This will prevent from incorrect formating in case when input
-       sequence has valig SeqId, but in fact this SeqId do not correspond
+       sequence has valid SeqId, but in fact this SeqId do not correspond
        to the real sequence  - XXX */
 
     if(!theInfo->believe_query)
@@ -872,9 +1001,18 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 	return FALSE; 
     }
     
+    if (is_megablast) {
+       options->is_megablast_search = TRUE;
+       options->query_lcase_mask = query_lcase_mask;
+       options->wordsize = 28; /* Default different from other BLAST programs */
+       options->gap_open = 0;
+       options->gap_extend = 0;
+       options->block_width = 0;
+    }
+
     theInfo->options = options;
 
-    /* Set default values fot matrix and gap parameters */
+    /* Set default values for matrix and gap parameters */
     BLASTOptionSetGapParams (options, NULL, 0, 0);
     
     /* Read MAT_PARAM if set */
@@ -885,7 +1023,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
         Int4    opencost, extendedcost;
         /* Get matrix name and gap costs */
         if (chptr[1] != '-' || chptr[2] != '-') {
-            sscanf(chptr, "%s\t %ld\t %ld", matrixname, &opencost, 
+            sscanf(chptr, "%s\t %d\t %d", matrixname, &opencost, 
                    &extendedcost);
             /* set the parameters */
             options->gap_open  = opencost;
@@ -936,7 +1074,7 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 
     if (!StringICmp(theInfo->program, "blastx")) {
         BioSourcePtr source;
-
+        
 	options->genetic_code = 1;
 
 	if((chptr = WWWGetValueByName(theInfo->info, 
@@ -955,6 +1093,19 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 			Seq_descr_source, source);
 	    }
 	}
+    }
+
+    /* For BLASTX we could set genetic code */
+
+    if (!StringICmp(theInfo->program, "blastx")) {
+	if((chptr = WWWGetValueByName(theInfo->info, "OOF_ALIGN")) != NULL) {
+            options->is_ooframe = TRUE;
+            options->shift_pen = atoi(chptr);
+
+            if(options->shift_pen == 0) {
+                options->is_ooframe = FALSE;
+            }
+        }
     }
 
     /* For TBLASTN and TBLASTX we could set DB_GENETIC_CODE */
@@ -1041,6 +1192,57 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 	    (StringStr(chptr, "default") == NULL)) {
 	options->number_of_bits = atof(chptr);
     }
+
+    /* Parameters for Smith-Waterman BLAST */
+
+    /* TWEAK_PARAMETERS */
+    
+    if (WWWGetValueByName(theInfo->info, "TWEAK_PARAMETERS") != NULL)
+        theInfo->options->tweak_parameters = TRUE;
+
+    /* Adjustment of expect value and hitlist size */
+    if (theInfo->options->tweak_parameters) {
+        theInfo->options->hitlist_size *= 2; /*allows for extra matches*/
+        theInfo->options->original_expect_value = 
+            theInfo->options->expect_value;
+        if (theInfo->options->expect_value < 0.1) {
+            theInfo->options->expect_value = 
+                MIN(0.1, 10 * theInfo->options->expect_value);
+        }
+    }
+    
+    /* SMITH_WATERMAN */
+    
+    if (WWWGetValueByName(theInfo->info, "SMITH_WATERMAN") != NULL)
+        theInfo->options->smith_waterman = TRUE;
+
+    /* RPSBLAST */
+
+    if (WWWGetValueByName(theInfo->info, "RPSBLAST") != NULL)
+        theInfo->options->is_rps_blast = TRUE;
+
+    /* ENTREZ_QUERY */
+    
+    if ((chptr = WWWGetValueByName(theInfo->info, "ENTREZ_QUERY")) != NULL) {
+        theInfo->options->entrez_query = StringSave(chptr);
+    
+#if defined(NCBI_CLIENT_SERVER) || defined (NCBI_ENTREZ_CLIENT)
+        {{
+            Int4Ptr uids;
+
+            theInfo->gi_list_total = 
+                BLASTGetUidsFromQuery(chptr, &uids, theInfo->db_is_na, FALSE);
+
+            if(theInfo->gi_list_total > 0) {
+
+                theInfo->gi_list = MemNew(theInfo->gi_list_total*sizeof(BlastDoubleInt4));
+                for(i = 0; i < theInfo->gi_list_total; i++)
+                    theInfo->gi_list[i].gi = uids[i];
+            }
+        }}
+#endif
+    }
+    /* ----------------------------------- */
 
     /* Number of CPU to use in BLAST Search: */
 
@@ -1160,7 +1362,13 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
 	index = GetLetterIndex(opt_str, 'W');
 	if(values[index] != NULL) {
 	    options->wordsize = atoi(values[index]);
-	}
+            if (is_megablast) {
+               if (options->wordsize < 8)
+                  options->wordsize = 8;
+               options->cutoff_s2 = options->wordsize;
+               options->wordsize += 4;
+            }
+        }
 
 	/* -v Number of descriptions to print. */
 
@@ -1243,9 +1451,21 @@ Boolean WWWCreateSearchOptions(WWWBlastInfoPtr theInfo)
     if((chptr = WWWGetValueByName(theInfo->info, 
                                   "ALIGNMENT_VIEW")) != NULL &&
        StringStr(chptr, "default") == NULL) {
-	theInfo->align_view = atoi(chptr);  
+	theInfo->align_view = atoi(chptr);
+        
+        if(theInfo->align_view == 12) {
+            theInfo->xml_output = TRUE;
+        }
     }
-    
+
+    if (WWWGetValueByName(theInfo->info, "XML_OUTPUT") != NULL)
+	theInfo->xml_output = TRUE;
+
+    if(options->is_ooframe) {
+        theInfo->xml_output = FALSE;
+        theInfo->align_view = 0;
+    }
+
     if (WWWGetValueByName(theInfo->info, "NCBI_GI") != NULL)
 	theInfo->show_gi = TRUE;
     
@@ -1346,6 +1566,58 @@ static Uint1 IntTo62S(Int1 value)
 	return(value + 87);
     return 0;
 }
+
+static Int4 BLASTCharTo4bits(Char ch)
+{
+    if(ch != '0')
+        ch = ch;
+    if ((ch >= 'A') && (ch <= 'F'))
+        return (((ch - 'A') + 10));
+    else if ((ch >= '0') && (ch <= '9'))
+        return ((ch - '0'));
+    else
+        return (Int4)(-1);
+}
+
+static Char BLAST4bitsToChar(int value)
+{
+    if (value < 10)
+        return (Char)(value + '0');
+    else
+        return (Char)(value - 10 + 'A');
+}
+
+static Nlm_FloatHi **BLASTDecodePosFreqs(CharPtr CHARPosFreqs,
+                                         Int4 length, Int4 size)
+{
+    Nlm_FloatHi **posFreqs;
+    register Int4 i, j, k = 0, l;
+    Nlm_FloatLo fvalue;
+    Uint4 ivalue = 0;
+    
+    if(CHARPosFreqs == NULL || CHARPosFreqs[0] == NULLB)
+	return NULL;
+    
+    posFreqs = (Nlm_FloatHi **) MemNew(sizeof(Nlm_FloatHi *)*(length+1));
+    
+    for(i = 0; i <= length; i++)
+	posFreqs[i] = (Nlm_FloatHi *) MemNew(sizeof(Nlm_FloatHi)*size);
+    
+    for(i = 0, k = 0; i <= length; i++) {
+	for(j =0; j < size; j++) {
+            for(l = 0; l < 8; l++, k++) {
+                ivalue += (BLASTCharTo4bits(CHARPosFreqs[k]) << (l * 4));
+                /* ivalue = ivalue << 4; */
+            }
+            
+            MemCpy(&fvalue, &ivalue, 4);
+            posFreqs[i][j] = (Nlm_FloatHi) fvalue; /* 4 bytes into 8 bytes */
+            ivalue = 0;
+	}
+    }
+    return posFreqs;
+}
+
 static Int4Ptr PNTR Decode62Matrix(CharPtr Matrix62, Int4 length, Int4 size)
 {
     Int4Ptr PNTR posMatrix;
@@ -1354,7 +1626,7 @@ static Int4Ptr PNTR Decode62Matrix(CharPtr Matrix62, Int4 length, Int4 size)
     if(Matrix62 == NULL || Matrix62[0] == NULLB)
 	return NULL;
 
-    posMatrix = (Int4Ptr PNTR) MemNew(sizeof(Int4)*(length+1));
+    posMatrix = (Int4Ptr PNTR) MemNew(sizeof(Int4Ptr)*(length+1));
 
     for(i = 0; i <= length; i++)
 	posMatrix[i] = (Int4Ptr) MemNew(sizeof(Int4Ptr)*size);
@@ -1372,7 +1644,35 @@ static Int4Ptr PNTR Decode62Matrix(CharPtr Matrix62, Int4 length, Int4 size)
     }
     return posMatrix;
 }
+static CharPtr BLASTEncodePosFreqs(Nlm_FloatHi **posFreqs, 
+                                   Int4 length, Int4 size)
+{    
+    Int4 i, j, k=0, ivalue, fmask, l;
+    CharPtr CHARPosFreqs;
+    Nlm_FloatLo fvalue;
+    Int2 tval;
+    
+    /* So... size of the buffer will be eq. to number of elements
+       in the posFreqs matrix times 8:  2 characters for every byte */
+    CHARPosFreqs = (CharPtr) MemNew((length+1)*(size+1)*sizeof(Nlm_FloatLo)*2);
+    
+    for(i = 0, k = 0; i <= length; i++) {
+	for(j =0; j < size; j++) {
+	    fvalue = (Nlm_FloatLo) posFreqs[i][j]; /* truncation to 4 bytes */
+            fmask = 0xF;       /* 4 bits */
+            if(fvalue != 0.0)
+                j=j;
+            
+            MemCpy(&ivalue, &fvalue, 4);
+            for(l = 0; l < 8; l++, k++) {
+                CHARPosFreqs[k] = BLAST4bitsToChar((ivalue & fmask) >> l * 4);
+                fmask = fmask << 4;
+            }
+	}
+    }
 
+    return CHARPosFreqs;
+}
 static CharPtr Encode62Matrix(Int4Ptr PNTR posMatrix, Int4 length, Int4 size)
 {
     register Int4 i, j, k=0;
@@ -1412,6 +1712,7 @@ void BLASTPrintDataFree(BLASTPrintDataPtr data)
     
     if(data->psidata != NULL) {
         MemFree(data->psidata->matrix62);
+        MemFree(data->psidata->CHARPosFreqs);
 
         for(glp = data->psidata->PrevCheckedGIs; glp != NULL; glp = glp_next) {
             glp_next = glp->next;
@@ -1679,7 +1980,7 @@ static ValNodePtr seed_core_private (BlastSearchBlkPtr search, CharPtr program_n
     return vnp;
 }
 
-static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr theInfo, Nlm_FloatHi *karlinK_out, Nlm_FloatHi *karlinK_nogap) {
+static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr theInfo, Nlm_FloatHi *karlinK_out, Nlm_FloatHi ***posFreqs_out) {
     
     CharPtr     chptr, Matrix62_last=NULL, pattern;
     Int4        i, j;
@@ -1702,6 +2003,8 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
     BLAST_ScorePtr PNTR posMatrix;
     compactSearchItems *compactSearch = NULL;
     posSearchItems *posSearch;
+    CharPtr CHARPosFreqs_last;
+    Nlm_FloatHi **posFreqs;
 
     /* first step; return NULL, means to use default matrix */
     if (psidata->StepNumber == 0) 
@@ -1794,6 +2097,35 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
         
         Matrix62_last = WWWGetValueByName(theInfo->info, "PSI_MATRIX");
         
+	/* Decode read matrix */
+        
+	if(Matrix62_last != NULL && Matrix62_last[0] != NULLB) {
+	    search->positionBased = TRUE;
+	    search->sbp->posMatrix = Decode62Matrix (Matrix62_last, search->context[0].query->length, search->sbp->alphabet_size);
+	}
+        
+        CHARPosFreqs_last = WWWGetValueByName(theInfo->info, "POS_FREQS");
+        
+        if(CHARPosFreqs_last != NULL && CHARPosFreqs_last[0] != NULLB) {
+	    search->positionBased = TRUE;
+            search->sbp->posFreqs = BLASTDecodePosFreqs(CHARPosFreqs_last, search->context[0].query->length, search->sbp->alphabet_size);
+
+#if 0
+        {{
+            FILE *fd;
+            fd = FileOpen("/tmp/new_freqs.float", "w");
+            for(i = 0; i <= search->context[0].query->length; i++) {
+                for(j =0; j < search->sbp->alphabet_size; j++) {        
+                    fprintf(fd, "%f ", search->sbp->posFreqs[i][j]);
+                }
+                fprintf(fd, "\n");
+            }
+        }}
+#endif
+
+
+        }
+        
         if((chptr = WWWGetValueByName(theInfo->info, 
                                       "PSI_KARLIN_K")) != NULL) {
             karlinK = atof(chptr);
@@ -1801,16 +2133,6 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
             search->sbp->kbp_gap_psi[0]->logK = log(karlinK);
         }
 	
-	/* Decode read matrix */
-        
-	if(Matrix62_last != NULL && Matrix62_last[0] != NULLB) {
-	    search->positionBased = TRUE;
-	    search->sbp->posMatrix = 
-		Decode62Matrix (Matrix62_last, 
-                                search->context[0].query->length, 
-                                search->sbp->alphabet_size);
-            
-	}
     } /* end reread the matrix */    
 
     search->thr_info->tick_callback = NULL;
@@ -1858,11 +2180,23 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
         ReadDBBioseqFetchEnable("psiblast", theInfo->database, 
                                 FALSE, TRUE);
         compactSearch = compactSearchNew(compactSearch);
-        copySearchItems(compactSearch, search);
+        copySearchItems(compactSearch, search, theInfo->options->matrix);
 
-        compactSearch->pseudoCountConst = 10;
+        compactSearch->pseudoCountConst = 7;
+
+        if (search->sbp->posFreqs == NULL) {
+            search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, 
+                                                      compactSearch->alphabetSize);
+        }
         
-        posMatrix = WposComputation(compactSearch, seqalign);
+        posMatrix = WposComputation(compactSearch, seqalign, 
+                                    search->sbp->posFreqs);
+
+        /* We have to return posFreqs to the upper layer */
+        posFreqs =  allocatePosFreqs(compactSearch->qlength, 
+                                     compactSearch->alphabetSize);
+        copyPosFreqs(search->sbp->posFreqs, posFreqs, compactSearch->qlength, 
+                     compactSearch->alphabetSize);
 
         MemFree(compactSearch->standardProb);
         MemFree(compactSearch);
@@ -1874,10 +2208,29 @@ static  BLAST_ScorePtr PNTR GetPSIMatrix(PSIDataPtr psidata, WWWBlastInfoPtr the
 	psidata->matrix62 = Encode62Matrix(posMatrix, 
                                            search->context[0].query->length, 
                                            search->sbp->alphabet_size);
-    }
 
+        psidata->CHARPosFreqs = BLASTEncodePosFreqs(posFreqs, search->context[0].query->length, search->sbp->alphabet_size);
+
+#if 0
+        {{
+            FILE *fd;
+            fd = FileOpen("/tmp/old_freqs.float", "w");
+            for(i = 0; i <= search->context[0].query->length; i++) {
+                for(j =0; j < search->sbp->alphabet_size; j++) {        
+                    fprintf(fd, "%f ", posFreqs[i][j]);
+                }
+                fprintf(fd, "\n");
+            }
+            FileClose(fd);
+            fd = FileOpen("/tmp/old_freqs.buffer", "w");
+            fprintf(fd, "%s", psidata->CHARPosFreqs);
+            FileClose(fd);            
+        }}
+#endif
+    }
+    
     *karlinK_out = search->sbp->kbp_gap_psi[0]->K;
-    *karlinK_nogap = search->sbp->kbp[0]->K;
+    *posFreqs_out = posFreqs;
 
     SeqAlignSetFree(seqalign);
     SeqLocFree(phi_seqloc);
@@ -1904,11 +2257,11 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
     Char       matrixname[64] = "BLOSUM62";
     Int4       opencost = 0, extendedcost = 0;
     BlastSearchBlkPtr search;
-    BLAST_ScorePtr PNTR posMatrix;
+    BLAST_ScorePtr PNTR posMatrix = NULL;
     Nlm_FloatHi karlinK;
-    Nlm_FloatHi karlinK_nogap;
     BLAST_MatrixPtr  matrix = NULL;
-
+    Nlm_FloatHi **posFreqs;
+    
     if(theInfo == NULL)
 	return NULL;
 
@@ -1920,7 +2273,7 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
     psidata->PrevCheckedGIs = NULL;
     
     /* initialize the search */
-    theInfo->options->pseudoCountConst = 10;
+    theInfo->options->pseudoCountConst = 7;
 
     if((search = BLASTSetUpSearchWithReadDb(theInfo->fake_bsp, theInfo->program, theInfo->query_bsp->length, theInfo->database, theInfo->options, WWWTickCallback ))  == NULL) {
 	return NULL;
@@ -1932,12 +2285,11 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
 	psidata->StepNumber = atoi(chptr);
     
     if((posMatrix = GetPSIMatrix(psidata, theInfo, 
-                                 &karlinK, &karlinK_nogap)) != NULL) {
+                                 &karlinK, &posFreqs)) != NULL) {
         search->positionBased = TRUE;
         search->sbp->kbp_gap_psi[0]->K = karlinK;
         search->sbp->kbp_gap_psi[0]->logK = log(karlinK);
-        search->sbp->kbp[0]->K = karlinK_nogap;
-        search->sbp->kbp[0]->logK = log(karlinK_nogap);
+        search->sbp->posFreqs = posFreqs;
     }
     
     search->sbp->posMatrix = posMatrix;
@@ -1945,6 +2297,33 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
     search->thr_info->tick_callback = WWWTickCallback;
     
     print_data->seqalign = BioseqBlastEngineCore(search, theInfo->options, posMatrix);
+
+#if 0
+    if(seqalign) {
+
+        ReadDBBioseqFetchEnable("psiblast", theInfo->database, 
+                                FALSE, TRUE);
+        compactSearch = compactSearchNew(compactSearch);
+        copySearchItems(compactSearch, search, theInfo->options->matrix);
+
+        compactSearch->pseudoCountConst = 7;
+
+        if (search->sbp->posFreqs == NULL) {
+            search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, 
+                                                      compactSearch->alphabetSize);
+        }
+        
+        posMatrix = WposComputation(compactSearch, seqalign, 
+                                    search->sbp->posFreqs);
+
+        MemFree(compactSearch->standardProb);
+        MemFree(compactSearch);
+
+        ReadDBBioseqFetchDisable();
+        
+	/* Encode matrix for the use in the next step*/
+    }
+#endif
 
     if(posMatrix != NULL) {
         for(i = 0; i <= theInfo->fake_bsp->length; i++) {
@@ -1981,8 +2360,8 @@ BLASTPrintDataPtr PSIBlastSearch(WWWBlastInfoPtr theInfo)
             print_data->buffer = vnp->data.ptrvalue;
             break;
         case TXMATRIX:
-            matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
-            BLAST_MatrixDestruct(matrix);
+            print_data->matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
+            /*BLAST_MatrixDestruct(matrix);*/
             vnp->data.ptrvalue = NULL;
             break;
         case SEQLOC_MASKING_NOTSET:
@@ -2041,7 +2420,7 @@ BLASTPrintDataPtr PHIBlastSearch(WWWBlastInfoPtr theInfo)
     
     if((chptr = WWWGetValueByName(theInfo->info, "MAT_PARAM")) != NULL) {
 	if (chptr[1] != '-' || chptr[2] != '-')
-	    sscanf(chptr, "%s\t %ld\t %ld", matrixname, &opencost, &extendedcost);
+	    sscanf(chptr, "%s\t %d\t %d", matrixname, &opencost, &extendedcost);
     }
 
     /* Change matrix parameters */
@@ -2097,8 +2476,8 @@ BLASTPrintDataPtr PHIBlastSearch(WWWBlastInfoPtr theInfo)
             print_data->buffer = vnp->data.ptrvalue;
             break;
         case TXMATRIX:
-            matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
-            BLAST_MatrixDestruct(matrix);
+            print_data->matrix = (BLAST_MatrixPtr) vnp->data.ptrvalue;
+            /*BLAST_MatrixDestruct(matrix);*/
             vnp->data.ptrvalue = NULL;
             break;
         case SEQLOC_MASKING_NOTSET:
@@ -2162,6 +2541,7 @@ Boolean PHIPrintOutput(WWWBlastInfoPtr theInfo,
     SeqAlignPtr	lastGood, BadSeqAlignments, GoodSeqAlignments;
     SeqLocPtr	seqloc;
     ValNodePtr	vnp_var;
+    Int4Ptr PNTR txmatrix;
 
     MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
@@ -2333,6 +2713,10 @@ the alignment was checked on the previous iteration \
 
     fprintf(stdout, "<HR>");
 
+    txmatrix = NULL;
+    if (print_data->matrix)
+       txmatrix = (Int4Ptr PNTR) BlastMatrixToTxMatrix(print_data->matrix);
+
     if (theInfo->number_of_alignments) {
 	fprintf(stdout, "<CENTER><b><FONT color=\"green\">"
 		"Alignments</FONT></b></CENTER>\n");
@@ -2340,20 +2724,20 @@ the alignment was checked on the previous iteration \
         f_order[FEATDEF_REGION] = 1;
         g_order[FEATDEF_REGION] = 1;
         if(theInfo->align_view == 0) {
-            ShowTextAlignFromAnnotExtra(theInfo->query_bsp, 
+            ShowTextAlignFromAnnotExtra(theInfo->fake_bsp, 
                                         print_data->vnp, 
                                         print_data->seqloc, 60, 
                                         stdout, 
                                         f_order, g_order, align_options, 
-                                        NULL, print_data->mask_loc, 
+                                        txmatrix, print_data->mask_loc, 
                                         FormatScoreFunc);
         } else {
-            ShowTextAlignFromAnnotExtra(theInfo->query_bsp, 
+            ShowTextAlignFromAnnotExtra(theInfo->fake_bsp, 
                                         print_data->vnp, 
                                         print_data->seqloc, 60, 
                                         stdout, 
                                         f_order, g_order, align_options, 
-                                        NULL, print_data->mask_loc, 
+                                        txmatrix, print_data->mask_loc, 
                                         NULL);
             printf("<P>\n");
         }
@@ -2370,6 +2754,10 @@ the alignment was checked on the previous iteration \
 	    "secs\t%8.2f total secs.\n\n", 
 	    time_keeper.user, time_keeper.system, time_keeper.total);    
     
+    if (txmatrix)
+           txmatrix =  (Int4Ptr PNTR) TxMatrixDestruct(txmatrix);
+    print_data->matrix = BLAST_MatrixDestruct(print_data->matrix);
+
     init_buff();
     PrintDbReport(print_data->dbinfo, 70, stdout);
     
@@ -2412,6 +2800,7 @@ Boolean PSIPrintOutput(WWWBlastInfoPtr theInfo,
     Char	f_name[64], title[1024];
     Int4	align_num;
     Int2	count;
+    Int4Ptr PNTR txmatrix;
 
     MemSet((Pointer)(g_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
     MemSet((Pointer)(f_order), 0, (size_t)(FEATDEF_ANY* sizeof(Uint1)));
@@ -2563,6 +2952,10 @@ the alignment was checked on the previous iteration \
 
     fprintf(stdout, "<HR>");
 
+    txmatrix = NULL;
+    if (print_data->matrix)
+       txmatrix = (Int4Ptr PNTR) BlastMatrixToTxMatrix(print_data->matrix);
+
     if (theInfo->number_of_alignments) {
 	fprintf(stdout, "<CENTER><b><FONT color=\"green\">"
 		"Alignments</FONT></b></CENTER>\n");
@@ -2582,13 +2975,13 @@ the alignment was checked on the previous iteration \
         } else {   /* Old type formating */
             if (theInfo->align_view == 0) {
                 ShowTextAlignFromAnnot2(seqannot, 60, stdout, f_order,
-                                        g_order, align_options, NULL, 
+                                        g_order, align_options, txmatrix, 
                                         print_data->mask_loc, 
                                         FormatScoreFunc, theInfo->database, 
                                         "psiblast");
             } else { 
                 ShowTextAlignFromAnnot(seqannot, 60, stdout, f_order,
-                                       g_order, align_options, NULL, 
+                                       g_order, align_options, txmatrix, 
                                        print_data->mask_loc, NULL);
                 printf("<P>\n");
             }
@@ -2604,7 +2997,7 @@ the alignment was checked on the previous iteration \
 
     prune = BlastPruneSapStructDestruct(prune);
 
-    seqannot->data = NULL;
+    seqannot->data = NULL; 
     seqannot = SeqAnnotFree(seqannot);
 
     printf("<PRE>\n");
@@ -2614,6 +3007,10 @@ the alignment was checked on the previous iteration \
     fprintf(stdout, "CPU time: %8.2f user secs.\t%8.2f sys. "
 	    "secs\t%8.2f total secs.\n\n", 
 	    time_keeper.user, time_keeper.system, time_keeper.total);    
+
+    print_data->matrix = BLAST_MatrixDestruct(print_data->matrix);
+    if (txmatrix)
+       txmatrix = (Int4Ptr PNTR) TxMatrixDestruct(txmatrix);
 
     init_buff();
     PrintDbReport(print_data->dbinfo, 70, stdout);

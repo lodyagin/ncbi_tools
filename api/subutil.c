@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.29 $
+* $Revision: 6.34 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -40,6 +40,21 @@
 *
 *
 * $Log: subutil.c,v $
+* Revision 6.34  2000/09/25 23:19:52  kans
+* mrna prot link user object now uses fasta long on the single best id, preferring refseq
+*
+* Revision 6.33  2000/09/20 12:32:53  kans
+* removed AddMethodToRefGeneTrackUserObject and AddSupportToRefGeneTrackUserObject
+*
+* Revision 6.32  2000/08/29 22:27:01  kans
+* reftrack support now has organism field
+*
+* Revision 6.31  2000/07/21 11:08:00  kans
+* place method after status and above accession or support user object fields
+*
+* Revision 6.30  2000/07/21 10:54:13  kans
+* added functions for adding Method and Support to RefGeneTrack user object
+*
 * Revision 6.29  2000/03/14 13:33:32  kans
 * NCBISubValidate sets indexing, adds AppProperty to shut off specific messages to be decided later
 *
@@ -4385,8 +4400,9 @@ NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr bsp)
   oip->str = StringSave ("MrnaProteinLink");
   uop->type = oip;
 
-  sip = SeqIdFindBest (bsp->id, 0);
-  SeqIdWrite(sip, buf, PRINTID_FASTA_SHORT, 79);
+  sip = SeqIdDup (SeqIdFindBest (bsp->id, SEQID_OTHER));
+  SeqIdWrite(sip, buf, PRINTID_FASTA_LONG, 79);
+  SeqIdFree (sip);
 
   ufp = UserFieldNew ();
   oip = ObjectIdNew ();

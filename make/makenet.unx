@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.108 2000/06/21 14:15:26 beloslyu Exp $
+#	$Id: makenet.unx,v 6.115 2000/10/18 21:47:16 vakatov Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -71,7 +71,7 @@ THREAD_OBJ =
 VIBLIBS = 
 VIBFLAG = -I/am/Motif/include -DWIN_MOTIF
 VIBFLAG =
-VIB = Cn3Dv3d vclient Nentrez ddv udv
+VIB = vclient Nentrez ddv udv
 VIB =
 VIBLIBS= -lXm -lXmu -lXt -lX11
 VIBLIBS=
@@ -100,12 +100,7 @@ BLIB19 = libncbispel.a
 BLIB23 = libncbitool.a
 BLIB24 = libncbisugg.a
 BLIB25 = libncbiwww.a
-# standalone tax library
-#BLIB26 = libncbitax1.a
 BLIB27 = libncbimsc1.a
-# client tax library
-# libncbitxc1 is disabled as per Vladmir Soussov 03/29/2000
-#BLIB29 = libncbitxc1.a
 BLIB30 = libncbicn3d.a
 BLIB3000 = libncbicn3dOGL.a
 ULIB31 = libvibnet.a
@@ -131,6 +126,8 @@ BLIB43 =
 ULIB44 = libidload.a
 BLIB44 = $(ULIB44)
 BLIB44 =
+
+BLIB45 = libddvlib.a
 
 #
 # Pseudo-dummy targets when Vibrant is not used
@@ -187,11 +184,7 @@ LIB22 = -lncbimmdb
 LIB23 = -lncbitool
 LIB24 = -lncbisugg
 LIB25 = -lncbiwww
-#LIB26 = -lncbitax1
 LIB27 = -lncbimsc1
-# libncbitxc1 is disabled as per Vladmir Soussov 03/29/2000
-#LIB29 = -lncbitxc1
-LIB29 = 
 LIB30 = -lncbicn3d
 LIB3000 = -lncbicn3dOGL
 LIB31 = -lvibnet
@@ -204,6 +197,7 @@ LIB41 = -lncbiid1
 LIB42 = -lctutils
 LIB43 = -losutils
 LIB44 = -lidload
+LIB45 = -lddvlib
 
 ##
 ## encryption of network services
@@ -314,11 +308,7 @@ SRC25 = www.c wtoolbar.c querydb.c
 
 SRCTAXCOMMON = objtax1.c taxutil.c
 
-#SRC26 = $(SRCTAXCOMMON) fs1proc.c taxctl.c rank.c nmclass.c division.c gc.c taxtree.c taxname.c fsutils.c rex_util.c objtax0.c tax1proc.c
-
 SRC27 = indexlist.c isamlist.c memmap.c miscutils.c
-
-SRC29 = $(SRCTAXCOMMON) fscproc.c objtaxc0.c tax0.c
 
 SRC31 = netcnfg.c trmlst.c docsum.c
 
@@ -329,6 +319,8 @@ SRC35 = dlistptr.c ssputil.c
 SRC36 = objblst3.c netblap3.c 
 
 SRC38 = ftanet.c
+
+SRC40 = objtax1.c taxutil.c tc2dproc.c txcdproc.c parttree.c taxcs.c taxblast.c
 
 SRC41 = id1gen.c id1arch.c accid1.c
 
@@ -382,13 +374,7 @@ OBJ24 = suggadj.o suggapi.o suggen.o suggest.o suggslp.o
 
 OBJ25 = www.o wtoolbar.o querydb.o
 
-OBJTAXCOMMON = objtax1.o taxutil.o
-
-#OBJ26 = $(OBJTAXCOMMON) fs1proc.o taxctl.o rank.o nmclass.o division.o gc.o taxtree.o taxname.o fsutils.o rex_util.o objtax0.o tax1proc.o
-
 OBJ27 = indexlist.o isamlist.o memmap.o miscutils.o
-
-OBJ29 = $(OBJTAXCOMMON) fscproc.o objtaxc0.o tax0.o
 
 OBJ31 = netcnfg.o trmlst.o docsum.o
 
@@ -400,7 +386,7 @@ OBJ36 = objblst3.o netblap3.o
 
 OBJ38 = ftanet.o
 
-OBJ40 = $(OBJTAXCOMMON) tc2dproc.o txcdproc.o parttree.o taxcs.o
+OBJ40 = objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o taxblast.o
 
 OBJ41 = id1gen.o id1arch.o accid1.o 
 
@@ -520,7 +506,7 @@ utilities : $(EXEUTIL)
 
 vibutilities : $(EXEUTILVIB)
 
-.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr Nbatch Nbatch2 Nbatch3 Nentrcmd genget seqget idfetch session test_ncbi_socket test_ncbisock debug_server
+.NO_PARALLEL:	copy nocopy Tentrez sequin Psequin Ssequin elecpcr asn2fast Nbatch Nbatch2 Nbatch3 Nentrcmd seqget idfetch session test_ncbi_socket test_ncbisock debug_server
 
 .WAIT:
 	echo Waiting...go
@@ -539,7 +525,6 @@ ES : $(BLIB17)
 
 
 others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
-#others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB26) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44)
 
 
 ## To clean out the directory without removing make
@@ -606,10 +591,6 @@ copy :
 	-$(SRCCOPY) ../network/medarch/client/*.c .
 	-$(SRCCOPY) ../network/taxonomy/client/*.h ../include
 	-$(SRCCOPY) ../network/taxonomy/client/*.c .
-	-$(SRCCOPY) ../network/taxon1/stdalone/*.h ../include
-	-$(SRCCOPY) ../network/taxon1/stdalone/*.c .
-	-$(SRCCOPY) ../network/taxon1/client/*.h ../include
-	-$(SRCCOPY) ../network/taxon1/client/*.c .
 	-$(SRCCOPY) ../network/taxon1/common/*.h ../include
 	-$(SRCCOPY) ../network/taxon1/common/*.c .
 	-$(SRCCOPY) ../network/taxon1/taxon2/*.h ../include
@@ -624,6 +605,8 @@ copy :
 	-$(SRCCOPY) ../network/suggest/client/*.c .
 	-$(SRCCOPY) ../network/blast3/client/*.h ../include
 	-$(SRCCOPY) ../network/blast3/client/*.c .
+	-$(SRCCOPY) ../tools/taxblast.h ../include
+	-$(SRCCOPY) ../tools/taxblast.c .
 	-$(SRCCOPY) $(ENCRSRCDIR)/*.c .
 	-$(SRCCOPY) $(SOCKSSRCDIR)/*.c .
 	-$(SRCCOPY) ../internal/misc/*.c .
@@ -660,8 +643,8 @@ copy :
 	$(SRCCOPY) ../demo/nbatch.c .
 	$(SRCCOPY) ../demo/qbatch.c .
 	$(SRCCOPY) ../demo/elecpcr.c .
+	$(SRCCOPY) ../demo/asn2fast.c .
 	$(SRCCOPY) ../demo/fetchent.c .
-	$(SRCCOPY) ../demo/genget.c .
 	$(SRCCOPY) ../demo/udvmain.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
@@ -814,6 +797,8 @@ parttree.o : parttree.c
 	$(CC) $(CFLAGS) parttree.c
 taxcs.o : taxcs.c
 	$(CC) $(CFLAGS) taxcs.c
+taxblast.o : taxblast.c
+	$(CC) $(CFLAGS) taxblast.c
 objtaxc0.o : objtaxc0.c
 	$(CC) $(CFLAGS) objtaxc0.c
 tax0.o : tax0.c
@@ -940,23 +925,11 @@ $(BLIB25) : $(OBJ25)
 	$(LIBCOPY) $(BLIB25) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB25)
 
-#$(BLIB26) : $(OBJ26)
-#	- rm -f $(BLIB26)
-#	$(AR) cru $(BLIB26) $(OBJ26)
-#	$(LIBCOPY) $(BLIB26) $(NCBI_LIBDIR)
-#	$(RAN) $(NCBI_LIBDIR)/$(BLIB26)
-
 $(BLIB27) : $(OBJ27)
 	- rm -f $(BLIB27)
 	$(AR) cru $(BLIB27) $(OBJ27)
 	$(LIBCOPY) $(BLIB27) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB27)
-
-#$(BLIB29) : $(OBJ29)
-#	- rm -f $(BLIB29)
-#	$(AR) cru $(BLIB29) $(OBJ29)
-#	$(LIBCOPY) $(BLIB29) $(NCBI_LIBDIR)
-#	$(RAN) $(NCBI_LIBDIR)/$(BLIB29)
 
 $(BLIB35) : $(OBJ35)
 	- rm -f $(BLIB35)
@@ -1081,34 +1054,36 @@ netentcf : netentcf.c $(ULIB31)
 	$(CC) -o netentcf $(LDFLAGS) netentcf.c $(LIB31) $(LIB20) $(LIB4) $(LIB23) $(LIB3) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # old viewer3D version
-Cn3Dv3d    : $(OBJCN3D) $(BENTREZLIBS) netentcf
-	$(CC) -o Cn3Dv3d $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB30) $(LIB20) \
-		$(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
-		$(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+#Cn3Dv3d    : $(OBJCN3D) $(BENTREZLIBS) netentcf
+#	$(CC) -o Cn3Dv3d $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB30) $(LIB20) $(LIB45) \
+#		$(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
+#		$(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # new (current) OpenGL version
 Cn3D : $(OBJCN3D) $(BENTREZLIBS) netentcf $(BLIB36)
-	$(CC) -o Cn3D $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB3000) $(LIB20) \
+	$(CC) -o Cn3D $(LDFLAGS) $(OBJCN3D) $(LIB31) $(LIB3000) $(LIB20) $(LIB45) \
 		$(LIB22) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) \
 		$(LIB400) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS) \
 		$(OGLLIBS)
 
 ddv    : $(OBJDDV)
-	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) \
+	$(CC) -o ddv $(LDFLAGS) $(OBJDDV) $(LIB41) $(LIB31) $(LIB20) $(LIB45) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1) \
 	$(VIBLIBS) $(OTHERLIBS)
 
 udv    : $(OBJUDV)
-	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) \
+	$(CC) -o udv $(LDFLAGS) $(OBJUDV) $(LIB41) $(LIB31) $(LIB20) $(LIB45) \
     $(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) \
 	$(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 Nentrez : entrez.c $(ULIB31) netentcf
-	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o Nentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB45) \
+    $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # left this in (Tentrez) for script backwards compatibility
 Tentrez : entrez.c $(ULIB31) netentcf
-	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(CC) -o Tentrez $(LDFLAGS) entrez.c $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB45) \
+    $(LIB22) $(LIB36) $(LIB23) $(LIB8) $(LIB7) $(NETCLILIB) $(LIB5) $(LIB4) $(LIB3) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 
 # sample network services client (non-Vibrant) - see catalogc.c Makefile
@@ -1170,15 +1145,15 @@ Nbatch3 : qbatch.c
 elecpcr : elecpcr.c
 	$(CC) -o elecpcr $(LDFLAGS) elecpcr.c $(LIB23) $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
+# demo program (asn2fast)
+
+asn2fast : asn2fast.c
+	$(CC) -o asn2fast $(LDFLAGS) asn2fast.c $(LIB41) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+
 # demo program (fetchent)
 
 fetchent : fetchent.c
 	$(CC) -o fetchent $(LDFLAGS) fetchent.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
-
-# demo program (network version of "genget")
-
-genget : genget.c
-	$(CC) -o genget $(LDFLAGS) genget.c $(ENTREZLIBS) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 # test client for the id0 network service
 
@@ -1314,31 +1289,31 @@ cnsgnv : cnsgnv.c
 
 # 'sequin' direct submission tool
 sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
-	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) \
+	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(LIB30) $(LIB20) $(LIB22) $(LIB19) $(LIB40) $(LIB41) \
+	$(LIB30) $(LIB20) $(LIB45) $(LIB22) $(LIB19) $(LIB40) $(LIB41) \
 	$(LIB36) $(LIB23) $(LIB11) $(LIB31) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 # 'sequin' direct submission tool with interprocess communication capability
 Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
-	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) \
+	$(BLIB22) $(BLIB19) $(BLIB40) $(BLIB41) $(BLIB36) $(BLIB45) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31) $(ULIB33) $(THREAD_OBJ)
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
-	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB20) $(LIB22) $(LIB19) $(LIB40) \
+	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB20) $(LIB45) $(LIB22) $(LIB19) $(LIB40) \
 	$(LIB41) $(LIB36) $(LIB23) $(LIB11) $(LIB31) $(ENTREZLIBS) $(LIB4) \
 	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
-Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB30) $(BLIB20) \
+Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB23) $(BLIB45) $(BLIB30) $(BLIB20) \
 	$(BLIB22) $(BLIB40) $(BLIB41) $(BLIB36) \
 	$(BLIB11) $(BLIB8) $(BLIB7) $(NETCLIBLIB) $(BLIB5) $(BLIB4) $(BLIB3) \
 	$(BLIB2) $(BLIB1) $(ULIB31)
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
-	$(LIB30) $(LIB20) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
+	$(LIB30) $(LIB20) $(LIB45) $(LIB22) $(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIB11) \
 	$(ENTREZLIBS) $(LIB31) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
 
 session : $(SRCSESSION) $(BSRVNETCLILIB)
@@ -1353,20 +1328,26 @@ wwwbutl.o:	wwwbutl.c
 wwwblast.o:	wwwblast.c
 	$(CC) $(CFLAGS) wwwblast.c
 
-blast.REAL:	wwwblast.o salogif.o wwwbutl.o $(THREAD_OBJ)
-	$(CC) $(LDFLAGS) wwwblast.o salogif.o wwwbutl.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
-	
-#test_ncbi_socket
+xmlblast.o:	xmlblast.c
+	$(CC) $(CFLAGS) xmlblast.c
+
+bxmlobj.o:	bxmlobj.c
+	$(CC) $(CFLAGS) bxmlobj.c
+
+blast.REAL:	wwwblast.o salogif.o wwwbutl.o xmlblast.o bxmlobj.o $(THREAD_OBJ)
+	$(CC) $(LDFLAGS) wwwblast.o salogif.o wwwbutl.o xmlblast.o bxmlobj.o $(THREAD_OBJ) -o blast.REAL -lvibgif $(LIB20) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# test_ncbi_socket
 
 test_ncbi_socket : test_ncbi_socket.c
 	$(CC) -o test_ncbi_socket $(LDFLAGS) test_ncbi_socket.c -DNCBI_C $(LIB1) $(OTHERLIBS)
 
-#test_ncbisock
+# test_ncbisock
 
 test_ncbisock : test_ncbisock.c
 	$(CC) -o test_ncbisock $(LDFLAGS) test_ncbisock.c $(LIB1) $(OTHERLIBS)
 
-#debug_server
+# debug_server
 
 debug_server : debug_server.c
 	$(CC) -o debug_server $(LDFLAGS) debug_server.c $(LIB1) $(OTHERLIBS)

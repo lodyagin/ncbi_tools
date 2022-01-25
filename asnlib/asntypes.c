@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:
 *   Routines to deal with internal operations on AsnType objects.
@@ -43,6 +43,9 @@
 * 02-24-94 Schuler     Make AsnTypeStringToHex LIBCALL too
 *
 * $Log: asntypes.c,v $
+* Revision 6.6  2000/07/25 20:30:58  ostell
+* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
+*
 * Revision 6.5  2000/05/26 14:51:23  ostell
 * fixed uninitialized variable
 *
@@ -1096,7 +1099,7 @@ NLM_EXTERN void LIBCALL  AsnModuleLink (AsnModulePtr amp)
 *   AsnStoreTree(file, amp)
 *
 *****************************************************************************/
-static void AsnStoreTree (CharPtr file, AsnModulePtr amp)
+NLM_EXTERN void LIBCALL AsnStoreTree (CharPtr file, AsnModulePtr amp)
 {
     ValNodePtr anp, last;
     AsnModulePtr tamp, tamp2, newamp;

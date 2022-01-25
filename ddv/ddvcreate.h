@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.h,v 1.28 2000/05/04 22:43:38 hurwitz Exp $
+/*  $Id: ddvcreate.h,v 1.29 2000/09/08 21:50:39 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.28 $
+* $Revision: 1.29 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.h,v $
+* Revision 1.29  2000/09/08 21:50:39  hurwitz
+* made DDV_ReadSeqBin public
+*
 * Revision 1.28  2000/05/04 22:43:38  hurwitz
 * don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
 *
@@ -232,6 +235,8 @@ NLM_EXTERN void DDV_InitDefSAPdispStyles(DDV_Disp_OptPtr ddop);
 NLM_EXTERN void DDV_InitCn3DSAPdispStyles(DDV_Disp_OptPtr ddop);
 NLM_EXTERN void DDV_InitDDESAPdispStyles(DDV_Disp_OptPtr ddop);
 NLM_EXTERN Uint4Ptr DDV_BuildBspEntitiesTbl(ValNodePtr PNTR TableHead,Int4 nBsp);
+NLM_EXTERN Uint1Ptr DDV_ReadSeqBin (SeqIdPtr sip, Int4 from, Int4 to, 
+                                    Boolean IsProt,Int2 len,Uint1 strand);
 
 /*export functions*/
 NLM_EXTERN void DDV_DumpSAPInAFile(MsaParaGPopListPtr mpplp,DDVOptionsBlockPtr dobp, 

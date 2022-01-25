@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.29 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -43,6 +43,12 @@
 *		       Model nodes and Dictionaries altered...
 *
 * $Log: mmdbapi1.h,v $
+* Revision 6.31  2000/07/24 22:29:45  thiessen
+* fix header conflict
+*
+* Revision 6.30  2000/07/21 18:56:41  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.29  2000/03/13 15:51:25  thiessen
 * added storage for PARS to each residue for Cn3D; removed unused fields
 *
@@ -672,6 +678,7 @@ typedef struct Nlm_msd
      PDNMS pdnmsSlaves;  /* slave structures in multiple alignments */
      BiostrucAnnotSetPtr psaStrucAlignment;
      VoidPtr pGlobalPARS; /* will hold pointer to default "global" PARS for this structure */
+     ValNodePtr pdnSlaveToMasterTransforms; /* store transformation for slave onto master */
 } MSD,  *PMSD;
  
 

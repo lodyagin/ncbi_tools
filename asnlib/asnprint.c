@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,12 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.12  2000/07/27 12:28:04  ostell
+* fixed PUBLIC identifier for DTDs in XML
+*
+* Revision 6.11  2000/07/25 20:30:58  ostell
+* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
+*
 * Revision 6.10  2000/06/29 20:15:15  ostell
 * minor typos fixed
 *
@@ -118,6 +124,66 @@ static CharPtr xmlsubstrs[XMLSUBS] = {
 	"&apos;",
 	"&quot;" };
 
+/********
+     MakeXMLModuleName()
+	makes module name into file name
+	returns pointer to \0 at end of string
+********/
+static CharPtr MakeXMLModuleName(AsnModulePtr amp, CharPtr buf)
+{
+	CharPtr ptr;
+	StringMove(buf, amp->modulename);
+	for (ptr = buf; *ptr != '\0'; ptr++)
+	{
+		if (*ptr == '-')
+			*ptr = '_';
+	}
+	return ptr;
+}
+
+
+/********
+     MakeXMLPublicName()
+	makes module name into name for PUBLIC declaration
+	returns pointer to \0 at end of string
+********/
+static CharPtr MakeXMLPublicName(CharPtr tobuf, CharPtr frombuf)
+{
+	CharPtr ptr;
+	StringMove(tobuf, frombuf);
+	for (ptr = tobuf; *ptr != '\0'; ptr++)
+	{
+		if (! IS_ALPHANUM(*ptr))
+			*ptr = ' ';
+	}
+	return ptr;
+}
+
+	
+static CharPtr GetXMLModuleName(AsnTypePtr atp, CharPtr buf)
+{
+	AsnModulePtr currmod;
+	AsnTypePtr curratp, baseatp;
+	CharPtr ptr;
+
+	currmod = AsnAllModPtr();  /* get loaded modules */
+	baseatp = AsnFindBaseType(atp);
+	if ((currmod == NULL) || (baseatp == NULL))
+		return NULL;
+
+	for (currmod; currmod != NULL; currmod = currmod->next)
+	{
+		for (curratp = currmod->types; curratp != NULL; curratp = curratp->next)
+		{
+			if (curratp == baseatp)
+			{
+				MakeXMLModuleName(currmod, buf);
+				return buf;
+			}
+		}
+	}
+	return NULL; /* didn't find it */
+}
 
 static CharPtr GetXMLname(AsnTypePtr atp)
 {
@@ -302,9 +368,19 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 
 		if (isXML)
 		{
-			AsnPrintCharBlock("<!DOCTYPE ", aip);
-			AsnPrintString(GetXMLname(atp2), aip);
-			AsnPrintCharBlock(" SYSTEM \"ncbi.dtd\">", aip);
+			Char tbuf[250];
+			Char tname[100], pname[100];
+			CharPtr xmlname;
+
+			if (GetXMLModuleName(atp2, tname) == NULL)
+			{
+				StringMove(tname, "Not_Found");
+			}
+			MakeXMLPublicName(pname, tname);
+			xmlname = GetXMLname(atp2);
+			sprintf(tbuf, "<!DOCTYPE %s PUBLIC \"-//NCBI//%s/EN\" \"%s.dtd\">",
+				xmlname, pname, tname);
+			AsnPrintCharBlock(tbuf, aip);
 			AsnPrintNewLine(aip);
 		}
 	}
@@ -1569,6 +1645,116 @@ static void AsnPrintTopTypeXML (AsnIoPtr aip, AsnTypePtr atp)
 	return;
 }
 
+#define AMPMAX 50
+
+typedef struct modulelist {
+	Int2 num;    /* total number in list */
+	AsnModulePtr amps[AMPMAX];
+}ModuleList, PNTR ModuleListPtr;
+
+static AsnModulePtr AsnModuleFind (CharPtr modname)
+{
+	AsnModulePtr amp;
+
+	for (amp = AsnAllModPtr(); amp != NULL; amp = amp->next)
+	{
+		if (! StringCmp(amp->modulename, modname))
+			return amp;
+	}
+	return amp;
+}
+
+static void AsnModuleGetList (AsnModulePtr amp, ModuleListPtr mlp)
+{
+	Int2 i;
+	AsnTypePtr atp;
+	CharPtr from;
+	AsnModulePtr newmod;
+
+	for (i = 0; i < mlp->num; i++)
+	{
+		if (mlp->amps[i] == amp)  /* already have it */
+			return;
+	}
+
+	if (mlp->num == AMPMAX)
+	{
+		ErrPostEx(SEV_ERROR,0,0,"Exceeded %d amps in AsnModuleGetList",
+			  (int)(mlp->num));
+		return;
+	}
+
+	mlp->amps[mlp->num] = amp;
+	mlp->num++;
+
+	atp = amp->types;		    /* check for IMPORTS */
+	from = NULL;
+	while (atp != NULL)
+	{
+		if (atp->imported == TRUE)
+		{
+			if (StringCmp((CharPtr) atp->branch, from))    /* new FROM */
+			{
+				from = (CharPtr)(atp->branch);
+				newmod = AsnModuleFind(from);
+				if (newmod != NULL)
+					AsnModuleGetList(newmod, mlp);
+				else
+					ErrPostEx(SEV_ERROR,0,0,"Can't find module %s",
+						from);
+			}
+		}
+		atp = atp->next;
+	}
+
+	return;
+	
+}
+
+/**************************************************************************
+*
+*  AsnPrintModuleXMLInc (amp, name)
+*    prints the ENTITY includes for a DTD
+*
+**************************************************************************/
+NLM_EXTERN void AsnPrintModuleXMLInc (AsnModulePtr amp, CharPtr name)
+{
+	ModuleList ml;
+	CharPtr ptr;
+	Char buf[200], buf2[200];
+	FILE * fp;
+	Int2 i;
+	static char * f1 = "\n<!ENTITY %% %s_module PUBLIC \"-//NCBI//%s Module//EN\" \"%s.mod\">\n";
+	static char * f2 = "%%%s_module;\n";
+
+	ml.num = 0;
+
+	AsnModuleGetList(amp, &ml);
+
+	fp = FileOpen(name, "w");
+
+	fprintf(fp, "<!-- %s\n", name);
+	fprintf(fp, "  This file is built from a series of basic modules.\n");
+	fprintf(fp, "  The actual ELEMENT and ENTITY declarations are in the modules.\n");
+        fprintf(fp, "  This file is used to put them together.\n");
+	fprintf(fp, "-->\n");
+
+	fprintf(fp, f1, "NCBI_Entity", "NCBI Entity", "NCBI_Entity");
+	fprintf(fp, f2, "NCBI_Entity");
+
+	for (i = 0; i < ml.num; i++)
+	{
+		ptr = MakeXMLModuleName(ml.amps[i], buf);
+		ptr = MakeXMLPublicName(buf2, buf);
+		
+		fprintf(fp, f1, buf, buf2, buf);
+		fprintf(fp, f2, buf);
+	}
+
+	FileClose(fp);
+	return;
+}
+
 /*****************************************************************************
 *
 *   void AsnPrintModuleXML(amp, aip)
@@ -1589,6 +1775,7 @@ NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip)
 		aip->XMLModuleWritten = TRUE;
 		aip->token = ISMODULE_TOKEN;   /* signal to AsnPrintIndent */
 	
+		/**** now a separate module **
 		AsnPrintCharBlock("<!-- ======================== -->", aip);
 		AsnPrintNewLine(aip);
 		AsnPrintCharBlock("<!-- NCBI DTD                 -->", aip);
@@ -1615,6 +1802,7 @@ NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip)
 		AsnPrintCharBlock("<!-- ============================================ -->", aip);
 		AsnPrintNewLine(aip);
 		AsnPrintNewLine(aip);
+		*****************************/
 
 	}
 

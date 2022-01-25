@@ -50,7 +50,6 @@ with timeout of 60000 seconds
 	
 	DoSetGlobals()
 	
-	CreateCn3Dv3d()
 	if DOOPENGL = "TRUE" then
 		CreateCn3D()
 	end if
@@ -303,10 +302,6 @@ on CompilePrograms()
 			Close Project
 		end if
 		
-		open (BUILDTEST & "cn3dv3d" & SUFFIX & ".µ")
-		Make Project
-		Close Project
-		
 		open (BUILDTEST & "nentrez" & SUFFIX & ".µ")
 		Make Project
 		Close Project
@@ -373,7 +368,7 @@ on CreateNENTREZ()
 		
 		my AddLibraries()
 		
-		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
+		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
 			"netentr", "ncbibls3", "ncbiid1", "vibnet"}
 			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
 		end repeat
@@ -417,7 +412,7 @@ on CreateSEQUIN()
 		
 		my AddLibraries()
 		
-		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
+		repeat with i in {"ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
 			"netentr", "ncbibls3", "ncbimla", "ncbitxc2", "ncbiid1", "vibnet"}
 			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
 		end repeat
@@ -474,50 +469,6 @@ on CreateTBL2ASN()
 	end tell
 end CreateTBL2ASN
 
-on CreateCn3Dv3d()
-	tell application "CodeWarrior IDE 4.0.4"
-		
-		Create Project {BUILDTEST & "cn3dv3d" & SUFFIX & ".µ"}
-		
-		my DoSetPreferences()
-		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"net.pfx"}
-		
-		if MASTER = "PPC" then
-			Set Preferences of panel "PPC Project" to {Project Type:standard application, File Name:"cn3dv3d"}
-			Set Preferences of panel "PPC Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-			Set Preferences of panel "PPC Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
-		else if MASTER = "68K" then
-			Set Preferences of panel "68K Project" to {Project Type:standard application, File Name:"cn3dv3d"}
-			Set Preferences of panel "68K Project" to {SIZE Flags:22720, File Creator:"Cn3D", File Type:"APPL"}
-			Set Preferences of panel "68K Project" to {Preferred Size:12000, Minimum Size:5000, Stack Size:64}
-		end if
-		
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:LIBRARIES, origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cdromlib:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {System Paths:{{name:NCBISOURCE & "cn3d:", origin:absolute}}}
-		my DoSetPaths2()
-		
-		my AddLibraries()
-		
-		repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrant", "ncbidesk", "ncbimmdb", "ncbicn3d", "ncbitool", "netcli", Â
-			"netentr", "ncbibls3", "vibnet"}
-			Add Files {LIBRARIES & i & SUFFIX} To Segment 1
-		end repeat
-		
-		repeat with i in {"accentr", "accutils"}
-			Add Files {NCBISOURCE & "cdromlib:" & i & ".c"} To Segment 1
-		end repeat
-		
-		repeat with i in {"cn3dmain"}
-			Add Files {NCBISOURCE & "cn3d:" & i & ".c"} To Segment 1
-		end repeat
-		
-		Reset File Paths
-		Close Project
-		
-	end tell
-end CreateCn3Dv3d
-
 on CreateCn3D()
 	tell application "CodeWarrior IDE 4.0.4"
 		
@@ -549,7 +500,7 @@ on CreateCn3D()
 			
 			my AddLibraries()
 			
-			repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrantOGL", "ncbidesk", "ncbimmdb", "ncbicn3dOGL", "ncbitool", "netcli", Â
+			repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrantOGL", "ncbidesk", "ddvlib", "ncbimmdb", "ncbicn3dOGL", "ncbitool", "netcli", Â
 				"netentr", "vibnet"}
 				Add Files {LIBRARIES & i & SUFFIX} To Segment 1
 			end repeat

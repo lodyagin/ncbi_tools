@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.h,v $
+* Revision 6.20  2000/07/08 20:43:55  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.19  2000/04/13 13:57:33  durand
 * allowed udv to display reverse complement sequence
 *
@@ -89,10 +92,6 @@
 #ifndef _UDVSEQ_
 #define _UDVSEQ_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <explore.h>
 #include <ncbi.h>
 #include <objfdef.h>
@@ -100,6 +99,10 @@ extern "C" {
 #include <objseq.h>
 #include <seqport.h>
 #include <sequtil.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*******************************************************************************
 

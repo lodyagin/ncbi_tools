@@ -32,8 +32,29 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.31 $ 
+/* $Revision: 6.38 $ 
 * $Log: blast.h,v $
+* Revision 6.38  2000/10/31 16:30:58  shavirin
+* Function BLASTSetUpSearchInternalByLoc became external.
+*
+* Revision 6.37  2000/10/26 18:52:42  dondosha
+* Added prototype for MegaBlastPrintReference
+*
+* Revision 6.36  2000/10/24 19:00:39  dondosha
+* Removed UniqueLocalId() prototype - goes to sequtil.h
+*
+* Revision 6.35  2000/10/24 18:57:22  dondosha
+* Added prototype of UniqueLocalId(), removed from mblast.h
+*
+* Revision 6.34  2000/08/31 16:27:20  shavirin
+* Added definition of the function BlastSequenceBlkDestruct().
+*
+* Revision 6.33  2000/07/12 23:07:30  kans
+* reverse_seq moved from pseed3.c to blastool.c, placed in blast.h header, called by gapxdrop.c
+*
+* Revision 6.32  2000/07/07 21:20:07  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope!
+*
 * Revision 6.31  2000/06/20 15:50:45  shavirin
 * Added new functions: BLASTAddBlastDBTitleToSeqAnnot and
 * BLASTGetDatabaseTitleFromSeqAnnot().
@@ -314,12 +335,13 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
  * */
 #ifndef __BLAST__
 #define __BLAST__
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <ncbi.h>
 #include <blastdef.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
 	Call this function to allocate the "options" structure.  The
@@ -353,6 +375,7 @@ BlastSearchBlkPtr LIBCALL BLASTSetUpSearch PROTO((BioseqPtr query_bsp, CharPtr p
 
 BlastSearchBlkPtr LIBCALL BLASTSetUpSearchByLoc PROTO((SeqLocPtr query_slp, CharPtr prog_name, Int4 qlen, Int8 dblen, BlastAllWordPtr all_words, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *index_callback)PROTO((Int4 done, Int4 positives))));
 
+Int2 LIBCALL BLASTSetUpSearchInternalByLoc  PROTO((BlastSearchBlkPtr search, SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives))));
 /*
 	Use these function to perform the search.
 */
@@ -368,6 +391,9 @@ BLASTSubjectInfoPtr LIBCALL BLASTSubjectInfoDestruct PROTO((BLASTSubjectInfoPtr 
 void LIBCALL do_the_blast_run PROTO((BlastSearchBlkPtr search));
 
 Int2 LIBCALL BlastSequenceAddSequence PROTO((BlastSequenceBlkPtr sequence_blk, Uint1Ptr sequence, Uint1Ptr sequence_start, Int4 length, Int4 original_seq, Int4 effective_length));
+
+BlastSequenceBlkPtr LIBCALL
+BlastSequenceBlkDestruct PROTO((BlastSequenceBlkPtr seq_blk));
 
 void BLASTUpdateSeqIdInSeqInt(SeqLocPtr mask, SeqIdPtr sip);
 
@@ -425,6 +451,7 @@ CharPtr LIBCALL BlastGetVersionNumber PROTO((void));
 CharPtr LIBCALL BlastGetReference PROTO((Boolean html));
 
 Boolean LIBCALL BlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
+Boolean LIBCALL MegaBlastPrintReference PROTO((Boolean html, Int4 line_length, FILE *outfp));
 
 CharPtr LIBCALL BlastGetPhiReference PROTO((Boolean html));
 
@@ -471,6 +498,8 @@ Int2 DefineToFrame PROTO((Uint1 define));
 CharPtr BLASTGetDatabaseTitleFromSeqAnnot PROTO((SeqAnnotPtr seqannot));
 void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot, 
                                            CharPtr title));
+
+Int4 reverse_seq (Uint1 *seq, Uint1 *pos, Uint1 *target);
 
 #ifdef OS_UNIX
 Boolean HeyIAmInMemory(Int4 program);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.19 $
+* $Revision: 6.24 $
 *
 * File Description: 
 *
@@ -53,6 +53,9 @@
 #include <objfeat.h>
 #include <objseq.h>
 #include <toasn3.h>
+#ifdef WIN_MOTIF
+#include <netscape.h>
+#endif
 
 typedef struct datepage {
   DIALOG_MESSAGE_BLOCK
@@ -1215,6 +1218,41 @@ extern DialoG CreateImportFields (GrouP h, CharPtr name, SeqFeatPtr sfp, Boolean
   return (DialoG) p;
 }
 
+static void ChangeCannedMessage (PopuP p)
+
+{
+  FeatureFormPtr  ffp;
+  Int2            val;
+
+  ffp = (FeatureFormPtr) GetObjectExtra (p);
+  if (ffp == NULL) return;
+  val = GetValue (p);
+  switch (val) {
+    case 1 :
+      if (Message (MSG_YN, "Clear the explanation field?") == ANS_YES) {
+        SetTitle (ffp->exceptText, "");
+        if (Message (MSG_YN, "Clear the exception flag?") == ANS_YES) {
+          SetStatus (ffp->exception, FALSE);
+        }
+      }
+      break;
+    case 2 :
+      SetTitle (ffp->exceptText, "RNA editing");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    case 3 :
+      SetTitle (ffp->exceptText, "reasons cited in publication");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    case 4 :
+      SetTitle (ffp->exceptText, "ribosomal slippage");
+      SetStatus (ffp->exception, TRUE);
+      break;
+    default :
+      break;
+  }
+}
+
 static CharPtr crossRefWarn =
 "A gene mapped by cross-reference does not extend the range\n\
 of the indicated gene feature.  Overlap is the usual case, and\n\
@@ -1253,6 +1291,7 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
 {
   ButtoN   b;
   GrouP    c;
+  PopuP    canned;
   Boolean  cdsQuals;
   GrouP    f;
   GrouP    g;
@@ -1322,12 +1361,34 @@ extern GrouP CreateCommonFeatureGroup (GrouP h, FeatureFormPtr ffp,
     PopupItem (ffp->evidence, "Non-Experimental");
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->partial,
                   (HANDLE) ffp->evidence, (HANDLE) pseudo, NULL);
-    r = HiddenGroup (f, 4, 0, NULL);
+    r = HiddenGroup (f, -3, 0, NULL);
     ffp->exception = CheckBox (r, "Exception", NULL);
     StaticPrompt (r, "Explanation", 0, dialogTextHeight, programFont, 'l');
     ffp->exceptText = DialogText (r, "", 12, NULL);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) ffp->exception,
                  (HANDLE) ffp->exceptText, NULL);
+    if (ffp->this_subtype == FEATDEF_CDS) {
+      StaticPrompt (r, "Standard explanation", 0, popupMenuHeight, programFont, 'l');
+      canned = PopupList (r, TRUE, ChangeCannedMessage);
+      SetObjectExtra (canned, (Pointer) ffp, NULL);
+      PopupItem (canned, " ");
+      PopupItem (canned, "RNA editing");
+      PopupItem (canned, "reasons cited in publication");
+      PopupItem (canned, "ribosomal slippage");
+      if (sfp != NULL && sfp->excpt) {
+        if (StringICmp (sfp->except_text, "RNA editing") == 0) {
+          SetValue (canned, 2);
+        } else if (StringICmp (sfp->except_text, "reasons cited in publication") == 0) {
+          SetValue (canned, 3);
+        } else if (StringICmp (sfp->except_text, "ribosomal slippage") == 0) {
+          SetValue (canned, 4);
+        } else if (StringICmp (sfp->except_text, "ribosome slippage") == 0) {
+          SetValue (canned, 4);
+        }
+      } else {
+        SetValue (canned, 1);
+      }
+    }
 
     if (cdsQuals) {
       /*
@@ -2411,5 +2472,37 @@ extern Int2 LIBCALLBACK StdVibrantEditorMsgFunc (OMMsgStructPtr ommsp)
       break;
   }
   return OM_MSG_RET_OK;
+}
+
+/* launch url section */
+
+NLM_EXTERN void LaunchEntrezURL (CharPtr database, Int4 uid, CharPtr format)
+
+{
+#ifdef WIN_MOTIF
+  NS_Window  window = NULL;
+#endif
+
+  Char  url [256];
+
+  if (uid < 1 || StringHasNoText (database) || StringHasNoText (format)) return;
+  sprintf (url,
+           "http://www.ncbi.nlm.nih.gov:80/entrez/query.fcgi?cmd=Retrieve&db=%s&list_uids=%ld&dopt=%s",
+            database, (long) uid, format);
+
+#ifdef WIN_MAC
+  Nlm_SendURLAppleEvent (url, "MOSS", NULL);
+#endif
+#ifdef WIN_MSWIN
+  if (! Nlm_MSWin_OpenDocument (url)) {
+    Message (MSG_POST, "Unable to launch browser");
+  }
+#endif
+#ifdef WIN_MOTIF
+  if (! NS_OpenURL (&window, url, NULL, TRUE)) {
+    Message (MSG_POST, "Unable to launch browser");
+  }
+  NS_WindowFree (window);
+#endif
 }
 

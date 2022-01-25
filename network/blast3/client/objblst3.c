@@ -32,7 +32,7 @@ objblst3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.9 at Jun 7, 2000 12:58 PM
+*    Generated using ASNCODE Revision: 6.9 at Sep 15, 2000  3:06 PM
 *
 **************************************************/
 
@@ -71,6 +71,7 @@ BlastSearchFree(BlastSearchPtr ptr)
    BlastParametersFree(ptr -> parameters);
    SeqLocFree(ptr -> mask);
    BlastMatrixFree(ptr -> matrix);
+   BioseqSetFree(ptr -> query_set);
    return MemFree(ptr);
 }
 
@@ -171,6 +172,13 @@ BlastSearchAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> return_parts = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_SEARCH_query_set) {
+      ptr -> query_set = BioseqSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -250,6 +258,11 @@ BlastSearchAsnWrite(BlastSearchPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    av.boolvalue = ptr -> return_parts;
    retval = AsnWrite(aip, BLAST_SEARCH_return_parts,  &av);
+   if (ptr -> query_set != NULL) {
+      if ( ! BioseqSetAsnWrite(ptr -> query_set, aip, BLAST_SEARCH_query_set)) {
+         goto erret;
+      }
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -607,6 +620,9 @@ BlastResponseFree(ValNodePtr anp)
    case BlastResponse_parts:
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) BlastPartsFree);
       break;
+   case BlastResponse_mbalign:
+      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) MegaBlastHitFree);
+      break;
    }
    return MemFree(anp);
 }
@@ -768,6 +784,14 @@ BlastResponseAsnRead(AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   else if (atp == BLAST_RESPONSE_mbalign) {
+      choice = BlastResponse_mbalign;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) MegaBlastHitAsnRead,             (AsnOptFreeFunc) MegaBlastHitFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -905,6 +929,9 @@ BlastResponseAsnWrite(BlastResponsePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case BlastResponse_parts:
       retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) BlastPartsAsnWrite, aip, BLAST_RESPONSE_parts, BLAST_RESPONSE_parts_E);
       break;
+   case BlastResponse_mbalign:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) MegaBlastHitAsnWrite, aip, BLAST_RESPONSE_mbalign, BLAST_RESPONSE_mbalign_E);
+      break;
    }
    if (writetype != NULL) {
       retval = (* func)(pnt, aip, writetype);   /* write it out */
@@ -958,6 +985,7 @@ BlastParametersFree(BlastParametersPtr ptr)
    MemFree(ptr -> filter_string);
    MemFree(ptr -> entrez_query);
    MemFree(ptr -> phi_pattern);
+   AsnGenericChoiceSeqOfFree(ptr -> query_lcase_mask, (AsnOptFreeFunc) SeqLocFree);
    return MemFree(ptr);
 }
 
@@ -1293,6 +1321,27 @@ BlastParametersAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> smith_waterman = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == BLAST_PARAMETERS_is_megablast) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_megablast = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_query_lcase_mask) {
+      ptr -> query_lcase_mask = AsnGenericChoiceSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) SeqLocAsnRead, (AsnOptFreeFunc) SeqLocFree);
+      if (isError && ptr -> query_lcase_mask == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == BLAST_PARAMETERS_is_ooframe) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_ooframe = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1522,6 +1571,11 @@ BlastParametersAsnWrite(BlastParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, BLAST_PARAMETERS_tweak_parameters,  &av);
    av.boolvalue = ptr -> smith_waterman;
    retval = AsnWrite(aip, BLAST_PARAMETERS_smith_waterman,  &av);
+   av.boolvalue = ptr -> is_megablast;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_is_megablast,  &av);
+   AsnGenericChoiceSeqOfAsnWrite(ptr -> query_lcase_mask, (AsnWriteFunc) SeqLocAsnWrite, aip, BLAST_PARAMETERS_query_lcase_mask, BLAST_PARAMETERS_query_lcase_mask_E);
+   av.intvalue = ptr -> is_ooframe;
+   retval = AsnWrite(aip, BLAST_PARAMETERS_is_ooframe,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4158,6 +4212,374 @@ BlastVersionAsnWrite(BlastVersionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> date != NULL) {
       av.ptrvalue = ptr -> date;
       retval = AsnWrite(aip, BLAST_VERSION_date,  &av);
+   }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    MegaBlastHitNew()
+*
+**************************************************/
+NLM_EXTERN 
+MegaBlastHitPtr LIBCALL
+MegaBlastHitNew(void)
+{
+   MegaBlastHitPtr ptr = MemNew((size_t) sizeof(MegaBlastHit));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    MegaBlastHitFree()
+*
+**************************************************/
+NLM_EXTERN 
+MegaBlastHitPtr LIBCALL
+MegaBlastHitFree(MegaBlastHitPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   MemFree(ptr -> id1);
+   MemFree(ptr -> id2);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    MegaBlastHitAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+MegaBlastHitPtr LIBCALL
+MegaBlastHitAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   MegaBlastHitPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* MegaBlastHit ::= (self contained) */
+      atp = AsnReadId(aip, amp, MEGABLAST_HIT);
+   } else {
+      atp = AsnLinkType(orig, MEGABLAST_HIT);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = MegaBlastHitNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == MEGABLAST_HIT_id1) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> id1 = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_id2) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> id2 = av.ptrvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_query_offset) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> query_offset = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_subject_offset) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> subject_offset = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_query_end) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> query_end = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_subject_end) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> subject_end = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == MEGABLAST_HIT_score) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> score = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = MegaBlastHitFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    MegaBlastHitAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+MegaBlastHitAsnWrite(MegaBlastHitPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, MEGABLAST_HIT);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> id1 != NULL) {
+      av.ptrvalue = ptr -> id1;
+      retval = AsnWrite(aip, MEGABLAST_HIT_id1,  &av);
+   }
+   if (ptr -> id2 != NULL) {
+      av.ptrvalue = ptr -> id2;
+      retval = AsnWrite(aip, MEGABLAST_HIT_id2,  &av);
+   }
+   av.intvalue = ptr -> query_offset;
+   retval = AsnWrite(aip, MEGABLAST_HIT_query_offset,  &av);
+   av.intvalue = ptr -> subject_offset;
+   retval = AsnWrite(aip, MEGABLAST_HIT_subject_offset,  &av);
+   av.intvalue = ptr -> query_end;
+   retval = AsnWrite(aip, MEGABLAST_HIT_query_end,  &av);
+   av.intvalue = ptr -> subject_end;
+   retval = AsnWrite(aip, MEGABLAST_HIT_subject_end,  &av);
+   av.intvalue = ptr -> score;
+   retval = AsnWrite(aip, MEGABLAST_HIT_score,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    SeqAlignSetListNew()
+*
+**************************************************/
+NLM_EXTERN 
+SeqAlignSetListPtr LIBCALL
+SeqAlignSetListNew(void)
+{
+   SeqAlignSetListPtr ptr = MemNew((size_t) sizeof(SeqAlignSetList));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    SeqAlignSetListFree()
+*
+**************************************************/
+NLM_EXTERN 
+SeqAlignSetListPtr LIBCALL
+SeqAlignSetListFree(SeqAlignSetListPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   SeqAlignSetFree(ptr -> align);
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    SeqAlignSetListAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+SeqAlignSetListPtr LIBCALL
+SeqAlignSetListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   SeqAlignSetListPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* SeqAlignSetList ::= (self contained) */
+      atp = AsnReadId(aip, amp, SEQ_ALIGN_SET_LIST);
+   } else {
+      atp = AsnLinkType(orig, SEQ_ALIGN_SET_LIST);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = SeqAlignSetListNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == SEQ_ALIGN_SET_LIST_align) {
+      ptr -> align = SeqAlignSetAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = SeqAlignSetListFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    SeqAlignSetListAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+SeqAlignSetListAsnWrite(SeqAlignSetListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objblst3AsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, SEQ_ALIGN_SET_LIST);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   if (ptr -> align != NULL) {
+      if ( ! SeqAlignSetAsnWrite(ptr -> align, aip, SEQ_ALIGN_SET_LIST_align)) {
+         goto erret;
+      }
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

@@ -29,13 +29,34 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.67 $
+* $Revision: 6.74 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.74  2000/07/28 21:05:54  lewisg
+* more c++ fixes
+*
+* Revision 6.73  2000/07/27 16:34:46  lewisg
+* more c++ fixes
+*
+* Revision 6.72  2000/07/27 13:37:31  lewisg
+* more c++ fixes
+*
+* Revision 6.71  2000/07/25 12:38:26  thiessen
+* change C++-style comments to C
+*
+* Revision 6.70  2000/07/24 22:31:21  thiessen
+* fix header conflict
+*
+* Revision 6.69  2000/07/22 20:13:42  thiessen
+* fix header conflict
+*
+* Revision 6.68  2000/07/21 18:55:58  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.67  2000/05/16 17:38:44  thiessen
 * do glGenLists after context init on X11 - for Mesa 3.2
 *
@@ -968,6 +989,7 @@ typedef struct _TransparentSphereData {
     Nlm_Int4 slices, stacks;
     Nlm_Int1 layer;
     Nlm_VoidPtr name;
+    ValNodePtr transforms;
     struct _TransparentSphereData *next;
 } TransparentSphereData, PNTR TransparentSphereDataPtr;
 
@@ -996,14 +1018,20 @@ static void OGL_RenderTransparentSpheres(TOGL_Data *OGL_Data)
     if (OGL_Data && OGL_transSpheresHead) {
         TransparentSphereDataPtr sph;
         int i, n, iList;
-        GLdouble *m = (GLdouble *) OGL_Data->ModelMatrix;
+        GLdouble m[16];
         Nlm_FloatHi x, y, z;
         Nlm_Boolean show;
 
         /* make an array of pointers to sphere data; sort by distance from camera */
         for (n=0, sph=OGL_transSpheresHead; sph; n++, sph = sph->next) {
-            x = m[0]*sph->x + m[4]*sph->y +  m[8]*sph->z + m[12];
-            y = m[1]*sph->x + m[5]*sph->y +  m[9]*sph->z + m[13];
+
+            /* transform model's xyz into GL-frame coordinates */
+            OGL_PushTransformation(sph->transforms);
+            glGetDoublev(GL_MODELVIEW_MATRIX, m);
+            OGL_PopTransformation();
+
+            x = m[0]*sph->x + m[4]*sph->y + m[8]*sph->z + m[12];
+            y = m[1]*sph->x + m[5]*sph->y + m[9]*sph->z + m[13];
             z = m[2]*sph->x + m[6]*sph->y + m[10]*sph->z + m[14];
             sph->distFromCamera =
                 sqrt((x * x) + (y * y) +
@@ -1011,6 +1039,7 @@ static void OGL_RenderTransparentSpheres(TOGL_Data *OGL_Data)
                       (z - OGL_Data->CameraDistance)))
                 - sph->radius;
         }
+
         if (!OGL_transSpheresList) {
             OGL_transSpheresList = (TransparentSphereDataPtr *)
                 MemNew(n * sizeof(TransparentSphereDataPtr));
@@ -1048,12 +1077,12 @@ static void OGL_RenderTransparentSpheres(TOGL_Data *OGL_Data)
                 OGL_LoadName(OGL_transSpheresList[i]->name);
                 OGL_SetColor(OGL_Data, &(OGL_transSpheresList[i]->color),
                              GL_DIFFUSE, OGL_transSpheresList[i]->alpha);
-                glPushMatrix();
+                OGL_PushTransformation(OGL_transSpheresList[i]->transforms);
                 glTranslated(OGL_transSpheresList[i]->x, OGL_transSpheresList[i]->y,
                              OGL_transSpheresList[i]->z);
                 gluSphere(OGL_qobj, OGL_transSpheresList[i]->radius,
                           OGL_transSpheresList[i]->slices, OGL_transSpheresList[i]->stacks);
-                glPopMatrix();
+                OGL_PopTransformation();
             }
         }
 
@@ -1071,7 +1100,7 @@ static Nlm_Int1 OGL_currentLayer;
 static void OGL_AddTransparentSphere(DDV_ColorCell * color,
                      Nlm_FloatHi x, Nlm_FloatHi y, Nlm_FloatHi z,
                      Nlm_FloatHi radius, Nlm_Int4 slices, Nlm_Int4 stacks,
-                     Nlm_FloatHi alpha, Nlm_VoidPtr name)
+                     Nlm_FloatHi alpha, Nlm_VoidPtr name, ValNodePtr transforms)
 {
     TransparentSphereDataPtr newSphere = (TransparentSphereDataPtr)
         MemNew(sizeof(TransparentSphereData));
@@ -1080,6 +1109,7 @@ static void OGL_AddTransparentSphere(DDV_ColorCell * color,
         newSphere->x = x;
         newSphere->y = y;
         newSphere->z = z;
+        newSphere->transforms = transforms;
         newSphere->radius = radius;
         newSphere->slices = slices;
         newSphere->stacks = stacks;
@@ -1114,7 +1144,7 @@ void OGL_ClearTransparentSpheres(void)
 void OGL_AddSphere3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                      Nlm_FloatHi x, Nlm_FloatHi y, Nlm_FloatHi z,
                      Nlm_FloatHi radius, Nlm_Int4 slices, Nlm_Int4 stacks,
-                     Nlm_FloatHi alpha)
+                     Nlm_FloatHi alpha, ValNodePtr transforms)
                       /* draws a sphere */
 {
 #ifdef DEBUG_GL
@@ -1126,7 +1156,7 @@ void OGL_AddSphere3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 
     if(!OGL_Data->IndexMode && alpha < 1.0) /* no transparency in index mode */
         OGL_AddTransparentSphere(color, x, y, z, radius, slices, stacks,
-                                 alpha, OGL_CurrentName);
+                                 alpha, OGL_CurrentName, transforms);
     else {
         OGL_SetColor(OGL_Data, color, GL_DIFFUSE, 1.0);
         glPushMatrix();
@@ -1171,6 +1201,37 @@ void OGL_AddText3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
     glListBase(0);
 }
 
+
+void OGL_PushTransformation(ValNodePtr transforms)
+{
+    FloatLoPtr pflv;
+    FloatLoPtr *ppflm;
+    GLfloat xmat[16];
+
+    glPushMatrix();
+
+    while (transforms) {
+        if (transforms->choice == 2) { /* Move_translate */
+            pflv = (FloatLoPtr) transforms->data.ptrvalue;
+            glTranslatef(pflv[0], pflv[1], pflv[2]);
+
+        } else if (transforms->choice == 1) { /* Move_rotate */
+            ppflm = (FloatLoPtr *) transforms->data.ptrvalue;
+            xmat[0]=ppflm[0][0]; xmat[4]=ppflm[1][0]; xmat[8]= ppflm[2][0]; xmat[12]=0;
+            xmat[1]=ppflm[0][1]; xmat[5]=ppflm[1][1]; xmat[9]= ppflm[2][1]; xmat[13]=0;
+            xmat[2]=ppflm[0][2]; xmat[6]=ppflm[1][2]; xmat[10]=ppflm[2][2]; xmat[14]=0;
+            xmat[3]=0;           xmat[7]=0;           xmat[11]=0;           xmat[15]=1;
+            glMultMatrixf(xmat);
+        }
+
+        transforms = transforms->next;
+    }
+}
+
+void OGL_PopTransformation(void)
+{
+    glPopMatrix();
+}
 
 /*
 *   Functions used to manage display lists
@@ -2081,7 +2142,7 @@ static char *standardXFont = "9x15";
 #endif
 
 /* called during app initialization, to set up font family menu */
-void Nlm_FindAvailableFonts(Nlm_PopuP pupmenu)
+NLM_EXTERN void Nlm_FindAvailableFonts(Nlm_PopuP pupmenu)
 {
 #if defined(WIN32)
     LOGFONT lf;
@@ -2154,19 +2215,14 @@ void Nlm_FindAvailableFonts(Nlm_PopuP pupmenu)
     XFreeFontNames(list);
 #endif
 }
-extern void Nlm_GetCurrentOGLFontMenuSettings(Nlm_Int2 *font, Nlm_Int2 *size,
-    Nlm_Boolean *isBold, Nlm_Boolean *isItalaic, Nlm_Boolean *isUnderlined);
 
-void SetOGLFont(TOGL_Data *OGL_Data)
+NLM_EXTERN void SetOGLFont(TOGL_Data *OGL_Data, Nlm_Int2 fontNameIndex, Nlm_Int2 fontSize,
+    Nlm_Boolean isBold, Nlm_Boolean isItalic, Nlm_Boolean isUnderlined)
 {
     static Nlm_Int2 currentIndex = -1, currentSize = -1;
     static Nlm_Boolean currentBold = FALSE, currentItalic = FALSE,
                        currentUnderlined = FALSE;
-    Nlm_Int2 fontNameIndex, fontSize;
-    Nlm_Boolean isBold, isItalic, isUnderlined;
 
-    Nlm_GetCurrentOGLFontMenuSettings(&fontNameIndex, &fontSize, &isBold,
-                                      &isItalic, &isUnderlined);
     fontNameIndex--; /* vibrant menus start at one */
     if (fontNameIndex == currentIndex && currentSize == fontSize &&
         isBold == currentBold && isItalic == currentItalic &&
@@ -2363,7 +2419,8 @@ TOGL_Data *OGL_CreateViewer(Nlm_GrouP prnt,
                                              OGL_ViewerHScrollProc : NULL),
                                             sizeof(MAPtr),
                                             OGL_ResetViewerProc_CB, NULL,
-                                            &OGL_Data->IndexMode);
+                                            &OGL_Data->IndexMode, &OGL_Data->display,
+                                            &OGL_Data->visinfo);
 
 
     if (flags & Z_ROTATE_SBAR) {

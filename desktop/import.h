@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: 
 *
@@ -45,11 +45,12 @@
 #ifndef _IMPORT_
 #define _IMPORT_
 
+#include <dlogutil.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <dlogutil.h>
 
 #define REGISTER_IMPORT_EDIT(PROCNAME,PROCLABEL,SUBTYPE) ObjMgrProcLoad(OMPROC_EDIT,PROCNAME,PROCLABEL,OBJ_SEQFEAT,SUBTYPE,OBJ_SEQFEAT,SUBTYPE,NULL,ImportGenFunc,PROC_PRIORITY_DEFAULT)
 

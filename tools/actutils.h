@@ -1,4 +1,5 @@
-/* ===========================================================================
+/* $Id: actutils.h,v 6.8 2000/09/06 18:06:04 sicotte Exp $
+ *===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
 *            National Center for Biotechnology Information (NCBI)
@@ -28,13 +29,22 @@
 *
 * Version Creation Date:   2/00
 *
-* $Revision: 6.5 $
+* $Revision: 6.8 $
 *
 * File Description: utility functions for alignments
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: actutils.h,v $
+* Revision 6.8  2000/09/06 18:06:04  sicotte
+* Add End gaps for sequin updates
+*
+* Revision 6.7  2000/08/28 16:19:14  sicotte
+* moved AlnMgrSeqAlignMergeTwoPairwiseEx AlnMgrSeqAlignMergeTwoPairwise AlnMgrSeqAlignMergePairwiseSet to actutils.c from alignmgr.c
+*
+* Revision 6.6  2000/07/08 20:44:11  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.5  2000/05/04 16:45:20  wheelan
 * changes to profile builder to accomodate IBMed BLAST results
 *
@@ -56,6 +66,13 @@
 #ifndef __ACTUTILS__
 #define __ACTUTILS__
 
+#include <ncbi.h>
+#include <objalign.h>
+#include <alignmgr.h>
+#include <sqnutils.h>
+#include <bandalgn.h>
+#include <needleman.h>
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -66,11 +83,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ncbi.h>
-#include <alignmgr.h>
-#include <sqnutils.h>
-#include <bandalgn.h>
 
 #define CG_WINDOWSIZE 200
 
@@ -172,6 +184,12 @@ NLM_EXTERN SeqAlignPtr ACT_GlobalAlignSimple(BioseqPtr bsp1, BioseqPtr bsp2,
 NLM_EXTERN SeqAlignPtr ACT_GlobalAlignTwoSeq(BioseqPtr bsp1, BioseqPtr bsp2);
 NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuous(SeqAlignPtr sap);
 NLM_EXTERN SeqAlignPtr AlnMgrForcePairwiseContinuousEx(SeqAlignPtr sap, Int4 start_1, Int4 stop_1, Int4 start_2, Int4 stop_2);
+
+NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwiseEx(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master, Uint1 strand_master, Uint1 strand_subject, Int4 startm1,Int4 stopm1, Int4 start1, Int4 stop1,Int4 startm2,Int4 stopm2, Int4 start2, Int4 stop2);
+NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignLocalToGlobal(SeqAlignPtr sap);
+NLM_EXTERN SeqAlignPtr AlnMgrSeqAlignMergeTwoPairwise(SeqAlignPtr sap_global,SeqAlignPtr salp1,SeqAlignPtr salp2,Int4 which_master);
+NLM_EXTERN Int4 AlnMgrSeqAlignMergePairwiseSet(SeqAlignPtr PNTR sap_ptr);
+
 
 #ifdef __cplusplus
 }

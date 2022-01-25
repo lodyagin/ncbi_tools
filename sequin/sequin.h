@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *
@@ -44,10 +44,6 @@
 
 #ifndef _SEQUIN_
 #define _SEQUIN_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #ifdef INTERNAL_NCBI_SEQUIN
 #ifndef EXTRA_SERVICES
@@ -90,6 +86,12 @@ extern "C" {
 #include <bspview.h>
 #include <objproj.h>
 #include <urlquery.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 
 #define SEQ_PKG_SINGLE        1
 #define SEQ_PKG_SEGMENTED     2
@@ -386,6 +388,7 @@ extern void ParseInMoreProteins (IteM i);
 extern void ParseInNucUpdates (IteM i);
 extern void ParseInOligoPrimers (IteM i);
 extern void ParseInMoreMRNAs (IteM i);
+extern void ParseInProteinsInOrder (IteM i);
 
 extern void AutoParseFeatureTableProc (IteM i);
 
@@ -440,7 +443,7 @@ extern void MakeSearchStringFromAlist (CharPtr str, CharPtr name);
 extern void AddToSubSource (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
 extern void AddToOrgMod (BioSourcePtr biop, CharPtr title, CharPtr label, Uint1 subtype);
 extern Boolean AutomaticProteinProcess (SeqEntryPtr esep, SeqEntryPtr psep,
-                                        Int2 code, Boolean makeMRNA);
+                                        Int2 code, Boolean makeMRNA, BioseqPtr forceTarget);
 
 extern CharPtr repackageMsg;
 extern BioseqPtr  updateTargetBspKludge;

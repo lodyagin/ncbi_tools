@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/16/95
 *
-* $Revision: 1.2 $
+* $Revision: 1.4 $
 *
 * File Description: 
 *       Header file to patch around constructs which the "ASNCODE" generator
@@ -46,6 +46,12 @@
 *
 * RCS Modification History:
 * $Log: blastpat.h,v $
+* Revision 1.4  2000/08/28 16:38:09  kans
+* included objsset.h
+*
+* Revision 1.3  2000/08/28 16:30:02  dondosha
+* Added one #define
+*
 * Revision 1.2  1999/08/19 17:39:11  shavirin
 * Added typedef for SeqAlign.
 *
@@ -68,6 +74,7 @@
 
 #include <objalign.h>
 #include <objseq.h>
+#include <objsset.h>
  
 #define NLM_EXTERN_LOADS { SeqAlignAsnLoad(); }
  
@@ -78,4 +85,5 @@
 
 #define struct_Bioseq    bioseq
 #define struct_Seq_align seqalign
+#define struct_Bioseq_set seqset
 

@@ -31,8 +31,17 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.8 $ 
+/* $Revision: 6.12 $ 
 * $Log: gapxdrop.h,v $
+* Revision 6.12  2000/08/08 21:46:20  shavirin
+* Added boolean discontinuous to GapAlignBlk and GapXEditBlock
+*
+* Revision 6.11  2000/07/17 15:26:06  shavirin
+* Added parameter to function OOFGapXEditBlockToSeqAlign().
+*
+* Revision 6.10  2000/07/11 20:49:07  shavirin
+* Added all major functions for Out-Of-Frame alignment.
+*
 * Revision 6.8  2000/05/16 18:36:15  dondosha
 * Added prototype for GXECollectDataForSeqalign
 *
@@ -116,14 +125,14 @@ Contents: prototypes to perform a gapped alignment on two sequences.
 
 #ifndef __GAPXDROP__
 #define __GAPXDROP__
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
 #include <ncbi.h>
 #include <readdb.h>
 #include <sequtil.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define CODON_LENGTH 3
 
@@ -139,18 +148,16 @@ typedef struct gapx_edit_script {
 } GapXEditScript, PNTR GapXEditScriptPtr;
 
 typedef struct gapx_edit_block {
-	Int4	start1,		/* starts of alignments. */
-		start2,	
-		length1,	/* total lengths of the sequences. */
-		length2,
-		original_length1,	/* Untranslated lengths of the sequences. */
-		original_length2;	
-	Int2	frame1,		/* frames of the sequences. */
-		frame2;
-	Boolean translate1,	/* are either of these be translated. */
-		translate2;
-	Boolean reverse;	/* reverse sequence 1 and 2 when producing SeqALign? */
-	GapXEditScriptPtr esp;
+    Int4 start1,  start2,       /* starts of alignments. */
+        length1, length2,       /* total lengths of the sequences. */
+        original_length1,	/* Untranslated lengths of the sequences. */
+        original_length2;	
+    Int2 frame1, frame2;	    /* frames of the sequences. */
+    Boolean translate1,	translate2; /* are either of these be translated. */
+    Boolean reverse;	/* reverse sequence 1 and 2 when producing SeqALign? */
+    Boolean is_ooframe; /* Is this out_of_frame edit block? */
+    Boolean discontinuous; /* Is this OK to produce discontinuous SeqAlign? */
+    GapXEditScriptPtr esp;
 } GapXEditBlock, PNTR GapXEditBlockPtr;
 
 /*
@@ -182,58 +189,63 @@ typedef struct _state_array_struct {
 */
 
 typedef struct _gapalign_blk {
-/* 
-The following must be supplied by caller.
-*/
-	Uint1Ptr query,		/* The query sequence. */
-		 subject;	/* The subject sequence. */
-	Int4	query_length,	/* the length of the query. */
-		subject_length,	/* The subject length. */
-		q_start,	/* query letter to start the gapped align. */
-		s_start,	/* subject letter to start the gapped align.*/ 
-		include_query,	/* length of query (starting from q_start) that 
-				   MUST be included in an alignment. */
-		gap_open,	/* Cost to open a gap. */
-		gap_extend,	/* cost to extend a gap. */
-		decline_align,  /* decline to align penalty */
-		x_parameter;	/* values of X-dropoff parameter. */	
-	Int4Ptr PNTR matrix;	/* Matrix for the alignment. */
-	Int4Ptr PNTR posMatrix;	/* Matrix for position-based searches. */
-	Boolean translate1,	/* are either of these be translated. */
-		translate2;
-/*
-The state, state_column_length, and state_row_length are used by ALIGN.
-If state is NULL, then ALIGN allocates a memory block and frees it before
-returning (for "call and forget" applications).
-*/
-	GapXDropStateArrayStructPtr state_struct;
-/* 
-The score, start, and stop of alignments are filled in by the
-functions PerformGappedAlignment and PerformGappedAlignmentWithTraceback
-*/
-	Int4	score, 		/* score of alignment. */
-		query_start,	/* start of alignment on query. */
-		query_stop,	/* end of alignment on query. */
-		subject_start,	/* start of alignment on subject. */
-		subject_stop;	/* end of alignment on subject. */
-	Int2	query_frame,	/* Frame of the query (0 is no-frame) */
-		subject_frame;	/* Frame of the subject (0 is no-frame). */
-/* 
-   GapXEditBlockPtr filled in by PerformGappedAlignmentWithTraceback, used
-   to make a SeqAlignPtr. 
-*/
-	GapXEditBlockPtr edit_block;
-/* Another TLM kludge for display. */
-        Int4Ptr tback;
-/*	Is the search position based. */
-	Boolean positionBased;
-	Boolean posConverged;
+    /* 
+       The following must be supplied by caller.
+    */
+    Uint1Ptr query,		/* The query sequence. */
+        subject;	/* The subject sequence. */
+    Int4	query_length,	/* the length of the query. */
+        subject_length,	/* The subject length. */
+        q_start,	/* query letter to start the gapped align. */
+        s_start,	/* subject letter to start the gapped align.*/ 
+        include_query,	/* length of query (starting from q_start) that 
+                           MUST be included in an alignment. */
+        gap_open,	/* Cost to open a gap. */
+        gap_extend,	/* cost to extend a gap. */
+        decline_align,  /* decline to align penalty */
+        x_parameter,	/* values of X-dropoff parameter. */	
+        shift_pen;      /* penalty for the frame shift */
+    Int4Ptr PNTR matrix;	/* Matrix for the alignment. */
+    Int4Ptr PNTR posMatrix;	/* Matrix for position-based searches. */
+    Boolean translate1,	/* are either of these be translated. */
+        translate2;
+
+    /*
+      The state, state_column_length, and state_row_length are used by ALIGN.
+      If state is NULL, then ALIGN allocates a memory block and frees it before
+      returning (for "call and forget" applications).
+    */
+    GapXDropStateArrayStructPtr state_struct;
+    /* 
+       The score, start, and stop of alignments are filled in by the
+       functions PerformGappedAlignment and PerformGappedAlignmentWithTraceback
+    */
+    Int4	score, 		/* score of alignment. */
+        query_start,	/* start of alignment on query. */
+        query_stop,	/* end of alignment on query. */
+        subject_start,	/* start of alignment on subject. */
+        subject_stop;	/* end of alignment on subject. */
+    Int2	query_frame,	/* Frame of the query (0 is no-frame) */
+        subject_frame;	/* Frame of the subject (0 is no-frame). */
+    /* 
+       GapXEditBlockPtr filled in by PerformGappedAlignmentWithTraceback, used
+       to make a SeqAlignPtr. 
+    */
+    GapXEditBlockPtr edit_block;
+    /* Another TLM kludge for display. */
+    Int4Ptr tback;
+    /*	Is the search position based. */
+    Boolean positionBased;
+    Boolean posConverged;
+    Boolean is_ooframe;
+    Boolean discontinuous;
 } GapAlignBlk, PNTR GapAlignBlkPtr;
 
 GapXDropStateArrayStructPtr GapXDropStateDestroy PROTO((GapXDropStateArrayStructPtr state_struct));
 
 
 SeqAlignPtr LIBCALL GapXEditBlockToSeqAlign PROTO((GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdPtr query_id));
+SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign PROTO((GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdPtr query_id, Int4 query_length));
 
 GapXEditBlockPtr LIBCALL SimpleIntervalToGapXEditBlock PROTO((Int4 start1, Int4 start2, Int4 length));
 

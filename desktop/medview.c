@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
@@ -329,6 +329,29 @@ static void MedlineEntryPtrToMedlineForm (ForM f, Pointer data)
         }
         FileRemove (path);
         break;
+      case MEDXML_PAGE :
+        TmpNam (path);
+        aipout = AsnIoOpen (path, "wx");
+        if (aipout != NULL) {
+          fnt = programFont;
+          if (mfp->displayFont != NULL) {
+            fnt = mfp->displayFont;
+          }
+          if (MedlineEntryAsnWrite (mep, aipout, NULL)) {
+            AsnIoClose (aipout);
+            if (mfp->useScrollText) {
+              if (! FileToScrollText (mfp->text, path)) {
+                SetTitle (mfp->text, "(Text is too large to be displayed in this control.)");
+              }
+            } else {
+              DisplayFancy (mfp->doc, path, &medParFmt, &medColFmt, fnt, 4);
+            }
+          } else {
+            AsnIoClose (aipout);
+          }
+        }
+        FileRemove (path);
+        break;
       default :
         break;
     }
@@ -592,6 +615,9 @@ static void SetMedlineImportExportItems (MedlineViewFormPtr mfp)
     case MEDASN1_PAGE :
       SafeSetTitle (exportItm, "Export ASN.1...");
       break;
+    case MEDXML_PAGE :
+      SafeSetTitle (exportItm, "Export XML...");
+      break;
     default :
       SafeSetTitle (exportItm, "Export...");
       break;
@@ -654,7 +680,7 @@ static void ChangeMedlineViewPopup (PopuP p)
 }
 
 static CharPtr  medlineViewFormTabs [] = {
-  "Abstract", "Citation", "MEDLINE", NULL, NULL
+  "Abstract", "Citation", "MEDLINE", NULL, NULL, NULL
 };
 
 static void CleanupMedlineForm (GraphiC g, VoidPtr data)
@@ -748,6 +774,7 @@ static void MedlineViewFormActivate (WindoW w)
   }
 }
 
+/*
 static void LaunchPubMedArticle (ButtoN b)
 
 {
@@ -803,6 +830,66 @@ static void LaunchPubMedArticle (ButtoN b)
   }
 #endif
 }
+*/
+
+static void LaunchPubMedArticle (ButtoN b)
+
+{
+  MedlineViewFormPtr  mfp;
+
+  mfp = (MedlineViewFormPtr) GetObjectExtra (b);
+  if (mfp == NULL) return;
+  if (mfp->docuid < 1) return;
+  LaunchEntrezURL ("PubMed", mfp->docuid, "Abstract");
+}
+
+static FonT SetFontIfNull (FonT f, CharPtr dfault)
+
+{
+  if (f != NULL) return f;
+  f = ParseFont (dfault);
+  return f;
+}
+
+static void SetupDefaultMvppFonts (MedlineViewProcsPtr mvpp)
+
+{
+  if (mvpp == NULL) return;
+
+#ifdef WIN_MAC
+  mvpp->jourfnt = SetFontIfNull (mvpp->jourfnt, "Geneva,10,i");
+  mvpp->volfnt = SetFontIfNull (mvpp->volfnt, "Geneva,10,b");
+  mvpp->pagesfnt = SetFontIfNull (mvpp->pagesfnt, "Geneva,10");
+  mvpp->titlefnt = SetFontIfNull (mvpp->titlefnt, "Times,14,b");
+  mvpp->authorsfnt = SetFontIfNull (mvpp->authorsfnt, "Times,14");
+  mvpp->affilfnt = SetFontIfNull (mvpp->affilfnt, "Times,12");
+  mvpp->abstractfnt = SetFontIfNull (mvpp->abstractfnt, "Geneva,10");
+  mvpp->meshfnt = SetFontIfNull (mvpp->meshfnt, "Monaco,9");
+  mvpp->displayFont = SetFontIfNull (mvpp->displayFont, "Monaco,9");
+#endif
+#ifdef WIN_MSWIN
+  mvpp->jourfnt = SetFontIfNull (mvpp->jourfnt, "Arial,11,i");
+  mvpp->volfnt = SetFontIfNull (mvpp->volfnt, "Arial,11,b");
+  mvpp->pagesfnt = SetFontIfNull (mvpp->pagesfnt, "Arial,11");
+  mvpp->titlefnt = SetFontIfNull (mvpp->titlefnt, "Times New Roman,14,b");
+  mvpp->authorsfnt = SetFontIfNull (mvpp->authorsfnt, "Times New Roman,14");
+  mvpp->affilfnt = SetFontIfNull (mvpp->affilfnt, "Times New Roman,11");
+  mvpp->abstractfnt = SetFontIfNull (mvpp->abstractfnt, "Times New Roman,11");
+  mvpp->meshfnt = SetFontIfNull (mvpp->meshfnt, "Times New Roman,9");
+  mvpp->displayFont = SetFontIfNull (mvpp->displayFont, "Courier New,10");
+#endif
+#ifdef WIN_MOTIF
+  mvpp->jourfnt = SetFontIfNull (mvpp->jourfnt, "Helvetica,12,i");
+  mvpp->volfnt = SetFontIfNull (mvpp->volfnt, "Helvetica,12,b");
+  mvpp->pagesfnt = SetFontIfNull (mvpp->pagesfnt, "Helvetica,12");
+  mvpp->titlefnt = SetFontIfNull (mvpp->titlefnt, "Times,18,b");
+  mvpp->authorsfnt = SetFontIfNull (mvpp->authorsfnt, "Times,18");
+  mvpp->affilfnt = SetFontIfNull (mvpp->affilfnt, "Times,14");
+  mvpp->abstractfnt = SetFontIfNull (mvpp->abstractfnt, "Times,14");
+  mvpp->meshfnt = SetFontIfNull (mvpp->meshfnt, "Times,12");
+  mvpp->displayFont = SetFontIfNull (mvpp->displayFont, "Courier,10");
+#endif
+}
 
 extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
                                            MedlineEntryPtr mep,
@@ -851,6 +938,7 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
     mfp->mep = mep;
     mfp->useScrollText = FALSE;
     if (mvpp != NULL) {
+      SetupDefaultMvppFonts (mvpp);
       mfp->cleanupObjectPtr = mvpp->cleanupObjectPtr;
       mfp->activateForm = mvpp->activateForm;
       mfp->jourfnt = mvpp->jourfnt;
@@ -894,6 +982,7 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
       }
       if (mvpp->showAsnPage) {
         medlineViewFormTabs [3] = "ASN.1";
+        medlineViewFormTabs [4] = "XML";
       }
       switch (mvpp->useFolderTabs) {
         case CHANGE_VIEW_NOTABS :
@@ -958,6 +1047,7 @@ extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
           break;
       }
       medlineViewFormTabs [3] = NULL;
+      medlineViewFormTabs [4] = NULL;
       pixwidth = MAX (pixwidth, mvpp->minPixelWidth);
       pixheight = MAX (pixheight, mvpp->minPixelHeight);
     }

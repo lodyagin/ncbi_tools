@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.14 2000/06/28 16:56:52 madden Exp $
+/* $Id: fastacmd.c,v 6.15 2000/10/16 20:47:35 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.15  2000/10/16 20:47:35  madden
+* Add -o option to write output to file
+*
 * Revision 6.14  2000/06/28 16:56:52  madden
 * Call Fastacmd_Search_ex, Boolean for target gi only
 *
@@ -99,7 +102,7 @@
 #include <tofasta.h>
 #include <readdb.h>
 
-#define NUMARG 6
+#define NUMARG 7
 
 static Args myargs [NUMARG] = {
     { "Database", 
@@ -114,7 +117,9 @@ static Args myargs [NUMARG] = {
     { "Line length for sequence", 
       "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL},
     { "Definition line should contain target gi only",
-      "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL}
+      "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Output file", 
+      "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
@@ -122,6 +127,7 @@ Int2 Main (void)
     CharPtr	database, searchstr, batchfile;
     Int4	linelen;
     Boolean	dupl, target;
+    FILE *outfp;
 
     if (! GetArgs ("fastacmd", NUMARG, myargs)) {
 	return (1);
@@ -138,7 +144,11 @@ Int2 Main (void)
     linelen = myargs[4].intvalue;
     target = myargs[5].intvalue;
 
-    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, (stdout), target);
+    outfp = FileOpen(myargs[6].strvalue, "w");
+
+    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, outfp, target);
+
+    FileClose(outfp);
 
     return 0;
 }

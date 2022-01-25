@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.8  2000/08/18 19:08:58  kans
+* added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
+*
 * Revision 6.7  2000/06/30 12:46:11  kans
 * added QUERY_CloseQueue
 *
@@ -195,6 +198,12 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
 NLM_EXTERN void QUERY_CloseQueue (
   QUEUE* queue
 );
+
+#ifdef OS_MAC
+NLM_EXTERN void QUERY_WaitForNextMacEvent (
+  void
+);
+#endif
 
 
 #ifdef __cplusplus

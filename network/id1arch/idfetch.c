@@ -25,8 +25,26 @@
  * Author Karl Sirotkin
  *
  $Log: idfetch.c,v $
- Revision 1.8  2000/06/06 17:23:09  butanaev
- New version is developed.
+ Revision 1.15  2000/10/06 22:59:44  yaschenk
+ strncpy not setting \0 bug
+
+ Revision 1.14  2000/08/10 15:17:38  butanaev
+ Updated -t 7 mode: strings like 'gi|3|emb|A00003.1|A00003' retreived from
+ Entrez2DocsumPtr->caption.
+
+ Revision 1.13  2000/08/03 17:01:23  kans
+ included ni_lib.h for Mac, removed Mac compiler warnings
+
+ Revision 1.12  2000/08/02 16:55:28  yaschenk
+ increasing buffer size to 1000
+
+ Revision 1.11  2000/08/02 16:17:00  butanaev
+ Added:
+ -t 7 - to retrieve Entrez DocSums
+ -Q filename - to read Entrez query from the file
+
+ Revision 1.9  2000/07/13 16:46:54  yaschenk
+ adding ObjMgrFreeCache(0) to avoid hitting the limit in ObrMgr
 
  Revision 1.2  2000/06/01 18:05:35  butanaev
  Fixed numerous bugs with control flow...
@@ -93,8 +111,23 @@
  *
  * RCS Modification History:
  * $Log: idfetch.c,v $
- * Revision 1.8  2000/06/06 17:23:09  butanaev
- * New version is developed.
+ * Revision 1.15  2000/10/06 22:59:44  yaschenk
+ * strncpy not setting \0 bug
+ *
+ * Revision 1.14  2000/08/10 15:17:38  butanaev
+ * Updated -t 7 mode: strings like 'gi|3|emb|A00003.1|A00003' retreived from
+ * Entrez2DocsumPtr->caption.
+ *
+ * Revision 1.13  2000/08/03 17:01:23  kans
+ * included ni_lib.h for Mac, removed Mac compiler warnings
+ *
+ * Revision 1.12  2000/08/02 16:55:28  yaschenk
+ * increasing buffer size to 1000
+ *
+ * Revision 1.11  2000/08/02 16:17:00  butanaev
+ * Added:
+ * -t 7         - to retrieve Entrez DocSums
+ * -Q filename  - to read Entrez query from the file
  *
  * Revision 1.2  2000/06/01 18:05:35  butanaev
  * Fixed numerous bugs with control flow...
@@ -149,10 +182,14 @@
 #include <asn2ff.h>
 #include <tofasta.h>
 #include <ni_types.h>
+#include <ni_lib.h>
 #include <sqnutils.h>
 #include <sequtil.h>
 #include <ffprint.h>
 #include <ent2api.h>
+
+static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids);
+static void EntrezQuery(char *query);
 
 static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
                                Boolean is_na, Boolean count_only);
@@ -167,7 +204,8 @@ Args myargs[] = {
 3=Genbank (Seq-entry only)\n\t\t\t\
 4=genpept (Seq-entry only)\n\t\t\t\
 5=fasta (table for history)\n\t\t\t\
-6=quality scores (Seq-entry only)\n","1", "1", "6", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
+6=quality scores (Seq-entry only)\n\t\t\t\
+7=Entrez DocSums\n","1", "1", "7", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
 {"Database to use (special meaning for -q flag: n - nucleotide, p - protein)",NULL,NULL,NULL,TRUE,'d',ARG_STRING,0.0,0,NULL},
 	{"Entity number (retrieval number) to dump" ,"0","0","99999999",TRUE,'e',ARG_INT,0.0,0,NULL},
         {"Type of lookup:\t\
@@ -190,7 +228,8 @@ Args myargs[] = {
 	NULL,NULL,NULL,TRUE,'s',ARG_STRING,0.0,0,NULL},
         {"Log file", NULL,NULL,NULL,TRUE,'l',ARG_FILE_OUT,0.0,0,NULL},
         {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'q',ARG_STRING,0.0,0,NULL},
-        {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL},
+        {"Generate gi list by entrez query", NULL,NULL,NULL,TRUE,'Q',ARG_FILE_IN,0.0,0,NULL},
+        {"Output only the list of gis, used with -q", NULL,NULL,NULL,TRUE,'n',ARG_BOOLEAN,0.0,0,NULL}
 };
 int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
@@ -206,10 +245,14 @@ int Numarg = sizeof(myargs)/sizeof(myargs[0]);
 
 static Nlm_Int2 Nlm_WhichArg PROTO(( Nlm_Char which, Nlm_Int2 numargs, Nlm_ArgPtr ap));
 
+Int4 giBuffer[1000];
+int giBufferPos = 0;
+
 DataVal Val;
-Int2
-  fileoutarg, logarg, outtypearg,maxplexarg,seqidarg,
-  giarg, fastaarg,infotypearg,entarg,dbarg,gifilearg, entrezqueryarg, onlylistarg;
+Int2 fileoutarg, logarg, outtypearg,maxplexarg,seqidarg,
+  giarg, fastaarg, infotypearg, entarg, dbarg, gifilearg,
+  entrezqueryarg, entrezqueryfilearg, onlylistarg;
+
 FILE * fp = NULL;
 AsnIoPtr asnout=NULL;
 
@@ -248,12 +291,13 @@ Int2 Main()
   MACRO_SETARG('l', logarg)
   MACRO_SETARG('s', fastaarg)
   MACRO_SETARG('q', entrezqueryarg)
+  MACRO_SETARG('Q', entrezqueryfilearg)
   MACRO_SETARG('n', onlylistarg)
 
   if(! SeqEntryLoad())
     ErrShow();
 
-  if(myargs[entrezqueryarg].strvalue)
+  if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {
     if(! myargs[dbarg].strvalue ||
        (0 != strcmp(myargs[dbarg].strvalue, "n") &&
@@ -287,7 +331,17 @@ Int2 Main()
     goto FATAL;
   }
 
-  if(myargs[entrezqueryarg].strvalue)
+  if(myargs[outtypearg].intvalue == 7 && ! myargs[dbarg].strvalue)
+  {
+    ErrPostEx(SEV_ERROR,0,0,"-t 7 can be used only with protein (-dp) or nucleotide (-dn)");
+    has_trouble=TRUE;
+    goto FATAL;
+  }
+
+  if(myargs[outtypearg].intvalue == 7)
+    myargs[infotypearg].intvalue = 2;
+
+  if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
     entity_spec_count++;
 
   if(myargs[giarg].intvalue)
@@ -338,6 +392,7 @@ Int2 Main()
     case 4:
     case 5:
     case 6:
+    case 7:
       fp = FileOpen((CharPtr)myargs[fileoutarg].strvalue, outmode);
       if(fp == NULL)
       {
@@ -353,7 +408,7 @@ Int2 Main()
   if( has_trouble )
     exit (1);
 
-  if(fp_in || myargs[entrezqueryarg].strvalue)
+  if(fp_in || myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   { /*** Statefull mode ***/
     NI_SetInterface(eNII_WWW);
   }
@@ -372,7 +427,7 @@ Int2 Main()
   {
     gi = myargs[giarg].intvalue;
   }
-  else if(myargs[entrezqueryarg].strvalue)
+  else if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {}
   else if(fp_in)
   {}
@@ -399,7 +454,6 @@ Int2 Main()
       found_colon = FALSE, flat_seqid_err = FALSE,
     dna_type = FALSE, any_type = FALSE;
     int dex;
-    CharPtr sql_where, sql_and, temp_where, temp_and;
     TextSeqIdPtr tsip;
 
     sip = ValNodeNew(NULL);
@@ -533,10 +587,11 @@ Int2 Main()
     }
   }
 
-  if(! fp_in && ! gi && ! myargs[entrezqueryarg].strvalue)
+  if(! fp_in && ! gi && ! (myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue))
   {
     gi = ID1ArchGIGet (sip);
-    if(gi <= 0){
+    if(gi <= 0)
+    {
       SeqIdPrint(sip, tbuf, PRINTID_FASTA_SHORT);
       ErrPostEx(SEV_ERROR, 0, 0, "Couldn't find SeqId [%s]", tbuf);
       goto FATAL;
@@ -547,31 +602,45 @@ Int2 Main()
     while(fgets(tbuf,sizeof(tbuf)-1,fp_in))
       IdFetch_func1(tbuf, myargs[maxplexarg].intvalue);
   }
-  else if(myargs[entrezqueryarg].strvalue)
+  else if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {
-    Uint4 *ids;
-    int count;
-    int i;
-    int isNa;
-    count = BEGetUidsFromQuery(myargs[entrezqueryarg].strvalue,
-                               &ids, 0 == strcmp(myargs[dbarg].strvalue, "n"), FALSE);
-    for(i = 0; i < count; ++i)
+    if(myargs[entrezqueryarg].strvalue)
+      EntrezQuery(myargs[entrezqueryarg].strvalue);
+    else if(myargs[entrezqueryfilearg].strvalue)
     {
-      if(myargs[onlylistarg].intvalue)
-        printf("%d\n", ids[i]);
-      else
-        IdFetch_func(ids[i],
-                     myargs[dbarg].strvalue,
-                     myargs[entarg].intvalue,
-                     myargs[maxplexarg].intvalue);
+      FILE *fp_query=FileOpen(myargs[entrezqueryfilearg].strvalue,"r");
+      if(fp_query==NULL)
+      {
+        ErrPostEx(SEV_ERROR, 0, 0, "couldn't open file %s", myargs[entrezqueryfilearg].strvalue);
+        has_trouble=TRUE;
+        goto FATAL;
+      }
+      {
+        char buffer[2000];
+        while(fgets(buffer, sizeof(buffer) - 1,fp_query))
+        {
+          int len = strlen(buffer);
+          if(buffer[len - 1] == '\n')
+            buffer[len - 1] = 0;
+          EntrezQuery(buffer);
+        }
+      }
     }
-    goto FATAL;
   }
 
   if(gi>0 && !IdFetch_func(gi,myargs[dbarg].strvalue, myargs[entarg].intvalue,myargs[maxplexarg].intvalue))
   {
     has_trouble=TRUE;
     goto FATAL;
+  }
+
+  if(giBufferPos != 0)
+  {
+    if(! ProcessOneDocSum(giBufferPos, giBuffer))
+    {
+      has_trouble=TRUE;
+      goto FATAL;
+    }
   }
 
 FATAL:
@@ -587,6 +656,26 @@ FATAL:
   return(has_trouble?1:0);
 }
 
+void EntrezQuery(char *query)
+{
+  Uint4 *ids;
+  int count;
+  int i;
+  count = BEGetUidsFromQuery(query,
+                             &ids,
+                             0 == strcmp(myargs[dbarg].strvalue, "n"), FALSE);
+  for(i = 0; i < count; ++i)
+  {
+    if(myargs[onlylistarg].intvalue)
+      printf("%d\n", ids[i]);
+    else
+      IdFetch_func(ids[i],
+                   myargs[dbarg].strvalue,
+                   myargs[entarg].intvalue,
+                   myargs[maxplexarg].intvalue);
+  }
+}
+
 static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr  bsp;
@@ -600,7 +689,7 @@ static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
   }
 }
 
-int TryGetGi(int choice, char *accession, char *name, int version)
+static int TryGetGi(int choice, char *accession, char *name, int version)
 {
   TextSeqIdPtr tsip;
   SeqIdPtr sip;
@@ -664,6 +753,7 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
     if(hasVersion)
     {
       strncpy(acc, data, hasVersion);
+      acc[hasVersion]='\0';
       ver = atoi(data + hasVersion + 1);
     }
     else
@@ -699,6 +789,49 @@ static Boolean IdFetch_func1(CharPtr data, Int2 maxplex)
     return IdFetch_func(atoi(data), NULL, 0, maxplex);
 }
 
+static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
+
+{
+  Entrez2DocsumPtr      dsp;
+  Entrez2DocsumListPtr  e2dl;
+  Entrez2RequestPtr     e2rq;
+  Entrez2ReplyPtr       e2ry;
+  CharPtr db;
+  int old;
+  int count;
+  Boolean result;
+
+  if(num == 0)
+    return TRUE;
+
+  db = strcmp(myargs[dbarg].strvalue, "n") == 0 ? "Nucleotide" : "Protein";
+  e2rq = EntrezCreateDocSumRequest (db, 0, num, uids, NULL);
+  if (e2rq == NULL) return FALSE;
+
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  e2dl = EntrezExtractDocsumReply (e2ry);
+  if (e2dl == NULL)
+    return FALSE;
+
+  result = TRUE;
+  for (dsp = e2dl->list; dsp != NULL; dsp = dsp->next)
+  {
+    char *title = "";
+    char *caption = "";
+    if(dsp->title)
+      title = dsp->title;
+    if(dsp->caption)
+      caption = dsp->caption;
+
+    fprintf(fp,">%s %s\n", caption, title);
+
+  }
+
+  Entrez2DocsumListFree (e2dl);
+  return result;
+}
+
 static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 {
   SeqEntryPtr	sep=NULL;
@@ -713,6 +846,18 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
   Uint2		entityID;
   Uint1		group_segs;
 
+  if(myargs[outtypearg].intvalue == 7)
+  {
+    Boolean result = TRUE;
+    if(giBufferPos == sizeof(giBuffer) / sizeof(giBuffer[0]))
+    {
+      result =  ProcessOneDocSum(giBufferPos, giBuffer);
+      giBufferPos = 0;
+    }
+    giBuffer[giBufferPos++] = gi;
+    return result;
+  }
+
   sprintf(user_string,"GI=%d|db=%s|ent=%d|",gi,db?db:"NULL",ent);
   utag=ErrUserInstall(user_string,0);
 
@@ -722,7 +867,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
     if(maxplex == 1 && myargs[outtypearg].intvalue != 1 && myargs[outtypearg].intvalue != 2)
     {
       si.data.intvalue=gi;
-      if(bsp=BioseqLockById(&si))
+      if((bsp=BioseqLockById(&si)) != NULL)
       {
         sep = ObjMgrGetChoiceForData (bsp);
         switch(myargs[outtypearg].intvalue)
@@ -794,6 +939,7 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
     ishp = ID1ArchGIHistGet(gi,TRUE,asnout);
     break;
   }
+
   if(myargs[infotypearg].intvalue == 1)
   {
     Char	buf[200];
@@ -847,9 +993,10 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
         }
         break;
       case 2:
-        SeqIdWrite(sip_ret,buf,PRINTID_FASTA_LONG,sizeof(buf) - 1);
-        fprintf(fp,"%s\n",buf);
+        SeqIdWrite(sip_ret, buf, PRINTID_FASTA_LONG, sizeof(buf) - 1);
+        fprintf(fp, "%s\n", buf);
         break;
+
       case 3:
       case 4:
         SeqHistPrintTable(ishp,fp);
@@ -861,7 +1008,13 @@ static Boolean IdFetch_func(Int4 gi,CharPtr db, Int4 ent,Int2 maxplex)
 DONE:
   if(bsp)
   {
+    static Uint2  reap_cnt;
     BioseqUnlock(bsp);
+    reap_cnt++;
+    if(reap_cnt > 128){
+      ObjMgrFreeCache(0);
+      reap_cnt=0;
+    }
   }
   else if(sep)
   {
@@ -912,7 +1065,7 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
   Entrez2ReplyPtr e2ry;
   Entrez2RequestPtr  e2rq;
   E2ReplyPtr e2rp;
-  Int4 count = 0, i;
+  Int4 count = 0;
   Entrez2BooleanReplyPtr e2br;
   Entrez2IdListPtr e2idlist;
 
@@ -967,3 +1120,4 @@ static Int4 BEGetUidsFromQuery(CharPtr query, Uint4Ptr PNTR uids,
   Entrez2RequestFree(e2rq);
   return count;
 }
+

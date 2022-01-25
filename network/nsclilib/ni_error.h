@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -40,12 +40,14 @@
 * -------  ----------  -----------------------------------------------------
 * 5/12/92  Epstein     Converted tabs to spaces
 *
-*
 * ==========================================================================
-*
-*
-* RCS Modification History:
 * $Log: ni_error.h,v $
+* Revision 6.4  2000/10/30 18:12:01  beloslyu
+* FreeBSD was added
+*
+* Revision 6.3  2000/07/08 20:44:05  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.2  1999/06/07 18:20:16  beloslyu
 * NetBSD port
 *
@@ -61,21 +63,25 @@
 * Revision 5.0  1996/05/28 14:11:55  ostell
 * Set to revision 5.0
 *
- * Revision 4.1  1995/11/27  20:59:13  epstein
- * add client support for direct-connection services
- *
- * Revision 4.0  95/07/26  13:56:32  ostell
- * force revision to 4.0
- * 
- * Revision 1.12  1995/05/17  17:52:13  epstein
- * add RCS log revision history
- *
+* Revision 4.1  1995/11/27  20:59:13  epstein
+* add client support for direct-connection services
 */
 
 #ifndef _NI_ERROR_
 #define _NI_ERROR_
 
 #include "ncbinet.h"
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define NI_Platform enum NI_platform
 NI_Platform {
@@ -108,6 +114,7 @@ NI_Platform {
   NI_PLATFORM_LINUX,
   NI_PLATFORM_LINUX_ALPHA,
   NI_PLATFORM_NETBSD,
+  NI_PLATFORM_FREEBSD,
 
   NI_N_PLATFORMS
 #define NI_MAX_PLATFORMS (NI_N_PLATFORMS - 1)
@@ -196,18 +203,6 @@ NI_Error {
   NIE_UNKNOWN,        /* unknown error */
   NIE_N_ERRORS        /* do not enumerate after this line! */
 };
-
-
-#undef NLM_EXTERN
-#ifdef NLM_IMPORT
-#define NLM_EXTERN NLM_IMPORT
-#else
-#define NLM_EXTERN extern
-#endif
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /* number of errors */
 NLM_EXTERN Uint2 *x_ni_nerr PROTO((void));

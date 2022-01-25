@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -46,6 +46,7 @@
 #include <objall.h>
 #include <objsset.h>
 #include <objsub.h>
+#include <objfdef.h>
 #include <sequtil.h>
 #include <edutil.h>
 #include <seqport.h>
@@ -57,38 +58,24 @@
 #include <asn2ff.h>
 #include <explore.h>
 
-static Pointer ReadOneFile (
+static FILE* OpenOneFile (
   CharPtr directory,
   CharPtr base,
-  CharPtr suffix,
-  Uint2Ptr datatype
+  CharPtr suffix
 )
 
 {
-  Pointer  dataptr;
-  Char     file [FILENAME_MAX], path [PATH_MAX];
-  FILE*    fp;
-
-  *datatype = 0;
+  Char  file [FILENAME_MAX], path [PATH_MAX];
 
   StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s.%s", base, suffix);
+  sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
 
-  fp = FileOpen (path, "r");
-  if (fp == NULL) return NULL;
-
-  /* ReadAsnFastaOrFlatFile can read ASN.1, FASTA, and feature table formats */
-
-  dataptr = ReadAsnFastaOrFlatFile (fp, datatype, NULL, FALSE, FALSE, TRUE, FALSE);
-
-  FileClose (fp);
-
-  return dataptr;
+  return FileOpen (path, "r");
 }
 
 static void WriteOneFile (
-  CharPtr directory,
+  CharPtr results,
   CharPtr base,
   CharPtr suffix,
   SeqEntryPtr sep,
@@ -105,21 +92,25 @@ static void WriteOneFile (
   ssb.datatype = 1;
   ssb.data = (Pointer) sep;
 
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s.%s", base, suffix);
+  StringNCpy_0 (path, results, sizeof (path));
+  sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
 
   aip = AsnIoOpen (path, "w");
   if (aip == NULL) return;
 
-  SeqSubmitAsnWrite (&ssb, aip, NULL);
+  if (sbp != NULL) {
+    SeqSubmitAsnWrite (&ssb, aip, NULL);
+  } else {
+    SeqEntryAsnWrite (sep, aip, NULL);
+  }
 
   AsnIoFlush (aip);
   AsnIoClose (aip);
 }
 
 static void ValidateOneFile (
-  CharPtr directory,
+  CharPtr results,
   CharPtr base,
   CharPtr suffix,
   SeqEntryPtr sep
@@ -130,8 +121,8 @@ static void ValidateOneFile (
   ErrSev          oldErrSev;
   ValidStructPtr  vsp;
 
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s.%s", base, suffix);
+  StringNCpy_0 (path, results, sizeof (path));
+  sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
 
   ErrSetOptFlags (EO_LOGTO_USRFILE);
@@ -152,7 +143,7 @@ static void ValidateOneFile (
 }
 
 static void FlatfileOneFile (
-  CharPtr directory,
+  CharPtr results,
   CharPtr base,
   CharPtr suffix,
   SeqEntryPtr sep
@@ -163,8 +154,8 @@ static void FlatfileOneFile (
   FILE    *fp;
   ErrSev  oldErrSev;
 
-  StringNCpy_0 (path, directory, sizeof (path));
-  sprintf (file, "%s.%s", base, suffix);
+  StringNCpy_0 (path, results, sizeof (path));
+  sprintf (file, "%s%s", base, suffix);
   FileBuildPath (path, NULL, file);
 
   fp = FileOpen (path, "w");
@@ -477,11 +468,163 @@ static void AddMissingSourceInfo (BioSourcePtr biop)
   }
 }
 
+static BioseqPtr SqnGetBioseqGivenSeqLoc (SeqLocPtr slp, Uint2 entityID)
+
+{
+  BioseqPtr    bsp;
+  SeqEntryPtr  sep;
+  SeqIdPtr     sip;
+  SeqLocPtr    tmp;
+
+  if (slp == NULL) return NULL;
+  bsp = NULL;
+  sip = SeqLocId (slp);
+  if (sip != NULL) {
+    bsp = BioseqFind (sip);
+  } else {
+    tmp = SeqLocFindNext (slp, NULL);
+    if (tmp != NULL) {
+      sip = SeqLocId (tmp);
+      if (sip != NULL) {
+        bsp = BioseqFind (sip);
+        if (bsp != NULL) {
+          sep = SeqMgrGetSeqEntryForData (bsp);
+          entityID = ObjMgrGetEntityIDForChoice (sep);
+          bsp = GetBioseqGivenSeqLoc (slp, entityID);
+        }
+      }
+    }
+  }
+  return bsp;
+}
+
+static BioseqPtr GetBioseqReferencedByAnnot (SeqAnnotPtr sap, Uint2 entityID)
+
+{
+  SeqAlignPtr   align;
+  BioseqPtr     bsp;
+  DenseDiagPtr  ddp;
+  DenseSegPtr   dsp;
+  SeqFeatPtr    feat;
+  SeqGraphPtr   graph;
+  SeqIdPtr      sip;
+  SeqLocPtr     slp;
+  StdSegPtr     ssp;
+  SeqLocPtr     tloc;
+
+  if (sap == NULL) return NULL;
+  switch (sap->type) {
+    case 1 :
+      feat = (SeqFeatPtr) sap->data;
+      while (feat != NULL) {
+        slp = feat->location;
+        if (slp != NULL) {
+          bsp = SqnGetBioseqGivenSeqLoc (slp, entityID);
+          if (bsp != NULL) return bsp;
+        }
+        feat = feat->next;
+      }
+      break;
+    case 2 :
+      align = (SeqAlignPtr) sap->data;
+      while (align != NULL) {
+        if (align->segtype == 1) {
+          ddp = (DenseDiagPtr) align->segs;
+          if (ddp != NULL) {
+            for (sip = ddp->id; sip != NULL; sip = sip->next) {
+              bsp = BioseqFind (sip);
+              if (bsp != NULL) return bsp;
+            }
+          }
+        } else if (align->segtype == 2) {
+          dsp = (DenseSegPtr) align->segs;
+          if (dsp != NULL) {
+            for (sip = dsp->ids; sip != NULL; sip = sip->next) {
+              bsp = BioseqFind (sip);
+              if (bsp != NULL) return bsp;
+            }
+          }
+        } else if (align->segtype == 3) {
+          ssp = (StdSegPtr) align->segs;
+          if (ssp != NULL && ssp->loc != NULL) {
+            for (tloc = ssp->loc; tloc != NULL; tloc = tloc->next) {
+              bsp = BioseqFind (SeqLocId (tloc));
+              if (bsp != NULL) return bsp;
+            }
+          }
+        }
+        align = align->next;
+      }
+      break;
+    case 3 :
+      graph = (SeqGraphPtr) sap->data;
+      while (graph != NULL) {
+        slp = graph->loc;
+        if (slp != NULL) {
+          bsp = SqnGetBioseqGivenSeqLoc (slp, entityID);
+          if (bsp != NULL) return bsp;
+        }
+        graph = graph->next;
+      }
+      break;
+    default :
+      break;
+  }
+  return NULL;
+}
+
+static BioseqPtr AttachSeqAnnotEntity (Uint2 entityID, SeqAnnotPtr sap)
+
+{
+  BioseqPtr      bsp;
+  Int2           genCode;
+  SeqEntryPtr    oldscope;
+  OMProcControl  ompc;
+  SeqEntryPtr    sep;
+  SeqFeatPtr     sfp = NULL;
+
+  if (sap == NULL) return NULL;
+  bsp = GetBioseqReferencedByAnnot (sap, entityID);
+  if (bsp == NULL) {
+    oldscope = SeqEntrySetScope (NULL);
+    if (oldscope != NULL) {
+      bsp = GetBioseqReferencedByAnnot (sap, entityID);
+      SeqEntrySetScope (oldscope);
+    }
+  }
+  if (bsp != NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+    entityID = ObjMgrGetEntityIDForChoice (sep);
+    if (sap->type == 1) {
+      sfp = (SeqFeatPtr) sap->data;
+      sep = GetBestTopParentForData (entityID, bsp);
+      genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
+      SetEmptyGeneticCodes (sap, genCode);
+    }
+    MemSet ((Pointer) &ompc, 0, sizeof (OMProcControl));
+    ompc.input_entityID = entityID;
+    ompc.input_itemID = GetItemIDGivenPointer (entityID, OBJ_BIOSEQ, (Pointer) bsp);
+    ompc.input_itemtype = OBJ_BIOSEQ;
+    ompc.output_itemtype = OBJ_SEQANNOT;
+    ompc.output_data = (Pointer) sap;
+    if (! AttachDataForProc (&ompc, FALSE)) {
+      Message (MSG_POSTERR, "AttachSeqAnnotEntity failed");
+    } else if (sfp != NULL) {
+      PromoteXrefs (sfp, bsp, entityID);
+    }
+  } else {
+    Message (MSG_POSTERR, "Feature table identifiers do not match record");
+  }
+  return bsp;
+}
+
 static void ProcessOneRecord (
   SubmitBlockPtr sbp,
   BioSourcePtr src,
   CharPtr directory,
+  CharPtr results,
   CharPtr base,
+  CharPtr suffix,
   CharPtr accn,
   CharPtr organism,
   Boolean findorf,
@@ -492,23 +635,35 @@ static void ProcessOneRecord (
 
 {
   BioSourcePtr  biop = NULL;
-  BioseqPtr     bsp;
+  BioseqPtr     bsp = NULL;
+  Pointer       dataptr;
   Uint2         datatype, entityID;
+  FILE          *fp;
   Int2          genCode;
   MolInfoPtr    mip;
   SeqAnnotPtr   sap;
-  SeqEntryPtr   sep;
+  SeqEntryPtr   nsep, sep;
   SeqFeatPtr    sfp;
   SeqIdPtr      sip;
   SqnTagPtr     stp;
   CharPtr       ttl;
   ValNodePtr    vnp;
 
-  Message (MSG_POST, "Processing %s\n", base);
+  fp = OpenOneFile (directory, base, suffix);
+  if (fp == NULL) return;
 
-  bsp = (BioseqPtr) ReadOneFile (directory, base, "fsa", &datatype);
-  if (bsp == NULL || datatype != OBJ_BIOSEQ) {
-    ObjMgrFree (datatype, (Pointer) bsp);
+  dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+  FileClose (fp);
+
+  if (dataptr == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  nsep = FindNucSeqEntry (sep);
+  if (nsep != NULL && IS_Bioseq (nsep)) {
+    bsp = (BioseqPtr) nsep->data.ptrvalue;
+  }
+  if (bsp == NULL) {
+    ObjMgrFreeByEntityID (entityID);
     return;
   }
 
@@ -543,13 +698,13 @@ static void ProcessOneRecord (
     AddMissingSourceInfo (biop);
   }
 
-  mip = MolInfoNew ();
-  if (mip != NULL) {
-    mip->biomol = MOLECULE_TYPE_GENOMIC;
-    SeqDescrAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
+  if (BioseqGetSeqDescr (bsp, Seq_descr_molinfo, NULL) == NULL) {
+    mip = MolInfoNew ();
+    if (mip != NULL) {
+      mip->biomol = MOLECULE_TYPE_GENOMIC;
+      SeqDescrAddPointer (&(bsp->descr), Seq_descr_molinfo, (Pointer) mip);
+    }
   }
-
-  entityID = ObjMgrRegister (datatype, (Pointer) bsp);
 
   sep = GetBestTopParentForData (entityID, bsp);
   genCode = SeqEntryToGeneticCode (sep, NULL, NULL, 0);
@@ -558,51 +713,61 @@ static void ProcessOneRecord (
     AnnotateBestOrf (bsp, genCode, altstart);
   }
 
-  sap = (SeqAnnotPtr) ReadOneFile (directory, base, "tbl", &datatype);
-  if (sap != NULL && datatype == OBJ_SEQANNOT && sap->type == 1) {
-    sap->next = bsp->annot;
-    bsp->annot = sap;
-  } else {
-    ObjMgrFree (datatype, (Pointer) sap);
-  }
+  fp = OpenOneFile (directory, base, ".tbl");
+  if (fp != NULL) {
 
-  /* if existing accession, coerce all SeqIds */
+    while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, NULL, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+      if (datatype == OBJ_SEQANNOT) {
 
-  if (! StringHasNoText (accn)) {
-    sip = SeqIdFromAccession (accn, 0, NULL);
-    if (sip != NULL) {
-      bsp->id = SeqIdSetFree (bsp->id);
-      bsp->id = sip;
-      SeqMgrReplaceInBioseqIndex (bsp);
-      VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
+        sap = (SeqAnnotPtr) dataptr;
+        bsp = AttachSeqAnnotEntity (entityID, sap);
+        if (bsp != NULL) {
+
+          /* if existing accession, coerce all SeqIds */
+
+          if (! StringHasNoText (accn)) {
+            sip = SeqIdFromAccession (accn, 0, NULL);
+            if (sip != NULL) {
+              bsp->id = SeqIdSetFree (bsp->id);
+              bsp->id = sip;
+              SeqMgrReplaceInBioseqIndex (bsp);
+              VisitFeaturesOnBsp (bsp, (Pointer) bsp->id, CorrectFeatureSeqIds);
+            }
+          }
+
+          /* for parsed in features or best ORF, promote CDS products to protein bioseq */
+
+          for (sap = bsp->annot; sap != NULL; sap = sap->next) {
+            if (sap->type == 1) {
+              SetEmptyGeneticCodes (sap, genCode);
+              sfp = (SeqFeatPtr) sap->data;
+              PromoteXrefs (sfp, bsp, entityID);
+            }
+          }
+        }
+
+      } else {
+        ObjMgrFree (datatype, dataptr);
+      }
     }
-  }
-
-  /* for parsed in features or best ORF, promote CDS products to protein bioseq */
-
-  for (sap = bsp->annot; sap != NULL; sap = sap->next) {
-    if (sap->type == 1) {
-      SetEmptyGeneticCodes (sap, genCode);
-      sfp = (SeqFeatPtr) sap->data;
-      PromoteXrefs (sfp, bsp, entityID);
-    }
+    FileClose (fp);
   }
 
   sep = GetTopSeqEntryForEntityID (entityID);
   if (sep != NULL) {
     SeriousSeqEntryCleanup (sep, NULL, NULL);
-    WriteOneFile (directory, base, "sqn", sep, sbp);
+    WriteOneFile (results, base, ".sqn", sep, sbp);
     if (validate || flatfile) {
       SeqMgrIndexFeatures (entityID, 0);
     }
     if (validate) {
       Message (MSG_POST, "Validating %s\n", base);
-      ValidateOneFile (directory, base, "val", sep);
+      ValidateOneFile (results, base, ".val", sep);
     }
     if (flatfile) {
       Message (MSG_POST, "Flatfile %s\n", base);
       sep = FindNucSeqEntry (sep);
-      FlatfileOneFile (directory, base, "gbf", sep);
+      FlatfileOneFile (results, base, ".gbf", sep);
     }
   }
 
@@ -611,29 +776,35 @@ static void ProcessOneRecord (
 
 /* command-line argument list */
 
-#define i_argInputPath  0
-#define i_argSingleFile 1
-#define i_argTemplate   2
-#define i_argAccession  3
-#define i_argOrgName    4
-#define i_argFindOrf    5
-#define i_argAltStart   6
-#define i_argValidate   7
-#define i_argGenBank    8
+#define p_argInputPath  0
+#define r_argOutputPath 1
+#define f_argSingleFile 2
+#define x_argSuffix     3
+#define t_argTemplate   4
+#define a_argAccession  5
+#define n_argOrgName    6
+#define c_argFindOrf    7
+#define m_argAltStart   8
+#define v_argValidate   9
+#define b_argGenBank   10
 
 Args myargs [] = {
   {"Path to files", NULL, NULL, NULL,
     TRUE, 'p', ARG_STRING, 0.0, 0, NULL},
+  {"Path for results", NULL, NULL, NULL,
+    TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
   {"Only this file", NULL, NULL, NULL,
     TRUE, 'f', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Suffix", ".fsa", NULL, NULL,
+    TRUE, 'x', ARG_STRING, 0.0, 0, NULL},
   {"Template file", NULL, NULL, NULL,
-    FALSE, 't', ARG_FILE_IN, 0.0, 0, NULL},
+    TRUE, 't', ARG_FILE_IN, 0.0, 0, NULL},
   {"Accession", NULL, NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Organism name", NULL, NULL, NULL,
     TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
   {"Annotate longest ORF", "F", NULL, NULL,
-    TRUE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
+    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Allow alternative starts", "F", NULL, NULL,
     TRUE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Validate", "F", NULL, NULL,
@@ -646,7 +817,7 @@ Int2 Main (void)
 
 {
   AsnIoPtr        aip;
-  CharPtr         base, directory, accn, organism, ptr, tmplate;
+  CharPtr         base, directory, results, suffix, accn, organism, ptr, tmplate;
   Boolean         altstart, findorf, flatfile, validate;
   ValNodePtr      head, vnp;
   SubmitBlockPtr  sbp = NULL;
@@ -675,62 +846,73 @@ Int2 Main (void)
     Message (MSG_FATAL, "GeneticCodeTableLoad failed");
     return 1;
   }
+  if (! FeatDefSetLoad ()) {
+    Message (MSG_FATAL, "FeatDefSetLoad failed");
+    return 1;
+  }
 
   if (! GetArgs ("tbl2asn", sizeof (myargs) / sizeof (Args), myargs)) {
     return 0;
   }
 
-  directory = (CharPtr) myargs [i_argInputPath].strvalue;
-  base = (CharPtr) myargs [i_argSingleFile].strvalue;
-  tmplate = (CharPtr) myargs [i_argTemplate].strvalue;
-  accn = (CharPtr) myargs [i_argAccession].strvalue;
-  organism = (CharPtr) myargs [i_argOrgName].strvalue;
-  findorf = (Boolean) myargs [i_argFindOrf].intvalue;
-  altstart = (Boolean) myargs [i_argAltStart].intvalue;
-  validate = (Boolean) myargs [i_argValidate].intvalue;
-  flatfile = (Boolean) myargs [i_argGenBank].intvalue;
+  directory = (CharPtr) myargs [p_argInputPath].strvalue;
+  results = (CharPtr) myargs [r_argOutputPath].strvalue;
+  if (StringHasNoText (results)) {
+    results = directory;
+  }
+  suffix = (CharPtr) myargs [x_argSuffix].strvalue;
+  base = (CharPtr) myargs [f_argSingleFile].strvalue;
+  tmplate = (CharPtr) myargs [t_argTemplate].strvalue;
+  accn = (CharPtr) myargs [a_argAccession].strvalue;
+  organism = (CharPtr) myargs [n_argOrgName].strvalue;
+  findorf = (Boolean) myargs [c_argFindOrf].intvalue;
+  altstart = (Boolean) myargs [m_argAltStart].intvalue;
+  validate = (Boolean) myargs [v_argValidate].intvalue;
+  flatfile = (Boolean) myargs [b_argGenBank].intvalue;
 
   if (StringHasNoText (base) && (! StringHasNoText (accn))) {
     Message (MSG_FATAL, "Accession can be entered only for a single record");
     return 1;
   }
 
-  aip = AsnIoOpen (tmplate, "r");
-  if (aip != NULL) {
-    ssp = SeqSubmitAsnRead (aip, NULL);
-    AsnIoClose (aip);
-  }
+  if (! StringHasNoText (tmplate)) {
+    aip = AsnIoOpen (tmplate, "r");
+    if (aip != NULL) {
+      ssp = SeqSubmitAsnRead (aip, NULL);
+      AsnIoClose (aip);
+    }
 
-  if (ssp == NULL) {
-    Message (MSG_FATAL, "Unable to read required template file");
-    return 1;
-  }
+    if (ssp == NULL) {
+      Message (MSG_FATAL, "Unable to read required template file");
+      return 1;
+    }
 
-  sbp = ssp->sub;
-  if (sbp == NULL) {
-    Message (MSG_FATAL, "Unable to read submit block within required template file");
-    ssp = SeqSubmitFree (ssp);
-    return 1;
-  }
+    sbp = ssp->sub;
+    if (sbp == NULL) {
+      Message (MSG_FATAL, "Unable to read submit block within required template file");
+      ssp = SeqSubmitFree (ssp);
+      return 1;
+    }
 
-  if (sbp != NULL) {
-    sbp->tool = MemFree (sbp->tool);
-    sbp->tool = StringSave ("tbl2asn");
-    sbp->hup = FALSE;
-    sbp->reldate = DateFree (sbp->reldate);
-  }
-  if (ssp->datatype == 1) {
-    sep = (SeqEntryPtr) ssp->data;
-    if (sep != NULL) {
-      SeqEntryToBioSource (sep, NULL, NULL, 0, &src);
+    if (sbp != NULL) {
+      sbp->tool = MemFree (sbp->tool);
+      sbp->tool = StringSave ("tbl2asn");
+      sbp->hup = FALSE;
+      sbp->reldate = DateFree (sbp->reldate);
+    }
+    if (ssp->datatype == 1) {
+      sep = (SeqEntryPtr) ssp->data;
+      if (sep != NULL) {
+        SeqEntryToBioSource (sep, NULL, NULL, 0, &src);
+      }
     }
   }
 
   if (! StringHasNoText (base)) {
-    ptr = StringStr (base, ".fsa");
+    ptr = StringStr (base, suffix);
     if (ptr != NULL) {
       *ptr = '\0';
-      ProcessOneRecord (sbp, src, directory, base, accn, organism, findorf, altstart, validate, flatfile);
+      ProcessOneRecord (sbp, src, directory, results, base, suffix, accn, organism, findorf, altstart, validate, flatfile);
     }
   } else {
     head = DirCatalog (directory);
@@ -738,10 +920,11 @@ Int2 Main (void)
       if (vnp->choice == 0) {
         base = (CharPtr) vnp->data.ptrvalue;
         if (! StringHasNoText (base)) {
-          ptr = StringStr (base, ".fsa");
+          ptr = StringStr (base, suffix);
           if (ptr != NULL) {
             *ptr = '\0';
-            ProcessOneRecord (sbp, src, directory, base, NULL, organism, findorf, altstart, validate, flatfile);
+            Message (MSG_POST, "Processing %s\n", base);
+            ProcessOneRecord (sbp, src, directory, results, base, suffix, NULL, organism, findorf, altstart, validate, flatfile);
           }
         }
       }

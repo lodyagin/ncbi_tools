@@ -31,6 +31,15 @@
 *
 *
 * $Log: tree.c,v $
+* Revision 1.11  2000/08/15 14:34:33  soussov
+* fixes bug in tree_getAncestor
+*
+* Revision 1.10  2000/08/14 16:05:30  soussov
+* improvements in tree_getAncestor
+*
+* Revision 1.9  2000/08/07 14:32:04  soussov
+* fixes bug in tree_getAncestor function
+*
 * Revision 1.8  1999/05/18 21:13:47  soussov
 * TREE_SHUTDOWN event added
 *
@@ -250,7 +259,7 @@ NLM_EXTERN _NodeId tree_getAncestor(TreeCursorPtr cursor1,
 	TreeCursorPtr t_cursor= tree_openCursor(cursor1->tree, NULL, NULL);
 	_NodeId *lin1;
 	_NodeId *lin2;
-	int l1, l2, s1= 32, s2= 32;
+	int l1, l2, s1= 64, s2= 64;
 	
 	/* build lineage for cursor1 */
 	lin1= (_NodeId *)MemNew(sizeof(_NodeId)*s1);
@@ -264,7 +273,7 @@ NLM_EXTERN _NodeId tree_getAncestor(TreeCursorPtr cursor1,
 	for(l1= 0; tree_parent(t_cursor); l1++) {
 	    if(l1 >= s1) {
 		s1+= s1/2;
-		lin1= (_NodeId *)MemMore(lin1, s1);
+		lin1= (_NodeId *)MemMore(lin1, sizeof(_NodeId)*s1);
 		if(lin1 == NULL) {
 		    tree_Message("tree_getAncestor", "Not enaugh memory", NO_MEM_MSG);
 		    return aId;
@@ -295,7 +304,7 @@ NLM_EXTERN _NodeId tree_getAncestor(TreeCursorPtr cursor1,
 	for(l2= 0; tree_parent(t_cursor); l2++) {
 	    if(l2 >= s2) {
 		s2+= s2/2;
-		lin2= (_NodeId *)MemMore(lin2, s2);
+		lin2= (_NodeId *)MemMore(lin2, sizeof(_NodeId)*s2);
 		if(lin2 == NULL) {
 		    tree_Message("tree_getAncestor", "Not enaugh memory", NO_MEM_MSG);
 		    return aId;
@@ -316,17 +325,13 @@ NLM_EXTERN _NodeId tree_getAncestor(TreeCursorPtr cursor1,
 	}
 	
 	/* check lineages */
-	for(l1= 0; l1 < s1; l1++) {
-	    for(l2= 0; l2 < s2; l2++) {
-		if(lin1[l1].idi == lin2[l2].idi) {
-		    aId= lin1[l1];
-		    MemFree(lin1);
-		    MemFree(lin2);
-		    tree_closeCursor(t_cursor);
-		    return aId;
-		}
+	for(l1= s1, l2= s2; (--l1 > 0) && (--l2 > 0);)  {
+	    if(lin1[l1-1].idi != lin2[l2-1].idi) {
+		aId= lin1[l1];
+		break;
 	    }
 	}
+	if(aId.idi == 0) aId= lin1[l1];
 	MemFree(lin1);
 	MemFree(lin2);
 	tree_closeCursor(t_cursor);

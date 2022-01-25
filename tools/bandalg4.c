@@ -217,11 +217,11 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
     if (leftd < midd) {
       fr = -1;
       for (j = 0; j < midd; j++) 
-	data->CD[j].CP = data->CD[j].DP = data->CD[j].FP = -1;
+	data->CD[j].CP = data->CD[j].DPDP = data->CD[j].FP = -1;
       for (j = midd; j <= rightd; j++) {
-	data->CD[j].CP = data->CD[j].DP = data->CD[j].FP = 0;
+	data->CD[j].CP = data->CD[j].DPDP = data->CD[j].FP = 0;
       }
-      data->CD[midd-1].DP = 0;
+      data->CD[midd-1].DPDP = 0;
       data->MP[0][0] = -1;
       data->MP[1][0] = -1;
       data->MP[2][0] = -1;
@@ -229,18 +229,18 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
     } else if (leftd > midd) {
       fr = leftd-midd;
       for (j = 0; j <= midd; j++) {
-	data->CD[j].CP = data->CD[j].DP = data->CD[j].FP = fr;
+	data->CD[j].CP = data->CD[j].DPDP = data->CD[j].FP = fr;
       }
       for (j = midd+1; j <= rightd; j++) 
-	data->CD[j].CP = data->CD[j].DP = data->CD[j].FP = -1;
-      data->CD[midd].DP = -1;
+	data->CD[j].CP = data->CD[j].DPDP = data->CD[j].FP = -1;
+      data->CD[midd].DPDP = -1;
       data->MP[0][fr] = -1;
       data->MP[1][fr] = -1;
       data->MP[2][fr] = -1;
       data->MP[3][fr] = -1;
     } else {
       for (j = 0; j < rightd; j++) {
-	data->CD[j].CP = data->CD[j].DP = data->CD[j].FP = 0;
+	data->CD[j].CP = data->CD[j].DPDP = data->CD[j].FP = 0;
       }
       data->MP[0][0] = -1;
       data->MP[1][0] = -1;
@@ -269,7 +269,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
     for(j = 0; j < leftd; j++) data->CD[j].FF = MININT;
     data->CD[rightd+1].CC = MININT;
     data->CD[rightd].DD = MININT;
-    data->CD[rightd+1].CP = data->CD[rightd].DP = 0;
+    data->CD[rightd+1].CP = data->CD[rightd].DPDP = 0;
     if(tb == 1) data->CD[leftd-1].DD = -data->zzh;
     else data->CD[leftd-1].DD = -data->m;
     if(!legA) data->CD[leftd-1].DD = -data->leggA - data->leghA;
@@ -283,7 +283,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
       f = data->CD[leftd].FF;
       if (d > c || ib <= 0) {
 	c = d;
-	data->CD[leftd].CP = data->CD[leftd].DP;
+	data->CD[leftd].CP = data->CD[leftd].DPDP;
       }
       if(c < f) {
 	c = f;
@@ -294,7 +294,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
       if(leftd > 1 && !legA) d -= data->leghA;
       else d -= data->zzh;
       data->CD[leftd-1].DD = d;
-      data->CD[leftd-1].DP = data->CD[leftd].DP;
+      data->CD[leftd-1].DPDP = data->CD[leftd].DPDP;
       if(f > c - data->g) {
 	data->CD[leftd].FF -= data->rr;
 	e = f - data->zzh;
@@ -305,7 +305,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	data->CD[leftd].FP = data->CD[leftd].CP;
       } 
       if (leftd == midd) 
-	data->CD[leftd].CP = data->CD[leftd-1].DP = data->CD[leftd].FP =
+	data->CD[leftd].CP = data->CD[leftd-1].DPDP = data->CD[leftd].FP =
 	  data->IP = i;
       data->CD[leftd].CC = c;
       curd=leftd + 1;
@@ -325,16 +325,16 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 		ap->CP = data->IP;
 		if(f > d) { 
 		  (ap-1)->DD = f - data->zzh;
-		  (ap-1)->DP = ap->FP;
+		  (ap-1)->DPDP = ap->FP;
 		}
 		else {
 		  (ap-1)->DD = d - data->zzh;
-		  (ap-1)->DP = ap->DP;
+		  (ap-1)->DPDP = ap->DPDP;
 		}
 	      }
 	      else {
 		ap->CC = f; 
-		ap->CP = data->IP = (ap-1)->DP = ap->FP;
+		ap->CP = data->IP = (ap-1)->DPDP = ap->FP;
 		e = (ap-1)->DD = f - data->zzh;
 	      }
 	      ap++->FF -= data->rr;
@@ -342,7 +342,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	    }
 	  } else if (d > c) {
 	    if (d > f) {
-	      ap->CC = d; (ap-1)->DP = ap->CP = ap->DP;
+	      ap->CC = d; (ap-1)->DPDP = ap->CP = ap->DPDP;
 	      (ap - 1)->DD = d - data->zzh; 
 	      if(f > e) {
 		e = f - data->zzh;
@@ -352,14 +352,14 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	    }
 	    else {
 	      ap->CC = f;
-	      ap->CP = (ap - 1)->DP = data->IP = ap->FP;
+	      ap->CP = (ap - 1)->DPDP = data->IP = ap->FP;
 	      e = (ap - 1)->DD = f - data->zzh;
 	    }
 	    ap++->FF -= data->rr;
 	    continue;
 	  }
 	  if(c < f) {
-	    ap->CC = f; ap->CP = (ap - 1)->DP = data->IP = ap->FP;
+	    ap->CC = f; ap->CP = (ap - 1)->DPDP = data->IP = ap->FP;
 	    e = (ap - 1)->DD = f - data->zzh;
 	    ap++->FF -= data->rr;
 	  }
@@ -376,11 +376,11 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	      }
 	      if(c > d) {
 		(ap - 1)->DD = c - data->zzh;
-		(ap - 1)->DP = ap->CP;
+		(ap - 1)->DPDP = ap->CP;
 	      }
 	      else {
 		(ap - 1)->DD = d - data->zzh;
-		(ap - 1)->DP = ap->DP;
+		(ap - 1)->DPDP = ap->DPDP;
 	      }
 	      ap++->FF = c - data->rr;
 	    }
@@ -389,22 +389,22 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 		data->IP = ap->FP; e = f - data->zzh;
 		if(f > d) {
 		  (ap - 1)->DD = e;
-		  (ap - 1)->DP = data->IP;
+		  (ap - 1)->DPDP = data->IP;
 		} 
 		else {
 		  (ap - 1)->DD = d - data->zzh;
-		  (ap - 1)->DP = ap->DP;
+		  (ap - 1)->DPDP = ap->DPDP;
 		}
 	      }
 	      else {
 		e -= data->zzh;
 		if (f > d) {
 		  (ap - 1)->DD = f - data->zzh;
-		  (ap - 1)->DP = ap->FP;  
+		  (ap - 1)->DPDP = ap->FP;  
 		}
 		else {
 		  (ap-1)->DD = d - data->zzh;
-		  (ap-1)->DP = ap->DP;
+		  (ap-1)->DPDP = ap->DPDP;
 		}
 	      }
 	      ap++->FF -= data->rr;
@@ -429,7 +429,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	  }
 	  if(d > c) {
 	    c = d;
-	    data->MP[0][i] = ap->DP;
+	    data->MP[0][i] = ap->DPDP;
 	    data->MT[0][i] = 1;
 	  }
 	  ap->CC = c;
@@ -451,7 +451,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	      (ap-1)->DD = c - data->zzh;
 	    }
 	    else {
-	      data->MP[2][i] = ap->DP;
+	      data->MP[2][i] = ap->DPDP;
 	      data->MT[2][i] = 1;
 	      (ap-1)->DD = d - data->zzh;
 	    }
@@ -471,7 +471,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	      data->MT[1][i] = 3;
 	    }
 	    if(d > f) {
-	      data->MP[2][i] = ap->DP;
+	      data->MP[2][i] = ap->DPDP;
 	      data->MT[2][i] = 1;
 	      (ap-1)->DD = d - data->zzh;
 	    }
@@ -484,7 +484,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
 	    data->MP[3][i] = i - 1;
 	    data->MT[3][i] = 3;
 	  }
-	  ap->CP = (ap - 1)->DP = data->IP = ap->FP = i; ap++;
+	  ap->CP = (ap - 1)->DPDP = data->IP = ap->FP = i; ap++;
 	  x = rightd + 1; curd++;
 	} else break;
       }
@@ -516,7 +516,7 @@ static Int4 g_band4_align(Uint1Ptr A, Uint1Ptr B,
       X = M; Y = N;
       v = c = data->CD[rightd].CC; d = data->CD[rightd-1].DD;
       if(te == 1 && d + data->m > c) {
-	k = data->CD[rightd - 1].DP;
+	k = data->CD[rightd - 1].DPDP;
 	l = 1;
       } else if(te == 2 && e + data->m > c) {
 	k = data->IP;

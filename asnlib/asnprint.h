@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *   typedefs and prototypes used internally by asnprint.c
@@ -41,6 +41,9 @@
 *
 *
 * $Log: asnprint.h,v $
+* Revision 6.2  2000/07/25 20:30:58  ostell
+* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
+*
 * Revision 6.1  2000/05/10 03:12:36  ostell
 * added support for XML DTD and XML data output
 *
@@ -81,6 +84,7 @@
 *****************************************************************************/
 NLM_EXTERN void AsnPrintModule PROTO((AsnModulePtr amp, AsnIoPtr aip));
 NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip);
+NLM_EXTERN void AsnPrintModuleXMLInc (AsnModulePtr amp, CharPtr name);
 NLM_EXTERN void AsnPrintTreeModule(AsnModulePtr amp, FILE * fp);
 NLM_EXTERN void AsnPrintType PROTO((AsnTypePtr atp, AsnIoPtr aip));
 NLM_EXTERN Boolean AsnPrintStrStore PROTO((ByteStorePtr bsp, AsnIoPtr aip));

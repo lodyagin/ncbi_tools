@@ -25,6 +25,30 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.15  2000/10/30 19:05:44  madden
+* Added -Y search space option
+*
+* Revision 6.14  2000/10/20 20:10:01  dondosha
+* Revert previous change - would fail on some platforms
+*
+* Revision 6.13  2000/10/20 19:45:16  dondosha
+* Changed -d option type to string to allow 8-byte integer db sizes
+*
+* Revision 6.12  2000/10/13 20:32:32  madden
+* Added call to AcknowledgeBlastQuery
+*
+* Revision 6.11  2000/10/06 21:37:08  dondosha
+* Set Mega BlAST default parameters correctly before calling the engine
+*
+* Revision 6.10  2000/10/05 22:44:28  dondosha
+* Set block_width to 0 for Mega BLAST - it has different meaning
+*
+* Revision 6.9  2000/10/03 15:16:12  madden
+* Set program name in call to BlastTwoSequencesEx
+*
+* Revision 6.8  2000/09/12 21:48:41  dondosha
+* Pass the correct scoring matrix to ShowTextAlignFromAnnot
+*
 * Revision 6.7  2000/06/15 15:29:57  dondosha
 * Fixed several memory leaks; tblastn and tblastx enabled
 *
@@ -53,7 +77,7 @@
 #include <sqnutils.h>
 
 		
-#define NUMARG 19
+#define NUMARG 20
 
 static Args myargs [NUMARG] = {
   { "First sequence",
@@ -93,7 +117,9 @@ static Args myargs [NUMARG] = {
   { "Produce HTML output",
         "F", NULL, NULL, FALSE, 'T', ARG_BOOLEAN, 0.0, 0, NULL},
   { "Use Mega Blast for search",
-        "F", NULL, NULL, FALSE, 'm', ARG_BOOLEAN, 0.0, 0, NULL}
+        "F", NULL, NULL, FALSE, 'm', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Effective length of the search space (use zero for the real size)",
+      "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
@@ -117,6 +143,7 @@ Int2 Main (void)
 	FILE *infp, *infp1, *outfp;
 	ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
 	BLAST_MatrixPtr matrix;
+        Int4Ptr PNTR txmatrix;
 
         if (! GetArgs ("bl2seq", NUMARG, myargs))
         {
@@ -229,6 +256,16 @@ Int2 Main (void)
 	}
 		
 	options = BLASTOptionNew(program_name, (Boolean) myargs[3].intvalue);
+	options->is_megablast_search = (Boolean) myargs[18].intvalue;
+	if (options->is_megablast_search) {
+           options->gap_open = options->gap_extend = 0;
+           options->wordsize = 32;
+           options->block_width = 0;
+	}
+
+    	if (myargs[19].floatvalue)
+        	options->searchsp_eff = (Nlm_FloatHi) myargs[19].floatvalue;
+
 
 	options->filter_string = StringSave(myargs[14].strvalue);
 	options->expect_value  = (Nlm_FloatHi) myargs [15].floatvalue;
@@ -254,19 +291,18 @@ Int2 Main (void)
         if (myargs[10].intvalue != 0)
                options->wordsize = (Int2) myargs[10].intvalue;
 
+	if (options->is_megablast_search) {
+	   options->cutoff_s2 = options->wordsize - 4;
+	   options->cutoff_s = options->wordsize;
+        }
 	MemFree(options->matrix);
 	options->matrix = myargs[11].strvalue;
 
 	options->strand_option = myargs[16].intvalue;
-	options->is_megablast_search = (Boolean) myargs[18].intvalue;
-	if (options->is_megablast_search) {
-	   options->cutoff_s2 = options->wordsize - 4;
-	   options->cutoff_s = options->wordsize;
-	}
 	if (myargs[6].strvalue || myargs[17].intvalue)
-		seqalign = BlastTwoSequencesEx(query_bsp, subject_bsp, NULL, options, &other_returns, &error_returns);
+		seqalign = BlastTwoSequencesEx(query_bsp, subject_bsp, program_name, options, &other_returns, &error_returns);
 	else
-		seqalign = BlastTwoSequencesEx(fake_bsp, fake_subject_bsp, NULL, options, &other_returns, &error_returns);
+		seqalign = BlastTwoSequencesEx(fake_bsp, fake_subject_bsp, program_name, options, &other_returns, &error_returns);
 
 		BlastErrorPrint(error_returns);
 
@@ -276,6 +312,7 @@ Int2 Main (void)
 		params_buffer = NULL;
 		mask_loc = NULL;
 		matrix = NULL;
+                txmatrix = NULL;
 		for (vnp=other_returns; vnp; vnp = vnp->next)
 		{
 			switch (vnp->choice) {
@@ -293,6 +330,8 @@ Int2 Main (void)
 					break;
 			        case TXMATRIX:
 				        matrix = vnp->data.ptrvalue;
+                                        if (matrix)
+                                           txmatrix = BlastMatrixToTxMatrix(matrix);
 			                break;
 				case SEQLOC_MASKING_NOTSET:
 				case SEQLOC_MASKING_PLUS1:
@@ -321,11 +360,13 @@ Int2 Main (void)
     if (myargs[17].intvalue)
        align_options += TXALIGN_HTML;
 	
+	AcknowledgeBlastQuery(query_bsp, 70, outfp, FALSE, myargs[17].intvalue);
+
       	seqannot = SeqAnnotNew();
         seqannot->type = 2;
 	AddAlignInfoToSeqAnnot(seqannot, align_type);
         seqannot->data = seqalign;
-	ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, NULL, mask_loc, FormatScoreFunc);
+	ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, FormatScoreFunc);
 
 	aip = NULL;
 	if (myargs[6].strvalue)
@@ -342,30 +383,32 @@ Int2 Main (void)
         seqannot = SeqAnnotFree(seqannot);
 		
         matrix = BLAST_MatrixDestruct(matrix);
-		init_buff_ex(85);
-		dbinfo_head = dbinfo;
-		while (dbinfo)
-		{
-                	PrintDbReport(dbinfo, 70, outfp);
-			dbinfo = dbinfo->next;
-		}
-		dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
+        if (txmatrix)
+           txmatrix = TxMatrixDestruct(txmatrix);
+        init_buff_ex(85);
+        dbinfo_head = dbinfo;
+        while (dbinfo)
+        {
+            PrintDbReport(dbinfo, 70, outfp);
+            dbinfo = dbinfo->next;
+        }
+        dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
+        
+        if (ka_params)
+        {
+            PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
+            MemFree(ka_params);
+        }
 
-		if (ka_params)
-		{
-                	PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
-			MemFree(ka_params);
-		}
+        if (ka_params_gap)
+        {
+            PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
+            MemFree(ka_params_gap);
+        }
 
-		if (ka_params_gap)
-		{
-                	PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
-			MemFree(ka_params_gap);
-		}
-
-                PrintTildeSepLines(params_buffer, 70, outfp);
-                MemFree(params_buffer);
-                free_buff();
+        PrintTildeSepLines(params_buffer, 70, outfp);
+        MemFree(params_buffer);
+        free_buff();
         mask_loc_start = mask_loc;
         while (mask_loc) {
             SeqLocSetFree(mask_loc->data.ptrvalue);

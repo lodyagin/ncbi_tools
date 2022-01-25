@@ -35,6 +35,30 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.73  2000/10/25 15:57:57  kans
+* sfp_in->excpt set to FALSE, not NULL, UNIX compiler does not know the difference, but Mac and PC compilers do
+*
+* Revision 6.72  2000/10/24 20:35:35  tatiana
+* CDS without protein sequence is accepted for  not forgbrel mode
+*
+* Revision 6.70  2000/10/19 18:52:32  kans
+* added another NULL entry to organelleQual for endogenous virus to suppress as organelle qualifier
+*
+* Revision 6.69  2000/10/16 19:10:17  kans
+* added UniSTS and InterimID to legal dbxrefs
+*
+* Revision 6.68  2000/10/10 15:06:02  kans
+* added SUBSRC_endogenous_virus_name
+*
+* Revision 6.67  2000/08/28 22:17:18  kans
+* added CDD to list of legal dbxrefs
+*
+* Revision 6.66  2000/07/14 20:24:26  kans
+* added RGD as dbxref with web link
+*
+* Revision 6.65  2000/07/12 22:45:15  kans
+* added ORGMOD_old_lineage
+*
 * Revision 6.64  2000/06/20 17:31:34  kans
 * added authority through breed as orgmod.subtypes
 *
@@ -501,13 +525,13 @@ typedef struct {
 	Uint1   num;
 } ORGMOD;
 
-#define num_subtype 24
+#define num_subtype 25
 CharPtr subtype[num_subtype] = {
 "chromosome", "map", "clone", "sub_clone", "haplotype", "genotype", "sex",
 "cell_line", "cell_type", "tissue_type", "clone_lib", "dev_stage", 
 "frequency", "germline", "rearranged", "lab_host", "pop_variant",
 "tissue_lib", "plasmid", "transposon", "insertion_seq", "plastid", "country",
-"segment"};
+"segment", "endogenous_virus"};
 
 #define num_genome 15
 static CharPtr genome[num_genome] = {"unknown", "genomic", "chloroplast", "chromoplast", "kinetoplast", "mitochondrion", "plastid", "macronuclear",
@@ -529,7 +553,7 @@ static CharPtr biomol[num_biomol] = {"genomic", "RNA", "mRNA", "rRNA",
 /*______________________________________________________________________
 */
 
-ORGMOD orgmod_subtype[33] = {
+ORGMOD orgmod_subtype[34] = {
 	{ "strain", 2 }, {"sub_strain", 3}, {"type", 4}, {"subtype", 5},
 	{"variety", 6},	{"serotype",7}, {"serogroup",8}, {"serovar", 9}, 
 	{"cultivar", 10}, {"pathovar", 11}, {"chemovar", 12}, {"biovar", 13},
@@ -538,10 +562,16 @@ ORGMOD orgmod_subtype[33] = {
 	{"sub_species", 22}, {"specimen_voucher", 23}, {"authority", 24},
 	{"forma", 25}, {"forma_specialis", 26}, {"ecotype", 27},
 	{"synonym", 28}, {"anamorph", 29}, {"teleomorph", 30}, {"breed", 31},
-	{"old_name", 254}, {"note", 255}, { NULL, 0 }
+	{"old_lineage", 253}, {"old_name", 254}, {"note", 255}, { NULL, 0 }
 };
 
-CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP", "RATMAP"};
+CharPtr dbtag[DBNUM] = {
+  "PIDe", "PIDd", "PIDg", "PID", "FLYBASE",
+  "GDB", "MIM", "SGD", "SWISS-PROT", "CK",
+  "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon",
+  "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR",
+  "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP",
+  "RATMAP", "RGD", "CDD", "UniSTS", "InterimID"};
 
 
 /*************************************************************************
@@ -2293,7 +2323,7 @@ static void  GatherProductGeneInfo (Asn2ffJobPtr ajp, SeqFeatPtr sfp_in, GBEntry
 
 NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr sfp_in, SeqFeatPtr PNTR sfpp_out, SortStructPtr gp)
 {
-	BioseqPtr bsp=gbp->bsp, pbsp;
+	BioseqPtr bsp=gbp->bsp, pbsp=NULL;
 	Boolean found_key, non_pseudo = FALSE;
 	CdRegionPtr cdr;
 	Char buffer[2], printbuf[41], temp[65];
@@ -2387,7 +2417,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 				}
 				return -1;
 			}
-			if (CheckSeqIdChoice(SeqLocId(product)) == FALSE) {
+			if (ajp->forgbrel && CheckSeqIdChoice(SeqLocId(product)) == FALSE) {
 				if (ajp->error_msgs == TRUE) {
 					loc = SeqLocPrint(sfp_in->location);
 					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
@@ -2396,7 +2426,7 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 				}
 				return -1;
 			}
-			if ((pbsp = BioseqFindCore(SeqLocId(product))) == NULL) {
+			if (ajp->forgbrel && (pbsp = BioseqFindCore(SeqLocId(product))) == NULL) {
 				if (ajp->error_msgs == TRUE) {
 					loc = SeqLocPrint(sfp_in->location);
 					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
@@ -2405,24 +2435,26 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 				}
 				return -1;
 			}
-			if (CheckSeqIdChoice(pbsp->id) == FALSE) {
-				if (ajp->error_msgs == TRUE) {
-					loc = SeqLocPrint(sfp_in->location);
-					ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+			if (pbsp != NULL) {
+				if (ajp->forgbrel && CheckSeqIdChoice(pbsp->id) == FALSE) {
+						if (ajp->error_msgs == TRUE) {
+							loc = SeqLocPrint(sfp_in->location);
+							ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
 				    		"Dropping CDS due to missing EMBL/DDBJ/GB protein accession: %s", loc);
-					MemFree(loc);
+							MemFree(loc);
+						}
+						return -1;
 				}
-				return -1;
-			}
-			if (ajp->show_version == TRUE) {
-				if (CheckSeqIdAccVer(pbsp->id) == FALSE) {
-					if (ajp->error_msgs == TRUE) {
-						loc = SeqLocPrint(sfp_in->location);
-						ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
-							"Dropping CDS due to missing protein accession.version: %s", loc);
-						MemFree(loc);
+				if (ajp->show_version == TRUE) {
+					if (CheckSeqIdAccVer(pbsp->id) == FALSE) {
+						if (ajp->error_msgs == TRUE) {
+							loc = SeqLocPrint(sfp_in->location);
+							ErrPostEx(SEV_ERROR, ERR_FEATURE_Dropped, 
+								"Dropping CDS due to missing protein accession.version: %s", loc);
+							MemFree(loc);
+						}
+						return -1;
 					}
-					return -1;
 				}
 			}
 		  }
@@ -2462,7 +2494,9 @@ NLM_EXTERN Int2 ConvertToNAImpFeat (Asn2ffJobPtr ajp, GBEntryPtr gbp, SeqFeatPtr
 			sfp_out->qual = AddGBQual(sfp_out->qual, "pseudo", NULL);
 		}
 		if (sfp_in->excpt) {
-			if (sfp_in->except_text) {
+			if (StringCmp("ribosomal slippage", sfp_in->except_text) == 0) {
+				sfp_in->excpt = FALSE;
+			} else if (sfp_in->except_text) {
 				sfp_out->qual = AddGBQual(sfp_out->qual, 
 									"exception", sfp_in->except_text);
 			} else if (GBQualPresent("exception", sfp_in->qual) == TRUE) {
@@ -3248,8 +3282,7 @@ NLM_EXTERN void AddPID (Asn2ffJobPtr ajp, SeqFeatPtr sfp_out)
 	}
 	sip = GetProductSeqId(product);
 	if (sip) {	/* Get protein bsp	*/
-		p_bsp = BioseqFind(sip);
-		if (ajp->mode != DUMP_MODE && ajp->show_version && p_bsp) {
+		if ((p_bsp = BioseqFind(sip)) != NULL) {
 			if ((new_id = GetSeqIdChoice(p_bsp->id)) == NULL) {
 				ErrPostStr(SEV_ERROR, ERR_ACCESSION_NoAccessNum, "");
 			} else {
@@ -3957,7 +3990,8 @@ static CharPtr organelleQual [] = {
   "nucleomorph",
   "plastid:apicoplast",
   "plastid:leucoplast",
-  "plastid:proplastid"
+  "plastid:proplastid",
+  NULL
 };
 
 NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, BioSourcePtr biosp, GBQualPtr gbqual, Boolean new_release)
@@ -3984,12 +4018,8 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 			} else {
 				qual = genome[i];
 				if (qual && (GBQualNameValid(qual)) != -1) {
-					if (i == 14) {  /*virion*/
-						if (new_release) {
-							gbqual = AddGBQual(gbqual, qual, val);
-						} else {
-							gbqual = AddGBQual(gbqual, "note", "virion");
-						}
+					if (i == 8) {  /*extrachrom*/
+						gbqual = AddGBQual(gbqual, "note", "extrachromosomal");
 					} else {
 						gbqual = AddGBQual(gbqual, qual, val);
 					}
@@ -4006,6 +4036,9 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 						break;
 				}
 				if (orgmod_subtype[i].name == NULL) {
+					continue;
+				}
+				if (orgmod_subtype[i].num == 253) { /* old_lineage */
 					continue;
 				}
 				if (orgmod_subtype[i].num == 254) { /* old_name */

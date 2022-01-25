@@ -31,9 +31,15 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.129 $
+ * $Revision: 6.131 $
  *
  * $Log: vecscrn.c,v $
+ * Revision 6.131  2000/09/01 18:29:13  dondosha
+ * Removed calls to ReadDBFreeSharedInfo and ReadDBCloseMHdrAndSeqFiles
+ *
+ * Revision 6.130  2000/08/07 20:38:11  madden
+ * Proper casting of int to long for printf
+ *
  * Revision 6.129  2000/05/19 20:40:34  kitts
  * 1. Fixed bug in VSMakeCombinedSeqLoc preventing "No hits" being
  *    reported when none of the blast hits were significant.
@@ -116,7 +122,7 @@ CoordTo62Notation (Int4 position, CharPtr major_part, CharPtr minor_part)
 
 
 	if (major_num < 10)
-		sprintf(major_part, "%ld", major_num);
+		sprintf(major_part, "%ld", (long) major_num);
 	else if (major_num < 36)
 		*major_part = 'A' + major_num - 10;
 	else
@@ -124,7 +130,7 @@ CoordTo62Notation (Int4 position, CharPtr major_part, CharPtr minor_part)
 		
 
 	if (minor_num < 10)
-		sprintf(minor_part, "%ld", minor_num);
+		sprintf(minor_part, "%ld", (long) minor_num);
 	else if (minor_num < 36)
 		*minor_part = 'A' + minor_num - 10;
 	else
@@ -1018,7 +1024,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 
 
 	fprintf(outfp, "<B>Distribution of Vector Matches on the Query Sequence</B>\n\n");
-	fprintf(outfp, "<IMG hspace=1 SRC=http://www.ncbi.nlm.nih.gov/cgi-bin/Entrez/tunf?450x12-1(1)150(%ld)300(%ld)450(%ld)600(%ld)\n", query_length/4, query_length/2, 3*query_length/4, query_length); 
+	fprintf(outfp, "<IMG hspace=1 SRC=http://www.ncbi.nlm.nih.gov/cgi-bin/Entrez/tunf?450x12-1(1)150(%ld)300(%ld)450(%ld)600(%ld)\n", (long) query_length/4, (long) query_length/2, (long) 3*query_length/4, (long) query_length); 
 	fprintf(outfp, ">\n");
 	fprintf(outfp, "<IMG hspace=1 SRC=http://www.ncbi.nlm.nih.gov/gorf/gun2.cgi?0M(009g)");
 	if (buffer20)
@@ -1047,7 +1053,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Strong\" TARGET=\"VecScreenInfo\">Strong match</A>:  ");
 		while (tmp)
 		{
-			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, " %ld-%ld", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			if (tmp->next)
 				fprintf(outfp, ",");
 			else
@@ -1063,7 +1069,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Moderate\" TARGET=\"VecScreenInfo\">Moderate match</A>:");
 		while (tmp)
 		{
-			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, " %ld-%ld", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			if (tmp->next)
 				fprintf(outfp, ",");
 			else
@@ -1079,7 +1085,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Weak\" TARGET=\"VecScreenInfo\">Weak match</A>:    ");
 		while (tmp)
 		{
-			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, " %ld-%ld", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			if (tmp->next)
 				fprintf(outfp, ",");
 			else
@@ -1095,7 +1101,7 @@ VSPrintOverviewFromSeqLocs (ValNodePtr vnp, Int4 query_length, FILE *outfp)
 		fprintf(outfp, "<A HREF=\"http://www.ncbi.nlm.nih.gov/VecScreen/VecScreen_docs.html#Suspect\" TARGET=\"VecScreenInfo\">Suspect origin</A>:");
 		while (tmp)
 		{
-			fprintf(outfp, " %ld-%ld", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, " %ld-%ld", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			if (tmp->next)
 				fprintf(outfp, ",");
 			else
@@ -1157,7 +1163,7 @@ VSPrintListFromSeqLocs (ValNodePtr vnp, FILE *outfp)
 		fprintf(outfp, "Strong match\n");
 		while (tmp)
 		{
-			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, "%ld\t%ld\n", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			tmp = tmp->next;
 		}
 	}
@@ -1169,7 +1175,7 @@ VSPrintListFromSeqLocs (ValNodePtr vnp, FILE *outfp)
 		fprintf(outfp, "Moderate match\n");
 		while (tmp)
 		{
-			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, "%ld\t%ld\n", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			tmp = tmp->next;
 		}
 	}
@@ -1181,7 +1187,7 @@ VSPrintListFromSeqLocs (ValNodePtr vnp, FILE *outfp)
 		fprintf(outfp, "Weak match\n");
 		while (tmp)
 		{
-			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, "%ld\t%ld\n", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			tmp = tmp->next;
 		}
 	}
@@ -1193,7 +1199,7 @@ VSPrintListFromSeqLocs (ValNodePtr vnp, FILE *outfp)
 		fprintf(outfp, "Suspect origin\n");
 		while (tmp)
 		{
-			fprintf(outfp, "%ld\t%ld\n", SeqLocStart(tmp)+1, SeqLocStop(tmp)+1);
+			fprintf(outfp, "%ld\t%ld\n", (long) (SeqLocStart(tmp)+1), (long) (SeqLocStop(tmp)+1));
 			tmp = tmp->next;
 		}
 	}
@@ -1302,7 +1308,6 @@ VSPrintListIdLine (BioseqPtr query_bsp, CharPtr proginfo, CharPtr database, FILE
 
 		*ptr = '\0';
 
-		rdfp = ReadDBFreeSharedInfo(rdfp);
 		rdfp = readdb_destruct(rdfp);
 
 	}

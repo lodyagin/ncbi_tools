@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.25 $
+* $Revision: 6.27 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -358,7 +358,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
-      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error\n", (long) Intvalue, buf, buf3);
+      sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error\n", (long) Intvalue, (int) pos,buf, buf3);
       break;
 
     case Err_End_More_Than_Biolen:
@@ -488,24 +488,6 @@ static Int2 CountSeqIdInSip (SeqIdPtr sip)
 }
 
 /*********************************************************/
-static Pointer LIBCALL sap_empty (SeqAnnotPtr sap, Uint1 type, Pointer PNTR ptr)
-{
-  SeqAlignPtr      salp = NULL;
-
-  if (sap != NULL) {
-     for (; sap!= NULL; sap=sap->next) {
-        if (sap->type == type) {
-           salp = (SeqAlignPtr) sap->data;
-           if (ptr!=NULL)
-              *ptr = (Pointer) sap;
-           break;
-        }
-     }
-  }
-  return salp;
-}
-
-/*********************************************************/
 static void delete_bioseqs (ValNodePtr ids, Uint2 entityID)
 {
   SeqEntryPtr  sep_top;
@@ -574,7 +556,7 @@ static void ValidateSeqId (SeqIdPtr sip, SeqAlignPtr salp)
 		AlignValBioseqUnlockById(siptemp);
 	*/
 	bsp = BioseqFindCore (siptemp);
-	if (bsp == NULL) {
+	if (bsp == NULL && sip->choice == SEQID_LOCAL) {
 		ValMessage (salp, Err_SeqId, SEV_ERROR, siptemp, NULL, 0);
 	}
   }
@@ -1958,12 +1940,27 @@ NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignFromData (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+static void ValidateSeqAlignInAnnot (SeqAnnotPtr sap, SaValPtr svp)
+
+{
+  SeqAlignPtr  salp;
+
+  while (sap != NULL) {
+    if (sap->type == 2) {
+      salp = (SeqAlignPtr) sap->data;
+      if (salp != NULL) {
+        ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
+      }
+    }
+    sap = sap->next;
+  }
+}
+
 static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
                                           Int4 index, Int2 indent)
 {
   BioseqPtr          bsp;
   BioseqSetPtr       bssp;
-  SeqAlignPtr        salp;
   SaValPtr           svp;
 
   if (sep != NULL && sep->data.ptrvalue && mydata != NULL) {
@@ -1971,19 +1968,13 @@ static void ValidateSeqAlignCallback (SeqEntryPtr sep, Pointer mydata,
      if (IS_Bioseq(sep)) {
         bsp = (BioseqPtr) sep->data.ptrvalue;
         if (bsp!=NULL) {
-           salp=sap_empty(bsp->annot, 2, NULL);
-           if (salp!=NULL) {
-              ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-           }
+           ValidateSeqAlignInAnnot (bsp->annot, svp);
         }
      }   
      else if(IS_Bioseq_set(sep)) {
         bssp = (BioseqSetPtr)sep->data.ptrvalue;
         if (bssp!=NULL) {
-           salp=sap_empty(bssp->annot, 2, NULL);
-           if (salp!=NULL) {
-              ValidateSeqAlign (salp, svp->entityID, svp->message, svp->msg_success, svp->find_remote_bsp, svp->delete_bsp, svp->delete_salp, &svp->dirty);
-           }
+           ValidateSeqAlignInAnnot (bssp->annot, svp);
         }
      }
   }

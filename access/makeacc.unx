@@ -1,3 +1,8 @@
 asntool -m entrez2.asn -o asnent2.h
 mv asnent2.h ../asnstat
 asntool -m entrez2.asn -G -B objent2 -K asnent2.h
+
+asntool -m mim.asn -o asnmim.h
+mv asnmim.h ../asnstat
+asntool -m mim.asn -G -B objmim -K asnmim.h
+

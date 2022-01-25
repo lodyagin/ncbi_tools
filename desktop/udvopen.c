@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.20  2000/07/26 17:26:26  lewisg
+* fix code for c++ inclusion
+*
 * Revision 6.19  2000/06/16 14:57:02  lewisg
 * move entrez calls out of desktop
 *

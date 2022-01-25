@@ -46,6 +46,7 @@
 #define ERR_SEQ_DESCR_MissingLineage  2,12
 #define ERR_SEQ_DESCR_SerialInComment  2,13
 #define ERR_SEQ_DESCR_BioSourceNeedsFocus  2,14
+#define ERR_SEQ_DESCR_BadOrganelle  2,15
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -62,6 +63,7 @@
 #define ERR_SEQ_PKG_PartsSetMixedBioseqs  4,8
 #define ERR_SEQ_PKG_PartsSetHasSets  4,9
 #define ERR_SEQ_PKG_FeaturePackagingProblem  4,10
+#define ERR_SEQ_PKG_GenomicProductPackagingProblem  4,11
 #define ERR_SEQ_FEAT  5,0
 #define ERR_SEQ_FEAT_InvalidForType  5,1
 #define ERR_SEQ_FEAT_PartialProblem  5,2
@@ -105,6 +107,7 @@
 #define ERR_SEQ_FEAT_FocusOnBioSourceFeature  5,40
 #define ERR_SEQ_FEAT_PeptideFeatOutOfFrame  5,41
 #define ERR_SEQ_FEAT_InvalidQualifierValue  5,42
+#define ERR_SEQ_FEAT_MultipleMRNAproducts  5,43
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2

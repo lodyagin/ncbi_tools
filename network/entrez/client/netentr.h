@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/15/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *       entrez index access library for Entrez network version
@@ -44,10 +44,10 @@
 * 11-20-94 Brylawski   Modified NetEntDoNeighborText to pass user preferences.
 *
 * ==========================================================================
-*
-*
-* RCS Modification History:
 * $Log: netentr.h,v $
+* Revision 6.2  2000/07/08 20:44:03  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.1  1998/02/21 22:34:38  kans
 * NetEntHierarchyGet passes type and field
 *
@@ -83,10 +83,6 @@
  *
  * Revision 1.18  1995/06/29  16:36:46  epstein
  * add biostruc-complexity
- *
- * Revision 1.17  95/05/17  17:53:13  epstein
- * add RCS log revision history
- * 
 */
 
 #ifndef _NETENTREZ_
@@ -231,4 +227,8 @@ NLM_EXTERN Int4 LIBCALL NetEntClusterAnalysis PROTO((DocUidPtr uids, Int4 numuid
 #endif
 
 #endif
+
+
+
+
 

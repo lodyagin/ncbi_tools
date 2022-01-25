@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.145 $
+* $Revision: 6.154 $
 *
 * File Description: 
 *
@@ -248,7 +248,8 @@ static void FixLocus (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 	return;
 }
 
-static void DoFixupLocus (SeqEntryPtr sep)
+extern void DoFixupLocus (SeqEntryPtr sep);
+extern void DoFixupLocus (SeqEntryPtr sep)
 
 {
   BioSourcePtr  biop;
@@ -328,7 +329,8 @@ static void DoFixPartLocus (SeqEntryPtr sep, CharPtr prefix, Int2 segment, Int2 
   tsip->name = StringSave (str);
 }
 
-static void DoFixupSegSet (SeqEntryPtr sep)
+extern void DoFixupSegSet (SeqEntryPtr sep);
+extern void DoFixupSegSet (SeqEntryPtr sep)
 
 {
   CharPtr       accn;
@@ -3305,64 +3307,66 @@ static void AddQualifier (IteM i)
 #define ADD_SOURCE       4
 
 static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
-  {" ",                  0},
-  {"Acronym",           19},
-  {"Anamorph",          29},
-  {"Authority",         24},
-  {"Biotype",           14},
-  {"Biovar",            13},
-  {"Breed",             31},
-  {"Cell-line",        108},
-  {"Cell-type",        109},
-  {"Chemovar",          12},
-  {"Chromosome",       101},
-  {"Clone",            103},
-  {"Clone-lib",        111},
-  {"Common",            18},
-  {"Country",          123},
-  {"Cultivar",          10},
-  {"Dev-stage",        112},
-  {"Dosage",            20},
-  {"Ecotype",           27},
-  {"Forma",             25},
-  {"Forma-specialis",   26},
-  {"Frequency",        113},
-  {"Genotype",         106},
-  {"Germline",         114},
-  {"Group",             15},
-  {"Haplotype",        105},
-  {"Ins-seq-name",     121},
-  {"Isolate",           17},
-  {"Lab-host",         116},
-  {"Map",              102},
-  {"Natural-host",      21},
-  {"Old Name",          54}, /* 254 */
-  {"OrgMod Note",       55},
-  {"Pathovar",          11},
-  {"Plasmid-name",     119},
-  {"Plastid-name",     122},
-  {"Pop-variant",      117},
-  {"Rearranged",       115},
-  {"Segment",          124},
-  {"Serogroup",          8},
-  {"Serotype",           7},
-  {"Serovar",            9},
-  {"Sex",              107},
-  {"Specimen-voucher",  23},
-  {"Strain",             2},
-  {"Sub-species",       22},
-  {"Subclone",         104},
-  {"Subgroup",          16},
-  {"SubSource Note",   155},
-  {"Substrain",          3},
-  {"Subtype",            5},
-  {"Synonym",           28},
-  {"Teleomorph",        30},
-  {"Tissue-lib",       118},
-  {"Tissue-type",      110},
-  {"Transposon-name",  120},
-  {"Type",               4},
-  {"Variety",            6},
+  {" ",                       0},
+  {"Acronym",                19},
+  {"Anamorph",               29},
+  {"Authority",              24},
+  {"Biotype",                14},
+  {"Biovar",                 13},
+  {"Breed",                  31},
+  {"Cell-line",             108},
+  {"Cell-type",             109},
+  {"Chemovar",               12},
+  {"Chromosome",            101},
+  {"Clone",                 103},
+  {"Clone-lib",             111},
+  {"Common",                 18},
+  {"Country",               123},
+  {"Cultivar",               10},
+  {"Dev-stage",             112},
+  {"Dosage",                 20},
+  {"Ecotype",                27},
+  {"Endogenous_virus-name", 125},
+  {"Forma",                  25},
+  {"Forma-specialis",        26},
+  {"Frequency",             113},
+  {"Genotype",              106},
+  {"Germline",              114},
+  {"Group",                  15},
+  {"Haplotype",             105},
+  {"Ins-seq-name",          121},
+  {"Isolate",                17},
+  {"Lab-host",              116},
+  {"Map",                   102},
+  {"Natural-host",           21},
+  {"Old Lineage",            53}, /* 253 */
+  {"Old Name",               54}, /* 254 */
+  {"OrgMod Note",            55},
+  {"Pathovar",               11},
+  {"Plasmid-name",          119},
+  {"Plastid-name",          122},
+  {"Pop-variant",           117},
+  {"Rearranged",            115},
+  {"Segment",               124},
+  {"Serogroup",               8},
+  {"Serotype",                7},
+  {"Serovar",                 9},
+  {"Sex",                   107},
+  {"Specimen-voucher",       23},
+  {"Strain",                  2},
+  {"Sub-species",            22},
+  {"Subclone",              104},
+  {"Subgroup",               16},
+  {"SubSource Note",        155},
+  {"Substrain",               3},
+  {"Subtype",                 5},
+  {"Synonym",                28},
+  {"Teleomorph",             30},
+  {"Tissue-lib",            118},
+  {"Tissue-type",           110},
+  {"Transposon-name",       120},
+  {"Type",                    4},
+  {"Variety",                 6},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alistX)
@@ -3385,6 +3389,7 @@ static ENUM_ALIST(biosource_genome_alistX)
   {"Apicoplast",          16},
   {"Leucoplast",          17},
   {"Proplastid",          18},
+  {"Endogenous-virus",    19},
 END_ENUM_ALIST
 
 static ENUM_ALIST(orgref_textfield_alist)
@@ -3495,6 +3500,8 @@ static OrgModPtr FindOrgMod (BioSourcePtr biop, Uint1 subtype, SourceFormPtr sfp
 
   if (subtype == 55 || subtype == 155) {
     subtype = 255;
+  } else if (subtype == 53) {
+    subtype = 253;
   } else if (subtype == 54) {
     subtype = 254;
   }
@@ -5215,7 +5222,7 @@ static void WriteTaxNode (CharPtr sci, CharPtr com, CharPtr syn,
   if (sci != NULL && sci [0] != '\0') {
     if (div == NULL || div [0] == '\0') div = "???";
     if (com != NULL && com [0] != '\0') {
-      sprintf (str, "%s\tS\t%s\t%ld\t%ld\t%s\t%ld\n", sci, com,
+      sprintf (str, "%s\t%s\t%ld\t%ld\t%s\t%ld\n", sci, com,
                (long) gc, (long) mgc, div, (long) taxID);
       fprintf (fout, "%s", str);
       /*
@@ -5223,12 +5230,14 @@ static void WriteTaxNode (CharPtr sci, CharPtr com, CharPtr syn,
                (long) gc, (long) mgc, div, (long) taxID);
       fprintf (fout, "%s", str);
       */
+    /*
     } else if (syn != NULL && syn [0] != '\0') {
       sprintf (str, "%s\tC\t%s\t%ld\t%ld\t%s\t%ld\n", syn, sci,
                (long) gc, (long) mgc, div, (long) taxID);
       fprintf (fout, "%s", str);
+    */
     } else {
-      sprintf (str, "%s\tS\t\t%ld\t%ld\t%s\t%ld\n", sci,
+      sprintf (str, "%s\t\t%ld\t%ld\t%s\t%ld\n", sci,
                (long) gc, (long) mgc, div, (long) taxID);
       fprintf (fout, "%s", str);
     }
@@ -6969,14 +6978,14 @@ static void AddGenomesUserObject (IteM i)
 
   if (IS_Bioseq (sep)) {
     bsp = (BioseqPtr) sep->data.ptrvalue;
-    vnp = ValNodeNew (NULL);
+    vnp = SeqDescrNew (NULL);
     vnp->choice = Seq_descr_user;
     vnp->data.ptrvalue = (Pointer) uop;
     vnp->next = bsp->descr;
     bsp->descr = vnp;
   } else if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    vnp = ValNodeNew (NULL);
+    vnp = SeqDescrNew (NULL);
     vnp->choice = Seq_descr_user;
     vnp->data.ptrvalue = (Pointer) uop;
     vnp->next = bssp->descr;
@@ -7387,6 +7396,9 @@ extern void PromoteAlignsToBestIDProc (IteM i);
 extern void SetSourceFocus (IteM i);
 extern void ClearSourceFocus (IteM i);
 extern void ExtraAccToHistByPos (IteM i);
+extern void StrandUnknownToStrandPlus (IteM i);
+extern void ClearCdsProducts (IteM i);
+extern void ClearMrnaProducts (IteM i);
 
 extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
@@ -7491,6 +7503,11 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Remove Unnecessary Gene Xrefs", RemoveGeneXrefs);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Clear CDS Products", ClearCdsProducts);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Clear mRNA Products", ClearMrnaProducts);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
   i = CommandItem (s, "Clear GenBank Components", (ItmActnProc) EditGenbankElements);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Clear ORF Flag in CDSs", ClearOrfFlagInCDS);
@@ -7564,6 +7581,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Edit Feature Partials", EditFeaturePartials);
   SetObjectExtra (i, bfp, NULL);
   SeparatorItem (s);
+  i = CommandItem (s, "Strand Unkown to Strand Plus", StrandUnknownToStrandPlus);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
   i = CommandItem (s, "Correct CDS Genetic Codes", CorrectCDSGenCodes);
   SetObjectExtra (i, bfp, NULL);
   /*
@@ -7620,6 +7640,8 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
 
   s = SubMenu (m, "Process/ P");
   i = CommandItem (s, "Process Additional FASTA Proteins", ParseInMoreProteins);
+  SetObjectExtra (i, bfp, NULL);
+  i = CommandItem (s, "Process FASTA Proteins in Order", ParseInProteinsInOrder);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Process Additional FASTA cDNAs", ParseInMoreMRNAs);
   SetObjectExtra (i, bfp, NULL);

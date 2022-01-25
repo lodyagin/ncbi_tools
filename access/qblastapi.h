@@ -29,13 +29,18 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.2 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 *
+* $Log: qblastapi.h,v $
+* Revision 1.5  2000/07/19 15:17:15  shavirin
+* Added loging for this file.
+*
+* 
 * ==========================================================================
 */
 
@@ -145,6 +150,17 @@ NLM_EXTERN Int4 PrintQBlastQueue (
   FILE *fp
 );
 
+/* 
+   Function to get SeqAnnot for RID. We suupose, that search already
+   finished and results are exists on the Qblast repository 
+*/
+NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID);
+
+/* Function to get BlastObject for RID. We suupose, that search already
+   finished and results are exists on the Qblast repository. Blast Object
+   ASN.1 will be returned as CharPtr buffer
+*/
+NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID);
 
 #ifdef __cplusplus
 }

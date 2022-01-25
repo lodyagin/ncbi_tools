@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *       Vibrant drawing procedure definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbidraw.h,v $
+* Revision 6.9  2000/07/08 20:44:13  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.8  2000/01/24 16:11:13  lewisg
 * speed up seqid comparison in color manager, make fast windows version of SetColor()
 *
@@ -89,12 +92,13 @@
 #ifndef _NCBIDRAW_
 #define _NCBIDRAW_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifndef _NCBI_
 #include <ncbi.h>
+#endif
+
+
+#ifdef __cplusplus
+extern "C" {
 #endif
 
 /***  PORTABLE GRAPHIC PRIMITIVE OBJECT TYPES  ***/

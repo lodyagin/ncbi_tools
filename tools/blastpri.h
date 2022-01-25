@@ -32,8 +32,26 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.65 $ 
+/* $Revision: 6.71 $ 
 * $Log: blastpri.h,v $
+* Revision 6.71  2000/10/12 21:40:36  shavirin
+* Added is_oofalign to definition of the function BLASTFilterOverlapRegions().
+*
+* Revision 6.70  2000/10/11 21:51:17  shavirin
+* Added definition of the function BLASTFilterOverlapRegions()
+*
+* Revision 6.69  2000/08/31 16:29:11  shavirin
+* Added definition of *QueryDNAP set of functions related to OOF.
+*
+* Revision 6.68  2000/08/28 21:51:53  shavirin
+* Added definition of the function BlastOtherReturnsFree().
+*
+* Revision 6.67  2000/07/21 21:26:43  dondosha
+* Added BLASTSetUpSearchWithReadDbInternalEx with Boolean argument is_megablast
+*
+* Revision 6.66  2000/07/08 20:44:11  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.65  2000/06/13 20:54:39  shavirin
 * Added return of EFF_SEARCH_SPACE in the function BlastOtherReturnsPrepare
 *
@@ -480,9 +498,6 @@ Contents: prototypes for "private" BLAST functions, these should not be called
  * */
 #ifndef __BLASTPRI__
 #define __BLASTPRI__
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <blast.h>
 #include <blastkar.h>
@@ -490,6 +505,10 @@ extern "C" {
 #include <seed.h>
 #include <ffprint.h>
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct _txdbinfo {
    struct _txdbinfo PNTR next;
@@ -605,7 +624,16 @@ BlastSearchBlkPtr LIBCALL BlastSearchBlkDestruct PROTO((BlastSearchBlkPtr search
 
 BlastSearchBlkPtr BLASTSetUpSearchWithReadDbInternal PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp, CharPtr prog_name, Int4 qlen, CharPtr dbname, BLAST_OptionsBlkPtr options, int (LIBCALLBACK *callback)PROTO((Int4 done, Int4 positives)), SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, Int4 gi_list_total, ReadDBFILEPtr rdfp));
 
-
+BlastSearchBlkPtr LIBCALL
+BLASTSetUpSearchWithReadDbInternalEx PROTO((SeqLocPtr query_slp, BioseqPtr query_bsp,
+				      CharPtr prog_name, Int4 qlen, CharPtr
+				      dbname, BLAST_OptionsBlkPtr options, int
+				      (LIBCALLBACK *callback)PROTO((Int4 done,
+								    Int4
+								    positives)),
+				      SeqIdPtr seqid_list, BlastDoubleInt4Ptr
+				      gi_list, Int4 gi_list_total, ReadDBFILEPtr
+				      rdfp, Boolean is_megablast));
 
 Int4 LIBCALL BlastTranslateUnambiguousSequence PROTO((BlastSearchBlkPtr search, Int4 length, Uint1Ptr prot_seq, Uint1Ptr nt_seq, Int2 frame));
 
@@ -693,6 +721,7 @@ BlastErrorMsgPtr BlastDestroyErrorMessage PROTO((BlastErrorMsgPtr error_msg));
 ValNodePtr BlastErrorChainDestroy PROTO((ValNodePtr vnp));
 
 ValNodePtr LIBCALL BlastOtherReturnsPrepare PROTO((BlastSearchBlkPtr search));
+void LIBCALL BlastOtherReturnsFree PROTO((ValNodePtr other_returns));
 
 SeqLocPtr BlastBioseqFilter PROTO((BioseqPtr bsp, CharPtr instructions));
 
@@ -788,6 +817,28 @@ SeqIdPtr BlastGetAllowedGis PROTO((BlastSearchBlkPtr search, Int4 ordinal_id, Se
 
 Int4 BlastDeleteHeap PROTO((BLASTHeapPtr which_heap, Int4 position));
 
+/* Functions used in OOF calculations */
+
+BlastSequenceBlkPtr PNTR LIBCALL
+BlastMakeCopyQueryDNAP PROTO((BlastSequenceBlkPtr PNTR bsbpp_in));
+
+void LIBCALL BlastFreeQueryDNAP PROTO((BlastSequenceBlkPtr PNTR bsbpp));
+
+    BlastSequenceBlkPtr PNTR LIBCALL
+BlastCreateQueryDNAP PROTO((BLASTContextStructPtr context, Int4 length));
+
+/* -----------------------------------------------------------------
+   This function will filter given SeqAlignPtr for overlaping
+   regions for the same query/subject pair. Another input parameter is
+   percentage of overlapping required for the alignment to be removed
+   from SeqAlignPtr
+   ---------------------------------------------------------------- */
+SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct, 
+                                      Boolean subject_is_aa, 
+                                      Boolean is_ooframe,
+                                      Boolean sort_array);
+
+/* End of functions used in OOF calculations */
 
 #ifdef __cplusplus
 }

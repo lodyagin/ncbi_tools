@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   11/13/92
 *
-* $Revision: 6.12 $
+* $Revision: 6.13 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: drawing.c,v $
+* Revision 6.13  2000/10/25 20:47:17  vakatov
+* Rollback R6.10 (still may need add. fix for MS-Windows) [w/ V.Chetvernin]
+*
 * Revision 6.12  1999/10/04 17:16:30  kans
 * include ncbidraw.h instead of vibrant.h, a couple Nlm_ prefixes
 *
@@ -1082,9 +1085,9 @@ static void s_DoRoundRect(RectPtr r,
       (flags & ROREC_TOP   &&  flags & ROREC_BOTTOM)  ||
       (flags & ROREC_LEFT  &&  flags & ROREC_RIGHT)) {
     if ( fill )
-      PaintRoundRect(r, (Nlm_Int2)(2 * oval_w), (Nlm_Int2)(2 * oval_h));
+      PaintRoundRect(r, oval_w, oval_h);
     else
-      FrameRoundRect(r, (Nlm_Int2)(2 * oval_w), (Nlm_Int2)(2 * oval_h));
+      FrameRoundRect(r, oval_w, oval_h);
     return;
   }
 

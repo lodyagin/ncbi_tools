@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: cdrgn.h,v $
+* Revision 6.3  2000/07/08 20:44:00  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
 * ==========================================================================
 */
@@ -45,11 +45,11 @@
 #ifndef _CDRGN_
 #define _CDRGN_
 
+#include <dlogutil.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <dlogutil.h>
 
 #define REGISTER_CDRGN_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit CdRgn","CDS",OBJ_SEQFEAT,FEATDEF_CDS,OBJ_SEQFEAT,FEATDEF_CDS,NULL,CdRgnGenFunc,PROC_PRIORITY_DEFAULT)
 

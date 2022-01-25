@@ -1,4 +1,4 @@
-/*   $Id: samutil.h,v 1.49 2000/07/05 18:42:17 hurwitz Exp $
+/*   $Id: samutil.h,v 1.57 2000/10/05 21:27:42 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,43 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.h,v 1.49 2000/07/05 18:42:17 hurwitz Exp $
+* File Name:  $Id: samutil.h,v 1.57 2000/10/05 21:27:42 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.49 $
+* $Revision: 1.57 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.h,v $
+* Revision 1.57  2000/10/05 21:27:42  hurwitz
+* bug fix for making ruler, added functions to get bioseq start and len of each aligned block
+*
+* Revision 1.56  2000/09/08 21:47:57  hurwitz
+* added DDE_GetNumResidues function
+*
+* Revision 1.55  2000/08/29 18:01:38  lewisg
+* fix dde launch logic
+*
+* Revision 1.54  2000/08/25 22:10:33  hurwitz
+* added utility function
+*
+* Revision 1.53  2000/08/07 23:02:39  hurwitz
+* when merging panels fails, scroll to spot where alignments differ
+*
+* Revision 1.52  2000/08/03 17:12:38  hurwitz
+* added functions to check if alignments are mergeable
+*
+* Revision 1.51  2000/07/25 20:30:22  hurwitz
+* bug fixes: panel update when file is closed, double-click launches UDV from DDE, seqName agrees in status line and left col
+*
+* Revision 1.50  2000/07/17 17:49:12  hurwitz
+* fixed bug.  when copying ParaG's need to copy all rows so edits can be saved properly
+*
 * Revision 1.49  2000/07/05 18:42:17  hurwitz
 * added split block function to DDV
 *
@@ -249,6 +273,8 @@ typedef  struct  _SAM_RecT {
 #define SAMVIEWUDV 3
 #define SAMVIEWSEQUIN 4
 #define SAMVIEWNENTREZ 5
+#define SAMVIEWDDE 6
+#define SAMVIEWCN3DDDV 7
 
 #define SAM_ViewString "Viewer Global"
 
@@ -373,15 +399,17 @@ NLM_EXTERN Boolean DDE_FirstColumnIsAligned(DDE_InfoPtr pEditInfo);
 NLM_EXTERN Boolean DDE_LastColumnIsAligned(DDE_InfoPtr pEditInfo);
 NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN ValNodePtr  DDE_GetMsaTxtNode(ValNodePtr head, Int4 DispCoord, Int4 PNTR pOffset);
+NLM_EXTERN Int4 DDE_GetStart(MsaParaGPopListPtr pPopList, Int4 BlockIndex, Int4 Row);
+NLM_EXTERN Int4 DDE_GetLen(MsaParaGPopListPtr pPopList, Int4 BlockIndex);
 
 /*=====================================================================
 *  here are some helper functions
 *======================================================================*/
 NLM_EXTERN DDE_InfoPtr  DDE_New(MsaParaGPopListPtr pPopList, Int4 TotalNumRows);
-NLM_EXTERN DDE_InfoPtr  DDE_Free(DDE_InfoPtr pEditInfo);
+NLM_EXTERN DDE_InfoPtr  DDE_Free(DDE_InfoPtr pEditInfo, Int4 TotalNumRows);
 NLM_EXTERN DDE_InfoPtr  DDE_Copy(DDE_InfoPtr pEditInfo, Int4 TotalNumRows);
-NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList);
-NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList);
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList, Int4 TotalNumRows);
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList, Int4 TotalNumRows);
 NLM_EXTERN ParaGPtr    DDE_ParaGNew(ParaGPtr pParaG);
 NLM_EXTERN ParaGPtr    DDE_ParaGFree(ParaGPtr pParaG);
 NLM_EXTERN Int4        DDE_GetNumVisibleRows(DDE_InfoPtr pEditInfo);
@@ -389,6 +417,7 @@ NLM_EXTERN Int4        DDE_GetDisplayRow(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN Int4        DDE_GetInsertRow(DDE_InfoPtr pEditInfo, Int4 Row);
 NLM_EXTERN Boolean     DDE_IsBefore(DDE_InfoPtr pEditInfo, Int4 Row1, Int4 Row2);
 NLM_EXTERN ParaGPtr    DDE_GetParaGPtr(DDE_InfoPtr pEditInfo, Int4 Row);
+NLM_EXTERN ParaGPtr    DDE_GetParaGPtr2(MsaParaGPopListPtr pPopList, Int4 Row);
 NLM_EXTERN ValNodePtr  DDE_GetTxtListPtr2(MsaParaGPopListPtr pPopList, Int4 Row);
 NLM_EXTERN void        DDE_SetTxtListPtr(DDE_InfoPtr pEditInfo, Int4 Row, ValNodePtr vnp);
 NLM_EXTERN ValNodePtr  DDE_AddMsaTxtNode(ValNodePtr ptxtList, Int4 from, Int4 to,
@@ -431,6 +460,7 @@ NLM_EXTERN Boolean     DDE_ShiftRightList(ValNodePtr PNTR pptxtList, ValNodePtr 
                                           Boolean FirstCharIsUnAligned, Boolean InsertLeftGap,
                                           Boolean OkToShrinkLastNode);
 NLM_EXTERN ValNodePtr  DDE_GetLastVNP(ValNodePtr ptxtList);
+NLM_EXTERN Int4        DDE_GetNumResidues(MsaParaGPopListPtr pPopList, Int4 Row);
 NLM_EXTERN Boolean     DDE_IsStartOfAlignment(ValNodePtr ptxtList);
 NLM_EXTERN Boolean     DDE_IsEndOfAlignment(ValNodePtr ptxtList);
 NLM_EXTERN Boolean     DDE_ShiftLeftBoundaryLeft1(DDE_InfoPtr pEditInfo, Int4 BlockIndex);
@@ -441,6 +471,9 @@ NLM_EXTERN ValNodePtr  DDE_ReMakeRuler(MsaParaGPopListPtr pPopList, Boolean Repl
 NLM_EXTERN ValNodePtr  DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Row, Int4 AlignStart);
 NLM_EXTERN Boolean     DDE_AreIdenticalRulers(ValNodePtr pRuler1, ValNodePtr pRuler2);
 NLM_EXTERN Boolean     DDE_AreIdenticalRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2);
+NLM_EXTERN Boolean     DDE_AreSimilarRulers(ValNodePtr pRuler1, ValNodePtr pRuler2,
+                                            Int4* pDispCoord1,  Int4* pDispCoord2);
+NLM_EXTERN Boolean     DDE_AreSimilarRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2);
 NLM_EXTERN Boolean     DDE_MergeNodes(ValNodePtr ptxtList);
 NLM_EXTERN void        DDE_MergeNodesLists(DDE_InfoPtr pEditInfo);
 NLM_EXTERN Int4        DDE_GetFirstAlignIndex(MsaParaGPopListPtr pPopList);

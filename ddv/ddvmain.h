@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.h,v 1.38 2000/07/05 19:23:13 lewisg Exp $
+/*  $Id: ddvmain.h,v 1.44 2000/07/17 13:32:33 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.38 $
+* $Revision: 1.44 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.h,v $
+* Revision 1.44  2000/07/17 13:32:33  lewisg
+* move DDV_args out of the library
+*
+* Revision 1.43  2000/07/17 12:38:53  kans
+* DDV_myargs is extern in header, instantiated in ddvpanel.c, since it is accessed from that library file
+*
+* Revision 1.42  2000/07/14 22:24:56  lewisg
+* fix scroll, click, visual c++ build bugs.  add command line arg parse to ddv
+*
+* Revision 1.41  2000/07/12 22:22:42  hurwitz
+* added delete block to DDV
+*
+* Revision 1.40  2000/07/10 14:38:07  lewisg
+* move seqalign and sequentry data from window to panels
+*
+* Revision 1.39  2000/07/08 20:43:58  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.38  2000/07/05 19:23:13  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -179,10 +197,6 @@
 #ifndef _DDVMAIN_
 #define _DDVMAIN_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <ncbi.h>
 #include <vibrant.h>
 #include <ddvopen.h>
@@ -190,6 +204,10 @@ extern "C" {
 #include <ddvcolor.h>
 #include <ddvcreate.h>
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /******************************************************************************
@@ -219,6 +237,7 @@ extern "C" {
 #define DDV_MOUSEMODE_MERGEBLOCKS1    6
 #define DDV_MOUSEMODE_MERGEBLOCKS2    7
 #define DDV_MOUSEMODE_SPLITBLOCK      8
+#define DDV_MOUSEMODE_DELETEBLOCK     9
 
 /*timer control*/
 #define DDV_SET_TIMER 1
@@ -296,6 +315,7 @@ typedef struct ddvmenu {
   IteM LaunchEditor;
   IteM MergeBlocks;
   IteM SplitBlock;
+  IteM DeleteDDVBlock;
 	} DdvMenu, PNTR DdvMenuPtr;
 
 typedef struct ddvmsadata {
@@ -330,9 +350,7 @@ typedef struct ddvmainwin {
 	UdvFetchSeqEntryProc  fetchSepProc;/*function to get a gi over the Network*/
 	Nlm_ItmActnProc   NetCfgMenuProc;
 	StartNetworkProc  NetStartProc;
-		/*SAP list when open a File or fetch an DB entry*/
-	ValNodePtr		vnp_ali;/*SeqAlign List*/
-	DdvOpenData     dod;/*what is open in DDV*/	
+    Boolean EditAllowed;  /* editing is allowed */
 	}DdvMainWin,PNTR DdvMainWinPtr;
 
 typedef struct ddvtimerdata {
@@ -364,8 +382,13 @@ typedef struct ddvmain {
     DDE_StackPtr       dsp;/*data for editor*/
     Int4               BlockIndex;/*the first block of merge 2 blocks*/
     Int4               SaveCol;/*col where split line is drawn*/
+    		/*SAP list when open a File or fetch an DB entry*/
+	ValNodePtr		vnp_ali;/*SeqAlign List*/
+	DdvOpenData        dod;/*what is open in DDV*/	
 	} DdvMain, PNTR DdvMainPtr;
 
+#define NUMARGS 2
+extern Args DDV_myargs[NUMARGS];
 
 #ifdef __cplusplus
 }

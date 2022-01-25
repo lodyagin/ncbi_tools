@@ -31,8 +31,44 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.94 $ 
+/* $Revision: 6.106 $ 
 * $Log: blastdef.h,v $
+* Revision 6.106  2000/10/18 19:53:19  shavirin
+* Empty log message.
+*
+* Revision 6.105  2000/10/18 19:17:56  shavirin
+* Changed BLAST_ENGINE_VERSION and BLAST_RELEASE_DATE
+*
+* Revision 6.104  2000/10/05 19:50:49  dondosha
+* Added mb_result_struct to the BlastSearchBlk to be used instead of result_struct in Mega BLAST
+*
+* Revision 6.103  2000/09/28 14:48:20  dondosha
+* Added exact_match_array to hitlist structure for megablast initial hits
+*
+* Revision 6.102  2000/09/21 19:16:30  madden
+* increase AWAKE_THR_MIN_SIZE by 100
+*
+* Revision 6.101  2000/08/29 19:35:49  madden
+* Add gilist_not_owned to blast_gi_list
+*
+* Revision 6.100  2000/08/08 20:37:21  madden
+* increase version number to 2.1.1 and release date
+*
+* Revision 6.99  2000/07/17 14:05:22  shavirin
+* Added parameter Out-Of-Frame shift penalty and query DNAP sequence
+*
+* Revision 6.98  2000/07/11 18:38:02  madden
+* decreased size of helper array, added prefetch to BlastGappedScoreInternal
+*
+* Revision 6.97  2000/07/11 17:16:20  shavirin
+* Added new parameter is_ooframe for Out-Of-Frame gapping algorithm.
+*
+* Revision 6.96  2000/07/10 15:41:28  madden
+* Add typedef for BLAST_HSP_helper
+*
+* Revision 6.95  2000/07/07 21:20:07  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope!
+*
 * Revision 6.94  2000/07/06 17:24:55  dondosha
 * Added option and parameter megablast_full_deflines
 *
@@ -674,9 +710,6 @@ Contents: #defines and definitions for structures used by BLAST.
  * */
 #ifndef __BLASTSTR__
 #define __BLASTSTR__
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <ncbi.h>
 #include <lookup.h>
@@ -687,9 +720,13 @@ extern "C" {
 #include <gapxdrop.h>
 #include <mbalign.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.14"
-#define BLAST_RELEASE_DATE "Jun-29-2000"
+#define BLAST_ENGINE_VERSION "2.1.2"
+#define BLAST_RELEASE_DATE "Nov-13-2000"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -711,7 +748,7 @@ extern "C" {
 #define BLAST_NOT_OWN 1
 
 /* Specifies minimum search space size for an awak thread. */
-#define AWAKE_THR_MIN_SIZE 20000000000.0
+#define AWAKE_THR_MIN_SIZE 2000000000000.0
 
 /********************************************************************
 *
@@ -885,6 +922,9 @@ typedef struct _blast_optionsblk {
 					   redundant sequence. */
         Boolean         megablast_full_deflines; /* Print full deflines in
 						   megablast one-line output */
+        Boolean         is_ooframe;  /* Use Out-Of-Frame gapping algorithm */
+        Int4            shift_pen;   /* Out-Of-Frame shift penalty */
+	Boolean		gilist_already_calculated; /* translation of gis to ordinalID's already done (used for neighboring). */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -973,6 +1013,8 @@ typedef struct _blast_parameterblk {
 	Boolean		explode_seqids;	/* make one SeqAlign for every gi on a
 					   redundant sequence. */
         Boolean megablast_full_deflines;
+        Boolean         is_ooframe;  /* Use Out-Of-Frame gapping algorithm */
+        Int4            shift_pen;  /* Out-Of-Frame shift penalty */
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;
@@ -1112,6 +1154,17 @@ typedef struct link_help_struct{
   Int4 next_larger;
 } LinkHelpStruct;
 
+/* Orders information for HSP accesses. */
+typedef struct hsp_helper{
+	Int4 	qoffset,
+		qend;
+} BLAST_HSP_helper, PNTR BLAST_HSP_helperPtr;
+		
+
+typedef struct _exact_match {
+   Int4 q_off;
+   Int4 s_off;
+} MegaBlastExactMatch, PNTR MegaBlastExactMatchPtr;
 
 typedef struct _blast_hitlist {
 	struct _blast_hitlist	PNTR next;
@@ -1127,6 +1180,9 @@ typedef struct _blast_hitlist {
         	/* added -cfj */
         LinkHelpStruct *lh_helper;
         Int4 lh_helper_size;
+        MegaBlastExactMatchPtr PNTR exact_match_array; /* Array to hold initial
+                                                          exact match hits */
+        Int4 exact_match_max;
 	} BLAST_HitList, PNTR BLAST_HitListPtr;
 
 /*
@@ -1240,6 +1296,7 @@ typedef struct _blast_gi_list {
     BlastDoubleInt4Ptr *gi_list_pointer;	/* Pointer to above list. */
     Int4 current;	       /* Current position in gi list. */
     Int4 total;		       /* total number of gi's. */
+    Boolean gilist_not_owned; /* do not delete gilist at end. */
 } BlastGiList, *BlastGiListPtr;
         
 /*
@@ -1547,6 +1604,9 @@ a field is allocated, then it's bit is non-zero.
   */
     Boolean			current_hitlist_purge;
     BLAST_HitListPtr	current_hitlist;
+
+    BlastSequenceBlkPtr	PNTR query_dnap; /* query DNAP sequence. */
+
     /*
       The worst evalue seen by this thread so far.
       Only filled in if the hitlist is already full, otherwise
@@ -1629,9 +1689,12 @@ a field is allocated, then it's bit is non-zero.
         semid;                  /* Here will be stored ID of load-ballance semaphore */
     /* Callback for the queueing system. */
     int (LIBCALLBACK *queue_callback)PROTO((int semid, int num, int num_cpu));
-   GreedyAlignMemPtr abmp;
-   Int4 PNTR query_context_offsets;
-   SeqIdPtr PNTR qid_array;
+    GreedyAlignMemPtr abmp; /* Memory for megablast greedy extension */
+    Int4 PNTR query_context_offsets; /* offsets for all queries and strands in a 
+                                        concatenated sequence */
+    SeqIdPtr PNTR qid_array; /* Ids of all queries in Mega BLAST search */
+    BLASTResultsStructPtr PNTR mb_result_struct; /* one result struct per query
+                                                    for Mega BLAST */
 } BlastSearchBlk, PNTR BlastSearchBlkPtr;
     
 

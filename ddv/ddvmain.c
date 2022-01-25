@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.c,v 1.23 2000/07/05 19:23:13 lewisg Exp $
+/*  $Id: ddvmain.c,v 1.26 2000/07/17 13:32:33 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.23 $
+* $Revision: 1.26 $
 *
 * File Description: starter module of DeuxD-Viewer (DDV). Onlu use to
 * start DDV as a standalone software.
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.c,v $
+* Revision 1.26  2000/07/17 13:32:33  lewisg
+* move DDV_args out of the library
+*
+* Revision 1.25  2000/07/17 12:38:53  kans
+* DDV_myargs is extern in header, instantiated in ddvpanel.c, since it is accessed from that library file
+*
+* Revision 1.24  2000/07/14 22:24:55  lewisg
+* fix scroll, click, visual c++ build bugs.  add command line arg parse to ddv
+*
 * Revision 1.23  2000/07/05 19:23:13  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -135,6 +144,10 @@
 #include <vibrant.h>
 #include <netcnfg.h>
 
+extern Args DDV_myargs[NUMARGS] = {
+ /*0*/ { "Gaps allowed",  "T", NULL, NULL, TRUE, 'g', ARG_BOOLEAN, 0.0,0,NULL},
+ /*1*/ { "Allow Edits", "T", NULL, NULL, TRUE , 'e', ARG_BOOLEAN, 0.0,0,NULL},
+};
 
 /*******************************************************************************
 
@@ -305,12 +318,7 @@ Boolean bRet;
 	/*use the Network ?*/
 	mWin_d->UseNetwork=TRUE;/*DDV_UseNetwork();*/
 
-#if defined(_COLD_LAUNCH_DDE)
-  /* launch the editor instead of the viewer */
-	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL,TRUE);  /*TRUE for editor  */
-#else
 	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL,FALSE); /*FALSE for viewer */
-#endif
 	if (!bRet) return(NULL);
 
 	/*init logo_panel*/
@@ -338,6 +346,7 @@ Boolean bRet;
   Return value : 
 
 *******************************************************************************/
+
 Int2 Main(void)
 {
 UDVLogoDataPtr	ldp;
@@ -345,9 +354,9 @@ Boolean 		UseNetwork;
 WindoW			w; 
 DdvMainWinPtr   mWin_d;/*main window data*/
 ObjMgrPtr omp = NULL;
-char*  Str;
 Boolean  NoGaps;
 
+	if ( !Nlm_GetArgsSilent("DDV 1.0", NUMARGS, DDV_myargs) ) return 1;
 	
 	ErrSetMessageLevel(SEV_WARNING);
 	ErrSetOptFlags(EO_SHOW_CODES);
@@ -389,15 +398,10 @@ Boolean  NoGaps;
 	}
 
   /* look for "nogaps" runtime parameter */
-    NoGaps = FALSE;
-    if (GetArgc() == 2) {
-        Str = GetArgv()[1];
-        Str = StrLower(Str);
-        if (StringStr(Str, "nogap") != NULL) {
-            NoGaps = TRUE;
-        }
-    }
+    NoGaps = (Boolean)DDV_myargs[0].intvalue;
     SetAppProperty("dde_nogaps",(void*)&NoGaps);
+
+    mWin_d->EditAllowed = (Boolean)DDV_myargs[1].intvalue;
 	
 	/*init data blocks*/
 	ldp=(UDVLogoDataPtr)MemNew(sizeof(UDVLogoData));

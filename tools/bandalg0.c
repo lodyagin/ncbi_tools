@@ -214,9 +214,9 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
     if(leftd < midd) {
       fr = -1;
       for(j = 0; j < midd; j++) 
-	data->CD[j].CP = data->CD[j].DP = -1;
+	data->CD[j].CP = data->CD[j].DPDP = -1;
       for(j = midd; j <= rightd; j++)
-	data->CD[j].CP = data->CD[j].DP = 0;
+	data->CD[j].CP = data->CD[j].DPDP = 0;
       data->MP[0][0] = -1;
       data->MP[1][0] = -1;
       data->MP[2][0] = -1;
@@ -224,9 +224,9 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
     else if (leftd > midd) {
       fr = leftd-midd;
       for (j = 0; j <= midd; j++)
-	data->CD[j].CP = data->CD[j].DP = fr;
+	data->CD[j].CP = data->CD[j].DPDP = fr;
       for (j = midd+1; j <= rightd; j++) 
-	data->CD[j].CP = data->CD[j].DP = -1;
+	data->CD[j].CP = data->CD[j].DPDP = -1;
       data->MP[0][fr] = -1;
       data->MP[1][fr] = -1;
       data->MP[2][fr] = -1;
@@ -234,9 +234,9 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
     else {
       fr = 0;
       for (j = 0; j < midd; j++)
-	data->CD[j].CP = data->CD[j].DP = 0;
+	data->CD[j].CP = data->CD[j].DPDP = 0;
       for (j = midd; j <= rightd; j++)
-	data->CD[j].CP = data->CD[j].DP = 0;
+	data->CD[j].CP = data->CD[j].DPDP = 0;
       data->MP[0][0] = -1;
       data->MP[1][0] = -1;
       data->MP[2][0] = -1;
@@ -251,7 +251,7 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
     }
     data->CD[rightd+1].CC = MININT;
     data->CD[rightd].DD = MININT;
-    data->CD[rightd+1].CP = data->CD[rightd].DP = 0;
+    data->CD[rightd+1].CP = data->CD[rightd].DPDP = 0;
     if(tb == 1) data->CD[leftd-1].DD = -data->zzh;
     else data->CD[leftd-1].DD = -data->m;
     data->CD[leftd-1].CC = MININT;
@@ -263,18 +263,18 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
       if((ib = leftd + low - 1 + i) > 0) c = data->CD[leftd].CC + wa[B[ib]];
       if(d > c || ib <= 0) {
 	c = d;
-	data->CD[leftd].CP = data->CD[leftd].DP;
+	data->CD[leftd].CP = data->CD[leftd].DPDP;
       }
       e = c - data->m;
       data->IP = data->CD[leftd].CP;	    
-      if(leftd == midd) data->CD[leftd].CP = data->CD[leftd].DP = data->IP = i;
+      if(leftd == midd) data->CD[leftd].CP = data->CD[leftd].DPDP = data->IP = i;
       if(leftd >= 1) 
 	if ((d -= data->zzh) >= e) {
 	  data->CD[leftd-1].DD = d;
-	  data->CD[leftd-1].DP = data->CD[leftd].DP;
+	  data->CD[leftd-1].DPDP = data->CD[leftd].DPDP;
 	} else {
 	  data->CD[leftd-1].DD = e;
-	  data->CD[leftd-1].DP = data->IP;
+	  data->CD[leftd-1].DPDP = data->IP;
 	}
       data->CD[leftd].CC = c;
       if(midd <= rightd && midd >= leftd + 1) x = midd; else x = rightd + 1;
@@ -288,7 +288,7 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
 	  }
 	  else {
 	    c = d;
-	    ap->CP = ap->DP;
+	    ap->CP = ap->DPDP;
 	  }
 	}   /* otherwise, CP is unchanged */
 	ap->CC = c;
@@ -298,19 +298,19 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
 	}
 	if(c > (d -= data->zzh)) {
 	  (ap - 1)->DD = c;
-	  (ap - 1)->DP = ap->CP;
+	  (ap - 1)->DPDP = ap->CP;
 	  ap++;
 	}
 	else {
 	  (ap - 1)->DD = d;
-	  (ap - 1)->DP = ap->DP;
+	  (ap - 1)->DPDP = ap->DPDP;
 	  ap++;
 	}
       }
       if(x != rightd + 1) {
 	data->MP[1][i] = data->IP;
 	data->MT[1][i] = 2;
-	data->MP[2][i] = ap->DP;
+	data->MP[2][i] = ap->DPDP;
 	data->MT[2][i] = 1;	   
 	c = ap->CC + wa[B[curd + low - 1 + i]];
 	d = ap->DD;
@@ -338,7 +338,7 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
 	  data->MP[2][i] = data->MP[0][i];
 	  data->MT[2][i] = data->MT[0][i];
 	}
-	ap->CP = (ap - 1)->DP = data->IP = i;
+	ap->CP = (ap - 1)->DPDP = data->IP = i;
 	ap->CC = c;
 	if((c -= data->m) > (e -= data->zzh)) e = c; 
 	if(c > (d -= data->zzh)) (ap++ - 1)->DD = c;
@@ -352,7 +352,7 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
 	      ap->CP = data->IP;
 	    } else {
 	      c = d;
-	      ap->CP = ap->DP;
+	      ap->CP = ap->DPDP;
 	    }
 	  }   /* otherwise, CP is unchanged */
 	  ap->CC = c;
@@ -360,9 +360,9 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
 	    e = c; data->IP = ap->CP;
 	  } 
 	  if (c > (d -= data->zzh)) {
-	    (ap-1)->DD = c; (ap-1)->DP = ap->CP; ap++;
+	    (ap-1)->DD = c; (ap-1)->DPDP = ap->CP; ap++;
 	  } else {
-	    (ap-1)->DD = d; (ap-1)->DP = ap->DP; ap++;
+	    (ap-1)->DD = d; (ap-1)->DPDP = ap->DPDP; ap++;
 	  }
 	}
       }
@@ -371,7 +371,7 @@ static Int4 g_band0_align(Uint1Ptr A, Uint1Ptr B,
     /* decide which path to be traced back */
     c = (ap-1)->CC; d = (ap-2)->DD;
     if (te == 1 && d + data->m > c) {
-      k = data->CD[rightd-1].DP;
+      k = data->CD[rightd-1].DPDP;
       l = 2;
     } else if (te == 2 && e + data->m > c) {
       k = data->IP;

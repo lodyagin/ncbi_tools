@@ -25,11 +25,11 @@
 *
 * File Name:  ncbistr.c
 *
-* Author:  Gish, Kans, Ostell, Schuler, Brylawski
+* Author:  Gish, Kans, Ostell, Schuler, Brylawski, Vakatov
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *   	portable string routines
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbistr.c,v $
+* Revision 6.7  2000/08/28 18:36:25  vakatov
+* un-const casts in some functions to pass C++ compilation
+*
 * Revision 6.6  1999/04/15 20:24:06  vakatov
 * Dont use "list" name as it can clash with the standard "list<>" template
 * on some raw C++ compilers
@@ -56,9 +59,6 @@
 * Revision 6.1  1997/10/29 02:44:52  vakatov
 * Type castings to pass through the C++ compiler
 *
-* Revision 6.0  1997/08/25 18:17:07  madden
-* Revision changed to 6.0
-*
 * Revision 5.5  1997/07/16 19:49:18  vakatov
 * Added Nlm_StringPrintable() function
 *
@@ -76,9 +76,6 @@
  * Revision 5.1  1996/12/03  21:48:33  vakatov
  * Adopted for 32-bit MS-Windows DLLs
  *
- * Revision 5.0  1996/05/28  13:18:57  ostell
- * Set to revision 5.0
- *
  * Revision 4.12  1996/05/22  18:04:14  kans
  * changed nulls to '\0' in new string functions
  *
@@ -95,7 +92,7 @@
  * change String variables to theString to work around SGI4 problem
  *
  * Revision 4.7  1996/01/05  02:29:37  ostell
- * aprovided return value for TruncateStringCopy()
+ * provided return value for TruncateStringCopy()
  *
  * Revision 4.6  1996/01/03  21:04:46  epstein
  * modify StringSubString() API and add other new functions, per Brandon
@@ -115,17 +112,11 @@
  * Revision 4.1  1995/10/16  13:43:29  epstein
  * fix brain-dmanaged string-compare logic to handle null strings correctly
  *
- * Revision 4.0  1995/07/26  13:46:50  ostell
- * force revision to 4.0
- *
  * Revision 2.12  1995/07/18  19:56:10  tatiana
  * add Nlm_LabelCopyNext()
  *
  * Revision 2.11  1995/05/30  13:19:37  kans
  * fixed StringSearch algorithm - check until i <= strLen, not just < strLen
- *
- * Revision 2.10  1995/05/15  18:45:58  ostell
- * added Log line
  *
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++.
 * 09-19-91 Schuler     Changed all types expressing sizes to size_t.
@@ -220,12 +211,12 @@ NLM_EXTERN int LIBCALL  Nlm_StringNICmp (const char FAR *a, const char FAR *b, s
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringChr (const char FAR *str, int chr)
 {
-	return str ? Nlm_StrChr(str,chr) : 0;
+	return (Nlm_CharPtr) (str ? Nlm_StrChr(str,chr) : 0);
 }
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringRChr (const char FAR *str, int chr)
 {
-	return str ? Nlm_StrRChr(str,chr) : 0;
+	return (Nlm_CharPtr) (str ? Nlm_StrRChr(str,chr) : 0);
 }
 
 NLM_EXTERN size_t LIBCALL  Nlm_StringSpn (const char FAR *a, const char FAR *b)
@@ -240,12 +231,12 @@ NLM_EXTERN size_t LIBCALL  Nlm_StringCSpn (const char FAR *a, const char FAR *b)
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringPBrk (const char FAR *a, const char FAR *b)
 {
-	return (a && b) ? Nlm_StrPBrk (a, b) : 0;
+	return (Nlm_CharPtr) ((a && b) ? Nlm_StrPBrk (a, b) : 0);
 }
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringStr (const char FAR *str1, const char FAR *str2)
 {
-	return (str1 && str2) ? Nlm_StrStr(str1,str2) : 0;
+	return (Nlm_CharPtr) ((str1 && str2) ? Nlm_StrStr(str1,str2) : 0);
 }
 
 NLM_EXTERN Nlm_CharPtr LIBCALL  Nlm_StringTok (char FAR *str1, const char FAR *str2)

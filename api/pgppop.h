@@ -1,4 +1,4 @@
-/*  $Id: pgppop.h,v 6.35 2000/05/24 21:42:59 hurwitz Exp $
+/*  $Id: pgppop.h,v 6.38 2000/10/13 19:48:16 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.35 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: pgppop.h,v $
+* Revision 6.38  2000/10/13 19:48:16  hurwitz
+* added functions for getting first VALID disp coord in range of bsp coords
+*
+* Revision 6.37  2000/08/25 18:58:29  shavirin
+* Added parameter Boolean is_aa to the function DDV_GetBLASTCompLine_1().
+*
+* Revision 6.36  2000/07/08 20:43:55  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.35  2000/05/24 21:42:59  hurwitz
 * getting hide/show rows to work with DDV and DDE together
 *
@@ -195,6 +204,13 @@
 #ifndef _PGPPOP_
 #define _PGPPOP_
 
+#include <ncbi.h>
+#include <objseq.h>
+#include <blocks.h>
+#include <udvseq.h>
+#include <ddvcolor.h>
+
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -205,13 +221,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ncbi.h>
-#include <objseq.h>
-
-#include <blocks.h>
-#include <udvseq.h>
-#include <ddvcolor.h>
 
 #define WWW_SCRIPT_SIZE 1000
 #define LETTER_BLOCK_WIDTH 10
@@ -404,7 +413,7 @@ NLM_EXTERN void DDV_DeleteParaGList(ValNodePtr PNTR vnp);
 NLM_EXTERN void DDV_DeleteDisplayList(MsaParaGPopListPtr mpplp);
 NLM_EXTERN void DDV_ResetParaGSeqAlignCoord(MsaParaGPopListPtr mpplp,Int2 LineSize);
 NLM_EXTERN CharPtr DDV_GetBLASTCompLine_1(CharPtr szQuery, CharPtr szSubject, 
-		Int4Ptr PNTR matrix);
+		Int4Ptr PNTR matrix, Boolean is_aa);
 NLM_EXTERN CharPtr DDV_GetBLASTCompLine_2(ParaGPtr pgpQuery, ParaGPtr pgpSubject, 
 		Int4Ptr PNTR matrix);
 NLM_EXTERN CharPtr DDV_GetBLASTCompLine_3(CharPtr szQuery, ParaGPtr pgpSubject, 
@@ -459,6 +468,10 @@ NLM_EXTERN Int4 DDV_GetDispCoordGivenBspCoord(ValNodePtr vnp_head,Int4 bsp_pos);
 NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrNew(DDVRulerDescrPtr pRulerDescr);
 NLM_EXTERN DDVRulerDescrPtr DDV_RulerDescrFree(DDVRulerDescrPtr pRulerDescr);
 
+NLM_EXTERN Int4 DDV_GetFirstDispCoordGivenBspCoordRange(ValNodePtr vnp_head,
+                                                        Int4 disp_start, Int4 disp_stop);
+NLM_EXTERN Int4 DDV_GetLastDispCoordGivenBspCoordRange(ValNodePtr vnp_head,
+                                                       Int4 disp_start, Int4 disp_stop);
 
 #ifdef __cplusplus
 }

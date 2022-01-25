@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objmgr.c,v $
+* Revision 6.31  2000/10/30 21:26:08  shavirin
+* Changes and fixes for some MT-safety related problems.
+*
 * Revision 6.30  2000/03/27 23:10:23  kans
 * initial readlock/lookup/unlock removed from ObjMgrDelete by request of EY
 *
@@ -267,7 +270,7 @@ static Boolean NEAR ObjMgrFreeCacheFunc PROTO((ObjMgrPtr omp, Uint2 type, Uint2P
 static Boolean NEAR ObjMgrAddFunc PROTO((ObjMgrPtr omp, Uint2 type, Pointer data));
 static Boolean NEAR ObjMgrFreeUserDataFunc PROTO((ObjMgrPtr omp, Uint2 entityID,
 								Uint2 procid, Uint2 proctype, Uint2 userkey));
-static Int2 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolean lockit);
+static Int4 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolean lockit);
 /*****************************************************************************
 *
 *   Procedure Management local Functions
@@ -335,7 +338,7 @@ static ObjMgrDataPtr NEAR ObjMgrFindByEntityID (ObjMgrPtr omp, Uint2 entityID, O
 {
 	ObjMgrDataPtr omdp, prevptr=NULL;
 	ObjMgrDataPtr PNTR omdpp;
-	Int2 i, imax;
+	Int4 i, imax;
 
 	imax = omp->currobj;
 	omdpp = omp->datalist;
@@ -359,7 +362,7 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 {
 	ObjMgrDataPtr omdp;
 	ObjMgrDataPtr PNTR omdpp;
-	Int2 i, imax;
+	Int4 i, imax;
 	
 	if (ptr == NULL) return NULL;
 
@@ -384,13 +387,13 @@ NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData (ObjMgrPtr omp, Pointer ptr)
 #define ENTITY_ID_STACK_SIZE  100
 
 static Uint2 recycledEntityIDs [ENTITY_ID_STACK_SIZE];
-static Int2  recycledIDStackPt = 0;
+static Int4  recycledIDStackPt = 0;
 
 extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp);
 extern void ObjMgrRemoveEntityIDFromRecycle (Uint2 entityID, ObjMgrPtr omp)
 
 {
-	Int2  i;
+	Int4  i;
 
 	if (entityID < 1) return;
 	if (omp != NULL) {
@@ -427,7 +430,7 @@ static void ObjMgrRecycleEntityID (Uint2 entityID, ObjMgrPtr omp)
 
 {
 
-	Int2  i;
+	Int4  i;
 
 	if (entityID < 1) return;
 	if (omp != NULL) {
@@ -686,13 +689,18 @@ NLM_EXTERN ObjMgrPtr LIBCALL ObjMgrReadLock (void)
 
 	omp = ObjMgrGet();  /* ensure initialization */
 
-	ret = NlmRWrdlock(omp_RWlock);
+        ret = NlmRWrdlock(omp_RWlock); 
+	/* ret = NlmRWwrlock(omp_RWlock); */
+
 	if (ret != 0)
 	{
 		ErrPostEx(SEV_ERROR,0,0,"ObjMgrReadLock: RWrdlock error [%ld]",
 			(long)ret);
 		return NULL;
 	}
+
+	omp->is_write_locked = TRUE;
+
 	return omp;
 }
 
@@ -867,6 +875,9 @@ NLM_EXTERN Boolean LIBCALL ObjMgrTestOptions (Uint2 option, Uint2 entityID)
 	if (*optionptr & (option & 0xFFFF))
 		retval = TRUE;
 erret:
+
+	ObjMgrUnlock();
+
 	return retval;
 }
 
@@ -960,7 +971,7 @@ static Boolean NEAR ObjMgrExtend (ObjMgrPtr omp)
 	Boolean result = FALSE;
 	OMDataPtr omdp, prev=NULL;
 	ObjMgrDataPtr PNTR tmp;
-	Int2 i, j;
+	Int4 i, j;
 
 	for (omdp = omp->ncbidata; omdp != NULL; omdp = omdp->next)
 		prev = omdp;
@@ -1022,7 +1033,7 @@ static Boolean NEAR ObjMgrAddFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 {
 	ObjMgrDataPtr omdp;
 	ObjMgrDataPtr PNTR omdpp;
-	Int2 i, imin, imax;
+	Int4 i, imin, imax;
 	Boolean retval = FALSE;
 	unsigned long tmp, datai;
 #ifdef DEBUG_OBJMGR
@@ -1422,9 +1433,9 @@ static Boolean NEAR ObjMgrFreeUserDataFunc (ObjMgrPtr omp, Uint2 entityID,
 *       returns -1 if not found
 *
 *****************************************************************************/
-NLM_EXTERN Int2 LIBCALL ObjMgrLookup(ObjMgrPtr omp, Pointer data)
+NLM_EXTERN Int4 LIBCALL ObjMgrLookup(ObjMgrPtr omp, Pointer data)
 {
-	Int2 imin, imax, i;
+	Int4 imin, imax, i;
 	ObjMgrDataPtr PNTR omdpp;
 	unsigned long tmp, datai;
 
@@ -1446,7 +1457,7 @@ NLM_EXTERN Int2 LIBCALL ObjMgrLookup(ObjMgrPtr omp, Pointer data)
 			return i;
 	}
 
-	return (Int2)(-1);
+	return (Int4)(-1);
 }
 
 /*****************************************************************************
@@ -1460,7 +1471,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDelete (Uint2 type, Pointer data)
 	ObjMgrPtr omp;
 	ObjMgrDataPtr omdp;
 	ObjMgrDataPtr PNTR omdpp, PNTR to, PNTR from;
-	Int2 i, j;
+	Int4 i, j;
 	Boolean retval = FALSE;
 
 	omp = ObjMgrWriteLock();  /* really remove the entity */
@@ -1696,7 +1707,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrConnect (Uint2 type, Pointer data, Uint2 parent
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrConnectFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Uint2 parenttype, Pointer parentdata)
 {
-	Int2 i;
+	Int4 i;
 	ObjMgrDataPtr omdp;
 	Boolean retval = FALSE;
 	
@@ -1775,7 +1786,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrDetach (Uint2 type, Pointer data)
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrDetachFunc (ObjMgrPtr omp, Uint2 type, Pointer data)
 {
-	Int2 i;
+	Int4 i;
 	ObjMgrDataPtr omdp;
 	Boolean retval = FALSE;
 	
@@ -1856,7 +1867,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrGetDirtyFlag (Uint2 entityID)
 NLM_EXTERN Boolean LIBCALL ObjMgrSetChoice (Uint2 type, ValNodePtr choice, Pointer data)
 {
 	ObjMgrPtr omp;
-	Int2 i;
+	Int4 i;
 	ObjMgrDataPtr omdp;
 	Boolean retval = FALSE;
 	
@@ -1893,7 +1904,7 @@ erret:
 *****************************************************************************/
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindTop (ObjMgrPtr omp, ObjMgrDataPtr omdp)
 {
-	Int2 i;
+	Int4 i;
 
 	if ((omp == NULL) || (omdp == NULL)) return NULL;
 
@@ -1977,6 +1988,9 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 		ObjMgrUnlock();
 	}
 
+        /*        if(type == 0)
+                  omp->HighestEntityID = 0; */
+        
 	return TRUE;
 }
 
@@ -1991,7 +2005,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrFreeCache (Uint2 type)
 *****************************************************************************/
 static Boolean NEAR ObjMgrFreeCacheFunc (ObjMgrPtr omp, Uint2 type, Uint2Ptr rettype, VoidPtr PNTR retval)
 {
-    Int2 i, num;
+    Int4 i, num;
 	ObjMgrDataPtr PNTR omdpp, omdp;
 
 	if (omp->hold)   /* things are being held */
@@ -2120,7 +2134,7 @@ NLM_EXTERN Int2 LIBCALL ObjMgrMatch (Uint2 type1, Uint2 type2)
 NLM_EXTERN ValNodePtr LIBCALL ObjMgrGetChoiceForData (Pointer data)
 {
 	ObjMgrPtr omp;
-	Int2 i;
+	Int4 i;
 	ValNodePtr choice = NULL;
 
 	if (data == NULL) return choice;
@@ -2235,10 +2249,10 @@ NLM_EXTERN ValNodePtr LIBCALL ObjMgrGetChoiceForEntityID (Uint2 id)
 *       returns the current lock count or -1 on failure
 *
 *****************************************************************************/
-NLM_EXTERN Int2 LIBCALL ObjMgrLock (Uint2 type, Pointer data, Boolean lockit)
+NLM_EXTERN Int4 LIBCALL ObjMgrLock (Uint2 type, Pointer data, Boolean lockit)
 {
 	ObjMgrPtr omp;
-	Int2 retval = -1;
+	Int4 retval = -1;
 	
 	omp = ObjMgrWriteLock();
 	if (omp != NULL)
@@ -2247,9 +2261,9 @@ NLM_EXTERN Int2 LIBCALL ObjMgrLock (Uint2 type, Pointer data, Boolean lockit)
 	return retval;
 }
 
-static Int2 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolean lockit)
+static Int4 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolean lockit)
 {
-	Int2 i, lockcnt = -1;
+	Int4 i, lockcnt = -1;
 	ObjMgrDataPtr omdp;
 
 #ifdef DEBUG_OBJMGR
@@ -2321,7 +2335,7 @@ static Int2 NEAR ObjMgrLockFunc (ObjMgrPtr omp, Uint2 type, Pointer data, Boolea
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad (ObjMgrPtr omp, Pointer ptr)
 {
-	Int2 index;
+	Int4 index;
 	ObjMgrDataPtr omdp;
 
 	index = ObjMgrLookup(omp, ptr);
@@ -2353,7 +2367,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad (ObjMgrPtr omp, Pointer ptr)
 NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 {
 	time_t lowest;
-	Int2 num, j;
+	Int4 num, j;
 	ObjMgrDataPtr tmp, ditch, PNTR omdpp;
 	Boolean is_write_locked, did_one = FALSE;
 
@@ -2462,7 +2476,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrReap (ObjMgrPtr omp)
 NLM_EXTERN Boolean LIBCALL ObjMgrIsTemp (Pointer data)
 {
 	ObjMgrPtr omp;
-	Int2 i;
+	Int4 i;
 	ObjMgrDataPtr omdp;
 	Boolean retval = FALSE;
 	
@@ -2499,7 +2513,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL ObjMgrIsChild (Pointer parent, Pointer child)
 {
 	ObjMgrPtr omp;
-	Int2 i;
+	Int4 i;
 	ObjMgrDataPtr omdp, PNTR omdpp;
 	Boolean retval = FALSE;
 
@@ -2552,7 +2566,7 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
 {
 	ObjMgrPtr omp;
 	ObjMgrDataPtr omdp;
-	Int2 i;
+	Int4 i;
 	Char buf[80];
 	BioseqPtr bsp;
 	Boolean close_it = FALSE;
@@ -2566,7 +2580,7 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
 	omp = ObjMgrGet();
 	fprintf(fp, "\n%s currobj=%d tempcnt=%d\n", title, (int)(omp->currobj),
 		(int)(omp->tempcnt));
-	for (i = 0; i < (Int2)(omp->currobj); i++)
+	for (i = 0; i < (Int4)(omp->currobj); i++)
 	{
 		omdp = omp->datalist[i];
 		fprintf(fp, "[%d] [%d %d %ld] [%d %ld] %ld (%d) %ld\n", (int)i,
@@ -2604,7 +2618,7 @@ static Boolean NEAR ObjMgrProcExtend (ObjMgrPtr omp)
 	Boolean result = FALSE;
 	OMProcPtr omdp, prev=NULL;
 	ObjMgrProcPtr PNTR tmp;
-	Int2 i, j;
+	Int4 i, j;
 
 	for (omdp = omp->ncbiproc; omdp != NULL; omdp = omdp->next)
 		prev = omdp;
@@ -2658,7 +2672,7 @@ NLM_EXTERN Uint2  LIBCALL ObjMgrProcAdd (ObjMgrProcPtr data, Int2 priority)
 	ObjMgrPtr omp;
 	ObjMgrProcPtr omdp;
 	ObjMgrProcPtr PNTR omdpp;
-	Int2 i;
+	Int4 i;
 	Uint2 procID;
 	Uint2 retval = 0;
 
@@ -2774,15 +2788,15 @@ NLM_EXTERN Uint2 ObjMgrProcLoad (Uint2 proctype, CharPtr procname, CharPtr procl
 *       returns -1 if not found
 *
 *****************************************************************************/
-NLM_EXTERN Int2 LIBCALL ObjMgrProcLookup(ObjMgrPtr omp, Uint2 procid)
+NLM_EXTERN Int4 LIBCALL ObjMgrProcLookup(ObjMgrPtr omp, Uint2 procid)
 {
 	if (omp == NULL)
-		return (Int2)(-1);
+		return (Int4)(-1);
 
 	if (procid)
-		return (Int2)(procid - 1);
+		return (Int4)(procid - 1);
 	else
-		return (Int2)(-1);
+		return (Int4)(-1);
 }
 
 /*****************************************************************************
@@ -2797,7 +2811,7 @@ NLM_EXTERN ObjMgrProcPtr LIBCALL ObjMgrProcFind(ObjMgrPtr omp, Uint2 procid,
 										CharPtr procname, Uint2 proctype)
 {
 	ObjMgrProcPtr ompp=NULL, PNTR omppp, tmp;
-	Int2 i, imax;
+	Int4 i, imax;
 
 	omppp = omp->proclist;
 	imax = omp->currproc;
@@ -2853,7 +2867,7 @@ NLM_EXTERN ObjMgrProcPtr LIBCALL ObjMgrProcFindNext (ObjMgrPtr tomp, Uint2 proct
 {
 	ObjMgrPtr omp;
 	ObjMgrProcPtr best = NULL, tmp, retval = NULL;
-	Int2 i, bestpriority=-32766, imax, maxpriority=32767;
+	Int4 i, bestpriority=-32766, imax, maxpriority=32767;
 	ObjMgrProcPtr PNTR omppp;
 	Boolean unlock = FALSE;
 
@@ -3018,7 +3032,7 @@ static Boolean NEAR ObjMgrTypeExtend (ObjMgrPtr omp)
 	Boolean result = FALSE;
 	OMTypePtr omdp, prev=NULL;
 	ObjMgrTypePtr PNTR tmp;
-	Int2 i, j;
+	Int4 i, j;
 
 	for (omdp = omp->ncbitype; omdp != NULL; omdp = omdp->next)
 		prev = omdp;
@@ -3065,7 +3079,7 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrTypeAdd (ObjMgrTypePtr data)
 	ObjMgrPtr omp;
 	ObjMgrTypePtr omdp;
 	ObjMgrTypePtr PNTR omdpp;
-	Int2 i, imin, imax;
+	Int4 i, imin, imax;
 	Uint2 tmp, type,retval = 0;
 
 	if (data == NULL) return retval;
@@ -3179,9 +3193,9 @@ NLM_EXTERN Uint2 LIBCALL ObjMgrTypeLoad ( Uint2 type, CharPtr asnname,
 *       returns -1 if not found
 *
 *****************************************************************************/
-NLM_EXTERN Int2 LIBCALL ObjMgrTypeLookup(ObjMgrPtr omp, Uint2 data)
+NLM_EXTERN Int4 LIBCALL ObjMgrTypeLookup(ObjMgrPtr omp, Uint2 data)
 {
-	Int2 imin, imax, i;
+	Int4 imin, imax, i;
 	ObjMgrTypePtr PNTR omdpp;
 	Uint2 tmp;
 
@@ -3201,7 +3215,7 @@ NLM_EXTERN Int2 LIBCALL ObjMgrTypeLookup(ObjMgrPtr omp, Uint2 data)
 			return i;
 	}
 
-	return (Int2)(-1);
+	return (Int4)(-1);
 }
 
 /*****************************************************************************
@@ -3220,7 +3234,7 @@ NLM_EXTERN ObjMgrTypePtr LIBCALL ObjMgrTypeFind (ObjMgrPtr tomp, Uint2 type, Cha
 {
 	ObjMgrTypePtr omtp = NULL;
 	ObjMgrTypePtr PNTR omdpp;
-	Int2 i, imax, result;
+	Int4 i, imax, result;
 	ObjMgrPtr omp;
 	Boolean unlock = FALSE;
 
@@ -3296,7 +3310,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrTypeSetLabelFunc(Uint2 type, OMLabelFunc labelf
 NLM_EXTERN ObjMgrTypePtr LIBCALL ObjMgrTypeFindNext (ObjMgrPtr omp, ObjMgrTypePtr last)
 {
 	ObjMgrTypePtr PNTR omdpp;
-	Int2 i, imax;
+	Int4 i, imax;
 	Boolean got_it = FALSE;
 
 	omdpp = omp->typelist;
@@ -4226,7 +4240,13 @@ static Pointer NEAR ObjMgrMemCopyFunc (ObjMgrPtr omp, Uint2 type, Pointer ptr, B
 	Pointer newptr = NULL;
 	ObjMgrTypePtr omtp;
 
-	if (ptr == NULL) return newptr;
+	if (ptr == NULL) {
+
+            if (unlock)
+		ObjMgrUnlock();
+            
+            return newptr;
+        }
 
 	omtp = ObjMgrTypeFind(omp, type, NULL, NULL);
 	if (unlock)
@@ -4283,7 +4303,11 @@ static Pointer NEAR ObjMgrFreeFunc (ObjMgrPtr omp, Uint2 type, Pointer ptr, Bool
 	Pointer newptr = NULL;
 	ObjMgrTypePtr omtp;
 
-	if (ptr == NULL) return newptr;
+	if (ptr == NULL) {
+            if (unlock)
+		ObjMgrUnlock();
+            return newptr;
+        }
 
 	omtp = ObjMgrTypeFind(omp, type, NULL, NULL);
 
@@ -4295,3 +4319,25 @@ static Pointer NEAR ObjMgrFreeFunc (ObjMgrPtr omp, Uint2 type, Pointer ptr, Bool
 	return newptr;
 }
 
+NLM_EXTERN void LIBCALL ObjMgrResetAll (void)
+{
+    Int4 ret;
+    ObjMgrPtr omp;
+    
+    if (global_omp == NULL)
+        return;
+    
+    ret = NlmMutexLockEx(&omp_mutex);  /* protect this section */
+    if (ret) { /* error */
+        ErrPostEx(SEV_FATAL,0,0,"ObjMgrResetAll failed [%ld]", (long)ret);
+        return;
+    }
+    
+    global_omp = (ObjMgrPtr) MemFree(global_omp);
+    NlmRWdestroy(omp_RWlock);
+    omp_RWlock = NULL;
+    
+    NlmMutexUnlock(omp_mutex);
+    
+    return;
+}

@@ -87,6 +87,7 @@ impalaKarlinLambdaNR(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda)
 	Nlm_FloatHi PNTR	sprob;
 	Nlm_FloatHi	lambda0, sum, slope, temp, x0, x1, amt;
         Nlm_FloatHi returnValue;
+	Boolean foundPositive;
 
 	low = sfp->obs_min;
 	high = sfp->obs_max;
@@ -101,6 +102,14 @@ impalaKarlinLambdaNR(BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda)
 	/* Calculate lambda */
 
 	sprob = sfp->sprob;
+	foundPositive = FALSE;
+	for(j = 1; j <=high; j++)
+	  if (sprob[j] > 0.0) {
+            foundPositive = TRUE;
+            break;
+	  }
+        if (!foundPositive)
+	  return(-1);
 	for (j=0; j<40; ++j) { /* limit of 20 should never be close-approached */
 		sum = -1.0;
 		slope = 0.0;

@@ -51,7 +51,7 @@ Detailed Contents:
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *       Functions to store "words" from a query and perform lookups against
@@ -67,6 +67,15 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: lookup.c,v $
+* Revision 6.38  2000/09/29 22:17:42  dondosha
+* Check if memory allocation fails in MegaBlastBuildLookupTable
+*
+* Revision 6.37  2000/08/28 17:13:56  dondosha
+* Changed the bit indicating mask at hash only for megablast
+*
+* Revision 6.36  2000/07/10 17:18:58  dondosha
+* Use several stacks in MegaBlast for speed up
+*
 * Revision 6.35  2000/05/31 14:06:11  dondosha
 * Added warning messages when 12mers are masked in megablast
 *
@@ -814,7 +823,7 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    register Int4 index;
    register Int4 ecode;
    register Int4 mask;
-   Uint1 val, nuc_mask = 0xfc;
+   Uint1 val, nuc_mask = 0xfc, at_hash_mask = 0x10;
    MbLookupTablePtr mb_lt;
    Int4 masked_word_count = 0;
    
@@ -831,23 +840,30 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
    else
       mb_lt->width = 3;
    mb_lt->lpm = lookup->wordsize * READDB_COMPRESSION_RATIO;
-   /* KLUDGE!!! - need to modify */
+   /* KLUDGE!!! */
    mb_lt->max_positions = search->pbp->block_width; 
    mb_lt->hashsize = (1<<(8*mb_lt->width)); 
    mask = mb_lt->mask = (1 << (8*mb_lt->width - 2)) - 1;
 
-   mb_lt->hashtable = (Int4Ptr)
-      MemNew(mb_lt->hashsize*sizeof(Int4));
+   if ((mb_lt->hashtable = (Int4Ptr) 
+        MemNew(mb_lt->hashsize*sizeof(Int4))) == NULL) {
+      MegaBlastLookupTableDestruct(lookup);
+      return FALSE;
+   }
 
-   mb_lt->next_pos = (Int4Ptr) MemNew(query_length*sizeof(Int4));
+   if ((mb_lt->next_pos = (Int4Ptr) 
+        MemNew(query_length*sizeof(Int4))) == NULL) {
+      MegaBlastLookupTableDestruct(lookup);
+      return FALSE;
+   }
 
    seq = search->context[search->first_context].query->sequence_start;
    pos = search->context[search->first_context].query->sequence;
    ecode = 0;
    for (index = 1; index < mb_lt->width*READDB_COMPRESSION_RATIO; ++index) {
       ecode = (ecode << 2) + (Int4) (*++seq);
-      if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
-	 *seq &= 0x03;
+      if (*seq & at_hash_mask) /* Will extend through this residue */
+	 *seq &= 0x0f;
    }
 
    while (index <= query_length) {
@@ -855,8 +871,8 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
       if ((val & nuc_mask) != 0) { /* ambiguity, gap or masked residue */
 	 ecode = 0;
 	 pos = seq + READDB_COMPRESSION_RATIO*mb_lt->width;
-	 if ((*seq & nuc_mask) == 0x04) /* Will extend through this residue */
-	    *seq &= 0x03;
+	 if (*seq & at_hash_mask) /* Will extend through this residue */
+	    *seq &= 0x0f;
       } else {
 	 /* get next base */
 	 ecode = ((ecode & mask) << 2) + val;
@@ -885,9 +901,15 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 	 
    }
    mb_lt->mask = (1 << (mb_lt->width*8 - 8)) - 1;
-   mb_lt->estack = 
-      (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
-   mb_lt->stack_size = MBSTACK_SIZE;
+   mb_lt->stack_index = (Int4Ptr) MemNew(MB_NUM_STACKS*sizeof(Int4));
+   mb_lt->stack_size = (Int4Ptr) Malloc(MB_NUM_STACKS*sizeof(Int4));
+   mb_lt->estack = (MbStackPtr PNTR) Malloc(MB_NUM_STACKS*sizeof(MbStackPtr));
+   for (index=0; index<MB_NUM_STACKS; index++) {
+      mb_lt->estack[index] = 
+	 (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
+      mb_lt->stack_size[index] = MBSTACK_SIZE;
+   }
+
    lookup->mb_lt = mb_lt;
    return TRUE;
 }
@@ -895,29 +917,43 @@ MegaBlastBuildLookupTable(BlastSearchBlkPtr search)
 LookupTablePtr
 MegaBlastLookupTableDestruct(LookupTablePtr lookup)
 {
+   Int4 index;
+
    if (!lookup->mb_lt)
       return lookup;
    if (lookup->mb_lt->hashtable)
       MemFree(lookup->mb_lt->hashtable);
    if (lookup->mb_lt->next_pos)
       MemFree(lookup->mb_lt->next_pos);
-   if (lookup->mb_lt->estack)
+   if (lookup->mb_lt->estack) {
+      for (index=0; index<MB_NUM_STACKS; index++)
+	 MemFree(lookup->mb_lt->estack[index]);
       MemFree(lookup->mb_lt->estack);
-   MemFree(lookup->mb_lt);
+   }
+   MemFree(lookup->mb_lt->stack_index);
+   MemFree(lookup->mb_lt->stack_size);
+   lookup->mb_lt = MemFree(lookup->mb_lt);
    return lookup;
 }
 
 
 LookupTablePtr MegaBlastLookupTableDup(LookupTablePtr lookup)
 {
+   Int4 index;
+
    /* The only piece that actually needs to be duplicated is estack array */
    LookupTablePtr new_lookup = 
       (LookupTablePtr) MemDup(lookup, sizeof(LookupTable));
 
    new_lookup->mb_lt = 
       (MbLookupTablePtr) MemDup(lookup->mb_lt, sizeof(MbLookupTable));
-   new_lookup->mb_lt->estack = 
-       (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
+   new_lookup->mb_lt->stack_index = (Int4Ptr) MemNew(MB_NUM_STACKS*sizeof(Int4));
+   new_lookup->mb_lt->stack_size = (Int4Ptr) MemDup(lookup->mb_lt->stack_size,
+						    MB_NUM_STACKS*sizeof(Int4));
+   new_lookup->mb_lt->estack = (MbStackPtr PNTR) Malloc(MB_NUM_STACKS*sizeof(MbStackPtr));
+   for (index=0; index<MB_NUM_STACKS; index++) 
+      new_lookup->mb_lt->estack[index] = 
+	 (MbStackPtr) Malloc(MBSTACK_SIZE*sizeof(MbStack));
 
    return new_lookup;
 }

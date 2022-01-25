@@ -34,6 +34,12 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.25  2000/09/28 16:44:31  dondosha
+* Changed prototype for MegaBlastSeqLocNetCore to return SeqAlignPtr
+*
+* Revision 1.24  2000/08/28 16:29:19  dondosha
+* Added definitions related to megablast
+*
 * Revision 1.23  2000/06/15 16:22:44  egorov
 * Make SubmitRequest() external
 *
@@ -143,6 +149,7 @@ typedef struct _blastnet3_block {
 	BlastNet3Hptr bl3hptr;	/* BlastNet 3 handler returned from BlastInit. */
 	NetProgressCallback callback;
 	BLAST_MatrixPtr blast_matrix;	/* Matrix to be sent to server. */
+        BioseqSetPtr bsp_set;   /* All queries if more than one */
 } BlastNet3Block, PNTR BlastNet3BlockPtr;
 
 /*
@@ -211,6 +218,7 @@ NLM_EXTERN SeqAlignPtr LIBCALL BlastSeqLocNet(BlastNet3Hptr bl3hp, SeqLocPtr slp
 NLM_EXTERN SeqAlignPtr LIBCALL BlastBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status);
 
 NLM_EXTERN SeqAlignPtr LIBCALL BlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR status);
+NLM_EXTERN SeqAlignPtr LIBCALL MegaBlastSeqLocNetCore(BlastNet3Hptr bl3hp, SeqLocPtr slp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, Boolean PNTR status);
 
 NLM_EXTERN BlastPhialignPtr LIBCALL SeedBioseqNetCore(BlastNet3Hptr bl3hp, BioseqPtr bsp, CharPtr program, CharPtr database, BLAST_OptionsBlkPtr options, ValNodePtr *other_returns, ValNodePtr *error_returns, NetProgressCallback callback, BLAST_MatrixPtr blast_matrix, Boolean PNTR ret_status, ValNodePtr PNTR vnp);
 

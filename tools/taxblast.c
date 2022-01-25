@@ -1,4 +1,4 @@
-/* $Id: taxblast.c,v 6.1 2000/05/17 15:54:38 shavirin Exp $
+/* $Id: taxblast.c,v 6.3 2000/08/10 14:52:44 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,19 @@
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.1 $
+* $Revision: 6.3 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.3  2000/08/10 14:52:44  shavirin
+* Fixed typo.
+*
+* Revision 6.2  2000/07/20 20:55:21  shavirin
+* Added TAX_BLAST_MAIN module, that may turn this file into
+* standalone executable.
+*
 * Revision 6.1  2000/05/17 15:54:38  shavirin
 * Initial revision in new location.
 *
@@ -269,7 +276,7 @@ static LinObjPtr LinObjNew (void)
     linobj->name = (CharPtr) NULL;
     linobj->taxid = 0;
     linobj->orglist = (ValNodePtr) NULL;
-    linobj->last - (LinObjPtr) NULL;
+    linobj->last = (LinObjPtr) NULL;
     linobj->next = (LinObjPtr) NULL;
     
     return (linobj);
@@ -1483,3 +1490,62 @@ void TXBHtmlReport(SeqAlignPtr sap, FILE *outfile, Boolean query_is_na,
 
     return;
 }
+
+#if defined (TAX_BLAST_MAIN)
+
+#define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
+
+static Args myargs [] = {
+    { "Input ASN.1 File (SeqAnnot)",             /* 0 */
+      NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL },
+    { "Sequence is DNA",                         /* 1 */
+      "F", NULL, NULL, TRUE, 'p', ARG_BOOLEAN, 0.0, 0, NULL },
+    { "Database used to get SeqAnnot ASN.1",     /* 2 */
+      "nr", NULL, NULL, TRUE, 'd', ARG_STRING, 0.0, 0, NULL },
+    { "Output file name",                        /* 3 */
+      NULL, NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL }
+};
+
+Int2 Main (void)
+{
+    AsnIoPtr aip;
+    SeqAnnotPtr sap;
+    Boolean is_na = FALSE;
+    FILE *outfile;
+    Char ofile[128];
+    
+    if (!GetArgs("txblast", NUMARG, myargs)) {
+        return 1;
+    }
+    
+    if (myargs[1].intvalue) 
+        is_na = TRUE;
+    
+    if((aip = AsnIoOpen(myargs[0].strvalue, "r")) == NULL) {
+        ErrPostEx(SEV_FATAL, 0,0, "AsnIoOpen failure\n");
+        return 1;
+    }
+    
+    if((sap = SeqAnnotAsnRead (aip, NULL)) == NULL) {
+        ErrPostEx(SEV_FATAL, 0,0,"SeqAlignAsnRead failure\n");
+        return 1;
+    }
+
+    if(myargs[3].strvalue == NULL) {
+        sprintf (ofile, "%s.html", myargs[0].strvalue);
+        outfile = FileOpen(ofile, "w");
+    } else {
+        outfile = FileOpen(myargs[3].strvalue, "w");
+    }
+    
+    TXBHtmlReport((SeqAlignPtr)sap->data, outfile, is_na, is_na, 
+                  myargs[2].strvalue, NULL, NULL, FALSE);
+    
+    FileClose(outfile);
+    
+    AsnIoClose(aip);
+    SeqAnnotFree(sap);
+    
+    return (0);
+}
+#endif

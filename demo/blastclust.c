@@ -1,4 +1,4 @@
-/*  $RCSfile: blastclust.c,v $  $Revision: 6.12 $  $Date: 2000/06/08 20:40:15 $
+/*  $RCSfile: blastclust.c,v $  $Revision: 6.17 $  $Date: 2000/09/01 18:30:55 $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,21 @@
 *
 * ---------------------------------------------------------------------------
 * $Log: blastclust.c,v $
+* Revision 6.17  2000/09/01 18:30:55  dondosha
+* Create database memory map only once for all searches
+*
+* Revision 6.16  2000/08/08 17:58:55  dondosha
+* Change back to create database with indexes
+*
+* Revision 6.15  2000/08/07 19:40:57  dondosha
+* Removed sequence lengths from ClusterLogInfo structure - redundant information
+*
+* Revision 6.14  2000/08/07 15:13:36  dondosha
+* Changed comment for -S option
+*
+* Revision 6.13  2000/08/04 23:24:40  dondosha
+* Added functionality to choose neighbors based on percentage of identities
+*
 * Revision 6.12  2000/06/08 20:40:15  dondosha
 * In case of equal lengths of sequences within a cluster or equal number of cluster elements, use alphabetic or numeric order when sorting ids and clusters
 *
@@ -115,9 +130,8 @@ static ClusterParametersPtr global_parameters;
 typedef struct cluster_log_info
 {
    Int4 id1, id2;
-   Int4 length1, length2;
    Int4 hsp_length1, hsp_length2;
-   FloatHi bit_score;
+   FloatHi bit_score, perc_identity;
 } ClusterLogInfo, PNTR ClusterLogInfoPtr;
 
 typedef struct blast_cluster_element
@@ -361,7 +375,6 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 	 MemFree(id_str);
    }
 
-
    while ((num_hits = FileRead(info, sizeof(ClusterLogInfo), INFO_LIST_SIZE,
 			       infofp)) > 0) {
       for (i=0; i<num_hits; i++) {
@@ -370,17 +383,21 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
 	    continue;
 	 if (global_parameters->bidirectional)
 	    length_coverage = MIN(((FloatHi)info[i].hsp_length1) / 
-				  info[i].length1, 
+				  seq_len[info[i].id1], 
 				  ((FloatHi)info[i].hsp_length2) / 
-				  info[i].length2);
+				  seq_len[info[i].id2]);
 	 else
 	    length_coverage = MAX(((FloatHi)info[i].hsp_length1) / 
-				  info[i].length1, 
+				  seq_len[info[i].id1], 
 				  ((FloatHi)info[i].hsp_length2) / 
-				  info[i].length2);
-	 score_coverage = info[i].bit_score / 
-	    (MAX(info[i].hsp_length1, info[i].hsp_length2));
-	 
+				  seq_len[info[i].id2]);
+
+         if (global_parameters->score_threshold < 3.0)
+            score_coverage = info[i].bit_score / 
+               (MAX(info[i].hsp_length1, info[i].hsp_length2));
+         else 
+            score_coverage = info[i].perc_identity;
+
 	 if (length_coverage >= global_parameters->length_threshold && 
 	     score_coverage >= global_parameters->score_threshold) {
 	    root1 = info[i].id1;
@@ -398,7 +415,7 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
       } /* End loop on hits from a chunk */
       last_seq = info[num_hits-1].id1;
    } /* End loop on chunks of hits */
-   
+ 
    if (outfp != NULL) {
       global_fp = outfp;
       BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, used_id_index);
@@ -409,16 +426,42 @@ static Int4 ReclusterFromFile(FILE *infofp, FILE *outfp, Int4Ptr PNTR gilp,
    MemFree(id_string);
    MemFree(info);
    return last_seq + 1;
-   /*
-   if (header.numeric_id_type)
-      MemFree(gi_list);
-   else {
-      MemFree(id_string);
-      MemFree(id_list);
-   }
-   MemFree(root);
-   return 0;*/
 }
+
+static FloatHi 
+GapAlignPercentIdentity(GapAlignBlkPtr gabp)
+{
+   GapXEditScriptPtr esp = gabp->edit_block->esp;
+   Int4 identical, total, q_index, s_index, i;
+   FloatHi perc_identity;
+   Uint1Ptr query, subject;
+
+   q_index = gabp->query_start;
+   s_index = gabp->subject_start;
+   query = gabp->query + q_index;
+   subject = gabp->subject + s_index;
+   identical = total = 0;
+
+   while (esp) {
+      if (esp->op_type == GAPALIGN_SUB || esp->op_type == GAPALIGN_DECLINE) {
+         for (i=0; i<esp->num; i++) {
+            if (*query == *subject)
+               identical++;
+            query++;
+            subject++;
+         }
+      } else if (esp->op_type == GAPALIGN_DEL) 
+         subject += esp->num;
+      else if (esp->op_type == GAPALIGN_INS)
+         query += esp->num;
+      total += esp->num;
+      esp = esp->next;
+   }
+   perc_identity = ((FloatHi)identical) / total * 100;
+
+   return perc_identity;
+}
+   
 
 /* The following function prints only those hits which correspond to 
    an almost identical match of two sequences */
@@ -434,8 +477,9 @@ PrintProteinNeighbors(VoidPtr ptr)
     Int4 high_score=0;
     Nlm_FloatHi current_evalue=DBL_MAX;
     Int4 subject_length;
-    Uint1Ptr subject;
+    Uint1Ptr subject, query;
     ClusterLogInfoPtr loginfo = NULL;
+    
     
     if (ptr == NULL)
         return 0;	
@@ -463,9 +507,11 @@ PrintProteinNeighbors(VoidPtr ptr)
     if (id1 < id2) { /* Must be always true */
 #define BUF_CHUNK_SIZE 1024
         Int4 query_length, q_length, s_length;
-        FloatHi length_coverage, bit_score, score_coverage; 
+        FloatHi length_coverage, bit_score, score_coverage, perc_identity; 
 	BLAST_KarlinBlkPtr kbp;
+        GapAlignBlkPtr gap_align = search->gap_align;
 
+        query = search->context[0].query->sequence;
         query_length = search->context[0].query->length;
 
 	if (global_parameters->logfp)
@@ -492,18 +538,31 @@ PrintProteinNeighbors(VoidPtr ptr)
 		bit_score = ((hsp->score*kbp->Lambda) -
 			     kbp->logK)/NCBIMATH_LN2;
 
+                gap_align->query_frame = ContextToFrame(search,
+                                                        hsp->context);
+                gap_align->subject_frame = hsp->subject.frame;
+                gap_align->q_start = hsp->query.gapped_start;
+                gap_align->s_start = hsp->subject.gapped_start;
+                PerformGappedAlignmentWithTraceback(gap_align);
+                perc_identity = GapAlignPercentIdentity(gap_align);
+                gap_align->state_struct = 
+                   GapXDropStateDestroy(gap_align->state_struct);
+                gap_align->edit_block = 
+                   GapXEditBlockDelete(gap_align->edit_block);
+                if (global_parameters->score_threshold < 3.0)
+                   score_coverage = bit_score / (MAX(q_length, s_length));
+                else
+                   score_coverage = perc_identity;
+
 		if (global_parameters->logfp) {
 		   loginfo[index].id1 = id1;
 		   loginfo[index].id2 = id2;
-		   loginfo[index].length1 = query_length;
-		   loginfo[index].length2 = subject_length;
 		   loginfo[index].hsp_length1 = q_length;
 		   loginfo[index].hsp_length2 = s_length;
 		   loginfo[index].bit_score = bit_score;
+                   loginfo[index].perc_identity = perc_identity;
 		}
 
-                score_coverage = bit_score / (MAX(q_length, s_length));
-                
                 if (length_coverage >= global_parameters->length_threshold && 
                     score_coverage >= global_parameters->score_threshold) {
 		   root1 = id1;
@@ -526,7 +585,8 @@ PrintProteinNeighbors(VoidPtr ptr)
 	if (global_parameters->logfp) {
 	   FileWrite(loginfo, sizeof(ClusterLogInfo), hspcnt, 
 		     global_parameters->logfp);
-	   fflush(global_parameters->logfp);
+           MemFree(loginfo);
+	   /*fflush(global_parameters->logfp);*/
 	}
     } else
        fprintf(stderr, "Error: this can't happen!\n");
@@ -550,7 +610,7 @@ static Args myargs [] = {
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
    { "Length coverage threshold",                                /* 3 */
       "0.9", NULL, NULL, FALSE, 'L', ARG_FLOAT, 0.0, 0, NULL},   
-   { "Score coverage threshold",                                 /* 4 */
+   { "Score coverage threshold (bit score / length if < 3.0, percentage of identities otherwise)",                                                              /* 4 */
       "1.75", NULL, NULL, FALSE, 'S', ARG_FLOAT, 0.0, 0, NULL},  
    { "Require coverage on both neighbours?",                     /* 5 */
       "TRUE", NULL, NULL, FALSE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -585,7 +645,7 @@ Int2 Main (void)
     ReadDBFILEPtr rdfp, rdfp_var;
     Uint1 align_type;
     SeqIdPtr sip;
-    SeqLocPtr query_slp = NULL;
+    BioseqPtr query_bsp = NULL;
     CharPtr blast_program, blast_inputfile, blast_outputfile, blast_database,
        progress_file = NULL;
     CharPtr logfile, info_file, defline, input_name;
@@ -670,7 +730,7 @@ Int2 Main (void)
        input_name = FileNameFind(blast_inputfile);
 #ifdef TMPDIR
        blast_database = 
-	  Malloc(StringLen(input_name) + StringLen(TMPDIR) + 1);
+	  Malloc(StringLen(input_name) + StringLen(TMPDIR) + 2);
        sprintf(blast_database, "%s/%s", TMPDIR, input_name);
 #else
        blast_database = blast_inputfile;
@@ -696,7 +756,7 @@ Int2 Main (void)
 	     return (1);
 	  }
        } else {
-	  if ((global_parameters->logfp = FileOpen(logfile, "wb")) == NULL) { 
+	  if ((global_parameters->logfp = FileOpen(logfile, "wb+")) == NULL) { 
 	     ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open log file %s for writing\n", logfile);
 	     return (1);
 	  }
@@ -789,7 +849,7 @@ Int2 Main (void)
        }
        
        FileWrite(seq_len, sizeof(Int4), num_queries, global_parameters->logfp);
-       fflush(global_parameters->logfp);
+       /*fflush(global_parameters->logfp);*/
     }
 
     if (print_progress) {
@@ -801,42 +861,33 @@ Int2 Main (void)
        else
 	  fprintf(progressfp, "%s Start clustering of %ld queries\n", 
 		  timestr, num_queries);
-       MemFree(timestr);
     }
     for (index=first_seq; index<num_queries; index++) {
-       rdfp = readdb_new(blast_database, READDB_DB_IS_PROT);
-
-       readdb_get_descriptor(rdfp, index, &sip, &defline);
-       ValNodeAddPointer(&query_slp, SEQLOC_WHOLE, SeqIdDup(sip));
-       SeqIdSetFree(sip);
-       MemFree(defline);
+       query_bsp = readdb_get_bioseq(rdfp, index);
        /* Set up the search */
        options->first_db_seq = index + 1;
 
-       search = BLASTSetUpSearchWithReadDbInternal(query_slp, NULL, blast_program, seq_len[index], blast_database, options, tick_callback, NULL, NULL, 0, rdfp);
+       search = BLASTSetUpSearchWithReadDbInternal(NULL, query_bsp, blast_program, seq_len[index], blast_database, options, NULL, NULL, NULL, 0, rdfp);
        if (search != NULL && !search->query_invalid) {
 	  search->handle_results = PrintProteinNeighbors;
             
 	  /* Run BLAST. */
 	  search->queue_callback = NULL;
-	  search->thr_info->tick_callback = tick_callback;
+	  search->thr_info->tick_callback = NULL;
 	  
 	  do_the_blast_run(search);
        }
        search = BlastSearchBlkDestruct(search);
-       query_slp = SeqLocSetFree(query_slp);
-       for (rdfp_var=rdfp; rdfp_var; rdfp_var=rdfp_var->next) 
-	  rdfp_var->shared_info = NULL;
-       rdfp = readdb_destruct(rdfp);
+       query_bsp = BioseqFree(query_bsp);
        
        if (print_progress && (index + 1)%PROGRESS_INTERVAL == 0) {
 	  DayTimeStr(timestr, TRUE, TRUE);
 	  fprintf(progressfp, "%s Finished processing of %ld queries\n", 
 		  timestr, index+1);
-	  MemFree(timestr);
        }
     } /* End of loop on queries */
 
+    rdfp = readdb_destruct(rdfp);
     BlastClusterNeighbours(num_queries, seq_len, id_list, gi_list, NULL);
 
 
@@ -872,6 +923,7 @@ Int2 Main (void)
        sprintf(db_file, "%s.psq", blast_database);
        FileRemove(db_file);
     }
+    MemFree(blast_database);
     return 0;
 }
 

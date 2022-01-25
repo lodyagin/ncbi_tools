@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.77 $
+* $Revision: 6.79 $
 *
 * File Description: 
 *
@@ -1705,6 +1705,30 @@ static void ChangeBioseqViewTabs (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
+static void ChangeBioseqSequenceStyle (PopuP p)
+
+{
+  BioseqViewFormPtr  bfp;
+  BioseqPagePtr      bpp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (p);
+  if (bfp != NULL && bfp->bvd.bsp != NULL) {
+    WatchCursor ();
+    bfp->bvd.moveToOldPos = FALSE;
+    bpp = bfp->currentBioseqPage;
+    if (bpp != NULL && bpp->show != NULL) {
+      bpp->show (&(bfp->bvd), FALSE);
+    }
+    Update ();
+    bfp->bvd.showContigJoin = (Boolean) (! bfp->bvd.showContigJoin);
+    PointerToForm (bfp->form, (Pointer) bfp->bvd.bsp);
+    SetBioseqImportExportItems (bfp);
+    ArrowCursor ();
+    Update ();
+    AdjustDynamicGraphicViewer (&(bfp->bvd));
+  }
+}
+
 static void ChangeBioseqDocText (PopuP p)
 
 {
@@ -2179,6 +2203,7 @@ NLM_EXTERN void Nlm_LaunchWebPage (Char *url)
 #endif
 }
 
+/*
 static void LaunchPubSeqArticle (ButtoN b)
 
 {
@@ -2233,6 +2258,25 @@ static void LaunchPubSeqArticle (ButtoN b)
     NS_WindowFree (window);
   }
 #endif
+}
+*/
+
+static void LaunchPubSeqArticle (ButtoN b)
+
+{
+  BioseqViewFormPtr  bfp;
+  BioseqPtr          bsp;
+
+  bfp = (BioseqViewFormPtr) GetObjectExtra (b);
+  if (bfp == NULL) return;
+  if (bfp->docuid < 1) return;
+  bsp = bfp->bvd.bsp;
+  if (bsp == NULL) return;
+  if (ISA_na (bsp->mol)) {
+    LaunchEntrezURL ("Nucleotide", bfp->docuid, "GenBank");
+  } else if (ISA_aa (bsp->mol)) {
+    LaunchEntrezURL ("Protein", bfp->docuid, "GenPept");
+  }
 }
 
 static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
@@ -2307,7 +2351,7 @@ static Handle CreateViewControl (GrouP g, BioseqViewFormPtr bfp,
         return (Handle) rads;
       case CHANGE_VIEW_POPUP :
         k = HiddenGroup (g, -3, 0, NULL);
-        ppt = StaticPrompt (k, "Display Format", 0, 0, programFont, 'l');
+        ppt = StaticPrompt (k, "Format", 0, 0, programFont, 'l');
         pops = PopupList (k, TRUE, ChangeBioseqViewPopup);
         SetObjectExtra (pops, (Pointer) bfp, NULL);
         for (j = 0; titles [j] != NULL; j++) {
@@ -2430,6 +2474,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
   SeqEntryPtr          sep;
   CharPtr              str;
   CharPtr              styleName;
+  PopuP                v;
   Int2                 val;
   WindoW               w;
   PopuP                x;
@@ -2480,6 +2525,7 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       if (svpp->allowScrollText) {
         bfp->bvd.useScrollText = svpp->startInScrollText;
       }
+      bfp->bvd.showContigJoin = TRUE;
       bfp->bvd.launchEditors = svpp->launchEditors;
       bfp->bvd.launchSubviewers = svpp->launchSubviewers;
       bfp->bvd.sendSelectMessages = svpp->sendSelectMessages;
@@ -2696,12 +2742,12 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
     }
 
     x = NULL;
-    bfp->bvd.docTxtControlGrp = HiddenGroup (h, -4, 0, NULL);
+    bfp->bvd.docTxtControlGrp = HiddenGroup (h, -6, 0, NULL);
     if (svpp != NULL && svpp->allowScrollText) {
-      StaticPrompt (bfp->bvd.docTxtControlGrp, "Display Type", 0, popupMenuHeight, programFont, 'l');
+      StaticPrompt (bfp->bvd.docTxtControlGrp, "Type", 0, popupMenuHeight, programFont, 'l');
       x = PopupList (bfp->bvd.docTxtControlGrp, TRUE, ChangeBioseqDocText);
       SetObjectExtra (x, bfp, NULL);
-      PopupItem (x, "Document");
+      PopupItem (x, "Doc");
       PopupItem (x, "Text");
     }
     if (bfp->bvd.hasTargetControl && GetAppProperty ("InternalNcbiSequin") != NULL) {
@@ -2713,6 +2759,12 @@ static ForM LIBCALL CreateNewSeqEntryViewFormEx (Int2 left, Int2 top, CharPtr ti
       PopupItem (bfp->bvd.ffModeCtrl, "Release");
       SetValue (bfp->bvd.ffModeCtrl, 1);
     }
+      StaticPrompt (bfp->bvd.docTxtControlGrp, "Sequence", 0, popupMenuHeight, programFont, 'l');
+      v = PopupList (bfp->bvd.docTxtControlGrp, TRUE, ChangeBioseqSequenceStyle);
+      SetObjectExtra (v, bfp, NULL);
+      PopupItem (v, "Bases");
+      PopupItem (v, "CONTIG");
+      SetValue (v, 2);
     Hide (bfp->bvd.docTxtControlGrp);
 
     s = HiddenGroup (h, -4, 0, NULL);

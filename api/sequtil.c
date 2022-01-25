@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.56 $
+* $Revision: 6.70 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,48 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.70  2000/10/27 20:10:57  shavirin
+* Added new function MakeNewProteinSeqIdExMT for MT save operation.
+*
+* Revision 6.69  2000/10/26 15:28:58  dondosha
+* Do not adjust offsets for empty SeqLocs in AdjustOffSetsInSeqAlign
+*
+* Revision 6.68  2000/10/24 19:04:18  dondosha
+* Moved function UniqueLocalId from blast.c
+*
+* Revision 6.67  2000/10/11 21:59:35  kans
+* added PRINTID_FASTA_GENERAL
+*
+* Revision 6.66  2000/10/11 18:33:36  kans
+* SeqIdWrite fasta_order prefers SEQID_OTHER, then SEQID_GENERAL, then SEQID_LOCAL
+*
+* Revision 6.65  2000/10/03 16:51:07  cavanaug
+* Added BF accession prefix to WHICH_db_accession
+*
+* Revision 6.64  2000/10/02 14:30:48  sicotte
+* Added BE prefix for NCBI EST to WHICH_db_accession
+*
+* Revision 6.63  2000/10/02 14:29:16  sicotte
+* Added BE prefix for NCBI EST to WHICH_db_accession
+*
+* Revision 6.62  2000/09/28 15:08:31  dondosha
+* Corrected local id handling in GetAccessionFromSeqid - used in Mega BLAST
+*
+* Revision 6.61  2000/09/19 15:22:07  sicotte
+* fix BD and BE prefix
+*
+* Revision 6.60  2000/09/12 20:20:13  cavanaug
+* WHICH_db_accession : fixed missing paren
+*
+* Revision 6.59  2000/09/12 19:54:22  cavanaug
+* WHICH_db_accession now knows about BE accessions
+*
+* Revision 6.58  2000/08/02 21:26:15  kans
+* SeqIdWrite will not print version if release is used
+*
+* Revision 6.57  2000/07/11 15:01:50  kans
+* added SeqIdFromAccessionDotVersion for genome mapping project
+*
 * Revision 6.56  2000/06/08 14:30:07  dondosha
 * Fixed bug in GetAccessionFromSeqId for general id
 *
@@ -2803,13 +2845,32 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 	10, /* 7 = pir */
 	10, /* 8 = swissprot */
 	15,  /* 9 = patent */
-	20, /* 10 = other TextSeqId */
-	20, /* 11 = general Dbtag */
+	12, /* 10 = other TextSeqId */
+	13, /* 11 = general Dbtag */
 	255,  /* 12 = gi */
 	10, /* 13 = ddbj */
 	10, /* 14 = prf */
 	12  /* 15 = pdb */
     };
+	static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
+ 	33, /* 0 = not set */
+	20, /* 1 = local Object-id */
+	15,  /* 2 = gibbsq */
+	16,  /* 3 = gibbmt */
+	30, /* 4 = giim Giimport-id */
+	10, /* 5 = genbank */
+	10, /* 6 = embl */
+	10, /* 7 = pir */
+	10, /* 8 = swissprot */
+	15,  /* 9 = patent */
+	13, /* 10 = other TextSeqId */
+	12, /* 11 = general Dbtag */
+	255,  /* 12 = gi */
+	10, /* 13 = ddbj */
+	10, /* 14 = prf */
+	12  /* 15 = pdb */
+    };
+    Boolean useGeneral = FALSE;
     TextSeqIdPtr tsip;
 	PDBSeqIdPtr psip;
 	ObjectIdPtr oip;
@@ -2836,6 +2897,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 			d [0] = (char) format;
 		format = PRINTID_FASTA_SHORT;
 	}
+
+	if (format == PRINTID_FASTA_GENERAL) {
+		useGeneral = TRUE;
+		format = PRINTID_FASTA_LONG;
+	}
 	
 	localbuf[0] = '\0';
 							/* error on input, return ??? */
@@ -2859,7 +2925,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 				break;
 			}
 		}
-		sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
+		if (useGeneral) {
+			sip = SeqIdSelect(isip, general_order, NUM_SEQID);
+		} else {
+			sip = SeqIdSelect(isip, fasta_order, NUM_SEQID);
+		}
 		if (sip == NULL)   /* only GI */
 			return tmp;
 		else if (got_gi)
@@ -2900,7 +2970,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Int2 bu
 					return tmp;
                 } else if ((format == PRINTID_TEXTID_ACC_VER) 
 					&& (tsip->accession != NULL)) {
-					if (tsip->version > 0) {
+					if (tsip->version > 0 && tsip->release == NULL) {
 						sprintf(localbuf, "%s.%d", tsip->accession,
 							(int)(tsip->version));
 					} else {
@@ -3046,7 +3116,6 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
    Int2 id_len;
    GiimPtr gip;
    ObjectIdPtr oip;
-   CharPtr ptr;
    TextSeqIdPtr textsip;
    DbtagPtr dbtag;
    PatentSeqIdPtr psip;
@@ -3067,11 +3136,15 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
       break;
    case SEQID_LOCAL:
       oip = (ObjectIdPtr) sip->data.ptrvalue;
-      ptr = oip->str;
       
-      id_len = StringLen(oip->str);
-      *id = (CharPtr) MemNew(id_len+1);
-      sprintf(*id, "%s", oip->str);
+      if (oip->str) {
+         id_len = StringLen(oip->str);
+         *id = (CharPtr) MemNew(id_len+1);
+         sprintf(*id, "%s", oip->str);
+      } else {
+         *id = (CharPtr) MemNew(6);
+         sprintf(*id, "%d", oip->id);
+      }
       break;
    case SEQID_GENBANK: case SEQID_EMBL: case SEQID_PIR: 
    case SEQID_SWISSPROT: case SEQID_DDBJ: case SEQID_PRF: 
@@ -3640,96 +3713,140 @@ NLM_EXTERN Boolean SeqIdForSameBioseq (SeqIdPtr a, SeqIdPtr b)
 *   	
 *
 *****************************************************************************/
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT (SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe)
+{
+    Char buf[40];
+    CharPtr tmp;
+    Int2 ctr;
+    Int2 start = 1;
+    SeqLocPtr tslp;
+    ValNodePtr newid;
+    ObjectIdPtr oid;
+    ValNode vn;
+    TextSeqId tsi;
+    ValNodePtr altid;
+    size_t len;
+    static Uint4 counter;
+    static TNlmMutex lock = NULL;
+    
+    
+    if (lock == NULL) {
+        NlmMutexInit(&lock);
+    }
+    
+    /* create a possible GenBankStyle id as well */
+    altid = &vn;
+    vn.choice = SEQID_GENBANK;
+    vn.next = NULL;
+    vn.data.ptrvalue = &tsi;
+    tsi.name = NULL;
+    tsi.accession = NULL;
+    tsi.version = INT2_MIN;
+    tsi.release = NULL;
+    
+    if ((sip == NULL) && (slp != NULL)) {
+        tslp = NULL;
+        while ((tslp = SeqLocFindNext(slp, tslp)) != NULL) {
+            sip = SeqLocId(tslp);
+            if (sip != NULL)
+                break;
+        }
+    }
+    
+    if (sip != NULL) {
+        SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 20);
+        tmp = buf;
+        while (*tmp != '\0')
+            tmp++;
+        if (*(tmp-1) == '>')
+            tmp--;
+        *tmp = '_';
+        tmp++;
+        *tmp = '\0';
+    } else {
+        len = StringLen (prefix);
+        if (len > 0 && len < 32) {
+            tmp = StringMove(buf, prefix);
+        } else {
+            tmp = StringMove(buf, "tmpseq_");
+        }
+    }
+    
+    newid = ValNodeNew(NULL);
+    oid = ObjectIdNew();
+    oid->str = buf;   /* allocate this later */
+    newid->choice = SEQID_LOCAL;
+    newid->data.ptrvalue = oid;
+    
+    tsi.name = buf;   /* check for alternative form */
+    
+    if (ctrptr != NULL) {
+        start = *ctrptr;
+    }
+    if (start < 1) {
+        start = 1;
+    }
+
+    /* Very dangerous way to create new id - don't use if you can */
+
+    if(is_MT_safe == FALSE) {
+	for (ctr = start; ctr < 32000; ctr++) {
+            sprintf(tmp, "%d", (int)ctr);
+            if ((BioseqFindCore(newid) == NULL) && (BioseqFindCore(altid) == NULL)) {
+                oid->str = StringSave(buf);
+                if (ctrptr != NULL) {
+                    *ctrptr = ctr + 1;
+                }
+                return newid;
+            }
+	}
+    }
+    
+    NlmMutexLock(lock);
+    
+    sprintf(tmp, "%d", (int)counter);
+    oid->str = StringSave(buf);
+    if (ctrptr != NULL) {
+        *ctrptr = ctr + 1;
+    }
+    
+    counter++;
+    NlmMutexUnlock(lock);
+    
+    return newid;
+}
+
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx (SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr)
 {
-	Char buf[40];
-	CharPtr tmp;
-	Int2 ctr;
-	Int2 start = 1;
-	SeqLocPtr tslp;
-	ValNodePtr newid;
-	ObjectIdPtr oid;
-	ValNode vn;
-	TextSeqId tsi;
-	ValNodePtr altid;
-	size_t len;
-
-	          /* create a possible GenBankStyle id as well */
-	altid = &vn;
-	vn.choice = SEQID_GENBANK;
-	vn.next = NULL;
-	vn.data.ptrvalue = &tsi;
-	tsi.name = NULL;
-	tsi.accession = NULL;
-	tsi.version = INT2_MIN;
-	tsi.release = NULL;
-
-	if ((sip == NULL) && (slp != NULL))
-	{
-		tslp = NULL;
-		while ((tslp = SeqLocFindNext(slp, tslp)) != NULL)
-		{
-			sip = SeqLocId(tslp);
-			if (sip != NULL)
-				break;
-		}
-	}
-
-	if (sip != NULL)
-	{
-		SeqIdWrite(sip, buf, PRINTID_TEXTID_ACCESSION, 20);
-		tmp = buf;
-		while (*tmp != '\0')
-			tmp++;
-		if (*(tmp-1) == '>')
-			tmp--;
-		*tmp = '_';
-		tmp++;
-		*tmp = '\0';
-	}
-	else
-	{
-		len = StringLen (prefix);
-		if (len > 0 && len < 32) {
-			tmp = StringMove(buf, prefix);
-		} else {
-			tmp = StringMove(buf, "tmpseq_");
-		}
-	}
-
-	newid = ValNodeNew(NULL);
-	oid = ObjectIdNew();
-	oid->str = buf;   /* allocate this later */
-	newid->choice = SEQID_LOCAL;
-	newid->data.ptrvalue = oid;
-
-	tsi.name = buf;   /* check for alternative form */
-
-	if (ctrptr != NULL) {
-		start = *ctrptr;
-	}
-	if (start < 1) {
-		start = 1;
-	}
-	for (ctr = start; ctr < 32000; ctr++)
-	{
-		sprintf(tmp, "%d", (int)ctr);
-		if ((BioseqFindCore(newid) == NULL) && (BioseqFindCore(altid) == NULL))
-		{
-			oid->str = StringSave(buf);
-			if (ctrptr != NULL) {
-				*ctrptr = ctr + 1;
-			}
-			return newid;
-		}
-	}
-
-	return NULL;
+    return MakeNewProteinSeqIdExMT (slp, sip, prefix, ctrptr, FALSE);
 }
 
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId (SeqLocPtr slp, SeqIdPtr sip)
 {
-	return MakeNewProteinSeqIdEx (slp, sip, NULL, NULL);
+    return MakeNewProteinSeqIdEx (slp, sip, NULL, NULL);
+}
+
+ObjectIdPtr UniqueLocalId(void)
+{
+    static TNlmMutex lock = NULL;
+    static long count = 0;
+    ObjectIdPtr oip;
+    long l;
+    Char buf[128];
+    
+    if (lock == NULL) {
+        NlmMutexInit(&lock);
+    }
+    NlmMutexLock(lock);
+    l = count;
+    if (++count < 0) {
+        count = 0;
+    }
+    NlmMutexUnlock(lock);
+    sprintf(buf, "lcl|unique%08ld", l);
+    oip = ObjectIdNew();
+    oip->str = StringSave(buf);
+    return oip;
 }
 
 /*****************************************************************************
@@ -7318,13 +7435,17 @@ AdjustOffSetsInSeqAlign(SeqAlignPtr salp, SeqLocPtr slp1, SeqLocPtr slp2)
 			     whole_slp = ValNodeFree(whole_slp);
 			}
 			seqloc = ssp->loc;
-			seq_int = seqloc->data.ptrvalue;
-			seq_int->from += offset1;
-			seq_int->to += offset1;
+                        if (seqloc->choice == SEQLOC_INT) {
+			    seq_int = seqloc->data.ptrvalue;
+			    seq_int->from += offset1;
+			    seq_int->to += offset1;
+                        }
 			seqloc = ssp->loc->next;
-			seq_int = seqloc->data.ptrvalue;
-			seq_int->from += offset2;
-			seq_int->to += offset2;
+                        if (seqloc->choice == SEQLOC_INT) {
+			    seq_int = seqloc->data.ptrvalue;
+			    seq_int->from += offset2;
+			    seq_int->to += offset2;
+                        }
                         ssp = ssp->next;
 		 }
               }
@@ -7484,6 +7605,28 @@ NLM_EXTERN  SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version
 }
 
 
+/* Variant of SeqIdFromAccession that works on accession.version string (JK) */
+
+NLM_EXTERN SeqIdPtr SeqIdFromAccessionDotVersion (CharPtr accession)
+
+{
+  Char      accn [41];
+  CharPtr   ptr;
+  long int  ver = 0;
+
+  StringNCpy_0 (accn, accession, sizeof (accn));
+  ptr = StringChr (accn, '.');
+  if (ptr != NULL) {
+    *ptr = '\0';
+    ptr++;
+    if (sscanf (ptr, "%ld", &ver) != 1) {
+      ver = 0;
+    }
+  }
+  return SeqIdFromAccession (accn, (Uint4) ver, NULL);
+}
+
+
 /* list of N* GSDB accession numbers that have been made secondary to
    embl or ddbj records. These records are the only ones ONLY
    taken over by one db (namely embl)
@@ -7538,6 +7681,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
         }
  
       switch (TO_UPPER(*s)) {
+
 /* Protein SWISS-PROT accessions */
       case 'O': case 'P': case 'Q':  
           retcode = ACCN_SWISSPROT;
@@ -7649,11 +7793,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           temp[1] = *s; s++;
           temp[2] = '\0';
           
-          if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
-              retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
-          }      else if ((StringICmp(temp,"AA") == 0) ||
-                          (StringICmp(temp,"AI") == 0) || 
-                          (StringICmp(temp,"AW") == 0) ) { /* NCBI EST */
+          if ((StringICmp(temp,"AA") == 0) ||
+	      (StringICmp(temp,"AI") == 0) || 
+	      (StringICmp(temp,"AW") == 0) || 
+	      (StringICmp(temp,"BE") == 0) || 
+	      (StringICmp(temp,"BF") == 0) ) {             /* NCBI EST */
               retcode = ACCN_NCBI_EST;
           } else if ((StringICmp(temp,"AC") == 0)) {      /* NCBI HTGS */
               retcode = ACCN_NCBI_HTGS;
@@ -7673,8 +7817,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"AZ") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0)) {      /* NCBI patent */
-              retcode = ACCN_NCBI_PATENT | ACCN_AMBIGOUS_MOL; /* Can be either protein or nuc */
-          } else if((StringICmp(temp,"BC")==0)) { /* NCBI long cDNA project : MGC */
+              retcode = ACCN_NCBI_PATENT;
+          } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0)) {     /* EMBL's direct submission */
@@ -7699,7 +7843,7 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_HTGS;
           } else if ((StringICmp(temp,"BA") == 0)) {      /* DDBJ CON division */
               retcode = ACCN_DDBJ_CON;
-          } else if ((StringICmp(temp,"BC") == 0)) {      /* DDBJ PATENT division */
+          } else if ((StringICmp(temp,"BD") == 0)) {      /* DDBJ PATENT division */
               retcode = ACCN_DDBJ_PATENT;
           } else {
               retval = FALSE;

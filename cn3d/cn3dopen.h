@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.17  2000/07/08 20:43:57  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.16  2000/06/16 14:57:03  lewisg
 * move entrez calls out of desktop
 *
@@ -105,11 +108,13 @@
 #ifndef _CN3DOPEN2_
 #define _CN3DOPEN2_ 1
 
+#include <objmime.h>
+#include <algorend.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#include <objmime.h>
-#include <algorend.h>
+
 #define MAX_MDLNO 1000
 #define PRINT_FORM_MIME_NAME "Ncbi-mime-asn1"
 #define PRINT_FORM_BIOSTRUC "Biostruc"

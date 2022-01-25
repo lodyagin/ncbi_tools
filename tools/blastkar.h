@@ -32,8 +32,26 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
 
 ******************************************************************************/
 
-/* $Revision: 6.16 $ 
+/* $Revision: 6.22 $ 
 * $Log: blastkar.h,v $
+* Revision 6.22  2000/09/27 21:27:15  dondosha
+* Added original_matrix member to BLAST_Matrix structure
+*
+* Revision 6.21  2000/09/12 16:03:51  dondosha
+* Added functions to create and destroy matrix used in txalign
+*
+* Revision 6.20  2000/08/31 15:45:07  dondosha
+* Added function BlastUnevenGapSumE for sum evalue computation with different gap size on two sequences
+*
+* Revision 6.19  2000/08/23 18:50:02  madden
+* Changes to support decline-to-align checking
+*
+* Revision 6.18  2000/08/04 15:49:26  sicotte
+* added BlastScoreBlkMatCreateEx(reward,penalty) and BlastKarlinGetDefaultMatrixValues as external functions
+*
+* Revision 6.17  2000/07/07 21:20:08  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope!
+*
 * Revision 6.16  2000/05/26 17:29:55  shavirin
 * Added array of pos frequencies into BLAST_Matrix structure and it's
 * handling.
@@ -196,12 +214,13 @@ Contents: definitions and prototypes used by blastkar.c to calculate BLAST
  * */
 #ifndef __BLASTKAR__
 #define __BLASTKAR__
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <ncbi.h>
 #include <objalign.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
 	Defines for the matrix 'preferences' (as specified by S. Altschul).
@@ -363,6 +382,7 @@ typedef struct _blast_matrix {
 		Int4Ptr PNTR matrix;
                 Nlm_FloatHi ** posFreqs;
 		FloatHi karlinK;
+                Int4Ptr PNTR original_matrix;
 } BLAST_Matrix, PNTR BLAST_MatrixPtr;
 
 typedef struct _blast_rescomp {
@@ -387,6 +407,7 @@ Int2 LIBCALL BlastScoreSetAmbigRes PROTO((BLAST_ScoreBlkPtr sbp, Char ambiguous_
 Int2 LIBCALL BlastScoreBlkFill PROTO((BLAST_ScoreBlkPtr sbp, CharPtr string, Int4 length, Int2 context_number));
  
 Int2 LIBCALL BlastScoreBlkMatFill PROTO((BLAST_ScoreBlkPtr sbp, CharPtr matrix));
+BLAST_ScorePtr PNTR LIBCALL BlastScoreBlkMatCreateEx(BLAST_ScorePtr PNTR matrix,BLAST_Score penalty, BLAST_Score reward);
  
 Int2 LIBCALL BlastScoreBlkMatRead PROTO((BLAST_ScoreBlkPtr sbp, FILE *fp));
  
@@ -419,6 +440,8 @@ BLAST_KarlinBlkPtr LIBCALL BlastKarlinBlkDestruct PROTO((BLAST_KarlinBlkPtr));
 Int2 LIBCALL BlastKarlinBlkCalc PROTO((BLAST_KarlinBlkPtr kbp, BLAST_ScoreFreqPtr sfp));
 
 Int2 LIBCALL BlastKarlinBlkGappedCalc PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, CharPtr matrix_name, ValNodePtr PNTR error_return));
+
+Int2 LIBCALL BlastKarlinBlkGappedCalcEx PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name, ValNodePtr PNTR error_return));
 
 
 Nlm_FloatHi BlastKarlinLHtoK PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi lambda, Nlm_FloatHi H));
@@ -456,6 +479,8 @@ Nlm_FloatHi LIBCALL BlastSumP PROTO((Int4 r, Nlm_FloatHi s));
 
 /* Functions to calculate SumE (for large and small gaps). */
 Nlm_FloatHi LIBCALL BlastSmallGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean min_length_one));
+
+Nlm_FloatHi LIBCALL BlastUnevenGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean min_length_one));
 
 Nlm_FloatHi LIBCALL BlastLargeGapSumE PROTO((BLAST_KarlinBlkPtr kbp, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum,  Nlm_FloatHi xsum, Int4 query_length, Int4 subject_length, Boolean old_stats));
 
@@ -511,6 +536,13 @@ arrays.
 */
 
 Int2 LIBCALL BlastKarlinGetMatrixValues PROTO((CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, Int4Ptr PNTR pref_flags));
+
+Int2 LIBCALL BlastKarlinGetMatrixValuesEx PROTO((CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, Int4Ptr PNTR decline_align, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, Int4Ptr PNTR pref_flags));
+
+Int2 LIBCALL BlastKarlinGetDefaultMatrixValues(CharPtr matrix, Int4Ptr open, Int4Ptr extension, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H);
+
+Int4Ptr PNTR LIBCALL BlastMatrixToTxMatrix PROTO((BLAST_MatrixPtr matrix));
+Int4Ptr PNTR LIBCALL TxMatrixDestruct PROTO((Int4Ptr PNTR txmatrix)); 
 
 #ifdef __cplusplus
 }

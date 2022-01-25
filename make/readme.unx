@@ -861,7 +861,6 @@ make: [copy] Error 1 (ignored)
 ./ln-if-absent ../demo/nbatch.c .
 ./ln-if-absent ../demo/elecpcr.c .
 ./ln-if-absent ../demo/fetchent.c .
-./ln-if-absent ../demo/genget.c .
 ./ln-if-absent ../demo/udvmain.c .
 ./ln-if-absent ../demo/srchnt.c ../demo/srchaa.c ../demo/mts.c ../demo/sigme.c ../demo/dst.c ../demo/ccp.c ../demo/epi.c ../demo/twop.c ../demo/cnsrt.c ../demo/cnsgn.c ../demo/ccpv.c ../demo/dustv.c ../demo/epiv.c ../demo/sigmev.c ../demo/twopv.c ../demo/cnsrtv.c ../demo/cnsgnv.c ../demo/searchv.c .
 ./ln-if-absent ../network/entrez/server/*.* .
@@ -1009,5 +1008,5 @@ Good luck!
 
 
 =======================================================================	
- $Id: readme.unx,v 6.14 2000/01/31 20:17:20 beloslyu Exp $
+ $Id: readme.unx,v 6.15 2000/10/17 05:02:24 beloslyu Exp $
 =======================================================================	

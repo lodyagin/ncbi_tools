@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   9/13/96
 *
-* $Revision: 6.47 $
+* $Revision: 6.50 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: docsum.c,v $
+* Revision 6.50  2000/08/18 19:53:52  kans
+* do not remove file sent to Cn3D on any platform
+*
+* Revision 6.49  2000/08/17 22:19:16  kans
+* launch Cn3D with system command, not Execv, which requires full path
+*
+* Revision 6.48  2000/08/17 20:32:24  kans
+* launch remote Cn3D
+*
 * Revision 6.47  2000/04/03 21:05:53  lewisg
 * fix launch of cn3d from sequin
 *
@@ -4047,12 +4056,20 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
 #if defined(WIN16)
   Message (MSG_OK, "Structure views not supported on this platform.");
 #else
-  BiostrucPtr  bsp;
-  Int4         complexity;
-  Int2         maxModels;
-  PDNMS        pdnms;
-  PMSD         pmsd;
-  WindoW       w;
+  AsnIoPtr         aip;
+  BiostrucPtr      bsp;
+  Int4             complexity;
+  EntrezGeneral    eg;
+  Int2             maxModels;
+  NcbiMimeAsn1     mime;
+  Char             path [PATH_MAX];
+  ValNode          vn;
+#ifdef WIN_MOTIF
+  Char             cmmd [PATH_MAX];
+#endif
+#ifdef WIN_MSWIN
+  Char             prog [PATH_MAX];
+#endif
 
   if (! BiostrucAvail ()) {
     Message (MSG_OK, "Structure libraries are not linked in.");
@@ -4069,32 +4086,53 @@ static void LaunchStructureViewer (Int4 uid, Int2 numAlign, Int4Ptr alignuids, I
     Message (MSG_OK, "Unable to find this record in the database.");
     return;
   }
-/*  ClearStructures (); lyg */
-  ObjMgrProcLoad(OMPROC_VIEW,
-		"OneD-Viewer SE", "SingleSeqViewer SE", OBJ_BIOSEQSET, 0, OBJ_BIOSEQSET, 0,
-		NULL, UDV_ObjRegAutonomous, -10000);
-  ObjMgrProcLoad(OMPROC_VIEW, 
-		"DDV", "MSA_Viewer", OBJ_SEQALIGN, 0, OBJ_SEQALIGN, 0,
-		NULL, DDV_ObjRegSlaveViewDDV, -10000);
-  w = (WindoW) Cn3DWin_Entrez(NULL, TRUE);
-  if (w != NULL) {
-    Cn3D_OpenStart();
-    pdnms = MakeAModelstruc (bsp); /* moved here from before window creation. lyg */
-    if (pdnms == NULL) {
-      Remove(w);  /* lyg */
-      ArrowCursor ();
-      Update ();
-      Message (MSG_OK, "Unable to convert this biostruc to a modelstruc.");
-      return;
-    }
-    pmsd = (PMSD) pdnms->data.ptrvalue;
-    MMDB_OpenTraverse(pmsd);
-    Cn3D_SetPars(NewStructureRenderSet(), pdnms);
 
-    Cn3D_OpenEnd();
-    Show (w);
-    Select (w);
+  TmpNam (path);
+  aip = AsnIoOpen (path, "w");
+
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+  vn.choice = Data_data_structure;
+  vn.data.ptrvalue = (Pointer) bsp;
+  vn.next = NULL;
+
+  MemSet ((Pointer) &eg, 0, sizeof (EntrezGeneral));
+  eg.style = Entrez_style_asn1;
+  eg.Data_data = &vn;
+
+  MemSet ((Pointer) &mime, 0, sizeof (NcbiMimeAsn1));
+  mime.choice = NcbiMimeAsn1_entrez;
+  mime.data.ptrvalue = &eg;
+  mime.next = NULL;
+
+  NcbiMimeAsn1AsnWrite (&mime, aip, NULL);
+  /*
+  BiostrucAsnWrite (bsp, aip, NULL);
+  */
+  AsnIoClose (aip);
+
+  BiostrucFree (bsp);
+
+  /* Cn3D expects Ncbi-mime-asn1, not Biostruc */
+
+#ifdef WIN_MAC
+  Nlm_SendOpenDocAppleEvent (path, "Cn3D");
+#endif
+#ifdef WIN_MSWIN
+  Nlm_GetExecPath ("valfile", prog, sizeof (prog));
+  Nlm_MSWin_OpenApplication (prog, path);
+#endif
+#ifdef WIN_MOTIF
+  /*
+  argv [0] = path;
+  argv [1] = NULL;
+  if (! Execv ("Cn3D", argv)) {
+    Message (MSG_POST, "Unable to launch Cn3D");
   }
+  */
+  sprintf (cmmd, "Cn3D %s &", path);
+  system (cmmd);
+#endif
+
   ArrowCursor ();
 #endif
 }

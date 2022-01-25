@@ -533,7 +533,7 @@ Int2 Main(void)
    int frg;
    ResqSeqgphPtr rsp;
    ResqContigPtr rcp;
-   CharPtr tool_ver = "fa2htgs 2.0";
+   CharPtr tool_ver = "fa2htgs 2.1";
 
                /* check command line arguments */
 

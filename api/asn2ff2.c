@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.23 $
+ * $Revision: 6.26 $
  *
  * File Description: 
  *
@@ -39,6 +39,15 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.26  2000/08/10 13:54:32  tatiana
+ * predicted refseq comment added
+ *
+ * Revision 6.25  2000/08/07 14:02:55  tatiana
+ * printf format fix
+ *
+ * Revision 6.24  2000/07/11 17:01:43  kans
+ * fixed bug of insufficient allocated memory block
+ *
  * Revision 6.23  2000/07/06 22:42:00  tatiana
  * REGSEQ text revised
  *
@@ -473,7 +482,8 @@ static CharPtr GetStrForBankit(UserObjectPtr uop)
 				ptrlen = (StringLen("Vector Explanation: ")
 							+ StringLen(ufp->data.ptrvalue) + 1);
 				ptr = (CharPtr) MemNew(ptrlen);
-				sprintf(ptr, "Vector Explanation: %s", ufp->data.ptrvalue);
+				sprintf(ptr, "Vector Explanation: %s", 
+										(CharPtr) ufp->data.ptrvalue);
 			}
 		}
 	}
@@ -485,9 +495,10 @@ static CharPtr GetStrForBankit(UserObjectPtr uop)
 							+ StringLen(ufp->data.ptrvalue) + 2 + ptrlen);
 				if (ptr) {
 					sprintf(ptr1, "%s~Bankit Comment: %s", 
-									ptr, ufp->data.ptrvalue);
+									ptr, (CharPtr) ufp->data.ptrvalue);
 				} else {
-					sprintf(ptr1, "Bankit Comment: %s", ufp->data.ptrvalue);
+					sprintf(ptr1, "Bankit Comment: %s", 
+										(CharPtr) ufp->data.ptrvalue);
 				}
 				return ptr1;
 			}
@@ -520,6 +531,8 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 				review = 1;
 			} else if (StringCmp(st, "Reviewed") == 0) {
 				review = 2;
+			} else if (StringCmp(st, "Predicted") == 0) {
+				review = 3;
 			}
 		}
 	}
@@ -533,12 +546,16 @@ static CharPtr GetStrForUserObject(UserObjectPtr uop)
 			ptr = (CharPtr) MemNew(
 			StringLen("PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ") + len + 18*i + 1);
 		sprintf(ptr, "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ");
+		} else if (review == 3) {
+			ptr = (CharPtr) MemNew(
+			StringLen("PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ") + len + 18*i + 1);
+		sprintf(ptr, "PREDICTED REFSEQ: The mRNA record is supported by experimental evidence; however, the coding sequence is predicted. ");
 		} else {
 			ptr = (CharPtr) MemNew( StringLen("REFSEQ: ") + len + 18*i + 1);
 			sprintf(ptr, "REFSEQ: ");
 		}
 		if (i > 0) {
-			pp = (CharPtr) MemNew(len);
+			pp = (CharPtr) MemNew(len + 1);
 			sprintf(pp, "The reference sequence was derived from ");
 			StringCat(ptr, pp);
 		}

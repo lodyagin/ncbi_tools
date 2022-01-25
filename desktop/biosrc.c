@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.22 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -80,36 +80,38 @@ ENUM_ALIST(orgmod_subtype_alist)
   {"Anamorph",         29},
   {"Teleomorph",       30},
   {"Breed",            31},
+  {"Old Lineage",     253},
   {"Old Name",        254},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  subsource_subtype_alist [];
 ENUM_ALIST(subsource_subtype_alist)
-  {" ",                 0},
-  {"Chromosome",        1},
-  {"Map",               2},
-  {"Clone",             3},
-  {"Subclone",          4},
-  {"Haplotype",         5},
-  {"Genotype",          6},
-  {"Sex",               7},
-  {"Cell-line",         8},
-  {"Cell-type",         9},
-  {"Tissue-type",      10},
-  {"Clone-lib",        11},
-  {"Dev-stage",        12},
-  {"Frequency",        13},
-  {"Germline",         14},
-  {"Rearranged",       15},
-  {"Lab-host",         16},
-  {"Pop-variant",      17},
-  {"Tissue-lib",       18},
-  {"Plasmid-name",     19},
-  {"Transposon-name",  20},
-  {"Ins-seq-name",     21},
-  {"Plastid-name",     22},
-  {"Country",          23},
-  {"Segment",          24},
+  {" ",                      0},
+  {"Chromosome",             1},
+  {"Map",                    2},
+  {"Clone",                  3},
+  {"Subclone",               4},
+  {"Haplotype",              5},
+  {"Genotype",               6},
+  {"Sex",                    7},
+  {"Cell-line",              8},
+  {"Cell-type",              9},
+  {"Tissue-type",           10},
+  {"Clone-lib",             11},
+  {"Dev-stage",             12},
+  {"Frequency",             13},
+  {"Germline",              14},
+  {"Rearranged",            15},
+  {"Lab-host",              16},
+  {"Pop-variant",           17},
+  {"Tissue-lib",            18},
+  {"Plasmid-name",          19},
+  {"Transposon-name",       20},
+  {"Ins-seq-name",          21},
+  {"Plastid-name",          22},
+  {"Country",               23},
+  {"Segment",               24},
+  {"Endogenous-virus-name", 25},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alist)
@@ -132,6 +134,7 @@ static ENUM_ALIST(biosource_genome_alist)
   {"Apicoplast",          16},
   {"Leucoplast",          17},
   {"Proplastid",          18},
+  {"Endogenous-virus",    19},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  biosource_genome_simple_alist [];
@@ -153,6 +156,7 @@ ENUM_ALIST(biosource_genome_simple_alist)
   {"Apicoplast",          16},
   {"Leucoplast",          17},
   {"Proplastid",          18},
+  {"Endogenous-virus",    19},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_origin_alist)
@@ -599,13 +603,13 @@ static void SetCodes (GenBioPagePtr gbp, Int2 row, Boolean changepopups)
   Char  str [256];
 
   if (gbp != NULL && row > 0) {
-    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 4);
+    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
     StrToInt (str, &gbp->nuclGC);
-    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 5);
+    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 4);
     StrToInt (str, &gbp->mitoGC);
-    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 6);
+    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 5);
     SafeSetTitle (gbp->gbDiv, str);
-    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 7);
+    CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 6);
     StrToLong (str, &gbp->taxID);
     if (changepopups) {
       ChangeGencodePopups (gbp);
@@ -679,32 +683,14 @@ static void AutoScrollTax (GenBioPagePtr gbp, TexT t, Boolean isSciName,
           }
           return;
         }
-        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 2);
-        if (str [0] == 'S' && isSciName) {
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
+        if (isSciName) {
+          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 2);
           if (! gbp->typedComName) {
             if (setText) {
               SafeSetTitle (gbp->commonName, str);
             }
           } else {
             GetTitle (gbp->commonName, txt, sizeof (txt));
-            if (StringICmp (txt, str) != 0) {
-              if (changepopups) {
-                ChangeGencodePopups (gbp);
-              }
-              return;
-            }
-          }
-        } else if (str [0] == 'C' && (! isSciName)) {
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
-          if (! gbp->typedSciName) {
-            if (setText) {
-              /*
-              SafeSetTitle (gbp->taxName, str);
-              */
-            }
-          } else {
-            GetTitle (gbp->taxName, txt, sizeof (txt));
             if (StringICmp (txt, str) != 0) {
               if (changepopups) {
                 ChangeGencodePopups (gbp);
@@ -826,22 +812,11 @@ static void ReleaseTaxName (DoC d, PoinT pt)
     if (item > 0 && row > 0 && row == gbp->clickedOrg) {
       ResetClip ();
       if (row == gbp->clickedOrg) {
+        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
+        SafeSetTitle (gbp->taxName, str);
         CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 2);
-        if (str [0] == 'S') {
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
-          SafeSetTitle (gbp->taxName, str);
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
-          SafeSetTitle (gbp->commonName, str);
-          Select (gbp->taxName);
-        } else if (str [0] == 'C') {
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
-          SafeSetTitle (gbp->taxName, str);
-          CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
-          SafeSetTitle (gbp->commonName, str);
-          Select (gbp->taxName);
-        } else {
-          return;
-        }
+        SafeSetTitle (gbp->commonName, str);
+        Select (gbp->taxName);
         SetCodes (gbp, row, TRUE);
       }
     }
@@ -877,22 +852,11 @@ extern Boolean SetBioSourceDialogTaxName (DialoG d, CharPtr taxname)
         ChangeGencodePopups (gbp);
         return FALSE;
       }
+      CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
+      SafeSetTitle (gbp->taxName, str);
       CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 2);
-      if (str [0] == 'S') {
-        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
-        SafeSetTitle (gbp->taxName, str);
-        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
-        SafeSetTitle (gbp->commonName, str);
-        Select (gbp->taxName);
-      } else if (str [0] == 'C') {
-        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 3);
-        SafeSetTitle (gbp->taxName, str);
-        CopyStrFromTaxPtr (str, sizeof (str) - 2, row, 1);
-        SafeSetTitle (gbp->commonName, str);
-        Select (gbp->taxName);
-      } else {
-        return FALSE;
-      }
+      SafeSetTitle (gbp->commonName, str);
+      Select (gbp->taxName);
       SetCodes (gbp, row, TRUE);
       return TRUE;
     }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,12 @@
 * 02-16-94 Epstein     Retired Gestalt functions and definitions
 *
 * $Log: ncbimisc.c,v $
+* Revision 6.20  2000/10/30 18:11:41  beloslyu
+* FreeBSD was added
+*
+* Revision 6.19  2000/08/28 18:41:29  vakatov
+* Added type cast in ValNodeSort() to pass C++ compilation
+*
 * Revision 6.18  2000/03/10 17:29:12  kans
 * changed divray to Uint8 - fix supplied by DDBJ for Cray computer
 *
@@ -869,7 +875,7 @@ NLM_EXTERN ValNodePtr LIBCALL ValNodeSort (ValNodePtr list, int (LIBCALLBACK *co
 	if (list == NULL) return NULL;
 	
 	count = ValNodeLen (list);
-	head = MemNew (((size_t) count + 1) * sizeof (ValNodePtr));
+	head = (ValNodePtr *) MemNew (((size_t) count + 1) * sizeof (ValNodePtr));
 	for (tmp = list, i = 0; tmp != NULL && i < count; i++) {
 		head [i] = tmp;
 		tmp = tmp->next;
@@ -1678,6 +1684,8 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void)
 #    endif
 #  elif defined(OS_UNIX_NETBSD)
   return "NetBSD";
+#  elif defined(OS_UNIX_FREEBSD)
+  return "FreeBSD";
 #  else
   return "UNIX";
 #  endif

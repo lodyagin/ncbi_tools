@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.36 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,18 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.36  2000/07/31 13:28:46  lewisg
+* Nlm_GetExecPath
+*
+* Revision 6.34  2000/07/25 19:18:36  lewisg
+* get pathname for executable on windows
+*
+* Revision 6.33  2000/07/14 22:28:59  lewisg
+* fix typo
+*
+* Revision 6.32  2000/07/14 20:30:41  kans
+* added Nlm_MSWin_OpenApplication (for launching Cn3D with a data file)
+*
 * Revision 6.31  2000/06/29 17:29:11  vakatov
 * [MSWIN]  Fixed printf format mismatches
 *
@@ -5438,6 +5450,57 @@ extern Nlm_Boolean Nlm_MSWin_OpenDocument(const Nlm_Char* doc_name)
   }
   return TRUE;
 }
+
+extern Nlm_Boolean Nlm_MSWin_OpenApplication(const Nlm_Char* program, const Nlm_Char* parameters)
+{
+  int status = (int)ShellExecute(0, "open", program,
+                                 parameters, NULL, SW_SHOWNORMAL);
+  if (status <= 32) {
+    Nlm_ErrPostEx(SEV_WARNING, 0, 0,
+                  "Unable to open document, error=%d", status);
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/*****************************************************************************
+
+Function: Nlm_GetExecPath()
+
+Purpose: Gets the path for an executable under Windows
+  
+Parameters: filetype: the name of the filetype (e.g. "valfile" for Cn3D)
+            buf: the buffer to put the path into
+            buflen: the length of buf
+
+
+*****************************************************************************/
+
+extern void Nlm_GetExecPath(char *filetype, char *buf, int buflen)
+{
+    HKEY hkResult;
+    int i;
+    char key[256];
+
+    if(buf == NULL || filetype == NULL || buflen < 1) return;
+    if(strlen(filetype)>220) return;
+    key[0] = '\0';
+    strcat(key, filetype);
+    strcat(key, "\\Shell\\open\\command");
+    RegOpenKeyEx(HKEY_CLASSES_ROOT, key, 0, KEY_READ,
+        &hkResult);
+    if(hkResult == NULL) {
+        buf[0] = '\0';
+        return;
+    }
+
+    RegQueryValueEx(hkResult,"", NULL, NULL, buf, &buflen);
+    RegCloseKey(hkResult);
+
+    for (i=1; i<buflen && buf[i] != '"'; i++);
+    buf[i-1] = '\0';
+}
+
 #endif
 
 

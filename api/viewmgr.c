@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.28 2000/06/20 19:35:11 hurwitz Exp $
+/*   $Id: viewmgr.c,v 1.30 2000/08/30 13:43:11 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.28 2000/06/20 19:35:11 hurwitz Exp $
+* File Name:  $Id: viewmgr.c,v 1.30 2000/08/30 13:43:11 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.28 $
+* $Revision: 1.30 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.30  2000/08/30 13:43:11  lewisg
+* change seqalign state when made into multiple
+*
+* Revision 1.29  2000/08/01 12:54:29  lewisg
+* *** empty log message ***
+*
 * Revision 1.28  2000/06/20 19:35:11  hurwitz
 * use indexed seqAlign when necessary, make multiple when redrawing
 *
@@ -544,7 +550,8 @@ Function: ViewMgr_SetBegin
 Purpose: make pNewBegin the original SeqAlign
   
 *****************************************************************************/
-NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin)
+NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin,
+                                       Boolean Neat, Boolean Intersect)
 {
     ViewMgr_AlignInfo *pInfo;
 
@@ -552,6 +559,8 @@ NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin)
     if(pInfo == NULL) return NULL;
 
     pInfo->pBegin = pNewBegin;
+    pInfo->Neat = Neat;
+    pInfo->Intersect = Intersect;
     return pInfo->pBegin;
 }
 
@@ -581,6 +590,43 @@ NLM_EXTERN SeqAlign * ViewMgr_GetBeginIndexed(SeqAlign *salp)
     }
     return pInfo->pBeginIndexed;
 }
+
+
+/*****************************************************************************
+
+Function: ViewMgr_IsNeat
+
+Purpose: is the seqalign neatly indexed?
+  
+*****************************************************************************/
+NLM_EXTERN Boolean ViewMgr_IsNeat(SeqAlign *salp)
+{
+    ViewMgr_AlignInfo *pInfo;
+    pInfo = ViewMgr_GetInfo(salp);
+    if(!pInfo) return FALSE;
+    
+    if(pInfo->Neat) return TRUE;
+    return FALSE;
+}
+
+
+/*****************************************************************************
+
+Function: ViewMgr_IsIBM
+
+Purpose: is the seqalign IBMed?
+  
+*****************************************************************************/
+NLM_EXTERN Boolean ViewMgr_IsIBM(SeqAlign *salp)
+{
+    ViewMgr_AlignInfo *pInfo;
+    pInfo = ViewMgr_GetInfo(salp);
+    if(!pInfo) return FALSE;
+    
+    if(pInfo->Intersect) return TRUE;
+    return FALSE;
+}
+
 
 /*****************************************************************************
 

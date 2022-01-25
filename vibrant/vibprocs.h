@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -37,6 +37,33 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibprocs.h,v $
+* Revision 6.18  2000/08/01 15:57:32  kans
+* separate lines for Nlm_HANDLE on all platforms, even if two are currently the same, and no space between # and define in case some compilers complain
+*
+* Revision 6.17  2000/08/01 15:23:29  vakatov
+* Addition to R6.13:   error if neither of "WIN_***" is #defined
+*
+* Revision 6.16  2000/07/31 13:28:46  lewisg
+* Nlm_GetExecPath
+*
+* Revision 6.15  2000/07/28 21:25:11  lewisg
+* *** empty log message ***
+*
+* Revision 6.14  2000/07/28 21:05:54  lewisg
+* more c++ fixes
+*
+* Revision 6.13  2000/07/28 15:36:34  kans
+* for OS_UNIX, give error message if WIN_MOTIF not defined
+*
+* Revision 6.12  2000/07/25 21:19:00  lewisg
+* eliminate redundant windows pathname code
+*
+* Revision 6.11  2000/07/25 19:18:36  lewisg
+* get pathname for executable on windows
+*
+* Revision 6.10  2000/07/14 20:30:40  kans
+* added Nlm_MSWin_OpenApplication (for launching Cn3D with a data file)
+*
 * Revision 6.9  1999/04/06 14:23:26  lewisg
 * add opengl replacement for viewer3d
 *
@@ -565,9 +592,15 @@ Nlm_PaneL  Nlm_AutonomousPanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int
 #ifdef _OPENGL
 void Nlm_Set3DColorMap PROTO((Nlm_PaneL w, Nlm_Uint2 totalColors,
                              Nlm_Uint1Ptr red, Nlm_Uint1Ptr green,
-                             Nlm_Uint1Ptr blue));
+                             Nlm_Uint1Ptr blue, void **display));
 
-Nlm_PaneL  Nlm_Autonomous3DPanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth, Nlm_Int2 pixheight, Nlm_PnlActnProc draw, Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl, Nlm_Int2 extra, Nlm_PnlActnProc reset, Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode));
+
+Nlm_PaneL  Nlm_Autonomous3DPanel PROTO((Nlm_GrouP prnt, Nlm_Int2 pixwidth,
+                                       Nlm_Int2 pixheight, Nlm_PnlActnProc draw,
+                                       Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl,
+                                       Nlm_Int2 extra, Nlm_PnlActnProc reset,
+                                       Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode,
+                                       void **display, void **visinfo));
 #endif /* _OPENGL */
 
 
@@ -899,14 +932,14 @@ extern Nlm_Boolean Nlm_Execv PROTO((const Nlm_Char* path, Nlm_Char *const * argv
 
 /***  OBJECT ALIGNMENT PROCEDURE FOR USE WITHOUT GROUP REPOSITIONING  ***/
 
-#ifdef WIN_MAC
+#if defined(WIN_MAC)
 #define Nlm_HANDLE Nlm_Handle
-#endif
-#ifdef WIN_MSWIN
+#elif defined(WIN_MOTIF)
+#define Nlm_HANDLE Nlm_Handle
+#elif defined(WIN_MSWIN)
 #define Nlm_HANDLE int
-#endif
-#ifdef WIN_MOTIF
-#define Nlm_HANDLE Nlm_Handle
+#elif !defined(WIN_GIF)
+#error "Vibrant applications must be compiled with WIN_*** defined!!!"
 #endif
 
 #define ALIGN_LEFT      1
@@ -1146,6 +1179,10 @@ extern void Nlm_SendURLAppleEvent (Nlm_CharPtr urlString, Nlm_CharPtr sig, Nlm_C
  * if the doc is URL then its name must explicitely start from "http://".
  */
 extern Nlm_Boolean Nlm_MSWin_OpenDocument(const Nlm_Char* doc_name);
+
+/* Call program (e.g., Cn3D) with parameters (e.g., data file name) */
+extern Nlm_Boolean Nlm_MSWin_OpenApplication(const Nlm_Char* program, const Nlm_Char* parameters);
+extern void Nlm_GetExecPath(char *filetype, char *buf, int buflen);
 #endif
 
 #ifdef WIN_MOTIF

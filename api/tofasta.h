@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.12 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.h,v $
+* Revision 6.12  2000/10/12 16:03:58  kans
+* added SeqEntryToFastaEx, printid_general field to MyFsa structure, to support processing software that requires gnl ID in FASTA defline even in the presence of higher-priority ref ID
+*
+* Revision 6.11  2000/07/20 17:48:28  dondosha
+* Added function FastaToSeqBuffForDb analogous to FastaToSeqEntryForDbtofasta.c
+*
 * Revision 6.10  2000/05/30 19:44:45  ostell
 * added FastaSeqLineEx() with another parameter, do_virtual
 *
@@ -164,6 +170,7 @@ typedef struct myfsa {   /* struct used for fasta searches */
     Boolean no_sequence;  /* used to disable sequence printing */
     Uint1	code;	/* coding of sequence */
     Boolean	formatdb; /* TRUE, if is used in formatdb */
+    Boolean printid_general; /* show gi and gnl for SeqId */
 } MyFsa, PNTR MyFsaPtr;
 
 typedef struct tofasta {
@@ -179,6 +186,7 @@ typedef struct tofasta {
 NLM_EXTERN Boolean BioseqRawToFastaExtra PROTO((BioseqPtr bsp, FILE *fp, Int2 line_length));
 NLM_EXTERN Boolean BioseqRawToFasta PROTO((BioseqPtr bsp, FILE * fp, Boolean is_na));
 NLM_EXTERN Boolean SeqEntryToFasta PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na));
+NLM_EXTERN Boolean SeqEntryToFastaEx PROTO((SeqEntryPtr sep, FILE * fp, Boolean is_na, Boolean printid_general));
 NLM_EXTERN Boolean BioseqToFasta PROTO((BioseqPtr bsp, FILE *fp, Boolean is_na));
 
 NLM_EXTERN void	SeqEntryFasta PROTO ((SeqEntryPtr sep, Pointer data,
@@ -247,6 +255,10 @@ NLM_EXTERN SeqEntryPtr FastaToSeqBuff PROTO((CharPtr buffer,
 NLM_EXTERN SeqEntryPtr FastaToSeqBuffEx(CharPtr buffer, CharPtr PNTR last_char, 
                              Boolean is_na, CharPtr PNTR errormsg,
                              Boolean parseSeqId);
+NLM_EXTERN SeqEntryPtr FastaToSeqBuffForDb(CharPtr buffer, CharPtr PNTR last_char, 
+                             Boolean is_na, CharPtr PNTR errormsg,
+                             Boolean parseSeqId, CharPtr prefix, Int2Ptr ctrptr,
+			     SeqLocPtr PNTR mask_ptr);
 NLM_EXTERN SeqEntryPtr FastaToSeqEntryEx (FILE *fp, Boolean is_na, 
                                CharPtr PNTR errormsg,
                                Boolean parseSeqId); 

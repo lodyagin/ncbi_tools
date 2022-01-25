@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ni_error.c,v $
+* Revision 6.3  2000/10/30 18:12:01  beloslyu
+* FreeBSD was added
+*
 * Revision 6.2  1999/06/07 18:28:26  beloslyu
 * NetBSD port
 *
@@ -172,7 +175,8 @@ static Char *STATIC__ni_platform[NI_N_PLATFORMS] =
   "AIX",               /* NI_PLATFORM_AIX */
   "LINUX",             /* NI_PLATFORM_LINUX */
   "LINUX on ALPHA",    /* NI_PLATFORM_LINUX_ALPHA */
-  "NetBSD"             /* NI_PLATFORM_NETBSD */
+  "NetBSD",            /* NI_PLATFORM_NETBSD */
+  "FreeBSD",           /* NI_PLATFORM_FREEBSD */
 };
 static Char       **STATIC__ni_platform_ptr = &STATIC__ni_platform[0];
 NLM_EXTERN Char  ***x_ni_platform(void)   { return &STATIC__ni_platform_ptr; }

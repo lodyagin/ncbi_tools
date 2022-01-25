@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.23 $
+* $Revision: 6.24 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objmgr.h,v $
+* Revision 6.24  2000/10/30 21:26:09  shavirin
+* Changes and fixes for some MT-safety related problems.
+*
 * Revision 6.23  2000/04/07 15:01:24  durand
 * added UPDATE_TYPE_NEWSEQ define
 *
@@ -759,7 +762,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrTestOptions PROTO((Uint2 option, Uint2 entityID
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL ObjMgrTypeLookup PROTO((ObjMgrPtr omp, Uint2 type));
+NLM_EXTERN Int4 LIBCALL ObjMgrTypeLookup PROTO((ObjMgrPtr omp, Uint2 type));
 
 /*****************************************************************************
 *
@@ -803,7 +806,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrTypeSetLabelFunc PROTO((Uint2 type, OMLabelFunc
 *
 *****************************************************************************/
 
-NLM_EXTERN Int2 LIBCALL ObjMgrProcLookup PROTO((ObjMgrPtr omp, Uint2 procID));
+NLM_EXTERN Int4 LIBCALL ObjMgrProcLookup PROTO((ObjMgrPtr omp, Uint2 procID));
 
 /*****************************************************************************
 *
@@ -915,7 +918,7 @@ NLM_EXTERN Uint2 LIBCALL OMGetNextUserKey PROTO((void));
 *****************************************************************************/
 
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindByData PROTO((ObjMgrPtr omp, Pointer ptr));
-NLM_EXTERN Int2 LIBCALL ObjMgrLookup PROTO((ObjMgrPtr omp, Pointer data));
+NLM_EXTERN Int4 LIBCALL ObjMgrLookup PROTO((ObjMgrPtr omp, Pointer data));
 NLM_EXTERN Boolean LIBCALL ObjMgrAdd PROTO((Uint2 type, Pointer data));
 NLM_EXTERN Boolean LIBCALL ObjMgrDelete PROTO((Uint2 type, Pointer data));
 NLM_EXTERN Boolean LIBCALL ObjMgrConnect PROTO((Uint2 type, Pointer data, Uint2 parenttype, Pointer parentdata));
@@ -951,7 +954,7 @@ NLM_EXTERN Boolean LIBCALL ObjMgrSetDirtyFlag PROTO((Uint2 entityID, Boolean the
 NLM_EXTERN Boolean LIBCALL ObjMgrGetDirtyFlag PROTO((Uint2 entityID));
 
 NLM_EXTERN Boolean LIBCALL ObjMgrSetChoice PROTO((Uint2 type, ValNodePtr choice, Pointer data));
-NLM_EXTERN Int2 LIBCALL ObjMgrLock PROTO((Uint2 type, Pointer data, Boolean lockit));
+NLM_EXTERN Int4 LIBCALL ObjMgrLock PROTO((Uint2 type, Pointer data, Boolean lockit));
 NLM_EXTERN Boolean LIBCALL ObjMgrSetTempLoad PROTO((ObjMgrPtr omp, Pointer ptr));
 NLM_EXTERN Boolean LIBCALL ObjMgrReap PROTO((ObjMgrPtr omp));
 NLM_EXTERN ObjMgrDataPtr LIBCALL ObjMgrFindTop PROTO((ObjMgrPtr omp, ObjMgrDataPtr smdp));
@@ -1266,6 +1269,8 @@ NLM_EXTERN Pointer LIBCALL ObjMgrFree PROTO((Uint2 type, Pointer ptr));
 *
 ******************************************************************************/
 NLM_EXTERN Pointer LIBCALL ObjMgrFreeByEntityID PROTO((Uint2 entityID));
+
+NLM_EXTERN void LIBCALL ObjMgrResetAll PROTO((void));
 
 
 #ifdef __cplusplus

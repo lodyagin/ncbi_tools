@@ -2914,6 +2914,8 @@ static Boolean CompareTranslation(ByteStorePtr bsp, CharPtr qval)
 	Int4			 len, blen;
 	Boolean		 done;
 
+	if(qval == NULL || *qval == '\0')
+		return(FALSE);
 	len = StringLen(qval);
 	BSSeek(bsp, 0, SEEK_SET);
 

@@ -1,5 +1,5 @@
 #! /bin/sh
-#    $Id: PubStruct_control.sh,v 6.22 1999/05/03 14:46:10 kimelman Exp $
+#    $Id: PubStruct_control.sh,v 6.23 2000/08/08 20:03:49 kimelman Exp $
 #  ===========================================================================
 # 
 #                             PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 #  Modifications:  
 #  --------------------------------------------------------------------------
 #  $Log: PubStruct_control.sh,v $
+#  Revision 6.23  2000/08/08 20:03:49  kimelman
+#  BACH10 -> PDQBACH
+#
 #  Revision 6.22  1999/05/03 14:46:10  kimelman
 #  schema initialization dropped from list : too risky.
 #
@@ -123,7 +126,7 @@ progdir=`dirname $progname`
 options="$*"
 
 #default PubStruct production DB server
-DBserver=BACH10 
+DBserver=PDQBACH 
 DBname=PubStruct
 DBuser=kimelman
 DBpasswrd=kmlmNu

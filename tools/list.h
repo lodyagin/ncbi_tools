@@ -29,34 +29,24 @@
 *
 * Version Creation Date: 5/25/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  functions used in the sim2 algorithm
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
-*
 * $Log: list.h,v $
+* Revision 6.1  2000/07/08 20:44:11  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.0  1997/08/25 18:53:22  madden
 * Revision changed to 6.0
 *
 * Revision 5.0  1996/05/28 13:43:15  ostell
 * Set to revision 5.0
 *
- * Revision 4.1  1996/05/21  13:43:46  epstein
- * change function-name 'delete' because it conflicts with VMS
- *
- * Revision 4.0  1995/07/26  13:50:15  ostell
- * force revision to 4.0
- *
- * Revision 1.2  1995/05/25  20:11:37  zjing
- * add new header
- *
-*
-*
+* Revision 4.1  1996/05/21  13:43:46  epstein
+* change function-name 'delete' because it conflicts with VMS
 * ==========================================================================
 */
 
@@ -69,7 +59,6 @@
 extern "C" {
 #endif
 
-#include <ncbi.h>
 typedef struct fragment {
 	Int4 i, j, k;
 	Int4 ref;

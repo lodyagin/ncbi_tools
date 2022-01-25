@@ -1,4 +1,4 @@
-/* $Id: mbutils.h,v 6.8 2000/03/29 21:58:01 dondosha Exp $
+/* $Id: mbutils.h,v 6.9 2000/10/05 21:35:30 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -30,12 +30,15 @@
 *
 * Initial Creation Date: 10/27/1999
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         Main file for Mega Blast program
 *
 * $Log: mbutils.h,v $
+* Revision 6.9  2000/10/05 21:35:30  hurwitz
+* changed list to AList in free_gal_list declaration to avoid C++ compiler conflicts
+*
 * Revision 6.8  2000/03/29 21:58:01  dondosha
 * Added prototypes for edit_script_new and edit_script_append
 *
@@ -234,7 +237,7 @@ mbt_t *mb_init(CharPtr blast_database);
 void mb_start(mbt_t *mbt, UcharPtr dna, Int4 ld, Int4 w, Int4 p);
 void mb_end(mbt_t *mbt);
 
-void free_gal_list(gal_t *list);
+void free_gal_list(gal_t *AList);
 SeqAlignPtr MBCreateSeqAlign(gal_t * galp, SeqIdPtr subject_id, 
                              SeqIdPtr query_id);
 void mb_print_sequence(UcharPtr seq, Int4 len, CharPtr);

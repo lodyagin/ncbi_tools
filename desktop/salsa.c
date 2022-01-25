@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.146 $
+* $Revision: 6.148 $
 *
 * File Description: 
 *
@@ -4413,12 +4413,15 @@ static Int2 what_seqalign (SeqAlignPtr salp)
   if (!start3) {
      if (start1)
         return 2;
-     return 3;
-  }
-  if (!start1) {
-     if (start3)
-        return 1;
-     return 3;
+     else if(!start2)
+         return 4; /* extension to the right */
+     return 5; /* HS XXX modify behavior of code.. now uses whole sequence for merge */
+     return 3; /* Could merge either before or after .. by default it's after */
+  } else if (!start1) { 
+      /* start3 == TRUE */
+     return 1;
+  } else  if(start1 && start4) { /* start3==TRUE already */
+      return 5; /* nothing new, just take sequence from new one */
   }
   return 0;
 }
@@ -4471,18 +4474,22 @@ static Boolean get_bestpos_formerge (SeqAlignPtr salp, Int4Ptr from, Int4Ptr to)
      return FALSE;
   j=what_seqalign(salp);
   if (j==1 || j==3) 
-  {
+  { /* when j==3, there is also a bit afterwards that could be merged.*/
      insert_before = TRUE;
      *from = SeqAlignStart(salp, 1);
-     *to = SeqAlignFirstLength (salp)-1;
+     *to = *from + SeqAlignFirstLength (salp)-1; /* HS bug fix */
      return TRUE;
   }
-  if (j==2)
+  if (j==2 || j==4)
   {
      insert_after = TRUE;
      *from = SeqAlignStop (salp, 1) - SeqAlignLastLength (salp) + 1;
      *to = SeqAlignStop (salp, 1);
      return TRUE;
+  }
+  if (j==5) { /* copy over the whole seqalign. .. nothing new */
+      *from = SeqAlignStart(salp,1);
+      *to = SeqAlignStop(salp,1);
   }
   return FALSE; 
 }

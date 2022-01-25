@@ -30,8 +30,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: prototypes to perform a global gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.6 $ 
+/* $Revision: 6.7 $ 
 * $Log: bandalgn.h,v $
+* Revision 6.7  2000/07/26 17:26:25  lewisg
+* fix code for c++ inclusion
+*
 * Revision 6.6  2000/02/10 22:47:07  vakatov
 * DLL'zation for MSVC on PC, Win-NT
 *
@@ -99,7 +102,7 @@ enum {v,h};
 #endif
 
 typedef struct DP {
-  Int4 CC, DD, CP, DP, FF, FP;
+  Int4 CC, DD, CP, DPDP, FF, FP;
 } PNTR dp_ptr, dp_node;
 
 typedef struct {

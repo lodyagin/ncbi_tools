@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.24 $
+* $Revision: 6.30 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,24 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.30  2000/10/10 15:06:01  kans
+* added SUBSRC_endogenous_virus_name
+*
+* Revision 6.29  2000/09/28 11:41:33  ostell
+* added GENOME_endogenous_virus
+*
+* Revision 6.28  2000/09/20 12:32:54  kans
+* removed AddMethodToRefGeneTrackUserObject and AddSupportToRefGeneTrackUserObject
+*
+* Revision 6.27  2000/08/29 22:27:02  kans
+* reftrack support now has organism field
+*
+* Revision 6.26  2000/07/21 10:54:14  kans
+* added functions for adding Method and Support to RefGeneTrack user object
+*
+* Revision 6.25  2000/07/12 22:45:15  kans
+* added ORGMOD_old_lineage
+*
 * Revision 6.24  2000/06/20 17:17:28  kans
 * added orgmod.subtype authority through breed
 *
@@ -737,6 +755,7 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 #define GENOME_apicoplast 16
 #define GENOME_leucoplast 17
 #define GENOME_proplastid 18
+#define GENOME_endogenous_virus 19
 
 /********************************************
 *  Genome describes the type of genome from which the DNA or gene for
@@ -789,6 +808,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_plastid_name 22
 #define SUBSRC_country 23
 #define SUBSRC_segment 24
+#define SUBSRC_endogenous_virus_name 25
 #define SUBSRC_other 255
 
 /*********************************************
@@ -859,6 +879,7 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_anamorph 29
 #define ORGMOD_teleomorph 30
 #define ORGMOD_breed 31
+#define ORGMOD_old_lineage 253
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
 

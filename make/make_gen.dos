@@ -1,4 +1,4 @@
-# $Id: make_gen.dos,v 6.12 2000/01/31 20:17:20 beloslyu Exp $
+# $Id: make_gen.dos,v 6.13 2000/07/21 20:03:46 lewisg Exp $
 ########################################################################
 #  This file specifies attributes common for the NCBI toolkit
 #  makefiles "makeall.dos", "makedemo.dos", "makenet.dos",
@@ -202,6 +202,7 @@ XLIB4 = vibrant
 LIB4 = $(LIBPATH)\$(XLIB4).lib
 
 XLIB20= ncbidesk
+XLIB45= ddvlib
 XLIB28= vibgif
 
 XLIB30 = ncbicn3d
@@ -219,6 +220,7 @@ LIB30_OGL = $(LIBPATH)\$(XLIB30_OGL).lib
 !endif
 
 LIB20 = $(LIBPATH)\ncbidesk.lib
+LIB45 = $(LIBPATH)\ddvlib.lib
 
 # special case: GIF-dump applications are console
 LIB28 = $(LIBPATH)\vibgif.lib

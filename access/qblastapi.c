@@ -29,12 +29,20 @@
 *
 * Version Creation Date:   6/28/00
 *
-* $Revision: 1.6 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
+*
+* $Log: qblastapi.c,v $
+* Revision 1.10  2000/08/30 14:55:08  kans
+* parentheses around cast of currtime - curr->initialTime in printf
+*
+* Revision 1.9  2000/07/19 15:16:12  shavirin
+* Added new function CharPtr BLASTGetBOByRID(CharPtr RID);
+*
 *
 * ==========================================================================
 */
@@ -687,7 +695,7 @@ NLM_EXTERN Int4 PrintQBlastQueue (
     if (! curr->done) {
 
       fprintf (fp, "%s\t%s\t%d\t%d\n", curr->rid, curr->seqid,
-               (int) currtime - curr->initialTime, (int) curr->estTime);
+               (int) (currtime - curr->initialTime), (int) curr->estTime);
       count++;
     }
 
@@ -697,3 +705,95 @@ NLM_EXTERN Int4 PrintQBlastQueue (
   return count;
 }
 
+static void LIBCALLBACK AsnIoErrorFunc(Int2 type, CharPtr message)
+{
+    return;
+}
+
+/* Function to get SeqAnnot for RID. We suupose, that search already
+   finished and results are exists on the Qblast repository */
+
+NLM_EXTERN SeqAnnotPtr BLASTGetSeqAnnotByRID(CharPtr RID)
+{
+    Char query_string[256];
+    CONN         conn;
+    SeqAnnotPtr  annot;
+    Uint4       n_written;
+    Int4        length;
+    AsnIoConnPtr     aicp;
+    EConnStatus  status;
+
+    sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=11", RID);
+    
+    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
+                               "/blast/blast.cgi", NULL, 
+                               "BLASTGetSeqAnnotByRID()", 
+                               30, eMIME_T_NcbiData, 
+                               eMIME_AsnBinary, eENCOD_None, 0);
+
+    length = StringLen(query_string);
+    status = CONN_Write (conn, query_string, length , &n_written);    
+    QUERY_SendQuery (conn);
+    
+    aicp = QUERY_AsnIoConnOpen ("r", conn);
+    AsnIoSetErrorMsg(aicp->aip, AsnIoErrorFunc);
+
+    annot = SeqAnnotAsnRead (aicp->aip, NULL);
+    QUERY_AsnIoConnClose (aicp);
+
+    CONN_Close(conn);
+    return annot;
+}
+
+/* Function to get BlastObject for RID. We suupose, that search already
+   finished and results are exists on the Qblast repository. Blast Object
+   ASN.1 will be returned as CharPtr buffer*/
+NLM_EXTERN CharPtr BLASTGetBOByRID(CharPtr RID)
+{
+    Char query_string[256];
+    CONN         conn;
+    Uint4        n_written;
+    Uint4        bytes;
+    Int4         length, buff_len, new_size;
+    EConnStatus  status;
+    CharPtr      in_buff;
+    
+    sprintf(query_string, "RID=%s&ALIGNMENT_VIEW=13", RID);
+    
+    conn = QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, 
+                               "/blast/blast.cgi", NULL, 
+                               "BLASTGetSeqAnnotByRID()", 
+                               30, eMIME_T_NcbiData, 
+                               eMIME_AsnBinary, eENCOD_None, 0);
+
+    length = StringLen(query_string);
+    status = CONN_Write (conn, query_string, length , &n_written);    
+    QUERY_SendQuery (conn);
+    
+    new_size = 1024;   
+    if((in_buff = (CharPtr)MemNew(new_size)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0, 0, "Error in allocating memory\n");
+        return NULL;
+    }
+
+    buff_len = 0;
+    while ((status = CONN_Read(conn, in_buff + buff_len, 
+                               1024, &bytes, eCR_Read)) == eCONN_Success) {
+        
+        if(bytes == 0) 
+            break;
+
+        new_size += bytes;
+        buff_len += bytes;
+        
+        if ((in_buff = (CharPtr)Realloc(in_buff, new_size)) == NULL) {
+            ErrPostEx(SEV_ERROR, 0, 0, "Error in reallocating memory\n");
+            return NULL;
+        }
+    }
+    
+    in_buff[buff_len] = NULLB;
+    
+    CONN_Close(conn);
+    return in_buff;
+}

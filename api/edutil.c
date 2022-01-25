@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 2/4/94
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: edutil.c,v $
+* Revision 6.11  2000/10/31 17:11:06  kans
+* SeqLocReplaceID was handling SEQLOC_PACKED_PNT incorrectly
+*
 * Revision 6.10  1999/12/20 20:47:12  kans
 * oldscope test was wrong everywhere
 *
@@ -3324,17 +3327,24 @@ NLM_EXTERN SeqLocPtr LIBCALL SeqLocSubtract (SeqLocPtr head, SeqLocPtr piece)
 NLM_EXTERN SeqLocPtr SeqLocReplaceID (SeqLocPtr slp, SeqIdPtr new_sip)
 {
   SeqLocPtr        curr;
+  PackSeqPntPtr    pspp;
   SeqIntPtr        target_sit;
   SeqPntPtr        spp;
 
   switch (slp->choice) {
      case SEQLOC_PACKED_INT :
-     case SEQLOC_PACKED_PNT :
      case SEQLOC_MIX :
      case SEQLOC_EQUIV :
         curr = NULL;
         while ((curr = SeqLocFindNext (slp, curr)) != NULL) {
            curr = SeqLocReplaceID (curr, new_sip);
+        }
+        break;
+     case SEQLOC_PACKED_PNT :
+        pspp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if (pspp != NULL) {
+          SeqIdFree (pspp->id);
+          pspp->id = SeqIdDup (new_sip);
         }
         break;
      case SEQLOC_EMPTY :

@@ -1,4 +1,4 @@
-/* $Id: ncbisam.h,v 6.2 1999/08/25 20:18:50 shavirin Exp $
+/* $Id: ncbisam.h,v 6.3 2000/07/18 19:29:27 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *         External include file for ISAM library
 *
 * $Log: ncbisam.h,v $
+* Revision 6.3  2000/07/18 19:29:27  shavirin
+* Added new parameter test_non_unique to suppress check for non-unique
+* strings ids in the database - default - TRUE.
+*
 * Revision 6.2  1999/08/25 20:18:50  shavirin
 * Added possibility to store user-specified Int4 options in the index
 * header.
@@ -318,6 +322,15 @@ ISAMErrorCode ISAMNumTerms(ISAMObjectPtr object, Int4Ptr terms);
    NOTE:        None
   ------------------------------------------------------------------*/
 ISAMErrorCode ISAMGetIdxOption(ISAMObjectPtr object, Int4Ptr idx_option);
+
+/* ------------------------ ISAMGetIdxOption ------------------------
+   Purpose:     To set option to check or not check for non-unique
+                elements
+   Parameters:  ISAM object
+   Returns:     None
+   NOTE:        None
+  ------------------------------------------------------------------*/
+void ISAMSetCheckForNonUnique(ISAMObjectPtr object, Boolean test_non_unique);
 
 #ifdef __cplusplus
 }

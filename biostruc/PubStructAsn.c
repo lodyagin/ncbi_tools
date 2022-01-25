@@ -1,4 +1,4 @@
-/*   $Id: PubStructAsn.c,v 6.30 1999/12/01 23:25:35 kimelman Exp $
+/*   $Id: PubStructAsn.c,v 6.32 2000/10/18 18:45:18 kimelman Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,12 @@
  * Modifications:  
  * --------------------------------------------------------------------------
  * $Log: PubStructAsn.c,v $
+ * Revision 6.32  2000/10/18 18:45:18  kimelman
+ * bugfix
+ *
+ * Revision 6.31  2000/08/08 20:03:49  kimelman
+ * BACH10 -> PDQBACH
+ *
  * Revision 6.30  1999/12/01 23:25:35  kimelman
  * cleanup handle on no data
  *
@@ -147,7 +153,7 @@
 
 #include <assert.h>
 
-#define DEF_SRV "BACH10:PubStruct=anyone,allowed"
+#define DEF_SRV "PDQBACH:PubStruct=anyone,allowed"
 
 typedef enum {
   PS_NEW,
@@ -938,7 +944,7 @@ PubStruct_updateasn  (char *server,Int4 acc, int newstate)
     return NULL;
   
   cmd = db->clu.ctcmd;
-  sprintf(buf,"exec push_struct_by_ticket %d,%d",acc,newstate);
+  sprintf(buf,"exec push_struct %d,%d",acc,newstate);
   if(CTLibSimpleSQL_Ex(cmd,buf))
     return pubstruct_openasn (db, &acc,0) ;
 

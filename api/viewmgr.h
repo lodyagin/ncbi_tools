@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.h,v 1.14 2000/06/20 19:35:12 hurwitz Exp $
+/*   $Id: viewmgr.h,v 1.17 2000/08/30 13:43:11 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.h,v 1.14 2000/06/20 19:35:12 hurwitz Exp $
+* File Name:  $Id: viewmgr.h,v 1.17 2000/08/30 13:43:11 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.14 $
+* $Revision: 1.17 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.h,v $
+* Revision 1.17  2000/08/30 13:43:11  lewisg
+* change seqalign state when made into multiple
+*
+* Revision 1.16  2000/08/01 12:54:29  lewisg
+* *** empty log message ***
+*
+* Revision 1.15  2000/07/08 20:43:55  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.14  2000/06/20 19:35:12  hurwitz
 * use indexed seqAlign when necessary, make multiple when redrawing
 *
@@ -91,6 +100,10 @@
 #ifndef _VIEWMGR_
 #define _VIEWMGR_
 
+#include <ncbi.h>
+#include <objalign.h>
+#include <ddvcolor.h>
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -101,10 +114,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ncbi.h>
-#include <objalign.h>
-#include <ddvcolor.h>
 
 typedef struct _ViewMgr_ChildInfo {
     SeqAlign *pChild; /* pointer to the child */
@@ -212,7 +221,8 @@ Function: ViewMgr_SetBegin
 Purpose: make pNewBegin the original SeqAlign
   
 *****************************************************************************/
-NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin);
+NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin,
+                                       Boolean Neat, Boolean Intersect);
 
 /*****************************************************************************
 
@@ -223,6 +233,24 @@ an indexed copy of the original SeqAlign.
   
 *****************************************************************************/
 NLM_EXTERN SeqAlign * ViewMgr_GetBeginIndexed(SeqAlign *salp);
+
+/*****************************************************************************
+
+Function: ViewMgr_IsNeat
+
+Purpose: is the seqalign neatly indexed?
+  
+*****************************************************************************/
+NLM_EXTERN Boolean ViewMgr_IsNeat(SeqAlign *salp);
+
+/*****************************************************************************
+
+Function: ViewMgr_IsIBM
+
+Purpose: is the seqalign IBMed?
+  
+*****************************************************************************/
+NLM_EXTERN Boolean ViewMgr_IsIBM(SeqAlign *salp);
 
 /*****************************************************************************
 

@@ -95,6 +95,27 @@ Package=<4>
     Begin Project Dependency
     Project_Dep_Name vibnet
     End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name ddvlib
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name mmdb
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "ddvlib"=.\ddv\ddvlib.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name ncbi
+    End Project Dependency
 }}}
 
 ###############################################################################

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.20 $
+* $Revision: 6.24 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -40,6 +40,18 @@
 *
 *
 * $Log: sequtil.h,v $
+* Revision 6.24  2000/10/27 20:10:58  shavirin
+* Added new function MakeNewProteinSeqIdExMT for MT save operation.
+*
+* Revision 6.23  2000/10/24 19:01:11  dondosha
+* Added prototype for UniqueLocalId(), previously in mblast.h
+*
+* Revision 6.22  2000/10/11 21:59:36  kans
+* added PRINTID_FASTA_GENERAL
+*
+* Revision 6.21  2000/07/11 15:01:50  kans
+* added SeqIdFromAccessionDotVersion for genome mapping project
+*
 * Revision 6.20  2000/05/17 17:22:44  dondosha
 * Added prototype for GetAccessionFromSeqId
 *
@@ -565,6 +577,7 @@ NLM_EXTERN Boolean SeqEntryConvert PROTO((SeqEntryPtr sep, Uint1 newcode));
 #define PRINTID_TEXTID_ACC_VER ( (Uint1)5)
 #define PRINTID_TEXTID_ACC_ONLY ( (Uint1)6)
 #define PRINTID_REPORT ( (Uint1)7)
+#define PRINTID_FASTA_GENERAL ( (Uint1)8)
 
 
 /*****************************************************************************
@@ -620,9 +633,10 @@ NLM_EXTERN SeqIdPtr SeqIdParse PROTO((CharPtr buf));
 *       the next count for improved speed when allocating many protein bioseqs
 *
 *****************************************************************************/
+NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdExMT PROTO((SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr, Boolean is_MT_safe));
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqIdEx PROTO((SeqLocPtr slp, SeqIdPtr sip, CharPtr prefix, Int2Ptr ctrptr));
 NLM_EXTERN SeqIdPtr LIBCALL MakeNewProteinSeqId PROTO((SeqLocPtr slp, SeqIdPtr sip));
-
+ObjectIdPtr UniqueLocalId PROTO(());
 
 /*****************************************************************************
 *
@@ -970,6 +984,11 @@ NLM_EXTERN void LIBCALL ExtractAccession(CharPtr accn,CharPtr accession,CharPtr 
   to split accession and version number.
 */
 NLM_EXTERN SeqIdPtr LIBCALL SeqIdFromAccession(CharPtr accession, Uint4 version,CharPtr name);
+
+
+/* Variant of SeqIdFromAccession that works on accession.version string */
+
+NLM_EXTERN SeqIdPtr SeqIdFromAccessionDotVersion (CharPtr accession);
 
 
     /*

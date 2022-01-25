@@ -29,9 +29,9 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.120 $
+* $Revision: 6.125 $
 *
-* File Description:  New GenBank flatfile generator
+* File Description:  New GenBank flatfile generator - work in progress
 *
 * Modifications:  
 * --------------------------------------------------------------------------
@@ -198,6 +198,8 @@ typedef struct int_cds_block {
 /* ********************************************************************** */
 
 /* utility functions */
+
+/* the val node strings mechanism will be replaced by a more efficient method later  */
 
 static CharPtr MergeValNodeStrings (
   ValNodePtr list
@@ -534,7 +536,8 @@ static CharPtr organellePrefix [] = {
   "Nucleomorph ",
   "Apicoplast ",
   "Leucoplast ",
-  "Proplastid "
+  "Proplastid ",
+  NULL
 };
 
 static CharPtr FormatSourceBlock (
@@ -3583,8 +3586,11 @@ typedef enum {
 
 typedef enum {
   SOURCE_acronym = 1,
+  SOURCE_anamorph,
+  SOURCE_authority,
   SOURCE_biotype,
   SOURCE_biovar,
+  SOURCE_breed,
   SOURCE_cell_line,
   SOURCE_cell_type,
   SOURCE_chemovar,
@@ -3599,8 +3605,12 @@ typedef enum {
   SOURCE_db_xref,
   SOURCE_dev_stage,
   SOURCE_dosage,
+  SOURCE_ecotype,
+  SOURCE_endogenous_virus_name,
   SOURCE_extrachrom,
   SOURCE_focus,
+  SOURCE_forma,
+  SOURCE_forma_specialis,
   SOURCE_frequency,
   SOURCE_genotype,
   SOURCE_germline,
@@ -3613,6 +3623,7 @@ typedef enum {
   SOURCE_macronuclear,
   SOURCE_map,
   SOURCE_note,
+  SOURCE_old_lineage,
   SOURCE_old_name,
   SOURCE_organism,
   SOURCE_organelle,
@@ -3622,6 +3633,7 @@ typedef enum {
   SOURCE_plastid_name,
   SOURCE_pop_variant,
   SOURCE_rearranged,
+  SOURCE_segment,
   SOURCE_seqfeat_note,
   SOURCE_sequenced_mol,
   SOURCE_serogroup,
@@ -3637,6 +3649,8 @@ typedef enum {
   SOURCE_sub_strain,
   SOURCE_sub_type,
   SOURCE_subsource_note,
+  SOURCE_synonym,
+  SOURCE_teleomorph,
   SOURCE_tissue_lib,
   SOURCE_tissue_type,
   SOURCE_transposon_name,
@@ -3715,6 +3729,20 @@ static Uint1 relmode_source_note_order [] = {
   SOURCE_dosage,
   SOURCE_genotype,
   SOURCE_plastid_name,
+
+  SOURCE_segment,
+  SOURCE_endogenous_virus_name,
+  SOURCE_authority,
+  SOURCE_forma,
+  SOURCE_forma_specialis,
+  SOURCE_ecotype,
+  SOURCE_synonym,
+  SOURCE_anamorph,
+  SOURCE_teleomorph,
+  SOURCE_breed,
+
+  /* SOURCE_old_lineage, */
+
   /* SOURCE_old_name, */
   0
 };
@@ -3786,6 +3814,20 @@ static Uint1 seqmode_source_note_order [] = {
   SOURCE_dosage,
   SOURCE_genotype,
   SOURCE_plastid_name,
+
+  SOURCE_segment,
+  SOURCE_endogenous_virus_name,
+  SOURCE_authority,
+  SOURCE_forma,
+  SOURCE_forma_specialis,
+  SOURCE_ecotype,
+  SOURCE_synonym,
+  SOURCE_anamorph,
+  SOURCE_teleomorph,
+  SOURCE_breed,
+
+  /* SOURCE_old_lineage, */
+
   /* SOURCE_old_name, */
   0
 };
@@ -3798,8 +3840,11 @@ typedef struct sourcequal {
 static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "",                 Qual_class_ignore    },
   { "acronym",          Qual_class_orgmod    },
+  { "anamorph",         Qual_class_orgmod    },
+  { "authority",        Qual_class_orgmod    },
   { "biotype",          Qual_class_orgmod    },
   { "biovar",           Qual_class_orgmod    },
+  { "breed",            Qual_class_orgmod    },
   { "cell_line",        Qual_class_subsource },
   { "cell_type",        Qual_class_subsource },
   { "chemovar",         Qual_class_orgmod    },
@@ -3814,8 +3859,12 @@ static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "db_xref",          Qual_class_db_xref   },
   { "dev_stage",        Qual_class_subsource },
   { "dosage",           Qual_class_orgmod    },
+  { "endogenous_virus", Qual_class_subsource },
+  { "ecotype",          Qual_class_orgmod    },
   { "extrachromosomal", Qual_class_boolean   },
   { "focus",            Qual_class_boolean   },
+  { "forma",            Qual_class_orgmod    },
+  { "forma_specialis",  Qual_class_orgmod    },
   { "frequency",        Qual_class_subsource },
   { "genotype",         Qual_class_subsource },
   { "germline",         Qual_class_subsource },
@@ -3828,6 +3877,7 @@ static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "macronuclear",     Qual_class_boolean   },
   { "map",              Qual_class_subsource },
   { "note",             Qual_class_note      },
+  { "old_lineage",      Qual_class_orgmod    },
   { "old_name",         Qual_class_orgmod    },
   { "organism",         Qual_class_string    },
   { "organelle",        Qual_class_organelle },
@@ -3837,6 +3887,7 @@ static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "plastid",          Qual_class_subsource },
   { "pop_variant",      Qual_class_subsource },
   { "rearranged",       Qual_class_subsource },
+  { "segment",          Qual_class_subsource },
   { "seqfeat_note",     Qual_class_string    },
   { "sequenced_mol",    Qual_class_quote     },
   { "serogroup",        Qual_class_orgmod    },
@@ -3852,6 +3903,8 @@ static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "sub_strain",       Qual_class_orgmod    },
   { "subtype",          Qual_class_orgmod    },
   { "subsource_note",   Qual_class_subsource },
+  { "synonym",          Qual_class_orgmod    },
+  { "teleomorph",       Qual_class_orgmod    },
   { "tissue_lib",       Qual_class_subsource },
   { "tissue_type",      Qual_class_subsource },
   { "transposon",       Qual_class_subsource },
@@ -3860,7 +3913,7 @@ static SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "variety",          Qual_class_orgmod    },
 };
 
-static Int2 subSourceToSourceIdx [25] = {
+static Int2 subSourceToSourceIdx [27] = {
   0,
   SOURCE_chromosome,
   SOURCE_map,
@@ -3885,6 +3938,8 @@ static Int2 subSourceToSourceIdx [25] = {
   SOURCE_ins_seq_name,
   SOURCE_plastid_name,
   SOURCE_country,
+  SOURCE_segment,
+  SOURCE_endogenous_virus_name,
   SOURCE_subsource_note
 };
 
@@ -3902,9 +3957,9 @@ static void SubSourceToQualArray (
   while (ssp != NULL) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 24;
+      subtype = 26;
     }
-    if (subtype < 25) {
+    if (subtype < 27) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].ssp == NULL) {
@@ -3916,7 +3971,7 @@ static void SubSourceToQualArray (
   }
 }
 
-static Int2 orgModToSourceIdx [26] = {
+static Int2 orgModToSourceIdx [35] = {
   0,
   0,
   SOURCE_strain,
@@ -3941,6 +3996,15 @@ static Int2 orgModToSourceIdx [26] = {
   SOURCE_spec_or_nat_host,
   SOURCE_sub_species,
   SOURCE_specimen_voucher,
+  SOURCE_authority,
+  SOURCE_forma,
+  SOURCE_forma_specialis,
+  SOURCE_ecotype,
+  SOURCE_synonym,
+  SOURCE_anamorph,
+  SOURCE_teleomorph,
+  SOURCE_breed,
+  SOURCE_old_lineage,
   SOURCE_old_name,
   SOURCE_orgmod_note
 };
@@ -3958,12 +4022,14 @@ static void OrgModToQualArray (
 
   while (omp != NULL) {
     subtype = omp->subtype;
-    if (subtype == 254) {
-      subtype = 24;
+    if (subtype == 253) {
+      subtype = 32;
+    } else if (subtype == 254) {
+      subtype = 33;
     } else if (subtype == 255) {
-      subtype = 25;
+      subtype = 34;
     }
-    if (subtype < 26) {
+    if (subtype < 35) {
       idx = orgModToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].omp == NULL) {
@@ -3995,6 +4061,7 @@ static CharPtr organelleQual [] = {
   NULL,
   NULL,
   NULL,
+  NULL,
   NULL
 };
 */
@@ -4018,7 +4085,8 @@ static CharPtr organelleQual [] = {
   "/organelle=\"nucleomorph\"",
   "/organelle=\"plastid:apicoplast\"",
   "/organelle=\"plastid:leucoplast\"",
-  "/organelle=\"plastid:proplastid\""
+  "/organelle=\"plastid:proplastid\"",
+  NULL
 };
 
 static Boolean StringIsJustQuotes (
@@ -4500,8 +4568,7 @@ static CharPtr featurekeys [] = {
 };
 
 typedef enum {
-  FEATUR_allele = 1,
-  FEATUR_anticodon,
+  FEATUR_anticodon = 1,
   FEATUR_bound_moiety,
   FEATUR_cds_product,
   FEATUR_citation,
@@ -4580,7 +4647,6 @@ static Uint1 relmode_feat_qual_order [] = {
 
   FEATUR_product,
 
-  FEATUR_allele,
   FEATUR_anticodon,
   FEATUR_bound_moiety,
   FEATUR_clone,
@@ -4656,7 +4722,6 @@ static Uint1 seqmode_feat_qual_order [] = {
 
   FEATUR_product,
 
-  FEATUR_allele,
   FEATUR_anticodon,
   FEATUR_bound_moiety,
   FEATUR_clone,
@@ -4732,7 +4797,6 @@ typedef struct featurqual {
 
 static FeaturQual asn2gnbk_featur_quals [ASN2GNBK_TOTAL_FEATUR] = {
   { "",               Qual_class_ignore       },
-  { "allele",         Qual_class_string       },
   { "anticodon",      Qual_class_anti_codon   },
   { "bound_moiety",   Qual_class_quote        },
   { "product",        Qual_class_string       },
@@ -5317,7 +5381,6 @@ static CharPtr FormatFeatureBlock (
         vnp = vnp->next;
         qvp [FEATUR_gene_syn].vnp = vnp;
       }
-      qvp [FEATUR_allele].str = grp->allele;
       qvp [FEATUR_gene_map].str = grp->maploc;
       if (grp->pseudo) {
         pseudo = TRUE;
@@ -7129,7 +7192,7 @@ static Int2 ValidateAccession (
   return -2;
 }
 
-/* this definitely needs more work to support all classes, use proper SeqId */
+/* !!! this definitely needs more work to support all classes, use proper SeqId !!! */
 
 static void AddAccessionBlock (
   Asn2gbWorkPtr awp
@@ -7572,6 +7635,8 @@ static void AddKeywordsBlock (
           break;
         case MI_TECH_htgs_0 :
           ValNodeCopyStr (&head, 0, "HTG; HTGS_PHASE0");
+          break;
+        case MI_TECH_htc :
           break;
         default :
           break;
@@ -10186,10 +10251,17 @@ static void DoPopPhyMutSet (
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
-    if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
 
-      /* this is a pop/phy/mut set, catenate separate reports */
+    /* now also handles upcoming eco-set and gen-prod-set */
+
+    if (bssp->_class == 7 ||
+        bssp->_class == 13 ||
+        bssp->_class == 14 ||
+        bssp->_class == 15 ||
+        bssp->_class == 16 ||
+        bssp->_class == BioseqseqSet_class_gen_prod_set) {
+
+      /* this is a pop/phy/mut/eco set, catenate separate reports */
 
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         DoPopPhyMutSet (sep, awp);
@@ -10347,7 +10419,7 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_setup (
 
   if (bssp != NULL) {
 
-    /* handle all components of a pop/phy/mut set */
+    /* handle all components of a pop/phy/mut/eco set */
 
     sep = SeqMgrGetSeqEntryForData (bssp);
     DoPopPhyMutSet (sep, &aw);
@@ -10540,10 +10612,11 @@ static void PrintFtableLocAndQuals (
                 ValNodeCopyStr (head, 0, tmp);
               }
             }
-          } else if (prp->desc != NULL) {
+          }
+          if (prp->desc != NULL) {
             StringNCpy_0 (str, prp->desc, sizeof (str));
             if (! StringHasNoText (str)) {
-              sprintf (tmp, "\t\t\tproduct\t%s\n", str);
+              sprintf (tmp, "\t\t\tprot_desc\t%s\n", str);
               ValNodeCopyStr (head, 0, tmp);
             }
           }
@@ -10801,58 +10874,6 @@ NLM_EXTERN Asn2gbJobPtr asn2gnbk_cleanup (
   return NULL;
 }
 
-static Boolean LIBCALLBACK LockAllSegments (
-  SeqLocPtr slp,
-  SeqMgrSegmentContextPtr context
-)
-
-{
-  BioseqPtr        bsp;
-  SeqLocPtr        loc;
-  SeqIdPtr         sip;
-  ValNodePtr PNTR  vnpp;
-
-  if (slp == NULL || context == NULL) return FALSE;
-  vnpp = (ValNodePtr PNTR) context->userdata;
-  if (vnpp == NULL) return TRUE;
-
-  sip = SeqLocId (slp);
-  if (sip == NULL) {
-    loc = SeqLocFindNext (slp, NULL);
-    if (loc != NULL) {
-      sip = SeqLocId (loc);
-    }
-  }
-  if (sip == NULL) return TRUE;
-
-  bsp = BioseqLockById (sip);
-  ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
-
-  return TRUE;
-}
-
-static Boolean LIBCALLBACK LockAllBioseqs (
-  BioseqPtr bsp,
-  SeqMgrBioseqContextPtr context
-)
-
-{
-  ValNodePtr PNTR  vnpp;
-
-  if (bsp == NULL || context == NULL) return FALSE;
-  vnpp = (ValNodePtr PNTR) context->userdata;
-  if (vnpp == NULL) return TRUE;
-
-  BioseqLock (bsp);
-  ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
-
-  if (bsp->repr == Seq_repr_seg) {
-    SeqMgrExploreSegments (bsp, (Pointer) vnpp, LockAllSegments);
-  }
-
-  return TRUE;
-}
-
 NLM_EXTERN Boolean SeqEntryToGnbk (
   SeqEntryPtr sep,
   FmtType format,
@@ -10870,7 +10891,6 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
   Int4          numParagraphs;
   CharPtr       str;
   ValNodePtr    bsplist = NULL;
-  ValNodePtr    vnp;
 
   if (sep == NULL || fp == NULL) return FALSE;
   if (IS_Bioseq (sep)) {
@@ -10886,7 +10906,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
 
   /* lock all bioseqs in advance, including remote genome components */
 
-  SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &bsplist, LockAllBioseqs, TRUE, FALSE, FALSE);
+  bsplist = LockFarComponents (sep);
 
   ajp = asn2gnbk_setup (bsp, bssp, NULL, format, mode, style);
 
@@ -10910,13 +10930,7 @@ NLM_EXTERN Boolean SeqEntryToGnbk (
 
   /* unlock all pre-locked bioseqs, including remote genome components */
 
-  for (vnp = bsplist; vnp != NULL; vnp = vnp->next) {
-    bsp = (BioseqPtr) vnp->data.ptrvalue;
-    if (bsp != NULL) {
-      BioseqUnlock (bsp);
-    }
-  }
-  bsplist = ValNodeFree (bsplist);
+  bsplist = UnlockFarComponents (bsplist);
 
   return TRUE;
 }
@@ -11111,6 +11125,7 @@ static void SaveAsn2ff (
 
 typedef struct hasgidata {
   Int4     gi;
+  CharPtr  accn;
   Boolean  found;
 } HasGiData, PNTR HasGiPtr;
 
@@ -11122,9 +11137,10 @@ static void LookForGi (
 )
 
 {
-  BioseqPtr  bsp;
-  HasGiPtr   hgp;
-  SeqIdPtr   sip;
+  BioseqPtr     bsp;
+  HasGiPtr      hgp;
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
 
   if (sep == NULL) return;
   if (! IS_Bioseq (sep)) return;
@@ -11133,25 +11149,45 @@ static void LookForGi (
   hgp = (HasGiPtr) mydata;
   if (hgp == NULL) return;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
-    if (sip->choice == SEQID_GI) {
-      if (sip->data.intvalue == hgp->gi) {
-        hgp->found = TRUE;
-        return;
-      }
+    switch (sip->choice) {
+      case SEQID_GI :
+        if (sip->data.intvalue == hgp->gi) {
+          hgp->found = TRUE;
+          return;
+        }
+        break;
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_PIR :
+      case SEQID_SWISSPROT :
+      case SEQID_OTHER :
+      case SEQID_DDBJ :
+      case SEQID_PRF :
+        tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+        if (tsip != NULL && hgp->accn!= NULL &&
+            StringICmp (tsip->accession, hgp->accn) == 0) {
+          hgp->found = TRUE;
+          return;
+        }
+        break;
+      default :
+        break;
     }
   }
 }
 
 static Boolean SeqEntryHasGi (
   SeqEntryPtr sep,
-  Int4 gi
+  Int4 gi,
+  CharPtr accn
 )
 
 {
   HasGiData  hgd;
 
-  if (sep == NULL || gi < 1) return FALSE;
+  if (sep == NULL || (gi < 1 && StringHasNoText (accn))) return FALSE;
   hgd.gi = gi;
+  hgd.accn = accn;
   hgd.found = FALSE;
   SeqEntryExplore (sep, (Pointer) (&hgd), LookForGi);
   return hgd.found;
@@ -11234,11 +11270,13 @@ static void CompareFlatFiles (
 static Int2 HandleMultipleRecords (
   CharPtr inputFile,
   CharPtr outputFile,
-  CharPtr iomode,
+  Boolean binary,
+  Boolean compressed,
   FmtType format,
   ModType mode,
   StlType style,
   Int4 gi,
+  CharPtr accn,
   Boolean batch,
   Boolean diff,
   Boolean gbdjoin
@@ -11253,10 +11291,27 @@ static Int2 HandleMultipleRecords (
   FILE          *fp;
   SeqEntryPtr   fsep;
   Boolean       hasgi;
+  FILE          *ofp;
   Char          path1 [PATH_MAX];
   Char          path2 [PATH_MAX];
   Char          path3 [PATH_MAX];
   SeqEntryPtr   sep;
+  Char          tmp [32];
+#ifdef OS_UNIX
+  Char          cmmd [256];
+  CharPtr       gzcatprog;
+  int           ret;
+  Boolean       usedPopen = FALSE;
+#endif
+
+  if (StringHasNoText (inputFile)) return 1;
+
+#ifndef OS_UNIX
+  if (compressed) {
+    Message (MSG_ERROR, "Can only decompress on-the-fly on UNIX machines");
+    return 1;
+  }
+#endif
 
   amp = AsnAllModPtr ();
   if (amp == NULL) {
@@ -11276,14 +11331,44 @@ static Int2 HandleMultipleRecords (
     return 1;
   }
 
-  aip = AsnIoOpen (inputFile, iomode);
-  if (aip == NULL) {
-    Message (MSG_FATAL, "AsnIoOpen failed for input file '%s'", inputFile);
+#ifdef OS_UNIX
+  if (compressed) {
+    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
+    if (gzcatprog != NULL) {
+      sprintf (cmmd, "%s %s", gzcatprog, inputFile);
+    } else {
+      ret = system ("gzcat -h >/dev/null 2>&1");
+      if (ret == 0) {
+        sprintf (cmmd, "gzcat %s", inputFile);
+      } else if (ret == -1) {
+        Message (MSG_FATAL, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
+        return;
+      } else {
+        Message (MSG_FATAL, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
+        return;
+      }
+    }
+    fp = popen (cmmd, binary? "rb" : "r");
+    usedPopen = TRUE;
+  } else {
+    fp = FileOpen (inputFile, binary? "rb" : "r");
+  }
+#else
+  fp = FileOpen (inputFile, binary? "rb" : "r");
+#endif
+  if (fp == NULL) {
+    Message (MSG_ERROR, "FileOpen failed for input file '%s'", inputFile);
     return 1;
   }
 
-  fp = FileOpen (outputFile, "w");
-  if (fp == NULL) {
+  aip = AsnIoNew (binary? ASNIO_BIN_IN : ASNIO_TEXT_IN, fp, NULL, NULL, NULL);
+  if (aip == NULL) {
+    Message (MSG_ERROR, "AsnIoNew failed for input file '%s'", inputFile);
+    return 1;
+  }
+
+  ofp = FileOpen (outputFile, "w");
+  if (ofp == NULL) {
     AsnIoClose (aip);
     Message (MSG_FATAL, "FileOpen failed for output file '%s'", outputFile);
     return 1;
@@ -11305,9 +11390,9 @@ static Int2 HandleMultipleRecords (
         if (bsp != NULL) {
           SeqIdWrite (bsp->id, buf, PRINTID_FASTA_LONG, sizeof (buf));
           if (SeqEntryHasNucs (sep)) {
-            fprintf (fp, "%s\n", buf);
+            fprintf (ofp, "%s\n", buf);
           } else {
-            fprintf (fp, "%s -- ignored\n", buf);
+            fprintf (ofp, "%s -- ignored\n", buf);
           }
 #ifdef OS_UNIX
           printf ("%s\n", buf);
@@ -11315,23 +11400,27 @@ static Int2 HandleMultipleRecords (
         }
       }
 
-      hasgi = SeqEntryHasGi (sep, gi);
+      hasgi = SeqEntryHasGi (sep, gi, accn);
       if (hasgi) {
-        sprintf (buf, "%ld.before", (long) gi);
+        if (accn == NULL) {
+          sprintf (tmp, "%ld", (long) gi);
+          accn = tmp;
+        }
+        sprintf (buf, "%s.before", accn);
         SaveSeqEntry (sep, buf);
-        sprintf (buf, "%ld.gbff.before", (long) gi);
+        sprintf (buf, "%s.gbff.before", accn);
         SaveAsn2ff (sep, buf);
         SeriousSeqEntryCleanup (sep, NULL, NULL);
-        sprintf (buf, "%ld.after", (long) gi);
+        sprintf (buf, "%s.after", accn);
         SaveSeqEntry (sep, buf);
-        sprintf (buf, "%ld.gbff.after", (long) gi);
+        sprintf (buf, "%s.gbff.after", accn);
         SaveAsn2ff (sep, buf);
-        FileClose (fp);
+        FileClose (ofp);
         AsnIoClose (aip);
         return 0;
       }
-      if (gi == 0 && SeqEntryHasNucs (sep)) {
-        CompareFlatFiles (path1, path2, path3, sep, fp,
+      if (gi == 0 && StringHasNoText (accn) && SeqEntryHasNucs (sep)) {
+        CompareFlatFiles (path1, path2, path3, sep, ofp,
                           format, mode, style,
                           batch, diff, gbdjoin);
       }
@@ -11341,23 +11430,36 @@ static Int2 HandleMultipleRecords (
     }
   }
 
+  FileClose (ofp);
+
+  AsnIoFree (aip, FALSE);
+
+#ifdef OS_UNIX
+  if (usedPopen) {
+    pclose (fp);
+  } else {
+    FileClose (fp);
+  }
+#else
   FileClose (fp);
-  AsnIoClose (aip);
+#endif
 
   return 0;
 }
 
-#define i_argInputFile 0
-#define o_argOutputFile 1
-#define f_argFormat 2
-#define m_argMode 3
-#define s_argStyle 4
-#define t_argBatch 5
-#define d_argDiffFF 6
-#define j_argGbdjoin 7
-#define b_argBinary 8
-#define g_argGiToSave 9
-#define r_argRemote 10
+#define i_argInputFile   0
+#define o_argOutputFile  1
+#define f_argFormat      2
+#define m_argMode        3
+#define s_argStyle       4
+#define t_argBatch       5
+#define d_argDiffFF      6
+#define j_argGbdjoin     7
+#define b_argBinary      8
+#define c_argCompressed  9
+#define g_argGiToSave   10
+#define a_argAccnToSave 11
+#define r_argRemote     12
 
 Args myargs [] = {
   {"Input File Name", "stdin", NULL, NULL,
@@ -11378,8 +11480,12 @@ Args myargs [] = {
     FALSE, 'j', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Bioseq-set is Binary", "T", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"GI to save", "0", NULL, NULL,
+  {"Bioseq-set is Compressed", "F", NULL, NULL,
+    TRUE, 'c', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"GI to save", NULL, NULL, NULL,
     TRUE, 'g', ARG_STRING, 0.0, 0, NULL},
+  {"Accession to save", NULL, NULL, NULL,
+    TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Remote fetching", "F", NULL, NULL,
     FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
 };
@@ -11395,12 +11501,14 @@ Int2 Main (
 )
 
 {
+  CharPtr  accn = NULL;
   Boolean  batch = FALSE;
+  Boolean  binary = FALSE;
+  Boolean  compressed = FALSE;
   Boolean  diff = FALSE;
   FmtType  format;
   Boolean  gbdjoin = FALSE;
   Int4     gi = 0;
-  CharPtr  iomode = "r";
   ModType  mode;
   Char     path [PATH_MAX];
   CharPtr  progname;
@@ -11467,15 +11575,25 @@ Int2 Main (
   }
 
   if (myargs [b_argBinary].intvalue) {
-    iomode = "rb";
+    binary = TRUE;
   } else {
-    iomode = "r";
+    binary = FALSE;
+  }
+
+  if (myargs [c_argCompressed].intvalue) {
+    compressed = TRUE;
+  } else {
+    compressed = FALSE;
   }
 
   if (! StringHasNoText (myargs [g_argGiToSave].strvalue)) {
     if (sscanf (myargs [g_argGiToSave].strvalue, "%ld", &val) == 1) {
       gi = (Int4) val;
     }
+  }
+
+  if (! StringHasNoText (myargs [a_argAccnToSave].strvalue)) {
+    accn = myargs [a_argAccnToSave].strvalue;
   }
 
   switch (myargs [f_argFormat].intvalue) {
@@ -11530,11 +11648,12 @@ Int2 Main (
   }
 #endif
 
-  if (batch || diff || gbdjoin || gi != 0) {
+  if (batch || diff || gbdjoin || gi != 0 || accn != NULL) {
     rsult = HandleMultipleRecords (myargs [i_argInputFile].strvalue,
                                    myargs [o_argOutputFile].strvalue,
-                                   iomode, format, mode, style, gi,
-                                   batch, diff, gbdjoin);
+                                   binary, compressed,
+                                   format, mode, style, gi,
+                                   accn, batch, diff, gbdjoin);
   } else {
     rsult = HandleSingleRecord (myargs [i_argInputFile].strvalue,
                                 myargs [o_argOutputFile].strvalue,

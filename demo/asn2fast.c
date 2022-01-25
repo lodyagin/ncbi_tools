@@ -6,8 +6,10 @@
 #include <tofasta.h>
 #include <subutil.h>
 #include <sqnutils.h>
+#include <accid1.h>
+#include <lsqfetch.h>
 
-#define NUMARG 14
+#define NUMARG 16
 Args myargs[NUMARG] = {
 	{"Filename for asn.1 input","stdin",NULL,NULL,TRUE,'a',ARG_FILE_IN,0.0,0,NULL},
 	{"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
@@ -22,7 +24,9 @@ Args myargs[NUMARG] = {
 	{"Instantiate virtual sequences","F",NULL,NULL,TRUE,'v',ARG_BOOLEAN,0.0,0,NULL},
 	{"Input is a Seq-submit","F", NULL ,NULL ,TRUE,'s',ARG_BOOLEAN,0.0,0,NULL},
 	{"Produce output file of Quality Scores (DNA sequences only)","F",NULL,NULL,TRUE,'q',ARG_BOOLEAN,0.0,0,NULL},
-	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL}
+	{"Output Filename for Quality Scores (DNA sequences only)","scores.ql", NULL,NULL,TRUE,'y',ARG_FILE_OUT,0.0,0,NULL},
+	{"Far Genomic Contig function for Quality Scores","F",NULL,NULL,TRUE,'f',ARG_BOOLEAN,0.0,0,NULL},
+	{"Remote fetching", "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
@@ -46,6 +50,27 @@ static void PrintQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
 	}
 }
 
+static void PrintFarQualScores (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+
+{
+	BioseqPtr  bsp;
+	FILE       *fp;
+
+	if (IS_Bioseq (sep)) {
+		bsp = (BioseqPtr) sep->data.ptrvalue;
+
+		/* WARNING: we're assuming here that asn2fast's quality-score
+		   output is DNA-centric, thus protein bioseqs can be ignored
+		   in the PrintQualScores callback. --MLC, 5/2000 */
+
+		if (ISA_aa(bsp->mol))
+		  return;
+
+		fp = (FILE*) data;
+		PrintQualityScoresForContig (bsp, fp);
+	}
+}
+
 
 Boolean CheckIsGenBank(SeqEntryPtr sep);
 
@@ -62,6 +87,7 @@ Int2 Main(void)
 		make_dna,
 		make_protein,
 		make_quality,
+		far_quality,
 		do_it;
 	
 
@@ -115,6 +141,7 @@ Int2 Main(void)
 	make_protein = (Boolean)(myargs[7].intvalue);
 	make_dna = (Boolean)(myargs[8].intvalue);
 	make_quality = (Boolean)(myargs[12].intvalue);
+	far_quality = (Boolean)(myargs[14].intvalue);
 
 					/* open the ASN.1 input file in the right mode */
 
@@ -172,6 +199,11 @@ Int2 Main(void)
 
 	limit_to_genbank = (Boolean)(myargs[9].intvalue);
 
+	if (myargs [15].intvalue) {
+		ID1BioseqFetchEnable ("asn2fast", FALSE);
+		LocalSeqFetchInit (FALSE);
+	}
+
 	if ( myargs[1].intvalue)   /* read one Seq-entry */
 	{
 
@@ -185,8 +217,13 @@ Int2 Main(void)
 				SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 			if (make_dna)
 				SeqEntrysToFasta(sep, na, TRUE, group_segs);
-			if (make_quality)
-				SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+			if (make_quality) {
+				if (far_quality) {
+					SeqEntryExplore (sep, (Pointer) ql, PrintFarQualScores);
+				} else {
+					SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+				}
+			}
 		}
 		SeqEntryFree(sep);
 	}
@@ -209,8 +246,13 @@ Int2 Main(void)
 							SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 						if (make_dna)
 							SeqEntrysToFasta(sep, na, TRUE, group_segs);
-						if (make_quality)
-							SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+						if (make_quality) {
+							if (far_quality) {
+								SeqEntryExplore (sep, (Pointer) ql, PrintFarQualScores);
+							} else {
+								SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+							}
+						}
 					}
 				}
 				SeqSubmitFree(ssp);
@@ -237,8 +279,13 @@ Int2 Main(void)
 						SeqEntrysToFasta(sep, aa, FALSE, group_segs);
 					if (make_dna)
 						SeqEntrysToFasta(sep, na, TRUE, group_segs);
-					if (make_quality)
-						SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+					if (make_quality) {
+						if (far_quality) {
+							SeqEntryExplore (sep, (Pointer) ql, PrintFarQualScores);
+						} else {
+							SeqEntryExplore (sep, (Pointer) ql, PrintQualScores);
+						}
+					}
 				}
 				SeqEntryFree(sep);
 			}
@@ -256,6 +303,11 @@ Int2 Main(void)
 		FileClose(na);
 	if (make_quality)
 		FileClose (ql);
+
+	if (myargs [15].intvalue) {
+		LocalSeqFetchDisable ();
+		ID1BioseqFetchDisable ();
+	}
 
 	return(0);
 }

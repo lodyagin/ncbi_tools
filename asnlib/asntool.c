@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -43,6 +43,12 @@
 *
 *
 * $Log: asntool.c,v $
+* Revision 6.8  2000/08/11 14:01:46  beloslyu
+* fix the bug. Karl
+*
+* Revision 6.7  2000/07/25 20:30:57  ostell
+* added support for printing multiple ASN.1 modules as multiple XML DTD and .mod files
+*
 * Revision 6.6  2000/05/10 17:45:00  ostell
 * fixed duplicate command line arguments
 *
@@ -111,7 +117,7 @@ extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipo
 Args asnargs[NUMARGS] = {
 	{"ASN.1 Module File",NULL,NULL,NULL,FALSE,'m',ARG_FILE_IN,0.0,0,NULL},
 	{"ASN.1 Module File", NULL,NULL,NULL,TRUE,'f',ARG_FILE_OUT,0.0,0,NULL},
-	{"XML DTD File", NULL,NULL,NULL,TRUE,'X',ARG_FILE_OUT,0.0,0,NULL},
+	{"XML DTD File\n\t(\"m\" to print each module to a separate file)", NULL,NULL,NULL,TRUE,'X',ARG_FILE_OUT,0.0,0,NULL},
 	{"ASN.1 Tree Dump File", NULL,NULL,NULL,TRUE,'T',ARG_FILE_OUT,0.0,0,NULL},
 	{"Print Value File",NULL,NULL,NULL,TRUE,'v',ARG_FILE_IN,0.0,0,NULL},
 	{"Print Value File",NULL,NULL,NULL,TRUE,'p',ARG_FILE_OUT,0.0,0,NULL},
@@ -164,8 +170,9 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 	FILE * fp;
 	AsnModulePtr amp = NULL,
 				currentmod = NULL,
-				nextmod;
+				nextmod, thisamp;
 	AsnTypePtr atp;
+	Boolean print_each_module = FALSE;
  AsnCodeInfoPtr acip = MemNew(sizeof(AsnCodeInfo));
    CharPtr         filename = NULL, p, last_comma, objmgrentry = NULL;
  int len;
@@ -213,8 +220,11 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 		}
 	}
 
+	thisamp = NULL;
 	while ((nextmod = AsnLexTReadModule(aip)) != NULL )
 	{
+		if (thisamp == NULL)
+			thisamp = nextmod;
 
 		if (amp == NULL)
 			amp = nextmod;
@@ -223,6 +233,7 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 		currentmod = nextmod;
 	}
  acip ->  last_amp = currentmod; /* last module of main file */
+	AsnStoreTree(acip->loadname, thisamp); /* store and link tree */
 
 /*--- read additional module files that will be used for everything
       but code generation.
@@ -250,14 +261,18 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 		     return 1;
 	     }
 /*--- read the modules in this current file ---*/
+	     thisamp = NULL;
 	     while ((nextmod = AsnLexTReadModule(aip)) != NULL )
 	     {
+		if (thisamp == NULL)
+			thisamp = nextmod;
 		     if (amp == NULL)
 			     amp = nextmod;
 		     else
 			     currentmod->next = nextmod;
 		     currentmod = nextmod;
 	     }
+	AsnStoreTree(filename, thisamp); /* store and link tree */
       if (!*last_comma)
 	        break;
 	     aip = AsnIoClose(aip);
@@ -273,8 +288,6 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 	}
 
 
-	AsnModuleLink(amp);      /* link up modules where possible */
-	
 	if (asnargs[f_arg_moduleOut].strvalue != NULL)
 	{
 		if ((aipout = AsnIoOpen(asnargs[f_arg_moduleOut].strvalue, "w")) == NULL)
@@ -298,23 +311,56 @@ Int2 m_argModuleIn=0, f_arg_moduleOut=1,
 	
 	if (asnargs[X_argDTDModuleOut].strvalue != NULL)
 	{
-		if ((aipout = AsnIoOpen(asnargs[X_argDTDModuleOut].strvalue, "wx")) == NULL)
+		Char tbuf[250];
+		CharPtr ptr;
+
+		if (! StringCmp(asnargs[X_argDTDModuleOut].strvalue, "m"))
 		{
-			ErrShow();
-			return 1;
+			print_each_module = TRUE;
+		}
+		else
+		{
+			if ((aipout = AsnIoOpen(asnargs[X_argDTDModuleOut].strvalue, "wx")) == NULL)
+			{
+				ErrShow();
+				return 1;
+			}
 		}
 
 		currentmod = amp;
 		do
 		{
+			if (print_each_module)
+			{
+			    StringMove(tbuf, currentmod->modulename);
+			    for (ptr = tbuf; *ptr != '\0'; ptr++)
+			    {
+				if (*ptr == '-')
+					*ptr = '_';
+			    }
+			    StringMove(ptr, ".dtd");
+
+			    AsnPrintModuleXMLInc(currentmod, tbuf);
+
+			    StringMove(ptr, ".mod");
+				
+			    aipout = AsnIoOpen(tbuf, "wx");
+			}
+			
+
 			AsnPrintModuleXML(currentmod, aipout);
+
+			if (print_each_module)
+				aipout = AsnIoClose(aipout);
+
 			if (currentmod == acip->last_amp)  /* last main module */
 				currentmod = NULL;
 			else
 				currentmod = currentmod->next;
 		} while (currentmod != NULL);
 
-		aipout = AsnIoClose(aipout);
+		if (! print_each_module)
+			aipout = AsnIoClose(aipout);
 	}
 	
 	if (asnargs[T_argTreeDumpOut].strvalue != NULL)

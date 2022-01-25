@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.49 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
@@ -146,37 +146,39 @@ static ENUM_ALIST(orgmod_note_subtype_alist)
   {"Anamorph",         29},
   {"Teleomorph",       30},
   {"Breed",            31},
+  {"Old Lineage",     253},
   {"Old Name",        254},
   {"Note",            255},
 END_ENUM_ALIST
 
 static ENUM_ALIST(subsource_note_subtype_alist)
-  {" ",                 0},
-  {"Chromosome",        1},
-  {"Map",               2},
-  {"Clone",             3},
-  {"Subclone",          4},
-  {"Haplotype",         5},
-  {"Genotype",          6},
-  {"Sex",               7},
-  {"Cell-line",         8},
-  {"Cell-type",         9},
-  {"Tissue-type",      10},
-  {"Clone-lib",        11},
-  {"Dev-stage",        12},
-  {"Frequency",        13},
-  {"Germline",         14},
-  {"Rearranged",       15},
-  {"Lab-host",         16},
-  {"Pop-variant",      17},
-  {"Tissue-lib",       18},
-  {"Plasmid-name",     19},
-  {"Transposon-name",  20},
-  {"Ins-seq-name",     21},
-  {"Plastid-name",     22},
-  {"Country",          23},
-  {"Segment",          24},
-  {"Note",            255},
+  {" ",                      0},
+  {"Chromosome",             1},
+  {"Map",                    2},
+  {"Clone",                  3},
+  {"Subclone",               4},
+  {"Haplotype",              5},
+  {"Genotype",               6},
+  {"Sex",                    7},
+  {"Cell-line",              8},
+  {"Cell-type",              9},
+  {"Tissue-type",           10},
+  {"Clone-lib",             11},
+  {"Dev-stage",             12},
+  {"Frequency",             13},
+  {"Germline",              14},
+  {"Rearranged",            15},
+  {"Lab-host",              16},
+  {"Pop-variant",           17},
+  {"Tissue-lib",            18},
+  {"Plasmid-name",          19},
+  {"Transposon-name",       20},
+  {"Ins-seq-name",          21},
+  {"Plastid-name",          22},
+  {"Country",               23},
+  {"Segment",               24},
+  {"Endogenous-virus-name", 25},
+  {"Note",                 255},
 END_ENUM_ALIST
 
 extern EnumFieldAssoc  orgmod_subtype_alist [];
@@ -3710,7 +3712,7 @@ typedef struct rnaformdata {
   Boolean        doReplaceAll;
 
   TexT           findthis;
-  Char           findStr [128];
+  Char           findStr [256];
   PopuP          rnaSubType;
   PopuP          rnaDestType;
   GrouP          txtGrp;

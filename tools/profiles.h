@@ -1,4 +1,5 @@
-/**************************************************************************
+/* $Id: profiles.h,v 6.13 2000/07/25 18:13:42 shavirin Exp $
+***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
 *                                                                         *
@@ -113,7 +114,7 @@ Boolean LIBCALL IMPALAPrintReference PROTO((Boolean html, Int4 line_length, FILE
 Nlm_FloatHi LIBCALL
 impalaKarlinLambdaNR PROTO((BLAST_ScoreFreqPtr sfp, Nlm_FloatHi initialLambda));
 
-void LIBCALL impalaScaling PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor));
+void LIBCALL impalaScaling PROTO((posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch));
 
 Boolean LIBCALL  impalaReadCheckpoint PROTO((posSearchItems * posSearch, compactSearchItems * compactSearch, CharPtr fileName, ValNodePtr * error_return,
 Nlm_FloatHi scalingFactor));
@@ -128,5 +129,6 @@ void LIBCALL IMPALAfillResidueProbability PROTO((Uint1Ptr sequence, Int4 length,
 
 BLAST_ScoreFreqPtr LIBCALL IMPALAfillSfp PROTO((BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArray, Nlm_FloatHi *scoreArray,  BLAST_ScoreFreqPtr return_sfp, Int4 range));
 
+ScorePtr LIBCALL addScoresToSeqAlign PROTO((Int4 rawScore, Nlm_FloatHi eValue, Nlm_FloatHi Lambda, Nlm_FloatHi logK));
 
-
+void LIBCALL pro_quicksort_hits PROTO((Int4 no_of_seq, SWResults **proResultsList));

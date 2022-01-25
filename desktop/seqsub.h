@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: seqsub.h,v $
+* Revision 6.1  2000/07/08 20:44:01  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
 * ==========================================================================
 */
@@ -45,12 +45,13 @@
 #ifndef _SEQSUB_
 #define _SEQSUB_
 
+#include <dlogutil.h>
+#include <objsub.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <dlogutil.h>
-#include <objsub.h>
 
 extern DialoG CreateContactDialog (GrouP h, CharPtr title);
 extern DialoG CreateCitSubDialog (GrouP h, CharPtr title, CitSubPtr csp);

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.56 $
+* $Revision: 6.59 $
 *
 * File Description: 
 *
@@ -291,6 +291,10 @@ typedef void (*QualityWriteFunc) (CharPtr buf, Uint4 buflen, Pointer userdata);
 
 NLM_EXTERN void PrintQualityScoresToBuffer (BioseqPtr bsp, Pointer userdata, QualityWriteFunc callback);
 
+/* special function for genome contig delta sequences with far pointers */
+
+NLM_EXTERN void PrintQualityScoresForContig (BioseqPtr bsp, FILE* fp);
+
 /* ReadContigList builds a far segmented bioseq from a table of accessions, starts, stops,
 lengths, and (optional) strands.  Gaps of a given length (with 0 start and stop) are also
 allowed. */
@@ -407,6 +411,15 @@ NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElem
 
 typedef void (*VisitSeqIdFunc) (SeqIdPtr sip, Pointer userdata);
 NLM_EXTERN void VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqIdFunc callback);
+
+/* visits all sub UserObjects if the data type is 12 - needed to pack multiple user objects on a single feature */
+
+typedef void (*VisitUserObjectFunc) (UserObjectPtr uop, Pointer userdata);
+NLM_EXTERN void VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, VisitUserObjectFunc callback);
+
+/* creates "CombinedFeatureUserObjects" sfp->ext to combine two user objects */
+
+NLM_EXTERN UserObjectPtr CombineUserObjects (UserObjectPtr origuop, UserObjectPtr newuop);
 
 /* visits all publication descriptors or features */
 

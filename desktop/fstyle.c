@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   9/23/94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: fstyle.c,v $
+* Revision 6.1  2000/09/07 21:44:51  shavirin
+* Fixed bug when function Nlm_InitMuskStyles() called more, than 1 time.
+*
 * Revision 6.0  1997/08/25 18:22:01  madden
 * Revision changed to 6.0
 *
@@ -1058,24 +1061,25 @@ void LIBCALL
 *   free all resourses
 **************************************************************************/
 void LIBCALL
-/*FCN*/Nlm_ExitMuskStyles ( 
-  void
-){
-  Nlm_MsmMemberPtr cp, cpold;
-  Nlm_Int2         i;
+/*FCN*/Nlm_ExitMuskStyles ( void )
+{
+    Nlm_MsmMemberPtr cp, cpold;
+    Nlm_Int2         i;
+    
+    for (i=0; i<MSM_TOTAL_SUBCLASSES; i++){
+        if ( cpStatic[i].str != NULL ) MemFree (cpStatic[i].str);
+        cpStatic[i].str = NULL;
+    }
 
-  for (i=0; i<MSM_TOTAL_SUBCLASSES; i++){
-    if ( cpStatic[i].str != NULL ) MemFree (cpStatic[i].str);
-  }
-  cpold = allStyles.next;
-  while ( cpold != NULL ){
-    cp = cpold->next;
-    MemFree ( cpold );
-    cpold = cp;
-  }
-  allStyles.next = NULL;
-  Nlm_FreeAllFont();
-  msmInit = FALSE;
+    cpold = allStyles.next;
+    while ( cpold != NULL ){
+        cp = cpold->next;
+        MemFree ( cpold );
+        cpold = cp;
+    }
+    allStyles.next = NULL;
+    Nlm_FreeAllFont();
+    msmInit = FALSE;
 }  /* End of Nlm_ExitMuskStyles() */
 
 /**************************************************************************

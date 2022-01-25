@@ -32,8 +32,56 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.82 $
+* $Revision: 6.97 $
 * $Log: blastool.c,v $
+* Revision 6.97  2000/10/26 18:52:56  dondosha
+* Added function MegaBlastPrintReference
+*
+* Revision 6.96  2000/10/13 18:49:22  lewisg
+* move structures out of unix ifdef
+*
+* Revision 6.95  2000/10/12 21:39:39  shavirin
+* Added support for OOF in the function  BLASTFilterOverlapRegions().
+*
+* Revision 6.94  2000/10/12 17:55:06  shavirin
+* Fixed NT error for invalid structure identifier.
+*
+* Revision 6.93  2000/10/11 21:49:58  shavirin
+* Added set of functions around BLASTFilterOverlapRegions() to sort and
+* filter output SeqAlign by overlapping reagions.
+*
+* Revision 6.92  2000/10/05 19:41:43  shavirin
+* Rewritten function BlastErrorPrintExtra().
+*
+* Revision 6.91  2000/09/15 17:11:53  dondosha
+* Set gap parameters to zeros for megablast in BLASTOptionSetGapParams
+*
+* Revision 6.90  2000/08/29 19:35:49  madden
+* Add gilist_not_owned to blast_gi_list
+*
+* Revision 6.89  2000/08/28 17:09:53  madden
+* query_lcase_mask no longer freed in BLASTOptionDelete
+*
+* Revision 6.88  2000/08/23 18:48:44  madden
+* Use BlastKarlinBlkGappedCalcEx in place of BlastKarlinBlkGappedCalc
+*
+* Revision 6.87  2000/08/18 19:34:38  madden
+* Do not print lcl| in AcknowledgeBlastQuery
+*
+* Revision 6.86  2000/08/04 15:02:25  shavirin
+* Changed default threshhold values for matrixes BLOSUM62_20,
+* BLOSUM62_20A, BLOSUM62_20B.
+*
+* Revision 6.85  2000/07/31 16:41:00  shavirin
+* Reduced POSIT_SCALE_FACTOR from 1000 to 200 to avoid overflow
+* with BLOSUM80; moved declaration os POSIT_SCALE_FACTOR to posit.h
+*
+* Revision 6.84  2000/07/21 15:23:24  madden
+* Set default threshold for BLOSUM62_20
+*
+* Revision 6.83  2000/07/12 23:07:30  kans
+* reverse_seq moved from pseed3.c to blastool.c, placed in blast.h header, called by gapxdrop.c
+*
 * Revision 6.82  2000/06/20 15:50:46  shavirin
 * Added new functions: BLASTAddBlastDBTitleToSeqAnnot and
 * BLASTGetDatabaseTitleFromSeqAnnot().
@@ -293,6 +341,20 @@ Contents: Utilities for BLAST
 #include <txalign.h>
 #include <posit.h>
 #include <seed.h>
+#include <xmlblast.h>
+
+typedef struct _FilterAlign {
+    SeqAlignPtr  sap;
+    Char         subject_sip[64];
+    HspPtr       hsp;
+} FilterAlign, PNTR FilterAlignPtr;
+
+
+typedef struct _SappSet {
+    Int4               count;
+    FilterAlignPtr PNTR fapp;
+} SappSet, PNTR SappSetPtr;
+
 
 #ifdef OS_UNIX
 /* Here is function to calculate number of BLAST jobs running on spesific
@@ -321,6 +383,7 @@ static struct sembuf BLASTSemaCmd[5] =
     {blast_type_tblastn - 1, 1, SEM_UNDO},  /* Increase 3 semaphore by one  - tblastn */
     {blast_type_tblastx - 1, 1, SEM_UNDO}  /* Increase 4 semaphore by one  - tblastx */
 };
+
 
 static Boolean HeyAlreadyCalled = FALSE;
 
@@ -756,55 +819,33 @@ void LIBCALL BlastErrorPrint(ValNodePtr error_return)
 
 void LIBCALL BlastErrorPrintExtra(ValNodePtr error_return, Boolean errpostex, FILE* fp)
 {
-    BlastErrorMsgPtr	error_msg;
-    ErrSev		err_sev;
-    CharPtr		default_msg = "Unknown BLAST error level", msg;
-    CharPtr		errsevmsg,
-        errsevmsg_0 = "INFO",
-        errsevmsg_1 = "WARNING",
-        errsevmsg_2 = "ERROR",
-        errsevmsg_3 = "FATAL";
+    BlastErrorMsgPtr error_msg;
+    ErrSev	     err_sev;
+    CharPtr	     msg;
     
-
+    CharPtr errsevmsg[] = { "UNKNOWN","INFO","WARNING","ERROR",
+                            "FATAL"};
     
     if (error_return == NULL)
         return;
     
-    while (error_return)
-    {
+    while (error_return) {
         error_msg = error_return->data.ptrvalue;
         msg = error_msg->msg;
         
-        switch (error_msg->level)
-        {
-            case 0:
-                err_sev = SEV_INFO;
-                errsevmsg = errsevmsg_0;
-                break;
-            case 1:
-                err_sev = SEV_WARNING;
-                errsevmsg = errsevmsg_1;
-                break;
-            case 2:
-                err_sev = SEV_ERROR;
-                errsevmsg = errsevmsg_2;
-              break;
-            case 3:
-                err_sev = SEV_FATAL;
-                errsevmsg = errsevmsg_3;
-           break;
-            default:
-                err_sev = SEV_WARNING;
-                msg = default_msg;
-                errsevmsg = errsevmsg_1;
-        break;
-        }
+        if(error_msg->level < 0 || error_msg->level > 5)
+            error_msg->level = 0;
+        
+        if(error_msg->level == 4)
+            err_sev = SEV_FATAL;
+        else
+            err_sev = error_msg->level;
 
         if (errpostex)
             ErrPostEx(err_sev, 0, 0, "%s", msg);
 
         if (fp)
-            fprintf(fp, "\n%s: %s", errsevmsg, msg);
+            fprintf(fp, "%s: %s\n", errsevmsg[error_msg->level], msg);
         
         error_return = error_return->next;
     }
@@ -913,7 +954,10 @@ AcknowledgeBlastQuery(BioseqPtr bsp, Int4 line_length, FILE *outfp, Boolean beli
 	if (bsp->id && believe_query)
 	{
 		SeqIdWrite(bsp->id, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
-		ff_AddString(buffer);
+		if (StringNCmp(buffer, "lcl|", 4) == 0)
+			ff_AddString(buffer+4);
+		else
+			ff_AddString(buffer);
 		ff_AddChar(' ');
 	}
 	ff_AddString(BioseqGetTitle(bsp));
@@ -1002,6 +1046,34 @@ BlastGetReference(Boolean html)
 	add_string_to_bufferEx("programs\",  Nucleic Acids Res. 25:3389-3402.", &ret_buffer, &ret_buffer_length, TRUE);
 	
 	return ret_buffer;
+}
+
+Boolean LIBCALL
+MegaBlastPrintReference(Boolean html, Int4 line_length, FILE *outfp)
+
+{
+	CharPtr ret_buffer;
+	Int2 ret_buffer_length;
+
+	ret_buffer = NULL;
+	ret_buffer_length = 0;
+
+	if (outfp == NULL)
+		return FALSE;
+	
+	if (html) {
+           add_string_to_bufferEx("<b><a href=\"http://www.ncbi.nlm.nih.gov/htbin-post/Entrez/query?uid=9254694&form=6&db=m&Dopt=r\">Reference</a>:</b>", &ret_buffer, &ret_buffer_length, TRUE);
+           add_string_to_bufferEx("Zhang Z., Schwartz S., Wagner L., Miller W., ", &ret_buffer, &ret_buffer_length, TRUE);
+	} else
+           add_string_to_bufferEx("Reference: Zhang Z., Schwartz S., Wagner L., Miller W., ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("Zheng Zhang, Scott Schwartz, Lukas Wagner, and Webb Miller (2000), ", &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("\"A greedy algorithm for aligning DNA sequences\", ", 
+                               &ret_buffer, &ret_buffer_length, TRUE);
+	add_string_to_bufferEx("J Comput Biol 2000; 7(1-2):203-14.", 
+                               &ret_buffer, &ret_buffer_length, TRUE);
+	
+        PrintTildeSepLines(ret_buffer, line_length, outfp);
+	return TRUE;
 }
 
 Boolean LIBCALL
@@ -1304,9 +1376,6 @@ BLASTOptionDelete(BLAST_OptionsBlkPtr options)
 
     MemFree(options->gifile);
 
-    if(options->query_lcase_mask != NULL)
-        SeqLocSetFree(options->query_lcase_mask);
-    
     options = MemFree(options);
     return options;
 }
@@ -1438,7 +1507,7 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 		
 		if (options->gapped_calculation == TRUE)
 		{
-			status = BlastKarlinBlkGappedCalc(NULL, options->gap_open, options->gap_extend, options->matrix, error_return);
+			status = BlastKarlinBlkGappedCalcEx(NULL, options->gap_open, options->gap_extend, options->decline_align, options->matrix, error_return);
 		}
 	}
 
@@ -1469,132 +1538,128 @@ BLASTOptionValidateEx (BLAST_OptionsBlkPtr options, CharPtr progname, ValNodePtr
 */
 
 Int2 LIBCALL 
-BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options, CharPtr matrix_name, Int4 open, Int4 extended)
+BLASTOptionSetGapParams (BLAST_OptionsBlkPtr options, 
+                         CharPtr matrix_name, Int4 open, Int4 extended)
 
 {
-	Boolean found_matrix=FALSE, threshold_set=FALSE;
-
-	if (options == NULL || matrix_name == NULL)
-		return -1;
-
-	/* blastn is different. */
-	if (StringICmp("blastn", options->program_name) == 0)
-	{
-		options->gap_open  = 5;
-		options->gap_extend  = 2;
-		return 0;
-	}
-
-	if (StringICmp(matrix_name, "BLOSUM62") == 0)
-	{
-		options->gap_open  = 11;
-		options->gap_extend  = 1;
-		options->window_size = 40;
-		options->threshold_first = 11;
-		options->threshold_second = 11;
-		found_matrix = TRUE;
-		threshold_set = TRUE;
-	}
-	else if (StringICmp(matrix_name, "BLOSUM45") == 0)
-	{
-		options->gap_open  = 14;
-		options->gap_extend  = 2;
-		options->window_size = 60;
-		options->threshold_first = 14;
-		options->threshold_second = 14;
-		found_matrix = TRUE;
-		threshold_set = TRUE;
-	}
-	else if (StringICmp(matrix_name, "BLOSUM50") == 0)
-	{
-		options->gap_open  = 13;
-		options->gap_extend  = 2;
-		found_matrix = TRUE;
-	}
-	else if (StringICmp(matrix_name, "PAM250") == 0)
-	{
-		options->gap_open  = 14;
-		options->gap_extend  = 2;
-		found_matrix = TRUE;
-	}
-	else if (StringICmp(matrix_name, "BLOSUM62_20") == 0)
-	{
-		options->gap_open  = 11;
-		options->gap_extend  = 1;
-		found_matrix = TRUE;
-	}
-	else if (StringICmp(matrix_name, "BLOSUM90") == 0)
-	{
-		options->gap_open  = 10;
-		options->gap_extend  = 1;
-		found_matrix = TRUE;
-	}
-	else if (StringICmp(matrix_name, "BLOSUM80") == 0)
-	{
-		options->gap_open  = 10;
-		options->gap_extend  = 1;
-		options->window_size = 25;
-		options->threshold_first = 12;
-		options->threshold_second = 12;
-		found_matrix = TRUE;
-		threshold_set = TRUE;
-	}
-	else if (StringICmp(matrix_name, "PAM30") == 0)
-	{
-		options->gap_open  = 9;
-		options->gap_extend  = 1;
-		options->window_size = 15;
-		options->threshold_first = 16;
-		options->threshold_second = 16;
-		found_matrix = TRUE;
-		threshold_set = TRUE;
-	}
-	else if (StringICmp(matrix_name, "PAM70") == 0)
-	{
-		options->gap_open  = 10;
-		options->gap_extend  = 1;
-		options->window_size = 20;
-		options->threshold_first = 14;
-		options->threshold_second = 14;
-		found_matrix = TRUE;
-		threshold_set = TRUE;
-	}
-
-	if (open)
-	    options->gap_open  = open;
-	if (extended)
-	    options->gap_extend  = extended;
-
-	if (matrix_name)
-	{
-		if (options->matrix)
-			MemFree(options->matrix);
-		options->matrix = StringSave(matrix_name);
-	}
-	
-	if (!found_matrix)
-		return -1;
-
-	if (threshold_set)
-	{
-		if (StringICmp(options->program_name, "blastx") == 0)
-		{
-			options->threshold_first++;
-			options->threshold_second++;
-		}
-		else if (StringICmp(options->program_name, "tblastn") == 0 || StringICmp(options->program_name, "tblastx") == 0)
-		{
-			options->threshold_first += 2;
-			options->threshold_second += 2;
-		}
-	}
-	return 0;
+    Boolean found_matrix=FALSE, threshold_set=FALSE;
+    
+    if (options == NULL || matrix_name == NULL)
+        return -1;
+    
+    /* blastn is different. */
+    if (StringICmp("blastn", options->program_name) == 0) {
+        if (!options->is_megablast_search) {
+           options->gap_open  = 5;
+           options->gap_extend  = 2;
+        } else {
+           options->gap_open = options->gap_extend = 0;
+        }
+        return 0;
+    }
+    
+    if (StringICmp(matrix_name, "BLOSUM62") == 0) {
+        options->gap_open  = 11;
+        options->gap_extend  = 1;
+        options->window_size = 40;
+        options->threshold_first = 11;
+        options->threshold_second = 11;
+        found_matrix = TRUE;
+        threshold_set = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM45") == 0) {
+        options->gap_open  = 14;
+        options->gap_extend  = 2;
+        options->window_size = 60;
+        options->threshold_first = 14;
+        options->threshold_second = 14;
+        found_matrix = TRUE;
+        threshold_set = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM50") == 0) {
+        options->gap_open  = 13;
+        options->gap_extend  = 2;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "PAM250") == 0) {
+        options->gap_open  = 14;
+        options->gap_extend  = 2;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM62_20") == 0) {
+        options->gap_open  = 11;
+        options->gap_extend  = 1;
+        options->threshold_first = 100;
+        options->threshold_second = 100;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM62_20A") == 0) {
+        options->gap_open  = 11;
+        options->gap_extend  = 1;
+        options->threshold_first = 100;
+        options->threshold_second = 100;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM62_20B") == 0) {
+        options->gap_open  = 11;
+        options->gap_extend  = 1;
+        options->threshold_first = 100;
+        options->threshold_second = 100;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM90") == 0) {
+        options->gap_open  = 10;
+        options->gap_extend  = 1;
+        found_matrix = TRUE;
+    } else if (StringICmp(matrix_name, "BLOSUM80") == 0) {
+        options->gap_open  = 10;
+        options->gap_extend  = 1;
+        options->window_size = 25;
+        options->threshold_first = 12;
+        options->threshold_second = 12;
+        found_matrix = TRUE;
+        threshold_set = TRUE;
+    } else if (StringICmp(matrix_name, "PAM30") == 0) {
+        options->gap_open  = 9;
+        options->gap_extend  = 1;
+        options->window_size = 15;
+        options->threshold_first = 16;
+        options->threshold_second = 16;
+        found_matrix = TRUE;
+        threshold_set = TRUE;
+    } else if (StringICmp(matrix_name, "PAM70") == 0) {
+        options->gap_open  = 10;
+        options->gap_extend  = 1;
+        options->window_size = 20;
+        options->threshold_first = 14;
+        options->threshold_second = 14;
+        found_matrix = TRUE;
+        threshold_set = TRUE;
+    }
+    
+    if (open)
+        options->gap_open  = open;
+    if (extended)
+        options->gap_extend  = extended;
+    
+    if (matrix_name) {
+        if (options->matrix)
+            MemFree(options->matrix);
+        options->matrix = StringSave(matrix_name);
+    }
+    
+    if (!found_matrix)
+        return -1;
+    
+    if (threshold_set) {
+        if (StringICmp(options->program_name, "blastx") == 0) {
+            options->threshold_first++;
+            options->threshold_second++;
+        } else if (StringICmp(options->program_name, "tblastn") == 0 || StringICmp(options->program_name, "tblastx") == 0) {
+            options->threshold_first += 2;
+            options->threshold_second += 2;
+        }
+    }
+    return 0;
 }
 
 /*
-	This function obtains the sequence from a BioseqPtr in ASCII alphabet.
-	The return value is a Uint1Ptr containing the sequence, the Int4Ptr
-	length inidcates the length of the seqeunce.
+  This function obtains the sequence from a BioseqPtr in ASCII alphabet.
+  The return value is a Uint1Ptr containing the sequence, the Int4Ptr
+  length inidcates the length of the seqeunce.
 */	
 
 Uint1Ptr
@@ -1644,7 +1709,7 @@ Boolean
 BlastAdjustDbNumbers (ReadDBFILEPtr rdfp, Int8Ptr db_length, Int4Ptr db_number, SeqIdPtr seqid_list, BlastDoubleInt4Ptr gi_list, OIDListPtr oidlist, BlastDoubleInt4Ptr PNTR gi_list_pointers, Int4 gi_list_total)
 
 {
-	Int4 count, db_number_start, index, ordinal_id;
+	Int4 count, db_number_start, ordinal_id;
         Int8	db_length_private, db_length_start;
 	SeqIdPtr sip;
 
@@ -1707,7 +1772,8 @@ BlastGiListDestruct(BlastGiListPtr blast_gi_list, Boolean contents)
 
 	if (contents)
 	{ /* On the main thread.  Deallocate contents. */
-		MemFree(blast_gi_list->gi_list);
+		if (blast_gi_list->gilist_not_owned == FALSE)
+			MemFree(blast_gi_list->gi_list);
 		MemFree(blast_gi_list->gi_list_pointer);
 	}
 
@@ -1741,7 +1807,6 @@ BlastGiListNew(BlastDoubleInt4Ptr gi_list, BlastDoubleInt4Ptr PNTR gi_list_point
 #define POSIT_PERCENT 0.05
 #define POSIT_NUM_ITERATIONS 10
 
-#define POSIT_SCALE_FACTOR 1000
 #define Xchar   21    /*character for low-complexity columns*/
 
 
@@ -2962,4 +3027,320 @@ void BLASTAddBlastDBTitleToSeqAnnot(SeqAnnotPtr seqannot, CharPtr title)
     ufp->data.boolvalue = TRUE; /* Just to fill required field ... */
     
     ValNodeAddPointer(&(seqannot->desc), Annot_descr_user, (Pointer)uop);
+}
+
+/* pos is assumed to be the address of a chracter in the array seq
+   if so, copy from pos backwards to the start of seq
+   into target.
+   return the number of characters copied*/
+Int4 reverse_seq(Uint1 *seq, Uint1 *pos, Uint1 *target) 
+{
+    Uint1 *c; /*index over addresses of characters in seq*/
+    Int4 numCopied; /*number of characters copied*/
+
+    for (c = pos, numCopied = 0; c >= seq; c--, numCopied++) 
+	*target++ = *c;
+    *target = '\0';
+    return numCopied;
+}
+
+static void FilterAlignFree(FilterAlignPtr fap)
+{
+    HspFree(fap->hsp);
+    
+    if(fap->sap != NULL)
+        SeqAlignSetFree(fap->sap);
+    
+    MemFree(fap);
+
+    return;
+}
+
+static void SappSetFree(SappSetPtr ssp)
+{
+    Int4 i;
+    FilterAlignPtr fap;
+    
+    for(i = 0; i < ssp->count; i++) {
+        if ((fap = ssp->fapp[i]) != NULL) {
+            FilterAlignFree(fap);
+        }
+    }
+
+    MemFree(ssp->fapp);
+    MemFree(ssp);
+
+    return;
+}
+static int LIBCALLBACK SappArrayScoreCmp(VoidPtr v1, VoidPtr v2)
+{
+    FilterAlignPtr f1, f2;
+    
+    f1 = (*(FilterAlignPtr PNTR) v1);
+    f2 = (*(FilterAlignPtr PNTR) v2);
+
+    if (f1->hsp->score < f2->hsp->score)
+        return 1;
+    else if (f1->hsp->score > f2->hsp->score)
+        return -1;
+
+    if (f1->hsp->evalue > f2->hsp->evalue)
+        return 1;
+    else if (f1->hsp->evalue < f2->hsp->evalue)
+        return -1;
+    
+    else return 0;
+}
+
+static Boolean BLASTSortSapArray(SappSetPtr ssp)
+{
+
+    HeapSort((VoidPtr)ssp->fapp, ssp->count, sizeof(FilterAlignPtr), 
+             SappArrayScoreCmp);
+
+    return TRUE;
+}
+
+static Boolean BLASTTestHSPPosition(HspPtr hsp1, HspPtr hsp2, Int4 pct)
+{
+    Boolean from_is_inside, to_is_inside;
+    Int4 length;
+    Nlm_FloatHi pct_overlap = 0.0;
+
+    if(hsp1 == NULL || hsp2 == NULL)
+        return TRUE;
+    
+    from_is_inside = FALSE;
+    to_is_inside   = FALSE;
+
+    if((SIGN(hsp1->query_frame) != SIGN(hsp2->query_frame)) || 
+       (SIGN(hsp1->hit_frame) != SIGN(hsp2->hit_frame)))
+        return TRUE;
+
+
+    if(SIGN(hsp1->query_frame) == SIGN(hsp1->hit_frame)) {
+
+        if(CONTAINED_IN_HSP(hsp1->query_from, hsp1->query_to, hsp2->query_from,hsp1->hit_from, hsp1->hit_to, hsp2->hit_from)) {
+            from_is_inside = TRUE;
+        }
+        
+        if(CONTAINED_IN_HSP(hsp1->query_from, hsp1->query_to, hsp2->query_from, hsp1->hit_from, hsp1->hit_to, hsp2->hit_from)) {
+            to_is_inside = TRUE;
+        }
+    } else {
+        if(CONTAINED_IN_HSP(hsp1->query_to, hsp1->query_from, hsp2->query_from, hsp1->hit_from, hsp1->hit_to, hsp2->hit_from)) {
+            from_is_inside = TRUE;
+        }
+
+        if(CONTAINED_IN_HSP(hsp1->query_to, hsp1->query_from, hsp2->query_from, hsp1->hit_from, hsp1->hit_to, hsp2->hit_from)) {
+            to_is_inside = TRUE;
+        }
+        
+    }
+
+    if(from_is_inside && to_is_inside)
+        return FALSE;
+
+    length = abs(hsp2->query_to -  hsp2->query_from);
+    
+    if(from_is_inside) {
+        pct_overlap = (length - (MIN(abs(hsp2->query_to - hsp1->query_from), abs(hsp2->query_to - hsp1->query_to))))*100.0/length;
+        
+    } else if (to_is_inside) {
+        
+        pct_overlap = (length - (MIN(abs(hsp2->query_from - hsp1->query_from), abs(hsp2->query_from - hsp1->query_to))))*100.0/length;
+        
+    }
+
+    if(pct_overlap > pct)
+        return FALSE;
+    
+    return TRUE;
+}
+static SeqAlignPtr BLASTFilterSapArray(SappSetPtr ssp,  Int4 pct, 
+                                       SeqAlignPtr PNTR next_tail)
+{
+    Int4 i, j;
+    HspPtr hsp1, hsp2;
+    SeqAlignPtr sap_head;
+
+    if(ssp == NULL || ssp->count == 0)
+        return NULL;
+
+    
+    for(i = 0; i < ssp->count; i++) {
+        
+        if(ssp->fapp[i] == NULL)
+            continue;
+        
+        hsp1 = ssp->fapp[i]->hsp;
+        
+        for(j = 0; j < i; j++) {
+            
+            if(ssp->fapp[j] == NULL)
+                continue;
+            
+            hsp2 = ssp->fapp[j]->hsp;
+            
+            if(!BLASTTestHSPPosition(hsp1, hsp2, pct)) { 
+                /* FALSE mean hsp2 to be removed */
+                if(ssp->fapp[j] != NULL) {
+                    FilterAlignFree(ssp->fapp[j]);    
+                    ssp->fapp[j] = NULL;
+                }
+                break;
+            }
+        }
+    }
+
+    sap_head   = NULL;
+    *next_tail = NULL;
+    
+    for(i = 0; i < ssp->count; i++) {
+        if(ssp->fapp[i] != NULL) {
+            if(sap_head == NULL) {
+                sap_head = ssp->fapp[i]->sap;
+                *next_tail = sap_head;
+            } else {
+                (*next_tail)->next = ssp->fapp[i]->sap;
+                *next_tail = (*next_tail)->next;
+            }
+            ssp->fapp[i]->sap = NULL;
+        }
+    }
+    
+    return sap_head;
+}
+
+static SappSetPtr BLASTCreateSappArray(SeqAlignPtr sap_in, 
+                                       Boolean subject_is_aa, 
+                                       Boolean is_ooframe)
+{
+    Int4 count;
+    SeqAlignPtr sap;
+    SappSetPtr ssp;
+
+    if(sap_in == NULL)
+        return NULL;
+    
+    for(count = 0, sap = sap_in; sap != NULL; sap = sap->next)
+        count++;
+    
+    ssp = (SappSetPtr) MemNew(sizeof(SappSet));
+    
+    ssp->count = count;
+    
+    ssp->fapp = (FilterAlignPtr PNTR) MemNew(count*sizeof(FilterAlignPtr));
+    
+    for(count = 0, sap = sap_in; sap != NULL; count++) {
+        ssp->fapp[count] = MemNew(sizeof(FilterAlign));
+        ssp->fapp[count]->sap = sap;
+        SeqIdWrite(TxGetSubjectIdFromSeqAlign(sap), 
+                   ssp->fapp[count]->subject_sip, 
+                   PRINTID_FASTA_LONG,
+                   sizeof(ssp->fapp[count]->subject_sip));
+        ssp->fapp[count]->hsp = BXMLGetHspFromSeqAlign(sap, subject_is_aa, 0,
+                                                       is_ooframe);
+
+        sap = sap->next;
+        ssp->fapp[count]->sap->next = NULL; /* Single SAP */
+    }
+
+    return ssp;
+}
+
+static SappSetPtr BLASTGetNextSapArray(SappSetPtr ssp_in, Int4 pct)
+{
+    CharPtr current_sip;
+    Int4 count, i;
+    SappSetPtr ssp;
+
+    /* First - calculating number of SeqAligns for the next sap array */
+    current_sip = NULL;
+    count = 0;
+    for(i = 0; i < ssp_in->count; i++) {
+        
+        if (ssp_in->fapp[i] != NULL) {
+            if(current_sip == NULL) {
+                current_sip = ssp_in->fapp[i]->subject_sip;
+                count++;
+                continue;
+            }
+            
+            if(!StringCmp(current_sip, ssp_in->fapp[i]->subject_sip))
+                count++;
+        }
+    }
+
+    if(count == 0)
+        return NULL;
+
+    ssp = (SappSetPtr) MemNew(sizeof(SappSet));
+    ssp->count = count;
+    ssp->fapp = (FilterAlignPtr PNTR) MemNew(sizeof(FilterAlignPtr) * ssp->count);
+
+    for(i = 0, count = 0; i < ssp_in->count && count < ssp->count; i++) {
+        if (ssp_in->fapp[i] != NULL) {
+            if(!StringCmp(current_sip, ssp_in->fapp[i]->subject_sip)) {
+                ssp->fapp[count] = ssp_in->fapp[i];
+                ssp_in->fapp[i] = NULL;
+                count++;
+            }
+        }
+    }
+    return ssp;
+}
+        
+/* -----------------------------------------------------------------
+   This function will filter given SeqAlignPtr for overlaping
+   regions for the same query/subject pair. Another input parameter is
+   percentage of overlapping required for the alignment to be removed
+   from SeqAlignPtr
+   ---------------------------------------------------------------- */
+
+SeqAlignPtr BLASTFilterOverlapRegions(SeqAlignPtr sap, Int4 pct, 
+                                      Boolean subject_is_aa, 
+                                      Boolean is_ooframe,
+                                      Boolean sort_array)
+{
+    SeqAlignPtr seqalign, head, tail, next_tail;
+    SeqAlignPtr PNTR sapp;
+    SappSetPtr  ssp, ssp_tmp;
+    
+    if(sap == NULL)
+        return NULL;
+    
+    head = NULL;
+    
+    ssp = BLASTCreateSappArray(sap, subject_is_aa, is_ooframe);
+    
+    /* Generally speaking SeqAlignPtr coming from Blast engine should be
+       correctly sorted - if not sorting below may be used */
+    
+    if(sort_array)
+        BLASTSortSapArray(ssp);
+    
+    while(TRUE) {
+        
+        if((ssp_tmp = BLASTGetNextSapArray(ssp, pct)) == NULL)
+            break;
+        
+        BLASTSortSapArray(ssp_tmp);
+        
+        seqalign = BLASTFilterSapArray(ssp_tmp, pct, &next_tail);
+
+        SappSetFree(ssp_tmp);
+        
+        if(head == NULL) {
+            head = seqalign;
+        } else {
+            tail->next = seqalign;
+        }
+        
+        tail = next_tail;
+    }
+    
+    SappSetFree(ssp);
+    
+    return head;
 }

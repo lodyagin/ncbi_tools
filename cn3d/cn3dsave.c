@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: Cn3d file saving routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dsave.c,v $
+* Revision 6.31  2000/07/21 18:55:14  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.30  2000/04/19 17:56:48  thiessen
 * added background color in OpenGL
 *
@@ -364,7 +367,7 @@ static void Cn3D_ExportAsnNow(ButtoN b)
     BiostrucSeqsPtr bsssp = NULL;
     BiostrucPtr bsSlaveHead = NULL, bsSlave = NULL, bsSlaveTail = NULL;
     BiostrucFeaturePtr pbsfThis;
-    PDNTRN pdnTransform = NULL;
+    /*PDNTRN pdnTransform = NULL;*/
     AsnIoPtr aip = NULL;
     ValNodePtr pvnAlignment;
     PDNML pdnmlThis = NULL;
@@ -440,6 +443,8 @@ static void Cn3D_ExportAsnNow(ButtoN b)
 
         while (pdnmsSlave) {
 
+#if 0 /* no longer need any of this junk, since coordinates aren't transformed */
+
             /* begin reverse transform */
 
             pmsdSlave = pdnmsSlave->data.ptrvalue;
@@ -457,7 +462,6 @@ static void Cn3D_ExportAsnNow(ButtoN b)
                 break;
             /* loop over the slave's models with the transformation */
             pdnmlThis = pmsdSlave->pdnmlModels;
-
             while (pdnmlThis) {
                 TraverseAtoms(pdnmsSlave, pdnmlThis->choice, 0,
                               pdnTransform, DoReverseTransform);
@@ -469,9 +473,8 @@ static void Cn3D_ExportAsnNow(ButtoN b)
 
             /* end reverse transform */
 
-            iTest =
-                WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave,
-                                  iCn3d);
+            iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
+
             pdnmlThis = pmsdSlave->pdnmlModels;
             while (pdnmlThis) {
                 TraverseAtoms(pdnmsSlave, pdnmlThis->choice, 0,
@@ -482,7 +485,9 @@ static void Cn3D_ExportAsnNow(ButtoN b)
             }
             /* after creating ASN.1, get the coordinates back for this run, yanli */
             FreeDNTRN(pdnTransform);
+#endif
 
+            iTest = WriteAsnModelList(pdnmsSlave, iCount, i2Vec, path, bSave, iCn3d);
             if (!iTest) {
                 ErrClear();
                 ErrPostEx(SEV_FATAL, 0, 0,

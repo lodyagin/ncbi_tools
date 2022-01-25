@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.32 2000/06/07 15:54:36 shavirin Exp $ */
+/* $Id: pseed3.c,v 6.35 2000/08/07 20:45:10 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,18 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.32 $
+$Revision: 6.35 $
 
 $Log: pseed3.c,v $
+Revision 6.35  2000/08/07 20:45:10  madden
+Proper casting of int to long for printf
+
+Revision 6.34  2000/07/18 12:56:06  madden
+changed init_order to avoid processing characters outside the 20 regular amino acids.
+
+Revision 6.33  2000/07/12 23:07:31  kans
+reverse_seq moved from pseed3.c to blastool.c, placed in blast.h header, called by gapxdrop.c
+
 Revision 6.32  2000/06/07 15:54:36  shavirin
 Removed bug prevented from searches of multiple patterns
 
@@ -870,21 +879,6 @@ void insert_hit(Int4 score, Int4 l_score, Int4 startPos, Int4 endPos,
     }
 }
 
-/* pos is assumed to be the address of a chracter in the array seq
-   if so, copy from pos backwards to the start of seq
-   into target.
-   return the number of characters copied*/
-Int4 reverse_seq(Uint1 *seq, Uint1 *pos, Uint1 *target) 
-{
-    Uint1 *c; /*index over addresses of characters in seq*/
-    Int4 numCopied; /*number of characters copied*/
-
-    for (c = pos, numCopied = 0; c >= seq; c--, numCopied++) 
-	*target++ = *c;
-    *target = '\0';
-    return numCopied;
-}
-
 /*seq is a packed DNA sequence with 4 DNA letters packed into one
   item of type Uint1, len is the number of DNA characters, dseq
   is the unpacked sequence*/
@@ -1162,7 +1156,7 @@ SeqAlignPtr LIBCALL output_hits(ReadDBFILEPtr rdpt,
                   sprintf(tmpbuf, "%d\t%s\n", oneMatch->seqno, buff);
                   ValNodeCopyStr(info_vnp, 0, tmpbuf);
               }
-              sprintf(tmpbuf, "%.3g Total Score %ld Outside Pattern Score %ld Match start in db seq %ld\n       Extent in query seq %ld %ld Extent in db seq %ld %ld\n", eValueForMatch, oneHit->score, (long) oneHit->l_score, (long) oneHit->hit_pos, (long) oneHit->bi+1, (long) oneHit->ei, (long) oneHit->bj+1, (long) oneHit->ej);
+              sprintf(tmpbuf, "%.3g Total Score %ld Outside Pattern Score %ld Match start in db seq %ld\n       Extent in query seq %ld %ld Extent in db seq %ld %ld\n", eValueForMatch, (long) oneHit->score, (long) oneHit->l_score, (long) oneHit->hit_pos, (long) oneHit->bi+1, (long) oneHit->ei, (long) oneHit->bj+1, (long) oneHit->ej);
               ValNodeCopyStr(info_vnp, 0, tmpbuf);
 	  } else {
               if (oneMatch->seqno != oldNumber)
@@ -1365,6 +1359,8 @@ void LIBCALL quicksort_hits(Int4 no_of_seq, seedResultItems *seedResults)
     return;
 }
 
+#define seedepsilon 0.00001
+
 /*Initialize the order of letters in the alphabet, the score matrix,
 and the row sums of the score matrix. matrixToFill is the
 score matrix, program_flag says which variant of the program is
@@ -1389,12 +1385,15 @@ void LIBCALL init_order(Int4 **matrix, Int4 program_flag, Boolean is_dna, seedSe
       for (i = 0; i < ALPHABET_SIZE; i++) 
         seedSearch->charMultiple[i] = 0;
       for (i = 0; i < ALPHABET_SIZE; i++) {
-	matrixRow = matrix[i];
-        rowSum= 0;
-	for (j = 0; j < ALPHABET_SIZE; j++) {
-	  rowSum += seedSearch->standardProb[j]*exp(-(seedSearch->paramLambda)*matrixRow[j]);
+	if (seedSearch->standardProb[i] > seedepsilon) {
+	  matrixRow = matrix[i];
+	  rowSum= 0;
+	  for (j = 0; j < ALPHABET_SIZE; j++) {
+	    if (seedSearch->standardProb[j] > seedepsilon) 
+	      rowSum += seedSearch->standardProb[j]*exp(-(seedSearch->paramLambda)*matrixRow[j]);
+	  }
+	  seedSearch->charMultiple[i] = rowSum;
 	}
-	seedSearch->charMultiple[i] = rowSum;
       }
     }
 }

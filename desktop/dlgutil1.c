@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -2562,7 +2562,8 @@ static void SeqLocPtrToIntervalPage (DialoG d, Pointer data)
                   isInterval = FALSE;
                   isPoint = TRUE;
                   StringCpy (fuzz_from_ch, "^");
-                  start--;
+                  /* start--; */  /* compensate for other fix */
+                  stop++; /* compensate for other fix */
                 }
               }
             }
@@ -2829,7 +2830,7 @@ static Pointer IntervalPageToSeqLocPtr (DialoG d)
             if (fuzz_after && to == from + 1) {
               isInterval = FALSE;
               isPoint = TRUE;
-              from++;
+              /* from++; */ /* this was causing point to be thrown off */
             } else if (to == from && (! partial5) && (! partial3)) {
               isInterval = FALSE;
               isPoint = TRUE;

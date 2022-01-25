@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.11  2000/08/18 19:08:58  kans
+* added QUERY_WaitForNextMacEvent, otherwise QuickDraw collides with mmdbapi
+*
 * Revision 6.10  2000/06/30 18:16:09  kans
 * protect against reentrant calls if resultproc is GUI and processes timer - showed up on PC/Windows, not Mac or UNIX version of Sequin
 *
@@ -58,6 +61,17 @@
 #include "asnbuild.h"
 #include <urlquery.h>
 
+#ifdef OS_MAC
+#include <Events.h>
+
+NLM_EXTERN void QUERY_WaitForNextMacEvent (void)
+
+{
+  EventRecord  currEvent;
+
+  WaitNextEvent (0, &currEvent, 0, NULL);
+}
+#endif
 
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
   Nlm_CharPtr host_machine, Nlm_Uint2 host_port,

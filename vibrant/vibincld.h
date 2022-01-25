@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *       Vibrant inclusion of underlying windowing system toolbox functions,
@@ -43,6 +43,9 @@
 *
 *
 * $Log: vibincld.h,v $
+* Revision 6.4  2000/07/08 20:44:14  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.3  1999/06/22 15:14:54  lewisg
 * fix image library so that works on linux with > 8 bits
 *
@@ -583,16 +586,17 @@ extern Nlm_Boolean Nlm_ProcessKeydown PROTO((Nlm_GraphiC g, WPARAM wParam,
 
 extern Nlm_Boolean Nlm_CheckX(XVisualInfo *visinfo);
 
+
+#ifdef __cplusplus
+}
+#endif
+
+
 #ifdef OS_UNIX
 #include <unistd.h>
 #endif
 #ifdef OS_VMS
 #endif
-#endif
-
-
-#ifdef __cplusplus
-}
 #endif
 
 #endif

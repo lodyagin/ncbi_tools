@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.9 at Jun 7, 2000 12:58 PM
+*    Generated using ASNCODE Revision: 6.9 at Sep 15, 2000  3:06 PM
 *
 **************************************************/
 
@@ -45,6 +45,7 @@ typedef struct struct_Blast_search {
    ValNodePtr   mask;
    struct struct_Blast_matrix PNTR   matrix;
    Uint1   return_parts;
+   struct struct_Bioseq_set PNTR   query_set;
 } BlastSearch, PNTR BlastSearchPtr;
 
 
@@ -93,6 +94,7 @@ typedef ValNode BlastResponse;
 #define BlastResponse_fini 18
 #define BlastResponse_phialign 19
 #define BlastResponse_parts 20
+#define BlastResponse_mbalign 21
 
 
 NLM_EXTERN BlastResponsePtr LIBCALL BlastResponseFree PROTO ((BlastResponsePtr ));
@@ -144,6 +146,9 @@ typedef struct struct_Blast_parameters {
    Uint1   is_rps_blast;
    Uint1   tweak_parameters;
    Uint1   smith_waterman;
+   Uint1   is_megablast;
+   ValNodePtr   query_lcase_mask;
+   Int4   is_ooframe;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -477,6 +482,47 @@ NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionFree PROTO ((BlastVersionPtr ));
 NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionNew PROTO (( void ));
 NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastVersionAsnWrite PROTO (( BlastVersionPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    MegaBlastHit
+*
+**************************************************/
+typedef struct struct_MegaBlast_hit {
+   struct struct_MegaBlast_hit PNTR next;
+   CharPtr   id1;
+   CharPtr   id2;
+   Int4   query_offset;
+   Int4   subject_offset;
+   Int4   query_end;
+   Int4   subject_end;
+   Int4   score;
+} MegaBlastHit, PNTR MegaBlastHitPtr;
+
+
+NLM_EXTERN MegaBlastHitPtr LIBCALL MegaBlastHitFree PROTO ((MegaBlastHitPtr ));
+NLM_EXTERN MegaBlastHitPtr LIBCALL MegaBlastHitNew PROTO (( void ));
+NLM_EXTERN MegaBlastHitPtr LIBCALL MegaBlastHitAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL MegaBlastHitAsnWrite PROTO (( MegaBlastHitPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    SeqAlignSetList
+*
+**************************************************/
+typedef struct struct_Seq_align_set_list {
+   struct struct_Seq_align PNTR   align;
+} SeqAlignSetList, PNTR SeqAlignSetListPtr;
+
+
+NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListFree PROTO ((SeqAlignSetListPtr ));
+NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListNew PROTO (( void ));
+NLM_EXTERN SeqAlignSetListPtr LIBCALL SeqAlignSetListAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL SeqAlignSetListAsnWrite PROTO (( SeqAlignSetListPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
@@ -47,6 +47,10 @@
 
 #include <salsa.h>
 #include <vibrant.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*********************************
 ***    SeqFontProc
@@ -125,5 +129,9 @@ extern void ColorIdentityDialog (WindoW w);
 extern void ColorIdentityDialogItem (IteM i);
 
 NLM_EXTERN void PropagateFeatDialog (IteM i);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

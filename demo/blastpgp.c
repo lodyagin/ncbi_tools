@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.65 2000/06/27 15:25:19 madden Exp $ */
+/* $Id: blastpgp.c,v 6.83 2000/10/27 21:26:50 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,64 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.65 $ 
+ * $Revision: 6.83 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.83  2000/10/27 21:26:50  shavirin
+ * Produce valid XML output if no hits found.
+ *
+ * Revision 6.82  2000/10/27 19:14:41  madden
+ * Change description of -b option
+ *
+ * Revision 6.81  2000/10/24 13:51:33  shavirin
+ * Removed unused parameter from the function BXMLPrintOutput().
+ *
+ * Revision 6.80  2000/10/23 19:58:22  dondosha
+ * Open and close AsnIo outside of call(s) to BXMLPrintOutput
+ *
+ * Revision 6.79  2000/10/17 19:39:20  shavirin
+ * Fixed compilation problems on Mac.
+ *
+ * Revision 6.78  2000/10/13 20:58:01  madden
+ * Add YES_TO_DECLINE_TO_ALIGN define and disable same
+ *
+ * Revision 6.77  2000/09/28 15:48:30  dondosha
+ * Open <PRE> block in PGPFormatFooter
+ *
+ * Revision 6.76  2000/09/27 19:31:44  dondosha
+ * Use original square substitution matrix to pass to txalign on all iterations
+ *
+ * Revision 6.75  2000/09/21 17:54:46  dondosha
+ * Do not pass matrix to txalign in case of query-anchored formatting
+ *
+ * Revision 6.74  2000/09/13 18:34:35  dondosha
+ * Create BLAST_Matrix from ScoreBlk before converting it to txalign-style matrix
+ *
+ * Revision 6.73  2000/09/12 21:51:38  dondosha
+ * Pass the correct scoring matrix to ShowTextAlignFromAnnot
+ *
+ * Revision 6.72  2000/08/28 21:55:01  shavirin
+ * Added option (m = 7) to print XML output.
+ *
+ * Revision 6.71  2000/08/22 20:18:21  shavirin
+ * Added support for HTML output if decline-to-align parameter is set.
+ *
+ * Revision 6.70  2000/08/18 21:31:12  madden
+ * no longer need to raise E-value threshold for composition-based statistics
+ *
+ * Revision 6.69  2000/08/08 21:47:55  shavirin
+ * Added parameter decline_align and possibility to print then
+ * discontinuous alignment.
+ *
+ * Revision 6.68  2000/07/26 19:04:14  shavirin
+ * Set overriding default threshold only if input value != 0.
+ *
+ * Revision 6.67  2000/07/25 18:14:06  shavirin
+ * WARNING: This is no-turning-back changed related to S&W Blast from
+ * Alejandro Schaffer
+ *
+ * Revision 6.66  2000/07/21 20:46:40  madden
+ * Threshold set to default if arg is zero
+ *
  * Revision 6.65  2000/06/27 15:25:19  madden
  * Changed master-slave to query-anchored
  *
@@ -302,6 +358,8 @@
 #include <posit.h>
 #include <seed.h>
 #include <sqnutils.h>
+#include <xmlblast.h>
+#include <ddvcreate.h>
 
 /* Used by the callback function. */
 FILE *global_fp=NULL;
@@ -332,6 +390,10 @@ star_callback(Int4 sequence_number, Int4 number_of_positive_hits)
     return 0;
 }
 
+/*
+#define YES_TO_DECLINE_TO_ALIGN
+*/
+
 #define NUMARG (sizeof(myargs)/sizeof(myargs[0]))
 
 static Args myargs [] = {
@@ -342,10 +404,10 @@ static Args myargs [] = {
     { "Multiple Hits window size (zero for single hit algorithm)", /* 2 */
       "40", NULL, NULL, FALSE, 'A', ARG_INT, 0.0, 0, NULL},
     { "Threshold for extending hits", /* 3 */
-      "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
+      "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -374,9 +436,9 @@ static Args myargs [] = {
     { "Show GI's in deflines",  /* 18 */
       "F", NULL, NULL, FALSE, 'I', ARG_BOOLEAN, 0.0, 0, NULL},
     { "e-value threshold for inclusion in multipass model", /* 19 */
-      "0.001", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
+      "0.002", NULL, NULL, FALSE, 'h', ARG_FLOAT, 0.0, 0, NULL},
     { "Constant in pseudocounts for multipass version", /* 20 */
-      "10", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
+      "7", NULL, NULL, FALSE, 'c', ARG_INT, 0.0, 0, NULL},
     { "Maximum number of passes to use in  multipass version", /* 21 */
       "1", NULL, NULL, FALSE, 'j', ARG_INT, 0.0, 0, NULL},
     { "Believe the query defline", /* 22 */
@@ -387,9 +449,9 @@ static Args myargs [] = {
       NULL, NULL, NULL, TRUE, 'O', ARG_FILE_OUT, 0.0, 0, NULL},
     { "Matrix",                 /* 25 */
       "BLOSUM62", NULL, NULL, FALSE, 'M', ARG_STRING, 0.0, 0, NULL},
-    { "Number of one-line descriptions (V)", /* 26 */
+    { "Number of database sequences to show one-line descriptions for (V)", /* 26 */
       "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-    { "Number of alignments to show (B)", /* 27 */
+    { "Number of database sequence to show alignments for (B)", /* 27 */
       "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},
     { "Output File for PSI-BLAST Checkpointing", /* 28 */
       NULL, NULL, NULL, TRUE, 'C', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -401,8 +463,8 @@ static Args myargs [] = {
       "0", NULL, NULL, FALSE, 'z', ARG_INT, 0.0, 0, NULL},
     { "Number of best hits from a region to keep", /* 32 */
       "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
-    { "Length of region used to judge hits", /* 33 */
-      "20", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
+    { "Compute locally optimal Smith-Waterman alignments", /*33*/
+      "F", NULL, NULL, FALSE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Effective length of the search space (use zero for the real size)", /* 34 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
     { "program option for PHI-BLAST", /* 35 */
@@ -419,8 +481,12 @@ static Args myargs [] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence",    /* 41 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    /*    { "Cost to decline alignment",  41 
-          "10000", NULL, NULL, FALSE, 'D', ARG_INT, 0.0, 0, NULL}  */
+    { "Tweak Lambda, K, and score matrix for each match", /*42*/
+      "T", NULL, NULL, FALSE, 't', ARG_BOOLEAN, 0.0, 0, NULL}
+#ifdef YES_TO_DECLINE_TO_ALIGN
+    { "Cost to decline alignment (disabled when 0)", /* 43 */
+      "0", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
+#endif
 };
 
 typedef struct _pgp_blast_options {
@@ -440,6 +506,7 @@ typedef struct _pgp_blast_options {
     CharPtr patfile;
     FILE *patfp; 
     seedSearchItems *seedSearch;
+    Boolean is_xml_output;
 } PGPBlastOptions, PNTR PGPBlastOptionsPtr;
 
 void PGPGetPrintOptions(Boolean gapped, Uint4Ptr align_options_out, 
@@ -568,8 +635,12 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     /* Set default gap params for matrix. */
     BLASTOptionSetGapParams(options, myargs[25].strvalue, 0, 0);
 
-    PGPGetPrintOptions(options->gapped_calculation, &bop->align_options, 
-                       &bop->print_options);
+    if(myargs[5].intvalue == 7) {
+        bop->is_xml_output = TRUE;
+    } else {
+        PGPGetPrintOptions(options->gapped_calculation, &bop->align_options, 
+                           &bop->print_options);
+    }
 
     /* decrement by one to agree with program values. */
     options->required_start = myargs[15].intvalue - 1;
@@ -579,8 +650,9 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     }
     
     options->window_size = myargs [2].intvalue;
-    
-    options->threshold_second = (Int4) myargs [3].intvalue;
+
+    if(myargs [3].intvalue)    
+        options->threshold_second = (Int4) myargs [3].intvalue;
     
     options->dropoff_2nd_pass  = myargs [7].floatvalue;
     options->expect_value  = (Nlm_FloatHi) myargs [4].floatvalue;
@@ -600,9 +672,16 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
         }
         options->gap_open = myargs[10].intvalue;
         options->gap_extend = myargs[11].intvalue;
-
-        options->decline_align = INT2_MAX;
-        /* options->decline_align = myargs[41].intvalue; */
+        
+#ifdef YES_TO_DECLINE_TO_ALIGN
+        if(myargs[43].intvalue != 0) {
+            options->discontinuous = TRUE;
+            options->decline_align = myargs[43].intvalue;
+        } else {
+            options->discontinuous = FALSE;
+            options->decline_align = INT2_MAX;
+        }
+#endif
 
         options->gap_x_dropoff = myargs[12].intvalue;
         options->gap_x_dropoff_final = myargs[23].intvalue;
@@ -622,6 +701,8 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     
     if (0 != (StringCmp("blastpgp",myargs[35].strvalue))) {
         options->isPatternSearch = TRUE;
+        options->discontinuous = FALSE;
+        options->decline_align = INT2_MAX;    
         bop->program_flag = convertProgramToFlag(myargs[35].strvalue, 
                                                  &is_dna);
     }
@@ -655,10 +736,22 @@ PGPBlastOptionsPtr PGPReadBlastOptions(void)
     options->hsp_range_max  = myargs[32].intvalue;
     if (options->hsp_range_max != 0)
         options->perform_culling = TRUE;
-    options->block_width  = myargs[33].intvalue;
+
+    options->block_width  = 20; /* Default value - previously '-L' parameter */
     
     if (myargs[34].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[34].floatvalue;
+
+    options->tweak_parameters = (Boolean) myargs[42].intvalue;
+    options->smith_waterman = (Boolean) myargs[33].intvalue;
+
+    if (bop->options->tweak_parameters) {
+      /*allows for extra matches in first pass of screening,
+        hitlist_size */
+      bop->options->original_expect_value = bop->options->expect_value;
+      bop->options->hitlist_size *= 2; 
+    }
+
 
     /* Seting list of gis to restrict search */
     
@@ -723,6 +816,10 @@ Boolean  PGPFormatFooter(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search)
     CharPtr params_buffer=NULL;
     ValNodePtr other_returns;
     BLAST_MatrixPtr blast_matrix;
+    Boolean html = myargs[37].intvalue;
+
+    if (html)
+        fprintf(bop->outfp, "<PRE>\n");
 
     other_returns = BlastOtherReturnsPrepare(search);
 
@@ -840,7 +937,18 @@ SeqAlignPtr PGPSeedSearch(PGPBlastOptionsPtr bop, BlastSearchBlkPtr search,
     search->gap_align->gap_open = bop->options->gap_open;
     search->gap_align->gap_extend = bop->options->gap_extend;
 
-    search->gap_align->decline_align = (-(BLAST_SCORE_MIN));
+
+    search->gap_align->decline_align = INT2_MAX;
+
+#ifdef YES_TO_DECLINE_TO_ALIGN
+    if(myargs[43].intvalue != NULL) {
+        search->gap_align->decline_align = myargs[43].intvalue;
+    } else {
+        search->gap_align->decline_align = INT2_MAX;
+    }
+#endif
+    
+    /* search->gap_align->decline_align = (-(BLAST_SCORE_MIN)); */
     /* search->gap_align->decline_align = myargs[41].intvalue; */
 
     search->gap_align->x_parameter = bop->options->gap_x_dropoff
@@ -912,6 +1020,8 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     SeqAnnotPtr seqannot;
     ValNodePtr pruneSeed, seedReturn;  
     BlastPruneSapStructPtr prune;
+    BLAST_MatrixPtr matrix;
+    Int4Ptr PNTR txmatrix;
 
     if(head == NULL) {
         fprintf(bop->outfp, "\n\n ***** No hits found ******\n\n");
@@ -972,43 +1082,46 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     }
 
     free_buff();
+    
+    matrix = NULL;
+    txmatrix = NULL;
+    if (search->sbp->matrix) {
+       matrix = BLAST_MatrixFill(search->sbp, FALSE);
+       txmatrix = BlastMatrixToTxMatrix(matrix);
+    }
 
     if (!(bop->options->isPatternSearch)) {
         prune = BlastPruneHitsFromSeqAlign(head, bop->number_of_alignments, 
                                            prune);
         seqannot->data = prune->sap;
 
-#ifdef SHOW_TEXT_ALIGN_PSSM
-        if (myargs[5].intvalue != 0) {
-            ShowTextAlignFromAnnot3(seqannot, 60, bop->outfp, 
-                                    bop->featureOrder, bop->groupOrder, 
-                                    bop->align_options, NULL, 
-                                    search->mask, NULL, NULL, NULL,
-                                    thisPassNum > 1 ?
-                                    search->sbp->posMatrix : NULL);
-        } else {
-            ShowTextAlignFromAnnot3(seqannot, 60, bop->outfp, 
-                                    bop->featureOrder, bop->groupOrder, 
-                                    bop->align_options, NULL, 
-                                    search->mask, FormatScoreFunc, NULL,
-                                    NULL, thisPassNum > 1 ?
-                                    search->sbp->posMatrix : NULL);
+        if(bop->options->discontinuous) {
+            if(!DDV_DisplayBlastPairList(prune->sap, search->mask, 
+                                         bop->outfp, FALSE, 
+                                         bop->align_options,
+                                         bop->align_options & TXALIGN_HTML ? 6 : 1)) { 
+                fprintf(stdout, 
+                        "\n\n!!!\n   "
+                        "    --------  Failure to print alignment...  --------"
+                        "\n!!!\n\n");
+                fflush(stdout);
+            }
+        } else {   /* Old type formating */
+            if (myargs[5].intvalue != 0) {
+                ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
+                                        bop->featureOrder, bop->groupOrder, 
+                                        bop->align_options, NULL, 
+                                        search->mask, NULL, 
+                                        NULL, NULL);
+            } else {
+                ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
+                                        bop->featureOrder, bop->groupOrder, 
+                                        bop->align_options, txmatrix, 
+                                        search->mask, FormatScoreFunc, 
+                                        NULL, NULL);
+            }
         }
-#else
-        if (myargs[5].intvalue != 0) {
-            ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
-                                    bop->featureOrder, bop->groupOrder, 
-                                    bop->align_options, NULL, 
-                                    search->mask, NULL, 
-                                    NULL, NULL);
-        } else {
-            ShowTextAlignFromAnnot2(seqannot, 60, bop->outfp, 
-                                    bop->featureOrder, bop->groupOrder, 
-                                    bop->align_options, NULL, 
-                                    search->mask, FormatScoreFunc, 
-                                    NULL, NULL);
-        }
-#endif
+
         /* seqannot->data = head; */
 
     } else {
@@ -1016,6 +1129,7 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
             pruneSeed = SeedPruneHitsFromSeedReturn(pruneSeed, 
                                                     bop->number_of_alignments);
         }
+
 
         if (myargs[5].intvalue != 0) {
             ShowTextAlignFromAnnotExtra(bop->query_bsp, pruneSeed, 
@@ -1027,7 +1141,7 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
             ShowTextAlignFromAnnotExtra(bop->query_bsp, pruneSeed, 
                                         seed_seqloc, 60, bop->outfp, 
                                         bop->featureOrder, bop->groupOrder, 
-                                        bop->align_options, NULL, 
+                                        bop->align_options, txmatrix, 
                                         search->mask, FormatScoreFunc);
         }
     }
@@ -1039,6 +1153,10 @@ void PGPFormatMainOutput(SeqAlignPtr head, PGPBlastOptionsPtr bop,
     search->positionBased = TRUE;
     ObjMgrClearHold();
     /* ObjMgrFreeCache(0); */
+
+    matrix = BLAST_MatrixDestruct(matrix);
+    if (txmatrix)
+       txmatrix = TxMatrixDestruct(txmatrix);
 
     seqannot->data = NULL;
     seqannot = SeqAnnotFree(seqannot);
@@ -1081,13 +1199,13 @@ Int2 Main (void)
     Boolean  freqCheckpoint = FALSE;
     Boolean  alignCheckpoint = FALSE;
     Boolean  checkReturn = FALSE;
-    
     SeqAlignPtr PNTR lastSeqAligns = NULL; 
                                 /*keeps track of the last SeqAlign in
                                   each list of seedReturn so that the
                                   2-level list can be converted to a 1-level
                                   list and then back to 2-level*/
     Int4 numLastSeqAligns = 0;
+    AsnIoPtr xml_aip;
 
     /* ----- End of definitions ----- */
     
@@ -1128,8 +1246,10 @@ Int2 Main (void)
         search->positionBased = FALSE;
     
     global_fp = bop->outfp;
-    
-    PGPFormatHeader(bop);
+
+    if(!bop->is_xml_output) {   
+        PGPFormatHeader(bop);
+    }
 
     posSearch = NULL;
     thisPassNum = 0;
@@ -1141,12 +1261,15 @@ Int2 Main (void)
     if (recoverCheckpoint) {
         posSearch = (posSearchItems *) MemNew(1 * sizeof(posSearchItems));
         compactSearch = compactSearchNew(compactSearch);
-        copySearchItems(compactSearch, search);
+        copySearchItems(compactSearch, search, bop->options->matrix);
         posInitializeInformation(posSearch,search);
         /*AAS*/
         if (freqCheckpoint) {
             checkReturn = posReadCheckpoint(posSearch, compactSearch, myargs[29].strvalue, &(search->error_return));
             search->sbp->posMatrix = posSearch->posMatrix;
+	    if (NULL == search->sbp->posFreqs)
+	      search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, compactSearch->alphabetSize);
+	    copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
         } else {
             search->sbp->posMatrix = BposComputation(posSearch, search, compactSearch, myargs[39].strvalue, myargs[28].strvalue, &(search->error_return)); 
             if (NULL == search->sbp->posMatrix)
@@ -1175,9 +1298,11 @@ Int2 Main (void)
             SeqAlignSetFree(head);
         
 #ifdef OS_UNIX
-        search->thr_info->tick_callback =  tick_callback;
-        fprintf(global_fp, "%s", "Searching");
-        fflush(global_fp);
+        if(!bop->is_xml_output) {
+            search->thr_info->tick_callback =  tick_callback;
+            fprintf(global_fp, "%s", "Searching");
+            fflush(global_fp);
+        }
 #endif
         if (1 == thisPassNum && (!recoverCheckpoint)) {
             
@@ -1193,6 +1318,14 @@ Int2 Main (void)
                                  &seed_seqloc,
                                  &lastSeqAligns, &numLastSeqAligns);
         } else {
+	  if ((bop->options->tweak_parameters) && (thisPassNum > 1)) {
+          /*allows for extra matches in first pass of screening,
+           hitlist_size will be restored in
+           BioseqBlastEngineCore for the second pass. */
+	    bop->options->original_expect_value = bop->options->expect_value;
+	    bop->options->hitlist_size *= 2; 
+	  }
+
             if ((1 == thisPassNum) && (!recoverCheckpoint))
                 head = BioseqBlastEngineCore(search, bop->options, NULL);
             else
@@ -1208,7 +1341,7 @@ Int2 Main (void)
         
         
         compactSearch = compactSearchNew(compactSearch);
-        copySearchItems(compactSearch, search);
+        copySearchItems(compactSearch, search, bop->options->matrix);
         
         /* The next two calls (after the "if") are diagnostics 
            for Stephen. Don't perform this if only one pass will 
@@ -1221,7 +1354,9 @@ Int2 Main (void)
         }
         
 #ifdef OS_UNIX
-        fprintf(global_fp, "%s", "done\n\n");
+        if(!bop->is_xml_output) {
+            fprintf(global_fp, "%s", "done\n\n");
+        }
 #endif
         
         /* AAS */
@@ -1240,9 +1375,33 @@ Int2 Main (void)
         search->positionBased = TRUE;
 
         /* Here is all BLAST formating of the main output done */
-        PGPFormatMainOutput(head, bop, search, thisPassNum,
-                            lastSeqAligns, numLastSeqAligns, 
-                            seed_seqloc, posSearch->posRepeatSequences);
+
+        if(bop->is_xml_output) {
+
+            ValNodePtr other_returns;
+            
+            other_returns = BlastOtherReturnsPrepare(search);
+            
+            xml_aip = AsnIoOpen(myargs[6].strvalue, "wx");
+            
+            if (head == NULL) {                
+                BXMLPrintOutput(xml_aip, NULL, 
+                                bop->options, "blastp", bop->blast_database,
+                                bop->fake_bsp, other_returns, 0, 
+                                "No hits found");
+            } else {
+                BXMLPrintOutput(xml_aip, head, bop->options, 
+                                "blastp", bop->blast_database, 
+                                bop->fake_bsp, other_returns, 0, NULL);
+            }
+
+            AsnIoClose(xml_aip);
+            BlastOtherReturnsFree(other_returns);
+        } else {
+            PGPFormatMainOutput(head, bop, search, thisPassNum,
+                                lastSeqAligns, numLastSeqAligns, 
+                                seed_seqloc, posSearch->posRepeatSequences);
+        }
 
         if (alreadyRecovered) {
             posCheckpointFreeMemory(posSearch, compactSearch->qlength);
@@ -1261,11 +1420,11 @@ Int2 Main (void)
                                     head, myargs[28].strvalue, 
                                     (bop->options->isPatternSearch && 
                                      (1== thisPassNum)), 
-                                    &(search->error_return)); /*AAS*/
+                                    &(search->error_return), 1.0); /*AAS*/
                 BlastErrorPrint(search->error_return);
             } else {
                 search->sbp->posMatrix = 
-                    WposComputation(compactSearch, head); 
+                    WposComputation(compactSearch, head, search->sbp->posFreqs); 
             }
 #if 0
             /* DEBUG Printing of the matrix */
@@ -1308,7 +1467,10 @@ Int2 Main (void)
     SeqAlignSetFree(head);
     
     /* Here we will print out footer of BLAST output */
-    PGPFormatFooter(bop, search);
+
+    if(!bop->is_xml_output) {
+        PGPFormatFooter(bop, search);
+    }
     
     ReadDBBioseqFetchDisable();
     if (bop->options->isPatternSearch) {

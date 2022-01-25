@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.48 2000/06/27 15:25:18 madden Exp $
+/* $Id: blastall.c,v 6.65 2000/10/27 19:14:40 madden Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,58 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.65  2000/10/27 19:14:40  madden
+ * Change description of -b option
+ *
+ * Revision 6.64  2000/10/23 22:14:04  shavirin
+ * Added possibility to pass valid error message into XML output in case
+ * of failure or no hits.
+ *
+ * Revision 6.63  2000/10/23 19:58:22  dondosha
+ * Open and close AsnIo outside of call(s) to BXMLPrintOutput
+ *
+ * Revision 6.62  2000/10/17 19:37:41  shavirin
+ * Fixed compilation problems detected on Mac.
+ *
+ * Revision 6.61  2000/10/17 17:19:49  shavirin
+ * Temporary - for toolkit release - commented OOF shift penalty parameter.
+ *
+ * Revision 6.60  2000/10/06 17:54:28  shavirin
+ * Added usage of correct matrix in case of OOF alignment.
+ *
+ * Revision 6.59  2000/09/26 15:48:15  dondosha
+ * Put back printing of header before results of every search when multiple queries are submitted
+ *
+ * Revision 6.58  2000/09/13 22:26:23  dondosha
+ * Removed extra </PRE> that is now printed in PrintDefLinesFromSeqAlign
+ *
+ * Revision 6.57  2000/09/13 21:39:31  dondosha
+ * Corrected html output when input contains multiple queries
+ *
+ * Revision 6.56  2000/09/12 16:08:43  dondosha
+ * Create txalign style matrix from search matrix
+ *
+ * Revision 6.55  2000/09/12 16:02:13  madden
+ * do not allow -P with blastn, fix typo
+ *
+ * Revision 6.54  2000/09/07 20:25:59  madden
+ * Remove L option, turn off K (culling) by default, add -P option
+ *
+ * Revision 6.53  2000/09/07 16:27:07  shavirin
+ * Added option for OOF gap alignment for blastx.
+ *
+ * Revision 6.52  2000/08/24 14:13:23  shavirin
+ * Added return 1 if database do not exists on any path.
+ *
+ * Revision 6.51  2000/08/11 18:03:58  shavirin
+ * Added possibility to make blastx and tblastx with XML output.
+ *
+ * Revision 6.50  2000/08/11 17:54:08  shavirin
+ * Added possibility to print XML output (with -m 7 option)
+ *
+ * Revision 6.49  2000/08/01 16:35:34  madden
+ * Append Seq-annot, do not overwrite
+ *
  * Revision 6.48  2000/06/27 15:25:18  madden
  * Changed master-slave to query-anchored
  *
@@ -209,7 +261,7 @@
 #include <txalign.h>
 #include <gapxdrop.h>
 #include <sqnutils.h>
-
+#include <xmlblast.h>
 
 #define DEFLINE_BUF 255
 
@@ -354,7 +406,7 @@ static Args myargs [] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends,\n7 = XML Blast output", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -372,9 +424,9 @@ static Args myargs [] = {
       "-3", NULL, NULL, FALSE, 'q', ARG_INT, 0.0, 0, NULL},
     { "Reward for a nucleotide match (blastn only)", /* 12 */
       "1", NULL, NULL, FALSE, 'r', ARG_INT, 0.0, 0, NULL},
-    { "Number of one-line descriptions (V)", /* 13 */
+    { "Number of database sequences to show one-line descriptions for (V)", /* 13 */
       "500", NULL, NULL, FALSE, 'v', ARG_INT, 0.0, 0, NULL},
-    { "Number of alignments to show (B)", /* 14 */
+    { "Number of database sequence to show alignments for (B)", /* 14 */
       "250", NULL, NULL, FALSE, 'b', ARG_INT, 0.0, 0, NULL},
     { "Threshold for extending hits, default if zero", /* 15 */
       "0", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
@@ -396,10 +448,10 @@ static Args myargs [] = {
       "0", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the database (use zero for the real size)", /* 24 */
       "0", NULL, NULL, FALSE, 'z', ARG_FLOAT, 0.0, 0, NULL},
-    { "Number of best hits from a region to keep", /* 25 */
-      "100", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
-    { "Length of region used to judge hits", /* 26 */
-      "20", NULL, NULL, FALSE, 'L', ARG_INT, 0.0, 0, NULL},
+    { "Number of best hits from a region to keep (off by default, if used a value of 100 is recommended)", /* 25 */
+      "0", NULL, NULL, FALSE, 'K', ARG_INT, 0.0, 0, NULL},
+    { "0 for multiple hits 1-pass, 1 for single hit 1-pass, 2 for 2-pass", /* 26 */
+      "0", NULL, NULL, FALSE, 'P', ARG_INT, 0.0, 0, NULL},
     { "Effective length of the search space (use zero for the real size)", /* 27 */
       "0", NULL, NULL, FALSE, 'Y', ARG_FLOAT, 0.0, 0, NULL},
     { "Query strands to search against database (for blast[nx], and tblastx).  3 is both, 1 is top, 2 is bottom", /* 28 */
@@ -414,15 +466,20 @@ static Args myargs [] = {
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
     { "X dropoff value for final gapped alignment (in bits)", /* 33 */
       "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
+#ifdef OOF_ALIGNMENT
+    { "Frame shift penalty (OOF algorithm for blastx)", /* 34 */
+      "0", NULL, NULL, FALSE, 'w', ARG_INT, 0.0, 0, NULL},
+#endif
 };
 
 Int2 Main (void)
  
 {
-    AsnIoPtr aip;
+    AsnIoPtr aip, xml_aip;
     BioseqPtr fake_bsp = NULL, query_bsp;
     BioSourcePtr source;
     BLAST_MatrixPtr matrix;
+    Int4Ptr PNTR txmatrix;
     BLAST_OptionsBlkPtr options;
     BLAST_KarlinBlkPtr ka_params=NULL, ka_params_gap=NULL;
     BlastPruneSapStructPtr prune;
@@ -481,15 +538,18 @@ Int2 Main (void)
     align_view = (Int1) myargs[4].intvalue;
     
     align_type = BlastGetTypes(blast_program, &query_is_na, &db_is_na);
-    if (StringICmp("blastx", blast_program) == 0) {
-        if (align_view != 0) {
-            ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with blastx");
-            return 1;
-        }
-    } else if (StringICmp("tblastx", blast_program) == 0) {
-        if (align_view != 0) {
-            ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with tblastx");
-            return 1;
+
+    if(align_view != 7) {
+        if (StringICmp("blastx", blast_program) == 0) {
+            if (align_view != 0) {
+                ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with blastx");
+                return 1;
+            }
+        } else if (StringICmp("tblastx", blast_program) == 0) {
+            if (align_view != 0) {
+                ErrPostEx(SEV_FATAL, 0, 0, "This option is not available with tblastx");
+                return 1;
+            }
         }
     }
     
@@ -516,6 +576,20 @@ Int2 Main (void)
         options->gap_extend = myargs[8].intvalue;
     if (myargs[9].intvalue != 0)
         options->gap_x_dropoff = myargs[9].intvalue;
+
+	/* Multiple hits does not apply to blastn. */
+    if (StringICmp("blastn", blast_program)) {
+    	if (myargs[26].intvalue == 0) {
+            options->two_pass_method  = FALSE;
+            options->multiple_hits_only  = TRUE;
+    	} else if (myargs[26].intvalue == 1) {
+            options->two_pass_method  = FALSE;
+            options->multiple_hits_only  = FALSE;
+    	} else {
+            options->two_pass_method  = TRUE;
+            options->multiple_hits_only  = FALSE;
+    	}
+    }
 
     if(myargs[33].intvalue != 0) 
         options->gap_x_dropoff_final = myargs[33].intvalue;
@@ -551,7 +625,6 @@ Int2 Main (void)
     options->hsp_range_max  = myargs[25].intvalue;
     if (options->hsp_range_max != 0)
         options->perform_culling = TRUE;
-    options->block_width  = myargs[26].intvalue;
     if (myargs[27].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[27].floatvalue;
     
@@ -600,7 +673,40 @@ Int2 Main (void)
     }
     
     options->is_megablast_search = FALSE;
+
+#ifdef OOF_ALIGNMENT
+
+    /* 
+       Out-of-frame option is valid only for blastx and tblastn searches
+    */
+
+    if(myargs[34].intvalue > 0) {
+        if (!StringICmp("blastx", blast_program)) {
+            options->is_ooframe = TRUE;
+            options->shift_pen = myargs[34].intvalue;
+        }
+    }
     
+#endif
+        
+    aip = NULL;
+    if (myargs[20].strvalue != NULL) {
+        if ((aip = AsnIoOpen (myargs[20].strvalue,"w")) == NULL) {
+                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", myargs[20].strvalue);
+                return 1;
+        }
+    }
+
+    if(align_view != 7) {
+       if (html) {
+          fprintf(outfp, "<HTML>\n<TITLE>BLAST Search Results</TITLE>\n");
+          fprintf(outfp, "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
+                  "VLINK=\"#660099\" ALINK=\"#660099\">\n");
+          fprintf(outfp, "<PRE>\n");
+       }
+    } else      
+       xml_aip = AsnIoOpen(blast_outputfile, "wx");
+
     while (TRUE) {
         if(myargs[31].intvalue) {
             sep = FastaToSeqEntryForDb (infp, query_is_na, NULL, believe_query, NULL, NULL, &options->query_lcase_mask);
@@ -639,45 +745,49 @@ Int2 Main (void)
         ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
         
         global_fp = outfp;
-        
-        if (html) {
-            fprintf(outfp, "<HTML>\n<TITLE>BLAST Search Results</TITLE>\n");
-            fprintf(outfp, "<BODY BGCOLOR=\"#FFFFFF\" LINK=\"#0000FF\" "
-                    "VLINK=\"#660099\" ALINK=\"#660099\">\n");
-            fprintf(outfp, "<PRE>\n");
-        }
 
-        init_buff_ex(90);
-        BlastPrintVersionInfo(blast_program, html, outfp);
-        fprintf(outfp, "\n");
-        BlastPrintReference(html, 90, outfp);
-        fprintf(outfp, "\n");
-        AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
-        PrintDbInformation(blast_database, !db_is_na, 70, outfp, html);
-        free_buff();
-        
+        if(align_view != 7) {
+           init_buff_ex(90);
+           BlastPrintVersionInfo(blast_program, html, outfp);
+           fprintf(outfp, "\n");
+           BlastPrintReference(html, 90, outfp);
+           fprintf(outfp, "\n");
+            
+            AcknowledgeBlastQuery(query_bsp, 70, outfp, believe_query, html);
+
+            /* Here we first check, that database do no exists */
+
+            if(!PrintDbInformation(blast_database, !db_is_na, 70, outfp, html))
+                return 1;
+            
+            free_buff();
+        }
 #ifdef OS_UNIX
-        fprintf(global_fp, "%s", "Searching");
+        if(align_view != 7) {
+            fprintf(global_fp, "%s", "Searching");
+        }
 #endif
         other_returns = NULL;
         error_returns = NULL;
         
-        seqalign = BioseqBlastEngine(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, tick_callback);
+        seqalign = BioseqBlastEngine(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, align_view != 7 ? tick_callback : NULL);
+        
+#if 0
+        seqalign = BLASTFilterOverlapRegions(seqalign, 0, !db_is_na, 
+                                             options->is_ooframe, FALSE);
+#endif
         
         BlastErrorPrint(error_returns);
 
         ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
-
-#if PRINT_XML_OUTPUT
-        BXMLPrintOutput("bout.xml", seqalign, options, blast_program, 
-                        blast_database, fake_bsp, other_returns, 0, 0);
-#endif        
+    
         dbinfo = NULL;
         ka_params = NULL;
         ka_params_gap = NULL;
         params_buffer = NULL;
         mask_loc = NULL;
         matrix = NULL;
+        txmatrix = NULL;
         for (vnp=other_returns; vnp; vnp = vnp->next) {
             switch (vnp->choice) {
             case TXDBINFO:
@@ -694,6 +804,8 @@ Int2 Main (void)
                 break;
             case TXMATRIX:
                 matrix = vnp->data.ptrvalue;
+                if (matrix)
+                   txmatrix = BlastMatrixToTxMatrix(matrix);
                 break;
             case SEQLOC_MASKING_NOTSET:
             case SEQLOC_MASKING_PLUS1:
@@ -715,79 +827,125 @@ Int2 Main (void)
 #endif
         
 #ifdef OS_UNIX
-        fprintf(global_fp, "%s", "done");
-#endif
-        
-        aip = NULL;
-        if (myargs[20].strvalue != NULL) {
-            if ((aip = AsnIoOpen (myargs[20].strvalue,"w")) == NULL) {
-                ErrPostEx(SEV_FATAL, 0, 0, "blast: Unable to open output file %s\n", "blastngp.sat");
-                return 1;
-            }
+        if(align_view != 7) {
+            fprintf(global_fp, "%s", "done");
         }
+#endif
         
         ReadDBBioseqSetDbGeneticCode(options->db_genetic_code);
 
         if (seqalign) {
-            seqannot = SeqAnnotNew();
-            seqannot->type = 2;
-            AddAlignInfoToSeqAnnot(seqannot, align_type);
-            seqannot->data = seqalign;
-            if (aip) {
-                SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
-                AsnIoReset(aip);
-                aip = AsnIoClose(aip);
-            }
-            if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
-                prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
-                ObjMgrSetHold();
-                init_buff_ex(85);
-                PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
-                free_buff();
-                
-                prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
-                seqannot->data = prune->sap;
-                if (align_view != 0)
-                    ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, NULL, mask_loc, NULL);
-                else
-                    ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, NULL, mask_loc, FormatScoreFunc);
+            if(align_view == 7 && !options->is_ooframe) {
+                BXMLPrintOutput(xml_aip, seqalign, 
+                                options, blast_program, blast_database, 
+                                fake_bsp, other_returns, 0, NULL);
+                AsnIoReset(xml_aip);
+                SeqAlignSetFree(seqalign);
+            } else {
+
+
+                seqannot = SeqAnnotNew();
+                seqannot->type = 2;
+                AddAlignInfoToSeqAnnot(seqannot, align_type);
                 seqannot->data = seqalign;
-                prune = BlastPruneSapStructDestruct(prune);
-                ObjMgrClearHold();
+                if (aip) {
+                    SeqAnnotAsnWrite((SeqAnnotPtr) seqannot, aip, NULL);
+                    AsnIoReset(aip);
+                }
+                if (outfp) { /* Uncacheing causes problems with ordinal nos. vs. gi's. */
+                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_descriptions, NULL);
+                    ObjMgrSetHold();
+                    init_buff_ex(85);
+                    PrintDefLinesFromSeqAlign(prune->sap, 80, outfp, print_options, FIRST_PASS, NULL);
+                    free_buff();
+                    
+                    prune = BlastPruneHitsFromSeqAlign(seqalign, number_of_alignments, prune);
+                    seqannot->data = prune->sap;
 
-                ObjMgrFreeCache(0);
+                    if(options->is_ooframe) {
+                        OOFShowBlastAlignment(seqalign, /*mask*/ NULL,
+                                              outfp, align_options, txmatrix);
+                    } else {
+                        if (align_view != 0)
+                            ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, NULL);
+                        else
+                            ShowTextAlignFromAnnot(seqannot, 60, outfp, NULL, NULL, align_options, txmatrix, mask_loc, FormatScoreFunc);
+                    }
+                    
+                    seqannot->data = seqalign;
+                    prune = BlastPruneSapStructDestruct(prune);
+                    ObjMgrClearHold();
+                    
+                    ObjMgrFreeCache(0);
+                    
+                }
+                seqannot = SeqAnnotFree(seqannot);
+            } /* if XML Printing */
+        } else {         /* seqalign is NULL */
+            if(align_view == 7 && !options->is_ooframe) {
+                BlastErrorMsgPtr error_msg;
+                CharPtr message;
+                
+                if (error_returns == NULL) {
+                    message = "No hits found";
+                } else {
+                    error_msg = error_returns->data.ptrvalue;
+                    message = error_msg->msg;
+                }
+                
+                BXMLPrintOutput(xml_aip, NULL, 
+                                options, blast_program, blast_database, 
+                                fake_bsp, other_returns, 0, message);
 
+                if (error_returns != NULL) {
+                    MemFree(error_msg->msg);
+                    MemFree(error_msg);
+                    MemFree(error_returns);
+                }
+
+                AsnIoReset(xml_aip);
+            } else {
+                fprintf(outfp, "\n\n ***** No hits found ******\n\n");
             }
-            seqannot = SeqAnnotFree(seqannot);
-        } else {
-            fprintf(outfp, "\n\n ***** No hits found ******\n\n");
         }
         
         matrix = BLAST_MatrixDestruct(matrix);
-
+        if (txmatrix)
+           txmatrix = TxMatrixDestruct(txmatrix);
+        
         if(html) {
             fprintf(outfp, "<PRE>\n");
         }
         
         init_buff_ex(85);
         dbinfo_head = dbinfo;
-        while (dbinfo) {
-            PrintDbReport(dbinfo, 70, outfp);
-            dbinfo = dbinfo->next;
+
+        if(align_view != 7) {
+            while (dbinfo) {
+                PrintDbReport(dbinfo, 70, outfp);
+                dbinfo = dbinfo->next;
+            }
         }
         dbinfo_head = TxDfDbInfoDestruct(dbinfo_head);
         
         if (ka_params) {
-            PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
+            if(align_view != 7) {
+                PrintKAParameters(ka_params->Lambda, ka_params->K, ka_params->H, 70, outfp, FALSE);
+            }
             MemFree(ka_params);
         }
         
         if (ka_params_gap) {
-            PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
+            if(align_view != 7) {
+                PrintKAParameters(ka_params_gap->Lambda, ka_params_gap->K, ka_params_gap->H, 70, outfp, TRUE);
+            }
             MemFree(ka_params_gap);
         }
-        
-        PrintTildeSepLines(params_buffer, 70, outfp);
+
+        if(align_view != 7) {
+            PrintTildeSepLines(params_buffer, 70, outfp);
+        }
+
         MemFree(params_buffer);
         free_buff();
         mask_loc_start = mask_loc;
@@ -804,11 +962,17 @@ Int2 Main (void)
         other_returns = ValNodeFree(other_returns);
         sep = SeqEntryFree(sep);
 	options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
+        if (html)
+           fprintf(outfp, "</PRE>\n<P><HR><BR>\n<PRE>");
     }
+    aip = AsnIoClose(aip);
 
-    if (html) {
-        fprintf(outfp, "</PRE>\n</BODY>\n</HTML>\n");
-    }
+    if(align_view != 7) {
+        if (html) {
+            fprintf(outfp, "</PRE>\n</BODY>\n</HTML>\n");
+        }
+    } else
+       xml_aip = AsnIoClose(xml_aip);
 
     options = BLASTOptionDelete(options);
     FileClose(infp);

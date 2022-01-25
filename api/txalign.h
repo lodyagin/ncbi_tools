@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.25 2000/06/09 19:00:06 shavirin Exp $
+/* $Id: txalign.h,v 6.28 2000/10/06 17:55:46 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.25 $
+* $Revision: 6.28 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,16 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.28  2000/10/06 17:55:46  shavirin
+* Added usage of correct matrix in OOF case.
+*
+* Revision 6.27  2000/07/11 20:51:06  shavirin
+* Added major functions for displaying Out-Of-Frame alignments.
+*
+* Revision 6.26  2000/07/10 20:45:54  shavirin
+* Added parameter ooframe for Out-Of-frame alignment and corresponding changes
+* to accomodate this parameter.
+*
 * Revision 6.25  2000/06/09 19:00:06  shavirin
 * Function GetGeneticCodeFromSeqId() made external and added to header file.
 *
@@ -237,6 +247,7 @@ typedef struct align_summary {
     Int4 master_to;             /* to for master sequence */
     Int4 target_from;           /* from for target sequence */
     Int4 target_to;             /* to region for master sequence */
+    Boolean ooframe;            /* Is this out-of-frame alignment ? */
 }AlignSum, PNTR AlignSumPtr;
 
 typedef struct align_stat_option { /*options for printing the statistics*/
@@ -552,11 +563,48 @@ NLM_EXTERN Boolean FormatScoreFromSeqAlign
 (SeqAlignPtr sap, Uint4 option, FILE *fp,
 Int4Ptr PNTR matrix, Boolean follower);    
 
+NLM_EXTERN SeqFeatPtr make_fake_cds(BioseqPtr m_bsp, Int4 start, Int4 stop, Uint1 strand);
+
 /*
   Obtains the genetic code from a BioseqPtr, assuming that a fetch function
   has been enabled.
 */
 NLM_EXTERN CharPtr GetGeneticCodeFromSeqId (SeqIdPtr sip);
+
+/* 
+   Translate DNA sequence in all frames and create protein
+   sequence for Out-Of-Frame gap algorithm 
+*/
+NLM_EXTERN CharPtr OOFTranslateDNAInAllFrames(Uint1Ptr dna, Int4 length, 
+                                              SeqIdPtr query_id);
+
+/*************************************************************************
+
+  Function : OOFShowBlastAlignment();
+  
+  Purpose : function to display a BLAST output with Out-of-Frame
+            information
+  
+  Parameters : 	sap; seqalign
+                mask; list of masked regions in the query
+                fp; output file;
+                tx_option; some display options
+				
+  Return value : FALSE if failure
+
+***************************************************************************/
+NLM_EXTERN Boolean OOFShowBlastAlignment(SeqAlignPtr sap, ValNodePtr mask,
+                                         FILE *fp, Uint4 tx_option, 
+                                         Int4Ptr PNTR matrix);
+/* 
+   Test functions to display Out-of-Frame traceback 
+*/
+NLM_EXTERN void OOFDisplayTraceBack1(Int4Ptr a, CharPtr dna, 
+                                     CharPtr pro, Int4 ld, Int4 lp, 
+                                     Int4 q_start, Int4 p_start);
+NLM_EXTERN void OOFDisplayTraceBack2(Int4Ptr a, CharPtr dna, CharPtr pro, 
+                                     Int4 ld, Int4 lp, 
+                                     Int4 q_start, Int4 p_start);
 
 #ifdef __cplusplus
 }

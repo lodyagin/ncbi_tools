@@ -1,4 +1,4 @@
-/*
+/* $Id: impatool.c,v 6.9 2000/07/26 16:54:07 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,17 @@ File name: impatool.c
 Author: Alejandro Schaffer
 
 Contents: utility routines for IMPALA.
+
+ $Revision: 6.9 $
+
+ $Log: impatool.c,v $
+ Revision 6.9  2000/07/26 16:54:07  lewisg
+ add LIBCALLs
+
+ Revision 6.8  2000/07/25 18:12:05  shavirin
+ WARNING: This is no-turning-back changed related to S&W Blast from
+ Alejandro Schaffer
+
 
 *****************************************************************************/
 
@@ -500,3 +511,169 @@ IMPALAfillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArr
     return_sfp->score_avg += i * return_sfp->sprob[i];
   return(return_sfp);
 }
+
+/*Gets the scores of an alignment together into a ScorePtr;
+  adapted from similar code with a different formula in pseed3.c*/
+ScorePtr LIBCALL addScoresToSeqAlign(Int4 rawScore, Nlm_FloatHi eValue, 
+           Nlm_FloatHi Lambda, Nlm_FloatHi logK)
+{
+  Nlm_FloatHi bitScoreUnrounded; /*conversion for raw score to bit score*/
+  ScorePtr returnScore = NULL;
+
+  MakeBlastScore(&returnScore,"score",0.0, rawScore);
+  MakeBlastScore(&returnScore,"e_value",eValue,0);
+  bitScoreUnrounded = ((rawScore * Lambda) - logK)/NCBIMATH_LN2;
+  MakeBlastScore(&returnScore,"bit_score",bitScoreUnrounded, 0);
+  return(returnScore);
+}
+
+/*Bubble sort the entries in qs from index i through j*/
+static void pro_bbsort(SWResults **qs, Int4 i, Int4 j)
+{
+    Int4 x, y; /*loop bounds for the two ends of the array to be sorted*/
+    SWResults *sp; /*temporary pointer for swapping*/
+
+    for (x = j; x > i; x--) {
+      for (y = i; y < x; y++) {
+	if ((qs[y]->eValue < qs[y+1]->eValue) ||
+            ((qs[y]->eValue == qs[y+1]->eValue) &&
+             (qs[y]->subject_index < qs[y+1]->subject_index)) ||
+            ((qs[y]->eValue == qs[y+1]->eValue) &&
+             (qs[y]->subject_index == qs[y+1]->subject_index) &&
+               (qs[y]->eValueThisAlign < qs[y+1]->eValueThisAlign))) {
+	  /*swap pointers for inverted adjacent elements*/
+	  sp = qs[y];
+	  qs[y] = qs[y+1]; 
+	  qs[y+1] = sp;
+	}
+      }
+    }
+}
+
+/*choose the median of  elemnts indexed i, i+j/2, j for
+partitioning in quicksort, if median is not in
+position i to start with, swap it to position i*/
+static void  medianOfThree(SWResults **qs, Int4 i, Int4 j)
+{
+  Int4 middle;
+  Int4 swapIndex;
+  SWResults *swapTemp;
+
+  middle = (i+j)/2;
+  if (qs[i]->eValue < qs[middle]->eValue) {
+    if (qs[middle]->eValue < qs[j]->eValue)
+      swapIndex = middle;
+    else
+      if (qs[i]->eValue < qs[j]->eValue)
+        swapIndex = j;
+      else
+        swapIndex = i;
+  }
+  else {
+    if (qs[j]->eValue < qs[middle]->eValue)
+      swapIndex = middle;
+    else
+      if (qs[j]->eValue < qs[i]->eValue)
+        swapIndex = j;
+      else
+        swapIndex = i;
+  }
+  if (i != swapIndex) {
+    swapTemp = qs[i];
+    qs[i] = qs[swapIndex];
+    qs[swapIndex] = swapTemp;
+  }
+}
+
+/*quicksort the entries in qs from qs[i] through qs[j] */
+static void pro_quicksort(SWResults **qs, Int4 i, Int4 j)
+{
+    Int4 lf, rt;  /*left and right fingers into the array*/
+    Nlm_FloatHi partitionEvalue; /*Evalue to partition around*/
+    Int4  secondaryPartitionValue; /*for breaking ties*/
+    Nlm_FloatHi tertiaryPartitionValue; /*for breaking ties*/
+    SWResults * tp; /*temporary pointer for swapping*/
+    if (j-i <= SORT_THRESHOLD) {
+      pro_bbsort(qs, i,j);
+      return;
+    }
+
+    lf = i+1; 
+    rt = j; 
+    /*use median of three since array may be nearly sorted*/
+    medianOfThree(qs, i, j);
+    /*implicitly choose qs[i] as the partition element*/    
+    partitionEvalue = qs[i]->eValue;
+    secondaryPartitionValue = qs[i]->subject_index;
+    tertiaryPartitionValue = qs[i]->eValueThisAlign;
+    /*partititon around partitionEvalue = qs[i]*/
+    while (lf <= rt) {
+      while ((qs[lf]->eValue >  partitionEvalue)  ||
+              ((qs[lf]->eValue == partitionEvalue) &&
+               (qs[lf]->subject_index > secondaryPartitionValue)) ||
+	      ((qs[lf]->eValue == partitionEvalue) &&
+               (qs[lf]->subject_index == secondaryPartitionValue) &&
+               (qs[lf]->eValueThisAlign > tertiaryPartitionValue)))
+	lf++;
+      while ((qs[rt]->eValue <  partitionEvalue)  ||
+              ((qs[rt]->eValue == partitionEvalue) &&
+               (qs[rt]->subject_index < secondaryPartitionValue)) ||
+	      ((qs[rt]->eValue == partitionEvalue) &&
+               (qs[rt]->subject_index == secondaryPartitionValue) &&
+               (qs[rt]->eValueThisAlign < tertiaryPartitionValue)))
+	rt--;
+
+
+      if (lf < rt) {
+	/*swap elements on wrong side of partition*/
+	tp = qs[lf];
+	qs[lf] = qs[rt];
+	qs[rt] = tp;
+	rt--;
+	lf++;
+      } 
+      else 
+	break;
+    }
+    /*swap partition element into middle position*/
+    tp = qs[i];
+    qs[i] = qs[rt]; 
+    qs[rt] = tp;
+    /*call recursively on two parts*/
+    pro_quicksort(qs, i,rt-1); 
+    pro_quicksort(qs, rt+1, j);
+}
+
+
+
+/*Sort the sequences that hit the query by increasing score;
+  This routine converts the list in proResultsList to
+  an array for sorting and then converts back to a singly-linked list
+  adapted from quicksort_hits of pseed3.c
+  no_of_seq is the number of entries in the results list*/
+void LIBCALL pro_quicksort_hits(Int4 no_of_seq, SWResults **proResultsList)
+{
+  Int4 i; /*loop index for the resutls list*/
+    SWResults *sp; /*pointer to one entry in the array*/
+    SWResults sentinel; /*sentinel to add at the end of the array*/
+    SWResults **qs; /*local array for sorting*/
+
+    /*Copy the list starting from proResultsList
+      into the array qs*/
+    qs = (SWResults **) MemNew(sizeof(SWResults*)*(no_of_seq+1));
+    for (i = 0, sp = (*proResultsList); 
+	 i < no_of_seq; i++, sp = sp->next) 
+      qs[i] = sp;
+    /*Put sentinel at the end of the array*/
+    qs[i] = &sentinel; 
+    sentinel.eValue = -0.1;
+    sentinel.eValueThisAlign = -0.1;
+    pro_quicksort(qs, 0, no_of_seq-1);
+    /*Copy back to the list starting at seedResults->listOfMatchingSequences*/
+    for (i = no_of_seq-1; i > 0; i--)
+      qs[i]->next = qs[i-1];
+    qs[0]->next = NULL;
+    (*proResultsList) = qs[no_of_seq-1];
+    MemFree(qs);
+}
+

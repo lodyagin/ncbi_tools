@@ -1,4 +1,4 @@
-/*  $Id: udvdef.h,v 6.14 2000/07/05 18:42:17 hurwitz Exp $
+/*  $Id: udvdef.h,v 6.15 2000/07/08 20:43:55 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   07/09/99
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: this file is the companion of udviewer.h
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvdef.h,v $
+* Revision 6.15  2000/07/08 20:43:55  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.14  2000/07/05 18:42:17  hurwitz
 * added split block function to DDV
 *
@@ -86,16 +89,16 @@
 #ifndef _UDVDEF_
 #define _UDVDEF_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /*******************************************************************************
 
   INCLUDE SECTION 
 
 *******************************************************************************/
 #include <ncbi.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*******************************************************************************
 

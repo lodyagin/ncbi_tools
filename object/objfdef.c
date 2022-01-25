@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -715,7 +715,7 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"NonStdRes\" , menulabel \"Non-standard Residue\" , featdef-key 83 , seqfeat-key 18 , entrygroup 5 , displaygroup 5 , molgroup aa } ,\n" \
 "{ typelabel \"Het\" , menulabel \"Heterogen\" , featdef-key 84 , seqfeat-key 19 , entrygroup 5 , displaygroup 5 , molgroup aa } ,\n" \
 "{ typelabel \"Src\" , menulabel \"Biological Source\" , featdef-key 85 , seqfeat-key 20 , entrygroup 4 , displaygroup 4 , molgroup both } ,\n" \
-"{ typelabel \"preprotein\" , menulabel \"Preprotein\" , featdef-key 86 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
+"{ typelabel \"proprotein\" , menulabel \"Proprotein\" , featdef-key 86 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"mat_peptide\" , menulabel \"Mature Peptide\" , featdef-key 87 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"sig_peptide\" , menulabel \"Signal Peptide\" , featdef-key 88 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } ,\n" \
 "{ typelabel \"transit_peptide\" , menulabel \"Transit Peptide\" , featdef-key 89 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } } };\n";

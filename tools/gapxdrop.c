@@ -32,8 +32,67 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.32 $ 
+/* $Revision: 6.52 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.52  2000/10/13 21:23:48  shavirin
+* Fixed OOF problem with truncated alignments.
+*
+* Revision 6.51  2000/10/04 20:43:36  shavirin
+* Fixed case with many multiple frame shifts - protein end corrected
+* in SeqAlign.
+*
+* Revision 6.50  2000/10/04 18:06:40  dondosha
+* Subtract decline_penalty from initial values of dyn_prog[i].FF
+*
+* Revision 6.49  2000/09/07 16:24:27  shavirin
+* Fixed minor memory leak.
+*
+* Revision 6.48  2000/08/30 14:15:16  shavirin
+* Empty log message.
+*
+* Revision 6.47  2000/08/30 13:56:58  shavirin
+* Removed (ifdef-ed out) OOF debug printout.
+*
+* Revision 6.46  2000/08/29 22:09:04  shavirin
+* Next update to OOF API. Fixed few cases.
+*
+* Revision 6.45  2000/08/25 19:00:45  shavirin
+* Added adjustment to the order of unaligned regions and gaps to ensure,
+* that unaligned regions will be always from the left from gap if adjacent
+*
+* Revision 6.44  2000/08/08 21:44:25  shavirin
+* Enabled possibility to create discontinuous alignment.
+*
+* Revision 6.43  2000/07/26 21:02:26  shavirin
+* Removed debug printing of OOF alignment.
+*
+* Revision 6.42  2000/07/26 20:33:13  kans
+* included txalign.h
+*
+* Revision 6.41  2000/07/25 16:48:07  shavirin
+* Changed function to create ASN.1 for results of OOF search.
+*
+* Revision 6.40  2000/07/18 22:36:01  shavirin
+* Fixed ABR, ABW errors or purify in PerformGapped..() functions.
+*
+* Revision 6.39  2000/07/17 15:24:21  shavirin
+* Added parameter to function OOFGapXEditBlockToSeqAlign()
+*
+* Revision 6.37  2000/07/13 15:10:55  shavirin
+* Changed SEMI_G_ALIGN to OOF_SEMI_G_ALIGN for is_ooframe == TRUE.
+*
+* Revision 6.36  2000/07/12 23:07:31  kans
+* reverse_seq moved from pseed3.c to blastool.c, placed in blast.h header, called by gapxdrop.c
+*
+* Revision 6.35  2000/07/12 14:48:14  kans
+* added prototype for reverse_seq, copied from pseed3.c - unable to easily include seed.h due to cascading dependency errors
+*
+* Revision 6.34  2000/07/11 20:56:08  shavirin
+* Fixed minor typo in GapAlignBlkDelete().
+*
+* Revision 6.33  2000/07/11 20:49:07  shavirin
+* Added all major functions for Out-Of-Frame alignment.
+*
 * Revision 6.32  2000/06/16 20:36:55  madden
 * Remove MemSet from setup of state structure
 *
@@ -233,6 +292,8 @@ Contents: Functions to perform a gapped alignment on two sequences.
 
 
 #include "gapxdrop.h"
+#include <blast.h>
+#include <txalign.h>
 
 
 /* A PACKAGE FOR LOCALLY ALIGNING TWO SEQUENCES WITHIN A BAND:
@@ -288,8 +349,11 @@ typedef struct DP {
 } PNTR dp_ptr, dp_node;
 
 typedef struct {
+  dp_ptr CD;
+  Int4Ptr PNTR v;	
   Int4Ptr sapp;			/* Current script append ptr */
-  Int4  last;	
+  Int4  last;
+  Int4 h,  g;
 } data_t;
 
 /* #define	CHUNKSIZE	1048576 */
@@ -568,6 +632,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
   data.last= 0;
   m = gap_align->gap_open + gap_align->gap_extend;
   decline_penalty = gap_align->decline_align;
+
   gap_open = gap_align->gap_open;
   gap_extend = gap_align->gap_extend;
   X = gap_align->x_parameter;
@@ -587,7 +652,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
 
   state = Nlm_Malloc(sizeof(Uint1Ptr)*(M+1));
   dyn_prog[0].CC = 0;
-  dyn_prog[0].FF = -m;
+  dyn_prog[0].FF = -m - decline_penalty;
   c = dyn_prog[0].DD = -m;
 
   /* Protection against divide by zero. */
@@ -603,7 +668,7 @@ ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4Ptr pei,
     if(c < -X) break;
     dyn_prog[i].CC = c;
     dyn_prog[i].DD = c - m; 
-    dyn_prog[i].FF = c-m;
+    dyn_prog[i].FF = c - m - decline_penalty;
     c -= gap_extend;
     stp[i] = 1;
   }
@@ -783,6 +848,7 @@ static Int4 SEMI_G_ALIGN_EX(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
   m = (g=gap_align->gap_open) + gap_align->gap_extend;
   h_original = h = gap_align->gap_extend;
   decline_penalty = gap_align->decline_align;
+
   X = gap_align->x_parameter;
 
   if (X < m)
@@ -918,8 +984,430 @@ Int4 SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
 		query_offset, reversed, FALSE);
 }
 
+static Int4 OOF_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+                      Int4Ptr S, Int4Ptr pei, Int4Ptr pej, Int4Ptr PNTR sapp, 
+                      GapAlignBlkPtr gap_align, Int4 query_offset, 
+                      Boolean reversed)
+	
+{ 
+  data_t data;
+  Int4 i, j, cb,  j_r, s, k, sc, s1, s2, s3, st1, st2, e1, e2, e3, shift;
+  register Int4 c, d, e, m,t, tt, tt_start, f1, f2;
+  Int4 best_score = 0;
+  register Int4Ptr wa;
+  Int4 count = 0;
+  register dp_ptr dp;
+  Uint1Ptr PNTR state, stp, tmp;
+  Uint1Ptr state_array;
+  Uint1 st;
+  Int4Ptr *matrix;
+  register Int4 X;
+  GapXDropStateArrayStructPtr state_struct;
+  
+  matrix = gap_align->matrix;
+  *pei =0; *pej = -2;
+  data.sapp = *sapp = S;
+  data.last= 0;
+  m = gap_align->gap_open + gap_align->gap_extend;
+  data.g = gap_align->gap_open;
+  data.h = gap_align->gap_extend;
+  data.v = matrix;
+  X = gap_align->x_parameter;
+  shift = gap_align->shift_pen;
+
+  if (X < m)
+	X = m;
+
+  if(N <= 0 || M <= 0) { 
+    return 0;
+  }
+
+  N+=2;
+  GapXDropPurgeState(gap_align->state_struct);
+
+  j = (N + 2) * sizeof(dp_node);
+  data.CD = (dp_ptr)MemNew(j);
+
+  state = MemNew(sizeof(Uint1Ptr)*(M+1));
+  data.CD[0].CC = 0;
+  c = data.CD[0].DD = -m;
+  state_struct = GapXDropGetState(&gap_align->state_struct, N+3);
+  state_array = state_struct->state_array;
+  state[0] = state_array;
+  stp  = state[0];
+  data.CD[0].CC = 0; c = data.CD[0].DD = -m;
+  for(i = 3; i <= N; i+=3) {
+    data.CD[i].CC = c;
+    data.CD[i].DD = c - m; 
+    data.CD[i-1].CC = data.CD[i-2].CC = data.CD[i-1].DD = 
+	data.CD[i-2].DD = MININT;
+    if(c < -X) break;
+    c -= data.h;
+    stp[i] = stp[i-1] = stp[i-2] = 6;
+  }
+  i -= 2;
+  data.CD[i].CC = data.CD[i].DD = MININT;
+  tt = 0;  j = i;
+  state_struct->used = i+1;
+  B-=2;
+  tt = 0;  j = i;
+  for(j_r = 1; j_r <= M; j_r++) {
+    count += j - tt; 
+    state_struct = GapXDropGetState(&gap_align->state_struct, N-tt+3);
+    state_array = state_struct->state_array + state_struct->used + 1;
+    state[j_r] = state_array - tt + 1;
+    stp = state[j_r];
+    tt_start = tt; 
+    if (!(gap_align->positionBased)) /*AAS*/
+      wa = matrix[A[j_r]]; 
+    else {
+      if(reversed)
+        wa = gap_align->posMatrix[M - j_r];
+      else
+        wa = gap_align->posMatrix[j_r + query_offset];
+    }
+    e = c = MININT; sc =f1=f2=e1 =e2=e3=s1=s2=s3=MININT;
+    for(cb = i = tt, dp = &data.CD[i-1]; 1;) {
+	if (i >= j) break;
+	sc = MAX(MAX(f1, f2)-shift, s3);
+	if (sc == s3) st1=3;
+	else if (sc+shift == f1) {
+	  if (f1 == s2) st1=2; else st1 = 5;
+	} else if (f2 == s1) st1 = 1; else st1 = 4;
+	sc += wa[B[i++]];
+	f1 = s3; 
+	s3 = (++dp)->CC; f1 = MAX(f1, s3);
+	d = dp->DD;
+	if (sc < MAX(d, e1)) {
+	    if (d > e1) { sc = d; st1 = 30;}
+	    else {sc = e1; st1 = 36;}
+	    if (best_score -sc > X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		dp->DD = d-data.h;
+		e1-=data.h;
+	    }
+	} else {
+	    if (best_score -sc > X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc; *pei = j_r;*pej=i-3;}
+		if ((sc-=m) > (e1-=data.h)) e1 = sc; else st1+=10;
+		if (sc < (d-=data.h)) { dp->DD = d; st1 += 20;} 
+		else dp->DD = sc;
+	    }
+	}
+	stp[i-1] = st1;
+	if (i >= j) {c = e1; e1 = e2; e2 = e3; e3 = c; break;}
+	sc = MAX(MAX(f1,f2)-shift, s2);
+	if (sc == s2) st1=3;
+	else if (sc+shift == f1) {
+	  if (f1 == s3) st1=1; else st1 = 4;
+	} else if (f2 == s1) st1 = 2; else st1 = 5;
+	sc += wa[B[i++]];
+	f2 = s2; s2 = (++dp)->CC; f2 = MAX(f2, s2);
+	d = dp->DD;
+	if (sc < MAX(d, e2)) {
+	    if ((sc=MAX(d,e2)) < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		if (sc == d)  st1= 30; else st1=36;
+		cb = i;
+		dp->CC = sc;
+		dp->DD = d-data.h;
+		e2-=data.h;
+	    }
+	} else {
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc;*pei= j_r; *pej=i-3;}
+		if ((sc-=m) > (e2-=data.h)) e2 = sc; else st1+=10;
+		if (sc < (d-=data.h)) {dp->DD = d; st1+=20;} 
+		else  dp->DD = sc;
+	    }
+	}
+	stp[i-1] = st1;
+	if (i >= j) { c = e2; e2 = e1; e1 = e3; e3 = c; break; }
+	sc = MAX(MAX(f1, f2)-shift, s1);
+	if (sc == s1) st1=3;
+	else if (sc+shift == f1) {
+	  if (f1 == s3) st1=2; else st1 = 5;
+	} else if (f2 == s2) st1 = 1; else st1 = 4;
+	sc += wa[B[i++]];
+	f1 = f2;
+	f2 = s1; s1 = (++dp)->CC; f2 = MAX(f2, s1);
+	d = dp->DD;
+	if (sc < MAX(d, e3)) {
+	    sc = MAX(d, e3);
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		if (sc == d) st1 = 30; else st1 = 36;
+		cb = i;
+		dp->CC = sc;
+		dp->DD = d-data.h;
+		e3-=data.h;
+	    }
+	} else {
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc;*pei = j_r; *pej=i-3;}
+		if ((sc-=m) > (e3-=data.h)) e3 = sc; else st1 += 10;
+		if (sc < (d-=data.h)) {dp->DD = d; st1 += 20;}
+		else dp->DD = sc;
+	    }
+	}
+	stp[i-1] = st1;
+	sc = c; 
+    }
+    if(tt == j) break;
+    if(cb < j) { j = cb;}
+    else {
+	c = (MAX(e1, MAX(e2, e3))+X-best_score)/data.h+j;
+	if (c > N) c = N;
+	if (c > j)
+	while (1) {
+	    data.CD[j].CC = e1;
+	    stp[j] = 36;
+	    data.CD[j++].DD = e1 - m; e1 -=data.h;
+	    if (j > c) break;      
+	    data.CD[j].CC = e2; stp[j] = 36;
+	    data.CD[j++].DD = e2- m; e2-=data.h;
+	    if (j > c) break;      
+	    data.CD[j].CC = e3; stp[j] = 36;
+	    data.CD[j++].DD = e3- m; e3-=data.h;
+	    if (j > c) break;
+	}
+    }
+    c = j+4;
+    if (c > N+1) c = N+1;
+    while (j < c) {
+	data.CD[j].DD = data.CD[j].CC = MININT;
+	j++;
+    }
+
+    state_struct->used += (MAX(i, j) - tt_start + 1);
+  }
+  i = *pei; j = *pej+2;
+  /* printf("best = %d i,j=%d %d\n", best_score, i, j); */
+  tmp = MemNew(i + j);        
+  for (s= 1, c= 0; i > 0 || j > 0; c++, i--) {
+      k  = (t=state[i][j])%10;
+      if (s == 6 && (t/10)%2 == 1) k = 6;
+      if (s == 0 && (t/20)== 1) k = 0;
+      if (k == 6) { j -= 3; i++;}
+      else {j -= k;}
+      s = tmp[c] = k;
+  }
+  c--; 
+  while(c >= 0) {
+      *data.sapp++ = tmp[c--];
+  }
+
+  MemFree(tmp);
+
+  MemFree(state);
+
+  MemFree(data.CD);
+  *sapp = data.sapp;
+
+  return best_score;
+}
 
 
+static Int4 OOF_SEMI_G_ALIGN(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N,
+                             Int4Ptr S, Int4Ptr pei, Int4Ptr pej, 
+                             Boolean score_only, Int4Ptr PNTR sapp, 
+                             GapAlignBlkPtr gap_align,
+                             Int4 query_offset, Boolean reversed)
+{ 
+  dp_ptr CD;
+  Int4 i, j, cb, j_r;
+  Int4 e1, e2, e3, s1, s2, s3, shift;
+  register Int4 c, d, sc, e, m, tt, h, X, f1, f2;
+  Int4 best_score = 0, count = 0;
+  Int4Ptr *matrix;
+  register Int4Ptr wa;
+  register dp_ptr dp;
+  
+  if(!score_only)
+      return OOF_ALIGN(A, B, M, N, S, pei, pej, sapp, gap_align, query_offset, reversed);
+  
+  /*printf("reversed=%d\n", reversed);*/
+  matrix = gap_align->matrix;
+  *pei = 0; *pej = -2;
+  m = gap_align->gap_open + gap_align->gap_extend;
+  h = gap_align->gap_extend;
+  X = gap_align->x_parameter;
+  shift = gap_align->shift_pen;
+  /*printf("m=%d h=%d X=%d shift=%d %d\n", m,h, X, shift, B[2]);*/
+
+  B-=2;
+  if (X < m)
+	X = m;
+
+  if(N <= 0 || M <= 0) return 0;
+  N+=2;
+
+  j = (N + 5) * sizeof(dp_node);
+  CD = (dp_ptr)MemNew(j);
+  CD[0].CC = 0; c = CD[0].DD = -m;
+  for(i = 3; i <= N; i+=3) {
+    CD[i].CC = c;
+    CD[i].DD = c - m; 
+    CD[i-1].CC = CD[i-2].CC = CD[i-1].DD = CD[i-2].DD = MININT;
+    if(c < -X) break;
+    c -= h;
+  }
+  i -= 2;
+  CD[i].CC = CD[i].DD = MININT;
+  tt = 0;  j = i;
+  for (j_r = 1; j_r <= M; j_r++) {
+    count += j - tt; CD[2].CC = CD[2].DD= MININT;
+    if (!(gap_align->positionBased)) /*AAS*/
+      wa = matrix[A[j_r]]; 
+    else {
+      if(reversed)
+        wa = gap_align->posMatrix[M - j_r];
+      else
+        wa = gap_align->posMatrix[j_r + query_offset];
+    }
+    s1 = s2 = s3 = f1= f2 = MININT; f1=f2=e1 = e2 = e3 = MININT; sc = MININT;
+    for(cb = i = tt, dp = &CD[i-1]; 1;) {
+	if (i >= j) break;
+	sc = MAX(MAX(f1, f2)-shift, s3)+wa[B[i++]];
+	f1 = s3; 
+	s3 = (++dp)->CC; f1 = MAX(f1, s3);
+	d = dp->DD;
+	if (sc < MAX(d, e1)) {
+	    sc = MAX(d, e1);
+	    if (best_score -sc > X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		dp->DD = d-h;
+		e1-=h;
+	    }
+	} else {
+	    if (best_score -sc > X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc; *pei = j_r;*pej=i-1;}
+		if ((sc-=m) > (e1-=h)) e1 = sc;
+		dp->DD = MAX(sc, d-h);
+	    }
+	}
+	if (i >= j) {c = e1; e1 = e2; e2 = e3; e3 = c; break;}
+	sc = MAX(MAX(f1, f2)-shift, s2)+wa[B[i++]];
+	f2 = s2; s2 = (++dp)->CC; f2 = MAX(f2, s2);
+	d = dp->DD;
+	if (sc < MAX(d, e2)) {
+	    if ((c=MAX(d,e2)) < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = c;
+		dp->DD = d-h;
+		e2-=h;
+	    }
+	} else {
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc;*pei= j_r; *pej=i-1;}
+		if ((sc-=m) > (e2-=h)) e2 = sc;
+		dp->DD = MAX(sc, d-h);
+	    }
+	}
+	if (i >= j) { c = e2; e2 = e1; e1 = e3; e3 = c; break; }
+	sc = MAX(MAX(f1, f2)-shift, s1)+wa[B[++i]];
+	f1 = f2;
+	f2 = s1; s1 = (++dp)->CC; f2 = MAX(f2, s1);
+	d = dp->DD;
+	if (sc < MAX(d, e3)) {
+	    sc = MAX(d, e3);
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		dp->DD = d-h;
+		e3-=h;
+	    }
+	} else {
+	    if (sc < best_score-X) {
+		if (tt == i-1) tt = i;
+		else dp->CC = MININT;
+	    } else {
+		cb = i;
+		dp->CC = sc;
+		if (sc > best_score) {best_score = sc;*pei = j_r; *pej=i-1;}
+		if ((sc-=m) > (e3-=h)) e3 = sc;
+		dp->DD = MAX(sc, d-h);
+	    }
+	}
+	sc = c;
+    }
+    if(tt == j) break;
+    if(cb < j) { j = cb;}
+    else {
+	c = (MAX(e1, MAX(e2, e3))+X-best_score)/h+j;
+	if (c > N) c = N;
+	if (c > j)
+	while (1) {
+	    CD[j].CC = e1;
+	    CD[j++].DD = e1 - m; e1 -=h;
+	    if (j > c) break;      
+	    CD[j].CC = e2;
+	    CD[j++].DD = e2- m; e2-=h;
+	    if (j > c) break;      
+	    CD[j].CC = e3;
+	    CD[j++].DD = e3- m; e3-=h;
+	    if (j > c) break;
+	}
+    }
+    c = j+4;
+    if (c > N+1) c = N+1;
+    while (j < c) {
+	CD[j].DD = CD[j].CC = MININT;
+	j++;
+    }
+  }
+  /*
+  printf("j_r=%d M=%d pei pej=%d %d\n", j_r, M, *pei, *pej);
+  */
+  /*printf("bestscore = %d\n", best_score);*/ 
+  
+  MemFree(CD);
+
+  return best_score;
+}
 /*
 	Allocates an EditScriptPtr and puts it on the end of
 	the chain of EditScriptPtr's.  Returns a pointer to the
@@ -1061,10 +1549,102 @@ TracebackToGapXEditBlock(Uint1Ptr A, Uint1Ptr B, Int4 M, Int4 N, Int4Ptr S, Int4
   }
 
   return edit_block;
-
-
 }
+/*
+  Converts a OOF traceback from the gapped alignment to a
+  GapXEditBlock.
+  
+  This function is for out-of-frame gapping:
+  
+  index1 is for the protein, index2 is for the nucleotides.
 
+  0: deletion of a dna codon, i.e dash aligned with a protein letter.
+  1: one nucleotide vs a protein, deletion of 2 nuc.
+  2: 2 nucleotides aligned with a protein, i.e deletion of one nuc.
+  3: substitution, 3 nucleotides vs an amino acid.
+  4: 4 nuc vs an amino acid.
+  5: 5 nuc vs an amino acid.
+  6: a codon aligned with a dash. opposite of 0.
+*/
+
+GapXEditBlockPtr LIBCALL
+OOFTracebackToGapXEditBlock(Int4 M, Int4 N, Int4Ptr S, Int4 start1, Int4 start2)
+{
+    register Int4 current_val, last_val, number, index1, index2;
+    GapXEditScriptPtr e_script, last_e_script=NULL;
+    GapXEditBlockPtr edit_block;
+    
+    if (S == NULL)
+        return NULL;
+    
+    number = 0;
+    index1 = 0;
+    index2 = 0;
+    
+    edit_block = GapXEditBlockNew(start1, start2);
+    edit_block->is_ooframe = TRUE;
+    edit_block->esp = e_script = GapXEditScriptNew(NULL);
+    
+    last_val = *S;
+    
+    /* index1, M - index and length of protein, 
+       index2, N - length of the nucleotide */
+    
+    for(index1 = 0, index2 = 0; index1 < M && index2 < N; S++, number++) {
+        
+        current_val = *S;
+        /* New script element will be created for any new frameshift
+           region  0,3,6 will be collected in a single segment */
+        if (current_val != last_val || (current_val%3 != 0 && 
+                                        edit_block->esp != e_script)) {
+            last_e_script = e_script;
+            e_script->num = number;
+            e_script = GapXEditScriptNew(e_script);
+            
+            /* if(last_val%3 != 0 && current_val%3 == 0) */
+            if(last_val%3 != 0 && current_val == 3) 
+                /* 1, 2, 4, 5 vs. 0, 3, 6*/                
+                number = 1;
+            else
+                number = 0;
+        }
+        
+        last_val = current_val;
+        
+        /* for out_of_frame == TRUE - we have op_type == S parameter */
+        e_script->op_type = current_val;
+        
+        if(current_val != 6) {
+            index1++;
+            index2 += current_val;
+        } else {
+            index2 += 3;
+        }
+        
+        switch (current_val) {
+        case 0: /* deletion of three nucleotides. */
+            break;
+        case 3: /* Substitution. */
+            break;
+        case 1:	/* gap of two nucleotides. */
+            break;
+        case 2: /* Gap of one nucleotide. */
+            break;
+        case 4: /* Insertion of one nucleotide. */
+            break;
+        case 5: /* Insertion of two nucleotides. */
+            break;
+        case 6: /* insertion of three nucleotides. */
+            break;
+        default:
+            break;
+        }
+    }
+    /* Get the last one. */    
+    e_script->num = number;
+
+    return edit_block;
+}
 
 /*
 	Destruct Function for GapAlignBlk.  If "state" is not NULL, then
@@ -1074,14 +1654,15 @@ GapAlignBlkPtr LIBCALL
 GapAlignBlkDelete(GapAlignBlkPtr gap_align)
 
 {
-	if (gap_align == NULL)
-		return NULL;
-
-	gap_align->state_struct = GapXDropStateDestroy(gap_align->state_struct);
-
-	gap_align = MemFree(gap_align);
-
-	return gap_align;
+    if (gap_align == NULL)
+        return NULL;
+    
+    gap_align->state_struct = GapXDropStateDestroy(gap_align->state_struct);
+    /* GapXEditBlockDelete(gap_align->edit_block); */
+    
+    gap_align = MemFree(gap_align);
+    
+    return gap_align;
 }
 
 /*
@@ -1184,74 +1765,102 @@ Boolean LIBCALL
 PerformGappedAlignment(GapAlignBlkPtr gap_align)
 
 {
-	Boolean found_start, found_end;
-	Int4 q_length=0, s_length=0, middle_score, score_right, score_left, private_q_start, private_s_start;
-	Int4 include_query, index;
-	Uint1Ptr query, subject, query_var, subject_var;
+    Boolean found_start, found_end;
+    Int4 q_length=0, s_length=0, middle_score, score_right, score_left, private_q_start, private_s_start;
+    Int4 include_query, index;
+    Uint1Ptr q_left=NULL, s_left=NULL;
+    Uint1Ptr query, subject, query_var, subject_var;
+    
+    if (gap_align == NULL)
+        return FALSE;
+    
+    found_start = FALSE;
+    found_end = FALSE;
+    
+    query = gap_align->query;
+    subject = gap_align->subject;
+    include_query = gap_align->include_query;
 
-	if (gap_align == NULL)
-		return FALSE;
+#if 0
+    printf("No traceback: q_start = %d, s_start = %d\n", gap_align->q_start, 
+           gap_align->s_start); 
+#endif
 
-	found_start = FALSE;
-	found_end = FALSE;
+    /* Looking for "left" score */
+    score_left = 0;
+    if (gap_align->q_start != 0 && gap_align->s_start != 0) {
+        found_start = TRUE;
+        if(gap_align->is_ooframe) {
+            q_left = (Uint1Ptr) MemNew((gap_align->q_start+3)*sizeof(Uint1));
+            s_left = (Uint1Ptr) MemNew((gap_align->s_start+5)*sizeof(Uint1));
+        
+            q_length = reverse_seq(query, 
+                                   query+gap_align->q_start-1, q_left+1);
+            s_length = reverse_seq(subject, 
+                                   subject+gap_align->s_start-3, s_left+3);
 
-	query = gap_align->query;
-	subject = gap_align->subject;
-	include_query = gap_align->include_query;
-	score_left = 0;
-	if (gap_align->q_start != 0 && gap_align->s_start != 0)
-	{
-		found_start = TRUE;
-		q_length = (gap_align->q_start+1);
-		s_length = (gap_align->s_start+1);
-		score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, NULL, &private_q_start, &private_s_start, TRUE, NULL, gap_align, gap_align->q_start, FALSE, TRUE);
-		gap_align->query_start = q_length - private_q_start;
-		gap_align->subject_start = s_length - private_s_start;
-	}
-	else
-	{
-		q_length = gap_align->q_start;
-		s_length = gap_align->s_start;
-	}
+            score_left = OOF_SEMI_G_ALIGN(q_left, s_left+2, q_length, s_length, NULL, &private_q_start, &private_s_start, TRUE, NULL, gap_align, gap_align->q_start, TRUE);
+            q_left = MemFree(q_left);
+            s_left = MemFree(s_left);
+        } else {
+            q_length = (gap_align->q_start+1);
+            s_length = (gap_align->s_start+1);
+            score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, NULL, &private_q_start, &private_s_start, TRUE, NULL, gap_align, gap_align->q_start, FALSE, TRUE);
+        }
+        
+        gap_align->query_start = q_length - private_q_start;
+        gap_align->subject_start = s_length - private_s_start;
 
-	middle_score = 0;
-	query_var = query+gap_align->q_start;
-	subject_var = subject+gap_align->s_start;
-	for (index=0; index<include_query; index++)
-	{
-		query_var++;
-		subject_var++;
-		if (!(gap_align->positionBased))  /*AAS*/
-		  middle_score += gap_align->matrix[*query_var][*subject_var];
-		else 
-		  middle_score += MtrxScoreGapAlign(gap_align,
-				gap_align->q_start+1 + index,*subject_var);
-	}
+    } else {
+        q_length = gap_align->q_start;
+        s_length = gap_align->s_start;
+    }
 
-	score_right = 0;
-	if (gap_align->q_start+include_query < gap_align->query_length && gap_align->s_start+include_query < gap_align->subject_length)
-	{
-		found_end = TRUE;
-		score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, NULL, &(gap_align->query_stop), &(gap_align->subject_stop), TRUE, NULL, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
-		gap_align->query_stop += gap_align->q_start+include_query;
-		gap_align->subject_stop += gap_align->s_start+include_query;
-	}
+    /* Looking for "middle" score */
+    middle_score = 0;
+    query_var = query+gap_align->q_start;
+    subject_var = subject+gap_align->s_start;
+    for (index=0; index<include_query; index++) {
+        query_var++;
+        subject_var++;
+        if (!(gap_align->positionBased))  /*AAS*/
+            middle_score += gap_align->matrix[*query_var][*subject_var];
+        else 
+            middle_score += MtrxScoreGapAlign(gap_align,
+                                              gap_align->q_start+1 + index,*subject_var);
+    }
+    
+    score_right = 0;
+    if (gap_align->q_start+include_query < gap_align->query_length && gap_align->s_start+include_query < gap_align->subject_length) {
+        found_end = TRUE;
+        if(gap_align->is_ooframe) {
+            score_right = OOF_SEMI_G_ALIGN(query+gap_align->q_start+include_query-1, subject+gap_align->s_start+include_query-1, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, NULL, &(gap_align->query_stop), &(gap_align->subject_stop), TRUE, NULL, gap_align, gap_align->q_start+include_query, FALSE);
+        } else {
+            score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, NULL, &(gap_align->query_stop), &(gap_align->subject_stop), TRUE, NULL, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
+        }
 
-	if (found_start == FALSE)
-	{	/* Start never found */
-		gap_align->query_start = gap_align->q_start;
-		gap_align->subject_start = gap_align->s_start;
-	}
+        gap_align->query_stop += gap_align->q_start+include_query;
+        gap_align->subject_stop += gap_align->s_start+include_query;
+    }
+    
+    if (found_start == FALSE) {	/* Start never found */
+        gap_align->query_start = gap_align->q_start;
+        gap_align->subject_start = gap_align->s_start;
+    }
+    
+    if (found_end == FALSE) {
+        gap_align->query_stop = gap_align->q_start + include_query - 1;
+        gap_align->subject_stop = gap_align->s_start + include_query - 1;
 
-	if (found_end == FALSE)
-	{
-		gap_align->query_stop = gap_align->q_start + include_query - 1;
-		gap_align->subject_stop = gap_align->s_start + include_query - 1;
-	}
+        if(gap_align->is_ooframe) {  /* Do we really need this ??? */
+            gap_align->query_stop++;
+            gap_align->subject_stop++;
+        }
+    }
 
-	gap_align->score = score_right+score_left+middle_score;
-
-	return TRUE;
+    gap_align->score = score_right+score_left+middle_score;
+    
+    return TRUE;
 }
 
 /*
@@ -1262,99 +1871,172 @@ Boolean LIBCALL
 PerformGappedAlignmentWithTraceback(GapAlignBlkPtr gap_align)
 
 {
-	Boolean found_start, found_end;
-	Int4 q_length=0, s_length=0, score_right, middle_score, score_left, private_q_length, private_s_length, tmp;
-	Int4 include_query, index;
-	Int4Ptr tback, tback1, p, q;
-	Uint1Ptr query, subject, query_var, subject_var;
+    Boolean found_start, found_end;
+    Int4 q_length=0, s_length=0, score_right, middle_score, score_left, private_q_length, private_s_length, tmp;
+    Int4 include_query, index, prev;
+    Int4Ptr tback, tback1, p, q;
+    Uint1Ptr q_left=NULL, s_left=NULL;
+    Uint1Ptr query, subject, query_var, subject_var;
+    
+    if (gap_align == NULL)
+        return FALSE;
+    
+    found_start = FALSE;
+    found_end = FALSE;
+    
+    query = gap_align->query;
+    subject = gap_align->subject;
+    
+    tback = tback1 = MemNew((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
+    include_query = gap_align->include_query;
 
-	if (gap_align == NULL)
-		return FALSE;
+    gap_align->tback = tback;
 
-	found_start = FALSE;
-	found_end = FALSE;
+#if 0
+    printf("With traceback: q_start = %d, s_start = %d\n", gap_align->q_start, gap_align->s_start); 
+#endif
+    
+    score_left = 0; prev = 3;
+    if (gap_align->q_start != 0 && gap_align->s_start != 0) {
+        found_start = TRUE;
+        
+        if(gap_align->is_ooframe) {
+            q_left = (Uint1Ptr) MemNew((gap_align->q_start+3)*sizeof(Uint1));
+            s_left = (Uint1Ptr) MemNew((gap_align->s_start+5)*sizeof(Uint1));
+            
+            q_length = reverse_seq(query, 
+                                   query+gap_align->q_start-1, q_left+1);
+            s_length = reverse_seq(subject, 
+                                   subject+gap_align->s_start-3, s_left+3);
 
-	query = gap_align->query;
-	subject = gap_align->subject;
+            score_left = OOF_SEMI_G_ALIGN(q_left, s_left+2, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, TRUE);
+            
+            q_left = MemFree(q_left);
+            s_left = MemFree(s_left);
+        } else {        
+            q_length = (gap_align->q_start+1);
+            s_length = (gap_align->s_start+1);
+        
+            score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, FALSE, TRUE);
+        }
 
-	tback = tback1 = Nlm_Malloc((gap_align->subject_length+gap_align->query_length)*sizeof(Int4));
-	include_query = gap_align->include_query;
+        for(p = tback, q = tback1 - 1; p < q; p++, q--)  {
+            tmp = *p;
+            *p = *q;
+            *q = tmp;
+        }
 
-	score_left = 0;
-	if (gap_align->q_start != 0 && gap_align->s_start != 0)
-	{
-		found_start = TRUE;
+        if(gap_align->is_ooframe){
+            for (prev = 3, p = tback; p < tback1; p++) {
+                if (*p == 0 || *p ==  6) continue;
+                tmp = *p; *p = prev; prev = tmp;
+            }
+        }
+        gap_align->query_start = q_length - private_q_length;
+        gap_align->subject_start = s_length - private_s_length;
+    } else {
+        q_length = gap_align->q_start;
+        s_length = gap_align->s_start;
+    }
+    
+    middle_score = 0;
+    query_var = query+gap_align->q_start;
+    subject_var = subject+gap_align->s_start;
+    for (index=0; index<include_query; index++) {
+        query_var++;
+        subject_var++;
+        if (!(gap_align->positionBased))  /*AAS*/
+            middle_score += gap_align->matrix[*query_var][*subject_var];
+        else 
+            middle_score += MtrxScoreGapAlign(gap_align,
+                                              gap_align->q_start+1 + index,*subject_var);
+        *tback1 = 0;
+        tback1++;
+    }
+    
+    score_right = 0;
+    if ((gap_align->q_start+include_query) < gap_align->query_length && (gap_align->s_start+include_query) < gap_align->subject_length) {
+        found_end = TRUE;
+        if(gap_align->is_ooframe){
+            score_right = OOF_SEMI_G_ALIGN(query+gap_align->q_start+include_query-1, subject+gap_align->s_start+include_query-1, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, tback1, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start+include_query, FALSE);
+            if (prev != 3) {
+                while (*p == 0 || *p == 6) p++;
+                *p = prev+*p-3;
+            }
+        } else {
+            score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, tback1, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
+        }
 
-		q_length = (gap_align->q_start+1);
-		s_length = (gap_align->s_start+1);
+        gap_align->query_stop = gap_align->q_start + private_q_length+include_query;
+        gap_align->subject_stop = gap_align->s_start + private_s_length+include_query;
+    }
+    
+    if (found_start == FALSE) {	/* Start never found */
+        gap_align->query_start = gap_align->q_start;
+        gap_align->subject_start = gap_align->s_start;
+    }
+    
+    if (found_end == FALSE) {
+        gap_align->query_stop = gap_align->q_start + include_query - 1;
+        gap_align->subject_stop = gap_align->s_start + include_query - 1;
 
-		score_left = SEMI_G_ALIGN_EX(query, subject, q_length, s_length, tback, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start, FALSE, TRUE);
-	        for(p = tback, q = tback1 - 1; p < q; p++, q--) 
-		{
-		        tmp = *p;
-		  	*p = *q;
-			*q = tmp;
-        	}
-		gap_align->query_start = q_length - private_q_length;
-		gap_align->subject_start = s_length - private_s_length;
-	}
-	else
-	{
-		q_length = gap_align->q_start;
-		s_length = gap_align->s_start;
-	}
+        if(FALSE && gap_align->is_ooframe){ /* Do we really need this ??? */
+            gap_align->query_stop++;
+            gap_align->subject_stop++;
+        }
+    }
 
-	middle_score = 0;
-	query_var = query+gap_align->q_start;
-	subject_var = subject+gap_align->s_start;
-	for (index=0; index<include_query; index++)
-	{
-		query_var++;
-		subject_var++;
-		if (!(gap_align->positionBased))  /*AAS*/
-		  middle_score += gap_align->matrix[*query_var][*subject_var];
-		else 
-		  middle_score += MtrxScoreGapAlign(gap_align,
-			gap_align->q_start+1 + index,*subject_var);
-		*tback1 = 0;
-		tback1++;
-	}
-	
-	score_right = 0;
-	if ((gap_align->q_start+include_query) < gap_align->query_length && (gap_align->s_start+include_query) < gap_align->subject_length)
-	{
-		found_end = TRUE;
-		score_right = SEMI_G_ALIGN_EX(query+gap_align->q_start+include_query, subject+gap_align->s_start+include_query, gap_align->query_length-q_length-include_query, gap_align->subject_length-s_length-include_query, tback1, &private_q_length, &private_s_length, FALSE, &tback1, gap_align, gap_align->q_start+include_query, FALSE, FALSE);
-		gap_align->query_stop = gap_align->q_start + private_q_length+include_query;
-		gap_align->subject_stop = gap_align->s_start + private_s_length+include_query;
-	}
+    if(gap_align->is_ooframe) {
+	gap_align->edit_block = OOFTracebackToGapXEditBlock(gap_align->query_stop-gap_align->query_start+1, gap_align->subject_stop-gap_align->subject_start+1, tback, gap_align->query_start, gap_align->subject_start);
+    } else {
+        gap_align->edit_block = TracebackToGapXEditBlock(query, subject, gap_align->query_stop-gap_align->query_start+1, gap_align->subject_stop-gap_align->subject_start+1, tback, gap_align->query_start, gap_align->subject_start);
+    }
 
-	if (found_start == FALSE)
-	{	/* Start never found */
-		gap_align->query_start = gap_align->q_start;
-		gap_align->subject_start = gap_align->s_start;
-	}
+    gap_align->edit_block->frame1 = gap_align->query_frame;
+    gap_align->edit_block->frame2 = gap_align->subject_frame;
+    gap_align->edit_block->length1 = gap_align->query_length;
+    gap_align->edit_block->length2 = gap_align->subject_length;
+    gap_align->edit_block->translate1 = gap_align->translate1;
+    gap_align->edit_block->translate2 = gap_align->translate2;
+    gap_align->edit_block->discontinuous = gap_align->discontinuous;
 
-	if (found_end == FALSE)
-	{
-		gap_align->query_stop = gap_align->q_start + include_query - 1;
-		gap_align->subject_stop = gap_align->s_start + include_query - 1;
-	}
+#ifdef OOF_DEBUG_PRINTOUT
+    {{
+        CharPtr pro_seq, dnap_seq;
+        SeqMapTablePtr smtp;
+        Int4 i;
 
-	gap_align->edit_block = TracebackToGapXEditBlock(query, subject, gap_align->query_stop-gap_align->query_start+1, gap_align->subject_stop-gap_align->subject_start+1, tback, gap_align->query_start, gap_align->subject_start);
+        pro_seq = MemNew(gap_align->query_length+1);
+        dnap_seq = MemNew(gap_align->subject_length+3*CODON_LENGTH);
 
-	gap_align->edit_block->frame1 = gap_align->query_frame;
-	gap_align->edit_block->frame2 = gap_align->subject_frame;
-	gap_align->edit_block->length1 = gap_align->query_length;
-	gap_align->edit_block->length2 = gap_align->subject_length;
-	gap_align->edit_block->translate1 = gap_align->translate1;
-	gap_align->edit_block->translate2 = gap_align->translate2;
+        smtp = SeqMapTableFindObj(Seq_code_ncbieaa, Seq_code_ncbistdaa);
+        
+        for(i = 0; i < gap_align->query_length; i++)
+            pro_seq[i] = SeqMapTableConvert(smtp, query[i]);
+        
+        for(i = 0; i < gap_align->subject_length; i++)
+            dnap_seq[i] = SeqMapTableConvert(smtp, subject[i]);
+            
+        /* for(i =0; i <gap_align->subject_length+
+           gap_align->query_length; i++)
+           printf("%d ", tback[i]); */
+        
+        OOFDisplayTraceBack1(tback, dnap_seq, pro_seq, 
+                             gap_align->subject_stop-1, 
+                             gap_align->query_stop-1, 
+                             gap_align->query_start, 
+                             gap_align->subject_start);
+        MemFree(dnap_seq);
+        MemFree(pro_seq);
+    }}
+#endif
 
-	tback = MemFree(tback);
+    tback = MemFree(tback);
+    gap_align->tback = NULL;
 
-	gap_align->score = score_right+score_left+middle_score;
-
-	return TRUE;
+    gap_align->score = score_right+score_left+middle_score;
+    
+    return TRUE;
 }
 
 /*
@@ -1678,6 +2360,42 @@ Boolean GXECollectDataForSeqalign(GapXEditBlockPtr edit_block,
     return TRUE;
 }
 
+static void GXECorrectUASequence(GapXEditBlockPtr edit_block)
+{
+    GapXEditScriptPtr curr, curr_last, curr_next, curr_last2;
+    Boolean last_indel;
+
+    last_indel = FALSE;
+    curr_last = NULL;
+    curr_last2 = NULL;
+
+    for (curr=edit_block->esp; curr; curr = curr->next) {
+
+        if(curr->op_type == GAPALIGN_DECLINE && last_indel == TRUE) {
+            /* This is invalid condition and regions should be
+               exchanged */
+
+            if(curr_last2 != NULL)
+                curr_last2->next = curr;
+            else
+                edit_block->esp = curr; /* First element in a list */
+            
+            curr_last->next = curr->next;
+            curr->next = curr_last;
+        }
+        
+        last_indel = FALSE;
+        
+        if(curr->op_type == GAPALIGN_INS || curr->op_type == GAPALIGN_DEL) {
+            last_indel = TRUE;
+            curr_last2 = curr_last;
+        }
+
+        curr_last = curr;
+    }
+    return;
+}
+
 /* 
    Convert an EditScript chain to a SeqAlign of type DenseSeg.
    Used for a non-simple interval (i.e., one without subs. or 
@@ -1703,9 +2421,8 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
 
     for (curr=edit_block->esp; curr; curr = curr->next) {
         numseg++;
-        if(curr->op_type == GAPALIGN_DECLINE) {
-            is_disc_align = TRUE;
-        }
+        if(/*edit_block->discontinuous && */curr->op_type == GAPALIGN_DECLINE)
+           is_disc_align = TRUE;
     }
     
     start1 = edit_block->start1;
@@ -1713,7 +2430,7 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
     
     /* If no GAPALIGN_DECLINE regions exists output seqalign will be
        regular Den-Seg or Std-seg */
-    if(TRUE || is_disc_align == FALSE) {
+    if(is_disc_align == FALSE) {
         /* Please note, that edit_block passed only for data like
            strand, translate, reverse etc. Real data is taken starting
            from "curr" and taken only "numseg" segments */
@@ -1727,6 +2444,14 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
                               edit_block->translate1, edit_block->translate2, 
                               numseg, length, start, strands);
     } else {
+
+        /* By request of Steven Altschul - we need to have 
+           the unaligned part being to the left if it is adjacent to the
+           gap (insertion or deletion) - so this function will do
+           shaffeling */
+
+        GXECorrectUASequence(edit_block); 
+
         sap_disc = SeqAlignNew();
         sap_disc->dim = 2;
         sap_disc->type = SAT_PARTIAL; /* ordered segments, over part of seq */
@@ -1782,6 +2507,422 @@ GapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdP
     return sap;
 }
 
+/* 
+   This function is used for Out-Of-Frame traceback conversion
+   Convert an OOF EditScript chain to a SeqAlign of type StdSeg.
+   Used for a non-simple interval (i.e., one without subs. or 
+   deletions).  
+   
+   The first SeqIdPtr in the chain of subject_id and query_id is duplicated for
+   the SeqAlign.
+*/
+SeqAlignPtr LIBCALL OOFGapXEditBlockToSeqAlign(GapXEditBlockPtr edit_block, SeqIdPtr subject_id, SeqIdPtr query_id, Int4 query_length)
+{
+    Boolean reverse, translate1, translate2;
+    GapXEditScriptPtr curr, esp;
+    Int2 frame1, frame2, numseg;
+    Int4 begin1, begin2, index, start1, start2, length1, length2;
+    Int4 original_length1, original_length2;
+    Int4Ptr length, start;
+    DenseSegPtr dsp;
+    SeqAlignPtr sap;
+    SeqIntPtr seq_int1, seq_int2;
+    SeqIntPtr seq_int1_last = NULL, seq_int2_last = NULL;
+    SeqIdPtr sip;
+    SeqLocPtr slp, slp1, slp2;
+    StdSegPtr sseg, sseg_head, sseg_old;
+    Uint1 strand1, strand2;
+    Uint1Ptr strands;
+    Boolean first_shift;
+
+    reverse = edit_block->reverse;	
+    
+    numseg=0;
+
+    start1 = edit_block->start1;
+    start2 = edit_block->start2;
+    frame1 = edit_block->frame1;
+    frame2 = edit_block->frame2;
+
+    original_length1 = edit_block->original_length2; /* Protein */
+    original_length2 = edit_block->original_length1; /* DNA */
+    
+    /* printf("%d %d %d %d\n", start1, start2, original_length1,
+       original_length2); */
+
+    if(frame1 > 0) 
+        strand1 = Seq_strand_plus;
+    else if (frame1 < 0)
+        strand1 = Seq_strand_minus;
+    else
+        strand1 = Seq_strand_unknown;
+    
+    if(frame2 > 0) 
+        strand2 = Seq_strand_plus;
+    else if (frame2 < 0)
+        strand2 = Seq_strand_minus;
+    else
+        strand2 = Seq_strand_unknown;
+    
+    esp = edit_block->esp;
+    
+    sap = SeqAlignNew();
+    
+    sap->dim =2; /**only two dimention alignment**/
+    
+    sap->type =3; /**partial for gapped translating search. */
+    sap->segtype =3; /**use denseg to store the alignment**/
+    sseg_head = NULL;
+    sseg_old = NULL;
+    esp = edit_block->esp;
+
+    /* query_length--; */
+
+    first_shift = FALSE;
+
+    for (curr=esp; curr; curr=curr->next) {
+
+        slp1 = NULL;
+        slp2 = NULL;
+        
+        switch (curr->op_type) {
+        case 0: /* deletion of three nucleotides. */
+            
+            first_shift = FALSE;
+
+            seq_int1 = SeqIntNew();
+            seq_int1->from = get_current_pos(&start1, curr->num);
+            seq_int1->to = start1 - 1;            
+
+            if(seq_int1->to >= original_length1)
+                seq_int1->to = original_length1-1;
+            
+            seq_int1->id = SeqIdDup(subject_id);
+            seq_int1->strand = strand1;
+
+            ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
+
+            /* Empty nucleotide piece */
+            ValNodeAddPointer(&slp2, SEQLOC_EMPTY, SeqIdDup(query_id));
+            
+            seq_int1_last = seq_int1;
+            seq_int2_last = NULL;
+            
+            break;
+
+        case 6: /* insertion of three nucleotides. */
+
+            /* If gap is followed after frameshift - we have to
+               add this element for the alignment to be correct */
+            
+            if(first_shift == TRUE) { /* Second frameshift in a row */
+                /* Protein coordinates */
+                seq_int1 = SeqIntNew();
+                seq_int1->from =  get_current_pos(&start1, 1);
+                seq_int1->to = start1 - 1;
+
+                if(seq_int1->to >= original_length1)
+                    seq_int1->to = original_length1-1;
+                
+                seq_int1->id = SeqIdDup(subject_id);
+                seq_int1->strand = strand1;
+                
+                ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
+                
+                /* Nucleotide scale shifted by op_type */
+                seq_int2 = SeqIntNew();
+
+                seq_int2->from = get_current_pos(&start2, 3);
+                seq_int2->to = start2 - 1;
+
+                if(seq_int2->to >= query_length) {/* Possible with frame shifts */
+                    seq_int2->to = query_length -1;
+                    seq_int1->to--;
+                }
+
+                /* Transfer to DNA minus strand coordinates */
+                if(strand2 == Seq_strand_minus) {
+                    int tmp_int;
+                    tmp_int = seq_int2->to;
+                    seq_int2->to = original_length2 - seq_int2->from - 1;
+                    seq_int2->from = original_length2 - tmp_int - 1;
+                }
+            
+                seq_int2->id = SeqIdDup(query_id);
+                seq_int2->strand = strand2;
+                
+                ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int2);
+
+                /* seq_int1_last = seq_int1; 
+                   seq_int2_last = seq_int2; */
+
+                /* first_shift = FALSE; */
+
+                if (reverse) {
+                    slp = slp1;
+                    slp1->next = slp2;
+                    sip = SeqIdDup(subject_id);
+                    sip->next = SeqIdDup(query_id);
+                } else {
+                    slp = slp2;
+                    slp2->next = slp1;
+                    sip = SeqIdDup(query_id);
+                    sip->next = SeqIdDup(subject_id);
+                }
+                
+                sseg = StdSegNew();
+                sseg->dim = 2;
+                
+                if (sseg_head == NULL)
+                    sseg_head = sseg;
+                
+                sseg->loc = slp;
+                sseg->ids = sip;
+                
+                if (sseg_old)
+                    sseg_old->next = sseg;
+                
+                sseg_old = sseg;
+
+                slp1 = NULL;
+                slp2 = NULL;
+            }
+
+            first_shift = FALSE;
+
+            /* Protein piece is empty */
+            ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(subject_id));
+            
+            /* Nucleotide scale shifted by 3, protein gapped */
+            seq_int2 = SeqIntNew();              
+            seq_int2->from = get_current_pos(&start2, curr->num*3);
+            seq_int2->to = start2 - 1;
+
+            if(seq_int2->to >= query_length) {/* Possible with frame shifts */
+                seq_int2->to = query_length -1;
+            }
+
+            /* Transfer to DNA minus strand coordinates */
+            if(strand2 == Seq_strand_minus) {
+                int tmp_int;
+                tmp_int = seq_int2->to;
+                seq_int2->to = original_length2 - seq_int2->from - 1;
+                seq_int2->from = original_length2 - tmp_int - 1;
+            }
+
+            seq_int2->id = SeqIdDup(query_id);
+            seq_int2->strand = strand2;
+            
+            ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int2);
+            
+            seq_int1_last = NULL;
+            seq_int2_last = seq_int2; /* Will be used to adjust "to" value */
+            
+            break;
+
+        case 3: /* Substitution. */
+
+            first_shift = FALSE;
+
+            /* Protein coordinates */
+            seq_int1 = SeqIntNew();
+            seq_int1->from =  get_current_pos(&start1, curr->num);
+            seq_int1->to = start1 - 1;
+
+            if(seq_int1->to >= original_length1)
+                seq_int1->to = original_length1-1;
+            
+            seq_int1->id = SeqIdDup(subject_id);
+            seq_int1->strand = strand1;
+
+            ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
+           
+            /* Nucleotide scale shifted by op_type */
+            seq_int2 = SeqIntNew();
+
+            /* Adjusting last segment and new start point in
+               nucleotide coordinates */
+            /* if(seq_int2_last != NULL) {
+               seq_int2_last->to = seq_int2_last->to - (3 - curr->op_type);
+               start2 = start2 - (3 - curr->op_type);
+               } */
+            
+            seq_int2->from = get_current_pos(&start2, curr->num*curr->op_type);
+            seq_int2->to = start2 - 1;
+
+            if(seq_int2->to >= query_length) {/* Possible with frame shifts */
+                seq_int2->to = query_length -1;
+                seq_int1->to--;
+            }
+
+            /* Transfer to DNA minus strand coordinates */
+            if(strand2 == Seq_strand_minus) {
+                int tmp_int;
+                tmp_int = seq_int2->to;
+                seq_int2->to = original_length2 - seq_int2->from - 1;
+                seq_int2->from = original_length2 - tmp_int - 1;
+            }
+            
+            seq_int2->id = SeqIdDup(query_id);
+            seq_int2->strand = strand2;
+
+            ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int2);
+
+            seq_int1_last = seq_int1; /* Will be used to adjust "to" value */
+            seq_int2_last = seq_int2; /* Will be used to adjust "to" value */
+            
+            break;
+        case 1:	/* gap of two nucleotides. */
+        case 2: /* Gap of one nucleotide. */
+        case 4: /* Insertion of one nucleotide. */
+        case 5: /* Insertion of two nucleotides. */
+
+            if(first_shift == TRUE) { /* Second frameshift in a row */
+                /* Protein coordinates */
+                seq_int1 = SeqIntNew();
+                seq_int1->from =  get_current_pos(&start1, 1);
+                seq_int1->to = start1 - 1;
+
+                if(seq_int1->to >= original_length1)
+                    seq_int1->to = original_length1-1;
+                
+                seq_int1->id = SeqIdDup(subject_id);
+                seq_int1->strand = strand1;
+                
+                ValNodeAddPointer(&slp1, SEQLOC_INT, seq_int1);
+                
+                /* Nucleotide scale shifted by op_type */
+                seq_int2 = SeqIntNew();
+
+                seq_int2->from = get_current_pos(&start2, curr->op_type);
+                seq_int2->to = start2 - 1;
+
+                if(seq_int2->to >= query_length) {/* Possible with frame shifts */
+                    seq_int2->to = query_length -1;
+                    seq_int1->to--;
+                }
+
+                /* Transfer to DNA minus strand coordinates */
+                if(strand2 == Seq_strand_minus) {
+                    int tmp_int;
+                    tmp_int = seq_int2->to;
+                    seq_int2->to = original_length2 - seq_int2->from - 1;
+                    seq_int2->from = original_length2 - tmp_int - 1;
+                }
+            
+                seq_int2->id = SeqIdDup(query_id);
+                seq_int2->strand = strand2;
+                
+                ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int2);
+
+                seq_int1_last = seq_int1; 
+                seq_int2_last = seq_int2; 
+
+                /* first_shift = FALSE; */
+
+                break;
+            }
+            
+            first_shift = TRUE;
+
+            /* If this substitution is following simple frameshift
+               we do not need to start new segment, but may continue
+               old one */
+            /* printf("curr_num = %d (%d)\n",  curr->num, curr->op_type); */
+
+            if(seq_int2_last != NULL) {
+                get_current_pos(&start2, curr->num*(curr->op_type-3));
+                if(strand2 != Seq_strand_minus) {
+                    seq_int2_last->to = start2 - 1;
+                } else {
+                    /* Transfer to DNA minus strand coordinates */
+                    seq_int2_last->from = original_length2 - start2;
+                }
+
+                /* Adjustment for multiple shifts - theoretically possible,
+                   but very unprobable */
+                if(seq_int2_last->from > seq_int2_last->to) {
+                    
+                    if(strand2 != Seq_strand_minus) {
+                        seq_int2_last->to += 3;
+                    } else {
+                        seq_int2_last->from -= 3;
+                    }
+                    
+                    if(seq_int1_last != 0)
+                        seq_int1_last++;
+                }
+
+            } else if (curr->op_type > 3) {
+                /* Protein piece is empty */
+                ValNodeAddPointer(&slp1, SEQLOC_EMPTY, SeqIdDup(subject_id));
+                /* Simulating insertion of nucleotides */
+                seq_int2 = SeqIntNew();
+                seq_int2->from = get_current_pos(&start2, 
+                                                 curr->num*(curr->op_type-3));
+                seq_int2->to = start2 - 1;
+                
+                if(seq_int2->to >= query_length) {
+                    seq_int2->to = query_length - 1;
+                }
+
+                /* Transfer to DNA minus strand coordinates */
+                if(strand2 == Seq_strand_minus) {
+                    int tmp_int;
+                    tmp_int = seq_int2->to;
+                    seq_int2->to = original_length2 - seq_int2->from - 1;
+                    seq_int2->from = original_length2 - tmp_int - 1;
+                }
+
+                seq_int2->id = SeqIdDup(query_id);
+                seq_int2->strand = strand2;
+                
+                ValNodeAddPointer(&slp2, SEQLOC_INT, seq_int2);
+                
+                seq_int1_last = NULL;
+                seq_int2_last = seq_int2; /* Will be used to adjust "to" value */
+                break;
+            } else {
+                continue;       /* Main loop */
+            }
+            continue;       /* Main loop */
+            /* break; */
+        default:
+            continue;       /* Main loop */
+            /* break; */
+        } 
+
+        if (reverse) {
+            slp = slp1;
+            slp1->next = slp2;
+            sip = SeqIdDup(subject_id);
+            sip->next = SeqIdDup(query_id);
+        } else {
+            slp = slp2;
+            slp2->next = slp1;
+            sip = SeqIdDup(query_id);
+            sip->next = SeqIdDup(subject_id);
+        }
+
+        sseg = StdSegNew();
+        sseg->dim = 2;
+        
+        if (sseg_head == NULL)
+            sseg_head = sseg;
+        
+        sseg->loc = slp;
+        sseg->ids = sip;
+        
+        if (sseg_old)
+            sseg_old->next = sseg;
+
+        sseg_old = sseg;
+    }
+    sap->segs = sseg_head;
+    sap->next = NULL;
+    
+    return sap;
+}
 /*
 	SimpleIntervalToGapXEditBlock(Int4 start1, Int4 start2, Int4 length)
 

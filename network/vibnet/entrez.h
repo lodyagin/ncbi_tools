@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   8/5/96
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: entrez.h,v $
+* Revision 6.12  2000/07/08 20:44:08  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
 * ==========================================================================
 */
@@ -45,13 +45,14 @@
 #ifndef _ENTREZ_
 #define _ENTREZ_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <vibrant.h>
 #include <objacces.h>
 #include <objentr.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
 *  The EntrezGlobalsPtr may be registered with a call to SetAppProperty

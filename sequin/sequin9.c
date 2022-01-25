@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.20 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -90,68 +90,70 @@ static ENUM_ALIST(gene_cds_prot_rna_fld_alist)
 END_ENUM_ALIST
 
 static ENUM_ALIST(source_modifiers_fld_alist)
-  {" ",                  0},
-  {"Acronym",           19},
-  {"Anamorph",          29},
-  {"Authority",         24},
-  {"Biotype",           14},
-  {"Biovar",            13},
-  {"Breed",             31},
-  {"Cell-line",        108},
-  {"Cell-type",        109},
-  {"Chemovar",          12},
-  {"Chromosome",       101},
-  {"Clone",            103},
-  {"Clone-lib",        111},
-  {"Common",            18},
-  {"Common Name",      202},
-  {"Country",          123},
-  {"Cultivar",          10},
-  {"Dev-stage",        112},
-  {"Division",         204},
-  {"Dosage",            20},
-  {"Ecotype",           27},
-  {"Forma",             25},
-  {"Forma-specialis",   26},
-  {"Frequency",        113},
-  {"Genotype",         106},
-  {"Germline",         114},
-  {"Group",             15},
-  {"Haplotype",        105},
-  {"Ins-seq-name",     121},
-  {"Isolate",           17},
-  {"Lab-host",         116},
-  {"Lineage",          203},
-  {"Map",              102},
-  {"Natural-host",      21},
-  {"Old Name",          54},
-  {"OrgMod Note",       55},
-  {"Pathovar",          11},
-  {"Plasmid-name",     119},
-  {"Plastid-name",     122},
-  {"Pop-variant",      117},
-  {"Rearranged",       115},
-  {"Scientific Name",  201},
-  {"Segment",          124},
-  {"Serogroup",          8},
-  {"Serotype",           7},
-  {"Serovar",            9},
-  {"Sex",              107},
-  {"Specimen-voucher",  23},
-  {"Strain",             2},
-  {"Sub-species",       22},
-  {"Subclone",         104},
-  {"Subgroup",          16},
-  {"SubSource Note",   155},
-  {"Substrain",          3},
-  {"Subtype",            5},
-  {"Synonym",           28},
-  {"Teleomorph",        30},
-  {"Tissue-lib",       118},
-  {"Tissue-type",      110},
-  {"Transposon-name",  120},
-  {"Type",               4},
-  {"Variety",            6},
+  {" ",                       0},
+  {"Acronym",                19},
+  {"Anamorph",               29},
+  {"Authority",              24},
+  {"Biotype",                14},
+  {"Biovar",                 13},
+  {"Breed",                  31},
+  {"Cell-line",             108},
+  {"Cell-type",             109},
+  {"Chemovar",               12},
+  {"Chromosome",            101},
+  {"Clone",                 103},
+  {"Clone-lib",             111},
+  {"Common",                 18},
+  {"Common Name",           202},
+  {"Country",               123},
+  {"Cultivar",               10},
+  {"Dev-stage",             112},
+  {"Division",              204},
+  {"Dosage",                 20},
+  {"Ecotype",                27},
+  {"Endogenous-virus-name", 125},
+  {"Forma",                  25},
+  {"Forma-specialis",        26},
+  {"Frequency",             113},
+  {"Genotype",              106},
+  {"Germline",              114},
+  {"Group",                  15},
+  {"Haplotype",             105},
+  {"Ins-seq-name",          121},
+  {"Isolate",                17},
+  {"Lab-host",              116},
+  {"Lineage",               203},
+  {"Map",                   102},
+  {"Natural-host",           21},
+  {"Old Lineage",            53},
+  {"Old Name",               54},
+  {"OrgMod Note",            55},
+  {"Pathovar",               11},
+  {"Plasmid-name",          119},
+  {"Plastid-name",          122},
+  {"Pop-variant",           117},
+  {"Rearranged",            115},
+  {"Scientific Name",       201},
+  {"Segment",               124},
+  {"Serogroup",               8},
+  {"Serotype",                7},
+  {"Serovar",                 9},
+  {"Sex",                   107},
+  {"Specimen-voucher",       23},
+  {"Strain",                  2},
+  {"Sub-species",            22},
+  {"Subclone",              104},
+  {"Subgroup",               16},
+  {"SubSource Note",        155},
+  {"Substrain",               3},
+  {"Subtype",                 5},
+  {"Synonym",                28},
+  {"Teleomorph",             30},
+  {"Tissue-lib",            118},
+  {"Tissue-type",           110},
+  {"Transposon-name",       120},
+  {"Type",                    4},
+  {"Variety",                 6},
 END_ENUM_ALIST
 
 static ENUM_ALIST(feature_qualifiers_fld_alist)
@@ -692,7 +694,7 @@ extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 
 static Int2  orgmod_rank [32];
-static Int2  subsource_rank [25];
+static Int2  subsource_rank [26];
 
 static Boolean StrainAlreadyInParentheses (CharPtr taxname, CharPtr strain)
 
@@ -754,7 +756,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
 
     ssp = biop->subtype;
     while (ssp != NULL) {
-      if (ssp->subtype < 25 && subsource_rank [ssp->subtype] > 0) {
+      if (ssp->subtype < 26 && subsource_rank [ssp->subtype] > 0) {
         text [0] = '\0';
         str [0] = '\0';
         StringNCpy_0 (text, ssp->name, sizeof (text));
@@ -1262,6 +1264,9 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
                dfp->sfp->partial == nextdfp->sfp->partial)) {
             StringCat (str, ", and");
+          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
+               dfp->sfp->partial == nextdfp->sfp->partial */) {
+            StringCat (str, " and");
           } else {
             StringCat (str, "; and");
           }
@@ -1292,6 +1297,9 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               (dfp->subtype == FEATDEF_otherRNA && nextdfp->subtype == FEATDEF_rRNA &&
                dfp->sfp->partial == nextdfp->sfp->partial)) {
             StringCat (str, ", and");
+          } else if (dfp->subtype == FEATDEF_exon && nextdfp->subtype == FEATDEF_exon /* &&
+               dfp->sfp->partial == nextdfp->sfp->partial */) {
+            StringCat (str, ",");
           } else {
             StringCat (str, "; and");
           }
@@ -1406,6 +1414,7 @@ static Boolean AreAltSpliceGenes (DefFeatsPtr dfp1, DefFeatsPtr dfp2)
 {
   Int2        comp;
   SeqFeatPtr  sfp1, sfp2;
+  Uint1       strand1, strand2;
 
   if (dfp1 == NULL || dfp2 == NULL) return FALSE;
   if (dfp1->prot == NULL || dfp2->prot == NULL) return FALSE;
@@ -1414,7 +1423,9 @@ static Boolean AreAltSpliceGenes (DefFeatsPtr dfp1, DefFeatsPtr dfp2)
   sfp2 = dfp2->sfp;
   if (sfp1 == NULL || sfp2 == NULL) return FALSE;
   if (sfp1->partial != sfp2->partial) return FALSE;
-  if (SeqLocStrand (sfp1->location) != SeqLocStrand (sfp2->location)) return FALSE;
+  strand1 = SeqLocStrand (sfp1->location);
+  strand2 = SeqLocStrand (sfp2->location);
+  if (strand1 != strand2) return FALSE;
   comp = SeqLocCompare (sfp1->location, sfp2->location);
   if (comp == SLC_NO_MATCH) return FALSE;
   if (dfp1->genename == NULL || dfp2->genename == NULL) return FALSE;
@@ -1462,7 +1473,7 @@ static void MergeAltSpliceCDSs (ValNodePtr head)
 static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
                          Boolean labelMods, Int2 maxMods, Boolean leaveInParen,
                          BioseqPtr target, BioseqPtr seg, ValNodePtr nonUniqueOrgs,
-                         Int2 mitochloroflag, BioseqPtr parent)
+                         Int2 mitochloroflag, Boolean suppressAltSplice, BioseqPtr parent)
 
 {
   Char            allele [256];
@@ -1519,7 +1530,7 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
       if (bssp->_class == 7 || bssp->_class == 13 ||
           bssp->_class == 14 || bssp->_class == 15) {
         for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, NULL);
+          AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, NULL);
         }
         return;
       }
@@ -1539,12 +1550,12 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
           if (sip != NULL) {
             part = BioseqFind (sip);
             if (part != NULL) {
-              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs, mitochloroflag, bsp);
+              AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, part, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
             }
           }
           slp = nextslp;
         }
-        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs, mitochloroflag, bsp);
+        AutoDefProc (entityID, sep, addMods, labelMods, maxMods, leaveInParen, NULL, bsp, nonUniqueOrgs, mitochloroflag, suppressAltSplice, bsp);
         return;
       }
     }
@@ -1804,7 +1815,9 @@ static void AutoDefProc (Uint2 entityID, SeqEntryPtr sep, Boolean addMods,
     vnp = nextvnp;
   }
 
-  MergeAltSpliceCDSs (head);
+  if (! suppressAltSplice) {
+    MergeAltSpliceCDSs (head);
+  }
 
   if (target != NULL) {
     head = SortValNode (head, SortCDSAfterExons);
@@ -1921,9 +1934,10 @@ static CharPtr sourceModRankList [] = {
   "Cell-line", "Cell-type", "Tissue-type", "Clone-lib", "Tissue-lib", "Dev-stage",
   "Lab-host", "Pop-variant", "Frequency", "Germline", "Rearranged",
   "Chromosome", "Segment", "Map", "Genotype", "Sex", "Plasmid-name", "Transposon-name",
-  "Ins-seq-name", "Plastid-name", "Country", "Old Name", "Common", "Acronym",
-  "Dosage", "Natural-host", "Sub-species", "Specimen-voucher", "Authority", "Forma",
-  "Forma-specialis", "Ecotype", "Synonym", "Anamorph", "Teleomorph", "Breed",
+  "Ins-seq-name", "Endogenous-virus-name", "Plastid-name", "Country", "Old Name",
+  "Common", "Acronym", "Dosage", "Natural-host", "Sub-species", "Specimen-voucher",
+  "Authority", "Forma", "Forma-specialis", "Ecotype", "Synonym", "Anamorph",
+  "Teleomorph", "Breed",
   NULL
 };
 
@@ -1940,6 +1954,7 @@ typedef struct deflineform {
   ButtoN         leaveInParentheses;
   GrouP          nucformitoorchloro;
   Boolean        smartMods;
+  ButtoN         suppressAltSplice;
 } DeflineForm, PNTR DeflineFormPtr;
 
 static int LIBCALLBACK SortByName (VoidPtr ptr1, VoidPtr ptr2)
@@ -2048,6 +2063,7 @@ static void DefLineModFormAcceptProc (ButtoN b)
   Int2               mitochloroflag;
   ValNodePtr         nextvnp;
   ValNodePtr         nonUniqueOrgs;
+  Boolean            suppressAltSplice;
   Int2               val;
   ValNodePtr         vnp;
 
@@ -2121,7 +2137,8 @@ static void DefLineModFormAcceptProc (ButtoN b)
   }
 
   mitochloroflag = GetValue (dfp->nucformitoorchloro) - 1;
-  AutoDefProc (dfp->input_entityID, dfp->sep, TRUE, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, NULL);
+  suppressAltSplice = GetStatus (dfp->suppressAltSplice);
+  AutoDefProc (dfp->input_entityID, dfp->sep, TRUE, labelMods, maxMods, leaveInParen, NULL, NULL, nonUniqueOrgs, mitochloroflag, suppressAltSplice, NULL);
   ValNodeFreeData (nonUniqueOrgs);
   ArrowCursor ();
   Remove (dfp->form);
@@ -2253,6 +2270,8 @@ static ForM CreateDefLineModForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr tar
     dfp->leaveInParentheses = CheckBox (w, "Leave in parenthetical organism info", NULL);
     SetStatus (dfp->leaveInParentheses, TRUE);
 
+    dfp->suppressAltSplice = CheckBox (w, "Suppress alternative splice phrase", NULL);
+
     dfp->onlyModifyTargeted = NULL;
     if (target != NULL) {
       dfp->onlyModifyTargeted = CheckBox (w, "Only modify targeted record", NULL);
@@ -2266,6 +2285,7 @@ static ForM CreateDefLineModForm (Uint2 entityID, SeqEntryPtr sep, BioseqPtr tar
     AlignObjects (ALIGN_CENTER, (HANDLE) dfp->addLabels, (HANDLE) dfp->customGrp,
                   (HANDLE) dfp->sourceListGrp, (HANDLE) q,
                   (HANDLE) dfp->leaveInParentheses,
+                  (HANDLE) dfp->suppressAltSplice,
                   (HANDLE) dfp->nucformitoorchloro, (HANDLE) c,
                   (HANDLE) dfp->onlyModifyTargeted, NULL);
 
@@ -2347,7 +2367,7 @@ extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean sm
 
   WatchCursor ();
   Update ();
-  AutoDefProc (bfp->input_entityID, sep, FALSE, FALSE, INT2_MAX, TRUE, NULL, NULL, NULL, 0, NULL);
+  AutoDefProc (bfp->input_entityID, sep, FALSE, FALSE, INT2_MAX, TRUE, NULL, NULL, NULL, 0, FALSE, NULL);
   ArrowCursor ();
   Update ();
   ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
@@ -3428,5 +3448,153 @@ extern void ExtraAccToHistByPos (IteM i)
   RealizeWindow (w);
   Show (w);
   Update ();
+}
+
+
+static void FixLocStrands (SeqLocPtr slp)
+
+{
+  SeqLocPtr      loc;
+  PackSeqPntPtr  psp;
+  SeqBondPtr     sbp;
+  SeqIntPtr      sinp;
+  SeqPntPtr      spp;
+
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_NULL :
+        break;
+      case SEQLOC_EMPTY :
+      case SEQLOC_WHOLE :
+        break;
+      case SEQLOC_INT :
+        sinp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sinp != NULL) {
+          if (sinp->strand == Seq_strand_unknown) {
+            sinp->strand = Seq_strand_plus;
+          }
+        }
+        break;
+      case SEQLOC_PNT :
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL) {
+          if (spp->strand == Seq_strand_unknown) {
+            spp->strand = Seq_strand_plus;
+          }
+        }
+        break;
+      case SEQLOC_PACKED_PNT :
+        psp = (PackSeqPntPtr) slp->data.ptrvalue;
+        if (psp != NULL) {
+          if (psp->strand == Seq_strand_unknown) {
+            psp->strand = Seq_strand_plus;
+          }
+        }
+        break;
+      case SEQLOC_PACKED_INT :
+      case SEQLOC_MIX :
+      case SEQLOC_EQUIV :
+        loc = (SeqLocPtr) slp->data.ptrvalue;
+        while (loc != NULL) {
+          FixLocStrands (loc);
+          loc = loc->next;
+        }
+        break;
+      case SEQLOC_BOND :
+        sbp = (SeqBondPtr) slp->data.ptrvalue;
+        if (sbp != NULL) {
+          spp = (SeqPntPtr) sbp->a;
+          if (spp != NULL) {
+            if (spp->strand == Seq_strand_unknown) {
+              spp->strand = Seq_strand_plus;
+            }
+          }
+          spp = (SeqPntPtr) sbp->b;
+          if (spp != NULL) {
+            if (spp->strand == Seq_strand_unknown) {
+              spp->strand = Seq_strand_plus;
+            }
+          }
+        }
+        break;
+      case SEQLOC_FEAT :
+        break;
+      default :
+        break;
+    }
+    slp = slp->next;
+  }
+}
+
+static void FixFeatStrands (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  FixLocStrands (sfp->location);
+}
+
+extern void StrandUnknownToStrandPlus (IteM i);
+extern void StrandUnknownToStrandPlus (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitFeaturesInSep (sep, NULL, FixFeatStrands);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void ClearCdsProducts (IteM i);
+extern void ClearMrnaProducts (IteM i);
+
+static void ClearAProduct (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  Uint2Ptr  featdefptr;
+  Uint2     subtype;
+
+  featdefptr = (Uint2Ptr) userdata;
+  subtype = *featdefptr;
+  if (sfp->idx.subtype != subtype) return;
+  sfp->product = SeqLocFree (sfp->product);
+}
+
+static void ClearFeatProducts (IteM i, Uint2 featdeftype)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+  VisitFeaturesInSep (sep, (Pointer) &featdeftype, ClearAProduct);
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
+extern void ClearCdsProducts (IteM i)
+
+{
+  ClearFeatProducts (i, FEATDEF_CDS);
+}
+
+extern void ClearMrnaProducts (IteM i)
+
+{
+  ClearFeatProducts (i, FEATDEF_mRNA);
 }
 

@@ -30,11 +30,24 @@
    
    Version Creation Date: 10/01/96
 
-   $Revision: 6.35 $
+   $Revision: 6.39 $
 
    File Description:  formats FASTA databases for use by BLAST
 
    $Log: formatdb.c,v $
+   Revision 6.39  2000/09/29 16:40:16  shavirin
+   Fixed problem with multivolume database creation.
+
+   Revision 6.38  2000/09/18 20:46:36  kans
+   added back #include <sqnutils.h>, needed for UseLocalAsnloadDataAndErrMsg
+
+   Revision 6.37  2000/09/12 15:38:35  shavirin
+   Error message level set to SEV_WARNING
+
+   Revision 6.36  2000/07/18 19:32:28  shavirin
+   Added new option -V to enable check for non-unique string ids in the
+   FASTA database. Default is FALSE.
+
    Revision 6.35  2000/02/17 17:20:59  sicotte
    Change Calling convention for FastaToSeqEntryForDb
 
@@ -191,41 +204,45 @@
 #include <tofasta.h>
 #include <sequtil.h>
 #include <readdb.h>
+#include <sqnutils.h>
 
 /* program's arguments */
 
-#define NUMARG 11
+#define NUMARG (sizeof(dump_args)/sizeof(dump_args[0]))
 
-Args dump_args[NUMARG] = {
-    { "Title for database file", 
+Args dump_args[] = {
+    { "Title for database file", /* 0 */
       NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
-    {"Input file for formatting (this parameter must be set)",
+    {"Input file for formatting (this parameter must be set)", /* 1 */
      NULL, NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
-    {"Logfile name:",
+    {"Logfile name:",           /* 2 */
      "formatdb.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
-    {"Type of file\n"
+    {"Type of file\n"           /* 3 */
      "         T - protein   \n"
      "         F - nucleotide", 
      "T", NULL,NULL,TRUE,'p',ARG_BOOLEAN,0.0,0,NULL},
-    {"Parse options\n"
+    {"Parse options\n"          /* 4 */
      "         T - True: Parse SeqId and create indexes.\n"
      "         F - False: Do not parse SeqId. Do not create indexes.\n",
      "F", NULL,NULL,TRUE,'o',ARG_BOOLEAN,0.0,0,NULL},
     {"Input file is database in ASN.1 format (otherwise FASTA is expected)\n"
      "         T - True, \n"
-     "         F - False.\n",
+     "         F - False.\n",   /* 5 */
      "F", NULL,NULL,TRUE,'a',ARG_BOOLEAN,0.0,0,NULL},
-    {"ASN.1 database in binary mode\n"
+    {"ASN.1 database in binary mode\n" /* 6 */
      "         T - binary, \n"
      "         F - text mode.\n",
      "F", NULL,NULL,TRUE,'b',ARG_BOOLEAN,0.0,0,NULL},
-    {"Input is a Seq-entry","F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
-    { "Base name for BLAST files", 
+    {"Input is a Seq-entry",    /* 7 */
+     "F", NULL ,NULL ,TRUE,'e',ARG_BOOLEAN,0.0,0,NULL},
+    { "Base name for BLAST files", /* 8 */
       NULL, NULL, NULL, TRUE, 'n', ARG_STRING, 0.0, 0, NULL},
-    { "Number of sequence bases to be created in the volume", 
+    { "Number of sequence bases to be created in the volume", /* 9 */
       "0", NULL, NULL, TRUE, 'v', ARG_INT, 0.0, 0, NULL},
-    { "Create indexes limited only to accessions - sparse", 
-      "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL}
+    { "Create indexes limited only to accessions - sparse", /* 10 */
+      "F", NULL, NULL, TRUE, 's', ARG_BOOLEAN, 0.0, 0, NULL},
+    { "Verbose: check for non-unique string ids in the database", /* 11 */
+      "F", NULL, NULL, TRUE, 'V', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 /*#define db_title	(const CharPtr) dump_args[0].strvalue 
@@ -240,7 +257,7 @@ Args dump_args[NUMARG] = {
 
 #define Bases_In_Volume dump_args[9].intvalue
 
-FDB_optionsPtr FDB_CreateCLOptions(void)
+static FDB_optionsPtr FDB_CreateCLOptions(void)
 {
     FDB_optionsPtr options;
     
@@ -254,6 +271,13 @@ FDB_optionsPtr FDB_CreateCLOptions(void)
     } else {
         ErrSetOpts (ERR_CONTINUE, ERR_LOG_ON);
     }
+
+    UseLocalAsnloadDataAndErrMsg ();
+    
+    if (!SeqEntryLoad())
+        return NULL;
+
+    ErrSetMessageLevel(SEV_WARNING);
     
     options->db_title = StringSave(dump_args[0].strvalue);
     options->db_file = StringSave(dump_args[1].strvalue);
@@ -266,12 +290,13 @@ FDB_optionsPtr FDB_CreateCLOptions(void)
     options->base_name = StringSave(dump_args[8].strvalue);
     options->dump_info = FALSE;
     options->sparse_idx = dump_args[10].intvalue;
-
+    options->test_non_unique = dump_args[11].intvalue;
+    
     return options;
 }
 
 
-Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
+static Boolean FD_CreateAliasFile(CharPtr title, CharPtr basename, 
                            Int4 volumes, Boolean is_protein)
 {
     Char filenamebuf[128];
@@ -462,6 +487,8 @@ Int2 Main(void)
 
     if(FormatDBClose(fdbp))
         return 9;
+
+    FDB_FreeCLOptions(options);
     
     return 0;
     

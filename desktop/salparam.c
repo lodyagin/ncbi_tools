@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.50 $
+* $Revision: 6.51 $
 *
 * File Description: 
 *
@@ -1435,7 +1435,7 @@ static void BoolButton (GrouP g)
 
   wdialog = ParentWindow (g);
   dbdp = (DialogBoxDataPtr) GetObjectExtra (wdialog);
-  dbdp->bool = (Boolean)((GetValue (g)) == 1);
+  dbdp->db_bool = (Boolean)((GetValue (g)) == 1);
   return;
 }
 
@@ -2239,7 +2239,7 @@ static void HighlightSelectionFunc (ButtoN b)
   stop = SeqLocStop(slp);
   str = load_seq_data (SeqLocId(slp), start, stop, (Boolean)ISA_aa(adp->mol_type), &j);
   adp->extra_data = NULL;
-  show = dbdp->bool;
+  show = dbdp->db_bool;
 /*
   ObjMgrDeferUpdate ();
 */
@@ -2303,7 +2303,7 @@ extern void SelectSeqDialog (IteM i)
   dbdp = (DialogBoxDataPtr) MemNew (sizeof (DialogBoxData));
   SetObjectExtra (wdialog, (Pointer) dbdp, StdCleanupExtraProc);
   dbdp->w = w;
-  dbdp->bool = TRUE;
+  dbdp->db_bool = TRUE;
 
   g = HiddenGroup (wdialog, 3, 0, NULL);
   StaticPrompt(g, "Select the sequences ", 0, popupMenuHeight, systemFont,'l');

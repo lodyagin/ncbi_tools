@@ -34,6 +34,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.16  2000/10/20 21:46:37  shavirin
+Added additional parameters for creating RPS database.
+
 Revision 6.15  2000/02/29 16:27:39  shavirin
 Added protection against matrix with scaleFactor != 1 for RPS Blast
 
@@ -95,7 +98,11 @@ static Args myargs [] = {
       "F", NULL, NULL, FALSE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Create RPS mem map file(s)", /* 2 */
       "F", NULL, NULL, FALSE, 'r', ARG_BOOLEAN, 0.0, 0, NULL},
-}; 
+    { "Threshold for extending hits for RPS database", /* 3 */
+      "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
+    { "Word size for RPS database", /* 4 */
+      "3", NULL, NULL, FALSE, 'W', ARG_INT, 0.0, 0, NULL},
+};
 
 /*counts the number of items in sequencesFile and matricesFile, assumed to
   be one per line, and checks that the numbers are equal.
@@ -304,8 +311,9 @@ static Int4 findTotalLength(FILE *matrixAuxiliaryFile, Int4 numProfiles,
     MemFree(underlyingMatrixName);
     return(totalLength);
 }
-#define RPS_THRESHOLD 11
-#define RPS_WORDSIZE  3
+
+/* #define RPS_THRESHOLD 11 */
+/* #define RPS_WORDSIZE  3 */
 
 /* -- SSH --
    Updates absolute pointers of the lookup table to relative pointers -
@@ -407,8 +415,8 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     start = seqlens[0]; /* 0 */
     
     if(BlastNewFindWordsEx(lookup, &posMatrix[start], 0, all_length, 
-                           all_words, RPS_THRESHOLD * scalingFactor, 
-                           RPS_WORDSIZE, 0) < 0) {
+                           all_words, myargs[3].intvalue * scalingFactor, 
+                           myargs[4].intvalue, 0) < 0) {
         ErrPostEx(SEV_ERROR, 0,0, "Failure to create llokup table");
         return FALSE;
     }

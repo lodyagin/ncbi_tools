@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.48 2000/06/23 18:32:21 beloslyu Exp $
+# $Id: makedis.csh,v 1.53 2000/11/01 18:51:03 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -118,13 +118,42 @@ case Linux:
 			break
 		endif
 	end
-endif
+	breaksw
+case FreeBSD:
+	set platform=freebsd
+	set HAVE_MOTIF=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 )
+		if (-d $i/Xm) then
+			set HAVE_MOTIF=1
+			echo Motif found at $i/Xm
+			break
+		endif
+	end
 	breaksw
 case NetBSD:
 	set platform=netbsd
+	set HAVE_MOTIF=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 )
+		if (-d $i/Xm) then
+			set HAVE_MOTIF=1
+			echo Motif found at $i/Xm
+			break
+		endif
+	end
 	breaksw
 case AIX:
 	set platform=r6k
+	set HAVE_MOTIF=0
+	foreach i (/usr/X11R6/include /usr/X11R6/include/X11 /usr/include \
+		/usr/include/X11 )
+		if (-d $i/Xm) then
+			set HAVE_MOTIF=1
+			echo Motif found at $i/Xm
+			break
+		endif
+	end
 	breaksw
 case HP-UX:
 	set platform=hpux
@@ -162,7 +191,7 @@ mv makeall.unx makefile
 #    TO USE VIBRANT
 # to have for makeall, this line
 #  LIB30=libncbicn3d.a LIB28=libvibgif.a LIB4=libvibrant.a LIB20=libncbidesk.a 
-#    and for the makenet, this symbol
+#  LIB45=libddvlib.a  and for the makenet, this symbol
 #  BLIB31=libvibnet.a 
 #
 
@@ -195,6 +224,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		LIB28=libvibgif.a \
 		LIB4=libvibrant.a \
 		LIB20=libncbidesk.a \
+		LIB45=libddvlib.a \
 		$OGL_NCBI_LIBS \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\")
@@ -205,7 +235,7 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin Nentrez Cn3Dv3d udv ddv blastcl3 blast.REAL \
+		VIB=\"Psequin Nentrez udv ddv blastcl3 blast.REAL \
 		idfetch $OGL_TARGETS\") 
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
@@ -215,7 +245,7 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3\") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch\") 
 endif
 
 set CMD='make $MFLG \
@@ -247,19 +277,22 @@ eval echo $CMD | sh
 
 set demo_stat = $status
 
-rm -f blastall blastpgp seedtop
-
 #
 # In case platform supports multi-threading, remake the apps which
 # should be multithreaded, if at all possible.
 #  Might repeat what is done above on some platforms.
 #
 
+set mtapps = "blastall blastpgp seedtop megablast rpsblast blastclust"
+
+rm -f $mtapps
+
+
 set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" CC=\"$NCBI_CC\"  \
    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=$NCBI_MT_OTHERLIBS \
-   $DEMO_VIB blastall blastpgp seedtop'
+   $DEMO_VIB $mtapps'
 eval echo $CMD
 eval echo $CMD | sh 
 

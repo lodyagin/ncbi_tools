@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -45,11 +45,12 @@
 #ifndef _BIOSRC_
 #define _BIOSRC_
 
+#include <dlogutil.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <dlogutil.h>
 
 #define NUM_GENETIC_CODES 40
 

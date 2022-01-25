@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.39  2000/07/21 18:56:41  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.38  2000/06/09 14:35:16  lewisg
 * fix freeing bugs
 *
@@ -392,6 +395,7 @@ PMSD LIBCALL NewMSD(void)
       pmsdNew->bUpdate = (Byte) (REG_STYLE | SHOW_ME );
       pmsdNew->pfbParent = NULL;
       pmsdNew->pGlobalPARS = NULL;
+      pmsdNew->pdnSlaveToMasterTransforms = NULL;
      }
     return pmsdNew;
 }

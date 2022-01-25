@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.104 $
+* $Revision: 6.114 $
 *
 * File Description: 
 *
@@ -852,7 +852,8 @@ NLM_EXTERN void RenormalizeNucProtSets (SeqEntryPtr sep, Boolean relink)
   if (IS_Bioseq_set (sep)) {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp != NULL && (bssp->_class == 7 || bssp->_class == 13 ||
-                         bssp->_class == 14 || bssp->_class == 15)) {
+                         bssp->_class == 14 || bssp->_class == 15 ||
+                         bssp->_class == BioseqseqSet_class_gen_prod_set)) {
       for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
         RenormalizeNucProtSets (sep, relink);
       }
@@ -4570,7 +4571,9 @@ static void BasicSeqEntryCleanupInternal (SeqEntryPtr sep, ValNodePtr PNTR publi
         break;
       case Seq_descr_source :
         biop = (BioSourcePtr) sdp->data.ptrvalue;
-        orp = biop->org;
+        if (biop != NULL) {
+          orp = biop->org;
+        }
         break;
       default :
         break;
@@ -5648,6 +5651,95 @@ NLM_EXTERN void VisitSeqIdsInSeqLoc (SeqLocPtr slp, Pointer userdata, VisitSeqId
   }
 }
 
+NLM_EXTERN UserObjectPtr CombineUserObjects (UserObjectPtr origuop, UserObjectPtr newuop)
+
+{
+  UserFieldPtr   prev = NULL;
+  ObjectIdPtr    oip;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (newuop == NULL) return origuop;
+  if (origuop == NULL) return newuop;
+
+  /* adding to an object that already chaperones at least two user objects */
+
+  oip = origuop->type;
+  if (oip != NULL && StringICmp (oip->str, "CombinedFeatureUserObjects") == 0) {
+
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+      prev = ufp;
+    }
+
+    ufp = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->id = 0;
+    ufp->label = oip;
+    ufp->choice = 6; /* user object */
+    ufp->data.ptrvalue = (Pointer) newuop;
+
+    /* link new set at end of list */
+
+    if (prev != NULL) {
+      prev->next = ufp;
+    } else {
+      uop->data = ufp;
+    }
+    return origuop;
+  }
+
+  /* creating a new chaperone, link in first two user objects */
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("CombinedFeatureUserObjects");
+  uop->type = oip;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  ufp->label = oip;
+  ufp->choice = 6; /* user object */
+  ufp->data.ptrvalue = (Pointer) origuop;
+  uop->data = ufp;
+  prev = ufp;
+
+  ufp = UserFieldNew ();
+  oip = ObjectIdNew ();
+  oip->id = 0;
+  ufp->label = oip;
+  ufp->choice = 6; /* user object */
+  ufp->data.ptrvalue = (Pointer) newuop;
+  prev->next = ufp;
+
+  return uop;
+}
+
+NLM_EXTERN void VisitUserObjectsInUop (UserObjectPtr uop, Pointer userdata, VisitUserObjectFunc callback)
+
+{
+  Boolean        nested = FALSE;
+  UserObjectPtr  obj;
+  UserFieldPtr   ufp;
+
+  if (uop == NULL || callback == NULL) return;
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    if (ufp->choice == 6) {
+      obj = (UserObjectPtr) ufp->data.ptrvalue;
+      VisitUserObjectsInUop (obj, userdata, callback);
+      nested = TRUE;
+    } else if (ufp->choice == 12) {
+      for (obj = (UserObjectPtr) ufp->data.ptrvalue; obj != NULL; obj = obj->next) {
+        VisitUserObjectsInUop (obj, userdata, callback);
+      }
+      nested = TRUE;
+    }
+  }
+  if (! nested) {
+    callback (uop, userdata);
+  }
+}
+
 static void VisitDescriptorsProc (SeqDescrPtr descr, Pointer userdata, VisitDescriptorsFunc callback)
 
 {
@@ -6210,7 +6302,8 @@ NLM_EXTERN void VisitElementsInSep (SeqEntryPtr sep, Pointer userdata, VisitElem
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
     if (bssp == NULL) return;
     if (bssp->_class == 7 || bssp->_class == 13 ||
-        bssp->_class == 14 || bssp->_class == 15) {
+        bssp->_class == 14 || bssp->_class == 15 ||
+        bssp->_class == BioseqseqSet_class_gen_prod_set) {
       for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
         VisitElementsInSep (tmp, userdata, callback);
       }
@@ -6230,6 +6323,9 @@ NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
   SeqEntryPtr   sep;
 #ifdef OS_UNIX
   Char          cmmd [256];
+  CharPtr       gzcatprog;
+  int           ret;
+  Boolean       usedPopen = FALSE;
 #endif
   if (StringHasNoText (inputFile) || callback == NULL) return;
 
@@ -6260,8 +6356,23 @@ NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
 
 #ifdef OS_UNIX
   if (compressed) {
-    sprintf (cmmd, "/usr/bin/zcat %s", inputFile);
+    gzcatprog = getenv ("NCBI_UNCOMPRESS-BINARY");
+    if (gzcatprog != NULL) {
+      sprintf (cmmd, "%s %s", gzcatprog, inputFile);
+    } else {
+      ret = system ("gzcat -h >/dev/null 2>&1");
+      if (ret == 0) {
+        sprintf (cmmd, "gzcat %s", inputFile);
+      } else if (ret == -1) {
+        Message (MSG_FATAL, "Unable to fork or exec gzcat in ScanBioseqSetRelease");
+        return;
+      } else {
+        Message (MSG_FATAL, "Unable to find gzcat in ScanBioseqSetRelease - please edit your PATH environment variable");
+        return;
+      }
+    }
     fp = popen (cmmd, binary? "rb" : "r");
+    usedPopen = TRUE;
   } else {
     fp = FileOpen (inputFile, binary? "rb" : "r");
   }
@@ -6291,6 +6402,16 @@ NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean
     }
   }
 
-  AsnIoClose (aip);
+  AsnIoFree (aip, FALSE);
+
+#ifdef OS_UNIX
+  if (usedPopen) {
+    pclose (fp);
+  } else {
+    FileClose (fp);
+  }
+#else
+  FileClose (fp);
+#endif
 }
 

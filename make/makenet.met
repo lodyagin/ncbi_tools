@@ -481,7 +481,6 @@ with timeout of 60000 seconds
 		Set Preferences of panel "PPC Project" to {File Name:"ncbitxc2ppc"}
 		Set Preferences of panel "68K Project" to {File Name:"ncbitxc268k"}
 		Set Preferences of panel "C/C++ Compiler" to {Prefix File:"tax2.pfx"}
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:client:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:common:", origin:absolute}}}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "network:taxon1:taxon2:", origin:absolute}}}
 		my DoSetPaths2()

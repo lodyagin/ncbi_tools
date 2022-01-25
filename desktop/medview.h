@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.2 $
 *
 * File Description: 
 *
@@ -45,13 +45,13 @@
 #ifndef _MEDVIEW_
 #define _MEDVIEW_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <dlogutil.h>
 #include <document.h>
 #include <objacces.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
 *  The MedlineViewProcsPtr may be registered with a call to SetAppProperty
@@ -97,6 +97,7 @@ typedef struct medlineviewprocs {
 #define CITATION_PAGE  1
 #define MEDLINE_PAGE   2
 #define MEDASN1_PAGE   3
+#define MEDXML_PAGE    4
 
 extern ForM LIBCALL CreateMedlineViewForm (Int2 left, Int2 top, CharPtr title,
                                    MedlineEntryPtr mep,

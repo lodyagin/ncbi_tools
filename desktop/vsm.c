@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -2356,7 +2356,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 						if (ufp != NULL && ufp->choice == 1) {
 							oip = ufp->label;
 							if (oip != NULL && oip->str != NULL && StringICmp (oip->str, "protein seqID") == 0) {
-								tmp = (CharPtr) ufp->data.intvalue;
+								tmp = (CharPtr) ufp->data.ptrvalue;
 								if (tmp != NULL) {
 									sip = MakeSeqID (tmp);
 									if (sip != NULL) {

@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dxprt.c,v $
+* Revision 6.9  2000/07/28 21:05:56  lewisg
+* more c++ fixes
+*
 * Revision 6.8  2000/03/24 20:34:58  lewisg
 * add blast from file, bug fixes, get rid of redundant code, etc.
 *
@@ -502,17 +505,6 @@ TOGL_Data * Cn3D_GetCurrentOGLData(void)
     return Cn3D_ColorData.OGL_Data;
 }
 
-#ifdef WIN_MOTIF
-void ** Cn3D_GetCurrentOGLDisplayHndl(void)
-{
-    return &(Cn3D_ColorData.OGL_Data->display);
-}
-
-void ** Cn3D_GetCurrentOGLVisinfoHndl(void)
-{
-    return &(Cn3D_ColorData.OGL_Data->visinfo);
-}
-#endif /* WIN_MOTIF */
 
 #endif /* _OPENGL */
 

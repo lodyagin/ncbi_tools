@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.32 $
+* $Revision: 6.64 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,102 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.64  2000/10/27 14:03:24  kans
+* fixed memory leak when seqport fails - with far accessions, no longer always considered fatal (JO)
+*
+* Revision 6.63  2000/10/26 16:09:19  kans
+* new translation function was adding unwanted * at end of proteins
+*
+* Revision 6.62  2000/10/12 22:01:50  kans
+* fixes for backing off segment in far delta seq, minus strand, which points to another delta seq with gaps (JO)
+*
+* Revision 6.61  2000/09/26 23:54:58  kans
+* bullet proof GetSequenceFromFeature call to SeqPortRead by dealing with SEQPORT_EOF, but this should not have been sent back by SeqPortGetResidue in this case of a feature on the complementary strand of a far delta with seqlit spacers
+*
+* Revision 6.60  2000/09/26 17:05:21  kans
+* GetSequenceByIdOrAccnDotVer does not delete SeqId if passed in as parameter, only if created from accession parameter
+*
+* Revision 6.59  2000/09/24 23:31:18  kans
+* added GetSequenceByFeature
+*
+* Revision 6.58  2000/09/24 22:52:46  kans
+* added GetSequenceByIdOrAccnDotVer
+*
+* Revision 6.57  2000/09/23 23:40:39  kans
+* SeqPortNew allows NULL spp->bsp for SEQLOC_NULL, but warns if real Bioseq cannot be fetched, fails gracefully (JO)
+*
+* Revision 6.56  2000/09/15 13:22:03  ostell
+* made default for gap with length do_virtual in Seq-Lit of delta seq
+*
+* Revision 6.55  2000/09/05 21:33:50  kans
+* productInterval_to_locationIntervals replaces aaInterval_to_dnaIntervals, also works for mRNA feature (JO)
+*
+* Revision 6.54  2000/08/31 18:12:53  shavirin
+* Added new function TransTableFreeAll().
+*
+* Revision 6.53  2000/08/16 18:37:45  kans
+* removed unused variables only detected by UNIX compiler, since they were initialized
+*
+* Revision 6.52  2000/08/16 16:33:13  kans
+* ReadCodingRegionBases needed to take SEQPORT_EOF into account
+*
+* Revision 6.51  2000/08/10 17:58:32  kans
+* ProteinFromCdRegionEx now uses finite state machine, old code commented out in #if 0..#endif block
+*
+* Revision 6.50  2000/08/10 17:22:37  kans
+* added GetDNAbyAccessionDotVersion for genome processing effort
+*
+* Revision 6.49  2000/08/04 19:02:41  kans
+* implemented contig rev comp for delta seqs - not yet tested
+*
+* Revision 6.48  2000/08/04 16:10:18  kans
+* fixes to ContigRevComp - still need to implement delta
+*
+* Revision 6.47  2000/08/04 15:45:21  kans
+* added ContigRevComp - still need to implement for delta bioseqs
+*
+* Revision 6.46  2000/08/03 19:02:53  kans
+* added PersistentTransTableByGenCode and PersistentTransTableByCdRegion
+*
+* Revision 6.45  2000/08/01 19:46:54  kans
+* trans table FSA now deals with start codon ambiguity, TransTableTranslateCommon does not need to special case this anymore, added ProteinFromCdRegionNew
+*
+* Revision 6.44  2000/07/31 23:16:17  kans
+* ProteinFromCdRegionEx and TranslateCommon functions skip past SEQPORT_VIRT and SEQPORT_EOS residues, in their own ways
+*
+* Revision 6.43  2000/07/31 21:40:14  kans
+* trim back last X, B, or Z
+*
+* Revision 6.42  2000/07/31 19:21:55  kans
+* fixed code break logic for translate common
+*
+* Revision 6.41  2000/07/31 16:18:59  kans
+* translate cdregion works on less than one codon, treats ambiguous start as X
+*
+* Revision 6.40  2000/07/31 00:29:24  kans
+* relax reality check for translate cdregion
+*
+* Revision 6.39  2000/07/31 00:18:47  kans
+* fixes to read bases, translate coding region
+*
+* Revision 6.38  2000/07/30 23:15:50  kans
+* ReadCodingRegionBases calls SeqPortSet_do_virtual if any bioseq components of feature location are delta or virtual
+*
+* Revision 6.37  2000/07/24 21:27:25  kans
+* implement code break in trans table translation
+*
+* Revision 6.36  2000/07/24 20:09:37  kans
+* fixed two bugs in trans table translate - code break is all that remains to be implemented
+*
+* Revision 6.35  2000/07/22 22:45:36  kans
+* more work on trans table translation functions
+*
+* Revision 6.34  2000/07/21 15:28:35  kans
+* first pass at TransTableTranslate functions - more work remains
+*
+* Revision 6.33  2000/07/20 17:42:06  kans
+* translation table finite state machine allows Asx (Asp or Asn) and Glx (Glu or Gln)
+*
 * Revision 6.32  2000/07/05 17:02:11  kans
 * added spp->gapIsZero, SeqPortSet_do_virtualEx, using ncbi4na with gap of 0 to distinguish quality scores under N versus quality scores under gap
 *
@@ -252,6 +348,9 @@ static char *this_file = __FILE__;
 #include <seqport.h>
 #include <edutil.h>    /* for SeqLoc creation functions */
 #include <gather.h>    /* for SeqLocOffset function */
+#include <sqnutils.h>
+#include <explore.h>   /* for BioseqFindFromSeqLoc function */
+
 
 
 NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp);
@@ -741,7 +840,7 @@ newcode)
     Uint1 curr_code, repr, tstrand = 0;
     SeqLocPtr the_segs = NULL, currseg;
     Int4 len, ctr, tlen = 0, tfrom = 0, tto = 0, xfrom, xto, tstart, tstop;
-	Char errbuf[41];
+	Char errbuf[41], idbuf[41];
 	ValNode fake;
 	Boolean done, started;
 	BioseqPtr tbsp;
@@ -749,6 +848,7 @@ newcode)
 */
 	Boolean do_multi_loc, cycle2;
 	SeqLitPtr slitp = NULL;
+	SeqIdPtr tsip;
 
     spp = (SeqPortPtr) MemNew(sizeof(SeqPort));
 	errbuf[0] = '\0';
@@ -918,17 +1018,34 @@ stop);
 						xto = tto - tstop;
 					}
 
-					if (currseg != NULL)    /* working off 
-locs */
+					if (currseg != NULL)    /* working off locs */
 					{
-						tbsp = 
-BioseqLockById(SeqLocId(currseg));
-		
-	    				spps = SeqPortNew(tbsp, xfrom, xto, 
-tstrand, newcode);
-						if (currseg->choice == 
-SEQLOC_NULL)
+						if (currseg->choice == SEQLOC_NULL)
+						{
+							tbsp = NULL;
+							spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
 							spps->isa_null = TRUE;
+						}
+						else
+						{
+							tsip = SeqLocId(currseg);
+							tbsp = BioseqLockById(tsip);
+							if (tbsp != NULL)
+								spps = SeqPortNew(tbsp, xfrom, xto, tstrand, newcode);
+							else
+							{
+								spps = NULL;
+								if (tsip != NULL)
+									SeqIdWrite(tsip, idbuf, PRINTID_FASTA_SHORT, 40);
+								else
+									StringMove(idbuf,"seqid=NULL");
+								ErrPostEx(SEV_ERROR,0,0,
+									  "SeqPortNew: %s could not find component %s", 
+									  errbuf, idbuf);
+								return SeqPortFree(spp);
+							}
+						}
+
 					}
 					else
 					{
@@ -945,6 +1062,11 @@ slitp->seq_data;
 							spps->isa_virtual = TRUE;
 						        if (slitp->length == 0)
 								spps->isa_null = TRUE;
+							else
+							{   /* default for delta gaps */
+								spps->do_virtual = TRUE;
+							}
+
 						}
 					}
 		
@@ -953,7 +1075,7 @@ slitp->seq_data;
 					    ErrPostEx(SEV_ERROR,0,0,
 						 "SeqPortNew: %s unexpected null during recursion", 
 						 		errbuf);
-	            	    return NULL;
+	            	    return SeqPortFree(spp);
 		            }
 
 					if (currseg != NULL)
@@ -1205,6 +1327,7 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 	switch (origin)
 	{
 		case SEEK_SET:
+			spp->backing = FALSE;  /* reset.. not backing */
 			if ((offset > spp->totlen) || (offset < 0)) {
 				ClearQCache (spp, sp);
 				return 1;
@@ -1215,6 +1338,18 @@ NLM_EXTERN Int2 SeqPortSeek (SeqPortPtr spp, Int4 offset, Int2 origin)
 			if (((sp + offset) > spp->totlen) ||
 				((sp + offset) < 0 ))
             {
+		/** check for reverse complement backing **/
+		if ((sp + offset < 0) && (offset == -2)) 
+		{
+			if (spp->backing == 1)
+			{
+				ClearQCache(spp, -1);
+				return 0;
+			}
+			if (spp->curpos == -1)  /* not set */
+				return 0;
+		}
+
                 if (! spp->is_circle) {
                 	ClearQCache (spp, sp);
     				return 1;
@@ -1342,9 +1477,10 @@ diff);
     else                    /* segmented, reference sequences */
     {
  
-		if (spp->backing)  /* check for backing off segment */
+		if (spp->backing == 1)  /* check for backing off segment */
 		{
-			if (spp->curr->curpos == 1)  /* yup */
+			if ((spp->curr->curpos == 1) &&
+			    (! spp->curr->backing))  /* yup */
 			{
 				spp->curr->curpos = -1;  /* just set the flag */
 				spp->curpos -= 2;
@@ -1524,6 +1660,9 @@ NLM_EXTERN Uint1 LIBCALL SeqPortGetResidue (SeqPortPtr spp)
 	SPCachePtr spcp;
 	SeqPortPtr tmp, prev;
 	SPCacheQPtr spcpq;
+
+	if (spp != NULL)
+		spp->backing = FALSE;  /* clear it on read */
 
 	if (spp != NULL && spp->cacheq != NULL && spp->curpos < spp->totlen) {
 		spcpq = spp->cacheq;
@@ -1771,11 +1910,11 @@ INVALID_RESIDUE))
 
         if (! plus_strand)
         {
-			spp->curr->backing = TRUE;     /* signal we are backing 
+			spp->curr->backing++;     /* signal we are backing 
 up */
             if (SeqPortSeek(spp->curr, -2, SEEK_CUR))  /* back up to "next" */
                 spp->curr->eos = TRUE;
-			spp->curr->backing = FALSE;
+
         }
     }
     
@@ -1914,6 +2053,68 @@ NLM_EXTERN Int2 LIBCALL SeqPortRead (SeqPortPtr spp, Uint1Ptr buf, Int2 len)
     return ctr;
 }
 
+/*******************************************************************************
+*	
+*	ProteinFromCdRegionEx ( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+*		replacement for old ProteinFromCdRegionEx, but using TransTableTranslateCdRegion. 
+*
+********************************************************************************/
+
+NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+
+{
+  ByteStorePtr   bs;
+  CdRegionPtr    crp;
+  Int2           genCode = 0;
+  Char           str [32];
+  Boolean        tableExists = FALSE;
+  TransTablePtr  tbl = NULL;
+  ValNodePtr     vnp;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION) return NULL;
+  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+  if (crp == NULL) return NULL;
+
+  /* find genetic code */
+
+  if (crp->genetic_code != NULL) {
+    vnp = (ValNodePtr) crp->genetic_code->data.ptrvalue;
+    while (vnp != NULL) {
+      if (vnp->choice == 2) {
+        genCode = (Int2) vnp->data.intvalue;
+      }
+      vnp = vnp->next;
+    }
+  }
+
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
+  /* set app property name for storing desired FSA */
+
+  sprintf (str, "TransTableFSAforGenCode%d", (int) genCode);
+
+  /* get FSA for desired genetic code if it already exists */
+
+  tbl = (TransTablePtr) GetAppProperty (str);
+  tableExists = (Boolean) (tbl != NULL);
+
+  bs = TransTableTranslateCdRegion (&tbl, sfp, include_stop, remove_trailingX);
+
+  /* save FSA in genetic code-specific app property name */
+
+  if (! tableExists) {
+    SetAppProperty (str, (Pointer) tbl);
+  }
+
+  return bs;
+}
+
 NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 
 /*****************************************************************************
@@ -1932,6 +2133,10 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegion(SeqFeatPtr sfp, Boolean include_stop
 	return ProteinFromCdRegionEx(sfp, include_stop, TRUE);
 }
 
+
+/* old version of ProteinFromCdRegionEx no longer compiled (below) */
+
+#if 0
 /*******************************************************************************
 *	
 *	ProteinFromCdRegionEx( SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
@@ -1940,7 +2145,7 @@ NLM_EXTERN ByteStorePtr ProteinFromCdRegion(SeqFeatPtr sfp, Boolean include_stop
 *
 ********************************************************************************/
 
-NLM_EXTERN ByteStorePtr ProteinFromCdRegionEx(SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
+NLM_EXTERN ByteStorePtr Old_ProteinFromCdRegionEx (SeqFeatPtr sfp, Boolean include_stop, Boolean remove_trailingX)
 {
 	SeqPortPtr spp = NULL;
 	ByteStorePtr bs = NULL;
@@ -2114,6 +2319,10 @@ partial codon at end */
 		for (i = 0; i < 3; i++)
 		{
 			residue = SeqPortGetResidue(spp);
+			if (residue == SEQPORT_VIRT || residue == SEQPORT_EOS) {
+				/* skip past null NULL in seqport, get next - JK */
+				residue = SeqPortGetResidue(spp);
+			}
 			if (residue == SEQPORT_EOF)
 				break;
 			if (residue == INVALID_RESIDUE)
@@ -2204,6 +2413,10 @@ erret:
 	bs = BSFree(bs);
 	goto ret;
 }
+#endif
+
+/* old version of ProteinFromCdRegionEx no longer compiled (above) */
+
 
 /*****************************************************************************
 *
@@ -2523,32 +2736,50 @@ Seq-loc*/
 *	map a SeqLoc on the amino acid sequence
 *       to a Seq-loc in the	DNA sequence
 *       through a CdRegion feature
+*       
+*       This now calls the more general productLoc_to_locationLoc(sfp, productLoc)
 *
 ******************************************************************/
 NLM_EXTERN SeqLocPtr LIBCALL aaLoc_to_dnaLoc(SeqFeatPtr sfp, SeqLocPtr aa_loc)
 {
+	return productLoc_to_locationLoc(sfp, aa_loc);
+}
+
+/******************************************************************
+*
+*	aaLoc_to_dnaLoc(sfp, productLoc)
+*	map a SeqLoc on the product sequence
+*       to a Seq-loc in the	location sequence
+*       through a feature.
+*
+*       if the feature is a CdRegion, converts by modulo 3
+*       to support aaLoc_to_dnaLoc() function
+*
+******************************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL productLoc_to_locationLoc(SeqFeatPtr sfp, SeqLocPtr productLoc)
+{
 	SeqLocPtr head = NULL, slp, tmp, next;
-	Int4 aa_start, aa_stop;
+	Int4 product_start, product_stop;
 	SeqBondPtr sbp;
 	ValNode vn;
+	Boolean is_cdregion = FALSE;
 
-
-	if ((sfp == NULL) || (aa_loc == NULL)) return head;
-	if (sfp->data.choice != 3) return head;
+	if ((sfp == NULL) || (productLoc == NULL)) return head;
+	if (sfp->data.choice == 3) is_cdregion = TRUE;
 	if (sfp->product == NULL) return head;
-	if (! (SeqIdForSameBioseq(SeqLocId(aa_loc), SeqLocId(sfp->product))))
+	if (! (SeqIdForSameBioseq(SeqLocId(productLoc), SeqLocId(sfp->product))))
 		return head;
 
-	if (aa_loc->choice == SEQLOC_BOND)   /* fake this one in */
+	if (productLoc->choice == SEQLOC_BOND)   /* fake this one in */
 	{
-		sbp = (SeqBondPtr)(aa_loc->data.ptrvalue);
-		tmp = aaInterval_to_dnaIntervals(sfp, sbp->a->point, 
+		sbp = (SeqBondPtr)(productLoc->data.ptrvalue);
+		tmp = productInterval_to_locationIntervals(sfp, sbp->a->point, 
 sbp->a->point);
 		if (sbp->b == NULL)  /* one point in bond */
 			return tmp;
 
 		SeqLocAdd(&head, tmp, TRUE, FALSE);
-		tmp = aaInterval_to_dnaIntervals(sfp, sbp->b->point, 
+		tmp = productInterval_to_locationIntervals(sfp, sbp->b->point, 
 sbp->b->point);
 		if (tmp == NULL)
 			return head;
@@ -2564,13 +2795,13 @@ sbp->b->point);
 	}
 
 	slp = NULL;
-	while ((slp = SeqLocFindNext(aa_loc, slp)) != NULL)
+	while ((slp = SeqLocFindNext(productLoc, slp)) != NULL)
 	{
-		aa_start = SeqLocStart(slp);
-		aa_stop = SeqLocStop(slp);
-		if ((aa_start >= 0) && (aa_stop >= 0))
+		product_start = SeqLocStart(slp);
+		product_stop = SeqLocStop(slp);
+		if ((product_start >= 0) && (product_stop >= 0))
 		{
-		   tmp = aaInterval_to_dnaIntervals(sfp, aa_start, aa_stop);
+		   tmp = productInterval_to_locationIntervals(sfp, product_start, product_stop);
 		   if(tmp != NULL)
 			load_fuzz_to_DNA(tmp, slp, TRUE);
 		   while (tmp != NULL)
@@ -2692,70 +2923,84 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp,
 
 /******************************************************************
 *
-*	aaInterval_to_dnaIntervals(sfp, aa_start, aa_stop)
+*	productInterval_to_locationIntervals(sfp, product_start, product_stop)
 *	map the amino acid sequence to a chain of Seq-locs in the 
 *	DNA sequence through a CdRegion feature
 *
 ******************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL aaInterval_to_dnaIntervals(SeqFeatPtr sfp, Int4 aa_start, Int4 
-aa_stop)
+NLM_EXTERN SeqLocPtr LIBCALL productInterval_to_locationIntervals(SeqFeatPtr sfp, Int4 product_start, Int4 
+product_stop)
 {
   Int4 frame_offset, start_offset;	/*for determine the reading frame*/
   SeqLocPtr slp = NULL;
   CdRegionPtr crp;
-  SeqLocPtr dna_loc, loc;			/*for the dna location*/
+  SeqLocPtr location_loc, loc;			/*for the sfp.location location*/
 
   Boolean is_end;			/**is the end for process reached?**/
-  Int4 p_start=0, p_stop=0;		/**protein start & stop in defined
-					corresponding CdRegion Seq-loc**/
-  Int4 cur_pos;			/**current protein position in process**/
-  Int4 cd_len;		/**length of the cDNA for the coding region**/
+  Int4 p_start=0, p_stop=0;		/**product sequence start & stop in defined
+					corresponding sfp.product **/
+  Int4 cur_pos;			/**current sfp.product sequence position in process**/
+  Int4 product_len;		/**length of the sfp.product **/
 
   Boolean is_new;		/**Is cur_pos at the begin of new exon?**/
   Int4 end_partial;		/*the end of aa is a partial codon*/
-  Int4 d_start, d_stop;		/*the start and the stop of the DNA sequence*/
+  Int4 d_start, d_stop;		/*the start and the stop of the sfp.location sequence*/
   Int4 offset;			/*offset from the start of the current exon*/
   Int4 aa_len;
   Uint1 strand;
-  Int4 p_end_pos;	/*the end of the protein sequence in the current loc*/
+  Int4 p_end_pos;	/*the end of the product sequence in the current loc*/
   Int4 first_partial;	/*first codon is a partial*/
+  Boolean is_cdregion = FALSE;
 
 
 
+   if(sfp->data.choice ==3)  /* cdregion must take into account 3 base/aa */
+   {
+	is_cdregion = TRUE;
 
-   if(sfp->data.choice !=3)
-	return NULL;
-
-
-   crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-   if(!crp)
-	return NULL;
-   if(crp->frame>0)
-	frame_offset = crp->frame-1;
+	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
+	if(!crp)
+		return NULL;
+	if(crp->frame>0)
+		frame_offset = crp->frame-1;
+	else
+		frame_offset = 0;
+	start_offset = frame_offset;
+   }
    else
+   {
+	start_offset = 0;
 	frame_offset = 0;
-   start_offset = frame_offset;
+   }
 
-
-   cur_pos= aa_start;
-   cd_len = 0;
+   cur_pos= product_start;
+   product_len = 0;
    is_end = FALSE;
    p_start = 0;
    first_partial = 0;
+   end_partial = 0;
    slp = NULL;
-   dna_loc= NULL;
+   location_loc= NULL;
    while(!is_end && ((slp = SeqLocFindNext(sfp->location, slp))!=NULL))
    {
-	cd_len += SeqLocLen(slp);
-	end_partial = ((cd_len - start_offset)%3);
-	p_stop = (cd_len - start_offset)/3 -1;
-	if(end_partial != 0)
-	   ++p_stop;
+	product_len += SeqLocLen(slp);
+	if (is_cdregion)
+	{
+		end_partial = ((product_len - start_offset)%3);
+		p_stop = (product_len - start_offset)/3 -1;
+		if(end_partial != 0)
+			++p_stop;
+	}
+	else
+	{
+		p_stop = product_len - start_offset - 1;
+	}
+
 	p_end_pos = p_stop;
 
-	if(p_stop > aa_stop || (p_stop == aa_stop && end_partial == 0))
+	if(p_stop > product_stop || (p_stop == product_stop && end_partial == 0))
 	{
-	   p_stop = aa_stop;		/**check if the end is reached**/
+	   p_stop = product_stop;		/**check if the end is reached**/
 	   is_end = TRUE;
 	}
 
@@ -2764,12 +3009,15 @@ aa_stop)
 		is_new = (p_start == cur_pos);	/*start a new exon?*/
 		if(is_new)	/**special case of the first partial**/
 		   offset = 0;
-		else
+		else if (is_cdregion)
 		{
 		   if(frame_offset && p_start >0)
 			++p_start;
 		   offset = 3*(cur_pos - p_start) + frame_offset;
 		}
+		else
+		   offset = cur_pos - p_start;
+
 		strand = SeqLocStrand(slp);
 		if(strand == Seq_strand_minus)
 		   d_start = SeqLocStop(slp) - offset;
@@ -2778,31 +3026,36 @@ aa_stop)
 
 		d_stop = d_start;
 		/*first codon*/
-		if(is_new && cd_len == SeqLocLen(slp))
+		if(is_cdregion && is_new && product_len == SeqLocLen(slp))
 		{
 			if(strand == Seq_strand_minus)
 				d_stop -= frame_offset;
 			else
 				d_stop += frame_offset;
 		}
-		aa_len = MIN(p_stop, aa_stop) - cur_pos +1;
-		if(end_partial != 0 && (p_end_pos >= aa_start && p_end_pos <= 
-aa_stop))
+		aa_len = MIN(p_stop, product_stop) - cur_pos +1;
+		if(end_partial != 0 && (p_end_pos >= product_start && p_end_pos <= 
+product_stop))
 			--aa_len;
 		if(first_partial > 0)
 			--aa_len;
 		if(strand == Seq_strand_minus)
 		{
 			if(aa_len >= 0)
-				d_stop -= (3*aa_len - 1);
+			{
+				if (is_cdregion)
+					d_stop -= (3*aa_len - 1);
+				else
+					d_stop -= (aa_len - 1);
+			}
 			else
 				++d_stop;
 			if(first_partial >0)
 				d_stop -= first_partial;
 				
 			first_partial = 0;
-			if (end_partial > 0 && (p_end_pos >= aa_start && 
-p_end_pos <= aa_stop)) {
+			if (end_partial > 0 && (p_end_pos >= product_start && 
+p_end_pos <= product_stop)) {
 				d_stop -= end_partial;
 				first_partial = 3 - end_partial;
 			}
@@ -2814,15 +3067,20 @@ SeqLocId(slp));
 		else
 		{
 			if(aa_len >= 0)
-				d_stop += (3*aa_len - 1);
+			{
+				if (is_cdregion)
+					d_stop += (3*aa_len - 1);
+				else
+					d_stop += (aa_len - 1);
+			}
 			else
 				--d_stop;
 				
 			if(first_partial > 0)
 				d_stop += first_partial;
 			first_partial = 0;
-			if (end_partial> 0 && (p_end_pos >= aa_start && 
-p_end_pos <= aa_stop)) {
+			if (end_partial> 0 && (p_end_pos >= product_start && 
+p_end_pos <= product_stop)) {
 				d_stop += end_partial;
 				first_partial = 3 - end_partial;
 			}
@@ -2830,7 +3088,7 @@ p_end_pos <= aa_stop)) {
 			loc = SeqLocIntNew(d_start, d_stop, strand, 
 SeqLocId(slp));
 		}
-		SeqLocAdd(&dna_loc, loc, TRUE, FALSE);
+		SeqLocAdd(&location_loc, loc, TRUE, FALSE);
 
 		if(end_partial != 0)
 			cur_pos = p_stop;
@@ -2849,14 +3107,16 @@ SeqLocId(slp));
 	    p_start = p_stop +1;
 	}
 	
-
-	frame_offset = (cd_len - start_offset)%3;
-	 if(frame_offset >0)
-	    frame_offset = 3-frame_offset;
+	if (is_cdregion)
+	{
+		frame_offset = (product_len - start_offset)%3;
+		if(frame_offset >0)
+		  frame_offset = 3-frame_offset;
+	}
 
    }/**end of while(slp && !is_end) **/
 
-   return dna_loc;
+   return location_loc;
 
 }
 
@@ -2864,7 +3124,7 @@ static Boolean load_fuzz_to_DNA PROTO((SeqLocPtr dnaLoc, SeqLocPtr aaLoc,
 Boolean first));
 /******************************************************************
 *
-*	dnaLoc_to_aaLoc(sfp, dna_loc, merge)
+*	dnaLoc_to_aaLoc(sfp, location_loc, merge)
 *	map a SeqLoc on the DNA sequence
 *       to a Seq-loc in the	protein sequence
 *       through a CdRegion feature
@@ -2872,12 +3132,12 @@ Boolean first));
 *      are merged into one. This should be the usual case.
 *
 ******************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr dna_loc, Boolean 
+NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr location_loc, Boolean 
 merge, Int4Ptr frame, Boolean allowTerminator)
 {
 	SeqLocPtr aa_loc = NULL, loc;
 	CdRegionPtr crp;
-	Int4 cd_len, end_pos, frame_offset;
+	Int4 product_len, end_pos, frame_offset;
 	GatherRange gr;
 	Int4 a_left = 0, a_right, last_aa = -20, aa_from, aa_to;
 	SeqLocPtr slp;
@@ -2885,15 +3145,15 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 	SeqIdPtr aa_sip;
 	BioseqPtr bsp;
 
-	if ((sfp == NULL) || (dna_loc == NULL)) return aa_loc;
+	if ((sfp == NULL) || (location_loc == NULL)) return aa_loc;
 	if (sfp->data.choice != 3) return aa_loc;
 	if (sfp->product == NULL) return aa_loc;
 
 	crp = (CdRegionPtr) sfp->data.value.ptrvalue;
 	if(crp == NULL) return aa_loc;
 
-	           /* dna_loc must be equal or contained in feature */
-	cmpval = SeqLocCompare(dna_loc, sfp->location);
+	           /* location_loc must be equal or contained in feature */
+	cmpval = SeqLocCompare(location_loc, sfp->location);
 	if (! ((cmpval == SLC_A_IN_B) || (cmpval == SLC_A_EQ_B)))
 		return aa_loc;
 
@@ -2910,16 +3170,16 @@ merge, Int4Ptr frame, Boolean allowTerminator)
 		frame_offset = (Int4)crp->frame-1;
 
 	slp = NULL;
-	cd_len = 0;
+	product_len = 0;
 	loc = NULL;
 	while ((slp = SeqLocFindNext(sfp->location, slp))!=NULL)
 	{
-	   if (SeqLocOffset(dna_loc, slp, &gr, 0))
+	   if (SeqLocOffset(location_loc, slp, &gr, 0))
 	   {
-			SeqLocOffset(slp, dna_loc, &gr, 0);
+			SeqLocOffset(slp, location_loc, &gr, 0);
 		
-			a_left = gr.left + cd_len - frame_offset;
-			a_right = gr.right + cd_len - frame_offset;
+			a_left = gr.left + product_len - frame_offset;
+			a_right = gr.right + product_len - frame_offset;
 
 			aa_from = a_left / 3;
 			aa_to = a_right / 3;
@@ -2942,7 +3202,7 @@ codons */
 				if(loc != NULL)
 				{
 					if(aa_loc == NULL)
-						load_fuzz_to_DNA(loc, dna_loc, 
+						load_fuzz_to_DNA(loc, location_loc, 
 TRUE);
 					SeqLocAdd(&aa_loc, loc, merge, FALSE);
 				}
@@ -2951,14 +3211,14 @@ TRUE);
 			}
 	     }
 
-	     cd_len += SeqLocLen(slp);		
+	     product_len += SeqLocLen(slp);		
 	}
 
 	if(loc != NULL)
 	{
 		if(aa_loc == NULL)
-			load_fuzz_to_DNA(loc, dna_loc, TRUE);
-		load_fuzz_to_DNA(loc, dna_loc, FALSE);
+			load_fuzz_to_DNA(loc, location_loc, TRUE);
+		load_fuzz_to_DNA(loc, location_loc, FALSE);
 		SeqLocAdd(&aa_loc, loc, merge, FALSE);
 	}
 	if (frame != NULL)
@@ -3349,6 +3609,176 @@ bytes*/
 
 /*****************************************************************************
 *
+*  ContigRevComp
+*
+*****************************************************************************/
+
+static Boolean SegRevComp (BioseqPtr bsp)
+
+{
+  ValNodePtr  head = NULL;
+  Int4        from, to, tmp;
+  Boolean     partial5, partial3;
+  SeqIntPtr   sintp;
+  SeqLocPtr   slp;
+  ValNode     vn;
+  ValNodePtr  vnp;
+
+  MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+  vn.choice = SEQLOC_MIX;
+  vn.data.ptrvalue = bsp->seq_ext;
+
+  /* get each location component */
+
+  slp = SeqLocFindNext (&vn, NULL);
+  while (slp != NULL) {
+
+    /* copy component, reversing strand */
+
+    vnp = NULL;
+    if (slp->choice == SEQLOC_NULL) {
+
+      vnp = ValNodeAddPointer (NULL, SEQLOC_NULL, NULL);
+
+    } else if (slp->choice == SEQLOC_INT) {
+
+      sintp = (SeqIntPtr) slp->data.ptrvalue;
+      if (sintp != NULL) {
+        CheckSeqLocForPartial (slp, &partial5, &partial3);
+        from = sintp->from;
+        to = sintp->to;
+        if (sintp->strand != Seq_strand_minus) {
+          tmp = from;
+          from = to;
+          to = tmp;
+        }
+        vnp = AddIntervalToLocation (NULL, sintp->id, from, to, partial3, partial5);
+      }
+
+    }
+
+    /* save in new list in reverse order */
+
+    if (vnp != NULL) {
+      vnp->next = head;
+      head = vnp;
+    }
+
+    slp = SeqLocFindNext (&vn, slp);
+  }
+
+  if (head == NULL) return FALSE;
+
+  bsp->seq_ext = SeqLocSetFree ((ValNodePtr) bsp->seq_ext);
+  bsp->seq_ext = head;
+
+  bsp->hist = SeqHistFree (bsp->hist);
+
+  return TRUE;
+}
+
+static Boolean DeltaRevComp (BioseqPtr bsp)
+
+{
+  DeltaSeqPtr  dsp, dspnext;
+  ValNodePtr   head = NULL;
+  Int4         from, to, tmp;
+  Boolean      partial5, partial3;
+  SeqIntPtr    sintp;
+  SeqLocPtr    slp;
+  SeqLitPtr    slitp, slip;
+  ValNodePtr   vnp;
+
+  for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+    vnp = NULL;
+
+    if (dsp->choice == 1) {
+
+      slp = (SeqLocPtr) dsp->data.ptrvalue;
+      if (slp != NULL) {
+
+        if (slp->choice == SEQLOC_NULL) {
+
+          vnp = ValNodeAddPointer (NULL, SEQLOC_NULL, NULL);
+
+        } else if (slp->choice == SEQLOC_INT) {
+
+          sintp = (SeqIntPtr) slp->data.ptrvalue;
+          if (sintp != NULL) {
+            CheckSeqLocForPartial (slp, &partial5, &partial3);
+            from = sintp->from;
+            to = sintp->to;
+            if (sintp->strand != Seq_strand_minus) {
+              tmp = from;
+              from = to;
+              to = tmp;
+            }
+            vnp = AddIntervalToLocation (NULL, sintp->id, from, to, partial3, partial5);
+          }
+        }
+      }
+
+    } else if (dsp->choice == 2) {
+
+      slitp = (SeqLitPtr) dsp->data.ptrvalue;
+      if (slitp != NULL && slitp->seq_data == NULL) {
+        slip = SeqLitNew ();
+        if (slip != NULL) {
+          slip->length = slitp->length;
+          /* not copying fuzz */
+          slip->seq_data_type = slitp->seq_data_type;
+          vnp = ValNodeAddPointer (NULL, 2, (Pointer) slip);
+        }
+      } else {
+        ValNodeFree (head);
+        return FALSE;
+      }
+    }
+
+    /* save in new list in reverse order */
+
+    if (vnp != NULL) {
+      vnp->next = head;
+      head = vnp;
+    }
+  }
+
+  if (head == NULL) return FALSE;
+
+  dsp = (DeltaSeqPtr) bsp->seq_ext;
+  while (dsp != NULL) {
+    dspnext = dsp->next;
+    dsp->next = NULL;
+    DeltaSeqFree (dsp);
+    dsp = dsp->next;
+  }
+  bsp->seq_ext = head;
+
+  bsp->hist = SeqHistFree (bsp->hist);
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean LIBCALL ContigRevComp (BioseqPtr bsp)
+
+{
+  if (bsp == NULL) {
+    ErrPostEx (SEV_ERROR, 0, 0, "ContigRevComp: empty BioseqPtr");
+  }
+
+  if (bsp->repr == Seq_repr_seg && bsp->seq_ext_type == 1 && bsp->seq_ext != NULL) {
+    return SegRevComp (bsp);
+  }
+  if (bsp->repr == Seq_repr_delta && bsp->seq_ext_type == 4 && bsp->seq_ext != NULL) {
+    return DeltaRevComp (bsp);
+  }
+
+  ErrPostEx (SEV_ERROR, 0, 0, "ContigRevComp: not a segmented or delta BioseqPtr");
+  return FALSE;
+}
+
+/*****************************************************************************
+*
 *  SPCompressNew(void); - allocated memory for SPCompress structure
 *
 *****************************************************************************/
@@ -3649,14 +4079,6 @@ static Boolean SetGenCode (Int2 genCode, CharPtr PNTR ncbieaa, CharPtr PNTR sncb
 
   if (ncbieaa == NULL || sncbieaa == NULL) return FALSE;
 
-  if (genCode == 7) {
-    genCode = 4;
-  } else if (genCode == 8) {
-    genCode = 1;
-  } else if (genCode == 0) {
-    genCode = 1;
-  }
-
   codes = GeneticCodeTableLoad ();
   if (codes == NULL) return FALSE;
   for (gcp = codes; gcp != NULL; gcp = gcp->next) {
@@ -3738,10 +4160,22 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
   if (tbl == NULL) return NULL;
   MemSet ((Pointer) tbl, 0, sizeof (TransTable));
 
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
   if ((! SetGenCode (genCode, &ncbieaa, &sncbieaa)) || ncbieaa == NULL || sncbieaa == NULL) {
     ncbieaa = "FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG";
     sncbieaa = "---M---------------M---------------M----------------------------";
   }
+
+  tbl->genCode = genCode;
+  StringNCpy_0 (tbl->ncbieaa, ncbieaa, sizeof (tbl->ncbieaa));
+  StringNCpy_0 (tbl->sncbieaa, sncbieaa, sizeof (tbl->sncbieaa));
 
   /* table to convert any ASCII character to BASE_x integer from 0 through 14 */
   for (i = 0; i < 256; i++) {
@@ -3810,14 +4244,21 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
               if (tpaa == '\0') {
                 tpaa = ch;
               } else if (tpaa != ch) {
-                tpaa = 'X';
+                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) */
+                if ((tpaa == 'B' || tpaa == 'D' || tpaa == 'N') && (ch == 'D' || ch == 'N')) {
+                  tpaa = 'B';
+                } else if ((tpaa == 'Z' || tpaa == 'E' || tpaa == 'Q') && (ch == 'E' || ch == 'Q')) {
+                  tpaa = 'Z';
+                } else {
+                  tpaa = 'X';
+                }
               }
               /* and translation start flag on top strand */
               ch = sncbieaa [cd];
               if (tporf == '\0') {
                 tporf = ch;
               } else if (tporf != ch) {
-                tporf = '-';
+                tporf = 'X'; /* was '-' */
               }
 
               /* lookup amino acid for complement of reversed ZYX */
@@ -3826,18 +4267,25 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
               if (btaa == '\0') {
                 btaa = ch;
               } else if (btaa != ch) {
-                btaa = 'X';
+                /* allow Asx (Asp or Asn) and Glx (Glu or Gln) */
+                if ((btaa == 'B' || btaa == 'D' || btaa == 'N') && (ch == 'D' || ch == 'N')) {
+                  btaa = 'B';
+                } else if ((btaa == 'Z' || btaa == 'E' || btaa == 'Q') && (ch == 'E' || ch == 'Q')) {
+                  btaa = 'Z';
+                } else {
+                  btaa = 'X';
+                }
               }
               /* and translation start flag on bottom strand */
               ch = sncbieaa [cd];
               if (btorf == '\0') {
                 btorf = ch;
               } else if (btorf != ch) {
-                btorf = '-';
+                btorf = 'X'; /* was '-' */
               }
 
               /* drop out of loop as soon as answer is known */
-              if (tpaa == 'X' && btaa == 'X' && tporf == '-' && btorf == '-') {
+              if (tpaa == 'X' && btaa == 'X' && tporf == 'X' && btorf == 'X') { /* was '-' for orfs */
                 goOn = FALSE;
               }
             }
@@ -3857,6 +4305,30 @@ NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode)
 
   /* finite state machine for 6-frame translation and ORF search is now initialized */
   return tbl;
+}
+
+NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl)
+
+{
+  return MemFree (tbl);
+}
+
+NLM_EXTERN void TransTableFreeAll (void)
+
+{
+    Int2           genCode;
+    Char           str [32];
+    TransTablePtr  tbl;
+    
+    for (genCode = 1; genCode < 40; genCode++) {
+        sprintf (str, "TransTableFSAforGenCode%d", (int) genCode);
+        tbl = (TransTablePtr) GetAppProperty (str);
+        if (tbl != NULL) {
+            SetAppProperty (str, NULL);
+            TransTableFree (tbl);
+        }
+    }
+    return;
 }
 
 /* convenience function calls SeqSearchProcessCharacter for entire bioseq */
@@ -3965,10 +4437,484 @@ NLM_EXTERN void TransTableProcessBioseq (
   SeqPortFree (spp);
 }
 
-NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl)
+/* trans table translation function can be passed cds feature or individual parameters */
+
+static CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 frame, Int4Ptr totalP)
 
 {
-  return MemFree (tbl);
+  Int2        actual, cnt;
+  CharPtr     bases, txt;
+  BioseqPtr   bsp;
+  Int4        mod, position;
+  SeqIdPtr    sip;
+  SeqLocPtr   slp;
+  SeqPortPtr  spp;
+
+  bases = MemNew ((size_t) (len + 6));
+  if (bases == NULL) return NULL;
+
+  spp = SeqPortNewByLoc (location, Seq_code_iupacna);
+  if (spp == NULL) {
+    MemFree (bases);
+    return NULL;
+  }
+
+  slp = SeqLocFindNext (location, NULL);
+  while (slp != NULL) {
+    sip = SeqLocId (slp);
+    if (sip != NULL) {
+      bsp = BioseqFind (sip);
+      if (bsp != NULL) {
+        if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+          SeqPortSet_do_virtual (spp, TRUE);
+        }
+      }
+    }
+    slp = SeqLocFindNext (location, slp);
+  }
+
+  /* adjust start position */
+
+  if (frame == 2) {
+    position = 1;
+  } else if (frame == 3) {
+    position = 2;
+  } else {
+    position = 0;
+  }
+  SeqPortSeek (spp, position, SEEK_SET);
+  len -= position;
+
+  /* read nucleotides into temporary buffer */
+
+  cnt = (Int2) MIN (len, 32000L);
+  txt = bases;
+  actual = 1;
+  while (cnt > 0 && len > 0 && actual > 0) {
+    actual = SeqPortRead (spp, (BytePtr) txt, cnt);
+    if (actual < 0) {
+      actual = -actual;
+      if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
+        actual = 1; /* ignore, keep going */
+      } else if (actual == SEQPORT_EOF) {
+        actual = 0; /* stop */
+      }
+    } else if (actual > 0) {
+      len -= actual;
+      txt += actual;
+      cnt = (Int2) MIN (len, 32000L);
+    }
+  }
+
+  SeqPortFree (spp);
+
+  /* pad incomplete last codon with Ns */
+
+  len = StringLen (bases);
+  if (len > 0) {
+    mod = len % 3;
+    if (mod == 1) {
+      txt = StringMove (txt, "NN");
+    } else if (mod == 2) {
+      txt = StringMove (txt, "N");
+    }
+  }
+  if (totalP != NULL) {
+    *totalP = len;
+  }
+
+  return bases;
+}
+
+static int LIBCALLBACK SortByIntvalue (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  Int4        val1;
+  Int4        val2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  val1 = (Int4) vnp1->data.intvalue;
+  val2 = (Int4) vnp2->data.intvalue;
+  if (val1 > val2) {
+    return 1;
+  } else if (val1 < val2) {
+    return -1;
+  }
+  return 0;
+}
+
+static ValNodePtr MakeCodeBreakList (SeqLocPtr cdslocation, Int4 len, CodeBreakPtr cbp, Uint1 frame)
+
+{
+  Int4        adjust = 0, pos, pos1, pos2;
+  SeqLocPtr   tmp;
+  ValNodePtr  vnphead = NULL;
+
+  if (cdslocation == NULL || cbp == NULL) return NULL;
+
+  if (frame == 2) {
+    adjust = 1;
+  } else if (frame == 3) {
+    adjust = 2;
+  } else {
+    adjust = 0;
+  }
+
+  while (cbp != NULL) {
+    pos1 = INT4_MAX;
+    pos2 = -10;
+    tmp = NULL;
+
+    while ((tmp = SeqLocFindNext (cbp->loc, tmp)) != NULL) {
+      pos = GetOffsetInLoc (tmp, cdslocation, SEQLOC_START);
+      if (pos < pos1) {
+        pos1 = pos;
+      }
+      pos = GetOffsetInLoc (tmp, cdslocation, SEQLOC_STOP);
+      if (pos > pos2) {
+        pos2 = pos;
+      }
+    }
+
+    pos = pos2 - pos1; /* codon length */
+    /* allow partial codon at the end */
+    if (pos == 2 || (pos >= 0 && pos <= 1 && pos2 == len - 1)) {
+      pos1 -= adjust;
+      ValNodeAddInt (&vnphead, (Int2) cbp->aa.value.intvalue, (Int4) (pos1 / 3));
+    }
+
+    cbp = cbp->next;
+  }
+
+  vnphead = ValNodeSort (vnphead, SortByIntvalue);
+
+  return vnphead;
+}
+
+static ByteStorePtr TransTableTranslateCommon (
+  TransTablePtr  PNTR tblptr,
+  SeqLocPtr location,
+  SeqLocPtr product,
+  Boolean partial,
+  Int2 genCode,
+  Uint1 frame,
+  CodeBreakPtr code_break,
+  Boolean include_stop,
+  Boolean remove_trailingX
+)
+
+{
+  Char           aa;
+  Int2           j, state = 0;
+  Boolean        bad_base, no_start, check_start, got_stop,
+                 incompleteLastCodon, use_break, is_first;
+  CharPtr        bases, txt;
+  ByteStorePtr   bs;
+  ValNodePtr     codebreakhead = NULL, vnp;
+  TransTablePtr  localtbl = NULL, tbl;
+  Uint2          part_prod = 0, part_loc = 0;
+  Int4           dnalen, protlen, total, k, p;
+  Uint1          residue = 0;
+
+  /* if table pointer not passed in from calling stack, use local table */
+
+  if (tblptr == NULL) {
+    tblptr = &localtbl;
+  }
+
+  if (location == NULL) return NULL;
+  dnalen = SeqLocLen (location);
+  if (dnalen < 1) return NULL;
+
+  /* adjust for obsolete genetic code numbers */
+
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
+  /* can store table for reuse on calling function's stack, replace if code is changing */
+
+  tbl = *tblptr;
+  if (tbl != NULL && genCode != tbl->genCode) {
+    tbl = TransTableFree (tbl);
+    *tblptr = tbl;
+  }
+  if (tbl == NULL) {
+    tbl = TransTableNew (genCode);
+    *tblptr = tbl;
+  }
+  if (tbl == NULL) return NULL;
+
+  /* read bases, pad last codon with Ns, get total base count without padding */
+
+  bases = ReadCodingRegionBases (location, dnalen, frame, &total);
+  if (bases == NULL) {
+    TransTableFree (localtbl);
+    return NULL;
+  }
+
+  /* reality check on length */
+
+  if (StringLen (bases) < 3) {
+    MemFree (bases);
+    TransTableFree (localtbl);
+    return NULL;
+  }
+
+  /* process code breaks into list of aa (choice) and protein offset (data.intvalue) */
+
+  codebreakhead = MakeCodeBreakList (location, dnalen, code_break, frame);
+
+  no_start = FALSE;
+  part_loc = SeqLocPartialCheck (location);
+  part_prod = SeqLocPartialCheck (product);
+  if ((part_loc & SLP_START) || (part_prod & SLP_START)) {
+    no_start = TRUE;
+  }
+  if (StringHasNoText (tbl->sncbieaa) || no_start || frame > 1) {
+    check_start = FALSE;
+  } else {
+    check_start = TRUE;
+  }
+
+  /* size of protein, allow partial codon at end */
+
+  protlen = dnalen;
+  protlen /= 3;
+  protlen += 1;
+
+  bs = BSNew (protlen);
+  if (bs == NULL) {
+    MemFree (bases);
+    ValNodeFree (codebreakhead);
+    TransTableFree (localtbl);
+    return NULL;
+  }
+
+  got_stop = FALSE;
+  incompleteLastCodon = FALSE;
+  is_first = TRUE;
+  use_break = FALSE;
+  state = 0;
+
+  k = 0;
+  p = 0;
+  txt = bases;
+  residue = (Uint1) *txt;
+
+  /* loop through all codons */
+
+  while (residue != '\0') {
+    for (j = 0, bad_base = FALSE; j < 3; j++, k++, txt++, residue = (Uint1) *txt) {
+      if (IS_residue (residue)) {
+        state = NextCodonState (tbl, state, residue);
+      } else {
+        state = NextCodonState (tbl, state, 'N');
+        bad_base = TRUE;
+      }
+    }
+
+    for (vnp = codebreakhead; vnp != NULL && vnp->data.intvalue != p; vnp = vnp->next) continue;
+    use_break = (Boolean) (vnp != NULL);
+
+    if (use_break) {
+      aa = (Char) vnp->choice;
+    } else if (bad_base) {
+      aa = 'X';
+    } else if (is_first && check_start) {
+
+      /* ambiguous start codon that MAY be an initiator now translated to ambiguous X amino acid */
+      aa = GetStartResidue (tbl, state, TTBL_TOP_STRAND);
+      if (aa == '-') {
+        if ((! ((part_loc & SLP_STOP) || (part_prod & SLP_STOP))) && (partial)) {
+          aa = GetCodonResidue (tbl, state, TTBL_TOP_STRAND);
+        }
+      }
+    } else {
+
+      aa = GetCodonResidue (tbl, state, TTBL_TOP_STRAND);
+    }
+    is_first = FALSE;
+
+    if ((! include_stop) && aa == '*') {
+      got_stop = TRUE;
+      residue = '\0'; /* signal end of loop */
+
+    } else {
+
+      BSPutByte (bs, (Int2) aa);
+    }
+
+    /* advance protein position for code break test */
+
+    p++;
+  }
+
+  if (k > total) {
+    incompleteLastCodon = TRUE;
+  }
+
+  if ((! got_stop) && incompleteLastCodon) {
+    BSSeek (bs, -1, SEEK_END);  /* remove last X if incomplete last codon */
+    aa = (Char) BSGetByte (bs);
+    if ((aa == 'X' || aa == 'B' || aa == 'Z') && BSLen (bs) > 0) {
+      BSSeek (bs, -1, SEEK_END);
+      BSDelete (bs, 1);
+      BSSeek (bs, -1, SEEK_END);
+    }
+  }
+
+  if ((! got_stop) && remove_trailingX) { /* only remove trailing X on partial CDS */
+    BSSeek (bs, -1, SEEK_END);  /* back up to last residue */
+    aa = (Char) BSGetByte (bs);
+    while ((aa == 'X' || aa == 'B' || aa == 'Z') && BSLen (bs) > 0) {
+      BSSeek (bs, -1, SEEK_END);
+      BSDelete (bs, 1);
+      BSSeek (bs, -1, SEEK_END);
+      aa = (Char) BSGetByte (bs);
+    }
+  }
+
+  if (BSLen (bs) < 1) {
+    bs = BSFree (bs);
+  }
+
+  /* clean up temporarily allocated memory */
+
+  MemFree (bases);
+  ValNodeFree (codebreakhead);
+
+  /* free local table, if allocated */
+
+  TransTableFree (localtbl);
+
+  return bs;
+}
+
+/* public functions for trans table translation */
+
+NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
+  TransTablePtr  PNTR tblptr,
+  SeqLocPtr location,
+  Int2 genCode,
+  Uint1 frame,
+  Boolean include_stop,
+  Boolean remove_trailingX
+)
+
+{
+  return TransTableTranslateCommon (tblptr, location, NULL, FALSE, genCode,
+                                    frame, NULL, include_stop, remove_trailingX);
+}
+
+NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
+  TransTablePtr  PNTR tblptr,
+  SeqFeatPtr cds,
+  Boolean include_stop,
+  Boolean remove_trailingX
+)
+
+{
+  CdRegionPtr  crp;
+  Int2         genCode = 0;
+  ValNodePtr   vnp;
+
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION) return NULL;
+  crp = (CdRegionPtr) cds->data.value.ptrvalue;
+  if (crp == NULL) return NULL;
+
+  /* set genCode variable from genetic_code parameter, if id choice is used */
+
+  if (crp->genetic_code != NULL) {
+    vnp = (ValNodePtr) crp->genetic_code->data.ptrvalue;
+    while (vnp != NULL) {
+      if (vnp->choice == 2) {
+        genCode = (Int2) vnp->data.intvalue;
+      }
+      vnp = vnp->next;
+    }
+  }
+
+  return TransTableTranslateCommon (tblptr, cds->location, cds->product, cds->partial,
+                                    genCode, crp->frame, crp->code_break,
+                                    include_stop, remove_trailingX);
+}
+
+/* allow reuse of translation tables by saving as AppProperty */
+
+static TransTablePtr  PersistentTransTableCommon (
+  SeqFeatPtr cds,
+  Int2 genCode
+)
+
+{
+  CdRegionPtr    crp;
+  Char           str [32];
+  TransTablePtr  tbl = NULL;
+  ValNodePtr     vnp;
+
+  if (cds != NULL && cds->data.choice == SEQFEAT_CDREGION) {
+    crp = (CdRegionPtr) cds->data.value.ptrvalue;
+    if (crp != NULL && crp->genetic_code != NULL) {
+      vnp = (ValNodePtr) crp->genetic_code->data.ptrvalue;
+      while (vnp != NULL) {
+        if (vnp->choice == 2) {
+          genCode = (Int2) vnp->data.intvalue;
+        }
+        vnp = vnp->next;
+      }
+    }
+  }
+
+  if (genCode == 7) {
+    genCode = 4;
+  } else if (genCode == 8) {
+    genCode = 1;
+  } else if (genCode == 0) {
+    genCode = 1;
+  }
+
+  /* set app property name for storing desired FSA */
+
+  sprintf (str, "TransTableFSAforGenCode%d", (int) genCode);
+
+  /* get FSA for desired genetic code if it already exists */
+
+  tbl = (TransTablePtr) GetAppProperty (str);
+
+  /* if not already exists, save FSA in genetic code-specific app property name */
+
+  if (tbl == NULL) {
+    tbl = TransTableNew (genCode);
+    SetAppProperty (str, (Pointer) tbl);
+  }
+
+  return tbl;
+}
+
+NLM_EXTERN TransTablePtr PersistentTransTableByGenCode (
+  Int2 genCode
+)
+
+{
+  return PersistentTransTableCommon (NULL, genCode);
+}
+
+NLM_EXTERN TransTablePtr PersistentTransTableByCdRegion (
+  SeqFeatPtr cds
+)
+
+{
+  return PersistentTransTableCommon (cds, 0);
 }
 
 /*****************************************************************************
@@ -4811,6 +5757,132 @@ extern void TestSeqSearch (void)
 }
 
 */
+
+/* Convenience functions for genome processing */
+
+NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
+
+{
+  Int2        actual, cnt;
+  BioseqPtr   bsp;
+  Int4        len;
+  SeqPortPtr  spp;
+  CharPtr     str = NULL, txt;
+
+  if (sfp == NULL) return NULL;
+  len = SeqLocLen (sfp->location);
+  if (len > 0 && len < MAXALLOC) {
+    str = MemNew (sizeof (Char) * (len + 2));
+    if (str != NULL) {
+      spp = SeqPortNewByLoc (sfp->location, Seq_code_iupacna);
+      if (spp != NULL) {
+
+        bsp = BioseqFindFromSeqLoc (sfp->location);
+        if (bsp != NULL) {
+          if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+            SeqPortSet_do_virtual (spp, TRUE);
+          }
+        }
+
+        cnt = (Int2) MIN (len, 32000L);
+        txt = str;
+        actual = 1;
+
+        while (cnt > 0 && len > 0 && actual > 0) {
+          actual = SeqPortRead (spp, (BytePtr) txt, cnt);
+          if (actual < 0) {
+            actual = -actual;
+            if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
+              actual = 1; /* ignore, keep going */
+            } else if (actual == SEQPORT_EOF) {
+              actual = 0; /* stop */
+            }
+          } else if (actual > 0) {
+            len -= actual;
+            txt += actual;
+            cnt = (Int2) MIN (len, 32000L);
+          }
+        }
+
+        SeqPortFree (spp);
+      }
+    }
+  }
+    
+  return str;
+}
+
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession, Boolean is_na)
+
+{
+  Int2        actual, cnt;
+  BioseqPtr   bsp;
+  SeqIdPtr    deleteme = NULL;
+  Int4        len;
+  SeqPortPtr  spp;
+  CharPtr     str = NULL, txt;
+
+  if (sip == NULL) {
+    if (StringHasNoText (accession)) return NULL;
+    sip = SeqIdFromAccessionDotVersion (accession);
+    deleteme = sip; /* allocated seqid, so must later delete it */
+  }
+  if (sip == NULL) return NULL;
+
+  bsp = BioseqLockById (sip);
+  SeqIdFree (deleteme);
+  if (bsp == NULL) return NULL;
+
+  if ((ISA_na (bsp->mol) && is_na) || (ISA_aa (bsp->mol) && (! is_na))) {
+    if (bsp->length < MAXALLOC) {
+      str = MemNew (sizeof (Char) * (bsp->length + 2));
+      if (str != NULL) {
+        spp = SeqPortNew (bsp, 0, -1, 0, Seq_code_iupacna);
+        if (spp != NULL) {
+          if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+            SeqPortSet_do_virtual (spp, TRUE);
+          }
+
+          len = bsp->length;
+          cnt = (Int2) MIN (len, 32000L);
+          txt = str;
+          actual = 1;
+
+          while (cnt > 0 && len > 0 && actual > 0) {
+            actual = SeqPortRead (spp, (BytePtr) txt, cnt);
+            if (actual < 0) {
+              actual = -actual;
+              if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
+                actual = 1; /* ignore, keep going */
+              }
+            } else if (actual > 0) {
+              len -= actual;
+              txt += actual;
+              cnt = (Int2) MIN (len, 32000L);
+            }
+          }
+
+          SeqPortFree (spp);
+        }
+      }
+    }
+  }
+
+  BioseqUnlock (bsp);
+  return str;
+}
+
+/* original convenience function now calls more advanced version that can get proteins */
+
+NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (CharPtr accession)
+
+{
+  return GetSequenceByIdOrAccnDotVer (NULL, accession, TRUE);
+}
+
+
+/* Protein Molecular Weight Section */
+
 
 /* Values are in ncbistdaa code order:
    B is really D or N, but they are close so is treated as D

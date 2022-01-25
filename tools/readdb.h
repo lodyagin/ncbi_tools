@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.61 $
+* $Revision: 6.68 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,29 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.68  2000/10/26 18:30:50  dondosha
+* Added gifile member to ReadDBFILE structure
+*
+* Revision 6.67  2000/10/13 17:31:52  shavirin
+* Adjusted calls to readdb_get_header for ASN.1 structured deflines.
+*
+* Revision 6.66  2000/09/29 16:38:30  shavirin
+* Added new function FDB_FreeCLOptions(FDB_optionsPtr options).
+*
+* Revision 6.65  2000/09/16 15:20:17  shavirin
+* Added AsnIoPtr structure for ASN.1 structured deflines.
+*
+* Revision 6.64  2000/09/07 20:49:58  shavirin
+* Added parameters to support ASN.1 defline dump for blast db. FORMATDB_VER 3->4
+* Added parameter FORMATDB_VER_TEXT for backward compatibility.
+*
+* Revision 6.63  2000/07/18 19:29:29  shavirin
+* Added new parameter test_non_unique to suppress check for non-unique
+* strings ids in the database - default - TRUE.
+*
+* Revision 6.62  2000/07/07 21:20:08  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope!
+*
 * Revision 6.61  2000/06/28 16:55:50  madden
 * Add function Fastacmd_Search_ex, gi_target to ReadDBFILEPtr
 *
@@ -252,7 +275,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 * Added definition for function readdb_acc2fasta()
 *
 * Revision 1.23  1997/05/07 21:04:02  madden
-* Added prototype for SeqId2OrdinalId and changed FORMATDB_VER
+* Added prototype for SeqId2OrdinalId and changed FORMATDB_VER 2->3
 *
 * Revision 1.22  1997/05/01 17:26:58  shavirin
 * Added definition for the function readdb_seqid2fasta()
@@ -274,7 +297,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
  * Added prototypes for BioseqFetch functions.
  *
  * Revision 1.16  1996/11/27  16:39:11  madden
- * Added functions to return filename and date.
+ * Added functions to return filename and date. FORMATDB_VER 1->2
  *
  * Revision 1.15  1996/11/26  19:54:27  madden
  * Added check for database in standard places.
@@ -366,9 +389,6 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 #ifndef _READDB_
 #define _READDB_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 /****************************************************************************/
 /* INCLUDES */
@@ -379,6 +399,34 @@ extern "C" {
 #include <sequtil.h>
 #include <ncbisam.h>
 #include <tofasta.h>
+
+/* This define should be added here to pacify NT build */
+#ifndef NLM_GENERATED_CODE_PROTO
+#define NLM_GENERATED_CODE_PROTO 
+#endif
+
+#define struct_Blast_def_line struct_BlastDefLine
+
+#include <fdlobj.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/****************************************************************************/
+/* Structure of index file header - old version */
+/****************************************************************************/
+
+/*
+   4 bytes  4 bytes      4 bytes    title_len bytes      n bytes    
+  <version><is_protein?><title_len><the_database_title><date_stamp>
+
+(title_len+n)%8 bytes
+  <ex_bytes><num_of_seqs><total_len><max_seq_len>
+
+  num_of_seqs*4bytes   num_of_seqs*4bytes     num_of_seqs*4bytes
+<defline_offset_table><sequence_offset_table><ambig_offset_table>
+*/
 
 /****************************************************************************/
 /* DEFINES */
@@ -428,8 +476,18 @@ belong to the same sequence. */
 				      memory mapping */
 
 /* The following variables are shared by formatdb and readdb. */
-/* version of formatdb. */
-#define FORMATDB_VER 3
+/* version of formatdb.
+
+   Explanations: last text version of defline used for blast database
+   was 3 - all subsequent versions use ASN.1 for defline storage.
+   For backward compatibility if database version is 3 new program
+   will handle it OK. If database version > 3 - exact match of version
+   is needed to proceed.
+   
+*/
+
+#define FORMATDB_VER_TEXT 3
+#define FORMATDB_VER      4
 
 /* 'Magic' number at the beginning of a binary gi list that indicates it is binary. */
 #define READDB_MAGIC_NUMBER UINT4_MAX
@@ -576,14 +634,15 @@ if there is no mem-mapping or it failed. */
         ISAMObjectPtr sisam_opt;  /* Object for string search */
 	Uint1Ptr buffer;
 	Int4 allocated_length;
-	CommonIndexHeadPtr	cih;	/* head of the common index */
-	Int2			filebit;/* bit corresponding to the DB file */
-	Int2			aliasfilebit;/* bit corresponding to the DB alias file */
-	OIDListPtr		oidlist; /* structure containing a list of ordinal ID's. */
-	Int4			sparse_idx; /* Sparse indexes indicator */
-        Char                    full_filename[PATH_MAX]; /* Full path for the file */
-        ReadDBSharedInfoPtr     shared_info;
-	Int4 	gi_target; /* only this gi should be retrieved if non-zero. */
+	CommonIndexHeadPtr  cih;       /* head of the common index */
+	Int2	            filebit;   /* bit corresponding to the DB file */
+	Int2		    aliasfilebit;/* bit corresponding to the DB alias file */
+	OIDListPtr	    oidlist;   /* structure containing a list of ordinal ID's. */
+	Int4		    sparse_idx;/* Sparse indexes indicator */
+        Char                full_filename[PATH_MAX]; /* Full path for the file */
+        ReadDBSharedInfoPtr shared_info;
+	Int4 	            gi_target; /* only this gi should be retrieved if non-zero. */
+        CharPtr             gifile;    /* Path to a file with the gi list */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
 
 /* Function prototypes */
@@ -869,6 +928,7 @@ typedef struct FASTALookup {
 } FASTALookup, PNTR FASTALookupPtr;
 
 typedef struct _FDB_options {
+    Int4  version;
     CharPtr db_title;
     CharPtr db_file;
     CharPtr LogFileName;
@@ -880,6 +940,8 @@ typedef struct _FDB_options {
     CharPtr base_name;
     Int4  dump_info;
     Int4  sparse_idx;
+    Int4  test_non_unique;    /* Print messages if FASTA database has 
+                                 non-unique string ids - accessions, locuses*/
 } FDB_options, PNTR FDB_optionsPtr;
 
 typedef struct formatdb 
@@ -900,12 +962,10 @@ typedef struct formatdb
     
     /* ASN.1 input, if the "-a" specified */
     AsnIoPtr	aip;
+
+    /* ASN.1 defline output if structured defline */
+    AsnIoPtr aip_def;
     
-    /* Boolean	isProtein;  is_protein true, if input database 
-       contains proteins */
-
-    /* Boolean ParseMode; parse_mode  true, if ISAM needed */
-
     Int4 num_of_seqs;  /* number of parsed sequences */
     Int4 TotalLen, MaxSeqLen;
     
@@ -943,6 +1003,7 @@ Int2 FDBAddSequence (FormatDBPtr fdbp, Int4 gi, CharPtr seq_id,
 Int2 FDBAddBioseq(FormatDBPtr fdbp, BioseqPtr bsp);
 Int2 FormatDBClose(FormatDBPtr fdbp);
 
+void FDB_FreeCLOptions(FDB_optionsPtr options);
 
 Int2 process_sep (SeqEntryPtr sep, FormatDBPtr fdbp);
 
@@ -993,6 +1054,8 @@ Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 
 Int4 FastaToBlastDB PROTO((FDB_optionsPtr options, CharPtr basename, 
 			   Int4 Bases_In_Volume));
+
+BlastDefLinePtr FDReadDeflineAsn(ReadDBFILEPtr rdfp, Int4 sequence_number);
 
 #ifdef __cplusplus
 }

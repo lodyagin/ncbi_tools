@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.104 2000/06/30 18:17:52 vakatov Exp $
+# $Id: makeall.dos,v 6.119 2000/10/31 19:50:46 beloslyu Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -32,7 +32,8 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
 	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj +pmfapi.obj \
-	+qblastapi.obj +vecscnapi.obj +seqport.obj +sequtil.obj +prtutil.obj \
+	+strucapi.obj +qblastapi.obj +vecscnapi.obj +objmim.obj +mimapi.obj +seqport.obj \
+	+sequtil.obj +prtutil.obj \
 	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
 	+alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
 	+asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
@@ -45,7 +46,7 @@ OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+udvseq.obj \
 	+salsap.obj +salstruc.obj +salutil.obj +salpedit.obj +salpstat.obj \
 	+blocks.obj +pgppop.obj +samutil.obj +objalignloc.obj +ddvcolor.obj \
-	+viewmgr.obj +ddvcreate.obj 
+	+viewmgr.obj +ddvcreate.obj +jsavlt.obj +needleman.obj
 
 OBJ3  = +cdentrez.obj +cdromlib.obj +cdnewlib.obj +casn.obj +cdconfig.obj \
 	+objentr.obj
@@ -63,10 +64,10 @@ OBJ4  = \
 
 OBJ5  = +accentr.obj +accutils.obj
 
-OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
+OBJ20 = +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+smdlg3.obj +smtools.obj +styleman.obj +stylemui.obj +glbpic.obj \
 	+layout.obj +vsm.obj +vsmfile.obj +vsmutil.obj +udvgraph.obj +udvopen.obj \
-	+udvpanel.obj +dlgutil1.obj +dlgutil2.obj +medview.obj \
+	+udvpanel.obj +dotvibrant.obj +dlgutil1.obj +dlgutil2.obj +medview.obj \
 	+bspview.obj +gbfview.obj +gphview.obj \
 	+gphdraw.obj +gxydraw.obj +gtrdraw.obj \
 	+biosrc.obj +cdrgn.obj +import.obj +pubdesc.obj +seqsub.obj \
@@ -75,12 +76,17 @@ OBJ20 = +apparam.obj +drawseq.obj +fstyle.obj +smdlg1.obj +smdlg2.obj \
 	+seqfltr.obj +seqgraph.obj +seqgrphx.obj +seqmtrx.obj \
 	+seqpcc.obj \
 	+seqanal.obj +aacomp.obj +seqscrl.obj \
-	+mapgene.obj +prtgene.obj \
-	+ddvclick.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
+	+mapgene.obj +prtgene.obj +salogif.obj
 
 OBJ22 = +corematx.obj +dvncode.obj +objmmdb1.obj +objmmdb2.obj +objmmdb3.obj \
 	+mmdbapi.obj +mmdbapi1.obj +mmdbapi2.obj +mmdbapi3.obj +mmdbapi4.obj \
-	+mmdbentr.obj +vastsubs.obj +prunebsc.obj
+	+mmdbentr.obj +vastsubs.obj +prunebsc.obj +objcdd.obj +cddutil.obj \
+	+cddposutil.obj \
+	+thrdalgs.obj +thrdatd.obj  +thrdbwfi.obj +thrdcpal.obj \
+	+thrdcpll.obj +thrdcprl.obj +thrdcxei.obj +thrddgri.obj +thrdrsmp.obj \
+	+thrdsal0.obj +thrdsalr.obj +thrdsalu.obj +thrdsgoi.obj +thrdslo0.obj \
+	+thrdslor.obj +thrdslou.obj +thrdspci.obj +thrdspea.obj +thrdspel.obj \
+	+thrdspni.obj +thrdttb0.obj +thrdttbi.obj +thrdzsc.obj
 
 OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+sim2.obj +sim3.obj +sim4.obj +simutil.obj +slist.obj +sec.obj +tfuns.obj \
@@ -95,8 +101,9 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkutil.obj +urkpcc.obj +urkptpf.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
-	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj +vecscrn.obj \
-	+mblast.obj +rpsutil.obj
+	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj \
+	+vecscrn.obj +mblast.obj +rpsutil.obj +kappa.obj  \
+	+xmlblast.obj +bxmlobj.obj +fdlobj.obj +dotseq.obj
 
 OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
 	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj
@@ -105,6 +112,8 @@ OBJ30 = +algorend.obj +cn3dmsel.obj +cn3dopen.obj +cn3dsave.obj \
 	+cn3dxprt.obj +cn3dwin.obj  +cn3dentr.obj +cn3dmesh.obj \
 	+cn3dmsg.obj +cn3dmatn.obj +cn3dmodl.obj +cn3dshim.obj \
 	+cn3dstyl.obj +seqcons.obj
+
+OBJ45 = +ddvclick.obj +ddvgraph.obj +ddvopen.obj +ddvpanel.obj
 
 
 ### OpenGL versions of LIB4(vibrant.lib) and LIB30(ncbicn3d.lib)
@@ -139,7 +148,7 @@ DO_OBJ = \
  $(MT_OBJ) $(MAIN_OBJ)
 
 DO_LIB = \
- $(XLIB1)  $(XLIB2)  $(XLIB3)  $(XLIB4)  $(XLIB5) \
+ $(XLIB1)  $(XLIB2)  $(XLIB3)  $(XLIB4)  $(XLIB5) $(XLIB45) \
  $(XLIB20) $(XLIB22) $(XLIB23) $(XLIB28) $(XLIB30) \
  $(XLIB4_OGL) $(XLIB30_OGL)
 
@@ -192,6 +201,8 @@ copy_reg:
 	copy ..\cdromlib\*.c .
 	copy ..\biostruc\*.h $(INCPATH)
 	copy ..\biostruc\*.c .
+	copy ..\biostruc\cdd\*.h $(INCPATH)
+	copy ..\biostruc\cdd\*.c .
 	copy ..\tools\*.h $(INCPATH)
 	copy ..\tools\*.c .
 	copy ..\link\mswin\*.rc .
@@ -356,6 +367,17 @@ LIB_NAME = $(XLIB30_OGL)
 LIB_OBJ = $(OBJ30_OGL)
 LIB_LIB =
 LIB_OPT = -D_OPENGL $(PNG_INCLUDES)
+$(INCLUDE_LIB)
+<<
+!endif
+##########################################################
+!ifdef XLIB45
+$(XLIB45):
+	$(MAKE) -f <<
+$(INCLUDE_GEN)
+LIB_NAME = $(XLIB45)
+LIB_OBJ = $(OBJ45)
+LIB_LIB =
 $(INCLUDE_LIB)
 <<
 !endif

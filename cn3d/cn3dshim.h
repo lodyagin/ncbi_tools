@@ -33,6 +33,9 @@
 *
 * Modifications:
 * $Log: cn3dshim.h,v $
+* Revision 6.22  2000/07/08 20:43:57  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.21  2000/04/04 22:18:42  lewisg
 * add defline to ddv, fix seq import bugs, set boundbox
 *
@@ -102,17 +105,28 @@
 #ifndef _CN3DSHIM_
 #define _CN3DSHIM_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <shim3d.h>
 #include <viewmgr.h>
 
 #ifndef _OPENGL
 #include <viewer3d.h>
+#endif
+
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef _OPENGL
 extern Viewer3D Cn3D_v3d;   /* the 3d view pane */
-extern void /*LIBCALL*/ Cn3D_SaveActiveCam(void);
+extern void Cn3D_SaveActiveCam(void);
 #endif
 
 typedef struct _Cn3D_AnimateDlg {
@@ -271,4 +285,12 @@ NLM_EXTERN void Cn3D_Asn2Matrix (void *modelmatrix, GLMatrix *glmatrix);
 #ifdef __cplusplus
 }
 #endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
+
 #endif                          /* _CN3DSHIM_ */

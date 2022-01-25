@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/24/95
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Moved globals into mmdbapi2.c.
 *
 * $Log: mmdbapi2.c,v $
+* Revision 6.8  2000/08/22 19:47:33  lewisg
+* fix GetMMFromMSDBySeqId
+*
 * Revision 6.7  2000/03/31 22:30:47  lewisg
 * fix output of CONECT, create intrabond traverser, misc bugs
 *
@@ -1976,19 +1979,17 @@ PMGD LIBCALL GetMGFromMM(PMMD pmmdThis, Int4 iRes)
 /*------------------------------------------------------*/
 PMMD LIBCALL GetMMFromMSDBySeqId(PMSD pmsdThis, SeqIdPtr sip)
 {
-  PDNMM pdnmmHead = NULL;
-  PMMD pmmdThis = NULL;
+  PDNMM pdnmmHead;
+  PMMD pmmdThis;
 
   pdnmmHead = pmsdThis->pdnmmHead;
   while(pdnmmHead){
      pmmdThis = pdnmmHead->data.ptrvalue;
      if(pmmdThis){
-        if(SeqIdForSameBioseq(pmmdThis->pSeqId, sip)){
-           break;
-        }
+        if(SeqIdForSameBioseq(pmmdThis->pSeqId, sip)) return pmmdThis;
      }
      pdnmmHead = pdnmmHead->next;
   }
 
-  return(pmmdThis);
+  return(NULL);
 }

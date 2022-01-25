@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -49,6 +49,10 @@
 #include <salsa.h>
 #include <vibrant.h>
 #include <txalign.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define REGISTER_IDTOUID ObjMgrProcLoad(OMPROC_FILTER,"IDtoUID","IDtoUID",0,0,0,0,NULL,SeqIdToUid,PROC_PRIORITY_DEFAULT)
 
@@ -83,4 +87,9 @@ extern void TranslateAllBioseq (PaneL pnl,  EditAlignDataPtr adp);
 extern ValNodePtr CCReadAnythingLoop (CharPtr filename, SelEdStructPtr seq_info);
 extern SeqEntryPtr AsnReadForSalsa (CharPtr path);
 extern SeqEntryPtr seqentry_read (CharPtr path);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif

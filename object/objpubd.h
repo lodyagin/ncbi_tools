@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager interface for type Pubdesc from
 *                    NCBI-Sequence.  This is separate to avoid typedef
@@ -45,6 +45,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: objpubd.h,v $
+* Revision 6.4  2000/09/28 11:53:13  ostell
+* added Pubdesc.reftype = 3
+*
 * Revision 6.3  2000/05/26 19:50:23  ostell
 * added MI_TECH_htc
 *
@@ -115,7 +118,8 @@ typedef struct pd {
     CharPtr maploc,
         seq_raw,
 		comment;
-	Uint1 reftype;     /* 0=seq, 1=sites, 2=feats, for GenBank ref */
+	Uint1 reftype;     /* 0=seq, 1=sites, 2=feats,
+                              3=seq with no explicit span, for GenBank ref */
 } Pubdesc, PNTR PubdescPtr;
 
 NLM_EXTERN PubdescPtr LIBCALL PubdescNew PROTO((void));

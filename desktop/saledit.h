@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description: 
 *
@@ -131,7 +131,7 @@ typedef struct dialogboxdata
   PopuP       color[10];
   Int2        align_format, mol_type;
   Int2        matrix, separator;
-  Boolean     bool;
+  Boolean     db_bool;
   PrompT      prompt;
 
 } DialogBoxData, PNTR DialogBoxDataPtr;

@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -44,6 +44,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.c,v $
+* Revision 6.5  2000/08/18 17:01:02  kans
+* added FetchPubPmId, enhanced FixPubEquiv to handle records with pmid but no muid
+*
 * Revision 6.4  1999/11/17 18:16:15  bazhin
 * If failed to get pub from MedArch server, then does not return NULL,
 * but use input one.
@@ -806,6 +809,98 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
 			}
 			return pube;
 		}
+
+		/* muid lookup failed */
+
+		pmid = MedArchCitMatchPmId(citartptr);
+		if (pmid != 0)   /* success */
+		{
+			print_pub(citartptr, TRUE, FALSE, pmid);
+			fpop->lookups_succeeded++;
+			if (oldpmid)   /* already had an muid */
+			{
+				if (oldpmid != pmid)
+				{
+					ErrPostEx(SEV_ERROR, ERR_REFERENCE_MuidMissmatch, "OldPMID=%ld doesn't match lookup (%ld). Keeping lookup.",
+						(long)oldpmid, (long)pmid);
+				}
+			}
+			if (fpop->replace_cit)
+			{
+				fpop->fetches_attempted++;
+				new = FetchPubPmId(pmid);
+				if (new != NULL) 
+				{
+					fpop->fetches_succeeded++;
+
+					if (ten_authors(citartptr->data.ptrvalue,
+											new->data.ptrvalue))
+					{
+						if (pmidptr != NULL)
+							tmp = pmidptr;
+						else
+						{
+							tmp = ValNodeNew(tmp2);
+							tmp->choice = PUB_PMid;
+						}
+						if (tmp2 == NULL) {
+							pube = tmp;
+						} else {
+							tmp2->next = tmp;
+						}
+						tmp->data.intvalue = pmid;
+						tmp->next = new;
+						
+						PubFree(citartptr);
+					} else {
+						print_pub(citartptr, FALSE, TRUE, pmid);
+						PubFree(new);
+						if (tmp2 == NULL) {
+							pube = citartptr;
+						} else {
+							tmp2->next = citartptr;
+						}
+						if (pmidptr != NULL)
+							citartptr->next = pmidptr;
+					}
+				}
+				else
+				{
+					ErrPostEx(SEV_ERROR, 0, 0, "Failed to get pub from MedArch server for pmid = %ld. Input one is preserved.", pmid);
+					if (pmidptr != NULL)
+						tmp = pmidptr;
+					else
+					{
+						tmp = ValNodeNew(tmp2);
+						tmp->choice = PUB_PMid;
+					}
+					if (tmp2 == NULL)
+						pube = tmp;
+					tmp->data.intvalue = pmid;
+					tmp2 = tmp;
+					tmp->next = citartptr;
+					MedlineToISO(citartptr);
+				}
+			}
+			else
+			{
+				if (pmidptr != NULL)
+					tmp = pmidptr;
+				else
+				{
+					tmp = ValNodeNew(tmp2);
+					tmp->choice = PUB_PMid;
+				}
+				if (tmp2 == NULL)
+					pube = tmp;
+				tmp->data.intvalue = pmid;
+				tmp2 = tmp;
+				tmp->next = citartptr;
+				MedlineToISO(citartptr);
+			}
+			return pube;
+		}
+
 		print_pub(citartptr, FALSE, FALSE, oldmuid);
 		if (tmp2 == NULL)
 			pube = citartptr;
@@ -891,6 +986,16 @@ ValNodePtr FetchPub (Int4 muid)
 	ValNodePtr tmp;
 
 	tmp = MedArchGetPub(muid);
+	if (tmp == NULL) return NULL;
+	tmp = MedlineToISO(tmp);
+	return tmp;
+}
+
+ValNodePtr FetchPubPmId (Int4 pmid)
+{
+	ValNodePtr tmp;
+
+	tmp = MedArchGetPubPmId(pmid);
 	if (tmp == NULL) return NULL;
 	tmp = MedlineToISO(tmp);
 	return tmp;

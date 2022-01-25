@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.32 $
+* $Revision: 6.34 $
 *
 * File Description: 
 *
@@ -564,7 +564,27 @@ static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
-static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode, Boolean show_gene)
+static void LookForGEDseqID (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr   isGEDPtr;
+  SeqIdPtr  sip;
+
+  isGEDPtr = (BoolPtr) userdata;
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+        *isGEDPtr = TRUE;
+        return;
+      default :
+        break;
+    }
+  }
+}
+
+static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, Uint1 mode, Boolean show_gene, Boolean showContigJoin)
 
 {
   Asn2ffJobPtr    ajp;
@@ -608,9 +628,11 @@ static Boolean PopulateFF (DoC d, SeqEntryPtr sep, BioseqPtr bsp, Uint1 format, 
           IsSegmentedBioseqWithoutParts (sep)) {
         ajp->only_one = TRUE;
         ajp->genome_view = TRUE;
+        ajp->contig_view = (Boolean) (! showContigJoin);
       } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
         ajp->only_one = TRUE;
         ajp->genome_view = TRUE;
+        ajp->contig_view = (Boolean) (! showContigJoin);
       }
       if (GetAppProperty ("InternalNcbiSequin") != NULL) {
         ajp->bankit = TRUE;
@@ -661,6 +683,8 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
   Uint2         entityID;
   FILE          *fp;
   Int2          into;
+  Boolean       isGenBankEMBLorDDBJ;
+  Boolean       showContigJoin;
   Int2          item;
   ErrSev        level;
   Uint1         mode;
@@ -733,6 +757,10 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
   WatchCursor ();
   ffColFmt.pixWidth = screenRect.right - screenRect.left;
   ffColFmt.pixInset = 8;
+  isGenBankEMBLorDDBJ = FALSE;
+  VisitBioseqsInSep (topsep, (Pointer) &isGenBankEMBLorDDBJ, LookForGEDseqID);
+  /* now using control instead of seqid type */
+  showContigJoin = bvp->showContigJoin;
   if (bvp->useScrollText) {
     ajp = MemNew (sizeof (Asn2ffJob));
     if (ajp != NULL) {
@@ -755,9 +783,11 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
             IsSegmentedBioseqWithoutParts (sep)) {
           ajp->only_one = TRUE;
           ajp->genome_view = TRUE;
+          ajp->contig_view = (Boolean) (! showContigJoin);
         } else if (IsADeltaBioseq (sep) && (! DeltaLitOnly (bsp))) {
           ajp->only_one = TRUE;
           ajp->genome_view = TRUE;
+          ajp->contig_view = (Boolean) (! showContigJoin);
         }
         if (GetAppProperty ("InternalNcbiSequin") != NULL) {
           ajp->bankit = TRUE;
@@ -777,7 +807,7 @@ static void PopulateFlatFile (BioseqViewPtr bvp, Uint1 format, Boolean show_gene
     }
     MemFree (ajp);
   } else {
-    PopulateFF (doc, sep, bsp, format, mode, show_gene);
+    PopulateFF (doc, sep, bsp, format, mode, show_gene, showContigJoin);
     SetDocShade (doc, DrawIcon, NULL, NULL, NULL);
     SetDocProcs (doc, ClickIcon, NULL, ReleaseIcon, NULL);
     SetDocCache (doc, StdPutDocCache, StdGetDocCache, StdResetDocCache);

@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.h,v 1.8 2000/07/05 19:23:13 lewisg Exp $
+/*  $Id: ddvclick.h,v 1.10 2000/07/12 15:38:08 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.8 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.h,v $
+* Revision 1.10  2000/07/12 15:38:08  hurwitz
+* made rectangle select much faster.  it's almost working.
+*
+* Revision 1.9  2000/07/08 20:43:58  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.8  2000/07/05 19:23:13  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -75,11 +81,18 @@
 #ifndef _DDVCLICK_
 #define _DDVCLICK_
 
+#include <ddvmain.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ddvmain.h>
 
 /******************************************************************************
 
@@ -114,7 +127,11 @@ NLM_EXTERN void DDV_HoldProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_ReleaseProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_KeyboardProc (SlatE s, Char ch);
 NLM_EXTERN Int4 DDV_GetHPixelPosGivenColNumber(DdvMainPtr dmp, RecT rc, Int4 Col);
+NLM_EXTERN Int4 DDV_GetHPixelPosGivenColNumberAndScroll(DdvMainPtr dmp, RecT rc,
+                                                        Int4 Col, Int4 ScrollPos);
 NLM_EXTERN Int4 DDV_GetVPixelPosGivenRowNumber(DdvMainPtr dmp, RecT rc, Int4 Row);
+NLM_EXTERN Int4 DDV_GetVPixelPosGivenRowNumberAndScroll(DdvMainPtr dmp, RecT rc,
+                                                        Int4 Row, Int4 ScrollPos);
 NLM_EXTERN void DDV_GetVPixelPosOfEmptySpace(DdvMainPtr dmp, RecT rc, Int4* pTop, Int4* pBot);
 NLM_EXTERN Int4 DDV_GetColNumberGivenMousePos(DdvMainPtr dmp, RecT rc, PoinT pt);
 NLM_EXTERN void DDV_ReDraw(DdvMainPtr dmp);
@@ -122,6 +139,13 @@ NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col, Boolean DDE);
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif /* ndef _DDVCLICK_ */

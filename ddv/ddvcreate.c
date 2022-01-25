@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.c,v 1.56 2000/06/29 23:15:13 hurwitz Exp $
+/*  $Id: ddvcreate.c,v 1.61 2000/09/08 21:50:38 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,29 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.56 $
+* $Revision: 1.61 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.c,v $
+* Revision 1.61  2000/09/08 21:50:38  hurwitz
+* made DDV_ReadSeqBin public
+*
+* Revision 1.60  2000/09/06 17:41:26  shavirin
+* Fixed bug with printing gaps with discontinuous alignment.
+*
+* Revision 1.59  2000/08/25 18:55:27  shavirin
+* Changed layout - unaligned regions will be always in lower characters.
+*
+* Revision 1.58  2000/08/22 19:59:28  shavirin
+* Changed layout no.1 - it will be used for standalone blast with
+* decline-to-align parameter not = 0
+*
+* Revision 1.57  2000/07/19 18:46:19  bauer
+* Fixed bug in DDV_CreateDisplayFromIndex_EX
+*
 * Revision 1.56  2000/06/29 23:15:13  hurwitz
 * leave single space between aligned blocks with no unaligned sequence between them, no auto-merge of adjacent aligned blocks
 *
@@ -727,7 +743,7 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex_EX(SeqAlignPtr sap, MsaParaGPopLis
                  amp->from_m = 0;
 	 amp->to_m = amp->from_m + LineSize -1;
          amp->row_num = n;
-         if (amp->to_m > to)
+         if (amp->to_m >= to)
             amp->to_m = to - 1;
          more = TRUE;
          vnp = vnp_head = NULL;
@@ -1823,10 +1839,14 @@ static void DDV_InitDefSAPdispStyles_BLAST(DDV_Disp_OptPtr ddop)
 	ddop->ShowRightTail=FALSE;
 	ddop->DispDiscStyle=MSA_TXT_STYLE_2;
 	ddop->SpacerSize=SPACER_TXT_BLANK;
-    ddop->DiscJustification=DISP_JUST_LEFT;
+        ddop->DiscJustification=DISP_JUST_LEFT;
+
+	ddop->UAGapStyle=MSA_TXT_STYLE_UAGAP;
+	ddop->AGapStyle=MSA_TXT_STYLE_GAP;
 
 	/*ruler style*/
 	ddop->RulerStyle=RulerStyle_Continue_Start;
+
 }
 
 
@@ -1859,6 +1879,7 @@ Boolean        bUseLayout;
 Uint1          what;
 
 	MemSet(&mppl,0,sizeof(MsaParaGPopList));
+	MemSet(&ddo,0,sizeof(DDV_Disp_Opt));
 	layout=NULL;
 
 	/*get the optional data*/
@@ -1949,13 +1970,18 @@ static void DDV_BlastGetColorSchemaZero(DDVOptionsBlockPtr dobp)
 *******************************************************************************/
 static void DDV_BlastGetColorSchemaOne(DDVOptionsBlockPtr dobp)
 {
-	memset(dobp,0,sizeof(DDVOptionsBlock));
-	
-	dobp->bUseLayout=TRUE;
+    memset(dobp,0,sizeof(DDVOptionsBlock));
+    
+    dobp->bUseLayout=TRUE;
+    
+    /* dobp->LayoutType=DDV_USE_MASKLAYOUT|DDV_USE_NOMLAYOUT; */
+    
+    dobp->LayoutType=DDV_USE_UALAYOUT|DDV_USE_GAPLAYOUT;
 
-	dobp->LayoutType=DDV_USE_MASKLAYOUT;
-
-	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;
+    dobp->UAlayout.style=DDV_TXTSTYLE_LOWERCASE;
+    dobp->GAPlayout.style=DDV_TXTSTYLE_LOWERCASE;
+    
+    /* dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE; */
 }
 
 /*******************************************************************************
@@ -1977,7 +2003,7 @@ static void DDV_BlastGetColorSchemaTwo(DDVOptionsBlockPtr dobp)
 	dobp->LayoutType=DDV_USE_MASKLAYOUT|DDV_USE_NOMLAYOUT;
 	dobp->LayoutType|=DDV_USE_UALAYOUT;
 
-	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC|DDV_TXTSTYLE_LOWERCASE;
 	dobp->normlayout.style=DDV_TXTSTYLE_BOLD;
 
 	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
@@ -2007,7 +2033,7 @@ static void DDV_BlastGetColorSchemaThree(DDVOptionsBlockPtr dobp)
 	dobp->LayoutType|=DDV_USE_UALAYOUT;
 	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
 
-	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC|DDV_TXTSTYLE_LOWERCASE;
 
 	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;/*|DDV_TXTSTYLE_COLOR;
 	dobp->MASKlayout.rgb[0]=102;
@@ -2036,7 +2062,7 @@ static void DDV_BlastGetColorSchemaFour(DDVOptionsBlockPtr dobp)
 	dobp->LayoutType|=DDV_USE_UALAYOUT;
 	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
 
-	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC|DDV_TXTSTYLE_LOWERCASE;
 
 	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
 	dobp->MASKlayout.rgb[0]=102;
@@ -2065,7 +2091,7 @@ static void DDV_BlastGetColorSchemaFive(DDVOptionsBlockPtr dobp)
 	dobp->LayoutType|=DDV_USE_UALAYOUT;
 	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
 
-	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC|DDV_TXTSTYLE_LOWERCASE;
 
 	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE|DDV_TXTSTYLE_COLOR;
 	dobp->MASKlayout.rgb[0]=102;
@@ -2094,7 +2120,7 @@ static void DDV_BlastGetColorSchemaSix(DDVOptionsBlockPtr dobp)
 	dobp->LayoutType|=DDV_USE_UALAYOUT;
 	dobp->LayoutType|=DDV_USE_ISOLAYOUT;
 
-	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC;
+	dobp->UAlayout.style=DDV_TXTSTYLE_ITALIC|DDV_TXTSTYLE_LOWERCASE;
 
 	dobp->MASKlayout.style=DDV_TXTSTYLE_LOWERCASE;/*|DDV_TXTSTYLE_COLOR;
 	dobp->MASKlayout.rgb[0]=102;
@@ -2127,17 +2153,17 @@ static void DDV_BlastGetColorSchemaSix(DDVOptionsBlockPtr dobp)
 NLM_EXTERN Boolean DDV_DisplayBlastPairList(SeqAlignPtr sap, ValNodePtr mask,
 	FILE *fp, Boolean is_na, Uint4 tx_option,Uint1 ColorSchema)
 {
-DDVOptionsBlock dob;
-SeqAlignPtr     sap4;
-SeqIdPtr        new_id = NULL, old_id = NULL;    
-Int4Ptr PNTR    matrix;
-Uint4           option,i;
-Boolean         bRet, follower= FALSE;
-
+    DDVOptionsBlock dob;
+    SeqAlignPtr     sap4;
+    SeqIdPtr        new_id = NULL, old_id = NULL;    
+    Int4Ptr PNTR    matrix;
+    Uint4           option,i;
+    Boolean         bRet, follower= FALSE;
+    
     if (!sap || !fp) 
         return(FALSE);
     
-	/*get the matrix*/
+    /*get the matrix*/
     if (is_na == FALSE){
         matrix=load_default_matrix();
         if (!matrix)
@@ -2146,54 +2172,58 @@ Boolean         bRet, follower= FALSE;
         matrix=NULL;
     }
     
+    memset(&dob, '\0', sizeof(DDVOptionsBlock));
+    
     /*init display format*/
-	option =VIEW_FULLSEQ;
-	if (ColorSchema==DDV_BLAST_COLOR0)    
-		option|=DISP_FULL_TXT;
-	else
-		option|=DISP_FULL_HTML;
+    option =VIEW_FULLSEQ;
+
+    if (ColorSchema==DDV_BLAST_COLOR0 || ColorSchema==DDV_BLAST_COLOR1)    
+        option|=DISP_FULL_TXT;
+    else
+        option|=DISP_FULL_HTML;
+
     option|=DISP_BSP_COORD;
     option|=SEQNAME_BLAST_STD;
-	option|=DISP_NOLINKONNAME;
+    option|=DISP_NOLINKONNAME;
     option|=DISP_BLAST_STD;
     option|=DISPE_COLOR;
-
-	/*get the color scheme layout*/
-        /*note that the following functions will set to 0 the entire dob structure, before
-          filling in its content with the layout information. All subsequent init. of dob
-          should be done after the following switch()*/
-	switch(ColorSchema){
-		case DDV_BLAST_COLOR0:
-			option|=DISP_BLAST_MIDLINE;
-			DDV_BlastGetColorSchemaZero(&dob);
-			break;
-		case DDV_BLAST_COLOR1:
-			option|=DISP_BLAST_MIDLINE;
-			DDV_BlastGetColorSchemaOne(&dob);
-			break;
-		case DDV_BLAST_COLOR2:
-			option|=DISP_BLAST_MIDLINE;
-			DDV_BlastGetColorSchemaTwo(&dob);
-			break;
-		case DDV_BLAST_COLOR3:
-			DDV_BlastGetColorSchemaThree(&dob);
-			break;
-		case DDV_BLAST_COLOR4:
-			DDV_BlastGetColorSchemaFour(&dob);
-			break;
-		case DDV_BLAST_COLOR5:
-			DDV_BlastGetColorSchemaFive(&dob);
-			break;
-		case DDV_BLAST_COLOR6:
-			DDV_BlastGetColorSchemaSix(&dob);
-			break;
-	}
-
+    
+    /*get the color scheme layout*/
+    /*note that the following functions will set to 0 the entire dob structure, before
+      filling in its content with the layout information. All subsequent init. of dob
+      should be done after the following switch()*/
+    switch(ColorSchema){
+    case DDV_BLAST_COLOR0:
+        option|=DISP_BLAST_MIDLINE;
+        DDV_BlastGetColorSchemaZero(&dob);
+        break;
+    case DDV_BLAST_COLOR1:
+        option|=DISP_BLAST_MIDLINE;
+        DDV_BlastGetColorSchemaOne(&dob);
+        break;
+    case DDV_BLAST_COLOR2:
+        option|=DISP_BLAST_MIDLINE;
+        DDV_BlastGetColorSchemaTwo(&dob);
+        break;
+    case DDV_BLAST_COLOR3:
+        DDV_BlastGetColorSchemaThree(&dob);
+        break;
+    case DDV_BLAST_COLOR4:
+        DDV_BlastGetColorSchemaFour(&dob);
+        break;
+    case DDV_BLAST_COLOR5:
+        DDV_BlastGetColorSchemaFive(&dob);
+        break;
+    case DDV_BLAST_COLOR6:
+        DDV_BlastGetColorSchemaSix(&dob);
+        break;
+    }
+    
     dob.LineSize=(Int2)60;
     dob.matrix=matrix;
     bRet=TRUE;
     sap4=sap;
-
+    
     while(sap4) {
         /*build the Index*/
         if (sap4->segtype == SAS_DISC){
@@ -2208,21 +2238,21 @@ Boolean         bRet, follower= FALSE;
                 break;
             }
         }
-							
+        
         if (option&DISP_FULL_HTML){
-			fprintf(fp,"<pre>\n");
-		}
+            fprintf(fp,"<pre>\n");
+        }
         /* Attempt to print score for the alignment */
         new_id = TxGetSubjectIdFromSeqAlign(sap4);
         if(old_id != NULL) {
             if(SeqIdMatch(new_id, old_id))
                 follower = TRUE;
         }
-		
-		/*separator*/
-		if (option&DISP_FULL_HTML)
-			fprintf(fp,"<HR WIDTH=\"400\">");
-
+        
+        /*separator*/
+        if (option&DISP_FULL_HTML)
+            fprintf(fp,"<HR WIDTH=\"400\">");
+        
         old_id = new_id;
         if(!FormatScoreFromSeqAlign(sap4, tx_option, fp, matrix, follower)){
             bRet=FALSE;
@@ -2230,11 +2260,11 @@ Boolean         bRet, follower= FALSE;
         }
         follower = FALSE;
         if (option&DISP_FULL_HTML){
-			fprintf(fp,"</pre>\n");
-		}
-
+            fprintf(fp,"</pre>\n");
+        }
+        
         /*display a SeqAlign*/
-		if (!DDV_DisplayNewBLAST(sap4, mask, matrix, option, (Pointer) &dob, fp)){
+        if (!DDV_DisplayNewBLAST(sap4, mask, matrix, option, (Pointer) &dob, fp)){
             bRet=FALSE;
             break;
         }
@@ -2470,8 +2500,8 @@ NLM_EXTERN void DDV_InitDDESAPdispStyles(DDV_Disp_OptPtr ddop)
   Return value : the sequence 
 
 *******************************************************************************/
-static Uint1Ptr DDV_ReadSeqBin (SeqIdPtr sip, Int4 from, Int4 to, 
-		Boolean IsProt,Int2 len,Uint1 strand)
+NLM_EXTERN Uint1Ptr DDV_ReadSeqBin (SeqIdPtr sip, Int4 from, Int4 to, 
+                                    Boolean IsProt,Int2 len,Uint1 strand)
 {
 SeqLocPtr  slp;
 SeqPortPtr spp;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.119 $
+* $Revision: 6.125 $
 *
 * File Description: 
 *
@@ -1761,6 +1761,8 @@ extern Uint2 SmartAttachSeqAnnotToSeqEntry (Uint2 entityID, SeqAnnotPtr sap)
       PromoteXrefs (sfp, bsp, entityID);
       PromotePubs (sfp, bsp, entityID);
     }
+  } else {
+    Message (MSG_ERROR, "Feature table identifiers do not match record");
   }
   return entityID;
 }
@@ -2775,8 +2777,8 @@ extern Int2 LIBCALLBACK RefGeneUserGenFunc (Pointer data);
 
 typedef struct refgeneuserdialog {
   DIALOG_MESSAGE_BLOCK
-  DialoG        fields;
   GrouP         status;
+  DialoG        fields;
 } RefgeneUserDialog, PNTR RefgeneUserDialogPtr;
 
 typedef struct refgeneuserform {
@@ -2821,7 +2823,7 @@ static CharPtr refgene_fields [] = {
   "Accession", "GI", "Comment", "Change", "Type", NULL
 };
 
-static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
+static void AccessionUserFieldPtrToVisStringDialog (DialoG d, Pointer data)
 
 {
   CharPtr       accession;
@@ -2885,7 +2887,7 @@ static void UserFieldPtrToVisStringDialog (DialoG d, Pointer data)
               } else if (StringICmp (oip->str, "annotationChange") == 0 && ufp->choice == 4) {
                 annotChange = ufp->data.boolvalue;
               } else if (StringICmp (oip->str, "comment") == 0 && ufp->choice == 1) {
-                comment = (CharPtr) ufp->data.intvalue;
+                comment = (CharPtr) ufp->data.ptrvalue;
               }
             }
             ufp = ufp->next;
@@ -2943,6 +2945,7 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
   UserFieldPtr          curr;
   ObjectIdPtr           oip;
   RefgeneUserDialogPtr  rdp;
+  Int2                  status = 0;
   CharPtr               str;
   UserObjectPtr         uop;
 
@@ -2950,8 +2953,8 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
   if (rdp == NULL) return;
   uop = (UserObjectPtr) data;
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "RefGeneTracking") != 0) {
-    PointerToDialog (rdp->fields, NULL);
     SetValue (rdp->status, 0);
+    PointerToDialog (rdp->fields, NULL);
     return;
   }
   PointerToDialog (rdp->fields, uop->data);
@@ -2963,18 +2966,15 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
   }
   if (curr != NULL && curr->choice == 1) {
     str = (CharPtr) curr->data.ptrvalue;
-    if (StringICmp (str, "Provisional") == 0) {
-      SetValue (rdp->status, 1);
-      return;
+    if (StringICmp (str, "Predicted") == 0) {
+      status = 1;
+    } else if (StringICmp (str, "Provisional") == 0) {
+      status = 2;
     } else if (StringICmp (str, "Reviewed") == 0) {
-      SetValue (rdp->status, 2);
-      return;
-    } else if (StringICmp (str, "Predicted") == 0) {
-      SetValue (rdp->status, 3);
-      return;
+      status = 3;
     }
   }
-  SetValue (rdp->status, 0);
+  SetValue (rdp->status, status);
 }
 
 static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
@@ -2987,6 +2987,7 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
   size_t                len;
   Int4                  num [5];
   Boolean               okay;
+  CharPtr               organism = NULL;
   RefgeneUserDialogPtr  rdp;
   Boolean               seqChange;
   Int2                  status;
@@ -3005,11 +3006,11 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
 
   status = GetValue (rdp->status);
   if (status == 1) {
-    AddStatusToRefGeneTrackUserObject (uop, "Provisional");
-  } else if (status == 2) {
-    AddStatusToRefGeneTrackUserObject (uop, "Reviewed");
-  } else if (status == 3) {
     AddStatusToRefGeneTrackUserObject (uop, "Predicted");
+  } else if (status == 2) {
+    AddStatusToRefGeneTrackUserObject (uop, "Provisional");
+  } else if (status == 3) {
+    AddStatusToRefGeneTrackUserObject (uop, "Reviewed");
   }
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
@@ -3087,12 +3088,13 @@ static DialoG CreateRefGeneDialog (GrouP g)
   rdp->todialog = UserObjectPtrToRefGeneDialog;
   rdp->fromdialog = RefGeneDialogToUserObjectPtr;
 
-  x = HiddenGroup (p, 3, 0, NULL);
+  x = HiddenGroup (p, 4, 0, NULL);
   /* StaticPrompt (x, "Status", 0, stdLineHeight, programFont, 'l'); */
-  rdp->status = HiddenGroup (x, 3, 0, NULL);
+  rdp->status = HiddenGroup (x, 4, 0, NULL);
+  SetObjectExtra (rdp->status, rdp, NULL);
+  RadioButton (rdp->status, "Predicted");
   RadioButton (rdp->status, "Provisional");
   RadioButton (rdp->status, "Reviewed");
-  RadioButton (rdp->status, "Predicted");
 
   q = HiddenGroup (p, -6, 0, NULL);
   lastppt = NULL;
@@ -3103,7 +3105,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
   }
   rdp->fields = CreateTagListDialog (p, 6, 5, STD_TAG_SPACING,
                                      refgene_types, refgene_widths, refgene_popups,
-                                     UserFieldPtrToVisStringDialog,
+                                     AccessionUserFieldPtrToVisStringDialog,
                                      VisStringDialogToUserFieldPtr);
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
@@ -3111,7 +3113,8 @@ static DialoG CreateRefGeneDialog (GrouP g)
     AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) lastppt, NULL);
     AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [4], (HANDLE) ppt, NULL);
   }
-  AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) q, NULL);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) x, (HANDLE) q, (HANDLE) rdp->fields, NULL);
   return (DialoG) p;
 }
 

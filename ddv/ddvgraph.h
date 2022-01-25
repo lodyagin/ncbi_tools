@@ -1,4 +1,4 @@
-/*  $Id: ddvgraph.h,v 1.12 2000/05/16 19:43:01 hurwitz Exp $
+/*  $Id: ddvgraph.h,v 1.14 2000/07/24 22:00:08 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.12 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvgraph.h,v $
+* Revision 1.14  2000/07/24 22:00:08  hurwitz
+* fixed bug that 1/2 characters were displayed sometimes
+*
+* Revision 1.13  2000/07/08 20:43:58  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 1.12  2000/05/16 19:43:01  hurwitz
 * grey out create block, delete block, undo, and redo as needed
 *
@@ -101,14 +107,21 @@
 #ifndef _DDVGRAPH_
 #define _DDVGRAPH_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <udviewer.h>
 #include <udvdef.h>
 #include <ddvmain.h>
 #include <ddvcolor.h>
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /******************************************************************************
 
@@ -139,7 +152,7 @@ extern void DDV_GetCurrentDispRange(PaneL hWndDDV,UnDViewerGraphDataPtr GrData,
 NLM_EXTERN ValNodePtr DDV_GetRulerForEditor(ValNodePtr descr_head,Int4 from_disp,
 		Int4 to_disp);
 extern ValNodePtr DDV_ComputeRuler(SeqAlignPtr sap,DDV_Disp_OptPtr ddop);
-extern void	DDV_AdjustDrawingRect(RecT * rcP,UDVFontDataPtr udv_font);
+extern void	DDV_AdjustDrawingRect(RecT * rcP,UDVFontDataPtr udv_font, DdvMainPtr dmp);
 extern void DDV_DrawPanelContent_H (PaneL p,DdvMainPtr dmp,RecT PNTR MyUpdateRect,
 		Boolean bSelect);
 extern void DDV_GreyOut(DdvMainWinPtr mWin_d, Boolean Start, Boolean End);
@@ -148,5 +161,11 @@ extern void DDV_GreyOut(DdvMainWinPtr mWin_d, Boolean Start, Boolean End);
 }
 #endif
 
-#endif /* ndef _DDVGRAPH_ */
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
+#endif /* ndef _DDVGRAPH_ */

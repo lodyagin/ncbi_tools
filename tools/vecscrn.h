@@ -31,9 +31,12 @@ Author: Tom Madden
 Contents: functions for Vector screening.
 
 ******************************************************************************
- * $Revision: 6.129 $
+ * $Revision: 6.130 $
  *
  * $Log: vecscrn.h,v $
+ * Revision 6.130  2000/07/08 20:44:12  vakatov
+ * Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+ *
  * Revision 6.129  2000/05/09 21:36:40  kitts
  * Removed unused parameter from VSPrintListFromSeqLocs
  *
@@ -67,17 +70,15 @@ Contents: functions for Vector screening.
 
 #ifndef __VECSCRN__
 #define __VECSCRN__
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 
 #include <ncbi.h>
 #include <blastdef.h>
 #include <blastpri.h>
 #include <blast.h>
 
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /**********************************************************************

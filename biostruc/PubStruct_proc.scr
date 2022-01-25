@@ -1,7 +1,13 @@
 /*
- * $Id: PubStruct_proc.scr,v 6.16 1999/06/15 20:37:48 kimelman Exp $
+ * $Id: PubStruct_proc.scr,v 6.18 2000/09/14 22:24:39 kimelman Exp $
  *
  * $Log: PubStruct_proc.scr,v $
+ * Revision 6.18  2000/09/14 22:24:39  kimelman
+ * bugfixes
+ *
+ * Revision 6.17  2000/09/13 16:59:38  kimelman
+ * enable retrival of dead mmdbs
+ *
  * Revision 6.16  1999/06/15 20:37:48  kimelman
  * id_get_asn_prop: synced to OS
  *
@@ -85,6 +91,47 @@ go
 go
 GRANT EXECUTE ON pdb2mmdb  TO public
 go
+
+
+IF EXISTS (SELECT * FROM sysobjects
+    WHERE name = 'mmdb2acc'
+    AND   uid = user_id('dbo')
+    AND   type = 'P')
+BEGIN
+    DROP PROCEDURE dbo.mmdb2acc
+END
+go
+/************************************************************************/
+PRINT '/*****           PROCEDURE    mmdb2acc                       *****/'
+/************************************************************************/
+go
+
+create proc
+mmdb2acc (
+          @mmdb  int,  /* mmdb */
+          @state int,
+          @acc   int output,
+         )
+as
+   declare @stat int
+   declare @suppress int
+   select @stat = @state
+   if @stat < 0
+     begin
+       select @stat = max(state)
+       from Struct
+       where mmdb_id = @gi and suppressed = 0 and state <= -@stat-1
+     end
+   select @suppress = min(suppressed) from Struct where mmdb_id = @gi and state = @stat and datalength(blob)
+
+   select @acc=acc
+   from Struct
+   where mmdb_id = @gi and suppressed = @suppress and state = @stat
+   if @@rowcount = 0 /* looks to be removed */
+     select @acc = -1
+go
+
+
 IF EXISTS (SELECT * FROM sysobjects
     WHERE name = 'id_find_gi'
     AND   uid = user_id('dbo')
@@ -104,17 +151,18 @@ id_find_gi (
             @state int  = 0
            )
 as
-   declare @stat int
-   select @stat = @state
-   if @stat < 0
-     begin
-       select @stat = max(state)
-       from Struct
-       where mmdb_id = @gi and suppressed = 0 and state <= -@stat-1
-     end
-   select sat=convert(smallint,10),sat_key=acc,gi_state=convert(tinyint,0),0,0,"01/01/1900"
-   from Struct
-   where mmdb_id = @gi and suppressed = 0 and state = @stat
+   declare @acc int
+   declare @live tinyint
+
+   exec mmdb2acc @gi,@state, @acc=@acc output
+   if exists ( select * from Struct where acc = @acc and suppressed = 0 )
+      select @live = 100
+   else 
+      select @live = 125
+
+   select sat=convert(smallint,10),sat_key=@acc,gi_state=@live,0,0,"01/01/1900"
+   from Struct 
+   where acc = @acc
 go
 /*****        Grant and Revoke permissions id_find_gi               *****/
 go
@@ -137,11 +185,19 @@ go
 create proc
 id_get_asnprop ( @sat_key int)
 as
-   select  state=100,confidential, suppress=suppressed, override=convert(tinyint,0),
-           length=datalength(blob), owner=convert(smallint,0), "unknown","N/A"
-   from    Struct
-   where   acc = @sat_key
- 
+   declare @state tinyint 
+   select  @state=suppressed from    Struct where   acc = @sat_key
+   if @@rowcount > 0 
+     begin
+        if @state > 0 
+          select  @state=125
+        else
+          select  @state=100
+        select  state=@state,confidential, suppress=suppressed, override=convert(tinyint,0),
+                length=datalength(blob), owner=convert(smallint,0), "unknown","N/A"
+        from    Struct
+        where   acc = @sat_key
+   end
 go
 /*****        Grant and Revoke permissions id_get_asnprop           *****/
 go
@@ -264,8 +320,6 @@ id_get_asn (
      @outfmt         int=0
      )
 as
-  declare @state          tinyint
-
   if(@sat != 10)
      return 100
 
@@ -274,17 +328,16 @@ as
   
   if(@sat_key=0)
     begin
-      select @sat_key = acc
-      from Struct s
-      where mmdb_id = @gi and state = 0 and suppressed = 0
+      declare @acc int
+   
+      exec mmdb2acc @gi,0, @acc=@acc output
+
+      select @sat_key = acc from Struct s where acc = @acc
       if(@@rowcount = 0)
         return 100
     end
 
-  select sat_key=@sat_key, sat=10, state=100, confidential, suppress=suppressed, override=convert(tinyint,0)
-  from  Struct
-  where  acc = @sat_key
-
+  exec id_get_asnprop @sat_key
   exec id_get_asnblob @sat_key
         
   if(@outfmt=100)

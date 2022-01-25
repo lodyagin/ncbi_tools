@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_www.c,v $  $Revision: 4.23 $  $Date: 1999/11/09 22:04:24 $
+/*  $Id: ni_www.c,v 4.26 2000/09/28 17:53:24 vakatov Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,15 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ni_www.c,v $
+* Revision 4.26  2000/09/28 17:53:24  vakatov
+* NI_WWW_SetNcbidPort() -- yet another fix
+*
+* Revision 4.25  2000/09/28 14:31:32  vakatov
+* NI_WWW_SetNcbidPort() -- fixed for the case of undefined #LB_DIRECT
+*
+* Revision 4.24  2000/09/27 21:05:09  vakatov
+* [WWW/LB-specific]  NI_WWW_SetNcbidPort() to set port of the NCBID to connect
+*
 * Revision 4.23  1999/11/09 22:04:24  vakatov
 * Get rid of S.Shavirin's ad-hoc proto
 *
@@ -102,6 +111,7 @@
 
 #ifdef LB_DIRECT
 #  include <lbapi.h>
+#  include <ncbithr.h>
 #endif
 
 
@@ -141,9 +151,11 @@
 #define ENV_DEBUG_PRINTOUT  "SRV_DEBUG_PRINTOUT"
 #define DEF_DEBUG_PRINTOUT  ""
 
+#define DEF_ENGINE_NCBID_PORT  80
+
 #ifdef LB_DIRECT
-#define DEF_ENGINE_LB_URL   "/Service/nph-ncbid.cgi"
-#define ENV_NO_LB_DIRECT    "SRV_NO_LB_DIRECT"
+#  define DEF_ENGINE_NCBID_URL   "/Service/nph-ncbid.cgi"
+#  define ENV_NO_LB_DIRECT       "SRV_NO_LB_DIRECT"
 #endif /* LB_DIRECT */
 
 
@@ -164,9 +176,36 @@ typedef struct {
   Uint4      flags;            /* to be passed to NIC_GetService() */
   AsnIoBSPtr aibsp;
 #ifdef LB_DIRECT
-  Boolean    no_lb_direct;     /* prohibit the use of local "nsdaemon" */
+  Uint2      ncbid_port;       /* NCBID port to connect to */
+  Boolean    no_lb_direct;     /* prohibit the use of local "lbdaemon" */
 #endif
 } ServiceInfo;
+
+
+
+NLM_EXTERN Uint2 NI_WWW_SetNcbidPort(Uint2 port)
+{
+#ifdef LB_DIRECT
+    static TNlmTls s_NcbidPortTLS;
+
+    VoidPtr ptr_port;
+    Uint2   prev_port;
+    NlmTlsGetValue(s_NcbidPortTLS, &ptr_port);
+    prev_port = ptr_port ? (Uint2) ptr_port : DEF_ENGINE_NCBID_PORT;
+
+    if (port != 0) {
+        NlmTlsSetValue(&s_NcbidPortTLS, (VoidPtr) port, 0);
+    }
+
+    return prev_port;
+#else
+    static Uint2 s_NcbidPort = DEF_ENGINE_NCBID_PORT;
+    Uint2 prev_port = s_NcbidPort;
+    if (port != 0)
+        s_NcbidPort = port;
+    return prev_port;
+#endif
+}
 
 
 /* Static functions
@@ -182,16 +221,18 @@ static unsigned s_AlternateDispatcher(ServiceInfo *sinfo,
   if ( sinfo->no_lb_direct )
     return 0;
 
-  ip_addr = (Uint4)LBGetIPAddress(sinfo->service, 0, skip_ip, n_skip);
+  ip_addr = (Uint4) LBGetIPAddress(sinfo->service, 0, skip_ip, n_skip);
   if (!ip_addr  ||  !Uint4toInaddr(ip_addr, str_addr, sizeof(str_addr)))
     return 0;
 
   StringNCpy_0(sinfo->disp_host, str_addr, sizeof(sinfo->disp_host));
-  sinfo->disp_port = DEF_ENGINE_PORT;
-  StringNCpy_0(sinfo->disp_path, DEF_ENGINE_LB_URL, sizeof(DEF_ENGINE_LB_URL));
+  sinfo->disp_port = sinfo->ncbid_port;
+  StringNCpy_0(sinfo->disp_path, DEF_ENGINE_NCBID_URL,
+               sizeof(sinfo->disp_path));
   return ip_addr;
 }
 #endif
+
 
 static Boolean s_Connect(ServiceInfo *sinfo, Char** hostname)
 {
@@ -457,7 +498,7 @@ static NI_HandPtr s_GenericGetService
   }}
 
 #ifdef LB_DIRECT
-  {{ /* if to prohibit the use of local "nsdaemon" info */
+  {{ /* if to prohibit the use of local "lbdaemon" info */
     Char  str[32];
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_NO_LB_DIRECT,
                    str, sizeof(str), "");
@@ -465,6 +506,9 @@ static NI_HandPtr s_GenericGetService
       (*str  &&  StringICmp(str, "0")  &&
        StringICmp(str, "false")  &&  StringICmp(str, "no"));
   }}
+
+  /* setup the NCBID port to use */
+  sinfo->ncbid_port = NI_WWW_SetNcbidPort(0);
 #endif
 
   /* open ASN i/o, etc. */

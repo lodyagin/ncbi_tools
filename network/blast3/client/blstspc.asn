@@ -1,4 +1,4 @@
---$Revision: 1.18 $
+--$Revision: 1.20 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -19,7 +19,7 @@ EXPORTS	Blast-search, Blast-request,
 	Blast-phialign;
 
 	
-IMPORTS Bioseq FROM NCBI-Sequence
+IMPORTS Bioseq, Bioseq-set FROM NCBI-Sequence
 	Seq-id, Seq-loc FROM NCBI-Seqloc
 	Seq-align, Seq-align-set FROM NCBI-Seqalign;
 
@@ -54,7 +54,8 @@ Blast-search ::= SEQUENCE {
 	parameters	Blast-parameters OPTIONAL, 	-- search parameters
 	mask		Seq-loc OPTIONAL,		-- locations on query to mask
 	matrix		Blast-matrix OPTIONAL,		-- PSI-BLAST matrix to use in search.
-	return-parts	BOOLEAN OPTIONAL		-- Return the results in an Blast-parts block
+	return-parts	BOOLEAN OPTIONAL,		-- Return the results in an Blast-parts block
+	query-set       Bioseq-set OPTIONAL     -- List of queries for MegaBLAST search
 }
 
 
@@ -147,8 +148,8 @@ Blast-parameters ::= SEQUENCE {
 	gap-extend		INTEGER OPTIONAL ,
 	-- the next two options are for "ranged" blast, which restricts the building of 
 	-- words to a certain region.   Hits may be extended beyond this range.
-	required-start	INTEGER OPTIONAL ,	-- start of word range
-	required-end	INTEGER OPTIONAL ,	-- end of words range (-1 denotes end of query)
+	required-start	INTEGER OPTIONAL ,	-- start location on query Bioseq
+	required-end	INTEGER OPTIONAL ,	-- end location on query Bioseq
 	-- PSI-BLAST parameters:
 	ethresh			REAL OPTIONAL ,
 	max-num-passes		INTEGER OPTIONAL ,
@@ -171,10 +172,13 @@ Blast-parameters ::= SEQUENCE {
 	strand-option	INTEGER OPTIONAL,	-- indicates strand to use.
 	phi-pattern	VisibleString OPTIONAL,	-- indicates, that this is phi-blast search and supplies pattern
 	use-real-db-size BOOLEAN OPTIONAL,  -- db size not to be adjusted for list of gis'.
-        use-best-align   BOOLEAN OPTIONAL,   -- option is to use alignments choosen by user in PSM computation API
-        is-rps-blast   BOOLEAN OPTIONAL,   -- option to set RPS BLAST search
+        use-best-align  BOOLEAN OPTIONAL,   -- option is to use alignments choosen by user in PSM computation API
+        is-rps-blast    BOOLEAN OPTIONAL,   -- option to set RPS BLAST search
         tweak-parameters BOOLEAN OPTIONAL, -- Tweak Lambda, K, and score matrix for each match  
-        smith-waterman   BOOLEAN OPTIONAL  -- Compute locally optimal Smith-Waterman alignments
+        smith-waterman  BOOLEAN OPTIONAL,  -- Compute locally optimal Smith-Waterman alignments
+	is-megablast    BOOLEAN OPTIONAL,  -- option to set MegaBLAST search.
+	query-lcase-mask SEQUENCE OF Seq-loc OPTIONAL, -- locations for lower case masking.
+	is-ooframe      INTEGER OPTIONAL   -- option to do outer frame. 
 }
 
 				-- series of these when the request is queued
@@ -236,6 +240,19 @@ Blast-phialign ::= SEQUENCE {
 	seqloc	   SEQUENCE OF Seq-loc  -- region locations
 }
 
+MegaBlast-hit ::= SEQUENCE {
+	id1            VisibleString,
+	id2            VisibleString,
+	query-offset   INTEGER,
+	subject-offset INTEGER,
+	query-end      INTEGER,
+	subject-end    INTEGER,
+	score          INTEGER
+} 
+
+Seq-align-set-list ::= SEQUENCE {
+	align          Seq-align-set OPTIONAL
+}
 
 Blast-response ::= CHOICE {
 	init Blast-version ,		-- acknowledges init
@@ -275,7 +292,8 @@ Blast-response ::= CHOICE {
 	done	Blast-Progress ,	-- one emitted at end of search
 	fini NULL,               -- acknowledge fini
 	phialign Blast-phialign, -- The result of PHI-Blast
-	parts		SEQUENCE OF Blast-parts -- the resutls in the Blast-parts format, rather than a Seq-align.
+	parts		SEQUENCE OF Blast-parts, -- the resutls in the Blast-parts format, rather than a Seq-align.
+	mbalign SEQUENCE OF MegaBlast-hit -- one-line MegaBlast results.
 }
 
 END

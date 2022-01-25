@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.139 2000/06/28 22:21:40 kans Exp $
+#	$Id: makeall.unx,v 6.153 2000/10/31 19:50:46 beloslyu Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -92,6 +92,9 @@ LIB10 =
 ULIB20 = libncbidesk.a
 LIB20 = $(ULIB20)
 LIB20 = 
+ULIB45 = libddvlib.a
+LIB45 = $(ULIB45)
+LIB45 = 
 LIB22 = libncbimmdb.a
 LIB23 = libncbitool.a
 ULIB28 = libvibgif.a
@@ -121,6 +124,7 @@ LIB39 =
 TLIB4 = D4$(ULIB4)
 TLIB400 = D400$(ULIB400)
 TLIB20 = D20$(ULIB20)
+TLIB45 = D45$(ULIB45)
 TLIB28 = D28$(ULIB28)
 TLIB30 = D30$(ULIB30)
 TLIB3000 = D3000$(ULIB3000)
@@ -131,6 +135,7 @@ TLIB39 = D39$(ULIB39)
 DLIB4 = D4$(LIB4)
 DLIB400 = D400$(LIB400)
 DLIB20 = D20$(LIB20)
+DLIB45 = D45$(LIB45)
 DLIB28 = D28$(LIB28)
 DLIB30 = D30$(LIB30)
 DLIB3000 = D3000$(LIB3000)
@@ -171,16 +176,17 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
-	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
-	qblastapi.c vecscnapi.c seqport.c sequtil.c prtutil.c \
+	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c strucapi.c \
+	qblastapi.c vecscnapi.c objmim.c mimapi.c seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c subutil.c edutil.c asn2ff1.c \
 	asn2ff2.c asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
 	gbparint.c utilpars.c utilpub.c ffprint.c wprint.c satutil.c \
 	seqmgr.c objmgr.c gather.c accmmdbs.c acccn3ds.c lsqfetch.c findrepl.c \
-	apparam.c codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
+	codon.c jzcoll.c jzmisc.c maputil.c mconsist.c txalign.c \
 	salpedit.c salpstat.c salpacc.c salprop.c salsap.c salstruc.c salutil.c \
-	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c 
+	udvseq.c blocks.c pgppop.c samutil.c ddvcolor.c viewmgr.c ddvcreate.c \
+	jsavlt.c needleman.c 
 
 SRC3 =	cdentrez.c cdromlib.c cdnewlib.c casn.c cdconfig.c objentr.c
 
@@ -209,16 +215,22 @@ SRC20 = drawseq.c dotmatrx.c fea2seg.c fstyle.c smdlg1.c smdlg2.c smdlg3.c \
 	layout.c saldist.c saled.c salfiles.c salpanel.c salparam.c \
 	salsa.c seqfltr.c seqgraph.c seqgrphx.c seqmtrx.c \
 	seqpcc.c seqanal.c aacomp.c seqscrl.c \
-	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c \
+	vsm.c vsmfile.c vsmutil.c udvgraph.c udvopen.c udvpanel.c dotvibrant.c \
 	dlgutil1.c dlgutil2.c \
 	medview.c bspview.c gbfview.c gphview.c \
 	gphdraw.c gxydraw.c gtrdraw.c \
-	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c \
-	ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
+	biosrc.c cdrgn.c import.c pubdesc.c seqsub.c mapgene.c prtgene.c salogif.c
+
+SRC45 = ddvclick.c ddvgraph.c ddvopen.c ddvpanel.c
 
 SRC22 = corematx.c dvncode.c objmmdb1.c objmmdb2.c objmmdb3.c \
 	mmdbapi.c mmdbapi1.c mmdbapi2.c mmdbapi3.c mmdbapi4.c mmdbentr.c \
-	vastsubs.c prunebsc.c
+	vastsubs.c prunebsc.c objcdd.c cddutil.c cddposutil.c \
+	thrdalgs.c thrdatd.c  thrdbwfi.c thrdcpal.c \
+	thrdcpll.c thrdcprl.c thrdcxei.c thrddgri.c thrdrsmp.c \
+	thrdsal0.c thrdsalr.c thrdsalu.c thrdsgoi.c thrdslo0.c \
+	thrdslor.c thrdslou.c thrdspci.c thrdspea.c thrdspel.c \
+	thrdspni.c thrdttb0.c thrdttbi.c thrdzsc.c
 
 SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	simutil.c slist.c sec.c tfuns.c toasn3.c toporg.c \
@@ -228,8 +240,8 @@ SRC23 = csim.c db_slist.c dust.c falign.c g_any.c sim2.c sim3.c sim4.c \
 	actutils.c posit.c lookup.c readdb.c ncbisam.c ncbisort.c \
 	salign.c salptool.c urkutil.c urkpcc.c urkptpf.c urkepi.c \
 	urkfltr.c urkdust.c urksigu.c seg.c urkbias.c urkcnsrt.c urktree.c \
-	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c vecscrn.c \
-	mblast.c rpsutil.c
+	pseed3.c pattern1.c impatool.c posit2.c newkar.c mbalign.c mbutils.c \
+	vecscrn.c mblast.c rpsutil.c kappa.c xmlblast.c bxmlobj.c fdlobj.c dotseq.c
 
 SRC28 = gdfontg.c gdfontmb.c gdfontt.c pictogif.c \
 	gdfontl.c gdfonts.c ncbidrwg.c drawing.c mapping.c picture.c ncbimain.c
@@ -269,17 +281,19 @@ OBJ1 =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
 	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o objalignloc.o \
-	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
-	qblastapi.o vecscnapi.o seqport.o sequtil.o prtutil.o simple.o tofasta.o \
+	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o strucapi.o \
+	qblastapi.o vecscnapi.o objmim.o mimapi.o seqport.o sequtil.o prtutil.o \
+	simple.o tofasta.o \
 	tofile.o tomedlin.o valid.o alignmgr.o alignval.o sqnutil1.o \
 	sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
 	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o \
 	gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
-	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
+	codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
 	salpedit.o salpstat.o salpacc.o salsap.o salstruc.o salutil.o salprop.o \
-	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o
+	udvseq.o blocks.o pgppop.o samutil.o ddvcolor.o viewmgr.o ddvcreate.o \
+	jsavlt.o needleman.o
 
 OBJ3 =  cdentrez.o cdromlib.o cdnewlib.o casn.o cdconfig.o objentr.o
 
@@ -318,16 +332,23 @@ OBJ20 = drawseq.o dotmatrx.o fea2seg.o fstyle.o smdlg1.o smdlg2.o smdlg3.o \
 	layout.o saldist.o saled.o salfiles.o salpanel.o \
 	salparam.o salsa.o seqfltr.o seqgraph.o seqgrphx.o seqmtrx.o \
 	seqpcc.o seqanal.o aacomp.o seqscrl.o \
-	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o \
+	vsm.o vsmfile.o vsmutil.o udvgraph.o udvopen.o udvpanel.o dotvibrant.o \
 	dlgutil1.o dlgutil2.o \
 	medview.o bspview.o gbfview.o gphview.o \
 	gphdraw.o gxydraw.o gtrdraw.o \
-	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o \
-	ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
+	biosrc.o cdrgn.o import.o pubdesc.o seqsub.o mapgene.o prtgene.o salogif.o
+
+OBJ45 = ddvclick.o ddvgraph.o ddvopen.o ddvpanel.o
 
 OBJ22 = corematx.o dvncode.o objmmdb1.o objmmdb2.o objmmdb3.o \
 	mmdbapi.o mmdbapi1.o mmdbapi2.o mmdbapi3.o mmdbapi4.o mmdbentr.o \
-	vastsubs.o prunebsc.o
+	vastsubs.o prunebsc.o objcdd.o cddutil.o cddposutil.o \
+	thrdalgs.o thrdatd.o  thrdbwfi.o thrdcpal.o \
+	thrdcpll.o thrdcprl.o thrdcxei.o thrddgri.o thrdrsmp.o \
+	thrdsal0.o thrdsalr.o thrdsalu.o thrdsgoi.o thrdslo0.o \
+	thrdslor.o thrdslou.o thrdspci.o thrdspea.o thrdspel.o \
+	thrdspni.o thrdttb0.o thrdttbi.o thrdzsc.o
+
 
 OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	simutil.o slist.o sec.o tfuns.o toasn3.o toporg.o \
@@ -338,7 +359,7 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
 	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o \
-	vecscrn.o mblast.o rpsutil.o
+	vecscrn.o mblast.o rpsutil.o kappa.o xmlblast.o bxmlobj.o fdlobj.o dotseq.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -364,6 +385,12 @@ OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 OBJ39 = ideochrow.o humchrom_dat.o mschrom_dat.o ideochrom.o ideoorgs.o \
 	bands_abc.o
 
+# NOTE: if you enter an object file to an OBJxx greater than 30, you have to explicitly
+# enter the make actions below (e.g. ddvclick.o).  This is because the
+# implicit make rule for opengl objects (.glo) somehow causes the default make rule for .o
+# files to disappear.  OBJ30 is the first opengl dependent library and this
+# triggers this bug.
+
 
 ## All things to make
 ##
@@ -374,7 +401,7 @@ ln-if-absent:	../make/ln-if-absent
 	ln -s ../make/ln-if-absent .
 
 nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
-	$(LIB5) $(DLIB20) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
+	$(LIB5) $(DLIB20) $(DLIB45) $(LIB22) $(LIB23) $(DLIB28) $(DLIB30) $(DLIB3000) \
 	$(DLIB34) $(DLIB37) $(DLIB38) $(NCBI_SHLIBS)
 
 sources : $(THR_SRC) $(SRC1) $(SRC2) $(SRC3) $(SRC4) $(SRC5) $(SRC20) $(SRC22) $(SRC23) $(SRC28) $(SRC30) 
@@ -391,7 +418,6 @@ clean :
 
 ## Implicit actions
 ##
-
 .SUFFIXES: .c .h .o .glo
 
 .c.o :
@@ -499,7 +525,14 @@ bands_abc.o:	bands_abc.c
 	$(CC) $(CFLAGS) $<
 ideo_gen_obj.o:	ideo_gen_obj.c
 	$(CC) $(CFLAGS) $<
-
+ddvgraph.o: ddvgraph.c
+	$(CC) $(CFLAGS) $<
+ddvopen.o: ddvopen.c
+	$(CC) $(CFLAGS) $<
+ddvpanel.o: ddvpanel.c
+	$(CC) $(CFLAGS) $<
+ddvclick.o: ddvclick.c
+	$(CC) $(CFLAGS) $<
 mschrom_dat.c : ideo_gen_obj mschrom.dat
 	- ./ideo_gen_obj -d mschrom.dat -f mschrom_dat -o MS
 	- mv -f mschrom_dat.h ../include
@@ -588,6 +621,8 @@ copy :
 	$(SRCCOPY) ../desktop/*.c .
 	$(SRCCOPY) ../biostruc/*.h ../include
 	$(SRCCOPY) ../biostruc/*.c .
+	$(SRCCOPY) ../biostruc/cdd/*.h ../include
+	$(SRCCOPY) ../biostruc/cdd/*.c .
 	$(SRCCOPY) ../tools/*.h ../include
 	$(SRCCOPY) ../tools/*.c .
 	$(SRCCOPY) ../cn3d/*.h ../include
@@ -650,6 +685,8 @@ D400:
 
 D20:
 
+D45:
+
 D28:
 
 D30:
@@ -669,6 +706,8 @@ $(TLIB4) : $(ULIB4)
 $(TLIB400) : $(ULIB400)
 
 $(TLIB20) : $(ULIB20)
+
+$(TLIB45) : $(ULIB45)
 
 $(TLIB28) : $(ULIB28)
 
@@ -701,6 +740,12 @@ $(ULIB20) : $(OBJ20)
 	$(AR) cru $(LIB20) $(OBJ20)
 	$(LIBCOPY) $(LIB20) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB20)
+
+$(ULIB45) : $(OBJ45)
+	- $(RM_LIB) $(LIB45)
+	$(AR) cru $(LIB45) $(OBJ45)
+	$(LIBCOPY) $(LIB45) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIB45)
 
 $(ULIB28) : $(OBJ28)
 	- $(RM_LIB) $(LIB28)

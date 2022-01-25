@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.28 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,42 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.28  2000/09/24 23:31:18  kans
+* added GetSequenceByFeature
+*
+* Revision 6.27  2000/09/24 22:52:47  kans
+* added GetSequenceByIdOrAccnDotVer
+*
+* Revision 6.26  2000/09/05 21:33:50  kans
+* productInterval_to_locationIntervals replaces aaInterval_to_dnaIntervals, also works for mRNA feature (JO)
+*
+* Revision 6.25  2000/08/31 18:12:54  shavirin
+* Added new function TransTableFreeAll().
+*
+* Revision 6.24  2000/08/11 18:09:49  kans
+* GetScoresbyAccessionDotVersion passes length back through new parameter
+*
+* Revision 6.23  2000/08/11 18:03:25  kans
+* added GetScoresbyAccessionDotVersion - prototyped in seqport.h but implemented in sqnutil2.c
+*
+* Revision 6.22  2000/08/10 17:22:38  kans
+* added GetDNAbyAccessionDotVersion for genome processing effort
+*
+* Revision 6.21  2000/08/04 15:45:22  kans
+* added ContigRevComp - still need to implement for delta bioseqs
+*
+* Revision 6.20  2000/08/03 19:02:54  kans
+* added PersistentTransTableByGenCode and PersistentTransTableByCdRegion
+*
+* Revision 6.19  2000/08/01 20:02:58  kans
+* separate macros for IsOrfStart, IsAmbigStart, IsAnyStart
+*
+* Revision 6.18  2000/07/22 22:45:37  kans
+* more work on trans table translation functions
+*
+* Revision 6.17  2000/07/21 15:28:36  kans
+* first pass at TransTableTranslate functions - more work remains
+*
 * Revision 6.16  2000/07/05 17:02:12  kans
 * added spp->gapIsZero, SeqPortSet_do_virtualEx, using ncbi4na with gap of 0 to distinguish quality scores under N versus quality scores under gap
 *
@@ -414,6 +450,19 @@ NLM_EXTERN SeqLocPtr LIBCALL dnaLoc_to_aaLoc(SeqFeatPtr sfp, SeqLocPtr dna_loc, 
 
 /******************************************************************
 *
+*	productLoc_to_locationLoc(sfp, product_loc)
+*	map a SeqLoc on the product sequence
+*       to a Seq-loc in the location sequence
+*       through a feature
+*
+*       this more general function is now called by
+*          aaLoc_to_dnaLoc()
+*
+******************************************************************/
+NLM_EXTERN SeqLocPtr LIBCALL productLoc_to_locationLoc(SeqFeatPtr sfp, SeqLocPtr product_loc);
+
+/******************************************************************
+*
 *	aaLoc_to_dnaLoc(sfp, aa_loc)
 *	map a SeqLoc on the amino acid sequence
 *       to a Seq-loc in the	DNA sequence
@@ -439,12 +488,12 @@ NLM_EXTERN SeqLocPtr LIBCALL aaFeatLoc_to_dnaFeatLoc(SeqFeatPtr sfp, SeqLocPtr a
 
 /******************************************************************
 *
-*	aaInterval_to_dnaIntervals(sfp, aa_start, aa_stop)
+*	productInterval_to_locationIntervals(sfp, aa_start, aa_stop)
 *	map the amino acid sequence to a chain of Seq-locs in the 
 *	DNA sequence through a CdRegion feature
 *
 ******************************************************************/
-NLM_EXTERN SeqLocPtr LIBCALL aaInterval_to_dnaIntervals (SeqFeatPtr sfp, Int4 aa_start, Int4 aa_stop);
+NLM_EXTERN SeqLocPtr LIBCALL productInterval_to_locationIntervals (SeqFeatPtr sfp, Int4 aa_start, Int4 aa_stop);
 
 /*-------------- BioseqRevComp () ---------------------------*/
 /***********************************************************************
@@ -472,6 +521,12 @@ NLM_EXTERN Boolean LIBCALL BioseqComplement (BioseqPtr bsp);
 ************************************************************************/
 NLM_EXTERN Boolean LIBCALL BioseqReverse (BioseqPtr bsp);
 
+
+/*-------------- ContigRevComp () ---------------------------*/
+/***********************************************************************
+*   ContigRevComp:   Reverse complement segmented or delta bioseq
+************************************************************************/
+NLM_EXTERN Boolean LIBCALL ContigRevComp (BioseqPtr bsp);
 
 /*****************************************************************************
 *
@@ -532,6 +587,9 @@ NLM_EXTERN Int2 ComposeCodonsRecognizedString (tRNAPtr trna, CharPtr buf, size_t
 *****************************************************************************/
 
 typedef struct fsatranstable {
+  Int2     genCode;
+  Char     ncbieaa [65];
+  Char     sncbieaa [65];
   Uint2    nextBase [3376];
   Char     aminoAcid [3376] [2];
   Char     orfStart [3376] [2];
@@ -541,6 +599,7 @@ typedef struct fsatranstable {
 /* allocate 6-frame finite state translation table and initialize with indicated genetic code */
 NLM_EXTERN TransTablePtr TransTableNew (Int2 genCode);
 NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl);
+NLM_EXTERN void TransTableFreeAll (void);
 
 #define TTBL_TOP_STRAND  0
 #define TTBL_BOT_STRAND  1
@@ -552,7 +611,9 @@ NLM_EXTERN TransTablePtr TransTableFree (TransTablePtr tbl);
 #define NextCodonState(tbl,cur,ch) (tbl->nextBase [(int) (Uint2) cur] + tbl->basesToIdx [(int) (Uint1) ch])
 #define GetCodonResidue(tbl,cur,stnd) (tbl->aminoAcid [(int) (Uint2) cur] [stnd])
 #define GetStartResidue(tbl,cur,stnd) (tbl->orfStart [(int) (Uint2) cur] [stnd])
-#define IsOrfStart(tbl,cur,stnd) ((Boolean) (GetStartResidue(tbl,cur,stnd) != '-'))
+#define IsOrfStart(tbl,cur,stnd) ((Boolean) (GetStartResidue(tbl,cur,stnd) == 'M'))
+#define IsAmbigStart(tbl,cur,stnd) ((Boolean) (GetStartResidue(tbl,cur,stnd) == 'X'))
+#define IsAnyStart(tbl,cur,stnd) ((Boolean) (GetStartResidue(tbl,cur,stnd) != '-'))
 #define IsOrfStop(tbl,cur,stnd) ((Boolean) (GetCodonResidue(tbl,cur,stnd) == '*'))
 #define IsATGStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur == TTBL_CAT_STATE) : (cur == TTBL_ATG_STATE))))
 #define IsAltStart(tbl,cur,stnd) ((Boolean) (IsOrfStart(tbl,cur,stnd) && (stnd ? (cur != TTBL_CAT_STATE) : (cur != TTBL_ATG_STATE))))
@@ -566,6 +627,34 @@ NLM_EXTERN void TransTableProcessBioseq (
   TransTableMatchProc matchProc,
   Pointer userdata,
   BioseqPtr bsp
+);
+
+/* trans table translation functions can be passed cds feature or individual parameters */
+
+NLM_EXTERN ByteStorePtr TransTableTranslateCdRegion (
+  TransTablePtr  PNTR tblptr,
+  SeqFeatPtr cds,
+  Boolean include_stop,
+  Boolean remove_trailingX
+);
+
+NLM_EXTERN ByteStorePtr TransTableTranslateSeqLoc (
+  TransTablePtr  PNTR tblptr,
+  SeqLocPtr location,
+  Int2 genCode,
+  Uint1 frame,
+  Boolean include_stop,
+  Boolean remove_trailingX
+);
+
+/* allow reuse of translation tables by saving as AppProperty, avoids unnecessary initializations */
+
+NLM_EXTERN TransTablePtr PersistentTransTableByGenCode (
+  Int2 genCode
+);
+
+NLM_EXTERN TransTablePtr PersistentTransTableByCdRegion (
+  SeqFeatPtr cds
 );
 
 /*****************************************************************************
@@ -627,6 +716,31 @@ NLM_EXTERN SeqSearchPtr SeqSearchFree (
   SeqSearchPtr tbl
 );
 
+
+/*
+   Convenience functions for genome processing use BioseqLockById to get sequence
+   record (perhaps with phrap quality score graphs) so fetching from some network
+   or local server must be enabled, or sequences must already be in memory.
+*/
+
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (
+  SeqIdPtr sip,
+  CharPtr accession,
+  Boolean is_na
+);
+
+NLM_EXTERN CharPtr GetSequenceByFeature (
+  SeqFeatPtr sfp
+);
+
+NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (
+  CharPtr accession
+);
+
+NLM_EXTERN BytePtr GetScoresbyAccessionDotVersion (
+  CharPtr accession,
+  Int4Ptr bsplength
+);
 
 /**************************************************************
 *

@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.25 2000/06/26 18:05:26 lewisg Exp $
+/* $Id: mmdbsrv.c,v 6.26 2000/08/21 16:12:42 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.26  2000/08/21 16:12:42  lewisg
+* add save=asntext option
+*
 * Revision 6.25  2000/06/26 18:05:26  lewisg
 * fix another hardcoded url
 *
@@ -373,7 +376,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.25 2000/06/26 18:05:26 lewisg Exp $";
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.26 2000/08/21 16:12:42 lewisg Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 
@@ -1181,7 +1184,7 @@ static void DumpMime(AsnIoPtr aip, CharPtr title, VoidPtr datum)
 #define LAUNCH_VIEWER	0
 #define SEE_FILE	1
 #define SAVE_FILE	2
-
+#define SEND_FILE   4
 
 /* Handle the various View/See/Save file options. */
 
@@ -1241,6 +1244,9 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
     printf ("Content-type: text/html\r\n\r\n");
     printf ("<HTML><PRE>\r\n");
     break;
+  case SEND_FILE:
+    printf ("Content-type: text/html\r\n\r\n");
+    break;
   }
 
   if (Filetype == 'j') {
@@ -1256,6 +1262,10 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
       NcbiMimeAsn1AsnWrite(mime, aip, NULL);
       break;
     case SEE_FILE:
+      aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
+      NcbiMimeAsn1AsnWrite(mime, aip, NULL);
+      break;
+    case SEND_FILE:
       aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
       NcbiMimeAsn1AsnWrite(mime, aip, NULL);
       break;
@@ -1280,6 +1290,10 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
       BiostrucAsnWrite(bsp, aip, NULL);
       break;
     case SEE_FILE:
+      aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
+      BiostrucAsnWrite(bsp, aip, NULL);
+      break;
+    case SEND_FILE:
       aip = AsnIoNew(ASNIO_TEXT_OUT, stdout, NULL, NULL, NULL);
       BiostrucAsnWrite(bsp, aip, NULL);
       break;
@@ -1839,6 +1853,10 @@ Int2 Main ()
       else if (StrICmp(pcThis, "M") == 0)
         {
 	    Save = 3;  /* MacSave - not implemented */
+	}	
+      else if (StrICmp(pcThis, "asntext") == 0)
+        {
+	    Save = SEND_FILE;  /* writes out asn text without the html header */
 	}	
     }	 
   

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/12/98
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -45,6 +45,10 @@
 #ifndef _NCBIURL_
 #define _NCBIURL_
 
+#include <ncbi.h>
+#include <ncbisock.h>
+
+
 #undef NLM_EXTERN
 #ifdef NLM_IMPORT
 #define NLM_EXTERN NLM_IMPORT
@@ -55,9 +59,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <ncbi.h>
-#include <ncbisock.h>
 
 /*****************************************************************************
 *

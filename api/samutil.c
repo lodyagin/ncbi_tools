@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.55 2000/07/05 19:23:12 lewisg Exp $
+/*   $Id: samutil.c,v 1.64 2000/10/16 23:45:02 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,46 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.55 2000/07/05 19:23:12 lewisg Exp $
+* File Name:  $Id: samutil.c,v 1.64 2000/10/16 23:45:02 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.55 $
+* $Revision: 1.64 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.c,v $
+* Revision 1.64  2000/10/16 23:45:02  hurwitz
+* fixed DDE_GetStart for case of no left tail
+*
+* Revision 1.63  2000/10/05 21:27:42  hurwitz
+* bug fix for making ruler, added functions to get bioseq start and len of each aligned block
+*
+* Revision 1.62  2000/09/08 21:47:57  hurwitz
+* added DDE_GetNumResidues function
+*
+* Revision 1.61  2000/08/25 22:10:32  hurwitz
+* added utility function
+*
+* Revision 1.60  2000/08/24 19:15:46  hurwitz
+* bug fix: undo and redo functions cause quit query dialog
+*
+* Revision 1.59  2000/08/23 20:06:49  hurwitz
+* fixes to DDE_PopListFree
+*
+* Revision 1.58  2000/08/07 23:02:39  hurwitz
+* when merging panels fails, scroll to spot where alignments differ
+*
+* Revision 1.57  2000/08/03 17:12:37  hurwitz
+* added functions to check if alignments are mergeable
+*
+* Revision 1.56  2000/07/17 17:49:12  hurwitz
+* fixed bug.  when copying ParaG's need to copy all rows so edits can be saved properly
+*
 * Revision 1.55  2000/07/05 19:23:12  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -1111,7 +1138,7 @@ NLM_EXTERN ParaGPtr DDE_ParaGFree(ParaGPtr pParaG) {
 }
 
 
-NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList) {
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList, Int4 TotalNumRows) {
 /*----------------------------------------------------------------------------
 *  makes a copy of PopList.
 *
@@ -1124,13 +1151,10 @@ NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList) {
 *  returns pointer to new PopList.
 *---------------------------------------------------------------------------*/
   MsaParaGPopListPtr  pPopListCopy;
-  Int4                i, NumRows;
+  Int4                i;
   ValNodePtr          pValNode;
   DDVRulerDescrPtr    pCopy;
   
-  NumRows = pPopList->nBsp;
-  ASSERT(NumRows > 0);
-
   /* allocate space for the new MsaParaGPopList */
   pPopListCopy = MemNew(sizeof(MsaParaGPopList));
   ASSERT(pPopListCopy != NULL);
@@ -1139,11 +1163,11 @@ NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList) {
   MemCopy(pPopListCopy, pPopList, sizeof(MsaParaGPopList));
 
   /* allocate space for array of ValNodePtr's */
-  pPopListCopy->TableHead = MemNew(NumRows * sizeof(ValNodePtr));
+  pPopListCopy->TableHead = MemNew(TotalNumRows * sizeof(ValNodePtr));
   ASSERT(pPopListCopy->TableHead != NULL);
 
   /* for each ValNodePtr in TableHead */
-  for (i=0; i<NumRows; i++) {
+  for (i=0; i<TotalNumRows; i++) {
     /* make new ValNode, point it to copy of ParaG, add it to linked list */
     /* note:  there is only one ParaG per row for DDE */
     pPopListCopy->TableHead[i] =
@@ -1167,30 +1191,30 @@ NLM_EXTERN MsaParaGPopListPtr DDE_PopListNew(MsaParaGPopListPtr pPopList) {
   }
 
   /* make copy of array of bioseq ID's (entitiesTbl) */
-  pPopListCopy->entitiesTbl = MemNew(NumRows * sizeof(Uint4));
+  pPopListCopy->entitiesTbl = MemNew(TotalNumRows * sizeof(Uint4));
   ASSERT(pPopListCopy->entitiesTbl != NULL);
-  MemCopy(pPopListCopy->entitiesTbl, pPopList->entitiesTbl, NumRows*sizeof(Uint4));
+  MemCopy(pPopListCopy->entitiesTbl, pPopList->entitiesTbl, TotalNumRows*sizeof(Uint4));
   
   /* return pointer to the new copy of MsaParaGPopList */
   return(pPopListCopy);
 }
 
 
-NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList) {
+NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList, Int4 TotalNumRows) {
 /*----------------------------------------------------------------------------
 *  frees all memory allocated for an MsaParaGPopList in DDE_PopListNew().
 *  returns NULL for successful completion.
 *---------------------------------------------------------------------------*/
-  Int4  i, NumRows;
-
-  NumRows = pPopList->nBsp;
+  Int4  i;
 
   /* for each ValNodePtr, free the ParaG the ValNode points to, free the ValNode */
-  for (i=0; i<NumRows; i++) {
-    ASSERT(pPopList->TableHead[i]->data.ptrvalue != NULL);
-    ASSERT(DDE_ParaGFree(pPopList->TableHead[i]->data.ptrvalue) == NULL);
-    ASSERT(pPopList->TableHead[i] != NULL);
-    ASSERT(ValNodeFree(pPopList->TableHead[i]) == NULL);
+  for (i=0; i<TotalNumRows; i++) {
+    if (pPopList->TableHead[i]->data.ptrvalue != NULL) {
+      ASSERT(DDE_ParaGFree(pPopList->TableHead[i]->data.ptrvalue) == NULL);
+    }
+    if (pPopList->TableHead[i] != NULL) {
+      ASSERT(ValNodeFree(pPopList->TableHead[i]) == NULL);
+    }
   }
 
   /* now free the array of ValNodePtr's (i.e. the TableHead array) */
@@ -1199,12 +1223,14 @@ NLM_EXTERN MsaParaGPopListPtr DDE_PopListFree(MsaParaGPopListPtr pPopList) {
 
   /* free the whole RulerDescr linked list */
   /* each DDVRulerDescr is free'd here (no need to call DDV_RulerDescrFree()) */
-  ASSERT(pPopList->RulerDescr != NULL);
-  ASSERT(ValNodeFreeData(pPopList->RulerDescr) == NULL);
+  if (pPopList->RulerDescr != NULL) {
+    ASSERT(ValNodeFreeData(pPopList->RulerDescr) == NULL);
+  }
 
   /* free the entitiesTbl array */
-  ASSERT(pPopList->entitiesTbl != NULL);
-  ASSERT(MemFree(pPopList->entitiesTbl) == NULL);
+  if (pPopList->entitiesTbl != NULL) {
+    ASSERT(MemFree(pPopList->entitiesTbl) == NULL);
+  }
 
   /* free the PopList */
   ASSERT(pPopList != NULL);
@@ -1337,6 +1363,33 @@ NLM_EXTERN Int4 DDE_GetFirstAlignIndex(MsaParaGPopListPtr pPopList) {
 }
 
 
+NLM_EXTERN Boolean DDE_AreSimilarRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2) {
+/*----------------------------------------------------------------------------
+*  compare 2 DDVRulerDescr's.
+*  return FALSE if only 1 is aligned.
+*  return FALSE if they're aligned, and the aligned starts and stops differ.
+*  return TRUE if they're unaligned.
+*---------------------------------------------------------------------------*/
+  /* if only 1 is aligned return FALSE */
+  if (p1->bUnAligned != p2->bUnAligned) {
+    return(FALSE);
+  }
+  /* if they're both aligned, have same align starts, and are same length return TRUE */
+  if (!p1->bUnAligned) {
+    if (p1->align_start == p2->align_start) {
+      if ((p1->disp_stop - p1->disp_start) == (p2->disp_stop - p2->disp_start)) {
+        return(TRUE);
+      }
+    }
+    return(FALSE);
+  }
+  /* if they're both unaligned return TRUE */
+  else {
+    return(TRUE);
+  }
+}
+
+
 NLM_EXTERN Boolean DDE_AreIdenticalRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDescrPtr p2) {
 /*----------------------------------------------------------------------------
 *  compare 2 DDVRulerDescr's.
@@ -1351,6 +1404,72 @@ NLM_EXTERN Boolean DDE_AreIdenticalRulerDescrs(DDVRulerDescrPtr p1, DDVRulerDesc
   else {
     return(FALSE);
   }
+}
+
+
+NLM_EXTERN Boolean DDE_AreSimilarRulers(ValNodePtr pRuler1, ValNodePtr pRuler2,
+                                        Int4* pDispCoord1,  Int4* pDispCoord2) {
+/*----------------------------------------------------------------------------
+*  compare 2 linked lists of DDVRulerDescr's.
+*  return TRUE if THE ALIGNED SECTIONS are identical.
+*  if this function returns FALSE, Display Coordinates are returned.
+*  These coordinates indicate where the first mismatch between rulers
+*  was found.
+*---------------------------------------------------------------------------*/
+  DDVRulerDescrPtr  pNode1, pNode2;
+  ValNodePtr        vnp1, vnp2;
+
+  vnp1 = pRuler1;
+  vnp2 = pRuler2;
+
+  /* for return of TRUE, give illegal display coordinates */
+  *pDispCoord1 = -1;
+  *pDispCoord2 = -1;
+
+  /* skip over the left tails, in case one ruler's tail is on and not the other's */
+  pNode1 = (DDVRulerDescrPtr) vnp1->data.ptrvalue;
+  pNode2 = (DDVRulerDescrPtr) vnp2->data.ptrvalue;
+  if (pNode1->bUnAligned) {
+    vnp1 = vnp1->next;
+  }
+  if (pNode2->bUnAligned) {
+    vnp2 = vnp2->next;
+  }
+
+  /* check each aligned node */
+  while (vnp1 != NULL) {
+    pNode1 = (DDVRulerDescrPtr) vnp1->data.ptrvalue;
+    pNode2 = (DDVRulerDescrPtr) vnp2->data.ptrvalue;
+    if (!DDE_AreSimilarRulerDescrs(pNode1, pNode2)) {
+      *pDispCoord1 = pNode1->disp_start;
+      *pDispCoord2 = pNode2->disp_start;
+      return(FALSE);
+    }
+    vnp1 = vnp1->next;
+    vnp2 = vnp2->next;
+    /* if just the right tail of ruler1 remains, return TRUE */
+    if ((vnp2 == NULL) && (vnp1 != NULL)) {
+      pNode1 = (DDVRulerDescrPtr) vnp1->data.ptrvalue;
+      if ((pNode1->bUnAligned) && (vnp1->next == NULL)) {
+        return(TRUE);
+      }
+    }
+    /* if just the right tail of ruler2 remains, return TRUE */
+    if ((vnp1 == NULL) && (vnp2 != NULL)) {
+      pNode2 = (DDVRulerDescrPtr) vnp2->data.ptrvalue;
+      if ((pNode2->bUnAligned) && (vnp2->next == NULL)) {
+        return(TRUE);
+      }
+    }
+  }
+
+  /* make sure they're the same length */
+  if (vnp2 == NULL) {
+    return(TRUE);
+  }
+  *pDispCoord1 = pNode1->disp_start;
+  *pDispCoord2 = pNode2->disp_start;
+  return(FALSE);
 }
 
 
@@ -1417,7 +1536,7 @@ NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Ro
 *  return a pointer to the new linked-list.
 *  (the old one is NOT free'd here.)
 *---------------------------------------------------------------------------*/
-  ValNodePtr     head, vnp, pRulerLast=NULL, pRulerHead=NULL;
+  ValNodePtr     head=NULL, vnp, pRulerLast=NULL, pRulerHead=NULL;
   MsaTxtDispPtr  msap;
   Int4           DispStart=0, DispStop=-1;
   Int4           AlignStop;
@@ -1433,7 +1552,10 @@ NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Ro
   while (pg_vnp != NULL) {
     /* get head of linked-list of MsaTxtDisp's for Row */
     pgp =        (ParaGPtr) (pg_vnp->data.ptrvalue);
-    head = vnp = (ValNodePtr) (pgp->ptxtList);
+    vnp = (ValNodePtr) (pgp->ptxtList);
+    if (head == NULL) {
+      head = vnp;
+    }
     while (vnp != NULL) {
       msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
       if (!msap->IsUnAligned) {
@@ -1510,7 +1632,7 @@ NLM_EXTERN DDE_InfoPtr DDE_New(MsaParaGPopListPtr pPopList, Int4 TotalNumRows) {
   pEditInfo->TotalNumRows = TotalNumRows;
 
   /* create a copy of PopList for editing */
-  pEditInfo->pPopList = DDE_PopListNew(pPopList);
+  pEditInfo->pPopList = DDE_PopListNew(pPopList, TotalNumRows);
 
   /* allocate space for the Visible and RowOrder arrays */
   pEditInfo->pVisible =     MemNew(TotalNumRows*sizeof(Boolean));
@@ -1551,12 +1673,12 @@ NLM_EXTERN DDE_InfoPtr DDE_Copy(DDE_InfoPtr pEditInfo, Int4 TotalNumRows) {
 }
 
 
-NLM_EXTERN DDE_InfoPtr DDE_Free(DDE_InfoPtr pEditInfo) {
+NLM_EXTERN DDE_InfoPtr DDE_Free(DDE_InfoPtr pEditInfo, Int4 TotalNumRows) {
 /*----------------------------------------------------------------------------
 *  frees all memory allocated for the DDE_Info.
 *  returns NULL for successful completion.
 *---------------------------------------------------------------------------*/
-  DDE_PopListFree(pEditInfo->pPopList);
+  DDE_PopListFree(pEditInfo->pPopList, TotalNumRows);
   MemFree(pEditInfo->pVisible);
   MemFree(pEditInfo->pRowOrder);
   MemFree(pEditInfo->pRowOrderLUT);
@@ -1614,15 +1736,15 @@ NLM_EXTERN DDE_StackPtr DDE_FreeStack(DDE_StackPtr pStack) {
   for (i=0; i<pStack->NumInStack; i++) {
     /* free a DDE_Info */
     ASSERT(pStack->pArray[Index] != NULL);
-    DDE_Free(pStack->pArray[Index]);
+    DDE_Free(pStack->pArray[Index], pStack->pOrig->TotalNumRows);
     Index = ++Index % DDE_STACK_SIZE;
   }
 
   /* free the copy of the original and the one that was being edited */
-  DDE_Free(pStack->pOrig);
+  DDE_Free(pStack->pOrig, pStack->pOrig->TotalNumRows);
 
   /* let DDV free the one being edited */
-/*  DDE_Free(pStack->pEdit); */
+/*  DDE_Free(pStack->pEdit, pStack->pEdit->TotalNumRows); */
 
   /* now free the stack */
   return(MemFree(pStack));
@@ -1636,7 +1758,7 @@ NLM_EXTERN void DDE_GetOriginal(DDE_StackPtr pStack, Boolean Save) {
 *  Save indicates if this edit is stored on the stack.
 *---------------------------------------------------------------------------*/
   /* free pStack->pEdit */
-  DDE_Free(pStack->pEdit);
+  DDE_Free(pStack->pEdit, pStack->pEdit->TotalNumRows);
 
   /* copy pStack->pOrig into pStack->pEdit */
   pStack->pEdit = DDE_Copy(pStack->pOrig, pStack->pOrig->TotalNumRows);
@@ -1658,7 +1780,7 @@ NLM_EXTERN Boolean DDE_Add(DDE_StackPtr pStack) {
 
   /* if there's something on the stack at current position, free it */
   if (pStack->pArray[pStack->StackIndex] != NULL) {
-    DDE_Free(pStack->pArray[pStack->StackIndex]);
+    DDE_Free(pStack->pArray[pStack->StackIndex], pStack->pOrig->TotalNumRows);
   }
 
   /* put a copy of pStack->pEdit on the stack */
@@ -1737,8 +1859,8 @@ NLM_EXTERN Boolean DDE_Prev(DDE_StackPtr pStack) {
     pStack->StackIndex = DDE_STACK_SIZE - ABS(pStack->StackIndex);
   }
 
-  /* free pStack->pEditInfo */
-  DDE_Free(pStack->pEdit);
+  /* free pStack->pEdit */
+  DDE_Free(pStack->pEdit, pStack->pEdit->TotalNumRows);
 
   /* put a copy of an item from the stack into pStack->pEdit */
   pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex], pStack->pOrig->TotalNumRows);
@@ -1746,6 +1868,9 @@ NLM_EXTERN Boolean DDE_Prev(DDE_StackPtr pStack) {
   /* advance 1 to point to slot after the one that's retrieved */
   pStack->StackIndex = ++pStack->StackIndex % DDE_STACK_SIZE;
 
+  /* when the position on the stack changes, indicate there are edits to save */
+  pStack->SomethingToSave = TRUE;
+  
   return(TRUE);
 }
 
@@ -1766,13 +1891,16 @@ NLM_EXTERN Boolean DDE_Next(DDE_StackPtr pStack) {
   pStack->NumFromStart++;
 
   /* free pStack->pEdit */
-  DDE_Free(pStack->pEdit);
+  DDE_Free(pStack->pEdit, pStack->pEdit->TotalNumRows);
 
   /* put a copy of an item from the stack into pStack->pEdit */
   pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex], pStack->pOrig->TotalNumRows);
 
   /* advance 1 to point to slot after the one that's retrieved */
   pStack->StackIndex = ++pStack->StackIndex % DDE_STACK_SIZE;
+
+  /* when the position on the stack changes, indicate there are edits to save */
+  pStack->SomethingToSave = TRUE;
 
   return(TRUE);
 }
@@ -2268,9 +2396,22 @@ NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Bo
 }
 
 
+NLM_EXTERN ParaGPtr DDE_GetParaGPtr2(MsaParaGPopListPtr pPopList, Int4 Row) {
+/*----------------------------------------------------------------------------
+* return pointer to ParaG
+*---------------------------------------------------------------------------*/
+  ValNodePtr    pg_vnp;
+  ParaGPtr      pgp;
+
+  pg_vnp =  (ValNodePtr) (pPopList->TableHead[Row]);
+  pgp =       (ParaGPtr) (pg_vnp->data.ptrvalue);
+  return(pgp);
+}
+
+
 NLM_EXTERN ParaGPtr DDE_GetParaGPtr(DDE_InfoPtr pEditInfo, Int4 Row) {
 /*----------------------------------------------------------------------------
-*  return pointer to linked-list of MsaTxtDisp structures
+* return pointer to ParaG
 *---------------------------------------------------------------------------*/
   ValNodePtr    pg_vnp;
   ParaGPtr      pgp;
@@ -3126,6 +3267,29 @@ NLM_EXTERN ValNodePtr DDE_GetLastVNP(ValNodePtr vnp) {
     vnp = vnp->next;
   }
   return(last_vnp);
+}
+
+
+NLM_EXTERN Int4 DDE_GetNumResidues(MsaParaGPopListPtr pPopList, Int4 Row) {
+/*----------------------------------------------------------------------------
+*  get the number of residues in Row of pPopList.
+*---------------------------------------------------------------------------*/
+  ValNodePtr     vnp;
+  MsaTxtDispPtr  msap;
+  Int4           from=-1, to;
+
+  vnp = DDE_GetTxtListPtr2(pPopList, Row);
+  while (vnp != NULL) {
+    msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
+    if (!msap->IsGap) {
+      if (from == -1) {
+        from = msap->from;
+      }
+      to = msap->to;
+    }
+    vnp = vnp->next;
+  }
+  return((to-from) + 1);
 }
 
 
@@ -5245,3 +5409,68 @@ NLM_EXTERN Int4 DDE_GetNumTrailingUnAlignedGaps(DDE_InfoPtr pEditInfo, Int4 Row)
   }
   return(NumGaps);
 }
+
+
+NLM_EXTERN Int4 DDE_GetStart(MsaParaGPopListPtr pPopList, Int4 BlockIndex, Int4 Row) {
+/*----------------------------------------------------------------------------
+*  get the bioseq coordinate for the start of the BlockIndex block of Row.
+*---------------------------------------------------------------------------*/
+  MsaTxtDispPtr  msap;
+  ValNodePtr     head, vnp;
+  Int4           Count=0;
+
+  head = vnp = DDE_GetTxtListPtr2(pPopList, Row);
+  if (head == NULL) return(-1);
+
+  msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
+  if (msap == NULL) return(-1);
+
+  /* for start of 1st block which starts with an aligned region */
+  if ((BlockIndex == 0) && (!msap->IsUnAligned)) {
+    return(msap->from);
+  }
+
+  /* look through the linked list of MsaTxtDisp's */
+  while (vnp!= NULL) {
+    /* if we're at the correct block */
+    if (Count == BlockIndex) {
+      /* if vnp is unaligned and vnp->next is aligned */
+      if (DDE_IsStartOfAlignment(vnp)) {
+        /* return bioseq coord of start of next block */
+        msap = (MsaTxtDispPtr) (vnp->next)->data.ptrvalue;
+        return(msap->from);
+      }
+    }
+    if (DDE_IsEndOfAlignment(vnp)) {
+      /* count unaligned to aligned transitions */
+      Count++;
+    }
+    vnp = vnp->next;
+  }
+  return(-1);
+}
+
+
+NLM_EXTERN Int4 DDE_GetLen(MsaParaGPopListPtr pPopList, Int4 BlockIndex) {
+/*----------------------------------------------------------------------------
+*  get the length of the BlockIndex block.
+*---------------------------------------------------------------------------*/
+  ValNodePtr        vnp;
+  DDVRulerDescrPtr  drdp;
+  Int4              BlockCount=0;
+
+  vnp = pPopList->RulerDescr;
+  while (vnp != NULL) {
+    drdp = (DDVRulerDescrPtr) vnp->data.ptrvalue;
+    if (!drdp->bUnAligned) {
+      if (BlockCount == BlockIndex) {
+        return(drdp->disp_stop - drdp->disp_start + 1);
+      }
+      BlockCount++;
+    }
+    vnp = vnp->next;
+  }
+  return(-1);
+}
+
+

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description:  * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -45,6 +45,9 @@
 *
 * RCS Modification History:
 * $Log: medutil.h,v $
+* Revision 6.1  2000/08/18 17:01:02  kans
+* added FetchPubPmId, enhanced FixPubEquiv to handle records with pmid but no muid
+*
 * Revision 6.0  1997/08/25 18:35:50  madden
 * Revision changed to 6.0
 *
@@ -107,6 +110,9 @@ ValNodePtr FixPubEquiv PROTO((ValNodePtr pube, FindPubOptionPtr fpop));
 
                               /* gets Cit-art in ISO/GenBank style given Muid */
 ValNodePtr FetchPub PROTO((Int4 muid));
+
+                              /* gets Cit-art in ISO/GenBank style given Pmid */
+ValNodePtr FetchPubPmId PROTO((Int4 pmid));
 
                               /* check if a string all upper case */
 Boolean AllUpperCase PROTO((CharPtr p ));

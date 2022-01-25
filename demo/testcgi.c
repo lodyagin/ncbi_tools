@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/24/98
 *
-* $Revision: 6.24 $
+* $Revision: 6.25 $
 *
 * File Description: 
 *
@@ -335,7 +335,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
 /* The >Message prefix causes Sequin to display the message to the user */
 
   if (qstr == NULL) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - Query not detected\n");
     fflush (stdout);
     return FALSE;
@@ -347,7 +347,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
   query = malloc (len + 3);
 
   if (query == NULL) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - query allocation failed\n");
     fflush (stdout);
     return FALSE;
@@ -384,7 +384,7 @@ static Bool ParseQuery (CharPtr qstr, Bool queryRequired)
 /* verify that any required query string is present in the URL */
 
   if (queryRequired && num_tags == 0) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - Unable to parse tokens from query:\n'%s'\n", query);
     fflush (stdout);
     return FALSE;
@@ -749,7 +749,7 @@ main (int argc, char *argv[])
 
   method = getenv ("REQUEST_METHOD");
   if (method == NULL) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - Program launched from command line\n");
     fflush (stdout);
     return 1;
@@ -758,7 +758,7 @@ main (int argc, char *argv[])
 /* ensure that the POST method is being sent from the HTTPD server */
 
   if (strcmp (method, "POST") != 0) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - Method (%s) must be POST\n", method);
     fflush (stdout);
     return 1;
@@ -769,7 +769,7 @@ main (int argc, char *argv[])
   ptr = getenv ("QUERY_STRING");
   if (ptr != NULL && strlen (ptr) > 0) {
     if (! ParseQuery (ptr, TRUE)) {
-      printf ("Content-type: text/html\n\n");
+      printf ("Content-type: text/html\r\n\r\n");
       printf (">Message\nFAILURE - QUERY_STRING parsing failed\n");
       fflush (stdout);
       if (query != NULL) {
@@ -788,7 +788,7 @@ main (int argc, char *argv[])
   tmpnam (tempfile);
   fp = fopen (tempfile, "w");
   if (fp == NULL) {
-    printf ("Content-type: text/html\n\n");
+    printf ("Content-type: text/html\r\n\r\n");
     printf (">Message\nFAILURE - file open failed\n");
     fflush (stdout);
     return 1;
@@ -807,7 +807,7 @@ main (int argc, char *argv[])
 
 /* now send required first header information to stdout */
 
-  printf ("Content-type: text/html\n\n");
+  printf ("Content-type: text/html\r\n\r\n");
   fflush (stdout);
 
 /* expect request=custom, request=echo, request=seg, or request=trnascan */

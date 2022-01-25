@@ -29,15 +29,15 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* Date     Name        Description of modification
-* -------  ----------  -----------------------------------------------------
-*
+* $Log: vsmutil.h,v $
+* Revision 6.4  2000/07/08 20:44:02  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
 *
 * ==========================================================================
 */
@@ -45,11 +45,12 @@
 #ifndef _VSMUTIL_
 #define _VSMUTIL_
 
+#include <vibrant.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <vibrant.h>
 
 /*****************************************************************************
 *

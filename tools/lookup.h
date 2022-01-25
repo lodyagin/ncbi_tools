@@ -39,7 +39,7 @@ Contents: defines and prototype used by lookup.c.
 *
 * Version Creation Date:   10/26/95
 *
-* $Revision: 6.16 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *       Functions that format traditional BLAST output.
@@ -54,6 +54,12 @@ Contents: defines and prototype used by lookup.c.
 *
 * RCS Modification History:
 * $Log: lookup.h,v $
+* Revision 6.18  2000/07/10 17:17:37  dondosha
+* Use several stacks in MegaBlast to speed up search for small word sizes
+*
+* Revision 6.17  2000/07/07 21:20:08  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope!
+*
 * Revision 6.16  2000/05/31 14:04:50  dondosha
 * Added member stack_size to MbStack structure
 *
@@ -150,11 +156,12 @@ Contents: defines and prototype used by lookup.c.
 #ifndef _LOOKUP_
 #define _LOOKUP_
 
+#include <ncbi.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <ncbi.h>
 /* 
 	Structure that keeps a block of memory for the functions in lookup.c
 	Most often used instead of a MemNew call in AddPositionToLookupTable.
@@ -209,23 +216,24 @@ typedef struct mod_lt_entry {
 } ModLAEntry, PNTR ModLAEntryPtr;
 #endif
 
-#define MBSTACK_SIZE 5000
+#define MB_NUM_STACKS 5
+#define MBSTACK_SIZE 1000
 
 typedef struct megablast_stack {
-    int diag, level, length;
+   Int4 diag, level, length;
 } MbStack, PNTR MbStackPtr;
 
 typedef struct megablast_lookup_table {
    Int2 width;          /* Number of bytes in hash value   */
-   Int4 hashsize;      /* = 2^(8*width) - 1               */ 
+   Int4 hashsize;       /* = 2^(8*width) - 1               */ 
    Int2 lpm;            /* Minimal length of perfect match */
    Int2 max_positions;  /* Maximal number of positions for one hash value */
    Int4Ptr hashtable;   /* Array of positions              */
    Int4Ptr next_pos;    /* Extra positions stored here     */
    Uint4 mask; 
-   Int4 stack_index;    
-   MbStackPtr estack; /* Most recent hits stored here */
-   Int4 stack_size;
+   Int4Ptr stack_index; /* Current number of elements in each stack */   
+   Int4Ptr stack_size;  /* Available memory for each stack */
+   MbStackPtr PNTR estack; /* Array of stacks for most recent hits */
 } MbLookupTable, PNTR MbLookupTablePtr;
 
 typedef struct lookup_table {

@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.23 2000/06/29 19:19:53 madden Exp $
+/* $Id: rpsutil.c,v 6.34 2000/10/27 19:44:05 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,46 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.23 $
+* $Revision: 6.34 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.34  2000/10/27 19:44:05  shavirin
+* ObjMgrFreeCache() now called more rare. Fixed memory leaks.
+*
+* Revision 6.33  2000/10/27 15:39:32  kans
+* added AnnotateRegionsFromCDD and FreeCDDRegions for common use by ripen, Sequin, and RefSeq processor
+*
+* Revision 6.32  2000/10/20 21:59:33  shavirin
+* Added workaround from ObjMgr deadlock bug.
+*
+* Revision 6.31  2000/10/16 19:35:18  shavirin
+* Function createFakeProtein() become external.
+*
+* Revision 6.30  2000/09/28 18:50:11  shavirin
+* Added parameter BioseqPtr query_bsp to print results callback.
+*
+* Revision 6.29  2000/09/27 19:09:40  shavirin
+* Significantly redesigned external interface to RPS Blast.
+*
+* Revision 6.28  2000/09/21 13:49:54  madden
+* Rename CddNew and CddDestruct to CddHitNew and CddHitDestruct
+*
+* Revision 6.27  2000/09/20 22:13:25  madden
+* Added code to get CddHit structure
+*
+* Revision 6.26  2000/09/18 16:04:39  madden
+* No call to BlastFindWords if rpsblast
+*
+* Revision 6.25  2000/09/01 14:54:22  shavirin
+* Added WARNING when found invalid profile. Alignment skipped then.
+*
+* Revision 6.24  2000/08/21 21:28:21  shavirin
+* Added check for wrong big/little endian architecture during
+* initialization.
+*
 * Revision 6.23  2000/06/29 19:19:53  madden
 * Fix memory leak
 *
@@ -111,8 +145,12 @@
 */
 
 #include <rpsutil.h>
+#include <sqnutils.h>
+#include <mblast.h>
 
 #define RPS_MAGIC_NUMBER 7702
+
+#define MAX_NUMBER_SEQS_FOR_OBJ_MGR 1000
 
 typedef struct _RPSSap {
     SeqAlignPtr sap;
@@ -124,6 +162,18 @@ typedef struct _RPSapSort {
     Int4 count;
     Int4 allocated;
 } RPSapSort, PNTR RPSapSortPtr;
+
+typedef struct _RPS_MTDataStruct {
+    RPSBlastOptionsPtr rpsbop;
+    RPSInfoPtr rpsinfo;
+    RPSReadBSPCallback bsp_callback;
+    VoidPtr bsp_user_data;
+    RPSHandleResultsCallback print_callback;
+    VoidPtr print_user_data;
+} RPS_MTDataStruct, PNTR RPS_MTDataStructPtr;
+
+static Boolean search_is_done;
+static Int4 glb_sequence_count=0;
 
 void RPSFreeLookup(RPSLookupPtr lookup)
 {
@@ -147,8 +197,15 @@ RPSLookupPtr RPSInitLookup(CharPtr LookupFile)
     lookup->header = (Int4Ptr) lookup->mmLookup->mmp_begin;
     
     if(lookup->header[0] != RPS_MAGIC_NUMBER) {
-        ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid lookup file");
-        return NULL;
+        /* Checking for wrong architecture */
+        if(Nlm_SwapUint4(lookup->header[0]) == RPS_MAGIC_NUMBER) {
+            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: database formated on "
+                      "opposite big/little endian architecture. Sorry.");
+            return NULL;
+        } else {
+            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid lookup file");
+            return NULL;
+        }
     }
 
     lookup->offsets = lookup->header + 8;
@@ -206,8 +263,14 @@ RPSInfoPtr RPSInit(CharPtr dbname, Int4 query_is_prot)
     header = (Int4Ptr) rpsinfo->mmMatrix->mmp_begin;
     
     if(header[0] != RPS_MAGIC_NUMBER) {
-        ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid matrix memmap file");
-        return (NULL);
+        if(Nlm_SwapUint4(header[0]) == RPS_MAGIC_NUMBER) {
+            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: database formated on "
+                      "opposite big/little endian architecture. Sorry.");
+            return NULL;
+        } else {
+            ErrPostEx(SEV_FATAL, 0, 0, "RPSInit: invalid matrix memmap file");
+            return NULL;
+        }
     }
     
     rpsinfo->matrixCount = header[1];
@@ -589,6 +652,9 @@ Boolean RPSubstituteQueryLookup(BlastSearchBlkPtr search,
                 BLAST_WordFinderNew(search->sbp->alphabet_size, 
                                     RPS_WORD_SIZE, 1, FALSE);
         }
+	else {
+            search->wfp = search->wfp_second = search->wfp_first;
+	}
         
         lookup = search->wfp->lookup;
         
@@ -895,6 +961,13 @@ RPSimpalaStatCorrections(RPSequencePtr rpseq, Nlm_FloatHiPtr LambdaRatio, Nlm_Fl
    initialUngappedLambda = IMPALAfindUngappedLambda("BLOSUM62");
    scaledInitialUngappedLambda = initialUngappedLambda/scalingFactor;
    correctUngappedLambda = impalaKarlinLambdaNR(this_sfp, scaledInitialUngappedLambda);
+   if(correctUngappedLambda == -1.0) {
+       MemFree(resProb);
+       MemFree(scoreArray);
+       MemFree(return_sfp);
+       return FALSE;
+   }
+
    *LambdaRatio = correctUngappedLambda/scaledInitialUngappedLambda;
 
    resProb = MemFree(resProb);
@@ -1015,8 +1088,29 @@ SeqAlignPtr RPSAlignTraceBack(BlastSearchBlkPtr search, RPSInfoPtr rpsinfo,
         RPSubstituteQueryLookup(search, rpseq, FALSE);
 	/* Correct statistics for proteins, should also be doen for nucleotides. */
 	if (rpsinfo->query_is_prot == TRUE) {
-            RPSimpalaStatCorrections(rpseq, &lambda_ratio, 1.0, 
-                                     subject_length, subject_seq);
+            if(!RPSimpalaStatCorrections(rpseq, &lambda_ratio, 1.0, 
+                                         subject_length, subject_seq)) {
+                Char tmp[64];
+
+                /* If this function failed - and returned FALSE - matrix
+                   used for this sequence is incorrect and results may not
+                   be trusted. We will post WARNING message and skip this
+                   profile completatly */
+
+                SeqIdWrite(rpseq->seqid, tmp, PRINTID_FASTA_LONG, sizeof(tmp));
+
+                ErrPostEx(SEV_WARNING, 0, rpseq->number, 
+                          "BAD matrix for the sequence %s %s",
+                          tmp, rpseq->description);
+                
+                seqalign = NULL; 
+                RPSequenceFree(rpseq);
+                BLASTResultHitlistFree(new_result);
+                result_struct_new->results[0] = NULL;
+                continue;
+            }
+
+
             if (rpseq->copyMatrix) {
                 posMatrix = search->sbp->posMatrix;
                 search->sbp->posMatrix = rpseq->copyMatrix;
@@ -1213,7 +1307,9 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
 
     /* Cleaning up word finder */
 
+/*
     RPSLookupCleanUp(search->wfp->lookup);
+*/
     
     search->subject_info = BLASTSubjectInfoNew(SeqIdDup(SeqIdFindBest(subject_bsp->id, SEQID_GI)), StringSave(BioseqGetTitle(subject_bsp)), subject_length);        
     rpseq = RPSGetBIGSequence(rpsinfo, &bsp);
@@ -1270,6 +1366,355 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
     SeqLocFree(slp);
     
     return seqalign;
+}
+
+CddHitPtr CddHitDestruct(CddHitPtr cdd)
+{
+    CddHitPtr next;
+    
+    while (cdd) {
+        MemFree(cdd->CDDid);
+        MemFree(cdd->ShortName);
+        MemFree(cdd->Definition);
+        next = cdd->next;
+        MemFree(cdd);
+        cdd = next;
+    }
+    return NULL;
+}
+
+CddHitPtr CddHitNew(void)
+{
+    CddHitPtr cdhThis;
+    
+    cdhThis = (CddHitPtr)MemNew(sizeof(CddHit));
+    if (cdhThis) {
+	cdhThis->start = -1; 
+	cdhThis->stop = -1;
+    }
+    return cdhThis;
+}
+
+
+/* 
+	Saves string up to first instance of token
+	one char beyond first instance returned in tmp.
+*/
+static CharPtr
+SaveUntilChar(CharPtr from, CharPtr *tmp, Char ch)
+{
+    CharPtr ptr, ptr_new, ptr_start;
+    
+    if (from == NULL) {
+        *tmp = NULL;
+        return NULL;
+    }
+    
+    ptr_new = ptr_start = StringSave(from);
+    ptr = from;
+    
+    while (*ptr != NULLB && *ptr != ch) {
+        ptr++;
+        ptr_new++;
+    }
+    if (*ptr == ch) {
+        *ptr_new = NULLB;
+        ptr++;
+    }
+    if (ptr != NULLB)
+        *tmp = ptr;
+    else
+        *tmp = NULL;
+    
+    return ptr_start;
+}
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+/* fill in the CDD hit data structure                                        */
+/*---------------------------------------------------------------------------*/
+/*---------------------------------------------------------------------------*/
+
+CddHitPtr RPSBgetCddHits(SeqAlignPtr sap)
+{
+  CddHitPtr         cdhThis, cdhHead = NULL, cdhTail = NULL;
+  CharPtr	    tmp=NULL;
+  Int4              i, number;
+  SeqIdPtr          sip = NULL;
+  BioseqPtr         bsp = NULL;
+  Boolean           found_score = FALSE;
+  SeqAlignPtr       sapThis;
+  CharPtr           dbname;
+  CharPtr           title;
+
+  if (!sap) return NULL;
+  sapThis = sap;
+  while (sapThis) {
+    cdhThis = CddHitNew();
+    cdhThis->start = SeqAlignStart(sapThis, 0);
+    cdhThis->stop = SeqAlignStop(sapThis, 0);
+    found_score = GetScoreAndEvalue(sapThis, &cdhThis->score,
+                                    &cdhThis->bit_score,
+                                    &cdhThis->evalue, &number);
+    sip = SeqAlignId(sapThis, 1);
+    if (sip) {
+      bsp = BioseqLockById(sip);
+      if(bsp) {
+        title = StringSave(BioseqGetTitle(bsp));
+	if (bsp->id->choice == SEQID_GENERAL)
+	{
+		DbtagPtr dbtag;
+		ObjectIdPtr objid;
+		
+		dbtag = bsp->id->data.ptrvalue;
+		dbname = StringSave(dbtag->db);
+		cdhThis->CDDid = StringSave(dbtag->tag->str);
+	}
+        if (StrCmp(dbname,"Pfam") == 0) {
+          cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
+	  if (tmp)
+          	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ',');
+        } else if (StrCmp(dbname,"Smart") == 0) {
+          cdhThis->ShortName = StringSave(cdhThis->CDDid);
+          cdhThis->Definition = SaveUntilChar(title, &tmp, ';');
+        } else if (StrCmp(dbname,"Load") == 0) {
+          cdhThis->ShortName = SaveUntilChar(title, &tmp, ',');
+	  if (tmp)
+          	cdhThis->Definition = SaveUntilChar(tmp+1, &tmp, ',');
+        } else {
+          cdhThis->ShortName = StringSave(cdhThis->CDDid);
+          cdhThis->Definition = StringSave(title);
+        }
+        title = MemFree(title);
+        dbname = MemFree(dbname);
+        BioseqUnlock(bsp);
+      }
+    }
+    if (cdhHead) {
+      cdhTail->next = cdhThis;
+      cdhTail = cdhThis;
+    } else {
+      cdhHead = cdhThis;
+      cdhTail = cdhThis;
+    }
+    sapThis = sapThis->next;
+  }
+  return(cdhHead);
+}
+
+BioseqPtr createFakeProtein(void)
+{
+    BioseqPtr bsp;
+    CharPtr sequence = "THEFAKEPROTEIN"; 
+    ObjectIdPtr oip;
+ 
+    bsp = BioseqNew();
+    
+    bsp->mol = Seq_mol_aa;
+    bsp->seq_data_type = Seq_code_iupacaa;
+    bsp->repr = Seq_repr_raw;
+    bsp->length = StringLen(sequence);
+    
+    bsp->seq_data = BSNew(64);
+    BSWrite(bsp->seq_data, sequence, StringLen(sequence));
+    
+    /* bsp->id = MakeNewProteinSeqIdEx(NULL, NULL, "ssh_seq", NULL); */
+    
+    oip = UniqueLocalId();
+    ValNodeAddPointer(&(bsp->id), SEQID_LOCAL, oip);
+    SeqMgrAddToBioseqIndex(bsp);
+
+    return bsp;
+}
+
+static VoidPtr RPSEngineThread(VoidPtr data)
+{
+
+    RPS_MTDataStructPtr mtdata;
+    SeqAlignPtr seqalign;
+    ValNodePtr other_returns, error_returns;
+    BlastSearchBlkPtr search;
+    RPSBlastOptionsPtr rpsbop;
+    BioseqPtr bsp, query_bsp, fake_bsp;
+    SeqEntryPtr sep;
+    Char buffer[64];
+    static TNlmMutex print_mutex;
+    SeqLocPtr query_lcase_mask = NULL;
+    RPSInfoPtr rpsinfo_local;
+    Int4  old_searchsp_eff;
+    static Int4 count_id = 0;
+
+    if((mtdata = (RPS_MTDataStructPtr) data) == NULL) {
+        return NULL;
+    }
+
+    rpsinfo_local = RPSInfoAttach(mtdata->rpsinfo);
+    rpsbop = (RPSBlastOptionsPtr) mtdata->rpsbop;
+
+    /* NlmThreadAddOnExit(RPSThreadOnExit, NULL); */
+    
+    ReadDBBioseqFetchEnable("rpsblast",  rpsbop->rps_database, FALSE, TRUE);
+    
+    NlmMutexInit(&print_mutex);
+
+    while(TRUE) {               /* Main loop */
+        
+        query_lcase_mask = NULL;
+        
+        if((sep = mtdata->bsp_callback(&query_lcase_mask, 
+                                       mtdata->bsp_user_data)) == NULL) {
+            search_is_done = TRUE;
+            break;
+        }
+
+        /* Here some parts of RPSReadBlastOptions should be moved here */
+
+        SeqEntryExplore(sep, &query_bsp, 
+                        rpsbop->query_is_protein ? FindProt : FindNuc); 
+        
+        if (query_bsp == NULL) {
+            ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+            return NULL;
+        }  
+
+        if (rpsbop->believe_query == TRUE) {
+            fake_bsp = query_bsp;
+        } else {
+            ObjectIdPtr obidp;
+            fake_bsp = BioseqNew();
+            fake_bsp->descr = query_bsp->descr;
+            fake_bsp->repr = query_bsp->repr;
+            fake_bsp->mol = query_bsp->mol;
+            fake_bsp->length = query_bsp->length;
+            fake_bsp->seq_data_type = query_bsp->seq_data_type;
+            fake_bsp->seq_data = query_bsp->seq_data;
+            
+            obidp = ObjectIdNew();
+            sprintf(buffer, "QUERY_%d", count_id++);
+            obidp->str = StringSave(buffer);
+            ValNodeAddPointer(&(fake_bsp->id), SEQID_LOCAL, obidp);
+            
+            /* FASTA defline not parsed, ignore the "lcl|tempseq" ID. */
+            query_bsp->id = SeqIdSetFree(query_bsp->id);
+            
+            BLASTUpdateSeqIdInSeqInt(query_lcase_mask, fake_bsp->id);
+        
+        }
+        /* ----------------------------------------------------------- */
+
+        if(rpsbop->query_is_protein)
+            bsp = fake_bsp;
+        else
+            bsp = createFakeProtein();
+        
+        /* Update size of the database in accordance with RPS Database size */
+
+        /* Unfortunately this function change values of "options". So this
+           should be done in one-thread mode only ;-) */
+        
+        NlmMutexLock(print_mutex);
+
+        old_searchsp_eff = rpsbop->options->searchsp_eff;
+        RPSUpdateDbSize(rpsbop->options, rpsinfo_local, fake_bsp->length);
+        
+        search = BLASTSetUpSearch (bsp, rpsbop->query_is_protein ? 
+                                   "blastp" : "tblastn", 
+                                   bsp->length, 0, 
+                                   NULL, rpsbop->options, NULL);
+        rpsbop->options->searchsp_eff = old_searchsp_eff;
+        NlmMutexUnlock(print_mutex); 
+
+        /* External lower-case mask */
+        search->pbp->query_lcase_mask = query_lcase_mask;
+        seqalign = RPSBlastSearch(search, fake_bsp, rpsinfo_local);
+        
+        NlmMutexLock(print_mutex);
+        
+        other_returns = BlastOtherReturnsPrepare(search);
+
+        mtdata->print_callback(fake_bsp, rpsbop, seqalign, 
+                               other_returns, NULL, 
+                               mtdata->print_user_data); 
+
+        BlastOtherReturnsFree(other_returns);
+
+        /* Final cleanup */
+
+        if(!rpsbop->query_is_protein) 
+            BioseqFree(bsp);
+        
+        SeqAlignSetFree(seqalign);
+        search = BlastSearchBlkDestruct(search);
+        
+        if(!rpsbop->believe_query)
+            fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+        
+        sep = SeqEntryFree(sep);
+
+        NlmMutexUnlock(print_mutex); 
+        
+        if(glb_sequence_count++ > MAX_NUMBER_SEQS_FOR_OBJ_MGR)
+            break;
+    }
+
+    ReadDBBioseqFetchDisable();
+
+    RPSInfoDetach(rpsinfo_local);
+
+    return NULL;
+}
+
+Boolean RPSBlastSearchMT(RPSBlastOptionsPtr rpsbop, 
+                         RPSReadBSPCallback bsp_callback, 
+                         VoidPtr bsp_user_data,
+                         RPSHandleResultsCallback print_callback, 
+                         VoidPtr print_user_data)
+{
+    
+    BioseqPtr bsp;
+    RPS_MTDataStructPtr mtdata;
+    RPSInfoPtr rpsinfo_main;
+    Int4 i;
+
+    mtdata = MemNew(sizeof(RPS_MTDataStruct));
+    
+    /* Initializing RPS Blast database */
+    if((rpsinfo_main = RPSInit(rpsbop->rps_database, 
+                               rpsbop->query_is_protein)) == NULL) {
+        ErrPostEx(SEV_ERROR, 0,0, 
+                  "Failure to initialize RPS Blast database");
+        return FALSE;
+    }
+    
+    mtdata->rpsinfo = rpsinfo_main;
+    mtdata->rpsbop = rpsbop;
+
+    mtdata->bsp_callback = bsp_callback;
+    
+    mtdata->bsp_user_data = bsp_user_data;
+    
+    mtdata->print_callback = print_callback;
+    mtdata->print_user_data = print_user_data;
+
+    while(!search_is_done) {
+    
+        if(rpsbop->num_threads > 1) {
+            for(i = 0; i < rpsbop->num_threads; i++) {
+                NlmThreadCreate(RPSEngineThread, (VoidPtr) mtdata);
+            }
+        } else {
+            RPSEngineThread((VoidPtr) mtdata);
+        }
+        
+        NlmThreadJoinAll();
+        ObjMgrFreeCache(0);
+        /* ObjMgrResetAll(); */
+        glb_sequence_count = 0;
+    }
+
+    RPSClose(rpsinfo_main);
+    MemFree(mtdata);
+
+    return TRUE;
 }
 
 /* These functions may be never be used ... */
@@ -1362,4 +1807,196 @@ BioseqPtr RPSGetBioseqFromMatrix(Int4Ptr PNTR psmatrix, Int4 length)
     return bsp;  
 }
 /* End of functions may be never be used ... */
+
+static UserObjectPtr CreateCddUserObject (void)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = UserObjectNew ();
+  oip = ObjectIdNew ();
+  oip->str = StringSave ("cddScoreData");
+  uop->type = oip;
+
+  return uop;
+}
+
+static UserObjectPtr GetCddUserObject (SeqFeatPtr sfp)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (sfp == NULL) return NULL;
+  if (sfp->ext == NULL) {
+    sfp->ext = CreateCddUserObject ();
+  }
+  uop = sfp->ext;
+  if (uop == NULL) return NULL;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "cddScoreData") != 0) return NULL;
+  return uop;
+}
+
+static void AddFieldToCddUserObject (UserObjectPtr uop, CharPtr label, CharPtr str, Int4 num, FloatHi flt)
+
+{
+  UserFieldPtr  curr;
+  UserFieldPtr  prev = NULL;
+  ObjectIdPtr   oip;
+
+  if (uop == NULL || StringHasNoText (label)) return;
+
+  for (curr = uop->data; curr != NULL; curr = curr->next) {
+    oip = curr->label;
+    if (oip != NULL && StringICmp (oip->str, label) == 0) {
+      break;
+    }
+    prev = curr;
+  }
+
+  if (curr == NULL) {
+    curr = UserFieldNew ();
+    oip = ObjectIdNew ();
+    oip->str = StringSave (label);
+    curr->label = oip;
+    if (! StringHasNoText (str)) {
+      curr->choice = 1; /* visible string */
+      curr->data.ptrvalue = StringSave (str);
+    } else if (num != 0) {
+      curr->choice = 2; /* integer */
+      curr->data.intvalue = num;
+    } else {
+      curr->choice = 3; /* real */
+      curr->data.realvalue = flt;
+    }
+
+    /* link at end of list */
+
+    if (prev != NULL) {
+      prev->next = curr;
+    } else {
+      uop->data = curr;
+    }
+  }
+}
+
+NLM_EXTERN void AnnotateRegionsFromCDD (
+  BioseqPtr bsp,
+  SeqAlignPtr salp,
+  FloatHi expectValue
+)
+
+{
+  DbtagPtr       db;
+  CddHitPtr      cdd_head, cdd;
+  size_t         len;
+  ObjectIdPtr    oip;
+  SeqFeatPtr     sfp;
+  SeqInt         sint;
+  SeqIdPtr       sip;
+  CharPtr        str;
+  UserObjectPtr  uop;
+  ValNode        vn;
+  ValNodePtr     vnp;
+
+
+  if (bsp == NULL || salp == NULL) return;
+
+  cdd_head =  RPSBgetCddHits (salp);
+  cdd = cdd_head;
+  sip = SeqIdFindBest (bsp->id, 0);
+
+  while (cdd != NULL) {
+
+    /* Aron recommends checking evalue before saving region feature */
+
+    if (cdd->evalue <= expectValue) {
+
+      MemSet ((Pointer) &sint, 0, sizeof (SeqInt));
+      MemSet ((Pointer) &vn, 0, sizeof (ValNode));
+      sint.from = cdd->start;
+      sint.to = cdd->stop;
+      sint.strand = Seq_strand_unknown;
+      sint.id = sip;
+      sint.if_from = NULL;
+      sint.if_to = NULL;
+      vn.choice = SEQLOC_INT;
+      vn.extended = 0;
+      vn.data.ptrvalue = &sint;
+      vn.next = NULL;
+      sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_REGION, &vn);
+      if (sfp != NULL) {
+
+        if (! StringHasNoText (cdd->Definition)) {
+          sfp->data.value.ptrvalue = StringSave (cdd->Definition);
+        } else {
+          sfp->data.value.ptrvalue = StringSave ("undefined CDD");
+        }
+
+        /* structured user object to store results */
+
+        uop = GetCddUserObject (sfp);
+        if (uop != NULL) {
+          AddFieldToCddUserObject (uop, "definition", cdd->Definition, 0, 0.0);
+          AddFieldToCddUserObject (uop, "short_name", cdd->ShortName, 0, 0.0);
+          AddFieldToCddUserObject (uop, "score", NULL, cdd->score, 0.0);
+          AddFieldToCddUserObject (uop, "evalue", NULL, 0, cdd->evalue);
+          AddFieldToCddUserObject (uop, "bit_score", NULL, 0, cdd->bit_score);
+        }
+        len = StringLen (cdd->ShortName) + 10;
+        str = MemNew (len);
+        if (str != NULL) {
+          sprintf (str, "%s", cdd->ShortName);
+          sfp->comment = str;
+        }
+
+        /* create CDD db_xref */
+
+        if (! StringHasNoText (cdd->CDDid)) {
+          vnp = ValNodeNew (NULL);
+          db = DbtagNew ();
+          db->db = StringSave ("CDD");
+          oip = ObjectIdNew ();
+          oip->str = StringSave (cdd->CDDid);
+          db->tag = oip;
+          vnp->data.ptrvalue = db;
+          vnp->next = sfp->dbxref;
+          sfp->dbxref = vnp;
+        }
+      }
+    }
+    cdd = cdd->next;
+  }
+
+  /* clean up */
+
+  CddHitDestruct (cdd_head);
+}
+
+static void FreeCDDProc (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  uop = sfp->ext;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL || StringICmp (oip->str, "cddScoreData") != 0) return;
+  sfp->idx.deleteme = TRUE;
+}
+
+NLM_EXTERN void FreeCDDRegions (
+  SeqEntryPtr topsep
+)
+
+{
+  VisitFeaturesInSep (topsep, NULL, FreeCDDProc);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, topsep);
+}
 

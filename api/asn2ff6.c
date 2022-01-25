@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.33 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.38  2000/10/24 20:28:44  tatiana
+* ValidateAccession accepts XP, XM
+*
+* Revision 6.37  2000/09/20 21:26:19  tatiana
+* all organelles adde to ORGANISM line
+*
+* Revision 6.36  2000/09/11 18:52:59  tatiana
+* PUBMED linetype is legal in release mode
+*
+* Revision 6.35  2000/08/25 16:16:46  kans
+* ValidateLocus initializes num_of_digits even if > 1000 segments
+*
+* Revision 6.34  2000/08/01 21:09:39  tatiana
+* ValidateVersion is colld in forgbrel option only
+*
 * Revision 6.33  2000/06/29 12:23:30  kans
 * GenPept on Seq_repr_virtual shown only if is_www || ajp->mode != RELEASE_MODE, earlier kludge of ignoring get_www was probably too broad
 *
@@ -1287,7 +1302,7 @@ NLM_EXTERN CharPtr FlatOrganelle(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
 	{
 		biosp = vnp->data.ptrvalue;
-		if (biosp->genome < 6 || biosp->genome > 12)
+	/*	if (biosp->genome < 6 || biosp->genome > 12)*/
 			retval = StringSave(genome[biosp->genome]);
 	}
 /* old next */
@@ -1877,7 +1892,6 @@ void GB_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 		www_muid(muid);
 		ff_EndPrint();
 	}
-	if (! ajp->forgbrel) { /* suppress for now in GenBank bulk release */
 	pmid = GetPmid (psp->pub);
 	if (pmid > 0) {
 		ff_StartPrint(3, 12, ASN2FF_GB_MAX, NULL);
@@ -1885,7 +1899,6 @@ void GB_PrintPubs (Asn2ffJobPtr ajp, GBEntryPtr gbp, PubStructPtr psp)
 		TabToColumn(13);
 		www_muid(pmid);
 		ff_EndPrint();
-	}
 	}
 
 	tag = FALSE;
@@ -2555,6 +2568,7 @@ CharPtr ValidateLocus(Asn2ffJobPtr ajp, BioseqPtr bsp, CharPtr base_locus, Int2 
 				num_of_digits = 3;
 			else 
 			{
+				num_of_digits = 4;
 				ErrPostStr(SEV_INFO, ERR_SEGMENT_MoreThan1000Segs, "");
 			}
 			if (num_seg < 10)
@@ -2663,7 +2677,7 @@ Int2 ValidateAccession(CharPtr new_buf, CharPtr orig_buf)
 			}
 			start_count = 2;
 			stop_count = 7;
-			if (orig_buf[0] == 'N') {
+			if (orig_buf[0] == 'N' || orig_buf[0] == 'X') {
 				if ((orig_buf[1] == 'M' || orig_buf[1] == 'C' 
 						|| orig_buf[1] == 'T'  || orig_buf[1] == 'P') 
 												&&  orig_buf[2] == '_') {
@@ -2904,7 +2918,7 @@ static Boolean ValidateVersion(SeqIdPtr sid, Asn2ffJobPtr ajp)
 {
 	TextSeqIdPtr tsip;
 		
-	if (ajp->mode != RELEASE_MODE)
+	if (ajp->forgbrel == FALSE)
 		return TRUE;
 	switch (sid->choice) {
 	case SEQID_GENBANK:

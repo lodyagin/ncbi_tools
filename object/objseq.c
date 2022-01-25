@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -300,20 +300,23 @@ static Int2 NEAR SeqDescLabelContent (ValNodePtr vnp, CharPtr buf, Int2 buflen)
 
 		case Seq_descr_create_date:
 		case Seq_descr_update_date:
-			if (DatePrint((DatePtr)(vnp->data.ptrvalue), tbuf))
+			if (vnp->data.ptrvalue != NULL && DatePrint((DatePtr)(vnp->data.ptrvalue), tbuf))
 				label = tbuf;
 			break;
 
 		case Seq_descr_org:
 			orp = (OrgRefPtr)(vnp->data.ptrvalue);
-orgref:		if (orp->taxname != NULL)
-				label = (orp->taxname);
-			else if (orp->common != NULL)
-				label = (orp->common);
+orgref:		if (orp != NULL) {
+				if (orp->taxname != NULL)
+					label = (orp->taxname);
+				else if (orp->common != NULL)
+					label = (orp->common);
+			}
 			break;
 
 		case Seq_descr_pub:
 			pdp = (PubdescPtr)(vnp->data.ptrvalue);
+			if (pdp == NULL) return 0;
 			vn.choice = PUB_Equiv;
 			vn.data.ptrvalue = pdp->pub;
 			vn.next = NULL;
@@ -321,6 +324,7 @@ orgref:		if (orp->taxname != NULL)
 
 		case Seq_descr_user:
 			uop = (UserObjectPtr)(vnp->data.ptrvalue);
+			if (uop == NULL) return 0;
 			label = (uop->_class);
 			if (label == NULL) {
 				oip = uop->type;
@@ -358,11 +362,13 @@ orgref:		if (orp->taxname != NULL)
 
 		case Seq_descr_source:
 			bsrcp = (BioSourcePtr)(vnp->data.ptrvalue);
+			if (bsrcp == NULL) return 0;
 			orp = bsrcp->org;
 			goto orgref;
 			
 		case Seq_descr_maploc:
 			dbt = (DbtagPtr)(vnp->data.ptrvalue);
+			if (dbt == NULL) return 0;
 			len = buflen;
 			if (dbt->db != NULL)
 			{
@@ -379,6 +385,7 @@ orgref:		if (orp->taxname != NULL)
 
 		case Seq_descr_molinfo:
 			mip = (MolInfoPtr)(vnp->data.ptrvalue);
+			if (mip == NULL) return 0;
 			if (mip->biomol)
 				mipsptr[0] = AsnEnumTypeStr(MOLINFO_biomol, (Int2)(mip->biomol));
 			else
@@ -408,6 +415,7 @@ orgref:		if (orp->taxname != NULL)
 
 
 		case Seq_descr_dbxref:
+			if (vnp->data.ptrvalue == NULL) return 0;
 			len = buflen;
 			diff = DbtagLabel((DbtagPtr)(vnp->data.ptrvalue), buf, buflen);
 			buflen -= diff;

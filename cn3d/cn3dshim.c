@@ -34,6 +34,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dshim.c,v $
+* Revision 6.29  2000/07/23 12:37:23  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.28  2000/04/08 00:37:31  lewisg
 * multiple seqentries, NEWSEQ message, etc.
 *
@@ -410,10 +413,12 @@ void LIBCALL Cn3D_Size(TOGL_BoundBox * BoundBox, PDNMS pdnmsThis)
     OGL_ClearBoundBox(BoundBox);
     BoundBox->set = FALSE;
     TraverseModels(pdnmsThis, TRAVERSE_ATOM, 0, BoundBox, Cn3D_SizeCB);
+    /* don't do slaves, since their coordinates are no longer trasnformed onto master
     pmsdThis = pdnmsThis->data.ptrvalue;
     for(pdnmsSlave = pmsdThis->pdnmsSlaves; pdnmsSlave != NULL;
             pdnmsSlave = pdnmsSlave->next)
         TraverseModels(pdnmsSlave, TRAVERSE_ATOM, 0, BoundBox, Cn3D_SizeCB);
+    */
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.16 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *     portable file routines
@@ -43,6 +43,9 @@
 * 11-27-94 Ostell      moved includes to ncbiwin.h to avoid conflict MSC
 *
 * $Log: ncbifile.c,v $
+* Revision 6.17  2000/10/16 17:54:46  kans
+* null out param block for FileLengthEx on Mac
+*
 * Revision 6.16  2000/03/08 17:55:47  vakatov
 * Use Int8 for the file size.
 * Also, get rid of the WIN16 code, do other cleanup.
@@ -585,15 +588,18 @@ NLM_EXTERN Nlm_Int8 LIBCALL Nlm_FileLengthEx(const Nlm_Char* fileName)
 
 #ifdef OS_MAC
   {{
+    OSErr           err;
     HParamBlockRec  params;
     Nlm_Char        path[256];
 
+	Nlm_MemSet ((Nlm_VoidPtr) &params, 0, sizeof (HParamBlockRec));
     Nlm_StringNCpy_0(path, fileName, sizeof(path));
     Nlm_CtoPstr((Nlm_CharPtr) path);
     params.fileParam.ioNamePtr = (StringPtr)path;
     params.fileParam.ioVRefNum = 0;
     params.fileParam.ioFDirIndex = 0;
-    return (PBHGetFInfo(&params, FALSE) == noErr) ?
+    err = PBHGetFInfo(&params, FALSE);
+    return (err == noErr) ?
             params.fileParam.ioFlLgLen : -1;
   }}
 #else

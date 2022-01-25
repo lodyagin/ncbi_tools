@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.93 $
+* $Revision: 6.98 $
 *
 * File Description: 
 *
@@ -61,6 +61,7 @@
 #include <vsm.h>
 #include <accentr.h>
 #include <accutils.h>
+#include <explore.h>
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -311,6 +312,13 @@ static void FormatFastaDoc (FastaPagePtr fpp)
         } else {
           StringCat (str, "No protein name detected\n");
         }
+        if (LookForSearchString (title, "[gene_syn=", tmp, FastaFormatBufLen - 1)) {
+          AddReportLine (str, "Gene Syn", tmp);
+        } 
+        if ((LookForSearchString (title, "[protein_desc=", tmp, FastaFormatBufLen - 1)) ||
+	    (LookForSearchString (title, "[prot_desc=", tmp, FastaFormatBufLen - 1))) {
+          AddReportLine (str, "Protein Desc", tmp);
+        } 
         ptr = StringISearch (title, "[orf]");
         if (ptr != NULL) {
         StringCat (str, "ORF indicated\n");
@@ -404,8 +412,11 @@ static void FormatFastaDoc (FastaPagePtr fpp)
       if (title != NULL) {
         if (! fpp->is_na) {
           ExciseString (title, "[gene=", "]");
+          ExciseString (title, "[gene_syn=", "]");
           ExciseString (title, "[prot=", "]");
           ExciseString (title, "[protein=", "]");
+          ExciseString (title, "[prot_desc=", "]");
+          ExciseString (title, "[protein_desc=", "]");
           ExciseString (title, "[orf", "]");
           ExciseString (title, "[comment", "]");
         } else if (fpp->is_mrna) {
@@ -2120,6 +2131,9 @@ static Boolean HasMinimalInformation (BioseqPtr pbsp)
   if (vnp == NULL || vnp->data.ptrvalue == NULL) return FALSE;
   title = (CharPtr) vnp->data.ptrvalue;
   ptr = StringISearch (title, "[gene=");
+  if (ptr == NULL) {
+    ptr = StringISearch (title, "[gene_syn=");
+  }
   if (ptr == NULL) return FALSE;
   StringNCpy_0 (str, ptr + 6, sizeof (str));
   ptr = StringChr (str, ']');
@@ -3929,10 +3943,10 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
             msep = sep;
           }
           AddSeqEntryToSeqEntry (msep, list, TRUE);
-          AutomaticProteinProcess (msep, list, code, sqfp->makeMRNA);
+          AutomaticProteinProcess (msep, list, code, sqfp->makeMRNA, NULL);
         } else {
           sep = list;
-          AutomaticProteinProcess (sep, list, code, sqfp->makeMRNA);
+          AutomaticProteinProcess (sep, list, code, sqfp->makeMRNA, NULL);
         }
         list = next;
       }
@@ -5522,9 +5536,20 @@ extern Uint2 PackageFormResults (SequinBlockPtr sbp, SeqEntryPtr sep, Boolean ma
   return entityID;
 }
 
-extern void ParseInMoreProteins (IteM i)
+static void GetRawBsps (BioseqPtr bsp, Pointer userdata)
 
 {
+  ValNodePtr PNTR  head;
+
+  if (bsp->repr != Seq_repr_raw) return;
+  head = (ValNodePtr PNTR) userdata;
+  ValNodeAddPointer (head, 0, (Pointer) bsp);
+}
+
+static void ParseInMoreProteinsCommon (IteM i, Boolean doSuggest)
+
+{
+  SeqEntryPtr  addhere;
   MsgAnswer    ans;
   BaseFormPtr  bfp;
   BioseqPtr    bsp;
@@ -5547,10 +5572,13 @@ extern void ParseInMoreProteins (IteM i)
   ObjectIdPtr  oid;
   Boolean      parseSeqId;
   Char         path [PATH_MAX];
+  ValNodePtr   rawBsps = NULL;
+  ValNodePtr   rawvnp;
   SeqEntryPtr  sep;
   SeqIdPtr     sip;
   SeqLocPtr    slp;
   Char         str [32];
+  BioseqPtr    target = NULL;
   Char         tmp [128];
   ValNodePtr   vnp;
 
@@ -5668,6 +5696,13 @@ extern void ParseInMoreProteins (IteM i)
   }
   descr = ExtractBioSourceAndPubs (sep);
   mon = MonitorStrNewEx ("Predicting Coding Region", 20, FALSE);
+
+  rawBsps = NULL;
+  if (! doSuggest) {
+    VisitBioseqsInSep (sep, (Pointer) &rawBsps, GetRawBsps);
+  }
+  rawvnp = rawBsps;
+
   count = 0;
   while (list != NULL) {
     nextsep = list->next;
@@ -5694,10 +5729,24 @@ extern void ParseInMoreProteins (IteM i)
         vnp->data.ptrvalue = (Pointer) mip;
       }
     }
-    AddSeqEntryToSeqEntry (sep, list, TRUE);
-    AutomaticProteinProcess (sep, list, code, makeMRNA);
+    addhere = sep;
+    target = NULL;
+    if (! doSuggest) {
+      if (rawvnp != NULL) {
+        target = (BioseqPtr) rawvnp->data.ptrvalue;
+        if (SeqMgrGetParentOfPart (target, NULL) == NULL) {
+          addhere = SeqMgrGetSeqEntryForData (target);
+        }
+        rawvnp = rawvnp->next;
+      }
+    }
+    AddSeqEntryToSeqEntry (addhere, list, TRUE);
+    AutomaticProteinProcess (addhere, list, code, makeMRNA, target);
     list = nextsep;
   }
+
+  ValNodeFree (rawBsps);
+
   mon = MonitorFree (mon);
   if (nucbsp != NULL) {
     ClearBatchSuggestNucleotide ();
@@ -5708,6 +5757,18 @@ extern void ParseInMoreProteins (IteM i)
   ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
   ArrowCursor ();
   Update ();
+}
+
+extern void ParseInMoreProteins (IteM i)
+
+{
+  ParseInMoreProteinsCommon (i, TRUE);
+}
+
+extern void ParseInProteinsInOrder (IteM i)
+
+{
+  ParseInMoreProteinsCommon (i, FALSE);
 }
 
 extern void ParseInMoreMRNAs (IteM i)
@@ -5992,6 +6053,7 @@ static void LookForReplacedByCallback (SeqEntryPtr sep, Pointer mydata, Int4 ind
 
 #ifdef USE_SMARTNET
 extern Pointer ReadFromDirSub (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
+extern Pointer ReadFromSmart (CharPtr accn, Uint2Ptr datatype, Uint2Ptr entityID);
 #endif
 
 static void DownloadProc (ButtoN b)
@@ -6108,7 +6170,10 @@ static void DownloadProc (ButtoN b)
   } else if (! StringHasNoText (accn)) {
 #ifdef USE_SMARTNET
     if (accn != NULL) {
-      dataptr = ReadFromDirSub (accn, &datatype, NULL);
+      dataptr = ReadFromSmart (accn, &datatype, NULL);
+      if (dataptr == NULL) {
+        dataptr = ReadFromDirSub (accn, &datatype, NULL);
+      }
     }
 #endif
   }

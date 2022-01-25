@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.19 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.19  2000/10/30 18:11:41  beloslyu
+* FreeBSD was added
+*
+* Revision 6.18  2000/08/30 16:43:23  vakatov
+* Nlm_WorkGetAppParam() -- do not try to open the same config file
+* again (and again, and again) if failed to open it just before.
+*
+* Revision 6.17  2000/08/28 21:35:48  vakatov
+* Figure out #LOGNAME_MAX value a little earlier in the code
+*
+* Revision 6.16  2000/08/28 18:32:18  vakatov
+* Nlm_GetHome() -- split for s_GetHomeByUID() + s_GetHomeByLOGIN().
+* Try s_GetHomeByUID() *before* s_GetHomeByLOGIN() to fix a problem
+* reported by "Ray.Hookway@compaq.com" for LSF's Remote Execution Server.
+*
 * Revision 6.15  2000/06/28 14:50:43  vakatov
 * Nlm_GetHome() -- IRIX, NLM_POSIX1B, getpwnam_r():  dont rely on the
 * returned value only;  check for non-zero "pwd_ptr"
@@ -305,10 +320,10 @@ Nlm_WorkGetAppParam(const Nlm_Char* file,
         Nlm_FlushAppParam();
       Nlm_FreeConfigFileData();
       fp = Nlm_OpenConfigFile(file, FALSE, FALSE);
+      MemFree( Nlm_lastParamFile );
+      Nlm_lastParamFile = Nlm_StringSave( file );
       if (fp != NULL)
         {
-          MemFree( Nlm_lastParamFile );
-          Nlm_lastParamFile = Nlm_StringSave( file );
           Nlm_ReadConfigFile( fp );
           Nlm_FileClose( fp );
         }
@@ -453,6 +468,15 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
                      (_POSIX_C_SOURCE - 0 >= 199309L) || \
                      defined(_POSIX_PTHREAD_SEMANTICS))
 
+#ifndef LOGNAME_MAX
+#  if defined(MAXLOGNAME)
+#    define LOGNAME_MAX MAXLOGNAME
+#  elif defined(_POSIX_LOGIN_NAME_MAX)
+#    define LOGNAME_MAX _POSIX_LOGIN_NAME_MAX
+#  endif
+#endif /* ndef LOGNAME_MAX */
+
+
 /*****************************************************************************
 *
 *   Nlm_GetHome (buf, buflen)
@@ -460,99 +484,115 @@ static Nlm_Boolean Nlm_CacheAppParam_ST(Nlm_Boolean value)
 *
 *****************************************************************************/
 
+
+/* This function is used by Nlm_GetHome(), see below
+ */
+static Nlm_Boolean s_GetHomeByUID(Nlm_Char* buf, size_t buf_size)
+{
+    struct passwd* pwd_ptr = 0;
+
+    /* Get the info using user ID */
+#if  (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+    struct passwd pwd;
+    Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
+
+#  if NLM_POSIX1B
+    if (getpwuid_r(getuid(), &pwd, pwd_buffer, sizeof(pwd_buffer),
+                   &pwd_ptr) != 0) {
+        pwd_ptr = 0;
+    }
+#  else
+    pwd_ptr = getpwuid_r(getuid(), &pwd, pwd_buffer, sizeof(pwd_buffer));
+#  endif
+#else
+    pwd_ptr = getpwuid(getuid());
+#endif
+
+    if (!pwd_ptr  ||  pwd_ptr->pw_dir[0] == '\0')
+        return FALSE;
+    Nlm_StringNCpy_0(buf, pwd_ptr->pw_dir, buf_size);
+    return TRUE;
+}
+
+
+/* This function is used by Nlm_GetHome(), see below
+ */
+static Nlm_Boolean s_GetHomeByLOGIN(Nlm_Char* buf, Nlm_Int2 buf_size)
+{
+    struct passwd* pwd_ptr = 0;
+
+    /* Get the user login name */
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+    struct passwd pwd;
+    Nlm_Char      login_name[LOGNAME_MAX + 1];
+    Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
+    Nlm_Boolean   ok = getlogin_r(login_name, sizeof(login_name)) ?
+#  if NLM_POSIX1B
+        FALSE : TRUE;
+#  else
+    TRUE : FALSE;
+#  endif
+#else
+
+    Nlm_Char* login_name = getlogin();
+    Nlm_Boolean ok       = (login_name != NULL);
+#endif
+
+    /* Get the info using user login-name */
+    if ( !ok )
+        return FALSE;
+
+#if (defined(SOLARIS_THREADS_AVAIL) || defined(POSIX_THREADS_AVAIL)) && !defined(OS_UNIX_FREEBSD)
+    pwd_ptr = &pwd;
+#  if NLM_POSIX1B
+    if (getpwnam_r(login_name, &pwd, pwd_buffer, sizeof(pwd_buffer),
+                   &pwd_ptr) != 0) {
+        pwd_ptr = 0;
+    }
+#  else
+    pwd_ptr = getpwnam_r(login_name, &pwd, pwd_buffer, sizeof(pwd_buffer));
+#  endif
+#else
+    pwd_ptr = getpwnam(login_name);
+#endif
+
+    if (!pwd_ptr  ||  pwd_ptr->pw_dir[0] == '\0')
+        return FALSE;
+    Nlm_StringNCpy_0(buf, pwd_ptr->pw_dir, buf_size);
+    return TRUE;
+}
+
+
 static Nlm_Boolean Nlm_GetHome(Nlm_Char* buf, Nlm_Int2 buflen)
 {
-  static Nlm_Char saveHome[PATH_MAX + 1];
+  static Nlm_Boolean s_Saved = FALSE;
+  static Nlm_Char    s_SaveHome[PATH_MAX + 1];
+  static TNlmMutex   s_SaveHomeMutex;
 
   /* Have we passed this way before?  If not, then try get the info. */
-  if (saveHome[0] == '\0'  &&  saveHome[1] == '\0')
-    {
+  if ( !s_Saved ) {
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
-    static TNlmMutex saveHomeMutex;
-    VERIFY_HARD ( NlmMutexLockEx( &saveHomeMutex ) == 0 );
-    if (saveHome[0] == '\0'  &&  saveHome[1] == '\0')
-    {
+    VERIFY_HARD( NlmMutexLockEx( &s_SaveHomeMutex ) == 0 );
+    if ( !s_Saved ) {
 #endif
+      s_Saved = TRUE;
 
-      struct passwd *pwd_ptr = NULL;
-
-      /* Get the user login name */
-#if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
-      struct passwd pwd;
-#ifndef LOGNAME_MAX
-#if defined(MAXLOGNAME)
-#define LOGNAME_MAX MAXLOGNAME
-#elif defined(_POSIX_LOGIN_NAME_MAX)
-#define LOGNAME_MAX _POSIX_LOGIN_NAME_MAX
-#endif
-#endif /* ndef LOGNAME_MAX */
-      Nlm_Char      login_name[LOGNAME_MAX + 1];
-      Nlm_Char      pwd_buffer[LOGNAME_MAX + PATH_MAX + 1024 + 1];
-      Nlm_Boolean   ok = getlogin_r(login_name, sizeof(login_name)) ?
-#if NLM_POSIX1B
-                        FALSE : TRUE;
-#else
-                        TRUE : FALSE;
-#endif
-#else
-
-      Nlm_Char* login_name = getlogin();
-      Nlm_Boolean ok         = (login_name != NULL);
-#endif
-
-      /* Get the info using user-login-name */
-      if ( ok )
-        {
-#if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
-          pwd_ptr = &pwd;
-          ok = (getpwnam_r(login_name, pwd_ptr, pwd_buffer, sizeof(pwd_buffer)
-#if NLM_POSIX1B
-                           , &pwd_ptr) == 0  &&  pwd_ptr);
-#else
-                           ) != NULL);
-#endif
-#else
-          pwd_ptr = getpwnam( login_name );
-#endif
-        }
-
-
-      /* Get the info using user-ID */
-      if ( !ok )
-        {
-#if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
-          pwd_ptr = &pwd;
-          ok = (getpwuid_r(getuid(), pwd_ptr, pwd_buffer, sizeof(pwd_buffer)
-#if NLM_POSIX1B
-                           , &pwd_ptr) == 0);
-#else
-                           ) != NULL);
-#endif
-#else
-          pwd_ptr = getpwuid( getuid() );
-#endif
-        }
-
-      /* Now we either *do* have it or we *never* will. */
-      /* Remember failure by setting first two bytes to "\000\001" */
-      saveHome[1] = (Nlm_Char)1;
-
-      /*  Also check that pwd_ptr is not NULL, as SGI Irix sets ok = 1 even
-       *  when getpwuid_r fails
+      /* Try to retrieve the home dir -- first use user's ID, 
+       * and if failed, then use user's login name.
        */
-       if (ok  &&  pwd_ptr)
-         Nlm_StringNCpy_0(saveHome, pwd_ptr->pw_dir, sizeof(saveHome));
-
+      if (!s_GetHomeByUID(s_SaveHome, sizeof(s_SaveHome))  &&
+          !s_GetHomeByLOGIN(s_SaveHome, sizeof(s_SaveHome))) {
+        s_SaveHome[0] = '\0';
+      }
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
-    VERIFY_HARD ( NlmMutexUnlock(saveHomeMutex) == 0 );
     }
+    VERIFY_HARD( NlmMutexUnlock(s_SaveHomeMutex) == 0 );
 #endif
-    }
-
-  /* Return the now-saved value and success code */
-  Nlm_StringNCpy_0(buf, saveHome, buflen);
-  return  (Nlm_Boolean)(*saveHome != '\0');
+  }
+  Nlm_StringNCpy_0(buf, s_SaveHome, buflen);
+  return (Nlm_Boolean) (*buf != '\0');
 }
+
 
 
 /*****************************************************************************

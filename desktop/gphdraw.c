@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 98-01-01
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: sentinel graphs
 *
@@ -38,6 +38,9 @@
 * Date       Name        Description of modification
 * --------------------------------------------------------------------------
 * $Log: gphdraw.c,v $
+* Revision 6.10  2000/07/14 19:47:38  kans
+* allow Phred Quality along with Phrap Quality
+*
 * Revision 6.9  1999/10/04 17:46:23  kans
 * include vibrant.h
 *
@@ -316,7 +319,8 @@ extern GraphSentPtr AddGraphSentinelToPicture (SeqGraphPtr sgp, BioseqPtr bsp,
   gsp->sgp = sgp;
   gsp->a = sgp->a;
   gsp->b = sgp->b;
-  is_phrap = (Boolean) (StringICmp (sgp->title, "Phrap Quality") == 0);
+  is_phrap = (Boolean) (StringICmp (sgp->title, "Phrap Quality") == 0 ||
+                        StringICmp (sgp->title, "Phred Quality") == 0);
   switch (sgp->flags [2]) {
     case 1 :
       min = (Int4) sgp->min.realvalue;

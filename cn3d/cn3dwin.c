@@ -1,4 +1,4 @@
-/*  $Id: cn3dwin.c,v 6.159 2000/05/17 22:27:36 lewisg Exp $
+/*  $Id: cn3dwin.c,v 6.160 2000/08/17 16:09:53 thiessen Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dwin.c,v $
+* Revision 6.160  2000/08/17 16:09:53  thiessen
+* fix X/OpenGL initialization bug
+*
 * Revision 6.159  2000/05/17 22:27:36  lewisg
 * rename viewer controls
 *
@@ -2352,7 +2355,7 @@ extern WindoW LIBCALL Cn3DWin(WndActnProc on_close, MenU * file_menu,
     RealizeWindow(Cn3D_w);
 #if defined(_OPENGL) && defined(WIN_MOTIF)
     /* now that all windows are realized, set X OpenGL context  (thiessen) */
-    Nlm_SetOGLContext(NULL, NULL);
+    Nlm_SetOGLContext(NULL, NULL, NULL, NULL);
 #endif
 #ifdef _OPENGL
     OGL_InitializeLists(OGL_Data);

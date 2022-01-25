@@ -1,5 +1,5 @@
 #
-# $Id: linux.ncbi.mk,v 1.12 2000/04/13 14:10:44 thiessen Exp $
+# $Id: linux.ncbi.mk,v 1.15 2000/07/31 02:25:13 beloslyu Exp $
 #
 NCBI_DEFAULT_LCL = lnx
 NCBI_MAKE_SHELL = /bin/sh
@@ -28,10 +28,11 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3D
+OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
-OPENGL_INCLUDE = -I/usr/local/apps/Mesa-3.0/include
-OPENGL_LIBS = -L/usr/local/apps/Mesa-3.0/lib -lMesaGL -lMesaGLU
+OPENGL_INCLUDE = -I/usr/X11R6/include
+OPENGL_LIBS = -L/usr/X11R6/lib -lGL -lGLU
+NCBI_OGLLIBS = -L/usr/X11R6/lib -lGL -lGLU
 
 # uncomment (and change appropriately) these lines to build PNG
 # output support into Cn3D (OpenGL version only)

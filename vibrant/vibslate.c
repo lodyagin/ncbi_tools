@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description:
 *       Vibrant slate (universal drawing environment) functions
@@ -37,6 +37,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibslate.c,v $
+* Revision 6.39  2000/08/17 16:13:21  thiessen
+* fix X/OpenGL initialization bug
+*
+* Revision 6.38  2000/07/28 21:05:55  lewisg
+* more c++ fixes
+*
 * Revision 6.37  2000/03/13 15:58:18  thiessen
 * warn user about buggy 8-bit OpenGL
 *
@@ -2706,14 +2712,10 @@ lyg
 */
 
 
-#ifdef WIN_MOTIF
-void ** Cn3D_GetCurrentOGLDisplayHndl(void);
-void ** Cn3D_GetCurrentOGLVisinfoHndl(void);
-#endif
 
 extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
                              Nlm_Uint1Ptr red, Nlm_Uint1Ptr green,
-                             Nlm_Uint1Ptr blue)
+                             Nlm_Uint1Ptr blue, void **dpyh)
 {
   Nlm_SlateData  wdata;
 
@@ -2802,7 +2804,6 @@ extern void Nlm_Set3DColorMap (Nlm_PaneL w, Nlm_Uint2 totalColors,
     unsigned long  pixel;
     int            n_savedColors = 0;
     XColor         colorCells[256];
-    Display **dpyh = (Display **) Cn3D_GetCurrentOGLDisplayHndl();
     Display *dpy = *dpyh;
 
     if (!dpy) return;
@@ -3066,27 +3067,33 @@ XVisualInfo * Nlm_GetBestOGLVisual(void)
    both arguments NULL to actually set the stored context. (thiessen)
 */
 
-void Nlm_SetOGLContext(Nlm_SlateTool a, Nlm_Boolean *im)
+void Nlm_SetOGLContext(Nlm_SlateTool a, Nlm_Boolean *im,
+                      Display **d, XVisualInfo **v)
 {
   static Nlm_SlateTool area;
   static Nlm_Boolean *indexed=NULL;
   static int alreadyDone=FALSE;
+  static Display **display=NULL;
+  static XVisualInfo **visinfo=NULL;
 
   if (a != NULL) {
     area = a;
     indexed = im;
+    display = d;
+    visinfo = v;
 
   } else {
-
+  
     GLXContext glCtx;
-    XVisualInfo **visinfo = (XVisualInfo **) Cn3D_GetCurrentOGLVisinfoHndl();
-    Display **display = (Display **) Cn3D_GetCurrentOGLDisplayHndl();
     int success;
 
-    if (alreadyDone)
-      return;
-    else
-      alreadyDone = TRUE;
+    if (!indexed || !display || !visinfo) {
+        puts("Nlm_SetOGLContext() : don't have required pointers");
+        exit(3);
+    }
+
+    if (alreadyDone) return;
+    alreadyDone = TRUE;
 
     *visinfo = Nlm_GetBestOGLVisual();
     if ((*visinfo)->depth < 12)
@@ -3097,9 +3104,13 @@ void Nlm_SetOGLContext(Nlm_SlateTool a, Nlm_Boolean *im)
     *display = XtDisplay(area);
 
     glCtx = glXCreateContext(*display, *visinfo, None, GL_TRUE);
+    if (!glCtx) {
+        puts("glXCreateContext in OpenGL window failed!\n");
+        exit(2);
+    }
     success = glXMakeCurrent(*display, XtWindow(area), glCtx);
     if (!glCtx || !success) {
-        puts("glXMakeCurrent on Cn3D window failed!\n");
+        puts("glXMakeCurrent in OpenGL window failed!\n");
         exit(2);
     }
   }
@@ -3128,7 +3139,8 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
                           Nlm_Boolean vScroll, Nlm_Boolean hScroll,
                           Nlm_SltScrlProc4 vscrl4, Nlm_SltScrlProc4 hscrl4,
                           Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl,
-                          Nlm_Int2 extra, Nlm_Boolean *IndexMode)
+                          Nlm_Int2 extra, Nlm_Boolean *IndexMode,
+                          void **display, void **visinfo)
 
 {
   Nlm_SlateTool   h;
@@ -3236,7 +3248,8 @@ static void Nlm_New3DSlate (Nlm_SlatE s, Nlm_Boolean border,
 
   XtManageChild( h );
 
-  Nlm_SetOGLContext(h, IndexMode);
+  Nlm_SetOGLContext(h, IndexMode,
+    (Display **) display, (XVisualInfo **) visinfo);
 
 #endif
 
@@ -3761,7 +3774,8 @@ extern Nlm_PaneL Nlm_Autonomous3DPanel (Nlm_GrouP prnt, Nlm_Int2 pixwidth,
                                       Nlm_Int2 pixheight, Nlm_PnlActnProc draw,
                                       Nlm_SltScrlProc vscrl, Nlm_SltScrlProc hscrl,
                                       Nlm_Int2 extra, Nlm_PnlActnProc reset,
-                                      Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode)
+                                      Nlm_GphPrcsPtr classPtr, Nlm_Boolean *IndexMode,
+                                      void **display, void **visinfo)
 
 /*
 *  Note that an autonomous panel is really a combination of slate and
@@ -3805,7 +3819,8 @@ extern Nlm_PaneL Nlm_Autonomous3DPanel (Nlm_GrouP prnt, Nlm_Int2 pixwidth,
         gdata.classptr = slateProcs;
         Nlm_SetGraphicData ((Nlm_GraphiC) p, &gdata);
       }
-      Nlm_New3DSlate ((Nlm_SlatE) p, border, vScroll, hScroll, NULL, NULL, vscrl, hscrl, extra, IndexMode);
+      Nlm_New3DSlate ((Nlm_SlatE) p, border, vScroll, hScroll, NULL, NULL, vscrl, hscrl,
+          extra, IndexMode, display, visinfo);
       Nlm_NewPanel (p, draw, extra, reset);
       if (vScroll) {
         r.right += Nlm_vScrollBarWidth;

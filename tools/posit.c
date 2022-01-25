@@ -1,4 +1,4 @@
-/*
+/* $Id: posit.c,v 6.49 2000/11/13 14:00:39 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -24,16 +24,45 @@
 * ===========================================================================
 *
 
-File name: posit.c
+   File name: posit.c
 
-Author: Alejandro Schaffer
+  Author: Alejandro Schaffer
 
-Contents: utilities for position-based BLAST.
+  Contents: utilities for position-based BLAST.
 
-$Revision: 6.40 $ 
+  $Revision: 6.49 $ 
  *****************************************************************************
 
  * $Log: posit.c,v $
+ * Revision 6.49  2000/11/13 14:00:39  madden
+ * Added frequency ratios for * in all standard matrices
+ *
+ * Revision 6.48  2000/11/09 14:27:52  madden
+ * psi-blast fixes for star character
+ *
+ * Revision 6.47  2000/11/01 16:25:57  madden
+ * Changes from Futamura for psitblastn
+ *
+ * Revision 6.46  2000/10/24 16:28:29  madden
+ * Changed IDENTITY_RATIO for putging near-identical matches from 0.98 to 0.95
+ *
+ * Revision 6.45  2000/10/10 21:46:04  shavirin
+ * Added support for BLOSUM50, BLOSUM90, PAM250 with -t T
+ *
+ * Revision 6.44  2000/08/18 21:28:37  madden
+ * support for BLOSUM62_20A and BLOSUM62_20B
+ *
+ * Revision 6.43  2000/07/31 16:41:01  shavirin
+ * Reduced POSIT_SCALE_FACTOR from 1000 to 200 to avoid overflow
+ * with BLOSUM80; moved declaration os POSIT_SCALE_FACTOR to posit.h
+ *
+ * Revision 6.42  2000/07/26 13:11:19  shavirin
+ * Added magical "LIBCALL" to pacify Windows build function allocatePosFreqs()
+ *
+ * Revision 6.41  2000/07/25 18:12:04  shavirin
+ * WARNING: This is no-turning-back changed related to S&W Blast from
+ * Alejandro Schaffer
+ *
  * Revision 6.40  2000/05/01 12:48:33  madden
  * changed rules for gaps in processing alignments with -B
  *
@@ -236,18 +265,17 @@ extern BLAST_ScoreFreqPtr BlastScoreFreqDestruct (BLAST_ScoreFreqPtr sfp);
 /*Used inside a seqAlign to reprsent the presence of a gap*/
 #define GAP_HERE (-1)
 /*Used to check that diagnostics printing routine will work*/
-#define PROTEIN_ALPHABET 26
 #define EFFECTIVE_ALPHABET 20
 
 #define POSIT_PERCENT 0.05
 #define POSIT_NUM_ITERATIONS 10
 
-#define POSIT_SCALE_FACTOR 1000
 
 #define POS_RESTING 0
 #define POS_COUNTING 1
 
-#define IDENTITY_RATIO 0.98
+#define IDENTITY_RATIO 0.95
+
 
 /*Allocate memory for  data structures inside posSearch used in
 * position-specific caculations
@@ -883,7 +911,7 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
        numsegs = curSegs->numseg;
        for(segIndex = 0; segIndex < numsegs; segIndex++) {
            queryOffset = curSegs->starts[startQ];
-           if (curSegs->starts[startS] != GAP_HERE)
+           if (curSegs->starts[startS] != GAP_HERE) /*XX*/
                subjectOffset = curSegs->starts[startS] - retrievalOffset;
            else
                subjectOffset = GAP_HERE;
@@ -892,7 +920,7 @@ static void posDemographics(posSearchItems *posSearch, compactSearchItems * comp
                ; /*do nothing, gap in query*/
            }
            else
-               if ((GAP_HERE) == subjectOffset) {
+	     if ((GAP_HERE) == subjectOffset) { /*XX*/
                    for(c = 0, qplace = queryOffset;
                        c < matchLength; c++, qplace++) {
                        posSearch->posDescMatrix[seqIndex + 1][qplace].used = TRUE;
@@ -936,9 +964,9 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
    q = compactSearch->query;
    for(seqIndex = 0; seqIndex < numseq; seqIndex++) {
      if (!posSearch->posUseSequences[seqIndex+1])
-       continue;
-     if ((posSearch->posDescMatrix[seqIndex+1][0].used)
-	 && (posSearch->posDescMatrix[seqIndex+1][length-1].letter != GAP_CHAR))
+       continue; /*XX*/
+     if ((posSearch->posDescMatrix[seqIndex+1][0].used) 
+	 && (posSearch->posDescMatrix[seqIndex+1][0].letter != GAP_CHAR))
        posSearch->posDescMatrix[seqIndex+1][0].leftExtent = 0;
      for(qplace = 1; qplace < length; qplace++)
        if(posSearch->posDescMatrix[seqIndex+1][qplace].used) {
@@ -947,7 +975,7 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
 	     posSearch->posDescMatrix[seqIndex+1][qplace -1].leftExtent;
 	 else
 	   posSearch->posDescMatrix[seqIndex+1][qplace].leftExtent = qplace;
-       }
+       } 
      if ((posSearch->posDescMatrix[seqIndex+1][length-1].used)
 	 && (posSearch->posDescMatrix[seqIndex+1][length-1].letter != GAP_CHAR))
        posSearch->posDescMatrix[seqIndex+1][length-1].rightExtent = length -1;
@@ -961,15 +989,17 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
        }
      for(qplace = 0; qplace < length; qplace++) 
        if (posSearch->posDescMatrix[seqIndex+1][qplace].used) {
-	 posSearch->posExtents[qplace].leftExtent = MAX(posSearch->posExtents[qplace].leftExtent,
+	 /* if (posSearch->posDescMatrix[seqIndex+1][qplace].letter != GAP_CHAR) { */
+	   posSearch->posExtents[qplace].leftExtent = MAX(posSearch->posExtents[qplace].leftExtent,
 							posSearch->posDescMatrix[seqIndex+1][qplace].leftExtent);
-	 posSearch->posExtents[qplace].rightExtent = MIN(posSearch->posExtents[qplace].rightExtent,
-							 posSearch->posDescMatrix[seqIndex+1][qplace].rightExtent);
+	   posSearch->posExtents[qplace].rightExtent = MIN(posSearch->posExtents[qplace].rightExtent,
+							   posSearch->posDescMatrix[seqIndex+1][qplace].rightExtent);
 	 
-       }
+	 }
+     /*       }*/
 
      for(qplace = 0; qplace < length; qplace++) 
-     /*used to check qplace for GAP_CHAR here*/
+       /*used to check qplace for GAP_CHAR here*/ /*XX*/
        if (posSearch->posDescMatrix[seqIndex+1][qplace].used) {
 	 posSearch->posC[qplace][posSearch->posDescMatrix[seqIndex+1][qplace].letter]++;
 	 posSearch->posCount[qplace]++; /*Add to number of matches in this query position*/
@@ -990,7 +1020,7 @@ static void posComputeExtents(posSearchItems *posSearch, compactSearchItems * co
  }
  
 /*Compute weight of each sequence and letter in each position*/
-static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch)
+static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi weightExponent)
 {
    Int4 length; /*length of query*/
    Int4 numseq, seqIndex; /*number of matches, index for them*/
@@ -1010,6 +1040,8 @@ static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchIt
    Int4 oldNumParticipating; /*number of sequences in this alignment block*/
    Boolean newSequenceSet; 
    Int4 p; /*index on sequences*/
+   Nlm_FloatHi weightSum; /*Sum of intermediate sequence weights in a column 
+                            used to normalize the weights, so they sum to 1*/
 
    alphabetSize = compactSearch->alphabetSize;
    length = compactSearch->qlength;
@@ -1035,10 +1067,12 @@ static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchIt
        numParticipating = 0;
        for (seqIndex = 0; seqIndex <= numseq; seqIndex++) {
          if (!posSearch->posUseSequences[seqIndex])
-           continue;
-	 if ((posSearch->posDescMatrix[seqIndex][qplace].used) &&
+           continue; 
+	 /* if ((posSearch->posDescMatrix[seqIndex][qplace].used) &&
 	     (posSearch->posDescMatrix[seqIndex][qplace].letter != GAP_CHAR)) {
-	   participatingSequences[numParticipating] = seqIndex;
+	 */
+	 if (posSearch->posDescMatrix[seqIndex][qplace].used) {
+	     participatingSequences[numParticipating] = seqIndex; 
 	   numParticipating++;
 	 }
        }
@@ -1067,8 +1101,8 @@ static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchIt
 	     posLocalC[c] = 0;
 	   for(seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
 	     thisSeq = participatingSequences[seqIndex];
-	     /*used to check for GAP here*/
-	     if (0 == posLocalC[posSearch->posDescMatrix[thisSeq][i].letter])
+	     /*used to check for GAP here*/ /*XX*/
+	     if (0 == posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]) 
 	       /*letter (not a gap) not seen before in this query pos.*/
 	       posLocalVariety++;  
 	     posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]++;
@@ -1076,19 +1110,31 @@ static void posComputeSequenceWeights(posSearchItems *posSearch, compactSearchIt
 	   intervalSigma += posLocalVariety;
 	   if (posLocalVariety > 1) {
 	     Sigma += posLocalVariety;
-	     for(seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
-	       thisSeq = participatingSequences[seqIndex];
-	       /*used to check for gap here*/
-	       posSearch->posRowSigma[thisSeq] += 
-		 ( 1.0 / (Nlm_FloatHi) posLocalC[posSearch->posDescMatrix[thisSeq][i].letter]);
-	     }
+	   }
+	   for(seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
+	     thisSeq = participatingSequences[seqIndex];
+	     /*used to check for gap here*/
+	     posSearch->posRowSigma[thisSeq] += 
+		( 1.0 / 
+  (((Nlm_FloatHi) posLocalC[posSearch->posDescMatrix[thisSeq][i].letter])
+    * posLocalVariety));
 	   }
 	 }
        }
        if (Sigma > 0) {
+	 weightSum = 0;
 	 for (seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
 	   thisSeq = participatingSequences[seqIndex];
-	   posSearch->posA[thisSeq] = posSearch->posRowSigma[thisSeq]/Sigma;
+	   posSearch->posA[thisSeq] = posSearch->posRowSigma[thisSeq]/
+	    (posSearch->posExtents[qplace].rightExtent -
+	       posSearch->posExtents[qplace].leftExtent +1);
+           posSearch->posA[thisSeq] = pow(posSearch->posA[thisSeq],
+                                          weightExponent);
+	   weightSum += posSearch->posA[thisSeq];
+	 }
+	 for (seqIndex = 0; seqIndex < numParticipating; seqIndex++) {
+	   thisSeq = participatingSequences[seqIndex];
+	   posSearch->posA[thisSeq] = posSearch->posA[thisSeq]/weightSum;
 	 }
        }
        else {
@@ -1134,6 +1180,18 @@ static void posCheckWeights(posSearchItems *posSearch, compactSearchItems * comp
    for(c = 0; c < length; c++) {
      if ((posSearch->posCount[c] > 1) && (q[c] != Xchar)) {
        runningSum = 0;
+       /*       if (posSearch->posMatchWeights[c][0] > 0.0)
+		printf("Stop here %d ", c); */
+       for(a = 0; a < alphabetSize; a++) 
+           runningSum += posSearch->posMatchWeights[c][a];
+       if((runningSum < 0.99) || (runningSum > 1.01))
+         ErrPostEx(SEV_ERROR, 0, 0, "\nERROR IN WEIGHTS, column %d, value %lf\n",c, runningSum);
+       for(a = 1; a < alphabetSize; a++) 
+	 if (compactSearch->standardProb[a] > posEpsilon)
+	   posSearch->posMatchWeights[c][a] = posSearch->posMatchWeights[c][a] +
+           (posSearch->posMatchWeights[c][0] * compactSearch->standardProb[a]);
+       posSearch->posMatchWeights[c][0] = 0.0;
+       runningSum = 0;
        for(a = 0; a < alphabetSize; a++) 
            runningSum += posSearch->posMatchWeights[c][a];
        if((runningSum < 0.99) || (runningSum > 1.01))
@@ -1167,11 +1225,9 @@ static void  posFreqsToInformation(posSearchItems * posSearch, compactSearchItem
    }
 }
 
-
-
-
-/*Convert pseudo-count frequencies to a score matrix */
-void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch)
+/*Convert pseudo-count frequencies to a score matrix, where standard
+matrix is represented by its frequencies */
+void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi **standardFreqRatios, Int4 multiplier)
 {
    Uint1Ptr q;  /*pointer to the query*/
    Int4 length;  /*length of the query*/
@@ -1180,12 +1236,14 @@ void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * co
    Nlm_FloatHi lambda; /*Karlin-Altschul parameter*/
    Nlm_FloatHi  qOverPEstimate, value; /*intermediate terms*/
    Boolean allZeros; /*are all frequencies in a column 0?*/
+   Nlm_FloatHi intermediateValue; /*intermediate value*/
 
    q = compactSearch->query;
    length = compactSearch->qlength;
 
    alphabetSize = compactSearch->alphabetSize;
    lambda = compactSearch->lambda_ideal;
+
 
    for(c = 0; c < length; c++) {
      allZeros = TRUE;
@@ -1202,15 +1260,32 @@ void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * co
        else {
 	 value = log(qOverPEstimate)/lambda;
 	 posSearch->posPrivateMatrix[c][a] = (BLAST_Score) posit_rounddown(POSIT_SCALE_FACTOR*value);
+
        }
-     }    
+       if (((Xchar == a) || (StarChar == a)) && (compactSearch->matrix[q[c]][Xchar] != BLAST_SCORE_MIN))
+	 posSearch->posPrivateMatrix[c][a] = 
+	   compactSearch->matrix[q[c]][a] * POSIT_SCALE_FACTOR;
+     }
      if (allZeros) {
-       for(a = 0; a < alphabetSize; a++) {
-         posSearch->posMatrix[c][a] = compactSearch->matrix[q[c]][a];
-	 if (compactSearch->matrix[q[c]][a] == BLAST_SCORE_MIN)
-		posSearch->posPrivateMatrix[c][a] = BLAST_SCORE_MIN;
-	 else
-         	posSearch->posPrivateMatrix[c][a] = POSIT_SCALE_FACTOR*compactSearch->matrix[q[c]][a];
+       if (NULL == standardFreqRatios) {
+	 for(a = 0; a < alphabetSize; a++) {
+	   posSearch->posMatrix[c][a] = compactSearch->matrix[q[c]][a];
+	   if (compactSearch->matrix[q[c]][a] == BLAST_SCORE_MIN)
+	     posSearch->posPrivateMatrix[c][a] = BLAST_SCORE_MIN;
+	   else
+	     posSearch->posPrivateMatrix[c][a] = POSIT_SCALE_FACTOR*compactSearch->matrix[q[c]][a];
+	 }
+       }
+       else {
+	 for(a = 0; a < alphabetSize; a++) {
+	   posSearch->posMatrix[c][a] = compactSearch->matrix[q[c]][a];
+	   if (compactSearch->matrix[q[c]][a] == BLAST_SCORE_MIN)
+	     posSearch->posPrivateMatrix[c][a] = BLAST_SCORE_MIN;
+	   else {
+	     intermediateValue = POSIT_SCALE_FACTOR * multiplier * log(standardFreqRatios[q[c]][a])/NCBIMATH_LN2;
+	     posSearch->posPrivateMatrix[c][a] = Nlm_Nint(intermediateValue);
+	   }
+	 }
        }
      }
    }
@@ -1219,7 +1294,17 @@ void LIBCALL posFreqsToMatrix(posSearchItems *posSearch, compactSearchItems * co
    }
 }
 
-static Nlm_FloatHi ** allocatePosFreqs(Int4 length, Int4 alphabetSize)
+/*copy position specific frequency matrix of diminesions qlength * alphabetSize*/
+void LIBCALL copyPosFreqs(Nlm_FloatHi **posFreqsFrom, Nlm_FloatHi **posFreqsTo, Int4 qlength, Int4 alphabetSize)
+{
+  Int4 c, i; /*loop indices*/
+
+  for (i = 0; i < qlength; i++)
+    for (c = 0; c < alphabetSize; c++)
+      posFreqsTo[i][c] = posFreqsFrom[i][c];
+}
+
+Nlm_FloatHi ** LIBCALL allocatePosFreqs(Int4 length, Int4 alphabetSize)
 {
   Int4 c, i; /*loop indices*/
   Nlm_FloatHi ** returnArray;
@@ -1249,6 +1334,7 @@ static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSe
    Nlm_FloatHi pseudo, numerator, denominator, qOverPEstimate; /*intermediate terms*/
    Nlm_FloatHi infoSum; /*sum used for information content*/
    Nlm_FloatHi **posFreqs; /*store frequencies*/
+   Nlm_FloatHi **frequencyRatios; /*matrix-specific frequency ratios*/
 
    q = compactSearch->query;
    length = compactSearch->qlength;
@@ -1257,16 +1343,92 @@ static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSe
    lambda = compactSearch->lambda_ideal;
    posFreqs = allocatePosFreqs(length, alphabetSize);
 
+   frequencyRatios = allocatePosFreqs(alphabetSize, alphabetSize);
+   if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62")) {
+     for(c = 0; c < alphabetSize; c++) {
+       for(a = 0; a < alphabetSize; a++)
+	 frequencyRatios[c][a] = BLOSUM62_FREQRATIOS[c][a];
+     }
+   }
+   else {
+     if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM45")) {
+       for(c = 0; c < alphabetSize; c++) {
+	 for(a = 0; a < alphabetSize; a++)
+	   frequencyRatios[c][a] = BLOSUM45_FREQRATIOS[c][a];
+       }
+     }
+     else {
+       if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM80")) {
+	 for(c = 0; c < alphabetSize; c++) {
+	   for(a = 0; a < alphabetSize; a++)
+	     frequencyRatios[c][a] = BLOSUM80_FREQRATIOS[c][a];
+	 }
+       }
+       else {
+	 if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM50")) {
+	   for(c = 0; c < alphabetSize; c++) {
+	     for(a = 0; a < alphabetSize; a++)
+	       frequencyRatios[c][a] = BLOSUM50_FREQRATIOS[c][a];
+	   }
+	 }
+	 else {
+	   if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM90")) {
+	     for(c = 0; c < alphabetSize; c++) {
+	       for(a = 0; a < alphabetSize; a++)
+		 frequencyRatios[c][a] = BLOSUM90_FREQRATIOS[c][a];
+	     }
+	   }
+	   else {
+	     if (0 == strcmp(compactSearch->standardMatrixName,"PAM30")) {
+	       for(c = 0; c < alphabetSize; c++) {
+		 for(a = 0; a < alphabetSize; a++)
+		   frequencyRatios[c][a] = PAM30_FREQRATIOS[c][a];
+	       }
+	     }
+	     else {
+	       if (0 == strcmp(compactSearch->standardMatrixName,"PAM70")) {
+		 for(c = 0; c < alphabetSize; c++) {
+		   for(a = 0; a < alphabetSize; a++)
+		     frequencyRatios[c][a] = PAM70_FREQRATIOS[c][a];
+		 }
+	       }
+	       else {
+		 if (0 == strcmp(compactSearch->standardMatrixName,"PAM250")) {
+		   for(c = 0; c < alphabetSize; c++) {
+		     for(a = 0; a < alphabetSize; a++)
+		       frequencyRatios[c][a] = PAM250_FREQRATIOS[c][a];
+		   }
+		 }
+		 else {
+		   if ((0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62_20"))
+		       || (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62_20A")) ||
+		       (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62_20B"))) {
+		     for(c = 0; c < alphabetSize; c++) {
+		       for(a = 0; a < alphabetSize; a++)
+			 frequencyRatios[c][a] = BLOSUM62_FREQRATIOS[c][a];
+		     }
+		   }
+		   else
+		     ErrPostEx(SEV_FATAL, 0, 0, "blastpgp: Cannot find aa frequencies for matrix %s\n", compactSearch->standardMatrixName);
+		 }
+	       }
+	     }
+	   }
+	 }
+       }
+     }
+   }
    for(c = 0; c < length; c++) {
-     if ((posSearch->posCount[c] > 1) && (Xchar != q[c])) {
+     if (Xchar != q[c]) {
        infoSum = 0;
        for(a = 0; a < alphabetSize; a++) {
          if (compactSearch->standardProb[a] > posEpsilon) {
 	   pseudo = 0;
+           /*changed to matrix specific ratios here May 2000*/
 	   for (aSub = 0; aSub < alphabetSize; aSub++)
 	     if(compactSearch->matrix[a][aSub] != BLAST_SCORE_MIN) 
 	       pseudo += (posSearch->posMatchWeights[c][aSub] *
-			exp(lambda * compactSearch->matrix[a][aSub]));
+			frequencyRatios[a][aSub]);
 	   pseudo *= (compactSearch->pseudoCountConst);
            Sigma = posSearch->posSigma[c];
            intervalLength = posSearch->posIntervalSizes[c];
@@ -1278,6 +1440,10 @@ static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSe
 	   /*Note artificial multiplication by standard probability to
              normalize*/
            posFreqs[c][a] = qOverPEstimate * compactSearch->standardProb[a];
+	   if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62_20A"))
+	     posFreqs[c][a] *= 0.9666;
+	   if (0 == strcmp(compactSearch->standardMatrixName,"BLOSUM62_20B"))
+	     posFreqs[c][a] *= 0.9344;
 	 if (0.0 != qOverPEstimate && (compactSearch->standardProb[a] > posEpsilon))
 	   infoSum += qOverPEstimate * compactSearch->standardProb[a] * log(qOverPEstimate)/ NCBIMATH_LN2;
 	 }
@@ -1292,6 +1458,7 @@ static Nlm_FloatHi ** posComputePseudoFreqs(posSearchItems *posSearch, compactSe
          posFreqs[c][a] = 0;
        }
    }
+  freePosFreqs(frequencyRatios, alphabetSize);
   return(posFreqs);
 }
 
@@ -1320,7 +1487,7 @@ static void posScaling(posSearchItems *posSearch, compactSearchItems * compactSe
 }
 
 
-Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return)
+Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr search, compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Char *ckptFileName, Boolean patternSearchStart, ValNodePtr * error_return, Nlm_FloatHi weightExponent)
 {
     Int4 numalign, numseq; /*number of alignments and matches in previous round*/
     
@@ -1337,19 +1504,22 @@ Int4Ptr * LIBCALL CposComputation(posSearchItems *posSearch, BlastSearchBlkPtr s
     posDemographics(posSearch, compactSearch, listOfSeqAligns);
     posPurgeMatches(posSearch, compactSearch);
     posComputeExtents(posSearch, compactSearch);
-    posComputeSequenceWeights(posSearch, compactSearch);
+    posComputeSequenceWeights(posSearch, compactSearch, weightExponent);
     posCheckWeights(posSearch, compactSearch);
     posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, TRUE);
+    if (NULL == search->sbp->posFreqs)
+      search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, compactSearch->alphabetSize);
+    copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
     if (NULL != ckptFileName)
         posTakeCheckpoint(posSearch, compactSearch, ckptFileName, error_return);
-    posFreqsToMatrix(posSearch,compactSearch);
+    posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
     posScaling(posSearch, compactSearch);
     return posSearch->posMatrix;
 }
 
 /* Top-level routine to compute position-specific matrix, when used through
 the Web, one round at a time*/
-Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns)
+Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPtr listOfSeqAligns, Nlm_FloatHi ** posFreqs)
 {
     posSearchItems *posSearch;
     Int4 i, numSeqAligns, numseq;
@@ -1362,11 +1532,12 @@ Int4Ptr * LIBCALL WposComputation(compactSearchItems * compactSearch, SeqAlignPt
     posDemographics(posSearch, compactSearch, listOfSeqAligns);
     posPurgeMatches(posSearch, compactSearch);
     posComputeExtents(posSearch, compactSearch);
-    posComputeSequenceWeights(posSearch, compactSearch);
+    posComputeSequenceWeights(posSearch, compactSearch, 1.0);
     posCheckWeights(posSearch, compactSearch);
     posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, 
                                                 FALSE);
-    posFreqsToMatrix(posSearch,compactSearch);
+    copyPosFreqs(posSearch->posFreqs,posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
+    posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
     posScaling(posSearch, compactSearch);
     posMatrix = posSearch->posMatrix;
     
@@ -1622,23 +1793,23 @@ void LIBCALL outputPosMatrix(posSearchItems *posSearch, compactSearchItems *comp
 
 void LIBCALL posPrintInformation(posSearchItems *posSearch, BlastSearchBlkPtr search, Int4 passNum)
 {
-    Int4 querySize;
-    
-    querySize = search->context[0].query->length;
-    
-    /* Used ifdef until final decision is made on output. */
+  Int4 querySize;
+
+  querySize = search->context[0].query->length;
+
+/* Used ifdef until final decision is made on output. */
 #ifdef POSIT_DEBUG
-    {{
-        Int4 c;
-        
-        printf("\nInformation content by position for pass %d\n", passNum);
-        for(c = 0; c < querySize; c++)
-            printf(" %5d", c); 
-        printf("\n");
-        for(c = 0; c < querySize; c++)
-            printf(" %5.2lf", posSearch->posInformation[c]); 
-        printf("\n");
-    }}
+  {{
+      Int4 c;
+  
+      printf("\nInformation content by position for pass %d\n", passNum);
+      for(c = 0; c < querySize; c++)
+          printf(" %5d", c); 
+      printf("\n");
+      for(c = 0; c < querySize; c++)
+          printf(" %5.2lf", posSearch->posInformation[c]); 
+      printf("\n");
+  }}
 #endif
 }   
  
@@ -1692,7 +1863,7 @@ void LIBCALL posFreeInformation(posSearchItems *posSearch)
 /*Copy a few fields from the lasrge record search into the small record
   compactSearch, so that a small amount of information
   is passed into posit.c*/
-void LIBCALL copySearchItems(compactSearchItems * compactSearch, BlastSearchBlkPtr search)
+void LIBCALL copySearchItems(compactSearchItems * compactSearch, BlastSearchBlkPtr search, char * matrixName)
 {
    BLAST_ResFreqPtr stdrfp; /* gets standard frequencies in prob field */
    Int4 a; /*index over characters*/
@@ -1721,6 +1892,7 @@ void LIBCALL copySearchItems(compactSearchItems * compactSearch, BlastSearchBlkP
    for(a = 0; a < compactSearch->alphabetSize; a++)
      compactSearch->standardProb[a] = stdrfp->prob[a];
    stdrfp = BlastResFreqDestruct(stdrfp);
+   strcpy(compactSearch->standardMatrixName,matrixName);
 }
 
 /*allocate memory for a record of type compactSearchItems*/
@@ -1942,13 +2114,28 @@ Boolean LIBCALL  posReadCheckpoint(posSearchItems * posSearch, compactSearchItem
   for(c = 0; c < length1; c++) {
     getCkptChar(nextRes, checkFile);
     oldQuery[c] = ResToInt(nextRes);
+
+
     if ((oldQuery[c] != compactSearch->query[c]) && (oldQuery[c] != Xchar)) {
+                                /* Error massage Added by Natsuhiko */
+      if (compactSearch->query[c] == Xchar) {
+        /* printf("\n oldQuery[c]=%c Xchar=%c", getRes(oldQuery[c]), getRes(Xchar));  */
+        ErrPostEx(SEV_WARNING, 0, 0, "\nStored query has a %c at position %ld, while new query has a %c there.\n%c appears in query sequence: The query could be filtered. Run with \"-F F\" option to turn the filter off.",getRes(oldQuery[c]), (long) c, getRes(compactSearch->query[c]),
+                  getRes(compactSearch->query[c]));
+      }
+      else{
       ErrPostEx(SEV_WARNING, 0, 0, "Stored query has a %c at position %ld, while new query has a %c there",getRes(oldQuery[c]), (long) c, getRes(compactSearch->query[c]));
+      }
+
       BlastConstructErrorMessage("posReadCheckpoint", "Failed to recover data\n", 1, error_return);
       MemFree(oldQuery);
       FileClose(checkFile);
       return(FALSE);
     }
+    if ((oldQuery[c] != compactSearch->query[c]) && (Xchar==oldQuery[c])) {
+      ErrPostEx(SEV_WARNING, 0, 0, "Stored query has a %c at position %ld, while new query has a %c there\n%c appears in the stored query: The stored query may be filtered. Run blastpgp with \"-F F\" option to turn the filter off",getRes(oldQuery[c]), (long) c,
+                getRes(compactSearch->query[c]), getRes(oldQuery[c])); }
+
   }
   posSearch->posMatrix = (BLAST_Score **) MemNew((length1 + 1) * sizeof(BLAST_Score *));
   posSearch->posPrivateMatrix = (BLAST_Score **) MemNew((length1 + 1) * sizeof(BLAST_Score *));
@@ -1979,7 +2166,7 @@ Boolean LIBCALL  posReadCheckpoint(posSearchItems * posSearch, compactSearchItem
   }
   getCkptFreqMatrix(posSearch->posFreqs,length1,compactSearch->alphabetSize,checkFile);
   posFreqsToInformation(posSearch,compactSearch);
-  posFreqsToMatrix(posSearch,compactSearch);
+  posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
   posScaling(posSearch, compactSearch);
   BlastConstructErrorMessage("posReadCheckpoint", "Data recovered successfully\n", 1, error_return);
   MemFree(oldQuery);
@@ -2374,12 +2561,16 @@ Int4Ptr * LIBCALL BposComputation(posSearchItems *posSearch, BlastSearchBlkPtr
   posSearch->posNumSequences = numSeqs;
   posPurgeMatches(posSearch, compactSearch);
   posComputeExtents(posSearch, compactSearch);
-  posComputeSequenceWeights(posSearch, compactSearch);
+  posComputeSequenceWeights(posSearch, compactSearch, 1.0);
   posCheckWeights(posSearch, compactSearch);
   posSearch->posFreqs = posComputePseudoFreqs(posSearch, compactSearch, TRUE);
+  if (NULL == search->sbp->posFreqs)
+    search->sbp->posFreqs =  allocatePosFreqs(compactSearch->qlength, compactSearch->alphabetSize);
+  copyPosFreqs(posSearch->posFreqs,search->sbp->posFreqs, compactSearch->qlength, compactSearch->alphabetSize);
   if (NULL != takeCkptFileName)
     posTakeCheckpoint(posSearch, compactSearch, takeCkptFileName, error_return);
-  posFreqsToMatrix(posSearch,compactSearch);
+  posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
   posScaling(posSearch, compactSearch);
   return posSearch->posMatrix;
 }
+

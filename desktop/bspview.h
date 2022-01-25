@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description: 
 *
@@ -45,14 +45,22 @@
 #ifndef _SEQVIEW_
 #define _SEQVIEW_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <dlogutil.h>
 #include <document.h>
 #include <viewer.h>
 #include <glbpic.h>
+
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* bioseqviewdata pointer is passed to callbacks to display views */
 
@@ -77,6 +85,7 @@ typedef struct bioseqviewdata {
   PrompT          clickMe;
 
   Boolean         useScrollText;
+  Boolean         showContigJoin;
   Boolean         launchEditors;
   Boolean         launchSubviewers;
   Boolean         sendSelectMessages;
@@ -283,6 +292,13 @@ extern void EnableDisableLegendItem (BioseqViewPtr bvp, Boolean enable);
 
 #ifdef __cplusplus
 }
+#endif
+
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
 #endif
 
 #endif /* ndef _SEQVIEW_ */

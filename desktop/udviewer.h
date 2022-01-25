@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.55 $
+* $Revision: 6.57 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.57  2000/07/12 15:38:08  hurwitz
+* made rectangle select much faster.  it's almost working.
+*
+* Revision 6.56  2000/07/08 20:44:01  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.55  2000/06/27 20:46:38  hurwitz
 * fixed bugs with select rectangle, added select row option
 *
@@ -185,21 +191,11 @@
 *
 * Revision 6.6  1999/06/08 13:52:36  durand
 * update UDV data structures for the MSA editor
-*
-* Revision 6.5  1999/06/07 15:39:43  durand
-* add LOG line to keep track of the history
-*
-*
-*
 * ==========================================================================
 */
 
 #ifndef _UNDVIEWER_
 #define _UNDVIEWER_
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 
 /*******************************************************************************
@@ -227,6 +223,18 @@ extern "C" {
 
 #include <ddvcolor.h>
 #include <samutil.h>
+
+
+#undef NLM_EXTERN
+#ifdef NLM_IMPORT
+#define NLM_EXTERN NLM_IMPORT
+#else
+#define NLM_EXTERN extern
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*******************************************************************************
 
@@ -351,27 +359,32 @@ extern "C" {
 		Uint2		iTypeSel;		/*-|               */
 		} UDV_Item_Select, PNTR UDV_Item_SelectPtr;
 		
-	typedef struct udv_mouse_select {
-		Int1		Action_type;	/*action with the mouse*/
-		RecT		rcClip;			/*limit mvt of the mouse to this rc*/
-		PoinT		oldPos;			/*old pos of the mouse*/
-		PoinT		newPos;			/*new pos of the mouse*/
-		ParaGPtr	pgp;			/*current ParaG data*/
-		Char        szPos[20];		/*current position within the bsp*/
-		Int4        old_row;        /*used by DDV only (display coords); 
-									set when 'on_click' and every 'on_drag'*/
-		Int4        old_col;        /*
-									set when 'on_click' and every 'on_drag'*/
-		ParaGPtr    old_pgp;        /*pgp where old_col was located*/
-		Int4        first_row;      /*set only when 'on_click'*/
-		Int4        first_col;      /*set only when 'on_click'*/
-    Int4*       first_cols;     /*  array for multiple rows*/
-		ParaGPtr    first_pgp;      /*pgp where first_col was located*/
-    ParaGPtr*   first_pgps;     /*  array for multiple rows*/
+  typedef struct udv_mouse_select {
+    Int1      Action_type;      /*action with the mouse*/
+    RecT      rcClip;           /*limit mvt of the mouse to this rc*/
+    PoinT     oldPos;           /*old pos of the mouse*/
+    PoinT     newPos;           /*new pos of the mouse*/
+    ParaGPtr	pgp;              /*current ParaG data*/
+    Char      szPos[20];        /*current position within the bsp*/
+    Int4      old_row;          /*used by DDV only (display coords); 
+							                    set when 'on_click' and every 'on_drag'*/
+    Int4      old_col;          /*
+                                  set when 'on_click' and every 'on_drag'*/
+    ParaGPtr    old_pgp;        /*pgp where old_col was located*/
+    Int4        first_row;      /*set only when 'on_click'*/
+    Int4        first_col;      /*set only when 'on_click'*/
+    Int4        last_row;       /*save corner of rectangle*/
+    Int4        last_col;       /*save corner of rectangle*/
+    Int4*       first_cols;     /*array for multiple rows*/
+    ParaGPtr    first_pgp;      /*pgp where first_col was located*/
+    ParaGPtr*   first_pgps;     /*array for multiple rows*/
     PoinT       first_point;    /*point where first clicked*/
     Int4        first_HScroll;  /*horizontal scroll position when first clicked*/
     Int4        first_VScroll;  /*vertical scroll position when first clicked*/
-		} UDV_mouse_select,PNTR UDV_mouse_selectPtr;
+    Int4        old_HScroll;    /*horizontal scroll when select rectangle last drawn */
+    Int4        old_VScroll;    /*vertical scroll when select rectangle last drawn */
+    RecT        outline;        /*rectangle when making selection*/
+  } UDV_mouse_select,PNTR UDV_mouse_selectPtr;
 
 	typedef  struct  scanfeat {/*use to scan feature when the user clicks
 						on a feature*/
@@ -513,8 +526,8 @@ extern "C" {
 		} UdvGlobals, PNTR UdvGlobalsPtr;
 
     /*
-    /* structs used only by the Blast sequence dialog box
-    */
+     * structs used only by the Blast sequence dialog box
+     */
 
 #if 0 
 
@@ -668,5 +681,11 @@ extern "C" {
 }
 #endif
 
-#endif /* ndef _UNDVIEWER_ */
+#undef NLM_EXTERN
+#ifdef NLM_EXPORT
+#define NLM_EXTERN NLM_EXPORT
+#else
+#define NLM_EXTERN
+#endif
 
+#endif /* ndef _UNDVIEWER_ */

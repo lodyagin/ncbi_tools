@@ -1,0 +1,195 @@
+RPS Blast: Reversed Position Specific Blast
+
+1. Binary files used in RPS Blast:
+
+The following binary files are used to setup and run RPS Blast:
+
+makemat	: primary profile preprocessor 
+  (converts a collection of binary profiles, created by the -C option
+   of PSI-BLAST, into portable ASCII form);
+
+copymat	: secondary profile preprocessor 
+  (converts ASCII matrices, produced by the primary preprocessor, 
+   into database that can be read into memory quickly);
+
+formatdb  : general BLAST database formatter.    
+
+rpsblast  : search program (searches a database of score 
+  matrices, prepared by copymat, producing BLAST-like output).
+
+2. Conversion of profiles into searchable database
+
+*Note*: if you are starting with *.mtx files obtained from the NCBI FTP site or
+another source you should skip the steps listed in 2.1.
+
+2.1. Primary preprocessing
+
+Prepare the following files:
+
+i.	a collection of PSI-BLAST-generated profiles with arbitrary 
+       names and suffix .chk; 
+
+ii.	a collection of "profile master sequences", associated with 
+    the profiles, each in a separate file with arbitrary name and a 3 character
+    suffix starting with c;
+    the sequences can have deflines; they need not be sequences in nr or
+    in any other sequence database; if the sequences have deflines, then
+    the deflines must be unique.
+
+iii.	a list of profile file names, one per line, named 
+    <database_name>.pn;
+
+iv.	a list of master sequence file names, one per line, in the same 
+    order as a list of profile names, named 
+     <database_name>.sn;
+
+The following files will be created:
+
+a.	a collection of ASCII files, corresponding to each of the 
+      original profiles, named 
+     <profile_name>.mtx;
+
+b.	a list of ASCII matrix files, named 
+      <database_name>.mn;
+
+c.	ASCII file with auxiliary information, named 
+       <database_name>.aux;
+
+Arguments to makemat:
+
+    -P database name (required)
+    -G Cost to open a gap (optional)
+       default = 11
+    -E Cost to extend a gap (optional)
+       default = 1
+    -U Underlying amino acid scoring matrix (optional)
+       default = BLOSUM62
+    -d Underlying sequence database used to create profiles (optional)
+       default = nr
+    -z Effective size of sequence database given by -d
+       default = current size of -d option
+       Note: It may make sense to use -z without -d when the
+       profiles were created with an older, smaller version of an
+       existing database 
+    -S  Scaling factor for  matrix outputs to avoid round-off problems
+       default = PRO_DEFAULT_SCALING_UP (currently defined as 100)
+       Use 1.0 to have no scaling
+       Output scores will be scaled back down to a unit scale to make
+       them look more like BLAST scores, but we found working with a larger
+       scale to help with roundoff problems.
+    -H get help (overrides all other arguments)
+Note: It is not enforced that the values of -G and -E passed to makemat
+were actually used in making the checkpoints. However, the values fed
+in to makemat are propagated to copymat and rpsblast.
+
+ATTENTION: It is strongly recommended to use -S 1 - the scaling factor
+	    should be set to 1 for rpsblast at this point in time.
+
+2.2. Secondary preprocessing
+
+Prepare the following files:
+
+i.	a collection of ASCII files, corresponding to each of the 
+  original profiles, named 
+  <profile_name>.mtx 
+(created by makemat);
+
+ii.	a collection of "profile master sequences", associated with 
+  the profiles, each in a separate file with arbitrary name and a 3 character
+  suffix starting with c.
+
+iii.	a list of ASCII_matrix files, named 
+     <database_name>.mn 
+   (created by makemat);
+
+iv.	a list of master sequence file names, one per
+  line, in the same order as a list of matrix names, named 
+  <database_name>.sn;
+
+v.	ASCII file with auxiliary information, named 
+  <database_name>.aux 
+(created by makemat);
+
+The files input to copymatices are in ASCII format and thus portable 
+between machines with different encodings for machine-readable files
+
+The following files will be created:
+
+a.	a huge binary file, containing all profile matrices, named
+ <database_name>.rps;
+b.     a huge binary file, containing lookup table for the Blast search
+ corresponding to matrixes named <database_name>.loo
+c.    File containing concatenation of all FASTA  "profile master sequences".
+     named  <database_name> (without extention)
+
+Arguments to copymat
+
+    -P database name (required)
+    -H get help (overrides all other arguments)
+    -r format data for RPS Blast
+
+ATTENTION: "-r" parameter have to be set to TRUE to format data for
+           RPS Blast at this step.
+
+2.3 Creating of BLAST database from <database_name> file containing
+    all "profile master sequences".
+
+"formatdb" program should be run to create regular BLAST database of all
+"profile master sequences":
+
+    formatdb -i <database_name>    
+
+3. Search
+
+Arguments to RPS Blast
+
+   -i  query sequence file (required)
+   -p  if query sequence protein (if FALSE 6 frame franslation will be
+                                  conducted as in blastx program)
+   -P  database of profiles (required)
+   -o  output file (optional)
+       default = stdout
+   -e  Expectation value threshold  (E), (optional, same as for BLAST)
+       default = 10 
+   -m  alignment view (optional, same as for BLAST)
+   -z  effective length of database (optional)
+       -1 = length given via -z option to makemat
+       default (0) implies  length is actual length of profile library
+          adjusted for end effects
+
+4. Directory convention
+
+  Since RPS Blast requires a large number of files, it may be convenient
+to store your RPS Blast files in various directories. For copymat,
+makemat, and rpsblast the following parsing convention applies
+to the string that follows the -P argument.
+If the string starts with a '/', then it is deemed to be a full
+path name. Whatever prefix occurs upto and including the rightmost
+'/' is deemed to be a prefix that should be prepended to all
+file names in the .sn, .pn, and .mn files.
+
+Example: If you call any of the 3 programs including the
+   argument -P /foo/bar/wolf1187
+then
+   /foo/bar/ is prepended to every filename listed in 
+       wolf1187.pn
+       wolf1187.sn
+       wolf1187.mn
+   before opening the file, but the files
+       wolf1187.pn
+       wolf1187.sn
+       wolf1187.mn
+   themselves are not changed.
+
+5. Output
+
+RPS Blast output closely mimics output of BLASTP family programs and
+should be compatible with SEALS BLAST parsers.
+
+Send suggestions, comments, complaints to blast-help@ncbi.nlm.nih.gov
+
+
+
+
+
+

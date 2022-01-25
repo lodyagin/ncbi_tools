@@ -1,4 +1,4 @@
-/* $Id: ncbisami.h,v 6.2 1999/08/25 20:19:24 shavirin Exp $
+/* $Id: ncbisami.h,v 6.3 2000/07/18 19:29:28 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,16 @@
 *
 * Initial Version Creation Date: 02/24/1997
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:
 *         Internal include file for ISAM library
 *
 * $Log: ncbisami.h,v $
+* Revision 6.3  2000/07/18 19:29:28  shavirin
+* Added new parameter test_non_unique to suppress check for non-unique
+* strings ids in the database - default - TRUE.
+*
 * Revision 6.2  1999/08/25 20:19:24  shavirin
 * Added parameter for user options to the internal structure.
 *
@@ -151,6 +155,7 @@ typedef struct ISAMData
     CharPtr         line;           /* Temporary buffer to work with strings */
     Int4            max_line_size;  /* Maximum string length in the database */
     Int4            idx_option;    /* Options set by upper layer */
+    Boolean       test_non_unique; /* Check if data for String ISAM sorted */
 } ISAMData, PNTR ISAMDataPtr;
 
 typedef struct ISAMTmpCA

@@ -331,6 +331,10 @@ on DoCompileLibraries()
 		Make Project
 		Close Project
 		
+		open (LIBRARIES & "ddvlib" & SUFFIX & ".µ")
+		Make Project
+		Close Project
+		
 		open (LIBRARIES & "ncbitool" & SUFFIX & ".µ")
 		Make Project
 		Close Project
@@ -456,7 +460,7 @@ with timeout of 60000 seconds
 			Add Files {NCBISOURCE & "object:" & i & ".c"} To Segment 1
 		end repeat
 		
-		repeat with i in {"objent2", "ent2api", "pmfapi", "qblastapi", "vecscnapi"}
+		repeat with i in {"objent2", "ent2api", "pmfapi", "strucapi", "qblastapi", "vecscnapi", "objmim", "mimapi"}
 			Add Files {NCBISOURCE & "access:" & i & ".c"} To Segment 1
 		end repeat
 		
@@ -465,7 +469,7 @@ with timeout of 60000 seconds
 			"maputil", "mconsist", "objmgr", "prtutil", "satutil", "seqmgr", "seqport", "sequtil", "simple", Â
 			"sqnutil1", "sqnutil2", "sqnutil3", "subutil", "tofasta", "tofile", "tomedlin", "txalign", "utilpars", Â
 			"utilpub", "salpstat", "salpedit", "valid", "alignmgr", "alignval", "wprint", "salpacc", "salprop", Â
-			"salsap", "salstruc", "salutil", "udvseq", "blocks", "pgppop", "samutil", "ddvcolor", "viewmgr"}
+			"salsap", "salstruc", "salutil", "udvseq", "blocks", "pgppop", "samutil", "ddvcolor", "viewmgr", "jsavlt", "needleman" }
 			Add Files {NCBISOURCE & "api:" & i & ".c"} To Segment 1
 		end repeat
 		
@@ -561,17 +565,28 @@ with timeout of 60000 seconds
 		Set Preferences of panel "PPC Project" to {File Name:"ncbideskppc"}
 		Set Preferences of panel "68K Project" to {File Name:"ncbidesk68k"}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "desktop:", origin:absolute}}}
-		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "ddv:", origin:absolute}}}
 		my DoSetPaths2()
 		
-		repeat with i in {"apparam", "biosrc", "bspview", "cdrgn", "dlgutil1", "dlgutil2", "dotmatrx", "drawseq", Â
+		repeat with i in {"biosrc", "bspview", "cdrgn", "dlgutil1", "dlgutil2", "dotmatrx", "drawseq", Â
 			"fea2seg", "fstyle", "glbpic", "gbfview", "gphview", "gphdraw", "gxydraw", "gtrdraw", "import", Â
 			"layout", "mapgene", "medview", "prtgene", "pubdesc", "saldist", "saled", "salfiles", "salpanel", Â
 			"salparam", "salsa", "seqsub", "seqfltr", "seqgraph", "seqgrphx", "seqmtrx", "seqpcc", "seqanal", Â
 			"aacomp", "seqscrl", "smdlg1", "smdlg2", "smdlg3", "smtools", "styleman", "stylemui", "vsm", Â
-			"vsmfile", "vsmutil", "udvgraph", "udvopen", "udvpanel"}
+			"vsmfile", "vsmutil", "udvgraph", "udvopen", "udvpanel", "salogif", "dotvibrant"}
 			Add Files {NCBISOURCE & "desktop:" & i & ".c"} To Segment 1
 		end repeat
+		
+		Reset File Paths
+		Close Project
+		
+		(* ================================================================================ *)
+		Create Project {LIBRARIES & "ddvlib" & SUFFIX & ".µ"}
+		
+		my DoSetPreferences()
+		Set Preferences of panel "PPC Project" to {File Name:"ddvlibppc"}
+		Set Preferences of panel "68K Project" to {File Name:"ddvlib68k"}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "ddv:", origin:absolute}}}
+		my DoSetPaths2()
 		
 		repeat with i in {"ddvclick", "ddvgraph", "ddvopen", "ddvpanel"}
 			Add Files {NCBISOURCE & "ddv:" & i & ".c"} To Segment 1
@@ -596,7 +611,8 @@ with timeout of 60000 seconds
 			"bandalg2", "bandalg3", "bandalg4", "bandalg5", "bandalgn", "blastkar", "lookup", "posit", Â
 			"readdb", "ncbisam", "ncbisort", "salign", "salptool", "urkutil", "urkpcc", "urkptpf", "urkepi", Â
 			"urkfltr", "urkdust", "urksigu", "seg", "urkbias", "urkcnsrt", "urktree", "pattern1", "pseed3", Â
-			"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn", "rpsutil"}
+			"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn", "rpsutil", "kappa", Â
+			"xmlblast", "bxmlobj" , "fdlobj", "dotseq"}
 			Add Files {NCBISOURCE & "tools:" & i & ".c"} To Segment 1
 		end repeat
 		
@@ -611,11 +627,21 @@ with timeout of 60000 seconds
 		Set Preferences of panel "PPC Project" to {File Name:"ncbimmdbppc"}
 		Set Preferences of panel "68K Project" to {File Name:"ncbimmdb68k"}
 		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "biostruc:", origin:absolute}}}
+		Set Preferences of panel "Access Paths" to {User Paths:{{name:NCBISOURCE & "biostruc:cdd:", origin:absolute}}}
 		my DoSetPaths2()
 		
 		repeat with i in {"corematx", "dvncode", "objmmdb1", "objmmdb2", "objmmdb3", "mmdbapi", "mmdbapi1", "mmdbapi2", Â
 			"mmdbapi3", "mmdbapi4", "mmdbentr", "vastsubs", "prunebsc"}
 			Add Files {NCBISOURCE & "biostruc:" & i & ".c"} To Segment 1
+		end repeat
+
+		repeat with i in {"objcdd", "cddutil", "cddposutil", Â
+			"thrdalgs", "thrdatd",  "thrdbwfi", "thrdcpal", Â
+			"thrdcpll", "thrdcprl", "thrdcxei", "thrddgri", "thrdrsmp", Â
+			"thrdsal0", "thrdsalr", "thrdsalu", "thrdsgoi", "thrdslo0", Â
+			"thrdslor", "thrdslou", "thrdspci", "thrdspea", "thrdspel", Â
+			"thrdspni", "thrdttb0", "thrdttbi", "thrdzsc"}
+			Add Files {NCBISOURCE & "biostruc:cdd:" & i & ".c"} To Segment 1
 		end repeat
 		
 		Reset File Paths

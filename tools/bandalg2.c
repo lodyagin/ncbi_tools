@@ -245,11 +245,11 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 	if (leftd < midd) {
 		fr = -1;
 		for (j = 0; j < midd; j++)
-			data->CD[j].CP = data->CD[j].DP = -1;
+			data->CD[j].CP = data->CD[j].DPDP = -1;
 		for (j = midd; j <= rightd; j++) {
-			data->CD[j].CP = data->CD[j].DP = 0;
+			data->CD[j].CP = data->CD[j].DPDP = 0;
 		}
-		data->CD[midd - 1].DP = 0;
+		data->CD[midd - 1].DPDP = 0;
 		dmp[0][0] = -1;
 		dmp[1][0] = -1;
 		dmp[2][0] = -1;
@@ -257,18 +257,18 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 	} else if (leftd > midd) {
 		fr = leftd - midd;
 		for (j = 0; j <= midd; j++) {
-			data->CD[j].CP = data->CD[j].DP = fr;
+			data->CD[j].CP = data->CD[j].DPDP = fr;
 		}
 		for (j = midd + 1; j <= rightd; j++)
-			data->CD[j].CP = data->CD[j].DP = -1;
-		data->CD[midd].DP = -1;
+			data->CD[j].CP = data->CD[j].DPDP = -1;
+		data->CD[midd].DPDP = -1;
 		dmp[0][fr] = -1;
 		dmp[1][fr] = -1;
 		dmp[2][fr] = -1;
 		dmt[0][fr] = dmt[1][fr] = dmt[2][fr] = 0;
 	} else {
 		for (j = 0; j < rightd; j++) {
-			data->CD[j].CP = data->CD[j].DP = 0;
+			data->CD[j].CP = data->CD[j].DPDP = 0;
 		}
 		dmp[0][0] = -1;
 		dmp[1][0] = -1;
@@ -296,7 +296,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 	}
 	data->CD[rightd + 1].CC = MININT;
 	data->CD[rightd].DD = MININT;
-	data->CD[rightd + 1].CP = data->CD[rightd].DP = 0;
+	data->CD[rightd + 1].CP = data->CD[rightd].DPDP = 0;
 	if (tb == 1) {
 		data->CD[leftd - 1].DD = -tz;
 	} else {
@@ -323,7 +323,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 		}
 		if (d > c || ib <= 0) {
 			c = d;
-			data->CD[leftd].CP = data->CD[leftd].DP;
+			data->CD[leftd].CP = data->CD[leftd].DPDP;
       	}
       	e = c - data->m;	    
       	data->IP = data->CD[leftd].CP;    
@@ -334,13 +334,13 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 		}
 		if (d >= e) {
 			data->CD[leftd - 1].DD = d;
-			data->CD[leftd - 1].DP = data->CD[leftd].DP;
+			data->CD[leftd - 1].DPDP = data->CD[leftd].DPDP;
 		} else {
 			data->CD[leftd - 1].DD = e;
-			data->CD[leftd - 1].DP = data->IP;
+			data->CD[leftd - 1].DPDP = data->IP;
 		}
 		if (leftd == midd) {
-			data->CD[leftd].CP = data->CD[leftd - 1].DP = data->IP = i;
+			data->CD[leftd].CP = data->CD[leftd - 1].DPDP = data->IP = i;
 		}
 		data->CD[leftd].CC = c;
 		if (midd <= rightd && midd >= leftd + 1) {
@@ -358,7 +358,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 					ap->CP = data->IP;
 				} else {
 					c = d;
-					ap->CP = ap->DP;
+					ap->CP = ap->DPDP;
 				}
 			}
 			ap->CC = c;
@@ -368,18 +368,18 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 			} 
 			if (c > (d -= tz)) {
 	  			(ap - 1)->DD = c;
-	  			(ap - 1)->DP = ap->CP;
+	  			(ap - 1)->DPDP = ap->CP;
 	 			 ap++;
 			} else {
 	  			(ap - 1)->DD = d;
-	  			(ap - 1)->DP = ap->DP;
+	  			(ap - 1)->DPDP = ap->DPDP;
 	  			ap++;
 			}
 		}
 		if (x != rightd+1) {
 			dmp[1][i] = data->IP;
 			dmt[1][i] = 2;
-			dmp[2][i] = ap->DP;
+			dmp[2][i] = ap->DPDP;
 			dmt[2][i] = 1;	   
 			c = ap->CC + wa[B[curd+low-1+i]];
 			d = ap->DD;
@@ -405,7 +405,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 		  		dmp[2][i] = dmp[0][i];
 		  		dmt[2][i] = dmt[0][i];
 			}
-			ap->CP = (ap - 1)->DP = data->IP = i;
+			ap->CP = (ap - 1)->DPDP = data->IP = i;
 			ap->CC = c;
 			if ((c -= data->m) > (e -= tz)) {
 				e = c;
@@ -424,7 +424,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 	      				ap->CP  = data->IP;
 	    			} else {
 	      				c = d;
-	      				ap->CP = ap->DP;
+	      				ap->CP = ap->DPDP;
 	    			}
 	  			}   /* otherwise, CP is unchanged */
 	  			ap->CC = c;
@@ -434,11 +434,11 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 	  			} 
 	  			if (c > (d -= tz)) {
 	    			(ap - 1)->DD = c;
-	    			(ap-1)->DP = ap->CP;
+	    			(ap-1)->DPDP = ap->CP;
 	    			ap++;
 	  			} else {
 	    			(ap-1)->DD = d;
-	    			(ap-1)->DP = ap->DP;
+	    			(ap-1)->DPDP = ap->DPDP;
 	    			ap++;
 	  			}
 			}
@@ -476,7 +476,7 @@ static Int4 gb_linear_align(Uint1Ptr A, Uint1Ptr B,
 		v = c = (ap-1)->CC; 
 		d = (ap-2)->DD;
 		if (te == 1 && d + data->m > c) {
-			k = data->CD[rightd-1].DP;
+			k = data->CD[rightd-1].DPDP;
 			l = 2;
       	} else if (te == 2 && e + data->m > c) {
 			k = data->IP;

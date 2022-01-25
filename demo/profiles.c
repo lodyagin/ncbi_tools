@@ -1,4 +1,4 @@
-/*
+/* $Id: profiles.c,v 6.30 2000/10/04 13:11:57 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,6 +32,27 @@ Author: Alejandro Schaffer
 
 Contents: main routines for impala program to search a database of
   PSI-BLAST-generated position-specific score matrices
+
+=======
+ $Revision: 6.30 $
+
+ $Log: profiles.c,v $
+ Revision 6.30  2000/10/04 13:11:57  madden
+ put query translation before call to BlastMaskTheResidues
+
+ Revision 6.29  2000/09/27 19:32:28  dondosha
+ Use original square substitution matrix to pass to txalign on all iterations
+
+ Revision 6.28  2000/09/13 18:34:36  dondosha
+ Create BLAST_Matrix from ScoreBlk before converting it to txalign-style matrix
+
+ Revision 6.27  2000/09/12 21:52:46  dondosha
+ Pass the correct scoring matrix to ShowTextAlignFromAnnot
+
+ Revision 6.26  2000/07/25 18:14:07  shavirin
+ WARNING: This is no-turning-back changed related to S&W Blast from
+ Alejandro Schaffer
+
 
 *****************************************************************************/
 
@@ -558,6 +579,7 @@ static Nlm_FloatHi basicSmithWatermanScoreOnly(Uint1 * query,
    *dbEnd = bestDbPos;
    *score = bestScore;
    returnEvalue = scoreToEvalue(effSearchSpace, bestScore,  kbp);
+   return(returnEvalue);
 }
 
 /*computes where optimal Smith-Waterman local alignment starts given the
@@ -881,22 +903,6 @@ static Int4 specialSmithWatermanFindStartGivenEnd(Uint1 * query,
 }
 
 
-
-/*Gets the scores of an alignment together into a ScorePtr;
-  adapted from similar code with a different formula in pseed3.c*/
-static ScorePtr addScoresToSeqAlign(Int4 rawScore, Nlm_FloatHi eValue, 
-           Nlm_FloatHi Lambda, Nlm_FloatHi logK)
-{
-  Nlm_FloatHi bitScoreUnrounded; /*conversion for raw score to bit score*/
-  ScorePtr returnScore = NULL;
-
-  MakeBlastScore(&returnScore,"score",0.0, rawScore);
-  MakeBlastScore(&returnScore,"e_value",eValue,0);
-  bitScoreUnrounded = ((rawScore * Lambda) - logK)/NCBIMATH_LN2;
-  MakeBlastScore(&returnScore,"bit_score",bitScoreUnrounded, 0);
-  return(returnScore);
-}
-
 /*converts the list of Smith-Waterman alignments to a corresponding list
   of SeqAlignPtrs. kbp stores parameters for computing the score
   Code is adapted from procedure output_hits of pseed3.c */
@@ -929,117 +935,6 @@ static SeqAlignPtr convertSWalignsToSeqAligns(SWResults * SWAligns,  Uint1Ptr qu
       curSW = curSW->next;
     }
     return(seqAlignList);
-}
-
-/*Bubble sort the entries in qs from index i through j*/
-static void pro_bbsort(SWResults **qs, Int4 i, Int4 j)
-{
-    Int4 x, y; /*loop bounds for the two ends of the array to be sorted*/
-    SWResults *sp; /*temporary pointer for swapping*/
-
-    for (x = j; x > i; x--) {
-      for (y = i; y < x; y++) {
-	if ((qs[y]->eValue < qs[y+1]->eValue) ||
-            ((qs[y]->eValue == qs[y+1]->eValue) &&
-             (qs[y]->subject_index < qs[y+1]->subject_index)) ||
-            ((qs[y]->eValue == qs[y+1]->eValue) &&
-             (qs[y]->subject_index == qs[y+1]->subject_index) &&
-               (qs[y]->eValueThisAlign < qs[y+1]->eValueThisAlign))) {
-	  /*swap pointers for inverted adjacent elements*/
-	  sp = qs[y];
-	  qs[y] = qs[y+1]; 
-	  qs[y+1] = sp;
-	}
-      }
-    }
-}
-
-
-/*quicksort the entries in qs from qs[i] through qs[j] */
-static void pro_quicksort(SWResults **qs, Int4 i, Int4 j)
-{
-    Int4 lf, rt;  /*left and right fingers into the array*/
-    Nlm_FloatHi partitionEvalue; /*Evalue to partition around*/
-    Int4 secondaryPartitionValue; /*index of profile for breaking ties*/
-    Nlm_FloatHi tertiaryPartitionValue; /*for breaking ties*/
-    SWResults * tp; /*temporary pointer for swapping*/
-    if (j-i <= SORT_THRESHOLD) {
-      pro_bbsort(qs, i,j);
-      return;
-    }
-    /*implicitly choose qs[i] as the partition element*/
-    lf = i+1; 
-    rt = j; 
-    partitionEvalue = qs[i]->eValue;
-    secondaryPartitionValue = qs[i]->subject_index;
-    tertiaryPartitionValue = qs[i]->eValueThisAlign;
-    /*partititon around partitionEvalue = qs[i]*/
-    while (lf <= rt) {
-      while ((qs[lf]->eValue >  partitionEvalue)  ||
-              ((qs[lf]->eValue == partitionEvalue) &&
-               (qs[lf]->subject_index > secondaryPartitionValue)) ||
-	      ((qs[lf]->eValue == partitionEvalue) &&
-               (qs[lf]->subject_index == secondaryPartitionValue) &&
-               (qs[lf]->eValueThisAlign > tertiaryPartitionValue)))
-	lf++;
-      while ((qs[rt]->eValue <  partitionEvalue)  ||
-              ((qs[rt]->eValue == partitionEvalue) &&
-               (qs[rt]->subject_index < secondaryPartitionValue)) ||
-	      ((qs[rt]->eValue == partitionEvalue) &&
-               (qs[rt]->subject_index == secondaryPartitionValue) &&
-               (qs[rt]->eValueThisAlign < tertiaryPartitionValue)))
-	rt--;
-      if (lf < rt) {
-	/*swap elements on wrong side of partition*/
-	tp = qs[lf];
-	qs[lf] = qs[rt];
-	qs[rt] = tp;
-	rt--;
-	lf++;
-      } 
-      else 
-	break;
-    }
-    /*swap partition element into middle position*/
-    tp = qs[i];
-    qs[i] = qs[rt]; 
-    qs[rt] = tp;
-    /*call recursively on two parts*/
-    pro_quicksort(qs, i,rt-1); 
-    pro_quicksort(qs, rt+1, j);
-}
-
-
-
-/*Sort the sequences that hit the query by increasing score;
-  This routine converts the list in proResultsList to
-  an array for sorting and then converts back to a singly-linked list
-  adapted from quicksort_hits of pseed3.c
-  no_of_seq is the number of entries in the results list*/
-static void pro_quicksort_hits(Int4 no_of_seq, SWResults **proResultsList)
-{
-  Int4 i; /*loop index for the resutls list*/
-    SWResults *sp; /*pointer to one entry in the array*/
-    SWResults sentinel; /*sentinel to add at the end of the array*/
-    SWResults **qs; /*local array for sorting*/
-
-    /*Copy the list starting from proResultsList
-      into the array qs*/
-    qs = (SWResults **) MemNew(sizeof(SWResults*)*(no_of_seq+1));
-    for (i = 0, sp = (*proResultsList); 
-	 i < no_of_seq; i++, sp = sp->next) 
-      qs[i] = sp;
-    /*Put sentinel at the end of the array*/
-    qs[i] = &sentinel; 
-    sentinel.eValue = -0.1;
-    sentinel.eValueThisAlign = -0.1;
-    pro_quicksort(qs, 0, no_of_seq-1);
-    /*Copy back to the list starting at seedResults->listOfMatchingSequences*/
-    for (i = no_of_seq-1; i > 0; i--)
-      qs[i]->next = qs[i-1];
-    qs[0]->next = NULL;
-    (*proResultsList) = qs[no_of_seq-1];
-    MemFree(qs);
 }
 
 /*top level procedure to find all profiles that match the input query
@@ -1263,114 +1158,120 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	   correctUngappedLambda = impalaKarlinLambdaNR(this_sfp, scaledInitialUngappedLambda);
 	   LambdaRatio = correctUngappedLambda/scaledInitialUngappedLambda;
 	 }
-	 lowerBoundEvalue = estimateEvalue(proDemographics->effSearchSpace, score,LambdaRatio, kbp);
-	 if ((lowerBoundEvalue < (1.1 *ethresh)) || 
-	     (correctUngappedLambda > scaledInitialUngappedLambda)) {
-	   for (p = 0; p < dbSequenceLength; p++) {
-	     for (c = 0; c < PRO_ALPHABET_SIZE; c++) {
-	       if ((posMatrix[p][c] == BLAST_SCORE_MIN) || (Xchar == c))
-		 copyMatrix[p][c] = posMatrix[p][c];
-	       else {
-		 temp1 = ((Nlm_FloatHi) (posMatrix[p][c]));
-		 temp1 = temp1 * LambdaRatio;
-		 temp2 = Nlm_Nint(temp1);
-		 copyMatrix[p][c] = temp2;
+	 if (LambdaRatio > 0) {
+	   lowerBoundEvalue = estimateEvalue(proDemographics->effSearchSpace, score,LambdaRatio, kbp);
+	   if ((lowerBoundEvalue < (1.1 *ethresh)) || 
+	       (correctUngappedLambda > scaledInitialUngappedLambda)) {
+	     for (p = 0; p < dbSequenceLength; p++) {
+	       for (c = 0; c < PRO_ALPHABET_SIZE; c++) {
+		 if ((posMatrix[p][c] == BLAST_SCORE_MIN) || (Xchar == c))
+		   copyMatrix[p][c] = posMatrix[p][c];
+		 else {
+		   temp1 = ((Nlm_FloatHi) (posMatrix[p][c]));
+		   temp1 = temp1 * LambdaRatio;
+		   temp2 = Nlm_Nint(temp1);
+		   copyMatrix[p][c] = temp2;
+		 }
 	       }
 	     }
-	   }
-	   if (foundMatchForThisMatrix) 
-	     thisEvalue = specialSmithWatermanScoreOnly(querySequence, queryLength, 
+	     if (foundMatchForThisMatrix) 
+	       thisEvalue = specialSmithWatermanScoreOnly(querySequence, queryLength, 
 							dbSequence, dbSequenceLength, copyMatrix, 
 							gap_align->gap_open, gap_align->gap_extend,  
 							&queryEnd, &dbEnd, &score, kbp, L, (Nlm_FloatHi) 
 							proDemographics->effSearchSpace,  minGappedK, 
 							numForbidden, forbiddenRanges);	 
-	   else
-	     thisEvalue = basicSmithWatermanScoreOnly(querySequence, queryLength, 
+	     else
+	       thisEvalue = basicSmithWatermanScoreOnly(querySequence, queryLength, 
 						      dbSequence, dbSequenceLength, copyMatrix, 
 						      gap_align->gap_open, gap_align->gap_extend,  
 						      &queryEnd, &dbEnd, &score, kbp, L, (Nlm_FloatHi) 
 						      proDemographics->effSearchSpace,  minGappedK);	 
-	   if (thisEvalue < ethresh) { 
-	     if (!foundMatchForThisMatrix) 
-	       proDemographics->numBetterThanEthresh++;
-	     if (foundMatchForThisMatrix) 
-	       specialSmithWatermanFindStartGivenEnd(querySequence, queryLength, 
+	     if (thisEvalue < ethresh) { 
+	       if (!foundMatchForThisMatrix) 
+		 proDemographics->numBetterThanEthresh++;
+	       if (foundMatchForThisMatrix) 
+		 specialSmithWatermanFindStartGivenEnd(querySequence, queryLength, 
 						     dbSequence, dbSequenceLength, copyMatrix, 
 						     gap_align->gap_open, gap_align->gap_extend,  
 						     queryEnd,  dbEnd, score, &queryStart, &dbStart,
 						     numForbidden, forbiddenRanges);
-	     else
-	       SmithWatermanFindStartGivenEnd(querySequence, queryLength, 
+	       else
+		 SmithWatermanFindStartGivenEnd(querySequence, queryLength, 
 			  dbSequence, dbSequenceLength, copyMatrix, 
 					      gap_align->gap_open, gap_align->gap_extend,  
 					      queryEnd,  dbEnd, score, &queryStart, &dbStart);
-	     gap_align->x_parameter = x_dropoff*NCBIMATH_LN2/kbp->Lambda;
-	     gap_align->posMatrix = copyMatrix;
-	     do {
-	       doublingCount = 0;
-	       alignScript = (Int4 *) MemNew((dbSequenceLength + queryLength + 3) * sizeof(Int4));
-	       reverseAlignScript = alignScript;
-	       proDemographics->numCallsALIGN++;
-	       XdropAlignScore = ALIGN(&(dbSequence[dbStart]) - 1, 
+	       gap_align->x_parameter = x_dropoff*NCBIMATH_LN2/kbp->Lambda;
+	       gap_align->posMatrix = copyMatrix;
+	       do {
+		 doublingCount = 0;
+		 alignScript = (Int4 *) MemNew((dbSequenceLength + queryLength + 3) * sizeof(Int4));
+		 reverseAlignScript = alignScript;
+		 proDemographics->numCallsALIGN++;
+		 XdropAlignScore = ALIGN(&(dbSequence[dbStart]) - 1, 
 				       &(querySequence[queryStart]) -1, 
 				       dbEnd - dbStart + 1,
 				       queryEnd - queryStart + 1,
 				       reverseAlignScript , &finalDbEnd, &finalQueryEnd, &alignScript,
 				       gap_align, dbStart - 1, FALSE); 
-	       gap_align->x_parameter *=2;
-	       doublingCount++;
-	       if ((XdropAlignScore < score) && (doublingCount < 3)) 
-		 MemFree(reverseAlignScript);
-	     } while ((XdropAlignScore < score) && (doublingCount < 3));
-	     thisSequenceFile = FileOpen(oneSequenceFileName, "r");
-	     dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
-				       &subject_id, TRUE, dbSequenceLength+2, i+1);
-	     FileClose(thisSequenceFile);
-	     for (revASptr = reverseAlignScript, ASptr = alignScript-1; 
-		  revASptr <= ASptr; revASptr++) {
-	       /* complement alignment script to put query on top*/
-	       *revASptr = -(*revASptr); 
+		 gap_align->x_parameter *=2;
+		 doublingCount++;
+		 if ((XdropAlignScore < score) && (doublingCount < 3)) 
+		   MemFree(reverseAlignScript);
+	       } while ((XdropAlignScore < score) && (doublingCount < 3));
+	       thisSequenceFile = FileOpen(oneSequenceFileName, "r");
+	       dbSequence = readSequence(thisSequenceFile, &dbSequenceLength, 
+					 &subject_id, TRUE, dbSequenceLength+2, i+1);
+	       FileClose(thisSequenceFile);
+	       for (revASptr = reverseAlignScript, ASptr = alignScript-1; 
+		    revASptr <= ASptr; revASptr++) {
+		 /* complement alignment script to put query on top*/
+		 *revASptr = -(*revASptr); 
+	       }
+	       if (!foundMatchForThisMatrix) 
+		 bestEvalue = thisEvalue;
+	       newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
+	       newSW->seq = dbSequence;
+	       newSW->seqStart = dbStart;
+	       newSW->seqEnd = dbStart + finalDbEnd;
+	       newSW->queryStart = queryStart;
+	       newSW->queryEnd = queryStart + finalQueryEnd;
+	       newSW->reverseAlignScript = reverseAlignScript;
+	       newSW->score = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / scalingFactor);
+	       newSW->eValue = bestEvalue;
+	       newSW->eValueThisAlign = thisEvalue;
+	       newSW->subject_index = i;
+	       newSW->Lambda = kbp-> Lambda * scalingFactor;
+	       newSW->logK = kbp->logK;
+	       newSW->subject_id = subject_id;
+	       if (NULL == SWAligns) 
+		 newSW->next = NULL;
+	       else
+		 newSW->next = SWAligns;
+	       SWAligns = newSW;
+	       numAligns++; 
+	       foundMatchForThisMatrix = TRUE;
+	       for(f = dbStart; f < (dbStart+ finalDbEnd); f++) {
+		 if (0 == numForbidden[f] ) {
+		   numForbidden[f] = 1;
+		   forbiddenRanges[f][0] = queryStart;
+		   forbiddenRanges[f][1] = queryStart + finalQueryEnd - 1;
+		 }
+		 else {
+		   tempForbidden = (Int4*) MemNew(2 * (numForbidden[f] + 1) * sizeof(Int4));
+		   for(tempIndex = 0; tempIndex < (2 * numForbidden[f]); tempIndex++)
+		     tempForbidden[tempIndex] = forbiddenRanges[f][tempIndex];
+		   tempForbidden[tempIndex] = queryStart;
+		   tempForbidden[tempIndex + 1] = queryStart + finalQueryEnd;
+		   numForbidden[f]++;
+		   MemFree(forbiddenRanges[f]);
+		   forbiddenRanges[f] = tempForbidden;
+		 }
+	       }
 	     }
-	     if (!foundMatchForThisMatrix) 
-               bestEvalue = thisEvalue;
-	     newSW = (SWResults *) MemNew(1 * sizeof(SWResults)); 
-	     newSW->seq = dbSequence;
-	     newSW->seqStart = dbStart;
-	     newSW->seqEnd = dbStart + finalDbEnd;
-	     newSW->queryStart = queryStart;
-	     newSW->queryEnd = queryStart + finalQueryEnd;
-	     newSW->reverseAlignScript = reverseAlignScript;
-	     newSW->score = Nlm_Nint(((Nlm_FloatHi) XdropAlignScore) / scalingFactor);
-	     newSW->eValue = bestEvalue;
-	     newSW->eValueThisAlign = thisEvalue;
-	     newSW->subject_index = i;
-	     newSW->Lambda = kbp-> Lambda * scalingFactor;
-	     newSW->logK = kbp->logK;
-	     newSW->subject_id = subject_id;
-	     if (NULL == SWAligns) 
-	       newSW->next = NULL;
-	     else
-	       newSW->next = SWAligns;
-	     SWAligns = newSW;
-	     numAligns++; 
-	     foundMatchForThisMatrix = TRUE;
-	     for(f = dbStart; f < (dbStart+ finalDbEnd); f++) {
-	       if (0 == numForbidden[f] ) {
-		 numForbidden[f] = 1;
-		 forbiddenRanges[f][0] = queryStart;
-		 forbiddenRanges[f][1] = queryStart + finalQueryEnd - 1;
-	       }
-	       else {
-		 tempForbidden = (Int4*) MemNew(2 * (numForbidden[f] + 1) * sizeof(Int4));
-		 for(tempIndex = 0; tempIndex < (2 * numForbidden[f]); tempIndex++)
-		   tempForbidden[tempIndex] = forbiddenRanges[f][tempIndex];
-		 tempForbidden[tempIndex] = queryStart;
-		 tempForbidden[tempIndex + 1] = queryStart + finalQueryEnd;
-		 numForbidden[f]++;
-		 MemFree(forbiddenRanges[f]);
-		 forbiddenRanges[f] = tempForbidden;
-	       }
+	     else {
+	       MemFree(dbSequence);
+	       thisEvalue = ethresh +1;
 	     }
 	   }
 	   else {
@@ -1379,8 +1280,8 @@ SeqAlignPtr findMatchingProfiles(FILE *matrixAuxiliaryFile,
 	   }
 	 }
 	 else {
-	   MemFree(dbSequence);
-	   thisEvalue = ethresh + 1;
+	     MemFree(dbSequence);
+	     thisEvalue = ethresh +1;
 	 }
        }
        else {
@@ -1546,7 +1447,9 @@ Int2  Main(void)
    Nlm_FloatHi targetUngappedLambda; /*ungapped Lambda for matrixName*/
    Char *directoryPrefix; /*directory where profile library is kept, used
                             to reach other directories indirectly*/
-                       
+   BLAST_MatrixPtr matrix;
+   Int4Ptr PNTR txmatrix;
+        
    if (! GetArgs ("impala", NUMARG, myargs))
      {
         return (1);
@@ -1667,11 +1570,12 @@ Int2  Main(void)
 
 	query = BlastGetSequenceFromBioseq(query_bsp, &queryLength);
 	seg_slp = BlastBioseqFilter(query_bsp, options->filter_string);
+	for (queryPos= 0; queryPos < queryLength; queryPos++)
+	  query[queryPos] = ResToInt((Char) query[queryPos]);  
 	if (seg_slp) {
 	  BlastMaskTheResidues(query,queryLength,21,seg_slp,FALSE,0);
 	}
-	for (queryPos= 0; queryPos < queryLength; queryPos++)
-	  query[queryPos] = ResToInt((Char) query[queryPos]);  
+
 
 	if (believe_query)
 	  {
@@ -1808,6 +1712,13 @@ Int2  Main(void)
           number_of_descriptions = myargs[ARG_NUM_DEFLINES].intvalue;
           number_of_alignments = myargs[ARG_NUM_ALIGNS].intvalue;
 
+          matrix = NULL;
+          txmatrix = NULL;
+          if (search->sbp->matrix) {
+             matrix = BLAST_MatrixFill(search->sbp, FALSE);
+             txmatrix = BlastMatrixToTxMatrix(matrix);
+          }
+
 	  if (head)
 	    {
 	      if (seqannot)
@@ -1828,9 +1739,9 @@ Int2  Main(void)
 		  seqannot->data = prune->sap;
 		  /*need to fix penultimate argument*/
 		  if (myargs[ARG_ALIGN_VIEW].intvalue != 0)
-		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, NULL);
+		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, NULL);
 		  else
-		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, NULL, search->mask, FormatScoreFunc);
+		    ShowTextAlignFromAnnot(seqannot, 60, outfp, featureOrder, groupOrder, align_options, txmatrix, search->mask, FormatScoreFunc);
 		}
 	      seqannot->data = head;
 	      prune = BlastPruneSapStructDestruct(prune);
@@ -1850,10 +1761,14 @@ Int2  Main(void)
      }
    printDemographics(proDemographics,outfp, options->expect_value);
 
-
    free_buff();
 
    ReadDBBioseqFetchDisable();
+
+   matrix = BLAST_MatrixDestruct(matrix);
+   if (txmatrix)
+      txmatrix = TxMatrixDestruct(txmatrix);
+   
    if (NULL != query)
      MemFree(query);
    options = BLASTOptionDelete(options);

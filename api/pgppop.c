@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.59 2000/05/19 14:30:52 wheelan Exp $
+/*  $Id: pgppop.c,v 6.64 2000/10/25 01:22:56 bauer Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.59 $
+* $Revision: 6.64 $
 *
 * File Description: 
 *
@@ -37,6 +37,22 @@
 * --------------------------------------------------------------------------
 *
 * $Log: pgppop.c,v $
+* Revision 6.64  2000/10/25 01:22:56  bauer
+* fixed DDV display of PDB-Id's in CDD-server
+*
+* Revision 6.63  2000/10/13 19:48:16  hurwitz
+* added functions for getting first VALID disp coord in range of bsp coords
+*
+* Revision 6.62  2000/08/25 18:57:12  shavirin
+* Removed printing of BLAST middle line if characters in 1st and 3d
+* lines are in lower case - used for unaligned regions.
+*
+* Revision 6.61  2000/08/11 20:59:07  shavirin
+* Added default character for a gap in the function DDV_GetSequenceFromParaG().
+*
+* Revision 6.60  2000/07/18 19:59:24  bauer
+* fixed bug in DDV_Print_Sequence
+*
 * Revision 6.59  2000/05/19 14:30:52  wheelan
 * fixed problem with formatting PDB ids
 *
@@ -1478,7 +1494,7 @@ Boolean boldOpen,italicOpen,underlineOpen,colorOpen;
 			pos++;nCompt++;		
 		}
 		if (szBuf[0]!='\0'){/*something to draw ?*/
-			szBuf[nCompt2]='\0';/*CLOSE THE STRING*/
+			szBuf[nCompt2-1]='\0';/*CLOSE THE STRING*/
 			DDV_DumpStyles(newStyle,newColor,boldOpen,italicOpen,
 				underlineOpen,colorOpen,szSequence,szBuf);
 		}
@@ -1640,12 +1656,13 @@ Uint1		  strand=Seq_strand_unknown;
 					case MSA_TXT_STYLE_1:
 						c=' ';
 						break;
-					case MSA_TXT_STYLE_GAP:
-					case MSA_TXT_STYLE_2:
-						c='-';
-						break;
 					case MSA_TXT_STYLE_UAGAP:
 						c='~';
+						break;
+					case MSA_TXT_STYLE_GAP:
+					case MSA_TXT_STYLE_2:
+                                        default:
+						c='-';
 						break;
 				}
 				MemSet(SeqBuf,c,size*sizeof(Char));
@@ -1722,6 +1739,7 @@ Int4           pgp_start,diff,bsp_coord;
 	return(bsp_coord);
 }
 
+
 /*****************************************************************************
 
 Function: DDV_GetBspCoordGivenPgpList()
@@ -1756,6 +1774,7 @@ Int4       bsp_coord;
 	}
 	return(bsp_coord);
 }
+
 
 /*****************************************************************************
 
@@ -1801,9 +1820,55 @@ Int4           pgp_start,diff,disp_coord,bsp_start_pgp,bsp_stop_pgp;
 		}
 		vnp2=vnp2->next;
 	}
-
 	return(disp_coord);
 }
+
+
+NLM_EXTERN Int4 DDV_GetFirstDispCoordGivenBspCoordRange(ValNodePtr vnp_head,
+                                                        Int4 disp_start, Int4 disp_stop) {
+/*----------------------------------------------------------------------------
+*  get first valid display coord in the bioseq range
+*---------------------------------------------------------------------------*/
+  Int4  i, start, stop;
+  Int4  RetVal;
+
+  if ((disp_start < 0) || (disp_stop < 0)) return(-1);
+
+  start = MIN(disp_start, disp_stop);
+  stop = MAX(disp_start, disp_stop);
+
+  for (i=start; i<=stop; i++) {
+    RetVal = DDV_GetDispCoordGivenBspCoord(vnp_head, i);
+    if (RetVal >= 0) {
+      return(RetVal);
+    }
+  }
+  return(-1);
+}
+
+
+NLM_EXTERN Int4 DDV_GetLastDispCoordGivenBspCoordRange(ValNodePtr vnp_head,
+                                                       Int4 disp_start, Int4 disp_stop) {
+/*----------------------------------------------------------------------------
+*  get last valid display coord in the bioseq range
+*---------------------------------------------------------------------------*/
+  Int4  i, start, stop;
+  Int4  RetVal;
+
+  if ((disp_start < 0) || (disp_stop < 0)) return(-1);
+
+  start = MIN(disp_start, disp_stop);
+  stop = MAX(disp_start, disp_stop);
+
+  for (i=stop; i>=start; i--) {
+    RetVal = DDV_GetDispCoordGivenBspCoord(vnp_head, i);
+    if (RetVal >= 0) {
+      return(RetVal);
+    }
+  }
+  return(-1);
+}
+
 
 /*******************************************************************************
 
@@ -1854,50 +1919,57 @@ Boolean         isAlpha;
   Purpose : get the middle line of a BLAST pairwise seqAlign
   
 *******************************************************************************/
-NLM_EXTERN CharPtr DDV_GetBLASTCompLine_1(CharPtr szQuery, CharPtr szSubject, 
-		Int4Ptr PNTR matrix)
+NLM_EXTERN CharPtr DDV_GetBLASTCompLine_1(CharPtr szQuery, 
+                                          CharPtr szSubject, 
+                                          Int4Ptr PNTR matrix, 
+                                          Boolean is_aa)
 {
-Int4    stop,pos;
-CharPtr szMiddleLine;
-Char    q,s;
+    Int4    stop,pos;
+    CharPtr szMiddleLine;
+    Char    q,s;
+    
+    stop=StringLen(szSubject);
 
-	stop=StringLen(szSubject);
-	szMiddleLine=(CharPtr)MemNew((stop+1)*sizeof(Char));
-	if (szMiddleLine){
-		pos=0;
-		while(pos<stop){
-			q=TO_UPPER(szQuery[pos]);
-			s=TO_UPPER(szSubject[pos]);
-			if (matrix){
-				if(IS_ALPHA(q) && IS_ALPHA(s)){
-					if(q==s){
-						szMiddleLine[pos]=szQuery[pos];
-					}
-					else{
-						if (matrix[s][q]>0){
-							szMiddleLine[pos]='+';
-						}
-						else{
-							szMiddleLine[pos]=' ';
-						}
-					}
-				}
-				else{
-					szMiddleLine[pos]=' ';
-				}
+    if((szMiddleLine=(CharPtr)MemNew((stop+1)*sizeof(Char))) == NULL)
+        return NULL;
+    
+    pos=0;
+    while(pos < stop) {
 
-			}
-			else{
-				if(q==s)
-					szMiddleLine[pos]='|';
-				else
-					szMiddleLine[pos]=' ';
-			}
-			pos++;
-		}
-	}
+        /* For protein alignments - unaligned regions should not anything
+           in the middle line. We show unaligned regions in lower case */
 
-	return(szMiddleLine);
+        if(is_aa && IS_LOWER(szQuery[pos]) && IS_LOWER(szSubject[pos])) {
+            szMiddleLine[pos]=' ';
+            pos++;
+            continue;
+        }
+        q = TO_UPPER(szQuery[pos]);
+        s = TO_UPPER(szSubject[pos]);
+        if (matrix) {
+            if(IS_ALPHA(q) && IS_ALPHA(s)){
+                if(q==s) { 
+                    szMiddleLine[pos]=szQuery[pos];
+                } else {
+                    if (matrix[s][q]>0){
+                        szMiddleLine[pos]='+';
+                    } else {
+                        szMiddleLine[pos]=' ';
+                    }
+                }
+            } else {
+                szMiddleLine[pos]=' ';
+            }
+            
+        } else {
+            if(q == s)
+                szMiddleLine[pos]='|';
+            else
+                szMiddleLine[pos]=' ';
+        }
+        pos++;
+    }
+    return(szMiddleLine);
 }
 
 /*******************************************************************************
@@ -1937,7 +2009,7 @@ Int4      bspLength;
 	if (!DDV_GetSequenceFromParaG(pgpSubject,&szSubject,bspLength,IsAA,NULL,
 			NULL,NULL)) goto error;
 
-	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix);
+	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix, IsAA);
 error:
 	if (szQuery) MemFree(szQuery);
 	if (szSubject) MemFree(szSubject);
@@ -1971,7 +2043,7 @@ Int4      bspLength;
 	if (!DDV_GetSequenceFromParaG(pgpSubject,&szSubject,bspLength,IsAA,NULL,
 			NULL,NULL)) goto error;
 			
-	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix);
+	szComp=DDV_GetBLASTCompLine_1(szQuery,szSubject,matrix, IsAA);
 error:
 	if (szSubject) MemFree(szSubject);
 	return(szComp);
@@ -2064,343 +2136,336 @@ ValNode         vn;
                 fill szFormattedLine with the info ready to display
 
 *******************************************************************************/
-static ValNodePtr DDV_DisplayParaG(ValNodePtr vnp,Int4 i,Boolean ShowScale,
-		Uint4 disp_format,CharPtr szSeqAcc,CharPtr szSeqName,Boolean IsAA,
-		Boolean bDispPhilouName,Int4 max_length,Int4 max_scale,Int2 LineSize,
-		CharPtr PNTR szFormattedLine,CharPtr PNTR szSeqMaster, Int4Ptr PNTR matrix,
-		DDV_ColorGlobal * gclr,ValNodePtr mask)		
-{
-ParaGPtr 		pgp;	/*ParaG data*/
-CharPtr			szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine, idstring;
-BioseqPtr       bsp;
-SeqIdPtr        sip;
-Int4            bspLength,size,stop,nCompt2,pos,gi,diff,disp,bsp_start,bsp_stop, n, j;
-Char 			szBuf4[WWW_SCRIPT_SIZE]={""};	/*Entrez query*/
-Uint1			bsp_strand;
-Char		tmpstr[99];
+static ValNodePtr DDV_DisplayParaG
+(ValNodePtr vnp,Int4 i,Boolean ShowScale, Uint4 disp_format,
+ CharPtr szSeqAcc,CharPtr szSeqName,Boolean IsAA, Boolean bDispPhilouName,
+ Int4 max_length,Int4 max_scale,Int2 LineSize, CharPtr PNTR szFormattedLine,
+ CharPtr PNTR szSeqMaster, Int4Ptr PNTR matrix, DDV_ColorGlobal * gclr,
+ ValNodePtr mask
+ ) {
+    ParaGPtr  pgp;	/*ParaG data*/
+    CharPtr   szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine, idstring;
+    BioseqPtr bsp;
+    SeqIdPtr  sip;
+    Int4      bspLength,size,stop,nCompt2,pos,gi,diff,disp;
+    Int4      bsp_start,bsp_stop, n, j;
+    Char      szBuf4[WWW_SCRIPT_SIZE]={""};   /*Entrez query*/
+    Uint1     bsp_strand;
+    Char      tmpstr[99];
 	
-	if (vnp==NULL) return(NULL);
+    if (vnp==NULL) 
+        return NULL;
+    
+    pgp=(ParaGPtr)vnp->data.ptrvalue;
+    if (!pgp) 
+        return(vnp->next);
+    
+    szSequence=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+3)*sizeof(Char));
+    
+    if (!szSequence) 
+        return NULL;
 
-	pgp=(ParaGPtr)vnp->data.ptrvalue;
-	if (!pgp) return(vnp->next);	
+    /*get some bsp info*/	
+    sip=SeqIdFindBest(pgp->sip,0);
+    if (sip==NULL) sip=pgp->sip;
 
-	szSequence=(CharPtr)MemNew((pgp->StopLetter-pgp->StartLetter+3)*sizeof(Char));
+    if((bsp=BioseqLockById(sip)) == NULL)
+        goto error;
 
-	if (!szSequence) return(NULL);
-
-	/*get some bsp info*/	
-	sip=SeqIdFindBest(pgp->sip,0);
-	if (sip==NULL) sip=pgp->sip;
-	bsp=BioseqLockById(sip);
-	if (!bsp) goto error;
-	bspLength=BioseqGetLen(bsp);
-
-	if (!DDV_GetSequenceFromParaG(pgp,&szSequence,bspLength,IsAA,&bsp_strand,
-			&bsp_start,&bsp_stop)) goto error;
-
-	if (gclr){/*format the output; only upper/lower case letters are lait out in 
-	          this function*/
-		DDV_GetFormattedSequence_1(pgp,szSequence,gclr,i);
-	}
-	else if (disp_format&TEXT_LOWERCASE || ISA_na(bsp->mol)){
+    bspLength=BioseqGetLen(bsp);
+    
+    if (!DDV_GetSequenceFromParaG(pgp,&szSequence,bspLength,IsAA,&bsp_strand,
+                                  &bsp_start,&bsp_stop)) 
+        goto error;
+    
+    if (gclr) {/*format the output; 
+                 only upper/lower case letters are lait out in this function*/
+        DDV_GetFormattedSequence_1(pgp,szSequence,gclr,i);
+    } else if (disp_format&TEXT_LOWERCASE || ISA_na(bsp->mol)){
 	/*switch to lower case if needed; this is for the PopSet viewer: it displays
-	DNA sequences using ALWAYS lower case letters. We don't need a complex gclr
-	data structure here (this takes time to create...)*/
-		szSequence=ConvertToLower(szSequence);
-	}
-	/*right now, I consider the first sequence of the SeqAlign is the master*/
-	if (i==1){
-		*szSeqMaster=StringSave(szSequence);
-	}
-
-	/*if (i==1 && mask){
-		DDV_HideMaskedLetters(szSequence,pgp,mask);
-	}*/
-	
-	/*7 : StringLen("unknown"); see below, when I print szSeqAcc*/
-	if (max_length<7) max_length=7;
-	disp=0;
-
-	if(disp_format&DISP_FULL_HTML || disp_format&DISP_FULL_TXT){/*output format: html*/
-		/*compute the left part size of the line to display*/
-		if (disp_format&DISP_ORDER_NUM) {disp+=7;max_length+=7;}
-		if (*szSeqAcc) disp+=StringLen(szSeqAcc);
-		else disp+=7;
-		diff=max_length-disp;
-		diff++;
-		disp+=diff;
-		if (disp_format&DISP_STRAND) disp+=2;
-		if (disp_format&DISP_BSP_COORD)disp+=max_scale+2;
-		/*display top scale if needed*/
-		if ((disp_format&RULER_TOP) && ShowScale) {
-			szTmp=DDV_DisplayTopScale(pgp->StartLetter,
-				pgp->StopLetter,disp,disp_format,SCALE_NUM);
-			if (szTmp){
-				szFLine=DDV_ConcatStr(szFLine,szTmp);
-				MemFree(szTmp);
-			}
-		}
-		if ((disp_format&RULER_TICK) && ShowScale) {
-			szTmp=DDV_DisplayTopScale(pgp->StartLetter,
-				pgp->StopLetter,disp,disp_format,SCALE_TICK);
-			if (szTmp){
-				szFLine=DDV_ConcatStr(szFLine,szTmp);
-				MemFree(szTmp);
-			}
-		}
-		/*display order num if needed*/
-		if (disp_format&DISP_ORDER_NUM){ /*fprintf(fp,"[%4i] ",i);*/
-			sprintf(szBuf4,"[%4i] ",i);
-			szFLine=DDV_ConcatStr(szFLine,szBuf4);
-		}
-		/*display sequence name*/
-		if (*szSeqAcc) {
-			if (disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME)){
-				gi=GetGIForSeqId(pgp->sip);
-				if(gi>0){
-					sprintf(szBuf4,szEntrezScript,gi,(IsAA ? "p" : "n"));
-				}
-				else{
-					if (pgp->sip->choice == SEQID_PDB)
-					{
-						n = j = 0;
-						idstring = StringSave(szSeqAcc);
-						while (idstring[n] != '\0')
-						{
-							if (idstring[n] != '_')
-							{
-								tmpstr[j] = idstring[n];
-								j++;
-							}
-							n++;
-						}
-						tmpstr[j] = '\0';
-						sprintf(szBuf4,szEntrezScriptSMART,tmpstr,(IsAA ? "p" : "n"));
-					} else
-						sprintf(szBuf4,"javascript:void(0)");
-				}
-				if (szSeqName){
-					szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
-					szFLine=DDV_ConcatStr(szFLine,szBuf4);
-					szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
-					szFLine=DDV_ConcatStr(szFLine,szSeqName);
-					szFLine=DDV_ConcatStr(szFLine,"';return true\">");
-				}
-				else{
-					szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
-					szFLine=DDV_ConcatStr(szFLine,szBuf4);
-					szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
-					szFLine=DDV_ConcatStr(szFLine,"unknown name");
-					szFLine=DDV_ConcatStr(szFLine,"';return true\">");
-				}
-			}
-			szFLine=DDV_ConcatStr(szFLine,szSeqAcc);
-			if (disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME)) 
-				szFLine=DDV_ConcatStr(szFLine,"</a>");
-		}
-		else {
-			szFLine=DDV_ConcatStr(szFLine,"unknown");
-		}
-		DDV_AddBlank2(diff,&szFLine);
-		if (disp_format&DISP_STRAND){
-			Char szStuff[]="< >";
-			Int1 iStuff=1;
-			
-			if (bsp_start==INT4_MAX){
-				iStuff=1;
-			}
-			else {
-				if (bsp_strand==Seq_strand_minus)
-					iStuff=0;
-				else
-					iStuff=2;
-			}
-			if (bsp_strand==Seq_strand_minus)
-				szFLine=DDV_ConcatStr(szFLine,"<FONT COLOR=#FF0000>");
-			sprintf(szBuf4,"%c ", szStuff[iStuff]);
-			szFLine=DDV_ConcatStr(szFLine,szBuf4);
-			if (bsp_strand==Seq_strand_minus)
-				szFLine=DDV_ConcatStr(szFLine,"</FONT>");
-		}
-		/*display bsp coord if needed*/
-		if (disp_format&DISP_BSP_COORD){
-			Char szBuf2[15]={""};
-			Int4 iVal;
-			
-			if (bsp_strand==Seq_strand_minus) iVal=bsp_stop;/**/
-			else iVal=bsp_start;
-
-			if (iVal!=INT4_MAX) {
-				sprintf(szBuf2,"%i",++iVal);/*switch to base one*/
-				szFLine=DDV_ConcatStr(szFLine,szBuf2);
-				DDV_AddBlank2(MAX(2,max_scale-StringLen(szBuf2)+2),&szFLine);
-			} 
-			else DDV_AddBlank2(max_scale+2,&szFLine);
-		}
-	}else if (disp_format&DISP_PHYLIP_TXT){
-		if (bDispPhilouName){/*Phylip format: seq. names for the first block only*/
-			if (szSeqAcc) {/*name only*/
-				sprintf(szBuf4,"%-10s ",szSeqAcc);
-				szFLine=DDV_ConcatStr(szFLine,szBuf4);
-			}
-			else {
-				szFLine=DDV_ConcatStr(szFLine,"unknown");
-			}
-		}
-		else {
-			sprintf(szBuf4,"%-10s "," ");
-			szFLine=DDV_ConcatStr(szFLine,szBuf4);
-		}
-	}
-	/*display sequence*/
-	size=StringLen(szSequence);
-	if (disp_format&DISPE_SHOWBLOCK){/*AFSDDGTFDG GDFDTEGDFG DFDGETDFGD*/
-		stop=size+1;
-		size+=(size/LETTER_BLOCK_WIDTH);
-		szDisp=(CharPtr)MemNew((size+1)*sizeof(Char));
-		if (szDisp){
-			MemSet(szDisp,' ',size*sizeof(Char));
-			pos=1;
-			nCompt2=0;
-			while(pos<stop){
-				if(disp_format&VIEW_FULLSEQ){
-					szDisp[nCompt2++]=szSequence[pos-1];
-				}else if(disp_format&VIEW_VARIA){
-					if(*szSeqMaster && i!=1){
-						if(szSequence[pos-1]=='-'){
-							szSequence[pos-1]='-';
-						}
-						if(szSequence[pos-1]!=(*szSeqMaster)[pos-1]){
-							szDisp[nCompt2++]=szSequence[pos-1];
-						}
-						else{
-							if(szSequence[pos-1]!='-') szDisp[nCompt2++]='.';
-							else szDisp[nCompt2++]=szSequence[pos-1];
-						}
-					}
-					else{
-						szDisp[nCompt2++]=szSequence[pos-1];
-					}
-				}
-				if (!(pos % LETTER_BLOCK_WIDTH)) {
-					szDisp[nCompt2++]=' ';
-				}
-				pos++;
-			}
-			szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
-			if (szTmp){
-				szFLine=DDV_ConcatStr(szFLine,szTmp);
-				MemFree(szTmp);
-			}
-			MemFree(szDisp);
-		}
-		else{
-			szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
-			if (szTmp){
-				szFLine=DDV_ConcatStr(szFLine,szTmp);
-				MemFree(szTmp);
-			}
-		}
-	}
-	else{/*AFSDDGTFDGGDFDTEGDFGDFDGETDFGD*/
-		if(disp_format&VIEW_FULLSEQ){
-			if(disp_format&DISP_FULL_HTML){/*output format*/
-				szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
-				if (szTmp){
-					szFLine=DDV_ConcatStr(szFLine,szTmp);
-					MemFree(szTmp);
-				}
-			}else {
-				szFLine=DDV_ConcatStr(szFLine,szSequence);
-			}
-		}else if(disp_format&VIEW_VARIA){
-			szDisp=(CharPtr)MemNew((size+1)*sizeof(Char));
-			if (szDisp){
-				MemSet(szDisp,' ',size*sizeof(Char));
-				pos=0;
-				stop=size+1;
-				while(pos<stop){
-					if(*szSeqMaster && i!=1){
-						if(szSequence[pos]!=(*szSeqMaster)[pos]){
-							szDisp[pos]=szSequence[pos];
-						}
-						else{
-							if(pos==stop-1)
-								szDisp[pos]=szSequence[pos];
-							else
-								szDisp[pos]='.';
-						}
-					}
-					else{
-						szDisp[pos]=szSequence[pos];
-					}
-					pos++;
-				}
-				if(disp_format&DISP_FULL_HTML){/*output format*/
-					szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
-					if (szTmp){
-						szFLine=DDV_ConcatStr(szFLine,szTmp);
-						MemFree(szTmp);
-					}
-				}else{
-					szFLine=DDV_ConcatStr(szFLine,szDisp);
-				}
-				MemFree(szDisp);
-			}
-			else {
-				if(disp_format&DISP_FULL_HTML){/*output format*/
-					szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
-					if (szTmp){
-						szFLine=DDV_ConcatStr(szFLine,szTmp);
-						MemFree(szTmp);
-					}
-				}else{
-					szFLine=DDV_ConcatStr(szFLine,szSequence);
-				}
-			}
-		}
-	}
-	/*display bsp coord if needed*/
-	if (disp_format&DISP_BSP_COORD){
-		Int4 iVal;
-
-		if (bsp_strand==Seq_strand_minus) iVal=bsp_start;/**/
-		else iVal=bsp_stop;
-		
-		if (iVal!=INT4_MIN) {
-			sprintf(szBuf4,"  %i", iVal+1);
-			szFLine=DDV_ConcatStr(szFLine,szBuf4);
-		}
-		else DDV_AddBlank2(max_scale+2,&szFLine);
-	}
-
-	/*build the BLAST middle line of the alignment*/
-	if(disp_format&DISP_BLAST_MIDLINE && i>1){
-		szMiddleLine=DDV_GetBLASTCompLine_1(*szSeqMaster, szSequence,matrix);
-		if (szMiddleLine){
-			szTmp=(CharPtr)MemNew((disp+1)*sizeof(Char));
-			MemSet(szTmp,' ',disp);
-			szTmp=DDV_ConcatStr(szTmp,szMiddleLine);
-			szTmp=DDV_ConcatStr(szTmp,"\n");
-			szTmp=DDV_ConcatStr(szTmp,szFLine);
-			MemFree(szFLine);
-			szFLine=szTmp;
-			MemFree(szMiddleLine);
-		}
-	}
-
-	/*hack: for test purpose (features display on SeqAlign)*/
-	/*DDV_DispFeaturesForPGP(pgp, bsp, &szFLine, disp, LineSize, szSequence,
-			bsp_strand);*/
-
-
-error:
-	if (bsp)BioseqUnlock(bsp);
-	MemFree(szSequence);
-	szFLine=DDV_ConcatStr(szFLine,"\n");
-	*szFormattedLine=szFLine;
-	
-	return(vnp->next);
+          DNA sequences using ALWAYS lower case letters. We don't need a complex gclr
+          data structure here (this takes time to create...)*/
+        szSequence=ConvertToLower(szSequence);
+    }
+    /*right now, I consider the first sequence of the SeqAlign is the master*/
+    if (i==1){
+        *szSeqMaster=StringSave(szSequence);
+    }
+    
+    /*if (i==1 && mask){
+      DDV_HideMaskedLetters(szSequence,pgp,mask);
+      }*/
+    
+    /*7 : StringLen("unknown"); see below, when I print szSeqAcc*/
+    if (max_length<7) max_length=7;
+    disp=0;
+    
+    if(disp_format&DISP_FULL_HTML || disp_format&DISP_FULL_TXT){/*output format: html*/
+        /*compute the left part size of the line to display*/
+        if (disp_format&DISP_ORDER_NUM) {disp+=7;max_length+=7;}
+        if (*szSeqAcc) disp+=StringLen(szSeqAcc);
+        else disp+=7;
+        diff=max_length-disp;
+        diff++;
+        disp+=diff;
+        if (disp_format&DISP_STRAND) disp+=2;
+        if (disp_format&DISP_BSP_COORD)disp+=max_scale+2;
+        /*display top scale if needed*/
+        if ((disp_format&RULER_TOP) && ShowScale) {
+            szTmp=DDV_DisplayTopScale(pgp->StartLetter,
+                                      pgp->StopLetter,disp,disp_format,SCALE_NUM);
+            if (szTmp){
+                szFLine=DDV_ConcatStr(szFLine,szTmp);
+                MemFree(szTmp);
+            }
+        }
+        if ((disp_format&RULER_TICK) && ShowScale) {
+            szTmp=DDV_DisplayTopScale(pgp->StartLetter,
+                                      pgp->StopLetter,disp,disp_format,SCALE_TICK);
+            if (szTmp){
+                szFLine=DDV_ConcatStr(szFLine,szTmp);
+                MemFree(szTmp);
+            }
+        }
+        /*display order num if needed*/
+        if (disp_format&DISP_ORDER_NUM){ /*fprintf(fp,"[%4i] ",i);*/
+            sprintf(szBuf4,"[%4i] ",i);
+            szFLine=DDV_ConcatStr(szFLine,szBuf4);
+        }
+        /*display sequence name*/
+        if (*szSeqAcc) {
+            if (disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME)){
+                if (pgp->sip->choice == SEQID_PDB) {
+                    n = j = 0;
+                    idstring = StringSave(szSeqAcc);
+                    while (idstring[n] != '\0') {
+                        if (idstring[n] != '_') {
+                            tmpstr[j] = idstring[n];
+                            j++;
+                        }
+                        n++;
+                    }
+                    tmpstr[j] = '\0';
+                    sprintf(szBuf4,szEntrezScriptSMART,tmpstr,(IsAA ? "p" : "n"));
+                } else {
+                    gi=GetGIForSeqId(pgp->sip);
+                    if(gi > 0){
+                        sprintf(szBuf4,szEntrezScript,gi,(IsAA ? "p" : "n"));
+                    } else
+                        sprintf(szBuf4,"javascript:void(0)");
+                }
+                if (szSeqName) {
+                    szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
+                    szFLine=DDV_ConcatStr(szFLine,szBuf4);
+                    szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
+                    szFLine=DDV_ConcatStr(szFLine,szSeqName);
+                    szFLine=DDV_ConcatStr(szFLine,"';return true\">");
+                } else {
+                    szFLine=DDV_ConcatStr(szFLine,"<a href=\"");
+                    szFLine=DDV_ConcatStr(szFLine,szBuf4);
+                    szFLine=DDV_ConcatStr(szFLine,"\" onMouseOut=\"window.status=''\" \nonMouseOver=\"window.status='");
+                    szFLine=DDV_ConcatStr(szFLine,"unknown name");
+                    szFLine=DDV_ConcatStr(szFLine,"';return true\">");
+                }
+            }
+            szFLine=DDV_ConcatStr(szFLine,szSeqAcc);
+            if (disp_format&DISP_FULL_HTML && !(disp_format&DISP_NOLINKONNAME)) 
+                szFLine=DDV_ConcatStr(szFLine,"</a>");
+        } else {
+            szFLine=DDV_ConcatStr(szFLine,"unknown");
+        }
+        DDV_AddBlank2(diff,&szFLine);
+        if (disp_format&DISP_STRAND){
+            Char szStuff[]="< >";
+            Int1 iStuff=1;
+            
+            if (bsp_start==INT4_MAX){
+                iStuff=1;
+            } else {
+                if (bsp_strand==Seq_strand_minus)
+                    iStuff=0;
+                else
+                    iStuff=2;
+            }
+            if (bsp_strand==Seq_strand_minus)
+                szFLine=DDV_ConcatStr(szFLine,"<FONT COLOR=#FF0000>");
+            sprintf(szBuf4,"%c ", szStuff[iStuff]);
+            szFLine=DDV_ConcatStr(szFLine,szBuf4);
+            if (bsp_strand==Seq_strand_minus)
+                szFLine=DDV_ConcatStr(szFLine,"</FONT>");
+        }
+        /*display bsp coord if needed*/
+        if (disp_format&DISP_BSP_COORD){
+            Char szBuf2[15]={""};
+            Int4 iVal;
+            
+            if (bsp_strand==Seq_strand_minus) iVal=bsp_stop;/**/
+            else iVal=bsp_start;
+            
+            if (iVal!=INT4_MAX) {
+                sprintf(szBuf2,"%i",++iVal);/*switch to base one*/
+                szFLine=DDV_ConcatStr(szFLine,szBuf2);
+                DDV_AddBlank2(MAX(2,max_scale-StringLen(szBuf2)+2),&szFLine);
+            } 
+            else DDV_AddBlank2(max_scale+2,&szFLine);
+        }
+    } else if (disp_format&DISP_PHYLIP_TXT){
+        if (bDispPhilouName){/*Phylip format: seq. names for the first block only*/
+            if (szSeqAcc) {/*name only*/
+                sprintf(szBuf4,"%-10s ",szSeqAcc);
+                szFLine=DDV_ConcatStr(szFLine,szBuf4);
+            }
+            else {
+                szFLine=DDV_ConcatStr(szFLine,"unknown");
+            }
+        } else {
+            sprintf(szBuf4,"%-10s "," ");
+            szFLine=DDV_ConcatStr(szFLine,szBuf4);
+        }
+    }
+    /*display sequence*/
+    size=StringLen(szSequence);
+    if (disp_format&DISPE_SHOWBLOCK){/*AFSDDGTFDG GDFDTEGDFG DFDGETDFGD*/
+        stop=size+1;
+        size+=(size/LETTER_BLOCK_WIDTH);
+        szDisp=(CharPtr)MemNew((size+1)*sizeof(Char));
+        if (szDisp){
+            MemSet(szDisp,' ',size*sizeof(Char));
+            pos=1;
+            nCompt2=0;
+            while(pos<stop){
+                if(disp_format&VIEW_FULLSEQ){
+                    szDisp[nCompt2++]=szSequence[pos-1];
+                }else if(disp_format&VIEW_VARIA){
+                    if(*szSeqMaster && i!=1){
+                        if(szSequence[pos-1]=='-'){
+                            szSequence[pos-1]='-';
+                        }
+                        if(szSequence[pos-1]!=(*szSeqMaster)[pos-1]){
+                            szDisp[nCompt2++]=szSequence[pos-1];
+                        } else {
+                            if(szSequence[pos-1]!='-') szDisp[nCompt2++]='.';
+                            else szDisp[nCompt2++]=szSequence[pos-1];
+                        }
+                    } else {
+                        szDisp[nCompt2++]=szSequence[pos-1];
+                    }
+                }
+                if (!(pos % LETTER_BLOCK_WIDTH)) {
+                    szDisp[nCompt2++]=' ';
+                }
+                pos++;
+            }
+            szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
+            if (szTmp){
+                szFLine=DDV_ConcatStr(szFLine,szTmp);
+                MemFree(szTmp);
+            }
+            MemFree(szDisp);
+        } else {
+            szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
+            if (szTmp){
+                szFLine=DDV_ConcatStr(szFLine,szTmp);
+                MemFree(szTmp);
+            }
+        }
+    } else {/*AFSDDGTFDGGDFDTEGDFGDFDGETDFGD*/
+        if(disp_format&VIEW_FULLSEQ){
+            if(disp_format&DISP_FULL_HTML){/*output format*/
+                szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
+                if (szTmp){
+                    szFLine=DDV_ConcatStr(szFLine,szTmp);
+                    MemFree(szTmp);
+                }
+            } else {
+                szFLine=DDV_ConcatStr(szFLine,szSequence);
+            }
+        } else if(disp_format&VIEW_VARIA){
+            szDisp=(CharPtr)MemNew((size+1)*sizeof(Char));
+            if (szDisp){
+                MemSet(szDisp,' ',size*sizeof(Char));
+                pos=0;
+                stop=size+1;
+                while(pos<stop){
+                    if(*szSeqMaster && i!=1){
+                        if(szSequence[pos]!=(*szSeqMaster)[pos]){
+                            szDisp[pos]=szSequence[pos];
+                        } else {
+                            if(pos==stop-1)
+                                szDisp[pos]=szSequence[pos];
+                            else
+                                szDisp[pos]='.';
+                        }
+                    } else {
+                        szDisp[pos]=szSequence[pos];
+                    }
+                    pos++;
+                }
+                if(disp_format&DISP_FULL_HTML){/*output format*/
+                    szTmp=DDV_Print_Sequence(szDisp,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
+                    if (szTmp){
+                        szFLine=DDV_ConcatStr(szFLine,szTmp);
+                        MemFree(szTmp);
+                    }
+                } else {
+                    szFLine=DDV_ConcatStr(szFLine,szDisp);
+                }
+                MemFree(szDisp);
+            } else {
+                if(disp_format&DISP_FULL_HTML){/*output format*/
+                    szTmp=DDV_Print_Sequence(szSequence,(Boolean)(disp_format&DISPE_COLOR),IsAA,pgp,gclr,i);
+                    if (szTmp){
+                        szFLine=DDV_ConcatStr(szFLine,szTmp);
+                        MemFree(szTmp);
+                    }
+                } else {
+                    szFLine=DDV_ConcatStr(szFLine,szSequence);
+                }
+            }
+        }
+    }
+    /*display bsp coord if needed*/
+    if (disp_format&DISP_BSP_COORD){
+        Int4 iVal;
+        
+        if (bsp_strand==Seq_strand_minus) iVal=bsp_start;/**/
+        else iVal=bsp_stop;
+        
+        if (iVal!=INT4_MIN) {
+            sprintf(szBuf4,"  %i", iVal+1);
+            szFLine=DDV_ConcatStr(szFLine,szBuf4);
+        }
+        else DDV_AddBlank2(max_scale+2,&szFLine);
+    }
+    
+    /*build the BLAST middle line of the alignment*/
+    if(disp_format&DISP_BLAST_MIDLINE && i>1){
+        szMiddleLine=DDV_GetBLASTCompLine_1(*szSeqMaster, szSequence, matrix,
+                                            IsAA);
+        if (szMiddleLine){
+            szTmp=(CharPtr)MemNew((disp+1)*sizeof(Char));
+            MemSet(szTmp,' ',disp);
+            szTmp=DDV_ConcatStr(szTmp,szMiddleLine);
+            szTmp=DDV_ConcatStr(szTmp,"\n");
+            szTmp=DDV_ConcatStr(szTmp,szFLine);
+            MemFree(szFLine);
+            szFLine=szTmp;
+            MemFree(szMiddleLine);
+        }
+    }
+    
+    /*hack: for test purpose (features display on SeqAlign)*/
+    /*DDV_DispFeaturesForPGP(pgp, bsp, &szFLine, disp, LineSize, szSequence,
+      bsp_strand);*/
+    
+    
+ error:
+    if (bsp)BioseqUnlock(bsp);
+    MemFree(szSequence);
+    szFLine=DDV_ConcatStr(szFLine,"\n");
+    *szFormattedLine=szFLine;
+    
+    return(vnp->next);
 }
 
 /*******************************************************************************
@@ -2574,7 +2639,7 @@ CharPtr  		szSeqMaster=NULL;
 						StringCpy(szBuf,"Sbjct:");
 				}
 				else{
-					sip = SeqIdFindBest(bsp->id, SEQID_GENBANK);
+					sip = SeqIdFindBest(bsp->id, SEQID_PDB);
 					if (!sip)
 				   		sip = SeqIdFindBest(bsp->id, 0);
 					SeqIdWrite(sip, szBuf,PRINTID_TEXTID_ACCESSION, 14);   

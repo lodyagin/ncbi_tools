@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -47,6 +47,11 @@
 
 #include <vibrant.h>
 #include <vsmfile.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*****************************************************************************
 *
@@ -119,5 +124,9 @@ Boolean LIBCALL VSMAddMenu PROTO((WindoW w, Int2 menutype));
 #define VSM_ANALYZE_MENU 2   /* adds Analysis menu */
 #define VSM_VIEW_MENU 3     /* viewers */
 #define VSM_EDIT_MENU 4     /* editors */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

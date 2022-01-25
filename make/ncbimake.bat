@@ -1,5 +1,5 @@
 @echo off
-rem  $Revision: 6.10 $
+rem  $Revision: 6.11 $
 rem  +++++ Denis Vakatov, NCBI // vakatov@peony.nlm.nih.gov +++++
 
 echo  *** Running:  %0  ***
@@ -11,7 +11,7 @@ rem if "%__PATH_MS%"==""  set __PATH_MS=c:\msdev
 if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc5
 rem if "%__PATH_BOR%"==""  set __PATH_BOR=c:\bc45
 
-rem set OPENGL=1
+set OPENGL=1
 rem set LIBPNG_DIR=..\..\libpng
 rem set ZLIB_DIR=..\..\zlib
 

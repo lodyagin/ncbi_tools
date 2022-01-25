@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.58 2000/06/16 16:18:56 lewisg Exp $
+# $Id: makenet.dos,v 6.61 2000/10/18 21:47:15 vakatov Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -62,7 +62,6 @@ NETENTCF_EXE = netentcf.___
 NENTREZ_EXE  = nentrez.___
 SEQUIN_EXE   = sequin.___
 VCLIENT_EXE  = vclient.___
-CN3D_EXE     = cn3d_v3d.__
 DDV_EXE      = ddv.__
 UDV_EXE      = udv.__
 !ifdef OPENGL
@@ -83,7 +82,7 @@ DO_EXE = \
  $(ENTREZCF_EXE) \
  $(BLASTCL3_EXE) \
  $(NETENTCF_EXE) $(NENTREZ_EXE)  \
- $(VCLIENT_EXE) $(SEQUIN_EXE) $(CN3D_EXE) \
+ $(VCLIENT_EXE) $(SEQUIN_EXE) \
  $(DDV_EXE) $(UDV_EXE) \
  $(CCPV_EXE) $(CCP_EXE) $(DUSTV_EXE) $(DUST_EXE) \
  $(EPIV_EXE) $(EPI_EXE) $(SIGMEV_EXE) $(SIGME_EXE) \
@@ -114,8 +113,6 @@ copy :
 !endif
 	copy ..\network\medarch\client\*.h $(INCPATH)
 	copy ..\network\medarch\client\*.c .
-	copy ..\network\taxon1\client\*.h $(INCPATH)
-	copy ..\network\taxon1\client\*.c .
 	copy ..\network\taxon1\common\*.h $(INCPATH)
 	copy ..\network\taxon1\common\*.c .
 	copy ..\network\taxon1\taxon2\*.h $(INCPATH)
@@ -156,7 +153,6 @@ copy :
 	copy nentrez.rc nentrez_ogl.rc
 	copy sequin.rc sequin_ogl.rc
 !endif
-	copy cn3d.rc cn3d_v3d.rc
 !endif
 ##########################################################
 
@@ -339,7 +335,7 @@ $(NENTREZ_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = nentrez
 TEST_OBJ = entrez.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB36) $(LIB23) $(LIB22) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB20) $(LIB45) $(LIB36) $(LIB23) $(LIB22) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -352,7 +348,7 @@ $(NENTREZ_OGL_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = nentrez_ogl
 TEST_OBJ = entrez.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB36) $(LIB23) $(LIB22) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB20) $(LIB45) $(LIB36) $(LIB23) $(LIB22) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
 RES = 1
@@ -379,7 +375,7 @@ $(INCLUDE_GEN)
 TEST_NAME = sequin
 TEST_OBJ = sequin1.obj sequin2.obj sequin3.obj sequin4.obj sequin5.obj \
 	sequin6.obj sequin7.obj sequin8.obj sequin9.obj sequinx.obj
-TEST_LIB = $(LIB31) $(LIB30) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB31) $(LIB30) $(LIB36) $(LIB23) $(LIB22) $(LIB20) $(LIB45) \
 	$(LIB40) $(LIB41) $(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -393,22 +389,9 @@ $(INCLUDE_GEN)
 TEST_NAME = sequin_ogl
 TEST_OBJ = sequin1.obj sequin2.obj sequin3.obj sequin4.obj sequin5.obj \
 	sequin6.obj sequin7.obj sequin8.obj sequin9.obj sequinx.obj
-TEST_LIB = $(LIB31) $(LIB30_OGL) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB31) $(LIB30_OGL) $(LIB36) $(LIB23) $(LIB22) $(LIB20) $(LIB45) \
 	$(LIB40) $(LIB41) $(LIB11) $(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
-RES = 1
-$(INCLUDE_EXE)
-<<
-!endif
-##########################################################
-!ifdef CN3D_EXE
-$(CN3D_EXE):
-	$(MAKE) -f <<
-$(INCLUDE_GEN)
-TEST_NAME = cn3d_v3d
-TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB23) $(LIB22) $(LIB20) \
-	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
 <<
@@ -420,7 +403,7 @@ $(CN3D_OGL_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = cn3d
 TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB23) $(LIB22) $(LIB20) $(LIB45) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
 RES = 1
@@ -434,7 +417,7 @@ $(DDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = ddv
 TEST_OBJ = ddvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB20) $(LIB45) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -447,7 +430,7 @@ $(UDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = udv
 TEST_OBJ = udvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB20) $(LIB45) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

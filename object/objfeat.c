@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -1833,7 +1833,10 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"-----------------------------------M---------------M------------\" } ,\n" \
 "{ name \"TAG-Leu,TCA-stop\" , id 22 ,\n" \
 "ncbieaa  \"FFLLSS*SYY*LCC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"-----------------------------------M----------------------------\" } };\n";
+"sncbieaa \"-----------------------------------M----------------------------\" } ,\n" \
+"{ name \"Thraustochytrium mitochondrial code\" , id 23 ,\n" \
+"ncbieaa  \"FF*LSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"--------------------------------M--M---------------M------------\" } };\n";
 #endif
 
 /*****************************************************************************

@@ -1,4 +1,4 @@
-/* $Id: batch.c,v 6.18 2000/05/09 13:37:01 shavirin Exp $
+/* $Id: batch.c,v 6.19 2000/08/30 16:44:20 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 12/16/1996
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description:
 *         Main file for WWW and Command Line BatchEntrez programs
 *
 * $Log: batch.c,v $
+* Revision 6.19  2000/08/30 16:44:20  vakatov
+* Fixed printf() format mismatch
+*
 * Revision 6.18  2000/05/09 13:37:01  shavirin
 * Use functions IS_ntdb_accession() and IS_protdb_accession() to
 * verify accession number.
@@ -740,7 +743,7 @@ Int2 Main ()
           BSRead(gis_bsp, &gi, sizeof(Int4));
           if(!PrintGi(gi, batchP->format, stdout, 
                       batchP->sequence, batchP->single_entry, bgbp)) {
-              printf("Error in printing gi %ld\r\n", gi);        
+              printf("Error in printing gi %d\r\n", (int) gi);        
           }
           if(batchP->html) 
               printf("<HR>");  

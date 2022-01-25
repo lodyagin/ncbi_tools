@@ -1,4 +1,4 @@
-/* $Id: seed.h,v 6.15 1999/10/18 19:54:43 shavirin Exp $
+/* $Id: seed.h,v 6.16 2000/08/01 17:21:13 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,9 +31,12 @@ Author: Alejandro Schaffer
  
 Contents: header file for PHI-BLAST and pseed3.
 
-$Revision: 6.15 $
+$Revision: 6.16 $
 
 $Log: seed.h,v $
+Revision 6.16  2000/08/01 17:21:13  shavirin
+Added protection for using C++ compiler.
+
 Revision 6.15  1999/10/18 19:54:43  shavirin
 Removed unused definition.
 
@@ -49,6 +52,11 @@ Now functions will collect messages in ValNodePtr before printing out.
 
 #if !defined(SEED__H)
 #define SEED__H
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define ALPHABET_SIZE 25
 #define DNA_ALPHABET_SIZE 4
@@ -323,5 +331,8 @@ void LIBCALL seed_free_all PROTO((seedResultItems *seedResults));
 ValNodePtr  LIBCALL SeedPruneHitsFromSeedReturn PROTO((ValNodePtr seedReturn, Int4 number_of_descriptions));
 
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*define SEED__H*/

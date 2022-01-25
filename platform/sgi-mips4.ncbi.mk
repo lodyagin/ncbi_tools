@@ -1,9 +1,11 @@
 #
-# $Id: sgi-mips4.ncbi.mk,v 1.1 2000/06/06 18:41:53 beloslyu Exp $
+# $Id: sgi-mips4.ncbi.mk,v 1.3 2000/10/05 16:06:58 beloslyu Exp $
+#
+# The SGI IRIX 6.* in 64-bit mode
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
-NCBI_CC = cc -mips4 -64
+NCBI_CC = cc -mips4 -64 -G0
 NCBI_SYBASE = /usr/people/sybase_10.0.3
 NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb
 NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a
@@ -44,7 +46,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3D
+OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   07/10/96
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:
 *   	Memory- and MT-safe "sprintf()"
@@ -38,6 +38,9 @@
 * --------------------------------------------------------------------------
 *
  * $Log: tsprintf.c,v $
+ * Revision 6.4  2000/07/19 20:54:48  vakatov
+ * minor cleanup
+ *
  * Revision 6.3  1998/01/28 15:57:24  vakatov
  * Nlm_TSPrintfArgs():  always ignore the "vsprintf()"'s return value;
  * count the resultant string length using StrLen
@@ -211,15 +214,17 @@ static int number_count(long num, int base, int size, int precision, int type)
   if (!(type&(ZEROPAD+LEFT)))
     while (size-- > 0)
       counter++;
-  if (type & SPECIAL)
+  if (type & SPECIAL) {
     if (base==8)
       counter++;
     else if (base==16)
       counter += 2;
+  }
 
-  if (!(type & LEFT))
+  if (!(type & LEFT)) {
     while (size-- > 0)
       counter++;
+  }
   while (i < precision--)
     counter++;
   while (i-- > 0)
@@ -569,7 +574,7 @@ static Int2 TEST__vsprintf_count( void )
     {
       for (n = 0;  n < sizeof( fmt ) / sizeof(const char *) / 5;  n++)
         {
-          printf("Test: %ld\n", n);
+          printf("Test: %ld\n", (long) n);
           i = -i;
           l = -l;
           f = -f;
@@ -589,14 +594,14 @@ static Int2 TEST__vsprintf_count( void )
     }
 
 
-  printf("\nTest ZERO:\n", n);
+  printf("\nTest ZERO:\n");
   i = 0;
   l = 0;
   f = (float)0;
   d = 0;
   for (n = 0;  n < sizeof( fmt ) / sizeof(const char *) / 5;  n++)
     {
-      printf("Test: %ld\n", n);
+      printf("Test: %ld\n", (long) n);
       test(n,0,i);
       test(n,1,l);
       test(n,2,f);

@@ -1,4 +1,4 @@
-/*      
+/* $Id: ncbinet.h,v 6.5 2000/07/08 20:44:05 vakatov Exp $      
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbinet.h,v $
+* Revision 6.5  2000/07/08 20:44:05  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.4  1999/07/30 19:11:05  vakatov
 * Use "strerror()" instead of "sys_errlist[]"
 *
@@ -69,10 +72,6 @@
 #ifndef _NCBINET_
 #define _NCBINET_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "ni_types.h"   /* include <ncbi.h> */
 #include "ni_defin.h"
 #include "ni_error.h"
@@ -98,15 +97,6 @@ extern void bzero PROTO((CharPtr target, long numbytes));
 
 
 /* GLOBAL VARIABLES */
-
-#ifdef NETP_INET_MACTCP
-#ifndef errno
-extern int      errno;
-#endif
-extern long     errno_long;
-#endif
-
-
 /* CLIENT FUNCTIONS */
 
 #undef NLM_EXTERN
@@ -115,6 +105,18 @@ extern long     errno_long;
 #else
 #define NLM_EXTERN extern
 #endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef NETP_INET_MACTCP
+#ifndef errno
+extern int      errno;
+#endif
+extern long     errno_long;
+#endif
+
 
 NLM_EXTERN Boolean NI_FqdnToIpaddr PROTO((CharPtr fqdn, CharPtr ipbuf, Int2 ipbuflen));
 

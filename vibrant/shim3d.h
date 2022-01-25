@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/29/99
 *
-* $Revision: 6.30 $
+* $Revision: 6.37 $
 *
 * File Description:
 *  header file for shims to replace Viewer3D with OpenGL
@@ -37,6 +37,27 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.h,v $
+* Revision 6.37  2000/07/28 21:05:54  lewisg
+* more c++ fixes
+*
+* Revision 6.36  2000/07/27 16:34:46  lewisg
+* more c++ fixes
+*
+* Revision 6.35  2000/07/27 13:37:31  lewisg
+* more c++ fixes
+*
+* Revision 6.34  2000/07/24 22:31:22  thiessen
+* fix header conflict
+*
+* Revision 6.33  2000/07/22 20:13:42  thiessen
+* fix header conflict
+*
+* Revision 6.32  2000/07/21 18:55:58  thiessen
+* allow dynamic slave->master transformation
+*
+* Revision 6.31  2000/07/08 20:44:14  vakatov
+* Get all "#include" out of the 'extern "C" { }' scope;  other cleanup...
+*
 * Revision 6.30  2000/05/16 17:38:44  thiessen
 * do glGenLists after context init on X11 - for Mesa 3.2
 *
@@ -123,8 +144,6 @@
 *
 * Revision 6.1  1999/04/06 14:23:29  lewisg
 * add opengl replacement for viewer3d
-*
-
 * ==========================================================================
 */
 
@@ -185,8 +204,16 @@ extern void Nlm_AddHalfWorm3D(Nlm_Picture3D pic,
 *  and vibforms.h confict with windows.h
 */
 
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
+
 #include <vibtypes.h>
 #include <vibprocs.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 
 /* defines */
@@ -280,21 +307,22 @@ typedef struct _OGL_Data
     Nlm_PoinT SelectPoint;      /* the point on the screen that was clicked for selection */
     Nlm_Uint4 SelectHits;       /* the number of hits */
 
-#ifdef WIN_MOTIF
     /* various info on X stuff related to OpenGL rendering context */
     /* these are void pointers, because including the X headers above this
        causes all sorts of name conflicts in various modules. Big pain! */
     void *display;              /* is actually a Display*      */
     void *visinfo;              /* is actually an XVisualInfo* */
-#endif
 
 } TOGL_Data;
 
 
+extern void OGL_PushTransformation(ValNodePtr transforms);
+extern void OGL_PopTransformation(void);
+
 extern void Nlm_AddHalfWorm3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                               Nlm_FloatHi x0, Nlm_FloatHi y0, Nlm_FloatHi z0,
                               Nlm_FloatHi x1, Nlm_FloatHi y1, Nlm_FloatHi z1,
-                              Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
+                               Nlm_FloatHi x2, Nlm_FloatHi y2, Nlm_FloatHi z2,
                               Nlm_FloatHi x3, Nlm_FloatHi y3, Nlm_FloatHi z3,
                               Nlm_Boolean cap1, Nlm_Boolean cap2,
                               Nlm_FloatHi radius, Nlm_Int4 segments, Nlm_Int4 sides);
@@ -331,7 +359,8 @@ extern void OGL_AddLine3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
 extern void OGL_AddSphere3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                             Nlm_FloatHi x, Nlm_FloatHi y, Nlm_FloatHi z,
                             Nlm_FloatHi radius, Nlm_Int4 slices, 
-                            Nlm_Int4 stacks, Nlm_FloatHi alpha);
+                            Nlm_Int4 stacks, Nlm_FloatHi alpha,
+                            ValNodePtr transforms);
 extern void OGL_AddText3D(TOGL_Data * OGL_Data, DDV_ColorCell * color,
                           Nlm_CharPtr string, Nlm_FloatHi x, Nlm_FloatHi y,
                           Nlm_FloatHi z, Nlm_Int2 flags);
@@ -367,6 +396,11 @@ NLM_EXTERN Nlm_Boolean OGL_IsPlaying(TOGL_Data *pOGL_Data);
 NLM_EXTERN void OGL_StopPlaying(TOGL_Data *pOGL_Data);
 NLM_EXTERN void OGL_StartPlaying(TOGL_Data *pOGL_Data);
 NLM_EXTERN void OGL_DrawLogo(TOGL_Data *OGL_Data);
+NLM_EXTERN void OGL_ClearTransparentSpheres(void);
+NLM_EXTERN void SetOGLFont(TOGL_Data *OGL_Data, Nlm_Int2 fontNameIndex, Nlm_Int2 fontSize,
+    Nlm_Boolean isBold, Nlm_Boolean isItalic, Nlm_Boolean isUnderlined);
+NLM_EXTERN void Nlm_FindAvailableFonts(Nlm_PopuP pupmenu);
+
 
 #ifdef _PNG
 void Nlm_SaveImagePNG(Nlm_Char *defname); /* for PNG export */

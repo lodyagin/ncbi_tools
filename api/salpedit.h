@@ -2,6 +2,9 @@
 #ifndef __SALPEDIT__
 #define __SALPEDIT__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef int (LIBCALLBACK *SeqAlignSortCB) (VoidPtr, VoidPtr);
 
@@ -41,5 +44,9 @@ NLM_EXTERN void SeqAlignSwapOrder(SeqAlignPtr align);
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignListReverseStrand (SeqAlignPtr salp);
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignDup (SeqAlignPtr salp);
 NLM_EXTERN SeqAlignPtr LIBCALL SeqAlignListDup (SeqAlignPtr salp);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

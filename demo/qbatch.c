@@ -1,4 +1,4 @@
-/* $Id: qbatch.c,v 6.7 2000/06/21 14:34:35 beloslyu Exp $
+/* $Id: qbatch.c,v 6.8 2000/08/25 21:02:15 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 05/04/2000
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *         WWW and Command-line Batch Entrez using Entre2 and ID1
 *
 * $Log: qbatch.c,v $
+* Revision 6.8  2000/08/25 21:02:15  shavirin
+* Changed Flat file printing from DUMP_MODE to RELEASE_MODE.
+*
 * Revision 6.7  2000/06/21 14:34:35  beloslyu
 * fix the args for ctime_r on linux
 *
@@ -333,11 +336,11 @@ void BEPrintIds(BEDataPtr pBdata, Uint4 *ids, int count)
         case F_GEN:                 /* 0 */
             if(!SeqEntryToFlatEx(sep_all, stdout, 
                                  is_na ? GENBANK_FMT : GENPEPT_FMT, 
-                                 DUMP_MODE, sip, FF_REGULAR)) {
+                                 RELEASE_MODE, sip, FF_REGULAR)) {
                 
                 if(!SeqEntryToFlatEx(sep_all, stdout, 
                                      is_na ? GENPEPT_FMT : GENBANK_FMT, 
-                                     DUMP_MODE, sip, FF_REGULAR)) {
+                                     RELEASE_MODE, sip, FF_REGULAR)) {
                 }
             }
             break;

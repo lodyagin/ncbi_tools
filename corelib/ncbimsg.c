@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/13/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *   	user alert and error messages
@@ -54,6 +54,9 @@
 *                      input will be read properly.
 *
 * $Log: ncbimsg.c,v $
+* Revision 6.9  2000/08/28 18:46:24  vakatov
+* Made internal hooks "static" and "C" -- to pass C++ compilation
+*
 * Revision 6.8  1999/10/01 14:41:40  kans
 * added SEV_REJECT between SEV_ERROR and SEV_FATAL
 *
@@ -146,13 +149,21 @@ static char *_filename = __FILE__;
 #include "corepriv.h"
 #include <tsprintf.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-MsgAnswer PASCAL _DefMessageHook PROTO((MsgKey key, ErrSev sev,
-			const char *caption, const char *message));
-			
-void PASCAL _DefBeepHook PROTO((void));
+    static MsgAnswer PASCAL _DefMessageHook
+    (MsgKey key, ErrSev sev, const char *caption, const char *message);
 
-int PASCAL _DefMonitorHook PROTO((MonitorPtr pMon, MonCode code));
+    static void PASCAL _DefBeepHook(void);
+
+    static int PASCAL _DefMonitorHook(MonitorPtr pMon, MonCode code);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
 
 
 /*************************************************************************\

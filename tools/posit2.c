@@ -1,4 +1,4 @@
-/*
+/* $Id: posit2.c,v 6.4 2000/07/31 16:41:02 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,9 +32,22 @@ Author: Alejandro Schaffer
 
 Contents: utilities for makematrices.
 
+$Revision: 6.4 $
 
 *****************************************************************************/
 
+/*
+ * $Log: posit2.c,v $
+ * Revision 6.4  2000/07/31 16:41:02  shavirin
+ * Reduced POSIT_SCALE_FACTOR from 1000 to 200 to avoid overflow
+ * with BLOSUM80; moved declaration os POSIT_SCALE_FACTOR to posit.h
+ *
+ * Revision 6.3  2000/07/25 18:12:05  shavirin
+ * WARNING: This is no-turning-back changed related to S&W Blast from
+ * Alejandro Schaffer
+ *
+ *
+ */
 
 #include<ncbi.h>
 #include <blastpri.h>
@@ -54,23 +67,25 @@ Contents: utilities for makematrices.
 
 #define POSIT_NUM_ITERATIONS 10
 
-#define POSIT_SCALE_FACTOR 1000
 
 
 static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_FloatHi *queryProbArray, Nlm_FloatHi *scoreArray,  BLAST_ScoreFreqPtr return_sfp)
 {
   Int4 minScore, maxScore; /*observed minimum and maximum scores*/
-  Int4 i,j; /* indices */
+  Int4 i,j,k; /* indices */
   Nlm_FloatHi onePosFrac; /*1/matrix length as a double*/
+  Int4 charPositions[20] = {1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,22};
+
 
   minScore = maxScore = 0;
 
   for(i = 0; i < matrixLength; i++) {
-    for(j = 0 ; j < PROTEIN_ALPHABET; j++) {
-      if ((matrix[i][j] != BLAST_SCORE_MIN) && (matrix[i][j] < minScore))
-	minScore = matrix[i][j];
-      if (matrix[i][j] > maxScore)
-        maxScore = matrix[i][j];
+    for(j = 0 ; j < EFFECTIVE_ALPHABET; j++) {
+      k = charPositions[j];
+      if ((matrix[i][k] != BLAST_SCORE_MIN) && (matrix[i][k] < minScore))
+	minScore = matrix[i][k];
+      if (matrix[i][k] > maxScore)
+        maxScore = matrix[i][k];
     }
   }
   return_sfp->obs_min = minScore;
@@ -80,9 +95,10 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
   return_sfp->sprob = &(scoreArray[-minScore]); /*center around 0*/
   onePosFrac = 1.0/ ((Nlm_FloatHi) matrixLength);
   for(i = 0; i < matrixLength; i++) {
-    for (j = 0; j < PROTEIN_ALPHABET; j++) {
-      if(matrix[i][j] >= minScore) {
-        return_sfp->sprob[matrix[i][j]] += (onePosFrac * queryProbArray[j]);
+    for (j = 0; j < EFFECTIVE_ALPHABET; j++) {
+      k = charPositions[j];
+      if(matrix[i][k] >= minScore) {
+        return_sfp->sprob[matrix[i][k]] += (onePosFrac * queryProbArray[k]);
       }
     }
   }
@@ -94,7 +110,7 @@ static BLAST_ScoreFreqPtr fillSfp(BLAST_Score **matrix, Int4 matrixLength, Nlm_F
 
 
 static void 
-impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFactor)
+impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFactor, Boolean doBinarySearch)
 {
    Int4 dim1, dim2; /*number of rows and number of columns*/
    Int4 a,c; /*loop indices*/
@@ -124,99 +140,101 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
 
    lambda = matrix_rescale->lambda_ideal/scalingFactor;
    divFactor = ((Nlm_FloatHi) POSIT_SCALE_FACTOR)/scalingFactor;
-
-   done = FALSE;
-   first_time = TRUE;
    factor = 1.0;
-   while (done != TRUE)
-   {
-   	for(c = 0; c < dim1; c++)
-   	{
-       	    for(a = 0; a < dim2; a++)
-	    {
-		if (private_matrix[c][a] == BLAST_SCORE_MIN)
-		{
-			matrix[c][a] = BLAST_SCORE_MIN;
-		}
-		else
-		{
-			matrix[c][a] = (factor*private_matrix[c][a]) /divFactor;
-		}
-	    }
-        }
 
-	this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
-	new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
+   if (doBinarySearch) {
+     done = FALSE;
+     first_time = TRUE;
+     while (done != TRUE)
+       {
+	 for(c = 0; c < dim1; c++)
+	   {
+	     for(a = 0; a < dim2; a++)
+	       {
+		 if (private_matrix[c][a] == BLAST_SCORE_MIN)
+		   {
+		     matrix[c][a] = BLAST_SCORE_MIN;
+		   }
+		 else
+		   {
+		     matrix[c][a] = (factor*private_matrix[c][a]) /divFactor;
+		   }
+	       }
+	   }
 
-	if (new_lambda > lambda)
-	{
-		if (first_time)
-		{
-			factor_high = 1.0 + POSIT_PERCENT;
-			factor = factor_high;
-			factor_low = 1.0;
-			too_high = TRUE;
-			first_time = FALSE;
-		}
-		else
-		{
-			if (too_high == FALSE)
-				break;
-			factor_high += (factor_high-1.0);
-			factor = factor_high;
-		}
-	}
-	else 
-	{
-		if (first_time)
-		{
-			factor_high = 1.0;
-			factor_low = 1.0 - POSIT_PERCENT;
-			factor = factor_low;
-			too_high = FALSE;
-			first_time = FALSE;
-		}
-		else
-		{
-			if (too_high == TRUE)
-				break;
-			factor_low += (factor_low-1.0);
-			factor = factor_low;
-		}
-	}
+	 this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
+	 new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
+
+	 if (new_lambda > lambda)
+	   {
+	     if (first_time)
+	       {
+		 factor_high = 1.0 + POSIT_PERCENT;
+		 factor = factor_high;
+		 factor_low = 1.0;
+		 too_high = TRUE;
+		 first_time = FALSE;
+	       }
+	     else
+	       {
+		 if (too_high == FALSE)
+		   break;
+		 factor_high += (factor_high-1.0);
+		 factor = factor_high;
+	       }
+	   }
+	 else 
+	   {
+	     if (first_time)
+	       {
+		 factor_high = 1.0;
+		 factor_low = 1.0 - POSIT_PERCENT;
+		 factor = factor_low;
+		 too_high = FALSE;
+		 first_time = FALSE;
+	       }
+	     else
+	       {
+		 if (too_high == TRUE)
+		   break;
+		 factor_low += (factor_low-1.0);
+		 factor = factor_low;
+	       }
+	   }
+       }
+
+     /* binary search for ten times. */
+     for (index=0; index<POSIT_NUM_ITERATIONS; index++)
+       {
+	 factor = 0.5*(factor_high+factor_low);
+	 for(c = 0; c < dim1; c++)
+	   {
+	     for(a = 0; a < dim2; a++)
+	       {
+		 if (private_matrix[c][a] == BLAST_SCORE_MIN)
+		   {
+		     matrix[c][a] = BLAST_SCORE_MIN;
+		   }
+		 else
+		   {
+		     matrix[c][a] = (factor*private_matrix[c][a])/divFactor;
+		   }
+	       }
+	   }
+
+	 this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
+	 new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
+
+	 if (new_lambda > lambda)
+	   {
+	     factor_low = factor;
+	   }
+	 else
+	   {
+	     factor_high = factor;
+	   }
+       }
    }
-
-/* binary search for ten times. */
-   for (index=0; index<POSIT_NUM_ITERATIONS; index++)
-   {
-        factor = 0.5*(factor_high+factor_low);
-   	for(c = 0; c < dim1; c++)
-   	{
-       	    for(a = 0; a < dim2; a++)
-	    {
-		if (private_matrix[c][a] == BLAST_SCORE_MIN)
-		{
-			matrix[c][a] = BLAST_SCORE_MIN;
-		}
-		else
-		{
-			matrix[c][a] = (factor*private_matrix[c][a])/divFactor;
-		}
-	    }
-   	}
-
-	this_sfp =  fillSfp(matrix, dim1, matrix_rescale->standardProb, scoreArray, return_sfp);
-	new_lambda = impalaKarlinLambdaNR(this_sfp, matrix_rescale->kbp_psi[0]->Lambda/scalingFactor);
-
-	if (new_lambda > lambda)
-	{
-		factor_low = factor;
-	}
-	else
-	{
-		factor_high = factor;
-	}
-    }
 
    for(c = 0; c < dim1; c++)
      for(a = 0; a < dim2; a++) {
@@ -233,7 +251,7 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
      for(a = 0; a < dim2; a++) {
        if (BLAST_SCORE_MIN != private_matrix[c][a]) {
          private_matrix[c][a] = Nlm_Nint((Nlm_FloatHi) private_matrix[c][a] *
-             factor * scalefactor);
+					 factor * scalefactor);
        }
      }
 
@@ -246,7 +264,7 @@ impalaScaleMatrix(BlastMatrixRescalePtr matrix_rescale, Nlm_FloatHi scalingFacto
    MemFree(return_sfp);
 }
 
-void LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor)
+void LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compactSearch, Nlm_FloatHi scalingFactor, Boolean doBinarySearch)
 {
 	BlastMatrixRescalePtr matrix_rescale;
 
@@ -263,7 +281,7 @@ void LIBCALL impalaScaling(posSearchItems *posSearch, compactSearchItems * compa
 						compactSearch->lambda_ideal,
 						compactSearch->K_ideal);
 
-	impalaScaleMatrix(matrix_rescale, scalingFactor);
+	impalaScaleMatrix(matrix_rescale, scalingFactor, doBinarySearch);
 
 	matrix_rescale = BlastMatrixRescaleDestruct(matrix_rescale);
 
@@ -403,8 +421,8 @@ Nlm_FloatHi scalingFactor)
     }
   }
   getCkptFreqMatrix(posSearch->posFreqs,length1,compactSearch->alphabetSize,checkFile);
-  posFreqsToMatrix(posSearch,compactSearch);
-  impalaScaling(posSearch, compactSearch, scalingFactor);
+  posFreqsToMatrix(posSearch,compactSearch, NULL, 1);
+  impalaScaling(posSearch, compactSearch, scalingFactor, TRUE);
   BlastConstructErrorMessage("posReadCheckpoint", "Data recovered successfully\n", 1, error_return);
   MemFree(oldQuery);
   FileClose(checkFile);

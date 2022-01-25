@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -45,6 +45,15 @@
 /*************************************
 *
  * $Log: asn2ffp.h,v $
+ * Revision 6.15  2000/10/16 19:10:18  kans
+ * added UniSTS and InterimID to legal dbxrefs
+ *
+ * Revision 6.14  2000/08/28 22:17:19  kans
+ * added CDD to list of legal dbxrefs
+ *
+ * Revision 6.13  2000/07/14 20:24:27  kans
+ * added RGD as dbxref with web link
+ *
  * Revision 6.12  2000/02/15 22:53:58  kans
  * added dbSNP and RATMAP as legal dbxrefs, put /organelle under ajp->forgrel control
  *
@@ -138,6 +147,15 @@
 /*************************************
 *
 * $Log: asn2ffp.h,v $
+* Revision 6.15  2000/10/16 19:10:18  kans
+* added UniSTS and InterimID to legal dbxrefs
+*
+* Revision 6.14  2000/08/28 22:17:19  kans
+* added CDD to list of legal dbxrefs
+*
+* Revision 6.13  2000/07/14 20:24:27  kans
+* added RGD as dbxref with web link
+*
 * Revision 6.12  2000/02/15 22:53:58  kans
 * added dbSNP and RATMAP as legal dbxrefs, put /organelle under ajp->forgrel control
 *
@@ -261,7 +279,7 @@ NLM_EXTERN  Boolean asn2ff_flags[13];
 #define ASN2FF_SHOW_ERROR_MSG	        asn2ff_flags[11]
 #define ASN2FF_SHOW_GB_STYLE	        asn2ff_flags[12]
 
-#define DBNUM 26
+#define DBNUM 30
 NLM_EXTERN CharPtr dbtag[DBNUM];
 
 NLM_EXTERN void FlatSpliceOff PROTO((SeqEntryPtr the_set, ValNodePtr desc));

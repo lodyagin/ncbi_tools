@@ -47,8 +47,72 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.43 $
+ * $Revision: 6.64 $
  * $Log: blastkar.c,v $
+ * Revision 6.64  2000/10/25 16:39:46  madden
+ * Add protection in BlastMatrixToTxMatrix for NULL matrix
+ *
+ * Revision 6.63  2000/10/23 15:52:18  dondosha
+ * Bug in previous revision: INT4_MIN is too small to be a matrix value
+ *
+ * Revision 6.62  2000/10/20 21:51:09  dondosha
+ * Set matrix[15][] values to INT4_MIN for blastn to prevent crossing boundary between strands
+ *
+ * Revision 6.61  2000/09/27 21:28:40  dondosha
+ * Copy square matrix in BLAST_MatrixFill to the original_matrix member of BLAST_Matrix
+ *
+ * Revision 6.60  2000/09/27 19:29:04  dondosha
+ * Check boolean parameter in BLAST_MatrixFill to use position based matrix
+ *
+ * Revision 6.59  2000/09/15 18:48:16  madden
+ * Added new blosum62_20 values
+ *
+ * Revision 6.58  2000/09/13 16:16:52  dondosha
+ * Added LIBCALL to TxMatrix functions declarations
+ *
+ * Revision 6.57  2000/09/13 15:50:28  dondosha
+ * Use SeqMapTable functions for conversion of search matrix to txalign-style matrix
+ *
+ * Revision 6.56  2000/09/12 16:03:50  dondosha
+ * Added functions to create and destroy matrix used in txalign
+ *
+ * Revision 6.55  2000/09/11 20:49:32  madden
+ * New values for BLOSUM62_20 from Stephen Altschul
+ *
+ * Revision 6.54  2000/08/31 15:45:07  dondosha
+ * Added function BlastUnevenGapSumE for sum evalue computation with different gap size on two sequences
+ *
+ * Revision 6.53  2000/08/28 13:38:31  shavirin
+ * Fixed bug in the function BLAST_MatrixFill() detected by Alejandro.
+ *
+ * Revision 6.52  2000/08/23 18:50:01  madden
+ * Changes to support decline-to-align checking
+ *
+ * Revision 6.51  2000/08/22 12:58:55  madden
+ * Add new BLOSUM62_20 values
+ *
+ * Revision 6.50  2000/08/04 15:49:25  sicotte
+ * added BlastScoreBlkMatCreateEx(reward,penalty) and BlastKarlinGetDefaultMatrixValues as external functions
+ *
+ * Revision 6.49  2000/08/04 15:13:29  dondosha
+ * Initialize posFreqs to NULL in BLAST_MatrixFill
+ *
+ * Revision 6.48  2000/08/04 14:43:58  shavirin
+ * Changed values for data corresponding to BLOSUM62_20A and
+ * BLOSUM62_20B matrixes.
+ *
+ * Revision 6.47  2000/08/03 22:23:13  shavirin
+ * Added initialization of the posFreqs array in the function BLAST_MatrixFill()
+ *
+ * Revision 6.46  2000/07/24 18:46:37  shavirin
+ * Added stat parameters for the matrixes BLOSUM62_20a and BLOSUM62_20b
+ *
+ * Revision 6.45  2000/07/24 17:32:42  shavirin
+ * Fixed values for size of matrix in the function BlastScoreBlkMaxScoreSet()
+ *
+ * Revision 6.44  2000/07/20 20:46:30  madden
+ * New values for blosum62_20
+ *
  * Revision 6.43  2000/06/12 21:37:33  shavirin
  * Adjusted blosum62_values{} and blosum80_values{}.
  *
@@ -459,13 +523,13 @@ Uint1 blastna_to_ncbi4na[] = {	 1, /* A, 0 */
 			};
 
 /* Used in BlastKarlinBlkGappedCalc */
-typedef FloatHi array_of_5[5];
+typedef FloatHi array_of_6[6];
 
 /* Used to temporarily store matrix values for retrieval. */
 
 typedef struct _matrix_info {
 	CharPtr		name;			/* name of matrix (e.g., BLOSUM90). */
-	array_of_5 	*values;		/* The values (below). */
+	array_of_6 	*values;		/* The values (below). */
 	Int4		*prefs;			/* Preferences for display. */
 	Int4		max_number_values;	/* number of values (e.g., BLOSUM90_VALUES_MAX). */
 } MatrixInfo, PNTR MatrixInfoPtr;
@@ -482,14 +546,14 @@ typedef struct _matrix_info {
 	
 	
 #define BLOSUM90_VALUES_MAX 7
-static Nlm_FloatHi blosum90_values[BLOSUM90_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX,  (Nlm_FloatHi) INT2_MAX,	0.3346,     0.190,      0.75},     
-	{  8.0,  2.0,	0.297,     0.088,      0.50},     
-	{  7.0,  2.0,   0.285,     0.077,      0.42}, 
-	{  6.0,  2.0,   0.269,     0.072,      0.31},
-	{ 11.0,  1.0,   0.304,     0.098,      0.52},
-	{ 10.0,  1.0,   0.289,     0.072,      0.42},
-	{  9.0,  1.0,   0.263,     0.040,      0.31},
+static Nlm_FloatHi blosum90_values[BLOSUM90_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX,  (Nlm_FloatHi) INT2_MAX,	(Nlm_FloatHi) INT2_MAX,       0.3346,     0.190,      0.75},     
+	{  8.0,  2.0,	(Nlm_FloatHi) INT2_MAX,       0.297,     0.088,      0.50},     
+	{  7.0,  2.0,   (Nlm_FloatHi) INT2_MAX,       0.285,     0.077,      0.42}, 
+	{  6.0,  2.0,   (Nlm_FloatHi) INT2_MAX,       0.269,     0.072,      0.31},
+	{ 11.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.304,     0.098,      0.52},
+	{ 10.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.289,     0.072,      0.42},
+	{  9.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.263,     0.040,      0.31},
 };
 
 static Int4 blosum90_prefs[BLOSUM90_VALUES_MAX] = {
@@ -504,16 +568,16 @@ BLAST_MATRIX_NOMINAL
 
 
 #define BLOSUM80_VALUES_MAX 9
-static Nlm_FloatHi blosum80_values[BLOSUM80_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX,  (Nlm_FloatHi) INT2_MAX,	0.3430,     0.177,      0.66},     
-	{  8.0,  2.0,	0.308,     0.089,      0.46},     
-	{  7.0,  2.0,   0.295,     0.077,      0.38},
-	{  6.0,  2.0,   0.271,     0.051,      0.28},
-	{ 11.0,  1.0,   0.314,     0.096,      0.48},
-	{ 10.0,  1.0,   0.300,     0.072,      0.39},
-	{  9.0,  1.0,   0.277,     0.046,      0.30},
-        { 20.0,  3.0,   0.3428,    0.177,      0.530},
-        { 25.0,  2.0,   0.3430,    0.177,      0.530}
+static Nlm_FloatHi blosum80_values[BLOSUM80_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX,  (Nlm_FloatHi) INT2_MAX,	(Nlm_FloatHi) INT2_MAX,       0.3430,     0.177,      0.66},     
+	{  8.0,  2.0,	(Nlm_FloatHi) INT2_MAX,       0.308,     0.089,      0.46},     
+	{  7.0,  2.0,   (Nlm_FloatHi) INT2_MAX,       0.295,     0.077,      0.38},
+	{  6.0,  2.0,   (Nlm_FloatHi) INT2_MAX,       0.271,     0.051,      0.28},
+	{ 11.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.314,     0.096,      0.48},
+	{ 10.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.300,     0.072,      0.39},
+	{  9.0,  1.0,   (Nlm_FloatHi) INT2_MAX,       0.277,     0.046,      0.30},
+        { 20.0,  3.0,   (Nlm_FloatHi) INT2_MAX,       0.3428,    0.177,      0.530},
+        { 25.0,  2.0,   (Nlm_FloatHi) INT2_MAX,       0.3430,    0.177,      0.530}
 };
 
 static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
@@ -528,17 +592,50 @@ static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
     BLAST_MATRIX_PREFERRED
 };
 
+/* ------------------- BLOSUM62_20 ---------------------------- */
 
-#define BLOSUM62_20_VALUES_MAX 8
-static Nlm_FloatHi blosum62_20_values[BLOSUM62_20_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX, 0.03391, 0.125, 0.45},
-	{100.0, 10.0, 0.0293, 0.054, 0.26},
-	{97.0, 10.0, 0.0286, 0.046, 0.24},
-	{95.0, 10.0, 0.0280, 0.041, 0.22},
-	{93.0, 10.0, 0.0273, 0.035, 0.21},
-	{90.0, 10.0, 0.0266, 0.031, 0.19},
-	{88.0, 10.0, 0.0261, 0.029, 0.17},
-	{87.0, 10.0, 0.0256, 0.026, 0.16}
+#define BLOSUM62_20_VALUES_MAX 41
+static Nlm_FloatHi blosum62_20_values[BLOSUM62_20_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,       0.03391, 0.125, 0.454},
+	{125, 9, 3,       0.0283, 0.034, 0.12},
+	{130, 8, 3,       0.0287, 0.037, 0.12},
+	{125, 7, 3,       0.0287, 0.036, 0.12},
+	{140, 6, 3,       0.0285, 0.033, 0.12},
+	{100, 14, 3,       0.0258, 0.023, 0.087},
+	{105, 13, 3,       0.0263, 0.024, 0.085},
+	{110, 12, 3,       0.0271, 0.028, 0.093},
+	{115, 11, 3,       0.0275, 0.030, 0.10},
+	{115, 10, 5,       0.0290, 0.042, 0.16},
+	{120, 10, 5,       0.0279, 0.033, 0.13},
+	{120, 10, 5,       0.0264, 0.024, 0.10},
+	{120, 10, 5,       0.0250, 0.018, 0.081},
+	{125, 10, 4,       0.0301, 0.053, 0.18},
+	{120, 10, 4,       0.0292, 0.043, 0.15},
+	{115, 10, 4,       0.0282, 0.035, 0.13},
+	{110, 10, 4,       0.0270, 0.027, 0.11},
+	{105, 10, 4,       0.0254, 0.020, 0.079},
+	{130, 10, 3,       0.0300, 0.051, 0.17},
+	{125, 10, 3,       0.0290, 0.040, 0.13},
+	{120, 10, 3,       0.0278, 0.030, 0.11},
+	{115, 10, 3,       0.0267, 0.025, 0.092},
+	{110, 10, 3,       0.0252, 0.018, 0.070},
+	{135, 10, 2,       0.0292, 0.040, 0.13},
+	{130, 10, 2,       0.0283, 0.034, 0.10},
+	{125, 10, 2,       0.0269, 0.024, 0.077},
+	{120, 10, 2,       0.0253, 0.017, 0.059},
+	{115, 10, 2,       0.0234, 0.011, 0.043},
+	{115, 10, (Nlm_FloatHi) INT2_MAX,       0.0308, 0.062, 0.22},
+	{110, 10, (Nlm_FloatHi) INT2_MAX,       0.0302, 0.056, 0.19},
+	{105, 10, (Nlm_FloatHi) INT2_MAX,       0.0296, 0.050, 0.16},
+	{100, 10, (Nlm_FloatHi) INT2_MAX,       0.0286, 0.041, 0.15},
+	{95, 10, (Nlm_FloatHi) INT2_MAX,       0.0272, 0.030, 0.14},
+	{90, 10, (Nlm_FloatHi) INT2_MAX,       0.0257, 0.022, 0.11},
+	{85, 10, (Nlm_FloatHi) INT2_MAX,       0.0242, 0.017, 0.08},
+	{115, 9, (Nlm_FloatHi) INT2_MAX,       0.0306, 0.061, 0.24},
+	{110, 9, (Nlm_FloatHi) INT2_MAX,       0.0299, 0.053, 0.19},
+	{105, 9, (Nlm_FloatHi) INT2_MAX,       0.0289, 0.043, 0.17},
+	{100, 9, (Nlm_FloatHi) INT2_MAX,       0.0279, 0.036, 0.14},
+	{95, 9, (Nlm_FloatHi) INT2_MAX,       0.0266, 0.028, 0.12}
 }; 
 
 static Int4 blosum62_20_prefs[BLOSUM62_20_VALUES_MAX] = {
@@ -549,20 +646,86 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_NOMINAL,
+BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL
 };
 
+/* ------------------- BLOSUM62_20a ---------------------------- */
+
+#define BLOSUM62_20a_VALUES_MAX 8
+static Nlm_FloatHi blosum62_20a_values[BLOSUM62_20a_VALUES_MAX][6] = 
+{
+    {(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,       0.03639 ,0.136, 0.544},
+    {100, 10, (Nlm_FloatHi) INT2_MAX,       0.0329, 0.070, 0.25},
+    {95, 10, (Nlm_FloatHi) INT2_MAX,       0.0320, 0.058, 0.22},
+    {90, 10, (Nlm_FloatHi) INT2_MAX,       0.0310, 0.049, 0.19},
+    {85, 10, (Nlm_FloatHi) INT2_MAX,       0.0297, 0.039, 0.16},
+    {80, 10, (Nlm_FloatHi) INT2_MAX,       0.0281, 0.029, 0.13},
+    {75, 10, (Nlm_FloatHi) INT2_MAX,       0.0259, 0.019, 0.10},
+    {70, 10, (Nlm_FloatHi) INT2_MAX,       0.0230, 0.0105, 0.066}
+
+}; 
+
+static Int4 blosum62_20a_prefs[BLOSUM62_20a_VALUES_MAX] = {
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL
+};
+
+/* ------------------- BLOSUM62_20b ---------------------------- */
+
+#define BLOSUM62_20b_VALUES_MAX 10
+static Nlm_FloatHi blosum62_20b_values[BLOSUM62_20b_VALUES_MAX][6] = 
+{
+    {(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,       0.03878, 0.147, 0.639},
+    {100, 10, (Nlm_FloatHi) INT2_MAX,       0.0359, 0.082, 0.39},
+    {95, 10, (Nlm_FloatHi) INT2_MAX,       0.0352, 0.071, 0.35},
+    {90, 10, (Nlm_FloatHi) INT2_MAX,       0.0347, 0.068, 0.32},
+    {85, 10, (Nlm_FloatHi) INT2_MAX,       0.0339, 0.062, 0.28},
+    {80, 10, (Nlm_FloatHi) INT2_MAX,       0.0327, 0.050, 0.23},
+    {75, 10, (Nlm_FloatHi) INT2_MAX,       0.0311, 0.038, 0.18},
+    {70, 10, (Nlm_FloatHi) INT2_MAX,       0.0291, 0.027, 0.14},
+    {65, 10, (Nlm_FloatHi) INT2_MAX,       0.0265, 0.017, 0.095},
+    {60, 10, (Nlm_FloatHi) INT2_MAX,       0.0227, 0.0083, 0.057}
+
+}; 
+
+static Int4 blosum62_20b_prefs[BLOSUM62_20b_VALUES_MAX] = 
+{
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_NOMINAL
+};
+
+/* -------------------------------------------------------------- */
+
 #define BLOSUM62_VALUES_MAX 9
-static Nlm_FloatHi blosum62_values[BLOSUM62_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.3176,     0.134,    0.40},
-	{  9.0,  2.0,     0.285,     0.075,    0.27},
-	{  8.0,  2.0,     0.265,     0.046,    0.22},
-	{  7.0,  2.0,     0.243,     0.032,    0.17},
-	{ 12.0,  1.0,     0.281,     0.057,    0.27},
-	{ 11.0,  1.0,     0.270,     0.047,    0.23},
-	{ 10.0,  1.0,     0.250,     0.033,    0.17},
-        { 20.0,  3.0,     0.3174,    0.134,    0.37},
-        { 25.0,  2.0,     0.3176,    0.134,    0.37},
+static Nlm_FloatHi blosum62_values[BLOSUM62_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.3176,     0.134,    0.40},
+	{  9.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.285,     0.075,    0.27},
+	{  8.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.265,     0.046,    0.22},
+	{  7.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.243,     0.032,    0.17},
+	{ 12.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.281,     0.057,    0.27},
+	{ 11.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.270,     0.047,    0.23},
+	{ 10.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.250,     0.033,    0.17},
+        { 20.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.3174,    0.134,    0.37},
+        { 25.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.3176,    0.134,    0.37},
 }; 
 				
 static Int4 blosum62_prefs[BLOSUM62_VALUES_MAX] = {
@@ -578,20 +741,20 @@ static Int4 blosum62_prefs[BLOSUM62_VALUES_MAX] = {
 };
 
 #define BLOSUM50_VALUES_MAX 13
-static Nlm_FloatHi blosum50_values[BLOSUM50_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.232,     0.11,      0.34},
-	{12.0,  3.0,     0.206,     0.055,      0.23},
-	{11.0,  3.0,     0.198,     0.046,      0.20},
-	{10.0,  3.0,     0.189,     0.038,      0.17},
-	{ 9.0,  3.0,     0.177,     0.030,      0.14},
-	{15.0,  2.0,     0.211,     0.062,      0.25},
-	{14.0,  2.0,     0.205,     0.053,      0.22},
-	{13.0,  2.0,    0.197,     0.043,      0.19},
-	{12.0,  2.0,     0.183,     0.028,      0.15},
-	{18.0,  1.0,     0.208,     0.055,      0.23},
-	{17.0,  1.0,     0.200,     0.042,      0.20},
-	{16.0,  1.0,     0.189,     0.030,      0.17},
-	{15.0,  1.0,     0.175,     0.020,      0.13},
+static Nlm_FloatHi blosum50_values[BLOSUM50_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.232,     0.11,      0.34},
+	{12.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.206,     0.055,      0.23},
+	{11.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.198,     0.046,      0.20},
+	{10.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.189,     0.038,      0.17},
+	{ 9.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.177,     0.030,      0.14},
+	{15.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.211,     0.062,      0.25},
+	{14.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.205,     0.053,      0.22},
+	{13.0,  2.0,    (Nlm_FloatHi) INT2_MAX,       0.197,     0.043,      0.19},
+	{12.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.183,     0.028,      0.15},
+	{18.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.208,     0.055,      0.23},
+	{17.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.200,     0.042,      0.20},
+	{16.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.189,     0.030,      0.17},
+	{15.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.175,     0.020,      0.13},
 };
 
 static Int4 blosum50_prefs[BLOSUM50_VALUES_MAX] = {
@@ -611,20 +774,20 @@ BLAST_MATRIX_NOMINAL
 };
 
 #define BLOSUM45_VALUES_MAX 13
-static Nlm_FloatHi blosum45_values[BLOSUM45_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.2291,     0.092,      0.25},
-	{13.0,  3.0,     0.209,     0.057,      0.19},
-	{12.0,  3.0,     0.203,     0.049,      0.17},
-	{11.0,  3.0,     0.193,     0.037,      0.15},
-	{10.0,  3.0,     0.182,     0.029,      0.12},
-	{15.0,  2.0,     0.206,     0.049,      0.18},
-	{14.0,  2.0, 	 0.199,     0.040,      0.16},
-	{13.0,  2.0,	 0.190,     0.032,      0.14},
-	{12.0,  2.0,     0.177,     0.023,      0.11},
-	{19.0,  1.0,     0.209,     0.049,      0.19},
-	{18.0,  1.0,     0.202,     0.041,      0.17},
-	{17.0,  1.0,     0.195,     0.034,      0.14},
-	{16.0,  1.0,     0.183,     0.024,      0.12}
+static Nlm_FloatHi blosum45_values[BLOSUM45_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.2291,     0.092,      0.25},
+	{13.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.209,     0.057,      0.19},
+	{12.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.203,     0.049,      0.17},
+	{11.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.193,     0.037,      0.15},
+	{10.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.182,     0.029,      0.12},
+	{15.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.206,     0.049,      0.18},
+	{14.0,  2.0, 	 (Nlm_FloatHi) INT2_MAX,       0.199,     0.040,      0.16},
+	{13.0,  2.0,	 (Nlm_FloatHi) INT2_MAX,       0.190,     0.032,      0.14},
+	{12.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.177,     0.023,      0.11},
+	{19.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.209,     0.049,      0.19},
+	{18.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.202,     0.041,      0.17},
+	{17.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.195,     0.034,      0.14},
+	{16.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.183,     0.024,      0.12}
 };
 
 static Int4 blosum45_prefs[BLOSUM45_VALUES_MAX] = {
@@ -644,17 +807,17 @@ BLAST_MATRIX_PREFERRED
 };
 
 #define PAM30_VALUES_MAX 10
-static Nlm_FloatHi pam30_values[PAM30_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.340,     0.283,       1.75},
-	{5.0,  3.0,     0.301,     0.14,       1.06},
-	{4.0,  3.0,     0.286,     0.12,       0.85},
-	{3.0,  3.0,     0.259,     0.081,      0.61},
-	{7.0,  2.0,     0.306,     0.15,       1.07 },
-	{6.0,  2.0,     0.292,     0.13,       0.86},
-	{5.0,  2.0,     0.263,     0.077,      0.60},
-	{10.0,  1.0,     0.309,     0.15,       1.07 },
-	{9.0,  1.0,    0.295,     0.12,       0.85  },
-	{8.0,  1.0,     0.270,     0.070,      0.59},
+static Nlm_FloatHi pam30_values[PAM30_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.340,     0.283,       1.75},
+	{5.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.301,     0.14,       1.06},
+	{4.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.286,     0.12,       0.85},
+	{3.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.259,     0.081,      0.61},
+	{7.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.306,     0.15,       1.07 },
+	{6.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.292,     0.13,       0.86},
+	{5.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.263,     0.077,      0.60},
+	{10.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.309,     0.15,       1.07 },
+	{9.0,  1.0,    (Nlm_FloatHi) INT2_MAX,       0.295,     0.12,       0.85  },
+	{8.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.270,     0.070,      0.59},
 };
 
 
@@ -672,17 +835,17 @@ BLAST_MATRIX_PREFERRED
 };
 
 #define PAM70_VALUES_MAX 10
-static Nlm_FloatHi pam70_values[PAM70_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.3345,     0.229,      1.03},
-	{6.0,  3.0,     0.297,     0.11,      0.67},
-	{5.0,  3.0,     0.285,     0.10,       0.55},
-	{4.0,  3.0,     0.258,     0.062,      0.40},
-	{8.0,  2.0,     0.303,     0.13,       0.67}, 
-	{7.0,  2.0,     0.287,     0.095,      0.56},
-	{6.0,  2.0,     0.269,     0.079,      0.42},
-	{11.0,  1.0,     0.307,     0.13,       0.70},
-	{10.0,  1.0,    0.291,     0.089,      0.57},
-	{9.0,  1.0,     0.269,     0.058,      0.42},
+static Nlm_FloatHi pam70_values[PAM70_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.3345,     0.229,      1.03},
+	{6.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.297,     0.11,      0.67},
+	{5.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.285,     0.10,       0.55},
+	{4.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.258,     0.062,      0.40},
+	{8.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.303,     0.13,       0.67}, 
+	{7.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.287,     0.095,      0.56},
+	{6.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.269,     0.079,      0.42},
+	{11.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.307,     0.13,       0.70},
+	{10.0,  1.0,    (Nlm_FloatHi) INT2_MAX,       0.291,     0.089,      0.57},
+	{9.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.269,     0.058,      0.42},
 };
 
 static Int4 pam70_prefs[PAM70_VALUES_MAX] = {
@@ -700,20 +863,20 @@ BLAST_MATRIX_PREFERRED
 
 
 #define PAM250_VALUES_MAX 13
-static Nlm_FloatHi pam250_values[PAM250_VALUES_MAX][5] = {
-	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.229,     0.09,      0.23},
-	{13.0,  3.0,     0.207,     0.051,      0.17},
-	{12.0,  3.0,     0.200,     0.043,      0.15},
-	{11.0,  3.0,     0.191,     0.034,      0.13},
-	{10.0,  3.0,     0.181,     0.028,      0.11},
-	{15.0,  2.0,     0.203,     0.043,      0.16},
-	{14.0,  2.0,    0.196,     0.036,      0.14},
-	{13.0,  2.0,     0.188,     0.030,      0.12},
-	{12.0,  2.0,     0.175,     0.022,      0.10},
-	{19.0,  1.0,     0.208,     0.049,      0.17 },
-	{18.0,  1.0,     0.202,     0.040,      0.15},
-	{17.0,  1.0,     0.194,     0.034,      0.13},
-	{16.0,  1.0,     0.180,     0.021,      0.10}
+static Nlm_FloatHi pam250_values[PAM250_VALUES_MAX][6] = {
+	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     (Nlm_FloatHi) INT2_MAX,       0.229,     0.09,      0.23},
+	{13.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.207,     0.051,      0.17},
+	{12.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.200,     0.043,      0.15},
+	{11.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.191,     0.034,      0.13},
+	{10.0,  3.0,     (Nlm_FloatHi) INT2_MAX,       0.181,     0.028,      0.11},
+	{15.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.203,     0.043,      0.16},
+	{14.0,  2.0,    (Nlm_FloatHi) INT2_MAX,       0.196,     0.036,      0.14},
+	{13.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.188,     0.030,      0.12},
+	{12.0,  2.0,     (Nlm_FloatHi) INT2_MAX,       0.175,     0.022,      0.10},
+	{19.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.208,     0.049,      0.17 },
+	{18.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.202,     0.040,      0.15},
+	{17.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.194,     0.034,      0.13},
+	{16.0,  1.0,     (Nlm_FloatHi) INT2_MAX,       0.180,     0.021,      0.10}
 };
 
 static Int4 pam250_prefs[PAM250_VALUES_MAX] = {
@@ -802,40 +965,54 @@ BLAST_ScoreBlkPtr LIBCALL
 BLAST_ScoreBlkDestruct(BLAST_ScoreBlkPtr sbp)
 
 {
-	Int2 index;
-
-	if (sbp == NULL)
-		return NULL;
-
-	for (index=0; index<sbp->number_of_contexts; index++)
-	{
-		if (sbp->sfp)
-			sbp->sfp[index] = BlastScoreFreqDestruct(sbp->sfp[index]);
-		if (sbp->kbp_std)
-			sbp->kbp_std[index] = BlastKarlinBlkDestruct(sbp->kbp_std[index]);
-		if (sbp->kbp_gap_std)
-			sbp->kbp_gap_std[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_std[index]);
-		if (sbp->kbp_psi)
-			sbp->kbp_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_psi[index]);
-		if (sbp->kbp_gap_psi)
-			sbp->kbp_gap_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_psi[index]);
-	}
-	if (sbp->kbp_ideal)
-		sbp->kbp_ideal = BlastKarlinBlkDestruct(sbp->kbp_ideal);
-	sbp->sfp = MemFree(sbp->sfp);
-	sbp->kbp_std = MemFree(sbp->kbp_std);
-	sbp->kbp_psi = MemFree(sbp->kbp_psi);
-	sbp->kbp_gap_std = MemFree(sbp->kbp_gap_std);
-	sbp->kbp_gap_psi = MemFree(sbp->kbp_gap_psi);
-	sbp->matrix_struct = BlastMatrixDestruct(sbp->matrix_struct);
-	sbp->maxscore = MemFree(sbp->maxscore);
-	sbp->comments = ValNodeFreeData(sbp->comments);
-	sbp->name = MemFree(sbp->name);
-	sbp->ambiguous_res = MemFree(sbp->ambiguous_res);
-
-	sbp = MemFree(sbp);
-
-	return sbp;
+    Int4 index, rows;
+    if (sbp == NULL)
+        return NULL;
+    
+    for (index=0; index<sbp->number_of_contexts; index++) {
+        if (sbp->sfp)
+            sbp->sfp[index] = BlastScoreFreqDestruct(sbp->sfp[index]);
+        if (sbp->kbp_std)
+            sbp->kbp_std[index] = BlastKarlinBlkDestruct(sbp->kbp_std[index]);
+        if (sbp->kbp_gap_std)
+            sbp->kbp_gap_std[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_std[index]);
+        if (sbp->kbp_psi)
+            sbp->kbp_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_psi[index]);
+        if (sbp->kbp_gap_psi)
+            sbp->kbp_gap_psi[index] = BlastKarlinBlkDestruct(sbp->kbp_gap_psi[index]);
+    }
+    if (sbp->kbp_ideal)
+        sbp->kbp_ideal = BlastKarlinBlkDestruct(sbp->kbp_ideal);
+    sbp->sfp = MemFree(sbp->sfp);
+    sbp->kbp_std = MemFree(sbp->kbp_std);
+    sbp->kbp_psi = MemFree(sbp->kbp_psi);
+    sbp->kbp_gap_std = MemFree(sbp->kbp_gap_std);
+    sbp->kbp_gap_psi = MemFree(sbp->kbp_gap_psi);
+    sbp->matrix_struct = BlastMatrixDestruct(sbp->matrix_struct);
+    sbp->maxscore = MemFree(sbp->maxscore);
+    sbp->comments = ValNodeFreeData(sbp->comments);
+    sbp->name = MemFree(sbp->name);
+    sbp->ambiguous_res = MemFree(sbp->ambiguous_res);
+    
+    /* Removing posMatrix and posFreqs if any */
+    rows = sbp->query_length + 1;
+    if(sbp->posMatrix != NULL) {
+        for (index=0; index < rows; index++) {
+            MemFree(sbp->posMatrix[index]);
+        }
+        MemFree(sbp->posMatrix);
+    }
+    
+    if(sbp->posFreqs != NULL) {
+        for (index = 0; index < rows; index++) {
+            MemFree(sbp->posFreqs[index]);
+        }
+        MemFree(sbp->posFreqs);
+    }
+    
+    sbp = MemFree(sbp);
+    
+    return sbp;
 }
 
 /* 
@@ -931,22 +1108,17 @@ BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
     FloatHi karlinK = 0.0;
     Int4 index1, index2, dim1, dim2;
     Int4Ptr PNTR matrix, PNTR original_matrix;
-    Nlm_FloatHi **posFreqs;
+    Nlm_FloatHi **posFreqs = NULL;
 
     if (sbp == NULL)
         return NULL;
     
     blast_matrix = (BLAST_MatrixPtr) MemNew(sizeof(BLAST_Matrix));
     
-    if (sbp->posMatrix) {
-        dim1 = sbp->query_length + 1;
-        dim2 = sbp->alphabet_size;
-        original_matrix = sbp->posMatrix;
-    } else {
-        dim1 = sbp->alphabet_size;
-        dim2 = sbp->alphabet_size;
-        original_matrix = sbp->matrix;
-    }
+    dim1 = sbp->alphabet_size;
+    dim2 = sbp->alphabet_size;
+    original_matrix = sbp->matrix;
+
     if (sbp->kbp_gap_psi[0])
         karlinK = sbp->kbp_gap_psi[0]->K;
     
@@ -958,8 +1130,25 @@ BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
         }
     }
 
+    blast_matrix->original_matrix = matrix;
+    
+    /* For PSI BLAST blast_matrix->matrix will be position based */
+    if (sbp->posMatrix) {
+        dim1 = sbp->query_length + 1;
+        dim2 = sbp->alphabet_size;
+        original_matrix = sbp->posMatrix;
+        matrix = MemNew(dim1*sizeof(Int4Ptr));
+        for (index1=0; index1<dim1; index1++) {
+           matrix[index1] = MemNew(dim2*sizeof(Int4));
+           for (index2=0; index2<dim2; index2++) {
+              matrix[index1][index2] = original_matrix[index1][index2];
+           }
+        }
+    }
+    blast_matrix->matrix = matrix;
+
     /* Copying posFreqs to the BLAST_Matrix */
-    if(sbp->posFreqs != NULL) {
+    if ((sbp->posFreqs != NULL) && (sbp->posMatrix != NULL)) {
         posFreqs = MemNew(dim1*sizeof(Nlm_FloatHi *));
         for (index1 = 0; index1 < dim1; index1++) {
             posFreqs[index1] = MemNew(dim2*sizeof(Nlm_FloatHi));
@@ -974,34 +1163,34 @@ BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
     blast_matrix->rows = dim1;
     blast_matrix->columns = dim2;
     blast_matrix->matrix = matrix;
+    blast_matrix->posFreqs = posFreqs;
     blast_matrix->karlinK = karlinK;
     
     return blast_matrix;
 }
 
 /* 
-	Fill in the matrix for blastn using the penaly and rewards on
-	the BLAST_ScoreBlkPtr.
+	Fill in the matrix for blastn using the penaly and rewards
 
 	The query sequence alphabet is blastna, the subject sequence
 	is ncbi2na.  The alphabet blastna is defined in blastkar.h
 	and the first four elements of blastna are identical to ncbi2na.
 
 	The query is in the first index, the subject is the second.
+        if matrix==NULL, it is allocated and returned.
 */
 
-static Int2
-BlastScoreBlkMatCreate(BLAST_ScoreBlkPtr sbp)
+BLAST_ScorePtr PNTR LIBCALL BlastScoreBlkMatCreateEx(BLAST_ScorePtr PNTR matrix,BLAST_Score penalty, BLAST_Score reward)
 {
 
-	BLAST_Score     penalty, reward;
-	BLAST_ScorePtr PNTR	matrix;
-	Char buffer[25];
 	Int2	index1, index2, degen;
 	Int2 degeneracy[BLASTNA_SIZE+1];
-
-	matrix = sbp->matrix;
 	
+        if(!matrix) {
+            BLASTMatrixStructurePtr matrix_struct;
+            matrix_struct =BlastMatrixAllocate((Int2) BLASTNA_SIZE);
+            matrix = matrix_struct->matrix;
+        }
 	for (index1 = 0; index1<BLASTNA_SIZE; index1++) /* blastna */
 		for (index2 = 0; index2<BLASTNA_SIZE; index2++) /* blastna */
 			matrix[index1][index2] = 0;
@@ -1024,8 +1213,6 @@ BlastScoreBlkMatCreate(BLAST_ScoreBlkPtr sbp)
 		degeneracy[index1] = degen;
 	}
 
-	reward = sbp->reward;
-	penalty = sbp->penalty;
 
 	for (index1=0; index1<BLASTNA_SIZE; index1++) /* blastna */
 	{
@@ -1047,6 +1234,30 @@ BlastScoreBlkMatCreate(BLAST_ScoreBlkPtr sbp)
 		}
 	}
 
+        /* The value of 15 is a gap, which is a sentinel between strands in 
+           the ungapped extension algorithm */
+	for (index1=0; index1<BLASTNA_SIZE; index1++) /* blastna */
+           matrix[BLASTNA_SIZE-1][index1] = INT4_MIN / 2;
+
+	return matrix;
+}
+/* 
+	Fill in the matrix for blastn using the penaly and rewards on
+	the BLAST_ScoreBlkPtr.
+
+	The query sequence alphabet is blastna, the subject sequence
+	is ncbi2na.  The alphabet blastna is defined in blastkar.h
+	and the first four elements of blastna are identical to ncbi2na.
+
+	The query is in the first index, the subject is the second.
+*/
+
+
+static Int2 BlastScoreBlkMatCreate(BLAST_ScoreBlkPtr sbp)
+{
+	Char buffer[25];
+
+        sbp->matrix = BlastScoreBlkMatCreateEx(sbp->matrix,sbp->penalty, sbp->reward);
 	sbp->mat_dim1 = BLASTNA_SIZE;
 	sbp->mat_dim2 = BLASTNA_SIZE;
 
@@ -1055,6 +1266,8 @@ BlastScoreBlkMatCreate(BLAST_ScoreBlkPtr sbp)
 
 	return 0;
 }
+
+
 
 
 
@@ -1500,10 +1713,10 @@ BlastScoreBlkMaxScoreSet(BLAST_ScoreBlkPtr sbp)
 	sbp->loscore = BLAST_SCORE_1MAX;
         sbp->hiscore = BLAST_SCORE_1MIN;
 	matrix = sbp->matrix;
-	for (index1=0; index1<sbp->mat_dim1; index1++)
+	for (index1=0; index1<sbp->alphabet_size; index1++)
 	{
 		maxscore=BLAST_SCORE_MIN;
-		for (index2=0; index2<sbp->mat_dim2; index2++)
+		for (index2=0; index2<sbp->alphabet_size; index2++)
 		{
 			score = matrix[index1][index2];
 			if (score <= BLAST_SCORE_MIN || score >= BLAST_SCORE_MAX)
@@ -2145,7 +2358,7 @@ MatrixInfoDestruct(MatrixInfoPtr matrix_info)
 */
 
 static MatrixInfoPtr
-MatrixInfoNew(CharPtr name, array_of_5 *values, Int4Ptr prefs, Int4 max_number)
+MatrixInfoNew(CharPtr name, array_of_6 *values, Int4Ptr prefs, Int4 max_number)
 
 {
 	MatrixInfoPtr matrix_info;
@@ -2193,26 +2406,39 @@ BlastLoadMatrixValues (void)
 
 	matrix_info = MatrixInfoNew("BLOSUM80", blosum80_values, blosum80_prefs, BLOSUM80_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("BLOSUM62", blosum62_values, blosum62_prefs, BLOSUM62_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("BLOSUM50", blosum50_values, blosum50_prefs, BLOSUM50_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("BLOSUM45", blosum45_values, blosum45_prefs, BLOSUM45_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("PAM250", pam250_values, pam250_prefs, PAM250_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("BLOSUM62_20", blosum62_20_values, blosum62_20_prefs, BLOSUM62_20_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
+	matrix_info = MatrixInfoNew("BLOSUM62_20a", blosum62_20a_values, blosum62_20a_prefs, BLOSUM62_20a_VALUES_MAX);
+	ValNodeAddPointer(&retval, 0, matrix_info);
+
+	matrix_info = MatrixInfoNew("BLOSUM62_20b", blosum62_20b_values, blosum62_20b_prefs, BLOSUM62_20b_VALUES_MAX);
+	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("BLOSUM90", blosum90_values, blosum90_prefs, BLOSUM90_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("PAM30", pam30_values, pam30_prefs, PAM30_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
+
 	matrix_info = MatrixInfoNew("PAM70", pam70_values, pam70_prefs, PAM70_VALUES_MAX);
 	ValNodeAddPointer(&retval, 0, matrix_info);
 
 	return retval;
 }
-
 /*
 Int2 LIBCALL
 BlastKarlinGetMatrixValues(CharPtr matrix, Int4Ptr open, Int4Ptr extension, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H)
@@ -2227,10 +2453,28 @@ Int2 LIBCALL
 BlastKarlinGetMatrixValues(CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, Int4Ptr PNTR pref_flags)
 
 {
-	array_of_5 *values;
+	return BlastKarlinGetMatrixValuesEx(matrix, open, extension, NULL, lambda, K, H, pref_flags);
+
+}
+
+/*
+Int2 LIBCALL
+BlastKarlinGetMatrixValuesEx(CharPtr matrix, Int4Ptr open, Int4Ptr extension, Int4Ptr decline_align, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H)
+	
+Obtains arrays of the allowed opening and extension penalties for gapped BLAST for
+the given matrix.  Also obtains arrays of Lambda, K, and H.  Any of these fields that
+are not required should be set to NULL.  The Int2 return value is the length of the
+arrays.
+*/
+
+Int2 LIBCALL
+BlastKarlinGetMatrixValuesEx(CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR extension, Int4Ptr PNTR decline_align, FloatHiPtr PNTR lambda, FloatHiPtr PNTR K, FloatHiPtr PNTR H, Int4Ptr PNTR pref_flags)
+
+{
+	array_of_6 *values;
 	Boolean found_matrix=FALSE;
 	Int4 index, max_number_values=0;
-	Int4Ptr open_array=NULL, extension_array=NULL, pref_flags_array=NULL, prefs;
+	Int4Ptr open_array=NULL, extension_array=NULL, decline_align_array=NULL, pref_flags_array=NULL, prefs;
 	Nlm_FloatHiPtr lambda_array=NULL, K_array=NULL, H_array=NULL;
 	MatrixInfoPtr matrix_info;
 	ValNodePtr vnp, head;
@@ -2260,6 +2504,8 @@ BlastKarlinGetMatrixValues(CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR exten
 			*open = open_array = MemNew(max_number_values*sizeof(Int4));
 		if (extension)
 			*extension = extension_array = MemNew(max_number_values*sizeof(Int4));
+		if (decline_align)
+			*decline_align = decline_align_array = MemNew(max_number_values*sizeof(Int4));
 		if (lambda)
 			*lambda = lambda_array = (FloatHiPtr) MemNew(max_number_values*sizeof(FloatHi));
 		if (K)
@@ -2275,12 +2521,14 @@ BlastKarlinGetMatrixValues(CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR exten
 				open_array[index] = values[index][0];
 			if (extension)
 				extension_array[index] = values[index][1];
+			if (decline_align)
+				decline_align_array[index] = values[index][2];
 			if (lambda)
-				lambda_array[index] = values[index][2];
+				lambda_array[index] = values[index][3];
 			if (K)
-				K_array[index] = values[index][3];
+				K_array[index] = values[index][4];
 			if (H)
-				H_array[index] = values[index][4];
+				H_array[index] = values[index][5];
 			if (pref_flags)
 				pref_flags_array[index] = prefs[index];
 		}
@@ -2290,7 +2538,52 @@ BlastKarlinGetMatrixValues(CharPtr matrix, Int4Ptr PNTR open, Int4Ptr PNTR exten
 
 	return max_number_values;
 }
-	
+/*
+  Conveniently return default/best Karling-Altschul parameters for a given matrix.
+  
+ */
+
+Int2 LIBCALL
+BlastKarlinGetDefaultMatrixValues(CharPtr matrix, Int4Ptr open, Int4Ptr extension, FloatHiPtr lambda, FloatHiPtr K, FloatHiPtr H) {
+    Int4Ptr gapOpen_arr, gapExtend_arr, pref_flags;
+    FloatHiPtr Lambda_arr, Kappa_arr, H_arr;
+    Int4 i,n;
+    if(matrix==NULL)
+        matrix = "BLOSUM62";
+    n = BlastKarlinGetMatrixValues(matrix, &gapOpen_arr, &gapExtend_arr, &Lambda_arr, &Kappa_arr, &H_arr,&pref_flags);
+    if(n) {
+        *open = gapOpen_arr[0];
+        *extension = gapExtend_arr[0];
+        *K = Kappa_arr[0];
+        *lambda = Lambda_arr[0];
+        *H = H_arr[0];
+        i+=n;
+        for(i=0;i<n;i++) {
+            if(pref_flags[i]==BLAST_MATRIX_PREFERRED) {
+                *open = gapOpen_arr[i];
+                *extension = gapExtend_arr[i];
+                *K = Kappa_arr[i];
+                *lambda = Lambda_arr[i];
+                *H = H_arr[i];
+            } else if(pref_flags[i]==BLAST_MATRIX_BEST) {
+                *open = gapOpen_arr[i];
+                *extension = gapExtend_arr[i];
+                *K = Kappa_arr[i];
+                *lambda = Lambda_arr[i];
+                *H = H_arr[i];
+                i+=n;
+            }
+        }
+        MemFree(gapOpen_arr);
+        MemFree(gapExtend_arr);
+        MemFree(Kappa_arr);
+        MemFree(Lambda_arr);
+        MemFree(H_arr);
+        MemFree(pref_flags);
+        return 1;
+    } else
+        return 0;
+}
 /*
 	Supplies lambda, H, and K values, as calcualted by Stephen Altschul 
 	in Methods in Enzy. (vol 266, page 474).
@@ -2302,8 +2595,24 @@ Int2 LIBCALL
 BlastKarlinBlkGappedCalc(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, CharPtr matrix_name, ValNodePtr PNTR error_return)
 
 {
+
+	return BlastKarlinBlkGappedCalcEx(kbp, gap_open, gap_extend, (FloatHi) INT2_MAX, matrix_name, error_return);
+
+}
+	
+/*
+	Supplies lambda, H, and K values, as calcualted by Stephen Altschul 
+	in Methods in Enzy. (vol 266, page 474).
+
+	if kbp is NULL, then a validation is perfomed.
+*/
+
+Int2 LIBCALL
+BlastKarlinBlkGappedCalcEx(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend, Int4 decline_align, CharPtr matrix_name, ValNodePtr PNTR error_return)
+
+{
 	Boolean found_matrix, found_values;
-	array_of_5 *values;
+	array_of_6 *values;
 	Char buffer[256];
 	Int4 index, max_number_values=0;
 	MatrixInfoPtr matrix_info;
@@ -2336,14 +2645,15 @@ BlastKarlinBlkGappedCalc(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend,
 		for (index=0; index<max_number_values; index++)
 		{
 			if (Nint(values[index][0]) == gap_open &&
-				Nint(values[index][1]) == gap_extend)
+				Nint(values[index][1]) == gap_extend &&
+				(Nint(values[index][2]) == INT2_MAX || Nint(values[index][2]) == decline_align))
 			{
 				if (kbp)
 				{
-					kbp->Lambda_real = kbp->Lambda = values[index][2];
-					kbp->K_real = kbp->K = values[index][3];
+					kbp->Lambda_real = kbp->Lambda = values[index][3];
+					kbp->K_real = kbp->K = values[index][4];
 					kbp->logK_real = kbp->logK = log(kbp->K);
-					kbp->H_real = kbp->H = values[index][4];
+					kbp->H_real = kbp->H = values[index][5];
 				}
 				found_values = TRUE;
 				break;
@@ -2372,11 +2682,17 @@ BlastKarlinBlkGappedCalc(BLAST_KarlinBlkPtr kbp, Int4 gap_open, Int4 gap_extend,
 		return 2;
 	}
 
-	sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
+	if (decline_align == INT2_MAX)
+		sprintf(buffer, "Gap existence and extension values of %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, matrix_name);
+	else
+		sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld not supported for %s", (long) gap_open, (long) gap_extend, (long) decline_align, matrix_name);
 	BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
 	for (index=0; index<max_number_values; index++)
 	{
-		sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
+		if (Nint(values[index][2]) == INT2_MAX)
+			sprintf(buffer, "Gap existence and extension values of %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]));
+		else
+			sprintf(buffer, "Gap existence, extension and decline-to-align values of %ld, %ld and %ld are supported", (long) Nint(values[index][0]), (long) Nint(values[index][1]), (long) Nint(values[index][2]));
 		BlastConstructErrorMessage("BlastKarlinBlkGappedCalc", buffer, 2, error_return);
 	}
 
@@ -3240,6 +3556,41 @@ BlastSmallGapSumE(BLAST_KarlinBlkPtr kbp, Int4 gap, Nlm_FloatHi gap_prob, Nlm_Fl
 }
 
 /*
+	Calculates the p-value for alignments with asymmetric gaps, typically 
+        a small (like in BlastSmallGapSumE) gap for one (protein) sequence and
+        a possibly large (up to 4000 bp) gap in the other (translated DNA) 
+        sequence. Used for linking HSPs representing exons in the DNA sequence
+        that are separated by introns.
+*/
+
+Nlm_FloatHi LIBCALL
+BlastUnevenGapSumE(BLAST_KarlinBlkPtr kbp, Int4 p_gap, Int4 n_gap, Nlm_FloatHi gap_prob, Nlm_FloatHi gap_decay_rate, Int2 num, Int4 sum, Nlm_FloatHi score_prime, Int4 query_length, Int4 subject_length, Boolean min_length_one)
+
+{
+
+	Nlm_FloatHi sum_p, sum_e;
+		
+	score_prime -= kbp->logK + log((Nlm_FloatHi)subject_length*(Nlm_FloatHi)query_length) + (num-1)*(kbp->logK + log((Nlm_FloatHi)p_gap) + log((Nlm_FloatHi)n_gap));
+	score_prime -= LnFactorial((Nlm_FloatHi) num); 
+
+	sum_p = BlastSumP(num, score_prime);
+
+	sum_e = BlastKarlinPtoE(sum_p);
+
+	sum_e = sum_e/((1.0-gap_decay_rate)*Nlm_Powi(gap_decay_rate, (num-1)));
+
+	if (num > 1)
+	{
+		if (gap_prob == 0.0)
+			sum_e = INT4_MAX;
+		else
+			sum_e = sum_e/gap_prob;
+	}
+
+	return sum_e;
+}
+
+/*
 	Calculates the p-values for alignments with "large" gaps (i.e., 
 	infinite) followings an idea of Stephen Altschul's.
 */
@@ -3397,3 +3748,53 @@ MakeBlastScore (ScorePtr PNTR old, CharPtr scoretype, Nlm_FloatHi prob, Int4 sco
 	return scrp;
 }
 
+#ifndef TX_MATRIX_SIZE
+#define TX_MATRIX_SIZE 128
+#endif
+
+Int4Ptr PNTR LIBCALL BlastMatrixToTxMatrix(BLAST_MatrixPtr blast_matrix)
+{
+   Uint1 i, j, index1, index2;
+   Int4Ptr PNTR matrix = blast_matrix->original_matrix;
+   Int4Ptr PNTR txmatrix;
+   SeqMapTablePtr smtp;
+   SeqCodeTablePtr sctp;
+
+   if (!blast_matrix->is_prot || matrix == NULL) 
+      return NULL;
+
+   sctp = SeqCodeTableFindObj(Seq_code_ncbistdaa);
+   smtp = SeqMapTableFind(Seq_code_ncbieaa, Seq_code_ncbistdaa);
+
+   txmatrix = Malloc(TX_MATRIX_SIZE*sizeof(Int4Ptr));
+
+   for (i=0; i<TX_MATRIX_SIZE; i++) {
+      txmatrix[i] = Malloc(TX_MATRIX_SIZE*sizeof(Int4));
+      for (j=0; j<TX_MATRIX_SIZE; j++) 
+         txmatrix[i][j] = BLAST_SCORE_MIN;
+   }
+   
+   for (i=sctp->start_at; i < sctp->start_at + sctp->num; i++) {
+      for (j=sctp->start_at; j < sctp->start_at + sctp->num; j++) { 
+         index1 = SeqMapTableConvert(smtp, i);
+         index2 = SeqMapTableConvert(smtp, j);
+         txmatrix[index1][index2] = matrix[i][j];
+      }
+   }
+
+   return txmatrix;
+}
+
+Int4Ptr PNTR LIBCALL TxMatrixDestruct(Int4Ptr PNTR txmatrix) 
+{
+   Int2 i;
+
+   if (txmatrix == NULL)
+      return NULL;
+
+   for (i=0; i<TX_MATRIX_SIZE; i++)
+      MemFree(txmatrix[i]);
+
+   MemFree(txmatrix);
+   return NULL;
+}

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.71 $
+* $Revision: 6.75 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,18 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.75  2000/10/27 20:15:04  shavirin
+* Changed creation of Protein SeqIds to MT-safe function.
+*
+* Revision 6.74  2000/10/12 16:03:57  kans
+* added SeqEntryToFastaEx, printid_general field to MyFsa structure, to support processing software that requires gnl ID in FASTA defline even in the presence of higher-priority ref ID
+*
+* Revision 6.73  2000/07/20 17:48:58  dondosha
+* Added function FastaToSeqBuffForDb analogous to FastaToSeqEntryForDb
+*
+* Revision 6.72  2000/07/12 16:22:43  madden
+* Fixed problem with reading FASTA definition lines
+*
 * Revision 6.71  2000/06/23 13:25:18  madden
 * Fix for comment lines
 *
@@ -565,7 +577,7 @@ Int4 GetOrderBySeqId(Int4 choice, Boolean is_prot)
 *   Traversal routine for SeqEntryToFasta
 *
 *****************************************************************************/
-void	SeqEntryFasta (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+void SeqEntryFasta (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 {
     FastaPtr tfa;
@@ -723,6 +735,16 @@ NLM_EXTERN Boolean SeqEntryToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na)
 		return SeqEntrysToFasta(sep, fp, is_na, 0);
 }
 
+static Boolean SeqEntrysToFastaXX (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uint1 group_segs, Boolean printid_general);
+
+NLM_EXTERN Boolean SeqEntryToFastaEx (SeqEntryPtr sep, FILE *fp, Boolean is_na, Boolean printid_general)
+{
+	if (IS_Bioseq(sep))
+		return SeqEntrysToFastaXX(sep, fp, is_na, 3, printid_general);
+	else
+		return SeqEntrysToFastaXX(sep, fp, is_na, 0, printid_general);
+}
+
 /*****************************************************************************
 *
 *   FastaFileFunc(key, buf, data)
@@ -765,7 +787,7 @@ NLM_EXTERN Boolean FastaFileFunc (BioseqPtr bsp, Int2 key, CharPtr buf,
 *       group_segs = 3 ... like 1, but instantiate virtual Bioseqs
 *   
 *****************************************************************************/
-NLM_EXTERN Boolean SeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uint1 group_segs)
+static Boolean SeqEntrysToFastaXX (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uint1 group_segs, Boolean printid_general)
 
 {
     FastaDat tfa;
@@ -788,6 +810,7 @@ NLM_EXTERN Boolean SeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, U
     mfa.tech = 0;
     mfa.no_sequence = FALSE;
     mfa.formatdb	= FALSE;
+    mfa.printid_general = printid_general;
     
     tfa.mfp = &mfa;
     tfa.is_na = is_na;
@@ -809,6 +832,12 @@ NLM_EXTERN Boolean SeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, U
     tfa.got_one = FALSE;
     SeqEntryExplore(sep, (Pointer)&tfa, SeqEntryFasta);
     return tfa.got_one;
+}
+
+NLM_EXTERN Boolean SeqEntrysToFasta (SeqEntryPtr sep, FILE *fp, Boolean is_na, Uint1 group_segs)
+
+{
+	return SeqEntrysToFastaXX (sep, fp, is_na, group_segs, FALSE);
 }
 
 /*****************************************************************************
@@ -839,6 +868,7 @@ NLM_EXTERN Boolean SeqEntrysToFastaX (SeqEntryPtr sep, MyFsaPtr mfp, Boolean is_
         SeqEntryExplore(sep, (Pointer)&tfa, SeqEntryFasta);
 	return tfa.got_one;
 }
+
 /*****************************************************************************
 *
 *   SeqEntrysToDefline(sep, mfa, is_na, group_segs)
@@ -970,8 +1000,9 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 	mfa.organism = NULL;
 	mfa.do_virtual = FALSE;
 	mfa.tech = 0;
-        mfa.no_sequence = FALSE;
-    	mfa.formatdb	= FALSE;
+	mfa.no_sequence = FALSE;
+	mfa.formatdb = FALSE;
+	mfa.printid_general = FALSE;
 
 	return BioseqToFastaX(bsp, &mfa, is_na);
 }
@@ -981,6 +1012,8 @@ NLM_EXTERN Boolean BioseqToFasta (BioseqPtr bsp, FILE *fp, Boolean is_na)
 *   Boolean BioseqToFastaX(bsp, mfp, is_na)
 *
 *****************************************************************************/
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean printid_general);
+
 NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 
 {
@@ -1063,7 +1096,7 @@ NLM_EXTERN Boolean BioseqToFastaX (BioseqPtr bsp, MyFsaPtr mfp, Boolean is_na)
 			break;
 	}
 
-	if (! FastaId(bsp, mfp->buf, mfp->buflen))
+	if (! FastaIdX(bsp, mfp->buf, mfp->buflen, mfp->printid_general))
 		return FALSE;
 
 	(*(mfp->myfunc))(bsp, FASTA_ID, mfp->buf, StringLen(mfp->buf), mfp->mydata);
@@ -1192,7 +1225,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
 
 /*****************************************************************************
 *
-*   SeqEntryPtr FastaToSeqBuffEx() - function to return SeqEntryPtr from
+*   SeqEntryPFtr FastaToSeqBuffEx() - function to return SeqEntryPtr from
 *                                    buffer with error handling
 *
 *****************************************************************************/
@@ -1208,6 +1241,24 @@ NLM_EXTERN SeqEntryPtr FastaToSeqBuffEx
   return FastaToSeqEntryInternal((void *)buffer, FASTA_MEM_IO , 
                                  last_char, is_na, errormsg, parseSeqId, NULL);
 }
+
+NLM_EXTERN SeqEntryPtr FastaToSeqBuffForDb
+  (
+    CharPtr buffer,         /* buffer in memory with FASTA sequence */
+    CharPtr PNTR last_char, /* here returned pointer to next FASTA if any */
+    Boolean is_na,          /* type of sequence */
+    CharPtr PNTR errormsg,  /* error message for debugging */
+    Boolean parseSeqId,     /* Parse SeqID from def line */
+    CharPtr prefix,         /* prefix for localID if not parsable */
+    Int2Ptr ctrptr,         /* starting point for constructing unique ID */
+    SeqLocPtr PNTR mask_ptr /* Pointer to a SeqLoc to Fill with Masking information from lowercased letters */
+  )
+{
+  return FastaToSeqEntryInternalExEx((void *)buffer, FASTA_MEM_IO , 
+				     last_char, is_na, errormsg, parseSeqId, 
+				     NULL, prefix, ctrptr, mask_ptr, TRUE);
+}
+
 
 /*****************************************************************************
 *
@@ -1803,37 +1854,41 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
   /* DEFLINE PROCCESSING*/
     
     if(ch == '>') {     /* Defline is present - processing */
-        if((buffer = (CharPtr) MemNew(BuffSize)) == NULL)
+        if((buffer = (CharPtr) MemNew(BuffSize+1)) == NULL)
             return NULL;        
         
         if(type == FASTA_FILE_IO) {    /* File */
             buffer[0] = (Char) ch;
 	    i = 0;
-	    fgets(buffer+1, BuffSize-1, fd);
+	    fgets(buffer+1, BuffSize, fd);
 
 	    while (1)
 	    {
-		while (i<BuffSize)
+		while (i<BuffSize-1)
 		{
-                	if(buffer[i] == '\n' || buffer[i] == '\r') 
+                	if(buffer[i] == '\n' || buffer[i] == '\r' || buffer[i] == NULLB) 
 			{
 				buffer[i] = NULLB;
                     		break;
 			}
 			i++;
 		}
+		if (i == BuffSize-1 && (buffer[i] == '\n' || buffer[i] == '\r'))
+		{
+			buffer[i] = NULLB;
+		}
 
 		if (buffer[i] == NULLB)
 			break;
 
                 BuffSize = i + FTSE_BUFF_CHUNK;
-                if((buffer = (CharPtr)Realloc(buffer, BuffSize)) == NULL) 
+                if((buffer = (CharPtr)Realloc(buffer, BuffSize+1)) == NULL) 
 		{
                       	ErrLogPrintf("Error re-allocating memory in FastaToSeqEntry");
                         MemFree(buffer);
                         return NULL;
 		}
-	    	fgets(buffer+i, BuffSize, fd);
+	    	fgets(buffer+i+1, FTSE_BUFF_CHUNK, fd);
 	    }
         } else {  /* type = FASTA_MEM_IO */
             for(i =0; (ch = *firstchar) != NULLB; firstchar++, i++) {
@@ -1887,7 +1942,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
             	if (trustID) {
                   bsp->id = MakeTrustedID (prefix, ctrptr);
             	} else {
-                  bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+                  bsp->id = MakeNewProteinSeqIdExMT (NULL, NULL, prefix, ctrptr, TRUE);
             	}
             }
             if (chptr != NULL) {
@@ -1921,7 +1976,7 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
         if (trustID) {
           bsp->id = MakeTrustedID (prefix, ctrptr);
         } else {
-          bsp->id = MakeNewProteinSeqIdEx (NULL, NULL, prefix, ctrptr);
+          bsp->id = MakeNewProteinSeqIdExMT (NULL, NULL, prefix, ctrptr, TRUE);
         }
 
         if(type == FASTA_FILE_IO)
@@ -1993,6 +2048,18 @@ NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Int2 buflen)
 	if ((bsp == NULL) || (buf == NULL)) return FALSE;
 
     SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
+	return TRUE;
+}
+
+static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Int2 buflen, Boolean printid_general)
+{
+	if ((bsp == NULL) || (buf == NULL)) return FALSE;
+
+	if (printid_general) { 
+		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_GENERAL, buflen);
+	} else {
+		SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
+	}
 	return TRUE;
 }
 

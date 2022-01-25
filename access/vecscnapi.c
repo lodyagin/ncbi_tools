@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/13/00
 *
-* $Revision: 1.4 $
+* $Revision: 1.5 $
 *
 * File Description: 
 *
@@ -507,7 +507,7 @@ NLM_EXTERN Int4 PrintVecScreenQueue (
     if (! curr->done) {
 
       fprintf (fp, "%s\t%s\t%d\t%d\n", curr->rid, curr->seqid,
-               (int) currtime - curr->initialTime, (int) curr->estTime);
+               (int) (currtime - curr->initialTime), (int) curr->estTime);
       count++;
     }
 

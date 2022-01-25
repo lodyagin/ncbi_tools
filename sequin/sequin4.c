@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/28/96
 *
-* $Revision: 6.124 $
+* $Revision: 6.126 $
 *
 * File Description: 
 *
@@ -92,6 +92,8 @@
 #define REGISTER_MAKESEQALIGNP ObjMgrProcLoadEx (OMPROC_FILTER,"Make Protein SeqAlign","CreateSeqAlignProt",0,0,0,0,NULL,GenerateSeqAlignFromSeqEntryProt,PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_NORMSEQALIGN ObjMgrProcLoadEx (OMPROC_FILTER,"Validate SeqAlign","ValidateSeqAlign",0,0,0,0,NULL,ValidateSeqAlignFromData,PROC_PRIORITY_DEFAULT, "Alignment")
+
+#define REGISTER_PARTSEQALIGNTOPARENT ObjMgrProcLoadEx (OMPROC_FILTER,"Part SeqAlign to Parent","PartSeqAlignToParent",0,0,0,0,NULL,PartSeqAlignToParent,PROC_PRIORITY_DEFAULT, "Alignment")
 
 #define REGISTER_GROUP_EXPLODE ObjMgrProcLoadEx (OMPROC_FILTER, "Explode a group", "GroupExplode", OBJ_SEQFEAT, 0, OBJ_SEQFEAT, 0, NULL, GroupExplodeFunc, PROC_PRIORITY_DEFAULT, "Indexer")
 
@@ -458,11 +460,15 @@ extern Int2 DoOneSegFixup (SeqEntryPtr sep, Boolean ask)
   return 0;
 }
 
+extern void DoFixupLocus (SeqEntryPtr sep);
+extern void DoFixupSegSet (SeqEntryPtr sep);
+
 static Int2 LIBCALLBACK UpdateSegSet (Pointer data)
 
 {
   OMProcControlPtr  ompcp;
   SeqEntryPtr       sep;
+  ErrSev            sev;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
@@ -480,8 +486,15 @@ static Int2 LIBCALLBACK UpdateSegSet (Pointer data)
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
   if (sep == NULL) return OM_MSG_RET_ERROR;
   DoOneSegFixup (sep, TRUE);
+  if (Message (MSG_YN, "Do you want to Force Locus Fixup?") == ANS_YES) {
+    sev = ErrSetMessageLevel (SEV_FATAL);
+    DoFixupLocus (sep);
+    DoFixupSegSet (sep);
+    ErrSetMessageLevel (sev);
+  }
   ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+  Update ();
   return OM_MSG_RET_DONE;
 }
 
@@ -796,6 +809,91 @@ static Int2 LIBCALLBACK UndoSegSet (Pointer data)
     ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
     ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
   }
+  return OM_MSG_RET_DONE;
+}
+
+#if 0
+typedef struct denseg {
+    Int2 dim,
+        numseg;
+    SeqIdPtr ids;           /* dimension is dim */
+    Int4Ptr starts;			/* dimension is dim * numseg */
+    Int4Ptr lens;			/* dimension is numseg */
+    Uint1Ptr strands;		/* dimension is dim * numseg */
+    ScorePtr scores;		/* dimension is numseg */
+} DenseSeg, PNTR DenseSegPtr;
+#endif
+
+static void DoPartSeqAlignToParent (DenseSegPtr dsp)
+
+{
+  BioseqPtr             bsp, part;
+  SeqMgrSegmentContext  context;
+  Int2                  i, j, k;
+  SeqIdPtr              sip, next;
+  SeqIdPtr PNTR         prev;
+  Int4                  val;
+
+  if (dsp == NULL || dsp->ids == NULL || dsp->starts == NULL) return;
+  for (i = 0, sip = dsp->ids, prev = &(dsp->ids);
+       i < dsp->dim && sip != NULL;
+       i++, sip = next) {
+    next = sip->next;
+    part = BioseqFind (sip);
+    if (part == NULL) continue;
+    bsp = SeqMgrGetParentOfPart (part, &context);
+    if (bsp == NULL) continue;
+    *prev = NULL;
+    sip->next = NULL;
+    SeqIdFree (sip);
+    sip = SeqIdDup (SeqIdFindBest (bsp->id, 0));
+    *prev = sip;
+    sip->next = next;
+    prev = &(sip->next);
+    for (j = 0; j < dsp->numseg; j++) {
+      k = (dsp->dim * j) + i;
+      val = dsp->starts [k];
+      if (val != -1) {
+        if (context.strand == Seq_strand_minus) {
+          dsp->starts [k] = context.cumOffset + (context.to - val);
+        } else {
+          dsp->starts [k] = context.cumOffset + (val - context.from);
+        }
+      }
+    }
+  }
+}
+
+static Int2 LIBCALLBACK PartSeqAlignToParent (Pointer data)
+
+{
+  DenseSegPtr       dsp;
+  OMProcControlPtr  ompcp;
+  SeqAlignPtr       sap;
+
+  ompcp = (OMProcControlPtr) data;
+  if (ompcp == NULL || ompcp->proc == NULL) return OM_MSG_RET_ERROR;
+  switch (ompcp->input_itemtype) {
+    case OBJ_SEQALIGN :
+      sap = (SeqAlignPtr) ompcp->input_data;
+      break;
+    case 0 :
+      return OM_MSG_RET_ERROR;
+    default :
+      return OM_MSG_RET_ERROR;
+  }
+  if (sap == NULL) return OM_MSG_RET_ERROR;
+
+  if (sap->segtype == SAS_DENSEG) {
+    dsp = (DenseSegPtr) sap->segs;
+    if (dsp != NULL) {
+      DoPartSeqAlignToParent (dsp);
+    }
+  }
+
+  ObjMgrSetDirtyFlag (ompcp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, ompcp->input_entityID, 0, 0);
+
   return OM_MSG_RET_DONE;
 }
 
@@ -4602,6 +4700,7 @@ extern void SetupSequinFilters (void)
   REGISTER_MAP_TO_NUC;
 
   REGISTER_UPDATE_SEQALIGN;
+  REGISTER_PARTSEQALIGNTOPARENT;
   REGISTER_MAKESEQALIGN;
   REGISTER_MAKESEQALIGNP;
   REGISTER_NORMSEQALIGN;

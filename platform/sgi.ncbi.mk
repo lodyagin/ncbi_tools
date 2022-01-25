@@ -1,9 +1,9 @@
 #
-# $Id: sgi.ncbi.mk,v 1.11 2000/04/13 14:10:44 thiessen Exp $
+# $Id: sgi.ncbi.mk,v 1.14 2000/10/23 11:32:27 beloslyu Exp $
 #
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_DEFAULT_LCL = sgi
-NCBI_CC = cc -mips1 `uname -r | sed 's/6\..*/-32/;s/5\..*//'` 
+NCBI_CC = cc -mips1 `uname -r | sed 's/6\..*/-n32 -G0/;s/5\..*//'` 
 NCBI_SYBASE = /usr/people/sybase_10.0.3
 NCBI_SYBLIBS = -L$(NCBI_SYBASE)/lib -lsybdb
 NCBI_SYBLIBS_STATIC = $(NCBI_SYBASE)/lib/libsybdb.a
@@ -44,7 +44,7 @@ NETENTREZVERSION = 2.02c2ASN1SPEC6
 # uncomment OPENGL_TARGETS to build OpenGL apps; do not change
 # OPENGL_NCBI_LIBS! However, may need to set
 # OPENGL_INCLUDE and OPENGL_LIBS to suit local environment
-#OPENGL_TARGETS = Cn3D
+OPENGL_TARGETS = Cn3D
 OPENGL_NCBI_LIBS = LIB400=libvibrantOGL.a LIB3000=libncbicn3dOGL.a
 OPENGL_INCLUDE =
 OPENGL_LIBS = -lGL -lGLU

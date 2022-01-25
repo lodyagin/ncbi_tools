@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   05/16/95
 *
-* $Revision: 1.20 $
+* $Revision: 1.23 $
 *
 * File Description: 
 *       Simulates "traditional" BLAST output
@@ -44,6 +44,15 @@
 *
 * RCS Modification History:
 * $Log: blastcl3.c,v $
+* Revision 1.23  2000/10/25 16:41:26  madden
+* Add BioSource to query_bsp
+*
+* Revision 1.22  2000/09/28 16:36:59  dondosha
+* Set parameters differently for megablast
+*
+* Revision 1.21  2000/08/28 15:17:45  dondosha
+* Added functionality for megablast search
+*
 * Revision 1.20  2000/05/04 18:57:00  shavirin
 * Added option to restrict search to results of Entrez2 lookup.
 *
@@ -256,8 +265,12 @@ static Args myargs [] = {
       "F", NULL, NULL, FALSE, 'R', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Restrict search of database to results of Entrez2 lookup", /* 33 */
       NULL, NULL, NULL, TRUE, 'u', ARG_STRING, 0.0, 0, NULL},
+    { "MegaBlast search",       /* 34 */
+      "F", NULL, NULL, FALSE, 'N', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
+#define MAX_NUM_QUERIES 16383 /* == 1/2 INT2_MAX */
+#define MAX_TOTAL_LENGTH 10000000
 /*********************************************************************
 *	"main" function to call blast for the client.  
 *
@@ -271,8 +284,9 @@ Int2 Main (void)
 {
     BLAST_OptionsBlkPtr	options;
     BLAST_KarlinBlkPtr	ka_params=NULL, ka_params_gap=NULL;
-    BlastResponsePtr	response;
+    BlastResponsePtr	response = NULL;
     BioseqPtr	query_bsp;
+    BioSourcePtr source;
     BlastNet3Hptr	bl3hp;
     BlastVersionPtr	blast_version;
     Boolean		db_is_na, query_is_na, show_gi, believe_query=FALSE;
@@ -362,6 +376,9 @@ Int2 Main (void)
     }
     
     options = BLASTOptionNew(blast_program, (Boolean) myargs [16].intvalue);
+    options->is_megablast_search = (Boolean) myargs[34].intvalue;
+    if (options->is_megablast_search) 
+       options->wordsize = 0;
     if (options == NULL)
         return 3;
 
@@ -408,7 +425,6 @@ Int2 Main (void)
     if (myargs[22].intvalue != 0)
         options->wordsize = myargs[22].intvalue;
     
-    
     print_options = 0;
     align_options = 0;
     align_options += TXALIGN_COMPRESS;
@@ -446,10 +462,13 @@ Int2 Main (void)
     }
     
     options->hsp_range_max  = myargs[28].intvalue;
-    if (options->hsp_range_max != 0)
+    if (options->hsp_range_max != 0 && !options->is_megablast_search)
         options->perform_culling = TRUE;
-    options->block_width  = myargs[29].intvalue;
-    
+    if (!options->is_megablast_search)
+       options->block_width  = myargs[29].intvalue;
+    else /* In megablast this has different meaning, will be default only */
+       options->block_width = 0;
+
     if (myargs[29].floatvalue)
         options->searchsp_eff = (Nlm_FloatHi) myargs[30].floatvalue;
     
@@ -458,24 +477,33 @@ Int2 Main (void)
     if(myargs[33].strvalue)
         options->entrez_query = StringSave(myargs[33].strvalue);
     
+    if (options->is_megablast_search) {
+       if (options->wordsize == 0)
+          options->wordsize = 32;
+       options->cutoff_s = options->wordsize;
+       options->cutoff_s2 = options->wordsize - 4;
+    }
+
+
     if (! BlastInit("blastcl3", &bl3hp, &response)) {
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to initialize BLAST service");
         FileClose(infp);
         FileClose(outfp);
         return (1);
     }
-    
     if (response && response->choice == BlastResponse_init) {
         blast_version = response->data.ptrvalue;
-        version = blast_version->version;
-        date = blast_version->date;
+        version = StringSave(blast_version->version);
+        date = StringSave(blast_version->date);
     } else {
         ErrPostEx(SEV_FATAL, 0, 0, "Unable to connect to service");
         FileClose(infp);
         FileClose(outfp);
         return 1;
     }
-    
+
+    BlastResponseFree(response);
+
     BlastNetBioseqFetchEnable(bl3hp, blast_database, db_is_na, TRUE);
     
     if(!myargs[32].intvalue) {
@@ -490,15 +518,82 @@ Int2 Main (void)
     if(options->is_rps_blast == TRUE)
         BlastPrintVersionInfoEx("RPS-BLAST", html, version, date, outfp);
     else {
+	init_buff_ex(90);
         BlastPrintVersionInfoEx(blast_program, html, version, date, outfp);
         fprintf(outfp, "\n");
         BlastPrintReference(html, 80, outfp);
+	free_buff();
     }
+
+    MemFree(version);
+    MemFree(date);
 
     fprintf(outfp, "\n");
     num_of_queries=0;
     retval=0;
-    while ((sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query)) != NULL) {
+
+    if (options->is_megablast_search) {
+       Int4 total_length, num_bsps, index;
+       Boolean done;
+       SeqLocPtr last_mask, mask_slp;
+       Int2 ctr = 1;
+       Char prefix[2];
+
+       StrCpy(prefix, "");
+       done = FALSE;
+       slp = NULL;
+       while (!done) {
+	  num_bsps = 0;
+	  total_length = 0;
+	  done = TRUE;
+	  SeqMgrHoldIndexing(TRUE);
+	  mask_slp = last_mask = NULL;
+	  while ((sep=FastaToSeqEntryForDb(infp, query_is_na, NULL,
+					   believe_query, prefix, &ctr, 
+					   &mask_slp)) != NULL) {
+	     
+	     if (mask_slp) {
+		if (!last_mask)
+		   options->query_lcase_mask = last_mask = mask_slp;
+		else {
+		   last_mask->next = mask_slp;
+		   last_mask = last_mask->next;
+		}
+		mask_slp = NULL;
+	     }
+	     query_bsp = NULL;
+	     if (query_is_na) 
+		SeqEntryExplore(sep, &query_bsp, FindNuc);
+	     else
+		SeqEntryExplore(sep, &query_bsp, FindProt);
+	     
+	     if (query_bsp == NULL) {
+		ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
+		return 2;
+	     }
+	     
+	     ValNodeAddPointer(&slp, SEQLOC_WHOLE,
+			       SeqIdDup(SeqIdFindBest(query_bsp->id,
+						      SEQID_GI)));
+	     num_bsps++;
+	     total_length += query_bsp->length;
+	     if (total_length > MAX_TOTAL_LENGTH ||
+		 num_bsps >= MAX_NUM_QUERIES) {
+		done = FALSE;
+		break;
+	     }
+	     sep = MemFree(sep); /* Do not free the underlying Bioseq */
+	  }
+	  SeqMgrHoldIndexing(FALSE);
+	  if (num_bsps > 0)
+	     status = TraditionalBlastReportLoc(slp, options, bl3hp, blast_program, blast_database, FALSE, outfp, TRUE, print_options, align_options, number_of_descriptions, number_of_alignments, NULL);
+	  if (status == FALSE)
+	     ErrPostEx(SEV_ERROR, 0, 0, 
+		       "An error has occurred on the server\n");
+	  slp = SeqLocSetFree(slp);
+       }
+    } else {
+       while ((sep = FastaToSeqEntryEx(infp, query_is_na, NULL, believe_query)) != NULL) {
         query_bsp = NULL;
         SeqEntryExplore(sep, &query_bsp, query_is_na? FindNuc : FindProt);
         
@@ -509,26 +604,41 @@ Int2 Main (void)
         else
             endloc = myargs[24].intvalue - 1;
         
-        /* Create the SeqLoc */
-        slp = SeqLocIntNew(startloc, endloc, Seq_strand_both, query_bsp->id);
-        
         if (query_bsp == NULL) {
             ErrPostEx(SEV_FATAL, 0, 0, "Unable to obtain bioseq\n");
             retval = 2;
             break;
         }
+
+        source = BioSourceNew();
+        source->org = OrgRefNew();
+        source->org->orgname = OrgNameNew();
+        source->org->orgname->gcode = options->genetic_code;
+        ValNodeAddPointer(&(query_bsp->descr), Seq_descr_source, source);
+
+	init_buff_ex(85);
         AcknowledgeBlastQuery(query_bsp, 70, outfp, FALSE, html);
+	free_buff();
         
-        if (startloc || endloc != query_bsp->length - 1)
+        if (startloc || endloc != query_bsp->length - 1) {
+	   /* Create the SeqLoc */
+	   slp = SeqLocIntNew(startloc, endloc, Seq_strand_both, query_bsp->id);
+        
             status = TraditionalBlastReportLoc(slp, options, bl3hp, blast_program, blast_database, FALSE, outfp, TRUE, print_options, align_options, number_of_descriptions, number_of_alignments, NULL);
-        else
-            status = TraditionalBlastReport(query_bsp, options, bl3hp, blast_program, blast_database, FALSE, outfp, TRUE, print_options, align_options, number_of_descriptions, number_of_alignments, NULL);
+	    slp = SeqLocSetFree(slp);
+        } else {
+            status = TraditionalBlastReport(query_bsp, options, bl3hp,
+					    blast_program, blast_database,
+					    FALSE, outfp, TRUE, print_options,
+					    align_options,
+					    number_of_descriptions,
+					    number_of_alignments, NULL);
+	}
         if (status == FALSE)
             ErrPostEx(SEV_ERROR, 0, 0, "An error has occurred on the server\n");
-        
         sep = SeqEntryFree(sep);
     }
-
+    }
     options = BLASTOptionDelete(options);
     FileClose(infp);
     FileClose (outfp);

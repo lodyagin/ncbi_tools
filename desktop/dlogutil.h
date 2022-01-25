@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.10 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -45,10 +45,6 @@
 #ifndef _DLOGUTIL_
 #define _DLOGUTIL_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <vibrant.h>
 #include <sqnutils.h>
 #include <prtutil.h>
@@ -56,6 +52,11 @@ extern "C" {
 #include <objfeat.h>
 #include <objfdef.h>
 #include <sequtil.h>
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define CHANGE_VIEW_NOTABS        0
 #define CHANGE_VIEW_FOLDERTABS    1
@@ -266,6 +267,25 @@ extern CharPtr SaveStringFromTextAndStripNewlines (TexT t);
 /* GetRidOfEmptyFeatsDescStrings takes either an entityID or a SeqEntryPtr */
 
 extern void GetRidOfEmptyFeatsDescStrings (Uint2 entityID, SeqEntryPtr sep);
+
+/*****************************************************************************
+*
+*   LaunchEntrezURL constructs a web-Entrez URL query.  Parameter choices are:
+*
+*     Database      Report Formats
+*
+*      PubMed        DocSum, Brief, Abstract, Citation, MEDLINE, ASN.1, ExternalLink
+*      Nucleotide    DocSum, Brief, GenBank, ASN.1, FASTA, ExternalLink
+*      Protein       DocSum, Brief, GenPept, ASN.1, FASTA, ExternalLink
+*      Genome        DocSum, Brief, ASN.1, ExternalLink
+*      Popset        DocSum, Brief, ASN.1, FASTA, ExternalLink
+*      Structure     DocSum, Brief
+*      OMIM          DocSum, Text, Synopsis, Variants, MiniMIM, ASN.1, ExternalLink
+*      Taxonomy      DocSum, Brief, TxInfo, TxTree, ExternalLink
+*
+*****************************************************************************/
+
+NLM_EXTERN void LaunchEntrezURL (CharPtr database, Int4 uid, CharPtr format);
 
 
 #ifdef __cplusplus

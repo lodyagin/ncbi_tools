@@ -29,7 +29,7 @@
 *
 * Version Creation Date:        1/1/92
 *
-* $Revision: 4.6 $
+* $Revision: 4.7 $
 *
 * File Description:
 *   This file is a library of functions to be used by server application
@@ -268,6 +268,9 @@
 *
 * RCS Modification History:
 * $Log: ni_disp.c,v $
+* Revision 4.7  2000/10/30 18:12:01  beloslyu
+* FreeBSD was added
+*
 * Revision 4.6  1999/07/30 19:11:06  vakatov
 * Use "strerror()" instead of "sys_errlist[]"
 *
@@ -2792,6 +2795,9 @@ NLM_EXTERN Int2 NI_GetPlatform (void)
 #endif
 #ifdef OS_UNIX_NETBSD
 	retval = NI_PLATFORM_NETBSD;
+#endif
+#ifdef OS_UNIX_FREEBSD
+	retval = NI_PLATFORM_FREEBSD;
 #endif
 #endif /* OS_UNIX */
 

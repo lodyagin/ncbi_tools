@@ -5,7 +5,9 @@
   <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
 <!-- if you use the following meta tags, uncomment them.
  <META NAME="keywords" CONTENT="Sequin">
- <META NAME="description" CONTENT="Sequin is a stand-alone software tool developed by the NCBI for submitting and updating entries to the GenBank, EMBL, or DDBJ sequence databases. ">
+ <META NAME="description" CONTENT="Sequin is a stand-alone software tool
+developed by the NCBI for submitting and updating entries to the GenBank, EMBL,
+or DDBJ sequence databases. ">
 -->
  <link rel="stylesheet" href="ncbi_sequin.css">
 
@@ -13,26 +15,37 @@
 </HEAD> 
 
 <body bgcolor="#FFFFFF" text="#000000" link="#0033CC" vlink="#0033CC">
-<!-- change the link and vlink colors from the original orange (link="#CC6600" vlink="#CC6600") -->
+<!-- change the link and vlink colors from the original orange (link="#CC6600"
+vlink="#CC6600") -->
 
 <!--  the header   --> 
 <table border="0" width="600" cellspacing="0" cellpadding="0">
   <tr> 
-    <td width="140"><a href="http://www.ncbi.nlm.nih.gov"> <img src="http://www.ncbi.nlm.nih.gov/corehtml/left.GIF" width="130" height="45" border="0"></a></td>
-    <td width="360" class="head1" valign="BOTTOM"> <span class="H1">Sequin Help Documentation</span></td>
+    <td width="140"><a href="http://www.ncbi.nlm.nih.gov"> <img
+src="http://www.ncbi.nlm.nih.gov/corehtml/left.GIF" width="130" height="45"
+border="0"></a></td>
+    <td width="360" class="head1" valign="BOTTOM"> <span class="H1">Sequin Help
+Documentation</span></td>
 <!--    <td width="100" valign="BOTTOM">Your Logo</td> -->
   </tr>
 </table>
 
 <!--  the quicklinks bar   --> 
-<table CLASS="TEXT" border="0" width="600" cellspacing="0" cellpadding="3" bgcolor="#000000">
+<table CLASS="TEXT" border="0" width="600" cellspacing="0" cellpadding="3"
+bgcolor="#000000">
   <tr CLASS="TEXT"  align="CENTER"> 
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/PubMed/" class="BAR">PubMed</a></td>
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Entrez/" class="BAR">Entrez</a></td>
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/BLAST/" class="BAR">BLAST</a></td>
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/omim/" class="BAR">OMIM</a></td>
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Taxonomy/taxonomyhome.html"  class="BAR">Taxonomy</a></td>
-    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Structure/" class="BAR">Structure</a></td>
+    <td width="100"><a href="index.html" class="BAR">Sequin</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Entrez/"
+class="BAR">Entrez</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/BLAST/"
+class="BAR">BLAST</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/omim/"
+class="BAR">OMIM</a></td>
+    <td width="100"><a
+href="http://www.ncbi.nlm.nih.gov/Taxonomy/taxonomyhome.html" 
+class="BAR">Taxonomy</a></td>
+    <td width="100"><a href="http://www.ncbi.nlm.nih.gov/Structure/"
+class="BAR">Structure</a></td>
   </tr>
 </table>
 
@@ -430,11 +443,14 @@ taxonomy browser
 http://www.ncbi.nlm.nih.gov/Taxonomy/tax.html
 
 
-#If the name of the organism is not on the list, type it in directly. 
-If you do not know the scientific name, you can provide another
-species-level indication like "Paramecium sp.", or "Unidentified green
-algae X457".  Additional information like subspecies, strain, isolates,
-or serotype can be entered later in the submission process.  
+#If the name of the organism is not on the list, type it in directly. If you do
+not know the scientific name, please be as specific as you can, and include a
+unique identifier, such as a clone, isolate, strain or voucher number or
+cultivar name, e.g.: Nostoc ATCC29106, uncultured spirochete Im403, Lauraceae
+sp. Vásquez 25230 (MO), Rosa hybrid cultivar 'Kazanlik'.  Also, if applicable,
+indicate if the name is unpublished as of time of submission.  Additional
+information like subspecies, strain, isolates, or serotype can be entered later
+in the submission process.
 
 **Location of Sequence
 
@@ -673,8 +689,8 @@ cell-type, tissue-type, clone-lib, dev-stage, frequency, germline, rearranged,
 lab-host, pop-variant, tissue-lib, plasmid-name, transposon-name,
 ins-sequence-name, plastid-name, country, strain, substrain, type, subtype,
 variety, serotype, serogroup, serovar, cultivar, pathovar, chemovar, biovar,
-biotype, group, subgroup, isolate, common, acronym, dosage, natural host,
-sub-species, and specimen voucher.  Complete descriptions of these modifiers
+biotype, group, subgroup, isolate, common, acronym, dosage, natural-host,
+sub-species, and specimen-voucher.  Complete descriptions of these modifiers
 can
 be found in the
 
@@ -2814,7 +2830,7 @@ serovar.
 
 #-Serovar:  See serotype.
 
-#-Cultivar:  Variety of plant from which sequence was obtained.
+#-Cultivar:  Cultivated variety of plant from which sequence was obtained.
 
 #-Pathovar:  Variety of a species (usually a fungus, bacteria or virus)
 characterized by the biological target of the pathogen.  Examples
@@ -2849,12 +2865,38 @@ exists in a symbiotic, parasitic or other special relationship with some
 second organism, the 'natural host' modifier can be used to identify the
 name of the host species.
 
-#-Sub-species:  Sub-species of organism from which sequence was obtained.
+#-Sub-species:  Subspecies of organism from which sequence was obtained.
+
+#-Specimen-voucher: An identifier of the individual or collection of the source
+organism and the place where it is currently stored, usually an institution.
+
+#-Authority: The author or authors of the organism name from which sequence 
+was obtained.
+
+#-Forma: The forma (lowest taxonomic unit governed by the nomenclatural 
+codes) of organism from which sequence was obtained. This term is usually 
+applied to plants and fungi.
+
+#-Forma-specialis: The physiologically distinct form from which sequence 
+was obtained (usually restricted to certain parasitic fungi).
+
+#-Ecotype: The named ecotype (population adapted to a local habitat) from 
+which sequence was obtained (customarily applied to populations of 
+Arabidopsis thaliana).
+  
+#-Synonym: The synonym (alternate scientific name) of the organism name 
+from which sequence was obtained.
+
+#-Anamorph: The scientific name applied to the asexual phase of a fungus. 
+
+#-Teleomorph: The scientific name applied to the sexual phase of a fungus.
+
+#-Breed: The named breed from which sequence was obtained (usually applied 
+to domesticated mammals).
 
 #-Old name:  Do not select this item.
 
-#-Specimen voucher: An identifier of the individual or collection of the source
-organism and the place where it is currently stored, usually an institution.
+
 
 *Miscellaneous Page
 
@@ -3799,7 +3841,8 @@ a new CDS feature, select the residues, and choose Features-->Coding
 Regions and Transcrips-->CDS.  This action launches the CDS editor.  The
 location of the highlighted sequenced will have been automatically filled
 out in the Location page.  Visit the Location page, enter the protein name
-on the Coding Region-->Protein subpage, and press Accept.  Select "Show Features"
+on the Coding Region-->Protein subpage, and press Accept.  Select "Show
+Features"
 at the bottom of the Sequence Editor to see the CDS as a colored bar.  
  The CDS can be selected by clicking either on it or on its
   name in the left margin.  To remove a CDS, select it and click on
@@ -3891,7 +3934,8 @@ be in a file or in Entrez (see Sequence Editor File menu, below).
 
 #Imports FASTA formatted sequence(s) or ASN1 records
 from a file.  
-Three alignment methods are available.  BLAST provides the best local alignment; 
+Three alignment methods are available.  BLAST provides the best local
+alignment; 
 BLAST with extensions provides a global alignment anchored by the BLAST
 local alignment; Global Alignment uses a dynamic programming algorithm to
 provide a different global alignment.
@@ -4086,9 +4130,11 @@ select split gaps, the feature will be split around any gaps in the
 sequence, resulting in multiple features.  If you select extend over gaps, the
 feature will be propagated across the gap, resulting in a single
 feature.  Features are generally extended over gaps, except when features are 
-propagated from mRNA to genomic sequence, and should be split at gaps (introns).
+propagated from mRNA to genomic sequence, and should be split at gaps
+(introns).
 If you select "stop CDS translation at internal stop codon", the
-CDS translation will stop if there is an internal stop codon in the target sequence.  
+CDS translation will stop if there is an internal stop codon in the target
+sequence.  
 If the source sequence has a stop codon but the target sequence does not,
 you have the option to "translate CDS after partial 3' boundary" to extend the 
 CDS feature on the target.  To complete the task, select Propagate.
@@ -4193,8 +4239,9 @@ ALT="Table of Contents" ALIGN=top BORDER=2></A>
 <CENTER>
 <P>&nbsp
 <P CLASS=medium1><B>Questions or Comments?</B>
-<BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk</A></P>
-<P CLASS=medium1>Revised December 9, 1999
+<BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service
+Desk</A></P>
+<P CLASS=medium1>Revised July 14, 2000
 
 </CENTER>
 

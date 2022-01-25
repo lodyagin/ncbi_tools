@@ -1,4 +1,4 @@
-/*
+/* $Id: suggapi.h,v 6.1 2000/07/08 20:44:06 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE                          
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   08/14/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *	Header file for API for Suggest service
@@ -48,10 +48,6 @@
 #ifndef __suggapi_h__
 #define __suggapi_h__
 
-#ifdef __cplusplus
-extern "C" {
-#endif	/* __cplusplus */
-
 #ifndef _NCBI_Seq_
 #include <objseq.h>
 #endif	/* _NCBI_Seq_ */
@@ -60,12 +56,17 @@ extern "C" {
 #include "suggen.h"
 #endif	/* _suggen_ */
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif	/* __cplusplus */
+
 Boolean SuggestInit PROTO((void));
 Boolean SuggestFini PROTO((void));
 SeqAnnotPtr SuggestFindIntervals PROTO((SuggestIntervalsPtr pIntervals));
 
 #ifdef __cplusplus
-extern "C" {
+}  /* extern "C" */
 #endif	/* __cplusplus */
 
 #endif	/* __suggapi_h__ */

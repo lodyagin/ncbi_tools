@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.110 $
+* $Revision: 6.112 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,12 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
+* Revision 6.112  2000/07/24 22:30:20  thiessen
+* fix header conflict
+*
+* Revision 6.111  2000/07/21 18:55:14  thiessen
+* allow dynamic slave->master transformation
+*
 * Revision 6.110  2000/06/16 14:57:03  lewisg
 * move entrez calls out of desktop
 *
@@ -1126,13 +1132,24 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                         fnMarkAlignedResidues(pdnmsMaster, pdnmsSlave, pbsfThis);
                     if (!pvnAlignment) break;
 
-                    pdnTransform = NULL;
                     /* create the spatial transformation */
+                    pdnTransform = NULL;
                     TransformToDNTRN(&pdnTransform,
-                                     ((ChemGraphAlignmentPtr)
-                                      pvnAlignment->data.ptrvalue)->transform);
-                    if (pdnTransform == NULL) break;
+                        ((ChemGraphAlignmentPtr) pvnAlignment->data.ptrvalue)->transform);
+                    /* reverse transforms order to pass to Vibrant/shim3d/OpenGL as ValNode */
+                    if (pdnTransform) {
+                        while (pdnTransform->next) pdnTransform = pdnTransform->next;
+                        while (pdnTransform) {
+                            ValNodeAddPointer(&(pmsdSlave->pdnSlaveToMasterTransforms), 
+                                pdnTransform->choice, pdnTransform->data.ptrvalue);
+                            pdnTransform = pdnTransform->last;
+                        }
+                        
+                    }
+
                     /* loop over the slave's models with the transformation */
+                    /*
+                    if (pdnTransform == NULL) break;
                     pdnmlThis = pmsdSlave->pdnmlModels;
 
                     while (pdnmlThis) {
@@ -1142,8 +1159,10 @@ Boolean MMDB_ReadMime(NcbiMimeAsn1Ptr mime)
                                        pdnTransform, DoApplyTransform);
                         pdnmlThis = pdnmlThis->next;
                     }
+                    */
 
                     FreeDNTRN(pdnTransform);
+
                     pbsThis = pbsThis->next;
                     pbsfThis = pbsfThis->next;
                 }               /*while pbsThis */

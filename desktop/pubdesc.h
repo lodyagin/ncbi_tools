@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.0 $
+* $Revision: 6.1 $
 *
 * File Description: 
 *
@@ -45,11 +45,12 @@
 #ifndef _PUBDESC_
 #define _PUBDESC_
 
+#include <dlogutil.h>
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <dlogutil.h>
 
 /*
  *  The PubdescEditProcsPtr may be registered with a call to SetAppProperty

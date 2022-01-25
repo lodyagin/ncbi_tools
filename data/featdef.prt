@@ -810,8 +810,8 @@ FeatDefGroupSet ::= {
     molgroup both
   } ,
   {                   -- Prot
-    typelabel "preprotein" ,
-    menulabel "Preprotein" ,
+    typelabel "proprotein" ,
+    menulabel "Proprotein" ,
     featdef-key 86 ,
     seqfeat-key 4 ,
     entrygroup 1 ,

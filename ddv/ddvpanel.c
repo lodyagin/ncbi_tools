@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.c,v 1.96 2000/07/05 19:23:13 lewisg Exp $
+/*  $Id: ddvpanel.c,v 1.107 2000/08/30 14:31:28 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,46 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.96 $
+* $Revision: 1.107 $
 *
 * File Description: window management module of DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.c,v $
+* Revision 1.107  2000/08/30 14:31:28  hurwitz
+* quick fix so build does not crash
+*
+* Revision 1.106  2000/07/25 20:30:23  hurwitz
+* bug fixes: panel update when file is closed, double-click launches UDV from DDE, seqName agrees in status line and left col
+*
+* Revision 1.105  2000/07/24 22:00:09  hurwitz
+* fixed bug that 1/2 characters were displayed sometimes
+*
+* Revision 1.104  2000/07/20 22:25:57  hurwitz
+* bug fix.  mouse-mode query working again
+*
+* Revision 1.103  2000/07/19 19:04:02  hurwitz
+* fixed bug that was causing overwrite of numbering over tick marks in DDE
+*
+* Revision 1.102  2000/07/17 13:32:33  lewisg
+* move DDV_args out of the library
+*
+* Revision 1.101  2000/07/17 12:38:53  kans
+* DDV_myargs is extern in header, instantiated in ddvpanel.c, since it is accessed from that library file
+*
+* Revision 1.100  2000/07/14 22:24:56  lewisg
+* fix scroll, click, visual c++ build bugs.  add command line arg parse to ddv
+*
+* Revision 1.99  2000/07/12 22:22:41  hurwitz
+* added delete block to DDV
+*
+* Revision 1.98  2000/07/10 14:38:08  lewisg
+* move seqalign and sequentry data from window to panels
+*
+* Revision 1.97  2000/07/07 22:31:14  lewisg
+* interface tweaks
+*
 * Revision 1.96  2000/07/05 19:23:13  lewisg
 * add two panes to ddv, update msvc project files
 *
@@ -366,7 +399,6 @@
 Char szAppName[]="DDV";
 Char szAppName2[]="DDE";
 
-
 /*local text*/
 static Char szAbout[]="DeuxD-Viewer : A sequence alignment viewer for GenBank\n\
 Version 1.0\n\nInformation Engineering Branch\n\
@@ -396,6 +428,7 @@ static void DDV_DoEditFunction(IteM i, Int4 WhichOne);
 static void DDV_LaunchEditor(IteM i);
 static void DDV_MergeBlocks(IteM i);
 static void DDV_SplitBlock(IteM i);
+static void DDV_DeleteBlock2(IteM i);
 static void DDV_CallSaveEdits(IteM i);
 
 /*******************************************************************************
@@ -635,13 +668,17 @@ DdvMainPtr 	dmp;
 extern void DDV_VHScrl(PaneL p,UnDViewerGraphDataPtr gdp, Int4 newval, Int4 oldval,
 	Boolean IsVscroll)
 {
-RecT 	rcP;
-WindoW 	temport;
-Int4 	n,limit;
-Int2	dx,dy;
+  RecT 	      rcP;
+  WindoW 	    temport;
+  Int4 	      n,limit;
+  Int2	      dx,dy;
+  DdvMainPtr  dmp;
 
 	if (!gdp || !p) return;
-	
+
+  dmp = (DdvMainPtr) GetObjectExtra(p);
+	if (dmp==NULL) return;
+
 	/*compute scroll offset*/
 	if (oldval>newval)n=oldval-newval;
 	else n=newval-oldval;
@@ -651,10 +688,7 @@ Int2	dx,dy;
 	ObjectRect(p,&rcP);
 	InsetRect(&rcP,4,4);
 	/*drawing region:*/
-	rcP.left=(rcP.left/gdp->udv_font.ColWidth)*gdp->udv_font.ColWidth;
-	rcP.right=(rcP.right/gdp->udv_font.ColWidth)*gdp->udv_font.ColWidth-2;
-	rcP.top=(rcP.top/gdp->udv_font.LineHeight)*gdp->udv_font.LineHeight;
-	rcP.bottom=(rcP.bottom/gdp->udv_font.LineHeight)*gdp->udv_font.LineHeight;
+  DDV_AdjustDrawingRect(&rcP, &(gdp->udv_font), dmp);
 
 	if (IsVscroll){/*Vertical scroll*/
 		gdp->udv_vscrl.ScrollPos=newval;
@@ -905,7 +939,14 @@ WindoW      temport;
 *****************************************************************************/
 extern void DDV_WinMainResize (WindoW w)
 {		
-	DDV_SetupWin (w,FALSE);
+    DdvMainWinPtr  mWin_d;
+    
+    mWin_d = (DdvMainWinPtr) GetObjectExtra(w);
+    if(mWin_d == NULL) return;
+    
+    DDV_SetupWin (w,FALSE);
+    DDV_Resize_DDV (mWin_d->hUpperPanel, FALSE);
+    DDV_Resize_DDV (mWin_d->hLowerPanel, FALSE);
 	Update();
 }
 
@@ -967,6 +1008,10 @@ Uint2     bsp_eID;
 		MemFree(dmdp->pgp_l.entitiesTbl);
 		dmdp->pgp_l.entitiesTbl=NULL;
 	}
+
+  /* no rows, no cols */
+  dmdp->pgp_l.LengthAli = 0;
+  dmdp->pgp_l.nBsp = 0;
 	
     if(dmdp->entityID != 0)
 	    ObjMgrFreeUserData(dmdp->entityID,procid,proctype,userkey);
@@ -976,6 +1021,7 @@ Uint2     bsp_eID;
 
 extern void DDV_CleanupDDVPdata_g (DdvMainPtr dmp)
 {
+ValNodePtr      vnp;
 
 	/*SeqAlign Idx & ParaG List*/
 	DDV_FreeDDVPdata(&(dmp->MSA_d),dmp->userkey,dmp->procid,dmp->proctype);
@@ -986,6 +1032,29 @@ extern void DDV_CleanupDDVPdata_g (DdvMainPtr dmp)
 	dmp->procid=0;
 	dmp->proctype=0;
 	dmp->userkey=0;
+
+    switch(dmp->dod.choice){
+    case DDV_OPENTYPE_NOTRESP:
+        break;
+    case DDV_OPENTYPE_FILE:
+        vnp=dmp->dod.vnp;
+        while(vnp){
+            ObjMgrFree(vnp->choice, (Pointer)vnp->data.ptrvalue);
+            vnp=vnp->next;
+        }
+        ValNodeFree(dmp->dod.vnp);
+        break;
+    case DDV_OPENTYPE_SEP:
+    case DDV_OPENTYPE_GI:
+        if (dmp->dod.sep) SeqEntryFree(dmp->dod.sep);
+        break;
+    }
+    memset(&(dmp->dod),0,sizeof(DdvOpenData));
+
+	/*delete list of SeqAligns*/
+	if (dmp->vnp_ali){
+		dmp->vnp_ali=ValNodeFree(dmp->vnp_ali);
+	}
 
 	memset(&dmp->GrData.udv_vscrl,0,sizeof(UDVScrollData));
 	memset(&dmp->GrData.udv_hscrl,0,sizeof(UDVScrollData));
@@ -1058,6 +1127,7 @@ static PaneL DDV_PanelInit(GrouP g, WindoW w,DdvMainWinPtr dmwp,
 
     if(!p) return NULL;
 
+    Nlm_SetSlateBorder ((SlatE) p, FALSE);
 	SetPanelClick(p,ClickProc,
 		DDV_DragProc,DDV_HoldProc,DDV_ReleaseProc);
 	SetSlateChar ((SlatE) p, DDV_KeyboardProc);
@@ -1142,15 +1212,14 @@ Int2   cxChar,cyChar;
 	StatusGroupLower = HiddenGroup (g, 1, 0, NULL);
     infoLower = StaticPrompt (StatusGroupLower, "", 0, 3*cyChar/2, hFnt, 'l');
     
-/*    AlignObjects(ALIGN_RIGHT, (HANDLE) p, (HANDLE) p2,
-        (HANDLE) StatusGroup, NULL); */
+    AlignObjects(ALIGN_RIGHT, (HANDLE) p,(HANDLE) StatusGroup,(HANDLE) p2,
+        (HANDLE) StatusGroupLower, NULL);
 
 	if (gotoBtn==NULL || gotoRowTxt==NULL || 
 		gotoColTxt==NULL || info==NULL || infoLower == NULL) 
 		return(FALSE);
 
 	SetWindowTimer (w, DDV_TimerProc);
-	
 
 	dmwp->gotoBtn=gotoBtn;
 	dmwp->gotoValRow=gotoRowTxt;
@@ -1285,34 +1354,10 @@ NLM_EXTERN void DDV_Cancel(ButtoN g) {
 *******************************************************************************/
 extern void DDV_CloseData(DdvMainWinPtr mWin_d,Boolean bFinalExit)
 {
-ValNodePtr      vnp;
 
 	WatchCursor();
 	/*dmp=(DdvMainPtr)GetObjectExtra(mWin_d->hWndDDV);*/
-	/*delete Entry information*/
-	switch(mWin_d->dod.choice){
-		case DDV_OPENTYPE_NOTRESP:
-			break;
-		case DDV_OPENTYPE_FILE:
-			vnp=mWin_d->dod.vnp;
-			while(vnp){
-				ObjMgrFree(vnp->choice, (Pointer)vnp->data.ptrvalue);
-				vnp=vnp->next;
-			}
-			ValNodeFree(mWin_d->dod.vnp);
-			break;
-		case DDV_OPENTYPE_SEP:
-		case DDV_OPENTYPE_GI:
-			if (mWin_d->dod.sep) SeqEntryFree(mWin_d->dod.sep);
-			break;
-	}
-	memset(&(mWin_d->dod),0,sizeof(DdvOpenData));
 	
-	/*delete list of SeqAligns*/
-	if (mWin_d->vnp_ali){
-		mWin_d->vnp_ali=ValNodeFree(mWin_d->vnp_ali);
-	}
-
 	/*DDV_CleanupDDVPdata_g(dmp);*/
 	if (!bFinalExit)
 		DDV_SetupWin (mWin_d->hWndMain,TRUE);
@@ -1326,17 +1371,25 @@ NLM_EXTERN void DDV_FileCloseIt(WindoW hWinMain) {
 *---------------------------------------------------------------------------*/
   DdvMainPtr    dmp;
   DdvMainWinPtr mWin_d;
+  RecT          rc;
 
 	mWin_d = (DdvMainWinPtr) GetObjectExtra((Handle)hWinMain);
 	if (mWin_d==NULL) return;
 
-	/*display the logo panel*/
-	mWin_d->Show_logo=TRUE;
-	/*delete data*/
+	/* delete data */
 	dmp=(DdvMainPtr)GetObjectExtra(mWin_d->hWndDDV);
 	DDV_CleanupDDVPdata_g(dmp);
 	DDV_CloseData(mWin_d,FALSE);
 	DDV_EnableGotoTBItems(hWinMain,FALSE);
+
+	/* blank the panel that's closed */
+	mWin_d->Show_logo=FALSE;
+  ObjectRect(mWin_d->hUpperPanel, &rc);
+  InvalRect(&rc);
+  ObjectRect(mWin_d->hLowerPanel, &rc);
+  InvalRect(&rc);
+
+  Update();
 }
 
 
@@ -2177,13 +2230,11 @@ Boolean  NoGaps;
     Disable(mWin_d->MainMenu.Next);
 	}
 
-#if defined (_LAUNCH_DDE)
 	if (mWin_d->AutonomeViewer){
-    mWin_d->MainMenu.Align = PulldownMenu(w, "Alignment/A");
-    mWin_d->MainMenu.Hide=CommandItem(mWin_d->MainMenu.Align,
-        "Hide or Show Rows...",DDV_HideDlgItem);
-  }
-#endif
+        mWin_d->MainMenu.Align = PulldownMenu(w, "Alignment/A");
+        mWin_d->MainMenu.Hide=CommandItem(mWin_d->MainMenu.Align,
+            "Hide or Show Rows...",DDV_HideDlgItem);
+    }
 	
     /* Align menu */
     if(vgp != NULL) {
@@ -2240,22 +2291,18 @@ Boolean  NoGaps;
     ChoiceItem(mWin_d->MainMenu.Justify,"Left");
     ChoiceItem(mWin_d->MainMenu.Justify,"Right");
     ChoiceItem(mWin_d->MainMenu.Justify,"Center");
-  } else {
+  } 
+
+  /* only launch the editor from the viewer */
+  if (!bEditor && mWin_d->EditAllowed) {
     mWin_d->MainMenu.ShowLowerPanel = StatusItem(m,
          "Show Lower Panel/L", DDV_ShowLowerPanel);
     SetObjectExtra (mWin_d->MainMenu.ShowLowerPanel, (Pointer)mWin_d, NULL);
-  }
-
-
-  /* allow launch of the editor */
-#if defined(_LAUNCH_DDE)
-  /* only launch the editor from the viewer */
-  if (!bEditor) {
     mWin_d->MainMenu.LaunchEditor=CommandItem(m,"Launch editor...",DDV_LaunchEditor);
     mWin_d->MainMenu.MergeBlocks=CommandItem(m,"Merge 2 blocks...",DDV_MergeBlocks);
     mWin_d->MainMenu.SplitBlock=CommandItem(m,"Split block in 2...",DDV_SplitBlock);
+    mWin_d->MainMenu.DeleteDDVBlock=CommandItem(m, "Delete block...",DDV_DeleteBlock2);
   }
-#endif
 
 	if (mWin_d->AutonomeViewer && mWin_d->NetCfgMenuProc){
 		mWin_d->MainMenu.ConfigNet=CommandItem(m,"Network...",
@@ -2296,10 +2343,10 @@ DdvMainWinPtr mWin_d;
 }
 
 /*******************************************************************************
-
-  Function : DDV_InitGraphGlobal()
   
   Purpose : init the graphical data structure of DDV. Use only when you start DDV. 
+
+  Function : DDV_InitGraphGlobal()
   
   Parameters : dmp; main DDV data block
   
@@ -2320,7 +2367,7 @@ Int2 decal=0;
 	dmp->GrData.udv_scale.ScalePosition=(Int2)SCALE_POS_TOP;
 	dmp->GrData.udv_panel.ShowFeatures=FALSE;
 	dmp->GrData.udv_panel.ShowByBlock=FALSE;
-	dmp->GrData.udv_scale.cxLeftScale=dmp->GrData.udv_font.cxChar;
+	dmp->GrData.udv_scale.cxLeftScale=dmp->GrData.udv_font.cxChar*2;
 	dmp->GrData.udv_panel.cxName=PANEL_NAME_WIDTH*dmp->GrData.udv_font.cxChar;
 	if (dmp->GrData.udv_scale.ShowMajorTick) decal++;
 	if (dmp->GrData.udv_scale.ScalePosition==SCALE_POS_TOP) decal++;
@@ -3294,6 +3341,12 @@ static void DDV_SplitBlock(IteM i)
   return;
 }
 
+static void DDV_DeleteBlock2(IteM i)
+{
+  DDV_DoEditFunction(i, DDV_DELETE_BLOCK);
+  return;
+}
+
 
 static void DDV_CallSaveEdits(IteM i) {
 /*----------------------------------------------------------------------------
@@ -3313,6 +3366,24 @@ static void DDV_CallSaveEdits(IteM i) {
 
   DDV_SaveEdits(dmp, TRUE);
 }
+
+
+static void write_annot(SeqAlignPtr align)
+{
+        SeqAnnotPtr annot;
+        AsnIoPtr aip;
+
+        annot = SeqAnnotNew();
+        annot->type = 2;
+        annot->data = align;
+
+        aip = AsnIoOpen("temp2.sat", "w");
+        SeqAnnotAsnWrite(annot, aip, NULL);
+        AsnIoClose(aip);
+
+        annot->data = NULL;
+        SeqAnnotFree(annot);
+}         
 
 
 NLM_EXTERN void DDV_SaveEdits(DdvMainPtr dmp, Boolean UpdateDDV) {
@@ -3396,7 +3467,7 @@ NLM_EXTERN void DDV_SaveEdits(DdvMainPtr dmp, Boolean UpdateDDV) {
   SeqAlignListFree(sap);
   sap = AlnMgrGetSubAlign(indexed_sap, NULL, 0, -1);
 
-  ViewMgr_SetBegin(dmp->MSA_d.pgp_l.viewed_sap, sap);
+  ViewMgr_SetBegin(dmp->MSA_d.pgp_l.viewed_sap, sap, FALSE, FALSE);
   /* indicate there are no edits to save when quitting DDE */
   dmp->dsp->SomethingToSave = FALSE;
 
@@ -3552,6 +3623,11 @@ DDE_StackPtr        ddesp;
     case DDE_SPLIT_BLOCK:
       dmp->SavedMouseMode = dmp->MouseMode;
       dmp->MouseMode = DDV_MOUSEMODE_SPLITBLOCK;
+      CrossCursor();
+      break;
+    case DDV_DELETE_BLOCK:
+      dmp->SavedMouseMode = dmp->MouseMode;
+      dmp->MouseMode = DDV_MOUSEMODE_DELETEBLOCK;
       CrossCursor();
       break;
   }

@@ -143,7 +143,11 @@ Int2 Main(void)
 		sep = SeqEntryAsnRead(aip, NULL);
 
 		if (sep == NULL)
+		{
+			fatal_error++;
+			numerrors++;
 			ErrPostEx(SEV_ERROR,0,0, "Couldn't load [%s]\n", myargs[0].strvalue);
+		}
 		else
 		{
 			if (aip->io_failure)
@@ -170,6 +174,11 @@ Int2 Main(void)
 			if (atp == atp2)    /* top level Seq-entry */
 			{
 				sep = SeqEntryAsnRead(aip, atp);
+				if (sep == NULL)
+				{
+					numerrors++;
+					fatal_error++;
+				}
 				if (aip->io_failure)
 				{
 					vsp->non_ascii_chars = TRUE;
