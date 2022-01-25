@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.c,v 1.23 2000/05/12 16:15:26 hurwitz Exp $
+/*   $Id: viewmgr.c,v 1.28 2000/06/20 19:35:11 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.c,v 1.23 2000/05/12 16:15:26 hurwitz Exp $
+* File Name:  $Id: viewmgr.c,v 1.28 2000/06/20 19:35:11 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.23 $
+* $Revision: 1.28 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,21 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.c,v $
+* Revision 1.28  2000/06/20 19:35:11  hurwitz
+* use indexed seqAlign when necessary, make multiple when redrawing
+*
+* Revision 1.27  2000/06/16 13:44:10  lewisg
+* fix Int4->int fcn declaration
+*
+* Revision 1.26  2000/06/13 18:23:54  hurwitz
+* made ViewMgr_MakeMultiple routine, call this on each launch of DDE rather than launch of DDV
+*
+* Revision 1.25  2000/06/08 20:52:42  hurwitz
+* fixed a bug with show/hide rows
+*
+* Revision 1.24  2000/06/07 23:08:48  lewisg
+* fix show/hide for large number of rows
+*
 * Revision 1.23  2000/05/12 16:15:26  hurwitz
 * reverted to not doing IntersectOnMaster for DDE, now determined by call to ViewMgr_Attach
 *
@@ -177,7 +192,7 @@ static Int4 ViewMgr_xVRow2TRow(ViewMgr_Global *pGlobal, SeqAlign *salp,
     for (TRow = 1, nVRow = 0; ; TRow++) {
         isHidden = FALSE;
         for (pvn = pInfo->pHiddenRows; pvn != NULL; pvn = pvn->next) {
-            if (pvn->choice == TRow) {
+            if (pvn->data.intvalue == TRow) {
                 isHidden = TRUE;
                 break;
             }
@@ -225,8 +240,8 @@ static Int4 ViewMgr_xTRow2VRow (ViewMgr_Global *pGlobal, SeqAlign *salp,
     if(pInfo == NULL) return -1;
 
     for(pvn = pInfo->pHiddenRows; pvn != NULL; pvn = pvn->next) {
-        if(pvn->choice < TRow) VRow--;
-        if(pvn->choice == TRow) return -1;
+        if(pvn->data.intvalue < TRow) VRow--;
+        if(pvn->data.intvalue == TRow) return -1;
     }
     return VRow;
 }
@@ -524,6 +539,24 @@ NLM_EXTERN SeqAlign * ViewMgr_GetBegin(SeqAlign *salp)
 
 /*****************************************************************************
 
+Function: ViewMgr_SetBegin
+
+Purpose: make pNewBegin the original SeqAlign
+  
+*****************************************************************************/
+NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin)
+{
+    ViewMgr_AlignInfo *pInfo;
+
+    pInfo = ViewMgr_GetInfo(salp);
+    if(pInfo == NULL) return NULL;
+
+    pInfo->pBegin = pNewBegin;
+    return pInfo->pBegin;
+}
+
+/*****************************************************************************
+
 Function: ViewMgr_GetBeginIndexed
 
 Purpose: return the original SeqAlign given the view seqalign.  This is
@@ -624,7 +657,7 @@ static void ViewMgr_Swap(SeqAlign *salp1, SeqAlign *salp2)
     salp2->alignID = (Uint2)lSwap;
 }
 
-static Int4 LIBCALLBACK ViewMgr_CmpInt(void *int1, void *int2)
+static int LIBCALLBACK ViewMgr_CmpInt(void *int1, void *int2)
 {
     if(int1 && int2) return *(Int4 *)int2 - *(Int4 *)int1;
     else return 0;
@@ -685,6 +718,40 @@ static Int4 ViewMgr_Massage(ViewMgr_AlignInfo *pInfo)
     }
     return 1;
 }
+
+/*****************************************************************************
+
+Function: ViewMgr_MakeMultiple
+
+Purpose: Turns a pairwise seqalign into a multiple
+  
+Parameters: salp, the seqalign to be turned into a multiple
+
+Returns: 1 on success, 0 otherwise
+
+*****************************************************************************/
+
+NLM_EXTERN Int4 ViewMgr_MakeMultiple(SeqAlign *salp)
+{
+    ViewMgr_AlignInfo *pInfo;
+    SeqAlign *pSeqAlign;
+
+    if(salp == NULL) 
+        ErrorReturn(SEV_ERROR, "ViewMgr_MakeMultiple", -1);
+    pInfo = ViewMgr_GetInfo(salp);
+    if(pInfo == NULL) ErrorReturn(SEV_ERROR, "ViewMgr_MakeMultiple", -1);
+
+    pSeqAlign = AlnMgrGetSubAlign(pInfo->pBeginIndexed, NULL, 0, -1);
+
+    if(pSeqAlign == NULL) return 0;
+    pInfo->pBegin = pSeqAlign;
+    ViewMgr_Massage(pInfo);
+
+    AlnMgrCopyIndexedParentIntoSap(pInfo->pTarget, salp);
+    
+    return ViewMgr_Update(salp);
+}
+
 
 /*****************************************************************************
 
@@ -806,7 +873,7 @@ Returns: 1 on success, 0 on setup failure, -1 if the requested action can't
 NLM_EXTERN Int4 ViewMgr_SetHidden(SeqAlign *salp, Boolean Hidden, Int4 Row)
 {
     ViewMgr_AlignInfo *pInfo;
-    ValNode *pvn;
+    ValNode *pvn, *pvnPrev;
 
     pInfo = ViewMgr_GetInfo(salp);
     if(pInfo == NULL) return 0;
@@ -815,20 +882,25 @@ NLM_EXTERN Int4 ViewMgr_SetHidden(SeqAlign *salp, Boolean Hidden, Int4 Row)
     if(pInfo->Intersect && !pInfo->Neat) return 0;  /* can't handle this case */
     if (Hidden) {
         /*	if(AlnMgrGetNumRows(pInfo->pBegin) - ValNodeLen(pInfo->pHiddenRows) < 3) return -1;  not indexed */
-        pvn = ValNodeFindNext(pInfo->pHiddenRows, NULL, (Nlm_Int2)Row);
+        for(pvn = pInfo->pHiddenRows; pvn != NULL; pvn = pvn->next)
+            if(pvn->data.intvalue == Row) break;
         if(pvn == NULL) {
             ValNodeAddInt(&pInfo->pHiddenRows, (Nlm_Int2)Row, Row);
             return 1;
-        }
-	else return -1;
+            }
+        else return -1;
     }
     else {
-        pvn = ValNodeExtract(&pInfo->pHiddenRows, (Nlm_Int2)Row);
-        if(pvn != NULL) {
-            MemFree(pvn);
-            return 1;
+        for(pvnPrev = pvn = pInfo->pHiddenRows; pvn != NULL; pvn = pvn->next) {
+            if(pvn->data.intvalue == Row) {
+                if(pvnPrev == pvn) pInfo->pHiddenRows = pvn->next;
+                else pvnPrev->next = pvn->next;
+                MemFree(pvn);
+                return 1;
+            }
+            else pvnPrev = pvn;
         }
-        else return -1;
+        return -1;
     }
     
     return 0;

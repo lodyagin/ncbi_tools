@@ -1,4 +1,4 @@
-/* $Id: mmdbFF.c,v 6.3 1999/09/08 18:43:54 zimmerma Exp $
+/* $Id: mmdbFF.c,v 6.4 2000/06/20 20:47:03 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: mmdbFF.c,v $
+* Revision 6.4  2000/06/20 20:47:03  lewisg
+* use gzip
+*
 * Revision 6.3  1999/09/08 18:43:54  zimmerma
 * Modified HashPDBCode with calls to "toupper" to ensure case-insensitivity
 *
@@ -203,7 +206,7 @@ BiostrucPtr MMDBBiostrucGet (DocUid uid, Int4 mdlLvl, Int4 maxModels)
       if (FileLength(path) <=0)
         return NULL;
       
-      sprintf(compath,"%s -c %s ", gunzip, path);
+      sprintf(compath,"%s -c -d %s ", gunzip, path);
       pipe=popen(compath,"rb");
       if (pipe == 0)
         {
@@ -270,5 +273,5 @@ MMDBFini (void)
 CharPtr LIBCALL
 MMDB_configuration(void)
 {
-  return "Version:\t$Id: mmdbFF.c,v 6.3 1999/09/08 18:43:54 zimmerma Exp $\nConfiguration: Flat Files" ;
+  return "Version:\t$Id: mmdbFF.c,v 6.4 2000/06/20 20:47:03 lewisg Exp $\nConfiguration: Flat Files" ;
 }

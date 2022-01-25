@@ -29,7 +29,7 @@
  *
  * Version Creation Date:   7/15/95
  *
- * $Revision: 6.20 $
+ * $Revision: 6.23 $
  *
  * File Description: 
  *
@@ -39,6 +39,15 @@
  * -------  ----------  -----------------------------------------------------
  *
  * $Log: asn2ff2.c,v $
+ * Revision 6.23  2000/07/06 22:42:00  tatiana
+ * REGSEQ text revised
+ *
+ * Revision 6.22  2000/06/19 16:36:27  kans
+ * NULL out ajp->Spop->ptr before calling StdFormatPrint, since string is freed elsewhere leaving ajp->Spop->ptr dangling
+ *
+ * Revision 6.21  2000/06/05 17:52:05  tatiana
+ * increase size of feature arrays to Int4
+ *
  * Revision 6.20  2000/02/29 16:54:35  bazhin
  * Removed memory leaks.
  *
@@ -208,6 +217,10 @@ static CharPtr SeqIdWriteProc (Asn2ffJobPtr ajp, SeqIdPtr sip)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
+
 	if (ajp->show_version) {
 		if (! StdFormatPrint((Pointer)sip, 
 			(AsnWriteFunc)SeqIdAsnWrite, "VersionSeqId", Spop)) {
@@ -230,6 +243,10 @@ static CharPtr BioseqIdPrintProc (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	BioseqPtr bsp=gbp->bsp;
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
+
 	if (gbp == NULL) 
 		return NULL;
 	if ((bsp=gbp->bsp) == NULL)
@@ -250,6 +267,10 @@ static CharPtr TableIdPrintProc (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	BioseqPtr bsp=ajp->asn2ffwep->seg;
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
+
 	if (bsp == NULL)
 		return NULL;
 
@@ -267,6 +288,10 @@ static CharPtr SPBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
+
 	if (! StdFormatPrint((Pointer)vnp->data.ptrvalue, 
 		(AsnWriteFunc)SPBlockAsnWrite, "StdSPBlock", Spop)) {
                     ErrPostStr (SEV_WARNING, 0, 0, "StdSPBlockStdFormatPrint failed");
@@ -280,6 +305,10 @@ static CharPtr SPBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 static CharPtr PIRBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
+
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
 
 	if (! StdFormatPrint((Pointer)vnp->data.ptrvalue, 
 		(AsnWriteFunc)PirBlockAsnWrite, "StdPirBlock", Spop)) {
@@ -295,6 +324,10 @@ static CharPtr PDBBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
 
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
+
 	if (! StdFormatPrint((Pointer)vnp->data.ptrvalue, 
 		(AsnWriteFunc)PdbBlockAsnWrite, "StdPDBBlock", Spop))
                     ErrPostStr (SEV_WARNING, 0, 0, "StdFormatPrint failed");
@@ -308,6 +341,10 @@ static CharPtr PDBBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 static CharPtr PRFBlockPrintProc (Asn2ffJobPtr ajp, ValNodePtr vnp)
 {
 	StdPrintOptionsPtr Spop=ajp->Spop;
+
+	if (Spop != NULL) {
+		Spop->ptr = NULL; /* reused ajp->Spop->ptr left dangling by previous call */
+	}
 
 	if (! StdFormatPrint((Pointer)vnp->data.ptrvalue, 
 		(AsnWriteFunc)PrfBlockAsnWrite, "StdPRFBlock", Spop))
@@ -347,14 +384,14 @@ static DescrStructPtr tie_next_dsp(DescrStructPtr head, DescrStructPtr next)
 
 static CharPtr GetSfpComment (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
-	Int2 index;
+	Int4 index;
 	SeqFeatPtr sfp;
 	SortStructPtr p;
 
 	if (gbp == NULL || gbp->feat == NULL) {
 		return  NULL;
 	}
-	index = (Int2) ajp->pap_index;
+	index = ajp->pap_index;
 	p = gbp->feat->Commlist + index;
 	if ((sfp = p->sfp) == NULL) {
 		GatherItemWithLock(p->entityID, p->itemID, 
@@ -370,7 +407,7 @@ NLM_EXTERN void PrintCommentByNumber(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	CharPtr newstring;
 	ComStructPtr s;
-	Int2 i, index = (Int2) ajp->pap_index;
+	Int4 i, index = ajp->pap_index;
 	
 	if (gbp == NULL) {
 		return;
@@ -385,7 +422,7 @@ NLM_EXTERN void PrintFirstComment(Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	CharPtr newstring;
 	ComStructPtr s;
-	Int2 i, index = (Int2) ajp->pap_index;
+	Int4 i, index = ajp->pap_index;
 	
 	if (gbp == NULL) {
 		return;
@@ -463,26 +500,49 @@ static CharPtr GetStrForBankit(UserObjectPtr uop)
 static CharPtr GetStrForUserObject(UserObjectPtr uop)
 {
     ObjectIdPtr		oip;
-	UserFieldPtr	ufp, tmp, u;
-	CharPtr			ptr=NULL;
+	UserFieldPtr	ufp, tmp, u, urf;
+	CharPtr			ptr=NULL, st;
 	Int2			i=0, acclen;
-	CharPtr			p;
+	CharPtr			p = NULL, pp;
+	Int2			review = 0, len;
 	
 	if ((oip = uop->type) == NULL) return NULL;
 	if (StringCmp(oip->str, "RefGeneTracking") != 0) return NULL;
+	len = StringLen("The reference sequence was derived from ");
 	for (ufp=uop->data; ufp; ufp=ufp->next) {
 		oip = ufp->label;
 		if (StringCmp(oip->str, "Assembly") == 0) {
-			break;
+			urf = ufp;
+		}
+		if (StringCmp(oip->str, "Status") == 0) {
+			st = (CharPtr) ufp->data.ptrvalue;
+			if (StringCmp(st, "Provisional") == 0) {
+				review = 1;
+			} else if (StringCmp(st, "Reviewed") == 0) {
+				review = 2;
+			}
 		}
 	}
-	if (ufp && ufp->choice == 11) {
-		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next, i++) ;
+	if (urf && urf->choice == 11) {
+		for (tmp=urf->data.ptrvalue; tmp; tmp=tmp->next, i++) ;
+		if (review == 2) {
 			ptr = (CharPtr) MemNew(
-			StringLen("REFSEQ: This reference sequence was derived from ")
-																 + 18*i + 1);
-		sprintf(ptr, "REFSEQ: This reference sequence was derived from ");
-		for (tmp=ufp->data.ptrvalue; tmp; tmp=tmp->next) {
+			StringLen("REVIEWED REFSEQ: This record has been curated by NCBI staff. ") + len + 18*i + 1);
+		sprintf(ptr, "REVIEWED REFSEQ: This record has been curated by NCBI staff. ");
+		} else if (review == 1) {
+			ptr = (CharPtr) MemNew(
+			StringLen("PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ") + len + 18*i + 1);
+		sprintf(ptr, "PROVISIONAL REFSEQ: This record has not yet been subject to final NCBI review. ");
+		} else {
+			ptr = (CharPtr) MemNew( StringLen("REFSEQ: ") + len + 18*i + 1);
+			sprintf(ptr, "REFSEQ: ");
+		}
+		if (i > 0) {
+			pp = (CharPtr) MemNew(len);
+			sprintf(pp, "The reference sequence was derived from ");
+			StringCat(ptr, pp);
+		}
+		for (tmp=urf->data.ptrvalue; tmp; tmp=tmp->next) {
 			for (u = tmp->data.ptrvalue; u; u=u->next) {
 				oip = u->label;
 				if (StringCmp(oip->str, "accession") == 0) {

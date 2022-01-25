@@ -196,6 +196,43 @@ Int4 tax1_getParent(Int4 id_tax)
     return ret_id;
 }
 
+Int4 tax1_getGenus(Int4 id_tax)
+{
+    TreeCursorPtr cursor;
+    Int4 ret_id= -1;
+
+    if(tax_tree == NULL) return -1;
+
+    if(id_tax == 1) return 0;
+
+    cursor= tree_openCursor(tax_tree, NULL, NULL);
+    if(cursor == NULL) return -1;
+
+    if(tc2_toNode(cursor, id_tax)) {
+	TXC_TreeNodePtr tnp;
+	Uint2 s;
+	Int2 rank;
+
+	do {
+	    tree_parent(cursor);
+	    tnp= tree_getNodeData(cursor, &s);
+	    if(tnp == NULL) {
+		ret_id= -1;
+		break;
+	    }
+	    ret_id= tnp->tax_id;
+	    rank= tnp->flags & 0xFF;
+	    --rank;
+	    if(rank == GenusRank) break;
+	    if((rank > 0) && (rank < GenusRank)) ret_id= -1;
+	}
+	while(ret_id > 1);
+    }
+    
+    tree_closeCursor(cursor);
+    return (ret_id > 1)? ret_id : -1;
+}
+
 int tax1_getChildren(Int4 id_tax, Int4** ids_out)
 {
     int n= 0;

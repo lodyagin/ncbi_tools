@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:
 *     NCBI Main() function and cmd.-line argument-handling routines
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbimain.h,v $
+* Revision 6.2  2000/06/15 20:51:41  vakatov
+* Use "const" in Args code
+*
 * Revision 6.1  1997/10/27 21:58:13  vakatov
 * Added Nlm_FreeArgs() to reset args earlier set by GetArgs[Silent]()
 *
@@ -79,8 +82,8 @@ extern "C" {
 
 
 typedef struct mainargs {
-  char *prompt;            /* prompt for field */
-  char *defaultvalue;      /* default */
+  const char *prompt;            /* prompt for field */
+  const char *defaultvalue;      /* default */
   char *from;              /* range or datalink type */
   char *to;
   Nlm_Boolean	optional;
@@ -94,6 +97,7 @@ typedef struct mainargs {
 #define Args   Nlm_Arg
 #define ArgPtr Nlm_ArgPtr
 
+
 #define ARG_INVALID  0
 #define ARG_BOOLEAN  1
 #define ARG_INT      2
@@ -105,16 +109,16 @@ typedef struct mainargs {
 #define ARG_DATA_OUT 8
 
 
-extern Nlm_Int2 Nlm_Main PROTO((void));
+extern Nlm_Int2 Nlm_Main(void);
 
-NLM_EXTERN Nlm_Boolean Nlm_GetArgs PROTO((Nlm_CharPtr progname, Nlm_Int2 numargs, Nlm_ArgPtr ap));
+NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname, Nlm_Int2 numargs, Nlm_ArgPtr ap);
 
 /* do not post the arg-query dialog if all non-optional arguments can be
  * resolved by default or using command line(even if command line is empty) */
-NLM_EXTERN Nlm_Boolean Nlm_GetArgsSilent PROTO((Nlm_CharPtr progname, Nlm_Int2 numargs, Nlm_ArgPtr ap));
+NLM_EXTERN Nlm_Boolean Nlm_GetArgsSilent(const char* progname, Nlm_Int2 numargs, Nlm_ArgPtr ap);
 
 /* Free all dynamically allocated data and reset all data in "ap" */
-NLM_EXTERN Nlm_Boolean Nlm_FreeArgs PROTO((Nlm_Int2 numargs, Nlm_ArgPtr ap));
+NLM_EXTERN Nlm_Boolean Nlm_FreeArgs(Nlm_Int2 numargs, Nlm_ArgPtr ap);
 
 
 /*****************************************************************************
@@ -125,16 +129,16 @@ NLM_EXTERN Nlm_Boolean Nlm_FreeArgs PROTO((Nlm_Int2 numargs, Nlm_ArgPtr ap));
 *
 *****************************************************************************/
 
-NLM_EXTERN Nlm_CharPtr PNTR Nlm_GetArgv PROTO((void));
-NLM_EXTERN Nlm_Int4         Nlm_GetArgc PROTO((void));
+NLM_EXTERN Nlm_CharPtr PNTR Nlm_GetArgv(void);
+NLM_EXTERN Nlm_Int4         Nlm_GetArgc(void);
 
 
-#define Main     Nlm_Main
-#define GetArgs  Nlm_GetArgs
-#define FreeArgs Nlm_FreeArgs
+#define Main           Nlm_Main
+#define GetArgs        Nlm_GetArgs
+#define FreeArgs       Nlm_FreeArgs
 #define GetArgsSilent  Nlm_GetArgsSilent
-#define GetArgv  Nlm_GetArgv
-#define GetArgc  Nlm_GetArgc
+#define GetArgv        Nlm_GetArgv
+#define GetArgc        Nlm_GetArgc
 
 #ifdef __cplusplus
 }

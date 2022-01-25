@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.c,v 1.43 2000/05/25 21:40:42 hurwitz Exp $
+/*  $Id: ddvclick.c,v 1.58 2000/07/05 19:23:13 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,58 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.43 $
+* $Revision: 1.58 $
 *
 * File Description: mouse management code for DeuxD-Viewer (DDV)
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.c,v $
+* Revision 1.58  2000/07/05 19:23:13  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.57  2000/07/05 18:42:16  hurwitz
+* added split block function to DDV
+*
+* Revision 1.56  2000/06/30 22:31:51  hurwitz
+* added merge block function for DDV
+*
+* Revision 1.55  2000/06/28 19:41:31  hurwitz
+* auto vertical scroll working for rectangle selection
+*
+* Revision 1.54  2000/06/27 20:46:38  hurwitz
+* fixed bugs with select rectangle, added select row option
+*
+* Revision 1.53  2000/06/26 19:32:17  hurwitz
+* can select a rectangle instead of a single row, auto horizontal scroll works but not vertical scroll yet
+*
+* Revision 1.52  2000/06/22 20:56:52  hurwitz
+* assorted bug fixes
+*
+* Revision 1.51  2000/06/21 21:20:56  hurwitz
+* a couple bug fixes
+*
+* Revision 1.50  2000/06/20 19:35:11  hurwitz
+* use indexed seqAlign when necessary, make multiple when redrawing
+*
+* Revision 1.49  2000/06/16 18:40:02  lewisg
+* send mouseup message when drag ends off of sequence
+*
+* Revision 1.48  2000/06/15 20:26:05  hurwitz
+* added left/right/center justify for DDE
+*
+* Revision 1.47  2000/06/13 18:23:54  hurwitz
+* made ViewMgr_MakeMultiple routine, call this on each launch of DDE rather than launch of DDV
+*
+* Revision 1.46  2000/06/12 23:02:40  hurwitz
+* enable launch of DDE from Cn3D, swith from DDV_ComputeRuler to DDE_ReMakeRuler, get rid of styles option for DDE
+*
+* Revision 1.45  2000/06/06 20:09:22  lewisg
+* fix double redraw bug
+*
+* Revision 1.44  2000/05/31 23:07:26  hurwitz
+* made NoGaps a runtime parameter, fixed bug with vertical scroll of show/hide list, save edits query is not performed if nothing to save
+*
 * Revision 1.43  2000/05/25 21:40:42  hurwitz
 * rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
 *
@@ -195,6 +240,13 @@
 static Boolean OnAlignmentBoundary(PoinT pt, PaneL p, DdvMainPtr dmp,
                                    Int4* pBlockIndex, Boolean* pLeftBoundary,
                                    Int4* pCol, Int4* pHPos);
+
+static Boolean GetBlockAndAlignment(PoinT pt, PaneL p, DdvMainPtr dmp,
+                                    Int4* pBlockIndex, Boolean* pIsUnAligned,
+                                    Int4* pCol, Int4* pOffset, Int4* pWidth, RecT* rcP);
+
+static Boolean GetBlockAndAlignmentForCol(DdvMainPtr dmp, Int4 Col, Int4* pBlockIndex,
+                                          Boolean* pIsUnAligned, Int4* pOffset, Int4* pWidth);
 
 
 NLM_EXTERN Int4 DDV_GetHPixelPosGivenColNumber(DdvMainPtr dmp, RecT rc, Int4 Col) {
@@ -431,33 +483,133 @@ Int4         sel_bsp_start,sel_bsp_stop;
 	return(FALSE);
 }
 
+
+static Uint1 DDV_GetRegionInParaG(ParaGPtr pgp, Int4 Line_num) {
 /*****************************************************************************
-
-Function: DDV_GetCoordsGivenAClick()
-
-Purpose: given some graphical info, this function returns bsp_coord, SeqAlign_coord,
-         Disp_coord. Future implementation : will also return eID, iID, idx of
-		 a feature (if the nice user clicks on a feature).
-		
-Parameters:	dmp; panel main data block
-            rcP; panel size
-			pt; mouse position
-			bsp_coord, SeqAlign_coord, Disp_coord,Line_num; return values
-            uWhere; where the mouse is in a ParaG
-			
-Note : all but Line_num are zero-based values. Line_num is a one-based value.
-			
-Return value: TRUE if the user clicks within a ParaG (see also 
-		bsp_coord, SeqAlign_coord, Disp_coord, uWhere). NOTE : if the function 
-		returns FALSE then bsp_coord, SeqAlign_coord, Line_num, Disp_coord and 
-		uWhere are undefined !
-
+*  get region within ParaG
 *****************************************************************************/
-static Boolean DDV_GetCoordsGivenAClick(DdvMainPtr dmp, RecT * rcP, PoinT * pt,
+  Int4  mouse_row, diff;
+
+  mouse_row = Line_num-1;
+
+  if (pgp->ScaleStyle==SCALE_POS_NONE)
+    diff=0;
+  else
+    diff=1;
+
+  if (mouse_row==(pgp->StartLine+diff)){
+    return(PGP_REGION_SEQ);
+  }
+  else if (mouse_row >  (pgp->StartLine+ diff) && 
+           mouse_row <= (pgp->StartLine+ pgp->nLines-1)){
+    return(PGP_REGION_FEAT);
+  }
+  return(PGP_REGION_NOWHERE);
+}
+
+
+static void DDV_GetRowAndColGivenPtAndScroll(DdvMainPtr dmp, RecT rc, PoinT pt,
+                                             Int4 HScroll, Int4 VScroll,
+                                             Int4Ptr Disp_coord, Int4Ptr Line_num) {
+/*****************************************************************************
+*  get row and column where the mouse is clicked.  Provide scroll positions.
+*****************************************************************************/
+  Int4  mouse_row, mouse_col;
+
+  InsetRect(&rc,4,4);
+  DDV_AdjustDrawingRect(&rc, &(dmp->GrData.udv_font));
+  rc.left += dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale;
+  rc.top += 3*dmp->GrData.udv_panel.cyScale/2;
+
+  mouse_row = (pt.y - rc.top)/dmp->GrData.udv_font.LineHeight + VScroll;
+  mouse_col = (pt.x - rc.left)/dmp->GrData.udv_font.ColWidth + HScroll;
+
+  *Line_num=mouse_row+1;
+  *Disp_coord=mouse_col;
+}
+
+
+static void DDV_GetRowAndColGivenPt(DdvMainPtr dmp, RecT rc, PoinT pt,
+                                    Int4Ptr Disp_coord, Int4Ptr Line_num) {
+/***********************************************************************************
+*  get row and column where the mouse is clicked.  Assume current scroll positions.
+***********************************************************************************/
+  DDV_GetRowAndColGivenPtAndScroll(dmp, rc, pt,
+      dmp->GrData.udv_hscrl.ScrollPos, dmp->GrData.udv_vscrl.ScrollPos,
+      Disp_coord, Line_num);
+}
+
+
+static Int4 DDV_GetParaGLineNumGivenLineNum(DdvMainPtr dmp, Int4 Line_num) {
+/*****************************************************************************
+*  get the ParaGLine_Num for Line_num.
+*****************************************************************************/
+  Int4      i, row;
+  ParaGPtr  pgp;
+
+  row = Line_num-1;
+  for (i=0; i<dmp->MSA_d.pgp_l.nBsp; i++) {
+    pgp = (ParaGPtr)(dmp->MSA_d.pgp_l.TableHead[i]->data.ptrvalue);
+    if (row>=pgp->StartLine && row<=(pgp->StartLine + pgp->nLines-1)) {
+      return(i+1);
+    }
+  }
+  return(-1);
+}
+
+
+static Int4 DDV_GetSeqAlignCoordGivenCol(DdvMainPtr dmp, Int4 Disp_coord) {
+/*****************************************************************************
+*  get the SeqAlignCoord for Disp_coord.
+*****************************************************************************/
+  ValNodePtr        vnp;
+  DDVRulerDescrPtr  drdp;
+  Int4              diff;
+
+  vnp=dmp->MSA_d.pgp_l.RulerDescr;
+  while(vnp){
+    drdp=(DDVRulerDescrPtr)vnp->data.ptrvalue;
+    if (!drdp->bUnAligned){
+      diff = Disp_coord - drdp->disp_start;
+      if (Disp_coord>=drdp->disp_start && Disp_coord<=drdp->disp_stop){
+        return(drdp->align_start + diff);
+      }
+    }
+    vnp=vnp->next;
+  }
+  return(-1);
+}
+
+
+static ParaGPtr DDV_GetPGPGivenRowAndCol(DdvMainPtr dmp, Int4 Line_num, Int4 Disp_coord) {
+/*****************************************************************************
+*  get the ParaG ptr that contains (Line_num, Disp_coord)
+*****************************************************************************/
+  ParaGPtr    pgp=NULL;
+  ValNodePtr  vnp;
+
+  vnp=dmp->MSA_d.pgp_l.TableHead[Line_num-1];
+  while(vnp){
+    pgp=(ParaGPtr)vnp->data.ptrvalue;
+    if (Disp_coord>=pgp->StartLetter && Disp_coord<=pgp->StopLetter){
+      return(pgp);
+    }
+    vnp=vnp->next;
+  }
+  return(pgp);
+}
+
+
+static Boolean DDV_GetCoordsGivenAClickAndScrollPos(DdvMainPtr dmp, RecT * rcP, PoinT * pt,
+    Int4 HScroll, Int4 VScroll,
 		Int4Ptr bsp_coord, Int4Ptr SeqAlign_coord, Int4Ptr Disp_coord,
 		Int4Ptr Line_num, Int4Ptr ParaGLine_Num, Uint1Ptr uWhere, 
-
 		ParaGPtr PNTR cur_pgp)
+/*****************************************************************************
+*  variation on DDV_GetCoordsGivenAClick.
+*  pass: VScroll and HScroll -- the positions of the vertical and
+*        horizontal scroll bars.
+*****************************************************************************/
 {
 ValNodePtr     vnp;
 ParaGPtr       pgp,TheParaG;
@@ -466,6 +618,7 @@ DDVRulerDescrPtr drdp;
 Int4           mouse_row,mouse_col,i,diff;
 Boolean        bFound;
 
+  *ParaGLine_Num = -1;
 	/*size of the Panel; see also DDV_DrawPanelContent_H()*/
 	InsetRect(rcP,4,4);
 	DDV_AdjustDrawingRect(rcP,&(dmp->GrData.udv_font));
@@ -473,13 +626,10 @@ Boolean        bFound;
 	rcP->top+=3*dmp->GrData.udv_panel.cyScale/2;
 
 	/*mouse position*/
-	mouse_row=(pt->y-rcP->top)/dmp->GrData.udv_font.LineHeight+
-		dmp->GrData.udv_vscrl.ScrollPos;
-	mouse_col=(pt->x-rcP->left)/dmp->GrData.udv_font.ColWidth+
-		dmp->GrData.udv_hscrl.ScrollPos;
+	mouse_row=(pt->y-rcP->top)/dmp->GrData.udv_font.LineHeight+VScroll;
+	mouse_col=(pt->x-rcP->left)/dmp->GrData.udv_font.ColWidth+HScroll;
 
 	bFound=FALSE;
-
 
 	for(i=0;i<dmp->MSA_d.pgp_l.nBsp;i++){
 		/*use the first ParaG of each sequence and mouse_row to find 
@@ -488,13 +638,12 @@ Boolean        bFound;
 		pgp=(ParaGPtr)(dmp->MSA_d.pgp_l.TableHead[i]->data.ptrvalue);
 		if (mouse_row>=pgp->StartLine && mouse_row<=(pgp->StartLine+pgp->nLines-1)){
 			vnp=dmp->MSA_d.pgp_l.TableHead[i];
+		    *ParaGLine_Num = i + 1;
 			while(vnp){
 				pgp=(ParaGPtr)vnp->data.ptrvalue;
 				if (mouse_col>=pgp->StartLetter && mouse_col<=pgp->StopLetter){
 					bFound=TRUE;
 					TheParaG=pgp;
-
-					*ParaGLine_Num = i + 1;
 					break;
 				}
 				vnp=vnp->next;
@@ -551,6 +700,40 @@ Boolean        bFound;
 	return(bFound);
 }
 
+
+/*****************************************************************************
+
+Function: DDV_GetCoordsGivenAClick()
+
+Purpose: given some graphical info, this function returns bsp_coord, SeqAlign_coord,
+         Disp_coord. Future implementation : will also return eID, iID, idx of
+		 a feature (if the nice user clicks on a feature).
+		
+Parameters:	dmp; panel main data block
+            rcP; panel size
+			pt; mouse position
+			bsp_coord, SeqAlign_coord, Disp_coord,Line_num; return values
+            uWhere; where the mouse is in a ParaG
+			
+Note : all but Line_num are zero-based values. Line_num is a one-based value.
+			
+Return value: TRUE if the user clicks within a ParaG (see also 
+		bsp_coord, SeqAlign_coord, Disp_coord, uWhere). NOTE : if the function 
+		returns FALSE then bsp_coord, SeqAlign_coord, Line_num, Disp_coord and 
+		uWhere are undefined !
+
+*****************************************************************************/
+static Boolean DDV_GetCoordsGivenAClick(DdvMainPtr dmp, RecT * rcP, PoinT * pt,
+		Int4Ptr bsp_coord, Int4Ptr SeqAlign_coord, Int4Ptr Disp_coord,
+		Int4Ptr Line_num, Int4Ptr ParaGLine_Num, Uint1Ptr uWhere, 
+		ParaGPtr PNTR cur_pgp)
+{
+  /* return coordinates for the current scroll position */
+  return(DDV_GetCoordsGivenAClickAndScrollPos(dmp, rcP, pt, 
+    dmp->GrData.udv_hscrl.ScrollPos, dmp->GrData.udv_vscrl.ScrollPos,
+    bsp_coord, SeqAlign_coord, Disp_coord, Line_num, ParaGLine_Num, uWhere, cur_pgp));
+}
+
 /*****************************************************************************
 
 Function: DDV_AutoHScroll()
@@ -577,6 +760,36 @@ BaR hsb;
 	}
 	else if (Disp_coord<=from_col){
 		SetValue(hsb,old_pos-2);
+	}
+
+}
+
+/*****************************************************************************
+
+Function: DDV_AutoVScroll()
+
+Purpose: used from drag/hold mouse to auto-scroll the panel vertically when
+         the mouse reaches the top/bottom borders of the panel
+
+
+Return value: none
+
+*****************************************************************************/
+static void DDV_AutoVScroll(DdvMainPtr dmp,Int4 Line_num)
+{
+Int4 from_col,to_col,from_row,to_row,old_pos;
+BaR vsb;
+
+	DDV_GetCurrentDispRange(dmp->hWndDDV,&(dmp->GrData),dmp->MSA_d.pgp_l.LengthAli,
+			&from_col,&to_col,&from_row,&to_row);
+	
+	vsb = GetSlateVScrollBar ((SlatE) dmp->hWndDDV);
+	old_pos=GetBarValue(vsb);
+	if (Line_num>=to_row){/*scroll down*/
+		SetValue(vsb,old_pos+2);
+	}
+	else if (Line_num<=from_row){/*scroll up*/
+		SetValue(vsb,old_pos-2);
 	}
 
 }
@@ -655,7 +868,8 @@ Return value: none
 
 *****************************************************************************/
 static void DDV_SendBSPSelectMsg(DdvMainPtr dmp,Int4 bsp_coord,Int4 SeqAlign_coord,
-		Int4 Disp_coord,Int4 Line_num,Int4 ParaGLine_Num, ParaGPtr cur_pgp,PoinT * pt)
+		Int4 Disp_coord,Int4 Line_num,Int4 ParaGLine_Num, ParaGPtr cur_pgp,PoinT * pt,
+    Boolean Display)
 {
 Int4        first_bsp_coord, bsp_coord_old,bsp_pos;
 Uint1       direction;/*use to tell ObjMgr the direction of the mouse (left,right)*/
@@ -675,14 +889,14 @@ DdvMainWinPtr dmwp;
 
 	/*get the very first click (from DDV_ClickProc)*/
 	first_bsp_coord=
-		DDV_GetBspCoordGivenDispCoord(dmp->ms.first_pgp,
-			dmp->ms.first_col);
+		DDV_GetBspCoordGivenDispCoord(dmp->ms.first_pgps[Line_num-1],
+                                  dmp->ms.first_cols[Line_num-1]);
 	if (first_bsp_coord==(Int4)-1){/*the first time the user 
 		clicked, it was on a gap*/
 		/*if we are in this scope, that means we have a bsp coord*/
 		first_bsp_coord=bsp_coord;
-		dmp->ms.first_col=Disp_coord;
-		dmp->ms.first_pgp=cur_pgp;
+		dmp->ms.first_cols[Line_num-1]=Disp_coord;
+		dmp->ms.first_pgps[Line_num-1]=cur_pgp;
 	}
 
 	bsp_pos=bsp_coord;
@@ -734,8 +948,11 @@ DdvMainWinPtr dmwp;
 	        
 			switch(dmp->MouseMode){
 				case DDV_MOUSEMODE_SELECT:
-					DDV_DispSelRangeInStatus(dmwp->InfoPanel,first_bsp_coord+1, 
-						bsp_coord+1,ParaGLine_Num,szAccess);/*+1 : switch to one-based value*/
+        case DDV_MOUSEMODE_SELECT_ONE_ROW:
+          if (Display) {
+            DDV_DispSelRangeInStatus(dmwp->InfoPanel,first_bsp_coord+1,
+              bsp_coord+1,ParaGLine_Num,szAccess);/*+1 : switch to one-based value*/
+          }
 					break;
 				case DDV_MOUSEMODE_QUERY:
 				case DDV_MOUSEMODE_EDIT:
@@ -745,7 +962,8 @@ DdvMainWinPtr dmwp;
 			}
 		}
 		/*send the message*/
-        if (dmp->MouseMode==DDV_MOUSEMODE_SELECT){
+        if (dmp->MouseMode==DDV_MOUSEMODE_SELECT ||
+            dmp->MouseMode==DDV_MOUSEMODE_SELECT_ONE_ROW){
 			ObjMgrAlsoSelect (bsp_eID, bsp_iID, 
     	        OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
 		}
@@ -756,6 +974,56 @@ DdvMainWinPtr dmwp;
 	}
 }
 
+/*****************************************************************************
+
+Functions: DDV_ClickProcUpper() and DDV_ClickProcLower()
+
+Purpose: mouse click funcions attached to the upper
+            and lower panels in 2-panel mode.  They switch focus between the upper
+            and lower panels, then call the main DDV_ClickProc.
+		
+Parameters:	p; panel handle (currently unused)
+			pt; new mouse position
+
+Return value: none
+
+*****************************************************************************/
+
+NLM_EXTERN void DDV_ClickProcUpper(PaneL p, PoinT pt)
+{
+DdvMainWinPtr mWin_d;
+WindoW		  hWinMain;
+
+	hWinMain=(WindoW)ParentWindow(p);
+	if (hWinMain==NULL) return;
+	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+	if (mWin_d==NULL) return;
+	mWin_d->hWndDDV = mWin_d->hUpperPanel;
+    DDV_SetMenuFocus(hWinMain);
+	mWin_d->InfoPanel = mWin_d->UpperInfoPanel;
+    SetTitle(mWin_d->InfoPanel,"Ready !");
+    SetTitle(mWin_d->LowerInfoPanel,"");
+
+    DDV_ClickProc(p, pt);
+}
+
+NLM_EXTERN void DDV_ClickProcLower(PaneL p, PoinT pt)
+{
+DdvMainWinPtr mWin_d;
+WindoW		  hWinMain;
+
+	hWinMain=(WindoW)ParentWindow(p);
+	if (hWinMain==NULL) return;
+	mWin_d = (DdvMainWinPtr) GetObjectExtra (hWinMain);
+	if (mWin_d==NULL) return;
+	mWin_d->hWndDDV = mWin_d->hLowerPanel;
+    DDV_SetMenuFocus(hWinMain);
+	mWin_d->InfoPanel = mWin_d->LowerInfoPanel;
+    SetTitle(mWin_d->InfoPanel,"Ready !");
+    SetTitle(mWin_d->UpperInfoPanel,"");
+
+    DDV_ClickProc(p, pt);
+}
 
 /*****************************************************************************
 
@@ -790,11 +1058,12 @@ DdvMainWinPtr  dmwp;
 BioseqPtr      bsp;
 Char           buf[81];
 ParaGPtr       pgp;
-Int4           i, NumRows;
+Int4           i, NumRows, ColCnt, Offset, Width;
 
 MsaParaGPopListPtr  mpplp;
 SeqAlignPtr         sap;
 DDE_StackPtr        dsp;
+Boolean             IsEditable, *pNoGaps, NoGaps, FoundIt;
 
 	/*get the panel data*/
 	dmp = (DdvMainPtr) GetObjectExtra(p);
@@ -807,53 +1076,148 @@ DDE_StackPtr        dsp;
 	if (ctrlKey || shftKey)
 		bDeselectAll=FALSE;
 
-  /* handle the case when we're launching the editor on a block */
-  if (dmp->MouseMode == DDV_MOUSEMODE_LAUNCHEDITOR) {
-    ObjectRect(p, &rcP);
-    InsetRect(&rcP,4,4);
-    DDV_AdjustDrawingRect(&rcP,&(dmp->GrData.udv_font));
-    rcP.left += dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale;
-    /* if the point is in a valid spot */
-    if (PtInRect(pt, &rcP)) {
-      ObjectRect(p, &rcP);
-      Col = DDV_GetColNumberGivenMousePos(dmp, rcP, pt);
-      /* and the column's legal */
-      if ((Col >= 0) && (Col < dmp->MSA_d.pgp_l.LengthAli)) {
-        /* get the block or unaligned-region index */
-        DDE_IsColValid(&(dmp->MSA_d.pgp_l), Col, &BlockIndex, &IsUnAligned);
-        /* get pointer to original seqAlign */
-        sap = ViewMgr_GetBegin(dmp->MSA_d.pgp_l.sap);
-        /* create display for editor */
+  /* handle the click when splitting 2 blocks */
+  if (dmp->MouseMode == DDV_MOUSEMODE_SPLITBLOCK) {
+    FoundIt = FALSE;
+    /* adjust x position so vertical bar jumps when mouse is on center of char */
+    pt.x -= dmp->GrData.udv_font.ColWidth/2;
+    /* if user clicked on an aligned block */
+    if (GetBlockAndAlignment(pt, p, dmp, &BlockIndex, &IsUnAligned, &Col, &Offset, &Width, &rcP)) {
+      /* save col where vertical bar was last drawn */
+      dmp->SaveCol = Col;
+      /* draw vertical bar after this column */
+      HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Col);
+      UDV_draw_vertical_bar(rcP, HPos, FALSE);
+      dmp->ms.Action_type = MS_ACTION_SPLIT_BLOCK;
+      FoundIt = TRUE;
+    }
+    if (!FoundIt) {
+      dmp->MouseMode = dmp->SavedMouseMode;
+      ArrowCursor();
+    }
+  }
+  
+  /* handle the 1st click when merging 2 blocks */
+  /* for the 1st click just need to record the block */
+  else if (dmp->MouseMode == DDV_MOUSEMODE_MERGEBLOCKS1) {
+    FoundIt = FALSE;
+    /* if mouse is in a valid place, get BlockIndex and alignment status */
+    if (GetBlockAndAlignment(pt, p, dmp, &BlockIndex, &IsUnAligned, &Col, &Offset, &Width, &rcP)) {
+      if (!IsUnAligned) {
+        dmp->BlockIndex = BlockIndex;
+        dmp->MouseMode = DDV_MOUSEMODE_MERGEBLOCKS2;
+        FoundIt = TRUE;
+      }
+    }
+    if (!FoundIt) {
+      dmp->MouseMode = dmp->SavedMouseMode;
+      ArrowCursor();
+    }
+  }
+
+  /* handle the 2nd click when merging 2 blocks */
+  else if (dmp->MouseMode == DDV_MOUSEMODE_MERGEBLOCKS2) {
+    /* if mouse is in a valid place, get BlockIndex and alignment status */
+    if (GetBlockAndAlignment(pt, p, dmp, &BlockIndex, &IsUnAligned, &Col, &Offset, &Width, &rcP)) {
+      /* if 2 blocks are next to each other and both aligned */
+      if ((!IsUnAligned) && (ABS(BlockIndex - dmp->BlockIndex) == 1)) {
+        /* create a stack for the block on the right */
+        BlockIndex = MAX(BlockIndex, dmp->BlockIndex);
+        sap = ViewMgr_GetBeginIndexed(dmp->MSA_d.pgp_l.sap);
+        dmp->MSA_d.pgp_l.viewed_sap = dmp->MSA_d.pgp_l.sap;
         mpplp = DDE_CreateDisplay(sap, BlockIndex, IsUnAligned, &NumBlocks);
-        mpplp->viewed_sap = dmp->MSA_d.pgp_l.sap;
-        /* create the stack used by editor */
         dsp = DDE_NewStack(mpplp);
-        DDE_MergeNodesLists(dsp->pEdit);
         /* record which block is being edited, etc */
         dsp->LaunchBlock = BlockIndex;
         dsp->NumBlocks =   NumBlocks;
         dsp->IsUnAligned = IsUnAligned;
-        /* hide the rows in DDE that are hidden in DDV */
-        NumRows = dsp->pEdit->TotalNumRows;
-        for (i=0; i<NumRows; i++) {
-          if (ViewMgr_TRow2VRow(dmp->MSA_d.pgp_l.sap, i+1) == -1) {
-            DDE_HideRow(dsp, i, FALSE);
-          }
+        DDE_MergeNodesLists(dsp->pEdit);
+        /* if block on right is flush left */
+        if (DDE_FirstColumnIsAligned(dsp->pEdit)) {
+          /* delete block on right.  count number of cols that were in block. */
+          ColCnt = DDE_DeleteBlock(dsp, 0, FALSE);
+          /* tell AlnMgr to save edits, don't redraw yet */
+          dmp->dsp = dsp;
+          DDV_SaveEdits(dmp, FALSE);
+          /* free stack for block on right.  create stack for block on left */
+          DDE_FreeStack(dsp);
+          sap = ViewMgr_GetBeginIndexed(dmp->MSA_d.pgp_l.sap);
+          dmp->MSA_d.pgp_l.viewed_sap = dmp->MSA_d.pgp_l.sap;
+          mpplp = DDE_CreateDisplay(sap, BlockIndex-1, IsUnAligned, &NumBlocks);
+          dsp = DDE_NewStack(mpplp);
+          /* record which block is being edited, etc */
+          dsp->LaunchBlock = BlockIndex-1;
+          dsp->NumBlocks =   NumBlocks;
+          dsp->IsUnAligned = IsUnAligned;
+          DDE_MergeNodesLists(dsp->pEdit);
+          DDE_Verify(dsp->pEdit);
+          /* shift right boundary of left block by number cols in right block */
+          DDE_ShiftRightBoundary(dsp, 0, ColCnt, FALSE);
+          /* tell AlnMgr to save edits, now redraw */
+          dmp->dsp = dsp;
+          DDV_SaveEdits(dmp, TRUE);
         }
-        DDE_Add(dsp);
-        /* launch the editor as a slave */
-        SetAppProperty("ddeinterndata",(void*)dsp);
-        GatherProcLaunch(OMPROC_EDIT, FALSE, dmp->MSA_d.entityID, 
-						dmp->MSA_d.itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
-        RemoveAppProperty("ddeinterndata");
+        /* free remaining stack */
+        dsp = DDE_FreeStack(dsp);
+        dmp->dsp = dsp;
       }
+    }
+    dmp->MouseMode = dmp->SavedMouseMode;
+    ArrowCursor();
+  }
+
+  
+  /* handle the case when we're launching the editor on a block */
+  else if (dmp->MouseMode == DDV_MOUSEMODE_LAUNCHEDITOR) {
+    /* if mouse is in a valid place, get BlockIndex and alignment status */
+    if (GetBlockAndAlignment(pt, p, dmp, &BlockIndex, &IsUnAligned, &Col, &Offset, &Width, &rcP)) {
+      /* don't allow editing when there are gaps and no gaps are allowed */
+      pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+      if (pNoGaps == NULL) NoGaps = TRUE;
+      else NoGaps = *pNoGaps;
+      IsEditable = AlnMgrIsEditable(dmp->MSA_d.pgp_l.sap);
+      if (!(IsEditable == AM_EDITGAPS && NoGaps) && IsEditable) {
+        ViewMgr_MakeMultiple(dmp->MSA_d.pgp_l.sap);
+      }
+      else {
+        Message(MSG_OK, "%s", "Unable to convert this alignment\n into an editable form.");
+        dmp->MouseMode = dmp->SavedMouseMode;
+        ArrowCursor();
+        return;
+      }
+      /* get pointer to original seqAlign */
+      sap = ViewMgr_GetBeginIndexed(dmp->MSA_d.pgp_l.sap);
+      /* create display for editor */
+      mpplp = DDE_CreateDisplay(sap, BlockIndex, IsUnAligned, &NumBlocks);
+      mpplp->viewed_sap = dmp->MSA_d.pgp_l.sap;
+      /* create the stack used by editor */
+      dsp = DDE_NewStack(mpplp);
+      DDE_MergeNodesLists(dsp->pEdit);
+      /* record which block is being edited, etc */
+      dsp->LaunchBlock = BlockIndex;
+      dsp->NumBlocks =   NumBlocks;
+      dsp->IsUnAligned = IsUnAligned;
+      /* hide the rows in DDE that are hidden in DDV */
+      NumRows = dsp->pEdit->TotalNumRows;
+      for (i=0; i<NumRows; i++) {
+        if (ViewMgr_TRow2VRow(dmp->MSA_d.pgp_l.sap, i+1) == -1) {
+          DDE_HideRow(dsp, i, FALSE);
+        }
+      }
+      DDE_Add(dsp);
+      dsp->SomethingToSave = FALSE;
+      /* launch the editor as a slave */
+      SetAppProperty("ddeinterndata",(void*)dsp);
+      GatherProcLaunch(OMPROC_EDIT, FALSE, dmp->MSA_d.entityID, 
+					dmp->MSA_d.itemID, OBJ_SEQALIGN, 0, 0, OBJ_SEQALIGN, 0);
+      RemoveAppProperty("ddeinterndata");
     }
     dmp->MouseMode = dmp->SavedMouseMode;
     ArrowCursor();
   }
   
   /* handle the case when we're creating an aligned block */
-  if (dmp->MouseMode == DDV_MOUSEMODE_CREATEBLOCK) {
+  else if (dmp->MouseMode == DDV_MOUSEMODE_CREATEBLOCK) {
     ObjectRect(p, &rcP);
     InsetRect(&rcP,4,4);
     DDV_AdjustDrawingRect(&rcP,&(dmp->GrData.udv_font));
@@ -876,7 +1240,6 @@ DDE_StackPtr        dsp;
           HPos -= dmp->GrData.udv_font.ColWidth;
           UDV_draw_vertical_bar(rcP, HPos, TRUE);
           dmp->ms.Action_type = MS_ACTION_CREATE_BLOCK;
-          CrossCursor();
         }
         else {
           dmp->MouseMode = dmp->SavedMouseMode;
@@ -893,6 +1256,7 @@ DDE_StackPtr        dsp;
       ArrowCursor();
     }
   }
+
   /*the mouse is located in a ParaG ?*/
 	/*if YES : the user is selecting either sequence letter(s) or a feature*/
 	else if ((pt.x>(rcP.left+dmp->GrData.udv_panel.cxName+
@@ -905,7 +1269,8 @@ DDE_StackPtr        dsp;
 					&bsp_coord,&SeqAlign_coord,&Disp_coord,&Line_num,
 					&ParaGLine_Num,&uWhere,&cur_pgp)){
 					if (uWhere==PGP_REGION_SEQ){
-						if (bDeselectAll && dmp->MouseMode==DDV_MOUSEMODE_SELECT)
+						if (bDeselectAll && (dmp->MouseMode==DDV_MOUSEMODE_SELECT ||
+                                 dmp->MouseMode==DDV_MOUSEMODE_SELECT_ONE_ROW))
 							ObjMgrDeSelectAll ();
 						if (shftKey && bsp_coord!=(Int4)-1){
 							UDV_DecodeIdxFeat (dmp->MSA_d.pgp_l.entitiesTbl[ParaGLine_Num-1], 
@@ -914,7 +1279,8 @@ DDE_StackPtr        dsp;
 								slp=DDV_GetClosetSeqLocGivenBspPos(cur_pgp->sip,bsp_eID, 
 									bsp_iID, bsp_coord, &old_pos, TRUE);
 								if (slp){
-									if (dmp->MouseMode==DDV_MOUSEMODE_SELECT)
+									if (dmp->MouseMode==DDV_MOUSEMODE_SELECT ||
+                      dmp->MouseMode==DDV_MOUSEMODE_SELECT_ONE_ROW)
 										ObjMgrAlsoSelect (bsp_eID, bsp_iID, 
 											OBJ_BIOSEQ,OM_REGION_SEQLOC, slp);
 									if (old_pos!=(Int4)-1)
@@ -933,8 +1299,16 @@ DDE_StackPtr        dsp;
 						dmp->ms.old_col=Disp_coord;
 						dmp->ms.old_pgp=cur_pgp;
 						dmp->ms.first_row=Line_num;
-						dmp->ms.first_col=Disp_coord;
-						dmp->ms.first_pgp=cur_pgp;
+            if (dmp->ms.first_cols == NULL) {
+              NumRows = dmp->MSA_d.pgp_l.nBsp;
+              dmp->ms.first_cols = MemNew(NumRows * sizeof(Int4));
+              dmp->ms.first_pgps = MemNew(NumRows * sizeof(ParaGPtr));
+            }
+						dmp->ms.first_cols[Line_num-1]=Disp_coord;
+						dmp->ms.first_pgps[Line_num-1]=cur_pgp;
+            dmp->ms.first_point=pt;
+            dmp->ms.first_HScroll=dmp->GrData.udv_hscrl.ScrollPos;
+            dmp->ms.first_VScroll=dmp->GrData.udv_vscrl.ScrollPos;
 						/*update caret pos, if needed only*/
 						if (dmp->MouseMode==DDV_MOUSEMODE_EDIT){
 							dmp->dci.old_row=dmp->dci.new_row;
@@ -972,8 +1346,11 @@ DDE_StackPtr        dsp;
               }
             }
 						/*select a single letter*/
-						DDV_SendBSPSelectMsg( dmp, bsp_coord, SeqAlign_coord,
-							Disp_coord, Line_num, ParaGLine_Num, cur_pgp,&pt);
+            if (dmp->MouseMode == DDV_MOUSEMODE_SELECT ||
+                dmp->MouseMode == DDV_MOUSEMODE_SELECT_ONE_ROW) {
+						  DDV_SendBSPSelectMsg(dmp, bsp_coord, SeqAlign_coord,
+							  Disp_coord, Line_num, ParaGLine_Num, cur_pgp, &pt, TRUE);
+            }
 					}
 				}
 			}
@@ -1000,7 +1377,7 @@ DDE_StackPtr        dsp;
 		if (Line_num!=(Int4)-1){
 		    UDV_DecodeIdxFeat (dmp->MSA_d.pgp_l.entitiesTbl[ParaGLine_Num-1], 
 				&bsp_eID,&bsp_iID);
-			if (dblClick){/*load the sequence viewer on that sequence*/
+			if (dblClick && !dmp->bEditor){/*load the sequence viewer on that sequence*/
                 {
                     SAM_ViewGlobal vg;
                     
@@ -1009,13 +1386,13 @@ DDE_StackPtr        dsp;
                     vg.Row = Line_num;
                     vg.MasterViewer = SAMVIEWDDV;
                     SetAppProperty(SAM_ViewString, &vg);
-                    GatherProcLaunch (OMPROC_VIEW, FALSE, bsp_eID, bsp_iID, 
-                        OBJ_BIOSEQ, 0, 0, OBJ_BIOSEQ, 0);
+                    GatherSpecificProcLaunch(0, "OneD-Viewer", OMPROC_VIEW,
+                      FALSE, bsp_eID, bsp_iID, OBJ_BIOSEQ);
                     RemoveAppProperty(SAM_ViewString);
                 }
             }
 			else{
-				if (dmp->bEditor==TRUE){
+				if (dmp->bEditor){
 					WindoW temport;
 					dmp->deri.curEditRow=ParaGLine_Num-1;
 					rcP.left=0;
@@ -1061,7 +1438,8 @@ DDE_StackPtr        dsp;
 			(pt.x<=dmp->GrData.udv_panel.cxName+3+dmp->GrData.udv_scale.cxLeftScale+
 			dmp->GrData.udv_font.cxChar) /*before the sequence ?*/
 			&& 
-			(dmp->MouseMode==DDV_MOUSEMODE_SELECT)/*valid only if selection mode*/
+			(dmp->MouseMode==DDV_MOUSEMODE_SELECT ||
+       dmp->MouseMode==DDV_MOUSEMODE_SELECT_ONE_ROW)/*valid only if selection mode*/
 			){
 		if (pt.y>(rcP.top+dmp->GrData.udv_panel.cyScale)){
 			/*get the ParaG list and look for the ParaG where the mouse is located*/
@@ -1125,7 +1503,8 @@ DDE_StackPtr        dsp;
   }
 
 	else{/*click outside "special" regions : deselect everything*/
-		if (dmp->MouseMode==DDV_MOUSEMODE_SELECT)
+		if (dmp->MouseMode==DDV_MOUSEMODE_SELECT ||
+        dmp->MouseMode==DDV_MOUSEMODE_SELECT_ONE_ROW)
 			ObjMgrDeSelectAll ();
 			/*this line if for cn3d only*/
             ObjMgrSendMsg(OM_MSG_MOUSEUP, dmp->MSA_d.entityID, 
@@ -1138,11 +1517,59 @@ DDE_StackPtr        dsp;
 }
 
 
+static Boolean GetBlockAndAlignmentForCol(DdvMainPtr dmp, Int4 Col, Int4* pBlockIndex,
+                                          Boolean* pIsUnAligned, Int4* pOffset, Int4* pWidth) {
+/*****************************************************************************
+*  get the BlockIndex and Alignment status for Col.
+*****************************************************************************/
+  /* if Col is legal */
+  if ((Col >= 0) && (Col < dmp->MSA_d.pgp_l.LengthAli)) {
+    /* get the block or unaligned-region index */
+    if (DDE_IsColValid(&(dmp->MSA_d.pgp_l), Col, pBlockIndex, pIsUnAligned, pOffset, pWidth)) {
+      return(TRUE);
+    }
+  }
+  *pBlockIndex = -1;
+  *pIsUnAligned = TRUE;
+  return(FALSE);
+}
+
+
+static Boolean GetBlockAndAlignment(PoinT pt, PaneL p, DdvMainPtr dmp,
+                                    Int4* pBlockIndex, Boolean* pIsUnAligned,
+                                    Int4* pCol, Int4* pOffset, Int4* pWidth, RecT* rcP) {
+/*****************************************************************************
+*  get the BlockIndex and Alignment status for point pt.
+*****************************************************************************/
+  ObjectRect(p, rcP);
+  InsetRect(rcP,4,4);
+  DDV_AdjustDrawingRect(rcP, &(dmp->GrData.udv_font));
+  rcP->left += dmp->GrData.udv_panel.cxName + dmp->GrData.udv_scale.cxLeftScale;
+  /* if the point is in a valid spot */
+  if (PtInRect(pt, rcP)) {
+    ObjectRect(p, rcP);
+    *pCol = DDV_GetColNumberGivenMousePos(dmp, *rcP, pt);
+    /* and the column's legal */
+    if ((*pCol >= 0) && (*pCol < dmp->MSA_d.pgp_l.LengthAli)) {
+      /* get the block or unaligned-region index */
+      if (DDE_IsColValid(&(dmp->MSA_d.pgp_l), *pCol, pBlockIndex, pIsUnAligned, pOffset, pWidth)) {
+        return(TRUE);
+      }
+    }
+  }
+  *pCol=-1;
+  *pBlockIndex = -1;
+  *pIsUnAligned = TRUE;
+  return(FALSE);
+}
+
+
+
 static Boolean OnAlignmentBoundary(PoinT pt, PaneL p, DdvMainPtr dmp,
                                    Int4* pBlockIndex, Boolean* pLeftBoundary,
                                    Int4* pCol, Int4* pHPos) {
 /*****************************************************************************
-*  check if point p is on one of the vertical bars that mark
+*  check if point pt is on one of the vertical bars that mark
 *  alignment boundaries.  return TRUE if it is.
 *  whether it's TRUE or not, ...
 *  return BlockIndex indicating which aligned block,
@@ -1212,13 +1639,16 @@ NLM_EXTERN void DDV_DragProc(PaneL p, PoinT pt)
 {
 DdvMainPtr 	dmp;
 RecT        rcP, rcP2;
-ParaGPtr    cur_pgp=NULL;
-Int4        bsp_coord,SeqAlign_coord, Jump,
-            Disp_coord, Line_num,ParaGLine_num;/*to get the coordinates*/
+ParaGPtr    pgp, cur_pgp=NULL;
+Int4        bsp_coord, SeqAlign_coord, Jump;
+Int4        Line_num, ParaGLine_num;/*to get the coordinates*/
 Int4        VPos, SavedVPos, from_col, to_col, from_row, to_row, old_VPos;
 Int4        HPos, SavedHPos, Col;
+Int4        Disp_coord_start, Disp_coord_stop;
+Int4        Line_num_start, Line_num_stop, BlockIndex, Offset, Width;
 Uint1       uWhere; /*where the use clicked (seq, feat, name,...)*/
 BaR         vsb;
+Boolean     Display, IsUnAligned;
 static Boolean  LineToErase=TRUE;
 
 	/*get the panel data*/
@@ -1230,24 +1660,44 @@ static Boolean  LineToErase=TRUE;
 		case MS_ACTION_SELECT_SEQ:/*selection on a sequence*/
 			if (shftKey) break;
 			ObjectRect(p,&rcP);
-			/*single sequence selection: force the mouse to stay on the same row*/
-			pt.y=dmp->ms.oldPos.y;
 			/*get the ParaG list and look for the ParaG where the mouse is located*/
 			/*note : only implemented for DDV_DISP_HORZ type of display...*/
-			if (dmp->MSA_d.pgp_l.DisplayType==DDV_DISP_HORZ){
-				if (DDV_GetCoordsGivenAClick(dmp,&rcP,&pt,
-					&bsp_coord,&SeqAlign_coord,&Disp_coord,&Line_num,
-					&ParaGLine_num, &uWhere,&cur_pgp)){
-					/*if same position... bye,bye */
-					if (dmp->ms.old_col==Disp_coord)
-						break;
-					if (uWhere==PGP_REGION_SEQ){/*we are on the sequence itself*/
-						DDV_SendBSPSelectMsg( dmp, bsp_coord, SeqAlign_coord,
-							 Disp_coord, Line_num, ParaGLine_num, cur_pgp,&pt);
-					}
-				}
-			}
-			break;
+			if (dmp->MSA_d.pgp_l.DisplayType==DDV_DISP_HORZ) {
+        /* get line num and col where mouse was first clicked */
+        DDV_GetRowAndColGivenPtAndScroll(dmp, rcP, dmp->ms.first_point,
+          dmp->ms.first_HScroll, dmp->ms.first_VScroll,
+          &Disp_coord_start, &Line_num_start);
+        /* get line num and col for current mouse position */
+        DDV_GetRowAndColGivenPt(dmp, rcP, pt, &Disp_coord_stop, &Line_num_stop);
+        /* force single row selection when needed */
+        if (dmp->MouseMode == DDV_MOUSEMODE_SELECT_ONE_ROW) Line_num_stop = Line_num_start;
+        /* for each row */
+        if (Line_num_start > Line_num_stop) swap(&Line_num_start, &Line_num_stop);
+        if (Line_num_start < 1) Line_num_start=1;
+        if (Line_num_stop > dmp->MSA_d.pgp_l.nBsp) Line_num_stop=dmp->MSA_d.pgp_l.nBsp;
+        for (Line_num=Line_num_start; Line_num<=Line_num_stop; Line_num++) {
+          /* save pgp and col of initial click, unless first click was on spacer */
+          /* if first click was on spacer, pgp and col are saved in DDV_SendBSPSelectMsg */
+          pgp = DDV_GetPGPGivenRowAndCol(dmp, Line_num, Disp_coord_start);
+          bsp_coord = DDV_GetBspCoordGivenDispCoord(pgp, Disp_coord_start);
+          if (bsp_coord != -1) {
+            dmp->ms.first_cols[Line_num-1] = Disp_coord_start;
+            dmp->ms.first_pgps[Line_num-1] = pgp;
+          }
+          /* send message to select all intervening columns on this row */
+          pgp = DDV_GetPGPGivenRowAndCol(dmp, Line_num, Disp_coord_stop);
+          bsp_coord = DDV_GetBspCoordGivenDispCoord(pgp, Disp_coord_stop);
+          uWhere = DDV_GetRegionInParaG(pgp, Line_num);
+          ParaGLine_num = DDV_GetParaGLineNumGivenLineNum(dmp, Line_num);
+          SeqAlign_coord = DDV_GetSeqAlignCoordGivenCol(dmp, Disp_coord_stop);
+          if (uWhere == PGP_REGION_SEQ) {
+            Display = (Line_num==Line_num_stop ? TRUE : FALSE);
+            DDV_SendBSPSelectMsg(dmp, bsp_coord, SeqAlign_coord, Disp_coord_stop,
+              Line_num, ParaGLine_num, pgp, &pt, Display);
+          }
+        }
+      }
+      break;
 		case MS_ACTION_RESIZE_WIN:/*the user moves the 3D line located between 
 			name area and SeqAlign area*/
 			InvertMode();	
@@ -1405,6 +1855,26 @@ static Boolean  LineToErase=TRUE;
         }
       }
       break;
+    case MS_ACTION_SPLIT_BLOCK:
+      /* adjust x position so vertical bar jumps when mouse is on center of char */
+      pt.x -= dmp->GrData.udv_font.ColWidth/2;
+      /* get block, col, etc for new mouse position */
+      if (GetBlockAndAlignment(pt, p, dmp, &BlockIndex, &IsUnAligned, &Col, &Offset, &Width, &rcP)) {
+        /* if mouse col changed */
+        if (Col != dmp->SaveCol) {
+          /* get horizontal pixel position of old column */
+          HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, dmp->SaveCol);
+          /* erase old vertical bar */
+          InvertMode();
+          UDV_draw_vertical_bar(rcP, HPos, FALSE);
+          /* get horizontal pixel position of new column */
+          HPos = DDV_GetHPixelPosGivenColNumber(dmp, rcP, Col);
+          /* draw the new vertical bar */
+          UDV_draw_vertical_bar(rcP, HPos, FALSE);
+          /* save the column */
+          dmp->SaveCol = Col;
+        }
+      }
 	}
 }
 
@@ -1422,22 +1892,28 @@ Return value: none
 *****************************************************************************/
 NLM_EXTERN void DDV_ReleaseProc(PaneL p, PoinT pt)
 {
-WindoW 	      temport;
-DdvMainPtr 	  dmp;
-DdvMainWinPtr dmwp;
+WindoW 	       temport;
+DdvMainPtr 	   dmp;
+DdvMainWinPtr  dmwp;
 DDVUpdateMSGPtr dump;
-RecT        rcP, rcP2;
-ParaGPtr    cur_pgp=NULL;
-Int4        bsp_coord, SeqAlign_coord, 
-		    Disp_coord, Line_num,ParaGLine_Num;/*to get the coordinates*/
-Uint1       uWhere; /*where the use clicked (seq, feat, name,...)*/
-Uint2       bsp_eID, bsp_iID;
-Int4        VPos, Shift, SavedVPos, SavedHPos;
+RecT         rcP, rcP2;
+ParaGPtr     cur_pgp=NULL;
+Int4         bsp_coord, SeqAlign_coord;
+Int4         Disp_coord, Line_num,ParaGLine_Num;/*to get the coordinates*/
+Uint1        uWhere; /*where the use clicked (seq, feat, name,...)*/
+Uint2        bsp_eID, bsp_iID;
+Int4         VPos, Shift, SavedVPos, SavedHPos, BlockIndex, NumBlocks;
+Boolean      IsUnAligned;
+MsaParaGPopListPtr  mpplp;
+SeqAlignPtr   sap;
+DDE_StackPtr  dsp;
+Int4          Offset, Width;
+BaR           hsb;
+
 
 	/*get the panel data*/
 	dmp = (DdvMainPtr) GetObjectExtra(p);
 	if (dmp==NULL) return;
-
 
     switch(dmp->ms.Action_type){
 		case MS_ACTION_SELECT_FULL_SEQ:
@@ -1475,6 +1951,12 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
 							}
 						}
                     }
+                } else {  /* send mouse up anyway */
+                    if(ParaGLine_Num > 0) {
+                        UDV_DecodeIdxFeat (dmp->MSA_d.pgp_l.entitiesTbl[ParaGLine_Num-1], 
+                            &bsp_eID,&bsp_iID);                    
+                        ObjMgrSendMsg(OM_MSG_MOUSEUP, bsp_eID, bsp_iID, OBJ_BIOSEQ);
+                    }
                 }
             }
 			break;
@@ -1492,7 +1974,7 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
 				rc.left=0;/*for obscure reasons, not == 0*/
 				rc.top=0;
 				dmp->GrData.udv_panel.cxName=dmp->ms.newPos.x;
-				DDV_SetupWin (p,FALSE,NULL);
+				DDV_Resize_DDV(p,FALSE); /*DDV_SetupWin (p,FALSE,NULL); */
 				InvalRect(&rc);
 			}
 			RestorePort(temport);
@@ -1567,9 +2049,52 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
       DDV_ReDraw(dmp);
       ArrowCursor();
       break;
+    case MS_ACTION_SPLIT_BLOCK:
+      /* get block and alignment for last saved col */
+      /* also get offset into block and width of block */
+      GetBlockAndAlignmentForCol(dmp, dmp->SaveCol, &BlockIndex, &IsUnAligned, &Offset, &Width);
+      /* if col is in aligned region */
+      if (!IsUnAligned) {
+        /* create a stack for the block */
+        sap = ViewMgr_GetBeginIndexed(dmp->MSA_d.pgp_l.sap);
+        dmp->MSA_d.pgp_l.viewed_sap = dmp->MSA_d.pgp_l.sap;
+        mpplp = DDE_CreateDisplay(sap, BlockIndex, FALSE, &NumBlocks);
+        dsp = DDE_NewStack(mpplp);
+        DDE_MergeNodesLists(dsp->pEdit);
+        /* record which block is being edited, etc */
+        dsp->LaunchBlock = BlockIndex;
+        dsp->NumBlocks =   NumBlocks;
+        dsp->IsUnAligned = IsUnAligned;
+        /* shift right boundary of block left, to the split line */
+        DDE_ShiftRightBoundary(dsp, 0, -(Width-(Offset+1)), FALSE);
+        /* tell AlnMgr to save edits, don't redraw yet */
+        dmp->dsp = dsp;
+        DDV_SaveEdits(dmp, FALSE);
+        /* free stack for block.  create stack for unaligned region to right of block */
+        DDE_FreeStack(dsp);
+        sap = ViewMgr_GetBeginIndexed(dmp->MSA_d.pgp_l.sap);
+        dmp->MSA_d.pgp_l.viewed_sap = dmp->MSA_d.pgp_l.sap;
+        mpplp = DDE_CreateDisplay(sap, BlockIndex+1, TRUE, &NumBlocks);
+        dsp = DDE_NewStack(mpplp);
+        DDE_MergeNodesLists(dsp->pEdit);
+        /* create new block of part that was just unaligned */
+        DDE_CreateBlock(dsp, 0, (Width-(Offset+1)-1), FALSE);
+        /* tell AlnMgr to save edits, now redraw */
+        dmp->dsp = dsp;
+        DDV_SaveEdits(dmp, TRUE);
+        /* free remaining stack */
+        dsp = DDE_FreeStack(dsp);
+        dmp->dsp = dsp;
+        dmp->MouseMode = dmp->SavedMouseMode;
+      }
+      /* get rid of vertical bar */
+      else {
+        hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
+        DDV_ReDrawAtCol(dmp, GetBarValue(hsb), FALSE);
+      }
 	}	
 
-	MemSet(&(dmp->ms),0,sizeof(UDV_mouse_select));
+  ClearUDV_mouse_select(&(dmp->ms));
 	dmp->ms.Action_type=MS_ACTION_FEAT_NOTHING;
 	/*update InfoPanel*/
 	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
@@ -1578,7 +2103,9 @@ Int4        VPos, Shift, SavedVPos, SavedHPos;
   }
 	if (dmwp && dmp->MouseMode!=DDV_MOUSEMODE_EDIT)
 		SetTitle(dmwp->InfoPanel,"Ready !");
-	ArrowCursor();
+
+  if (dmp->MouseMode != DDV_MOUSEMODE_MERGEBLOCKS2)
+    ArrowCursor();
 }
 
 /*****************************************************************************
@@ -1597,10 +2124,13 @@ NLM_EXTERN void DDV_HoldProc(PaneL p, PoinT pt)
 {
 DdvMainPtr 	dmp;
 RecT        rcP;
-ParaGPtr    cur_pgp=NULL;
-Int4        bsp_coord, SeqAlign_coord, 
-		    Disp_coord, Line_num,ParaGLine_num;/*to get the coordinates*/
+ParaGPtr    pgp, cur_pgp=NULL;
+Int4        bsp_coord, SeqAlign_coord;
+Int4        Line_num, ParaGLine_num;/*to get the coordinates*/
+Int4        Disp_coord_start, Disp_coord_stop;
+Int4        Line_num_start, Line_num_stop;
 Uint1       uWhere; /*where the use clicked (seq, feat, name,...)*/
+Boolean     Scroll=FALSE, Display;
 
 	/*get the panel data*/
 	dmp = (DdvMainPtr) GetObjectExtra(p);
@@ -1610,25 +2140,44 @@ Uint1       uWhere; /*where the use clicked (seq, feat, name,...)*/
 		case MS_ACTION_SELECT_SEQ:
 			if (shftKey) break;
 			ObjectRect(p,&rcP);
-			/*signle sequence selection: force the mouse to stay on the same row*/
-			pt.y=dmp->ms.oldPos.y;
 			/*get the ParaG list and look for the ParaG where the mouse is located*/
 			/*note : only implemented for DDV_DISP_HORZ type of display...*/
-			if (dmp->MSA_d.pgp_l.DisplayType==DDV_DISP_HORZ){
-				if (DDV_GetCoordsGivenAClick(dmp,&rcP,&pt,
-					&bsp_coord,&SeqAlign_coord,&Disp_coord,&Line_num,
-					&ParaGLine_num, &uWhere,&cur_pgp)){
-					/*if the mouse is on the far left/right; auto-scroll the panel*/
-					DDV_AutoHScroll(dmp,Disp_coord);
-					if (uWhere==PGP_REGION_SEQ){/*we are on the sequence itself*/
-						/*if same position... bye,bye */
-						if (dmp->ms.old_col==Disp_coord)
-							break;
-						DDV_SendBSPSelectMsg( dmp, bsp_coord, SeqAlign_coord,
-							 Disp_coord, Line_num, ParaGLine_num, cur_pgp,&pt);
-					}
-				}
-			}
+			if (dmp->MSA_d.pgp_l.DisplayType==DDV_DISP_HORZ) {
+        /* get line num and col where mouse was first clicked */
+        DDV_GetRowAndColGivenPtAndScroll(dmp, rcP, dmp->ms.first_point,
+          dmp->ms.first_HScroll, dmp->ms.first_VScroll,
+          &Disp_coord_start, &Line_num_start);
+        /* get line num and col for current mouse position */
+        DDV_GetRowAndColGivenPt(dmp, rcP, pt, &Disp_coord_stop, &Line_num_stop);
+        /* force single row selection when needed */
+        if (dmp->MouseMode == DDV_MOUSEMODE_SELECT_ONE_ROW) Line_num_stop = Line_num_start;
+        /* for each row */
+        if (Line_num_start > Line_num_stop) swap(&Line_num_start, &Line_num_stop);
+        if (Line_num_start < 1) Line_num_start=1;
+        if (Line_num_stop > dmp->MSA_d.pgp_l.nBsp) Line_num_stop=dmp->MSA_d.pgp_l.nBsp;
+        for (Line_num=Line_num_start; Line_num<=Line_num_stop; Line_num++) {
+          /* save pgp and col of initial click, unless first click was on spacer */
+          /* if first click was on spacer, pgp and col are saved in DDV_SendBSPSelectMsg */
+          pgp = DDV_GetPGPGivenRowAndCol(dmp, Line_num, Disp_coord_start);
+          bsp_coord = DDV_GetBspCoordGivenDispCoord(pgp, Disp_coord_start);
+          if (bsp_coord != -1) {
+            dmp->ms.first_cols[Line_num-1] = Disp_coord_start;
+            dmp->ms.first_pgps[Line_num-1] = pgp;
+          }
+          pgp = DDV_GetPGPGivenRowAndCol(dmp, Line_num, Disp_coord_stop);
+          bsp_coord = DDV_GetBspCoordGivenDispCoord(pgp, Disp_coord_stop);
+          uWhere = DDV_GetRegionInParaG(pgp, Line_num);
+          ParaGLine_num = DDV_GetParaGLineNumGivenLineNum(dmp, Line_num);
+          SeqAlign_coord = DDV_GetSeqAlignCoordGivenCol(dmp, Disp_coord_stop);
+          if (uWhere == PGP_REGION_SEQ) {
+            Display = (Line_num==Line_num_stop ? TRUE : FALSE);
+            DDV_SendBSPSelectMsg(dmp, bsp_coord, SeqAlign_coord, Disp_coord_stop,
+              Line_num, ParaGLine_num, pgp, &pt, Display);
+          }
+        }
+      }
+      DDV_AutoHScroll(dmp, Disp_coord_stop);
+      DDV_AutoVScroll(dmp, Line_num_stop);
 			break;
 		case MS_ACTION_RESIZE_WIN:
 		case MS_ACTION_SELECT_FULL_SEQ:
@@ -1991,7 +2540,7 @@ Int4       old_Hpos,old_Vpos,/*scrolls positions*/
 }
 
 
-NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col) {
+NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col, Boolean DDE) {
 /*------------------------------------------
 *  resize, redraw.
 *------------------------------------------*/
@@ -1999,8 +2548,11 @@ NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col) {
   WindoW         temport;
   RecT 	         rcP;
   BaR            hsb;
+  Int4           NumBlocks;
 
-  MemCopy(&(dmp->MSA_d.pgp_l), dmp->dsp->pEdit->pPopList, sizeof(MsaParaGPopList));
+  if (DDE) {
+    MemCopy(&(dmp->MSA_d.pgp_l), dmp->dsp->pEdit->pPopList, sizeof(MsaParaGPopList));
+  }
 
   DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
     &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);
@@ -2010,14 +2562,31 @@ NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col) {
   hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
   DDV_UpdateHScrollVal(dmp->hWndDDV, FALSE, GetBarValue(hsb));
 
-	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
+  dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
   temport=SavePort(dmwp->hWndDDV);
   Select(dmwp->hWndDDV);
   ObjectRect(dmwp->hWndDDV, &rcP);
   InvalRect(&rcP);
-  SetValue(hsb, Col);
+  if (Col >= 0) {
+    SetValue(hsb, Col);
+  }
   Update();
   RestorePort(temport);
+
+  if (DDE) {
+    /* decide about greying out undo and redo functions */
+    DDV_GreyOut(dmwp, DDE_AtStartOfStack(dmp->dsp), DDE_AtEndOfStack(dmp->dsp));
+
+    /* decide about greying out left/right/center functions */
+    NumBlocks = DDE_GetNumBlocks(dmp->dsp->pEdit);
+    if (NumBlocks == 0) {
+      Enable(dmwp->MainMenu.Justify);
+    }
+    else {
+      Disable(dmwp->MainMenu.Justify);
+    }
+  }
+
  	return;
 }
 
@@ -2026,27 +2595,7 @@ NLM_EXTERN void DDV_ReDraw(DdvMainPtr dmp) {
 /*------------------------------------------
 *  resize, redraw.
 *------------------------------------------*/
-  DdvMainWinPtr  dmwp;
-  WindoW         temport;
-  RecT 	         rcP;
-  BaR            hsb;
-
-  MemCopy(&(dmp->MSA_d.pgp_l), dmp->dsp->pEdit->pPopList, sizeof(MsaParaGPopList));
-
-  DDV_InitColour_When_Start(dmp->MSA_d.pgp_l.sap,
-    &(dmp->MSA_d.pgp_l),&(dmp->Globals.colorp), FALSE);
-  /* recalculate window size */
-  DDV_WhatSize(dmp);
-  /* adjust horizontal scroll bar */
-  hsb = GetSlateHScrollBar((SlatE) dmp->hWndDDV);
-  DDV_UpdateHScrollVal(dmp->hWndDDV, FALSE, GetBarValue(hsb));
-
-	dmwp=(DdvMainWinPtr)GetObjectExtra(dmp->hParent);
-  temport=SavePort(dmwp->hWndDDV);
-  Select(dmwp->hWndDDV);
-  ObjectRect(dmwp->hWndDDV, &rcP);
-  InvalRect(&rcP);
-  Update();
-  RestorePort(temport);
- 	return;
+  /* give an illegal column so the column's not set */
+  /* specify that this redraw is for DDE */
+  DDV_ReDrawAtCol(dmp, -1, TRUE);
 }

@@ -1,4 +1,4 @@
-/* $Id: fastacmd.c,v 6.13 2000/03/08 15:26:03 madden Exp $
+/* $Id: fastacmd.c,v 6.14 2000/06/28 16:56:52 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 05/20/1997
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description:
 *        FASTA retrievel system using ISAM indexes
 *
 * $Log: fastacmd.c,v $
+* Revision 6.14  2000/06/28 16:56:52  madden
+* Call Fastacmd_Search_ex, Boolean for target gi only
+*
 * Revision 6.13  2000/03/08 15:26:03  madden
 * Add return statement to Main fct, purify nit
 *
@@ -96,7 +99,7 @@
 #include <tofasta.h>
 #include <readdb.h>
 
-#define NUMARG 5
+#define NUMARG 6
 
 static Args myargs [NUMARG] = {
     { "Database", 
@@ -109,14 +112,16 @@ static Args myargs [NUMARG] = {
     { "Retrieve duplicated accessions",
       "F", NULL, NULL, TRUE, 'a', ARG_BOOLEAN, 0.0, 0, NULL},
     { "Line length for sequence", 
-      "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL}
+      "80", NULL, NULL, TRUE, 'l', ARG_INT, 0.0, 0, NULL},
+    { "Definition line should contain target gi only",
+      "F", NULL, NULL, TRUE, 't', ARG_BOOLEAN, 0.0, 0, NULL}
 };
 
 Int2 Main (void)
 {
     CharPtr	database, searchstr, batchfile;
     Int4	linelen;
-    Boolean	dupl;
+    Boolean	dupl, target;
 
     if (! GetArgs ("fastacmd", NUMARG, myargs)) {
 	return (1);
@@ -131,8 +136,9 @@ Int2 Main (void)
     batchfile = myargs[2].strvalue;
     dupl = myargs[3].intvalue;
     linelen = myargs[4].intvalue;
+    target = myargs[5].intvalue;
 
-    Fastacmd_Search (searchstr, database, batchfile, dupl, linelen, (stdout));
+    Fastacmd_Search_ex (searchstr, database, batchfile, dupl, linelen, (stdout), target);
 
     return 0;
 }

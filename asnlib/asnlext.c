@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *   Routines for parsing ASN.1 module definitions.  Extends asnlex.c
@@ -44,6 +44,9 @@
 * 04-20-93 Schuler     LIBCALL calling convention
 *
 * $Log: asnlext.c,v $
+* Revision 6.7  2000/06/29 20:15:16  ostell
+* minor typos fixed
+*
 * Revision 6.6  2000/05/15 20:23:30  ostell
 * more checks for COMMENT_TOKEN added
 *
@@ -1028,26 +1031,11 @@ NLM_EXTERN Int2 AsnLexTMatchToken (AsnIoPtr aip)
 	}
 	return 0;     /* not found */
 }
-static AsnLexTAddComment(CharPtr cbeg, CharPtr cend, AsnIoPtr aip)
+static void AsnLexTAddComment(CharPtr cbeg, CharPtr cend, AsnIoPtr aip)
 {
-	AsnOptionPtr aop;
 	Char tchar;
 	CharPtr comment;
-	Boolean allblanks = TRUE;
 	DataVal dv;
-
-	/**
-	for (comment = cbeg; comment != cend; comment++)
-	{
-		if (! IS_WHITESP(*comment))
-		{
-			allblanks = FALSE;
-			break;
-		}
-	}
-	
-	if (allblanks) return;
-	**/
 
 	tchar = *cend;
 	*cend = '\0';

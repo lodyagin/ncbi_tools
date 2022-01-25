@@ -1,7 +1,7 @@
 #ifndef CONNUTIL__H
 #define CONNUTIL__H
 
-/*  $Id: connutil.h,v 6.12 2000/02/25 16:45:53 vakatov Exp $
+/*  $Id: connutil.h,v 6.13 2000/06/29 17:32:21 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -39,6 +39,11 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connutil.h,v $
+* Revision 6.13  2000/06/29 17:32:21  vakatov
+* Added more MIME sub-types
+* Allow non-NCBI ("standard") MIME types
+* Added MIME_*ContentTypeEx(), and tests for them
+*
 * Revision 6.12  2000/02/25 16:45:53  vakatov
 * Redesigned to really share "ncbi_*.[ch]" etc. between the C and
 * the C++ toolkits, and even to use them in a "standalone" fashion
@@ -383,20 +388,32 @@ NLM_EXTERN void URL_Encode
 /****************************************************************************
  * NCBI-specific MIME content type and sub-types
  * (the API to compose and parse them)
- *    Content-Type: x-ncbi-data/<MIME_ComposeSubType()>\r\n
+ *    Content-Type: <type>/<MIME_ComposeSubType()>\r\n
  *
- *    Content-Type: x-ncbi-data/x-<subtype>-<encoding>\r\n
+ *    Content-Type: <type>/<subtype>-<encoding>\r\n
  *
  * where  MIME_ComposeSubType(EMIME_SubType subtype, EMIME_Encoding encoding):
  *   "x-<subtype>-<encoding>":
- *     "x-<subtype>",   "x-<subtype>-url-encoded",   "x-<subtype>-<encoding>",
- *     "x-asn-text",    "x-asn-text-url-encoded",    "x-asn-text-<encoding>
- *     "x-asn-binary",  "x-asn-binary-url-encoded",  "x-asn-binary-<encoding>"
- *     "x-unknown",     "x-unknown-url-encoded",     "x-unknown-<encoding>"
+ *     "x-<subtype>",   "x-<subtype>-urlencoded",   "x-<subtype>-<encoding>",
+ *     "x-asn-text",    "x-asn-text-urlencoded",    "x-asn-text-<encoding>
+ *     "x-asn-binary",  "x-asn-binary-urlencoded",  "x-asn-binary-<encoding>"
+ *     "x-www-form",    "x-www-form-urlencoded",    "x-www-form-<encoding>"
+ *     "html",          "html-urlencoded",          "html-<encoding>"
+ *     "x-unknown",     "x-unknown-urlencoded",     "x-unknown-<encoding>"
  *
  *  Note:  <subtype> and <encoding> are expected to contain only
  *         alphanumeric symbols, '-' and '_'. They are case-insensitive.
  ****************************************************************************/
+
+/* Type
+ */
+typedef enum {
+  eMIME_T_NcbiData = 0,  /* "x-ncbi-data"  (NCBI specific data) */
+  eMIME_T_Text,          /* "text" */
+  eMIME_T_Application,   /* "application" */
+  /* eMIME_T_???, "<type>"  here go other types */
+  eMIME_T_Unknown        /* "unknown" */
+} EMIME_Type;
 
 /* SubType
  */
@@ -404,39 +421,62 @@ typedef enum {
   eMIME_AsnText = 0,  /* "x-asn-text"    (text ASN.1 data) */
   eMIME_AsnBinary,    /* "x-asn-binary"  (binary ASN.1 data) */
   eMIME_Fasta,        /* "x-fasta"       (data in FASTA format) */
-  /* eMIME_???,          "x-<subtype>"   here go other NCBI subtypes */
+  eMIME_WwwForm,      /* "x-www-form" */
+  /* standard MIMEs */
+  eMIME_Html,         /* "html" */
+  /* eMIME_???,          "<subtype>"   here go other NCBI subtypes */
   eMIME_Unknown       /* "x-unknown"     (an arbitrary binary data) */
 } EMIME_SubType;
 
 /* Encoding
  */
 typedef enum {
-  eENCOD_Url = 0,  /* "-url-encoded"  (the content is URL-encoded) */
+  eENCOD_Url = 0,  /* "-urlencoded"  (the content is URL-encoded) */
   /* eENCOD_???,      "-<encoding>"   here go other NCBI encodings */
   eENCOD_None      /* ""              (the content is passed "as is") */
 } EMIME_Encoding;
 
 
 /* Write up to "buflen" bytes to "buf":
- *   Content-Type: x-ncbi-data/x-<subtype>-<encoding>\r\n
+ *   Content-Type: <type>/[x-]<subtype>-<encoding>\r\n
  * Return pointer to the "buf".
  */
 #define MAX_CONTENT_TYPE_LEN 64
-NLM_EXTERN char* MIME_ComposeContentType
-(EMIME_SubType  subtype,
+NLM_EXTERN char* MIME_ComposeContentTypeEx
+(EMIME_Type     type,
+ EMIME_SubType  subtype,
  EMIME_Encoding encoding,
  char*          buf,
  size_t         buflen    /* must be at least MAX_CONTENT_TYPE_LEN */
  );
 
+/* Exactly equivalent to MIME_ComposeContentTypeEx(eMIME_T_NcbiData, ...)
+ */
+NLM_EXTERN char* MIME_ComposeContentType
+(EMIME_SubType  subtype,
+ EMIME_Encoding encoding,
+ char*          buf,
+ size_t         buflen
+ );
+
 /* Parse the NCBI-specific content-type; the (case-insensitive) "str"
  * can be in the following two formats:
- *   Content-Type: x-ncbi-data/x-<subtype>-<encoding>
- *   x-ncbi-data/x-<subtype>-<encoding>
- * If it does not match any of NCBI MIME types then return TRUE,
- * eMIME_Unknown and eENCOD_None.
- * If the passed "str" has an invalid(non-HTTP ContentType) format
- * (or if it is NULL/empty) then return FALSE, eMIME_Unknown and eENCOD_None.
+ *   Content-Type: <type>/x-<subtype>-<encoding>
+ *   <type>/x-<subtype>-<encoding>
+ * If it does not match any of NCBI MIME type/subtypes/encodings, then
+ * return TRUE, eMIME_T_Unknown, eMIME_Unknown or eENCOD_None, respectively.
+ * If the passed "str" has an invalid (non-HTTP ContentType) format
+ * (or if it is NULL/empty), then
+ * return FALSE, eMIME_T_Unknown, eMIME_Unknown, and eENCOD_None.
+ */
+NLM_EXTERN Nlm_Boolean MIME_ParseContentTypeEx
+(const char*     str,      /* the HTTP "Content-Type:" header to parse */
+ EMIME_Type*     type,     /* can be NULL */
+ EMIME_SubType*  subtype,  /* can be NULL */
+ EMIME_Encoding* encoding  /* can be NULL */
+ );
+
+/* Requires the MIME type be "x-ncbi-data"
  */
 NLM_EXTERN Nlm_Boolean MIME_ParseContentType
 (const char*     str,      /* the HTTP "Content-Type:" header to parse */
@@ -446,7 +486,7 @@ NLM_EXTERN Nlm_Boolean MIME_ParseContentType
 
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
 
 #undef NLM_EXTERN

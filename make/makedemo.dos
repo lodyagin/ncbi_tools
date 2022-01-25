@@ -43,11 +43,13 @@ MAKEMAT_EXE   = makemat.___
 COPYMAT_EXE   = copymat.___
 IMPALA_EXE    = impala.___
 BL2SEQ_EXE    = bl2seq.___
-MEGABLST_EXE  = megablst.___
+MEGABLST_EXE  = megablast.___
 FA2HTGS_EXE   = fa2htgs.___
 VECSCREEN_EXE = vecscreen.___
 GIL2BIN_EXE   = gil2bin.___
 TBL2ASN_EXE   = tbl2asn.___
+BLASTCLUST_EXE   = blastclust.___
+RPSBLAST_EXE	= rpsblast.___
 !endif
 
 
@@ -83,7 +85,9 @@ $(BL2SEQ_EXE)	\
 $(MEGABLST_EXE) \
 $(VECSCREEN_EXE) \
 $(GIL2BIN_EXE) \
-$(TBL2ASN_EXE)
+$(TBL2ASN_EXE) \
+$(BLASTCLUST_EXE) \
+$(RPSBLAST_EXE)
 
 
 ##################################################
@@ -424,8 +428,8 @@ $(MEGABLST_EXE):
 	$(MAKE) -f <<
 MT = 1
 $(INCLUDE_GEN)
-TEST_NAME = megablst
-TEST_OBJ = megablst.obj
+TEST_NAME = megablast
+TEST_OBJ = megablast.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -465,6 +469,32 @@ MT = 1
 $(INCLUDE_GEN)
 TEST_NAME = tbl2asn
 TEST_OBJ = tbl2asn.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef BLASTCLUST_EXE
+$(BLASTCLUST_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = blastclust
+TEST_OBJ = blastclust.obj
+TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
+RES = 1
+$(INCLUDE_EXE)
+<<
+!endif
+##################################################
+!ifdef RPSBLAST_EXE
+$(RPSBLAST_EXE):
+	$(MAKE) -f <<
+MT = 1
+$(INCLUDE_GEN)
+TEST_NAME = rpsblast
+TEST_OBJ = rpsblast.obj
 TEST_LIB = $(LIB23) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

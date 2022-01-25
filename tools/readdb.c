@@ -48,7 +48,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.167 $
+* $Revision: 6.175 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -63,6 +63,31 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.175  2000/06/30 18:20:30  madden
+* Elaborate on SORTFiles error message
+*
+* Revision 6.174  2000/06/30 16:40:11  madden
+* Changed error message if unable to initialze readdb
+*
+* Revision 6.173  2000/06/28 16:55:49  madden
+* Add function Fastacmd_Search_ex, gi_target to ReadDBFILEPtr
+*
+* Revision 6.172  2000/06/22 18:59:33  egorov
+* Allow absolute paths to databases in alias files.
+* The change is provided by Maxim Shemanarev (Informax Inc).
+*
+* Revision 6.171  2000/06/19 20:06:42  madden
+* Add ready Boolean to readdb_get_sequence_ex, for nucl. sequence the data is then in blastna format with sentinel bytes
+*
+* Revision 6.170  2000/06/19 16:53:21  madden
+* Remove unneeded memcpy
+*
+* Revision 6.169  2000/06/16 16:43:33  madden
+* Replace MemNew with Nlm_Malloc
+*
+* Revision 6.168  2000/06/08 19:02:26  madden
+* Return file-name if no title found
+*
 * Revision 6.167  2000/05/25 20:31:24  madden
 * Do not change aliasfilebit unless it is zero
 *
@@ -1283,6 +1308,12 @@ readdb_read_alias_file(CharPtr filename)
 			{
 				done = readdb_parse_db_names(&ptr, file_buffer);
 				sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, file_buffer);
+
+				if(*file_buffer == DIRDELIMCHR)
+				    StringCpy(full_buffer, file_buffer);
+				else
+				    sprintf(full_buffer, "%s%c%s", file_path, DIRDELIMCHR, file_buffer);
+
 				buffer_length = StringLen(full_buffer);
 				if (buffer_length+length > total_length)
 				{
@@ -3099,11 +3130,11 @@ and the last two bits of the byte holds the size of the remainder (0-3). */
 */
 
 Int4 LIBCALL 
-readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length)
+readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length, Boolean ready)
 
 {
     	ByteStorePtr byte_store;
-    	Int2 byte_value;
+    	Uint1 byte_value;
 	Int4 index, index2, length, copy_length;
 	Uint1Ptr private_buffer, buffer_4na;
     	Uint4Ptr ambchar = NULL;
@@ -3112,41 +3143,40 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
 	length = readdb_get_sequence(rdfp, sequence_number, &private_buffer);
 
 	/* Check the length, make it one longer for ALIGN. */
-	if ((length+1) > *buffer_length || *buffer == NULL)
+	if ((length+2) > *buffer_length || *buffer == NULL)
 	{
 		if (*buffer)
 			MemFree(*buffer);
 
-		*buffer = MemNew((length+1)*sizeof(Uint1));
-		*buffer_length = length+1;
+		*buffer = Nlm_Malloc((length+2)*sizeof(Uint1));
+		*buffer_length = length+2;
 	}
 
 	/* Copy sequence into allocated buffer. */
 	if (!is_prot)
 	{
 		copy_length = length/4;
-		if (length%4 != 0) 
-			copy_length++;
 	}
 	else
 	{
 		copy_length = length;
+		MemCpy((VoidPtr) *buffer, private_buffer, copy_length);
 	}
-	MemCpy((VoidPtr) *buffer, private_buffer, copy_length);
 
     	if (!is_prot) 
 	{
     		byte_store = BSNew(0);
        	 	/* Nucleotide sequence require more attention */
-        
+		/* Add one in case it's not divisible by four. */
+	    	buffer_4na = Nlm_Malloc((2*(copy_length+1))*sizeof(Uint1));
+	    	MapNa2ByteToNa4String(private_buffer, (Uint2Ptr) buffer_4na, copy_length);
 		if (length%4 != 0)
 		{
-            		byte_value = *(*buffer+length/4);
+            		byte_value = *(private_buffer+length/4);
             		byte_value &= 252; 
-			*(*buffer+length/4) = byte_value;
+	    		MapNa2ByteToNa4String(&byte_value, (Uint2Ptr) (buffer_4na+(2*copy_length)), 1);
+			copy_length++;
 		}
-	    	buffer_4na = MemNew((2*copy_length)*sizeof(Uint1));
-	    	MapNa2ByteToNa4String(*buffer, (Uint2Ptr) buffer_4na, copy_length);
             	BSWrite(byte_store, (VoidPtr) buffer_4na, copy_length*2);
         
         	if(!readdb_get_ambchar(rdfp, sequence_number, &ambchar)) {
@@ -3163,24 +3193,51 @@ readdb_get_sequence_ex (ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR 
 
 		/* Sequence is copied back to *buffer. */
 		BSSeek(byte_store, 0, SEEK_SET);
-		BSMerge(byte_store, *buffer);
+		if (ready)
+			BSMerge(byte_store, (*buffer)+1);
+		else
+			BSMerge(byte_store, *buffer);
 		BSFree(byte_store);
 
-		private_buffer = *buffer;
-		index = length/2 - 1;
-		index2 = length-1;
-		if (length%2 != 0)
+		if (ready)
 		{
-			private_buffer[index2] = (private_buffer[index+1] >> 4);
-			index2--;
+			private_buffer = (*buffer)+1;
+			index = length/2 - 1;
+			index2 = length-1;
+			private_buffer[length] = ncbi4na_to_blastna[0];
+			if (length%2 != 0)
+			{
+				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index+1] >> 4)];
+				index2--;
+			}
+			while (index2 > 0)
+			{
+				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] & 15)];
+				index2--; 
+				private_buffer[index2] = ncbi4na_to_blastna[(private_buffer[index] >> 4)];
+				index2--; index--;
+			}
+			(*buffer)[0] = ncbi4na_to_blastna[0];
 		}
-		while (index2 > 0)
+		else
 		{
-			private_buffer[index2] = (private_buffer[index] & 15);
-			index2--; 
-			private_buffer[index2] = (private_buffer[index] >> 4);
-			index2--; index--;
+			private_buffer = *buffer;
+			index = length/2 - 1;
+			index2 = length-1;
+			if (length%2 != 0)
+			{
+				private_buffer[index2] = (private_buffer[index+1] >> 4);
+				index2--;
+			}
+			while (index2 > 0)
+			{
+				private_buffer[index2] = (private_buffer[index] & 15);
+				index2--; 
+				private_buffer[index2] = (private_buffer[index] >> 4);
+				index2--; index--;
+			}
 		}
+
 		
 	}
 
@@ -3424,6 +3481,37 @@ readdb_get_descriptor (ReadDBFILEPtr rdfp, Int4 sequence_number, SeqIdPtr PNTR i
 				new_defline = MemFree(new_defline);
 				new_defline = tmp_defline;
 			}
+		}
+		else
+		{
+			seqid = SeqIdSetFree(seqid);
+			defline = MemFree(defline);
+		}
+	}
+	if (description != NULL)
+		*description = new_defline;
+	else
+		new_defline = MemFree(new_defline);
+    }
+    else if (rdfp->gi_target != 0)
+    {
+	*id = NULL;
+	not_done = TRUE;
+	header_index = 0;
+	new_defline = NULL;
+	while (not_done)
+	{
+		not_done = readdb_get_header(rdfp, sequence_number, &header_index, &seqid, &defline);
+		if (not_done == FALSE)
+			break;
+		bestid = SeqIdFindBest(seqid, SEQID_GI);
+		gi = bestid->data.intvalue;
+		if (gi == rdfp->gi_target)
+		{
+			*id = seqid;
+			seqid = NULL;
+			new_defline = defline;
+			defline = NULL;
 		}
 		else
 		{
@@ -3703,7 +3791,11 @@ readdb_get_title (ReadDBFILEPtr rdfp)
 	if (rdfp == NULL)
 		return NULL;
 
-	return rdfp->title;
+	if (rdfp->title)
+		return rdfp->title;
+
+	/* return the file-name if no title found. */
+	return readdb_get_filename(rdfp);
 }
 
 /*
@@ -5001,7 +5093,7 @@ static Boolean FormatdbCreateStringIndex(const CharPtr FileName,
     
     if (SORTFiles(&files, 1, fd_out, sop) != SORTNoError)
     {
-        ErrPostEx(SEV_ERROR, 0, 0, "SORTFiles failed");
+        ErrPostEx(SEV_ERROR, 0, 0, "SORTFiles failed, change TMPDIR to a partition with more free space or use -s option");
 	return FALSE;
     }
     SORTObjectFree(sop);
@@ -6812,6 +6904,12 @@ static void FCMDAccListFree(FCMDAccListPtr falp)
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out)
 {
+	return Fastacmd_Search_ex(searchstr, database, batchfile, dupl, linelen, out, FALSE);
+}
+
+Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
+	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, Boolean use_target)
+{
     BioseqPtr		bsp;
     ReadDBFILEPtr	rdfp;
     Int4		i, fid, TotalItems=0, count;
@@ -6855,7 +6953,7 @@ Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
     }
 
     if((rdfp = readdb_new_ex(database, is_prot, TRUE)) == NULL) {
-	ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb engine. Exiting...\n");
+	ErrPostEx(SEV_ERROR, 0, 0, "ERROR: Cannot initialize readdb for %s database\n", database);
 	return(1);
     }
     database = MemFree(database);
@@ -6897,6 +6995,8 @@ Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	} else if (fid == -1) {
 	    ErrPostEx(SEV_ERROR, 0, 0, "Entry \"%s\" not found\n", falp_tmp->acc);
 	} else if (ids == NULL) { /* gi or SeqId */
+	    if (use_target)
+	    	rdfp->gi_target = falp_tmp->gi;
 	    bsp = readdb_get_bioseq(rdfp, fid);
 	    BioseqRawToFastaExtra(bsp, out, linelen);
 	    BioseqFree(bsp);  

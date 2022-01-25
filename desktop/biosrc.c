@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -72,6 +72,14 @@ ENUM_ALIST(orgmod_subtype_alist)
   {"Natural-host",     21},
   {"Sub-species",      22},
   {"Specimen-voucher", 23},
+  {"Authority",        24},
+  {"Forma",            25},
+  {"Forma-specialis",  26},
+  {"Ecotype",          27},
+  {"Synonym",          28},
+  {"Anamorph",         29},
+  {"Teleomorph",       30},
+  {"Breed",            31},
   {"Old Name",        254},
 END_ENUM_ALIST
 
@@ -101,6 +109,7 @@ ENUM_ALIST(subsource_subtype_alist)
   {"Ins-seq-name",     21},
   {"Plastid-name",     22},
   {"Country",          23},
+  {"Segment",          24},
 END_ENUM_ALIST
 
 static ENUM_ALIST(biosource_genome_alist)
@@ -288,7 +297,7 @@ extern Boolean LoadOrganismTable (void)
 #endif
         tmp = ptr;
         ch = *tmp;
-        while (ch != '0' && ch != '\n') {
+        while (ch != '\0' && ch != '\n') {
           tmp++;
           ch = *tmp;
         }
@@ -2120,10 +2129,10 @@ static void SetBioSourceImportExportItems (GenBioFormPtr gfp)
     exportItm = FindFormMenuItem ((BaseFormPtr) gfp, VIB_MSG_EXPORT);
     switch (gfp->currentPage) {
       case ORGANISM_PAGE :
-        SafeSetTitle (importItm, "Import...");
-        SafeSetTitle (exportItm, "Export...");
-        SafeDisable (importItm);
-        SafeDisable (exportItm);
+        SafeSetTitle (importItm, "Import BioSource...");
+        SafeSetTitle (exportItm, "Export BioSource...");
+        SafeEnable (importItm);
+        SafeEnable (exportItm);
         break;
       case MODIFIERS_PAGE :
         SafeSetTitle (importItm, "Import...");
@@ -2188,11 +2197,31 @@ static void ChangeBioSourcePage (VoidPtr data, Int2 newval, Int2 oldval)
 static Boolean ImportBioSourceForm (ForM f, CharPtr filename)
 
 {
+  AsnIoPtr       aip;
+  BioSourcePtr   biop;
   GenBioFormPtr  gfp;
+  Char           path [PATH_MAX];
 
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
   gfp = (GenBioFormPtr) GetObjectExtra (f);
   if (gfp != NULL) {
     switch (gfp->currentPage) {
+      case ORGANISM_PAGE :
+        if (path [0] != '\0' || GetInputFileName (path, sizeof (path), "", "TEXT")) {
+          aip = AsnIoOpen (path, "r");
+          if (aip != NULL) {
+            biop = BioSourceAsnRead (aip, NULL);
+            AsnIoClose (aip);
+            if (biop != NULL) {
+              PointerToDialog (gfp->data, (Pointer) biop);
+              biop = BioSourceFree (biop);
+              Update ();
+              return TRUE;
+            }
+          }
+        }
+        break;
       case LOCATION_PAGE :
         return ImportDialog (gfp->location, filename);
       default :
@@ -2205,11 +2234,39 @@ static Boolean ImportBioSourceForm (ForM f, CharPtr filename)
 static Boolean ExportBioSourceForm (ForM f, CharPtr filename)
 
 {
+  AsnIoPtr       aip;
+  BioSourcePtr   biop;
   GenBioFormPtr  gfp;
+  Char           path [PATH_MAX];
+#ifdef WIN_MAC
+  FILE           *fp;
+#endif
 
+  path [0] = '\0';
+  StringNCpy_0 (path, filename, sizeof (path));
   gfp = (GenBioFormPtr) GetObjectExtra (f);
   if (gfp != NULL) {
     switch (gfp->currentPage) {
+      case ORGANISM_PAGE :
+        if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), NULL)) {
+#ifdef WIN_MAC
+          fp = FileOpen (path, "r");
+          if (fp != NULL) {
+            FileClose (fp);
+          } else {
+            FileCreate (path, "TEXT", "ttxt");
+          }
+#endif
+          aip = AsnIoOpen (path, "w");
+          if (aip != NULL) {
+            biop = DialogToPointer (gfp->data);
+            BioSourceAsnWrite (biop, aip, NULL);
+            AsnIoClose (aip);
+            biop = BioSourceFree (biop);
+            return TRUE;
+          }
+        }
+        break;
       case LOCATION_PAGE :
         return ExportDialog (gfp->location, filename);
       default :

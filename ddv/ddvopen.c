@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.c,v 1.80 2000/05/24 21:43:00 hurwitz Exp $
+/*  $Id: ddvopen.c,v 1.92 2000/07/05 19:23:13 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.80 $
+* $Revision: 1.92 $
 *
 * File Description: code to open a SeqAlign (file & Net) and code of the
 * message callback for DeuxD-Viewer (DDV).
@@ -37,6 +37,42 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.c,v $
+* Revision 1.92  2000/07/05 19:23:13  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.91  2000/06/16 14:57:03  lewisg
+* move entrez calls out of desktop
+*
+* Revision 1.90  2000/06/15 17:33:18  hurwitz
+* used view seqAlignPtr to get original (bug fix), and started working on left/right/center justify for DDE
+*
+* Revision 1.89  2000/06/15 16:01:07  hurwitz
+* rewrote section that calls ViewMgr_Attach when SeqAlign is not editable but IBMable
+*
+* Revision 1.88  2000/06/13 18:23:55  hurwitz
+* made ViewMgr_MakeMultiple routine, call this on each launch of DDE rather than launch of DDV
+*
+* Revision 1.87  2000/06/12 23:02:40  hurwitz
+* enable launch of DDE from Cn3D, swith from DDV_ComputeRuler to DDE_ReMakeRuler, get rid of styles option for DDE
+*
+* Revision 1.86  2000/06/08 20:04:38  hurwitz
+* made warning about converting to true multiple alignment into a Message window, and other small fixes
+*
+* Revision 1.85  2000/06/07 19:09:36  hurwitz
+* made DDE_ReMakeRuler work with linked list of ParaGs
+*
+* Revision 1.84  2000/06/06 14:44:16  hurwitz
+* fixed bug that SetAppProperty(dde_nogaps)
+*
+* Revision 1.83  2000/06/02 19:57:03  hurwitz
+* added a query dialog when converting from pairwise multiple to true multiple, bug fix of double freeing of a seqAlignPtr
+*
+* Revision 1.82  2000/06/01 14:40:08  hurwitz
+* temp fix: when DDV is launched as slave, don't allow aligned gaps
+*
+* Revision 1.81  2000/05/31 23:07:26  hurwitz
+* made NoGaps a runtime parameter, fixed bug with vertical scroll of show/hide list, save edits query is not performed if nothing to save
+*
 * Revision 1.80  2000/05/24 21:43:00  hurwitz
 * getting hide/show rows to work with DDV and DDE together
 *
@@ -332,18 +368,15 @@
 #include <gather.h>
 #include <ddvcolor.h>
 #include <samutil.h>
-#include <accutils.h>
 #include <blast.h>
 #include <viewmgr.h>
 #include <actutils.h>
 
-
-#if !defined(CN3D_TRIM) && !defined(CN3D_SHRED)
-#define CN3D_SHRED 1
-#endif
-
 /*extern WindoW g_hParent = NULL;*/
 static void DDV_RegisterMsgFuncOnBsp(Uint2 bsp_eID,DdvMainPtr dmp);
+
+static void DDV_Convert(ButtoN g);
+static void DDV_NoConvert(ButtoN g);
 
 /*local struct used only by the Download sequence dialog box*/
 	typedef struct ddvnetopen {
@@ -707,7 +740,8 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
 	if (!dmp->MSA_d.pgp_l.entitiesTbl)
 		return(OM_MSG_RET_ERROR);	
 	/*build the Master Ruler descriptor*/
-	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
+/*	dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo)); */
+  dmp->MSA_d.pgp_l.RulerDescr = DDE_ReMakeRuler(&(dmp->MSA_d.pgp_l), FALSE, 0);
 
 	/*delete old tables*/
     if(dmp->MasterViewer != SAMVIEWCN3D) {
@@ -721,7 +755,8 @@ OMUserDataPtr omudp;/*user data set when registering DDV panel*/
     
     DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
 	DDV_WhatSize(dmp);
-	DDV_SetupWin(dmp->hWndDDV,TRUE,NULL);
+	/* DDV_SetupWin(dmp->hWndDDV,TRUE,NULL); */
+    DDV_Resize_DDV(dmp->hWndDDV,TRUE); 
 	Update();
 
     return(OM_MSG_RET_OK);
@@ -774,10 +809,10 @@ Int4          HPos;
 	if (!dmp->MSA_d.pgp_l.entitiesTbl)
 		return(OM_MSG_RET_ERROR);
 
-	/*build the Master Ruler descriptor*/
+	/* build the Master Ruler descriptor */
   /* Patrick's ComputeRuler isn't working right, so I substituted mine -- Dave H. */
   /* dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo)); */
-  DDE_ReMakeRuler(&dmp->MSA_d.pgp_l);
+  dmp->MSA_d.pgp_l.RulerDescr = DDE_ReMakeRuler(&(dmp->MSA_d.pgp_l), FALSE, 0);
 
 	/*delete old tables*/
     if(dmp->MasterViewer != SAMVIEWCN3D) {
@@ -791,7 +826,7 @@ Int4          HPos;
     
   DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
 	DDV_WhatSize(dmp);
-	DDV_SetupWin(dmp->hWndDDV,TRUE,NULL);
+	DDV_Resize_DDV(dmp->hWndDDV,TRUE); /* DDV_SetupWin(dmp->hWndDDV,TRUE,NULL); */
 
   /* put col back to where it was */
   SetValue(hsb, HPos);
@@ -873,7 +908,8 @@ Uint1       oldSpacerSize;
 		if (!dmp->MSA_d.pgp_l.entitiesTbl)
 			return(OM_MSG_RET_ERROR);	
 		/*build the Master Ruler descriptor*/
-		dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));
+/*		dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(dmp->MSA_d.pgp_l.sap,&(dmp->ddo));  */
+    dmp->MSA_d.pgp_l.RulerDescr = DDE_ReMakeRuler(&(dmp->MSA_d.pgp_l), FALSE, 0);
 
 		/*init the colours*/
 		if(bUpdateColors){
@@ -922,7 +958,7 @@ Uint1       oldSpacerSize;
 	if (bRebuildDisplay){
 	    DDV_SortPGPLineNum(dmp->MSA_d.pgp_l.TableHead,dmp->MSA_d.pgp_l.nBsp);
 	    DDV_WhatSize(dmp);
-	    DDV_SetupWin(hWndDDV,bResetScrolls,NULL);
+	    DDV_Resize_DDV(hWndDDV,bResetScrolls); /* DDV_SetupWin(hWndDDV,bResetScrolls,NULL);*/
 	    Update();
 	}
 	else if (bSwitchColors){
@@ -1216,6 +1252,36 @@ Uint2         bsp_eID;
 	}
 }
 
+static void DDV_Convert(ButtoN g) {
+/*----------------------------------------------------------------------------
+*  just need to quit the pop-up window
+*---------------------------------------------------------------------------*/
+  WindoW  hDialog;
+
+	hDialog = (WindoW)ParentWindow(g);
+	if (!hDialog) return;
+	Remove(hDialog);
+  return;
+}
+
+
+static void DDV_NoConvert(ButtoN g) {
+/*----------------------------------------------------------------------------
+*  quit the pop-up window and close the file
+*---------------------------------------------------------------------------*/
+  WindoW         hDialog;
+  DdvMainPtr     dmp;
+
+	hDialog = (WindoW)ParentWindow(g);
+	if (!hDialog) return;
+	Remove(hDialog);
+
+  dmp = (DdvMainPtr) GetObjectExtra(hDialog);
+  DDV_FileCloseIt(dmp->hParent);
+  return;
+}
+
+
 /*******************************************************************************
 
   Function : DDV_StartPanel_Slave()
@@ -1245,35 +1311,61 @@ static Boolean DDV_StartPanel_Slave(DdvMainPtr dmp, SeqAlignPtr sap,
 DDV_ColorGlobal * dcgp;
 MsaParaGPopListPtr  mpplp;
 BaR  hsb;
-Int4  HPos, Col, RetVal;
-SeqAlignPtr  new_sap;
-	
+Int4  HPos, Col, IsEditable;
+DdvMainWinPtr  mWin_d;
+Boolean*   pNoGaps;
+Boolean    NoGaps;
+char       Str[1024];
+MsgAnswer  Answer;
+Boolean    Attached = FALSE;
+  
   WatchCursor();
 
 #if defined(_LAUNCH_DDE)
   if (!dmp->bEditor) {
-    if (AlnMgrIsIBMable(sap)) {
-      if (!AlnMgrNeatlyIndex(sap)) return(FALSE);
-      if (!AlnMgrMakeMultByIntersectOnMaster(sap, TRUE)) return(FALSE);
-      /* need a message to user saying info may be lost when doing GetSubAlign */
+    mWin_d = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
+    Enable(mWin_d->MainMenu.LaunchEditor);
+    IsEditable = AlnMgrIsEditable(sap);
+    if (!IsEditable) {
+      if (AlnMgrIsIBMable(sap)) {
+        Str[0] = 0;
+        StringCat(Str, "This file is a multiple pairwise alignment.\n");
+        StringCat(Str, "To edit this file, it needs to be converted\n");
+        StringCat(Str, "to a true multiple alignment.\n");
+        StringCat(Str, "Should it be converted?");
+        mWin_d->Show_logo=TRUE;
+        Answer = Message(MSG_YN, "%s", Str);
+        mWin_d->Show_logo=FALSE;
+        if (Answer == ANS_YES) {
+          if (ViewMgr_Attach(sap, TRUE, TRUE, *pInput_entityID, *pInput_itemID) < 1)
+            return (FALSE);
+          Attached = TRUE;
+        }
+        else {
+          Disable(mWin_d->MainMenu.LaunchEditor);
+        }
+      }
     }
-    new_sap = AlnMgrGetSubAlign(sap, NULL, 0, -1);
-    if (!new_sap) return(FALSE);
-    RetVal = AlnMgrIsEditable(new_sap);
-    if (!RetVal) return(FALSE);
-    SeqAlignSetFree(sap);
-    sap = new_sap;
-    *pInput_entityID = ObjMgrRegister(OBJ_SEQALIGN, (Pointer)sap);
-    *pInput_itemID = GatherItemIDByData(*pInput_entityID, OBJ_SEQALIGN, (Pointer)sap);
-    AssignIDsInEntity(*pInput_entityID, OBJ_SEQALIGN, (Pointer)sap);
-#if defined(_NO_GAPS)
-    if (RetVal == AM_EDITGAPS) return(FALSE);
-#endif
+    else if (IsEditable == AM_EDITGAPS) {
+      pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+      if (pNoGaps == NULL) NoGaps = TRUE;
+      else NoGaps = *pNoGaps;
+      if (NoGaps) {
+        Str[0] = 0;
+        StringCat(Str, "This alignment can't be edited\n");
+        StringCat(Str, "because it has aligned gaps\n");
+        StringCat(Str, "and DDV is running in NoGaps mode");
+        Message(MSG_OK, "%s", Str);
+        Disable(mWin_d->MainMenu.LaunchEditor);
+      }
+    }
   }
 #endif
 
-	if (ViewMgr_Attach(sap, FALSE, FALSE, *pInput_entityID, *pInput_itemID) < 1)
-    return (FALSE);
+  if (!Attached) {
+    if (ViewMgr_Attach(sap, FALSE, FALSE, *pInput_entityID, *pInput_itemID) < 1)
+      return (FALSE);
+  }
 	
 	/*if we have a NULL SeqAlign, switch the display style to show
 	the sequences, not a spacer*/
@@ -1298,7 +1390,8 @@ SeqAlignPtr  new_sap;
 		  dmp->MSA_d.pgp_l.nBsp);
 	  if (!dmp->MSA_d.pgp_l.entitiesTbl) return(FALSE);
 	  /*build the Master Ruler descriptor*/
-	  dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(sap,&(dmp->ddo));
+/*	  dmp->MSA_d.pgp_l.RulerDescr=DDV_ComputeRuler(sap,&(dmp->ddo));  */
+    dmp->MSA_d.pgp_l.RulerDescr = DDE_ReMakeRuler(&(dmp->MSA_d.pgp_l), FALSE, 0);
   }
 
 	dmp->MSA_d.entityID=*pInput_entityID;
@@ -1339,7 +1432,7 @@ SeqAlignPtr  new_sap;
 	DDV_WhatSize(dmp);
 
 	ArrowCursor();
-	DDV_SetupWin (dmp->hWndDDV,TRUE,NULL);
+	DDV_Resize_DDV(dmp->hWndDDV,TRUE); /*DDV_SetupWin (dmp->hWndDDV,TRUE,NULL); */
 	/*Update();*/
 
   CaptureSlateFocus((SlatE)dmp->hWndDDV);
@@ -1358,6 +1451,17 @@ SeqAlignPtr  new_sap;
       }
     }
     SetValue(hsb, HPos+Col-5);
+  }
+
+  /* only enable left/right/center justify for an unaligned region in the editor */
+  if (bEditor) {
+    mWin_d = (DdvMainWinPtr) GetObjectExtra(dmp->hParent);
+    if (dmp->dsp->IsUnAligned) {
+      Enable(mWin_d->MainMenu.Justify);
+    }
+    else {
+      Disable(mWin_d->MainMenu.Justify);
+    }
   }
 
 	return(TRUE);
@@ -2300,9 +2404,6 @@ Char AppName[40];
 	/*this is a slave editor/viewer*/
 	mWin_d->AutonomeViewer=FALSE;
 
-	/*init menu*/
-	/*DDV_SetupMenus(w,FALSE,bEditor);*/
-
 	/*build GUI*/
 	bRet=DDV_CreateViewerPanel(w,mWin_d, vgp, bEditor);
 
@@ -2313,31 +2414,6 @@ Char AppName[40];
 	return(w);
 }
 
-
-NLM_EXTERN Int4 DDV_Accession2Gi (CharPtr string, DocType type)
-{
-   CharPtr str;
-   LinkSetPtr lsp;
-   Int4 gi;
-
-   if (!EntrezIsInited ()) {
-       Message (MSG_ERROR, "Network connection to Entrez unavailable");
-       return 0;
-   }
-
-   str = MemNew (StringLen (string) + 10);
-   sprintf (str, "\"%s\" [ACCN]", string);
-   lsp = EntrezTLEvalString (str, type, -1, NULL, NULL);
-   MemFree (str);
-   if (lsp == NULL) return 0;
-   if (lsp->num <= 0) {
-       LinkSetFree (lsp);
-       return 0;
-   }
-   gi = lsp->uids [0];
-   LinkSetFree (lsp);
-   return gi;
-}
 
 static Boolean DDV_DigitsOnly(Char* str)
 {
@@ -2571,11 +2647,9 @@ NLM_EXTERN void DDV_DoAlign(DDV_ImportDialog *idp)
     
     if(idp->mode & DDVIMPNET) {
         si.choice = SEQID_GI;
-        if(ISA_aa(bsp1->mol)) idp->AAorNN = TYP_AA;
-        else idp->AAorNN = TYP_NT;
         GetTitle(idp->DDV_tAccession, str, sizeof(str));
-        if(GetValue(idp->DDV_gAccType) == 1) si.data.intvalue = 
-            DDV_Accession2Gi(str, idp->AAorNN);
+        if(GetValue(idp->DDV_gAccType) == 1 && idp->AccessionCB)
+            si.data.intvalue = idp->AccessionCB(str, ISA_aa(bsp1->mol));
         else si.data.intvalue = atoi(str);
         if (si.data.intvalue <= 0) {
             Message (MSG_ERROR, "Unable to understand accession");
@@ -2731,10 +2805,6 @@ NLM_EXTERN void DDV_ImportBioseqDlg(DDV_ImportDialog *idp)
     Char szName[21]={""};
 
     if(idp == NULL) return;
-    if (!EntrezIsInited () && idp->mode & DDVIMPNET) {
-        Message (MSG_OK, "Network connection to Entrez unavailable");
-        return;
-    }
     
     /* check if we have the right data for each mode */
     if(idp->mode == DDVIMPSE2SA 
@@ -2955,18 +3025,22 @@ static void DDV_HideList(Nlm_LisT l)
     DDV_HideDialog *hdp;
     Int4 i, count = 0;
     Boolean status;
+    Int2  HScroll, VScroll;
 
-	hHideDlg = (WindoW)ParentWindow(l);
-	if(hHideDlg == NULL) return;	
-	hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
+    hHideDlg = (WindoW)ParentWindow(l);
+    if(hHideDlg == NULL) return;	
+    hdp = (DDV_HideDialog *) GetObjectExtra(hHideDlg);
     if(hdp == NULL) return;
+
+    /* get vertical scroll now */
+    GetOffset(hdp->DDV_lsip, &HScroll, &VScroll);
     
     for(i = 1; i <= hdp->numrows; i++)
         if(GetItemStatus(hdp->DDV_lsip, i)) count++;
         
     if(count < 2 || !GetItemStatus(hdp->DDV_lsip, 1)) {
         DDV_SetHideList(hdp);
-        return;
+        goto Fin;
     }
         
     for(i = 1; i <= hdp->numrows; i++) {
@@ -2975,6 +3049,10 @@ static void DDV_HideList(Nlm_LisT l)
     }
     ViewMgr_Update(hdp->salp);
     DDV_SetHideList(hdp);
+
+Fin:
+    /* keep the same vertical scroll */
+    SetOffset(hdp->DDV_lsip, 0, VScroll);
 }
 
 static void DDV_HideAcceptProc(ButtoN b)

@@ -1,4 +1,4 @@
-/* $Id: rpsblast.c,v 6.16 2000/05/02 18:01:32 shavirin Exp $
+/* $Id: rpsblast.c,v 6.19 2000/06/28 17:12:29 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,21 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.16 $
+* $Revision: 6.19 $
 *
 * File Description:
 *         Main file for RPS BLAST program
 *
 * $Log: rpsblast.c,v $
+* Revision 6.19  2000/06/28 17:12:29  shavirin
+* Fixed problem with -U T option: NULL-ed slp between different sequences.
+*
+* Revision 6.18  2000/06/27 15:25:19  madden
+* Changed master-slave to query-anchored
+*
+* Revision 6.17  2000/06/20 15:49:35  shavirin
+* Added BLAST database title to SeqAnnot output.
+*
 * Revision 6.16  2000/05/02 18:01:32  shavirin
 * Adjusted to changes in RPSInti() function.
 *
@@ -133,7 +142,7 @@ static Args myargs [] = {
       "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",        /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = master-slave showing identities,\n2 = master-slave no identities,\n3 = flat master-slave, show identities,\n4 = flat master-slave, no identities,\n5 = master-slave no identities and blunt ends,\n6 = flat master-slave, no identities and blunt ends", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -431,6 +440,7 @@ RPSBlastOptionsPtr RPSReadBlastOptions(RPSInfoPtr rpsinfo_main,
     
     return rpsbop;
 }
+
 void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop, 
                      ValNodePtr mask)
 {
@@ -438,6 +448,7 @@ void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop,
     AsnIoPtr aip;
     BlastPruneSapStructPtr prune;
     Uint1 align_type;
+    CharPtr title;
 
     free_buff();    
     init_buff_ex(128);
@@ -463,6 +474,16 @@ void RPSViewSeqAlign(SeqAlignPtr seqalign, RPSBlastOptionsPtr rpsbop,
     
     AddAlignInfoToSeqAnnot(seqannot, align_type); /* blastp or tblastn */
     
+    /* Now adding database title from SeqAnnot */
+
+    title = readdb_get_title(rpsbop->rpsinfo->rdfp);
+    
+    BLASTAddBlastDBTitleToSeqAnnot(seqannot, title);
+    
+    /* ValNodeAddPointer(&(seqannot->desc), Annot_descr_title, title); */
+    
+    /* --------------------------------------- */
+
     if(!rpsbop->rpsinfo->query_is_prot)
         rpsbop->align_options += TXALIGN_BLASTX_SPECIAL;
     
@@ -674,6 +695,8 @@ VoidPtr RPSEngineThread(VoidPtr data)
     NlmMutexInit(&print_mutex);
 
     while(TRUE) {               /* Main loop */
+
+        slp = NULL;
 
         if((sep = RPSGetNextSeqEntry(&slp)) == NULL)
             break;

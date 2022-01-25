@@ -89,6 +89,10 @@ SOURCE=.\aacomp.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\apparam.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\biosrc.c
 # End Source File
 # Begin Source File
@@ -298,6 +302,10 @@ SOURCE=.\vsmutil.c
 # Begin Source File
 
 SOURCE=.\aacomp.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\apparam.h
 # End Source File
 # Begin Source File
 

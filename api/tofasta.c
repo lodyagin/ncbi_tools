@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.66 $
+* $Revision: 6.71 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -39,6 +39,21 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: tofasta.c,v $
+* Revision 6.71  2000/06/23 13:25:18  madden
+* Fix for comment lines
+*
+* Revision 6.70  2000/06/19 21:22:52  kans
+* FastaReadSequenceChunk looks for null byte to limit length, otherwise can be fooled by text pasted in from web with no newline at end
+*
+* Revision 6.69  2000/06/14 19:07:48  kans
+* chrom defline generator now handles the new SUBSRC_segment
+*
+* Revision 6.68  2000/06/14 14:50:11  madden
+* Fix for multiple line returns between sequences
+*
+* Revision 6.67  2000/05/31 20:13:23  madden
+* More replacement of getc with fgets
+*
 * Revision 6.66  2000/05/30 19:44:44  ostell
 * added FastaSeqLineEx() with another parameter, do_virtual
 *
@@ -1284,7 +1299,8 @@ static Int4 FastaReadSequenceChunk
     
     if(type == FASTA_FILE_IO) {
 	fd = (FILE *) input;
-	if ((ch = getc(fd)) == EOF)
+	ch = getc(fd);
+	if (ch == EOF || ch == '\n' || ch == '\r')
 		return 0;
         if(ch == '>' || ch == '&' || ch == '{' || ch == '}' || ch == '[' || ch == ']') 
 	{
@@ -1303,7 +1319,7 @@ static Int4 FastaReadSequenceChunk
     
     if(type == FASTA_FILE_IO) {
         for(i=0; i < length; i++) {      
-	    if (sequence[i] == '\n' || sequence[i] == '\r')
+	    if (sequence[i] == '\n' || sequence[i] == '\r' || sequence[i] == '\0')
 		break;
         }
     } else { /* type = FASTA_MEM_IO */
@@ -1565,7 +1581,14 @@ static Boolean FastaReadSequenceInternalEx
                   (byte_from = in_buff[in_index]) != '\n' && 
                   byte_from != '\r')
                 in_index++;
-            if(in_index < total_read)
+
+	/* Do not skip other passes if a line-return has
+	been encountered as shown by examining less than the total
+	(for FASTA_MEM_IO) or finding a line-return (FASTA_FILE_IO). */
+
+            if(in_index < total_read || 
+		(in_index < FTSE_BUFF_CHUNK && 
+		(in_buff[in_index] == '\n' || in_buff[in_index] == '\r')))
                 skip_to_eol = FALSE;                    
         }
         
@@ -1785,25 +1808,33 @@ static SeqEntryPtr FastaToSeqEntryInternalExEx
         
         if(type == FASTA_FILE_IO) {    /* File */
             buffer[0] = (Char) ch;
-            
-            for(i=1; (ch = getc(fd)) != EOF; i++) {      
-                
-                if (i >= BuffSize) {        /* Reallocating defline buffer */
-                    BuffSize = i + FTSE_BUFF_CHUNK;
-                    if((buffer = (CharPtr)Realloc(buffer, 
-                                                  BuffSize)) == NULL) {
-                        ErrLogPrintf("Error re-allocating memory in "
-                                     "FastaToSeqEntry");
+	    i = 0;
+	    fgets(buffer+1, BuffSize-1, fd);
+
+	    while (1)
+	    {
+		while (i<BuffSize)
+		{
+                	if(buffer[i] == '\n' || buffer[i] == '\r') 
+			{
+				buffer[i] = NULLB;
+                    		break;
+			}
+			i++;
+		}
+
+		if (buffer[i] == NULLB)
+			break;
+
+                BuffSize = i + FTSE_BUFF_CHUNK;
+                if((buffer = (CharPtr)Realloc(buffer, BuffSize)) == NULL) 
+		{
+                      	ErrLogPrintf("Error re-allocating memory in FastaToSeqEntry");
                         MemFree(buffer);
                         return NULL;
-                    }
-                }
-                if((buffer[i] = (Char) ch) == '\n' || ch == '\r') {
-                    break;
-                }
-            }
-            buffer[i] = NULLB;
-            
+		}
+	    	fgets(buffer+i, BuffSize, fd);
+	    }
         } else {  /* type = FASTA_MEM_IO */
             for(i =0; (ch = *firstchar) != NULLB; firstchar++, i++) {
                 if (i >= BuffSize) {
@@ -2762,7 +2793,8 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 	BioSourcePtr  biop;
 	OrgRefPtr     orp;
 	SubSourcePtr  ssp;
-	CharPtr       name = NULL, chr = NULL, orgnl = NULL, pls = NULL, def = NULL;
+	CharPtr       name = NULL, chr = NULL, orgnl = NULL,
+	              seg = NULL, pls = NULL, def = NULL;
 	Int2          deflen = 60; /* starts with space for all fixed text */
 	Char          ch;
 	Boolean       plasmid;
@@ -2791,6 +2823,11 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 		if (ssp->subtype == SUBSRC_chromosome) {
 			if (ssp->name != NULL) {
 				chr = ssp->name;
+				deflen += StringLen(ssp->name);
+			}
+		} else if (ssp->subtype == SUBSRC_segment) {
+			if (ssp->name != NULL) {
+				seg = ssp->name;
 				deflen += StringLen(ssp->name);
 			}
 		} else if (ssp->subtype == SUBSRC_plasmid_name) {
@@ -2869,6 +2906,14 @@ static CharPtr MakeCompleteChromTitle (BioseqPtr bsp, Uint1 biomol)
 		StringCat (def, " ");
 		StringCat (def, orgnl);
 		StringCat (def, ", complete genome");
+		ch = *def;
+		*def = TO_UPPER (ch);
+		return def;
+	}
+	if (seg != NULL) {
+		StringCat (def, " ");
+		StringCat(def, seg);
+		StringCat (def, ", complete sequence");
 		ch = *def;
 		*def = TO_UPPER (ch);
 		return def;

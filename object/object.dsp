@@ -97,10 +97,6 @@ SOURCE=..\api\alignval.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\desktop\apparam.c
-# End Source File
-# Begin Source File
-
 SOURCE=..\api\asn2ff1.c
 # End Source File
 # Begin Source File
@@ -297,7 +293,15 @@ SOURCE=..\api\pgppop.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\pmfapi.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\prtutil.c
+# End Source File
+# Begin Source File
+
+SOURCE=..\access\qblastapi.c
 # End Source File
 # Begin Source File
 
@@ -401,6 +405,10 @@ SOURCE=..\api\valid.c
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\vecscnapi.c
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\viewmgr.c
 # End Source File
 # Begin Source File
@@ -442,10 +450,6 @@ SOURCE=..\asnstat\all.h
 # Begin Source File
 
 SOURCE=..\asnstat\allpub.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\desktop\apparam.h
 # End Source File
 # Begin Source File
 
@@ -793,11 +797,19 @@ SOURCE=..\api\pgppop.h
 # End Source File
 # Begin Source File
 
+SOURCE=..\access\pmfapi.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\api\prtutil.h
 # End Source File
 # Begin Source File
 
 SOURCE=..\api\puberr.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\access\qblastapi.h
 # End Source File
 # Begin Source File
 
@@ -898,6 +910,10 @@ SOURCE=..\api\validatr.h
 # Begin Source File
 
 SOURCE=..\api\validerr.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\access\vecscnapi.h
 # End Source File
 # Begin Source File
 

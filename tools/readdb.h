@@ -41,7 +41,7 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * Version Creation Date:   3/21/95
 *
-* $Revision: 6.59 $
+* $Revision: 6.61 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -56,6 +56,12 @@ Contents: defines and prototypes used by readdb.c and formatdb.c.
 *
 * RCS Modification History:
 * $Log: readdb.h,v $
+* Revision 6.61  2000/06/28 16:55:50  madden
+* Add function Fastacmd_Search_ex, gi_target to ReadDBFILEPtr
+*
+* Revision 6.60  2000/06/19 20:06:43  madden
+* Add ready Boolean to readdb_get_sequence_ex, for nucl. sequence the data is then in blastna format with sentinel bytes
+*
 * Revision 6.59  2000/05/22 18:46:23  dondosha
 * Merged all Boolean members in ReadDBFILE structure into a single Int4
 *
@@ -577,6 +583,7 @@ if there is no mem-mapping or it failed. */
 	Int4			sparse_idx; /* Sparse indexes indicator */
         Char                    full_filename[PATH_MAX]; /* Full path for the file */
         ReadDBSharedInfoPtr     shared_info;
+	Int4 	gi_target; /* only this gi should be retrieved if non-zero. */
 } ReadDBFILE, PNTR ReadDBFILEPtr;
 
 /* Function prototypes */
@@ -693,7 +700,7 @@ Int4 LIBCALL readdb_get_sequence PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number
 	protein sequences are always returned as Seq_code_ncbistdaa,
 	nucleotide sequences as Seq_code_ncbi4na.
 */
-Int4 LIBCALL readdb_get_sequence_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length));
+Int4 LIBCALL readdb_get_sequence_ex PROTO((ReadDBFILEPtr rdfp, Int4 sequence_number, Uint1Ptr PNTR buffer, Int4 *buffer_length, Boolean ready));
 
 /* Gets sequence number by gi number. Returnes -1 if gi not found or
    other negative value if NISAM library faults. Non-negative value
@@ -978,6 +985,8 @@ Int4	UpdateCommonIndexFile (CharPtr dbfilename, Boolean proteins,
 /* Fastacmd API */
 Int2 Fastacmd_Search (CharPtr searchstr, CharPtr database,
 	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out);
+Int2 Fastacmd_Search_ex (CharPtr searchstr, CharPtr database,
+	CharPtr batchfile, Boolean dupl, Int4 linelen, FILE *out, Boolean use_target);
 
 Int4 LIBCALL readdb_MakeGiFileBinary PROTO((CharPtr input_file, CharPtr
 					    output_file));

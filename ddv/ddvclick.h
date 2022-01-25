@@ -1,4 +1,4 @@
-/*  $Id: ddvclick.h,v 1.6 2000/05/05 20:24:13 hurwitz Exp $
+/*  $Id: ddvclick.h,v 1.8 2000/07/05 19:23:13 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   09/20/99
 *
-* $Revision: 1.6 $
+* $Revision: 1.8 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvclick.h,v $
+* Revision 1.8  2000/07/05 19:23:13  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.7  2000/07/05 18:42:16  hurwitz
+* added split block function to DDV
+*
 * Revision 1.6  2000/05/05 20:24:13  hurwitz
 * some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
 *
@@ -100,6 +106,8 @@ NLM_EXTERN void DDV_DispPositionInStatus(PrompT InfoPanel,Int4 bsp_pos,
 		Int4 line_num,CharPtr szSeqName);
 NLM_EXTERN void DDV_GetSeqNameGivenRow(ValNodePtr * ParaG_List, Int4 row_num,
 	CharPtr szSeqName);
+NLM_EXTERN void DDV_ClickProcUpper(PaneL p, PoinT pt);
+NLM_EXTERN void DDV_ClickProcLower(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_ClickProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_DragProc(PaneL p, PoinT pt);
 NLM_EXTERN void DDV_HoldProc(PaneL p, PoinT pt);
@@ -110,7 +118,7 @@ NLM_EXTERN Int4 DDV_GetVPixelPosGivenRowNumber(DdvMainPtr dmp, RecT rc, Int4 Row
 NLM_EXTERN void DDV_GetVPixelPosOfEmptySpace(DdvMainPtr dmp, RecT rc, Int4* pTop, Int4* pBot);
 NLM_EXTERN Int4 DDV_GetColNumberGivenMousePos(DdvMainPtr dmp, RecT rc, PoinT pt);
 NLM_EXTERN void DDV_ReDraw(DdvMainPtr dmp);
-NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col);
+NLM_EXTERN void DDV_ReDrawAtCol(DdvMainPtr dmp, Int4 Col, Boolean DDE);
 
 #ifdef __cplusplus
 }

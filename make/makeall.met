@@ -456,7 +456,7 @@ with timeout of 60000 seconds
 			Add Files {NCBISOURCE & "object:" & i & ".c"} To Segment 1
 		end repeat
 		
-		repeat with i in {"objent2", "ent2api", "pmfapi"}
+		repeat with i in {"objent2", "ent2api", "pmfapi", "qblastapi", "vecscnapi"}
 			Add Files {NCBISOURCE & "access:" & i & ".c"} To Segment 1
 		end repeat
 		
@@ -596,7 +596,7 @@ with timeout of 60000 seconds
 			"bandalg2", "bandalg3", "bandalg4", "bandalg5", "bandalgn", "blastkar", "lookup", "posit", Â
 			"readdb", "ncbisam", "ncbisort", "salign", "salptool", "urkutil", "urkpcc", "urkptpf", "urkepi", Â
 			"urkfltr", "urkdust", "urksigu", "seg", "urkbias", "urkcnsrt", "urktree", "pattern1", "pseed3", Â
-			"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn"}
+			"impatool", "posit2", "newkar", "mbalign", "mbutils", "mblast", "vecscrn", "rpsutil"}
 			Add Files {NCBISOURCE & "tools:" & i & ".c"} To Segment 1
 		end repeat
 		

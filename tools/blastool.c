@@ -32,8 +32,12 @@ Contents: Utilities for BLAST
 
 ******************************************************************************/
 /*
-* $Revision: 6.81 $
+* $Revision: 6.82 $
 * $Log: blastool.c,v $
+* Revision 6.82  2000/06/20 15:50:46  shavirin
+* Added new functions: BLASTAddBlastDBTitleToSeqAnnot and
+* BLASTGetDatabaseTitleFromSeqAnnot().
+*
 * Revision 6.81  2000/04/18 16:29:27  madden
 * Free gifile name
 *
@@ -2912,4 +2916,50 @@ Boolean BlastParceInputString(CharPtr string,
     }
 
     return TRUE;
+}
+
+CharPtr BLASTGetDatabaseTitleFromSeqAnnot(SeqAnnotPtr seqannot)
+{
+    ValNodePtr vnp;
+    
+    UserObjectPtr uop;
+    UserFieldPtr ufp;
+    ObjectIdPtr oip;
+    
+    for(vnp = seqannot->desc; vnp != NULL; vnp = vnp->next) {
+        
+        if (vnp->choice == Annot_descr_user) {
+            uop = (UserObjectPtr) vnp->data.ptrvalue;
+            oip = uop->type;
+            if(!StringICmp(oip->str, "BLAST database title")) {
+                ufp = uop->data;
+                oip = ufp->label;
+                return oip->str;
+            }
+        }
+    }
+    return NULL;
+}
+
+void BLASTAddBlastDBTitleToSeqAnnot(SeqAnnotPtr seqannot, CharPtr title)
+{
+    UserObjectPtr uop;
+    UserFieldPtr ufp;
+    ObjectIdPtr oip;
+    
+    uop = UserObjectNew();
+    oip = ObjectIdNew();
+    uop->type = oip;
+    oip->str = StringSave("BLAST database title");
+    
+    ufp = UserFieldNew();
+    oip = ObjectIdNew();
+    ufp->label = oip;
+    uop->data = ufp;
+    
+    oip->str = StringSave(title);
+    ufp->choice = 4;
+    ufp->data.boolvalue = TRUE; /* Just to fill required field ... */
+    
+    ValNodeAddPointer(&(seqannot->desc), Annot_descr_user, (Pointer)uop);
 }

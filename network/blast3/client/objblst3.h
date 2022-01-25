@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Blast
-*    Generated using ASNCODE Revision: 6.8 at Apr 28, 2000  1:20 PM
+*    Generated using ASNCODE Revision: 6.9 at Jun 7, 2000 12:58 PM
 *
 **************************************************/
 
@@ -142,6 +142,8 @@ typedef struct struct_Blast_parameters {
    Uint1   use_real_db_size;
    Uint1   use_best_align;
    Uint1   is_rps_blast;
+   Uint1   tweak_parameters;
+   Uint1   smith_waterman;
 } BlastParameters, PNTR BlastParametersPtr;
 
 
@@ -203,6 +205,7 @@ typedef struct struct_Blast_matrix {
    Int4   column_length;
    ValNodePtr   scores;
    FloatHi   karlinK;
+   ValNodePtr   posFreqs;
 } BlastMatrix, PNTR BlastMatrixPtr;
 
 
@@ -310,6 +313,24 @@ NLM_EXTERN Boolean LIBCALL BlastErrorAsnWrite PROTO (( BlastErrorPtr , AsnIoPtr,
 
 /**************************************************
 *
+*    BlastPhialign
+*
+**************************************************/
+typedef struct struct_Blast_phialign {
+   Int4   numaligns;
+   ValNodePtr   seqloc;
+} BlastPhialign, PNTR BlastPhialignPtr;
+
+
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignFree PROTO ((BlastPhialignPtr ));
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignNew PROTO (( void ));
+NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL BlastPhialignAsnWrite PROTO (( BlastPhialignPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
 *    BlastDbinfoGet
 *
 **************************************************/
@@ -358,7 +379,7 @@ NLM_EXTERN Boolean LIBCALL BlastSeqIdAsnWrite PROTO (( BlastSeqIdPtr , AsnIoPtr,
 typedef struct struct_Blast_sequence {
    struct struct_Blast_sequence PNTR next;
    struct struct_Seq_align PNTR   align;
-   Pointer   db_seq;
+   ByteStorePtr   db_seq;
 } BlastSequence, PNTR BlastSequencePtr;
 
 
@@ -456,24 +477,6 @@ NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionFree PROTO ((BlastVersionPtr ));
 NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionNew PROTO (( void ));
 NLM_EXTERN BlastVersionPtr LIBCALL BlastVersionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL BlastVersionAsnWrite PROTO (( BlastVersionPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    BlastPhialign
-*
-**************************************************/
-typedef struct struct_Blast_phialign {
-   Int4   numaligns;
-   ValNodePtr   seqloc;
-} BlastPhialign, PNTR BlastPhialignPtr;
-
-
-NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignFree PROTO ((BlastPhialignPtr ));
-NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignNew PROTO (( void ));
-NLM_EXTERN BlastPhialignPtr LIBCALL BlastPhialignAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL BlastPhialignAsnWrite PROTO (( BlastPhialignPtr , AsnIoPtr, AsnTypePtr));
 
 #ifdef __cplusplus
 /* { */ }

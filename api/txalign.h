@@ -1,4 +1,4 @@
-/* $Id: txalign.h,v 6.23 2000/03/07 21:58:41 shavirin Exp $
+/* $Id: txalign.h,v 6.25 2000/06/09 19:00:06 shavirin Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Initial Version Creation Date: 03/13/94
 *
-* $Revision: 6.23 $
+* $Revision: 6.25 $
 *
 * File Description:
 *         External include file for various alignments
@@ -38,6 +38,12 @@
 *
 *
 * $Log: txalign.h,v $
+* Revision 6.25  2000/06/09 19:00:06  shavirin
+* Function GetGeneticCodeFromSeqId() made external and added to header file.
+*
+* Revision 6.24  2000/06/08 20:44:50  shavirin
+* Added calculation of start/stop values in the function find_score_in_align().
+*
 * Revision 6.23  2000/03/07 21:58:41  shavirin
 * Now will use PSSM Matrix to show positives in PSI Blast
 *
@@ -212,21 +218,25 @@ typedef struct text_buf{	/*for a generic feature comment*/
 }TextAlignBuf, PNTR TextAlignBufPtr;
 
 typedef struct align_summary {
-	Int4 positive;	        /*number of positive residues*/
-	Int4 identical;	        /*number of identical residues*/
-	Int4 gaps;		/*number of the gaps*/
-	Int4 totlen;	        /*total length of the alignemtns*/
-	Int4Ptr PNTR matrix;	/*matrix for protein alignments*/
-	Int4Ptr PNTR posMatrix;	/*matrix for PSSM protein alignments*/
-	SeqIdPtr master_sip;	/*the Seq-id of the master sequence*/
-	SeqIdPtr target_sip;	/*the Seq-id for the target sequence*/
-	Boolean is_aa;		/*are the sequences nucleotide or protein?*/
-	Uint1 	m_strand,	/* strand of the query. */
-		t_strand;	/* strand of the database sequence. */
-	Int4	m_frame,	/* Frame of the query. */
-		t_frame;	/* Frame of the database sequence. */
-	Boolean	m_frame_set,	/* query frame was set. */
-		t_frame_set;	/* database sequence frame was set. */
+    Int4 positive;	        /*number of positive residues*/
+    Int4 identical;	        /*number of identical residues*/
+    Int4 gaps;		        /*number of the gaps*/
+    Int4 totlen;	        /*total length of the alignemtns*/
+    Int4Ptr PNTR matrix;	/*matrix for protein alignments*/
+    Int4Ptr PNTR posMatrix;	/*matrix for PSSM protein alignments*/
+    SeqIdPtr master_sip;	/*the Seq-id of the master sequence*/
+    SeqIdPtr target_sip;	/*the Seq-id for the target sequence*/
+    Boolean is_aa;              /*are the sequences nucleotide or protein?*/
+    Uint1 m_strand,	        /* strand of the query. */
+          t_strand;	        /* strand of the database sequence. */
+    Int4  m_frame,	        /* Frame of the query. */
+        t_frame;	        /* Frame of the database sequence. */
+    Boolean	m_frame_set,	/* query frame was set. */
+        t_frame_set;	        /* database sequence frame was set. */
+    Int4 master_from;           /* from for master sequence */
+    Int4 master_to;             /* to for master sequence */
+    Int4 target_from;           /* from for target sequence */
+    Int4 target_to;             /* to region for master sequence */
 }AlignSum, PNTR AlignSumPtr;
 
 typedef struct align_stat_option { /*options for printing the statistics*/
@@ -542,6 +552,11 @@ NLM_EXTERN Boolean FormatScoreFromSeqAlign
 (SeqAlignPtr sap, Uint4 option, FILE *fp,
 Int4Ptr PNTR matrix, Boolean follower);    
 
+/*
+  Obtains the genetic code from a BioseqPtr, assuming that a fetch function
+  has been enabled.
+*/
+NLM_EXTERN CharPtr GetGeneticCodeFromSeqId (SeqIdPtr sip);
 
 #ifdef __cplusplus
 }

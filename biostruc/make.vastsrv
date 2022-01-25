@@ -9,6 +9,9 @@
 #######################################################################
 #
 # $Log: make.vastsrv,v $
+# Revision 6.12  2000/06/23 22:35:57  lewisg
+# get rid of hardcoded urls
+#
 # Revision 6.11  1999/07/26 14:30:31  zimmerma
 # Reorganized lines dealing with debug vs production build
 #
@@ -28,12 +31,12 @@ OTHERLIBS = -lm
 INCPATH = $(NCBI_INCDIR)
 
 #development mode
-OPTFLAG = -g
-LIBPATH = $(NCBI_ALTLIB)
+# OPTFLAG = -g
+# LIBPATH = $(NCBI_ALTLIB)
 
 #production mode
-#OPTFLAG = $(NCBI_OPTFLAG)
-#LIBPATH = $(NCBI_LIBDIR)
+OPTFLAG = $(NCBI_OPTFLAG)
+LIBPATH = $(NCBI_LIBDIR)
 
 SHARED_SRC = vastsrv.c vastlocl.c vast2mage.c vast2pdb.c vast2cn3d.c vastsubs.c \
 	     vastchkid.c mkbioseq_vs.c mkbioseqA.c mkbioseqB.c
@@ -42,7 +45,7 @@ SRC_FF = $(SHARED_SRC) mmdbFF.c
 SRC_PS = $(SHARED_SRC) mmdb_pubstruct.c PubStructAsn.c
 
 CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH)
-LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH)
+LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L../lib -L$(LIBPATH)
 
 LIB1 = -lncbi
 LIB2 = -lncbiobj

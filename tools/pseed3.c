@@ -1,4 +1,4 @@
-/* $Id: pseed3.c,v 6.31 2000/05/12 19:15:50 shavirin Exp $ */
+/* $Id: pseed3.c,v 6.32 2000/06/07 15:54:36 shavirin Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -33,9 +33,12 @@ Maintainer: Alejandro Schaffer
  
 Contents: high-level routines for PHI-BLAST and pseed3
 
-$Revision: 6.31 $
+$Revision: 6.32 $
 
 $Log: pseed3.c,v $
+Revision 6.32  2000/06/07 15:54:36  shavirin
+Removed bug prevented from searches of multiple patterns
+
 Revision 6.31  2000/05/12 19:15:50  shavirin
 Fixed memory leaks in do_the_seed_SEARCH() function.
 
@@ -1573,6 +1576,8 @@ static void do_the_seed_search(BlastSearchBlkPtr search, Int4 num_seq,
     /* Directive to the function BlastGetDbChunk to use oidlist */
     if(search->rdfp->oidlist != NULL)
         search->thr_info->realdb_done = TRUE;
+    else
+        search->thr_info->realdb_done = FALSE;
     
     BlastSetLimits(search->pbp->cpu_limit, search->pbp->process_num);	
     

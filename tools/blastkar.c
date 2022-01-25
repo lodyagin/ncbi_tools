@@ -47,8 +47,14 @@ Detailed Contents:
 	- calculate pseuod-scores from p-values.
 
 ****************************************************************************** 
- * $Revision: 6.41 $
+ * $Revision: 6.43 $
  * $Log: blastkar.c,v $
+ * Revision 6.43  2000/06/12 21:37:33  shavirin
+ * Adjusted blosum62_values{} and blosum80_values{}.
+ *
+ * Revision 6.42  2000/06/02 16:20:54  shavirin
+ * Fixed minor bug in function BLAST_MatrixFill
+ *
  * Revision 6.41  2000/05/26 17:29:54  shavirin
  * Added array of pos frequencies into BLAST_Matrix structure and it's
  * handling.
@@ -497,7 +503,7 @@ BLAST_MATRIX_NOMINAL
 };
 
 
-#define BLOSUM80_VALUES_MAX 7
+#define BLOSUM80_VALUES_MAX 9
 static Nlm_FloatHi blosum80_values[BLOSUM80_VALUES_MAX][5] = {
 	{(Nlm_FloatHi) INT2_MAX,  (Nlm_FloatHi) INT2_MAX,	0.3430,     0.177,      0.66},     
 	{  8.0,  2.0,	0.308,     0.089,      0.46},     
@@ -505,17 +511,21 @@ static Nlm_FloatHi blosum80_values[BLOSUM80_VALUES_MAX][5] = {
 	{  6.0,  2.0,   0.271,     0.051,      0.28},
 	{ 11.0,  1.0,   0.314,     0.096,      0.48},
 	{ 10.0,  1.0,   0.300,     0.072,      0.39},
-	{  9.0,  1.0,   0.277,     0.046,      0.30}
+	{  9.0,  1.0,   0.277,     0.046,      0.30},
+        { 20.0,  3.0,   0.3428,    0.177,      0.530},
+        { 25.0,  2.0,   0.3430,    0.177,      0.530}
 };
 
 static Int4 blosum80_prefs[BLOSUM80_VALUES_MAX] = {
-BLAST_MATRIX_NOMINAL,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_BEST,
-BLAST_MATRIX_PREFERRED
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_BEST,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED
 };
 
 
@@ -542,7 +552,7 @@ BLAST_MATRIX_NOMINAL,
 BLAST_MATRIX_NOMINAL
 };
 
-#define BLOSUM62_VALUES_MAX 7
+#define BLOSUM62_VALUES_MAX 9
 static Nlm_FloatHi blosum62_values[BLOSUM62_VALUES_MAX][5] = {
 	{(Nlm_FloatHi) INT2_MAX, (Nlm_FloatHi) INT2_MAX,     0.3176,     0.134,    0.40},
 	{  9.0,  2.0,     0.285,     0.075,    0.27},
@@ -551,16 +561,20 @@ static Nlm_FloatHi blosum62_values[BLOSUM62_VALUES_MAX][5] = {
 	{ 12.0,  1.0,     0.281,     0.057,    0.27},
 	{ 11.0,  1.0,     0.270,     0.047,    0.23},
 	{ 10.0,  1.0,     0.250,     0.033,    0.17},
+        { 20.0,  3.0,     0.3174,    0.134,    0.37},
+        { 25.0,  2.0,     0.3176,    0.134,    0.37},
 }; 
 				
 static Int4 blosum62_prefs[BLOSUM62_VALUES_MAX] = {
-BLAST_MATRIX_NOMINAL,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_PREFERRED,
-BLAST_MATRIX_BEST,
-BLAST_MATRIX_PREFERRED
+    BLAST_MATRIX_NOMINAL,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_BEST,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED,
+    BLAST_MATRIX_PREFERRED
 };
 
 #define BLOSUM50_VALUES_MAX 13
@@ -948,7 +962,7 @@ BLAST_MatrixFill(BLAST_ScoreBlkPtr sbp, Boolean positionBased)
     if(sbp->posFreqs != NULL) {
         posFreqs = MemNew(dim1*sizeof(Nlm_FloatHi *));
         for (index1 = 0; index1 < dim1; index1++) {
-            matrix[index1] = MemNew(dim2*sizeof(Nlm_FloatHi));
+            posFreqs[index1] = MemNew(dim2*sizeof(Nlm_FloatHi));
             for (index2=0; index2 < dim2; index2++) {
                 posFreqs[index1][index2] = sbp->posFreqs[index1][index2];
             }

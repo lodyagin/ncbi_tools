@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.124 $
+* $Revision: 6.125 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqmgr.c,v $
+* Revision 6.125  2000/05/31 19:58:49  kans
+* do not add last bsp a second time, speed up removal of NULLs from bspp array
+*
 * Revision 6.124  2000/05/25 20:04:13  dondosha
 * Fixed bug in SeqIdIndexElementCmp
 *
@@ -3142,6 +3145,17 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 			bspp[i] = NULL;
 	}
 
+	/* faster single pass removal of NULLs */
+	for (i = 0, k = 0; i < total; i++) {
+		bsp = bspp [i];
+		if (bsp != NULL) {
+			bspp [k] = bsp;
+			k++;
+		}
+	}
+	total = k;
+
+	/*
 	for (i = 0; i < total; i++)
 	{
 		if (bspp[i] == NULL)
@@ -3152,6 +3166,7 @@ static Boolean NEAR SeqMgrProcessNonIndexedBioseq(Boolean force_it)
 		   i--;
 		}
 	}
+	*/
 
 	smp->NonIndexedBioseqCnt = total;
 
@@ -3183,15 +3198,19 @@ NLM_EXTERN Boolean LIBCALL SeqMgrAddToBioseqIndex (BioseqPtr bsp)
 		return FALSE;
 
 	smp = SeqMgrWriteLock();
-							  /* increase array as 
-needed */
+
+	/* if this bsp was the last one added, no need to add it again */
+	if (smp->NonIndexedBioseqCnt > 0 && smp->NonIndexedBioseq [smp->NonIndexedBioseqCnt - 1] == bsp) {
+		SeqMgrUnlock();
+		return TRUE;
+	}
+
+							  /* increase array as needed */
 	if (smp->NonIndexedBioseqCnt >= smp->NonIndexedBioseqNum)
 	{
 		bspp = smp->NonIndexedBioseq;
-		smp->NonIndexedBioseq = MemNew((smp->NonIndexedBioseqNum + 10) * 
-sizeof (BioseqPtr));
-		MemCopy(smp->NonIndexedBioseq, bspp, (smp->NonIndexedBioseqNum * 
-sizeof(BioseqPtr)));
+		smp->NonIndexedBioseq = MemNew((smp->NonIndexedBioseqNum + 10) * sizeof (BioseqPtr));
+		MemCopy(smp->NonIndexedBioseq, bspp, (smp->NonIndexedBioseqNum * sizeof(BioseqPtr)));
 		MemFree(bspp);
 		smp->NonIndexedBioseqNum += 10;
 	}

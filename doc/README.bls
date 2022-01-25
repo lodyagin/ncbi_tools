@@ -380,6 +380,14 @@ cases:
 
 4.) fastacmd is used to fetch sequences from the database by accession or gi.
 
+Note on "SORTFiles failed" message:
+
+Formatdb will use the 'standard' temporary directory to sort the string indices on disk.
+Under UNIX this is often /var/tmp and if there is not enough space there, then
+the error message: "ERROR: [000.000] SORTFiles failed" will be issued.  This can
+be avoided by setting the TMPDIR environment variable to a partition with
+more free space.  This message may also often be avoided by using the sparse
+option (-s) for formatdb described above.
 
 
 Blastall
@@ -523,8 +531,8 @@ The options may be obtained by executing 'bl2seq -'.
 
   -i  First sequence [File In]
   -j  Second sequence [File In]
-  -p  blastp? (blastn otherwise) [T/F]
-    default = T
+  -p  Program name: blastp, blastn, blastx. For blastx 1st argument should be nucleotide [String]
+    default = blastp
   -g  Gapped [T/F]
     default = T
   -o  alignment output file [File Out]
@@ -1039,6 +1047,27 @@ References
 
 Release History
 ---------------
+
+Notes for 2.0.14 release:
+
+
+Bug fixes:
+
+1.) extra line returns between sequences in the a FASTA file 
+causes formatdb to produce corrupted databases.
+
+2.) ";" at the beginning of a line was not being treated as a comment.
+
+3.) a problem with the formatter causes blast to core-dump if
+the FASTA definition line only contains an identifier and
+no description.
+
+4.) a problem in the ungapped extension for protein sequences
+causes a rare problem.
+
+5.) the '-U' option that causes lower-case sequence to be masked
+does not work correctly for blastx.
+
 
 Notes for 2.0.13 release:
 

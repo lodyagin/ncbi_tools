@@ -32,8 +32,15 @@ Contents: prototypes for "public" BLAST functions (ones that other utilitiles
 
 ******************************************************************************/
 
-/* $Revision: 6.29 $ 
+/* $Revision: 6.31 $ 
 * $Log: blast.h,v $
+* Revision 6.31  2000/06/20 15:50:45  shavirin
+* Added new functions: BLASTAddBlastDBTitleToSeqAnnot and
+* BLASTGetDatabaseTitleFromSeqAnnot().
+*
+* Revision 6.30  2000/06/14 22:21:57  dondosha
+* Added prototypes for BlastQuerySequenceSetUp and BlastSequencesOnTheFlyEx
+*
 * Revision 6.29  2000/04/28 19:49:36  shavirin
 * Added definition of the function DefineToFrame().
 *
@@ -381,7 +388,13 @@ SeqAlignPtr LIBCALL BlastSequencesOnTheFly PROTO((BlastSearchBlkPtr search, Bios
 
 SeqAlignPtr LIBCALL BlastSequencesOnTheFlyByLoc PROTO((BlastSearchBlkPtr search, SeqLocPtr subject_slp));
 
+BlastSearchBlkPtr LIBCALL
+BlastQuerySequenceSetUp PROTO((BioseqPtr bsp, CharPtr progname,  
+			       BLAST_OptionsBlkPtr options));
 
+BlastSearchBlkPtr LIBCALL
+BlastSequencesOnTheFlyEx PROTO((BlastSearchBlkPtr search, BioseqPtr subject_bsp));
+   
 SeqAlignPtr LIBCALL SumBlastGetGappedAlignmentTraceback PROTO((BlastSearchBlkPtr search, Int4 hit_number, Boolean reverse, Boolean ordinal_number, Uint1Ptr subject, Int4 subject_length));
 
 
@@ -454,6 +467,10 @@ BlastNtWordExtend PROTO((BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, BLAST
 Boolean MegaBlastBuildLookupTable PROTO((BlastSearchBlkPtr search));
 
 Int2 DefineToFrame PROTO((Uint1 define));
+
+CharPtr BLASTGetDatabaseTitleFromSeqAnnot PROTO((SeqAnnotPtr seqannot));
+void BLASTAddBlastDBTitleToSeqAnnot PROTO((SeqAnnotPtr seqannot, 
+                                           CharPtr title));
 
 #ifdef OS_UNIX
 Boolean HeyIAmInMemory(Int4 program);

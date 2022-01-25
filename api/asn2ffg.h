@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.15 $
-* $Revision: 6.15 $
+* $Revision: 6.16 $
+* $Revision: 6.16 $
 *
 * File Description: 
 *
@@ -46,6 +46,9 @@
 /*************************************
 *
  * $Log: asn2ffg.h,v $
+ * Revision 6.16  2000/06/05 17:51:41  tatiana
+ * increase size of feature arrays to Int4
+ *
  * Revision 6.15  2000/04/03 23:33:36  tatiana
  * added showSeqLoc for GenBank region view
  *
@@ -268,25 +271,25 @@ typedef struct organizefeat {
 	Boolean embl_feat;
 	BioseqPtr bsp;
 	BioseqPtr seg_bsp;
-	Int2 sfpListsize;	
-	Int2 sortListsize;	
+	Int4 sfpListsize;	
+	Int4 sortListsize;	
 	SortStructPtr List;	/* ptr's to "generic" features */
 	Int2 sfpCommsize;	/* Number of comment features */ 
 	Int2 sortCommsize;	/* Number of sorted comment features */ 
 	SortStructPtr Commlist;	
-	Int2 sfpGenesize;	/* Number of gene features */
-	Int2 sortGenesize;	/* Number of sorted gene features */
+	Int4 sfpGenesize;	/* Number of gene features */
+	Int4 sortGenesize;	/* Number of sorted gene features */
 	SortStructPtr Genelist;	
-	Int2 sfpOrgsize;	/* Number of Organism features. */
-	Int2 sortOrgsize;	/* Number of sorted Organism features. */
+	Int4 sfpOrgsize;	/* Number of Organism features. */
+	Int4 sortOrgsize;	/* Number of sorted Organism features. */
 	SortStructPtr Orglist;	
-	Int2 sfpSitesize;	/* Number of ImpFeat's with key "Site-ref" */
-	Int2 sortSitesize;	/* Number of sorted ImpFeat's with key "Site-ref" */
+	Int4 sfpSitesize;	/* Number of ImpFeat's with key "Site-ref" */
+	Int4 sortSitesize;	/* Number of sorted ImpFeat's with key "Site-ref" */
 	SortStructPtr Siteslist;	
-	Int2 sfpSourcesize;	/* Number of ImpFeat's with key "source" */
-	Int2 sortSourcesize;	/* Number of sorted ImpFeat's with key "source" */
+	Int4 sfpSourcesize;	/* Number of ImpFeat's with key "source" */
+	Int4 sortSourcesize;	/* Number of sorted ImpFeat's with key "source" */
 	SortStructPtr Sourcelist;	
-	Int2 sfpXrefsize;	/* Number of Seq's that go out as xref's */
+	Int4 sfpXrefsize;	/* Number of Seq's that go out as xref's */
 	SortStructPtr Xreflist;
 	Uint2	oldID;	   /* is used to sort within entity */
 	NoteStructPtr source_notes;	/* Note for source feature */
@@ -330,7 +333,7 @@ typedef struct gbentry {
 	ValNodePtr Pub;
 	DescrStructPtr descr;		/* keeps entityID, itemID, itemtype for descr */
 	DescrStructPtr source_info;	/* keeps org info if no source feature found */
-	Int2 feat_num;				/* number of printed features */
+	Int4 feat_num;				/* number of printed features */
 	Int2 comm_num;				/* number of printed cooment blocks */
 	ComStructPtr comm;		/* CharPtr in com.data.ptrvalue are comments */
 	Boolean map;

@@ -3241,6 +3241,8 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
 	CodeBreakPtr	hcbp = NULL, cbp;
 	SeqIntPtr		sip;
 	SeqLocPtr 		loc;
+	BioseqPtr       bsp;
+	SeqIdPtr        sidp;
 	
 	if (sfp == NULL)
 		return FALSE;
@@ -3248,7 +3250,17 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
 		return FALSE;
 	imp = sfp->data.value.ptrvalue;
 	if (StringCmp(imp->key, "CDS") != 0)
-		return FALSE;	
+		return FALSE;
+
+	/* do not convert ImpCDS if EMBL or DDBJ */
+	bsp = BioseqFindFromSeqLoc (sfp->location);
+	if (bsp != NULL) {
+		for (sidp = bsp->id;
+			sidp != NULL && sidp->choice != SEQID_EMBL && sidp->choice != SEQID_DDBJ;
+			sidp = sidp->next) continue;
+	}
+	if (sidp != NULL) return FALSE;
+
 	sfp->data.choice = SEQFEAT_CDREGION;
 	ImpFeatFree(imp);
 	crp = CdRegionNew();
@@ -4287,6 +4299,65 @@ void CdCheck(SeqEntryPtr sep, FILE *fp)
 	return;
 }
 
+static Boolean OutOfFramePeptideButEmblOrDdbj (SeqFeatPtr sfp, SeqFeatPtr cds)
+
+{
+  BioseqPtr    bsp;
+  CdRegionPtr  crp;
+  ImpFeatPtr   ifp;
+  SeqLocPtr    first = NULL, last = NULL, slp = NULL;
+  Boolean      partial5, partial3;
+  Int4         pos1, pos2, adjust = 0, mod1, mod2;
+  SeqIdPtr     sip;
+
+  if (sfp == NULL || cds == NULL || sfp->data.choice != SEQFEAT_IMP) return FALSE;
+ 
+  ifp = (ImpFeatPtr) sfp->data.value.ptrvalue;
+  if (ifp == NULL) return FALSE;
+  if (StringCmp (ifp->key, "mat_peptide") != 0 &&
+      StringCmp (ifp->key, "sig_peptide") != 0 &&
+      StringCmp (ifp->key, "transit_peptide") != 0) return FALSE;
+
+  crp = (CdRegionPtr) cds->data.value.ptrvalue;
+  if (crp == NULL) return FALSE;
+  if (crp->frame == 2) {
+    adjust = 1;
+  } else if (crp->frame == 3) {
+    adjust = 2;
+  }
+
+  while ((slp = SeqLocFindNext (sfp->location, slp)) != NULL) {
+    last = slp;
+    if (first == NULL) {
+      first = slp;
+    }
+  }
+  if (first == NULL || last == NULL) return FALSE;
+
+  pos1 = GetOffsetInLoc (first, cds->location, SEQLOC_START) - adjust;
+  pos2 = GetOffsetInLoc (last, cds->location, SEQLOC_STOP) - adjust;
+  mod1 = pos1 % 3;
+  mod2 = pos2 % 3;
+
+  CheckSeqLocForPartial (sfp->location, &partial5, &partial3);
+  if (partial5) {
+    mod1 = 0;
+  }
+  if (partial3) {
+    mod2 = 2;
+  }
+
+  if (mod1 == 0 && mod2 == 2) return FALSE;
+
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return FALSE;
+  for (sip = bsp->id;
+       sip != NULL && sip->choice != SEQID_EMBL && sip->choice != SEQID_DDBJ;
+       sip = sip->next) continue;
+  if (sip != NULL) return TRUE;
+
+  return FALSE;
+}
 
 static void ImpFeatToProtRef(SeqFeatArr sfa)
 {
@@ -4336,6 +4407,8 @@ static void ImpFeatToProtRef(SeqFeatArr sfa)
 			"CDS for the peptide feature [%s] not found", p);
 			MemFree(p);
 		} else {
+			if (OutOfFramePeptideButEmblOrDdbj (f1, best_cds))
+				continue;
 			slp = dnaLoc_to_aaLoc(best_cds, f1->location, TRUE, &frame, FALSE);
 			if (slp == NULL) {
 			p = SeqLocPrint(f1->location);

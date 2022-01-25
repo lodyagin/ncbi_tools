@@ -45,6 +45,7 @@
 #define ERR_SEQ_DESCR_InconsistentBioSources  2,11
 #define ERR_SEQ_DESCR_MissingLineage  2,12
 #define ERR_SEQ_DESCR_SerialInComment  2,13
+#define ERR_SEQ_DESCR_BioSourceNeedsFocus  2,14
 #define ERR_GENERIC  3,0
 #define ERR_GENERIC_NonAsciiAsn  3,1
 #define ERR_GENERIC_Spell  3,2
@@ -101,8 +102,9 @@
 #define ERR_SEQ_FEAT_OverlappingPeptideFeat  5,37
 #define ERR_SEQ_FEAT_SerialInComment  5,38
 #define ERR_SEQ_FEAT_MultipleCDSproducts  5,39
-#define ERR_SEQ_FEAT_FocusOnBioSourceFeauture  5,40
+#define ERR_SEQ_FEAT_FocusOnBioSourceFeature  5,40
 #define ERR_SEQ_FEAT_PeptideFeatOutOfFrame  5,41
+#define ERR_SEQ_FEAT_InvalidQualifierValue  5,42
 #define ERR_SEQ_ALIGN  6,0
 #define ERR_SEQ_ALIGN_SeqIdProblem  6,1
 #define ERR_SEQ_ALIGN_StrandRev  6,2
@@ -122,5 +124,23 @@
 #define ERR_SEQ_ALIGN_SegsDimOne  6,16
 #define ERR_SEQ_ALIGN_AlignDimOne  6,17
 #define ERR_SEQ_ALIGN_Segtype  6,18
+#define ERR_SEQ_ALIGN_BlastAligns  6,19
+#define ERR_SEQ_GRAPH  7,0
+#define ERR_SEQ_GRAPH_GraphMin  7,1
+#define ERR_SEQ_GRAPH_GraphMax  7,2
+#define ERR_SEQ_GRAPH_GraphBelow  7,3
+#define ERR_SEQ_GRAPH_GraphAbove  7,4
+#define ERR_SEQ_GRAPH_GraphByteLen  7,5
+#define ERR_SEQ_GRAPH_GraphOutOfOrder  7,6
+#define ERR_SEQ_GRAPH_GraphBioseqLen  7,7
+#define ERR_SEQ_GRAPH_GraphSeqLitLen  7,8
+#define ERR_SEQ_GRAPH_GraphSeqLocLen  7,9
+#define ERR_SEQ_GRAPH_GraphStartPhase  7,10
+#define ERR_SEQ_GRAPH_GraphStopPhase  7,11
+#define ERR_SEQ_GRAPH_GraphDiffNumber  7,12
+#define ERR_SEQ_GRAPH_GraphACGTScore  7,13
+#define ERR_SEQ_GRAPH_GraphNScore  7,14
+#define ERR_SEQ_GRAPH_GraphGapScore  7,15
+#define ERR_SEQ_GRAPH_GraphOverlap  7,16
 
 #endif

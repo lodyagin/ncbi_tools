@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.113 2000/05/16 16:32:17 shavirin Exp $
+/* $Id: txalign.c,v 6.124 2000/06/22 18:56:55 egorov Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,13 +27,48 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.113 $
+* $Revision: 6.124 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: txalign.c,v $
+* Revision 6.124  2000/06/22 18:56:55  egorov
+* Add a protection against empty deflines.
+*
+* Revision 6.123  2000/06/19 12:53:18  madden
+* Do SeqIdWrite for both HTML and text
+*
+* Revision 6.122  2000/06/16 18:25:43  shavirin
+* Fixed problem with removing full path of db in make_dumpgnl_links()
+*
+* Revision 6.121  2000/06/16 16:18:46  madden
+* Roll back change from rev. 6.114
+*
+* Revision 6.120  2000/06/15 15:35:47  shavirin
+* Fixed Uninitialized memory read error in make_dumpgnl_links() function
+*
+* Revision 6.119  2000/06/13 18:58:51  shavirin
+* Adjusted region of database sequence in the function
+* load_align_sum_for_DenseDiag()
+*
+* Revision 6.118  2000/06/12 16:50:03  shavirin
+* Fixed bug with calculation total length of the StdSeg alignment and
+* adjusted calculation of translation frame.
+*
+* Revision 6.117  2000/06/09 19:00:05  shavirin
+* Function GetGeneticCodeFromSeqId() made external and added to header file.
+*
+* Revision 6.116  2000/06/08 20:44:49  shavirin
+* Added calculation of start/stop values in the function find_score_in_align().
+*
+* Revision 6.115  2000/06/08 17:13:53  dondosha
+* Fixed bug with wrong scores reported for ungapped blastx alignments
+*
+* Revision 6.114  2000/06/06 16:40:20  shavirin
+* Use plain database name if TXALIGN_NO_ENTREZ option is set.
+*
 * Revision 6.113  2000/05/16 16:32:17  shavirin
 * Added check for WWW_ROOT_PATH environment for PSI Blast.
 *
@@ -1707,110 +1742,102 @@ identical, positive residues, # of gaps, to the structure
 
 static Boolean load_align_sum_for_DenseDiag(DenseDiagPtr ddp, AlignSumPtr asp)
 {
-	SeqInt si;
-	SeqLoc sl;
-	Int4 i;
-	Int2 m_order, t_order;	/*order of the master and the target sequence*/
-	Uint1 m_res, t_res;
-	SeqIdPtr sip;
-	SeqPortPtr m_spp, t_spp;
-	Int2 dim;
-	SeqPortPtr spp;
-
-	if(ddp == NULL || asp == NULL)
-		return FALSE;
-	m_order = -1;
-	t_order = -1;
-	dim = 0;
-	for(i = 0, sip = ddp->id; sip != NULL; sip = sip->next, ++i)
-	{
-		if(SeqIdMatch(sip, asp->master_sip) && m_order == -1)
-			m_order = i;
-		else if(SeqIdMatch(sip, asp->target_sip) && t_order == -1)
-			t_order = i;
-		++dim;
-	}
-
-	if(m_order == -1 || t_order == -1)
-		return FALSE;
-
-	asp->m_frame_set = FALSE;
-	asp->t_frame_set = FALSE;
-
-	for(i = 0; i<dim; ++i)
-	{
-		if(i == m_order || i == t_order)
-		{
-			
-			if(i == m_order)
-				si.id = asp->master_sip;
-			else
-				si.id = asp->target_sip;
-			si.from = ddp->starts[i];
-			si.to = si.from + ddp->len -1;
-			if(ddp->strands != NULL)
-				si.strand = ddp->strands[i];
-			else
-				si.strand = 0;
-
-			
-			if (asp->is_aa)
-			{
-				asp->m_strand = Seq_strand_unknown;
-				asp->t_strand = Seq_strand_unknown;
-			}
-			else
-			{
-				if(i == m_order)
-				{
-					asp->m_strand = si.strand;
-				}
-				else
-				{
-					asp->t_strand = si.strand;
-				}
-			}
-
-			sl.choice = SEQLOC_INT;
-			sl.data.ptrvalue = &si;
-
-			spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
-			if(i == m_order)
-				m_spp = spp;
-			else
-				t_spp = spp;
-		}
-	}
-
-	if(m_spp == NULL || t_spp == NULL)
-	{
-		if(m_spp == NULL)
-			SeqPortFree(m_spp);
-		if(t_spp != NULL)
-			SeqPortFree(t_spp);
-		return FALSE;
-	}
-
-	for(i = 0; i<ddp->len; ++i)
-	{
-		m_res = SeqPortGetResidue(m_spp);
-		t_res = SeqPortGetResidue(t_spp);
-		if(m_res == t_res)
-			++(asp->identical);
-		else if(asp->matrix != NULL && asp->is_aa)
-		{
-			if (IS_residue(m_res) && IS_residue(t_res))
-			{
-				if(asp->matrix[m_res][t_res] >0)
-					++(asp->positive);
-			}
-		}
-	}
-	asp->totlen = ddp->len;
-
-	SeqPortFree(m_spp);
-	SeqPortFree(t_spp);
-	return TRUE;
+    SeqInt si;
+    SeqLoc sl;
+    Int4 i;
+    Int2 m_order, t_order;	/*order of the master and the target sequence*/
+    Uint1 m_res, t_res;
+    SeqIdPtr sip;
+    SeqPortPtr m_spp, t_spp;
+    Int2 dim;
+    SeqPortPtr spp;
+    
+    if(ddp == NULL || asp == NULL)
+        return FALSE;
+    m_order = -1;
+    t_order = -1;
+    dim = 0;
+    for(i = 0, sip = ddp->id; sip != NULL; sip = sip->next, ++i) {
+        if(SeqIdMatch(sip, asp->master_sip) && m_order == -1)
+            m_order = i;
+        else if(SeqIdMatch(sip, asp->target_sip) && t_order == -1)
+            t_order = i;
+        ++dim;
+    }
+    
+    if(m_order == -1 || t_order == -1)
+        return FALSE;
+    
+    asp->m_frame_set = FALSE;
+    asp->t_frame_set = FALSE;
+    
+    for(i = 0; i<dim; ++i) {
+        if(i == m_order || i == t_order) {
+            
+            if(i == m_order)
+                si.id = asp->master_sip;
+            else
+                si.id = asp->target_sip;
+            si.from = ddp->starts[i];
+            si.to = si.from + ddp->len -1;
+            if(ddp->strands != NULL)
+                si.strand = ddp->strands[i];
+            else
+                si.strand = 0;
+            
+            
+            if (asp->is_aa) {
+                asp->m_strand = Seq_strand_unknown;
+                asp->t_strand = Seq_strand_unknown;
+            } else {
+                if(i == m_order) {
+                    asp->m_strand = si.strand;
+                } else {
+                    asp->t_strand = si.strand;
+                }
+            }
+            
+            sl.choice = SEQLOC_INT;
+            sl.data.ptrvalue = &si;
+            
+            spp = SeqPortNewByLoc(&sl, (asp->is_aa) ? Seq_code_ncbieaa : Seq_code_iupacna);
+            if(i == m_order) {
+                asp->master_from = si.from;
+                asp->master_to = si.to;
+                m_spp = spp;
+            } else {
+                asp->target_from = si.from;
+                asp->target_to = si.to;
+                t_spp = spp;
+            }
+        }
+    }
+    
+    if(m_spp == NULL || t_spp == NULL) {
+        if(m_spp == NULL)
+            SeqPortFree(m_spp);
+        if(t_spp != NULL)
+            SeqPortFree(t_spp);
+        return FALSE;
+    }
+    
+    for(i = 0; i<ddp->len; ++i) {
+        m_res = SeqPortGetResidue(m_spp);
+        t_res = SeqPortGetResidue(t_spp);
+        if(m_res == t_res)
+            ++(asp->identical);
+        else if(asp->matrix != NULL && asp->is_aa) {
+            if (IS_residue(m_res) && IS_residue(t_res)) {
+                if(asp->matrix[m_res][t_res] >0)
+                    ++(asp->positive);
+            }
+        }
+    }
+    asp->totlen = ddp->len;
+    
+    SeqPortFree(m_spp);
+    SeqPortFree(t_spp);
+    return TRUE;
 }
 
 
@@ -1875,6 +1902,11 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
             }
         }
     }
+
+    asp->master_from = msi.from;
+    asp->master_to = msi.to;
+    asp->target_from = tsi.from;
+    asp->target_to = tsi.to;
     
     if (asp->is_aa) {
         asp->m_strand = Seq_strand_unknown;
@@ -1946,7 +1978,7 @@ static Boolean load_align_sum_for_DenseSeg(DenseSegPtr dsp, AlignSumPtr asp)
 	Obtains the genetic code from a BioseqPtr, assuming that a fetch function
 	has been enabled.
 */
-static CharPtr
+NLM_EXTERN CharPtr
 GetGeneticCodeFromSeqId (SeqIdPtr sip)
 
 {
@@ -1988,156 +2020,157 @@ NLM_EXTERN Uint1 AAForCodon (Uint1Ptr codon, CharPtr codes);
 
 static Boolean load_align_sum_for_StdSeg(StdSegPtr ssp, AlignSumPtr asp)
 {
-	Boolean master_is_translated=FALSE, both_translated=FALSE;
-	BioseqPtr bsp;
-	CharPtr genetic_code1, genetic_code2;
-	SeqPortPtr spp1, spp2;
-	Uint1 codon[4], residue1, residue2;
+    Boolean master_is_translated=FALSE, both_translated=FALSE;
+    Boolean target_is_translated = FALSE;
+    BioseqPtr bsp;
+    CharPtr genetic_code1, genetic_code2;
+    SeqPortPtr spp1, spp2;
+    Uint1 codon[4], residue1, residue2;
+    Boolean ungapped_align = FALSE;
+    StdSegPtr ssp_last;
+    
+    if(ssp == NULL || asp == NULL)
+        return FALSE;
+    
+    /* Check for valid sequence. */
+    if (SeqLocLen(ssp->loc) == 3*SeqLocLen(ssp->loc->next))
+        master_is_translated = TRUE;
+    else if (3*SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
+            target_is_translated = TRUE;	
+    else if (SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
+        both_translated = TRUE;
+    else
+        return FALSE;
+    
+    asp->master_from = SeqLocStart(ssp->loc);
+    asp->target_from = SeqLocStart(ssp->loc->next);
+    
+    if (master_is_translated) {
+        genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids);
+    } else if (both_translated) {
+        genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids);
+        genetic_code2 = GetGeneticCodeFromSeqId(ssp->ids->next);
+    } else {
+        genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids->next);
+    }
+    
+    asp->m_frame_set = FALSE;
+    asp->t_frame_set = FALSE;
+    
+    if (master_is_translated || both_translated) {
+        asp->m_strand = SeqLocStrand(ssp->loc);
+        asp->m_frame = SeqLocStart(ssp->loc);
+        if (SeqLocStrand(ssp->loc) == Seq_strand_minus) {
+            bsp = BioseqLockById(SeqLocId(ssp->loc));
+            asp->m_frame += SeqLocLen(ssp->loc);
+            asp->m_frame = -(1+(bsp->length - asp->m_frame)%3);
+            asp->m_frame_set = TRUE;
+            BioseqUnlock(bsp);
+        } else {
+            asp->m_frame = (1+(asp->m_frame)%3);
+            asp->m_frame_set = TRUE;
+        }
+    }
+    
+    if (!master_is_translated || both_translated) {
+        asp->t_strand = SeqLocStrand(ssp->loc->next);
+        asp->t_frame = SeqLocStart(ssp->loc->next);
+        if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus) {
+            if (bsp = BioseqLockById(SeqLocId(ssp->loc->next))) {
+                asp->t_frame += SeqLocLen(ssp->loc->next);
+                asp->t_frame = -(1+(bsp->length - asp->t_frame)%3);
+                asp->t_frame_set = TRUE;
+                BioseqUnlock(bsp);
+            } else {
+                return FALSE;
+            }
+        } else {
+            asp->t_frame = (1+(asp->t_frame)%3);
+            asp->t_frame_set = TRUE;
+        }
+    }
+    
+    while (ssp) {
+        if (ssp->loc->choice != SEQLOC_EMPTY && ssp->loc->next->choice != SEQLOC_EMPTY) {
+            if (both_translated) {
+                spp1 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbi4na);
+                spp2 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbi4na);
+                while ((codon[0]=SeqPortGetResidue(spp2)) != SEQPORT_EOF) {
+                    codon[1] = SeqPortGetResidue(spp2);
+                    codon[2] = SeqPortGetResidue(spp2);
+                    residue1 = AAForCodon(codon, genetic_code1);
+                    codon[0] = SeqPortGetResidue(spp1);
+                    codon[1] = SeqPortGetResidue(spp1);
+                    codon[2] = SeqPortGetResidue(spp1);
+                    residue2 = AAForCodon(codon, genetic_code2);
+                    if (residue1 == residue2)
+                        ++(asp->identical);
+                    else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
+                        ++(asp->positive);
+                }
+            } else {
+                if (master_is_translated) {
+                    spp1 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbi4na);
+                    spp2 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbieaa);
+                } else {
+                    spp2 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbieaa);
+                    spp1 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbi4na);
+                }
+                
+                while ((residue1=SeqPortGetResidue(spp2)) != SEQPORT_EOF) {
+                    codon[0] = SeqPortGetResidue(spp1);
+                    codon[1] = SeqPortGetResidue(spp1);
+                    codon[2] = SeqPortGetResidue(spp1);
+                    residue2 = AAForCodon(codon, genetic_code1);
+                    if (residue1 == residue2)
+                        ++(asp->identical);
+                    else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
+                        ++(asp->positive);
+                }
+            }
+            SeqPortFree(spp1);
+            SeqPortFree(spp2);
+            /* Check if this is an ungapped alignment;
+               in this case do not go to next link */
+            if (ssp->next && 
+                ssp->next->loc->choice != SEQLOC_EMPTY && 
+                ssp->next->loc->next->choice != SEQLOC_EMPTY)
+                ungapped_align = TRUE;
+        } else {	/* Count only gaps in the top (master) strand. */
+            if (ssp->loc->choice == SEQLOC_EMPTY)
+                {
+                    if (!master_is_translated || both_translated)
+                        asp->gaps += SeqLocLen(ssp->loc->next)/3;
+                    else
+                        asp->gaps += SeqLocLen(ssp->loc->next);
+                }
+        }
+        
+        if (ssp->loc->choice != SEQLOC_EMPTY) {
+            if (master_is_translated || both_translated)
+                asp->totlen += SeqLocLen(ssp->loc)/3;
+            else
+                asp->totlen += SeqLocLen(ssp->loc);
+        } else {
+            if (target_is_translated || both_translated)
+                asp->totlen += SeqLocLen(ssp->loc->next)/3;
+            else
+                asp->totlen += SeqLocLen(ssp->loc->next);
+        }
 
+        ssp_last = ssp;
+        
+        if (both_translated || ungapped_align)	
+            /* for tblastx perform only one StdSegPtr. */
+            break;
+        
+        ssp = ssp->next;
+    }
 
-	if(ssp == NULL || asp == NULL)
-		return FALSE;
-
-	/* Check for valid sequence. */
-	if (SeqLocLen(ssp->loc) == 3*SeqLocLen(ssp->loc->next))
-		master_is_translated = TRUE;
-	else if (3*SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
-		;	
-	else if (SeqLocLen(ssp->loc) == SeqLocLen(ssp->loc->next))
-		both_translated = TRUE;
-	else
-		return FALSE;
-
-	if (master_is_translated)
-	{
-		genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids);
-	}
-	else if (both_translated)
-	{
-		genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids);
-		genetic_code2 = GetGeneticCodeFromSeqId(ssp->ids->next);
-	}
-	else
-	{
-		genetic_code1 = GetGeneticCodeFromSeqId(ssp->ids->next);
-	}
-
-	asp->m_frame_set = FALSE;
-	asp->t_frame_set = FALSE;
-
-	if (master_is_translated || both_translated)
-	{
-		asp->m_strand = SeqLocStrand(ssp->loc);
-		asp->m_frame = SeqLocStart(ssp->loc);
-		if (SeqLocStrand(ssp->loc) == Seq_strand_minus)
-		{
-			bsp = BioseqLockById(SeqLocId(ssp->loc));
-			asp->m_frame += SeqLocLen(ssp->loc);
-			asp->m_frame = -(1+(bsp->length - asp->m_frame)%3);
-			asp->m_frame_set = TRUE;
-			BioseqUnlock(bsp);
-		}
-		else
-		{
-			asp->m_frame_set = TRUE;
-		}
-	}
-
-	if (!master_is_translated || both_translated)
-	{
-		asp->t_strand = SeqLocStrand(ssp->loc->next);
-		asp->t_frame = SeqLocStart(ssp->loc->next);
-		if (SeqLocStrand(ssp->loc->next) == Seq_strand_minus)
-		{
-			if (bsp = BioseqLockById(SeqLocId(ssp->loc->next))) {
-			    asp->t_frame += SeqLocLen(ssp->loc->next);
-			    asp->t_frame = -(1+(bsp->length - asp->t_frame)%3);
-			    asp->t_frame_set = TRUE;
-			    BioseqUnlock(bsp);
-			} else {
-			    return FALSE;
-			}
-		}
-		else
-		{
-			asp->t_frame_set = TRUE;
-		}
-	}
-
-	while (ssp)
-	{
-		if (ssp->loc->choice != SEQLOC_EMPTY && ssp->loc->next->choice != SEQLOC_EMPTY)
-		{
-			if (both_translated)
-			{
-				spp1 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbi4na);
-				spp2 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbi4na);
-				while ((codon[0]=SeqPortGetResidue(spp2)) != SEQPORT_EOF)
-				{
-					codon[1] = SeqPortGetResidue(spp2);
-					codon[2] = SeqPortGetResidue(spp2);
-					residue1 = AAForCodon(codon, genetic_code1);
-					codon[0] = SeqPortGetResidue(spp1);
-					codon[1] = SeqPortGetResidue(spp1);
-					codon[2] = SeqPortGetResidue(spp1);
-					residue2 = AAForCodon(codon, genetic_code2);
-					if (residue1 == residue2)
-						++(asp->identical);
-					else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
-                       	        		++(asp->positive);
-				}
-			}
-			else
-			{
-				if (master_is_translated)
-				{
-					spp1 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbi4na);
-					spp2 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbieaa);
-				}
-				else
-				{
-					spp2 = SeqPortNewByLoc(ssp->loc, Seq_code_ncbieaa);
-					spp1 = SeqPortNewByLoc(ssp->loc->next, Seq_code_ncbi4na);
-				}
-
-				while ((residue1=SeqPortGetResidue(spp2)) != SEQPORT_EOF)
-				{
-					codon[0] = SeqPortGetResidue(spp1);
-					codon[1] = SeqPortGetResidue(spp1);
-					codon[2] = SeqPortGetResidue(spp1);
-					residue2 = AAForCodon(codon, genetic_code1);
-					if (residue1 == residue2)
-						++(asp->identical);
-					else if (asp->matrix != NULL && asp->matrix[residue1][residue2] >0)
-               	                		++(asp->positive);
-				}
-			}
-			SeqPortFree(spp1);
-			SeqPortFree(spp2);
-		}
-		else
-		{	/* Count only gaps in the top (master) strand. */
-			if (ssp->loc->choice == SEQLOC_EMPTY)
-			{
-				if (!master_is_translated || both_translated)
-					asp->gaps += SeqLocLen(ssp->loc->next)/3;
-				else
-					asp->gaps += SeqLocLen(ssp->loc->next);
-			}
-		}
-
-		if (master_is_translated || both_translated)
-			asp->totlen += SeqLocLen(ssp->loc)/3;
-		else
-			asp->totlen += SeqLocLen(ssp->loc);
-
-		if (both_translated)	/* for tblastx perform only one StdSegPtr. */
-			break;
-
-		ssp = ssp->next;
-	}
-	
-	return TRUE;
+    asp->master_to = SeqLocStop(ssp_last->loc);
+    asp->target_to = SeqLocStop(ssp_last->loc->next);
+    
+    return TRUE;
 }
 
 
@@ -2160,7 +2193,7 @@ NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain,
     Uint2 order = 0;
     SeqAlignPtr sap;
     ScorePtr    sp;
-
+    
     if(align == NULL)
         return NULL;
     
@@ -2176,7 +2209,7 @@ NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain,
         while(ddp) {
             ++order;
             if(order == chain) {
-                if(asp != NULL)
+                if(asp != NULL) 
                     load_align_sum_for_DenseDiag(ddp, asp);
                 return ddp->scores;
             }
@@ -2196,7 +2229,7 @@ NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain,
         while(ssp) {
             ++order;
             if(order == chain) {
-                if(asp != NULL)
+                if(asp != NULL) 
                     load_align_sum_for_StdSeg(ssp, asp);
                 return ssp->scores;
             }
@@ -2205,7 +2238,7 @@ NLM_EXTERN ScorePtr find_score_in_align(SeqAlignPtr align, Uint2 chain,
         break;
     case 5: /* Discontinuous alignment */
         sap = (SeqAlignPtr) align->segs;
-
+        
         if((sp = find_score_in_align(sap, chain, asp)) == NULL)
             return align->score;
         else
@@ -2950,22 +2983,19 @@ NLM_EXTERN Boolean ShowAlignNodeText2(ValNodePtr anp_list, Int2 num_node, Int4 l
                                 aso.positive = asp->positive;
                                 aso.identical = asp->identical;
                                 aso.align_len = asp->totlen;
+
                                 if (asp->m_frame_set) {
-                                    if (asp->m_strand == Seq_strand_minus)
                                         aso.m_frame = asp->m_frame;
-                                    else
-                                        aso.m_frame = 1+(asp->m_frame)%3;
                                 } else {
                                     aso.m_frame = 255;
                                 }
+
                                 if (asp->t_frame_set) {
-                                    if (asp->t_strand == Seq_strand_minus)
-                                        aso.t_frame = asp->t_frame;
-                                    else
-                                        aso.t_frame = 1+(asp->t_frame)%3;
+                                    aso.t_frame = asp->t_frame;
                                 } else {
                                     aso.t_frame = 255;
                                 }
+
                                 aso.m_strand = asp->m_strand;
                                 aso.t_strand = asp->t_strand;
                             } else {
@@ -4713,77 +4743,110 @@ SeqAlignSegsStr(SeqAlignPtr sap, Int2 index, CharPtr *dst, size_t *size, size_t 
 	* links to incomplete genomes
 **/
 static void
-make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer)
+make_dumpgnl_links(SeqIdPtr sip, CharPtr blast_type, CharPtr segs, CharPtr dbname, Boolean is_na, FILE *fp, CharPtr sip_buffer, Boolean nodb_path)
 {
-	Char gnl[256];
-	CharPtr str;
-	Uchar buf[32];
-	Int4 length;
-	MD5Context context;
-	Char passwd[128];
-	Char tool_url[128];
-
-        /* We do need to make security protected link to BLAST gnl */
-        if (StringStr(sip_buffer, "gnl|BL_ORD_ID") != NULL)
-            return;
-
-        *passwd = NULLB;
-        *tool_url = NULLB;
-
-        str = NULL;
+    Char gnl[256];
+    CharPtr str, chptr, dbtmp;
+    Uchar buf[32];
+    Int4 i, j, length;
+    MD5Context context;
+    Char passwd[128], tool_url[128], tmpbuff[256];
+    
+    /* We do need to make security protected link to BLAST gnl */
+    if (StringStr(sip_buffer, "gnl|BL_ORD_ID") != NULL)
+        return;
+    
+    *passwd = NULLB;
+    *tool_url = NULLB;
+    
+    str = NULL;
 #ifdef OS_UNIX
-        str = getenv("DUMPGNL_PASSWD");
+    str = getenv("DUMPGNL_PASSWD");
 #endif
-        if(str != NULL) {
-            StringCpy(passwd, str);
-        } else {
-            GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, 
-                        sizeof(passwd));
-        }
-        
-        str = NULL;
+    if(str != NULL) {
+        StringCpy(passwd, str);
+    } else {
+        GetAppParam("NCBI", blast_type, "PASSWD", "", passwd, 
+                    sizeof(passwd));
+    }
+    
+    str = NULL;
 #ifdef OS_UNIX
-        str = getenv("DUMPGNL_TOOL_URL");
+    str = getenv("DUMPGNL_TOOL_URL");
 #endif
-        if(str != NULL) {
-            StringCpy(tool_url, str);
-        } else {
-            GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, 
-                        sizeof(tool_url));
-        }
+    if(str != NULL) {
+        StringCpy(tool_url, str);
+    } else {
+        GetAppParam("NCBI", blast_type, "TOOL_URL", "", tool_url, 
+                    sizeof(tool_url));
+    }
 
-        if(*passwd == NULLB || *tool_url == NULLB)
-            return;
+    if(*passwd == NULLB || *tool_url == NULLB)
+        return;
+    
+    if(nodb_path) {
+
+        length = StringLen(dbname);
+        dbtmp = MemNew(sizeof(Char)*length + 2); /* aditional space and NULLB */
         
-	/*
-	 * Need to protect start and stop positions
-	 * to avoid web users sending us hand-made URLs
-	 * to retrive full sequences
-	 */
-	MD5Init(&context);
-	length = StringLen(passwd);
-	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-	SeqIdWrite(sip, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
-	MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
-	MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
-	MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
-	MD5Final(&context, (UcharPtr)buf);
+        for(i = 0; i < length; i++) {
+            
+            if(isspace(dbname[i]) || dbname[i] == ',') /* Rolling spaces */
+                continue;
 
-	str = MakeURLSafe(dbname == NULL ? "nr" : dbname);
-	fprintf(fp, "<a href=\"%s?db=%s&na=%d&", tool_url, str, is_na);
-	str = (CharPtr) MemFree(str);
-	str = MakeURLSafe(gnl);
-	fprintf(fp,
-		"gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
-		"%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
-		str, segs,
-		buf[0], buf[1], buf[2], buf[3],
-		buf[4], buf[5], buf[6], buf[7],
-		buf[8], buf[9], buf[10], buf[11],
-		buf[12], buf[13], buf[14], buf[15]);
-	str = (CharPtr) MemFree(str);
+            j = 0;
+            while (!isspace(dbname[i]) && j < 256  && i < length) { 
+                tmpbuff[j] = dbname[i];
+                j++; i++;
+                if(dbname[i] == ',')  /* Comma is valid delimiter */
+                    break;
+            }
+            tmpbuff[j] = NULLB;
 
-	return;
+            if((chptr = strrchr(tmpbuff, '/')) != NULL) { 
+                StringCat(dbtmp, chptr+1);
+            } else {
+                StringCat(dbtmp, tmpbuff);
+            }
+
+            StringCat(dbtmp, " ");            
+        }
+    } else {
+        dbtmp = dbname;
+    }
+    
+    /*
+     * Need to protect start and stop positions
+     * to avoid web users sending us hand-made URLs
+     * to retrive full sequences
+     */
+    MD5Init(&context);
+    length = StringLen(passwd);
+    MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+    SeqIdWrite(sip, gnl, PRINTID_FASTA_SHORT, sizeof(gnl));
+    MD5Update(&context, (UcharPtr)gnl, (Uint4)StringLen(gnl));
+    MD5Update(&context, (UcharPtr)segs, (Uint4)StringLen(segs));
+    MD5Update(&context, (UcharPtr)passwd, (Uint4)length);
+    MD5Final(&context, (UcharPtr)buf);
+    
+    str = MakeURLSafe(dbtmp == NULL ? "nr" : dbtmp);
+    fprintf(fp, "<a href=\"%s?db=%s&na=%d&", tool_url, str, is_na);
+    str = (CharPtr) MemFree(str);
+    str = MakeURLSafe(gnl);
+    fprintf(fp,
+            "gnl=%s&segs=%s&seal=%02X%02X%02X%02X"
+            "%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X\">",
+            str, segs,
+            buf[0], buf[1], buf[2], buf[3],
+            buf[4], buf[5], buf[6], buf[7],
+            buf[8], buf[9], buf[10], buf[11],
+            buf[12], buf[13], buf[14], buf[15]);
+    str = (CharPtr) MemFree(str);
+    
+    if(nodb_path)
+        MemFree(dbtmp);
+    
+    return;
 }
 
 NLM_EXTERN Boolean LIBCALL
@@ -4803,7 +4866,7 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
     SeqIdPtr bestid, gi_list, subject_id, sip_list=NULL, last_id;
     TxDfLineStructPtr txsp = NULL, txsp_head, txsp_var;
     Boolean retval = FALSE;
-    Boolean firstnew = TRUE;
+    Boolean firstnew = TRUE, nodb_path = FALSE;
     Int4 countdescr = number_of_descriptions;
     Int4 numalign;
     Char passwd[128];
@@ -4974,7 +5037,13 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
         blast_type = StringSave(blast_type);
         StringUpper(blast_type);
     }
-        
+
+    /* If option TXALIGN_NO_ENTREZ set full database name will be stripped
+       to the database fileneme */
+    
+    if(options & TXALIGN_NO_ENTREZ)
+        nodb_path = TRUE;
+
     txsp = txsp_head;
     while (txsp) {
         found_next_one = FALSE;
@@ -5069,10 +5138,10 @@ PrintDefLinesFromSeqAlignEx2(SeqAlignPtr seqalign, Int4 line_length, FILE *outfp
                                 
                             }
                         } else {
-                            make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id);
+                            make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
                         }
                     } else
-                        make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id);
+                        make_dumpgnl_links(bestid, blast_type, txsp->segs_str, db_name, ISA_na(bsp->mol), outfp, txsp->buffer_id, nodb_path);
                     make_link = TRUE;
                 }
         }
@@ -5426,6 +5495,9 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
     CharPtr ptr;
     Int4 gi, seqid_len = 0;
 
+    /* Printing full label to the buffer */
+     SeqIdWrite(sip, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
+
     if (asop->html_hot_link == TRUE)  {
         /* if (ISA_na(bsp->seq_data_type)) */
         
@@ -5471,10 +5543,10 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
                         }
                     } else {
                         /** * links to incomplete genomes */
-                        make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer);
+                        make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
                     }
                 } else {
-                    make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer);
+                    make_dumpgnl_links(bestid, asop->blast_type, asop->segs, asop->db_name, is_na, asop->fp, buffer, asop->no_entrez);
                 }
                 make_link = TRUE;
             }
@@ -5484,11 +5556,7 @@ static CharPtr FSFPrintOneDefline(AlignStatOptionPtr asop, Boolean is_na,
     /* else {
        fprintf(asop->fp, ">");
        } */
-    
-
-    /* Printing label to the buffer */
-    SeqIdWrite(sip, buffer, PRINTID_FASTA_LONG, BUFFER_LENGTH);
-    
+        
     found_next_one = FALSE;
     if (asop->show_gi == FALSE) {
         if (StringNCmp(buffer, "gi|", 3) == 0) {
@@ -5626,7 +5694,7 @@ NLM_EXTERN int LIBCALLBACK FormatScoreFunc(AlignStatOptionPtr asop)
                 len = StringLen(defline);
 
                 /* Trimming tail white spaces if any */
-                for(i = len; IS_WHITESP(defline[i-1]) && i > 0; i++)
+                for(i = len; i > 0 && IS_WHITESP(defline[i-1]); i++)
                     defline[i-1] = NULLB;
 
                 FSFPrintOneDefline(asop, ISA_na(bsp->mol), sip, defline);

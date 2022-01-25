@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description: 
 *
@@ -2092,6 +2092,7 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 	ValNode vn;
 	SeqFeatPtr sfp;
 	SeqAnnotPtr annot;
+	SeqGraphPtr sgp;
 	ValNodePtr desc;
 	ObjectIdPtr oip;
 	SeqIdPtr sip;
@@ -2295,8 +2296,22 @@ static Boolean VSMGatherPictProc (GatherContextPtr gcp)
 			width = StringWidth(buf) + (2 * vsmp->charw);
 			AddAttribute(seg, COLOR_ATT , BLUE_COLOR, 0, 0,0,0);
 			AddTextLabel(seg, left + vsmp->charw, top, buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
-			add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID));
 			vsmgp->currline--;
+			maxwidth = width;
+			k = 1;
+			sgp = (SeqGraphPtr) gcp->thisitem;
+			if (vsmgp->level[OBJ_SEQGRAPH] > 1 && sgp != NULL && sgp->loc != NULL) {
+				k++;
+				SeqLocLabel(sgp->loc, buf, buflen, OM_LABEL_CONTENT);
+				SelectFont(vsmp->font);
+				width = StringWidth(buf) + (3 * vsmp->charw);
+				if (width > maxwidth)
+					maxwidth = width;
+				AddTextLabel(seg, left + (2*vsmp->charw), (top-lineheight), buf, vsmp->font,0, LOWER_RIGHT,(Uint2)(gcp->itemID));
+				vsmgp->currline--;
+			}
+			add_frame(seg, left, top-2, (left+width), (top-(k*lineheight)+2), (Uint2)(gcp->itemID));
+			/* add_frame(seg, left+vsmp->charw, top, (left+width), (top-lineheight), (Uint2)(gcp->itemID)); */
 			break;
 		case OBJ_SEQFEAT:
 			if (vsmgp->level[OBJ_SEQFEAT] < 2)

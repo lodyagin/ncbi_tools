@@ -1,4 +1,4 @@
-/* $Id: mmdbsrv.c,v 6.23 2000/01/31 19:59:12 lewisg Exp $
+/* $Id: mmdbsrv.c,v 6.25 2000/06/26 18:05:26 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,18 @@
 *
 * Version Creation Date: 6 January 1997
 *
-* $Revision: 6.23 $
+* $Revision: 6.25 $
 *
 * File Description:
 *        MMDB WWW-server 
 *
 * $Log: mmdbsrv.c,v $
+* Revision 6.25  2000/06/26 18:05:26  lewisg
+* fix another hardcoded url
+*
+* Revision 6.24  2000/06/23 22:35:58  lewisg
+* get rid of hardcoded urls
+*
 * Revision 6.23  2000/01/31 19:59:12  lewisg
 * fix output of date in pdb header
 *
@@ -367,7 +373,7 @@ static Char MAILto[256];
 static Char MAILTO[PATH_MAX];
 static Char ARROW[PATH_MAX];
 
-static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.23 2000/01/31 19:59:12 lewisg Exp $";
+static char* cvsId_ = "@(#)$Id: mmdbsrv.c,v 6.25 2000/06/26 18:05:26 lewisg Exp $";
 
 /*****************************************************
  * WWWPrintFileData looks in the current CGI-BIN directory 
@@ -686,7 +692,7 @@ PrintStructureInfo(PDNMS ModelStruc,  FILE *File, CharPtr tax_save)
   *****/
   fprintf(File, "<font size=+2>");
   fprintf(File, "MMDB Id: <A HREF=\"%s%s?uid=%ld&form=6&db=t&Dopt=s\">%ld</A>&nbsp ",
-	URLcgi, "mmdbsrv", (long) pmsdThis->iMMDBid, (long) pmsdThis->iMMDBid);
+	URLcgi, CGIName, (long) pmsdThis->iMMDBid, (long) pmsdThis->iMMDBid);
   fprintf(File, "PDB Id: <A HREF=\"%s=%s\">%s</a>\n", TDBurl,pmsdThis->pcPDBName, pmsdThis->pcPDBName);
   if (IsLayerOne(pmsdThis->pbsBS->descr))
     fprintf(File, " - Warning: <A HREF=\"http://www.pdb.bnl.gov/pdb-docs/what_is_LR.html\">Not validated!</A>\n");
@@ -753,7 +759,7 @@ PrintStructureView(PDNMS ModelStruc, FILE *File)
         if (ModelStruc == NULL) return;         
 
 	pmsd = (PMSD) ModelStruc->data.ptrvalue;
-	fprintf(File, "<FORM METHOD=POST ACTION=\"%s%s\">\n", URLcgi, "mmdbsrv");
+	fprintf(File, "<FORM METHOD=POST ACTION=\"%s%s\">\n", URLcgi, CGIName);
 	fprintf(File, "<INPUT TYPE=HIDDEN NAME=uid VALUE=%ld>\n", (long) pmsd->iMMDBid);
 	WWWPrintFileData(CODEFILE, File);
 }
@@ -1264,7 +1270,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
      */
     switch (Mime) {
     case LAUNCH_VIEWER:
-      printf ("Content-type: chemical/ncbi-asn1-binary\r\n\r\n");
+      printf ("Content-type: chemical/ncbi-asn1-binary\r\n");
+      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
       aip = AsnIoNew(ASNIO_BIN_OUT, stdout, NULL, NULL, NULL);
       DumpMime_v1(aip, "MIME", Entrez_style_report, Data_data_structure, bsp);
       break;
@@ -1284,7 +1291,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
   else if (Filetype == 'r') {
     /* RasMol format */
     if (Mime == LAUNCH_VIEWER)
-      printf ("Content-type: chemical/x-pdb\r\n\r\n");
+      printf ("Content-type: chemical/x-pdb\r\n");
+      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
     
     ModelStruc = MakeAModelstruc(bsp);
     bssp->structure = NULL;  /* already linked into modelstruc */
@@ -1294,7 +1302,8 @@ SendStructureMIME(Char Filetype, Int4 uid, Int4 Mime, Int4 Complexity,
   else if (Filetype == 'k') {
     /* Mage format */
     if (Mime == LAUNCH_VIEWER)
-      printf ("Content-type: chemical/x-kinemage\r\n\r\n");
+      printf ("Content-type: chemical/x-kinemage\r\n");
+      printf ("Content-disposition: filename=\"%d.val\"\r\n\r\n", uid);
     
     ModelStruc = MakeAModelstruc(bsp);
     bssp->structure = NULL;  /* already linked into modelstruc */

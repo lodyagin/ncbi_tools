@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.15 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,14 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.15  2000/06/28 14:50:43  vakatov
+* Nlm_GetHome() -- IRIX, NLM_POSIX1B, getpwnam_r():  dont rely on the
+* returned value only;  check for non-zero "pwd_ptr"
+*
+* Revision 6.14  2000/06/01 16:57:03  vakatov
+* [IRIX]  Nlm_GetHome() -- added an extra check for the "pwd_ptr"
+* (as per request by "Lack Mr G M" from SGI, gml4410@ggr.co.uk)
+*
 * Revision 6.13  2000/03/15 20:59:53  kans
 * Mac version of Nlm_OpenConfigFile was opening file for reading even under writeMode - fixed
 *
@@ -499,7 +507,7 @@ static Nlm_Boolean Nlm_GetHome(Nlm_Char* buf, Nlm_Int2 buflen)
           pwd_ptr = &pwd;
           ok = (getpwnam_r(login_name, pwd_ptr, pwd_buffer, sizeof(pwd_buffer)
 #if NLM_POSIX1B
-                           , &pwd_ptr) == 0);
+                           , &pwd_ptr) == 0  &&  pwd_ptr);
 #else
                            ) != NULL);
 #endif
@@ -528,8 +536,12 @@ static Nlm_Boolean Nlm_GetHome(Nlm_Char* buf, Nlm_Int2 buflen)
       /* Now we either *do* have it or we *never* will. */
       /* Remember failure by setting first two bytes to "\000\001" */
       saveHome[1] = (Nlm_Char)1;
-      if ( ok )
-        Nlm_StringNCpy_0(saveHome, pwd_ptr->pw_dir, sizeof(saveHome));
+
+      /*  Also check that pwd_ptr is not NULL, as SGI Irix sets ok = 1 even
+       *  when getpwuid_r fails
+       */
+       if (ok  &&  pwd_ptr)
+         Nlm_StringNCpy_0(saveHome, pwd_ptr->pw_dir, sizeof(saveHome));
 
 #if  defined(SOLARIS_THREADS_AVAIL)  ||  defined(POSIX_THREADS_AVAIL)
     VERIFY_HARD ( NlmMutexUnlock(saveHomeMutex) == 0 );

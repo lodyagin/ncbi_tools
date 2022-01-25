@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/12/97
 *
-* $Revision: 6.47 $
+* $Revision: 6.49 $
 *
 * File Description: 
 *
@@ -138,6 +138,14 @@ static ENUM_ALIST(orgmod_note_subtype_alist)
   {"Natural-host",     21},
   {"Sub-species",      22},
   {"Specimen-voucher", 23},
+  {"Authority",        24},
+  {"Forma",            25},
+  {"Forma-specialis",  26},
+  {"Ecotype",          27},
+  {"Synonym",          28},
+  {"Anamorph",         29},
+  {"Teleomorph",       30},
+  {"Breed",            31},
   {"Old Name",        254},
   {"Note",            255},
 END_ENUM_ALIST
@@ -167,6 +175,7 @@ static ENUM_ALIST(subsource_note_subtype_alist)
   {"Ins-seq-name",     21},
   {"Plastid-name",     22},
   {"Country",          23},
+  {"Segment",          24},
   {"Note",            255},
 END_ENUM_ALIST
 

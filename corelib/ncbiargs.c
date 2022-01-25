@@ -35,6 +35,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: ncbiargs.c,v $
+* Revision 6.5  2000/06/15 20:51:41  vakatov
+* Use "const" in Args code
+*
 * Revision 6.4  1999/03/11 21:12:23  vakatov
 * Get in-sync the "printf"/"scanf"'s format and args in some places
 *
@@ -64,10 +67,10 @@
 *
 *****************************************************************************/
 
-NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
+NLM_EXTERN Nlm_Boolean Nlm_GetArgs(const char* progname,
                                    Nlm_Int2 numargs, Nlm_ArgPtr ap)
 {
-  static Nlm_CharPtr types[] = {
+  static const char* types[] = {
     NULL,
     "T/F",
     "Integer",
@@ -79,12 +82,12 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
     "Data Out"
   };
 
-  Nlm_Boolean okay, all_default = TRUE, range;
-  Nlm_Int2 i, j;
-  Nlm_ArgPtr  curarg;
-  Nlm_Boolean *resolved;
+  Nlm_Boolean  okay, all_default = TRUE, range;
+  Nlm_Int2     i, j;
+  Nlm_ArgPtr   curarg;
+  Nlm_Boolean* resolved;
   Nlm_Int4     xx_argc = Nlm_GetArgc();
-  Nlm_CharPtr *xx_argv = Nlm_GetArgv();
+  char**       xx_argv = Nlm_GetArgv();
 
   if (!ap  ||  numargs <= 0)
     return FALSE;
@@ -199,7 +202,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
   /* Parse the arguments */
   for (i = 1; i < xx_argc; i++)
     {
-      Nlm_CharPtr arg = xx_argv[i];
+      const char* arg = xx_argv[i];
       if (*arg != '-')
         {
           ErrPostEx(SEV_ERROR, 0, 0, "Arguments must start with '-' (the offending argument #%d was: '%s')", (int)i, arg);
@@ -233,7 +236,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
             {
               if (*xx_argv[i + 1] == '-')
                 {
-                  Nlm_Char tmp = *(xx_argv[i+1]+1);
+                  char tmp = *(xx_argv[i+1]+1);
                   if ((curarg->type == ARG_INT  ||  curarg->type == ARG_FLOAT)
                       &&  (tmp == '.'  ||  IS_DIGIT(tmp)))
                     ok = TRUE;
@@ -378,7 +381,7 @@ NLM_EXTERN Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
 }
 
 
-NLM_EXTERN Nlm_Boolean Nlm_GetArgsSilent(Nlm_CharPtr progname,
+NLM_EXTERN Nlm_Boolean Nlm_GetArgsSilent(const char* progname,
                                          Nlm_Int2 numargs, Nlm_ArgPtr ap)
 {
   return Nlm_GetArgs(progname, numargs, ap);

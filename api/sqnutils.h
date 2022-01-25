@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.54 $
+* $Revision: 6.56 $
 *
 * File Description: 
 *
@@ -360,6 +360,7 @@ NLM_EXTERN void VisitDescriptorsOnSep (SeqEntryPtr sep, Pointer userdata, VisitD
 NLM_EXTERN void VisitDescriptorsInSep (SeqEntryPtr sep, Pointer userdata, VisitDescriptorsFunc callback);
 
 typedef void (*VisitFeaturesFunc) (SeqFeatPtr sfp, Pointer userdata);
+NLM_EXTERN void VisitFeaturesOnSap (SeqAnnotPtr sap, Pointer userdata, VisitFeaturesFunc callback);
 NLM_EXTERN void VisitFeaturesOnBsp (BioseqPtr bsp, Pointer userdata, VisitFeaturesFunc callback);
 NLM_EXTERN void VisitFeaturesOnSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
 NLM_EXTERN void VisitFeaturesInSet (BioseqSetPtr bssp, Pointer userdata, VisitFeaturesFunc callback);
@@ -367,6 +368,7 @@ NLM_EXTERN void VisitFeaturesOnSep (SeqEntryPtr sep, Pointer userdata, VisitFeat
 NLM_EXTERN void VisitFeaturesInSep (SeqEntryPtr sep, Pointer userdata, VisitFeaturesFunc callback);
 
 typedef void (*VisitAlignmentsFunc) (SeqAlignPtr sap, Pointer userdata);
+NLM_EXTERN void VisitAlignmentsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitAlignmentsFunc callback);
 NLM_EXTERN void VisitAlignmentsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAlignmentsFunc callback);
 NLM_EXTERN void VisitAlignmentsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
 NLM_EXTERN void VisitAlignmentsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAlignmentsFunc callback);
@@ -374,11 +376,19 @@ NLM_EXTERN void VisitAlignmentsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAl
 NLM_EXTERN void VisitAlignmentsInSep (SeqEntryPtr sep, Pointer userdata, VisitAlignmentsFunc callback);
 
 typedef void (*VisitGraphsFunc) (SeqGraphPtr sgp, Pointer userdata);
+NLM_EXTERN void VisitGraphsOnSap (SeqAnnotPtr sap, Pointer userdata, VisitGraphsFunc callback);
 NLM_EXTERN void VisitGraphsOnBsp (BioseqPtr bsp, Pointer userdata, VisitGraphsFunc callback);
 NLM_EXTERN void VisitGraphsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
 NLM_EXTERN void VisitGraphsInSet (BioseqSetPtr bssp, Pointer userdata, VisitGraphsFunc callback);
 NLM_EXTERN void VisitGraphsOnSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
 NLM_EXTERN void VisitGraphsInSep (SeqEntryPtr sep, Pointer userdata, VisitGraphsFunc callback);
+
+typedef void (*VisitAnnotsFunc) (SeqAnnotPtr sap, Pointer userdata);
+NLM_EXTERN void VisitAnnotsOnBsp (BioseqPtr bsp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN void VisitAnnotsOnSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN void VisitAnnotsInSet (BioseqSetPtr bssp, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN void VisitAnnotsOnSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
+NLM_EXTERN void VisitAnnotsInSep (SeqEntryPtr sep, Pointer userdata, VisitAnnotsFunc callback);
 
 typedef void (*VisitBioseqsFunc) (BioseqPtr bsp, Pointer userdata);
 NLM_EXTERN void VisitBioseqsInSep (SeqEntryPtr sep, Pointer userdata, VisitBioseqsFunc callback);
@@ -408,9 +418,10 @@ NLM_EXTERN void VisitPubdescsOnSep (SeqEntryPtr sep, Pointer userdata, VisitPubd
 NLM_EXTERN void VisitPubdescsInSep (SeqEntryPtr sep, Pointer userdata, VisitPubdescsFunc callback);
 
 /* function to scan binary ASN.1 file of entire release as Bioseq-set, simple explore from successive top seps */
+/* compressed can be TRUE only on UNIX, where it does a popen on zcat to decompress on-the-fly */
 
 typedef void (*ScanBioseqSetFunc) (SeqEntryPtr sep, Pointer userdata);
-NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Pointer userdata, ScanBioseqSetFunc callback);
+NLM_EXTERN void ScanBioseqSetRelease (CharPtr inputFile, Boolean binary, Boolean compressed, Pointer userdata, ScanBioseqSetFunc callback);
 
 
 #ifdef __cplusplus

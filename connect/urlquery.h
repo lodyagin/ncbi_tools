@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.4 $
+* $Revision: 6.7 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.h,v $
+* Revision 6.7  2000/06/30 12:46:11  kans
+* added QUERY_CloseQueue
+*
+* Revision 6.6  2000/06/29 18:27:10  kans
+* QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding encoding parameters
+*
+* Revision 6.5  2000/06/13 12:58:15  kans
+* added closeConn parameter to QUERY_AddToQueue
+*
 * Revision 6.4  1999/07/28 21:05:23  vakatov
 * Moved all #include's from inside the NLM_EXTERN & `extern "C"' block
 *
@@ -72,17 +81,23 @@ extern "C" {
     "cruncher.nlm.nih.gov", 80,
     "/cgi-bin/Sequin/testcgi.cgi",
     "request=seg&window=12&lowcut=2.3&hicut=2.6",
-    "Sequin", 30, eMIME_Fasta,
+    "Sequin", 30, eMIME_T_NcbiData, eMIME_Fasta, eENCOD_Url,
     URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT
   );
 
   The returned CONN value is then passed data before being sent to the cgi.
 */
 NLM_EXTERN CONN QUERY_OpenUrlQuery (
-  Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
-  Nlm_CharPtr host_path, Nlm_CharPtr arguments,
-  Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
-  EMIME_SubType subtype, URLC_Flags flags
+  Nlm_CharPtr host_machine,
+  Nlm_Uint2 host_port,
+  Nlm_CharPtr host_path,
+  Nlm_CharPtr arguments,
+  Nlm_CharPtr appName,
+  Nlm_Uint4 timeoutsec,
+  EMIME_Type type,
+  EMIME_SubType subtype,
+  EMIME_Encoding encoding,
+  URLC_Flags flags
 );
 
 /*
@@ -102,7 +117,8 @@ NLM_EXTERN void QUERY_SendQuery (
   protein sequence data is appropriate.
 */
 NLM_EXTERN void QUERY_CopyFileToQuery (
-  CONN conn, FILE *fp
+  CONN conn,
+  FILE *fp
 );
 
 /*
@@ -113,7 +129,8 @@ NLM_EXTERN void QUERY_CopyFileToQuery (
   with lower case x characters replacing amino acids in low-complexity regions.
 */
 NLM_EXTERN void QUERY_CopyResultsToFile (
-  CONN conn, FILE *fp
+  CONN conn,
+  FILE *fp
 );
 
 /* Structure for direct AsnIo-CONN link */
@@ -127,7 +144,8 @@ typedef struct asnioconn {    /* for AsnIo to and from a connection */
   to AsnRead and AsnWrite functions.
 */
 NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnOpen (
-  Nlm_CharPtr mode, CONN conn
+  Nlm_CharPtr mode,
+  CONN conn
 );
 
 /*
@@ -140,7 +158,9 @@ NLM_EXTERN AsnIoConnPtr QUERY_AsnIoConnClose (
 /* FUNCTIONS FOR MAINTAINING A QUEUE OF PENDING URL QUERIES */
 
 /* Callback type for queued queries */
-typedef Nlm_Boolean (LIBCALLBACK *QueryResultProc) (CONN conn, Nlm_VoidPtr userdata, EConnStatus status);
+typedef Nlm_Boolean (LIBCALLBACK *QueryResultProc) (
+  CONN conn, Nlm_VoidPtr userdata, EConnStatus status
+);
 
 /* Opaque handle type.  Variable must be kept by application and initialized
  * to NULL.
@@ -152,16 +172,27 @@ typedef struct SQueueTag* QUEUE;  /* queue handle */
   Records connection, completion routine, and user data in queue.
 */
 NLM_EXTERN void QUERY_AddToQueue (
-  QUEUE* queue, CONN conn, QueryResultProc resultproc, Nlm_VoidPtr userdata
+  QUEUE* queue,
+  CONN conn,
+  QueryResultProc resultproc,
+  Nlm_VoidPtr userdata,
+  Nlm_Boolean closeConn
 );
 
 /*
   Checks queued connections (with CONN_Wait), calls completion routine, then
-  removes query from queue and closes connection.
+  removes query from queue and closes connection (if closeConn was TRUE).
   Application is responsible for calling QUERY_CheckQueue() every once in a
   while, typically with a timer.
 */
 NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
+  QUEUE* queue
+);
+
+/*
+  Forces all connections to be closed, removes all queries from queue.
+*/
+NLM_EXTERN void QUERY_CloseQueue (
   QUEUE* queue
 );
 

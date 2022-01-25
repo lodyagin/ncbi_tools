@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -42,6 +42,9 @@
 * 3/4/91   Kans        Stricter typecasting for GNU C and C++
 *
 * $Log: asnprint.c,v $
+* Revision 6.10  2000/06/29 20:15:15  ostell
+* minor typos fixed
+*
 * Revision 6.9  2000/05/26 14:55:31  ostell
 * remove apostrophes and H from OCTETS for XML
 *
@@ -2020,7 +2023,7 @@ static void AsnPrintTreeType(Int2 indent, AsnTypePtr atp, CharPtr prefix, FILE *
 
 	if (prefix != NULL)
 		fprintf(fp,"%s", prefix);
-	fprintf(fp,"[%ul] ", (unsigned long)ptr);
+	fprintf(fp,"[%lu] ", (unsigned long)ptr);
 	fprintf(fp,"%d ", (int)isa);
 	if (atp->name == NULL)
 		fprintf(fp,"(null) ");

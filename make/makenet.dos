@@ -1,4 +1,4 @@
-# $Id: makenet.dos,v 6.57 2000/04/27 18:31:27 vakatov Exp $
+# $Id: makenet.dos,v 6.58 2000/06/16 16:18:56 lewisg Exp $
 ########################################################################
 ###  Makefile for network-based libraries and applications
 #####
@@ -407,7 +407,7 @@ $(CN3D_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = cn3d_v3d
 TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30) $(LIB23) $(LIB22) $(LIB20) \
 	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -420,7 +420,7 @@ $(CN3D_OGL_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = cn3d
 TEST_OBJ = cn3dmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB36) $(LIB23) $(LIB22) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB30_OGL) $(LIB23) $(LIB22) $(LIB20) \
 	$(ENTREZLIBS) $(LIB4_OGL) $(LIB2) $(LIB1)
 TEST_STDLIB = $(OGL_LIBS) $(PNG_LIBS)
 RES = 1
@@ -434,7 +434,7 @@ $(DDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = ddv
 TEST_OBJ = ddvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB36) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)
@@ -447,7 +447,7 @@ $(UDV_EXE):
 $(INCLUDE_GEN)
 TEST_NAME = udv
 TEST_OBJ = udvmain.obj
-TEST_LIB = $(LIB41) $(LIB31) $(LIB36) $(LIB20) \
+TEST_LIB = $(LIB41) $(LIB31) $(LIB20) \
 	$(LIB8) $(LIB7) $(NETCLILIB) $(LIB3) $(LIB4) $(LIB23) $(LIB2) $(LIB1)
 RES = 1
 $(INCLUDE_EXE)

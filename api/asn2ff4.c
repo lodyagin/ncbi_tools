@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *
@@ -42,17 +42,14 @@
 * ==========================================================================
 */
 
-/******************************************************************************
-*
-*	"location.c" prints out the location in the Genbank FlatFile
-*	format.  Most of this code was taken from Karl Sirotkin's
-*	code and modified by Tom Madden.
-*
-******************************************************************************/
+
 /*************************************
 *
 =======
 * $Log: asn2ff4.c,v $
+* Revision 6.36  2000/06/05 17:52:18  tatiana
+* increase size of feature arrays to Int4
+*
 * Revision 6.35  2000/04/13 14:17:32  ostell
 * fixed support for lim->tr. FlatLocHalfCaret alwasy assume lim->tl
 *
@@ -1256,7 +1253,7 @@ static void UniqueGeneName(Boolean error_msgs, OrganizeFeatPtr ofp)
 	CharPtr 		gene;
 	CharPtr 		s, ss;
 	SeqLocPtr 		slp;
-	Int2 			index, size;
+	Int4 			index, size;
 	
 	if (ofp == NULL)
 		return;
@@ -1355,9 +1352,9 @@ static FeatMatch (SeqFeatPtr f1, SeqFeatPtr f2)
 *	mark (with boolean 'dup') identical features in the List
 *
 ******************************************************************************/
-static void UniqueFeat(SortStructPtr List, Int2 size)
+static void UniqueFeat(SortStructPtr List, Int4 size)
 {
-	Int2 			i, j, jj, ii;
+	Int4 			i, j, jj, ii;
 	Int4 			start;
 	SortStructPtr 	p, pp;
 	
@@ -1731,7 +1728,7 @@ static Boolean get_feats (GatherContextPtr gcp)
 	SeqEntryPtr 	sep;
 	GatherScope 	gs;
 	SeqFeatPtr 		new_sfp, psfp;
-	Int2 			index;
+	Int4 			index;
 	Boolean 		temp = FALSE;
 	SeqMgrFeatContext fcontext;
 	
@@ -2094,7 +2091,7 @@ NLM_EXTERN void MatchNAGeneToFeat (Boolean non_strict, OrganizeFeatPtr ofp, Sort
 	GeneStructPtr 	gsp;
 	GeneRefPtr 		grp=NULL;
 	ImpFeatPtr 		ifp;
-	Int2 			best_gene = -1, index;
+	Int4 			best_gene = -1, index;
 	Int4 			diff_lowest, diff_current;
 	SeqFeatPtr		gene = NULL, best_gene_feat = NULL, sfp;
 	Uint1			sg, sf;
@@ -2257,7 +2254,7 @@ NLM_EXTERN Boolean GetGeneQuals(SeqFeatPtr sfp_in, GeneStructPtr gsp)
 NLM_EXTERN void MatchAAGeneToFeat (OrganizeFeatPtr ofp, SortStructPtr p)
 {
 	GeneRefPtr			grp = NULL;
-	Int2 				best_gene = -1, index;
+	Int4 				best_gene = -1, index;
 	SeqFeatPtr			gene = NULL, best_gene_feat = NULL, sfp;
 	NoteStructPtr 		nsp; /* UNUSED */
 	GeneStructPtr 		gsp;
@@ -2346,7 +2343,7 @@ NLM_EXTERN void SortOrganizeFeat(OrganizeFeatPtr ofp)
 {
 	SortStructPtr 	p;
 	GeneStructPtr 	gsp;
-	Int2 			index;
+	Int4 			index;
 	SeqFeatPtr 		sfp;
 	
 	if (ofp == NULL)

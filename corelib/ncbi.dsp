@@ -157,10 +157,6 @@ SOURCE=.\gifgen.c
 # End Source File
 # Begin Source File
 
-SOURCE=..\connect\lbapi\lbapi.c
-# End Source File
-# Begin Source File
-
 SOURCE=.\matrix.c
 # End Source File
 # Begin Source File
@@ -360,10 +356,6 @@ SOURCE=..\connect\connutil.h
 # Begin Source File
 
 SOURCE=.\gifgen.h
-# End Source File
-# Begin Source File
-
-SOURCE=..\connect\lbapi\lbapi.h
 # End Source File
 # Begin Source File
 

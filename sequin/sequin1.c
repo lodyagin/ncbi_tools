@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.266 $
+* $Revision: 6.268 $
 *
 * File Description: 
 *
@@ -122,7 +122,7 @@ static char *time_of_compilation = "now";
 #endif
 #endif
 
-#define SEQ_APP_VER "3.30"
+#define SEQ_APP_VER "3.32"
 
 #ifndef CODECENTER
 static char* sequin_version_binary = "Sequin Indexer Services Version " SEQ_APP_VER " " __DATE__ " " __TIME__;
@@ -1892,6 +1892,8 @@ static Boolean HandleOneNewAsnProc (BaseFormPtr bfp, Boolean removeold, Boolean 
             } else if (bssp->_class == 7) {
               processonenuc = FALSE;
             } else if (bssp->_class == 1 || bssp->_class == 2) {
+              processonenuc = FALSE;
+            } else if (bssp->_class == 0) {
               processonenuc = FALSE;
             }
           }

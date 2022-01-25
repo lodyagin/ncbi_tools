@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/8/00
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -105,11 +105,13 @@ static Boolean FindDbxref (
   return FALSE;
 }
 
-static void PrintReportLine (
+static void PrintSnpScanReportLine (
   FILE *fp,
   Int2 type,
   SeqFeatPtr sfp1,
-  SeqFeatPtr sfp2
+  SeqMgrFeatContextPtr sfp1context,
+  SeqFeatPtr sfp2,
+  SeqMgrFeatContextPtr sfp2context
 )
 
 {
@@ -119,15 +121,21 @@ static void PrintReportLine (
   if (! FindDbxref (sfp1, &type1, label1)) return;
   if (! FindDbxref (sfp2, &type2, label2)) return;
 
-  fprintf (fp, "%s\t%s\t%s\t%s\t%d\n", label1, xreftypes [type1], label2, xreftypes [type2], (int) type);
+  fprintf (fp, "%s\t%s\t%ld\t%ld\t%s\t%s\t%ld\t%ld\t%d\n",
+           label1, xreftypes [type1],
+           (long) sfp1context->left + 1, (long) sfp1context->right + 1,
+           label2, xreftypes [type2],
+           (long) sfp2context->left + 1, (long) sfp2context->right + 1,
+           (int) type);
 }
 
 typedef struct snpdata {
-  FILE        *fp;
-  SeqFeatPtr  sfp;
-  Uint2       ignoreID;
-  Int4        left;
-  Int4        right;
+  FILE                  *fp;
+  SeqFeatPtr            sfp;
+  SeqMgrFeatContextPtr  sfpcontext;
+  Uint2                 ignoreID;
+  Int4                  left;
+  Int4                  right;
 } SnpData, PNTR SnpDataPtr;
 
 static Boolean TestProximity (
@@ -171,24 +179,8 @@ static Boolean GenesOnSlp (
   if (context->itemID == sdp->ignoreID) return TRUE;
   if (! TestProximity (context, sdp->left, sdp->right)) return TRUE;
 
-  PrintReportLine (sdp->fp, 3, sdp->sfp, sfp);
+  PrintSnpScanReportLine (sdp->fp, /* 3 */ 1, sdp->sfp, sdp->sfpcontext, sfp, context);
   return TRUE;
-}
-
-static void CheckForSnpChangeToCDS (
-  SeqFeatPtr snp,
-  SeqFeatPtr cds,
-  FILE *fp
-)
-
-{
-  /*
-     See ProteinFromCdRegionEx in seqport.c.
-     pos = GetOffsetInLoc (snp->location, cds->location, SEQLOC_START) will
-     give the snp position within the cds.  Get the cds sequence itself with
-     SeqPortNewByLoc (cds->location, Seq_code_iupacna).  Use AAForCodon to
-     compare the appropriate codon before and after SNP substitution.
-  */
 }
 
 static void LookForGenes (
@@ -229,12 +221,8 @@ static void LookForGenes (
   cds = SeqMgrGetOverlappingFeature (&vn, FEATDEF_CDS, NULL, 0, NULL,
                                      SIMPLE_OVERLAP, &fcontext);
   if (cds != NULL) {
-    PrintReportLine (fp, 1, sfp, cds);
+    PrintSnpScanReportLine (fp, /* 1 */ 2, sfp, sfpcontext, cds, &fcontext);
     ignoreID = fcontext.itemID;
-
-    if (sfp->idx.subtype == FEATDEF_variation) {
-      CheckForSnpChangeToCDS (sfp, cds, fp);
-    }
 
   } else {
 
@@ -243,7 +231,7 @@ static void LookForGenes (
     exon = SeqMgrGetOverlappingFeature (&vn, 0, exonarray, numexons, NULL,
                                         SIMPLE_OVERLAP, &fcontext);
     if (exon != NULL) {
-      PrintReportLine (fp, 2, sfp, exon);
+      PrintSnpScanReportLine (fp, /* 2 */ 5, sfp, sfpcontext, exon, &fcontext);
       ignoreID = fcontext.itemID;
 
     } else {
@@ -253,7 +241,7 @@ static void LookForGenes (
       mrna = SeqMgrGetOverlappingFeature (&vn, FEATDEF_mRNA, NULL, 0, NULL,
                                           SIMPLE_OVERLAP, &fcontext);
       if (mrna != NULL) {
-        PrintReportLine (fp, 2, sfp, mrna);
+        PrintSnpScanReportLine (fp, /* 2 */ 5, sfp, sfpcontext, mrna, &fcontext);
         ignoreID = fcontext.itemID;
       }
     }
@@ -272,6 +260,7 @@ static void LookForGenes (
 
   sd.fp = fp;
   sd.sfp = sfp;
+  sd.sfpcontext = sfpcontext;
   sd.ignoreID = ignoreID;
   sd.left = sfpcontext->left;
   sd.right = sfpcontext->right;
@@ -289,33 +278,38 @@ static void LookForSTSs (
   FILE *fp,
   BioseqPtr bsp,
   SeqFeatPtr snp,
-  SeqMgrFeatContextPtr sfpcontext
+  SeqMgrFeatContextPtr snpcontext
 )
 
 {
-  SeqMgrFeatContext  fcontext;
+  SeqMgrFeatContext  fcontext, lftcontext, rgtcontext;
   SeqFeatPtr         sts, bestlft = NULL, bestrgt = NULL;
+
+  MemSet ((Pointer) &lftcontext, 0, sizeof (SeqMgrFeatContext));
+  MemSet ((Pointer) &rgtcontext, 0, sizeof (SeqMgrFeatContext));
 
   sts = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_STS, &fcontext);
   while (sts != NULL) {
 
     /* check for simple overlap */
 
-    if ((fcontext.left <= sfpcontext->left && fcontext.right > sfpcontext->left) ||
-        (fcontext.left < sfpcontext->right && fcontext.right >= sfpcontext->right)) {
-      PrintReportLine (fp, 1, snp, sts);
+    if ((fcontext.left <= snpcontext->left && fcontext.right > snpcontext->left) ||
+        (fcontext.left < snpcontext->right && fcontext.right >= snpcontext->right)) {
+      PrintSnpScanReportLine (fp, /* 1 */ 2, snp, snpcontext, sts, &fcontext);
       return;
     }
 
     /* check for closest on each side - 10000 bp 5' or 3' */
 
-    if (fcontext.right < sfpcontext->left && fcontext.right + 10000 >= sfpcontext->left) {
+    if (fcontext.right < snpcontext->left && fcontext.right + 10000 >= snpcontext->left) {
       bestlft = sts;
+      MemCopy ((Pointer) &lftcontext, (Pointer) &fcontext, sizeof (SeqMgrFeatContext));
     }
 
-    if (fcontext.left > sfpcontext->right && fcontext.left <= sfpcontext->left + 10000) {
+    if (fcontext.left > snpcontext->right && fcontext.left <= snpcontext->left + 10000) {
       if (bestrgt == NULL) {
         bestrgt = sts;
+      MemCopy ((Pointer) &rgtcontext, (Pointer) &fcontext, sizeof (SeqMgrFeatContext));
       }
     }
 
@@ -325,11 +319,11 @@ static void LookForSTSs (
   }
 
   if (bestlft != NULL) {
-    PrintReportLine (fp, 2, snp, bestlft);
+    PrintSnpScanReportLine (fp, /* 2 */ 5, snp, snpcontext, bestlft, &lftcontext);
   }
 
   if (bestrgt != NULL) {
-    PrintReportLine (fp, 2, snp, bestrgt);
+    PrintSnpScanReportLine (fp, /* 2 */ 5, snp, snpcontext, bestrgt, &rgtcontext);
   }
 }
 
@@ -368,28 +362,29 @@ static void LookForClones (
   clone = SeqMgrGetOverlappingFeature (&vn, 0, clonearray, numclones, NULL,
                                        SIMPLE_OVERLAP, &fcontext);
   if (clone != NULL) {
-    PrintReportLine (fp, 1, sfp, clone);
+    PrintSnpScanReportLine (fp, /* 1 */ 2, sfp, sfpcontext, clone, &fcontext);
   }
 }
 
 static Boolean GeneCDSmRNA (
   SeqFeatPtr sfp,
-  SeqMgrFeatContextPtr context
+  SeqMgrFeatContextPtr sfpcontext
 )
 
 {
-  FILE       *fp;
-  SeqFeatPtr  gene;
-  GeneRefPtr  grp;
+  FILE              *fp;
+  SeqFeatPtr         gene;
+  SeqMgrFeatContext  genecontext;
+  GeneRefPtr         grp;
 
-  fp = (FILE*) context->userdata;
+  fp = (FILE*) sfpcontext->userdata;
 
   grp = SeqMgrGetGeneXref (sfp);
   if (grp != NULL && SeqMgrGeneIsSuppressed (grp)) return TRUE;
 
-  gene = SeqMgrGetOverlappingGene (sfp->location, NULL);
+  gene = SeqMgrGetOverlappingGene (sfp->location, &genecontext);
   if (gene != NULL) {
-    PrintReportLine (fp, 1, gene, sfp);
+    PrintSnpScanReportLine (fp, /* 1 */ 2, gene, &genecontext, sfp, sfpcontext);
   }
 
   return TRUE;

@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh,v 1.45 2000/05/19 16:00:51 beloslyu Exp $
+# $Id: makedis.csh,v 1.48 2000/06/23 18:32:21 beloslyu Exp $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -75,6 +75,11 @@ case SunOS:
 			set platform=solarisintel
 		else
 			set platform=solaris
+			if ("$?CC" == 1) then
+				if ("$CC" == "gcc") then
+					set platform=solaris-gcc
+				endif
+			endif
 		endif
 		breaksw
 	endsw
@@ -87,7 +92,10 @@ case IRIX*:
 	case "5.*":
 		set platform=sgi5
 		breaksw
-	case "6.*":
+	case "6.5":
+		set platform=sgi-mips4
+		breaksw
+	case "6.[0-4]":
 		set platform=sgi
 		breaksw
 	default:
@@ -128,6 +136,7 @@ default:
 endsw
 
 echo platform is $platform
+uname -a
 
 set NCBI_DOT_MK = ncbi/platform/${platform}.ncbi.mk
 
@@ -193,7 +202,8 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\")
 	set NET_VIB=(BLIB31=libvibnet.a \
-		VIBLIBS=\"$NCBI_DISTVIBLIBS $OGL_LIBS $PNG_LIBS\" \
+		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
+		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB=\"Psequin Nentrez Cn3Dv3d udv ddv blastcl3 blast.REAL \
 		idfetch $OGL_TARGETS\") 

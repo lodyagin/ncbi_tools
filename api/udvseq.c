@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvseq.c,v $
+* Revision 6.22  2000/05/31 21:05:38  kans
+* suppress all source features
+*
 * Revision 6.21  2000/05/09 17:00:18  kans
 * suppresses full-length biosource features
 *
@@ -743,7 +746,6 @@ Boolean bFirst=TRUE,bTrouve=FALSE;
 Boolean IsTransNeeded=FALSE;
 SeqMgrFeatContextPtr context;
 SeqAnnotPtr sap;
-ValNode vn;
 
 	if (!context2->sfp) return (TRUE);
 
@@ -773,6 +775,7 @@ ValNode vn;
 	if (sap && sap->desc!=NULL) return(TRUE);
 	if (context2->seqfeattype==SEQFEAT_PUB) return(TRUE);
 	if (context2->seqfeattype == SEQFEAT_BIOSRC) {
+	  /*
 	  if (context2->bsp != NULL) {
         MemSet ((Pointer) &vn, 0, sizeof (ValNode));
         vn.choice = SEQLOC_WHOLE;
@@ -780,6 +783,8 @@ ValNode vn;
         vn.next = NULL;
         if (SeqLocCompare (sfp->location, &vn) == SLC_A_EQ_B) return TRUE;
 	  }
+	  */
+	  return TRUE; /* now decided to suppress all source features */
 	}
 	
 	context=UDV_ConvertFeatContext(context2,pgfl->cumOffset,pgfl->bsp_part_length);

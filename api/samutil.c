@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.46 2000/05/25 21:40:42 hurwitz Exp $
+/*   $Id: samutil.c,v 1.55 2000/07/05 19:23:12 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,19 +23,46 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.46 2000/05/25 21:40:42 hurwitz Exp $
+* File Name:  $Id: samutil.c,v 1.55 2000/07/05 19:23:12 lewisg Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.46 $
+* $Revision: 1.55 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: samutil.c,v $
+* Revision 1.55  2000/07/05 19:23:12  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.54  2000/07/05 18:42:16  hurwitz
+* added split block function to DDV
+*
+* Revision 1.53  2000/06/30 22:31:51  hurwitz
+* added merge block function for DDV
+*
+* Revision 1.52  2000/06/22 20:56:50  hurwitz
+* assorted bug fixes
+*
+* Revision 1.51  2000/06/21 21:20:56  hurwitz
+* a couple bug fixes
+*
+* Revision 1.50  2000/06/15 20:26:05  hurwitz
+* added left/right/center justify for DDE
+*
+* Revision 1.49  2000/06/08 20:04:39  hurwitz
+* made warning about converting to true multiple alignment into a Message window, and other small fixes
+*
+* Revision 1.48  2000/06/07 19:09:35  hurwitz
+* made DDE_ReMakeRuler work with linked list of ParaGs
+*
+* Revision 1.47  2000/05/31 23:07:26  hurwitz
+* made NoGaps a runtime parameter, fixed bug with vertical scroll of show/hide list, save edits query is not performed if nothing to save
+*
 * Revision 1.46  2000/05/25 21:40:42  hurwitz
 * rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
 *
@@ -1035,8 +1062,11 @@ NLM_EXTERN ParaGPtr DDE_ParaGNew(ParaGPtr pParaG) {
 
   /* make new copy of the ptxtList linked list */
   /* head points to new ValNode which points to a new copy of an MsaTxtDisp */
-  pParaGCopy->ptxtList =
-    ValNodeAddPointer(NULL, 0, UDV_MsaTxtDispNew(pParaG->ptxtList->data.ptrvalue));
+  pParaGCopy->ptxtList = NULL;
+  if (pParaG->ptxtList != NULL) {
+    pParaGCopy->ptxtList = 
+      ValNodeAddPointer(NULL, 0, UDV_MsaTxtDispNew(pParaG->ptxtList->data.ptrvalue));
+  }
   /* do while there's another node to add */
   pValNode = ValNodeFindNext(pParaG->ptxtList, pParaG->ptxtList, 0);
   while (pValNode != NULL) {
@@ -1063,16 +1093,20 @@ NLM_EXTERN ParaGPtr DDE_ParaGFree(ParaGPtr pParaG) {
 *---------------------------------------------------------------------------*/
   /* free the whole ptxtList linked list */
   /* each MsaTxtDisp is free'd here (no need to call UDV_MsaTxtDispFree()) */
-  ASSERT(pParaG->ptxtList != NULL);
-  ASSERT(ValNodeFreeData(pParaG->ptxtList) == NULL);
+  if (pParaG->ptxtList != NULL) {
+    ASSERT(ValNodeFreeData(pParaG->ptxtList) == NULL);
+  }
 
   /* free the szEditSeq char array */
-  ASSERT(pParaG->szEditSeq != NULL);
-  ASSERT(MemFree(pParaG->szEditSeq) == NULL);
+  if (pParaG->szEditSeq != NULL) {
+    ASSERT(MemFree(pParaG->szEditSeq) == NULL);
+  }
 
   /* free the ParaG */
-  ASSERT(pParaG != NULL);
-  ASSERT(MemFree(pParaG) == NULL);
+  if (pParaG != NULL) {
+    ASSERT(MemFree(pParaG) == NULL);
+  }
+
   return(NULL);
 }
 
@@ -1248,10 +1282,11 @@ NLM_EXTERN void DDE_Verify(DDE_InfoPtr pEditInfo) {
   }
 
   /* remake the RulerDescr for row 0.  this is the reference. */
-  pRuler1 = DDE_ReMakeRulerForRow(pEditInfo->pPopList, 0);
+  /* use arbitrary align start of 0.  it matters, but not here */
+  pRuler1 = DDE_ReMakeRulerForRow(pEditInfo->pPopList, 0, 0);
   for (i=1; i<NumRows; i++) {
     /* remake the RulerDescr for each row */
-    pRuler2 = DDE_ReMakeRulerForRow(pEditInfo->pPopList, i);
+    pRuler2 = DDE_ReMakeRulerForRow(pEditInfo->pPopList, i, 0);
     /* make sure the 2 RulerDescr's match */
     ASSERT(DDE_AreIdenticalRulers(pRuler1, pRuler2));
     ASSERT(ValNodeFreeData(pRuler2) == NULL);
@@ -1346,26 +1381,36 @@ NLM_EXTERN Boolean DDE_AreIdenticalRulers(ValNodePtr pRuler1, ValNodePtr pRuler2
 }
 
 
-ValNodePtr DDE_ReMakeRuler(MsaParaGPopListPtr pPopList) {
+NLM_EXTERN ValNodePtr DDE_ReMakeRuler(MsaParaGPopListPtr pPopList, Boolean Replace, Int4 AlignStart) {
 /*----------------------------------------------------------------------------
 *  remake the RulerDescr linked list of pPopListEdit with an arbitrary Row.
 *  save pointer to head of linked-list, and return it.
+*  if Replace is TRUE, PopList's RulerDescr is replaced with the new one.
+*  if Replace is TRUE, AlignStart comes from the AlignStart in the
+*  current RulerDescr.  Otherwise, AlignStart passed here is used.
 *---------------------------------------------------------------------------*/
   ValNodePtr  pRulerHead;
 
+  /* if there's a valid AlignStart in the current RulerDescr, use it */
+  if (Replace) {
+    AlignStart = DDE_GetFirstAlignIndex(pPopList);
+  }
+
   /* make a new linked list */
-  pRulerHead = DDE_ReMakeRulerForRow(pPopList, 0);
+  pRulerHead = DDE_ReMakeRulerForRow(pPopList, 0, AlignStart);
 
-  /* free the old RulerDescr linked list */
-  ASSERT(ValNodeFreeData(pPopList->RulerDescr) == NULL);
+  if (Replace) {
+    /* free the old RulerDescr linked list */
+    ValNodeFreeData(pPopList->RulerDescr);
+    /* save the new linked list */
+    pPopList->RulerDescr = pRulerHead;
+  }
 
-  /* save the new linked list */
-  pPopList->RulerDescr = pRulerHead;
   return(pRulerHead);
 }
 
 
-NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Row) {
+NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Row, Int4 AlignStart) {
 /*----------------------------------------------------------------------------
 *  remake the RulerDescr linked list of pPopListEdit.
 *  the linked list is made by scanning through a single Row.
@@ -1375,53 +1420,61 @@ NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Ro
   ValNodePtr     head, vnp, pRulerLast=NULL, pRulerHead=NULL;
   MsaTxtDispPtr  msap;
   Int4           DispStart=0, DispStop=-1;
-  Int4           AlignStart, AlignStop;
+  Int4           AlignStop;
   Boolean        InAlignedRegion=FALSE;
+  ValNodePtr     pg_vnp;
+  ParaGPtr       pgp;
 
-  /* get the first alignment index */
-  AlignStart = DDE_GetFirstAlignIndex(pPopList);
   AlignStop = AlignStart - 1;
 
-  /* get head of linked-list of MsaTxtDisp's for Row */
-  head = vnp = DDE_GetTxtListPtr2(pPopList, Row);
-  while (vnp != NULL) {
-    msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
-    if (!msap->IsUnAligned) {
-      /* if entering an aligned region */
-      if (!InAlignedRegion) {
-        if (vnp != head) {
-          /* add unaligned RulerDescr to end of linked list */
-          pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, -1, TRUE, FALSE);
+  /* get the head of the linked-list of ParaG's */
+  pg_vnp =  (ValNodePtr) (pPopList->TableHead[Row]);
+
+  while (pg_vnp != NULL) {
+    /* get head of linked-list of MsaTxtDisp's for Row */
+    pgp =        (ParaGPtr) (pg_vnp->data.ptrvalue);
+    head = vnp = (ValNodePtr) (pgp->ptxtList);
+    while (vnp != NULL) {
+      msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
+      if (!msap->IsUnAligned) {
+        /* if entering an aligned region */
+        if (!InAlignedRegion) {
+          if (vnp != head) {
+            /* add unaligned RulerDescr to end of linked list */
+            pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, -1, TRUE, FALSE);
+            if (pRulerHead == NULL) {
+              pRulerHead = pRulerLast;
+            }
+          }
+          InAlignedRegion = TRUE;
+          /* adjust start when entering aligned region */
+          AlignStart = AlignStop + 1;
+          DispStart = DispStop + 1;
+        }
+        /* adjust stop every time node is aligned */
+        AlignStop =  AlignStop + 1 + (msap->to - msap->from);
+        DispStop =  DispStop + 1 + (msap->to - msap->from);
+      }
+      else {
+        /* if entering an unaligned region */
+        if (InAlignedRegion) {
+          /* add aligned RulerDescr to end of linked list */
+          pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, AlignStart, FALSE, FALSE);
           if (pRulerHead == NULL) {
             pRulerHead = pRulerLast;
           }
+          /* adjust start when entering unaligned region */
+          DispStart = DispStop + 1;
         }
-        InAlignedRegion = TRUE;
-        /* adjust start when entering aligned region */
-        AlignStart = AlignStop + 1;
-        DispStart = DispStop + 1;
+        InAlignedRegion = FALSE;
+        /* adjust stop every time node is unaligned */
+        DispStop =  DispStop + 1 + (msap->to - msap->from);
       }
-      /* adjust stop every time node is aligned */
-      AlignStop =  AlignStop + 1 + (msap->to - msap->from);
-      DispStop =  DispStop + 1 + (msap->to - msap->from);
+      vnp = vnp->next;
     }
-    else {
-      /* if entering an unaligned region */
-      if (InAlignedRegion) {
-        /* add aligned RulerDescr to end of linked list */
-        pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, AlignStart, FALSE, FALSE);
-        if (pRulerHead == NULL) {
-          pRulerHead = pRulerLast;
-        }
-        /* adjust start when entering unaligned region */
-        DispStart = DispStop + 1;
-      }
-      InAlignedRegion = FALSE;
-      /* adjust stop every time node is unaligned */
-      DispStop =  DispStop + 1 + (msap->to - msap->from);
-    }
-    vnp = vnp->next;
+    pg_vnp = pg_vnp->next;
   }
+
   /* add last RulerDescr node to linked list */
   if (InAlignedRegion) {
     pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, AlignStart, FALSE, FALSE);
@@ -1429,6 +1482,7 @@ NLM_EXTERN ValNodePtr DDE_ReMakeRulerForRow(MsaParaGPopListPtr pPopList, Int4 Ro
   else {
     pRulerLast = DDE_AddRulerDescrNode(pRulerLast, DispStart, DispStop, -1, TRUE, FALSE);
   }
+
   /* if there's only 1 node, make it the head */
   if (pRulerHead == NULL) {
     pRulerHead = pRulerLast;
@@ -1480,21 +1534,19 @@ NLM_EXTERN DDE_InfoPtr DDE_New(MsaParaGPopListPtr pPopList, Int4 TotalNumRows) {
 }
 
 
-NLM_EXTERN DDE_InfoPtr DDE_Copy(DDE_InfoPtr pEditInfo) {
+NLM_EXTERN DDE_InfoPtr DDE_Copy(DDE_InfoPtr pEditInfo, Int4 TotalNumRows) {
 /*---------------------------------------------------------------------------------
 *  make a duplicate of pEditInfo.
 *--------------------------------------------------------------------------------*/
-  Int4         NumRows;
   DDE_InfoPtr  pDup;
 
   /* make a duplicate of pEditInfo */
-  pDup = DDE_New(pEditInfo->pPopList, pEditInfo->TotalNumRows);
+  pDup = DDE_New(pEditInfo->pPopList, TotalNumRows);
 
   /* make copies of the arrays */
-  NumRows = pEditInfo->TotalNumRows;
-  MemCopy(pDup->pVisible, pEditInfo->pVisible, NumRows*sizeof(Boolean));
-  MemCopy(pDup->pRowOrder, pEditInfo->pRowOrder, NumRows*sizeof(Int4));
-  MemCopy(pDup->pRowOrderLUT, pEditInfo->pRowOrderLUT, NumRows*sizeof(Int4));
+  MemCopy(pDup->pVisible, pEditInfo->pVisible, TotalNumRows*sizeof(Boolean));
+  MemCopy(pDup->pRowOrder, pEditInfo->pRowOrder, TotalNumRows*sizeof(Int4));
+  MemCopy(pDup->pRowOrderLUT, pEditInfo->pRowOrderLUT, TotalNumRows*sizeof(Int4));
   return(pDup);
 }
 
@@ -1538,7 +1590,6 @@ NLM_EXTERN DDE_StackPtr DDE_NewStack(MsaParaGPopListPtr pPopList) {
   pStack->StackIndex = 0;
   pStack->StackMin = 0;
   pStack->StackMax = 0;
-  pStack->SomethingToSave = FALSE;
 
   /* make copies of pEditInfo */
   pStack->pOrig = DDE_New(pPopList, pPopList->nBsp);
@@ -1557,6 +1608,7 @@ NLM_EXTERN DDE_StackPtr DDE_FreeStack(DDE_StackPtr pStack) {
 *---------------------------------------------------------------------------*/
   Int4  i, Index;
 
+  if(!pStack) return pStack;
   /* free each DDE_Info that's been allocated */
   Index = pStack->StackMin;
   for (i=0; i<pStack->NumInStack; i++) {
@@ -1587,7 +1639,7 @@ NLM_EXTERN void DDE_GetOriginal(DDE_StackPtr pStack, Boolean Save) {
   DDE_Free(pStack->pEdit);
 
   /* copy pStack->pOrig into pStack->pEdit */
-  pStack->pEdit = DDE_Copy(pStack->pOrig);
+  pStack->pEdit = DDE_Copy(pStack->pOrig, pStack->pOrig->TotalNumRows);
 
   /* add pStack->pEdit to the stack */
   if (Save) {
@@ -1610,7 +1662,7 @@ NLM_EXTERN Boolean DDE_Add(DDE_StackPtr pStack) {
   }
 
   /* put a copy of pStack->pEdit on the stack */
-  pStack->pArray[pStack->StackIndex] = DDE_Copy(pStack->pEdit);
+  pStack->pArray[pStack->StackIndex] = DDE_Copy(pStack->pEdit, pStack->pOrig->TotalNumRows);
 
   /* set StackMax to this slot */
   pStack->StackMax = pStack->StackIndex;
@@ -1689,7 +1741,7 @@ NLM_EXTERN Boolean DDE_Prev(DDE_StackPtr pStack) {
   DDE_Free(pStack->pEdit);
 
   /* put a copy of an item from the stack into pStack->pEdit */
-  pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex]);
+  pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex], pStack->pOrig->TotalNumRows);
 
   /* advance 1 to point to slot after the one that's retrieved */
   pStack->StackIndex = ++pStack->StackIndex % DDE_STACK_SIZE;
@@ -1717,7 +1769,7 @@ NLM_EXTERN Boolean DDE_Next(DDE_StackPtr pStack) {
   DDE_Free(pStack->pEdit);
 
   /* put a copy of an item from the stack into pStack->pEdit */
-  pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex]);
+  pStack->pEdit = DDE_Copy(pStack->pArray[pStack->StackIndex], pStack->pOrig->TotalNumRows);
 
   /* advance 1 to point to slot after the one that's retrieved */
   pStack->StackIndex = ++pStack->StackIndex % DDE_STACK_SIZE;
@@ -2140,9 +2192,9 @@ NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Bo
   Int4        i, Mag;
   ValNodePtr  ptxtList, prev_vnp=NULL;
   Boolean     GapsAdded=FALSE, Shifted=FALSE;
-#if defined (_NO_GAPS)
   Boolean     RightSide;
-#endif
+  Boolean*    pNoGaps;
+  Boolean     NoGaps;
 
   if (NumChars == 0) {
     return(FALSE);
@@ -2196,14 +2248,17 @@ NLM_EXTERN Boolean DDE_ShiftRow(DDE_StackPtr pStack, Int4 Row, Int4 NumChars, Bo
     DDE_Verify(pStack->pEdit);
   }
 
-#if defined(_NO_GAPS)
-  if (ShiftBack) {
-    RightSide = NumChars < 0 ? TRUE : FALSE;
-    DDE_RemoveAlignedGapsFromEndOfRow(pStack, Row, RightSide);
-    DDE_CleanEnds(pStack->pEdit);
-    DDE_Verify(pStack->pEdit);
+  pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+  if (pNoGaps == NULL) {NoGaps = TRUE;}
+  else                 {NoGaps = *pNoGaps;}
+  if (NoGaps) {
+    if (ShiftBack) {
+      RightSide = NumChars < 0 ? TRUE : FALSE;
+      DDE_RemoveAlignedGapsFromEndOfRow(pStack, Row, RightSide);
+      DDE_CleanEnds(pStack->pEdit);
+      DDE_Verify(pStack->pEdit);
+    }
   }
-#endif
   
   /* add pStack->pEdit to the stack */
   if (Save) {
@@ -2884,7 +2939,7 @@ NLM_EXTERN Boolean DDE_CleanEnds(DDE_InfoPtr pEditInfo) {
     RetVal = TRUE;
   }
   if (RetVal) {
-    DDE_ReMakeRuler(pEditInfo->pPopList);
+    DDE_ReMakeRuler(pEditInfo->pPopList, TRUE, -1);
   }
   return(RetVal);
 }
@@ -2938,7 +2993,7 @@ NLM_EXTERN Boolean DDE_RemoveGapFromStartOfAllRows(DDE_InfoPtr pEditInfo, Boolea
   }
 
   if (ReMakeRuler) {
-    DDE_ReMakeRuler(pEditInfo->pPopList);
+    DDE_ReMakeRuler(pEditInfo->pPopList, TRUE, -1);
   }
 
   return(TRUE);
@@ -2989,7 +3044,7 @@ NLM_EXTERN Boolean DDE_RemoveGapFromEndOfAllRows(DDE_InfoPtr pEditInfo, Boolean 
   }
 
   if (ReMakeRuler) {
-    DDE_ReMakeRuler(pEditInfo->pPopList);
+    DDE_ReMakeRuler(pEditInfo->pPopList, TRUE, -1);
   }
 
   return(TRUE);
@@ -3021,7 +3076,7 @@ NLM_EXTERN void DDE_AddGapToStartOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMake
   }
 
   if (ReMakeRuler) {
-    DDE_ReMakeRuler(pEditInfo->pPopList);
+    DDE_ReMakeRuler(pEditInfo->pPopList, TRUE, -1);
   }
 
   return;
@@ -3053,7 +3108,7 @@ NLM_EXTERN void DDE_AddGapToEndOfAllRows(DDE_InfoPtr pEditInfo, Boolean ReMakeRu
   }
 
   if (ReMakeRuler) {
-    DDE_ReMakeRuler(pEditInfo->pPopList);
+    DDE_ReMakeRuler(pEditInfo->pPopList, TRUE, -1);
   }
 
   return;
@@ -3861,7 +3916,7 @@ NLM_EXTERN Boolean DDE_ShiftRightList(ValNodePtr PNTR vnpp, ValNodePtr StopNode,
 *  return modified vnpp, if a new first node is added.
 *---------------------------------------------------------------------------*/
   MsaTxtDispPtr    msap;
-  ValNodePtr       vnp, save_vnp, prev_vnp=NULL;
+  ValNodePtr       vnp, save_vnp=NULL, prev_vnp=NULL;
   Boolean          DeleteGapFound=FALSE, RetVal=FALSE;
 
   vnp = *vnpp;
@@ -4008,7 +4063,10 @@ NLM_EXTERN Int4 DDE_GetAlignStart(DDE_InfoPtr pEditInfo, Int4 BlockIndex) {
   Int4           Count=0;
 
   head = vnp = DDE_GetTxtListPtr(pEditInfo, 0);
+  if (head == NULL) return(-1);
+
   msap = (MsaTxtDispPtr) vnp->data.ptrvalue;
+  if (msap == NULL) return(-1);
 
   /* for start of first block that's not preceeded by unaligned chars */
   if (BlockIndex==0 && !msap->IsUnAligned && vnp==head) {
@@ -4174,32 +4232,35 @@ NLM_EXTERN void DDE_ShiftBlock(DDE_StackPtr pStack, Int4 BlockIndex, Int4 NumCha
 }
 
 
-NLM_EXTERN Boolean DDE_DeleteBlock(DDE_StackPtr pStack, Int4 BlockIndex, Boolean Save) {
+NLM_EXTERN Int4 DDE_DeleteBlock(DDE_StackPtr pStack, Int4 BlockIndex, Boolean Save) {
 /*----------------------------------------------------------------------------
 *  delete the BlockIndex block
 *  Save indicates if this edit is stored on the stack.
-*  return value indicates if a block was deleted.
+*  return value indicates the number of positions the right boundary
+*  is shifted in order to delete the block. (0 means block not deleted)
 *---------------------------------------------------------------------------*/
-  Int4     OldNumBlocks, NewNumBlocks, DebugCount=0;
-  Boolean  RetVal=FALSE;
+  Int4  OldNumBlocks, NewNumBlocks;
+  Int4  RetVal=0;
 
   OldNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
 
   /* shift the right boundary left until an aligned region disappears */
   while (DDE_ShiftRightBoundaryLeft1(pStack->pEdit, BlockIndex)) {
-    DebugCount++;
+    RetVal++;
   }
 
   /* remake the DDVRuler */
-  DDE_ReMakeRuler(pStack->pEdit->pPopList);
+  DDE_ReMakeRuler(pStack->pEdit->pPopList, TRUE, -1);
 
   NewNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
 
   /* if the number of aligned blocks changed */
   if (NewNumBlocks != OldNumBlocks) {
-    RetVal = TRUE;
     /* merge abutting unaligned nodes */
     DDE_MergeNodesLists(pStack->pEdit);
+  }
+  else {
+    RetVal = 0;
   }
 
   DDE_CleanEnds(pStack->pEdit);
@@ -4226,6 +4287,8 @@ NLM_EXTERN Boolean DDE_ShiftLeftBoundary(DDE_StackPtr pStack, Int4 BlockIndex, I
   Int4     i, Mag;
   Int4     OldNumBlocks, NewNumBlocks;
   Boolean  RetVal=TRUE;
+  Boolean* pNoGaps;
+  Boolean  NoGaps;
 
   /* get number of aligned blocks */
   OldNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
@@ -4243,12 +4306,15 @@ NLM_EXTERN Boolean DDE_ShiftLeftBoundary(DDE_StackPtr pStack, Int4 BlockIndex, I
     }
   }
 
-#if defined(_NO_GAPS)
-  DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
-#endif
+  pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+  if (pNoGaps == NULL) {NoGaps = TRUE;}
+  else                 {NoGaps = *pNoGaps;}
+  if (NoGaps) {
+    DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
+  }
 
   /* every time an alignment boundary changes, remake the DDVRuler */
-  DDE_ReMakeRuler(pStack->pEdit->pPopList);
+  DDE_ReMakeRuler(pStack->pEdit->pPopList, TRUE, -1);
 
   /* get new number of aligned blocks */
   NewNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
@@ -4280,6 +4346,8 @@ NLM_EXTERN Boolean DDE_ShiftRightBoundary(DDE_StackPtr pStack, Int4 BlockIndex, 
   Int4     i, Mag;
   Int4     OldNumBlocks, NewNumBlocks;
   Boolean  RetVal=TRUE;
+  Boolean* pNoGaps;
+  Boolean  NoGaps;
 
   /* get number of aligned blocks */
   OldNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
@@ -4297,12 +4365,15 @@ NLM_EXTERN Boolean DDE_ShiftRightBoundary(DDE_StackPtr pStack, Int4 BlockIndex, 
     }
   }
 
-#if defined(_NO_GAPS)
-  DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
-#endif
+  pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+  if (pNoGaps == NULL) {NoGaps = TRUE;}
+  else                 {NoGaps = *pNoGaps;}
+  if (NoGaps) {
+    DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
+  }
 
   /* every time an alignment boundary changes, remake the DDVRuler */
-  DDE_ReMakeRuler(pStack->pEdit->pPopList);
+  DDE_ReMakeRuler(pStack->pEdit->pPopList, TRUE, -1);
 
   /* get new number of aligned blocks */
   NewNumBlocks = DDE_GetNumBlocks(pStack->pEdit);
@@ -4628,6 +4699,8 @@ NLM_EXTERN void DDE_CreateBlock(DDE_StackPtr pStack, Int4 Left, Int4 Right, Bool
   Int4           i, NumRows, LeftOffset, RightOffset;
   ValNodePtr     vnp, start_vnp, stop_vnp, head;
   MsaTxtDispPtr  msap;
+  Boolean*       pNoGaps;
+  Boolean        NoGaps;
   
   NumRows = pStack->pOrig->pPopList->nBsp;
 
@@ -4654,12 +4727,15 @@ NLM_EXTERN void DDE_CreateBlock(DDE_StackPtr pStack, Int4 Left, Int4 Right, Bool
   }
   DDE_MergeNodesLists(pStack->pEdit);
 
-#if defined(_NO_GAPS)
-  DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
-  DDE_MergeNodesLists(pStack->pEdit);
-#endif
+  pNoGaps = (Boolean*) GetAppProperty("dde_nogaps");
+  if (pNoGaps == NULL) {NoGaps = TRUE;}
+  else                 {NoGaps = *pNoGaps;}
+  if (NoGaps) {
+    DDE_RemoveAlignedGapsFromEnds(pStack->pEdit);
+    DDE_MergeNodesLists(pStack->pEdit);
+  }
 
-  DDE_ReMakeRuler(pStack->pEdit->pPopList);
+  DDE_ReMakeRuler(pStack->pEdit->pPopList, TRUE, -1);
   DDE_Verify(pStack->pEdit);
 
   /* add pStack->pEdit to the stack */
@@ -4676,17 +4752,19 @@ NLM_EXTERN Int4 DDE_GetIndexOfMaster(DDE_StackPtr pStack) {
 *  the master is the first (0 index) row.  this function returns
 *  the row where that row is now found.
 *---------------------------------------------------------------------------*/
-  return(DDE_GetRowOrder(pStack->pEdit, 0));
+  return(DDE_GetDisplayRow(pStack->pEdit, 0));
 }
 
 
 NLM_EXTERN Boolean DDE_IsColValid(MsaParaGPopListPtr pPopList, Int4 Col,
-                                  Int4 PNTR pBlockIndex, Boolean PNTR pUnAligned) {
+                                  Int4 PNTR pBlockIndex, Boolean PNTR pUnAligned,
+                                  Int4 PNTR pOffset, Int4 PNTR pWidth) {
 /*----------------------------------------------------------------------------
 *  return TRUE if Col is in the legal range.
 *  Col is a display coordinate.
 *  also return whether the Col is aligned or not.
 *  also return the BlockIndex.
+*  also return the Offset into the Block.
 *  For an aligned column, BlockIndex is the (zero-based) block in which
 *  the column resides.
 *  For an unaligned column, BlockIndex is the BlockIndex for the preceeding
@@ -4706,6 +4784,8 @@ NLM_EXTERN Boolean DDE_IsColValid(MsaParaGPopListPtr pPopList, Int4 Col,
     *pUnAligned = rdp->bUnAligned;
     if ((Col >= rdp->disp_start) && (Col <= rdp->disp_stop)) {
       /* if col is in range, return TRUE flag, BlockIndex and alignment */
+      *pOffset = Col - rdp->disp_start;
+      *pWidth = rdp->disp_stop - rdp->disp_start + 1;
       return(TRUE);
     }
     if (!rdp->bUnAligned) {
@@ -5043,4 +5123,125 @@ NLM_EXTERN void DDE_RemoveAlignedGapsFromEndOfRow(DDE_StackPtr pStack, Int4 Row,
   DDE_RemoveGapFromStartOfAllRows(pStack->pEdit, FALSE);
   DDE_RemoveGapFromEndOfAllRows(pStack->pEdit, FALSE);
   return;
+}
+
+
+NLM_EXTERN Boolean DDE_LeftJustify(DDE_StackPtr pStack, Boolean Save) {
+/*----------------------------------------------------------------------------
+*  Left align the rows.  This only works if there's no aligned block.
+*  Save indicates if this edit is stored on the stack.
+*---------------------------------------------------------------------------*/
+  Int4  i, NumRows, NumBlocks, NumGaps;
+
+  NumBlocks = DDE_GetNumBlocks(pStack->pEdit);
+  if (NumBlocks != 0) return(FALSE);
+  
+  /* shift each row left by the number of leading unaligned gaps */
+  NumRows = pStack->pEdit->TotalNumRows;
+  for (i=0; i<NumRows; i++) {
+    NumGaps = DDE_GetNumLeadingUnAlignedGaps(pStack->pEdit, i);
+    DDE_ShiftRow(pStack, i, -NumGaps, FALSE, TRUE);
+  }
+
+  /* add pStack->pEdit to the stack */
+  if (Save) {
+    DDE_Add(pStack);
+  }
+
+  return(TRUE);
+}
+
+
+NLM_EXTERN Boolean DDE_RightJustify(DDE_StackPtr pStack, Boolean Save) {
+/*----------------------------------------------------------------------------
+*  Right align the rows.  This only works if there's no aligned block.
+*  Save indicates if this edit is stored on the stack.
+*---------------------------------------------------------------------------*/
+  Int4  i, NumRows, NumBlocks, NumGaps;
+
+  NumBlocks = DDE_GetNumBlocks(pStack->pEdit);
+  if (NumBlocks != 0) return(FALSE);
+  
+  /* shift each row right by the number of trailing unaligned gaps */
+  NumRows = pStack->pEdit->TotalNumRows;
+  for (i=0; i<NumRows; i++) {
+    NumGaps = DDE_GetNumTrailingUnAlignedGaps(pStack->pEdit, i);
+    DDE_ShiftRow(pStack, i, NumGaps, FALSE, TRUE);
+  }
+
+  /* add pStack->pEdit to the stack */
+  if (Save) {
+    DDE_Add(pStack);
+  }
+
+  return(TRUE);
+}
+
+
+NLM_EXTERN Boolean DDE_CenterJustify(DDE_StackPtr pStack, Boolean Save) {
+/*----------------------------------------------------------------------------
+*  Center the rows.  This only works if there's no aligned block.
+*  Save indicates if this edit is stored on the stack.
+*---------------------------------------------------------------------------*/
+  Int4  i, NumRows, NumBlocks, NumLeadingGaps, NumTrailingGaps, Shift;
+
+  NumBlocks = DDE_GetNumBlocks(pStack->pEdit);
+  if (NumBlocks != 0) return(FALSE);
+  
+  NumRows = pStack->pEdit->TotalNumRows;
+  for (i=0; i<NumRows; i++) {
+    NumLeadingGaps = DDE_GetNumLeadingUnAlignedGaps(pStack->pEdit, i);
+    NumTrailingGaps = DDE_GetNumTrailingUnAlignedGaps(pStack->pEdit, i);
+    Shift = (NumTrailingGaps - NumLeadingGaps) / 2;
+    DDE_ShiftRow(pStack, i, Shift, FALSE, TRUE);
+  }
+
+  /* add pStack->pEdit to the stack */
+  if (Save) {
+    DDE_Add(pStack);
+  }
+
+  return(TRUE);
+}
+
+
+NLM_EXTERN Int4 DDE_GetNumLeadingUnAlignedGaps(DDE_InfoPtr pEditInfo, Int4 Row) {
+/*----------------------------------------------------------------------------
+*  Count the number of unaligned gaps at the start of the row.
+*---------------------------------------------------------------------------*/
+  Int4     Col=0;
+  Boolean  UnAligned, Gap;
+
+  while(DDE_GetColStatusForRow(pEditInfo, Row, Col, &UnAligned, &Gap)) {
+    if (UnAligned && Gap) {
+      Col++;
+    }
+    else {
+      return(Col);
+    }
+  }
+  return(Col);
+}
+
+
+NLM_EXTERN Int4 DDE_GetNumTrailingUnAlignedGaps(DDE_InfoPtr pEditInfo, Int4 Row) {
+/*----------------------------------------------------------------------------
+*  Count the number of unaligned gaps at the end of the row.
+*---------------------------------------------------------------------------*/
+  Int4     Col, NumCols, NumGaps=0;
+  Boolean  UnAligned, Gap;
+
+  NumCols = pEditInfo->pPopList->LengthAli;
+  Col = NumCols-1;
+  
+  while(DDE_GetColStatusForRow(pEditInfo, Row, Col, &UnAligned, &Gap)) {
+    if (UnAligned && Gap) {
+      Col--;
+      NumGaps++;
+    }
+    else {
+      return(NumGaps);
+    }
+  }
+  return(NumGaps);
 }

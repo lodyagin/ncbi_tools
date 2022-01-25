@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.h,v 1.33 2000/05/19 13:48:31 hurwitz Exp $
+/*  $Id: ddvmain.h,v 1.38 2000/07/05 19:23:13 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,28 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.33 $
+* $Revision: 1.38 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.h,v $
+* Revision 1.38  2000/07/05 19:23:13  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.37  2000/07/05 18:42:16  hurwitz
+* added split block function to DDV
+*
+* Revision 1.36  2000/06/30 22:31:51  hurwitz
+* added merge block function for DDV
+*
+* Revision 1.35  2000/06/27 20:46:38  hurwitz
+* fixed bugs with select rectangle, added select row option
+*
+* Revision 1.34  2000/06/15 17:33:18  hurwitz
+* used view seqAlignPtr to get original (bug fix), and started working on left/right/center justify for DDE
+*
 * Revision 1.33  2000/05/19 13:48:31  hurwitz
 * made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
 *
@@ -195,11 +210,15 @@ extern "C" {
 /*caret style */
 #define DDV_CARET_BAR 1
 /*mouse mode*/
-#define DDV_MOUSEMODE_QUERY         0
-#define DDV_MOUSEMODE_SELECT        1
-#define DDV_MOUSEMODE_EDIT          2
-#define DDV_MOUSEMODE_CREATEBLOCK   3
-#define DDV_MOUSEMODE_LAUNCHEDITOR  4
+#define DDV_MOUSEMODE_QUERY           0
+#define DDV_MOUSEMODE_SELECT          1
+#define DDV_MOUSEMODE_EDIT            2
+#define DDV_MOUSEMODE_CREATEBLOCK     3
+#define DDV_MOUSEMODE_LAUNCHEDITOR    4
+#define DDV_MOUSEMODE_SELECT_ONE_ROW  5
+#define DDV_MOUSEMODE_MERGEBLOCKS1    6
+#define DDV_MOUSEMODE_MERGEBLOCKS2    7
+#define DDV_MOUSEMODE_SPLITBLOCK      8
 
 /*timer control*/
 #define DDV_SET_TIMER 1
@@ -271,8 +290,12 @@ typedef struct ddvmenu {
 	MenU Options;
 	IteM DispStyles;/*display styles*/
 	ChoicE MouseMode;/*mouse mode (query, selection, edit)*/
+    ChoicE Justify;/*justify (left, right, center)*/
+    IteM ShowLowerPanel;
 	IteM ConfigNet;/*Entrez Network Conf. dlg*/
   IteM LaunchEditor;
+  IteM MergeBlocks;
+  IteM SplitBlock;
 	} DdvMenu, PNTR DdvMenuPtr;
 
 typedef struct ddvmsadata {
@@ -289,6 +312,7 @@ typedef struct ddvmainwin {
 	TexT    gotoValRow;
 	TexT    gotoValCol;
 	GrouP   StatusGroup;
+	GrouP   StatusGroupLower;
 	Boolean	Show_logo;
 	FonT	f1;	/*tree fonts used to display the software logo*/
 	FonT	f2;
@@ -296,8 +320,12 @@ typedef struct ddvmainwin {
 		/*viewer data used only when AutonomeViewer is TRUE */
 	Boolean	AutonomeViewer;/*viewer is standalone ?*/
 	WindoW	hWndMain;/*handle to the main window*/
-	PaneL   hWndDDV;/*handle of the DDV panel*/
+	PaneL   hWndDDV;/*handle of the current DDV panel*/
+    PaneL   hUpperPanel;/*handle of the upper DDV panel (the multiple)*/
+    PaneL   hLowerPanel;/*handle of the DDV panel (the pairwise) */
 	PrompT   InfoPanel;
+	PrompT   UpperInfoPanel;
+	PrompT   LowerInfoPanel;
 		/*use to open a file*/
 	UdvFetchSeqEntryProc  fetchSepProc;/*function to get a gi over the Network*/
 	Nlm_ItmActnProc   NetCfgMenuProc;
@@ -334,6 +362,8 @@ typedef struct ddvmain {
     Int4               MasterViewer;/*the viewer launching ddv*/
     Boolean	           bEditor;/*true if use DDV with editor functions*/
     DDE_StackPtr       dsp;/*data for editor*/
+    Int4               BlockIndex;/*the first block of merge 2 blocks*/
+    Int4               SaveCol;/*col where split line is drawn*/
 	} DdvMain, PNTR DdvMainPtr;
 
 

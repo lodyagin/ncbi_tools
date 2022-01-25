@@ -35,6 +35,15 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff3.c,v $
+* Revision 6.64  2000/06/20 17:31:34  kans
+* added authority through breed as orgmod.subtypes
+*
+* Revision 6.63  2000/06/15 16:45:40  kans
+* added segment to biosource note print
+*
+* Revision 6.62  2000/06/05 17:52:11  tatiana
+* increase size of feature arrays to Int4
+*
 * Revision 6.61  2000/05/15 15:52:50  bazhin
 * Removed memory leak in "PrintSourceFeat()".
 *
@@ -492,12 +501,13 @@ typedef struct {
 	Uint1   num;
 } ORGMOD;
 
-#define num_subtype 23
+#define num_subtype 24
 CharPtr subtype[num_subtype] = {
 "chromosome", "map", "clone", "sub_clone", "haplotype", "genotype", "sex",
 "cell_line", "cell_type", "tissue_type", "clone_lib", "dev_stage", 
 "frequency", "germline", "rearranged", "lab_host", "pop_variant",
-"tissue_lib", "plasmid", "transposon", "insertion_seq", "plastid", "country"};
+"tissue_lib", "plasmid", "transposon", "insertion_seq", "plastid", "country",
+"segment"};
 
 #define num_genome 15
 static CharPtr genome[num_genome] = {"unknown", "genomic", "chloroplast", "chromoplast", "kinetoplast", "mitochondrion", "plastid", "macronuclear",
@@ -519,14 +529,16 @@ static CharPtr biomol[num_biomol] = {"genomic", "RNA", "mRNA", "rRNA",
 /*______________________________________________________________________
 */
 
-ORGMOD orgmod_subtype[25] = {
+ORGMOD orgmod_subtype[33] = {
 	{ "strain", 2 }, {"sub_strain", 3}, {"type", 4}, {"subtype", 5},
 	{"variety", 6},	{"serotype",7}, {"serogroup",8}, {"serovar", 9}, 
 	{"cultivar", 10}, {"pathovar", 11}, {"chemovar", 12}, {"biovar", 13},
 	{"biotype", 14}, {"group", 15}, {"subgroup", 16}, {"isolate", 17},
 	{"common", 18}, {"acronym", 19}, {"dosage", 20}, {"nat_host", 21},
-	{"sub_species", 22},  {"specimen_voucher", 23}, {"old_name", 254},
-	{"note", 255}, { NULL, 0 }
+	{"sub_species", 22}, {"specimen_voucher", 23}, {"authority", 24},
+	{"forma", 25}, {"forma_specialis", 26}, {"ecotype", 27},
+	{"synonym", 28}, {"anamorph", 29}, {"teleomorph", 30}, {"breed", 31},
+	{"old_name", 254}, {"note", 255}, { NULL, 0 }
 };
 
 CharPtr dbtag[DBNUM] = {"PIDe", "PIDd", "PIDg", "PID", "FLYBASE", "GDB", "MIM", "SGD", "SWISS-PROT", "CK", "SPTREMBL", "ATCC", "ATCC (inhost)", "ATCC (dna)", "taxon", "BDGP_EST", "dbEST", "dbSTS", "MGD", "PIR", "GI", "RiceGenes", "UniGene", "LocusID", "dbSNP", "RATMAP"};
@@ -1473,13 +1485,13 @@ NLM_EXTERN void PrintNAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	CharPtr ptr=NULL;
 	ImpFeatPtr ifp;
 	SeqFeatPtr sfp_in, sfp_out=NULL;
-	Int2 status, total_feats, feat_index;
+	Int4 status, total_feats, feat_index;
 	SortStructPtr p;
 
 	if (gbp == NULL || gbp->feat == NULL) {
 		return;
 	}
-	feat_index = (Int2) ajp->pap_index;
+	feat_index = ajp->pap_index;
 	total_feats=gbp->feat->sfpListsize;
 	if (total_feats == 0) {
 		return;
@@ -1593,8 +1605,8 @@ NLM_EXTERN void PrintAAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	CharPtr ptr=NULL;
 	Char genetic_code[3];
 	ImpFeatPtr ifp;
-	Int2 status, total_feats;
-	Int2 feat_index;
+	Int2 status;
+	Int4 feat_index, total_feats;
 	NoteStructPtr nsp;
 	SeqFeatPtr sfp_in, sfp_out=NULL;
 	SortStructPtr p;
@@ -1602,7 +1614,7 @@ NLM_EXTERN void PrintAAFeatByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 	if (gbp == NULL || gbp->feat == NULL) {
 		return;
 	}
-	feat_index = (Int2) ajp->pap_index;
+	feat_index = ajp->pap_index;
 	total_feats=gbp->feat->sfpListsize;
 	if (total_feats == 0) {
 		return;
@@ -4059,6 +4071,9 @@ NLM_EXTERN GBQualPtr AddBioSourceToGBQual (Asn2ffJobPtr ajp, NoteStructPtr nsp, 
 				val = "";
 			}
 		if ((GBQualNameValid(qual)) == -1) {
+			if (qual == NULL) {
+				qual = "?";
+			}
 			s = MemNew(StringLen(val) + StringLen(qual) + 3);
 			sprintf(s, "%s: %s", qual, val);
 			CpNoteToCharPtrStack(nsp, NULL, s);

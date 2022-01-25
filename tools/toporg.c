@@ -479,6 +479,7 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				}
 				if (ch == '\0' || StringCmp (npstitle, ", and translated products") == 0) {
 					vnp = ValNodeExtractList (&(bssp->descr), Seq_descr_title);
+					ValNodeFreeData (vnp);
 				}
 			}
 		}
@@ -556,6 +557,7 @@ void MoveNPPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				v_copy->choice = Seq_descr_pub;
 				v_copy->data.ptrvalue = pdp_copy;
 				descr = ValNodeLink(&(descr), v_copy);
+				PubdescFree (pdp);
 				vnp = remove_node(vnp, v);
 			}
 		}
@@ -1280,6 +1282,9 @@ static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
 	if ((usop = sfp->ext) == NULL) {
 		return NULL;
 	}
+	if (StringICmp (usop->_class, "NCBI") != 0) {
+		return NULL;
+	}
 	ufp = usop->data;
 	if (ufp && ufp->choice == 8) {  /* ints */
 		ints = (Int4Ptr) ufp->data.ptrvalue;
@@ -1293,7 +1298,8 @@ static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
 	slp = ValNodeNew(NULL);
 	slp->choice = SEQLOC_INT;
 	slp->data.ptrvalue = sip;
-	MemFree(usop);
+	sfp->ext = usop->next /* NULL */;
+	UserObjectFree (usop);
 	return slp;
 
 }
@@ -1367,7 +1373,6 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
    					trna = rrp->ext.value.ptrvalue;
    					if (sfp->ext != NULL && trna->anticodon == NULL) {
    						trna->anticodon = GetAnticodonFromObject(sfp);
-   						sfp->ext = NULL;
    						for (q = sfp->qual; q; q = qnext) {
    							qnext = q->next;
    							if (StringCmp(q->qual, "anticodon") == 0) {
@@ -1991,7 +1996,7 @@ void MoveSetPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 				(AsnReadFunc) PubdescAsnRead, (AsnWriteFunc) PubdescAsnWrite);
 			SeqEntryExplore(sep, &tmp_pdp, CmpPub);
 			if (tmp_pdp != NULL) {
-				tmp = ValNodeNew(NULL);
+				tmp = SeqDescrNew(NULL);
 				tmp->choice = Seq_descr_pub;
 				tmp->data.ptrvalue = tmp_pdp;
 				set_list = tie_next(set_list, tmp);
@@ -2563,16 +2568,46 @@ static void CollectPseudoCdsProducts (SeqEntryPtr sep, Pointer mydata, Int4 inde
   }
 }
 
+static void CheckForEmblDdbjID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr  bsp;
+  BoolPtr    isEmblOrDdbj;
+  SeqIdPtr   sip;
+
+  if (sep == NULL) return;
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    isEmblOrDdbj = (BoolPtr) mydata;
+    if (isEmblOrDdbj == NULL) return;
+    for (sip = bsp->id; sip != NULL; sip = sip->next) {
+      switch (sip->choice) {
+        case SEQID_EMBL :
+        case SEQID_DDBJ :
+          *isEmblOrDdbj = TRUE;
+          break;
+          break;
+        default :
+          break;
+      }
+    }
+  }
+}
+
 extern void CleanUpPseudoProducts (Uint2 entityID, SeqEntryPtr sep)
 
 {
   BioseqPtr      bsp;
+  Boolean        isEmblOrDdbj = FALSE;
   Uint2          itemID;
   ValNodePtr     list;
   OMProcControl  ompc;
   ValNodePtr     vnp;
 
   if (entityID == 0 || sep == NULL) return;
+  SeqEntryExplore (sep, (Pointer) &isEmblOrDdbj, CheckForEmblDdbjID);
+  if (isEmblOrDdbj) return;
   list = NULL;
   SeqEntryExplore (sep, &list, CollectPseudoCdsProducts);
   for (vnp = list; vnp != NULL; vnp = vnp->next) {

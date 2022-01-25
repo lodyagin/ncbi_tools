@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/20/99
 *
-* $Revision: 6.15 $
+* $Revision: 6.20 $
 *
 * File Description: 
 *
@@ -92,8 +92,11 @@ END_ENUM_ALIST
 static ENUM_ALIST(source_modifiers_fld_alist)
   {" ",                  0},
   {"Acronym",           19},
+  {"Anamorph",          29},
+  {"Authority",         24},
   {"Biotype",           14},
   {"Biovar",            13},
+  {"Breed",             31},
   {"Cell-line",        108},
   {"Cell-type",        109},
   {"Chemovar",          12},
@@ -107,6 +110,9 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Dev-stage",        112},
   {"Division",         204},
   {"Dosage",            20},
+  {"Ecotype",           27},
+  {"Forma",             25},
+  {"Forma-specialis",   26},
   {"Frequency",        113},
   {"Genotype",         106},
   {"Germline",         114},
@@ -126,6 +132,7 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"Pop-variant",      117},
   {"Rearranged",       115},
   {"Scientific Name",  201},
+  {"Segment",          124},
   {"Serogroup",          8},
   {"Serotype",           7},
   {"Serovar",            9},
@@ -138,6 +145,8 @@ static ENUM_ALIST(source_modifiers_fld_alist)
   {"SubSource Note",   155},
   {"Substrain",          3},
   {"Subtype",            5},
+  {"Synonym",           28},
+  {"Teleomorph",        30},
   {"Tissue-lib",       118},
   {"Tissue-type",      110},
   {"Transposon-name",  120},
@@ -170,10 +179,11 @@ static ENUM_ALIST(feature_qualifiers_fld_alist)
   {"usedin",         21},
 END_ENUM_ALIST
 
+/*
 static Uint1 SourceModListToOrgModType (UIEnum val) 
 
 {
-  if (val > 0 && val < 24) return (Uint1) val;
+  if (val > 0 && val < 32) return (Uint1) val;
   if (val == 55) return 255;
   if (val == 54) return 254;
   return 0;
@@ -182,7 +192,7 @@ static Uint1 SourceModListToOrgModType (UIEnum val)
 static Uint1 SourceModListToSubSourceType (UIEnum val) 
 
 {
-  if (val > 100 && val < 124) return (Uint1) val - 100;
+  if (val > 100 && val < 125) return (Uint1) val - 100;
   if (val == 155) return 255;
   return 0;
 }
@@ -193,6 +203,7 @@ static Uint1 SourceModListToBioSourceField (UIEnum val)
   if (val > 200 && val < 205) return (Uint1) val - 200;
   return 0;
 }
+*/
 
 #define NUM_SUBTARGET_POPUPS 10
 
@@ -680,8 +691,8 @@ static int LIBCALLBACK SortCDSAfterExons (VoidPtr ptr1, VoidPtr ptr2)
 extern EnumFieldAssoc  orgmod_subtype_alist [];
 extern EnumFieldAssoc  subsource_subtype_alist [];
 
-static Int2  orgmod_rank [24];
-static Int2  subsource_rank [24];
+static Int2  orgmod_rank [32];
+static Int2  subsource_rank [25];
 
 static Boolean StrainAlreadyInParentheses (CharPtr taxname, CharPtr strain)
 
@@ -718,7 +729,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
       if (onp != NULL) {
         mod = onp->mod;
         while (mod != NULL) {
-          if (mod->subtype < 24 && orgmod_rank [mod->subtype] > 0) {
+          if (mod->subtype < 32 && orgmod_rank [mod->subtype] > 0) {
             if (mod->subtype == 2 && StrainAlreadyInParentheses (orp->taxname, mod->subname)) {
               /* do not add strain if already parenthetical in organism name */
             } else {
@@ -743,7 +754,7 @@ static void AddOrgModsToDef (ValNodePtr PNTR stringsPtr, BioSourcePtr biop, Bool
 
     ssp = biop->subtype;
     while (ssp != NULL) {
-      if (ssp->subtype < 24 && subsource_rank [ssp->subtype] > 0) {
+      if (ssp->subtype < 25 && subsource_rank [ssp->subtype] > 0) {
         text [0] = '\0';
         str [0] = '\0';
         StringNCpy_0 (text, ssp->name, sizeof (text));
@@ -878,6 +889,8 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
                 }
                 if (mip->biomol == MOLECULE_TYPE_MRNA) {
                   StringCat (str, " mRNA");
+                } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+                  StringCat (str, " precursor RNA");
                 } else {
                   StringCat (str, " gene");
                 }
@@ -932,6 +945,8 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
               }
               if (mip->biomol == MOLECULE_TYPE_MRNA) {
                 StringCat (str, " mRNA");
+              } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+                StringCat (str, " precursor RNA");
               } else {
                 StringCat (str, " gene");
               }
@@ -1176,6 +1191,8 @@ static void FinishAutoDefProc (Uint2 entityID, SeqEntryPtr sep,
         } else if (dfp->numUnknown > 0) {
           if (mip != NULL && mip->biomol == MOLECULE_TYPE_MRNA) {
             StringCat (str, "unknown mRNA");
+          } else if (mip->biomol == MOLECULE_TYPE_PRE_MRNA) {
+            StringCat (str, " unknown precursor RNA");
           } else {
             StringCat (str, "unknown gene");
           }
@@ -1903,9 +1920,10 @@ static CharPtr sourceModRankList [] = {
   "Variety", "Pathovar", "Chemovar", "Biovar", "Biotype", "Group", "Subgroup",
   "Cell-line", "Cell-type", "Tissue-type", "Clone-lib", "Tissue-lib", "Dev-stage",
   "Lab-host", "Pop-variant", "Frequency", "Germline", "Rearranged",
-  "Chromosome", "Map", "Genotype", "Sex", "Plasmid-name", "Transposon-name",
+  "Chromosome", "Segment", "Map", "Genotype", "Sex", "Plasmid-name", "Transposon-name",
   "Ins-seq-name", "Plastid-name", "Country", "Old Name", "Common", "Acronym",
-  "Dosage", "Natural-host", "Sub-species", "Specimen-voucher",
+  "Dosage", "Natural-host", "Sub-species", "Specimen-voucher", "Authority", "Forma",
+  "Forma-specialis", "Ecotype", "Synonym", "Anamorph", "Teleomorph", "Breed",
   NULL
 };
 
@@ -2046,13 +2064,13 @@ static void DefLineModFormAcceptProc (ButtoN b)
       if (! GetStatus (dfp->sourceBoxList [count])) {
         for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
           if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
-              ap->value > 0 && ap->value < 24) {
+              ap->value > 0 && ap->value < 32) {
             orgmod_rank [ap->value] = 0;
           }
         }
         for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
           if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
-              ap->value > 0 && ap->value < 24) {
+              ap->value > 0 && ap->value < 25) {
             subsource_rank [ap->value] = 0;
           }
         }
@@ -2291,13 +2309,13 @@ extern void GenerateAutomaticDefLinesCommon (IteM i, Boolean addMods, Boolean sm
   while (sourceModRankList [count] != NULL) {
     for (ap = orgmod_subtype_alist; ap->name != NULL; ap++) {
       if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
-          ap->value > 0 && ap->value < 24) {
+          ap->value > 0 && ap->value < 32) {
         orgmod_rank [ap->value] = count + 1;
       }
     }
     for (ap = subsource_subtype_alist; ap->name != NULL; ap++) {
       if (StringICmp (ap->name, sourceModRankList [count]) == 0 &&
-          ap->value > 0 && ap->value < 24) {
+          ap->value > 0 && ap->value < 25) {
         subsource_rank [ap->value] = count + 1;
       }
     }
@@ -3270,23 +3288,34 @@ static void ExAcToHisProc (BioseqPtr bsp, Pointer userdata)
 {
   CharPtr       accn;
   AccHistPtr    ahp;
+  EMBLBlockPtr  ebp;
   GBBlockPtr    gbp;
   SeqHistPtr    hist;
   Int2          i;
   SeqDescrPtr   sdp;
   SeqIdPtr      sip;
   TextSeqIdPtr  tsip;
-  ValNodePtr    vnp;
+  ValNodePtr    vnp = NULL;
   Uint4         whichdb;
 
   ahp = (AccHistPtr) userdata;
   sdp = BioseqGetSeqDescr (bsp, Seq_descr_genbank, NULL);
-  if (sdp == NULL) return;
-  gbp = (GBBlockPtr) sdp->data.ptrvalue;
-  if (gbp == NULL) return;
-  for (vnp = gbp->extra_accessions, i = 1;
-       vnp != NULL && i < ahp->pos;
-       vnp = vnp->next, i++) continue;
+  if (sdp != NULL) {
+    gbp = (GBBlockPtr) sdp->data.ptrvalue;
+    if (gbp == NULL) return;
+    for (vnp = gbp->extra_accessions, i = 1;
+         vnp != NULL && i < ahp->pos;
+         vnp = vnp->next, i++) continue;
+  } else {
+    sdp = BioseqGetSeqDescr (bsp, Seq_descr_embl, NULL);
+    if (sdp != NULL) {
+      ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
+      if (ebp == NULL) return;
+      for (vnp = ebp->extra_acc, i = 1;
+           vnp != NULL && i < ahp->pos;
+           vnp = vnp->next, i++) continue;
+    }
+  }
   if (vnp == NULL) return;
   accn = (CharPtr) vnp->data.ptrvalue;
   if (StringHasNoText (accn)) return;

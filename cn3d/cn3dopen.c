@@ -29,7 +29,7 @@
 *
 * First Version Creation Date:   1/31/96
 *
-* $Revision: 6.109 $
+* $Revision: 6.110 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.c,v $
+* Revision 6.110  2000/06/16 14:57:03  lewisg
+* move entrez calls out of desktop
+*
 * Revision 6.109  2000/05/16 20:24:23  thiessen
 * don't display alignseq
 *
@@ -407,6 +410,7 @@
 #include <seqcons.h>
 #include <udviewer.h>
 #include <tofasta.h>
+#include <accutils.h>
 
 
 static Boolean Cn3D_Open_InUse = FALSE;
@@ -1462,6 +1466,9 @@ static void Cn3D_ImportSAEnd(SeqAlign *salp, Boolean Neat)
     Disable(Cn3D_ColorData.BlastMany);
 }
 
+
+#if 0
+
 static void Cn3D_ImportSAEndCB(UDV_BlastDlgData *bddp)
 {
     if(bddp) Cn3D_ImportSAEnd(bddp->salp, bddp->IBM);
@@ -1496,6 +1503,8 @@ NLM_EXTERN void Cn3D_BlastDlg(IteM i)
 
     UDV_BlastDlg(bddp);
 }
+
+#endif /* 0 */
 
 static void Cn3D_ImportSeqEntry(DDV_ImportDialog *idp)
 {
@@ -1579,6 +1588,7 @@ static void Cn3D_sImportBioseq(Boolean Gap)
     idp = MemNew(sizeof(DDV_ImportDialog));
     if(idp == NULL) return;
 
+    idp->AccessionCB = Cn3D_Accession2Gi;
     idp->Gap = Gap;
     Cn3D_StartNet(TRUE);
     if (!Cn3D_ColorData.EntrezOn) {
@@ -1655,6 +1665,7 @@ static void Cn3D_sImportBioseqFile(Boolean Gap)
     idp->sep = sep;
     idp->Gap = Gap;
     idp->sipslave = SAM_ExtractSips(sep);
+    idp->AccessionCB = Cn3D_Accession2Gi;
 
     if(Cn3D_ColorData.sap == NULL) {
         idp->sap = NULL;
@@ -1681,4 +1692,34 @@ NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i)
 NLM_EXTERN void Cn3D_ImportBioseqFileGap(IteM i)
 {
     Cn3D_sImportBioseqFile(TRUE);
+}
+
+
+NLM_EXTERN Int4 Cn3D_Accession2Gi (CharPtr string, Boolean IsAmino)
+{
+   CharPtr str;
+   LinkSetPtr lsp;
+   Int4 gi;
+   DocType AAorNN; /* is this of TYP_AA or TYP_NA */
+
+   if (!EntrezIsInited ()) {
+       Message (MSG_ERROR, "Network connection to Entrez unavailable");
+       return 0;
+   }
+
+   if(IsAmino) AAorNN = TYP_AA;
+   else AAorNN = TYP_NT;
+
+   str = MemNew (StringLen (string) + 10);
+   sprintf (str, "\"%s\" [ACCN]", string);
+   lsp = EntrezTLEvalString (str, AAorNN, -1, NULL, NULL);
+   MemFree (str);
+   if (lsp == NULL) return 0;
+   if (lsp->num <= 0) {
+       LinkSetFree (lsp);
+       return 0;
+   }
+   gi = lsp->uids [0];
+   LinkSetFree (lsp);
+   return gi;
 }

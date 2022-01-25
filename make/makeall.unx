@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.132 2000/05/31 01:52:02 beloslyu Exp $
+#	$Id: makeall.unx,v 6.139 2000/06/28 22:21:40 kans Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -172,7 +172,7 @@ SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objres.c objseq.c objblock.c objcode.c objsset.c \
 	objsub.c objprt.c objfdef.c objmime.c objalignloc.c \
 	objpubme.c objmdrs.c objproj.c objent2.c ent2api.c pmfapi.c \
-	seqport.c sequtil.c prtutil.c \
+	qblastapi.c vecscnapi.c seqport.c sequtil.c prtutil.c \
 	simple.c tofasta.c tofile.c tomedlin.c \
 	valid.c alignmgr.c alignval.c sqnutil1.c sqnutil2.c sqnutil3.c subutil.c edutil.c asn2ff1.c \
 	asn2ff2.c asn2ff3.c asn2ff4.c asn2ff5.c asn2ff6.c ftusrstr.c gbfeat.c gbftglob.c \
@@ -241,12 +241,14 @@ SRC30 = algorend.c cn3dmsel.c cn3dopen.c cn3dsave.c \
 
 SRC34 =	block.c entry.c indx_blk.c utilfun.c em_index.c gb_index.c sp_index.c
 
-SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ff2asn.c ftamain.c gb_ascii.c genref.c hash.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c utilfeat.c utilref.c
+SRC37 = add.c asci_blk.c em_ascii.c em_unorg.c ff2asn.c ftamain.c gb_ascii.c \
+	genref.c hash.c ind.c loadfeat.c nucprot.c ref.c sp_ascii.c sp_ref.c \
+	utilfeat.c utilref.c fta_qscore.c
 
 SRC38 =  deflate.c inflate.c trees.c bits.c util.c dcompr.c streamprocs.c
 
 SRC39 = ideochrow.c humchrom_dat.c mschrom_dat.c ideochrom.c ideoorgs.c \
-	bands_abc.c humchrdrw.c cghlite.c cghlieka.c chrom_input.c structure.c
+	bands_abc.c
 
 
 # objects needed for versions of asntool and entrez
@@ -268,10 +270,11 @@ OBJ2 =	objacces.o objalign.o objall.o objbibli.o objfeat.o \
 	objgen.o objloc.o objmedli.o objpub.o objres.o objseq.o \
 	objblock.o objcode.o objsset.o objsub.o objprt.o objfdef.o objalignloc.o \
 	objmime.o objpubme.o objmdrs.o objproj.o objent2.o ent2api.o pmfapi.o \
-	seqport.o sequtil.o prtutil.o simple.o tofasta.o \
-	tofile.o tomedlin.o \
-	valid.o alignmgr.o alignval.o sqnutil1.o sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
-	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o gbfeat.o gbftglob.o \
+	qblastapi.o vecscnapi.o seqport.o sequtil.o prtutil.o simple.o tofasta.o \
+	tofile.o tomedlin.o valid.o alignmgr.o alignval.o sqnutil1.o \
+	sqnutil2.o sqnutil3.o subutil.o edutil.o asn2ff1.o \
+	asn2ff2.o asn2ff3.o asn2ff4.o asn2ff5.o asn2ff6.o ftusrstr.o \
+	gbfeat.o gbftglob.o \
 	gbparint.o utilpars.o utilpub.o ffprint.o wprint.o satutil.o \
 	seqmgr.o objmgr.o gather.o accmmdbs.o acccn3ds.o lsqfetch.o findrepl.o \
 	apparam.o codon.o jzcoll.o jzmisc.o maputil.o mconsist.o txalign.o \
@@ -334,8 +337,8 @@ OBJ23 = csim.o db_slist.o dust.o falign.o g_any.o sim2.o sim3.o sim4.o \
 	actutils.o posit.o lookup.o readdb.o ncbisam.o ncbisort.o \
 	salign.o salptool.o urkutil.o urkpcc.o urkptpf.o urkepi.o \
 	urkfltr.o urkdust.o urksigu.o seg.o urkbias.o urkcnsrt.o urktree.o \
-	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o vecscrn.o \
-	mblast.o rpsutil.o
+	pseed3.o pattern1.o impatool.o posit2.o newkar.o mbalign.o mbutils.o \
+	vecscrn.o mblast.o rpsutil.o
 
 OBJ28 = gdfontg.o gdfontmb.o gdfontt.o pictogif.o \
 	gdfontl.o gdfonts.o ncbidrwg.o drawing.o mapping.o picture.o ncbimain.o
@@ -352,17 +355,19 @@ OBJ3000 = algorend.glo cn3dmsel.glo cn3dopen.glo cn3dsave.glo \
 
 OBJ34 =	block.o entry.o indx_blk.o utilfun.o em_index.o gb_index.o sp_index.o
 
-OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ff2asn.o ftamain.o gb_ascii.o genref.o hash.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o utilfeat.o utilref.o
+OBJ37 = add.o asci_blk.o em_ascii.o em_unorg.o ff2asn.o ftamain.o gb_ascii.o \
+	genref.o hash.o ind.o loadfeat.o nucprot.o ref.o sp_ascii.o sp_ref.o \
+	utilfeat.o utilref.o fta_qscore.o
 
 OBJ38 =  deflate.o inflate.o trees.o bits.o util.o dcompr.o streamprocs.o
 
 OBJ39 = ideochrow.o humchrom_dat.o mschrom_dat.o ideochrom.o ideoorgs.o \
-	bands_abc.o humchrdrw.o cghlite.o cghlieka.o chrom_input.o structure.o
+	bands_abc.o
 
 
 ## All things to make
 ##
-all : ln-if-absent copy .WAIT nocopy asntool .WAIT #$(DLIB39)
+all : ln-if-absent copy .WAIT nocopy asntool .WAIT $(DLIB39)
 
 ln-if-absent:	../make/ln-if-absent
 	rm -f ln-if-absent
@@ -462,6 +467,8 @@ utilfeat.o: utilfeat.c
 	$(CC) $(CFLAGS) $<
 utilref.o: utilref.c
 	$(CC) $(CFLAGS) $<
+fta_qscore.o: fta_qscore.c
+	$(CC) $(CFLAGS) $<
 
 deflate.o: deflate.c
 	$(CC) $(CFLAGS) $<
@@ -488,33 +495,18 @@ ideochrom.o:	ideochrom.c
 	$(CC) $(CFLAGS) $<
 ideoorgs.o:	ideoorgs.c
 	$(CC) $(CFLAGS) $<
-humchrdrw.o:	humchrdrw.c
-	$(CC) $(CFLAGS) $<
 bands_abc.o:	bands_abc.c
-	$(CC) $(CFLAGS) $<
-cghlite.o:	cghlite.c
-	$(CC) $(CFLAGS) $<
-cghlieka.o:	cghlieka.c
-	$(CC) $(CFLAGS) $<
-chrom_input.o:	chrom_input.c
-	$(CC) $(CFLAGS) $<
-structure.o:	structure.c
-	$(CC) $(CFLAGS) $<
-hc_gen_obj.o:	hc_gen_obj.c
 	$(CC) $(CFLAGS) $<
 ideo_gen_obj.o:	ideo_gen_obj.c
 	$(CC) $(CFLAGS) $<
-
-humchrom_dat.c: ideo_gen_obj humchrom.dat
-	- ./ideo_gen_obj -d humchrom.dat -f humchrom_dat -o HC
-	- mv -f humchrom_dat.h ../include
 
 mschrom_dat.c : ideo_gen_obj mschrom.dat
 	- ./ideo_gen_obj -d mschrom.dat -f mschrom_dat -o MS
 	- mv -f mschrom_dat.h ../include
 
-hc_gen_obj: hc_gen_obj.o humchrom.o $(LIB1)
-	$(CC) $(LDFLAGS) -o hc_gen_obj hc_gen_obj.o humchrom.o $(LIB1) $(OTHERLIBS)
+humchrom_dat.c : ideo_gen_obj humchrom.dat
+	- ./ideo_gen_obj -d humchrom.dat -f humchrom_dat -o HC
+	- mv -f humchrom_dat.h ../include
 
 ideo_gen_obj: ideo_gen_obj.o ideochrom.o ideoorgs.o
 	$(CC) $(LDFLAGS) -o ideo_gen_obj ideo_gen_obj.o ideochrom.o ideoorgs.o $(LIB1) $(OTHERLIBS)
@@ -610,6 +602,10 @@ copy :
 	- $(SRCCOPY) ../internal/libindx/*.h ../include
 	- $(SRCCOPY) ../internal/libpars/*.c .
 	- $(SRCCOPY) ../internal/libpars/*.h ../include
+	- $(SRCCOPY) ../internal/ideogram/*.c .
+	- $(SRCCOPY) ../internal/ideogram/*.dat .
+	- $(SRCCOPY) ../internal/ideogram/ideochr*.h ../include
+	- $(SRCCOPY) ../internal/ideogram/ideoorgs.h .
 	- $(SRCCOPY) ../internal/ccap/*.c .
 	- $(SRCCOPY) ../internal/ccap/*.dat .
 	- $(SRCCOPY) ../internal/ccap/*.h ../include

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.17 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
@@ -135,7 +135,8 @@ NLM_EXTERN CONN EntrezOpenConnection (
 
   return QUERY_OpenUrlQuery (host_machine, host_port, host_path,
                              NULL, EntrezGetProgramName (),
-                             30, eMIME_AsnBinary, URLC_SURE_FLUSH);
+                             30, eMIME_T_NcbiData, eMIME_AsnBinary,
+                             eENCOD_None, 0);
 }
 
 #ifdef OS_MAC
@@ -234,7 +235,7 @@ NLM_EXTERN Boolean EntrezAsynchronousQuery (
 
   QUERY_SendQuery (conn);
 
-  QUERY_AddToQueue (queue, conn, resultproc, userdata);
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
 
   return TRUE;
 }
@@ -723,4 +724,59 @@ NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
   return (Entrez2LinkCountListPtr) GeneralEntrezExtractReply (e2ry, E2Reply_get_link_counts, NULL);
 }
 
+/* special SeqIdString to UID convenience function */
+
+NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
+  CharPtr db,
+  CharPtr seq_id_string
+)
+
+{
+  Char                    ch;
+  Entrez2BooleanReplyPtr  e2br;
+  Entrez2IdListPtr        e2id;
+  Entrez2RequestPtr       e2rq;
+  Entrez2ReplyPtr         e2ry;
+  CharPtr                 ptr;
+  Char                    str [61];
+  Uint4                   uid = 0;
+
+  if (StringHasNoText (db) || StringHasNoText (seq_id_string)) return 0;
+
+  StringNCpy_0 (str, seq_id_string, sizeof (str));
+  ptr = str;
+  ch = *ptr;
+  while (ch != '\0') {
+    if (ch == '|' || ch == '.') {
+      *ptr = ' ';
+    }
+    ptr++;
+    ch = *ptr;
+  }
+  TrimSpacesAroundString (str);
+  if (StringStr (str, "[SQID]") == NULL) {
+    StringCat (str, " [SQID]");
+  }
+
+  e2rq = EntrezCreateBooleanRequest (TRUE, FALSE, db, str,
+                                     0, 0, NULL, 1, 0);
+  if (e2rq == NULL) return 0;
+  e2ry = EntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree (e2rq);
+  if (e2ry == NULL) return 0;
+  e2br = EntrezExtractBooleanReply (e2ry);
+  if (e2br == NULL) return 0;
+
+  if (e2br->count > 0) {
+    e2id = e2br->uids;
+    if (e2id != NULL && e2id->num > 0 && e2id->uids != NULL) {
+      BSSeek (e2id->uids, 0, SEEK_SET);
+      uid = Nlm_BSGetUint4 (e2id->uids);
+    }
+  }
+
+  Entrez2BooleanReplyFree (e2br);
+
+  return uid;
+}
 

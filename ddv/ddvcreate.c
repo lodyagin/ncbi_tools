@@ -1,4 +1,4 @@
-/*  $Id: ddvcreate.c,v 1.50 2000/05/10 16:17:00 hurwitz Exp $
+/*  $Id: ddvcreate.c,v 1.56 2000/06/29 23:15:13 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   08/99
 *
-* $Revision: 1.50 $
+* $Revision: 1.56 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvcreate.c,v $
+* Revision 1.56  2000/06/29 23:15:13  hurwitz
+* leave single space between aligned blocks with no unaligned sequence between them, no auto-merge of adjacent aligned blocks
+*
+* Revision 1.55  2000/06/22 20:56:52  hurwitz
+* assorted bug fixes
+*
+* Revision 1.54  2000/06/13 18:23:55  hurwitz
+* made ViewMgr_MakeMultiple routine, call this on each launch of DDE rather than launch of DDV
+*
+* Revision 1.53  2000/06/12 23:02:40  hurwitz
+* enable launch of DDE from Cn3D, swith from DDV_ComputeRuler to DDE_ReMakeRuler, get rid of styles option for DDE
+*
+* Revision 1.52  2000/06/08 20:04:38  hurwitz
+* made warning about converting to true multiple alignment into a Message window, and other small fixes
+*
+* Revision 1.51  2000/06/07 19:09:36  hurwitz
+* made DDE_ReMakeRuler work with linked list of ParaGs
+*
 * Revision 1.50  2000/05/10 16:17:00  hurwitz
 * can show tails for just 1 aligned block
 *
@@ -755,18 +773,22 @@ NLM_EXTERN Boolean DDV_CreateDisplayFromIndex(SeqAlignPtr sap, MsaParaGPopListPt
 
 static Boolean DDV_PopulateDisplayForDisc(SeqAlignPtr sap,MsaParaGPopListPtr mpplp,
 	Int4 nBsp,Int4 LineSize,DDV_Disp_OptPtr ddop,Int4 TotLength,ValNodePtr vnp_head,
-  Boolean OverrideDiscJustification)
+  Boolean OverrideDiscJustification, Boolean ForceLeft)
 {
 /*-------------------------------------------------------------
   Added OverrideDiscJustification:
   Set this true for single block alignment.  In that case,
   the first unaligned region will be right-justified and
   the second unaligned region will be left-justified.
+
+  Added ForceLeft:
+  Set this true for single unaligned region alignment.
+  In that case, the unaligned region will be left-aligned.
 -------------------------------------------------------------*/
 Int4            cumulpop,StartLetter,n,nPgp,from_bsp,to_bsp,MaxLength,
-                BspLength,BspStart,BspStop,AbsPos;
+                BspLength=0,BspStart,BspStop,AbsPos;
 Boolean         more,bFirstMtdp,bFirstPgp,IsGap;
-ValNodePtr      vnp,vnp2,vnp3,vnp_para,vnp_mtdp;
+ValNodePtr      vnp,vnp2,vnp3,vnp_para,vnp_mtdp=NULL;
 ValNodePtr PNTR vnp_list;
 ParaGPtr        pgp;
 SeqIdPtr        sip;
@@ -774,7 +796,8 @@ DescriDispPtr   ddp;
 MsaTxtDispPtr   mtdp_pgp;
 AlnMsgPtr       amp;
 UAMsgPtr        uamp;
-Uint1           strand, strand_tmp, Justification;
+Uint1           strand = Seq_strand_unknown;
+Uint1           strand_tmp, Justification;
 Int4            PassCount;
 
 	/*now, use the previous descriptor to build the ParaG List*/
@@ -889,8 +912,9 @@ Int4            PassCount;
 						/*init the analysis process of an UA region*/
 						switch(ddp->UAnum){
 							case (Int4)-1:/*left tail*/
+                Justification = ForceLeft ? DISP_JUST_LEFT : DISP_JUST_RIGHT;
 								uamp=UAMgrIntUAMsg(MaxLength,BspLength,BspStart,BspStop, 
-									ddp->from,ddp->to,DISP_JUST_RIGHT, strand);
+									ddp->from,ddp->to, Justification, strand);
 								break;
 							case (Int4)-2:/*right tail*/
 								uamp=UAMgrIntUAMsg(MaxLength,BspLength,BspStart,BspStop, 
@@ -1006,7 +1030,7 @@ ValNodePtr vnp_head;
 
 	/*build the display*/
 	return(DDV_PopulateDisplayForDisc(sap,mpplp,nBsp,LineSize,ddop,
-		TotLength,vnp_head, FALSE));
+		TotLength,vnp_head, FALSE, FALSE));
 }
 
 /*******************************************************************************
@@ -1036,7 +1060,7 @@ DDV_Disp_Opt ddo;
 	DDV_InitDDESAPdispStyles(&ddo);
 	/*build the display*/
 	return(DDV_PopulateDisplayForDisc(sap,mpplp,nBsp,LIMIT_EDITOR_SIZE,&ddo,
-		TotLength,vnp_head, FALSE));
+		TotLength,vnp_head, FALSE, FALSE));
 }
 
 /*******************************************************************************
@@ -1424,6 +1448,8 @@ DescriDispPtr   ddp;
 					break;
 				case MSA_TXT_STYLE_2:/*put sequence between 2 align blocks*/
 					stopcopy=ABS(length);
+          /* give a small space no matter what */
+          if (stopcopy==0) stopcopy=1;
 					break;
 			}
 			UAnum++;
@@ -3094,14 +3120,14 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 Bl
   DescriDispPtr       ddp1, ddp2, ddp3;
   Int4                i, NumRows, NumBlocks, Size, SaveSize, start, stop;
   Int4                TotalLength=0;
-  Uint1               strand;
+  Uint1               strand=Seq_strand_unknown;
   DDV_Disp_Opt        DisplayOptions;
   MsaParaGPopListPtr  pPopList;
 
   /* index the seq align */
-  if (!AlnMgrIndexSeqAlign(sap)) {
+/*  if (!AlnMgrIndexSeqAlign(sap)) {
     return(NULL);
-  }
+  } */
 
   NumRows = AlnMgrGetNumRows(sap);
   NumBlocks = AlnMgrGetNumAlnBlocks(sap);
@@ -3184,7 +3210,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForBlock(SeqAlignPtr sap, Int4 Bl
   pPopList = MemNew(sizeof(MsaParaGPopList));
   DDV_InitDDESAPdispStyles(&DisplayOptions);
   if (DDV_PopulateDisplayForDisc(sap, pPopList, NumRows, TotalLength+10,
-                                 &DisplayOptions, TotalLength, head, TRUE)) {
+                                 &DisplayOptions, TotalLength, head, TRUE, FALSE)) {
     return(pPopList);
   }
   else {
@@ -3228,14 +3254,14 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int
   Int4                NumRows, NumBlocks;
   Int4                i, Size, SaveSize, start, stop;
   Int4                TotalLength=0;
-  Uint1               strand;
+  Uint1               strand=Seq_strand_unknown;
   DDV_Disp_Opt        DisplayOptions;
   MsaParaGPopListPtr  pPopList;
 
   /* index the seq align */
-  if (!AlnMgrIndexSeqAlign(sap)) {
+/*  if (!AlnMgrIndexSeqAlign(sap)) {
     return(NULL);
-  }
+  } */
 
   NumRows = AlnMgrGetNumRows(sap);
   NumBlocks = AlnMgrGetNumAlnBlocks(sap);
@@ -3281,7 +3307,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplayForUnAligned(SeqAlignPtr sap, Int
   pPopList = MemNew(sizeof(MsaParaGPopList));
   DDV_InitDDESAPdispStyles(&DisplayOptions);
   if (DDV_PopulateDisplayForDisc(sap, pPopList, NumRows, TotalLength+10,
-                                 &DisplayOptions, TotalLength, head, FALSE)) {
+                                 &DisplayOptions, TotalLength, head, FALSE, TRUE)) {
     return(pPopList);
   }
   else {
@@ -3297,6 +3323,7 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplay(SeqAlignPtr sap, Int4 BlockIndex
 *  unaligned region or an aligned block
 *---------------------------------------------------------------------------*/
   MsaParaGPopListPtr  mpplp;
+  Int4                from=-1, to;
  
   if (IsUnAligned) {
     mpplp = DDE_CreateDisplayForUnAligned(sap, BlockIndex);
@@ -3305,13 +3332,15 @@ NLM_EXTERN MsaParaGPopListPtr DDE_CreateDisplay(SeqAlignPtr sap, Int4 BlockIndex
   else {
     mpplp = DDE_CreateDisplayForBlock(sap, BlockIndex);
     *pNumBlocks = 1;
+    /* get the first align index of block */
+    AlnMgrGetNthBlockRange(sap, BlockIndex+1, &from, &to);
   }
   ASSERT(mpplp != NULL);
 
   mpplp->entitiesTbl = DDV_BuildBspEntitiesTbl(mpplp->TableHead, mpplp->nBsp);
   ASSERT(mpplp->entitiesTbl != NULL);
 
-  DDE_ReMakeRuler(mpplp);
+  mpplp->RulerDescr = DDE_ReMakeRuler(mpplp, FALSE, from);
   return(mpplp);
 }
 

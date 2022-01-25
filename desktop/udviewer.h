@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.52 $
+* $Revision: 6.55 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udviewer.h,v $
+* Revision 6.55  2000/06/27 20:46:38  hurwitz
+* fixed bugs with select rectangle, added select row option
+*
+* Revision 6.54  2000/06/26 19:32:17  hurwitz
+* can select a rectangle instead of a single row, auto horizontal scroll works but not vertical scroll yet
+*
+* Revision 6.53  2000/06/16 14:57:02  lewisg
+* move entrez calls out of desktop
+*
 * Revision 6.52  2000/05/19 13:48:31  hurwitz
 * made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
 *
@@ -356,7 +365,12 @@ extern "C" {
 		ParaGPtr    old_pgp;        /*pgp where old_col was located*/
 		Int4        first_row;      /*set only when 'on_click'*/
 		Int4        first_col;      /*set only when 'on_click'*/
+    Int4*       first_cols;     /*  array for multiple rows*/
 		ParaGPtr    first_pgp;      /*pgp where first_col was located*/
+    ParaGPtr*   first_pgps;     /*  array for multiple rows*/
+    PoinT       first_point;    /*point where first clicked*/
+    Int4        first_HScroll;  /*horizontal scroll position when first clicked*/
+    Int4        first_VScroll;  /*vertical scroll position when first clicked*/
 		} UDV_mouse_select,PNTR UDV_mouse_selectPtr;
 
 	typedef  struct  scanfeat {/*use to scan feature when the user clicks
@@ -502,6 +516,8 @@ extern "C" {
     /* structs used only by the Blast sequence dialog box
     */
 
+#if 0 
+
     struct _UDV_BlastDlgData;
     typedef void (*UDV_BlastProcCB)(struct _UDV_BlastDlgData *bddp);
 
@@ -517,6 +533,7 @@ extern "C" {
         SeqAlign *salp;  /* resulting seqalign */
     } UDV_BlastDlgData;
 
+#endif /* 0 */
 
 /*******************************************************************************
 
@@ -638,8 +655,13 @@ extern "C" {
 	NLM_EXTERN void UDV_LoadSpecificEditor(BioseqViewPtr bvp, Uint2 entityID, 
 		Uint2 itemID, Uint2 itemtype);
 
+  /*zero UDV_mouse_select structure*/
+  NLM_EXTERN void ClearUDV_mouse_select(UDV_mouse_selectPtr msp);
+
+#if 0
     /* blast dialog */
     NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp);
+#endif
 
 
 #ifdef __cplusplus

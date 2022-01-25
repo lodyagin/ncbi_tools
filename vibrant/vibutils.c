@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibutils.c,v $
+* Revision 6.31  2000/06/29 17:29:11  vakatov
+* [MSWIN]  Fixed printf format mismatches
+*
 * Revision 6.30  2000/02/23 16:21:55  kans
 * switched to Churchill fix for nav services file dialogs
 *
@@ -3862,7 +3865,7 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
       PrintDefault (prHdl);
       prerr = PrError ();
       if (prerr != noErr) {
-        Nlm_Message (MSG_ERROR, "PrintDefault error %d", prerr);
+        Nlm_Message (MSG_ERROR, "PrintDefault error %d", (int) prerr);
       }
       if (! PrStlDialog (prHdl)) {
         prHdl = Nlm_HandFree (prHdl);
@@ -3913,7 +3916,8 @@ extern Nlm_WindoW Nlm_StartPrinting (void)
       }
     } else {
       commdlgerr = CommDlgExtendedError ();
-      Nlm_Message (MSG_ERROR, "Unable to create print context, error %ul", (long) commdlgerr);
+      Nlm_Message (MSG_ERROR, "Unable to create print context, error %lu",
+                   (unsigned long) commdlgerr);
       w = NULL;
     }
   } else {

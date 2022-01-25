@@ -1,4 +1,4 @@
-/* $Id: rpsutil.c,v 6.22 2000/05/08 20:52:20 shavirin Exp $
+/* $Id: rpsutil.c,v 6.23 2000/06/29 19:19:53 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Initial Version Creation Date: 12/14/1999
 *
-* $Revision: 6.22 $
+* $Revision: 6.23 $
 *
 * File Description:
 *         Reversed PSI BLAST utilities file
 *
 * $Log: rpsutil.c,v $
+* Revision 6.23  2000/06/29 19:19:53  madden
+* Fix memory leak
+*
 * Revision 6.22  2000/05/08 20:52:20  shavirin
 * Updated query_gapped_start in case when hsp hits 2 boundaries.
 *
@@ -1196,6 +1199,7 @@ SeqAlignPtr RPSBlastSearch (BlastSearchBlkPtr search,
         spp = SeqPortFree(spp);
 
         /* Adjusting translation buffer */
+	spc->lbytes = MemFree(spc->lbytes);
         MemFree(spc);
         MemFree(search->translation_buffer);
         search->translation_buffer = MemNew((3+(subject_length/3))*sizeof(Uint1));

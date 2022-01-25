@@ -1,4 +1,4 @@
-/* $Id: blastpgp.c,v 6.64 2000/03/29 17:32:55 madden Exp $ */
+/* $Id: blastpgp.c,v 6.65 2000/06/27 15:25:19 madden Exp $ */
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -24,8 +24,11 @@
 * appreciated.                                                            *
 *                                                                         *
 **************************************************************************
- * $Revision: 6.64 $ 
+ * $Revision: 6.65 $ 
  * $Log: blastpgp.c,v $
+ * Revision 6.65  2000/06/27 15:25:19  madden
+ * Changed master-slave to query-anchored
+ *
  * Revision 6.64  2000/03/29 17:32:55  madden
  * Commented out yet another call to ObjMgrFreeCache
  *
@@ -342,7 +345,7 @@ static Args myargs [] = {
       "11", NULL, NULL, FALSE, 'f', ARG_INT, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 4 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = master-slave showing identities,\n2 = master-slave no identities,\n3 = flat master-slave, show identities,\n4 = flat master-slave, no identities,\n5 = master-slave no identities and blunt ends,\n6 = flat master-slave, no identities and blunt ends", /* 5 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends", /* 5 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "Output File for Alignment", /* 6 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},

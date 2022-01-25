@@ -1,4 +1,4 @@
-/*  $Id: ddvopen.h,v 1.20 2000/05/15 23:39:34 lewisg Exp $
+/*  $Id: ddvopen.h,v 1.21 2000/06/16 14:57:03 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.20 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvopen.h,v $
+* Revision 1.21  2000/06/16 14:57:03  lewisg
+* move entrez calls out of desktop
+*
 * Revision 1.20  2000/05/15 23:39:34  lewisg
 * shred cblast, add menu items for gapped/ungapped, fix pdbheaders
 *
@@ -219,9 +222,10 @@ struct _DDV_ImportDialog;
 typedef void (*DDV_ImportProcCB)(struct _DDV_ImportDialog *idp, SeqAlign *salpdest,
                                  SeqAlign *salp);
 
+typedef Int4 (*DDV_AccessionCB)(CharPtr string, Boolean IsAmino);
+
 /* for the BLAST import dialog */
 typedef struct _DDV_ImportDialog {
-    DocType AAorNN; /* is this of TYP_AA or TYP_NA */
     WindoW DDV_wImport; /*the import dialog*/
     GrouP DDV_gAccType; /*the type of accession*/
     ButtoN DDV_bImportAccept; /*accept button*/
@@ -237,6 +241,7 @@ typedef struct _DDV_ImportDialog {
     SeqEntry *sep;  /* used to pass new seqentry to call back */
     Bioseq *bsp; /* the bioseq being added */
     Boolean Gap; /* should the alignment used gapped blast? */
+    DDV_AccessionCB AccessionCB; /* converts accession to gi */
 } DDV_ImportDialog;
 
 /* import to sequence to seqalign */
@@ -283,7 +288,6 @@ extern ValNodePtr DDV_GetSelectedRegions(SelStructPtr om_slp, Uint2 bsp_eID,
 	Uint2 bsp_iID);
 extern Boolean DDV_IsLetterSelected(ValNodePtr vnp_bsp, Int4 bsp_pos);
 
-NLM_EXTERN Int4 DDV_Accession2Gi (CharPtr string, DocType type);
 NLM_EXTERN void DDV_ImportBioseqDlg(DDV_ImportDialog *idp);
 NLM_EXTERN void DDV_ImportBioseq(IteM i);
 NLM_EXTERN SeqAlignPtr DDV_ShredAln(SeqAlignPtr sap);

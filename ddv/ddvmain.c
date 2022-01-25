@@ -1,4 +1,4 @@
-/*  $Id: ddvmain.c,v 1.20 2000/04/21 23:00:50 hurwitz Exp $
+/*  $Id: ddvmain.c,v 1.23 2000/07/05 19:23:13 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.20 $
+* $Revision: 1.23 $
 *
 * File Description: starter module of DeuxD-Viewer (DDV). Onlu use to
 * start DDV as a standalone software.
@@ -37,6 +37,15 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvmain.c,v $
+* Revision 1.23  2000/07/05 19:23:13  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.22  2000/06/06 14:44:16  hurwitz
+* fixed bug that SetAppProperty(dde_nogaps)
+*
+* Revision 1.21  2000/05/31 23:07:26  hurwitz
+* made NoGaps a runtime parameter, fixed bug with vertical scroll of show/hide list, save edits query is not performed if nothing to save
+*
 * Revision 1.20  2000/04/21 23:00:50  hurwitz
 * can launch DDE from DDV
 *
@@ -296,7 +305,6 @@ Boolean bRet;
 	/*use the Network ?*/
 	mWin_d->UseNetwork=TRUE;/*DDV_UseNetwork();*/
 
-
 #if defined(_COLD_LAUNCH_DDE)
   /* launch the editor instead of the viewer */
 	bRet=DDV_CreateViewerPanel(w,mWin_d,NULL,TRUE);  /*TRUE for editor  */
@@ -337,6 +345,8 @@ Boolean 		UseNetwork;
 WindoW			w; 
 DdvMainWinPtr   mWin_d;/*main window data*/
 ObjMgrPtr omp = NULL;
+char*  Str;
+Boolean  NoGaps;
 
 	
 	ErrSetMessageLevel(SEV_WARNING);
@@ -370,13 +380,25 @@ ObjMgrPtr omp = NULL;
 		Message (MSG_ERROR, "FeatDefSeqLoad() failed.");
 		return(1);
 	}
-	
+
 	/*init data blocks*/
 	mWin_d=(DdvMainWinPtr)MemNew(sizeof(DdvMainWin));
 	if (!mWin_d){
 		Message (MSG_ERROR, "Viewer creation failed.");
 		return(1);
 	}
+
+  /* look for "nogaps" runtime parameter */
+    NoGaps = FALSE;
+    if (GetArgc() == 2) {
+        Str = GetArgv()[1];
+        Str = StrLower(Str);
+        if (StringStr(Str, "nogap") != NULL) {
+            NoGaps = TRUE;
+        }
+    }
+    SetAppProperty("dde_nogaps",(void*)&NoGaps);
+	
 	/*init data blocks*/
 	ldp=(UDVLogoDataPtr)MemNew(sizeof(UDVLogoData));
 	if (ldp){
@@ -391,7 +413,7 @@ ObjMgrPtr omp = NULL;
 /*	REG_DDV_AUTO_EDIT; */
 	REG_DDV_AUTO_VIEW;
 	REGISTER_UDV_AUTONOMOUS;
-  REG_DDV_SLA_EDIT;
+    REG_DDV_SLA_EDIT;
 	
     /* increment maximum # of objects held in memory */
     omp = ObjMgrWriteLock();

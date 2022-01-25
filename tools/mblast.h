@@ -32,8 +32,17 @@ Contents: prototypes for "public" Mega BLAST functions (ones that other utilitil
 
 ******************************************************************************/
 
-/* $Revision: 6.21 $ 
+/* $Revision: 6.24 $ 
 * $Log: mblast.h,v $
+* Revision 6.24  2000/06/30 17:52:45  madden
+* Move AWAKE_THR_MIN_SIZE to blastdef.h
+*
+* Revision 6.23  2000/06/27 22:21:02  dondosha
+* Added 3 prototypes for masked query output
+*
+* Revision 6.22  2000/06/27 14:48:04  dondosha
+* Changed and added macros for testing HSP inclusion
+*
 * Revision 6.21  2000/05/26 19:21:39  dondosha
 * Added two defines for neighboring
 *
@@ -117,11 +126,15 @@ extern "C" {
 #include <mbutils.h>
 #include <mbalign.h>
 
-#define AWAKE_THR_MIN_SIZE 6000000000.0 
 #define MB_DIAG_CLOSE 10
-#define MB_HSP_CONTAINED(qo1,qo2,qe2,so1,so2,se2) \
+#define MB_DIAG_NEAR 30
+
+#define MB_HSP_CLOSE(q1, q2, s1, s2, c) \
+(ABS((q1-s1) - (q2-s2)) < c)
+
+#define MB_HSP_CONTAINED(qo1,qo2,qe2,so1,so2,se2,c) \
 (qo1>=qo2 && qo1<=qe2 && so1>=so2 && so1<=se2 && \
-ABS((qo1-so1) - (qo2-so2)) < MB_DIAG_CLOSE)
+MB_HSP_CLOSE(qo1,qo2,so1,so2,c))
 
 #define MIN_NEIGHBOR_PERC_IDENTITY 96
 #define MIN_NEIGHBOR_HSP_LENGTH 100
@@ -238,12 +251,22 @@ BlastNeedHumanRepeatFiltering PROTO((BlastDoubleInt4Ptr gi_list,
 				     Int4 gi_list_size, Uint4 query_gi));
 
 FloatHi
-MegaBlastGetPercentIdentity PROTO((Uint1Ptr query, Uint1Ptr subject, Int4 q_start, 
-			    Int4 s_start, Int4 length, Boolean reverse));
+MegaBlastGetPercentIdentity PROTO((Uint1Ptr query, Uint1Ptr subject, 
+				   Int4 q_start, Int4 s_start, Int4 length, 
+				   Boolean reverse));
 
 Int4 MegaBlastGappedAlign PROTO((BlastSearchBlkPtr search));
 
 Int4 BinarySearchInt4 PROTO((Int4 n, Int4Ptr A, Int4 size));
+
+void BlastLCaseMaskTheResidues PROTO((Uint1Ptr buffer, Int4 max_length,
+				      SeqLocPtr mask_slp, Boolean reverse, 
+				      Int4 offset));
+
+SeqLocPtr MaskSeqLocFromSeqAlign PROTO((SeqAlignPtr seqalign));
+   
+void PrintMaskedSequence PROTO((BioseqPtr query_bsp, SeqLocPtr mask_slp, 
+				CharPtr file_name));
 
 #ifdef __cplusplus
 }

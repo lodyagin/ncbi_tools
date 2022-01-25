@@ -1,4 +1,4 @@
-/* $Id: blastall.c,v 6.45 2000/05/26 19:28:44 shavirin Exp $
+/* $Id: blastall.c,v 6.48 2000/06/27 15:25:18 madden Exp $
 /**************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -26,6 +26,15 @@
 ************************************************************************** 
  * 
  * $Log: blastall.c,v $
+ * Revision 6.48  2000/06/27 15:25:18  madden
+ * Changed master-slave to query-anchored
+ *
+ * Revision 6.47  2000/06/13 19:38:46  shavirin
+ * Added ability to print XML Blast output.
+ *
+ * Revision 6.46  2000/06/05 19:31:31  madden
+ * Free query->lcase_mask between searches
+ *
  * Revision 6.45  2000/05/26 19:28:44  shavirin
  * Added adjustment of dropoff_1st_pass if dropoff_1st_pass > dropoff_2nd_pass
  *
@@ -345,7 +354,7 @@ static Args myargs [] = {
       "stdin", NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
     { "Expectation value (E)",  /* 3 */
       "10.0", NULL, NULL, FALSE, 'e', ARG_FLOAT, 0.0, 0, NULL},
-    { "alignment view options:\n0 = pairwise,\n1 = master-slave showing identities,\n2 = master-slave no identities,\n3 = flat master-slave, show identities,\n4 = flat master-slave, no identities,\n5 = master-slave no identities and blunt ends,\n6 = flat master-slave, no identities and blunt ends", /* 4 */
+    { "alignment view options:\n0 = pairwise,\n1 = query-anchored showing identities,\n2 = query-anchored no identities,\n3 = flat query-anchored, show identities,\n4 = flat query-anchored, no identities,\n5 = query-anchored no identities and blunt ends,\n6 = flat query-anchored, no identities and blunt ends", /* 4 */
       "0", NULL, NULL, FALSE, 'm', ARG_INT, 0.0, 0, NULL},
     { "BLAST report Output File", /* 5 */
       "stdout", NULL, NULL, TRUE, 'o', ARG_FILE_OUT, 0.0, 0, NULL},
@@ -401,7 +410,7 @@ static Args myargs [] = {
       NULL, NULL, NULL, TRUE, 'l', ARG_STRING, 0.0, 0, NULL},
     {"Use lower case filtering of FASTA sequence", /* 31 */
      "F", NULL,NULL,TRUE,'U',ARG_BOOLEAN, 0.0,0,NULL},
-    { "Dropoff (X) for blast extensions in bits (default if zero)", /* 32 */
+    { "Dropoff (X) for blast extensions in bits (0.0 invokes default behavior)", /* 32 */
       "0.0", NULL, NULL, FALSE, 'y', ARG_FLOAT, 0.0, 0, NULL},
     { "X dropoff value for final gapped alignment (in bits)", /* 33 */
       "0", NULL, NULL, FALSE, 'Z', ARG_INT, 0.0, 0, NULL},
@@ -411,7 +420,7 @@ Int2 Main (void)
  
 {
     AsnIoPtr aip;
-    BioseqPtr fake_bsp, query_bsp;
+    BioseqPtr fake_bsp = NULL, query_bsp;
     BioSourcePtr source;
     BLAST_MatrixPtr matrix;
     BLAST_OptionsBlkPtr options;
@@ -615,7 +624,10 @@ Int2 Main (void)
             return 2;
         }
         
-        fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
+        if(believe_query)
+            fake_bsp = query_bsp;
+        else 
+            fake_bsp = BlastMakeFakeBioseq(query_bsp, NULL);
         
         /* If fake_bsp created mask should be updated to use it's id */
         BLASTUpdateSeqIdInSeqInt(options->query_lcase_mask, fake_bsp->id);
@@ -650,10 +662,16 @@ Int2 Main (void)
         other_returns = NULL;
         error_returns = NULL;
         
-        seqalign = BioseqBlastEngine(believe_query ? query_bsp : fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, tick_callback);
+        seqalign = BioseqBlastEngine(fake_bsp, blast_program, blast_database, options, &other_returns, &error_returns, tick_callback);
         
         BlastErrorPrint(error_returns);
-        
+
+        ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
+
+#if PRINT_XML_OUTPUT
+        BXMLPrintOutput("bout.xml", seqalign, options, blast_program, 
+                        blast_database, fake_bsp, other_returns, 0, 0);
+#endif        
         dbinfo = NULL;
         ka_params = NULL;
         ka_params_gap = NULL;
@@ -708,7 +726,6 @@ Int2 Main (void)
             }
         }
         
-        ReadDBBioseqFetchEnable ("blastall", blast_database, db_is_na, TRUE);
         ReadDBBioseqSetDbGeneticCode(options->db_genetic_code);
 
         if (seqalign) {
@@ -780,11 +797,13 @@ Int2 Main (void)
         }
         ValNodeFree(mask_loc_start);
         
-        fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+        if(!believe_query)
+            fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
         
         ReadDBBioseqFetchDisable();
         other_returns = ValNodeFree(other_returns);
         sep = SeqEntryFree(sep);
+	options->query_lcase_mask = SeqLocSetFree(options->query_lcase_mask);
     }
 
     if (html) {

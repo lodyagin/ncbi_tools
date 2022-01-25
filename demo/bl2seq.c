@@ -25,6 +25,9 @@
 ***************************************************************************
 *
 * $Log: bl2seq.c,v $
+* Revision 6.7  2000/06/15 15:29:57  dondosha
+* Fixed several memory leaks; tblastn and tblastx enabled
+*
 * Revision 6.6  2000/05/24 20:36:08  dondosha
 * If megablast is used, set cutoff_s and cutoff_s2 parameters
 *
@@ -57,7 +60,7 @@ static Args myargs [NUMARG] = {
 	NULL, NULL, NULL, FALSE, 'i', ARG_FILE_IN, 0.0, 0, NULL},
   { "Second sequence",
 	NULL, NULL, NULL, FALSE, 'j', ARG_FILE_IN, 0.0, 0, NULL},
-  { "Program name: blastp, blastn, blastx. For blastx 1st argument should be nucleotide",
+  { "Program name: blastp, blastn, blastx, tblastn, tblastx. For blastx 1st sequence should be nucleotide, tblastn 2nd sequence nucleotide",
         "blastp", NULL, NULL, FALSE, 'p', ARG_STRING, 0.0, 0, NULL},
   { "Gapped",
         "T", NULL, NULL, FALSE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -112,7 +115,8 @@ Int2 Main (void)
 	TxDfDbInfoPtr dbinfo=NULL, dbinfo_head;
 	CharPtr blast_inputfile, blast_inputfile1, program_name, blast_outputfile;
 	FILE *infp, *infp1, *outfp;
-	ValNodePtr  mask_loc, vnp, other_returns, error_returns;
+	ValNodePtr  mask_loc, mask_loc_start, vnp, other_returns, error_returns;
+	BLAST_MatrixPtr matrix;
 
         if (! GetArgs ("bl2seq", NUMARG, myargs))
         {
@@ -133,8 +137,10 @@ Int2 Main (void)
 	program_name = StringSave(myargs[2].strvalue);
 	if (StringCmp(program_name, "blastn") && 
 	    StringCmp(program_name, "blastp") && 
-	    StringCmp(program_name, "blastx")) {
-		ErrPostEx(SEV_FATAL, 0, 0, "Program name must be blastn, blastp or blastx\n");
+	    StringCmp(program_name, "blastx") && 
+	    StringCmp(program_name, "tblastn") && 
+	    StringCmp(program_name, "tblastx")) {
+		ErrPostEx(SEV_FATAL, 0, 0, "Program name must be blastn, blastp, blastx, tblastn or tblastx\n");
 		return (1);
 	}
 	   
@@ -248,6 +254,7 @@ Int2 Main (void)
         if (myargs[10].intvalue != 0)
                options->wordsize = (Int2) myargs[10].intvalue;
 
+	MemFree(options->matrix);
 	options->matrix = myargs[11].strvalue;
 
 	options->strand_option = myargs[16].intvalue;
@@ -268,10 +275,11 @@ Int2 Main (void)
 		ka_params_gap = NULL;
 		params_buffer = NULL;
 		mask_loc = NULL;
+		matrix = NULL;
 		for (vnp=other_returns; vnp; vnp = vnp->next)
 		{
 			switch (vnp->choice) {
-				case TXDBINFO:
+			        case TXDBINFO:
 					dbinfo = vnp->data.ptrvalue;
 					break;
 				case TXKABLK_NOGAP:
@@ -283,6 +291,9 @@ Int2 Main (void)
 				case TXPARAMETERS:
 					params_buffer = vnp->data.ptrvalue;
 					break;
+			        case TXMATRIX:
+				        matrix = vnp->data.ptrvalue;
+			                break;
 				case SEQLOC_MASKING_NOTSET:
 				case SEQLOC_MASKING_PLUS1:
 				case SEQLOC_MASKING_PLUS2:
@@ -330,6 +341,7 @@ Int2 Main (void)
         }
         seqannot = SeqAnnotFree(seqannot);
 		
+        matrix = BLAST_MatrixDestruct(matrix);
 		init_buff_ex(85);
 		dbinfo_head = dbinfo;
 		while (dbinfo)
@@ -354,10 +366,17 @@ Int2 Main (void)
                 PrintTildeSepLines(params_buffer, 70, outfp);
                 MemFree(params_buffer);
                 free_buff();
+        mask_loc_start = mask_loc;
+        while (mask_loc) {
+            SeqLocSetFree(mask_loc->data.ptrvalue);
+            mask_loc = mask_loc->next;
+        }
+        ValNodeFree(mask_loc_start);
 
 	fake_bsp = BlastDeleteFakeBioseq(fake_bsp);
+	other_returns = ValNodeFree(other_returns);
 	options = BLASTOptionDelete(options);
-
+	MemFree(program_name);
 	FileClose(outfp);
 
 	SeqEntryFree(sep);

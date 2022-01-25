@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   9/2/97
 *
-* $Revision: 6.63 $
+* $Revision: 6.66 $
 *
 * File Description: 
 *
@@ -1260,7 +1260,8 @@ static CharPtr biosource_orgmod_list [] = {
   "serotype", "serogroup", "serovar" "cultivar", "pathovar", "chemovar",
   "biovar", "biotype", "group", "subgroup", "isolate", "common name",
   "acronym", "dosage", "natural host", "sub-species", "specimen-voucher",
-  NULL
+  "authority", "forma", "forma-specialis", "ecotype", "synonym",
+  "anamorph", "teleomorph", "breed", NULL
 };
 
 static CharPtr biosource_subsource_list [] = {
@@ -1269,7 +1270,7 @@ static CharPtr biosource_subsource_list [] = {
   "clone-lib", "dev-stage", "frequency", "germline", "rearranged",
   "lab-host", "pop-variant", "tissue-lib", "plasmid-name",
   "transposon-name", "ins-seq-name", "plastid-name", "country",
-  NULL
+  "segment", NULL
 };
 
 NLM_EXTERN BioSourcePtr ParseTitleIntoBioSource (
@@ -3053,7 +3054,9 @@ static CharPtr orgModList [] = {
   "Serotype", "Serogroup", "Serovar", "Cultivar", "Pathovar",
   "Chemovar", "Biovar", "Biotype", "Group", "Subgroup", "Isolate",
   "Common", "Acronym", "Dosage", "Natural-host", "Sub-species",
-  "Specimen-voucher", "Old Name", "Note", NULL
+  "Specimen-voucher", "Authority", "Forma", "Forma-specialis",
+  "Ecotype", "Synonym", "Anamorph", "Teleomorph", "Breed",
+  "Old Name", "Note", NULL
 };
 
 static CharPtr subSourceList [] = {
@@ -3062,7 +3065,7 @@ static CharPtr subSourceList [] = {
   "Clone-lib", "Dev-stage", "Frequency", "Germline", "Rearranged",
   "Lab-host", "Pop-variant", "Tissue-lib", "Plasmid-name",
   "Transposon-name", "Ins-seq-name", "Plastid-name", "Country",
-  NULL
+  "Segment", NULL
 };
 
 static OrgNamePtr GetOrMakeOnp (OrgRefPtr orp)
@@ -5264,6 +5267,7 @@ typedef struct gphitem {
   SeqGraphPtr  sgp;
   Int4         left;
   Int4         right;
+  Int2         index;
 } GphItem, PNTR GphItemPtr;
 
 static Boolean GetGraphsProc (GatherObjectPtr gop)

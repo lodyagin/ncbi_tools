@@ -1,4 +1,4 @@
-/* $Id: fdfilter.c,v 6.11 2000/03/14 16:59:32 shavirin Exp $ */
+/* $Id: fdfilter.c,v 6.12 2000/06/07 19:18:42 shavirin Exp $ */
 /*****************************************************************************
 
   
@@ -31,11 +31,14 @@
    
    Version Creation Date: 05/21/99
 
-   $Revision: 6.11 $
+   $Revision: 6.12 $
 
    File Description:  Filter FASTA databases for identical sequences
 
    $Log: fdfilter.c,v $
+   Revision 6.12  2000/06/07 19:18:42  shavirin
+   Added rank sorting of PDB sequences using rank file (optional)
+
    Revision 6.11  2000/03/14 16:59:32  shavirin
    For equivalent databases added sorting by gi.
 
@@ -108,6 +111,7 @@ typedef struct _DefLine
 {
     Int4 type;
     Int4 gi;
+    Int4 pdb_rank;
     CharPtr line;
 } DefLine, PNTR DefLinePtr;
 
@@ -140,25 +144,42 @@ typedef struct HashTable
     
 } HashTable, *HashTablePtr;
 
-#define NUMARG 8
+/* Structures used for special PDF sorting of deflines */
+typedef struct pdbelm
+{
+    Int4  gi;
+    Int4  group;
+    Int4  rank;
+} PDBElm, *PDBElmPtr;
 
-Args flt_args[NUMARG] = {
-    { "Title for output database file", 
+typedef struct PDBTable
+{
+    Int4 count;
+    Int4 allocated;
+    PDBElmPtr pelms;
+} PDBTable, *PDBTablePtr;
+
+#define NUMARG (sizeof(flt_args)/sizeof(flt_args[0]))
+
+Args flt_args[] = {
+    { "Title for output database file", /* 0 */
       NULL, NULL, NULL, TRUE, 't', ARG_STRING, 0.0, 0, NULL},
-    {"Input file for the filtering (this parameter must be set)",
+    {"Input file for the filtering (this parameter must be set)", /* 1 */
      NULL, NULL,NULL,FALSE,'i',ARG_FILE_IN, 0.0,0,NULL},
-    {"Input file with a list of gis",
+    {"Input file with a list of gis", /* 2 */
      NULL, NULL,NULL,TRUE,'g',ARG_FILE_IN, 0.0,0,NULL},
-    {"Logfile name:",
+    {"Logfile name:",           /* 3 */
      "fdfilter.log", NULL,NULL,TRUE,'l',ARG_FILE_OUT, 0.0,0,NULL},
-    {"Create sparse indexes in the filtered database",
+    {"Create sparse indexes in the filtered database", /* 4 */
      "F", NULL,NULL,TRUE,'s',ARG_BOOLEAN, 0.0,0,NULL},
-    {"Query string for creating database subset",
+    {"Query string for creating database subset", /* 5 */
      NULL, NULL,NULL,TRUE,'q',ARG_STRING, 0.0,0,NULL},
-    {"Input database is proten",
+    {"Input database is proten", /* 6 */
      "T", NULL,NULL,TRUE,'p',ARG_BOOLEAN, 0.0,0,NULL},
-    {"Reverse query request to negative",
+    {"Reverse query request to negative", /* 7 */
      "F", NULL,NULL,TRUE,'r',ARG_BOOLEAN, 0.0,0,NULL},
+    {"Input file with PDB ranks", /* 8 */
+     NULL, NULL,NULL,TRUE,'y',ARG_FILE_IN, 0.0,0,NULL},
 };
 
 #define FLT_Input    flt_args[1].strvalue
@@ -314,7 +335,90 @@ static FDB_optionsPtr FDB_CreateCLOptions(void)
 }
 #define HASH_ALLOC_CHUNK 1024
 #define GI_ALLOC_CHUNK 1024
+#define PDB_ALLOC_CHUNK 1024
 
+static int PDBCompare(VoidPtr i, VoidPtr j)
+{
+    if (*(Int4Ptr)i > *(Int4Ptr)j)
+        return (1);
+    if (*(Int4Ptr)i < *(Int4Ptr)j)
+        return (-1);
+    return (0);
+}
+
+static void FDBAddNewPDB(PDBTablePtr pdbp, Int4 gi, Int4 group, Int4 rank)
+{
+    PDBElmPtr pelm;
+    
+    /* Reallocate if necessary */
+    
+    if(pdbp->allocated <= pdbp->count) {
+        pdbp->allocated += PDB_ALLOC_CHUNK + 1;
+        pdbp->pelms = (PDBElmPtr) 
+            Realloc (pdbp->pelms, pdbp->allocated * sizeof(PDBElm));
+    }
+    
+    pelm = &pdbp->pelms[pdbp->count];
+    
+    pelm->gi      = gi;
+    pelm->group = group;
+    pelm->rank = rank;
+    
+    pdbp->count++;
+    
+    return;
+}
+
+static PDBTablePtr FDBPDBTableNew(void)
+{
+    PDBTablePtr pdbp;
+    
+    pdbp = MemNew(sizeof(PDBTable));
+    pdbp->allocated = PDB_ALLOC_CHUNK;
+    pdbp->pelms = (PDBElmPtr) MemNew (pdbp->allocated * sizeof(PDBElm));
+    
+    return pdbp;
+}
+
+static void FDBDestroyPDBIndex(PDBTablePtr pdbp)
+{
+    if(pdbp == NULL)
+        return;
+    
+    MemFree(pdbp->pelms);
+    MemFree(pdbp);
+    
+    return;
+}
+
+PDBTablePtr FDBCreatePDBIndex(CharPtr filename)
+{
+    PDBTablePtr pdbp;
+    Int4 length;
+    Char buffer[1024];
+    FILE *fd;
+    Int4 gi, group, rank;
+    Char div[32];
+    
+    pdbp = FDBPDBTableNew();
+    length = sizeof(buffer);
+    
+    if((fd = FileOpen(filename, "r")) == NULL) {
+        ErrPostEx(SEV_ERROR, 0,0, "Unable to open input index file");
+        return NULL;
+    }
+    
+    while(fgets(buffer, length, fd) != NULL) {
+        if(*buffer == '#')
+            continue;
+        sscanf(buffer+16, "%d %d %d", &gi, &group, &rank);
+        FDBAddNewPDB(pdbp, gi, group, rank);
+    }
+    
+    HeapSort(pdbp->pelms, pdbp->count, sizeof(PDBElm), PDBCompare);
+    
+    return pdbp;
+}
 static HashTablePtr FDBHashTableNew(void)
 {
     HashTablePtr htp;
@@ -365,7 +469,8 @@ static int HashCompare(VoidPtr i, VoidPtr j)
 static int DefListCompare(VoidPtr i, VoidPtr j)
 {
     DefLinePtr dp, dp1;
-    
+    Int4 rank, rank1;
+
     dp =   *((DefLinePtr *) i);
     dp1 =  *((DefLinePtr *) j);
 
@@ -373,7 +478,14 @@ static int DefListCompare(VoidPtr i, VoidPtr j)
         return (1);
     if (dp->type < dp1->type)
         return (-1);
-
+    
+    if(dp->pdb_rank || dp1->pdb_rank) { /* Both PDB - comaring by rank */
+        if (dp->pdb_rank > dp1->pdb_rank)
+            return (1);
+        if (dp->pdb_rank < dp1->pdb_rank)
+            return (-1);
+    }
+    
     /* If type the same we compare gis */
     
     if (dp->gi > dp1->gi)
@@ -491,10 +603,11 @@ static void DefListFree(DefListPtr dlp)
     return;
 }
 
-static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi)
+static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi,
+                              Int4 pdb_rank)
 {
     DefLinePtr dp;
-
+    
     if(dlp->count >= dlp->allocated) {
         if(!DefListRealloc(dlp))
             return FALSE;
@@ -505,8 +618,10 @@ static Boolean DefListAddLine(DefListPtr dlp, CharPtr line, Int4 type, Int4 gi)
     dp->line = StringSave(line);
     dp->type = type;
     dp->gi = gi;
+    dp->pdb_rank = pdb_rank;
     
     dlp->count++;
+
     return TRUE;
 }
 
@@ -537,13 +652,36 @@ static CharPtr FinalDefLineOut(DefListPtr dlp, SeqIdPtr PNTR seqid)
     return dline;
 }
 
+static Int4 GetPDBRankByGi(PDBTablePtr pdbp, Int4 gi)
+{
 
-static Int4 GetMinimalType(CharPtr defline, Int4Ptr gip)
+    Int4 m, b, e;
+
+    b = 0;
+    e = pdbp->count;
+
+    while (b < e - 1) {
+	m = (b + e) / 2;
+	if ((pdbp->pelms[m].gi) > gi)
+	    e = m;
+	else
+	    b = m;
+    }
+    
+    if(pdbp->pelms[b].gi == gi)
+        return pdbp->pelms[b].rank;
+    else                        /* Gi was not found */
+        return 0;
+}
+
+static Int4 GetMinimalType(PDBTablePtr pdbp, CharPtr defline, 
+                           Int4Ptr gip, Int4Ptr pdb_rank)
 {
     SeqIdPtr sip, sip_tmp;
     Int4 order, order1 = INT2_MAX;
     Char buffer[512];
     CharPtr chptr;
+    Boolean is_pdb = FALSE;
 
     if(defline == NULL || gip == NULL)
         return -1;
@@ -559,16 +697,27 @@ static Int4 GetMinimalType(CharPtr defline, Int4Ptr gip)
 
     sip = SeqIdParse(buffer);
 
+    *pdb_rank = 0;
+    is_pdb = FALSE;
+    *gip = 0;
+
     for(sip_tmp = sip; sip_tmp != NULL; sip_tmp = sip_tmp->next) {
         if((order = GetOrderBySeqId(sip_tmp->choice, TRUE)) < 0)
             return -1;
         order1 = MIN(order, order1);
-
+        
         /* Extracting gi */
         if(sip_tmp->choice == SEQID_GI)
             *gip = (Int4) sip->data.intvalue;
-    }
+        
+        if(sip_tmp->choice == SEQID_PDB)
+            is_pdb = TRUE;
 
+    }
+    
+    if(is_pdb && *gip != 0)
+        *pdb_rank = GetPDBRankByGi(pdbp, *gip);
+    
     MySeqIdFree(sip);
     return order1;
 }
@@ -577,15 +726,16 @@ static Int4 GetMinimalType(CharPtr defline, Int4Ptr gip)
 
 static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count, 
                            ValNodePtr PNTR seqid, CharPtr PNTR defline, 
-                           BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num)
+                           BioseqPtr PNTR bsp, FILE *fd_info, Int4 seq_num,
+                           PDBTablePtr pdbp)
 {
     Int4 i, hash_val, length, len_seq;
     Int4 first, next_count = 0, type;
     UcharPtr sequence, buffer;
     CharPtr dline;
     DefListPtr dlp;
-    Int4 gi;
-
+    Int4 gi, pdb_rank;
+    
     dlp = DefListNew();
     
     for(i = count, hash_val = htp->hep[count].hash, first = TRUE; 
@@ -612,12 +762,12 @@ static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
             
 
             readdb_get_defline(rdfp, htp->hep[i].seq_num, &dline);
-            type = GetMinimalType(dline, &gi);
+            type = GetMinimalType(pdbp, dline, &gi, &pdb_rank);
             
             if(dline == NULL)
                 return -1;
             
-            DefListAddLine(dlp, dline, type, gi);
+            DefListAddLine(dlp, dline, type, gi, pdb_rank);
             MemFree(dline);          
             
             first = FALSE;
@@ -632,8 +782,8 @@ static Int4 NewUniqueFASTA(ReadDBFILEPtr rdfp, HashTablePtr htp, Int4 count,
             if(dline == NULL)
                 return -1;
 
-            type = GetMinimalType(dline, &gi);
-            DefListAddLine(dlp, dline, type, gi);
+            type = GetMinimalType(pdbp, dline, &gi, &pdb_rank);
+            DefListAddLine(dlp, dline, type, gi, pdb_rank);
             MemFree(dline);
                 
             htp->hep[i].seq_num = -1; /* Label do not pass second time */
@@ -880,7 +1030,9 @@ Int2 Main(void)
     CharPtr defline;
     FILE *fd_info;
     SR_InfoPtr srip;
-   
+    Boolean is_prot;
+    PDBTablePtr pdbp;
+
     /* ---------------------------------------------- */
     /* ----- Initializing formatdb structures ------- */
     /* ---------------------------------------------- */
@@ -898,6 +1050,8 @@ Int2 Main(void)
         return 1;
     }
     
+    is_prot = (Boolean) (rdfp->parameters & READDB_IS_PROT);
+    
     count = readdb_get_num_entries (rdfp);
     
     /* ---------------------------------------------- */
@@ -914,7 +1068,7 @@ Int2 Main(void)
             return -1;
 
         glp = GiListNew();
-        sprintf(buffer, "%s.%cdi", FLT_Input, rdfp->is_prot? 'p' : 'n');
+        sprintf(buffer, "%s.%cdi", FLT_Input, is_prot? 'p' : 'n');
         if(!FDGetGiListByQuery(rdfp, srip, glp, buffer, ReverseQuery)) 
             return -1;
         
@@ -927,14 +1081,19 @@ Int2 Main(void)
         MemFree(srip);
 
     } else { /* Hash filtering */
-        sprintf(buffer, "%s.%cdi", FLT_Input, rdfp->is_prot? 'p' : 'n');
+        sprintf(buffer, "%s.%cdi", FLT_Input, is_prot? 'p' : 'n');
         
         if((htp = FDBCreateHashIndex(buffer)) == NULL) {
             ErrPostEx(SEV_ERROR, 0,0, "Failure to create hash index");
             return -1;
         }
-        
-        sprintf(buffer, "%s.%cdi", options->db_file, rdfp->is_prot? 'p' : 'n');
+
+        if(flt_args[8].strvalue != NULL) 
+            pdbp = FDBCreatePDBIndex(flt_args[8].strvalue);
+        else
+            pdbp = NULL;
+
+        sprintf(buffer, "%s.%cdi", options->db_file, is_prot? 'p' : 'n');
         fd_info = FileOpen(buffer, "w");
     }
 
@@ -955,7 +1114,7 @@ Int2 Main(void)
         do {
             next_number =  NewUniqueFASTA(rdfp, htp, next_number, &sip, 
                                           &defline, &bsp, fd_info, 
-                                          fdbp->num_of_seqs);
+                                          fdbp->num_of_seqs, pdbp);
 
             if(next_number < 0) {
                 ErrPostEx(SEV_ERROR, 0, 0, "Failure to get sequence");
@@ -974,8 +1133,10 @@ Int2 Main(void)
         } while (next_number < count); 
 
         FileClose(fd_info);
-        FDBDestroyHashIndex(htp);
 
+        FDBDestroyHashIndex(htp);
+        FDBDestroyPDBIndex(pdbp);
+        
     }  else { /* list of gis */
         
         for(i = 0; i < glp->count; i++) {

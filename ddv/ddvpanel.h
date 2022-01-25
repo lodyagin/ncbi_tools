@@ -1,4 +1,4 @@
-/*  $Id: ddvpanel.h,v 1.25 2000/05/15 22:00:36 hurwitz Exp $
+/*  $Id: ddvpanel.h,v 1.28 2000/07/05 19:23:14 lewisg Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   06/19/99
 *
-* $Revision: 1.25 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ddvpanel.h,v $
+* Revision 1.28  2000/07/05 19:23:14  lewisg
+* add two panes to ddv, update msvc project files
+*
+* Revision 1.27  2000/06/30 22:31:51  hurwitz
+* added merge block function for DDV
+*
+* Revision 1.26  2000/06/02 19:57:04  hurwitz
+* added a query dialog when converting from pairwise multiple to true multiple, bug fix of double freeing of a seqAlignPtr
+*
 * Revision 1.25  2000/05/15 22:00:36  hurwitz
 * put save-edits query into DDV_SlaveQuit where it belongs
 *
@@ -189,6 +198,9 @@ typedef struct ddvexporttextemsg {/*used by the Display Styles Dlg box*/
 #define DDE_DELETE_BLOCK           9
 #define DDE_CREATE_BLOCK          10
 #define DDE_LAUNCH_EDITOR         11
+#define DDE_MERGE_BLOCKS          12
+#define DDE_SPLIT_BLOCK           13
+
 
 /******************************************************************************
 
@@ -207,8 +219,8 @@ extern Char szAppName2[];
 extern void DDV_EnableGotoTBItems(WindoW hParent,Boolean bEnable);
 extern void DDV_WhatSize(DdvMainPtr dmp);
 extern void DDV_InitPanelData(UDVPanelDataPtr pdp);
-extern void DDV_SetupWin (PaneL p,Boolean bInit,RecT PNTR rcPp);
-extern void DDV_Resize_DDV (PaneL Viewer,RecT PNTR rcP);
+extern void DDV_SetupWin (WindoW w,Boolean bInit);
+extern void DDV_Resize_DDV (PaneL p, Boolean bInit);
 extern void DDV_WinMainResize (WindoW w);
 extern void DDV_UpdateVScrollVal(PaneL p,Boolean bInit,Int4 CurPos);
 extern void DDV_UpdateHScrollVal(PaneL p,Boolean bInit,Int4 CurPos);
@@ -218,7 +230,8 @@ extern void DDV_VScrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
 extern void DDV_HScrlProc (BaR sb, SlatE s, Int4 newval, Int4 oldval);
 extern Boolean DDV_CreateViewerPanel(WindoW w,DdvMainWinPtr dmwp,
 	SAM_ViewGlobal *vgp,Boolean bEditor);
-extern void DDV_SetupMenus(WindoW w,DdvMainPtr dmp,Boolean isID1Ok,Boolean bEditor,
+NLM_EXTERN void DDV_SetMenuFocus(WindoW w);
+extern void DDV_SetupMenus(WindoW w,Boolean isID1Ok,Boolean bEditor,
                            SAM_ViewGlobal *vgp);
 extern void DDV_WinMainResize (WindoW w);
 extern void DDV_WinMainCleanup (GraphiC g, VoidPtr data);
@@ -234,6 +247,8 @@ NLM_EXTERN void DDVResetProc (PaneL p);
 NLM_EXTERN void DDV_Save(ButtoN g);
 NLM_EXTERN void DDV_NoSave(ButtoN g);
 NLM_EXTERN void DDV_Cancel(ButtoN g);
+NLM_EXTERN void DDV_FileCloseIt(WindoW hWinMain);
+NLM_EXTERN void DDV_SaveEdits(DdvMainPtr dmp, Boolean UpdateDDV);
 
 #ifdef __cplusplus
 }

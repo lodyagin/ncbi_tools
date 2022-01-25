@@ -37,7 +37,7 @@ Args myargs[NUMARGS] = {
 	  "1", "1", "5", FALSE, 't', ARG_INT, 0.0, 0, NULL } ,
 	{"GI id for single Bioseq to dump" ,"0","1","99999999",TRUE,'g',ARG_INT,0.0,0,NULL},
 	{"Maximum complexity of SeqEntry: 0=as stored, 1=Bioseq, 2=Seq-set, 3=nuc-prot set " ,"0","0","3",TRUE,'c',ARG_INT,0.0,0,NULL},
- 	{"Fasta style SeqId ENCLOSED IN QUOTES: lcl|int or str bbs|int bbm|int gb|acc|loc emb|acc|loc pir|acc|name sp|acc|name pat|country|patent|seq gi|int dbj|acc|loc prf|acc|name pdb|entry|chain  ",
+ 	{"Fasta style SeqId ENCLOSED IN QUOTES:\nlcl|int or str bbs|int bbm|int gb|acc|loc\nemb|acc|loc pir|acc|name sp|acc|name\npat|country|patent|seq gi|int\ndbj|acc|loc prf|acc|name pdb|entry|chain  ",
 	NULL,NULL,NULL,TRUE,'s',ARG_STRING,0.0,0,NULL}};
 
 Int2 Main(void)

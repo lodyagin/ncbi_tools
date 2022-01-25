@@ -23,9 +23,9 @@
 *
 * ===========================================================================
 *
-* $Id: ncbierr.c,v 6.15 1999/10/01 14:41:39 kans Exp $
+* $Id: ncbierr.c,v 6.16 2000/06/14 22:27:52 vakatov Exp $
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * Authors:  Schuler, Sirotkin (UserErr stuff)
 *
@@ -71,6 +71,9 @@
 * 03-06-95 Schuler     Fixed problem with ErrMsgRoot_fopen
 *
 * $Log: ncbierr.c,v $
+* Revision 6.16  2000/06/14 22:27:52  vakatov
+* Nlm_AbnormalExit() -- print message only if called for the first time
+*
 * Revision 6.15  1999/10/01 14:41:39  kans
 * added SEV_REJECT between SEV_ERROR and SEV_FATAL
 *
@@ -1855,7 +1858,11 @@ NLM_EXTERN void LIBCALL Nlm_AbnormalExitPure(int code)
 
 NLM_EXTERN void LIBCALL  Nlm_AbnormalExit (int code)
 {
-  ErrLogPrintStr( "\n***** ABNORMAL PROGRAM EXIT *****\n" );
+  static Nlm_Boolean s_Exiting = FALSE;
+  if ( !s_Exiting ) {
+    s_Exiting = TRUE;
+    ErrLogPrintStr( "\n***** ABNORMAL PROGRAM EXIT *****\n" );
+  }
   Nlm_AbnormalExitPure( code );
 }
 

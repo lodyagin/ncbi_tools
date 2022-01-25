@@ -28,13 +28,16 @@
 *
 * Version Creation Date:   7/99
 *
-* $Revision: 6.57 $
+* $Revision: 6.58 $
 *
 * File Description: SeqAlign indexing and messaging functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr.h,v $
+* Revision 6.58  2000/06/01 14:17:55  wheelan
+* added AlnMgrCheckOrdered and AlnMgrMakeRowsForOrdered
+*
 * Revision 6.57  2000/05/24 15:46:27  wheelan
 * added AlnMgrRemoveInconsistentFromPairwiseSet and AlnMgrSortAlnSetByNthRowPos
 *
@@ -239,7 +242,9 @@ extern "C" {
 #define AM_CHILD 1
 #define AM_PARENT 2
 
-/* return values for AlnMgrCheckOverlapping */
+/* return values for AlnMgrCheckOverlapping and AlnMgrCheckOrdered */
+#define AM_NOTORDERED -4
+#define AM_ORDERED -3
 #define CHECK_ERROR -2
 #define NO_OVERLAP -1
 
@@ -876,6 +881,7 @@ NLM_EXTERN Uint4 AlnMgrGetMasterGapStartForSeg(SeqAlignPtr sap, Int4 which_gap, 
 NLM_EXTERN Boolean AlnMgrReconcileGaps(Int4Ptr lens, Uint4Ptr aligncoords, Int4 num);
 NLM_EXTERN Boolean AlnMgrMakeMultSegments(AMAlignIndexPtr amaip);
 
+NLM_EXTERN Int4 AlnMgrCheckOrdered(SeqAlignPtr sap);
 NLM_EXTERN Int4 AlnMgrCheckOverlapping(SeqAlignPtr sap);
 
 /******************************************************************************
@@ -893,6 +899,7 @@ NLM_EXTERN Int4 AlnMgrGetMaxSegments(SeqAlignPtr sap);
 *
 *******************************************************************************/
 NLM_EXTERN Int4 AlnMgrGetNumRows(SeqAlignPtr sap);
+NLM_EXTERN Boolean AlnMgrMakeRowsForOrdered(SeqAlignPtr sap);
 NLM_EXTERN Int4 AlnMgrGetMaxRowsForParentPartial(SeqAlignPtr sap);
 NLM_EXTERN Boolean AlnMgrGetRowsForPartial(SeqAlignPtr sap);
 NLM_EXTERN Boolean AlnMgrGetRowsForMasterSlave(SeqAlignPtr sap);

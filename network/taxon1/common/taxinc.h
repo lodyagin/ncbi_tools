@@ -122,6 +122,11 @@ Boolean tax1_setSynonyms(Boolean on_off);
 Int4 tax1_getParent(Int4 id_tax);
 
 /*---------------------------------------------
+ * Get genus tax_id (id_tax should be below genus)
+ */
+Int4 tax1_getGenus(Int4 id_tax);
+
+/*---------------------------------------------
  * Get taxids for all children.
  * Returns: number of children
  */

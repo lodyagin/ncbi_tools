@@ -29,7 +29,7 @@
 *
 * Version Creation Date:  21 February 97  
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description: Used to provide VAST data to MMDB-API when
 *  VAST files are on a local filesystem in standard VAST ftp-site format.
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vastlocl.c,v $
+* Revision 6.6  2000/06/21 21:40:07  lewisg
+* change to using gzip
+*
 * Revision 6.5  1998/07/27 16:07:40  madej
 * Pipe the results of gunzip when we get a BAS.
 *
@@ -102,7 +105,7 @@ BiostrucAnnotSetPtr LIBCALL VASTBsAnnotSetGet (Int4 uid)
 
 #ifdef MMDB_UNIXCOMPRESSED
    compath[0] = '\0';
-   sprintf(compath, "%s -c %s.gz ", gunzip, path);
+   sprintf(compath, "%s -d -c %s.gz ", gunzip, path);
    pipe = popen(compath, "rb");
 
    if (pipe == NULL) {

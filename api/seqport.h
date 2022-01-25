@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: seqport.h,v $
+* Revision 6.16  2000/07/05 17:02:12  kans
+* added spp->gapIsZero, SeqPortSet_do_virtualEx, using ncbi4na with gap of 0 to distinguish quality scores under N versus quality scores under gap
+*
 * Revision 6.15  2000/05/23 20:41:17  ostell
 * added MolWtForLoc()
 *
@@ -219,6 +222,7 @@ typedef struct seqport {
     Boolean is_circle ,          /* go around the end of a circle? */
             is_seg ,             /* return EOS at the end of segments? */
             do_virtual,          /* deliver 'N''X' over virtual seqs */
+            gapIsZero,           /* deliver 0 for ncbi4na over virtual seqs - also needs do_virtual */
             eos,                 /* set when comp strand tries to back off */
 			isa_null,            /* TRUE if seqport represents a NULL location */
 			isa_virtual,         /* represents a virtual interval or Bioseq */
@@ -326,6 +330,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_is_seg (SeqPortPtr spp, Boolean value);
 *
 *****************************************************************************/
 NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value);
+NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtualEx (SeqPortPtr spp, Boolean value, Boolean gapIsZero);
 
 /*****************************************************************************
 *

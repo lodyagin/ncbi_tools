@@ -29,13 +29,25 @@
 *
 * Version Creation Date:   4/16/98
 *
-* $Revision: 6.6 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: urlquery.c,v $
+* Revision 6.10  2000/06/30 18:16:09  kans
+* protect against reentrant calls if resultproc is GUI and processes timer - showed up on PC/Windows, not Mac or UNIX version of Sequin
+*
+* Revision 6.9  2000/06/30 12:46:10  kans
+* added QUERY_CloseQueue
+*
+* Revision 6.8  2000/06/29 18:27:10  kans
+* QUERY_OpenUrlQuery has new EMIME_Type type and EMIME_Encoding encoding parameters
+*
+* Revision 6.7  2000/06/13 12:58:14  kans
+* added closeConn parameter to QUERY_AddToQueue
+*
 * Revision 6.6  1999/07/28 21:09:15  vakatov
 * Multiple fixes in QUERY_OpenUrlQuery() to make it work with a generic
 * URL server;  also, pass arguments in the cmd.-line
@@ -51,12 +63,12 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
   Nlm_CharPtr host_machine, Nlm_Uint2 host_port,
   Nlm_CharPtr host_path, Nlm_CharPtr arguments,
   Nlm_CharPtr appName, Nlm_Uint4 timeoutsec,
-  EMIME_SubType subtype, URLC_Flags flags)
+  EMIME_Type type, EMIME_SubType subtype,
+  EMIME_Encoding encoding, URLC_Flags flags)
 {
   CONN            conn = NULL;
   CONNECTOR       connector;
   Nlm_Char        contentType[MAX_CONTENT_TYPE_LEN];
-  EMIME_Encoding  encoding = eENCOD_None;
   SNetConnInfo*   info;
   Nlm_Char        path [PATH_MAX];
   EConnStatus     status;
@@ -80,11 +92,13 @@ NLM_EXTERN CONN QUERY_OpenUrlQuery (
     userAgentName = "?";
   }
 
-  /* set content type from parameters */
+  /* was set content type from parameters - now explicit parameter */
+  /*
   if ((flags & URLC_URL_ENCODE_OUT) != 0) {
     encoding = eENCOD_Url;
   }
-  VERIFY( MIME_ComposeContentType(subtype, encoding,
+  */
+  VERIFY( MIME_ComposeContentTypeEx(type, subtype, encoding,
                                   contentType, sizeof(contentType)) );
 
   /* set HTML header with program name as user agent */
@@ -237,11 +251,13 @@ typedef struct SQueueTag {
   CONN                conn;
   QueryResultProc     resultproc;
   Nlm_VoidPtr         userdata;
+  Nlm_Boolean         closeConn;
+  Nlm_Boolean         protect;
   struct SQueueTag*   next;
 } SConnQueue, PNTR QueuePtr;
 
 NLM_EXTERN void QUERY_AddToQueue (
-  QUEUE* queue, CONN conn, QueryResultProc resultproc, Nlm_VoidPtr userdata
+  QUEUE* queue, CONN conn, QueryResultProc resultproc, Nlm_VoidPtr userdata, Nlm_Boolean closeConn
 )
 
 {
@@ -259,6 +275,8 @@ NLM_EXTERN void QUERY_AddToQueue (
   cqp->conn = conn;
   cqp->resultproc = resultproc;
   cqp->userdata = userdata;
+  cqp->closeConn = closeConn;
+  cqp->protect = FALSE;
 
   /* add to polling queue */
 
@@ -327,17 +345,21 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   while (curr != NULL) {
     next = curr->next;
 
-    if (curr->conn != NULL) {
+    if (curr->conn != NULL && (! curr->protect)) {
       timeout.sec  = 0;
       timeout.usec = 0;
       status = CONN_Wait (curr->conn, eCONN_Read, &timeout);
 
       if (status == eCONN_Success) {
+        /* protect against reentrant calls if resultproc is GUI and processes timer */
+        curr->protect = TRUE;
         if (curr->resultproc != NULL) {
           /* result could eventually be used to reconnect on timeout */
           curr->resultproc (curr->conn, curr->userdata, status);
         }
-        CONN_Close (curr->conn);
+        if (curr->closeConn) {
+          CONN_Close (curr->conn);
+        }
         QUERY_RemoveFromQueue (queue, curr->conn);
 
       } else {
@@ -349,5 +371,31 @@ NLM_EXTERN Nlm_Int4 QUERY_CheckQueue (
   }
 
   return count;
+}
+
+NLM_EXTERN void QUERY_CloseQueue (
+  QUEUE* queue
+)
+
+{
+  QueuePtr       curr;
+  QueuePtr       next;
+  QueuePtr PNTR  qptr;
+
+  qptr = (QueuePtr PNTR) queue;
+  if (qptr == NULL || *qptr == NULL) return;
+
+  curr = *qptr;
+
+  while (curr != NULL) {
+    next = curr->next;
+
+    if (curr->conn != NULL) {
+      CONN_Close (curr->conn);
+      QUERY_RemoveFromQueue (queue, curr->conn);
+    }
+
+    curr = next;
+  }
 }
 

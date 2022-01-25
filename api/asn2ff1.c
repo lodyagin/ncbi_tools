@@ -29,8 +29,8 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.90 $
-* $Revision: 6.90 $
+* $Revision: 6.93 $
+* $Revision: 6.93 $
 *
 * File Description:  files that go with "asn2ff"
 *
@@ -254,7 +254,7 @@ static void GetPapCommPtr (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 ext_index, Int
 static void GetPapSeqFeatPtr (GBEntryPtr gbp, Int4 ext_index, Int4 pap_index, FFPrintArrayPtr pap)
 
 {
-	Int2 feat_index, index, listsize;
+	Int4 feat_index, index, listsize;
 	OrganizeFeatPtr ofp;
 	DescrStructPtr dsp;
 	
@@ -263,7 +263,7 @@ static void GetPapSeqFeatPtr (GBEntryPtr gbp, Int4 ext_index, Int4 pap_index, FF
 	}
 	ofp = gbp->feat;
 	listsize=ofp->sfpListsize;
-	index = (Int2) ext_index;
+	index = (Int4) ext_index;
 
 	feat_index = index - listsize;
 	if (feat_index < 0) {
@@ -1418,9 +1418,9 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	BioseqPtr bsp;
 	SeqEntryPtr sep = NULL;
 
-/*	if (ajp->sep != NULL) {
+	if (ajp->sep != NULL) {
 	  sep = ajp->sep;
-	} else if (ajp->ssp != NULL & ajp->ssp->datatype == 1) {
+	} else if (ajp->ssp != NULL && ajp->ssp->datatype == 1) {
 	  sep = (SeqEntryPtr) ajp->ssp->data;
 	} else if (ajp->entityID > 0 && ajp->slp == NULL) {
 	  sep = GetTopSeqEntryForEntityID (ajp->entityID);
@@ -1430,7 +1430,6 @@ NLM_EXTERN Int4 asn2ff_setup (Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 		VisitFeaturesInSep (sep, NULL, ChangeObsoleteImpFeats);
 	} 
 
-*/
 	ajp->show_gi = FALSE; /* displayed two obsolete line types - should always be FALSE */
 
   	MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
@@ -2569,7 +2568,8 @@ Int4 asn2gp_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 
 	BioseqPtr bsp;
 	FFPrintArrayPtr pap;
-	Int2 feat_num, pub_num;
+	Int4 feat_num;
+	Int2 pub_num;
 	Int4 index, total;
 	Int4 seqblks_num;
 	GBEntryPtr gbp;
@@ -2758,7 +2758,8 @@ Int4 asn2ep_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	BioseqPtr bsp;
 	FFPrintArrayPtr pap;
 	Int4 index, total;
-	Int2 feat_num, pub_num;
+	Int4 feat_num;
+	Int2 pub_num;
 	Int4 seqblks_num;
 	GBEntryPtr gbp;
 
@@ -2886,10 +2887,10 @@ Int4 asn2ep_setup(Asn2ffJobPtr ajp, FFPrintArrayPtr PNTR papp)
 	return total;
 }	
 
-static void FreeSortStructLoc(Int2 size, SortStructPtr p)
+static void FreeSortStructLoc(Int4 size, SortStructPtr p)
 {
-	Int2 index;
-	Int2 size_loc;
+	Int4 index;
+	Int4 size_loc;
 	
 				size_loc = p->extra_loc_cnt;
 				if (size_loc > 0) {
@@ -2907,10 +2908,10 @@ static void FreeSortStructLoc(Int2 size, SortStructPtr p)
 }
 
 /**********************************************************/
-static void FreeSortStructSet(Int2 size, SortStructPtr ssp)
+static void FreeSortStructSet(Int4 size, SortStructPtr ssp)
 {
     SortStructPtr p;
-    Int2          i;
+    Int4          i;
 
     if(size <= 0)
         return;
@@ -2939,6 +2940,9 @@ NLM_EXTERN void asn2ff_cleanup(Asn2ffJobPtr ajp)
     ComStructPtr    snext;
     OrganizeFeatPtr ofp;
 	
+	if (get_www()) {
+		return;
+	}
     if(ajp->asn2ffwep != NULL)
     {
         for(gbp = ajp->asn2ffwep->gbp; gbp != NULL; gbp = next)
@@ -3082,14 +3086,28 @@ void CheckSeqPort (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start)
 				SeqPortSeek(spp, start, SEEK_SET);
 		} else {
 			SeqPortFree(spp);
-			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-			start1 = start - spp->start;
+			if (ajp->slp) {
+			/*	spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
+				start1 = start - spp->start - SeqLocStart(ajp->slp);*/
+				spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
+				start1 = start - spp->start;
+			} else {
+				spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
+				start1 = start - spp->start;
+			}
 			if (start1 != spp->curpos)
 				SeqPortSeek(spp, start1, SEEK_SET);
 		}
 	} else {
-		spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
-		start1 = start - spp->start;
+		if (ajp->slp) {
+			spp = SeqPortNewByLoc(ajp->slp, Seq_code_iupacna);
+			start1 = start - spp->start;
+		/*	spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
+			start1 = start - spp->start - SeqLocStart(ajp->slp);*/
+		} else {
+			spp = SeqPortNew(bsp, 0, -1, 0, Seq_code_iupacna);
+			start1 = start - spp->start;
+		}
 		if (start1 != spp->curpos) 
 			SeqPortSeek(spp, start1, SEEK_SET);
 	}
@@ -4544,7 +4562,7 @@ void PrintPubsByNumber (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	PubStructPtr psp;
 	ValNodePtr vnp;
-	Int2 i, index = (Int2) ajp->pap_index;
+	Int4 i, index = ajp->pap_index;
 
 	for (vnp=gbp->Pub, i=0; vnp && i < index; vnp=vnp->next, i++);
 	if (vnp) {
@@ -4899,6 +4917,9 @@ void PrintSequence (Asn2ffJobPtr ajp, GBEntryPtr gbp, Int4 start, Int4 stop)
 			spp = SeqPortNew(bsp, start, stop, 0, Seq_code_iupacaa);
 		else
 			spp = SeqPortNew(bsp, start, stop, 0, Seq_code_ncbieaa);
+		if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+			SeqPortSet_do_virtual(spp, TRUE);
+		}
 		while ((residue=SeqPortGetResidue(spp)) != SEQPORT_EOF)
 		{
 			if ( !IS_residue(residue) && residue != INVALID_RESIDUE )
@@ -5107,6 +5128,7 @@ Boolean find_item (GatherContextPtr gcp)
 	}
 	return TRUE;
 }
+
 static void PrintSeqRegion (Asn2ffJobPtr ajp, GBEntryPtr gbp)
 {
 	SeqPortPtr spp;

@@ -9,6 +9,9 @@
 #######################################################################
 #
 # $Log: make.mmdbsrv,v $
+# Revision 6.27  2000/06/23 22:35:56  lewisg
+# get rid of hardcoded urls
+#
 # Revision 6.26  1999/06/11 19:56:29  zimmerma
 # new makefiles
 #
@@ -25,12 +28,13 @@ OTHERLIBS = -lm
 INCPATH = $(NCBI_INCDIR)
 
 #development mode
-OPTFLAG = -g
-LIBPATH = $(NCBI_ALTLIB)
+#OPTFLAG = -g
+#LIBPATH = $(NCBI_ALTLIB)
 
 #production mode
-#OPTFLAG = $(NCBI_OPTFLAG)
-#LIBPATH = $(NCBI_LIBDIR)
+OPTFLAG = $(NCBI_OPTFLAG)
+# LIBPATH = ../lib
+LIBPATH = $(NCBI_LIBDIR)
 
 # SYMBOLS FOR flat file source, executables.
 
@@ -38,7 +42,7 @@ SRC_FF = mmdbsrv.c mmdbFF.c
 SRC_PS = mmdbsrv.c mmdb_pubstruct.c PubStructAsn.c
 
 CFLAGS = $(CFLAGS1) $(OPTFLAG) -I$(INCPATH) 
-LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L$(LIBPATH)
+LDFLAGS = -I$(INCPATH) $(OPTFLAG) -L../lib -L$(LIBPATH)
 
 # The current list of NCBI libraries copied from makenet.unx
 

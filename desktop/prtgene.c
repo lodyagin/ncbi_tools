@@ -1,5 +1,4 @@
 #include <prtgene.h>
-#include <accentr.h>
 
 /*functions to print everything between two genes */
 #include <tofile.h>
@@ -489,7 +488,7 @@ static Boolean print_gene_dblst(ValNodePtr db, FILE *fp, CharPtr buf, Int4 buf_s
 			else if(StringICmp(dbtag->db, "GenBank") == 0 && oip->str != NULL)
 			{
 				t_sip = gb_id_make(NULL, oip->str);
-				gi = EntrezFindSeqId(t_sip);
+				gi = GetGIForSeqId (t_sip);
 				if(gi > 0)
 				{
 					sprintf(HTML_buffer, "<a href=\"http://www3.ncbi.nlm.nih.gov/"
@@ -679,10 +678,8 @@ static Boolean PrintGeneRefToFile(SeqFeatPtr sfp, FILE *fp, Uint1 match_type, Ui
 CharPtr WWW_PrintGeneRef(SeqFeatPtr sfp, Uint1 match_type, Uint1 print_loc, NumberingPtr np, Boolean is_html)
 {
 	GeneRefPtr grp = NULL;
-	Char buf[1001];
 	SeqIdPtr sip;
 	DbtagPtr db_tag;
-	ObjectIdPtr oip;
 	CharPtr html_buf, text = NULL;
 
 	if (sfp == NULL) {

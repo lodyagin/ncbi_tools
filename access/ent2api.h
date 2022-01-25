@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.13 $
+* $Revision: 1.14 $
 *
 * File Description: 
 *
@@ -275,6 +275,13 @@ NLM_EXTERN Entrez2IdListPtr EntrezExtractLinkedReply (
 
 NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
   Entrez2ReplyPtr e2ry
+);
+
+/* special SeqIdString to UID convenience function */
+
+NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
+  CharPtr db,
+  CharPtr seq_id_string
 );
 
 /* sample synchronous query code:

@@ -213,6 +213,10 @@ SOURCE=.\readdb.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\rpsutil.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\salign.c
 # End Source File
 # Begin Source File
@@ -418,6 +422,10 @@ SOURCE=.\profiles.h
 # Begin Source File
 
 SOURCE=.\readdb.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\rpsutil.h
 # End Source File
 # Begin Source File
 

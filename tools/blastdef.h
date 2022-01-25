@@ -31,8 +31,20 @@ Contents: #defines and definitions for structures used by BLAST.
 
 ******************************************************************************/
 
-/* $Revision: 6.90 $ 
+/* $Revision: 6.94 $ 
 * $Log: blastdef.h,v $
+* Revision 6.94  2000/07/06 17:24:55  dondosha
+* Added option and parameter megablast_full_deflines
+*
+* Revision 6.93  2000/06/30 17:52:45  madden
+* Move AWAKE_THR_MIN_SIZE to blastdef.h
+*
+* Revision 6.92  2000/06/29 20:30:03  madden
+* Update version and date
+*
+* Revision 6.91  2000/06/08 20:34:18  madden
+* add explode_seqids option to show all ids in a defline
+*
 * Revision 6.90  2000/05/26 20:04:57  madden
 * Raise version and date
 *
@@ -676,8 +688,8 @@ extern "C" {
 #include <mbalign.h>
 
 /* the version of BLAST. */
-#define BLAST_ENGINE_VERSION "2.0.13"
-#define BLAST_RELEASE_DATE "May-26-2000"
+#define BLAST_ENGINE_VERSION "2.0.14"
+#define BLAST_RELEASE_DATE "Jun-29-2000"
 
 /* Defines for program numbers. (Translated in BlastGetProgramNumber). */
 #define blast_type_undefined 0
@@ -697,6 +709,9 @@ extern "C" {
 */
 #define BLAST_OWN 0
 #define BLAST_NOT_OWN 1
+
+/* Specifies minimum search space size for an awak thread. */
+#define AWAKE_THR_MIN_SIZE 20000000000.0
 
 /********************************************************************
 *
@@ -866,6 +881,10 @@ typedef struct _blast_optionsblk {
         Boolean         is_neighboring;   /* Is this a neighboring task? */
 	Nlm_FloatHi original_expect_value;/* Used to change the E-value threshold for 
 			part of a BLAST-KAPPA run and to restore it to the original threshold for the final output. */
+	Boolean		explode_seqids;	/* make one SeqAlign for every gi on a
+					   redundant sequence. */
+        Boolean         megablast_full_deflines; /* Print full deflines in
+						   megablast one-line output */
       } BLAST_OptionsBlk, PNTR BLAST_OptionsBlkPtr;
 
 /****************************************************************************
@@ -951,6 +970,9 @@ typedef struct _blast_parameterblk {
         Boolean is_rps_blast;      /* If this RPS Blast ? */
         SeqLocPtr  query_lcase_mask; /* Masking of input DNA regions */
         Boolean is_neighboring;    /* Is this a neighboring task? */ 
+	Boolean		explode_seqids;	/* make one SeqAlign for every gi on a
+					   redundant sequence. */
+        Boolean megablast_full_deflines;
         } BLAST_ParameterBlk, PNTR BLAST_ParameterBlkPtr;
 
 typedef Nlm_Int4	BLAST_Diag, PNTR BLAST_DiagPtr;

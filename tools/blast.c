@@ -1,4 +1,4 @@
-/* $Id: blast.c,v 6.219 2000/05/25 21:03:56 dondosha Exp $
+/* $Id: blast.c,v 6.222 2000/06/22 22:28:07 dondosha Exp $
 /* ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -47,9 +47,18 @@ Detailed Contents:
 	further manipulation.
 
 ******************************************************************************
- * $Revision: 6.219 $
+ * $Revision: 6.222 $
  *
  * $Log: blast.c,v $
+ * Revision 6.222  2000/06/22 22:28:07  dondosha
+ * Only look at HSPs up to hspcnt_max in BlastSaveCurrentHitlist - this allows not to use MemNew when initializing hsp_array
+ *
+ * Revision 6.221  2000/06/22 14:08:20  madden
+ * Fix bug in BlastWordExtend_prelim if word-hit is at end of sequence
+ *
+ * Revision 6.220  2000/06/08 20:34:10  madden
+ * add explode_seqids option to show all ids in a defline
+ *
  * Revision 6.219  2000/05/25 21:03:56  dondosha
  * In BlastSaveCurrentHitlist assign hspcnt for result hitlist correctly
  *
@@ -3972,6 +3981,7 @@ available) this needs to be set higher up. */
 
 	search->pbp->is_megablast_search = options->is_megablast_search;
 	search->pbp->is_neighboring = options->is_neighboring;
+	search->pbp->explode_seqids = options->explode_seqids;
 
 	search->thr_info->awake_index = FALSE;
 	if (NlmThreadsAvailable() && (search->context_factor*query_length) > INDEX_THR_MIN_SIZE) {
@@ -6319,7 +6329,7 @@ BlastWordExtend_prelim(BlastSearchBlkPtr search, Int4 q_off, Int4 s_off, Int4 wo
 	score=0;
 	sum = 0;
 	q_left = q - word_width;
-	q_right = q+1;
+	q_right = q;
 
 /* Look for the highest scoring region in the initial word. */
 	while (q > q_left)
@@ -6368,7 +6378,6 @@ q_off - q_left is greater than the window. */
 	{
 		*succeed_to_right = TRUE;
 		q = q_right = q_best_right;
-		q--;
 		s = search->subject->sequence + (q - query) + diag;
 		sum = 0;
 /* "score" is actually the "maxscore", if sum drops by "score", then the
@@ -7735,7 +7744,7 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 		hspcnt = result_hitlist->hspcnt;
 		hsp_array = result_hitlist->hsp_array;
 		index1 = 0;
-		hspmax = current_hitlist->hspmax;
+		hspmax = current_hitlist->hspcnt_max;
 
 		hsp = current_hitlist->hsp_array[0];
 		hspset_cnt = -1;
@@ -7794,7 +7803,6 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 			hsp_array[index].subject_offset = hsp->subject.offset;
 			hsp_array[index].subject_length = hsp->subject.length;
 			hsp_array[index].subject_frame = hsp->subject.frame;;
-
 			hsp_array[index].point_back = result_hitlist;
 
 			if (hsp->start_of_chain)
@@ -7804,12 +7812,12 @@ BlastSaveCurrentHitlist(BlastSearchBlkPtr search)
 			hsp_array[index].hspset_cnt = hspset_cnt;
 
 			index1++;
-			if (index1 > hspmax)
+			if (index1 >= hspmax)
 				break;
 			hsp = current_hitlist->hsp_array[index1];
 		}
 		/* Check if there were less HSPs than expected */
-		result_hitlist->hspcnt = index;
+		result_hitlist->hspcnt = index1;
 		result_hitlist->best_evalue = current_evalue;
 		result_hitlist->high_score = high_score;
 	}

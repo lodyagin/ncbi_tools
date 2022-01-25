@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   03/14/95
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description: 
 *
@@ -44,6 +44,9 @@
 * 95/08/30 C. Hogue    Minor changes.
 *
 * $Log: mmdbapi1.c,v $
+* Revision 6.38  2000/06/09 14:35:16  lewisg
+* fix freeing bugs
+*
 * Revision 6.37  2000/04/20 23:27:44  lewisg
 * misc bug fixes
 *
@@ -687,7 +690,8 @@ printf("in FreeMMD ");
     	if (pmmdThis->pdnmgHead) FreeListDNMG(pmmdThis->pdnmgHead);
         if (pmmdThis->pvnmbIRBHead) FreeListVNMB(pmmdThis->pvnmbIRBHead);
         if (pmmdThis->ppflBoundBox) FLMatrixFree(pmmdThis->ppflBoundBox,0,0);
-        if (pmmdThis->pMolDescr)  BiomolDescrFree(pmmdThis->pMolDescr);
+        if (pmmdThis->pMolDescr)  
+            AsnGenericChoiceSeqOfFree(pmmdThis->pMolDescr,(AsnOptFreeFunc)BiomolDescrFree);
 	if (pmmdThis->pSeqId) SeqIdFree(pmmdThis->pSeqId);
         MemFree(pmmdThis);
       }
@@ -703,7 +707,8 @@ printf("in FreeMSD ");
 /* ASN.1 parts */
 	if (pmsdThis->pbsBS) BiostrucFree(pmsdThis->pbsBS);    
   /* BiostrucFree kills models, features % saved ASN.1 parts ... */    
-        if (pmsdThis->pGraphDescr) BiomolDescrFree(pmsdThis->pGraphDescr);
+        if (pmsdThis->pGraphDescr) 
+            AsnGenericChoiceSeqOfFree(pmsdThis->pGraphDescr,(AsnOptFreeFunc)BiomolDescrFree);
 	if (pmsdThis->pDictLocal) ResidueGraphFree(pmsdThis->pDictLocal); 
 /* Structure Strings */ 
   	if (pmsdThis->pcSName) MemFree(pmsdThis->pcSName);

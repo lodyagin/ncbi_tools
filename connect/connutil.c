@@ -1,4 +1,4 @@
-/*  $Id: connutil.c,v 6.14 1999/09/13 15:54:31 vakatov Exp $
+/*  $Id: connutil.c,v 6.15 2000/06/29 17:32:21 vakatov Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,6 +31,11 @@
 *
 * --------------------------------------------------------------------------
 * $Log: connutil.c,v $
+* Revision 6.15  2000/06/29 17:32:21  vakatov
+* Added more MIME sub-types
+* Allow non-NCBI ("standard") MIME types
+* Added MIME_*ContentTypeEx(), and tests for them
+*
 * Revision 6.14  1999/09/13 15:54:31  vakatov
 * Added URL_DecodeEx() -- for "relaxed" URL decoding: let the user to
 * allow some of the symbols prohibited by the standard
@@ -802,16 +807,55 @@ NLM_EXTERN void URL_Encode
  * NCBI-specific MIME content type and sub-types
  */
 
-static const char* s_MIME_SubType[eMIME_Unknown+1] = {
-  "asn-text",
-  "asn-binary",
-  "fasta",
+static const char* s_MIME_Type[eMIME_T_Unknown+1] = {
+  "x-ncbi-data",
+  "text",
+  "application",
   "unknown"
 };
+
+static const char* s_MIME_SubType[eMIME_Unknown+1] = {
+  "x-asn-text",
+  "x-asn-binary",
+  "x-fasta",
+  "x-www-form",
+  "html",
+  "x-unknown"
+};
+
 static const char* s_MIME_Encoding[eENCOD_None+1] = {
-  "url-encoded",
+  "urlencoded",
   ""
 };
+
+
+NLM_EXTERN char* MIME_ComposeContentTypeEx
+(EMIME_Type     type,
+ EMIME_SubType  subtype,
+ EMIME_Encoding encoding,
+ char*          buf,
+ size_t         buflen)
+{
+  static const char s_ContentType[] = "Content-Type: ";
+  const char*       x_Type          = s_MIME_Type    [(int) type];
+  const char*       x_SubType       = s_MIME_SubType [(int) subtype];
+  const char*       x_Encoding      = s_MIME_Encoding[(int) encoding];
+  char              x_buf[MAX_CONTENT_TYPE_LEN];
+
+  if ( *x_Encoding ) {
+    ASSERT(sizeof(s_ContentType) + strlen(x_Type) + strlen(x_SubType) + strlen(x_Encoding) + 4 < MAX_CONTENT_TYPE_LEN);
+    sprintf(x_buf, "%s%s/%s-%s\r\n",
+            s_ContentType, x_Type, x_SubType, x_Encoding);
+  } else {
+      ASSERT(sizeof(s_ContentType) + strlen(x_Type) + strlen(x_SubType) + 3 < MAX_CONTENT_TYPE_LEN);
+    sprintf(x_buf, "%s%s/%s\r\n", s_ContentType, x_Type, x_SubType);
+  }
+
+  ASSERT( strlen(x_buf) < sizeof(x_buf) );
+  ASSERT( strlen(x_buf) < buflen );
+  StringNCpy_0(buf, x_buf, buflen);
+  return buf;
+}
 
 
 NLM_EXTERN char* MIME_ComposeContentType
@@ -820,34 +864,24 @@ NLM_EXTERN char* MIME_ComposeContentType
  char*          buf,
  size_t         buflen)
 {
-  static const char s_ContentType[] = "Content-Type: x-ncbi-data/x-";
-  const char*       x_SubType       = s_MIME_SubType[(int)subtype];
-  const char*       x_Encoding      = s_MIME_Encoding[(int)encoding];
-  char              x_buf[MAX_CONTENT_TYPE_LEN];
-
-  ASSERT( sizeof(s_ContentType) + strlen(x_SubType) + strlen(x_Encoding) + 2
-          < MAX_CONTENT_TYPE_LEN );
-
-  if ( *x_Encoding )
-    sprintf(x_buf, "%s%s-%s\r\n", s_ContentType, x_SubType, x_Encoding);
-  else
-    sprintf(x_buf, "%s%s\r\n", s_ContentType, x_SubType);
-
-  ASSERT( strlen(x_buf) < sizeof(x_buf) );
-  StringNCpy_0(buf, x_buf, buflen);
-  return buf;
+    return MIME_ComposeContentTypeEx(eMIME_T_NcbiData,
+                                     subtype, encoding, buf, buflen);
 }
 
 
-NLM_EXTERN Boolean MIME_ParseContentType
+NLM_EXTERN Boolean MIME_ParseContentTypeEx
 (const char*     str,
+ EMIME_Type*     type,
  EMIME_SubType*  subtype,
  EMIME_Encoding* encoding)
 {
   char*   x_buf;
+  char*   x_type;
   char*   x_subtype;
   int     i;
 
+  if ( type )
+    *type = eMIME_T_Unknown;
   if ( subtype )
     *subtype = eMIME_Unknown;
   if ( encoding )
@@ -859,21 +893,30 @@ NLM_EXTERN Boolean MIME_ParseContentType
   {{
     size_t  x_size = strlen(str) + 1;
     x_buf     = (char*) malloc(2 * x_size);
-    x_subtype = x_buf + x_size;
+    x_type    = x_buf  + x_size;
   }}
 
   strcpy(x_buf, str);
   StrLower(x_buf);
-  if (sscanf(x_buf, " content-type: x-ncbi-data/x-%s ", x_subtype) != 1  &&
-      sscanf(x_buf, " x-ncbi-data/x-%s ", x_subtype) != 1) {
+  if ((sscanf(x_buf, " content-type: %s ", x_type) != 1  &&
+       sscanf(x_buf, " %s ", x_type) != 1)  ||
+      (x_subtype = strchr(x_type, '/')) == 0) {
     free(x_buf);
     return FALSE;
   }
+  *x_subtype++ = '\0';
+
+  if ( type ) {
+    for (i = 0;  i < (int) eMIME_T_Unknown;  i++) {
+      if ( !strncmp(x_type, s_MIME_Type[i], strlen(s_MIME_Type[i])) )
+        *type = (EMIME_Type) i;
+    }
+  }
 
   if ( subtype ) {
-    for (i = 0;  i < (int)eMIME_Unknown;  i++) {
+    for (i = 0;  i < (int) eMIME_Unknown;  i++) {
       if ( !strncmp(x_subtype, s_MIME_SubType[i], strlen(s_MIME_SubType[i])) )
-        *subtype = (EMIME_SubType)i;
+        *subtype = (EMIME_SubType) i;
     }
   }
 
@@ -889,6 +932,25 @@ NLM_EXTERN Boolean MIME_ParseContentType
 }
 
 
+NLM_EXTERN Nlm_Boolean MIME_ParseContentType
+(const char*     str,
+ EMIME_SubType*  subtype,
+ EMIME_Encoding* encoding)
+{
+    EMIME_Type type;
+    if ( !MIME_ParseContentTypeEx(str, &type, subtype, encoding) )
+        return FALSE;
+
+    if (type != eMIME_T_NcbiData) {
+        if ( subtype )
+            *subtype  = eMIME_Unknown;
+        if ( encoding )
+            *encoding = eENCOD_None;
+        return FALSE;
+    }
+
+    return TRUE;
+}
 
 
 /***********************************************************************
@@ -1144,27 +1206,48 @@ Int2 Main(void)
 
 #ifdef TEST_MODULE__CONNUTIL
 
-static Boolean s_CheckMIME(const char* str,
-                           EMIME_SubType subtype, EMIME_Encoding encoding)
+static Boolean s_CheckMIME
+(const char* str,
+ EMIME_Type type, EMIME_SubType subtype, EMIME_Encoding encoding)
 {
-  EMIME_SubType  x_subtype;
-  EMIME_Encoding x_encoding;
+    EMIME_Type     x_type;
+    EMIME_SubType  x_subtype;
+    EMIME_Encoding x_encoding;
 
-  if (!MIME_ParseContentType(str, &x_subtype, 0)   ||  x_subtype  != subtype)
-    return FALSE;
-  if (!MIME_ParseContentType(str, 0, &x_encoding)  ||  x_encoding != encoding)
-    return FALSE;    
-  if (!MIME_ParseContentType(str, &x_subtype, &x_encoding)  ||
-      x_subtype != subtype  ||  x_encoding != encoding)
-    return FALSE;    
+    if (type == eMIME_T_NcbiData) {
+        if (!MIME_ParseContentType(str, &x_subtype, 0)  ||
+            x_subtype  != subtype) {
+            return FALSE;
+        }
+        if (!MIME_ParseContentType(str, 0, &x_encoding)  ||
+            x_encoding != encoding) {
+            return FALSE;
+        }
+        if (!MIME_ParseContentType(str, &x_subtype, &x_encoding)  ||
+            x_subtype != subtype  ||  x_encoding != encoding) {
+            return FALSE;
+        }
+    }
 
-  str = strchr(str, ':');
-  if ( str ) {
-    str++;
-    return s_CheckMIME(str, subtype, encoding);
-  }
+    if (!MIME_ParseContentTypeEx(str, &x_type, &x_subtype, 0)  ||
+        x_type != type  ||  x_subtype != subtype) {
+        return FALSE;
+    }
+    if (!MIME_ParseContentTypeEx(str, &x_type, 0, &x_encoding)  ||
+        x_type != type  ||  x_encoding != encoding) {
+        return FALSE;
+    }
+    if (!MIME_ParseContentTypeEx(str, &x_type, &x_subtype, &x_encoding)  ||
+        x_type != type  ||  x_subtype != subtype  ||  x_encoding != encoding) {
+        return FALSE;
+    }
+    str = strchr(str, ':');
+    if ( str ) {
+        str++;
+        return s_CheckMIME(str, type, subtype, encoding);
+    }
 
-  return TRUE;
+    return TRUE;
 }
 
 
@@ -1173,34 +1256,42 @@ extern "C"
 #endif
 Int2 Main(void)
 {
-  int i,j;
+  int i,j,k;
 
   /* MIME API */
+  EMIME_Type     type;
   EMIME_SubType  subtype;
   EMIME_Encoding encoding;
   char str[MAX_CONTENT_TYPE_LEN];
   *str = '\0';
-  for (i = 0, subtype = (EMIME_SubType) i;
-       i <= (int)eMIME_Unknown;  i++, subtype = (EMIME_SubType) i) {
-    for (j = 0, encoding = (EMIME_Encoding) j; 
-         j <= (int)eENCOD_None;  j++, encoding = (EMIME_Encoding) j) {
-      ASSERT( !s_CheckMIME(str, subtype, encoding) );
-      MIME_ComposeContentType(subtype, encoding, str, sizeof(str));
-      ASSERT( s_CheckMIME(str, subtype, encoding) );
+  for (k = 0, type = (EMIME_Type) k;
+       k <= (int) eMIME_T_Unknown;  k++, type = (EMIME_Type) k) {
+    for (i = 0, subtype = (EMIME_SubType) i;
+         i <= (int)eMIME_Unknown;  i++, subtype = (EMIME_SubType) i) {
+      for (j = 0, encoding = (EMIME_Encoding) j; 
+           j <= (int)eENCOD_None;  j++, encoding = (EMIME_Encoding) j) {
+        ASSERT( !s_CheckMIME(str, type, subtype, encoding) );
+        MIME_ComposeContentTypeEx(type, subtype, encoding, str, sizeof(str));
+        ASSERT( s_CheckMIME(str, type, subtype, encoding) );
+      }
     }
   }
 
   ASSERT( s_CheckMIME("content-type:  x-ncbi-data/x-asn-binary ",
-                      eMIME_AsnBinary, eENCOD_None) );
-  ASSERT( s_CheckMIME("content-TYPE: \t x-ncbi-data/x-asn-text-url-encoded\r",
-                      eMIME_AsnText, eENCOD_Url) );
+                      eMIME_T_NcbiData, eMIME_AsnBinary, eENCOD_None) );
+  ASSERT( s_CheckMIME("content-type:  application/x-www-form-urlencoded ",
+                      eMIME_T_Application, eMIME_WwwForm, eENCOD_Url) );
+  ASSERT( s_CheckMIME("content-TYPE: \t x-ncbi-data/x-asn-text-urlencoded\r",
+                      eMIME_T_NcbiData, eMIME_AsnText, eENCOD_Url) );
   ASSERT( s_CheckMIME("x-ncbi-data/x-eeee",
-                      eMIME_Unknown, eENCOD_None) );
+                      eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None) );
 
   ASSERT( !s_CheckMIME("content-TYPE : x-ncbi-data/x-unknown\r",
-                       eMIME_Unknown, eENCOD_None) );
-  ASSERT( !s_CheckMIME("", eMIME_Unknown, eENCOD_None) );
-  ASSERT( !s_CheckMIME(0, eMIME_Unknown, eENCOD_None) );
+                       eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None) );
+  ASSERT( s_CheckMIME("text/html",
+                       eMIME_T_Text, eMIME_Html, eENCOD_None) );
+  ASSERT( !s_CheckMIME("", eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None) );
+  ASSERT( !s_CheckMIME(0, eMIME_T_NcbiData, eMIME_Unknown, eENCOD_None) );
 
   return 0;
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.95 $
+* $Revision: 6.96 $
 *
 * File Description: 
 *
@@ -1318,7 +1318,8 @@ static Boolean seq_line (CharPtr str)
         if (str2[j] >= 'A' && str2[j] <= 'Z') 
         {
            val1++;
-           if (str2[j]=='A' || str2[j]=='C' || str2[j]=='T' || str2[j]=='G')
+           if (str2[j]=='A' || str2[j]=='C' || str2[j]=='T' ||
+               str2[j]=='G' || str2[j]=='N' || str2[j]=='U')
               val2++;
         }
      }

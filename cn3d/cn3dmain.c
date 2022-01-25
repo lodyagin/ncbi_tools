@@ -34,6 +34,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: cn3dmain.c,v $
+* Revision 6.57  2000/06/12 23:02:41  hurwitz
+* enable launch of DDE from Cn3D, swith from DDV_ComputeRuler to DDE_ReMakeRuler, get rid of styles option for DDE
+*
+* Revision 6.56  2000/06/08 21:00:59  lewisg
+* force dde into nogap mode
+*
 * Revision 6.55  2000/03/20 18:18:33  thiessen
 * fixed header problem causing network unavailability
 *
@@ -327,6 +333,7 @@ Int2 Main(void)
     WindoW www;
     Boolean netCurrentlyOn = FALSE;
     ObjMgrPtr omp;
+    Boolean NoGaps;
 
 
     ErrSetFatalLevel(SEV_MAX);
@@ -353,7 +360,12 @@ Int2 Main(void)
     /*register the sequence and alignment viewers */
     REGISTER_UDV_AUTONOMOUS;    /* udv */
     REG_DDV_SLA_VIEW;           /* ddv */
+    REG_DDV_SLA_EDIT;           /* dde */
     REGISTER_UDV_SEQENTRY;      /* udv launch seqentry */
+
+    /* force DDE to not allow gaps in alignments */
+    NoGaps = TRUE;
+    SetAppProperty("dde_nogaps",(void*)&NoGaps);
 
     Cn3D_CheckNetworkUse();
 

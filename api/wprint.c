@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.36 $
+* $Revision: 6.37 $
 *
 * File Description: 
 *
@@ -45,6 +45,9 @@
 /*************************************
 *
  * $Log: wprint.c,v $
+ * Revision 6.37  2000/06/21 18:31:04  tatiana
+ * fixed qmap.cgi syntax for dbsource link
+ *
  * Revision 6.36  2000/03/23 14:45:53  tatiana
  * added links for MGD, FBgn, FBan
  *
@@ -659,7 +662,7 @@ NLM_EXTERN Boolean LIBCALL www_extra_acc(CharPtr acc, Boolean ncbi)
 	
 	if (www && !ncbi) {
 		l = StringLen(link_seq);
-		prefix = "<a href=%suid=gb|%s|&form=6&db=n&Dopt=g>"; 
+		prefix = "<a href=%suid=%s&form=6&db=n&Dopt=g>"; 
 		ll = StringLen(prefix); 
 		s = (CharPtr)MemNew(l+ ll + 10);
 		sprintf(s, prefix, link_seq, acc);
@@ -710,16 +713,16 @@ NLM_EXTERN Boolean LIBCALL www_dbsource(CharPtr str, Boolean first, Uint1 choice
 	if(www) {
 		if (choice == SEQID_PIR /*|| choice == SEQID_SWISSPROT*/) {
 			link = link_seq;
-			prefix = "<a href=%suid=gb|%s|&form=6&db=p&Dopt=g>";
+			prefix = "<a href=%suid=%s&form=6&db=p&Dopt=g>";
 		} else if (choice == SEQID_PDB || choice == SEQID_PRF) {
 			link = link_seq;
-			prefix = "<a href=%suid=gb|%s|&form=6&db=p&Dopt=g>";
+			prefix = "<a href=%suid=%s&form=6&db=p&Dopt=g>";
 		} else if (choice == SEQID_EMBL || choice == SEQID_GENBANK || 
 			choice == SEQID_DDBJ || choice == SEQID_GIBBSQ || 
 				choice == SEQID_GIBBMT || choice == SEQID_GI || 
 					choice == SEQID_GIIM || SEQID_OTHER)  {
 			link = link_seq;
-			prefix = "<a href=%suid=gb|%s|&form=6&db=s&Dopt=g>";
+			prefix = "<a href=%suid=%s&form=6&db=s&Dopt=g>";
 		} else {
 			ff_AddStringWithTildes(str);
 			return TRUE;

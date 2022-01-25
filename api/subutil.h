@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.22 $
+* $Revision: 6.24 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -42,6 +42,12 @@
 *
 *
 * $Log: subutil.h,v $
+* Revision 6.24  2000/06/20 17:17:28  kans
+* added orgmod.subtype authority through breed
+*
+* Revision 6.23  2000/06/14 16:41:20  kans
+* added SUBSRC_segment
+*
 * Revision 6.22  2000/03/10 18:35:46  kans
 * added CreateContigCloneUserObject for genome contig RefSeq records
 *
@@ -782,6 +788,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_insertion_seq_name 21
 #define SUBSRC_plastid_name 22
 #define SUBSRC_country 23
+#define SUBSRC_segment 24
 #define SUBSRC_other 255
 
 /*********************************************
@@ -844,6 +851,14 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_nat_host 21
 #define ORGMOD_sub_species 22
 #define ORGMOD_specimen_voucher 23
+#define ORGMOD_authority 24
+#define ORGMOD_forma 25
+#define ORGMOD_forma_specialis 26
+#define ORGMOD_ecotype 27
+#define ORGMOD_synonym 28
+#define ORGMOD_anamorph 29
+#define ORGMOD_teleomorph 30
+#define ORGMOD_breed 31
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
 

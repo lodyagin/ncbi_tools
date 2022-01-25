@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.3 $
+* $Revision: 1.6 $
 *
 * File Description: 
 *
@@ -262,8 +262,8 @@ NLM_EXTERN CONN PMFetchOpenConnection (
   }
   sprintf (query, "db=%s&id=%ld&report=asn1&mode=text", db, (long) uid);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/utils/pmfetch.fcgi",
-                             query, "Entrez2Tool",
-                             30, eMIME_AsnText, URLC_SURE_FLUSH);
+                             query, "Entrez2Tool", 30, eMIME_T_NcbiData,
+                             eMIME_AsnText, eENCOD_None, 0);
 }
 
 static EConnStatus CommonWaitForReply (
@@ -272,7 +272,7 @@ static EConnStatus CommonWaitForReply (
 
 {
   time_t           currtime, starttime;
-  Int2             max;
+  Int2             max = 0;
   EConnStatus      status;
   STimeout         timeout;
 #ifdef OS_MAC
@@ -398,7 +398,7 @@ NLM_EXTERN Boolean PubMedAsynchronousQuery (
 
   QUERY_SendQuery (conn);
 
-  QUERY_AddToQueue (queue, conn, resultproc, userdata);
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
 
   return TRUE;
 }
@@ -445,7 +445,7 @@ NLM_EXTERN Boolean PubSeqAsynchronousQuery (
 
   QUERY_SendQuery (conn);
 
-  QUERY_AddToQueue (queue, conn, resultproc, userdata);
+  QUERY_AddToQueue (queue, conn, resultproc, userdata, TRUE);
 
   return TRUE;
 }

@@ -29,13 +29,31 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.27 $
+* $Revision: 6.33 $
 *
 * File Description: 
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: asn2ff6.c,v $
+* Revision 6.33  2000/06/29 12:23:30  kans
+* GenPept on Seq_repr_virtual shown only if is_www || ajp->mode != RELEASE_MODE, earlier kludge of ignoring get_www was probably too broad
+*
+* Revision 6.32  2000/06/28 19:31:22  kans
+* in SeqToAwp always set is_www to TRUE, so virtual sequences show up on non-web applications
+*
+* Revision 6.31  2000/06/23 15:42:34  tatiana
+* removed virion and proviral from ORGANISM line
+*
+* Revision 6.30  2000/06/21 15:04:57  tatiana
+* space added to Virion
+*
+* Revision 6.29  2000/06/12 20:49:04  tatiana
+* new organelles added to ORGANISM filed
+*
+* Revision 6.28  2000/06/05 17:51:53  tatiana
+* increase size of feature arrays to Int4
+*
 * Revision 6.27  2000/02/09 19:34:39  kans
 * added forgbrel flag to Asn2ffJobPtr, currently used to suppress PUBMED line, which was not formally announced in release notes
 *
@@ -381,11 +399,11 @@ NLM_EXTERN void NoteStructReset (NoteStructPtr nsp)
 }
 
 
-NLM_EXTERN void ListFree (SeqFeatPtr PNTR PNTR List, Int2 range)
+NLM_EXTERN void ListFree (SeqFeatPtr PNTR PNTR List, Int4 range)
 {
-	Int2 index;
+	Int4 index;
 
-	for (index=0; index<range; index++)
+	for (index=0; index < range; index++)
 		MemFree(List[index]);
 
 	MemFree(List);
@@ -505,7 +523,7 @@ NLM_EXTERN void EnlargeCharPtrStack (NoteStructPtr nsp, Int2 enlarge)
 	nsp->note_alloc = new_alloc;
 }
 
-NLM_EXTERN SortStructPtr EnlargeSortList(SortStructPtr List, Int2 size)
+NLM_EXTERN SortStructPtr EnlargeSortList(SortStructPtr List, Int4 size)
 {
 	SortStructPtr NewList;
 
@@ -1023,8 +1041,8 @@ NLM_EXTERN ValNodePtr FlatRefBest(ValNodePtr equiv, Boolean error_msgs, Boolean 
 	return retval;
 }	/* FlatRefBest */
 
-NLM_EXTERN Int2 StoreFeatTemp(SortStruct PNTR List, SeqFeatPtr sfp,
-Int2 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt,
+NLM_EXTERN Int4 StoreFeatTemp(SortStruct PNTR List, SeqFeatPtr sfp,
+Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt,
 Boolean temp)
 {
 	SeqLocPtr PNTR slpp = NULL;
@@ -1054,7 +1072,7 @@ Boolean temp)
 	return currentsize;
 }
 
-NLM_EXTERN Int2 StoreFeat(SortStruct PNTR List, SeqFeatPtr sfp, Int2 currentsize, 
+NLM_EXTERN Int4 StoreFeat(SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, 
 BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
 SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt)
 {
@@ -1062,7 +1080,7 @@ SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt)
 					itemtype,slp, extra_loc, extra_loc_cnt, FALSE);
 }
 
-NLM_EXTERN Int2 StoreFeatFree(SortStruct PNTR List, SeqFeatPtr sfp, Int2 currentsize, 
+NLM_EXTERN Int4 StoreFeatFree(SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, 
 BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 itemtype,
 SeqLocPtr slp, SeqLocPtr PNTR extra_loc, Int2 extra_loc_cnt, Boolean feat_free)
 {
@@ -1258,15 +1276,18 @@ NLM_EXTERN CharPtr FlatOrganelle(Asn2ffJobPtr ajp, GBEntryPtr gbp)
     "Kinetoplast ",
     "Cyanelle "};
 	BioSourcePtr biosp=NULL;
-	
+/*	
 	static CharPtr genome[] = {
-	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid", "Macronuclear", "Extrachrom", "Plasmid", NULL, NULL, "Cyanelle ", "Proviral"};
+	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid ", "Macronuclear ", "Extrachrom ", "Plasmid ", NULL, NULL, "Cyanelle ", "Proviral ", "Virion ", "Nucleomorph ", "Apicoplast ", "Leucoplast ", "Proplastid "};
+*/	
+	static CharPtr genome[] = {
+	NULL, NULL, "Chloroplast ", "Chromoplast ", "Kinetoplast ", "Mitochondrion ", "Plastid ", "Macronuclear ", "Extrachrom ", "Plasmid ", NULL, NULL, "Cyanelle ", NULL, NULL, "Nucleomorph ", "Apicoplast ", "Leucoplast ", "Proplastid "};
 	
 /* try new first */
 	if ((vnp=GatherDescrByChoice(ajp, gbp, Seq_descr_source)) != NULL) 
 	{
 		biosp = vnp->data.ptrvalue;
-		if (biosp->genome < 6 || biosp->genome == 12)
+		if (biosp->genome < 6 || biosp->genome > 12)
 			retval = StringSave(genome[biosp->genome]);
 	}
 /* old next */
@@ -3293,6 +3314,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 	GBEntryPtr	gbep;
 	SeqIdPtr isip, sip;
 	Uint1 format;
+	Boolean is_www = get_www();
 
 	ajp = (Asn2ffJobPtr) gcp->userdata;
 	awp = ajp->asn2ffwep;
@@ -3324,7 +3346,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 					|| (ISA_aa(bsp->mol) && format == GRAPHIK_FMT)) {
 					if (ISA_aa(bsp->mol) && (bsp->repr == Seq_repr_raw 
 		   	|| bsp->repr == Seq_repr_const || bsp->repr == Seq_repr_delta 
-		   	|| 	bsp->repr == Seq_repr_virtual)) {
+		   	|| 	((is_www || ajp->mode != RELEASE_MODE) && bsp->repr == Seq_repr_virtual))) {
 						gbep = CreateGBEntry(awp, bsp, gcp->entityID, 
 							gcp->itemID, gcp->thistype);
 						++awp->total_seg;
@@ -3333,7 +3355,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 				} else {
 					if (ISA_na(bsp->mol) && (bsp->repr == Seq_repr_raw 
 		   		|| bsp->repr == Seq_repr_const|| bsp->repr == Seq_repr_delta
-		   		|| 	bsp->repr == Seq_repr_virtual)) {
+		   		|| 	(is_www && bsp->repr == Seq_repr_virtual))) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
 							sip = SeqIdSelect(bsp->id, fasta_order, NUM_ORDER);
 							if (sip && sip->choice != SEQID_LOCAL) {
@@ -3363,7 +3385,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 						if (bsp->repr == Seq_repr_raw || 
 							bsp->repr == Seq_repr_const 
 							|| bsp->repr == Seq_repr_delta 
-							|| bsp->repr == Seq_repr_virtual) {
+							|| (is_www && bsp->repr == Seq_repr_virtual)) {
 							if (CompareToAwpList(bsp, awp) == FALSE) {
 								if (ASN2FF_LOCAL_ID == FALSE) {
 									isip = bsp->id;
@@ -3398,7 +3420,7 @@ NLM_EXTERN Boolean SeqToAwp (GatherContextPtr gcp)
 				} else if (ISA_na(bsp->mol) && (bsp->repr == Seq_repr_raw || 
 						bsp->repr == Seq_repr_const 
 							|| bsp->repr == Seq_repr_delta 
-							|| bsp->repr == Seq_repr_virtual)) {
+							|| (is_www && bsp->repr == Seq_repr_virtual))) {
 						if (CompareToAwpList(bsp, awp) == FALSE) {
 						if (ASN2FF_LOCAL_ID == FALSE) {
 							isip = bsp->id;

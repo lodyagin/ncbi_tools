@@ -29,13 +29,19 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.50 $
+* $Revision: 6.52 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvpanel.c,v $
+* Revision 6.52  2000/06/27 20:46:38  hurwitz
+* fixed bugs with select rectangle, added select row option
+*
+* Revision 6.51  2000/06/16 17:30:40  kans
+* UDVResetProc sends TRUE to UDV_FreeVDPstruct
+*
 * Revision 6.50  2000/05/19 13:48:31  hurwitz
 * made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
 *
@@ -980,7 +986,7 @@ ViewerMainPtr vmp;
 		vdp->udv_graph.udv_panel.nTotLines=0;
 		if (vdp->udv_graph.udv_panel.region)
 			ValNodeFreeData(vdp->udv_graph.udv_panel.region);
-		memset(&vdp->UDV_ms,0,sizeof(UDV_mouse_select));
+    ClearUDV_mouse_select(&(vdp->UDV_ms));
 		vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
 		memset(&vdp->Item_select,(Uint2)-1,sizeof(UDV_Item_Select));
 		memset(&vdp->Old_Item_select,(Uint2)-1,sizeof(UDV_Item_Select));
@@ -2130,7 +2136,7 @@ NLM_EXTERN void UDVResetProc (PaneL p)
 
   vdp = (ViewerDialogDataPtr) GetObjectExtra (p);
   if (vdp == NULL) return;
-  UDV_FreeVDPstruct (vdp, FALSE);
+  UDV_FreeVDPstruct (vdp, TRUE);
 }
 
 /*******************************************************************************
@@ -3628,3 +3634,12 @@ WindoW				hWinMain;
 	ArrowCursor ();
 }
 
+
+NLM_EXTERN void ClearUDV_mouse_select(UDV_mouse_selectPtr msp) {
+/*******************************************************************************
+  zero the UDV_mouse_select structure.
+*******************************************************************************/
+  if (msp->first_cols != NULL) MemFree(msp->first_cols);
+  if (msp->first_pgps != NULL) MemFree(msp->first_pgps);
+	MemSet(msp, 0, sizeof(UDV_mouse_select));
+}

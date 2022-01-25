@@ -1,4 +1,4 @@
---$Revision: 1.16 $
+--$Revision: 1.18 $
 --********************************************************************
 --
 --  Network BLAST 
@@ -15,7 +15,8 @@ BEGIN
 
 EXPORTS	Blast-search, Blast-request,
 	Blast-response, Blast-parameters, Blast-matrix,
-	Blast-dbinfo, Blast-mask, Blast-KABlk, Blast-error;
+	Blast-dbinfo, Blast-mask, Blast-KABlk, Blast-error,
+	Blast-phialign;
 
 	
 IMPORTS Bioseq FROM NCBI-Sequence
@@ -105,7 +106,8 @@ Blast-matrix ::= SEQUENCE {
 	-- for proteins the values returned correspond to (-,-), (-,A), (-,B), (-,C) ...
 	-- (A,-), (A,A), (A,B), (A,C) ...
 	scores		SEQUENCE OF INTEGER , -- integer values of matrix 
-	karlinK		REAL	-- Karlin/Altschul parameter calculated with this matrix
+	karlinK		REAL,	-- Karlin/Altschul parameter calculated with this matrix
+        posFreqs        SEQUENCE OF REAL OPTIONAL -- S&W PSI Blast frequencies
 }
 
 -- Describes a sequence for the BLAST retriveal system
@@ -170,7 +172,9 @@ Blast-parameters ::= SEQUENCE {
 	phi-pattern	VisibleString OPTIONAL,	-- indicates, that this is phi-blast search and supplies pattern
 	use-real-db-size BOOLEAN OPTIONAL,  -- db size not to be adjusted for list of gis'.
         use-best-align   BOOLEAN OPTIONAL,   -- option is to use alignments choosen by user in PSM computation API
-        is-rps-blast   BOOLEAN OPTIONAL   -- option to set RPS BLAST search
+        is-rps-blast   BOOLEAN OPTIONAL,   -- option to set RPS BLAST search
+        tweak-parameters BOOLEAN OPTIONAL, -- Tweak Lambda, K, and score matrix for each match  
+        smith-waterman   BOOLEAN OPTIONAL  -- Compute locally optimal Smith-Waterman alignments
 }
 
 				-- series of these when the request is queued

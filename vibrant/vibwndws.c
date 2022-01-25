@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.37 $
+* $Revision: 6.38 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: vibwndws.c,v $
+* Revision 6.38  2000/06/15 20:51:45  vakatov
+* Use "const" in Args code
+*
 * Revision 6.37  2000/03/31 16:14:13  thiessen
 * fix modal window lockout bug
 *
@@ -7360,11 +7363,11 @@ static Nlm_Boolean FetchArg(Nlm_ArgPtr arg, const char *str,
 }
 
 
-static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
+static Nlm_Boolean GetArgs_ST(const char* progname,
                               Nlm_Int2 numargs, Nlm_ArgPtr ap,
                               Nlm_Boolean silent)
 {
-  const static char* s_TypeStrings[] = {
+  static const char* s_TypeStrings[] = {
     "",
     "",
     "Integer: ",
@@ -7376,7 +7379,7 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
     "Data Out: "
   };
 
-  const static char* s_ValueStrings[] = {
+  static const char* s_ValueStrings[] = {
     "",
     "T/F",
     "Integer",
@@ -7540,7 +7543,7 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
 
 
   /* Arg-Query Dialog Box */ 
-  w = Nlm_FixedWindow (-50, -33, -10, -10, progname, NULL);
+  w = Nlm_FixedWindow (-50, -33, -10, -10, (Nlm_CharPtr) progname, NULL);
   smallScreen = FALSE;
 #ifdef WIN_MAC
   if (Nlm_screenRect.right < 513  ||  Nlm_screenRect.bottom < 343)
@@ -7568,7 +7571,8 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
        initialize these by default values */
     switch (curarg->type) {
       case ARG_BOOLEAN:
-        hp [i] = (Nlm_Handle) Nlm_CheckBox (g, curarg->prompt, NULL);
+        hp[i] = (Nlm_Handle)
+          Nlm_CheckBox(g, (Nlm_CharPtr) curarg->prompt, NULL);
         Nlm_StaticPrompt (g, "", 0, 0, Nlm_systemFont, 'l');
         if (curarg->intvalue == 1) {
           Nlm_SetStatus (hp [i], TRUE);
@@ -7581,8 +7585,8 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
       case ARG_FILE_OUT:
       case ARG_DATA_IN:
       case ARG_DATA_OUT:
-        Nlm_MultiLinePrompt (g, curarg->prompt, 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
-        hp[i] = (Nlm_Handle) Nlm_DialogText(g, curarg->defaultvalue, 10, NULL);
+        Nlm_MultiLinePrompt (g, (Nlm_CharPtr) curarg->prompt, 0, Nlm_dialogTextHeight, Nlm_systemFont, 'l');
+        hp[i] = (Nlm_Handle) Nlm_DialogText(g, (Nlm_CharPtr) curarg->defaultvalue, 10, NULL);
         if (firstText == NULL) {
           firstText = (Nlm_TexT) hp[i];
         }
@@ -7692,7 +7696,7 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
   Nlm_Update ();
 
   if (getArgsOk) {  /* leave up a little window with the program name */
-    w = Nlm_FixedWindow (-50, -33, -10, -10, progname, NULL);
+    w = Nlm_FixedWindow (-50, -33, -10, -10, (Nlm_CharPtr) progname, NULL);
     Nlm_DoShow ((Nlm_GraphiC) w, TRUE, TRUE);
   }
 
@@ -7701,14 +7705,14 @@ static Nlm_Boolean GetArgs_ST(Nlm_CharPtr progname,
 }
 
 
-extern Nlm_Boolean Nlm_GetArgs(Nlm_CharPtr progname,
+extern Nlm_Boolean Nlm_GetArgs(const char* progname,
                                Nlm_Int2 numargs, Nlm_ArgPtr ap)
 {
   return GetArgs_ST(progname, numargs, ap, FALSE);
 }
 
 
-extern Nlm_Boolean Nlm_GetArgsSilent(Nlm_CharPtr progname,
+extern Nlm_Boolean Nlm_GetArgsSilent(const char* progname,
                                      Nlm_Int2 numargs, Nlm_ArgPtr ap)
 {
   return GetArgs_ST(progname, numargs, ap, TRUE);

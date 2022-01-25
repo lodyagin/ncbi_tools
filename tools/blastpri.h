@@ -32,8 +32,11 @@ Contents: prototypes for "private" BLAST functions, these should not be called
 
 ******************************************************************************/
 
-/* $Revision: 6.64 $ 
+/* $Revision: 6.65 $ 
 * $Log: blastpri.h,v $
+* Revision 6.65  2000/06/13 20:54:39  shavirin
+* Added return of EFF_SEARCH_SPACE in the function BlastOtherReturnsPrepare
+*
 * Revision 6.64  2000/04/10 19:57:20  dondosha
 * Added prototype for BlastSeqLocFillDoubleIntRev
 *
@@ -516,6 +519,7 @@ typedef struct _txdbinfo {
 #define TXKABLK_GAP 13
 #define TXPARAMETERS 14
 #define TXMATRIX 15
+#define EFF_SEARCH_SPACE 16
 
 	
 /*

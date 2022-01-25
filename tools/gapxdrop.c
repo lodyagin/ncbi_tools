@@ -32,8 +32,11 @@ Author: Gennadiy Savchuk, Jinqhui Zhang, Tom Madden
 Contents: Functions to perform a gapped alignment on two sequences.
 
 ****************************************************************************/
-/* $Revision: 6.31 $ 
+/* $Revision: 6.32 $ 
 * $Log: gapxdrop.c,v $
+* Revision 6.32  2000/06/16 20:36:55  madden
+* Remove MemSet from setup of state structure
+*
 * Revision 6.31  2000/05/16 19:59:39  madden
 * Fix for rpsblast extensions
 *
@@ -303,10 +306,11 @@ GapXDropGetState(GapXDropStateArrayStructPtr PNTR head, Int4 length)
 	retval = NULL;
 	if (*head == NULL)
 	{
-		retval = (GapXDropStateArrayStructPtr) MemNew(sizeof(GapXDropStateArrayStruct));
-		retval->state_array = MemNew(chunksize*sizeof(Uint1));
+		retval = (GapXDropStateArrayStructPtr) Nlm_Malloc(sizeof(GapXDropStateArrayStruct));
+		retval->state_array = Nlm_Malloc(chunksize*sizeof(Uint1));
 		retval->length = chunksize;
 		retval->used = 0;
+		retval->next = NULL;
 		*head = retval;
 	}
 	else
@@ -323,7 +327,7 @@ GapXDropGetState(GapXDropStateArrayStructPtr PNTR head, Int4 length)
 			else if (var->used == 0)
 			{ /* If it's empty and too small, replace. */
 				var->state_array = MemFree(var->state_array);
-				var->state_array = MemNew(chunksize*sizeof(Uint1));
+				var->state_array = Nlm_Malloc(chunksize*sizeof(Uint1));
 				var->length = chunksize;
 				retval = var;
 				break;
@@ -334,10 +338,11 @@ GapXDropGetState(GapXDropStateArrayStructPtr PNTR head, Int4 length)
 
 		if (var == NULL)
 		{
-			retval = (GapXDropStateArrayStructPtr) MemNew(sizeof(GapXDropStateArrayStruct));
-			retval->state_array = MemNew(chunksize*sizeof(Uint1));
+			retval = (GapXDropStateArrayStructPtr) Nlm_Malloc(sizeof(GapXDropStateArrayStruct));
+			retval->state_array = Nlm_Malloc(chunksize*sizeof(Uint1));
 			retval->length = chunksize;
 			retval->used = 0;
+			retval->next = NULL;
 			last->next = retval;
 		}
 	}
@@ -355,7 +360,9 @@ GapXDropPurgeState(GapXDropStateArrayStructPtr state_struct)
 {
 	while (state_struct)
 	{
+/*
 		MemSet(state_struct->state_array, 0, state_struct->used);
+*/
 		state_struct->used = 0;
 		state_struct = state_struct->next;
 	}

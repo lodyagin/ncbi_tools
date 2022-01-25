@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.110 $
+* $Revision: 6.128 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -39,6 +39,60 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: valid.c,v $
+* Revision 6.128  2000/07/06 21:50:21  kans
+* start lastloc at -1, set gcp->itemID for all messages
+*
+* Revision 6.127  2000/07/06 21:11:32  kans
+* added ERR_SEQ_GRAPH_GraphOverlap
+*
+* Revision 6.126  2000/07/06 16:17:40  kans
+* once again only counting seqlit with real data for numdsp - introduced bug when separating dsp and sgp counting
+*
+* Revision 6.125  2000/07/06 16:01:54  kans
+* expanded phrap graph error messages
+*
+* Revision 6.124  2000/07/06 15:25:11  kans
+* check for fa2htgs bug
+*
+* Revision 6.123  2000/07/05 17:02:12  kans
+* added spp->gapIsZero, SeqPortSet_do_virtualEx, using ncbi4na with gap of 0 to distinguish quality scores under N versus quality scores under gap
+*
+* Revision 6.122  2000/07/03 21:22:47  kans
+* changed some seqgraph error levels, preparing to figure out if nonzero score is below a gap, report as more severe error
+*
+* Revision 6.121  2000/07/03 17:11:43  kans
+* gphlen should be either seqlen (seqlit sum) or bsplen, also check every value to be within reported range
+*
+* Revision 6.120  2000/07/03 16:37:28  kans
+* multi seqlit deltas can have a single phrap seqgraph, downgrade some errors to warning (for now), may want to allow small positive score for N bases in future
+*
+* Revision 6.119  2000/06/26 12:58:15  kans
+* look for Blast Type instead of Hist Seqalign to detect PowerBLAST alignment
+*
+* Revision 6.118  2000/06/21 21:57:02  kans
+* fix to graph validation
+*
+* Revision 6.117  2000/06/21 18:01:39  kans
+* check residues against quality values, report ACGT with 0 score and N with non-zero score
+*
+* Revision 6.116  2000/06/21 17:08:23  kans
+* check each sgp->loc against running seqlit range
+*
+* Revision 6.115  2000/06/21 00:02:58  kans
+* added ValidateGraphsOnBioseq, still need to look for runs of 0 that are not opposite runs of N
+*
+* Revision 6.114  2000/06/20 20:30:53  kans
+* added ERR_SEQ_ALIGN_BlastAligns
+*
+* Revision 6.113  2000/06/13 15:14:08  kans
+* change pre-locking to only lock remote genome components - otherwise got unlocking 0 lockcnt messages
+*
+* Revision 6.112  2000/06/12 14:55:19  kans
+* added ERR_SEQ_FEAT_InvalidQualifierValue for /rpt_type and /rpt_unit
+*
+* Revision 6.111  2000/06/09 19:01:00  kans
+* added ERR_SEQ_DESCR_BioSourceNeedsFocus
+*
 * Revision 6.110  2000/05/17 16:12:28  kans
 * virion is no longer a legal feature
 *
@@ -58,7 +112,7 @@
 * Do not report ERR_SEQ_FEAT_MultipleCDSproducts if pseudo cds or contained by pseudo gene
 *
 * Revision 6.104  2000/05/10 18:09:29  kans
-* added ERR_SEQ_FEAT_FocusOnBioSourceFeauture
+* added ERR_SEQ_FEAT_FocusOnBioSourceFeature
 *
 * Revision 6.103  2000/05/04 14:36:58  kans
 * cleared up warnings found by gcc and clcc, and changed implementation of locking and unlocking remote genome segments
@@ -558,6 +612,7 @@ NLM_EXTERN void CDECL  ValidErr VPROTO((ValidStructPtr vsp, int severity, int co
 static void ValidateBioseqInst (GatherContextPtr gcp);
 static void ValidateBioseqContext (GatherContextPtr gcp);
 static void ValidateBioseqSet (GatherContextPtr gcp);
+static void ValidateGraphsOnBioseq (GatherContextPtr gcp);
 static void SpellCheckSeqDescr(GatherContextPtr gcp);
 NLM_EXTERN void CdTransCheck(ValidStructPtr vsp, SeqFeatPtr sfp);
 void ValidateFeatureTable (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent);
@@ -996,6 +1051,10 @@ NLM_EXTERN void CDECL  ValidErr (ValidStructPtr vsp, int severity, int code1, in
 static Boolean Valid1GatherProc (GatherContextPtr gcp)
 {
 	ValidStructPtr vsp;
+	AnnotDescrPtr desc;
+	SeqAnnotPtr sap;
+	ObjectIdPtr oip;
+	Boolean is_blast_align;
 	SeqFeatPtr sfp;
 	ValNodePtr sdp;
 	BioSourcePtr biop;
@@ -1009,11 +1068,32 @@ static Boolean Valid1GatherProc (GatherContextPtr gcp)
 			if (! vsp->onlyspell) {
 				ValidateBioseqInst (gcp);
 				ValidateBioseqContext (gcp);
+				ValidateGraphsOnBioseq (gcp);
 			}
 			break;
 		case OBJ_BIOSEQSET:
 			if (! vsp->onlyspell) {
 				ValidateBioseqSet (gcp);
+			}
+			break;
+		case OBJ_SEQANNOT:
+			if (! vsp->onlyspell) {
+				sap = (SeqAnnotPtr) gcp->thisitem;
+				if (sap != NULL && sap->type == 2) {
+					is_blast_align = FALSE;
+					desc = NULL;
+					while ((desc = ValNodeFindNext (sap->desc, desc, Annot_descr_user)) != NULL) {
+						if (desc->data.ptrvalue != NULL) {
+							oip = ((UserObjectPtr) desc->data.ptrvalue)->type;
+							if (oip != NULL && StringCmp (oip->str, "Blast Type") == 0) {
+								is_blast_align = TRUE;
+							}
+						}
+					}
+					if (is_blast_align) {
+						ValidErr (vsp, SEV_ERROR, ERR_SEQ_ALIGN_BlastAligns, "Record contains BLAST alignments");
+					}
+				}
 			}
 			break;
 		case OBJ_SEQFEAT:
@@ -1167,6 +1247,10 @@ static Boolean LIBCALLBACK LockAllSegments (SeqLocPtr slp, SeqMgrSegmentContextP
   }
   if (sip == NULL) return TRUE;
 
+  /* if packaged in record, no need to fetch it */
+
+  if (BioseqFindCore (sip) != NULL) return TRUE;
+
   bsp = BioseqLockById (sip);
   ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
 
@@ -1182,8 +1266,10 @@ static Boolean LIBCALLBACK LockAllBioseqs (BioseqPtr bsp, SeqMgrBioseqContextPtr
   vnpp = (ValNodePtr PNTR) context->userdata;
   if (vnpp == NULL) return TRUE;
 
+  /*
   BioseqLock (bsp);
   ValNodeAddPointer (vnpp, 0, (Pointer) bsp);
+  */
 
   if (bsp->repr == Seq_repr_seg) {
     SeqMgrExploreSegments (bsp, (Pointer) vnpp, LockAllSegments);
@@ -1279,9 +1365,11 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 				SeqMgrIndexFeatures (entityID, NULL);
 			}
  
-			/* lock all bioseqs in advance, including remote genome components */
+			/* lock all remote genome components in advance */
 
+			oldsep = SeqEntrySetScope (sep);
 			SeqMgrExploreBioseqs (0, sep->data.ptrvalue, (Pointer) &bsplist, LockAllBioseqs, TRUE, FALSE, FALSE);
+			SeqEntrySetScope (oldsep);
 		}
 
 		fsep = FindNthBioseq (sep, 1);
@@ -1314,6 +1402,8 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 		topsep = GetTopSeqEntryForEntityID (gc.entityID);
 		oldsep = SeqEntrySetScope (topsep);
 
+		AssignIDsInEntity (gc.entityID, 0, NULL);
+
       	GatherSeqEntry(sep, (Pointer)vsp, Valid1GatherProc, &gs);
 
 		if (vsp->validateAlignments) {
@@ -1326,7 +1416,7 @@ NLM_EXTERN Boolean ValidateSeqEntry(SeqEntryPtr sep, ValidStructPtr vsp)
 
 		if (vsp->useSeqMgrIndexes) {
  
-			/* unlock all  pre-locked bioseqs, including remote genome components */
+			/* unlock all pre-locked remote genome components */
 
 			for (vnp = bsplist; vnp != NULL; vnp = vnp->next) {
 				bsp = (BioseqPtr) vnp->data.ptrvalue;
@@ -3813,14 +3903,21 @@ static void CheckPeptideOnCodonBoundary (ValidStructPtr vsp, GatherContextPtr gc
   }
 }
 
+static CharPtr legal_repeat_types [] = {
+  "tandem", "inverted", "flanking", "terminal",
+  "direct", "dispersed", "other", NULL
+};
+
 static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPtr sfp, ImpFeatPtr ifp)
 
 {
+  Char       ch;
   Boolean    found;
   GBQualPtr  gbqual;
   Int2       i;
   Int2       index;
   CharPtr    key;
+  CharPtr    ptr;
   Int2       qual;
   Int2       val;
 
@@ -3877,6 +3974,33 @@ static void ValidateImpFeat (ValidStructPtr vsp, GatherContextPtr gcp, SeqFeatPt
         }
         if (! found) {
           ValidErr (vsp, SEV_WARNING, ERR_SEQ_FEAT_WrongQualOnImpFeat, "Wrong qualifier %s for feature %s", gbqual->qual, key);
+        }
+      }
+      if (gbqual->val != NULL) {
+        if (val == GBQUAL_rpt_type) {
+          found = FALSE;
+          for (i = 0; legal_repeat_types [i] != NULL; i++) {
+            if (StringICmp (gbqual->val, legal_repeat_types [i]) == 0) {
+              found = TRUE;
+              break;
+            }
+          }
+          if (! found) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "%s is not legal a legal value for qualifier %s", gbqual->val, gbqual->qual);
+          }
+        } else if (val == GBQUAL_rpt_unit) {
+          found = FALSE;
+          for (ptr = gbqual->val, ch = *ptr; ch != '\0'; ptr++, ch = *ptr) {
+            if (ch <= ' ') {
+              found = TRUE;
+              break;
+            }
+          }
+          if (found) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Illegal value for qualifier %s", gbqual->qual);
+          } else if (StringLen (gbqual->val) > 48) {
+            ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_InvalidQualifierValue, "Illegal value for qualifier %s", gbqual->qual);
+          }
         }
       }
     }
@@ -4169,9 +4293,9 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 	ValNodePtr vnp;
 	BioseqPtr bsp;
 	BioseqContextPtr bcp = NULL;
-	BioSourcePtr biop;
+	BioSourcePtr biop, dbiop;
 	OrgNamePtr onp;
-	OrgRefPtr orp;
+	OrgRefPtr orp, dorp;
 	Int2 biopgencode;
 	Int2 cdsgencode;
 	GeneticCodePtr gc;
@@ -4184,6 +4308,7 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 	Boolean redundantgenexref;
 	SeqMgrFeatContext fcontext;
 	CharPtr syn1, syn2, label = NULL;
+	Uint2 oldEntityID, oldItemID;
 
 	vsp = (ValidStructPtr)(gcp->userdata);
 	sfp = (SeqFeatPtr)(gcp->thisitem);
@@ -4495,7 +4620,43 @@ NLM_EXTERN void ValidateSeqFeat( GatherContextPtr gcp)
 		case 20:        /* BioSource*/
 			biop = (BioSourcePtr) sfp->data.value.ptrvalue;
 			if (biop != NULL && biop->is_focus) {
-				ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_FocusOnBioSourceFeauture, "Focus must be on BioSource descriptor, not BioSource feature.");
+				ValidErr (vsp, SEV_ERROR, ERR_SEQ_FEAT_FocusOnBioSourceFeature, "Focus must be on BioSource descriptor, not BioSource feature.");
+			}
+			if (biop != NULL) {
+				orp = biop->org;
+				if (orp != NULL) {
+					bsp = GetBioseqGivenSeqLoc (sfp->location, gcp->entityID);
+					if (bsp != NULL) {
+						vnp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_source, &context);
+						if (vnp != NULL) {
+							dbiop = (BioSourcePtr) vnp->data.ptrvalue;
+							if (dbiop != NULL) {
+								dorp = dbiop->org;
+								if (dorp != NULL) {
+									if (! StringHasNoText (orp->taxname)) {
+										if (StringICmp (orp->taxname, dorp->taxname) != 0) {
+											if (! dbiop->is_focus) {
+												oldEntityID = gcp->entityID;
+												oldItemID = gcp->itemID;
+
+												gcp->entityID = context.entityID;
+												gcp->itemID = context.itemID;
+												gcp->thistype = OBJ_SEQDESC;
+
+												ValidErr (vsp, SEV_ERROR, ERR_SEQ_DESCR_BioSourceNeedsFocus,
+												"BioSource descriptor must have focus when BioSource feature with different taxname is present.");
+
+												gcp->entityID = oldEntityID;
+												gcp->itemID = oldItemID;
+												gcp->thistype = OBJ_SEQFEAT;
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 			}
 			/*
 			ValidateBioSource (vsp, gcp, biop);
@@ -5265,6 +5426,434 @@ NLM_EXTERN void ValidateSeqLoc(ValidStructPtr vsp, SeqLocPtr slp, CharPtr prefix
 	}
 
 	return;
+}
+
+/*****************************************************************************
+*
+*   SeqGraph validation section
+*
+*****************************************************************************/
+
+typedef struct gphgetdata {
+  ValNodePtr  vnp;
+  SeqLocPtr   slp;
+  BioseqPtr   bsp;
+} GphGetData, PNTR GphGetPtr;
+
+typedef struct gphitem {
+  SeqGraphPtr  sgp;
+  Int4         left;
+  Int4         right;
+  Int2         index;
+} GphItem, PNTR GphItemPtr;
+
+static Boolean GetGraphsProc (GatherObjectPtr gop)
+
+{
+  GphGetPtr    ggp;
+  GphItemPtr   gip;
+  SeqGraphPtr  sgp;
+
+  if (gop == NULL || gop->itemtype != OBJ_SEQGRAPH) return TRUE;
+  ggp = (GphGetPtr) gop->userdata;
+  sgp = (SeqGraphPtr) gop->dataptr;
+  if (ggp == NULL || sgp == NULL) return TRUE;
+  /* only phrap or gap4 currently allowed */
+  if (StringICmp (sgp->title, "Phrap Quality") == 0 ||
+      StringICmp (sgp->title, "Gap4") == 0) {
+    /* data type must be bytes */
+    if (sgp->flags[2] == 3) {
+      if (SeqIdForSameBioseq (SeqLocId (sgp->loc), SeqLocId (ggp->slp))) {
+        gip = (GphItemPtr) MemNew (sizeof (GphItem));
+        if (gip == NULL) return TRUE;
+        gip->sgp = sgp;
+        gip->left = GetOffsetInBioseq (sgp->loc, ggp->bsp, SEQLOC_LEFT_END);
+        gip->right = GetOffsetInBioseq (sgp->loc, ggp->bsp, SEQLOC_RIGHT_END);
+        ValNodeAddPointer (&(ggp->vnp), 0, (Pointer) gip);
+      }
+    }
+  }
+  return TRUE;
+}
+
+static int LIBCALLBACK SortSeqGraphProc (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  GphItemPtr  gip1, gip2;
+  ValNodePtr  vnp1, vnp2;
+
+  if (ptr1 == NULL || ptr2 == NULL) return 0;
+  vnp1 = *((ValNodePtr PNTR) ptr1);
+  vnp2 = *((ValNodePtr PNTR) ptr2);
+  if (vnp1 == NULL || vnp2 == NULL) return 0;
+  gip1 = (GphItemPtr) vnp1->data.ptrvalue;
+  gip2 = (GphItemPtr) vnp2->data.ptrvalue;
+  if (gip1 == NULL || gip2 == NULL) return 0;
+  if (gip1->left > gip2->left) {
+    return 1;
+  } else if (gip1->left < gip2->left) {
+    return -1;
+  } else if (gip1->right > gip2->right) {
+    return -1;
+  } else if (gip2->right < gip2->right) {
+    return 1;
+  }
+  return 0;
+}
+
+/* gets valnode list of sorted graphs in GphItem structures */
+
+static ValNodePtr GetSeqGraphsOnBioseq (Uint2 entityID, BioseqPtr bsp)
+
+{
+  GphGetData  ggd;
+  GphItemPtr  gip;
+  Int2        index;
+  Boolean     objMgrFilter [OBJ_MAX];
+  ValNode     vn;
+  ValNodePtr  vnp;
+
+  ggd.vnp = NULL;
+  vn.choice = SEQLOC_WHOLE;
+  vn.data.ptrvalue = (Pointer) bsp->id;
+  ggd.slp = &vn;
+  ggd.bsp = bsp;
+  MemSet ((Pointer) &objMgrFilter, 0, sizeof (objMgrFilter));
+  objMgrFilter [OBJ_SEQGRAPH] = TRUE;
+  GatherObjectsInEntity (entityID, 0, NULL, GetGraphsProc, (Pointer) &ggd, objMgrFilter);
+  for (vnp = ggd.vnp, index = 1; vnp != NULL; vnp = vnp->next, index++) {
+    gip = (GphItemPtr) vnp->data.ptrvalue;
+    if (gip != NULL) {
+      gip->index = index;
+    }
+  }
+  ggd.vnp = ValNodeSort (ggd.vnp, SortSeqGraphProc);
+  return ggd.vnp;
+}
+
+static void ValidateGraphsOnBioseq (GatherContextPtr gcp)
+
+{
+  Byte            bases [400];
+  ByteStorePtr    bs;
+  BioseqPtr       bsp;
+  Int2            ctr, i, val, index;
+  Int4            curroffset = 0, gphlen = 0, seqlen = 0, slplen,
+                  bslen, min = INT4_MAX, max = INT4_MIN, j, lastloc = -1,
+                  NsWithScore, GapsWithScore, ACGTsWithoutScore,
+                  valsBelowMin, valsAboveMax;
+  DeltaSeqPtr     dsp;
+  Uint2           entityID, olditemid = 0, olditemtype = 0,
+                  numdsp = 0, numsgp = 0, firstsgitemid = 0;
+  GphItemPtr      gip;
+  ValNodePtr      head, vnp;
+  Boolean         outOfOrder = FALSE, fa2htgsBug = FALSE, overlaps = FALSE;
+  Uint1           residue;
+  SeqGraphPtr     sgp;
+  SeqIntPtr       sintp;
+  SeqLocPtr       slocp;
+  SeqLitPtr       slp;
+  SeqPortPtr      spp;
+  ValidStructPtr  vsp;
+
+  vsp = (ValidStructPtr) gcp->userdata;
+  bsp = (BioseqPtr) gcp->thisitem;
+  if (vsp == NULL || bsp == NULL) return;
+  if (! ISA_na (bsp->mol)) return;
+
+  vsp->bsp = bsp;
+  vsp->descr = NULL;
+  vsp->sfp = NULL;
+  vsp->bssp = (BioseqSetPtr) gcp->parentitem;
+
+  if (SeqMgrGetParentOfPart (bsp, NULL) != NULL) return;
+
+  entityID = ObjMgrGetEntityIDForPointer (bsp);
+  head = GetSeqGraphsOnBioseq (entityID, bsp);
+  if (head == NULL) return;
+
+  olditemid = gcp->itemID;
+  olditemtype = gcp->thistype;
+  gcp->thistype = OBJ_SEQGRAPH;
+
+  for (vnp = head, index = 1; vnp != NULL; vnp = vnp->next, index++) {
+    gip = (GphItemPtr) vnp->data.ptrvalue;
+    if (gip == NULL) continue;
+
+    sgp = gip->sgp;
+    if (sgp == NULL) continue;
+    gcp->itemID = sgp->idx.itemID;
+    if (firstsgitemid == 0) {
+      firstsgitemid = sgp->idx.itemID;
+    }
+
+    if (gip->index != index) {
+      outOfOrder = TRUE;
+      if (gip->index == 129 && index == 2) {
+        fa2htgsBug = TRUE;
+      }
+    }
+    if (gip->left <= lastloc) {
+      overlaps = TRUE;
+    }
+    lastloc = gip->right;
+    min = MIN ((Int4) min, (Int4) sgp->min.intvalue);
+    max = MAX ((Int4) max, (Int4) sgp->max.intvalue);
+
+    if (sgp->min.intvalue < 0 || sgp->min.intvalue > 100) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphMin, "Graph min (%ld) out of range", (long) sgp->min.intvalue);
+    }
+
+    if (sgp->max.intvalue < 0 || sgp->max.intvalue > 100) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphMax, "Graph max (%ld) out of range", (long) sgp->max.intvalue);
+    }
+
+    gphlen += sgp->numval;
+    bs = (ByteStorePtr) sgp->values;
+    if (bs != NULL) {
+      bslen = BSLen (bs);
+      if (sgp->numval != bslen) {
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphByteLen, "SeqGraph (%ld) and ByteStore (%ld) length mismatch",
+                  (long) sgp->numval, (long) bslen);
+      }
+    }
+  }
+  if (outOfOrder) {
+    gcp->itemID = firstsgitemid;
+    if (fa2htgsBug) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphOutOfOrder, "Graph components are out of order - probably caused by old fa2htgs bug");
+    } else {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphOutOfOrder, "Graph components are out of order - may be a software bug");
+    }
+  }
+  if (overlaps) {
+    gcp->itemID = firstsgitemid;
+    ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphOverlap, "Graph components overlap, with multiple scores for a single base");
+  }
+
+  if (bsp->repr == Seq_repr_raw) {
+    seqlen = bsp->length;
+  } else if (bsp->repr == Seq_repr_delta) {
+    for (dsp = (DeltaSeqPtr) (bsp->seq_ext); dsp != NULL; dsp = dsp->next) {
+      switch (dsp->choice) {
+        case 1 :
+          slocp = (SeqLocPtr) dsp->data.ptrvalue;
+          if (slocp == NULL) break;
+          if (slocp->choice != SEQLOC_NULL) {
+            seqlen += SeqLocLen (slocp);
+          }
+          break;
+        case 2 :
+          slp = (SeqLitPtr) dsp->data.ptrvalue;
+          if (slp == NULL || slp->seq_data == NULL) break;
+          seqlen += slp->length;
+          break;
+        default :
+          break;
+      }
+    }
+  }
+
+  if (seqlen != gphlen && bsp->length != gphlen) {
+    gcp->itemID = firstsgitemid;
+    ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphBioseqLen, "SeqGraph (%ld) and Bioseq (%ld) length mismatch",
+              (long) gphlen, (long) seqlen);
+  }
+
+  if (bsp->repr == Seq_repr_delta) {
+    if (head != NULL && head->next != NULL) {
+      for (dsp = (DeltaSeqPtr) (bsp->seq_ext), vnp = head;
+           dsp != NULL && vnp != NULL; dsp = dsp->next) {
+        gip = (GphItemPtr) vnp->data.ptrvalue;
+        if (gip == NULL) continue;
+        sgp = gip->sgp;
+        if (sgp == NULL) continue;
+        switch (dsp->choice) {
+          case 1 :
+            slocp = (SeqLocPtr) dsp->data.ptrvalue;
+            if (slocp != NULL && slocp->choice != SEQLOC_NULL) {
+              slplen = SeqLocLen (slocp);
+              curroffset += slplen;
+              if (sgp->numval != slplen) {
+                gcp->itemID = sgp->idx.itemID;
+                ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphSeqLocLen, "SeqGraph (%ld) and SeqLoc (%ld) length mismatch",
+                          (long) sgp->numval, (long) slplen);
+              }
+              numdsp++;
+              if (vnp != NULL) {
+                vnp = vnp->next;
+                numsgp++;
+              }
+            }
+            break;
+          case 2 :
+            slp = (SeqLitPtr) dsp->data.ptrvalue;
+            if (slp != NULL && slp->seq_data != NULL) {
+              if (sgp->numval != slp->length) {
+                gcp->itemID = sgp->idx.itemID;
+                ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphSeqLitLen, "SeqGraph (%ld) and SeqLit (%ld) length mismatch",
+                          (long) sgp->numval, (long) slp->length);
+              }
+              slocp = sgp->loc;
+              if (slocp != NULL && slocp->choice == SEQLOC_INT) {
+                sintp = (SeqIntPtr) slocp->data.ptrvalue;
+                if (sintp != NULL) {
+                  if (sintp->from != curroffset) {
+                    gcp->itemID = sgp->idx.itemID;
+                    ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphStartPhase, "SeqGraph (%ld) and SeqLit (%ld) start do not coincide",
+                              (long) sintp->from, (long) curroffset);
+                  }
+                  if (sintp->to != slp->length + curroffset - 1) {
+                    gcp->itemID = sgp->idx.itemID;
+                    ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphStopPhase, "SeqGraph (%ld) and SeqLit (%ld) stop do not coincide",
+                              (long) sintp->to, (long) (slp->length + curroffset - 1));
+                  }
+                }
+              }
+              numdsp++;
+              if (vnp != NULL) {
+                vnp = vnp->next;
+                numsgp++;
+              }
+            }
+            if (slp != NULL) {
+              curroffset += slp->length;
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      for (dsp = (DeltaSeqPtr) (bsp->seq_ext), numdsp = 0; dsp != NULL; dsp = dsp->next) {
+        switch (dsp->choice) {
+          case 1 :
+            slocp = (SeqLocPtr) dsp->data.ptrvalue;
+            if (slocp != NULL && slocp->choice != SEQLOC_NULL) {
+              numdsp++;
+            }
+            break;
+          case 2 :
+            slp = (SeqLitPtr) dsp->data.ptrvalue;
+            if (slp != NULL && slp->seq_data != NULL) {
+              numdsp++;
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      for (vnp = head, numsgp = 0;
+           vnp != NULL; vnp = vnp->next, numsgp++) continue;
+      if (numdsp != numsgp) {
+        gcp->itemID = firstsgitemid;
+        ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphDiffNumber, "Different number of SeqGraph (%d) and SeqLit (%d) components",
+                  (int) numsgp, (int) numdsp);
+      }
+    }
+  }
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    gip = (GphItemPtr) vnp->data.ptrvalue;
+    if (gip == NULL) continue;
+    sgp = gip->sgp;
+    if (sgp == NULL) continue;
+    spp = SeqPortNewByLoc (sgp->loc, Seq_code_ncbi4na);
+    if (spp == NULL) continue;
+    slplen = SeqLocLen (sgp->loc);
+    if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
+      SeqPortSet_do_virtualEx (spp, TRUE, TRUE); /* sets gapIsZero */
+    }
+
+    bs = (ByteStorePtr) sgp->values;
+    BSSeek (bs, 0, SEEK_SET);
+    j = 0;
+    val = 0;
+
+    ctr = SeqPortRead (spp, bases, sizeof (bases));
+    i = 0;
+    residue = (Uint1) bases [i];
+
+    NsWithScore = 0;
+    GapsWithScore = 0;
+    ACGTsWithoutScore = 0;
+    valsBelowMin = 0;
+    valsAboveMax = 0;
+
+    while (residue != SEQPORT_EOF && j < sgp->numval) {
+      if (IS_residue (residue)) {
+        val = (Int2) BSGetByte (bs);
+        if (val < sgp->min.intvalue) {
+          valsBelowMin++;
+        }
+        if (val > sgp->max.intvalue) {
+          valsAboveMax++;
+        }
+        j++;
+        switch (residue) {
+          case 0 :
+            if (val > 0) {
+              GapsWithScore++;
+            }
+            break;
+          case 1 :
+          case 2 :
+          case 4 :
+          case 8 :
+            if (val == 0) {
+              ACGTsWithoutScore++;
+            }
+            break;
+          case 15 :
+            if (val > 0) {
+              NsWithScore++;
+            }
+            break;
+          default :
+            break;
+        }
+      }
+      i++;
+      if (i >= ctr) {
+        i = 0;
+        ctr = SeqPortRead (spp, bases, sizeof (bases));
+        if (ctr < 0) {
+          bases [0] = -ctr;
+        } else if (ctr < 1) {
+          bases [0] = SEQPORT_EOF;
+        }
+      }
+      residue = (Uint1) bases [i];
+    }
+
+    gcp->itemID = sgp->idx.itemID;
+    if (ACGTsWithoutScore > 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphACGTScore, "%ld ACGT bases have zero score value",
+                (long) ACGTsWithoutScore);
+    }
+    if (NsWithScore > 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphNScore, "%ld N bases have positive score value",
+                (long) NsWithScore);
+    }
+    if (GapsWithScore > 0) {
+      ValidErr (vsp, SEV_ERROR, ERR_SEQ_GRAPH_GraphGapScore, "%ld gap bases have positive score value",
+                (long) GapsWithScore);
+    }
+    if (valsBelowMin > 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphBelow, "%ld quality scores have values below the reported minimum",
+                (long) valsBelowMin);
+    }
+    if (valsAboveMax > 0) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_GRAPH_GraphAbove, "%ld quality scores have values above the reported maximum",
+                (long) valsAboveMax);
+    }
+
+    SeqPortFree (spp);
+  }
+
+  gcp->itemID = olditemid;
+  gcp->thistype = olditemtype;
+
+  ValNodeFreeData (head);
 }
 
 /*****************************************************************************

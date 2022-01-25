@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.53 2000/05/15 19:39:55 kans Exp $
+#	$Id: makedemo.unx,v 6.55 2000/06/20 14:09:52 beloslyu Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -94,7 +94,7 @@ EXE1 = testcore makeset \
 	entrcmd asn2fast errhdr cdscan findspl \
 	ncbisort fa2htgs fastacmd formatdb blastall blastpgp \
 	testval seedtop fmerge makemat copymat impala bl2seq \
-	megablst vecscreen gil2bin tbl2asn
+	megablast vecscreen gil2bin tbl2asn blastclust rpsblast
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
@@ -102,7 +102,7 @@ SRC1 = testcore.c makeset.c \
     entrcmd.c asn2fast.c errhdr.c cdscan.c findspl.c \
     ncbisort.c fa2htgs.c fastacmd.c formatdb.c blastall.c blastpgp.c \
     testval.c seedtop.c fmerge.c makemat.c copymat.c profiles.c bl2seq.c \
-	megablst.c vecscreen.c gil2bin.c tbl2asn.c
+	megablast.c vecscreen.c gil2bin.c tbl2asn.c blastclust.c rpsblast.c
 
 INTERNAL = testgen
 
@@ -321,10 +321,10 @@ testmem : testmem.c
 packfilt : packfilt.c
 	$(CC) -o packfilt $(LDFLAGS) packfilt.c $(LIB2) $(LIB1) $(OTHERLIBS)
 
-# megablst
+# megablast
 
-megablst : megablst.c $(THREAD_OBJ)
-	$(CC) -o megablst $(LDFLAGS) megablst.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+megablast : megablast.c $(THREAD_OBJ)
+	$(CC) -o megablast $(LDFLAGS) megablast.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # vecscreen
 
@@ -340,4 +340,15 @@ gil2bin : gil2bin.c
 
 tbl2asn : tbl2asn.c 
 	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) 
+
+# blastclust
+
+blastclust : blastclust.c $(THREAD_OBJ)
+	$(CC) -o blastclust $(LDFLAGS) blastclust.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+# rpsblast
+
+rpsblast : rpsblast.c $(THREAD_OBJ)
+	$(CC) -o rpsblast $(LDFLAGS) rpsblast.c $(THREAD_OBJ) $(LIB23) $(LIB2) $(LIB1) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
 

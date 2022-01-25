@@ -34,6 +34,9 @@
 *
 * RCS Modification History:
 * $Log: netblap3.h,v $
+* Revision 1.23  2000/06/15 16:22:44  egorov
+* Make SubmitRequest() external
+*
 * Revision 1.22  2000/05/04 18:09:26  shavirin
 * Added new function  BLASTGetUidsFromQuery().
 *
@@ -224,6 +227,8 @@ NLM_EXTERN BlastDbinfoPtr LIBCALL Blast3GetDbinfo(BlastNet3Hptr bl3hptr);
 
 NLM_EXTERN Int4 BLASTGetUidsFromQuery(CharPtr query, Int4Ptr PNTR uids, 
                                       Boolean is_na, Boolean count_only);
+
+NLM_EXTERN Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish));
 #ifdef __cplusplus
 }
 #endif

@@ -1,4 +1,4 @@
-/*  $Id: udvdef.h,v 6.13 2000/04/13 13:57:33 durand Exp $
+/*  $Id: udvdef.h,v 6.14 2000/07/05 18:42:17 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   07/09/99
 *
-* $Revision: 6.13 $
+* $Revision: 6.14 $
 *
 * File Description: this file is the companion of udviewer.h
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvdef.h,v $
+* Revision 6.14  2000/07/05 18:42:17  hurwitz
+* added split block function to DDV
+*
 * Revision 6.13  2000/04/13 13:57:33  durand
 * allowed udv to display reverse complement sequence
 *
@@ -169,6 +172,7 @@ typedef struct udvmapinfo {/*use to build the image map of the Entrez viewer*/
 #define MS_ACTION_SHIFT_ROW       7 /*shift row left/right*/
 #define MS_ACTION_SHIFT_BOUNDARY  8 /*shift left/right boundary left/right*/
 #define MS_ACTION_CREATE_BLOCK    9 /*create aligned block*/
+#define MS_ACTION_SPLIT_BLOCK    10 /*split aligned block in 2*/
 
 	/*************************************************************************
 

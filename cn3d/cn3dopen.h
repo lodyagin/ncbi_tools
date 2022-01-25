@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/31/96
 *
-* $Revision: 6.15 $
+* $Revision: 6.16 $
 *
 * File Description: Cn3d file opening routines 
 *                   
@@ -39,6 +39,9 @@
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
 * $Log: cn3dopen.h,v $
+* Revision 6.16  2000/06/16 14:57:03  lewisg
+* move entrez calls out of desktop
+*
 * Revision 6.15  2000/05/15 23:39:34  lewisg
 * shred cblast, add menu items for gapped/ungapped, fix pdbheaders
 *
@@ -171,6 +174,8 @@ NLM_EXTERN void Cn3D_NetOpenBiostruc(IteM i);
 *******************************************************************************/
 NLM_EXTERN void Cn3D_ImportBioseqFile(IteM i);
 NLM_EXTERN void Cn3D_ImportBioseqFileGap(IteM i);
+
+NLM_EXTERN Int4 Cn3D_Accession2Gi (CharPtr string, Boolean IsAmino);
 
 #ifdef __cplusplus
 }

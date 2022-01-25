@@ -169,6 +169,10 @@ Comments that refer to the conclusions of a specific reference should not be
 cited by a serial number inside brackets (e.g., [3]), but should instead be
 attached as a REMARK on the reference itself.
 
+$^   BioSourceNeedsFocus, 14
+Focus must be set on a BioSource descriptor in records where there is a
+BioSource feature with a different organism name.
+
 $$ GENERIC, 3
 
 $^   NonAsciiAsn, 1
@@ -387,13 +391,18 @@ More than one CDS feature points to the same protein product.  This can happen w
 viral long terminal repeats (LTRs), but GenBank policy is to have each equivalent
 CDS point to a separately accessioned protein Bioseq.
 
-$^ FocusOnBioSourceFeauture, 40
+$^ FocusOnBioSourceFeature, 40
 The /focus flag is only appropriate on BioSource descriptors, not BioSource features.
 
 $^ PeptideFeatOutOfFrame, 41
 The start or stop positions of this processed peptide feature do not occur in between
 codon boundaries.  This may incorrectly overlap other peptides when the features are
 converted to protein coordinates by mapping through the CDS.
+
+$^ InvalidQualifierValue, 42
+The value of this qualifier is constrained to a particular vocabulary of style.  This
+value does not conform to those constraints.  Please see the feature table documentation
+for more information.
 
 $$ SEQ_ALIGN, 6
 
@@ -450,4 +459,60 @@ Please contact the sequence database for further help with this error.
 
 $^   Segtype, 18
 Please contact the sequence database for further help with this error.
+
+$^   BlastAligns, 19
+BLAST alignments are not desired in records submitted to the sequence database.
+
+$$ SEQ_GRAPH, 7
+
+$^   GraphMin, 1
+The graph minimum value is outside of the 0-100 range.
+
+$^   GraphMax, 2
+The graph maximum value is outside of the 0-100 range.
+
+$^   GraphBelow, 3
+Some quality scores are below the stated graph minimum value.
+
+$^   GraphAbove, 4
+Some quality scores are above the stated graph maximum value.
+
+$^   GraphByteLen, 5
+The number of bytes in the quality graph does not correspond to the
+stated length of the graph.
+
+$^   GraphOutOfOrder, 6
+The quality graphs are not packaged in order - may be due to an old fa2htgs bug.
+
+$^   GraphBioseqLen, 7
+The length of the quality graph does not correspond to the length of the Bioseq.
+
+$^   GraphSeqLitLen, 8
+The length of the quality graph does not correspond to the length of the
+delta Bioseq literal component.
+
+$^   GraphSeqLocLen, 9
+The length of the quality graph does not correspond to the length of the
+delta Bioseq location component.
+
+$^   GraphStartPhase, 10
+The quality graph does not start or stop on a sequence segment boundary.
+
+$^   GraphStopPhase, 11
+The quality graph does not start or stop on a sequence segment boundary.
+
+$^   GraphDiffNumber, 12
+The number quality graph does not equal the number of sequence segments.
+
+$^   GraphACGTScore, 13
+Quality score values for known bases should be above 0.
+
+$^   GraphNScore, 14
+Quality score values for unknown bases should not be above 0.
+
+$^   GraphGapScore, 15
+Gap positions should not have quality scores above 0.
+
+$^   GraphOverlap, 16
+Quality graphs overlap - may be due to an old fa2htgs bug.
 

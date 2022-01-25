@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.76 $
+* $Revision: 6.77 $
 *
 * File Description: 
 *
@@ -1315,7 +1315,9 @@ static void BioseqPtrToBioseqForm (ForM f, Pointer data)
         /* oldErrSev = ErrSetMessageLevel (SEV_FATAL); */
         if (bfp->bvd.hasTargetControl) { /* just sequin, for now */
           sep = GetTopSeqEntryForEntityID (entityID);
+          /*
           SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
+          */
           if (allRawOrSeg) {
             SeqMgrIndexFeatures (entityID, NULL);
           }

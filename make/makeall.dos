@@ -1,4 +1,4 @@
-# $Id: makeall.dos,v 6.101 2000/05/24 17:20:23 vakatov Exp $
+# $Id: makeall.dos,v 6.104 2000/06/30 18:17:52 vakatov Exp $
 ##################################################
 ###  Makefile for non-network-based libraries + asntool
 #####
@@ -23,19 +23,19 @@ OBJ1  = \
 	+asntypes.obj +gifgen.obj +togif.obj +tsprintf.obj +ncbiargs.obj \
 	+ncbithrs.obj +regex.obj +tree.obj +ncbisock.obj +matrix.obj \
 	+ncbibuf.obj +connectn.obj +connutil.obj \
-   +con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj \
-   +binary.obj  +ncbi_socket_.obj +ncbi_buffer.obj \
-   +ncbi_core.obj +ncbi_util.obj
+	+con_url.obj +con_sock.obj +urlquery.obj +con_stateless.obj \
+	+binary.obj  +ncbi_socket_.obj +ncbi_buffer.obj \
+	+ncbi_core.obj +ncbi_util.obj
 
 OBJ2  = +objacces.obj +objalign.obj +objall.obj +objbibli.obj \
 	+objfeat.obj +objgen.obj +objloc.obj +objmedli.obj +objpub.obj \
 	+objres.obj +objseq.obj +objcode.obj +objblock.obj +objsset.obj \
 	+objsub.obj +objprt.obj +objfdef.obj +objmime.obj +objpubme.obj \
 	+objmdrs.obj +objproj.obj + objent2.obj +ent2api.obj +pmfapi.obj \
-   +seqport.obj +sequtil.obj +prtutil.obj \
+	+qblastapi.obj +vecscnapi.obj +seqport.obj +sequtil.obj +prtutil.obj \
 	+simple.obj +tofasta.obj +tofile.obj +tomedlin.obj +valid.obj \
-   +alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
-   +asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
+	+alignmgr.obj +alignval.obj +subutil.obj +edutil.obj \
+	+asn2ff1.obj +asn2ff2.obj +asn2ff3.obj \
 	+asn2ff4.obj +asn2ff5.obj +asn2ff6.obj +ftusrstr.obj +gbfeat.obj \
 	+gbftglob.obj +gbparint.obj +utilpars.obj +utilpub.obj +ffprint.obj \
 	+wprint.obj +satutil.obj +seqmgr.obj +gather.obj +objmgr.obj \
@@ -96,7 +96,7 @@ OBJ23 = +csim.obj +db_slist.obj +dust.obj +falign.obj +g_any.obj \
 	+urkepi.obj +urkfltr.obj +urkdust.obj +urksigu.obj +seg.obj \
 	+urkbias.obj +urkcnsrt.obj +urktree.obj +pseed3.obj +pattern1.obj \
 	+impatool.obj +posit2.obj +newkar.obj +mbalign.obj +mbutils.obj +vecscrn.obj \
-	+mblast.obj
+	+mblast.obj +rpsutil.obj
 
 OBJ28 = +ncbidrwg.obj +drawing.obj +mapping.obj +picture.obj +pictogif.obj \
 	+gdfontg.obj +gdfontmb.obj +gdfontt.obj +gdfontl.obj +gdfonts.obj

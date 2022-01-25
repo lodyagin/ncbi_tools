@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.3  2000/06/15 19:13:28  yaschenk
+* PubAsnWrite should not fail when pmid is stripped
+*
 * Revision 6.2  1998/12/30 20:28:34  ostell
 * fixed bug in PubLabelUnique() for author list. If alp->names is NULL,
 * diff was not initialized. So operations using diff moved inside
@@ -435,6 +438,7 @@ NLM_EXTERN Boolean LIBCALL PubAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr
 	if ((aip->spec_version > 0 && aip->spec_version < 5) && anp->choice >= 13)  /* ASN4 strip new value */
 	{
 		ErrPostEx(SEV_ERROR,0,0,"ASN4: PubMedId stripped");
+		retval=TRUE;
 		goto erret;
 	}
 

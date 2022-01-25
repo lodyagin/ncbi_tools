@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.30 $
+* $Revision: 6.32 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -39,6 +39,12 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: seqport.c,v $
+* Revision 6.32  2000/07/05 17:02:11  kans
+* added spp->gapIsZero, SeqPortSet_do_virtualEx, using ncbi4na with gap of 0 to distinguish quality scores under N versus quality scores under gap
+*
+* Revision 6.31  2000/06/02 15:31:58  tatiana
+* added SEQLOC_NULL in aaLoc_to_dnaLoc()
+*
 * Revision 6.30  2000/05/25 19:40:02  ostell
 * treated Z as E instead of Q for MolWt
 *
@@ -554,6 +560,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortSetValues (SeqPortPtr spp)
 		tmp->is_circle = spp->is_circle;
 		tmp->is_seg = spp->is_seg;
 		tmp->do_virtual = spp->do_virtual;
+		tmp->gapIsZero = spp->gapIsZero;
 
 		if (tmp->segs != NULL)
 			SeqPortSetValues(tmp);
@@ -622,7 +629,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortAdjustLength (SeqPortPtr spp)
 
 }
 
-NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
+NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtualEx (SeqPortPtr spp, Boolean value, Boolean gapIsZero)
 {
 	Boolean do_it = FALSE, has_virtual=FALSE;
 	SeqPortPtr tmp;
@@ -634,11 +641,15 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
 		has_virtual = TRUE;
 	if (spp->do_virtual != value)
 		do_it = TRUE;
+	if (spp->gapIsZero != gapIsZero)
+		do_it = TRUE;
 	for (tmp = spp->segs; tmp != NULL; tmp = tmp->next)
 	{
 		if (tmp->isa_virtual == TRUE)
 			has_virtual = TRUE;
 		if (tmp->do_virtual != value)
+			do_it = TRUE;
+		if (tmp->gapIsZero != gapIsZero)
 			do_it = TRUE;
 	}
 
@@ -647,6 +658,7 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
 
 	
 	spp->do_virtual = value;
+	spp->gapIsZero = gapIsZero;
 	SeqPortSetValues(spp);
 	if (has_virtual)   /* have to check the SeqPort */
 	{
@@ -657,6 +669,11 @@ NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
 	return TRUE;
 }
 
+
+NLM_EXTERN Boolean LIBCALL SeqPortSet_do_virtual (SeqPortPtr spp, Boolean value)
+{
+	return SeqPortSet_do_virtualEx (spp, value, FALSE);
+}
 
 NLM_EXTERN Boolean LIBCALL SeqPortSetUpFields (SeqPortPtr spp, Int4 start, Int4 stop, Uint1 
 strand, Uint1 newcode)
@@ -1655,7 +1672,11 @@ byte */
 				the_code = spp->newcode;
 			else
 				the_code = spp->oldcode;
-			residue = GetGapCode (the_code);
+			if (spp->gapIsZero && the_code == Seq_code_ncbi4na) {
+				residue = 0;
+			} else {
+				residue = GetGapCode (the_code);
+			}
 			spp->curpos++;
 			return residue;
         }
@@ -2532,8 +2553,7 @@ sbp->b->point);
 		if (tmp == NULL)
 			return head;
 
-		vn.choice = SEQLOC_NULL;   /* make a mix with an internal NULL 
-*/
+		vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
 		vn.next = NULL;
 		vn.data.ptrvalue = NULL;
 
@@ -2562,6 +2582,11 @@ sbp->b->point);
 			   SeqLocAdd(&head, tmp, TRUE, FALSE);
 			   tmp = next;
 		   }
+		} else if (slp->choice == SEQLOC_NULL) {
+			vn.choice = SEQLOC_NULL;  /* make a mix with an internal NULL */
+			vn.next = NULL;
+			vn.data.ptrvalue = NULL;
+			SeqLocAdd(&head, &vn, TRUE, TRUE); 
 		}
 	}
 ret:			   

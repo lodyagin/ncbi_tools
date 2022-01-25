@@ -34,6 +34,27 @@
 *
 * RCS Modification History:
 * $Log: netblap3.c,v $
+* Revision 1.69  2000/06/22 18:01:49  shavirin
+* Added check for 0s passed for required end and required start from
+* the network.
+*
+* Revision 1.68  2000/06/19 19:02:52  dondosha
+* Pass required_start and required_end between parameters and options - these are from and to positions on query
+*
+* Revision 1.67  2000/06/15 20:02:48  egorov
+* Allow dispatcher == NULL in NetFini.  We need
+* this when call SubmitRequest->ReestablishNetBlast() from an external
+* program, eg. blastque
+*
+* Revision 1.66  2000/06/15 16:22:44  egorov
+* Make SubmitRequest() external
+*
+* Revision 1.65  2000/06/07 17:16:17  shavirin
+* Added handligng of posFreqs matrix - S&W blastpgp specific.
+*
+* Revision 1.64  2000/06/06 14:08:54  madden
+* Fill in matrix name if NULL, required for ASN.1
+*
 * Revision 1.63  2000/05/30 15:08:57  shavirin
 * Rolled back revision without swaping UIDs from Entrez query.
 *
@@ -248,7 +269,6 @@ static TNlmMutex formating_mutex; /* Mutex to regulate formating in TraditionalB
 
 static Boolean BlastInitEx PROTO((CharPtr program_name, BlastNet3Hptr bl3hp, BlastResponsePtr PNTR respp, Boolean reesatblish));
  
-static Boolean SubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish));
 static Boolean RealSubmitRequest PROTO((BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback));
 
 /* error_occurred and old_error_hook should not be accessed directly.
@@ -430,7 +450,8 @@ static Boolean NetFini(BlastNet3Hptr bl3hp, Boolean deallocate)
 
 		if (num_attached == 0)
 		{	/* Disconnect if last service to dispatcher. */
-			NI_EndServices (dispatcher);
+			if (dispatcher)
+			    NI_EndServices (dispatcher);
 			dispatcher = NULL;
 		}
 	}
@@ -703,7 +724,16 @@ BlastOptionsToParameters (BLAST_OptionsBlkPtr options)
         parameters->db_dir_prefix = StringSave(options->db_dir_prefix);
 #endif
         parameters->use_best_align = options->use_best_align;
+
+        if(options->required_start != 0)
+            parameters->required_start = options->required_start;
+        
+        if(options->required_end != 0)
+            parameters->required_end = options->required_end;
+
         parameters->is_rps_blast = options->is_rps_blast;
+        parameters->tweak_parameters = options->tweak_parameters;
+        parameters->smith_waterman = options->smith_waterman;
         
 	return parameters;
 }
@@ -968,19 +998,15 @@ BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
     net_matrix = (BlastMatrixPtr) MemNew(sizeof(BlastMatrix));
     
     net_matrix->is_protein = matrix->is_prot;
-    net_matrix->name = StringSave(matrix->name);
+
+    if (matrix->name)
+        net_matrix->name = StringSave(matrix->name);
+    else
+        net_matrix->name = StringSave("unknown");
+
     net_matrix->row_length = matrix->rows;
     net_matrix->column_length = matrix->columns;
     net_matrix->karlinK = matrix->karlinK;
-    
-    /*	for (index1=0; index1<matrix->rows; index1++)
-        {
-        for (index2=0; index2<matrix->columns; index2++)
-        {
-        ValNodeAddInt(&vnp, 0, matrix->matrix[index1][index2]);
-        }
-        } */
-    
     
     for (vnp=NULL,index1 = matrix->rows-1; index1 >= 0; index1--) {
         for (index2 = matrix->columns-1; index2 >= 0; index2--) {
@@ -992,6 +1018,18 @@ BlastMatrixToBlastNetMatrix(BLAST_MatrixPtr matrix)
     }
     
     net_matrix->scores = vnp;
+
+    if(matrix->posFreqs != NULL) {
+        for (vnp=NULL,index1 = matrix->rows-1; index1 >= 0; index1--) {
+            for (index2 = matrix->columns-1; index2 >= 0; index2--) {
+                newvnp = (ValNodePtr) Nlm_MemNew(sizeof(ValNode));
+                newvnp->data.realvalue =  matrix->posFreqs[index1][index2];
+                newvnp->next = vnp;
+                vnp = newvnp;
+            }
+        }
+        net_matrix->posFreqs = vnp;
+    }
     
     return net_matrix;
     
@@ -1004,36 +1042,50 @@ NLM_EXTERN BLAST_MatrixPtr LIBCALL
 BlastNetMatrixToBlastMatrix (BlastMatrixPtr net_matrix)
 
 {
-	BLAST_MatrixPtr blast_matrix;
-	Int4 index1, index2;
-	Int4Ptr PNTR matrix;
-	ValNodePtr vnp;
+    BLAST_MatrixPtr blast_matrix;
+    Int4 index1, index2;
+    Int4Ptr PNTR matrix;
+    Nlm_FloatHi **posFreqs;
+    ValNodePtr vnp;
+    
+    if (net_matrix == NULL)
+        return NULL;
+    
+    blast_matrix = (BLAST_MatrixPtr) MemNew(sizeof(BLAST_Matrix));
+    
+    blast_matrix->is_prot = net_matrix->is_protein;
+    blast_matrix->name = StringSave(net_matrix->name);
+    blast_matrix->rows = net_matrix->row_length;
+    blast_matrix->columns = net_matrix->column_length;
+    blast_matrix->karlinK = net_matrix->karlinK;
+    
+    vnp = net_matrix->scores;
+    matrix = (Int4Ptr PNTR) MemNew(blast_matrix->rows*sizeof(Int4Ptr));
+    for (index1=0; index1<blast_matrix->rows; index1++) {
+        matrix[index1] = (Int4Ptr) MemNew(blast_matrix->columns*sizeof(Int4));
+        for (index2=0; index2<blast_matrix->columns; index2++) {
+            matrix[index1][index2] = (Int4) vnp->data.intvalue;
+            vnp = vnp->next;
+        }
+    }
+    blast_matrix->matrix = matrix;
 
-	if (net_matrix == NULL)
-		return NULL;
+    if(net_matrix->posFreqs != NULL) {
+        vnp = net_matrix->posFreqs;
+        posFreqs = (Nlm_FloatHi **) 
+            MemNew(blast_matrix->rows*sizeof(Nlm_FloatHi *));
 
-	blast_matrix = (BLAST_MatrixPtr) MemNew(sizeof(BLAST_Matrix));
+        for (index1=0; index1 < blast_matrix->rows; index1++) {
+            posFreqs[index1] = (Nlm_FloatHi *) MemNew(blast_matrix->columns*sizeof(Nlm_FloatHi));
+            for (index2=0; index2<blast_matrix->columns; index2++) {
+                posFreqs[index1][index2] = (Int4) vnp->data.intvalue;
+                vnp = vnp->next;
+            }
+        }
+        blast_matrix->posFreqs = posFreqs;
+    }
 
-	blast_matrix->is_prot = net_matrix->is_protein;
-	blast_matrix->name = StringSave(net_matrix->name);
-	blast_matrix->rows = net_matrix->row_length;
-        blast_matrix->columns = net_matrix->column_length;
-	blast_matrix->karlinK = net_matrix->karlinK;
-
-	vnp = net_matrix->scores;
-	matrix = (Int4Ptr PNTR) MemNew(blast_matrix->rows*sizeof(Int4Ptr));
-	for (index1=0; index1<blast_matrix->rows; index1++)
-	{
-		matrix[index1] = (Int4Ptr) MemNew(blast_matrix->columns*sizeof(Int4));
-		for (index2=0; index2<blast_matrix->columns; index2++)
-		{
-			matrix[index1][index2] = (Int4) vnp->data.intvalue;
-			vnp = vnp->next;
-		}
-	}
-	blast_matrix->matrix = matrix;
-
-	return blast_matrix;
+    return blast_matrix;
 }
 
 NLM_EXTERN ValNodePtr LIBCALL
@@ -1425,7 +1477,7 @@ Blast3GetDbinfo(BlastNet3Hptr bl3hptr)
 	return dbinfo;
 }
 
-static Boolean
+NLM_EXTERN Boolean
 SubmitRequest(BlastNet3Hptr bl3hptr, BlastRequestPtr blreqp, BlastResponsePtr PNTR response, NetProgressCallback callback, Boolean reestablish)
 
 {
@@ -2400,7 +2452,15 @@ parametersToOptions (BlastParametersPtr parameters, CharPtr program, ValNodePtr 
 		}
 #endif
         	options->use_best_align = parameters->use_best_align;
+
+                if(parameters->required_start != 0)
+                    options->required_start = parameters->required_start;
+                if(parameters->required_end != 0)
+                    options->required_end = parameters->required_end;
+                
         	options->is_rps_blast = parameters->is_rps_blast;
+                options->tweak_parameters = parameters->tweak_parameters;
+                options->smith_waterman = parameters->smith_waterman;
         }
 
 	if (status = BLASTOptionValidateEx(options, program, error_return)) {

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/3/98
 *
-* $Revision: 6.112 $
+* $Revision: 6.119 $
 *
 * File Description: 
 *
@@ -56,6 +56,8 @@
 #include <explore.h>
 #include <medarch.h>
 #include <medutil.h>
+#include <vecscnapi.h>
+#include <qblastapi.h>
 
 typedef struct evidenceformdata {
   FEATURE_FORM_BLOCK
@@ -2967,6 +2969,9 @@ static void UserObjectPtrToRefGeneDialog (DialoG d, Pointer data)
     } else if (StringICmp (str, "Reviewed") == 0) {
       SetValue (rdp->status, 2);
       return;
+    } else if (StringICmp (str, "Predicted") == 0) {
+      SetValue (rdp->status, 3);
+      return;
     }
   }
   SetValue (rdp->status, 0);
@@ -3003,6 +3008,8 @@ static Pointer RefGeneDialogToUserObjectPtr (DialoG d)
     AddStatusToRefGeneTrackUserObject (uop, "Provisional");
   } else if (status == 2) {
     AddStatusToRefGeneTrackUserObject (uop, "Reviewed");
+  } else if (status == 3) {
+    AddStatusToRefGeneTrackUserObject (uop, "Predicted");
   }
 
   tlp = (TagListPtr) GetObjectExtra (rdp->fields);
@@ -3085,6 +3092,7 @@ static DialoG CreateRefGeneDialog (GrouP g)
   rdp->status = HiddenGroup (x, 3, 0, NULL);
   RadioButton (rdp->status, "Provisional");
   RadioButton (rdp->status, "Reviewed");
+  RadioButton (rdp->status, "Predicted");
 
   q = HiddenGroup (p, -6, 0, NULL);
   lastppt = NULL;
@@ -3982,6 +3990,176 @@ static void SimpleRsiteProc (IteM i)
 #endif
 }
 
+static VQUEUE  vsquerylist = NULL;
+
+static void LIBCALLBACK AnnounceCallback (CharPtr requestID, CharPtr seqID, Int2 estimatedSeconds)
+
+{
+  if (StringHasNoText (requestID)) {
+    requestID = "?";
+  }
+  if (StringHasNoText (seqID)) {
+    seqID = "?";
+  }
+  Message (MSG_POST, "Queued rID %s, seqID %s, estimated seconds = %d",
+           requestID, seqID, (int) estimatedSeconds);
+}
+
+static Boolean LIBCALLBACK VecScreenCallback (
+  CharPtr filename,
+  VoidPtr userdata,
+  CharPtr requestID,
+  CharPtr seqID,
+  Boolean success
+)
+
+{
+  if (StringHasNoText (requestID)) {
+    requestID = "?";
+  }
+  if (StringHasNoText (seqID)) {
+    seqID = "?";
+  }
+  if (success) {
+    if (! SequinHandleNetResults (filename)) {
+      /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
+    }
+  } else {
+    Message (MSG_POST, "Failure of rID '%s', seqID %s", requestID, seqID);
+  }
+  return TRUE;
+}
+
+static void SimpleUniVecScreenProc (IteM i)
+
+{
+  BaseFormPtr   bfp;
+  BioseqPtr     bsp;
+  NewObjectPtr  nop;
+  SeqEntryPtr   sep = NULL;
+  Int2          which;
+
+  nop = (NewObjectPtr) GetObjectExtra (i);
+  if (nop == NULL) return;
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = nop->bfp;
+#endif
+  if (bfp == NULL) return;
+  which = BioseqViewOrDocSumChoice (nop);
+  if (which != 1) return;
+  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp != NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+  } else {
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  }
+  if (sep == NULL) return;
+
+  VecScreenAsynchronousRequest ("UniVec", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
+}
+
+static void SimpleUniVecCoreScreenProc (IteM i)
+
+{
+  BaseFormPtr   bfp;
+  BioseqPtr     bsp;
+  NewObjectPtr  nop;
+  SeqEntryPtr   sep = NULL;
+  Int2          which;
+
+  nop = (NewObjectPtr) GetObjectExtra (i);
+  if (nop == NULL) return;
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = nop->bfp;
+#endif
+  if (bfp == NULL) return;
+  which = BioseqViewOrDocSumChoice (nop);
+  if (which != 1) return;
+  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp != NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+  } else {
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  }
+  if (sep == NULL) return;
+
+  VecScreenAsynchronousRequest ("UniVec_Core", bsp, &vsquerylist, VecScreenCallback, AnnounceCallback, NULL);
+}
+
+static QBQUEUE  qbquerylist = NULL;
+
+static void LIBCALLBACK QBAnnounceCallback (CharPtr requestID, CharPtr seqID, Int2 estimatedSeconds)
+
+{
+  if (StringHasNoText (requestID)) {
+    requestID = "?";
+  }
+  if (StringHasNoText (seqID)) {
+    seqID = "?";
+  }
+  Message (MSG_POST, "Queued rID %s, seqID %s, estimated seconds = %d",
+           requestID, seqID, (int) estimatedSeconds);
+}
+
+static Boolean LIBCALLBACK QBCallback (
+  CharPtr filename,
+  VoidPtr userdata,
+  CharPtr requestID,
+  CharPtr seqID,
+  Boolean success
+)
+
+{
+  if (StringHasNoText (requestID)) {
+    requestID = "?";
+  }
+  if (StringHasNoText (seqID)) {
+    seqID = "?";
+  }
+  if (success) {
+    if (! SequinHandleNetResults (filename)) {
+      /* LaunchGeneralTextViewer (path, "QueueFastaQueryToURL failed"); */
+    }
+  } else {
+    Message (MSG_POST, "Failure of rID '%s', seqID %s", requestID, seqID);
+  }
+  return TRUE;
+}
+
+static void SimpleQBlastProc (IteM i)
+
+{
+  BaseFormPtr   bfp;
+  BioseqPtr     bsp;
+  NewObjectPtr  nop;
+  SeqEntryPtr   sep = NULL;
+  Int2          which;
+
+  nop = (NewObjectPtr) GetObjectExtra (i);
+  if (nop == NULL) return;
+#ifdef WIN_MAC
+  bfp = (BaseFormPtr) currentFormDataPtr;
+#else
+  bfp = nop->bfp;
+#endif
+  if (bfp == NULL) return;
+  which = BioseqViewOrDocSumChoice (nop);
+  if (which != 1) return;
+  bsp =  GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
+  if (bsp != NULL) {
+    sep = SeqMgrGetSeqEntryForData (bsp);
+  } else {
+    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  }
+  if (sep == NULL) return;
+
+  QBlastAsynchronousRequest ("nr", "blastn", bsp, &qbquerylist, QBCallback, QBAnnounceCallback, NULL);
+}
+
 /* Analysis menu can launch external programs or use Web services */
 
 static QUEUE  urlquerylist = NULL;
@@ -4044,8 +4222,8 @@ extern void SubmitToNCBI (IteM i)
 
   conn = QUERY_OpenUrlQuery ("cruncher.nlm.nih.gov", 80,
                              "/cgi-bin/Sequin/testcgi.cgi", "request=echo",
-                             progname, 30, eMIME_AsnBinary,
-                             URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+                             progname, 30, eMIME_T_NcbiData, eMIME_AsnBinary, eENCOD_Url,
+                             URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
 
   fp = FileOpen (path, "rb");
   QUERY_CopyFileToQuery (conn, fp);
@@ -4053,7 +4231,7 @@ extern void SubmitToNCBI (IteM i)
 
   QUERY_SendQuery (conn);
 
-  QUERY_AddToQueue (&urlquerylist, conn, SubmitToNCBIResultProc, NULL);
+  QUERY_AddToQueue (&urlquerylist, conn, SubmitToNCBIResultProc, NULL, TRUE);
 
   pendingqueries++;
 
@@ -4070,6 +4248,8 @@ extern void SequinCheckSocketsProc (void)
     Beep ();
     pendingqueries--;
   }
+  remaining = VecScreenCheckQueue (&vsquerylist);
+  remaining = QBlastCheckQueue (&qbquerylist);
 }
 
 static Boolean LIBCALLBACK DemoModeResultProc (CONN conn, VoidPtr userdata, EConnStatus status)
@@ -4131,8 +4311,8 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
   conn = QUERY_OpenUrlQuery (nop->host_machine, nop->host_port,
                              nop->host_path, arguments,
                              progname, nop->timeoutsec,
-                             subtype,
-                             URLC_SURE_FLUSH | URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
+                             eMIME_T_NcbiData, subtype, eENCOD_Url,
+                             URLC_URL_DECODE_INP | URLC_URL_ENCODE_OUT);
   if (conn == NULL) return;
 
   fp = FileOpen (path, "r");
@@ -4141,7 +4321,7 @@ static void FinishURLProc (NewObjectPtr nop, CharPtr arguments, CharPtr path)
 
   QUERY_SendQuery (conn);
 
-  QUERY_AddToQueue (&urlquerylist, conn, resultproc, NULL);
+  QUERY_AddToQueue (&urlquerylist, conn, resultproc, NULL, TRUE);
 
   pendingqueries++;
 }
@@ -5625,6 +5805,20 @@ extern MenU CreateAnalysisMenu (WindoW w, BaseFormPtr bfp, Boolean bspviewOK, Bo
                      NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
                      "Restriction Search", "Search",
                      SimpleRsiteProc, &first);
+    if (indexerVersion) {
+      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
+                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
+                       "Vector Screen - UniVec", "Search",
+                       SimpleUniVecScreenProc, &first);
+      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
+                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
+                       "Vector Screen - UniVec Core", "Search",
+                       SimpleUniVecCoreScreenProc, &first);
+      AddAnalysisItem (m, bfp, bspviewOK, FALSE, TRUE, FALSE, TRUE,
+                       NULL, 0, NULL, NULL, 0, 0, FALSE, NULL, NULL, NULL, NULL,
+                       "QBlast Test", "Search",
+                       SimpleQBlastProc, &first);
+    }
   }
   if (bspviewOK || docsumOK) {
     if (useEntrez) {

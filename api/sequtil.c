@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.55 $
+* $Revision: 6.56 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: sequtil.c,v $
+* Revision 6.56  2000/06/08 14:30:07  dondosha
+* Fixed bug in GetAccessionFromSeqId for general id
+*
 * Revision 6.55  2000/05/22 17:37:01  sicotte
 * add BD prefix to WHICH_db_accession
 *
@@ -3080,9 +3083,14 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi,
       break;
    case SEQID_GENERAL:
       dbtag = (DbtagPtr) sip->data.ptrvalue;
-      id_len = StringLen(dbtag->tag->str);
-      *id = (CharPtr) MemNew(id_len+1);
-      sprintf(*id, "%s", dbtag->tag->str);
+      if (dbtag->tag->str == NULL) {
+	 numeric_id_type = TRUE;
+	 *gi = dbtag->tag->id;
+      } else {
+	 id_len = StringLen(dbtag->tag->str);
+	 *id = (CharPtr) MemNew(id_len+1);
+	 sprintf(*id, "%s", dbtag->tag->str);
+      }
       break;
    case SEQID_PATENT:
       psip = (PatentSeqIdPtr) sip->data.ptrvalue;

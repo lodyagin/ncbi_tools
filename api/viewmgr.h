@@ -1,4 +1,4 @@
-/*   $Id: viewmgr.h,v 1.12 2000/05/24 21:42:59 hurwitz Exp $
+/*   $Id: viewmgr.h,v 1.14 2000/06/20 19:35:12 hurwitz Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,13 +23,13 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: viewmgr.h,v 1.12 2000/05/24 21:42:59 hurwitz Exp $
+* File Name:  $Id: viewmgr.h,v 1.14 2000/06/20 19:35:12 hurwitz Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   2/1/00
 *
-* $Revision: 1.12 $
+* $Revision: 1.14 $
 *
 * File Description: The ViewMgr is the part of the alignment management
 *                   system that creates a viewable seqalign from an original
@@ -41,6 +41,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: viewmgr.h,v $
+* Revision 1.14  2000/06/20 19:35:12  hurwitz
+* use indexed seqAlign when necessary, make multiple when redrawing
+*
+* Revision 1.13  2000/06/13 18:23:54  hurwitz
+* made ViewMgr_MakeMultiple routine, call this on each launch of DDE rather than launch of DDV
+*
 * Revision 1.12  2000/05/24 21:42:59  hurwitz
 * getting hide/show rows to work with DDV and DDE together
 *
@@ -169,6 +175,20 @@ NLM_EXTERN Int4 ViewMgr_TRow2VRow (SeqAlign *salp, Int4 TRow);
 
 /*****************************************************************************
 
+Function: ViewMgr_MakeMultiple
+
+Purpose: Turns a pairwise seqalign into a multiple
+  
+Parameters: salp, the seqalign to be turned into a multiple
+
+Returns: 1 on success, 0 otherwise
+
+*****************************************************************************/
+
+NLM_EXTERN Int4 ViewMgr_MakeMultiple(SeqAlign *salp);
+
+/*****************************************************************************
+
 Function: ViewMgr_GetTarget
 
 Purpose: return the original *indexed* SeqAlign given the view seqalign
@@ -184,6 +204,15 @@ Purpose: return the original SeqAlign given the view seqalign
   
 *****************************************************************************/
 NLM_EXTERN SeqAlign * ViewMgr_GetBegin(SeqAlign *salp);
+
+/*****************************************************************************
+
+Function: ViewMgr_SetBegin
+
+Purpose: make pNewBegin the original SeqAlign
+  
+*****************************************************************************/
+NLM_EXTERN SeqAlign * ViewMgr_SetBegin(SeqAlign *salp, SeqAlign *pNewBegin);
 
 /*****************************************************************************
 

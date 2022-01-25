@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description: 
 *
@@ -51,6 +51,9 @@
 /*************************************
 *
 * $Log: asn2ff6.h,v $
+* Revision 6.3  2000/06/05 17:51:58  tatiana
+* increase size of feature arrays to Int4
+*
 * Revision 6.2  1998/02/10 17:01:22  tatiana
 * AddGBQualEx() added
 *
@@ -200,14 +203,14 @@ NLM_EXTERN void NoteStructReset PROTO ((NoteStructPtr nsp));
 NLM_EXTERN int LIBCALL CompareSfpForHeap PROTO ((VoidPtr vp1, VoidPtr vp2));
 NLM_EXTERN int LIBCALL CompareGeneName PROTO ((VoidPtr vp1, VoidPtr vp2));
 NLM_EXTERN ValNodePtr FlatRefBest PROTO ((ValNodePtr equiv, Boolean error_msgs, Boolean accept_muid));
-NLM_EXTERN SeqFeatPtr PNTR CopyList PROTO((SortStructPtr List, Int2 currentsize));
-NLM_EXTERN Int2 StoreFeatFree PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int2 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt, Boolean feat_free));
-NLM_EXTERN Int2 StoreFeatTemp PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int2 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt, Boolean temp));
-NLM_EXTERN Int2 StoreFeat PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int2 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt));
-NLM_EXTERN void ListFree PROTO ((SeqFeatPtr PNTR PNTR List, Int2 range));
+NLM_EXTERN SeqFeatPtr PNTR CopyList PROTO((SortStructPtr List, Int4 currentsize));
+NLM_EXTERN Int4 StoreFeatFree PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt, Boolean feat_free));
+NLM_EXTERN Int4 StoreFeatTemp PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt, Boolean temp));
+NLM_EXTERN Int4 StoreFeat PROTO((SortStruct PNTR List, SeqFeatPtr sfp, Int4 currentsize, BioseqPtr bsp, BioseqPtr seg, Uint2 entityID, Uint2 itemID, Uint2 thistype, SeqLocPtr slp, SeqLocPtr PNTR extr_loc, Int2 extr_loc_cnt));
+NLM_EXTERN void ListFree PROTO ((SeqFeatPtr PNTR PNTR List, Int4 range));
 NLM_EXTERN CharPtr Cat2Strings PROTO ((CharPtr string1, CharPtr string2, CharPtr separator, Int2 num));
 NLM_EXTERN void EnlargeCharPtrStack PROTO ((NoteStructPtr nsp, Int2 enlarge));
-NLM_EXTERN SortStructPtr EnlargeSortList PROTO((SortStructPtr List, Int2 size));
+NLM_EXTERN SortStructPtr EnlargeSortList PROTO((SortStructPtr List, Int4 size));
 NLM_EXTERN void NoteToCharPtrStack PROTO ((NoteStructPtr nsp, CharPtr annot, CharPtr string, Uint1 alloc));
 NLM_EXTERN void CpNoteToCharPtrStack PROTO ((NoteStructPtr nsp, CharPtr annot, CharPtr string));
 NLM_EXTERN void SaveNoteToCharPtrStack PROTO ((NoteStructPtr nsp, CharPtr annot, CharPtr string));

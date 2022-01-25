@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.141 $
+* $Revision: 6.145 $
 *
 * File Description: 
 *
@@ -61,6 +61,7 @@
 #include <salstruc.h>
 #include <explore.h>
 #include <utilpub.h>
+#include <tofasta.h>
 
 /*#ifdef INTERNAL_NCBI_SEQUIN*/
 /*#ifdef NEW_TAXON_SERVICE*/
@@ -3306,8 +3307,11 @@ static void AddQualifier (IteM i)
 static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {" ",                  0},
   {"Acronym",           19},
+  {"Anamorph",          29},
+  {"Authority",         24},
   {"Biotype",           14},
   {"Biovar",            13},
+  {"Breed",             31},
   {"Cell-line",        108},
   {"Cell-type",        109},
   {"Chemovar",          12},
@@ -3319,6 +3323,9 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Cultivar",          10},
   {"Dev-stage",        112},
   {"Dosage",            20},
+  {"Ecotype",           27},
+  {"Forma",             25},
+  {"Forma-specialis",   26},
   {"Frequency",        113},
   {"Genotype",         106},
   {"Germline",         114},
@@ -3336,6 +3343,7 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"Plastid-name",     122},
   {"Pop-variant",      117},
   {"Rearranged",       115},
+  {"Segment",          124},
   {"Serogroup",          8},
   {"Serotype",           7},
   {"Serovar",            9},
@@ -3348,6 +3356,8 @@ static ENUM_ALIST(subsource_and_orgmod_subtype_alistX)
   {"SubSource Note",   155},
   {"Substrain",          3},
   {"Subtype",            5},
+  {"Synonym",           28},
+  {"Teleomorph",        30},
   {"Tissue-lib",       118},
   {"Tissue-type",      110},
   {"Transposon-name",  120},
@@ -6252,11 +6262,100 @@ static void FixAndRetranslateCDSs (BioseqPtr bsp, SeqEntryPtr sep,
   gs.target = SeqLocFree (gs.target);
 }
 
+static ValNodePtr CollectAndExtendSingleBaseFeatures (BioseqPtr bsp, Int2 whichend, Int4 len)
+
+{
+  SeqMgrFeatContext  context;
+  ValNodePtr         head = NULL;
+  SeqFeatPtr         sfp;
+  SeqLocPtr          slp;
+  SeqPntPtr          spp;
+
+  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, 0, &context);
+  while (sfp != NULL) {
+    if (whichend == 1 && context.numivals == 1 && context.right == 0) {
+      slp = sfp->location;
+      if (slp != NULL && slp->choice == SEQLOC_PNT && slp->next == NULL) {
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL && spp->point == 0) {
+          spp->point = 1;
+          ValNodeAddPointer (&head, 1, (Pointer) sfp);
+        }
+      }
+    } else if (whichend == 2 && context.numivals == 1 && context.left == bsp->length - 1) {
+      slp = sfp->location;
+      if (slp != NULL && slp->choice == SEQLOC_PNT && slp->next == NULL) {
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL && spp->point == bsp->length - 1) {
+          spp->point = bsp->length - 2;
+          ValNodeAddPointer (&head, 2, (Pointer) sfp);
+        }
+      }
+    }
+    sfp = SeqMgrGetNextFeature (bsp, sfp, 0, 0, &context);
+  }
+
+  return head;
+}
+
+static void ReadjustSingleBaseFeatures (ValNodePtr head, BioseqPtr bsp, Int2 whichend, Int4 len)
+
+{
+  SeqFeatPtr  sfp;
+  SeqIntPtr   sintp;
+  SeqLocPtr   slp;
+  SeqPntPtr   spp;
+  ValNodePtr  vnp;
+
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    sfp = (SeqFeatPtr) vnp->data.ptrvalue;
+    if (sfp != NULL) {
+      slp = sfp->location;
+      if (slp != NULL && slp->choice == SEQLOC_PNT && slp->next == NULL) {
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL) {
+          if (whichend == 1) {
+            sintp = SeqIntNew ();
+            if (sintp != NULL) {
+              sintp->from = 0;
+              sintp->to = spp->point - 1;
+              sintp->strand = spp->strand;
+              sintp->id = spp->id;
+              spp->id = NULL;
+              sintp->if_from = spp->fuzz;
+              spp->fuzz = NULL;
+              slp->choice = SEQLOC_INT;
+              slp->data.ptrvalue = (Pointer) sintp;
+              SeqPntFree (spp);
+            }
+          } else if (whichend == 2) {
+            sintp = SeqIntNew ();
+            if (sintp != NULL) {
+              sintp->from = spp->point + 1;
+              sintp->to = spp->point + 1 + len;
+              sintp->strand = spp->strand;
+              sintp->id = spp->id;
+              spp->id = NULL;
+              sintp->if_to = spp->fuzz;
+              spp->fuzz = NULL;
+              slp->choice = SEQLOC_INT;
+              slp->data.ptrvalue = (Pointer) sintp;
+              SeqPntFree (spp);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 static void EditSeqEndsCallback (Uint2 entityID, EditSeqPtr esp, SeqEntryPtr sep)
 
 {
   BioseqPtr     bsp;
   BioseqSetPtr  bssp;
+  ValNodePtr    head;
+  Int4          len;
   SeqEntryPtr   nsep;
   Int4          pos;
   Uint1         residue;
@@ -6304,24 +6403,32 @@ static void EditSeqEndsCallback (Uint2 entityID, EditSeqPtr esp, SeqEntryPtr sep
     SeqPortFree (spp);
     str = MemNew ((size_t) (StringLen (esp->seqstr) + 4));
     if (str != NULL) {
+      head = NULL;
       if (esp->endval == 2) {
         esp->extendedthis = bsp;
         StringCpy (str, terminal);
         StringCat (str, esp->seqstr);
+        len = StringLen (esp->seqstr);
         pos = bsp->length - 1;
+        head = CollectAndExtendSingleBaseFeatures (bsp, 2, len);
         insertchar (str, pos, bsp->id, bsp->mol, FALSE);
         BioseqDelete (bsp->id, bsp->length - 1, bsp->length - 1, TRUE, FALSE);
+        ReadjustSingleBaseFeatures (head, bsp, 2, len);
         FixAndRetranslateCDSs (bsp, sep, esp, FALSE);
       } else {
         esp->frameshift = (Int2) StringLen (esp->seqstr);
         esp->extendedthis = bsp;
         StringCpy (str, esp->seqstr);
         StringCat (str, terminal);
+        len = StringLen (esp->seqstr);
         pos = 1;
+        head = CollectAndExtendSingleBaseFeatures (bsp, 1, len);
         insertchar (str, pos, bsp->id, bsp->mol, FALSE);
         BioseqDelete (bsp->id, 0, 0, TRUE, FALSE);
+        ReadjustSingleBaseFeatures (head, bsp, 1, len);
         FixAndRetranslateCDSs (bsp, sep, esp, TRUE);
       }
+      ValNodeFree (head);
     }
     MemFree (str);
   } else {
@@ -6332,7 +6439,9 @@ static void EditSeqEndsCallback (Uint2 entityID, EditSeqPtr esp, SeqEntryPtr sep
 static void DoEditSeqEndsProc (ButtoN b)
 
 {
+  Char        ch;
   EditSeqPtr  esp;
+  CharPtr     p, q;
 
   esp = (EditSeqPtr) GetObjectExtra (b);
   if (esp == NULL) {
@@ -6342,6 +6451,21 @@ static void DoEditSeqEndsProc (ButtoN b)
   Hide (esp->form);
   Update ();
   esp->seqstr = SaveStringFromText  (esp->seq);
+  p = esp->seqstr;
+  if (p != NULL) {
+    /* remove any non-sequence characters */
+    q = p;
+    ch = *p;
+    while (ch != '\0') {
+      if (IS_ALPHA (ch)) {
+        *q = ch;
+        q++;
+      }
+      p++;
+      ch = *p;
+    }
+    *q = '\0';
+  }
   esp->genestr = SaveStringFromText  (esp->genename);
   esp->endval = GetValue (esp->whichend);
   esp->extendflag = GetStatus (esp->extendfeat);
@@ -6423,10 +6547,10 @@ static void EditSeqEndsProc (IteM i)
 
   k = HiddenGroup (h, 0, -2, NULL);
   StaticPrompt (k, "Sequence", 0, 0, programFont, 'l');
-  esp->seq = ScrollText (k, 20, 4, programFont, TRUE, NULL);
+  esp->seq = ScrollText (k, 25, 5, programFont, TRUE, NULL);
 
   q = HiddenGroup (h, 2, 0, NULL);
-  StaticPrompt (q, "Gene", 0, dialogTextHeight, programFont, 'l');
+  StaticPrompt (q, "Optional gene constraint", 0, dialogTextHeight, programFont, 'l');
   esp->genename = DialogText (q, "", 14, NULL);
 
   c = HiddenGroup (h, 4, 0, NULL);
@@ -7234,6 +7358,29 @@ static void MakeToolBarWindow (IteM i)
   Select (f);
 }
 
+static void DoNCCleanup (IteM i)
+
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  if (sep == NULL) return;
+
+  NC_Cleanup (bfp->input_entityID, NULL);
+
+  Update ();
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 extern void LookupAllPubs (IteM i);
 extern void ResolveExistingLocalIDs (IteM i);
 extern void PromoteAlignsToBestIDProc (IteM i);
@@ -7282,6 +7429,9 @@ extern void SetupSpecialMenu (MenU m, BaseFormPtr bfp)
   i = CommandItem (s, "Append Clone to Organism", AddCloneToOrg);
   SetObjectExtra (i, bfp, NULL);
   i = CommandItem (s, "Append Subspecies to Organism", AddSubspeciesToOrg);
+  SetObjectExtra (i, bfp, NULL);
+  SeparatorItem (s);
+  i = CommandItem (s, "NC_Cleanup", DoNCCleanup);
   SetObjectExtra (i, bfp, NULL);
 
 

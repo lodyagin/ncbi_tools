@@ -114,7 +114,7 @@ Int2 Main(void)
 
 	make_protein = (Boolean)(myargs[7].intvalue);
 	make_dna = (Boolean)(myargs[8].intvalue);
-	make_quality = (Boolean)(myargs[13].intvalue);
+	make_quality = (Boolean)(myargs[12].intvalue);
 
 					/* open the ASN.1 input file in the right mode */
 
@@ -145,9 +145,9 @@ Int2 Main(void)
 		}
 	}
 
-	if ((myargs[12].strvalue != NULL) && (make_quality))
+	if ((myargs[13].strvalue != NULL) && (make_quality))
 	{
-		if ( (ql = FileOpen (myargs[12].strvalue, "w")) == NULL)
+		if ( (ql = FileOpen (myargs[13].strvalue, "w")) == NULL)
 		{
 			ErrShow();
 			return 1;

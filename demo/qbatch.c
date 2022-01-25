@@ -1,4 +1,4 @@
-/* $Id: qbatch.c,v 6.6 2000/05/31 12:37:17 kans Exp $
+/* $Id: qbatch.c,v 6.7 2000/06/21 14:34:35 beloslyu Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,15 @@
 *
 * Version Creation Date: 05/04/2000
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *         WWW and Command-line Batch Entrez using Entre2 and ID1
 *
 * $Log: qbatch.c,v $
+* Revision 6.7  2000/06/21 14:34:35  beloslyu
+* fix the args for ctime_r on linux
+*
 * Revision 6.6  2000/05/31 12:37:17  kans
 * removed SwapUint4, which somehow got back into the code
 *
@@ -879,7 +882,7 @@ Boolean QSRV_Time(CharPtr string, Int4 len, time_t seconds)
         seconds = GetSecs();
     }
     
-#ifdef OS_UNIX_IRIX  
+#if defined(OS_UNIX_IRIX) || defined(OS_UNIX_LINUX)
     ctime_r(&seconds, string);
 #else
     ctime_r(&seconds, string, len);

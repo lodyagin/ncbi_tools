@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.87 $
+* $Revision: 6.93 $
 *
 * File Description: 
 *
@@ -1120,7 +1120,11 @@ static Boolean ImportPhylipDialog (DialoG d, CharPtr filename)
                 seqtitles = 0;
                 seqtotals = 0;
                 for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+                  /*
                   ttl = SeqEntryGetTitle (tmp);
+                  */
+                  ttl = NULL;
+                  SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
                   if (ttl != NULL) {
                     if (bssp->_class == BioseqseqSet_class_phy_set) {
                       if (StringISearch (ttl, "[org=") != NULL ||
@@ -1409,6 +1413,9 @@ typedef struct fixnucorm {
 
 static ENUM_ALIST(combined_subtype_alist)
   {" ",                    0},
+  {"Authority",           31},
+  {"Anamorph",            36},
+  {"Breed",               38},
   {"Cell-line",            2},
   {"Cell-type",            3},
   {"Chromosome",           4},
@@ -1417,6 +1424,9 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Country",             29},
   {"Cultivar",             7},
   {"Dev-stage",            8},
+  {"Ecotype",             34},
+  {"Forma",               32},
+  {"Forma-specialis",     33},
   {"Haplotype",            9},
   {"Isolate",             10},
   {"Lab-host",            11},
@@ -1429,10 +1439,13 @@ static ENUM_ALIST(combined_subtype_alist)
   {"Organism",             1},
   {"Plasmid-name",        14},
   {"Plastid-name",        15},
+  {"Segment",             30},
   {"Sex",                 16},
   {"Specimen-voucher",    27},
   {"Strain",              17},
   {"Sub-species",         18},
+  {"Synonym",             35},
+  {"Teleomorph",          37},
   {"Tissue-lib",          19},
   {"Tissue-type",         20},
   {"Transposon-name",     21},
@@ -2520,7 +2533,8 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
   BioseqSetPtr       bssp;
   Int2               code;
   CharPtr            lin;
-  OrgRefPtr          masterorp;
+  OrgNamePtr         masteronp = NULL;
+  OrgRefPtr          masterorp = NULL;
   MolInfoPtr         mip;
   BioseqPtr          nbsp;
   Boolean            needbiop;
@@ -2608,6 +2622,20 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
               if (orp != NULL) {
                 TrimSpacesAroundString (str);
                 orp->taxname = StringSave (str);
+                if (masterbiop != NULL) {
+                  masterorp = masterbiop->org;
+                  if (masterorp != NULL) {
+                    masteronp = masterorp->orgname;
+                    if (masteronp != NULL) {
+                      onp = OrgNameNew ();
+                      orp->orgname = onp;
+                      if (onp != NULL) {
+                        onp->gcode = masteronp->gcode;
+                        onp->mgcode = masteronp->mgcode;
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -2625,6 +2653,15 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
               if (orp != NULL) {
                 orp->taxname = StringSave (masterorp->taxname);
                 orp->common = StringSave (masterorp->common);
+                masteronp = masterorp->orgname;
+                if (masteronp != NULL) {
+                  onp = OrgNameNew ();
+                  orp->orgname = onp;
+                  if (onp != NULL) {
+                    onp->gcode = masteronp->gcode;
+                    onp->mgcode = masteronp->mgcode;
+                  }
+                }
               }
             }
           }
@@ -2671,7 +2708,10 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
                   } else {
                     onp->gcode = gcIndexToId [GetValue (gencode)];
                   }
+                  biop->genome = (Uint1) val;
                 }
+              } else if (GetEnumPopup (genome, biosource_genome_simple_alist, &val)) {
+                biop->genome = (Uint1) val;
               }
             }
           }
@@ -2836,6 +2876,32 @@ extern Boolean ProcessOneNucleotideTitle (Int2 seqPackage, DialoG genbio, PopuP 
             if (orp != NULL) {
               orp->taxname = StringSave (masterorp->taxname);
               orp->common = StringSave (masterorp->common);
+              onp = orp->orgname;
+              if (onp == NULL) {
+                orp->orgname = OrgNameNew ();
+                onp = orp->orgname;
+              }
+              if (onp != NULL) {
+                masteronp = masterorp->orgname;
+                if (masteronp != NULL) {
+                  if (onp->gcode == 0 && onp->mgcode == 0) {
+                    onp->gcode = masteronp->gcode;
+                    onp->mgcode = masteronp->mgcode;
+                  }
+                }
+                biop->genome = masterbiop->genome;
+                if (onp->gcode == 0 && onp->mgcode == 0) {
+                  code = gcIndexToId [GetValue (gencode)];
+                  if (GetEnumPopup (genome, biosource_genome_simple_alist, &val)) {
+                    if (val == 4 || val == 5) {
+                      onp->mgcode = gcIndexToId [GetValue (gencode)];
+                    } else {
+                      onp->gcode = gcIndexToId [GetValue (gencode)];
+                    }
+                    biop->genome = (Uint1) val;
+                  }
+                }
+              }
             }
           }
         }
@@ -3616,6 +3682,9 @@ static Pointer FastaSequencesFormToSeqEntryPtr (ForM f)
     biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
     if (biop != NULL) {
       code = BioSourceToGeneticCode (biop);
+      if (code == 0) {
+        code = gcIndexToId [GetValue (sqfp->gencode)];
+      }
     } else if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
       code = gcIndexToId [GetValue (sqfp->gencode)];
     } else {
@@ -4132,6 +4201,9 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
     biop = (BioSourcePtr) DialogToPointer (sqfp->genbio);
     if (biop != NULL) {
       code = BioSourceToGeneticCode (biop);
+      if (code == 0) {
+        code = gcIndexToId [GetValue (sqfp->gencode)];
+      }
     } else if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
       code = gcIndexToId [GetValue (sqfp->gencode)];
     } else {
@@ -4160,7 +4232,11 @@ static Pointer PhylipSequencesFormToSeqEntryPtr (ForM f)
           seqtitles = 0;
           seqtotals = 0;
           for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+            /*
             ttl = SeqEntryGetTitle (tmp);
+            */
+            ttl = NULL;
+            SeqEntryExplore (sep, (Pointer) (&ttl), FindFirstTitle);
             if (ttl != NULL) {
               if (sqfp->seqPackage == SEQ_PKG_PHYLOGENETIC) {
                 if (StringISearch (ttl, "[org=") != NULL ||
@@ -4815,18 +4891,21 @@ static void ChangeAnnotType (GrouP g)
       SafeHide (sqfp->protOrRnaPpt);
       SafeHide (sqfp->protOrRnaName);
       SafeShow (sqfp->annotGrp);
+      Select (sqfp->geneName);
       break;
     case 2 :
       SafeSetTitle (sqfp->protOrRnaPpt, "rRNA Name");
       SafeShow (sqfp->protOrRnaPpt);
       SafeShow (sqfp->protOrRnaName);
       SafeShow (sqfp->annotGrp);
+      Select (sqfp->protOrRnaName);
       break;
     case 3 :
       SafeSetTitle (sqfp->protOrRnaPpt, "Protein Name");
       SafeShow (sqfp->protOrRnaPpt);
       SafeShow (sqfp->protOrRnaName);
       SafeShow (sqfp->annotGrp);
+      Select (sqfp->protOrRnaName);
       break;
     default :
       SafeHide (sqfp->annotGrp);

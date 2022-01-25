@@ -550,7 +550,7 @@ on CreateCn3D()
 			my AddLibraries()
 			
 			repeat with i in {"ncbiid1", "ncsasock", "ncbi", "ncbiobj", "ncbicdr", "vibrantOGL", "ncbidesk", "ncbimmdb", "ncbicn3dOGL", "ncbitool", "netcli", Â
-				"netentr", "ncbibls3", "vibnet"}
+				"netentr", "vibnet"}
 				Add Files {LIBRARIES & i & SUFFIX} To Segment 1
 			end repeat
 			

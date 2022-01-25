@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description: mouse management, graphic engine of the sequence viewer
 *                   part of this code is also used for the WWW Entrez viewer
@@ -37,6 +37,9 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvgraph.c,v $
+* Revision 6.48  2000/06/27 20:46:38  hurwitz
+* fixed bugs with select rectangle, added select row option
+*
 * Revision 6.47  2000/04/13 13:58:02  durand
 * allowed udv to display reverse complement sequence
 *
@@ -1736,7 +1739,7 @@ Uint2       bsp_eID,bsp_iID;
 			break;
 	}
 	
-	memset(&(vdp->UDV_ms),0,sizeof(UDV_mouse_select));
+  ClearUDV_mouse_select(&(vdp->UDV_ms));
 	vdp->UDV_ms.Action_type=MS_ACTION_FEAT_NOTHING;
 	ArrowCursor();
 }

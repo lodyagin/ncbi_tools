@@ -33,6 +33,9 @@
 *
 * Modifications:
 * $Log: cn3dmsg.c,v $
+* Revision 6.102  2000/06/16 14:57:03  lewisg
+* move entrez calls out of desktop
+*
 * Revision 6.101  2000/05/19 17:46:57  thiessen
 * fix redraw from DDV show/hide bug
 *
@@ -327,7 +330,9 @@ void Cn3D_LaunchSeqEntry(ValNode * pvnsep)
     vg.BlastFileGap = (void *)Cn3D_ImportBioseqFileGap;
     vg.BlastNet = (void *)Cn3D_ImportBioseq;
     vg.BlastNetGap = (void *)Cn3D_ImportBioseqGap;
+#if 0
     vg.BlastMany = (void *)Cn3D_BlastDlg;
+#endif
     SetAppProperty(SAM_ViewString, &vg);
     entityID = ObjMgrGetEntityIDForPointer(pvnsep);
     
@@ -425,7 +430,9 @@ void Cn3D_LaunchSeqAnnot(SeqAnnot * sap)
         vg.BlastFileGap = (void *)Cn3D_ImportBioseqFileGap;
         vg.BlastNet = (void *)Cn3D_ImportBioseq;
         vg.BlastNetGap = (void *)Cn3D_ImportBioseqGap;
+#if 0
         vg.BlastMany = (void *)Cn3D_BlastDlg;
+#endif 
         SetAppProperty(SAM_ViewString, &vg);
         GatherSpecificProcLaunch(0, "DDV", OMPROC_VIEW,
             FALSE, entityID, itemID, OBJ_SEQALIGN);

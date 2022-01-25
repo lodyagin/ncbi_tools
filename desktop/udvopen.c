@@ -29,13 +29,16 @@
 *
 * Version Creation Date:   5/3/99
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: open/close/choose sequence/file from disk/network
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: udvopen.c,v $
+* Revision 6.19  2000/06/16 14:57:02  lewisg
+* move entrez calls out of desktop
+*
 * Revision 6.18  2000/05/01 21:21:13  lewisg
 * make features dialogs modal
 *
@@ -90,8 +93,10 @@
 */
 
 #include <udviewer.h>
+#if 0
 #include <blast.h>
 #include <netblap3.h>
+#endif
 
 
 	typedef struct dlgfileopendata {/*use to manage the FileOpen dialog box*/
@@ -1186,6 +1191,9 @@ Uint2			eID,iID;
 	}
 }
 
+
+#if 0 
+
 static CharPtr udvprotdbs [] = {
   "swissprot", "nr", "pdb", "month", "kabat", "yeast", NULL
 };
@@ -1417,3 +1425,5 @@ NLM_EXTERN void UDV_BlastDlg(UDV_BlastDlgData *bddp)
         Show(d);
     }
 }
+
+#endif /* 0 */
