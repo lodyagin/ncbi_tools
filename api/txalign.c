@@ -1,4 +1,4 @@
-/* $Id: txalign.c,v 6.96 2011/12/19 18:33:53 gouriano Exp $
+/* $Id: txalign.c,v 6.101 2016/09/02 15:01:22 ucko Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -27,530 +27,12 @@
 *
 * File Name:  txalign.c
 *
-* $Revision: 6.96 $
+* $Revision: 6.101 $
 * 
 * File Description:  Formating of text alignment for the BLAST output
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: txalign.c,v $
-* Revision 6.96  2011/12/19 18:33:53  gouriano
-* Corrected printf formatting. NOJIRA
-*
-* Revision 6.95  2008/01/07 23:20:06  bealer
-* - Fix condition found by valgrind - conditional statement on
-*   unassigned location.
-*
-* Revision 6.94  2007/05/07 13:28:35  kans
-* added casts for Seq-data.gap (SeqDataPtr, SeqGapPtr, ByteStorePtr)
-*
-* Revision 6.93  2006/07/13 12:58:15  bollin
-* removed unused variables
-*
-* Revision 6.92  2006/01/24 18:37:08  papadopo
-* from Mike Gertz: Use enumerated values, rather than #define'd constants, to specify the composition adjustment method
-*
-* Revision 6.91  2005/05/16 17:39:20  papadopo
-* From Alejandro Schaffer: if matrix is adjusted due to composition in
-* blastpgp, then print the method for adjustment in the output alignments.
-*
-* Revision 6.90  2004/12/13 16:14:45  jianye
-* increase the width of new.gif so that it looks normal on window browsers
-*
-* Revision 6.89  2004/09/09 19:39:49  jianye
-* Added gene linkout
-*
-* Revision 6.88  2004/08/16 19:36:52  dondosha
-* Made CreateMaskByteStore function public: needed by web BLAST 2 sequences
-*
-* Revision 6.87  2004/08/11 18:14:55  jianye
-* not turn on gene linkout yet
-*
-* Revision 6.86  2004/08/10 20:02:03  jianye
-* Added gene linkout
-*
-* Revision 6.85  2004/07/06 19:12:13  dondosha
-* Correction for bit score formatting in one-line descriptions
-*
-* Revision 6.84  2004/06/24 21:15:44  dondosha
-* Changed last Boolean argument in ScoreAndEvalueToBuffers to Uint1, to allow different options for formatting
-*
-* Revision 6.83  2004/05/14 16:31:03  kans
-* ScoreAndEvalueToBuffers had a typo in OS_MAC specific code
-*
-* Revision 6.82  2004/05/14 15:38:09  dondosha
-* Made function ScoreAndEvalueToBuffers public
-*
-* Revision 6.81  2003/11/25 16:24:03  dondosha
-* Use query number for synchronizeCheck; do not show structure link if RID not available
-*
-* Revision 6.80  2003/11/20 22:09:26  dondosha
-* Added a PrindDefLinesFromSeqAlignWithPath function with an argument to provide root path for image links
-*
-* Revision 6.79  2003/09/26 20:54:10  dondosha
-* Revert change in revision 6.77, as it turned trace.cgi links should have stayed as they were
-*
-* Revision 6.78  2003/08/20 21:29:13  dondosha
-* Correction for OOF alignments with nucleotide coordinates starting at 1
-*
-* Revision 6.77  2003/07/30 14:07:36  dondosha
-* Changed hrefs to trace.cgi in accordance with the new taxonomy web interface
-*
-* Revision 6.76  2003/07/21 22:15:23  dondosha
-* Added support for out-of-frame tblastn alignments
-*
-* Revision 6.75  2003/07/15 14:36:06  dondosha
-* Added a #define for fprintf substitute, needed for gzip compression of Web BLAST results
-*
-* Revision 6.74  2003/06/11 20:15:35  jianye
-* changed unigene linkout
-*
-* Revision 6.73  2003/06/02 20:02:15  jianye
-* Added geo linkout
-*
-* Revision 6.72  2003/01/23 23:31:58  dondosha
-* Added a global variable for the query number, needed in make_dumpgnl_links
-*
-* Revision 6.71  2002/12/11 16:24:34  jianye
-* added structure linkout
-*
-* Revision 6.70  2002/11/12 22:37:35  dondosha
-* Compute number of identities from sequence data when formatting, not relying on the score set in seqalign
-*
-* Revision 6.69  2002/11/04 23:04:00  dondosha
-* Take number of identities directly from seqalign
-*
-* Revision 6.68  2002/10/17 16:57:49  jianye
-* added option for get sequence feature
-*
-* Revision 6.67  2002/09/09 21:59:21  jianye
-* fixed problem associated with query-anchored alignment for get sequence checkbox
-*
-* Revision 6.66  2002/09/04 20:32:52  jianye
-* added get sequence feature
-*
-* Revision 6.65  2002/07/24 21:08:47  kans
-* reverted ncbi URL
-*
-* Revision 6.64  2002/07/23 16:44:35  kans
-* changed www.ncbi.nlm.nih.gov to www.ncbi.nih.gov
-*
-* Revision 6.63  2002/07/09 16:38:05  dondosha
-* Use gather for all translated searches when parsing seqaligns - fixes a bug for ungapped blastx
-*
-* Revision 6.62  2002/05/21 20:34:33  jianye
-* Added download large sequence gif
-*
-* Revision 6.61  2002/05/02 18:06:02  dondosha
-* Print 2 sequences tblastx link and/or list of extra hits in a cluster only for the first HSP in a hit
-*
-* Revision 6.60  2002/04/26 16:26:30  madden
-* Add length check to for loop over fasta seqid
-*
-* Revision 6.59  2002/04/24 17:53:11  dondosha
-* Pass SeqIds in URL safe form to the wblast2.cgi link
-*
-* Revision 6.58  2002/04/15 20:22:05  dondosha
-* Changed link to wblast2.cgi to
-*
-* Revision 6.57  2002/04/05 15:53:53  camacho
-* Fixed Tx_PrintDefLine
-*
-* Revision 6.56  2002/03/26 23:26:37  dondosha
-* Added a possibility of a link to Blast 2 sequences from megablast output
-*
-* Revision 6.55  2002/02/21 17:48:52  camacho
-* Fixed UMR problem in PrintDefLinesFromSeqAlignEx2
-*
-* Revision 6.54  2002/02/15 14:18:24  camacho
-* Added RDBTaxNamesClone function
-*
-* Revision 6.53  2002/02/07 19:44:23  jianye
-* added discrimination between na and aa sequence for locus link linkout
-*
-* Revision 6.52  2002/02/05 19:50:50  camacho
-* Fix to Tx_PrintDefLine
-*
-* Revision 6.51  2002/02/01 20:04:56  jianye
-* Fixed getting wrong blast defline struct for non-redundant bioseq and adding utility function getBlastDefLineForSeqId(bdlp, sip)
-*
-* Revision 6.50  2002/01/31 21:17:00  camacho
-* Fixed minor memory leak
-*
-* Revision 6.49  2002/01/29 21:43:45  jianye
-* Changed some gif image path and get rid of unneeded readdb.h include
-*
-* Revision 6.48  2002/01/24 18:47:49  camacho
-* Moved RDBTaxNamesFree from readdb.[ch] to txalign.[ch]
-*
-* Revision 6.47  2002/01/23 20:29:14  madden
-* Add back 6.45 changes that were accidentally removed
-*
-* Revision 6.46  2002/01/23 19:42:57  jianye
-* Added checkLinkoutType(), addLinkoutForBioseq(). Changed PrintDefLinesFromSeqAlignEx2 and FSFPrintOneDefline for linkout info.  Fixed bug in FDGetTaxNamesFromBioseq().
-*
-* Revision 6.45  2002/01/15 20:41:23  madden
-* If tool_url is dumpgnl.cgi do no set the NO_ENTREZ flag
-*
-* Revision 6.44  2002/01/10 20:59:05  camacho
-* Fixed problem with long deflines in Tx_PrintDefLine
-*
-* Revision 6.43  2001/12/13 21:05:38  madden
-* Comment out hyperlink to wgetorg for new db format
-*
-* Revision 6.42  2001/12/10 22:34:24  dondosha
-* Bug fix for Traces html links
-*
-* Revision 6.41  2001/11/14 17:53:21  camacho
-* One more minor fix to Tx_PrintDefLine.
-*
-* Revision 6.40  2001/11/09 22:07:39  camacho
-* Fixed Tx_PrintDefLine to properly format 1-line descriptions in the
-* default blast output for the new database format.
-*
-* Revision 6.39  2001/10/29 20:39:53  camacho
-* Fixed memory leak
-*
-* Revision 6.38  2001/10/12 15:35:38  dondosha
-* Added printing of cluster sequences deflines in ShowAlignNodeText2Ex
-*
-* Revision 6.37  2001/10/05 17:49:30  dondosha
-* Fixed bug in strand reporting for bl2seq
-*
-* Revision 6.36  2001/08/03 19:45:53  egorov
-* Change size of title_length and related variables to Int4
-*
-* Revision 6.35  2001/08/01 16:03:06  madden
-* Only call SeqAlignSegsStr for first alignment for each db sequence
-*
-* Revision 6.34  2001/07/23 20:20:11  dondosha
-* Made replace_bytestore_data function public for use in web blast2seq
-*
-* Revision 6.33  2001/07/09 14:17:55  madden
-* Fix memory leak
-*
-* Revision 6.32  2001/07/06 15:24:39  madden
-* Fix compiler warning
-*
-* Revision 6.31  2001/06/21 18:26:27  shavirin
-* Moved here functions to get Taxonomy names information encoded in
-* the Bioseq returned from the Blast database.
-*
-* Revision 6.30  2001/06/15 15:32:38  madden
-* Fix memory leaks
-*
-* Revision 6.29  2001/06/15 14:49:36  madden
-* Fix spacing for BLAST databases without -o option
-*
-* Revision 6.28  2001/06/04 21:29:42  dondosha
-* Add message about deleted hits with e-value below the low threshold
-*
-* Revision 6.27  2001/05/25 18:59:30  vakatov
-* Nested comment typo fixed
-*
-* Revision 6.26  2001/05/16 19:32:15  egorov
-* Added ALT tags to HTML images
-*
-* Revision 6.25  2001/05/15 17:16:41  egorov
-* TXALIGN_TARGET_IN_LINKS added
-*
-* Revision 6.24  2001/05/11 16:23:45  egorov
-* Out of bsp scope use stored txsp->is_na boolean value
-*
-* Revision 6.23  2001/05/04 14:12:57  madden
-* Fix problem with accessing already freed annot
-*
-* Revision 6.22  2001/04/26 13:55:02  madden
-* Use accession in URL for dumpgnl
-*
-* Revision 6.21  2001/03/29 21:56:33  madden
-* Minor fix if formatdb run without -o T
-*
-* Revision 6.20  2001/03/29 19:04:59  madden
-* Fixed problem in FilterAsn1DefLine, added Tx_PrintDefLine for one-line descriptions
-*
-* Revision 6.19  2001/03/23 21:20:56  madden
-* Print Length for old and new databases
-*
-* Revision 6.18  2001/03/23 17:48:34  kans
-* define NLM_GENERATED_CODE_PROTO so BlastDefLineSetAsnRead prototype is available to txalign.c
-*
-* Revision 6.17  2001/03/23 17:24:44  madden
-* Add FDGetDeflineAsnFromBioseq from readdb.[ch]
-*
-* Revision 6.16  2001/02/13 21:32:54  madden
-* Fix for tblastx
-*
-* Revision 6.15  2001/02/09 21:42:09  madden
-* Return from PrintDefLineEx2 if no descriptions demanded
-*
-* Revision 6.14  2001/02/07 17:22:39  shavirin
-* Changed order of Human genome viewer labels in case of minus strand.
-*
-* Revision 6.13  2001/02/05 21:40:14  madden
-* Correction to gather change for ungapped output
-*
-* Revision 6.12  2001/02/02 20:42:53  dondosha
-* Corrected count of number of descriptions in PrintDefLinesFromSeqAlignEx2
-*
-* Revision 6.11  2001/01/31 22:20:24  madden
-* Minimize calls to gather
-*
-* Revision 6.10  2001/01/31 18:43:48  dondosha
-* Test whether subject Bioseq is found before trying to show the hit
-*
-* Revision 6.9  2001/01/24 14:43:02  egorov
-* Do not overwrite bestid with a garbage, what happened with non-existing
-* (e.g. recently deleted) GIs.
-*
-* Revision 6.8  2001/01/23 16:32:37  dondosha
-* 1. Fixed bug in PrintDefLinesFromSeqAlignEx2
-* 2. Round percentages to nearest integer instead of casting
-*
-* Revision 6.7  2001/01/03 17:28:26  dondosha
-* Link gnl|ti ids to the Trace Archive web page
-*
-* Revision 6.6  2000/12/18 20:35:10  shavirin
-* Added +1 to from/to using for printing links to Genome viewer.
-*
-* Revision 6.5  2000/12/15 19:46:50  shavirin
-* Adeed missing "</a>" in the label to the single alignment.
-*
-* Revision 6.4  2000/12/14 17:08:52  shavirin
-* Added additinal label "<name=" for the single alignment. This link will
-* be shown only in Human Genome viewer.
-*
-* Revision 6.3  2000/11/27 17:18:16  madden
-* Do not strip directory name if dumpgnl.cgi is used
-*
-* Revision 6.2  2000/11/22 19:56:04  shavirin
-* Added possibility to print links to Taxonomy database in HTML output
-* used with ASN.1 structured deflines.
-*
-* Revision 6.1  2000/11/16 22:19:34  shavirin
-* File moved to distrib/tools directory and to libncbitool.a library.
-*
-* Revision 6.154  2000/11/14 17:03:21  shavirin
-* Fixed problem with uninitialized memory in the function ShowAlignNodeText2()
-* resulted in coredump of blastcl3 program.
-*
-* Revision 6.153  2000/11/14 16:57:55  madden
-* Init aso.blast_type to NULL if not set
-*
-* Revision 6.152  2000/11/13 18:01:43  madden
-* do not set blast_type to UNFIN_GEN by default
-*
-* Revision 6.151  2000/11/03 15:26:02  madden
-* Check TOOL_URL for ? before adding one
-*
-* Revision 6.150  2000/11/01 14:43:11  madden
-* Changes from Futamura for psitblastn
-*
-* Revision 6.149  2000/11/01 14:24:56  madden
-* Set options to TXALIGN_NO_ENTREZ if TOOL_URL defined
-*
-* Revision 6.148  2000/10/27 17:54:17  madden
-* Changes to make_dumpgnl_links for new hs genome page
-*
-* Revision 6.147  2000/10/12 21:37:32  shavirin
-* Adjusted calculation of ends of alignment in minus strand.
-*
-* Revision 6.146  2000/10/06 19:30:51  shavirin
-* Added printing of initial frame number in OOF case. Fixed some spacing
-* to be the same as in regular case.
-*
-* Revision 6.145  2000/10/06 17:55:44  shavirin
-* Added usage of correct matrix in OOF case.
-*
-* Revision 6.144  2000/10/06 17:23:21  shavirin
-* Added BioseqUnlock in printing OOF alignment.
-*
-* Revision 6.142  2000/10/02 22:03:26  shavirin
-* Changed function OOFShowSingleAlignment to have correct spacing.
-*
-* Revision 6.141  2000/09/28 15:51:44  dondosha
-* Open <PRE> block in PrintDefLinesFromSeqAlignEx2 - needed for PSI BLAST
-*
-* Revision 6.140  2000/09/28 15:03:15  dondosha
-* Added boolean splice_junction score type
-*
-* Revision 6.139  2000/09/27 20:57:55  shavirin
-* Fixed bug with printing DNA line ends in case of minus strand.
-*
-* Revision 6.138  2000/09/25 19:22:12  shavirin
-* Fixed start of protein sequencer in OOF alignment. Added check for NULL
-* return from BioseqLocById in FormatScoreFromSeqAlignEx() function.
-*
-* Revision 6.137  2000/09/13 22:24:30  dondosha
-* Corrected the printing of </PRE> at the end of PrintDefLinesFromSeqAlignEx2
-*
-* Revision 6.136  2000/09/13 21:15:39  dondosha
-* Removed opening <PRE> in PrintDefLinesFromSeqAlignEx2
-*
-* Revision 6.135  2000/09/01 18:43:38  shavirin
-* Adjusted start and stop of every line for OOF alignment printout.
-*
-* Revision 6.134  2000/08/31 16:53:10  shavirin
-* Fixed memory leak in OOFShowSingleAlignment().
-*
-* Revision 6.133  2000/08/30 14:18:42  shavirin
-* Fixed case for printing OOF alignment.
-*
-* Revision 6.132  2000/08/25 19:02:37  shavirin
-* Corrected calculation of number of mismatches, gaps,positives etc.
-* for discontinuous alignments.
-*
-* Revision 6.131  2000/08/24 18:14:54  shavirin
-* Added "<a name=..." links to every HSP Score for Greg's BLAST page.
-* This easyly may be changed for general Blast output case.
-*
-* Revision 6.130  2000/07/25 16:47:13  shavirin
-* Changed function to print OOF alignment.
-*
-* Revision 6.129  2000/07/18 22:37:22  shavirin
-* Adjusted end_of_line values in the function OOFShowSingleAlignment()
-*
-* Revision 6.128  2000/07/17 14:11:47  shavirin
-* Adjusted function OOFShowSingleAlignment()
-*
-* Revision 6.127  2000/07/14 16:02:41  shavirin
-* Initialixed variable ooframe to FALSE.
-*
-* Revision 6.126  2000/07/11 20:51:04  shavirin
-* Added major functions for displaying Out-Of-Frame alignments.
-*
-* Revision 6.125  2000/07/10 20:45:53  shavirin
-* Added parameter ooframe for Out-Of-frame alignment and corresponding changes
-* to accomodate this parameter.
-*
-* Revision 6.124  2000/06/22 18:56:55  egorov
-* Add a protection against empty deflines.
-*
-* Revision 6.123  2000/06/19 12:53:18  madden
-* Do SeqIdWrite for both HTML and text
-*
-* Revision 6.122  2000/06/16 18:25:43  shavirin
-* Fixed problem with removing full path of db in make_dumpgnl_links()
-*
-* Revision 6.121  2000/06/16 16:18:46  madden
-* Roll back change from rev. 6.114
-*
-* Revision 6.120  2000/06/15 15:35:47  shavirin
-* Fixed Uninitialized memory read error in make_dumpgnl_links() function
-*
-* Revision 6.119  2000/06/13 18:58:51  shavirin
-* Adjusted region of database sequence in the function
-* load_align_sum_for_DenseDiag()
-*
-* Revision 6.118  2000/06/12 16:50:03  shavirin
-* Fixed bug with calculation total length of the StdSeg alignment and
-* adjusted calculation of translation frame.
-*
-* Revision 6.117  2000/06/09 19:00:05  shavirin
-* Function GetGeneticCodeFromSeqId() made external and added to header file.
-*
-* Revision 6.116  2000/06/08 20:44:49  shavirin
-* Added calculation of start/stop values in the function find_score_in_align().
-*
-* Revision 6.115  2000/06/08 17:13:53  dondosha
-* Fixed bug with wrong scores reported for ungapped blastx alignments
-*
-* Revision 6.114  2000/06/06 16:40:20  shavirin
-* Use plain database name if TXALIGN_NO_ENTREZ option is set.
-*
-* Revision 6.113  2000/05/16 16:32:17  shavirin
-* Added check for WWW_ROOT_PATH environment for PSI Blast.
-*
-* Revision 6.112  2000/05/05 20:23:08  shavirin
-* Do not make gnl-link if passwd or tool_url == NULL.
-*
-* Revision 6.111  2000/05/05 20:03:48  shavirin
-* Rolled back revision 6.110.
-*
-* Revision 6.109  2000/05/01 19:09:58  shavirin
-* Removed function SeqIdSetDup()
-*
-* Revision 6.108  2000/05/01 16:26:14  shavirin
-* Added multiple-highligted deflines in the BLAST output.
-*
-* Revision 6.107  2000/04/25 18:13:43  shavirin
-* Do not link to anything ids with BL_ORD_ID.
-*
-* Revision 6.106  2000/04/04 21:52:50  madden
-* Roll-back last change
-*
-* Revision 6.105  2000/04/03 17:45:42  shavirin
-* Changed way to print multiple deflines. Removed define to print
-* old Entrez links.
-*
-* Revision 6.104  2000/03/24 16:04:24  shavirin
-* Added hack for Drosophila BLAST page.
-*
-* Revision 6.103  2000/03/23 15:02:12  shavirin
-* Added possibility to use environment variables in the function
-* make_dumpgnl_links()
-*
-* Revision 6.102  2000/03/14 17:16:11  shavirin
-* Cleared AlignSum buffer in the function FormatScoreFromSeqAlign
-*
-* Revision 6.101  2000/03/07 21:58:40  shavirin
-* Now will use PSSM Matrix to show positives in PSI Blast
-*
-* Revision 6.100  2000/03/02 16:25:09  shavirin
-* Fixed bug with very long deflines in FilterTheDefline() function.
-*
-* Revision 6.99  2000/01/19 21:54:31  madden
-* Moved vecscreen stuff to vecscrn.[ch]
-*
-* Revision 6.98  2000/01/07 21:08:28  shavirin
-* Fixed minor memory leak in ShowTextAlignFromAnnot2().
-*
-* Revision 6.97  1999/12/02 19:36:10  shavirin
-* Fixed hundreds of errors detected by C++ compiler. Fixed formating
-* of deflines in PHI/PSI Blast search.
-*
-* Revision 6.96  1999/11/24 21:24:31  vakatov
-* Fixed for the C++ and/or MSVC DLL compilation
-*
-* Revision 6.95  1999/11/16 20:44:07  egorov
-* Close all <PRE>'s
-*
-* Revision 6.94  1999/11/12 19:01:40  madden
-* Fix memory leaks
-*
-* Revision 6.93  1999/11/10 18:27:11  madden
-* Fix problem with determining if same sequence as last is being examined
-*
-* Revision 6.92  1999/11/09 22:15:07  shavirin
-* Added parameter follower to the Blast score printing function
-*
-* Revision 6.91  1999/11/01 16:50:25  shavirin
-* Fixed typo in the function get_seqid_for_textbuf()
-*
-* Revision 6.90  1999/11/01 15:38:13  shavirin
-* Turned on producing of new Entrez links in the BLAST output.
-*
-* Revision 6.89  1999/10/19 18:25:43  shavirin
-* Added prefix "images" to psi_blast gifs.
-*
-* Revision 6.88  1999/10/07 16:08:04  shavirin
-* Passed matrix to the function FormatScoreFromSeqAlign().
-*
-* Revision 6.87  1999/10/07 13:13:44  egorov
-* Fix bug when preprocessor direrective and C statement were at the same line.
-*
-* Revision 6.86  1999/09/30 20:43:34  madden
-* change ray links for VecScreen
-*
-* Revision 6.85  1999/09/29 17:15:37  shavirin
-* Added new funtion FormatScoreFromSeqAlign()
-*
-* Revision 6.84  1999/09/29 14:07:56  shavirin
-* Fixed typo in webb_blossum62 matrix.
-*
-* Revision 6.83  1999/09/28 20:11:34  shavirin
-* Added Id, Revision and Log information.
-*
 *
 * ==========================================================================
 */
@@ -704,7 +186,7 @@ BlastDefLinePtr getBlastDefLineForSeqId(BlastDefLinePtr bdlp, SeqIdPtr sip){
 static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){   
     BlastDefLinePtr bdlp, bdlpTemp;
     Boolean hasLinkout=FALSE;
-    Int4 gi, firstGi=GetGIForSeqId(sip);
+    BIG_ID gi, firstGi=GetGIForSeqId(sip);
     Char molType[8]={""};
 
     if(bsp){
@@ -772,7 +254,7 @@ static void addLinkoutForDefline(BioseqPtr bsp, SeqIdPtr sip, FILE* fp){
 static void addLinkoutForBioseq(BioseqPtr bsp, SeqIdPtr sip, SeqIdPtr firstSip, FILE* fp){   
     BlastDefLinePtr bdlp, actualBdlp;
     Boolean hasLinkout=FALSE;
-    Int4 gi, firstGi;
+    BIG_ID gi, firstGi;
     Char molType[8]={""};
 
     if(bsp){
@@ -1769,14 +1251,14 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 					/*check box for getting sequence*/
 					if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 					  Char checkboxBuf[200];
-					  sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%d\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%d', 'getSeqGi', this.checked)\">", sip->data.intvalue, query_number_glb);
-					  sprintf(docbuf+pos,checkboxBuf);
+					  snprintf(checkboxBuf, 200, "<input type=\"checkbox\" name=\"getSeqGi\" value=\"%d\" onClick=\"synchronizeCheck(this.value, 'getSeqAlignment%d', 'getSeqGi', this.checked)\">", sip->data.intvalue, query_number_glb);
+					  snprintf(docbuf+pos, size-pos, "%s", checkboxBuf);
 					  
 					  pos += StringLen(checkboxBuf);
 					}
 				
 					html_len = StringLen(HTML_buffer);
-					sprintf(docbuf+pos, HTML_buffer);
+					snprintf(docbuf+pos, size-pos, "%s", HTML_buffer);
 					pos += html_len;
 				
 					pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
@@ -1793,7 +1275,8 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
                                             sprintf(HTML_buffer, "<a name = THC%ld></a><a href=\"http://www.tigr.org/docs/tigr-scripts/hgi_scripts/thc_report.spl?est=THC%ld&report_type=n\">", (long) oip->id, (long) oip->id);
                                             
                                             html_len = StringLen(HTML_buffer);
-                                            sprintf(docbuf+pos, HTML_buffer);
+                                            snprintf(docbuf+pos, size-pos, "%s",
+                                                     HTML_buffer);
                                             pos += html_len;
                                             pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
 					    		tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
@@ -1802,7 +1285,8 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
                                             sprintf(HTML_buffer, "<a name = TI%ld></a><a href=\"http://www.ncbi.nlm.nih.gov/Traces/trace.cgi?cmd=retrieve&dopt=fasta&val=%ld\">", (long) oip->id, (long) oip->id);
                                             
                                             html_len = StringLen(HTML_buffer);
-                                            sprintf(docbuf+pos, HTML_buffer);
+                                            snprintf(docbuf+pos, size-pos, "%s",
+                                                     HTML_buffer);
                                             pos += html_len;
                                             pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, 
 					    		tdp->strand, FALSE, TRUE, label_size, num_size, show_strand, strip_semicolon);
@@ -1818,14 +1302,14 @@ static CharPtr DrawTextToBuffer(ValNodePtr tdp_list, CharPtr PNTR m_buf, Boolean
 		if(!load){
 		  if(options&TXALIGN_HTML&&options&TXALIGN_MASTER&&DbHasGi&&(options&TXALIGN_GET_SEQUENCE)){
 		    Char checkboxBuf[200];
-		    sprintf(checkboxBuf, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment%d', 'getSeqMaster')\">", query_number_glb);
-		    sprintf(docbuf+pos,checkboxBuf);
+		    snprintf(checkboxBuf, 200, "<input type=\"checkbox\" name=\"getSeqMaster\" value=\"\" onClick=\"uncheckable('getSeqAlignment%d', 'getSeqMaster')\">", query_number_glb);
+		    snprintf(docbuf+pos, size-pos, "%s", checkboxBuf);
 		  
 		    pos += StringLen(checkboxBuf);
 		  }
 		  pos += print_label_to_buffer_all_ex(docbuf+pos, tdp->label, tdp->pos, tdp->strand, FALSE, FALSE, label_size, num_size, show_strand, strip_semicolon);
 		}
-		sprintf(docbuf+pos, "%s", tdp->buf);
+		snprintf(docbuf+pos, size-pos, "%s", tdp->buf);
 		pos += StringLen(tdp->buf);
 		if(stop_val >=0 && is_first)
 		{
@@ -6300,7 +5784,7 @@ static Boolean OOFShowSingleAlignment(SeqAlignPtr sap, ValNodePtr mask,
             if(seq_int1 != NULL) {
                 
                 /* This line should be checked for correctness */
-                if((line1[line_index] = BSGetByte(b_store)) == EOF)
+                if((line1[line_index] = BSGetByte(b_store)) == (Char)EOF)
                     line1[line_index] = '?';
                 
                 if(dna_strand != Seq_strand_minus)

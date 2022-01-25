@@ -1,4 +1,4 @@
-/* $Id: socket_io_bouncer.c,v 6.19 2012/04/25 15:00:27 kazimird Exp $
+/* $Id: socket_io_bouncer.c,v 6.22 2016/08/10 18:39:16 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,8 @@
 #include <connect/ncbi_connutil.h>
 #include <connect/ncbi_util.h>
 #include "../ncbi_assert.h"
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 
 static FILE* s_LogFile;
@@ -139,10 +139,11 @@ int main(int argc, const char* argv[])
     if (n_cycle <= 0) {
         fprintf(stderr,    "Usage: %s <port> [n_cycle]\n\n", argv[0]);
         fprintf(s_LogFile, "Usage: %s <port> [n_cycle]\n\n", argv[0]);
+        ConnNetInfo_Destroy(net_info);
         return 1/*error*/;
     }
 
-    if (net_info->debug_printout != eDebugPrintout_None)
+    if (net_info->debug_printout)
         SOCK_SetDataLoggingAPI(eOn);
 
     /* run */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/04
 *
-* $Revision: 1.62 $
+* $Revision: 1.71 $
 *
 * File Description:
 *
@@ -60,8 +60,9 @@
 #ifdef INTERNAL_NCBI_ASN2FSA
 #include <accpubseq.h>
 #endif
+#include <connect/ncbi_gnutls.h>
 
-#define ASN2FSA_APP_VER "5.3"
+#define ASN2FSA_APP_VER "5.9"
 
 CharPtr ASN2FSA_APPLICATION = ASN2FSA_APP_VER;
 
@@ -275,6 +276,7 @@ typedef struct fastaflags {
   FILE     *ql;
   FILE     *fr;
   FILE     *logfp;
+  Boolean  debugging;
 } FastaFlagData, PNTR FastaFlagPtr;
 
 static VoidPtr DoAsyncLookup (
@@ -429,20 +431,6 @@ static ValNodePtr DoLockFarComponents (
   return rsult;
 }
 
-static Boolean DeltaLitOnly (
-  BioseqPtr bsp
-)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
 static Boolean SegHasParts (
   BioseqPtr bsp
 )
@@ -554,7 +542,7 @@ static void ProcessSingleRecord (
   BioseqSetPtr   bssp;
   Pointer        dataptr = NULL;
   Uint2          datatype, entityID = 0;
-  Char           file [FILENAME_MAX], path [PATH_MAX];
+  Char           file /* [FILENAME_MAX] */ [PATH_MAX], path [PATH_MAX];
   StreamFlgType  flags = STREAM_CORRECT_INVAL;
   FILE           *fp;
   ObjMgrPtr      omp;
@@ -657,6 +645,8 @@ static void ProcessSingleRecord (
     }
 
     if (sep != NULL) {
+      BasicSeqEntryCleanup (sep);
+
       if (ffp->expand_gaps && ffp->use_dashes) {
         flags |= EXPAND_GAPS_TO_DASHES;
       } else if (ffp->expand_gaps) {
@@ -726,7 +716,7 @@ static void ProcessMultipleRecord (
   AsnTypePtr     atp, atp_bss, atp_desc, atp_se;
   BioseqPtr      bsp;
   ValNodePtr     bsplist;
-  Char           buf [64], file [FILENAME_MAX], path [PATH_MAX], longest [64];
+  Char           buf [64], file /* [FILENAME_MAX] */ [PATH_MAX], path [PATH_MAX], longest [64];
   StreamFlgType  flags = STREAM_CORRECT_INVAL;
   FILE           *fp;
   Int4           numrecords = 0;
@@ -855,6 +845,8 @@ static void ProcessMultipleRecord (
       sep = SeqEntryAsnRead (aip, atp);
       SeqMgrHoldIndexing (FALSE);
 
+      BasicSeqEntryCleanup (sep);
+
       starttime = GetSecs ();
       buf [0] = '\0';
 
@@ -944,6 +936,7 @@ static void FastaWrapper (
   ffp = (FastaFlagPtr) userdata;
   if (ffp == NULL) return;
 
+  BasicSeqEntryCleanup (sep);
 
   if (ffp->expand_gaps && ffp->use_dashes) {
     flags |= EXPAND_GAPS_TO_DASHES;
@@ -994,7 +987,7 @@ static void ProcessAutomaticRecord (
 )
 
 {
-  Char  file [FILENAME_MAX], path [PATH_MAX];
+  Char  file /* [FILENAME_MAX] */ [PATH_MAX], path [PATH_MAX];
 
   if (ffp == NULL) return;
 
@@ -1004,9 +997,17 @@ static void ProcessAutomaticRecord (
   if (suffix == NULL) {
     suffix = "";
   }
+
   StringNCpy_0 (path, directory, sizeof (path));
   sprintf (file, "%s%s", base, suffix);
+  if (ffp->debugging) {
+    printf ("FILENAME_MAX %d\n PATH_MAX %d\n", (int) FILENAME_MAX, (int) PATH_MAX);
+    printf ("base '%s'\nsufx '%s'\nfile '%s' \n", base, suffix, file);
+  }
   FileBuildPath (path, NULL, file);
+  if (ffp->debugging) {
+    printf ("path '%s' \n", path);
+  }
 
   if (StringHasNoText (path)) return;
 
@@ -1043,6 +1044,8 @@ static void ProcessOneSeqEntry (
   StreamFlgType  flags = STREAM_CORRECT_INVAL;
 
   if (sep == NULL || ffp == NULL) return;
+
+  BasicSeqEntryCleanup (sep);
 
   if (ffp->expand_gaps && ffp->use_dashes) {
     flags |= EXPAND_GAPS_TO_DASHES;
@@ -1218,6 +1221,7 @@ static SeqEntryPtr SeqEntryFromAccnOrGi (
 #define L_argLogFile      24
 #define A_argAccession    25
 #define H_argHtmlSpans    26
+#define y_argDebugging    27
 
 Args myargs [] = {
   {"Path to ASN.1 Files", NULL, NULL, NULL,
@@ -1274,6 +1278,8 @@ Args myargs [] = {
     TRUE, 'A', ARG_STRING, 0.0, 0, NULL},
   {"HTML Spans", "F", NULL, NULL,
     TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Debugging", "F", NULL, NULL,
+    TRUE, 'y', ARG_BOOLEAN, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
@@ -1285,7 +1291,7 @@ Int2 Main (void)
   Boolean        automatic, batch, binary, blast, compressed, dorecurse,
                  expandgaps, extendedids, fargenomicqual, fasta, htmlspans,
                  local, lock, masterstyle, qualgapzero, remote, usedashes,
-                 usethreads;
+                 usethreads, debugging;
   FastaFlagData  ffd;
   Int2           linelen, type = 0;
   time_t         run_time, start_time, stop_time;
@@ -1298,6 +1304,8 @@ Int2 Main (void)
   ErrSetLogfile ("stderr", ELOG_APPEND);
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
+
+  SOCK_SetupSSL(NcbiSetupGnuTls);
 
   if (! AllObjLoad ()) {
     Message (MSG_FATAL, "AllObjLoad failed");
@@ -1357,6 +1365,8 @@ Int2 Main (void)
   batch = FALSE;
   binary = (Boolean) myargs [b_argBinary].intvalue;
   compressed = (Boolean) myargs [c_argCompressed].intvalue;
+
+  debugging = (Boolean) myargs [y_argDebugging].intvalue;
 
   str = myargs [a_argType].strvalue;
   if (StringICmp (str, "a") == 0) {
@@ -1431,6 +1441,7 @@ Int2 Main (void)
   ffd.ql = NULL;
   ffd.fr = NULL;
   ffd.logfp = NULL;
+  ffd.debugging = debugging;
 
   if (! StringHasNoText (ntout)) {
     ffd.nt = FileOpen (ntout, "w");
@@ -1538,7 +1549,8 @@ Int2 Main (void)
 
     ptr = StringRChr (base, '.');
     sfx[0] = '\0';
-    if (ptr != NULL) {
+    /* check for file without suffix but path includes dotted URL name */
+    if (ptr != NULL && StringChr (ptr, '/') == NULL) {
       StringNCpy_0 (sfx, ptr, sizeof (sfx));
       *ptr = '\0';
     }

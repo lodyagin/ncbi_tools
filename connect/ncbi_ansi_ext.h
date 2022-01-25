@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ANSI_EXT__H
 #define CONNECT___NCBI_ANSI_EXT__H
 
-/* $Id: ncbi_ansi_ext.h,v 6.24 2011/11/16 18:09:32 kazimird Exp $
+/* $Id: ncbi_ansi_ext.h,v 6.26 2012/09/04 12:24:35 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -147,6 +147,30 @@ char* strncpy0(char* s1, const char* s2, size_t n);
 void* memrchr(const void* s, int c, size_t n);
 
 #endif/*!HAVE_MEMRCHR*/
+
+
+/* Locale-independent double-to-ASCII conversion of value "f" into a character
+ * buffer pointed to by "s", with a specified precision (mantissa digits) "p".
+ * There is an internal limit on precision (so larger values of "p" will be
+ * silently truncated).  The maximal representable whole part corresponds to
+ * the maximal signed long integer.  Otherwise, the behavior is undefined.
+ * Return the pointer past the output string (points to the terminating '\0').
+ */
+NCBI_XCONNECT_EXPORT
+char*  NCBI_simple_ftoa(char* s, double f, int p);
+
+
+/* Locale-independent ASCII-to-double conversion of string "s".  Does not work
+ * for scientific notation (values including exponent).  Sets "e" to point to
+ * the character that stopped conversion.  Clears "errno" but sets it non-zero
+ * in case of conversion errors.  Maximal value for the whole part may not
+ * exceed the maximal signed long integer, and for mantissa -- unsigned long
+ * integer.
+ * Returns the result of conversion (on error sets errno, returns 0.0).
+ * @note e == s upon return if no valid input was found and consumed.
+ */
+NCBI_XCONNECT_EXPORT
+double NCBI_simple_atof(const char* s, char** e);
 
 
 #ifdef __cplusplus

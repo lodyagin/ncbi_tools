@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.4 $
+* $Revision: 6.5 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -43,6 +43,9 @@
 *
 *
 * $Log: ncbisgml.c,v $
+* Revision 6.5  2015/03/17 18:28:23  kans
+* NOJIRA Increased size of buffer in Nlm_SgmlLoadTable
+*
 * Revision 6.4  2002/12/09 14:40:37  kans
 * fixed NUM_SGML_ENTITY, sgml_bb_array
 *
@@ -179,16 +182,21 @@ static int Nlm_LoadSgmlTableFromLocalArray (void)
 
 NLM_EXTERN int LIBCALL  Nlm_SgmlLoadTable (void)
 {
-	char buf[80], *p1, *p2;
+	char buf[500], *p1, *p2;
+  size_t len;
 	FILE *fp;
 	int i, x;
 
 	if (num_sgml_entity > 0)
 		return (int)num_sgml_entity;
 
+    buf [0] = '\0';
     if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
         ErrPostEx(SEV_INFO,E_SGML,1,"SgmlLoadTable:  FindPath(ncbi,ncbi,data,...) failed");
-    strncat(buf,"sgmlbb.ent",sizeof buf);
+    len = sizeof (buf) - StringLen (buf);
+    if (len > 0) {
+      strncat(buf,"sgmlbb.ent",len);
+    }
 
 	if ((fp = FileOpen(buf,"r")) ==NULL)
 		return Nlm_LoadSgmlTableFromLocalArray ();

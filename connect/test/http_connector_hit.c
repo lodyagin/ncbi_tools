@@ -1,4 +1,4 @@
-/* $Id: http_connector_hit.c,v 6.19 2010/02/03 19:04:42 kazimird Exp $
+/* $Id: http_connector_hit.c,v 6.26 2016/07/27 15:09:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,11 +30,13 @@
  *
  */
 
-#include <connect/ncbi_http_connector.h>
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
-/* This header must go last */
-#include "test_assert.h"
+#include <connect/ncbi_gnutls.h>
+#include <connect/ncbi_http_connector.h>
+#include <stdlib.h>
+
+#include "test_assert.h"  /* This header must go last */
 
 
 /* Holder for the cmd.-line arg values describing the URL to hit
@@ -94,9 +96,10 @@ int main(int argc, const char* argv[])
     const char* inp_file    = (argc > 5) ? argv[5] : "";
     const char* user_header = (argc > 6) ? argv[6] : "";
 
-    CONNECTOR   connector;
-    CONN        conn;
-    EIO_Status  status;
+    SConnNetInfo* net_info;
+    CONNECTOR     connector;
+    CONN          conn;
+    EIO_Status    status;
 
     char   buffer[100];
     size_t n_read, n_written;
@@ -127,6 +130,8 @@ int main(int argc, const char* argv[])
     /* Tune to the test URL using hard-coded pseudo-registry */
     CORE_SetREG( REG_Create(0, s_REG_Get, 0, 0, 0) );
 
+    SOCK_SetupSSL(NcbiSetupGnuTls);
+
     /* Usage */
     if (argc < 4) {
         fprintf(stderr,
@@ -139,13 +144,19 @@ int main(int argc, const char* argv[])
     }
 
     /* Connect */
-    connector = HTTP_CreateConnector(0, user_header, 0);
+    if (atoi(s_Args.port) == CONN_PORT_HTTPS) {
+        verify((net_info = ConnNetInfo_Create(0)) != 0);
+        net_info->scheme = eURL_Https;
+    } else
+        net_info = 0;
+
+    connector = HTTP_CreateConnector(net_info, user_header, 0);
     assert(connector);
     verify(CONN_Create(connector, &conn) == eIO_Success);
 
-    /* If the input file is specified,
-     * then send its content (as the HTTP request body) to URL
-     */
+    ConnNetInfo_Destroy(net_info);
+
+    /* If input file specified, then send its content (as HTTP request body) */
     if (*inp_file) {
         FILE* inp_fp;
 

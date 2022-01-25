@@ -1,5 +1,5 @@
 
-/* $Id: link_hsps.c,v 1.74 2011/07/25 13:54:31 kazimird Exp $
+/* $Id: link_hsps.c,v 1.76 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
 /** @file link_hsps.c
  * Functions to link with use of sum statistics
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: link_hsps.c,v 1.74 2011/07/25 13:54:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/link_hsps.h>
 #include <algo/blast/core/blast_util.h>
@@ -1793,7 +1788,7 @@ BLAST_LinkHsps(EBlastProgramType program_number, BlastHSPList* hsp_list,
            compare with sum e-values. Use decay rate to compensate for 
            multiple tests. */
         
-        Blast_HSPListGetEvalues(query_info, 
+        Blast_HSPListGetEvalues(program_number, query_info, 
                                 Blast_SubjectIsTranslated(program_number) ?
                                 subject_length / CODON_LENGTH : subject_length,
                                 hsp_list, gapped_calculation, FALSE,sbp, 

@@ -1,6 +1,6 @@
 #!/bin/csh -f
 #
-# $Id: makedis.csh 214533 2010-12-06 15:06:34Z ucko $
+# $Id: makedis.csh 512803 2016-09-02 19:57:21Z ucko $
 #
 ##                            PUBLIC DOMAIN NOTICE                          
 #               National Center for Biotechnology Information
@@ -71,6 +71,14 @@ set HAVE_MOTIF=1
 set HAVE_MAC=0
 #we will try to build OpenGL version of vibrant
 set HAVE_OGL=1
+
+if ("$?NCBI" == 0) then
+    if (-d /netopt/ncbi_tools64) then
+        set NCBI = /netopt/ncbi_tools64
+    else if (-d /netopt/ncbi_tools) then
+        set NCBI = /netopt/ncbi_tools
+    endif
+endif
 
 switch ($os)
 case SunOS:
@@ -237,10 +245,16 @@ case Darwin:
 	if ("$?DARWIN_MODE" == 1) then
 		if ("$DARWIN_MODE" == "universal") then
 			set platform=darwin-univ
+            unset NCBI
+            unsetenv NCBI
 		endif
 	endif
+    if ("$?NCBI" == 1) then
+        if (-d "$NCBI/ncbi64") then
+            set NCBI = $NCBI/ncbi64
+        endif
+    endif
 	set HAVE_MOTIF=0
-	set HAVE_MAC=1
 	breaksw
 case NetBSD:
 	set platform=netbsd
@@ -306,6 +320,23 @@ if (! -r "$NCBI_DOT_MK") then
   goto BADPLATFORM
 endif
 
+set NCBI_GNUTLS_INCLUDE =
+set NCBI_GNUTLS_LIBS =
+
+if ("$?NCBI" == 1) then
+    if (-r "$NCBI/ncbi.mk") then
+        set unsplit = '{ if (/\\$/) { l = l substr($0, 0, length-1) } else { print l $0; l="" } }'
+        set NCBI_GNUTLS_INCLUDE = `awk "$unsplit" $NCBI/ncbi.mk | sed -ne 's/  */ /g; s/^ *NCBI_GNUTLS_INCLUDE *= *//p'`
+        set NCBI_GNUTLS_LIBS = `awk "$unsplit" $NCBI/ncbi.mk | sed -ne 's/  */ /g; s/^ *NCBI_GNUTLS_LIBS *= *//p'`
+    endif
+else if ( { pkg-config gnutls --exists >&/dev/null } ) then
+    set NCBI_GNUTLS_INCLUDE = "`pkg-config gnutls --cflags` -DHAVE_LIBGNUTLS"
+    set NCBI_GNUTLS_LIBS    = "`pkg-config gnutls --libs --static`"
+else if ( { libgnutls-config --version >&/dev/null } ) then
+    set NCBI_GNUTLS_INCLUDE = "`libgnutls-config --cflags` -DHAVE_LIBGNUTLS"
+    set NCBI_GNUTLS_LIBS    = "`libgnutls-config --libs`"
+endif
+
 set noglob
 # take the file $NCBI_DOT_MK and convert it to be suitable for csh eval:
 # (1) remove comments at the beginning of the lines
@@ -328,9 +359,9 @@ ln -s ../make/*.unx .
 ln -s ../make/ln-if-absent .
 mv makeall.unx makefile
 
-if ( -r ../demo/.BLAST_VERSION ) then
-	echo BLAST version is `cat ../demo/.BLAST_VERSION`
-endif
+# if ( -r ../demo/.BLAST_VERSION ) then
+# 	echo BLAST version is `cat ../demo/.BLAST_VERSION`
+# endif
 
 
 #  Inherited to this system is the requirement to use:
@@ -369,8 +400,8 @@ else
     set PNG_LIBS=""
 endif
 
-set VIBWWWBLAST=(psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL)
-set NONVIBWWWBLAST=(nph-viewgif.cgi wblast2.REAL wblast2_cs.REAL bl2bag.cgi)
+set VIBWWWBLAST= #(psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL)
+set NONVIBWWWBLAST= #(nph-viewgif.cgi wblast2.REAL wblast2_cs.REAL bl2bag.cgi)
 set WWWBLAST=($VIBWWWBLAST $NONVIBWWWBLAST)
 
 if ( "$HAVE_MOTIF" == 1 ) then
@@ -392,9 +423,9 @@ if ( "$HAVE_MOTIF" == 1 ) then
 		VIBLIBS=\"$NCBI_DISTVIBLIBS\" \
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
-		VIB=\"Psequin sbtedit Nentrez udv ddv blastcl3 taxblast \
-		idfetch bl2seq asn2gb tbl2asn gene2xml entrez2 gbseqget \
-		$WWWBLAST $OGL_TARGETS\") 
+		VIB=\"Psequin sbtedit Nentrez udv ddv blastcl3 \
+		idfetch asn2gb tbl2asn gene2xml entrez2 gbseqget $WWWBLAST \
+		$OGL_TARGETS\") # bl2seq taxblast $WWWBLAST
 else if ( "$HAVE_MAC" == 1 ) then
 	set ALL_VIB=(LIB30=libncbicn3d.a \
 		LIB28=libvibgif.a \
@@ -415,8 +446,9 @@ else if ( "$HAVE_MAC" == 1 ) then
 		OGLLIBS=\"$OGL_LIBS $PNG_LIBS\" \
 		VIBFLAG=\"$NCBI_VIBFLAG\" \
 		VIB_POST_LINK=\"../make/make-mac-bundle\" \
-		VIB=\"Psequin sbtedit udv ddv blastcl3 taxblast \
-		idfetch bl2seq asn2gb tbl2asn gene2xml entrez2 gbseqget $WWWBLAST \") 
+		VIB=\"Psequin sbtedit udv ddv blastcl3 \
+		idfetch asn2gb tbl2asn gene2xml entrez2 gbseqget \")
+		# bl2seq taxblast $WWWBLAST
 else # no Motif, build only ascii-based applications
     set OGL_NCBI_LIBS=""
     set OGL_INCLUDE=""
@@ -425,10 +457,12 @@ else # no Motif, build only ascii-based applications
 
 	set ALL_VIB=()
 	set DEMO_VIB=()
-	set NET_VIB=(VIB=\"blastcl3 taxblast idfetch bl2seq asn2gb tbl2asn gene2xml $NONVIBWWWBLAST \") 
+	set NET_VIB=(VIB=\"blastcl3 idfetch asn2gb tbl2asn gene2xml \")
+	# bl2seq taxblast $NONVIBWWWBLAST
 endif
 
-set CMD='make $MFLG \
+set CMD='make $MFLG GNUTLS_INCLUDE=\"$NCBI_GNUTLS_INCLUDE\" \
+   GNUTLS_LIBS=\"$NCBI_GNUTLS_LIBS\" \
    CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE $PNG_INCLUDE\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    SHELL=\"$NCBI_MAKE_SHELL\" LCL=\"$NCBI_DEFAULT_LCL\" \
@@ -449,7 +483,8 @@ EoF
 	exit 1
 endif
 
-set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+set CMD='make $MFLG -f makedemo.unx GNUTLS_INCLUDE=\"$NCBI_GNUTLS_INCLUDE\" \
+   GNUTLS_LIBS=\"$NCBI_GNUTLS_LIBS\" CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" $DEMO_VIB'
 eval echo $CMD
@@ -463,23 +498,25 @@ set demo_stat = $status
 #  Might repeat what is done above on some platforms.
 #
 
-set mtapps = "blastall blastpgp seedtop megablast rpsblast blastclust"
-
-rm -f $mtapps
-
-
-set CMD='make $MFLG -f makedemo.unx CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
-   LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
-   LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\"  \
-   THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
-   $DEMO_VIB $mtapps'
-eval echo $CMD
-eval echo $CMD | sh 
+# set mtapps = "blastall blastpgp seedtop megablast rpsblast blastclust"
+# 
+# rm -f $mtapps
+# 
+# 
+# set CMD='make $MFLG -f makedemo.unx GNUTLS_INCLUDE=\"$NCBI_GNUTLS_INCLUDE\" \
+#    GNUTLS_LIBS=\"$NCBI_GNUTLS_LIBS\" CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1\" \
+#    LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
+#    LCL=\"$NCBI_DEFAULT_LCL\" RAN=\"$NCBI_RANLIB\" AR=\"$NCBI_AR\" CC=\"$NCBI_CC\"  \
+#    THREAD_OBJ=$NCBI_THREAD_OBJ THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
+#    $DEMO_VIB $mtapps'
+# eval echo $CMD
+# eval echo $CMD | sh 
 
 set threaded_demo_stat = $status
 
 if ("$?NCBI_MT_OTHERLIBS" == "1") then
-	set CMD='make $MFLG -f makenet.unx \
+    set CMD='make $MFLG -f makenet.unx GNUTLS_INCLUDE=\"$NCBI_GNUTLS_INCLUDE\" \
+        GNUTLS_LIBS=\"$NCBI_GNUTLS_LIBS\" \
 		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
 		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
 		AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \
@@ -487,7 +524,8 @@ if ("$?NCBI_MT_OTHERLIBS" == "1") then
 		THREAD_OTHERLIBS=\"$NCBI_MT_OTHERLIBS\" \
 		NETENTREZVERSION=\"$NETENTREZVERSION\" $NET_VIB'
 else
-	set CMD='make $MFLG -f makenet.unx \
+    set CMD='make $MFLG -f makenet.unx GNUTLS_INCLUDE=\"$NCBI_GNUTLS_INCLUDE\" \
+        GNUTLS_LIBS=\"$NCBI_GNUTLS_LIBS\" \
 		CFLAGS1=\"$NCBI_OPTFLAG $NCBI_CFLAGS1 $OGL_INCLUDE\" \
 		LDFLAGS1=\"$NCBI_LDFLAGS1\" SHELL=\"$NCBI_MAKE_SHELL\" \
 		AR=\"$NCBI_AR\" CC=\"$NCBI_CC\" RAN=\"$NCBI_RANLIB\" OTHERLIBS=\"$NCBI_OTHERLIBS\" \

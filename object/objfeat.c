@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.74 $
+* $Revision: 6.81 $
 *
 * File Description:  Object manager for module NCBI-SeqFeat
 *
@@ -250,6 +250,8 @@ NLM_EXTERN Boolean LIBCALL SeqFeatAsnWrite (SeqFeatPtr sfp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (sfp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sfp))
         goto erret;
@@ -537,7 +539,7 @@ NLM_EXTERN SeqFeatPtr LIBCALL SeqFeatAsnRead (AsnIoPtr aip, AsnTypePtr orig)
                 cp = (ChoicePtr) MemNew (sizeof (Choice));
                 if (cp == NULL) goto erret;
                 cp->choice = id.choice;
-                if (id.choice) {
+                if (id.choice == 1) {
                     cp->value.intvalue = id.value.intvalue;
                 } else {
                     cp->value.ptrvalue = id.value.ptrvalue;
@@ -843,6 +845,8 @@ NLM_EXTERN Boolean LIBCALL SeqFeatDataAsnWrite (ChoicePtr cp, AsnIoPtr aip, AsnT
         return FALSE;
 
     if (cp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     pnt = cp->value.ptrvalue;
     av.ptrvalue = pnt;
@@ -1189,6 +1193,8 @@ NLM_EXTERN Boolean LIBCALL GBQualAsnWrite (GBQualPtr gbp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
     if (gbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)gbp))
         goto erret;
@@ -1645,6 +1651,9 @@ ModelEvidenceSupportAsnWrite(ModelEvidenceSupportPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1847,6 +1856,9 @@ ExperimentSupportAsnWrite(ExperimentSupportPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2014,6 +2026,9 @@ ProgramIdAsnWrite(ProgramIdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2381,6 +2396,9 @@ InferenceSupportAsnWrite(InferenceSupportPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2581,6 +2599,9 @@ ModelEvidenceItemAsnWrite(ModelEvidenceItemPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2840,6 +2861,8 @@ NLM_EXTERN Boolean LIBCALL CdRegionAsnWrite (CdRegionPtr cdp, AsnIoPtr aip, AsnT
         return FALSE;
 
     if (cdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)cdp))
         goto erret;
@@ -3153,6 +3176,8 @@ NLM_EXTERN Boolean LIBCALL GeneticCodeAsnWrite (GeneticCodePtr gcp, AsnIoPtr aip
 
     if (gcp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)gcp))
         goto erret;
 
@@ -3344,7 +3369,13 @@ static CharPtr genCodeTblMemStr = "Genetic-code-table ::= {\n" \
 "sncbieaa \"--------------------------------M--M---------------M------------\" } ,\n" \
 "{ name \"Pterobranchia Mitochondrial\" , id 24 ,\n" \
 "ncbieaa  \"FFLLSSSSYY**CCWWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSSKVVVVAAAADDEEGGGG\",\n" \
-"sncbieaa \"---M---------------M---------------M---------------M------------\" } };\n";
+"sncbieaa \"---M---------------M---------------M---------------M------------\" } ,\n" \
+"{ name \"Candidate Division SR1 and Gracilibacteria\" , id 25 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CCGWLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"---M-------------------------------M---------------M------------\" } ,\n" \
+"{ name \"Pachysolen tannophilus Nuclear\" , id 26 ,\n" \
+"ncbieaa  \"FFLLSSSSYY**CC*WLLLAPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG\",\n" \
+"sncbieaa \"-------------------M---------------M----------------------------\" } };\n";
 #endif
 
 /*****************************************************************************
@@ -3607,7 +3638,7 @@ NLM_EXTERN CodeBreakPtr LIBCALL CodeBreakFree (CodeBreakPtr cbp)
 NLM_EXTERN Boolean LIBCALL CodeBreakAsnWrite (CodeBreakPtr cbp, AsnIoPtr aip, AsnTypePtr orig)
 {
     DataVal av;
-    AsnTypePtr atp, tmp;
+    AsnTypePtr atp, tmp = NULL;
     Boolean retval = FALSE;
 
     if (! loaded)
@@ -3624,6 +3655,8 @@ NLM_EXTERN Boolean LIBCALL CodeBreakAsnWrite (CodeBreakPtr cbp, AsnIoPtr aip, As
         return FALSE;
 
     if (cbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)cbp))
         goto erret;
@@ -3771,6 +3804,8 @@ NLM_EXTERN Boolean LIBCALL ImpFeatAsnWrite (ImpFeatPtr ifp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (ifp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ifp))
         goto erret;
@@ -3925,6 +3960,8 @@ NLM_EXTERN Boolean LIBCALL RnaRefAsnWrite (RnaRefPtr rrp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
     if (rrp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)rrp))
         goto erret;
@@ -4285,6 +4322,9 @@ RNAQualAsnWrite(RNAQualPtr rqp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (rqp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) rqp)) {
       goto erret;
    }
@@ -4569,6 +4609,9 @@ RNAGenAsnWrite(RNAGenPtr rgp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (rgp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) rgp)) {
       goto erret;
    }
@@ -4755,6 +4798,9 @@ GeneNomenclatureAsnWrite (GeneNomenclaturePtr gnp, AsnIoPtr aip, AsnTypePtr orig
    }
 
    if (gnp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) gnp)) {
       goto erret;
    }
@@ -4917,6 +4963,8 @@ NLM_EXTERN Boolean LIBCALL GeneRefAsnWrite (GeneRefPtr grp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (grp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)grp))
         goto erret;
@@ -5171,6 +5219,8 @@ NLM_EXTERN Boolean LIBCALL OrgRefAsnWrite (OrgRefPtr orp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
     if (orp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)orp))
         goto erret;
@@ -5508,6 +5558,8 @@ NLM_EXTERN Boolean LIBCALL OrgNameAsnWrite (OrgNamePtr onp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (onp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)onp))
         goto erret;
@@ -6053,6 +6105,8 @@ NLM_EXTERN Boolean LIBCALL ProtRefAsnWrite (ProtRefPtr prp, AsnIoPtr aip, AsnTyp
 
     if (prp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)prp))
         goto erret;
 
@@ -6300,6 +6354,8 @@ NLM_EXTERN Boolean LIBCALL RsiteRefAsnWrite (RsiteRefPtr rrp, AsnIoPtr aip, AsnT
 
     if (rrp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnWrite(aip, atp, &av)) goto erret;     /* CHOICE */
     switch (rrp->choice)
     {
@@ -6477,6 +6533,8 @@ NLM_EXTERN Boolean LIBCALL SeqFeatIdAsnWrite (ChoicePtr cp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (cp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (cp->choice)              /* feat-id present */
     {
@@ -6667,6 +6725,8 @@ NLM_EXTERN Boolean LIBCALL TxinitAsnWrite (TxinitPtr txp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
     if (txp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)txp))
         goto erret;
@@ -7048,6 +7108,8 @@ NLM_EXTERN Boolean LIBCALL OrgModAsnWrite (OrgModPtr omp, AsnIoPtr aip, AsnTypeP
 
     if (omp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)omp))
         goto erret;
 
@@ -7317,6 +7379,8 @@ NLM_EXTERN Boolean LIBCALL TaxElementAsnWrite (TaxElementPtr tep, AsnIoPtr aip, 
 
     if (tep == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)tep))
         goto erret;
 
@@ -7560,6 +7624,8 @@ NLM_EXTERN Boolean LIBCALL BinomialOrgNameAsnWrite (BinomialOrgNamePtr bop, AsnI
 
     if (bop == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)bop))
         goto erret;
 
@@ -7703,6 +7769,8 @@ NLM_EXTERN Boolean LIBCALL BioSourceAsnWrite (BioSourcePtr bsp, AsnIoPtr aip, As
         return FALSE;
 
     if (bsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)bsp))
         goto erret;
@@ -7919,6 +7987,8 @@ NLM_EXTERN Boolean LIBCALL SubSourceAsnWrite (SubSourcePtr ssp, AsnIoPtr aip, As
         return FALSE;
 
     if (ssp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ssp))
         goto erret;
@@ -8280,6 +8350,9 @@ PCRPrimerAsnWrite(PCRPrimerPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -8846,6 +8919,9 @@ CloneRefAsnWrite(CloneRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -9167,6 +9243,9 @@ CloneSeqAsnWrite(CloneSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -9927,6 +10006,9 @@ SomaticOriginConditionAsnWrite(SomaticOriginConditionPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -9979,6 +10061,9 @@ VariationRefAsnWrite(VariationRefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10129,6 +10214,8 @@ ConsequenceAsnWrite(ValNodePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    retval = AsnGenericChoiceSeqOfAsnWrite(anp, 
    (AsnWriteFunc) Consequence_elementAsnWrite, aip, atp, VARIATION_REF_consequence_E);
@@ -10168,6 +10255,8 @@ Consequence_elementAsnWrite(Consequence_elementPtr anp, AsnIoPtr aip, AsnTypePtr
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -10245,6 +10334,9 @@ Consequence_loss_of_heterozygosityAsnWrite(Consequence_loss_of_heterozygosityPtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10298,6 +10390,9 @@ Consequence_frameshiftAsnWrite(Consequence_frameshiftPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10349,6 +10444,9 @@ VarRefDataSetAsnWrite(VarRefDataSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10404,6 +10502,8 @@ VarRefDataAsnWrite( VarRefDataPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -10465,7 +10565,7 @@ Consequence_elementAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    DataVal av;
    AsnTypePtr atp;
    ValNodePtr anp;
-   Uint1 choice;
+   Uint1 choice = 0;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -10888,7 +10988,7 @@ VarRefDataAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    DataVal av;
    AsnTypePtr atp;
    ValNodePtr anp;
-   Uint1 choice;
+   Uint1 choice = 0;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -11230,6 +11330,9 @@ VariationInstAsnWrite(VariationInstPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11510,6 +11613,9 @@ VariantPropertiesAsnWrite(VariantPropertiesPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11737,6 +11843,9 @@ PhenotypeAsnWrite(PhenotypePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11949,6 +12058,9 @@ PopulationDataAsnWrite(PopulationDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12126,6 +12238,7 @@ ExtLocAsnWrite(ExtLocPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12323,7 +12436,7 @@ Seq_seqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
    DataVal av;
    AsnTypePtr atp;
    ValNodePtr anp;
-   Uint1 choice;
+   Uint1 choice = 0;
    Boolean nullIsError = FALSE;
    AsnReadFunc func;
 
@@ -12427,6 +12540,9 @@ DeltaItemAsnWrite(DeltaItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12490,6 +12606,8 @@ Seq_seqAsnWrite(Seq_seqPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {

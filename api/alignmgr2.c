@@ -28,13 +28,23 @@
 *
 * Version Creation Date:  10/01 
 *
-* $Revision: 6.63 $
+* $Revision: 6.66 $
 *
 * File Description: SeqAlign indexing, access, and manipulation functions 
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: alignmgr2.c,v $
+* Revision 6.66  2016/09/02 14:57:38  ucko
+* Formally clean up calls to printf-family functions that are at least
+* nominally unsafe, as already done in Debian/Ubuntu packages.
+*
+* Revision 6.65  2013/11/26 01:23:42  kans
+* JIRA:GP-6623 AlnMgr2ConvertAllToDenseSeg bails specifically for Spliced-seg
+*
+* Revision 6.64  2013/11/26 00:15:42  kans
+* JIRA:GP-5360 AlnMgr2ConvertAllToDenseSeg returns Boolean if not Dense-diag or Dense-seg to avoid crash on Spliced-seg
+*
 * Revision 6.63  2008/12/01 19:35:39  bollin
 * prevent crash when mapping positions and row of alignment is entirely in the gapl.
 *
@@ -248,7 +258,7 @@ static void AMIntervalSetFree(AMIntervalSetPtr amint);
 static void AlnMgr2ConvertDendiagToDensegChain(SeqAlignPtr sap);
 static void AlnMgr2IndexSingleDenseSegSA(SeqAlignPtr sap);
 static Boolean AlnMgr2UnpackSeqAlign(SeqAlignPtr sap);
-static void AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap);
+static Boolean AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap);
 static void AlnMgr2DecomposeToPairwise(SeqAlignPtr sap);
 static void AlnMgr2HidePairwiseConflicts(SeqAlignPtr sap);
 static void AlnMgr2SortBySeqId(SeqAlignPtr sap);
@@ -1106,7 +1116,7 @@ static void AlnMgr2UnpackSeqAlignChain(SeqAlignPtr sap)
 *  non-allocated strands are allocated and all set to Seq_strand_plus.
 *
 ***************************************************************************/
-static void AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap)
+static Boolean AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap)
 {
    DenseSegPtr  dsp;
    Int4         i;
@@ -1115,8 +1125,9 @@ static void AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap)
    while (sap != NULL)
    {
       sap_next = sap->next;
-      if (sap->segtype == SAS_DENDIAG)
+      if (sap->segtype == SAS_DENDIAG) {
          AlnMgr2ConvertDendiagToDensegChain(sap);
+      }
       else if (sap->segtype == SAS_DENSEG)
       {
          dsp = (DenseSegPtr)(sap->segs);
@@ -1129,8 +1140,13 @@ static void AlnMgr2ConvertAllToDenseSeg(SeqAlignPtr sap)
             }
          }
       }
+      else if (sap->segtype == SAS_SPLICED)
+      {
+        return FALSE;
+      }
       sap = sap_next;
    }
+   return TRUE;
 }
 
 /* SECTION 2c */
@@ -1152,7 +1168,8 @@ NLM_EXTERN Boolean AlnMgr2IndexLite(SeqAlignPtr sap)
       return FALSE;
    if (!AlnMgr2UnpackSeqAlign(sap))
       return FALSE;
-   AlnMgr2ConvertAllToDenseSeg((SeqAlignPtr)sap->segs);
+   if (!AlnMgr2ConvertAllToDenseSeg((SeqAlignPtr)sap->segs))
+      return FALSE;
    amaip = AMAlignIndex2New();
    amaip->alnstyle = AM2_LITE;
    salp = (SeqAlignPtr)(sap->segs);
@@ -5616,7 +5633,7 @@ NLM_EXTERN void AlnMgr2PrintSeqAlign(SeqAlignPtr sap, Int4 linesize, Boolean isn
                spp = SeqPortNew(bsp, amp->from_row, amp->to_row, amp->strand, seqcode);
                ctr = SeqPortRead(spp, (Uint1Ptr)buf, amp->to_row-amp->from_row+1);
                buf[ctr] = '\0';
-               fprintf(ofp, buf);
+               fwrite(buf, 1, ctr, ofp);
                SeqPortFree(spp);
             }
          }

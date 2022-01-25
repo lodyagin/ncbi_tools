@@ -2152,6 +2152,7 @@ ID2SSeqFeatIdsInfoFree(ID2SSeqFeatIdsInfoPtr ptr)
    AsnGenericUserSeqOfFree(ptr -> feat_types, (AsnOptFreeFunc) ID2SFeatTypeInfoFree);
    AsnGenericUserSeqOfFree(ptr -> xref_types, (AsnOptFreeFunc) ID2SFeatTypeInfoFree);
    AsnGenericBaseSeqOfFree(ptr -> local_ids ,ASNCODE_INTVAL_SLOT);
+   AsnGenericBaseSeqOfFree(ptr -> local_str_ids ,ASNCODE_PTRVAL_SLOT);
    return MemFree(ptr);
 }
 
@@ -2224,6 +2225,13 @@ ID2SSeqFeatIdsInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == FEAT_IDS_INFO_local_str_ids) {
+      ptr -> local_str_ids = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+      if (isError && ptr -> local_str_ids == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -2278,6 +2286,7 @@ ID2SSeqFeatIdsInfoAsnWrite(ID2SSeqFeatIdsInfoPtr ptr, AsnIoPtr aip, AsnTypePtr o
    AsnGenericUserSeqOfAsnWrite(ptr -> feat_types, (AsnWriteFunc) ID2SFeatTypeInfoAsnWrite, aip, SEQ_FEAT_IDS_INFO_feat_types, SEQ_FEAT_IDS_INFO_feat_types_E);
    AsnGenericUserSeqOfAsnWrite(ptr -> xref_types, (AsnWriteFunc) ID2SFeatTypeInfoAsnWrite, aip, SEQ_FEAT_IDS_INFO_xref_types, SEQ_FEAT_IDS_INFO_xref_types_E);
    retval = AsnGenericBaseSeqOfAsnWrite(ptr -> local_ids ,ASNCODE_INTVAL_SLOT, aip, SEQ_FEAT_IDS_INFO_local_ids, SEQ_FEAT_IDS_INFO_local_ids_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> local_str_ids ,ASNCODE_PTRVAL_SLOT, aip, FEAT_IDS_INFO_local_str_ids, FEAT_IDS_INFO_local_str_ids_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

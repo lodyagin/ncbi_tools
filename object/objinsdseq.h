@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.17 at May 26, 2010 12:38 PM
+*    Generated using ASNCODE Revision: 6.19 at Sep 17, 2013  6:09 PM
 *
 **************************************************/
 
@@ -87,6 +87,7 @@ typedef struct struct_INSDSeq {
    CharPtr   sequence;
    CharPtr   contig;
    struct struct_INSDAltSeqData PNTR   alt_seq;
+   struct struct_INSDXref PNTR   xrefs;
 } INSDSeq, PNTR INSDSeqPtr;
 
 
@@ -135,7 +136,7 @@ typedef struct struct_INSDComment {
    struct struct_INSDComment PNTR next;
    Uint4 OBbits__;
    CharPtr   type;
-   struct struct_INSDCommentParagraph PNTR   paragraphs;
+   ValNodePtr   paragraphs;
 } INSDComment, PNTR INSDCommentPtr;
 
 
@@ -253,45 +254,6 @@ NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefFree PROTO ((INSDXrefPtr ));
 NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefNew PROTO (( void ));
 NLM_EXTERN INSDXrefPtr LIBCALL INSDXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL INSDXrefAsnWrite PROTO (( INSDXrefPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    INSDCommentParagraph
-*
-**************************************************/
-typedef struct struct_INSDCommentParagraph {
-   struct struct_INSDCommentParagraph PNTR next;
-   Uint4 OBbits__;
-   struct struct_INSDCommentItem PNTR   items;
-} INSDCommentParagraph, PNTR INSDCommentParagraphPtr;
-
-
-NLM_EXTERN INSDCommentParagraphPtr LIBCALL INSDCommentParagraphFree PROTO ((INSDCommentParagraphPtr ));
-NLM_EXTERN INSDCommentParagraphPtr LIBCALL INSDCommentParagraphNew PROTO (( void ));
-NLM_EXTERN INSDCommentParagraphPtr LIBCALL INSDCommentParagraphAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL INSDCommentParagraphAsnWrite PROTO (( INSDCommentParagraphPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    INSDCommentItem
-*
-**************************************************/
-typedef struct struct_INSDCommentItem {
-   struct struct_INSDCommentItem PNTR next;
-   Uint4 OBbits__;
-   CharPtr   value;
-   CharPtr   url;
-} INSDCommentItem, PNTR INSDCommentItemPtr;
-
-
-NLM_EXTERN INSDCommentItemPtr LIBCALL INSDCommentItemFree PROTO ((INSDCommentItemPtr ));
-NLM_EXTERN INSDCommentItemPtr LIBCALL INSDCommentItemNew PROTO (( void ));
-NLM_EXTERN INSDCommentItemPtr LIBCALL INSDCommentItemAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL INSDCommentItemAsnWrite PROTO (( INSDCommentItemPtr , AsnIoPtr, AsnTypePtr));
 
 
 

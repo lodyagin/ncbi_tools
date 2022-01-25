@@ -1,4 +1,4 @@
-.TH TBL2ASN 1 2009-07-31 NCBI "NCBI Tools User's Manual"
+.TH TBL2ASN 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 tbl2asn \- prepare a GenBank submission using an ASCII feature table
 .SH SYNOPSIS
@@ -11,11 +11,14 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-F\fP\ \fIstr\fP\|]
 [\|\fB\-G\fP\ \fIstr\fP\|]
 [\|\fB\-H\fP\ \fIstr\fP\|]
+[\|\fB\-J\fP\|]
 [\|\fB\-K\fP\|]
 [\|\fB\-L\fP\|]
+[\|\fB\-M\fP\ \fIstr\fP\|]
+[\|\fB\-N\fP\ \fIn\fP\|]
 [\|\fB\-O\fP\|]
 [\|\fB\-P\fP\|]
-[\|\fB\-Q\fP\|]
+[\|\fB\-Q\fP\ \fIstr\fP\|]
 [\|\fB\-R\fP\|]
 [\|\fB\-S\fP\|]
 [\|\fB\-T\fP\|]
@@ -34,6 +37,8 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-i\fP\ \fIfilename\fP\|]
 [\|\fB\-j\fP\ \fIstr\fP\|]
 [\|\fB\-k\fP\ \fIstr\fP\|]
+[\|\fB\-l\fP\ \fIstr\fP\|]
+[\|\fB\-m\fP\ \fIstr\fP\|]
 [\|\fB\-n\fP\ \fIstr\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIstr\fP\|]
@@ -43,6 +48,7 @@ tbl2asn \- prepare a GenBank submission using an ASCII feature table
 [\|\fB\-t\fP\ \fIfilename\fP\|]
 [\|\fB\-u\fP\|]
 [\|\fB\-v\fP\|]
+[\|\fB\-w\fP\ \fIfilename\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
 [\|\fB\-y\fP\ \fIstr\fP\|]
 [\|\fB\-z\fP\|]
@@ -72,7 +78,19 @@ Descriptors file
 Recurse
 .TP
 \fB\-F\fP
-Feature ID links (\fBo\fP by Overlap, \fBp\fP by Product)
+Feature ID links:
+.RS
+.PD 0
+.IP o
+By Overlap
+.IP p
+By Product
+.IP l
+By Label and Location
+.IP s
+Suppress links forced by \fB-M\fP
+.PD
+.RE
 .TP
 \fB\-G\fP\ \fIstr\fP
 Alignment Gap Flags (comma separated fields, e.g., \fBp,\-,\-,\-,?,.\fP )
@@ -92,11 +110,32 @@ Until the specified date
 .PD
 .RE
 .TP
+\fB\-J\fP
+Delayed genomic product set
+.TP
 \fB\-K\fP
 Safe Bioseq-set
 .TP
 \fB\-L\fP
 Force Local protein_id/transcript_id
+.TP
+\fB\-M\fP\ \fIstr\fP
+Master genome flags:
+.RS
+.PD 0
+.IP n
+Normal
+.IP b
+Big sequence
+.IP p
+Power option
+.IP t
+TSA
+.PD
+.RE
+.TP
+\fB\-N\fP\ \fIn\fP
+Project version number
 .TP
 \fB\-O\fP
 Allow run-on ORFs
@@ -105,7 +144,15 @@ Allow run-on ORFs
 Remote publication lookup
 .TP
 \fB\-Q\fP
+mRNA title policy
+.RS
+.PD 0
+.IP s
 Special mRNA titles
+.IP r
+RefSeq mRNA titles
+.PD
+.RE
 .TP
 \fB\-R\fP
 Remote sequence record fetching from ID
@@ -127,10 +174,14 @@ Verification (combine any of the following letters)
 Validate with Normal Stringency
 .IP r
 Validate without Country Check
+.IP c
+BarCode validation
 .IP b
 Generate GenBank Flatfile
 .IP g
 Generate Gene Report
+.IP t
+Validate with TSA check
 .PD
 .RE
 .TP
@@ -141,8 +192,12 @@ Log progress
 Extra flags (combine any of the following letters)
 .RS
 .PD 0
+.IP A
+Automatic definition line generation
 .IP C
-Apply comments in \fB.cmt\fP files to all sequences
+Apply Comments in \fB.cmt\fP files to all sequences
+.IP E
+Treat like Eukarypota in the discrepancy report
 .PD
 .RE
 .TP
@@ -162,19 +217,26 @@ Any (default)
 Runs of 20+ Ns are gaps, 100 Ns are unknown length
 .IP r20k
 Runs of 20+ Ns are gaps, 100 Ns are known length
+.IP r10u
+Runs of 10+ Ns are gaps, 100 Ns are unknown length
+.IP r10k
+Runs of 10+ Ns are gaps, 100 Ns are known length
 .IP s
 FASTA Set (\fBs\fP Batch, \fBs1\fP Pop, \fBs2\fP Phy, \fBs3\fP Mut,
-\fBs4\fP Eco)
+\fBs4\fP Eco, \fBs9\fP Small-genome)
 .IP d
 FASTA Delta
 .IP di
 FASTA Delta with Implicit Gaps
 .IP l
-FASTA+Gap Alignment
+FASTA+Gap Alignment (\fBl\fP Batch, \fBl1\fP Pop, \fBl2\fP Phy, \fBl3\fP Mut,
+\fBl4\fP Eco, \fBl9\fP Small-genome)
 .IP z
 FASTA with Gap Lines
 .IP e
 PHRAP/ACE
+.IP b
+ASN.1 (in conjunction with \bF-M\fP)
 .PD
 .RE
 .TP
@@ -195,6 +257,12 @@ similar product names and do not contain 'ABC'
 .IP x
 Extend partial ends of features by one or two nucleotides to abut gaps
 or sequence ends
+.IP p
+Add exception to non\-extendable partials
+.IP s
+Add exception to short introns
+.IP f
+Fix product names
 .PD
 .RE
 .TP
@@ -228,6 +296,25 @@ Set Conflict on Mismatch
 .PD
 .RE
 .TP
+\fB\-l\fP\ \fIstr\fP
+Add type of evidence used to assert linkage across assembly gaps (only
+for TSA records).  Must be one of the following:
+.RS
+.PD 0
+.IP paired-ends
+.IP align-genus
+.IP align-xgenus
+.IP align-trnscpt
+.IP within-clone
+.IP clone-contig
+.IP map
+.IP strobe
+.PD
+.RE
+.TP
+\fB\-m\fP\ \fIstr\fP
+Lineage to use for discrepancy report tests
+.TP
 \fB\-n\fP\ \fIstr\fP
 Organism name
 .TP
@@ -253,7 +340,10 @@ Read template from \fIfilename\fP
 Convert GenProdSet to NucProtSet
 .TP
 \fB\-v\fP
-Validate (deprecated in favor of \fB-V v\fP)
+Validate (deprecated in favor of \fB\-V\ v\fP)
+.TP
+\fB\-w\fP\ \fIfilename\fP
+Single structured comment file (overrides the use of \fB\-X\ C\fP)
 .TP
 \fB\-x\fP\ \fIstr\fP
 Suffix (default = \fB.fsa\fP)

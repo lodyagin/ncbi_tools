@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.154 $
+* $Revision: 1.178 $
 *
 * File Description: 
 *
@@ -223,7 +223,7 @@ NLM_EXTERN CharPtr DoEinfoQuery (
     MemFree (db);
   }
 
-  str = QUERY_UrlSynchronousQuery (eutils_host, 80, einfo_url, ptr, NULL, NULL, NULL);
+  str = QUERY_UrlSynchronousQuery (eutils_host, 0, einfo_url, ptr, NULL, NULL, NULL);
 
   MemFree (ptr);
 
@@ -283,7 +283,7 @@ NLM_EXTERN CharPtr DoEsearchQuery (
   MemFree (qu);
   MemFree (sf);
 
-  str = QUERY_UrlSynchronousQuery (eutils_host, 80, esearch_url, NULL, NULL, NULL, ptr);
+  str = QUERY_UrlSynchronousQuery (eutils_host, 0, esearch_url, NULL, NULL, NULL, ptr);
 
   MemFree (ptr);
 
@@ -358,7 +358,7 @@ NLM_EXTERN CharPtr DoElinkQuery (
   MemFree (cd);
   MemFree (id);
 
-  str = QUERY_UrlSynchronousQuery (eutils_host, 80, elink_url, NULL, NULL, NULL, ptr);
+  str = QUERY_UrlSynchronousQuery (eutils_host, 0, elink_url, NULL, NULL, NULL, ptr);
 
   MemFree (ptr);
 
@@ -413,7 +413,7 @@ NLM_EXTERN CharPtr DoEsummaryQuery (
   MemFree (db);
   MemFree (id);
 
-  str = QUERY_UrlSynchronousQuery (eutils_host, 80, esummary_url, NULL, NULL, NULL, ptr);
+  str = QUERY_UrlSynchronousQuery (eutils_host, 0, esummary_url, NULL, NULL, NULL, ptr);
 
   MemFree (ptr);
 
@@ -448,6 +448,73 @@ static Boolean GetBooleanValue (
   if (ch == 'Y' || ch == 'y') return TRUE;
 
   return FALSE;
+}
+
+NLM_EXTERN void Entrez2StreamTerms (
+  CharPtr database,
+  CharPtr field,
+  Entrez2TermStreamProc proc
+)
+
+{
+  Int4                count = 0, firstPos, numTerms;
+  Entrez2RequestPtr   e2rq;
+  Entrez2ReplyPtr     e2ry;
+  Entrez2TermListPtr  e2tl;
+  Entrez2TermPtr      e2tp;
+  Boolean             match;
+  XmlObjPtr           nxt, sub, tmp, xop;
+  CharPtr             str;
+
+  if (StringHasNoText (database) || StringHasNoText (field) || proc == NULL) return;
+
+  str = DoEinfoQuery (database);
+  if (str == NULL) return;
+
+  xop = ParseXmlString (str);
+  MemFree (str);
+  if (xop == NULL) return;
+
+  for (tmp = xop; tmp != NULL; tmp = nxt) {
+    nxt = tmp->successor;
+    if (XmlPathSuffixIs (tmp, "/FieldList/Field")) {
+      match = FALSE;
+	  for (sub = tmp->successor; sub != NULL && sub->level > tmp->level; sub = sub->successor) {
+		if (XmlPathSuffixIs (sub, "/Field/Name")) {
+          if (StringICmp (sub->contents, field) == 0) {
+            match = TRUE;
+          }
+		} else if (XmlPathSuffixIs (sub, "/Field/TermCount") && match) {
+		  count = GetNumericValue (sub->contents);
+		}
+	  }
+    }
+  }
+
+  FreeXmlObject (xop);
+
+  numTerms = 5000;
+  for (firstPos = 0; firstPos < count; firstPos += numTerms) {
+
+    if (firstPos + numTerms > count) {
+      numTerms = count - firstPos;
+    }
+
+    e2rq = EntrezCreateGetTermListRequest (database, field, firstPos, numTerms);
+    if (e2rq == NULL) return;
+
+    e2ry = EntrezSynchronousQuery (e2rq);
+    Entrez2RequestFree (e2rq);
+
+    if (e2ry == NULL) return;
+
+    e2tl = EntrezExtractTermListReply (e2ry);
+    if (e2tl != NULL) {
+      for (e2tp = e2tl->list; e2tp != NULL; e2tp = e2tp->next) {
+        proc (e2tp->term, e2tp->count);
+      }
+    }
+  }
 }
 
 static Entrez2DbInfoPtr GetDbInfo (
@@ -501,8 +568,11 @@ static Entrez2DbInfoPtr GetDbInfo (
             e2fp->single_token = GetBooleanValue (sub->contents);
           } else if (XmlPathSuffixIs (sub, "/Field/Hierarchy")) {
             e2fp->hierarchy_avail = GetBooleanValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/IsRangable")) {
+            e2fp->is_rangable = GetBooleanValue (sub->contents);
+          } else if (XmlPathSuffixIs (sub, "/Field/IsTruncatable")) {
+            e2fp->is_truncatable = GetBooleanValue (sub->contents);
           }
-/* is_rangable and is_truncatable are not present in XML */
         }
         if (lastfp != NULL) {
           lastfp->next = e2fp;
@@ -2166,6 +2236,8 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
   CharPtr                    lnk;
   Int2                       lnkcount;
   ValNodePtr                 menuhead = NULL;
+  CharPtr                    next;
+  ValNodePtr                 nextvnp;
   Boolean                    notAlphNum;
   Boolean                    rsult = TRUE;
   CharPtr                    str;
@@ -2272,7 +2344,12 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
           StringICmp (db, "clone") != 0 &&
           StringICmp (db, "pubmedhealth") != 0 &&
           StringICmp (db, "assembly") != 0 &&
-          StringICmp (db, "gapplus") != 0) {
+          StringICmp (db, "gapplus") != 0 &&
+          StringICmp (db, "toolkitbook") != 0 &&
+          StringICmp (db, "unists") != 0 &&
+          StringICmp (db, "grasp") != 0 &&
+          StringICmp (db, "annotinfo") != 0 &&
+          StringICmp (db, "gpipe") != 0) {
         sprintf (buf, "Database %s has no links", db);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
@@ -2327,7 +2404,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
        }
       }
       if (StringLen (fld) > 4) {
-        sprintf (buf, "Database %s field %s name is > 4 characters long", db, fld);
+        sprintf (buf, "Database %s field %s name is longer than 4 characters", db, fld);
         ValNodeCopyStr (head, 0, buf);
         rsult = FALSE;
       }
@@ -2488,13 +2565,15 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
       if (StringICmp (last, str) == 0 && StringCmp (last, str) != 0) {
         if (StringICmp (last, "PmId") == 0 && StringICmp (str, "PMID") == 0) {
         } else if (StringICmp (last, "Object Type") == 0 && StringICmp (str, "Object type") == 0) {
+        } else if (StringICmp (last, "ClinVar Accession") == 0 && StringICmp (str, "ClinVar accession") == 0) {
           /* suppress for now */
         } else {
           sprintf (buf, "Menu names %s [%s] and %s [%s] differ in capitalization", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
           ValNodeCopyStr (head, 0, buf);
           rsult = FALSE;
         }
-      } else if (checkMenuNameVariants) {
+      }
+      if (checkMenuNameVariants) {
         len1 = StringLen (last);
         len2 = StringLen (str);
         if (len1 < len2) {
@@ -2526,6 +2605,7 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
             } else if (StringICmp (last, "ActiveAid") == 0 && StringICmp (str, "ActiveAidCount") == 0) {
             } else if (StringICmp (last, "InactiveAid") == 0 && StringICmp (str, "InactiveAidCount") == 0) {
             } else if (StringICmp (last, "Phenotype") == 0 && StringICmp (str, "Phenotype Ontology ID") == 0) {
+            } else if (StringICmp (last, "Phenotype") == 0 && StringICmp (str, "Phenotype Trait") == 0) {
             } else if (StringICmp (last, "Title") == 0 && StringICmp (str, "Title Abbreviation") == 0) {
             } else if (StringICmp (last, "Library") == 0 && StringICmp (str, "Library Class") == 0) {
             } else if (StringICmp (last, "Sequence") == 0 && StringICmp (str, "Sequence Count") == 0) {
@@ -2605,10 +2685,40 @@ NLM_EXTERN Boolean ValidateEntrez2InfoPtrExExEx (
             } else if (StringICmp (last, "Vector") == 0 && StringICmp (str, "Vector Type") == 0) {
             } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease/Phenotype") == 0) {
             } else if (StringICmp (last, "Variable") == 0 && StringICmp (str, "Variable Description") == 0) {
+            } else if (StringICmp (last, "Platform") == 0 && StringICmp (str, "Platform ID") == 0) {
+            } else if (StringICmp (last, "Validation") == 0 && StringICmp (str, "Validation Method") == 0) {
+            } else if (StringICmp (last, "BioProject ID") == 0 && StringICmp (str, "BioProject IDs and Accessions") == 0) {
+            } else if (StringICmp (last, "MIM") == 0 && StringICmp (str, "MIM ID") == 0) {
+            } else if (StringICmp (last, "Name") == 0 && StringICmp (str, "Name of the ClinVar record") == 0) {
+            } else if (StringICmp (last, "Type") == 0 && StringICmp (str, "Type of variation") == 0) {
+            } else if (StringICmp (last, "Assembly") == 0 && StringICmp (str, "Assembly Accession") == 0) {
+            } else if (StringICmp (last, "CID") == 0 && StringICmp (str, "CIDCount") == 0) {
+            } else if (StringICmp (last, "CID") == 0 && StringICmp (str, "CID Count") == 0) {
+            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SIDCount") == 0) {
+            } else if (StringICmp (last, "SID") == 0 && StringICmp (str, "SID Count") == 0) {
+            } else if (StringICmp (last, "Database") == 0 && StringICmp (str, "Database Author Name") == 0) {
+            } else if (StringICmp (last, "Disease") == 0 && StringICmp (str, "Disease BioConcepts Entrez ID") == 0) {
+            } else if (StringICmp (last, "Name") == 0 && StringICmp (str, "Name of Method") == 0) {
+            } else if (StringICmp (last, "Text Word") == 0 && StringICmp (str, "Text Word 1") == 0) {
+            } else if (StringICmp (last, "Type") == 0 && StringICmp (str, "Type of organization") == 0) {
+            } else if (StringICmp (last, "Assembly Method") == 0 && StringICmp (str, "Assembly Method Program") == 0) {
+            } else if (StringICmp (last, "Subject") == 0 && StringICmp (str, "Subject - Personal Name") == 0) {
+            } else if (StringICmp (last, "Phenotype") == 0 && StringICmp (str, "Phenotype Category") == 0) {
+            } else if (StringICmp (last, "Name") == 0 && StringICmp (str, "Name Parts") == 0) {
+            } else if (StringICmp (last, "Name") == 0 && StringICmp (str, "Name Tokens") == 0) {
+            } else if (StringICmp (last, "Multi") == 0 && StringICmp (str, "Multiple in assembly") == 0) {
+            } else if (StringICmp (last, "Base Position") == 0 && StringICmp (str, "Base Position for Assembly GRCh37") == 0) {
             } else {
               sprintf (buf, "Menu names %s [%s] and %s [%s] may be unintended variants", last, dbnames [lastvnp->choice], str, dbnames [vnp->choice]);
               ValNodeCopyStr (head, 0, buf);
               rsult = FALSE;
+              for (nextvnp = vnp->next; nextvnp != NULL; nextvnp = nextvnp->next) {
+                next = (CharPtr) nextvnp->data.ptrvalue;
+                if (StringICmp (last, next) == 0) {
+                  sprintf (buf, "Additional unintended variants %s [%s] and %s [%s]", next, dbnames [nextvnp->choice], str, dbnames [vnp->choice]);
+                  ValNodeCopyStr (head, 0, buf);
+                }
+              }
             }
           }
         }

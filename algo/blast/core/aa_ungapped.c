@@ -1,4 +1,4 @@
-/* $Id: aa_ungapped.c,v 1.63 2011/03/17 14:15:31 kazimird Exp $
+/* $Id: aa_ungapped.c,v 1.65 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,11 +27,6 @@
 /** @file aa_ungapped.c
  * Functions to iterate over seed hits and perform ungapped extensions.
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: aa_ungapped.c,v 1.63 2011/03/17 14:15:31 kazimird Exp $";
-#endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/aa_ungapped.h>
 #include <algo/blast/core/blast_aalookup.h>
@@ -563,6 +558,20 @@ s_BlastAaWordFinder_TwoHit(const BLAST_SequenceBlk * subject,
                    extension, the query context must first be found */
 
                 curr_context = BSearchContextInfo(query_offset, query_info);
+
+                /* Check if the last hit hits current query. Because last_hit
+                   is never reset, it may contain a hit to the previous
+                   concatenated query */
+
+                if (query_offset - diff <
+                    query_info->contexts[curr_context].query_offset) {
+                    
+                    /* there was no last hit for this diagnol; start a new hit */
+                    diag_array[diag_coord].last_hit =
+                        subject_offset + diag_offset;
+                    continue;
+                }
+
                 cutoffs = word_params->cutoffs + curr_context;
                 score = s_BlastAaExtendTwoHit(matrix, subject, query,
                                               last_hit + wordsize,

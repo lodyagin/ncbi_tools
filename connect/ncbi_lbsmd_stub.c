@@ -1,4 +1,4 @@
-/* $Id: ncbi_lbsmd_stub.c,v 6.18 2009/02/03 16:39:35 kazimird Exp $
+/* $Id: ncbi_lbsmd_stub.c,v 6.19 2015/02/09 00:49:21 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
 
 
 /*ARGSUSED*/
-const SSERV_VTable *SERV_LBSMD_Open(SERV_ITER    iter,
+const SSERV_VTable* SERV_LBSMD_Open(SERV_ITER    iter,
                                     SSERV_Info** info,
                                     HOST_INFO*   host_info,
                                     int/*bool*/  dispd_to_follow)
@@ -69,6 +69,13 @@ extern const char* LBSMD_GetHostParameter(unsigned int host,
                                           const char*  name)
 {
     return 0;
+}
+
+
+/*ARGSUSED*/
+unsigned int LBSMD_GetLocalHostAddress(const void* v)
+{
+    return SOCK_GetLocalHostAddress(eDefault);
 }
 
 

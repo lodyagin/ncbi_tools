@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.181 $
+* $Revision: 6.197 $
 *
 * File Description: 
 *
@@ -67,10 +67,10 @@
 /* for formatting */
 #include <asn2gnbp.h>
 
-#define NUMBER_OF_SUFFIXES    8
+#define NUMBER_OF_SUFFIXES    13
 
 static CharPtr name_suffix_labels [] = {
-  " ", "Jr.", "Sr.", "II", "III", "IV", "V", "VI", NULL
+  " ", "Jr.", "Sr.", "II", "III", "IV", "V", "VI", "2nd", "3rd", "4th", "5th", "6th", NULL
 };
 
 static ENUM_ALIST(name_suffix_alist)
@@ -82,6 +82,11 @@ static ENUM_ALIST(name_suffix_alist)
   {"IV",   5},
   {"V",    6},
   {"VI",   7},
+  {"2nd",  8},
+  {"3rd",  9},
+  {"4th", 10},
+  {"5th", 11},
+  {"6th", 12},
 END_ENUM_ALIST
 
 Uint2 author_types [] = {
@@ -107,6 +112,8 @@ typedef struct authordialog {
   GrouP              stdGrp;
   GrouP              strGrp;
   Uint1              type;
+  Nlm_ChangeNotifyProc change_notify;
+  Pointer              change_data;
 } AuthorDialog, PNTR AuthorDialogPtr;
 
 StdPrintOptionsPtr  spop = NULL;
@@ -1492,7 +1499,7 @@ extern void SeqFeatPtrToCommon (FeatureFormPtr ffp, SeqFeatPtr sfp)
       PointerToDialog (ffp->gbquals, sfp->qual);
       SeqFeatPtrToFieldPage (ffp->gbquals, sfp);
       GbqualsToPseudogenePopup (sfp, ffp, ffp->pseudogene);
-      GbqualsToVisStringDialog (sfp, ffp->experiment, "experiment");
+      GBQualsToExperimentDialog (sfp, ffp->experiment);
       GBQualsToInferenceDialog (ffp->inference, sfp);
       PointerToDialog (ffp->usrobjext, sfp->ext);
       VisitUserObjectsInUop (sfp->ext, (Pointer) ffp, SaveGoTermsInSfp);
@@ -1733,62 +1740,6 @@ static void AddProtRefXref (SeqFeatPtr sfp, TexT protXrefName, TexT protXrefDesc
   }
 }
 
-static Boolean FeatIsPseudo (SeqFeatPtr sfp)
-{
-  Boolean   pseudo = FALSE;
-  GBQualPtr qual;
-  
-  if (sfp != NULL)
-  {
-    if (sfp->pseudo)
-    {
-      pseudo = TRUE;
-    }
-    else
-    {
-      qual = sfp->qual;
-      while (qual != NULL)
-      {
-        if (StringICmp (qual->qual, "pseudo") == 0) 
-        {
-          pseudo = TRUE;
-        }
-        qual = qual->next;
-      }
-    }
-  }
-  return pseudo;
-}
-
-static void RemoveProtXrefs (SeqFeatPtr sfp)
-{
-  SeqFeatXrefPtr  xref_prev = NULL, xref_next, xref;
-
-  if (sfp == NULL || sfp->xref == NULL) return;
-
-  for (xref = sfp->xref; xref != NULL; xref = xref_next)
-  {
-    xref_next = xref->next;
-    if (xref->data.choice == SEQFEAT_PROT)
-    {
-      if (xref_prev == NULL)
-      {
-        sfp->xref = xref->next;
-      }
-      else
-      {
-        xref_prev->next = xref->next;
-      }
-      xref->next = NULL;
-      xref->data.value.ptrvalue = ProtRefFree (xref->data.value.ptrvalue);
-      SeqFeatXrefFree (xref);
-    }
-    else
-    {
-      xref_prev = xref;
-    }
-  }  
-}
 
 static CharPtr infDetails [] = {
   "unknown error",
@@ -1853,6 +1804,8 @@ static CharPtr infWarning2 =
 
 static CharPtr infAccept =
 "Do you want to accept changes with bad inference data?  The bad qualifier will be converted to a note!";
+
+const char * kTransSplicing = "trans-splicing";
 
 extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
 
@@ -1975,7 +1928,7 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
     }
   }
 
-  if (StringISearch (sfp->except_text, "trans-splicing") != NULL) 
+  if (StringISearch (sfp->except_text, kTransSplicing) != NULL) 
   {
     trans_spliced = TRUE;
   }
@@ -2215,14 +2168,8 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
     if (ffp->fidxref != NULL) {
       TextToFeatXref (ffp->fidxref, sfp);
     }
-    if (FeatIsPseudo (sfp))
-    {
-      RemoveProtXrefs (sfp);
-    }
-    else
-    {
-      AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
-    }
+    AddProtRefXref (sfp, ffp->protXrefName, ffp->protXrefDesc);
+
     FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
     if (! ReplaceDataForProc (&ompc, FALSE)) {
       Message (MSG_ERROR, "ReplaceDataForProc failed");
@@ -2272,6 +2219,13 @@ extern Boolean FeatFormReplaceWithoutUpdateProc (ForM f)
             hasNulls = LocationHasNullsBetween (new_gene->location);
             CheckSeqLocForPartial (new_gene->location, &noLeft, &noRight);
             new_gene->partial = (hasNulls || noLeft || noRight);
+
+            /* copy trans-splicing exception if present */
+            if (trans_spliced) {
+                new_gene->excpt = TRUE;
+                new_gene->except_text = StringSave(kTransSplicing);
+            }
+
           }
         }
       }
@@ -2426,7 +2380,7 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b)
     {
       Remove (w);
     }
-    else
+    else if (ffp != NULL)
     {
       /* set strand and sequence ID, but clear other location information */
       SendMessageToDialog (ffp->location, NUM_VIB_MSG + 1);
@@ -3354,7 +3308,6 @@ static ValNodePtr TestAuthorDialog (DialoG d)
   AuthorDialogPtr  adp;
   ValNodePtr       find_list = NULL, vnp;
   TagListPtr       tlp;
-  CharPtr          cp;
   Boolean          did_find = FALSE;
   Boolean          did_change = FALSE;
   CharPtr PNTR     vals;
@@ -3393,12 +3346,46 @@ static ValNodePtr TestAuthorDialog (DialoG d)
 }
 
 
-extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
+static void ImportAuthorsBtn (ButtoN b)
+{
+  AuthorDialogPtr dlg;
+  Char              path [PATH_MAX];
+
+  dlg = (AuthorDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL) {
+    return;
+  }
+  path[0] = '\0';
+  if (GetInputFileName (path, sizeof (path), "", "TEXT")) {
+    ImportDialog (dlg->dialog, path);
+    if (dlg->change_notify != NULL) {
+      (dlg->change_notify)(dlg->change_data);
+    }
+  }
+}
+
+
+static void AuthorNotify (Pointer data)
+{
+  AuthorDialogPtr adp;
+
+  adp = (AuthorDialogPtr) data;
+  if (adp != NULL && adp->change_notify != NULL) {
+    (adp->change_notify)(adp->change_data);
+  }
+}
+
+
+static TaglistCallback author_callback_list[4] = 
+ { AuthorNotify, AuthorNotify, AuthorNotify, AuthorNotify };
+
+
+extern DialoG CreateAuthorDialogEx (GrouP prnt, Uint2 rows, Int2 spacing, Boolean use_import_btn, Nlm_ChangeNotifyProc change_notify, Pointer change_data)
 
 {
   AuthorDialogPtr  adp;
   GrouP            k;
-  GrouP            p, list_grp;
+  GrouP            p, list_grp, btn_grp;
   PrompT           p1, p2, p3, p4, p5;
   TagListPtr       tlp;
   ButtoN           b;
@@ -3416,6 +3403,8 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     adp->importdialog = ReadAuthorDialog;
     adp->exportdialog = WriteAuthorDialog;
     adp->dialogmessage = AuthorDialogMessage;
+    adp->change_notify = change_notify;
+    adp->change_data = change_data;
 
     list_grp = HiddenGroup (p, 0, 0, NULL);
 
@@ -3426,10 +3415,12 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
     SetGroupSpacing (k, spacing, spacing);
     p1 = StaticPrompt (k, "Name", 0, 0, programFont, 'c');
 
-    adp->strAuthor = CreateTagListDialog (adp->strGrp, rows, 1, spacing,
+    adp->strAuthor = CreateTagListDialogExEx (adp->strGrp, rows, 1, spacing,
                                           author_types, str_author_widths, NULL,
+                                          TRUE, FALSE, 
                                           StrAuthListPtrToAuthorDialog,
-                                          AuthorDialogToStrAuthListPtr);
+                                          AuthorDialogToStrAuthListPtr,
+                                          author_callback_list, adp, FALSE);
     Hide (adp->strGrp);
 
     adp->stdGrp = HiddenGroup (list_grp, -1, 0, NULL);
@@ -3448,7 +3439,7 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
                                              TRUE, FALSE,
                                              StdAuthListPtrToAuthorDialog,
                                              AuthorDialogToStdAuthListPtr,
-                                             NULL, NULL, FALSE, TRUE);
+                                             author_callback_list, adp, FALSE, TRUE);
     adp->type = 1;
 
     tlp = (TagListPtr) GetObjectExtra (adp->strAuthor);
@@ -3463,13 +3454,28 @@ extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
       AlignObjects (ALIGN_JUSTIFY, (HANDLE) tlp->control [3], (HANDLE) p5, NULL);
     }
 
-    b = PushButton (p, "Insert First Author", InsertFirstAuthor);
+    btn_grp = HiddenGroup (p, 2, 0, NULL);
+    SetGroupSpacing (btn_grp, 10, 10);
+    b = PushButton (btn_grp, "Insert First Author", InsertFirstAuthor);
     SetObjectExtra (b, adp, NULL);
-    AlignObjects (ALIGN_CENTER, (HANDLE) list_grp, (HANDLE) b, NULL);
+    if (use_import_btn) {
+      b = PushButton (btn_grp, "Import Authors", ImportAuthorsBtn);
+      SetObjectExtra (b, adp, NULL);
+    }
+    AlignObjects (ALIGN_CENTER, (HANDLE) list_grp, (HANDLE) btn_grp, NULL);
   }
 
   return (DialoG) p;
 }
+
+
+extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing)
+
+{
+  return CreateAuthorDialogEx (prnt, rows, spacing, FALSE, NULL, NULL);
+
+}
+
 
 typedef struct affildialog {
   DIALOG_MESSAGE_BLOCK
@@ -6447,10 +6453,10 @@ extern DialoG CreateIntervalEditorDialogExEx (GrouP h, CharPtr title, Uint2 rows
             ipp->salp_list [ipp->aln_count]->next = NULL;
             ipp->aln_count++;
           }
+          /* add end of list marker */
+          ipp->aln_alist [ipp->aln_count].name = NULL;
+          ipp->aln_alist [ipp->aln_count].value = (UIEnum) 0;
         }
-        /* add end of list marker */
-        ipp->aln_alist [ipp->aln_count].name = NULL;
-        ipp->aln_alist [ipp->aln_count].value = (UIEnum) 0;
 
       }
       else
@@ -7170,6 +7176,11 @@ static void DbtagPtrToDbtagDialog (DialoG d, Pointer data, Boolean readOnly)
           ptr = NULL;
           if (oid->str != NULL) {
             ptr = oid->str;
+            if (StringNCmp (ptr, "HGNC:", 5) == 0) {
+              ptr += 5;
+            } else if (StringNCmp (ptr, "MGI:", 4) == 0) {
+              ptr += 4;
+            }
           } else {
             sprintf (tmp, "%ld", (long) oid->id);
             ptr = tmp;
@@ -7233,6 +7244,7 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
   Int2         len;
   ValNodePtr   list;
   Boolean      notallzero;
+  Int2         num_digits;
   ObjectIdPtr  oid;
   Boolean      okay;
   CharPtr      ptr;
@@ -7273,29 +7285,7 @@ static Pointer DbtagDialogToDbtagPtr (DialoG d)
               tmp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
               TrimSpacesAroundString (tmp);
               if (tmp != NULL) {
-                leadingzero = FALSE;
-                notallzero = FALSE;
-                alldigits = TRUE;
-                ptr = tmp;
-                ch = *ptr;
-                if (ch == '0') {
-                  leadingzero = TRUE;
-                }
-                while (ch != '\0') {
-                  if (! (IS_DIGIT (ch))) {
-                    alldigits = FALSE;
-                  } else if ('1'<= ch && ch <='9') {
-                    notallzero = TRUE;
-                  }
-                  ptr++;
-                  ch = *ptr;
-                }
-                if (alldigits && (! (leadingzero && notallzero)) && sscanf (tmp, "%ld", &val) == 1) {
-                  oid->id = (Int4) val;
-                  MemFree (tmp);
-                } else {
-                  oid->str = tmp;
-                }
+                SetObjectIdString(oid, tmp, ExistingTextOption_replace_old);
               } else {
                 oid->str = StringSave ("?");
               }
@@ -8064,13 +8054,248 @@ static Boolean ParseSpecimenVoucherOk (CharPtr str)
 }
 
 
+typedef struct altitudedlg {
+  DIALOG_MESSAGE_BLOCK
+
+  TexT  val;
+
+  TaglistCallback change_notify;
+  Pointer change_userdata;
+
+} AltitudeDlgData, PNTR AltitudeDlgPtr;
+
+
+static void ResetAltitudeDlg (AltitudeDlgPtr dlg)
+{
+  if (dlg == NULL) return;
+
+  SetTitle (dlg->val, "");
+}
+
+
+static void StringToAltitudeDlg (DialoG d, Pointer data)
+{
+  AltitudeDlgPtr dlg;
+  CharPtr      str, stp, tmp;
+  Int4         len;
+
+  dlg = (AltitudeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return;
+  
+  str = (CharPtr) data;
+  if (str == NULL)
+  {
+    ResetAltitudeDlg (dlg);
+    return;
+  }
+
+  stp = StringChr (str, 'm');
+  if (stp == NULL) {
+    ResetAltitudeDlg (dlg);
+    return;
+  }
+
+  len = stp - str + 1;
+  tmp = (CharPtr) MemNew (sizeof (Char) * len);
+  StringNCpy (tmp, str, len - 1);
+  tmp [len - 1] = 0;
+  TrimSpacesAroundString (tmp);
+  SetTitle (dlg->val, tmp);
+  tmp = MemFree (tmp);
+}
+
+
+static Boolean ParseAltitudeNumberOnly (CharPtr str)
+{
+  CharPtr cp;
+  Boolean any_digit = FALSE;
+
+  if (StringHasNoText (str))
+  {
+    return TRUE;
+  }
+  cp = str;
+  if (*cp == '-') {
+    /* allow negative */
+    cp++;
+  }
+  while (isdigit(*cp)) {
+    any_digit = TRUE;
+    cp++;
+  }
+  if (*cp == '.') {
+    cp++;
+    while (isdigit(*cp)) {
+      cp++;
+      any_digit = TRUE;
+    }
+  }
+  if (!any_digit || *cp != 0) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+
+static Pointer AltitudeDlgToString (DialoG d)
+{
+  AltitudeDlgPtr dlg;
+  CharPtr      str, val;
+  CharPtr      m = " m.";
+  Int4         len;
+
+  dlg = (AltitudeDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) return NULL;
+
+  if (TextHasNoText (dlg->val))
+  {
+    return NULL;
+  }  
+
+  val = SaveStringFromText (dlg->val);
+  if (ParseAltitudeNumberOnly(val)) {
+    len = StringLen (val) + StringLen (m) + 1;
+    str = (CharPtr) MemNew (sizeof(Char) * len);
+    sprintf (str, "%s%s", val, m);
+    val = MemFree (val);
+  } else {
+    str = val;
+  }
+  return str;
+}
+
+static void AltitudeTextChange (TexT t)
+{
+  AltitudeDlgPtr dlg;
+
+  dlg = (AltitudeDlgPtr) GetObjectExtra (t);
+  if (dlg == NULL) return;
+
+
+  if (dlg->change_notify != NULL)
+  {
+    (dlg->change_notify) (dlg->change_userdata);
+  }
+}
+
+
+static DialoG AltitudeDialog (GrouP h, TaglistCallback change_notify, Pointer change_userdata)
+{
+  AltitudeDlgPtr dlg;
+  GrouP        p;
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (AltitudeDlgPtr) MemNew (sizeof(AltitudeDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToAltitudeDlg;
+  dlg->fromdialog = AltitudeDlgToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+
+  dlg->val = DialogText (p, "", 3, AltitudeTextChange);
+  SetObjectExtra (dlg->val, dlg, NULL);
+  StaticPrompt (p, "meters", 0, 0, systemFont, 'l');
+
+  return (DialoG) p;
+}
+
+
+static Boolean ParseAltitudeOk (CharPtr str)
+{
+  CharPtr cp;
+  Boolean any_digit = FALSE;
+
+  if (StringHasNoText (str))
+  {
+    return TRUE;
+  }
+  cp = str;
+  if (*cp == '-') {
+    /* allow negative */
+    cp++;
+  }
+  while (isdigit(*cp)) {
+    any_digit = TRUE;
+    cp++;
+  }
+  if (*cp == '.') {
+    cp++;
+    while (isdigit(*cp)) {
+      cp++;
+      any_digit = TRUE;
+    }
+  }
+  if (!any_digit) {
+    return FALSE;
+  }
+  while (isspace(*cp)) {
+    cp++;
+  }
+  if (StringCmp (cp, "m") == 0
+      || StringCmp (cp, "m.") == 0
+      || StringCmp (cp, "meters") == 0
+      || StringCmp (cp, "metres") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static DialoG ValueListAltitudeDialog (GrouP h, Int2 width, ValueListParentPtr parent, TaglistCallback change_notify, Pointer change_userdata)
+{
+  StructuredValueEditDlgPtr dlg;
+  GrouP           p;
+  ButtoN          b;
+
+
+  p = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+  dlg = (StructuredValueEditDlgPtr) MemNew (sizeof(StructuredValueEditDlgData));
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = StringToStructuredValueEditDialog;
+  dlg->fromdialog = StructuredValueEditDialogToString;
+  dlg->testdialog = NULL;
+  dlg->dialogmessage = NULL;
+  dlg->change_notify = change_notify;
+  dlg->change_userdata = change_userdata;
+  dlg->parent = parent;
+ 
+  dlg->dlg = AltitudeDialog (p, change_notify, change_userdata);
+  dlg->parse_func = ParseAltitudeOk;
+  
+  dlg->unparsable = HiddenGroup (p, 3, 0, NULL);
+  SetGroupSpacing (dlg->unparsable, 10, 10);
+  dlg->text = DialogText (dlg->unparsable, "", width - 15, StructuredValueEditChange);
+  SetObjectExtra (dlg->text, dlg, NULL);
+ 
+  b = PushButton (dlg->unparsable, "Copy to Note", CopyUnparsableToNote);
+  SetObjectExtra (b, dlg, NULL);
+
+  b = PushButton (dlg->unparsable, "Erase", EraseUnparsable);
+  SetObjectExtra (b, dlg, NULL);
+
+  Hide (dlg->unparsable);
+
+  return (DialoG) p;
+}
+
+
 typedef DialoG (*MakeValueEditDialogFunc) PROTO ((GrouP, Int2, ValueListParentPtr, TaglistCallback, Pointer));
 
 static MakeValueEditDialogFunc value_edit_dialog_list[] = {
   SimpleTextValueEditDialog,
   TrueFalseValueEditDialog,
   ValueListLatLonDialog,
-  SpecimenVoucherDialog
+  SpecimenVoucherDialog,
+  ValueListAltitudeDialog
 };
 
 
@@ -8836,6 +9061,10 @@ static ValNodePtr GetSubSourceChoicesForValueList (EnumFieldAssocPtr al)
     {
       ValNodeAddStr (&choice_list, eValueEditLatLon + 1, StringSave (efap->name));
     }
+    else if (efap->value == SUBSRC_altitude)
+    {
+      ValNodeAddStr (&choice_list, eValueEditAltitude + 1, StringSave (efap->name));
+    }
     else if (IsNonTextModifier (efap->name))
     {
       ValNodeAddStr (&choice_list, eValueEditTrueFalse + 1, StringSave (efap->name));
@@ -8854,13 +9083,15 @@ static CharPtr subsource_extra_prompts [] = {
   "Additional", "Source", "Information", NULL
 };
 
+
 extern DialoG CreateSubSourceDialog (GrouP h, EnumFieldAssocPtr al)
 {
   ModifierListDlgPtr dlg;
   GrouP        p, g, x;
   ValNodePtr   choice_list;
   Int2         max;
-  
+  ButtoN       b;
+
 
   p = HiddenGroup (h, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -8877,12 +9108,15 @@ extern DialoG CreateSubSourceDialog (GrouP h, EnumFieldAssocPtr al)
   dlg->dlg = ValueListDialog (p, 3, 23, choice_list, (ValueListParentPtr) dlg, NULL, NULL);  
   choice_list = ValNodeFreeData (choice_list);
 
-  g = HiddenGroup (p, 2, 0, NULL);
+  g = HiddenGroup (p, 3, 0, NULL);
   SelectFont (programFont);
   max = MaxStringWidths (subsource_extra_prompts) + 2;
   x = MultiLinePrompt (g, "Additional Source Information", max, programFont);
   dlg->note = ScrollText (g, 20, 3, programFont, TRUE, NULL);
-  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, NULL);
+  b = PushButton (g, "X", ClearTextBtn);
+  SetObjectExtra (b, dlg->note, NULL);
+
+  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, (HANDLE) b, NULL);
 
   AlignObjects (ALIGN_CENTER, (HANDLE) dlg->dlg, (HANDLE) g, NULL);
 
@@ -8900,6 +9134,7 @@ static ValNodePtr OrgModListToNameValueList (OrgModPtr mod)
     if (mod->subtype != ORGMOD_gb_acronym
         && mod->subtype != ORGMOD_gb_anamorph
         && mod->subtype != ORGMOD_gb_synonym
+        && mod->subtype != ORGMOD_type_material
         && mod->subtype != ORGMOD_other)
     {
       nvp = (NameValuePairPtr) MemNew (sizeof (NameValuePairData));
@@ -9141,7 +9376,8 @@ extern DialoG CreateOrgModDialog (GrouP h, EnumFieldAssocPtr al, TexT taxname)
   GrouP        p, g, x;
   ValNodePtr   choice_list;
   Int2         max;
-  
+  ButtoN       b;
+
 
   p = HiddenGroup (h, -1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -9158,13 +9394,15 @@ extern DialoG CreateOrgModDialog (GrouP h, EnumFieldAssocPtr al, TexT taxname)
   dlg->dlg = ValueListDialog (p, 3, 23, choice_list, (ValueListParentPtr) dlg, NULL, NULL);  
   choice_list = ValNodeFreeData (choice_list);
 
-  g = HiddenGroup (p, 2, 0, NULL);
+  g = HiddenGroup (p, 3, 0, NULL);
   SelectFont (programFont);
   max = MaxStringWidths (orgmod_extra_prompts) + 2;
   x = MultiLinePrompt (g, "Additional Organism Information", max, programFont);
   dlg->note = ScrollText (g, 20, 3, programFont, TRUE, ChangeOrgmodComment);
   SetObjectExtra (dlg->note, dlg, NULL);
-  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, NULL);
+  b = PushButton (g, "X", ClearTextBtn);
+  SetObjectExtra (b, dlg->note, NULL);
+  AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) dlg->note, (HANDLE) b, NULL);
 
   dlg->taxname = taxname;
   if (dlg->taxname != NULL)
@@ -9416,6 +9654,22 @@ NLM_EXTERN void CloseLog (LogInfoPtr lip)
     LaunchGeneralTextViewer (lip->path, lip->display_title);
   }
   FileRemove (lip->path);  
+}
+
+
+NLM_EXTERN void ShowLog (LogInfoPtr lip)
+{
+  if (lip == NULL || lip->fp == NULL)
+  {
+    return;
+  }
+  FileClose (lip->fp);
+  lip->fp = NULL;
+  if (lip->data_in_log)
+  {
+    LaunchGeneralTextViewer (lip->path, lip->display_title);
+  }
+  lip->fp = FileOpen (lip->path, "a");
 }
 
 

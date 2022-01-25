@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: blfmtutl.c,v 1.43 2011/10/28 14:24:13 coulouri Exp $";
+static char const rcsid[] = "$Id: blfmtutl.c,v 1.44 2012/10/10 14:05:50 fongah2 Exp $";
 
 /* ===========================================================================
 *
@@ -36,6 +36,9 @@ Contents: Utilities for BLAST formatting
 /*
 * $Revision: 
 * $Log: blfmtutl.c,v $
+* Revision 1.44  2012/10/10 14:05:50  fongah2
+* Add oof support for tabular fmt, JIRA:SB-1044
+*
 * Revision 1.43  2011/10/28 14:24:13  coulouri
 * bump version
 *
@@ -942,7 +945,7 @@ void PrintTabularOutputHeader(CharPtr blast_database, BioseqPtr query_bsp,
    if (getenv("PRINT_SEQUENCES")) {
          ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score, query seq., subject seq.");
    } else {
-         ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score");
+         ff_AddString("# Fields: Query id, Subject id, % identity, alignment length, mismatches, gap openings, q. start, q. end, s. start, s. end, e-value, bit score, frame shifts");
    }
 
    ff_EndPrint();
@@ -1044,6 +1047,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
    SeqLocPtr slp;
    Int4 alignments_count;
    Int4 objmgr_count = 0;
+   Int4 num_oof;
 
    is_translated = (StringCmp(blast_program, "blastn") &&
                     StringCmp(blast_program, "blastp"));
@@ -1154,6 +1158,7 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
       align_length = 0;
       num_gap_opens = 0;
       num_mismatches = 0;
+      num_oof = 0;
 
       GetScoreAndEvalue(sap, &score, &bit_score, &evalue, &number);
 
@@ -1257,9 +1262,26 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
                s_start = SeqLocStart(ssp->loc->next) + 1;
             
             if (!is_ungapped) {
+               if(is_ooframe) {
+
+            	   for (index=1; ssp->next; index++) {
+            		   Int4 q_len, s_len;
+            		   q_len = SeqLocLen(ssp->loc);
+            		   s_len = SeqLocLen(ssp->loc->next);
+            		   if(q_len == 0 || s_len == 0)
+                		  num_gap_opens ++;
+            		   ssp = ssp->next;
+            	   }
+            	   if(index > 1)
+            		   num_oof = index - (2*num_gap_opens + 1);
+            	   else
+            		   num_oof = 0;
+               }
+               else {
                for (index=1; ssp->next; index++)
-                  ssp = ssp->next;
-               num_gap_opens = index / 2;
+            	   ssp = ssp->next;
+               	   num_gap_opens = index / 2;
+               }
             } else 
                num_gap_opens = 0;
 
@@ -1334,11 +1356,10 @@ void BlastPrintTabularResults(SeqAlignPtr seqalign, BioseqPtr query_bsp,
          if (perc_ident >= 99.995 && perc_ident < 100.00)
             perc_ident = 99.99;
          
-         fprintf(fp, 
-                 "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\n",
-                 query_buffer, subject_buffer, perc_ident, align_length, 
-                 num_mismatches, num_gap_opens, q_start, 
-                 q_end, s_start, s_end, eval_buff, bit_score_buff);
+         fprintf(fp, "%s\t%s\t%.2f\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%s\t%s\t%d\n",
+                 query_buffer, subject_buffer, perc_ident, align_length,
+                 num_mismatches, num_gap_opens, q_start,
+                 q_end, s_start, s_end, eval_buff, bit_score_buff, num_oof);
          old_subject_id = subject_id;
          if (sap->segtype == SAS_DENSEG)
             break;

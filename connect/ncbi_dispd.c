@@ -1,4 +1,4 @@
-/* $Id: ncbi_dispd.c,v 6.99 2012/02/27 15:09:33 kazimird Exp $
+/* $Id: ncbi_dispd.c,v 6.112 2016/07/27 15:09:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,8 +26,8 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
- *   Low-level API to resolve NCBI service name to the server meta-address
- *   with the use of NCBI network dispatcher (DISPD).
+ *   Low-level API to resolve an NCBI service name to server meta-addresses
+ *   with the use of the NCBI network dispatcher (DISPD).
  *
  */
 
@@ -38,28 +38,32 @@
 #include "ncbi_priv.h"
 #include <connect/ncbi_http_connector.h>
 #include <ctype.h>
-#include <math.h>
 #include <stdlib.h>
 
-#define NCBI_USE_ERRCODE_X   Connect_Dispd
+#ifdef   fabs
+#  undef fabs
+#endif /*fabs*/
+#define  fabs(v)  ((v) < 0.0 ? -(v) : (v))
+
+#define NCBI_USE_ERRCODE_X   Connect_LBSM
 
 /* Lower bound of up-to-date/out-of-date ratio */
 #define DISPD_STALE_RATIO_OK  0.8
 /* Default rate increase 20% if svc runs locally */
-#define DISPD_LOCAL_BONUS 1.2
+#define DISPD_LOCAL_BONUS     1.2
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif /*__cplusplus*/
-    static void        s_Reset      (SERV_ITER);
-    static SSERV_Info* s_GetNextInfo(SERV_ITER, HOST_INFO*);
-    static int/*bool*/ s_Update     (SERV_ITER, const char*, int);
-    static void        s_Close      (SERV_ITER);
+static SSERV_Info* s_GetNextInfo(SERV_ITER, HOST_INFO*);
+static int/*bool*/ s_Update     (SERV_ITER, const char*, int);
+static void        s_Reset      (SERV_ITER);
+static void        s_Close      (SERV_ITER);
 
-    static const SSERV_VTable s_op = {
-        s_Reset, s_GetNextInfo, s_Update, 0/*Feedback*/, s_Close, "DISPD"
-    };
+static const SSERV_VTable s_op = {
+    s_GetNextInfo, 0/*Feedback*/, s_Update, s_Reset, s_Close, "DISPD"
+};
 #ifdef __cplusplus
 } /* extern "C" */
 #endif /*__cplusplus*/
@@ -109,27 +113,27 @@ static int/*bool*/ s_AddServerInfo(struct SDISPD_Data* data, SSERV_Info* info)
 
 #ifdef __cplusplus
 extern "C" {
-    static int s_ParseHeader(const char*, void*, int);
+    static EHTTP_HeaderParse s_ParseHeader(const char*, void*, int);
 }
 #endif /*__cplusplus*/
 
-static int/*bool*/ s_ParseHeader(const char* header,
-                                 void*       iter,
-                                 int         server_error)
+static EHTTP_HeaderParse s_ParseHeader(const char* header,
+                                       void*       iter,
+                                       int         server_error)
 {
     struct SDISPD_Data* data = (struct SDISPD_Data*)((SERV_ITER) iter)->data;
     int code = 0/*success code if any*/;
     if (server_error) {
-        if (server_error == 400  ||  server_error == 403)
+        if (server_error == 400 || server_error == 403 || server_error == 404)
             data->fail = 1/*true*/;
     } else if (sscanf(header, "%*s %d", &code) < 1) {
         data->eof = 1/*true*/;
-        return 0/*header parse error*/;
+        return eHTTP_HeaderError;
     }
     /* check for empty document */
     if (!SERV_Update((SERV_ITER) iter, header, server_error)  ||  code == 204)
         data->eof = 1/*true*/;
-    return 1/*header parsed okay*/;
+    return eHTTP_HeaderSuccess;
 }
 
 
@@ -154,9 +158,9 @@ static void s_Resolve(SERV_ITER iter)
     struct SDISPD_Data* data = (struct SDISPD_Data*) iter->data;
     SConnNetInfo* net_info = data->net_info;
     EIO_Status status = eIO_Success;
-    CONNECTOR conn = 0;
+    CONNECTOR c = 0;
+    CONN conn;
     char* s;
-    CONN c;
 
     assert(!(data->eof | data->fail));
     assert(!!net_info->stateless == !!iter->stateless);
@@ -178,23 +182,26 @@ static void s_Resolve(SERV_ITER iter)
                                        : !net_info->stateless
                                        ? "Client-Mode: STATEFUL_CAPABLE\r\n"
                                        : "Client-Mode: STATELESS_ONLY\r\n")) {
-        conn = HTTP_CreateConnectorEx(net_info, fHTTP_Flushable, s_ParseHeader,
-                                      iter/*data*/, s_Adjust, 0/*cleanup*/);
+        c = HTTP_CreateConnectorEx(net_info, fHTTP_Flushable, s_ParseHeader,
+                                   iter/*data*/, s_Adjust, 0/*cleanup*/);
     }
     if (s) {
         ConnNetInfo_DeleteUserHeader(net_info, s);
         free(s);
     }
-    if (conn  &&  (status = CONN_Create(conn, &c)) == eIO_Success) {
-        /* Send all the HTTP data, then trigger header callback */
-        CONN_Flush(c);
-        CONN_Close(c);
+    if (c  &&  (status = CONN_Create(c, &conn)) == eIO_Success) {
+        /* Send all the HTTP data... */
+        CONN_Flush(conn);
+        /* ...then trigger the header callback */
+        CONN_Close(conn);
     } else {
-        CORE_LOGF_X(1, eLOG_Error,
+        CORE_LOGF_X(5, eLOG_Error,
                     ("%s%s%sUnable to create auxiliary HTTP %s: %s",
                      &"["[!*iter->name], iter->name, *iter->name ? "]  " : "",
-                     conn ? "connection" : "connector",
-                     IO_StatusStr(conn ? status : eIO_Unknown)));
+                     c              ? "connection" : "connector",
+                     IO_StatusStr(c ? status       : eIO_Unknown)));
+        if (c  &&  c->destroy)
+            c->destroy(c);
         assert(0);
     }
 }
@@ -238,7 +245,7 @@ static int/*bool*/ s_Update(SERV_ITER iter, const char* text, int code)
             s = 0;
             name = "";
         }
-        info = SERV_ReadInfoEx(text + d2, name);
+        info = SERV_ReadInfoEx(text + d2, name, 0);
         if (s)
             free(s);
         if (info) {
@@ -259,7 +266,7 @@ static int/*bool*/ s_Update(SERV_ITER iter, const char* text, int code)
             text += sizeof(HTTP_DISP_FAILURES) - 1;
             while (*text  &&  isspace((unsigned char)(*text)))
                 text++;
-            CORE_LOGF_X(2, failure ? eLOG_Warning : eLOG_Note,
+            CORE_LOGF_X(6, failure ? eLOG_Warning : eLOG_Note,
                         ("[%s]  %s", data->net_info->svc, text));
         }
 #endif /*_DEBUG && !NDEBUG*/
@@ -297,7 +304,6 @@ static int/*bool*/ s_IsUpdateNeeded(TNCBI_Time now, struct SDISPD_Data *data)
             }
         }
     }
-
     return total == 0.0 ? 1 : status/total < DISPD_STALE_RATIO_OK;
 }
 
@@ -397,19 +403,19 @@ const SSERV_VTable* SERV_DISPD_Open(SERV_ITER iter,
     }
 
     if (g_NCBI_ConnectRandomSeed == 0) {
-        g_NCBI_ConnectRandomSeed = iter->time ^ NCBI_CONNECT_SRAND_ADDEND;
+        g_NCBI_ConnectRandomSeed  = iter->time ^ NCBI_CONNECT_SRAND_ADDEND;
         srand(g_NCBI_ConnectRandomSeed);
     }
 
-    /* Reset request method to be GET ('cause no HTTP body is ever used) */
+    data->net_info->scheme = eURL_Https;
     data->net_info->req_method = eReqMethod_Get;
-    if ( iter->stateless)
+    if (iter->stateless)
         data->net_info->stateless = 1/*true*/;
-    if ((iter->type & fSERV_Firewall)  &&  !data->net_info->firewall)
+    if ((iter->types & fSERV_Firewall)  &&  !data->net_info->firewall)
         data->net_info->firewall = eFWMode_Adaptive;
     ConnNetInfo_ExtendUserHeader(data->net_info,
                                  "User-Agent: NCBIServiceDispatcher/"
-                                 DISP_PROTOCOL_VERSION
+                                 NCBI_DISP_VERSION
 #ifdef NCBI_CXX_TOOLKIT
                                  " (CXX Toolkit)"
 #else

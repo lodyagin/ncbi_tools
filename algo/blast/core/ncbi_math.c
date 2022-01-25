@@ -1,4 +1,4 @@
-/* $Id: ncbi_math.c,v 1.18 2012/02/01 17:14:32 kazimird Exp $
+/* $Id: ncbi_math.c,v 1.19 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,11 +27,6 @@
 /** @file ncbi_math.c
  * Definitions for portable math library
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: ncbi_math.c,v 1.18 2012/02/01 17:14:32 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_math.h>
 

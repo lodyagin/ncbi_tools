@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.1029 $
+* $Revision: 6.1216 $
 *
 * File Description: 
 *
@@ -95,6 +95,7 @@ static char *time_of_compilation = "now";
 #include <findrepl.h>
 #include <ent2api.h>
 #include <aliread.h>
+
 #ifdef WIN_MOTIF
 #include <netscape.h>
 #endif
@@ -133,7 +134,6 @@ static char *time_of_compilation = "now";
 
 #include <mla2api.h>
 
-
 #ifdef USE_SPELL
 #include <spellapi.h>
 #endif
@@ -142,7 +142,9 @@ static char *time_of_compilation = "now";
 #include <Gestalt.h>
 #endif
 
-#define SEQ_APP_VER "12.21"
+#include <connect/ncbi_gnutls.h>
+
+#define SEQ_APP_VER "15.30"
 
 CharPtr SEQUIN_APPLICATION = SEQ_APP_VER;
 CharPtr SEQUIN_SERVICES = NULL;
@@ -224,7 +226,6 @@ static MenU  validateMenu = NULL;
 static MenU  vecscreenMenu = NULL;
 static IteM  spellItem = NULL;
 static IteM  vectorScreenItem = NULL;
-static IteM  cddBlastItem = NULL;
 static MenU  cddSearchMenu = NULL;
 static IteM  cddSearchItem = NULL;
 static IteM  editsequenceitem = NULL;
@@ -377,17 +378,6 @@ static Boolean SetSequinAppParam (CharPtr section, CharPtr type, CharPtr value)
   }
   return WriteSequinAppParam (section, type, value);
 }
-
-static void SetSequinAppParamTF (CharPtr section, CharPtr type, Boolean value)
-
-{
-  if (value) {
-    SetSequinAppParam (section, type, "TRUE");
-  } else {
-    SetSequinAppParam (section, type, "FALSE");
-  }
-}
-
 
 static void ShowWizardHelpText (CharPtr title, CharPtr PNTR msgs)
 {
@@ -625,14 +615,6 @@ static EOkToWriteEntity OkayToWriteTheEntity (Uint2 entityID, ForM f, Boolean al
   Update ();
 
   return rval;
-}
-
-static void ReplaceString (CharPtr PNTR target, CharPtr newstr)
-
-{
-  if (target == NULL) return;
-  MemFree (*target);
-  *target = StringSaveNoNull (newstr);
 }
 
 static void UncompressBsps (BioseqPtr bsp, Pointer userdata)
@@ -2177,6 +2159,7 @@ static void ProcessDoneButton (ForM f)
   CharPtr         missing_annot = "  Please include a brief summary of your submission within your correspondence.";
   CharPtr         note = "";
   CharPtr         email_address;
+  MsgAnswer       ans;
 
   bfp = (BaseFormPtr) GetObjectExtra (f);
   if (bfp == NULL) return;
@@ -2237,7 +2220,12 @@ static void ProcessDoneButton (ForM f)
     }
     ArrowCursor ();
     Update ();
-    if (Message (MSG_YN, "Are you ready to save the record?") == ANS_YES) {
+    if (Nlm_GetAppProperty ("SequinUseEMBLStyle") != NULL) {
+      ans = Message (MSG_YN, "In order to submit to update@ebi.ak.uk, you must Export the EMBL format using the File menu.  Do you want to save the file in the ASN.1 format now (not the correct format for EBI)?");
+    } else {
+      ans = Message (MSG_YN, "Are you ready to save the record?");
+    }
+    if (ans == ANS_YES) {
       if (SaveSeqSubmitProc (bfp, TRUE)) {
         if (IsAnySequenceMissingAnnotation (sep)) {
           note = missing_annot;
@@ -2283,12 +2271,6 @@ static void AboutProc (IteM i)
   SetPanelClick (p, NULL, NULL, NULL, CloseAboutPanelProc);
   Show (w);
   Select (w);
-}
-
-static void StyleManagerProc (IteM i)
-
-{
-  MuskStyleManager ();
 }
 
 extern Boolean SequinEntrezInit (CharPtr appl_id, Boolean no_warnings, BoolPtr is_network)
@@ -2437,7 +2419,7 @@ static void GetSrcFeat (SeqFeatPtr sfp, Pointer userdata)
 NLM_EXTERN void CDECL  ValidErr VPROTO((ValidStructPtr vsp, int severity, int code1, int code2, const char *fmt, ...));
 
 
-static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPtr msg_fmt)
+static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, ErrSev sev, int code1, int code2, CharPtr msg_fmt)
 {
   ObjValNodePtr ovp;
   BioSourcePtr  biop;
@@ -2487,7 +2469,9 @@ static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPt
         vsp->bssp = ovp->idx.parentptr;        
       }
     }
-    biop = vsp->descr->data.ptrvalue;
+    if (vsp->descr != NULL) {
+      biop = vsp->descr->data.ptrvalue;
+    }
   }
   
   if (biop != NULL && biop->org != NULL && biop->org->orgname != NULL)
@@ -2499,7 +2483,7 @@ static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPt
     }
     if (mod != NULL)
     {      
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, msg_fmt, mod->subname);
+      ValidErr (vsp, sev, code1, code2, msg_fmt, mod->subname);
     }
   }
 }
@@ -2512,16 +2496,16 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
   Taxon3ValidateSpecificHostsInSeqEntry (sep, &misspelled, &bad_caps, &ambiguous, &unrecognized);
 
   for (vnp = misspelled; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is misspelled: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Specific host value is misspelled: %s");
   }
   for (vnp = bad_caps; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is incorrectly capitalized: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Specific host value is incorrectly capitalized: %s");
   } 
   for (vnp = ambiguous; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is ambiguous: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_INFO, ERR_SEQ_DESCR_AmbiguousSpecificHost, "Specific host value is ambiguous: %s");
   } 
   for (vnp = unrecognized; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Invalid value for specific host: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Invalid value for specific host: %s");
   } 
 
   misspelled = ValNodeFree (misspelled);
@@ -2594,14 +2578,47 @@ static void ReportBadTaxID (ValidStructPtr vsp, OrgRefPtr orig, OrgRefPtr reply)
 }
 
 
+static void IsINSDpatent (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr   bp;
+  Boolean   is_insd = FALSE;
+  Boolean   is_patent = FALSE;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+        is_insd = TRUE;
+        break;
+      case SEQID_PATENT :
+        is_patent = TRUE;
+        break;
+      default :
+        break;
+    }
+  }
+
+  if (is_insd && is_patent) {
+    bp = (BoolPtr) userdata;
+    *bp = TRUE;
+  }
+}
+
 static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
   GatherContext     gc;
   Boolean           has_nucleomorphs;
+  Boolean           is_insd_patent = FALSE;
   Boolean           is_nucleomorph;
   Boolean           is_species_level;
   Boolean           force_tax_consult;
+  Boolean           has_plastids;
   ValNodePtr        last = NULL;
   OrgNamePtr        onp;
   OrgRefPtr         orp;
@@ -2622,6 +2639,8 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   if (sep == NULL || vsp == NULL) return;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
   vsp->gcp = &gc;
+
+  VisitBioseqsInSep (sep, (Pointer) &is_insd_patent, IsINSDpatent);
 
   srclist.head = NULL;
   srclist.tail = NULL;
@@ -2718,6 +2737,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
     is_species_level = FALSE;
     has_nucleomorphs = FALSE;
     is_nucleomorph = FALSE;
+    has_plastids = FALSE;
 
     for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
 
@@ -2745,13 +2765,23 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
             gc.itemID = tvp->itemID;
             gc.thistype = tvp->itemtype;
 
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem, "Taxonomy lookup reports is_species_level FALSE");
+            if (! vsp->is_wp_in_sep) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem, "Taxonomy lookup reports is_species_level FALSE");
+            }
           }
         }
       } else if (StringICmp (tfp->property, "force_consult") == 0) {
         val = tfp->Value_value;
         if (val != NULL && val->choice == Value_value_bool) {
           force_tax_consult = (Boolean) (val->data.intvalue != 0);
+          if (force_tax_consult && is_insd_patent) {
+            orp = (OrgRefPtr) tdp->org;
+            if (orp != NULL) {
+              if (StringICmp (orp->taxname, "unidentified") == 0) {
+                force_tax_consult = FALSE;
+              }
+            }
+          }
           if (force_tax_consult) {
             gc.entityID = tvp->entityID;
             gc.itemID = tvp->itemID;
@@ -2768,12 +2798,18 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
             is_nucleomorph = TRUE;
           }
         }
+      } else if (StringICmp (tfp->property, "has_plastids") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          has_plastids = (Boolean) (val->data.intvalue != 0);
+        }
       }
     }
     if (tvp->organelle == GENOME_nucleomorph && (! is_nucleomorph)) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyNucleomorphProblem, "Taxonomy lookup does not have expected nucleomorph flag");
+    } else if (tvp->organelle == GENOME_plastid && (! has_plastids)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyPlastidsProblem, "Taxonomy lookup does not have expected plastid flag");
     }
-
   }
 
   Taxon3ReplyFree (t3ry);
@@ -3014,6 +3050,21 @@ static void StructCommentTentativeNameValidate (SeqEntryPtr sep, ValidStructPtr 
   ValNodeFreeData (srclist.head);
 }
 
+
+NLM_EXTERN Boolean UseLessClickingOption (void)
+{
+  Boolean less_clicking = FALSE;
+  Char            str [32];
+
+  if (GetSequinAppParam ("SETTINGS", "LESS_CLICKING", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      less_clicking = TRUE;
+    }
+  }
+  return less_clicking;
+}
+
+
 static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean inferenceAccnCheck, FormActnFunc revalProc, FormActnFunc revalNoTaxProc, FormActnFunc doneProc)
 
 {
@@ -3114,7 +3165,11 @@ static void ValSeqEntryFormExEx (ForM f, Boolean doAligns, Int2 limit, Boolean i
         }
         if (errors == 0) {
           ArrowCursor ();
-          Message (MSG_OK, "Validation test succeeded.");
+          if (UseLessClickingOption()) {
+            Message (MSG_POSTERR, "Validation test succeeded.");
+          } else {
+            Message (MSG_OK, "Validation test succeeded.");
+          }
           FreeValidateWindow ();
         } else {
           RepopulateValidateFilter ();
@@ -3290,120 +3345,6 @@ static void ValSeqEntryProcDesc (IteM i)
   ValSeqEntryProcSpec (i, VALIDATE_DESC);
 }
 
-#ifdef USE_SPELL
-static void SpellCheckTheForm (ForM f)
-
-{
-  Boolean         allRawOrSeg = TRUE;
-  BaseFormPtr     bfp;
-  Char            buf [32];
-  Int2            errors;
-  Int2            j;
-  MonitorPtr      mon;
-  ErrHookProc     oldErrHook;
-  ErrSev          oldErrSev;
-  SeqEntryPtr     sep;
-  Int2            verbosity;
-  ValidStructPtr  vsp;
-
-  bfp = (BaseFormPtr) GetObjectExtra (f);
-  if (bfp != NULL) {
-    sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-    if (sep != NULL) {
-      WatchCursor ();
-      Update ();
-      vsp = ValidStructNew ();
-      if (vsp != NULL) {
-        /*SetChecklistValue (checklistForm, 6);*/
-        mon = MonitorStrNewEx ("SpellCheck", 40, FALSE);
-        MonitorStrValue (mon, "Connecting to Spell");
-        Update ();
-        if (! SpellInit ()) {
-          /*SetChecklistValue (checklistForm, 5);*/
-          ArrowCursor ();
-          MonitorFree (mon);
-          Update ();
-          Message (MSG_ERROR, "Unable to initialize Spell service.");
-          Update ();
-          return;
-        }
-        MonitorStrValue (mon, "Performing Spell Check");
-        Update ();
-        vsp->spellfunc = SpellCheck;
-        vsp->spellcallback = SpellCallBack;
-        vsp->onlyspell = TRUE;
-        vsp->justwarnonspell = TRUE;
-
-       verbosity = 1;
-       if (GetSequinAppParam ("SETTINGS", "VALIDATEVERBOSITY", NULL, buf, sizeof (buf))) {
-          if (! StrToInt (buf, &verbosity)) {
-            verbosity = 1;
-          }
-        }
-
-        CreateValidateWindowEx (ValidNotify, "Sequin Spell Check Errors",
-                                programFont, SEV_INFO, verbosity, bfp, SpellCheckTheForm, TRUE);
-        ClearValidateWindow ();
-        SeqEntryExplore (sep, (Pointer) (&allRawOrSeg), CheckForCookedBioseqs);
-        if (allRawOrSeg) {
-          vsp->useSeqMgrIndexes = TRUE;
-        }
-        HideValidateDoc ();
-        vsp->suppressContext = ShouldSetSuppressContext ();
-        vsp->justShowAccession = ShouldSetJustShowAccession ();
-        vsp->testLatLonSubregion = testLatLonSubregion;
-        vsp->strictLatLonCountry = strictLatLonCountry;
-        vsp->indexerVersion = indexerVersion;
-        oldErrHook = ErrSetHandler (ValidErrHook);
-        oldErrSev = ErrSetMessageLevel (SEV_NONE);
-        for (j = 0; j < 6; j++) {
-          vsp->errors [j] = 0;
-        }
-        vsp->errfunc = ValidErrCallback;
-        SequinValidateSeqEntry (sep, vsp);
-        ErrSetMessageLevel (oldErrSev);
-        ErrSetHandler (oldErrHook);
-        ErrClear ();
-        ShowValidateDoc ();
-        errors = 0;
-        for (j = 0; j < 6; j++) {
-          errors += vsp->errors [j];
-        }
-        if (errors == 0) {
-          ArrowCursor ();
-          Message (MSG_OK, "Spelling check succeeded.");
-          FreeValidateWindow ();
-        } else {
-          RepopulateValidateFilter ();
-        }
-        ValidStructFree (vsp);
-        MonitorStrValue (mon, "Closing Spell Check");
-        Update ();
-        SpellFini ();
-        /*SetChecklistValue (checklistForm, 5);*/
-        MonitorFree (mon);
-      }
-      ArrowCursor ();
-      Update ();
-    }
-  }
-}
-
-static void SpellCheckSeqEntryProc (IteM i)
-
-{
-  BaseFormPtr  bfp;
-
-#ifdef WIN_MAC
-  bfp = (BaseFormPtr) currentFormDataPtr;
-#else
-  bfp = (BaseFormPtr) GetObjectExtra (i);
-#endif
-  if (bfp != NULL) {
-    SpellCheckTheForm (bfp->form);
-  }
-}
-#endif
 
 extern Int4 MySeqEntryToAsn3Ex (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force, Boolean dotaxon);
 extern Int4 MySeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip, Boolean correct, Boolean force)
@@ -3796,6 +3737,8 @@ static Boolean HandleOneNewAsnProcEx (BaseFormPtr bfp, Boolean removeold, Boolea
           ErrPostEx (SEV_WARNING, 0, 0, "This record was retrieved from Entrez");
         }
       }
+      /* no longer support "Do you plan to submit this as an update" question */
+      askForSubmit = FALSE;
       if ((! indexerVersion) && askForSubmit && datatype != OBJ_SEQSUB) {
         ArrowCursor ();
         Update ();
@@ -4749,6 +4692,8 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
   Uint2          updateEntityID;
   ValNodePtr     vnp, err_list, vnp_err;
   LogInfoPtr     lip;
+  Boolean        any_feature_tables = FALSE;
+  SeqAnnotPtr    sap;
 
   if (filename == NULL) return FALSE;
   fp = FileOpen (filename, "r");
@@ -4802,7 +4747,13 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
           omudp->messagefunc = BackupModeMsgFunc;
         }
         subtoolRecordDirty = TRUE;
-      }      
+      }
+      if (datatype == OBJ_SEQANNOT) {
+        sap = (SeqAnnotPtr) dataptr;
+        if (sap != NULL && sap->type == 1) {
+          any_feature_tables = TRUE;
+        }
+      }
     }
     CloseLog (lip);
     lip = FreeLog (lip);
@@ -4818,8 +4769,10 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
     if (bioseqs != NULL) {
       if (HandledAnnotatedProteins (bfp, bioseqs)) {
         rsult = TRUE;
-        ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
-        ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+        if (bfp != NULL) {
+          ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+          ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+        }
       } else if (bioseqs->next == NULL && (! alwaysMult)) {
         bsp = (BioseqPtr) bioseqs->data.ptrvalue;
         bioseqs->data.ptrvalue = NULL;
@@ -4877,6 +4830,10 @@ static Boolean DoReadAnythingLoop (BaseFormPtr bfp, CharPtr filename, CharPtr pa
       rsult = TRUE;
     }
     ValNodeFree (simples);
+    if (any_feature_tables) {
+      SeqMgrIndexFeatures(updateEntityID, NULL);
+      SeqMgrExploreBioseqs (updateEntityID, 0, NULL, RemoveGeneXrefsOnBioseqs, TRUE, TRUE, TRUE);
+    }
     return rsult;
   }
   return FALSE;
@@ -5619,7 +5576,7 @@ static void EnableEditAlignItem (BaseFormPtr bfp)
   SeqEntryPtr   sep;
   SelStructPtr  sel;
 
-  if (bfp == NULL && bfp->input_entityID != 0) return;
+  if (bfp == NULL || bfp->input_entityID == 0) return;
   mssgalign = RegisterFormMenuItemName ("SequinEditAlignmentItem");
   mssgdup = RegisterFormMenuItemName ("SequinDuplicateItem");
   mssgfeatprop = RegisterFormMenuItemName ("SequinFeaturePropagate");
@@ -5700,7 +5657,7 @@ static void EnableEditSeqAlignAndSubItems (BaseFormPtr bfp)
   ObjMgrDataPtr  omdp;
   SeqEntryPtr    sep;
 
-  if (bfp == NULL && bfp->input_entityID != 0) return;
+  if (bfp == NULL || bfp->input_entityID == 0) return;
   mssgseq = RegisterFormMenuItemName ("SequinEditSequenceItem");
   mssgsub = RegisterFormMenuItemName ("SequinEditSubmitterItem");
   mssgupd = RegisterFormMenuItemName ("SequinUpdateSeqSubmenu");
@@ -5828,7 +5785,6 @@ static void BioseqViewFormActivated (WindoW w)
   Enable (projectsMenu);
   Enable (analysisMenu);
   Enable (vectorScreenItem);
-  Enable (cddBlastItem);
   Enable (cddSearchMenu);
   Enable (cddSearchItem);
   Enable (parseFileItem);
@@ -6116,7 +6072,6 @@ static void MacDeactProc (WindoW w)
   Disable (aluItem);
   Disable (submitItem);
   Disable (vectorScreenItem);
-  Disable (cddBlastItem);
   Disable (cddSearchMenu);
   Disable (cddSearchItem);
   Disable (parseFileItem);
@@ -6348,7 +6303,7 @@ static Int4 PerformArticleQuery (CharPtr query, CharPtr journalcheck, Int4Ptr nu
   curl -s "http://intranet.ncbi.nlm.nih.gov/projects/hydra/hydra_search.cgi?search=pubmed_search_citation_top_20.1&query=..." | xlint
   */
 
-  str = QUERY_UrlSynchronousQuery ("intranet.ncbi.nlm.nih.gov", 80,
+  str = QUERY_UrlSynchronousQuery ("www.ncbi.nlm.nih.gov", 0,
                                    "/projects/hydra/hydra_search.cgi",
                                    "search=pubmed_search_citation_top_20.1&query=",
                                    /* "search=pmc_citation.1&query=", */
@@ -6375,6 +6330,7 @@ static Int4 PerformArticleQuery (CharPtr query, CharPtr journalcheck, Int4Ptr nu
           if (StringICmp (attr->name, "score") != 0) continue;
           score = attr->contents;
           if (StringHasNoText (score)) continue;
+          if (StringChr (score, '-') != NULL) continue;
           if (StringNCmp (score, "1", 1) == 0 || StringNCmp (score, "0.9", 3) == 0 || StringNCmp (score, "0.8", 3) == 0) {
             ValNodeCopyStrEx (&head, &tail, 0, tmp->contents);
           }
@@ -6404,8 +6360,9 @@ static Int4 PerformArticleQuery (CharPtr query, CharPtr journalcheck, Int4Ptr nu
                       if (vnt->choice != Cit_title_jta && vnt->choice != Cit_title_iso_jta) continue;
                       jour = (CharPtr) vnt->data.ptrvalue;
                       if (StringHasNoText (jour)) continue;
-                      if (journalcheck == NULL || StringICmp (jour, journalcheck) != 0) continue;
-                      pmid = pmval;
+                      if (journalcheck == NULL || StringICmp (jour, journalcheck) == 0) {
+                        pmid = pmval;
+                      }
                     }
                   }
                 }
@@ -6461,13 +6418,50 @@ static Int4 ConstructAndPerformQuery (ValNodePtr oldpep, Boolean useAuthors, Boo
   return pmid;
 }
 
+static ValNodePtr LookupArticleByPmid (Int4 pmid, BoolPtr success)
+
+{
+  CitArtPtr        cap;
+  ArticleIdPtr     ids;
+  MedlineEntryPtr  mep;
+  PubmedEntryPtr   pep;
+  ValNodePtr       pub = NULL;
+
+  if (pmid > 0) {
+    pep = GetPubMedForUid (pmid);
+    if (pep != NULL) {
+      mep = (MedlineEntryPtr) pep->medent;
+      if (mep != NULL && mep->cit != NULL) {
+        cap = AsnIoMemCopy ((Pointer) mep->cit,
+                            (AsnReadFunc) CitArtAsnRead,
+                            (AsnWriteFunc) CitArtAsnWrite);
+        if (cap != NULL) {
+          ChangeCitArtMLAuthorsToSTD (cap);
+          for (ids = cap->ids; ids != NULL; ids = ids->next) {
+            if (ids->choice != ARTICLEID_PUBMED) continue;
+            if (ids->data.intvalue != pmid) {
+              Message (MSG_POSTERR, "CitArt ID %ld does not match PMID %ld",
+                       (long) ids->data.intvalue, (long) pmid);
+            }
+          }
+          pub = ValNodeAddPointer (NULL, PUB_Article, (Pointer) cap);
+          ValNodeAddInt (&pub, PUB_PMid, pmid);
+          if (success != NULL) {
+            *success = TRUE;
+          }
+        }
+      }
+      PubmedEntryFree (pep);
+    }
+  }
+
+  return pub;
+}
+
 static ValNodePtr LookupAnArticleFuncViaEUtils (ValNodePtr oldpep, BoolPtr success)
 
 {
   CitArtPtr      cap = NULL;
-  ArticleIdPtr   ids;
-  MlaBackPtr     mbp;
-  MlaRequestPtr  mrp;
   Int4           numhits;
   Int4           pmid = 0;
   ValNodePtr     pub = NULL;
@@ -6506,42 +6500,7 @@ static ValNodePtr LookupAnArticleFuncViaEUtils (ValNodePtr oldpep, BoolPtr succe
   }
 
   if (pmid > 0) {
-    mrp = Mla2CreatePubFetchRequest (pmid);
-    if (mrp != NULL) {
-      if (log_mla_asn) {
-        LaunchAsnTextViewer ((Pointer) mrp, (AsnWriteFunc) MlaRequestAsnWrite, "get pub request");
-      }
-      mbp = Mla2SynchronousQuery (mrp);
-      mrp = MlaRequestFree (mrp);
-      if (mbp != NULL) {
-        if (log_mla_asn) {
-          LaunchAsnTextViewer ((Pointer) mbp, (AsnWriteFunc) MlaBackAsnWrite, "get pub result");
-        }
-        cap = Mla2ExtractPubFetchReply (mbp);
-        if (cap != NULL) {
-          if (log_mla_asn) {
-            LaunchAsnTextViewer ((Pointer) cap, (AsnWriteFunc) CitArtAsnWrite, "before");
-          }
-          ChangeCitArtMLAuthorsToSTD (cap);
-          if (log_mla_asn) {
-            LaunchAsnTextViewer ((Pointer) cap, (AsnWriteFunc) CitArtAsnWrite, "after");
-          }
-          for (ids = cap->ids; ids != NULL; ids = ids->next) {
-            if (ids->choice != ARTICLEID_PUBMED) continue;
-            if (ids->data.intvalue != pmid) {
-              Message (MSG_POSTERR, "CitArt ID %ld does not match PMID %ld",
-                       (long) ids->data.intvalue, (long) pmid);
-            }
-          }
-          pub = ValNodeAddPointer (NULL, PUB_Article, (Pointer) cap);
-          ValNodeAddInt (&pub, PUB_PMid, pmid);
-          if (success != NULL) {
-            *success = TRUE;
-          }
-        }
-        mbp = MlaBackFree (mbp);
-      }
-    }
+    pub = LookupArticleByPmid (pmid, success);
   }
 
   return pub;
@@ -6551,7 +6510,6 @@ static ValNodePtr LookupAnArticleFuncNew (ValNodePtr oldpep, BoolPtr success)
 
 {
   CitArtPtr      cap = NULL;
-  ArticleIdPtr   ids;
   MlaBackPtr     mbp;
   MlaRequestPtr  mrp;
   Int4           pmid = 0;
@@ -6605,42 +6563,7 @@ static ValNodePtr LookupAnArticleFuncNew (ValNodePtr oldpep, BoolPtr success)
   }
 
   if (pmid > 0) {
-    mrp = Mla2CreatePubFetchRequest (pmid);
-    if (mrp != NULL) {
-      if (log_mla_asn) {
-        LaunchAsnTextViewer ((Pointer) mrp, (AsnWriteFunc) MlaRequestAsnWrite, "get pub request");
-      }
-      mbp = Mla2SynchronousQuery (mrp);
-      mrp = MlaRequestFree (mrp);
-      if (mbp != NULL) {
-        if (log_mla_asn) {
-          LaunchAsnTextViewer ((Pointer) mbp, (AsnWriteFunc) MlaBackAsnWrite, "get pub result");
-        }
-        cap = Mla2ExtractPubFetchReply (mbp);
-        if (cap != NULL) {
-          if (log_mla_asn) {
-            LaunchAsnTextViewer ((Pointer) cap, (AsnWriteFunc) CitArtAsnWrite, "before");
-          }
-          ChangeCitArtMLAuthorsToSTD (cap);
-          if (log_mla_asn) {
-            LaunchAsnTextViewer ((Pointer) cap, (AsnWriteFunc) CitArtAsnWrite, "after");
-          }
-          for (ids = cap->ids; ids != NULL; ids = ids->next) {
-            if (ids->choice != ARTICLEID_PUBMED) continue;
-            if (ids->data.intvalue != pmid) {
-              Message (MSG_POSTERR, "CitArt ID %ld does not match PMID %ld",
-                       (long) ids->data.intvalue, (long) pmid);
-            }
-          }
-          pub = ValNodeAddPointer (NULL, PUB_Article, (Pointer) cap);
-          ValNodeAddInt (&pub, PUB_PMid, pmid);
-          if (success != NULL) {
-            *success = TRUE;
-          }
-        }
-        mbp = MlaBackFree (mbp);
-      }
-    }
+    pub = LookupArticleByPmid (pmid, success);
   }
 
   return pub;
@@ -6666,6 +6589,85 @@ static ValNodePtr LookupAnArticleFuncHybrid (ValNodePtr oldpep, BoolPtr success)
 
   return pub;
 }
+
+
+static void GlobalArticleLookupPubdescCallback(PubdescPtr pdp, Pointer userdata)
+{
+  ValNodePtr new_pub, vnp, tmp_pub;
+  Boolean    success = FALSE;
+  Int4       pmid = 0;
+
+  if (pdp == NULL) {
+    return;
+  }
+
+  for (vnp = pdp->pub; vnp != NULL; vnp = vnp->next) {
+    if (vnp->choice == PUB_PMid) {
+      pmid = (Int4) vnp->data.intvalue;
+    }
+  }
+  if (pmid > 0) {
+    tmp_pub = ValNodeNew (NULL);
+    tmp_pub->choice = PUB_PMid;
+    tmp_pub->data.intvalue = pmid;
+    new_pub = LookupAnArticleFuncHybrid(tmp_pub, &success);
+    tmp_pub = PubEquivFree(tmp_pub);
+    if (success && new_pub != NULL) {
+      pdp->pub = PubEquivFree (pdp->pub);
+      pdp->pub = new_pub;
+    }    
+  }
+}
+
+
+static void GlobalArticleLookupDescCallback(SeqDescPtr sdp, Pointer userdata)
+{
+  if (sdp != NULL && sdp->choice == Seq_descr_pub) {
+    GlobalArticleLookupPubdescCallback(sdp->data.ptrvalue, userdata);
+  }
+}
+
+
+static void GlobalArticleLookupFeatCallback(SeqFeatPtr sfp, Pointer userdata)
+{
+  if (sfp != NULL && sfp->data.choice == SEQFEAT_PUB) {
+    GlobalArticleLookupPubdescCallback(sfp->data.value.ptrvalue, userdata);
+  }
+}
+
+
+static void GlobalArticleLookup (SeqEntryPtr sep)
+{
+  Uint2 entityID;
+  
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+  VisitDescriptorsInSep(sep, NULL, GlobalArticleLookupDescCallback);
+  VisitFeaturesInSep(sep, NULL, GlobalArticleLookupFeatCallback);
+
+  ObjMgrSetDirtyFlag (entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
+}
+
+
+NLM_EXTERN void GLobalArticleLookupMenuItem (IteM i)
+{
+  BaseFormPtr  bfp;
+  SeqEntryPtr  sep;
+
+#ifdef WIN_MAC
+  bfp = currentFormDataPtr;
+#else
+  bfp = GetObjectExtra (i);
+#endif
+  if (bfp == NULL) return;
+
+  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
+  GlobalArticleLookup(sep);
+
+  ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
+  ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+}
+
 
 static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep, BoolPtr success)
 
@@ -6776,7 +6778,7 @@ static ValNodePtr LookupAnArticleFunc (ValNodePtr oldpep, BoolPtr success)
 }
 
 
-static Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP)
+NLM_EXTERN Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP)
 
 {
   CharPtr       count = NULL, end, jids = NULL, iso = NULL, issn = NULL, name = NULL, str = NULL;
@@ -6807,7 +6809,7 @@ static Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr j
     if (title [8] == 'x') {
       title [8] = 'X';
     }
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bissn%5D", NULL);
@@ -6818,7 +6820,7 @@ static Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr j
   */
 
   if (str == NULL) {
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
@@ -6870,7 +6872,7 @@ static Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr j
     microbiology reading, england
     */
 
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bjour%5D", NULL);
@@ -6912,7 +6914,7 @@ static Boolean LookupJournalEUtilsFunc (CharPtr title, size_t maxsize, Int1Ptr j
   curl -s http://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"db=nlmcatalog&version=2.0&id=101232377" | grep '<CurrentIndexingStatus>' | perl -nle 'print /(?<=<CurrentIndexingStatus>).*?(?=<\/CurrentIndexingStatus>)/g'
   */
 
-  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                    "/entrez/eutils/esummary.fcgi",
                                    "db=nlmcatalog&retmax=200&version=2.0&id=",
                                    jids, NULL, NULL);
@@ -7024,6 +7026,9 @@ static Boolean LookupJournalFuncViaEUtils (CharPtr title, size_t maxsize, Int1Pt
   return rsult;
 }
 
+#define USE_LOOKUPJOURNALFUNCNEW 0
+
+#if USE_LOOKUPJOURNALFUNCNEW
 static Boolean HasMoreThanOneISOJTA (TitleMsgPtr titles)
 {
   TitleMsgPtr tmp;
@@ -7080,6 +7085,7 @@ static CharPtr GetExtendedDescription (TitleMsgPtr tmp)
   }
   return extended;
 }
+
 
 static Boolean LookupJournalFuncNew (CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP)
 
@@ -7178,6 +7184,7 @@ static Boolean LookupJournalFuncNew (CharPtr title, size_t maxsize, Int1Ptr jtaT
 
   return TRUE;
 }
+#endif
 
 static Boolean LookupJournalFunc (CharPtr title, size_t maxsize, Int1Ptr jtaType, ValNodePtr PNTR all_titlesP)
 
@@ -7665,6 +7672,10 @@ static void FindOrf (IteM i)
   LaunchOrfViewer (bsp, bfp->input_entityID, bfp->input_itemID, FALSE);
 }
 
+
+#define USE_FINDALU 0
+
+#if USE_FINDALU
 static void FindAlu (IteM i)
 
 {
@@ -7696,6 +7707,7 @@ static void FindAlu (IteM i)
     Message (MSG_OK, "No Repeat regions found.");
   }
 }
+#endif
 
 typedef struct changetargetform {
   FORM_MESSAGE_BLOCK
@@ -7846,12 +7858,44 @@ static void ConfigTurnedOff (void)
   }
 }
 
+
+#define USE_STYLE_MANAGER 0
+
+#if USE_STYLE_MANAGER
+
+static void StyleManagerProc (IteM i)
+
+{
+  MuskStyleManager ();
+}
+
+
+static void SetSequinAppParamTF (CharPtr section, CharPtr type, Boolean value)
+
+{
+  if (value) {
+    SetSequinAppParam (section, type, "TRUE");
+  } else {
+    SetSequinAppParam (section, type, "FALSE");
+  }
+}
+
+
+static void ReplaceString (CharPtr PNTR target, CharPtr newstr)
+
+{
+  if (target == NULL) return;
+  MemFree (*target);
+  *target = StringSaveNoNull (newstr);
+}
+
+
 typedef struct prefsform {
   FORM_MESSAGE_BLOCK
   DialoG             prefs;
 } PrefsForm, PNTR PrefsFormPtr;
 
-/*
+
 static void AcceptPrefsProc (ButtoN b)
 
 {
@@ -7889,7 +7933,6 @@ static void AcceptPrefsProc (ButtoN b)
   EntrezPrefsFree (epp);
   Remove (pfp->form);
 }
-*/
 
 static void DefaultMessageProc (ForM f, Int2 mssg)
 
@@ -7903,7 +7946,9 @@ static void DefaultMessageProc (ForM f, Int2 mssg)
     }
   }
 }
+#endif
 
+#ifdef WIN_MAC
 static void PreferencesProc (IteM i)
 
 {
@@ -7954,6 +7999,7 @@ static void PreferencesProc (IteM i)
   Select (w);
   */
 }
+#endif
 
 void NetConfigureProc (IteM i)
 
@@ -7995,18 +8041,6 @@ extern void SqnReadAlignView (BaseFormPtr bfp, BioseqPtr target_bsp, SeqEntryPtr
 extern void NewFeaturePropagate (
   IteM i
 );
-
-static void ExtendSeqWithFASTA (IteM i)
-
-{
-  NewExtendSequence (i);
-}
-
-static void ExtendSeqWithRec (IteM i)
-
-{
-  NewExtendSequence (i);
-}
 
 NLM_EXTERN Int4 GenomeFromLocName (CharPtr loc_name);
 
@@ -8060,7 +8094,7 @@ static void CommonAddSeq (IteM i, Int2 type)
         if (vnp != NULL) {
           src = (BioSourcePtr) vnp->data.ptrvalue;
           if (src != NULL) {
-            orp = biop->org;
+            orp = src->org;
             if (orp != NULL) {
               tax = orp->taxname;
             }
@@ -8077,6 +8111,7 @@ static void CommonAddSeq (IteM i, Int2 type)
       if (datatype == OBJ_BIOSEQ || datatype == OBJ_BIOSEQSET) {
         bsp = NULL;
         bssp = NULL;
+        biop = NULL;
         sep = SeqMgrGetSeqEntryForData (dataptr);
         if (sep == NULL) {
           sep = SeqEntryNew ();
@@ -8271,31 +8306,6 @@ static void AddSeqWithRec (IteM i)
   CommonAddSeq (i, 2);
 }
 
-/*#ifdef ALLOW_DOWNLOAD*/
-BioseqPtr  updateTargetBspKludge = NULL;
-
-static void ExtendSeqWithAcc (IteM i)
-
-{
-  BaseFormPtr  bfp;
-  BioseqPtr    bsp;
-  SeqEntryPtr  sep;
-
-#ifdef WIN_MAC
-  bfp = currentFormDataPtr;
-#else
-  bfp = GetObjectExtra (i);
-#endif
-  if (bfp == NULL) return;
-  sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
-  if (sep == NULL) return;
-  bsp = GetBioseqGivenIDs (bfp->input_entityID, bfp->input_itemID, bfp->input_itemtype);
-  if (bsp == NULL) return;
-  updateTargetBspKludge = bsp;
-  CommonFetchFromNet (DownloadAndExtendProc, StdCancelButtonProc);
-}
-/*#endif*/
-
 
 #ifndef WIN_MAC
 extern void CreateNewLayoutMenu (MenU m, BaseFormPtr bp);
@@ -8372,10 +8382,6 @@ static void BioseqViewFormMenus (WindoW w)
     AddAboutAndHelpMenuItems (m);
     i = CommandItem (m, "Open...", ReadNewAsnProc);
     SetObjectExtra (i, bfp, NULL);
-    if (indexerVersion) {
-      i = CommandItem (m, "FASTA Nucleotide Direct to Sequence Editor", FastaNucDirectToSeqEdProc);
-      SetObjectExtra (i, bfp, NULL);
-    }
     SeparatorItem (m);
     FormCommandItem (m, "Close", bfp, VIB_MSG_CLOSE);
     SeparatorItem (m);
@@ -8545,19 +8551,6 @@ static void BioseqViewFormMenus (WindoW w)
       SetObjectExtra (i, bfp, NULL);
     }
     
-    sub = SubMenu (m, "Extend Sequence");
-    SetFormMenuItem (bfp, mssgext, (IteM) sub);
-    i = CommandItem (sub, "Read FASTA File...", ExtendSeqWithFASTA);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Read Sequence Record...", ExtendSeqWithRec);
-    SetObjectExtra (i, bfp, NULL);
-    i = CommandItem (sub, "Read FASTA or ASN.1 Set", ExtendFastaSet);
-    SetObjectExtra (i, bfp, NULL);
-    if (useEntrez) {
-      i = CommandItem (sub, "Download Accession...", ExtendSeqWithAcc);
-      SetObjectExtra (i, bfp, NULL);
-    }
-            
     SeparatorItem (m);
     i = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
     SetObjectExtra (i, bfp, NULL);
@@ -8615,18 +8608,10 @@ static void BioseqViewFormMenus (WindoW w)
       i = CommandItem (m, "Validate/ V", ValSeqEntryProc);
       SetObjectExtra (i, bfp, NULL);
     }
-#ifdef USE_SPELL
-    SeparatorItem (m);
-    i = CommandItem (m, "Spell Check...", SpellCheckSeqEntryProc);
-    SetObjectExtra (i, bfp, NULL);
-#endif
 /*#ifdef USE_BLAST*/
+    /*
     if (useBlast) {
       SeparatorItem (m);
-      if (indexerVersion) {
-        i = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
-        SetObjectExtra (i, bfp, NULL);
-      }
       if (extraServices) {
         sub = SubMenu (m, "CDD Search");
         i = CommandItem (sub, "Features", SimpleCDDSearchFeatProc);
@@ -8638,6 +8623,7 @@ static void BioseqViewFormMenus (WindoW w)
         SetObjectExtra (i, bfp, NULL);
       }
     }
+    */
 /*#endif*/
     SeparatorItem (m);
     sub = SubMenu (m, "Vector Screen");
@@ -8652,10 +8638,10 @@ static void BioseqViewFormMenus (WindoW w)
     SeparatorItem (m);
     i = CommandItem (m, "ORF Finder...", FindOrf);
     SetObjectExtra (i, bfp, NULL);
-    /*
+#if USE_FINDALU
     i = CommandItem (m, "Repeat Finder...", FindAlu);
     SetObjectExtra (i, bfp, NULL);
-    */
+#endif
     SeparatorItem (m);
     i = CommandItem (m, "Select Target...", DoChangeTarget);
     SetObjectExtra (i, bfp, NULL);
@@ -8681,10 +8667,10 @@ static void BioseqViewFormMenus (WindoW w)
 /*#endif*/
 
     m = PulldownMenu (w, "Misc");
-    /*
+#if USE_STYLE_MANAGER
     CommandItem (m, "Style Manager...", StyleManagerProc);
     SeparatorItem (m);
-    */
+#endif
     CommandItem (m, "Net Configure...", NetConfigureProc);
     if (useEntrez) {
       /*
@@ -8715,6 +8701,10 @@ static void BioseqViewFormMenus (WindoW w)
     sub = SubMenu (m, "Batch Feature Edit");
     SetupBatchEditMenu (sub, bfp);
     i = CommandItem (m, "Batch Apply Molecule Type", ExternalApplyMoleculeType);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (m, "Batch Apply Genetic Code", BatchApplyGeneticCode);
+    SetObjectExtra (i, bfp, NULL);
+    i = CommandItem (m, "Add Keyword", ApplyKeywordWithStringConstraint);
     SetObjectExtra (i, bfp, NULL);
     i = CommandItem (m, "Set Release Date", SetReleaseDate);
     SetObjectExtra (i, bfp, NULL);
@@ -9046,49 +9036,6 @@ static Boolean DeleteSelectedFeatureOrDescriptor (GatherContextPtr gcp)
   /* Note - delete marked objects is called by the calling function */
 
   return TRUE;
-}
-
-static void TermSelectionFormMessage (ForM f, Int2 mssg)
-
-{
-  BaseFormPtr  bfp;
-
-  bfp = (BaseFormPtr) GetObjectExtra (f);
-  if (bfp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_CLOSE :
-        Hide (f);
-        break;
-      case VIB_MSG_QUIT :
-        QuitProc ();
-        break;
-      default :
-        break;
-    }
-  }
-}
-
-static void DocumentSummaryFormMessage (ForM f, Int2 mssg)
-
-{
-  BaseFormPtr  bfp;
-
-  bfp = (BaseFormPtr) GetObjectExtra (f);
-  if (bfp != NULL) {
-    switch (mssg) {
-      case VIB_MSG_CHANGE :
-        EnableAnalysisItems (bfp, TRUE);
-        break;
-      case VIB_MSG_CLOSE :
-        Hide (f);
-        break;
-      case VIB_MSG_QUIT :
-        QuitProc ();
-        break;
-      default :
-        break;
-    }
-  }
 }
 
 static void SequinMedlineFormMessage (ForM f, Int2 mssg)
@@ -9666,6 +9613,26 @@ static void ProcessHelpMessage (CharPtr heading, CharPtr section)
 }
 
 /*
+static void TermSelectionFormMessage (ForM f, Int2 mssg)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (f);
+  if (bfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CLOSE :
+        Hide (f);
+        break;
+      case VIB_MSG_QUIT :
+        QuitProc ();
+        break;
+      default :
+        break;
+    }
+  }
+}
+
 static void MakeTermListForm (void)
 
 {
@@ -9677,6 +9644,29 @@ static void MakeTermListForm (void)
   termListForm = CreateTermListForm (-50, -33, "Query",
                                      TermSelectionActivateProc,
                                      TermSelectionFormMessage);
+}
+
+static void DocumentSummaryFormMessage (ForM f, Int2 mssg)
+
+{
+  BaseFormPtr  bfp;
+
+  bfp = (BaseFormPtr) GetObjectExtra (f);
+  if (bfp != NULL) {
+    switch (mssg) {
+      case VIB_MSG_CHANGE :
+        EnableAnalysisItems (bfp, TRUE);
+        break;
+      case VIB_MSG_CLOSE :
+        Hide (f);
+        break;
+      case VIB_MSG_QUIT :
+        QuitProc ();
+        break;
+      default :
+        break;
+    }
+  }
 }
 
 static void MakeDocSumForm (void)
@@ -10087,59 +10077,6 @@ extern void SetupBioseqPageList (void)
   AddBioseqPageToList (&(seqviewprocs.pageSpecs), &dskPageData);
 }
 
-static Boolean DeltaLitOnly (BioseqPtr bsp)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
-static Int2 LIBCALLBACK DeltaToRawConvertFunc (Pointer data)
-
-{
-  BioseqPtr         bsp = NULL;
-  OMProcControlPtr  ompcp;
-  
-  if (indexerVersion)
-  {
-    SeqEditFunc (data);
-  }
-  else
-  {
-    ompcp = (OMProcControlPtr) data;
-    if (ompcp == NULL || ompcp->proc == NULL) 
-      return OM_MSG_RET_ERROR;
-    switch (ompcp->input_itemtype) {
-      case OBJ_BIOSEQ :
-        bsp = (BioseqPtr) ompcp->input_data;
-        break;
-      case 0 :
-        return OM_MSG_RET_ERROR;
-      default :
-        return OM_MSG_RET_ERROR;
-    }
-    if (bsp == NULL) {
-       return OM_MSG_RET_ERROR;
-    }
-    if (! DeltaLitOnly (bsp)) {
-      return OM_MSG_RET_OK;
-    }
-    if (Message (MSG_YN, "Convert near delta Bioseq to raw Bioseq?") == ANS_NO) {
-      return OM_MSG_RET_DONE;
-    }
-    SegOrDeltaBioseqToRaw (bsp);
-    Message (MSG_OK, "Converted to raw, now launch editor again");
-  }
-  return OM_MSG_RET_DONE;
-}
-
-#define REGISTER_DELTA_BIOSEQ_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Delta Bioseq Convert","DeltaBioseqConverter",OBJ_BIOSEQ,Seq_repr_delta,OBJ_BIOSEQ,Seq_repr_raw,NULL,DeltaToRawConvertFunc,PROC_PRIORITY_DEFAULT)
-
 static void SetupDesktop (void)
 
 {
@@ -10302,9 +10239,9 @@ static void SetupDesktop (void)
     pubedprocs.lookupArticle = LookupAnArticleFuncViaEUtils;
     */
     pubedprocs.lookupArticle = LookupAnArticleFuncHybrid;
-    /*
+#if USE_LOOKUPJOURNALFUNCNEW
     pubedprocs.lookupJournal = LookupJournalFuncNew;
-    */
+#endif
     pubedprocs.lookupJournal = LookupJournalFuncViaEUtils;
   } else if (useMedarch) {
     pubedprocs.lookupArticle = LookupAnArticleFunc;
@@ -10619,7 +10556,6 @@ static void SetupDesktop (void)
 
   /* register types and functions first */
 
-  REGISTER_MEDLINE_VIEW;
   if (smartnetMode) {
     REGISTER_SMART_SEQENTRY_VIEW;
   } else {
@@ -10697,7 +10633,7 @@ static void SetupDesktop (void)
   REGISTER_DELTA_BIOSEQ_EDIT;
   REGISTER_NEW_SEQALIGN_EDIT;
   REGISTER_NEW_SEQANNOT_EDIT;
-  REGISTER_NEW_SEQALIGN_VIEW; 
+
   REGISTER_BIOSEQ_SEG_EDIT;
   REGISTER_BIOSEQ_SET_EDIT;
   REGISTER_SUBMITBLOCK_EDIT;
@@ -11005,15 +10941,6 @@ static void SetupMacMenus (void)
     CommandItem (updateSeqMenu, "Multiple Sequences", TestUpdateSequenceSetSubmitter);
   }
   
-  extendSeqMenu = SubMenu (m, "Extend Sequence");
-  SetFormMenuItem (NULL, mssgext, (IteM) extendSeqMenu);
-  CommandItem (extendSeqMenu, "Read FASTA File...", ExtendSeqWithFASTA);
-  CommandItem (extendSeqMenu, "Read Sequence Record...", ExtendSeqWithRec);
-  CommandItem (extendSeqMenu, "Read FASTA or ASN.1 Set...", ExtendFastaSet);
-  if (useEntrez) {
-    CommandItem (extendSeqMenu, "Download Accession...", ExtendSeqWithAcc);
-  }
-  SeparatorItem (m);
   featPropItem = CommandItem (m, "Feature Propagate...", NewFeaturePropagate);
   SetFormMenuItem (NULL, mssgfeatprop, featPropItem);
   SeparatorItem (m);
@@ -11050,16 +10977,10 @@ static void SetupMacMenus (void)
   } else {
     validateItem = CommandItem (m, "Validate", ValSeqEntryProc);
   }
-#ifdef USE_SPELL
-  SeparatorItem (m);
-  spellItem = CommandItem (m, "Spell Check...", SpellCheckSeqEntryProc);
-#endif
 /*#ifdef USE_BLAST*/
+  /*
   if (useBlast) {
     SeparatorItem (m);
-    if (indexerVersion) {
-      cddBlastItem = CommandItem (m, "CDD BLAST...", SimpleCDDBlastProc);
-    }
     if (extraServices) {
       cddSearchMenu = SubMenu (m, "CDD Search");
       CommandItem (cddSearchMenu, "Features", SimpleCDDSearchFeatProc);
@@ -11068,6 +10989,7 @@ static void SetupMacMenus (void)
       cddSearchItem = CommandItem (m, "CDD Search", SimpleCDDSearchFeatProc);
     }
   }
+  */
 /*#endif*/
   SeparatorItem (m);
   vecscreenMenu = SubMenu (m, "Vector Screen");
@@ -11075,6 +10997,7 @@ static void SetupMacMenus (void)
   if (indexerVersion) {
     CommandItem (vecscreenMenu, "UniVec Core", SimpleUniVecCoreScreenProc);
   }
+  CommandItem (vecscreenMenu, "Vector Search & Trim Tool", ExternalVecScreenTool);
   SeparatorItem (m);
   orfItem = CommandItem (m, "ORF Finder...", FindOrf);
   /*
@@ -12451,6 +12374,7 @@ static Int2 LIBCALLBACK DirSubBioseqFetchFunc (Pointer data)
   return OM_MSG_RET_DONE;
 }
 
+#ifdef USE_SMARTNET
 static Boolean DirSubFetchEnable (void)
 
 {
@@ -12459,6 +12383,7 @@ static Boolean DirSubFetchEnable (void)
                   DirSubBioseqFetchFunc, PROC_PRIORITY_DEFAULT);
   return TRUE;
 }
+#endif
 
 static CharPtr smartfetchproc = "SmartBioseqFetch";
 
@@ -12744,6 +12669,7 @@ static Int2 LIBCALLBACK HUPBioseqFetchFunc (Pointer data)
 
   return OM_MSG_RET_DONE;
 }
+
 
 static Boolean HUPFetchEnable (void)
 
@@ -13377,6 +13303,72 @@ static ForM CreateWizardChoiceForm (void);
 
 extern CharPtr objPrtMemStr;
 
+extern void Nlm_SetMemFailFlag (Nlm_Boolean val);
+
+static void SqnLogItemUse (CharPtr string)
+
+{
+  Char  buf [256];
+  Int4  count = 0;
+
+  FreeConfigStruct ();
+
+  buf[0] = 0;
+  GetAppParam ("SEQUINCUSTOM", "USAGE", string, NULL, buf, sizeof (buf) - 1);
+  if (StringDoesHaveText (buf)) {
+    if (! StringIsAllDigits (buf)) return;
+  }
+  StrToLong (buf, &count);
+  count++;
+  sprintf (buf, "%ld", (long) count);
+  SetAppParam ("SEQUINCUSTOM", "USAGE", string, buf);
+
+  FreeConfigStruct ();
+}
+
+static void SqnMenuAction (IteM i)
+
+{
+  Char  mnu [256];
+
+  mnu [0] = '\0';
+
+  GetTitle (i, mnu, sizeof (mnu));
+  if (StringHasNoText (mnu)) return;
+
+  SqnLogItemUse (mnu);
+}
+
+static void SqnButtonAction (ButtoN b)
+
+{
+  Char    btn [256];
+  Char    title [520];
+  Char    wnd [256];
+  WindoW  w;
+
+  btn [0] = '\0';
+  wnd [0] = '\0';
+  title [0] = '\0';
+
+  GetTitle (b, btn, sizeof (btn));
+  if (StringHasNoText (btn)) return;
+
+  w = ParentWindow (b);
+  GetTitle (w, wnd, sizeof (wnd));
+  if (StringHasNoText (wnd)) return;
+
+  if (StringStr (wnd, "-- ToolBar") != NULL) {
+    StringCpy (wnd, "ToolBar");
+  }
+
+  StringCpy (title, wnd);
+  StringCat (title, " -- ");
+  StringCat (title, btn);
+
+  SqnLogItemUse (title);
+}
+
 Int2 Main (void)
 
 {
@@ -13422,6 +13414,8 @@ Int2 Main (void)
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
 
+  SOCK_SetupSSL(NcbiSetupGnuTls);
+
 #if defined(OS_MAC) && !defined(OS_UNIX_DARWIN)
   if ( Gestalt (gestaltSystemVersion, &sysVer) == noErr) {
     /* system version in low order word is hexadecimal */
@@ -13451,6 +13445,7 @@ Int2 Main (void)
         Nlm_UsePrimaryMonitor ();
       }
     }
+    Nlm_SetMemFailFlag (TRUE);
   }
 
   sprintf (str, "Sequin Application Version %s", SEQUIN_APPLICATION);
@@ -13734,6 +13729,8 @@ Int2 Main (void)
     } else if (useIdLookup) {
       PubSeqFetchEnableEx (FALSE, TRUE, TRUE, TRUE, TRUE, -1);
       PubMedFetchEnable ();
+    } else {
+      PubMedFetchEnable ();
     }
   }
 
@@ -13850,6 +13847,12 @@ Int2 Main (void)
     subtoolTimerCount = 0;
     subtoolRecordDirty = FALSE;
     Metronome (SubtoolModeTimerProc);
+    if (GetSequinAppParam ("PREFERENCES", "SUPPRESSUSAGE", NULL, str, sizeof (str)) && StringICmp (str, "TRUE") == 0) {
+    } else {
+      SetMenuAction (SqnMenuAction);
+      SetButtonAction (SqnButtonAction);
+    }
+
     ProcessEvents();
 
     /* No more code in Main() for smartnet Mode */
@@ -14059,6 +14062,15 @@ Int2 Main (void)
 
   if (backupMode) {
     Metronome (BackupModeTimerProc);
+  }
+
+  if (indexerVersion) {
+    str [0] = '\0';
+    if (GetSequinAppParam ("PREFERENCES", "SUPPRESSUSAGE", NULL, str, sizeof (str)) && StringICmp (str, "TRUE") == 0) {
+    } else {
+      SetMenuAction (SqnMenuAction);
+      SetButtonAction (SqnButtonAction);
+    }
   }
 
   if (subtoolMode || stdinMode || binseqentryMode) {
@@ -14393,7 +14405,7 @@ extern void UpdateFeatures (IteM i)
   SeqFeatPtr     sfp;
   ValNodePtr     new_feat_list = NULL, no_bsp_list = NULL, old_item_list = NULL;
   Int4           leftmost = -1, rightmost = -1, new_left, new_right, tmp;
-  BioseqPtr      bsp, last_bsp = NULL;
+  BioseqPtr      bsp = NULL, last_bsp = NULL;
   SeqLocPtr        slp;
   WindoW           w;
   GrouP            h, g2, k, c;
@@ -14468,7 +14480,7 @@ extern void UpdateFeatures (IteM i)
       }
     }
   }
-  if (last_bsp != NULL) {
+  if (last_bsp != NULL && bsp != NULL) {
     slp = SeqLocIntNew (leftmost, rightmost, Seq_strand_plus, SeqIdDup (SeqIdFindWorst (bsp->id)));
     ValNodeLink (&old_item_list, ListFeaturesOverlappingLocation (last_bsp, slp, 0, 0));
     slp = SeqLocFree (slp);
@@ -14767,6 +14779,65 @@ static CharPtr DateIsAmbiguous (CharPtr val, CharPtr name, Boolean general)
 }
 
 
+CharPtr sBadUnculturedIsolationSources[] = {
+  "uncultured bacterium",
+  "uncultured bacteria",
+  "uncultured fungus",
+  "uncultured fungi",
+  "uncultured bacterium clone",
+  "uncultured bacteria clone",
+  "uncultured fungus clone",
+  "uncultured fungi clone",
+  "isolation source",
+  NULL
+};
+
+
+static CharPtr ValueInList (CharPtr val, CharPtr PNTR list)
+{
+  Int4 i;
+
+  for (i = 0; list[i] != NULL; i++) {
+    if (StringICmp (val, list[i]) == 0) {
+      return list[i];
+    }
+  }
+  return NULL;
+}
+
+
+static CharPtr IsolationSourceOk (CharPtr val, CharPtr name, Boolean general)
+{
+  Boolean is_ambiguous = FALSE;
+  CharPtr rval = NULL;
+  CharPtr specific_short_fmt = "isolation-source should have a value like seawater, soil, etc.  '%s' is suspiciously short";
+  CharPtr general_short_fmt = "isolation-source should have a value like seawater, soil, etc.  At least one of your values is suspiciously short.";
+  CharPtr specific_bad_fmt = "isolation-source should have a value like seawater, soil, etc. '%s' is not a valid isolation-source.";
+  CharPtr general_bad_fmt = "isolation-source should have a value like seawater, soil, etc.  One or more isolation-source values you have provided are not valid.";
+
+  if (StringHasNoText (val)) {
+    return NULL;
+  } 
+
+  if (StringLen (val) < 3) {
+    if (general) {
+      rval = StringSave (general_short_fmt);
+    } else {
+      rval = (CharPtr) MemNew (sizeof (Char) * (StringLen (specific_short_fmt) + StringLen (val)));
+      sprintf (rval, specific_short_fmt, val);
+    }
+  } else if (ValueInList(val, sBadUnculturedIsolationSources)) {
+    if (general) {
+      rval = StringSave (general_bad_fmt);
+    } else {
+      rval = (CharPtr) MemNew (sizeof (Char) * (StringLen (general_bad_fmt) + StringLen (val)));
+      sprintf (rval, general_bad_fmt, val);
+    }
+  }
+  return rval;
+}
+
+
 static void LaunchWebBrowser (CharPtr url)
 {
 #ifdef WIN_MOTIF
@@ -14827,6 +14898,36 @@ typedef enum {
   eIGSSourceType_Animal
 } EIGSSourceType;
 
+typedef enum {
+  eWGSSourceType_Unknown = 0,
+  eWGSSourceType_Bacteria,
+  eWGSSourceType_Fungi,
+  eWGSSourceType_OtherEuk
+} EWGSSourceType;
+
+static CharPtr wizard_names[] = {
+  "",
+  "Uncultured Sample Wizard",
+  "Virus Wizard",
+  "rRNA-ITS-IGS Wizard",
+  "TSA Wizard",
+  "IGS Wizard",
+  "Microsatellite Wizard",
+  "D-loop Wizard",
+  "WGS Wizard"
+};
+
+
+static CharPtr FormatWizardTitle (CharPtr fmt, EWizardType wizard_type)
+{
+  CharPtr title;
+
+  title = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (wizard_names[wizard_type])));
+  sprintf (title, fmt, wizard_names[wizard_type]);
+  return title;
+}
+
+
 /* list of dialog titles - some are re-used, here for ease of changing formatting */
 /* three titles for each class of title */
 static CharPtr wizard_dlg_titles[] = {
@@ -14837,6 +14938,7 @@ static CharPtr wizard_dlg_titles[] = {
   "IGS Wizard Annotation",
   "Microsatellite Wizard Annotation",
   "D-loop Wizard Annotation",
+  "WGS Wizard Annotation",
 
   "Uncultured Sample Wizard Primer Type",
   "Virus Wizard Primer Type",
@@ -14845,6 +14947,7 @@ static CharPtr wizard_dlg_titles[] = {
   "IGS Wizard Primer Type",
   "Microsatellite Wizard Primer Type",
   "D-Loop Wizard Primer Type",
+  "WGS Wizard Primer Type",
 
   "Uncultured Sample Wizard Source Information",
   "Virus Wizard Source Information",
@@ -14853,6 +14956,7 @@ static CharPtr wizard_dlg_titles[] = {
   "IGS Wizard Source Information",
   "Microsatellite Wizard Source Information",
   "D-Loop Wizard Source Information",
+  "WGS Wizard Source Information",
 
   "Uncultured Sample Wizard Molecule Information",
   "Virus Wizard Molecule Information",
@@ -14860,7 +14964,8 @@ static CharPtr wizard_dlg_titles[] = {
   "TSA Wizard Molecule Information",
   "IGS Wizard Molecule Information",
   "Microsatellite Wizard Molecule Type",
-  "D-Loop Wizard Molecule Information"
+  "D-Loop Wizard Molecule Information",
+  "WGS Wizard Molecule Information"
 };
 
 typedef enum {
@@ -15019,6 +15124,64 @@ typedef struct wizardsrcqual {
   IsSrcQualFormatValid valid_func;
 } WizardSrcQualData, PNTR WizardSrcQualPtr;
 
+
+typedef struct examplepair {
+  CharPtr qual_name;
+  CharPtr example;
+} ExamplePairData, PNTR ExamplePairPtr;
+
+static ExamplePairData s_QualiferExamples[] = {
+  { "Collection-date", "05-Feb-2005"} ,
+  { "host", "Homo sapiens"},
+  { "lat-lon", "39.00 N 77.10 W"},
+  { "strain", "ABC123" },
+  { "country", "USA: Ann Arbor, MI"},
+  { "Isolation-source", "soil"},
+  { "Isolate", "SDZ123"},
+  { "Specimen-voucher", "USNM:12345"},
+  { "sex", "female"},
+  { "breed", "Holstein"},
+  { "cultivar", "Granny Smith"},
+  { NULL, NULL } };
+
+static CharPtr GetDefaultExample (CharPtr name)
+{
+  Int4 i;
+  
+  for (i = 0; s_QualiferExamples[i].qual_name != NULL; i++) {
+    if (StringICmp (s_QualiferExamples[i].qual_name, name) == 0) {
+      return s_QualiferExamples[i].example;
+    }
+  }
+  return NULL;
+}
+
+
+typedef struct formatpair {
+  CharPtr qual_name;
+  IsSrcQualFormatValid func;
+} FormatPairData, PNTR FormatPairPtr;
+
+static FormatPairData s_QualiferFormatCheck[] = {
+  { "collection-date", DateIsAmbiguous },
+  { "country", NotAllNumbers },
+  { "host", NotAllNumbers },
+  { "isolation-source", IsolationSourceOk },
+  { NULL, NULL } };
+
+static IsSrcQualFormatValid GetDefaultValidator (CharPtr name)
+{
+  Int4 i;
+  
+  for (i = 0; s_QualiferFormatCheck[i].qual_name != NULL; i++) {
+    if (StringICmp (s_QualiferFormatCheck[i].qual_name, name) == 0) {
+      return s_QualiferFormatCheck[i].func;
+    }
+  }
+  return NULL;
+}
+
+
 static WizardSrcQualPtr WizardSrcQualNewEx 
 (CharPtr name, 
  EWizardEditQual edit_type, 
@@ -15037,7 +15200,11 @@ static WizardSrcQualPtr WizardSrcQualNewEx
   q->show = show;
   q->required = required;
   q->problem_when_missing = FALSE;
-  q->valid_func = valid_func;
+  if (valid_func == NULL) {
+    q->valid_func = GetDefaultValidator(name);
+  } else {
+    q->valid_func = valid_func;
+  }
   q->valid_required = valid_required;
   q->example = example;
   q->linked = NULL;
@@ -15341,25 +15508,7 @@ GetUniquenessProblemsForTable
 }
 
 
- static Boolean IsAllDigits (CharPtr str)
-{
-  CharPtr cp;
-
-  if (StringHasNoText (str)) return FALSE;
-
-  cp = str;
-  while (*cp != 0 && isdigit (*cp)) {
-    cp++;
-  }
-  if (*cp == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-typedef struct wizardtracker {
+ typedef struct wizardtracker {
   EWizardType wizard_type;
   SeqEntryPtr sequences;
   Uint1       set_class;
@@ -15386,6 +15535,16 @@ typedef struct wizardtracker {
 
   /* IGS source type */
   EIGSSourceType igs_source_type;
+
+  /* WGS source type */
+  EWGSSourceType wgs_source_type;
+  /* WGS AGP file */
+  Boolean has_agp;
+  /* WGS Ns message */
+  CharPtr wgs_ns_msg;
+
+  /* microsatellite flags */
+  Boolean multiple_repeats;
 
   /* genome - used for source location */
   Uint1 genome;
@@ -15589,10 +15748,16 @@ static WizardTrackerPtr WizardTrackerNew (EWizardType wizard_type, SeqEntryPtr s
   wiz->wizard_type = wizard_type;
   wiz->sequences = sequences;
   wiz->set_class = BioseqseqSet_class_genbank;
-  wiz->base_src_quals = ValNodeFreeData (wiz->base_src_quals);
-  wiz->extra_src_quals = ValNodeFreeData (wiz->extra_src_quals);
+  wiz->base_src_quals = NULL;
+  wiz->extra_src_quals = NULL;
   wiz->virus_class = eVirusClass_Unknown;
-  wiz->molinfo = NULL;
+  if (wiz->wizard_type == eWizardType_WGS) {
+    wiz->molinfo = MolInfoNew ();
+    wiz->molinfo->biomol = MOLECULE_TYPE_GENOMIC;
+    wiz->molinfo->tech = MI_TECH_wgs;
+  } else {
+    wiz->molinfo = NULL;
+  }
   wiz->mol_class = Seq_mol_dna;
   wiz->molinfo_comment = NULL;
   wiz->topology = TOPOLOGY_LINEAR;
@@ -15623,6 +15788,8 @@ static WizardTrackerPtr WizardTrackerNew (EWizardType wizard_type, SeqEntryPtr s
   wiz->use_alternate_leaving_msg = FALSE;
   wiz->show_feature_table_help = FALSE;
   wiz->add_span_note = FALSE;
+  wiz->wgs_source_type = eWGSSourceType_Unknown;
+  wiz->wgs_ns_msg = NULL;
   wiz->uniqueness_list = NULL;
   wiz->quit_now = FALSE;
   if (wiz->wizard_type == eWizardType_Microsatellite) {
@@ -15649,6 +15816,8 @@ static WizardTrackerPtr WizardTrackerFree (WizardTrackerPtr wiz)
       sep->next = NULL;
       sep = SeqEntryFree (sep);
     }
+    wiz->base_src_quals = ValNodeFreeData (wiz->base_src_quals);
+    wiz->extra_src_quals = ValNodeFreeData (wiz->extra_src_quals);
     wiz->molinfo = MolInfoFree (wiz->molinfo);
     wiz->molinfo_comment = MemFree (wiz->molinfo_comment);
     wiz->breadcrumbs = ValNodeFree (wiz->breadcrumbs);
@@ -15667,6 +15836,7 @@ static WizardTrackerPtr WizardTrackerFree (WizardTrackerPtr wiz)
     wiz->bioproject = MemFree (wiz->bioproject);
     wiz->biosample = MemFree (wiz->biosample);
     wiz->srr = MemFree (wiz->srr);
+    wiz->wgs_ns_msg = MemFree (wiz->wgs_ns_msg);
     wiz->uniqueness_list = UniquenessListFree (wiz->uniqueness_list);
     SequenceInfoFree (wiz->aln_settings);
     wiz = MemFree (wiz);
@@ -15901,9 +16071,6 @@ static void FinishOneSeqEntry (SeqEntryPtr list, WizardTrackerPtr wiz)
     AddChimeraComment (list, wiz->chimera_program, wiz->chimera_version);
   }
 
-  /* add structured comments */
-  AddStructuredCommentsFromWizard (list, wiz->structured_comments);
-
 }
 
 
@@ -16078,14 +16245,31 @@ static void SetWizardTrackerBaseSrcQuals (WizardTrackerPtr wiz, IDAndTitleEditPt
         SetWizardSrcQualExample("organism", "Taxodium distichum", wiz);
       }
       break;
-    case eWizardType_TSA:
-      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Organism", eWizardEditQual_ApplyAll, TRUE, TRUE, NULL, FALSE, "Homo sapiens"));
-      break;
     case eWizardType_Microsatellite:
       ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Organism", eWizardEditQual_ApplyAll, TRUE, TRUE, NULL, FALSE, "Coffea arabica"));
       break;
     case eWizardType_DLoop:
       ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Organism", eWizardEditQual_ApplyAll, TRUE, TRUE, NULL, FALSE, "Coffea arabica"));
+      break;
+    case eWizardType_WGS:
+      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Organism", eWizardEditQual_ApplyAll, TRUE, TRUE, NULL, FALSE, "Dictyostelium discoideum"));
+      if (wiz->wgs_source_type == eWGSSourceType_Bacteria) {
+        SetWizardSrcQualExample("organism", "Bacillus cereus ABC123", wiz);
+        ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Strain", eWizardEditQual_ApplyAll, TRUE, TRUE, NULL, FALSE, GetDefaultExample("Strain")));
+        ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Culture-collection", eWizardEditQual_ApplyAll, TRUE, FALSE, NULL, FALSE, "ATCC 12345"));
+      } else if (wiz->wgs_source_type == eWGSSourceType_Fungi) {
+        SetWizardSrcQualExample("organism", "Morchella esculenta", wiz);
+        ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Strain", eWizardEditQual_ApplyAll, TRUE, FALSE, NULL, FALSE, GetDefaultExample("Strain")));
+        ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Culture-collection", eWizardEditQual_ApplyAll, TRUE, FALSE, NULL, FALSE, "CBS 123"));
+      }
+      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Host", eWizardEditQual_ApplyAll, TRUE, FALSE,
+                         NULL, FALSE, GetDefaultExample("Host")));
+      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Isolation-source", eWizardEditQual_ApplyAll, TRUE, FALSE,
+                         NULL, FALSE, 
+                         wiz->wgs_source_type == eWGSSourceType_Bacteria ? "blood OR soil" : GetDefaultExample("Isolation-source")));
+
+      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Collection-date", eWizardEditQual_ApplyAll, TRUE, FALSE, NULL, FALSE, GetDefaultExample("Collection-date")));
+      ValNodeAddPointer (&(wiz->base_src_quals), 0, WizardSrcQualNewEx ("Country", eWizardEditQual_ApplyAll, TRUE, FALSE, NULL, FALSE, GetDefaultExample("Country")));
       break;
   }
 }
@@ -16100,6 +16284,14 @@ static WizardSrcQualPtr AddOneExtraSrcQual (WizardTrackerPtr wiz, CharPtr name, 
   if (wiz == NULL || StringHasNoText (name)) {
     return NULL;
   }
+  for (vnp = wiz->base_src_quals; vnp != NULL && !found; vnp = vnp->next) {
+    if ((q = (WizardSrcQualPtr) vnp->data.ptrvalue) != NULL
+        && StringICmp (q->name, name) == 0) {
+      q->example = example;
+      found = TRUE;
+    }
+  }
+
   for (vnp = wiz->extra_src_quals; vnp != NULL && !found; vnp = vnp->next) {
     if ((q = (WizardSrcQualPtr) vnp->data.ptrvalue) != NULL
         && StringICmp (q->name, name) == 0) {
@@ -16138,6 +16330,7 @@ static void SetWizardTrackerExtraSrcQuals (WizardTrackerPtr wiz, IDAndTitleEditP
           AddOneExtraSrcQual (wiz, "isolation-source", eWizardEditQual_ApplyAll, "feces", iatep);
           AddOneExtraSrcQual (wiz, "serotype", eWizardEditQual_ApplyAll, "Ex1", iatep);
           AddOneExtraSrcQual (wiz, "genotype", eWizardEditQual_ApplyAll, "D9", iatep);
+          AddOneExtraSrcQual (wiz, "segment", eWizardEditQual_ApplyAll, "10", iatep);
           break;
         case eVirusClass_FootAndMouth:
           AddOneExtraSrcQual (wiz, "genotype", eWizardEditQual_ApplyAll, "VII", iatep);
@@ -16204,13 +16397,6 @@ static void SetWizardTrackerExtraSrcQuals (WizardTrackerPtr wiz, IDAndTitleEditP
         AddOneExtraSrcQual (wiz, "culture-collection", eWizardEditQual_CopyFromId, "", iatep);
       }
       break;
-    case eWizardType_TSA:
-      AddOneExtraSrcQual (wiz, "dev-stage", eWizardEditQual_ApplyAll, "seed", iatep);
-      AddOneExtraSrcQual (wiz, "cell-line", eWizardEditQual_ApplyAll, "HK234", iatep);
-      AddOneExtraSrcQual (wiz, "cell-type", eWizardEditQual_ApplyAll, "leukocyte", iatep);
-      AddOneExtraSrcQual (wiz, "cultivar", eWizardEditQual_ApplyAll, "Microtom", iatep);
-      AddOneExtraSrcQual (wiz, "tissue-type", eWizardEditQual_ApplyAll, "liver", iatep);
-      break;
     case eWizardType_Microsatellite:
       AddOneExtraSrcQual (wiz, "clone", eWizardEditQual_CopyFromId, "Ca-789", iatep);
       q_name = AddOneExtraSrcQual (wiz, "Fwd-PCR-primer-name", eWizardEditQual_ApplyAll, "ex1a-f", iatep);
@@ -16242,6 +16428,19 @@ static void SetWizardTrackerExtraSrcQuals (WizardTrackerPtr wiz, IDAndTitleEditP
       }
       AddOneExtraSrcQual (wiz, "breed", eWizardEditQual_ApplyAll, NULL, iatep);
       AddOneExtraSrcQual (wiz, "cultivar", eWizardEditQual_ApplyAll, NULL, iatep);
+      break;
+    case eWizardType_WGS:
+      if (wiz->wgs_source_type != eWGSSourceType_Bacteria) {
+        AddOneExtraSrcQual (wiz, "strain", eWizardEditQual_ApplyAll, GetDefaultExample("strain"), iatep);
+        AddOneExtraSrcQual (wiz, "specimen-voucher", eWizardEditQual_ApplyAll, GetDefaultExample("specimen-voucher"), iatep);
+        AddOneExtraSrcQual (wiz, "isolate", eWizardEditQual_ApplyAll, GetDefaultExample("isolate"), iatep);
+      }
+      if (wiz->wgs_source_type == eWGSSourceType_OtherEuk) {
+        AddOneExtraSrcQual (wiz, "sex", eWizardEditQual_ApplyAll, GetDefaultExample("sex"), iatep);
+        AddOneExtraSrcQual (wiz, "breed", eWizardEditQual_ApplyAll, GetDefaultExample("breed"), iatep);
+        AddOneExtraSrcQual (wiz, "cultivar", eWizardEditQual_ApplyAll, GetDefaultExample("cultivar"), iatep);
+      }
+      AddOneExtraSrcQual (wiz, "lat-lon", eWizardEditQual_ApplyAll, GetDefaultExample("lat-lon"), iatep);
       break;
   }
 }
@@ -16631,7 +16830,7 @@ static UserObjectPtr DBLinkFromWizard (WizardTrackerPtr wiz)
 
   if (wiz == NULL) {
     return NULL;
-  } else if (StringHasNoText (wiz->bioproject) && !StringHasNoText (wiz->biosample) && !StringHasNoText (wiz->srr)) {
+  } else if (StringHasNoText (wiz->bioproject) && StringHasNoText (wiz->biosample) && StringHasNoText (wiz->srr)) {
     return NULL;
   }
   uop = CreateDBLinkUserObject ();
@@ -16662,6 +16861,9 @@ static void AddWizardDescriptorsCallback (BioseqPtr bsp, Pointer data)
     return;
   }
 
+  bsp->mol = wiz->mol_class;
+  bsp->topology = wiz->topology;
+
   if (wiz->molinfo != NULL) {
     if (wiz->wizard_type == eWizardType_Viruses) {
       if (wiz->virus_feat == eVirusFeat_viroid_complete) {
@@ -16670,9 +16872,6 @@ static void AddWizardDescriptorsCallback (BioseqPtr bsp, Pointer data)
         wiz->molinfo->completeness = 2;
       }
     }
-
-    bsp->mol = wiz->mol_class;
-    bsp->topology = wiz->topology;
 
     sdp = bsp->descr;
     while (sdp != NULL && sdp->choice != Seq_descr_molinfo) {
@@ -16690,10 +16889,11 @@ static void AddWizardDescriptorsCallback (BioseqPtr bsp, Pointer data)
 
     mip->biomol = wiz->molinfo->biomol;
     mip->completeness = wiz->molinfo->completeness;
+    mip->tech = wiz->molinfo->tech;
   }
 
   if (wiz->comment != NULL) {
-    if (wiz->wizard_type == eWizardType_TSA) {
+    if (wiz->wizard_type == eWizardType_WGS) {
       comment = StringSave (wiz->comment);
     } else {
       comment = (CharPtr) MemNew (sizeof(Char) * (StringLen (comment_fmt) + StringLen (wiz->comment)));
@@ -16709,10 +16909,6 @@ static void AddWizardDescriptorsCallback (BioseqPtr bsp, Pointer data)
     sdp->data.ptrvalue = uop;
   }
 
-  if (wiz->wizard_type == eWizardType_TSA) {
-    SetTsaCallback (bsp, NULL);
-  }
-
 }
 
 
@@ -16722,10 +16918,7 @@ static void AddWizardDescriptors (WizardTrackerPtr wiz, SeqEntryPtr sep)
     return;
   }
 
-  if (wiz->molinfo != NULL || wiz->comment != NULL 
-      || wiz->wizard_type == eWizardType_TSA) {
-    VisitBioseqsInSep (sep, wiz, AddWizardDescriptorsCallback);
-  }
+  VisitBioseqsInSep (sep, wiz, AddWizardDescriptorsCallback);
 
 }
 
@@ -16810,6 +17003,32 @@ static void SpecialWizardCleanup (WizardTrackerPtr wiz, SeqEntryPtr sep)
 }
 
 
+static CharPtr GetWGSNote (WizardTrackerPtr wiz)
+{
+  CharPtr wizard_note = "[WGS wizard]";
+  Int4    len = 0;
+  CharPtr fmt = "[%s][WGS wizard]";
+  CharPtr note;
+
+  if (StringHasNoText (wiz->wgs_ns_msg)) {
+    note = StringSave (wizard_note);
+  } else {
+    len = StringLen (wizard_note) + 1;
+    if (!StringHasNoText (wiz->wgs_ns_msg)) {
+      len += StringLen (wiz->wgs_ns_msg) + 2;
+    }
+    note = (CharPtr) MemNew (sizeof (Char) * len);
+    StringCpy (note, wizard_note);
+    if (!StringHasNoText (wiz->wgs_ns_msg)) {
+      StringCat (note, "[");
+      StringCat (note, wiz->wgs_ns_msg);
+      StringCat (note, "]");
+    }
+  }
+  return note;
+}
+
+
 static Boolean FinishWizardAndLaunchSequin (WizardTrackerPtr wiz)
 {
   BioseqSetPtr bssp;
@@ -16874,11 +17093,12 @@ static Boolean FinishWizardAndLaunchSequin (WizardTrackerPtr wiz)
           iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[intergenic wizard]", NULL, 0);
         }
         break;
-      case eWizardType_TSA:
-        iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[TSA wizard]", NULL, 0);
-        break;
       case eWizardType_Microsatellite:
-        iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[Microsatellite wizard]", NULL, 0);
+        if (wiz->multiple_repeats) {
+          iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[Microsatellite wizard; multiple repeats]", NULL, 0);
+        } else {
+          iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[Microsatellite wizard]", NULL, 0);
+        }
         break;
       case eWizardType_DLoop:
         if (wiz->add_span_note) {
@@ -16890,6 +17110,11 @@ static Boolean FinishWizardAndLaunchSequin (WizardTrackerPtr wiz)
         } else {
           iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", "[D-loop wizard]", NULL, 0);
         }
+        break;
+      case eWizardType_WGS:
+        val = GetWGSNote(wiz);
+        iatep->title_list[i] = AddNoteTextToOne (iatep->title_list[i], "note-subsrc", val, NULL, 0);
+        val = MemFree (val);
         break;
     }
   }
@@ -16926,6 +17151,8 @@ static Boolean FinishWizardAndLaunchSequin (WizardTrackerPtr wiz)
       tmp = next;
     }
   }
+  /* add structured comments */
+  AddStructuredCommentsFromWizard (sep, wiz->structured_comments);
 
   iatep = IDAndTitleEditFree (iatep);
 
@@ -17093,6 +17320,39 @@ static Boolean DoAllSequencesHaveSameModifierValue (SeqEntryPtr sep, CharPtr mod
 }
 
 
+static Boolean DoAllSequencesHaveSameModiferValueIfPresent (IDAndTitleEditPtr iatep, CharPtr mod_name)
+{
+  Int4 i;
+  Boolean rval = TRUE;
+  CharPtr first_val = NULL, val;
+
+  if (iatep == NULL) {
+    return TRUE;
+  }
+
+  for (i = 0; i < iatep->num_sequences && rval; i++) {
+    val = FindValueFromPairInDefline (mod_name, iatep->title_list[i]);
+    if (StringHasNoText (val)) {
+      if (first_val != NULL) {
+        rval = FALSE;
+      }
+    } else {
+      if (i == 0) {
+        first_val = val;
+        val = NULL;
+      } else if (first_val == NULL) {
+        rval = FALSE;
+      } else if (StringCmp (first_val, val)!= 0) {
+        rval = FALSE;
+      } 
+    }
+    val = MemFree (val);
+  }
+  first_val = MemFree (first_val);
+  return rval;
+}
+
+
 static Boolean HaveUniqueCombination (IDAndTitleEditPtr iatep, CharPtr name1, CharPtr name2)
 {
   CharPtr     defline, val1, val2;
@@ -17184,38 +17444,6 @@ static Boolean HaveUniqueCombinationOfQuals (IDAndTitleEditPtr iatep, ValNodePtr
 }
 
 
-static Boolean DoAllSequencesHaveAnExtraQual (SeqEntryPtr sep, ValNodePtr extra_src_quals)
-{
-  IDAndTitleEditPtr iatep;
-  Int4              i;
-  WizardSrcQualPtr  q;
-  Boolean           rval = TRUE;
-  Boolean           this_has_one;
-  ValNodePtr        vnp;
-  CharPtr           val;
-
-  iatep = SeqEntryListToIDAndTitleEditEx (sep, TRUE);
-
-  for (i = 0; i < iatep->num_sequences && rval; i++) {
-    this_has_one = FALSE;
-    for (vnp = extra_src_quals; vnp != NULL && !this_has_one; vnp = vnp->next) {
-      if ((q = (WizardSrcQualPtr) vnp->data.ptrvalue) != NULL) {
-        val = FindValueFromPairInDefline (q->name, iatep->title_list[i]);
-        if (!StringHasNoText (val)) {
-          this_has_one = TRUE;
-        }
-        val = MemFree (val);
-      }
-    }
-    if (!this_has_one) {
-      rval = FALSE;
-    }
-  }
-  iatep = IDAndTitleEditFree (iatep);
-  return rval;
-}
-
-
 static Boolean DoAllSequencesHaveASourceQualOtherThanTaxname (IDAndTitleEditPtr iatep)
 {
   Int4              i, j;
@@ -17251,104 +17479,6 @@ static Boolean DoAllSequencesHaveASourceQualOtherThanTaxname (IDAndTitleEditPtr 
     }
   }
   return rval;
-}
-
-
-static void SeqEntryToModTabTable (SeqEntryPtr sep, DialoG d, CharPtr mod_name)
-{
-  CharPtr     val, line, line_fmt = "%s\t%s\n";
-  ValNodePtr  list = NULL;
-  TagListPtr  tlp;
-  IDAndTitleEditPtr iatep;
-  Int4        i;
-
-  tlp = (TagListPtr) GetObjectExtra (d);
-  if (tlp == NULL) {
-    return;
-  }
-
-  iatep = SeqEntryListToIDAndTitleEditEx (sep, TRUE);
-
-  for (i = 0; i < iatep->num_sequences; i++) {
-    val = FindValueFromPairInDefline (mod_name, iatep->title_list[i]);
-    line = (CharPtr) MemNew (sizeof (Char) * (StringLen (line_fmt) + StringLen (iatep->id_list[i]) + StringLen (val) + 1));
-    sprintf (line, line_fmt, iatep->id_list[i], val == NULL ? "" : val);
-    ValNodeAddPointer (&list, 0, line);
-    val = MemFree (val);
-  }
-
-
-  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-  tlp->vnp = list;
-  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
-  tlp->max = MAX ((Int2) 0, (Int2) (iatep->num_sequences - tlp->rows));
-  CorrectBarMax (tlp->bar, tlp->max);
-  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1); 
-
-  iatep = IDAndTitleEditFree (iatep);
-}
-
-
-static void ModTableToSeqEntryList (SeqEntryPtr sep, DialoG d, CharPtr mod_name)
-{
-  CharPtr     val = NULL;
-  ValNodePtr  vnp;
-  TagListPtr  tlp;
-  IDAndTitleEditPtr iatep;
-  Int4        i;
-
-  tlp = (TagListPtr) GetObjectExtra (d);
-  if (tlp == NULL) {
-    return;
-  }
-
-  iatep = SeqEntryListToIDAndTitleEditEx (sep, TRUE);
-  for (i = 0, vnp = tlp->vnp; i < iatep->num_sequences; i++) {
-    if (vnp == NULL || (val = ExtractTagListColumn (vnp->data.ptrvalue, 1)) == NULL || StringHasNoText (val)) {
-      RemoveValueFromDefline (mod_name, iatep->title_list[i]);
-    } else {
-      iatep->title_list[i] = ReplaceValueInOneDefLine (iatep->title_list[i], mod_name, val);
-    }
-    val = MemFree (val);
-    if (vnp != NULL) {
-      vnp = vnp->next;
-    }
-  }
-
-  ApplyIDAndTitleEditToSeqEntryList (sep, iatep);
-
-  iatep = IDAndTitleEditFree (iatep);
-}
-
-
-static void ClearModifierValues (SeqEntryPtr sep, DialoG d, CharPtr mod_name)
-{
-  CharPtr     val = NULL;
-  ValNodePtr  list = NULL;
-  TagListPtr  tlp;
-  IDAndTitleEditPtr iatep;
-  Int4              i;
-  CharPtr           line_fmt = "%s\t\n", line;
-
-  tlp = (TagListPtr) GetObjectExtra (d);
-  if (tlp == NULL) {
-    return;
-  }
-
-  iatep = SeqEntryListToIDAndTitleEditEx (sep, TRUE);
-  for (i = 0; i < iatep->num_sequences; i++) {
-    RemoveValueFromDefline (mod_name, iatep->title_list[i]);
-    line = (CharPtr) MemNew (sizeof (Char) * (StringLen (line_fmt) + StringLen (iatep->id_list[i]) + StringLen (val) + 1));
-    sprintf (line, line_fmt, iatep->id_list[i]);
-    ValNodeAddPointer (&list, 0, line);
-  }
-
-  ApplyIDAndTitleEditToSeqEntryList (sep, iatep);
-  iatep = IDAndTitleEditFree (iatep);
-
-  SendMessageToDialog (tlp->dialog, VIB_MSG_RESET);
-  tlp->vnp = list;
-  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
 }
 
 
@@ -17466,19 +17596,6 @@ static void AddNoteTextToAll (SeqEntryPtr sep, CharPtr mod_name, CharPtr val, Ch
   ApplyIDAndTitleEditToSeqEntryList (sep, iatep);
 
   iatep = IDAndTitleEditFree (iatep);
-}
-
-
-static CharPtr ValueInList (CharPtr val, CharPtr PNTR list)
-{
-  Int4 i;
-
-  for (i = 0; list[i] != NULL; i++) {
-    if (StringICmp (val, list[i]) == 0) {
-      return list[i];
-    }
-  }
-  return NULL;
 }
 
 
@@ -17685,12 +17802,254 @@ static GrouP MakeWizardNav (GrouP h, Pointer frmdata)
 }
 
 
+typedef struct wizardchoice {
+  CharPtr name;
+  SequencesOkFunc fwd_ok_func;
+  CreateFormFunc next_form;
+} WizardChoiceData, PNTR WizardChoicePtr;
+
+
+typedef struct wizardsinglechoiceform {
+  WIZARD_BLOCK
+
+  GrouP single_choice;
+
+  WizardChoicePtr choice_list;
+} WizardSingleChoiceFormData, PNTR WizardSingleChoiceFormPtr;
+
+
+static Boolean MissingWizardSingleChoice (WizardTrackerPtr wiz)
+{
+  Message (MSG_ERROR, "You must make a selection!");
+  return FALSE;
+}
+
+
+static void SaveWizardSingleChoice (Pointer data, WizardTrackerPtr wiz)
+{
+  WizardSingleChoiceFormPtr frm;
+  Int2 val, i;
+
+  frm = (WizardSingleChoiceFormPtr) data;
+  if (frm == NULL) {
+    return;
+  }
+
+  val = GetValue (frm->single_choice);
+  for (i = 0; i < val - 1 && frm->choice_list[i].name != NULL; i++)
+  {
+  }
+
+  if (i == val - 1 && frm->choice_list[i].name != NULL) {
+    frm->fwd_ok_func = frm->choice_list[i].fwd_ok_func;
+    frm->next_form = frm->choice_list[i].next_form;
+  } else {
+    frm->fwd_ok_func = MissingWizardSingleChoice;
+    frm->next_form = NULL;
+  }
+}
+
+
+static Boolean CreateWizardSingleChoiceForm (WizardTrackerPtr wiz, WizardChoicePtr choice_list, CharPtr dlg_title, CharPtr prompt)
+{
+  WizardSingleChoiceFormPtr frm;
+  WindoW  w;
+  GrouP   h;
+  GrouP   c;
+  PrompT  ppt;
+  Int4    i;
+
+  frm = (WizardSingleChoiceFormPtr) MemNew (sizeof (WizardSingleChoiceFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveWizardSingleChoice;
+  frm->fwd_ok_func = NULL;
+  frm->next_form = NULL;
+  frm->choice_list = choice_list;
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  SetObjectExtra (w, frm, CleanupWizardForm);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, -1, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  ppt = StaticPrompt (h, prompt, 0, 0, programFont, 'c');
+
+  frm->single_choice = HiddenGroup (h, 0, 20, NULL);
+  SetGroupSpacing (frm->single_choice, 10, 10);
+  for (i = 0; frm->choice_list[i].name != NULL; i++) {
+    RadioButton (frm->single_choice, frm->choice_list[i].name);
+  }
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, 
+                              (HANDLE) frm->single_choice, 
+                              (HANDLE) c, 
+                              NULL);
+
+  Update();
+  Show (w);
+
+  return TRUE;
+}
+
+
+typedef struct wizardsubchoice {
+  CharPtr name;
+  CharPtr hidden_prompt;
+  WizardChoiceData subchoices[5];
+} WizardSubChoiceData, PNTR WizardSubChoicePtr;
+
+
+typedef struct wizardmultichoiceform {
+  WIZARD_BLOCK
+
+  GrouP main_choice;
+  GrouP PNTR subchoices;
+  
+  WizardSubChoicePtr choice_list;
+} WizardMultiChoiceFormData, PNTR WizardMultiChoiceFormPtr;
+
+
+static void SaveWizardMultiChoice (Pointer data, WizardTrackerPtr wiz)
+{
+  WizardMultiChoiceFormPtr frm;
+  Int2 val, i, j;
+
+  frm = (WizardMultiChoiceFormPtr) data;
+  if (frm == NULL) {
+    return;
+  }
+
+  val = GetValue (frm->main_choice);
+  for (i = 0; i < val - 1 && frm->choice_list[i].name != NULL; i++)
+  {
+  }
+
+  if (i == val - 1 && frm->choice_list[i].name != NULL) {
+    if (frm->choice_list[i].subchoices[1].name == NULL) {
+      frm->fwd_ok_func = frm->choice_list[i].subchoices[0].fwd_ok_func;
+      frm->next_form = frm->choice_list[i].subchoices[0].next_form;
+    } else {
+      val = GetValue (frm->subchoices[i]);
+      if (!StringHasNoText (frm->choice_list[i].hidden_prompt)) {
+        val--;
+      }
+      for (j = 0; j < val - 1 && frm->choice_list[i].subchoices[j].name != NULL; j++)
+      {
+      }
+      if (j == val - 1 && frm->choice_list[i].subchoices[j].name != NULL) {
+        frm->fwd_ok_func = frm->choice_list[i].subchoices[j].fwd_ok_func;
+        frm->next_form = frm->choice_list[i].subchoices[j].next_form;
+      } else {
+        frm->fwd_ok_func = MissingWizardSingleChoice;
+        frm->next_form = NULL;
+      }
+    }
+  } else {
+    frm->fwd_ok_func = MissingWizardSingleChoice;
+    frm->next_form = NULL;
+  }
+}
+
+
+static void ChangeWizardMultiChoice (GrouP g)
+{
+  WizardMultiChoiceFormPtr frm;
+  Int2 val, i;
+
+  frm = (WizardMultiChoiceFormPtr) GetObjectExtra (g);
+  if (frm == NULL) {
+    return;
+  }
+
+  for (i = 0; frm->choice_list[i].name != NULL; i++)
+  {
+    SafeHide (frm->subchoices[i]);
+  }
+  val = GetValue (frm->main_choice);
+  if (val - 1 < i) {
+    SafeShow (frm->subchoices[val - 1]);
+  }
+}
+
+
+static Boolean CreateWizardMultiChoiceForm (WizardTrackerPtr wiz, WizardSubChoicePtr choice_list, CharPtr dlg_title, CharPtr prompt)
+{
+  WizardMultiChoiceFormPtr frm;
+  WindoW  w;
+  GrouP   h, g;
+  GrouP   c;
+  PrompT  ppt;
+  Int4    i, j, num_main = 0;
+
+  frm = (WizardMultiChoiceFormPtr) MemNew (sizeof (WizardMultiChoiceFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveWizardMultiChoice;
+  frm->fwd_ok_func = NULL;
+  frm->next_form = NULL;
+  frm->choice_list = choice_list;
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  SetObjectExtra (w, frm, CleanupWizardForm);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, -1, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  ppt = StaticPrompt (h, prompt, 0, 0, programFont, 'c');
+
+  frm->main_choice = HiddenGroup (h, 0, 20, ChangeWizardMultiChoice);
+  SetObjectExtra (frm->main_choice, frm, NULL);
+  SetGroupSpacing (frm->main_choice, 10, 10);
+
+  for (i = 0; frm->choice_list[i].name != NULL; i++) {
+    num_main++;
+  }
+
+  for (i = 0; frm->choice_list[i].name != NULL; i++) {
+    RadioButton (frm->main_choice, frm->choice_list[i].name);
+    num_main++;
+  }
+
+  frm->subchoices = (GrouP PNTR) MemNew (sizeof (GrouP) * num_main);
+
+  g = HiddenGroup (h, 0, 0, NULL);
+  for (i = 0; frm->choice_list[i].name != NULL; i++) {
+    if (frm->choice_list[i].subchoices[1].name != NULL 
+        || !StringHasNoText (frm->choice_list[i].hidden_prompt)) {
+      frm->subchoices[i] = HiddenGroup (h, 0, 20, NULL);
+      if (!StringHasNoText (frm->choice_list[i].hidden_prompt)) {
+        StaticPrompt (frm->subchoices[i], frm->choice_list[i].hidden_prompt, 0, 0, programFont, 'c');
+      }
+      for (j = 0; frm->choice_list[i].subchoices[j].name != NULL; j++) {
+        RadioButton (frm->subchoices[i], frm->choice_list[i].subchoices[j].name);
+      }
+      Hide (frm->subchoices[i]);
+    }
+  }
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, 
+                              (HANDLE) frm->main_choice, 
+                              (HANDLE) g,
+                              (HANDLE) c, 
+                              NULL);
+
+  Update();
+  Show (w);
+
+  return TRUE;
+}
+
+
 /* Wizard Form Creation Functions */
 static Boolean CreateWizardSrcQualsForm (WizardTrackerPtr wiz);
 static Boolean CreateWizardMolInfoForm (WizardTrackerPtr wiz);
 static Boolean CreateWizardMolInfoExtraForm (WizardTrackerPtr wiz);
 static Boolean WizardSourceTypeForm (WizardTrackerPtr wiz);
-static Boolean RNAAnnotationWindow(WizardTrackerPtr wiz);
 static Boolean SingleRNAOrgWindow(WizardTrackerPtr wiz);
 static Boolean MultRNAOrgWindow(WizardTrackerPtr wiz);
 static Boolean PrimerChoiceWindow(WizardTrackerPtr wiz);
@@ -17722,6 +18081,12 @@ static Boolean CreateFeatureQualsForm (WizardTrackerPtr wiz);
 static Boolean CheckDLoopSequenceLengthAndOkToContinueToSequin (WizardTrackerPtr wiz);
 static Boolean MakeControlRegionAndContinueToSequin (WizardTrackerPtr wiz);
 static Boolean MakeDLoopAndContinueToSequin (WizardTrackerPtr wiz);
+
+/* WGS protos */
+static Boolean AskAboutWGSLocation (WizardTrackerPtr wiz);
+static Boolean SetPlasmidNames (WizardTrackerPtr wiz);
+static Boolean AskAboutChromosomes (WizardTrackerPtr wiz);
+
 
 static Boolean WizardCommentForm (WizardTrackerPtr wiz);
 static Boolean OkToContinueToSequin (WizardTrackerPtr wiz);
@@ -18081,18 +18446,6 @@ static Boolean ShowMiscFeatureTableInstructionsAndContinueToSequin (WizardTracke
 }
 
 
-static Boolean JumpToMainSubmission (WizardTrackerPtr wiz)
-{
-  if (!OkToContinueToSequin(wiz)) {
-    return FALSE;
-  } else {
-    RejoinMainSubmissionForm (wiz->sequences, 2, wiz);
-    wiz->sequences = NULL;
-    return TRUE;
-  }
-}
-
-
 static Boolean WizardHasRNA (WizardTrackerPtr wiz)
 {
   Boolean rval = TRUE;
@@ -18179,25 +18532,6 @@ static Boolean OkToContinueToSequinWithMessage (WizardTrackerPtr wiz, CharPtr le
 static Boolean OkToContinueToSequin (WizardTrackerPtr wiz)
 {
   return OkToContinueToSequinWithMessage (wiz, NULL);
-}
-
-
-static Int2 GroupChoiceFromName (CharPtr rna_name, CharPtr PNTR standard_names)
-{
-  Int2 rval = 0;
-
-  if (StringHasNoText (rna_name)) {
-    rval = 0;
-  } else if (standard_names == NULL) {
-    rval = 0;
-  } else {
-    for (rval = 1; standard_names[rval - 1] != NULL && StringCmp (rna_name, standard_names[rval - 1]) != 0; rval++) {
-    }
-    if (standard_names[rval - 1] == NULL) {
-      rval = 0;
-    }
-  }
-  return rval;
 }
 
 
@@ -18656,12 +18990,6 @@ static Boolean MultFungalFeat (WizardTrackerPtr wiz)
 }
 
 
-static Boolean MultOrganelleFeat (WizardTrackerPtr wiz)
-{
-  return MultRNAFeat (wiz, OrganelleFeatNames);
-}
-
-
 typedef struct rnaorgform {
   WIZARD_BLOCK
   GrouP org_choice;
@@ -18779,133 +19107,6 @@ static Boolean MultRNAOrgWindow(WizardTrackerPtr wiz)
 }
 
 static Boolean UnculturedSamplesCodingRegionForm (WizardTrackerPtr wiz);
-
-typedef struct annotationform {
-  WIZARD_BLOCK
-  GrouP annotation_choice;
-} AnnotationFormData, PNTR AnnotationFormPtr;
-
-
-static void ChangeAnnotationChoice (GrouP g)
-{
-  AnnotationFormPtr frm;
-  Int2 val;
-
-  frm = (AnnotationFormPtr) GetObjectExtra (g);
-  if (frm == NULL) {
-    return;
-  }
-  val = GetValue (frm->annotation_choice);
-  switch (val) {
-    case 1:
-      frm->fwd_ok_func = NULL;
-      if (frm->wiz->wizard_type == eWizardType_UnculturedSamples) {
-        frm->next_form = SingleRNAOrgWindow;
-      } else if (frm->wiz->wizard_type == eWizardType_CulturedSamples) {
-        if (frm->wiz->cultured_kingdom == eCulturedKingdom_BacteriaArchea) {
-          frm->next_form = SingleBacteriaArchaeaFeat;
-        } else {
-          frm->next_form = SingleFungalFeat;
-        }
-      }
-      break;
-    case 2:
-      frm->fwd_ok_func = NULL;
-      if (frm->wiz->wizard_type == eWizardType_UnculturedSamples) {
-        frm->next_form = MultRNAOrgWindow;
-      } else if (frm->wiz->wizard_type == eWizardType_CulturedSamples) {
-        if (frm->wiz->cultured_kingdom == eCulturedKingdom_BacteriaArchea) {
-          frm->next_form = MultBacteriaArchaeaFeat;
-        } else {
-          frm->next_form = MultFungalFeat;
-        }
-      }
-      break;
-    case 3:
-      frm->fwd_ok_func = NULL;
-      frm->next_form = ShowRNAFeatureTableInstructionsAndContinueToSequin;
-      break;
-    case 4:
-      frm->fwd_ok_func = NULL;
-      frm->next_form = UnculturedSamplesCodingRegionForm;
-      break;
-    case 5:
-      frm->fwd_ok_func = NULL;
-      frm->next_form = ShowMiscFeatureTableInstructionsAndContinueToSequin;
-      break;
-    default:
-      frm->fwd_ok_func = OkToContinueToSequin;
-      frm->next_form = FinishWizardAndLaunchSequin;
-      break;
-  }
-
-}
-
-
-static Boolean MustChooseAnnotationType(WizardTrackerPtr wiz)
-{
-  Message (MSG_ERROR, "You must choose an annotation type!");
-  return FALSE;
-}
-
-
-static Boolean RNAAnnotationWindow(WizardTrackerPtr wiz)
-{
-  AnnotationFormPtr frm;
-  WindoW w;
-  GrouP  h;
-  PrompT p;
-  GrouP  g;
-  CharPtr dlg_title;
-
-  frm = (AnnotationFormPtr) MemNew (sizeof (AnnotationFormData));
-  frm->wiz = wiz;
-
-  dlg_title = GetWizardDlgTitle(wiz->wizard_type, eWizardDlgTitle_Annotation);
-  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
-  SetObjectExtra (w, frm, CleanupWizardForm);
-  frm->form = (ForM) w;
-
-  h = HiddenGroup (w, -1, -1, NULL);
-  SetGroupSpacing (h, 10, 10);
-
-  p = StaticPrompt (h, "What do your sequences contain?", 0, 0, programFont, 'c');
-  
-  frm->annotation_choice = HiddenGroup (h, 0, 5, ChangeAnnotationChoice);
-  SetObjectExtra (frm->annotation_choice, frm, NULL);
-  SetGroupSpacing (frm->annotation_choice, 10, 10);
-  if (wiz->wizard_type == eWizardType_CulturedSamples) {
-    if (wiz->cultured_kingdom == eCulturedKingdom_BacteriaArchea) {
-      RadioButton (frm->annotation_choice, "Single rRNA or IGS");
-      RadioButton (frm->annotation_choice, "Multiple rRNA or IGS regions where spans are unknown");
-      RadioButton (frm->annotation_choice, "Multiple rRNA or IGS regions where spans are known");
-    } else {
-      RadioButton (frm->annotation_choice, "Single rRNA or ITS");
-      RadioButton (frm->annotation_choice, "Multiple rRNA or ITS regions where spans are unknown");
-      RadioButton (frm->annotation_choice, "Multiple rRNA or ITS regions where spans are known");
-    }
-  } else {
-    RadioButton (frm->annotation_choice, "Single rRNA, ITS, or IGS");
-    RadioButton (frm->annotation_choice, "Multiple rRNA, ITS, or IGS regions where spans are unknown");
-    RadioButton (frm->annotation_choice, "Multiple rRNA, ITS, or IGS regions where spans are known");
-    RadioButton (frm->annotation_choice, "Coding Region (CDS)");
-    RadioButton (frm->annotation_choice, "Something else/multiple features");
-  }
-
-  g = MakeWizardNav (h, frm);
-
-  frm->next_form = MustChooseAnnotationType;
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) frm->annotation_choice, (HANDLE) g, NULL);
-
-  Update();
-  Show (w);
-  SendHelpScrollMessage (helpForm, dlg_title, "");
-  /* must set spans_unknown after this point, if backing through, unset */
-  wiz->spans_unknown = FALSE;
-  return TRUE;
-}
-
 
 typedef struct chimera {
   WIZARD_BLOCK
@@ -19675,7 +19876,6 @@ CharPtr sUnwiseSampleOrgNames[] = {
   NULL
 };
 
-
 static void AddDuplicateSingleQualifierProblems (IDAndTitleEditPtr iatep, CharPtr qual_name, CharPtr PNTR problems, CharPtr err_name)
 {
   Int4    i;
@@ -19759,7 +19959,9 @@ static CharPtr PNTR GetUnculturedQualifiersProblems (WizardTrackerPtr wiz)
       host = MemFree (host);
     } else if (StringLen (iso) < 3) {
       SetStringValue (&(problems[i]), "Suspiciously short isolation source", ExistingTextOption_append_semi);
-    }
+    } else if (ValueInList(iso, sBadUnculturedIsolationSources)) {
+      SetStringValue (&(problems[i]), "Invalid isolation source", ExistingTextOption_append_semi);
+    }      
     iso = MemFree (iso);
   }
 
@@ -20058,7 +20260,7 @@ static Int4 GetYearFromCollectionDateString (CharPtr collection_date, Boolean de
         Message (MSG_ERROR, "Year could not be parsed from '%s'", reformatted);
       }
     } else {
-      if (isdigit (*reformatted)) {
+      if (reformatted != NULL && isdigit (*reformatted)) {
         cp++;
         cp2 = StringChr (cp, '-');
         if (cp2 != NULL) {
@@ -20118,7 +20320,7 @@ static void CheckStrainAgainstSerotypeAndCollectionDateProblems (IDAndTitleEditP
       }
       if (collection_date != NULL) {
         cp = StringRChr (strain, '/');
-        if (cp != NULL && cp == strain + len - 5 && IsAllDigits(cp + 1)) {
+        if (cp != NULL && cp == strain + len - 5 && StringIsAllDigits(cp + 1)) {
           year = GetYearFromCollectionDateString (collection_date, FALSE); 
           if (year != -1 && year != atoi (cp + 1)) {
             SetStringValue (&(problems[i]), "collection-date and strain conflict", ExistingTextOption_append_semi);
@@ -20431,9 +20633,6 @@ static CharPtr PNTR GetWizardQualifierProblems (WizardTrackerPtr wiz)
     case eWizardType_CulturedSamples:
       problems = GetCulturedSamplesQualifiersProblems (wiz);
       break;
-    case eWizardType_TSA:
-      problems = GetTSAQualifiersProblems (wiz);
-      break;
     case eWizardType_IGS:
       problems = GetIGSQualifiersProblems (wiz);
       break;
@@ -20455,7 +20654,7 @@ static Boolean UnculturedQualifiersOk (WizardTrackerPtr wiz)
   IDAndTitleEditPtr        iatep;
   Int4                     i;
   CharPtr                  val, host;
-  Boolean                  all_present = TRUE, long_enough = TRUE;
+  Boolean                  all_present = TRUE, long_enough = TRUE, bad_val = FALSE;
 
   iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
 
@@ -20510,6 +20709,8 @@ static Boolean UnculturedQualifiersOk (WizardTrackerPtr wiz)
         host = MemFree (host);
       } else if (StringLen (val) < 3) {
         long_enough = FALSE;
+      } else if (ValueInList(val, sBadUnculturedIsolationSources)) {
+        bad_val = TRUE;
       }
       val = MemFree (val);
     }
@@ -20522,7 +20723,10 @@ static Boolean UnculturedQualifiersOk (WizardTrackerPtr wiz)
         rval = FALSE;
       }
     }
-
+    if (rval && bad_val) {
+      Message (MSG_ERROR, "Isolation source should have a value like seawater, soil, etc. One or more of values you have provided are not valid. Please provide the isolation-source.");
+      rval = FALSE;
+    }
   }
 
   /* check for presence of strain */
@@ -20630,6 +20834,24 @@ static Boolean CheckValidationRules (WizardTrackerPtr wiz, Boolean required)
       }
     }
   }
+  for (vnp = wiz->extra_src_quals; vnp != NULL && rval; vnp = vnp->next) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    if (q->valid_func != NULL && ((required && q->valid_required) || (!required && !q->valid_required))) {
+      bad_qual_found = FALSE;
+      for (i = 0; i < iatep->num_sequences && rval && !bad_qual_found; i++) {
+        val = FindValueFromPairInDefline (q->name, iatep->title_list[i]);
+        tmp = (q->valid_func)(val, q->name, TRUE);
+        val = MemFree (val);
+        if (tmp != NULL) {
+          if (ANS_CANCEL == Message (MSG_OKC, "%s Are you sure you want to continue?", tmp)) {
+            rval = FALSE;
+          }
+          tmp = MemFree (tmp);
+          bad_qual_found = TRUE;
+        }
+      }
+    }
+  }
   iatep = IDAndTitleEditFree (iatep);
   return rval;
 }
@@ -20668,7 +20890,7 @@ static CharPtr CheckStrainAgainstSerotypeAndCollectionDate (IDAndTitleEditPtr ia
       }
       if (collection_date != NULL) {
         cp = StringRChr (strain, '/');
-        if (cp != NULL && cp == strain + len - 5 && IsAllDigits(cp + 1)) {
+        if (cp != NULL && cp == strain + len - 5 && StringIsAllDigits(cp + 1)) {
           year = GetYearFromCollectionDateString (collection_date, FALSE); 
           if (year == -1) {
             rval = "Error in collection date format.";
@@ -21026,6 +21248,95 @@ static Boolean TSASrcQualsOk (WizardTrackerPtr wiz)
 }
 
 
+static Boolean AllQualsMatch (IDAndTitleEditPtr iatep, WizardTrackerPtr wiz)
+{
+  WizardSrcQualPtr q;
+  ValNodePtr vnp;
+  Boolean    rval = TRUE;
+
+  for (vnp = wiz->base_src_quals; vnp != NULL && rval; vnp = vnp->next) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    if (!DoAllSequencesHaveSameModiferValueIfPresent (iatep, q->name)) {
+      Message (MSG_ERROR, "You must provide the same value of %s for every sequence!", q->name);
+      rval = FALSE;
+    }
+  }
+
+  for (vnp = wiz->extra_src_quals; vnp != NULL && rval; vnp = vnp->next) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    if (q->show && !DoAllSequencesHaveSameModiferValueIfPresent (iatep, q->name)) {
+      Message (MSG_ERROR, "You must provide the same value of %s for every sequence!", q->name);
+      rval = FALSE;
+    }
+  }
+
+  return rval;
+}
+
+
+static Boolean WGSQualsOk (WizardTrackerPtr wiz)
+{
+  Boolean rval = TRUE;
+  IDAndTitleEditPtr iatep;
+  CharPtr val;
+  Boolean has_one = FALSE;
+  CharPtr mutually_exclusive[] = {"strain", "breed", "isolate", "cultivar", NULL};
+  Int4 i;
+
+  if (wiz == NULL) {
+    return FALSE;
+  }
+
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+
+  rval = AllQualsMatch (iatep, wiz);
+  if (rval) {
+    if (wiz->wgs_source_type == eWGSSourceType_Bacteria || wiz->wgs_source_type == eWGSSourceType_Fungi) {
+      if (!DoAllSequencesHaveModifier (iatep, "host")
+          && !DoAllSequencesHaveModifier (iatep, "isolation-source")
+          && !DoAllSequencesHaveModifier (iatep, "culture collection")) {
+        Message (MSG_ERROR, "You must provide host, isolation-source, or culture collection.");
+        rval = FALSE;
+      }
+    } else {
+      if (!DoAllSequencesHaveModifier (iatep, "host")
+          && !DoAllSequencesHaveModifier (iatep, "isolation-source")) {
+        Message (MSG_ERROR, "You must provide host or isolation-source.");
+        rval = FALSE;
+      }
+    }
+  } 
+  if (rval && wiz->wgs_source_type != eWGSSourceType_Bacteria) {
+    if (!DoAllSequencesHaveModifier (iatep, "strain")
+        && !DoAllSequencesHaveModifier (iatep, "specimen-voucher")
+        && !DoAllSequencesHaveModifier (iatep, "isolate")) {
+      Message (MSG_ERROR, "You must provide strain, specimen-voucher, or isolate.");
+      rval = FALSE;
+    }
+  }
+
+  /* strain, breed, isolate & cultivar are mutually exclusive */
+  for (i = 0; mutually_exclusive[i] != NULL && rval; i++) {
+    val = FindValueFromPairInDefline (mutually_exclusive[i], iatep->title_list[0]);
+    if (!StringHasNoText (val)) {
+      if (has_one) {
+        Message (MSG_ERROR, "Strain, breed, isolate and cultivar are mutually exclusive.  You should only provide one of these.");
+        rval = FALSE;
+      } else {
+        has_one = TRUE;
+      }
+    }
+    val = MemFree (val);
+  }
+
+  iatep = IDAndTitleEditFree (iatep);
+  if (rval) {
+    rval = StandardQualChecks(wiz);
+  }
+  return rval;
+}
+
+
 static Boolean WizardSrcQualsOk (WizardTrackerPtr wiz)
 {
   Boolean rval = FALSE;
@@ -21043,9 +21354,6 @@ static Boolean WizardSrcQualsOk (WizardTrackerPtr wiz)
     case eWizardType_CulturedSamples:
       rval = CulturedSamplesOk (wiz);
       break;
-    case eWizardType_TSA:
-      rval = TSASrcQualsOk (wiz);
-      break;
     case eWizardType_IGS:
       rval = IGSQualsOk(wiz);
       break;
@@ -21054,6 +21362,9 @@ static Boolean WizardSrcQualsOk (WizardTrackerPtr wiz)
       break;
     case eWizardType_DLoop:
       rval = DLoopQualsOk (wiz);
+      break;
+    case eWizardType_WGS:
+      rval = WGSQualsOk (wiz);
       break;
   }
   return rval;
@@ -21652,9 +21963,6 @@ static void ShowSourceTableHelp (ButtoN b)
           break;
       }
       break;
-    case eWizardType_TSA:
-      ShowWizardHelpText ("Source Table Help", s_TSASrcTblHelpMsgs);
-      break;
     case eWizardType_DLoop:
       ShowWizardHelpText ("Source Table Help", s_DLoopSrcTblHelpMsgs);
       break;
@@ -22104,10 +22412,6 @@ static Boolean CreateWizardSrcQualsForm (WizardTrackerPtr wiz)
     case eWizardType_UnculturedSamples:
       frm->next_form = PrimerChoiceWindow;
       break;
-    case eWizardType_TSA:
-      frm->fwd_ok_func = SrcQualsOkAndOkToContinueToSequin;
-      frm->next_form = FinishWizardAndLaunchSequin;
-      break;
     case eWizardType_IGS:
       frm->next_form = CreateWizardGenomeForm;
       break;
@@ -22238,7 +22542,7 @@ static Boolean RangePairIsFullSeq (CharPtr begin_str, CharPtr end_str, BioseqPtr
 {
   Int4 begin, end, x;
 
-  if (bsp == NULL || !IsAllDigits (end_str) || !IsAllDigits(begin_str)) {
+  if (bsp == NULL || !StringIsAllDigits (end_str) || !StringIsAllDigits(begin_str)) {
     return FALSE;
   }
   begin = atoi (begin_str);
@@ -22310,7 +22614,7 @@ Click Cancel to edit this information in the table.")) {
                   }
                   unbalanced_found = TRUE;
                 }
-              } else if (IsAllDigits (val) && IsAllDigits (range_start_str) && RangePairIsFullSeq(range_start_str, val, bsp)) {
+              } else if (StringIsAllDigits (val) && StringIsAllDigits (range_start_str) && RangePairIsFullSeq(range_start_str, val, bsp)) {
                 if (ANS_CANCEL == Message (MSG_OKC, "Some of the values in rpt_unit_range are the same length as the sequence(s).\n\
 The rpt_unit_range should contain the nucleotide locations of one repeat unit.\n\
 Click OK to proceed and remove the bad rpt_unit_range values.\n\
@@ -22321,7 +22625,7 @@ Click Cancel to edit this information in the table.")) {
               }
             }
           }
-          if (!out_of_range_found && !StringHasNoText (val) && IsAllDigits(val) && (atoi (val) > bsp->length || atoi (val) < 1)) {
+          if (!out_of_range_found && !StringHasNoText (val) && StringIsAllDigits(val) && (atoi (val) > bsp->length || atoi (val) < 1)) {
             if (ANS_CANCEL == Message (MSG_OKC, "Some of the values in rpt_unit_range are larger than the length of the sequence(s) or less than one.\n\
 Click OK to proceed and remove the bad rpt_unit_range values.\n\
 Click Cancel to edit this information in the table.")) {
@@ -22627,7 +22931,7 @@ static void DiscardInvalidQuals (WizardTrackerPtr wiz)
               val[0] = 0;
             } else if (val[0] == 0) {
               range_start_str[0] = 0;
-            } else if (IsAllDigits (val) && IsAllDigits (range_start_str) && RangePairIsFullSeq(range_start_str, val, bsp)) {
+            } else if (StringIsAllDigits (val) && StringIsAllDigits (range_start_str) && RangePairIsFullSeq(range_start_str, val, bsp)) {
               val[0] = 0;
               range_start_str[0] = 0;
             }
@@ -22722,12 +23026,12 @@ static CharPtr GetLineProblems (ValNodePtr line, ValNodePtr base_src_quals, ValN
   for (vnp = extra_src_quals; vnp != NULL; vnp = vnp->next) {
     sq = (WizardSrcQualPtr) vnp->data.ptrvalue;
     if (sq->show) {
-      msg = OneSrcQualProblem (sq, val_vnp->data.ptrvalue);
-      if (msg != NULL) {
-        ValNodeAddPointer (&problem_list, 0, msg);
-        len += StringLen (msg) + 2;
-      }
       if (val_vnp != NULL) {
+        msg = OneSrcQualProblem (sq, val_vnp->data.ptrvalue);
+        if (msg != NULL) {
+          ValNodeAddPointer (&problem_list, 0, msg);
+          len += StringLen (msg) + 2;
+        }
         val_vnp = val_vnp->next;
       }
     }
@@ -23096,10 +23400,10 @@ static void TabTableToSeqAnnotList
 {
   CharPtr      this_id, last_id = NULL, val;
   ValNodePtr   sap_vnp = NULL, q_vnp, row_vnp, col_vnp;
-  Int4         i;
+  Int4         i = 0;
   Int4         num_saps;
   CharPtr PNTR sap_ids = NULL;
-  SeqFeatPtr   sfp, last_sfp = NULL;
+  SeqFeatPtr   sfp = NULL, last_sfp = NULL;
   SeqAnnotPtr  sap;
   WizardSrcQualPtr  sq;
   WizardFeatQualPtr fq;
@@ -23115,12 +23419,14 @@ static void TabTableToSeqAnnotList
     col_vnp = row_vnp->data.ptrvalue;
     this_id = col_vnp->data.ptrvalue;
     if (StringCmp (this_id, last_id) == 0) {
-      if (last_sfp->next == NULL) {
+      if (last_sfp != NULL && last_sfp->next == NULL) {
         sfp = NewFeatForAnnotList (this_id, iatep, sep_list);
         MakeSeqFeatMicrosatellite (sfp);
         last_sfp->next = sfp;
       }
-      sfp = last_sfp->next;
+      if (last_sfp != NULL) {
+        sfp = last_sfp->next;
+      }
       this_id = MemFree (this_id);
     } else {
       i = 0;
@@ -23465,45 +23771,6 @@ static void CleanupWizardFeatureQualsForm (GraphiC g, Pointer data)
 }
 
 
-static Boolean s_IsIgnorable (Char ch)
-{
-  if (isspace (ch) || ispunct (ch) || ch == '\n' || ch == '\r') {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-static Boolean EqualIgnoreWhiteSpacePunctAndCaps (CharPtr a, CharPtr b)
-{  
-  if (StringHasNoText (a) && StringHasNoText (b)) {
-    return TRUE;
-  } else if (StringHasNoText (a) || StringHasNoText (b)) {
-    return FALSE;
-  }
-
-  while (*a != 0 || *b != 0) {
-    while (s_IsIgnorable(*a)) {
-      a++;
-    }
-    while (s_IsIgnorable(*b)) {
-      b++;
-    }
-    if (*a != *b) {
-      return FALSE;
-    }
-    if (*a != 0) {
-      a++;
-    }
-    if (*b != 0) {
-      b++;
-    }
-  }
-  return TRUE;
-}
-
-
 static void ShowAllFeatureQualSequences (GrouP g)
 {
   WizardFeatureQualsFormPtr frm;
@@ -23564,9 +23831,11 @@ static void InsertBlankColumnAfterN (ValNodePtr table, Int4 n)
     if (vnp_col == NULL) {
       vnp_col = vnp_prev;
     }
-    vnp_new = ValNodeNew (NULL);
-    vnp_new->next = vnp_col->next;
-    vnp_col->next = vnp_new;
+    if (vnp_col != NULL) {
+      vnp_new = ValNodeNew (NULL);
+      vnp_new->next = vnp_col->next;
+      vnp_col->next = vnp_new;
+    }
   }
 }
 
@@ -23599,7 +23868,7 @@ static void AddExtraTabEditorColumn (ButtoN b)
       } else {
         i++;
       }
-    } else if (q->show) {
+    } else if (q != NULL && q->show) {
       j++;
     }
   }
@@ -23706,9 +23975,9 @@ static Int4 GetWizardQualPos (CharPtr q_name, WizardTrackerPtr wiz)
 
   for (vnp = wiz->base_src_quals; vnp != NULL; vnp = vnp->next, i++) {
     q = (WizardQualPtr) vnp->data.ptrvalue;
-    if (StringsAreEquivalent (q->name, q_name)) {
+    if (q != NULL && StringsAreEquivalent (q->name, q_name)) {
       return i;
-    } else if (q->edit_type == eWizardEditQual_Range) {
+    } else if (q != NULL && q->edit_type == eWizardEditQual_Range) {
       if (StringsAreEquivalent (q_name, "begin")) {
         return i;
       } else if (StringsAreEquivalent (q_name, "end")) {
@@ -23738,7 +24007,7 @@ static Int4 GetWizardQualPos (CharPtr q_name, WizardTrackerPtr wiz)
     q = (WizardQualPtr) vnp->data.ptrvalue;
     if (q != NULL && StringsAreEquivalent (q->name, q_name)) {
       return i;
-    } else if (q->edit_type == eWizardEditQual_Range) {
+    } else if (q != NULL && q->edit_type == eWizardEditQual_Range) {
       if (StringsAreEquivalent (q_name, "begin")) {
         return i;
       } else if (StringsAreEquivalent (q_name, "end")) {
@@ -24542,7 +24811,7 @@ static CharPtr CheckRangeStart (CharPtr val, BioseqPtr bsp)
 
   if (StringHasNoText (val)) {
     rval = NULL;
-  } else if (IsAllDigits (val)) {
+  } else if (StringIsAllDigits (val)) {
     pos = atoi (val);
     if (pos < 1) {
       rval = StringSave ("rpt_unit_range values should be inside the sequence (must be 1 or greater).");
@@ -24563,7 +24832,7 @@ static CharPtr CheckRangeStop (CharPtr val, BioseqPtr bsp)
 
   if (StringHasNoText (val)) {
     rval = NULL;
-  } else if (IsAllDigits (val)) {
+  } else if (StringIsAllDigits (val)) {
     pos = atoi (val);
     if (pos < 1) {
       rval = StringSave ("rpt_unit_range values should be inside the sequence (must be 1 or greater)");
@@ -24574,64 +24843,6 @@ static CharPtr CheckRangeStop (CharPtr val, BioseqPtr bsp)
     rval = StringSave ("The rpt_unit_range begin and end should have number values only. Please go back and edit this information or else it will be discarded. Do not use symbols or letters in these fields.");
   }
   return rval;
-}
-
-
-static CharPtr GetLocStart (SeqFeatPtr sfp)
-{
-  Char buf[15];
-  SeqIntPtr sint;
-
-  if (sfp == NULL || sfp->location == NULL || sfp->location->choice != SEQLOC_INT || (sint = (SeqIntPtr) sfp->location->data.ptrvalue) == NULL) {
-    return NULL;
-  }
-  sprintf (buf, "%d", sint->from + 1);
-  return StringSave (buf);
-}
-
-
-static CharPtr GetLocStop (SeqFeatPtr sfp)
-{
-  Char buf[15];
-  SeqIntPtr sint;
-
-  if (sfp == NULL || sfp->location == NULL || sfp->location->choice != SEQLOC_INT || (sint = (SeqIntPtr) sfp->location->data.ptrvalue) == NULL) {
-    return NULL;
-  }
-  sprintf (buf, "%d", sint->to + 1);
-  return StringSave (buf);
-}
-
-
-static void ApplyLocStart (SeqFeatPtr sfp, CharPtr val)
-{
-  Int4    pos;
-  SeqIntPtr sint;
-
-  if (sfp == NULL || StringHasNoText (val)) {
-    return;
-  }
-
-  pos = atoi (val) - 1;
-
-  sint = (SeqIntPtr) sfp->location->data.ptrvalue;
-  sint->from = pos;
-}
-
-
-static void ApplyLocStop (SeqFeatPtr sfp, CharPtr val)
-{
-  Int4    pos;
-  SeqIntPtr sint;
-
-  if (sfp == NULL || StringHasNoText (val)) {
-    return;
-  }
-
-  pos = atoi (val) - 1;
-
-  sint = (SeqIntPtr) sfp->location->data.ptrvalue;
-  sint->to = pos;
 }
 
 
@@ -24646,7 +24857,7 @@ static CharPtr IsLocStartFormatValid (CharPtr val, CharPtr qual_name, BioseqPtr 
 
   if (StringHasNoText (val)) {
     /* empty value, ok */
-  } else if (!IsAllDigits (val)) {
+  } else if (!StringIsAllDigits (val)) {
     fmt = num_fmt;
   } else {
     pos = atoi (val);
@@ -24675,7 +24886,7 @@ static CharPtr IsLocStopFormatValid (CharPtr val, CharPtr qual_name, BioseqPtr b
 
   if (StringHasNoText (val)) {
     /* ok if empty */
-  } else if (!IsAllDigits (val)) {
+  } else if (!StringIsAllDigits (val)) {
     fmt = num_fmt;
   } else {
     pos = atoi (val);
@@ -24723,19 +24934,6 @@ static CharPtr GetRptUnitSeq (SeqFeatPtr sfp)
 
   rval = GetFirstGBQualMatch (sfp->qual, "rpt_unit_seq", 0, NULL);
   return rval;
-}
-
-
-static Boolean IsAllATGC (CharPtr val) 
-{
-  if (val == NULL || *val == 0) {
-    return FALSE;
-  }
-  if (StringSpn (val, "ATGCatgc") == StringLen (val)) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
 }
 
 
@@ -24873,6 +25071,1661 @@ static CharPtr GetRangeStop (SeqFeatPtr sfp)
     rval = tmp;
   }
   return rval;    
+}
+
+
+/* universal source information */
+
+static void AddMissingQuals (CharPtr title, WizardTrackerPtr wiz)
+{
+  ValNodePtr    q_vnp;
+  WizardSrcQualPtr q;
+  Boolean       found;
+  CharPtr       names, val, cp, qual_name;
+  Uint1         subtype;
+
+  names = GetPresentModifierNames (title);
+  val = names;
+  while (val != NULL) {
+    cp = StringChr (val, ',');
+    if (cp != NULL) {
+      *cp = 0;
+    }
+    TrimSpacesAroundString (val);
+    qual_name = NULL;
+    if ((subtype = EquivalentOrgMod (val)) != 0) {
+      qual_name = GetOrgModQualName (subtype);
+    } else if ((subtype = EquivalentSubSource (val)) != 0) {
+      qual_name = GetSubsourceQualName (subtype);
+    }
+
+    if (qual_name != NULL) {
+      found = FALSE;
+      for (q_vnp = wiz->base_src_quals; q_vnp != NULL && !found; q_vnp = q_vnp->next) {
+        q = (WizardSrcQualPtr) q_vnp->data.ptrvalue;
+        found = StringsAreEquivalent (q->name, qual_name);
+      }
+      for (q_vnp = wiz->extra_src_quals; q_vnp != NULL && !found; q_vnp = q_vnp->next) {
+        q = (WizardSrcQualPtr) q_vnp->data.ptrvalue;
+        found = StringsAreEquivalent (q->name, qual_name);
+        if (found) {
+          q->show = TRUE;
+        }
+      }
+      if (!found) {
+        q = WizardSrcQualNewEx (qual_name, eWizardEditQual_None, TRUE, TRUE, NULL, FALSE, NULL);
+        ValNodeAddPointer (&(wiz->extra_src_quals), 0, q);
+      }
+    }
+    if (cp == NULL) {
+      val = cp;
+    } else {
+      val = cp + 1;
+    }
+  }
+  names = MemFree (names);
+}
+
+typedef struct universalsrc {
+  ValNodePtr id_list_list;
+  ValNodePtr val_list;
+} UniversalSrcData, PNTR UniversalSrcPtr;
+
+
+static UniversalSrcPtr UniversalSrcNew (ValNodePtr id_list_list, ValNodePtr val_list)
+{
+  UniversalSrcPtr u;
+
+  u = (UniversalSrcPtr) MemNew (sizeof (UniversalSrcData));
+  u->id_list_list = id_list_list;
+  u->val_list = val_list;
+  return u;
+}
+
+static UniversalSrcPtr UniversalSrcFree (UniversalSrcPtr u)
+{
+  ValNodePtr vnp;
+
+  if (u != NULL) {
+    for (vnp = u->id_list_list; vnp != NULL; vnp = vnp->next) {
+      vnp->data.ptrvalue = ValNodeFreeData (vnp->data.ptrvalue);
+    }
+    u->id_list_list = ValNodeFree (u->id_list_list);      
+    u->val_list = ValNodeFreeData (u->val_list);
+    u = MemFree (u);
+  }
+  return u;
+}
+
+
+static ValNodePtr UniversalSrcListFree (ValNodePtr list)
+{
+  ValNodePtr vnp_next;
+
+  while (list != NULL) {
+    vnp_next = list->next;
+    list->next = NULL;
+    list->data.ptrvalue= UniversalSrcFree (list->data.ptrvalue);
+    list = ValNodeFree (list);
+    list = vnp_next;
+  }
+  return list;
+}
+
+
+static void RemoveNonUniversalQuals (ValNodePtr PNTR list)
+{
+  ValNodePtr v_p = NULL, v_n, v;
+  WizardQualPtr wq;
+
+  if (list == NULL || *list == NULL) {
+    return;
+  }
+  for (v = *list; v != NULL; v = v_n) {
+    v_n = v->next;
+    wq = (WizardQualPtr) v->data.ptrvalue;
+    if (StringICmp (wq->name, "chromosome") == 0 || StringICmp (wq->name, "plasmid-name") == 0 || StringICmp (wq->name, "location") == 0) {
+      if (v_p == NULL) {
+        *list = v_n;
+      } else {
+        v_p->next = v_n;
+      }
+      v->next = NULL;
+      v = ValNodeFreeData (v);
+    } else {
+      v_p = v;
+    }
+  }
+}
+
+
+static ValNodePtr FindUniversalSourceInfo (IDAndTitleEditPtr iatep, WizardTrackerPtr wiz)
+{
+  ValNodePtr table = NULL, line, row, row_cols;
+  Int4       num_cols = 0, col, i;
+  CharPtr    curr_val, this_val;
+  ValNodePtr id_list = NULL;
+  UniversalSrcPtr u;
+  ValNodePtr summaries = NULL;
+
+  for (i = 0; i < iatep->num_sequences; i++) {
+    AddMissingQuals (iatep->title_list[i], wiz);
+    RemoveNonUniversalQuals (&(wiz->base_src_quals));
+    RemoveNonUniversalQuals (&(wiz->extra_src_quals));
+  }
+  for (i = 0; i < iatep->num_sequences; i++) {
+    line = NULL;
+    ValNodeAddPointer (&line, 0, StringSave (iatep->id_list[i]));
+    ValNodeLink (&line, TabTableLineFromSrcQuals (iatep->title_list[i], wiz->base_src_quals, wiz->extra_src_quals));
+    ValNodeAddPointer (&table, 0, line);        
+  }
+
+  if (table != NULL) {
+    num_cols = ValNodeLen (table->data.ptrvalue);
+  }
+
+  for (col = 1; col < num_cols; col++) {
+    table = SortTableRowByAnyColumn (table, col + 1);
+    row_cols = table->data.ptrvalue;
+    curr_val = StringSave (GetNthField (row_cols, col));
+    u = UniversalSrcNew (NULL, NULL);
+    ValNodeAddPointer (&summaries, 0, u);
+    ValNodeAddPointer (&(u->val_list), 0, curr_val);
+    id_list = NULL;
+    ValNodeAddPointer (&id_list, 0, StringSave (row_cols->data.ptrvalue));
+    ValNodeAddPointer (&(u->id_list_list), 0, id_list);
+    for (row = table->next; row != NULL; row = row->next) {
+      row_cols = row->data.ptrvalue;
+      this_val = GetNthField (row_cols, col);
+      if (StringCmp (curr_val, this_val) == 0) {
+        ValNodeAddPointer (&id_list, 0, StringSave (row_cols->data.ptrvalue));
+      } else {
+        ValNodeAddPointer (&(u->val_list), 0, StringSave (this_val));
+        id_list = NULL;
+        ValNodeAddPointer (&id_list, 0, StringSave (row_cols->data.ptrvalue));
+        ValNodeAddPointer (&(u->id_list_list), 0, id_list);
+        curr_val = this_val;
+      }
+    }
+  }
+
+  table = FreeTabTable (table);
+  return summaries;
+}
+
+
+static CharPtr GetBestValueFromSingleSourceSummary (UniversalSrcPtr u)
+{
+  Int4 best = -1, num;
+  CharPtr best_val = NULL;
+  ValNodePtr id, val;
+
+  if (u == NULL || u->val_list == NULL) {
+    best_val = NULL;
+  } else if (u->id_list_list == NULL || u->id_list_list->next == NULL) {
+    best_val = u->val_list->data.ptrvalue;
+  } else {
+    for (id = u->id_list_list, val = u->val_list;
+         id != NULL && val != NULL;
+         id = id->next, val = val->next) {
+      num = ValNodeLen (id->data.ptrvalue);
+      if (best < num) {
+        best = num;
+        best_val = val->data.ptrvalue;
+      }
+    }
+  }
+  return best_val;
+}
+
+
+static CharPtr ExplainBestValueFromSingleSourceSummary (UniversalSrcPtr u)
+{ 
+  CharPtr rval = NULL;
+  CharPtr part_fmt = "'%s' (%d)";
+  CharPtr more = ", others";
+  ValNodePtr vnp_i, vnp_v;
+  Int4       len = 0;
+
+  if (u == NULL || u->val_list->next == NULL) {
+    return NULL;
+  }
+
+  for (vnp_i = u->id_list_list, vnp_v = u->val_list;
+       vnp_i != NULL && vnp_v != NULL && len < 200;
+       vnp_i = vnp_i->next, vnp_v = vnp_v->next) {
+    len += StringLen (part_fmt) + 15 + StringLen (vnp_v->data.ptrvalue) + 2;
+  }
+  if (vnp_v != NULL) {
+    len += StringLen (more);
+  }
+  rval = (CharPtr) MemNew (sizeof (Char) * len);
+  rval[0] = 0;
+  len = 0;
+  for (vnp_i = u->id_list_list, vnp_v = u->val_list;
+       vnp_i != NULL && vnp_v != NULL && len < 200;
+       vnp_i = vnp_i->next, vnp_v = vnp_v->next) {
+    if (len > 0) {
+      StringCat (rval, ", ");
+      len += 2;
+    }
+    sprintf (rval + len, part_fmt, 
+             vnp_v->data.ptrvalue == NULL ? "" : vnp_v->data.ptrvalue,
+             ValNodeLen (vnp_i->data.ptrvalue));
+    len = StringLen (rval);
+  }
+  if (vnp_v != NULL) {
+    StringCat (rval, more);
+  }
+  return rval;
+}
+
+
+typedef struct wizardsinglesourceform {
+  WIZARD_BLOCK
+
+  PrompT PNTR name_prompts;
+  TexT   PNTR vals;
+  GrouP  PNTR prompts;
+  Int4   num_quals;
+
+  ButtoN PNTR add_btns;
+  Int4   num_unseen;
+
+  PrompT status_title;
+
+  DialoG extra_quals;
+
+  IDAndTitleEditPtr iatep;
+} WizardSingleSourceFormData, PNTR WizardSingleSourceFormPtr;
+
+
+static void CleanupWizardSingleSourceForm (GraphiC g, Pointer data)
+{
+  WizardSingleSourceFormPtr frm;
+  
+  if (data != NULL)
+  {
+    frm = (WizardSingleSourceFormPtr) data;
+    frm->wiz = WizardTrackerFree(frm->wiz);
+    frm->name_prompts = MemFree (frm->name_prompts);
+    frm->vals = MemFree (frm->vals);
+    frm->prompts = MemFree (frm->prompts);
+    frm->iatep = IDAndTitleEditFree (frm->iatep);
+  }
+  StdCleanupFormProc (g, data);
+}
+
+
+static void PopulateSingleSource (WizardSingleSourceFormPtr frm)
+{
+  ValNodePtr summaries, vnp, t_vnp;
+  Int4       i;
+  CharPtr    exp, new_line;
+  TagListPtr tlp;
+  Boolean    has_status_info = FALSE;
+
+  summaries = FindUniversalSourceInfo (frm->iatep, frm->wiz);
+  for (vnp = summaries, i = 0;
+       vnp != NULL && i < frm->num_quals; 
+       vnp = vnp->next, i++) {
+    SetTitle (frm->vals[i], GetBestValueFromSingleSourceSummary(vnp->data.ptrvalue));
+    exp = ExplainBestValueFromSingleSourceSummary (vnp->data.ptrvalue);
+    SetTitle (frm->prompts[i], exp);
+    if (!StringHasNoText (exp)) {
+      has_status_info = TRUE;
+    }
+    exp = MemFree (exp);
+  }
+  tlp = (TagListPtr) GetObjectExtra (frm->extra_quals);
+  t_vnp = tlp->vnp;
+  while (vnp != NULL && t_vnp != NULL) {
+    new_line = ReplaceTagListColumn (t_vnp->data.ptrvalue, GetBestValueFromSingleSourceSummary(vnp->data.ptrvalue), 1);
+    t_vnp->data.ptrvalue = MemFree (t_vnp->data.ptrvalue);
+    t_vnp->data.ptrvalue = new_line;
+    vnp = vnp->next;
+    t_vnp = t_vnp->next;
+  }
+
+  summaries = UniversalSrcListFree (summaries);
+  if (has_status_info) {
+    Show (frm->status_title);
+  } else {
+    Hide (frm->status_title);
+  }
+}
+
+
+static void SaveWizardSingleSource (Pointer data, WizardTrackerPtr wiz)
+{
+  WizardSingleSourceFormPtr frm;
+  Int4 i, j, num_erase = 0;
+  WizardSrcQualPtr q;
+  CharPtr          val, qual_name;
+  Char             one_name[100], tmp[100];
+  TagListPtr       tlp;
+  ValNodePtr       vnp;
+
+  frm = (WizardSingleSourceFormPtr) data;
+  if (frm == NULL || wiz == NULL) {
+    return;
+  }
+
+  for (j = 0; j < frm->num_quals; j++) {
+    if (TextHasNoText (frm->vals[j])) {
+      GetTitle (frm->name_prompts[j], tmp, sizeof (tmp) - 1);
+      if (DoAnySequencesHaveModifier(frm->iatep, tmp)) {
+        num_erase++;
+        GetTitle (frm->name_prompts[j], one_name, sizeof (one_name) - 1);
+      }
+    }
+  }
+  if (num_erase == 1) {
+    if (ANS_NO == Message (MSG_YN, "You are about to erase values for %s.  Are you sure?", one_name)) {
+      return;
+    }
+  } else if (num_erase > 0) {
+    if (ANS_NO == Message (MSG_YN, "You are about to erase values for %d qualifiers.  Are you sure?", num_erase)) {
+      return;
+    }
+  }
+
+  for (j = 0, vnp = wiz->base_src_quals;
+       vnp != NULL;
+       vnp = vnp->next, j++) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    val = SaveStringFromText (frm->vals[j]);
+    for (i = 0; i < frm->iatep->num_sequences; i++) {
+      if (StringHasNoText (val)) {
+        RemoveValueFromDefline (q->name, frm->iatep->title_list[i]);
+      } else {
+        frm->iatep->title_list[i] = ReplaceValueInOneDefLine (frm->iatep->title_list[i], q->name, val);
+      }
+    }
+    val = MemFree (val);
+  }
+  for (vnp = wiz->extra_src_quals;
+       vnp != NULL && j < frm->num_quals;
+       vnp = vnp->next) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    if (q->show) {
+      val = SaveStringFromText (frm->vals[j]);
+      for (i = 0; i < frm->iatep->num_sequences; i++) {
+        if (StringHasNoText (val)) {
+          RemoveValueFromDefline (q->name, frm->iatep->title_list[i]);
+        } else {
+          frm->iatep->title_list[i] = ReplaceValueInOneDefLine (frm->iatep->title_list[i], q->name, val);
+        }
+      }
+      val = MemFree (val);
+      j++;
+    }
+  }
+  /* remove extra quals previously shown */
+  while (vnp != NULL) {
+    q = (WizardSrcQualPtr) vnp->data.ptrvalue;
+    if (q->show) {
+      for (i = 0; i < frm->iatep->num_sequences; i++) {
+        RemoveValueFromDefline (q->name, frm->iatep->title_list[i]);
+      }
+    }
+    vnp = vnp->next;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (frm->extra_quals);
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+    qual_name = ExtractTagListColumn (vnp->data.ptrvalue, 0);
+    if (!StringHasNoText (qual_name)) {
+      val = ExtractTagListColumn (vnp->data.ptrvalue, 1);
+      for (i = 0; i < frm->iatep->num_sequences; i++) {
+        if (StringHasNoText (val)) {
+          RemoveValueFromDefline (qual_name, frm->iatep->title_list[i]);
+        } else {
+          frm->iatep->title_list[i] = ReplaceValueInOneDefLine (frm->iatep->title_list[i], qual_name, val);
+        }
+      }
+      val = MemFree (val);
+    }
+    qual_name = MemFree (qual_name);
+  }
+
+  ApplyIDAndTitleEditToSeqEntryList (wiz->sequences, frm->iatep);
+  PopulateSingleSource (frm);
+}
+
+
+static void HideUnseenTagListRows (TagListPtr tlp)
+{
+  Int4 len, i, j;
+
+  len = ValNodeLen (tlp->vnp);
+  if (len > tlp->rows) {
+    Show (tlp->bar);
+    for (i = 0; i < tlp->rows; i++) {
+      for (j = 0; j < tlp->cols; j++) {
+        Show (tlp->control[(i * MAX_TAGLIST_COLS) + j]);
+      }
+    }
+  } else {
+    Hide (tlp->bar);
+    for (i = 0; i < len; i++) {
+      for (j = 0; j < tlp->cols; j++) {
+        Show (tlp->control[(i * MAX_TAGLIST_COLS) + j]);
+      }
+    }
+    for ( ; i < tlp->rows; i++) {
+      for (j = 0; j < tlp->cols; j++) {
+        Hide (tlp->control[(i * MAX_TAGLIST_COLS) + j]);
+      }
+    }
+  }
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1); 
+}
+
+
+static void AddSingleSourceQual(ButtoN b)
+{
+  WizardSingleSourceFormPtr frm;
+  Int4          i, j, k = 0;
+  ValNodePtr    vq, vq_prev = NULL;
+  WizardSrcQualPtr wq;
+  CharPtr       new_str;
+  Char          qual_name[PATH_MAX];
+  Int4          len;
+  TagListPtr    tlp;
+  Boolean       found = FALSE;
+
+  frm = (WizardSingleSourceFormPtr) GetObjectExtra (b);
+  for (i = 0; i < frm->num_unseen; i++) {
+    if (b == frm->add_btns[i]) {
+      /* found it */
+      j = 0;
+      for (vq = frm->wiz->extra_src_quals; vq != NULL; vq = vq->next) {
+        wq = (WizardSrcQualPtr) vq->data.ptrvalue;
+        if (!wq->show) {
+          if (j == k) {
+            /* found it, move it to the end and make it shown */
+            found = TRUE;
+            if (vq_prev == NULL) {
+              frm->wiz->extra_src_quals = vq->next;
+            } else {
+              vq_prev->next = vq->next;
+            }
+            vq->next = NULL;
+            ValNodeLink (&(frm->wiz->extra_src_quals), vq);
+            wq->show = TRUE;
+            break;
+          } else {
+            j++;
+            vq_prev = vq;
+          }
+        } else {
+          vq_prev = vq;
+        }
+      }
+      if (!found) {
+        GetTitle (b, qual_name, sizeof (qual_name) - 1);
+        wq = WizardSrcQualNewEx (qual_name + 4, eWizardEditQual_ApplyAll, TRUE, 
+                                 FALSE, NULL, FALSE, GetDefaultExample (qual_name + 4)); 
+        ValNodeAddPointer (&(frm->wiz->extra_src_quals), 0, wq);
+      }
+      /* add to taglist */
+      tlp = (TagListPtr) GetObjectExtra (frm->extra_quals);
+      len = StringLen (wq->name) + StringLen (wq->example) + 4;
+      new_str = (CharPtr) MemNew (sizeof (Char) * len);
+      sprintf (new_str, "%s\t\t%s\n", wq->name, wq->example == NULL ? "" : wq->example);
+      ValNodeAddPointer (&(tlp->vnp), 0, new_str);
+      SendMessageToDialog (frm->extra_quals, VIB_MSG_REDRAW);
+      Disable (b);
+      /* hide extra rows */
+      Show (frm->extra_quals);
+      HideUnseenTagListRows (tlp);
+      break;
+    }
+    if (Enabled (frm->add_btns[i])) {
+      k++;
+    }
+  }
+}
+
+
+Uint2 single_src_dlg_types [] = {
+  TAGLIST_PROMPT, TAGLIST_TEXT, TAGLIST_PROMPT
+};
+
+Uint2 single_src_dlg_widths [] = {
+  8, 10, 20
+};
+
+
+static void ClearSingleSourceQuals (ButtoN b)
+{
+  WizardSingleSourceFormPtr frm;
+  Int4                      i;
+  TagListPtr                tlp;
+  ValNodePtr                vnp;
+  CharPtr                   new_line;
+
+  frm = (WizardSingleSourceFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  for (i = 0; i < frm->num_quals; i++) {
+    SetTitle (frm->vals[i], "");
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (frm->extra_quals);
+  if (tlp != NULL) {
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      if (!StringHasNoText (vnp->data.ptrvalue)) {
+        new_line = ReplaceTagListColumn (vnp->data.ptrvalue, "", 1);
+        vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+        vnp->data.ptrvalue = new_line;
+      }
+    }
+  }
+  SendMessageToDialog (frm->extra_quals, VIB_MSG_REDRAW);
+}
+
+
+static Boolean CreateWizardSingleSourceForm (WizardTrackerPtr wiz)
+{
+  WizardSingleSourceFormPtr frm;
+  WindoW w;
+  GrouP  h, quals_grp, g, add_grp = NULL;
+  GrouP  c;
+  CharPtr dlg_title, exp;
+  ValNodePtr summaries, vnp, vq;
+  WizardQualPtr wq;
+  Int4          i;
+  Int4          status_width = 200;
+  Char          add_txt[PATH_MAX];
+  ButtoN        clear_btn;
+  Boolean       has_status_info = FALSE;
+  PrompT        title_prompt;
+
+  frm = (WizardSingleSourceFormPtr) MemNew (sizeof (WizardSingleSourceFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveWizardSingleSource;
+  frm->fwd_ok_func = WizardSrcQualsOk;
+  frm->next_form = AskAboutWGSLocation;
+  frm->iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+  wiz->base_src_quals = ValNodeFreeData (wiz->base_src_quals);
+  SetWizardTrackerBaseSrcQuals (wiz, frm->iatep);
+  wiz->extra_src_quals = ValNodeFreeData (wiz->extra_src_quals);
+  SetWizardTrackerExtraSrcQuals (wiz, frm->iatep);
+  summaries = FindUniversalSourceInfo (frm->iatep, wiz);
+  frm->num_quals = CountSrcQualsToShow (wiz->base_src_quals, wiz->extra_src_quals);
+  frm->name_prompts = (PrompT PNTR) MemNew (sizeof (PrompT) * frm->num_quals);
+  frm->vals = (TexT PNTR) MemNew (sizeof (TexT) * frm->num_quals);
+  frm->prompts = (GrouP PNTR) MemNew (sizeof (PrompT) * frm->num_quals);
+  frm->num_unseen = CountUnseenSrcQuals (wiz->extra_src_quals);
+  if (frm->num_unseen > 0) {
+    frm->add_btns = (ButtoN PNTR) MemNew (sizeof (ButtoN) * frm->num_unseen);
+  }
+
+  dlg_title = GetWizardDlgTitle(wiz->wizard_type, eWizardDlgTitle_Source);
+  SendHelpScrollMessage (helpForm, dlg_title, "");
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  SetObjectExtra (w, frm, CleanupWizardSingleSourceForm);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, -1, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  title_prompt = StaticPrompt (h, "Please provide the required source information common to all of your sequences.", 0, 0, systemFont, 'c');
+  StaticPrompt (h, "", 0, 0, systemFont, 'c');
+  quals_grp = HiddenGroup (h, 1, 0, NULL);
+  g = HiddenGroup (quals_grp, 4, 0, NULL);
+  StaticPrompt (g, "Qualifier", 112, 0, systemFont, 'l');
+  StaticPrompt (g, "Value", 0, 0, systemFont, 'c');
+  StaticPrompt (g, "Example", 0, 0, systemFont, 'l');
+  frm->status_title = StaticPrompt (g, "Existing Values", 0, 0, systemFont, 'c');
+  StaticPrompt (g, "", single_src_dlg_widths[0], 0, systemFont, 'l');
+  StaticPrompt (g, "", 0, 0, systemFont, 'c');
+  StaticPrompt (g, "", 0, 0, systemFont, 'c');
+  StaticPrompt (g, "", 0, 0, systemFont, 'c');
+  for (vnp = summaries, vq = wiz->base_src_quals, i = 0;
+       vnp != NULL && vq != NULL; 
+       vnp = vnp->next, vq = vq->next, i++) {
+    wq = (WizardQualPtr) vq->data.ptrvalue;
+    frm->name_prompts[i] = StaticPrompt (g, wq->name, 0, 0, systemFont, 'l');
+    frm->vals[i] = DialogText (g, GetBestValueFromSingleSourceSummary(vnp->data.ptrvalue),
+                               single_src_dlg_widths[1], NULL);
+    StaticPrompt (g, wq->example, 0, 0, systemFont, 'l');
+    exp = ExplainBestValueFromSingleSourceSummary (vnp->data.ptrvalue);
+    frm->prompts[i] = MultiLinePrompt (g, exp, status_width, systemFont);
+    if (!StringHasNoText (exp)) {
+      has_status_info = TRUE;
+    }
+    exp = MemFree (exp);
+  }
+  for (vq = wiz->extra_src_quals;
+       vnp != NULL && vq != NULL; 
+       vq = vq->next) {
+    wq = (WizardQualPtr) vq->data.ptrvalue;
+    if (wq->show) {
+      frm->name_prompts[i] = StaticPrompt (g, wq->name, 0, 0, systemFont, 'l');
+      frm->vals[i] = DialogText (g, GetBestValueFromSingleSourceSummary(vnp->data.ptrvalue),
+                                 single_src_dlg_widths[1], NULL);
+      StaticPrompt (g, wq->example, 0, 0, systemFont, 'l');
+      exp = ExplainBestValueFromSingleSourceSummary (vnp->data.ptrvalue);
+      frm->prompts[i] = MultiLinePrompt (g, exp, status_width, systemFont);
+      if (!StringHasNoText (exp)) {
+        has_status_info = TRUE;
+      }
+      exp = MemFree (exp);
+      vnp = vnp->next;
+      i++;
+    }
+  }
+  summaries = UniversalSrcListFree (summaries);
+
+  if (has_status_info) {
+    Show (frm->status_title);
+  } else {
+    Hide (frm->status_title);
+  }
+
+  /* extra qualifiers */
+  frm->extra_quals = CreateTagListDialogEx3 (quals_grp, 4, 3, 2,
+                                      single_src_dlg_types, single_src_dlg_widths, NULL,
+                                      TRUE, TRUE, 
+                                      NULL, 
+                                      NULL,
+                                      NULL, NULL, FALSE, FALSE);
+  Hide (frm->extra_quals);
+
+
+  if (frm->num_unseen > 0) {
+    add_grp = HiddenGroup (h, 6, 0, NULL);
+    i = 0;
+    for (vq = wiz->extra_src_quals;
+         vq != NULL && i < frm->num_unseen; 
+         vq = vq->next) {
+      wq = (WizardQualPtr) vq->data.ptrvalue;
+      if (!wq->show) {
+        sprintf (add_txt, "Add %s", wq->name);
+        frm->add_btns[i] = PushButton (add_grp, add_txt, AddSingleSourceQual);
+        SetObjectExtra (frm->add_btns[i], frm, NULL);
+        i++;
+      }
+    }
+  }
+
+  clear_btn = PushButton (h, "Clear", ClearSingleSourceQuals);
+  SetObjectExtra (clear_btn, frm, NULL);
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) title_prompt,
+                              (HANDLE) quals_grp, 
+                              (HANDLE) clear_btn,
+                              (HANDLE) c, 
+                              (HANDLE) add_grp,
+                              NULL);
+
+  Update();
+  Show (w);
+
+  return TRUE;
+}
+
+
+typedef struct wizardsourceavailabilityform {
+  WIZARD_BLOCK
+
+  TexT   org;
+  TexT   dna;
+} WizardSourceAvailabilityFormData, PNTR WizardSourceAvailabilityFormPtr;
+
+
+static void SaveWizardSourceAvailability (Pointer data, WizardTrackerPtr wiz)
+{
+  WizardSourceAvailabilityFormPtr frm;
+  Int4 len = 0;
+  CharPtr prefix = "Source Availability: ";
+  CharPtr org_fmt = "organism available from %s";
+  CharPtr dna_fmt = "DNA available from %s";
+  CharPtr org = NULL, dna = NULL;
+
+  frm = (WizardSourceAvailabilityFormPtr) data;
+  if (frm == NULL || wiz == NULL) {
+    return;
+  }
+
+  wiz->comment = MemFree (wiz->comment);
+  if (TextHasNoText (frm->org) && TextHasNoText (frm->dna)) {
+    return;
+  }
+
+  len += StringLen (prefix);
+  if (!TextHasNoText (frm->org)) {
+    org = SaveStringFromText (frm->org);
+    len += StringLen (org_fmt) + StringLen (org);
+  }
+  if (!TextHasNoText (frm->dna)) {
+    dna = SaveStringFromText (frm->dna);
+    len += StringLen (dna_fmt) + StringLen (dna);
+    if (!StringHasNoText (org)) {
+      len += 2;
+    }
+  }
+  wiz->comment = (CharPtr) MemNew (sizeof (Char) * len);
+  StringCpy (wiz->comment, prefix);
+  len = StringLen (prefix);
+  if (!StringHasNoText (org)) {
+    sprintf (wiz->comment + len, org_fmt, org);
+    if (!StringHasNoText (dna)) {
+      StringCat (wiz->comment, ", ");
+    }
+    len = StringLen (wiz->comment);
+  }
+  if (!StringHasNoText (dna)) {
+    sprintf (wiz->comment + len, dna_fmt, dna);
+  }
+
+  org = MemFree (org);
+  dna = MemFree (dna);
+}
+
+
+static Boolean CreateWizardSourceAvailabilityForm (WizardTrackerPtr wiz)
+{
+  WizardSourceAvailabilityFormPtr frm;
+  WindoW w;
+  GrouP  h, g1, g;
+  GrouP  c;
+  PrompT p = NULL;
+  CharPtr dlg_title;
+
+  frm = (WizardSourceAvailabilityFormPtr) MemNew (sizeof (WizardSourceAvailabilityFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveWizardSourceAvailability;
+  frm->fwd_ok_func = NULL;
+  frm->next_form = BioProjectBioSampleWindow;
+
+  dlg_title = FormatWizardTitle("%s Source Availability", wiz->wizard_type);
+  SendHelpScrollMessage (helpForm, dlg_title, "");
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  SetObjectExtra (w, frm, CleanupWizardForm);
+  dlg_title = MemFree (dlg_title);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, -1, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  g1 = NormalGroup (h, -1, 0, "Is the source organism available for other researchers?", programFont, NULL);
+  SetGroupSpacing (g1, 10, 10);
+  StaticPrompt (g1, "", 0, 0, programFont, 'l');
+  if (frm->wiz->wgs_source_type == eWGSSourceType_Bacteria) {
+    p = StaticPrompt (g1, "Provide a name and address of the lab or PI, or a culture collection identifier", 0, 0, programFont, 'l');
+  }
+  g = HiddenGroup (g1, 2, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  switch (frm->wiz->wgs_source_type) {
+    case eWGSSourceType_Bacteria:
+      StaticPrompt (g, "Bacteria is available from", 0, 0, programFont, 'l');
+      break;
+    case eWGSSourceType_Fungi:
+      StaticPrompt (g, "Fungus is available from", 0, 0, programFont, 'l');
+      break;
+    default:
+      StaticPrompt (g, "Organism is available from", 0, 0, programFont, 'l');
+      break;
+  }
+  frm->org = DialogText (g, "", 15, NULL); 
+  StaticPrompt (g, "Source DNA is available from", 0, 0, programFont, 'c');
+  frm->dna = DialogText (g, "", 15, NULL); 
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) p, NULL);
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1,
+                              (HANDLE) c, 
+                              NULL);
+
+  Update();
+  Show (w);
+
+  return TRUE;
+}
+
+
+#define QUAL_BY_BY_LIST_WIZARD_BLOCK         \
+  WIZARD_BLOCK \
+  DialoG clickable_list_dlg; \
+  TexT   mark_seqid_list; \
+  ValNodePtr seq_list;
+
+typedef struct qualbylistwizardform {
+  QUAL_BY_BY_LIST_WIZARD_BLOCK
+} QualByListWizardFormData, PNTR QualByListWizardFormPtr;
+
+
+static void CleanupQualByListWizard (GraphiC g, Pointer data)
+{
+  QualByListWizardFormPtr frm;
+
+  if (data != NULL)
+  {
+    frm = (QualByListWizardFormPtr) data;
+    frm->seq_list = FreeClickableList (frm->seq_list);
+  }
+  CleanupWizardForm (g, data);
+}
+
+
+static void MarkSetQualListBtn (ButtoN b)
+{
+  QualByListWizardFormPtr frm;
+  CharPtr id_list;
+
+  frm = (QualByListWizardFormPtr) GetObjectExtra (b);
+  if (frm == NULL || TextHasNoText (frm->mark_seqid_list)) {
+    return;
+  }
+
+  id_list = SaveStringFromText (frm->mark_seqid_list);
+  ChooseCategoriesByIdList (frm->seq_list, id_list);
+  id_list = MemFree (id_list);
+  PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+}
+
+
+static void UnselectAllSequencesForSetQual (ButtoN b)
+{
+  QualByListWizardFormPtr frm;
+
+  frm = (QualByListWizardFormPtr) GetObjectExtra (b);
+  if (frm != NULL) {
+    ChooseCategories (frm->seq_list, FALSE);
+    PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+  }
+}
+
+
+typedef struct setsrcqualwizardform {
+  QUAL_BY_BY_LIST_WIZARD_BLOCK
+  CharPtr qual;
+  CharPtr val;
+} SetQualWizardFormData, PNTR SetQualWizardFormPtr;
+
+
+static void CleanupSetQualWizardForm (GraphiC g, Pointer data)
+{
+  SetQualWizardFormPtr frm;
+  
+  if (data != NULL)
+  {
+    frm = (SetQualWizardFormPtr) data;
+    frm->qual = MemFree (frm->qual);
+    frm->val = MemFree (frm->val);
+  }
+  CleanupQualByListWizard (g, data);
+}
+
+
+static void SaveSetQual (Pointer data, WizardTrackerPtr wiz)
+{
+  SetQualWizardFormPtr frm;
+  ValNodePtr           vnp, vnp_i;
+  ClickableItemPtr     cip;
+  BioseqPtr            bsp;
+  SeqDescPtr           sdp;
+  CharPtr              title;
+  CharPtr              curr_val;
+
+  frm = (SetQualWizardFormPtr) data;
+  if (frm == NULL || wiz == NULL) {
+    return;
+  }
+
+  for (vnp = frm->seq_list; vnp != NULL; vnp = vnp->next) {
+    if ((cip = (ClickableItemPtr) (vnp->data.ptrvalue)) != NULL) {
+      for (vnp_i = cip->item_list; vnp_i != NULL; vnp_i = vnp_i->next) {
+        if (vnp_i->choice == OBJ_BIOSEQ && (bsp = (BioseqPtr) vnp_i->data.ptrvalue) != NULL) {
+          sdp = bsp->descr;
+          while (sdp != NULL && sdp->choice != Seq_descr_title) {
+            sdp = sdp->next;
+          }
+          if (sdp == NULL) {
+            sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_title);
+          }
+          title = sdp->data.ptrvalue;
+          if (cip->chosen) {
+            title = ReplaceValueInOneDefLine (title, frm->qual, frm->val);
+          } else {
+            curr_val = FindValueFromPairInDefline (frm->qual, title);
+            if (StringICmp (frm->val, curr_val) == 0) {
+              RemoveValueFromDefline (frm->qual, title);
+            }
+            curr_val = MemFree (curr_val);
+          }
+          sdp->data.ptrvalue = title;
+        }
+      }
+    }
+  }
+}
+
+
+NLM_EXTERN Boolean SetQualForSequencesFromWizardList (WizardTrackerPtr wiz, CharPtr qual, CharPtr val, CharPtr help, SequencesOkFunc ok_func, CreateFormFunc next_form)
+{
+  WindoW w;
+  SetQualWizardFormPtr frm;
+  GrouP h, mark_grp, c;
+  ButtoN b, unselect;
+  ValNodeBlock change_list;
+  SeqEntryPtr  sep;
+  ClickableItemPtr cip;
+  Boolean          rval = FALSE;
+  CharPtr          dlg_title = val;
+  CharPtr          title, curr_val;
+  PrompT           p1, p2, p_top = NULL;
+
+  if (wiz->sequences == NULL) {
+    return FALSE;
+  }
+
+  frm = (SetQualWizardFormPtr) MemNew (sizeof (SetQualWizardFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveSetQual;
+  frm->fwd_ok_func = ok_func;
+  frm->next_form = next_form;
+  frm->qual = StringSave (qual);
+  frm->val = StringSave (val);
+  InitValNodeBlock (&change_list, NULL);
+  for (sep = wiz->sequences; sep != NULL; sep = sep->next) {
+    if (IS_Bioseq (sep)) {
+      cip = ClickableItemForBioseq (sep->data.ptrvalue);
+      title = BioseqGetTitle(sep->data.ptrvalue);
+      curr_val = FindValueFromPairInDefline (qual, title);
+      if (StringICmp (val, curr_val) == 0) {
+        cip->chosen = TRUE;
+      }
+      curr_val = MemFree (curr_val);
+      ValNodeAddPointerToEnd (&change_list, 0, cip);
+    }
+  }
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  frm->form = (ForM) w;
+  SetObjectExtra (w, frm, CleanupSetQualWizardForm);
+  frm->seq_list = change_list.head;
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+
+  if (!StringHasNoText (help)) {
+    p_top = StaticPrompt (h, help, 0, 0, systemFont, 'c');
+  }
+
+  frm->clickable_list_dlg = CreateClickableListDialogExEx (h, "Sequences in your file", val,
+                                                      NULL, NULL,
+                                                      NULL, NULL, NULL,
+                                                      GetDiscrepancyItemText,
+                                                      stdCharWidth * 30,
+                                                      stdCharWidth * 30 + 5,
+                                                      TRUE, FALSE, TRUE);
+  PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+  mark_grp = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (mark_grp, 10, 10);
+  b = PushButton (mark_grp, "Select sequences in this list:", MarkSetQualListBtn);
+  SetObjectExtra (b, frm, NULL);
+  frm->mark_seqid_list = DialogText (mark_grp, "", 30, NULL);
+  p1 = StaticPrompt (h, "Paste a list of sequence IDs in the text box and click button: Select sequences in this list", 0, 0, systemFont, 'c');
+  unselect = PushButton (h, "Unselect All Sequences", UnselectAllSequencesForSetQual);
+  SetObjectExtra (unselect, frm, NULL);
+  p2 = StaticPrompt (h, "", 0, 0, systemFont, 'c');
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, 
+                (HANDLE) frm->clickable_list_dlg,
+                (HANDLE) mark_grp,
+                (HANDLE) p1,
+                (HANDLE) unselect,
+                (HANDLE) p2,
+                (HANDLE) c,
+                (HANDLE) p_top,
+                NULL);
+
+  RealizeWindow (w);
+  Show (w);
+  Update ();  
+  Select (w);
+  return TRUE;
+}
+
+
+static Boolean IsStringPlasmid (CharPtr val)
+{
+  if (StringICmp (val, "plasmid") == 0) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Boolean AnyPlasmids (WizardTrackerPtr wiz)
+{
+  Boolean rval = FALSE;
+  IDAndTitleEditPtr iatep;
+
+  if (wiz == NULL || wiz->sequences == NULL) {
+    return FALSE;
+  }
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+  if (DoAnySequencesHaveModifierEx (iatep, "location", IsStringPlasmid)) {
+    rval = TRUE;
+  }
+  iatep = IDAndTitleEditFree (iatep);
+  if (!rval) {
+    Message (MSG_ERROR, "You have not selected any sequences as plasmids.");
+  }
+  return rval;
+}
+
+
+static Boolean SetPlasmids (WizardTrackerPtr wiz)
+{
+  return SetQualForSequencesFromWizardList (wiz, "location", "plasmid", 
+          "Use checkboxes to select sequences that are derived from naturally-occurring plasmids or paste a list in the text box below.", 
+          AnyPlasmids, SetPlasmidNames);
+}
+
+
+typedef struct setlocationswizardform {
+  QUAL_BY_BY_LIST_WIZARD_BLOCK
+  PopuP location;
+} SetLocationsWizardFormData, PNTR SetLocationsWizardFormPtr;
+
+static CharPtr wizard_genomes[] = {
+ "nucleus",
+ "chloroplast", 
+ "mitochondrion",
+ "apicoplast",
+ "chromatophore", 
+ "chromoplast", 
+ "cyanelle",
+ "hydrogenosome",
+ "kinetoplast",
+ "leucoplast",
+ "macronuclear",
+ "nucleomorph",
+ "plastid",
+ "proplastid",
+ NULL};
+
+
+static Boolean SetLocationForChosen (ValNodePtr list, CharPtr genome, Boolean chosen)
+{
+  ValNodePtr                vnp, vnp_i;
+  ClickableItemPtr          cip;
+  BioseqPtr                 bsp;
+  SeqDescPtr                sdp;
+  CharPtr                   title;
+  Boolean                   rval = FALSE;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (cip == NULL) continue;
+    if (chosen || cip->chosen) {
+      for (vnp_i = cip->item_list; vnp_i != NULL; vnp_i = vnp_i->next) {
+        if (vnp_i->choice == OBJ_BIOSEQ && (bsp = (BioseqPtr) vnp_i->data.ptrvalue) != NULL) {
+          sdp = bsp->descr;
+          while (sdp != NULL && sdp->choice != Seq_descr_title) {
+            sdp = sdp->next;
+          }
+          if (sdp == NULL) {
+            sdp = CreateNewDescriptorOnBioseq (bsp, Seq_descr_title);
+            sdp->data.ptrvalue = StringSave ("");
+          }
+          title = sdp->data.ptrvalue;
+          if (StringHasNoText (genome)) {
+            RemoveValueFromDefline ("location", title);
+          } else {
+            title = ReplaceValueInOneDefLine (title, "location", genome);
+          }
+          sdp->data.ptrvalue = title;
+          rval = TRUE;
+        }
+      }
+      rval |= SetLocationForChosen (cip->subcategories, genome, TRUE);
+    } else {
+      rval |= SetLocationForChosen (cip->subcategories, genome, FALSE);
+    }
+  }
+  return rval;
+}
+
+
+static ValNodePtr GroupByGenome (SeqEntryPtr sequences)
+{
+  ValNodeBlock change_list;
+  SeqEntryPtr  sep;
+  ValNodePtr   sorted_list, vnp, vnp_next, vnp_prev;
+  BioseqPtr    bsp;
+  CharPtr      title;
+  CharPtr      genome;
+  ClickableItemPtr cip, cip_last;
+
+  InitValNodeBlock (&change_list, NULL);
+  for (sep = sequences; sep != NULL; sep = sep->next) {
+    if (IS_Bioseq (sep) && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL) {
+      title = BioseqGetTitle(bsp);
+      genome = FindValueFromPairInDefline ("location", title);
+      if (StringHasNoText (genome)) {
+        genome = MemFree (genome);
+        genome = StringSave ("nucleus");
+      }
+      cip = (ClickableItemPtr) MemNew (sizeof (ClickableItemData));
+      cip->description = genome;
+      ValNodeAddPointer (&(cip->subcategories), 0, ClickableItemForBioseq(bsp));
+      ValNodeAddPointerToEnd (&change_list, 0, cip);
+    }
+  }
+
+  sorted_list = ValNodeSort (change_list.head, SortVnpByDiscrepancyDescription);
+
+  cip_last = sorted_list->data.ptrvalue;
+  vnp_prev = sorted_list;
+  cip_last->expanded = TRUE;
+  for (vnp = sorted_list->next; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    cip = (ClickableItemPtr) vnp->data.ptrvalue;
+    if (StringCmp (cip->description, cip_last->description) == 0) {
+      ValNodeLink (&(cip_last->item_list), cip->item_list);
+      cip->item_list = NULL;
+      ValNodeLink (&(cip_last->subcategories), cip->subcategories);
+      cip->subcategories = NULL;
+      cip = ClickableItemFree (cip);
+      vnp_prev->next = vnp_next;
+      vnp->next = NULL;
+      vnp = ValNodeFree (vnp);
+    } else {
+      vnp_prev = vnp;
+      cip_last = cip;
+      cip_last->expanded = TRUE;
+    }
+  }
+  return sorted_list;
+}
+
+
+static void AddLocationToSelectedSequences (ButtoN b)
+{
+  SetLocationsWizardFormPtr frm;
+  Uint1                     val;
+  Boolean                   update = FALSE;
+
+  frm = (SetLocationsWizardFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  val = GetValue (frm->location);
+  if (val < 1) {
+    Message (MSG_ERROR, "Must select location!");
+  } else if (val == 1) {
+    if (SetLocationForChosen (frm->seq_list, NULL, FALSE)) {
+      update = TRUE;
+    } else {
+      Message (MSG_ERROR, "Must select sequences!");
+    }
+  } else if (!SetLocationForChosen (frm->seq_list, wizard_genomes[val - 1], FALSE)) {
+    Message (MSG_ERROR, "Must select sequences!");
+  } else {
+    update = TRUE;
+  }
+  if (update) {
+    /* need to redo display */
+    frm->seq_list = FreeClickableList (frm->seq_list);
+    frm->seq_list = GroupByGenome(frm->wiz->sequences);
+    PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+  }
+}
+
+
+static void RemoveAllOrganelles (ButtoN b)
+{
+  SetLocationsWizardFormPtr frm;
+
+  frm = (SetLocationsWizardFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+
+  SetLocationForChosen (frm->seq_list, NULL, TRUE);
+  frm->seq_list = FreeClickableList (frm->seq_list);
+  frm->seq_list = GroupByGenome(frm->wiz->sequences);
+  PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+
+}
+
+
+NLM_EXTERN Boolean SetLocationsForSequencesFromWizardList (WizardTrackerPtr wiz, SequencesOkFunc ok_func, CreateFormFunc next_form)
+{
+  WindoW w;
+  SetLocationsWizardFormPtr frm;
+  GrouP h, mark_grp, set_grp, remove_grp, c;
+  ButtoN b;
+  Int4             i;
+  CharPtr          dlg_title = "WGS Wizard Organelle-Derived Sequences";
+  PrompT           p1;
+
+  if (wiz->sequences == NULL) {
+    return FALSE;
+  }
+
+  frm = (SetLocationsWizardFormPtr) MemNew (sizeof (SetLocationsWizardFormData));
+  frm->wiz = wiz;
+  frm->collect_func = NULL;
+  frm->fwd_ok_func = ok_func;
+  frm->next_form = next_form;
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  frm->form = (ForM) w;
+  SetObjectExtra (w, frm, CleanupQualByListWizard);
+  frm->seq_list = GroupByGenome(wiz->sequences);
+  
+  h = HiddenGroup (w, -1, 0, NULL);
+
+
+  frm->clickable_list_dlg = CreateClickableListDialogExEx (h, "Sequences in your file", "Sequences from organelle",
+                                                      NULL, NULL,
+                                                      NULL, NULL, NULL,
+                                                      GetDiscrepancyItemText,
+                                                      stdCharWidth * 30,
+                                                      stdCharWidth * 30 + 5,
+                                                      TRUE, FALSE, TRUE);
+  PointerToDialog (frm->clickable_list_dlg, frm->seq_list);
+  
+  p1 = StaticPrompt (h, "Use checkboxes to select sequences from an organelle or paste the a list in the text box below.", 0, 0, systemFont, 'c');
+  mark_grp = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (mark_grp, 10, 10);
+  b = PushButton (mark_grp, "Select sequences in this list:", MarkSetQualListBtn);
+  SetObjectExtra (b, frm, NULL);
+  frm->mark_seqid_list = DialogText (mark_grp, "", 30, NULL);
+  
+
+  set_grp = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (set_grp, 10, 10);
+  frm->location = PopupList (set_grp, TRUE, NULL);
+  for (i = 0; wizard_genomes[i] != NULL; i++) {
+    PopupItem (frm->location, wizard_genomes[i]);
+  }
+  SetValue (frm->location, 1);
+  b = PushButton (set_grp, "Apply Location to Selected Sequences", AddLocationToSelectedSequences);
+  SetObjectExtra (b, frm, NULL);
+
+  remove_grp = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (remove_grp, 10, 10);
+  b = PushButton (remove_grp, "Unselect All Sequences", UnselectAllSequencesForSetQual);
+  SetObjectExtra (b, frm, NULL);
+  b = PushButton (remove_grp, "Remove All Organelles", RemoveAllOrganelles);
+  SetObjectExtra (b, frm, NULL);
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, 
+                (HANDLE) frm->clickable_list_dlg,
+                (HANDLE) p1,
+                (HANDLE) mark_grp,
+                (HANDLE) remove_grp,
+                (HANDLE) set_grp,
+                (HANDLE) c,
+                NULL);
+
+  RealizeWindow (w);
+  Show (w);
+  Update ();  
+  Select (w);
+  return TRUE;
+}
+
+
+static Boolean SetAllWizardLocations (WizardTrackerPtr wiz)
+{
+  return SetLocationsForSequencesFromWizardList (wiz, NULL, AskAboutChromosomes);
+}
+
+
+static WizardChoiceData wgs_location_bacteria_choice_list[] = {
+  { "Yes", NULL, SetPlasmids } ,
+  { "No", OkToContinueToSequin, FinishWizardAndLaunchSequin },
+  { NULL, NULL, NULL }
+};
+
+
+static WizardChoiceData wgs_location_nonbacteria_choice_list[] = {
+  { "Yes", NULL, SetAllWizardLocations } ,
+  { "No", NULL, AskAboutChromosomes },
+  { NULL, NULL, NULL }
+};
+
+
+static Boolean AskAboutWGSLocation (WizardTrackerPtr wiz)
+{
+  IDAndTitleEditPtr iatep;
+  Boolean           force_yes = FALSE;
+
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+  if (wiz->wgs_source_type == eWGSSourceType_Bacteria) {
+    if (DoAnySequencesHaveModifierEx (iatep, "location", IsStringPlasmid) || DoAnySequencesHaveModifier(iatep, "plasmid-name")) {
+      force_yes = TRUE;
+    }
+  } else if (DoAnySequencesHaveModifier(iatep, "location")) {
+    force_yes = TRUE;
+  }
+  iatep = IDAndTitleEditFree (iatep);
+
+  if (wiz->wgs_source_type == eWGSSourceType_Bacteria) {
+    if (force_yes) {
+      return SetPlasmids (wiz);
+    } else {
+      return CreateWizardSingleChoiceForm (wiz, wgs_location_bacteria_choice_list,
+                                           "Sequence Location", "Are any of your sequences derived from a naturally-occurring plasmid?");
+    }
+  } else {
+    if (force_yes) {
+      return SetAllWizardLocations (wiz);
+    } else {
+      return CreateWizardSingleChoiceForm (wiz, wgs_location_nonbacteria_choice_list,
+                                         "WGS Wizard Sequence Location", "Are any of your sequences derived from an organelle (chloroplast, mitochondrion, etc.)?");
+    }
+  }
+}
+
+
+typedef struct wizardrelatedqualsform {
+  WIZARD_BLOCK
+  DialoG qual_table;
+  GrouP PNTR ed_grps;
+  TexT PNTR  apply_all_txt;
+  ButtoN PNTR bulk_btns;
+
+  IDAndTitleEditPtr iatep;
+  ValNodePtr        rows_displayed;
+  CharPtr           new_qual_name;
+  CharPtr           related_qual_name;
+  CharPtr           related_qual_val;
+  CharPtr PNTR      mod_names;
+  CharPtr PNTR      examples;
+  Int4              num_mods;
+} WizardRelatedQualsFormData, PNTR WizardRelatedQualsFormPtr;
+
+
+static void CleanupRelatedQuals (GraphiC g, Pointer data)
+{
+  WizardRelatedQualsFormPtr frm;
+  Int4 i;
+
+  if (data != NULL)
+  {
+    frm = (WizardRelatedQualsFormPtr) data;
+    for (i = 0; i < frm->num_mods; i++) {
+      MemFree (frm->mod_names[i]);
+      MemFree (frm->examples[i]);
+    }
+    frm->mod_names = MemFree (frm->mod_names);
+    frm->examples = MemFree (frm->examples);
+    frm->ed_grps = MemFree (frm->ed_grps);
+    frm->apply_all_txt = MemFree (frm->apply_all_txt);
+    frm->bulk_btns = MemFree (frm->bulk_btns);
+  }
+  CleanupWizardForm (g, data);
+}
+
+
+static void ApplyAllValueToRelatedQuals (ButtoN b)
+{
+  WizardRelatedQualsFormPtr frm;
+  TagListPtr tlp;
+  Int4 i, num_existing = 0;
+  ValNodePtr vnp;
+  CharPtr  set_val, old_val, new_line;
+
+  frm = (WizardRelatedQualsFormPtr) GetObjectExtra (b);
+  if (frm == NULL) {
+    return;
+  }
+  tlp = (TagListPtr) GetObjectExtra (frm->qual_table);
+  if (tlp == NULL) {
+    return;
+  }
+
+  for (i = 0; i < frm->num_mods; i++) {
+    if (frm->bulk_btns[i] == b) {
+      break;
+    }
+  }
+
+  if (i < frm->num_mods) {
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      old_val = ExtractTagListColumn (vnp->data.ptrvalue, i + 1);
+      if (!StringHasNoText (old_val)) {
+        num_existing++;
+      }
+      old_val = MemFree (old_val);
+    }
+    if (num_existing > 0 && ANS_CANCEL == Message (MSG_OKC, "Replace %d existing values?", num_existing)) {
+      return;
+    }
+    set_val = SaveStringFromText (frm->apply_all_txt[i]);
+    for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+      new_line = ReplaceTagListColumn (vnp->data.ptrvalue, set_val, i + 1);
+      vnp->data.ptrvalue = MemFree (vnp->data.ptrvalue);
+      vnp->data.ptrvalue = new_line;
+    }
+    SendMessageToDialog (frm->qual_table, VIB_MSG_REDRAW);
+  }
+}
+
+
+static void MakeRelatedQualHeaders (GrouP g, WizardRelatedQualsFormPtr frm)
+{
+  Int4 i;
+  Int4 grp_len = 5;
+
+  frm->ed_grps = (GrouP PNTR) MemNew (sizeof (GrouP) * frm->num_mods);
+  frm->apply_all_txt = (TexT PNTR) MemNew (sizeof (TexT) * frm->num_mods);
+  frm->bulk_btns = (ButtoN PNTR) MemNew (sizeof (ButtoN) * frm->num_mods);
+
+  for (i = 0; i < frm->num_mods; i++) {
+    frm->ed_grps[i] = HiddenGroup (g, 0, grp_len, NULL);
+    SetGroupSpacing (frm->ed_grps[i], 10, 10);
+    StaticPrompt (frm->ed_grps[i], "Set", 0, 0, programFont, 'c');
+    StaticPrompt (frm->ed_grps[i], frm->mod_names[i], 0, 0, programFont, 'c');
+    StaticPrompt (frm->ed_grps[i], "for All", 0, 0, programFont, 'c');
+    frm->apply_all_txt[i] = DialogText (frm->ed_grps[i], "", 8, NULL);
+    frm->bulk_btns[i] = PushButton (frm->ed_grps[i], "Apply", ApplyAllValueToRelatedQuals);
+    SetObjectExtra (frm->bulk_btns[i], frm, NULL);
+  }
+}
+
+
+static ValNodePtr GetTableForRelatedQuals (SeqEntryPtr sequences, CharPtr related_qual_name, CharPtr related_qual_val, CharPtr new_qual_name)
+{
+  IDAndTitleEditPtr iatep;
+  ValNodePtr        table = NULL;
+  Int4              i;
+  CharPtr           val, val2, line;
+
+  iatep = SeqEntryListToIDAndTitleEditEx (sequences, TRUE);
+  for (i = 0; i < iatep->num_sequences; i++) {
+    val = FindValueFromPairInDefline (related_qual_name, iatep->title_list[i]);
+    if (StringICmp (val, related_qual_val) == 0 || (StringHasNoText (val) && StringHasNoText (related_qual_val))) {
+      val2 = FindValueFromPairInDefline (new_qual_name, iatep->title_list[i]);
+      line = (CharPtr) MemNew (sizeof (Char) * (StringLen (iatep->id_list[i]) + StringLen (val2) + 5));
+      sprintf (line, "%s\t%s\t\t\n", iatep->id_list[i], val2 == NULL ? "" : val2);
+      ValNodeAddPointer (&table, 0, line);
+      val2 = MemFree (val2);
+    }
+    val = MemFree (val);
+  }
+
+  iatep = IDAndTitleEditFree (iatep);
+  return table;
+}
+
+
+static void SaveRelatedQuals (Pointer data, WizardTrackerPtr wiz)
+{
+  WizardRelatedQualsFormPtr frm;
+  TagListPtr tlp;
+  IDAndTitleEditPtr iatep;
+  ValNodePtr vnp;
+  CharPtr id, val;
+  Int4    i;
+
+  frm = (WizardRelatedQualsFormPtr) data;
+  if (frm == NULL || wiz == NULL) {
+    return;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (frm->qual_table);
+  if (tlp == NULL) {
+    return;
+  }
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+  vnp = tlp->vnp;
+  i = 0;
+  while (vnp != NULL && i < iatep->num_sequences) {
+    id = ExtractTagListColumn (vnp->data.ptrvalue, 0);
+    while (StringCmp (id, iatep->id_list[i]) != 0 && i < iatep->num_sequences) {
+      i++;
+    }
+    id = MemFree (id);
+    if (i < iatep->num_sequences) {
+      val = ExtractTagListColumn (vnp->data.ptrvalue, 1);
+      if (StringHasNoText (val)) {
+        RemoveValueFromDefline (frm->new_qual_name, iatep->title_list[i]);
+      } else {
+        iatep->title_list[i] = ReplaceValueInOneDefLine (iatep->title_list[i], frm->new_qual_name, val);
+      }
+      val = MemFree (val);
+    }
+    vnp = vnp->next;
+  }
+  ApplyIDAndTitleEditToSeqEntryList (wiz->sequences, iatep);
+  iatep = IDAndTitleEditFree (iatep);
+}
+
+
+static Boolean SetRelatedQualForLocation (WizardTrackerPtr wiz, CharPtr related_qual_name, CharPtr related_qual_val, CharPtr new_qual_name, SequencesOkFunc ok_func, CreateFormFunc next_form)
+{
+  WizardRelatedQualsFormPtr frm;
+  WindoW w;
+  GrouP  h;
+  GrouP  c;
+  CharPtr dlg_title = "X";
+  GrouP PNTR grp_list;
+  TagListPtr tlp;
+  Int4       i, num_seq;
+  ValNodePtr tbl_data;
+
+  tbl_data = GetTableForRelatedQuals (wiz->sequences, related_qual_name, related_qual_val, new_qual_name);
+  if (tbl_data == NULL) {
+    return FALSE;
+  }
+
+  frm = (WizardRelatedQualsFormPtr) MemNew (sizeof (WizardRelatedQualsFormData));
+  frm->wiz = wiz;
+  frm->collect_func = SaveRelatedQuals;
+  frm->fwd_ok_func = ok_func;
+  frm->next_form = next_form;
+  frm->num_mods = 1;
+  frm->related_qual_name = StringSave (related_qual_name);
+  frm->related_qual_val = StringSave (related_qual_val);
+  frm->new_qual_name = StringSave (new_qual_name);
+  frm->mod_names = (CharPtr PNTR) MemNew (sizeof (CharPtr) * frm->num_mods);
+  frm->mod_names[0] = StringSave (frm->new_qual_name);
+  frm->examples = (CharPtr PNTR) MemNew (sizeof (CharPtr) * frm->num_mods);
+  frm->examples[0] = GetDefaultExample(frm->new_qual_name);
+
+  SendHelpScrollMessage (helpForm, dlg_title, "");
+
+  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
+  SetObjectExtra (w, frm, CleanupRelatedQuals);
+  frm->form = (ForM) w;
+
+  h = HiddenGroup (w, -1, -1, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  MakeRelatedQualHeaders (h, frm);
+  grp_list = (GrouP PNTR) MemNew (sizeof (GrouP) * (frm->num_mods + 2));
+
+  num_seq = ValNodeLen (tbl_data);
+  frm->qual_table = AddMultiModifierTableEditor (h, frm->mod_names, frm->examples, frm->num_mods, num_seq, grp_list);
+
+  tlp = GetObjectExtra (frm->qual_table);
+  tlp->vnp = tbl_data;
+  tlp->max = MAX ((Int2) 0, (Int2) (num_seq - tlp->rows));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, tlp->rows - 1, tlp->rows - 1); 
+
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) grp_list[0], (HANDLE) tlp->control[0], NULL);
+  for (i = 0; i < frm->num_mods; i++) {
+    AlignObjects (ALIGN_JUSTIFY, (HANDLE) grp_list[i + 1], (HANDLE) tlp->control[i + 1], (HANDLE) frm->ed_grps[i], NULL);
+  }
+  /* align problems */
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) grp_list[i + 1], (HANDLE) tlp->control[i + 1], NULL);
+  grp_list = MemFree (grp_list);
+
+  c = MakeWizardNav (h, frm);
+
+  AlignObjects (ALIGN_CENTER, (HANDLE) frm->qual_table, 
+                              (HANDLE) c, 
+                              NULL);
+
+  Update();
+  Show (w);
+  SendMessageToDialog (frm->qual_table, VIB_MSG_REDRAW);
+  return TRUE;
+}
+
+
+static Boolean SetPlasmidNames (WizardTrackerPtr wiz)
+{
+  return SetRelatedQualForLocation (wiz, "location", "plasmid", "plasmid-name", OkToContinueToSequin, FinishWizardAndLaunchSequin);
+}
+
+
+static Boolean GetChromosomeNumbers (WizardTrackerPtr wiz)
+{
+  return SetRelatedQualForLocation (wiz, "location", "", "chromosome", OkToContinueToSequin, FinishWizardAndLaunchSequin);
+}
+
+
+static WizardChoiceData ask_chromosome_choice_list[] = {
+  { "Yes", NULL, GetChromosomeNumbers } ,
+  { "No", OkToContinueToSequin, FinishWizardAndLaunchSequin },
+  { NULL, NULL, NULL }
+};
+
+
+static Boolean AskAboutChromosomes (WizardTrackerPtr wiz)
+{
+  Boolean           pick_chromosomes = FALSE;
+  IDAndTitleEditPtr iatep;
+
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+  if (DoAnySequencesHaveModifier(iatep, "chromosome")) {
+    pick_chromosomes = TRUE;
+  }
+  iatep = IDAndTitleEditFree (iatep);
+  if (pick_chromosomes) {
+    return GetChromosomeNumbers (wiz);
+  } else {
+    return CreateWizardSingleChoiceForm (wiz, ask_chromosome_choice_list,
+                                         "Sequence Location", "Do you want to provide chromosome number(s) for your sequences?");
+  }
 }
 
 
@@ -25261,18 +27114,6 @@ typedef struct virusfeaturetableform {
   DoC doc;
   ButtoN clear_btn;
 } VirusFeatureTableFormData, PNTR VirusFeatureTableFormPtr;
-
-
-static void SaveVirusFeatureTableChoice (Pointer data, WizardTrackerPtr wiz)
-{
-  VirusFeatureTableFormPtr frm;
-
-  frm = (VirusFeatureTableFormPtr) data;
-  if (frm == NULL) {
-    return;
-  }
-
-}
 
 
 static CharPtr s_VirusFeatureAnnotationHelp[] = {
@@ -25800,131 +27641,13 @@ static Boolean WizardSetTypeForm (WizardTrackerPtr wiz)
 }
 
 
-typedef struct wizardstructuredcommentform {
-  WIZARD_BLOCK
-  CharPtr structured_comment_tag;
-  CharPtr PNTR field_names;
-  Int4    num_names;
-  TexT PNTR fields;
-} WizardStructuredCommentFormData, PNTR WizardStructuredCommentFormPtr;
-
-
-static UserObjectPtr UserObjectFromWizardFields (CharPtr tag, TexT PNTR fields, CharPtr PNTR field_names)
-{
-  UserObjectPtr uop;
-  CharPtr       prefix_fmt = "##%s-START##";
-  CharPtr       suffix_fmt = "##%s-END##";
-  CharPtr       prefix, suffix, val;
-  Int4          i;
-
-  prefix = (CharPtr) MemNew (sizeof (CharPtr) * (StringLen (prefix_fmt) + StringLen (tag)));
-  sprintf (prefix, prefix_fmt, tag);
-  suffix = (CharPtr) MemNew (sizeof (CharPtr) * (StringLen (suffix_fmt) + StringLen (tag)));
-  sprintf (suffix, suffix_fmt, tag);
-  uop = CreateStructuredCommentUserObject (prefix, suffix);
-  prefix = MemFree (prefix);
-  suffix = MemFree (suffix);
-
-  for (i = 0; field_names[i] != NULL; i++) {
-    val = SaveStringFromText (fields[i]);
-    AddItemStructuredCommentUserObject (uop, field_names[i], val);
-    val = MemFree (val);
-  }
-  return uop;
-}
-
-
-static void CollectWizardStructuredComment (Pointer data, WizardTrackerPtr wiz)
-{
-  WizardStructuredCommentFormPtr frm;
-  UserObjectPtr uop;
-  ValNodePtr    vnp;
-
-  frm = (WizardStructuredCommentFormPtr) data;
-  if (frm == NULL) 
-  {
-    return;
-  }
-
-  uop = UserObjectFromWizardFields (frm->structured_comment_tag, frm->fields, frm->field_names);
-
-  vnp = GetStructuredCommentFromList (wiz->structured_comments, frm->structured_comment_tag);
-  if (vnp == NULL) 
-  {
-    ValNodeAddPointer (&(wiz->structured_comments), 0, uop);
-  }
-  else
-  {
-    vnp->data.ptrvalue = UserObjectFree (vnp->data.ptrvalue);
-    vnp->data.ptrvalue = uop;
-  }
-}
-
-
-static Boolean WizardStructuredCommentForm 
-(WizardTrackerPtr wiz, 
- CharPtr window_name, 
- CharPtr tag, 
- CharPtr intro, 
- CharPtr PNTR field_names,
- SequencesOkFunc fwd_ok_func,
- CreateFormFunc next_form)
-{
-  WizardStructuredCommentFormPtr frm;
-  WindoW w;
-  GrouP  h, g;
-  GrouP  c;
-  PrompT ppt;
-  Int4   i;
-
-  frm = (WizardStructuredCommentFormPtr) MemNew (sizeof (WizardStructuredCommentFormData));
-  frm->wiz = wiz;
-  frm->collect_func = CollectWizardStructuredComment;
-  frm->fwd_ok_func = fwd_ok_func;
-  frm->next_form = next_form;
-
-  w = FixedWindow (-50, -33, -10, -10, window_name, NULL);
-  SetObjectExtra (w, frm, CleanupWizardForm);
-  frm->form = (ForM) w;
-
-  frm->structured_comment_tag = tag;
-  frm->field_names = field_names;
-
-  h = HiddenGroup (w, -1, -1, NULL);
-  SetGroupSpacing (h, 10, 10);
-  
-  ppt = StaticPrompt (h, intro, 0, 0, programFont, 'c');
-
-  frm->num_names = 0;
-  for (i = 0; frm->field_names[i] != NULL; i++) {
-    frm->num_names ++;
-  }
-
-  frm->fields = (TexT PNTR) MemNew (sizeof (TexT) * frm->num_names);
-
-  g = NormalGroup (h, 2, 0, tag, programFont, NULL);
-  SetGroupSpacing (g, 10, 10);
-  for (i = 0; frm->field_names[i] != NULL; i++) {
-    StaticPrompt (g, field_names[i], 0, 0, programFont, 'l');
-    frm->fields[i] = DialogText (g, "", 10, NULL);
-  }
-
-  c = MakeWizardNav (h, frm);
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, (HANDLE) g, (HANDLE) c, NULL);
-  Update();
-  Show (w);
-  return TRUE;
-}
-
-
 static CharPtr method_names[] = {
   "Sanger dideoxy sequencing",
   "454", 
   "Helicos", 
   "Illumina", 
   "IonTorrent", 
-  "Pacific Biosciences", 
+  "PacBio", 
   "SOLiD", 
   "Other"};
 
@@ -26020,6 +27743,27 @@ static CharPtr JustAssemblyProgramVersionFromDialog (DialoG d)
 }
 
 
+static ValNodePtr TestAssemblyProgramDialog (DialoG d)
+{
+  SingleAssemblyProgramDialogPtr dlg;
+  ValNodePtr errs = 0;
+
+  dlg = (SingleAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  if (TextHasNoText (dlg->assembly_program) && TextHasNoText (dlg->version)) {
+    return NULL;
+  } else if (TextHasNoText (dlg->assembly_program)) {
+    ValNodeAddPointer (&errs, 0, "Program name is required");
+  } else if (TextHasNoText (dlg->version)) {
+    ValNodeAddPointer (&errs, 0, "Version is required");
+  }
+  return errs;
+}
+
+
 static DialoG CreateAssemblyProgramDialog (GrouP parent)
 {
   SingleAssemblyProgramDialogPtr dlg;
@@ -26037,6 +27781,7 @@ static DialoG CreateAssemblyProgramDialog (GrouP parent)
   dlg->dialog = (DialoG) h;
   dlg->fromdialog = AssemblyProgramFromDialog;
   dlg->todialog = AssemblyProgramToDialog;
+  dlg->testdialog = TestAssemblyProgramDialog;
 
   StaticPrompt (h, "Assembly program (required):", 0, 0, programFont, 'r');
   dlg->assembly_program = DialogText (h, "", 10, NULL);
@@ -26085,6 +27830,42 @@ static void AssemblyProgramToTagListDialog (DialoG d, Pointer data)
     ValNodeAddPointer (&tlp->vnp, 0, line);
   }
   SendMessageToDialog (d, VIB_MSG_REDRAW);
+}
+
+
+static Boolean MultipleAssemblyProgramsOk (DialoG d)
+{
+  TagListPtr tlp;
+  ValNodePtr vnp;
+  CharPtr    line, cp;
+  Boolean    ok = TRUE;
+
+  tlp =(TagListPtr) GetObjectExtra (d);
+  if (tlp == NULL) {
+    return TRUE;
+  }
+
+  /* are version and program both supplied for every "active" line? */
+  for (vnp = tlp->vnp; vnp != NULL && ok; vnp = vnp->next) {
+    line = (CharPtr) vnp->data.ptrvalue;
+    if (!StringHasNoText (line)) {
+      cp = StringChr (line, '\t');
+      if (cp == NULL) {
+        if (!StringHasNoText (line)) {
+          ok = FALSE;
+        }
+      } else if (StringHasNoText (cp + 1)) {
+        ok = FALSE;
+      } else {
+        *cp = 0;
+        if (StringHasNoText (line)) {
+          ok = FALSE;
+        }
+        *cp = '\t';
+      }
+    }
+  }
+  return ok;
 }
 
 
@@ -26155,20 +27936,421 @@ static Pointer AssemblyProgramFromTagListDialog (DialoG d)
 }
 
 
+typedef struct stdassemblyprogramdialog {
+  DIALOG_MESSAGE_BLOCK
+
+  GrouP  single_assembly_program_grp;
+  DialoG single_assembly_program;
+  GrouP  mult_assembly_program_grp;
+  DialoG assembly_programs;
+  Boolean use_mult;
+
+} StdAssemblyProgramDialogData, PNTR StdAssemblyProgramDialogPtr;
+
+
+static Pointer StdAssemblyProgramFromDialog (DialoG d)
+{
+  StdAssemblyProgramDialogPtr dlg;
+  
+  dlg = (StdAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  if (dlg->use_mult) {
+    return DialogToPointer (dlg->assembly_programs);
+  } else {
+    return DialogToPointer (dlg->single_assembly_program);
+  }
+}
+
+
+static void StdAssemblyProgramToDialog (DialoG d, Pointer data)
+{
+  StdAssemblyProgramDialogPtr dlg;
+  
+  dlg = (StdAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  PointerToDialog (dlg->single_assembly_program, data);
+  PointerToDialog (dlg->assembly_programs, data);
+}
+
+
+static void AddAssemblyPrograms (ButtoN b)
+{
+  StdAssemblyProgramDialogPtr dlg;
+  CharPtr val, a, v;
+  CharPtr fmt = "%s v. %s";
+
+  dlg = (StdAssemblyProgramDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL) {
+    return;
+  }
+
+  val = DialogToPointer (dlg->single_assembly_program);
+  if (StringHasNoText (val)) {
+    val = MemFree (val);
+    a = JustAssemblyProgramNameFromDialog (dlg->single_assembly_program);
+    v = JustAssemblyProgramVersionFromDialog (dlg->single_assembly_program);
+    val = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (a) + StringLen (v)));
+    sprintf (val, fmt, a == NULL ? "" : a, v == NULL ? "" : v);
+    a = MemFree (a);
+    v = MemFree (v);
+  }
+
+  Hide (dlg->single_assembly_program_grp);
+  PointerToDialog (dlg->assembly_programs, val);
+  val = MemFree (val);
+  Show (dlg->mult_assembly_program_grp);
+  dlg->use_mult = TRUE;
+}
+
+
+static ValNodePtr TestStdAssemblyProgramDialog (DialoG d)
+{
+  StdAssemblyProgramDialogPtr dlg;
+  ValNodePtr errs = NULL;
+
+  dlg = (StdAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  if (dlg->use_mult) {
+    if (!MultipleAssemblyProgramsOk(dlg->assembly_programs)) {
+      ValNodeAddPointer (&errs, 0, "Program name and version are both required");
+    }
+  } else {
+    errs = TestAssemblyProgramDialog (dlg->single_assembly_program);
+  }
+  return errs;
+}
+
+
+static DialoG CreateStdAssemblyProgramDialog (GrouP parent)
+{
+  StdAssemblyProgramDialogPtr dlg;
+  GrouP  h, g4;
+  ButtoN add_prg;
+
+  dlg = (StdAssemblyProgramDialogPtr) MemNew (sizeof (StdAssemblyProgramDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  h = HiddenGroup (parent, 0, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+  SetObjectExtra (h, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) h;
+  dlg->fromdialog = StdAssemblyProgramFromDialog;
+  dlg->todialog = StdAssemblyProgramToDialog;
+  dlg->testdialog = TestStdAssemblyProgramDialog;
+  dlg->use_mult = FALSE;
+
+  dlg->single_assembly_program_grp = HiddenGroup (h, -1, 0, NULL);
+  dlg->single_assembly_program = CreateAssemblyProgramDialog(dlg->single_assembly_program_grp);
+  add_prg = PushButton (dlg->single_assembly_program_grp, "Add More Assembly Programs", AddAssemblyPrograms);
+  SetObjectExtra (add_prg, dlg, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->single_assembly_program, (HANDLE) add_prg, NULL);
+
+  dlg->mult_assembly_program_grp = NormalGroup (h, -1, 0, "What program(s) did you use to assemble your sequences?", programFont, NULL);
+  SetGroupSpacing (dlg->mult_assembly_program_grp, 10, 10);
+  g4 = HiddenGroup (dlg->mult_assembly_program_grp, 2, 0, NULL);
+  SetGroupSpacing (g4, 10, 10);
+  StaticPrompt (g4, "Assembly program (required):", 0, 0, programFont, 'r');
+  StaticPrompt (g4, "Version or date (required):", 0, 0, programFont, 'r');
+  dlg->assembly_programs = CreateTagListDialog (dlg->mult_assembly_program_grp, 3, 2, 2, assemblyprogram_types, assemblyprogram_widths, NULL,
+                                                AssemblyProgramToTagListDialog, AssemblyProgramFromTagListDialog);
+  
+  Hide (dlg->mult_assembly_program_grp);
+  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->single_assembly_program_grp, (HANDLE) dlg->mult_assembly_program_grp, NULL);
+
+  return (DialoG) h;
+}
+
+
+
+static CharPtr wgs_programs[] = {
+  "Newbler",
+  "Celera Assembler",
+  "SOAPdenovo",
+  "Velvet",
+  "ALLPATHS",
+  "GS De Novo Assembler",
+  "MIRA",
+  "phredPhrap",
+  "ABySS",
+  "CLC NGS Cell",
+  NULL
+};
+
+
+typedef struct wgsassemblyprogramdialog {
+  DIALOG_MESSAGE_BLOCK
+
+  ButtoN PNTR cv_programs;
+  TexT   PNTR cv_versions;
+  DialoG other_programs;
+
+  Int4 num_cv_programs;
+} WGSAssemblyProgramDialogData, PNTR WGSAssemblyProgramDialogPtr;
+
+
+static Boolean SetOneWGSAssemblyProgramCheckbox (WGSAssemblyProgramDialogPtr dlg, CharPtr program, CharPtr version)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+  CharPtr tmp;
+
+  for (i = 0; i < dlg->num_cv_programs && wgs_programs[i] != NULL && !rval; i++) {
+    if (StringICmp (program, wgs_programs[i]) == 0) {
+      if (GetStatus (dlg->cv_programs[i])) {
+        tmp = SaveStringFromText (dlg->cv_versions[i]);
+        /* don't list same program/version twice, if different version put in other */
+        if (StringCmp (tmp, version) == 0) {
+          rval = TRUE;
+        } 
+        tmp = MemFree (tmp);
+        return rval;
+      }
+      SetStatus (dlg->cv_programs[i], TRUE);
+      Enable (dlg->cv_versions[i]);
+      SetTitle (dlg->cv_versions[i], version);
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static void AddOneWGSAssemblyProgramToDialog (WGSAssemblyProgramDialogPtr dlg, CharPtr val, ValNodePtr PNTR others)
+{
+  CharPtr line, cp;
+
+  if (StringHasNoText (val)) {
+    return;
+  }
+  line = StringSave (val);
+  cp = StringISearch (line, " v. ");
+  if (cp == NULL) {
+    if (!SetOneWGSAssemblyProgramCheckbox (dlg, line, NULL)) {
+      ValNodeAddPointer (others, 0, line);
+    }
+  } else {
+    *cp = 0;
+    if (!SetOneWGSAssemblyProgramCheckbox (dlg, line, cp + 4)) {
+      *cp = ' ';
+      FindReplaceString (&line, " v. ", "\t", FALSE, FALSE);
+      ValNodeAddPointer (others, 0, line);
+    }
+  }
+}
+
+
+static void WGSAssemblyProgramToDialog (DialoG d, Pointer data)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  CharPtr val;
+  CharPtr lf;
+  Int4 i;
+  TagListPtr tlp;
+
+  dlg = (WGSAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+
+  tlp = (TagListPtr) GetObjectExtra (dlg->other_programs);
+  if (tlp == NULL) {
+    return;
+  }
+
+  for (i = 0; i < dlg->num_cv_programs; i++) {
+    SetStatus (dlg->cv_programs[i], FALSE);
+    SetTitle (dlg->cv_versions[i], "");
+    Disable (dlg->cv_versions[i]);
+  }
+  tlp->vnp = ValNodeFreeData (tlp->vnp);
+
+  val = (CharPtr) data;
+  if (!StringHasNoText (val)) {
+    lf = StringChr (val, ';');
+    while (lf != NULL) {
+      *lf = 0;
+      AddOneWGSAssemblyProgramToDialog (dlg, val, &(tlp->vnp));
+      *lf = ';';
+      val = lf + 1;
+      lf = StringChr (val, ';');
+    }
+    AddOneWGSAssemblyProgramToDialog (dlg, val, &(tlp->vnp));
+  }
+
+  SendMessageToDialog (dlg->other_programs, VIB_MSG_REDRAW);
+}
+
+
+static Pointer WGSAssemblyProgramFromDialog (DialoG d)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  CharPtr v, rval = NULL, others;
+  Int4 i;
+
+  dlg = (WGSAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  for (i = 0; i < dlg->num_cv_programs; i++) {
+    if (GetStatus (dlg->cv_programs[i])) {
+      SetStringValue (&rval, wgs_programs[i], ExistingTextOption_append_semi);
+      if (!TextHasNoText (dlg->cv_versions[i])) {
+        v = SaveStringFromText (dlg->cv_versions[i]);
+        SetStringValue (&rval, " v. ", ExistingTextOption_append_none);
+        SetStringValue (&rval, v, ExistingTextOption_append_none);
+        v = MemFree (v);
+      }
+    }
+  }
+  others = DialogToPointer (dlg->other_programs);
+  if (!StringHasNoText (others)) {
+    SetStringValue (&rval, others, ExistingTextOption_append_semi);
+  }
+  others = MemFree (others);
+  return rval;
+}
+
+
+static void CleanupWGSAssemblyProgramDialog (GraphiC g, Pointer data)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  
+  if (data != NULL)
+  {
+    dlg = (WGSAssemblyProgramDialogPtr) data;
+    dlg->cv_programs = MemFree (dlg->cv_programs);
+    dlg->cv_versions = MemFree (dlg->cv_versions);
+  }
+  StdCleanupExtraProc (g, data);
+}
+
+
+static void WGSAssemblyBtn (ButtoN b)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  Int4 i;
+
+  dlg = (WGSAssemblyProgramDialogPtr) GetObjectExtra (b);
+  if (dlg == NULL) {
+    return;
+  }
+
+  for (i = 0; i < dlg->num_cv_programs; i++) {
+    if (GetStatus (dlg->cv_programs[i])) {
+      Enable (dlg->cv_versions[i]);
+    } else {
+      Disable (dlg->cv_versions[i]);
+    }
+  }
+}
+
+
+static ValNodePtr TestWGSAssemblyProgramDialog (DialoG d)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  Int4 i;
+  ValNodePtr errs = NULL;
+
+  dlg = (WGSAssemblyProgramDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  for (i = 0; i < dlg->num_cv_programs; i++) {
+    if (GetStatus (dlg->cv_programs[i]) && TextHasNoText (dlg->cv_versions[i])) {
+      ValNodeAddPointer (&errs, 0, "Version is required");
+      break;
+    }
+  }
+  if (errs == NULL) {
+    if (!MultipleAssemblyProgramsOk(dlg->other_programs)) {
+      ValNodeAddPointer (&errs, 0, "Program name and version are both required");
+    }
+  }
+  return errs;
+}
+
+
+static DialoG CreateWGSAssemblyProgramDialog (GrouP parent)
+{
+  WGSAssemblyProgramDialogPtr dlg;
+  GrouP  h, g, g2;
+  Int4   i, div_width = 20;
+
+  dlg = (WGSAssemblyProgramDialogPtr) MemNew (sizeof (WGSAssemblyProgramDialogData));
+  if (dlg == NULL)
+  {
+    return NULL;
+  }
+
+  h = NormalGroup (parent, -1, 0, "What program(s) did you use to assemble your sequences?", programFont, NULL);
+  SetGroupSpacing (h, 10, 10);
+  SetObjectExtra (h, dlg, CleanupWGSAssemblyProgramDialog);
+  dlg->dialog = (DialoG) h;
+  dlg->fromdialog = WGSAssemblyProgramFromDialog;
+  dlg->todialog = WGSAssemblyProgramToDialog;
+  dlg->testdialog = TestWGSAssemblyProgramDialog;
+
+  g = HiddenGroup (h, 5, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  StaticPrompt (g, "", 0, 0, programFont, 'c');
+  StaticPrompt (g, "Version or date", 0, 0, programFont, 'c');
+  StaticPrompt (g, "", div_width, 0, programFont, 'c');
+  StaticPrompt (g, "", 0, 0, programFont, 'c');
+  StaticPrompt (g, "Version or date", 0, 0, programFont, 'c');
+
+  dlg->num_cv_programs = 0;
+  for (i = 0; wgs_programs[i] != NULL; i++) {
+    dlg->num_cv_programs++;
+  }
+
+  dlg->cv_programs = (ButtoN PNTR) MemNew (sizeof (ButtoN) * dlg->num_cv_programs);
+  dlg->cv_versions = (TexT PNTR) MemNew (sizeof (TexT) * dlg->num_cv_programs);
+  for (i = 0; wgs_programs[i] != NULL; i++) {
+    dlg->cv_programs[i] = CheckBox (g, wgs_programs[i], WGSAssemblyBtn);
+    SetObjectExtra (dlg->cv_programs[i], dlg, NULL);
+    dlg->cv_versions[i] = DialogText (g, "", 5, NULL);
+    Disable (dlg->cv_versions[i]);
+    if (i % 2 == 0) {
+      StaticPrompt (g, "", div_width, 0, programFont, 'c');
+    }
+  }
+
+  g2 = HiddenGroup (h, 2, 0, NULL);
+  SetGroupSpacing (g2, 10, 10);
+  StaticPrompt (g2, "Other assembly program", 200, 0, programFont, 'l');
+  StaticPrompt (g2, "Version or date", 200, 0, programFont, 'l');
+  dlg->other_programs = CreateTagListDialog (h, 3, 2, 2, assemblyprogram_types, assemblyprogram_widths, NULL,
+                                                AssemblyProgramToTagListDialog, AssemblyProgramFromTagListDialog);
+  
+  AlignObjects (ALIGN_CENTER, (HANDLE) g, (HANDLE) g2, (HANDLE) dlg->other_programs, NULL);
+  return (DialoG) h;
+}
+
+
 typedef struct sequencingmethoddialog {
   DIALOG_MESSAGE_BLOCK
 
   ButtoN method_names[kNumMethodNames];
   TexT  method_text;
   GrouP is_assembled;
+
+  DialoG assembly_program;
+  GrouP  name_coverage;
   TexT   assembly_name;
-  GrouP  single_assembly_program_grp;
-  DialoG single_assembly_program;
-  GrouP  mult_assembly_program_grp;
-  DialoG assembly_programs;
   TexT coverage;
 
-  Boolean use_mult;
+  EWizardType wizard_type;
 
 } SequencingMethodDialogData, PNTR SequencingMethodDialogPtr;
 
@@ -26194,7 +28376,7 @@ static Pointer SequencingMethodFromDialog (DialoG d)
   SequencingMethodInfoPtr info;
   UserObjectPtr uop;
   Int4          i;
-  CharPtr       tech = NULL, val = NULL, tmp, assembly_program, assembly_name;
+  CharPtr       tech = NULL, val = NULL, tmp, assembly_program, assembly_name = NULL;
 
   dlg = (SequencingMethodDialogPtr) GetObjectExtra (d);
   if (dlg == NULL) {
@@ -26202,9 +28384,15 @@ static Pointer SequencingMethodFromDialog (DialoG d)
   }
 
   info = SequencingMethodInfoNew();
-  info->assembled_choice = GetValue (dlg->is_assembled);
+  if (dlg->is_assembled == NULL) {
+    info->assembled_choice = 0;
+  } else {
+    info->assembled_choice = GetValue (dlg->is_assembled);
+  }
 
-  assembly_name = SaveStringFromText (dlg->assembly_name);
+  if (dlg->assembly_name != NULL) {
+    assembly_name = SaveStringFromText (dlg->assembly_name);
+  }
 
   for (i = 0; i < kNumMethodNames - 1; i++) {
     if (GetStatus (dlg->method_names[i])) {
@@ -26217,17 +28405,17 @@ static Pointer SequencingMethodFromDialog (DialoG d)
     tmp = MemFree (tmp);
   }
 
-  if (dlg->use_mult) {
-    assembly_program = DialogToPointer (dlg->assembly_programs);
-  } else {
-    assembly_program = DialogToPointer (dlg->single_assembly_program);
-  }
+  assembly_program = DialogToPointer (dlg->assembly_program);
 
   if (!StringHasNoText (tech) 
              || !StringHasNoText (assembly_program) 
              || !TextHasNoText (dlg->coverage)
-             || !TextHasNoText (dlg->assembly_name)) {
-    uop = CreateStructuredCommentUserObject ("##Assembly-Data-START##", "##Assembly-Data-END##");
+             || !StringHasNoText (assembly_name)) {
+    if (dlg->wizard_type == eWizardType_WGS) {
+      uop = CreateStructuredCommentUserObject ("##Genome-Assembly-Data-START##", "##Genome-Assembly-Data-END##");
+    } else {
+      uop = CreateStructuredCommentUserObject ("##Assembly-Data-START##", "##Assembly-Data-END##");
+    }
     if (assembly_program != NULL) {
       AddItemStructuredCommentUserObject (uop, "Assembly Method", assembly_program);
     }
@@ -26236,7 +28424,7 @@ static Pointer SequencingMethodFromDialog (DialoG d)
     }
     if (!TextHasNoText (dlg->coverage)) {
       val = SaveStringFromText (dlg->coverage);
-      AddItemStructuredCommentUserObject (uop, "Coverage", val);
+      AddItemStructuredCommentUserObject (uop, dlg->wizard_type == eWizardType_WGS ? "Genome Coverage" : "Coverage", val);
       val = MemFree (val);
     }
     if (!StringHasNoText (tech)) {
@@ -26269,14 +28457,15 @@ static void ClearSequencingMethodDialog (ButtoN b)
   SetTitle (dlg->method_text, "");
   Disable (dlg->method_text);
   SetValue (dlg->is_assembled, 0);
-  PointerToDialog (dlg->assembly_programs, NULL);
-  PointerToDialog (dlg->single_assembly_program, NULL);
+  PointerToDialog (dlg->assembly_program, NULL);
   SetTitle (dlg->coverage, "");
-  SetTitle (dlg->assembly_name, "");
+  if (dlg->assembly_name != NULL) {
+    SetTitle (dlg->assembly_name, "");
+  }
 }
 
 
-static void EnableSequencingMethodText (ButtoN b)
+static void EnableSequencingMethodOptions (ButtoN b)
 {
   SequencingMethodDialogPtr dlg;
 
@@ -26285,57 +28474,103 @@ static void EnableSequencingMethodText (ButtoN b)
     return;
   }
 
-  if (GetStatus (b)) {
+  if (GetStatus (dlg->method_names[kNumMethodNames - 1])) {
     Enable (dlg->method_text);
   } else {
     Disable (dlg->method_text);
   }
+
 }
 
 
-static void AddAssemblyPrograms (ButtoN b)
+static Boolean SequencingMethodDialogIsEmpty (SequencingMethodDialogPtr dlg)
 {
-  SequencingMethodDialogPtr dlg;
-  CharPtr val, a, v;
-  CharPtr fmt = "%s v. %s";
+  Int4 i;
+  CharPtr tmp;
+  Boolean rval = TRUE;
 
-  dlg = (SequencingMethodDialogPtr) GetObjectExtra (b);
   if (dlg == NULL) {
-    return;
+    return TRUE;
   }
 
-  val = DialogToPointer (dlg->single_assembly_program);
-  if (StringHasNoText (val)) {
-    val = MemFree (val);
-    a = JustAssemblyProgramNameFromDialog (dlg->single_assembly_program);
-    v = JustAssemblyProgramVersionFromDialog (dlg->single_assembly_program);
-    val = (CharPtr) MemNew (sizeof (Char) * (StringLen (fmt) + StringLen (a) + StringLen (v)));
-    sprintf (val, fmt, a == NULL ? "" : a, v == NULL ? "" : v);
-    a = MemFree (a);
-    v = MemFree (v);
+  for (i = 0; i < kNumMethodNames; i++) {
+    if (GetStatus (dlg->method_names[i])) {
+      return FALSE;
+    }
   }
-
-  Hide (dlg->single_assembly_program_grp);
-  PointerToDialog (dlg->assembly_programs, val);
-  val = MemFree (val);
-  Show (dlg->mult_assembly_program_grp);
-  dlg->use_mult = TRUE;
+  if (dlg->is_assembled != NULL && GetValue (dlg->is_assembled) != 0) {
+    return FALSE;
+  }
+  if ((dlg->assembly_name != NULL && !TextHasNoText (dlg->assembly_name))
+      || !TextHasNoText (dlg->coverage)) {
+    return FALSE;
+  }
+  tmp = DialogToPointer (dlg->assembly_program);
+  if (!StringHasNoText (tmp)) {
+    rval = FALSE;
+  }
+  tmp = MemFree (tmp);
+  return rval;
 }
 
 
-NLM_EXTERN DialoG SequencingMethodDialog (GrouP parent)
+static ValNodePtr TestSequencingMethodDialog (DialoG d)
 {
   SequencingMethodDialogPtr dlg;
-  GrouP  h, g1, g2, g4, g5, program_group;
+  ValNodePtr errs = NULL;
+  Boolean    need_tech = TRUE;
+  Int4       i;
+
+  dlg = (SequencingMethodDialogPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+
+  if (dlg->wizard_type != eWizardType_WGS && SequencingMethodDialogIsEmpty(dlg)) {
+    return NULL;
+  }
+
+  for (i = 0; i < kNumMethodNames - 1 && need_tech; i++) {
+    if (GetStatus (dlg->method_names[i])) {
+      need_tech = FALSE;
+    }
+  }
+  if (GetStatus (dlg->method_names[i]) && !TextHasNoText (dlg->method_text)) {
+    need_tech = FALSE;
+  }
+
+  if (need_tech) {
+    ValNodeAddPointer (&errs, 0, "Please select the sequencing technology used to obtain these sequences.");
+  }
+
+  ValNodeLink (&errs, TestDialog (dlg->assembly_program));
+  if (dlg->wizard_type == eWizardType_WGS) {
+    if (TextHasNoText (dlg->assembly_name)) {
+      ValNodeAddPointer (&errs, 0, "Assembly name is required");
+    }
+    if (TextHasNoText (dlg->coverage)) {
+      ValNodeAddPointer (&errs, 0, "Genome coverage is required");
+    }
+  }
+  return errs;
+}
+
+
+NLM_EXTERN DialoG SequencingMethodDialog (GrouP parent, EWizardType wizard_type)
+{
+  SequencingMethodDialogPtr dlg;
+  GrouP  h, g1, g2; 
   Int4   i;
-  ButtoN b, add_prg;
+  ButtoN b;
   CharPtr title = "Sequencing Method";
+  CharPtr assembly_name_example = "Example: ""EscColABCD_1.0"" for the first version of the Escherichia coli ABCD assembly";
 
   dlg = (SequencingMethodDialogPtr) MemNew (sizeof (SequencingMethodDialogData));
   if (dlg == NULL)
   {
     return NULL;
   }
+  dlg->wizard_type = wizard_type;
 
   h = HiddenGroup (parent, -1, -1, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -26344,58 +28579,63 @@ NLM_EXTERN DialoG SequencingMethodDialog (GrouP parent)
   dlg->todialog = SequencingMethodToDialog;
   dlg->fromdialog = SequencingMethodFromDialog;
   dlg->dialogmessage = NULL;
-  dlg->testdialog = NULL;
-  dlg->use_mult = FALSE;
+  dlg->testdialog = TestSequencingMethodDialog;
   
-  g1 = NormalGroup (h, 0, kNumMethodNames, "What methods were used to obtain these sequences?", programFont, NULL);
+  g1 = NormalGroup (h, 0, kNumMethodNames/2, "What methods were used to obtain these sequences?", programFont, NULL);
   SetGroupSpacing (g1, 10, 10);
   for (i = 0; i < kNumMethodNames - 1; i++) {
-    dlg->method_names[i] = CheckBox (g1, method_names[i], NULL);
+    dlg->method_names[i] = CheckBox (g1, method_names[i], EnableSequencingMethodOptions);
+    SetObjectExtra (dlg->method_names[i], dlg, NULL);
   }
   g2 = HiddenGroup (g1, 2, 0, NULL);
   SetGroupSpacing (g2, 10, 10);
-  dlg->method_names[i] = CheckBox (g2, method_names[i], EnableSequencingMethodText);
+  dlg->method_names[i] = CheckBox (g2, method_names[i], EnableSequencingMethodOptions);
   SetObjectExtra (dlg->method_names[i], dlg, NULL);
   dlg->method_text = DialogText (g2, "", 10, NULL);
   Disable (dlg->method_text);
 
-  dlg->is_assembled = NormalGroup (h, 2, 0, "Are these sequence(s):", programFont, NULL);
-  RadioButton (dlg->is_assembled, "raw sequence reads (not assembled)");
-  RadioButton (dlg->is_assembled, "assembled sequences");
+  StaticPrompt (h, "", 0, 0, programFont, 'c');
 
-  program_group = HiddenGroup (h, 0, 0, NULL);
-  dlg->single_assembly_program_grp = HiddenGroup (program_group, -1, 0, NULL);
-  dlg->single_assembly_program = CreateAssemblyProgramDialog(dlg->single_assembly_program_grp);
-  add_prg = PushButton (dlg->single_assembly_program_grp, "Add More Assembly Programs", AddAssemblyPrograms);
-  SetObjectExtra (add_prg, dlg, NULL);
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->single_assembly_program, (HANDLE) add_prg, NULL);
+  if (dlg->wizard_type != eWizardType_WGS) {
+    dlg->is_assembled = NormalGroup (h, 2, 0, "Are these sequence(s):", programFont, NULL);
+    RadioButton (dlg->is_assembled, "raw sequence reads (not assembled)");
+    RadioButton (dlg->is_assembled, "assembled sequences");
+    StaticPrompt (h, "", 0, 0, programFont, 'c');
+  }
 
-  dlg->mult_assembly_program_grp = NormalGroup (program_group, -1, 0, "What program(s) did you use to assemble your sequences?", programFont, NULL);
-  SetGroupSpacing (dlg->mult_assembly_program_grp, 10, 10);
-  g4 = HiddenGroup (dlg->mult_assembly_program_grp, 2, 0, NULL);
-  SetGroupSpacing (g4, 10, 10);
-  StaticPrompt (g4, "Assembly program (required):", 0, 0, programFont, 'r');
-  StaticPrompt (g4, "Version or date (required):", 0, 0, programFont, 'r');
-  dlg->assembly_programs = CreateTagListDialog (dlg->mult_assembly_program_grp, 4, 2, 2, assemblyprogram_types, assemblyprogram_widths, NULL,
-                                                AssemblyProgramToTagListDialog, AssemblyProgramFromTagListDialog);
-  
-  Hide (dlg->mult_assembly_program_grp);
-  AlignObjects (ALIGN_CENTER, (HANDLE) dlg->single_assembly_program_grp, (HANDLE) dlg->mult_assembly_program_grp, NULL);
-  
+  if (dlg->wizard_type == eWizardType_WGS) {
+    dlg->assembly_program = CreateWGSAssemblyProgramDialog (h);
+  } else {
+    dlg->assembly_program = CreateStdAssemblyProgramDialog (h);  
+  }
 
-  g5 = HiddenGroup (h, 2, 0, NULL);
-  SetGroupSpacing (g5, 10, 10);
-  StaticPrompt (g5, "Assembly Name (optional):", 0, 0, programFont, 'l');
-  dlg->assembly_name = DialogText(g5, "", 10, NULL);
-  StaticPrompt (g5, "Coverage (optional):", 0, 0, programFont, 'r');
-  dlg->coverage = DialogText (g5, "", 10, NULL);
+  dlg->name_coverage = HiddenGroup (h, dlg->wizard_type == eWizardType_WGS ? 3 : 2, 0, NULL);
+  SetGroupSpacing (dlg->name_coverage, 10, 10);
+  if (dlg->wizard_type == eWizardType_WGS) {
+    if (dlg->wizard_type == eWizardType_WGS) {
+      StaticPrompt (dlg->name_coverage, "Assembly Name (required):", 0, 0, programFont, 'l');
+    } else {
+      StaticPrompt (dlg->name_coverage, "Assembly Name (optional):", 0, 0, programFont, 'l');
+    }
+    dlg->assembly_name = DialogText(dlg->name_coverage, "", 10, NULL);
+  }
+  if (dlg->wizard_type == eWizardType_WGS) {
+    MultiLinePrompt (dlg->name_coverage, assembly_name_example, 250, programFont);
+    StaticPrompt (dlg->name_coverage, "Genome Coverage (required):", 0, 0, programFont, 'r');
+  } else {
+    StaticPrompt (dlg->name_coverage, "Coverage (optional):", 0, 0, programFont, 'r');
+  }
+  dlg->coverage = DialogText (dlg->name_coverage, "", 10, NULL);
+  if (dlg->wizard_type == eWizardType_WGS) {
+    StaticPrompt (dlg->name_coverage, "Example: 10X", 0, 0, programFont, 'l');
+  }
 
   b = PushButton (h, "Clear", ClearSequencingMethodDialog);
   SetObjectExtra (b, dlg, NULL);
   SendHelpScrollMessage (helpForm, title, "");
   
-  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->is_assembled, (HANDLE) program_group, (HANDLE) g5, (HANDLE) b, NULL);
-
+  AlignObjects (ALIGN_CENTER, (HANDLE) g1, (HANDLE) dlg->assembly_program, (HANDLE) dlg->name_coverage, (HANDLE) b, (HANDLE) dlg->is_assembled, NULL);
+  EnableSequencingMethodOptions(dlg->method_names[0]);
   return (DialoG) h;
 }
 
@@ -26403,8 +28643,28 @@ NLM_EXTERN DialoG SequencingMethodDialog (GrouP parent)
 
 
 
-static CharPtr bad_methods[] = { "core", "core facility", "core lab", NULL };
-static CharPtr bad_assem[] = { "Assembly program", "No", "Yes", "Not Applicable", "N/A", NULL };
+static CharPtr bad_methods[] = { 
+  "core", 
+  "core facility", 
+  "core lab", 
+  "Sequencing", 
+  "PCR", 
+  "PCR product", 
+  "Overlapping sequence", 
+  "Overlapping sequences", 
+  NULL };
+static CharPtr bad_assem[] = { 
+  "Assembly program", 
+  "No", 
+  "Yes", 
+  "Not Applicable", 
+  "N/A", 
+  "Sequencing", 
+  "PCR", 
+  "PCR product", 
+  "Overlapping sequence", 
+  "Overlapping sequences", 
+  NULL };
 
 static Boolean IsAssemblyMethodValid (CharPtr assem)
 {
@@ -26436,12 +28696,55 @@ static Boolean IsAssemblyMethodValid (CharPtr assem)
 }
 
 
+static CharPtr GetSequencingMethodPrefixForWizardType (EWizardType wizard_type)
+{
+  if (wizard_type == eWizardType_WGS) {
+    return "Genome-Assembly-Data";
+  } else {
+    return "Assembly-Data";
+  }
+}
+
+
+static Boolean IsSpecialTech (CharPtr tech)
+{
+  CharPtr cp;
+  Int4    len;
+  Boolean rval = FALSE;
+
+  if (StringHasNoText (tech)) {
+    rval = FALSE;
+  } else {
+    rval = TRUE;
+    cp = StringChr (tech, ';');
+    while (cp != NULL && rval) {
+      len = cp - tech;
+      if (StringNCmp (tech, "Sanger dideoxy sequencing", len) != 0
+          && StringNICmp (tech, "ABI", 3) != 0) {
+        rval = FALSE;
+      } else {
+        tech = cp + 1;
+        while (isspace(*tech)) {
+          tech++;
+        }
+        cp = StringChr (tech, ';');
+      }
+    }
+    if (StringCmp (tech, "Sanger dideoxy sequencing") != 0
+        && StringNICmp (tech, "ABI", 3) != 0) {
+      rval = FALSE;
+    }
+  }
+  return rval;
+}
+
+
 NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, Int4 num_sequences, Boolean required, Int4 wizard_type)
 {
   Boolean    sequencing_method_required = FALSE;
   ValNodePtr sc;
   ValNode    vn;
-  CharPtr    tech, assem, coverage;
+  CharPtr    tech, assem, coverage, a_name;
   Int4       i, opt;
   Boolean    rval = FALSE;
 
@@ -26457,7 +28760,8 @@ NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, In
     }
   } 
 
-  sc = GetStructuredCommentFromList (info->structured_comments, "Assembly-Data");
+  sc = GetStructuredCommentFromList (info->structured_comments,
+                                     GetSequencingMethodPrefixForWizardType(wizard_type));
   if (sc == NULL) {
     if (sequencing_method_required) {
       Message (MSG_ERROR, "Please select the sequencing technology used to obtain these sequences.");
@@ -26476,35 +28780,31 @@ NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, In
     tech = GetStructuredCommentFieldFromUserObject (sc->data.ptrvalue, &vn, NULL);
     vn.data.ptrvalue = "Assembly Method";
     assem = GetStructuredCommentFieldFromUserObject (sc->data.ptrvalue, &vn, NULL);
-    vn.data.ptrvalue = "Coverage";
+    if (wizard_type == eWizardType_WGS) {
+      vn.data.ptrvalue = "Genome Coverage";
+    } else {
+      vn.data.ptrvalue = "Coverage";
+    }
     coverage = GetStructuredCommentFieldFromUserObject (sc->data.ptrvalue, &vn, NULL);
+    vn.data.ptrvalue = "Assembly Name";
+    a_name = GetStructuredCommentFieldFromUserObject (sc->data.ptrvalue, &vn, NULL);
     if (StringHasNoText (tech)) {
       Message (MSG_ERROR, "Please select the sequencing technology used to obtain these sequences.");
       rval = FALSE;
-    } else if (StringCmp (tech, "Sanger dideoxy sequencing") == 0 && wizard_type != eWizardType_TSA) {
+    } else if (IsSpecialTech(tech) && wizard_type != eWizardType_WGS) {
       rval = TRUE;
-    } else if (info->assembled_choice == 0) {
+    } else if (info->assembled_choice == 0 && wizard_type != eWizardType_WGS) {
       Message (MSG_ERROR, "You must select whether the sequences are assembled or raw.");
       rval = FALSE;
     } else if (info->assembled_choice == 1) {
       rval = FALSE;
-      if (wizard_type == eWizardType_TSA && StringCmp (tech, "Sanger dideoxy sequencing") == 0) {
-        opt = ThreeOptionsDlg ("Do not use TSA wizard for unassembled Sanger sequences",
-          "This wizard should not be used for unassembled Sanger sequences.",
-          "Exit Submission",
-          "Change Options",
-          NULL);
-      } else {
-        opt = ThreeOptionsDlg ("Please submit to SRA", 
-          "Raw sequence reads generated by next generation sequencing technologies should be submitted to the Sequence Read Archive (SRA), not GenBank. Please see: http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi",
-          "Exit Submission",
-          "Change Options",
-          NULL);
-        if (opt == 1) {
-          LaunchWebBrowser ("http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi");
-        }
-      }
+      opt = ThreeOptionsDlg ("Please submit to SRA", 
+        "Raw sequence reads generated by next generation sequencing technologies should be submitted to the Sequence Read Archive (SRA), not GenBank. Please see: http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi",
+        "Exit Submission",
+        "Change Options",
+        NULL);
       if (opt == 1) {
+        LaunchWebBrowser ("http://trace.ncbi.nlm.nih.gov/Traces/sra/sra.cgi");
         info->quit_now = TRUE;
       }
     } else if (StringHasNoText (assem)) {
@@ -26518,10 +28818,16 @@ NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, In
     } else if (StringICmp (tech, "Sequencing Technology") == 0) {
       Message (MSG_ERROR, "Sequencing technology is not a valid answer. Please enter the specific type of technology used to obtain these sequences.");
       rval = FALSE;
+    } else if (wizard_type == eWizardType_WGS && StringHasNoText (a_name)) {
+      Message (MSG_ERROR, "You must enter an assembly name.");
+      rval = FALSE;
+    } else if (wizard_type == eWizardType_WGS && StringHasNoText (coverage)) {
+      Message (MSG_ERROR, "You must enter the coverage.");
+      rval = FALSE;
     } else {
       rval = TRUE;
       for (i = 0; bad_methods[i] != NULL && rval; i++) {
-        if (StringISearch (tech, bad_methods[i]) != NULL) {
+        if (StringICmp (tech, bad_methods[i]) == 0) {
           if (ANS_CANCEL == Message (MSG_OKC, "'%s' is not a sequencing technology. Please only enter the type of technology that was used to generate your sequences.", bad_methods[i])) {
             rval = FALSE;
           }
@@ -26531,6 +28837,7 @@ NLM_EXTERN Boolean IsSequencingMethodInfoValid (SequencingMethodInfoPtr info, In
     tech = MemFree (tech);
     assem = MemFree (assem);
     coverage = MemFree (coverage);
+    a_name = MemFree (a_name);
   }
   return rval;
 }
@@ -26547,9 +28854,12 @@ static Boolean IsSequencingMethodValid (WizardTrackerPtr wiz)
 
   info = SequencingMethodInfoNew ();
   info->assembled_choice = wiz->assembled_choice;
-  info->structured_comments = GetStructuredCommentFromList (wiz->structured_comments, "Assembly-Data");
+  info->structured_comments = GetStructuredCommentFromList (wiz->structured_comments, 
+                                                            GetSequencingMethodPrefixForWizardType(wiz->wizard_type));
   info->quit_now = FALSE;
-  rval = IsSequencingMethodInfoValid (info, CountSequencesAndSegments (wiz->sequences, TRUE), wiz->wizard_type == eWizardType_TSA, wiz->wizard_type);
+  rval = IsSequencingMethodInfoValid (info, CountSequencesAndSegments (wiz->sequences, TRUE), 
+                                      (wiz->wizard_type == eWizardType_WGS),
+                                      wiz->wizard_type);
   wiz->quit_now = info->quit_now;
   info->structured_comments = NULL;
   info = SequencingMethodInfoFree (info);
@@ -26573,6 +28883,17 @@ static CharPtr SequenceMethodKeywords[] = {
   "solexa",
   "deep sequencing",
   "deep-sequencing",
+  "transcriptom",
+  "next-gen",
+  "RNA-Seq",
+  "RNASeq",
+  "RNA Seq",
+  "high-throughput",
+  "high throughput",
+  "metagenom",
+  "assembl",
+  "raw seq",
+  "next gen",
   NULL
 };
 
@@ -27226,250 +29547,6 @@ select genome: chloroplast and molecule type: genomic DNA.",
 
 
 
-typedef struct wizardchoice {
-  CharPtr name;
-  SequencesOkFunc fwd_ok_func;
-  CreateFormFunc next_form;
-} WizardChoiceData, PNTR WizardChoicePtr;
-
-
-typedef struct wizardsinglechoiceform {
-  WIZARD_BLOCK
-
-  GrouP single_choice;
-
-  WizardChoicePtr choice_list;
-} WizardSingleChoiceFormData, PNTR WizardSingleChoiceFormPtr;
-
-
-static Boolean MissingWizardSingleChoice (WizardTrackerPtr wiz)
-{
-  Message (MSG_ERROR, "You must make a selection!");
-  return FALSE;
-}
-
-
-static void SaveWizardSingleChoice (Pointer data, WizardTrackerPtr wiz)
-{
-  WizardSingleChoiceFormPtr frm;
-  Int2 val, i;
-
-  frm = (WizardSingleChoiceFormPtr) data;
-  if (frm == NULL) {
-    return;
-  }
-
-  val = GetValue (frm->single_choice);
-  for (i = 0; i < val - 1 && frm->choice_list[i].name != NULL; i++)
-  {
-  }
-
-  if (i == val - 1 && frm->choice_list[i].name != NULL) {
-    frm->fwd_ok_func = frm->choice_list[i].fwd_ok_func;
-    frm->next_form = frm->choice_list[i].next_form;
-  } else {
-    frm->fwd_ok_func = MissingWizardSingleChoice;
-    frm->next_form = NULL;
-  }
-}
-
-
-static Boolean CreateWizardSingleChoiceForm (WizardTrackerPtr wiz, WizardChoicePtr choice_list, CharPtr dlg_title, CharPtr prompt)
-{
-  WizardSingleChoiceFormPtr frm;
-  WindoW  w;
-  GrouP   h;
-  GrouP   c;
-  PrompT  ppt;
-  Int4    i;
-
-  frm = (WizardSingleChoiceFormPtr) MemNew (sizeof (WizardSingleChoiceFormData));
-  frm->wiz = wiz;
-  frm->collect_func = SaveWizardSingleChoice;
-  frm->fwd_ok_func = NULL;
-  frm->next_form = NULL;
-  frm->choice_list = choice_list;
-
-  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
-  SetObjectExtra (w, frm, CleanupWizardForm);
-  frm->form = (ForM) w;
-
-  h = HiddenGroup (w, -1, -1, NULL);
-  SetGroupSpacing (h, 10, 10);
-
-  ppt = StaticPrompt (h, prompt, 0, 0, programFont, 'c');
-
-  frm->single_choice = HiddenGroup (h, 0, 20, NULL);
-  SetGroupSpacing (frm->single_choice, 10, 10);
-  for (i = 0; frm->choice_list[i].name != NULL; i++) {
-    RadioButton (frm->single_choice, frm->choice_list[i].name);
-  }
-
-  c = MakeWizardNav (h, frm);
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, 
-                              (HANDLE) frm->single_choice, 
-                              (HANDLE) c, 
-                              NULL);
-
-  Update();
-  Show (w);
-
-  return TRUE;
-}
-
-
-typedef struct wizardsubchoice {
-  CharPtr name;
-  CharPtr hidden_prompt;
-  WizardChoiceData subchoices[5];
-} WizardSubChoiceData, PNTR WizardSubChoicePtr;
-
-
-typedef struct wizardmultichoiceform {
-  WIZARD_BLOCK
-
-  GrouP main_choice;
-  GrouP PNTR subchoices;
-  
-  WizardSubChoicePtr choice_list;
-} WizardMultiChoiceFormData, PNTR WizardMultiChoiceFormPtr;
-
-
-static void SaveWizardMultiChoice (Pointer data, WizardTrackerPtr wiz)
-{
-  WizardMultiChoiceFormPtr frm;
-  Int2 val, i, j;
-
-  frm = (WizardMultiChoiceFormPtr) data;
-  if (frm == NULL) {
-    return;
-  }
-
-  val = GetValue (frm->main_choice);
-  for (i = 0; i < val - 1 && frm->choice_list[i].name != NULL; i++)
-  {
-  }
-
-  if (i == val - 1 && frm->choice_list[i].name != NULL) {
-    if (frm->choice_list[i].subchoices[1].name == NULL) {
-      frm->fwd_ok_func = frm->choice_list[i].subchoices[0].fwd_ok_func;
-      frm->next_form = frm->choice_list[i].subchoices[0].next_form;
-    } else {
-      val = GetValue (frm->subchoices[i]);
-      if (!StringHasNoText (frm->choice_list[i].hidden_prompt)) {
-        val--;
-      }
-      for (j = 0; j < val - 1 && frm->choice_list[i].subchoices[j].name != NULL; j++)
-      {
-      }
-      if (j == val - 1 && frm->choice_list[i].subchoices[j].name != NULL) {
-        frm->fwd_ok_func = frm->choice_list[i].subchoices[j].fwd_ok_func;
-        frm->next_form = frm->choice_list[i].subchoices[j].next_form;
-      } else {
-        frm->fwd_ok_func = MissingWizardSingleChoice;
-        frm->next_form = NULL;
-      }
-    }
-  } else {
-    frm->fwd_ok_func = MissingWizardSingleChoice;
-    frm->next_form = NULL;
-  }
-}
-
-
-static void ChangeWizardMultiChoice (GrouP g)
-{
-  WizardMultiChoiceFormPtr frm;
-  Int2 val, i;
-
-  frm = (WizardMultiChoiceFormPtr) GetObjectExtra (g);
-  if (frm == NULL) {
-    return;
-  }
-
-  for (i = 0; frm->choice_list[i].name != NULL; i++)
-  {
-    SafeHide (frm->subchoices[i]);
-  }
-  val = GetValue (frm->main_choice);
-  if (val - 1 < i) {
-    SafeShow (frm->subchoices[val - 1]);
-  }
-}
-
-
-static Boolean CreateWizardMultiChoiceForm (WizardTrackerPtr wiz, WizardSubChoicePtr choice_list, CharPtr dlg_title, CharPtr prompt)
-{
-  WizardMultiChoiceFormPtr frm;
-  WindoW  w;
-  GrouP   h, g;
-  GrouP   c;
-  PrompT  ppt;
-  Int4    i, j, num_main = 0;
-
-  frm = (WizardMultiChoiceFormPtr) MemNew (sizeof (WizardMultiChoiceFormData));
-  frm->wiz = wiz;
-  frm->collect_func = SaveWizardMultiChoice;
-  frm->fwd_ok_func = NULL;
-  frm->next_form = NULL;
-  frm->choice_list = choice_list;
-
-  w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
-  SetObjectExtra (w, frm, CleanupWizardForm);
-  frm->form = (ForM) w;
-
-  h = HiddenGroup (w, -1, -1, NULL);
-  SetGroupSpacing (h, 10, 10);
-
-  ppt = StaticPrompt (h, prompt, 0, 0, programFont, 'c');
-
-  frm->main_choice = HiddenGroup (h, 0, 20, ChangeWizardMultiChoice);
-  SetObjectExtra (frm->main_choice, frm, NULL);
-  SetGroupSpacing (frm->main_choice, 10, 10);
-
-  for (i = 0; frm->choice_list[i].name != NULL; i++) {
-    num_main++;
-  }
-
-  for (i = 0; frm->choice_list[i].name != NULL; i++) {
-    RadioButton (frm->main_choice, frm->choice_list[i].name);
-    num_main++;
-  }
-
-  frm->subchoices = (GrouP PNTR) MemNew (sizeof (GrouP) * num_main);
-
-  g = HiddenGroup (h, 0, 0, NULL);
-  for (i = 0; frm->choice_list[i].name != NULL; i++) {
-    if (frm->choice_list[i].subchoices[1].name != NULL 
-        || !StringHasNoText (frm->choice_list[i].hidden_prompt)) {
-      frm->subchoices[i] = HiddenGroup (h, 0, 20, NULL);
-      if (!StringHasNoText (frm->choice_list[i].hidden_prompt)) {
-        StaticPrompt (frm->subchoices[i], frm->choice_list[i].hidden_prompt, 0, 0, programFont, 'c');
-      }
-      for (j = 0; frm->choice_list[i].subchoices[j].name != NULL; j++) {
-        RadioButton (frm->subchoices[i], frm->choice_list[i].subchoices[j].name);
-      }
-      Hide (frm->subchoices[i]);
-    }
-  }
-
-  c = MakeWizardNav (h, frm);
-
-  AlignObjects (ALIGN_CENTER, (HANDLE) ppt, 
-                              (HANDLE) frm->main_choice, 
-                              (HANDLE) g,
-                              (HANDLE) c, 
-                              NULL);
-
-  Update();
-  Show (w);
-
-  return TRUE;
-}
-
-
-
 static WizardChoiceData virus_annotation_choice_list[] = {
   { "Single coding region across the entire sequence", NULL, UnculturedSamplesCodingRegionForm } ,
   { "Single non-coding feature across the entire sequence", NULL, CreateVirusNoncodingForm } ,
@@ -27608,6 +29685,40 @@ static Boolean CreateWizardAnnotationChoiceForm (WizardTrackerPtr wiz)
   }
   SendHelpScrollMessage (helpForm, dlg_title, "");
   return rval;
+}
+
+
+static Boolean WGSWizardBacteria (WizardTrackerPtr wiz)
+{
+  wiz->wgs_source_type = eWGSSourceType_Bacteria;
+  return CreateWizardSourceAvailabilityForm(wiz);
+}
+
+
+static Boolean WGSWizardFungi (WizardTrackerPtr wiz)
+{
+  wiz->wgs_source_type = eWGSSourceType_Fungi;
+  return BioProjectBioSampleWindow(wiz);
+}
+
+
+static Boolean WGSWizardOtherEuk (WizardTrackerPtr wiz)
+{
+  wiz->wgs_source_type = eWGSSourceType_OtherEuk;
+  return BioProjectBioSampleWindow(wiz);
+}
+
+
+static WizardChoiceData wgs_source_choice_list[] = {
+  { "Bacteria", NULL, WGSWizardBacteria } ,
+  { "Fungi", NULL, WGSWizardFungi },
+  { "Other eukaryote", NULL, WGSWizardOtherEuk },
+  { NULL, NULL, NULL }
+};
+
+static Boolean CreateWGSWizardSourceTypeForm (WizardTrackerPtr wiz)
+{
+  return CreateWizardSingleChoiceForm (wiz, wgs_source_choice_list, "WGS Source Type", "What type of organism are your sequences from?");
 }
 
 
@@ -28170,7 +30281,7 @@ static Boolean MultipleIGSFeatSpansUnknown (WizardTrackerPtr wiz)
   MultiLinePrompt (frm->partial_choice3, "Do your sequences contain part of the feature described above?", 30 * stdCharWidth, systemFont);
   RadioButton (frm->partial_choice3, "Yes");
   RadioButton (frm->partial_choice3, "Yes, but only in some of the sequences");
-  RadioButton (frm->partial_choice3, "No, it is only the intergenic spacer at the 5' end");
+  RadioButton (frm->partial_choice3, "No, it is only the intergenic spacer at the 3' end");
 
   frm->sub5 = NormalGroup (g_inside, 1, 0, "Is the intergenic spacer 5' complete?", programFont, NULL);
   RadioButton (frm->sub5, "Yes");
@@ -28288,11 +30399,14 @@ static void CollectMicrosatelliteAnnotationType (Pointer data, WizardTrackerPtr 
   wiz->feature_quals = ValNodeFreeData (wiz->feature_quals);
   wiz->annot_list = FreeAnnotList(wiz->annot_list);
   wiz->feat_qual_table = FreeTabTable (wiz->feat_qual_table);
+  wiz->multiple_repeats = FALSE;
 
   val = GetValue (frm->apply_type);
   if (val == 3) {
     wiz->show_feature_table_help = TRUE;
+    wiz->multiple_repeats = TRUE;
     frm->next_form = CreateWizardSrcQualsForm;
+
   } else if (val == 1) {
     iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
     if (DoAnySequencesHaveModifier(iatep, "clone")) {
@@ -28350,12 +30464,12 @@ static Boolean CreateMicrosatelliteAnnotationTypeForm (WizardTrackerPtr wiz)
   h = HiddenGroup (w, -1, -1, NULL);
   SetGroupSpacing (h, 10, 10);
 
-  ppt = StaticPrompt (h, "What type of annotation do you want to apply to your submission?", 0, 0, programFont, 'c');
+  ppt = StaticPrompt (h, "What type of annotation do you want to apply to each sequence?", 0, 0, programFont, 'c');
 
-  frm->apply_type = HiddenGroup (h, 0, 3, ChangeMicrosatelliteAnnotationApplyType);
+  frm->apply_type = HiddenGroup (h, 0, 4, ChangeMicrosatelliteAnnotationApplyType);
   SetObjectExtra (frm->apply_type, frm, NULL);
   SetGroupSpacing (frm->apply_type, 10, 10);
-  RadioButton (frm->apply_type, "Apply 1 microsatellite across entire sequence(s)");
+  RadioButton (frm->apply_type, "Apply a microsatellite repeat region to each sequence (automatic)");
   frm->extra_info = NormalGroup (frm->apply_type, 0, 3, "Do you want to apply information about the sequence repeat?", systemFont, NULL);
   frm->no_additional = CheckBox (frm->extra_info, "No, I do not want to add more information", ChangeMicrosatelliteAnnotationExtra);
   SetObjectExtra (frm->no_additional, frm, NULL);
@@ -28363,7 +30477,8 @@ static Boolean CreateMicrosatelliteAnnotationTypeForm (WizardTrackerPtr wiz)
   SetObjectExtra (frm->rpt_unit_seq, frm, NULL);
   frm->rpt_unit_range = CheckBox (frm->extra_info, "Add rpt_unit_range (nucleotide location of 1 repeat unit)", ChangeMicrosatelliteAnnotationExtra);
   SetObjectExtra (frm->rpt_unit_range, frm, NULL);
-  RadioButton (frm->apply_type, "Apply multiple microsatellites or information for multiple repeat units in the record viewer using a feature table or menu options.");
+  RadioButton (frm->apply_type, "Apply multiple microsatellite repeat regions to each sequence.");
+  StaticPrompt (frm->apply_type, "Annotate using a feature table or menu options in the record viewer", 0, 0, systemFont, 'l');
 
   c = MakeWizardNav (h, frm);
 
@@ -28981,7 +31096,9 @@ static void CollectBioProjectBioSample (Pointer data, WizardTrackerPtr wiz)
   if (frm->biosample != NULL) {
     wiz->biosample = SaveStringFromText (frm->biosample);
   }
-  wiz->srr = SaveStringFromText (frm->srr);
+  if (frm->srr != NULL) {
+    wiz->srr = SaveStringFromText (frm->srr);
+  }
 }
 
 
@@ -29027,13 +31144,17 @@ static Boolean BioProjectBioSampleWindow(WizardTrackerPtr wiz)
   frm = (BioProjectBioSampleFormPtr) MemNew (sizeof (BioProjectBioSampleFormData));
   frm->wiz = wiz;
 
-  dlg_title = "TSA Wizard BioProject and BioSample";
+  dlg_title = FormatWizardTitle("%s BioProject and BioSample", wiz->wizard_type);
   w = FixedWindow (-50, -33, -10, -10, dlg_title, NULL);
   SetObjectExtra (w, frm, CleanupWizardForm);
   frm->form = (ForM) w;
   frm->collect_func = CollectBioProjectBioSample;
   frm->fwd_ok_func = HasBioProject;
-  frm->next_form = CreateWizardSrcQualsForm;
+  if (wiz->wizard_type == eWizardType_WGS) {
+    frm->next_form = CreateWizardSingleSourceForm;
+  } else {
+    frm->next_form = CreateWizardSrcQualsForm;
+  }
 
   h = HiddenGroup (w, -1, -1, NULL);
   SetGroupSpacing (h, 10, 10);
@@ -29045,12 +31166,14 @@ static Boolean BioProjectBioSampleWindow(WizardTrackerPtr wiz)
   StaticPrompt (g, "", 0, 0, programFont, 'c');
   StaticPrompt (g, "", 0, 0, programFont, 'c');
   StaticPrompt (g, "", 0, 0, programFont, 'c');
-  StaticPrompt (g, "SRA Run accessions (SRR) (if applicable)", 0, 0, programFont, 'c');
-  frm->srr = DialogText (g, wiz->srr, 10, NULL);
-  PushButton (g, "Link to submit NextGen primary sequence data to SRA", RegisterSRRBtn);
-  StaticPrompt (g, "", 0, 0, programFont, 'c');
-  StaticPrompt (g, "", 0, 0, programFont, 'c');
-  StaticPrompt (g, "", 0, 0, programFont, 'c');
+  if (wiz->wizard_type != eWizardType_WGS) {
+    StaticPrompt (g, "SRA Run accessions (SRR) (if applicable)", 0, 0, programFont, 'c');
+    frm->srr = DialogText (g, wiz->srr, 10, NULL);
+    PushButton (g, "Link to submit NextGen primary sequence data to SRA", RegisterSRRBtn);
+    StaticPrompt (g, "", 0, 0, programFont, 'c');
+    StaticPrompt (g, "", 0, 0, programFont, 'c');
+    StaticPrompt (g, "", 0, 0, programFont, 'c');
+  }
   StaticPrompt (g, "BioSample Accession (optional)", 0, 0, programFont, 'c');
   frm->biosample = DialogText (g, wiz->biosample, 10, NULL);
   PushButton (g, "Link to register for a BioSample accession", RegisterBioSampleBtn);
@@ -29063,7 +31186,42 @@ static Boolean BioProjectBioSampleWindow(WizardTrackerPtr wiz)
   Update();
   Show (w);
   SendHelpScrollMessage (helpForm, dlg_title, "");
+  dlg_title = MemFree (dlg_title);
   return TRUE;
+}
+
+
+typedef struct splitint {
+  Int4 start;
+  Int4 stop;
+} SplitIntData, PNTR SplitIntPtr;
+
+
+static SplitIntPtr SplitIntNew (Int4 start, Int4 stop)
+{
+  SplitIntPtr s;
+
+  s = (SplitIntPtr) MemNew (sizeof (SplitIntData));
+  s->start = start;
+  s->stop = stop;
+  return s;
+}
+
+
+static ValNodePtr SplitIntListCopy (ValNodePtr orig)
+{
+  ValNodeBlock block;
+  ValNodePtr vnp;
+  SplitIntPtr s;
+
+  InitValNodeBlock (&block, NULL);
+
+  for (vnp = orig; vnp != NULL; vnp = vnp->next) {
+    if ((s = (SplitIntPtr)vnp->data.ptrvalue) != NULL) {
+      ValNodeAddPointerToEnd (&block, 0, SplitIntNew (s->start, s->stop));
+    }
+  }
+  return block.head;
 }
 
 
@@ -29071,7 +31229,13 @@ typedef struct ambiguousend {
   BioseqPtr bsp;
   Int4      trim5;
   Int4      trim3;
+  Int4      longest_n_run;
+  Int4      untrimmed_ns;
+  Int4      num_n_not_in_run;
   Char      id[100];
+  CharPtr   orig_id;
+  Boolean   is_new;
+  ValNodePtr split_locs;
 } AmbiguousEndData, PNTR AmbiguousEndPtr;
 
 
@@ -29084,6 +31248,11 @@ static AmbiguousEndPtr AmbiguousEndNew (BioseqPtr bsp, Int4 trim5, Int4 trim3)
   a->bsp = bsp;
   a->trim5 = trim5;
   a->trim3 = trim3;
+  a->longest_n_run = 0;
+  a->untrimmed_ns = 0;
+  a->is_new = FALSE;
+  a->split_locs = NULL;
+  a->orig_id = NULL;
   if (a->bsp != NULL) {
     SeqIdWrite (SeqIdFindBest (a->bsp->id, SEQID_GENBANK), a->id, PRINTID_REPORT, sizeof (a->id) - 1);
   }
@@ -29091,17 +31260,174 @@ static AmbiguousEndPtr AmbiguousEndNew (BioseqPtr bsp, Int4 trim5, Int4 trim3)
 }
 
 
+static AmbiguousEndPtr AmbiguousEndCopy (AmbiguousEndPtr orig)
+{
+  AmbiguousEndPtr a;
+
+  if (orig == NULL) {
+    return NULL;
+  }
+  a = (AmbiguousEndPtr) MemNew (sizeof (AmbiguousEndData));
+  MemSet (a, 0, sizeof (AmbiguousEndData));
+  a->bsp = orig->bsp;
+  a->trim5 = orig->trim5;
+  a->trim3 = orig->trim3;
+  a->longest_n_run = orig->longest_n_run;
+  a->untrimmed_ns = orig->untrimmed_ns;
+  a->is_new = orig->is_new;
+  a->split_locs = SplitIntListCopy(orig->split_locs);
+  if (orig->orig_id != NULL) {
+    a->orig_id = StringSave (orig->orig_id);
+  }
+  StringCpy (a->id, orig->id);
+  return a;
+}
+
+  
 static AmbiguousEndPtr AmbiguousEndFree (AmbiguousEndPtr a)
 {
-  a = MemFree (a);
+  if (a != NULL) {
+    a->split_locs = ValNodeFreeData (a->split_locs);
+    a->orig_id = MemFree (a->orig_id);
+    a = MemFree (a);
+  }
   return a;
 }
 
 
 static ValNodePtr AmbiguousEndListFree (ValNodePtr list)
 {
-  list = ValNodeFreeData (list);
+  ValNodePtr vnp;
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    vnp->data.ptrvalue = AmbiguousEndFree (vnp->data.ptrvalue);
+  }
+  list = ValNodeFree (list);
   return list;
+}
+
+
+static void DoAmbiguous3EndTrim (AmbiguousEndPtr a, SeqEntryPtr top_sep);
+static void DoAmbiguous5EndTrim (AmbiguousEndPtr a, SeqEntryPtr top_sep);
+
+
+static ValNodePtr SplitOneAtSplitLocations (AmbiguousEndPtr a, SeqEntryPtr top_sep, Int4 min_len)
+{
+  ValNodePtr list = NULL, vnp;
+  AmbiguousEndPtr a_new;
+  BioseqPtr       bsp_new;
+  SeqIdPtr        sip, sip_remove, sip_next;
+  SplitIntPtr     s;
+
+  if (a == NULL || a->split_locs == NULL) {
+    return NULL;
+  }
+
+  for (vnp = a->split_locs; vnp != NULL; vnp = vnp->next) {
+    s = (SplitIntPtr) vnp->data.ptrvalue;
+    bsp_new = (BioseqPtr) AsnIoMemCopy (a->bsp, (AsnReadFunc) BioseqAsnRead, (AsnWriteFunc) BioseqAsnWrite);
+    if (bsp_new == NULL) {
+      Message (MSG_POSTERR, "Out of memory!");
+      break;
+    }
+    sip = MakeNewProteinSeqId (NULL, bsp_new->id);
+    sip_remove = bsp_new->id;
+    bsp_new->id = sip;
+    for (sip = sip_remove; sip != NULL; sip = sip_next) {
+      sip_next = sip->next;
+      sip->next = NULL;
+      sip = SeqIdFree (sip);
+    }
+    SeqMgrAddToBioseqIndex (bsp_new);
+    a_new = AmbiguousEndNew (bsp_new, s->stop, a->trim3);
+    a_new->is_new = TRUE;
+    if (a->orig_id == NULL) {
+      a_new->orig_id = StringSave (a->id);
+    } else {
+      a_new->orig_id = StringSave (a->orig_id);
+    }
+    ValNodeAddPointer (&list, 0, a_new);
+    a->trim3 = a->bsp->length - s->start;
+    /* trim now, so not to log trim later */
+    DoAmbiguous3EndTrim (a, top_sep);
+    DoAmbiguous5EndTrim (a_new, top_sep);
+    a = a_new;
+  }
+  a->split_locs = ValNodeFreeData (a->split_locs);
+  return list;
+}
+
+
+static void SplitAtSplitLocations (ValNodePtr list, SeqEntryPtr top_sep, Int4 min_len)
+{
+  ValNodePtr      vnp, vnp_next, new_list;
+
+  for (vnp = list; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    new_list = SplitOneAtSplitLocations (vnp->data.ptrvalue, top_sep, min_len);
+    if (new_list != NULL) {
+      ValNodeLink (&new_list, vnp_next);
+      vnp->next = new_list;
+    }
+  }
+}
+
+
+static void AddSplitBioseqs (SeqEntryPtr sep, ValNodePtr list)
+{
+  BioseqSetPtr    bssp = NULL;
+  AmbiguousEndPtr a;
+  ValNodePtr      vnp;
+  SeqEntryPtr     sep_last;
+
+  if (sep == NULL || list == NULL) {
+    return;
+  }
+  while (sep->next != NULL) {
+    sep = sep->next;
+  }
+  
+  if (IS_Bioseq (sep)) {
+    sep_last = sep;
+  } else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL) {
+    sep_last = bssp->seq_set;
+    if (sep_last != NULL) {
+      while (sep_last->next != NULL) {
+        sep_last = sep_last->next;
+      }
+    }
+  } else {
+    return;
+  }
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+    if (a->is_new) {
+      sep = SeqEntryNew ();
+      sep->choice = 1;
+      sep->data.ptrvalue = a->bsp;
+      SeqMgrSeqEntry(OBJ_BIOSEQ, sep->data.ptrvalue, sep);
+      if (sep_last == NULL) {
+        bssp->seq_set = sep;
+      } else {
+        sep_last->next = sep;
+      }
+      sep_last = sep;
+      a->is_new = FALSE;
+    }
+  }
+}
+
+
+static void ClearSplitLocs (ValNodePtr list)
+{
+  AmbiguousEndPtr a;
+
+  while (list != NULL) {
+    if ((a = (AmbiguousEndPtr) list->data.ptrvalue) != NULL) {
+      a->split_locs = ValNodeFreeData (a->split_locs);
+    }
+    list = list->next;
+  }
 }
 
 
@@ -29221,6 +31547,151 @@ static void FindAmbiguousEnds (SeqEntryPtr sep, ValNodeBlockPtr block)
 }
 
 
+static void ShrinkTSATrimForLowQuality (AmbiguousEndPtr end, Int4 big_end, FloatLo big_end_percent, Int4 small_end, FloatLo small_end_percent)
+{
+  AmbicountData a;
+  Int4 trim5, trim3;
+
+  MemSet (&a, 0, sizeof (AmbicountData));
+  a.big_end_size = big_end;
+  a.big_end_percent = big_end_percent;
+  a.small_end_size = small_end;
+  a.small_end_percent = small_end_percent;
+  SeqPortStreamInt (end->bsp, end->trim5, end->bsp->length - 1 - end->trim3, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) &a, CountAmbiProc);
+  trim5 = a.trim;
+  a.last_n_pos = 0;
+  a.pos = 0;
+  a.num_other = 0;
+  a.trim = 0;
+
+  SeqPortStreamInt (end->bsp, end->trim5, end->bsp->length - 1 - end->trim3, Seq_strand_minus, STREAM_EXPAND_GAPS, (Pointer) &a, CountAmbiProc);
+  trim3 = a.trim;
+  end->trim5 += trim5;
+  end->trim3 += trim3;
+}
+
+
+static AmbiguousEndPtr FindTSATrimEndsForBioseq (BioseqPtr bsp, FloatLo n_percent, Int4 run_length, Int4 min_length)
+{
+  AmbiguousEndPtr a = NULL;
+  Int4 trim5 = 0, trim3 = 0;
+  Int4 big_end = 50;
+  Int4 small_end = 10;
+  FloatLo big_end_percent = 30.0;
+  FloatLo small_end_percent = 50.0;
+
+  TSATrimBioseq (bsp, n_percent, run_length, 200, &trim5, &trim3);
+  if (trim5 > 0 || trim3 > 0) {
+    a = AmbiguousEndNew (bsp, trim5, trim3);
+    ShrinkTSATrimForLowQuality (a, big_end, big_end_percent, small_end, small_end_percent);
+  } else {
+    a = FindAmbiguousEndsForBioseq(bsp, big_end, big_end_percent, small_end, small_end_percent);
+  }
+
+  return a;
+}
+
+
+static void FindTSATrimEnds (SeqEntryPtr sep, ValNodeBlockPtr block)
+{
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  AmbiguousEndPtr a;
+  FloatLo n_percent = 0.10;
+  Int4    run_length = 14;
+
+  while (sep != NULL) {
+    if (IS_Bioseq (sep) && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL) {
+      a = FindTSATrimEndsForBioseq (bsp, n_percent, run_length, 200);
+      if (a != NULL) {
+        ValNodeAddPointerToEnd (block, 0, a);
+      }
+    } else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL) {
+      FindTSATrimEnds (bssp->seq_set, block);
+    }
+    sep = sep->next;
+  }
+}
+
+
+static void DoAmbiguous5EndTrim (AmbiguousEndPtr a, SeqEntryPtr top_sep)
+{
+  SeqLocPtr  delete_loc;
+  SeqIntPtr  sint;
+  SeqEntryPtr sep, orig_scope;
+  
+  if (a == NULL || a->bsp == NULL) {
+    return;
+  }
+  if (a->trim5 == 0) {
+    return;
+  }
+
+  if (IS_Bioseq_set (top_sep)) {
+    sep = top_sep;
+  } else {
+    sep = SeqMgrGetSeqEntryForData (a->bsp);
+  }
+  orig_scope = SeqEntrySetScope (sep);
+
+  /* Trim Quality Scores */
+  TrimQualityScores (a->bsp, a->trim5, TRUE);
+  sint = SeqIntNew ();
+  sint->id = SeqIdDup (a->bsp->id);
+  sint->from = 0;
+  sint->to = a->trim5 - 1;
+  delete_loc = ValNodeNew (NULL);
+  delete_loc->choice = SEQLOC_INT;
+  delete_loc->data.ptrvalue = sint;
+  /* delete from alignments */
+  SeqEntryExplore (top_sep, (Pointer) delete_loc, SeqAlignDeleteByLocCallback);
+  /* delete from sequence */
+  SeqDeleteByLocEx (delete_loc, TRUE, FALSE, TRUE); 
+  delete_loc = SeqLocFree (delete_loc);
+  SeqEntrySetScope (orig_scope);
+  a->trim5 = 0;
+}
+
+
+static void DoAmbiguous3EndTrim (AmbiguousEndPtr a, SeqEntryPtr top_sep)
+{
+  SeqLocPtr  delete_loc;
+  SeqIntPtr  sint;
+  SeqEntryPtr sep, orig_scope;
+  
+  if (a == NULL || a->bsp == NULL) {
+    return;
+  }
+  if (a->trim3 == 0) {
+    return;
+  }
+
+  if (IS_Bioseq_set (top_sep)) {
+    sep = top_sep;
+  } else {
+    sep = SeqMgrGetSeqEntryForData (a->bsp);
+  }
+  orig_scope = SeqEntrySetScope (sep);
+
+  /* Trim Quality Scores */
+  TrimQualityScores (a->bsp, a->trim3, FALSE);
+  sint = SeqIntNew ();
+  sint->id = SeqIdDup (a->bsp->id);
+  sint->from = a->bsp->length - a->trim3;
+  sint->to = a->bsp->length - 1;
+  delete_loc = ValNodeNew (NULL);
+  delete_loc->choice = SEQLOC_INT;
+  delete_loc->data.ptrvalue = sint;
+  /* delete from alignments */
+  SeqEntryExplore (top_sep, (Pointer) delete_loc, SeqAlignDeleteByLocCallback);
+  /* delete from sequence */
+  SeqDeleteByLocEx (delete_loc, TRUE, FALSE, TRUE); 
+  delete_loc = SeqLocFree (delete_loc);
+  SeqEntrySetScope (orig_scope);
+  a->trim3 = 0;
+}
+
+
 static void TrimAmbiguousEnds (AmbiguousEndPtr a, SeqEntryPtr top_sep, Int4 min_len)
 {
   SeqLocPtr  delete_loc;
@@ -29281,25 +31752,27 @@ static void TrimAmbiguousEnds (AmbiguousEndPtr a, SeqEntryPtr top_sep, Int4 min_
 }
 
 
-static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
+static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length, CharPtr delete_warn_fmt, CharPtr extra_warning, CharPtr optional_title)
 {
   ModalAcceptCancelData acd;
   WindoW                w;
-  GrouP                 h, c;
+  GrouP                 h, c, prompt_group, boxes_group;
   ButtoN                b;
   Boolean               rval = FALSE;
   CharPtr               msg;
   DoC                   doc1 = NULL, doc2 = NULL;
-  PrompT                p;
+  PrompT                p1, title = NULL, pr = NULL, pt = NULL;
+  GrouP                 p2 = NULL;
+  CharPtr               question; 
   Int4 num_delete = 0, delete_msg_len = 1;
   Int4 num_trim = 0, trim_msg_len = 1;
   ValNodePtr vnp;
   AmbiguousEndPtr a;
-  CharPtr      delete_warn_fmt = "The %d sequence(s) listed below have a high percentage of ambiguous bases, which may mean these regions are of low quality.  We suggest that you remove them from the submission.";
   CharPtr      trim_warn_fmt = "The 5' and/or 3' ends of the %d sequences listed below include significant ambiguous bases, which may mean these regions are of low quality. We suggest that you trim them.";
   CharPtr      end5 = " %d from 5' end";
   CharPtr      end3 = " %d from 3' end";
   Int4         len;
+  LogInfoPtr   lip;
   
   for (vnp = list; vnp != NULL; vnp = vnp->next) {
     a = (AmbiguousEndPtr) vnp->data.ptrvalue;
@@ -29321,6 +31794,7 @@ static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
     }
   }
 
+  lip = OpenLog ("Sequence Changes");
   acd.accepted = FALSE;
   acd.cancelled = FALSE;
   acd.third_option = FALSE;
@@ -29329,8 +31803,15 @@ static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
   h = HiddenGroup (w, -1, 0, NULL);
   SetGroupSpacing (h, 10, 10);
 
+  if (optional_title != NULL) {
+    title = StaticPrompt (h, optional_title, 0, 0, programFont, 'c');
+  }
+
+  boxes_group = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (boxes_group, 10, 10);
   if (num_delete > 0) {
-    doc1 = DocumentPanel (h, 800, 100);
+    pr = StaticPrompt (boxes_group, "Sequences to be removed:", 0, 0, programFont, 'c');
+    doc1 = DocumentPanel (boxes_group, 800, 100);
     SetDocAutoAdjust (doc1, TRUE);
     msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (delete_warn_fmt) + 15));
     sprintf (msg, delete_warn_fmt, num_delete);
@@ -29345,10 +31826,14 @@ static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
       }
     }
     AppendText (doc1, msg, NULL, NULL, programFont);
+    fprintf (lip->fp, "Sequences Removed:\n");
+    fprintf (lip->fp, "%s\n", msg);
+    lip->data_in_log = TRUE;
     msg = MemFree (msg);
   }
   if (num_trim > 0) {
-    doc2 = DocumentPanel (h, 800, 100);
+    pt = StaticPrompt (boxes_group, "Sequences to be trimmed:", 0, 0, programFont, 'c');
+    doc2 = DocumentPanel (boxes_group, 800, 100);
     SetDocAutoAdjust (doc2, TRUE);
     msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (trim_warn_fmt) + 15));
     sprintf (msg, trim_warn_fmt, num_trim);
@@ -29377,27 +31862,44 @@ static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
       }
     }
     AppendText (doc2, msg, NULL, NULL, programFont);
+    fprintf (lip->fp, "Sequences Trimmed:\n");
+    fprintf (lip->fp, "%s", msg);
+    lip->data_in_log = TRUE;
     msg = MemFree (msg);
+    if (doc1 == NULL) {
+      AlignObjects (ALIGN_CENTER, (HANDLE) pt, (HANDLE) doc2, NULL);
+    } else {
+      AlignObjects (ALIGN_CENTER, (HANDLE) pr, (HANDLE) doc1, (HANDLE) pt, (HANDLE) doc2, NULL);
+    }
   }
         
+  prompt_group = HiddenGroup (h, -1, 0, NULL);
+  SetGroupSpacing (prompt_group, 10, 10);
+
   if (num_delete > 0 && num_trim > 0) {
-    p = StaticPrompt (h, "Would you like to remove and trim the sequences above now?", 0, 0, programFont, 'c');
+    question = "Would you like to proceed with the actions listed above now?";
   } else if (num_delete > 0) {
-    p = StaticPrompt (h, "Would you like to remove the sequences above now?", 0, 0, programFont, 'c');
+    question = "Would you like to remove the sequences above now?";
   } else {
-    p = StaticPrompt (h, "Would you like to trim the sequences above now?", 0, 0, programFont, 'c');
+    question = "Would you like to trim the sequences above now?";
   }
+
+  if (extra_warning != NULL) {
+    msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (extra_warning) + StringLen (question) + 2));
+    sprintf (msg, "%s\n%s", extra_warning, question);
+    p2 = MultiLinePrompt (prompt_group, msg, 60 * stdCharWidth, programFont);
+    msg = MemFree (msg);
+  } else {
+    p1 = StaticPrompt (prompt_group, question, 0, 0, programFont, 'c');
+  }
+
   c = HiddenGroup (h, 3, 0, NULL);
   SetGroupSpacing (c, 10, 10);
   b = PushButton (c, "Yes", ModalAcceptButton);
   SetObjectExtra (b, &acd, NULL);
   b = PushButton (c, "No", ModalCancelButton);
   SetObjectExtra (b, &acd, NULL);
-  if (doc1 == NULL) {
-    AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, (HANDLE) doc2, NULL);
-  } else {
-    AlignObjects (ALIGN_CENTER, (HANDLE) p, (HANDLE) c, (HANDLE) doc1, (HANDLE) doc2, NULL);
-  }
+  AlignObjects (ALIGN_CENTER, (HANDLE) prompt_group, (HANDLE) c, (HANDLE) boxes_group, (HANDLE) title, NULL);
   
   Show(w); 
   Select (w);
@@ -29411,12 +31913,69 @@ static Boolean OkToTrimAmbiguous (ValNodePtr list, Int4 min_length)
   if (acd.accepted)
   {
     rval = TRUE;
+    CloseLog (lip);
   }
+  lip = FreeLog (lip);
   return rval;
 }
 
 
-static void RemoveSequencesByIdx (SeqEntryPtr PNTR sequences)
+static void RemoveOneSequenceFromAlignmentsByIdx (SeqEntryPtr sequences, SeqIdPtr sip)
+{
+  SeqEntryPtr sep;
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  SeqAnnotPtr sap;
+
+  for (sep = sequences; sep != NULL; sep = sep->next) 
+  {
+    sap = NULL;
+    if (IS_Bioseq (sep) 
+        && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL)
+    {
+      sap = bsp->annot;
+    }
+    else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL)
+    {
+      sap = bssp->annot;
+    }
+    while (sap != NULL) {
+      if (sap->type == 2) {
+        RemoveOneSequenceFromAlignment(sip, sap->data);
+      }
+      sap = sap->next;
+    }
+  }
+}
+
+
+static void RemoveSequencesFromAlignmentByIdx (SeqEntryPtr sequences, SeqEntryPtr top_sep)
+{
+  SeqEntryPtr sep;
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+
+  if (top_sep == NULL) {
+    top_sep = sequences;
+  }
+
+  for (sep = sequences; sep != NULL; sep = sep->next) 
+  {
+    if (IS_Bioseq (sep) 
+        && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL
+        && bsp->idx.deleteme)
+    {
+      RemoveOneSequenceFromAlignmentsByIdx(top_sep, bsp->id);
+    }
+    else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL)
+    {
+      RemoveSequencesFromAlignmentByIdx (bssp->seq_set, top_sep);
+    }
+  }
+}
+
+
+static void RemoveSequencesByIdxEx (SeqEntryPtr PNTR sequences)
 {
   SeqEntryPtr sep, sep_prev = NULL, sep_next;
   BioseqPtr bsp;
@@ -29445,7 +32004,7 @@ static void RemoveSequencesByIdx (SeqEntryPtr PNTR sequences)
     }
     else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL)
     {
-      RemoveSequencesByIdx (&(bssp->seq_set));
+      RemoveSequencesByIdxEx (&(bssp->seq_set));
       sep_prev = sep;
     }
     else 
@@ -29456,12 +32015,24 @@ static void RemoveSequencesByIdx (SeqEntryPtr PNTR sequences)
 }
 
 
+static void RemoveSequencesByIdx (SeqEntryPtr PNTR sequences)
+{
+  if (sequences == NULL) {
+    return;
+  }
+  RemoveSequencesFromAlignmentByIdx (*sequences, *sequences);
+  RemoveSequencesByIdxEx (sequences);
+}
+
+
 NLM_EXTERN void TrimAmbiguousBases (SeqEntryPtr PNTR sequences)
 {
   ValNodeBlock block;
   ValNodePtr   vnp;
   AmbiguousEndPtr a;
   SeqEntryPtr orig_scope;
+  CharPtr     delete_warn_fmt = "The %d sequence(s) listed below have a high percentage of ambiguous bases, which may mean these regions are of low quality.  We suggest that you remove them from the submission.";
+
 
   if (sequences == NULL || *sequences == NULL) {
     return;
@@ -29469,7 +32040,7 @@ NLM_EXTERN void TrimAmbiguousBases (SeqEntryPtr PNTR sequences)
   InitValNodeBlock (&block, NULL);
 
   FindAmbiguousEnds (*sequences, &block);
-  if (block.head == NULL || !OkToTrimAmbiguous(block.head, 50)) {
+  if (block.head == NULL || !OkToTrimAmbiguous(block.head, 50, delete_warn_fmt, NULL, NULL)) {
     return;
   }
 
@@ -29485,6 +32056,916 @@ NLM_EXTERN void TrimAmbiguousBases (SeqEntryPtr PNTR sequences)
 }
 
 
+static void TrimTSABases (SeqEntryPtr PNTR sequences)
+{
+  ValNodeBlock block;
+  ValNodePtr   vnp;
+  AmbiguousEndPtr a;
+  SeqEntryPtr orig_scope;
+  CharPtr     delete_warn_fmt = "The %d sequence(s) listed below are less than 200 nucleotides or have a high percentage of amibiguous bases..  We suggest that you remove them from the submission.";
+  CharPtr     extra_warning = "Some of your sequences do not meet the requirements for the TSA database. Note you will delay processing of your file if you do not remove or trim these sequences.";
+  CharPtr     title = "The following sequences do not meet the requirements for the TSA database.";
+
+  if (sequences == NULL || *sequences == NULL) {
+    return;
+  }
+  InitValNodeBlock (&block, NULL);
+
+  FindTSATrimEnds (*sequences, &block);
+  if (block.head == NULL || !OkToTrimAmbiguous(block.head, 50, delete_warn_fmt, extra_warning, title)) {
+    return;
+  }
+
+  orig_scope = SeqEntrySetScope (*sequences);
+  for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+    a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+    TrimAmbiguousEnds (a, *sequences, 50);
+  }
+  block.head = AmbiguousEndListFree (block.head);
+  /* actually remove the sequences */
+  RemoveSequencesByIdx (sequences);
+  SeqEntrySetScope(orig_scope);
+}
+
+
+static void TrimLowQualitySequences (SeqEntryPtr PNTR sequences, EWizardType wizard_type)
+{
+  TrimAmbiguousBases(sequences);
+}
+
+
+static Int4 CountShortSequences (SeqEntryPtr seq_list, Int4 less_than)
+{
+  Int4 num_less_than = 0;
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+
+  while (seq_list != NULL) {
+    if (IS_Bioseq (seq_list)) {
+      bsp = (BioseqPtr) seq_list->data.ptrvalue;
+      if (bsp != NULL && bsp->length < less_than) {
+        num_less_than++;
+      }
+    } else if (IS_Bioseq_set (seq_list)) {
+      bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
+      if (bssp != NULL) {
+        num_less_than += CountShortSequences (bssp->seq_set, less_than);
+      }
+    }
+    seq_list = seq_list->next;
+  }
+  return num_less_than;
+}
+
+
+typedef struct termncount {
+  Int4 pos;
+  Int4 trim;
+  Boolean all_n;
+  Int4 num_n;
+  Int4 num_n_not_in_run;
+  Int4 run_size;
+  Int4 best_run_size;
+} TermNCountData, PNTR TermNCountPtr;
+
+static void LIBCALLBACK TermNProc (CharPtr sequence, Pointer userdata)
+{
+  TermNCountPtr tn;
+  CharPtr cp;
+
+  if (sequence == NULL || userdata == NULL) return;
+  tn = (TermNCountPtr) userdata;
+
+  for (cp = sequence; *cp != 0; cp++)
+  {
+    if (*cp == 'A' || *cp == 'T' || *cp == 'G' || *cp == 'C') 
+    {
+      /* ignore */
+      tn->all_n = FALSE;
+      if (tn->run_size < 10) {
+        tn->num_n_not_in_run += tn->run_size;
+      }
+      if (tn->run_size > tn->best_run_size) {
+        tn->best_run_size = tn->run_size;
+      }
+      tn->run_size = 0;
+    }
+    else 
+    {
+      tn->num_n++;
+      if (tn->all_n) {
+        tn->trim = tn->pos + 1;
+        tn->num_n = 0;
+      } else {
+        tn->run_size ++;
+      }
+    }
+    /* a->pos starts at 0, after incrementing, a->pos is count of nt examined already */
+    tn->pos++;
+  }
+}
+
+
+static void ShrinkForTerminalNs (AmbiguousEndPtr a)
+{
+  TermNCountData tn;
+
+  if (a == NULL || a->bsp == NULL || a->bsp->length < a->trim5 + a->trim3) {
+    return;
+  }
+  MemSet (&tn, 0, sizeof (TermNCountData));
+  tn.all_n = TRUE;
+  SeqPortStreamInt (a->bsp, a->trim5, a->bsp->length - 1 - a->trim3, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) &tn, TermNProc);
+  a->trim5 += tn.trim;
+  MemSet (&tn, 0, sizeof (TermNCountData));
+  tn.all_n = TRUE;
+  SeqPortStreamInt (a->bsp, a->trim5, a->bsp->length - 1 - a->trim3, Seq_strand_minus, STREAM_EXPAND_GAPS, (Pointer) &tn, TermNProc);
+  a->trim3 += tn.trim;
+  a->untrimmed_ns = tn.num_n;
+  a->num_n_not_in_run = tn.num_n_not_in_run;
+  a->longest_n_run = tn.best_run_size;
+}
+
+
+static void GetAmbiguousEndBlankList (SeqEntryPtr sep, ValNodeBlockPtr block)
+{
+  BioseqPtr    bsp;
+  BioseqSetPtr bssp;
+  while (sep != NULL) {
+    if (IS_Bioseq (sep) && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL) {
+      ValNodeAddPointerToEnd (block, 0, AmbiguousEndNew (bsp, 0, 0));
+    } else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL) {
+      GetAmbiguousEndBlankList (bssp->seq_set, block);
+    }
+    sep = sep->next;
+  }
+}
+
+
+static void CombineSplitsForAmbiguousEnd (AmbiguousEndPtr a, Int4 min_length)
+{
+  SplitIntPtr      s, s_prev;
+  ValNodePtr       vnp, vnp_prev, vnp_next;
+
+  if (a == NULL || a->split_locs == NULL || a->split_locs->next == NULL) {
+    return;
+  }
+
+  s_prev = a->split_locs->data.ptrvalue;
+  vnp_prev = a->split_locs;
+  for (vnp = vnp_prev->next; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    s = (SplitIntPtr) vnp->data.ptrvalue;
+    if (s->start - s_prev->stop - 1 < min_length)  {
+      if (s->stop > s_prev->stop) {
+        s_prev->stop = s->stop;
+      }
+      s = MemFree (s);
+      vnp->next = NULL;
+      vnp = ValNodeFree (vnp);
+      vnp_prev->next = vnp_next;
+    } else {
+      vnp_prev = vnp;
+    }
+  }
+}
+
+
+static void RecheckSplits (AmbiguousEndPtr a, Int4 max_dist)
+{
+  ValNodePtr vnp, vnp_next;
+  SplitIntPtr s;
+
+  if (a == NULL || a->split_locs == NULL) {
+    return;
+  }
+  /* reverse distance, so can start from right side */
+  ValNodeReverse (&(a->split_locs));
+  for (vnp = a->split_locs; vnp != NULL; vnp = vnp_next) {
+    vnp_next = vnp->next;
+    s = (SplitIntPtr) vnp->data.ptrvalue;
+    if (s->start < a->bsp->length - a->trim3 && a->bsp->length - s->stop < max_dist) {
+      a->trim3 = a->bsp->length - s->start;
+      vnp->next = NULL;
+      vnp = ValNodeFreeData (vnp);
+      a->split_locs = vnp_next;
+    } else {
+      break;
+    }
+  }
+  /* put back in left to right order */
+  ValNodeReverse (&(a->split_locs));
+}
+
+
+static void GetVectorTrimAndSplit (AmbiguousEndPtr a, Int4 min_length, Int4 max_dist)
+{
+  SeqFeatPtr       sfp;
+  Int4             left, right, tmp, left_dist, right_dist, left_remaining, right_remaining;
+  SeqAnnotPtr      sap;
+  
+  if (a == NULL || a->bsp == NULL || a->bsp->length - a->trim5 - a->trim3 < min_length) return;
+
+  for (sap = a->bsp->annot; sap != NULL; sap = sap->next) {
+    if (IsVecScreenAnnot(sap)) {
+      sfp = sap->data;
+      while (sfp != NULL) {
+        left = SeqLocStart (sfp->location);
+        right = SeqLocStop (sfp->location);
+        if (left > right) {
+          tmp = left;
+          left = right;
+          right = tmp;
+        }
+        left_remaining = left - a->trim5;
+        right_remaining = a->bsp->length - a->trim3 - right;
+        left_dist = left - a->trim5;
+        right_dist = a->bsp->length - a->trim3 - right;
+        if (right > a->trim5 && right_remaining > left_remaining) {
+          if (left_dist < max_dist) {
+            a->trim5 = right;
+          } else {
+            ValNodeAddPointer (&(a->split_locs), 0, SplitIntNew (left, right));
+          }
+        }
+        if (left < a->trim3 && left_remaining > right_remaining) {
+          if (right_dist < max_dist) {
+            a->trim3 = a->bsp->length - left;
+          } else {
+            ValNodeAddPointer (&(a->split_locs), 0, SplitIntNew (left, right));
+          }
+        }
+        if (left_remaining > max_dist && right_remaining > max_dist) {
+          ValNodeAddPointer (&(a->split_locs), 0, SplitIntNew (left, right));
+        }
+        sfp = sfp->next;
+      }
+    }
+  }
+
+  /* some splits may be so close together that they should be combined */
+  CombineSplitsForAmbiguousEnd (a, min_length);
+
+  /* after removing right-most vector, some earlier splits might be close enough for simple trimming */
+  RecheckSplits (a, max_dist);
+}
+
+
+typedef struct splitncount {
+  Int4 pos;
+  Int4 run_size;
+  Int4 min_gap_size;
+  SplitIntPtr last_split;
+  ValNodePtr splits;
+} SplitNCountData, PNTR SplitNCountPtr;
+
+
+static void LIBCALLBACK SplitNProc (CharPtr sequence, Pointer userdata)
+{
+  SplitNCountPtr tn;
+  CharPtr cp;
+
+  if (sequence == NULL || userdata == NULL) return;
+  tn = (SplitNCountPtr) userdata;
+
+  for (cp = sequence; *cp != 0; cp++)
+  {
+    if (*cp == 'N') 
+    {
+      tn->run_size ++;
+      if (tn->run_size >= tn->min_gap_size) {
+        if (tn->last_split == NULL) {
+          tn->last_split = SplitIntNew (tn->pos - tn->run_size, tn->pos);
+          ValNodeAddPointer (&(tn->splits), 0, tn->last_split);
+        } else {
+          tn->last_split->stop = tn->pos;
+        }
+      }
+    } 
+    else
+    {
+      tn->run_size = 0;
+      tn->last_split = NULL;
+    }
+    /* a->pos starts at 0, after incrementing, a->pos is count of nt examined already */
+    tn->pos++;
+  }
+}
+
+
+static void SplitOneForNs (AmbiguousEndPtr a, Int4 min_gap_size, Int4 min_length) 
+{
+  SplitNCountData tn;
+
+  if (a == NULL || a->bsp == NULL || a->bsp->length < a->trim5 + a->trim3) {
+    return;
+  }
+  MemSet (&tn, 0, sizeof (SplitNCountData));
+  tn.min_gap_size = min_gap_size;
+  SeqPortStreamInt (a->bsp, a->trim5, a->bsp->length - 1 - a->trim3, Seq_strand_plus, STREAM_EXPAND_GAPS, (Pointer) &tn, SplitNProc);
+
+  if (tn.splits != NULL) {
+    ValNodeLink (&(a->split_locs), tn.splits);
+    /* some splits may be so close together that they should be combined */
+    CombineSplitsForAmbiguousEnd (a, min_length);
+  }
+}
+
+
+static void SplitForNs (ValNodePtr list, Int4 min_gap_size, Int4 min_length) 
+{
+  ValNodePtr vnp;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    SplitOneForNs (vnp->data.ptrvalue, min_gap_size, min_length);
+  }
+}
+
+
+static CharPtr s_SplitMsgFmt = "Split %s before %d and after %d (%s)\n";
+
+static void AddToLogSplitMessages (AmbiguousEndPtr a, CharPtr reason, ValNodeBlockPtr msg_block)
+{
+  ValNodePtr vnp;
+  SplitIntPtr s;
+  CharPtr     msg;
+  Int4        len;
+
+  if (a == NULL || a->split_locs == NULL || msg_block == NULL) {
+    return;
+  }
+  for (vnp = a->split_locs; vnp != NULL; vnp = vnp->next) {
+    s = (SplitIntPtr) vnp->data.ptrvalue;
+    len = StringLen (s_SplitMsgFmt) + StringLen (a->id) + StringLen (reason) + 30;
+    msg = (CharPtr) MemNew (sizeof (Char) * len);
+    sprintf (msg, s_SplitMsgFmt, a->id, s->start, s->stop, reason == NULL ? "Unknown" : reason);
+    ValNodeAddPointerToEnd (msg_block, 0, msg);
+  }
+}
+
+
+static void LogSplit (AmbiguousEndPtr a, CharPtr reason, LogInfoPtr lip)
+{
+  ValNodePtr vnp;
+  SplitIntPtr s;
+
+  if (a == NULL || a->split_locs == NULL || lip == NULL || lip->fp == NULL) {
+    return;
+  }
+  for (vnp = a->split_locs; vnp != NULL; vnp = vnp->next) {
+    s = (SplitIntPtr) vnp->data.ptrvalue;
+    fprintf (lip->fp, s_SplitMsgFmt, a->id, s->start, s->stop, reason == NULL ? "Unknown" : reason);
+    lip->data_in_log = TRUE;
+  }
+}
+
+
+static Boolean AnySplits (ValNodePtr list)
+{
+  Boolean any = FALSE;
+  AmbiguousEndPtr a;
+
+  while (list != NULL && !any) {
+    if ((a = (AmbiguousEndPtr) list->data.ptrvalue) != NULL && a->split_locs != NULL) {
+      any = TRUE;
+    }
+    list = list->next;
+  }
+  return any;
+}
+
+
+static void LogSplitIdChanges (ValNodePtr list, LogInfoPtr lip)
+{
+  AmbiguousEndPtr a;
+  Boolean any = FALSE;
+
+  while (list != NULL) {
+    if ((a = (AmbiguousEndPtr) list->data.ptrvalue) != NULL && a->orig_id != NULL) {
+      if (!any) {
+        fprintf (lip->fp, "New sequences:\n");
+        lip->data_in_log = TRUE;
+        any = TRUE;
+      }
+      fprintf (lip->fp, "%s (originally part of %s)\n", a->id, a->orig_id);
+    }
+    list = list->next;
+  }
+}
+
+
+static CharPtr DescribeTrimAction (AmbiguousEndPtr a, Int4 min_length)
+{
+  CharPtr msg = NULL;
+  Int4    len;
+  CharPtr end5 = " %d from 5' end";
+  CharPtr end3 = " %d from 3' end";
+
+  if (a == NULL || (a->trim5 == 0 && a->trim3 == 0) || a->bsp->length - a->trim5 - a->trim3 < min_length) {
+    return NULL;
+  }
+
+  len = StringLen (a->id) + 3;
+  if (a->trim5 > 0) {
+    len += StringLen (end5) + 15;
+  }
+  if (a->trim3 > 0) {
+    len += StringLen (end3) + 15;
+  }
+
+  msg = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (msg, "%s:", a->id);
+  len = StringLen (msg);
+  if (a->trim5 > 0) {
+    sprintf (msg + len, end5, a->trim5);
+    if (a->trim3 > 0) {
+      StringCat (msg, ",");
+    }
+    len = StringLen (msg);
+  }
+  if (a->trim3 > 0) {
+    sprintf (msg + len, end3, a->trim3);
+  }
+  return msg;
+}
+
+
+static Boolean ShouldDelete (AmbiguousEndPtr a, Int4 min_length)
+{
+  if (a != NULL && a->bsp->length - a->trim5 - a->trim3 < min_length) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static Int4 CountTrim (ValNodePtr list, Int4 min_length)
+{
+  AmbiguousEndPtr a;
+  Int4 count = 0;
+
+  while (list != 0) {
+    if ((a = (AmbiguousEndPtr) list->data.ptrvalue) != NULL 
+        && (a->trim5 > 0 || a->trim3 > 0)
+        && !ShouldDelete (a, min_length)) {
+      count++;
+    }
+    list = list->next;
+  }
+  return count;
+}
+
+
+static Int4 CountDelete (ValNodePtr list, Int4 min_length)
+{
+  AmbiguousEndPtr a;
+  Int4 count = 0;
+
+  while (list != 0) {
+    if ((a = (AmbiguousEndPtr) list->data.ptrvalue) != NULL && ShouldDelete (a, min_length)) {
+      count++;
+    }
+    list = list->next;
+  }
+  return count;
+}
+
+
+static Boolean CheckForWGSSource (WizardTrackerPtr wiz)
+{
+  IDAndTitleEditPtr iatep;
+  ValNodePtr summaries, vnp_s, vnp_q;
+  Boolean    rval = TRUE;
+  UniversalSrcPtr u;
+  WizardQualPtr   q;
+  CharPtr         warn_fmt = "Your file contains multiple %s values, which is unexpected for a WGS submission.\
+If you think this is from a typo in one of the FASTA definition lines you may continue. \
+You will be prompted to provide the correct information later in the dialogs. \
+If these sequences are from multiple %s, please quit using the WGS wizard now.";
+  CharPtr         warn_msg;
+
+  if (wiz == NULL || wiz->sequences == NULL) {
+    return FALSE;
+  }
+  iatep = SeqEntryListToIDAndTitleEditEx (wiz->sequences, TRUE);
+
+  SetWizardTrackerBaseSrcQuals (wiz, iatep);
+  wiz->extra_src_quals = ValNodeFreeData (wiz->extra_src_quals);
+  SetWizardTrackerExtraSrcQuals (wiz, iatep);
+
+  summaries = FindUniversalSourceInfo (iatep, wiz);
+  for (vnp_s = summaries, vnp_q = wiz->base_src_quals;
+       vnp_s != NULL && vnp_q != NULL && rval; 
+       vnp_s = vnp_s->next, vnp_q = vnp_q->next) {
+    u = (UniversalSrcPtr) vnp_s->data.ptrvalue;
+    q = (WizardQualPtr) vnp_q->data.ptrvalue;
+    if (u != NULL && u->val_list->next != NULL) {
+      warn_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (warn_fmt) + 2 * StringLen (q->name)));
+      sprintf (warn_msg, warn_fmt, q->name, q->name);
+      if (ThreeOptionsDlg ("Multiple values", warn_msg,
+                           "Continue", "Quit", NULL) == 2) {
+        rval = FALSE;
+      }
+      warn_msg = MemFree (warn_msg);
+    }
+  }
+  for (vnp_q = wiz->extra_src_quals;
+       vnp_s != NULL && vnp_q != NULL && rval; 
+       vnp_q = vnp_q->next) {
+    u = (UniversalSrcPtr) vnp_s->data.ptrvalue;
+    q = (WizardQualPtr) vnp_q->data.ptrvalue;
+    if (q->show) {
+      if (u != NULL && u->val_list->next != NULL) {
+        warn_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (warn_fmt) + 2 * StringLen (q->name)));
+        sprintf (warn_msg, warn_fmt, q->name, q->name);
+        if (ThreeOptionsDlg ("Multiple values", warn_msg,
+                             "Continue", "Quit", NULL) == 2) {
+          rval = FALSE;
+        }
+        warn_msg = MemFree (warn_msg);
+      }
+      vnp_s = vnp_s->next;
+    }
+  }
+
+  summaries = UniversalSrcListFree (summaries);
+  wiz->base_src_quals = ValNodeFreeData (wiz->base_src_quals);
+  wiz->extra_src_quals = ValNodeFreeData (wiz->extra_src_quals);
+
+  iatep = IDAndTitleEditFree (iatep);
+  return rval;
+}
+
+
+typedef struct norgapfrm {
+  FORM_MESSAGE_BLOCK
+  GrouP n_or_gap;
+  TexT other_exp;
+  TexT gap_size;
+  PrompT gap_prompt;
+} NOrGapFrmData, PNTR NOrGapFrmPtr;
+
+static void ChangeNOrGap (GrouP g)
+{
+  NOrGapFrmPtr frm;
+  Int2 val;
+
+  frm = (NOrGapFrmPtr) GetObjectExtra (g);
+  if (frm == NULL) {
+    return;
+  }
+  val = GetValue (frm->n_or_gap);
+  if (val == 1 || val == 2) {
+    Enable (frm->gap_prompt);
+    Enable (frm->gap_size);
+    Disable (frm->other_exp);
+  } else if (val == 3) {
+    Disable (frm->gap_prompt);
+    Disable (frm->gap_size);
+    Enable (frm->other_exp);
+  } else {
+    Disable (frm->gap_prompt);
+    Disable (frm->gap_size);
+    Disable (frm->other_exp);
+  }
+}
+
+
+static Boolean SplitAtNs (ValNodePtr list, WizardTrackerPtr wiz, Int4 min_length)
+{
+  ModalAcceptCancelData acd;
+  WindoW                w;
+  GrouP                 h, c;
+  PrompT                intro;
+  ButtoN                b;
+  Boolean               rval = FALSE;
+  NOrGapFrmPtr          frm;
+  Int2                  val;
+  CharPtr               tmp;
+  Int4                  gap;
+  CharPtr               split_msg_fmt = "split at sequencing gaps of %d Ns";
+  CharPtr               no_split_fmt = "Ns = %s";
+
+  acd.accepted = FALSE;
+  acd.cancelled = FALSE;
+  acd.third_option = FALSE;
+  
+  w = ModalWindow(-20, -13, -10, -10, NULL);
+  h = HiddenGroup (w, -1, 0, NULL);
+  SetGroupSpacing (h, 10, 10);
+
+  frm = (NOrGapFrmPtr) MemNew (sizeof (NOrGapFrmData));
+  SetObjectExtra (w, frm, StdCleanupFormProc);
+
+  intro = StaticPrompt (h, "Some of your sequences contain runs of ten or more consecutive Ns.", 0, 0, systemFont, 'c');
+  frm->n_or_gap = NormalGroup (h, 0, 3, "What do the Ns represent?", systemFont, ChangeNOrGap);
+  SetObjectExtra (frm->n_or_gap, frm, NULL);
+  SetGroupSpacing (frm->n_or_gap, 10, 10);
+  RadioButton (frm->n_or_gap, "Sequencing Gaps");
+  RadioButton (frm->n_or_gap, "Sequencing gaps and sequence ambiguities");
+  RadioButton (frm->n_or_gap, "Other");
+  StaticPrompt (frm->n_or_gap, "", 0, 0, systemFont, 'c');
+  StaticPrompt (frm->n_or_gap, "", 0, 0, systemFont, 'c');
+  frm->other_exp = DialogText (frm->n_or_gap, "", 10, NULL);
+
+  frm->gap_prompt = StaticPrompt (h, "What is the shortest run of Ns that represents a sequence gap?", 0, 0, systemFont, 'c');
+  frm->gap_size = DialogText (h, "", 10, NULL);  
+
+  c = HiddenGroup (h, 3, 0, NULL);
+  SetGroupSpacing (c, 10, 10);
+  b = PushButton (c, "Accept", ModalAcceptButton);
+  SetObjectExtra (b, &acd, NULL);
+  AlignObjects (ALIGN_CENTER, (HANDLE) intro, 
+                              (HANDLE) frm->n_or_gap,
+                              (HANDLE) frm->other_exp,
+                              (HANDLE) frm->gap_prompt,
+                              (HANDLE) frm->gap_size,
+                              (HANDLE) c,
+                              NULL);  
+  ChangeNOrGap(frm->n_or_gap);
+  Show(w); 
+  Select (w);
+  while (!acd.accepted && !acd.cancelled)
+  {
+    ProcessExternalEvent ();
+    Update ();
+    if (acd.accepted) {
+      val = GetValue (frm->n_or_gap);
+      if (val < 1 || val > 3) {
+        Message (MSG_ERROR, "Must select meaning for runs of Ns");
+        acd.accepted = FALSE;
+      } else if (val == 1 || val == 2) {
+        if (TextHasNoText (frm->gap_size)) {
+          Message (MSG_ERROR, "Must select smallest run of Ns to convert to gap");
+          acd.accepted = FALSE;
+        } else {
+          tmp = SaveStringFromText (frm->gap_size);
+          if (!StringIsAllDigits (tmp)) {
+            Message (MSG_ERROR, "Must specify a number!");
+            acd.accepted = FALSE;
+          }
+          tmp = MemFree (tmp);
+        }
+      } else if (TextHasNoText (frm->other_exp)) {
+        Message (MSG_ERROR, "Must explain runs of Ns");
+        acd.accepted = FALSE;
+      }
+    }
+  }
+  ProcessAnEvent ();
+  Remove (w);
+  if (acd.accepted)
+  {
+    val = GetValue (frm->n_or_gap);
+    if (val == 1 || val == 2) {
+      tmp = SaveStringFromText (frm->gap_size);
+      gap = atoi (tmp);
+      tmp = MemFree (tmp);
+      SplitForNs (list, gap, min_length);
+      wiz->wgs_ns_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (split_msg_fmt) + 15));
+      sprintf (wiz->wgs_ns_msg, split_msg_fmt, gap);
+    } else {
+      tmp = SaveStringFromText (frm->other_exp);
+      wiz->wgs_ns_msg = (CharPtr) MemNew (sizeof (Char) * (StringLen (no_split_fmt) + StringLen(tmp)));
+      sprintf (wiz->wgs_ns_msg, no_split_fmt, tmp);
+      tmp = MemFree (tmp);
+    }
+    rval = TRUE;
+  }
+  return rval;
+}
+
+
+static void WGSVectorScreen (WizardTrackerPtr wiz, ValNodeBlockPtr block, Int4 min_length, Int4 max_dist)
+{
+  ValNodeBlock vector_adjusted_list;
+  ValNodeBlock vector_split_msgs;
+  Int4        num_vector_trim = 0;
+  Int4        num_vector_delete = 0;
+  ValNodePtr  vnp;
+  AmbiguousEndPtr a, a_vec;
+  Boolean     any_internal_vector = FALSE;
+  CharPtr     action;
+  CharPtr     trim_action = "trim ends of sequence with vector";
+  CharPtr     delete_action = "delete sequences that are mostly vector";
+  ValNodePtr  internal_vector = NULL;
+  CharPtr     reasons[] = {"Low Quality", "Vector Contamination", "Low Quality and Vector Contamination"};
+  MsgAnswer   ans;
+
+  VecScreenWizard (wiz->sequences);
+
+  InitValNodeBlock (&vector_adjusted_list, NULL);
+  InitValNodeBlock (&vector_split_msgs, NULL);
+  /* now look for vector trimming in addition to quality */
+  for (vnp = block->head; vnp != NULL; vnp = vnp->next) {
+    a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+    a_vec = AmbiguousEndCopy (a);
+    GetVectorTrimAndSplit (a_vec, min_length, max_dist);
+    if (a_vec->split_locs != NULL) {
+      any_internal_vector = TRUE;
+    }
+    if (a_vec->trim5 > a->trim5 || a_vec->trim3 > a->trim3) {
+      if (ShouldDelete(a_vec, min_length)) {
+        num_vector_delete++;
+      } else {
+        num_vector_trim++;
+      }
+    }
+    ValNodeAddPointerToEnd (&vector_adjusted_list, 0, a_vec);
+  }
+
+  if (any_internal_vector || num_vector_trim > 0 || num_vector_delete > 0) {
+    action = NULL;
+    if (any_internal_vector) {
+      action = StringSave ("split sequences at internal vector");
+      for (vnp = vector_adjusted_list.head; vnp != NULL; vnp = vnp->next) {
+        AddToLogSplitMessages (vnp->data.ptrvalue, "Vector match", &vector_split_msgs);
+      }
+    }
+    if (num_vector_trim > 0) {
+      if (StringHasNoText (action)) {
+        action = StringSave (trim_action);
+      } else if (num_vector_delete == 0) {
+        SetStringValue (&action, "and", ExistingTextOption_append_space);
+        SetStringValue (&action, trim_action, ExistingTextOption_append_space);
+      } else {
+        SetStringValue (&action, "trim ends of sequence with vector", ExistingTextOption_append_comma);
+      }
+    }
+    if (num_vector_delete > 0) {
+      if (StringHasNoText (action)) {
+        action = StringSave (delete_action);
+      } else if (internal_vector != NULL && num_vector_trim > 0) {
+        SetStringValue (&action, "and", ExistingTextOption_append_comma);
+        SetStringValue (&action, delete_action, ExistingTextOption_append_space);
+      } else {
+        SetStringValue (&action, "and", ExistingTextOption_append_space);
+        SetStringValue (&action, trim_action, ExistingTextOption_append_space);
+      }
+    }
+    if (wiz->has_agp) {
+      ans = Message (MSG_YN, "Vector contamination was detected.  Do you want to %s to adjust your FASTA file, before regenerating your AGP file?  Failure to do so could cause a delay in processing.", action);
+    } else {
+      ans = Message (MSG_YN, "Vector contamination was detected.  Do you want to %s?  Failure to do so could cause a delay in processing.", action);
+    }
+    if (ans == ANS_YES) {   
+      block->head = AmbiguousEndListFree (block->head);
+      block->head = vector_adjusted_list.head;
+      block->tail = vector_adjusted_list.tail;
+      vector_adjusted_list.head = NULL;
+      SplitAtSplitLocations (block->head, wiz->sequences, min_length);
+      AddSplitBioseqs (wiz->sequences, block->head);
+      ClearSplitLocs (block->head);
+    } else {
+      vector_split_msgs.head = ValNodeFreeData (vector_split_msgs.head);
+    }
+  }
+  vector_adjusted_list.head = AmbiguousEndListFree (vector_adjusted_list.head);
+  WizardRemoveVecScreenAnnots (wiz->sequences);
+}
+
+
+/* returns TRUE if anything is changed */
+static Boolean WGSSequenceAdjustment (WizardTrackerPtr wiz)
+{
+  ValNodeBlock block;
+  ValNodePtr   vnp;
+  CharPtr      msg, action;
+  AmbiguousEndPtr a;
+  SeqEntryPtr orig_scope;
+  LogInfoPtr  lip;
+  Int4        min_length = 200;
+  Int4        max_dist = 20;
+  Int4        num_trim, num_delete;
+  CharPtr     quit_problems = NULL;
+  Boolean     rval = FALSE;
+  Int4        keep_len;
+  Boolean     has_n_runs = FALSE;
+  Boolean     was_split = FALSE;
+
+  if (wiz->sequences == NULL) {
+    return FALSE;
+  }
+  wiz->wgs_ns_msg = MemFree (wiz->wgs_ns_msg);
+
+  if (Message (MSG_YN, "Do you have an AGP file that accompanies this submission?") == ANS_YES) {
+    wiz->has_agp = TRUE;
+  } else {
+    wiz->has_agp = FALSE;
+  }
+
+  InitValNodeBlock (&block, NULL);
+
+  GetAmbiguousEndBlankList (wiz->sequences, &block);
+  for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+    ShrinkForTerminalNs (vnp->data.ptrvalue);
+  }
+
+  /* WGSVectorScreen () */
+
+  for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+    a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+    ShrinkForTerminalNs (a);
+  }
+  has_n_runs = FALSE;
+  /* check for > 10% Ns */
+  for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+    a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+    keep_len = a->bsp->length - a->trim5 - a->trim3;
+    if (keep_len >= min_length) {
+      if ((100 * a->untrimmed_ns) / keep_len >= 10) {
+        /* greater than 10% Ns */
+        a->trim5 = a->bsp->length - 1;
+      } else if (a->longest_n_run > 9) {
+        has_n_runs = TRUE;
+      }
+    }
+  }
+
+  if (has_n_runs) {
+    SplitAtNs (block.head, wiz, min_length);
+    SplitAtSplitLocations (block.head, wiz->sequences, min_length);
+    AddSplitBioseqs (wiz->sequences, block.head);
+  }
+
+  lip = OpenLog ("Sequence Adjustments");
+  if (AnySplits(block.head)) {
+    fprintf (lip->fp, "Sequences %ssplit:\n", wiz->has_agp ? "to be " : "");
+    lip->data_in_log = TRUE;
+    for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+      LogSplit ((AmbiguousEndPtr) vnp->data.ptrvalue, "Split at sequence gap", lip);
+    }
+    was_split = TRUE;
+    LogSplitIdChanges (block.head, lip);
+    rval = TRUE;
+  }
+
+  num_trim = CountTrim (block.head, min_length);
+  num_delete = CountDelete (block.head, min_length);
+  if (num_delete > 0 || num_trim > 0) {
+    orig_scope = SeqEntrySetScope (wiz->sequences);
+    /* sequences to delete */
+    if (num_delete > 0) {
+      fprintf (lip->fp, "Sequences %sremoved:\n", wiz->has_agp ? "to be " : "");
+      lip->data_in_log = TRUE;
+      for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+        a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+        if (ShouldDelete(a, min_length)) {
+          if (a->bsp->length < min_length || (a->trim5 == 0 && a->trim3 == 0)) {
+            fprintf (lip->fp, "%s (too short)\n", a->id, "Low Quality");
+          } else {
+            fprintf (lip->fp, "%s (%s)\n", a->id, "Low Quality");
+          }
+          a->bsp->idx.deleteme = 1;
+        }
+      }
+    }
+    /* sequences to trim */
+    if (num_trim > 0) {
+      fprintf (lip->fp, "Sequences %strimmed:\n", wiz->has_agp ? "to be " : "");
+      lip->data_in_log = TRUE;
+      for (vnp = block.head; vnp != NULL; vnp = vnp->next) {
+        a = (AmbiguousEndPtr) vnp->data.ptrvalue;
+        msg = DescribeTrimAction (a, min_length);
+        if (msg != NULL) {
+          fprintf (lip->fp, "%s (%s)\n", msg, "Low Quality");
+          TrimAmbiguousEnds (a, wiz->sequences, min_length);
+        }
+      }
+    }
+    /* actually remove the sequences */
+    RemoveSequencesByIdx (&(wiz->sequences));
+    SeqEntrySetScope(orig_scope);
+    rval = TRUE;
+  }
+  CloseLog (lip);
+  lip = FreeLog (lip);
+  if (wiz->has_agp && (was_split || num_delete > 0 || num_trim > 0)) {    
+    if (was_split && num_delete > 0 && num_trim > 0) {
+      action = "split, trimmed, or deleted";
+    } else if (num_delete > 0 && num_trim > 0) {
+      action = "trimmed or deleted";
+    } else if (was_split && num_delete > 0) {
+      action = "split or deleted";
+    } else if (was_split && num_trim > 0) {
+      action = "split or trimmed";
+    } else if (was_split) {
+      action = "split";
+    } else if (num_delete > 0) {
+      action = "deleted";
+    } else {
+      action = "trimmed";
+    }
+    Message (MSG_ERROR, "The sequences listed need to be %s.  Please perform these actions and import a new sequence file.  Please don't forget to regenerate your AGP file.",
+             action);
+  }
+
+  block.head = AmbiguousEndListFree (block.head);
+  return rval;
+}
+
+
 typedef struct wizardfastaform {
   WIZARD_BLOCK
 
@@ -29497,6 +32978,7 @@ typedef struct wizardfastaform {
   GrouP  fasta_vs_aln;
   ButtoN aln_btn;
   ButtoN vecscreen_btn;
+  PrompT current_count;
 
   ParData parFmt;
   ColData colFmt;
@@ -29776,6 +33258,7 @@ accggatggcaccggatggcaccggatggc\n\
 ", NULL };
 
 static CharPtr s_VectorURL = "http://www.ncbi.nlm.nih.gov/Sequin/sequin.hlp.html#VectorScreen";
+static CharPtr s_WGSURL = "http://www.ncbi.nlm.nih.gov/genbank/wgs/";
 
 /* note - welcome text array follows same order as wizard text */
 static CharPtr s_WizardIntroText[] = {
@@ -29851,28 +33334,6 @@ Vector contamination should be removed before submitting your sequences to GenBa
 Click the Vector Trim Tool button below if you have not yet screened your sequences for vector.\n\
 Please see: \n\
 ",
-  /* eWizardType_TSA */
-"\
-Welcome to the TSA Submission Wizard!\n\
-Use this tool for computationally assembled sequences from primary\n\
-data such as ESTs, traces and Next Generation Sequencing\n\
-Technologies.  TSA sequence records differ from EST and GenBank\n\
-records because there are no physical counterparts to the assemblies.\n\
-\n\
-Prior to preparing your TSA submission please make sure your\n\
-assemblies conform to the following standards:\n\
-\n\
--Screen your sequences for vector contamination and remove any\n\
- vector sequence.\n\
--Remove any sequences less than 200bp in length.\n\
--Trim any sequences having more than 10% n's or containing greater\n\
- than 14 n's in a row.\n\
-\n\
-Vector Contamination:\n\
-Vector contamination should be removed before submitting your sequences to GenBank.\n\
-Click the Vector Trim Tool button below if you have not yet screened your sequences for vector.\n\
-Please see: \n\
-",
   /* eWizardType_IGS */
 "\
 Welcome to the Intergenic Spacer Submission Wizard!\n\
@@ -29925,6 +33386,22 @@ Vector contamination should be removed before submitting your sequences to GenBa
 Click the Vector Trim Tool button below if you have not yet screened your sequences for vector.\n\
 Please see: \n\
 ",
+/* WGS */
+"\
+Welcome to the WGS wizard!\n\
+\n\
+Use this tool for submitting Whole Genome Shotgun Submissions to NCBI. \n\
+This tool is for microbial genomes without annotation. Your file should include sequences from one organism only.\n\
+\n\
+Prior to preparing your WGS submission, please make sure your sequences and file conform to the following standards:\n\
+-WGS contigs should not have any Ns representing gaps. If there are gaps in your sequence, you will need to split the sequences at the gaps. \n\
+-do not include terminal N's\n\
+-do not include any sequences shorter than 200 nt \n\
+-do not include sequences containing more than 10% N's or large regions of low quality sequence\n\
+-file should not contain more than 10,000 sequences\n\
+\n\
+For more information about WGS submissions, please see: \n\
+",
 /* default */
 "\
 Vector Contamination:\n\
@@ -29957,7 +33434,11 @@ static void SetFastaText (WizardFastaFormPtr frm)
   Reset (frm->fasta_doc);
   if (frm->wiz->sequences == NULL) {
     AppendText (frm->fasta_doc, s_WizardIntroText[frm->wiz->wizard_type - 1], &(frm->parFmt), &(frm->colFmt), programFont);
-    url = s_VectorURL;
+    if (frm->wiz->wizard_type == eWizardType_WGS) {
+      url = s_WGSURL;
+    } else {
+      url = s_VectorURL;
+    }
 
     if (url != NULL) {
       AppendText (frm->fasta_doc, url, &(frm->parFmt), &(frm->colFmt), programFont);
@@ -30021,13 +33502,126 @@ static void SetFastaText (WizardFastaFormPtr frm)
 }
 
 
-static void ImportUnculturedSamplesFASTA (ButtoN b)
+static Int4 CountSequences (SeqEntryPtr seq_list)
+{
+  Int4 num = 0;
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+
+  while (seq_list != NULL) {
+    if (IS_Bioseq (seq_list)) {
+      bsp = (BioseqPtr) seq_list->data.ptrvalue;
+      if (bsp != NULL) {
+        num++;
+      }
+    } else if (IS_Bioseq_set (seq_list)) {
+      bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
+      if (bssp != NULL) {
+        num += CountSequences (bssp->seq_set);
+      }
+    }
+    seq_list = seq_list->next;
+  }
+  return num;
+}
+
+
+NLM_EXTERN Boolean BadSeqIdLengths (SeqEntryPtr sep)
+{
+  BioseqPtr bsp;
+  BioseqSetPtr bssp;
+  Boolean      rval = FALSE;
+  SeqIdPtr     sip;
+  ObjectIdPtr  oip;
+  DbtagPtr     dbtag;
+
+  while (sep != NULL && !rval) {
+    if (IS_Bioseq (sep) && (bsp = (BioseqPtr) sep->data.ptrvalue) != NULL) {
+      for (sip = bsp->id; sip != NULL && !rval; sip = sip->next) {
+        if (sip->choice == SEQID_LOCAL
+            && (oip = (ObjectIdPtr) sip->data.ptrvalue) != NULL 
+            && StringLen (oip->str) > 64) {
+          Message (MSG_ERROR, "Please do not use sequence IDs longer than 64 characters (example: %s).", oip->str);
+          rval = TRUE;
+        } else if (sip->choice == SEQID_GENERAL
+                   && (dbtag = (DbtagPtr) sip->data.ptrvalue) != NULL
+                   && dbtag->tag != NULL
+                   && StringLen (dbtag->tag->str) > 64) {
+          Message (MSG_ERROR, "Please do not use sequence IDs longer than 64 characters (example: %s).", dbtag->tag->str);
+          rval = TRUE;
+        }
+      }
+    } else if (IS_Bioseq_set (sep) && (bssp = (BioseqSetPtr) sep->data.ptrvalue) != NULL) {
+      rval = BadSeqIdLengths(bssp->seq_set);
+    }
+    sep = sep->next;
+  }
+  return rval;
+}
+
+
+static void ImportSeqCallback (Int4 seq_count, Int4 nt_count, Pointer data)
+{
+  Char    buf[50];
+  PrompT  ppt;
+  Int4    x = 0;
+  
+  if (seq_count % 100 == 0) {
+    x = 1;
+  }
+  if (seq_count % 10 == 0) {
+    x = 2;
+  }
+/*  if ((ppt = (PrompT) data) != NULL && count % 100 == 0) { */
+  if ((ppt = (PrompT) data) != NULL) {
+    sprintf (buf, "%d %d", seq_count, nt_count);
+    SetTitle (ppt, buf);
+    Show (ppt);
+    Update();
+  }
+}
+
+
+static void ExportWizardFASTA (SeqEntryPtr sep)
+{
+  CharPtr       extension;
+  FILE          *f;
+  Char          path [PATH_MAX];
+  Boolean       rval = FALSE;
+
+  path [0] = '\0';
+
+  extension = NULL;
+  extension = GetAppProperty ("FastaNucExtension");
+
+  if (path [0] != '\0' || GetOutputFileName (path, sizeof (path), extension)) {
+    f = FileOpen (path, "w");
+    if (f == NULL)
+    {
+      Message (MSG_ERROR, "Unable to open %s", path);
+    }
+    else
+    {
+      WatchCursor ();
+      ExportFASTASeqEntryList (sep, f);    
+      FileClose (f);
+      
+      ArrowCursor ();
+      Update ();
+      rval = TRUE;
+    }
+  }
+}
+
+
+static void ImportWizardFASTA (ButtoN b)
 {
   WizardFastaFormPtr frm;
   Char        path [PATH_MAX];
   CharPtr     extension;
-  SeqEntryPtr sep = NULL;
+  SeqEntryPtr sep = NULL, next;
   FILE * fp;
+  Boolean     changed = FALSE;
 
   frm = (WizardFastaFormPtr) GetObjectExtra (b);
   if (frm == NULL) {
@@ -30041,7 +33635,8 @@ static void ImportUnculturedSamplesFASTA (ButtoN b)
   }
 
   if (frm->wiz->is_fasta) {
-    sep = GetSequencesFromFile (path, NULL);
+    sep = GetSequencesFromFileEx (path, NULL, ImportSeqCallback, frm->current_count);
+    Hide (frm->current_count);
   } else {
     fp = FileOpen (path, "r");
     if (fp == NULL) {
@@ -30054,9 +33649,58 @@ static void ImportUnculturedSamplesFASTA (ButtoN b)
   if (sep == NULL) {
     Message (MSG_ERROR, "Unable to read %s from %s", frm->wiz->is_fasta ? "sequences" : "alignment", path);
     return;
+  } else if (BadSeqIdLengths (sep)) {
+    while (sep != NULL) {
+      next = sep->next;
+      sep->next = NULL;
+      SeqEntryFree (sep);
+      sep = next;
+    }
+    frm->wiz->sequences = NULL;
+    return;
+  } else if (frm->wiz->wizard_type == eWizardType_WGS) {
+    frm->wiz->sequences = sep;
+    if (!CheckForWGSSource(frm->wiz)) {
+      QuitFromWizard (frm->form);
+      return;
+    } else if (CountSequences (sep) > 10000) {
+      Message (MSG_ERROR, "Your file should contain less than 10,000 sequences.  Please split your file.");
+      while (sep != NULL) {
+        next = sep->next;
+        sep->next = NULL;
+        SeqEntryFree (sep);
+        sep = next;
+      }
+      frm->wiz->sequences = NULL;
+      return;
+    } else {
+      if (WGSSequenceAdjustment (frm->wiz)) {
+        if (frm->wiz->has_agp) {
+          sep = frm->wiz->sequences;
+          if (sep != NULL) {
+            if (ANS_YES == Message (MSG_YN, "Would you like to save an adjusted sequence file to use when you regenerate your AGP file?")) {
+              ExportWizardFASTA (sep);
+            }
+          }
+          frm->wiz->sequences = NULL;
+          while (sep != NULL) {
+            next = sep->next;
+            sep->next = NULL;
+            SeqEntryFree (sep);
+            sep = next;
+          }
+          return;
+        } else {
+          if (ANS_YES == Message (MSG_YN, "Would you like to save an adjusted sequence file?")) {
+            ExportWizardFASTA (frm->wiz->sequences);
+          }
+        }
+      }
+    }
+    sep = frm->wiz->sequences;
+  } else {
+    TrimLowQualitySequences (&sep, frm->wiz->wizard_type);
   }
-
-  TrimAmbiguousBases (&sep);
 
   frm->wiz->sequences = sep;
   /* change instructions */
@@ -30064,7 +33708,7 @@ static void ImportUnculturedSamplesFASTA (ButtoN b)
 }
 
 
-static void ClearUnculturedSamplesFASTA (ButtoN b)
+static void ClearWizardFASTA (ButtoN b)
 {
   WizardFastaFormPtr frm;
   SeqEntryPtr sep, next;
@@ -30089,6 +33733,12 @@ static void ClearUnculturedSamplesFASTA (ButtoN b)
 
   /* change instructions */
   SetFastaText (frm);
+
+  /* clean up some other items */
+  frm->wiz->bioproject = MemFree (frm->wiz->bioproject);
+  frm->wiz->biosample = MemFree (frm->wiz->biosample);
+  frm->wiz->srr = MemFree (frm->wiz->srr);
+
 }
 
 
@@ -30115,29 +33765,6 @@ static void ChangeWizardFastaPage (VoidPtr data, Int2 newval, Int2 oldval)
   Update ();
 }
 
-
-static Int4 CountShortSequences (SeqEntryPtr seq_list, Int4 less_than)
-{
-  Int4 num_less_than = 0;
-  BioseqPtr bsp;
-  BioseqSetPtr bssp;
-
-  while (seq_list != NULL) {
-    if (IS_Bioseq (seq_list)) {
-      bsp = (BioseqPtr) seq_list->data.ptrvalue;
-      if (bsp != NULL && bsp->length < less_than) {
-        num_less_than++;
-      }
-    } else if (IS_Bioseq_set (seq_list)) {
-      bssp = (BioseqSetPtr) seq_list->data.ptrvalue;
-      if (bssp != NULL) {
-        num_less_than += CountShortSequences (bssp->seq_set, less_than);
-      }
-    }
-    seq_list = seq_list->next;
-  }
-  return num_less_than;
-}
 
 static CharPtr s_ShorterThan50Msg = "\
 Sequences shorter than %d nucleotides were detected in your submission.\n\
@@ -30227,7 +33854,8 @@ static Boolean IsSequencingMethodOkForTSA (WizardTrackerPtr wiz)
   if (wiz == NULL) {
     return FALSE;
   }
-  sc = GetStructuredCommentFromList (wiz->structured_comments, "Assembly-Data");
+  sc = GetStructuredCommentFromList (wiz->structured_comments, 
+                                     GetSequencingMethodPrefixForWizardType(wiz->wizard_type));
   if (sc == NULL) {
     return FALSE;
   }
@@ -30268,6 +33896,7 @@ static void WizardFASTAFwd (ButtoN b)
   SequencingMethodInfoPtr info;
   CreateFormFunc next_form = NULL;
   Int4           ans;
+  ValNodePtr     errs;
 
   if ((frm = (WizardFastaFormPtr) GetObjectExtra (b)) == NULL) {
     return;
@@ -30285,12 +33914,6 @@ static void WizardFASTAFwd (ButtoN b)
   }
 
   switch (frm->wiz->wizard_type) {
-    case eWizardType_TSA:
-      if (frm->wiz->sequences->next == NULL) {
-        Message (MSG_ERROR, "A TSA submission should include more than one sequence.");
-        return;
-      }
-      break;
     case eWizardType_DLoop:
       if (AnySequencesLonger(frm->wiz->sequences, 1099)) {
         ans = ThreeOptionsDlg ("Sequences are unexpectedly long",  
@@ -30310,7 +33933,14 @@ static void WizardFASTAFwd (ButtoN b)
   }
 
   /* check for sequencing info */
-  RemoveStructuredCommentFromList (&(frm->wiz->structured_comments), "Assembly-Data");
+  RemoveStructuredCommentFromList (&(frm->wiz->structured_comments),
+                                   GetSequencingMethodPrefixForWizardType(frm->wiz->wizard_type));
+  errs = TestDialog (frm->sequencing_method);
+  if (errs != NULL) {
+    Message (MSG_ERROR, "%s", errs->data.ptrvalue);
+    errs = ValNodeFree (errs);
+    return;
+  }
   info = DialogToPointer (frm->sequencing_method);
   if (info != NULL) {
     ValNodeLink (&(frm->wiz->structured_comments), info->structured_comments);
@@ -30325,13 +33955,7 @@ static void WizardFASTAFwd (ButtoN b)
       QuitFromWizard (frm->form);
     }
     return;
-  } else if (frm->wiz->wizard_type == eWizardType_TSA && !IsSequencingMethodOkForTSA (frm->wiz)) {
-    globalFormatBlock.seqPackage = SEQ_PKG_TSA;
-    RejoinMainSubmissionForm (frm->wiz->sequences, 0, frm->wiz);    
-    frm->wiz->sequences = NULL;
-    Remove (frm->form);
-    return;
-  }
+  } 
   
   if (!ShortSequencesOk(frm->wiz->sequences, frm->wiz->min_seq_length, frm->wiz->recommended_seq_length)) {
     if (RemoveSequencesFromWizardList (&(frm->wiz->sequences), frm->wiz->recommended_seq_length)) {
@@ -30360,13 +33984,13 @@ static void WizardFASTAFwd (ButtoN b)
         globalFormatBlock.seqPackage = SEQ_PKG_GENBANK;
         next_form = WizardSetTypeForm;
         break;
-      case eWizardType_TSA:
-        globalFormatBlock.seqPackage = SEQ_PKG_TSA;
-        next_form = WizardAssemblyDescriptionForm;
-        break;
       case eWizardType_Microsatellite:
         globalFormatBlock.seqPackage = SEQ_PKG_GENBANK;
         next_form = CreateWizardMoleculeForm;
+        break;
+      case eWizardType_WGS:
+        globalFormatBlock.seqPackage = SEQ_PKG_GENBANK;
+        next_form = CreateWGSWizardSourceTypeForm;
         break;
       default:
         next_form = CreateWizardSrcQualsForm;
@@ -30379,6 +34003,8 @@ static void WizardFASTAFwd (ButtoN b)
         || frm->wiz->wizard_type == eWizardType_CulturedSamples
         || frm->wiz->wizard_type == eWizardType_IGS) {
       next_form = WizardSourceTypeForm;
+    } else if (frm->wiz->wizard_type == eWizardType_WGS) {
+      next_form = CreateWGSWizardSourceTypeForm;
     } else {
       next_form = CreateWizardSrcQualsForm;
     }
@@ -30421,10 +34047,6 @@ static void WizardFASTABack (ButtoN b)
     case eWizardType_CulturedSamples:
       title = "Leaving rRNA-ITS-IGS Sequences Wizard";
       question = "You are about to leave the rRNA-ITS-IGS sequences wizard - do you want to abandon your data and start over, or copy it to the normal submission dialog?";
-      break;
-    case eWizardType_TSA:
-      title = "Leaving TSA Wizard";
-      question = "You are about to leave the TSA wizard - do you want to abandon your data and start over, or copy it to the normal submission dialog?";
       break;
     case eWizardType_IGS:
       title = "Leaving Intergenic Spacer Wizard";
@@ -30473,9 +34095,6 @@ static void WizardFastaHelpBtn (ButtoN b)
       break;
     case eWizardType_CulturedSamples:
       ShowWizardHelpText ("FASTA Format Help", s_CulturedSamplesFastaExample);
-      break;
-    case eWizardType_TSA:
-      ShowWizardHelpText ("FASTA Format Help", s_TSAFastaExample);
       break;
     case eWizardType_Microsatellite:
       ShowWizardHelpText ("FASTA Format Help", s_MicrosatelliteFastaExample);
@@ -30633,7 +34252,8 @@ static Boolean CreateWizardFastaForm(WizardTrackerPtr wiz)
   InsetRect (&r, 4, 4);
   frm->colFmt.pixWidth = r.right - r.left;
 
-  if (wiz->wizard_type != eWizardType_TSA && wiz->wizard_type != eWizardType_Microsatellite) {
+  if (wiz->wizard_type != eWizardType_Microsatellite
+      && wiz->wizard_type != eWizardType_WGS) {
     aln_btns = HiddenGroup (frm->pages[0], 2, 0, NULL);
     SetGroupSpacing (aln_btns, 10, 10);
     frm->fasta_vs_aln = HiddenGroup (aln_btns, 2, 0, ChangeFastaVsAln);
@@ -30650,24 +34270,32 @@ static Boolean CreateWizardFastaForm(WizardTrackerPtr wiz)
     SetObjectExtra (frm->aln_btn, frm, NULL);
     Disable (frm->aln_btn);
   }
+  frm->current_count = StaticPrompt (frm->pages[0], "      sequences", 0, 0, systemFont, 'c');
+  Hide (frm->current_count);
 
   table_btns = HiddenGroup (frm->pages[0], 6, 0, NULL);
   SetGroupSpacing (table_btns, 10, 10);
 
-  frm->fasta_import_btn = PushButton (table_btns, "Import Nucleotide FASTA", ImportUnculturedSamplesFASTA);
+  frm->fasta_import_btn = PushButton (table_btns, "Import Nucleotide FASTA", ImportWizardFASTA);
   SetObjectExtra (frm->fasta_import_btn, frm, NULL);
-  frm->fasta_clear_btn = PushButton (table_btns, "Clear Nucleotide FASTA", ClearUnculturedSamplesFASTA);
+  frm->fasta_clear_btn = PushButton (table_btns, "Clear Nucleotide FASTA", ClearWizardFASTA);
   SetObjectExtra (frm->fasta_clear_btn, frm, NULL);
   b = PushButton (table_btns, "FASTA Format Help", WizardFastaHelpBtn);
   SetObjectExtra (b, wiz, NULL);
-  frm->vecscreen_btn = PushButton (frm->pages[0], "Vector Trim Tool", WizardVectorTrim);
-  SetObjectExtra (frm->vecscreen_btn, frm, NULL);
+  if (wiz->wizard_type != eWizardType_WGS) {
+    frm->vecscreen_btn = PushButton (frm->pages[0], "Vector Trim Tool", WizardVectorTrim);
+    SetObjectExtra (frm->vecscreen_btn, frm, NULL);
+  }
 
-  AlignObjects (ALIGN_CENTER, (HANDLE) frm->fasta_doc, (HANDLE) table_btns, (HANDLE) frm->vecscreen_btn, (HANDLE) aln_btns, NULL);
+  if (frm->vecscreen_btn == NULL) {
+    AlignObjects (ALIGN_CENTER, (HANDLE) frm->fasta_doc, (HANDLE) table_btns, (HANDLE) frm->current_count, (HANDLE) aln_btns, NULL);
+  } else {
+    AlignObjects (ALIGN_CENTER, (HANDLE) frm->fasta_doc, (HANDLE) table_btns, (HANDLE) frm->current_count, (HANDLE) frm->vecscreen_btn, (HANDLE) aln_btns, NULL);
+  }
 
   frm->pages[1] = HiddenGroup (k, -1, 0, NULL);
   SetGroupSpacing (frm->pages[1], 10, 10);
-  frm->sequencing_method = SequencingMethodDialog (frm->pages[1]);
+  frm->sequencing_method = SequencingMethodDialog (frm->pages[1], frm->wiz->wizard_type);
   AlignObjects (ALIGN_CENTER, (HANDLE) frm->pages[0], (HANDLE) frm->pages[1], NULL);
   Hide (frm->pages[1]);
 
@@ -30751,23 +34379,17 @@ static void NextToWizard (ButtoN b)
       break;
     case 8:
       Hide (frm->form);
-      wiz = WizardTrackerNew(eWizardType_TSA, NULL);
+      wiz = WizardTrackerNew(eWizardType_IGS, NULL);
       CreateWizardFastaForm (wiz);
       Update();
       break;
     case 9:
       Hide (frm->form);
-      wiz = WizardTrackerNew(eWizardType_IGS, NULL);
-      CreateWizardFastaForm (wiz);
-      Update();
-      break;
-    case 10:
-      Hide (frm->form);
       wiz = WizardTrackerNew (eWizardType_Microsatellite, NULL);
       CreateWizardFastaForm (wiz);
       Update();
       break;
-    case 11:
+    case 10:
       Hide (frm->form);
       wiz = WizardTrackerNew (eWizardType_DLoop, NULL);
       CreateWizardFastaForm (wiz);
@@ -30818,7 +34440,6 @@ static ForM CreateWizardChoiceForm (void)
   RadioButton (frm->wizard_choice, "Viruses");
   RadioButton (frm->wizard_choice, "Uncultured Samples");
   RadioButton (frm->wizard_choice, "rRNA-ITS-IGS sequences");
-  RadioButton (frm->wizard_choice, "TSA");
   RadioButton (frm->wizard_choice, "Intergenic Spacer (IGS) sequences");
   RadioButton (frm->wizard_choice, "Microsatellite sequences");
   RadioButton (frm->wizard_choice, "D-loops and control regions");
@@ -30897,6 +34518,9 @@ static WizardKeywordData wizard_keyword_list[] = {
   { "rRNA", eWizardType_CulturedSamples},
   { "ribosomal RNA", eWizardType_CulturedSamples},
   { "internal transcribed spacer", eWizardType_CulturedSamples},
+  { "microsatellite", eWizardType_Microsatellite},
+  { "D-loop", eWizardType_DLoop},
+  { "Control region", eWizardType_DLoop},
   { NULL, eWizardType_CulturedSamples}
 };
 
@@ -30982,23 +34606,37 @@ static Int4 GetRNAWizardType (void)
 }
 
 
-static CharPtr s_AskForVirus = "\
-You may use the Submission Wizard for viruses if your file contains all virus sequences.\n\
-Would you like to use the virus wizard to assist with your submission?";
-
-static CharPtr s_AskForUncultured = "\
+static CharPtr s_AskForWizard[] = {
+  NULL,
+"\
 You may use the uncultured sample wizard if these sequences are all from an uncultured source.\n\
-Would you like to use the uncultured sample wizard to assist with your submission?";
-
-static CharPtr s_AskForRNA = "\
+Would you like to use the uncultured sample wizard to assist with your submission?",
+"\
+You may use the Submission Wizard for viruses if your file contains all virus sequences.\n\
+Would you like to use the virus wizard to assist with your submission?",
+"\
 It appears you may be submitting rRNA or ITS sequences.\n\
-Would you like to use a wizard to assist with your submission?";
+Would you like to use a wizard to assist with your submission?",
+  NULL,
+"\
+You may use the Submission Wizard for Intergenic spacer sequences if your file contains all sequences from the same Intergenic spacer.\n\
+Would you like to use the Intergenic spacer wizard to assist with your submission?",
+"\
+You may use the Submission Wizard for Microsatellites if your file contains all microsatellite sequences.\n\
+Would you like to use the Microsatellite wizard to assist with your submission?",
+"\
+You may use the Submission Wizard for D-loops and Control regions if your file contains all sequences from D-loops and control regions.\n\
+Would you like to use the D-loop/Control region wizard to assist with your submission?",
+  NULL
+};
+
 
 NLM_EXTERN Boolean SuggestJumpingToWizard (SeqEntryPtr sep)
 {
   Int4 wizard_type;
   Boolean rval = FALSE;
   WizardTrackerPtr wiz;
+  CharPtr ask;
 
   if (ValNodeLen (sep) < 20) {
     return FALSE;
@@ -31007,29 +34645,27 @@ NLM_EXTERN Boolean SuggestJumpingToWizard (SeqEntryPtr sep)
   if (wizard_type == -1) {
     return FALSE;
   }
+  ask = s_AskForWizard[wizard_type];
+  if (ask == NULL) {
+    return FALSE;
+  }
+
   switch (wizard_type) {
-    case eWizardType_Viruses:
-      if (ANS_OK == Message (MSG_OKC, s_AskForVirus)) {
-        wiz = WizardTrackerNew(eWizardType_Viruses, sep);
-        CreateWizardFastaForm (wiz);
-        rval = TRUE;
-      }
-      break;
-    case eWizardType_UnculturedSamples:
-      if (ANS_OK == Message (MSG_OKC, s_AskForUncultured)) {
-        wiz = WizardTrackerNew(eWizardType_UnculturedSamples, sep);
-        CreateWizardFastaForm (wiz);
-        rval = TRUE;
-      }
-      break;
     case eWizardType_CulturedSamples:
-      if (ANS_OK == Message (MSG_OKC, s_AskForRNA)) {
+      if (ANS_OK == Message (MSG_OKC, ask)) {
         wizard_type = GetRNAWizardType ();
         if (wizard_type != -1) {
           wiz = WizardTrackerNew(wizard_type, sep);
           CreateWizardFastaForm (wiz);
           rval = TRUE;
         }
+      }
+      break;
+    default:
+      if (ask != NULL && ANS_OK == Message (MSG_OKC, ask)) {
+        wiz = WizardTrackerNew(wizard_type, sep);
+        CreateWizardFastaForm (wiz);
+        rval = TRUE;
       }
       break;
   }

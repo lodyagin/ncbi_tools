@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.h,v 1.40 2009/01/07 16:29:41 kazimird Exp $
+/* $Id: ncbi_std.h,v 1.41 2013/11/07 16:10:03 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -180,6 +180,20 @@ typedef Uint1 Boolean;
 #endif
 
 #endif /* _NCBISTD_ */
+
+/** 64-bit integers */
+#ifndef NCBI_CONST_INT8 /* C Toolkit */
+#  ifdef INT64_C /* stdint.h should have this */
+#    define NCBI_CONST_INT8(v)   INT64_C(v)
+#    define NCBI_CONST_UINT8(v)  UINT64_C(v)
+#  elif defined(_MSC_VER)
+#    define NCBI_CONST_INT8(v)   v##i64
+#    define NCBI_CONST_UINT8(v)  v##ui64
+#  else /* Try treating as (unsigned) long long */
+#    define NCBI_CONST_INT8(v)   v##LL
+#    define NCBI_CONST_UINT8(v)  v##ULL
+#  endif
+#endif
 
 /** Copies memory using memcpy and malloc
  * @param orig memory to be copied [in]

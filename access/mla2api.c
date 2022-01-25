@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/30/07
 *
-* $Revision: 1.18 $
+* $Revision: 1.21 $
 *
 * File Description: 
 *
@@ -677,6 +677,7 @@ static EjourData mla2_ejour_list [] = {
  {"Afr. J. Biotechnol.",                                           0 },
  {"Ambul. Surg.",                                               2005 },
  {"Ann. Clin. Microbiol. Antimicrob.",                             0 },
+ {"Appl Plant Sci",                                                0 },
  {"Biol. Direct",                                                  0 },
  {"Biotecnol. Apl.",                                            2002 },
  {"BMC Biochem.",                                                  0 },
@@ -714,11 +715,15 @@ static EjourData mla2_ejour_list [] = {
  {"Evol. Bioinform. Online",                                       0 },
  {"Front. Zool.",                                                  0 },
  {"Fungal Planet",                                                 0 },
+ {"Genome Announcements",                                          0 },
  {"Genome Biol.",                                               2005 },
  {"Geochem. Trans.",                                               0 },
  {"Hereditas",                                                  2004 },
  {"Hum. Genomics",                                              2004 },
+ {"ISRN Genetics",                                                 0 },
  {"Infect. Agents Cancer",                                         0 },
+ {"J Clin Exp Cardiolog",                                          0 },
+ {"J Oral Microbiol",                                              0 },
  {"J. Exp. Clin. Assist. Reprod.",                                 0 },
  {"JOP",                                                           0 },
  {"Kinetoplastid Biol Dis",                                        0 },

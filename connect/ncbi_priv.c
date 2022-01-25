@@ -1,4 +1,4 @@
-/* $Id: ncbi_priv.c,v 6.18 2012/01/11 19:34:37 kazimird Exp $
+/* $Id: ncbi_priv.c,v 6.26 2016/08/29 16:54:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,25 +31,35 @@
  */
 
 #include "ncbi_priv.h"
-#if defined(NCBI_OS_UNIX)
+#if   defined(NCBI_OS_UNIX)
 #  include <unistd.h>
 #elif defined(NCBI_OS_MSWIN)
 #  include <windows.h>
 #else
 #  include <connect/ncbi_socket.h>
-#endif /*NCBI_OS_...*/
+#endif /*NCBI_OS*/
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
-
 /* GLOBALS */
-int             g_NCBI_ConnectRandomSeed = 0;
-MT_LOCK         g_CORE_MT_Lock           = &g_CORE_MT_Lock_default;
-LOG             g_CORE_Log               = 0;
-REG             g_CORE_Registry          = 0;
-FNcbiGetAppName g_CORE_GetAppName        = 0;
-FNcbiGetSid     g_CORE_GetSid            = 0;
+TCORE_Set           g_CORE_Set               = 0;
+MT_LOCK             g_CORE_MT_Lock           = &g_CORE_MT_Lock_default;
+LOG                 g_CORE_Log               = 0;
+REG                 g_CORE_Registry          = 0;
+int                 g_NCBI_ConnectRandomSeed = 0;
+FNcbiGetAppName     g_CORE_GetAppName        = 0;
+FNcbiGetRequestID   g_CORE_GetRequestID      = 0;
+FNcbiGetRequestDtab g_CORE_GetRequestDtab    = 0;
+
+#ifdef NCBI_MONKEY
+FMonkeySend         g_MONKEY_Send            = 0;
+FMonkeyRecv         g_MONKEY_Recv            = 0;
+FMonkeyConnect      g_MONKEY_Connect         = 0;
+FMonkeyPoll         g_MONKEY_Poll            = 0;
+FMonkeyClose        g_MONKEY_Close           = 0;
+FSockHasSocket      g_MONKEY_SockHasSocket   = 0;
+#endif /*NCBI_MONKEY*/
 
 
 extern int g_NCBI_ConnectSrandAddend(void)
@@ -80,7 +90,7 @@ extern int g_NCBI_CoreCheckUnlock(void)
 {
     /* check that unlock operates on the same lock */
     if (s_CoreLock != g_CORE_MT_Lock) {
-        CORE_LOG(eLOG_Critical, "Inconsistent use of CORE MT-Lock detected");
+        CORE_LOG(eLOG_Critical, "Inconsistent use of CORE MT-Lock");
         assert(0);
         return 0/*failure*/;
     }
@@ -113,16 +123,31 @@ extern const char* g_CORE_Sprintf(const char* fmt, ...)
 
 
 extern const char* g_CORE_RegistryGET
-(const char* section,
- const char* name,
- char*       value,
- size_t      value_size,
- const char* def_value)
+(const char*  section,
+ const char*  name,
+ char*        value,
+ size_t       value_size,
+ const char*  def_value)
 {
-    const char* ret_value;
+    const char* retval;
     CORE_LOCK_READ;
-    ret_value = REG_Get(g_CORE_Registry,
-                        section, name, value, value_size, def_value);
+    retval = REG_Get(g_CORE_Registry,
+                     section, name, value, value_size, def_value);
     CORE_UNLOCK;
-    return ret_value;
+    return retval;
+}
+
+
+extern int/*bool*/ g_CORE_RegistrySET
+(const char*  section,
+ const char*  name,
+ const char*  value,
+ EREG_Storage storage)
+{
+    int/*bool*/ retval;
+    CORE_LOCK_READ;
+    retval = REG_Set(g_CORE_Registry,
+                     section, name, value, storage);
+    CORE_UNLOCK;
+    return retval;
 }

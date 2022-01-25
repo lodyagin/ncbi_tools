@@ -3,73 +3,7 @@
 *   -- all routines for checking genbank feature table
 *   -- all extern variables are in gbftglob.c
 *                                                                  10-11-93
-$Revision: 6.9 $
-*
-* $Log: gbfeat.c,v $
-* Revision 6.9  2003/10/09 15:35:51  bazhin
-* Qualifier "rpt_unit" is removed from the list of ones to be splitted
-* by commas.
-*
-* Revision 6.8  2001/12/06 17:00:41  kans
-* TextSave takes size_t, not Int2, otherwise titin protein tries to allocate negative number
-*
-* Revision 6.7  2001/06/08 20:09:53  bazhin
-* From now on "absent" is a legal value for /cons_splice qualifier.
-*
-* Revision 6.6  2000/02/02 22:10:19  kans
-* use TextSave instead of TextSaveEx, which is not available
-*
-* Revision 6.5  2000/02/02 21:03:09  tatiana
-* CkNumberType() added
-*
-* Revision 6.4  1998/06/15 15:00:17  tatiana
-* UNIX compiler warnings fixed
-*
-* Revision 6.3  1998/04/30 21:44:05  tatiana
-* *** empty log message ***
-*
-* Revision 6.2  1998/02/10 17:00:19  tatiana
-* GBQualValidToAdd(0 added
-*
-* Revision 6.1  1998/01/08 23:42:35  tatiana
-* type fixed in GBQual_names_split_ignore
-*
-* Revision 6.0  1997/08/25 18:05:54  madden
-* Revision changed to 6.0
-*
-* Revision 5.5  1997/06/19 18:37:55  vakatov
-* [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
-*
-* Revision 5.4  1997/01/21 23:11:36  tatiana
-* error msg changed
-*
- * Revision 5.3  1996/08/28  20:43:42  tatiana
- * skip gsdb_id qualifier in GBQualSemanticValid()
- *
- * Revision 5.3  1996/08/28  20:43:42  tatiana
- * skip gsdb_id qualifier in GBQualSemanticValid()
- *
- * Revision 5.2  1996/07/30  17:28:07  kans
- * ParFlat_... arrays now external in header file
- *
- * Revision 5.1  1996/07/29  19:45:59  tatiana
- * GBQual_names changed to use a structure
- *
- * Revision 4.4  1996/02/26  00:46:18  ostell
- * removed unused local variables and integer size mismatch fusses
- *
- * Revision 4.3  1995/11/08  22:54:38  tatiana
- * case sensitive feature key check
- *
- * Revision 4.2  1995/09/20  20:37:01  tatiana
- * a bug fixed in CkQualText
- *
- * Revision 4.1  1995/08/15  22:04:04  tatiana
- * change check for mandatory /citation and add additional check for sfp-cit
- *
- * Revision 1.23  1995/05/15  21:46:05  ostell
- * added Log line
- *
+$Revision: 6.11 $
 *
 ****************************************************************************/
 
@@ -788,7 +722,9 @@ NLM_EXTERN int CkQualNote(GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
          for (; *str != '\0'; str++)
              if (*str == '\"')
                 *str = '\'';
+         /*
          ConvertEmbedQual(gbqp->val);
+         */
       }
 
    return retval;
@@ -1151,7 +1087,7 @@ NLM_EXTERN int CkQualEcnum( GBQualPtr PNTR head_gbqp, GBQualPtr gbqp,
           str++;
    
       for (; *str != '\0' && *str != '\"'; str++)
-          if (!IS_DIGIT(*str) && *str != '.' && *str != '-') {
+          if (!IS_DIGIT(*str) && *str != '.' && *str != '-' && *str != 'n') {
             if (error_msgs){ 
                ErrPostEx(SEV_ERROR, ERR_QUALIFIER_BadECnum,
                  "At <%c>(%d) /%s=%s",

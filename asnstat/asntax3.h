@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asntax3.h13";
+static char * asnfilename = "asntax3.h15";
 static AsnValxNode avnx[5] = {
     {20,"none" ,0,0.0,&avnx[1] } ,
     {20,"info" ,1,0.0,&avnx[2] } ,
@@ -17,7 +17,7 @@ static AsnValxNode avnx[5] = {
     {20,"error" ,3,0.0,&avnx[4] } ,
     {20,"fatal" ,4,0.0,NULL } };
 
-static AsnType atx[51] = {
+static AsnType atx[52] = {
   {401, "Org-ref" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[1]} ,
   {402, "Taxon3-request" ,1,0,0,0,0,0,0,0,NULL,&atx[15],&atx[2],0,&atx[4]} ,
   {0, "request" ,128,0,0,0,0,0,0,0,NULL,&atx[13],&atx[3],0,NULL} ,
@@ -68,10 +68,11 @@ static AsnType atx[51] = {
   {0, "lineage-changed" ,128,3,0,0,0,0,0,0,NULL,&atx[39],NULL,0,&atx[48]} ,
   {0, "gc-changed" ,128,4,0,0,0,0,0,0,NULL,&atx[39],NULL,0,&atx[49]} ,
   {0, "mgc-changed" ,128,5,0,0,0,0,0,0,NULL,&atx[39],NULL,0,&atx[50]} ,
-  {0, "orgmod-changed" ,128,6,0,0,0,0,0,0,NULL,&atx[39],NULL,0,NULL} };
+  {0, "orgmod-changed" ,128,6,0,0,0,0,0,0,NULL,&atx[39],NULL,0,&atx[51]} ,
+  {0, "pgc-changed" ,128,7,0,1,0,0,0,0,NULL,&atx[39],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Taxon3" , "asntax3.h13",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Taxon3" , "asntax3.h15",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -136,3 +137,4 @@ static AsnModulePtr amp = ampx;
 #define T3REFRESHFLAGS_gc_changed &at[48]
 #define T3REFRESHFLAGS_mgc_changed &at[49]
 #define T3REFRESHFLAGS_orgmod_changed &at[50]
+#define T3REFRESHFLAGS_pgc_changed &at[51]

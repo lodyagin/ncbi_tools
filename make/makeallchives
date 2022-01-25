@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# $Id: makeallchives 338696 2011-09-21 19:34:41Z bollin $
+# $Id: makeallchives 512538 2016-08-31 19:11:34Z ucko $
 #
 #
 # Creates all archives from a directory above 'ncbi'
@@ -29,9 +29,15 @@ datafiles="humrep.fsa lineages.txt sequin.hlp asn2ff.prt bstdt.val \
    BLOSUM45 BLOSUM80 PAM30 PAM70 KSpcc.mat \
    ecnum_ambiguous.txt ecnum_specific.txt UniVec.nhr UniVec.nin UniVec.nsq \
    UniVec_Core.nhr UniVec_Core.nin UniVec_Core.nsq organelle_products.prt \
-   product_rules.prt"
+   product_rules.prt validrules.prt"
 
 configfiles="nlmstmanrc sequinrc ncbidtrc"
+
+if test `uname -s` = Darwin; then
+    everything="fa2htgs asn2xml"
+else
+    everything="sequin entrez fa2htgs asn2xml"
+fi
 
 TOPDIR=`pwd`
 configdir=$TOPDIR/ncbi/config/unix
@@ -46,7 +52,7 @@ test -d archive && rm -rf archive
 #make sure we have timestamp file
 test -f ncbi/VERSION || date > ncbi/VERSION
 
-for i in sequin entrez fa2htgs asn2xml
+for i in $everything
 do
 	f=""
 	mkdir -p archive/$i/data
@@ -268,7 +274,7 @@ EOF
 	cd ..
 done
 
-for A in sequin entrez fa2htgs asn2xml
+for A in $everything
 do
 	cd $A || continue
 	tar cf ../$A.$platform.tar .
@@ -285,37 +291,37 @@ do
 	rm -fr $A
 done
 
-echo Building blast archive...
-
-BLASTDIR=blast-`cat ../ncbi/demo/.BLAST_VERSION`
-
-mkdir $BLASTDIR
-mkdir $BLASTDIR/bin
-mkdir $BLASTDIR/data
-mkdir $BLASTDIR/doc
-
-for file in blastall blastpgp seedtop formatdb formatrpsdb fastacmd copymat makemat impala megablast blastclust rpsblast bl2seq 
-do
-cp ../ncbi/build/$file $BLASTDIR/bin
-done
-
-for file in $datafiles
-do
-cp ../ncbi/data/$file $BLASTDIR/data
-done
-
-for file in bl2seq.html blast.html blastall.html blastclust.html blastdb.html blastftp.html blastpgp.html fastacmd.html filter.html formatdb.html formatrpsdb.html history.html impala.html index.html megablast.html netblast.html rpsblast.html scoring.pdf web_blast.pl
-do
-cp ../ncbi/doc/blast/$file $BLASTDIR/doc
-done
-
-cp ../ncbi/VERSION $BLASTDIR
-
-tar -cpf blast.$platform.tar $BLASTDIR
-gzip blast.$platform.tar
-rm -rf $BLASTDIR
-
-# end build blast archive
+# echo Building blast archive...
+# 
+# BLASTDIR=blast-`cat ../ncbi/demo/.BLAST_VERSION`
+# 
+# mkdir $BLASTDIR
+# mkdir $BLASTDIR/bin
+# mkdir $BLASTDIR/data
+# mkdir $BLASTDIR/doc
+# 
+# for file in blastall blastpgp seedtop formatdb formatrpsdb fastacmd copymat makemat impala megablast blastclust rpsblast bl2seq 
+# do
+# cp ../ncbi/build/$file $BLASTDIR/bin
+# done
+# 
+# for file in $datafiles
+# do
+# cp ../ncbi/data/$file $BLASTDIR/data
+# done
+# 
+# for file in bl2seq.html blast.html blastall.html blastclust.html blastdb.html blastftp.html blastpgp.html fastacmd.html filter.html formatdb.html formatrpsdb.html history.html impala.html index.html megablast.html netblast.html rpsblast.html scoring.pdf web_blast.pl
+# do
+# cp ../ncbi/doc/blast/$file $BLASTDIR/doc
+# done
+# 
+# cp ../ncbi/VERSION $BLASTDIR
+# 
+# tar -cpf blast.$platform.tar $BLASTDIR
+# gzip blast.$platform.tar
+# rm -rf $BLASTDIR
+# 
+# # end build blast archive
 
 echo Building netblast archive...
 
@@ -338,27 +344,27 @@ tar -cpf netblast.$platform.tar    net$BLASTDIR
 gzip netblast.$platform.tar
 rm -rf net$BLASTDIR
 
-echo Building wwwblast archive...
-
-mkdir blast
-
-cp -r ../ncbi/network/wwwblast/* blast 
-
-find blast -type d -name CVS | xargs rm -rf
-find blast -type d -name Src | xargs rm -rf
-
-for file in psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL wblast2.REAL wblast2_cs.REAL bl2bag.cgi nph-viewgif.cgi
-do
-cp ../ncbi/build/$file blast
-done
-
-mkdir -p blast/TmpGifs
-chmod 777 blast/TmpGifs
-chmod 666 blast/*.log
-
-tar -cpf wwwblast.$platform.tar blast
-gzip wwwblast.$platform.tar
-
-rm -rf blast
+# echo Building wwwblast archive...
+# 
+# mkdir blast
+# 
+# cp -r ../ncbi/network/wwwblast/* blast 
+# 
+# find blast -type d -name CVS | xargs rm -rf
+# find blast -type d -name Src | xargs rm -rf
+# 
+# for file in psiblast.REAL psiblast_cs.REAL blast.REAL blast_cs.REAL wblast2.REAL wblast2_cs.REAL bl2bag.cgi nph-viewgif.cgi
+# do
+# cp ../ncbi/build/$file blast
+# done
+# 
+# mkdir -p blast/TmpGifs
+# chmod 777 blast/TmpGifs
+# chmod 666 blast/*.log
+# 
+# tar -cpf wwwblast.$platform.tar blast
+# gzip wwwblast.$platform.tar
+# 
+# rm -rf blast
 
 exit 0

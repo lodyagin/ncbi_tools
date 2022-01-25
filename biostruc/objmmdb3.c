@@ -187,6 +187,7 @@ BiostrucFeatureSetAsnWrite(BiostrucFeatureSetPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -355,7 +356,7 @@ ChemGraphPntrsAsnWrite(ChemGraphPntrsPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -549,6 +550,7 @@ AtomPntrsAsnWrite(AtomPntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -745,6 +747,7 @@ ChemGraphAlignmentAsnWrite(ChemGraphAlignmentPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -943,6 +946,7 @@ ChemGraphInteractionAsnWrite(ChemGraphInteractionPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1885,6 +1889,7 @@ TransformAsnWrite(TransformPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2068,7 +2073,7 @@ BiostrucFeatureSetDescrAsnWrite(BiostrucFeatureSetDescrPtr anp, AsnIoPtr aip, As
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -2413,6 +2418,7 @@ BiostrucFeatureAsnWrite(BiostrucFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2479,7 +2485,7 @@ Location_locationAsnWrite(Location_locationPtr anp, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -2557,7 +2563,7 @@ Property_propertyAsnWrite(Property_propertyPtr anp, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -2902,6 +2908,7 @@ ColorPropAsnWrite(ColorPropPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3100,6 +3107,7 @@ CameraAsnWrite(CameraPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3504,6 +3512,7 @@ RegionPntrsAsnWrite(RegionPntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3557,7 +3566,7 @@ Region_regionAsnWrite(Region_regionPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -3746,6 +3755,7 @@ RegionSimilarityAsnWrite(RegionSimilarityPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3915,6 +3925,7 @@ OtherFeatureAsnWrite(OtherFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4081,6 +4092,7 @@ BiostrucMoleculePntrAsnWrite(BiostrucMoleculePntrPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4250,7 +4262,7 @@ ResiduePntrsAsnWrite(ResiduePntrsPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -4423,6 +4435,7 @@ MoleculePntrsAsnWrite(MoleculePntrsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4592,6 +4605,7 @@ ResidueExplicitPntrsAsnWrite(ResidueExplicitPntrsPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4759,6 +4773,7 @@ ResidueIntervalPntrAsnWrite(ResidueIntervalPntrPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4931,6 +4946,7 @@ RegionCoordinatesAsnWrite(RegionCoordinatesPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5108,7 +5124,7 @@ RegionBoundaryAsnWrite(RegionBoundaryPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -5346,6 +5362,7 @@ AlignStatsAsnWrite(AlignStatsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5530,6 +5547,7 @@ RealValueAsnWrite(RealValuePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5704,6 +5722,7 @@ ModelSpacePointAsnWrite(ModelSpacePointPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5869,7 +5888,7 @@ MoveAsnWrite(MovePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -6097,6 +6116,7 @@ RotMatrixAsnWrite(RotMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6287,6 +6307,7 @@ TransMatrixAsnWrite(TransMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6556,6 +6577,7 @@ GLMatrixAsnWrite(GLMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6794,6 +6816,7 @@ BiostrucScriptStepAsnWrite(BiostrucScriptStepPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

@@ -1,4 +1,4 @@
-/* $Id: blast_message.h,v 1.20 2010/03/23 16:04:51 kazimird Exp $
+/* $Id: blast_message.h,v 1.22 2014/08/07 19:29:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,8 +59,12 @@ typedef enum {
    eBlastSevFatal
 } EBlastSeverity;
 
-extern NCBI_XBLAST_EXPORT const int kBlastMessageNoContext;  /**< No single context is known to cause the error 
-                                                 (probably a setup issue). */
+/*** No single context is known to cause the error (probably a setup issue). */
+extern NCBI_XBLAST_EXPORT 
+const int kBlastMessageNoContext;
+/*** Error message for failure to calculate ungapped Karlin-Altschul parameters */
+extern NCBI_XBLAST_EXPORT 
+const char* kBlastErrMsg_CantCalculateUngappedKAParams;  
 
 /** Structure to hold the a message from the core of the BLAST engine. */
 typedef struct Blast_Message {
@@ -162,6 +166,9 @@ void Blast_PerrorEx(Blast_Message* *msg,
 
   /** The value of the option is not supported (e.g., word size too small) */
 #define BLASTERR_OPTION_VALUE_INVALID               202
+
+/** Blast seqsrc returns  BLAST_SEQSRC_ERROR */
+#define BLASTERR_SEQSRC								300
 
 #ifdef __cplusplus
 }

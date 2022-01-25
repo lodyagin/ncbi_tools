@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.21 $
+* $Revision: 6.22 $
 *
 * File Description: 
 *
@@ -220,7 +220,7 @@ typedef Nlm_Boolean (*Nlm_FormInOutFunc) (Nlm_ForM, Nlm_CharPtr filename);
   Nlm_Uint2            this_subtype;    \
   Nlm_Uint2            procid;          \
   Nlm_Uint2            proctype;        \
-  Nlm_Int4             docuid;          \
+  BIG_ID               docuid;          \
   Nlm_Int2             doctype;         \
   Nlm_VoidPtr          objectDataPtr;   \
   Nlm_VoidPtr          userDataPtr;     \

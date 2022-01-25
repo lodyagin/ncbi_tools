@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.10 $
+* $Revision: 6.11 $
 *
 * File Description:  runs external programs for ingenue
 *
@@ -597,7 +597,7 @@ static void Ing_FinishURLProc (tRSdataPtr trs, CharPtr arguments, CharPtr path)
                              trs->host_path, arguments,
                              progname, trs->timeoutsec,
                              eMIME_T_NcbiData, subtype, eENCOD_Url,
-                             fHTTP_UrlDecodeInput | fHTTP_UrlEncodeOutput);
+                             fHCC_UrlDecodeInput | fHCC_UrlEncodeOutput);
   if (conn == NULL) return;
 
   fp = FileOpen (path, "rb");

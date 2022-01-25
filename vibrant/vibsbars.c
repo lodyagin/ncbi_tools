@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.8 $
 *
 * File Description:
 *       Vibrant scroll bar functions
@@ -41,6 +41,13 @@
 *
 *
 * $Log: vibsbars.c,v $
+* Revision 6.8  2016/07/19 16:58:07  choi
+* JIRA SM-1185
+* Fixed Windows implementation of invalRange().
+*
+* Revision 6.7  2016/04/01 16:15:08  bazhin
+* Fixed to satisfy 64-bit Windows.
+*
 * Revision 6.6  2006/09/14 19:18:29  ivanov
 * Rollback last changes. All missed defines added to corelib/ncbiwin.h.
 *
@@ -344,7 +351,27 @@ static void invalRange(Nlm_BaR b, Nlm_Boolean savePort)
   SetControlMaximum(bdata.handle, bdata.maximum);
 #endif
 #ifdef WIN_MSWIN
-  SetScrollRange(bdata.handle, SB_CTL, 0, bdata.maximum, TRUE);
+  /* SetScrollRange(bdata.handle, SB_CTL, 0, bdata.maximum, TRUE); */
+  /* SendMessage(bdata.handle, SBM_SETRANGEREDRAW, 0, bdata.maximum); */
+  {{
+  SCROLLINFO si;
+  int page = ((bdata.pageUp + bdata.pageDn) / 2) / bdata.factor;
+  page = MAX(1, page);
+  page = MIN(page, (INT2_MAX - bdata.maximum - 1));
+  memset(&si, 0, sizeof(si));
+  si.cbSize = sizeof(si);
+  si.fMask = SIF_PAGE | SIF_RANGE;
+  si.nMin = 0;
+  /* 
+    Win32 docs say : MaxScrollPos = MaxRangeValue - (PageSize - 1) 
+    since we want MaxScrollPos == bdata.maximum, then we have via substitution
+    MaxScrollPos = (bdata.maximum + PageSize - 1) - (PageSize - 1)
+    MaxScrollPos = bdata.maximum
+  */
+  si.nMax = bdata.maximum + page - 1;
+  si.nPage = page;
+  SetScrollInfo(bdata.handle, SB_CTL, &si, TRUE);
+  }}
 #endif
 #ifdef WIN_MOTIF
   {{
@@ -530,6 +557,9 @@ static Nlm_Boolean Nlm_ScrollCommand(Nlm_GraphiC g)
     case SB_PAGEDOWN:
       event = SCROLL_PAGEDN;  break;
     case SB_THUMBPOSITION:
+      setValue((Nlm_BaR)g, (Nlm_Int2)Nlm_currentPos, TRUE);
+      return TRUE;
+    case SB_THUMBTRACK:
       setValue((Nlm_BaR)g, (Nlm_Int2)Nlm_currentPos, TRUE);
       return TRUE;
     default:
@@ -963,6 +993,13 @@ static void Nlm_BottomCallback (Widget w,
 {
   setValue((Nlm_BaR)client_data, (Nlm_Int2)INT2_MAX, TRUE);
 }
+
+static void Nlm_DragCallback (Widget w,
+                               XtPointer client_data, XtPointer call_data)
+{
+  XmScrollBarCallbackStruct  *cbs  = (XmScrollBarCallbackStruct *)call_data;
+  setValue((Nlm_BaR)client_data, (Nlm_Int2)cbs->value, TRUE);
+}
 #endif
 
 
@@ -1011,7 +1048,7 @@ static void Nlm_NewBarX (Nlm_BaR b, Nlm_GraphiC slv,
   else if (lpfnOldBarProc != (WNDPROC)GetWindowLongPtr(c, GWLP_WNDPROC))
     Nlm_Message(MSG_ERROR, "BarProc subclass error");
 
-  SetWindowLongPtr(c, GWLP_WNDPROC, (LONG)lpfnNewBarProc);
+  SetWindowLongPtr(c, GWLP_WNDPROC, (LONG_PTR)lpfnNewBarProc);
 #endif
 
 #ifdef WIN_MOTIF
@@ -1044,6 +1081,7 @@ static void Nlm_NewBarX (Nlm_BaR b, Nlm_GraphiC slv,
   XtAddCallback(c, XmNvalueChangedCallback,  Nlm_ThumbCallback,  b_ptr);
   XtAddCallback(c, XmNtoTopCallback,         Nlm_BottomCallback, b_ptr);
   XtAddCallback(c, XmNtoBottomCallback,      Nlm_TopCallback,    b_ptr);
+  XtAddCallback(c, XmNdragCallback,          Nlm_DragCallback,   b_ptr);
   }}
 
   XtManageChild( c );

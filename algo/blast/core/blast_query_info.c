@@ -1,4 +1,4 @@
-/* $Id: blast_query_info.c,v 1.7 2011/11/30 13:59:31 kazimird Exp $
+/* $Id: blast_query_info.c,v 1.12 2016/06/27 15:54:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Functions to manipulate the BlastQueryInfo structure
  */
 
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_query_info.c,v 1.7 2011/11/30 13:59:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_query_info.h>
@@ -114,7 +109,7 @@ BlastQueryInfo* BlastQueryInfoFree(BlastQueryInfo* query_info)
     return NULL;
 }
 
-BlastQueryInfo* BlastQueryInfoDup(BlastQueryInfo* query_info)
+BlastQueryInfo* BlastQueryInfoDup(const BlastQueryInfo* query_info)
 {
    BlastQueryInfo* retval = BlastMemDup(query_info, sizeof(BlastQueryInfo));
    Int4 num_contexts = query_info->last_context + 1;
@@ -170,7 +165,7 @@ Int4 BlastQueryInfoGetQueryLength(const BlastQueryInfo* qinfo,
 
     if (Blast_QueryIsTranslated(program)) {
         return s_GetTranslatedQueryDNALength(qinfo, query_index);
-    } else if (program == eBlastTypeBlastn) {
+    } else if (program == eBlastTypeBlastn || program == eBlastTypeMapping) {
         Int4 retval = qinfo->contexts[query_index*kNumContexts].query_length;
         if (retval <= 0) {
             retval = qinfo->contexts[query_index*kNumContexts+1].query_length;
@@ -222,9 +217,17 @@ Int4 BSearchContextInfo(Int4 n, const BlastQueryInfo * A)
     Int4 m=0, b=0, e=0, size=0;
     
     size = A->last_context+1;
-    
-    b = 0;
-    e = size;
+
+    if (A->min_length > 0 && A->max_length > 0 && A->first_context == 0) {
+        b = MIN(n / (A->max_length + 1), size - 1);
+        e = MIN(n / (A->min_length + 1) + 1, size);
+        ASSERT(e <= size);
+    }
+    else {
+        b = 0;
+        e = size;
+    }
+
     while (b < e - 1) {
 	m = (b + e) / 2;
 	if (A->contexts[m].query_offset > n)
@@ -243,7 +246,7 @@ QueryInfo_GetSeqBufLen(const BlastQueryInfo* qinfo)
 }
 
 Int4 *
-ContextOffsetsToOffsetArray(BlastQueryInfo* info)
+ContextOffsetsToOffsetArray(const BlastQueryInfo* info)
 {
     /* The Many Values of 'Length'
      *

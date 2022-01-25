@@ -29,6 +29,7 @@
 /* Begin PBXBuildFile section */
 		1DDD57D60DA1CFB400B32029 /* main.xib in Resources */ = {isa = PBXBuildFile; fileRef = 1DDD57D40DA1CFB400B32029 /* main.xib */; };
 		37286FDB0E2FE48900715A92 /* ncbi.icns in Resources */ = {isa = PBXBuildFile; fileRef = 37286FDA0E2FE48900715A92 /* ncbi.icns */; };
+		377273391815B6570066D258 /* sequin2.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E910E2FDB2000FECF1E /* sequin2.c */; };
 		377467ED0E3524B900DEEC53 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */; };
 		377467EE0E3524B900DEEC53 /* main.xib in Resources */ = {isa = PBXBuildFile; fileRef = 1DDD57D40DA1CFB400B32029 /* main.xib */; };
 		377467EF0E3524B900DEEC53 /* ncbi.icns in Resources */ = {isa = PBXBuildFile; fileRef = 37286FDA0E2FE48900715A92 /* ncbi.icns */; };
@@ -70,7 +71,6 @@
 		3781E96C0E352FFC006A8FDB /* ncbictoolkit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 37D9028A0E3522A900A884CA /* ncbictoolkit.framework */; };
 		3781E9730E35300C006A8FDB /* asnval.c in Sources */ = {isa = PBXBuildFile; fileRef = 377E1D640E35065C0092A9C3 /* asnval.c */; };
 		37B41E9D0E2FDB2000FECF1E /* sequin1.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E900E2FDB2000FECF1E /* sequin1.c */; };
-		37B41E9E0E2FDB2000FECF1E /* sequin2.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E910E2FDB2000FECF1E /* sequin2.c */; };
 		37B41E9F0E2FDB2000FECF1E /* sequin3.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E920E2FDB2000FECF1E /* sequin3.c */; };
 		37B41EA00E2FDB2000FECF1E /* sequin4.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E930E2FDB2000FECF1E /* sequin4.c */; };
 		37B41EA10E2FDB2000FECF1E /* sequin5.c in Sources */ = {isa = PBXBuildFile; fileRef = 37B41E940E2FDB2000FECF1E /* sequin5.c */; };
@@ -92,6 +92,41 @@
 		37C78BD10E35361D008966BA /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 37C78BB90E353600008966BA /* main.c */; };
 		37D9028E0E3522C200A884CA /* ncbictoolkit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 37D9028A0E3522A900A884CA /* ncbictoolkit.framework */; };
 		37D902910E3522EE00A884CA /* ncbictoolkit.framework in CopyFiles */ = {isa = PBXBuildFile; fileRef = 37D9028A0E3522A900A884CA /* ncbictoolkit.framework */; };
+		37E305511D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305521D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305531D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305541D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305551D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305561D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E305571D482B8700598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305501D482B8700598945 /* libgmp.a */; };
+		37E3055A1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E3055B1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E3055C1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E3055D1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E3055E1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E3055F1D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E305601D482BA300598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305581D482BA300598945 /* libhogweed.a */; };
+		37E305611D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305621D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305631D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305641D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305651D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305661D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E305671D482BA300598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305591D482BA300598945 /* libnettle.a */; };
+		37E3056A1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E3056B1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E3056C1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E3056D1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E3056E1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E3056F1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E305701D482BBA00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305681D482BBA00598945 /* libgnutls.30.dylib */; };
+		37E305711D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305721D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305731D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305741D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305751D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305761D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
+		37E305771D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */; };
 		8D0C4E8D0486CD37000505A6 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0867D6AAFE840B52C02AAC07 /* InfoPlist.strings */; };
 		8D0C4E920486CD37000505A6 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 20286C33FDCF999611CA2CEA /* Carbon.framework */; };
 /* End PBXBuildFile section */
@@ -312,6 +347,11 @@
 		37D9027C0E35220200A884CA /* Entrez-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Entrez-Info.plist"; sourceTree = SOURCE_ROOT; };
 		37D9027D0E35220200A884CA /* Sequin-Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = "Sequin-Info.plist"; sourceTree = SOURCE_ROOT; };
 		37D902820E3522A900A884CA /* ncbictoolkit.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = ncbictoolkit.xcodeproj; path = ../ncbictoolkit/ncbictoolkit.xcodeproj; sourceTree = SOURCE_ROOT; };
+		37E305501D482B8700598945 /* libgmp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libgmp.a; sourceTree = "<group>"; };
+		37E305581D482BA300598945 /* libhogweed.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libhogweed.a; sourceTree = "<group>"; };
+		37E305591D482BA300598945 /* libnettle.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libnettle.a; sourceTree = "<group>"; };
+		37E305681D482BBA00598945 /* libgnutls.30.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libgnutls.30.dylib; sourceTree = "<group>"; };
+		37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libgnutlsxx.28.dylib; sourceTree = "<group>"; };
 		8D0C4E960486CD37000505A6 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8D0C4E970486CD37000505A6 /* Sequin.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sequin.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -322,7 +362,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				377467FF0E3524B900DEEC53 /* ncbictoolkit.framework in Frameworks */,
+				37E3056B1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055B1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305621D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305521D482B8700598945 /* libgmp.a in Frameworks */,
 				377468000E3524B900DEEC53 /* Carbon.framework in Frameworks */,
+				37E305721D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -331,7 +376,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				377468410E35294A00DEEC53 /* ncbictoolkit.framework in Frameworks */,
+				37E3056C1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055C1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305631D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305531D482B8700598945 /* libgmp.a in Frameworks */,
 				377468420E35294A00DEEC53 /* Carbon.framework in Frameworks */,
+				37E305731D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -340,7 +390,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				3781E9390E352F32006A8FDB /* ncbictoolkit.framework in Frameworks */,
+				37E3056D1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055D1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305641D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305541D482B8700598945 /* libgmp.a in Frameworks */,
 				3781E93A0E352F32006A8FDB /* Carbon.framework in Frameworks */,
+				37E305741D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -349,7 +404,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				3781E9510E352F89006A8FDB /* ncbictoolkit.framework in Frameworks */,
+				37E3056E1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055E1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305651D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305551D482B8700598945 /* libgmp.a in Frameworks */,
 				3781E9520E352F89006A8FDB /* Carbon.framework in Frameworks */,
+				37E305751D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -358,7 +418,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				3781E9690E352FFC006A8FDB /* ncbictoolkit.framework in Frameworks */,
+				37E3056F1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055F1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305661D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305561D482B8700598945 /* libgmp.a in Frameworks */,
 				3781E96A0E352FFC006A8FDB /* Carbon.framework in Frameworks */,
+				37E305761D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,7 +432,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				37C78BC70E35360C008966BA /* ncbictoolkit.framework in Frameworks */,
+				37E305701D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E305601D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305671D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305571D482B8700598945 /* libgmp.a in Frameworks */,
 				37C78BC80E35360C008966BA /* Carbon.framework in Frameworks */,
+				37E305771D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -376,7 +446,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				37D9028E0E3522C200A884CA /* ncbictoolkit.framework in Frameworks */,
+				37E3056A1D482BBA00598945 /* libgnutls.30.dylib in Frameworks */,
+				37E3055A1D482BA300598945 /* libhogweed.a in Frameworks */,
+				37E305611D482BA300598945 /* libnettle.a in Frameworks */,
+				37E305511D482B8700598945 /* libgmp.a in Frameworks */,
 				8D0C4E920486CD37000505A6 /* Carbon.framework in Frameworks */,
+				37E305711D482BBA00598945 /* libgnutlsxx.28.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -440,6 +515,11 @@
 		20286C32FDCF999611CA2CEA /* External Frameworks and Libraries */ = {
 			isa = PBXGroup;
 			children = (
+				37E305681D482BBA00598945 /* libgnutls.30.dylib */,
+				37E305691D482BBA00598945 /* libgnutlsxx.28.dylib */,
+				37E305581D482BA300598945 /* libhogweed.a */,
+				37E305591D482BA300598945 /* libnettle.a */,
+				37E305501D482B8700598945 /* libgmp.a */,
 				37D902820E3522A900A884CA /* ncbictoolkit.xcodeproj */,
 				20286C33FDCF999611CA2CEA /* Carbon.framework */,
 			);
@@ -678,6 +758,8 @@
 /* Begin PBXProject section */
 		20286C28FDCF999611CA2CEA /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = C0E91AC908A95435008D54AB /* Build configuration list for PBXProject "ncbicguiapp" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
@@ -852,8 +934,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				377273391815B6570066D258 /* sequin2.c in Sources */,
 				37B41E9D0E2FDB2000FECF1E /* sequin1.c in Sources */,
-				37B41E9E0E2FDB2000FECF1E /* sequin2.c in Sources */,
 				37B41E9F0E2FDB2000FECF1E /* sequin3.c in Sources */,
 				37B41EA00E2FDB2000FECF1E /* sequin4.c in Sources */,
 				37B41EA10E2FDB2000FECF1E /* sequin5.c in Sources */,
@@ -976,6 +1058,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = "Entrez-Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Entrez;
 			};
 			name = Debug;
@@ -990,6 +1076,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = "Entrez-Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Entrez;
 			};
 			name = Release;
@@ -997,20 +1087,28 @@
 		377468290E35281B00DEEC53 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				COPY_PHASE_STRIP = NO;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_VERSION = "";
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				PRODUCT_NAME = Untitled;
+				VALID_ARCHS = i386;
 			};
 			name = Debug;
 		};
 		3774682A0E35281B00DEEC53 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				COPY_PHASE_STRIP = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_ENABLE_FIX_AND_CONTINUE = NO;
+				GCC_VERSION = "";
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				PRODUCT_NAME = Untitled;
+				VALID_ARCHS = i386;
 				ZERO_LINK = NO;
 			};
 			name = Release;
@@ -1028,6 +1126,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Tbl2asn;
 			};
 			name = Debug;
@@ -1042,6 +1144,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Tbl2asn;
 			};
 			name = Release;
@@ -1059,6 +1165,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asn2all;
 			};
 			name = Debug;
@@ -1073,6 +1183,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asn2all;
 			};
 			name = Release;
@@ -1090,6 +1204,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asn2gb;
 			};
 			name = Debug;
@@ -1104,6 +1222,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asn2gb;
 			};
 			name = Release;
@@ -1121,6 +1243,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asnval;
 			};
 			name = Debug;
@@ -1135,6 +1261,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Asnval;
 			};
 			name = Release;
@@ -1152,6 +1282,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Demo;
 			};
 			name = Debug;
@@ -1166,6 +1300,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Demo;
 			};
 			name = Release;
@@ -1183,6 +1321,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = "Sequin-Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Sequin;
 			};
 			name = Debug;
@@ -1197,6 +1339,10 @@
 				GCC_PREFIX_HEADER = "";
 				INFOPLIST_FILE = "Sequin-Info.plist";
 				INSTALL_PATH = "$(HOME)/Applications";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				PRODUCT_NAME = Sequin;
 			};
 			name = Release;
@@ -1212,7 +1358,7 @@
 					WIN_MAC,
 					"$(inherited)",
 				);
-				GCC_VERSION = com.apple.compilers.llvmgcc42;
+				GCC_VERSION = "";
 				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
@@ -1220,9 +1366,16 @@
 					"../../../**",
 					"$(inherited)",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"/netopt/ncbi_tools/gmp-6.0.0a/lib",
+					"/netopt/ncbi_tools/nettle-3.1.1/lib",
+					"/netopt/ncbi_tools/gnutls-3.4.0/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = i386;
 			};
 			name = Debug;
 		};
@@ -1236,7 +1389,7 @@
 					WIN_MAC,
 					"$(inherited)",
 				);
-				GCC_VERSION = com.apple.compilers.llvmgcc42;
+				GCC_VERSION = "";
 				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
@@ -1244,8 +1397,15 @@
 					"../../../**",
 					"$(inherited)",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"/netopt/ncbi_tools/gmp-6.0.0a/lib",
+					"/netopt/ncbi_tools/nettle-3.1.1/lib",
+					"/netopt/ncbi_tools/gnutls-3.4.0/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				PREBINDING = NO;
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = i386;
 			};
 			name = Release;
 		};

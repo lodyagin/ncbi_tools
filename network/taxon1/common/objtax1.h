@@ -45,6 +45,10 @@ typedef ValNode Taxon1Req;
 #define Taxon1Req_taxachildren 18
 #define Taxon1Req_taxalineage 19
 #define Taxon1Req_maxtaxid 20
+#define Taxon1Req_getproptypes 21
+#define Taxon1Req_getorgprop 22
+#define Taxon1Req_searchname 23
+#define Taxon1Req_dumpnames4class 24
 
 
 NLM_EXTERN Taxon1ReqPtr LIBCALL Taxon1ReqFree PROTO ((Taxon1ReqPtr ));
@@ -95,6 +99,10 @@ typedef ValNode Taxon1Resp;
 #define Taxon1Resp_taxachildren 20
 #define Taxon1Resp_taxalineage 21
 #define Taxon1Resp_maxtaxid 22
+#define Taxon1Resp_getproptypes 23
+#define Taxon1Resp_getorgprop 24
+#define Taxon1Resp_searchname 25
+#define Taxon1Resp_dumpnames4class 26
 
 
 NLM_EXTERN Taxon1RespPtr LIBCALL Taxon1RespFree PROTO ((Taxon1RespPtr ));

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.31 $
+* $Revision: 6.35 $
 *
 * File Description:
 *   Routines for printing ASN.1 value notation (text) messages and
@@ -427,6 +427,8 @@ NLM_EXTERN Boolean LIBCALL  AsnTxtWriteEx (AsnIoPtr aip, AsnTypePtr atp, DataVal
 					AsnPrintCharBlock(">", aip);
 				if (isa == BIGINT_TYPE)
 					AsnPrintBigInt(dvp->bigintvalue, aip);
+				else if (isa == INTEGER_TYPE)
+					AsnPrintBigInt(dvp->intvalue, aip);
 				else
 					AsnPrintInteger(dvp->intvalue, aip);
 				if(isXML) AsnXMLTerm(aip, atp);
@@ -670,6 +672,7 @@ NLM_EXTERN void AsnPrintType (AsnTypePtr atp, AsnIoPtr aip)
 				break;
 			case INTEGER_TYPE:
 			case ENUM_TYPE:
+			case BIGINT_TYPE:
 				AsnPrintChar(' ', aip);
 				AsnPrintOpenStruct(aip, atp);
 				avnp = (AsnValxNodePtr)atp->branch;
@@ -684,7 +687,7 @@ NLM_EXTERN void AsnPrintType (AsnTypePtr atp, AsnIoPtr aip)
 					AsnPrintString(avnp->name, aip);
 					AsnPrintChar(' ', aip);
 					AsnPrintChar('(', aip);
-					AsnPrintInteger(avnp->intvalue, aip);
+					AsnPrintBigInt(avnp->intvalue, aip);
 					AsnPrintChar(')', aip);
 					avnp = avnp->next;
 				}
@@ -740,7 +743,7 @@ NLM_EXTERN void AsnPrintType (AsnTypePtr atp, AsnIoPtr aip)
 				AsnPrintBoolean((Boolean)avnp->intvalue, aip);
 				break;
 			case VALUE_ISA_INT:
-				AsnPrintInteger(avnp->intvalue, aip);
+				AsnPrintBigInt(avnp->intvalue, aip);
 				break;
 			case VALUE_ISA_REAL:
 				AsnPrintReal(avnp->realvalue, aip);
@@ -1843,7 +1846,7 @@ static void AsnXMLElementStart(AsnTypePtr atp, AsnIoPtr aip)
 	}
 	
 	isa = AsnFindBaseIsa(atp);
-	if ((atp->branch != NULL) && (isa == INTEGER_TYPE) && (isa == ENUM_TYPE))
+	if ((atp->branch != NULL) && ((isa == INTEGER_TYPE) || (isa == ENUM_TYPE) || (isa == BIGINT_TYPE)))
 	{
 		for (avnp = (AsnValxNodePtr)(atp->branch); 
              avnp != NULL; 
@@ -2300,8 +2303,8 @@ NLM_EXTERN void AsnPrintModuleXML (AsnModulePtr amp, AsnIoPtr aip)
 			{
 				AsnPrintTopTypeXML(aip, atp);
 			}
+            atp = atp->next;
 		}
-		atp = atp->next;
 	}
 
 	AsnPrintNewLine(aip);

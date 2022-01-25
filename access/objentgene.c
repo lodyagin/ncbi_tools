@@ -32,7 +32,7 @@ objentgeneAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Entrezgene
-*    Generated using ASNCODE Revision: 6.16 at Apr 24, 2009 11:11 AM
+*    Generated using ASNCODE Revision: 6.19 at Mar 23, 2015  6:20 PM
 *
 **************************************************/
 
@@ -315,6 +315,7 @@ EntrezgeneAsnWrite(EntrezgenePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -482,6 +483,7 @@ EntrezgeneSetAsnWrite(EntrezgeneSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) EntrezgeneAsnWrite, aip, atp, ENTREZGENE_SET_E);
    retval = TRUE;
 
@@ -666,6 +668,7 @@ GeneTrackAsnWrite(GeneTrackPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -745,6 +748,7 @@ GeneCommentaryFree(GeneCommentaryPtr ptr)
    AsnGenericUserSeqOfFree(ptr -> comment, (AsnOptFreeFunc) GeneCommentaryFree);
    DateFree(ptr -> create_date);
    DateFree(ptr -> update_date);
+   RNARefFree(ptr -> rna);
    return MemFree(ptr);
 }
 
@@ -908,6 +912,13 @@ GeneCommentaryAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GENE_COMMENTARY_rna) {
+      ptr -> rna = RNARefAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -955,6 +966,7 @@ GeneCommentaryAsnWrite(GeneCommentaryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -994,6 +1006,11 @@ GeneCommentaryAsnWrite(GeneCommentaryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
    if (ptr -> update_date != NULL) {
       if ( ! DateAsnWrite(ptr -> update_date, aip, GENE_COMMENTARY_update_date)) {
+         goto erret;
+      }
+   }
+   if (ptr -> rna != NULL) {
+      if ( ! RNARefAsnWrite(ptr -> rna, aip, GENE_COMMENTARY_rna)) {
          goto erret;
       }
    }
@@ -1267,6 +1284,7 @@ MapsAsnWrite(MapsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1322,7 +1340,7 @@ Method_methodAsnWrite(Method_methodPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -1536,6 +1554,7 @@ GeneSourceAsnWrite(GeneSourcePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1715,6 +1734,7 @@ XtraTermsAsnWrite(XtraTermsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1906,6 +1926,7 @@ OtherSourceAsnWrite(OtherSourcePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

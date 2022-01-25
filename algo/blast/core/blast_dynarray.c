@@ -1,4 +1,4 @@
-/* $Id: blast_dynarray.c,v 1.7 2007/11/08 22:55:42 kazimird Exp $
+/* $Id: blast_dynarray.c,v 1.8 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Definitions for various dynamic array types
  */
 
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_dynarray.c,v 1.7 2007/11/08 22:55:42 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_dynarray.h"
 #include <algo/blast/core/blast_util.h>

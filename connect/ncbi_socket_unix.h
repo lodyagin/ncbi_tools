@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKET_UNIX__H
 #define CONNECT___NCBI_SOCKET_UNIX__H
 
-/* $Id: ncbi_socket_unix.h,v 1.2 2008/10/16 18:25:42 kazimird Exp $
+/* $Id: ncbi_socket_unix.h,v 1.3 2012/07/12 15:34:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -59,8 +59,8 @@ extern NCBI_XCONNECT_EXPORT EIO_Status SOCK_CreateUNIX
 (const char*     path,     /* [in]  path of the UNIX socket to connect to    */
  const STimeout* timeout,  /* [in]  connection timeout (infinite if NULL)    */
  SOCK*           sock,     /* [out] handle of the created socket             */
- const void*     init_data,/* [in]  initial output data segment (may be NULL)*/
- size_t          init_size,/* [in]  size of initial data segment (may be 0)  */
+ const void*     data,     /* [in]  initial output data block (may be NULL)  */
+ size_t          size,     /* [in]  size of the initial data block (may be 0)*/
  TSOCK_Flags     flags     /* [in]  socket properties                        */
  );
 

@@ -1,4 +1,4 @@
-/* $Id: blast_util.c,v 1.135 2012/06/06 16:04:49 kazimird Exp $
+/* $Id: blast_util.c,v 1.142 2016/08/17 18:44:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Various BLAST utilities
  */
 
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_util.c,v 1.135 2012/06/06 16:04:49 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_filter.h>
@@ -308,6 +303,8 @@ Int2 BlastProgram2Number(const char *program, EBlastProgramType *number)
         *number = eBlastTypePhiBlastn;
     else if (strcasecmp("phiblastp", program) == 0)
         *number = eBlastTypePhiBlastp;
+    else if (strcasecmp("mapper", program) == 0)
+        *number = eBlastTypeMapping;
 
 	return 0;
 }
@@ -352,6 +349,9 @@ Int2 BlastNumber2Program(EBlastProgramType number, char* *program)
         case eBlastTypePhiBlastn:
 			*program = strdup("phiblastn");
 			break;
+        case eBlastTypeMapping:
+            *program = strdup("mapper");
+            break;
         default:
 			*program = strdup("unknown");
 			break;
@@ -811,8 +811,12 @@ Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length,
    Int4 index;
    /* Conversion table from forward to reverse strand residue in the blastna 
       encoding */
-   Uint1 conversion_table[17] = 
-      { 0, 8, 4, 12, 2, 10, 9, 14, 1, 6, 5, 13, 3, 11, 7, 15 };
+   Uint1 conversion_table[16] = {
+     0,  8, 4, 12,
+     2, 10, 6, 14,
+     1,  9, 5, 13,
+     3, 11, 7, 15
+   };
 
    if (!rev_sequence_ptr)
       return -1;
@@ -822,7 +826,10 @@ Int2 GetReverseNuclSequence(const Uint1* sequence, Int4 length,
    rev_sequence[0] = rev_sequence[length+1] = NULLB;
 
    for (index = 0; index < length; ++index) {
-      rev_sequence[length-index] = conversion_table[sequence[index]];
+        if (sequence[index] == FENCE_SENTRY)
+                rev_sequence[length-index] = FENCE_SENTRY;
+        else
+                rev_sequence[length-index] = conversion_table[sequence[index]];
    }
 
    *rev_sequence_ptr = rev_sequence;
@@ -833,7 +840,7 @@ Int1 BLAST_ContextToFrame(EBlastProgramType prog_number, Uint4 context_number)
 {
    Int1 frame = INT1_MAX;	/* INT1_MAX is used to indicate error */
 
-   if (prog_number == eBlastTypeBlastn) {
+   if (prog_number == eBlastTypeBlastn || prog_number == eBlastTypeMapping) {
       if (context_number % NUM_STRANDS == 0)
          frame = 1;
       else
@@ -931,6 +938,8 @@ Int2 BLAST_CreateMixedFrameDNATranslation(BLAST_SequenceBlk* query_blk,
 
    /* Allocate 1 extra byte for a final sentinel. */ 
    buffer = (Uint1*) malloc(total_length+1);
+   if (!buffer)
+	return -1;
 
    for (index = 0; index <= query_info->last_context; index += CODON_LENGTH) {
       int i;
@@ -959,7 +968,8 @@ Int2 BLAST_CreateMixedFrameDNATranslation(BLAST_SequenceBlk* query_blk,
       }
    }
    /* Add a sentinel null byte at the end. */
-   *seq = NULLB;
+   if (seq)
+   	*seq = NULLB;
 
    /* The mixed-frame protein sequence buffer will be saved in 
       'sequence_start' */
@@ -1038,7 +1048,7 @@ Int2 BLAST_GetAllTranslations(const Uint1* nucl_seq, EBlastEncoding encoding,
         Uint1** mixed_seq_ptr)
 {
    Uint1* translation_buffer,* mixed_seq;
-   Uint1* translation_table = NULL,* translation_table_rc;
+   Uint1* translation_table = NULL,* translation_table_rc = NULL;
    Uint1* nucl_seq_rev;
    Int4 offset = 0, length;
    Int4 context; 
@@ -1143,7 +1153,10 @@ int Blast_GetPartialTranslation(const Uint1* nucl_seq,
    if (!mixed_seq_ptr) {
        if ((translation_buffer = 
             (Uint1*) malloc(nucl_length/CODON_LENGTH+2)) == NULL)
+	{
+	   sfree(nucl_seq_rev);
            return -1;
+	}
            
        length = 
            BLAST_GetTranslation(nucl_seq, nucl_seq_rev, 
@@ -1159,7 +1172,10 @@ int Blast_GetPartialTranslation(const Uint1* nucl_seq,
        Uint1* seq;
        
        if ((translation_buffer = (Uint1*) malloc(nucl_length+2)) == NULL)
+       {
+	   sfree(nucl_seq_rev);
            return -1;
+       }
 
        for (index = 1; index <= CODON_LENGTH; ++index) {
            length = 

@@ -31,7 +31,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.88 $
+* $Revision: 6.93 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -624,6 +624,8 @@ NLM_EXTERN Boolean AddGenBankBlockToEntry (
 #define GENOME_hydrogenosome 20
 #define GENOME_chromosome 21
 #define GENOME_chromatophore 22
+#define GENOME_plasmid_in_mitochondrion 23
+#define GENOME_plasmid_in_plastid 24
 
 /********************************************
 *  Genome describes the type of genome from which the DNA or gene for
@@ -694,6 +696,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
 #define SUBSRC_haplogroup 40
 #define SUBSRC_whole_replicon 41
 #define SUBSRC_phenotype 42
+#define SUBSRC_altitude 43
 #define SUBSRC_other 255
 
 /*********************************************
@@ -743,6 +746,7 @@ NLM_EXTERN Boolean AddGenomeToEntry (
         haplogroup (40) ,
         whole-replicon (41) ,
         phenotype (42) ,
+        altitude (43) ,
         other (255) } ,
 
 *   value is an optional string to give the name (eg. of the
@@ -790,6 +794,7 @@ NLM_EXTERN Boolean AddSubSourceToEntry (
 #define ORGMOD_culture_collection 35
 #define ORGMOD_bio_material 36
 #define ORGMOD_metagenome_source 37
+#define ORGMOD_type_material 38
 #define ORGMOD_old_lineage 253
 #define ORGMOD_old_name 254
 #define ORGMOD_other 255 
@@ -1565,10 +1570,24 @@ NLM_EXTERN UserObjectPtr CreateDBLinkUserObject (
   void
 );
 
+NLM_EXTERN void AddIntListFieldToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  Int4Ptr values,
+  CharPtr field_name
+); 
+
 NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
   Int4Ptr values
+);
+
+NLM_EXTERN void AddStringListFieldToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values,
+  CharPtr field_name
 );
 
 NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
@@ -1582,14 +1601,6 @@ NLM_EXTERN void AddSeqReadArchIDsToDBLinkUserObject (
   Int4 num,
   CharPtr PNTR values
 );
-
-NLM_EXTERN void AddFieldsToDBLinkUserObject (
-  UserObjectPtr uop,
-  CharPtr field_name,
-  Int4 num,
-  CharPtr PNTR values
-);
-
 
 NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   UserObjectPtr uop,

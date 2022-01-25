@@ -542,20 +542,239 @@ nelle\)$" ,
             required TRUE ,
             severity info } } } } } ,
   {
+    prefix "##MIGS:4.0-Data-START##" ,
+    fields {
+      {
+        field-name "investigation_type" ,
+        match-expression "^\(eukaryote\|bacteria_archaea\|plasmid\|virus\|orga
+nelle\)$" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "project_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "lat_lon" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "geo_loc_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "collection_date" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_biome" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_feature" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_material" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_package" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "isol_growth_condt" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "seq_meth" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "assembly" ,
+        required TRUE ,
+        severity info } } ,
+    require-order FALSE ,
+    allow-unlisted TRUE ,
+    dependent-rules {
+      {
+        match-name "investigation_type" ,
+        value-constraint "^eukaryote$" ,
+        other-fields {
+          {
+            field-name "num_replicons" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "ploidy" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "estimated_size" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "propagation" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "finishing_strategy" ,
+            required TRUE ,
+            severity info } } } ,
+      {
+        match-name "investigation_type" ,
+        value-constraint "^bacteria_archaea$" ,
+        other-fields {
+          {
+            field-name "num_replicons" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "ref_biomaterial" ,
+            required TRUE ,
+            severity info } ,
+          {
+            field-name "finishing_strategy" ,
+            required TRUE ,
+            severity info } } } ,
+      {
+        match-name "investigation_type" ,
+        value-constraint "^plasmid$" ,
+        other-fields {
+          {
+            field-name "propagation" ,
+            required TRUE ,
+            severity info } } } ,
+      {
+        match-name "investigation_type" ,
+        value-constraint "^virus$" ,
+        other-fields {
+          {
+            field-name "propagation" ,
+            required TRUE ,
+            severity info } } } } } ,
+  {
+    prefix "##MIMS:4.0-Data-START##" ,
+    fields {
+      {
+        field-name "investigation_type" ,
+        match-expression "^metagenome$" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "project_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "lat_lon" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "geo_loc_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "collection_date" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_biome" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_feature" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_material" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_package" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "seq_meth" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "assembly" ,
+        required TRUE ,
+        severity info } } ,
+    require-order FALSE ,
+    allow-unlisted TRUE } ,
+  {
+    prefix "##MIMARKS:4.0-Data-START##" ,
+    fields {
+      {
+        field-name "investigation_type" ,
+        match-expression "^\(mimarks-survey\|mimarks-culture\)$" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "project_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "lat_lon" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "geo_loc_name" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "collection_date" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_biome" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_feature" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_material" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "env_package" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "target_gene" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "seq_meth" ,
+        required TRUE ,
+        severity info } } ,
+    require-order FALSE ,
+    allow-unlisted TRUE ,
+    dependent-rules {
+      {
+        match-name "investigation_type" ,
+        value-constraint "^mimarks-culture$" ,
+        other-fields {
+          {
+            field-name "isol_growth_condt" ,
+            required TRUE ,
+            severity info } } } } } ,
+  {
     prefix "##Genome-Assembly-Data-START##" ,
     fields {
       {
+        field-name "Assembly Provider" } ,
+      {
         field-name "Finishing Goal" ,
-        match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\|Annotation-Directed Improvement\|Noncontiguous
- Finished\|Finished\)$" ,
-        severity info } ,
+        match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd] [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|Annotation-Directed Improvement\|Noncontiguous Finished\|Finished\)$" ,
+        severity error } ,
       {
         field-name "Current Finishing Status" ,
-        match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\|Annotation-Directed Improvement\|Noncontiguous
- Finished\|Finished\)$" ,
-        severity info } ,
+        match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd] [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|Annotation-Directed Improvement\|Noncontiguous Finished\|Finished\)$" ,
+        severity error } ,
       {
         field-name "Assembly Date" ,
         match-expression "^\(\(\(0\|1\|2\|3\)\(0\|1\|2\|3\|4\|5\|6\|7\|8\|9\)-
@@ -574,6 +793,22 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
       {
         field-name "Long Assembly Name" } ,
       {
+        field-name "Genome Representation" ,
+        match-expression "^\([Ff][Uu][Ll][Ll]\|[Pp][Aa][Rr][Tt][Ii][Aa][Ll]\)$" ,
+        required FALSE } ,
+      {
+        field-name "Expected Final Version" ,
+        match-expression "^\([Yy][Ee][Ss]\|[Nn][Oo]\)$" ,
+        required FALSE } ,
+      {
+        field-name "Reference-guided Assembly" } ,
+      {
+        field-name "Single-cell Amplification" } ,
+      {
+        field-name "Corresponding 16S rRNA" ,
+        match-expression "^[A-Z]+[0-9]+\.\(0\|1\|2\|3\|4\|5\|6\|7\|8\|9\)+$",
+        required FALSE } ,
+      {
         field-name "Genome Coverage" ,
         required TRUE } ,
       {
@@ -582,42 +817,42 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
     dependent-rules {
       {
         match-name "Finishing Goal" ,
-        value-constraint "^Standard Draft$" ,
+        value-constraint "^[Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]$" ,
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^Standard Draft$" } } } ,
+            match-expression "^[Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]$" } } } ,
       {
         match-name "Finishing Goal" ,
-        value-constraint "^High-Quality Draft$" ,
+        value-constraint "^[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]$" ,
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^\(Standard Draft\|High-Quality Draft\)$" } } } ,
+            match-expression "^\(Standard [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\)$" } } } ,
       {
         match-name "Finishing Goal" ,
-        value-constraint "^Improved High-Quality Draft$" ,
+        value-constraint "^[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd] [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]$" ,
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\)$" } } } ,
+            match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd]
+ [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\)$" } } } ,
       {
         match-name "Finishing Goal" ,
         value-constraint "^Annotation-Directed Improvement$" ,
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\|Annotation-Directed Improvement\)$" } } } ,
+            match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd]
+ [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|Annotation-Directed Improvement\)$" } } } ,
       {
         match-name "Finishing Goal" ,
         value-constraint "^Noncontiguous Finished$" ,
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\|Annotation-Directed Improvement\|Noncontiguous
+            match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd]
+ [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|Annotation-Directed Improvement\|Noncontiguous
  Finished\)$" } } } ,
       {
         match-name "Finishing Goal" ,
@@ -625,8 +860,8 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
         other-fields {
           {
             field-name "Current Finishing Status" ,
-            match-expression "^\(Standard Draft\|High-Quality Draft\|Improved
- High-Quality Draft\|Annotation-Directed Improvement\|Noncontiguous
+            match-expression "^\([Ss][Tt][Aa][Nn][Dd][Aa][Rr][Dd] [Dd][Rr][Aa][Ff][Tt]\|[Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|[Ii][Mm][Pp][Rr][Oo][Vv][Ee][Dd]
+ [Hh][Ii][Gg][Hh]-[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Dd][Rr][Aa][Ff][Tt]\|Annotation-Directed Improvement\|Noncontiguous
  Finished\|Finished\)$" } } } ,
       {
         match-name "Sequencing Technology" ,
@@ -635,7 +870,10 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
           {
             field-name "Assembly Date" ,
             required TRUE ,
-            severity warning } } } } } ,
+            severity warning } } } } ,
+    forbidden-phrases {
+      "Affymetrix",
+      "Affy" } } ,
   {
     prefix "##Assembly-Data-START##" ,
     fields {
@@ -655,12 +893,15 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
     dependent-rules {
       {
         match-name "Sequencing Technology" ,
-        value-constraint "Sanger",
+        value-constraint "\(Sanger dideoxy sequencing\|ABI PRISM\|Sanger\|Sanger sequencing\)",
         invert-match TRUE ,
         other-fields {
           {
             field-name "Assembly Method" ,
-            required TRUE } } } } } ,
+            required TRUE } } } } ,
+    forbidden-phrases {
+      "Affymetrix",
+      "Affy" } } ,
   {
     prefix "##International Barcode of Life (iBOL)Data-START##" ,
     fields {
@@ -678,4 +919,137 @@ AR\|APR\|MAY\|JUN\|JUL\|AUG\|SEP\|OCT\|NOV\|DEC\)-\(19\|20\)\(0\|1\|2\|3\|4\|5
         required FALSE } ,
       { field-name "Tentative Name" ,
         required FALSE } } ,
-    allow-unlisted TRUE } }
+    allow-unlisted TRUE } ,
+  {
+    prefix "##Genome-Annotation-Data-START##" ,
+    fields {
+      {
+        field-name "Annotation Provider" ,
+        required TRUE } ,
+      {
+        field-name "Annotation Status" ,
+        required FALSE } ,
+      {
+        field-name "Annotation Version" ,
+        required FALSE } ,
+      {
+        field-name "Annotation Date" ,
+        required FALSE } ,
+      {
+        field-name "Annotation Pipeline" ,
+        required FALSE } ,
+      {
+        field-name "Annotation Method" ,
+        required FALSE } ,
+      {
+        field-name "Annotation Software Version" ,
+        required FALSE } ,
+      {
+        field-name "Features Annotated" ,
+        required FALSE } ,
+      {
+        field-name "Update Version" ,
+        required FALSE } ,
+      {
+        field-name "Input Data" ,
+        required FALSE } ,
+      { 
+        field-name "URL" ,
+        required FALSE } } ,
+    require-order FALSE ,
+    allow-unlisted TRUE } ,
+  {
+    prefix "##RefSeq-Attributes-START##" ,
+    fields {
+      {
+        field-name "Transcript_exon_combination_evidence" ,
+        required FALSE } } ,
+    allow-unlisted TRUE } ,
+  {
+    prefix "##BWP:1.0-START##" ,
+    fields {
+      {
+        field-name "chainOfCustody" ,
+        required FALSE } , 
+      {
+        field-name "typeStatus" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "basisOfIdentification" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "identificationConfidence" ,
+        match-expression "^\([Hh]igh\|[Mm]edium\|[Pp]reliminary\)$" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "identificationDate" ,
+        required TRUE ,
+        severity info } ,
+      {
+        field-name "coordinatePrecision" ,
+        required FALSE } } ,
+    require-order FALSE ,
+    allow-unlisted TRUE } ,
+  {
+    prefix "##Taxonomic-Update-Statistics-START##" ,
+    fields {
+      {
+        field-name "This Genome (query)" ,
+        required TRUE } ,
+      { 
+        field-name "Current Name" ,
+        required TRUE } ,
+      {
+        field-name "Previous Name" ,
+        required TRUE } ,
+      {
+        field-name "Date Updated" ,
+        required TRUE } ,
+      {
+        field-name "Analysis Type" ,
+        required TRUE } ,
+      {
+        field-name "Analysis 1 (A1)" ,
+        required TRUE } ,
+      {
+        field-name "A1 Genome (subject)" ,
+        required TRUE } ,
+      {
+        field-name "A1 Name" ,
+        required TRUE } ,
+      {
+        field-name "A1 ANI" ,
+        required TRUE } ,
+      {
+        field-name "A1 Query Coverage" ,
+        required TRUE } ,
+      {
+        field-name "A1 Subject Coverage" ,
+        required TRUE } ,
+      {
+        field-name "Analysis 2 (A2)" ,
+        required TRUE } ,
+      {
+        field-name "A2 Genome (subject)" ,
+        required TRUE } ,
+      {
+        field-name "A2 Name" ,
+        required TRUE } ,
+      {
+        field-name "A2 ANI" ,
+        required TRUE } ,
+      {
+        field-name "A2 Query Coverage" ,
+        required TRUE } ,
+      {
+        field-name "A2 Subject Coverage" ,
+        required TRUE }
+    } ,
+    require-order TRUE ,
+    allow-unlisted FALSE 
+  }
+}
+

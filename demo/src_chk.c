@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.24 $
+* $Revision: 1.25 $
 *
 * File Description: 
 *
@@ -780,7 +780,8 @@ static ValNodePtr CollectBioseqLineValues
         || (sip->choice == SEQID_EMBL && sip_gb == NULL)
         || (sip->choice == SEQID_SWISSPROT && sip_gb == NULL)
         || (sip->choice == SEQID_DDBJ && sip_gb == NULL)
-        || (sip->choice == SEQID_PIR && sip_gb == NULL)) {
+        || (sip->choice == SEQID_PIR && sip_gb == NULL)
+        || (sip->choice == SEQID_OTHER && sip_gb == NULL)) {
       sip_gb = sip;
     } else if (sip->choice == SEQID_GI) {
       sip_gi = sip;

@@ -1,4 +1,4 @@
-/* $Id: ncbi_memory_connector.c,v 6.15 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_memory_connector.c,v 6.16 2012/09/03 23:44:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,7 +34,7 @@
  */
 
 #include <connect/ncbi_memory_connector.h>
-#include <assert.h>
+#include "ncbi_assert.h"
 #include <stdlib.h>
 
 

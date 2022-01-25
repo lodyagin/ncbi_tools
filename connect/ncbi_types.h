@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_TYPES__H
 #define CONNECT___NCBI_TYPES__H
 
-/* $Id: ncbi_types.h,v 6.22 2012/05/02 19:19:42 kazimird Exp $
+/* $Id: ncbi_types.h,v 6.25 2016/05/13 16:04:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -78,8 +78,8 @@ typedef struct STimeoutTag {
     unsigned int usec; /**< microseconds (modulo 1,000,000) */
 } STimeout;
 
-#define kDefaultTimeout  ((const STimeout*)(-1))
-#define kInfiniteTimeout ((const STimeout*)( 0))
+#define kDefaultTimeout   ((const STimeout*)(-1))
+#define kInfiniteTimeout  ((const STimeout*)( 0))
 
 
 extern NCBI_XCONNECT_EXPORT unsigned long NcbiTimeoutToMs
@@ -132,8 +132,8 @@ typedef enum ENcbiSwitch {
  * For example, specify if a CSocket object owns its underlying SOCK object.
  */
 typedef enum ENcbiOwnership {
-    eNoOwnership,       /** No ownership is assumed                 */
-    eTakeOwnership      /** An object can take ownership of another */
+    eNoOwnership,       /**< No ownership is assumed                 */
+    eTakeOwnership      /**< An object can take ownership of another */
 } EOwnership;
 
 #endif /*!NCBI_EOWNERSHIP_DEFINED*/
@@ -147,18 +147,21 @@ typedef unsigned int TNCBI_Time;
 #define NCBI_TIME_INFINITE ((TNCBI_Time)(-1))
 
 
-/** Big integer for file size and position
+/** Big unsigned integer for file size and position
  */
 
 #if defined(__MINGW32__)  ||  defined(__MINGW64__)
-typedef unsigned long long TNCBI_BigCount;
-#  define NCBI_BIGCOUNT_FORMAT_SPEC "I64u"
+typedef unsigned long long  TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC      "I64u"
+#  define NCBI_BIGCOUNT_FORMAT_SPEC_HEX  "I64x"
 #elif defined(_WIN32)
-typedef unsigned __int64   TNCBI_BigCount;
-#  define NCBI_BIGCOUNT_FORMAT_SPEC "I64u"
+typedef unsigned __int64    TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC      "I64u"
+#  define NCBI_BIGCOUNT_FORMAT_SPEC_HEX  "I64x"
 #else
-typedef uint64_t           TNCBI_BigCount;
-#  define NCBI_BIGCOUNT_FORMAT_SPEC PRIu64
+typedef uint64_t            TNCBI_BigCount;
+#  define NCBI_BIGCOUNT_FORMAT_SPEC      PRIu64
+#  define NCBI_BIGCOUNT_FORMAT_SPEC_HEX  PRIx64
 #endif
 
 

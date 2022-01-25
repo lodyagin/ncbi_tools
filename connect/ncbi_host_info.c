@@ -1,4 +1,4 @@
-/* $Id: ncbi_host_info.c,v 6.14 2011/06/10 03:44:32 kazimird Exp $
+/* $Id: ncbi_host_info.c,v 6.17 2015/03/18 16:24:20 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,16 +31,15 @@
  */
 
 #include "ncbi_lbsmd.h"
-#include <math.h>
+#include <math.h>  /* NB: pull only M_PI */
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef M_PI
-/* Not defined on MacOS.9 :-( */
-#  define M_PI 3.14159265358979323846
-#endif
-
-#define HINFO_MAGIC M_PI
+#ifdef    M_PI
+#  define HINFO_MAGIC  M_PI
+#else /* Not defined on MacOS.9 :-( */
+#  define HINFO_MAGIC  3.14159265358979323846
+#endif /*!M_PI*/
 
 
 HOST_INFO HINFO_Create(unsigned int addr, const void* hinfo, size_t hinfo_size,
@@ -55,9 +54,9 @@ HOST_INFO HINFO_Create(unsigned int addr, const void* hinfo, size_t hinfo_size,
 
     if (!hinfo)
         return 0;
-    e_s = env && *env ? strlen(env) + 1 : 0;
-    a_s = arg && *arg ? strlen(arg) + 1 : 0;
-    v_s = a_s &&  val ? strlen(val) + 1 : 0;
+    e_s = env  &&  *env ? strlen(env) + 1 : 0;
+    a_s = arg  &&  *arg ? strlen(arg) + 1 : 0;
+    v_s = a_s  &&   val ? strlen(val) + 1 : 0;
     size = sizeof(*host_info) + hinfo_size;
     if (!(host_info = (SHOST_Info*) calloc(1, size + e_s + a_s + v_s)))
         return 0;
@@ -72,10 +71,8 @@ HOST_INFO HINFO_Create(unsigned int addr, const void* hinfo, size_t hinfo_size,
         host_info->arg = (const char*) memcpy(s, arg, a_s);
         s += a_s;
     }
-    if (v_s) {
+    if (v_s)
         host_info->val = (const char*) memcpy(s, val, v_s);
-        s += v_s;
-    }
     host_info->pad = HINFO_MAGIC;
     return host_info;
 }
@@ -112,6 +109,7 @@ extern double HINFO_CpuClock(const HOST_INFO host_info)
     return LBSM_HINFO_CpuClock(host_info);
 }
 
+
 extern int HINFO_TaskCount(const HOST_INFO host_info)
 {
     if (!host_info  ||  host_info->pad != HINFO_MAGIC)
@@ -122,7 +120,7 @@ extern int HINFO_TaskCount(const HOST_INFO host_info)
 
 extern int HINFO_Memusage(const HOST_INFO host_info, double memusage[5])
 {
-    memset(memusage, 0, sizeof(memusage[0]) * 5);
+    memset(memusage, 0, 5 * sizeof(memusage[0]));
     if (!host_info  ||  host_info->pad != HINFO_MAGIC)
         return 0;
     return LBSM_HINFO_Memusage(host_info, memusage);
@@ -140,7 +138,7 @@ extern int HINFO_MachineParams(const HOST_INFO host_info, SHINFO_Params* p)
 
 extern int/*bool*/ HINFO_LoadAverage(const HOST_INFO host_info, double lavg[2])
 {
-    memset(lavg, 0, sizeof(lavg[0]) * 2);
+    memset(lavg, 0, 2 * sizeof(lavg[0]));
     if (!host_info  ||  host_info->pad != HINFO_MAGIC)
         return 0;
     return LBSM_HINFO_LoadAverage(host_info, lavg);
@@ -149,7 +147,7 @@ extern int/*bool*/ HINFO_LoadAverage(const HOST_INFO host_info, double lavg[2])
 
 extern int/*bool*/ HINFO_Status(const HOST_INFO host_info, double status[2])
 {
-    memset(status, 0, sizeof(status[0]) * 2);
+    memset(status, 0, 2 * sizeof(status[0]));
     if (!host_info  ||  host_info->pad != HINFO_MAGIC)
         return 0;
     return LBSM_HINFO_Status(host_info, status);

@@ -1,4 +1,4 @@
-/* $Id: na_ungapped.h,v 1.6 2009/10/02 15:21:51 kazimird Exp $
+/* $Id: na_ungapped.h,v 1.7 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,6 +42,8 @@
 #include <algo/blast/core/lookup_wrap.h>
 #include <algo/blast/core/blast_hits.h>
 #include <algo/blast/core/blast_diagnostics.h>
+
+#include <algo/blast/core/blast_gapalign.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -94,6 +96,67 @@ Int2 BlastNaWordFinder(BLAST_SequenceBlk* subject,
  */
 NCBI_XBLAST_EXPORT
 void BlastChooseNaExtend(LookupTableWrap *lookup_wrap);
+
+
+/* A structure to hold several lists of word hits for groups of queries */
+typedef struct MapperWordHits
+{
+    BlastOffsetPair** pair_arrays; /**< lists of word hits */
+    Int4* num;                     /**< number of hits in the list */
+    Int4 num_arrays;               /**< number of pair_arrays */
+    Int4 array_size;               /**< size of each array */
+    Int4* last_diag;               /**< diagnal for the last word hit for each
+                                        query context */
+    Int4* last_pos;                /**< subject position for the last word hit
+                                        for each query context */
+
+    Int4 divisor;                  /**< divisor used to find pair_arrays index
+                                        based on query offset */
+} MapperWordHits;
+
+MapperWordHits* MapperWordHitsFree(MapperWordHits* wh);
+MapperWordHits* MapperWordHitsNew(const BLAST_SequenceBlk* query,
+                                  const BlastQueryInfo* query_info);
+
+
+NCBI_XBLAST_EXPORT
+Int2
+JumperNaWordFinder(BLAST_SequenceBlk * subject,
+                   BLAST_SequenceBlk * query,
+                   BlastQueryInfo * query_info,
+                   LookupTableWrap * lookup_wrap,
+                   const BlastInitialWordParameters * word_params,
+                   const BlastScoringParameters* score_params,
+                   const BlastHitSavingParameters* hit_params,
+                   BlastOffsetPair * offset_pairs,
+                   MapperWordHits* word_hits,
+                   Int4 max_hits,
+                   BlastGapAlignStruct* gap_align,
+                   BlastInitHitList* init_hitlist,
+                   BlastHSPList** hsp_list_ptr,
+                   BlastUngappedStats * ungapped_stats,
+                   BlastGappedStats* gapped_stats);
+
+
+NCBI_XBLAST_EXPORT
+Int2 ShortRead_IndexedWordFinder( 
+        BLAST_SequenceBlk * subject,
+        BLAST_SequenceBlk * query,
+        BlastQueryInfo * query_info,
+        LookupTableWrap * lookup_wrap,
+        const BlastInitialWordParameters * word_params,
+        const BlastScoringParameters* score_params,
+        const BlastHitSavingParameters* hit_params,
+        BlastOffsetPair * offset_pairs,
+        MapperWordHits* word_hits,
+        Int4 max_hits,
+        BlastGapAlignStruct* gap_align,
+        BlastInitHitList* init_hitlist,
+        BlastHSPList** hsp_list,
+        BlastUngappedStats* ungapped_stats,
+        BlastGappedStats* gapped_stats);
+
+
 
 #ifdef __cplusplus
 }

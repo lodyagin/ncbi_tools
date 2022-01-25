@@ -1,4 +1,4 @@
-/* $Id: ncbi_file_connector.c,v 6.22 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_file_connector.c,v 6.23 2012/09/03 23:44:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,8 @@
  */
 
 #include "ncbi_ansi_ext.h"
+#include "ncbi_assert.h"
 #include <connect/ncbi_file_connector.h>
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 

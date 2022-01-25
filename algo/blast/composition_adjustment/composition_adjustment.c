@@ -28,10 +28,6 @@
  *
  * @author Yi-Kuo Yu, Alejandro Schaffer, E. Michael Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: composition_adjustment.c,v 1.26 2010/03/22 11:39:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <limits.h>
 #include <assert.h>
@@ -693,11 +689,12 @@ s_SetXUOScores(double ** M, int alphsize,
         M[eXchar][eJchar] =
             s_CalcXScore(&M[0][eJchar], alphsize, cols, row_probs);
     }
-    /* Copy X scores to U and O */
-    memcpy(M[eSelenocysteine], M[eXchar], alphsize * sizeof(double));
+    /* Copy C scores to U */
+    memcpy(M[eSelenocysteine], M[eCchar], alphsize * sizeof(double));
     for (i = 0;  i < alphsize;  i++) {
-        M[i][eSelenocysteine] = M[i][eXchar];
+        M[i][eSelenocysteine] = M[i][eCchar];
     }
+    /* Copy X scores to O */
     if (alphsize > eOchar) {
         memcpy(M[eOchar], M[eXchar], alphsize * sizeof(double));
         for (i = 0;  i < alphsize;  i++) {
@@ -1042,7 +1039,8 @@ s_ScalePSSM(int **matrix, int rows, int cols, double ** freq_ratios,
 
         Blast_FreqRatioToScore(row_matrix, 1, cols, Lambda);
         row[eXchar] = Xscore = s_CalcXScore(row, cols, 1, col_prob);
-        row[eSelenocysteine] = Xscore;
+        /* use Cysteine score for Selenocysteine */
+        row[eSelenocysteine] = row[eCchar];
         if (cols > eOchar) {
             row[eOchar] = Xscore;
         }
@@ -1175,11 +1173,23 @@ Blast_ReadAaComposition(Blast_AminoAcidComposition * composition,
         prob[i] = 0.0;
     }
     for (i = 0;  i < length;  i++) {
-        if (alphaConvert[sequence[i]] >= 0) {
+        if (alphaConvert[sequence[i]] >= 0 || sequence[i] == eSelenocysteine) {
             prob[sequence[i]]++;
             numTrueAminoAcids++;
         }
     }
+
+    /* Count Selenocysteine (U) as if it was Cysteine (C) to avoid a result
+       where C aligned to U is scored higher than C aligned to C. Otherwise,
+       because U is not counted as a true amino acid, sequences with U would
+       appear more complex than those composed only of the 20 "true" amino
+       acids. Therefore computationally adjusted alignment score would be
+       larger for sequences containing U than for sequences with C. */
+    if (prob[eSelenocysteine] > 0.0) {
+        prob[eCchar] += prob[eSelenocysteine];
+        prob[eSelenocysteine] = 0.0;
+    }
+
     composition->numTrueAminoAcids = numTrueAminoAcids;
     if (numTrueAminoAcids > 0) {
         for (i = 0;  i < alphsize;  i++) {
@@ -1253,7 +1263,7 @@ Blast_CompositionWorkspaceFree(Blast_CompositionWorkspace ** pNRrecord)
 
         free(NRrecord);
     }
-    pNRrecord = NULL;
+    *pNRrecord = NULL;
 }
 
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.2 $
+* $Revision: 6.4 $
 *
 * File Description: 
 *
@@ -126,6 +126,8 @@ Boolean LIBCALL VSMAddMenu PROTO((WindoW w, Int2 menutype));
 #define VSM_EDIT_MENU 4     /* editors */
 
 NLM_EXTERN Boolean OkToListFeatDefInRemainingFeatures (Uint2 subtype);
+
+NLM_EXTERN Boolean IsVSeqMgrOpen (void);
 
 #ifdef __cplusplus
 }

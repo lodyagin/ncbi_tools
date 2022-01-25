@@ -1,4 +1,4 @@
-/* $Id: blast_itree.c,v 1.18 2012/04/03 14:51:02 kazimird Exp $
+/* $Id: blast_itree.c,v 1.19 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,11 +30,6 @@
 /** @file blast_itree.c
  * Functions that implement an interval tree for fast HSP containment tests
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_itree.c,v 1.18 2012/04/03 14:51:02 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include "blast_itree.h"
 #include "blast_gapalign_priv.h"

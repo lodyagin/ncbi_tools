@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *       Vibrant menu functions
@@ -689,6 +689,14 @@ static void Nlm_DeactivateInnerMenus (Nlm_MenU m)
   }
 }
 
+static Nlm_ItmActnProc itemAction = NULL;
+
+extern void Nlm_SetMenuAction (Nlm_ItmActnProc actn)
+
+{
+  itemAction = actn;
+}
+
 #ifdef WIN_MAC
 static Nlm_Boolean Nlm_DesktopMenuBarClick (Nlm_GraphiC mb, Nlm_PoinT pt)
 
@@ -986,6 +994,9 @@ static Nlm_Boolean Nlm_CommItemClick (Nlm_GraphiC i, Nlm_PoinT pt)
   index = Nlm_GetFirstItem ((Nlm_IteM) i);
   if (currentItemNum == index && currentMenuTag == currentMenuNum) {
     Nlm_DoAction (i);
+    if (itemAction != NULL) {
+      itemAction ((Nlm_IteM) i);
+    }
     rsult = TRUE;
   }
   return rsult;
@@ -1159,6 +1170,9 @@ static Nlm_Boolean Nlm_CommItemCommand (Nlm_GraphiC i)
   id = Nlm_ItemToID (m, index);
   if (currentItemID == id) {
     Nlm_DoAction (i);
+    if (itemAction != NULL) {
+      itemAction ((Nlm_IteM) i);
+    }
     rsult = TRUE;
   }
   return rsult;
@@ -1228,6 +1242,9 @@ static void Nlm_CommItemCallback (Nlm_GraphiC i)
 
 {
   Nlm_DoAction (i);
+  if (itemAction != NULL) {
+    itemAction ((Nlm_IteM) i);
+  }
 }
 
 static void Nlm_StatItemCallback (Nlm_GraphiC i)
@@ -1431,6 +1448,9 @@ static Nlm_Boolean Nlm_CommItemKey (Nlm_GraphiC i, Nlm_Char ch)
   index = Nlm_GetFirstItem ((Nlm_IteM) i);
   if (currentItemNum == index) {
     Nlm_DoAction (i);
+    if (itemAction != NULL) {
+      itemAction ((Nlm_IteM) i);
+    }
     rsult = TRUE;
   }
   return rsult;
@@ -3771,8 +3791,18 @@ static void Nlm_AddAccel(Nlm_MenU m, Nlm_Int2 id, Nlm_Char key)
 
     if(IS_ALPHA(key))
     {
+        /* - old implementation
         fAccelFlags = FCONTROL;
 	key = TO_UPPER(key) - 'A' + 1;
+        */
+
+        /*  
+           use virtual keycodes to distinguish between Return and controlM
+           and Backspace and controlH.  (the old way of using character codes
+           used ascii values which did not distinguish the two, i.e. both
+           controlM and Return map to ascii 13)
+        */
+        fAccelFlags = FCONTROL | FVIRTKEY;
     }
     else
     if(IS_DIGIT(key))
@@ -5048,7 +5078,7 @@ static void Nlm_NewPopListMenu (Nlm_MenU m)
   } else if (lpfnOldPopupProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "PopupProc subclass error");
   }
-  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewPopupProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG_PTR) lpfnNewPopupProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);

@@ -381,7 +381,7 @@ NLM_EXTERN ValNodePtr StorePub(BioseqPtr bsp, ValNodePtr vnp, ValNodePtr pub, Se
 			AddPubBsp (psp, bsp);
 			AddCitFeat(psp, sfp);
 		}
-	} else {
+	} else if (sfp) {
 		PubSet = (ValNodePtr) sfp->cit;
 		Pub = (ValNodePtr) PubSet->data.ptrvalue;
 		for (v=Pub; v; v=v->next) {
@@ -1161,7 +1161,8 @@ NLM_EXTERN void DeleteSites (SeqEntryPtr sep, Pointer data, Int4 index, Int2 ind
 	
 	for (ap = sap; ap != NULL; ap = apnext) {
 		apnext = ap->next;
-		if (ap->data == NULL) {
+        /* now keep empty annot if annot_descr present */
+		if (ap->data == NULL && ap->desc == NULL) {
 			sap = remove_annot(sap, ap);
 		}
 	}

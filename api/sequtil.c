@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.350 $
+* $Revision: 6.405 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -2657,7 +2657,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     char d [2];
     CharPtr tmp;
     static Uint1 fasta_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
-     33, /* 0 = not set */
+    33, /* 0 = not set */
     20, /* 1 = local Object-id */
     15,  /* 2 = gibbsq */
     16,  /* 3 = gibbmt */
@@ -2667,7 +2667,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     10, /* 7 = pir */
     10, /* 8 = swissprot */
     15,  /* 9 = patent */
-    12, /* 10 = other TextSeqId */
+    10, /* 10 = other = refseq */
     13, /* 11 = general Dbtag */
     255,  /* 12 = gi */
     10, /* 13 = ddbj */
@@ -2680,7 +2680,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     15   /* 20 = nat */
     };
     static Uint1 tmsmart_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
-     33, /* 0 = not set */
+    33, /* 0 = not set */
     20, /* 1 = local Object-id */
     15,  /* 2 = gibbsq */
     16,  /* 3 = gibbmt */
@@ -2690,7 +2690,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     10, /* 7 = pir */
     10, /* 8 = swissprot */
     15,  /* 9 = patent */
-    12, /* 10 = other TextSeqId */
+    10, /* 10 = other = refseq */
     29, /* 11 = general Dbtag */
     255,  /* 12 = gi */
     10, /* 13 = ddbj */
@@ -2703,7 +2703,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     15   /* 20 = nat */
     };
     static Uint1 general_order[NUM_SEQID] = {  /* order for other id FASTA_LONG */
-     33, /* 0 = not set */
+    33, /* 0 = not set */
     20, /* 1 = local Object-id */
     15,  /* 2 = gibbsq */
     16,  /* 3 = gibbmt */
@@ -2713,7 +2713,7 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
     10, /* 7 = pir */
     10, /* 8 = swissprot */
     15,  /* 9 = patent */
-    13, /* 10 = other TextSeqId */
+    10, /* 10 = other = refseq */
     12, /* 11 = general Dbtag */
     255,  /* 12 = gi */
     10, /* 13 = ddbj */
@@ -2815,8 +2815,8 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
         {
             if (sip->choice == SEQID_GI)
             {
-                sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
-                    (long)(sip->data.intvalue));
+                sprintf(localbuf, "%s%s%lld", txtid[SEQID_GI], ldelim,
+                    (long long)(sip->data.intvalue));
                 Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
                 got_gi = TRUE;
             } else if (sip->choice == SEQID_GENERAL) {
@@ -2946,8 +2946,11 @@ NLM_EXTERN CharPtr SeqIdWrite (SeqIdPtr isip, CharPtr buf, Uint1 format, Uint4 b
             break;
         case SEQID_GIBBSQ:         
         case SEQID_GIBBMT:
-        case SEQID_GI:
             sprintf(localbuf, "%ld", (long)sip->data.intvalue);
+            Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
+            break;
+        case SEQID_GI:
+            sprintf(localbuf, "%lld", (long long)sip->data.intvalue);
             Nlm_LabelCopyNext(&tmp, localbuf, &buflen);
             break;
         case SEQID_GIIM:
@@ -3196,8 +3199,8 @@ NLM_EXTERN Int4 SeqIdLabelLen (SeqIdPtr isip, Uint1 format)
         {
             if (sip->choice == SEQID_GI)
             {
-                sprintf(localbuf, "%s%s%ld", txtid[SEQID_GI], ldelim,
-                    (long)(sip->data.intvalue));
+                sprintf(localbuf, "%s%s%lld", txtid[SEQID_GI], ldelim,
+                    (long long)(sip->data.intvalue));
                 label_len += StringLen (localbuf) + 1; /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
                 got_gi = TRUE;
             } else if (sip->choice == SEQID_GENERAL) {
@@ -3326,8 +3329,11 @@ NLM_EXTERN Int4 SeqIdLabelLen (SeqIdPtr isip, Uint1 format)
             break;
         case SEQID_GIBBSQ:         
         case SEQID_GIBBMT:
-        case SEQID_GI:
             sprintf(localbuf, "%ld", (long)sip->data.intvalue);
+            label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
+            break;
+        case SEQID_GI:
+            sprintf(localbuf, "%lld", (long long)sip->data.intvalue);
             label_len += StringLen (localbuf) + 1;  /* have to include 1 for extra terminator from Nlm_LabelCopyNext */
             break;
         case SEQID_GIIM:
@@ -3465,7 +3471,7 @@ NLM_EXTERN CharPtr SeqIdWholeLabel (SeqIdPtr isip, Uint1 format)
 /* The following function finds either an integer or a string id from
    SeqIdPtr */
 
-Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id)
+Boolean GetAccessionFromSeqId(SeqIdPtr sip, BIG_ID_PNTR gi, CharPtr PNTR id)
 {
    return GetAccessionVersionFromSeqId(sip, gi, id, FALSE);
 }
@@ -3473,7 +3479,7 @@ Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, CharPtr PNTR id)
 /* Maximal length of a version number in Accession.version identifiers */
 #define MAX_VERSION_LENGTH 10
 
-Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, BIG_ID_PNTR gi, 
                                      CharPtr PNTR id, Boolean get_version)
 {
    Boolean numeric_id_type = FALSE;
@@ -3583,7 +3589,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
     char localbuf[SEQID_PARSE_BUF_SIZE + 2];
     char * tmp, *strt, * tokens[6], *chain;
     char d;
-    long num;
+    long long num;
     CharPtr tp;
     Int2 numtoken, i, type = 0, j, ctr=0, numdigits; /* ctr is number of OK ids done */
     SeqIdPtr sip = NULL, head = NULL, last = NULL, tmpsip;
@@ -3718,10 +3724,10 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                 }
                 if (oip->str == NULL)
                 {
-                    sscanf(tokens[0], "%ld", &num);
+                    sscanf(tokens[0], "%lld", &num);
                     oip->id = (Int4)num;
-                    if (numdigits < 10 ||
-                        (numdigits == 10 && StringCmp (tokens [0], "2147483647") <= 0)) {
+                    if (*tokens[0] != '0' && (numdigits < 10 ||
+                        (numdigits == 10 && StringCmp (tokens [0], "2147483647") <= 0))) {
                         sscanf(tokens[0], "%ld", &num);
                         oip->id = (Int4)num;
                     } else {
@@ -3731,18 +3737,23 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                 break;
             case SEQID_GIBBSQ:         
             case SEQID_GIBBMT:
+                if (! IS_DIGIT(*tokens[0]))
+                    goto erret;
+                sscanf(tokens[0], "%lld", &num);
+                sip->data.intvalue = (BIG_ID)num;
+                break;
             case SEQID_GI:
                 if (! IS_DIGIT(*tokens[0]))
                     goto erret;
-                sscanf(tokens[0], "%ld", &num);
-                sip->data.intvalue = (Int4)num;
+                sscanf(tokens[0], "%lld", &num);
+                sip->data.intvalue = (BIG_ID)num;
                 break;
             case SEQID_GIIM:
                 if (! IS_DIGIT(*tokens[0])) goto erret;
                 gim = GiimNew();
                 sip->data.ptrvalue = gim;
-                sscanf(tokens[0], "%ld", &num);
-                gim->id = (Int4)num;
+                sscanf(tokens[0], "%lld", &num);
+                gim->id = (BIG_ID)num;
                 break;
             case SEQID_GENBANK:
             case SEQID_EMBL:
@@ -3770,7 +3781,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                                                    if (IS_DIGIT(*(tmp+1)))
                                                    {
                             *tmp = '\0';
-                                                        sscanf((tmp+1),"%ld",&num);
+                                                        sscanf((tmp+1),"%lld",&num);
                                                         tsip->version =(Int2)num;
                            }
                            else
@@ -3815,7 +3826,7 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                 } else {
                     ipp->number = StringSave(tokens[1]);
                 }
-                sscanf(tokens[2], "%ld", &num);
+                sscanf(tokens[2], "%lld", &num);
                 patsip->seqid = (Int2)num;
                 break;
             case SEQID_GENERAL:
@@ -3835,9 +3846,9 @@ NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf)
                 }
                 if (oip->str == NULL)
                 {
-                    if (numdigits < 10 ||
-                        (numdigits == 10 && StringCmp (tokens [1], "2147483647") <= 0)) {
-                        sscanf(tokens[1], "%ld", &num);
+                    if (*tokens[1] != '0' && (numdigits < 10 ||
+                        (numdigits == 10 && StringCmp (tokens [1], "2147483647") <= 0))) {
+                        sscanf(tokens[1], "%lld", &num);
                         oip->id = (Int4)num;
                     } else {
                         oip->str = StringSave(tokens[1]);
@@ -3931,6 +3942,16 @@ NLM_EXTERN Boolean SeqIdMatch (SeqIdPtr a, SeqIdPtr b)
         return FALSE;
 }
 
+static Int8 GetGiFromSeqIdGeneral( SeqIdPtr seq_id)
+{
+    if( seq_id->choice != SEQID_GENERAL) return 0;
+    DbtagPtr db_tag = (DbtagPtr) seq_id->data.ptrvalue;
+    if( StringICmp( db_tag->db, "GI")) return 0;
+    ObjectIdPtr tag = db_tag->tag;
+    if( (tag == NULL) || (tag->str == NULL)) return 0;
+    return atol( tag->str);
+}
+
 /*****************************************************************************
 *
 *   SeqIdComp(a, b)
@@ -3977,6 +3998,19 @@ NLM_EXTERN Uint1 SeqIdComp (SeqIdPtr a, SeqIdPtr b)
                         return SIC_DIFF;
                 }
                 break;
+            case SEQID_GI:
+            {
+                Int8 gi = GetGiFromSeqIdGeneral( b);
+                if( a->data.intvalue == gi) return SIC_YES;
+                return SIC_DIFF;
+            }
+            case SEQID_GENERAL:
+            {
+                if( b->choice != SEQID_GI) return SIC_DIFF;
+                Int8 gi = GetGiFromSeqIdGeneral( a);
+                if( b->data.intvalue == gi) return SIC_YES;
+                return SIC_DIFF;
+            }
             default:
                 return SIC_DIFF;
         }
@@ -4885,10 +4919,11 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
     Int4 len = -1L, tmp;
     SeqLocPtr slp;
     Boolean locked = FALSE;
+    ErrSev logsev;
     Boolean average = FALSE;
     Int2 num;
     SeqIdPtr sip;
-    Int4 gi;
+    BIG_ID gi;
     SeqMgrPtr smp;
     SeqLenLookupFunc func;
 
@@ -4910,7 +4945,7 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
             bsp = BioseqFindCore(sip);
             if (bsp == NULL) {
                 if (sip != NULL && sip->choice == SEQID_GI) {
-                    gi = (Int4) sip->data.intvalue;
+                    gi = (BIG_ID) sip->data.intvalue;
                     /* try registered service for rapid length lookup */
                     smp = SeqMgrWriteLock ();
                     if (smp != NULL) {
@@ -4922,7 +4957,9 @@ NLM_EXTERN Int4 SeqLocLen (SeqLocPtr anp)   /* seqloc */
                         }
                     }
                 }
+                logsev = ErrSetLogLevel (SEV_MAX);
                 bsp = BioseqLockById(sip);
+                ErrSetLogLevel (logsev);
                 if (bsp != NULL)
                     locked = TRUE;
             }
@@ -5630,7 +5667,9 @@ NLM_EXTERN Int2 SeqLocCompareEx (SeqLocPtr a, SeqLocPtr b, Boolean compare_stran
                         && (!compare_strand || DoStrandsMatch (sip->strand, ((SeqPntPtr)b->data.ptrvalue)->strand)))
                     {
                         point = ((SeqPntPtr)b->data.ptrvalue)->point;
-                        if ((point >= sip->from) && (point <= sip->to))
+                        if ((point == sip->from) && (point == sip->to))
+                            retval = SLC_A_EQ_B;
+                        else if ((point >= sip->from) && (point <= sip->to))
                             retval = SLC_B_IN_A;
                     }
                     break;
@@ -6872,7 +6911,7 @@ static Int4 SeqLocCoverage (SeqLocPtr slp)
   Int4Ptr ivals;
   Int4    numivals = 0;
   SeqLocPtr tmp;
-  SeqIdPtr sip;
+  SeqIdPtr sip = NULL;
   SeqIdPtr PNTR id_list;
   Int4     coverage = 0, i = 0, from, to, j;
   Int4     i_from, i_to, j_from, j_to;
@@ -7171,7 +7210,6 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
     PackSeqPntPtr pspp;
     IntFuzzPtr ifp;
     Boolean miss_end;
-    BioseqContextPtr bcp;
     ValNodePtr vnp, vnp2;
     Boolean locked, found_molinfo;
     MolInfoPtr mip;
@@ -7368,11 +7406,9 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
                     if (bsp != NULL)
                         locked = TRUE;
                 }
-                if (bsp == NULL) break;
-                bcp = BioseqContextNew(bsp);
-                if (bcp != NULL) {
+                if (bsp != NULL) {
                     vnp = NULL;
-                    while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_molinfo, vnp, NULL)) != NULL)
+                    while ((vnp = GetNextDescriptorUnindexed(bsp, Seq_descr_molinfo, vnp)) != NULL)
                     {
                         found_molinfo = TRUE;
                         mip = (MolInfoPtr)(vnp->data.ptrvalue);
@@ -7403,7 +7439,7 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
                     }
                     if (! found_molinfo)
                     {
-                        while ((vnp = BioseqContextGetSeqDescr(bcp, Seq_descr_modif, vnp, NULL)) != NULL)
+                        while ((vnp = GetNextDescriptorUnindexed(bsp, Seq_descr_modif, vnp)) != NULL)
                         {
                             for (vnp2 = (ValNodePtr)(vnp->data.ptrvalue); vnp2 != NULL; vnp2 = vnp2->next)
                             {
@@ -7432,7 +7468,6 @@ NLM_EXTERN Uint2 SeqLocPartialCheckEx (SeqLocPtr head, Boolean farFetch)
                             }
                         }
                     }
-                    BioseqContextFree(bcp);
                 }
                 if (locked)
                     BioseqUnlock (bsp);
@@ -10591,6 +10626,16 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_TPA_PROT;
           } else  if ((StringICmp(temp,"JAA") >= 0) && (StringICmp(temp,"JZZ") <= 0)) { 
               retcode = ACCN_NCBI_TPA_PROT;
+          } else if ((StringICmp(temp,"KAA") >= 0) && (StringICmp(temp,"KZZ") <= 0)) { 
+              retcode = ACCN_NCBI_WGS_PROT;
+          } else if ((StringICmp(temp,"LAA") >= 0) && (StringICmp(temp,"LZZ") <= 0)) { 
+              retcode = ACCN_DDBJ_TPA_PROT;
+          } else if ((StringICmp(temp,"OAA") >= 0) && (StringICmp(temp,"OZZ") <= 0)) { 
+              retcode = ACCN_NCBI_WGS_PROT;
+          } else if ((StringICmp(temp,"PAA") >= 0) && (StringICmp(temp,"PZZ") <= 0)) { 
+              retcode = ACCN_NCBI_WGS_PROT;
+          } else if ((StringICmp(temp,"SAA") >= 0) && (StringICmp(temp,"SZZ") <= 0)) { 
+              retcode = ACCN_EMBL_PROT;
           } else {
               retcode = ACCN_IS_PROTEIN;
               retval = TRUE;
@@ -10691,7 +10736,16 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"FA") == 0) ||
                      (StringICmp(temp,"GG") == 0) ||
                      (StringICmp(temp,"GL") == 0) ||
-                     (StringICmp(temp,"JH") == 0)) {      /* NCBI segmented set header Bioseq */
+                     (StringICmp(temp,"JH") == 0) ||
+                     (StringICmp(temp,"KB") == 0) ||
+                     (StringICmp(temp,"KD") == 0) ||
+                     (StringICmp(temp,"KE") == 0) ||
+                     (StringICmp(temp,"KI") == 0) ||
+                     (StringICmp(temp,"KK") == 0) ||
+                     (StringICmp(temp,"KL") == 0) ||
+                     (StringICmp(temp,"KN") == 0) ||
+                     (StringICmp(temp,"KQ") == 0) ||
+                     (StringICmp(temp,"KV") == 0)) {      /* NCBI segmented set header Bioseq */
               retcode = ACCN_NCBI_SEGSET;
           } else if ((StringICmp(temp,"AS") == 0) ||
                      (StringICmp(temp,"HR") == 0) ||
@@ -10725,7 +10779,10 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"JJ") == 0) ||
                      (StringICmp(temp,"JM") == 0) ||
                      (StringICmp(temp,"JS") == 0) ||
-                     (StringICmp(temp,"JY") == 0) )  {     /* NCBI GSS */
+                     (StringICmp(temp,"JY") == 0) ||
+                     (StringICmp(temp,"KG") == 0) ||
+                     (StringICmp(temp,"KO") == 0) ||
+                     (StringICmp(temp,"KS") == 0) )  {     /* NCBI GSS */
               retcode = ACCN_NCBI_GSS;
           } else if ((StringICmp(temp,"AR") == 0) ||
                      (StringICmp(temp,"DZ") == 0) ||
@@ -10738,7 +10795,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"GZ") == 0) ||
                      (StringICmp(temp,"HJ") == 0) ||
                      (StringICmp(temp,"HK") == 0) ||
-                     (StringICmp(temp,"HL") == 0)) {      /* NCBI patent */
+                     (StringICmp(temp,"HL") == 0) ||
+                     (StringICmp(temp,"KH") == 0)) {      /* NCBI patent */
               retcode = ACCN_NCBI_PATENT;
           } else if((StringICmp(temp,"BC")==0)) {         /* NCBI long cDNA project : MGC */
               retcode = ACCN_NCBI_cDNA;
@@ -10769,9 +10827,24 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                     (StringICmp(temp,"JU") == 0) ||
                     (StringICmp(temp,"JV") == 0) ||
                     (StringICmp(temp,"JW") == 0) ||
-                    (StringICmp(temp,"JX") == 0)) {
+                    (StringICmp(temp,"JX") == 0) ||
+                    (StringICmp(temp,"KA") == 0) ||
+                    (StringICmp(temp,"KC") == 0) ||
+                    (StringICmp(temp,"KF") == 0) ||
+                    (StringICmp(temp,"KJ") == 0) ||
+                    (StringICmp(temp,"KM") == 0) ||
+                    (StringICmp(temp,"KP") == 0) ||
+                    (StringICmp(temp,"KR") == 0) ||
+                    (StringICmp(temp,"KT") == 0) ||
+                    (StringICmp(temp,"KU") == 0) ||
+                    (StringICmp(temp,"KX") == 0)) {
               retcode = ACCN_NCBI_TSA;
-          } else if((StringICmp(temp,"FX") == 0)) {
+          } else if((StringICmp(temp,"FX") == 0) ||
+                    (StringICmp(temp,"LA") == 0) ||
+                    (StringICmp(temp,"LE") == 0) ||
+                    (StringICmp(temp,"LH") == 0) ||
+                    (StringICmp(temp,"LI") == 0) ||
+                    (StringICmp(temp,"LJ") == 0)) {
               retcode = ACCN_DDBJ_TSA;
           } else if ((StringICmp(temp,"AJ") == 0) ||
                      (StringICmp(temp,"AM") == 0) ||
@@ -10784,7 +10857,17 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"HE") == 0) ||
                      (StringICmp(temp,"HF") == 0) ||
                      (StringICmp(temp,"HG") == 0) ||
-                     (StringICmp(temp,"HI") == 0)) {     /* EMBL direct submission */
+                     (StringICmp(temp,"HI") == 0) ||
+                     (StringICmp(temp,"LK") == 0) ||
+                     (StringICmp(temp,"LL") == 0) ||
+                     (StringICmp(temp,"LM") == 0) ||
+                     (StringICmp(temp,"LN") == 0) ||
+                     (StringICmp(temp,"LO") == 0) ||
+                     (StringICmp(temp,"LP") == 0) ||
+                     (StringICmp(temp,"LQ") == 0) ||
+                     (StringICmp(temp,"LR") == 0) ||
+                     (StringICmp(temp,"LS") == 0) ||
+                     (StringICmp(temp,"LT") == 0)) {     /* EMBL direct submission */
               retcode = ACCN_EMBL_DIRSUB;
           } else if ((StringICmp(temp,"AL") == 0) ||
                      (StringICmp(temp,"BX") == 0)||
@@ -10828,9 +10911,11 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"FS") == 0) ||
                      (StringICmp(temp,"FY") == 0) ||
                      (StringICmp(temp,"HX") == 0) ||
-                     (StringICmp(temp,"HY") == 0)) {      /* DDBJ EST's */
+                     (StringICmp(temp,"HY") == 0) ||
+                     (StringICmp(temp,"LU") == 0)) {      /* DDBJ EST's */
               retcode = ACCN_DDBJ_EST;
-          } else if ((StringICmp(temp,"AB") == 0)) {      /* DDBJ direct submission */
+          } else if ((StringICmp(temp,"AB") == 0) || 
+                     (StringICmp(temp,"LC") == 0)) {      /* DDBJ direct submission */
               retcode = ACCN_DDBJ_DIRSUB;
           } else if ((StringICmp(temp,"AG") == 0) || 
                      (StringICmp(temp,"AP") == 0) || 
@@ -10840,7 +10925,8 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
               retcode = ACCN_DDBJ_HTGS;
           } else if ((StringICmp(temp,"BA") == 0) || 
                      (StringICmp(temp,"DF") == 0) || 
-                     (StringICmp(temp,"DG") == 0)) {      /* DDBJ CON division */
+                     (StringICmp(temp,"DG") == 0) || 
+                     (StringICmp(temp,"LD") == 0)) {      /* DDBJ CON division */
               retcode = ACCN_DDBJ_CON;
           } else if ((StringICmp(temp,"BD") == 0) ||
                      (StringICmp(temp,"DD") == 0) || 
@@ -10854,12 +10940,17 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
                      (StringICmp(temp,"FZ") == 0) || 
                      (StringICmp(temp,"GB") == 0) || 
                      (StringICmp(temp,"HV") == 0) || 
-                     (StringICmp(temp,"HW") == 0)) {      /* DDBJ patent division */
+                     (StringICmp(temp,"HW") == 0) || 
+                     (StringICmp(temp,"HZ") == 0) || 
+                     (StringICmp(temp,"LF") == 0) || 
+                     (StringICmp(temp,"LG") == 0) || 
+                     (StringICmp(temp,"LV") == 0)) {      /* DDBJ patent division */
               retcode = ACCN_DDBJ_PATENT;
           } else if ((StringICmp(temp,"DE") == 0) ||
                      (StringICmp(temp,"DH") == 0) || 
                      (StringICmp(temp,"FT") == 0) || 
-                     (StringICmp(temp,"GA") == 0)) {      /* DDBJ GSS */
+                     (StringICmp(temp,"GA") == 0) ||
+                     (StringICmp(temp,"LB") == 0)) {      /* DDBJ GSS */
               retcode = ACCN_DDBJ_GSS;
           } else {
               retcode = ACCN_IS_NT;
@@ -10919,6 +11010,28 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
           s++;
       }
       break;
+    case 10: /* New 10-character accession, three letters +"_"+ 6 digits */
+      if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)))
+          break;
+      if(*(s+3)!='_')
+          break;
+      temp[0] = *s; s++;
+      temp[1] = *s; s++;
+      temp[2] = *s; s++;
+      temp[3] = NULLB; s++;
+      
+      if ((StringICmp(temp,"MAP") == 0)) { 
+          while (*s) {
+              if (! IS_DIGIT(*s)) {
+                  retval = FALSE;
+                  break;
+              }
+              s++;
+          }
+          retcode = ACCN_NCBI_OTHER;
+      } else
+          retval = FALSE;
+      break;
     case 11: /* New 11-character accession, two letters +"_"+ 8 digits */
       if(!IS_ALPHA(*s) || !IS_ALPHA(*(s+1)))
           break;
@@ -10957,9 +11070,37 @@ NLM_EXTERN Uint4 LIBCALL WHICH_db_accession (CharPtr s)
         } else if ((StringNICmp(temp,"C", 1) == 0)) {
           retcode = ACCN_EMBL_WGS;
         } else if ((StringNICmp(temp,"D", 1) == 0)) {
-          retcode = ACCN_NCBI_WGS;
+          retcode = ACCN_NCBI_WGS_TPA;
         } else if ((StringNICmp(temp,"E", 1) == 0)) {
-          retcode = ACCN_DDBJ_WGS;
+          retcode = ACCN_DDBJ_WGS_TPA;
+        } else if ((StringNICmp(temp,"F", 1) == 0)) {
+          retcode = ACCN_EMBL_WGS;
+        } else if ((StringNICmp(temp,"G", 1) == 0)) {
+          retcode = ACCN_NCBI_TSA;
+        } else if ((StringNICmp(temp,"H", 1) == 0)) {
+          retcode = ACCN_EMBL_TSA;
+        } else if ((StringNICmp(temp,"I", 1) == 0)) {
+          retcode = ACCN_DDBJ_TSA;
+        } else if ((StringNICmp(temp,"J", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"K", 1) == 0)) {
+          retcode = ACCN_NCBI_TARGETED;
+        } else if ((StringNICmp(temp,"L", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"M", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"N", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"O", 1) == 0)) {
+          retcode = ACCN_EMBL_WGS;
+        } else if ((StringNICmp(temp,"P", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"Q", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"R", 1) == 0)) {
+          retcode = ACCN_NCBI_WGS;
+        } else if ((StringNICmp(temp,"S", 1) == 0)) {
+          retcode = ACCN_NCBI_PATENT;
         } else
           retval = FALSE;
         while (*s) {
@@ -11222,6 +11363,31 @@ NLM_EXTERN Boolean IsSkippableDbtag (DbtagPtr dbt)
   } else {
     return FALSE;
   }
+}
+
+
+NLM_EXTERN Boolean DoesCDSEndWithStopCodon (SeqFeatPtr cds)
+{
+  ByteStorePtr bs;
+  CharPtr      prot_str;
+  Boolean      retval = FALSE;
+  
+  if (cds == NULL || cds->data.choice != SEQFEAT_CDREGION) {
+    return FALSE;
+  }
+  bs = ProteinFromCdRegionEx (cds, TRUE, FALSE);
+  if (bs == NULL) return FALSE;
+  prot_str = BSMerge (bs, NULL);
+  bs = BSFree (bs);
+  if (prot_str == NULL) return FALSE;
+
+  if (prot_str[StringLen (prot_str) - 1] == '*') {
+    retval = TRUE;
+  } else {
+    retval = FALSE;
+  }
+  prot_str = MemFree (prot_str);
+  return retval;
 }
 
 

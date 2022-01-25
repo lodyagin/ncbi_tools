@@ -1,4 +1,4 @@
-/* $Id: blast_message.c,v 1.26 2010/03/23 15:44:41 kazimird Exp $
+/* $Id: blast_message.c,v 1.31 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,16 +29,15 @@
  * the BLAST code as a wrapper for error and warning messages.
  */
 
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_message.c,v 1.26 2010/03/23 15:44:41 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
-
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/blast_message.h>
 
 /** Declared in blast_message.h as extern const. */
 const int kBlastMessageNoContext = -1;
+const char* kBlastErrMsg_CantCalculateUngappedKAParams
+    = "Could not calculate ungapped Karlin-Altschul parameters due "
+      "to an invalid query sequence or its translation. Please verify the "
+      "query sequence(s) and/or filtering options";
 
 /** Allocate a new SMessageOrigin structure
  * @param filename name of the file [in]
@@ -182,15 +181,21 @@ Blast_PerrorEx(Blast_Message* *msg,
         new_msg->context = context;
         break;
     case BLASTERR_NOVALIDKARLINALTSCHUL:
-        new_msg->message = strdup("Warning: Could not calculate ungapped Karlin-Altschul "
-                               "parameters due to an invalid query sequence or its translation. "
-                               "Please verify the query sequence(s) and/or filtering options");
-        new_msg->severity = eBlastSevError;
+        new_msg->message = strdup(kBlastErrMsg_CantCalculateUngappedKAParams);
+        /* this should be a warning when multiple queries are there and at
+         * least 1 is OK */
+        new_msg->severity = eBlastSevError; 
         new_msg->context = context;
         break;
 
     /* Fatal errors */
     case BLASTERR_MEMORY:
+        /** @todo Ideally this message would be more informative (the error code
+         * already conveys this information) so that this string can be
+         * displayed to the end user via the CATCH_ALL macro. If this string is
+         * ever changed, please update that macro accordingly (ideally this
+         * error code would be caught and would lead to a CBlastSystemException
+         * being thrown with the eOutOfMemory error code) */
         new_msg->message = strdup("Out of memory");
         new_msg->severity = eBlastSevFatal;
         new_msg->context = context;
@@ -207,6 +212,12 @@ Blast_PerrorEx(Blast_Message* *msg,
         new_msg->context = context;
         break;
 
+    case BLASTERR_SEQSRC:
+        new_msg->message = strdup("search cannot proceed due to errors "
+                                 "retrieving sequences from databases");
+        new_msg->severity = eBlastSevFatal;
+        new_msg->context = context;
+        break;
     /* No error, just free the structure */
     case 0:
         new_msg = Blast_MessageFree(new_msg);
@@ -224,7 +235,7 @@ Blast_PerrorEx(Blast_Message* *msg,
         break;
     }
 
-    if (file_name && lineno > 0) {
+    if (new_msg && file_name && lineno > 0) {
         new_msg->origin = SMessageOriginNew(file_name, 
                                            (unsigned int) lineno);
     }

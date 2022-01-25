@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/17/07
 *
-* $Revision: 1.25 $
+* $Revision: 1.28 $
 *
 * File Description: 
 *
@@ -57,7 +57,7 @@
 #include <valid.h>
 #include <suggslp.h>
 
-#define CSPEEDTEST_APP_VER "2.1"
+#define CSPEEDTEST_APP_VER "2.2"
 
 CharPtr CSPEEDTEST_APPLICATION = CSPEEDTEST_APP_VER;
 
@@ -513,6 +513,7 @@ static void LIBCALLBACK ValidCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr seqid,
   CharPtr featureID,
   CharPtr message,
   CharPtr objtype,

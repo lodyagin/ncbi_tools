@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICEP__H
 #define CONNECT___NCBI_SERVICEP__H
 
-/* $Id: ncbi_servicep.h,v 6.52 2011/11/18 13:54:31 kazimird Exp $
+/* $Id: ncbi_servicep.h,v 6.62 2015/10/21 15:04:17 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,12 +29,38 @@
  * Author:  Anton Lavrentiev, Denis Vakatov
  *
  * File Description:
- *   Private API to define server iterator structure.
+ *   Private API to define server iterator.
  *
  */
 
+#include "ncbi_comm.h"
 #include "ncbi_server_infop.h"
 #include <connect/ncbi_service.h>
+
+
+/* Order:
+   R>0 T>0    Up
+   R<0 T>0    Standby
+   R>0 T=0    Reserved
+   R>0 T=INF  Suppressed
+   R<0 T=INF  Standby+Suppressed
+   R<0 T=0    Reserved+Suppressed
+   R=0 T>0    Down
+   R=0 T=INF  Down+Suppressed
+   R=0 T=0    Off (unseen)
+*/
+
+
+/* SERV_IfSuppressed() can be applied to any of the SERV_Is*() macros below */
+#define SERV_IfSuppressed(i)  (  (i)->time == NCBI_TIME_INFINITE   ||  \
+                               (!(i)->time  &&      (i)->rate < 0.0))
+#define SERV_IsActive(i)      (  (i)->time  &&      (i)->rate > 0.0)
+#define SERV_IsStandby(i)     (  (i)->time  &&      (i)->rate < 0.0)
+#define SERV_IsReserved(i)    ( !(i)->time  &&      (i)->rate)
+#define SERV_IsDown(i)        (                    !(i)->rate)
+
+/* Thus, SERV_IsUp() can be defined as follows */
+#define SERV_IsUp(i)          (SERV_IsActive(i)  &&  !SERV_IfSuppressed(i))
 
 
 #ifdef __cplusplus
@@ -42,65 +68,65 @@ extern "C" {
 #endif
 
 
-#define xSERV_IsSuppressed(i) ((i)->time && (i)->time != NCBI_TIME_INFINITE \
-                               &&  (i)->rate < 0.0)
-#define xSERV_IsStandby(i)    ((i)->time && (i)->time != NCBI_TIME_INFINITE \
-                               &&  fabs((i)->rate) < 0.01)
-#define xSERV_IsDown(i)       ((i)->time && (i)->time != NCBI_TIME_INFINITE \
-                               &&  !(i)->rate)
-
-
 /* Table of iterator's "virtual functions"
  */
 typedef struct {
-    void        (*Reset)(SERV_ITER iter);
     SSERV_Info* (*GetNextInfo)(SERV_ITER iter, HOST_INFO* host_info);
-    int/*bool*/ (*Update)(SERV_ITER iter, const char* text, int code);
-    int/*bool*/ (*Feedback)(SERV_ITER iter, double value, int/*bool*/ fine);
-    void        (*Close)(SERV_ITER iter);
-    const char* name;
+    int/*bool*/ (*Feedback)   (SERV_ITER iter, double value, int/*bool*/ fine);
+    int/*bool*/ (*Update)     (SERV_ITER iter, const char* text, int code);
+    void        (*Reset)      (SERV_ITER iter);
+    void        (*Close)      (SERV_ITER iter);
+    const char* mapper;
 } SSERV_VTable;
 
 
-/* Iterator structure
+/* enough to hold all types, currently */
+typedef unsigned char TBSERV_TypeOnly;
+
+
+/* Iterator structure, fields "packed" to consume minimal space.
  */
 struct SSERV_IterTag {
     const char*         name; /* requested service name, private storage     */
-    TSERV_Type          type; /* requested server type(s), specials stripped */
+    double              pref; /* preference [0..100]%% as a decimal fraction */
+    TNCBI_Time          time; /* time of call                                */
     unsigned int        host; /* preferred host to select, network b.o.      */
     unsigned short      port; /* preferred port to select, host b.o.         */
-    double              pref; /* range [0..100] %%                           */
-    size_t            n_skip; /* actual number of servers in the array       */
-    size_t            a_skip; /* number of allocated slots in the array      */
-    SSERV_Info**        skip; /* servers to skip (w/names)                   */
-    const SSERV_Info*   last; /* last server info taken out                  */
-    const SSERV_VTable*   op; /* table of virtual functions                  */
-
-    void*               data; /* private opaque data field                   */
+    TBSERV_TypeOnly    types; /* requested server types only, packed         */
     unsigned        ismask:1; /* whether the name is to be treated as a mask */
-    unsigned       ok_down:1; /* as taken..                                  */
-    unsigned ok_suppressed:1; /*      ..from types..                         */
-    unsigned   reverse_dns:1; /*               ..as passed into..            */
-    unsigned     stateless:1; /*                            ..SERV_*() calls */
+    unsigned       ok_down:1; /* ..as taken..                                */
+    unsigned    ok_standby:1; /*         ..from..                            */
+    unsigned   ok_reserved:1; /*             ..types..                       */
+    unsigned ok_suppressed:1; /*                  ..passed..                 */
+    unsigned   reverse_dns:1; /*                        ..to..               */
+    unsigned     stateless:1; /*                          ..SERV_*() calls.. */
     unsigned      external:1; /* whether this is an external request         */
-    const char*          arg; /* argument to match; original pointer         */
-    size_t            arglen; /* == 0 for NULL pointer above                 */
-    const char*          val; /* value to match; original pointer            */
-    size_t            vallen; /* == 0 for NULL pointer above                 */
-    TNCBI_Time          time; /* the time of call                            */
+    unsigned int   localhost; /* local host address if known                 */
+    size_t            o_skip; /* original number of servers passed in "skip" */
+    size_t            n_skip; /* actual number of servers in the skip array  */
+    size_t            a_skip; /* number of allocated slots in the skip array */
+    SSERV_InfoCPtr*     skip; /* servers to skip (always w/names)            */
+    SSERV_InfoCPtr      last; /* last server info taken out, points into skip*/
+    const char*          arg; /* argument to match;  the original pointer!   */
+    const char*          val; /* value to match;     the original pointer!   */
+    size_t            arglen; /* NB: == 0 for the NULL "arg" pointer above   */
+    size_t            vallen; /* NB: == 0 for the NULL "val" pointer above   */
+    void*               data; /* private opaque data field of the mapper     */
+    const SSERV_VTable*   op; /* table of virtual functions                  */
 };
 
 
 /* Control whether to skip using registry/environment when opening iterators,
- * and doing fast track lookups.  Default is eOff.
+ * and doing fast track lookups.  Dangerous!  Default is eOff.
  */
 extern NCBI_XCONNECT_EXPORT ESwitch SERV_DoFastOpens(ESwitch on);
 
 
-/* Modified "fast track" routine for obtaining of a server info in one-shot.
+/* Modified "fast track" routine for obtaining a server info in one-shot.
  * Please see <connect/ncbi_service.h> for explanations [SERV_GetInfoEx()].
  *
- * CAUTION: unlike 'service' parameter, 'arg' and 'val' are not copied from,
+ * CAUTION: Unlike the 'service' parameter, for performance reasons 'arg'
+ *          and 'val' are not copied into the internal iterator structure
  *          but the original pointers to them get stored -- take this into
  *          account while dealing with dynamically allocated strings in the
  *          slow iterative version of the call below -- the pointers must
@@ -108,15 +134,16 @@ extern NCBI_XCONNECT_EXPORT ESwitch SERV_DoFastOpens(ESwitch on);
  *          SERV_Close() gets called).
  *
  * NOTE: Preference 0.0 does not prohibit the preferred_host to be selected;
- *       nor preference 100.0 ultimately opts for the preferred_host; rather,
+ *       nor preference 100.0 ultimately opts for the preferred_host;  rather,
  *       the preference is considered as an estimate for the selection
  *       probability when all other conditions for favoring the host are
  *       optimal, i.e. preference 0.0 actually means not to favor the preferred
  *       host at all, while 100.0 means to opt for that as much as possible.
- * NOTE: Preference < 0 is a special value that means to latch the preferred
+ *
+ * NOTE: Preference < 0.0 is a special value that means to latch the preferred
  *       host[:port] if the service exists out there, regardless of the load
  *       (but taking into account the server disposition [working/non-working]
- *       only -- servers, which are down, don't get returned).
+ *       only: servers, which are down, don't get returned unless requested).
  */
 extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
 (const char*          service,       /* service name (may not be a mask here)*/
@@ -124,8 +151,8 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
  unsigned int         preferred_host,/* preferred host to use service on, nbo*/
  unsigned short       preferred_port,/* preferred port to use service on, hbo*/
  double               preference,    /* [0,100] preference in %, or -1(latch)*/
- const SConnNetInfo*  net_info,      /* for connection to dispatcher, m.b. 0 */
- const SSERV_InfoCPtr skip[],        /* array of servers NOT to select       */
+ const SConnNetInfo*  net_info,      /* for network dispatcher (0 to disable)*/
+ SSERV_InfoCPtr       skip[],        /* array of servers NOT to select       */
  size_t               n_skip,        /* number of servers in preceding array */
  int/*bool*/          external,      /* whether mapping is not local to NCBI */
  const char*          arg,           /* environment variable name to search  */
@@ -133,10 +160,12 @@ extern NCBI_XCONNECT_EXPORT SSERV_Info* SERV_GetInfoP
  HOST_INFO*           hinfo          /* host information to return on match  */
  );
 
-/* same as the above but creates an iterator to get the servers one by one 
+
+/* Same as the above but creates an iterator to get the servers one by one.
  * CAUTION:  Special requirement for "skip" infos in case of a wildcard
  * service is that they _must_ be created having a name (perhaps, empty "")
- * attached, like if done by SERV_ReadInfoEx() or SERV_CopyInfoEx() */
+ * attached, like if done by SERV_ReadInfoEx() or SERV_CopyInfoEx().
+ */
 extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
 (const char*          service,       /* service name (here: can be a mask!)  */
  TSERV_Type           types,
@@ -144,7 +173,7 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
  unsigned short       preferred_port,
  double               preference,
  const SConnNetInfo*  net_info,
- const SSERV_InfoCPtr skip[],
+ SSERV_InfoCPtr       skip[],        /* must be "named" if service is a mask!*/
  size_t               n_skip,
  int/*bool*/          external,
  const char*          arg,
@@ -152,32 +181,32 @@ extern NCBI_XCONNECT_EXPORT SERV_ITER SERV_OpenP
  );
 
 
-/* Return service name, which the iterator is currently working on.
+/* Return the service name, which the iterator is currently at.
  */
 extern NCBI_XCONNECT_EXPORT const char* SERV_CurrentName(SERV_ITER iter);
 
 
-/* Update mapper information from the given text (<CR><LF> separated lines,
- * usually as taken from HTTP header), and by optionally (if non-zero)
- * using the HTTP error code provided.
+/* Private interface:  update mapper information from the given text
+ * (<CR><LF> separated lines, usually as taken from HTTP header), and
+ * by optionally (if non-zero) using the HTTP error code provided.
  */
-extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_Update
+int/*bool*/ SERV_Update
 (SERV_ITER   iter,
  const char* text,
  int         code
  );
 
 
-/* Private interface: print and return the HTTP-compliant header portion
- * (<CR><LF> separated lines, including the last line) out of the information
+/* Private interface:  print and return an HTTP-compliant header portion
+ * (<CR><LF> separated lines, including the last line) out of information
  * contained in the iterator;  to be used in mapping requests to DISPD.
  * Also, if "net_info" is non-NULL and "net_info->http_referer" is NULL,
  * then fill out "net_info->http_referer" accordingly.  "but_last" controls
- * whether the currently taken info appears as the info to skip over
- * (by the dispatcher) ["but_last"==0], or as just being used
- * ["but_last"==1].  Return value must be 'free'd.
+ * whether the currently taken info appears as the info to skip over (by the
+ * dispatcher) ["but_last"==0], or is just being used ["but_last"==1].
+ * Return value must be 'free()'d.
  */
-extern NCBI_XCONNECT_EXPORT char* SERV_Print
+char* SERV_Print
 (SERV_ITER     iter,
  SConnNetInfo* net_info,
  int/*bool*/   but_last
@@ -187,44 +216,45 @@ extern NCBI_XCONNECT_EXPORT char* SERV_Print
 /* Same as SERV_Penalize() but can specify penalty hold time.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_PenalizeEx
-(SERV_ITER            iter,          /* handle obtained via 'SERV_Open*' call*/
- double               fine,          /* fine from range [0=min..100=max] (%%)*/
- TNCBI_Time           time           /* for how long to keep the penalty, sec*/
+(SERV_ITER  iter,                    /* handle obtained via 'SERV_Open*' call*/
+ double     fine,                    /* fine from range [0=min..100=max] (%%)*/
+ TNCBI_Time time                     /* for how long to keep the penalty, sec*/
  );
 
 
-/* Get name of underlying service mapper.
+/* Get a name of the underlying service mapper.
  */
 extern NCBI_XCONNECT_EXPORT const char* SERV_MapperName(SERV_ITER iter);
 
 
-/* Get final service name, using CONN_SERVICE_NAME_service environment
- * variable, then (if not found) registry section [service] and a key
- * CONN_SERVICE_NAME. Return resulting name (perhaps, an exact copy of
- * "service" if no override name was found in environment/registry), which
- * is to be freed by a caller when no longer needed. Return NULL on error.
- * NOTE: This procedure does not detect cyclical redefinitions.
+/* Get the final service name, using service_CONN_SERVICE_NAME environment
+ * variable(s), then (if not found) registry section [service] and a key
+ * CONN_SERVICE_NAME.  Return the resultant name (perhaps, an exact copy of
+ * "service" if no override name has been found in the environment/registry),
+ * which is to be 'free()'d by the caller when no longer needed.
+ * Return NULL on error.
+ * NOTE:  This procedure can detect simple cyclic redefinitions, and is limited
+ * to a search depth of 8.
  */
-extern NCBI_XCONNECT_EXPORT char* SERV_ServiceName(const char* service);
+char* SERV_ServiceName(const char* service);
 
 
-/* Given the status gap and wanted preference, calculate
- * acceptable stretch for the gap (the number of candidates is n).
- */
-extern NCBI_XCONNECT_EXPORT double SERV_Preference
-(double pref,
- double gap,
- size_t n
- );
+void SERV_InitFirewallPorts(void);
 
 
-extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_AddFirewallPort
+int/*bool*/ SERV_AddFirewallPort
 (unsigned short port
 );
 
 
-extern NCBI_XCONNECT_EXPORT int/*bool*/ SERV_IsFirewallPort
+int/*bool*/ SERV_IsFirewallPort
 (unsigned short port
+);
+
+void SERV_PrintFirewallPorts
+(char*   buf,
+ size_t  bufsize,
+ EFWMode mode
 );
 
 

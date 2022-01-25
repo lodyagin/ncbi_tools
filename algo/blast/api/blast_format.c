@@ -1,4 +1,4 @@
-/* $Id: blast_format.c,v 1.119 2011/05/26 20:59:45 camacho Exp $
+/* $Id: blast_format.c,v 1.120 2012/10/10 14:07:01 fongah2 Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -32,7 +32,7 @@
  */
 
 #ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = "$Id: blast_format.c,v 1.119 2011/05/26 20:59:45 camacho Exp $";
+static char const rcsid[] = "$Id: blast_format.c,v 1.120 2012/10/10 14:07:01 fongah2 Exp $";
 #endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/api/blast_format.h>
@@ -750,6 +750,7 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
    BlastFormattingOptions* format_options;
    EAlignView align_view;
    Boolean ungapped;
+   Boolean ooframe;
 
    ASSERT(format_info && format_info->format_options && 
           format_info->search_options && query_slp);
@@ -758,6 +759,7 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
    align_view = format_options->align_view;
    ungapped = 
        !format_info->search_options->score_options->gapped_calculation;
+   ooframe = format_info->search_options->score_options->is_ooframe;
 
    if (align_view == eAlignViewXml) {
        const Int4 kXmlFlag = 0; /* Change to BXML_INCLUDE_QUERY if inclusion
@@ -888,10 +890,10 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
                                      format_info->program_name,
                                      0, format_options->believe_query, outfp);
          
-         BlastPrintTabulatedResults(seqalign, bsp, NULL, 
+         BlastPrintTabularResults(seqalign, bsp, NULL, 
             format_options->number_of_alignments, format_info->program_name, 
-            ungapped, format_options->believe_query, 0, 0, 
-            outfp, (Boolean)(align_view == eAlignViewTabularWithComments));
+            ungapped, ooframe, format_options->believe_query, 0, 0, 
+            outfp, NULL, (Boolean)(align_view == eAlignViewTabularWithComments));
       } else if(align_view == eAlignViewXml) {
          Iteration* iterp;
          
@@ -900,7 +902,7 @@ Int2 BLAST_FormatResults(SBlastSeqalignArray* seqalign_arr, Int4 num_queries,
             current formatting round, plus the number of previously formatted
             queries. */
          iterp = 
-             s_XMLBuildOneQueryIteration(seqalign, sum_returns, FALSE, 
+             s_XMLBuildOneQueryIteration(seqalign, sum_returns, ooframe, 
                                          ungapped, 
                                          query_index+1+format_info->num_formatted,
                                          NULL, bsp, mask_loc);

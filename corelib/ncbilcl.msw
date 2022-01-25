@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:
 *               system dependent header
@@ -39,6 +39,12 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbilcl.msw,v $
+* Revision 6.7  2016/07/25 14:53:47  ivanov
+* Added ssize_t definition for MSVC.
+* Committed on the Free edition of March Hare Software CVSNT Client.
+* Upgrade to CVS Suite for more features and support:
+* http://march-hare.com/cvsnt/
+*
 * Revision 6.6  2006/09/08 16:12:45  coulouri
 * add x64 support
 *
@@ -269,6 +275,15 @@ typedef unsigned short USHORT;
 typedef unsigned char  UCHAR;
 
 #endif /* COMP_BOR */
+
+#ifdef COMP_MSC
+    #ifdef _WIN64
+        typedef __int64 ssize_t;
+    #else
+        typedef   int   ssize_t;
+    #endif
+#endif /* COMP_MSC */
+
 
 #define HAVE_STRDUP 1
 

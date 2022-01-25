@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.188 $
+* $Revision: 6.197 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -1754,11 +1754,15 @@ byte */
 
         if (spp->smtp == NULL)   /* no conversion, check now */
         {
-            index = (Int2)residue - (Int2)(spp->sctp->start_at);
-            if ((index < 0) || (index >= (Int2)(spp->sctp->num)))
+            if (spp->sctp != NULL)  {
+                index = (Int2)residue - (Int2)(spp->sctp->start_at);
+                if ((index < 0) || (index >= (Int2)(spp->sctp->num)))
+                    residue = INVALID_RESIDUE;
+                else if (*(spp->sctp->names[index]) == '\0')
+                    residue = INVALID_RESIDUE;
+            } else {
                 residue = INVALID_RESIDUE;
-            else if (*(spp->sctp->names[index]) == '\0')
-                residue = INVALID_RESIDUE;
+            }
         }
     }
     else if (spp->isa_virtual)  /* virtual */
@@ -2050,16 +2054,19 @@ static Int4 SeqPortStreamGap (
   Boolean is_na,
   Boolean is_virt,
   Boolean is_known,
+  Boolean is_seq_gap,
   StreamDataPtr sdp
 )
 
 {
   Char     buf [4004];
   Char     ch, gapchar = '-';
-  Boolean  expand_gaps, many_dashes, many_pluses, single_dash;
+  Boolean  expand_gaps, many_dashes, many_pluses, many_tildes, single_dash;
   Int4     len;
 
   if (sdp == NULL) return 0;
+
+  many_tildes = (Boolean) ((sdp->flags & SEQ_GAP_AS_TILDE) != 0);
 
   many_pluses = FALSE;
   if (is_virt) {
@@ -2067,6 +2074,10 @@ static Int4 SeqPortStreamGap (
     if ((sdp->flags & STREAM_VIRT_AS_PLUS) != 0) {
       many_pluses = TRUE;
       gapchar = '+';
+    }
+  } else if (is_seq_gap) {
+    if (many_tildes) {
+      gapchar = '~';
     }
   } else if (is_known) {
     if ((sdp->flags & KNOWN_GAP_AS_PLUS) != 0) {
@@ -2079,9 +2090,9 @@ static Int4 SeqPortStreamGap (
   single_dash = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == GAP_TO_SINGLE_DASH);
   many_dashes = (Boolean) ((sdp->flags & STREAM_GAP_MASK) == EXPAND_GAPS_TO_DASHES);
 
-  /* if both gap flags are false, ignore gap */
+  /* if all gap flags are false, ignore gap */
 
-  if ((! expand_gaps) && (! single_dash) && (! many_dashes)) return 0;
+  if ((! expand_gaps) && (! single_dash) && (! many_dashes) && (! many_tildes)) return 0;
 
   if (single_dash) {
 
@@ -2099,7 +2110,7 @@ static Int4 SeqPortStreamGap (
 
   if (length < 1) return 0;
 
-  if (many_dashes || many_pluses) {
+  if (many_dashes || many_pluses || many_tildes) {
     ch = gapchar;
   } else if (is_na) {
     ch = 'N';
@@ -2320,7 +2331,7 @@ static Int4 SeqPortStreamRaw (
 
     /* support for new Seq-data.gap */
 
-    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, FALSE, sdp);
+    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, FALSE, TRUE, sdp);
 
     return count;
   }
@@ -2406,15 +2417,28 @@ static Int4 SeqPortStreamSeqLit (
 
   if (slitp->length < 1) return 0;
 
-  if (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap) {
+  if (slitp->seq_data == NULL) {
 
-    /* literal without sequence data is a virtual gap, also handle new gap type */
+    /* literal without sequence data is a virtual gap */
 
     if (slitp->fuzz != NULL) {
       is_known = FALSE;
     }
 
-    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, is_known, sdp);
+    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, is_known, FALSE, sdp);
+
+    return count;
+  }
+
+  if (slitp->seq_data_type == Seq_code_gap) {
+
+    /* also handle new gap type */
+
+    if (slitp->fuzz != NULL) {
+      is_known = FALSE;
+    }
+
+    count += SeqPortStreamGap (stop - start + 1, is_na, FALSE, is_known, TRUE, sdp);
 
     return count;
   }
@@ -2556,7 +2580,8 @@ static Int4 SeqPortStreamSeqLoc (
     SeqIdWrite (sip, buf, PRINTID_FASTA_SHORT, sizeof (buf) - 1);
     if (parentID != NULL) {
       SeqIdWrite (parentID, pid, PRINTID_FASTA_LONG, sizeof (pid) - 1);
-      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream failed to load Bioseq %s component of %s", buf, pid);
+      ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream failed to load Bioseq %s component of %s, size = %d",
+                 buf, pid, sizeof( sip->data.intvalue));
     } else {
       ErrPostEx (SEV_ERROR, 0, 0, "SeqPortStream failed to load Bioseq %s", buf);
     }
@@ -2764,7 +2789,7 @@ static Int4 SeqPortStreamDelta (
 
   /* process components in correct order */
 
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+  for (vnp = head; vnp != NULL && (! sdp->failed); vnp = vnp->next) {
 
     sop = (StreamObjPtr) vnp->data.ptrvalue;
     if (sop == NULL) continue;
@@ -2882,7 +2907,7 @@ static Int4 SeqPortStreamSeg (
 
   /* process components in correct order */
 
-  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+  for (vnp = head; vnp != NULL && (! sdp->failed); vnp = vnp->next) {
 
     sop = (StreamObjPtr) vnp->data.ptrvalue;
     if (sop == NULL) continue;
@@ -2900,6 +2925,82 @@ static Int4 SeqPortStreamSeg (
   return count;
 }
 
+static Int4 SeqPortStreamRef (
+  BioseqPtr bsp,
+  Int4 start,
+  Int4 stop,
+  Uint1 strand,
+  StreamDataPtr sdp
+)
+
+{
+  Int4       count = 0, from, to, len;
+  Boolean    is_na;
+  Boolean    revcomp = FALSE;
+  SeqLocPtr  slp;
+
+  if (bsp == NULL || sdp == NULL) return 0;
+
+  is_na = (Boolean) ISA_na (bsp->mol);
+
+  if (strand == Seq_strand_minus && is_na) {
+    revcomp = TRUE;
+  }
+
+  /* build linked list in forward or reverse order, depending upon input strand */
+
+  slp = (SeqLocPtr) bsp->seq_ext;
+
+  if (slp == NULL || slp->choice == SEQLOC_NULL) return 0;
+
+  len = 0;
+
+  from = SeqLocStart (slp);
+  to = SeqLocStop (slp);
+  strand = SeqLocStrand (slp);
+
+  if (from < 0 || to < 0) return 0;
+
+  len = to - from + 1;
+
+  if (len <= start) return 0;
+
+  /* adjust from and to if not using entire interval */
+
+  if (strand == Seq_strand_minus) {
+
+    if (start > 0) {
+      to -= start;
+    }
+
+    if (stop < len) {
+      from += len - stop - 1;
+    }
+
+  } else {
+
+    if (start > 0) {
+      from += start;
+    }
+
+    if (stop < len) {
+      to -= len - stop - 1;
+    }
+  }
+
+  if (revcomp) {
+    if (strand == Seq_strand_minus) {
+      strand = Seq_strand_plus;
+    } else {
+      strand = Seq_strand_minus;
+    }
+  }
+
+  count += SeqPortStreamSeqLoc (slp, from, to, strand, sdp, bsp->id);
+
+  return count;
+}
+
 /* SeqPortStreamWork calls appropriate representation-specific function */
 
 static Int4 SeqPortStreamWork (
@@ -2912,7 +3013,7 @@ static Int4 SeqPortStreamWork (
 
 {
   Int4  count = 0;
-
+ 
   if (bsp == NULL || sdp == NULL) return 0;
 
   /* start and stop position reality checks */
@@ -2948,7 +3049,7 @@ static Int4 SeqPortStreamWork (
   switch (bsp->repr) {
 
     case Seq_repr_virtual :
-      count += SeqPortStreamGap (stop - start + 1, ISA_na (bsp->mol), TRUE, FALSE, sdp);
+      count += SeqPortStreamGap (stop - start + 1, ISA_na (bsp->mol), TRUE, FALSE, FALSE, sdp);
       break;
 
     case Seq_repr_raw :
@@ -2965,6 +3066,12 @@ static Int4 SeqPortStreamWork (
     case Seq_repr_delta :
       if (bsp->seq_ext_type == 4) {
         count += SeqPortStreamDelta (bsp, start, stop, strand, sdp);
+      }
+      break;
+
+    case Seq_repr_ref :
+      if (bsp->seq_ext_type == 2) {
+        count += SeqPortStreamRef (bsp, start, stop, strand, sdp);
       }
       break;
 
@@ -6127,7 +6234,8 @@ NLM_EXTERN CharPtr ReadCodingRegionBases (SeqLocPtr location, Int4 len, Uint1 fr
   */
 
   bases = MemNew ((size_t) (len + 6));
-  if (bases == NULL) return NULL;
+  if (bases == NULL) 
+      return NULL;
 
   rcd.tmp = bases;
   rcd.max = len;
@@ -8339,66 +8447,25 @@ extern void TestProtSearch (void)
 *
 *****************************************************************************/
 
-NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
+NLM_EXTERN CharPtr GetSequenceByFeatureEx (SeqFeatPtr sfp, StreamFlgType flags)
 
 {
-  Int4        len;
-  CharPtr     str = NULL;
-  /*
-  Int2        actual, cnt;
-  BioseqPtr   bsp;
-  SeqPortPtr  spp;
-  CharPtr     str = NULL, txt;
-  */
+  Int4     len;
+  CharPtr  str = NULL;
 
   if (sfp == NULL) return NULL;
   len = SeqLocLen (sfp->location);
   if (len > 0 && len < MAXALLOC) {
     str = MemNew (sizeof (Char) * (len + 2));
     if (str != NULL) {
-      SeqPortStreamLoc (sfp->location, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
-    
-#if 0
-      spp = SeqPortNewByLoc (sfp->location, Seq_code_iupacna);
-      if (spp != NULL) {
-
-        bsp = BioseqFindFromSeqLoc (sfp->location);
-        if (bsp != NULL) {
-          if (bsp->repr == Seq_repr_delta || bsp->repr == Seq_repr_virtual) {
-            SeqPortSet_do_virtual (spp, TRUE);
-          }
-        }
-
-        cnt = (Int2) MIN (len, 32000L);
-        txt = str;
-        actual = 1;
-
-        while (cnt > 0 && len > 0 && actual > 0) {
-          actual = SeqPortRead (spp, (BytePtr) txt, cnt);
-          if (actual < 0) {
-            actual = -actual;
-            if (actual == SEQPORT_VIRT || actual == SEQPORT_EOS) {
-              actual = 1; /* ignore, keep going */
-            } else if (actual == SEQPORT_EOF) {
-              actual = 0; /* stop */
-            }
-          } else if (actual > 0) {
-            len -= actual;
-            txt += actual;
-            cnt = (Int2) MIN (len, 32000L);
-          }
-        }
-
-        SeqPortFree (spp);
-      }
-#endif
+      SeqPortStreamLoc (sfp->location, flags, (Pointer) str, NULL);
     }
   }
     
   return str;
 }
 
-NLM_EXTERN CharPtr GetSequenceByLocation (SeqLocPtr slp)
+NLM_EXTERN CharPtr GetSequenceByLocationEx (SeqLocPtr slp, StreamFlgType flags)
 
 {
   Int4     len;
@@ -8409,14 +8476,14 @@ NLM_EXTERN CharPtr GetSequenceByLocation (SeqLocPtr slp)
   if (len > 0 && len < MAXALLOC) {
     str = MemNew (sizeof (Char) * (len + 2));
     if (str != NULL) {
-      SeqPortStreamLoc (slp, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+      SeqPortStreamLoc (slp, flags, (Pointer) str, NULL);
     }
   }
     
   return str;
 }
 
-NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
+NLM_EXTERN CharPtr GetSequenceByBspEx (BioseqPtr bsp, StreamFlgType flags)
 
 {
   CharPtr  str = NULL;
@@ -8426,12 +8493,12 @@ NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
   str = MemNew (sizeof (Char) * (bsp->length + 2));
   if (str == NULL) return NULL;
 
-  SeqPortStream (bsp, STREAM_EXPAND_GAPS, (Pointer) str, NULL);
+  SeqPortStream (bsp, flags, (Pointer) str, NULL);
 
   return str;
 }
 
-NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession, Boolean is_na)
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVerEx (SeqIdPtr sip, CharPtr accession, Boolean is_na, StreamFlgType flags)
 
 {
   BioseqPtr  bsp;
@@ -8451,12 +8518,36 @@ NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession,
 
   if ((ISA_na (bsp->mol) && is_na) || (ISA_aa (bsp->mol) && (! is_na))) {
     if (bsp->length < MAXALLOC) {
-      str = GetSequenceByBsp (bsp);
+      str = GetSequenceByBspEx (bsp, flags);
     }
   }
 
   BioseqUnlock (bsp);
   return str;
+}
+
+NLM_EXTERN CharPtr GetSequenceByFeature (SeqFeatPtr sfp)
+
+{
+  return GetSequenceByFeatureEx (sfp, STREAM_EXPAND_GAPS);
+}
+
+NLM_EXTERN CharPtr GetSequenceByLocation (SeqLocPtr slp)
+
+{
+  return GetSequenceByLocationEx (slp, STREAM_EXPAND_GAPS);
+}
+
+NLM_EXTERN CharPtr GetSequenceByBsp (BioseqPtr bsp)
+
+{
+  return GetSequenceByBspEx (bsp, STREAM_EXPAND_GAPS);
+}
+
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVer (SeqIdPtr sip, CharPtr accession, Boolean is_na)
+
+{
+  return GetSequenceByIdOrAccnDotVerEx (sip, accession, is_na, STREAM_EXPAND_GAPS);
 }
 
 /* original convenience function now calls more advanced version that can get proteins */

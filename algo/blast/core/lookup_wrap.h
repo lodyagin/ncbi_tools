@@ -1,4 +1,4 @@
-/* $Id: lookup_wrap.h,v 1.20 2012/02/29 17:44:32 kazimird Exp $
+/* $Id: lookup_wrap.h,v 1.22 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -40,6 +40,8 @@
 #include <algo/blast/core/blast_rps.h>
 #include <algo/blast/core/blast_stat.h>
 
+#include <algo/blast/core/blast_seqsrc.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -52,6 +54,10 @@ typedef struct LookupTableWrap {
                               from an indexed database */
    void* check_index_oid; /**< function used to check if seeds
                                for a given oid are present */
+   void * end_search_indication; /**< function used to report that
+                                      a thread is done iterating over
+                                      the database in preliminary
+                                      search */
    void* lookup_callback;    /**< function used to look up an
                                   index->q_off pair */
 } LookupTableWrap;
@@ -69,6 +75,7 @@ typedef Boolean (*T_Lookup_Callback)(const LookupTableWrap *, Int4, Int4);
  * @param lookup_wrap_ptr The initialized lookup table [out]
  * @param rps_info Structure containing RPS blast setup information [in]
  * @param error_msg message with warning or errors [in|out]
+ * @param seqsrc Database sequences [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 LookupTableWrapInit(BLAST_SequenceBlk* query, 
@@ -76,7 +83,8 @@ Int2 LookupTableWrapInit(BLAST_SequenceBlk* query,
         const QuerySetUpOptions* query_options,
         BlastSeqLoc* lookup_segments, BlastScoreBlk* sbp, 
         LookupTableWrap** lookup_wrap_ptr, const BlastRPSInfo *rps_info,
-        Blast_Message* *error_msg);
+        Blast_Message* *error_msg,
+        BlastSeqSrc* seqsrc);
 
 /** Deallocate memory for the lookup table */
 NCBI_XBLAST_EXPORT

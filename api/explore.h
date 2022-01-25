@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 6/30/98
 *
-* $Revision: 6.58 $
+* $Revision: 6.59 $
 *
 * File Description:  Reengineered and optimized exploration functions
 *                      to be used for future code
@@ -121,6 +121,7 @@ typedef struct seqmgrfeatcontext {
   Int4          dnaStop;
   Boolean       partialL;
   Boolean       partialR;
+  Boolean       external;
   Boolean       farloc;
   Boolean       bad_order;
   Boolean       mixed_strand;

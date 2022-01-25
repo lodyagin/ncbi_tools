@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.24 $
+* $Revision: 1.30 $
 *
 * File Description: 
 *
@@ -145,7 +145,8 @@ typedef enum {
   eReturnedOrgFlag_misspelled =  0x008,
   eReturnedOrgFlag_ambiguous =   0x010,
   eReturnedOrgFlag_unpublished = 0x020,
-  eReturnedOrgFlag_error =       0x040
+  eReturnedOrgFlag_common_name  = 0x040,
+  eReturnedOrgFlag_error =       0x080,
 } EReturnedOrgFlag;
 
 typedef enum {
@@ -188,18 +189,29 @@ typedef struct taxfixitem {
   CharPtr taxname;
   CharPtr suggested_fix;
   CharPtr rank;
-  Boolean is_uncultured;
+  Boolean is_ambiguous;
+  Boolean is_species_specific;
+  Boolean remove_species_specific;
+  Boolean truncate_binomial;
 } TaxFixItemData, PNTR TaxFixItemPtr;
 
 NLM_EXTERN TaxFixItemPtr TaxFixItemNew (void);
-NLM_EXTERN TaxFixItemPtr TaxFixItemCopy (TaxFixItemPtr orig);
 NLM_EXTERN TaxFixItemPtr TaxFixItemFree (TaxFixItemPtr t);
 NLM_EXTERN ValNodePtr LIBCALLBACK TaxFixItemListFree (ValNodePtr vnp);
+NLM_EXTERN Boolean OkToTaxFix(CharPtr orgname);
 NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list);
+NLM_EXTERN void RemoveSpeciesSpecific (BioSourcePtr biop);
 
 NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep);
 
-NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number);
+NLM_EXTERN SeqDescrPtr SeqDescrFromBioSample (CharPtr number);
+
+/* Compare Functions */
+NLM_EXTERN int LIBCALL ObjectIdCompare (ObjectIdPtr a, ObjectIdPtr b);
+NLM_EXTERN int LIBCALL DbtagCompare (DbtagPtr a, DbtagPtr b);
+NLM_EXTERN int LIBCALL OrgModSetCompare (OrgModPtr mod1, OrgModPtr mod2);
+NLM_EXTERN int LIBCALL OrgNameCompare (OrgNamePtr onp1, OrgNamePtr onp2);
+NLM_EXTERN int LIBCALL OrgRefCompare (OrgRefPtr orp1, OrgRefPtr orp2);
 
 #ifdef __cplusplus
 }

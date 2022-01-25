@@ -1,4 +1,4 @@
-/* $Id: ncbi_http_connector.c,v 6.140 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_http_connector.c,v 6.194 2016/06/27 16:39:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,42 +50,49 @@
  ***********************************************************************/
 
 
-/* "READ" mode states, see table below
+/* Connection states, see table below
  */
-enum EReadState {
-    eRS_WriteRequest = 0,
-    eRS_ReadHeader   = 1,
-    eRS_ReadBody     = 2,
-    eRS_DoneBody     = 3  /* NB: |eRS_ReadBody */
+enum EConnState {
+    eCS_WriteRequest =   0,
+    eCS_FlushRequest =   1,
+    eCS_ReadHeader   =   2,
+    eCS_ReadBody     =   4,
+    eCS_DoneBody     =   5,  /* NB: |eCS_ReadBody */
+    eCS_Discard      =   7,  /* NB: |eCS_DoneBody */
+    eCS_Eom          = 0xF   /* NB: |eCS_Discard  */
 };
-typedef unsigned       EBReadState;  /* packed EReadState */
+typedef unsigned       EBConnState;   /* packed EConnState */
 
 
 /* Whether the connector is allowed to connect
+ * NB:  In order to be able to connect, fCC_Once must be set.
  */
 enum ECanConnect {
-    eCC_None,
-    eCC_Once,
-    eCC_Unlimited
+    fCC_None,      /* 0   */
+    fCC_Once,      /*   1 */
+    fCC_Unlimited  /* 0|2 */
 };
 typedef unsigned       EBCanConnect;  /* packed ECanConnect */
 
 typedef unsigned short TBHTTP_Flags;  /* packed THTTP_Flags */
 
+typedef unsigned       EBSwitch;      /* packed ESwitch     */
 
 typedef enum {
-    eEM_Drop,
-    eEM_Wait,
-    eEM_Read,
-    eEM_Flush
+    eEM_Drop,  /*   0 */
+    eEM_Wait,  /* 1   */
+    eEM_Read,  /*   2 */
+    eEM_Flush  /* 1|2 */
 } EExtractMode;
 
 
 typedef enum {
-    eRetry_None,
-    eRetry_Redirect,
-    eRetry_Authenticate,
-    eRetry_ProxyAuthenticate
+    eRetry_None              = 0,  /* 0   */
+    eRetry_Unused            = 1,  /* yet */
+    eRetry_Redirect          = 2,  /* 2   */
+    eRetry_Redirect303       = 3,  /* 2|1 */
+    eRetry_Authenticate      = 4,  /* 4   */
+    eRetry_ProxyAuthenticate = 5   /* 4|1 */
 } ERetry;
 
 typedef struct {
@@ -94,17 +101,21 @@ typedef struct {
 } SRetry;
 
 
-/* All internal data necessary to perform the (re)connect and I/O
+/* All internal data necessary to perform the (re)connect and I/O:
  *
- * The following states are defined:
- *  "sock"  | "read_state" | State description
- * ---------+--------------+--------------------------------------------------
- *   NULL   |  <whatever>  | User "WRITE" mode: accumulate data in buffer
- * non-NULL | WriteRequest | HTTP request body is being written ("READ" mode)
- * non-NULL |  ReadHeader  | HTTP response header is being read ("READ" mode)
- * non-NULL |   ReadBody   | HTTP response body is being read   ("READ" mode)
- * non-NULL |   DoneBody   | HTTP body is finishing (EOF seen)  ("READ" mode)
- * ---------+--------------+--------------------------------------------------
+ * IDLE:  sock == NULL  AND  (can_connect & fCC_Once)  [store data in w_buf]
+ * CONN:  otherwise                         [read from either sock or r_buf]
+ *
+ * The following connection states are defined (sock != NULL):
+ * --------------+--------------------------------------------------
+ *  WriteRequest | HTTP request body is being written
+ *  FlushRequest | HTTP request is being completed and flushed out
+ *   ReadHeader  | HTTP response header is being read
+ *    ReadBody   | HTTP response body is being read
+ *    DoneBody   | HTTP body is all read out of the connection
+ *    Discard    | HTTP data (if any) to be discarded
+ *      Eom      | HTTP connection is closing
+ * --------------+--------------------------------------------------
  */
 typedef struct {
     SConnNetInfo*     net_info;       /* network configuration parameters    */
@@ -114,15 +125,20 @@ typedef struct {
     FHTTP_Cleanup     cleanup;        /* cleanup callback                    */
 
     TBHTTP_Flags      flags;          /* as passed to constructor            */
-    unsigned          error_header:1; /* only err.HTTP header on SOME debug  */
+    EBSwitch          unsafe_redir:2; /* if unsafe redirects are allowed     */
+    EBSwitch          error_header:2; /* only err.HTTP header on SOME debug  */
     EBCanConnect      can_connect:2;  /* whether more connections permitted  */
-    EBReadState       read_state:2;   /* "READ" mode state per table above   */
+    EBConnState       conn_state:4;   /* connection state per table above    */
     unsigned          auth_done:1;    /* website authorization sent          */
     unsigned    proxy_auth_done:1;    /* proxy authorization sent            */
-    unsigned          reserved:6;     /* MBZ                                 */
+    unsigned          skip_host:1;    /* do *not* add the "Host:" header tag */
+    unsigned          keepalive:1;    /* connection keep-alive               */
+    unsigned          chunked:1;      /* if writing/reading chunked, HTTP/1.1*/
+    unsigned          entity:1;       /* if there's entity payload (body)/1.1*/
+    unsigned          unused:5;
     unsigned          minor_fault:3;  /* incr each minor failure since majo  */
     unsigned short    major_fault;    /* incr each major failure since open  */
-    unsigned short    code;           /* last response code                  */
+    unsigned short    http_code;      /* last http code response             */
 
     SOCK              sock;           /* socket;  NULL if not in "READ" mode */
     const STimeout*   o_timeout;      /* NULL(infinite), dflt or ptr to next */
@@ -130,12 +146,12 @@ typedef struct {
     const STimeout*   w_timeout;      /* NULL(infinite), dflt or ptr to next */
     STimeout          ww_timeout;     /* storage for a (finite) write tmo    */
 
-    BUF               http;           /* storage for HTTP reply header       */
+    BUF               http;           /* storage for HTTP reply              */
     BUF               r_buf;          /* storage to accumulate input data    */
     BUF               w_buf;          /* storage to accumulate output data   */
     size_t            w_len;          /* pending message body size           */
 
-    TNCBI_BigCount    expected;       /* expected to receive until EOF       */
+    TNCBI_BigCount    expected;       /* expected to receive before end/EOF  */
     TNCBI_BigCount    received;       /* actually received so far            */
 } SHttpConnector;
 
@@ -149,8 +165,9 @@ static int                   s_MessageIssued = 0;
 static FHTTP_NcbiMessageHook s_MessageHook   = 0;
 
 
-static int/*bool tri-state inverted*/ x_Authorize(SHttpConnector* uuu,
-                                                  const SRetry*   retry)
+/* -1=nothing to do;  0=failure;  1=success */
+static int/*tri-state*/ x_Authenticate(SHttpConnector* uuu,
+                                       ERetry          auth)
 {
     static const char kProxyAuthorization[] = "Proxy-Authorization: Basic ";
     static const char kAuthorization[]      = "Authorization: Basic ";
@@ -158,17 +175,10 @@ static int/*bool tri-state inverted*/ x_Authorize(SHttpConnector* uuu,
     size_t taglen, userlen, passlen, len, n;
     const char *tag, *user, *pass;
 
-    assert(retry  &&  retry->data);
-    assert(strncasecmp(retry->data, "basic", strcspn(retry->data," \t")) == 0);
-    switch (retry->mode) {
+    switch (auth) {
     case eRetry_Authenticate:
         if (uuu->auth_done)
-            return  1/*failed*/;
-        uuu->auth_done = 1/*true*/;
-        if (uuu->net_info->scheme != eURL_Https
-            &&  !(uuu->flags & fHTTP_InsecureRedirect)) {
-            return -1/*prohibited*/;
-        }
+            return -1/*nothing to do*/;
         tag    = kAuthorization;
         taglen = sizeof(kAuthorization) - 1;
         user   = uuu->net_info->user;
@@ -176,8 +186,7 @@ static int/*bool tri-state inverted*/ x_Authorize(SHttpConnector* uuu,
         break;
     case eRetry_ProxyAuthenticate:
         if (uuu->proxy_auth_done)
-            return 1/*failed*/;
-        uuu->proxy_auth_done = 1/*true*/;
+            return -1/*nothing to do*/;
         tag    = kProxyAuthorization;
         taglen = sizeof(kProxyAuthorization) - 1;
         user   = uuu->net_info->http_proxy_user;
@@ -185,11 +194,16 @@ static int/*bool tri-state inverted*/ x_Authorize(SHttpConnector* uuu,
         break;
     default:
         assert(0);
-        return 1/*failed*/;
+        return 0/*failure*/;
     }
     assert(tag  &&  user  &&  pass);
     if (!*user)
-        return 1/*failed*/;
+        return -1/*nothing to do*/;
+
+    if (auth == eRetry_Authenticate)
+        uuu->auth_done = 1/*true*/;
+    else
+        uuu->proxy_auth_done = 1/*true*/;
     userlen = strlen(user);
     passlen = strlen(pass);
     s = buf + sizeof(buf) - passlen;
@@ -215,9 +229,63 @@ static int/*bool tri-state inverted*/ x_Authorize(SHttpConnector* uuu,
     userlen -= taglen + 1;
     BASE64_Encode(s, len, &n, buf + taglen, userlen, &passlen, 0);
     if (len != n  ||  buf[taglen + passlen])
-        return 1/*failed*/;
+        return 0/*failure*/;
     memcpy(buf, tag, taglen);
-    return !ConnNetInfo_OverrideUserHeader(uuu->net_info, buf);
+    return ConnNetInfo_OverrideUserHeader(uuu->net_info, buf);
+}
+
+
+static int/*bool*/ x_UnsafeRedirectOK(SHttpConnector* uuu)
+{
+    if (uuu->unsafe_redir == eDefault) {
+        if (!(uuu->flags & fHTTP_UnsafeRedirects)) {
+            char val[32];
+            ConnNetInfo_GetValue(0, "HTTP_UNSAFE_REDIRECTS",
+                                 val, sizeof(val), 0);
+            uuu->unsafe_redir = ConnNetInfo_Boolean(val) ? eOn : eOff;
+        } else
+            uuu->unsafe_redir = eOn;
+    }
+    return uuu->unsafe_redir == eOn ? 1/*true*/ : 0/*false*/;
+}
+
+
+#ifdef __GNUC__
+inline
+#endif /*__GNUC__*/
+static int/*bool*/ x_IsWriteThru(const SHttpConnector* uuu)
+{
+    return uuu->net_info->version  &&  (uuu->flags & fHTTP_WriteThru)
+        ? 1/*true*/ : 0/*false*/;
+}
+
+
+/* -1=prohibited;  0=okay;  1=failure */
+static int/*bool tri-state inverted*/ x_RetryAuth(SHttpConnector* uuu,
+                                                  const SRetry*   retry)
+{
+    int result;
+
+    switch (retry->mode) {
+    case eRetry_Authenticate:
+        if (uuu->net_info->scheme != eURL_Https
+            &&  !x_UnsafeRedirectOK(uuu)) {
+            return -1/*prohibited*/;
+        }
+        break;
+    case eRetry_ProxyAuthenticate:
+        if (!uuu->net_info->http_proxy_host[0]  ||
+            !uuu->net_info->http_proxy_port) {
+            return -1/*prohibited*/;
+        }
+        break;
+    default:
+        assert(0);
+        return 1/*failed*/;
+    }
+
+    result = x_Authenticate(uuu, retry->mode);
+    return result < 0 ? 1/*failed*/ : !result/*done*/;
 }
 
 
@@ -229,7 +297,8 @@ static EIO_Status s_Adjust(SHttpConnector* uuu,
     EIO_Status status;
     const char* msg;
 
-    assert(!uuu->sock  &&  uuu->can_connect != eCC_None);
+    assert(!retry  ||  !retry->data  ||  *retry->data);
+    assert(!uuu->sock  &&  uuu->can_connect != fCC_None);
 
     if (!retry  ||  !retry->mode  ||  uuu->minor_fault > 5) {
         uuu->minor_fault = 0;
@@ -239,84 +308,122 @@ static EIO_Status s_Adjust(SHttpConnector* uuu,
 
     if (uuu->major_fault >= uuu->net_info->max_try) {
         msg = extract != eEM_Drop  &&  uuu->major_fault > 1
-            ? "[HTTP%s%s]  Too many failed attempts (%d), giving up" : "";
+            ? "[HTTP%s%s]  Too many failed attempts (%hu), giving up" : "";
     } else if (retry  &&  retry->mode) {
-        char* url  = ConnNetInfo_URL(uuu->net_info);
+        char*  url = ConnNetInfo_URL(uuu->net_info);
+        int secure = 0/*false(yet)*/;
         int   fail = 0;
         switch (retry->mode) {
         case eRetry_Redirect:
-            if (uuu->net_info->req_method == eReqMethod_Connect)
+            if (uuu->entity)
+                fail = -2;
+            /*FALLTHRU*/
+        case eRetry_Redirect303:
+            if (!fail &&  uuu->net_info->req_method == eReqMethod_Connect)
                 fail = 2;
-            else if (retry->data  &&  *retry->data  &&  *retry->data != '?') {
-                if (uuu->net_info->req_method == eReqMethod_Get
-                    ||  (uuu->flags & fHTTP_InsecureRedirect)
-                    ||  !uuu->w_len) {
-                    int secure = uuu->net_info->scheme == eURL_Https ? 1 : 0;
-                    *uuu->net_info->args = '\0'/*arguments not inherited*/;
+            else if (!fail  &&  retry->data  &&  *retry->data != '?') {
+                if (uuu->net_info->req_method != eReqMethod_Post
+                    ||  retry->mode == eRetry_Redirect303
+                    ||  x_UnsafeRedirectOK(uuu)
+                    ||  !(x_IsWriteThru(uuu)  ||  BUF_Size(uuu->w_buf))) {
+                    char           host[sizeof(uuu->net_info->host)];
+                    unsigned short port =      uuu->net_info->port;
+                    strcpy(host, uuu->net_info->host);
+                    if (uuu->net_info->scheme == eURL_Https)
+                        secure = 1/*true*/;
+                    uuu->net_info->args[0] = '\0'/*arguments not inherited*/;
                     fail = !ConnNetInfo_ParseURL(uuu->net_info, retry->data);
-                    if (!fail  &&  secure
-                        &&  uuu->net_info->scheme != eURL_Https
-                        &&  !(uuu->flags & fHTTP_InsecureRedirect)) {
-                        fail = -1;
+                    if (!fail) {
+                        if (secure  &&  uuu->net_info->scheme != eURL_Https
+                            &&  !x_UnsafeRedirectOK(uuu)) {
+                            fail = -1;
+                        } else {
+                            if (port !=    uuu->net_info->port  ||
+                                strcasecmp(uuu->net_info->host, host) != 0) {
+                                /* drop the flag on host / port replaced */
+                                uuu->skip_host = 0/*false*/;
+                            }
+                            if (retry->mode == eRetry_Redirect303) {
+                                if (uuu->net_info->req_method ==
+                                    eReqMethod_Post) {
+                                    uuu->net_info->req_method  =
+                                    eReqMethod_Get;
+                                } else
+                                    fail = -2;
+                            }
+                            if (!fail && (uuu->flags & fHTTP_AdjustOnRedirect)
+                                &&   uuu->adjust
+                                &&  !uuu->adjust(uuu->net_info,
+                                                 uuu->user_data, 0)) {
+                                fail = 1;
+                            }
+                        }
                     }
                 } else
-                    fail = -1;
-            } else
+                    fail = -1 - x_IsWriteThru(uuu);
+            } else if (!fail)
                 fail = 1;
             if (fail) {
                 CORE_LOGF_X(2, eLOG_Error,
-                            ("[HTTP%s%s]  %s redirect to %s%s%s",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : "",
-                             fail < 0 ? "Prohibited" :
-                             fail > 1 ? "Spurious tunnel" : "Cannot",
+                            ("[HTTP%s%s]  %s %s%s to %s%s%s",
+                             url ? "; " : "",
+                             url ? url  : "",
+                             fail < -1 ? "Invalid" :
+                             fail <  0 ? "Prohibited" :
+                             fail >  1 ? "Spurious tunnel" : "Cannot",
+                             fail == -1  &&  secure ? "insecure " : "",
+                             fail > 1  ||  retry->mode != eRetry_Redirect303
+                             ? "redirect" : "submission",
                              retry->data ? "\""        : "<",
                              retry->data ? retry->data : "NULL",
                              retry->data ? "\""        : ">"));
                 status = fail > 1 ? eIO_NotSupported : eIO_Closed;
             } else {
                 CORE_LOGF_X(17, eLOG_Trace,
-                            ("[HTTP%s%s]  Redirecting to \"%s\"",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : "",
+                            ("[HTTP%s%s]  %s \"%s\"",
+                             url ? "; " : "",
+                             url ? url  : "",
+                             retry->mode == eRetry_Redirect303
+                             ? "Finishing submission with" : "Redirecting to",
                              retry->data));
                 status = eIO_Success;
             }
             break;
         case eRetry_Authenticate:
             if (uuu->net_info->req_method == eReqMethod_Connect)
-                fail = -1;
+                fail = 3;
             /*FALLTHRU*/
         case eRetry_ProxyAuthenticate:
             if (!fail) {
-                if (retry->data  &&  strncasecmp(retry->data, "basic ", 6)==0){
-                    fail = x_Authorize(uuu, retry);
-                    if (fail < 0)
-                        fail = 2;
-                } else
-                    fail = -1;
+                if (!retry->data
+                    ||  strncasecmp(retry->data, "basic",
+                                    strcspn(retry->data, " \t")) != 0) {
+                    fail = -2;
+                } else if (!(fail = x_RetryAuth(uuu, retry))
+                           &&  x_IsWriteThru(uuu)) {
+                    fail =  2;
+                }
             }
             if (fail) {
-                char* url = ConnNetInfo_URL(uuu->net_info);
                 CORE_LOGF_X(3, eLOG_Error,
                             ("[HTTP%s%s]  %s %s %c%s%c",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : "",
+                             url ? "; " : "",
+                             url ? url  : "",
                              retry->mode == eRetry_Authenticate
                              ? "Authorization" : "Proxy authorization",
-                             fail < 0 ? "not yet implemented" :
-                             fail > 1 ? "prohibited" : "failed",
+                             fail >  2 ? "not allowed with CONNECT" :
+                             fail < -1 ? "not implemented" :
+                             fail >  1 ? "must be pushed with write-through" :
+                             fail <  0 ? "prohibited" : "failed",
                              "(["[!retry->data],
                              retry->data ? retry->data : "NULL",
                              ")]"[!retry->data]));
-                if (url)
-                    free(url);
                 status = fail < 0 ? eIO_NotSupported : eIO_Closed;
             } else {
                 CORE_LOGF_X(18, eLOG_Trace,
                             ("[HTTP%s%s]  Authorizing%s",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : "",
+                             url ? "; " : "",
+                             url ? url  : "",
                              retry->mode == eRetry_Authenticate
                              ? "" : " proxy"));
                 status = eIO_Success;
@@ -325,9 +432,8 @@ static EIO_Status s_Adjust(SHttpConnector* uuu,
         default:
             CORE_LOGF_X(4, eLOG_Critical,
                         ("[HTTP%s%s]  Unknown retry mode #%u",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : "",
-                         (unsigned int) retry->mode));
+                         url ? "; " : "",
+                         url ? url  : "", (unsigned int) retry->mode));
             status = eIO_Unknown;
             assert(0);
             break;
@@ -335,58 +441,57 @@ static EIO_Status s_Adjust(SHttpConnector* uuu,
         if (url)
             free(url);
         if (status != eIO_Success)
-            uuu->can_connect = eCC_None;
+            uuu->can_connect = fCC_None;
         return status;
-    } else if (!uuu->adjust
-               ||  !uuu->adjust(uuu->net_info,
-                                uuu->user_data,
-                                uuu->major_fault)) {
+    } else if (uuu->adjust  &&  !uuu->adjust(uuu->net_info,
+                                             uuu->user_data,
+                                             uuu->major_fault)) {
         msg = extract != eEM_Drop  &&  uuu->major_fault > 1
-            ? "[HTTP%s%s]  Retry attempts (%d) exhausted, giving up" : "";
+            ? "[HTTP%s%s]  Retry attempts (%hu) exhausted, giving up" : "";
     } else
         return eIO_Success;
 
+    assert(msg);
     if (*msg) {
         char* url = ConnNetInfo_URL(uuu->net_info);
         CORE_LOGF_X(1, eLOG_Error,
                     (msg,
-                     url  &&  *url ? "; " : "",
-                     url           ? url  : "",
-                     uuu->major_fault));
+                     url ? "; " : "",
+                     url ? url  : "", uuu->major_fault));
         if (url)
             free(url);
     }
-    uuu->can_connect = eCC_None;
+    uuu->can_connect = fCC_None;
     return eIO_Closed;
 }
 
 
-static char* s_HostPort(size_t slack, const char* host, unsigned short aport)
+static char* x_HostPort(size_t reserve, const char* host, unsigned short xport)
 {
     size_t hostlen = strlen(host), portlen;
     char*  hostport, port[16];
  
-    if (!aport) {
+    if (!xport) {
         portlen = 1;
         port[0] = '\0';
     } else
-        portlen = (size_t) sprintf(port, ":%hu", aport) + 1;
-    hostport = (char*) malloc(slack + hostlen + portlen);
+        portlen = (size_t) sprintf(port, ":%hu", xport) + 1;
+    hostport = (char*) malloc(reserve + hostlen + portlen);
     if (hostport) {
-        memcpy(hostport + slack,   host, hostlen);
-        hostlen        += slack;
+        memcpy(hostport + reserve, host, hostlen);
+        hostlen        += reserve;
         memcpy(hostport + hostlen, port, portlen);
     }
     return hostport;
 }
 
 
-static int/*bool*/ s_SetHttpHostTag(SConnNetInfo* net_info)
+static int/*bool*/ x_SetHttpHostTag(SConnNetInfo* net_info)
 {
     char*       tag;
     int/*bool*/ retval;
 
-    tag = s_HostPort(sizeof(kHttpHostTag)-1, net_info->host, net_info->port);
+    tag = x_HostPort(sizeof(kHttpHostTag)-1, net_info->host, net_info->port);
     if (tag) {
         memcpy(tag, kHttpHostTag, sizeof(kHttpHostTag)-1);
         retval = ConnNetInfo_OverrideUserHeader(net_info, tag);
@@ -397,47 +502,80 @@ static int/*bool*/ s_SetHttpHostTag(SConnNetInfo* net_info)
 }
 
 
-static const char* s_MakePath(const SConnNetInfo* net_info)
+static void x_SetRequestIDs(SConnNetInfo* net_info)
 {
-    if (net_info->req_method == eReqMethod_Connect
-        &&  net_info->firewall  &&  *net_info->proxy_host) {
-        return s_HostPort(0, net_info->proxy_host, net_info->port);
+    char* id = CORE_GetNcbiRequestID(eNcbiRequestID_SID);
+    assert(!id  ||  *id);
+    if (id) {
+        char*  tag;
+        size_t len = strlen(id);
+        if (!(tag = (char*) realloc(id, ++len + sizeof(HTTP_NCBI_SID)))) {
+            ConnNetInfo_DeleteUserHeader(net_info, HTTP_NCBI_SID);
+            free(id);
+        } else {
+            memmove(tag + sizeof(HTTP_NCBI_SID), tag, len);
+            memcpy (tag,         HTTP_NCBI_SID, sizeof(HTTP_NCBI_SID) - 1);
+            tag[sizeof(HTTP_NCBI_SID) - 1] = ' ';
+            ConnNetInfo_OverrideUserHeader(net_info, tag);
+            free(tag);
+        }
     }
-    return ConnNetInfo_URL(net_info);
+    id = CORE_GetNcbiRequestID(eNcbiRequestID_HitID);
+    assert(!id  ||  *id);
+    if (id) {
+        char*  tag;
+        size_t len = strlen(id);
+        if (!(tag = (char*) realloc(id, ++len + sizeof(HTTP_NCBI_PHID)))) {
+            ConnNetInfo_DeleteUserHeader(net_info, HTTP_NCBI_PHID);
+            free(id);
+        } else {
+            memmove(tag + sizeof(HTTP_NCBI_PHID), tag, len);
+            memcpy (tag,         HTTP_NCBI_PHID, sizeof(HTTP_NCBI_PHID) - 1);
+            tag[sizeof(HTTP_NCBI_PHID) - 1] = ' ';
+            ConnNetInfo_OverrideUserHeader(net_info, tag);
+            free(tag);
+        }
+    }
 }
 
 
 /* Connect to the HTTP server, specified by uuu->net_info's "port:host".
  * Return eIO_Success only if socket connection has succeeded and uuu->sock
- * is non-zero. If unsuccessful, try to adjust uuu->net_info by s_Adjust(),
+ * is non-zero.  If unsuccessful, try to adjust uuu->net_info by s_Adjust(),
  * and then re-try the connection attempt.
  */
 static EIO_Status s_Connect(SHttpConnector* uuu,
+                            const STimeout* timeout,
                             EExtractMode    extract)
 {
     EIO_Status status;
     SOCK sock;
 
     assert(!uuu->sock);
-    if (uuu->can_connect == eCC_None) {
-        if (extract == eEM_Read) {
+    uuu->http_code = 0;
+    if (!(uuu->can_connect & fCC_Once)) {
+        if (extract == eEM_Read  &&  uuu->net_info->max_try
+            &&  uuu->can_connect == fCC_None) {
             char* url = ConnNetInfo_URL(uuu->net_info);
-            CORE_LOGF_X(5, eLOG_Error,
+            CORE_LOGF_X(5, eLOG_Critical,
                         ("[HTTP%s%s]  Connector is no longer usable",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : ""));
+                         url ? "; " : "",
+                         url ? url  : ""));
             if (url)
                 free(url);
         }
         return eIO_Closed;
     }
 
+    uuu->entity = 0;
     /* the re-try loop... */
     for (;;) {
         TSOCK_Flags flags
             = (uuu->net_info->debug_printout == eDebugPrintout_Data
-               ? fSOCK_LogOn : fSOCK_LogDefault);
+               ? fSOCK_KeepAlive | fSOCK_LogOn
+               : fSOCK_KeepAlive | fSOCK_LogDefault);
         sock = 0;
+        uuu->chunked = 0;
         if (uuu->net_info->req_method != eReqMethod_Connect
             &&  uuu->net_info->scheme == eURL_Https
             &&  uuu->net_info->http_proxy_host[0]
@@ -447,13 +585,12 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
                 status = eIO_Unknown;
                 break;
             }
-            net_info->scheme   = eURL_Http;
-            net_info->user[0]  = '\0';
-            net_info->pass[0]  = '\0';
-            if (!net_info->port)
-                net_info->port = CONN_PORT_HTTPS;
-            net_info->firewall = 0/*false*/;
-            net_info->proxy_host[0] = '\0';
+            net_info->scheme    = eURL_Http;
+            net_info->user[0]   = '\0';
+            net_info->pass[0]   = '\0';
+            if (net_info->port == 0)
+                net_info->port  = CONN_PORT_HTTPS;
+            net_info->firewall  = 0/*false*/;
             ConnNetInfo_DeleteUserHeader(net_info, kHttpHostTag);
             status = HTTP_CreateTunnel(net_info, fHTTP_NoUpread, &sock);
             assert((status == eIO_Success) ^ !sock);
@@ -461,29 +598,57 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
         } else
             status  = eIO_Success;
         if (status == eIO_Success) {
+            EReqMethod     req_method = uuu->net_info->req_method;
             int/*bool*/    reset_user_header;
             char*          http_user_header;
             const char*    host;
             unsigned short port;
-            const char*    path;
-            const char*    args;
+            char*          path;
+            char*          args;
+            char*          temp;
             size_t         len;
 
-            len = BUF_Size(uuu->w_buf);
-            if (uuu->net_info->req_method == eReqMethod_Connect
+            /* RFC7230 now requires Host: for CONNECT as well */
+            if (!uuu->skip_host  &&  !x_SetHttpHostTag(uuu->net_info)) {
+                status = eIO_Unknown;
+                break;
+            }
+            if (x_IsWriteThru(uuu)) {
+                assert(req_method != eReqMethod_Connect);
+                if (req_method == eReqMethod_Any)
+                    req_method  = BUF_Size(uuu->w_buf)
+                        ? eReqMethod_Post : eReqMethod_Get;
+                if (req_method != eReqMethod_Head  &&
+                    req_method != eReqMethod_Get) {
+                    if (!ConnNetInfo_OverrideUserHeader
+                        (uuu->net_info, "Transfer-Encoding: chunked")) {
+                        status = eIO_Unknown;
+                        break;
+                    }
+                    uuu->chunked = 1;
+                }
+                len = 0;
+            } else
+                len = BUF_Size(uuu->w_buf);
+            if (req_method == eReqMethod_Connect
                 ||  (uuu->net_info->scheme != eURL_Https
                      &&  uuu->net_info->http_proxy_host[0]
                      &&  uuu->net_info->http_proxy_port)) {
-                char* temp;
+                if (uuu->net_info->http_push_auth
+                    &&  !x_Authenticate(uuu, eRetry_ProxyAuthenticate)) {
+                    status = eIO_Unknown;
+                    break;
+                }
                 host = uuu->net_info->http_proxy_host;
                 port = uuu->net_info->http_proxy_port;
-                path = s_MakePath(uuu->net_info);
+                path = ConnNetInfo_URL(uuu->net_info);
                 if (!path) {
                     status = eIO_Unknown;
                     break;
                 }
-                if (uuu->net_info->req_method == eReqMethod_Connect) {
+                if (req_method == eReqMethod_Connect) {
                     /* Tunnel */
+                    assert(!uuu->net_info->version);
                     if (!len) {
                         args = 0;
                     } else if (!(temp = (char*) malloc(len))
@@ -491,20 +656,14 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
                         if (temp)
                             free(temp);
                         status = eIO_Unknown;
-                        free((void*) path);
+                        free(path);
                         break;
                     } else
                         args = temp;
                 } else {
                     /* Proxied HTTP */
                     assert(uuu->net_info->scheme == eURL_Http);
-                    if (!s_SetHttpHostTag(uuu->net_info)) {
-                        status = eIO_Unknown;
-                        free((void*) path);
-                        assert(!sock);
-                        break;
-                    }
-                    if (uuu->flags & fHTTP_UrlEncodeArgs) {
+                    if (uuu->flags & fHCC_UrlEncodeArgs) {
                         /* args added to path not valid(unencoded), remove */
                         if ((temp = strchr(path, '?')) != 0)
                             *temp = '\0';
@@ -514,7 +673,10 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
                 }
             } else {
                 /* Direct HTTP[S] or tunneled HTTPS */
-                if (!s_SetHttpHostTag(uuu->net_info)) {
+                if (uuu->net_info->http_push_auth
+                    &&  (uuu->net_info->scheme == eURL_Https
+                         ||  x_UnsafeRedirectOK(uuu))
+                    &&  !x_Authenticate(uuu, eRetry_Authenticate)) {
                     status = eIO_Unknown;
                     break;
                 }
@@ -523,12 +685,45 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
                 path = uuu->net_info->path;
                 args = uuu->net_info->args;
             }
-            if (uuu->net_info->scheme == eURL_Https)
-                flags |= fSOCK_Secure;
-            if (!(uuu->flags & fHTTP_NoUpread))
-                flags |= fSOCK_ReadOnWrite;
 
-            /* connect & send HTTP header */
+            /* encode args (obsolete feature) */
+            if (req_method != eReqMethod_Connect
+                &&  args  &&  (uuu->flags & fHCC_UrlEncodeArgs)) {
+                size_t args_len = strcspn(args, "#");
+                assert(args == uuu->net_info->args);
+                if (args_len > 0) {
+                    size_t rd_len, wr_len;
+                    size_t size = args_len * 3;
+                    if (!(temp = (char*) malloc(size + 1))) {
+                        int error = errno;
+                        temp = ConnNetInfo_URL(uuu->net_info);
+                        CORE_LOGF_ERRNO_X(20, eLOG_Error, error,
+                                          ("[HTTP%s%s]  Out of memory encoding"
+                                           " URL arguments (%lu bytes)",
+                                           temp ? "; " : "",
+                                           temp ? temp : "",
+                                           (unsigned long)(size + 1)));
+                        if (temp)
+                            free(temp);
+                        if (path != uuu->net_info->path)
+                            free(path);
+                        status = eIO_Unknown;
+                        break;
+                    }
+                    URL_Encode(args, args_len, &rd_len, temp, size, &wr_len);
+                    assert(rd_len == args_len);
+                    assert(wr_len <= size);
+                    temp[wr_len] = '\0';
+                    args = temp;
+                } else
+                    args = 0;
+            }
+
+            /* NCBI request IDs */
+            if (!(uuu->flags & fHTTP_NoAutomagicSID))
+                x_SetRequestIDs(uuu->net_info);
+
+            /* identify the connector in the User-Agent: header tag */
             http_user_header = (uuu->net_info->http_user_header
                                 ? strdup(uuu->net_info->http_user_header)
                                 : 0);
@@ -546,14 +741,22 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
                 reset_user_header = 0;
 
             if (uuu->net_info->debug_printout)
-                ConnNetInfo_Log(uuu->net_info, CORE_GetLOG());
+                ConnNetInfo_Log(uuu->net_info, eLOG_Note, CORE_GetLOG());
+
+            /* connect & send HTTP header */
+            if (uuu->net_info->scheme == eURL_Https)
+                flags |= fSOCK_Secure;
+            if (!(uuu->flags & fHTTP_NoUpread))
+                flags |= fSOCK_ReadOnWrite;
 
             status = URL_ConnectEx(host, port, path, args,
-                                   (EReqMethod) uuu->net_info->req_method, len,
-                                   uuu->o_timeout, uuu->w_timeout,
+                                   req_method | (uuu->net_info->version
+                                                 ? eReqMethod_v1
+                                                 : 0), len,
+                                   uuu->o_timeout, timeout,
                                    uuu->net_info->http_user_header,
-                                   uuu->flags & fHTTP_UrlEncodeArgs, flags, 
-                                   &sock);
+                                   uuu->net_info->credentials,
+                                   flags, &sock);
 
             if (reset_user_header) {
                 ConnNetInfo_SetUserHeader(uuu->net_info, 0);
@@ -561,44 +764,42 @@ static EIO_Status s_Connect(SHttpConnector* uuu,
             }
 
             if (path != uuu->net_info->path)
-                free((void*) path);
+                free(path);
             if (args != uuu->net_info->args  &&  args)
-                free((void*) args);
+                free(args);
 
             if (sock) {
                 assert(status == eIO_Success);
-                uuu->w_len = (uuu->net_info->req_method != eReqMethod_Connect
-                              ? len : 0);
+                uuu->w_len = req_method != eReqMethod_Connect
+                    ? BUF_Size(uuu->w_buf) : 0;
                 break;
             }
-            assert(status != eIO_Success);
         } else
             assert(!sock);
 
-        /* connection failed */
+        assert(status != eIO_Success);
+        /* connection failed, try another server */
         if (s_Adjust(uuu, 0, extract) != eIO_Success)
             break;
     }
-    if (status != eIO_Success) {
-        if (sock) {
-            SOCK_Abort(sock);
-            SOCK_Close(sock);
-        }
-        return status;
+
+    if (status == eIO_Success) {
+        uuu->conn_state = eCS_WriteRequest;
+        uuu->sock = sock;
+        assert(sock);
+    } else if (sock) {
+        SOCK_Abort(sock);
+        SOCK_Close(sock);
     }
-    assert(sock);
-    uuu->sock = sock;
-    return eIO_Success;
+    return status;
 }
 
 
-/* Unconditionally drop the connection; timeout may specify time allowance */
+/* Unconditionally drop the connection w/o any wait */
 static void s_DropConnection(SHttpConnector* uuu)
 {
-    /*"READ" mode*/
     assert(uuu->sock);
-    BUF_Erase(uuu->http);
-    if (uuu->read_state < eRS_ReadBody)
+    if (!(uuu->conn_state & eCS_ReadBody)  ||  uuu->conn_state == eCS_Discard)
         SOCK_Abort(uuu->sock);
     else
         SOCK_SetTimeout(uuu->sock, eIO_Close, &kZeroTimeout);
@@ -607,87 +808,116 @@ static void s_DropConnection(SHttpConnector* uuu)
 }
 
 
+typedef struct {
+    SOCK       sock;
+    EIO_Status status;
+} XBUF_PeekCBCtx;
+
+
+static size_t x_WriteBuf(void* data, const void* buf, size_t size)
+{
+    XBUF_PeekCBCtx* ctx = (XBUF_PeekCBCtx*) data;
+    size_t written;
+
+    assert(buf  &&  size);
+    if (ctx->status != eIO_Success)
+        return 0;
+    ctx->status = SOCK_Write(ctx->sock, buf, size,
+                             &written, eIO_WritePlain);
+    return written;
+}
+
+
 /* Connect to the server specified by uuu->net_info, then compose and form
  * relevant HTTP header, and flush the accumulated output data(uuu->w_buf)
- * after the HTTP header. If connection/write unsuccessful, retry to reconnect
- * and send the data again until permitted by s_Adjust().
+ * after the HTTP header.
+ * If connection/write unsuccessful, retry to reconnect and send the data
+ * again until permitted by s_Adjust().
  */
 static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,
+                                   const STimeout* timeout,
                                    EExtractMode    extract)
 {
     EIO_Status status;
 
     for (;;) {
-        size_t body_size;
-        char   buf[4096];
+        char   buf[80];
+        int    error;
+        size_t off;
         char*  url;
 
-        if (!uuu->sock) {
-            uuu->read_state = eRS_WriteRequest;
-            if ((status = s_Connect(uuu, extract)) != eIO_Success)
-                break;
-            assert(uuu->sock);
-            uuu->expected = 0;
-            uuu->received = 0;
-            uuu->code = 0;
-        } else
+        if (uuu->sock)
             status = eIO_Success;
+        else if ((status = s_Connect(uuu, timeout, extract)) != eIO_Success)
+            break;
 
         if (uuu->w_len) {
-            size_t off = BUF_Size(uuu->w_buf) - uuu->w_len;
-
-            SOCK_SetTimeout(uuu->sock, eIO_Write, uuu->w_timeout);
-            do {
-                size_t n_written;
-                size_t n_write = BUF_PeekAt(uuu->w_buf, off, buf, sizeof(buf));
-                status = SOCK_Write(uuu->sock, buf, n_write,
-                                    &n_written, eIO_WritePlain);
-                if (status != eIO_Success)
-                    break;
-                uuu->w_len -= n_written;
-                off        += n_written;
-            } while (uuu->w_len);
-        } else if (!uuu->read_state)
-            status = SOCK_Write(uuu->sock, 0, 0, 0, eIO_WritePlain);
+            XBUF_PeekCBCtx ctx;
+            ctx.sock   = uuu->sock;
+            ctx.status = eIO_Success/*NB:==status*/;
+            off = BUF_Size(uuu->w_buf) - uuu->w_len;
+            assert(uuu->conn_state < eCS_ReadHeader);
+            SOCK_SetTimeout(ctx.sock, eIO_Write, uuu->w_timeout);
+            uuu->w_len -= BUF_PeekAtCB(uuu->w_buf, off,
+                                       x_WriteBuf, &ctx, uuu->w_len);
+            status = ctx.status;
+        } else
+            off = 0;
 
         if (status == eIO_Success) {
-            assert(uuu->w_len == 0);
-            if (!uuu->read_state) {
-                /* 10/07/03: While this call here is perfectly legal, it could
-                 * cause connection severed by a buggy CISCO load-balancer. */
-                /* 10/28/03: CISCO's beta patch for their LB shows that the
-                 * problem has been fixed; no more 2'30" drops in connections
-                 * that shut down for write.  We still leave this commented
-                 * out to allow unpatched clients to work seamlessly... */ 
-                /*SOCK_Shutdown(uuu->sock, eIO_Write);*/
-                uuu->read_state = eRS_ReadHeader;
-            }
-            break;
+            if (uuu->w_len)
+                continue;
+            if (uuu->conn_state  > eCS_FlushRequest)
+                break;
+            if (!uuu->chunked)
+                uuu->conn_state  = eCS_FlushRequest;
+            if (uuu->conn_state == eCS_FlushRequest) {
+                /* "flush" */
+                status = SOCK_Write(uuu->sock, 0, 0, 0, eIO_WritePlain);
+                if (status == eIO_Success) {
+                    uuu->conn_state = eCS_ReadHeader;
+                    uuu->keepalive = 0/*uuu->net_info->version*/;
+                    uuu->expected = (TNCBI_BigCount)(-1L);
+                    uuu->received = 0;
+                    uuu->chunked = 0;
+                    BUF_Erase(uuu->http);
+                    break;
+                }
+            } else
+                break;
         }
 
         if (status == eIO_Timeout
             &&  (extract == eEM_Wait
-                 ||  (uuu->w_timeout
-                      &&  !(uuu->w_timeout->sec | uuu->w_timeout->usec)))) {
+                 ||  (timeout  &&  !(timeout->sec | timeout->usec)))) {
             break;
         }
-        if ((body_size = BUF_Size(uuu->w_buf)) != 0) {
-            sprintf(buf, "write request body at offset %lu",
-                    (unsigned long)(body_size - uuu->w_len));
-        } else
-            strcpy(buf, "flush request header");
+
+        error = errno;
+        if (uuu->w_len  &&  uuu->conn_state == eCS_WriteRequest) {
+            if (!x_IsWriteThru(uuu)) {
+                sprintf(buf, "write request body at offset %lu",
+                        (unsigned long) off);
+            } else
+                strcpy(buf, "write request body");
+        } else {
+            if (uuu->w_len)
+                strcpy(buf, "finalize request body");
+            else
+                strcpy(buf, "finalize request");
+        }
 
         url = ConnNetInfo_URL(uuu->net_info);
-        CORE_LOGF_X(6, eLOG_Error,
-                    ("[HTTP%s%s]  Cannot %s (%s)",
-                     url  &&  *url ? "; " : "",
-                     url           ? url  : "",
-                     buf, IO_StatusStr(status)));
+        CORE_LOGF_ERRNO_X(6, eLOG_Error, error,
+                          ("[HTTP%s%s]  Cannot %s (%s)",
+                           url ? "; " : "",
+                           url ? url  : "", buf, IO_StatusStr(status)));
         if (url)
             free(url);
 
-        /* write failed; close and try to use another server */
+        /* write failed; close and try to use another server, if possible */
         s_DropConnection(uuu);
+        assert(status != eIO_Success);
         if ((status = s_Adjust(uuu, 0, extract)) != eIO_Success)
             break/*closed*/;
     }
@@ -696,56 +926,249 @@ static EIO_Status s_ConnectAndSend(SHttpConnector* uuu,
 }
 
 
-static int/*bool*/ s_IsValidParam(const char* param, size_t parlen)
+static int/*bool*/ x_IsValidParam(const char* param, size_t paramlen)
 {
-    const char* e = (const char*) memchr(param, '=', parlen);
-    size_t toklen;
+    const char* e = (const char*) memchr(param, '=', paramlen);
+    size_t len;
     if (!e  ||  e == param)
         return 0/*false*/;
-    if ((toklen = (size_t)(++e - param)) >= parlen)
+    if ((len = (size_t)(++e - param)) >= paramlen)
         return 0/*false*/;
     assert(!isspace((unsigned char)(*param)));
-    if (strcspn(param, " \t") < toklen)
+    if (strcspn(param, " \t") < len)
         return 0/*false*/;
     if (*e == '\''  ||  *e == '"') {
         /* a quoted string */
-        toklen = parlen - toklen;
-        if (!(e = (const char*) memchr(e + 1, *e, --toklen)))
+        assert(len < paramlen);
+        len = paramlen - len;
+        if (!(e = (const char*) memchr(e + 1, *e, --len)))
             return 0/*false*/;
         e++/*skip the quote*/;
     } else
         e += strcspn(e, " \t");
-    if (e != param + parlen  &&  e + strspn(e, " \t") != param + parlen)
+    if (e != param + paramlen  &&  e + strspn(e, " \t") != param + paramlen)
         return 0/*false*/;
     return 1/*true*/;
 }
 
 
-static int/*bool*/ s_IsValidAuth(const char* challenge, size_t len)
+static int/*bool*/ x_IsValidChallenge(const char* text, size_t len)
 {
     /* Challenge must contain a scheme name token and a non-empty param
      * list (comma-separated pairs token={token|quoted_string}), with at
      * least one parameter being named "realm=".
      */
-    size_t word = strcspn(challenge, " \t");
+    size_t word = strcspn(text, " \t");
     int retval = 0/*false*/;
     if (word < len) {
         /* 1st word is always the scheme name */
-        const char* param = challenge + word;
-        for (param += strspn(param, " \t");  param < challenge + len;
+        const char* param = text + word;
+        for (param += strspn(param, " \t");  param < text + len;
              param += strspn(param, ", \t")) {
-            size_t parlen = (size_t)(challenge + len - param);
-            const char* c = (const char*) memchr(param, ',', parlen);
+            size_t paramlen = (size_t)(text + len - param);
+            const char* c = (const char*) memchr(param, ',', paramlen);
             if (c)
-                parlen = (size_t)(c - param);
-            if (!s_IsValidParam(param, parlen))
+                paramlen = (size_t)(c - param);
+            if (!x_IsValidParam(param, paramlen))
                 return 0/*false*/;
-            if (parlen > 6  &&  strncasecmp(param, "realm=", 6) == 0)
+            if (paramlen > 6  &&  strncasecmp(param, "realm=", 6) == 0)
                 retval = 1/*true, but keep scanning*/;
-            param += c ? ++parlen : parlen;
+            param += c ? ++paramlen : paramlen;
         }
     }
     return retval;
+}
+
+
+static size_t x_PushbackBuf(void* data, const void* buf, size_t size)
+{
+    XBUF_PeekCBCtx* ctx = (XBUF_PeekCBCtx*) data;
+
+    assert(buf  &&  size);
+    if (ctx->status == eIO_Success)
+        ctx->status  = SOCK_Pushback(ctx->sock, buf, size);
+    return ctx->status != eIO_Success ? 0 : size;
+}
+
+
+static int/*bool*/ x_Pushback(SOCK sock, BUF buf)
+{
+    size_t size = BUF_Size(buf);
+    XBUF_PeekCBCtx ctx;
+    ctx.sock   = sock;
+    ctx.status = eIO_Success;
+    size ^= BUF_PeekAtCB(buf, 0, x_PushbackBuf, &ctx, size);
+    BUF_Destroy(buf);
+    return size ? 0 : 1;
+}
+
+
+static EIO_Status x_ReadChunkHead(SHttpConnector* uuu, int/*bool*/ first)
+{
+    int            n;
+    BUF            buf;
+    char*          str;
+    size_t         size;
+    TNCBI_BigCount chunk;
+    EIO_Status     status;
+
+    buf = 0;
+    str = 0;
+    size = 0;
+    for (;;) {
+        size_t off;
+        if (size > 2) {
+            if (!(str = (char*) malloc(size + 1)))
+                break;
+            verify(BUF_Peek(buf, str, size) == size);
+            if (!first  &&  (str[0] != '\r'  ||  str[1] != '\n')) {
+                free(str);
+                str = 0;
+                break;
+            }
+            assert(str[size - 1] == '\n');
+            str[size] = '\0';
+            break;
+        }
+        status = SOCK_StripToPattern(uuu->sock, "\r\n", 2, &buf, &off);
+        if (status != eIO_Success  ||  (size += off) != BUF_Size(buf))
+            break;
+    }
+
+    if (!str
+        ||  sscanf(str, "%" NCBI_BIGCOUNT_FORMAT_SPEC_HEX "%n", &chunk, &n) < 1
+        ||  (!isspace((unsigned char) str[n])  &&  str[n] != ';')) {
+        char* url = ConnNetInfo_URL(uuu->net_info);
+        CORE_LOGF_X(23, eLOG_Error,
+                    ("[HTTP%s%s]  Cannot read chunk size%s%.*s",
+                     url ? "; " : "",
+                     url ? url  : "",
+                     str ? ": " : "",
+                     str ? (int)(size - (first ? 2 : 4)) : 0,
+                     str ?       str  + (first ? 0 : 2)  : ""));
+        if (url)
+            free(url);
+        if (str) {
+            free(str);
+            BUF_Destroy(buf);
+            return eIO_Closed;
+        }
+        return x_Pushback(uuu->sock, buf) ? eIO_Unknown : eIO_Closed;
+    }
+    free(str);
+
+    uuu->expected = chunk;
+    uuu->received = 0;
+    BUF_Destroy(buf);
+    return eIO_Success;
+}
+
+
+static EIO_Status x_ReadChunkTail(SHttpConnector* uuu)
+{
+    EIO_Status status;
+    BUF buf = 0;
+    do {
+        size_t n;
+        status = SOCK_StripToPattern(uuu->sock, "\r\n", 2, &buf, &n);
+        if (n == 2) {
+            /*last trailer*/
+            BUF_Destroy(buf);
+            uuu->conn_state = eCS_Discard;
+            return eIO_Closed;
+        }
+    } while (status == eIO_Success);
+    return x_Pushback(uuu->sock, buf) ? status : eIO_Closed;
+}
+
+
+/* If "size"==0, then "buf" is a pointer to a BUF to receive the current body.
+ * Otherwise, "buf" is a non-NULL destination buffer.
+ */
+static EIO_Status s_ReadData(SHttpConnector* uuu,
+                             void* buf, size_t size,
+                             size_t* n_read, EIO_ReadMethod how)
+{
+    BUF*       xxx;
+    EIO_Status status;
+
+    assert(buf  &&  n_read  &&  !*n_read);
+
+    if (!uuu->chunked  ||  uuu->expected > uuu->received) {
+        if (!size) {
+            size = uuu->expected != (TNCBI_BigCount)(-1L)
+                ? uuu->expected - uuu->received
+                : 4096;
+            if (!size) {
+                assert(!uuu->chunked);
+                uuu->conn_state = eCS_DoneBody;
+                return eIO_Closed;
+            }
+            if (size > 2 * 4096)
+                size = 2 * 4096;
+            xxx = (BUF*) buf;
+            if (!(buf = (void*) malloc(size))) {
+                int error = errno;
+                char* url = ConnNetInfo_URL(uuu->net_info);
+                CORE_LOGF_ERRNO_X(24, eLOG_Error, error,
+                                  ("[HTTP%s%s]  Cannot allocate response chunk"
+                                   " (%lu byte%s)",
+                                   url ? "; " : "",
+                                   url ? url  : "",
+                                   (unsigned long) size, &"s"[size == 1]));
+                if (url)
+                    free(url);
+                return eIO_Unknown;
+            }
+        } else if (uuu->chunked) {
+            assert(uuu->expected != (TNCBI_BigCount)(-1L));
+            if (size > uuu->expected - uuu->received)
+                size = uuu->expected - uuu->received;
+            xxx = 0;
+        } else if (uuu->expected == uuu->received) {
+            uuu->conn_state = eCS_DoneBody;
+            return eIO_Closed;
+        } else
+            xxx = 0;
+        status = SOCK_Read(uuu->sock, buf, size, n_read, how);
+        if (xxx  &&  !BUF_AppendEx(xxx, buf, size, buf, *n_read)) {
+            int error = errno;
+            char* url = ConnNetInfo_URL(uuu->net_info);
+            CORE_LOGF_ERRNO_X(25, eLOG_Error, error,
+                              ("[HTTP%s%s]  Cannot collect response body",
+                               url ? "; " : "",
+                               url ? url  : ""));
+            if (url)
+                free(url);
+            free(buf);
+            status = eIO_Unknown;
+        }
+        return status;
+    }
+
+    if ((status = x_ReadChunkHead(uuu, !uuu->expected)) != eIO_Success)
+        return status;
+
+    if (uuu->expected) {
+        assert(uuu->expected != (TNCBI_BigCount)(-1L)  &&  !uuu->received);
+        if (size > uuu->expected)
+            size = uuu->expected;
+        return s_ReadData(uuu, buf, size, n_read, how);
+    }
+
+    uuu->conn_state = eCS_DoneBody;
+    return x_ReadChunkTail(uuu);
+}
+
+
+static int/*bool*/ x_IsErrorHeader(SHttpConnector* uuu)
+{
+    if (uuu->error_header == eDefault) {
+        char val[32];
+        ConnNetInfo_GetValue(0, "HTTP_ERROR_HEADER_ONLY", val, sizeof(val), 0);
+        uuu->error_header = ConnNetInfo_Boolean(val) ? eOn : eOff;
+    }
+    return uuu->error_header == eOn ? 1/*true*/ : 0/*false*/;
 }
 
 
@@ -754,42 +1177,59 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu,
                                SRetry*         retry,
                                EExtractMode    extract)
 {
-    int        server_error = 0;
-    int        http_status;
-    EIO_Status status;
-    char*      header;
-    size_t     size;
+    enum EHTTP_Tag {
+        eHTTP_NcbiMsg          = 1 << 0,
+        eHTTP_NcbiSid          = 1 << 1,
+        eHTTP_Location         = 1 << 2,
+        eHTTP_Connection       = 1 << 3,
+        eHTTP_Authenticate     = 1 << 4,
+        eHTTP_ContentLength    = 1 << 5,
+        eHTTP_TransferEncoding = 1 << 6
+    };
+    typedef unsigned short THTTP_Tags;  /* Bitwise-OR of EHTTP_Tag */
+    char*             url = 0, *hdr, *s;
+    EHTTP_HeaderParse header_parse;
+    int               http_code;
+    size_t            size, n;
+    EIO_Status        status;
+    int               fatal;
+    THTTP_Tags        tags;
 
-    assert(uuu->sock  &&  uuu->read_state == eRS_ReadHeader);
-    retry->mode = eRetry_None;
-    retry->data = 0;
+    assert(uuu->sock  &&  uuu->conn_state == eCS_ReadHeader);
+    memset(retry, 0, sizeof(*retry));
+    /*retry->mode = eRetry_None;
+      retry->data = 0;*/
 
     /* line by line HTTP header input */
     for (;;) {
-        size_t n;
         /* do we have full header yet? */
-        size = BUF_Size(uuu->http);
-        if (!(header = (char*) malloc(size + 1))) {
-            char* url = ConnNetInfo_URL(uuu->net_info);
-            CORE_LOGF_X(7, eLOG_Error,
-                        ("[HTTP%s%s]  Cannot allocate header, %lu byte%s",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : "",
-                         (unsigned long) size, &"s"[size == 1]));
-            if (url)
-                free(url);
-            return eIO_Unknown;
+        if ((size = BUF_Size(uuu->http)) >= 4) {
+            if (!(hdr = (char*) malloc(size + 1))) {
+                int error = errno;
+                assert(!url);
+                url = ConnNetInfo_URL(uuu->net_info);
+                CORE_LOGF_ERRNO_X(7, eLOG_Error, error,
+                                  ("[HTTP%s%s]  Cannot allocate header"
+                                   " (%lu bytes)",
+                                   url ? "; " : "",
+                                   url ? url  : "",
+                                   (unsigned long) size));
+                if (url)
+                    free(url);
+                return eIO_Unknown;
+            }
+            verify(BUF_Peek(uuu->http, hdr, size) == size);
+            if (memcmp(&hdr[size - 4], "\r\n\r\n", 4) == 0) {
+                /* full header captured */
+                hdr[size] = '\0';
+                break;
+            }
+            free(hdr);
         }
-        verify(BUF_Peek(uuu->http, header, size) == size);
-        header[size] = '\0';
-        if (size >= 4  &&  strcmp(&header[size - 4], "\r\n\r\n") == 0)
-            break/*full header captured*/;
-        free(header);
 
         status = SOCK_StripToPattern(uuu->sock, "\r\n", 2, &uuu->http, &n);
 
         if (status != eIO_Success  ||  size + n != BUF_Size(uuu->http)) {
-            char* url;
             ELOG_Level level;
             if (status == eIO_Timeout) {
                 const STimeout* tmo = SOCK_GetTimeout(uuu->sock, eIO_Read);
@@ -803,12 +1243,12 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu,
                     level = eLOG_Trace;
             } else
                 level = eLOG_Error;
+            assert(!url);
             url = ConnNetInfo_URL(uuu->net_info);
             CORE_LOGF_X(8, level,
                         ("[HTTP%s%s]  Cannot %s header (%s)",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : "",
-                         status != eIO_Success
+                         url ? "; " : "",
+                         url ? url  : "", status != eIO_Success
                          ? "read" : "scan",
                          IO_StatusStr(status != eIO_Success
                                       ? status : eIO_Unknown)));
@@ -818,249 +1258,426 @@ static EIO_Status s_ReadHeader(SHttpConnector* uuu,
         }
     }
     /* the entire header has been read */
-    uuu->read_state = eRS_ReadBody;
-    status = eIO_Success;
+    uuu->conn_state = eCS_ReadBody;
     BUF_Erase(uuu->http);
 
     /* HTTP status must come on the first line of the response */
-    if (sscanf(header, "HTTP/%*d.%*d %d ", &http_status) != 1 || !http_status)
-        http_status = -1;
-    if (http_status < 200  ||  299 < http_status) {
-        server_error = http_status;
-        if (http_status == 301  ||  http_status == 302  ||  http_status == 307)
+    fatal = 0/*false*/;
+    if (sscanf(hdr, "HTTP/%*d.%*d %d ", &http_code) != 1  ||  !http_code)
+        http_code = -1;
+    uuu->http_code = http_code;
+    if (http_code < 200  ||  299 < http_code) {
+        if      (http_code == 301  ||  http_code == 302  ||  http_code == 307)
             retry->mode = eRetry_Redirect;
-        else if (http_status == 401)
+        else if (http_code == 303)
+            retry->mode = eRetry_Redirect303;
+        else if (http_code == 401)
             retry->mode = eRetry_Authenticate;
-        else if (http_status == 407)
+        else if (http_code == 407)
             retry->mode = eRetry_ProxyAuthenticate;
-        else if (http_status < 0  ||  http_status == 403 || http_status == 404)
-            uuu->net_info->max_try = 0;
-    }
-    uuu->code = http_status < 0 ? -1 : http_status;
+        else if (http_code <=   0  ||
+                 http_code == 400  ||  http_code == 403  ||
+                 http_code == 404  ||  http_code == 405  ||
+                 http_code == 406  ||  http_code == 410) {
+            fatal = 1/*true*/;
+        }
+    } else
+        http_code = 0/*no server error*/;
 
-    if (!(uuu->flags & fHTTP_KeepHeader)
-        &&  (server_error  ||  !uuu->error_header)
+    if ((http_code  ||  !x_IsErrorHeader(uuu))
         &&  uuu->net_info->debug_printout == eDebugPrintout_Some) {
         /* HTTP header gets printed as part of data logging when
            uuu->net_info->debug_printout == eDebugPrintout_Data. */
         const char* header_header;
-        if (!server_error)
+        if (!http_code)
             header_header = "HTTP header";
+        else if (fatal)
+            header_header = "HTTP header (fatal)";
         else if (uuu->flags & fHTTP_KeepHeader)
             header_header = "HTTP header (error)";
         else if (retry->mode == eRetry_Redirect)
-            header_header = "HTTP header (moved)";
-        else if (retry->mode)
+            header_header = "HTTP header (redirect)";
+        else if (retry->mode == eRetry_Redirect303)
+            header_header = "HTTP header (see other)";
+        else if (retry->mode & eRetry_Authenticate)
             header_header = "HTTP header (authentication)";
-        else if (!uuu->net_info->max_try)
-            header_header = "HTTP header (unrecoverable error)";
+        else if (retry->mode)
+            header_header = 0, assert(0);
         else
-            header_header = "HTTP header (server error, retry available)";
-        CORE_DATA_X(9, header, size, header_header);
+            header_header = "HTTP header (retriable server error)";
+        assert(!url);
+        url = ConnNetInfo_URL(uuu->net_info);
+        CORE_DATAF_X(9, fatal ? eLOG_Error : eLOG_Note, hdr, size,
+                     ("[HTTP%s%s]  %s",
+                      url ? "; " : "",
+                      url ? url  : "", header_header));
     }
 
-    {{
-        /* parsing "NCBI-Message" tag */
-        static const char kNcbiMessageTag[] = "\n" HTTP_NCBI_MESSAGE " ";
-        const char* s;
-        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
-            if (strncasecmp(s, kNcbiMessageTag, sizeof(kNcbiMessageTag)-1)==0){
-                const char* message = s + sizeof(kNcbiMessageTag) - 1;
-                while (*message  &&  isspace((unsigned char)(*message)))
-                    message++;
-                if (!(s = strchr(message, '\r')))
-                    s = strchr(message, '\n');
-                assert(s);
+    if (!(uuu->flags & fHTTP_KeepHeader)) {
+        if (fatal) {
+            if (!uuu->net_info->debug_printout  &&  !uuu->parse_header) {
+                char text[40];
+                assert(http_code);
+                if (!url)
+                    url = ConnNetInfo_URL(uuu->net_info);
+                if (http_code > 0)
+                    sprintf(text, "%d", http_code);
+                else
+                    strncpy0(text, "occurred", sizeof(text) - 1);
+                CORE_LOGF_X(22, eLOG_Error,
+                            ("[HTTP%s%s]  Fatal error %s",
+                             url ? "; " : "",
+                             url ? url  : "", text));
+            }
+            if (!uuu->adjust)
+                uuu->net_info->max_try = 0;
+        }
+
+        header_parse = uuu->parse_header
+            ? uuu->parse_header(hdr, uuu->user_data, http_code)
+            : eHTTP_HeaderSuccess;
+
+        if (header_parse == eHTTP_HeaderError) {
+            retry->mode = eRetry_None;
+            if (!http_code/*i.e. was okay*/  &&  x_IsErrorHeader(uuu)
+                &&  uuu->net_info->debug_printout == eDebugPrintout_Some) {
+                if (!url)
+                    url = ConnNetInfo_URL(uuu->net_info);
+                CORE_DATAF_X(9, eLOG_Note, hdr, size,
+                             ("[HTTP%s%s]  HTTP header (parse error)",
+                              url ? "; " : "",
+                              url ? url  : ""));
+            }
+        } else if (header_parse == eHTTP_HeaderComplete) {
+            /* i.e. stop processing */
+            retry->mode = eRetry_None;
+            http_code = 0/*fake success*/;
+        }
+    } else {
+        header_parse = eHTTP_HeaderSuccess;
+        retry->mode = eRetry_None;
+    }
+
+    tags = eHTTP_NcbiMsg | eHTTP_Connection
+        | (retry->mode & eRetry_Redirect     ? eHTTP_Location     :
+           retry->mode & eRetry_Authenticate ? eHTTP_Authenticate : 0)
+        | (uuu->flags & fHTTP_NoAutomagicSID ? 0 : eHTTP_NcbiSid);
+    if (uuu->http_code / 100 != 1  &&  uuu->http_code != 204)
+        tags |= eHTTP_ContentLength | eHTTP_TransferEncoding;
+
+    /* NB: the loop may clobber "hdr" unless fHTTP_KeepHeader is set */
+    for (s = strchr(hdr, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
+        if (tags & eHTTP_NcbiMsg) {
+            /* parse NCBI message */
+            static const char kNcbiMsgTag[] = "\n" HTTP_NCBI_MESSAGE;
+            if (strncasecmp(s, kNcbiMsgTag, sizeof(kNcbiMsgTag) - 1) == 0) {
+                char* msg = s + sizeof(kNcbiMsgTag) - 1, *e;
+                while (*msg  &&  isspace((unsigned char)(*msg)))
+                    ++msg;
+                if (!(e = strchr(msg, '\r'))  &&  !(e = strchr(msg, '\n')))
+                    break;
                 do {
-                    if (!isspace((unsigned char) s[-1]))
+                    if (!isspace((unsigned char) e[-1]))
                         break;
-                } while (--s > message);
-                if (message != s) {
+                } while (--e > msg);
+                n = (size_t)(e - msg);
+                if (n) {
+                    char c = msg[n];
+                    msg[n] = '\0';
                     if (s_MessageHook) {
                         if (s_MessageIssued <= 0) {
                             s_MessageIssued  = 1;
-                            s_MessageHook(message);
+                            s_MessageHook(msg);
                         }
                     } else {
                         s_MessageIssued = -1;
                         CORE_LOGF_X(10, eLOG_Critical,
-                                    ("[NCBI-MESSAGE]  %.*s",
-                                     (int)(s - message), message));
+                                    ("[NCBI-MESSAGE]  %s", msg));
                     }
+                    msg[n] = c;
                 }
-                break;
+                tags &= ~eHTTP_NcbiMsg;
+                continue;
             }
         }
-    }}
-
-    if (uuu->flags & fHTTP_KeepHeader) {
-        retry->mode = eRetry_None;
-        if (!BUF_Write(&uuu->r_buf, header, size)) {
-            char* url = ConnNetInfo_URL(uuu->net_info);
-            CORE_LOGF_X(11, eLOG_Error,
-                        ("[HTTP%s%s]  Cannot keep HTTP header",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : ""));
-            if (url)
-                free(url);
-            status = eIO_Unknown;
-        }
-        free(header);
-        return status;
-    }
-
-    if (uuu->parse_header
-        &&  !uuu->parse_header(header, uuu->user_data, server_error)) {
-        server_error = 1/*fake, but still boolean true*/;
-    }
-
-    if (retry->mode == eRetry_Redirect) {
-        /* parsing "Location" pointer */
-        static const char kLocationTag[] = "\nLocation: ";
-        char* s;
-        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
-            if (strncasecmp(s, kLocationTag, sizeof(kLocationTag) - 1) == 0) {
-                char* location = s + sizeof(kLocationTag) - 1;
-                while (*location  &&  isspace((unsigned char)(*location)))
-                    location++;
-                if (!(s = strchr(location, '\r')))
-                    s = strchr(location, '\n');
-                if (!s)
+        if (tags & eHTTP_NcbiSid) {
+            /* parse NCBI SID */
+            static const char kNcbiSidTag[] = "\n" HTTP_NCBI_SID;
+            if (strncasecmp(s, kNcbiSidTag, sizeof(kNcbiSidTag) - 1) == 0) {
+                char* sid = s + sizeof(kNcbiSidTag) - 1, *e;
+                while (*sid  &&  isspace((unsigned char)(*sid)))
+                    ++sid;
+                if (!(e = strchr(sid, '\r'))  &&  !(e = strchr(sid, '\n')))
                     break;
                 do {
-                    if (!isspace((unsigned char) s[-1]))
+                    if (!isspace((unsigned char) e[-1]))
                         break;
-                } while (--s > location);
-                if (s != location) {
-                    size_t len = (size_t)(s - location);
-                    memmove(header, location, len);
-                    header[len] = '\0';
-                    retry->data = header;
+                } while (--e > sid);
+                n = (size_t)(e - sid);
+                if (n) {
+                    char c = sid[n];
+                    sid[n] = '\0';
+                    ConnNetInfo_OverrideUserHeader(uuu->net_info, s + 1);
+                    sid[n] = c;
                 }
-                break;
+                tags &= ~eHTTP_NcbiSid;
+                continue;
             }
         }
-    } else if (retry->mode) {
-        /* parsing "Authenticate" tags */
-        static const char kAuthenticateTag[] = "-Authenticate: ";
-        char* s;
-        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
+        if (tags & eHTTP_Location) {
+            /* parse "Location" pointer */
+            static const char kLocationTag[] = "\nLocation:";
+            assert(http_code);
+            if (strncasecmp(s, kLocationTag, sizeof(kLocationTag) - 1) == 0) {
+                char* loc = s + sizeof(kLocationTag) - 1, *e;
+                while (*loc  &&  isspace((unsigned char)(*loc)))
+                    ++loc;
+                if (!(e = strchr(loc, '\r'))  &&  !(e = strchr(loc, '\n')))
+                    break;
+                do {
+                    if (!isspace((unsigned char) e[-1]))
+                        break;
+                } while (--e > loc);
+                n = (size_t)(e - loc);
+                if (n) {
+                    memmove(hdr, loc, n);
+                    hdr[n] = '\0';
+                    retry->data = hdr;
+                }
+                tags &= ~eHTTP_Location;
+                continue;
+            }
+        }
+        if (tags & eHTTP_Connection) {
+            /* parse "Connection" tag */
+            static const char kConnectionTag[] = "\nConnection:";
+            if (strncasecmp(s, kConnectionTag, sizeof(kConnectionTag)-1) == 0){
+                char* con = s + sizeof(kConnectionTag) - 1, *e;
+                while (*con  &&  isspace((unsigned char)(*con)))
+                    ++con;
+                if (!(e = strchr(con, '\r'))  &&  !(e = strchr(con, '\n')))
+                    break;
+                do {
+                    if (!isspace((unsigned char) e[-1]))
+                        break;
+                } while (--e > con);
+                n = (size_t)(e - con);
+                if (strncasecmp(con, "close", n) == 0)
+                    uuu->keepalive = 0;
+                tags &= ~eHTTP_Connection;
+                continue;
+            }
+        }
+        if (tags & eHTTP_Authenticate) {
+            /* parse "Authenticate"/"Proxy-Authenticate" tags */
+            static const char kAuthenticateTag[] = "-Authenticate:";
+            assert(http_code);
             if (strncasecmp(s + (retry->mode == eRetry_Authenticate ? 4 : 6),
-                            kAuthenticateTag, sizeof(kAuthenticateTag)-1)==0){
+                            kAuthenticateTag, sizeof(kAuthenticateTag)-1)==0) {
                 if ((retry->mode == eRetry_Authenticate
                      &&  strncasecmp(s, "\nWWW",   4) == 0)  ||
                     (retry->mode == eRetry_ProxyAuthenticate
                      &&  strncasecmp(s, "\nProxy", 6) == 0)) {
-                    char* challenge = s + sizeof(kAuthenticateTag) - 1, *e;
-                    challenge += retry->mode == eRetry_Authenticate ? 4 : 6;
-                    while (*challenge && isspace((unsigned char)(*challenge)))
-                        challenge++;
-                    if (!(e = strchr(challenge, '\r')))
-                        e = strchr(challenge, '\n');
-                    else
-                        s = e;
-                    if (!e)
+                    char* txt = s + sizeof(kAuthenticateTag) - 1, *e;
+                    txt += retry->mode == eRetry_Authenticate ? 4 : 6;
+                    while (*txt  &&  isspace((unsigned char)(*txt)))
+                        ++txt;
+                    if (!(e = strchr(txt, '\r'))  &&  !(e = strchr(txt, '\n')))
                         break;
                     do {
                         if (!isspace((unsigned char) e[-1]))
                             break;
-                    } while (--e > challenge);
-                    if (e != challenge) {
-                        size_t len = (size_t)(e - challenge);
-                        if (s_IsValidAuth(challenge, len)) {
-                            memmove(header, challenge, len);
-                            header[len] = '\0';
-                            retry->data = header;
+                    } while (--e > txt);
+                    n = (size_t)(e - txt);
+                    if (n  &&  x_IsValidChallenge(txt, n)) {
+                        memmove(hdr, txt, n);
+                        hdr[n] = '\0';
+                        retry->data = hdr;
+                    }
+                    tags &= ~eHTTP_Authenticate;
+                    continue;
+                }
+            }
+        }
+        if (tags & eHTTP_ContentLength) {
+            /* parse "Content-Length" for non-HEAD/CONNECT */
+            static const char kContentLenTag[] = "\nContent-Length:";
+            if (strncasecmp(s, kContentLenTag, sizeof(kContentLenTag)-1) == 0){
+                if (!uuu->chunked
+                    &&  uuu->net_info->req_method != eReqMethod_Head
+                    &&  uuu->net_info->req_method != eReqMethod_Connect) {
+                    const char* len = s + sizeof(kContentLenTag) - 1, *e;
+                    int tmp;
+                    while (*len  &&  isspace((unsigned char)(*len)))
+                        len++;
+                    if (!(e = strchr(len, '\r'))  &&  !(e = strchr(len, '\n')))
+                        break;
+                    do {
+                        if (!isspace((unsigned char) e[-1]))
                             break;
-                        }
+                    } while (--e > len);
+                    if (e == len
+                        ||  sscanf(len, "%" NCBI_BIGCOUNT_FORMAT_SPEC "%n",
+                                   &uuu->expected, &tmp) < 1
+                        ||  len + tmp != e) {
+                        uuu->expected = (TNCBI_BigCount)(-1L)/*no checks*/;
                     }
                 }
+                tags &= ~eHTTP_ContentLength;
+                continue;
             }
         }
-    } else if (!server_error) {
-        static const char kContentLengthTag[] = "\nContent-Length: ";
-        const char* s;
-        for (s = strchr(header, '\n');  s  &&  *s;  s = strchr(s + 1, '\n')) {
-            if (!strncasecmp(s,kContentLengthTag,sizeof(kContentLengthTag)-1)){
-                const char* expected = s + sizeof(kContentLengthTag) - 1;
-                while (*expected  &&  isspace((unsigned char)(*expected)))
-                    expected++;
-                if (!(s = strchr(expected, '\r')))
-                    s = strchr(expected, '\n');
-                assert(s);
+        if (tags & eHTTP_TransferEncoding) {
+            static const char kTransferEncodingTag[] = "\nTransfer-Encoding:";
+            if (strncasecmp(s, kTransferEncodingTag,
+                            sizeof(kTransferEncodingTag)-1) == 0) {
+                const char* te = s + sizeof(kTransferEncodingTag) - 1, *e;
+                while (*te  &&  isspace((unsigned char)(*te)))
+                    te++;
+                if (!(e = strchr(te, '\r'))  &&  !(e = strchr(te, '\n')))
+                    break;
                 do {
-                    if (!isspace((unsigned char) s[-1]))
+                    if (!isspace((unsigned char) e[-1]))
                         break;
-                } while (--s > expected);
-                if (s != expected) {
-                    int n;
-                    if (sscanf(expected, "%" NCBI_BIGCOUNT_FORMAT_SPEC "%n",
-                               &uuu->expected, &n) < 1  ||  expected + n != s){
-                        uuu->expected = 0/*no checks*/;
-                    } else if (!uuu->expected)
-                        uuu->expected = (TNCBI_BigCount)(-1L);
+                } while(--e > te);
+                n = (size_t)(e - te);
+                if (n < 7  ||  strncasecmp(&e[-7], "chunked", 7) != 0
+                    ||  (!isspace((unsigned char) e[-8])
+                         &&  e[-8] != ':'  &&  e[-8] != ',')) {
+                    uuu->keepalive = 0;
+                } else
+                    uuu->chunked = 1;
+                uuu->expected = 0;
+                tags &= ~(eHTTP_ContentLength | eHTTP_TransferEncoding);
+                if (!uuu->net_info->version) {
+                    CORE_LOG(eLOG_Warning,
+                             "Chunked transfer encoding within HTTP/1.0");
                 }
-                break;
+                continue;
             }
         }
+        if (!tags)
+            break;
     }
+
+    if (uuu->flags & fHTTP_KeepHeader) {
+        assert(retry->mode == eRetry_None);
+        if (!BUF_AppendEx(&uuu->r_buf, hdr, 0, hdr, size)) {
+            int error = errno;
+            if (!url)
+                url = ConnNetInfo_URL(uuu->net_info);
+            CORE_LOGF_ERRNO_X(11, eLOG_Error, error,
+                              ("[HTTP%s%s]  Cannot save HTTP header",
+                               url ? "; " : "",
+                               url ? url  : ""));
+            free(hdr);
+        }
+        if (url)
+            free(url);
+        return eIO_Success;
+    }
+
     if (!retry->data)
-        free(header);
+        free(hdr);
 
-    /* skip & printout the content, if a server error was flagged */
-    if (server_error && uuu->net_info->debug_printout == eDebugPrintout_Some) {
-        char* url = ConnNetInfo_URL(uuu->net_info);
-        BUF   buf = 0;
-        char* body;
+    if (http_code == 0) {
+        if (url)
+            free(url);
+        return header_parse == eHTTP_HeaderError ? eIO_Unknown : eIO_Success;
+    }
+    assert(header_parse != eHTTP_HeaderComplete);
 
-        SOCK_SetTimeout(uuu->sock, eIO_Read, 0);
-        /* read until EOF */
-        SOCK_StripToPattern(uuu->sock, 0, 0, &buf, 0);
-        if (!(size = BUF_Size(buf))) {
-            CORE_LOGF_X(12, eLOG_Trace,
-                        ("[HTTP%s%s]  No HTTP body received with server error",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : ""));
-        } else if ((body = (char*) malloc(size)) != 0) {
-            size_t n = BUF_Read(buf, body, size);
+    if (uuu->net_info->debug_printout
+        ||  header_parse == eHTTP_HeaderContinue) {
+        if (http_code > 0/*real error, w/only a very short body expected*/) {
+            static const STimeout kDefConnTimeout = {
+                (unsigned int)
+                  DEF_CONN_TIMEOUT,
+                (unsigned int)
+                ((DEF_CONN_TIMEOUT - (unsigned int) DEF_CONN_TIMEOUT)
+                 * 1000000.0)
+            };
+            SOCK_SetTimeout(uuu->sock, eIO_Read, &kDefConnTimeout);
+        }
+        do {
+            n = 0;
+            status = s_ReadData(uuu, &uuu->http, 0, &n, eIO_ReadPlain);
+            uuu->received += n;
+        } while (status == eIO_Success);
+        if (header_parse == eHTTP_HeaderContinue  &&  status == eIO_Closed) {
+            if (url)
+                free(url);
+            return retry->mode ? status : eIO_Success;
+        }
+    } else
+        status = eIO_Success/*NB: irrelevant*/;
+
+    if (uuu->net_info->debug_printout == eDebugPrintout_Some
+        ||  header_parse == eHTTP_HeaderContinue) {
+        const char* err = status != eIO_Closed ? IO_StatusStr(status) : 0;
+        if (!url)
+            url = ConnNetInfo_URL(uuu->net_info);
+        assert(status != eIO_Success);
+        assert(!err  ||  *err);
+        if (header_parse == eHTTP_HeaderContinue) {
+            assert(err/*status != eIO_Closed*/);
+            CORE_LOGF_X(19, eLOG_Warning,
+                        ("[HTTP%s%s]  Server error message incomplete (%s)",
+                         url ? "; " : "",
+                         url ? url  : "", err));
+        } else if (!(size = BUF_Size(uuu->http))) {
+            CORE_LOGF_X(12, err  &&  !(uuu->flags & fHTTP_SuppressMessages)
+                        ? eLOG_Warning : eLOG_Trace,
+                        ("[HTTP%s%s]  No error message received from server"
+                         "%s%s%s",
+                         url ? "; " : "",
+                         url ? url  : "",
+                         err ? " (" : "",
+                         err ? err  : "", &")"[!err]));
+        } else if ((s = (char*) malloc(size)) != 0) {
+            n = BUF_Read(uuu->http, s, size);
             if (n != size) {
                 CORE_LOGF_X(13, eLOG_Error,
-                            ("[HTTP%s%s]  Cannot read server error body"
-                             " from buffer (%lu out of %lu)",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : "",
+                            ("[HTTP%s%s]  Cannot extract server error message"
+                             " from buffer entirely (%lu/%lu)",
+                             url ? "; " : "",
+                             url ? url  : "",
                              (unsigned long) n, (unsigned long) size));
             }
             if (n) {
-                CORE_DATAF_X(14, body, n,
-                             ("[HTTP%s%s] Server error body",
-                              url  &&  *url ? "; " : "",
-                              url           ? url  : ""));
+                CORE_DATAF_X(14, eLOG_Note, s, n,
+                             ("[HTTP%s%s]  Server error message%s%s%s",
+                              url ? "; " : "",
+                              url ? url  : "",
+                              err ? " (" : "",
+                              err ? err  : "", &")"[!err]));
             }
-            free(body);
+            free(s);
         } else {
             CORE_LOGF_X(15, eLOG_Error,
-                        ("[HTTP%s%s]  Cannot allocate server error body,"
-                         " %lu byte%s",
-                         url  &&  *url ? "; " : "",
-                         url           ? url  : "",
+                        ("[HTTP%s%s]  Cannot allocate server error message"
+                         " (%lu byte%s)",
+                         url ? "; " : "",
+                         url ? url  : "",
                          (unsigned long) size, &"s"[size == 1]));
         }
-        BUF_Destroy(buf);
-        if (url)
-            free(url);
     }
 
-    return server_error ? eIO_Unknown : status;
+    if (url)
+        free(url);
+    if (header_parse != eHTTP_HeaderContinue)
+        BUF_Erase(uuu->http);
+    return eIO_Unknown;
 }
 
 
-/* Prepare connector for reading. Open socket if necessary and
- * make initial connect and send, re-trying if possible until success.
+/* Prepare connector for reading.  Open socket if necessary and make an initial
+ * connect and send, re-trying if possible until success.
  * Return codes:
  *   eIO_Success = success, connector is ready for reading (uuu->sock != NULL);
- *   eIO_Timeout = maybe (check uuu->sock) connected and no data yet available;
+ *   eIO_Timeout = maybe (check uuu->sock) connected and no data available yet;
  *   other code  = error, not connected (uuu->sock == NULL).
+ * NB: On error, uuu->r_buf may be updated to contain new pending data!
  */
 static EIO_Status s_PreRead(SHttpConnector* uuu,
                             const STimeout* timeout,
@@ -1069,56 +1686,89 @@ static EIO_Status s_PreRead(SHttpConnector* uuu,
     EIO_Status status;
 
     for (;;) {
-        EIO_Status adjust_status;
+        EIO_Status adjust;
         SRetry     retry;
 
-        status = s_ConnectAndSend(uuu, extract);
-        if (!uuu->sock) {
-            assert(status != eIO_Success);
+        if ((status = s_ConnectAndSend(uuu, timeout, extract)) != eIO_Success)
             break;
-        }
-        if (status != eIO_Success) {
-            if (status != eIO_Timeout  ||
-                status == SOCK_Status(uuu->sock, eIO_Read)/*pending*/)
+        assert(!uuu->w_len);
+
+        if (uuu->conn_state == eCS_WriteRequest) {
+            assert(x_IsWriteThru(uuu)  &&  uuu->chunked);
+            BUF_Erase(uuu->w_buf);
+            if (!BUF_Write(&uuu->w_buf, "0\r\n\r\n", 5)) {
+                status = eIO_Unknown;
                 break;
+            }
+            uuu->w_len = 5;
+            uuu->conn_state  = eCS_FlushRequest;
+
+            status = s_ConnectAndSend(uuu, timeout, extract);
+            if (status != eIO_Success)
+                break;
+            assert(!uuu->w_len);
         }
+
         if (extract == eEM_Flush)
-            break;
+            return eIO_Success;
+
+        assert(uuu->sock  &&  uuu->conn_state > eCS_FlushRequest);
+
+        if (extract == eEM_Wait
+            &&  (uuu->conn_state & eCS_DoneBody) == eCS_DoneBody) {
+            return eIO_Closed;
+        }
 
         /* set read timeout before leaving (s_Read() expects it set) */
         SOCK_SetTimeout(uuu->sock, eIO_Read, timeout);
 
-        if (uuu->read_state & eRS_ReadBody)
-            break;
+        if (uuu->conn_state & eCS_ReadBody)
+            return eIO_Success;
 
+        assert(uuu->conn_state == eCS_ReadHeader);
         if ((status = s_ReadHeader(uuu, &retry, extract)) == eIO_Success) {
-            assert((uuu->read_state & eRS_ReadBody)  &&  !retry.mode);
+            assert((uuu->conn_state & eCS_ReadBody)  &&  !retry.mode);
             /* pending output data no longer needed */
             BUF_Erase(uuu->w_buf);
             break;
         }
+
         assert(status != eIO_Timeout  ||  !retry.mode);
         /* if polling then bail out with eIO_Timeout */
         if (status == eIO_Timeout
             &&  (extract == eEM_Wait
                  ||  (timeout  &&  !(timeout->sec | timeout->usec)))) {
             assert(!retry.data);
-            break;
+            return eIO_Timeout;
         }
 
-        /* HTTP header read error; disconnect and try to use another server */
+        /* HTTP header read error; disconnect and retry */
         s_DropConnection(uuu);
-        adjust_status = s_Adjust(uuu, &retry, extract);
+        assert(status != eIO_Success);
+        adjust = s_Adjust(uuu, &retry, extract);
         if (retry.data)
             free((void*) retry.data);
-        if (adjust_status != eIO_Success) {
-            if (adjust_status != eIO_Closed)
-                status = adjust_status;
+        if (adjust != eIO_Success) {
+            if (adjust != eIO_Closed)
+                status  = adjust;
             break;
         }
     }
 
+    if (BUF_Size(uuu->http)  &&  !BUF_Splice(&uuu->r_buf, uuu->http))
+        BUF_Erase(uuu->http);
+    assert(!BUF_Size(uuu->http));
     return status;
+}
+
+
+/* NB: Sets the EOM read state */
+static void x_Close(SHttpConnector* uuu)
+{
+    /* since this is merely an acknowledgement, it will be "instant" */
+    SOCK_SetTimeout(uuu->sock, eIO_Close, &kZeroTimeout);
+    SOCK_CloseEx(uuu->sock, 0/*retain SOCK*/);
+    uuu->conn_state = eCS_Eom;
 }
 
 
@@ -1128,88 +1778,106 @@ static EIO_Status s_Read(SHttpConnector* uuu, void* buf,
 {
     EIO_Status status;
 
-    assert(uuu->sock  &&  n_read  &&  (uuu->read_state & eRS_ReadBody));
+    assert(uuu->conn_state & eCS_ReadBody);
+    assert(uuu->sock  &&  size  &&  n_read  &&  !*n_read);
+    assert(uuu->net_info->req_method != eReqMethod_Connect);
 
-    if (uuu->read_state == eRS_DoneBody) {
-        *n_read = 0;
-        return eIO_Closed;
+    if ((uuu->conn_state & eCS_DoneBody) == eCS_DoneBody) {
+        if (!uuu->chunked)
+            return eIO_Closed;
+        if (uuu->conn_state == eCS_Discard)
+            x_Close(uuu);
+        return uuu->conn_state != eCS_Eom ? x_ReadChunkTail(uuu) : eIO_Closed;
     }
+    assert(uuu->received <= uuu->expected);
 
-    if (uuu->flags & fHTTP_UrlDecodeInput) {
+    if (uuu->net_info->req_method == eReqMethod_Head
+        ||  uuu->http_code / 100 == 1
+        ||  uuu->http_code == 204
+        ||  uuu->http_code == 304) {
+        status = eIO_Closed;
+    } else if (!uuu->net_info->version && (uuu->flags & fHCC_UrlDecodeInput)) {
         /* read and URL-decode */
-        size_t n_peeked, n_decoded;
-        size_t peek_size = 3 * size;
-        void*  peek_buf  = malloc(peek_size);
+        size_t         n_peeked, n_decoded;
+        TNCBI_BigCount remain    = uuu->expected - uuu->received;
+        size_t         peek_size = size > remain ? (size_t)(remain + 1) : size;
+        void*          peek_buf  = malloc(peek_size *= 3);
 
         /* peek the data */
         status= SOCK_Read(uuu->sock,peek_buf,peek_size,&n_peeked,eIO_ReadPeek);
-        if (status != eIO_Success) {
-            assert(!n_peeked);
-            *n_read = 0;
-        } else {
+        if (status == eIO_Success) {
             if (URL_DecodeEx(peek_buf,n_peeked,&n_decoded,buf,size,n_read,"")){
                 /* decode, then discard successfully decoded data from input */
                 if (n_decoded) {
                     SOCK_Read(uuu->sock,0,n_decoded,&n_peeked,eIO_ReadPersist);
                     assert(n_peeked == n_decoded);
                     uuu->received += n_decoded;
-                    status = eIO_Success;
-                } else if (SOCK_Status(uuu->sock, eIO_Read) == eIO_Closed) {
-                    /* we are at EOF, and remaining data cannot be decoded */
-                    status = eIO_Unknown;
+                } else {
+                    assert(!*n_read);
+                    if (size) {
+                        /* if at EOF and remaining data cannot be decoded */
+                        status = SOCK_Status(uuu->sock, eIO_Read);
+                        if (status == eIO_Closed)
+                            status  = eIO_Unknown;
+                    }
                 }
             } else
-                status = eIO_Unknown;
-
+                status  = eIO_Unknown;
             if (status != eIO_Success) {
                 char* url = ConnNetInfo_URL(uuu->net_info);
                 CORE_LOGF_X(16, eLOG_Error,
-                            ("[HTTP%s%s]  Cannot URL-decode data",
-                             url  &&  *url ? "; " : "",
-                             url           ? url  : ""));
+                            ("[HTTP%s%s]  Cannot URL-decode data: %s",
+                             url ? "; " : "",
+                             url ? url  : "", IO_StatusStr(status)));
                 if (url)
                     free(url);
             }
-        }
-        free(peek_buf);
+        } else
+            assert(!n_peeked);
+        if (peek_buf)
+            free(peek_buf);
     } else {
         /* just read, with no URL-decoding */
-        status = SOCK_Read(uuu->sock, buf, size, n_read, eIO_ReadPlain);
+        status = s_ReadData(uuu, buf, size, n_read, eIO_ReadPlain);
         uuu->received += *n_read;
     }
 
-    if (status == eIO_Closed) {
-        /* since this is merely an acknowledgement, it will be "instant" */
-        SOCK_SetTimeout(uuu->sock, eIO_Close, &kZeroTimeout);
-        SOCK_CloseEx(uuu->sock, 0/*retain*/);
-        uuu->read_state = eRS_DoneBody;
-    }
+    if (status == eIO_Closed  &&  !uuu->keepalive)
+        x_Close(uuu);
 
-    if (uuu->expected) {
+    if (uuu->expected != (TNCBI_BigCount)(-1L)) {
         const char* how = 0;
-        if (uuu->received > uuu->expected) {
-             status = eIO_Unknown/*received too much*/;
-             how = "too much";
-        } else if (uuu->expected != (TNCBI_BigCount)(-1L)) {
-            if (status == eIO_Closed  &&  uuu->expected > uuu->received) {
-                status  = eIO_Unknown/*received too little*/;
-                how = "premature EOF in";
+        if (uuu->received < uuu->expected) {
+            if (status == eIO_Closed) {
+                status  = eIO_Unknown;
+                how = "premature EOM in";
             }
-        } else if (uuu->received) {
-            status = eIO_Unknown/*received too much*/;
-            how = "too much";
+        } else {
+            if (uuu->expected < uuu->received) {
+                if (uuu->flags & fHCC_UrlDecodeInput) {
+                    assert(*n_read);
+                    --(*n_read);
+                } else {
+                    TNCBI_BigCount excess = uuu->received - uuu->expected;
+                    assert(*n_read >= excess);
+                    *n_read -= (size_t) excess;
+                }
+                uuu->conn_state = eCS_Discard;
+                status  = eIO_Unknown;
+                how = "too much";
+            }
         }
         if (how) {
             char* url = ConnNetInfo_URL(uuu->net_info);
-            CORE_LOGF(eLOG_Trace,
-                      ("[HTTP%s%s]  Got %s data (received "
-                       "%" NCBI_BIGCOUNT_FORMAT_SPEC " vs. "
-                       "%" NCBI_BIGCOUNT_FORMAT_SPEC " expected)",
-                       url  &&  *url ? "; " : "",
-                       url           ? url  : "", how,
-                       uuu->received,
-                       uuu->expected != (TNCBI_BigCount)(-1L) ?
-                       uuu->expected : 0));
+            CORE_LOGF_X(21, eLOG_Warning,
+                        ("[HTTP%s%s]  Got %s data (received "
+                         "%" NCBI_BIGCOUNT_FORMAT_SPEC " vs. "
+                         "%" NCBI_BIGCOUNT_FORMAT_SPEC " expected)",
+                         url ? "; " : "",
+                         url ? url  : "", how,
+                         uuu->received,
+                         uuu->expected != (TNCBI_BigCount)(-1L) ?
+                         uuu->expected : 0));
             if (url)
                 free(url);
         }
@@ -1225,12 +1893,15 @@ static EIO_Status s_Disconnect(SHttpConnector* uuu,
 {
     EIO_Status status = eIO_Success;
 
+    assert(!(extract & eEM_Wait));  /* here it's only either drop or read */
+
+    BUF_Erase(uuu->http);
     if (extract == eEM_Drop)
         BUF_Erase(uuu->r_buf);
     else if ((status = s_PreRead(uuu, timeout, extract)) == eIO_Success) {
         do {
-            char   buf[4096];
-            size_t x_read;
+            char buf[4096];
+            size_t x_read = 0;
             status = s_Read(uuu, buf, sizeof(buf), &x_read);
             if (!BUF_Write(&uuu->r_buf, buf, x_read))
                 status = eIO_Unknown;
@@ -1241,30 +1912,8 @@ static EIO_Status s_Disconnect(SHttpConnector* uuu,
 
     if (uuu->sock) /* s_PreRead() might have dropped the connection already */
         s_DropConnection(uuu);
-    if (uuu->can_connect == eCC_Once)
-        uuu->can_connect  = eCC_None;
-
+    uuu->can_connect &= ~fCC_Once;
     return status;
-}
-
-
-/* Send the accumulated output data(if any) to server, then close the socket.
- * Regardless of the flush, clear both input and output buffers.
- */
-static void s_FlushAndDisconnect(SHttpConnector* uuu,
-                                 const STimeout* timeout)
-{
-    if (uuu->can_connect != eCC_None
-        &&  ((!uuu->sock  &&  BUF_Size(uuu->w_buf))
-             ||  (uuu->flags & fHTTP_Flushable))) {
-        /* "WRITE" mode and data (or just flag) is still pending */
-        s_PreRead(uuu, timeout, eEM_Drop);
-    }
-    s_Disconnect(uuu, timeout, eEM_Drop);
-    assert(!uuu->sock);
-
-    /* clear pending output data, if any */
-    BUF_Erase(uuu->w_buf);
 }
 
 
@@ -1272,8 +1921,7 @@ static void s_OpenHttpConnector(SHttpConnector* uuu,
                                 const STimeout* timeout)
 {
     /* NOTE: the real connect will be performed on the first "READ", or
-     * "FLUSH/CLOSE", or on "WAIT" on read -- see in "s_ConnectAndSend()" */
-
+     * "FLUSH/CLOSE", or on "WAIT" on read -- see in "s_ConnectAndSend" */
     assert(!uuu->sock);
 
     /* store timeouts for later use */
@@ -1283,17 +1931,30 @@ static void s_OpenHttpConnector(SHttpConnector* uuu,
         uuu->ww_timeout = *timeout;
         uuu->w_timeout  = &uuu->ww_timeout;
     } else {
-        uuu->o_timeout  = timeout;
-        uuu->w_timeout  = timeout;
+        uuu->o_timeout  = kInfiniteTimeout;
+        uuu->w_timeout  = kInfiniteTimeout;
     }
 
     /* reset the auto-reconnect/re-try/auth features */
     uuu->can_connect     = (uuu->flags & fHTTP_AutoReconnect
-                            ? eCC_Unlimited : eCC_Once);
+                            ? fCC_Unlimited | fCC_Once : fCC_Once);
     uuu->major_fault     = 0;
     uuu->minor_fault     = 0;
     uuu->auth_done       = 0;
     uuu->proxy_auth_done = 0;
+}
+
+
+static void s_DestroyHttpConnector(SHttpConnector* uuu)
+{
+    assert(!uuu->sock);
+    if (uuu->cleanup)
+        uuu->cleanup(uuu->user_data);
+    ConnNetInfo_Destroy(uuu->net_info);
+    BUF_Destroy(uuu->http);
+    BUF_Destroy(uuu->r_buf);
+    BUF_Destroy(uuu->w_buf);
+    free(uuu);
 }
 
 
@@ -1371,17 +2032,35 @@ static EIO_Status s_VT_Wait
     case eIO_Read:
         if (BUF_Size(uuu->r_buf))
             return eIO_Success;
-        if (uuu->can_connect == eCC_None)
+        if (uuu->can_connect == fCC_None)
             return eIO_Closed;
-        if ((status = s_PreRead(uuu, timeout, eEM_Wait)) != eIO_Success)
+        status = s_PreRead(uuu, timeout, eEM_Wait);
+        if (BUF_Size(uuu->r_buf))
+            return eIO_Success;
+        if (status != eIO_Success)
             return status;
         assert(uuu->sock);
         return SOCK_Wait(uuu->sock, eIO_Read, timeout);
     case eIO_Write:
-        /* Return 'Closed' if no more writes are allowed (and now - reading) */
-        return uuu->can_connect == eCC_None
-            ||  (uuu->sock  &&  uuu->can_connect == eCC_Once)
-            ? eIO_Closed : eIO_Success;
+        if (uuu->can_connect == fCC_None)
+            return eIO_Closed;
+        if (!x_IsWriteThru(uuu)) {
+            return uuu->sock  &&  uuu->can_connect == fCC_Once
+                ? eIO_Closed : eIO_Success;
+        }
+        if (!uuu->sock  &&  !BUF_Size(uuu->w_buf))
+            return eIO_Success;
+        if (!uuu->sock  ||  uuu->conn_state < eCS_ReadHeader) {
+            status = s_ConnectAndSend(uuu, timeout, eEM_Flush);
+            if (status != eIO_Success)
+                return status;
+        } else
+            return uuu->can_connect == fCC_Once ? eIO_Closed : eIO_Success;
+        assert(uuu->sock);
+        assert(uuu->conn_state < eCS_ReadHeader  &&  !uuu->w_len);
+        return uuu->conn_state < eCS_FlushRequest
+            ? SOCK_Wait(uuu->sock, eIO_Write, timeout)
+            : eIO_Success;
     default:
         assert(0);
         break;
@@ -1398,44 +2077,82 @@ static EIO_Status s_VT_Write
  const STimeout* timeout)
 {
     SHttpConnector* uuu = (SHttpConnector*) connector->handle;
+    EIO_Status status;
 
-    /* if trying to "WRITE" after "READ" then close the socket,
-     * and so switch to "WRITE" mode */
-    if (uuu->sock) {
-        EIO_Status status = s_Disconnect(uuu, timeout,
-                                         uuu->flags & fHTTP_DropUnread
-                                         ? eEM_Drop : eEM_Read);
-        if (status != eIO_Success)
-            return status;
-    }
-    if (uuu->can_connect == eCC_None)
-        return eIO_Closed; /* no more connects permitted */
-
-    /* accumulate all output in the memory buffer */
-    if (size  &&  (uuu->flags & fHTTP_UrlEncodeOutput)) {
-        /* with URL-encoding */
-        size_t dst_size = 3 * size;
-        void*  dst = malloc(dst_size);
-        URL_Encode(buf, size, n_written, dst, dst_size, &dst_size);
-        if (*n_written != size  ||  !BUF_Write(&uuu->w_buf, dst, dst_size)) {
-            if (dst)
-                free(dst);
-            return eIO_Unknown;
-        }
-        free(dst);
-    } else {
-        /* "as is" (without URL-encoding) */
-        if (!BUF_Write(&uuu->w_buf, buf, size))
-            return eIO_Unknown;
-        *n_written = size;
-    }
+    assert(!*n_written);
 
     /* store the write timeout */
     if (timeout) {
         uuu->ww_timeout = *timeout;
         uuu->w_timeout  = &uuu->ww_timeout;
     } else
-        uuu->w_timeout  = timeout;
+        uuu->w_timeout  = kInfiniteTimeout;
+
+    /* if trying to write after a request then close the socket first,
+     * and so return to "IDLE" */
+    if (uuu->sock  &&  uuu->conn_state > eCS_WriteRequest) {
+        status = s_Disconnect(uuu, timeout,
+                              uuu->flags & fHTTP_DropUnread
+                              ? eEM_Drop : eEM_Read);
+        if (status != eIO_Success)
+            return status;
+    }
+    if (uuu->can_connect == fCC_None)
+        return eIO_Closed; /* no more connects permitted */
+    uuu->can_connect |= fCC_Once;
+
+    /* check if writing is at all legitimate */
+    if (size  &&  (uuu->net_info->req_method == eReqMethod_Head  ||
+                   uuu->net_info->req_method == eReqMethod_Get)) {
+        return eIO_Closed;
+    }
+
+    /* write-through with HTTP/1.1 */
+    if (x_IsWriteThru(uuu)) {
+        if (BUF_Size(uuu->w_buf)) {
+            status = s_ConnectAndSend(uuu, timeout, eEM_Flush);
+            if (status != eIO_Success)
+                return status;
+        }
+        assert(!uuu->sock  ||  (uuu->conn_state == eCS_WriteRequest
+                                &&  !uuu->w_len));
+        if (size) {
+            char prefix[80];
+            int  n = sprintf(prefix, "%" NCBI_BIGCOUNT_FORMAT_SPEC_HEX "\r\n",
+                             (TNCBI_BigCount) size);
+            BUF_Erase(uuu->w_buf);
+            if (!BUF_Write(&uuu->w_buf, prefix, (size_t) n)  ||
+                !BUF_Write(&uuu->w_buf, buf,    size)        ||
+                !BUF_Write(&uuu->w_buf, "\r\n", 2)) {
+                BUF_Erase(uuu->w_buf);
+                return eIO_Unknown;
+            }
+            *n_written = size;
+            size += n + 2;
+            uuu->w_len = size;
+            uuu->entity = 1;
+        }
+        return eIO_Success;
+    }
+
+    /* accumulate all output in a memory buffer */
+    if (size  &&  (uuu->flags & fHCC_UrlEncodeOutput)) {
+        /* with URL-encoding */
+        size_t dst_size = 3 * size;
+        void*  dst = malloc(dst_size);
+        URL_Encode(buf, size, n_written, dst, dst_size, &dst_size);
+        if (!*n_written
+            ||  !BUF_AppendEx(&uuu->w_buf, dst, 0, dst, dst_size)) {
+            if (dst)
+                free(dst);
+            return eIO_Unknown;
+        }
+    } else {
+        /* "as is" (without URL-encoding) */
+        if (!BUF_Write(&uuu->w_buf, buf, size))
+            return eIO_Unknown;
+        *n_written = size;
+    }
     return eIO_Success;
 }
 
@@ -1445,22 +2162,28 @@ static EIO_Status s_VT_Flush
  const STimeout* timeout)
 {
     SHttpConnector* uuu = (SHttpConnector*) connector->handle;
+    EIO_Status status;
 
-    if (!(uuu->flags & fHTTP_Flushable)  ||  uuu->sock) {
-        /* The real flush will be performed on the first "READ" (or "CLOSE"),
-         * or on "WAIT". Here, we just store the write timeout, that's all...
-         * NOTE: fHTTP_Flushable connectors are able to actually flush data.
-         */
-        if (timeout) {
-            uuu->ww_timeout = *timeout;
-            uuu->w_timeout  = &uuu->ww_timeout;
-        } else
-            uuu->w_timeout  = timeout;
-        
+    if (!uuu->sock  &&  uuu->can_connect == fCC_None)
+        return eIO_Closed;
+
+    if (timeout) {
+        uuu->ww_timeout = *timeout;
+        uuu->w_timeout  = &uuu->ww_timeout;
+    } else
+        uuu->w_timeout  = timeout;
+
+    if (!(uuu->flags & fHTTP_Flushable))
+        return eIO_Success;
+
+    if (uuu->sock
+        &&  !(x_IsWriteThru(uuu)  &&  uuu->conn_state < eCS_ReadHeader)) {
         return eIO_Success;
     }
-    return uuu->can_connect == eCC_None
-        ? eIO_Closed : s_PreRead(uuu, timeout, eEM_Flush);
+    status = x_IsWriteThru(uuu)
+        ? s_ConnectAndSend(uuu, timeout, eEM_Flush)
+        : s_PreRead       (uuu, timeout, eEM_Flush);
+    return BUF_Size(uuu->r_buf) ? eIO_Success : status;
 }
 
 
@@ -1471,16 +2194,19 @@ static EIO_Status s_VT_Read
  size_t*         n_read,
  const STimeout* timeout)
 {
-    SHttpConnector* uuu = (SHttpConnector*) connector->handle;
-    EIO_Status status = s_PreRead(uuu, timeout, eEM_Read);
-    size_t x_read = BUF_Read(uuu->r_buf, buf, size);
+    SHttpConnector*  uuu = (SHttpConnector*) connector->handle;
+    EExtractMode extract = BUF_Size(uuu->r_buf) ? eEM_Flush : eEM_Read;
+    EIO_Status    status = uuu->can_connect & fCC_Once
+        ? s_PreRead(uuu, timeout, extract) : eIO_Closed;
+    size_t        x_read = BUF_Read(uuu->r_buf, buf, size);
 
-    if (x_read < size  &&  status == eIO_Success) {
-        status = s_Read(uuu, (char*) buf + x_read, size - x_read, n_read);
+    assert(n_read  &&  !*n_read);
+    if (x_read < size  &&  extract == eEM_Read  &&  status == eIO_Success) {
+        status   = s_Read(uuu, (char*) buf + x_read, size - x_read, n_read);
         *n_read += x_read;
     } else
         *n_read  = x_read;
-    return status;
+    return extract == eEM_Read ? status : eIO_Success;
 }
 
 
@@ -1490,7 +2216,7 @@ static EIO_Status s_VT_Status
 {
     SHttpConnector* uuu = (SHttpConnector*) connector->handle;
     return uuu->sock ? SOCK_Status(uuu->sock, dir) :
-        (uuu->can_connect == eCC_None ? eIO_Closed : eIO_Success);
+        (uuu->can_connect == fCC_None ? eIO_Closed : eIO_Success);
 }
 
 
@@ -1498,7 +2224,22 @@ static EIO_Status s_VT_Close
 (CONNECTOR       connector,
  const STimeout* timeout)
 {
-    s_FlushAndDisconnect((SHttpConnector*) connector->handle, timeout);
+    SHttpConnector* uuu = (SHttpConnector*) connector->handle;
+
+    /* Send the accumulated output data(if any) to server, then close the
+     * socket.  Regardless of the flush, clear both input and output buffers.
+     */
+    if ((uuu->can_connect & fCC_Once)
+        &&  ((!uuu->sock  &&  BUF_Size(uuu->w_buf))
+             ||  (uuu->flags & fHTTP_Flushable))) {
+        /* "WRITE" mode and data (or just flag) is still pending */
+        s_PreRead(uuu, timeout, eEM_Drop);
+    }
+    s_Disconnect(uuu, timeout, eEM_Drop);
+    assert(!uuu->sock);
+
+    /* clear pending output data, if any */
+    BUF_Erase(uuu->w_buf);
     return eIO_Success;
 }
 
@@ -1523,19 +2264,6 @@ static void s_Setup
 }
 
 
-static void s_DestroyHttpConnector(SHttpConnector* uuu)
-{
-    assert(!uuu->sock);
-    if (uuu->cleanup)
-        uuu->cleanup(uuu->user_data);
-    ConnNetInfo_Destroy(uuu->net_info);
-    BUF_Destroy(uuu->http);
-    BUF_Destroy(uuu->r_buf);
-    BUF_Destroy(uuu->w_buf);
-    free(uuu);
-}
-
-
 static void s_Destroy
 (CONNECTOR connector)
 {
@@ -1548,25 +2276,22 @@ static void s_Destroy
 
 
 /* NB: per the standard, the HTTP tag name is misspelled as "Referer" */
-static void x_FixupUserHeader(SConnNetInfo* net_info, int/*bool*/ has_sid)
+static int/*bool*/ x_FixupUserHeader(SConnNetInfo* net_info,
+                                     int* /*bool*/ has_sid)
 {
     int/*bool*/ has_referer = 0/*false*/;
-    char* referer;
+    int/*bool*/ has_host = 0/*false*/;
     const char* s;
 
-    s = CORE_GetAppName();
-    if (s  &&  *s) {
-        char ua[16 + 80];
-        sprintf(ua, "User-Agent: %.80s", s);
-        ConnNetInfo_ExtendUserHeader(net_info, ua);
-    }
     if ((s = net_info->http_user_header) != 0) {
         int/*bool*/ first = 1/*true*/;
         while (*s) {
-            if (strncasecmp(s, "\nReferer:" + first, 9 - first) == 0) {
+            if        (strncasecmp(s, &"\nReferer:"[first], 9 - first) == 0) {
                 has_referer = 1/*true*/;
+            } else if (strncasecmp(s, &"\nHost:"[first], 6 - first) == 0) {
+                has_host = 1/*true*/;
 #ifdef HAVE_LIBCONNEXT
-            } else if (strncasecmp(s, "\nCAF" + first, 4 - first) == 0
+            } else if (strncasecmp(s, &"\nCAF"[first], 4 - first) == 0
                        &&  (s[4 - first] == '-'  ||  s[4 - first] == ':')) {
                 char* caftag = strndup(s + !first, strcspn(s + !first, " \t"));
                 if (caftag) {
@@ -1578,30 +2303,29 @@ static void x_FixupUserHeader(SConnNetInfo* net_info, int/*bool*/ has_sid)
                     continue;
                 }
 #endif /*HAVE_LIBCONNEXT*/
-            } else if (!has_sid
-                       &&  strncasecmp(s, "\n" HTTP_NCBI_SID + first,
+            } else if (!*has_sid
+                       &&  strncasecmp(s, &"\n" HTTP_NCBI_SID[first],
                                        sizeof(HTTP_NCBI_SID) - first) == 0) {
-                has_sid = 1/*true*/;
+                *has_sid = 1/*true*/;
             }
             if (!(s = strchr(++s, '\n')))
                 break;
             first = 0/*false*/;
         }
     }
-    if (!has_sid  &&  (s = CORE_GetNcbiSid()) != 0  &&  *s) {
-        char sid[128];
-        sprintf(sid, HTTP_NCBI_SID " %.80s", s);
-        ConnNetInfo_AppendUserHeader(net_info, sid);
+    s = CORE_GetAppName();
+    if (s  &&  *s) {
+        char buf[128];
+        sprintf(buf, "User-Agent: %.80s", s);
+        ConnNetInfo_ExtendUserHeader(net_info, buf);
     }
-    if (has_referer)
-        return;
-    if (!net_info->http_referer  ||  !*net_info->http_referer
-        ||  !(referer = (char*) malloc(strlen(net_info->http_referer) + 10))) {
-        return;
+    if (!has_referer  &&  net_info->http_referer  &&  *net_info->http_referer
+        &&  (s = (char*) malloc(strlen(net_info->http_referer) + 10)) != 0) {
+        sprintf((char*) s, "Referer: %s", net_info->http_referer);
+        ConnNetInfo_AppendUserHeader(net_info, s);
+        free((void*) s);
     }
-    sprintf(referer, "Referer: %s", net_info->http_referer);
-    ConnNetInfo_AppendUserHeader(net_info, referer);
-    free(referer);
+    return has_host;
 }
 
 
@@ -1615,12 +2339,19 @@ static EIO_Status s_CreateHttpConnector
     SConnNetInfo*   xxx;
     SHttpConnector* uuu;
     char*           fff;
-    char            val[32];
+    int/*bool*/     sid;
 
     *http = 0;
     xxx = net_info ? ConnNetInfo_Clone(net_info) : ConnNetInfo_Create(0);
     if (!xxx)
         return eIO_Unknown;
+
+    if (xxx->req_method >=  eReqMethod_v1) {
+        xxx->req_method &= ~eReqMethod_v1;
+        xxx->version = 1;
+        if (flags & fHTTP_PushAuth)
+            xxx->http_push_auth = 1;
+    }
     if (!tunnel) {
         if (xxx->req_method == eReqMethod_Connect
             ||  (xxx->scheme != eURL_Unspec  && 
@@ -1634,21 +2365,30 @@ static EIO_Status s_CreateHttpConnector
         if ((fff = strchr(xxx->args, '#')) != 0)
             *fff = '\0';
     }
-    ConnNetInfo_OverrideUserHeader(xxx, user_header);
+
+    if (!ConnNetInfo_OverrideUserHeader(xxx, user_header)) {
+        ConnNetInfo_Destroy(xxx);
+        return eIO_Unknown;
+    }
+
     if (tunnel) {
+        if (!xxx->http_proxy_host[0]  ||  !xxx->http_proxy_port) {
+            ConnNetInfo_Destroy(xxx);
+            return eIO_InvalidArg;
+        }
         xxx->req_method = eReqMethod_Connect;
-        *xxx->path = '\0';
-        *xxx->args = '\0';
+        xxx->version = 0;
+        xxx->path[0] = '\0';
+        xxx->args[0] = '\0';
         if (xxx->http_referer) {
             free((void*) xxx->http_referer);
             xxx->http_referer = 0;
         }
         ConnNetInfo_DeleteUserHeader(xxx, "Referer:");
     }
-    x_FixupUserHeader(xxx, flags & fHTTP_NoAutomagicSID ? 1 : tunnel);
 
-    if ((flags & fHTTP_NoAutoRetry)  ||  !xxx->max_try)
-        xxx->max_try = 1;
+    if (xxx->max_try == 0  ||  (flags & fHTTP_NoAutoRetry))
+        xxx->max_try  = 1;
 
     if (!(uuu = (SHttpConnector*) malloc(sizeof(SHttpConnector)))) {
         ConnNetInfo_Destroy(xxx);
@@ -1663,19 +2403,24 @@ static EIO_Status s_CreateHttpConnector
     uuu->adjust       = 0;
     uuu->cleanup      = 0;
 
+    sid = flags & fHTTP_NoAutomagicSID ? 1 : tunnel;
+    uuu->skip_host    = x_FixupUserHeader(xxx, &sid);
+    if (sid)
+        flags |= fHTTP_NoAutomagicSID;
     uuu->flags        = flags;
-    uuu->reserved     = 0;
-    uuu->can_connect  = eCC_None;         /* will be properly set at open */
 
-    ConnNetInfo_GetValue(0, "HTTP_ERROR_HEADER_ONLY", val, sizeof(val), "");
-    uuu->error_header = ConnNetInfo_Boolean(val);
+    uuu->unsafe_redir = flags & fHTTP_UnsafeRedirects ? eOn : eOff;
+    uuu->error_header = eDefault;
+    uuu->can_connect  = fCC_None;         /* will be properly set at open    */
+    uuu->unused       = 0;
 
     uuu->sock         = 0;
-    uuu->o_timeout    = kDefaultTimeout;  /* deliberately bad values..    */
-    uuu->w_timeout    = kDefaultTimeout;  /* ..must be reset prior to use */
+    uuu->o_timeout    = kDefaultTimeout;  /* deliberately bad values here... */
+    uuu->w_timeout    = kDefaultTimeout;  /* ...must be reset prior to use   */
     uuu->http         = 0;
     uuu->r_buf        = 0;
     uuu->w_buf        = 0;
+    uuu->w_len        = 0;
 
     if (tunnel)
         s_OpenHttpConnector(uuu, xxx->timeout);
@@ -1697,7 +2442,6 @@ static CONNECTOR s_CreateConnector
 {
     SHttpConnector* uuu;
     CONNECTOR       ccc;
-    char            val[32];
 
     if (s_CreateHttpConnector(net_info, user_header, 0/*regular*/,
                               flags, &uuu) != eIO_Success) {
@@ -1717,9 +2461,9 @@ static CONNECTOR s_CreateConnector
     uuu->adjust       = adjust;
     uuu->cleanup      = cleanup;
 
-    ConnNetInfo_GetValue(0, "HTTP_INSECURE_REDIRECT", val, sizeof(val), "");
-    if (ConnNetInfo_Boolean(val))
-        uuu->flags |= fHTTP_InsecureRedirect;
+    /* enable an override from outside */
+    if (!uuu->unsafe_redir)
+        uuu->unsafe_redir = eDefault;
 
     /* initialize connector structure */
     ccc->handle  = uuu;
@@ -1761,18 +2505,18 @@ extern CONNECTOR HTTP_CreateConnectorEx
 extern EIO_Status HTTP_CreateTunnelEx
 (const SConnNetInfo* net_info,
  THTTP_Flags         flags,
- const void*         init_data,
- size_t              init_size,
+ const void*         data,
+ size_t              size,
  SOCK*               sock)
 {
+    unsigned short  http_code;
     EIO_Status      status;
-    unsigned short  code;
     SHttpConnector* uuu;
 
     if (!sock)
         return eIO_InvalidArg;
     *sock = 0;
-    
+
     status = s_CreateHttpConnector(net_info, 0/*user_header*/, 1/*tunnel*/,
                                    flags | fHTTP_DropUnread, &uuu);
     if (status != eIO_Success) {
@@ -1780,30 +2524,31 @@ extern EIO_Status HTTP_CreateTunnelEx
         return status;
     }
     assert(uuu  &&  !BUF_Size(uuu->w_buf));
-    if (!init_size  ||  BUF_Prepend(&uuu->w_buf, init_data, init_size)) {
-        if (init_size)
-            sprintf(uuu->net_info->args, "[%lu]", (unsigned long) init_size);
+    if (!size  ||  BUF_Prepend(&uuu->w_buf, data, size)) {
+        if (size)
+            sprintf(uuu->net_info->args, "[%lu]", (unsigned long) size);
         status = s_PreRead(uuu, uuu->net_info->timeout, eEM_Wait);
         if (status == eIO_Success) {
-            assert(uuu->read_state == eRS_ReadBody);
-            assert(uuu->code / 100 == 2);
+            assert(uuu->conn_state == eCS_ReadBody);
+            assert(uuu->http_code / 100 == 2);
             assert(uuu->sock);
             *sock = uuu->sock;
+            http_code = 0;
             uuu->sock = 0;
-            code = 0;
         } else {
-            code = uuu->code;
             if (uuu->sock)
                 s_DropConnection(uuu);
+            http_code = uuu->http_code;
         }
     } else {
+        http_code = 0;
         status = eIO_Unknown;
-        code = 0;
     }
     s_DestroyHttpConnector(uuu);
-    switch (code) {
+    switch (http_code) {
     case 503:
         return eIO_NotSupported;
+    case 426:
     case 404:
         return eIO_InvalidArg;
     case 403:

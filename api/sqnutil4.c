@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/27/2007
 *
-* $Revision: 1.187 $
+* $Revision: 1.257 $
 *
 * File Description: 
 * This file contains functions for automatically generating definition lines.
@@ -57,6 +57,7 @@
 #include <salpedit.h>
 #include <alignmgr.h>
 #include <alignmgr2.h>
+#include <explore.h>
 #define NLM_GENERATED_CODE_PROTO
 #include <objmacro.h>
 #include <macroapi.h>
@@ -67,73 +68,38 @@
 /* you should make the corresponding change to the DefLinePos enum. */
 
 ModifierItemGlobalData DefLineModifiers[] = {
-  { "Acronym"              , TRUE , ORGMOD_acronym              },
-  { "Anamorph"             , TRUE , ORGMOD_anamorph             },
-  { "Authority"            , TRUE , ORGMOD_authority            },
   { "Bio-material"         , TRUE,  ORGMOD_bio_material         },
   { "Biotype"              , TRUE , ORGMOD_biotype              },
   { "Biovar"               , TRUE , ORGMOD_biovar               },
   { "Breed"                , TRUE , ORGMOD_breed                },
   { "Cell-line"            , FALSE, SUBSRC_cell_line            },
-  { "Cell-type"            , FALSE, SUBSRC_cell_type            },
   { "Chemovar"             , TRUE , ORGMOD_chemovar             },
   { "Chromosome"           , FALSE, SUBSRC_chromosome           },
   { "Clone"                , FALSE, SUBSRC_clone                },
-  { "Clone-lib"            , FALSE, SUBSRC_clone_lib            },
-  { "Collected-by"         , FALSE, SUBSRC_collected_by         },
-  { "Collection-date"      , FALSE, SUBSRC_collection_date      },
-  { "Common"               , TRUE , ORGMOD_common               },
   { "Country"              , FALSE, SUBSRC_country              },
   { "Cultivar"             , TRUE , ORGMOD_cultivar             },
   { "Culture-collection"   , TRUE , ORGMOD_culture_collection   },
   { "Dev-stage"            , FALSE, SUBSRC_dev_stage            },
   { "Ecotype"              , TRUE , ORGMOD_ecotype              },
   { "Endogenous-virus-name", FALSE, SUBSRC_endogenous_virus_name},
-  { "Environmental-sample" , FALSE, SUBSRC_environmental_sample },
-  { "Forma"                , TRUE , ORGMOD_forma                },
-  { "Forma-specialis"      , TRUE , ORGMOD_forma_specialis      },
-  { "Frequency"            , FALSE, SUBSRC_frequency            },
   { "Genotype"             , FALSE, SUBSRC_genotype             },
-  { "Germline"             , FALSE, SUBSRC_germline             },
-  { "Group"                , TRUE , ORGMOD_group                },
   { "Haplogroup"           , FALSE, SUBSRC_haplogroup           },
   { "Haplotype"            , FALSE, SUBSRC_haplotype            },
-  { "Host"                 , TRUE , ORGMOD_nat_host             },
-  { "Identified-by"        , FALSE, SUBSRC_identified_by        },
   { "Isolate"              , TRUE , ORGMOD_isolate              },
-  { "Isolation-source"     , FALSE, SUBSRC_isolation_source     },
-  { "Lab-host"             , FALSE, SUBSRC_lab_host             },
-  { "Lat-lon"              , FALSE, SUBSRC_lat_lon              },
   { "Linkage-group"        , FALSE, SUBSRC_linkage_group        },
   { "Map"                  , FALSE, SUBSRC_map                  },
-  { "Mating-type"          , FALSE, SUBSRC_mating_type          },
-  { "Metagenomic"          , FALSE, SUBSRC_metagenomic          },
-  { "Note-OrgMod"          , TRUE,  ORGMOD_other                },
-  { "Note-SubSrc"          , FALSE, SUBSRC_other                },
   { "Pathovar"             , TRUE , ORGMOD_pathovar             },
   { "Plasmid-name"         , FALSE, SUBSRC_plasmid_name         },
-  { "Plastid-name"         , FALSE, SUBSRC_plastid_name         },
   { "Pop-variant"          , FALSE, SUBSRC_pop_variant          },
-  { "Rearranged"           , FALSE, SUBSRC_rearranged           },
   { "Segment"              , FALSE, SUBSRC_segment              },
   { "Serogroup"            , TRUE , ORGMOD_serogroup            },
   { "Serotype"             , TRUE , ORGMOD_serotype             },
   { "Serovar"              , TRUE , ORGMOD_serovar              },
-  { "Sex"                  , FALSE, SUBSRC_sex                  },
   { "Specimen voucher"     , TRUE , ORGMOD_specimen_voucher     },
   { "Strain"               , TRUE , ORGMOD_strain               },
   { "Subclone"             , FALSE, SUBSRC_subclone             },
-  { "Subgroup"             , TRUE , ORGMOD_subgroup             },
-  { "Sub-species"          , TRUE , ORGMOD_sub_species          },
   { "Substrain"            , TRUE , ORGMOD_substrain            },
-  { "Subtype"              , TRUE , ORGMOD_subtype              },
-  { "Synonym"              , TRUE , ORGMOD_synonym              },
-  { "Teleomorph"           , TRUE , ORGMOD_teleomorph           },
-  { "Tissue-lib"           , FALSE, SUBSRC_tissue_lib           },
-  { "Tissue-type"          , FALSE, SUBSRC_tissue_type          },
-  { "Transgenic"           , FALSE, SUBSRC_transgenic           },
-  { "Type"                 , TRUE , ORGMOD_type                 },
-  { "Variety"              , TRUE , ORGMOD_variety              }
+  { "Transgenic"           , FALSE, SUBSRC_transgenic           }
 };
 
 #define numDefLineModifiers (sizeof (DefLineModifiers) / sizeof (ModifierItemGlobalData))
@@ -300,7 +266,8 @@ static ValNodePtr FindStringInStrings (
   return NULL;
 }
 
-
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 NLM_EXTERN ValNodePtr FindExactStringListMatch (
   ValNodePtr list,
   CharPtr value
@@ -318,6 +285,7 @@ NLM_EXTERN ValNodePtr FindExactStringListMatch (
   return NULL;
 }
 
+//Not part of Autodef or Cleanup
 /* This function creates a new linked list of strings with copies of
  * contents of orig.
  */
@@ -335,6 +303,7 @@ static ValNodePtr CopyStrings (
   }
   return new_string_start;
 }
+//LCOV_EXCL_STOP
 
 /*
  * This section of the code contains functions and structures for obtaining a
@@ -421,7 +390,8 @@ static Boolean IsDeflineModifierRequiredByDefault (Boolean is_orgmod, Int2 index
   }
 }
 
-
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 static void AddOneSubtypeField (ValNodePtr PNTR sq_list, SourceQualDescPtr orig, CharPtr str, Uint1 subfield)
 {
   SourceQualDescPtr sqdp_cpy;
@@ -439,6 +409,7 @@ static void AddOneSubtypeField (ValNodePtr PNTR sq_list, SourceQualDescPtr orig,
 }
 
 
+//Not part of Autodef or Cleanup
 static void AddSubtypeFields (ValNodePtr PNTR sq_list, SourceQualDescPtr orig)
 {
   if (sq_list == NULL || orig == NULL) return;
@@ -465,6 +436,7 @@ static void AddSubtypeFields (ValNodePtr PNTR sq_list, SourceQualDescPtr orig)
 }
 
 
+//Not part of Autodef or Cleanup
 static void AddQualList (ValNodePtr PNTR list, Nlm_QualNameAssocPtr qual_list, Boolean is_orgmod, Boolean use_alternate_note_name, Boolean get_subfields)
 {
   Int4              k;
@@ -500,7 +472,7 @@ static void AddQualList (ValNodePtr PNTR list, Nlm_QualNameAssocPtr qual_list, B
   }
 }
 
-
+//Not part of Autodef or Cleanup
 static void AddNoteQual (ValNodePtr PNTR list, Boolean is_orgmod, Boolean use_alternate_note_name)
 {
   SourceQualDescPtr sqdp;
@@ -532,6 +504,7 @@ static void AddNoteQual (ValNodePtr PNTR list, Boolean is_orgmod, Boolean use_al
 }
 
 
+//Not part of Autodef or Cleanup
 NLM_EXTERN int LIBCALLBACK SortVnpBySourceQualDesc (VoidPtr ptr1, VoidPtr ptr2)
 
 {
@@ -556,6 +529,7 @@ NLM_EXTERN int LIBCALLBACK SortVnpBySourceQualDesc (VoidPtr ptr1, VoidPtr ptr2)
 }
 
 
+//Not part of Autodef or Cleanup
 extern ValNodePtr GetSourceQualDescListEx (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued, Boolean get_subfields)
 {
   ValNodePtr        source_qual_list = NULL;
@@ -585,11 +559,13 @@ extern ValNodePtr GetSourceQualDescListEx (Boolean get_subsrc, Boolean get_orgmo
   return source_qual_list;
 }
 
+//Not part of Autodef or Cleanup
 extern ValNodePtr GetSourceQualDescList (Boolean get_subsrc, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued)
 {
   return GetSourceQualDescListEx (get_subsrc, get_orgmod, get_discouraged, get_discontinued, TRUE);
 }
 
+//Not part of Autodef or Cleanup
 /*
  * The CountModifiersProc is used as the callback function for
  * VisitBioSourcesInSep when we are getting a list of all the modifiers
@@ -690,6 +666,7 @@ static void CountModifiersProc (
   }
 } 
 
+//Not part of Autodef or Cleanup
 /* The CountModifiers function visits all of the bio sources, determining
  * which modifiers are present, which modifiers have only one value,
  * which modifiers have all different values, and which modifiers are
@@ -745,6 +722,7 @@ NLM_EXTERN void CountModifiers (
   }
 }
 
+//Not part of Autodef or Cleanup
 /* The BioSrcDescData structure is used to hold a BioSourcePtr, a list
  * of strings used to describe the biosource, including the taxonomy name
  * and the values of all of the modifiers selected so far for this bio
@@ -771,6 +749,7 @@ static BioSrcDescPtr CopyBioSrcDescPtr (
   return new_bsdp_start;
 }
 
+//Not part of Autodef or Cleanup
 /* The FreeBioSrcDescPtr function frees the memory associated with a
  * linked list of BioSrcDescData structures.
  */
@@ -785,6 +764,8 @@ static void FreeBioSrcDescPtr (
   MemFree (bsdp);
 }
 
+
+//Not part of Autodef or Cleanup
 /* The AddQualToBioSrcDescPtr function finds the qualifier at the
  * feature_index position in the DefLineModifiers array in the
  * BioSourcePtr and adds the value for that modifier to the array
@@ -848,7 +829,8 @@ static void AddQualToBioSrcDescPtr (
     }
   }
 }
- 
+
+//Not part of Autodef or Cleanup
 /* The CompareOrganismDescriptors function compares the contents of the
  * lists of strings for each BioSrcDesc item.
  * The function returns:
@@ -889,6 +871,7 @@ static int CompareOrganismDescriptors (
   }
 }
 
+//Not part of Autodef or Cleanup
 /* The OrgGroupData structure contains a list of BioSrcDescData items
  * for which the contents of the descriptive strings list are identical,
  * i.e., all the organisms in the group would have the same description
@@ -927,6 +910,7 @@ static OrgGroupPtr CopyOrgGroupList (
   return new_ogp_start;
 }
 
+//Not part of Autodef or Cleanup
 /* The FreeOrgGroupPtr function frees the memory associated with a
  * list of OrgGroups */
 static void FreeOrgGroupPtr (
@@ -944,6 +928,7 @@ static void FreeOrgGroupPtr (
   return;
 }
 
+//Not part of Autodef or Cleanup
 /* The ReorderGroupOrgs function sorts the OrgGroup list based on the results
  * of the CompareOrganismDescriptors function.
  */
@@ -991,6 +976,7 @@ static void ReorderGroupOrgs (
   }
 }
 
+//Not part of Autodef or Cleanup
 /* The ReGroupOrgs function operates on a single OrgGroup item.
  * If any of the BioSrcDesc items in the group now have different
  * descriptions, the function breaks it up into smaller, homogenous OrgGroups.
@@ -1030,6 +1016,7 @@ static void ReGroupOrgs (
   }
 }
 
+//Not part of Autodef or Cleanup
 /* The AddQualToGroup function operates on a single OrgGroup item.
  * The function adds a qualifier to each BioSrcDesc item in the OrgGroup,
  * breaks the group into multiple groups if the group is no longer
@@ -1058,6 +1045,7 @@ static void AddQualToGroup (
   ReGroupOrgs (this_group);
 }
 
+//Not part of Autodef or Cleanup
 /* The AddQualToGroupList function operates on a list of OrgGroup items.
  * It calls AddQualToGroup for each item in the list.
  */
@@ -1077,6 +1065,7 @@ static void AddQualToGroupList (
   }
 }
 
+//Not part of Autodef or Cleanup
 /* The CopyModifierIndices function creates a new ValNode list with the
  * same data.intvalue values for each node as the original modifier_indices
  * ValNode list.
@@ -1095,7 +1084,8 @@ static ValNodePtr CopyModifierIndices (
   new_indices->next = CopyModifierIndices (modifier_indices->next);
   return new_indices;
 }
- 
+
+//Not part of Autodef or Cleanup
 /* The CopyModifierCombo creates a copy of a ModificationCombination item.
  * This includes creating a copy of the number and list of modifiers
  * and a copy of the number and list of OrgGroups, as well as copying the
@@ -1141,6 +1131,7 @@ static ModifierCombinationPtr CopyModifierCombo (
   return newm; 
 }
 
+//Not part of Autodef or Cleanup
 /* This function creates a new ModifierCombination item using the supplied
  * OrgGroup list.  It calculates the number of groups, maximum number of 
  * organisms in any one group, and number of unique organisms.
@@ -1180,6 +1171,7 @@ static ModifierCombinationPtr NewModifierCombo (
   return newm; 
 }
 
+//Not part of Autodef or Cleanup
 /* This function frees the memory associated with a list of
  * ModifierCombination items.
  */
@@ -1194,6 +1186,7 @@ static void FreeModifierCombo (
   MemFree (m);
 }
 
+//Not part of Autodef or Cleanup
 /* This function adds the qualifier at the feature_index position in the
  * DefLineModifiers array to each OrgGroup in the list and recalculates
  * the maximum number of organisms in any one group and the number of
@@ -1237,6 +1230,8 @@ static void AddQualToModifierCombo (
   }
 }
 
+
+//Not part of Autodef or Cleanup
 /* This function creates the initial OrgGroup list that is copied for every
  * ModifierCombination item.
  */
@@ -1317,6 +1312,7 @@ typedef struct bestsortdata {
   Boolean is_unique;
 } BestSortData, PNTR BestSortPtr;
 
+//Not part of Autodef or Cleanup
 static Boolean Index1FoundBeforeIndex2 (
   Int4 index1,
   Int4 index2,
@@ -1337,6 +1333,7 @@ static Boolean Index1FoundBeforeIndex2 (
   return FALSE;
 }
 
+//Not part of Autodef or Cleanup
 /* This function determines whether or not we should try adding this modifier
  * to our combination.  If we've already tried it and not added it to the list,
  * there's no reason to try adding it again.
@@ -1351,7 +1348,7 @@ static Boolean OkToTryAddingQual (
   ValNodePtr vnp;
 
   /* if feature_index indicates a value we don't use for best combos, skip */
-  if (feature_index == DEFLINE_POS_Map || feature_index == DEFLINE_POS_Specific_host)
+  if (feature_index == DEFLINE_POS_Map)
   {
     return FALSE;
   }
@@ -1377,6 +1374,8 @@ static Boolean OkToTryAddingQual (
   return TRUE;
 }
 
+
+//Not part of Autodef or Cleanup
 static ValNodePtr GetListOfAvailableModifiers ( ModifierItemLocalPtr ItemList)
 {
   ValNodePtr  vnp, head;
@@ -1414,12 +1413,11 @@ static Int4 DefLineQualSortOrder [] = {
   DEFLINE_POS_Cultivar,
   DEFLINE_POS_Specimen_voucher,
   DEFLINE_POS_Ecotype,
-  DEFLINE_POS_Type,
   DEFLINE_POS_Serotype,
-  DEFLINE_POS_Authority,
   DEFLINE_POS_Breed
 };
 
+//Not part of Autodef or Cleanup
 static int LIBCALLBACK SortByImportanceAndPresence (
   VoidPtr ptr1,
   VoidPtr ptr2
@@ -1471,6 +1469,7 @@ static int LIBCALLBACK SortByImportanceAndPresence (
 }
 
 
+//Not part of Autodef or Cleanup
 /* The function FindBestCombo tries to find the best combination of modifiers
  * to create unique organism descriptions.  This is accomplished by
  * creating a list of required modifiers, and then creating a list of
@@ -1645,6 +1644,7 @@ static ModifierCombinationPtr FindBestCombo(
 }
 
 
+//Not part of Autodef or Cleanup
 /* create combo with the specified modifiers */
 NLM_EXTERN ValNodePtr GetModifierIndicesFromModList (
   ModifierItemLocalPtr modList
@@ -1663,6 +1663,7 @@ NLM_EXTERN ValNodePtr GetModifierIndicesFromModList (
   }
   return modifier_indices;
 }
+//LCOV_EXCL_STOP
 
 
 /* This is the callback function for sorting the modifier list.  It 
@@ -1675,9 +1676,7 @@ static Int4 DefLineQualPresentationOrder [] = {
   DEFLINE_POS_Cultivar,
   DEFLINE_POS_Specimen_voucher,
   DEFLINE_POS_Ecotype,
-  DEFLINE_POS_Type,
   DEFLINE_POS_Serotype,
-  DEFLINE_POS_Authority,
   DEFLINE_POS_Breed
 };
 
@@ -1881,7 +1880,7 @@ static void AddHIVModifierIndices (
     }
   }
 
-  if ( ! have_country_in_list && have_country_mod)
+  if ( ! have_country_in_list && have_country_mod && modifier_indices != NULL)
   {
     vnp = ValNodeNew (*modifier_indices);
     vnp->data.intvalue = DEFLINE_POS_Country;
@@ -1899,7 +1898,7 @@ static void AddHIVModifierIndices (
         && have_isolate_mod
         && ( clone_isolate_HIV_rule_num == clone_isolate_HIV_rule_prefer_isolate
           || clone_isolate_HIV_rule_num == clone_isolate_HIV_rule_want_both
-          || ! have_clone_mod))
+          || ! have_clone_mod) && modifier_indices != NULL)
     {
       vnp = ValNodeNew (*modifier_indices);
       vnp->data.intvalue = DEFLINE_POS_Isolate;
@@ -1910,7 +1909,7 @@ static void AddHIVModifierIndices (
         && have_clone_mod
         && ( clone_isolate_HIV_rule_num == clone_isolate_HIV_rule_prefer_clone
           || clone_isolate_HIV_rule_num == clone_isolate_HIV_rule_want_both
-          || ! have_isolate_mod))
+          || ! have_isolate_mod) && modifier_indices != NULL)
     {
       vnp = ValNodeNew (*modifier_indices);
       vnp->data.intvalue = DEFLINE_POS_Clone;
@@ -2017,6 +2016,9 @@ AddWGSModifierIndices
   {
     return;
   }
+  //LCOV_EXCL_START
+  //When creating definition lines, always remove existing ones, so 
+  //SpecialHandlingForSpecialTechniques will never return true
 
   for (vnp = *modifier_indices;
        vnp != NULL && vnp->data.intvalue != DEFLINE_POS_Strain;
@@ -2042,6 +2044,7 @@ AddWGSModifierIndices
       }
     }
   }
+  //LCOV_EXCL_STOP
 }
 
 /* This function provides a label to be used in the definition line for
@@ -2249,7 +2252,8 @@ NLM_EXTERN Boolean UseSubSrcModifier (
   return rval;
 }
 
-
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 /* The SetRequiredModifiers function copies the default required values from
  * the global DefLineModifiers array into the local list of modifier
  * information.
@@ -2279,6 +2283,7 @@ static const Int4 s_auto_def_id_preferred_quals[] = {
 
 static const Int4 k_num_auto_def_id_preferred_quals = sizeof (s_auto_def_id_preferred_quals) / sizeof (Int4);
 
+//Not part of Autodef or Cleanup
 /* This function generates the modifiers for "AutoDefID" */
 NLM_EXTERN void SetAutoDefIDModifiers (ModifierItemLocalPtr modList)
 {
@@ -2301,6 +2306,7 @@ NLM_EXTERN void SetAutoDefIDModifiers (ModifierItemLocalPtr modList)
     }
   }
 }
+//LCOV_EXCL_STOP
 
 
 /* This function fixes HIV abbreviations, removes items in parentheses,
@@ -2414,6 +2420,8 @@ NLM_EXTERN Boolean IsTSA (BioseqPtr bsp)
 }
 
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 NLM_EXTERN Boolean IsGenomeProjectIDDescriptor (SeqDescrPtr sdp) 
 {
   UserObjectPtr        uop;
@@ -2429,8 +2437,11 @@ NLM_EXTERN Boolean IsGenomeProjectIDDescriptor (SeqDescrPtr sdp)
   }
   return FALSE;
 }
+//LCOV_EXCL_STOP
 
 
+//LCOV_EXCL_START
+//Not used for Autodef and Cleanup
 NLM_EXTERN SeqDescrPtr GetGenomeProjectIDDescriptor (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
@@ -2447,7 +2458,7 @@ NLM_EXTERN SeqDescrPtr GetGenomeProjectIDDescriptor (BioseqPtr bsp)
 }
 
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Int4 GetGenomeProjectID (BioseqPtr bsp)
 {
   SeqMgrDescContext context;
@@ -2480,6 +2491,7 @@ NLM_EXTERN Int4 GetGenomeProjectID (BioseqPtr bsp)
 }
 
 
+//Not part of Autodef or Cleanup
 static void AddSpTaxnameToList (SeqDescrPtr sdp, Pointer userdata)
 {
   BioSourcePtr biop;
@@ -2492,7 +2504,7 @@ static void AddSpTaxnameToList (SeqDescrPtr sdp, Pointer userdata)
   ValNodeAddPointer ((ValNodePtr PNTR) userdata, 0, biop->org->taxname);
 }
 
-
+//Not part of Autodef or Cleanup
 NLM_EXTERN Boolean ShouldExcludeSp (SeqEntryPtr sep)
 {
   ValNodePtr name_list = NULL, vnp1, vnp2;
@@ -2519,7 +2531,7 @@ NLM_EXTERN Boolean ShouldExcludeSp (SeqEntryPtr sep)
   name_list = ValNodeFree (name_list);
   return all_diff;
 }
-
+//LCOV_EXCL_STOP
 
 /* This function sets the default values for the organism description settings */
 NLM_EXTERN void InitOrganismDescriptionModifiers(OrganismDescriptionModifiersPtr odmp, SeqEntryPtr sep)
@@ -2714,7 +2726,7 @@ static CharPtr GetOrganismDescription (
       {
         mod = mod->next;
       }
-      if ( UseOrgModifier (mod, taxName, odmp->allow_mod_at_end_of_taxname))
+      if (mod != NULL && UseOrgModifier (mod, taxName, odmp->allow_mod_at_end_of_taxname))
       {
         if (odmp->allow_semicolon_in_modifier) {
           no_semicolon_len = StringLen (mod->subname);
@@ -3058,6 +3070,8 @@ static Boolean IsAEmptyIntervalOfB (SeqLocPtr a, SeqLocPtr b, BioseqPtr bsp)
 }
 
 
+//LCOV_EXCL_START
+//Due to logic error, this function is never called
 static Boolean LocAContainsIntervalOfB (SeqLocPtr a, SeqLocPtr b)
 {
   SeqLocPtr interval;
@@ -3075,6 +3089,7 @@ static Boolean LocAContainsIntervalOfB (SeqLocPtr a, SeqLocPtr b)
   }
   return rval;
 }
+//LCOV_EXCL_STOP
 
 
 /* This section of code deals with identifying and labeling features
@@ -3265,8 +3280,16 @@ static Boolean LIBCALLBACK IsLTR (
   SeqFeatPtr sfp
 )
 {
-  if (sfp == NULL || sfp->idx.subtype != FEATDEF_LTR) return FALSE;
-  return TRUE;
+  GBQualPtr gb;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region) return FALSE;
+  for (gb = sfp->qual; gb != NULL; gb = gb->next) {
+      if (StringICmp(gb->qual, "rpt_type") == 0 && StringISearch(gb->val, "long_terminal_repeat") != NULL) {
+          return TRUE;
+      }
+  }
+
+  return FALSE;
 }
 
 static CharPtr GetLTRDescription (
@@ -3531,8 +3554,9 @@ static Boolean FeatureDoesNotGetPartialComplete (SeqFeatPtr sfp)
 {
   GBQualPtr gbqual;
   Int4 keyword_idx;
+
   if (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region) return FALSE;
-  
+    
   for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next)
   {
     keyword_idx = IsMobileElementGBQual(gbqual);
@@ -3550,13 +3574,17 @@ NLM_EXTERN Boolean LIBCALLBACK IsMobileElement (SeqFeatPtr sfp)
   GBQualPtr gbqual;
   if (sfp == NULL || (sfp->idx.subtype != FEATDEF_repeat_region && sfp->idx.subtype != FEATDEF_mobile_element)) return FALSE;
   
-  for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next)
-  {
-    if (IsMobileElementGBQual(gbqual) > -1) {
+  if (sfp->idx.subtype == FEATDEF_repeat_region) {
+      for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next)
+      {
+          if (IsMobileElementGBQual(gbqual) > -1) {
+              return TRUE;
+          }
+      }
+      return FALSE;
+  } else {
       return TRUE;
-    }
   }
-  return FALSE;
 }
 
 static Boolean LIBCALLBACK IsRemovableMobileElement (SeqFeatPtr sfp)
@@ -3851,45 +3879,45 @@ static Boolean LIBCALLBACK IsIntergenicSpacer (
 )
 {
   if (sfp == NULL
-    || sfp->idx.subtype != FEATDEF_misc_feature
-    || sfp->comment == NULL
-    || StringStr (sfp->comment, "intergenic spacer") == NULL)
-  {
-    return FALSE;
-  }
-  return TRUE;
-}
-
-static ValNodePtr GettRNAGenesAndSpacers (CharPtr str);
-static ValNodePtr FreetRNAGenesAndSpacersList (ValNodePtr list);
-
-static Boolean LIBCALLBACK IsParsableList (
-  SeqFeatPtr sfp
-)
+|| sfp->idx.subtype != FEATDEF_misc_feature
+|| sfp->comment == NULL
+|| StringStr(sfp->comment, "intergenic spacer") == NULL)
 {
-  ValNodePtr list;
+    return FALSE;
+}
+return TRUE;
+}
 
-  if (sfp == NULL
-    || sfp->idx.subtype != FEATDEF_misc_feature
-    || sfp->comment == NULL)
-  {
-    return FALSE;
-  }
-  
-  list = GettRNAGenesAndSpacers (sfp->comment);
-  if (list == NULL) 
-  {
-    return FALSE;
-  } 
-  else
-  {
-    FreetRNAGenesAndSpacersList (list);
-    return TRUE;
-  }
+static ValNodePtr GettRNAGenesAndSpacers(CharPtr str);
+static ValNodePtr FreetRNAGenesAndSpacersList(ValNodePtr list);
+
+static Boolean LIBCALLBACK IsParsableList(
+    SeqFeatPtr sfp
+    )
+{
+    ValNodePtr list;
+
+    if (sfp == NULL
+        || sfp->idx.subtype != FEATDEF_misc_feature
+        || sfp->comment == NULL)
+    {
+        return FALSE;
+    }
+
+    list = GettRNAGenesAndSpacers(sfp->comment);
+    if (list == NULL)
+    {
+        return FALSE;
+    }
+    else
+    {
+        FreetRNAGenesAndSpacersList(list);
+        return TRUE;
+    }
 }
 
 
-/* This function produces the default definition line label for a misc_feature 
+/* This function produces the default definition line label for a misc_feature
  * that has the word "intergenic spacer" in the comment.  If the comment starts
  * with the word "contains", "contains" is ignored.  If "intergenic spacer"
  * appears first in the comment (or first after the word "contains", the text
@@ -3899,58 +3927,62 @@ static Boolean LIBCALLBACK IsParsableList (
  * "intergenic spacer", this text will appear in the definition line before the words
  * "intergenic spacer".
  */
-static void LIBCALLBACK GetIntergenicSpacerFeatureLabel (
-  ValNodePtr      featlist,
-  BioseqPtr       bsp,
-  Uint1           biomol,
-  FeatureLabelPtr flp
-)
+static void LIBCALLBACK GetIntergenicSpacerFeatureLabel(
+    ValNodePtr      featlist,
+    BioseqPtr       bsp,
+    Uint1           biomol,
+    FeatureLabelPtr flp
+    )
 {
-  SeqFeatPtr main_feat;
-  CharPtr    cp, buffer;
-  Int4       datalen, offset;
+    SeqFeatPtr main_feat;
+    CharPtr    cp, buffer;
+    Int4       datalen, offset;
 
-  if (featlist == NULL || featlist->data.ptrvalue == NULL) return;
-  main_feat = featlist->data.ptrvalue;
-  if (StringHasNoText (main_feat->comment)) return;
-  if (StringNCmp (main_feat->comment, "contains ", 9) == 0)
-  {
-    buffer = main_feat->comment + 9;
-  }
-  else if (StringNCmp (main_feat->comment, "may contain ", 12) == 0)
-  {
-    buffer = main_feat->comment + 12;
-  }
-  else
-  {
-    buffer = main_feat->comment;
-  }
-  cp = StringStr (buffer, "intergenic spacer");
-  if (cp == NULL) return;
-  flp->typeword = StringSave ("intergenic spacer");
-  flp->pluralizable = FALSE;
-  if (cp == buffer)
-  {
-    flp->is_typeword_first = TRUE;
-    offset = StringLen ("intergenic spacer") + 1;
-    if (StringNCmp (cp + offset, "and ", 4) == 0
-        || *(cp + StringLen("intergenic spacer")) == 0)
+    if (featlist == NULL || featlist->data.ptrvalue == NULL) return;
+    main_feat = featlist->data.ptrvalue;
+    if (StringHasNoText(main_feat->comment)) return;
+    if (StringNCmp(main_feat->comment, "contains ", 9) == 0)
     {
-      flp->description = NULL;
+        buffer = main_feat->comment + 9;
+    }
+    else if (StringNCmp(main_feat->comment, "may contain ", 12) == 0)
+    {
+        buffer = main_feat->comment + 12;
     }
     else
     {
-      flp->description = StringSave (cp + StringLen ("intergenic spacer") + 1);
-      cp = StringChr (flp->description, ';');
-      if (cp != NULL)
-      {
-        *cp = 0;
-      }
+        buffer = main_feat->comment;
     }
-  }
-  else
-  {
-    flp->is_typeword_first = FALSE;
+    cp = StringStr(buffer, "intergenic spacer");
+    if (cp == NULL) return;
+    flp->typeword = StringSave("intergenic spacer");
+    flp->pluralizable = FALSE;
+    if (cp == buffer)
+    {
+        flp->is_typeword_first = TRUE;
+        offset = StringLen("intergenic spacer") + 1;
+        if (StringNCmp(cp + offset, "and ", 4) == 0
+            || *(cp + StringLen("intergenic spacer")) == 0)
+        {
+            flp->description = NULL;
+        }
+        else
+        {
+            flp->description = StringSave(cp + StringLen("intergenic spacer") + 1);
+            cp = StringChr(flp->description, ';');
+            if (cp != NULL)
+            {
+                *cp = 0;
+            }
+        }
+    }
+    else
+    {
+      flp->is_typeword_first = FALSE;
+      if (StringCmp(cp + StringLen(flp->typeword), " region") == 0) {
+        flp->typeword = MemFree(flp->typeword);
+        flp->typeword = StringSave("intergenic spacer region");
+      }
     datalen = cp - buffer;
     flp->description = MemNew ( datalen + 1);
     if (flp->description == NULL) return;
@@ -3978,6 +4010,21 @@ static CommentFeatPtr CommentFeatFree (CommentFeatPtr cfp)
     cfp = MemFree (cfp);
   }
   return cfp;
+}
+
+
+static ValNodePtr CommentFeatListFree (ValNodePtr vnp)
+{
+    ValNodePtr vnp_next;
+
+    while (vnp != NULL) {
+        vnp_next = vnp->next;
+        vnp->next = NULL;
+        vnp->data.ptrvalue = CommentFeatFree ((CommentFeatPtr)(vnp->data.ptrvalue));
+        vnp = ValNodeFree (vnp);
+        vnp = vnp_next;
+    }
+    return vnp;
 }
 
 
@@ -4306,17 +4353,22 @@ FeatureClauseFromParsedComment
   if (fcp != NULL)
   {
     fcp->feature_label_data.is_typeword_first = FALSE;
-    fcp->feature_label_data.typeword = StringSave ("gene");
-    if (tdp->gene_name == NULL) {
-      fcp->feature_label_data.description = StringSave (tdp->product_name);
+    if (StringCmp(tdp->product_name, "control region") == 0 || StringCmp(tdp->product_name, "D-loop") == 0) {
+      fcp->feature_label_data.typeword = StringSave(tdp->product_name);
+      fcp->feature_label_data.description = StringSave("");
     } else {
-      fcp->feature_label_data.description = (CharPtr) MemNew (sizeof (Char) * (StringLen (gene_fmt)
+      fcp->feature_label_data.typeword = StringSave ("gene");
+      if (tdp->gene_name == NULL) {
+        fcp->feature_label_data.description = StringSave (tdp->product_name);
+      } else {
+        fcp->feature_label_data.description = (CharPtr) MemNew (sizeof (Char) * (StringLen (gene_fmt)
                                                                                + StringLen (tdp->gene_name)
                                                                                + StringLen (tdp->product_name)));
-      if (fcp->feature_label_data.description != NULL)
-      {
-        sprintf (fcp->feature_label_data.description, gene_fmt,
-                tdp->product_name, tdp->gene_name);
+        if (fcp->feature_label_data.description != NULL)
+        {
+          sprintf (fcp->feature_label_data.description, gene_fmt,
+                   tdp->product_name, tdp->gene_name);
+        }
       }
     }
     if (is_partial)
@@ -4522,6 +4574,37 @@ DeflineFeatureRequestListPtr rp)
   return head;
 }
 
+static Boolean IsRegulatory(SeqFeatPtr sfp)
+{
+  ImpFeatPtr imp;
+
+  if (sfp == NULL || 
+      sfp->data.choice != SEQFEAT_IMP ||
+      (imp = (ImpFeatPtr)(sfp->data.value.ptrvalue)) == NULL ||
+      StringCmp(imp->key, "regulatory") != 0) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+
+
+static CharPtr GetRegulatoryClass(SeqFeatPtr sfp)
+{
+  GBQualPtr gbqual;
+
+  if (sfp == NULL || !IsRegulatory(sfp)) {
+    return NULL;
+  }
+  for (gbqual = sfp->qual; gbqual != NULL; gbqual = gbqual->next) {
+    if (StringICmp(gbqual->qual, "regulatory_class") == 0) {
+      return gbqual->val;
+    }
+  }
+  return NULL;
+}
+
+
 static Boolean LIBCALLBACK IsSatelliteSequence (
   SeqFeatPtr sfp
 )
@@ -4546,8 +4629,14 @@ static Boolean LIBCALLBACK IsPromoter (
   SeqFeatPtr sfp
 )
 {
-  if (sfp == NULL || sfp->idx.subtype != FEATDEF_promoter) return FALSE;
-  return TRUE;
+  if (sfp == NULL) {
+    return FALSE;
+  } else if (sfp->idx.subtype == FEATDEF_promoter) {
+    return TRUE;
+  } else if (StringCmp (GetRegulatoryClass(sfp), "promoter") == 0) {
+    return TRUE;
+  }
+  return FALSE;
 }
 
 static Boolean LIBCALLBACK IsEndogenousVirusSourceFeature (
@@ -4625,6 +4714,72 @@ static CharPtr find_noncoding_feature_keyword (
   return NULL;
 }
 
+
+// returns ValNode list of CommentFeatPtr
+static ValNodePtr ParsetRNAAndOtherElement (CharPtr str)
+{
+  CharPtr cp, other;
+  ValNodePtr list = NULL;
+  CommentFeatPtr cf;
+
+  cp = str;
+  if (StringNCmp(cp, "contains ", 9) == 0) {
+    cp += 9;
+  }
+
+  other = StringSearch (cp, " and ");
+  if (other == NULL) {
+    return list;
+  }
+
+  while (cp < other) {
+      cf = ParseGeneFromNoteForDefLine (&cp);
+      if (cf == NULL) {
+          list = CommentFeatListFree(list);
+          return list;
+      } else {
+          ValNodeAddPointer (&list, MISCFEAT_TRNA_GENE, cf);
+          while (*cp == ',' || isspace(*cp)) {
+            cp ++;
+          }
+      }
+  }
+  
+  other += 5;
+
+  if (StringCmp(other, "control region") == 0 || StringCmp (other, "D-loop") == 0) {
+    cf = (CommentFeatPtr) MemNew (sizeof (CommentFeatData));
+    cf->product_name = StringSave(other);
+    ValNodeAddPointer (&list, MISCFEAT_TRNA_GENE, cf);
+  } else {
+      list = CommentFeatListFree(list);
+  }
+  return list;
+}
+
+
+static Boolean LIBCALLBACK IsTrnaPlusOther (
+  SeqFeatPtr sfp
+)
+{
+  ValNodePtr list;
+  Boolean rval = FALSE;
+
+  if (sfp == NULL || 
+      sfp->idx.subtype != FEATDEF_misc_feature || 
+      sfp->comment == NULL) {
+    rval = FALSE;
+  } else {
+    list = ParsetRNAAndOtherElement(sfp->comment);
+    if (list != NULL) {
+      rval = TRUE;
+    }
+    list = CommentFeatListFree (list);
+  }
+  return rval;
+}
+
+
 static Boolean LIBCALLBACK IsNoncodingProductFeat (
   SeqFeatPtr sfp
 )
@@ -4634,12 +4789,14 @@ static Boolean LIBCALLBACK IsNoncodingProductFeat (
     || sfp->comment == NULL
     || StringStr (sfp->comment, "intergenic") != NULL
     || IsParsableList (sfp)
+    || IsTrnaPlusOther (sfp)
     || (find_noncoding_feature_keyword (sfp->comment) == NULL
       && (StringStr (sfp->comment, "nonfunctional ") == NULL
         || StringStr (sfp->comment, " due to ") == NULL)))
   {
     return FALSE;
   }
+
 
   return TRUE;
 }
@@ -4713,6 +4870,114 @@ static Boolean LIBCALLBACK IsMiscFeat (
   return TRUE;
 }
 
+
+static Boolean IsSatellite (SeqFeatPtr sfp)
+{
+  GBQualPtr gbq;
+  Boolean rval = FALSE;
+
+  if ( sfp == NULL
+    || sfp->idx.subtype != FEATDEF_repeat_region) {
+    return FALSE;
+  }
+  for (gbq = sfp->qual; gbq != NULL && !rval; gbq = gbq->next) {
+    if (StringICmp (gbq->qual, "satellite") == 0) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+// use comment or rpt_family
+static Boolean DoesRepeatRegionHaveLabel(SeqFeatPtr sfp)
+{
+    GBQualPtr g;
+
+    if (sfp == NULL || sfp->idx.subtype != FEATDEF_repeat_region) {
+        return FALSE;
+    }
+    if (!StringHasNoText(sfp->comment)) {
+        return TRUE;
+    }
+    
+    for (g = sfp->qual; g != NULL; g = g->next) {
+        if (StringICmp(g->qual, "rpt_family") == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static Boolean LIBCALLBACK IsRepeatRegion (
+  SeqFeatPtr sfp
+)
+{
+  if ( sfp == NULL
+    || sfp->idx.subtype != FEATDEF_repeat_region
+    || !DoesRepeatRegionHaveLabel(sfp)
+    || IsSatellite(sfp))
+  {
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+static CharPtr RepeatRegionLabelFromString(CharPtr str)
+{
+    CharPtr extra = "repeat region";
+    CharPtr rval = NULL;
+    Int4 len, extra_len;
+
+    if (str == NULL) {
+        return NULL;
+    }
+    len = StringLen(str);
+    extra_len = StringLen(extra);
+
+    if (len < extra_len || StringCmp(str + len - extra_len, extra) != 0) {
+        rval = StringSave(str);
+    } else {
+        rval = (CharPtr)MemNew(sizeof(Char) * (1 + len - extra_len));
+        StringNCpy(rval, str, len - extra_len);
+        rval[len - extra_len] = 0;
+    }
+    return rval;
+}
+
+static void LIBCALLBACK GetRepeatRegionLabel (
+  ValNodePtr      featlist,
+  BioseqPtr       bsp,
+  Uint1           biomol,
+  FeatureLabelPtr flp
+)
+{
+  SeqFeatPtr main_feat;
+  Boolean    found = FALSE;
+  GBQualPtr  g;
+
+  flp->description = NULL; 
+  flp->typeword = StringSave("repeat region");
+  flp->pluralizable = FALSE;
+  flp->is_typeword_first = FALSE;
+ 
+  if (featlist == NULL) return;
+  main_feat = featlist->data.ptrvalue;
+  if (main_feat == NULL) return;
+
+  for (g = main_feat->qual; g != NULL; g = g->next) {
+      if (StringICmp(g->qual, "rpt_family") == 0) {
+          flp->description = RepeatRegionLabelFromString(g->val);
+          found = TRUE;
+      }
+  }
+
+  if (!found && !StringHasNoText(main_feat->comment)) {
+      flp->description = RepeatRegionLabelFromString(main_feat->comment);
+  }
+}
+
+
 static Boolean LIBCALLBACK IsOperon (
   SeqFeatPtr sfp
 )
@@ -4754,6 +5019,7 @@ static Boolean IsRecognizedFeature (
     || IsNoncodingProductFeat (sfp)
     || IsPromoter (sfp)
     || IsMiscFeat (sfp)
+    || IsRepeatRegion (sfp)
     || IsOperon (sfp))
   {
     return TRUE;
@@ -5226,6 +5492,7 @@ static void FindBestMatchCandidate
             && SeqLocAinB (clause->slp, slp) > -1)
           || IsLocAInBonSameStrand (clause->slp, slp)
           || ( IsPromoter (clause_sfp)
+            && search_parent != NULL
             && IsAAdjacentToB (clause->slp, search_parent->slp, bsp,
                                ADJACENT_TYPE_UPSTREAM, TRUE))
           || (IsmRNASequence (bsp) 
@@ -5571,7 +5838,9 @@ static void ExpandAltSplicedExons (
       }
       ValNodeFree (fcp->featlist->next);
       fcp->featlist->next = NULL;
-      new_clause->next = rest_of_list;
+      if (new_clause != NULL) {
+        new_clause->next = rest_of_list;
+      }
 
       /* put back location for first exon - was reduced to union of 
        * all exon intervals in GroupAltSplicedExons
@@ -6372,7 +6641,7 @@ static Boolean ShowInterval (
 )
 {
   if (IsSatelliteSequence (sfp) || IsExon (sfp) || IsIntron (sfp)
-    || IsPromoter (sfp) || Is3UTR (sfp) || Is5UTR (sfp))
+    || IsPromoter (sfp) || Is3UTR (sfp) || Is5UTR (sfp) || IsRepeatRegion(sfp))
     return FALSE;
   return TRUE;
 }
@@ -6662,7 +6931,7 @@ static CharPtr GetGenericInterval
     {
       if (utr3vnp != NULL)
       {
-        if (featlist->next != NULL)
+        if (featlist != NULL && featlist->next != NULL)
         {
           StringCat (interval, ",");
         }
@@ -6807,7 +7076,8 @@ static MatchLabelFunctionData label_functions[] = {
  { IsMobileElement,     GetMobileElementFeatureLabel        },
  { IsPromoter,          GetPromoterFeatureLabel          },
  { IsIntergenicSpacer,  GetIntergenicSpacerFeatureLabel  },
- { IsGeneCluster,       GetGeneClusterFeatureLabel       }
+ { IsGeneCluster,       GetGeneClusterFeatureLabel       },
+ { IsRepeatRegion,      GetRepeatRegionLabel             }
 };
 
 typedef enum {
@@ -6816,6 +7086,7 @@ typedef enum {
  DEFLINE_FEATLABEL_Promoter,
  DEFLINE_FEATLABEL_IntergenicSpacer,
  DEFLINE_FEATLABEL_GeneCluster,
+ DEFLINE_FEATLABEL_RepeatRegion,
  NumDefLineFeatLabels
 } DefLineFeatLabel;
 
@@ -7284,6 +7555,7 @@ static CharPtr misc_words [] = {
   "external transcribed spacer",
   "ribosomal RNA intergenic spacer",
   "ribosomal RNA",
+  "intergenic spacer region",
   "intergenic spacer"
 };
 
@@ -7292,6 +7564,7 @@ typedef enum {
   MISC_RNA_WORD_EXTERNAL_SPACER,
   MISC_RNA_WORD_RNA_INTERGENIC_SPACER,
   MISC_RNA_WORD_RNA,
+  MISC_RNA_WORD_INTERGENIC_SPACER_REGION,
   MISC_RNA_WORD_INTERGENIC_SPACER,
   NUM_MISC_RNA_WORDS
 } MiscWord;
@@ -7398,7 +7671,8 @@ GetFeatureClausesFromMiscRNATokens
         if (vnp->choice == MISC_RNA_WORD_INTERNAL_SPACER
             || vnp->choice == MISC_RNA_WORD_EXTERNAL_SPACER
             || vnp->choice == MISC_RNA_WORD_RNA_INTERGENIC_SPACER
-            || vnp->choice == MISC_RNA_WORD_INTERGENIC_SPACER) {
+            || vnp->choice == MISC_RNA_WORD_INTERGENIC_SPACER
+            || vnp->choice == MISC_RNA_WORD_INTERGENIC_SPACER_REGION) {
           if (word_loc == vnp->data.ptrvalue) {
             fcp->feature_label_data.is_typeword_first = TRUE;
             fcp->feature_label_data.typeword = StringSave (misc_words [vnp->choice]);
@@ -7416,6 +7690,8 @@ GetFeatureClausesFromMiscRNATokens
           }
         } else if (vnp->choice == MISC_RNA_WORD_RNA) {
           fcp->feature_label_data.description = StringSave (vnp->data.ptrvalue);
+          fcp->feature_label_data.is_typeword_first = FALSE;
+          fcp->feature_label_data.typeword = StringSave ("gene");
         }
         if ((vnp == token_list && partial5) || (vnp->next == NULL && partial3)) {
           fcp->interval = StringSave ("partial sequence");
@@ -7490,6 +7766,11 @@ static CharPtr GetRegionDescription
 }
 
 
+/* Some misc_RNA clauses have a comment that actually lists multiple
+ * features.  This function creates a clause for each element in the
+ * comment and inserts the list of new clauses into the feature list
+ * at the point where the single previous clause was.
+ */
 static ValNodePtr GetMiscRNAelements 
 ( SeqFeatPtr misc_rna,
   BioseqPtr  bsp,
@@ -7536,49 +7817,48 @@ static ValNodePtr GetMiscRNAelements
   return clause_list;
 }
 
-/* Some misc_RNA clauses have a comment that actually lists multiple
- * features.  This function creates a clause for each element in the
- * comment and inserts the list of new clauses into the feature list
- * at the point where the single previous clause was.
+
+/* Some misc_feature clauses have a comment that actually lists a tRNA
+ * and either a control region or D-loop.  This function creates a clause 
+ * for each element in the comment and inserts the list of new clauses into
+ * the feature list at the point where the single previous clause was.
  */
-static void ReplaceRNAClauses (
-  ValNodePtr PNTR clause_list,
-  BioseqPtr       bsp,
+static ValNodePtr GettRNAAndOtherElements 
+( SeqFeatPtr misc_feat,
+  BioseqPtr  bsp,
   DeflineFeatureRequestListPtr rp)
 {
+  ValNodePtr clause_list = NULL, cf_list = NULL, vnp;
   FeatureClausePtr fcp;
-  SeqFeatPtr main_feat;
-  ValNodePtr clause, replacement_clauses, nextclause, vnp;
+  Boolean partial5, partial3, is_partial;
 
-  if (clause_list == NULL || *clause_list == NULL) return;
-  clause = *clause_list;
-  while (clause != NULL)
-  {
-    nextclause = clause->next;
-    fcp = (clause->data.ptrvalue);
-    if (fcp == NULL
-      || fcp->featlist == NULL
-      || fcp->featlist->choice != DEFLINE_FEATLIST)
-    {
-      return;
-    }
-    main_feat = (SeqFeatPtr) fcp->featlist->data.ptrvalue;
-  
-    if (IsrRNA (main_feat) || IsMiscRNA (main_feat))
-    {
-      replacement_clauses = GetMiscRNAelements ( main_feat, bsp, rp );
-      if (replacement_clauses != NULL)
-      {
-        for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
-        vnp->next = clause->next;
-        clause->next = replacement_clauses;
-        fcp->delete_me = TRUE;
-      }
-    }
-    clause = nextclause;
+  if (misc_feat == NULL || 
+      misc_feat->idx.subtype != FEATDEF_misc_feature ||
+      StringHasNoText (misc_feat->comment)) {
+    return NULL;
   }
-  DeleteFeatureClauses (clause_list);
+
+  cf_list = ParsetRNAAndOtherElement(misc_feat->comment);
+  if (cf_list == NULL) {
+    return NULL;
+  }
+
+  CheckSeqLocForPartial (misc_feat->location, &partial5, &partial3);
+
+  for (vnp = cf_list; vnp != NULL; vnp = vnp->next) {
+    is_partial = FALSE;
+    if (vnp == cf_list && partial5) {
+      is_partial = TRUE;
+    } else if (vnp->next == NULL && partial3) {
+      is_partial = TRUE;
+    }
+    fcp = FeatureClauseFromParsedComment (vnp->data.ptrvalue, misc_feat, is_partial, bsp, rp);
+    ValNodeAddPointer (&clause_list, DEFLINE_CLAUSEPLUS, fcp);
+  }
+  cf_list = CommentFeatListFree(cf_list);
+  return clause_list;
 }
+
 
 /* Some misc_feat clauses have a comment that lists one or more tRNAs and
  * an intergenic spacer.  This function creates a clause for each element 
@@ -7621,6 +7901,12 @@ static void ReplaceIntergenicSpacerClauses (
       {
         fcp->delete_me = TRUE;
       }
+    } else if ((replacement_clauses = GetMiscRNAelements ( main_feat, bsp, rp )) != NULL ||
+               (replacement_clauses = GettRNAAndOtherElements ( main_feat, bsp, rp )) != NULL) {
+      for (vnp = replacement_clauses; vnp->next != NULL; vnp = vnp->next) {}
+      vnp->next = clause->next;
+      clause->next = replacement_clauses;
+      fcp->delete_me = TRUE;
     }
     clause = nextclause;
   }
@@ -7744,7 +8030,8 @@ static void RemoveUnwantedMiscFeats (
         && ! IsControlRegion (sfp)
         && ! IsIntergenicSpacer (sfp)
         && ! IsGeneCluster (sfp)
-        && ! IsParsableList (sfp))
+        && ! IsParsableList (sfp)
+        && ! IsTrnaPlusOther (sfp))
       {
         fcp->delete_me = TRUE;
       }
@@ -7928,7 +8215,7 @@ static void ReplaceExonClauseList (
   Int4             i;
   CharPtr          new_description;
   Int4             new_description_len;
-  CharPtr          exdesc1, exdesc2;
+  CharPtr          exdesc1 = NULL, exdesc2 = NULL;
 
   if (fcp == NULL || clause == NULL) return;
 
@@ -7959,8 +8246,12 @@ static void ReplaceExonClauseList (
     tmpclause = tmpclause->next;
   }
 
-  exdesc1 = GetExonDescription (bsp, fcp->featlist->data.ptrvalue);
-  exdesc2 = GetExonDescription (bsp, lastfeat->data.ptrvalue);
+  if (fcp->featlist != NULL) {
+    exdesc1 = GetExonDescription (bsp, fcp->featlist->data.ptrvalue);
+  }
+  if (lastfeat != NULL) {
+    exdesc2 = GetExonDescription (bsp, lastfeat->data.ptrvalue);
+  }
   if (exdesc1 == NULL || exdesc2 == NULL)
   {
     if (exdesc1 != NULL) MemFree (exdesc1);
@@ -8133,7 +8424,10 @@ AddProductEnding
         StringCat (str, "; micronuclear");
       }
       else if (mitochloroflag > 0) {
-        if (mitochloroflag > 9) {
+        if (mitochloroflag > DEFAULT_ORGANELLE_CLAUSE && mitochloroflag - DEFAULT_ORGANELLE_CLAUSE < DEFAULT_ORGANELLE_CLAUSE) {
+            sprintf(orgnelle, "; nuclear copy of %s gene", organelleByPopup[mitochloroflag - DEFAULT_ORGANELLE_CLAUSE]);
+            StringCat(str, orgnelle);
+        } else if (mitochloroflag > 9) {
           /* beyond list */
         }
         else {
@@ -8881,6 +9175,29 @@ static Boolean LIBCALLBACK ShouldRemoveLTR (
     return TRUE;
 }
 
+
+static Boolean LIBCALLBACK ShouldRemoveRepeatRegion (
+  SeqFeatPtr sfp,
+  FeatureClausePtr parent_fcp,
+  FeatureClausePtr this_fcp,
+  BioseqPtr bsp,
+  Boolean isLonely,
+  Boolean isRequested,
+  Boolean isSegment,
+  DeflineFeatureRequestListPtr rp
+)
+{
+  if (isRequested)
+  {
+    return FALSE;
+  }
+  else
+  {
+    return TRUE;
+  }
+}
+
+
 static Boolean LIBCALLBACK ShouldRemove3UTR (
   SeqFeatPtr sfp,
   FeatureClausePtr parent_fcp,
@@ -9067,7 +9384,7 @@ static Boolean LIBCALLBACK ShouldRemovePrecursorRNA
   Boolean isSegment,
   DeflineFeatureRequestListPtr rp)
 {
-  if (!isLonely && IsBioseqPrecursorRNA(bsp))
+  if (!isLonely && IsBioseqPrecursorRNA(bsp) && !isRequested)
   {
     return TRUE;
   }
@@ -9102,10 +9419,13 @@ static RemovableItemGlobalData remove_items[] = {
   { IsNoncodingProductFeat,  ShouldRemoveNoncodingProductFeat, "Misc feats with comments:" },
   { IsRemovableMobileElement, ShouldRemoveMobileElement, "Optional Mobile Element" },
   { IsPrecursorRNA, ShouldRemovePrecursorRNA, "Precursor RNAs" },
-  { IsncRNA, ShouldRemovencRNA, "ncRNAs that overlap precursor RNAs"}
+  { IsncRNA, ShouldRemovencRNA, "ncRNAs that overlap precursor RNAs"},
+  { IsRepeatRegion, ShouldRemoveRepeatRegion, "Repeat regions" }
 };
 
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup, used for GUI
 NLM_EXTERN CharPtr GetRemovableItemName (Int4 i)
 {
   if (i < 0 || i >= NumRemovableItems) {
@@ -9114,6 +9434,7 @@ NLM_EXTERN CharPtr GetRemovableItemName (Int4 i)
     return remove_items[i].group_name;
   }
 }
+//LCOV_EXCL_STOP
 
 NLM_EXTERN void InitFeatureRequests (
   DeflineFeatureRequestListPtr feature_requests
@@ -9136,6 +9457,8 @@ NLM_EXTERN void InitFeatureRequests (
 }
 
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 NLM_EXTERN DeflineFeatureRequestListPtr FreeDeflineFeatureRequestList (DeflineFeatureRequestListPtr feature_requests)
 {
   if (feature_requests != NULL) {
@@ -9144,6 +9467,7 @@ NLM_EXTERN DeflineFeatureRequestListPtr FreeDeflineFeatureRequestList (DeflineFe
   }
   return feature_requests;
 }
+//LCOV_EXCL_STOP
 
 
 static Boolean RemoveCondition (
@@ -9829,6 +10153,9 @@ static void PluralizeConsolidatedClauseDescription (
   /* don't pluralize tRNA names */
   if (StringNCmp (fcp->feature_label_data.description, "tRNA-", 5) ==0) return;
 
+  /* don't pluralize if typeword present */
+  if (fcp->feature_label_data.typeword != NULL && !StringHasNoText(fcp->feature_label_data.typeword)) return;
+
   new_desc = MemNew (StringLen (fcp->feature_label_data.description) + 2);
   if (new_desc == NULL) return;
 
@@ -10159,6 +10486,8 @@ static Boolean FeatureIsOnSegment (
   return FALSE;
 }
 
+//LCOV_EXCL_START
+//Segsets no longer supported
 static Boolean FeatureClauseIsOnSegment (
   FeatureClausePtr fcp,
   ValNodePtr segment_features
@@ -10185,6 +10514,7 @@ static Boolean FeatureClauseIsOnSegment (
   return FALSE;
 }
 
+//Segsets no longer supported
 static FeatureClausePtr CopyMatchingClauses (
   FeatureClausePtr fcp,
   ValNodePtr segment_features
@@ -10267,6 +10597,7 @@ static FeatureClausePtr CopyMatchingClauses (
   return new_fcp; 
 }
 
+//Segsets no longer supported
 static void CopyFeatureList (
   ValNodePtr match_features,
   ValNodePtr parent_features,
@@ -10304,6 +10635,7 @@ static void CopyFeatureList (
     
 }
 
+//Segsets no longer supported
 static void ExtractSegmentClauses (
   ValNodePtr segment_features,
   ValNodePtr parent_features,
@@ -10312,6 +10644,7 @@ static void ExtractSegmentClauses (
 {
   CopyFeatureList (segment_features, parent_features, segment_clauses);
 }
+//LCOV_EXCL_STOP
 
 typedef struct segmentdeflinedata {
   BioseqPtr  parent_bsp;
@@ -10358,6 +10691,8 @@ NLM_EXTERN void DefLineFeatClauseListFree (ValNodePtr vnp)
 }
 
 
+//LCOV_EXCL_START
+//Segsets no longer supported
 static Boolean IntervalIntersectsIvals 
 (Int2    numivals,
  Int4Ptr ivals,
@@ -10381,6 +10716,7 @@ static Boolean IntervalIntersectsIvals
 }
 
 
+//Segsets no longer supported
 /* if there are no features at all on this segment, select the genes that 
  * traverse the segment.
  */
@@ -10422,6 +10758,7 @@ static ValNodePtr GrabTraversingGenes
   }
   return segment_feature_list;
 }
+//LCOV_EXCL_STOP
 
 
 static CharPtr BuildFeatureClauses (
@@ -10437,6 +10774,8 @@ static CharPtr BuildFeatureClauses (
   DeflineFeatureRequestList PNTR feature_requests
 );
 
+//LCOV_EXCL_START
+//Segsets no longer supported
 static Boolean LIBCALLBACK GetFeatureClauseForSeg (
   SeqLocPtr slp,
   SeqMgrSegmentContextPtr context)
@@ -10534,18 +10873,20 @@ static Boolean LIBCALLBACK GetFeatureClauseForSeg (
   DeleteMarkedObjects (entityID, 0, NULL);
   return TRUE;
 }
+//LCOV_EXCL_STOP
 
 static Boolean HasAnyPromoters (BioseqPtr bsp)
 {
   SeqFeatPtr sfp;
   SeqMgrFeatContext fcontext;
-  
-  sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_promoter, &fcontext);
-  if (sfp == NULL) {
-    return FALSE;
-  } else {
-    return TRUE;
+  Boolean rval = FALSE;
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_regulatory, &fcontext);
+       sfp != NULL && !rval;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_regulatory, &fcontext)) {
+    rval = IsPromoter(sfp);
   }
+  return rval;
 }
 
 static void AddFakePromoterClause (ValNodePtr PNTR feature_list, BioseqPtr bsp, DeflineFeatureRequestListPtr rp)
@@ -10595,47 +10936,54 @@ static Boolean IsInGenProdSet (BioseqPtr bsp)
 NLM_EXTERN CharPtr BuildNonFeatureListClause (BioseqPtr bsp, DefLineType feature_list_type)
 {
   CharPtr      str = NULL;
-  BioSourcePtr biop;
+  BioSourcePtr biop = NULL;
   SeqDescrPtr  sdp;
   SeqMgrDescContext context;
+  CharPtr      organelle_name = NULL;
   Char         ending_str [200];
-  CharPtr      mol_name;
+  CharPtr      mol_name = NULL;
   MolInfoPtr   molinfo;
 
   ending_str [0] = 0;
 
-  if (feature_list_type == DEFLINE_COMPLETE_SEQUENCE
-      || feature_list_type == DEFLINE_PARTIAL_SEQUENCE
-      || feature_list_type == DEFLINE_COMPLETE_GENOME
-      || feature_list_type == DEFLINE_PARTIAL_GENOME)
+  biop = GetBiopForBsp (bsp);
+  if (biop != NULL)
   {
-    biop = GetBiopForBsp (bsp);
-    if (biop != NULL)
-    {
       switch (biop->genome) {
-        case GENOME_macronuclear :
-          sprintf (ending_str, "macronuclear");
+      case GENOME_macronuclear :
+          if (feature_list_type != DEFLINE_SEQUENCE) {
+            organelle_name = "macronuclear";
+          }
           break;
-        case GENOME_nucleomorph :
-          sprintf (ending_str, "nucleomorph");
+      case GENOME_nucleomorph :
+          if (feature_list_type != DEFLINE_SEQUENCE) {
+            organelle_name = "nucleomorph";
+          }
           break;
-        case GENOME_mitochondrion :
-          sprintf (ending_str, "mitochondrion");
+      case GENOME_mitochondrion :
+          organelle_name = "mitochondrion";
           break;
-        case GENOME_apicoplast :
-        case GENOME_chloroplast :
-        case GENOME_chromoplast :
-        case GENOME_kinetoplast :
-        case GENOME_plastid :
-        case GENOME_cyanelle :
-        case GENOME_leucoplast :
-        case GENOME_proplastid :
-        case GENOME_hydrogenosome :
-        case GENOME_chromatophore :
-          sprintf (ending_str, "%s", organelleByGenome [biop->genome]);
+      case GENOME_apicoplast :
+      case GENOME_chloroplast :
+      case GENOME_kinetoplast :
+      case GENOME_plastid :
+      case GENOME_leucoplast :
+          organelle_name = organelleByGenome [biop->genome];
+          break;
+      case GENOME_cyanelle :
+      case GENOME_proplastid :
+      case GENOME_hydrogenosome :
+      case GENOME_chromatophore :
+      case GENOME_chromoplast :
+          if (feature_list_type != DEFLINE_SEQUENCE) {
+            organelle_name = organelleByGenome [biop->genome];
+          }
           break;
       }
-    }
+  }
+
+  if (organelle_name != NULL) {
+    sprintf (ending_str, "%s", organelle_name);
   }
 
   if (feature_list_type == DEFLINE_COMPLETE_SEQUENCE)
@@ -10656,14 +11004,16 @@ NLM_EXTERN CharPtr BuildNonFeatureListClause (BioseqPtr bsp, DefLineType feature
   }
   else if (feature_list_type == DEFLINE_SEQUENCE) 
   {
-    sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
-    if (sdp == NULL || (molinfo = sdp->data.ptrvalue) == NULL) 
-    {
-      mol_name = NULL;
-    } 
-    else 
-    {
-      mol_name = BiomolNameFromBiomol (molinfo->biomol);
+    if (organelle_name == NULL) {
+        sdp = SeqMgrGetNextDescriptor (bsp, NULL, Seq_descr_molinfo, &context);
+        if (sdp == NULL || (molinfo = sdp->data.ptrvalue) == NULL) 
+        {
+          mol_name = NULL;
+        } 
+        else 
+        {
+          mol_name = BiomolNameFromBiomol (molinfo->biomol);
+        }
     }
     if (mol_name == NULL) 
     {
@@ -10671,7 +11021,7 @@ NLM_EXTERN CharPtr BuildNonFeatureListClause (BioseqPtr bsp, DefLineType feature
     } 
     else 
     {
-      sprintf (ending_str + StringLen (ending_str), "%s sequence", mol_name);
+      sprintf (ending_str + StringLen (ending_str), " %s sequence", mol_name);
     }
   }
 
@@ -10698,8 +11048,8 @@ static Boolean IsAmplifiedMiscFeat (ValNodePtr feature_list)
   } else if (feature_list->choice == DEFLINE_FEATLIST) {
     sfp = (SeqFeatPtr) feature_list->data.ptrvalue;
     if (sfp != NULL && sfp->idx.subtype == FEATDEF_misc_feature
-        && (StringNICmp (sfp->comment, phrase1, StringLen (phrase1)) == 0) 
-            || StringNICmp (sfp->comment, phrase2, StringLen (phrase2)) == 0) {
+        && (StringNICmp (sfp->comment, phrase1, StringLen (phrase1)) == 0 
+            || StringNICmp (sfp->comment, phrase2, StringLen (phrase2)) == 0)) {
       rval = TRUE;
     }
   }
@@ -10821,8 +11171,6 @@ static CharPtr BuildFeatureClauses (
       RemoveUnwantedMiscFeats (feature_list, TRUE);
     }
 
-    ReplaceRNAClauses (feature_list, bsp, feature_requests);
-
     /* take any exons on the minus strand */
     /* and reverse their order within the clause */
     ReverseClauses (feature_list, IsExonOrIntron);
@@ -10900,6 +11248,8 @@ static Int2 GetProductFlagFromCDSProductNames (BioseqPtr bsp)
 }
 
 
+//LCOV_EXCL_START
+//Segsets no longer supported
 static void BuildFeatClauseListForSegSet (
   BioseqPtr bsp,
   Uint2 entityID,
@@ -10951,6 +11301,7 @@ static void BuildFeatClauseListForSegSet (
   vnp->data.ptrvalue = deflist;
   FreeListElement (sdld.parent_feature_list);
 }
+//LCOV_EXCL_STOP
 
 
 static Boolean Is5SList (ValNodePtr feature_list)
@@ -11032,7 +11383,10 @@ static void BuildOneFeatClauseList (
     if (bsp != NULL && bsp->repr == Seq_repr_seg &&
       bsp->seq_ext != NULL && bsp->seq_ext_type == 1) 
     {
+      //LCOV_EXCL_START
+      //Segsets no longer supported
       BuildFeatClauseListForSegSet (bsp, entityID, feature_requests, product_flag, alternate_splice_flag, gene_cluster_opp_strand, list);
+      //LCOV_EXCL_STOP
     }
   }
 
@@ -11062,7 +11416,7 @@ static void BuildOneFeatClauseList (
   deflist->sep = SeqMgrGetSeqEntryForData (bsp),
   deflist->bsp = bsp;
   if (Is5SList(head)) {
-    deflist->clauselist = StringSave ("5S ribosomal RNA gene region");
+    deflist->clauselist = StringSave ("5S ribosomal RNA gene region.");
   } else {
     deflist->clauselist = BuildFeatureClauses (bsp,
                                                molecule_type,
@@ -11096,6 +11450,8 @@ static void RecurseForBuildingFeatClauseLists(
 {
   BioseqSetPtr    bssp;
 
+  //LCOV_EXCL_START
+  //when regenerating, always calling at bioseq level
   if ( IS_Bioseq_set (sep))
   {
     bssp = (BioseqSetPtr) sep->data.ptrvalue;
@@ -11113,8 +11469,10 @@ static void RecurseForBuildingFeatClauseLists(
       return;
     }
   }
+  //LCOV_EXCL_STOP
   BuildOneFeatClauseList (sep, entityID, feature_requests, product_flag, alternate_splice_flag, gene_cluster_opp_strand, list);
 }
+
 
 
 NLM_EXTERN void BuildDefLineFeatClauseList (
@@ -11131,6 +11489,8 @@ NLM_EXTERN void BuildDefLineFeatClauseList (
   DeleteMarkedObjects (entityID, 0, NULL);
 }
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 static Boolean IdenticalExceptForPartialComplete (CharPtr str1, CharPtr str2)
 {
     CharPtr cp, word_in_first, word_in_second;
@@ -11178,6 +11538,7 @@ static Boolean IdenticalExceptForPartialComplete (CharPtr str1, CharPtr str2)
 }
 
 
+//Not part of Autodef or Cleanup
 static CharPtr GetTaxnameForBsp (BioseqPtr bsp)
 {
   SeqDescrPtr       sdp;
@@ -11195,7 +11556,7 @@ static CharPtr GetTaxnameForBsp (BioseqPtr bsp)
   return taxname;
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 NLM_EXTERN Boolean AreFeatureClausesUnique (ValNodePtr list)
 {
   ValNodePtr vnp1, vnp2;
@@ -11221,6 +11582,7 @@ NLM_EXTERN Boolean AreFeatureClausesUnique (ValNodePtr list)
   }
   return TRUE;
 }
+//LCOV_EXCL_STOP
 
 
 NLM_EXTERN CharPtr GetKeywordPrefix (SeqEntryPtr sep)
@@ -11305,6 +11667,8 @@ typedef struct deflineclauseoptions {
   Boolean gene_cluster_opp_strand;
 } DefLineClauseOptions, PNTR DefLineClauseOptionsPtr;
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup (no more popset retros)
 static DefLineClauseOptionsPtr DefLineClauseOptionsNew (void)
 {
   DefLineClauseOptionsPtr clause_options;
@@ -11330,6 +11694,7 @@ static DefLineClauseOptionsPtr DefLineClauseOptionsFree (DefLineClauseOptionsPtr
 
 typedef void (*Nlm_SetFeatureRequestsProc) PROTO ((DefLineClauseOptionsPtr));
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void DefaultClauseOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11339,6 +11704,7 @@ static void DefaultClauseOptions (DefLineClauseOptionsPtr clause_options)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void CompleteSequenceClauseOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11348,7 +11714,7 @@ static void CompleteSequenceClauseOptions (DefLineClauseOptionsPtr clause_option
   clause_options->gene_cluster_opp_strand = FALSE;
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static void CompleteGenomeClauseOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11358,7 +11724,7 @@ static void CompleteGenomeClauseOptions (DefLineClauseOptionsPtr clause_options)
   clause_options->gene_cluster_opp_strand = FALSE;
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static void SequenceClauseOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11369,6 +11735,7 @@ static void SequenceClauseOptions (DefLineClauseOptionsPtr clause_options)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void MiscFeatNonCodingOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11377,6 +11744,7 @@ static void MiscFeatNonCodingOptions (DefLineClauseOptionsPtr clause_options)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void MiscFeatSemicolonOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11386,7 +11754,7 @@ static void MiscFeatSemicolonOptions (DefLineClauseOptionsPtr clause_options)
  
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static void MitochondrialProductClauseOptions (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11396,6 +11764,7 @@ static void MitochondrialProductClauseOptions (DefLineClauseOptionsPtr clause_op
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void RequestPromoterAndExon (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11404,6 +11773,7 @@ static void RequestPromoterAndExon (DefLineClauseOptionsPtr clause_options)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void RequestIntronAndExon (DefLineClauseOptionsPtr clause_options)
 {
   InitFeatureRequests (&(clause_options->feature_requests));
@@ -11411,7 +11781,7 @@ static void RequestIntronAndExon (DefLineClauseOptionsPtr clause_options)
   clause_options->feature_requests.keep_items[RemovableIntron] = TRUE;
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static Nlm_SetFeatureRequestsProc ClauseOptionSetList[] = {
   DefaultClauseOptions,
   RequestPromoterAndExon,
@@ -11427,6 +11797,7 @@ static Nlm_SetFeatureRequestsProc ClauseOptionSetList[] = {
 typedef Boolean (*Nlm_SetOrgModifiersProc) PROTO ((OrganismDescriptionModifiersPtr, ValNodePtr PNTR, ModifierItemLocalPtr));
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void DefaultOrgOptions (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list)
 {
   odmp->use_modifiers = TRUE;
@@ -11434,6 +11805,7 @@ static void DefaultOrgOptions (OrganismDescriptionModifiersPtr odmp, ValNodePtr 
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean SubstituteMod (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available, Int4 mod1, Int4 mod2) 
 {
   ValNodePtr vnp;
@@ -11466,24 +11838,27 @@ static Boolean SubstituteMod (OrganismDescriptionModifiersPtr odmp, ValNodePtr P
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean IsolateInsteadOfClone (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available) 
 {
   return SubstituteMod (odmp, mod_list, available, DEFLINE_POS_Clone, DEFLINE_POS_Isolate);
 } 
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean  HaplotypeInsteadOfVoucher (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available) 
 {
   return SubstituteMod (odmp, mod_list, available, DEFLINE_POS_Specimen_voucher, DEFLINE_POS_Haplotype);
 } 
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean  VoucherInsteadOfIsolate (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available) 
 {
   return SubstituteMod (odmp, mod_list, available, DEFLINE_POS_Isolate, DEFLINE_POS_Specimen_voucher);
 } 
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseNone (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   if (mod_list == NULL || *mod_list == NULL) {
@@ -11496,6 +11871,7 @@ static Boolean UseNone (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mo
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AddOneAdjustmentMod (ValNodePtr PNTR mod_list, ModifierItemLocalPtr available, Int4 specific)
 {
   Boolean already_has_sv = FALSE;
@@ -11523,6 +11899,7 @@ static Boolean AddOneAdjustmentMod (ValNodePtr PNTR mod_list, ModifierItemLocalP
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseOneSpecific (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available, Int4 specific)
 {
   DefaultOrgOptions(odmp, mod_list);
@@ -11530,24 +11907,28 @@ static Boolean UseOneSpecific (OrganismDescriptionModifiersPtr odmp, ValNodePtr 
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseStrain (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   return UseOneSpecific (odmp, mod_list, available, DEFLINE_POS_Strain);
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseSpecimenVoucher (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   return UseOneSpecific (odmp, mod_list, available, DEFLINE_POS_Specimen_voucher);
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseHaplotype (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   return UseOneSpecific (odmp, mod_list, available, DEFLINE_POS_Haplotype);
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseAutoDefId (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   size_t index;
@@ -11587,6 +11968,7 @@ static Boolean UseAutoDefId (OrganismDescriptionModifiersPtr odmp, ValNodePtr PN
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean DontExcludeSp (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   if (odmp == NULL || !odmp->exclude_sp) {
@@ -11598,6 +11980,7 @@ static Boolean DontExcludeSp (OrganismDescriptionModifiersPtr odmp, ValNodePtr P
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean UseCountryAndIsolate (OrganismDescriptionModifiersPtr odmp, ValNodePtr PNTR mod_list, ModifierItemLocalPtr available)
 {
   Boolean add_country, add_isolate;
@@ -11613,6 +11996,7 @@ static Boolean UseCountryAndIsolate (OrganismDescriptionModifiersPtr odmp, ValNo
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Nlm_SetOrgModifiersProc OrgModifiersSetList[] = {
   IsolateInsteadOfClone,
   UseNone,
@@ -11629,6 +12013,7 @@ static Nlm_SetOrgModifiersProc OrgModifiersSetList[] = {
 
 typedef Boolean (*Nlm_CompareDeflinesProc) PROTO ((CharPtr, CharPtr));
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean MatchExceptOldProduct (CharPtr old_str, CharPtr new_str)
 {
   Int4 old_len, new_len, pattern_len, new_pattern_len, organelle_len, i;
@@ -11683,6 +12068,7 @@ static Boolean MatchExceptOldProduct (CharPtr old_str, CharPtr new_str)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean NoSequenceForIntron (CharPtr old_str, CharPtr new_str)
 {
   Int4 old_len, new_len;
@@ -11701,6 +12087,7 @@ static Boolean NoSequenceForIntron (CharPtr old_str, CharPtr new_str)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean SkipPair (CharPtr PNTR a, CharPtr PNTR b, CharPtr a_start, CharPtr b_start, CharPtr val1, CharPtr val2)
 {
   Int4 len1, len2;
@@ -11736,6 +12123,7 @@ static Boolean SkipPair (CharPtr PNTR a, CharPtr PNTR b, CharPtr a_start, CharPt
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForSpace (CharPtr PNTR a, CharPtr PNTR b, CharPtr a_start, CharPtr b_start) 
 {
   Boolean rval = FALSE;
@@ -11754,6 +12142,7 @@ static Boolean AdjustForSpace (CharPtr PNTR a, CharPtr PNTR b, CharPtr a_start, 
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForCharBeforePhrase (CharPtr PNTR a, CharPtr PNTR b, CharPtr phrase, Char ch)
 {
   Boolean rval = FALSE;
@@ -11774,19 +12163,21 @@ static Boolean AdjustForCharBeforePhrase (CharPtr PNTR a, CharPtr PNTR b, CharPt
   return rval;
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForCommaBeforePhrase (CharPtr PNTR a, CharPtr PNTR b, CharPtr phrase)
 {
   return AdjustForCharBeforePhrase (a, b, phrase, ',');
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForCommaBeforeAnd (CharPtr PNTR a, CharPtr PNTR b)
 {
   return AdjustForCommaBeforePhrase (a, b, " and ");
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForSkippableWord (CharPtr PNTR a, CharPtr PNTR b, CharPtr str1, CharPtr str2, CharPtr word)
 {
   Int4 len;
@@ -11810,6 +12201,7 @@ static Boolean AdjustForSkippableWord (CharPtr PNTR a, CharPtr PNTR b, CharPtr s
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForKnownDiffs (CharPtr PNTR a, CharPtr PNTR b, CharPtr str1, CharPtr str2)
 {
   Boolean rval = SkipPair (a, b, str1, str2, " pseudogene, partial sequence", " gene, partial cds")
@@ -11843,6 +12235,7 @@ static Boolean AdjustForKnownDiffs (CharPtr PNTR a, CharPtr PNTR b, CharPtr str1
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean AdjustForCommaBeforeGenomicSequence (CharPtr PNTR a, CharPtr PNTR b)
 {
   return AdjustForCommaBeforePhrase (a, b, " genomic sequence");
@@ -11854,6 +12247,8 @@ static CharPtr defline_skippable_words[] = {
   " mitochondrial",
   NULL};
 
+
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean SkipWord (CharPtr PNTR a, CharPtr a_start, CharPtr PNTR b)
 {
   Int4 index, len;
@@ -11875,10 +12270,11 @@ static Boolean SkipWord (CharPtr PNTR a, CharPtr a_start, CharPtr PNTR b)
 }
    
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean MatchWithPhraseExceptions (CharPtr str1, CharPtr str2)
 {
   Int4 len_curr, len_new;
-  CharPtr a, b;
+  CharPtr a = NULL, b = NULL;
   CharPtr mitochondrial = "; mitochondrial";
   Int4 len_mito = StringLen (mitochondrial);
 
@@ -11922,7 +12318,7 @@ static Boolean MatchWithPhraseExceptions (CharPtr str1, CharPtr str2)
   }
 }
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static Nlm_CompareDeflinesProc CompareDeflinesList[] = {
   MatchExceptOldProduct,
   NoSequenceForIntron,
@@ -11930,6 +12326,8 @@ static Nlm_CompareDeflinesProc CompareDeflinesList[] = {
   NULL };
 
 
+
+//Not part of Autodef or Cleanup (no more popset retros)
 static Boolean DeflinesMatch (CharPtr old_str, CharPtr new_str)
 {
   Int4 index;
@@ -11946,6 +12344,7 @@ static Boolean DeflinesMatch (CharPtr old_str, CharPtr new_str)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void ReplaceOldName (BioseqPtr bsp, CharPtr PNTR old_title)
 {
   SeqDescPtr                    sdp;
@@ -11970,6 +12369,7 @@ static void ReplaceOldName (BioseqPtr bsp, CharPtr PNTR old_title)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void AddMissingPeriod (CharPtr PNTR old_title)
 {
   Int4 len;
@@ -11989,6 +12389,7 @@ static void AddMissingPeriod (CharPtr PNTR old_title)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void ChangeExonList (CharPtr PNTR old_title)
 {
   CharPtr exon_start, first_and, second_and;
@@ -12017,6 +12418,7 @@ static void ChangeExonList (CharPtr PNTR old_title)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 NLM_EXTERN DefLineClauseOptionsPtr MakeFeatureRequestsMatchExpectedTitle (BioseqPtr bsp)
 {
   SeqEntryPtr                   sep;
@@ -12168,6 +12570,7 @@ NLM_EXTERN DefLineClauseOptionsPtr MakeFeatureRequestsMatchExpectedTitle (Bioseq
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static Int4 MatchlenForAutodef (CharPtr str1, CharPtr str2)
 {
   Int4 len_curr, len_new;
@@ -12201,6 +12604,7 @@ static Int4 MatchlenForAutodef (CharPtr str1, CharPtr str2)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void FindCommonTitleCallback (BioseqPtr bsp, Pointer data)
 {
   Int4 len_curr, len_new;
@@ -12265,13 +12669,12 @@ static void FindCommonTitleCallback (BioseqPtr bsp, Pointer data)
   }
 }
 
-
 typedef struct verifycommonfeatureclause {
   CharPtr common_clause;
   Boolean is_ok;
 } VerifyCommonFeatureClauseData, PNTR VerifyCommonFeatureClausePtr;
 
-
+//Not part of Autodef or Cleanup (no more popset retros)
 static void PrintBioSource (BioSourcePtr biop)
 {
   OrgModPtr mod;
@@ -12288,6 +12691,7 @@ static void PrintBioSource (BioSourcePtr biop)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void VerifyCommonFeatureClauseCallback (BioseqPtr bsp, Pointer data)
 {
   VerifyCommonFeatureClausePtr v;
@@ -12365,6 +12769,7 @@ static void VerifyCommonFeatureClauseCallback (BioseqPtr bsp, Pointer data)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static CharPtr GetCommonFeatureClause (SeqEntryPtr sep)
 {
   CharPtr common_clause = NULL;
@@ -12396,6 +12801,7 @@ static CharPtr GetCommonFeatureClause (SeqEntryPtr sep)
   }
   return common_clause;
 }
+//LCOV_EXCL_STOP
 
 
 NLM_EXTERN void BuildDefinitionLinesFromFeatureClauseLists (
@@ -12422,6 +12828,8 @@ NLM_EXTERN void BuildDefinitionLinesFromFeatureClauseLists (
   }
 }
 
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
 NLM_EXTERN void BuildDefLinesFromFeatClauseListsForOneBsp (
   ValNodePtr list,
   ModifierItemLocalPtr modList,
@@ -12454,6 +12862,7 @@ NLM_EXTERN void BuildDefLinesFromFeatClauseListsForOneBsp (
  * visible in the flat file if all sequences in the nuc-prot set have
  * their own title.
  */
+// Not actually called on nuc-prot sets during title regeneration
 NLM_EXTERN void RemoveNucProtSetTitles (SeqEntryPtr sep)
 {
   BioseqSetPtr bssp;
@@ -12497,6 +12906,7 @@ NLM_EXTERN void RemoveNucProtSetTitles (SeqEntryPtr sep)
     }
   }
 }
+//LCOV_EXCL_STOP
 
 
 static void ProtTitleRemoveProc (BioseqPtr bsp, Pointer userdata)
@@ -12527,6 +12937,8 @@ NLM_EXTERN void RemoveProteinTitles (SeqEntryPtr sep)
   DeleteMarkedObjects (entityID, 0, NULL);
 }
 
+//LCOV_EXCL_START
+//not used in autodef or cleanup
 static void MRnaTitleRemoveProc (BioseqPtr bsp, Pointer userdata)
 
 {
@@ -12550,6 +12962,7 @@ static void MRnaTitleRemoveProc (BioseqPtr bsp, Pointer userdata)
   }
 }
 
+//not used in autodef or cleanup
 NLM_EXTERN void RemoveMRnaTitles (SeqEntryPtr sep)
 
 {
@@ -12570,7 +12983,7 @@ typedef struct popsetdefline {
 } PopsetDeflineData, PNTR PopsetDeflinePtr;
 
 
-
+//Not regenerating popset titles
 NLM_EXTERN Boolean GetsDocsumTitle(Uint1 set_class)
 {
   if (set_class == BioseqseqSet_class_pop_set
@@ -12583,7 +12996,7 @@ NLM_EXTERN Boolean GetsDocsumTitle(Uint1 set_class)
   }
 }
 
-
+//Not part of Autodef when not regenerating popset titles
 static Boolean HasTitle(SeqDescrPtr descr)
 {
   while (descr != NULL) {
@@ -12596,6 +13009,7 @@ static Boolean HasTitle(SeqDescrPtr descr)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 NLM_EXTERN void AddPopsetDeflineWithClause (BioseqSetPtr bssp, CharPtr clause)
 {
   SeqEntryPtr set_sep;
@@ -12637,6 +13051,7 @@ NLM_EXTERN void AddPopsetDeflineWithClause (BioseqSetPtr bssp, CharPtr clause)
 }
 
 
+//Not regenerating popset titles
 static void AddPopsetCallback (BioseqSetPtr bssp, Pointer data)
 {
   SeqEntryPtr          set_sep, first_sep;
@@ -12698,7 +13113,7 @@ static void AddPopsetCallback (BioseqSetPtr bssp, Pointer data)
   MemFree (org_desc);
 }
 
-
+//Not regenerating popset titles
 NLM_EXTERN void AddPopsetTitles 
 (SeqEntryPtr sep,
  DeflineFeatureRequestListPtr feature_requests,
@@ -12718,7 +13133,7 @@ NLM_EXTERN void AddPopsetTitles
   VisitSetsInSep (sep, &pop, AddPopsetCallback);
 }
 
-
+//Not regenerating popset titles
 static void RemovePopsetTitlesCallback(BioseqSetPtr bssp, Pointer data)
 {
   SeqDescrPtr   sdp;
@@ -12736,7 +13151,7 @@ static void RemovePopsetTitlesCallback(BioseqSetPtr bssp, Pointer data)
   }
 }
 
-
+//Not regenerating popset titles
 NLM_EXTERN void RemovePopsetTitles(SeqEntryPtr sep)
 {
   Uint2 entityID;
@@ -12745,13 +13160,405 @@ NLM_EXTERN void RemovePopsetTitles(SeqEntryPtr sep)
   entityID = ObjMgrGetEntityIDForChoice (sep);
   DeleteMarkedObjects (entityID, 0, NULL);
 }
+//LCOV_EXCL_STOP
 
 
-NLM_EXTERN void 
-AutoDefForSeqEntry 
-(SeqEntryPtr sep,
- Uint2 entityID,
- OrganismDescriptionModifiersPtr odmp,
+const CharPtr kAutoDefOptions = "AutodefOptions";
+const CharPtr kAltSpliceFlag = "AltSpliceFlag";
+const CharPtr kDoNotApplyToAff = "DoNotApplyToAff";
+const CharPtr kDoNotApplyToCf = "DoNotApplyToCf";
+const CharPtr kDoNotApplyToNr = "DoNotApplyToNr";
+const CharPtr kDoNotApplyToSp = "DoNotApplyToSp";
+const CharPtr kFeatureListType = "FeatureListType";
+const CharPtr kGeneClusterOppStrand = "GeneClusterOppStrand";
+const CharPtr kHIVRule = "HIVRule";
+const CharPtr kIncludeCountryText = "IncludeCountryText";
+const CharPtr kKeep3UTRs = "Keep3UTRs";
+const CharPtr kKeep5UTRs = "Keep5UTRs";
+const CharPtr kKeepAfterSemicolon = "KeepAfterSemicolon";
+const CharPtr kKeepExons = "KeepExons";
+const CharPtr kKeepIntrons = "KeepIntrons";
+const CharPtr kKeepLTRs = "KeepLTRs";
+const CharPtr kKeepPromoters = "KeepPromoters";
+const CharPtr kLeaveParenthetical = "LeaveParenthetical";
+const CharPtr kMaxMods = "MaxMods";
+const CharPtr kMiscFeatRule = "MiscFeatRule";
+const CharPtr kModifierList = "ModifierList";
+const CharPtr kProductFlag = "ProductFlag";
+const CharPtr kNuclearCopyFlag = "NuclearCopyFlag";
+const CharPtr kSpecifyNuclearProduct = "SpecifyNuclearProduct";
+const CharPtr kSuppressedFeatures = "SuppressedFeatures";
+const CharPtr kSuppressFeatureAltSplice = "SuppressFeatureAltSplice";
+const CharPtr kSuppressLocusTags = "SuppressLocusTags";
+const CharPtr kSuppressMobileElementSubfeatures = "SuppressMobileElementSubfeatures";
+const CharPtr kUseFakePromoters = "UseFakePromoters";
+const CharPtr kUseLabels = "UseLabels";
+const CharPtr kUseNcRNAComment = "UseNcRNAComment";
+const CharPtr kAllowModAtEndOfTaxname = "AllowModAtEndOfTaxname";
+const CharPtr kKeepuOrf = "KeepuOrf";
+const CharPtr kKeepMobileElement = "KeepMobileElement";
+const CharPtr kKeepNoncodingProductFeat = "KeepNoncodingProductFeat";
+const CharPtr kKeepPrecursorRNA = "KeepPrecursorRNA";
+const CharPtr kKeepncRNA = "KeepncRNA";
+const CharPtr kKeepRepeatRegion = "KeepRepeatRegion";
+const CharPtr kSuppressAllele = "SuppressAllele";
+
+/* field values for HIV rule*/
+const CharPtr kPreferClone = "PreferClone";
+const CharPtr kPreferIsolate = "PreferIsolate";
+const CharPtr kWantBoth = "WantBoth";
+/* field values for feature list */
+const CharPtr kCompleteGenome = "Complete Genome";
+const CharPtr kCompleteSequence = "Complete Sequence";
+const CharPtr kListAllFeatures = "List All Features";
+const CharPtr kPartialGenome = "Partial Genome";
+const CharPtr kPartialSequence = "Partial Sequence";
+const CharPtr kSequence = "Sequence";
+/* field values for misc feat rules */
+const CharPtr kCommentFeat = "CommentFeat";
+const CharPtr kDelete = "Delete";
+const CharPtr kNoncodingProductFeat = "NoncodingProductFeat";
+
+static Boolean IsAutoDefOptions(UserObjectPtr uop)
+{
+    if (uop != NULL && uop->type != NULL && 
+        StringICmp(uop->type->str, kAutoDefOptions) == 0) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+//LCOV_EXCL_START
+//not testing construction of autodef options object at this time
+void LabelUserField(UserFieldPtr ufp, CharPtr field_name)
+{
+    ufp->label = ObjectIdNew();
+    ufp->label->str = StringSave(field_name);
+}
+
+//not testing construction of autodef options object at this time
+void AddFieldToUserObject(UserFieldPtr ufp, UserObjectPtr uop)
+{
+    ufp->next = uop->data;
+    uop->data = ufp;
+}
+
+//not testing construction of autodef options object at this time
+void AddBooleanAutodefField(UserObjectPtr uop, CharPtr field_name)
+{
+    UserFieldPtr ufp = UserFieldNew();
+    LabelUserField(ufp, field_name);
+    ufp->choice = 4;
+    ufp->data.boolvalue = TRUE;
+    AddFieldToUserObject(ufp, uop);
+}
+
+//not testing construction of autodef options object at this time
+void AddAutodefProductFlag(UserObjectPtr uop, Int2 product_flag)
+{
+    UserFieldPtr ufp;
+    CharPtr val;
+
+    if (product_flag == DEFAULT_ORGANELLE_CLAUSE) {
+        AddBooleanAutodefField(uop, kSpecifyNuclearProduct);
+    } else if (product_flag > DEFAULT_ORGANELLE_CLAUSE) {
+        val = organelleByPopup[product_flag - DEFAULT_ORGANELLE_CLAUSE];
+        if (val != NULL) {
+            ufp = UserFieldNew();
+            LabelUserField(ufp, kNuclearCopyFlag);
+            ufp->choice = 1;
+            ufp->data.ptrvalue = StringSave(val);
+            AddFieldToUserObject(ufp, uop);
+        }
+    } else {
+        val = organelleByPopup[product_flag];
+        if (val != NULL) {
+            ufp = UserFieldNew();
+            LabelUserField(ufp, kProductFlag);
+            ufp->choice = 1;
+            ufp->data.ptrvalue = StringSave(val);
+            AddFieldToUserObject(ufp, uop);
+        }
+    }
+}
+
+//not testing construction of autodef options object at this time
+void AddHIVRule(UserObjectPtr uop, Int4 rule)
+{
+    UserFieldPtr ufp;
+
+    ufp = UserFieldNew();
+    LabelUserField(ufp, kHIVRule);
+    ufp->choice = 1;
+    switch (rule) {
+        case clone_isolate_HIV_rule_prefer_clone:
+            ufp->data.ptrvalue = StringSave(kPreferClone);
+            break;
+        case clone_isolate_HIV_rule_prefer_isolate:
+            ufp->data.ptrvalue = StringSave(kPreferIsolate);
+            break;
+        case clone_isolate_HIV_rule_want_both:
+            ufp->data.ptrvalue = StringSave(kWantBoth);
+            break;
+        default:
+            break;
+    }
+    AddFieldToUserObject(ufp, uop);
+}
+
+//not testing construction of autodef options object at this time
+void AddOrganismDescriptionModifiersToAutoDefUserObject
+(UserObjectPtr uop, 
+ OrganismDescriptionModifiersPtr odmp)
+{
+    UserFieldPtr ufp;
+
+    if (odmp->use_labels) {
+        AddBooleanAutodefField(uop, kUseLabels);
+    }
+    ufp = UserFieldNew();
+    LabelUserField(ufp, kMaxMods);
+    ufp->choice = 2;
+    ufp->data.intvalue = odmp->max_mods;
+    AddFieldToUserObject(ufp, uop);
+    if (odmp->keep_paren) {
+        AddBooleanAutodefField(uop, kLeaveParenthetical);
+    }
+    if (odmp->exclude_sp) {
+        AddBooleanAutodefField(uop, kDoNotApplyToSp);
+    }
+    if (odmp->exclude_cf) {
+        AddBooleanAutodefField(uop, kDoNotApplyToCf);
+    }
+    if (odmp->exclude_aff) {
+        AddBooleanAutodefField(uop, kDoNotApplyToAff);
+    }
+    if (odmp->exclude_nr) {
+        AddBooleanAutodefField(uop, kDoNotApplyToNr);
+    }
+    if (odmp->include_country_extra) {
+        AddBooleanAutodefField(uop, kIncludeCountryText);
+    }
+    AddHIVRule(uop, odmp->clone_isolate_HIV_rule_num);
+    if (odmp->allow_semicolon_in_modifier) {
+        AddBooleanAutodefField(uop, kKeepAfterSemicolon);
+    }
+    if (odmp->allow_mod_at_end_of_taxname) {
+        AddBooleanAutodefField(uop, kAllowModAtEndOfTaxname);
+    }
+}
+
+
+//not testing construction of autodef options object at this time
+void AddFeatureListType(UserObjectPtr uop, Int4 rule)
+{
+    UserFieldPtr ufp;
+
+    ufp = UserFieldNew();
+    LabelUserField(ufp, kFeatureListType);
+    ufp->choice = 1;
+    switch (rule) {
+    case DEFLINE_USE_FEATURES:
+        ufp->data.ptrvalue = StringSave(kListAllFeatures);
+        break;
+    case DEFLINE_COMPLETE_GENOME:
+        ufp->data.ptrvalue = StringSave(kCompleteGenome);
+        break;
+    case DEFLINE_COMPLETE_SEQUENCE:
+        ufp->data.ptrvalue = StringSave(kCompleteSequence);
+        break;
+    case DEFLINE_SEQUENCE:
+        ufp->data.ptrvalue = StringSave(kSequence);
+        break;
+    case DEFLINE_PARTIAL_GENOME:
+        ufp->data.ptrvalue = StringSave(kPartialGenome);
+        break;
+    case DEFLINE_PARTIAL_SEQUENCE:
+        ufp->data.ptrvalue = StringSave(kPartialSequence);
+        break;
+    default:
+        break;
+    }
+    AddFieldToUserObject(ufp, uop);
+}
+
+
+//not testing construction of autodef options object at this time
+void AddMiscFeatParseRule(UserObjectPtr uop, Int4 misc_feat_parse_rule)
+{
+    UserFieldPtr ufp;
+
+    ufp = UserFieldNew();
+    LabelUserField(ufp, kMiscFeatRule);
+    ufp->choice = 1;
+    switch (misc_feat_parse_rule) {
+    case 1:
+        ufp->data.ptrvalue = StringSave(kCommentFeat);
+        break;
+    case 2:
+        ufp->data.ptrvalue = StringSave(kNoncodingProductFeat);
+        break;
+    case 3:
+        ufp->data.ptrvalue = StringSave(kDelete);
+        break;
+    default:
+        break;
+    }
+    AddFieldToUserObject(ufp, uop);
+}
+
+//not testing construction of autodef options object at this time
+UserFieldPtr BuildStringsField(CharPtr field_name, ValNodePtr vals)
+{
+    UserFieldPtr ufp;
+    CharPtr PNTR cpp;
+    ValNodePtr vnp;
+    Int4 i;
+
+    ufp = UserFieldNew();
+    LabelUserField(ufp, field_name);
+    ufp->choice = 7;
+    ufp->num = ValNodeLen(vals);
+    cpp = (CharPtr PNTR) MemNew(ufp->num * sizeof(CharPtr));
+    for (i = 0, vnp = vals; vnp != NULL; vnp = vnp->next, i++) {
+        cpp[i] = StringSave(vnp->data.ptrvalue);
+    }
+    ufp->data.ptrvalue = cpp;
+    return ufp;
+}
+
+//not testing construction of autodef options object at this time
+void AddSuppressedFeatures(UserObjectPtr uop, ValNodePtr list)
+{
+    UserFieldPtr ufp;
+    ValNodePtr vnp, val_list = NULL;
+    CharPtr val;
+    Int4 num_unrecognized = 0;
+
+    if (list == NULL) {
+        return;
+    }
+    for (vnp = list; vnp != NULL; vnp = vnp->next) {
+        val = GetFeatureNameFromFeatureType(GetFeatureTypeFromFeatdef(vnp->choice));
+        if (StringICmp(val, "any") == 0) {
+            num_unrecognized++;
+        } else {
+            ValNodeAddPointer(&val_list, 0, val);
+        }
+    }
+    ufp = BuildStringsField(kSuppressedFeatures, val_list);
+    val_list = ValNodeFree(val_list);
+    AddFieldToUserObject(ufp, uop);
+}
+
+
+//not testing construction of autodef options object at this time
+void AddDeflineFeatureRequestListToAutoDefUserObject
+(UserObjectPtr uop,
+DeflineFeatureRequestListPtr rq)
+{
+    if (rq->keep_items[RemovableExon]) {
+        AddBooleanAutodefField(uop, kKeepExons);
+    }
+    if (rq->keep_items[RemovableIntron]) {
+        AddBooleanAutodefField(uop, kKeepIntrons);
+    }
+    if (rq->keep_items[Removable5UTR]) {
+        AddBooleanAutodefField(uop, kKeep5UTRs);
+    }
+    if (rq->keep_items[Removable3UTR]) {
+        AddBooleanAutodefField(uop, kKeep3UTRs);
+    }
+    if (rq->keep_items[RemovablePromoter]) {
+        AddBooleanAutodefField(uop, kKeepPromoters);
+        if (rq->add_fake_promoters) {
+            AddBooleanAutodefField(uop, kUseFakePromoters);
+        }
+    }
+    if (rq->keep_items[RemovableLTR]) {
+        AddBooleanAutodefField(uop, kKeepLTRs);
+    }
+    if (rq->keep_items[RemovableuORF]) {
+        AddBooleanAutodefField(uop, kKeepuOrf);
+    }
+    if (rq->keep_items[RemovableNoncodingProductFeat]) {
+        AddBooleanAutodefField(uop, kKeepNoncodingProductFeat);
+    }
+    if (rq->keep_items[RemovableMobileElement]) {
+        AddBooleanAutodefField(uop, kKeepMobileElement);
+    }
+    if (rq->keep_items[RemovablePrecursorRNA]) {
+        AddBooleanAutodefField(uop, kKeepPrecursorRNA);
+    }
+    if (rq->keep_items[RemovablencRNA]) {
+        AddBooleanAutodefField(uop, kKeepncRNA);
+    }
+    if (rq->keep_items[RemovableRepeatRegion]) {
+        AddBooleanAutodefField(uop, kKeepRepeatRegion);
+    }
+
+    if (rq->suppress_alt_splice_phrase) {
+        AddBooleanAutodefField(uop, kSuppressFeatureAltSplice);
+    }
+    if (rq->remove_subfeatures) {
+        AddBooleanAutodefField(uop, kSuppressMobileElementSubfeatures);
+    }
+    AddFeatureListType(uop, rq->feature_list_type);
+    AddMiscFeatParseRule(uop, rq->misc_feat_parse_rule);
+    if (rq->suppress_locus_tags) {
+        AddBooleanAutodefField(uop, kSuppressLocusTags);
+    }
+    AddSuppressedFeatures(uop, rq->suppressed_feature_list);
+
+    if (rq->use_ncrna_note) {
+        AddBooleanAutodefField(uop, kUseNcRNAComment);
+    }
+}
+
+const CharPtr kSubSources = "SubSources";
+const CharPtr kOrgMods = "OrgMods";
+
+//not testing construction of autodef options object at this time
+void AddModListToAutoDefUserObject(UserObjectPtr uop, ValNodePtr modifier_indices)
+{
+    UserFieldPtr ufp, ufp_ss = NULL, ufp_mod = NULL;
+    ValNodePtr ss_vals = NULL, mod_vals = NULL, vnp;
+
+    for (vnp = modifier_indices; vnp != NULL; vnp = vnp->next) {
+        if (DefLineModifiers[vnp->data.intvalue].isOrgMod) {
+            ValNodeAddPointer(&mod_vals, 0, DefLineModifiers[vnp->data.intvalue].name);
+        } else {
+            ValNodeAddPointer(&ss_vals, 0, DefLineModifiers[vnp->data.intvalue].name);
+        }
+    }
+    if (ss_vals != NULL) {
+        ufp_ss = BuildStringsField(kSubSources, ss_vals);
+        ss_vals = ValNodeFree(ss_vals);
+    }
+
+    if (mod_vals != NULL) {
+        ufp_mod = BuildStringsField(kOrgMods, mod_vals);
+        mod_vals = ValNodeFree(mod_vals);
+    }
+
+    if (ufp_ss != NULL || ufp_mod != NULL) {
+        ufp = UserFieldNew();
+        LabelUserField(ufp, kModifierList);
+        ufp->choice = 11;
+        if (ufp_ss != NULL) {
+            ufp_ss->next = ufp_mod;
+            ufp->data.ptrvalue = ufp_ss;
+        } else {
+            ufp->data.ptrvalue = ufp_mod;
+        }
+        AddFieldToUserObject(ufp, uop);
+    }    
+}
+
+//not testing construction of autodef options object at this time
+NLM_EXTERN UserObjectPtr MakeAutoDefOptionsUserObject
+(OrganismDescriptionModifiersPtr odmp,
  ModifierItemLocalPtr modList,
  ValNodePtr modifier_indices,
  DeflineFeatureRequestListPtr feature_requests,
@@ -12759,13 +13566,114 @@ AutoDefForSeqEntry
  Boolean alternate_splice_flag,
  Boolean gene_cluster_opp_strand)
 {
+    UserObjectPtr uop;
+
+    uop = UserObjectNew();
+    uop->type = ObjectIdNew();
+    uop->type->str = StringSave(kAutoDefOptions);
+    uop->_class = StringSave("1.0");
+
+    AddOrganismDescriptionModifiersToAutoDefUserObject(uop, odmp);
+    if (odmp->use_modifiers) {
+        AddModListToAutoDefUserObject(uop, modifier_indices);
+    }
+    AddDeflineFeatureRequestListToAutoDefUserObject(uop, feature_requests);
+    if (gene_cluster_opp_strand) {
+        AddBooleanAutodefField(uop, kGeneClusterOppStrand);
+    }
+    if (alternate_splice_flag) {
+        AddBooleanAutodefField(uop, kAltSpliceFlag);
+    }
+    AddAutodefProductFlag(uop, product_flag);
+
+
+    return uop;
+}
+
+//not testing construction of autodef options object at this time
+static void RemoveAutoDefObjectCallback(SeqDescPtr sdp, Pointer data)
+{
+    ObjValNodePtr ovp;
+
+    if (sdp != NULL && sdp->extended && sdp->choice == Seq_descr_user &&
+        IsAutoDefOptions(sdp->data.ptrvalue)) {
+        ovp = (ObjValNodePtr)sdp;
+        ovp->idx.deleteme = TRUE;
+    }
+}
+
+//not testing construction of autodef options object at this time
+NLM_EXTERN void RemoveAutodefObjects(SeqEntryPtr sep)
+{
+    VisitDescriptorsInSep(sep, NULL, RemoveAutoDefObjectCallback);
+    DeleteMarkedObjects(0, OBJ_SEQENTRY, (Pointer)sep);
+}
+
+
+//not testing construction of autodef options object at this time
+NLM_EXTERN void RemoveAutodefObjectsForDesc(SeqDescPtr sdp)
+{
+    ObjValNodePtr ovp;
+    BioseqPtr bsp;
+    BioseqSetPtr bssp;
+    SeqEntryPtr sep;
+
+    if (sdp == NULL || sdp->extended == 0) {
+        return;
+    }
+    ovp = (ObjValNodePtr)sdp;
+    sep = SeqMgrGetSeqEntryForData(ovp->idx.parentptr);
+    RemoveAutodefObjects(sep);
+}
+
+//not testing construction of autodef options object at this time
+void AddAutoDefUserObjectCallback(BioseqPtr bsp, Pointer data)
+{
+    UserObjectPtr uop, cpy;
+    SeqDescPtr sdp;
+
+    if (bsp == NULL || ISA_aa(bsp->mol) || (uop = (UserObjectPtr)data) == NULL) {
+        return;
+    }
+    cpy = (UserObjectPtr)AsnIoMemCopy(uop,
+        (AsnReadFunc)UserObjectAsnRead, (AsnWriteFunc)UserObjectAsnWrite);
+    sdp = CreateNewDescriptorOnBioseq(bsp, Seq_descr_user);
+    sdp->data.ptrvalue = cpy;
+}
+
+//not testing construction of autodef options object at this time
+NLM_EXTERN void AddAutoDefUserObjectToSeqEntry(SeqEntryPtr sep, UserObjectPtr uop)
+{
+    if (sep == NULL) return;
+
+    RemoveAutodefObjects(sep);
+    VisitBioseqsInSep(sep, uop, AddAutoDefUserObjectCallback);
+}
+//LCOV_EXCL_STOP
+
+NLM_EXTERN void
+AutoDefForSeqEntryEx
+(SeqEntryPtr sep,
+Uint2 entityID,
+OrganismDescriptionModifiersPtr odmp,
+ModifierItemLocalPtr modList,
+ValNodePtr modifier_indices,
+DeflineFeatureRequestListPtr feature_requests,
+Int2 product_flag,
+Boolean alternate_splice_flag,
+Boolean gene_cluster_opp_strand,
+Boolean update_options)
+{
+
   ValNodePtr defline_clauses = NULL;
+  UserObjectPtr uop;
 
   if (sep == NULL) return;
 
   RemoveNucProtSetTitles (sep);
   
   SeqEntrySetScope (sep);
+
 
   BuildDefLineFeatClauseList (sep, entityID,
                               feature_requests,
@@ -12783,10 +13691,314 @@ AutoDefForSeqEntry
 
   AddPopsetTitles (sep, feature_requests, product_flag, 
                    alternate_splice_flag, gene_cluster_opp_strand);
+  
+  if (update_options) {
+      uop = MakeAutoDefOptionsUserObject(odmp, modList, modifier_indices,
+          feature_requests, product_flag, alternate_splice_flag, gene_cluster_opp_strand);
+      AddAutoDefUserObjectToSeqEntry(sep, uop);
+      uop = UserObjectFree(uop);
+  }
+}
+
+//LCOV_EXCL_START
+//not testing construction of autodef options object at this time
+NLM_EXTERN void
+AutoDefForSeqEntry
+(SeqEntryPtr sep,
+Uint2 entityID,
+OrganismDescriptionModifiersPtr odmp,
+ModifierItemLocalPtr modList,
+ValNodePtr modifier_indices,
+DeflineFeatureRequestListPtr feature_requests,
+Int2 product_flag,
+Boolean alternate_splice_flag,
+Boolean gene_cluster_opp_strand)
+{
+    AutoDefForSeqEntryEx(sep, entityID, odmp, modList, modifier_indices,
+        feature_requests, product_flag, alternate_splice_flag, gene_cluster_opp_strand, TRUE);
+}
+//LCOV_EXCL_STOP
+
+Boolean SetBoolFromField(UserFieldPtr field, CharPtr field_name, BoolPtr val)
+{
+    if (StringICmp(field->label->str, field_name) == 0) {
+        if (field->choice == 4 && field->data.boolvalue) {
+            *val = TRUE;
+        }
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+void SetDefLineTypeFromFieldString(UserFieldPtr field, CharPtr match, DefLineType new_val, DefLineType PNTR val)
+{
+    if (field->choice == 1) {
+        if (StringICmp(field->data.ptrvalue, match) == 0) {
+            *val = new_val;
+        }
+    }
+}
+
+
+Boolean SetInt4FromFieldString(UserFieldPtr field, CharPtr match, Int4 new_val, Int4Ptr val)
+{
+    if (field->choice == 1) {
+        if (StringICmp(field->data.ptrvalue, match) == 0) {
+            *val = new_val;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+
+void SetInt2FromFieldString(UserFieldPtr field, CharPtr match, Int2 new_val, Int2Ptr val)
+{
+    if (field->choice == 1) {
+        if (StringICmp(field->data.ptrvalue, match) == 0) {
+            *val = new_val;
+        }
+    }
+}
+
+
+void SetModifierIndices(ValNodePtr PNTR modifier_indices, UserFieldPtr field)
+{
+    UserFieldPtr curr;
+    CharPtr PNTR cpp;
+    Int4 i;
+    Int4 subtype;
+
+    if (modifier_indices == NULL || field == NULL || field->choice != 11) {
+        return;
+    }
+
+    for (curr = field->data.ptrvalue; curr != NULL; curr = curr->next) {
+        if (curr->label != NULL && curr->choice == 7) {
+            cpp = (CharPtr PNTR) curr->data.ptrvalue;
+            for (i = 0; i < curr->num; i++) {
+                subtype = GetDeflinePosForFieldName(cpp[i]);
+                ValNodeAddInt(modifier_indices, 0, subtype);                     
+            }
+        }
+    }
+}
+
+void SetSuppressedFeatures(ValNodePtr PNTR suppressed_features, UserFieldPtr field)
+{
+    CharPtr PNTR cpp;
+    Int4 i;
+    Uint1 subtype;
+
+    if (suppressed_features == NULL || field == NULL || field->choice != 7) {
+        return;
+    }
+    cpp = (CharPtr PNTR) field->data.ptrvalue;
+    for (i = 0; i < field->num; i++) {
+        subtype = (Uint1)GetFeatdefFromFeatureType(GetFeatureTypeByName(cpp[i]));
+        ValNodeAddPointer(suppressed_features, subtype, NULL);
+    }
+}
+
+NLM_EXTERN void RegenerateAutoDef(BioseqPtr bsp)
+{
+    SeqMgrDescContext context;
+    SeqDescPtr sdp;
+    SeqEntryPtr sep;
+    UserObjectPtr uop;
+    OrganismDescriptionModifiers odm;
+    ModifierItemLocalPtr modlist;
+    ValNodePtr modifier_indices = NULL;
+    DeflineFeatureRequestList feature_request;
+    Int2 product_flag = DEFAULT_ORGANELLE_CLAUSE;
+    Boolean alternate_splice_flag = FALSE;
+    Boolean gene_cluster_opp_strand = FALSE;
+    UserFieldPtr field;
+    Int4 index;
+
+    if (bsp == NULL || ISA_aa(bsp->mol)){
+        return;
+    }
+    sep = SeqMgrGetSeqEntryForData(bsp);
+    if (sep == NULL) {
+        return;
+    }
+
+    sdp = SeqMgrGetNextDescriptor(bsp, NULL, Seq_descr_user, &context);
+    while (sdp != NULL && !IsAutoDefOptions(sdp->data.ptrvalue)) {
+        sdp = SeqMgrGetNextDescriptor(bsp, sdp, Seq_descr_user, &context);
+    }
+    if (sdp == NULL) {
+        return;
+    }
+
+    uop = sdp->data.ptrvalue;
+
+    MemSet(&odm, 0, sizeof(OrganismDescriptionModifiers));
+    modlist = MemNew(NumDefLineModifiers() * sizeof(ModifierItemLocalData));
+    InitFeatureRequests(&feature_request);
+
+    for (field = uop->data; field != NULL; field = field->next) {
+        if (field->label != NULL) {
+            /* organism */
+            if (SetBoolFromField(field, kDoNotApplyToAff, &(odm.exclude_aff))) {
+            } else if (SetBoolFromField(field, kDoNotApplyToCf, &(odm.exclude_cf))) {
+            } else if (SetBoolFromField(field, kDoNotApplyToNr, &(odm.exclude_nr))) {
+            } else if (SetBoolFromField(field, kDoNotApplyToCf, &(odm.exclude_cf))) {
+            } else if (SetBoolFromField(field, kDoNotApplyToSp, &(odm.exclude_sp))) {
+            } else if (SetBoolFromField(field, kGeneClusterOppStrand, &gene_cluster_opp_strand)) {
+            } else if (SetBoolFromField(field, kIncludeCountryText, &(odm.include_country_extra))) {
+            } else if (SetBoolFromField(field, kKeepAfterSemicolon, &(odm.allow_semicolon_in_modifier))) {
+            } else if (SetBoolFromField(field, kLeaveParenthetical, &(odm.keep_paren))) {
+            } else if (SetBoolFromField(field, kUseLabels, &(odm.use_labels))) {
+            } else if (SetBoolFromField(field, kAllowModAtEndOfTaxname, &(odm.allow_mod_at_end_of_taxname))) {
+            } else if (StringICmp(field->label->str, kHIVRule) == 0) {
+                if (SetInt4FromFieldString(field, kPreferClone, clone_isolate_HIV_rule_prefer_clone, &(odm.clone_isolate_HIV_rule_num)) ||
+                    SetInt4FromFieldString(field, kPreferIsolate, clone_isolate_HIV_rule_prefer_isolate, &(odm.clone_isolate_HIV_rule_num)) ||
+                    SetInt4FromFieldString(field, kWantBoth, clone_isolate_HIV_rule_want_both, &(odm.clone_isolate_HIV_rule_num))) {
+                    odm.use_modifiers = TRUE;
+                }
+            } else if (StringICmp(field->label->str, kModifierList) == 0) {
+                SetModifierIndices(&modifier_indices, field);
+            /* features */
+            } else if (SetBoolFromField(field, kAltSpliceFlag, &(alternate_splice_flag))) {
+            } else if (SetBoolFromField(field, kKeep3UTRs, &(feature_request.keep_items[Removable3UTR]))) {
+            } else if (SetBoolFromField(field, kKeep5UTRs, &(feature_request.keep_items[Removable5UTR]))) {
+            } else if (SetBoolFromField(field, kKeepExons, &(feature_request.keep_items[RemovableExon]))) {
+            } else if (SetBoolFromField(field, kKeepIntrons, &(feature_request.keep_items[RemovableIntron]))) {
+            } else if (SetBoolFromField(field, kKeepLTRs, &(feature_request.keep_items[RemovableLTR]))) {
+            } else if (SetBoolFromField(field, kKeepPromoters, &(feature_request.keep_items[RemovablePromoter]))) {
+            } else if (SetBoolFromField(field, kKeepuOrf, &(feature_request.keep_items[RemovableuORF]))) {
+            } else if (SetBoolFromField(field, kKeepMobileElement, &(feature_request.keep_items[RemovableMobileElement]))) {
+            } else if (SetBoolFromField(field, kKeepNoncodingProductFeat, &(feature_request.keep_items[RemovableNoncodingProductFeat]))) {
+            } else if (SetBoolFromField(field, kKeepPrecursorRNA, &(feature_request.keep_items[RemovablePrecursorRNA]))) {
+            } else if (SetBoolFromField(field, kKeepncRNA, &(feature_request.keep_items[RemovablencRNA]))) {
+            } else if (SetBoolFromField(field, kKeepRepeatRegion, &(feature_request.keep_items[RemovableRepeatRegion]))) {
+            } else if (SetBoolFromField(field, kUseFakePromoters, &(feature_request.add_fake_promoters))) {
+            } else if (SetBoolFromField(field, kSuppressFeatureAltSplice, &(feature_request.suppress_alt_splice_phrase))) {
+            } else if (SetBoolFromField(field, kSuppressLocusTags, &(feature_request.suppress_locus_tags))) {
+            } else if (SetBoolFromField(field, kSuppressMobileElementSubfeatures, &(feature_request.remove_subfeatures))) {
+            } else if (SetBoolFromField(field, kUseNcRNAComment, &(feature_request.use_ncrna_note))) {
+            } else if (SetBoolFromField(field, kSuppressAllele, &(feature_request.suppress_allele))) {
+            } else if (StringICmp(field->label->str, kSpecifyNuclearProduct) == 0) {
+                if (field->choice == 4 && field->data.boolvalue) {
+                    product_flag = DEFAULT_ORGANELLE_CLAUSE;
+                }  
+            } else if (StringICmp(field->label->str, kMaxMods) == 0) {
+                if (field->choice == 2) {
+                    odm.max_mods = field->data.intvalue;
+                }
+            } else if (StringICmp(field->label->str, kFeatureListType) == 0) {
+                SetDefLineTypeFromFieldString(field, kCompleteGenome, DEFLINE_COMPLETE_GENOME, &(feature_request.feature_list_type));
+                SetDefLineTypeFromFieldString(field, kCompleteSequence, DEFLINE_COMPLETE_SEQUENCE, &(feature_request.feature_list_type));
+                SetDefLineTypeFromFieldString(field, kPartialGenome, DEFLINE_PARTIAL_GENOME, &(feature_request.feature_list_type));
+                SetDefLineTypeFromFieldString(field, kPartialSequence, DEFLINE_PARTIAL_SEQUENCE, &(feature_request.feature_list_type));
+                SetDefLineTypeFromFieldString(field, kSequence, DEFLINE_SEQUENCE, &(feature_request.feature_list_type));
+                SetDefLineTypeFromFieldString(field, kListAllFeatures, DEFLINE_USE_FEATURES, &(feature_request.feature_list_type));
+            } else if (StringICmp(field->label->str, kMiscFeatRule) == 0) {
+                SetInt4FromFieldString(field, kCommentFeat, 1, &(feature_request.misc_feat_parse_rule));
+                SetInt4FromFieldString(field, kDelete, 2, &(feature_request.misc_feat_parse_rule));
+                SetInt4FromFieldString(field, kNoncodingProductFeat, 3, &(feature_request.misc_feat_parse_rule));
+            } else if (StringICmp(field->label->str, kProductFlag) == 0) {
+                SetInt2FromFieldString(field, "mitochondrial", 1, &product_flag);
+                SetInt2FromFieldString(field, "chloroplast", 2, &product_flag);
+                SetInt2FromFieldString(field, "kinetoplast", 3, &product_flag);
+                SetInt2FromFieldString(field, "plastid", 4, &product_flag);
+                SetInt2FromFieldString(field, "chromoplast", 5, &product_flag);
+                SetInt2FromFieldString(field, "cyanelle", 6, &product_flag);
+                SetInt2FromFieldString(field, "apicoplast", 7, &product_flag);
+                SetInt2FromFieldString(field, "leucoplast", 8, &product_flag);
+                SetInt2FromFieldString(field, "proplastid", 9, &product_flag);
+            } else if (StringICmp(field->label->str, kSuppressedFeatures) == 0) {
+                SetSuppressedFeatures(&(feature_request.suppressed_feature_list), field);
+            }
+        }
+    }
+    if (modifier_indices != NULL) {
+        odm.use_modifiers = TRUE;
+    }
+
+    AutoDefForSeqEntryEx(sep, bsp->idx.entityID, &odm, modlist, modifier_indices,
+        &feature_request, product_flag, alternate_splice_flag,
+        gene_cluster_opp_strand, FALSE);
+
+    /* cleanup */
+    if (modlist != NULL) {
+        for (index = 0; index < NumDefLineModifiers(); index++) {
+            ValNodeFree(modlist[index].values_seen);
+        }
+        MemFree(modlist);
+    }
+
+    modifier_indices = ValNodeFree(modifier_indices);
+
+}
+
+
+//LCOV_EXCL_START
+//Not part of Autodef or Cleanup
+NLM_EXTERN void DoTbl2AsnAutoDef(SeqEntryPtr sep, Uint2 entityID)
+
+{
+    ValNodePtr                    defline_clauses = NULL;
+    DeflineFeatureRequestList     feature_requests;
+    size_t                        index;
+    ValNodePtr                    modifier_indices = NULL;
+    ModifierItemLocalPtr          modList;
+    OrganismDescriptionModifiers  odmp;
+    SeqEntryPtr                   oldscope;
+
+    if (sep == NULL) return;
+    if (entityID < 1) return;
+
+    modList = MemNew(NumDefLineModifiers() * sizeof(ModifierItemLocalData));
+    if (modList == NULL) return;
+
+    InitFeatureRequests(&feature_requests);
+
+    SetRequiredModifiers(modList);
+    CountModifiers(modList, sep);
+
+    InitOrganismDescriptionModifiers(&odmp, sep);
+
+    RemoveNucProtSetTitles(sep);
+    oldscope = SeqEntrySetScope(sep);
+
+    BuildDefLineFeatClauseList(sep, entityID, &feature_requests,
+        DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE,
+        &defline_clauses);
+    if (AreFeatureClausesUnique(defline_clauses)) {
+        modifier_indices = GetModifierIndicesFromModList(modList);
+    }
+    else {
+        modifier_indices = FindBestModifiers(sep, modList);
+    }
+
+    BuildDefinitionLinesFromFeatureClauseLists(defline_clauses, modList,
+        modifier_indices, &odmp);
+    DefLineFeatClauseListFree(defline_clauses);
+    if (modList != NULL) {
+        for (index = 0; index < NumDefLineModifiers(); index++) {
+            ValNodeFree(modList[index].values_seen);
+        }
+        MemFree(modList);
+    }
+    modifier_indices = ValNodeFree(modifier_indices);
+
+    ClearProteinTitlesInNucProts(entityID, NULL);
+    InstantiateProteinTitles(entityID, NULL);
+    /*
+    RemovePopsetTitles (sep);
+    */
+    AddPopsetTitles(sep, &feature_requests, DEFAULT_ORGANELLE_CLAUSE, FALSE, FALSE);
+
+    SeqEntrySetScope(oldscope);
 }
 
 
 /* Retro PopSet Title Functions */
+//Not part of Autodef or Cleanup (no more popset retros)
 static SeqDescPtr BioseqHasTitleOrNucProtSetHasTitle (BioseqPtr bsp)
 {
   SeqDescPtr sdp = NULL;
@@ -12812,6 +14024,7 @@ static SeqDescPtr BioseqHasTitleOrNucProtSetHasTitle (BioseqPtr bsp)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static BioseqPtr FindFirstNucBioseqWithTitle (SeqEntryPtr sep)
 
 {
@@ -12837,6 +14050,7 @@ static BioseqPtr FindFirstNucBioseqWithTitle (SeqEntryPtr sep)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 static void RetroPopSetAutoDefCallback (BioseqSetPtr bssp, Pointer data)
 {
   SeqEntryPtr set_sep;
@@ -12895,6 +14109,7 @@ static void RetroPopSetAutoDefCallback (BioseqSetPtr bssp, Pointer data)
 }
 
 
+//Not part of Autodef or Cleanup (no more popset retros)
 NLM_EXTERN void PopSetAutoDefRetro (SeqEntryPtr sep, PopSetRetroStatPtr stat)
 
 {
@@ -12910,8 +14125,7 @@ NLM_EXTERN void PopSetAutoDefRetro (SeqEntryPtr sep, PopSetRetroStatPtr stat)
 }
 
 
-
-
+//Not used for Autodef or Cleanup
 /* functions for editing seq-locs */
 NLM_EXTERN Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
 {
@@ -12992,9 +14206,8 @@ NLM_EXTERN Int4 ExtendSeqLocToEnd (SeqLocPtr slp, BioseqPtr bsp, Boolean end5)
   return start_diff;
 }
 
-
 /* functions for feature conversion.  shared by sequin5 and macroapi */
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean IsBioseqSetInGPS (BioseqSetPtr bssp)
 {
   if (bssp == NULL) return FALSE;
@@ -13003,7 +14216,7 @@ NLM_EXTERN Boolean IsBioseqSetInGPS (BioseqSetPtr bssp)
   return IsBioseqSetInGPS ((BioseqSetPtr) bssp->idx.parentptr);
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean IsBioseqInGPS (BioseqPtr bsp)
 {
   if (bsp == NULL || bsp->idx.parentptr == NULL || bsp->idx.parenttype != OBJ_BIOSEQSET)
@@ -13016,14 +14229,14 @@ NLM_EXTERN Boolean IsBioseqInGPS (BioseqPtr bsp)
   }
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean IsFeatInGPS (SeqFeatPtr sfp)
 {
   if (sfp == NULL) return FALSE;
   return IsBioseqInGPS (BioseqFindFromSeqLoc (sfp->location));
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN RnaRefPtr RnaRefFromLabel (Uint2 featdef_to, CharPtr label, BoolPtr add_label_to_comment)
 {
   RnaRefPtr rrp;
@@ -13098,7 +14311,7 @@ NLM_EXTERN RnaRefPtr RnaRefFromLabel (Uint2 featdef_to, CharPtr label, BoolPtr a
   return rrp;
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean ConvertProtToProtFunc 
 (SeqFeatPtr sfp,
  Uint2      featdef_to)
@@ -13125,13 +14338,16 @@ NLM_EXTERN Boolean ConvertProtToProtFunc
     case FEATDEF_transit_peptide_aa :
       prp->processed = 4;
       break;
+    case FEATDEF_propeptide :
+      prp->processed = 5;
+      break;
     default :
       break;
   }
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN void 
 ApplyCDSOptionsToFeature
 (SeqFeatPtr sfp,
@@ -13178,7 +14394,7 @@ ApplyCDSOptionsToFeature
 
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean 
 ConvertCDSToRNA 
 (SeqFeatPtr  sfp,
@@ -13220,7 +14436,7 @@ ConvertCDSToRNA
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean ConvertGeneToRNA (SeqFeatPtr sfp, Uint2 featdef_to)
 {
   Char                   label [256];
@@ -13324,7 +14540,7 @@ NLM_EXTERN Boolean ConvertGeneToRNA (SeqFeatPtr sfp, Uint2 featdef_to)
 
 /* These functions are used for converting features on nucleotide sequences to
  * features on protein sequences */
-
+//Not used for Autodef or Cleanup
 /* copied from seqport.c, for the benefit of load_fuzz_to_DNA */
 static Boolean add_fuzziness_to_loc (SeqLocPtr slp, Boolean less)
 {
@@ -13361,7 +14577,7 @@ static Boolean add_fuzziness_to_loc (SeqLocPtr slp, Boolean less)
     return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 /* copied from seqport.c, for the benefit of MYdnaLoc_to_aaLoc */
 static Boolean load_fuzz_to_DNA(SeqLocPtr dnaLoc, SeqLocPtr aaLoc, Boolean 
 first)
@@ -13418,7 +14634,7 @@ Seq-loc*/
         return FALSE;
 }    
 
-
+//Not used for Autodef or Cleanup
 static SeqLocPtr MYdnaLoc_to_aaLoc(SeqFeatPtr sfp, 
                                    SeqLocPtr location_loc, 
                                    Boolean merge, 
@@ -13526,7 +14742,7 @@ codons */
     return SeqLocPackage(aa_loc);
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN SeqLocPtr BuildProtLoc (SeqFeatPtr overlapping_cds, SeqLocPtr slp, Int4Ptr frame)
 {
   SeqLocPtr tmp_loc, aa_loc = NULL, prot_loc = NULL, last_loc = NULL, next_loc;
@@ -13580,6 +14796,7 @@ NLM_EXTERN SeqLocPtr BuildProtLoc (SeqFeatPtr overlapping_cds, SeqLocPtr slp, In
   return prot_loc;
 }
 
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean ConvertRegionToProtFunc (SeqFeatPtr sfp, Uint2 featdef_to)
 {
   BioseqPtr  bsp;
@@ -13634,6 +14851,9 @@ NLM_EXTERN Boolean ConvertRegionToProtFunc (SeqFeatPtr sfp, Uint2 featdef_to)
         case FEATDEF_transit_peptide_aa :
           prp->processed = 4;
           break;
+        case FEATDEF_propeptide :
+          prp->processed = 5;
+          break;
         default :
           break;
       }
@@ -13645,7 +14865,7 @@ NLM_EXTERN Boolean ConvertRegionToProtFunc (SeqFeatPtr sfp, Uint2 featdef_to)
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN SeqLocPtr GetProteinLocationForNucleotideFeatureConversion (SeqLocPtr nuc_slp, BoolPtr no_cds)
 {
   SeqFeatPtr cds;
@@ -13679,7 +14899,7 @@ NLM_EXTERN SeqLocPtr GetProteinLocationForNucleotideFeatureConversion (SeqLocPtr
 /*           converted here.                                           */
 /*                                                                     */
 /*---------------------------------------------------------------------*/
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean ConvertImpToProtFunc 
 (SeqFeatPtr  sfp,
  Uint2       featdef_to)
@@ -13764,6 +14984,9 @@ NLM_EXTERN Boolean ConvertImpToProtFunc
     case FEATDEF_transit_peptide_aa :
       prp->processed = 4;
       break;
+    case FEATDEF_propeptide :
+      prp->processed = 5;
+      break;
   }
 
   /* Transfer unchanged fields from old feature */
@@ -13799,7 +15022,7 @@ NLM_EXTERN Boolean ConvertImpToProtFunc
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN SeqLocPtr FindNucleotideLocationForProteinFeatureConversion (SeqLocPtr slp)
 {
   SeqMgrFeatContext context;
@@ -13830,7 +15053,7 @@ NLM_EXTERN SeqLocPtr FindNucleotideLocationForProteinFeatureConversion (SeqLocPt
 /* ConvertProtToImp () -                                        */
 /*                                                                     */
 /*---------------------------------------------------------------------*/
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
 {
   ProtRefPtr    prp;
@@ -13842,7 +15065,7 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
   ValNodePtr    vnp;
   GBQualPtr     gbqual = NULL;
   GBQualPtr     prevGbq;
-  GBQualPtr     topOfGbqList;
+  GBQualPtr     topOfGbqList = NULL;
   DbtagPtr      dbt;
   Char          idStr[64];
   ObjectIdPtr   oip;
@@ -13876,6 +15099,10 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
       break;
     case FEATDEF_transit_peptide_aa :
       if (4 != prp->processed)
+        return FALSE;
+      break;
+    case FEATDEF_propeptide :
+      if (5 != prp->processed)
         return FALSE;
       break;
   }
@@ -13971,7 +15198,9 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
     gbqual = GBQualNew ();
     if (NULL == gbqual)
       return FALSE;
-    prevGbq->next = gbqual;
+    if (prevGbq != NULL) {
+      prevGbq->next = gbqual;
+    }
     gbqual->qual = StringSave ("EC_number");
     gbqual->val = StringSave (ec);
   }
@@ -13987,7 +15216,9 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
     gbqual = GBQualNew ();
     if (NULL == gbqual)
       return FALSE;
-    prevGbq->next = gbqual;
+    if (prevGbq != NULL) {
+      prevGbq->next = gbqual;
+    }
     gbqual->qual = StringSave ("function");
     gbqual->val = StringSave (activity);
   }
@@ -14002,7 +15233,9 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
       gbqual = GBQualNew ();
       if (NULL == gbqual)
         continue;
-      prevGbq->next = gbqual;
+      if (prevGbq != NULL) {
+        prevGbq->next = gbqual;
+      }
       oip = dbt->tag;
       if (oip->str != NULL && (! StringHasNoText (oip->str))) {
         sprintf (idStr, "%s:%s", (CharPtr)dbt->tag, oip->str);
@@ -14019,7 +15252,9 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
 
   /* Insert the new qualifiers in front of any existing ones */
 
-  gbqual->next = sfp->qual;
+  if (gbqual != NULL) {
+    gbqual->next = sfp->qual;
+  }
   sfp->qual = topOfGbqList;
 
   /* Free the obsolete Protein reference */
@@ -14028,7 +15263,7 @@ NLM_EXTERN Boolean ConvertProtToImpFunc (SeqFeatPtr  sfp, Uint2 featdef_to)
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 /* functions for converting from biosource */
 NLM_EXTERN CharPtr SubSourceText (BioSourcePtr biop, Uint1 subtype, BoolPtr found)
 {
@@ -14058,6 +15293,7 @@ NLM_EXTERN CharPtr SubSourceText (BioSourcePtr biop, Uint1 subtype, BoolPtr foun
   return subtype_txt;
 }
 
+//Not used for Autodef and Cleanup
 NLM_EXTERN CharPtr OrgModText (BioSourcePtr biop, Uint1 subtype, BoolPtr found)
 {
   Int4 subtype_len = 0;
@@ -14092,6 +15328,7 @@ NLM_EXTERN CharPtr OrgModText (BioSourcePtr biop, Uint1 subtype, BoolPtr found)
   return subtype_txt;
 }
 
+//Not used for Autodef and Cleanup
 NLM_EXTERN CharPtr NoteText (BioSourcePtr biop, CharPtr comment)
 {
   CharPtr orgmod_note, subsource_note;
@@ -14134,7 +15371,7 @@ NLM_EXTERN CharPtr NoteText (BioSourcePtr biop, CharPtr comment)
   return note_text;
 }
 
-
+//Not used for Autodef and Cleanup
 /*---------------------------------------------------------------------*/
 /*                                                                     */
 /* ConvertBioSrcToRepeatRegion ()                                  */
@@ -14207,7 +15444,7 @@ NLM_EXTERN Boolean ConvertBioSrcToRepeatRegion (SeqFeatPtr sfp, Uint2 featdef_to
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean 
 ConvertNonPseudoCDSToMiscFeat 
 (SeqFeatPtr sfp,
@@ -14308,7 +15545,7 @@ ConvertNonPseudoCDSToMiscFeat
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Uint1 RnaTypeFromFeatdef (Uint2 featdef)
 {
   switch (featdef) 
@@ -14347,7 +15584,7 @@ NLM_EXTERN Uint1 RnaTypeFromFeatdef (Uint2 featdef)
   }
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean ConvertRegionToRNAFunc 
 (SeqFeatPtr sfp,
  Uint2      featdef_to)
@@ -14388,7 +15625,7 @@ NLM_EXTERN Boolean ConvertRegionToRNAFunc
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN CharPtr GetImportFeatureName (Uint2 featdef_key)
 {
   FeatDefPtr  curr;
@@ -14407,7 +15644,7 @@ NLM_EXTERN CharPtr GetImportFeatureName (Uint2 featdef_key)
   return NULL;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean ConvertRegionToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to)
 {
   GBQualPtr          gbqual;
@@ -14445,7 +15682,7 @@ NLM_EXTERN Boolean ConvertRegionToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to)
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean ConvertImpToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to)
 {
   ImpFeatPtr         ifp;
@@ -14472,8 +15709,20 @@ NLM_EXTERN Boolean ConvertImpToImpFunc (SeqFeatPtr sfp, Uint2 featdef_to)
   return TRUE;
 }
 
+//Not used for Autodef and Cleanup
+static Boolean OkToAddToImpFeat (CharPtr val, Uint2 featdef_to)
+{
+  if (StringHasNoText (val)) {
+    return FALSE;
+  } else if (featdef_to == FEATDEF_D_loop && StringsAreEquivalent(val, "D-Loop")) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
 
-NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc 
+//Not used for Autodef and Cleanup
+NLM_EXTERN Boolean ConvertGeneToImpFeatFunc 
 (SeqFeatPtr sfp,
  Uint2      featdef_to)
 {
@@ -14481,6 +15730,7 @@ NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc
   CharPtr     new_comment;
   GeneRefPtr  grp;
   Int4        comment_len = 0;
+  CharPtr     featname;
 
   if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE)
   {
@@ -14495,11 +15745,11 @@ NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc
   grp = (GeneRefPtr) sfp->data.value.ptrvalue;
   if (grp != NULL) 
   {
-    if (!StringHasNoText (grp->locus))
+    if (OkToAddToImpFeat (grp->locus, featdef_to))
     {
       comment_len += StringLen (grp->locus) + 2;
     }
-    if (!StringHasNoText (grp->desc))
+    if (OkToAddToImpFeat (grp->desc, featdef_to))
     {
       comment_len += StringLen (grp->desc) + 2;
     }
@@ -14522,12 +15772,12 @@ NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc
      * comment_len would only have been > 0 if grp had existed
      * and had nonempty fields.
      */
-    if (!StringHasNoText (grp->desc))
+    if (OkToAddToImpFeat (grp->desc, featdef_to))
     {
       StringCat (new_comment, grp->desc);
       StringCat (new_comment, "; ");    
     }
-    if (!StringHasNoText (grp->locus))
+    if (OkToAddToImpFeat (grp->locus, featdef_to))
     {
       StringCat (new_comment, grp->locus);
       StringCat (new_comment, "; ");    
@@ -14547,13 +15797,24 @@ NLM_EXTERN Boolean ConvertGeneToMiscFeatFunc
     GeneRefFree ((GeneRefPtr) sfp->data.value.ptrvalue);
   sfp->data.choice = SEQFEAT_IMP;
   sfp->data.value.ptrvalue = (Pointer) ifp;
-  ifp->key = StringSave ("misc_feature");
+
+  featname = GetImportFeatureName (featdef_to);
+  ifp->key = MemFree (ifp->key);
+  if (featname == NULL)
+  {
+    ifp->key = StringSave ("misc_feature");
+  }
+  else
+  {
+    ifp->key = StringSave (featname);
+  }
+
   return TRUE;
 }
 
 
 
-
+//Not used for Autodef and Cleanup
 /* For mat-peptide instantiation */
 static SeqIdPtr MakeMatPeptideProductId (SeqLocPtr mat_peptide_loc)
 {
@@ -14592,7 +15853,7 @@ static SeqIdPtr MakeMatPeptideProductId (SeqLocPtr mat_peptide_loc)
   return sip;
 }
 
-
+//Not used for Autodef and Cleanup
 static void InstantiateMatPeptideProductForProteinFeature (SeqFeatPtr sfp, Pointer data)
 {
   BioseqPtr mat_bsp, prot_bsp;
@@ -14717,7 +15978,7 @@ static void InstantiateMatPeptideProductForProteinFeature (SeqFeatPtr sfp, Point
 
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN void ExtraCDSCreationActions (SeqFeatPtr cds, SeqEntryPtr parent_sep)
 {
   ByteStorePtr       bs;
@@ -14831,7 +16092,7 @@ NLM_EXTERN void ExtraCDSCreationActions (SeqFeatPtr cds, SeqEntryPtr parent_sep)
   }
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN SeqFeatPtr GetProtFeature (BioseqPtr protbsp)
 {
   SeqMgrFeatContext fcontext;
@@ -14860,7 +16121,7 @@ NLM_EXTERN SeqFeatPtr GetProtFeature (BioseqPtr protbsp)
   return prot_sfp;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean ConvertMiscFeatToGene (SeqFeatPtr sfp)
 {
   GeneRefPtr grp;
@@ -14890,7 +16151,7 @@ NLM_EXTERN Boolean ConvertMiscFeatToGene (SeqFeatPtr sfp)
   return TRUE;
 }
 
-
+//Not used for Autodef and Cleanup
 NLM_EXTERN Boolean ConvertMiscFeatToCodingRegion (SeqFeatPtr sfp)
 {
   BioseqPtr bsp, prot_bsp;
@@ -14923,13 +16184,83 @@ NLM_EXTERN Boolean ConvertMiscFeatToCodingRegion (SeqFeatPtr sfp)
   return TRUE;
 }
 
+//Not used for Autodef and Cleanup
+NLM_EXTERN Boolean ConvertmRNAToCodingRegion (SeqFeatPtr sfp)
+{
+  BioseqPtr bsp, prot_bsp;
+  SeqFeatPtr prot;
+  ProtRefPtr prp;
+  RnaRefPtr  rrp;
+  CharPtr    product = NULL;
 
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_mRNA) {
+    return FALSE;
+  }
+  
+  rrp = (RnaRefPtr)(sfp->data.value.ptrvalue);
+  if (rrp != NULL && rrp->ext.choice == 1) {
+      product = StringSave(rrp->ext.value.ptrvalue);
+  }
+
+  sfp->data.value.ptrvalue = RnaRefFree (sfp->data.value.ptrvalue);
+  sfp->data.value.ptrvalue = CdRegionNew ();
+  sfp->data.choice = SEQFEAT_CDREGION;
+  sfp->idx.subtype = 0;
+
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp != NULL) {
+    ExtraCDSCreationActions (sfp, GetBestTopParentForData (bsp->idx.entityID, bsp));
+    prot_bsp = BioseqFindFromSeqLoc (sfp->product);
+    prot = GetProtFeature (prot_bsp);
+    if (prot != NULL) {
+      prp = prot->data.value.ptrvalue;
+      if (!StringHasNoText(product)) {
+        ValNodeAddPointer (&prp->name, 0, product);
+        product = NULL;
+      }
+      if (!StringHasNoText (sfp->comment)) {
+        ValNodeAddPointer (&prp->name, 0, sfp->comment);
+        sfp->comment = NULL;
+      }
+    }
+  }
+  product = MemFree (product);
+
+  return TRUE;
+}
+
+//Not used for Autodef and Cleanup
+NLM_EXTERN Boolean ConverttRNAToGene(SeqFeatPtr sfp)
+{
+  RnaRefPtr  rrp;
+  tRNAPtr    trp;
+  GeneRefPtr grp;
+
+  if (sfp == NULL || sfp->idx.subtype != FEATDEF_tRNA
+      || (rrp = (RnaRefPtr)(sfp->data.value.ptrvalue)) == NULL
+      || rrp->ext.choice != 2
+      || (trp = (tRNAPtr)(rrp->ext.value.ptrvalue)) == NULL)
+   {
+    return FALSE;
+  }
+
+  grp = GeneRefNew();
+  grp->desc = GetRNARefProductString(rrp, NULL);
+  sfp->data.value.ptrvalue = RnaRefFree (sfp->data.value.ptrvalue);
+  sfp->data.value.ptrvalue = grp;
+  sfp->data.choice = SEQFEAT_GENE;
+  sfp->idx.subtype = 0;
+  return TRUE;
+}
+
+//Not used for Autodef and Cleanup
 NLM_EXTERN void InstantiateMatPeptideProducts (SeqEntryPtr sep)
 {
   VisitFeaturesInSep (sep, NULL, InstantiateMatPeptideProductForProteinFeature);
 }
 
 
+//Not used for Autodef and Cleanup
 NLM_EXTERN CharPtr GetTSAIDDB (BioseqPtr bsp)
 {
   CharPtr db = NULL, cp;
@@ -14953,6 +16284,7 @@ NLM_EXTERN CharPtr GetTSAIDDB (BioseqPtr bsp)
 }
 
 
+//Not used for Autodef and Cleanup
 static void ConvertLocalIdsToBarcodeIdsCallback (BioseqPtr bsp, Pointer data)
 {
   SeqIdPtr        sip_local = NULL;
@@ -14990,33 +16322,45 @@ static void ConvertLocalIdsToBarcodeIdsCallback (BioseqPtr bsp, Pointer data)
 }     
           
   
+//Not used for Autodef and Cleanup
 NLM_EXTERN void ConvertLocalIdsToBarcodeIds (SeqEntryPtr sep)
 {
   VisitBioseqsInSep (sep, sep, ConvertLocalIdsToBarcodeIdsCallback);
 }
+//LCOV_EXCL_STOP
+
+NLM_EXTERN Int4 GetDeflinePosForFieldName(CharPtr name)
+{
+    Int4    i, rval = -1;
+
+    if (StringICmp(name, "specimen-voucher") == 0) {
+        rval = DEFLINE_POS_Specimen_voucher;
+    } else {
+        for (i = 0; i < numDefLineModifiers; i++) {
+            if (StringICmp(name, DefLineModifiers[i].name) == 0) {
+                rval = i;
+                break;
+            }
+        }
+    }
+    return rval;
+}
 
 
+//LCOV_EXCL_START
+//Not used in Autodef or Cleanup
 NLM_EXTERN Int4 GetDeflinePosForFieldType (ValNodePtr field)
 {
-  Int4    i, rval = -1;
+  Int4    rval = -1;
   CharPtr name;
 
   name = SummarizeFieldType (field);
-  if (StringICmp (name, "specimen-voucher") == 0) {
-    rval = DEFLINE_POS_Specimen_voucher;
-  } else {
-    for (i = 0; i < numDefLineModifiers; i++) {
-      if (StringICmp (name, DefLineModifiers[i].name) == 0) {
-        rval = i;
-        break;
-      }
-    }
-  }
+  rval = GetDeflinePosForFieldName(name);
   name = MemFree (name);
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static void RemoveUnusedFieldTypes (FieldTypePtr PNTR orig_list)
 {
   ValNodePtr vnp, prev = NULL, vnp_next;
@@ -15040,7 +16384,7 @@ static void RemoveUnusedFieldTypes (FieldTypePtr PNTR orig_list)
   }  
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean RemoveMatchingFieldType (FieldTypePtr PNTR orig_list, FieldTypePtr match)
 {
   ValNodePtr vnp, prev = NULL, vnp_next;
@@ -15068,7 +16412,7 @@ static Boolean RemoveMatchingFieldType (FieldTypePtr PNTR orig_list, FieldTypePt
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean ListHasMatchingFieldType (FieldTypePtr list, FieldTypePtr match)
 {
   Boolean rval = FALSE;
@@ -15100,7 +16444,7 @@ static Int4 DefLineFieldTypeSortOrder [] = {
   Source_qual_breed
 };
 
-
+//Not used in Autodef or Cleanup
 static int CompareFieldTypeByImportance (FieldTypePtr field1, FieldTypePtr field2)
 {
   int rval = 0;
@@ -15129,6 +16473,7 @@ static int CompareFieldTypeByImportance (FieldTypePtr field1, FieldTypePtr field
   return rval;
 }
 
+//Not used in Autodef or Cleanup
 static int LIBCALLBACK SortFieldTypeByImportance (
   VoidPtr ptr1,
   VoidPtr ptr2
@@ -15156,7 +16501,7 @@ typedef struct uniqbiosource {
   ValNodePtr   available_fields;
   ValNodePtr   strings;
 } UniqBioSourceData, PNTR UniqBioSourcePtr;
-
+//Not used in Autodef or Cleanup
 static Boolean AddQualToUniqBioSource (
   UniqBioSourcePtr u,
   FieldTypePtr     field
@@ -15192,7 +16537,7 @@ static Boolean AddQualToUniqBioSource (
   return rval;
 }
  
-
+//Not used in Autodef or Cleanup
 static UniqBioSourcePtr UniqBioSourceNew (BioSourcePtr biop)
 {
   UniqBioSourcePtr u;
@@ -15210,6 +16555,7 @@ static UniqBioSourcePtr UniqBioSourceNew (BioSourcePtr biop)
   return u;
 }
 
+//Not used in Autodef or Cleanup
 static UniqBioSourcePtr UniqBioSourceFree (UniqBioSourcePtr u)
 {
   if (u != NULL) {
@@ -15220,7 +16566,7 @@ static UniqBioSourcePtr UniqBioSourceFree (UniqBioSourcePtr u)
   return u;
 }
 
-
+//Not used in Autodef or Cleanup
 static UniqBioSourcePtr UniqBioSourceCopy (UniqBioSourcePtr u)
 {
   UniqBioSourcePtr u2;
@@ -15236,7 +16582,7 @@ static UniqBioSourcePtr UniqBioSourceCopy (UniqBioSourcePtr u)
   return u2;
 }
 
-
+//Not used in Autodef or Cleanup
 /* The CompareOrganismDescriptors function compares the contents of the
  * lists of strings for each BioSrcDesc item.
  * The function returns:
@@ -15277,7 +16623,7 @@ static int CompareUniqBioSource (
   }
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean RemoveFieldFromUniqBioSource (UniqBioSourcePtr u, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15288,7 +16634,7 @@ static Boolean RemoveFieldFromUniqBioSource (UniqBioSourcePtr u, FieldTypePtr fi
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr UniqBioSourceListFree (ValNodePtr list)
 {
   ValNodePtr list_next;
@@ -15303,7 +16649,7 @@ static ValNodePtr UniqBioSourceListFree (ValNodePtr list)
   return list;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr UniqBioSourceListCopy (ValNodePtr orig)
 {
   ValNodePtr list = NULL, prev = NULL, vnp;
@@ -15325,7 +16671,7 @@ static ValNodePtr UniqBioSourceListCopy (ValNodePtr orig)
   return list;
 }
 
-
+//Not used in Autodef or Cleanup
 static int LIBCALLBACK SortUniqBioSource (VoidPtr ptr1, VoidPtr ptr2)
 
 {
@@ -15341,14 +16687,14 @@ static int LIBCALLBACK SortUniqBioSource (VoidPtr ptr1, VoidPtr ptr2)
   return 0;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr UniqBioSourceListSort (ValNodePtr orig)
 {
   orig = ValNodeSort (orig, SortUniqBioSource);
   return orig;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean AddQualToUniqBioSourceList (ValNodePtr list, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15359,7 +16705,7 @@ static Boolean AddQualToUniqBioSourceList (ValNodePtr list, FieldTypePtr field)
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean RemoveFieldFromUniqBioSourceList (ValNodePtr list, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15385,7 +16731,7 @@ typedef struct uniqbiosrcgrp {
   ValNodePtr biop_list;
 } UniqBioSrcGrpData, PNTR UniqBioSrcGrpPtr;
 
-
+//Not used in Autodef or Cleanup
 static UniqBioSrcGrpPtr UniqBioSrcGrpNew (ValNodePtr biop_list)
 {
   UniqBioSrcGrpPtr g;
@@ -15396,7 +16742,7 @@ static UniqBioSrcGrpPtr UniqBioSrcGrpNew (ValNodePtr biop_list)
   return g;
 }
 
-
+//Not used in Autodef or Cleanup
 static UniqBioSrcGrpPtr UniqBioSrcGrpFree (UniqBioSrcGrpPtr g)
 {
   if (g != NULL) {
@@ -15406,7 +16752,7 @@ static UniqBioSrcGrpPtr UniqBioSrcGrpFree (UniqBioSrcGrpPtr g)
   return g;
 }
 
-
+//Not used in Autodef or Cleanup
 static UniqBioSrcGrpPtr UniqBioSrcGrpCopy (UniqBioSrcGrpPtr orig)
 {
   UniqBioSrcGrpPtr g;
@@ -15419,7 +16765,7 @@ static UniqBioSrcGrpPtr UniqBioSrcGrpCopy (UniqBioSrcGrpPtr orig)
   return g;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean AddQualToUniqBioSrcGrp (UniqBioSrcGrpPtr g, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15433,7 +16779,7 @@ static Boolean AddQualToUniqBioSrcGrp (UniqBioSrcGrpPtr g, FieldTypePtr field)
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean RemoveFieldFromUniqBioSrcGrp (UniqBioSrcGrpPtr g, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15444,7 +16790,7 @@ static Boolean RemoveFieldFromUniqBioSrcGrp (UniqBioSrcGrpPtr g, FieldTypePtr fi
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static FieldTypePtr GetAllPresentQualsForGroup (UniqBioSrcGrpPtr g)
 {
   ValNodePtr vnp;
@@ -15480,7 +16826,7 @@ static FieldTypePtr GetAllPresentQualsForGroup (UniqBioSrcGrpPtr g)
   return match_list;
 }
 
-
+//Not used in Autodef or Cleanup
 static FieldTypePtr GetAllQualsForGroup (UniqBioSrcGrpPtr g)
 {
   ValNodePtr vnp, tmp;
@@ -15511,7 +16857,7 @@ static FieldTypePtr GetAllQualsForGroup (UniqBioSrcGrpPtr g)
   return field_list_head;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr UniqBioSrcGrpListFree (ValNodePtr list)
 {
   ValNodePtr list_next;
@@ -15526,7 +16872,7 @@ static ValNodePtr UniqBioSrcGrpListFree (ValNodePtr list)
   return list;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr UniqBioSrcGrpListCopy (ValNodePtr orig)
 {
   ValNodePtr list = NULL, prev = NULL, vnp;
@@ -15548,7 +16894,7 @@ static ValNodePtr UniqBioSrcGrpListCopy (ValNodePtr orig)
   return list;
 }
 
-
+//Not used in Autodef or Cleanup
 /* NOTE - we want to sort groups from most biops to least biops */
 static int LIBCALLBACK SortUniqBioSrcGrp (VoidPtr ptr1, VoidPtr ptr2)
 
@@ -15573,14 +16919,14 @@ static int LIBCALLBACK SortUniqBioSrcGrp (VoidPtr ptr1, VoidPtr ptr2)
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr BioSrcGrpListSort (ValNodePtr orig)
 {
   orig = ValNodeSort (orig, SortUniqBioSrcGrp);
   return orig;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean RemoveFieldFromUniqBioSrcGrpList (ValNodePtr list, FieldTypePtr field)
 {
   Boolean rval = FALSE;
@@ -15592,7 +16938,7 @@ static Boolean RemoveFieldFromUniqBioSrcGrpList (ValNodePtr list, FieldTypePtr f
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static void ReGroupUniqBioSrcGrpList (ValNodePtr list)
 {
   ValNodePtr list_next, vnp;
@@ -15620,7 +16966,7 @@ static void ReGroupUniqBioSrcGrpList (ValNodePtr list)
   }
 }
 
-
+//Not used in Autodef or Cleanup
 static Int4 FindMaxOrgsInUniqBioSrcGrpList (ValNodePtr list)
 {
   Int4 max = 0;
@@ -15636,7 +16982,7 @@ static Int4 FindMaxOrgsInUniqBioSrcGrpList (ValNodePtr list)
   return max;
 }
 
-
+//Not used in Autodef or Cleanup
 static Int4 CountUniqueOrgsInUniqBioSrcGrpList (ValNodePtr list)
 {
   Int4 count = 0;
@@ -15652,7 +16998,7 @@ static Int4 CountUniqueOrgsInUniqBioSrcGrpList (ValNodePtr list)
   return count;
 }    
 
-
+//Not used in Autodef or Cleanup
 static Boolean AddQualToUniqBioSrcGrpList (ValNodePtr list, FieldTypePtr field)
 {
   Boolean    rval = FALSE;
@@ -15680,7 +17026,7 @@ typedef struct qualcombo {
   ValNodePtr   group_list;
 } QualComboData, PNTR QualComboPtr;
 
-
+//Not used in Autodef or Cleanup
 /* This function creates a new ModifierCombination item using the supplied
  * OrgGroup list.  It calculates the number of groups, maximum number of 
  * organisms in any one group, and number of unique organisms.
@@ -15706,7 +17052,7 @@ static QualComboPtr QualComboNew (ValNodePtr grp_list)
   return newm; 
 }
 
-
+//Not used in Autodef or Cleanup
 /* The CopyQualCombo creates a copy of a QualCombo item.
  * This includes creating a copy of the number and list of modifiers
  * and a copy of the number and list of OrgGroups, as well as copying the
@@ -15728,6 +17074,7 @@ static QualComboPtr QualComboCopy (
   return newm; 
 }
 
+//Not used in Autodef or Cleanup
 /* This function frees the memory associated with a list of
  * ModifierCombination items.
  */
@@ -15743,7 +17090,7 @@ static QualComboPtr QualComboFree (
   return m;
 }
 
-
+//Not used in Autodef or Cleanup
 static void TESTDisplayQualCombo (QualComboPtr q)
 {
   ValNodePtr vnp_t, vnp_b, vnp_q, vnp_f;
@@ -15763,7 +17110,7 @@ static void TESTDisplayQualCombo (QualComboPtr q)
   }
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean AddQualToQualCombo (
   QualComboPtr m,
   FieldTypePtr field
@@ -15787,7 +17134,7 @@ static Boolean AddQualToQualCombo (
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr LIBCALLBACK QualComboListFree (ValNodePtr list)
 {
   ValNodePtr list_next;
@@ -15802,7 +17149,7 @@ static ValNodePtr LIBCALLBACK QualComboListFree (ValNodePtr list)
   return list;
 }
 
-
+//Not used in Autodef or Cleanup
 /* NOTE - we want to sort groups from most unique organisms to least unique organisms */
 /* secondary sort - most groups to least groups */
 /* tertiary sort - fewer max orgs in group to most max orgs in group */
@@ -15859,7 +17206,7 @@ static int LIBCALLBACK SortQualCombo (VoidPtr ptr1, VoidPtr ptr2)
   return rval;
 }
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr QualComboListSort (ValNodePtr orig)
 {
   orig = ValNodeSort (orig, SortQualCombo);
@@ -15868,7 +17215,7 @@ static ValNodePtr QualComboListSort (ValNodePtr orig)
 }
 
 
-
+//Not used in Autodef or Cleanup
 static ValNodePtr ExpandOneComboListUsingAllPresentQuals (QualComboPtr q)
 {
   ValNodePtr new_list = NULL, vnp, vnp_m;
@@ -15897,7 +17244,7 @@ static ValNodePtr ExpandOneComboListUsingAllPresentQuals (QualComboPtr q)
   return new_list;
 }
 
-
+//Not used in Autodef or Cleanup
 static void TESTDisplayList (ValNodePtr new_list)
 {
   QualComboPtr q;
@@ -15910,7 +17257,7 @@ static void TESTDisplayList (ValNodePtr new_list)
 
 }
 
-
+//Not used in Autodef or Cleanup 
 static Boolean IsQualOkForDefline (ValNodePtr vnp)
 {
   ValNodePtr scp;
@@ -15928,7 +17275,7 @@ static Boolean IsQualOkForDefline (ValNodePtr vnp)
 }
   
       
-    
+//Not used in Autodef or Cleanup    
 static ValNodePtr ExpandOneComboListUsingAnyPresentQuals (QualComboPtr q)
 {
   ValNodePtr new_list = NULL, vnp, vnp_m;
@@ -15962,7 +17309,7 @@ static ValNodePtr ExpandOneComboListUsingAnyPresentQuals (QualComboPtr q)
   return new_list;
 }
 
-
+//Not used in Autodef or Cleanup
 static Boolean ExpandComboList (ValNodePtr PNTR list)
 {
   QualComboPtr  q;
@@ -15998,7 +17345,7 @@ static Boolean ExpandComboList (ValNodePtr PNTR list)
   return any_expansion;
 }
 
-
+//Not used in Autodef or Cleanup
 static void BuildUniqBioSrcList (
   BioSourcePtr biop,
   Pointer userdata
@@ -16017,7 +17364,7 @@ static void BuildUniqBioSrcList (
   vnbp->tail = vnp;
 }
 
-
+//Not used in Autodef or Cleanup
 /* The function FindBestQualCombo tries to find the best combination of modifiers
  * to create unique organism descriptions.  This is accomplished by
  * creating a list of required modifiers, and then creating a list of
@@ -16119,7 +17466,7 @@ static QualComboPtr FindBestQualComboEx(ValNodePtr PNTR biop_list, ModifierItemL
   return best_combo;
 }
 
-
+//Not used in Autodef or Cleanup
 static QualComboPtr FindBestQualCombo(SeqEntryPtr sep, ModifierItemLocalPtr ItemList)
 {
   QualComboPtr  best_combo;
@@ -16136,7 +17483,7 @@ static QualComboPtr FindBestQualCombo(SeqEntryPtr sep, ModifierItemLocalPtr Item
   return best_combo;
 }
 
-
+//Not used in Autodef or Cleanup
 static ModifierCombinationPtr ModifierCombinationFromQualCombo (QualComboPtr q)
 {
   ModifierCombinationPtr m;
@@ -16165,6 +17512,7 @@ static ModifierCombinationPtr ModifierCombinationFromQualCombo (QualComboPtr q)
 }
 
 
+//Not used in Autodef or Cleanup
 NLM_EXTERN ValNodePtr FindBestModifiersForDeflineClauseList (
   ValNodePtr defline_clauses,
   ModifierItemLocalPtr ItemList
@@ -16204,7 +17552,7 @@ NLM_EXTERN ValNodePtr FindBestModifiersForDeflineClauseList (
   return modifier_indices;
 }
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN ValNodePtr FindBestModifiersEx(
   SeqEntryPtr sep,
   ModifierItemLocalPtr ItemList,
@@ -16223,12 +17571,14 @@ NLM_EXTERN ValNodePtr FindBestModifiersEx(
   } else {
     m = FindBestCombo (sep, ItemList);
   }
-  modifier_indices = CopyModifierIndices (m->modifier_indices);
+  if (m != NULL) {
+    modifier_indices = CopyModifierIndices (m->modifier_indices);
+  }
   FreeModifierCombo (m);
   return modifier_indices;
 }
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN ValNodePtr FindBestModifiers(
   SeqEntryPtr sep,
   ModifierItemLocalPtr ItemList
@@ -16238,7 +17588,7 @@ NLM_EXTERN ValNodePtr FindBestModifiers(
   return FindBestModifiersEx (sep, ItemList, FALSE);
 }
 
-
+//Not used in Autodef or Cleanup
 /* In this test function, we create a list of biosources with various combinations of modifiers,
  * and then calculate the best combination to use for the organism description.
  */
@@ -16275,6 +17625,7 @@ static void ClearBiopQuals (BioSourcePtr biop)
 }
 
 
+//Not used in Autodef or Cleanup
 static void PrintBiopQuals (BioSourcePtr biop, FILE *fp)
 {
   OrgModPtr mod;
@@ -16290,7 +17641,7 @@ static void PrintBiopQuals (BioSourcePtr biop, FILE *fp)
   fprintf (fp, "\n");
 }
 
-
+//Not used in Autodef or Cleanup
 static void PrintModifiers (ValNodePtr modifiers, FILE *fp)
 {
   ValNodePtr vnp;
@@ -16306,13 +17657,10 @@ static void PrintModifiers (ValNodePtr modifiers, FILE *fp)
 }
 
 
+//Not used in AUtodef or Cleanup
 static Boolean IsNonTextDeflineQual (Int4 srcqual)
 {
-  if (srcqual == DEFLINE_POS_Transgenic
-      || srcqual == DEFLINE_POS_Germline
-      || srcqual == DEFLINE_POS_Metagenomic
-      || srcqual == DEFLINE_POS_Environmental_sample
-      || srcqual == DEFLINE_POS_Rearranged)
+  if (srcqual == DEFLINE_POS_Transgenic)
   {
     return TRUE;  
   }
@@ -16322,7 +17670,7 @@ static Boolean IsNonTextDeflineQual (Int4 srcqual)
   }
 }
 
-
+//Not used in AUtodef or Cleanup
 static void CreateOneTest (FILE *fp, Int4 i, Int4 j, Int4 k, BioSourcePtr PNTR biops, Int4 num_biops, Boolean vary1, Boolean vary2, Boolean vary3)
 {
   Int4 n;
@@ -16373,6 +17721,7 @@ static void CreateOneTest (FILE *fp, Int4 i, Int4 j, Int4 k, BioSourcePtr PNTR b
 }
 
 
+//Not used in AUtodef or Cleanup
 extern void TestFindBestQualCombo (FILE *fp)
 {
   BioSourcePtr biops[3];
@@ -16425,7 +17774,6 @@ extern void TestFindBestQualCombo (FILE *fp)
 
 
 
-
 /* collection_date has a controlled format.  
  * It is YYYY or Mmm-YYYY or DD-Mmm-YYYY where Mmm = Jan, Feb, Mar, Apr, May, 
  *                                                   Jun, Jul, Aug, Sep, Oct, 
@@ -16436,7 +17784,7 @@ extern void TestFindBestQualCombo (FILE *fp)
  * 
  * If the date supplied is ambiguous (01/03/05), can you allow the indexer to choose which field goes in Mmm and which in DD.
  */
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
 {
   Int4 val = 0;
@@ -16456,6 +17804,7 @@ NLM_EXTERN Int4 ReadNumberFromToken (CharPtr token, Int4 token_len)
   return val;
 }
 
+//Not used in Autodef or Cleanup
 static Int4 GetYearFromNumber(Int4 year)
 {
     Nlm_DayTime dt;
@@ -16475,11 +17824,12 @@ static Int4 GetYearFromNumber(Int4 year)
   return year;
 }
 
+//Not used in Autodef or Cleanup
 NLM_EXTERN Int4 GetYearFromToken (CharPtr token, Int4 token_len)
 {
   Int4        year = 0;
   
-  if (token == NULL || token_len == 0 || token_len > 4)
+  if (token == NULL || token_len == 0 || token_len > 4 || token_len == 3)
   {
     return 0;
   }
@@ -16495,7 +17845,7 @@ static CharPtr month_abbrevs [12] =
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN CharPtr GetMonthAbbrev (Int4 n)
 {
   if (n > 0 && n <= 12) {
@@ -16512,7 +17862,7 @@ static Int4 days_in_month [12] =
   31, 31, 30, 31, 30, 31
 };
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN Int4 GetDaysInMonth (Int4 n)
 {
   if (n > 0 && n <= 12) {
@@ -16522,7 +17872,7 @@ NLM_EXTERN Int4 GetDaysInMonth (Int4 n)
   }
 }
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN Int4 GetMonthNumFromAbbrev (CharPtr month_abbrev) 
 {
   Int4 i;
@@ -16535,6 +17885,7 @@ NLM_EXTERN Int4 GetMonthNumFromAbbrev (CharPtr month_abbrev)
   return -1;
 }
 
+//Not used in Autodef or Cleanup
 static Int4 GetDaysInMonthByName (CharPtr month)
 {
   Int4 month_num;
@@ -16549,6 +17900,7 @@ static Int4 GetDaysInMonthByName (CharPtr month)
   return 0;
 }
 
+//Not used in Autodef or Cleanup
 NLM_EXTERN CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
 {
   Int4    month_num;
@@ -16590,10 +17942,13 @@ NLM_EXTERN CharPtr GetMonthFromToken (CharPtr token, Int4 token_len)
   }
 }
 
+//Not used in Autodef or Cleanup
 static Boolean
 ChooseDayAndYear 
 (Int4    num_1,
+ Int4    num_1_len,
  Int4    num_2,
+ Int4    num_2_len,
  CharPtr month,
  Boolean year_first,
  Int4Ptr day,
@@ -16608,40 +17963,53 @@ ChooseDayAndYear
   {
     return FALSE;
   }
-  else if (num_1 == 0)
+  else if (num_1 == 0 && num_1_len == 2)
   {
     *year = 2000;
     *day = num_2;
   }
-  else if (num_2 == 0)
+  else if (num_2 == 0 && num_2_len == 2)
   {
     *year = 2000;
     *day = num_1;
   }
-  else if (num_1 > GetDaysInMonthByName (month))
+  else if (num_1 == 0 || num_2 == 0) 
   {
+    return FALSE;
+  }
+  else if (num_1 > GetDaysInMonthByName (month) && (num_2_len == 2 || num_2_len == 4))
+  {
+    if (num_2 > GetDaysInMonthByName (month))
+    {
+      return FALSE;
+    }
     *year = num_1;
     *day = num_2;
   }
-  else if (num_2 > GetDaysInMonthByName (month))
+  else if (num_2 > GetDaysInMonthByName (month) && (num_1_len == 2 || num_1_len == 4))
   {
     *year = num_2;
     *day = num_1;
   }
-  else if (year_first)
+  else if (year_first && (num_1_len == 2 || num_1_len == 4))
   {
     *year = num_1;
     *day = num_2;
+  }
+  else if (num_2_len == 2 || num_2_len == 4)
+  {
+    *year = num_2;
+    *day = num_1;
   }
   else
   {
-    *year = num_2;
-    *day = num_1;
+    return FALSE;
   }
   
   return TRUE;
 }
 
+//Not used in Autodef or Cleanup
 static Boolean 
 ChooseMonthAndYear
 (Int4    num_1,
@@ -16702,6 +18070,7 @@ ChooseMonthAndYear
 }
 
 
+//Not used in Autodef or Cleanup
 static Boolean ChooseMonthAndDay 
 (Int4    num_1,
  Int4    num_2,
@@ -16747,6 +18116,7 @@ static Boolean ChooseMonthAndDay
   return TRUE;
 }
 
+//Not used in Cleanup or Autodef
 NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first, BoolPtr month_ambiguous)
 {
   CharPtr reformatted_date = NULL, cp;
@@ -16852,7 +18222,7 @@ NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first,
       month = GetMonthFromToken (token_list [0], token_lens [0]);
       num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
       num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      if (!ChooseDayAndYear (num_1, token_lens[1], num_2, token_lens[2], month, FALSE, &day, &year))
       {
         return NULL;
       }
@@ -16862,7 +18232,7 @@ NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first,
       month = GetMonthFromToken (token_list [1], token_lens [1]);
       num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
       num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      if (!ChooseDayAndYear (num_1, token_lens[0], num_2, token_lens[2], month, FALSE, &day, &year))
       {
         return NULL;
       }
@@ -16872,7 +18242,7 @@ NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first,
       month = GetMonthFromToken (token_list [2], token_lens [2]);
       num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
       num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
+      if (!ChooseDayAndYear (num_1, token_lens[0], num_2, token_lens[1], month, FALSE, &day, &year))
       {
         return NULL;
       }
@@ -16991,6 +18361,37 @@ NLM_EXTERN CharPtr ReformatDateStringEx (CharPtr orig_date, Boolean month_first,
 }
 
 
+//Not used in Autodef or Cleanup
+NLM_EXTERN Boolean ReformatAssemblyDate (CharPtr PNTR orig_date)
+{
+  CharPtr collection_date;
+  CharPtr assembly_date;
+  Boolean ambiguous = FALSE;
+ 
+  if (orig_date == NULL || StringHasNoText (*orig_date)) {
+    return FALSE;
+  }
+
+  collection_date = ReformatDateStringEx(*orig_date, TRUE, &ambiguous);
+  if (StringHasNoText(collection_date)) {
+    collection_date = MemFree (collection_date);
+    return FALSE;
+  }
+
+
+  assembly_date = AssemblyDateFromCollectionDate (collection_date, ambiguous);
+  collection_date = MemFree (collection_date);
+  if (!StringHasNoText (assembly_date)) {
+    *orig_date = MemFree (*orig_date);
+    *orig_date = assembly_date;
+    return TRUE;
+  }
+  
+  return FALSE;
+}
+
+
+//Not used in Autodef or Cleanup
 NLM_EXTERN CharPtr ReformatDateWithMonthNames (CharPtr orig_date)
 {
   CharPtr reformatted_date = NULL, cp;
@@ -17004,8 +18405,9 @@ NLM_EXTERN CharPtr ReformatDateWithMonthNames (CharPtr orig_date)
   Int4    token_len;
   Int4    month_token = -1;
   Boolean is_num;
-  Int4    num_1, num_2;
-  Int4    i;
+  Int4    nums[2];
+  Int4    num_lens[2];
+  Int4    i, nums_pos;
   
   if (StringHasNoText (orig_date))
   {
@@ -17093,40 +18495,28 @@ NLM_EXTERN CharPtr ReformatDateWithMonthNames (CharPtr orig_date)
   }
   else if (num_tokens == 3)
   {
-    if (month_token == 0)
+    if (month_token < 0 || month_token > 2) 
     {
-      month = GetMonthFromToken (token_list [0], token_lens [0]);
-      num_1 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
+      return NULL;
+    }
+    nums_pos = 0;
+    for (i = 0; i < 3; i++) {
+      if (i == month_token) {
+        month = GetMonthFromToken (token_list[i], token_lens[i]);
+      } else if (token_lens[i] == 3) {
         return NULL;
+      } else {
+        nums[nums_pos] = ReadNumberFromToken(token_list[i], token_lens[i]);
+        num_lens[nums_pos] = token_lens[i];
+        nums_pos++;
       }
     }
-    else if (month_token == 1)
+
+    if (!ChooseDayAndYear (nums[0], num_lens[0], nums[1], num_lens[1], month, FALSE, &day, &year))
     {
-      month = GetMonthFromToken (token_list [1], token_lens [1]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [2], token_lens [2]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
+      return NULL;
     }
-    else if (month_token == 2)
-    {
-      month = GetMonthFromToken (token_list [2], token_lens [2]);
-      num_1 = ReadNumberFromToken (token_list [0], token_lens [0]);
-      num_2 = ReadNumberFromToken (token_list [1], token_lens [1]);
-      if (!ChooseDayAndYear (num_1, num_2, month, FALSE, &day, &year))
-      {
-        return NULL;
-      }
-    }
-    else
-    {
-      return NULL;                
-    }
+
     year = GetYearFromNumber(year);
   }
 
@@ -17160,7 +18550,7 @@ NLM_EXTERN CharPtr ReformatDateWithMonthNames (CharPtr orig_date)
   return reformatted_date;
 }
 
-
+//Not used in Autodef or Cleanup
 NLM_EXTERN Boolean CreateMatPeptideFromCDS (SeqFeatPtr sfp)
 {
   SeqFeatPtr        orig_prot, new_prot;
@@ -17192,6 +18582,7 @@ NLM_EXTERN Boolean CreateMatPeptideFromCDS (SeqFeatPtr sfp)
 }
 
 
+//Not used in Autodef or Cleanup
 NLM_EXTERN Boolean ConvertCDSToMatPeptideForOverlappingCDS (SeqFeatPtr sfp, SeqFeatPtr top_cds, Boolean remove_original)
 {
   BioseqPtr prot_bsp;
@@ -17242,6 +18633,7 @@ NLM_EXTERN Boolean ConvertCDSToMatPeptideForOverlappingCDS (SeqFeatPtr sfp, SeqF
 }
 
 
+//Not used in Autodef or Cleanup
 NLM_EXTERN Boolean AutoConvertCDSToMiscFeat (SeqFeatPtr cds, Boolean remove_original)
 {
   BioseqPtr bsp;
@@ -17277,7 +18669,7 @@ NLM_EXTERN Boolean AutoConvertCDSToMiscFeat (SeqFeatPtr cds, Boolean remove_orig
   return rval;
 }
 
-
+//Not part of Autodef or Cleanup
 NLM_EXTERN SeqEntryPtr GetBestSeqEntryForItem (ValNodePtr vnp)
 {
   SeqFeatPtr       sfp;
@@ -17310,9 +18702,30 @@ NLM_EXTERN SeqEntryPtr GetBestSeqEntryForItem (ValNodePtr vnp)
   return sep;
 }
 
+
+//Not part of Autodef or Cleanup
+static Boolean IsDescriptorInList(SeqDescPtr sdp, SeqDescPtr list)
+{
+  Boolean found_match = FALSE;
+  SeqDescPtr sdp_tmp, sdp_tmp_next;
+  for (sdp_tmp = list, found_match = FALSE;
+       sdp_tmp != NULL && !found_match; 
+       sdp_tmp = sdp_tmp->next) {
+    sdp_tmp_next = sdp_tmp->next;
+    sdp_tmp->next = NULL;
+    if (AsnIoMemComp (sdp, sdp_tmp, (AsnWriteFunc) SeqDescrAsnWrite)) {
+      found_match = TRUE;
+    }
+    sdp_tmp->next = sdp_tmp_next;
+  }
+  return found_match;
+}
+
+
+//Not part of Autodef or Cleanup
 NLM_EXTERN void AddNewUniqueDescriptors (SeqDescrPtr PNTR new_set, SeqDescrPtr parent_set)
 {
-  SeqDescrPtr sdp, sdp_next, sdp_tmp, sdp_tmp_next;
+  SeqDescrPtr sdp, sdp_next;
   Boolean     found_match;
 
   if (new_set == NULL || parent_set == NULL) return;
@@ -17327,16 +18740,7 @@ NLM_EXTERN void AddNewUniqueDescriptors (SeqDescrPtr PNTR new_set, SeqDescrPtr p
     while (sdp != NULL) {
       sdp_next = sdp->next;
       sdp->next = NULL;
-      for (sdp_tmp = *new_set, found_match = FALSE;
-           sdp_tmp != NULL && !found_match; 
-           sdp_tmp = sdp_tmp->next) {
-        sdp_tmp_next = sdp_tmp->next;
-        sdp_tmp->next = NULL;
-        if (AsnIoMemComp (sdp, sdp_tmp, (AsnWriteFunc) SeqDescrAsnWrite)) {
-          found_match = TRUE;
-        }
-        sdp_tmp->next = sdp_tmp_next;
-      }
+      found_match = IsDescriptorInList(sdp, *new_set);
       if (!found_match) {
         ValNodeLink (new_set,
                      AsnIoMemCopy ((Pointer) sdp,
@@ -17349,6 +18753,8 @@ NLM_EXTERN void AddNewUniqueDescriptors (SeqDescrPtr PNTR new_set, SeqDescrPtr p
   }
 }
 
+
+//Not part of Autodef or Cleanup
 static void AddNewUniqueDescriptorsToSeqEntry (SeqEntryPtr sep, SeqDescrPtr parent_set)
 {
   BioseqPtr    bsp;
@@ -17367,6 +18773,8 @@ static void AddNewUniqueDescriptorsToSeqEntry (SeqEntryPtr sep, SeqDescrPtr pare
   }
 }
 
+
+//Not part of Autodef or Cleanup
 NLM_EXTERN void AddNewUniqueAnnotations (SeqAnnotPtr PNTR new_set, SeqAnnotPtr parent_set)
 {
   SeqAnnotPtr sap, sap_next, sap_tmp, sap_tmp_next, sap_copy, last_sap;
@@ -17404,6 +18812,7 @@ NLM_EXTERN void AddNewUniqueAnnotations (SeqAnnotPtr PNTR new_set, SeqAnnotPtr p
 }
 
 
+//Not part of Autodef or Cleanup
 static void AddItemListToSet (ValNodePtr item_list, BioseqSetPtr newset, Boolean for_segregate)
 {
   ValNodePtr vnp_item;
@@ -17494,6 +18903,7 @@ static void AddItemListToSet (ValNodePtr item_list, BioseqSetPtr newset, Boolean
 }
 
 
+//Not part of AutoDef or Cleanup
 static void AddCategorySeqEntriesToSet (BioseqSetPtr newset, ClickableItemPtr category)
 {
   ValNodePtr vnp_item;
@@ -17509,6 +18919,7 @@ static void AddCategorySeqEntriesToSet (BioseqSetPtr newset, ClickableItemPtr ca
   }
 }
 
+//Not part of AutoDef or Cleanup
 static Boolean NeedsNewSet (SeqEntryPtr sep)
 {
   BioseqSetPtr bssp;
@@ -17529,6 +18940,7 @@ static Boolean NeedsNewSet (SeqEntryPtr sep)
 }
 
 
+//Not part of AutoDef or Cleanup
 static Boolean IsSingletonSet (SeqEntryPtr sep)
 {
   BioseqSetPtr bssp;
@@ -17552,6 +18964,7 @@ static Boolean IsSingletonSet (SeqEntryPtr sep)
 }
 
 
+//Not part of AutoDef or Cleanup
 static void AddAnnotsToSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap)
 {
   BioseqPtr bsp;
@@ -17586,7 +18999,7 @@ static void AddAnnotsToSeqEntry (SeqEntryPtr sep, SeqAnnotPtr sap)
   }
 }
 
-
+//Not part of AutoDef or Cleanup
 static void PromoteSingletonSetsInSet (SeqEntryPtr sep)
 {
   ObjMgrDataPtr     omdptop;
@@ -17634,7 +19047,7 @@ static void PromoteSingletonSetsInSet (SeqEntryPtr sep)
   RestoreSeqEntryObjMgrData (sep, omdptop, &omdata);
 }
 
-
+//Not part of AutoDef or Cleanup
 NLM_EXTERN BioseqSetPtr MakeGroupsForUniqueValues
 (BioseqSetPtr bssp, 
  ValNodePtr   value_lists)
@@ -17736,7 +19149,7 @@ NLM_EXTERN BioseqSetPtr MakeGroupsForUniqueValues
       SeqMgrLinkSeqEntry (tmp, OBJ_BIOSEQSET, parent_set);
       /* need to update GatherIndex values */
       AssignIDsInEntity (entityID, 0, NULL);
-    } else {
+    } else if (first_new_sep != NULL) {
       sep = first_new_sep->next;
       while (sep != NULL) {
         AddNewUniqueDescriptorsToSeqEntry (sep, parent_set->descr);
@@ -17758,7 +19171,7 @@ NLM_EXTERN BioseqSetPtr MakeGroupsForUniqueValues
   return parent_set;
 }
 
-
+//Not part of Autodef or Cleanup
 static void RemoveBioseqFromAlignmentsCallback (SeqAnnotPtr sap, Pointer data)
 {
   BioseqPtr   bsp;
@@ -17831,7 +19244,7 @@ static void RemoveBioseqFromAlignmentsCallback (SeqAnnotPtr sap, Pointer data)
   }
 }
 
-
+//Not part of Autodef or Cleanup
 /* expect that list is a valnode list with choice OBJ_BIOSEQ and data.ptrvalue a bioseq */
 NLM_EXTERN void MoveSequencesFromSetToWrapper (ValNodePtr list, Uint2 entityID)
 {
@@ -17875,7 +19288,7 @@ NLM_EXTERN void MoveSequencesFromSetToWrapper (ValNodePtr list, Uint2 entityID)
 
 }
 
-
+//Not part of Autodef or cleanup
 static void GetBioseqListCallback (BioseqPtr bsp, Pointer userdata)
 {
   if (bsp != NULL && userdata != NULL && ! ISA_aa (bsp->mol))
@@ -17884,6 +19297,8 @@ static void GetBioseqListCallback (BioseqPtr bsp, Pointer userdata)
   }
 }
 
+
+//Not part of Autodef or cleanup
 NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByNumberOfSets (Int4 num_sets, SeqEntryPtr sep)
 {
   ValNodePtr cip_list = NULL;
@@ -17919,6 +19334,7 @@ NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByNumberOfSets (Int4 num_se
 }
 
 
+//Not part of Autodef or cleanup
 NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByNumberPerSet (Int4 num_per_set, SeqEntryPtr sep)
 {
   ValNodePtr cip_list = NULL;
@@ -17949,6 +19365,7 @@ NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByNumberPerSet (Int4 num_pe
 }
 
 
+//Not part of Autodef or cleanup
 NLM_EXTERN void SegregateSetsByNumber (SeqEntryPtr sep, Int4 num_sets)
 {
   ValNodePtr set_list;
@@ -17968,6 +19385,7 @@ NLM_EXTERN void SegregateSetsByNumber (SeqEntryPtr sep, Int4 num_sets)
 }
 
 
+//Not part of Autodef or cleanup
 NLM_EXTERN void SegregateSetsByNumberPerSet (SeqEntryPtr sep, Int4 num_per_set)
 {
   ValNodePtr set_list;
@@ -18015,6 +19433,7 @@ static CharPtr s_PlantGroupList[] = {
 };
 
 
+//Not used by Autodef or cleanup
 static void AssignBioseqToLineageGroup (BioseqPtr bsp, Pointer data)
 {
   SeqDescPtr sdp;
@@ -18048,6 +19467,7 @@ static void AssignBioseqToLineageGroup (BioseqPtr bsp, Pointer data)
 }
 
 
+//Not used by Autodef or cleanup
 static ValNodePtr MakeLineageGroupList (SeqEntryPtr sep, CharPtr PNTR lineage_strings)
 {
   ClickableItemPtr cip;
@@ -18086,6 +19506,7 @@ static ValNodePtr MakeLineageGroupList (SeqEntryPtr sep, CharPtr PNTR lineage_st
 }
 
 
+//Not used by Autodef or cleanup
 static ValNodePtr MakePlantGroupList (SeqEntryPtr sep)
 {
   return MakeLineageGroupList (sep, s_PlantGroupList);
@@ -18149,6 +19570,7 @@ static CharPtr s_FungusGroupList[] = {
   NULL
 };
 
+//Not used by Autodef or cleanup
 NLM_EXTERN void SegregateSetsByFungusGroup (SeqEntryPtr sep)
 {
   ValNodePtr set_list;
@@ -18167,6 +19589,7 @@ NLM_EXTERN void SegregateSetsByFungusGroup (SeqEntryPtr sep)
 }
 
 
+//Not part of Autodef or Cleanup
 NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByBioseqList (SeqEntryPtr sep, ValNodePtr bsp_list)
 {
   ValNodeBlock b_list;
@@ -18185,7 +19608,7 @@ NLM_EXTERN ValNodePtr PrepareSequenceListForSegregateByBioseqList (SeqEntryPtr s
   return cip_list;
 }
 
-
+//Not part of Autodef or Cleanup
 static void RemoveFoundBioseqFromAlignment (BioseqPtr bsp, Pointer data)
 {
   SeqAlignPtr PNTR pSalp;
@@ -18200,6 +19623,7 @@ static void RemoveFoundBioseqFromAlignment (BioseqPtr bsp, Pointer data)
 }
 
 
+//Not part of Autodef or Cleanup
 static void RemoveSequencesFromOtherSepFromAlignment (SeqEntryPtr exclude, SeqAnnotPtr sap)
 {
   SeqAlignPtr salp;
@@ -18221,6 +19645,7 @@ static void RemoveSequencesFromOtherSepFromAlignment (SeqEntryPtr exclude, SeqAn
 }
 
 
+//Not part of Autodef or Cleanup
 static void CopyAnnotToOtherSeq (SeqAnnotPtr sap, SeqEntryPtr list, SeqEntryPtr not_this_one)
 {
   SeqEntryPtr sep;
@@ -18249,6 +19674,7 @@ static void CopyAnnotToOtherSeq (SeqAnnotPtr sap, SeqEntryPtr list, SeqEntryPtr 
 }
 
 
+//Not part of Autodef or Cleanup
 static void FixOriginalCopiedAlignment (SeqAnnotPtr sap, SeqEntryPtr list, SeqEntryPtr not_this_one)
 {
   SeqEntryPtr sep;
@@ -18261,6 +19687,7 @@ static void FixOriginalCopiedAlignment (SeqAnnotPtr sap, SeqEntryPtr list, SeqEn
 }
 
 
+//Not part of Autodef or Cleanup
 static void CopyBioseqListAlignments (BioseqSetPtr parent)
 {
   SeqEntryPtr sep;
@@ -18286,6 +19713,7 @@ static void CopyBioseqListAlignments (BioseqSetPtr parent)
 }
 
 
+//Not part of Autodef or Cleanup
 NLM_EXTERN void SegregateSetsByBioseqList (SeqEntryPtr sep, ValNodePtr vnp)
 {
   ValNodePtr set_list;
@@ -18305,7 +19733,7 @@ NLM_EXTERN void SegregateSetsByBioseqList (SeqEntryPtr sep, ValNodePtr vnp)
 
 }
 
-
+//Not used for Autodef or Cleanup
 static void SeqAnnotIsPairwiseAlignment (SeqAnnotPtr sap, Pointer data)
 {
   BoolPtr     is;
@@ -18326,7 +19754,7 @@ static void SeqAnnotIsPairwiseAlignment (SeqAnnotPtr sap, Pointer data)
   }
 }
 
-
+//Not used for Autodef or Cleanup
 NLM_EXTERN Boolean SeqEntryHasPairwiseAlignments (SeqEntryPtr sep)
 {
   Boolean rval = FALSE;
@@ -18338,13 +19766,13 @@ NLM_EXTERN Boolean SeqEntryHasPairwiseAlignments (SeqEntryPtr sep)
 
 typedef  Boolean  (*Nlm_ParseProc) PROTO ((CharPtr, Pointer));
 
-
+//Not used for Autodef or Cleanup
 static Boolean SkipToken (CharPtr cp, Pointer data)
 {
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseLineOfTokens (CharPtr line, Nlm_ParseProc PNTR token_funcs, Pointer data)
 {
   CharPtr cp, cp_next;
@@ -18400,7 +19828,7 @@ typedef struct extractorinfo {
   Boolean is_complement;
 } ExtractorInfoData, PNTR ExtractorInfoPtr;
 
-
+//Not used for Autodef or Cleanup
 static ExtractorInfoPtr ExtractorInfoNew ()
 {
   ExtractorInfoPtr ep = (ExtractorInfoPtr) MemNew (sizeof (ExtractorInfoData));
@@ -18408,7 +19836,7 @@ static ExtractorInfoPtr ExtractorInfoNew ()
   return ep;
 }
 
-
+//Not used for Autodef or Cleanup
 static ExtractorInfoPtr ExtractorInfoFree (ExtractorInfoPtr ep)
 {
   if (ep != NULL) {
@@ -18420,7 +19848,7 @@ static ExtractorInfoPtr ExtractorInfoFree (ExtractorInfoPtr ep)
   return ep;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseExtractorIdAndLength (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18485,7 +19913,7 @@ static Boolean ParseExtractorIdAndLength (CharPtr cp, Pointer data)
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseHasITS1 (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18505,7 +19933,7 @@ static Boolean ParseHasITS1 (CharPtr cp, Pointer data)
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseHasITS2 (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18525,7 +19953,7 @@ static Boolean ParseHasITS2 (CharPtr cp, Pointer data)
   return TRUE;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseITS1Range (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18553,7 +19981,7 @@ static Boolean ParseITS1Range (CharPtr cp, Pointer data)
   return rval;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseITS2Range (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18581,7 +20009,7 @@ static Boolean ParseITS2Range (CharPtr cp, Pointer data)
   return rval;
 }
 
-
+//Not used for Autodef or Cleanup
 static Boolean ParseIsComplement (CharPtr cp, Pointer data)
 {
   ExtractorInfoPtr ep;
@@ -18630,6 +20058,34 @@ CharPtr extractor_feature_labels[] = {
 };
 
 
+typedef struct rnafeatlist {
+  CharPtr id;
+  Boolean has_feat[eExtractorFeat28S + 1];
+  Int4    feat_pos;
+  Boolean is_complement;
+  CharPtr error;
+} RNAFeatListData, PNTR RNAFeatListPtr;
+
+//Not used for Autodef or Cleanup
+static RNAFeatListPtr RNAFeatListNew ()
+{
+  RNAFeatListPtr ep = (RNAFeatListPtr) MemNew (sizeof (RNAFeatListData));
+  MemSet (ep, 0, sizeof (RNAFeatListData));
+  return ep;
+}
+
+//Not used for Autodef or Cleanup
+static RNAFeatListPtr RNAFeatListFree (RNAFeatListPtr ep)
+{
+  if (ep != NULL) {
+    ep->id = MemFree (ep->id);
+    ep->error = MemFree (ep->error);
+    ep = MemFree (ep);
+  }
+  return ep;
+}
+
+//Not used for Autodef or Cleanup
 static CharPtr MakeLabelFromExtractorInfo (ExtractorInfoPtr ep)
 {
   Boolean feat_present[5];
@@ -18718,6 +20174,194 @@ static CharPtr MakeLabelFromExtractorInfo (ExtractorInfoPtr ep)
 }
 
 
+//Not used for Autodef or Cleanup
+static Boolean ParseExtractorIdOnly (CharPtr cp, Pointer data)
+{
+  RNAFeatListPtr ep;
+  CharPtr div = NULL, id_start, id_end;
+  Char    ch_was;
+
+  if (StringHasNoText (cp) || (ep = (RNAFeatListPtr) data) == NULL) {
+    return FALSE;
+  }
+
+  id_start = cp;
+  while (isspace (*id_start)) {
+    id_start++;
+  }
+
+  if (*id_start == 0) {
+    return FALSE;
+  }
+
+  /* if we have a list of IDs, truncate after just the first one */
+  id_end = StringChr (id_start, '|');
+  if (id_end != NULL && id_end < div) {
+    id_end = StringChr (id_end + 1, '|');
+    if (id_end != NULL) {
+      div = id_end;
+    }
+  }
+  
+  if (div != NULL) {
+    ch_was = *div;
+    *div = 0;
+  }
+  ep->id = StringSave (id_start);  
+  if (div != NULL) {
+    *div = ch_was;
+  }
+  /* trim spaces from end of ID */
+  cp = ep->id + StringLen (ep->id) - 1;
+  while (cp > ep->id && isspace (*cp)) {
+    cp--;
+  }
+  *(cp + 1) = 0;
+  return TRUE;
+}
+
+//Not used for Autodef or Cleanup
+static Boolean ParseNewComplement (CharPtr cp, Pointer data)
+{
+  RNAFeatListPtr ep;
+  Boolean rval = TRUE;
+
+  if ((ep = (RNAFeatListPtr) data) == NULL) {
+    return FALSE;
+  }
+  if (StringHasNoText (cp) || StringCmp (cp, "0") == 0) {
+    ep->is_complement = FALSE;
+  } else if (StringCmp (cp, "1") == 0) {
+    ep->is_complement = TRUE;
+  } else {
+    rval = FALSE;
+  }
+  return rval;
+}
+
+
+static CharPtr sIgnoreRNAErrors[] = {
+  "Broken or partial sequence, no 5.8S!",
+  "Broken or partial sequence, only partial 5.8S!",
+  NULL};
+
+//Not used for Autodef or Cleanup
+static Boolean ParseRNAError (CharPtr cp, Pointer data)
+{
+  RNAFeatListPtr ep;
+  Boolean rval = TRUE, ignore = FALSE;
+  Int4 j;
+
+  if ((ep = (RNAFeatListPtr) data) == NULL) {
+    return FALSE;
+  }
+  if (!StringHasNoText (cp)) {
+    for (j = 0; sIgnoreRNAErrors[j] != NULL && !ignore; j++) {
+      if (StringNICmp (cp, sIgnoreRNAErrors[j], StringLen (sIgnoreRNAErrors[j])) == 0) {
+        ignore = TRUE;
+      }
+    }
+    if (!ignore) {
+      ep->error = StringSave (cp);
+    }
+  }
+  return rval;
+}
+
+//Not used for Autodef or Cleanup
+static Boolean ParseRNARange (CharPtr cp, Pointer data)
+{
+  RNAFeatListPtr ep;
+  Boolean rval = TRUE;
+  CharPtr colon;
+
+  if ((ep = (RNAFeatListPtr) data) == NULL) {
+    return FALSE;
+  }
+  colon = StringChr (cp, ':');
+  if (colon == NULL) {
+    return FALSE;
+  }
+  colon++;
+  while (isspace (*colon)) {
+    colon++;
+  }
+  if (StringICmp (colon, "Not found") == 0) {
+    ep->has_feat[ep->feat_pos] = FALSE;
+    ep->feat_pos++;
+  } else if (StringICmp (colon, "No end") == 0) {
+    ep->has_feat[ep->feat_pos] = TRUE;
+    ep->feat_pos++;
+  } else if (StringICmp (colon, "No start") == 0) {
+    ep->has_feat[ep->feat_pos] = TRUE;
+    ep->feat_pos++;
+  } else if (!isdigit (*colon)) {
+    rval = FALSE;
+  } else {
+    ep->has_feat[ep->feat_pos] = TRUE;
+    ep->feat_pos++;
+  }
+  return rval;
+}
+
+
+static Nlm_ParseProc new_token_parsers[] = {
+  ParseExtractorIdOnly,
+  SkipToken,
+  ParseRNARange,
+  ParseRNARange,
+  ParseRNARange,
+  ParseRNARange,
+  ParseRNARange,
+  ParseRNAError,
+  ParseNewComplement,
+  NULL};
+
+//Not used for Autodef or Cleanup
+static CharPtr MakeLabelFromRNAFeatList (RNAFeatListPtr ep)
+{
+  CharPtr label;
+  Int4 len, i, num_feat = 0, feat_num = 0;
+
+  if (ep == NULL) {
+    return NULL;
+  }
+
+  len = 15;
+  for (i = 0; i < 5; i++) {
+    if (ep->has_feat[i]) {
+      len += StringLen (extractor_feature_labels[i]) + 2;
+      num_feat++;
+    } else if (num_feat > 0) {
+      break;
+    }
+  }
+  label = (CharPtr) MemNew (sizeof (Char) * len);
+  sprintf (label, "contains ");
+  for (i = 0; i < 5; i++) {
+    if (ep->has_feat[i]) {
+      if (feat_num > 0) {
+        if (feat_num == num_feat - 1) {
+          if (num_feat == 2) {
+            StringCat (label, " and ");
+          } else {
+            StringCat (label, ", and ");
+          }
+        } else {
+          StringCat (label, ", ");
+        }
+      }
+      StringCat (label, extractor_feature_labels[i]);
+      feat_num++;
+    } else if (feat_num > 0) {
+      break;
+    }
+  }
+  return label;
+}
+
+
+//Not used for Autodef or Cleanup
 NLM_EXTERN void RevCompFeats (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -18750,17 +20394,61 @@ NLM_EXTERN void RevCompFeats (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 
   }
 }
 
+//Not used for Autodef or Cleanup
+static BioseqPtr GetBioseqFromExtractorTextId (CharPtr id, CharPtr line, SeqEntryPtr sep)
+{
+  Int4 len;
+  BioseqPtr bsp;
+  SeqIdPtr  sip;
 
+  if (StringHasNoText (id)) {
+    Message (MSG_POSTERR, "No id for line %s", line);
+    return NULL;
+  }
+  /* figure out ID */
+  len = StringLen (id);
+  if (len > 3 && id[len - 1] == '.' && id[len - 2] == '.' && id[len - 3] == '.') {
+    Message (MSG_POSTERR, "ID was truncated for line %s", line);
+    return NULL;
+  }
+  sip = CreateSeqIdFromText (id, sep);
+  bsp = BioseqFind (sip);
+  sip = SeqIdFree (sip);
+  if (bsp == NULL) {
+    Message (MSG_POSTERR, "ID for sequence not present in record in line %s", line);
+    return NULL;
+  }
+  return bsp;
+}
+
+
+//Not used for Autodef or Cleanup
+static SeqFeatPtr MakeMiscRNAWithLabel(BioseqPtr bsp, CharPtr label)
+{
+  SeqFeatPtr sfp;
+  RnaRefPtr rrp;
+  RNAGenPtr rgp;
+
+  /* make feature and attach to appropriate annots */
+  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_RNA, NULL);
+  rrp = RnaRefNew ();
+  sfp->data.value.ptrvalue = rrp;
+  rrp->type = 255;
+  rgp = RNAGenNew ();
+  rrp->ext.choice = 3;
+  rrp->ext.value.ptrvalue = rgp;
+  sfp->comment = StringSave(label);
+  SetSeqLocPartial (sfp->location, TRUE, TRUE);
+  return sfp;
+}
+
+//Not used for Autodef or Cleanup
 static SeqFeatPtr ParseExtractorResultRowToFeatures (CharPtr line, SeqEntryPtr sep)
 {
   ExtractorInfoPtr ep;
   SeqFeatPtr sfp = NULL;
   CharPtr  label;
-  Int4     len;
-  SeqIdPtr sip;
   BioseqPtr bsp;
-  RnaRefPtr rrp;
-  RNAGenPtr rgp;
 
   if (StringHasNoText (line)) {
     return NULL;
@@ -18779,21 +20467,11 @@ static SeqFeatPtr ParseExtractorResultRowToFeatures (CharPtr line, SeqEntryPtr s
   }
 
   /* figure out ID */
-  len = StringLen (ep->id);
-  if (len > 3 && ep->id[len - 1] == '.' && ep->id[len - 2] == '.' && ep->id[len - 3] == '.') {
-    ep = ExtractorInfoFree (ep);
-    Message (MSG_POSTERR, "ID was truncated for line %s", line);
-    return NULL;
-  }
-  sip = CreateSeqIdFromText (ep->id, sep);
-  bsp = BioseqFind (sip);
-  sip = SeqIdFree (sip);
+  bsp = GetBioseqFromExtractorTextId(ep->id, line, sep);
   if (bsp == NULL) {
     ep = ExtractorInfoFree (ep);
-    Message (MSG_POSTERR, "ID for sequence not present in record in line %s", line);
     return NULL;
   }
-
 
   /* calculate label */
   label = MakeLabelFromExtractorInfo(ep);
@@ -18804,20 +20482,14 @@ static SeqFeatPtr ParseExtractorResultRowToFeatures (CharPtr line, SeqEntryPtr s
   }
 
   /* make feature and attach to appropriate annots */
-  sfp = CreateNewFeatureOnBioseq (bsp, SEQFEAT_RNA, NULL);
-  rrp = RnaRefNew ();
-  sfp->data.value.ptrvalue = rrp;
-  rrp->type = 255;
-  rgp = RNAGenNew ();
-  rrp->ext.choice = 3;
-  rrp->ext.value.ptrvalue = rgp;
-  sfp->comment = label;
-  SetSeqLocPartial (sfp->location, TRUE, TRUE);
+  sfp = MakeMiscRNAWithLabel(bsp, label);
+  label = MemFree (label);
   
   ep = ExtractorInfoFree (ep);
   return sfp;
 }
 
+//Not used for Autodef or Cleanup
 NLM_EXTERN void ParseExtractorResultsTableToFeatures (FILE *fp, SeqEntryPtr sep)
 {
   ReadBufferData  rbd;
@@ -18829,6 +20501,84 @@ NLM_EXTERN void ParseExtractorResultsTableToFeatures (FILE *fp, SeqEntryPtr sep)
   while (line != NULL && line[0] != EOF) {
     /* TODO: skip intro lines */
     ParseExtractorResultRowToFeatures(line, sep);
+    line = MemFree (line);
+    line = AbstractReadFunction (&rbd);
+  }
+}
+
+//Not used for Autodef or Cleanup
+static SeqFeatPtr ParseRNAFeatListRowToFeatures (CharPtr line, SeqEntryPtr sep, LogInfoPtr lip)
+{
+  RNAFeatListPtr ep;
+  SeqFeatPtr sfp = NULL;
+  CharPtr  label;
+  BioseqPtr bsp;
+
+  if (StringHasNoText (line)) {
+    return NULL;
+  }
+
+  ep = RNAFeatListNew ();
+  if (!ParseLineOfTokens(line, new_token_parsers, ep)) {
+    ep = RNAFeatListFree (ep);
+    if (lip == NULL) {
+      Message (MSG_POSTERR, "Unable to parse extractor line %s", line);
+    } else {
+      if (lip->fp != NULL) {
+        fprintf (lip->fp, "Unable to parse extractor line %s\n", line);
+      }
+      lip->data_in_log = TRUE;
+    }
+    return NULL;
+  }
+  if (ep->error != NULL) {
+    if (lip == NULL) {
+      Message (MSG_POSTERR, "Error scanning for feature on %s: %s", ep->id, ep->error);
+      ep = RNAFeatListFree (ep);
+    } else {
+      if (lip->fp != NULL) {
+        fprintf (lip->fp, "Error scanning for feature on %s: %s\n", ep->id, ep->error);
+      }
+      lip->data_in_log = TRUE;
+    }
+    return NULL;
+  }
+
+  /* figure out ID */
+  bsp = GetBioseqFromExtractorTextId(ep->id, line, sep);
+  if (bsp == NULL) {
+    ep = RNAFeatListFree (ep);
+    return NULL;
+  }
+
+  /* calculate label */
+  label = MakeLabelFromRNAFeatList(ep);
+
+  if (ep->is_complement) {
+    BioseqRevComp (bsp);
+    SeqEntryExplore (sep, (Pointer) bsp, RevCompFeats);
+  }
+
+  /* make feature and attach to appropriate annots */
+  sfp = MakeMiscRNAWithLabel(bsp, label);
+  label = MemFree (label);
+  
+  ep = RNAFeatListFree (ep);
+  return sfp;
+}
+
+//Not used for Autodef or Cleanup
+NLM_EXTERN void ParseRNAFeatListTableToFeatures (FILE *fp, SeqEntryPtr sep, LogInfoPtr lip)
+{
+  ReadBufferData  rbd;
+  CharPtr         line;
+
+  rbd.fp = fp;
+  rbd.current_data = NULL;
+  line = AbstractReadFunction (&rbd); 
+  while (line != NULL && line[0] != EOF) {
+    /* TODO: skip intro lines */
+    ParseRNAFeatListRowToFeatures(line, sep, lip);
     line = MemFree (line);
     line = AbstractReadFunction (&rbd);
   }
@@ -18916,27 +20666,27 @@ CharPtr latlon_onedegree [] = {
   "Antarctica",
   "\t-59\t-47\t-43",
   "\t-60\t-59\t-53\t-47\t-43",
-  "\t-61\t-62\t-53\t-47\t-43",
-  "\t-62\t-62\t-53",
+  "\t-61\t-63\t-53\t-47\t-43",
+  "\t-62\t-63\t-53",
   "\t-63\t-65\t-54",
-  "\t-64\t-66\t-54\t51\t56\t99\t104\t110\t114",
-  "\t-65\t-69\t-56\t47\t58\t86\t117\t119\t144",
-  "\t-66\t-70\t-59\t42\t70\t79\t147",
-  "\t-67\t-91\t-89\t-73\t-59\t31\t35\t38\t71\t76\t156",
-  "\t-68\t-91\t-89\t-76\t-60\t31\t161",
-  "\t-69\t-91\t-89\t-77\t-60\t-11\t168",
+  "\t-64\t-67\t-54\t51\t56\t91\t93\t99\t104\t110\t114",
+  "\t-65\t-69\t-55\t47\t58\t84\t117\t119\t144\t161\t164",
+  "\t-66\t-70\t-58\t42\t70\t79\t147\t161\t165",
+  "\t-67\t-91\t-89\t-73\t-59\t31\t35\t38\t71\t76\t156\t161\t165",
+  "\t-68\t-91\t-89\t-76\t-59\t14\t17\t31\t161\t163\t165",
+  "\t-69\t-91\t-89\t-77\t-59\t-11\t168",
   "\t-70\t-103\t-95\t-77\t-59\t-13\t171",
-  "\t-71\t-106\t-87\t-81\t-79\t-77\t-58\t-15\t171",
-  "\t-72\t-128\t-117\t-115\t-112\t-106\t-58\t-22\t-19\t-17\t171",
+  "\t-71\t-106\t-87\t-81\t-79\t-77\t-58\t-17\t171",
+  "\t-72\t-128\t-112\t-106\t-58\t-22\t-19\t-17\t171",
   "\t-73\t-137\t-109\t-106\t-58\t-23\t171",
   "\t-74\t-147\t-58\t-27\t170",
-  "\t-75\t-150\t-59\t-32\t166",
-  "\t-76\t-159\t-62\t-48\t-44\t-36\t170",
+  "\t-75\t-151\t-59\t-32\t167",
+  "\t-76\t-159\t-62\t-50\t-43\t-36\t170",
   "\t-77\t-165\t-65\t-51\t-42\t-37\t170",
   "\t-78\t-165\t-64\t-62\t-58\t-52\t-41\t-37\t170",
   "\t-79\t-165\t-58\t-55\t168",
   "\t-80\t-165\t-58\t-55\t164",
-  "\t-81\t-175\t-170\t-164\t169",
+  "\t-81\t-175\t-169\t-164\t169",
   "\t-82\t-175\t177",
   "\t-83\t-180\t180",
   "\t-84\t-180\t180",
@@ -19027,7 +20777,7 @@ CharPtr latlon_onedegree [] = {
   "\t-26\t111\t154",
   "\t-27\t112\t154",
   "\t-28\t112\t154",
-  "\t-29\t113\t154",
+  "\t-29\t112\t154",
   "\t-30\t113\t154\t158\t160",
   "\t-31\t113\t154\t158\t160",
   "\t-32\t113\t154\t158\t160",
@@ -19088,13 +20838,14 @@ CharPtr latlon_onedegree [] = {
   "\t-26\t128\t139",
   "\t-27\t128\t139",
   "Australia: Queensland",
-  "\t-9\t141\t143",
-  "\t-10\t140\t144",
-  "\t-11\t140\t144",
-  "\t-12\t140\t144",
+  "\t-8\t141\t145",
+  "\t-9\t141\t145",
+  "\t-10\t140\t145",
+  "\t-11\t140\t145",
+  "\t-12\t140\t145",
   "\t-13\t140\t146",
   "\t-14\t140\t146",
-  "\t-15\t137\t146",
+  "\t-15\t137\t147",
   "\t-16\t137\t147",
   "\t-17\t137\t147",
   "\t-18\t137\t149",
@@ -19147,7 +20898,7 @@ CharPtr latlon_onedegree [] = {
   "Australia: Western Australia",
   "\t-12\t124\t128",
   "\t-13\t123\t130",
-  "\t-14\t123\t130",
+  "\t-14\t122\t130",
   "\t-15\t121\t130",
   "\t-16\t121\t130",
   "\t-17\t120\t130",
@@ -19162,7 +20913,7 @@ CharPtr latlon_onedegree [] = {
   "\t-26\t111\t130",
   "\t-27\t112\t130",
   "\t-28\t112\t130",
-  "\t-29\t113\t130",
+  "\t-29\t112\t130",
   "\t-30\t113\t130",
   "\t-31\t113\t130",
   "\t-32\t113\t130",
@@ -19282,9 +21033,9 @@ CharPtr latlon_onedegree [] = {
   "\t-23\t-69\t-61",
   "Borneo",
   "\t6\t113\t116",
-  "\t5\t113\t116",
-  "\t4\t113\t116",
-  "\t3\t113\t116",
+  "\t5\t112\t116",
+  "\t4\t112\t116",
+  "\t3\t112\t116",
   "Borneo",
   "\t5\t114\t118",
   "\t4\t107\t109\t114\t118",
@@ -19386,9 +21137,9 @@ CharPtr latlon_onedegree [] = {
   "\t17\t-65\t-63",
   "Brunei",
   "\t6\t113\t116",
-  "\t5\t113\t116",
-  "\t4\t113\t116",
-  "\t3\t113\t116",
+  "\t5\t112\t116",
+  "\t4\t112\t116",
+  "\t3\t112\t116",
   "Bulgaria",
   "\t45\t21\t28",
   "\t44\t21\t29",
@@ -19504,7 +21255,7 @@ CharPtr latlon_onedegree [] = {
   "\t59\t-140\t-119",
   "\t58\t-140\t-119",
   "\t57\t-138\t-119",
-  "\t56\t-134\t-119",
+  "\t56\t-133\t-119",
   "\t55\t-134\t-119",
   "\t54\t-134\t-117",
   "\t53\t-134\t-116",
@@ -19550,7 +21301,7 @@ CharPtr latlon_onedegree [] = {
   "\t53\t-68\t-54",
   "\t52\t-68\t-54",
   "\t51\t-68\t-54",
-  "\t50\t-65\t-63\t-59\t-52",
+  "\t50\t-66\t-63\t-59\t-52",
   "\t49\t-60\t-51",
   "\t48\t-60\t-51",
   "\t47\t-60\t-51",
@@ -19566,7 +21317,7 @@ CharPtr latlon_onedegree [] = {
   "\t73\t-126\t-109",
   "\t72\t-126\t-109",
   "\t71\t-132\t-109",
-  "\t70\t-136\t-109",
+  "\t70\t-137\t-109",
   "\t69\t-137\t-109",
   "\t68\t-137\t-115\t-113\t-111",
   "\t67\t-137\t-113",
@@ -19611,7 +21362,7 @@ CharPtr latlon_onedegree [] = {
   "\t63\t-110\t-62",
   "\t62\t-103\t-63",
   "\t61\t-103\t-89\t-84\t-63",
-  "\t60\t-103\t-91\t-81\t-77\t-69\t-63",
+  "\t60\t-103\t-91\t-81\t-76\t-69\t-63",
   "\t59\t-103\t-93\t-81\t-76\t-69\t-63",
   "\t58\t-81\t-75",
   "\t57\t-81\t-75",
@@ -19651,7 +21402,7 @@ CharPtr latlon_onedegree [] = {
   "\t63\t-79\t-71",
   "\t62\t-79\t-68",
   "\t61\t-79\t-68\t-66\t-63",
-  "\t60\t-79\t-68\t-66\t-63",
+  "\t60\t-79\t-63",
   "\t59\t-79\t-62",
   "\t58\t-79\t-62",
   "\t57\t-79\t-62",
@@ -19822,7 +21573,10 @@ CharPtr latlon_onedegree [] = {
   "\t20\t98\t102\t105\t114",
   "\t19\t107\t112",
   "\t18\t107\t112",
-  "\t17\t107\t111",
+  "\t17\t107\t113",
+  "\t16\t110\t113",
+  "\t15\t110\t113",
+  "\t14\t110\t112",
   "China: Hainan",
   "\t21\t108\t111",
   "\t20\t107\t112",
@@ -19842,9 +21596,9 @@ CharPtr latlon_onedegree [] = {
   "\t-12\t95\t97",
   "\t-13\t95\t97",
   "Colombia",
-  "\t14\t-82\t-80",
-  "\t13\t-82\t-80\t-73\t-70",
-  "\t12\t-82\t-80\t-75\t-70",
+  "\t14\t-82\t-79",
+  "\t13\t-82\t-79\t-73\t-70",
+  "\t12\t-82\t-79\t-75\t-70",
   "\t11\t-82\t-80\t-76\t-70",
   "\t10\t-77\t-70",
   "\t9\t-78\t-71",
@@ -19852,9 +21606,9 @@ CharPtr latlon_onedegree [] = {
   "\t7\t-78\t-66",
   "\t6\t-78\t-66",
   "\t5\t-78\t-66",
-  "\t4\t-78\t-66",
-  "\t3\t-79\t-66",
-  "\t2\t-80\t-65",
+  "\t4\t-82\t-66",
+  "\t3\t-82\t-66",
+  "\t2\t-82\t-65",
   "\t1\t-80\t-65",
   "\t0\t-80\t-65",
   "\t-1\t-79\t-68",
@@ -19884,10 +21638,10 @@ CharPtr latlon_onedegree [] = {
   "\t-16\t146\t151",
   "\t-17\t146\t151",
   "\t-18\t147\t149",
-  "\t-20\t152\t156",
-  "\t-21\t152\t156",
-  "\t-22\t152\t156",
-  "\t-23\t154\t156",
+  "\t-20\t151\t156",
+  "\t-21\t151\t156",
+  "\t-22\t151\t156",
+  "\t-23\t151\t156",
   "Costa Rica",
   "\t12\t-86\t-83",
   "\t11\t-86\t-82",
@@ -19981,7 +21735,7 @@ CharPtr latlon_onedegree [] = {
   "\t56\t7\t16",
   "\t55\t7\t16",
   "\t54\t7\t16",
-  "\t53\t7\t13",
+  "\t53\t7\t16",
   "Djibouti",
   "\t13\t41\t44",
   "\t12\t40\t44",
@@ -20101,7 +21855,7 @@ CharPtr latlon_onedegree [] = {
   "\t-18\t-180\t-177\t176\t180",
   "\t-19\t-180\t-177\t176\t180",
   "\t-20\t-180\t-177\t173\t180",
-  "\t-21\t173\t175",
+  "\t-21\t-179\t-177\t173\t175",
   "\t-22\t173\t175",
   "Finland",
   "\t71\t26\t28",
@@ -20165,16 +21919,16 @@ CharPtr latlon_onedegree [] = {
   "\t-10\t-141\t-137",
   "\t-11\t-140\t-137",
   "\t-13\t-149\t-140",
-  "\t-14\t-149\t-139",
-  "\t-15\t-152\t-139",
-  "\t-16\t-152\t-137",
-  "\t-17\t-152\t-135",
-  "\t-18\t-150\t-148\t-146\t-135",
+  "\t-14\t-155\t-153\t-149\t-139",
+  "\t-15\t-155\t-139",
+  "\t-16\t-155\t-137",
+  "\t-17\t-154\t-135",
+  "\t-18\t-151\t-148\t-146\t-135",
   "\t-19\t-142\t-135",
   "\t-20\t-142\t-134",
   "\t-21\t-152\t-150\t-141\t-134",
   "\t-22\t-152\t-146\t-141\t-133",
-  "\t-23\t-152\t-146\t-136\t-133",
+  "\t-23\t-152\t-146\t-137\t-133",
   "\t-24\t-150\t-146\t-136\t-133",
   "\t-26\t-145\t-143",
   "\t-27\t-145\t-143",
@@ -20227,7 +21981,7 @@ CharPtr latlon_onedegree [] = {
   "\t40\t40\t47",
   "Germany",
   "\t56\t7\t9",
-  "\t55\t7\t15",
+  "\t55\t6\t15",
   "\t54\t5\t15",
   "\t53\t5\t15",
   "\t52\t4\t16",
@@ -20585,7 +22339,7 @@ CharPtr latlon_onedegree [] = {
   "\t40\t51\t56\t65\t71",
   "\t39\t66\t69",
   "Kenya",
-  "\t6\t33\t36",
+  "\t6\t34\t36",
   "\t5\t32\t42",
   "\t4\t32\t42",
   "\t3\t32\t42",
@@ -20609,15 +22363,16 @@ CharPtr latlon_onedegree [] = {
   "Kiribati",
   "\t5\t-161\t-159",
   "\t4\t-161\t-158\t171\t173",
-  "\t3\t-161\t-156\t171\t173",
+  "\t3\t-161\t-156\t171\t174",
   "\t2\t-160\t-156\t171\t174",
-  "\t1\t-158\t-156\t171\t175",
-  "\t0\t-158\t-156\t171\t177",
-  "\t-1\t-172\t-170\t171\t177",
+  "\t1\t-158\t-156\t168\t175",
+  "\t0\t-158\t-156\t168\t177",
+  "\t-1\t-172\t-170\t168\t177",
   "\t-2\t-172\t-170\t173\t177",
-  "\t-3\t-173\t-170\t-156\t-153\t174\t177",
-  "\t-4\t-173\t-171\t-156\t-153",
-  "\t-5\t-173\t-171\t-156\t-153",
+  "\t-3\t-175\t-170\t-156\t-153\t174\t177",
+  "\t-4\t-175\t-170\t-156\t-153",
+  "\t-5\t-175\t-170\t-156\t-153",
+  "\t-6\t-156\t-154",
   "\t-10\t-152\t-150",
   "\t-11\t-152\t-150",
   "\t-12\t-152\t-150",
@@ -20738,7 +22493,7 @@ CharPtr latlon_onedegree [] = {
   "\t-20\t42\t50",
   "\t-21\t42\t49",
   "\t-22\t42\t49",
-  "\t-23\t42\t48",
+  "\t-23\t42\t49",
   "\t-24\t42\t48",
   "\t-25\t42\t48",
   "\t-26\t43\t48",
@@ -20855,9 +22610,9 @@ CharPtr latlon_onedegree [] = {
   "\t28\t-119\t-98",
   "\t27\t-119\t-96",
   "\t26\t-116\t-96",
-  "\t25\t-115\t-96",
-  "\t24\t-113\t-96",
-  "\t23\t-113\t-96",
+  "\t25\t-116\t-96",
+  "\t24\t-116\t-96",
+  "\t23\t-116\t-96\t-90\t-88",
   "\t22\t-111\t-96\t-91\t-85",
   "\t21\t-111\t-95\t-91\t-85",
   "\t20\t-111\t-109\t-107\t-94\t-92\t-85",
@@ -20869,13 +22624,18 @@ CharPtr latlon_onedegree [] = {
   "\t14\t-98\t-90",
   "\t13\t-93\t-91",
   "Micronesia",
-  "\t10\t137\t139",
-  "\t9\t137\t139\t148\t151\t153\t155",
-  "\t8\t137\t139\t148\t155",
-  "\t7\t148\t159",
+  "\t10\t137\t141",
+  "\t9\t137\t141\t148\t151",
+  "\t8\t137\t141\t148\t152",
+  "\t7\t148\t152\t156\t159",
   "\t6\t148\t154\t156\t159\t161\t164",
   "\t5\t148\t150\t152\t154\t156\t159\t161\t164",
-  "\t4\t152\t154\t156\t158\t161\t164",
+  "\t4\t152\t158\t161\t164",
+  "\t3\t153\t155",
+  "\t2\t153\t155",
+  "\t1\t153\t155",
+  "\t0\t153\t155",
+  "\t-1\t153\t155",
   "Midway Islands",
   "\t29\t-178\t-176",
   "\t28\t-178\t-176",
@@ -21024,12 +22784,12 @@ CharPtr latlon_onedegree [] = {
   "\t12\t-69\t-67",
   "\t11\t-69\t-67",
   "New Caledonia",
-  "\t-18\t158\t160\t162\t164",
-  "\t-19\t158\t160\t162\t168",
-  "\t-20\t158\t160\t162\t169",
-  "\t-21\t162\t169",
-  "\t-22\t163\t169",
-  "\t-23\t165\t168",
+  "\t-18\t162\t164",
+  "\t-19\t162\t168",
+  "\t-20\t162\t169",
+  "\t-21\t162\t172",
+  "\t-22\t163\t172",
+  "\t-23\t165\t168\t170\t172",
   "New Zealand",
   "\t-7\t-173\t-171",
   "\t-8\t-173\t-170",
@@ -21045,7 +22805,7 @@ CharPtr latlon_onedegree [] = {
   "\t-37\t172\t179",
   "\t-38\t172\t179",
   "\t-39\t171\t179",
-  "\t-40\t170\t179",
+  "\t-40\t170\t178",
   "\t-41\t169\t177",
   "\t-42\t-177\t-175\t167\t177",
   "\t-43\t-177\t-175\t166\t175",
@@ -21178,6 +22938,7 @@ CharPtr latlon_onedegree [] = {
   "\t23\t65\t72",
   "\t22\t66\t69",
   "Palau",
+  "\t9\t133\t135",
   "\t8\t133\t135",
   "\t7\t133\t135",
   "\t6\t131\t135",
@@ -21187,6 +22948,7 @@ CharPtr latlon_onedegree [] = {
   "\t2\t130\t132",
   "\t1\t130\t132",
   "Palmyra Atoll",
+  "\t7\t-163\t-161",
   "\t6\t-163\t-161",
   "\t5\t-163\t-161",
   "\t4\t-163\t-161",
@@ -21352,8 +23114,8 @@ CharPtr latlon_onedegree [] = {
   "\t81\t35\t37\t43\t66\t77\t81\t88\t100",
   "\t80\t35\t37\t43\t66\t75\t81\t88\t105",
   "\t79\t35\t37\t43\t66\t75\t81\t89\t108",
-  "\t78\t49\t52\t57\t60\t66\t68\t75\t78\t88\t108\t155\t157",
-  "\t77\t59\t70\t88\t114\t136\t143\t147\t153\t155\t157",
+  "\t78\t49\t52\t57\t60\t66\t68\t75\t78\t87\t108\t155\t157",
+  "\t77\t59\t70\t87\t114\t136\t143\t147\t153\t155\t157",
   "\t76\t54\t70\t80\t114\t134\t153\t155\t157",
   "\t75\t53\t70\t78\t117\t134\t153",
   "\t74\t52\t130\t134\t151",
@@ -21451,7 +23213,7 @@ CharPtr latlon_onedegree [] = {
   "\t29\t33\t49",
   "\t28\t33\t50",
   "\t27\t33\t51",
-  "\t26\t33\t51",
+  "\t26\t34\t51",
   "\t25\t34\t52",
   "\t24\t35\t53",
   "\t23\t36\t56",
@@ -21569,20 +23331,20 @@ CharPtr latlon_onedegree [] = {
   "\t-46\t36\t38",
   "\t-47\t36\t38",
   "South Georgia and the South Sandwich Islands",
-  "\t-52\t-43\t-36",
-  "\t-53\t-43\t-33",
-  "\t-54\t-43\t-33",
-  "\t-55\t-39\t-33\t-29\t-26",
-  "\t-56\t-35\t-33\t-29\t-25",
+  "\t-52\t-39\t-36",
+  "\t-53\t-39\t-34",
+  "\t-54\t-39\t-34",
+  "\t-55\t-39\t-34\t-29\t-26",
+  "\t-56\t-29\t-25",
   "\t-57\t-29\t-25",
   "\t-58\t-28\t-25",
   "\t-59\t-28\t-25",
   "\t-60\t-28\t-25",
   "South Korea",
   "\t39\t125\t129",
-  "\t38\t123\t131",
-  "\t37\t123\t131",
-  "\t36\t123\t131",
+  "\t38\t123\t132",
+  "\t37\t123\t132",
+  "\t36\t123\t132",
   "\t35\t124\t130",
   "\t34\t124\t130",
   "\t33\t124\t129",
@@ -21598,7 +23360,7 @@ CharPtr latlon_onedegree [] = {
   "\t6\t23\t36",
   "\t5\t25\t36",
   "\t4\t25\t36",
-  "\t3\t26\t35",
+  "\t3\t26\t36",
   "\t2\t29\t34",
   "Spain",
   "\t44\t-10\t0",
@@ -21654,7 +23416,7 @@ CharPtr latlon_onedegree [] = {
   "\t8\t22\t35",
   "\t7\t22\t25",
   "Suriname",
-  "\t7\t-56\t-54",
+  "\t7\t-57\t-55",
   "\t6\t-58\t-52",
   "\t5\t-59\t-52",
   "\t4\t-59\t-52",
@@ -21776,9 +23538,9 @@ CharPtr latlon_onedegree [] = {
   "\t-9\t-172\t-170",
   "\t-10\t-172\t-170",
   "Tonga",
-  "\t-14\t-176\t-172",
-  "\t-15\t-176\t-172",
-  "\t-16\t-176\t-172",
+  "\t-14\t-176\t-174",
+  "\t-15\t-176\t-174",
+  "\t-16\t-176\t-174",
   "\t-17\t-175\t-172",
   "\t-18\t-176\t-172",
   "\t-19\t-176\t-172",
@@ -21863,7 +23625,7 @@ CharPtr latlon_onedegree [] = {
   "\t43\t32\t36",
   "United Arab Emirates",
   "\t27\t55\t57",
-  "\t26\t53\t57",
+  "\t26\t54\t57",
   "\t25\t50\t57",
   "\t24\t50\t57",
   "\t23\t50\t57",
@@ -21919,7 +23681,7 @@ CharPtr latlon_onedegree [] = {
   "\t49\t-125\t-86",
   "\t48\t-125\t-84\t-70\t-66",
   "\t47\t-125\t-82\t-71\t-66",
-  "\t46\t-125\t-81\t-75\t-66",
+  "\t46\t-125\t-81\t-75\t-65",
   "\t45\t-125\t-81\t-77\t-65",
   "\t44\t-125\t-65",
   "\t43\t-125\t-65",
@@ -21927,7 +23689,7 @@ CharPtr latlon_onedegree [] = {
   "\t41\t-125\t-68",
   "\t40\t-125\t-68",
   "\t39\t-125\t-71",
-  "\t38\t-124\t-73",
+  "\t38\t-125\t-73",
   "\t37\t-124\t-73",
   "\t36\t-124\t-74",
   "\t35\t-123\t-74",
@@ -21936,9 +23698,9 @@ CharPtr latlon_onedegree [] = {
   "\t32\t-121\t-76",
   "\t31\t-119\t-78",
   "\t30\t-114\t-79",
-  "\t29\t-106\t-79",
-  "\t28\t-105\t-79",
-  "\t27\t-174\t-172\t-104\t-94\t-90\t-88\t-83\t-79",
+  "\t29\t-179\t-177\t-106\t-79",
+  "\t28\t-179\t-177\t-105\t-79",
+  "\t27\t-179\t-177\t-174\t-172\t-104\t-94\t-90\t-88\t-83\t-79",
   "\t26\t-174\t-166\t-100\t-95\t-83\t-79",
   "\t25\t-174\t-166\t-100\t-96\t-83\t-79",
   "\t24\t-172\t-160\t-98\t-96\t-83\t-79",
@@ -21984,8 +23746,8 @@ CharPtr latlon_onedegree [] = {
   "\t50\t-180\t-174\t176\t180",
   "USA: Alaska, Aleutian Islands",
   "\t60\t-154\t-149\t-147\t-145",
-  "\t59\t-162\t-159\t-154\t-149\t-147\t-145",
-  "\t58\t-171\t-169\t-162\t-159\t-155\t-149\t-147\t-145",
+  "\t59\t-162\t-158\t-154\t-149\t-147\t-145",
+  "\t58\t-171\t-169\t-162\t-149\t-147\t-145",
   "\t57\t-171\t-168\t-162\t-150",
   "\t56\t-171\t-168\t-164\t-151",
   "\t55\t-170\t-152",
@@ -22017,7 +23779,7 @@ CharPtr latlon_onedegree [] = {
   "\t41\t-125\t-119",
   "\t40\t-125\t-119",
   "\t39\t-125\t-117",
-  "\t38\t-124\t-116",
+  "\t38\t-125\t-116",
   "\t37\t-124\t-115",
   "\t36\t-124\t-113",
   "\t35\t-123\t-113",
@@ -22068,12 +23830,14 @@ CharPtr latlon_onedegree [] = {
   "\t30\t-86\t-79",
   "\t29\t-86\t-80",
   "USA: Hawaii",
-  "\t27\t-174\t-172",
-  "\t26\t-174\t-166",
+  "\t29\t-179\t-177",
+  "\t28\t-179\t-174",
+  "\t27\t-179\t-172",
+  "\t26\t-176\t-166",
   "\t25\t-174\t-166",
   "\t24\t-172\t-160",
-  "\t23\t-165\t-158",
-  "\t22\t-165\t-155",
+  "\t23\t-167\t-158",
+  "\t22\t-167\t-155",
   "\t21\t-161\t-154",
   "\t20\t-161\t-153",
   "\t19\t-158\t-153",
@@ -22140,11 +23904,12 @@ CharPtr latlon_onedegree [] = {
   "USA: Maine",
   "\t48\t-70\t-66",
   "\t47\t-71\t-66",
-  "\t46\t-72\t-66",
+  "\t46\t-72\t-65",
   "\t45\t-72\t-65",
   "\t44\t-72\t-65",
   "\t43\t-72\t-65",
-  "\t42\t-71\t-68",
+  "\t42\t-71\t-67",
+  "\t41\t-71\t-69",
   "USA: Maryland",
   "\t40\t-80\t-74",
   "\t39\t-80\t-74",
@@ -22285,7 +24050,7 @@ CharPtr latlon_onedegree [] = {
   "\t33\t-101\t-93",
   "\t32\t-98\t-93",
   "USA: Oregon",
-  "\t47\t-124\t-115",
+  "\t47\t-125\t-115",
   "\t46\t-125\t-115",
   "\t45\t-125\t-115",
   "\t44\t-125\t-115",
@@ -22417,6 +24182,9 @@ CharPtr latlon_onedegree [] = {
   "\t-20\t168\t170",
   "\t-21\t168\t170",
   "Venezuela",
+  "\t16\t-64\t-62",
+  "\t15\t-64\t-62",
+  "\t14\t-64\t-62",
   "\t13\t-71\t-66",
   "\t12\t-73\t-62",
   "\t11\t-73\t-60",
@@ -22464,19 +24232,19 @@ CharPtr latlon_onedegree [] = {
   "\t-12\t-177\t-175",
   "\t-13\t-179\t-175",
   "\t-14\t-179\t-175",
-  "\t-15\t-179\t-176",
+  "\t-15\t-179\t-177",
   "West Bank",
   "\t33\t33\t36",
   "\t32\t33\t36",
   "\t31\t33\t36",
   "\t30\t33\t36",
   "Western Sahara",
-  "\t28\t-14\t-7",
-  "\t27\t-15\t-7",
-  "\t26\t-15\t-7",
-  "\t25\t-16\t-7",
-  "\t24\t-17\t-7",
-  "\t23\t-17\t-11",
+  "\t28\t-11\t-7",
+  "\t27\t-13\t-7",
+  "\t26\t-13\t-7",
+  "\t25\t-14\t-7",
+  "\t24\t-15\t-7",
+  "\t23\t-15\t-11",
   "\t22\t-18\t-11",
   "\t21\t-18\t-12",
   "\t20\t-18\t-12",
@@ -22523,7 +24291,7 @@ extern CharPtr water_onedegree [];
 CharPtr water_onedegree [] = {
   "1",
   "Adriatic Sea",
-  "46\t11\t15",
+  "\t46\t11\t15",
   "\t45\t11\t16",
   "\t44\t11\t18",
   "\t43\t11\t20",
@@ -23998,21 +25766,20 @@ CharPtr water_onedegree [] = {
   "\t69\t-82\t-78",
   "\t68\t-82\t-78",
   "Internal Denmark Waters",
-  "\t57\t9\t11",
-  "\t56\t8\t12",
-  "\t55\t8\t12",
-  "\t54\t8\t12",
-  "\t53\t8\t12",
+  "\t55\t9\t13",
+  "\t54\t9\t13",
+  "\t53\t9\t13",
+  "\t52\t9\t12",
   "Internal Philippines Waters",
-  "\t11\t124\t127",
-  "\t10\t124\t127",
-  "\t9\t124\t127",
-  "\t8\t124\t127",
+  "\t11\t124\t126",
+  "\t10\t124\t126",
+  "\t9\t124\t126",
+  "\t8\t124\t126",
   "Internal Philippines Waters",
+  "\t14\t121\t124",
+  "\t13\t121\t124",
+  "\t12\t121\t124",
   "\t11\t122\t124",
-  "\t10\t122\t124",
-  "\t9\t122\t124",
-  "\t8\t122\t124",
   "Internal U.S. (Alaska) Waters",
   "\t60\t-138\t-134",
   "\t59\t-138\t-132",
@@ -25424,6 +27191,7 @@ CharPtr water_onedegree [] = {
 };
 
 
+//Not part of AutoDef or Cleanup
 static Uint4 sqn_binary_search_on_uint4_list(Uint4Ptr list, Uint4 pos, Uint4 listlen)
 {
    Uint4  L;
@@ -25449,6 +27217,7 @@ static Uint4 sqn_binary_search_on_uint4_list(Uint4Ptr list, Uint4 pos, Uint4 lis
 }
 
 
+//Not part of AutoDef or Cleanup
 static Int4 MapRowCoordsSpecial(SeqAlignPtr sap, Uint4 pos, Int4 row, Boolean is_left_end)
 {
    DenseSegPtr  dsp;
@@ -25502,6 +27271,7 @@ static Int4 MapRowCoordsSpecial(SeqAlignPtr sap, Uint4 pos, Int4 row, Boolean is
 }
 
 
+//Not part of AutoDef or Cleanup
 static Int4 MapBioseqToBioseqSpecial(SeqAlignPtr sap, Int4 begin, Int4 fin, Int4 pos, Boolean is_left_end)
 {
    Int4  bspos;
@@ -25530,7 +27300,7 @@ static Int4 MapBioseqToBioseqSpecial(SeqAlignPtr sap, Int4 begin, Int4 fin, Int4
       return (stop2+1);
 }
 
-
+//Not part of AutoDef or Cleanup
 /* This function adjusts the endpoints of a location, as long as the
  * endpoints are in the area represented by the alignment.
  * When we are adjusting locations for an alignment of a part, we will 
@@ -25592,6 +27362,7 @@ static Int4 AdjustEndpoint
 }
 
 
+//Not part of AutoDef or Cleanup
 static void ReplaceLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 length, Int4 begin, Int4 fin)
 
 {
@@ -25633,6 +27404,7 @@ static void ReplaceLocation (SeqAlignPtr salp, SeqLocPtr slp, Int4 length, Int4 
 }
 
 
+//Not part of AutoDef or Cleanup
 /* this function iterates through the pieces of a complex location
  * and calls ReplaceLocation for each one.  ReplaceLocation will only
  * act on SEQLOC_INT, SEQLOC_PNT, and SEQLOC_PACKED_PNT and will ignore
@@ -25661,6 +27433,7 @@ ReplaceComplexLocation
 }
 
 
+//Not part of AutoDef or Cleanup
 static void UpdateOneFeatureForSequenceReplace 
 (SeqFeatPtr  sfp, 
  SeqAlignPtr salp,
@@ -25705,6 +27478,7 @@ static void UpdateOneFeatureForSequenceReplace
 }
 
 
+//Not part of AutoDef or Cleanup
 static void UpdateLocationsForSequenceReplace 
 (SeqAlignPtr salp,
  BioseqPtr oldbsp,
@@ -25746,6 +27520,7 @@ static void UpdateLocationsForSequenceReplace
 }
 
 
+//Not part of AutoDef or Cleanup
 NLM_EXTERN void 
 ReplaceOneSequence 
 (SeqAlignPtr salp,
@@ -25801,6 +27576,7 @@ ReplaceOneSequence
 }
 
 
+//Not part of AutoDef or Cleanup
 NLM_EXTERN Boolean AreSequenceResiduesIdentical (BioseqPtr bsp1, BioseqPtr bsp2)
 {
   SeqPortPtr    spp1, spp2;
@@ -25874,7 +27650,7 @@ NLM_EXTERN Boolean AreSequenceResiduesIdentical (BioseqPtr bsp1, BioseqPtr bsp2)
   return rval;
 }
 
-
+//Not part of AutoDef or Cleanup
 static Boolean FindBestCitSubCallback (GatherContextPtr gcp)
 
 {
@@ -25909,7 +27685,7 @@ static Boolean FindBestCitSubCallback (GatherContextPtr gcp)
   return TRUE;
 }
 
-
+//Not part of AutoDef or Cleanup
 static CitSubPtr FindBestCitSubForSeqEntry (SeqEntryPtr sep)
 {
   CitSubPtr    best = NULL;
@@ -25927,7 +27703,7 @@ static CitSubPtr FindBestCitSubForSeqEntry (SeqEntryPtr sep)
   return best;
 }
 
-
+//Not part of AutoDef or Cleanup
 NLM_EXTERN ValNodePtr CreateUpdateCitSubFromBestTemplate (
   SeqEntryPtr top_sep,
   SeqEntryPtr upd_sep,
@@ -25998,6 +27774,7 @@ NLM_EXTERN ValNodePtr CreateUpdateCitSubFromBestTemplate (
 }                               
 
 
+//Not part of AutoDef or Cleanup
 CharPtr kSubmitterUpdateText = "Sequence update by submitter";
 
 NLM_EXTERN void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entityID, CharPtr update_txt)
@@ -26021,6 +27798,7 @@ NLM_EXTERN void AddCitSubToUpdatedSequence (BioseqPtr upd_bsp, Uint2 input_entit
 }
 
 
+//Not used for Autodef or cleanup
 static void ListPhrapGraphsCallback (SeqGraphPtr sgp, Pointer userdata)
 {
   ValNodePtr PNTR vnpp;
@@ -26033,7 +27811,7 @@ static void ListPhrapGraphsCallback (SeqGraphPtr sgp, Pointer userdata)
   }
 }
 
-
+//Not used for Autodef or cleanup
 NLM_EXTERN void RemoveQualityScores 
 (BioseqPtr bsp, 
  FILE      *log_fp,
@@ -26070,6 +27848,7 @@ NLM_EXTERN void RemoveQualityScores
 }
 
 
+//Not used for Autodef or cleanup
 static Char GetNextCharacterFromFile (FILE *fp, BoolPtr pIsASN)
 {
   FileCache    fc;
@@ -26105,7 +27884,7 @@ static Char GetNextCharacterFromFile (FILE *fp, BoolPtr pIsASN)
   return special_symbol;
 }
 
-
+//Not used for Autodef or cleanup
 NLM_EXTERN void ReplaceFakeIDWithIDFromTitle (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
@@ -26186,7 +27965,7 @@ NLM_EXTERN void ReplaceFakeIDWithIDFromTitle (BioseqPtr bsp)
   }  
 }
 
-
+//Not used for Autodef or cleanup
 static void PutDeflineIDBackInTitle (BioseqPtr bsp)
 {
   SeqDescrPtr sdp;
@@ -26234,7 +28013,7 @@ static void PutDeflineIDBackInTitle (BioseqPtr bsp)
 }
 
 
-
+//Not used for Autodef or cleanup
 static SeqEntryPtr 
 ImportOneNucBioseq 
 (FILE   *fp, 
@@ -26251,7 +28030,7 @@ ImportOneNucBioseq
   ErrSev      oldsev;
 
   if (feof (fp)) {
-    lastchar = 0;
+    *lastchar = 0;
     return NULL;
   }
   oldsev = ErrSetMessageLevel (SEV_MAX);
@@ -26281,7 +28060,7 @@ ImportOneNucBioseq
         sep = ReadOneSegSet (fp, parse_id, err_msg_list, this_chars_stripped);
       } 
       else  */
-      if (lastchar == 0) 
+      if (*lastchar == 0) 
       {
         *lastchar = GetNextCharacterFromFile(fp, isAsn);
       }
@@ -26323,7 +28102,7 @@ ImportOneNucBioseq
   return sep;
 }
 
-
+//Not used for Autodef or cleanup
 static Boolean HasGapID (SeqEntryPtr sep)
 {
   BioseqPtr bsp;
@@ -26365,6 +28144,7 @@ static Boolean HasGapID (SeqEntryPtr sep)
 }
 
 
+//Not used for Autodef or cleanup
 static Boolean HasNoSeqID (SeqEntryPtr sep)
 {
   BioseqPtr bsp;
@@ -26384,6 +28164,7 @@ static Boolean HasNoSeqID (SeqEntryPtr sep)
 }
 
 
+//Not used for Autodef or cleanup
 static Int4 FindLineForStartOfBadRead (FILE *fp, Int4 pos)
 {
   FileCache    fc;
@@ -26407,6 +28188,7 @@ static Int4 FindLineForStartOfBadRead (FILE *fp, Int4 pos)
 }
 
 
+//Not used for Autodef or cleanup
 static Int4 FindLineForBadReadChar (FILE *fp, Char badchar)
 {
   FileCache    fc;
@@ -26430,18 +28212,21 @@ static Int4 FindLineForBadReadChar (FILE *fp, Char badchar)
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN SeqEntryPtr 
-ImportNucleotideFASTASequencesFromFile
+ImportNucleotideFASTASequencesFromFileEx
 (FILE           *fp, 
  Boolean         parse_id,
  CharPtr         supplied_id_txt,
  ValNodePtr PNTR err_msg_list,
  BoolPtr         chars_stripped,
- Boolean         allow_char_stripping)
+ Boolean         allow_char_stripping,
+ Nlm_ImportSeqCallbackProc callback,
+ Pointer                   callback_data)
 {
-  Int4          count;
+  Int4          seq_count = 0, nt_count = 0;
   SeqEntryPtr   last;
-  Char          lastchar;
+  Char          lastchar = '\0';
   SeqEntryPtr   nextsep;
   BioseqPtr     bsp = NULL;
   SeqEntryPtr   new_sep_list = NULL;
@@ -26456,8 +28241,6 @@ ImportNucleotideFASTASequencesFromFile
     *chars_stripped = FALSE;
   }
     
-  count = 0;
-  
   new_sep_list = NULL;
   last = NULL;
   
@@ -26513,6 +28296,13 @@ ImportNucleotideFASTASequencesFromFile
         last->next = nextsep;
         last = nextsep;
       }
+      seq_count++;
+      if (IS_Bioseq (nextsep) && (bsp = (BioseqPtr) nextsep->data.ptrvalue) != NULL) {
+        nt_count += bsp->length;
+      }
+      if (callback != NULL) {
+        callback (seq_count, nt_count, callback_data);
+      }
     } 
     pos = ftell (fp);
     if (!allow_char_stripping && this_chars_stripped)
@@ -26533,7 +28323,22 @@ ImportNucleotideFASTASequencesFromFile
   return new_sep_list;
 }
 
+//Not used for Autodef or cleanup
+NLM_EXTERN SeqEntryPtr 
+ImportNucleotideFASTASequencesFromFile
+(FILE           *fp, 
+ Boolean         parse_id,
+ CharPtr         supplied_id_txt,
+ ValNodePtr PNTR err_msg_list,
+ BoolPtr         chars_stripped,
+ Boolean         allow_char_stripping)
+{
+  return ImportNucleotideFASTASequencesFromFileEx (fp, parse_id, supplied_id_txt,
+                       err_msg_list, chars_stripped, allow_char_stripping, NULL, NULL);
+}
 
+
+//Not used for Autodef or cleanup
 static void StripStopCodons (SeqEntryPtr sep_list)
 {
   BioseqPtr pbsp;
@@ -26556,6 +28361,7 @@ static void StripStopCodons (SeqEntryPtr sep_list)
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN SeqEntryPtr ImportProteinFASTASequences 
 (FILE            *fp,
  Boolean         parse_id,
@@ -26636,6 +28442,7 @@ NLM_EXTERN SeqEntryPtr ImportProteinFASTASequences
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN void AddUniqueUpdateSequenceIDs (SeqEntryPtr sep)
 {
   BioseqPtr bsp;
@@ -26666,7 +28473,7 @@ NLM_EXTERN void AddUniqueUpdateSequenceIDs (SeqEntryPtr sep)
   AddUniqueUpdateSequenceIDs (sep->next);
 }
 
-
+//Not used for Autodef or cleanup
 NLM_EXTERN void 
 ListBioseqsInSeqEntry 
 (SeqEntryPtr     sep, 
@@ -26708,6 +28515,7 @@ ListBioseqsInSeqEntry
 }
 
 
+//Not used for Autodef or cleanup
 static Boolean SeqIdListsOverlap (SeqIdPtr sip1, SeqIdPtr sip2)
 { 
   SeqIdPtr sip_next;
@@ -26739,6 +28547,7 @@ static Boolean SeqIdListsOverlap (SeqIdPtr sip1, SeqIdPtr sip2)
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN ValNodePtr ShuffleUpdateBioseqList (ValNodePtr PNTR update_bioseq_list, ValNodePtr orig_bioseq_list)
 {
   ValNodePtr unmatched_list = NULL;
@@ -26807,7 +28616,7 @@ NLM_EXTERN ValNodePtr ShuffleUpdateBioseqList (ValNodePtr PNTR update_bioseq_lis
   return unmatched_list;
 }
 
-
+//Not used for Autodef or cleanup
 /* This function compares the text from a local ID against the 
  * report string from non-local IDs in sip_list, useful when
  * comparing values from a file in which the user did not specify
@@ -26866,6 +28675,7 @@ NLM_EXTERN Boolean RelaxedSeqIdIn (SeqIdPtr sip, SeqIdPtr sip_list)
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN BioseqPtr FindBioseqInList (ValNodePtr bioseq_list, SeqIdPtr sip, Int4Ptr position)
 {
   ValNodePtr vnp;
@@ -26902,6 +28712,7 @@ NLM_EXTERN BioseqPtr FindBioseqInList (ValNodePtr bioseq_list, SeqIdPtr sip, Int
 }
 
 
+//Not used for Autodef or cleanup
 /* This function should find all update Bioseqs that have colliding sequence IDs and
  * replace the colliding IDs with new sequence IDs.
  */
@@ -26946,6 +28757,7 @@ NLM_EXTERN void ReplaceCollidingUpdateIDs (ValNodePtr update_bioseq_list, ValNod
 }
 
 
+//Not used for Autodef or cleanup
 NLM_EXTERN void RemoveSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list, ValNodePtr PNTR update_bioseq_list)
 {
   ValNodePtr orig_prev = NULL, update_prev = NULL;
@@ -27003,6 +28815,7 @@ NLM_EXTERN void RemoveSequencesWithoutUpdates (ValNodePtr PNTR orig_bioseq_list,
 }
 
 
+//Not used for Autodef or Cleanup
 NLM_EXTERN SeqAlignPtr AlignForSequenceUpdate (BioseqPtr bsp1, BioseqPtr bsp2, BoolPtr revcomp, GlobalAlignFunc align_func)
 {
   SeqIdPtr    old_id;
@@ -27029,6 +28842,7 @@ NLM_EXTERN SeqAlignPtr AlignForSequenceUpdate (BioseqPtr bsp1, BioseqPtr bsp2, B
 }
 
 
+//Not used for Autodef or Cleanup
 static AuthorPtr AuthorFromEndnoteString (CharPtr val)
 {
   AuthorPtr       auth;
@@ -27078,6 +28892,7 @@ static AuthorPtr AuthorFromEndnoteString (CharPtr val)
 }
 
 
+//Not used for Autodef or Cleanup
 NLM_EXTERN PubPtr ParsePubFromEndnote (FILE *fp)
 {
   ReadBufferData  rbd;
@@ -27239,6 +29054,330 @@ NLM_EXTERN PubPtr ParsePubFromEndnote (FILE *fp)
   return pub;
 }
 
+//Not used by Autodef or Cleanup
+static Int4 ReplaceStopsWithSelenocysteine(BioseqPtr bsp, FILE *log_fp)
+{
+  SeqFeatPtr prot, cds;
+  SeqMgrFeatContext context;
+  ProtRefPtr prp;
+  CharPtr    bases, cp;
+  Int4       pos;
+  SeqLocPtr  prot_loc, dna_loc;
+  Boolean    partial5, partial3;
+  BioseqPtr  nbsp;
+  Char       nbases[10];
+  CdRegionPtr crp;
+  CodeBreakPtr cbp, last_cbp = NULL;
+  CharPtr      fmt = "Unable to add transl_except for stop codon at position %d in protein %s because codon is not TGA\n";
+  Char         id_buf[PATH_MAX];
+  Int4         num_replaced = 0;
+
+  if (bsp == NULL || !ISA_aa(bsp->mol)) {
+    return num_replaced;
+  }
+  prot = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_PROT, &context);
+  if (prot == NULL || (prp = (ProtRefPtr) prot->data.value.ptrvalue) == NULL
+      || prp->name == NULL
+      || StringISearch (prp->name->data.ptrvalue, "seleno") == NULL) {
+    return num_replaced;
+  } 
+  cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+  if (cds == NULL) {
+    return num_replaced;
+  }
+  nbsp = BioseqFindFromSeqLoc (cds->location);
+  if (nbsp == NULL) {
+    return num_replaced;
+  }
+  crp = (CdRegionPtr) cds->data.value.ptrvalue;
+  if (crp == NULL) {
+    crp = CdRegionNew ();
+    cds->data.value.ptrvalue = crp;
+  }
+
+  CheckSeqLocForPartial (prot->location, &partial5, &partial3);
+  /* find stop codons */
+  bases = GetSequenceByBsp(bsp);
+  cp = StringChr (bases, '*');
+  while (cp != NULL) {
+    pos = cp - bases;
+    prot_loc = SeqLocIntNew (pos, pos, Seq_strand_unknown, SeqIdFindBest (bsp->id, 0));
+    dna_loc = productInterval_to_locationIntervals(cds, pos, pos, partial5);
+    SeqPortStreamLoc (dna_loc, STREAM_EXPAND_GAPS, (Pointer) nbases, NULL);
+    if (StringICmp (nbases, "TGA") == 0) {
+      cbp = CodeBreakNew ();
+      cbp->loc = dna_loc;
+      cbp->aa.choice = 1; /* ncbieaa */
+      cbp->aa.value.intvalue = 'U';
+      if (last_cbp == NULL) {
+        crp->code_break = cbp;
+      } else {
+        last_cbp->next = cbp;
+      }
+      last_cbp = cbp;
+      num_replaced ++;
+    } else {
+      if (log_fp != NULL) {
+        SeqIdWrite (SeqIdFindBest (bsp->id, 0), id_buf, PRINTID_REPORT, sizeof (id_buf) - 1);
+        fprintf (log_fp, fmt, pos + 1, id_buf);
+      }
+      dna_loc = SeqLocFree (dna_loc);
+    }
+    prot_loc = SeqLocFree (prot_loc);
+    cp = StringChr (cp + 1, '*');
+  }
+
+  if (num_replaced > 0) {
+    RetranslateOneCDS (cds, cds->idx.entityID, TRUE, TRUE);
+  }
+
+  return num_replaced;    
+}
 
 
+typedef struct fixlog {
+  Int4 num_replaced;
+  FILE *log_fp;
+} FixLogData, PNTR FixLogPtr;
+
+//Not used by Autodef or Cleanup
+static void ReplaceStopsWithSelenocysteineCallback (BioseqPtr bsp, Pointer data)
+{
+  FixLogPtr rp = (FixLogPtr) data;
+
+  if (rp == NULL) {
+    return;
+  }
+  rp->num_replaced += ReplaceStopsWithSelenocysteine(bsp, rp->log_fp);
+}
+
+//Not used by Autodef or Cleanup
+NLM_EXTERN Boolean ReplaceStopsWithSelenocysteineInSeqEntry (SeqEntryPtr sep, FILE *log_fp)
+{
+  FixLogData rd;
+
+  MemSet (&rd, 0, sizeof (FixLogData));
+  rd.log_fp = log_fp;
+
+  VisitBioseqsInSep (sep, &rd, ReplaceStopsWithSelenocysteineCallback);
+  if (rd.num_replaced > 0) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "Replaced %d stops with selenocysteine\n", rd.num_replaced);
+    }
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+typedef struct trnamatch {
+  CharPtr label;
+  Int4    left;
+  Int4    len;
+  Uint1   strand;
+  SeqFeatPtr sfp;
+  SeqFeatPtr gene;
+} trnaMatchData, PNTR trnaMatchPtr;
+
+//Not used by Autodef or Cleanup
+trnaMatchPtr trnaMatchNew (SeqFeatPtr sfp, SeqMgrFeatContextPtr context)
+{
+  trnaMatchPtr t = (trnaMatchPtr) MemNew (sizeof (trnaMatchData));
+  t->label = StringSave(context->label);
+  t->left = context->left;
+  t->len = SeqLocLen (sfp->location);
+  t->strand = context->strand;
+  t->sfp = sfp;
+  t->gene = GetGeneForFeature (t->sfp);
+  return t;
+}
+
+
+//Not used by Autodef or Cleanup
+trnaMatchPtr trnaMatchFree (trnaMatchPtr t)
+{
+  if (t != NULL) {
+    t->label = MemFree (t->label);
+    t = MemFree (t);
+  }
+  return t;
+}
+
+
+//Not used by Autodef or Cleanup
+static int LIBCALLBACK SortVnpBytrnaMatch (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  trnaMatchPtr     str1;
+  trnaMatchPtr     str2;
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+  int rval = 0;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      str1 = (trnaMatchPtr) vnp1->data.ptrvalue;
+      str2 = (trnaMatchPtr) vnp2->data.ptrvalue;
+      if (str1 != NULL && str2 != NULL) {
+        rval = StringICmp (str1->label, str2->label);
+        if (rval == 0) {
+          if (str1->strand == Seq_strand_minus && str2->strand != Seq_strand_minus) {
+            rval = 1;
+          } else if (str1->strand != Seq_strand_minus && str2->strand == Seq_strand_minus) {
+            rval = -1;
+          }
+        }
+        if (rval == 0) {
+          if (str1->strand == Seq_strand_minus) {
+            if (str1->left > str2->left) {
+              rval = -1;
+            } else if (str1->left < str2->left) {
+              rval = 1;
+            }
+          } else {
+            if (str1->left > str2->left) {
+              rval = 1;
+            } else if (str1->left < str2->left) {
+              rval = -1;
+            }
+          }
+        }
+      }
+    }
+  }
+  return rval;
+}
+
+
+//Not used by Autodef or Cleanup
+static void AddToLoc (SeqLocPtr PNTR loc, SeqLocPtr add, Boolean single_interval, BioseqPtr bsp)
+{
+  SeqLocPtr new_loc;
+
+  if (loc == NULL || *loc == NULL || add == NULL) {
+    return;
+  }
+  new_loc = SeqLocMerge (bsp, *loc, add, single_interval, FALSE, FALSE);
+  *loc = SeqLocFree (*loc);
+  *loc = new_loc;
+}
+
+
+//Not used by Autodef or Cleanup
+static void JoinShortTrnasCallback(BioseqPtr bsp, Pointer data)
+{
+  FixLogPtr rp;
+  SeqFeatPtr sfp;
+  SeqMgrFeatContext context;
+  ValNodePtr list = NULL, vnp;
+  trnaMatchPtr t_prev, t_this;
+
+  if (bsp == NULL) {
+    return;
+  }
+  rp = (FixLogPtr) data;
+
+  for (sfp = SeqMgrGetNextFeature (bsp, NULL, 0, FEATDEF_tRNA, &context);
+       sfp != NULL;
+       sfp = SeqMgrGetNextFeature (bsp, sfp, 0, FEATDEF_tRNA, &context)) {
+    if (SeqLocLen (sfp->location) < 50) {
+      ValNodeAddPointer (&list, 0, trnaMatchNew(sfp, &context));
+    }
+  }
+
+  if (list != NULL && list->next != NULL) {
+    list = ValNodeSort (list, SortVnpBytrnaMatch);
+    t_prev = list->data.ptrvalue;
+    vnp = list->next;
+    while (vnp != NULL) {
+      t_this = vnp->data.ptrvalue;
+      if (StringICmp (t_prev->label, t_this->label) == 0 
+          && ((t_prev->strand == Seq_strand_minus && t_this->strand == Seq_strand_minus)
+              || (t_prev->strand != Seq_strand_minus && t_this->strand != Seq_strand_minus))) {
+        AddToLoc (&(t_prev->sfp->location), t_this->sfp->location, FALSE, bsp);
+        if (t_prev->gene != NULL) {
+          if (t_this->gene != NULL) {
+            AddToLoc (&(t_prev->gene->location), t_this->gene->location, TRUE, bsp);
+          } else {
+            AddToLoc (&(t_prev->gene->location), t_this->sfp->location, TRUE, bsp);
+          }
+        }
+        if (t_this->gene != NULL) {
+          t_this->gene->idx.deleteme = TRUE;
+        }
+
+        SetStringValue (&(t_prev->sfp->comment), t_this->sfp->comment, ExistingTextOption_append_semi);
+        t_this->sfp->idx.deleteme = TRUE;
+        rp->num_replaced ++;
+        vnp = vnp->next;
+      } else {
+        t_prev = t_this;
+        while (t_prev != NULL && t_prev->sfp->idx.deleteme) {
+          vnp = vnp->next;
+          if (vnp == NULL) {
+            t_prev = NULL;
+          } else {
+            t_prev = vnp->data.ptrvalue;
+            vnp = vnp->next;
+          }
+        }
+        if (vnp != NULL) {
+          vnp = vnp->next;
+        }
+      }
+    }
+  }
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    vnp->data.ptrvalue = trnaMatchFree (vnp->data.ptrvalue);
+  }
+  list = ValNodeFree (list);
+}
+
+//Not used by Autodef or Cleanup
+NLM_EXTERN Boolean JoinShortTrnas (SeqEntryPtr sep, FILE *log_fp)
+{
+  FixLogData rd;
+
+  MemSet (&rd, 0, sizeof (FixLogData));
+  rd.log_fp = log_fp;
+
+  VisitBioseqsInSep (sep, &rd, JoinShortTrnasCallback);
+  DeleteMarkedObjects (ObjMgrGetEntityIDForChoice (sep), 0, NULL);
+
+  if (rd.num_replaced > 0) {
+    if (log_fp != NULL) {
+      fprintf (log_fp, "Joined %d short tRNAs\n", rd.num_replaced);
+    }
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+//Not part of Autodef or Cleanup
+NLM_EXTERN Boolean IsRegulatorySubtype (Uint1 key)
+{
+    if (key == FEATDEF_enhancer ||
+        key == FEATDEF_promoter ||
+        key == FEATDEF_CAAT_signal ||
+        key == FEATDEF_TATA_signal ||
+        key == FEATDEF_35_signal ||
+        key == FEATDEF_10_signal ||
+        key == FEATDEF_RBS ||
+        key == FEATDEF_GC_signal ||
+        key == FEATDEF_polyA_signal ||
+        key == FEATDEF_attenuator ||
+        key == FEATDEF_terminator ||
+        key == FEATDEF_misc_signal) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+//LCOV_EXCL_STOP
 

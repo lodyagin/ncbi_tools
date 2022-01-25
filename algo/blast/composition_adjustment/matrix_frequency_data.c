@@ -27,10 +27,6 @@
  *
  * @author Yi-Kuo Yu, Alejandro Schaffer, E. Michael Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: matrix_frequency_data.c,v 1.5 2006/09/27 17:36:18 gertz Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <stdlib.h>
 #include <algo/blast/core/ncbi_std.h>
@@ -1365,7 +1361,7 @@ s_LocateFrequencyData(const char * matrix)
 {
     int i;
     for (i = 0;  i < NUM_SUPPORTED_MATRICES;  i++) {
-        if (0 == strcmp(s_FrequencyData[i].name, matrix)) {
+        if (0 == strcasecmp(s_FrequencyData[i].name, matrix)) {
             return &s_FrequencyData[i];
         }
     }

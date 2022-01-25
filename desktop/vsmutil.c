@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.80 $
+* $Revision: 6.85 $
 *
 * File Description: 
 *
@@ -1138,6 +1138,92 @@ extern Boolean WriteBadSpecificHostTable (ValNodePtr bad_biop_list, FILE *fp)
 }
 
 
+static CharPtr FormatLatLonReport (CharPtr report)
+{
+  CharPtr start, cp;
+
+  if (StringHasNoText (report)) {
+    return NULL;
+  }
+  start = report;
+  while (isspace (*start) || *start == '\n') {
+    start++;
+  }
+  cp = StringISearch (start, "DESCRIPTOR");
+  if (cp != NULL) {
+    *cp = 0;
+  }
+  cp = start;
+  while (*cp != 0) {
+    if (*cp == '\n') {
+      *cp = ' ';
+    }
+    cp++;
+  }
+  return start;
+}
+
+static Int2 GetDocPosForError (ValidExtraPtr vep, Int2 err_pos);
+
+static CharPtr MakeLatLonReportWithLabel(ValidExtraPtr vep, ErrItemPtr eip, Int2 item)
+{
+  Int2 actual_pos;
+  CharPtr rval = NULL, label = NULL, content = NULL, str;
+  ValNode vn;
+  SeqFeatPtr sfp;
+  BioseqPtr bsp;
+  SeqDescPtr sdp;
+  SeqMgrFeatContext fcontext;
+  SeqMgrDescContext dcontext;
+
+  MemSet (&vn, 0, sizeof (ValNode));
+  if (eip->itemtype == OBJ_SEQFEAT) {
+    sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
+    if (sfp != NULL) {
+      vn.choice = OBJ_SEQFEAT;
+      vn.data.ptrvalue = sfp;
+      label = GetParentLabelForDiscrepancyItem (&vn);
+    }
+  } else if (eip->itemtype == OBJ_SEQDESC) {
+    sdp = SeqMgrGetDesiredDescriptor (eip->entityID, NULL, eip->itemID, 0, NULL, &dcontext);
+    if (sdp != NULL) {
+      vn.choice = OBJ_SEQDESC;
+      vn.data.ptrvalue = sdp;
+      label = GetParentLabelForDiscrepancyItem (&vn);
+    }
+  } else if (eip->itemtype == OBJ_BIOSEQ) {
+    bsp = GetBioseqGivenIDs (eip->entityID, eip->itemID, OBJ_BIOSEQ);
+    if (bsp != NULL) {
+      vn.choice = OBJ_BIOSEQ;
+      vn.data.ptrvalue = bsp;
+      label = GetParentLabelForDiscrepancyItem (&vn);
+    }
+  }
+
+  actual_pos = GetDocPosForError(vep, item);
+  if (actual_pos < 0) {
+    content = StringSave("Unable to generate report for lat-lon error because filter does not include lat-lon errors");
+  } else {
+    str = GetDocText (vep->doc, actual_pos, 0, 5);
+    content = StringSave(FormatLatLonReport(str));
+    str = MemFree (str);
+  }
+
+  if (label == NULL && content == NULL) {
+    rval = StringSave ("Error in formatting Lat-lon report");
+  } else if (label == NULL) {
+    rval = StringSave (content);
+  } else if (content == NULL) {
+    rval = StringSave (label);
+  } else {
+    rval = (CharPtr) MemNew (sizeof (Char) * (StringLen (label) + StringLen (content) + 2));
+    sprintf (rval, "%s:%s", label, content);
+  }
+  content = MemFree (content);
+  return rval;
+}
+
+
 typedef struct validatoreporttype {
   ButtoN PNTR btn_array;
   ValNodePtr  errorfilter;
@@ -1716,6 +1802,7 @@ static void MakeValidatorReport (ButtoN b)
   ValNodePtr     ecnumber_format = NULL, ecnumber_value = NULL, ecnumber_problem = NULL;
   ValNodePtr     specific_host_list = NULL;
   ValNodePtr     bad_inst_code = NULL;
+  ValNodePtr     lat_lon_list = NULL;
   SeqFeatPtr     sfp;
   SeqDescrPtr    sdp;
   BioseqPtr      bsp;
@@ -1824,6 +1911,8 @@ static void MakeValidatorReport (ButtoN b)
               ValNodeAddPointer (&bad_inst_code, OBJ_SEQFEAT, sfp);
             }
           }
+        } else if (eip->errcode == 2 && eip->subcode == 48) {
+          ValNodeAddPointer (&lat_lon_list, 0, MakeLatLonReportWithLabel(vep, eip, item));
         } else if (eip->itemtype == OBJ_SEQFEAT) {
           sfp = SeqMgrGetDesiredFeature (eip->entityID, NULL, eip->itemID, 0, NULL, &fcontext);
           if (sfp != NULL) {
@@ -1878,6 +1967,16 @@ static void MakeValidatorReport (ButtoN b)
   if (bad_inst_code != NULL) {
     fprintf (fp, "Bad Institution Codes\n");
     found_any |= MakeBadInstCodeReport(bad_inst_code, fp);
+  }
+
+  if (lat_lon_list != NULL) {
+    fprintf (fp, "LatLonCountry Errors\n");
+    for (vnp = lat_lon_list; vnp != NULL; vnp = vnp->next) {
+      fprintf (fp, "%s\n", (CharPtr) vnp->data.ptrvalue);
+    }
+    fprintf (fp, "\n");
+    found_any = TRUE;
+    lat_lon_list = ValNodeFreeData (lat_lon_list);
   }
 
   found_any |= MakeStandardReports (chosen, report_lists, fp);
@@ -2992,6 +3091,7 @@ extern void LIBCALLBACK ValidErrCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr seqid,
   CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
@@ -3019,6 +3119,10 @@ extern void LIBCALLBACK ValidErrCallback (
 
   msg_level = ErrGetMessageLevel ();
   if (severity < msg_level) return;
+
+  if (errcode == 0 && subcode == 0) {
+    return;
+  }
 
   ShowValidateWindow ();
   if (validWindow == NULL) return;

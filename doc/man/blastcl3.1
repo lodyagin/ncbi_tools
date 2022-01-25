@@ -1,1 +1,288 @@
-.so man1/blast.1
+.TH BLASTCL3 1 2016-09-01 NCBI "NCBI Tools User's Manual"
+.SH NAME
+blastcl3 \- Basic Local Alignment Search Tool client
+.SH SYNOPSIS
+.B blastcl3
+[\|\fB\-\fP\|]
+[\|\fB\-A\fP\ \fIN\fP\|]
+[\|\fB\-C\fP\ \fIx\fP\|]
+[\|\fB\-D\fP\ \fIN\fP\|]
+[\|\fB\-E\fP\ \fIN\fP\|]
+[\|\fB\-F\fP\ \fIstr\fP\|]
+[\|\fB\-G\fP\ \fIN\fP\|]
+[\|\fB\-I\fP\|]
+[\|\fB\-J\fP\|]
+[\|\fB\-K\fP\ \fIN\fP\|]
+[\|\fB\-L\fP\ \fIstart,stop\fP\|]
+[\|\fB\-M\fP\ \fIstr\fP\|]
+[\|\fB\-O\fP\ \fIfilename\fP\|]
+[\|\fB\-Q\fP\ \fIN\fP\|]
+[\|\fB\-R\fP\|]
+[\|\fB\-S\fP\|]
+[\|\fB\-T\fP\|]
+[\|\fB\-U\fP\|]
+[\|\fB\-W\fP\ \fIN\fP\|]
+[\|\fB\-X\fP\ \fIN\fP\|]
+[\|\fB\-Y\fP\ \fIX\fP\|]
+[\|\fB\-Z\fP\ \fIN\fP\|]
+[\|\fB\-a\fP\ \fIN\fP\|]
+[\|\fB\-b\fP\ \fIN\fP\|]
+[\|\fB\-d\fP\ \fIstr\fP\|]
+[\|\fB\-e\fP\ \fIX\fP\|]
+[\|\fB\-f\fP\ \fIX\fP\|]
+[\|\fB\-g\ F\fP\|]
+[\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-m\fP\ \fIN\fP\|]
+[\|\fB\-n\fP\|]
+[\|\fB\-o\fP\ \fIfilename\fP\|]
+\fB\-p\fP\ \fIstr\fP
+[\|\fB\-q\fP\ \fIN\fP\|]
+[\|\fB\-r\fP\ \fIN\fP\|]
+[\|\fB\-s\fP\|]
+[\|\fB\-t\fP\ \fIN\fP\|]
+[\|\fB\-u\fP\ \fIstr\fP\|]
+[\|\fB\-v\fP\ \fIN\fP\|]
+[\|\fB\-w\fP\ \fIN\fP\|]
+[\|\fB\-y\fP\ \fIX\fP\|]
+[\|\fB\-z\fP\ \fIX\fP\|]
+.SH DESCRIPTION
+\fBblastcl3\fP accesses the newest NCBI BLAST search engine (version
+2.0).  The software behind BLAST version 2.0 was written from scratch
+to allow BLAST to handle the new challenges posed by the sequence
+databases in the coming years.  Updates to this software will continue
+in the coming years.
+.PP
+It supports multiple types of comparison, governed by the \fB\-p\fP
+("program") flag:
+.IP blastp 12
+compares an amino acid query sequence against a protein sequence
+database.
+.IP blastn 12
+compares a nucleotide query sequence against a nucleotide sequence
+database.
+.IP blastx 12
+compares the six-frame conceptual translation products of a nucleotide
+query sequence (both strands) against a protein sequence database.
+.IP psitblastn 12
+compares a protein query sequence against a nucleotide sequence
+database dynamically translated in all six reading frames (both
+strands) using a position specific matrix created by PSI-BLAST.
+.IP tblastn 12
+compares a protein query sequence against a nucleotide sequence
+database dynamically translated in all six reading frames (both
+strands).
+.IP tblastx 12
+compares the six-frame translations of a nucleotide query sequence
+against the six-frame translations of a nucleotide sequence database.
+.SH OPTIONS
+A summary of options is included below.
+.TP
+\fB\-\fP
+Print usage message
+.TP
+\fB\-A\fP\ \fIN\fP
+Multiple Hits window size; generally defaults to 0 (for single-hit
+extensions), but defaults to 40 when using discontiguous templates.
+.TP
+\fB\-C\fP\ \fIX\fP
+Use composition-based statistics for blastp or tblastn:
+.RS
+.PD 0
+.IP "T, t, D, or d"
+Default (equivalent to \fB1\fP)
+.IP "0, F, or f"
+No composition-based statistics
+.IP 1
+Composition-based statistics as in \fINAR\fP 29:2994-3005, 2001
+.IP 2
+Composition-based score adjustment as in \fIBioinformatics\fP 21:902-911,
+2005, conditioned on sequence properties
+.IP 3
+Composition-based score adjustment as in \fIBioinformatics\fP 21:902-911,
+2005, unconditionally
+.PD
+.RE
+.RS
+When enabling statistics in blastall, blastall_old, or blastcl3 (\fIi.e.\fP,
+not \*(bx), appending \fBu\fP (case-insensitive) to the mode enables
+use of unified p-values combining alignment and compositional p-values
+in round 1 only.
+.RE
+.TP
+\fB\-D\fP\ \fIN\fP
+Translate sequences in the database according to genetic code \fIN\fP
+in /usr/share/ncbi/data/gc.prt (default is 1; only applies to tblast*)
+.TP
+\fB\-E\fP\ \fIN\fP
+Extending a gap costs \fIN\fP (\-1 invokes default behavior)
+.TP
+\fB\-F\fP\ \fIstr\fP
+Filter options for DUST or SEG (default is \fBT\fP)
+.TP
+\fB\-G\fP\ \fIN\fP
+Opening a gap costs \fIN\fP (\-1 invokes default behavior)
+.TP
+\fB\-I\fP
+Show GIs in deflines
+.TP
+\fB\-J\fP
+Believe the query defline
+.TP
+\fB\-K\fP\ \fIN\fP
+Number of best hits from a region to keep.
+Off by default.
+If used a value of 100 is recommended.
+.TP
+\fB\-L\fP\ \fIstart,stop\fP
+Location on query sequence.
+.TP
+\fB\-M\fP\ \fIstr\fP
+Use matrix \fIstr\fP (default = BLOSUM62)
+.TP
+\fB\-O\fP\ \fIfilename\fP
+Write (ASN.1) sequence alignments to \fIfilename\fP..
+.TP
+\fB\-P\fP\ \fIN\fP
+Set to 1 for single-hit mode or 0 for multiple-hit mode (default).
+Does not apply to blastn.
+.TP
+\fB\-Q\fP\ \fIN\fP
+Translate query according to genetic code \fIN\fP in
+/usr/share/ncbi/data/gc.prt (default is 1)
+.TP
+\fB\-R\fP
+RPS Blast search
+.TP
+\fB\-S\fP\ \fIN\fP
+Query strands to search against database for blastn, blastx, tblastx:
+.RS
+.PD 0
+.IP 1
+top
+.IP 2
+bottom
+.IP 3
+both (default)
+.PD
+.RE
+.TP
+\fB\-T\fP
+Produce HTML output
+.TP
+\fB\-U\fP
+Use lower case filtering for the query sequence
+.TP
+\fB\-W\fP\ \fIN\fP
+Use words of size \fIN\fP (length of best perfect match; zero invokes
+default behavior -- 11 for blastn [28 in MegaBlast mode], 3 otherwise).
+.TP
+\fB\-X\fP\ \fIN\fP
+X dropoff value for gapped alignment (in bits) (zero invokes default
+behavior, which varies with "program": 30 for blastn [20 in MegaBlast
+mode], 0 for tblastx, and 15 for everything else.)
+.TP
+\fB\-Y\fP\ \fIX\fP
+Effective length of the search space (use zero for the real size)
+.TP
+\fB\-Z\fP\ \fIN\fP
+X dropoff value for final [dynamic programming?] gapped alignment in
+bits (default is 50 for blastn, 0 for tblastx, 25 for others)
+.TP
+\fB\-a\fP\ \fIN\fP
+Number of threads to use (default is one)
+.TP
+\fB\-b\fP\ \fIN\fP
+Number of database sequences to show alignments for (B) (default is 250)
+.TP
+\fB\-d\fP\ \fIstr\fP
+Database to use (default is nr)
+.TP
+\fB\-e\fP\ \fIX\fP
+Expectation value (E) (default = 10.0)
+.TP
+\fB\-f\fP\ \fIX\fP
+Threshold for extending hits, default if zero: 0 for blastn,
+11 for blastp, 12 for blastx, and 13 for tblastn and tblastx.
+.TP
+\fB\-g\ F\fP
+Do not perform gapped alignment (N/A for tblastx)
+.TP
+\fB\-i\fP\ \fIfilename\fP
+Read query sequence or set from \fIfilename\fP (default is stdin)
+.TP
+\fB\-m\fP\ \fIN\fP
+alignment view options:
+.RS
+.PD 0
+.IP 0
+pairwise (default)
+.IP 1
+query-anchored showing identities
+.IP 2
+query-anchored, no identities
+.IP 3
+flat query-anchored, show identities
+.IP 4
+flat query-anchored, no identities
+.IP 5
+query-anchored, no identities and blunt ends
+.IP 6
+flat query-anchored, no identities and blunt ends
+.IP 7
+XML Blast output
+.IP 8
+tabular
+.IP 9
+tabular with comment lines
+.IP 10
+ASN.1 text
+.IP 11
+ASN.1 binary
+.PD
+.RE
+.TP
+\fB\-n\fP
+MegaBlast search
+.TP
+\fB\-o\fP\ \fIfilename\fP
+Write final alignment report to \fIfilename\fP rather than stdout
+.TP
+\fB\-p\fP\ \fIstr\fP
+Use the "program" (comparison type) \fIstr\fP.  The \fBDESCRIPTION\fP
+section covers this option in more detail.
+.TP
+\fB\-q\fP\ \fIN\fP
+Penalty for a nucleotide mismatch (blastn only) (default = \-3)
+.TP
+\fB\-r\fP\ \fIN\fP
+Reward for a nucleotide match (blastn only) (default = \-10)
+.TP
+\fB\-s\fP
+Compute locally optimal Smith-Waterman alignments (only available in gapped
+tblastn mode).
+.TP
+\fB\-t\fP\ \fIN\fP
+Length of a discontiguous word template (the largest intron allowed in
+a translated nucleotide sequence when linking multiple distinct
+assignments; default = 0; negative values disable linking.)
+.TP
+\fB\-u\fP\ \fIstr\fP
+Restrict search of database to results of Entrez2 lookup
+.TP
+\fB\-v\fP\ \fIN\fP
+Number of one-line descriptions to show (V) (default = 500)
+.TP
+\fB\-w\fP\ \fIN\fP
+Frame shift penalty (OOF algorithm for blastx)
+.TP
+\fB\-y\fP\ \fIX\fP
+X dropoff for ungapped extensions in bits (0.0 invokes default
+behavior: 20 for blastn [10 in MegaBlast mode], 7 otherwise).
+.TP
+\fB\-z\fP\ \fIN\fP
+Effective length of the database (use zero for the real size)
+.SH AUTHOR
+The National Center for Biotechnology Information.
+.SH SEE ALSO
+.ad l
+<http://blast.ncbi.nlm.nih.gov/>.

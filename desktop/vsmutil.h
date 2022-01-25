@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/3/95
 *
-* $Revision: 6.18 $
+* $Revision: 6.19 $
 *
 * File Description: 
 *
@@ -109,6 +109,7 @@ extern void LIBCALLBACK ValidErrCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr seqid,
   CharPtr featureID,
   CharPtr message,
   CharPtr objtype,

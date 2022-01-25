@@ -1,4 +1,4 @@
-/*  $Id: blast_seqsrc.c,v 1.47 2012/02/09 15:49:34 kazimird Exp $
+/*  $Id: blast_seqsrc.c,v 1.49 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,13 +32,6 @@
  * Definition of ADT to retrieve sequences for the BLAST engine and
  * low level details of the implementation of the BlastSeqSrc framework.
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_seqsrc.c,v 1.47 2012/02/09 15:49:34 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
-#endif
 
 #include <algo/blast/core/blast_seqsrc.h>
 #include <algo/blast/core/blast_seqsrc_impl.h>
@@ -404,7 +397,7 @@ BlastSeqSrcIterator* BlastSeqSrcIteratorNewEx(unsigned int chunk_sz)
     }
 
     /* Should employ lazy initialization? */
-    itr->oid_list = (int*)malloc(chunk_sz * sizeof(unsigned int));
+    itr->oid_list = (int*)malloc(chunk_sz * sizeof(int));
     if (!itr->oid_list) {
         sfree(itr);
         return NULL;

@@ -1,7 +1,7 @@
 #ifndef COMMON__TEST_ASSERT_IMPL__H
 #define COMMON__TEST_ASSERT_IMPL__H
 
-/* $Id: test_assert_impl.h,v 1.6 2009/09/21 16:24:42 kazimird Exp $
+/* $Id: test_assert_impl.h,v 1.8 2015/03/31 14:39:22 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -150,7 +150,17 @@ static int (*_SDPM)(void) = _SuppressDiagPopupMessages;
 #ifdef   _TROUBLE
 #  undef _TROUBLE
 #endif
-#define  _TROUBLE assert(0)
+#define  _TROUBLE do { assert(0); abort(); } while (0)
+
+/* Often, both _DEBUG_ARG and _ASSERT are used together
+   Once we redefine one, we should redefine another as well
+*/
+#ifndef _DEBUG
+# ifdef _DEBUG_ARG
+#  undef _DEBUG_ARG
+# endif
+# define _DEBUG_ARG(x) x
+#endif
 
 #endif /* NCBI_MSWIN_NO_POPUP */
 

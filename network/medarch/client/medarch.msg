@@ -17,5 +17,7 @@ $^   MedArchMatchIgnored, 14, SEV_ERROR
 $^   SuccessfulPmidLookup, 15, SEV_INFO
 $^   PmidNotFound, 16, SEV_WARNING
 $^   NoPmidJournalNotInPubMed, 17, SEV_INFO
+$^   PmidNotFoundInPress, 18, SEV_WARNING
+$^   NoPmidJournalNotInPubMedInPress, 19, SEV_INFO
 $$ PRINT, 2
 $^   Failed, 1, SEV_WARNING

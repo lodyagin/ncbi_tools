@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/23/07
 *
-* $Revision: 1.43 $
+* $Revision: 1.54 $
 *
 * File Description:
 *
@@ -66,7 +66,7 @@
 #include <macroapi.h>
 
 
-#define ASNDISC_APP_VER "2.0"
+#define ASNDISC_APP_VER "2.3"
 
 CharPtr ASNDISC_APPLICATION = ASNDISC_APP_VER;
 
@@ -83,6 +83,7 @@ typedef struct drflags {
   CharPtr  outpath;
   CharPtr  output_suffix;
   CharPtr  output_dir;
+  CharPtr  extra_comment;
   FILE     *outfp;
   Int4     numrecords;
   ValNodePtr            sep_list;
@@ -572,7 +573,12 @@ static void ProcessSeqEntryList (DRFlagPtr drfp, CharPtr filename)
   }
   ofp = FileOpen (path, "w");
 
+  if (!StringHasNoText (drfp->extra_comment)) {
+    fprintf (ofp, "Discrepancy Report Results%s\n", drfp->extra_comment);
+  }
+
   discrepancy_list = CollectDiscrepancies (drfp->global_report->test_config, drfp->sep_list, taxlookup);
+
   AddListOutputTags(discrepancy_list, drfp->global_report->output_config);
   WriteAsnDiscReport (discrepancy_list, ofp, drfp->global_report->output_config, TRUE);
   discrepancy_list = FreeClickableList (discrepancy_list);
@@ -709,7 +715,7 @@ static void ProcessMultipleRecord (
 {
   AsnIoPtr        aip;
   AsnModulePtr    amp;
-  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp;
+  AsnTypePtr      atp, atp_bss, atp_desc, atp_sbp, atp_se, atp_ssp, atp_seqentry;
   ValNodePtr      bsplist_next;
   Int2            maxcount = 0;
   CitSubPtr       csp = NULL;
@@ -755,6 +761,12 @@ static void ProcessMultipleRecord (
   atp_sbp = AsnFind ("Seq-submit.sub");
   if (atp_sbp == NULL) {
     Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.sub");
+    return;
+  }
+
+  atp_seqentry = AsnFind ("Seq-entry");
+  if (atp_seqentry == NULL) {
+    Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-entry");
     return;
   }
 
@@ -831,13 +843,15 @@ static void ProcessMultipleRecord (
     atp = atp_bss;
   } else if (drfp->type == 5) {
     atp = atp_ssp;
+  } else if (drfp->type == 2) {
+    atp = atp_seqentry;
   } else {
     Message (MSG_ERROR, "Batch processing type not set properly");
     return;
   }
 
   while ((atp = AsnReadId (aip, amp, atp)) != NULL && maxcount < drfp->maxcount) {
-    if (atp == atp_se) {
+    if (atp == atp_se || atp == atp_seqentry) {
 
       SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
@@ -921,8 +935,10 @@ static void ProcessOneRecord (CharPtr filename, Pointer userdata)
     ProcessSingleRecord (filename, drfp);
   }
 
+  AddListToOutputConfig(drfp->sep_list, drfp->global_report->output_config);
   if (drfp->outfp == NULL) {
     ProcessSeqEntryList (drfp, filename);
+    drfp->global_report->output_config->num_nucs = 0;
   } else {
     ProcessSeqEntryListWithCollation (drfp->global_report, drfp->sep_list, filename);
   }
@@ -997,7 +1013,7 @@ Args myargs [] = {
     TRUE, 'r', ARG_STRING, 0.0, 0, NULL},
   {"Remote CDS Product Fetch", "F", NULL, NULL,
     TRUE, 'Z', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit)", "a", NULL, NULL,
+  {"ASN.1 Type (a Any, e Seq-entry, b Bioseq, s Bioseq-set, m Seq-submit, t Batch Bioseq-set, u Batch Seq-submit, c Catenated seq-entry)", "a", NULL, NULL,
     TRUE, 'a', ARG_STRING, 0.0, 0, NULL},
   {"Batch File is Binary", "F", NULL, NULL,
     TRUE, 'b', ARG_BOOLEAN, 0.0, 0, NULL},
@@ -1327,7 +1343,6 @@ Int2 Main (void)
   dfd.global_report = GlobalDiscrepReportNew ();
   dfd.global_report->test_config = DiscrepancyConfigNew();
 
-
   ExpandDiscrepancyReportTestsFromString ((CharPtr) myargs [X_argExpandCategories].strvalue, TRUE, dfd.global_report->output_config);
   dfd.global_report->output_config->summary_report = (Boolean) myargs [S_argSummaryReport].intvalue;
 
@@ -1362,6 +1377,8 @@ Int2 Main (void)
     }
   }
 
+  if (big_sequence_report) dfd.global_report->test_config->is_big_sequence = TRUE;
+
   enabled_list = (CharPtr) myargs [e_argEnableTests].strvalue;
   disabled_list = (CharPtr) myargs [d_argDisableTests].strvalue;
 
@@ -1374,6 +1391,7 @@ Int2 Main (void)
       big_test_set = (Boolean) myargs [t_argBigTest].intvalue;
       if (big_test_set) dfd.global_report->test_config->use_big_test_set = TRUE;
       ConfigureForBigSequence (dfd.global_report->test_config);
+      dfd.extra_comment = StringSave(" (due to the large size of the file some checks may not have run)");
     } else if (StringCmp (report_type, "m") == 0) {
       ConfigureForReportType(dfd.global_report->test_config, eReportTypeMegaReport);
     } else {
@@ -1435,6 +1453,9 @@ Int2 Main (void)
   } else if (StringICmp (str, "u") == 0) {
     type = 5;
     batch = TRUE;
+  } else if (StringICmp (str, "c") == 0) {
+    type = 2;
+    batch = TRUE;
   } else {
     type = 1;
   }
@@ -1468,6 +1489,10 @@ Int2 Main (void)
       Message (MSG_FATAL, "Unable to open single output file");
       return 1;
     }
+  }
+
+  if (!StringHasNoText (product_rule_file)) {
+    SetAppParam ("SEQUINCUSTOM", "SETTINGS", "PRODUCT_RULES_LIST", product_rule_file);
   }
 
   if (!StringHasNoText (product_name_file)) {
@@ -1538,7 +1563,7 @@ Int2 Main (void)
     ProcessOneRecord (infile, (Pointer) &dfd);
   }
   if (dfd.outfp != NULL) {
-    WriteGlobalDiscrepancyReport (dfd.global_report, dfd.outfp);
+    WriteGlobalDiscrepancyReportEx (dfd.global_report, dfd.outfp, dfd.extra_comment);
     FileClose (dfd.outfp);
     dfd.outfp = NULL;
   }

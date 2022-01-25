@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.14 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   Routines for AsnIo objects.  This code has some machine dependencies.
@@ -39,102 +39,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++
-* 4/7/91   Ostell      Berkely Socket support, block I/O
-* 04-20-93 Schuler     LIBCALL calling convention
-* 01-31-94 Schuler     Changed ErrGetOpts/ErrSetOpts to ErrSaveOptions/ErrRestoreOptions
-*
-* $Log: asnio.c,v $
-* Revision 6.14  2012/03/08 20:30:37  kans
-* aip->linelength is now Int2
-*
-* Revision 6.13  2011/04/12 21:28:51  lavr
-* Fix ASN stream flushing: avoid fflush(NULL) that has an effect of flushing ALL open FILE* streams
-*
-* Revision 6.12  2005/12/01 20:00:13  lavr
-* AsnIoErrorMsg(): Don't insert extra LFs if there was no typestack dumped
-*
-* Revision 6.11  2002/05/20 23:13:39  ivanov
-* Fixed overburn memory AsnIo buf in the AsnPrint*() -- increased
-* buffers reserved room
-*
-* Revision 6.10  2001/10/11 14:39:08  ostell
-* added support for XMLModulePrefix
-*
-* Revision 6.9  2001/03/13 13:11:46  ostell
-* made AsnIoBSOpen() and AsnIoMemOpen() XML aware
-*
-* Revision 6.8  2001/02/02 22:08:47  shavirin
-* Fixed case of opening AsnIoPtr in case of XML output for Linux.
-*
-* Revision 6.7  2000/05/10 03:12:37  ostell
-* added support for XML DTD and XML data output
-*
-* Revision 6.6  1999/07/30 20:34:25  vakatov
-* AsnIoGets():  rewritten -- to handle an incremental read
-*
-* Revision 6.5  1998/02/27 17:22:21  vakatov
-* [WIN32 DLL]  Declared some functions as NLM_EXTERN(DLL-exportable)
-*
-* Revision 6.4  1998/01/09 15:51:03  shavirin
-* Hash function turned to be external
-*
-* Revision 6.3  1998/01/09 15:47:52  shavirin
-* Added hash calculating functions.
-*
-* Revision 6.2  1997/12/04 21:41:14  shavirin
-* Fixed bug with printing error message
-*
-* Revision 6.1  1997/10/29 02:41:13  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 6.0  1997/08/25 18:10:00  madden
-* Revision changed to 6.0
-*
-* Revision 5.4  1997/04/23 15:44:51  ostell
-* commented out references to g_asnlib which caused unecessary error messages
-* trying to open asnlib.msg file which does not exist.
-*
- * Revision 5.3  1996/12/03  21:43:48  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.2  1996/10/07  14:37:28  vakatov
- * AsnIoErrorMsg() rearranged to avoid memory corruption when posting
- * long (>2048 bytes) error messages
- *
- * Revision 5.1  1996/06/18  16:07:46  sad
- * AsnIoGets errorneously reported that line too long at the end of file, fixed
- *
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.6  1996/02/18  18:05:37  kans
- * severity is an ErrSev variable
- *
- * Revision 4.5  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.4  1995/12/21  14:00:51  ostell
- * added AsnIoFree()
- *
- * Revision 4.3  1995/12/18  21:38:00  epstein
- * add diagnostic values in AsnIoWriteBlock error message
- *
- * Revision 4.2  1995/10/28  15:02:06  ostell
- * added casts to quiet DOS compile warnings
- *
- * Revision 4.1  1995/09/14  20:41:02  sirotkin
- * modification to AsnIoErrMsg to give meaningful error codes
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.24  1995/05/26  22:14:40  ostell
- * added spec_version saving to AsnIoReset
- *
- * Revision 2.23  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -245,6 +149,11 @@ NLM_EXTERN CharPtr LIBCALL AsnGetXMLmodulePrefix (void)
 NLM_EXTERN AsnIoPtr LIBCALL  AsnIoNew (Int1 type, FILE *fp, Pointer iostruct, IoFuncType readfunc, IoFuncType writefunc)
 {
     AsnIoPtr aip;
+#ifdef OS_UNIX
+    CharPtr  str;
+    int      val;
+#endif
+
 
     aip = (AsnIoPtr) MemNew(sizeof(AsnIo));
     if (aip == NULL)
@@ -269,6 +178,30 @@ NLM_EXTERN AsnIoPtr LIBCALL  AsnIoNew (Int1 type, FILE *fp, Pointer iostruct, Io
     aip->first[0] = TRUE;
 	aip->typestack = (PstackPtr) MemNew((sizeof(Pstack) * 10));
 	aip->max_type = 10;
+
+#ifdef OS_UNIX
+    /* !!! CXX-3341 Allow environment variables to set initial policies !!! */
+
+    str = (CharPtr) getenv ("FIX_NON_PRINT_POLICY");
+    if (StringDoesHaveText (str) && sscanf (str, "%d", &val) == 1 && val >= 0 && val <= 3) {
+      aip->fix_non_print = (Uint1) val;
+    }
+
+    if ((type & ASNIO_BIN) && (type & ASNIO_IN)) {
+      str = (CharPtr) getenv ("UTF8_INPUT_POLICY");
+      if (StringDoesHaveText (str) && sscanf (str, "%d", &val) == 1 && val >= 0 && val <= 3) {
+        aip->fix_utf8_in = (Uint1) val;
+      }
+    }
+
+    if ((type & ASNIO_BIN) && (type & ASNIO_OUT)) {
+      str = (CharPtr) getenv ("UTF8_OUTPUT_POLICY");
+      if (StringDoesHaveText (str) && sscanf (str, "%d", &val) == 1 && val >= 0 && val <= 3) {
+        aip->fix_utf8_out = (Uint1) val;
+      }
+    }
+#endif
+
     return aip;
 }
 
@@ -793,7 +726,7 @@ NLM_EXTERN Int2 AsnIoWriteBlock (AsnIoPtr aip)
 	return aip->bytes;
 }
 
-static char * AsnIoErrStr[107] = {
+static char * AsnIoErrStr[109] = {
 #ifdef WIN16
 
 "Sorry. Not supported yet",
@@ -902,7 +835,9 @@ static char * AsnIoErrStr[107] = {
 "Did not AsnReadId before AsnReadVal. line %ld" ,
 "Did not AsnReadVal before AsnReadId. line %ld",
 "Did not load parse trees for trying to explore them",
-"Invalid value(s) [%d] in VisibleString [%Fs ...]"
+"Invalid value(s) [%d] in VisibleString [%Fs ...]",
+"UTF8String encountered where VisibleString expected",
+"UTF8String replaced by VisibleString"
 
 #else
 
@@ -1012,7 +947,9 @@ static char * AsnIoErrStr[107] = {
 "Did not AsnReadId before AsnReadVal. line %ld" ,
 "Did not AsnReadVal before AsnReadId. line %ld",
 "Did not load parse trees for trying to explore them",
-"Invalid value(s) [%d] in VisibleString [%s ...]"
+"Invalid value(s) [%d] in VisibleString [%s ...]",
+"UTF8String encountered where VisibleString expected",
+"UTF8String replaced by VisibleString"
 
 #endif
 }; 
@@ -1056,6 +993,10 @@ NLM_EXTERN void CDECL AsnIoErrorMsg(AsnIoPtr aip, int errcode, ...)
       /* non-printing chars in string may not be fatal */
       if (errcode == 106  &&  aip->fix_non_print == 0)
         severity = SEV_ERROR;
+      else if (errcode == 107)
+        severity = SEV_WARNING;
+      else if (errcode == 108)
+        severity = SEV_WARNING;
       else
         aip->io_failure = TRUE;
 
@@ -1154,6 +1095,8 @@ NLM_EXTERN void LIBCALL  AsnIoReset (AsnIoPtr aip)
 	AsnExpOptPtr aeop;   /* exploration options chain */
 	AsnExpOptStructPtr aeosp;
 	Uint1 fix_non_print;
+    Uint1 fix_utf8_in;
+    Uint1 fix_utf8_out;
 	Int2 spec_version;
 
 	if (aip->type & ASNIO_OUT)
@@ -1182,6 +1125,8 @@ NLM_EXTERN void LIBCALL  AsnIoReset (AsnIoPtr aip)
 	aeop = aip->aeop;
 	aeosp = aip->aeosp;
 	fix_non_print = aip->fix_non_print;
+    fix_utf8_in = aip->fix_utf8_in;
+    fix_utf8_out = aip->fix_utf8_out;
 	spec_version = aip->spec_version;
 
 	MemFill(aip, '\0', sizeof(AsnIo));	 /* clear it */
@@ -1207,6 +1152,8 @@ NLM_EXTERN void LIBCALL  AsnIoReset (AsnIoPtr aip)
 	aip->aeop = aeop;
 	aip->aeosp = aeosp;
 	aip->fix_non_print = fix_non_print;
+    aip->fix_utf8_in = fix_utf8_in;
+    aip->fix_utf8_out = fix_utf8_out;
 	aip->spec_version = spec_version;
 										/* clear stacks and buffers */
 	MemFill(aip->typestack, '\0', (size_t)(sizeof(Pstack) * aip->max_type));

@@ -276,6 +276,7 @@ typedef struct struct_ID2S_Seq_feat_Ids_Info {
    struct struct_ID2S_Feat_type_Info PNTR   feat_types;
    struct struct_ID2S_Feat_type_Info PNTR   xref_types;
    ValNodePtr   local_ids;
+   ValNodePtr   local_str_ids;
 } ID2SSeqFeatIdsInfo, PNTR ID2SSeqFeatIdsInfoPtr;
 
 

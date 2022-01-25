@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: spidey.c,v 6.73 2006/06/01 14:55:31 kskatz Exp $";
+static char const rcsid[] = "$Id: spidey.c,v 6.74 2016/09/02 14:57:38 ucko Exp $";
 
 /* ===========================================================================
 *
@@ -30,13 +30,17 @@ static char const rcsid[] = "$Id: spidey.c,v 6.73 2006/06/01 14:55:31 kskatz Exp
 *
 * Version Creation Date:   5/01
 *
-* $Revision: 6.73 $
+* $Revision: 6.74 $
 *
 * File Description: mrna-to-genomic alignment algorithms and functions
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: spidey.c,v $
+* Revision 6.74  2016/09/02 14:57:38  ucko
+* Formally clean up calls to printf-family functions that are at least
+* nominally unsafe, as already done in Debian/Ubuntu packages.
+*
 * Revision 6.73  2006/06/01 14:55:31  kskatz
 * fixed -s option so that it sets gap-open/gap-extend penalties that are valid as a pair for gap statistics and are a bit less stringent thatn default (default = 5 open : 2 extend; interspecies -s = 4 open :  1 extend)
 *
@@ -2088,7 +2092,7 @@ static void SPI_PrintResult(FILE *ofp, FILE *ofp2, SPI_RegionInfoPtr srip, Biose
                           fprintf(ofp2, " ");
                           ctr++;
                       }
-                      fprintf(ofp2, buf);
+                      fwrite(buf, 1, ctr, ofp2);
                       if (spp){
                           SeqPortFree(spp);
                       }
@@ -2417,7 +2421,7 @@ static void SPI_PrintHerdResult(FILE *ofp, FILE *ofp2, SPI_mRNAToHerdPtr herd, S
                         ctr = SeqPortRead(spp, (Uint1Ptr)buf, 10);
                         if (ctr > 0)
                            buf[ctr] = '\0';
-                        fprintf(ofp2, buf);
+                        fwrite(buf, 1, ctr, ofp2);
                         SeqPortFree(spp);
                      }
                      done = TRUE;

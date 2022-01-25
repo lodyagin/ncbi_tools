@@ -1,4 +1,4 @@
-/* $Id: gapinfo.c,v 1.19 2006/11/21 17:09:45 papadopo Exp $
+/* $Id: gapinfo.c,v 1.20 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Initialization and freeing of structures containing traceback information.
  */
 
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: gapinfo.c,v 1.19 2006/11/21 17:09:45 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h>
 #include <algo/blast/core/gapinfo.h>

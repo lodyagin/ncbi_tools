@@ -1,4 +1,4 @@
-/* $Id: ncbi_core_c.c,v 6.26 2011/11/16 18:25:40 lavr Exp $
+/* $Id: ncbi_core_c.c,v 6.29 2014/03/27 19:48:31 lavr Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,7 +43,6 @@
 #include <ncbistr.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 
 
 /***********************************************************************
@@ -121,12 +120,17 @@ extern "C" {
 static void s_LOG_Handler(void* user_data/*unused*/, SLOG_Handler* call_data)
 {
     enum _ErrSev sev;
+    ErrStrId id;
     char* msg;
 
     switch (call_data->level) {
     case eLOG_Trace:
+#if defined(NDEBUG)  &&  !defined(_DEBUG)
+        return;
+#else
         sev = SEV_INFO; /* FIXME: Should be somewhat different */
         break;
+#endif /*NDEBUG && !_DEBUG*/
     case eLOG_Note:
         sev = SEV_INFO;
         break;
@@ -153,7 +157,12 @@ static void s_LOG_Handler(void* user_data/*unused*/, SLOG_Handler* call_data)
     if (!(msg = LOG_ComposeMessage(call_data, fLOG_None)))
         return/*failed*/;
 
-    Nlm_ErrPostStr(sev, call_data->err_code, call_data->err_subcode, msg);
+    /* use "user strings" for long messages, truncated otherwise */
+    id = strlen(msg) > ERRTEXT_MAX ? Nlm_ErrUserInstall(msg, 0) : 0;
+    Nlm_ErrPostStr(sev, call_data->err_code, call_data->err_subcode,
+                   id ? 0 : msg);
+    if (id)
+        Nlm_ErrUserDelete(id);
 
     if (call_data->level == eLOG_Trace)
         Nlm_ErrClear();
@@ -237,8 +246,10 @@ static const char* s_GetAppName(void)
 
 extern void CONNECT_Init(const char* conf_file)
 {
-    g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
-    srand(g_NCBI_ConnectRandomSeed);
+    if (g_NCBI_ConnectRandomSeed == 0) {
+        g_NCBI_ConnectRandomSeed  = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
+        srand(g_NCBI_ConnectRandomSeed);
+    }
 
     CORE_SetLOCK(MT_LOCK_c2c(0, 1/*true*/));
     CORE_SetLOG(LOG_c2c());

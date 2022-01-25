@@ -1,4 +1,4 @@
-/* $Id: asn_connection.c,v 1.15 2012/02/29 20:14:34 kazimird Exp $
+/* $Id: asn_connection.c,v 1.16 2013/12/22 17:59:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -68,7 +68,7 @@ struct SAsnConn_Cbdata {
 };
 
 
-static EIO_Status s_AsnClose(CONN conn, ECONN_Callback type, void* data)
+static EIO_Status s_AsnClose(CONN conn, TCONN_Callback type, void* data)
 {
     EIO_Status status;
     struct SAsnConn_Cbdata* cbdata = (struct SAsnConn_Cbdata*) data;

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/13/91
 *
-* $Revision: 6.66 $
+* $Revision: 6.67 $
 *
 * File Description:  Ports onto Bioseqs
 *
@@ -189,9 +189,10 @@ typedef unsigned long StreamFlgType;
 #define EXPAND_GAPS_TO_DASHES     3
 
 #define KNOWN_GAP_AS_PLUS         4
+#define SEQ_GAP_AS_TILDE          8
 
-#define SUPPRESS_VIRT_SEQ         8
-#define STREAM_VIRT_AS_PLUS      16
+#define SUPPRESS_VIRT_SEQ        16
+#define STREAM_VIRT_AS_PLUS      32
 
 #define STREAM_CORRECT_INVAL     64
 
@@ -803,6 +804,28 @@ NLM_EXTERN CharPtr GetSequenceByFeature (
 
 NLM_EXTERN CharPtr GetSequenceByLocation (
   SeqLocPtr slp
+);
+
+NLM_EXTERN CharPtr GetSequenceByBspEx (
+  BioseqPtr bsp,
+  StreamFlgType flags
+);
+
+NLM_EXTERN CharPtr GetSequenceByIdOrAccnDotVerEx (
+  SeqIdPtr sip,
+  CharPtr accession,
+  Boolean is_na,
+  StreamFlgType flags
+);
+
+NLM_EXTERN CharPtr GetSequenceByFeatureEx (
+  SeqFeatPtr sfp,
+  StreamFlgType flags
+);
+
+NLM_EXTERN CharPtr GetSequenceByLocationEx (
+  SeqLocPtr slp,
+  StreamFlgType flags
 );
 
 NLM_EXTERN CharPtr GetDNAbyAccessionDotVersion (

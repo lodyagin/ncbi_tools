@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Entrezgene
-*    Generated using ASNCODE Revision: 6.16 at Apr 24, 2009 11:11 AM
+*    Generated using ASNCODE Revision: 6.19 at Mar 23, 2015  6:20 PM
 *
 **************************************************/
 
@@ -126,6 +126,7 @@ typedef struct struct_Gene_commentary {
    struct struct_Gene_commentary PNTR   comment;
    struct struct_Date PNTR   create_date;
    struct struct_Date PNTR   update_date;
+   struct struct_RNA_ref PNTR   rna;
 } GeneCommentary, PNTR GeneCommentaryPtr;
 
 

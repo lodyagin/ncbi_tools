@@ -124,13 +124,17 @@
 #define GBQUAL_mobile_element_type  114
 #define GBQUAL_gap_type             115
 #define GBQUAL_linkage_evidence     116
+#define GBQUAL_altitude             117
+#define GBQUAL_metagenome_source    118
+#define GBQUAL_type_material        119
+#define GBQUAL_regulatory_class     120
 
-#define ParFlat_TOTAL_GBQUAL    117
+#define ParFlat_TOTAL_GBQUAL    121
 #define ParFlat_TOTAL_IntOr       3
 #define ParFlat_TOTAL_LRB         3
 #define ParFlat_TOTAL_Exp         2
-#define ParFlat_TOTAL_Rpt         7
-#define ParFlat_TOTAL_GBFEAT     73
+#define ParFlat_TOTAL_Rpt        15
+#define ParFlat_TOTAL_GBFEAT     75
 
 #define  Class_pos_aa             1
 #define  Class_text               2

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_UTIL__H
 #define CONNECT___NCBI_UTIL__H
 
-/* $Id: ncbi_util.h,v 6.47 2011/11/16 18:04:35 kazimird Exp $
+/* $Id: ncbi_util.h,v 6.63 2016/01/06 13:49:16 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,9 +35,8 @@
  *  ncbi_core.h
  *
  * 1. CORE support:
- *    macros:     LOG_Write(), LOG_Data(),
- *                LOG_WRITE(), LOG_DATA(),
- *                THIS_FILE, THIS_MODULE,
+ *    macros:     LOG_WRITE(), LOG_DATA(),
+ *                THIS_MODULE,  CORE_CURRENT_FUNCTION
  *    flags:      TLOG_FormatFlags, ELOG_FormatFlags
  *    methods:    LOG_ComposeMessage(), LOG_ToFILE(), NcbiMessagePlusError(),
  *                CORE_SetLOCK(), CORE_GetLOCK(),
@@ -46,10 +45,10 @@
  *                LOG_ToFILE[_Ex]()
  *
  * 2. Auxiliary API:
- *       CORE_GetNcbiSid()
  *       CORE_GetAppName()
+ *       CORE_GetNcbiRequestID()
  *       CORE_GetPlatform()
- *       CORE_GetUsername()
+ *       CORE_GetUsername[Ex]()
  *       CORE_GetVMPageSize()
  *
  * 3. Checksumming support:
@@ -111,28 +110,46 @@ extern NCBI_XCONNECT_EXPORT MT_LOCK CORE_GetLOCK(void);
  * @sa
  *  LOG_Write
  */
-#define  LOG_WRITE(lg, code, subcode, level, message)                   \
-    LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
-              message, 0, 0)
+#define  LOG_WRITE(lg, code, subcode, level, message)                        \
+    LOG_Write(lg, code, subcode, level, THIS_MODULE, CORE_CURRENT_FUNCTION,  \
+              __FILE__, __LINE__, message, 0, 0)
 
 #ifdef   LOG_DATA
 /* AIX's <pthread.h> defines LOG_DATA to be an integer constant;
    we must explicitly drop such definitions to avoid trouble */
 #  undef LOG_DATA
 #endif
-#define  LOG_DATA(lg, code, subcode, level, data, size, message)        \
-    LOG_Write(lg, code, subcode, level, THIS_MODULE, THIS_FILE, __LINE__, \
-              message, data, size)
+#define  LOG_DATA(lg, code, subcode, level, data, size, message)             \
+    LOG_Write(lg, code, subcode, level, THIS_MODULE, CORE_CURRENT_FUNCTION,  \
+              __FILE__, __LINE__, message, data, size)
 
 
-/** Defaults for the THIS_FILE and THIS_MODULE macros (used by LOG_WRITE).
+/** Default for THIS_MODULE.
  */
-#ifndef   THIS_FILE
-#  define THIS_FILE __FILE__
+#ifndef   THIS_MODULE
+#  define THIS_MODULE  0
 #endif
 
-#ifndef   THIS_MODULE
-#  define THIS_MODULE 0
+
+/** Get current function name.
+ * @note Defined inside of either a method or a function body only.
+ * See <corelib/ncbidiag.hpp> for definition of NCBI_CURRENT_FUNCTION.
+ */
+#if    defined(__GNUC__)                                       ||     \
+      (defined(__MWERKS__)        &&  (__MWERKS__ >= 0x3000))  ||     \
+      (defined(__ICC)             &&  (__ICC >= 600))
+#  define CORE_CURRENT_FUNCTION  __PRETTY_FUNCTION__
+#elif defined(__FUNCSIG__)
+#  define CORE_CURRENT_FUNCTION  __FUNCSIG__
+#elif (defined(__INTEL_COMPILER)  &&  (__INTEL_COMPILER >= 600))  ||  \
+      (defined(__IBMCPP__)        &&  (__IBMCPP__ >= 500))
+#  define CORE_CURRENT_FUNCTION  __FUNCTION__
+#elif  defined(__BORLANDC__)      &&  (__BORLANDC__ >= 0x550)
+#  define CORE_CURRENT_FUNCTION  __FUNC__
+#elif  defined(__STDC_VERSION__)  &&  (__STDC_VERSION__ >= 199901)
+#  define CORE_CURRENT_FUNCTION  __func__
+#else
+#  define CORE_CURRENT_FUNCTION  0
 #endif
 
 
@@ -164,6 +181,8 @@ extern NCBI_XCONNECT_EXPORT LOG  CORE_GetLOG(void);
  *  The file stream to log to
  * @param cut_off
  *  Do not post messages with severity levels lower than specified
+ * @param fatal_err
+ *  Severity greater or equal to "fatal_err" always logs and aborts the program
  * @param auto_close
  *  Do "fclose(fp)" when the LOG is reset/destroyed
  * @sa
@@ -172,12 +191,12 @@ extern NCBI_XCONNECT_EXPORT LOG  CORE_GetLOG(void);
 extern NCBI_XCONNECT_EXPORT void CORE_SetLOGFILE_Ex
 (FILE*       fp,
  ELOG_Level  cut_off,
+ ELOG_Level  fatal_err,
  int/*bool*/ auto_close
  );
 
 
-/** Same as CORE_SetLOGFILE_Ex() with last parameter passed as 0
- * (all messages get posted).
+/** Same as CORE_SetLOGFILE_Ex(fp, eLOG_Trace, eLOG_Fatal, auto_close).
  * @sa
  *  CORE_SetLOGFILE_Ex, CORE_SetLOG
  */
@@ -187,29 +206,31 @@ extern NCBI_XCONNECT_EXPORT void CORE_SetLOGFILE
  );
 
 
-/** Same as CORE_SetLOGFILE_Ex(fopen(filename, "a"), cut_off, TRUE).
- * @param filename
+/** Same as CORE_SetLOGFILE_Ex(fopen(logfile, "a"), cut_off, fatal_err, TRUE).
+ * @param logile
  *  Filename to write the log into
  * @param cut_off
  *  Do not post messages with severity levels lower than specified
+ * @param fatal_err
+ *  Severity greater or equal to "fatal_err" always logs and aborts the program
  * @return
  *  Return zero on error, non-zero on success
  * @sa
  *  CORE_SetLOGFILE_Ex, CORE_SetLOG
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME_Ex
-(const char* filename,
- ELOG_Level  cut_off
+(const char* logfile,
+ ELOG_Level  cut_off,
+ ELOG_Level  fatal_err
  );
 
 
-/** Same as CORE_SetLOGFILE_NAME_Ex with last parameter passed as 0
- * (all messages pass).
+/** Same as CORE_SetLOGFILE_NAME_Ex(logfile, eLOG_Trace, eLOG_Fatal).
  * @sa
  *  CORE_SetLOGFILE_NAME_Ex, CORE_SetLOG
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ CORE_SetLOGFILE_NAME
-(const char* filename
+(const char* logfile
 );
 
 
@@ -223,6 +244,7 @@ enum ELOG_FormatFlag {
     fLOG_Module        = 0x2,
     fLOG_FileLine      = 0x4,
     fLOG_DateTime      = 0x8,
+    fLOG_Function      = 0x10,
     fLOG_FullOctal     = 0x2000, /**< do not do reduction in octal data bytes*/
     fLOG_OmitNoteLevel = 0x4000, /**< do not add NOTE if eLOG_Note is level  */
     fLOG_None          = 0x8000  /**< nothing but spec'd parts, msg and data */
@@ -238,12 +260,13 @@ extern NCBI_XCONNECT_EXPORT TLOG_FormatFlags CORE_SetLOGFormatFlags
 
 /** Compose message using the "call_data" info.
  * Full log record format:
- *     mm/dd/yy HH:MM:SS "<file>", line <line>: [<module>] <level>: <message>
+ *     mm/dd/yy HH:MM:SS "<file>", line <line>: [<module>::<function>] <level>: <message>
  *     \n----- [BEGIN] Raw Data (<raw_size> bytes) -----\n
  *     <raw_data>
  *     \n----- [END] Raw Data -----\n
  *
- * @li <b>NOTE:</b>  the returned string must be deallocated using "free()".
+ * @note The returned string must be deallocated using "free()".
+ *
  * @param call_data
  *  Parts of the message
  * @param format_flags
@@ -264,6 +287,8 @@ extern NCBI_XCONNECT_EXPORT char* LOG_ComposeMessage
  *  The file stream to log to
  * @param cut_off
  *  Do not post messages with severity levels lower than specified
+ * @param fatal_err
+ *  Severity greater or equal to "fatal_err" always logs and aborts the program
  * @param auto_close
  *  Whether to do "fclose(fp)" when the LOG is reset/destroyed
  * @sa
@@ -273,12 +298,12 @@ extern NCBI_XCONNECT_EXPORT void LOG_ToFILE_Ex
 (LOG         lg,
  FILE*       fp,
  ELOG_Level  cut_off,
+ ELOG_Level  fatal_err,
  int/*bool*/ auto_close
  );
 
 
-/** Same as LOG_ToFILEx with "cut_off" parameter passed as 0
- * (all messages pass).
+/** Same as LOG_ToFILEx(lg, fp, eLOG_Trace, eLOG_Fatal, auto_close).
  * @sa
  *  LOG_ToFILE_Ex
  */
@@ -342,18 +367,9 @@ extern NCBI_XCONNECT_EXPORT void CORE_SetREG(REG rg);
 extern NCBI_XCONNECT_EXPORT REG  CORE_GetREG(void);
 
 
-
 /******************************************************************************
  *  Auxiliary API
  */
-
-/** Obtain current NCBI SID (if known, per thread).
- * @return
- *  Return NULL when the SID cannot be determined;
- *  otherwise, return a '\0'-terminated string.
- */
-extern NCBI_XCONNECT_EXPORT const char* CORE_GetNcbiSid(void);
-
 
 /** Obtain current application name (toolkit dependent).
  * @return
@@ -366,24 +382,74 @@ extern NCBI_XCONNECT_EXPORT const char* CORE_GetNcbiSid(void);
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetAppName(void);
 
 
-/**
+/** NCBI request ID enumerator */
+typedef enum {
+    eNcbiRequestID_None = 0,
+    eNcbiRequestID_HitID,     /**< NCBI Hit     ID */
+    eNcbiRequestID_SID        /**< NCBI Session ID */
+} ENcbiRequestID;
+
+
+/** NCBI request "DTab-Local" header  */
+extern NCBI_XCONNECT_EXPORT char* CORE_GetNcbiRequestDtab;
+
+
+/** Obtain current NCBI request ID (if known, per thread).
+ * @return
+ *  Return NULL when the ID cannot be determined or an error has occurred;
+ *  otherwise, return a '\0'-terminated, non-empty string that is allocated
+ *  on the heap, and must be free()'d when no longer needed.
+ */
+extern NCBI_XCONNECT_EXPORT char* CORE_GetNcbiRequestID
+(ENcbiRequestID reqid);
+
+
+/** Return NCBI platrofm ID (if known).
  * @return
  *  Return read-only textual but machine-readable platform description.
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetPlatform(void);
 
 
-/** Obtain and store current user's name in the buffer provided.
- * Note that resultant strlen(buf) is always guaranteed to be less
- * than "bufsize", extra non-fit characters discarded.
+/** Select which username is the most preferable to obtain from the system. */
+typedef enum {
+    eCORE_UsernameCurrent,  /**< process UID */
+    eCORE_UsernameLogin,    /**< login UID   */
+    eCORE_UsernameReal      /**< real UID    */
+} ECORE_Username;
+
+
+/** Obtain and store in the buffer provided, the best (as possible) user name
+ * that matches the requested username selector.
  * Both "buf" and "bufsize" must not be zeros.
  * @param buf
  *  Pointer to buffer to store the user name at
  * @param bufsize
  *  Size of buffer in bytes
+ * @param username
+ *  Selects which username to get (most preferably)
  * @return
- *  Return 0 when the user name cannot be determined;
- *  otherwise, return "buf".
+ *  Return NULL when the user name cannot be stored (e.g. buffer too small);
+ *  otherwise, return "buf".  Return "buf" as an empty string "" if the user
+ *  name cannot be determined.
+ * @note
+ *  For some OSes the username selector may not effect any differences,
+ *  and for some OS releases, it may cause different results.
+ * @sa
+ *  CORE_GetUsername, ECORE_Username
+ */
+extern NCBI_XCONNECT_EXPORT const char* CORE_GetUsernameEx
+(char*          buf,
+ size_t         bufsize,
+ ECORE_Username username
+ );
+
+
+/** Equivalent to CORE_GetUsernameEx(buf, bufsize, eNCBI_UsernameLogin)
+ * except that it always returns non-empty "buf" when successful, or NULL
+ * otherwise (i.e. when the username cannot be either obtained or stored).
+ * @sa
+ *  CORE_GetUsernameEx, ECORE_Username
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_GetUsername
 (char*  buf,
@@ -400,7 +466,7 @@ extern NCBI_XCONNECT_EXPORT size_t CORE_GetVMPageSize(void);
 
 
 /******************************************************************************
- *  CRC32
+ *  Checksumming
  */
 
 /** Calculate/Update CRC-32 checksum
@@ -421,9 +487,6 @@ extern NCBI_XCONNECT_EXPORT unsigned int UTIL_CRC32_Update
  size_t       len
  );
 
-/* FIXME: Compatibility (to remove in the future) */
-#define CRC32_Update(c, p, l)  UTIL_CRC32_Update(c, p, l)
-
 
 /** Calculate/Update Adler-32 checksum
  * NB:  Initial checksum is "1".
@@ -442,6 +505,57 @@ extern NCBI_XCONNECT_EXPORT unsigned int UTIL_Adler32_Update
  const void*  ptr,
  size_t       len
  );
+
+
+/** Cryptographic hash function descriptor:
+ * @var block_len
+ *  Byte length of hashing blocks (e.g. 64 bytes for MD5, SHA1, SHA256)
+ * @var digest_len
+ *  Byte length of the resultant digest (e.g. MD5: 16, SHA1: 20, SHA256: 32)
+ * @var init
+ *  Init and set a hash context; return 0 on failure, non-zero on success
+ * @var update
+ *  Update the hash with data provided
+ * @var fini
+ *  Write out the resultant digest (if non-0) and destroy the context
+ * @sa
+ *  UTIL_GenerateHMAC
+ */
+typedef struct {
+    size_t block_len;
+    size_t digest_len;
+
+    int/*bool*/ (*init)  (void** ctx);
+    void        (*update)(void*  ctx, const void* data, size_t data_len);
+    void        (*fini)  (void*  ctx, void* digest);
+} SHASH_Descriptor;
+
+
+/** Generate an RFC2401 digest (HMAC).
+ * @param hash
+ *  Hash function descriptor
+ * @param text
+ *  Text to get a digest for
+ * @param text_key
+ *  Byte length of the text
+ * @param key
+ *  Key to hash the text with
+ * @param key_len
+ *  Byte length of the key (recommended to be no less than "hash::digest_len")
+ * @param digest
+ *  The resultant HMAC storage (must be of an adequate size)
+ * @return
+ *  NULL on errors ("digest" will not be valid), or "digest" on success.
+ * @sa
+ *  SHASH_Descriptor
+ */
+extern NCBI_XCONNECT_EXPORT void* UTIL_GenerateHMAC
+(const SHASH_Descriptor* hash,
+ const void*             text,
+ size_t                  text_len,
+ const void*             key,
+ size_t                  key_len,
+ void*                   digest);
 
 
 
@@ -486,7 +600,7 @@ extern NCBI_XCONNECT_EXPORT char* UTIL_NcbiLocalHostName
 
 /** Calculate size of buffer needed to store printable representation of the
  * block of data of the specified size (or, if size is 0, strlen(data)).
- * NOTE:  The calculated size does not include terminating '\0'.
+ * NOTE:  The calculated size does not account for a terminating '\0'.
  * @param data
  *  Block of data (NULL causes 0 to return regardless of "size")
  * @param size
@@ -514,9 +628,9 @@ extern NCBI_XCONNECT_EXPORT size_t UTIL_PrintableStringSize
  *  Block of data (NULL causes NULL to return regardless of "size" or "buf")
  * @param size
  *  Size of block (0 causes strlen(data) to be used)
- * @buf
+ * @param buf
  *  Buffer to store the result (NULL always causes NULL to return)
- * @full
+ * @param full
  *  Whether to print full octal representation of non-printable characters
  * @return next position in the buffer past the last stored character.
  * @sa
@@ -538,9 +652,9 @@ extern NCBI_XCONNECT_EXPORT char* UTIL_PrintableString
  */
 
 #if defined(NCBI_OS_MSWIN)  &&  defined(_UNICODE)
-extern const char*    UTIL_TcharToUtf8OnHeap(const wchar_t* buffer);
-extern const char*    UTIL_TcharToUtf8      (const wchar_t* buffer);
-extern const wchar_t* UTIL_Utf8ToTchar      (const    char* buffer);
+extern const char*    UTIL_TcharToUtf8OnHeap(const wchar_t* str);
+extern const char*    UTIL_TcharToUtf8      (const wchar_t* str);
+extern const wchar_t* UTIL_Utf8ToTchar      (const    char* str);
 /*
  * NOTE:  If you change these macros (here and in #else) you need to make
  *        similar changes in ncbi_strerror.c as well.
@@ -554,7 +668,7 @@ extern const wchar_t* UTIL_Utf8ToTchar      (const    char* buffer);
 #endif /*NCBI_OS_MSWIN && _UNICODE*/
 
 #ifdef NCBI_OS_MSWIN
-extern void           UTIL_ReleaseBufferOnHeap(const void* buffer);
+extern void           UTIL_ReleaseBufferOnHeap(const void* ptr);
 #else
 #  define             UTIL_ReleaseBufferOnHeap(x)  /*void*/
 #endif /*NCBI_OS_MSWIN*/

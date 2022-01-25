@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/7/2009
 *
-* $Revision: 1.17 $
+* $Revision: 1.33 $
 *
 * File Description: 
 *
@@ -109,7 +109,10 @@ static void SortFieldsInCommentRule (CommentRulePtr cr)
   ValNodePtr list = NULL, vnp;
 
   if (cr == NULL || cr->fields == NULL) {
+      //LCOV_EXCL_START
+      //not valid, not testable
     return;
+    //LCOV_EXCL_STOP
   }
 
   for (r = cr->fields; r != NULL; r = r->next) {
@@ -140,6 +143,8 @@ static void SortCommentRuleFields (CommentSetPtr cr_set)
 }
 
 
+//LCOV_EXCL_START
+//not testable in regression
 static Boolean LoadCommentRulesFromLocalString (void)
 
 {
@@ -160,6 +165,7 @@ static Boolean LoadCommentRulesFromLocalString (void)
 #endif
   return (Boolean) (CommentRules != NULL);
 }
+//LCOV_EXCL_STOP
 
 
 NLM_EXTERN CommentRulePtr LoadCommentRuleSet (void)
@@ -172,25 +178,29 @@ NLM_EXTERN CommentRulePtr LoadCommentRuleSet (void)
 
     if (! FindPath("ncbi", "ncbi", "data", buf, sizeof (buf)))
     {
-
+        //LCOV_EXCL_START
+        //not testable in regression
         if (LoadCommentRulesFromLocalString ()) {
             return CommentRules;
         }
 
         ErrPostEx(SEV_WARNING, 0, 0, "FindPath failed in LoadCommentRuleSet - ncbi configuration file missing or incorrect");
         return CommentRules;
+        //LCOV_EXCL_STOP
     }
 
     StringCat(buf, "validrules.prt");
     if ((aip = AsnIoOpen(buf, "r")) == NULL)
     {
-
+        //LCOV_EXCL_START
+        //not testable in regression
         if (LoadCommentRulesFromLocalString ()) {
             return CommentRules;
         }
 
         ErrPostEx(SEV_WARNING, 0, 0, "Couldn't open [%s]", buf);
         return CommentRules;
+        //LCOV_EXCL_STOP
     }
 
     CommentRules = CommentSetAsnRead(aip, NULL);
@@ -361,7 +371,7 @@ static UserFieldPtr FindFieldForRuleName (UserFieldPtr ufp, CharPtr field_rule)
 }
 
 
-static int CompareUserFields (UserFieldPtr ufp1, UserFieldPtr ufp2)
+static int VACompareUserFields (UserFieldPtr ufp1, UserFieldPtr ufp2)
 {
   int rval = 0;
   CharPtr cp1, cp2;
@@ -415,7 +425,7 @@ NLM_EXTERN int LIBCALLBACK SortVnpByUserField (VoidPtr ptr1, VoidPtr ptr2)
     vnp1 = *((ValNodePtr PNTR) ptr1);
     vnp2 = *((ValNodePtr PNTR) ptr2);
     if (vnp1 != NULL && vnp2 != NULL) {
-      return CompareUserFields(vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+      return VACompareUserFields(vnp1->data.ptrvalue, vnp2->data.ptrvalue);
     }
   }
   return 0;
@@ -428,7 +438,10 @@ static void SortFieldsInUserObject (UserObjectPtr uop)
   ValNodePtr list = NULL, vnp;
 
   if (uop == NULL || uop->data == NULL) {
+    //LCOV_EXCL_START
+    //invalid
     return;
+    //LCOV_EXCL_STOP
   }
 
   for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
@@ -447,9 +460,84 @@ static void SortFieldsInUserObject (UserObjectPtr uop)
   list = ValNodeFree (list);
 }
 
+static Boolean PrefixOrSuffixInList (CharPtr val, CharPtr before, CharPtr after)
 
-NLM_EXTERN EFieldValid 
-IsStructuredCommentValidForRule 
+{
+  Char        buf [1024];
+  size_t      len, l_before, l_after;
+  ValNodePtr  list, vnp;
+  Boolean     rsult = FALSE;
+  CharPtr     str;
+
+  if (val == NULL) return FALSE;
+  len = StringLen (val);
+  if (len < 10) return FALSE;
+  l_before = StringLen (before);
+  l_after = StringLen (after);
+  if (StringNCmp (val, before, l_before) != 0) return FALSE;
+  if (StringNCmp (val + len - l_after, after, l_after) != 0) return FALSE;
+
+  if (len > sizeof (buf)) return FALSE;
+  StringNCpy_0 (buf, val + l_before, sizeof (buf));
+  buf [len - l_before - l_after] = '\0';
+
+  list = GetStructuredCommentPrefixList ();
+  if (list == NULL) return FALSE;
+
+  for (vnp = list; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    if (StringCmp (buf, str) == 0) rsult = TRUE;
+  }
+
+  ValNodeFreeData (list);
+
+  return rsult;
+}
+
+
+static EFieldValid FindForbiddenPhrases
+(UserObjectPtr uop,
+ CommentRulePtr comment_rule,
+ StructuredCommentCallback s_callback,
+ Pointer s_callback_data)
+{
+  UserFieldPtr ufp;
+  ValNodePtr   vnp;
+  EFieldValid  rval = eFieldValid_Valid;
+
+  if (uop == NULL || comment_rule == NULL || comment_rule->forbidden_phrases == NULL) {
+    return eFieldValid_Valid;
+  }
+
+  /* examine fields for forbidden phrases */
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    if (ufp->label != NULL 
+        && (StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0
+            || StringICmp (ufp->label->str, "StructuredCommentSuffix") == 0)) {
+        /* skip suffix and prefix */
+        continue;
+    } else {
+      if (ufp->choice == 1) {
+        /* compare string value */
+        for (vnp = comment_rule->forbidden_phrases; vnp != NULL; vnp = vnp->next) {
+          if (StringISearch(ufp->data.ptrvalue, vnp->data.ptrvalue) != NULL) {
+            rval = eFieldValid_Inappropriate;
+            if (s_callback == NULL) {
+              break;
+            } else {
+              s_callback (eFieldValid_Inappropriate, NULL, ufp, NULL, s_callback_data, uop);
+            }
+          }
+        }
+      }
+    }
+  }
+  return rval;
+}
+
+
+static EFieldValid AreStructuredCommentContentsValidForRule
 (UserObjectPtr uop,
  CommentRulePtr comment_rule,
  StructuredCommentCallback s_callback,
@@ -458,20 +546,15 @@ IsStructuredCommentValidForRule
   UserFieldPtr ufp, ufp_tmp, depend_ufp;
   FieldRulePtr field_rule, rule_tmp;
   DependentFieldRulePtr depend_rule;
-  EFieldValid  rval = eFieldValid_Valid;
+  EFieldValid  rval = eFieldValid_Valid, tmp_val;
+  Boolean      free_uop = FALSE;
 
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) {
-    return eFieldValid_Invalid;
-  } else if (comment_rule == NULL) {
-    return eFieldValid_Valid;
-  }
-
-  /* first, make sure comment rule prefix matches comment */
-  if (!DoesStructuredCommentHavePrefix (uop, comment_rule->prefix)) {
     return eFieldValid_Invalid;
   }
 
   if (!comment_rule->require_order) {
+    free_uop = TRUE;
     uop = (UserObjectPtr) AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
     SortFieldsInUserObject(uop);
   }
@@ -497,7 +580,7 @@ IsStructuredCommentValidForRule
           if (rval == eFieldValid_Valid) {
             rval = eFieldValid_Invalid;
           }
-          s_callback (eFieldValid_Invalid, field_rule, ufp, NULL, s_callback_data);
+          s_callback (eFieldValid_Invalid, field_rule, ufp, NULL, s_callback_data, uop);
         }
       }
       ufp = ufp->next;
@@ -511,7 +594,7 @@ IsStructuredCommentValidForRule
           if (rval == eFieldValid_Valid) {
             rval = eFieldValid_Invalid;
           }
-          s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data);
+          s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data, uop);
         }
       }
       ufp = ufp->next;
@@ -526,12 +609,12 @@ IsStructuredCommentValidForRule
             if (rval == eFieldValid_Valid) {
               rval = eFieldValid_MissingRequiredField;
             }
-            s_callback (eFieldValid_MissingRequiredField, field_rule, NULL, NULL, s_callback_data);
+            s_callback (eFieldValid_MissingRequiredField, field_rule, NULL, NULL, s_callback_data, uop);
           }
         } else {
           /* field wasn't required, it's ok */
         }
-      } else {
+      } else if (comment_rule->require_order) {
         /* field is out of order */
         if (s_callback == NULL) {
           rval = eFieldValid_FieldOutOfOrder;
@@ -540,10 +623,19 @@ IsStructuredCommentValidForRule
           if (rval == eFieldValid_Valid) {
             rval = eFieldValid_FieldOutOfOrder;
           }
-          s_callback (eFieldValid_FieldOutOfOrder, field_rule, ufp_tmp, NULL, s_callback_data);
+          s_callback (eFieldValid_FieldOutOfOrder, field_rule, ufp_tmp, NULL, s_callback_data, uop);
           if (!DoesFieldValueMatchRule (ufp_tmp, field_rule)) {
-            s_callback (eFieldValid_Invalid, field_rule, ufp_tmp, NULL, s_callback_data);
+            s_callback (eFieldValid_Invalid, field_rule, ufp_tmp, NULL, s_callback_data, uop);
           }
+        }
+      } else {
+        if (!DoesFieldValueMatchRule(ufp_tmp, field_rule)) {
+            if (s_callback == NULL) {
+                rval = eFieldValid_Invalid;
+                goto IsStructuredCommentValidForRule_exit;
+            } else {
+                s_callback(eFieldValid_Invalid, field_rule, ufp_tmp, NULL, s_callback_data, uop);
+            }
         }
       }
       field_rule = field_rule->next;
@@ -560,7 +652,7 @@ IsStructuredCommentValidForRule
         if (rval == eFieldValid_Valid) {
           rval = eFieldValid_MissingRequiredField;
         }
-        s_callback (eFieldValid_MissingRequiredField, field_rule, NULL, NULL, s_callback_data);
+        s_callback (eFieldValid_MissingRequiredField, field_rule, NULL, NULL, s_callback_data, uop);
       }
     }
     field_rule = field_rule->next;
@@ -583,7 +675,7 @@ IsStructuredCommentValidForRule
         if (rval == eFieldValid_Valid) {
           rval = eFieldValid_Invalid;
         }
-        s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data);
+        s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data, uop);
       }
     } else if (field_rule != NULL && FindFieldForRuleName(uop->data, field_rule->field_name) != ufp) {
       if (s_callback == NULL) {
@@ -593,7 +685,7 @@ IsStructuredCommentValidForRule
         if (rval == eFieldValid_Valid) {
           rval = eFieldValid_DuplicateField;
         }
-        s_callback (eFieldValid_DuplicateField, field_rule, ufp, NULL, s_callback_data);
+        s_callback (eFieldValid_DuplicateField, field_rule, ufp, NULL, s_callback_data, uop);
       }
     }
     ufp = ufp->next;
@@ -615,7 +707,7 @@ IsStructuredCommentValidForRule
             if (rval == eFieldValid_Valid) {
               rval = eFieldValid_MissingRequiredField;
             }
-            s_callback (eFieldValid_MissingRequiredField, field_rule, ufp, depend_ufp, s_callback_data);
+            s_callback (eFieldValid_MissingRequiredField, field_rule, ufp, depend_ufp, s_callback_data, uop);
           }
         } else if (!DoesFieldValueMatchRule (ufp, field_rule)) {
           if (s_callback == NULL) {
@@ -625,11 +717,13 @@ IsStructuredCommentValidForRule
             if (rval == eFieldValid_Valid) {
               rval = eFieldValid_MissingRequiredField;
             }
-            s_callback (eFieldValid_Invalid, field_rule, ufp, depend_ufp, s_callback_data);
+            s_callback (eFieldValid_Invalid, field_rule, ufp, depend_ufp, s_callback_data, uop);
           }
         }
       }
       for (field_rule = depend_rule->disallowed_fields; field_rule != NULL; field_rule = field_rule->next) {
+          //LCOV_EXCL_START
+          //no rules currently have disallowed fields
         ufp = FindFieldForRuleName (uop->data, field_rule->field_name);
         if (ufp != NULL && DoesFieldValueMatchRule (ufp, field_rule)) {
           if (s_callback == NULL) {
@@ -639,19 +733,79 @@ IsStructuredCommentValidForRule
             if (rval == eFieldValid_Valid) {
               rval = eFieldValid_Disallowed;
             }
-            s_callback (eFieldValid_Disallowed, field_rule, ufp, depend_ufp, s_callback_data);
+            s_callback (eFieldValid_Disallowed, field_rule, ufp, depend_ufp, s_callback_data, uop);
           }
+        }
+        //LCOV_EXCL_STOP
+      }
+    }
+  }
+
+  tmp_val = FindForbiddenPhrases(uop, comment_rule, s_callback, s_callback_data);
+  if (rval == eFieldValid_Valid) {
+    rval = tmp_val;
+  }
+
+IsStructuredCommentValidForRule_exit:
+  if (free_uop) {
+    uop = UserObjectFree (uop);
+  }
+  return rval;
+}
+
+
+NLM_EXTERN EFieldValid 
+IsStructuredCommentValidForRule 
+(UserObjectPtr uop,
+ CommentRulePtr comment_rule,
+ StructuredCommentCallback s_callback,
+ Pointer s_callback_data)
+{
+  UserFieldPtr ufp;
+  EFieldValid  rval = eFieldValid_Valid;
+
+  if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) {
+    return eFieldValid_Invalid;
+  }
+
+  for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+    if (ufp->label != NULL && StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0) {
+      /* check prefix */
+      if (! PrefixOrSuffixInList ((CharPtr) ufp->data.ptrvalue, "##", "-START##")) {
+        if (s_callback == NULL) {
+          return eFieldValid_Invalid;
+        } else {
+          if (rval == eFieldValid_Valid) {
+            rval = eFieldValid_Invalid;
+          }
+          s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data, uop);
+        }
+      }
+    } else if (ufp->label != NULL && StringICmp (ufp->label->str, "StructuredCommentSuffix") == 0) {
+      /* check suffix */
+      if (! PrefixOrSuffixInList ((CharPtr) ufp->data.ptrvalue, "##", "-END##")) {
+        if (s_callback == NULL) {
+          return eFieldValid_Invalid;
+        } else {
+          if (rval == eFieldValid_Valid) {
+            rval = eFieldValid_Invalid;
+          }
+          s_callback (eFieldValid_Invalid, NULL, ufp, NULL, s_callback_data, uop);
         }
       }
     }
   }
 
-IsStructuredCommentValidForRule_exit:
-  if (!comment_rule->require_order) {
-    uop = UserObjectFree (uop);
+  if (comment_rule == NULL) {
+    return rval;
   }
 
-  return rval;
+  /* first, make sure comment rule prefix matches comment */
+  if (!DoesStructuredCommentHavePrefix (uop, comment_rule->prefix)) {
+    return eFieldValid_Invalid;
+  }
+
+  return AreStructuredCommentContentsValidForRule (uop, comment_rule, s_callback, s_callback_data);
 }
 
 
@@ -674,54 +828,6 @@ NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop, StructuredCo
   }
   cr = GetCommentRuleFromRuleSet (prefix);
   return IsStructuredCommentValidForRule (uop, cr, s_callback, s_callback_data);
-}
-
-
-static Boolean IsStructuredCommentPrefix (UserFieldPtr ufp)
-{
-  if (ufp == NULL) {
-    return FALSE;
-  }
-  if (ufp->label != NULL 
-      && StringICmp (ufp->label->str, "StructuredCommentPrefix") == 0
-      && ufp->choice == 1) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-static Boolean IsStructuredCommentSuffix (UserFieldPtr ufp)
-{
-  if (ufp == NULL) {
-    return FALSE;
-  }
-  if (ufp->label != NULL 
-      && StringICmp (ufp->label->str, "StructuredCommentSuffix") == 0
-      && ufp->choice == 1) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
-static CharPtr GetStructuredCommentPrefix (UserObjectPtr uop)
-{
-  UserFieldPtr ufp;
-  CharPtr prefix = NULL;
-
-  if (uop == NULL) {
-    return NULL;
-  }
-
-  for (ufp = uop->data; ufp != NULL && prefix == NULL; ufp = ufp->next) {
-    if (IsStructuredCommentPrefix(ufp)) {
-      prefix = ufp->data.ptrvalue;
-    }
-  }
-  return prefix;
 }
 
 
@@ -770,16 +876,20 @@ static Boolean MovePrefixAndSuffixFieldsToFlank (UserObjectPtr uop)
 }
 
 
+//LCOV_EXCL_START
+//not used for validation
 NLM_EXTERN Boolean ReorderStructuredCommentFields (UserObjectPtr uop)
 {
   CommentRulePtr cr;
   FieldRulePtr rule;
-  UserFieldPtr ufp, ufp_prev = NULL, new_list = NULL, new_prev = NULL, ufp_next, ufp_last = NULL;
+  UserFieldPtr ufp, ufp_prev = NULL, new_list = NULL, new_prev = NULL;
   CharPtr prefix = NULL;
+  UserObjectPtr uop_orig;
   Boolean changed = FALSE;
 
   if (uop == NULL || uop->type == NULL || StringICmp (uop->type->str, "StructuredComment") != 0) return FALSE;
 
+  uop_orig = AsnIoMemCopy (uop, (AsnReadFunc) UserObjectAsnRead, (AsnWriteFunc) UserObjectAsnWrite);
   prefix = GetStructuredCommentPrefix (uop);
   if (prefix != NULL
       && (cr = GetCommentRuleFromRuleSet (prefix)) != NULL) {
@@ -812,10 +922,37 @@ NLM_EXTERN Boolean ReorderStructuredCommentFields (UserObjectPtr uop)
   } 
   changed |= MovePrefixAndSuffixFieldsToFlank (uop);
 
+  changed = !AsnIoMemComp (uop, uop_orig, (AsnWriteFunc) UserObjectAsnWrite);
+  uop_orig = UserObjectFree (uop_orig);
+
   return changed;
 }
 
+//not used for validation
+static void ReorderStructuredCommentFieldsCallback (SeqDescrPtr sdp, Pointer userdata)
+{
+  BoolPtr r = (BoolPtr) userdata;
+  if (sdp->choice == Seq_descr_user) {
+    if (ReorderStructuredCommentFields ((UserObjectPtr) sdp->data.ptrvalue)) {
+      if (r != NULL) {
+        *r = TRUE;
+      }
+    }
+  }
+}
 
+
+//not used for validation
+NLM_EXTERN Boolean ReorderStructuredCommentsInSeqEntry (SeqEntryPtr sep)
+{
+  Boolean rval = FALSE;
+
+  VisitDescriptorsInSep (sep, &rval, ReorderStructuredCommentFieldsCallback);
+  return rval;
+}
+
+
+//not used for validation
 static Boolean DoesStructuredCommentHaveAnyPrefixOrSuffix (UserObjectPtr uop)
 {
   UserFieldPtr ufp;
@@ -836,11 +973,14 @@ static Boolean DoesStructuredCommentHaveAnyPrefixOrSuffix (UserObjectPtr uop)
 }
 
 
+//LCOV_EXCL_START
+//not used in validation
 static Boolean IsRuleOkForStructuredComment (UserObjectPtr uop, CommentRulePtr cr)
 {
-  UserFieldPtr ufp, ufp_last = NULL;
+  UserFieldPtr ufp;
   FieldRulePtr field_rule;
   Boolean  rval = FALSE;
+  CommentRulePtr cr_tmp = NULL;
 
   if (uop == NULL || uop->data == NULL || cr == NULL) {
     return FALSE;
@@ -849,29 +989,31 @@ static Boolean IsRuleOkForStructuredComment (UserObjectPtr uop, CommentRulePtr c
 
   /* all field names must be recognized */
   while (ufp != NULL) {
-    field_rule = FindRuleForFieldName(ufp, cr->fields);
-    if (field_rule == NULL) {
-      return FALSE;
+    if (!IsStructuredCommentPrefix(ufp) && !IsStructuredCommentSuffix(ufp)) {
+      /* ignore prefix and suffix if present */
+      field_rule = FindRuleForFieldName(ufp, cr->fields);
+      if (field_rule == NULL) {
+        return FALSE;
+      }
     }
-    ufp_last = ufp;
     ufp = ufp->next;
   }
 
-  ufp = UserFieldNew ();
-  ufp->label = ObjectIdNew ();
-  ufp->label->str = StringSave ("StructuredCommentPrefix");
-  ufp->choice = 1; /* visible string */
-  ufp->data.ptrvalue = (Pointer) StringSave (cr->prefix);
-  ufp_last->next = ufp;
-
-  if (IsStructuredCommentValidForRule (uop, cr, NULL, NULL) == eFieldValid_Valid) {
+  /* don't be picky about order when assigning prefix */
+  if (cr->require_order) {
+    cr_tmp = (CommentRulePtr) AsnIoMemCopy (cr, (AsnReadFunc) CommentRuleAsnRead, (AsnWriteFunc) CommentRuleAsnWrite);
+    cr_tmp->require_order = FALSE;
+    cr = cr_tmp;
+  }
+  if (AreStructuredCommentContentsValidForRule (uop, cr, NULL, NULL) == eFieldValid_Valid) {
     rval = TRUE;
   }
-  ufp_last->next = UserFieldFree (ufp_last->next);
+  cr_tmp = CommentRuleFree (cr_tmp);
   return rval;
 }
 
 
+//not used for validation
 NLM_EXTERN CharPtr AutoapplyStructuredCommentPrefix (UserObjectPtr uop)
 {
   CommentRulePtr cr;
@@ -903,4 +1045,39 @@ NLM_EXTERN CharPtr AutoapplyStructuredCommentPrefix (UserObjectPtr uop)
   }
   return prefix;
 }
+
+
+//not used for validation
+NLM_EXTERN CommentRulePtr NewRuleForStructuredComment (UserObjectPtr uop)
+{
+  CommentRulePtr cr;
+  CommentRulePtr new_cr = NULL;
+
+  if (uop == NULL || uop->type == NULL 
+      || StringICmp (uop->type->str, "StructuredComment") != 0
+      || !DoesStructuredCommentHaveAnyPrefixOrSuffix (uop)
+      || IsStructuredCommentValid (uop, NULL, NULL) == eFieldValid_Valid) {
+    return NULL;
+  }
+
+  if (CommentRules == NULL) {
+    cr = LoadCommentRuleSet ();
+  } else {
+    cr = CommentRules;
+  }
+
+  while (cr != NULL) {
+    if (IsRuleOkForStructuredComment(uop, cr)) {
+      if (new_cr == NULL) {
+        new_cr = cr;
+      } else {
+        return NULL;
+      }
+    }
+    cr = cr->next;
+  }
+
+  return new_cr;
+}
+//LCOV_EXCL_STOP
 

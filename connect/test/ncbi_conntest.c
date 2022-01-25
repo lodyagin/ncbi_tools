@@ -1,4 +1,4 @@
-/* $Id: ncbi_conntest.c,v 6.20 2012/05/08 15:09:32 kazimird Exp $
+/* $Id: ncbi_conntest.c,v 6.21 2013/02/23 17:24:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -36,8 +36,8 @@
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include "ncbi_conntest.h"
 #include <string.h>
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 
 /***********************************************************************

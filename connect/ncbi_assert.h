@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_ASSERT__H
 #define CONNECT___NCBI_ASSERT__H
 
-/* $Id: ncbi_assert.h,v 1.4 2009/01/22 17:59:35 kazimird Exp $
+/* $Id: ncbi_assert.h,v 1.5 2014/10/23 15:49:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,7 +26,7 @@
  *
  * ===========================================================================
  *
- * Author:  Anton Lavrentiev
+ * Author:  Denis Vakatov
  *
  * File Description:
  *    Run-time debugging
@@ -41,9 +41,11 @@
 #if !defined(NDEBUG)  &&  !defined(_DEBUG)
 #  define NDEBUG
 #endif
+
 #include <assert.h>
+
 #if defined(NDEBUG)
-#  define verify(expr)  (void)(expr)
+#  define verify(expr)  while ( expr ) break
 #else
 #  define verify(expr)  assert(expr)
 #endif

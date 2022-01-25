@@ -29,13 +29,22 @@
 *
 * Version Creation Date:   1/26/99
 *
-* $Revision: 6.79 $
+* $Revision: 6.81 $
 *
 * File Description: Shim functions to replace Viewer3D with OpenGL
 *
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: shim3d.c,v $
+* Revision 6.81  2016/09/02 15:08:15  ucko
+* shim3d.c (OGL_Reset): conditionally call OGL_ClearBoundBox, to avoid a
+* (historical?) potential crash, per a long-standing Debian/Ubuntu patch
+* that might be redundant nowadays.
+*
+* Revision 6.80  2016/09/02 15:06:30  ucko
+* shim3d.c: accommodate newer versions of libpng, which don't directly
+* expose the jmpbuf field, as already done in Debian/Ubuntu packages.
+*
 * Revision 6.79  2002/03/28 13:35:48  kans
 * only include MoreCarbonAccessors.h if not OS_UNIX_DARWIN
 *
@@ -312,6 +321,9 @@
 
 #ifdef _PNG
 #include <png.h> /* must go berore ncbi headers */
+#ifndef png_jmpbuf
+#define png_jmpbuf(x) ((x)->jmpbuf)
+#endif
 #endif
 
 /* from ncbimisc.h */
@@ -2711,6 +2723,9 @@ void OGL_Reset(TOGL_Data * OGL_Data)
     if (OGL_Data == NULL)
         return;
 
+    if (!OGL_Data->BoundBox.set)
+        OGL_ClearBoundBox(&(OGL_Data->BoundBox));
+
     OGL_Data->MaxSize = (Nlm_FloatLo)
         fabs(OGL_Data->BoundBox.x[0] - OGL_Data->BoundBox.x[1]);
     diff = fabs(OGL_Data->BoundBox.y[0] - OGL_Data->BoundBox.y[1]);
@@ -3154,7 +3169,7 @@ void Nlm_SaveImagePNG(Nlm_Char *fname)
         goto cleanup;
     }
 
-    if (setjmp(png_ptr->jmpbuf)) {
+    if (setjmp(png_jmpbuf(png_ptr))) {
         Message(MSG_ERROR, "PNG write failed");
         goto cleanup;
     }

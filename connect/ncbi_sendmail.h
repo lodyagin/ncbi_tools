@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SENDMAIL__H
 #define CONNECT___NCBI_SENDMAIL__H
 
-/* $Id: ncbi_sendmail.h,v 6.23 2012/06/20 18:09:36 kazimird Exp $
+/* $Id: ncbi_sendmail.h,v 6.33 2014/12/23 16:34:28 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,11 +29,12 @@
  * Author:  Anton Lavrentiev
  *
  * File Description:
+ * @file
  *   Send mail (in accordance with RFC821 [protocol] and RFC822 [headers])
  *
  */
 
-#include <connect/ncbi_types.h>
+#include <connect/ncbi_util.h>
 
 
 /** @addtogroup Sendmail
@@ -47,112 +48,157 @@ extern "C" {
 #endif
 
 
-/* Options apply to various fields of SSendMailInfo structure, below */
+/** Options apply to various fields of SSendMailInfo structure, below
+ * @sa SSendMailInfo
+ */
 enum ESendMailOption {
-    fSendMail_NoMxHeader       = (1 << 0), /* Don't add standard mail header,
-                                            * just use what user provided    */
-    fSendMail_StripNonFQDNHost = (1 << 8)  /* Strip host part in "from" field
-                                            * if it does not look like an FQDN
-                                            * (i.e. doesn't have at least two
-                                            * domain name labels separated by a
-                                            * dot); leave only username part */
+    fSendMail_LogOn            = eOn,      /**< see: fSOCK_LogOn      */
+    fSendMail_LogOff           = eOff,     /**<      fSOCK_LogDefault */
+    fSendMail_NoMxHeader       = (1 << 4), /**< Don't add standard mail header,
+                                                just use what user provided */
+    fSendMail_Old822Headers    = (1 << 6), /**< Form "Date:" and "From:" hdrs
+                                                (usually they are defaulted) */
+    fSendMail_StripNonFQDNHost = (1 << 8), /**< Strip host part off the "from"
+                                                field if it does not look like
+                                                an FQDN (i.e. does not have at
+                                                least two domain name labels
+                                                separated by a dot); leave only
+                                                the username part */
 };
-typedef unsigned int TSendMailOptions;     /* Bitwise OR of ESendMailOption  */
+typedef unsigned short TSendMailOptions;   /**< Bitwise OR of ESendMailOption*/
 
 
-/* Define optional parameters for communication with sendmail
+/** Define optional parameters for communication with sendmail.
  */
 typedef struct {
-    const char*      cc;            /* Carbon copy recipient(s)              */
-    const char*      bcc;           /* Blind carbon copy recipient(s)        */
-    char             from[1024];    /* Originator address                    */
-    const char*      header;        /* Custom header fields ('\n'-separated) */
-    size_t           body_size;     /* Message body size (if specified)      */
-    const char*      mx_host;       /* Host to contact an MTA at             */
-    short            mx_port;       /* Port to contact an MTA at             */
-    STimeout         mx_timeout;    /* Timeout for all network transactions  */
-    TSendMailOptions mx_options;    /* From the above                        */
-    unsigned int     magic_cookie;  /* Filled in by SendMailInfo_Init        */
+    const char*      cc;            /**< Carbon copy recipient(s)            */
+    const char*      bcc;           /**< Blind carbon copy recipient(s)      */
+    char             from[1024];    /**< Originator address                  */
+    const char*      header;        /**< Custom msg header ('\n'-separated)  */
+    size_t           body_size;     /**< Message body size (if specified)    */
+    STimeout         mx_timeout;    /**< Timeout for all network transactions*/
+    const char*      mx_host;       /**< Host to contact an MTA at           */
+    short            mx_port;       /**< Port to contact an MTA at           */
+    TSendMailOptions mx_options;    /**< See ESendMailOption                 */
+    unsigned int     magic_cookie;  /**< RO, filled in by SendMailInfo_Init  */
 } SSendMailInfo;
 
 
-/* NOTE about recipient lists:
- * They are not parsed; valid recipient (according to the standard)
- * can be specified in the form "Name" <address>; recipients should
- * be separated by commas.  In case of address-only recipients (with no
- * "Name" part above), angle brackets around the address may be omitted.
- *
- * NOTE about message body size:
- * If not specified (0), and by default, the message body size is calculated
- * as strlen() of passed body argument, which thus must be '\0'-terminated.
- * Otherwise, exactly "body_size" bytes are read from the location pointed
- * to by "body" parameter, and are sent in the message.
- *
- * NOTE about MX header:
- * A message header is automatically prepended to a message that has the
- * fSendMail_NoMxHeader flag cleared in "mx_options" (default).  Otherwise,
- * only "header" part (if any) is sent to the MTA (mail tranfser agent), and
- * the rest of the header and the message body is passed "as is" following it.
- * Message header separator and proper message formatting is then
- * the caller's responsibility.
- */
-
-/* Initialize SSendMailInfo structure, setting:
+/** Initialize SSendMailInfo structure, setting:
  *   'cc', 'bcc', 'header' to NULL (means no recipients/additional headers);
- *   'from' filled out using either the provided (non-empty) user name
- *          or the name of the current user if discovered, 'anonymous'
- *          otherwise, and host in the form: username@hostname; may be later
- *          reset by the application to "" for sending no-return messages
- *          (aka MAILER-DAEMON messages);
+ *   'from' filled out with a return address using either the provided
+ *          (non-empty) user name or the name of the current user if
+ *          discoverable ("anonymous" otherwise), and the host, in the form:
+ *          "username@hostname";  that may later be reset by the application
+ *          to "" for sending no-return messages (aka MAILER-DAEMON messages);
  *   'mx_*' filled out in accordance with some hard-coded defaults, which are
- *          very NCBI-specific; an outside application is likely to choose and
- *          use different values (at least for mx_host).
+ *          rather NCBI-specific;  an outside application is likely to choose
+ *          and use different values (at least for 'mx_host').
  *          The mx_... fields can be configured via the registry file at
  *          [CONN]MX_HOST, [CONN]MX_PORT, and [CONN]MX_TIMEOUT, as well as
  *          through their process environment equivalents (which have higher
  *          precedence, and override the values found in the registry):
  *          CONN_MX_HOST, CONN_MX_PORT, and CONN_MX_TIMEOUT, respectively;
  *   'magic_cookie' to a proper value (verified by CORE_SendMailEx()!).
- * Return value equals the argument passed in.
- * Note: This call is the only valid way to properly init SSendMailInfo.
+ * @note This call is the only valid way to properly init SSendMailInfo.
+ * @param info
+ *  A pointer to the structure to initialize
+ * @param from
+ *  Return address pattern to use in 'info->from' as the following:
+ *  * "user@host" or "user" is copied verbatim (as-is);
+ *  * "user@" is appended with the local host name;
+ *  * "@host" is prepended with the user name according to the 'user' argument;
+ *  * "@"     is replaced with an empty string (for no-return messages);
+ *  * "" or NULL cause to generate both the user and the host parts.
+ * @param user
+ *  Which username to use when auto-generating (ignored otherwise)
+ * @return
+ *  Return value equals the argument 'info' passed in.
+ * @note It is allowed to pre-fill 'info->from' (of the 'info' being inited)
+ *       with one of the above patterns, and pass it as the 'from' parameter.
+ * @note Unlike the username part of the return address, the hostname part is
+ *       never truncated but dropped altogether if it does not fit.
+ * @note If the username is unobtainable, then it is be replaced with the word
+ *       "anonymous".
+ * @sa
+ *  CORE_SendMailEx, CORE_GetUsernameEx
  */
 extern NCBI_XCONNECT_EXPORT SSendMailInfo* SendMailInfo_InitEx
-(SSendMailInfo*       info,
- const char*          user
+(SSendMailInfo* info,
+ const char*    from,
+ ECORE_Username user
  );
 
-#define SendMailInfo_Init(info)  SendMailInfo_InitEx(info, 0)
+#define SendMailInfo_Init(i)  SendMailInfo_InitEx(i, 0, eCORE_UsernameLogin)
 
 
-/* Send a simple message to recipient(s) defined in 'to',
- * and having subject 'subject', which may be empty (both NULL and "" treated
- * equally as empty subjects), and message body 'body' (may be NULL/empty,
- * if not empty, lines are separated by '\n', must be '\0'-terminated).
- * Return value 0 means success; otherwise descriptive error message
- * gets returned.  Communicaiton parameters for connection with sendmail
- * are set using default values as described in SendMailInfo_Init().
- * NOTE:  Use of this call in out-of-house applications is discouraged as
- *        it is likely to fail since MTA communication parameters set
- *        to their defaults (which are NCBI-specific) may not be suitable.
+/** Send a simple message to recipient(s) defined in 'to', and having:
+ * 'subject', which may be empty (both NULL and "" treated equally), and
+ * message 'body' (may be NULL/empty, if not empty, lines are separated by
+ * '\n', must be '\0'-terminated).  Communicaiton parameters for connection
+ * with sendmail are set using default values as described in
+ * SendMailInfo_InitEx().
+ * @note  Use of this call in out-of-house applications is discouraged as it is
+ *        likely to fail because the MTA communication parameters (set to their
+ *        defaults, which are NCBI-specific) may not be suitable.
+ * @param to
+ *  Recipient list
+ * @param subject
+ *  Subject of the message
+ * @param body
+ *  The message body
+ * @return
+ *  0 on success;  otherwise, a descriptive error message.
+ * @sa
+ *  SendMailInfo_InitEx, CORE_SendMailEx
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_SendMail
-(const char*          to,
- const char*          subject,
- const char*          body
+(const char* to,
+ const char* subject,
+ const char* body
  );
 
-/* Send a message as in CORE_SendMail() but by explicitly specifying
- * all additional parameters of the message and the communication via
- * argument 'info'. In case of 'info' == NULL, the call is completely
- * equivalent to CORE_SendMail().
- * NB: Body is not neccessarily '\0'-terminated if 'info->body_size' specifies
- * non-zero message body size (see SSendMailInfo::body_size above).
+/** Send a message as in CORE_SendMail() but by explicitly specifying all
+ * additional parameters of the message and communication via the argument
+ * 'info'. In case of 'info' == NULL, the call is completely equivalent to
+ * CORE_SendMail().
+ * @note Body may not necessarily be '\0'-terminated if 'info->body_size'
+ * specifies non-zero message body size (see SSendMailInfo::body_size above).
  *
- * NOTE: Body can have additional header part if fSendMail_NoMxHeader is
- *       set in 'info->mx_options'.  Even if no additional headers are
- *       supplied, the body must provide the proper header / message text
- *       delimiter (an empty line), which will not be automatically inserted
- *       in the no-header (aka "as-is") mode.
+ * @note
+ * Recipient lists are not validated;  a valid recipient (according to the
+ * standard) can be specified in the form '"Name" \<address\>' (excluding all
+ * comment fields, which are discouraged from appearance in the addresses);
+ * recipients must be separated by commas.  In case of address-only recipients
+ * (with no "Name" part above), the angle brackets around the address should
+ * be omitted.  Group syntax for recipients 'groupname ":" [mailbox-list] ";"'
+ * is not currently supported.
+ *
+ * @note
+ * If not specified (0), and by default, the message body size is calculated as
+ * strlen() of the passed 'body' argument, which thus must be '\0'-terminated.
+ * Otherwise, exactly 'info->body_size' bytes are read from the location
+ * pointed to by the 'body' parameter, and are then sent in the message.
+ *
+ * @note
+ * If fSendMail_NoMxHeader is set in 'info->mx_options', the body can have
+ * an additional header part  (otherwise, a standard header gets generated as
+ * needed).  In this case, even if no additional headers are supplied, the body
+ * must provide the proper header / message text delimiter (an empty line),
+ * which will not be automatically inserted (aka "as-is" message mode).
+ *
+ * @param to
+ *  Recipient list
+ * @param subject
+ *  Subject of the message
+ * @param body
+ *  The message body
+ * @param info
+ *  Communicational and additional protocol parameters
+ * @return
+ *  0 on success;  otherwise, a descriptive error message.
+ * @sa
+ *  SendMailInfo_InitEx
  */
 extern NCBI_XCONNECT_EXPORT const char* CORE_SendMailEx
 (const char*          to,

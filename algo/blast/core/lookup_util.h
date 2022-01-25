@@ -1,4 +1,4 @@
-/* $Id: lookup_util.h,v 1.16 2008/11/04 19:59:32 kazimird Exp $
+/* $Id: lookup_util.h,v 1.17 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -57,7 +57,7 @@ Int4 iexp(Int4 x, Int4 n);
  */
 
 NCBI_XBLAST_EXPORT
-Int4 ilog2(Int4 x);
+Int4 ilog2(Int8 x);
 
 /**
  * generates a de Bruijn sequence containing all substrings

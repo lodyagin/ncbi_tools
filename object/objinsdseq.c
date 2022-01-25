@@ -31,7 +31,7 @@ objinsdseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module INSD-INSDSeq
-*    Generated using ASNCODE Revision: 6.17 at May 26, 2010 12:38 PM
+*    Generated using ASNCODE Revision: 6.19 at Sep 17, 2013  6:09 PM
 *
 **************************************************/
 
@@ -63,6 +63,7 @@ NLM_EXTERN
 INSDSetPtr LIBCALL
 INSDSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -118,6 +119,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -138,6 +140,9 @@ INSDSetAsnWrite(INSDSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) INSDSeqAsnWrite, aip, atp, INSDSET_E);
    retval = TRUE;
 
@@ -210,6 +215,7 @@ INSDSeqFree(INSDSeqPtr ptr)
    MemFree(ptr -> sequence);
    MemFree(ptr -> contig);
    AsnGenericUserSeqOfFree(ptr -> alt_seq, (AsnOptFreeFunc) INSDAltSeqDataFree);
+   AsnGenericUserSeqOfFree(ptr -> xrefs, (AsnOptFreeFunc) INSDXrefFree);
    return MemFree(ptr);
 }
 
@@ -499,6 +505,13 @@ INSDSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == INSDSEQ_xrefs) {
+      ptr -> xrefs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDXrefAsnRead, (AsnOptFreeFunc) INSDXrefFree);
+      if (isError && ptr -> xrefs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -546,6 +559,9 @@ INSDSeqAsnWrite(INSDSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -657,6 +673,7 @@ INSDSeqAsnWrite(INSDSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, INSDSEQ_contig,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> alt_seq, (AsnWriteFunc) INSDAltSeqDataAsnWrite, aip, INSDSEQ_alt_seq, INSDSEQ_alt_seq_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> xrefs, (AsnWriteFunc) INSDXrefAsnWrite, aip, INSDSEQ_xrefs, INSDSEQ_xrefs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -868,6 +885,9 @@ INSDReferenceAsnWrite(INSDReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -943,7 +963,7 @@ INSDCommentFree(INSDCommentPtr ptr)
       return NULL;
    }
    MemFree(ptr -> type);
-   AsnGenericUserSeqOfFree(ptr -> paragraphs, (AsnOptFreeFunc) INSDCommentParagraphFree);
+   AsnGenericBaseSeqOfFree(ptr -> paragraphs ,ASNCODE_PTRVAL_SLOT);
    return MemFree(ptr);
 }
 
@@ -1003,7 +1023,7 @@ INSDCommentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == INSDCOMMENT_paragraphs) {
-      ptr -> paragraphs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDCommentParagraphAsnRead, (AsnOptFreeFunc) INSDCommentParagraphFree);
+      ptr -> paragraphs = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
       if (isError && ptr -> paragraphs == NULL) {
          goto erret;
       }
@@ -1056,6 +1076,9 @@ INSDCommentAsnWrite(INSDCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1064,7 +1087,7 @@ INSDCommentAsnWrite(INSDCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> type;
       retval = AsnWrite(aip, INSDCOMMENT_type,  &av);
    }
-   AsnGenericUserSeqOfAsnWrite(ptr -> paragraphs, (AsnWriteFunc) INSDCommentParagraphAsnWrite, aip, INSDCOMMENT_paragraphs, INSDCOMMENT_paragraphs_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> paragraphs ,ASNCODE_PTRVAL_SLOT, aip, INSDCOMMENT_paragraphs, INSDCOMMENT_paragraphs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1220,6 +1243,9 @@ INSDStrucCommentAsnWrite(INSDStrucCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1432,6 +1458,9 @@ INSDFeatureAsnWrite(INSDFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1612,6 +1641,9 @@ INSDFeatureSetAsnWrite(INSDFeatureSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1776,6 +1808,9 @@ INSDAltSeqDataAsnWrite(INSDAltSeqDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1843,6 +1878,7 @@ INSDXrefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    INSDXrefPtr ptr;
 
@@ -1939,6 +1975,9 @@ INSDXrefAsnWrite(INSDXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1950,323 +1989,6 @@ INSDXrefAsnWrite(INSDXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> id != NULL) {
       av.ptrvalue = ptr -> id;
       retval = AsnWrite(aip, INSDXREF_id,  &av);
-   }
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    INSDCommentParagraphNew()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentParagraphPtr LIBCALL
-INSDCommentParagraphNew(void)
-{
-   INSDCommentParagraphPtr ptr = MemNew((size_t) sizeof(INSDCommentParagraph));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    INSDCommentParagraphFree()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentParagraphPtr LIBCALL
-INSDCommentParagraphFree(INSDCommentParagraphPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr -> items, (AsnOptFreeFunc) INSDCommentItemFree);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    INSDCommentParagraphAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentParagraphPtr LIBCALL
-INSDCommentParagraphAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   INSDCommentParagraphPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objinsdseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* INSDCommentParagraph ::= (self contained) */
-      atp = AsnReadId(aip, amp, INSDCOMMENTPARAGRAPH);
-   } else {
-      atp = AsnLinkType(orig, INSDCOMMENTPARAGRAPH);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = INSDCommentParagraphNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == INSDCOMMENTPARAGRAPH_items) {
-      ptr -> items = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) INSDCommentItemAsnRead, (AsnOptFreeFunc) INSDCommentItemFree);
-      if (isError && ptr -> items == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = INSDCommentParagraphFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    INSDCommentParagraphAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-INSDCommentParagraphAsnWrite(INSDCommentParagraphPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objinsdseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, INSDCOMMENTPARAGRAPH);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   AsnGenericUserSeqOfAsnWrite(ptr -> items, (AsnWriteFunc) INSDCommentItemAsnWrite, aip, INSDCOMMENTPARAGRAPH_items, INSDCOMMENTPARAGRAPH_items_E);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    INSDCommentItemNew()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentItemPtr LIBCALL
-INSDCommentItemNew(void)
-{
-   INSDCommentItemPtr ptr = MemNew((size_t) sizeof(INSDCommentItem));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    INSDCommentItemFree()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentItemPtr LIBCALL
-INSDCommentItemFree(INSDCommentItemPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   MemFree(ptr -> value);
-   MemFree(ptr -> url);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    INSDCommentItemAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-INSDCommentItemPtr LIBCALL
-INSDCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   AsnReadFunc func;
-   INSDCommentItemPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objinsdseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* INSDCommentItem ::= (self contained) */
-      atp = AsnReadId(aip, amp, INSDCOMMENTITEM);
-   } else {
-      atp = AsnLinkType(orig, INSDCOMMENTITEM);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = INSDCommentItemNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == INSDCOMMENTITEM_value) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> value = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == INSDCOMMENTITEM_url) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> url = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = INSDCommentItemFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    INSDCommentItemAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-INSDCommentItemAsnWrite(INSDCommentItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objinsdseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, INSDCOMMENTITEM);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   if (ptr -> value != NULL) {
-      av.ptrvalue = ptr -> value;
-      retval = AsnWrite(aip, INSDCOMMENTITEM_value,  &av);
-   }
-   if (ptr -> url != NULL) {
-      av.ptrvalue = ptr -> url;
-      retval = AsnWrite(aip, INSDCOMMENTITEM_url,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -2327,6 +2049,7 @@ INSDStrucCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    INSDStrucCommentItemPtr ptr;
 
@@ -2430,6 +2153,9 @@ INSDStrucCommentItemAsnWrite(INSDStrucCommentItemPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2503,6 +2229,7 @@ INSDIntervalAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    INSDIntervalPtr ptr;
 
@@ -2632,6 +2359,9 @@ INSDIntervalAsnWrite(INSDIntervalPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2713,6 +2443,7 @@ INSDQualifierAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    INSDQualifierPtr ptr;
 
@@ -2809,6 +2540,9 @@ INSDQualifierAsnWrite(INSDQualifierPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2884,6 +2618,7 @@ INSDAltSeqItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    INSDAltSeqItemPtr ptr;
 
@@ -3031,6 +2766,9 @@ INSDAltSeqItemAsnWrite(INSDAltSeqItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

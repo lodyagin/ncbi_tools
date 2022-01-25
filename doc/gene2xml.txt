@@ -8,6 +8,14 @@ then gene2xml, and download and extract the appropriate file.
 
 The following versions of gene2xml have been made available:
 
+  Version 1.5  March 23, 2015
+
+    Added RNA-ref field to Gene-commentary
+
+  Version 1.4  September 16, 2013
+
+    Removed Gene-track.status value 'newentry'
+
   Version 1.3  March 1, 2010
 
     Report write failures

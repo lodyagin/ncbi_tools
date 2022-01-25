@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.19 $
 *
 * File Description:  Object manager for module NCBI-Seqset
 *
@@ -479,6 +479,8 @@ NLM_EXTERN Boolean LIBCALL BioseqSetAsnWrite (BioseqSetPtr bsp, AsnIoPtr aip, As
 
 	if (bsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct(aip, atp, (Pointer)bsp)) goto erret;
     
     if (bsp->id != NULL)
@@ -737,7 +739,7 @@ NLM_EXTERN BioseqSetPtr LIBCALL BioseqSetAsnRead (AsnIoPtr aip, AsnTypePtr orig)
 			else
 			{
 	            bsp->annot = SeqAnnotSetAsnRead(aip, atp, BIOSEQ_SET_annot_E);
-				if (bsp->annot == NULL) goto erret;
+				/* if (bsp->annot == NULL) goto erret;n*/
 			}
         }
         else
@@ -925,6 +927,8 @@ NLM_EXTERN Boolean LIBCALL SeqEntryAsnWrite (SeqEntryPtr sep, AsnIoPtr aip, AsnT
 	if (atp == NULL) return FALSE;
 
 	if (sep == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	av.ptrvalue = (Pointer)sep;
     if (! AsnWriteChoice(aip, atp, (Int2)sep->choice, &av)) goto erret;

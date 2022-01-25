@@ -1,4 +1,4 @@
-/* $Id: ncbi_lb.c,v 1.13 2011/04/17 02:44:31 kazimird Exp $
+/* $Id: ncbi_lb.c,v 1.16 2014/11/06 15:35:31 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,10 +31,32 @@
 
 #include "ncbi_lb.h"
 #include "ncbi_priv.h"
-#include <assert.h>
 #include <stdlib.h>
 
 #define NCBI_USE_ERRCODE_X   Connect_LBSM
+
+
+/*
+ * Note parameters' ranges here:
+ * 0.0 <= pref <= 1.0
+ * 0.0 <  gap  <= 1.0
+ * n >= 2
+ * Hence, the formula below always yields in a value from the range [0..1].
+ */
+static double s_Preference(double pref, double gap, size_t n)
+{
+    double spread;
+    assert(0.0 <= pref && pref <= 1.0);
+    assert(0.0 <  gap  && gap  <= 1.0);
+    assert(n >= 2);
+    if (gap >= pref)
+        return gap;
+    spread = 14.0/(n + 12.0);
+    if (gap >= spread/((double) n))
+        return pref;
+    else
+        return 2.0/spread*gap*pref;
+}
 
 
 size_t LB_Select(SERV_ITER     iter,          void*  data,
@@ -59,8 +81,8 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
         status = cand->status;
         latch  = iter->host  &&  iter->host == info->host
             && (!iter->port  ||  iter->port == info->port);
-        if (latch  ||  (!fixed  &&  !iter->host  &&
-                        info->locl  &&  info->coef < 0.0)) {
+        if (latch  ||  (!fixed  &&  !iter->host  &&  info->coef < 0.0
+                        &&  (info->site & (fSERV_Local | fSERV_Private)))) {
             if (fixed < latch) {
                 fixed = latch;
                 access = point = 0.0;
@@ -99,7 +121,7 @@ size_t LB_Select(SERV_ITER     iter,          void*  data,
     } else {
         if (iter->pref > 0.0) {
             if (point > 0.0  &&  access > 0.0  &&  total != access) {
-                p = SERV_Preference(iter->pref, access/total, n);
+                p = s_Preference(iter->pref, access/total, n);
 #ifdef NCBI_LB_DEBUG
                 CORE_LOGF(eLOG_Note,
                           ("(P=%lf,\tA=%lf,\tT=%lf,\tA/T=%lf,\tN=%d) "

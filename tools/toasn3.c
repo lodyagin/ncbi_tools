@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toasn3.c,v 6.133 2012/06/04 20:04:10 kans Exp $";
+static char const rcsid[] = "$Id: toasn3.c,v 6.147 2015/09/04 15:37:58 bollin Exp $";
 
 /*****************************************************************************
 *
@@ -150,6 +150,8 @@ Int4 ToAsn4 (SeqEntryPtr sep, Boolean isEmblOrDdbj)
     return 0;        
 }
 
+//LCOV_EXCL_START
+// not used
 static void CopySfpId(SeqFeatPtr new, SeqFeatPtr sfp)
 {
     ObjectIdPtr oip, noip;
@@ -187,6 +189,7 @@ static void CopySfpId(SeqFeatPtr new, SeqFeatPtr sfp)
     }
     return;
 }
+//LCOV_EXCL_STOP
 
 static void toasn3_free(ToAsn3Ptr tap) 
 {
@@ -284,6 +287,9 @@ static OrgFixPtr OrgFixNew(void)
     return ofp;
 }
 
+//LCOV_EXCL_START
+// used for rescuing biosource and molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
 /*****************************************************************************/
 static void AddOrgToFix (OrgRefPtr orp, ToAsn3Ptr tap, ValNodePtr mod,
                     SeqEntryPtr sep, ValNodePtr vnp, SeqFeatPtr sfp, Int4 index)
@@ -322,6 +328,8 @@ static void AddOrgToFix (OrgRefPtr orp, ToAsn3Ptr tap, ValNodePtr mod,
     return;
 }
 
+// used for rescuing molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
 /*****************************************************************************/
 static void AddMolToFix (ToAsn3Ptr tap, SeqEntryPtr sep,
                          Uint1 mol, ValNodePtr mod, Uint1 meth, Int4 index)
@@ -342,6 +350,7 @@ static void AddMolToFix (ToAsn3Ptr tap, SeqEntryPtr sep,
     
     return;
 }
+//LCOV_EXCL_STOP
 /*****************************************************************************/
 
 static void AddImpToFix (SeqFeatPtr imp, ToAsn3Ptr tap, SeqEntryPtr sep,
@@ -389,6 +398,9 @@ static void FixToAsn(SeqEntryPtr sep, ToAsn3Ptr tap)
     CharPtr        tmp;
     Int2        i, len = 0;
     
+//LCOV_EXCL_START
+// used for rescuing molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
     mfp = tap->mfp;
     while (mfp != NULL) {
 
@@ -409,6 +421,7 @@ static void FixToAsn(SeqEntryPtr sep, ToAsn3Ptr tap)
         mfp = mfp->next;
     
     }
+//LCOV_EXCL_STOP
 
 /* look for Org-refs (desc or feature) and create Biosource */
     for (ofp = tap->ofp; ofp != NULL; ofp = ofp->next) {
@@ -417,6 +430,9 @@ static void FixToAsn(SeqEntryPtr sep, ToAsn3Ptr tap)
             bsp->org = AsnIoMemCopy(ofp->orp, (AsnReadFunc) OrgRefAsnRead, 
                (AsnWriteFunc) OrgRefAsnWrite);
             tap->had_biosource = TRUE;
+//LCOV_EXCL_START
+// used for rescuing biosource from modif, mol-type, and method descriptors,
+// which are obsolete
             for (mfp = tap->mfp; mfp; mfp = mfp->next) {
                 if (ofp->index < mfp->index) {
                     continue;
@@ -429,6 +445,7 @@ static void FixToAsn(SeqEntryPtr sep, ToAsn3Ptr tap)
                     ModToBiosource(bsp, mod);
                 }
             }
+//LCOV_EXCL_STOP
             ofp->bsp = bsp;
        }
     } 
@@ -614,6 +631,9 @@ static void FuseMolInfos (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent
     }
 }
 
+//LCOV_EXCL_START
+// used for rescuing biosource from org desc and org feat, which
+//are converted to biosource desc and biosource feat earlier
 /*****************************************************************************
 *
 *  Build Biosource from descr-org and features
@@ -671,6 +691,7 @@ static void FixOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
     return;
 }
+//LCOV_EXCL_STOP
 
 /*****************************************************************************
 *
@@ -827,7 +848,8 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             SeqFeatFree(sfp);
         }
         /* ap->data = tmp_sfp; */
-        if (ap->data == NULL) {
+        /* now keep empty annot if annot_descr present */
+        if (ap->data == NULL && ap->desc == NULL) {
             sap = remove_annot(sap, ap);
         }
     }
@@ -838,6 +860,7 @@ void StripOld (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
 }
 
+//LCOV_EXCL_START
 /*****************************************************************************
 * EMBL may have multiple OS lines that are parsed to multiple descr on
 * the top level. In NCBI model only one Biosource descr is allowed, others
@@ -876,6 +899,7 @@ ValNodePtr GetMultBiosource(SeqEntryPtr sep)
     }
     return retval;    
 }
+//LCOV_EXCL_STOP
 
 /*****************************************************************************
 * RemoveEmptyTitleAndPubGenAsOnlyPub removes pub { pub { gen { } } empty pubs
@@ -933,7 +957,8 @@ static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && sap->desc == NULL) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);
@@ -959,6 +984,8 @@ static void RemoveEmptyTitleAndPubGenAsOnlyPub (SeqEntryPtr sep)
   }
 }
 
+//LCOV_EXCL_START
+// never called, always called with Ex
 /*****************************************************************************
 *   SeqEntryToAsn3(sep)
 *       Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
@@ -978,6 +1005,8 @@ Int4 SeqEntryToAsn3 (SeqEntryPtr sep, Boolean strip_old, Boolean source_correct,
     return SeqEntryToAsn3Ex(sep, strip_old, source_correct, 
             taxserver, taxfun, NULL, FALSE, FALSE);
 }
+//LCOV_EXCL_STOP
+
 static Boolean is_equiv(SeqEntryPtr sep)
 {
     BioseqSetPtr bssp;
@@ -1080,6 +1109,97 @@ static void CleanMiscFeatFields (SeqFeatPtr sfp, Pointer userdata)
   }
 }
 
+typedef struct dblinknpsdata {
+  SeqDescrPtr  dblinksdp;
+  Boolean      morethanone;
+} DblinkNpsData, PNTR DblinkNpsPtr;
+
+static void FindOneDblink (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  DblinkNpsPtr   dnp;
+  ObjectIdPtr    oip;
+  UserObjectPtr  uop;
+
+  if (sdp == NULL || sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  oip = uop->type;
+  if (oip == NULL) return;
+  if (StringCmp (oip->str, "DBLink") != 0) return;
+
+  dnp = (DblinkNpsPtr) userdata;
+  if (dnp == NULL) return;
+  if (dnp->dblinksdp == NULL) {
+    dnp->dblinksdp = sdp;
+  } else {
+    dnp->morethanone = TRUE;
+  }
+}
+
+static void MoveDBLinkToNPS (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  DblinkNpsData  dnd;
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp;
+  UserObjectPtr  uop;
+
+  if (bssp == NULL) return;
+  if (bssp->_class != BioseqseqSet_class_nuc_prot) return;
+
+  MemSet ((Pointer) &dnd, 0, sizeof (DblinkNpsData));
+  dnd.dblinksdp = NULL;
+  dnd.morethanone = FALSE;
+
+  VisitDescriptorsInSet (bssp, (Pointer) &dnd, FindOneDblink);
+
+  if (dnd.morethanone) return;
+
+  sdp = dnd.dblinksdp;
+  if (sdp == NULL) return;
+  if (sdp->extended == 0) return;
+  ovp = (ObjValNodePtr) sdp;
+  if (ovp->idx.parenttype != OBJ_BIOSEQ) return;
+
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+  if (uop == NULL) return;
+  sdp->data.ptrvalue = NULL;
+  ovp->idx.deleteme = TRUE;
+
+  SeqDescrAddPointer (&(bssp->descr), Seq_descr_user, uop);
+}
+
+static void MarkEmptyUserObjects (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  BoolPtr        bp;
+  ObjectIdPtr    oip;
+  ObjValNodePtr  ovp;
+  UserObjectPtr  uop;
+
+  if (sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+
+  if (uop != NULL) {
+    oip = uop->type;
+    if (oip != NULL) {
+      if (StringICmp (oip->str, "NcbiAutofix") == 0) return;
+      if (StringICmp (oip->str, "Unverified") == 0) return;
+      if (uop->data != NULL) return;
+    }
+  }
+
+  if (sdp->extended == 0) return;
+  ovp = (ObjValNodePtr) sdp;
+  ovp->idx.deleteme = TRUE;
+
+  bp = (BoolPtr) userdata;
+  if (bp != NULL) {
+    *bp = TRUE;
+  }
+}
+
 /*****************************************************************************
 *   SeqEntryToAsn3Ex(sep)
 *       Converts a SeqEntry with old OrgRefs to SeqEntry with Biosource
@@ -1117,6 +1237,7 @@ Boolean isEmblOrDdbj
     ValNodePtr mult = NULL;
     Int4 retval = INFO_ASNOLD, ret;
     Int2 update_date_pos;
+    Boolean  do_delete = FALSE;
     
     ta.had_biosource = FALSE;
     ta.had_molinfo = FALSE;
@@ -1132,6 +1253,13 @@ Boolean isEmblOrDdbj
     }
 
     RemoveAllNcbiCleanupUserObjects (sep);
+
+    VisitDescriptorsInSep (sep, (Pointer) &do_delete, MarkEmptyUserObjects);
+    if (do_delete) {
+      DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+    }
+
+    VisitSetsInSep (sep, NULL, MoveDBLinkToNPS);
 
     update_date_pos = GetUpdateDatePos (sep);
     RemoveEmptyTitleAndPubGenAsOnlyPub (sep);
@@ -1163,12 +1291,15 @@ Boolean isEmblOrDdbj
                 SeqEntryExplore(sep, mult, MergeBSinDescr);
             }
         } else {
+            //LCOV_EXCL_START
+            // Only for SegSets
             SeqEntryExplore(sep, (Pointer) (&bs), CheckBS);
             if (bs.same == TRUE) {
                 SeqEntryExplore(sep, (Pointer) (&bs), StripBSfromParts);
             } else {
                 SeqEntryExplore(sep, (Pointer) (&bs), StripBSfromTop);
             }
+            //LCOV_EXCL_STOP
         }
          ret = FixNucProtSet(sep);
          retval |= ret;
@@ -1273,6 +1404,7 @@ Boolean isEmblOrDdbj
     return retval;
 }
 
+//LCOV_EXCL_START
 Boolean CheckLocWhole(BioseqPtr bsp, SeqLocPtr slp)
 {
     SeqIntPtr sip;
@@ -1290,6 +1422,7 @@ Boolean CheckLocWhole(BioseqPtr bsp, SeqLocPtr slp)
     }
     return FALSE;
 }
+//LCOV_EXCL_STOP
 /*****************************************************************************
 *
 *   Find all the OrgRefs
@@ -1332,6 +1465,9 @@ void FindOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
 
     vnp0 = vnp;
+//LCOV_EXCL_START
+// used for rescuing biosource and molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
     while (vnp != NULL) {
         if (vnp->choice == Seq_descr_org) {
             org = vnp;
@@ -1360,6 +1496,7 @@ void FindOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     if (info) {
         AddMolToFix(tap, sep, mol, mod, meth, index);
     }
+//LCOV_EXCL_STOP
     for (ap = sap; ap; ap = ap->next) {
         if (ap->type != 1) {  /* feature table */
             continue;
@@ -1481,6 +1618,7 @@ Int4 BSComparison(BioSourcePtr one, BioSourcePtr two)
     return retval;
 }
 
+//LCOV_EXCL_START
 Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone)
 {
     OrgRefPtr orp1, orp2;
@@ -1568,6 +1706,7 @@ Int4 BSComparisonEx(BioSourcePtr one, BioSourcePtr two, Boolean clone)
     }
     return retval;
 }
+//LCOV_EXCL_STOP
 
 static CharPtr GetQualValue(GBQualPtr gbqual, CharPtr qual)
 {
@@ -1710,12 +1849,17 @@ We need to find the OrgName here. Now it's optional. Tatiana 10.21.94
     return;
 }
 
+//LCOV_EXCL_START
+// used for rescuing molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
 MolInfoPtr new_info(MolInfoPtr mfi)
 {
     return (mfi == NULL) ? MolInfoNew() : mfi;
 }
 
 /*****************************************************************************/
+// used for rescuing molinfo from modif, mol-type, and method descriptors,
+// which are obsolete
 MolInfoPtr ModToMolInfo(MolInfoPtr mfi, Uint1 mod)
 {
     
@@ -1755,6 +1899,8 @@ MolInfoPtr ModToMolInfo(MolInfoPtr mfi, Uint1 mod)
 }
 
 /*****************************************************************************/
+// used for rescuing BioSource from modif, mol-type, and method descriptors,
+// which are obsolete
 void ModToBiosource(BioSourcePtr bsp, Uint1 mod)
 {
         switch(mod) {
@@ -1864,6 +2010,7 @@ void CkOrg (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
         }
     }
 }
+//LCOV_EXCL_STOP
 
 /**************************************************************************
 *    Compare BioSources in one bioseq->descr,
@@ -2003,7 +2150,7 @@ Int4 FixNucProtSet(SeqEntryPtr sep)
             tmp->data.ptrvalue = bsrc;
         } else if (CmpOrgById(bsrc, bs) == TRUE) {
             bsrc = BioSourceMerge(bsrc, bs);
-        } else {
+        } else if (bsp != NULL) {
             sfp = SeqFeatNew();
             sfp->location = ValNodeNew(NULL);
             sfp->location->choice = SEQLOC_WHOLE;
@@ -2101,6 +2248,7 @@ void CheckBS (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     
 }
 
+//LCOV_EXCL_START
 Int2 seq_loc_compare( SeqLocPtr a, SeqLocPtr b)
 {
     Int2 retval = -1;
@@ -2250,6 +2398,7 @@ Boolean feat_join(SeqFeatPtr f1, SeqFeatPtr f2, SeqFeatPtr head)
     return new;
     
 }
+
 void count_join(SeqFeatPtr f1, SeqFeatPtr f2)
 {
     Int2    comp, nq1, nq2;
@@ -2376,11 +2525,17 @@ static void MergeWholeBSFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 in
             if (sfp->data.choice != SEQFEAT_BIOSRC) {
                 continue;
             }
+            if (SeqMgrFeaturesAreIndexed (sfp->idx.entityID) != 0) {
+              SeqMgrClearFeatureIndexes(sfp->idx.entityID, NULL);
+            }
             ap->data = remove_feat(ap->data, sfp);
             break;
         }
     }
 }
+
+// NOTE: This never finds whole features because they were already cleaned up by
+// ConvertFullLenSourceFeatToDesc
 void CombineBSFeat(SeqEntryPtr sep)
 {
     WholeFeatPtr wfp;
@@ -2537,11 +2692,13 @@ void CountSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
     }
     
 }
+
 /*****************************************************************************
 *
 *  Check multiple source features and try to correct them
 *
 *****************************************************************************/
+// NOTE that this is never called by the cleanup library
 void CorrectSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
     Boolean        whole = FALSE, new = FALSE;
@@ -2700,6 +2857,8 @@ void CorrectSourceFeat (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
         }
     }
 }
+//LCOV_EXCL_STOP
+
 
 Int2 BioSourceToGeneticCode (BioSourcePtr biop)
 {
@@ -3079,6 +3238,7 @@ static void CheckGeneticCode (SeqEntryPtr sep)
   VisitFeaturesInSep (sep, (Pointer) &code, CheckGCode);
 }
 
+//LCOV_EXCL_START
 static Boolean ParseRange(CharPtr pos, Int4 PNTR from, Int4 PNTR to)
 {
     CharPtr  ptr, ptr1, ptr2;
@@ -3187,6 +3347,8 @@ static Uint1 GetQualValueAa(CharPtr qval)
 
 }
 
+// Note: conversion of impfeat cds is handled by CleanUpSeqFeat,
+// which is called before this function is
 Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
 {
     ImpFeatPtr imp;
@@ -3277,6 +3439,7 @@ Boolean ImpFeatToCdregion(SeqFeatPtr sfp)
     
     return TRUE;    
 }
+//LCOV_EXCL_STOP
 
 static void NoteToComment (SeqFeatPtr sfp)
 {
@@ -3346,13 +3509,17 @@ void ChangeReplaceToQual(SeqFeatPtr sfp)
     if(ifp == NULL || ifp->loc == NULL)
         return;
     if ((p = StringStr(ifp->loc, "replace")) != NULL) {
+//LCOV_EXCL_START
+        // This is never called, because BasicCleanup would have removed it already
         AddReplaceQual(sfp, p);
         MemFree(ifp->loc);
         ifp->loc = NULL;
+//LCOV_EXCL_STOP
     }
     return;
 }
 
+//LCOV_EXCL_START
 /**********************************************************/
 void AddReplaceQual(SeqFeatPtr sfp, CharPtr p)
 {
@@ -3373,6 +3540,8 @@ void AddReplaceQual(SeqFeatPtr sfp, CharPtr p)
     *s = '\"';
     return;
 }
+//LCOV_EXCL_STOP
+
 /***************************************************************************
 *    check and remove HTG keywords automaticly generated by asn2ff
 *    HTG info is redundand in GBBlock
@@ -4170,7 +4339,7 @@ extern Boolean EntryCheckGBBlock (SeqEntryPtr sep)
 
 static SeqIntPtr GetOriginalBeforeAdjustment (SeqLocPtr slp, Int4Ptr p_oldfrom, Int4Ptr p_oldto)
 {
-    SeqLocPtr curr = NULL, last;
+    SeqLocPtr curr = NULL, last = NULL;
     SeqIntPtr sip;
   
     if (slp == NULL)
@@ -4991,7 +5160,8 @@ static void RemovePeptideImpFeats (SeqEntryPtr sep, Pointer data, Int4 index, In
                 }
             }
         }
-        if (sap->data == NULL) {
+        /* now keep empty annot if annot_descr present */
+        if (sap->data == NULL && sap->desc == NULL) {
             *(prevsap) = sap->next;
             sap->next = NULL;
             SeqAnnotFree (sap);
@@ -5107,8 +5277,8 @@ void EntryChangeImpFeatToProt (SeqEntryPtr sep)
     return;
 }
 
+//LCOV_EXCL_START
 /* functions moved from Sequin */
-
 static void NormalizeAuthors (AuthListPtr alp)
 
 {
@@ -5649,6 +5819,7 @@ void StripTitleFromProtsInNucProts (SeqEntryPtr sep)
   if (bssp->_class != BioseqseqSet_class_nuc_prot) return;
   SeqEntryExplore (sep, NULL, StripTitleFromProteinProducts);
 }
+//LCOV_EXCL_STOP
 
 
 static void CleanFeatStrings (SeqFeatPtr sfp)
@@ -5957,7 +6128,8 @@ void GetRidOfEmptyFeatsDescCallback (SeqEntryPtr sep, Pointer mydata, Int4 index
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && sap->desc == NULL) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);
@@ -6077,7 +6249,8 @@ static void move_cds_within_nucprot(SeqEntryPtr sep, Pointer mydata, Int4 index,
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && sap->desc == NULL) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);

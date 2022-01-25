@@ -1,6 +1,6 @@
 #	makefile for demo programs
 #
-#	$Id: makedemo.unx,v 6.94 2008/07/29 19:42:43 ucko Exp $
+#	$Id: makedemo.unx,v 6.96 2016/08/31 19:05:26 ucko Exp $
 #
 #	Sun with unbundled ANSI compiler [ make CC=acc ]
 #	Sun with Gnu C [ make CC=gcc ]
@@ -63,6 +63,7 @@ BINCOPY = cp -p
 SUFFIXENV = unx
 ASNDIR = asnstat
 LIB1 = -lncbi
+LIBTLS = -lconnssl
 LIB2 = -lncbiobj
 LIB3 = -lncbicdr
 LIB4 = -lvibrant
@@ -97,23 +98,23 @@ EXE1 = testcore makeset \
     getmesh indexpub getpub testobj seqtest \
 	dosimple asn2ff checksub asndhuff \
 	entrcmd errhdr cdscan findspl \
-	ncbisort fa2htgs fastacmd formatdb formatrpsdb \
-	blastall .WAIT blastpgp testval seedtop \
-	makemat copymat impala \
-	megablast vecscreen gil2bin blastclust rpsblast \
+	ncbisort fa2htgs .WAIT testval \
+	vecscreen gil2bin \
 	asn2xml debruijn asn2idx sortbyquote subfuse \
 	test_regexp demo_regexp demo_regexp_grep
+# fastacmd formatdb formatrpsdb blastall blastpgp seedtop makemat copymat
+# impala megablast blastclust rpsblast
 
 SRC1 = testcore.c makeset.c \
     getmesh.c indexpub.c getpub.c testobj.c seqtest.c dosimple.c asn2ff.c \
     checksub.c asndhuff.c \
     entrcmd.c errhdr.c cdscan.c findspl.c \
-    ncbisort.c fa2htgs.c fastacmd.c formatdb.c formatrpsdb.c \
-    blast_driver.c blastall.c blastpgp.c testval.c seedtop.c \
-    makemat.c copymat.c profiles.c \
-	megablast.c vecscreen.c gil2bin.c blastclust.c rpsblast.c \
+    ncbisort.c fa2htgs.c testval.c \
+    vecscreen.c gil2bin.c blastclust.c rpsblast.c \
 	asn2xml.c debruijn.c asn2idx.c sortbyquote.c subfuse.c \
 	pcretest.c pcredemo.c pcregrep.c
+# fastacmd.c formatdb.c formatrpsdb.c blastall.c blastpgp.c seedtop.c
+# makemat.c copymat.c impala.c megablast.c blastclust.c rpsblast.c
 
 INTERNAL = testgen
 

@@ -66,8 +66,10 @@ static GbFeatName STATIC__ParFlat_GBQual_names[ParFlat_TOTAL_GBQUAL] = {
  {"satellite", Class_text}, { "gene_synonym", Class_text},
  {"UniProtKB_evidence", Class_text}, {"haplogroup", Class_text},
  {"artificial_location", Class_text}, {"non_functional", Class_text},
- {"pseudogene", Class_text}, {"mobile_element_type", Class_text} ,
- {"gap_type", Class_text }, {"linkage_evidence", Class_text }
+ {"pseudogene", Class_text}, {"mobile_element_type", Class_text},
+ {"gap_type", Class_text }, {"linkage_evidence", Class_text },
+ {"altitude", Class_text }, {"metagenome_source", Class_text},
+ {"type_material", Class_text}, {"regulatory_class", Class_text}
 };
 
 NLM_EXTERN GbFeatNamePtr x_ParFlat_GBQual_names(void) {
@@ -82,8 +84,22 @@ CharPtr ParFlat_ExpString[ParFlat_TOTAL_Exp] = {
                     "EXPERIMENTAL", "NOT_EXPERIMENTAL"};
 
 CharPtr ParFlat_RptString[ParFlat_TOTAL_Rpt] = {
-       "tandem", "inverted", "flanking", "terminal", "direct",
-       "dispersed", "other"};
+       "tandem",
+       "inverted",
+       "flanking",
+       "nested",
+       "terminal",
+       "direct",
+       "dispersed",
+       "long_terminal_repeat",
+       "non_LTR_retrotransposon_polymeric_tract",
+       "X_element_combinatorial_repeat",
+       "Y_prime_element",
+       "telomeric_repeat",
+       "centromeric_repeat",
+       "engineered_foreign_repetitive_element",
+       "other"
+};
 
 static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
    {"allele", 0, {-1, -1, -1, -1, -1}, 18,
@@ -1382,7 +1398,7 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1}},
    {"source", 1, {
-      GBQUAL_organism, -1, -1, -1, -1}, 62,
+      GBQUAL_organism, -1, -1, -1, -1}, 65,
      {
       GBQUAL_bio_material,
       GBQUAL_cell_line,
@@ -1446,7 +1462,9 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       GBQUAL_variety,
       GBQUAL_virion,
       GBQUAL_haplogroup,
-      -1, -1, -1}},
+      GBQUAL_altitude,
+      GBQUAL_metagenome_source,
+      GBQUAL_type_material}},
    {"stem_loop", 0, {-1, -1, -1, -1, -1}, 17,
      {
       GBQUAL_allele,
@@ -1934,7 +1952,62 @@ static SematicFeat STATIC__ParFlat_GBFeat[ParFlat_TOTAL_GBFEAT] = {
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-      -1, -1, -1, -1}}
+      -1, -1, -1, -1}},
+   {"regulatory", 1, {
+      GBQUAL_regulatory_class, -1, -1, -1, -1}, 20,
+     {
+      GBQUAL_allele,
+      GBQUAL_bound_moiety,
+      GBQUAL_citation,
+      GBQUAL_db_xref,
+      GBQUAL_evidence,
+      GBQUAL_experiment,
+      GBQUAL_function,
+      GBQUAL_gene,
+      GBQUAL_gene_synonym,
+      GBQUAL_inference,
+      GBQUAL_locus_tag,
+      GBQUAL_map,
+      GBQUAL_note,
+      GBQUAL_old_locus_tag,
+      GBQUAL_operon,
+      GBQUAL_partial,
+      GBQUAL_phenotype,
+      GBQUAL_pseudo,
+      GBQUAL_pseudogene,
+      GBQUAL_standard_name,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1}},
+   {"propeptide", 0, {-1, -1, -1, -1, -1}, 20,
+     {
+      GBQUAL_allele,
+      GBQUAL_citation,
+      GBQUAL_db_xref,
+      GBQUAL_evidence,
+      GBQUAL_experiment,
+      GBQUAL_function,
+      GBQUAL_gene,
+      GBQUAL_gene_synonym,
+      GBQUAL_inference,
+      GBQUAL_locus_tag,
+      GBQUAL_map,
+      GBQUAL_non_functional,
+      GBQUAL_note,
+      GBQUAL_old_locus_tag,
+      GBQUAL_partial,
+      GBQUAL_product,
+      GBQUAL_pseudo,
+      GBQUAL_pseudogene,
+      GBQUAL_standard_name,
+      GBQUAL_usedin,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+      -1, -1, -1, -1, -1}}
 };
 
 NLM_EXTERN SematicFeatPtr x_ParFlat_GBFeat(void) {

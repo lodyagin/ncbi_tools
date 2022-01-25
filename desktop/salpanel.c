@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.102 $
+* $Revision: 6.104 $
 *
 * File Description: 
 *
@@ -3637,7 +3637,7 @@ static void PropagateCDS (SeqFeatPtr dup,
 
   /* Extend the location to the end if that was checked */
 
-  if (transPast && cds3end) 
+  if (transPast && (cds3end || !DoesCDSEndWithStopCodon (dup))) 
     ExtendLocToEnd (dup->location, newbsp, strand);
 
   /**/
@@ -3763,7 +3763,7 @@ static Uint1 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr 
   CdRegionPtr   crp;
   Int4          len;
   Int4          max;
-  Uint1         frame;
+  Uint1         frame, orig_frame;
   Int2          i;
   CharPtr       protstr;
   SeqAlignPtr   salp = NULL;
@@ -3791,6 +3791,10 @@ static Uint1 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr 
       }
   	}
   }
+  orig_frame = crp->frame;
+  if (orig_frame == 0) {
+    orig_frame = 1;
+  }
   for (i = 1; i <= 3; i++) {
     crp->frame = (Uint1) i;
     bs = ProteinFromCdRegionEx (sfp, FALSE, FALSE);
@@ -3800,7 +3804,7 @@ static Uint1 CalculateReadingFrame (SeqFeatPtr sfp, Boolean partial3, BioseqPtr 
     if (salp == NULL) 
     {
       /* if no alignment, take longest protein */
-      if (! best_is_aligned && len > max) {
+      if (! best_is_aligned && (len > max || (len == max && i == orig_frame))) {
         max = len;
         frame = (Uint1) i;
       }

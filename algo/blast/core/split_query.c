@@ -1,4 +1,4 @@
-/*  $Id: split_query.c,v 1.2 2010/06/25 17:14:31 kazimird Exp $
+/*  $Id: split_query.c,v 1.3 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -29,11 +29,6 @@
 
 /** @file split_query.c
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: split_query.c,v 1.2 2010/06/25 17:14:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/split_query.h>
 #include <algo/blast/core/blast_def.h>      /* needed for sfree */

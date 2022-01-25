@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/8/93
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:
 *   Automatically generate C code from ASN.1 specifications
@@ -63,7 +63,7 @@
 
 static Boolean AsnCodeIsEnumType PROTO ((AsnTypePtr atp));
 
-static char     RCS_Rev [] = "$Revision: 6.19 $";
+static char     RCS_Rev [] = "$Revision: 6.20 $";
 
 /*******************
  * Interator structure
@@ -3653,7 +3653,7 @@ AsnCodeFunctionWriteFuncChoiceStart (AsnIterPtr iter, Boolean doing_outer_setof_
    AsnIterTakeBuf (iter);
    sprintf (iter->buf, "\
 	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }\n\
-\n\
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));\n\
 	av.ptrvalue = (Pointer)anp;\n");
    AsnIterTakeBuf (iter);
    if (!doing_outer_setof_choice) {
@@ -3695,7 +3695,8 @@ AsnCodeFunctionWriteFuncSeqStart (AsnIterPtr iter, Boolean no_write_braces)
 
    AsnIterTakeBuf (iter);
    sprintf (iter->buf, "\
-            if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }\n");
+            if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }\n\
+            MemSet ((Pointer) (&av), 0, sizeof (DataVal));\n");
    AsnIterTakeBuf (iter);
 
    if (! no_write_braces){

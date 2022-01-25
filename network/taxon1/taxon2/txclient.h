@@ -31,6 +31,9 @@
 *
 *
 * $Log: txclient.h,v $
+* Revision 1.9  2013/10/24 19:31:26  vakatov
+* Set pre-processor macro TAXSERVICE by default (per V.Soussov, at S.Bazhin's request)
+*
 * Revision 1.8  2005/08/08 18:03:27  soussov
 * adds extern C
 *
@@ -70,8 +73,13 @@
 #include <ncbi.h>
 #include <txcommon.h>
 #include <treemgr.h>
+
+#if !defined(NO_TAXSERVICE)
+/* TAXSERVICE is default nowadays */
+#  define TAXSERVICE 1
+#endif
 #ifdef TAXSERVICE
-#include <objfeat.h>
+#  include <objfeat.h>
 #endif
 
 #ifdef __cplusplus

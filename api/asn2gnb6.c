@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.281 $
+* $Revision: 1.371 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -57,6 +57,7 @@
 #include <alignmgr2.h>
 #include <asn2gnbi.h>
 #include <findrepl.h>
+#include <valid.h>
 
 #ifdef WIN_MAC
 #if __profile__
@@ -64,18 +65,21 @@
 #endif
 #endif
 
-static CharPtr link_tax = "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?";
+static CharPtr link_tax = "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?";
 
-static CharPtr link_featn = "http://www.ncbi.nlm.nih.gov/nuccore/";
-static CharPtr link_featp = "http://www.ncbi.nlm.nih.gov/protein/";
+static CharPtr link_featn = "https://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_featp = "https://www.ncbi.nlm.nih.gov/protein/";
 
-static CharPtr link_seqn = "http://www.ncbi.nlm.nih.gov/nuccore/";
-static CharPtr link_seqp = "http://www.ncbi.nlm.nih.gov/protein/";
+static CharPtr link_seqn = "https://www.ncbi.nlm.nih.gov/nuccore/";
+static CharPtr link_seqp = "https://www.ncbi.nlm.nih.gov/protein/";
 
 static CharPtr link_lat_lon = "http://www.ncbi.nlm.nih.gov/projects/Sequin/latlonview.html?";
 
 static CharPtr link_gold_stamp_id = "http://genomesonline.org/cgi-bin/GOLD/bin/GOLDCards.cgi?goldstamp=";
 
+static CharPtr link_annot_soft_ver = "http://www.ncbi.nlm.nih.gov/genome/annotation_euk/release_notes/#version";
+
+static CharPtr link_annot_ver = "http://www.ncbi.nlm.nih.gov/genome/annotation_euk/";
 
 /* ordering arrays for qualifiers and note components */
 
@@ -101,6 +105,8 @@ static SourceType source_qual_order [] = {
   SCQUAL_culture_collection,
   SCQUAL_bio_material,
 
+  SCQUAL_type_material,
+
   SCQUAL_db_xref,
   SCQUAL_org_xref,
 
@@ -121,7 +127,6 @@ static SourceType source_qual_order [] = {
   SCQUAL_clone_lib,
   SCQUAL_dev_stage,
   SCQUAL_ecotype,
-  SCQUAL_frequency,
 
   SCQUAL_germline,
   SCQUAL_rearranged,
@@ -141,6 +146,7 @@ static SourceType source_qual_order [] = {
   SCQUAL_focus,
 
   SCQUAL_lat_lon,
+  SCQUAL_altitude,
   SCQUAL_collection_date,
   SCQUAL_collected_by,
   SCQUAL_identified_by,
@@ -191,6 +197,7 @@ static SourceType source_desc_note_order [] = {
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
   SCQUAL_breed,
+  SCQUAL_frequency,
 
   SCQUAL_metagenome_source,
   SCQUAL_metagenome_note,
@@ -243,7 +250,8 @@ static SourceType source_feat_note_order [] = {
   SCQUAL_anamorph,
   SCQUAL_teleomorph,
   SCQUAL_breed,
-  
+  SCQUAL_frequency,
+
   SCQUAL_metagenome_source,
   SCQUAL_metagenome_note,
 
@@ -274,6 +282,7 @@ static SourceType source_feat_note_order [] = {
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "",                         Qual_class_ignore     },
   { "acronym",                  Qual_class_orgmod     },
+  { "altitude",                 Qual_class_subsource  },
   { "anamorph",                 Qual_class_orgmod     },
   { "authority",                Qual_class_orgmod     },
   { "biotype",                  Qual_class_orgmod     },
@@ -341,6 +350,7 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "PCR_primers",              Qual_class_pcr        },
   { "PCR_primers",              Qual_class_pcr        },
   { "PCR_primers",              Qual_class_pcr_react  },
+  { "phenotype",                Qual_class_subsource  },
   { "plasmid",                  Qual_class_subsource  },
   { "plastid",                  Qual_class_subsource  },
   { "pop_variant",              Qual_class_subsource  },
@@ -370,15 +380,17 @@ NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE] = {
   { "transgenic",               Qual_class_subsource  },
   { "transposon",               Qual_class_subsource  },
   { "type",                     Qual_class_orgmod     },
+  { "type_material",            Qual_class_orgmod     },
   { "unstructured",             Qual_class_valnode    },
   { "usedin",                   Qual_class_quote      },
   { "variety",                  Qual_class_orgmod     },
+  { "whole_replicon",           Qual_class_subsource  },
   { "?",                        Qual_class_orgmod     },
   { "?",                        Qual_class_orgmod     },
   { "?",                        Qual_class_subsource  }
 };
 
-NLM_EXTERN SourceType subSourceToSourceIdx [42] = {
+NLM_EXTERN SourceType subSourceToSourceIdx [45] = {
   SCQUAL_zero_subsrc,
   SCQUAL_chromosome,
   SCQUAL_map,
@@ -420,6 +432,9 @@ NLM_EXTERN SourceType subSourceToSourceIdx [42] = {
   SCQUAL_mating_type,
   SCQUAL_linkage_group,
   SCQUAL_haplogroup,
+  SCQUAL_whole_replicon,
+  SCQUAL_phenotype,
+  SCQUAL_altitude,
   SCQUAL_subsource_note
 };
 
@@ -440,6 +455,7 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "ApiDB_CryptoDB",
   "ApiDB_PlasmoDB",
   "ApiDB_ToxoDB",
+  "Araport",
   "ASAP",
   "ATCC",
   "ATCC(in host)",
@@ -447,10 +463,13 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "Axeldb",
   "BDGP_EST",
   "BDGP_INS",
+  "BEEBASE",
   "BEETLEBASE",
+  "BEI",
   "BGD",
   "BOLD",
   "CDD",
+  "CGD",
   "CK",
   "COG",
   "dbClone",
@@ -462,6 +481,9 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "dictyBase",
   "EcoGene",
   "ENSEMBL",
+  "EnsemblGenomes",
+  "EnsemblGenomes-Gn",
+  "EnsemblGenomes-Tr",
   "ERIC",
   "ESTLIB",
   "FANTOM_DB",
@@ -480,19 +502,23 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "HMP",
   "HOMD",
   "HSSP",
+  "I5KNAL",
   "IKMC",
   "IMGT/GENE-DB",
   "IMGT/HLA",
   "IMGT/LIGM",
   "InterimID",
   "InterPro",
+  "IntrepidBio",
   "IRD",
   "ISD",
   "ISFinder",
+  "ISHAM-ITS",
   "JCM",
   "JGIDB",
   "LocusID",
   "MaizeGDB",
+  "MedGen",
   "MGI",
   "MIM",
   "miRBase",
@@ -502,12 +528,14 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "niaEST",
   "NMPDR",
   "NRESTdb",
+  "OrthoMCL",
   "Osa1",
   "Pathema",
   "PBmice",
   "PDB",
   "PFAM",
   "PGN",
+  "Phytozome",
   "PIR",
   "PomBase",
   "PSEUDO",
@@ -522,10 +550,12 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "SGD",
   "SGN",
   "SoyBase",
+  "SRPDB",
   "SubtiList",
   "TAIR",
   "taxon",
   "TIGRFAM",
+  "TubercuList",
   "UniGene",
   "UNILIB",
   "UniProtKB/Swiss-Prot",
@@ -534,7 +564,10 @@ NLM_EXTERN CharPtr legalDbXrefs [] = {
   "UNITE",
   "VBASE2",
   "VectorBase",
+  "Vega",
+  "VGNC",
   "ViPR",
+  "VISTA",
   "WorfDB",
   "WormBase",
   "Xenbase",
@@ -548,10 +581,12 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "ATCC",
   "ATCC(dna)",
   "ATCC(in host)",
+  "BEI",
   "BOLD",
   "FANTOM_DB",
   "FBOL",
   "FLYBASE",
+  "Fungorum",
   "Greengenes",
   "GRIN",
   "HMP",
@@ -559,10 +594,13 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
   "IKMC",
   "IMGT/HLA",
   "IMGT/LIGM",
+  "ISHAM-ITS",
   "JCM",
   "MGI",
   "MycoBank",
   "NBRC",
+  "RBGE_garden",
+  "RBGE_herbarium",
   "RZPD",
   "taxon",
   "UNILIB",
@@ -571,17 +609,21 @@ NLM_EXTERN CharPtr legalSrcDbXrefs [] = {
 };
 
 NLM_EXTERN CharPtr legalRefSeqDbXrefs [] = {
-  "BEEBASE",
   "BioProject",
+  "BioSample",
   "CCDS",
   "CGNC",
   "CloneID",
+  "CollecTF",
   "ECOCYC",
+  "GenBank",
+  "HPM",
   "HPRD",
   "LRG",
   "NASONIABASE",
   "PBR",
   "REBASE",
+  "RefSeq",
   "SK-FST",
   "VBRC",
   NULL
@@ -1019,7 +1061,7 @@ NLM_EXTERN CharPtr FormatSourceBlock (
   }
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    
+
     temp = FFGetString(ajp);
 
     if (ajp->newSourceOrg) {
@@ -1061,14 +1103,14 @@ NLM_EXTERN CharPtr FormatSourceBlock (
       gbseq->source = StringSave (str);
     }
 
-    
+
     FFStartPrint(ffstring, afp->format, 0, 12, "SOURCE", 12, 5, 5, "OS", TRUE);
     if (str != NULL) {
       FFAddTextToString(ffstring, NULL, str, NULL, addPeriod, FALSE, TILDE_TO_SPACES);
     } else {
       FFAddOneChar(ffstring, '.', FALSE);
     }
-    
+
     MemFree (str);
 
   } else if (afp->format == EMBL_FMT || afp->format == EMBLPEPT_FMT) {
@@ -1079,7 +1121,7 @@ NLM_EXTERN CharPtr FormatSourceBlock (
         FFAddTextToString(ffstring, " (", common, ")", FALSE, FALSE, TILDE_TO_SPACES);
     }
   }
-  
+
   str = FFEndPrint(ajp, ffstring, afp->format, 12, 12, 0, 5, "OS");
   FFRecycleString(ajp, ffstring);
   return str;
@@ -1195,7 +1237,7 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
   if ( ffstring == NULL || temp == NULL ) return NULL;
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
-    
+
     FFStartPrint(temp, afp->format, 2, 12, "ORGANISM", 12, 5, 5, "OC", FALSE);
     if (! ajp->newSourceOrg) {
       FFAddOneString(temp, organelle, FALSE, FALSE, TILDE_IGNORE);
@@ -1279,7 +1321,7 @@ NLM_EXTERN CharPtr FormatOrganismBlock (
       }
     }
   }
-  
+
   str = FFToCharPtr(ffstring);
   FFRecycleString(ajp, ffstring);
   return str;
@@ -1296,7 +1338,7 @@ static Boolean IsTildeEOL(CharPtr str) {
 
   ++str;
 
-  
+
   for ( ptr = str; 
     IS_ALPHANUM(*ptr) || *ptr == '_' || *ptr == '-' || *ptr == '.';
     ++ptr) continue;
@@ -1382,6 +1424,12 @@ NLM_EXTERN void AddCommentWithURLlinks (
     return;
   }
 
+  /*
+  if (GetWWW (ajp)) {
+    str = EncodeXmlEx (str);
+  }
+  */
+
   while (! StringHasNoText (str)) {
     ptr = StringStr (str, "http://");
     if (ptr == NULL) {
@@ -1453,34 +1501,39 @@ static size_t ThresholdForStructuredCommentColumnarDisplay (
   // We are trying to make those structured comments look pretty. However, if the first column gets
   //  too big, the printout starts to look ugly. This function attempts to define the first column
   //  extent at which pretty turns into ugly.
-  
+
   const size_t MAX_COLUMN_WIDTH = 45;
   switch ( format ) {
-  
+
     case GENBANK_FMT:
     case GENPEPT_FMT:
       return MIN( MAX_COLUMN_WIDTH, ASN2FF_GB_MAX - 12 );
-      
+
     default:
       return MIN( MAX_COLUMN_WIDTH, ASN2FF_EMBL_MAX - 5 );
   }
 }
 
-static CharPtr GetStrForStructuredComment (
+NLM_EXTERN CharPtr GetStrForStructuredComment (
   IntAsn2gbJobPtr ajp,
   UserObjectPtr uop
 )
 
 {
-  Char           buf [120];
+  Char           buf [132];
+  Char           ch;
   UserFieldPtr   curr;
   StringItemPtr  ffstring;
   CharPtr        field;
   ValNodePtr     head = NULL;
   size_t         len;
+  CharPtr        link_annot_tmp;
   size_t         max = 0;
   ObjectIdPtr    oip;
   CharPtr        prefix = NULL;
+  CharPtr        provider = NULL;
+  CharPtr        ptr;
+  CharPtr        status = NULL;
   CharPtr        str;
   CharPtr        suffix = NULL;
   CharPtr        tmp;
@@ -1511,6 +1564,17 @@ static CharPtr GetStrForStructuredComment (
         suffix = str;
       }
       continue;
+    }
+    if (StringCmp (field, "Annotation Provider") == 0) {
+      str = (CharPtr) curr->data.ptrvalue;
+      if (StringDoesHaveText (str)) {
+        provider = str;
+      }
+    } else if (StringCmp (field, "Annotation Status") == 0) {
+      str = (CharPtr) curr->data.ptrvalue;
+      if (StringDoesHaveText (str)) {
+        status = str;
+      }
     }
     len = StringLen (field);
     if (len > max) {
@@ -1567,11 +1631,12 @@ static CharPtr GetStrForStructuredComment (
       FFStartPrint (ffstring, GENBANK_FMT, 0, max + 1, field, max + 1, 0, max + 1, field, TRUE);
       */
       StringNCpy_0 (buf, field, sizeof (buf) - 40);
-      StringCat (buf, "                                   ");
+      StringCat (buf, "                                         ");
       buf [max + 1] = ':';
       buf [max + 2] = ':';
       buf [max + 3] = '\0';
       FFStartPrint (ffstring, GENBANK_FMT, 0, max + 4, buf, max + 4, 0, max + 4, buf, TRUE);
+
       if (GetWWW (ajp) && StringCmp (field, "GOLD Stamp ID") == 0 && StringNCmp (str, "Gi", 2) == 0) {
         FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
         FF_Add_NCBI_Base_URL (ffstring, link_gold_stamp_id);
@@ -1580,6 +1645,49 @@ static CharPtr GetStrForStructuredComment (
         FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
         FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
         FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+      } else if (GetWWW (ajp) &&
+        StringCmp (prefix, "##Genome-Annotation-Data-START##") == 0 &&
+        StringCmp (field, "Annotation Software Version") == 0) {
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_annot_soft_ver);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
+      } else if (GetWWW (ajp) &&
+        StringCmp (prefix, "##Genome-Annotation-Data-START##") == 0 &&
+        StringCmp (field, "Annotation Version") == 0 &&
+        StringCmp (provider, "NCBI") == 0 &&
+        StringCmp (status, "Full annotation") == 0) {
+        FFAddOneString (ffstring, "<a href=\"", FALSE, FALSE, TILDE_IGNORE);
+        FF_Add_NCBI_Base_URL (ffstring, link_annot_ver);
+        link_annot_tmp = StringSave (str);
+        if (link_annot_tmp != NULL) {
+          ptr = StringStr (link_annot_tmp, " Annotation Release ");
+          if (ptr != NULL) {
+            *ptr = '\0';
+            StringCat (link_annot_tmp, "/");
+            ptr += 20;
+            StringCat (link_annot_tmp, ptr);
+            ptr = link_annot_tmp;
+            ch = *ptr;
+            while (ch != '\0') {
+              if (ch == ' ') {
+                *ptr = '_';
+              }
+              ptr++;
+              ch = *ptr;
+            }
+          }
+          FFAddOneString (ffstring, link_annot_tmp, FALSE, FALSE, TILDE_EXPAND);
+          MemFree (link_annot_tmp);
+        }
+        FFAddOneString (ffstring, "\">", FALSE, FALSE, TILDE_IGNORE);
+        FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
+        FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
+
       } else if (GetWWW (ajp) && StringCmp (field, "url") == 0) {
         AddCommentWithURLlinks (ajp, ffstring, NULL, str, NULL);
       } else if (GetWWW (ajp) && StringNICmp (str, "http://", 7) == 0) {
@@ -1858,6 +1966,30 @@ static void CatenateCommentInGbseq (
   }
 }
 
+static void CommentTildes (
+  CharPtr PNTR str
+)
+
+{
+#ifndef OS_MSWIN
+  FindReplaceString (str, "nnotated by GenomeRefine~~", "nnotated by GenomeRefine", FALSE, FALSE);
+  FindReplaceString (str, "based on SOLiD3 (Applied Biosystems)~~", "based on SOLiD3 (Applied Biosystems)", FALSE, FALSE);
+  FindReplaceString (str, "Biological resourse center, NITE (NRBC)~~", "Biological resourse center, NITE (NRBC)", FALSE, FALSE);
+  FindReplaceString (str, "developmental01.html~~", "developmental01.html", FALSE, FALSE);
+  FindReplaceString (str, "http://bionano.toyo.ac.jp/~~", "http://bionano.toyo.ac.jp/", FALSE, FALSE);
+  FindReplaceString (str, "http://dictycdb1.biol.tsukuba.ac.jp/acytodb/~~", "http://dictycdb1.biol.tsukuba.ac.jp/acytodb/", FALSE, FALSE);
+  FindReplaceString (str, "http://egg.umh.es~~", "http://egg.umh.es", FALSE, FALSE);
+  FindReplaceString (str, "http://www.aist.go.jp/~~", "http://www.aist.go.jp/", FALSE, FALSE);
+  FindReplaceString (str, "http://www.bio.nite.go.jp/~~DOGAN ; Database", "http://www.bio.nite.go.jp/\n            \nDOGAN ; Database", FALSE, FALSE);
+  FindReplaceString (str, "http://www.bio.nite.go.jp/ngac/e/~~", "http://www.bio.nite.go.jp/ngac/e/", FALSE, FALSE);
+  FindReplaceString (str, "http://www.brs.kyushu-u.ac.jp/~fcmic/~~", "http://www.brs.kyushu-u.ac.jp/~fcmic/", FALSE, FALSE);
+  FindReplaceString (str, "http://www.miyazaki-u.ac.jp/ir/english/index.html~~", "http://www.miyazaki-u.ac.jp/ir/english/index.html", FALSE, FALSE);
+  FindReplaceString (str, "URL:http://www.bio.nite.go.jp/~~", "URL:http://www.bio.nite.go.jp/", FALSE, FALSE);
+  FindReplaceString (str, "RAST version 2.0 (http://rast.nmpdr.org/)~~", "RAST version 2.0 (http://rast.nmpdr.org/)", FALSE, FALSE);
+  FindReplaceString (str, "URL:http://www.tmd.ac.jp/grad/bac/database.html~~", "URL:http://www.tmd.ac.jp/grad/bac/database.html", FALSE, FALSE);
+#endif
+}
+
 NLM_EXTERN CharPtr FormatCommentBlock (
   Asn2gbFormatPtr afp,
   BaseBlockPtr bbp
@@ -1870,6 +2002,7 @@ NLM_EXTERN CharPtr FormatCommentBlock (
   Boolean            as_string = FALSE;
   Boolean            blank_before = FALSE;
   CommentBlockPtr    cbp;
+  Char               ch;
   SeqMgrDescContext  dcontext;
   CharPtr            db;
   DbtagPtr           dbt;
@@ -1883,6 +2016,7 @@ NLM_EXTERN CharPtr FormatCommentBlock (
   SeqFeatPtr         sfp;
   Char               sfx [32];
   CharPtr            str;
+  CharPtr            struc_comm_title = NULL;
   CharPtr            suffix;
   CharPtr            title;
   UserObjectPtr      uop = NULL;
@@ -1968,6 +2102,7 @@ NLM_EXTERN CharPtr FormatCommentBlock (
         if (uop != NULL) {
           title = GetStrForStructuredComment (ajp, uop);
           if (title != NULL) {
+            struc_comm_title = title;
             str = GetStructuredCommentTable (ajp, uop);
             CatenateCommentInGbseq (ajp, gbseq, str, TRUE, FALSE);
             MemFree (str);
@@ -2001,12 +2136,27 @@ NLM_EXTERN CharPtr FormatCommentBlock (
   } else {
     FFStartPrint (ffstring, afp->format, 0, 12, NULL, 12, 5, 5, "CC", FALSE);
     if (blank_before) {
-      FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
+      if (! cbp->no_blank_before) {
+        FFAddOneString (ffstring, "\n", FALSE, FALSE, TILDE_EXPAND);
+      }
     }
   }
 
   str = StringSave (title);
+
+  if (StringDoesHaveText (str)) {
+    CommentTildes (&str);
+  }
+
   TrimSpacesAndJunkFromEnds (str, TRUE);
+
+  /* remove trailing double tilde */
+  /*
+  len = StringLen (str);
+  if (len > 5 && str [len-1] == '~' && str [len-2] == '~') {
+    str [len-2] = '\0';
+  }
+  */
 
   if (as_string) {
     FFAddOneString (ffstring, str, FALSE, FALSE, TILDE_EXPAND);
@@ -2014,8 +2164,11 @@ NLM_EXTERN CharPtr FormatCommentBlock (
     if (! IsEllipsis (str)) {
       s_RemovePeriodFromEnd (str);
       len = StringLen (str);
-      if (len > 0 && str [len - 1] != '.') {
-        add_period = TRUE;
+      if (len > 0) {
+        ch = str [len - 1];
+        if (ch != '.' && ch != '/' && ch != '~') {
+          add_period = TRUE;
+        }
       }
     }
     AddCommentWithURLlinks(ajp, ffstring, prefix, str, suffix);
@@ -2033,6 +2186,9 @@ NLM_EXTERN CharPtr FormatCommentBlock (
   }
 
   FFRecycleString(ajp, ffstring);
+
+  MemFree (struc_comm_title);
+
   return str;
 }
 
@@ -2101,7 +2257,7 @@ static Boolean  order_initialized = FALSE;
 
 static CharPtr lim_str [5] = { "", ">","<", ">", "<" };
 
-NLM_EXTERN Boolean GetAccnVerFromServer (Int4 gi, CharPtr buf)
+NLM_EXTERN Boolean GetAccnVerFromServer (BIG_ID gi, CharPtr buf)
 
 {
   AccnVerLookupFunc  func;
@@ -2648,7 +2804,34 @@ static void FF_DoFlatLoc (
   }
 }
 
+static void FF_DoFlatLocEx (
+  IntAsn2gbJobPtr ajp,
+  StringItemPtr ffstring,
+  BioseqPtr bsp,
+  SeqLocPtr location,
+  Boolean ok_to_complement,
+  Boolean isGap,
+  Boolean swapPartials
+)
 
+{
+  Boolean    partial5, partial3;
+  SeqLocPtr  slp;
+
+  if (location == NULL) return;
+
+  if (! swapPartials) {
+    FF_DoFlatLoc (ajp, ffstring, bsp, location, ok_to_complement, isGap);
+    return;
+  }
+
+  slp = (SeqLocPtr) AsnIoMemCopy ((Pointer) location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+  if (slp == NULL) return;
+  CheckSeqLocForPartial (slp, &partial5, &partial3);
+  SetSeqLocPartial (slp, partial3, partial5);
+  FF_DoFlatLoc (ajp, ffstring, bsp, slp, ok_to_complement, isGap);
+  SeqLocFree (slp);
+}
 
 
 NLM_EXTERN CharPtr FFFlatLoc (
@@ -2663,6 +2846,7 @@ NLM_EXTERN CharPtr FFFlatLoc (
   Boolean     hasNulls;
   IntFuzzPtr  fuzz = NULL;
   SeqLocPtr   loc;
+  Boolean     minus_strand = FALSE;
   Boolean     noLeft;
   Boolean     noRight;
   Uint1       num = 1;
@@ -2699,8 +2883,12 @@ NLM_EXTERN CharPtr FFFlatLoc (
     order_initialized = TRUE;
   }
 
+  if (ajp->ajp.slp != NULL) {
+    minus_strand = (Boolean) (SeqLocStrand (ajp->ajp.slp) == Seq_strand_minus);
+  }
+
   if (ajp->smallGenomeSet) {
-    FF_DoFlatLoc (ajp, ffstring, bsp, location, TRUE, isGap);
+    FF_DoFlatLocEx (ajp, ffstring, bsp, location, TRUE, isGap, minus_strand);
   } else if (masterStyle) {
 
     /* map location from parts to segmented bioseq */
@@ -2743,12 +2931,12 @@ NLM_EXTERN CharPtr FFFlatLoc (
       }
     }
 
-    FF_DoFlatLoc (ajp, ffstring, bsp, loc, TRUE, isGap);
+    FF_DoFlatLocEx (ajp, ffstring, bsp, loc, TRUE, isGap, minus_strand);
 
     SeqLocFree (loc);
 
   } else {
-    FF_DoFlatLoc (ajp, ffstring, bsp, location, TRUE, isGap);
+    FF_DoFlatLocEx (ajp, ffstring, bsp, location, TRUE, isGap, minus_strand);
   }
 
   str = FFToCharPtr(ffstring);
@@ -2892,9 +3080,9 @@ static void SubSourceToQualArray (
   while (ssp != NULL) {
     subtype = ssp->subtype;
     if (subtype == 255) {
-      subtype = 41;
+      subtype = 44;
     }
-    if (subtype < 42) {
+    if (subtype < 45) {
       idx = subSourceToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].ssp == NULL) {
@@ -2906,7 +3094,7 @@ static void SubSourceToQualArray (
   }
 }
 
-NLM_EXTERN SourceType orgModToSourceIdx [41] = {
+NLM_EXTERN SourceType orgModToSourceIdx [42] = {
   SCQUAL_zero_orgmod,
   SCQUAL_one_orgmod,
   SCQUAL_strain,
@@ -2945,6 +3133,7 @@ NLM_EXTERN SourceType orgModToSourceIdx [41] = {
   SCQUAL_culture_collection,
   SCQUAL_bio_material,
   SCQUAL_metagenome_source,
+  SCQUAL_type_material,
   SCQUAL_old_lineage,
   SCQUAL_old_name,
   SCQUAL_orgmod_note
@@ -2964,13 +3153,13 @@ static void OrgModToQualArray (
   while (omp != NULL) {
     subtype = omp->subtype;
     if (subtype == 253) {
-      subtype = 38;
-    } else if (subtype == 254) {
       subtype = 39;
-    } else if (subtype == 255) {
+    } else if (subtype == 254) {
       subtype = 40;
+    } else if (subtype == 255) {
+      subtype = 41;
     }
-    if (subtype < 41) {
+    if (subtype < 42) {
       idx = orgModToSourceIdx [subtype];
       if (idx > 0 && idx < ASN2GNBK_TOTAL_SOURCE) {
         if (qvp [idx].omp == NULL) {
@@ -3132,11 +3321,17 @@ NLM_EXTERN void AddFeatureToGbseq (
             if (sfp->data.choice == SEQFEAT_CDREGION &&
                 StringICmp (qual, "translation") == 0) {
               RemoveAllSpaces (gbqual->value);
+            } else if (sfp->data.choice == SEQFEAT_CDREGION &&
+                       StringICmp (qual, "coded_by") == 0) {
+              RemoveAllSpaces (gbqual->value);
             } else if (sfp->data.choice == SEQFEAT_RNA &&
                        StringICmp (qual, "transcription") == 0) {
               RemoveAllSpaces (gbqual->value);
             } else if (sfp->data.choice == SEQFEAT_PROT &&
                        StringICmp (qual, "peptide") == 0) {
+              RemoveAllSpaces (gbqual->value);
+            } else if (sfp->data.choice == SEQFEAT_PROT &&
+                       StringICmp (qual, "derived_from") == 0) {
               RemoveAllSpaces (gbqual->value);
             }
           }
@@ -3627,7 +3822,7 @@ static void SetupInstCodeNameTable (void)
     ErrSetMessageLevel (sev);
     if (fp != NULL) {
       FileCacheSetup (&fc, fp);
-  
+
       str = FileCacheReadLine (&fc, line, sizeof (line), NULL);
       while (str != NULL) {
         if (StringDoesHaveText (str)) {
@@ -3710,116 +3905,172 @@ static CharPtr FullNameFromInstCode (CharPtr code)
 
 /* specimen_voucher, culture_collection, bio_material hyperlinks */
 
-#define s_atcc_base  "http://www.atcc.org/SearchCatalogs/linkin?id="
-#define s_bcrc_base  "http://strain.bcrc.firdi.org.tw/BSAS/controller?event=SEARCH&bcrc_no="
+#define s_acbr_base  "http://www.acbr-database.at/BioloMICS.aspx?Link=T&DB=0&Table=0&Descr="
+#define s_atcc_base  "http://www.atcc.org/Products/All/"
+#define s_bcrc_base  "https://catalog.bcrc.firdi.org.tw/BSAS_cart/controller?event=SEARCH&bcrc_no="
+#define s_cas_base   "http://collections.calacademy.org/herp/specimen/"
 #define s_cbs_base   "http://www.cbs.knaw.nl/collections/BioloMICS.aspx?Fields=All&ExactMatch=T&Table=CBS+strain+database&Name=CBS+"
 #define s_ccap_base  "http://www.ccap.ac.uk/strain_info.php?Strain_No="
 #define s_ccmp_base  "https://ccmp.bigelow.org/node/1/strain/CCMP"
 #define s_ccug_base  "http://www.ccug.se/default.cfm?page=search_record.cfm&db=mc&s_tests=1&ccugno="
-#define s_cori_base  "http://ccr.coriell.org/Sections/Search/Sample_Detail.aspx?Ref="
+#define s_cfmr_base  "http://www.fpl.fs.fed.us/search/mycologysearch_action.php?sorting_rule=1u&phrasesAndKeywords02="
+#define s_cori_base  "http://ccr.coriell.org/Sections/Search/Search.aspx?q="
 #define s_dsmz_base  "http://www.dsmz.de/catalogues/details/culture/DSM-"
+#define s_frr_base   "http://www.foodscience.csiro.au/cgi-bin/rilax/search.pl?stpos=0&stype=AND&query="
 #define s_fsu_base   "http://www.prz.uni-jena.de/data.php?fsu="
+#define s_jcm_base   "http://www.jcm.riken.jp/cgi-bin/jcm/jcm_number?JCM="
 #define s_kctc_base  "http://www.brc.re.kr/English/_SearchView.aspx?sn="
-#define s_ku_base    "http://collections.nhm.ku.edu/"
+#define s_ku_base    "https://ichthyology.specify.ku.edu/specify/bycatalog/"
 #define s_lcr_base   "http://scd.landcareresearch.co.nz/Specimen/"
+#define s_maff_base  "http://www.gene.affrc.go.jp/databases-micro_search_detail_en.php?maff="
+#define s_mcz_base   "http://mczbase.mcz.harvard.edu/guid/"
+#define s_mtcc_base  "http://mtcc.imtech.res.in/catalogue_hyper.php?a="
+#define s_mucl_base  "http://bccm.belspo.be/db/mucl_search_results.php?FIRSTITEM=1&LIST1=STRAIN_NUMBER&TEXT1="
+#define s_nbrc_base  "http://www.nbrc.nite.go.jp/NBRC2/NBRCCatalogueDetailServlet?ID=NBRC&CAT="
+#define s_ncimb_base "http://www.ncimb.com/BioloMICS.aspx?Table=NCIMBstrains&ExactMatch=T&Fields=All&Name=NCIMB%20"
+#define s_nctc_base  "https://www.phe-culturecollections.org.uk/products/bacteria/detail.jsp?collection=nctc&refId=NCTC+"
+#define s_nrrl_base  "http://nrrl.ncaur.usda.gov/cgi-bin/usda/prokaryote/report.html?nrrlcodes="
+#define s_nrrl_mold  "http://nrrl.ncaur.usda.gov/cgi-bin/usda/mold/report.html?nrrlcodes="
+#define s_nrrl_prok  "http://nrrl.ncaur.usda.gov/cgi-bin/usda/prokaryote/report.html?nrrlcodes="
+#define s_nrrl_yest  "http://nrrl.ncaur.usda.gov/cgi-bin/usda/yeast/report.html?nrrlcodes="
 #define s_pcc_base   "http://www.crbip.pasteur.fr/fiches/fichecata.jsp?crbip=PCC+"
 #define s_pcmb_base  "http://www2.bishopmuseum.org/HBS/PCMB/results3.asp?searchterm3="
+#define s_pycc_base  "http://pycc.bio-aware.com/BioloMICS.aspx?Table=PYCC%20strains&Name=PYCC%20"
 #define s_sag_base   "http://sagdb.uni-goettingen.de/detailedList.php?str_number="
 #define s_tgrc_base  "http://tgrc.ucdavis.edu/Data/Acc/AccDetail.aspx?AccessionNum="
 #define s_uam_base   "http://arctos.database.museum/guid/"
-#define s_ypm_base   "http://peabody.research.yale.edu/cgi-bin/Query.Ledger?"
+#define s_uamh_base  "https://secure.devonian.ualberta.ca/uamh/details.php?id="
+#define s_usnm_base  "http://collections.mnh.si.edu/services/resolver/resolver.php?"
+#define s_ypm_base   "http://collections.peabody.yale.edu/search/Record/"
 
 #define s_colon_pfx  ":"
 #define s_uscr_pfx   "_"
 
-#define s_kui_pfx    "KU_Fish/detail.jsp?record="
-#define s_kuit_pfx   "KU_Tissue/detail.jsp?record="
+#define s_kui_pfx    "KUI/"
+#define s_kuit_pfx   "KUIT/"
 #define s_psu_pfx    "PSU:Mamm:"
+#define s_usnm_pfx   "voucher=Birds:"
 
-#define s_ypment_pfx "LE=ent&ID="
-#define s_ypmher_pfx "LE=her&ID="
-#define s_ypmich_pfx "LE=ich&ID="
-#define s_ypmiz_pfx  "LE=iz&ID="
-#define s_ypmmam_pfx "LE=mam&ID="
-#define s_ypmorn_pfx "LE=orn&ID="
+#define s_ypment_pfx "YPM-ENT-"
+#define s_ypmher_pfx "YPM-HER-"
+#define s_ypmich_pfx "YPM-ICH-"
+#define s_ypmiz_pfx  "YPM-IZ-"
+#define s_ypmmam_pfx "YPM-MAM-"
+#define s_ypmorn_pfx "YPM-ORN-"
 
-#define s_bcrc_sfx  "&type_id=6&keyword=;;"
+#define s_acbr_sfx  "&Fields=All&ExactMatch=T"
+#define s_atcc_sfx  ".aspx"
+#define s_bcrc_sfx  "&type_id=9&keyword="
+#define s_ku_sfx    "/"
+#define s_mucl_sfx  "&LIST2=ALL+FIELDS&CONJ=OR&RANGE=20&B3=Run+Query"
+#define s_pycc_sfx  "&Fields=All&ExactMatch=T"
 
 typedef struct vouch {
   CharPtr  sites;
   CharPtr  links;
   Boolean  prepend_institute;
+  Int2     pad_to;
+  CharPtr  pad_with;
   CharPtr  prefix;
   CharPtr  suffix;
 } VouchData, PNTR VouchDataPtr;
 
 static VouchData Nlm_spec_vouchers [] = {
-  {  "ATCC",              s_atcc_base,  FALSE,  NULL,          NULL        },
-  {  "BCRC",              s_bcrc_base,  FALSE,  NULL,          s_bcrc_sfx  },
-  {  "CBS",               s_cbs_base,   FALSE,  NULL,          NULL        },
-  {  "CCAP",              s_ccap_base,  FALSE,  NULL,          NULL        },
-  {  "CCMP",              s_ccmp_base,  FALSE,  NULL,          NULL        },
-  {  "CCUG",              s_ccug_base,  FALSE,  NULL,          NULL        },
-  {  "CHR",               s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
-  {  "Coriell",           s_cori_base,  FALSE,  NULL,          NULL        },
-  {  "CRCM:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DGR:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DGR:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DGR:Fish",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DGR:Herp",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DGR:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DMNS:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DMNS:Mamm",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "DSM",               s_dsmz_base,  FALSE,  NULL,          NULL        },
-  {  "FSU<DEU>",          s_fsu_base,   FALSE,  NULL,          NULL        },
-  {  "ICMP",              s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
-  {  "KCTC",              s_kctc_base,  FALSE,  NULL,          NULL        },
-  {  "KNWR:Ento",         s_uam_base ,  TRUE,   s_colon_pfx,   NULL        },
-  {  "KU:I",              s_ku_base,    FALSE,  s_kui_pfx,     NULL        },
-  {  "KU:IT",             s_ku_base,    FALSE,  s_kuit_pfx,    NULL        },
-  {  "KWP:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MLZ:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MLZ:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MSB:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MSB:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MSB:Para",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Egg",           s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Herp",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Hild",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Img",           s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZ:Page",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "MVZObs:Herp",       s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "NBSB:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "NZAC",              s_lcr_base,   TRUE,   s_uscr_pfx,    NULL        },
-  {  "PCC",               s_pcc_base,   FALSE,  NULL,          NULL        },
-  {  "PCMB",              s_pcmb_base,  FALSE,  NULL,          NULL        },
-  {  "PDD",               s_lcr_base,   TRUE ,  s_uscr_pfx,    NULL        },
-  {  "PSU<USA-OR>:Mamm",  s_uam_base,   FALSE,  s_psu_pfx,     NULL        },
-  {  "SAG",               s_sag_base,   FALSE,  NULL,          NULL        },
-  {  "TGRC",              s_tgrc_base,  FALSE,  NULL,          NULL        },
-  {  "UAM:Bird",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Bryo",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Crus",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Ento",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Fish",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Herb",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Herp",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Mamm",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Moll",          s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAM:Paleo",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "UAMObs:Mamm",       s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "WNMU:Bird",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "WNMU:Fish",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "WNMU:Mamm",         s_uam_base,   TRUE,   s_colon_pfx,   NULL        },
-  {  "YPM:ENT",           s_ypm_base,   FALSE,  s_ypment_pfx,  NULL        },
-  {  "YPM:HER",           s_ypm_base,   FALSE,  s_ypmher_pfx,  NULL        },
-  {  "YPM:ICH",           s_ypm_base,   FALSE,  s_ypmich_pfx,  NULL        },
-  {  "YPM:IZ",            s_ypm_base,   FALSE,  s_ypmiz_pfx,   NULL        },
-  {  "YPM:MAM",           s_ypm_base,   FALSE,  s_ypmmam_pfx,  NULL        },
-  {  "YPM:ORN",           s_ypm_base,   FALSE,  s_ypmorn_pfx,  NULL        },
-  {  NULL,                NULL,         FALSE,  NULL,          NULL        }
+  {  "ACBR",              s_acbr_base,  FALSE,  0, "",   NULL,          s_acbr_sfx  },
+  {  "ATCC",              s_atcc_base,  FALSE,  0, "",   NULL,          s_atcc_sfx  },
+  {  "BCRC",              s_bcrc_base,  FALSE,  0, "",   NULL,          s_bcrc_sfx  },
+  {  "CAS:HERP",          s_cas_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "CBS",               s_cbs_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "CCAP",              s_ccap_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "CCMP",              s_ccmp_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "CCUG",              s_ccug_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "CFMR",              s_cfmr_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "CHR",               s_lcr_base,   TRUE,   0, "",   s_uscr_pfx,    NULL        },
+  {  "Coriell",           s_cori_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "CRCM:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DGR:Bird",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DGR:Ento",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DGR:Fish",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DGR:Herp",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DGR:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DMNS:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DMNS:Mamm",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "DSM",               s_dsmz_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "FRR",               s_frr_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "FSU<DEU>",          s_fsu_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "ICMP",              s_lcr_base,   TRUE,   0, "",   s_uscr_pfx,    NULL        },
+  {  "JCM",               s_jcm_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "KCTC",              s_kctc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "KNWR:Ento",         s_uam_base ,  TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "KU:I",              s_ku_base,    FALSE,  0, "",   s_kui_pfx,     s_ku_sfx    },
+  {  "KU:IT",             s_ku_base,    FALSE,  0, "",   s_kuit_pfx,    s_ku_sfx    },
+  {  "KWP:Ento",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MAFF",              s_maff_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "MCZ:Bird",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Cryo",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Ent",           s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Fish",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Herp",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Ich",           s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:IP",            s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:IZ",            s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Mala",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Mamm",          s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MCZ:Orn",           s_mcz_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MLZ:Bird",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MLZ:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MSB:Bird",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MSB:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MSB:Para",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MTCC",              s_mtcc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "MUCL",              s_mucl_base,  FALSE,  0, "",   NULL,          s_mucl_sfx  },
+  {  "MVZ:Bird",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Egg",           s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Herp",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Hild",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Img",           s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZ:Page",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "MVZObs:Herp",       s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "NBRC",              s_nbrc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NBSB:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "NCIMB",             s_ncimb_base, FALSE,  0, "",   NULL,          NULL        },
+  {  "NCTC",              s_nctc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NRRL",              s_nrrl_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NRRL:MOLD",         s_nrrl_mold,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NRRL:PROK",         s_nrrl_prok,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NRRL:YEAST",        s_nrrl_yest,  FALSE,  0, "",   NULL,          NULL        },
+  {  "NZAC",              s_lcr_base,   TRUE,   0, "",   s_uscr_pfx,    NULL        },
+  {  "PCC",               s_pcc_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "PCMB",              s_pcmb_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "PDD",               s_lcr_base,   TRUE ,  0, "",   s_uscr_pfx,    NULL        },
+  {  "PSU<USA-OR>:Mamm",  s_uam_base,   FALSE,  0, "",   s_psu_pfx,     NULL        },
+  {  "PYCC",              s_pycc_base,  FALSE,  0, "",   NULL,          s_pycc_sfx  },
+  {  "SAG",               s_sag_base,   FALSE,  0, "",   NULL,          NULL        },
+  {  "TGRC",              s_tgrc_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "UAM:Bird",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Bryo",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Crus",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Ento",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Fish",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Herb",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Herp",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Mamm",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Moll",          s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAM:Paleo",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "UAMH",              s_uamh_base,  FALSE,  0, "",   NULL,          NULL        },
+  {  "UAMObs:Mamm",       s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "USNM:Birds",        s_usnm_base,  FALSE,  0, "",   s_usnm_pfx,    NULL        },
+  {  "WNMU:Bird",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "WNMU:Fish",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "WNMU:Mamm",         s_uam_base,   TRUE,   0, "",   s_colon_pfx,   NULL        },
+  {  "YPM:ENT",           s_ypm_base,   FALSE,  6, "0",  s_ypment_pfx,  NULL        },
+  {  "YPM:HER",           s_ypm_base,   FALSE,  6, "0",  s_ypmher_pfx,  NULL        },
+  {  "YPM:ICH",           s_ypm_base,   FALSE,  6, "0",  s_ypmich_pfx,  NULL        },
+  {  "YPM:IZ",            s_ypm_base,   FALSE,  6, "0",  s_ypmiz_pfx,   NULL        },
+  {  "YPM:MAM",           s_ypm_base,   FALSE,  6, "0",  s_ypmmam_pfx,  NULL        },
+  {  "YPM:ORN",           s_ypm_base,   FALSE,  6, "0",  s_ypmorn_pfx,  NULL        },
+  {  NULL,                NULL,         FALSE,  0, "",   NULL,          NULL        }
 };
 
 static Int2 VoucherNameIsValid (
@@ -3850,9 +4101,9 @@ static Int2 VoucherNameIsValid (
     }
   }
 
-  /* case sensitive comparison at end enforces strictness */
+  /* switch to case sensitive comparison to restore case strictness */
 
-  if (StringCmp (Nlm_spec_vouchers [R].sites, str) == 0) {
+  if (StringICmp (Nlm_spec_vouchers [R].sites, str) == 0) {
     return R;
   }
 
@@ -3906,6 +4157,7 @@ static void Do_www_specimen_voucher (
 )
 
 {
+  size_t   len_id, len_pad;
   CharPtr  mouseover = NULL;
 
   if ( ffstring == NULL || inst == NULL || id == NULL || vdp == NULL || vdp->links == NULL ) return;
@@ -3929,6 +4181,14 @@ static void Do_www_specimen_voucher (
   if (vdp->prefix != NULL) {
     FFAddOneString (ffstring, vdp->prefix, FALSE, FALSE, TILDE_IGNORE);
   }
+  if (vdp->pad_to > 0) {
+    len_id = StringLen (id);
+    len_pad = StringLen (vdp->pad_with);
+    while (len_id < vdp->pad_to) {
+      FFAddOneString (ffstring, vdp->pad_with, FALSE, FALSE, TILDE_IGNORE);
+      len_id += len_pad;
+    }
+  }
   FFAddOneString (ffstring, id, FALSE, FALSE, TILDE_IGNORE);
   if (vdp->suffix != NULL) {
     FFAddOneString (ffstring, vdp->suffix, FALSE, FALSE, TILDE_IGNORE);
@@ -3946,7 +4206,7 @@ NLM_EXTERN void FF_www_specimen_voucher (
 
 {
   Char          buf [512];
-  CharPtr       inst = NULL, id = NULL, mouseover = NULL;
+  CharPtr       inst = NULL, id = NULL, mouseover = NULL, encoded;
   Int2          R;
   VouchDataPtr  vdp;
 
@@ -3967,7 +4227,9 @@ NLM_EXTERN void FF_www_specimen_voucher (
       FFAddOneString (ffstring, "<acronym title=\"", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, mouseover, FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString(ffstring, "\" class=\"voucher\">", FALSE, FALSE, TILDE_IGNORE);
-      FFAddOneString (ffstring, inst, FALSE, FALSE, TILDE_IGNORE);
+      encoded = EncodeXml (inst);
+      FFAddOneString (ffstring, encoded, FALSE, FALSE, TILDE_IGNORE);
+      MemFree (encoded);
       FFAddOneString (ffstring, "</acronym>", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, ":", FALSE, FALSE, TILDE_IGNORE);
       FFAddOneString (ffstring, id, FALSE, FALSE, TILDE_IGNORE);
@@ -3981,7 +4243,9 @@ NLM_EXTERN void FF_www_specimen_voucher (
     FFAddTextToString (ffstring, NULL, subname, NULL, FALSE, TRUE, TILDE_TO_SPACES);
     return;
   }
-  Do_www_specimen_voucher (ffstring, inst, id, vdp);
+  encoded = EncodeXml (inst);
+  Do_www_specimen_voucher (ffstring, encoded, id, vdp);
+  MemFree (encoded);
 }
 
 static void Do_www_lat_lon (
@@ -4096,7 +4360,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
   BioseqSetPtr       bssp;
   Char               buf [128], pfx [512], sfx [128];
   CharPtr            common = NULL;
-  Int4               currGi = 0;
+  BIG_ID             currGi = 0;
   DbtagPtr           dbt;
   SeqMgrDescContext  dcontext;
   SeqMgrFeatContext  fcontext;
@@ -4206,7 +4470,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice == SEQID_GI) {
-      currGi = (Int4) sip->data.intvalue;
+      currGi = (BIG_ID) sip->data.intvalue;
     }
   }
 
@@ -4313,7 +4577,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
       }
     }
   }
- 
+
   if (ajp->refseqConventions) {
     is_other = TRUE;
   }
@@ -4415,6 +4679,21 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
     /* move metagenome_source to note */
     qvp [SCQUAL_metagenome_note].omp = qvp [SCQUAL_metagenome_source].omp;
     qvp [SCQUAL_metagenome_source].omp = NULL;
+  }
+
+  if (ajp->mode == RELEASE_MODE || ajp->mode == ENTREZ_MODE) {
+    if (qvp [SCQUAL_altitude].ssp != NULL) {
+      ssp = qvp [SCQUAL_altitude].ssp;
+      if (! AltitudeIsValid (ssp->name)) {
+        qvp [SCQUAL_altitude].ssp = NULL;
+      }
+    }
+    if (qvp [SCQUAL_type_material].omp != NULL) {
+      ssp = qvp [SCQUAL_type_material].ssp;
+      if (! TypeMaterialIsValid (ssp->name)) {
+        qvp [SCQUAL_type_material].ssp = NULL;
+      }
+    }
   }
 
 #if 0
@@ -4811,7 +5090,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                     if (add_period) {
                       prefix = ".\n";
                     } else {
-                      prefix = "\n";
+                      prefix = ";\n";
                     }
                   } else {
                     prefix = "; ";
@@ -4855,7 +5134,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
                     if (add_period) {
                       prefix = ".\n";
                     } else {
-                      prefix = "\n";
+                      prefix = ";\n";
                     }
                   } else {
                     prefix = "; ";
@@ -4916,7 +5195,7 @@ NLM_EXTERN CharPtr FormatSourceFeatBlock (
         }
         if ( !FFEmpty(unique) ) {
           notestr = FFToCharPtr(unique);
-        
+
           if (add_period) {
             s_AddPeriodToEnd (notestr);
           }
@@ -5094,7 +5373,7 @@ static void PrintSeqLine (
   StringItemPtr ffstring,
   FmtType format,
   CharPtr buf,
-  Int4 gi,
+  BIG_ID gi,
   Int4 startwithoutgap,
   Int4 start,
   Int4 stop
@@ -5173,7 +5452,7 @@ static CharPtr CompressNonBases (CharPtr str)
     10, /* 7 = pir */
     10, /* 8 = swissprot */
     15, /* 9 = patent */
-    20, /* 10 = other TextSeqId */
+    10, /* 10 = other = refseq */
     20, /* 11 = general Dbtag */
     255, /* 12 = gi */
     10, /* 13 = ddbj */
@@ -5182,8 +5461,8 @@ static CharPtr CompressNonBases (CharPtr str)
     10, /* 16 = tpg */
     10, /* 17 = tpe */
     10, /* 18 = tpd */
-    10, /* 19 = gpp */
-    10  /* 20 = nat */
+    15, /* 19 = gpp */
+    15  /* 20 = nat */
   };
 
 static void PrintGenome (
@@ -5195,11 +5474,12 @@ static void PrintGenome (
   Boolean is_na
 )
 {
-  Char         buf[40], gibuf [32], vbuf [80];
+  Char         buf[128], gibuf [32], vbuf [128];
   Boolean      first = TRUE;
   SeqIdPtr     freeid = NULL, sid = NULL, newid = NULL;
   SeqLocPtr    slp = NULL;
-  Int4         start = 0, stop = 0, gi = 0;
+  Int4         start = 0, stop = 0;
+  BIG_ID       gi = 0;
   BioseqPtr    bsp = NULL;
   Int2         p1 = 0, p2 = 0;
 
@@ -5226,7 +5506,7 @@ static void PrintGenome (
     buf [0] = '\0';
     gi = 0;
     if (sid->choice == SEQID_GI) {
-      gi = sid->data.intvalue;
+      gi = (BIG_ID) sid->data.intvalue;
       if (GetAccnVerFromServer (gi, buf)) {
         /* no need to call GetSeqIdForGI */
       } else {
@@ -5449,7 +5729,7 @@ NLM_EXTERN CharPtr FormatContigBlock (
   } else {
     label = "CONTIG";
   }
-  
+
   FFAddOneString(ffstring, label,  FALSE, FALSE, TILDE_IGNORE);  
   FFAddNChar(ffstring, ' ', 12 - StringLen(label), FALSE);
   */
@@ -5514,6 +5794,12 @@ NLM_EXTERN CharPtr FormatContigBlock (
 
       prefix = ",";
     }
+
+  } else if (bsp->seq_ext_type == 2) {
+
+    slp = (SeqLocPtr) bsp->seq_ext;
+    PrintGenome (ajp, ffstring, slp, prefix, segWithParts, is_na);
+
   }
 
   FFAddOneChar (ffstring, ')', FALSE);
@@ -5605,7 +5891,7 @@ static Int2 GapAtStart (
   for (ch = *ptr, j = 0; ch != '\0' && j < 60; ptr++, ch = *ptr, j++) {
     if (ch != '-') return j;
   }
-  return 0;
+  return j;
 }
 
 static void FixGapAtStart (
@@ -5724,8 +6010,8 @@ static Int2 ProcessGapSpecialFormat (
 {
   Char      fmt_buf [64];
   Char      gapbuf [80];
-  Int4      gi;
-  Char      gi_buf [16];
+  BIG_ID    gi;
+  Char      gi_buf [32];
   Boolean   is_na;
   Char      pad;
   Char      rgn_buf [64];
@@ -5761,7 +6047,7 @@ static Int2 ProcessGapSpecialFormat (
       gi = 0;
       for (sip = bsp->id; sip != NULL; sip = sip->next) {
         if (sip->choice == SEQID_GI) {
-          gi = (Int4) sip->data.intvalue;
+          gi = (BIG_ID) sip->data.intvalue;
         }
       }
       if (gi > 0) {
@@ -5851,7 +6137,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
   Int4              extend;
   StreamFlgType     flags = STREAM_EXPAND_GAPS | STREAM_CORRECT_INVAL;
   GBSeqPtr          gbseq;
-  Int4              gi = 0;
+  BIG_ID            gi = 0;
   IntAsn2gbSectPtr  iasp;
   Int2              lin;
   SeqLocPtr         loc;
@@ -5988,7 +6274,7 @@ NLM_EXTERN CharPtr FormatSequenceBlock (
 
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
    if (sip->choice != SEQID_GI) continue;
-   gi = (Int4) sip->data.intvalue;
+   gi = (BIG_ID) sip->data.intvalue;
   }
 
   /* format subsequence cached with SeqPortStream */
@@ -6207,6 +6493,7 @@ NLM_EXTERN CharPtr FormatSlashBlock (
       is.sequence = gbseq->sequence;
       is.contig = gbseq->contig;
       is.alt_seq = (INSDAltSeqDataPtr) gbseq->alt_seq;
+      is.xrefs = (INSDXrefPtr) gbseq->xrefs;
       INSDSeqAsnWrite (&is, afp->aip, afp->atp);
     } else {
       GBSeqAsnWrite (gbseq, afp->aip, afp->atp);

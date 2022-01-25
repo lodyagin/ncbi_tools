@@ -529,6 +529,7 @@ Cn3dColorAsnWrite(Cn3dColorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -711,6 +712,7 @@ Cn3dBackboneStyleAsnWrite(Cn3dBackboneStylePtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -894,6 +896,7 @@ Cn3dGeneralStyleAsnWrite(Cn3dGeneralStylePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1083,6 +1086,7 @@ Cn3dBackboneLabelStyleAsnWrite(Cn3dBackboneLabelStylePtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1432,6 +1436,7 @@ Cn3dStyleSettingsAsnWrite(Cn3dStyleSettingsPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1795,6 +1800,7 @@ Cn3dStyleTableItemAsnWrite(Cn3dStyleTableItemPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1959,6 +1965,7 @@ Cn3dResidueRangeAsnWrite(Cn3dResidueRangePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2121,6 +2128,7 @@ Cn3dMoleculeLocationAsnWrite(Cn3dMoleculeLocationPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2469,6 +2477,7 @@ Cn3dUserAnnotationAsnWrite(Cn3dUserAnnotationPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2737,6 +2746,7 @@ Cn3dGLMatrixAsnWrite(Cn3dGLMatrixPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2933,6 +2943,7 @@ Cn3dVectorAsnWrite(Cn3dVectorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3140,6 +3151,7 @@ Cn3dViewSettingsAsnWrite(Cn3dViewSettingsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

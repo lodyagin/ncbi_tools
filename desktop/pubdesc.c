@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/28/95
 *
-* $Revision: 6.93 $
+* $Revision: 6.95 $
 *
 * File Description:
 *
@@ -123,6 +123,7 @@ typedef struct pubdescpage {
   AuthListPtr   originalAuthList;
 
   TexT          journal;
+  Boolean       is_iso_jta;
   TexT          volume;
   TexT          issue;
 
@@ -785,7 +786,10 @@ static Pointer PubdescPageToPubdescPtr (DialoG d)
             if (ttl != NULL)
             {
               cjp->title = ttl;
-              ttl->choice = 5;      /* OhOh - assume ISO_JTA for journal */
+              ttl->choice = Cit_title_jta;
+              if (ppp->is_iso_jta) {
+                ttl->choice = Cit_title_iso_jta;      /* OhOh - assume ISO_JTA for journal */
+              }
               ttl->data.ptrvalue = SaveStringFromText (ppp->journal);
             }
             imp = ImprintNew ();
@@ -1304,6 +1308,9 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                         SetTitle (ppp->journal,
                                   (CharPtr) ttl->data.ptrvalue);
                       }
+                      if (ttl->choice == Cit_title_iso_jta) {
+                        ppp->is_iso_jta = TRUE;
+                      }
                     }
                     ttl = ttl->next;
                   }
@@ -1405,6 +1412,9 @@ static void PubdescPtrToPubdescPage (DialoG d, Pointer data)
                         title_old = title_new;
                         journal = (CharPtr) ttl->data.ptrvalue;
                         SetTitle (ppp->journal, journal);
+                      }
+                      if (ttl->choice == Cit_title_iso_jta) {
+                        ppp->is_iso_jta = TRUE;
                       }
                     }
                     ttl = ttl->next;
@@ -1965,6 +1975,7 @@ static void LookupCommonProc (ButtoN b, Boolean byMuid, Boolean byPmid)
       }
       PubdescFree (pdp);
       FixEPubOnlyJournal (ppp, FALSE);
+      ppp->is_iso_jta = TRUE;
       Select (ParentWindow (b));
       Update ();
     }
@@ -2150,12 +2161,14 @@ static void LookupISOJournalProc (ButtoN b)
         if (len > 1) {
           if (ChooseFromMultipleJournals (str, sizeof (str) - 1, allTitles)) {
             SetTitle (ppp->journal, str);
+            ppp->is_iso_jta = TRUE;
             FixEPubOnlyJournal (ppp, FALSE);
             unable_to_match = FALSE;
           }
         } else if (len == 1 && StringDoesHaveText (allTitles->data.ptrvalue) &&
                    allTitles->choice == Cit_title_iso_jta) {
           SetTitle (ppp->journal, allTitles->data.ptrvalue);
+          ppp->is_iso_jta = TRUE;
           FixEPubOnlyJournal (ppp, FALSE);
           unable_to_match = FALSE;
         }
@@ -2467,6 +2480,7 @@ static DialoG CreatePubdescDialog (GrouP h, CharPtr title, GrouP PNTR pages,
         g5 = HiddenGroup (g4, -3, 0, NULL);
         StaticPrompt (g5, "Journal", wid1, dialogTextHeight, programFont, 'l');
         ppp->journal = DialogText (g5, "", 24, NULL);
+        ppp->is_iso_jta = FALSE;
 
         g6 = HiddenGroup (g4, -6, 0, NULL);
         StaticPrompt (g6, "Volume", wid1, dialogTextHeight, programFont, 'l');
@@ -2856,7 +2870,7 @@ static void SetPubdescImportExportItems (PubdescFormPtr pfp)
       SafeEnable (exportItm);
     } else if ((ppp = (PubdescPagePtr) GetObjectExtra (pfp->data)) != NULL
                && ppp->pub_choice == PUB_JOURNAL
-               &&& pfp->currentPage == 1) {
+               && pfp->currentPage == 1) {
       SafeSetTitle (importItm, "Import Pubdesc...");
       SafeSetTitle (exportItm, "Export Pubdesc...");
       SafeEnable (importItm);

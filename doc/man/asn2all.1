@@ -1,10 +1,15 @@
-.TH ASN2ALL 1 2009-07-31 NCBI "NCBI Tools User's Manual"
+.TH ASN2ALL 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2all \- generate reports from ASN.1 biological data
 .SH SYNOPSIS
 .B asn2all
 [\|\fB\-\fP\|]
 [\|\fB\-A\fP\ \fIacc\fP\|]
+[\|\fB\-F\fP\ \fIfilename\fP\|]
+[\|\fB\-G\fP\|]
+[\|\fB\-J\fP\ \fIn\fP\|]
+[\|\fB\-K\fP\ \fIn\fP\|]
+[\|\fB\-M\fP\|]
 [\|\fB\-T\fP\|]
 [\|\fB\-X\fP\|]
 [\|\fB\-a\fP\ \fItype\fP\|]
@@ -20,6 +25,7 @@ asn2all \- generate reports from ASN.1 biological data
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIpath\fP\|]
 [\|\fB\-r\fP\|]
+[\|\fB\-s\fP\ \fIdb\fP\|]
 [\|\fB\-v\fP\ \fIfilename\fP\|]
 [\|\fB\-x\fP\ \fIext\fP\|]
 .SH DESCRIPTION
@@ -65,8 +71,26 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
-\fB\-A\fP\ \fIacc\fP
-Accession to fetch
+\fB\-A\fP\ \fIaccession\fP
+Accession to fetch; may take the form
+.IB accession , complexity , flags
+where \fIcomplexity\fP should normally be \fB0\fP and a \fIflags\fP
+value of \fB-1\fP enables fetching of external features
+.TP
+\fB\-F\fP\ \fIfilename\fP
+Accession Filter file
+.TP
+\fB\-G\fP
+Relaxed Genome Mapping
+.TP
+\fB\-J\fP\ \fIn\fP
+Seq-loc from
+.TP
+\fB\-K\fP\ \fIn\fP
+Seq-loc to
+.TP
+\fB\-M\fP
+Seq-loc Minus strand
 .TP
 \fB\-T\fP
 Use Threads
@@ -80,6 +104,10 @@ Input ASN.1 type:
 .PD 0
 .IP a
 Automatic (default)
+.IP c
+Catenated
+.IP p
+Piped
 .IP z
 Any
 .IP e
@@ -91,7 +119,9 @@ Bioseq-set
 .IP m
 Seq-submit
 .IP t
-batch processing (suitable for official releases; autodetects specific type)
+Batch Bioseq-set
+.IP u
+Batch Seq-submit
 .PD
 .RE
 .TP
@@ -110,10 +140,16 @@ Output Format:
 .PD 0
 .IP g
 GenBank/GenPept (default)
+.IP m
+GenBank Master Style
 .IP f
 FASTA
 .IP d
 CDS FASTA
+.IP e
+Gene FASTA
+.IP r
+Regenerated Defline
 .IP t
 Sequin-style 5-column feature table
 .IP y
@@ -162,6 +198,17 @@ Path to files
 .TP
 \fB\-r\fP
 Enable Remote fetching
+.TP
+\fB\-s\fP\ \fIdb\fP
+Source database:
+.RS
+.PD 0
+.IP a
+Any (default)
+.IP w
+Exclude segmented sequences
+.PD
+.RE
 .TP
 \fB\-v\fP\ \fIfilename\fP
 Protein output file name

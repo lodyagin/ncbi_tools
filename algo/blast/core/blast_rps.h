@@ -1,4 +1,4 @@
-/* $Id: blast_rps.h,v 1.12 2011/12/14 20:11:33 kazimird Exp $
+/* $Id: blast_rps.h,v 1.15 2012/09/10 13:54:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -78,6 +78,23 @@ typedef struct BlastRPSProfileHeader {
 
 } BlastRPSProfileHeader;
 
+/** header for RPS blast frequency ratios ('.freq') file */
+
+#define FREQ_RATIO_SCALE 1000000000
+
+typedef struct BlastRPSFreqRatiosHeader {
+	Int4 magic_number;
+    Int4 num_profiles;     /**< number of PSSMs in the file */
+    Int4 start_offsets[1];   /**< start of an Int4 array that gives the starting
+                              byte offset of each RPS DB sequence. There
+                              are num_profiles+1 entries in the list, and
+                              the last entry effectively contains the length
+                              of all protein sequences combined. Note that
+                              the length of each sequence includes one byte
+                              at the end for an end-of-sequence sentinel */
+
+} BlastRPSFreqRatiosHeader;
+
 /** information derived from RPS blast '.aux' file */
 
 typedef struct BlastRPSAuxInfo {
@@ -107,6 +124,7 @@ typedef struct BlastRPSInfo {
 
     BlastRPSProfileHeader *freq_header;      /**< for '.wcounts' file */
     BlastRPSProfileHeader *obsr_header;      /**< for '.obsr' file */
+    BlastRPSFreqRatiosHeader *freq_ratios_header; /**< for '.freq' file */
 } BlastRPSInfo;
 
 #ifdef __cplusplus

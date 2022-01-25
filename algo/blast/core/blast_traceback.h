@@ -1,4 +1,4 @@
-/* $Id: blast_traceback.h,v 1.52 2010/12/02 16:14:52 kazimird Exp $
+/* $Id: blast_traceback.h,v 1.55 2013/11/22 17:12:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -68,14 +68,14 @@ extern "C" {
  * @param ext_options Gapped extension options [in]
  * @param hit_params Hit saving parameters [in]
  * @param gen_code_string specifies genetic code [in]
- * @param fence_hit True is returned here if overrun is detected. [in]
+ * @param fence_hit True is returned here if overrun is detected. [in|out]
  */
 NCBI_XBLAST_EXPORT
 Int2
 Blast_TracebackFromHSPList(EBlastProgramType program_number, 
-   BlastHSPList* hsp_list, BLAST_SequenceBlk* query_blk, 
-   BLAST_SequenceBlk* subject_blk, BlastQueryInfo* query_info,
-   BlastGapAlignStruct* gap_align, BlastScoreBlk* sbp,
+   BlastHSPList* hsp_list, const BLAST_SequenceBlk* query_blk, 
+   BLAST_SequenceBlk* subject_blk, const BlastQueryInfo* query_info,
+   BlastGapAlignStruct* gap_align, const BlastScoreBlk* sbp,
    const BlastScoringParameters* score_params,
    const BlastExtensionOptions* ext_options,
    const BlastHitSavingParameters* hit_params,
@@ -129,7 +129,8 @@ NCBI_XBLAST_EXPORT
 Int2 
 BLAST_ComputeTraceback(EBlastProgramType program_number, 
    BlastHSPStream* hsp_stream, BLAST_SequenceBlk* query, 
-   BlastQueryInfo* query_info, const BlastSeqSrc* seq_src, 
+   BlastQueryInfo* query_info, 
+   const BlastSeqSrc* seq_src, 
    BlastGapAlignStruct* gap_align, BlastScoringParameters* score_params,
    const BlastExtensionParameters* ext_params,
    BlastHitSavingParameters* hit_params,
@@ -160,6 +161,7 @@ BLAST_ComputeTraceback(EBlastProgramType program_number,
  * @param rps_info RPS database information structure [in]
  * @param pattern_blk PHI BLAST auxiliary data structure [in]
  * @param results Where to save the results after traceback. [out]
+ * @param num_threads Maximum number of threads to spawn [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
@@ -172,7 +174,8 @@ Blast_RunTracebackSearch(EBlastProgramType program,
    const BlastDatabaseOptions* db_options, 
    const PSIBlastOptions* psi_options, BlastScoreBlk* sbp,
    BlastHSPStream* hsp_stream, const BlastRPSInfo* rps_info, 
-   SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results);
+   SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results,
+                         size_t num_threads);
 
 
 /** Entry point from the API level to perform the traceback stage of a BLAST 
@@ -198,6 +201,7 @@ Blast_RunTracebackSearch(EBlastProgramType program,
  * @param results Where to save the results after traceback. [out]
  * @param interrupt_search User specified function to interrupt search [in]
  * @param progress_info User supplied data structure to aid interrupt [in]
+ * @param num_threads Maximum number of threads to spawn [in]
  */
 NCBI_XBLAST_EXPORT
 Int2 
@@ -211,7 +215,8 @@ Blast_RunTracebackSearchWithInterrupt(EBlastProgramType program,
    const PSIBlastOptions* psi_options, BlastScoreBlk* sbp,
    BlastHSPStream* hsp_stream, const BlastRPSInfo* rps_info, 
    SPHIPatternSearchBlk* pattern_blk, BlastHSPResults** results,
-   TInterruptFnPtr interrupt_search, SBlastProgress* progress_info);
+   TInterruptFnPtr interrupt_search, SBlastProgress* progress_info,
+                                      size_t num_threads);
 
 #ifdef __cplusplus
 }

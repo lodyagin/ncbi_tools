@@ -9,7 +9,7 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnvalid.h14";
+static char * asnfilename = "asnvalid.h15";
 static AsnValxNode avnx[12] = {
     {20,"none" ,0,0.0,&avnx[1] } ,
     {20,"info" ,1,0.0,&avnx[2] } ,
@@ -24,7 +24,7 @@ static AsnValxNode avnx[12] = {
     {2,NULL,1,0.0,NULL } ,
     {2,NULL,0,0.0,NULL } };
 
-static AsnType atx[30] = {
+static AsnType atx[33] = {
   {401, "Severity-level" ,1,0,0,0,0,1,0,0,NULL,&atx[1],&avnx[0],0,&atx[2]} ,
   {310, "ENUMERATED" ,0,10,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {402, "Field-rule" ,1,0,0,0,0,1,0,0,NULL,&atx[9],&atx[3],0,&atx[10]} ,
@@ -46,18 +46,21 @@ static AsnType atx[30] = {
   {0, "disallowed-fields" ,128,4,0,1,0,0,0,0,NULL,&atx[10],NULL,0,NULL} ,
   {405, "Dependent-field-set" ,1,0,0,0,0,1,0,0,NULL,&atx[12],&atx[20],0,&atx[21]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[13],NULL,0,NULL} ,
-  {406, "Comment-rule" ,1,0,0,0,0,1,0,0,NULL,&atx[9],&atx[22],0,&atx[28]} ,
+  {406, "Comment-rule" ,1,0,0,0,0,1,0,0,NULL,&atx[9],&atx[22],0,&atx[31]} ,
   {0, "prefix" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[23]} ,
   {0, "updated" ,128,1,0,0,1,0,0,0,&avnx[9],&atx[7],NULL,0,&atx[24]} ,
   {0, "fields" ,128,2,0,0,0,0,0,0,NULL,&atx[10],NULL,0,&atx[25]} ,
   {0, "require-order" ,128,3,0,0,1,0,0,0,&avnx[10],&atx[7],NULL,0,&atx[26]} ,
   {0, "allow-unlisted" ,128,4,0,0,1,0,0,0,&avnx[11],&atx[7],NULL,0,&atx[27]} ,
-  {0, "dependent-rules" ,128,5,0,1,0,0,0,0,NULL,&atx[19],NULL,0,NULL} ,
-  {407, "Comment-set" ,1,0,0,0,0,1,0,0,NULL,&atx[12],&atx[29],0,NULL} ,
+  {0, "dependent-rules" ,128,5,0,1,0,0,0,0,NULL,&atx[19],NULL,0,&atx[28]} ,
+  {0, "forbidden-phrases" ,128,6,0,1,0,0,0,0,NULL,&atx[29],NULL,0,NULL} ,
+  {408, "Phrase-list" ,1,0,0,0,0,0,0,0,NULL,&atx[12],&atx[30],0,NULL} ,
+  {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[4],NULL,0,NULL} ,
+  {407, "Comment-set" ,1,0,0,0,0,1,0,0,NULL,&atx[12],&atx[32],0,&atx[29]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[21],NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Structured-comment-validation" , "asnvalid.h14",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Structured-comment-validation" , "asnvalid.h15",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -99,6 +102,10 @@ static AsnModulePtr amp = ampx;
 #define COMMENT_RULE_require_order &at[25]
 #define COMMENT_RULE_allow_unlisted &at[26]
 #define COMMENT_RULE_dependent_rules &at[27]
+#define COMMENT_RULE_forbidden_phrases &at[28]
 
-#define COMMENT_SET &at[28]
-#define COMMENT_SET_E &at[29]
+#define COMMENT_SET &at[31]
+#define COMMENT_SET_E &at[32]
+
+#define PHRASE_LIST &at[29]
+#define PHRASE_LIST_E &at[30]

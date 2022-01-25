@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.77 $
+* $Revision: 6.95 $
 *
 * File Description:  To validate sequence alignment.
 *
@@ -93,6 +93,7 @@ static ValNodePtr errorp = NULL;
 
 static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps, Boolean internal_validation);
 
+//LCOV_EXCL_START
 static ValNodePtr JYConstructErrorMessage (CharPtr function, CharPtr message, Uint1 level, ValNodePtr PNTR vnpp)
 {
         Char buffer[BUFFER_LENGTH];
@@ -144,6 +145,8 @@ static ValNodePtr JYErrorChainDestroy (ValNodePtr vnp)
 
         return NULL;
 }
+//LCOV_EXCL_STOP
+
 /******************************************************************
 Output error message according to code defined in alignval.h.  
 id refers to seqid of the sequence that causes the error 
@@ -346,15 +349,13 @@ static Int4 valmsggetseqpos(SeqAlignPtr sap, Int4 segment, SeqIdPtr sip)
 }
 
 
-static BioseqPtr BioseqForAlignment (SeqAlignPtr salp)
+static BioseqPtr BioseqForAlignmentWork (SeqAlignPtr salp)
 {
   Int4 row, num_rows;
   BioseqPtr bsp = NULL;
   SeqIdPtr  sip;
-  SeqEntryPtr oldscope;
   DenseDiagPtr ddp;
   
-  oldscope = SeqEntrySetScope (NULL);
   /* NOTE - can't index DenseDiag chain during validation because we're examining the individual DenseDiags,
    * and indexing converts it to DenseSegs.
    */
@@ -375,7 +376,23 @@ static BioseqPtr BioseqForAlignment (SeqAlignPtr salp)
       bsp = BioseqFind(sip);
     }
   }
-  SeqEntrySetScope (oldscope);  
+  return bsp;
+}
+
+static BioseqPtr BioseqForAlignment (SeqAlignPtr salp)
+{
+  BioseqPtr bsp;
+  SeqEntryPtr oldscope;
+
+  /* first look locally to scope */
+  bsp = BioseqForAlignmentWork (salp);
+  if (bsp != NULL) return bsp;
+
+  /* otherwise temporarily clear scope */
+  oldscope = SeqEntrySetScope (NULL);
+  bsp = BioseqForAlignmentWork (salp);
+  SeqEntrySetScope (oldscope);
+
   return bsp;
 }
 
@@ -397,7 +414,7 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
   {
     case Err_SeqId:
       sprintf(string1, "SeqId");
-      sprintf(string2, "The sequence corresponding to SeqId %s could not be found", buf);
+      sprintf(string2, "The sequence corresponding to SeqId %s could not be found.", buf);
       break;
 
     case Err_Strand_Rev:
@@ -415,11 +432,14 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case  Err_Start_Less_Than_Zero:
+        //LCOV_EXCL_START
+        //unreachable for ASN.1 valid for C++ Toolkit
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
       sprintf(string2, "Start point is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s", (long) Intvalue, (long) pos, buf, buf3);
       break;
+      //LCOV_EXCL_STOP
 
     case Err_Start_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
@@ -429,11 +449,14 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_End_Less_Than_Zero:
+        //LCOV_EXCL_START
+        //unreachable with valid ASN.1
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
       sprintf(string2, "End point is less than zero in segment %ld (near position %d) for sequence ID: %s in the context of %s.  This could be a formatting error", (long) Intvalue, (int) pos,buf, buf3);
       break;
+      //LCOV_EXCL_STOP
 
     case Err_End_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
@@ -443,11 +466,14 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_Len_Less_Than_Zero:
+        //LCOV_EXCL_START
+        //unreachable with valid ASN.1
       pos = valmsggetseqpos(salp, Intvalue, id);
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Length");
       sprintf(string2, "Segment length is less than zero in segment %ld (near sequence position %ld) for sequence ID: %s in the context of %s.  Look for extra characters in this segment or flanking segments", (long) Intvalue, (long) pos, buf, buf3); 
       break;
+      //LCOV_EXCL_STOP
 
     case Err_Len_More_Than_Biolen:
       pos = valmsggetseqpos(salp, Intvalue, id);
@@ -482,9 +508,12 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_Null_Segs:
+        //LCOV_EXCL_START
+        // unreachable for valid ASN.1
       sprintf(string1, "Segs");
       sprintf(string2, "This alignment is missing all segments.  This is a non-correctable error -- look for serious formatting problems.");
       break;
+      //LCOV_EXCL_STOP
 
     case Err_Segment_Gap:
       pos = valmsggetseqpos(salp, Intvalue, id);
@@ -518,9 +547,12 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
       break;
 
     case Err_Short_Aln:
+        //LCOV_EXCL_START
+        //only call to only function to generate this error is commented out
       sprintf(string1, "ShortAln");
       sprintf(string2, "This alignment is shorter than at least one non-farpointer sequence.");
       break;
+      //LCOV_EXCL_STOP
 
     case Err_Unexpected_Alignment_Type:
       sprintf(string1, "UnexpectedAlignmentType");
@@ -544,8 +576,10 @@ static void ValMessage (SeqAlignPtr salp, Int1 MessageCode, ErrSev errlevel, Seq
     }
     return;
   }
+//LCOV_EXCL_START
   if (StringLen(string1) > 0)
      errorp = JYConstructErrorMessage (string1, string2, errlevel, &errorp);
+//LCOV_EXCL_STOP
 }
 
  
@@ -660,8 +694,11 @@ static SeqIdPtr SeqIdInAlignSegs(Pointer segs, Uint1 segtype, SeqAlignPtr salp)
 
   if(!segs)
   {
+      //LCOV_EXCL_START
+      //unreachable for valid ASN.1
       ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
       return NULL;
+      //LCOV_EXCL_STOP
   }
   if(segtype==1) 
   { /* DenseDiag */
@@ -710,8 +747,12 @@ static void  ValidateSeqIdInSeqAlign (SeqAlignPtr salp)
   if(salp)
     {     
       segptr=salp->segs;
-      if(!segptr)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      if (!segptr) {
+          //LCOV_EXCL_START
+          // unreachable for valid ASN.1      
+          ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+          //LCOV_EXCL_STOP
+      }
       else
     {
 
@@ -797,6 +838,8 @@ static Uint1 SeqLocStrandForSipInStdSeg (SeqIdPtr sip, StdSegPtr ssp, SeqAlignPt
 }
 
 
+//LCOV_EXCL_START
+//code for this error does not actually work as described in comments
 /******************************************************************
 check if the  strand is consistent in Stdseg
 ******************************************************************/ 
@@ -810,8 +853,10 @@ static void ValidateStrandInStdSeg(StdSegPtr ssp, SeqAlignPtr salp)
   Boolean      CheckedStatus;
   Int4         start_numseg=0, end_numseg=0;
   
-  if(!ssp)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  if (!ssp) {
+      // unreachable for valid ASN.1
+      ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  }
   else
     for(ssptemp=ssp; ssptemp!=NULL; ssptemp=ssptemp->next)
       {
@@ -878,15 +923,15 @@ static void ValidateStrandInStdSeg(StdSegPtr ssp, SeqAlignPtr salp)
   
   ValNodeFree(FinishedSip);
 }
+//LCOV_EXCL_STOP
  
  
 /******************************************************************
 check if the  strand is consistent in Denseseg
 ******************************************************************/ 
-static void ValidateStrandInPack_DenseSeg(Pointer segs, Uint1 segtype, SeqAlignPtr salp)
+static void ValidateStrandInDenseSeg(Pointer segs, Uint1 segtype, SeqAlignPtr salp)
 { 
   DenseSegPtr dsp=NULL;
-  PackSegPtr psp=NULL;
   Int4         numseg, aligndim, dimnumseg, i, j, m;
   SeqIdPtr     sip=NULL, siptemp;
   Uint1           strand1=0, strand2=0;
@@ -894,26 +939,18 @@ static void ValidateStrandInPack_DenseSeg(Pointer segs, Uint1 segtype, SeqAlignP
         
   if(!segs)
   {
+      //LCOV_EXCL_START
+      // unreachable for valid ASN.1
     ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+    //LCOV_EXCL_STOP
   } 
-  else if(segtype==2||segtype==4)
+  else if(segtype==2)
   {
-    if(segtype==2)
-    {
-      dsp=(DenseSegPtr)segs;
-      strandptr=dsp->strands;
-      sip=dsp->ids;
-      numseg=dsp->numseg;
-      aligndim=dsp->dim;
-    }     
-    else if(segtype==4)
-    {
-      psp=(PackSegPtr)segs;
-      strandptr=psp->strands;
-      sip=psp->ids;
-      numseg=psp->numseg;
-      aligndim=psp->dim;
-    }
+    dsp=(DenseSegPtr)segs;
+    strandptr=dsp->strands;
+    sip=dsp->ids;
+    numseg=dsp->numseg;
+    aligndim=dsp->dim;
 
     dimnumseg=numseg*aligndim;
     if(strandptr)
@@ -972,10 +1009,10 @@ static void ValidateStrandinSeqAlign(SeqAlignPtr salp)
    
       /*Strands needs to be validated  in case of global or partial alignment*/ 
      
-      /*denseseg or packseg*/
-      if(salp->segtype==2||salp->segtype==4)
+      /*denseseg*/
+      if(salp->segtype==2)
  
-    ValidateStrandInPack_DenseSeg(salp->segs, salp->segtype, salp);
+    ValidateStrandInDenseSeg(salp->segs, salp->segtype, salp);
 
       /*stdseg*/
       else if(salp->segtype==3)
@@ -1003,8 +1040,12 @@ static void ValidateSeqlengthInDenseDiag (DenseDiagPtr ddp, SeqAlignPtr salp)
   BioseqPtr    bsp=NULL;
   
 
-  if(!ddp)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  if (!ddp){
+      //LCOV_EXCL_START
+      // unreachable for valid ASN.1
+      ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      //LCOV_EXCL_STOP
+  }
   else
     {
       for(ddptemp=ddp, numseg=0; ddptemp!=NULL; ddptemp=ddptemp->next, numseg++)
@@ -1022,15 +1063,23 @@ static void ValidateSeqlengthInDenseDiag (DenseDiagPtr ddp, SeqAlignPtr salp)
               bslen=bsp->length; 
               AlignValBioseqUnlock (bsp);
               /*verify start*/
-              if(stptr[i]<0)
-            ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg);     
+              if (stptr[i] < 0) {
+                  //LCOV_EXCL_START
+                  //unreachable with valid ASN.1
+                  ValMessage(salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip, numseg);
+                  //LCOV_EXCL_STOP
+              }
               if(stptr[i]>=bslen)
             ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg); 
               
               /*verify length*/
               
-              if(ddptemp->len<0)
-            ValMessage (salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg); 
+              if (ddptemp->len<0) {
+                  //LCOV_EXCL_START
+                  //unreachable with valid ASN.1
+                  ValMessage(salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip, numseg);
+                  //LCOV_EXCL_STOP
+              }
               
               if(ddptemp->len+stptr[i]>bslen)
             ValMessage (salp, Err_Sum_Len_Start, SEV_ERROR, siptemp, sip , numseg);  
@@ -1109,8 +1158,12 @@ static void ValidateSeqlengthInDenseSeg (DenseSegPtr dsp, SeqAlignPtr salp)
   Int4         bslen = 0;
   BioseqPtr    bsp=NULL;
 
- if(!dsp)
-   ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  if (!dsp) {
+      //LCOV_EXCL_START
+      // unreachable for valid ASN.1
+      ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      //LCOV_EXCL_STOP
+  }
  else
     {
       numseg=dsp->numseg;
@@ -1251,7 +1304,10 @@ static void ValidateSeqlengthInStdSeg (StdSegPtr ssp, SeqAlignPtr salp)
   SeqLocPtr    slp=NULL, slptemp;
 
   if(!ssp) {
+      //LCOV_EXCL_START
+      // unreachable for valid ASN.1
     ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+    //LCOV_EXCL_STOP
   } else {
     for(ssptemp=ssp, numseg=0; ssptemp!=NULL; ssptemp=ssptemp->next, numseg++) { 
       /*get all seqid in current segment*/
@@ -1272,7 +1328,10 @@ static void ValidateSeqlengthInStdSeg (StdSegPtr ssp, SeqAlignPtr salp)
      
           /*verify start*/
           if(start<0) {
+              //LCOV_EXCL_START
+              //unreachable with valid ASN.1
             ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1);      
+            //LCOV_EXCL_STOP
           }
             
           if(start>bslen-1) {
@@ -1281,7 +1340,10 @@ static void ValidateSeqlengthInStdSeg (StdSegPtr ssp, SeqAlignPtr salp)
           
             /*verify end*/
           if(end<0) {
+              //LCOV_EXCL_START
+              //unreachable with valid ASN.1
             ValMessage (salp, Err_End_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1); 
+            //LCOV_EXCL_STOP
           }
           if(end>bslen-1) {
             ValMessage (salp, Err_End_More_Than_Biolen, SEV_ERROR, siptemp, sip , numseg+1); 
@@ -1289,7 +1351,10 @@ static void ValidateSeqlengthInStdSeg (StdSegPtr ssp, SeqAlignPtr salp)
                                   
           /*verify length*/
           if(length<0) {
+              //LCOV_EXCL_START
+              //unreachable with valid ASN.1
             ValMessage (salp, Err_Len_Less_Than_Zero, SEV_ERROR, siptemp, sip , numseg+1); 
+            //LCOV_EXCL_STOP
           }
             
           if(length>bslen) {
@@ -1316,8 +1381,12 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
   BioseqPtr    bsp=NULL;
   Int4         bslen, seg_start;
 
-  if(!psp)
-    ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+  if (!psp){
+      //LCOV_EXCL_START
+      // unreachable for valid ASN.1
+      ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      //LCOV_EXCL_STOP
+  }
   else
     {
       numseg=psp->numseg;
@@ -1350,8 +1419,11 @@ static void ValidateSeqlengthInPackSeg (PackSegPtr psp, SeqAlignPtr salp)
               AlignValBioseqUnlock (bsp);
               seg_start=stptr[j];
               /*check start*/
-              if(seg_start<0)
-            ValMessage (salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip , 0);     
+              if (seg_start < 0) {
+                  //LCOV_EXCL_START              
+                  ValMessage(salp, Err_Start_Less_Than_Zero, SEV_ERROR, siptemp, sip, 0);
+                  //LCOV_EXCL_STOP
+              }
               if(seg_start>=bslen)
             ValMessage (salp, Err_Start_More_Than_Biolen, SEV_ERROR, siptemp, sip , 0);
               
@@ -1413,8 +1485,12 @@ static void ValidateDimSeqIds (SeqAlignPtr salp)
        {
      
      ddp=(DenseDiagPtr)salp->segs;
-     if(!ddp)
-       ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+     if (!ddp) {
+         //LCOV_EXCL_START
+         // unreachable for valid ASN.1
+         ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+         //LCOV_EXCL_STOP
+     }
      else
        for(ddptemp=ddp, numseg=0; ddptemp!=NULL; ddptemp=ddptemp->next, numseg++)
          {
@@ -1431,8 +1507,12 @@ static void ValidateDimSeqIds (SeqAlignPtr salp)
      else if(salp->segtype==2||salp->segtype==4)
        {
      dsp=(DenseSegPtr) (salp->segs);
-     if(!dsp)
-       ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+     if (!dsp) {
+         //LCOV_EXCL_START
+         // unreachable for valid ASN.1     
+         ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+         //LCOV_EXCL_STOP
+     }
      else
        {
          sip=dsp->ids;
@@ -1449,8 +1529,12 @@ static void ValidateDimSeqIds (SeqAlignPtr salp)
        {
      
      ssp=(StdSegPtr)salp->segs;
-     if(!ssp)
-       ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+     if (!ssp) {
+         //LCOV_EXCL_START
+         // unreachable for valid ASN.1
+         ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+         //LCOV_EXCL_STOP
+     }
      else
        for(ssptemp=ssp, numseg=0; ssptemp!=NULL; ssptemp=ssptemp->next, numseg++)
          {
@@ -1594,7 +1678,10 @@ static Boolean Is_Fasta_Seqalign (SeqAlignPtr salp)
     dsp = (DenseSegPtr) salp->segs;
     if(!dsp)
     {
+        //LCOV_EXCL_START
+        // unreachable for valid ASN.1
       ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      //LCOV_EXCL_STOP
     }
     else
     {
@@ -1685,16 +1772,24 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
       if(salp->segtype==1)
     {
       ddp=(DenseDiagPtr)salp->segs;
-      if(!ddp)
-        ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      if (!ddp) {
+          //LCOV_EXCL_START
+          // unreachable for valid ASN.1
+          ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+          //LCOV_EXCL_STOP
+      }
       else
         {
           for(ddptemp=ddp, numseg=0; ddptemp!=NULL; ddptemp=ddptemp->next, numseg++)
         {
           sip=ddptemp->id;
           /*empty segment*/
-          if(ddptemp->dim==0)   
-            ValMessage (salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg);
+          if (ddptemp->dim == 0)  {
+              //LCOV_EXCL_START
+              //ASN.1 is unreadable if dim is 0          
+              ValMessage(salp, Err_Segment_Gap, SEV_ERROR, NULL, sip, numseg);
+              //LCOV_EXCL_STOP
+          }
         }
         }
     }
@@ -1704,8 +1799,12 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
      else if(salp->segtype==2)
     {
       dsp=(DenseSegPtr)salp->segs;
-      if(!dsp)
-        ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      if (!dsp) {
+          //LCOV_EXCL_START
+          // unreachable for valid ASN.1
+          ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+          //LCOV_EXCL_STOP
+      }
       else
         {
           numseg=dsp->numseg;
@@ -1742,8 +1841,12 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
      else if(salp->segtype==3)
     {
       ssp=(StdSegPtr)salp->segs;
-      if(!ssp)
-        ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      if (!ssp) {
+          //LCOV_EXCL_START
+          // unreachable for valid ASN.1
+          ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+          //LCOV_EXCL_STOP
+      }
       else
         {
           /*go through each segment*/
@@ -1776,8 +1879,12 @@ static void Segment_Gap_In_SeqAlign(SeqAlignPtr salp)
       else if(salp->segtype==4)
     {
       psp=(PackSegPtr)salp->segs;
-      if(!psp)
-        ValMessage (salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+      if (!psp) {
+          //LCOV_EXCL_START
+          // unreachable for valid ASN.1
+          ValMessage(salp, Err_Null_Segs, SEV_ERROR, NULL, NULL, 0);
+          //LCOV_EXCL_STOP
+      }
       else
         {
           numseg=psp->numseg;
@@ -1876,9 +1983,11 @@ static Boolean IsAlignmentTPA (SeqAlignPtr salp)
       for (sip=SeqIdInAlignSegs(salp->segs, salp->segtype, salp);
            sip != NULL && !isTPA;
            sip = sip->next) {
-        bsp = BioseqLockById(sip);
+        /* NOTE - we do not want to fetch Bioseqs if they aren't local.
+         * we only care about TpaUserObjects on Bioseqs in THIS record.
+         */
+        bsp = BioseqFind(sip);
         isTPA = HasTpaUserObject(bsp);
-        BioseqUnlock(bsp);
       }
       break;
   }
@@ -1888,6 +1997,8 @@ static Boolean IsAlignmentTPA (SeqAlignPtr salp)
 }
 
 
+//LCOV_EXCL_START
+// only call to this function is commented out
 static void CheckAlnSeqLens (SeqAlignPtr salp)
 {
   Int4     aln_len, start, stop;
@@ -1919,8 +2030,31 @@ static void CheckAlnSeqLens (SeqAlignPtr salp)
     ValMessage (salp, Err_Short_Aln, SEV_INFO, NULL, NULL, 0);
   }
 }
+//LCOV_EXCL_STOP
 
- 
+
+static Boolean AlignmentScorePercentIdOk (SeqAlignPtr salp)
+{
+  ScorePtr   score;
+
+  if (salp == NULL) {
+    return FALSE;
+  }
+  for (score = salp->score; score != NULL; score = score->next) {
+    if (score->id != NULL
+        && score->id->str != NULL
+        && StringICmp (score->id->str, "pct_identity_ungap") == 0) {
+      if (score->value.realvalue > 50.0) {
+        return TRUE;
+      } else {
+        return FALSE;
+      }
+    }
+  }
+  return FALSE;
+}
+
+
 /******************************************************************
 validate seqid, segment length, strand in Seqalignment for Denseseg, 
 Densediag and Stdseg.  Also check if it's FASTA-like
@@ -1953,7 +2087,7 @@ static Boolean ValidateSeqAlignFunc (SeqAlignPtr salp, Boolean find_remote_bsp)
   /*validate segment gap*/
   Segment_Gap_In_SeqAlign (salp);
   
-  if (!IsAlignmentTPA(salp)) {
+  if (!IsAlignmentTPA(salp) && !AlignmentScorePercentIdOk(salp)) {
     if (salp->segtype == SAS_DENDIAG) {
       /* duplicate alignment, to prevent indexing from changing the original type */
       salp_test = SeqAlignDup (salp);
@@ -2029,6 +2163,8 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
         }         
            if (errorp)
            {
+               //LCOV_EXCL_START
+               //not used
               if(svp->message)
               {
                  for (vnp=errorp; vnp!=NULL; vnp=vnp->next)
@@ -2058,6 +2194,7 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
               }
               err_count++;
            svp->retdel=FALSE;
+           //LCOV_EXCL_STOP
         }
            else {
               salptmp = salptmp->next;
@@ -2077,6 +2214,7 @@ NLM_EXTERN Boolean ValidateSeqAlign (SeqAlignPtr salp, Uint2 entityID, Boolean m
 } 
 
 
+//LCOV_EXCL_START
 /******************************************************************
 call back function for REGISTER_ALIGNVALIDATION defined in sequin4.c.  
 Starting point for seqalign validation if user clicked on 
@@ -2134,6 +2272,7 @@ NLM_EXTERN Int2 LIBCALLBACK ValidateSeqAlignFromData (Pointer data)
   }
   return OM_MSG_RET_DONE;
 }
+//LCOV_EXCL_STOP
 
 static void ValidateSeqAlignInAnnot (SeqAnnotPtr sap, SaValPtr svp)
 
@@ -2359,6 +2498,7 @@ static Char AmbiguousMatch (Char ch1, Char ch2)
 }
 
 
+//LCOV_EXCL_START
 extern double *
 GetAlignmentColumnPercentIdentities 
 (SeqAlignPtr salp,
@@ -2522,6 +2662,7 @@ GetAlignmentColumnPercentIdentities
       
   return pct_ids;  
 }
+//LCOV_EXCL_STOP
 
 
 static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps, Boolean internal_validation)
@@ -2541,7 +2682,9 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   Int4           sample_len = 50;
   Int4Ptr        starts, stops;
   Int4           match_25 = 0;
-  
+  ErrSev         logsev;
+  ErrSev         msgsev;
+ 
   if (salp == NULL) return 0;
  
   AlnMgr2IndexSingleChildSeqAlign(salp);
@@ -2561,10 +2704,18 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   for (row = 1; row <= num_rows; row++) {
     sip_list[row - 1] = AlnMgr2GetNthSeqIdPtr(salp, row);
     strand_list[row - 1] = AlnMgr2GetNthStrand(salp, row);
+    msgsev = ErrSetMessageLevel (SEV_MAX);
+    logsev = ErrSetLogLevel (SEV_MAX);
     bsp_list[row - 1] = BioseqLockById(sip_list[row - 1]);
+    ErrSetLogLevel (logsev);
+    ErrSetMessageLevel (msgsev);
     if (bsp_list[row - 1] == NULL) {
       oldscope = SeqEntrySetScope (NULL);
+      msgsev = ErrSetMessageLevel (SEV_MAX);
+      logsev = ErrSetLogLevel (SEV_MAX);
       bsp_list[row - 1] = BioseqLockById(sip_list[row - 1]);
+      ErrSetLogLevel (logsev);
+      ErrSetMessageLevel (msgsev);
       SeqEntrySetScope(oldscope);
       if (bsp_list[row - 1] == NULL) {
         break;
@@ -2670,167 +2821,9 @@ static Uint2 AlignmentPercentIdentityEx (SeqAlignPtr salp, Boolean internal_gaps
   return pcnt;
 }
 
+//LCOV_EXCL_START
 extern Uint2 AlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps)
 {
   return AlignmentPercentIdentityEx (salp, internal_gaps, FALSE);
 }
-
-extern Uint2 WeightedAlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps)
-{
-  Int4       aln_len, num_rows, row, col_count = 0;
-  Int4       num_match;
-  Uint2      pcnt;
-  Int4       aln_pos, seq_pos, k;
-  Uint1          row_ch;
-  SeqEntryPtr    oldscope;
-  SeqIdPtr PNTR  sip_list;
-  BioseqPtr PNTR bsp_list;
-  Uint1Ptr       strand_list;
-  BoolPtr        start_gap, end_gap;
-  Int4Ptr        start_list;
-  Uint1Ptr       seqbuf_list;
-  Int4           sample_len = 50;
-  Int4           chars_appearing[5]; /* 0 is A, 1 is T, 2 is G, 3 is C, 4 is internal gap */
-  double         col_pct, col_pct_total = 0;
-  Int4           max_app, total_app, i;
-  
-  if (salp == NULL) return 0;
- 
-  AlnMgr2IndexSingleChildSeqAlign(salp);
-  aln_len = AlnMgr2GetAlnLength(salp, FALSE);
-  num_rows = AlnMgr2GetNumRows(salp);
-  if (num_rows < 0) {
-    Message (MSG_POSTERR, "AlnMgr2GetNumRows failed");
-    return 0;
-  }
-  bsp_list = (BioseqPtr PNTR) MemNew (num_rows * sizeof (BioseqPtr));
-  sip_list = (SeqIdPtr PNTR) MemNew (num_rows * sizeof(SeqIdPtr));
-  strand_list = (Uint1Ptr) MemNew (num_rows * sizeof(Uint1));
-  start_gap = (BoolPtr) MemNew (num_rows * sizeof(Boolean));
-  end_gap = (BoolPtr) MemNew (num_rows * sizeof(Boolean));
-  for (row = 1; row <= num_rows; row++) {
-    sip_list[row - 1] = AlnMgr2GetNthSeqIdPtr(salp, row);
-    strand_list[row - 1] = AlnMgr2GetNthStrand(salp, row);
-    bsp_list[row - 1] = BioseqLockById(sip_list[row - 1]);
-    if (bsp_list[row - 1] == NULL) {
-      oldscope = SeqEntrySetScope (NULL);
-      bsp_list[row - 1] = BioseqLockById(sip_list[row - 1]);
-      SeqEntrySetScope(oldscope);
-      if (bsp_list[row - 1] == NULL) {
-        break;
-      }
-    }
-    start_gap[row - 1] = TRUE;
-    end_gap[row - 1] = FALSE;
-  }
-  
-  if (row <= num_rows) {
-    Message (MSG_POSTERR, "Unable to locate Bioseq in alignment");
-    while (row >= 0) {
-      sip_list[row] = SeqIdFree(sip_list[row]);
-      BioseqUnlock(bsp_list[row]);
-      row--;
-    }
-    sip_list = MemFree (sip_list);
-    bsp_list = MemFree (bsp_list);
-    start_gap = MemFree (start_gap);
-    end_gap = MemFree (end_gap);
-    return 0;
-  }
-  
-  start_list = (Int4Ptr) MemNew (num_rows * sizeof(Int4));
-  seqbuf_list = (Uint1Ptr) MemNew (num_rows * sample_len * sizeof(Uint1));
-  for (row = 0; row < num_rows; row++) {
-    start_list[row] = 0;
-    PopulateSample (seqbuf_list, start_list, 
-                    sample_len, bsp_list,
-                    row);
-  }
-  
-  num_match = 0;
-  for (aln_pos = 0; aln_pos < aln_len; aln_pos++) {
-    /* init lists */
-    MemSet (chars_appearing, 0, sizeof (chars_appearing));
-    for (row = 1; row <= num_rows; row++) {
-      if (end_gap[row - 1]) {
-        continue;
-      }
-      seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, aln_pos, row);
-      if (seq_pos < 0) {
-        if (start_gap[row - 1] || end_gap[row - 1]) {
-          /* beginning/end gap - never counts against percent identity */
-        } else {
-          k = aln_pos + 1;
-          while (k < aln_len && seq_pos < 0) {
-            seq_pos = AlnMgr2MapSeqAlignToBioseq(salp, k, row);
-            k++;
-          }
-          if (seq_pos < 0) {
-            /* now in end_gap for this sequence */
-            end_gap[row - 1] = TRUE;
-          } else {
-            /* internal gaps count against percent identity when specified */
-            if (internal_gaps) {
-              chars_appearing[4] ++;
-            }
-          }
-        }
-      } else {
-        start_gap[row - 1] = FALSE;
-        
-        row_ch = ReadFromAlignmentSample(seqbuf_list, start_list, 
-                                         sample_len, bsp_list, strand_list,
-                                         row - 1, seq_pos);
-        switch (row_ch) {
-          case 'A':
-            chars_appearing[0]++;
-            break;
-          case 'T':
-            chars_appearing[1]++;
-            break;
-          case 'G':
-            chars_appearing[2]++;
-            break;
-          case 'C':
-            chars_appearing[3]++;
-            break;
-          default:
-            /* we don't count ambiguity characters */
-            break;
-       }
-      }
-    }
-    max_app = 0;
-    total_app = 0;
-    for (i = 0; i < 4; i++) {
-      if (chars_appearing[i] > max_app) {
-        max_app = chars_appearing[i];
-      }
-      total_app += chars_appearing[i];
-    }
-    if (total_app > 0) {
-      col_pct = (double) max_app / (double) total_app;
-      col_pct_total += col_pct;
-    }
-    col_count++;
-  }
-  
-  for (row = 0; row < num_rows; row++) {
-    sip_list[row] = SeqIdFree(sip_list[row]);
-    BioseqUnlock(bsp_list[row]);
-  }
-  sip_list = MemFree (sip_list);
-  bsp_list = MemFree (bsp_list);
-  start_gap = MemFree (start_gap);
-  end_gap = MemFree (end_gap);
-  start_list = MemFree (start_list);
-  seqbuf_list = MemFree (seqbuf_list);
-      
-  if (col_count == 0) {
-      pcnt = 0;
-  } else {
-      pcnt = (100 * col_pct_total) / col_count;
-  }
-  return pcnt;
-}
-
+//LCOV_EXCL_STOP

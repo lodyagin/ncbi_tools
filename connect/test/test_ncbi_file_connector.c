@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_file_connector.c,v 6.10 2010/02/05 20:35:04 kazimird Exp $
+/* $Id: test_ncbi_file_connector.c,v 6.11 2013/02/23 17:24:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,8 +34,8 @@
 #include <connect/ncbi_file_connector.h>
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include <stdlib.h>
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 #define OUT_FILE "test_ncbi_file_connector.out"
 

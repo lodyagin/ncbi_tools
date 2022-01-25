@@ -240,6 +240,9 @@ TSeqAsnWrite(TSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -392,6 +395,7 @@ TSeqSetAsnWrite(TSeqSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) TSeqAsnWrite, aip, atp, TSEQSET_E);
    retval = TRUE;
 
@@ -676,6 +680,9 @@ NLM_EXTERN Boolean BioseqAsnWriteAsTSeq (BioseqPtr bsp, AsnIoPtr aip, AsnTypePtr
    ptr = BioseqToMiniTSeq (bsp);
  
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

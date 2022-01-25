@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/4/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *     portable file routines
@@ -1123,11 +1123,16 @@ NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
 {
   Nlm_Int4     count = 0;
   Nlm_Char     file [FILENAME_MAX], path [PATH_MAX];
+  size_t       len, suflen = 0;
   Nlm_CharPtr  ptr, str;
   ValNodePtr   head, vnp;
 
   if (proc == NULL) return 0;
   if (Nlm_StringHasNoText (directory) /* || Nlm_StringHasNoText (suffix) */ ) return 0;
+
+  if (Nlm_StringDoesHaveText (suffix)) {
+    suflen = Nlm_StringLen (suffix);
+  }
 
   /* get list of all files in source directory */
 
@@ -1138,17 +1143,14 @@ NLM_EXTERN Nlm_Int4 Nlm_DirExplore (
       str = (Nlm_CharPtr) vnp->data.ptrvalue;
       if (! Nlm_StringHasNoText (str)) {
 
-        /* check filename for indicated suffix */
+        /* check end of filename for indicated suffix */
 
-        ptr = Nlm_StringStr (str, suffix);
-        if (ptr != NULL) {
-
-          /* make sure detected suffix is really at end of filename */
-
-          if (Nlm_StringCmp (ptr, suffix) == 0) {
+        len = Nlm_StringLen (str);
+        ptr = NULL;
+        if (len > suflen) {
+          if (Nlm_StringCmp (str + len - suflen, suffix) == 0) {
+            ptr = str + len - suflen;
             *ptr = '\0';
-          } else {
-            ptr = NULL;
           }
         }
 
@@ -1320,8 +1322,15 @@ NLM_EXTERN Nlm_Boolean Nlm_FileCacheSetup (
 
   MemSet ((Nlm_VoidPtr) fcp, 0, sizeof (Nlm_FileCache));
 
+  fcp->failed = FALSE;
+
   fcp->fp = fp;
   fcp->offset = ftell (fp);
+
+  if (fcp->offset < 0) {
+    fcp->failed = TRUE;
+    return FALSE;
+  }
 
   return TRUE;
 }
@@ -1333,12 +1342,18 @@ static void Nlm_FileCacheReadBlock (
 {
   int  total;
 
-  if (fcp == NULL || fcp->fp == NULL) return;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed) return;
 
   if (fcp->ctr >= fcp->total) {
     fcp->offset += (Nlm_Int4) fcp->total;
     fcp->ctr = 0;
     fcp->total = 0;
+
+    if (fcp->offset < 0) {
+      fcp->failed = TRUE;
+      ErrPostEx(SEV_WARNING,E_Programmer,0,"FileCacheReadBlock negative position %ld", (long) (fcp->offset));
+      return;
+    }
 
     fcp->buf [0] = '\0';
     total = (int) Nlm_FileRead ((Nlm_VoidPtr) fcp->buf, sizeof (Nlm_Char), (size_t) 512, fcp->fp);
@@ -1360,12 +1375,13 @@ static Nlm_Char Nlm_FileCacheGetChar (
 {
   Nlm_Char  ch = '\0', nxt;
 
-  if (fcp == NULL || fcp->fp == NULL) return ch;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed) return ch;
 
   /* read a fresh block if buffer is empty */
 
   if (fcp->ctr >= fcp->total) {
     Nlm_FileCacheReadBlock (fcp);
+    if (fcp->failed) return '\0';
   }
 
   /* get next character in buffer */
@@ -1381,6 +1397,7 @@ static Nlm_Char Nlm_FileCacheGetChar (
 
     if (fcp->ctr >= fcp->total) {
       Nlm_FileCacheReadBlock (fcp);
+      if (fcp->failed) return '\0';
     }
     if (fcp->ctr < fcp->total) {
 
@@ -1405,6 +1422,7 @@ static Nlm_Char Nlm_FileCacheGetChar (
 
     if (fcp->ctr >= fcp->total) {
       Nlm_FileCacheReadBlock (fcp);
+      if (fcp->failed) return '\0';
     }
     if (fcp->ctr < fcp->total) {
 
@@ -1435,9 +1453,10 @@ NLM_EXTERN Nlm_CharPtr Nlm_FileCacheGetString (
   Nlm_Uint2     count;
   Nlm_CharPtr  ptr;
 
-  if (fcp == NULL || fcp->fp == NULL || str == NULL || size < 1) return NULL;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed || str == NULL || size < 1) return NULL;
 
   ch = Nlm_FileCacheGetChar (fcp);
+  if (fcp->failed) return NULL;
   count = 0;
   ptr = str;
 
@@ -1446,6 +1465,7 @@ NLM_EXTERN Nlm_CharPtr Nlm_FileCacheGetString (
     ptr++;
     count++;
     ch = Nlm_FileCacheGetChar (fcp);
+    if (fcp->failed) return NULL;
   }
 
   if (ch == '\n' || ch == '\r') {
@@ -1478,9 +1498,10 @@ NLM_EXTERN Nlm_CharPtr Nlm_FileCacheReadLine (
   Nlm_CharPtr  ptr;
   Nlm_CharPtr  tmp;
 
-  if (fcp == NULL || fcp->fp == NULL || str == NULL || size < 1) return NULL;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed || str == NULL || size < 1) return NULL;
   *str = '\0';
   tmp = Nlm_FileCacheGetString (fcp, str, size);
+  if (fcp->failed) return NULL;
   if (tmp != NULL) {
     ptr = str;
     ch = *ptr;
@@ -1506,7 +1527,7 @@ NLM_EXTERN void Nlm_FileCacheSeek (
 )
 
 {
-  if (fcp == NULL || fcp->fp == NULL) return;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed) return;
 
   /*
   if (fcp->offset <= pos && fcp->offset + (Nlm_Int4) fcp->total >= pos) {
@@ -1519,6 +1540,12 @@ NLM_EXTERN void Nlm_FileCacheSeek (
   fcp->total = 0;
   fcp->offset = pos;
 
+  if (fcp->offset < 0) {
+    fcp->failed = TRUE;
+    ErrPostEx(SEV_WARNING,E_Programmer,0,"FileCacheSeek negative position %ld", (long) (fcp->offset));
+    return;
+  }
+
   fseek (fcp->fp, pos, SEEK_SET);
 }
 
@@ -1530,7 +1557,7 @@ NLM_EXTERN Nlm_Int4 Nlm_FileCacheTell (
   Nlm_Int4  bytes;
   Nlm_Int4  offset;
 
-  if (fcp == NULL || fcp->fp == NULL) return 0L;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed) return 0L;
 
   offset = ftell (fcp->fp);
   bytes = (Nlm_Int4) (fcp->total - fcp->ctr);
@@ -1547,7 +1574,7 @@ NLM_EXTERN Nlm_Boolean Nlm_FileCacheFree (
 {
   Nlm_Int4  pos;
 
-  if (fcp == NULL || fcp->fp == NULL) return FALSE;
+  if (fcp == NULL || fcp->fp == NULL || fcp->failed) return FALSE;
 
   if (restoreFilePos) {
 

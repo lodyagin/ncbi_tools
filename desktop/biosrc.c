@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.103 $
+* $Revision: 6.110 $
 *
 * File Description: 
 *
@@ -113,6 +113,7 @@ typedef struct genbiopage {
   DIALOG_MESSAGE_BLOCK
   TexT            taxName;
   Handle          commonName;
+  ButtoN          disable_strain_forwarding;
   Boolean         typedSciName;
   Boolean         typedComName;
   Int2            selectedOrg;
@@ -140,6 +141,7 @@ typedef struct genbiopage {
   PrompT          gbacr;
   PrompT          gbana;
   PrompT          gbsyn;
+  PrompT          tymat;
 
   DialoG          subsrc_val_dlg;
   DialoG          orgmod_val_dlg;
@@ -1375,7 +1377,7 @@ extern Boolean BioSourceDialogToGenBankDivision (DialoG d, CharPtr div, size_t m
   return FALSE;
 }
 
-static void PopulateGeneticCodePopup (PopuP gc)
+NLM_EXTERN void PopulateGeneticCodePopup (PopuP gc)
 
 {
   Int2  i;
@@ -1639,8 +1641,23 @@ static void ReleaseTaxName (DoC d, PoinT pt)
   Int2           item;
   Int2           row;
   Char           str [256];
+  CharPtr        taxname;
 
   gbp = (GenBioPagePtr) GetObjectExtra (d);
+  if (gbp == NULL) {
+    return;
+  }
+  if (!TextHasNoText (gbp->taxName) || !TextHasNoText (gbp->commonName)) {
+    if (ANS_CANCEL == Message (MSG_OKC, "Are you sure you want to overwrite the existing scientific name and/or common name?")) {
+      taxname = SaveStringFromText (gbp->taxName);
+      if (!StringHasNoText (taxname)) {
+        SetBioSourceDialogTaxName (gbp->dialog, taxname);
+      }
+      taxname = MemFree (taxname);
+      return;
+    }
+  }
+
   if (gbp != NULL) {
     gbp->nuclGC = 0;
     gbp->mitoGC = 0;
@@ -1810,6 +1827,61 @@ static void FreeGenBioOrgNameData (GenBioPagePtr gbp)
 }
 
 
+const CharPtr kDisableStrainForwardAttrib = "nomodforward";
+
+static Boolean IsStrainForwardingDisabled(BioSourcePtr biop)
+{
+    Boolean rval = FALSE;
+    if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL) {
+        return FALSE;
+    }
+    if (StringISearch(biop->org->orgname->attrib, kDisableStrainForwardAttrib) != NULL) {
+        rval = TRUE;
+    }
+
+    return rval;
+}
+
+
+NLM_EXTERN void DisableStrainForwarding(BioSourcePtr biop, Boolean val)
+{
+    CharPtr cp;
+    Int4    len;
+
+    if (biop == NULL) {
+        return;
+    }
+    if (biop->org == NULL) {
+        if (val) {
+            biop->org = OrgRefNew();
+        } else {
+            return;
+        }
+    }
+    if (biop->org->orgname == NULL) {
+        if (val) {
+            biop->org->orgname = OrgNameNew();
+        } else {
+            return;
+        }
+    }
+    if ((cp = StringISearch(biop->org->orgname->attrib, kDisableStrainForwardAttrib)) == NULL) {
+        if (val) {
+            SetStringValue (&(biop->org->orgname->attrib), kDisableStrainForwardAttrib, ExistingTextOption_append_semi);
+        }
+    } else {
+        if (!val) {
+            len = StringLen (kDisableStrainForwardAttrib);
+            StringCpy(cp, cp + len);
+            if (StringHasNoText(biop->org->orgname->attrib)) {
+                biop->org->orgname->attrib = MemFree (biop->org->orgname->attrib);
+            }
+        }
+    }
+
+}
+
+
 static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
 
 {
@@ -1850,6 +1922,7 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
     SafeSetTitle (gbp->gbacr, "");
     SafeSetTitle (gbp->gbana, "");
     SafeSetTitle (gbp->gbsyn, "");
+    SafeSetTitle (gbp->tymat, "");
     SafeSetTitle (gbp->lineage, "");
     PointerToDialog (gbp->db, NULL);
     PointerToDialog (gbp->syn, NULL);
@@ -1896,6 +1969,8 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
               case 34 :
                 SetTitle (gbp->gbsyn, mod->subname);
                 break;
+              case 38 :
+                SetTitle (gbp->tymat, mod->subname);
                 break;
               default :
                 break;
@@ -1903,6 +1978,13 @@ static void BioSourcePtrToGenBioPage (DialoG d, Pointer data)
             mod = mod->next;
           }
         }
+      }
+      if (IsStrainForwardingDisabled(biop)) {
+        SafeSetStatus(gbp->disable_strain_forwarding, TRUE);
+        Show(gbp->disable_strain_forwarding);
+      } else {
+        SafeSetStatus(gbp->disable_strain_forwarding, FALSE);
+        Hide(gbp->disable_strain_forwarding);
       }
 
       PointerToDialog (gbp->subsrc_val_dlg, biop->subtype);
@@ -2174,6 +2256,23 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
               mod->subname = StringSave (buf);
             }
           }
+          GetTitle (gbp->tymat, buf, sizeof (buf) - 1);
+          if (! StringHasNoText (buf)) {
+            mod = OrgModNew ();
+            if (onp->mod == NULL) {
+              onp->mod = mod;
+            } else {
+              tmpmod = onp->mod;
+              while (tmpmod->next != NULL) {
+                tmpmod = tmpmod->next;
+              }
+              tmpmod->next = mod;
+            }
+            if (mod != NULL) {
+              mod->subtype = 38;
+              mod->subname = StringSave (buf);
+            }
+          }
           if (gbp->stripOldName && onp->mod != NULL) {
             prevmod = (OrgModPtr PNTR) &(onp->mod);
             tmpmod = onp->mod;
@@ -2194,6 +2293,11 @@ static Pointer GenBioPageToBioSourcePtr (DialoG d)
             orp->orgname = OrgNameFree (orp->orgname);
           }
         }
+      }
+
+      /* disable strain forwarding if requested */
+      if (gbp->disable_strain_forwarding != NULL) {
+        DisableStrainForwarding(biop, GetStatus(gbp->disable_strain_forwarding));
       }
 
       biop->subtype = DialogToPointer (gbp->subsrc_val_dlg);
@@ -2348,6 +2452,9 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
   GrouP          s;
   GrouP          x;
   ValNode        vn;
+  Boolean        indexerVersion;
+
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
@@ -2406,8 +2513,10 @@ extern DialoG CreateSimpleBioSourceDialog (GrouP h, CharPtr title)
     SetDocProcs (gbp->orglist, ClickTaxName, NULL, ReleaseTaxName, NULL);
     SetDocShade (gbp->orglist, NULL, NULL, HighlightTaxName, NULL);
 
+    gbp->disable_strain_forwarding = CheckBox (f, "Disable Strain Forwarding", NULL);
+
     AlignObjects (ALIGN_RIGHT, (HANDLE) gbp->taxName, (HANDLE) gbp->commonName,
-                  (HANDLE) gbp->orglist, NULL);
+                  (HANDLE) gbp->orglist, (HANDLE) gbp->disable_strain_forwarding, NULL);
 
     g = HiddenGroup (q, -1, 0, NULL);
     f = HiddenGroup (g, 3, 0, NULL);
@@ -2474,7 +2583,7 @@ static void OrgModPtrToOrgmodDialog (DialoG d, Pointer data)
     head = NULL;
     while (list != NULL) {
       if (list->subname != NULL && list->subtype != 255 &&
-          list->subtype != 32 && list->subtype != 33 && list->subtype != 34) {
+          list->subtype != 32 && list->subtype != 33 && list->subtype != 34 && list->subtype != 38) {
         vnp = ValNodeNew (head);
         if (head == NULL) {
           head = vnp;
@@ -3584,8 +3693,10 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     SetDocProcs (gbp->orglist, ClickTaxName, NULL, ReleaseTaxName, NULL);
     SetDocShade (gbp->orglist, NULL, NULL, HighlightTaxName, NULL);
 
+    gbp->disable_strain_forwarding = CheckBox (f, "Disable Strain Forwarding", NULL);
+
     AlignObjects (ALIGN_RIGHT, (HANDLE) gbp->taxName, (HANDLE) gbp->commonName,
-                  (HANDLE) gbp->orglist, NULL);
+                  (HANDLE) gbp->orglist, (HANDLE) gbp->disable_strain_forwarding, NULL);
 
     gbp->orgGrp [1] = HiddenGroup (k, -1, 0, NULL);
     SetGroupSpacing (gbp->orgGrp [1], 10, 10);
@@ -3731,6 +3842,8 @@ static DialoG CreateBioSourceDialog (GrouP h, CharPtr title, GrouP PNTR pages,
     gbp->gbana = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
     StaticPrompt (g, "Assigned Synonym", 0, stdLineHeight, programFont, 'l');
     gbp->gbsyn = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
+    StaticPrompt (g, "Type Material", 0, stdLineHeight, programFont, 'l');
+    gbp->tymat = StaticPrompt (g, "", 15 * stdCharWidth, stdLineHeight, systemFont, 'l');
 
     Hide (gbp->modGrp [eModTabGenBank]);
 

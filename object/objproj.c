@@ -586,6 +586,8 @@ ProjectItemAsnWrite(ProjectItemPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -818,6 +820,9 @@ ProjectDescrAsnWrite(ProjectDescrPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1002,6 +1007,8 @@ ProjdescAsnWrite(ProjdescPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {

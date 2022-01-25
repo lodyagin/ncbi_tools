@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.89 $
+* $Revision: 6.92 $
 *
 * File Description:  New GenBank flatfile generator
 *
@@ -122,6 +122,12 @@ typedef unsigned long FlgType;
 #define FORCE_ALLOW_FAR_FEATS 262144
 
 #define RELAXED_MAPPING       524288
+
+#define GPIPE_DEFLINES       1048576
+
+#define HIDE_PROTEIN_ID      2097152
+
+#define HIDE_GI_NUMBERS      4194304
 
 /* locking behavior for system performance */
 

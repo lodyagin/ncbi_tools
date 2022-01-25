@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description: 
 *
@@ -39,6 +39,9 @@
 * -------  ----------  -----------------------------------------------------
 *
 * $Log: gather.h,v $
+* Revision 6.15  2012/07/30 21:52:07  kans
+* JIRA:GPI-1532 Track indexing of external AnnotDesc, assign to most recent Bioseq if sequence component ID not already loaded
+*
 * Revision 6.14  2006/07/13 17:06:38  bollin
 * use Uint4 instead of Uint2 for itemID values
 * removed unused variables
@@ -606,6 +609,7 @@ typedef struct gatherobject {
   Pointer           parentptr;
   Pointer PNTR      prevlink;
   Pointer           userdata;
+  Boolean           external;
 } GatherObject, PNTR GatherObjectPtr;
 
 typedef Boolean (*GatherObjectProc) (GatherObjectPtr gop);

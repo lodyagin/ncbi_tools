@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.49 $
+* $Revision: 6.53 $
 *
 * File Description:  Object manager for feature definitions
 *
@@ -125,6 +125,8 @@ NLM_EXTERN Boolean LIBCALL FeatDefAsnWrite (FeatDefPtr fdp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
     if (fdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)fdp))
         goto erret;
@@ -395,6 +397,8 @@ NLM_EXTERN Boolean LIBCALL FeatDispGroupAsnWrite (FeatDispGroupPtr fdp, AsnIoPtr
         return FALSE;
 
     if (fdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)fdp))
         goto erret;
@@ -705,7 +709,9 @@ static CharPtr featDefSetMemStr = "FeatDefGroupSet ::= {\n" \
 "{ typelabel \"mobile_element\" , menulabel \"Mobile genetic element\" , featdef-key 98 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"centromere\" , menulabel \"Centromere\" , featdef-key 99 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
 "{ typelabel \"telomere\" , menulabel \"Telomere\" , featdef-key 100 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
-"{ typelabel \"assembly_gap\" , menulabel \"Assembly Gap\" , featdef-key 101 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } } };\n";
+"{ typelabel \"assembly_gap\" , menulabel \"Assembly Gap\" , featdef-key 101 , seqfeat-key 8 , entrygroup 0 , displaygroup 4 , molgroup na } ,\n" \
+"{ typelabel \"regulatory\" , menulabel \"Regulatory\" , featdef-key 102 , seqfeat-key 8 , entrygroup 1 , displaygroup 1 , molgroup na } ,\n" \
+"{ typelabel \"propeptide\" , menulabel \"Propeptide\" , featdef-key 103 , seqfeat-key 4 , entrygroup 1 , displaygroup 1 , molgroup aa } } };\n";
 #endif
 
 /*****************************************************************************
@@ -920,6 +926,8 @@ NLM_EXTERN Uint1 LIBCALL FindFeatDefType(SeqFeatPtr sfp)
                     return FEATDEF_sig_peptide_aa;
                 case 4:
                     return FEATDEF_transit_peptide_aa;
+                case 5:
+                    return FEATDEF_propeptide;
             }
             return FEATDEF_BAD;
         case SEQFEAT_RNA:

@@ -3,6 +3,11 @@
 *
 * RCS Modification History:
 * $Log: mdrcherr.h,v $
+* Revision 6.5  2013/12/05 18:05:35  bazhin
+* Performs MedArch lookup for in-press articles the same way as
+* it does for regular ones, with slightly different error messages
+* in case of success or failure.
+*
 * Revision 6.4  2011/04/14 19:28:40  kans
 * added ERR_REFERENCE_NoPmidJournalNotInPubMed
 *
@@ -53,6 +58,8 @@
 #define ERR_REFERENCE_SuccessfulPmidLookup  1,15
 #define ERR_REFERENCE_PmidNotFound  1,16
 #define ERR_REFERENCE_NoPmidJournalNotInPubMed  1,17
+#define ERR_REFERENCE_PmidNotFoundInPress  1,18
+#define ERR_REFERENCE_NoPmidJournalNotInPubMedInPress  1,19
 #define ERR_PRINT  2,0
 #define ERR_PRINT_Failed  2,1
 

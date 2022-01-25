@@ -1,6 +1,6 @@
 #   makefile for network demo programs and network entrez
 #
-#	$Id: makenet.unx,v 6.246 2011/04/26 15:32:34 ucko Exp $
+#	$Id: makenet.unx,v 6.261 2016/08/25 15:37:04 ucko Exp $
 #   test, ignore
 #
 #   Sun with unbundled ANSI compiler [ make CC=acc RAN=ranlib ]
@@ -102,6 +102,7 @@ BLIB33 =
 BLIB35 = libssparse.a
 BLIB36 = libnetblast.a
 BLIB38 = libncbiprsn.a
+BLIB39 = libobjtax1.a
 BLIB40 = libncbitxc2.a
 BLIB41 = libncbiid1.a
 
@@ -153,6 +154,7 @@ DLIB44 = D44$(BLIB44)
 
 
 LIB1 = -lncbi
+LIBTLS = -lconnssl
 LIB2 = -lncbiobj
 LIB3 = -lncbicdr
 LIB4 = -lvibrant
@@ -184,10 +186,11 @@ LIB33 = -lsmartnet
 LIB35 = -lssparse
 LIB36 = -lnetblast
 LIB38 = -lncbiprsn
+LIB39 = -lobjtax1
 LIB40 = -lncbitxc2
 LIB41 = -lncbiid1
 LIB42 = -lctutils
-LIB_PS = -lctutils -lz
+LIB_PS = -lctutils $(LMDB_LIBS) -lz
 LIB43 = -losutils
 LIB44 = -lidload
 LIB45 = -lddvlib
@@ -261,13 +264,15 @@ SRC36 = objblst3.c netblap3.c
 
 SRC38 = ftanet.c
 
+SRC39 = objtax1.c
+
 SRC40 = objtax1.c taxutil.c tc2dproc.c txcdproc.c parttree.c taxcs.c taxblast.c
 
 SRC41 = id1gen.c id1arch.c accid1.c
 
-SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c gicache.c acclinkos.c
+SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c gicache.c acclinkos.c accvdb.c
 
-SRC43 = os_mtutils.c already_running.c
+SRC43 = os_mtutils.c already_running.c applog_wrap.c
 
 SRC44 = idload_lib.c
 
@@ -309,13 +314,15 @@ OBJ36 = objblst3.o netblap3.o
 
 OBJ38 = ftanet.o
 
+OBJ39 = objtax1.o
+
 OBJ40 = objtax1.o taxutil.o tc2dproc.o txcdproc.o parttree.o taxcs.o taxblast.o
 
 OBJ41 = id1gen.o id1arch.o accid1.o 
 
-OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o gicache.o acclinkos.o
+OBJ42 = accpubseq.o ctliberr.o ctlibutils.o password.o gipropmmap.o gicache.o acclinkos.o accvdb.o
 
-OBJ43 = os_mtutils.o already_running.o
+OBJ43 = os_mtutils.o already_running.o applog_wrap.o
 
 OBJ44 = idload_lib.o
 
@@ -399,7 +406,7 @@ vibutilities : $(EXEUTILVIB)
 	echo Waiting...go
 
 
-others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44) $(BLIB46)
+others : $(BLIB11) $(BLIB12) $(BLIB13) $(BLIB19) $(BLIB25) $(BLIB27) $(BLIB35) $(BLIB36) $(BLIB38) $(BLIB39) $(BLIB40) $(NCBI_SHLIBS).alt $(BLIB41) $(BLIB42) $(BLIB43) $(BLIB44) $(BLIB46)
 
 
 ## To clean out the directory without removing make
@@ -563,6 +570,8 @@ copy :
 	$(SRCCOPY) ../demo/blast_driver.c .
 	$(SRCCOPY) ../demo/src_chk.c .
 	$(SRCCOPY) ../demo/tbl_chk.c .
+	$(SRCCOPY) ../demo/export_cmt.c .
+	-$(SRCCOPY) ../internal/parser/flat2asn.c .
 	$(SRCCOPY) $(SRCUTILCOPY) .
 	-$(SRCCOPY) ../network/entrez/server/*.* .
 	-$(SRCCOPY) ../network/suggest/server/*.* .
@@ -818,6 +827,12 @@ $(BLIB38) : $(OBJ38)
 	$(LIBCOPY) $(BLIB38) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(BLIB38)
 
+$(BLIB39) : $(OBJ39)
+	- rm -f $(BLIB39)
+	$(AR) cru $(BLIB39) $(OBJ39)
+	$(LIBCOPY) $(BLIB39) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(BLIB39)
+
 $(BLIB40) : $(OBJ40)
 	- rm -f $(BLIB40)
 	$(AR) cru $(BLIB40) $(OBJ40)
@@ -896,7 +911,7 @@ $(ULIB44) : $(OBJ44)
 # Since Sybase needs special include, and becuase of the TLIB/DLIB trick
 #  this will not be invoked unless BLIB42 defined on the make line, we
 #  can safely have an NCBI-only rule here
-# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c acclinkos.c
+# SRC42 = accpubseq.c ctliberr.c ctlibutils.c password.c gipropmmap.c acclinkos.c accvdb.c
 
 ctlibutils.o : ctlibutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c ctlibutils.c
@@ -915,16 +930,23 @@ gipropmmap.o : gipropmmap.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c gipropmmap.c
 
 gicache.o : gicache.c
-	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c gicache.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) $(LMDB_INCLUDE) -c gicache.c
 
 os_mtutils.o : os_mtutils.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c os_mtutils.c
+
+applog_wrap.o : applog_wrap.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c applog_wrap.c
+
 
 idload_lib.o : idload_lib.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c idload_lib.c
 
 acclinkos.o : acclinkos.c
 	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c acclinkos.c
+
+accvdb.o : accvdb.c
+	$(CC) $(CFLAGS) $(IN_HOUSE_CFLAGS) -c accvdb.c
 
 ## make applications
 ##
@@ -987,45 +1009,55 @@ aceread_tst :	aceread_tst.c
 # asn2gb program (asn2gb)
 asn2gb :	asn2gb.c
 	$(CC) -g -o asn2gb $(LDFLAGS) asn2gb.c $(LIB41) $(NETCLILIB) \
-		$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(OTHERLIBS)
+	    $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(GNUTLS_LIBS) $(OTHERLIBS)
 
 # asn2gb_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-asn2gb_psf :	asn2gb.c
-	$(CC) -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf $(LDFLAGS) asn2gb.c \
-		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+asn2gb_psf :	asn2gb_psf.o
+	$(CC) -g -o asn2gb_psf $(LDFLAGS) asn2gb_psf.o \
+	    $(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(NCBI_SYBLIBS_CT) $(GNUTLS_LIBS) $(OTHERLIBS)
+
+asn2gb_psf.o :	asn2gb.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_ASN2GB -g -o asn2gb_psf.o asn2gb.c
 
 # asn2fsa program (asn2fsa)
 asn2fsa :	asn2fsa.c
 	$(CC) -g -o asn2fsa $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB41) \
-		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+	    $(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asn2fsa_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-asn2fsa_psf :	asn2fsa.c
-	$(CC) -DINTERNAL_NCBI_ASN2FSA -g -o asn2fsa_psf $(LDFLAGS) asn2fsa.c $(THREAD_OBJ) $(LIB_PS) \
-	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
-	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+asn2fsa_psf :	asn2fsa_psf.o
+	$(CC) -g -o asn2fsa_psf $(LDFLAGS) asn2fsa_psf.o $(THREAD_OBJ) $(LIB_PS) \
+	    $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+            $(NCBI_SYBLIBS_CT_r) $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+asn2fsa_psf.o :	asn2fsa.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_ASN2FSA -g -o asn2fsa_psf.o asn2fsa.c
 
 # asn2all program (asn2all)
 asn2all :	asn2all.c
 	$(CC) -g -o asn2all $(LDFLAGS) asn2all.c $(THREAD_OBJ) $(LIB41) \
-		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+	    $(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # tbl2asn
 tbl2asn : tbl2asn.c 
 	$(CC) -o tbl2asn $(LDFLAGS) tbl2asn.c $(LIB23) $(LIBCOMPADJ) \
-		$(LIB2) $(NETCLILIB) $(LIB1) $(OTHERLIBS)
+	    $(LIB2) $(NETCLILIB) $(LIBTLS) $(LIB1) $(GNUTLS_LIBS) $(OTHERLIBS)
 
 # tbl2asn_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-tbl2asn_psf : tbl2asn.c 
-	$(CC) -DINTERNAL_NCBI_TBL2ASN -g -o tbl2asn_psf $(LDFLAGS) tbl2asn.c $(THREAD_OBJ) $(LIB_PS) \
-	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
-	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+tbl2asn_psf : tbl2asn_psf.o
+	$(CC) -g -o tbl2asn_psf $(LDFLAGS) tbl2asn_psf.o $(THREAD_OBJ) $(LIB_PS) \
+	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	$(NCBI_SYBLIBS_CT_r) $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+tbl2asn_psf.o :	tbl2asn.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_TBL2ASN -g -o tbl2asn_psf.o tbl2asn.c
 
 # raw2delt
 raw2delt : raw2delt.c 
@@ -1039,22 +1071,28 @@ gene2xml :	gene2xml.c
 # asnval program (asnval)
 asnval :	asnval.c
 	$(CC) -g -o asnval $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB41) \
-		$(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(OTHERLIBS) $(THREAD_OTHERLIBS)
+	    $(NETCLILIB) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # asnval_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-asnval_psf :	asnval.c
-	$(CC) -DINTERNAL_NCBI_ASN2VAL -g -o asnval_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
-	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
-	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+asnval_psf :	asnval_psf.o
+	$(CC) -g -o asnval_psf $(LDFLAGS) asnval_psf.o $(THREAD_OBJ) $(LIB_PS) \
+	    $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(NCBI_SYBLIBS_CT_r) $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+asnval_psf.o :	asnval.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_ASN2VAL -g -o asnval_psf.o asnval.c
 
 # asnval_dbx_psf, -- debug version -- uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-asnval_dbx_psf :	asnval.c
-	$(CC) -DINTERNAL_NCBI_ASN2VAL -g -o asnval_dbx_psf $(LDFLAGS) asnval.c $(THREAD_OBJ) $(LIB_PS) \
+asnval_dbx_psf :	asnval_dbx_psf.o
+	$(CC) -g -o asnval_dbx_psf $(LDFLAGS) asnval_dbx_psf.o $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+asnval_dbx_psf.o :	asnval.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_ASN2VAL -g -o asnval_psf.o asnval.c
 
 # asndisc program (asndisc)
 asndisc :	asndisc.c
@@ -1064,10 +1102,13 @@ asndisc :	asndisc.c
 
 # asndisc_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-asndisc_psf :	asndisc.c
-	$(CC) -DINTERNAL_NCBI_ASNDISC -g -o asndisc_psf $(LDFLAGS) asndisc.c $(THREAD_OBJ) $(LIB_PS) \
+asndisc_psf :	asndisc_psf.o
+	$(CC) -g -o asndisc_psf $(LDFLAGS) asndisc_psf.o $(THREAD_OBJ) $(LIB_PS) \
 	$(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) $(NCBI_SYBLIBS_CT_r) \
 	$(OTHERLIBS) $(THREAD_OTHERLIBS)
+
+asndisc_psf.o :	asndisc.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_ASNDISC -g -o asndisc_psf.o asndisc.c
 
 # asnbarval program (asnbarval)
 asnbarval :	asnbarval.c
@@ -1179,14 +1220,20 @@ asn2asn : asn2asn.c
 # demo program (cleanasn)
 
 cleanasn : cleanasn.c
-	$(CC) -o cleanasn $(LDFLAGS) cleanasn.c $(LIB41) $(LIB23) $(LIB6) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -o cleanasn $(LDFLAGS) cleanasn.c $(LIB61) $(LIB60) $(LIB41) \
+	    $(LIB23) $(LIBCOMPADJ) $(LIB6) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(GNUTLS_LIBS) $(OTHERLIBS)
 
 # cleanasn_psf, uses PUBSEQBioseqFetchEnable instead of PubSeqFetchEnable
 # should be used only internally within NCBI.
-cleanasn_psf : cleanasn.c
-	$(CC) -DINTERNAL_NCBI_CLEANASN -g -o cleanasn_psf $(LDFLAGS) cleanasn.c \
-		$(LIB_PS) $(LIB41) $(LIB23) $(LIB6) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
-		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+cleanasn_psf : cleanasn_psf.o
+	$(CC) -g -o cleanasn_psf $(LDFLAGS) cleanasn_psf.o \
+	    $(LIB_PS) $(LIB61) $(LIB60) $(LIB41) $(LIB23) $(LIB6) \
+	    $(LIBCOMPADJ) $(LIB2) $(LIBTLS) $(LIB1) \
+	    $(NCBI_SYBLIBS_CT) $(GNUTLS_LIBS) $(OTHERLIBS)
+
+cleanasn_psf.o :	cleanasn.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_CLEANASN -g -o cleanasn_psf.o cleanasn.c
 
 # demo program (cspeedtest)
 
@@ -1218,7 +1265,7 @@ id0test: id0test.c $(BNETCLILIB) $(BLIB13)
 	$(CC) -g -o id0test $(LDFLAGS) id0test.c $(LIB13) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
 
 idfetch: idfetch.c $(BNETCLILIB) $(BLIB41)
-	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB41) $(NETCLILIB) $(LIB2) $(LIB1) $(OTHERLIBS)
+	$(CC) -g -o idfetch $(LDFLAGS) idfetch.c $(LIB41) $(NETCLILIB) $(LIB2) $(LIBTLS) $(LIB1) $(GNUTLS_LIBS) $(OTHERLIBS)
 
 # gapped BLAST client
 # blastcl3 now has the same source code as blastall but should be compiled
@@ -1397,7 +1444,7 @@ sequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
 	$(CC) -o sequin $(SEQUIN_OPTS) -I. $(LDFLAGS) $(SRCSEQUIN) \
 	$(LIB31) $(LIB30) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB45) $(LIB19) $(LIB40) $(LIB41) \
 	$(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) $(ENTREZLIBS) $(LIB4) \
-	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(LIB2) $(LIBTLS) $(LIB1) $(VIBLIBS) $(GNUTLS_LIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) sequin
 
 # 'sequin' direct submission tool with interprocess communication capability
@@ -1409,8 +1456,8 @@ Ssequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
 	$(CC) -o Ssequin $(SEQUIN_OPTS) -DUSE_SMARTNET -I. $(LDFLAGS) $(SRCSEQUIN) \
 	$(THREAD_OBJ) $(LIB33) $(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) $(LIB19) $(LIB40) \
 	$(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) \
-	$(LIB11) $(ENTREZLIBS) $(LIB4) \
-	$(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
+	$(LIB11) $(ENTREZLIBS) $(LIB4) $(LIB2) $(LIBTLS) $(LIB1) \
+	$(VIBLIBS) $(GNUTLS_LIBS) $(OTHERLIBS) $(THREAD_OTHERLIBS)
 
 # 'Psequin' ("Public Network Sequin") direct submission tool
 Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
@@ -1421,7 +1468,8 @@ Psequin : $(SRCSEQUIN) $(BENTREZLIBS) $(BLIB61) $(BLIB60) $(BLIB23) \
 	$(CC) -o Psequin -I. $(LDFLAGS) -UINTERNAL_NCBI_SEQUIN $(SRCSEQUIN) \
 	$(LIB30) $(LIB45) $(LIB31) $(LIB20) $(LIB61) $(LIB60) $(LIB22) \
 	$(LIB40) $(LIB41) $(LIB36) $(LIB23) $(LIBCOMPADJ) $(LIB11) \
-	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIB1) $(VIBLIBS) $(OTHERLIBS)
+	$(ENTREZLIBS) $(LIB4) $(LIB2) $(LIBTLS) $(LIB1) \
+	$(VIBLIBS) $(GNUTLS_LIBS) $(OTHERLIBS)
 	$(VIB_POST_LINK) Psequin
 
 # 'sbtedit' Submission Template Editor
@@ -1518,19 +1566,38 @@ bl2bag.cgi : bl2bag.c
 src_chk : src_chk.c 
 	$(CC) -o src_chk $(LDFLAGS) src_chk.c $(LIB2) $(LIB1) $(OTHERLIBS) 
 
-src_chk_psf : src_chk.c 
-	$(CC) -DINTERNAL_NCBI_SRC_CHK -g -o src_chk_psf $(LDFLAGS) src_chk.c \
+src_chk_psf : src_chk_psf.o
+	$(CC) -g -o src_chk_psf $(LDFLAGS) src_chk_psf.o.c \
 		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
 		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+
+src_chk_psf.o :	src_chk.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_SRC_CHK -g -o src_chk_psf.o src_chk.c
 
 # tbl_chk
 
 tbl_chk : tbl_chk.c 
 	$(CC) -o tbl_chk $(LDFLAGS) tbl_chk.c $(LIB2) $(LIB1) $(OTHERLIBS) 
 
-tbl_chk_psf : tbl_chk.c 
-	$(CC) -DINTERNAL_NCBI_TBL_CHK -g -o tbl_chk_psf $(LDFLAGS) tbl_chk.c \
+tbl_chk_psf : tbl_chk_psf.o
+	$(CC) -g -o tbl_chk_psf $(LDFLAGS) tbl_chk_psf.o \
 		$(LIB_PS) $(LIB23) $(LIBCOMPADJ) $(LIB2) $(LIB1) \
 		$(NCBI_SYBLIBS_CT) $(OTHERLIBS)
+
+tbl_chk_psf.o :	tbl_chk.c
+	$(CC) $(CFLAGS) -c -DINTERNAL_NCBI_TBL_CHK -g -o tbl_chk_psf.o tbl_chk.c
+
+# export_cmt
+
+export_cmt : export_cmt.c
+	$(CC) -o export_cmt $(LDFLAGS) export_cmt.c $(LIB23) $(LIB8) $(LIB7) \
+		$(LIB6) $(LIB3) $(LIB2) $(LIB1) $(OTHERLIBS)
+
+# flat2asn
+
+flat2asn : flat2asn.c
+	$(CC) -o flat2asn $(LDFLAGS) flat2asn.c $(LIB38) $(LIB37) $(LIB34) \
+	    $(LIB40) $(LIB11) $(LIB_PS) $(LIB23) $(LIB6) $(LIB2) $(LIB1) \
+	    $(NCBI_SYBLIBS_CT) $(OTHERLIBS)
 
 ##

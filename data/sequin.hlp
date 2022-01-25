@@ -96,9 +96,10 @@ presented below.
 
 >Welcome to Sequin Form
 
-#First, indicate with one of the radio buttons whether you are
-submitting the sequence to the GenBank or EMBL database.  If you
-are working on a sequence submission for the first time, click on
+#First, indicate with one of the radio buttons whether you are submitting
+the sequence to the GenBank or EMBL database.  If you are sending to the
+EMBL database, you must Export the EMBL format in order to submit.  If
+you are working on a sequence submission for the first time, click on
 "Start New Submission".  If you are modifying an existing submission
 record, click on "Read Existing Record". If you would like to quit from
 Sequin, click on "Quit Program".
@@ -117,53 +118,6 @@ file for analysis purposes.  The sequence will be displayed in Sequin and
 can be analyzed, but it should not be submitted because it does not have the
 appropriate annotations.
 
-#If you are running Sequin in its network-aware mode, you will see
-another button labeled "Download from Entrez".  This option allows you
-to update an existing database record using Sequin. The record will be
-downloaded from GenBank into Sequin using NCBI's Entrez retrieval
-system.  The contents of the record will appear in Sequin, and you can
-edit them by updating the sequence or the annotations, as necessary.  If
-you do not see the button labeled "Download from Entrez" on the Welcome
-to Sequin form, you are not running Sequin in its network-aware mode. 
-To make Sequin network-aware, see the
-<A HREF="#NetConfigure">
-instructions
-</A> 
-later in the help documentation.
-
-#You can update only those records that you have submitted, not those
-submitted by others.  To update an existing record, first select which
-of the databases you will be sending the update to.  This should be the
-database to which the original record was submitted.  If you do not
-know which database to use, send the record to GenBank and the NCBI
-staff will forward it to the appropriate database.  Next, click on the
-button "Download from Entrez". Enter the nucleotide Accession number or
-GI of the sequence on the first form. Then enter "yes" if you are
-planning to submit the record as an update to one of the databases.
-Fill out the Submitting Authors form.
-
-<A HREF="#EditSubmitterInfo">
-Instructions
-</A> 
-
-for this form are found in the Sequin help documentation under "Edit
-Submitter Info" under the Sequin File menu.  The record will then open
-in the record viewer.  Explanations of how to add annotations or update
-sequences are presented in the documentation entitled 
-
-<A HREF="#EditingtheRecord">
-"Editing the record"
-</A> 
-and 
-<A HREF="#SequenceEditor">
-Sequence Editor
-</A>
-
- respectively.  You will not see the Submitting Authors Form, the
-Sequence Format Form, or the Organism and Sequences Form.  Note that
-updates, as well as new records, must be emailed to the appropriate
-database.  Sequin does not support direct submission of records over the
-Internet.
 
 #Additional configuration options are available under the Misc menu. 
 You can toggle between the stand-alone and network-aware modes of
@@ -431,12 +385,12 @@ point.
 #Examples of properly formatted FASTA definition lines for nucleotide
 sequences are:
 
-<KBD><PRE>>Seq1 [organism=Mus musculus] [strain=C57BL/6] Mus musculus neuropilin 1 (Nrp1) mRNA, complete cds.
-</KBD></PRE>
-<KBD><PRE>>ABCD [organism=Plasmodium falciparum] [isolate=ABCD] Plasmodium falciparum isolate ABCD merozoite surface protein 2 (msp2) gene, partial cds.
-</KBD></PRE>
-<KBD><PRE>>DNA.new [organism=Homo sapiens] [chromosome=17] [map=17q21] [moltype=mRNA] Homo sapiens breast and ovarian cancer susceptibility protein (BRCA1) mRNA, complete cds.
-</KBD></PRE>
+<PRE>>Seq1 [organism=Mus musculus] [strain=C57BL/6] Mus musculus neuropilin 1 (Nrp1) mRNA, complete cds.
+</PRE>
+<PRE>>ABCD [organism=Plasmodium falciparum] [isolate=ABCD] Plasmodium falciparum isolate ABCD merozoite surface protein 2 (msp2) gene, partial cds.
+</PRE>
+<PRE>>DNA.new [organism=Homo sapiens] [chromosome=17] [map=17q21] [moltype=mRNA] Homo sapiens breast and ovarian cancer susceptibility protein (BRCA1) mRNA, complete cds.
+</PRE>
 #The line after the FASTA definition line begins the nucleotide
 sequence.  Unlike the FASTA definition line, the nucleotide sequence
 itself can contain returns.  It is recommended that each line of
@@ -916,9 +870,9 @@ individually.
 #
 Please use this tool to detect and remove vector contamination from
 sequences before submitting.  The Vector Trim tool runs a BLAST search of
-your sequence(s) against NCBI's
-<A HREF="http://www.ncbi.nlm.nih.gov/VecScreen/UniVec.html">
- UniVec
+your sequence(s) against NCBI's 
+<A HREF="http://www.ncbi.nlm.nih.gov/tools/vecscreen/univec/">
+UniVec
 </A>
  database.  If potential contamination is found, a new window will be
 launched.  The left side of the window lists the sequences with vector
@@ -1286,11 +1240,11 @@ returns.  All information must be on a single line of text.
 
 #Examples of properly formatted protein FASTA definition lines are:
 
-<KBD><PRE>>Seq1 [protein=neuropilin 1] [gene=Nrp1]</KBD></PRE>
+<PRE>>Seq1 [protein=neuropilin 1] [gene=Nrp1]</PRE>
 
-<KBD><PRE>>ABCD [protein=merozoite surface protein 2] [gene=msp2] [protein_desc=MSP2]</KBD></PRE>
+<PRE>>ABCD [protein=merozoite surface protein 2] [gene=msp2] [protein_desc=MSP2]</PRE>
 
-<KBD><PRE>>DNA.new [protein=breast and ovarian cancer susceptibility protein] [gene=BRCA1] [note=breast cancer 1, early onset]</KBD></PRE>
+<PRE>>DNA.new [protein=breast and ovarian cancer susceptibility protein] [gene=BRCA1]</PRE>
 
 #The protein name should be included in the entry; all other fields are
 optional.
@@ -1386,10 +1340,8 @@ pull-down menu in order to generate the Assembly Tracking form.
 
 #After you finish the Organism and Sequences Form, Sequin will process
 your entry based on the information you have entered.  The window you
-see now is called the record viewer.  This is also the window you will
-see if you are submitting an update to an existing record.  The
-instructions after this point are the same whether you are submitting a
-new record or an update.
+see now is called the record viewer.  
+
 
 #In the default window of the record viewer, you will see your entry
 approximately as it would appear in the database.  Most of the
@@ -1417,7 +1369,7 @@ entire sequence, or an entire set of sequences, and Features are
 annotations that apply to a specific sequence interval.  For example,
 you may want to change the Reference Descriptor to add a published
 manuscript, or to annotate the sequence by adding features such as a
-signal peptide or polyA signal.
+signal peptide.
 
 #Information in the record viewer can be edited in different ways.  One
 way to modify information is to double click within the block of
@@ -1488,11 +1440,8 @@ you will see a message that "Validation test succeeded".
 viewer, or select "Prepare Submission" under the File menu. You will be
 prompted to save the file.  Email this file to the database at the
 address shown.  You MUST email the file; Sequin does not submit the
-file automatically over the network.  The email addresses for the
+file automatically over the network.  
 databases are:
-
-!-GenBank:  gb-sub@ncbi.nlm.nih.gov 
-!-EMBL:  datasubs@ebi.ac.uk 
 
 #After your entry is complete, close the record viewer.  You will be
 returned to the Welcome to Sequin form and can begin another entry.
@@ -1657,7 +1606,7 @@ sequences and associated references in PubMed.
 
 >Descriptors
 
-*Overview
+*Descriptor Overview
 
 #Descriptors are annotations that apply to an entire sequence, or an
 entire set of sequences, in a given entry.  They do not have a specific
@@ -1711,28 +1660,6 @@ TPA Assembly
  was created from the information regarding primary accession numbers. 
 This Assembly information can be edited here.  Note that it is not
 necessary to enter nucleotide location in the "from" and "to" columns.
-
-**Update Date
-
-#This is for database staff use only.  Please do not modify the date.
-
-**Create Date
-
-#This is for database staff use only.  Please do not modify the date.
-
-**Region
-
-#This descriptor provides general information about the genetic context
-of the sequence.  For example, if your nucleotide sequence is cloned
-from the region surrounding the Huntington's Disease gene, you could
-enter that information here.  Providing information for this descriptor
-is optional.
-
-**Name
-
-#Alternative place for a descriptive name for the sequence.  This
-information will not appear in the flatfile view, but will be
-maintained in the ASN1.
 
 **Comment
 
@@ -1960,7 +1887,7 @@ below.
 
 >Features
 
-*Overview
+*Feature Overview
 
 #Features are annotations which apply to one or more intervals on a
 sequence. They can be contrasted to 
@@ -2076,7 +2003,11 @@ genome submission guidelines
 The two choices of evidence are Experiment or Inference.
 
 #Wet-bench, experimental evidence can be entered as free text in the
-Experiment section.  Please be as brief as possible.
+Experiment section.  Please be as brief as possible.  The Category
+pull-down is optional and describes what the experiment has determined
+(coordinates, description or existence).  The experiment itself is
+defined in the middle box.  A supporting PMID ID or doi can be entered
+in the final box.
 
 #The Inference section allows for information to be added in cases where
 the feature is annotated based solely on sequence similarity or
@@ -2175,24 +2106,12 @@ page
 http://www.ncbi.nlm.nih.gov/collab/FT/index.html
  provides detailed information about other features.
 
-*attenuator
-
-#1) region of DNA at which regulation of termination of transcription
-occurs, which controls the expression of some bacterial operons; 2)
-sequence segment located between the promoter and the first structural
-gene that causes partial termination of transcription.
-
 *C_region
 
 #Constant region of immunoglobulin light and heavy chains, and T-cell
 receptor alpha, beta, and gamma chains.  Includes one or more exons,
 depending on the particular chain.
 
-*CAAT_signal
-
-#CAAT box; part of a conserved sequence located about 75 bp upstream of
-the start point of eukaryotic transcription units that may be involved
-in RNA polymerase binding; consensus=GG(C or T)CAATCT.
 
 *CDS
 
@@ -2312,22 +2231,11 @@ stranded invader in the reaction catalyzed by RecA protein.
 #Diversity segment of immunoglobulin heavy chain, and T-cell receptor
 beta chain.
 
-*enhancer
-
-#A cis-acting sequence that increases the utilization of (some)
-eukaryotic promoters and can function in either orientation and in any
-location (upstream or downstream) relative to the promoter.
 
 *exon
 
 #Region of genome that codes for portion of spliced mRNA; may contain
 5' UTR, all CDSs, and 3' UTR.
-
-*GC_signal
-
-#GC box; a conserved GC-rich region located upstream of the start point
-of eukaryotic transcription units that may occur in multiple copies or
-in either orientation; consensus=GGGCGG.
 
 *gene
 
@@ -2350,10 +2258,6 @@ it.
 #Joining segment of immunoglobulin light and heavy chains, and T-cell
 receptor alpha, beta, and gamma chains.
 
-*LTR
-
-#Long terminal repeat, a sequence directly repeated at both ends of a
-defined sequence, of the sort typically found in retroviruses.
 
 *mat_peptide
 
@@ -2392,12 +2296,6 @@ source key (/proviral).
 (prim_transcript, precursor_RNA, mRNA, 5'UTR, 3'UTR,
 exon, transit_peptide, polyA_site, rRNA, tRNA, and ncRNA).
 
-*misc_signal
-
-#Any region containing a signal controlling or altering gene function or
-expression that cannot be described by other Signal keys (promoter,
-CAAT_signal, TATA_signal, -35_signal, -10_signal, GC_signal, RBS,
-polyA_signal, enhancer, attenuator, terminator, and rep_origin).
 
 *misc_structure
 
@@ -2426,8 +2324,7 @@ qualifier value).
 *ncRNA
 
 #non-coding RNA; a non-protein-coding transcript other than ribosomal RNA and
-transfer RNA, including antisense RNA, guide RNA, scRNA, siRNA, miRNA, piRNA,
-snoRNA, and snRNA.  The specific type of ncRNA must be specified in the
+transfer RNA.  The specific type of ncRNA must be specified in the
 /ncRNA_class qualifier.
 
 *N_region
@@ -2444,10 +2341,6 @@ regulatory sequences.
 Origin of transfer; region of DNA where transfer is initiated during the
 process of conjugation or mobilization.
 
-*polyA_signal
-
-#Recognition region necessary for endonuclease cleavage of an RNA
-transcript that is followed by polyadenylation; consensus=AATAAA.
 
 *polyA_site
 
@@ -2474,18 +2367,15 @@ clipped region (3' clip).
 transcription, or reverse transcription. Includes site(s) for synthetic
 e.g., PCR primer elements.
 
-*promoter
-
-#Region on a DNA molecule involved in RNA polymerase binding to initiate
-transcription.
-
 *protein_bind
 
 #Non-covalent protein binding site on nucleic acid.
 
-*RBS
+*regulatory
 
-#Ribosome binding site.
+#Region of sequence that functions in the regulation of transcription or
+translation.  The specific type of regulatory region must be specified in
+the /regulatory_class qualifier.
 
 *repeat_region
 
@@ -2536,23 +2426,12 @@ characterizes a mapping landmark on the genome and can be detected by
 PCR. A region of the genome can be mapped by determining the order of a
 series of STSs.
 
-*TATA_signal
-
-#TATA box; Goldberg-Hogness box; a conserved AT-rich septamer found
-about 25 bp before the start point of each eukaryotic RNA polymerase II
-transcript unit that may be involved in positioning the enzyme for
-correct initiation; consensus=TATA(A or T)A(A or T).
 
 *telomere
 
 #Experimentally characterized specialized DNA segment found at the ends of
 eukaryotic chromosomes.
 
-*terminator
-
-#Sequence of DNA located either at the end of the transcript or adjacent
-to a promoter region that causes RNA polymerase to terminate
-transcription; may also be site of binding of repressor protein.
 
 *tmRNA
 
@@ -2573,7 +2452,8 @@ sequence.
 
 *unsure
 
-#Author is unsure of exact sequence in this region.
+#A small region of sequenced bases, generally 10 or fewer in its length,
+which could not be confidently identified.
 
 *V_region
 
@@ -2604,16 +2484,6 @@ the stop codon) that is not translated into a protein; trailer.
 #Region near or at the 5' end of a mature transcript (usually preceding
 the initiation codon) that is not translated into a protein; leader.
 
-* -10_signal
-
-#Pribnow box; a conserved region about 10 bp upstream of the start point
-of bacterial transcription units that may be involved in binding RNA
-polymerase; consensus=TAtAaT.
-
-* -35_signal
-
-#A conserved hexamer about 35 bp upstream of the start point of
-bacterial transcription units; consensus = TTGACa or TGTTGACA.
 
 >Biological Source Descriptor or Feature
 
@@ -2751,6 +2621,10 @@ sequencing or other primers.
 
 #The following is a description of the available modifiers:
 
+#-Altitude:  Geographical altitude of the location from which the sample
+was collected.  Value should reflect distance in meters above or below
+sea level.
+
 #-Cell-line:  Cell line from which sequence derives.
 
 #-Cell-type:  Type of cell from which sequence derives.
@@ -2761,8 +2635,8 @@ sequencing or other primers.
 
 #-Clone-lib:  Name of library from which sequence was obtained.
 
-#-Collected-by:  Name of person who collected sample.  Do not use
-accented or non-ASCII characters.
+#-Collected-by:  Name of person(s) or institute who collected sample.  Do
+not use accented or non-ASCII characters.
 
 #-Collection-date:  Date sample was collected.  Must use format
 23-Mar-2005, Mar-2005, or 2005.
@@ -2785,8 +2659,6 @@ isolation from an unidentified organism.  You cannot include extra text when
 using this modifier; the text box will change to TRUE upon selection of this
 modifier from the pull-down list
 
-#-Frequency:  Frequency of occurrence of a feature.
-
 #-Genotype:  Genotype of the organism.
 
 #-Germline:  If the sequence shown is DNA and a member of the
@@ -2800,8 +2672,8 @@ in a specific combination which can indicate a common ancestor.
 
 #-Haplotype:  Haplotype of the organism.
 
-#-Identified-by:  Name of person who identified sample.  Do not use
-accented or non-ASCII characters.
+#-Identified-by:  Name of expert who identified specimen taxonomically. 
+Do not use accented or non-ASCII characters.
 
 #-Isolation-source:  Describes the local geographical source of the organism
 from which the sequence was derived
@@ -2990,7 +2862,7 @@ alternative gene or protein names.
 
 >Publications
 
-*Overview:  Descriptor or Feature?
+*Publication Overview:  Descriptor or Feature?
 
 #Sequin allows two types of publications to be entered, Publication
 Descriptors and Publication Features.  Publication Descriptors are
@@ -3157,7 +3029,7 @@ populated.  Please do not edit the information.
 previously saved in Sequin.  Furthermore, for analysis purposes, it can also
 open
 a FASTA-formatted sequence file.  The sequence will be displayed in Sequin and
-can be analyzed with tools such as CDD Search, but it should not be submitted,
+can be analyzed, but it should not be submitted,
 because it does not have the appropriate annotations.
 
 *Close
@@ -3277,9 +3149,7 @@ Authors form.
 
 **Submission Page
 
-#Indicate the type of submission.  If it is a new submission, select
-New.  If you are updating an existing submission in order to resubmit it
-to the databases, select Update.  Check either the "Yes" or "No" radio
+#Indicate the type of submission.  Check either the "Yes" or "No" radio
 button to indicate if the record should be released before publication. 
 If you select "Yes", the entry will be released to the public after the
 database staff has added it to the database. If you select "No", fields
@@ -3301,9 +3171,8 @@ communication with database staff.
 #Update the names and affiliation of the people who should receive
 scientific credit for the generation of sequences in this entry.  The
 address should list the principal institution in which the sequencing
-and/or analysis was carried out.  If you are submitting the record as
-an update to the databases, explain the reason for the update on the
-Description subpage.
+and/or analysis was carried out.  
+
 
 *Update Sequence
 
@@ -3364,17 +3233,6 @@ in the Update Sequence dialog.
 #In any case, please carefully review the sequence and annotation in the
 record viewer after using the Update Sequence function.
 
-*Extend Sequence
-
-#This selection functions similar to the 
-
-<A HREF="#UpdateSequence">
-Update Sequence
-</A>
-
-function.  However, you can only extend the existing sequence in either
-the 5' or 3' direction in cases with no overlap between the existing
-and new sequences.
 
 *Feature Propagate
 
@@ -3412,25 +3270,6 @@ population, mutation, phylogenetic, or environmental sample set.
 You may import the new entry in FASTA format or ASN.1 format (for
 example, a sequence record that has been saved in Sequin).
 
-*Parse File to Source
-
-#This selection allows you to add unique information for one source
-qualifier for each of the records in a batch or set.  The input file
-must be in the format of a tab-delimited, two column table.  The first
-column should list the SeqID exactly as it was listed in the original
-FASTA file.  The second column should list the text value for the
-desired source qualifier for each record. Once the file has been
-imported, a pop-up box will appear with the source qualifiers listed in
-the pull down menus.  The qualifiers are separated into three menus:
-one for taxonomic information, one for the Organism modifiers and one
-for the Source modifiers. For example, in order to add the clone
-designations 57 and 49 to the sequences labeled seq1 and seq2, the table
-
-seq1	57
-seq2	49
-
-should be used and clone should be selected from the Source modifiers
-pull-down menu.
 
 >Search Menu
 
@@ -3475,30 +3314,11 @@ Submitting the Finished Record to the Database
 </A> 
  in the Sequin help documentation.
 
-*CDD Search 
-
-#Performs a CDD BLAST search of the selected sequence against the
-NCBI's 
-<A HREF="http://www.ncbi.nlm.nih.gov/Structure/cdd/cdd.shtml">
-Conserved Domain Database
-</A>
-.  To do a CDD BLAST search, Sequin must be in its network aware mode.
-
-#CDD currently contains domains derived from two popular collections,
-Smart and Pfam, plus contributions from colleagues at NCBI.  The source
-databases also provide descriptions and links to citations.  Since
-conserved domains correspond to compact structural units, CDs contain
-links to 3D-structure via Cn3D whenever possible.
-
-#The results of the CDD search will be displayed in the record
-viewer.  These results are for your use only and should be removed
-from the record before submission.
-
 *Vector Screen
 
 #The UniVec option allows you to run a BLAST search of your nucleotide
 sequence(s) against NCBI's 
-<A HREF="http://www.ncbi.nlm.nih.gov/VecScreen/UniVec.html">
+<A HREF="http://www.ncbi.nlm.nih.gov/tools/vecscreen/univec/">
 UniVec
 </A>
 database.  We highly recommend that you run this analysis and remove
@@ -3625,22 +3445,6 @@ additional menu items.  A brief description of these functions follows.
 Further descriptions are available as indicated elsewhere in the help
 documentation.
 
-**Updating Existing GenBank Records 
-
-#Using Sequin in its network-aware mode, you can download an existing
-GenBank record from Entrez using the GenBank accession number or GI
-identification number (NID). You can then use Sequin to make any
-necessary changes to the record, and resubmit it to GenBank as a
-sequence update.
-
-<A HREF="#WelcometoSequinForm">
-Instructions
-</A> 
-for submitting sequence updates are presented under the Welcome to
-Sequin Form. You can download any record from Entrez and look at it in
-Sequin. However, you can only formally update those records which you
-have submitted since submitters retain editorial control of their
-records.
 
 **Performing a PubMed Look-Up  
 
@@ -3743,6 +3547,13 @@ all nucleotide sequences within your submission. The choices in this
 dialog are explained in the 
 <A HREF="#SpecifyMolecule">Specify Molecule</A>  section of this document.
 
+#Batch Apply Genetic Code allows you to apply the same genetic code to be used
+for all sequences in the submission.  For more information regarding the
+genetic codes available, see the NCBI 
+<A  HREF="http://www.ncbi.nlm.nih.gov/Taxonomy/taxonomyhome.html/index.cgi?chapter=cgencodes">
+Taxonomy
+</A> page.
+
 #The Set Release Date dialog allows you to change the release date
 specified in the Submission Dialogs.
 
@@ -3750,8 +3561,15 @@ specified in the Submission Dialogs.
 <A HREF="#ORFFinder">Search</A> menus.
 
 #Import Source Table allows you to add unique information for one source
-qualifier for each of the records in a batch or set.  See 
-<A HREF="#ParseFiletoSource">Parse File to Source</A> for details.
+qualifier for each of the records in a batch or set.  The input file must be
+in the format of a tab-delimited, two column table. The first column should
+list the SeqID exactly as it was listed in the original FASTA file. The second
+column should list the text value for the desired source qualifier for each
+record. Once the file has been imported, a pop-up box will appear with the
+source qualifiers listed in the pull down menus. The qualifiers are separated
+into three menus: one for taxonomic information, one for the Organism
+modifiers and one for the Source modifiers.
+
 
 #The Publications option allows you to add a Publication Feature or
 Publication Descriptor to the record.  Publications are described in
@@ -4172,7 +3990,7 @@ be entered as the location relative to the alignment coordinates.
 <P CLASS=medium1><B>Questions or Comments?</B>
 <BR>Write to the <A HREF="mailto:info@ncbi.nlm.nih.gov">NCBI Service Desk
 </A></P>
-<P CLASS=medium1>Revised June 18, 2012
+<P CLASS=medium1>Revised February 29, 2016
 
 </CENTER>
 

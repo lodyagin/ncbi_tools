@@ -82,10 +82,6 @@
  *
  * @author E. Michael Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: optimize_target_freq.c,v 1.8 2005/12/19 15:37:33 gertz Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <string.h>
 #include <assert.h>

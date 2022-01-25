@@ -1,4 +1,4 @@
-/* $Id: phi_gapalign.c,v 1.15 2008/07/17 17:55:44 kazimird Exp $
+/* $Id: phi_gapalign.c,v 1.17 2016/06/30 12:34:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -52,11 +52,6 @@
  *    Right score = Blast_SemiGappedAlign(...) 
  * </pre>
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: phi_gapalign.c,v 1.15 2008/07/17 17:55:44 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/phi_gapalign.h>
 #include <algo/blast/core/blast_encoding.h>
@@ -861,7 +856,6 @@ Int2 PHIGappedAlignmentWithTraceback(Uint1* query, Uint1* subject,
     GapPrelimEditBlockReset(rev_prelim_tback);
 
     found_end = FALSE;
-    score_left = 0;
         
     score_left = 
        Blast_SemiGappedAlign(query, subject, q_start, s_start, 

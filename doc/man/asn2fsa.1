@@ -1,4 +1,4 @@
-.TH ASN2FSA 1 2009-07-31 NCBI "NCBI Tools User's Manual"
+.TH ASN2FSA 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asn2fsa \- convert biological sequence data from ASN.1 to FASTA
 .SH SYNOPSIS
@@ -6,6 +6,8 @@ asn2fsa \- convert biological sequence data from ASN.1 to FASTA
 [\|\fB\-\fP\|]
 [\|\fB\-A\fP\ \fIacc\fP\|]
 [\|\fB\-D\fP\|]
+[\|\fB\-E\fP\|]
+[\|\fB\-H\fP\|]
 [\|\fB\-L\fP\ \fIfilename\fP\|]
 [\|\fB\-T\fP\|]
 [\|\fB\-a\fP\ \fItype\fP\|]
@@ -28,6 +30,7 @@ asn2fsa \- convert biological sequence data from ASN.1 to FASTA
 [\|\fB\-u\fP\|]
 [\|\fB\-v\fP\ \fIfilename\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
+[\|\fB\-y\fP\|]
 [\|\fB\-z\fP\|]
 .SH DESCRIPTION
 \fBasn2fsa\fP converts biological sequence data from ASN.1 to FASTA.
@@ -42,6 +45,12 @@ Accession to fetch
 .TP
 \fB\-D\fP
 Use Dash for Gap
+.TP
+\fB\-E\fP
+Extended Seq-ids
+.TP
+\fB\-H\fP
+HTML spans
 .TP
 \fB\-L\fP\ \fIfilename\fP
 Log file
@@ -126,6 +135,9 @@ Protein output file name
 .TP
 \fB\-x\fP\ \fIstr\fP
 File selection substring (\fB.ent\fP by default) [String]
+.TP
+\fB\-y\fP
+Debugging
 .TP
 \fB\-z\fP
 Print quality score gap as \-1

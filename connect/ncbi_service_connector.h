@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVICE_CONNECTOR__H
 #define CONNECT___NCBI_SERVICE_CONNECTOR__H
 
-/* $Id: ncbi_service_connector.h,v 6.13 2011/05/26 19:09:31 kazimird Exp $
+/* $Id: ncbi_service_connector.h,v 6.18 2015/04/15 18:29:19 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,18 +51,19 @@ extern "C" {
 #endif
 
     
-typedef void              (*FSERVICE_ResetData)  (void* data);
-typedef void              (*FSERVICE_CleanupData)(void* data);
+typedef void              (*FSERVICE_Reset)      (void* data);
+typedef void              (*FSERVICE_Cleanup)    (void* data);
 typedef const SSERV_Info* (*FSERVICE_GetNextInfo)(void* data, SERV_ITER iter);
 
 
 typedef struct {
-    void*                data;
-    FSERVICE_ResetData   reset;         /* called at each close (before iter)*/
-    FSERVICE_CleanupData cleanup;       /* called at destruction             */
-    FSERVICE_GetNextInfo get_next_info; /* called to get conn point          */
-    FHTTP_ParseHeader    parse_header;  /* called if data source is HTTP     */
-    THTTP_Flags          flags;         /* fHCC_Flushable | fHCC_NoAutoRetry */
+    void*                data;          /* User-supplied callback data       */
+    FSERVICE_Reset       reset;         /* Called prior to each iter reset   */
+    FHTTP_Adjust         adjust;        /* Called when data source is HTTP(S)*/
+    FSERVICE_Cleanup     cleanup;       /* Called prior to connector destroy */
+    FHTTP_ParseHeader    parse_header;  /* Called when data source is HTTP(S)*/
+    FSERVICE_GetNextInfo get_next_info; /* Called to get connection point    */
+    THTTP_Flags          flags;         /* fHTTP_Flushable|fHTTP_NoAutoRetry */
 } SSERVICE_Extra;
 
 
@@ -70,7 +71,7 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR SERVICE_CreateConnectorEx
 (const char*           service,
  TSERV_Type            types,
  const SConnNetInfo*   net_info,
- const SSERVICE_Extra* params
+ const SSERVICE_Extra* extra
  );
 
 #define SERVICE_CreateConnector(service) \

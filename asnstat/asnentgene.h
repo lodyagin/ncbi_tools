@@ -9,24 +9,24 @@
 #include <asn.h>
 #endif
 
-static char * asnfilename = "asnentgene.h31";
-static AsnValxNode avnx[50] = {
+static char * asnfilename = "asnentgene.h36";
+static AsnValxNode avnx[52] = {
     {20,"live" ,0,0.0,&avnx[1] } ,
     {20,"secondary" ,1,0.0,&avnx[2] } ,
-    {20,"discontinued" ,2,0.0,&avnx[3] } ,
-    {20,"newentry" ,3,0.0,NULL } ,
+    {20,"discontinued" ,2,0.0,NULL } ,
     {3,NULL,0,0.0,NULL } ,
-    {20,"unknown" ,0,0.0,&avnx[6] } ,
-    {20,"tRNA" ,1,0.0,&avnx[7] } ,
-    {20,"rRNA" ,2,0.0,&avnx[8] } ,
-    {20,"snRNA" ,3,0.0,&avnx[9] } ,
-    {20,"scRNA" ,4,0.0,&avnx[10] } ,
-    {20,"snoRNA" ,5,0.0,&avnx[11] } ,
-    {20,"protein-coding" ,6,0.0,&avnx[12] } ,
-    {20,"pseudo" ,7,0.0,&avnx[13] } ,
-    {20,"transposon" ,8,0.0,&avnx[14] } ,
-    {20,"miscRNA" ,9,0.0,&avnx[15] } ,
-    {20,"ncRNA" ,10,0.0,&avnx[16] } ,
+    {20,"unknown" ,0,0.0,&avnx[5] } ,
+    {20,"tRNA" ,1,0.0,&avnx[6] } ,
+    {20,"rRNA" ,2,0.0,&avnx[7] } ,
+    {20,"snRNA" ,3,0.0,&avnx[8] } ,
+    {20,"scRNA" ,4,0.0,&avnx[9] } ,
+    {20,"snoRNA" ,5,0.0,&avnx[10] } ,
+    {20,"protein-coding" ,6,0.0,&avnx[11] } ,
+    {20,"pseudo" ,7,0.0,&avnx[12] } ,
+    {20,"transposon" ,8,0.0,&avnx[13] } ,
+    {20,"miscRNA" ,9,0.0,&avnx[14] } ,
+    {20,"ncRNA" ,10,0.0,&avnx[15] } ,
+    {20,"biological-region" ,11,0.0,&avnx[16] } ,
     {20,"other" ,255,0.0,NULL } ,
     {20,"cyto" ,0,0.0,&avnx[18] } ,
     {20,"bp" ,1,0.0,&avnx[19] } ,
@@ -59,16 +59,18 @@ static AsnValxNode avnx[50] = {
     {20,"compound" ,21,0.0,&avnx[46] } ,
     {20,"ncRNA" ,22,0.0,&avnx[47] } ,
     {20,"gene-group" ,23,0.0,&avnx[48] } ,
-    {20,"comment" ,254,0.0,&avnx[49] } ,
+    {20,"assembly" ,24,0.0,&avnx[49] } ,
+    {20,"assembly-unit" ,25,0.0,&avnx[50] } ,
+    {20,"comment" ,254,0.0,&avnx[51] } ,
     {20,"other" ,255,0.0,NULL } };
 
-static AsnType atx[104] = {
-  {401, "Entrezgene" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[101]} ,
+static AsnType atx[105] = {
+  {401, "Entrezgene" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[1],0,&atx[102]} ,
   {0, "track-info" ,128,0,0,1,0,0,0,0,NULL,&atx[2],NULL,0,&atx[15]} ,
   {403, "Gene-track" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[3],0,&atx[47]} ,
   {0, "geneid" ,128,0,0,0,0,0,0,0,NULL,&atx[4],NULL,0,&atx[5]} ,
   {302, "INTEGER" ,0,2,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "status" ,128,1,0,0,1,0,0,0,&avnx[4],&atx[4],&avnx[0],0,&atx[6]} ,
+  {0, "status" ,128,1,0,0,1,0,0,0,&avnx[3],&atx[4],&avnx[0],0,&atx[6]} ,
   {0, "current-id" ,128,2,0,1,0,0,0,0,NULL,&atx[9],&atx[7],0,&atx[10]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],NULL,0,NULL} ,
   {409, "Dbtag" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[11]} ,
@@ -78,7 +80,7 @@ static AsnType atx[104] = {
   {0, "update-date" ,128,4,0,0,0,0,0,0,NULL,&atx[11],NULL,0,&atx[13]} ,
   {0, "discontinue-date" ,128,5,0,1,0,0,0,0,NULL,&atx[11],NULL,0,NULL} ,
   {311, "SEQUENCE" ,0,16,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
-  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[4],&avnx[5],0,&atx[16]} ,
+  {0, "type" ,128,1,0,0,0,0,0,0,NULL,&atx[4],&avnx[4],0,&atx[16]} ,
   {0, "source" ,128,2,0,0,0,0,0,0,NULL,&atx[17],NULL,0,&atx[18]} ,
   {407, "BioSource" ,1,0,0,0,0,0,1,0,NULL,NULL,NULL,0,&atx[23]} ,
   {0, "gene" ,128,3,0,0,0,0,0,0,NULL,&atx[19],NULL,0,&atx[20]} ,
@@ -108,7 +110,7 @@ static AsnType atx[104] = {
   {301, "BOOLEAN" ,0,1,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} ,
   {0, "locus-display" ,128,5,0,0,1,0,0,0,&avnx[23],&atx[42],NULL,0,&atx[44]} ,
   {0, "extra-terms" ,128,6,0,0,1,0,0,0,&avnx[24],&atx[42],NULL,0,NULL} ,
-  {0, "locus" ,128,9,0,1,0,0,0,0,NULL,&atx[9],&atx[46],0,&atx[83]} ,
+  {0, "locus" ,128,9,0,1,0,0,0,0,NULL,&atx[9],&atx[46],0,&atx[84]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
   {404, "Gene-commentary" ,1,0,0,0,0,1,0,0,NULL,&atx[14],&atx[48],0,&atx[19]} ,
   {0, "type" ,128,0,0,0,0,0,0,0,NULL,&atx[4],&avnx[25],0,&atx[49]} ,
@@ -145,31 +147,32 @@ static AsnType atx[104] = {
   {0, "comment" ,128,13,0,1,0,0,0,0,NULL,&atx[9],&atx[80],0,&atx[81]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
   {0, "create-date" ,128,14,0,1,0,0,0,0,NULL,&atx[11],NULL,0,&atx[82]} ,
-  {0, "update-date" ,128,15,0,1,0,0,0,0,NULL,&atx[11],NULL,0,NULL} ,
-  {0, "properties" ,128,10,0,1,0,0,0,0,NULL,&atx[9],&atx[84],0,&atx[85]} ,
+  {0, "update-date" ,128,15,0,1,0,0,0,0,NULL,&atx[11],NULL,0,&atx[83]} ,
+  {0, "rna" ,128,16,0,1,0,0,0,0,NULL,&atx[23],NULL,0,NULL} ,
+  {0, "properties" ,128,10,0,1,0,0,0,0,NULL,&atx[9],&atx[85],0,&atx[86]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {0, "refgene" ,128,11,0,1,0,0,0,0,NULL,&atx[9],&atx[86],0,&atx[87]} ,
+  {0, "refgene" ,128,11,0,1,0,0,0,0,NULL,&atx[9],&atx[87],0,&atx[88]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {0, "homology" ,128,12,0,1,0,0,0,0,NULL,&atx[9],&atx[88],0,&atx[89]} ,
+  {0, "homology" ,128,12,0,1,0,0,0,0,NULL,&atx[9],&atx[89],0,&atx[90]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {0, "comments" ,128,13,0,1,0,0,0,0,NULL,&atx[9],&atx[90],0,&atx[91]} ,
+  {0, "comments" ,128,13,0,1,0,0,0,0,NULL,&atx[9],&atx[91],0,&atx[92]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[47],NULL,0,NULL} ,
-  {0, "unique-keys" ,128,14,0,1,0,0,0,0,NULL,&atx[9],&atx[92],0,&atx[93]} ,
+  {0, "unique-keys" ,128,14,0,1,0,0,0,0,NULL,&atx[9],&atx[93],0,&atx[94]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],NULL,0,NULL} ,
-  {0, "xtra-index-terms" ,128,15,0,1,0,0,0,0,NULL,&atx[9],&atx[94],0,&atx[95]} ,
+  {0, "xtra-index-terms" ,128,15,0,1,0,0,0,0,NULL,&atx[9],&atx[95],0,&atx[96]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[25],NULL,0,NULL} ,
-  {0, "xtra-properties" ,128,16,0,1,0,0,0,0,NULL,&atx[9],&atx[96],0,&atx[97]} ,
+  {0, "xtra-properties" ,128,16,0,1,0,0,0,0,NULL,&atx[9],&atx[97],0,&atx[98]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {0, "xtra-iq" ,128,17,0,1,0,0,0,0,NULL,&atx[9],&atx[98],0,&atx[99]} ,
+  {0, "xtra-iq" ,128,17,0,1,0,0,0,0,NULL,&atx[9],&atx[99],0,&atx[100]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[56],NULL,0,NULL} ,
-  {0, "non-unique-keys" ,128,18,0,1,0,0,0,0,NULL,&atx[9],&atx[100],0,NULL} ,
+  {0, "non-unique-keys" ,128,18,0,1,0,0,0,0,NULL,&atx[9],&atx[101],0,NULL} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[8],NULL,0,NULL} ,
-  {402, "Entrezgene-Set" ,1,0,0,0,0,1,0,0,NULL,&atx[103],&atx[102],0,&atx[2]} ,
+  {402, "Entrezgene-Set" ,1,0,0,0,0,1,0,0,NULL,&atx[104],&atx[103],0,&atx[2]} ,
   {0, NULL,1,-1,0,0,0,0,0,0,NULL,&atx[0],NULL,0,NULL} ,
   {314, "SET OF" ,0,17,0,0,0,0,0,0,NULL,NULL,NULL,0,NULL} };
 
 static AsnModule ampx[1] = {
-  { "NCBI-Entrezgene" , "asnentgene.h31",&atx[0],NULL,NULL,0,0} };
+  { "NCBI-Entrezgene" , "asnentgene.h36",&atx[0],NULL,NULL,0,0} };
 
 static AsnValxNodePtr avn = avnx;
 static AsnTypePtr at = atx;
@@ -196,27 +199,27 @@ static AsnModulePtr amp = ampx;
 #define ENTREZGENE_gene_source &at[35]
 #define ENTREZGENE_locus &at[45]
 #define ENTREZGENE_locus_E &at[46]
-#define ENTREZGENE_properties &at[83]
-#define ENTREZGENE_properties_E &at[84]
-#define ENTREZGENE_refgene &at[85]
-#define ENTREZGENE_refgene_E &at[86]
-#define ENTREZGENE_homology &at[87]
-#define ENTREZGENE_homology_E &at[88]
-#define ENTREZGENE_comments &at[89]
-#define ENTREZGENE_comments_E &at[90]
-#define ENTREZGENE_unique_keys &at[91]
-#define ENTREZGENE_unique_keys_E &at[92]
-#define ENTREZGENE_xtra_index_terms &at[93]
-#define ENTREZGENE_xtra_index_terms_E &at[94]
-#define ENTREZGENE_xtra_properties &at[95]
-#define ENTREZGENE_xtra_properties_E &at[96]
-#define ENTREZGENE_xtra_iq &at[97]
-#define ENTREZGENE_xtra_iq_E &at[98]
-#define ENTREZGENE_non_unique_keys &at[99]
-#define ENTREZGENE_non_unique_keys_E &at[100]
+#define ENTREZGENE_properties &at[84]
+#define ENTREZGENE_properties_E &at[85]
+#define ENTREZGENE_refgene &at[86]
+#define ENTREZGENE_refgene_E &at[87]
+#define ENTREZGENE_homology &at[88]
+#define ENTREZGENE_homology_E &at[89]
+#define ENTREZGENE_comments &at[90]
+#define ENTREZGENE_comments_E &at[91]
+#define ENTREZGENE_unique_keys &at[92]
+#define ENTREZGENE_unique_keys_E &at[93]
+#define ENTREZGENE_xtra_index_terms &at[94]
+#define ENTREZGENE_xtra_index_terms_E &at[95]
+#define ENTREZGENE_xtra_properties &at[96]
+#define ENTREZGENE_xtra_properties_E &at[97]
+#define ENTREZGENE_xtra_iq &at[98]
+#define ENTREZGENE_xtra_iq_E &at[99]
+#define ENTREZGENE_non_unique_keys &at[100]
+#define ENTREZGENE_non_unique_keys_E &at[101]
 
-#define ENTREZGENE_SET &at[101]
-#define ENTREZGENE_SET_E &at[102]
+#define ENTREZGENE_SET &at[102]
+#define ENTREZGENE_SET_E &at[103]
 
 #define GENE_TRACK &at[2]
 #define GENE_TRACK_geneid &at[3]
@@ -252,6 +255,7 @@ static AsnModulePtr amp = ampx;
 #define GENE_COMMENTARY_comment_E &at[80]
 #define GENE_COMMENTARY_create_date &at[81]
 #define GENE_COMMENTARY_update_date &at[82]
+#define GENE_COMMENTARY_rna &at[83]
 
 #define MAPS &at[28]
 #define MAPS_display_str &at[29]

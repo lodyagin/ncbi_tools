@@ -1,4 +1,4 @@
-/* $Id: ncbi_server_info.c,v 6.72 2012/03/06 20:44:33 kazimird Exp $
+/* $Id: ncbi_server_info.c,v 6.85 2016/07/18 22:39:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,14 +31,19 @@
  */
 
 #include "ncbi_ansi_ext.h"
+#include "ncbi_assert.h"
 #include "ncbi_server_infop.h"
-#include <assert.h>
+#include "ncbi_socketp.h"
 #include <ctype.h>
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_IP_ADDR_LEN  16 /* sizeof("255.255.255.255") */
+#ifdef   fabs
+#  undef fabs
+#endif /*fabs*/
+#define  fabs(v)  ((v) < 0.0 ? -(v) : (v))
+
+#define MAX_IP_ADDR_LEN  16  /*sizeof("255.255.255.255")*/
 
 
 /*****************************************************************************
@@ -65,23 +70,24 @@ typedef struct {
 } SSERV_Attr;
 
 
-static const char* k_FlagTag[] = {
-    "Regular",  /* fSERV_Regular */
-    "Blast"     /* fSERV_Blast   */
-};
-
-
-/* Any server is not local by default.
+/* Flags
  */
-static int/*bool*/ s_LocalServerDefault = 0/*false*/;
+static const char kRegularInter[] = "RegularInter";
+static const char kBlastInter[]   = "BlastInter";
+static const char kRegular[]      = "Regular";
+static const char kBlast[]        = "Blast";
 
-
-int/*bool*/ SERV_SetLocalServerDefault(int/*bool*/ onoff)
-{
-    int/*bool*/ retval = s_LocalServerDefault;
-    s_LocalServerDefault = onoff ? 1/*true*/ : 0/*false*/;
-    return retval;
-}
+static struct {
+    const char* tag;
+    size_t      len;
+    ESERV_Flag  val;
+} kFlags[] = {
+    /* must be ordered longer-to-shorter */
+    { kRegularInter, sizeof(kRegularInter)-1, eSERV_RegularInter },
+    { kBlastInter,   sizeof(kBlastInter)-1,   eSERV_BlastInter   },
+    { kRegular,      sizeof(kRegular)-1,      eSERV_Regular      },
+    { kBlast,        sizeof(kBlast)-1,        eSERV_Blast        }
+};
 
 
 /* Attributes' lookup (by either type or tag)
@@ -117,6 +123,7 @@ extern const char* SERV_ReadType(const char* str,
 
 extern char* SERV_WriteInfo(const SSERV_Info* info)
 {
+    static const char* k_NY[] = { "no", "yes" };
     char c_t[MAX_CONTENT_TYPE_LEN];    
     const SSERV_Attr* attr;
     size_t reserve;
@@ -128,17 +135,17 @@ extern char* SERV_WriteInfo(const SSERV_Info* info)
         &&  MIME_ComposeContentTypeEx(info->mime_t, info->mime_s,
                                       info->mime_e, c_t, sizeof(c_t))) {
         char* p;
-        assert(c_t[strlen(c_t) - 2] == '\r' && c_t[strlen(c_t) - 1] == '\n');
+        assert(c_t[strlen(c_t) - 2] == '\r'  &&  c_t[strlen(c_t) - 1] == '\n');
         c_t[strlen(c_t) - 2] = 0;
         p = strchr(c_t, ' ');
         assert(p);
         p++;
         memmove(c_t, p, strlen(p) + 1);
     } else
-        *c_t = 0;
-    reserve = attr->tag_len+1 + MAX_IP_ADDR_LEN + 1+5/*port*/ + 1+10/*flag*/ +
-        1+9/*coef*/ + 3+strlen(c_t)/*cont.type*/ + 1+5/*locl*/ + 1+5/*priv*/ +
-        1+7/*quorum*/ + 1+14/*rate*/ + 1+5/*sful*/ + 1+12/*time*/ + 1/*EOL*/;
+        *c_t = '\0';
+    reserve = attr->tag_len+1 + MAX_IP_ADDR_LEN + 1+5/*port*/ + 1+12/*flag*/ +
+        1+9/*coef*/ + 3+strlen(c_t)/*cont.type*/ + 3*(1+5)/*site*/ +
+        1+14/*rate*/ + 2*(1+5)/*mode*/ + 1+12/*time*/ + 1/*EOL*/;
     /* write server-specific info */
     if ((str = attr->vtable.Write(reserve, &info->u)) != 0) {
         char* s = str;
@@ -153,35 +160,36 @@ extern char* SERV_WriteInfo(const SSERV_Info* info)
             memmove(s, str + reserve, n + 1);
             s = str + strlen(str);
         }
-
-        assert(info->flag < (int)(sizeof(k_FlagTag)/sizeof(k_FlagTag[0])));
-        if (k_FlagTag[info->flag] && *k_FlagTag[info->flag])
-            s += sprintf(s, " %s", k_FlagTag[info->flag]);
-        s += sprintf(s, " B=%.2f", info->coef);
+        for (n = 0;  n < sizeof(kFlags) / sizeof(kFlags[0]);  ++n) {
+            if (info->flag == kFlags[n].val) {
+                s += sprintf(s, " %s", kFlags[n].tag);
+                break;
+            }
+        }
+        if (info->coef)
+            s  = NCBI_simple_ftoa(strcpy(s, " B=") + 3, info->coef, 2);
         if (*c_t)
             s += sprintf(s, " C=%s", c_t);
-        s += sprintf(s, " L=%s", info->locl & 0x0F ? "yes" : "no");
-        if (info->type != fSERV_Dns && (info->locl & 0xF0))
+        s += sprintf(s, " L=%s", k_NY[info->site & fSERV_Local]);
+        if (info->type != fSERV_Dns  &&  (info->site & fSERV_Private))
             s += sprintf(s, " P=yes");
-        if (info->host && info->quorum) {
-            if (info->quorum == (unsigned short)(-1))
-                s += sprintf(s, " Q=yes");
-            else
-                s += sprintf(s, " Q=%hu", info->quorum);
-        }
-        s += sprintf(s," R=%.*f", fabs(info->rate) < 0.01 ? 3 : 2, info->rate);
-        if (!(info->type & fSERV_Http) && info->type != fSERV_Dns)
-            s += sprintf(s, " S=%s", info->sful ? "yes" : "no");
-        s += sprintf(s, " T=%lu", (unsigned long)info->time);
+        s  = NCBI_simple_ftoa(strcpy(s," R=") + 3, info->rate,
+                              fabs(info->rate) < 0.01 ? 3 : 2);
+        if (!(info->type & fSERV_Http)  &&  info->type != fSERV_Dns)
+            s += sprintf(s, " S=%s", k_NY[info->mode & fSERV_Stateful]);
+        if (info->type != fSERV_Dns  &&  (info->mode & fSERV_Secure))
+            s += sprintf(s, " $=yes");
+        sprintf(s, " T=%lu", (unsigned long) info->time);
     }
     return str;
 }
 
 
 SSERV_Info* SERV_ReadInfoEx(const char* str,
-                            const char* name)
+                            const char* name,
+                            int/*bool*/ lazy)
 {
-    int/*bool*/    coef, mime, locl, priv, quorum, rate, sful, time;
+    int/*bool*/    coef, mime, locl, priv, rate, sful, secu, time, flag;
     ESERV_Type     type;
     unsigned int   host;                /* network byte order       */
     unsigned short port;                /* host (native) byte order */
@@ -189,16 +197,41 @@ SSERV_Info* SERV_ReadInfoEx(const char* str,
 
     /* detect server type */
     str = SERV_ReadType(str, &type);
-    if (!str || (*str && !isspace((unsigned char)(*str))))
+    if (!str  ||  (*str  &&  !isspace((unsigned char)(*str))))
         return 0;
-    /* NB: "str" guarantees there is non-NULL attr */
-    while (*str && isspace((unsigned char)(*str)))
-        str++;
-    if (!ispunct((unsigned char)(*str)) || *str == ':') {
-        if (!(str = SOCK_StringToHostPort(str, &host, &port)))
-            return 0;
-        while (*str && isspace((unsigned char)(*str)))
-            str++;
+    /* NB: "str" guarantees there is a non-NULL attr */
+    while (*str  &&  isspace((unsigned char)(*str)))
+        ++str;
+    if (*str  &&  (*str == ':'  ||  !ispunct((unsigned char)(*str)))) {
+        const char* end = str;
+        size_t      len;
+        while (*end  &&  !isspace((unsigned char)(*end)))
+            ++end;
+        verify((len = (size_t)(end - str)) > 0);
+        if (*str != ':') {
+            if (strcspn(str, "=") >= len) {
+                size_t i;
+                for (i = 0;  i < sizeof(kFlags) / sizeof(kFlags[0]);  ++i) {
+                    if (len == kFlags[i].len
+                        &&  strncasecmp(str, kFlags[i].tag, len) == 0) {
+                        end = 0;
+                        break;
+                    }
+                }
+            } else
+                end = 0;
+        }
+        if (end) {
+            if (!(str = SOCK_StringToHostPortEx(str, &host, &port, lazy)))
+                return 0;
+            if (str != end)
+                return 0;
+            while (*str  &&  isspace((unsigned char)(*str)))
+                ++str;
+        } else {
+            host = 0;
+            port = 0;
+        }
     } else {
         host = 0;
         port = 0;
@@ -208,17 +241,16 @@ SSERV_Info* SERV_ReadInfoEx(const char* str,
     if (!info)
         return 0;
     info->host = host;
-    if (port)
-        info->port = port;
-    coef = mime = locl = priv = quorum = rate = sful = time = 0;/*unassigned*/
-    /* continue reading server info: optional parts: ... */
-    while (*str && isspace((unsigned char)(*str)))
-        str++;
+    info->port = port;
+    coef = mime = locl = priv = rate = sful = secu = time = flag = 0/*false*/;
+    /* continue reading server info: optional parts... */
+    while (*str  &&  isspace((unsigned char)(*str)))
+        ++str;
     while (*str) {
-        if (*(str + 1) == '=') {
+        if (str[1] == '='  &&  !isspace((unsigned char) str[2])) {
+            char*          e;
             int            n;
             double         d;
-            unsigned short h;
             unsigned long  t;
             char           s[4];
             EMIME_Type     mime_t;
@@ -227,131 +259,147 @@ SSERV_Info* SERV_ReadInfoEx(const char* str,
             
             switch (toupper((unsigned char)(*str++))) {
             case 'B':
-                if (!coef && sscanf(str, "=%lf%n", &d, &n) >= 1) {
-                    if (fabs(d) < SERV_MINIMAL_BONUS)
+                if (coef)
+                    break;
+                coef = 1/*true*/;
+                d = NCBI_simple_atof(++str, &e);
+                if (e > str) {
+                    if      (fabs(d) < SERV_MINIMAL_BONUS / 2.0)
                         d = 0.0;
+                    else if (fabs(d) < SERV_MINIMAL_BONUS)
+                        d = d < 0.0 ? -SERV_MINIMAL_BONUS : SERV_MINIMAL_BONUS;
                     else if (fabs(d) > SERV_MAXIMAL_BONUS)
                         d = d < 0.0 ? -SERV_MAXIMAL_BONUS : SERV_MAXIMAL_BONUS;
                     info->coef = d;
-                    str += n;
-                    coef = 1;
+                    str = e;
                 }
                 break;
             case 'C':
-                if (type == fSERV_Dns)
+                if (mime  ||  type == fSERV_Dns)
                     break;
-                if (!mime && MIME_ParseContentTypeEx(str + 1, &mime_t,
-                                                     &mime_s, &mime_e)) {
+                mime = 1/*true*/;
+                if (MIME_ParseContentTypeEx(++str, &mime_t, &mime_s, &mime_e)){
                     info->mime_t = mime_t;
                     info->mime_s = mime_s;
                     info->mime_e = mime_e;
-                    mime = 1;
-                    while (*str && !isspace((unsigned char)(*str)))
+                    /* skip the entire token */
+                    while (*str  &&  !isspace((unsigned char)(*str)))
                         str++;
                 }
                 break;
             case 'L':
-                if (!locl && sscanf(str, "=%3s%n", s, &n) >= 1) {
+                if (locl)
+                    break;
+                locl = 1/*true*/;
+                if (sscanf(++str, "%3s%n", s, &n) >= 1) {
                     if (strcasecmp(s, "YES") == 0) {
-                        info->locl |=  0x01/*true in low nibble*/;
+                        info->site |=  fSERV_Local;
                         str += n;
-                        locl = 1;
                     } else if (strcasecmp(s, "NO") == 0) {
-                        info->locl &= ~0x0F/*false in low nibble*/;
+                        info->site &= ~fSERV_Local;
                         str += n;
-                        locl = 1;
                     }
                 }
                 break;
             case 'P':
-                if (type == fSERV_Dns)
+                if (priv  ||  type == fSERV_Dns)
                     break;
-                if (!priv && sscanf(str, "=%3s%n", s, &n) >= 1) {
+                priv = 1/*true*/;
+                if (sscanf(++str, "%3s%n", s, &n) >= 1) {
                     if (strcasecmp(s, "YES") == 0) {
-                        info->locl |=  0x10;/*true in high nibble*/
+                        info->site |=  fSERV_Private;
                         str += n;
-                        priv = 1;
                     } else if (strcasecmp(s, "NO") == 0) {
-                        info->locl &= ~0xF0;/*false in high nibble*/
+                        info->site &= ~fSERV_Private;
                         str += n;
-                        priv = 1;
                     }
                 }
                 break;
-            case 'Q':
-                if (type == fSERV_Firewall || !info->host || quorum)
-                    break;
-                if (sscanf(str,"=%3s%n",s,&n) >= 1 && strcasecmp(s, "YES")==0){
-                    info->quorum = (unsigned short)(-1);
-                    str += n;
-                    quorum = 1;
-                } else if (sscanf(str, "=%hu%n", &h, &n) >= 1) {
-                    info->quorum = h;
-                    str += n;
-                    quorum = 1;
-                }
-                break;
             case 'R':
-                if (!rate && sscanf(str, "=%lf%n", &d, &n) >= 1) {
-                    if (fabs(d) < SERV_MINIMAL_RATE)
+                if (rate)
+                    break;
+                rate = 1/*true*/;
+                d = NCBI_simple_atof(++str, &e);
+                if (e > str) {
+                    if      (fabs(d) < SERV_MINIMAL_RATE / 2.0)
                         d = 0.0;
+                    else if (fabs(d) < SERV_MINIMAL_RATE)
+                        d = d < 0.0 ? -SERV_MINIMAL_RATE : SERV_MINIMAL_RATE;
                     else if (fabs(d) > SERV_MAXIMAL_RATE)
                         d = d < 0.0 ? -SERV_MAXIMAL_RATE : SERV_MAXIMAL_RATE;
                     info->rate = d;
-                    str += n;
-                    rate = 1;
+                    str = e;
                 }
                 break;
             case 'S':
-                if ((type & fSERV_Http) != 0)
+                if (sful  ||  type == fSERV_Dns  ||  (type & fSERV_Http))
                     break;
-                if (!sful && sscanf(str, "=%3s%n", s, &n) >= 1) {
+                sful = 1/*true*/;
+                if (sscanf(++str, "%3s%n", s, &n) >= 1) {
                     if (strcasecmp(s, "YES") == 0) {
-                        if (type == fSERV_Dns)
-                            break; /*check only here for compatibility*/
-                        info->sful = 1/*true */;
+                        info->mode |=  fSERV_Stateful;
                         str += n;
-                        sful = 1;
                     } else if (strcasecmp(s, "NO") == 0) {
-                        info->sful = 0/* false */;
+                        info->mode &= ~fSERV_Stateful;
                         str += n;
-                        sful = 1;
+                    }
+                }
+                break;
+            case '$':
+                if (secu  ||  type == fSERV_Dns)
+                    break;
+                secu = 1/*true*/;
+                if (sscanf(++str, "%3s%n", s, &n) >= 1) {
+                    if (strcasecmp(s, "YES") == 0) {
+                        info->mode |=  fSERV_Secure;
+                        str += n;
+                    } else if (strcasecmp(s, "NO") == 0) {
+                        info->mode &= ~fSERV_Secure;
+                        str += n;
                     }
                 }
                 break;
             case 'T':
-                if (!time && sscanf(str, "=%lu%n", &t, &n) >= 1) {
+                if (time)
+                    break;
+                time = 1/*true*/;
+                if (sscanf(++str, "%lu%n", &t, &n) >= 1) {
                     info->time = (TNCBI_Time) t;
                     str += n;
-                    time = 1;
                 }
                 break;
             }
-        } else {
+        } else if (!flag) {
             size_t i;
-            for (i = 0; i < sizeof(k_FlagTag)/sizeof(k_FlagTag[0]); i++) {
-                size_t n = strlen(k_FlagTag[i]);
-                if (strncasecmp(str, k_FlagTag[i], n) == 0) {
-                    info->flag = (ESERV_Flag) i;
-                    str += n;
+            flag = 1/*true*/;
+            for (i = 0;  i < sizeof(kFlags) / sizeof(kFlags[0]);  ++i) {
+                if (strncasecmp(str, kFlags[i].tag, kFlags[i].len) == 0) {
+                    info->flag = kFlags[i].val;
+                    str += kFlags[i].len;
                     break;
                 }
             }
-        }
-        if (*str && !isspace((unsigned char)(*str)))
+        } else
+              break;
+        if (*str  &&  !isspace((unsigned char)(*str)))
             break;
-        while (*str && isspace((unsigned char)(*str)))
-            str++;
+        while (*str  &&  isspace((unsigned char)(*str)))
+            ++str;
     }
-    if (*str) {
+    if (!*str) {
+        if (name) {
+            strcpy((char*) info + SERV_SizeOfInfo(info), name);
+            if (info->type == fSERV_Dns)
+                info->u.dns.name = 1/*true*/;
+        } else if (info->type == fSERV_Dns)
+            info->u.dns.name = 0/*false*/;
+        if (!info->port
+            &&  (info->type == fSERV_Ncbid  ||  (info->type & fSERV_Http))) {
+            info->port = secu ? CONN_PORT_HTTPS : CONN_PORT_HTTP;
+        }
+    } else {
         free(info);
         info = 0;
-    } else if (name) {
-        strcpy((char*) info + SERV_SizeOfInfo(info), name);
-        if (info->type == fSERV_Dns)
-            info->u.dns.name = 1/*true*/;
-    } else if (info->type == fSERV_Dns) {
-        info->u.dns.name = 0/*false*/;
     }
     return info;
 }
@@ -359,7 +407,7 @@ SSERV_Info* SERV_ReadInfoEx(const char* str,
 
 extern SSERV_Info* SERV_ReadInfo(const char* str)
 {
-    return SERV_ReadInfoEx(str, 0);
+    return SERV_ReadInfoEx(str, 0, 0);
 }
 
 
@@ -429,9 +477,8 @@ static char* s_Ncbid_Write(size_t reserve, const USERV_Info* u)
     const char* args = SERV_NCBID_ARGS(info);
     char* str = (char*) malloc(reserve + strlen(args) + 3);
 
-    if (str) {
+    if (str)
         sprintf(str + reserve, "%s", *args ? args : "''");
-    }
     return str;
 }
 
@@ -443,15 +490,16 @@ static SSERV_Info* s_Ncbid_Read(const char** str, size_t add)
 
     if (!(args = strdup(*str)))
         return 0;
-    for (c = args;  *c;  c++) {
+    for (c = args;  *c;  ++c) {
         if (isspace((unsigned char)(*c))) {
             *c++ = '\0';
             while (*c  &&  isspace((unsigned char)(*c)))
-                c++;
+                ++c;
             break;
         }
     }
-    if ((info = SERV_CreateNcbidInfoEx(0, 80, args, add)) != 0)
+    info = SERV_CreateNcbidInfoEx(0, 0, args, add);
+    if (info)
         *str += c - args;
     free(args);
     return info;
@@ -480,22 +528,21 @@ SSERV_Info* SERV_CreateNcbidInfoEx(unsigned int   host,
 
     add += args ? strlen(args) : 0;
     if ((info = (SSERV_Info*) malloc(sizeof(SSERV_Info) + add + 1)) != 0) {
-        info->type         = fSERV_Ncbid;
-        info->host         = host;
-        info->port         = port;
-        info->sful         = 0;
-        info->locl         = s_LocalServerDefault & 0x0F;
-        info->time         = 0;
-        info->coef         = 0.0;
-        info->rate         = 0.0;
-        info->mime_t       = eMIME_T_Undefined;
-        info->mime_s       = eMIME_Undefined;
-        info->mime_e       = eENCOD_None;
-        info->flag         = SERV_DEFAULT_FLAG;
+        info->type   = fSERV_Ncbid;
+        info->host   = host;
+        info->port   = port;
+        info->mode   = 0;
+        info->site   = fSERV_Local;
+        info->time   = 0;
+        info->coef   = 0.0;
+        info->rate   = 0.0;
+        info->mime_t = eMIME_T_Undefined;
+        info->mime_s = eMIME_Undefined;
+        info->mime_e = eENCOD_None;
+        info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
-        info->quorum       = 0;
         info->u.ncbid.args = (TNCBI_Size) sizeof(info->u.ncbid);
-        if (strcmp(args, "''") == 0) /* special case */
+        if (args  &&  strcmp(args, "''"/*special case*/) == 0)
             args = 0;
         strcpy(SERV_NCBID_ARGS(&info->u.ncbid), args ? args : "");
     }
@@ -549,8 +596,8 @@ SSERV_Info* SERV_CreateStandaloneInfoEx(unsigned int   host,
         info->type   = fSERV_Standalone;
         info->host   = host;
         info->port   = port;
-        info->sful   = 0;
-        info->locl   = s_LocalServerDefault & 0x0F;
+        info->mode   = 0;
+        info->site   = fSERV_Local;
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
@@ -559,7 +606,6 @@ SSERV_Info* SERV_CreateStandaloneInfoEx(unsigned int   host,
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
-        info->quorum = 0;
         memset(&info->u.standalone, 0, sizeof(info->u.standalone));
     }
     return info;
@@ -586,7 +632,7 @@ static char* s_Http_Write(size_t reserve, const USERV_Info* u)
     if (str) {
         int n = sprintf(str + reserve, "%s", path);
         if (*args)
-            sprintf(str + reserve + n, "%s%s", &"?"[*args == '#'], args);
+            sprintf(str + reserve + n, "%s%s", &"?"[!(*args != '#')], args);
     }
     return str;
 }
@@ -599,36 +645,37 @@ static SSERV_Info* s_HttpAny_Read(ESERV_Type type,const char** str, size_t add)
 
     if (!**str  ||  !(path = strdup(*str)))
         return 0;
-    for (c = path;  *c;  c++) {
+    for (c = path;  *c;  ++c) {
         if (isspace((unsigned char)(*c))) {
             *c++ = '\0';
             while (*c  &&  isspace((unsigned char)(*c)))
-                c++;
+                ++c;
             break;
         }
     }
     if ((args = strchr(path, '?')) != 0)
         *args++ = '\0';
-    if ((info = SERV_CreateHttpInfoEx(type, 0, 80, path, args, add)) != 0)
+    info = SERV_CreateHttpInfoEx(type, 0, 0, path, args, add);
+    if (info)
         *str += c - path;
     free(path);
     return info;
 }
 
 
-static SSERV_Info *s_HttpGet_Read(const char** str, size_t add)
+static SSERV_Info* s_HttpGet_Read(const char** str, size_t add)
 {
     return s_HttpAny_Read(fSERV_HttpGet, str, add);
 }
 
 
-static SSERV_Info *s_HttpPost_Read(const char** str, size_t add)
+static SSERV_Info* s_HttpPost_Read(const char** str, size_t add)
 {
     return s_HttpAny_Read(fSERV_HttpPost, str, add);
 }
 
 
-static SSERV_Info *s_Http_Read(const char** str, size_t add)
+static SSERV_Info* s_Http_Read(const char** str, size_t add)
 {
     return s_HttpAny_Read(fSERV_Http, str, add);
 }
@@ -662,20 +709,19 @@ SSERV_Info* SERV_CreateHttpInfoEx(ESERV_Type     type,
         return 0;
     add += (path ? strlen(path) : 0) + 1 + (args ? strlen(args) : 0);
     if ((info = (SSERV_Info*) malloc(sizeof(SSERV_Info) + add + 1)) != 0) {
-        info->type        = type;
-        info->host        = host;
-        info->port        = port;
-        info->sful        = 0;
-        info->locl        = s_LocalServerDefault & 0x0F;
-        info->time        = 0;
-        info->coef        = 0.0;
-        info->rate        = 0.0;
-        info->mime_t      = eMIME_T_Undefined;
-        info->mime_s      = eMIME_Undefined;
-        info->mime_e      = eENCOD_None;
-        info->flag        = SERV_DEFAULT_FLAG;
+        info->type   = type;
+        info->host   = host;
+        info->port   = port;
+        info->mode   = 0;
+        info->site   = fSERV_Local;
+        info->time   = 0;
+        info->coef   = 0.0;
+        info->rate   = 0.0;
+        info->mime_t = eMIME_T_Undefined;
+        info->mime_s = eMIME_Undefined;
+        info->mime_e = eENCOD_None;
+        info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
-        info->quorum      = 0;
         info->u.http.path = (TNCBI_Size) sizeof(info->u.http);
         info->u.http.args = (TNCBI_Size) (info->u.http.path +
                                           (path ? strlen(path) : 0) + 1);
@@ -747,8 +793,8 @@ SSERV_Info* SERV_CreateFirewallInfoEx(unsigned int   host,
         info->type   = fSERV_Firewall;
         info->host   = host;
         info->port   = port;
-        info->sful   = 0;
-        info->locl   = s_LocalServerDefault & 0x0F;
+        info->mode   = 0;
+        info->site   = fSERV_Local;
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
@@ -757,7 +803,6 @@ SSERV_Info* SERV_CreateFirewallInfoEx(unsigned int   host,
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
-        info->quorum = 0;
         info->u.firewall.type = type;
     }
     return info;
@@ -808,8 +853,8 @@ SSERV_Info* SERV_CreateDnsInfoEx(unsigned int host, size_t add)
         info->type   = fSERV_Dns;
         info->host   = host;
         info->port   = 0;
-        info->sful   = 0;
-        info->locl   = s_LocalServerDefault & 0x0F;
+        info->mode   = 0;
+        info->site   = fSERV_Local;
         info->time   = 0;
         info->coef   = 0.0;
         info->rate   = 0.0;
@@ -818,7 +863,6 @@ SSERV_Info* SERV_CreateDnsInfoEx(unsigned int host, size_t add)
         info->mime_e = eENCOD_None;
         info->flag   = SERV_DEFAULT_FLAG;
         memset(&info->reserved, 0, sizeof(info->reserved));
-        info->quorum = 0;
         memset(&info->u.dns, 0, sizeof(info->u.dns));
     }
     return info;
@@ -844,7 +888,7 @@ static const char kFIREWALL  [] = "FIREWALL";
 static const char kDNS       [] = "DNS";
 
 
-static const SSERV_Attr s_SERV_Attr[] = {
+static const SSERV_Attr kSERV_Attr[] = {
     { fSERV_Ncbid,
       kNCBID,      sizeof(kNCBID) - 1,
       {s_Ncbid_Read,      s_Ncbid_Write,
@@ -885,9 +929,9 @@ static const SSERV_Attr s_SERV_Attr[] = {
 static const SSERV_Attr* s_GetAttrByType(ESERV_Type type)
 {
     size_t i;
-    for (i = 0;  i < sizeof(s_SERV_Attr)/sizeof(s_SERV_Attr[0]);  i++) {
-        if (s_SERV_Attr[i].type == type)
-            return &s_SERV_Attr[i];
+    for (i = 0;  i < sizeof(kSERV_Attr)/sizeof(kSERV_Attr[0]);  ++i) {
+        if (kSERV_Attr[i].type == type)
+            return &kSERV_Attr[i];
     }
     return 0;
 }
@@ -897,11 +941,11 @@ static const SSERV_Attr* s_GetAttrByTag(const char* tag)
 {
     if (tag) {
         size_t i;
-        for (i = 0;  i < sizeof(s_SERV_Attr)/sizeof(s_SERV_Attr[0]);  i++) {
-            size_t len = s_SERV_Attr[i].tag_len;
-            if (strncasecmp(tag, s_SERV_Attr[i].tag, len) == 0
+        for (i = 0;  i < sizeof(kSERV_Attr)/sizeof(kSERV_Attr[0]);  ++i) {
+            size_t len = kSERV_Attr[i].tag_len;
+            if (strncasecmp(tag, kSERV_Attr[i].tag, len) == 0
                 &&  (!tag[len]  ||  isspace((unsigned char) tag[len])))
-                return &s_SERV_Attr[i];
+                return &kSERV_Attr[i];
         }
     }
     return 0;

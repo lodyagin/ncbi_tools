@@ -1,4 +1,4 @@
-/* $Id: blast_gapalign.h,v 1.71 2010/09/13 12:49:31 kazimird Exp $
+/* $Id: blast_gapalign.h,v 1.73 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,6 +62,9 @@ typedef struct {
 } BlastGapDP;
 
 
+typedef struct JumperGapAlign JumperGapAlign;
+
+
 /** Structure supporting the gapped alignment */
 typedef struct BlastGapAlignStruct {
    Boolean positionBased; /**< Is this PSI-BLAST? */
@@ -76,6 +79,8 @@ typedef struct BlastGapAlignStruct {
    Int4 dp_mem_alloc;  /**< current number of structures allocated */
    BlastScoreBlk* sbp; /**< Pointer to the scoring information block */
    Int4 gap_x_dropoff; /**< X-dropoff parameter to use */
+   Int4 max_mismatches;  /**< Max number of mismatches for jumper */
+   Int4 mismatch_window; /**< Window sie for mismatches for jumper */
    Int4 query_start; /**< query start offset of current alignment */
    Int4 query_stop; /**< query end offseet of current alignment */
    Int4 subject_start;  /**< subject start offset current alignment */
@@ -85,6 +90,8 @@ typedef struct BlastGapAlignStruct {
    Int4 greedy_subject_seed_start;  /**< for greedy alignments, the subject
                                          offset of the gapped start point */
    Int4 score;   /**< Return value: alignment score */
+
+   JumperGapAlign* jumper;   /**< data for jumper alignment */
 } BlastGapAlignStruct;
 
 /** Initializes the BlastGapAlignStruct structure 
@@ -234,6 +241,18 @@ Int4
 BlastGetStartForGappedAlignment (const Uint1* query, const Uint1* subject,
    const BlastScoreBlk* sbp, Uint4 q_start, Uint4 q_length, 
    Uint4 s_start, Uint4 s_length);
+
+/** Function to look for the longest identity match run (up to size HSP_MAX_IDENT_RUN)
+ * in an HSP and return the middle of this.  Used by the gapped-alignment
+ * functions to start the gapped alignments.
+ * @param query The query sequence [in]
+ * @param subject The subject sequence [in]
+ * @param hsp On return, the gapped_start will be filled. [in][out]
+*/
+NCBI_XBLAST_EXPORT
+void 
+BlastGetStartForGappedAlignmentNucl (const Uint1* query, const Uint1* subject,
+   BlastHSP* hsp);
 
 /** Function to look for the highest scoring window (of size HSP_MAX_WINDOW)
  * in an HSP and return the middle of this.  Used by the gapped-alignment

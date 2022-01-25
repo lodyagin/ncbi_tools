@@ -1,4 +1,4 @@
-/* $Id: composition_adjustment.h,v 1.20 2008/08/21 19:55:43 kazimird Exp $
+/* $Id: composition_adjustment.h,v 1.21 2016/05/02 18:04:45 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,8 +43,8 @@ extern "C" {
 
 /* Some characters in the NCBIstdaa alphabet, including ambiguity
    characters, selenocysteine and the stop character. */
-enum { eGapChar = 0, eBchar = 2,  eDchar = 4,  eEchar = 5, eIchar = 9,
-       eLchar = 11,  eNchar = 13, eQchar = 15, eXchar = 21,
+enum { eGapChar = 0, eBchar = 2, eCchar = 3,  eDchar = 4,  eEchar = 5,
+       eIchar = 9, eLchar = 11,  eNchar = 13, eQchar = 15, eXchar = 21,
        eZchar = 23,  eSelenocysteine = 24, eStopChar = 25,
        eOchar = 26,  eJchar = 27};
 

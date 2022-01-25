@@ -1,7 +1,3 @@
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_psi.c,v 1.38 2011/12/14 20:11:33 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -471,7 +467,7 @@ PSIMsaNew(const PSIMsaDimensions* dimensions)
         return NULL;
     }
 
-    retval = (PSIMsa*) malloc(sizeof(PSIMsa));
+    retval = (PSIMsa*) calloc(1, sizeof(PSIMsa));
     if ( !retval ) {
         return PSIMsaFree(retval);
     }

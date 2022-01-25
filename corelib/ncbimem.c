@@ -29,131 +29,14 @@
 *
 * Version Creation Date:   6/4/91
 *
-* $Revision: 6.27 $
+* $Revision: 6.30 $
 *
 * File Description:
 *   	portable memory handlers for Mac, PC, Unix
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: ncbimem.c,v $
-* Revision 6.27  2009/07/08 19:43:43  madden
-* Use MAP_PRIVATE instead of shared for distributed file systems (RT 15656919)
 *
-* Revision 6.26  2004/09/01 21:21:54  kans
-* if Windows but not DLL, handle functions now implemented with direct pointer
-*
-* Revision 6.25  2003/08/11 19:43:27  rsmith
-* Memory Handle functions apply to Mac OS Darwin (OSX) not just to OS_MAC (OS9)
-*
-* Revision 6.24  2002/11/06 21:24:35  ucko
-* Make sure MADV_NORMAL is actually defined before trying to use madvise.
-*
-* Revision 6.23  2002/10/28 20:19:56  kans
-* removed C++ style comment
-*
-* Revision 6.22  2002/07/11 22:14:31  vakatov
-* [LINUX, MMAP_AVAIL]  #define __USE_BSD to get MADV_*** constants
-*
-* Revision 6.21  2002/07/11 19:13:41  ivanov
-* Nlm_MemMapAdvise() -- fix arguments for madvise() on Sun Solaris
-*
-* Revision 6.20  2002/07/10 20:24:44  ivanov
-* Added functions Nlm_MemMapAdvise(), Nlm_MemMapAdvisePtr()
-*
-* Revision 6.19  2002/06/17 15:01:30  ivanov
-* Disable USE_SETHEAPLIMIT on BeOS platform
-*
-* Revision 6.18  2002/02/07 14:41:19  ivanov
-* Added MemSearch()
-*
-* Revision 6.17  2000/03/08 17:55:49  vakatov
-* Use Int8 for the file size.
-* Also, get rid of the WIN16 code, do other cleanup.
-*
-* Revision 6.16  1999/11/05 21:48:48  vakatov
-* [MMAP_AVAIL]  cast to get rid of a warning on the pointer comparison
-*
-* Revision 6.15  1999/08/25 17:40:12  madden
-* ifdef for AIX fcntl.h
-*
-* Revision 6.14  1998/09/25 15:57:31  vakatov
-* + #include <sys/fcntl.h> to provide O_RDONLY
-*
-* Revision 6.13  1998/08/21 16:37:42  vakatov
-* [MMAP_AVAIL]  Nlm_MemMapInit():  use "open()/close()" instead of
-* "fopen()/fclose()" to avoid problems when more than FOPEN_MAX files
-* are opened at the same time
-*
-* Revision 6.12  1998/06/25 19:40:56  vakatov
-* MemMapInit():  "FileLengthEx()" to catch non-existent files
-*
-* Revision 6.11  1998/06/23 16:30:02  vakatov
-* MemMapInit(): return zero-filled structure(not a NULL) if file is empty
-*
-* Revision 6.10  1998/06/11 21:02:27  shavirin
-* Fixed few warnings
-*
-* Revision 6.9  1998/05/28 19:10:45  vakatov
-* Nlm_MemMapInit():  allow one to open a zero-length file
-*
-* Revision 6.8  1998/04/28 14:35:02  vakatov
-* #define MAP_FAILED -- if not defined yet(e.g. for IRIX5)
-*
-* Revision 6.7  1998/04/27 21:40:19  vakatov
-* Nlm_MemMapInit():  check for the mapping error(MAP_FAILED)
-*
-* Revision 6.6  1998/03/26 17:54:10  vakatov
-* Added Nlm_CallocViaMalloc to replace native "calloc" on Solaris
-*
-* Revision 6.5  1998/03/20 17:09:37  vakatov
-* [OS_UNIX] Added Nlm_SetHeapLimit() //NOTE: has no effect on OSF1(?)
-*
-* Revision 6.4  1997/12/12 20:32:37  kans
-* DisposHandle now DisposeHandle on Mac
-*
-* Revision 6.3  1997/11/26 21:26:21  vakatov
-* Fixed errors and warnings issued by C and C++ (GNU and Sun) compilers
-*
-* Revision 6.2  1997/10/29 02:43:48  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 6.1  1997/09/09 23:42:19  vakatov
-* struct Nlm_MemMap::  made "hMap" field be WIN32-only;  removed "hFile" field
-* Nlm_MemMapInit():: use '/' instead of '\' in the file-mapping object
-* name to allow specify(and then -- reuse) "pathed" filenames
-*
-* Revision 5.6  1997/07/22 19:11:34  vakatov
-* Separated Main() from GetArg[svc]() functions;  [WIN_MSWIN] converged
-* console and GUI libraries; [for WIN32-DLL] encapsulated global variables
-*
-* Revision 5.5  1997/01/06 22:28:04  vakatov
-* [WIN16,WIN32][_DEBUG]  Nlm_MemFreeTrace(incl. [_CONSOLE], excl. [!_DEBUG])
-*
-* Revision 5.4  1996/12/13  20:35:32  epstein
-* logic fix for WIN32
-*
-* Revision 5.3  1996/12/13  19:13:01  epstein
-* use MMAP_AVAIL definition instead of cumbersome #defines
-*
-* Revision 5.2  1996/12/03  21:48:33  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
-* Revision 5.1  1996/08/29  20:50:44  madden
-* Added functions for memory-mapping.
-*
-* 2/11/91  Kans        MemMore now frees old memory block
-* 3/12/91  Kans        MemGet, HandGet will not clear if allocation failed
-* 6/4/91   Kans        Macintosh version uses malloc, realloc, free
-* 6/6/91   Schuler     New versions of MemGet, MemMore, MemFree for Windows
-* 8/12/91  Ostell      Protection from NULL ptrs to MemFill, MemCopy
-* 09-19-91 Schuler     Modified for closer resemblance to ANSI functions
-* 09-19-91 Schuler     Changed all functions to _cdecl calling convention
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
-* 05-21-93 Schuler     win_Free checks now for invalid pointers
-* 05-21-93 Schuler     Nlm_MemFreeTrace added for debugging MemFree
-* 06-14-93 Schuler     Added dll_Malloc and dll_Free
-* 12-20-93 Schuler     Converted ERRPOST to ErrPostEx
 * ==========================================================================
 */
 
@@ -279,6 +162,15 @@ typedef enum {
  *   Nlm_MemExtend(ptr, size, oldsize)
  *
  ****************************************************************************/
+ 
+static Nlm_Boolean post_mssg_for_mem_fail = FALSE;
+
+extern void Nlm_SetMemFailFlag (Nlm_Boolean val);
+extern void Nlm_SetMemFailFlag (Nlm_Boolean val)
+
+{
+  post_mssg_for_mem_fail = val;
+}
 
 static void* s_MemAllocator(void *ptr, size_t size,
                             unsigned int flags, EAllocator allocator)
@@ -357,6 +249,9 @@ static void* s_MemAllocator(void *ptr, size_t size,
       memset(x_ptr, 0, size);
   }
   else if (flags & MGET_ERRPOST) {
+    if (post_mssg_for_mem_fail) {
+      Nlm_Message (MSG_OK, "Failed to allocate %ld bytes", (long)size);
+    }
     ErrPostEx(SEV_FATAL, E_NoMemory, 0,
               "Failed to allocate %ld bytes", (long)size);
   }
@@ -556,7 +451,11 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandGet (size_t size, Nlm_Boolean clear_out)
 
 #ifdef OS_MSWIN
 #ifdef _DLL
+#ifdef WIN32
+    hnd = (Nlm_Handle) HeapAlloc(GetProcessHeap(), 0, size);
+#else
     hnd = (Nlm_Handle) GlobalAlloc (GMEM_MOVEABLE, size);
+#endif
 #else
     hnd = (Nlm_Handle) malloc (size);
 #endif
@@ -631,7 +530,11 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandMore (Nlm_Handle hnd, size_t size)
 
 #ifdef OS_MSWIN
 #ifdef _DLL
+#ifdef WIN32
+    hnd2 = (Nlm_Handle) HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, hnd, size);
+#else
     hnd2 = (Nlm_Handle) GlobalReAlloc ((HANDLE) hnd, size, GHND);
+#endif
 #else
     hnd2 = (Nlm_Handle) realloc (hnd, size);
 #endif
@@ -668,7 +571,11 @@ NLM_EXTERN Nlm_Handle LIBCALL  Nlm_HandFree (Nlm_Handle hnd)
 
 #ifdef OS_MSWIN
 #ifdef _DLL
+#ifdef WIN32
+        HeapFree(GetProcessHeap(), 0, (HANDLE) hnd);
+#else
         GlobalFree ((HANDLE) hnd);
+#endif
 #else
         free (hnd);
 #endif
@@ -710,7 +617,11 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_HandLock (Nlm_Handle hnd)
 
 #ifdef OS_MSWIN
 #ifdef _DLL
+#ifdef WIN32
+    ptr = hnd;
+#else
     ptr = GlobalLock ((HANDLE) hnd);
+#endif
 #else
     ptr = hnd;
 #endif
@@ -744,7 +655,11 @@ NLM_EXTERN Nlm_VoidPtr LIBCALL  Nlm_HandUnlock (Nlm_Handle hnd)
 
 #ifdef OS_MSWIN
 #ifdef _DLL
+#ifdef WIN32
+        /* nothing */
+#else
         GlobalUnlock ((HANDLE) hnd);
+#endif
 #else
         /* nothing */
 #endif

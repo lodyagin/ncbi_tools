@@ -1,12 +1,12 @@
 #
-# $Id: freebsd.ncbi.mk,v 1.11 2010/12/06 15:36:54 ucko Exp $
+# $Id: freebsd.ncbi.mk,v 1.14 2015/09/09 19:01:44 ucko Exp $
 #
-# This platform is not supported. Tested on FreeBSD 8.0-RELEASE
+# This platform is not supported. Tested on FreeBSD 10.1-RELEASE
 #
 NCBI_DEFAULT_LCL = fbd
 NCBI_MAKE_SHELL = /bin/sh
 NCBI_AR=ar
-NCBI_CC = gcc -pipe -pthread
+NCBI_CC = cc -pthread
 NCBI_CFLAGS1 = -c
 NCBI_LDFLAGS1 = -O
 NCBI_OPTFLAG = -O
@@ -18,7 +18,7 @@ NCBI_ALTLIB = /home/coremake/ncbi/altlib
 #will work only when you have Motif installed!
 NCBI_VIBFLAG = -I/usr/X11R6/include -L/usr/X11R6/lib -I/usr/local/include -L/usr/local/lib -DWIN_MOTIF
 NCBI_VIBLIBS = -lXm -lXmu -lXp -lXpm -lXt -lX11 -lXext 
-NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -L/usr/local/lib -Wl,-Bstatic -lXm -lXp -lXpm -Wl,-Bdynamic -lXmu -lXt -lX11 -lXext
+NCBI_DISTVIBLIBS = -L/usr/X11R6/lib -L/usr/local/lib -Wl,-Bstatic -lXm -lXp -lXpm -Wl,-Bdynamic -lXft -lfontconfig -lXrender -ljpeg -lpng -lz -lXmu -lXau -lXt -lX11 -lXext
 NCBI_OTHERLIBS = -lm
 NCBI_RANLIB = ranlib
 # Used by makedis.csh

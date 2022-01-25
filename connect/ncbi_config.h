@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONFIG__H
 #define CONNECT___NCBI_CONFIG__H
 
-/* $Id: ncbi_config.h,v 6.18 2011/05/04 16:05:39 lavr Exp $
+/* $Id: ncbi_config.h,v 6.19 2015/09/14 18:50:32 vakatov Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -93,6 +93,9 @@
 #  define NCBI_OS_MSWIN 1
 #  ifdef COMP_METRO
 #    define NCBI_COMPILER_METROWERKS 1
+#  endif
+#  ifdef COMP_MSC
+#    define NCBI_COMPILER_MSVC 1
 #  endif
 #elif defined(OS_MAC)
 #  define NCBI_OS_MAC 1

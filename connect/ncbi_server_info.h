@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SERVER_INFO__H
 #define CONNECT___NCBI_SERVER_INFO__H
 
-/* $Id: ncbi_server_info.h,v 6.46 2012/02/27 15:09:33 kazimird Exp $
+/* $Id: ncbi_server_info.h,v 6.50 2016/03/04 01:49:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,7 +47,7 @@
  * @{
  */
 
-#define SERV_DEFAULT_FLAG   fSERV_Regular
+#define SERV_DEFAULT_FLAG   eSERV_Regular
 #define SERV_MINIMAL_RATE   0.001
 #define SERV_MAXIMAL_RATE   100000.0
 #define SERV_MINIMAL_BONUS  0.01
@@ -72,13 +72,31 @@ typedef enum {
 } ESERV_Type;
 
 
-/* Flags to specify the algorithm for selecting the most preferred
- * server from the set of available servers
+/* Flag to specify an algorithm for selecting the most preferred server from
+ * a set of available servers (NB: binary properties of the enumerated values
+ * may be in use!).  Should have been named ESERV_Algo, but since it's now
+ * adding the "Inter" feature (also misplaced, and to be moved away to the part
+ * of "locl" area, the mis-name is still retained.
  */
 typedef enum {
-    fSERV_Regular = 0,
-    fSERV_Blast   = 1
+    eSERV_Regular      = 0,  /* Server either tied up to lavg or static   */
+    eSERV_Blast        = 1,  /* Server is tied up to an instant host load */
+    eSERV_RegularInter = 2,  /* Regular server shared between LBSM zones  */
+    eSERV_BlastInter   = 3,  /* ... same for Blast-type server            */
 } ESERV_Flag;
+
+
+typedef enum {
+    fSERV_Stateful = 1,
+    fSERV_Secure = 2
+} ESERV_Mode;
+
+
+typedef enum {
+    fSERV_Local = 1,
+    fSERV_Private = 2,
+    fSERV_SiteMask = 0xF0
+} ESERV_Site;
 
 
 /* Verbal representation of a server type (no internal spaces allowed)
@@ -141,17 +159,16 @@ typedef struct {
     ESERV_Type            type; /* type of server                            */
     unsigned int          host; /* host the server running on, network b.o.  */
     unsigned short        port; /* port the server running on, host b.o.     */
-    unsigned char/*bool*/ sful; /* true for stateful-only server (default=no)*/
-    unsigned char/*bool*/ locl; /* true for local (LBSMD-only) server(def=no)*/
+    unsigned char         mode; /* connection mode (stateful, secure, etc)   */
+    unsigned char         site; /* site info (LSB: local, private; MSB: @#)  */
     TNCBI_Time            time; /* relaxation period / expiration time       */
     double                coef; /* bonus coefficient for server run locally  */
     double                rate; /* rate of the server                        */
     EMIME_Type          mime_t; /* type,                                     */
     EMIME_SubType       mime_s; /*     subtype,                              */
     EMIME_Encoding      mime_e; /*         and encoding for content-type     */
-    ESERV_Flag            flag; /* algorithm flag for the server             */
-    unsigned char reserved[14]; /* zeroed reserved area - do not use!        */
-    unsigned short      quorum; /* quorum required to override this entry    */
+    ESERV_Flag            flag; /* rate algorithm for the server (NB: algo!) */
+    unsigned char reserved[16]; /* zeroed reserved area - do not use!        */
     USERV_Info               u; /* server type-specific data/params          */
 } SSERV_Info;
 
@@ -209,7 +226,7 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *
  * Server-specific parameters:
  *
- *    Standalone servers: None
+ *    STANDALONE servers: None
  *                        Servers of this type do not take any arguments.
  *
  *    NCBID servers: Arguments to CGI in addition to specified by application.
@@ -249,18 +266,18 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *           0.0 means not to use the described rate increase at all (default
  *           rate calculation is used, which only slightly increases rates
  *           of locally run servers).
- *           Negative value denotes that locally run server should
- *           be taken in first place, regardless of its rate, if that rate
- *           is larger than percent of expressed by the absolute value
- *           of this coefficient of the average rate coefficient of other
- *           servers for the same service.  That is, -5 instructs to
- *           ignore locally run server if its status is less than 5% of
+ *           Negative value denotes that locally run server should be taken
+ *           in the first place, regardless of its rate, if that rate
+ *           is as large as the percentage (expressed by the absolute value
+ *           of this coefficient) of the average rate coefficient of other
+ *           servers for the same service.  In other words, -5 instructs to
+ *           ignore locally run server only if its rate is less than 5% of
  *           average status of remaining servers for the same service.
  *
  *    Content type indication:
  *       C=type/subtype [no default]
  *           specification of Content-Type (including encoding), which server
- *           accepts. The value of this flag gets added automatically to any
+ *           accepts.  The value of this flag gets added automatically to any
  *           HTTP packet sent to the server by SERVICE connector. However, in
  *           order to communicate, a client still has to know and generate the
  *           data type accepted by the server, i.e. a protocol, which server
@@ -269,8 +286,7 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *           This tag is not allowed in DNS server specifications.
  *
  *    Local server:
- *       L=no           (default for non-DNS specs)
- *       L=yes          (default for DNS specs)
+ *       L={yes|no}     [default is set by SERV_SetLocalServerDefault()]
  *           Local servers are accessible only by local clients (from within
  *           the Intranet) or direct clients of LBSMD, and are not accessible
  *           by the outside users (i.e. via network dispatching).
@@ -283,16 +299,6 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *           this host.  When non-private (default), the server lacks
  *           'P=no' in verbal representation resulted from SERV_WriteInfo().
  *           This tag is not allowed in DNS server specifications.
- *
- *    Quorum:
- *       Q=integer      [0 = default]
- *           specifies how many dynamic service entries have to be defined
- *           by respective hosts in order for this entry to be INACTIVE.
- *           Note that value 0 disables the quorum and the entry becomes
- *           effective immediately.  The quorum flag is to create a standby
- *           configuration, which is to be activated in case of either server
- *           or network malfunction.  Use of this flag is not encouraged.
- *           Only static and non-FIREWALL server specs can have this tag.
  *
  *    Reachability base rate:
  *       R=double       [0.0 = default]
@@ -313,28 +319,33 @@ extern NCBI_XCONNECT_EXPORT char* SERV_WriteInfo
  *           file means "default" and gets replaced with the value 1000.0).
  *           Values less than 0.01 define standby server entries, which are
  *           used by the clients only if there are no working entries with a
- *           higher initial rate available (the final rate, which takes load
- *           into account can make it smaller than 0.01 for such entries).
- *           Standby entries are not governed by the host load but the values
- *           of rates in the descending order (for same-rate entries, an entry
- *           is taken at random).
+ *           higher initial rate available.  Standby entries are not governed
+ *           by the host load but are used up according to the values of rates
+ *           in descending order (for same-rate entries, an entry is taken at
+ *           random).
  *
  *    Stateful server:
  *       S=no           (default)
  *       S=yes
- *           Indication of stateful server, which allows only dedicated socket
- *           (stateful) connections.
+ *           indicates whether a server is stateful, which only allows context
+ *           bearing, dedicated socket (stateful) connections.
  *           This tag is not allowed for HTTP* and DNS servers.
+ *
+ *    Secure connection:
+ *       $=no           (default)
+ *       $=yes
+ *           indicates that connection to the server must be made over a secure
+ *           protocol (HTTPS or SSL).
  *
  *    Validity period:
  *       T=integer      [0 = default]
- *           specifies the time in seconds this server entry is valid
- *           without update. (If equal to 0 then defaulted by
+ *           specifies the time in seconds that this server entry is valid for
+ *           without an update. (If equal to 0 then defaulted by
  *           the LBSM Daemon to some reasonable value.)
  *
  *
  * Note that optional arguments can be omitted along with all preceding
- * optional arguments, that is the following 2 server specifications are
+ * optional arguments; that is, the following 2 server specifications are
  * both valid:
  *
  * NCBID ''

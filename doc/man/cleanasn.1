@@ -1,31 +1,43 @@
-.TH CLEANASN 1 2009-07-31 NCBI "NCBI Tools User's Manual"
+.TH CLEANASN 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 cleanasn \- clean up irregularities in NCBI ASN.1 objects
 .SH SYNOPSIS
 .B cleanasn
 [\|\fB\-\fP\|]
+[\|\fB\-A\fP\ \fIfilename\fP\|]
+[\|\fB\-B\fP\ \fIstr\fP\|]
+[\|\fB\-C\fP\ \fIstr\fP\|]
 [\|\fB\-D\fP\ \fIstr\fP\|]
 [\|\fB\-F\fP\ \fIstr\fP\|]
 [\|\fB\-K\fP\ \fIstr\fP\|]
 [\|\fB\-L\fP\ \fIfilename\fP\|]
 [\|\fB\-M\fP\ \fIfilename\fP\|]
 [\|\fB\-N\fP\ \fIstr\fP\|]
-[\|\fB\-P\fP\|]
+[\|\fB\-O\fP\ \fIstr\fP\|]
+[\|\fB\-P\fP\ \fIstr\fP\|]
 [\|\fB\-Q\fP\ \fIstr\fP\|]
 [\|\fB\-R\fP\|]
+[\|\fB\-S\fP\ \fIstr\fP\|]
 [\|\fB\-T\fP\|]
 [\|\fB\-U\fP\ \fIstr\fP\|]
+[\|\fB\-V\fP\ \fIstr\fP\|]
 [\|\fB\-X\fP\ \fIstr\fP\|]
+[\|\fB\-Z\fP\ \fIstr\fP\|]
 [\|\fB\-a\fP\ \fIstr\fP\|]
 [\|\fB\-b\fP\|]
 [\|\fB\-c\fP\|]
+[\|\fB\-d\fP\ \fIstr\fP\|]
 [\|\fB\-f\fP\ \fIstr\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-j\fP\ \fIfilename\fP\|]
+[\|\fB\-k\fP\ \fIfilename\fP\|]
 [\|\fB\-m\fP\ \fIstr\fP\|]
+[\|\fB\-n\fP\ \fIpath\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIpath\fP\|]
 [\|\fB\-q\fP\ \fIpath\fP\|]
 [\|\fB\-r\fP\ \fIpath\fP\|]
+[\|\fB\-v\fP\ \fIpath\fP\|]
 [\|\fB\-x\fP\ \fIext\fP\|]
 .SH DESCRIPTION
 \fBcleanasn\fP is a utility program to clean up irregularities in NCBI
@@ -36,12 +48,81 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
+\fB\-A\fP\ \fIfilename\fP
+Accession list file
+.TP
+\fB\-B\fP\ \fIstr\fP
+Branch, per the flags in str:
+.RS
+.PD 0
+.IP c
+Has coding regions
+.IP d
+No coding regions
+.IP p
+Passes validation
+.IP q
+Validator errors or rejects
+.IP r
+Only pop/phy/mut/eco/WGS sets
+.IP s
+Exclude pop/phy/mut/eco/WGS sets
+.IP t
+Only nuc\-prot sets
+.IP u
+Exclude nuc\-prot sets
+.IP v
+Only segmented sequences
+.IP w
+Exclude segmented sequences
+.PD
+.RE
+.TP
+\fB\-C\fP\ \fIstr\fP
+Sequence operations, per the flags in str:
+.RS
+.PD 0
+.IP c
+Compress
+.IP d
+Decompress
+.IP v
+Virtual gaps inside segmented sequence
+.IP s
+Convert segmented set to delta sequence
+.IP t
+Non\-NucProt segmented set to delta sequence
+.IP u
+Improved non\-NucProt segmented set to delta sequence
+.IP g
+Raw to delta by assembly gap
+.IP m
+Merge assembly gap features
+.PD
+.RE
+.TP
 \fB\-D\fP\ \fIstr\fP
 Clean up descriptors, per the flags in str:
 .RS
 .PD 0
 .IP t
 Remove Title
+.IP c
+Remove Comment
+.IP n
+Remove Nuc-Prot Set title
+.IP e
+Remove Pop/Phy/Mut/Eco Set title
+.IP m
+Remove mRNA title
+.IP p
+Remove Protein title
+.IP a
+Title to name
+.IP b
+AutoDef title or name
+.IP x
+Prefix title with organism name
 .PD
 .RE
 .TP
@@ -53,8 +134,28 @@ Clean up features, per the flags in str:
 Remove User-objects
 .IP d
 Remove db_xrefs
+.IP e
+Remove \fB/evidence\fP and \fB/inference\fP
+.IP g
+Fuse multi\-interval genes
+.IP i
+Fuse adjacent\-interval imported features
 .IP r
 Remove redundant gene xrefs
+.IP f
+Fuse duplicate features
+.IP s
+Package features on referenced Bioseq
+.IP k
+Package coding-region or parts features
+.IP z
+Delete or update EC numbers
+.IP b
+Set Best coding\-region reading frame
+.IP x
+Retranslate coding regions
+.IP a
+Adjust for missing stop codon
 .PD
 .RE
 .TP
@@ -66,14 +167,38 @@ Perform a general cleanup, per the flags in str:
 BasicSeqEntryCleanup
 .IP p
 C++ BasicCleanup (via an external utility)
+.IP v
+AdvancedSeqEntryCleanup
 .IP s
 SeriousSeqEntryCleanup
+.IP x
+ExtendedSeqEntryCleanup
 .IP g
 GpipeSeqEntryCleanup
 .IP n
-Normalize Descriptor Order
+Normalize descriptor order
 .IP u
 Remove NcbiCleanup User Objects
+.IP c
+Synchronize genetic Codes
+.IP f
+CDS partial from translation
+.IP e
+Impose CDS partials
+.IP d
+Resynchronize CDS partials
+.IP m
+Resynchronize mRNA partials
+.IP t
+Resynchronize Peptide partials
+.IP a
+Adjust consensus splice
+.IP i
+Promote to "worst" Seq-ID
+.IP r
+Reassign local IDs
+.IP l
+Remove locus
 .PD
 .RE
 .TP
@@ -88,34 +213,128 @@ Clean up links, per the flags in str:
 .RS
 .PD 0
 .IP o
-LinkCDSmRNAbyOverlap
+Link CDS mRNA by Overlap
 .IP p
-LinkCDSmRNAbyProduct
+Link CDS mRNA by Product
+.IP l
+Link CDS mRNA by Label and Location
 .IP r
-ReassignFeatureIDs
+Reassign feature IDs
+.IP m
+Merge colliding feature IDs
+.IP f
+Fix missing reciprocal feature IDs
 .IP c
-ClearFeatureIDs
+Clear feature IDs
 .PD
 .RE
 .TP
-\fB\-P\fP
-Publication Lookup
+\fB\-O\fP\ \fIstr\fP
+Missing prot\-ref name
+.TP
+\fB\-P\fP\ \fIstr\fP
+Publication options:
+.RS
+.PD 0
+.IP a
+Remove All publications
+.IP s
+Remove Serial number
+.IP f
+Remove Figure, numbering, and name
+.IP r
+Remove Remark
+.IP u
+Update PMID-only publication
+.IP j
+Lookup ISO Journal title abbreviation
+.IP m
+Merge identical publication features
+.IP #
+Replace unpublished with PMID
+.PD
+.RE
 .TP
 \fB\-Q\fP\ \fIstr\fP
 Report:
 .RS
 .PD 0
+.IP c
+Record count
 .IP r
-ASN.1 BSEC/SSEC Report
+ASN.1 BSEC report
+.IP s
+ASN.1 SSEC report
+.IP n
+NORM vs. SSEC report
+.IP e
+PopPhyMutEco AutoDef report
+.IP o
+Overlap report
+.IP l
+Latitude-longitude country diff
+.IP d
+Log SSEC differences
 .IP g
-GenBank SSEC Diff
+GenBank SSEC diff
+.IP f
+asn2gb/asn2flat diff
+.IP h
+Seg-to-delta GenBank diff
+.IP v
+Validator SSEC diff
 .IP m
-Modernization
+Modernize Gene/RNA/PCR
+.IP u
+Unpublished Pub lookup
+.IP p
+Published Pub lookup
+.IP j
+Unindexed Journal report
+.IP t
+tRNA anticodon report
+.IP w
+Component offset report
+.IP x
+Custom scan
 .PD
 .RE
 .TP
 \fB\-R\fP
 Remote fetching from ID (NCBI sequence databases)
+.TP
+\fB\-S\fP\ \fIstr\fP
+Selective difference filter (capital letters skip)
+.RS
+.PD 0
+.IP s
+SSEC
+.IP b
+BSEC
+.IP A
+Author
+.IP p
+Publication
+.IP l
+Location
+.IP r
+RNA
+.IP q
+Qualifier sort order
+.IP g
+Genbank block
+.IP k
+Package CdRegion or parts features
+.IP m
+Move publication
+.IP o
+Leave duplicate Bioseq publication
+.IP d
+Automatic definition line
+.IP e
+Pop/Phy/Mut/Eco Set definition line
+.PD
+.RE
 .TP
 \fB\-T\fP
 Taxonomy Lookup
@@ -133,14 +352,60 @@ PCR Primers
 .PD
 .RE
 .TP
+\fB\-V\fP\ \fIstr\fP
+Remove features by validator severity:
+.RS
+.PD 0
+.IP r
+Reject
+.IP e
+Error
+.IP w
+Warning
+.IP i
+Info
+.PD
+.RE
+.TP
 \fB\-X\fP\ \fIstr\fP
 Miscellaneous options, per str:
 .RS
 .PD 0
 .IP d
 Automatic definition line
+.IP s
+Automatic definition line with Source qualifiers
+.IP e
+Pop/Phy/Mut/Eco Set definition line
+.IP n
+Instantiate NC title
+.IP m
+Instantiate NM titles
+.IP x
+Special XM titles
+.IP p
+Instantiate Protein titles
+.IP g
+GPipe instantiate titles
+.IP c
+Create mRNAs for coding sequences
+.IP f
+Fix reciprocal protein_id/transcript_id
+.IP v
+Revert preRNA or ncRNA transcript_id
+.IP t
+Parse anticodon from Sequence
+.IP b
+Batch cleanup of multireader output
+.IP z
+Wrap SegSet with NucProt set
+.IP w
+GFF/WGS genome cleanup
 .PD
 .RE
+.TP
+\fB\-Z\fP\ \fIstr\fP
+Remove indicated User-object
 .TP
 \fB\-a\fP\ \fIstr\fP
 ASN.1 type
@@ -157,7 +422,9 @@ Bioseq-set
 .IP m
 Seq-submit
 .IP t
-Batch Processing [String]
+Batch Bioseq-set
+.IP u
+Batch Seq-submit
 .PD
 .RE
 .TP
@@ -167,11 +434,44 @@ Input ASN.1 is Binary
 \fB\-c\fP
 Input ASN.1 is Compressed
 .TP
+\fB\-d\fP\ \fIstr\fP
+Source database
+.RS
+.PD 0
+.IP a
+Any (default)
+.IP g
+GenBank
+.IP e
+EMBL
+.IP d
+DDBJ
+.IP b
+EMBL or DDBJ
+.IP i
+INSD
+.IP r
+RefSeq
+.IP n
+NCBI
+.IP x
+Exclude EMBL/DDBJ
+.IP y
+Exclude gbcon, gbest, gbgss, gbhtg, gbpat, gbsts
+.PD
+.RE
+.TP
 \fB\-f\fP\ \fIstr\fP
 Substring filter
 .TP
 \fB\-i\fP\ \fIfilename\fP
 Single input file (defaults to stdin)
+.TP
+\fB\-j\fP\ \fIfilename\fP
+First filename
+.TP
+\fB\-k\fP\ \fIfilename\fP
+Last filename
 .TP
 \fB\-m\fP\ \fIstr\fP
 Flatfile mode:
@@ -188,6 +488,9 @@ Dump
 .PD
 .RE
 .TP
+\fB\-n\fP\ \fIpath\fP
+\fBasn2flat\fP executable (default is \fB/netopt/ncbi_tools/bin/asn2flat\fP)
+.TP
 \fB\-o\fP\ \fIfilename\fP
 Single output file (defaults to stdout)
 .TP
@@ -195,15 +498,19 @@ Single output file (defaults to stdout)
 Process all matching files in \fIpath\fP
 .TP
 \fB\-q\fP\ \fIpath\fP
-Ffdiff executable (default is /netopt/genbank/subtool/bin/ffdiff)
+\fBffdiff\fP executable (default is \fB/netopt/genbank/subtool/bin/ffdiff\fP)
 .TP
 \fB\-r\fP\ \fIpath\fP
 Path for results
+.TP
+\fB\-v\fP\ \fIpath\fP
+\fBasnval\fP executable (default is \fB/netopt/ncbi_tools/bin/asnval\fP)
 .TP
 \fB\-x\fP\ \fIext\fP
 File selection suffix for use with \fB\-p\fP (defaults to \fB.ent\fP)
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO
-asnval (1),
-sequin (1).
+.BR asndisc (1),
+.BR asnval (1),
+.BR sequin (1).

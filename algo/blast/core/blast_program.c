@@ -1,7 +1,3 @@
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_program.c,v 1.5 2007/01/21 08:45:12 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -77,6 +73,17 @@ Boolean Blast_ProgramIsPhiBlast(EBlastProgramType p)
 Boolean Blast_ProgramIsRpsBlast(EBlastProgramType p)
 { return SAFE_CAST_INT_TO_BOOLEAN(p & PSSM_SUBJECT_MASK); }
 
+Boolean Blast_ProgramIsMapping(EBlastProgramType p)
+{ return SAFE_CAST_INT_TO_BOOLEAN(p & MAPPING_MASK); }
+
+Boolean Blast_QueryIsPattern(EBlastProgramType p)
+{ return SAFE_CAST_INT_TO_BOOLEAN(p & PATTERN_QUERY_MASK); }
+
+Boolean Blast_ProgramIsNucleotide(EBlastProgramType p)
+{ return Blast_QueryIsNucleotide(p) && Blast_SubjectIsNucleotide(p) &&
+        !Blast_QueryIsTranslated(p) && !Blast_SubjectIsTranslated(p);}
+
+
 Boolean Blast_ProgramIsValid(EBlastProgramType p)
 {
     switch (p) {
@@ -91,6 +98,7 @@ Boolean Blast_ProgramIsValid(EBlastProgramType p)
     case eBlastTypeRpsTblastn:
     case eBlastTypePhiBlastp:
     case eBlastTypePhiBlastn:
+    case eBlastTypeMapping:
         return TRUE;
         break;
     default:

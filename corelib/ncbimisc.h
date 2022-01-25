@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.40 $
+* $Revision: 6.45 $
 *
 * File Description:
 *   	prototypes of miscellaneous functions
@@ -91,7 +91,7 @@ NLM_EXTERN const Nlm_Char* Nlm_PlatformName(void);
 
 typedef union dataval {
 	Nlm_VoidPtr ptrvalue;
-	Nlm_Int4 intvalue;
+	Nlm_Int8 intvalue;
 	Nlm_FloatHi realvalue;
 	Nlm_Boolean boolvalue;
 	Nlm_FnPtr	funcvalue;
@@ -102,6 +102,7 @@ typedef struct valnode {
 	Nlm_Uint1 choice;          /* to pick a choice */
 	Nlm_Uint1 extended;        /* extra fields reserved to NCBI allocated in structure */
 	DataVal data;              /* attached data */
+    Nlm_Boolean fatal;
 	struct valnode PNTR next;  /* next in linked list */
 } ValNode, PNTR ValNodePtr;
 
@@ -424,6 +425,10 @@ NLM_EXTERN Nlm_CharPtr DecodeXml (
 );
 
 NLM_EXTERN Nlm_CharPtr EncodeXml (
+  Nlm_CharPtr str
+);
+
+NLM_EXTERN Nlm_CharPtr EncodeXmlEx (
   Nlm_CharPtr str
 );
 

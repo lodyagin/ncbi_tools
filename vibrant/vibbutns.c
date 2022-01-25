@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.17 $
 *
 * File Description: 
 *       Vibrant button functions
@@ -147,6 +147,14 @@ static Nlm_ControlTool Nlm_GetButtonHandle (Nlm_ButtoN b)
 }
 
 
+static Nlm_BtnActnProc buttonAction = NULL;
+
+extern void Nlm_SetButtonAction (Nlm_BtnActnProc actn)
+
+{
+  buttonAction = actn;
+}
+
 #ifdef WIN_MAC
 static Nlm_Int2 Nlm_GetButtonBorder (Nlm_ButtoN b)
 {
@@ -186,6 +194,9 @@ static Nlm_Boolean Nlm_PushClick (Nlm_GraphiC b, Nlm_PoinT pt)
   if (Nlm_CommonPtInRect (b, pt)) {
     if (Nlm_CommonButtonClick (b, pt, kControlButtonPart)) {
       Nlm_DoAction (b);
+      if (buttonAction != NULL) {
+        buttonAction ((Nlm_ButtoN) b);
+      }
     }
     rsult = TRUE;
   }
@@ -201,6 +212,9 @@ static Nlm_Boolean Nlm_DefaultClick (Nlm_GraphiC b, Nlm_PoinT pt)
   if (Nlm_CommonPtInRect (b, pt)) {
     if (Nlm_CommonButtonClick (b, pt, kControlButtonPart)) {
       Nlm_DoAction (b);
+      if (buttonAction != NULL) {
+        buttonAction ((Nlm_ButtoN) b);
+      }
     }
     rsult = TRUE;
   }
@@ -262,6 +276,9 @@ static Nlm_Boolean Nlm_PushCommand (Nlm_GraphiC b)
 
 {
   Nlm_DoAction (b);
+  if (buttonAction != NULL) {
+    buttonAction ((Nlm_ButtoN) b);
+  }
   return TRUE;
 }
 
@@ -269,6 +286,9 @@ static Nlm_Boolean Nlm_DefaultCommand (Nlm_GraphiC b)
 
 {
   Nlm_DoAction (b);
+  if (buttonAction != NULL) {
+    buttonAction ((Nlm_ButtoN) b);
+  }
   return TRUE;
 }
 
@@ -313,12 +333,18 @@ static void Nlm_PushCallback (Nlm_GraphiC b)
 
 {
   Nlm_DoAction (b);
+  if (buttonAction != NULL) {
+    buttonAction ((Nlm_ButtoN) b);
+  }
 }
 
 static void Nlm_DefaultCallback (Nlm_GraphiC b)
 
 {
   Nlm_DoAction (b);
+  if (buttonAction != NULL) {
+    buttonAction ((Nlm_ButtoN) b);
+  }
 }
 
 static void Nlm_CheckCallback (Nlm_GraphiC b)
@@ -1073,7 +1099,7 @@ static void Nlm_NewButton (Nlm_ButtoN b, Nlm_CharPtr title,
   } else if (lpfnOldButtonProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "ButtonProc subclass error");
   }
-  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewButtonProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG_PTR) lpfnNewButtonProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);
@@ -1208,10 +1234,10 @@ static Nlm_ButtoN Nlm_CommonButton (Nlm_GrouP prnt, Nlm_CharPtr title,
         shrinkY = 6;
         break;
       case CHECK_STYLE:
-        wid += 4;
+        wid += 8;
         break;
       case RADIO_STYLE:
-        wid += 4;
+        wid += 8;
         break;
       default:
         wid += 0;

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.88 $
+* $Revision: 6.92 $
 *
 * File Description:
 *       Vibrant main, event loop, and window functions
@@ -7094,7 +7094,7 @@ static void Nlm_ProcessKeyPress (LPMSG lpMsg)
   }
   else if (lpMsg->message == WM_KEYDOWN)
   {
-    sp_ch = Nlm_KeydownToChar (ch);
+    sp_ch = Nlm_KeydownToChar ((Nlm_Uchar)ch);
     if (sp_ch != 0)
     {
       keyAction (sp_ch);    
@@ -7603,8 +7603,10 @@ static void Nlm_MultiLinePrompt (Nlm_GrouP prnt, Nlm_CharPtr str, Nlm_Int2 width
 {
   Nlm_CharPtr    buf;
   Nlm_Char       ch;
+  Nlm_Boolean    go_on;
   Nlm_Int2       k;
   Nlm_Int2       l;
+  Nlm_Int2       num;
   Nlm_GrouP      pg;
 
   if (prnt != NULL && str != NULL) {
@@ -7613,14 +7615,20 @@ static void Nlm_MultiLinePrompt (Nlm_GrouP prnt, Nlm_CharPtr str, Nlm_Int2 width
     Nlm_SetGroupSpacing (pg, 1, 1);
     buf = StringSave (str);
     k = 0;
-    while (Nlm_StringLen (buf + k) > 0) {
+    num = 0;
+    go_on = TRUE;
+    while (Nlm_StringLen (buf + k) > 0 && go_on) {
       l = 0;
       ch = buf [k + l];
       while (ch != '\0' && ch != '\n' && ch != '\r') {
         l++;
         ch = buf [k + l];
       }
-      if (ch == '\n' || ch == '\r') {
+      num++;
+      if (num >= 20) {
+        go_on = FALSE;
+        Nlm_StaticPrompt (pg, "...", width, height, fnt, just);
+      } else if (ch == '\n' || ch == '\r') {
         buf [k + l] = '\0';
         if (Nlm_StringLen (buf + k) > 0) {
           Nlm_StaticPrompt (pg, buf + k, width, height, fnt, just);
@@ -7918,6 +7926,18 @@ static const char* s_ValueStrings[] = {
   for (i = 1;  i < xx_argc;  i++)
     {
       Nlm_CharPtr arg_str = xx_argv[i];
+
+#ifdef WIN_MAC
+      if (Nlm_StringCmp (arg_str, "-NSDocumentRevisionsDebugMode") == 0) {
+        ++i;
+        if (i < xx_argc) {
+          arg_str = xx_argv[i];
+          if (Nlm_StringCmp (arg_str, "YES") == 0) continue;
+          if (Nlm_StringCmp (arg_str, "NO") == 0) continue;
+        }
+      }
+#endif
+
       if (*arg_str != '-') {
         ErrPostEx(SEV_ERROR, 0, 0,
                   "\n%s\n(offending argument #%d was: '%s')",

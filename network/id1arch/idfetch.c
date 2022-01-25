@@ -44,6 +44,8 @@
 #include <ffprint.h>
 #include <ent2api.h>
 
+#include <connect/ncbi_gnutls.h>
+
 static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids);
 static void EntrezQuery(char *query);
 
@@ -178,6 +180,8 @@ Int2 Main()
   /* EntrezSetServer("www.ncbi.nlm.nih.gov", 80,
                   "/entrez/utils/entrez2server.fcgi");
   */
+
+  SOCK_SetupSSL(NcbiSetupGnuTls);
 
   if(myargs[entrezqueryarg].strvalue || myargs[entrezqueryfilearg].strvalue)
   {
@@ -770,6 +774,26 @@ static Entrez2ReplyPtr MyEntrezSynchronousQuery(Entrez2RequestPtr e2rq)
   return NULL;
 }
 
+static Entrez2DocsumListPtr 
+s_GetDocsumList(Int4 num, Int4Ptr uids, const char* db)
+{
+  Entrez2DocsumListPtr  e2dl;
+  Entrez2RequestPtr     e2rq;
+  Entrez2ReplyPtr       e2ry;
+
+  e2rq = EntrezCreateDocSumRequest (db, 0, num, uids, NULL);
+  if (e2rq == NULL) return NULL;
+
+  e2ry = MyEntrezSynchronousQuery (e2rq);
+  e2rq = Entrez2RequestFree(e2rq);
+  e2dl = EntrezExtractDocsumReply (e2ry);
+
+  if (e2dl && (e2dl->count == 0 || e2dl->list == NULL))
+     e2dl = Entrez2DocsumListFree (e2dl);
+
+  return e2dl;
+}
+
 static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
 
 {
@@ -778,19 +802,19 @@ static Boolean ProcessOneDocSum (Int4 num, Int4Ptr uids)
   Entrez2RequestPtr     e2rq;
   Entrez2ReplyPtr       e2ry;
   Entrez2DocsumDataPtr  e2ddp;
-  CharPtr db;
   Boolean result;
 
   if(num == 0)
     return TRUE;
 
-  db = strcmp(myargs[dbarg].strvalue, "n") == 0 ? "Nucleotide" : "Protein";
-  e2rq = EntrezCreateDocSumRequest (db, 0, num, uids, NULL);
-  if (e2rq == NULL) return FALSE;
-
-  e2ry = MyEntrezSynchronousQuery (e2rq);
-  e2rq = Entrez2RequestFree(e2rq);
-  e2dl = EntrezExtractDocsumReply (e2ry);
+  if (strcmp(myargs[dbarg].strvalue, "p") == 0) {
+     e2dl = s_GetDocsumList(num, uids, "Protein");
+  } else { 
+     if ((e2dl = s_GetDocsumList(num, uids, "NucCore")) == NULL) {
+        if ((e2dl = s_GetDocsumList(num, uids, "NucEst")) == NULL)
+           e2dl = s_GetDocsumList(num, uids, "NucGss");
+     }
+  }
 
   if (e2dl == NULL)
     return FALSE;

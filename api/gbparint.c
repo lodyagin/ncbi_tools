@@ -28,6 +28,9 @@
 * Author:  Karl Sirotkin
 *
 * $Log: gbparint.c,v $
+* Revision 6.10  2014/08/01 17:14:01  bazhin
+* Added support for new format (4+2+S+{6|7|8}) WGS scaffolds.
+*
 * Revision 6.9  2009/10/02 19:46:00  kans
 * address clang static analyzer warnings
 *
@@ -1877,6 +1880,9 @@ static int Nlm_gbparse_accprefix(CharPtr acc)
         else
             ret = 1;
     }
+    else if(p[0] != '\0' && p[0] >= '0' && p[0] <= '9' &&
+           p[1] != '\0' && p[1] >= '0' && p[1] <= '9' && p[2] == 'S')
+        ret = 7;
     else if(ret != 1 && ret != 2 && ret != 4)
         ret = 1;
     return(ret);

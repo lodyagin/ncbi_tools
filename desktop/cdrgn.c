@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.132 $
+* $Revision: 6.153 $
 *
 * File Description: 
 *
@@ -147,7 +147,6 @@ typedef struct rnaform {
 typedef struct rnapage {
   DIALOG_MESSAGE_BLOCK
   PopuP         type;
-  ButtoN        pseudo;
   GrouP         nameGrp;
   PrompT        rrnaPrompt;
   PrompT        ornaPrompt;
@@ -156,6 +155,8 @@ typedef struct rnapage {
   PopuP         AAitem;
   DialoG        codons;
   DialoG        anticodon;
+  GrouP         iMet_fMet;
+  GrouP         initiator;
   GrouP         trnaPages [3];
   RnaFormPtr    rfp;
 
@@ -267,7 +268,7 @@ static Pointer RawBioseqPageToBioseqPtr (DialoG d)
   Int4              cnt;
   Int4              cntr;
   Int2              i;
-  Char              ids [32];
+  Char              ids [64];
   Int4              nxt;
   Char              str [102];
   RawBioseqPagePtr  rbpp;
@@ -656,7 +657,7 @@ static Pointer CdRgnPageToCdRegionPtr (DialoG d)
   return (Pointer) crp;
 }
 
-static void PopulateGeneticCodePopup (PopuP gc)
+static void CdrPopulateGeneticCodePopup (PopuP gc)
 
 {
   Int2  i;
@@ -936,107 +937,87 @@ static void ChangeCdRgnPage (VoidPtr data, Int2 newval, Int2 oldval)
   }
 }
 
-typedef struct protgatherlist {
-  ObjMgrPtr  omp;
-  SeqLocPtr  slp;
-  Int4       min;
-  CharPtr    protName;
-  CharPtr    protDesc;
-  Uint2      entityID;
-  Uint4      itemID;
-  Uint2      itemtype;
-  Boolean    protFound;
-} ProtGatherList, PNTR ProtGatherPtr;
 
-static Boolean ProtMatchFunc (GatherContextPtr gcp)
-
+static void FormFromProtRef(CdRgnFormPtr cfp, ProtRefPtr prp)
 {
-  Int4           diff;
-  ObjMgrTypePtr  omtp;
-  ProtGatherPtr  pgp;
-  ProtRefPtr     prp;
-  SeqFeatPtr     sfp;
-  Char           thislabel [41];
-  ValNodePtr     vnp;
-
-  if (gcp == NULL) return TRUE;
-
-  pgp = (ProtGatherPtr) gcp->userdata;
-  if (pgp == NULL) return TRUE;
-
-  thislabel [0] = '\0';
-
-  if (gcp->thistype == OBJ_SEQFEAT) {
-    sfp = (SeqFeatPtr) gcp->thisitem;
-    if (sfp != NULL && sfp->data.choice == SEQFEAT_PROT && sfp->data.value.ptrvalue != NULL) {
-      omtp = ObjMgrTypeFind (pgp->omp, gcp->thistype, NULL, NULL);
-      if (omtp == NULL) {
-        return TRUE;
-      }
-      if (omtp->labelfunc != NULL) {
-        (*(omtp->labelfunc)) (gcp->thisitem, thislabel, 40, OM_LABEL_CONTENT);
-      }
-      if (thislabel [0] != '\0') {
-        diff = SeqLocAinB (sfp->location, pgp->slp);
-        if (diff >= 0) {
-          if (diff < pgp->min) {
-            pgp->min = diff;
-            prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-            pgp->protName = MemFree (pgp->protName);
-            pgp->protDesc = MemFree (pgp->protDesc);
-            vnp = prp->name;
-            if (vnp != NULL) {
-              pgp->protName = StringSave ((CharPtr) vnp->data.ptrvalue);
-            }
-            pgp->protDesc = StringSave (prp->desc);
-            pgp->entityID = gcp->entityID;
-            pgp->itemID = gcp->itemID;
-            pgp->itemtype = gcp->thistype;
-            pgp->protFound = TRUE;
-          }
-        }
-      }
+    CharPtr name = "";
+  
+    if (cfp == NULL) {
+        return;
     }
-  }
-
-  return TRUE;
+    if (prp == NULL) {
+        SafeSetTitle(cfp->protNameText, "");
+        SafeSetTitle(cfp->protDescText, "");
+    } else {
+        if (prp->name != NULL) {
+          name = prp->name->data.ptrvalue;
+        }
+        SafeSetTitle(cfp->protNameText, name);
+        SafeSetTitle(cfp->protDescText, prp->desc);
+    }
 }
 
-static void SetBestProteinFeature (CdRgnFormPtr cfp, SeqLocPtr product)
+
+static void FormToProtRef(CdRgnFormPtr cfp, ProtRefPtr prp)
+{
+    if (cfp == NULL || prp == NULL) {
+        return;
+    }
+    if (TextHasNoText(cfp->protNameText)) {
+        prp->name = ValNodeFreeData(prp->name);
+    } else {
+        if (prp->name == NULL) {
+            ValNodeAddPointer(&prp->name, 0, SaveStringFromText(cfp->protNameText));
+        } else {
+            prp->name = ValNodeFreeData(prp->name);
+            ValNodeAddPointer(&prp->name, 0, SaveStringFromText(cfp->protNameText));
+        }
+    }
+    prp->desc = MemFree(prp->desc);
+    if (!TextHasNoText(cfp->protDescText)) {
+        prp->desc = SaveStringFromText(cfp->protDescText);
+    }
+}
+
+
+static SeqFeatPtr GetBestProtFeat(SeqLocPtr product)
+{
+    BioseqPtr  prot_bsp;
+    SeqFeatPtr prot_feat = NULL;
+    SeqMgrFeatContext fcontext;
+
+    if (product != NULL) {
+        prot_bsp = BioseqFindFromSeqLoc(product);
+        if (prot_bsp != NULL) {
+            prot_feat = SeqMgrGetNextFeature(prot_bsp, NULL, 0, FEATDEF_PROT, &fcontext);
+        }
+    }
+    return prot_feat;
+}
+
+
+static void SetBestProteinFeature(CdRgnFormPtr cfp, SeqLocPtr product)
 
 {
-  GatherScope     gs;
-  ProtGatherList  pgl;
+    SeqFeatPtr      prot_feat;
+    ProtRefPtr      prp;
 
-  if (cfp == NULL) return;
-  pgl.protName = NULL;
-  pgl.protDesc = NULL;
-  pgl.entityID = 0;
-  pgl.itemID = 0;
-  pgl.itemtype = 0;
-  pgl.protFound = FALSE;
-  if (product != NULL) {
-    pgl.omp = ObjMgrGet ();
-    pgl.slp = product;
-    pgl.min = INT4_MAX;
-    MemSet ((Pointer) (&gs), 0, sizeof (GatherScope));
-    gs.seglevels = 1;
-    gs.get_feats_location = TRUE;
-    MemSet((Pointer)(gs.ignore), (int)(TRUE), (size_t)(OBJ_MAX * sizeof(Boolean)));
-    gs.ignore[OBJ_BIOSEQ] = FALSE;
-    gs.ignore[OBJ_BIOSEQ_SEG] = FALSE;
-    gs.ignore[OBJ_SEQFEAT] = FALSE;
-    gs.ignore[OBJ_SEQANNOT] = FALSE;
-    GatherEntity (cfp->input_entityID, (Pointer) &pgl, ProtMatchFunc, &gs);
-  }
-  SafeSetTitle (cfp->protNameText, pgl.protName);
-  SafeSetTitle (cfp->protDescText, pgl.protDesc);
-  cfp->protEntityID = pgl.entityID;
-  cfp->protItemID = pgl.itemID;
-  cfp->protItemtype = pgl.itemtype;
-  cfp->protFound = pgl.protFound;
-  MemFree (pgl.protName);
-  MemFree (pgl.protDesc);
+    if (cfp == NULL) return;
+
+    prot_feat = GetBestProtFeat(product);
+    if (prot_feat == NULL){
+        FormFromProtRef(cfp, NULL);
+        cfp->protEntityID = 0;
+        cfp->protItemID = 0;
+        cfp->protItemtype = 0;
+        cfp->protFound = FALSE;
+    } else {
+        FormFromProtRef(cfp, (ProtRefPtr)prot_feat->data.value.ptrvalue);
+        cfp->protEntityID = prot_feat->idx.entityID;
+        cfp->protItemID = prot_feat->idx.itemID;
+        cfp->protItemtype = prot_feat->idx.itemtype;
+        cfp->protFound = TRUE;
+    }
 }
 
 static void SetProteinLengthDisplay (PrompT p, Int4 length)
@@ -1088,13 +1069,7 @@ static void CdRegionPtrToForm (ForM f, Pointer data)
         }
         if (xref != NULL) {
           prp = (ProtRefPtr) xref->data.value.ptrvalue;
-          if (prp != NULL) {
-            vnp = prp->name;
-            if (vnp != NULL) {
-              SafeSetTitle (cfp->protNameText, (CharPtr) vnp->data.ptrvalue);
-            }
-            SafeSetTitle (cfp->protDescText, prp->desc);
-          }
+          FormFromProtRef(cfp, prp);
         }
       }
       if (sfp->product != NULL) {
@@ -2799,7 +2774,7 @@ static DialoG CreateCdRgnDialog (GrouP h, CharPtr title, Int2 genCode,
     StaticPrompt (y, "Genetic Code", 0, popupMenuHeight, programFont, 'l');
     StaticPrompt (y, "Reading Frame", 0, popupMenuHeight, programFont, 'l');
     cpp->geneticCode = PopupList (y, TRUE, NULL);
-    PopulateGeneticCodePopup (cpp->geneticCode);
+    CdrPopulateGeneticCodePopup (cpp->geneticCode);
     SetValue (cpp->geneticCode, gcIdToIndex [genCode]);
     v = HiddenGroup (y, 3, 0, NULL);
     cpp->frame = PopupList (v, TRUE, NULL);
@@ -3569,7 +3544,7 @@ static Boolean LabelChangeOnly (CdRgnFormPtr cfp)
   sfp->dbxref = DialogToPointer (cfp->dbxrefs);
 
   CleanupEvidenceGBQuals (&(sfp->qual));
-  VisStringDialogToGbquals (sfp, cfp->experiment, "experiment");
+  ExperimentDialogToGbquals (sfp, cfp->experiment);
   InferenceDialogToGBQuals (cfp->inference, sfp, TRUE);
 
   FixSpecialCharactersForObject (OBJ_SEQFEAT, sfp, "You may not include special characters in the text.\nIf you do not choose replacement characters, these special characters will be replaced with '#'.", TRUE, NULL);
@@ -3630,6 +3605,45 @@ static Boolean LabelChangeOnly (CdRgnFormPtr cfp)
 }
 
 
+static Boolean Cdr_IsPseudo(CdRgnFormPtr cfp)
+{
+    Boolean pseudo = FALSE;
+    FeatureFormPtr ffp;
+    GBQualPtr      qual;
+    GBQualPtr      gbq;
+    CharPtr        str;
+
+    if (cfp == NULL) {
+        return FALSE;
+    }
+
+    if (GetStatus(cfp->pseudo))
+    {
+        pseudo = TRUE;
+    } else
+    {
+        qual = (GBQualPtr)DialogToPointer(cfp->gbquals);
+        gbq = qual;
+        while (gbq != NULL) {
+            if (StringICmp(gbq->qual, "pseudo") == 0) {
+                pseudo = TRUE;
+            }
+            gbq = gbq->next;
+        }
+        GBQualFree(qual);
+        if (!pseudo) {
+            ffp = (FeatureFormPtr)GetObjectExtra(cfp->form);
+            str = GetEnumPopupByName(ffp->pseudogene, ffp->pseudoalist);
+            if (!StringHasNoText(str)) {
+                pseudo = TRUE;
+            }
+            str = MemFree(str);
+        }
+    }
+    return pseudo;
+}
+
+
 static void CdRgnFormAcceptButtonProc (ButtoN b)
 
 {
@@ -3639,11 +3653,9 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
   Char           badInfQual [256];
   BioseqPtr      bsp;
   CdRgnFormPtr   cfp;
-  GBQualPtr      gbq;
   SeqEntryPtr    old;
   OMProcControl  ompc;
   Boolean        pseudo;
-  GBQualPtr      qual;
   SeqEntryPtr    sep;
   SeqIdPtr       sip;
   SeqLocPtr      slp = NULL;
@@ -3745,23 +3757,7 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
         DoTranslateProtein (cfp);
       }
       
-      pseudo = FALSE;
-      if (GetStatus (cfp->pseudo))
-      {
-        pseudo = TRUE;
-      }
-      else
-      {
-        qual = (GBQualPtr) DialogToPointer (cfp->gbquals);
-        gbq = qual;
-        while (gbq != NULL) {
-          if (StringICmp (gbq->qual, "pseudo") == 0) {
-            pseudo = TRUE;
-          }
-          gbq = gbq->next;
-        }
-        GBQualFree (qual);
-      }
+      pseudo = Cdr_IsPseudo(cfp);
       
       if (pseudo)
       {
@@ -3780,14 +3776,8 @@ static void CdRgnFormAcceptButtonProc (ButtoN b)
         /* do not create new product */
         PointerToDialog (cfp->product, NULL);
         PointerToDialog (cfp->protseq, NULL);
-        
-        /* if the protein name is set, move it to a note */
-        GetTitle (cfp->protNameText, str, sizeof (str) - 1);
-        if (! StringHasNoText (str))
-        {
-          SetComment (str, w);
-          SetTitle (cfp->protNameText, "");
-        }
+        cfp->protXrefName = cfp->protNameText;
+        cfp->protXrefDesc = cfp->protDescText;
       }
       else
       {
@@ -4148,6 +4138,7 @@ extern void CdRgnFeatFormActnProc (ForM f)
   CdRgnFormPtr  cfp;
   Char          desc [128];
   ValNodePtr    descr;
+  DeltaSeqPtr   dsp, dspnext;
   GBQualPtr     gbq;
   MolInfoPtr    mip;
   Char          name [128];
@@ -4240,6 +4231,17 @@ extern void CdRgnFeatFormActnProc (ForM f)
             bsp = (BioseqPtr) DialogToPointer (cfp->protseq);
             if (bsp != NULL) {
               seq_data_type = target->seq_data_type;
+              if (target->repr == Seq_repr_delta && target->seq_ext_type == 4) {
+                dsp = (DeltaSeqPtr)(target->seq_ext);
+                while (dsp != NULL) {
+                  dspnext = dsp->next;
+                  DeltaSeqFree(dsp);
+                  dsp = dspnext;
+                }
+                target->seq_ext = NULL;
+                target->seq_ext_type = 0;
+              }
+              target->repr = Seq_repr_raw;
               target->length = bsp->length;
               target->seq_data = SeqDataFree (target->seq_data, target->seq_data_type);
               target->seq_data = bsp->seq_data;
@@ -4273,6 +4275,17 @@ extern void CdRgnFeatFormActnProc (ForM f)
           bsp = (BioseqPtr) DialogToPointer (cfp->protseq);
           if (bsp != NULL) {
             seq_data_type = target->seq_data_type;
+            if (target->repr == Seq_repr_delta && target->seq_ext_type == 4) {
+              dsp = (DeltaSeqPtr)(target->seq_ext);
+              while (dsp != NULL) {
+                dspnext = dsp->next;
+                DeltaSeqFree(dsp);
+                dsp = dspnext;
+              }
+              target->seq_ext = NULL;
+              target->seq_ext_type = 0;
+            }
+            target->repr = Seq_repr_raw;
             target->length = bsp->length;
             target->seq_data = SeqDataFree (target->seq_data, target->seq_data_type);
             target->seq_data = bsp->seq_data;
@@ -4701,23 +4714,6 @@ static void GeneRefPtrToGenePage (DialoG d, Pointer data)
   }
 }
 
-static Boolean IsAllDigits (CharPtr str)
-{
-  CharPtr cp;
-
-  if (StringHasNoText (str)) return FALSE;
-
-  cp = str;
-  while (*cp != 0 && isdigit (*cp)) {
-    cp++;
-  }
-  if (*cp == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
 static Pointer GenePageToGeneRefPtr (DialoG d)
 
 {
@@ -4728,7 +4724,6 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
   GenePagePtr          gpp;
   GeneNomenclaturePtr  gnp;
   GeneRefPtr           grp;
-  long int             val;
 
   grp = NULL;
   gpp = (GenePagePtr) GetObjectExtra (d);
@@ -4754,12 +4749,7 @@ static Pointer GenePageToGeneRefPtr (DialoG d)
           if (dbt != NULL) {
             oip = ObjectIdNew ();
             if (oip != NULL) {
-              if (IsAllDigits (ds)) {
-                sscanf (ds, "%ld", &val);
-                oip->id = val;
-              } else {
-                oip->str = StringSave (ds);
-              }
+              SetObjectIdString(oip, ds, ExistingTextOption_replace_old);
               dbt->db = StringSave (db);
               dbt->tag = oip;
               gnp->source = dbt;
@@ -4883,7 +4873,7 @@ static DialoG CreateGeneDialog (GrouP h, CharPtr title, GeneRefPtr grp, GeneForm
     if (grp != NULL && grp->db != NULL) {
       showXrefs = TRUE;
     }
-    if (gfp != NULL && GeneIsInRefSeq (gfp->sep)) {
+    if (gfp != NULL && (GeneIsInRefSeq (gfp->sep) || (grp != NULL && grp->formal_name != NULL))) {
       showNomen = TRUE;
     }
 
@@ -5688,6 +5678,7 @@ static DialoG CreateProtDialog (GrouP h, CharPtr title, ProtRefPtr prp, SeqFeatP
     PopupItem (ppp->processed, "Mature");
     PopupItem (ppp->processed, "Signal peptide");
     PopupItem (ppp->processed, "Transit peptide");
+    PopupItem (ppp->processed, "Propeptide");
     SetValue (ppp->processed, 1);
 
     pfp->product = CreateProteinOrMRNAProductDialog (ppp->protGrp [0], NULL, "Processing Product", FALSE,
@@ -6218,7 +6209,7 @@ extern Int2 LIBCALLBACK ProtGenFunc (Pointer data)
       if (ppp != NULL) {
         if (subtype == FEATDEF_PROT) {
           SetValue (ppp->processed, 1);
-        } else if (subtype >= FEATDEF_preprotein && subtype <= FEATDEF_transit_peptide_aa) {
+        } else if (subtype >= FEATDEF_preprotein && subtype <= FEATDEF_propeptide) {
           SetValue (ppp->processed, subtype - FEATDEF_preprotein + 2);
         } else {
           SetValue (ppp->processed, 1);
@@ -6423,7 +6414,6 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
   if (rrp != NULL) {
 
     SetEnumPopup (rpp->type, rna_type_alist, rrp->type);
-    SafeSetStatus (rpp->pseudo, rrp->pseudo);
     switch (rrp->type) {
       case 0 :
         SafeHide (rpp->trnaGrp);
@@ -6441,6 +6431,7 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
         SafeHide (rpp->ncrnaGrp);
         SafeHide (rpp->tmrnaGrp);
         SafeSetValue (rpp->AAitem, 1);
+        SafeHide (rpp->iMet_fMet);
         if (rrp->ext.choice == 2) {
           trna = rrp->ext.value.ptrvalue;
           if (trna != NULL) {
@@ -6487,9 +6478,14 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
               if (aa != '*') {
                 i = aa - (64 + shift);
               } else {
-                i = 25;
+                i = 27;
               }
               SetValue (rpp->AAitem, (Int2) i + 1);
+              if (aa == 77) {
+                SafeShow (rpp->iMet_fMet);
+              } else {
+                SafeHide (rpp->iMet_fMet);
+              }
             }
             head = NULL;
             for (j = 0; j < 6; j++) {
@@ -6615,12 +6611,12 @@ static void RnaRefPtrToRnaPage (DialoG d, Pointer data)
     }
   } else {
     SetEnumPopup (rpp->type, rna_type_alist, (UIEnum) 0);
-    SafeSetStatus (rpp->pseudo, FALSE);
     SafeSetTitle (rpp->name, "");
     SafeHide (rpp->nameGrp);
     SafeHide (rpp->rrnaPrompt);
     SafeHide (rpp->ornaPrompt);
     SafeSetValue (rpp->AAitem, 0);
+    SafeHide (rpp->iMet_fMet);
     SafeHide (rpp->trnaGrp);
     SafeHide (rpp->ncrnaGrp);
     SafeHide (rpp->tmrnaGrp);
@@ -6657,7 +6653,6 @@ static Pointer RnaPageToRnaRefPtr (DialoG d)
       if (GetEnumPopup (rpp->type, rna_type_alist, &val)) {
         rrp->type = (Uint1) val;
       }
-      rrp->pseudo = GetStatus (rpp->pseudo);
       switch (val) {
         case 3 :
           rrp->ext.choice = 2;
@@ -7063,6 +7058,12 @@ static void PopulateAAPopup (PopuP AAitem)
     sprintf (item, "%c    %s", ch, str);
     PopupItem (AAitem, item);
   }
+  /* handle stop codon */
+  ch = GetSymbolForResidue (sctp, 42);
+  str = (CharPtr) GetNameForResidue (sctp, 42);
+  sprintf (item, "%c    %s", ch, str);
+  PopupItem (AAitem, item);
+
   SetValue (AAitem, 1); 
 }
 
@@ -7195,7 +7196,23 @@ static void ChangeRNAType (PopuP p)
   }
 }
 
+static void ChangeAAItem (PopuP p)
 
+{
+  Int2        i;
+  RnaPagePtr  rpp;
+
+  rpp = (RnaPagePtr) GetObjectExtra (p);
+  if (rpp == NULL) return;
+
+  i = GetValue (rpp->AAitem);
+
+  if (i == 14) {
+    SafeShow (rpp->iMet_fMet);
+  } else {
+    SafeHide (rpp->iMet_fMet);
+  }
+}
 
 
 static DialoG CreateRnaDialog (GrouP h, CharPtr title,
@@ -7211,17 +7228,17 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
   GrouP       p;
   GrouP       q;
   RnaPagePtr  rpp;
-  RnaRefPtr   rrp;
   GrouP       s;
-  Boolean     showpseudo;
   PrompT      t;
   DialoG      tbs;
   GrouP       x;
+  GrouP       y;
   Uint1       rna_type;
   Uint2       entityID;
 
   p = HiddenGroup (h, 1, 0, NULL);
   SetGroupSpacing (p, 10, 10);
+  indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
 
   rpp = (RnaPagePtr) MemNew (sizeof (RnaPage));
   if (rpp != NULL) {
@@ -7254,21 +7271,6 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
     StaticPrompt (m, "Changing RNA type will recreate the window.",
                         0, 0, programFont, 'c');
 
-    showpseudo = FALSE;
-    if (sfp != NULL && sfp->data.choice == SEQFEAT_RNA) {
-      rrp = (RnaRefPtr) sfp->data.value.ptrvalue;
-      if (rrp != NULL && rrp->pseudo) {
-        showpseudo = TRUE;
-      }
-    }
-    indexerVersion = (Boolean) (GetAppProperty ("InternalNcbiSequin") != NULL);
-    if (indexerVersion) {
-      showpseudo = TRUE;
-    }
-    if (showpseudo) {
-      rpp->pseudo = CheckBox (m, "PseudoRNA", NULL);
-    }
-
     g = HiddenGroup (m, 0, 0, NULL);
 
     rpp->nameGrp = HiddenGroup (g, -1, 0, NULL);
@@ -7287,10 +7289,22 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
                             PROGRAM_FOLDER_TAB,
                             ChangetRNASubPage, (Pointer) rpp);
     k = HiddenGroup (rpp->trnaGrp, 0, 0, NULL);
-    rpp->trnaPages [0] = HiddenGroup (k, -2, 0, NULL);
-    StaticPrompt (rpp->trnaPages [0], "Amino Acid", 0, popupMenuHeight, programFont, 'l');
-    rpp->AAitem = PopupList (rpp->trnaPages [0], TRUE, NULL);
+    rpp->trnaPages [0] = HiddenGroup (k, -1, 0, NULL);
+    SetGroupSpacing (rpp->trnaPages [0], 10, 10);
+    y = HiddenGroup (rpp->trnaPages [0], -2, 0, NULL);
+    StaticPrompt (y, "Amino Acid", 0, popupMenuHeight, programFont, 'l');
+    rpp->AAitem = PopupList (rpp->trnaPages [0], TRUE, ChangeAAItem);
+    SetObjectExtra (rpp->AAitem, rpp, NULL);
     PopulateAAPopup (rpp->AAitem);
+    rpp->iMet_fMet = HiddenGroup (rpp->trnaPages [0], -2, 0, NULL);
+    StaticPrompt (rpp->iMet_fMet, "Initiator?", 0, popupMenuHeight, programFont, 'l');
+    rpp->initiator = HiddenGroup (rpp->iMet_fMet, 4, 0, NULL);
+    RadioButton (rpp->initiator, "No");
+    RadioButton (rpp->initiator, "fMet");
+    RadioButton (rpp->initiator, "iMet");
+    SetValue (rpp->initiator, 1);
+    Hide (rpp->iMet_fMet);
+
     rpp->trnaPages [1] = HiddenGroup (k, -1, 0, NULL);
     t = StaticPrompt (rpp->trnaPages [1], "Recognized Codons", 0, 0, programFont, 'c');
     rpp->codons = CreateVisibleStringDialog (rpp->trnaPages [1], 3, -1, 4);
@@ -7307,7 +7321,7 @@ static DialoG CreateRnaDialog (GrouP h, CharPtr title,
                   (HANDLE) rpp->trnaPages [0], (HANDLE) rpp->trnaPages [1],
                   (HANDLE) rpp->trnaPages [2], NULL);
     AlignObjects (ALIGN_CENTER, (HANDLE) f, (HANDLE) rpp->nameGrp,
-                  (HANDLE) rpp->trnaGrp,  (HANDLE) rpp->pseudo,NULL);
+                  (HANDLE) rpp->trnaGrp, NULL);
     Hide (rpp->ncrnaGrp);
 
     rpp->ncrnaGrp = HiddenGroup (g, 2, 0, NULL);
@@ -7536,7 +7550,11 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
 
 {
   SeqEntryPtr   oldsep;
+  GBQualPtr     gbq;
+  Boolean       is_fMet = FALSE;
+  Boolean       is_iMet = FALSE;
   RnaFormPtr    rfp;
+  RnaPagePtr    rpp;
   SeqEntryPtr   sep;
   SeqFeatPtr    sfp;
   Int4          val;
@@ -7563,6 +7581,21 @@ static void RnaRefPtrToForm (ForM f, Pointer data)
       }
       SeqFeatPtrToCommon ((FeatureFormPtr) rfp, sfp);
       PointerToDialog (rfp->product, sfp->product);
+
+      rpp = (RnaPagePtr) GetObjectExtra (rfp->data);
+      if (rpp != NULL) {
+        for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+          if (StringICmp (gbq->qual, "product") != 0) continue;
+          if (StringICmp (gbq->val, "tRNA-fMet") == 0) {
+            SetValue (rpp->initiator, 2);
+            break;
+          }
+          if (StringICmp (gbq->val, "tRNA-iMet") == 0) {
+            SetValue (rpp->initiator, 3);
+            break;
+          }
+        }
+      }
     }
     SeqEntrySetScope (oldsep);
   }
@@ -7712,6 +7745,92 @@ extern ForM CreateRnaForm (Int2 left, Int2 top, CharPtr title,
   return (ForM) w;
 }
 
+static void SetGBQualProduct (SeqFeatPtr sfp, CharPtr str)
+
+{
+  GBQualPtr       gbq;
+  GBQualPtr       next;
+  GBQualPtr PNTR  prev;
+  Boolean         unlink;
+
+  if (sfp == NULL) return;
+
+  gbq = sfp->qual;
+  prev = (GBQualPtr PNTR) &(sfp->qual);
+  while (gbq != NULL) {
+    next = gbq->next;
+    unlink = FALSE;
+
+    if (StringCmp (gbq->qual, "product") == 0) {
+      if (StringICmp (gbq->val, "tRNA-fMet") == 0 || StringICmp (gbq->val, "tRNA-iMet") == 0) {
+        unlink = TRUE;
+      }
+    }
+
+    if (unlink) {
+      *(prev) = gbq->next;
+      gbq->next = NULL;
+      GBQualFree (gbq);
+    } else {
+      prev = (GBQualPtr PNTR) &(gbq->next);
+    }
+    gbq = next;
+  }
+
+  if (StringHasNoText (str)) return;
+
+  gbq = GBQualNew ();
+  if (gbq == NULL) return;
+  gbq->qual = StringSave ("product");
+  gbq->val = StringSaveNoNull (str);
+
+  gbq->next = sfp->qual;
+  sfp->qual = gbq;
+}
+
+static void RnaFeatFormActnProc (ForM f)
+
+{
+  Int2        aminoacid;
+  Int2        initiator;
+  Int2        rnachoice;
+  RnaFormPtr  rfp;
+  RnaPagePtr  rpp;
+  SeqFeatPtr  sfp;
+
+  rfp = (RnaFormPtr) GetObjectExtra (f);
+  if (rfp == NULL) return;
+  rpp = (RnaPagePtr) GetObjectExtra (rfp->data);
+  if (rpp == NULL) return;
+
+  rnachoice = GetValue (rpp->type);
+  aminoacid = GetValue (rpp->AAitem);
+  initiator = GetValue (rpp->initiator);
+
+  if (FeatFormReplaceWithoutUpdateProc (f)) {
+    GetRidOfEmptyFeatsDescStrings (rfp->input_entityID, NULL);
+    if (GetAppProperty ("InternalNcbiSequin") != NULL) {
+      ExtendGeneFeatIfOnMRNA (rfp->input_entityID, NULL);
+    }
+
+    sfp = SeqMgrGetDesiredFeature (rfp->input_entityID, NULL,
+                                   rfp->input_itemID, 0, NULL, NULL);
+    if (sfp != NULL && rnachoice == 4) {
+      if (aminoacid != 14 || initiator < 2) {
+        SetGBQualProduct (sfp, NULL);
+      } else if (initiator == 2) {
+        SetGBQualProduct (sfp, "tRNA-fMet");
+      } else if (initiator == 3) {
+        SetGBQualProduct (sfp, "tRNA-iMet");
+      }
+    }
+
+    ObjMgrSetDirtyFlag (rfp->input_entityID, TRUE);
+    ObjMgrSendMsg (OM_MSG_UPDATE, rfp->input_entityID,
+                   rfp->input_itemID, rfp->input_itemtype);
+  }
+}
+
 extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
 
 {
@@ -7791,7 +7910,7 @@ extern Int2 LIBCALLBACK RnaGenFunc (Pointer data)
   sep = GetTopSeqEntryForEntityID (ompcp->input_entityID);
   ModernizeRNAFields (sfp);
   w = (WindoW) CreateRnaForm (-50, -33, title, sfp, sep,
-                              subtype, StdFeatFormActnProc);
+                              subtype, RnaFeatFormActnProc);
   rfp = (RnaFormPtr) GetObjectExtra (w);
   if (rfp != NULL) {
     rfp->input_entityID = ompcp->input_entityID;

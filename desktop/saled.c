@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.58 $
+* $Revision: 6.60 $
 *
 * File Description: 
 *
@@ -3226,9 +3226,7 @@ NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype)
 {
   Int4      index;
   CharPtr   seq_data;
-  SeqIdPtr  sip;
   BioseqPtr bsp;
-  CharPtr   tmp_id_str;
   Char      prot_str[200];
   Boolean   all_far = FALSE;
   Boolean   all_skip = FALSE;
@@ -3240,21 +3238,10 @@ NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype)
     seq_data = AlignmentStringToSequenceString (afp->sequences [index], moltype);
     if (! StringHasNoText (seq_data))
     {
-      sip = MakeSeqID (afp->ids [index]);
-      sip->next = SeqIdFree (sip->next);
       if (StringNCmp (afp->ids[index], "acc", 3) != 0)
       {
-        bsp = BioseqFind (sip);
-        if (bsp == NULL && StringChr (afp->ids[index], '|') == NULL)
-        {
-          sip = SeqIdFree (sip);
-          tmp_id_str = (CharPtr) MemNew (sizeof (Char) * (StringLen (afp->ids [index]) + 4));
-          sprintf (tmp_id_str, "gb|%s", afp->ids [index]);
-          sip = MakeSeqID (tmp_id_str);
-          MemFree (tmp_id_str);
-          bsp = BioseqFind (sip);
-        }
-
+        bsp = BioseqFromAlignmentID (&(afp->ids[index]));
+          
         if (bsp != NULL && moltype == Seq_mol_aa && !ISA_aa (bsp->mol)) 
         {
           /* IDs in alignment are for nucleotide sequences but this is 
@@ -3271,7 +3258,6 @@ NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype)
                 && nucprot_bssp->seq_set->next->next == NULL
                 && IS_Bioseq (nucprot_bssp->seq_set->next)) 
             {
-              sip = SeqIdFree (sip);
               bsp = (BioseqPtr) nucprot_bssp->seq_set->next->data.ptrvalue;
               SeqIdWrite (SeqIdFindBest (bsp->id, 0), prot_str, PRINTID_FASTA_LONG, sizeof (prot_str) - 1);
               afp->ids[index] = MemFree (afp->ids[index]);
@@ -3306,7 +3292,6 @@ NLM_EXTERN Boolean CorrectAlignmentIDs (TAlignmentFilePtr afp, Uint1 moltype)
         }
 
       }
-      sip = SeqIdFree (sip);
     }
     MemFree (seq_data);
   }

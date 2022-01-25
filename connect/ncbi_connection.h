@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNECTION__H
 #define CONNECT___NCBI_CONNECTION__H
 
-/* $Id: ncbi_connection.h,v 6.36 2012/05/19 20:39:32 kazimird Exp $
+/* $Id: ncbi_connection.h,v 6.43 2015/06/29 16:09:15 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -124,6 +124,19 @@ extern NCBI_XCONNECT_EXPORT const char* CONN_GetType
  );
 
 
+/** Return a human-readable description of the connection as a character
+ * '\0'-terminated string.  The string is not guaranteed to have any
+ * particular format and is intended solely for something like
+ * logging and debugging.  Return NULL if the connection cannot
+ * provide any description information (or if it is in a bad state).
+ * Application program must call free() to deallocate space occupied
+ * by the returned string when the description is no longer needed.
+ */
+extern NCBI_XCONNECT_EXPORT char* CONN_Description
+(CONN conn  /**< [in] connection handle */
+ );
+
+
 /** Get read ("event" == eIO_Read) or write ("event" == eIO_Write)
  * position within the connection.
  * Positions are advanced from 0 on, and only concerning I/O that has
@@ -135,19 +148,6 @@ extern NCBI_XCONNECT_EXPORT const char* CONN_GetType
 extern NCBI_XCONNECT_EXPORT TNCBI_BigCount CONN_GetPosition
 (CONN      conn,  /**< [in] connection handle */ 
  EIO_Event event  /**< [in] see description   */
- );
-
-
-/** Return a human-readable description of the connection as a character
- * '\0'-terminated string.  The string is not guaranteed to have any
- * particular format and is intended solely for something like
- * logging and debugging.  Return NULL if the connection cannot
- * provide any description information (or if it is in a bad state).
- * Application program must call free() to deallocate space occupied
- * by the returned string when the description is no longer needed.
- */
-extern NCBI_XCONNECT_EXPORT char* CONN_Description
-(CONN conn  /**< [in] connection handle */
  );
 
 
@@ -164,7 +164,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_SetTimeout
  );
 
 
-/** Retrieve current timeout (return NULL if it is infinite).
+/** Retrieve current timeout, return NULL(kInfiniteTimeout) if it is infinite.
  * The returned pointer is guaranteed to point to a valid timeout structure,
  * or to be either NULL or kDefaultTimeout until next CONN_SetTimeout()
  * or CONN_Close().
@@ -178,7 +178,7 @@ extern NCBI_XCONNECT_EXPORT const STimeout* CONN_GetTimeout
 /** Block on the connection until it becomes available for either reading or
  * writing (depending on "event"), until timeout expires, or until any error.
  * @note  "timeout" can also be one of the two special values:
- *        * NULL (for infinite timeout, also as kInfiniteTimeout);
+ *        * NULL (for infinite timeout, also known as kInfiniteTimeout);
  *        * kDefaultTimeout (connector-defined).
  * @sa
  *  CONN_Read, CONN_Write
@@ -221,16 +221,17 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_Write
  );
 
 
-/** Push back "size" bytes from the buffer "buf" into connection.
+/** Push "size" bytes from the buffer "buf" back into connection.
  * Return eIO_Success on success, other code on error.
- * @note  The data pushed back may not necessarily be the same as
- *        previously obtained from the connection.
- * @note  Upon a following read operation, the pushed back data are
- *        taken out first.
+ * @note  The data pushed back may not necessarily be the same as previously
+ *        obtained from the connection.
+ * @note  Upon a following read operation, the pushed back data are taken out
+ *        first.
+ * @note  Pushback data can desynchronize underlying connector (so use wisely).
  * @sa
  *  CONN_Read, CONN_Write
  */
-extern NCBI_XCONNECT_EXPORT EIO_Status CONN_PushBack
+extern NCBI_XCONNECT_EXPORT EIO_Status CONN_Pushback
 (CONN        conn,  /**< [in] connection handle                     */
  const void* buf,   /**< [in] pointer to the data being pushed back */
  size_t      size   /**< [in] # of bytes to push back               */
@@ -337,21 +338,27 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_Close
  );
 
 
-/** Set user callback function to be called upon an event specified by the
- * callback type.  Note that the callback function is always called prior
+/** Set user callback function to be invoked upon an event specified by the
+ * callback type.  Note that the callback function gets always called prior
  * to the event to happen, e.g. the eCONN_OnClose callback is called when
  * the connection is about to close, but has not yet been closed.
  * @par
- * The callback function is supplied with 3 arguments: the connection handle,
- * a type of event, and a user data (specified when the callback was set).
+ * The callback function is supplied with 3 arguments:  the connection handle,
+ * a type of event (except for eCONN_OnTimeout), and a user data (specified
+ * when the callback was set).
+ * When eCONN_OnTimeout callback occurs, the callback type eCONN_OnTimeout gets
+ * OR'ed with I/O direction, which has timed out:  eIO_Open (when opening),
+ * eIO_Read, eIO_Write, or both (when flushing), then passed in the "type"
+ * argument.
+ * @par
  * CONN_SetCallback() stores previous callback in "old_cb" (if it is not NULL).
  * @par
  * The callbacks remain valid until they are explicitly changed / de-activated
  * or the connection becomes closed.
  * @par
- * This means that if a callback is intercepted and then relayed to the old
- * handler, the interceptor may not assume the callback remains set, and
- * must re-instate itself upon each upcall of the old handler (in general).
+ * This also means that if a callback is intercepted and then relayed to an old
+ * handler, the interceptor may not always assume the callback remains set, and
+ * so in general must reinstate itself upon each upcall of the old handler.
  * @par
  * Normally, callback would return eIO_Success and let the operation continue;
  * non-eIO_Success return value causes it to be returned to the caller level
@@ -362,8 +369,10 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_Close
  * fail with eIO_Interrupt.
  * @note  non-eIO_Success from an eCONN_OnClose callback cannot postpone the
  * connection closure (but the error code is still passed through to the user).
- * @note  eCONN_OnTimeout can restart the I/O that has timed out by returning
- * eIO_Success.
+ * @note  by returning eIO_Success, eCONN_OnTimeout restarts the I/O that
+ * has timed out (except for open).
+ * @note  eCONN_OnTimeout for connection open is only called if eCONN_OnOpen
+ * was also set for that connection.
  * @sa
  *  CONN_Read, CONN_Write, CONN_Close
  */
@@ -371,15 +380,18 @@ typedef enum {
     eCONN_OnClose   = 0,  /**< NB: CONN has been flushed prior to the call   */
     eCONN_OnRead    = 1,  /**< Read from connector is about to occur         */
     eCONN_OnWrite   = 2,  /**< Write to connector is about to occur          */
-    eCONN_OnFlush   = 3,  /**< Connector is about to be flushed              */
-    eCONN_OnTimeout = 4   /**< Connector I/O has timed out                   */
+    eCONN_OnFlush   = 3,  /**< About to be flushed (NB: == eIO_ReadWrite)    */
+    eCONN_OnTimeout = 4,  /**< Connector I/O has timed out                   */
+    eCONN_OnOpen    = 8   /**< Call prior to open (NB: "conn" still closed)  */
 } ECONN_Callback;
-#define CONN_N_CALLBACKS  5
+#define CONN_N_CALLBACKS  6
 
-typedef EIO_Status (*FCONN_Callback)(CONN conn,ECONN_Callback type,void* data);
+typedef unsigned int TCONN_Callback;  /* Bitwise ECONN_Callback for time-out */
+
+typedef EIO_Status (*FCONN_Callback)(CONN conn,TCONN_Callback type,void* data);
 
 typedef struct {
-    FCONN_Callback func;  /**< function to call on the event                 */
+    FCONN_Callback func;  /**< function address to call on the event         */
     void*          data;  /**< data to pass to the callback as its last arg  */
 } SCONN_Callback;
 
@@ -392,7 +404,7 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_SetCallback
 
 
 /** Get an underlying SOCK handle for connection that is implemented as a
- * socket.  Not a eIO_Success return code guarantees "*sock" is NULL.
+ * socket.  Non-eIO_Success return code guarantees "*sock" is NULL.
  * Set "*sock" to NULL when no socket handle can be obtained.
  * @note  The returned SOCK object remains in use by the connection.
  * @sa
@@ -423,6 +435,33 @@ extern NCBI_XCONNECT_EXPORT EIO_Status CONN_SetFlags
  *  CONN_CreateEx, CONN_SetFlags
  */
 extern NCBI_XCONNECT_EXPORT TCONN_Flags CONN_GetFlags
+(CONN conn  /**< [in]  connection handle */
+ );
+
+
+/** Associate an arbitraty user data pointer with the connection.
+ * The pointer is not used by the connection itself but is retrievable with
+ * CONN_GetUserData() from the user's code as long as the CONN handle remains
+ * valid.  Successive calls to CONN_SetUserData() replace the pointer value.
+ * @return
+ *  eIO_Success on success, other error code on error.
+ * @sa
+ *  CONN_Create, CONN_GetUserData
+ */
+extern NCBI_XCONNECT_EXPORT EIO_Status CONN_SetUserData
+(CONN  conn,  /**< [in]  connection handle */
+ void* data   /**< [in]  user data pointer */
+ );
+
+
+/** Get current value of the user's data pointer last associated with the
+ * connection, or NULL (if CONN is NULL or no pointer is currently set).
+ * @return
+ *  Current value of the user pointer.
+ * @sa
+ *  CONN_Create, CONN_SetUserData
+ */
+extern NCBI_XCONNECT_EXPORT void* CONN_GetUserData
 (CONN conn  /**< [in]  connection handle */
  );
 

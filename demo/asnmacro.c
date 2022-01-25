@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/12/07
 *
-* $Revision: 1.11 $
+* $Revision: 1.19 $
 *
 * File Description: 
 *
@@ -58,7 +58,7 @@
 #include <objmacro.h>
 #include <macroapi.h>
 
-#define ASNMACRO_APP_VER "1.3"
+#define ASNMACRO_APP_VER "1.8"
 
 CharPtr ASNMACRO_APPLICATION = ASNMACRO_APP_VER;
 
@@ -327,6 +327,9 @@ static Uint2 ProcessOneAsn (
   SeqMgrIndexFeatures (entityID, NULL);
   sep = GetTopSeqEntryForEntityID (entityID);
   ApplyMacroToSeqEntryEx (sep, macro, NULL, Sequin_GlobalAlign2Seq);
+  DeleteMarkedObjects (entityID, 0, NULL);
+  RenormalizeNucProtSets (sep, TRUE);
+  BasicSeqEntryCleanup (sep);
 
   if (sbpp != NULL) {
     *sbpp = sbp;
@@ -405,9 +408,11 @@ static Int4 ProcessStream (InputStreamPtr isp, OutputStreamPtr osp, AsnStreamPtr
     }
     if (rval == 0) {
       entityID = ObjMgrRegister (OBJ_SEQENTRY, sep);
-      ApplyMacroToSeqEntry (sep, macro);
-      DeleteMarkedObjects (entityID, 0, NULL);
+      if (ApplyMacroToSeqEntryEx(sep, macro, NULL, NULL)) {
+        DeleteMarkedObjects(entityID, 0, NULL);
+      }
       RenormalizeNucProtSets (sep, TRUE);
+      BasicSeqEntryCleanup (sep);
       if (! SeqEntryAsnWrite(sep, asn_out, atp)) {
        Message (MSG_POSTERR, "SeqEntryAsnWrite failure");
        rval = 1;
@@ -548,6 +553,36 @@ static ValNodePtr ReadMacroFile (CharPtr macro_file)
 }
 
 
+static void ReduceMacroList (ValNodePtr PNTR p_macro_list, Int4 skip, Int4 limit)
+{
+  Int4 i;
+  ValNodePtr macro_list, vnp, vnp_prev = NULL;
+
+  if (p_macro_list == NULL || *p_macro_list == NULL) {
+    return;
+  }
+  macro_list = *p_macro_list;
+
+  for (i = 0; i < skip && macro_list != NULL; i++) {
+    vnp = macro_list;
+    macro_list = macro_list->next;
+    vnp->next = NULL;
+    vnp = MacroActionListFree(vnp);
+  }
+
+  if (limit > 0 && macro_list != NULL) {
+    for (vnp = macro_list, i = 0; i < limit && vnp != NULL; i++, vnp = vnp->next) {
+      vnp_prev = vnp;
+    }
+    if (vnp != NULL) {
+      vnp_prev->next = NULL;
+      vnp = MacroActionListFree(vnp);
+    }
+  }
+  *p_macro_list = macro_list;
+}
+
+
 /* Args structure contains command-line arguments */
 
 #define p_argInputPath         0
@@ -560,6 +595,8 @@ static ValNodePtr ReadMacroFile (CharPtr macro_file)
 #define e_argInputSeqEntry     7
 #define d_argOutputBinary      8
 #define m_argMacroFile         9
+#define k_argSkipSteps        10
+#define l_argLimitSteps       11
 
 Args myargs [] = {
   {"Path to Files", NULL, NULL, NULL,
@@ -580,8 +617,12 @@ Args myargs [] = {
     TRUE, 'e', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Output is binary", "F", NULL, NULL,
     TRUE, 'd', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Macro file", "NULL", NULL, NULL,
-    TRUE, 'm', ARG_FILE_IN, 0.0, 0, NULL}
+  {"Macro file", NULL, NULL, NULL,
+    TRUE, 'm', ARG_FILE_IN, 0.0, 0, NULL},
+  {"Skip steps", "0", NULL, NULL,
+    TRUE, 'k', ARG_INT, 0.0, 0, NULL},
+  {"Limit steps", "0", NULL, NULL,
+    TRUE, 'l', ARG_INT, 0.0, 0, NULL}
 };
 
 Int2 Main(void)
@@ -644,6 +685,9 @@ Int2 Main(void)
 
   macro_file = (CharPtr) myargs [m_argMacroFile].strvalue;
   action_list = ReadMacroFile (macro_file);
+
+  ReduceMacroList (&action_list, myargs [k_argSkipSteps].intvalue, myargs [l_argLimitSteps].intvalue);
+
   if (!PreprocessMacroForRepeatedUse (action_list, NULL)) {
     Message (MSG_FATAL, "Failed to preprocess tables in macro\n");
     return 1;

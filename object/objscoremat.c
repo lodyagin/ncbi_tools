@@ -235,6 +235,9 @@ PssmAsnWrite(PssmPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -470,6 +473,7 @@ PssmIntermediateDataAsnWrite(PssmIntermediateDataPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -679,6 +683,9 @@ PssmFinalDataAsnWrite(PssmFinalDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -859,6 +866,9 @@ PssmParametersAsnWrite(PssmParametersPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1028,6 +1038,7 @@ PssmWithParametersAsnWrite(PssmWithParametersPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1202,6 +1213,9 @@ BlockPropertyAsnWrite(BlockPropertyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1389,6 +1403,9 @@ CoreBlockAsnWrite(CoreBlockPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1556,6 +1573,9 @@ LoopConstraintAsnWrite(LoopConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1726,6 +1746,9 @@ CoreDefAsnWrite(CoreDefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1894,6 +1917,9 @@ FormatRpsDbParametersAsnWrite(FormatRpsDbParametersPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

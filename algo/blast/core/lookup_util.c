@@ -1,4 +1,4 @@
-/* $Id: lookup_util.c,v 1.17 2006/12/01 16:52:58 papadopo Exp $
+/* $Id: lookup_util.c,v 1.19 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,11 +27,6 @@
 /** @file lookup_util.c
  *  Utility functions for lookup table generation.
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: lookup_util.c,v 1.17 2006/12/01 16:52:58 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/lookup_util.h>
 
@@ -73,7 +68,7 @@ iexp(Int4 x,
 }
 
 Int4
-ilog2(Int4 x)
+ilog2(Int8 x)
 {
     Int4 lg = 0;
 

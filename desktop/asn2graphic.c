@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   11/8/01
 *
-* $Revision: 6.132 $
+* $Revision: 6.133 $
 *
 * File Description:
 *
@@ -3721,7 +3721,7 @@ static Uint2 GeneProductsLayoutInternal (
   ValNodePtr              bumpedListHead = NULL, bumpedListTail = NULL;
   ValNodePtr              potCDSvnp, potRNAvnp;
   ValNodePtr              GroupsHead = NULL, GroupsTailVNP, MemberTailVNP;
-  ValNodePtr              groupVNP, featVNP;
+  ValNodePtr              groupVNP = NULL, featVNP = NULL;
   RFIPentryPtr            tRFIPentry;
   RFIPentryPtr            bumpedListEntry;
   RFIPentryPtr            potCDS, potRNA, GroupsTailMemberTail;
@@ -3917,6 +3917,7 @@ static Uint2 GeneProductsLayoutInternal (
                  thisRow2 = thisRow,
                  featVNP = currentGroup->members;
                tRFIPentry != NULL
+                 && featVNP != NULL
                  && i < currentGroup->memberCount;
                featVNP = featVNP->next,
                  thisRow2 = thisRow2->next,
@@ -5759,7 +5760,7 @@ AccumSegments(IntervalAccumulatorPtr accum, AccumNodePtr new_nodes)
         in_weight = in_node->weight;
 
         /* insert at node. */
-        if (in_node->coord == prev_node->next->coord) {
+        if (prev_node != NULL && prev_node->next != NULL && in_node->coord == prev_node->next->coord) {
           prev_node = prev_node->next;
             old_weight = prev_node->weight;
             AccumulateWeight(prev_node, in_weight, accum->accumOp); 

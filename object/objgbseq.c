@@ -31,7 +31,7 @@ objgbseqAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.17 at May 26, 2010 12:37 PM
+*    Generated using ASNCODE Revision: 6.19 at Sep 17, 2013  6:09 PM
 *
 **************************************************/
 
@@ -63,6 +63,7 @@ NLM_EXTERN
 GBSetPtr LIBCALL
 GBSetAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean isError = FALSE;
    AsnReadFunc func;
@@ -118,6 +119,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL 
 GBSetAsnWrite(GBSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
 {
+   DataVal av;
    AsnTypePtr atp;
    Boolean retval = FALSE;
 
@@ -138,6 +140,9 @@ GBSetAsnWrite(GBSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) GBSeqAsnWrite, aip, atp, GBSET_E);
    retval = TRUE;
 
@@ -210,6 +215,7 @@ GBSeqFree(GBSeqPtr ptr)
    MemFree(ptr -> sequence);
    MemFree(ptr -> contig);
    AsnGenericUserSeqOfFree(ptr -> alt_seq, (AsnOptFreeFunc) GBAltSeqDataFree);
+   AsnGenericUserSeqOfFree(ptr -> xrefs, (AsnOptFreeFunc) GBXrefFree);
    return MemFree(ptr);
 }
 
@@ -499,6 +505,13 @@ GBSeqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GBSEQ_xrefs) {
+      ptr -> xrefs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBXrefAsnRead, (AsnOptFreeFunc) GBXrefFree);
+      if (isError && ptr -> xrefs == NULL) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -546,6 +559,9 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -657,6 +673,7 @@ GBSeqAsnWrite(GBSeqPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       retval = AsnWrite(aip, GBSEQ_contig,  &av);
    }
    AsnGenericUserSeqOfAsnWrite(ptr -> alt_seq, (AsnWriteFunc) GBAltSeqDataAsnWrite, aip, GBSEQ_alt_seq, GBSEQ_alt_seq_E);
+   AsnGenericUserSeqOfAsnWrite(ptr -> xrefs, (AsnWriteFunc) GBXrefAsnWrite, aip, GBSEQ_xrefs, GBSEQ_xrefs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -868,6 +885,9 @@ GBReferenceAsnWrite(GBReferencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -943,7 +963,7 @@ GBCommentFree(GBCommentPtr ptr)
       return NULL;
    }
    MemFree(ptr -> type);
-   AsnGenericUserSeqOfFree(ptr -> paragraphs, (AsnOptFreeFunc) GBCommentParagraphFree);
+   AsnGenericBaseSeqOfFree(ptr -> paragraphs ,ASNCODE_PTRVAL_SLOT);
    return MemFree(ptr);
 }
 
@@ -1003,7 +1023,7 @@ GBCommentAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       atp = AsnReadId(aip,amp, atp);
    }
    if (atp == GBCOMMENT_paragraphs) {
-      ptr -> paragraphs = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBCommentParagraphAsnRead, (AsnOptFreeFunc) GBCommentParagraphFree);
+      ptr -> paragraphs = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
       if (isError && ptr -> paragraphs == NULL) {
          goto erret;
       }
@@ -1056,6 +1076,9 @@ GBCommentAsnWrite(GBCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1064,7 +1087,7 @@ GBCommentAsnWrite(GBCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> type;
       retval = AsnWrite(aip, GBCOMMENT_type,  &av);
    }
-   AsnGenericUserSeqOfAsnWrite(ptr -> paragraphs, (AsnWriteFunc) GBCommentParagraphAsnWrite, aip, GBCOMMENT_paragraphs, GBCOMMENT_paragraphs_E);
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr -> paragraphs ,ASNCODE_PTRVAL_SLOT, aip, GBCOMMENT_paragraphs, GBCOMMENT_paragraphs_E);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1220,6 +1243,9 @@ GBStrucCommentAsnWrite(GBStrucCommentPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1432,6 +1458,9 @@ GBFeatureAsnWrite(GBFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1612,6 +1641,9 @@ GBFeatureSetAsnWrite(GBFeatureSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1776,6 +1808,9 @@ GBAltSeqDataAsnWrite(GBAltSeqDataPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1843,6 +1878,7 @@ GBXrefAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    GBXrefPtr ptr;
 
@@ -1939,6 +1975,9 @@ GBXrefAsnWrite(GBXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1950,323 +1989,6 @@ GBXrefAsnWrite(GBXrefPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    if (ptr -> id != NULL) {
       av.ptrvalue = ptr -> id;
       retval = AsnWrite(aip, GBXREF_id,  &av);
-   }
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GBCommentParagraphNew()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentParagraphPtr LIBCALL
-GBCommentParagraphNew(void)
-{
-   GBCommentParagraphPtr ptr = MemNew((size_t) sizeof(GBCommentParagraph));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    GBCommentParagraphFree()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentParagraphPtr LIBCALL
-GBCommentParagraphFree(GBCommentParagraphPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   AsnGenericUserSeqOfFree(ptr -> items, (AsnOptFreeFunc) GBCommentItemFree);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    GBCommentParagraphAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentParagraphPtr LIBCALL
-GBCommentParagraphAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean isError = FALSE;
-   AsnReadFunc func;
-   GBCommentParagraphPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GBCommentParagraph ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBCOMMENTPARAGRAPH);
-   } else {
-      atp = AsnLinkType(orig, GBCOMMENTPARAGRAPH);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = GBCommentParagraphNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == GBCOMMENTPARAGRAPH_items) {
-      ptr -> items = AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) GBCommentItemAsnRead, (AsnOptFreeFunc) GBCommentItemFree);
-      if (isError && ptr -> items == NULL) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GBCommentParagraphFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GBCommentParagraphAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GBCommentParagraphAsnWrite(GBCommentParagraphPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GBCOMMENTPARAGRAPH);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   AsnGenericUserSeqOfAsnWrite(ptr -> items, (AsnWriteFunc) GBCommentItemAsnWrite, aip, GBCOMMENTPARAGRAPH_items, GBCOMMENTPARAGRAPH_items_E);
-   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
-      goto erret;
-   }
-   retval = TRUE;
-
-erret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return retval;
-}
-
-
-
-/**************************************************
-*
-*    GBCommentItemNew()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentItemPtr LIBCALL
-GBCommentItemNew(void)
-{
-   GBCommentItemPtr ptr = MemNew((size_t) sizeof(GBCommentItem));
-
-   return ptr;
-
-}
-
-
-/**************************************************
-*
-*    GBCommentItemFree()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentItemPtr LIBCALL
-GBCommentItemFree(GBCommentItemPtr ptr)
-{
-
-   if(ptr == NULL) {
-      return NULL;
-   }
-   MemFree(ptr -> value);
-   MemFree(ptr -> url);
-   return MemFree(ptr);
-}
-
-
-/**************************************************
-*
-*    GBCommentItemAsnRead()
-*
-**************************************************/
-NLM_EXTERN 
-GBCommentItemPtr LIBCALL
-GBCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   AsnReadFunc func;
-   GBCommentItemPtr ptr;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return NULL;
-      }
-   }
-
-   if (aip == NULL) {
-      return NULL;
-   }
-
-   if (orig == NULL) {         /* GBCommentItem ::= (self contained) */
-      atp = AsnReadId(aip, amp, GBCOMMENTITEM);
-   } else {
-      atp = AsnLinkType(orig, GBCOMMENTITEM);
-   }
-   /* link in local tree */
-   if (atp == NULL) {
-      return NULL;
-   }
-
-   ptr = GBCommentItemNew();
-   if (ptr == NULL) {
-      goto erret;
-   }
-   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
-      goto erret;
-   }
-
-   atp = AsnReadId(aip,amp, atp);
-   func = NULL;
-
-   if (atp == GBCOMMENTITEM_value) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> value = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-   if (atp == GBCOMMENTITEM_url) {
-      if ( AsnReadVal(aip, atp, &av) <= 0) {
-         goto erret;
-      }
-      ptr -> url = av.ptrvalue;
-      atp = AsnReadId(aip,amp, atp);
-   }
-
-   if (AsnReadVal(aip, atp, &av) <= 0) {
-      goto erret;
-   }
-   /* end struct */
-
-ret:
-   AsnUnlinkType(orig);       /* unlink local tree */
-   return ptr;
-
-erret:
-   aip -> io_failure = TRUE;
-   ptr = GBCommentItemFree(ptr);
-   goto ret;
-}
-
-
-
-/**************************************************
-*
-*    GBCommentItemAsnWrite()
-*
-**************************************************/
-NLM_EXTERN Boolean LIBCALL 
-GBCommentItemAsnWrite(GBCommentItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
-{
-   DataVal av;
-   AsnTypePtr atp;
-   Boolean retval = FALSE;
-
-   if (! loaded)
-   {
-      if (! objgbseqAsnLoad()) {
-         return FALSE;
-      }
-   }
-
-   if (aip == NULL) {
-      return FALSE;
-   }
-
-   atp = AsnLinkType(orig, GBCOMMENTITEM);   /* link local tree */
-   if (atp == NULL) {
-      return FALSE;
-   }
-
-   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
-      goto erret;
-   }
-
-   if (ptr -> value != NULL) {
-      av.ptrvalue = ptr -> value;
-      retval = AsnWrite(aip, GBCOMMENTITEM_value,  &av);
-   }
-   if (ptr -> url != NULL) {
-      av.ptrvalue = ptr -> url;
-      retval = AsnWrite(aip, GBCOMMENTITEM_url,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -2327,6 +2049,7 @@ GBStrucCommentItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    GBStrucCommentItemPtr ptr;
 
@@ -2430,6 +2153,9 @@ GBStrucCommentItemAsnWrite(GBStrucCommentItemPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2503,6 +2229,7 @@ GBIntervalAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    GBIntervalPtr ptr;
 
@@ -2632,6 +2359,9 @@ GBIntervalAsnWrite(GBIntervalPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2713,6 +2443,7 @@ GBQualifierAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    GBQualifierPtr ptr;
 
@@ -2809,6 +2540,9 @@ GBQualifierAsnWrite(GBQualifierPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2884,6 +2618,7 @@ GBAltSeqItemAsnRead(AsnIoPtr aip, AsnTypePtr orig)
 {
    DataVal av;
    AsnTypePtr atp;
+   Boolean isError = FALSE;
    AsnReadFunc func;
    GBAltSeqItemPtr ptr;
 
@@ -3031,6 +2766,9 @@ GBAltSeqItemAsnWrite(GBAltSeqItemPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

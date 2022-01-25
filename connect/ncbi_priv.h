@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_PRIV__H
 #define CONNECT___NCBI_PRIV__H
 
-/* $Id: ncbi_priv.h,v 6.78 2012/05/04 18:30:53 kazimird Exp $
+/* $Id: ncbi_priv.h,v 6.102 2016/07/21 21:29:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,17 +43,28 @@
  * Registry:
  *    private global:  g_CORE_Registry
  *    macros:          CORE_REG_GET, CORE_REG_SET
+ * Setup accounting:   ECORE_Set
+ *    private global:  g_CORE_Set
  * Random generator seeding support
  *    private global:  g_NCBI_ConnectRandomSeed
  *    macro:           NCBI_CONNECT_SRAND_ADDEND
- * App name and SID support
+ * App name / NCBI ID / DTab support
  *    private globals: g_CORE_GetAppName
- *                     g_CORE_GetSid
+ *                     g_CORE_GetRequestID
+ *                     g_CORE_GetRequestDtab
  *
  */
 
 #include "ncbi_assert.h"
 #include <connect/ncbi_util.h>
+#ifdef NCBI_MONKEY
+#  if defined(NCBI_OS_MSWIN)
+#    include <WinSock2.h>
+#  else
+#    include <sys/socket.h>
+#    define SOCKET int
+#  endif /*NCBI_OS_MSWIN*/
+#endif /* NCBI_MONKEY */
 
 
 #ifdef __cplusplus
@@ -76,26 +87,25 @@ extern "C" {
         /* automatic subcode checking is not implemented in C code */   \
     }
 
-/* Here are only error codes used in C sources. For error codes used in
+/* Here are only error codes used in C sources.  For error codes used in
  * C++ sources (in C++ Toolkit) see include/connect/error_codes.hpp.
  */
 NCBI_C_DEFINE_ERRCODE_X(Connect_Conn,     301,  36);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,     302,  22);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Util,     303,   8);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Dispd,    304,   2);
-NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,      305,  12);
-NCBI_C_DEFINE_ERRCODE_X(Connect_HeapMgr,  306,  33);
-NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,     307,  18);
-NCBI_C_DEFINE_ERRCODE_X(Connect_LBSMD,    308,   8);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Sendmail, 309,  31);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Service,  310,   9);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,   311, 162);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,    312,   6);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Socket,   302, 163);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Util,     303,   9);
+NCBI_C_DEFINE_ERRCODE_X(Connect_LBSM,     304,  33);
+NCBI_C_DEFINE_ERRCODE_X(Connect_FTP,      305,  13);
+NCBI_C_DEFINE_ERRCODE_X(Connect_SMTP,     306,  33);
+NCBI_C_DEFINE_ERRCODE_X(Connect_HTTP,     307,  23);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Service,  308,   9);
+NCBI_C_DEFINE_ERRCODE_X(Connect_HeapMgr,  309,  33);
+                                       /* 310 unused */
+NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,    311,  16);
+NCBI_C_DEFINE_ERRCODE_X(Connect_Crypt,    312,   5);
 NCBI_C_DEFINE_ERRCODE_X(Connect_LocalNet, 313,   4);
-NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,    314,  16);
 
 /** Make one identifier from 2 parts */
-#define NCBI_C_CONCAT_IDENTIFIER(prefix, postfix) prefix##postfix
+#define NCBI_C_CONCAT_IDENTIFIER(prefix, postfix)  prefix##postfix
 
 /** Return value of error code by its name defined by NCBI_DEFINE_ERRCODE_X
  *
@@ -109,7 +119,8 @@ NCBI_C_DEFINE_ERRCODE_X(Connect_Mghbn,    314,  16);
  *
  * @sa NCBI_DEFINE_ERRCODE_X
  */
-#define NCBI_C_ERRCODE_X   NCBI_C_ERRCODE_X_NAME(NCBI_USE_ERRCODE_X)
+#define NCBI_C_ERRCODE_X                        \
+    NCBI_C_ERRCODE_X_NAME(NCBI_USE_ERRCODE_X)
 
 
 extern NCBI_XCONNECT_EXPORT LOG g_CORE_Log;
@@ -152,20 +163,20 @@ extern NCBI_XCONNECT_EXPORT LOG g_CORE_Log;
     DO_CORE_LOG_ERRNO(NCBI_C_ERRCODE_X, subcode, level, error, 0,       \
                       g_CORE_Sprintf fmt_args, 1)
 
-#define CORE_LOG_ERRNO_EXX(subcode, level, error, descr, message)       \
-    DO_CORE_LOG_ERRNO(NCBI_C_ERRCODE_X, subcode, level, error, descr,   \
-                      message, 0)
-
-#define CORE_LOGF_ERRNO_EXX(subcode, level, error, descr, fmt_args)     \
-    DO_CORE_LOG_ERRNO(NCBI_C_ERRCODE_X, subcode, level, error, descr,   \
-                      g_CORE_Sprintf fmt_args, 1)
-
 #define CORE_LOG_ERRNO(level, error, message)                           \
     DO_CORE_LOG_ERRNO(0, 0, level, error, 0,                            \
                       message, 0)
 
 #define CORE_LOGF_ERRNO(level, error, fmt_args)                         \
     DO_CORE_LOG_ERRNO(0, 0, level, error, 0,                            \
+                      g_CORE_Sprintf fmt_args, 1)
+
+#define CORE_LOG_ERRNO_EXX(subcode, level, error, descr, message)       \
+    DO_CORE_LOG_ERRNO(NCBI_C_ERRCODE_X, subcode, level, error, descr,   \
+                      message, 0)
+
+#define CORE_LOGF_ERRNO_EXX(subcode, level, error, descr, fmt_args)     \
+    DO_CORE_LOG_ERRNO(NCBI_C_ERRCODE_X, subcode, level, error, descr,   \
                       g_CORE_Sprintf fmt_args, 1)
 
 #define CORE_LOG_ERRNO_EX(level, error, descr, message)                 \
@@ -176,35 +187,19 @@ extern NCBI_XCONNECT_EXPORT LOG g_CORE_Log;
     DO_CORE_LOG_ERRNO(0, 0, level, error, descr,                        \
                       g_CORE_Sprintf fmt_args, 1)
 
-#define CORE_DATA_X(subcode, data, size, message)                       \
-    DO_CORE_LOG_DATA(NCBI_C_ERRCODE_X, subcode, eLOG_Trace, data, size, \
-                     message, 0)
-
-#define CORE_DATAF_X(subcode, data, size, fmt_args)                     \
-    DO_CORE_LOG_DATA(NCBI_C_ERRCODE_X, subcode, eLOG_Trace, data, size, \
-                     g_CORE_Sprintf fmt_args, 1)
-
-#define CORE_DATA_EXX(subcode, level, data, size, message)              \
+#define CORE_DATA_X(subcode, level, data, size, message)                \
     DO_CORE_LOG_DATA(NCBI_C_ERRCODE_X, subcode, level, data, size,      \
                      message, 0)
-    
-#define CORE_DATAF_EXX(subcode, level, data, size, fmt_args)            \
+
+#define CORE_DATAF_X(subcode, level, data, size, fmt_args)              \
     DO_CORE_LOG_DATA(NCBI_C_ERRCODE_X, subcode, level, data, size,      \
                      g_CORE_Sprintf fmt_args, 1)
 
-#define CORE_DATA(data, size, message)                                  \
-    DO_CORE_LOG_DATA(0, 0, eLOG_Trace, data, size,                      \
-                     message, 0)
-    
-#define CORE_DATAF(data, size, fmt_args)                                \
-    DO_CORE_LOG_DATA(0, 0, eLOG_Trace, data, size,                      \
-                     g_CORE_Sprintf fmt_args, 1)
-
-#define CORE_DATA_EX(level, data, size, message)                        \
+#define CORE_DATA(level, data, size, message)                           \
     DO_CORE_LOG_DATA(0, 0, level, data, size,                           \
                      message, 0)
 
-#define CORE_DATAF_EX(level, data, size, fmt_args)                      \
+#define CORE_DATAF(level, data, size, fmt_args)                         \
     DO_CORE_LOG_DATA(0, 0, level, data, size,                           \
                      g_CORE_Sprintf fmt_args, 1)
 
@@ -212,17 +207,18 @@ extern NCBI_XCONNECT_EXPORT LOG g_CORE_Log;
 #define DO_CORE_LOG_X(_code, _subcode, _level, _message, _dynamic,      \
                       _error, _descr, _raw_data, _raw_size)             \
     do {                                                                \
-        ELOG_Level xx_level = (_level);                                 \
-        if (g_CORE_Log  ||  xx_level == eLOG_Fatal) {                   \
+        ELOG_Level _xx_level = (_level);                                \
+        if (g_CORE_Log  ||  _xx_level == eLOG_Fatal) {                  \
             SLOG_Handler _mess;                                         \
             _mess.dynamic     = _dynamic;                               \
             _mess.message     = NcbiMessagePlusError(&_mess.dynamic,    \
-                                                     _message,          \
-                                                     _error,            \
-                                                     _descr);           \
-            _mess.level       = xx_level;                               \
+                                                     (_message),        \
+                                                     (_error),          \
+                                                     (_descr));         \
+            _mess.level       = _xx_level;                              \
             _mess.module      = THIS_MODULE;                            \
-            _mess.file        = THIS_FILE;                              \
+            _mess.func        = CORE_CURRENT_FUNCTION;                  \
+            _mess.file        = __FILE__;                               \
             _mess.line        = __LINE__;                               \
             _mess.raw_data    = (_raw_data);                            \
             _mess.raw_size    = (_raw_size);                            \
@@ -297,30 +293,51 @@ extern NCBI_XCONNECT_EXPORT REG g_CORE_Registry;
 #define CORE_REG_GET(section, name, value, value_size, def_value)   \
     g_CORE_RegistryGET(section, name, value, value_size, def_value)
     
-#define CORE_REG_SET(section, name, value, storage)  do {           \
-    CORE_LOCK_READ;                                                 \
-    REG_Set(g_CORE_Registry, section, name, value, storage);        \
-    CORE_UNLOCK;                                                    \
-} while (0)
+#define CORE_REG_SET(section, name, value, storage)                 \
+    g_CORE_RegistrySET(section, name, value, storage)
 
 
 /* (private, to be used exclusively by the above macro CORE_REG_GET) */
 extern NCBI_XCONNECT_EXPORT const char* g_CORE_RegistryGET
-(const char* section,
- const char* name,
- char*       value,
- size_t      value_size,
- const char* def_value
+(const char*  section,
+ const char*  name,
+ char*        value,
+ size_t       value_size,
+ const char*  def_value
  );
+
+/* (private, to be used exclusively by the above macro CORE_REG_SET) */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ g_CORE_RegistrySET
+(const char*  section,
+ const char*  name,
+ const char*  value,
+ EREG_Storage storage
+ );
+
+
+/******************************************************************************
+ *  Setup accounting
+ */
+
+typedef enum {
+    eCORE_SetSSL  = 1,
+    eCORE_SetREG  = 4,
+    eCORE_SetLOG  = 2,
+    eCORE_SetLOCK = 8
+} ECORE_Set;
+typedef unsigned int TCORE_Set;
+
+
+extern TCORE_Set g_CORE_Set;
 
 
 /******************************************************************************
  *  Random generator seeding support
  */
 
-extern NCBI_XCONNECT_EXPORT int   g_NCBI_ConnectRandomSeed;
-extern NCBI_XCONNECT_EXPORT int   g_NCBI_ConnectSrandAddend(void);
-#define NCBI_CONNECT_SRAND_ADDEND g_NCBI_ConnectSrandAddend()
+extern NCBI_XCONNECT_EXPORT int    g_NCBI_ConnectRandomSeed;
+extern NCBI_XCONNECT_EXPORT int    g_NCBI_ConnectSrandAddend(void);
+#define NCBI_CONNECT_SRAND_ADDEND  g_NCBI_ConnectSrandAddend()
 
 
 /******************************************************************************
@@ -332,11 +349,90 @@ extern NCBI_XCONNECT_EXPORT FNcbiGetAppName g_CORE_GetAppName;
 
 
 /******************************************************************************
- *  NCBI SID support (return "as is" to the user)
+ *  NCBI request ID support (return "as is" to the user)
+ *  Return NULL on error;  otherwise, the returned ID is a non-empty string
+ *  allocated on the heap, and must be free()'d when no longer needed.
  */
 
-typedef const char* (*FNcbiGetSid)(void);
-extern NCBI_XCONNECT_EXPORT FNcbiGetSid g_CORE_GetSid;
+typedef char* (*FNcbiGetRequestID)(ENcbiRequestID);
+extern NCBI_XCONNECT_EXPORT FNcbiGetRequestID g_CORE_GetRequestID;
+
+
+/******************************************************************************
+ *  DTab-Local support (returned NULL gets converted to "" at the user level)
+ */
+typedef const char* (*FNcbiGetRequestDtab)(void);
+extern NCBI_XCONNECT_EXPORT FNcbiGetRequestDtab g_CORE_GetRequestDtab;
+
+
+/******************************************************************************
+ *  Miscellanea
+ */
+
+#ifdef __GNUC__
+#  define likely(x)    __builtin_expect(!!(x),1)
+#  define unlikely(x)  __builtin_expect(!!(x),0)
+#else
+#  define likely(x)    (x)
+#  define unlikely(x)  (x)
+#endif /*__GNUC__*/
+
+
+/******************************************************************************
+ *  NCBI Crazy Monkey support
+ */
+
+#ifdef NCBI_MONKEY
+/* UNIX and Windows have different prototypes for send(), recv(), etc., so
+ * some types have to be pre-selected based on current OS
+ */
+#   ifdef NCBI_OS_MSWIN
+#       define MONKEY_RETTYPE  int
+#       define MONKEY_SOCKTYPE SOCKET
+#       define MONKEY_DATATYPE char*
+#       define MONKEY_LENTYPE  int
+#       define MONKEY_SOCKLENTYPE  int
+#       define MONKEY_STDCALL __stdcall /* in Windows, socket functions have 
+                                           prototypes with __stdcall */
+#   else
+#       define MONKEY_RETTYPE  ssize_t
+#       define MONKEY_SOCKTYPE int
+#       define MONKEY_DATATYPE void*
+#       define MONKEY_LENTYPE  size_t
+#       define MONKEY_SOCKLENTYPE  socklen_t
+#       define MONKEY_STDCALL /* empty*/ 
+#   endif /* NCBI_OS_MSWIN */
+
+/******************************************************************************
+ *  Socket functions via Crazy Monkey
+ */
+typedef MONKEY_RETTYPE
+            (MONKEY_STDCALL  *FMonkeyRecv)  (MONKEY_SOCKTYPE       sock,
+                                             MONKEY_DATATYPE       buf,
+                                             MONKEY_LENTYPE        size,
+                                             int                   flags,
+                                             void* /* SOCK* */     sock_ptr);
+typedef MONKEY_RETTYPE
+            (MONKEY_STDCALL *FMonkeySend)  (MONKEY_SOCKTYPE        sock,
+                                            const MONKEY_DATATYPE  data,
+                                            MONKEY_LENTYPE         size,
+                                            int                    flags,
+                                            void* /* SOCK* */      sock_ptr);
+typedef int(MONKEY_STDCALL *FMonkeyConnect)(MONKEY_SOCKTYPE        sock,
+                                            const struct sockaddr* name,
+                                            MONKEY_SOCKLENTYPE     namelen);
+
+typedef int /* bool */    (*FMonkeyPoll)   (size_t*                n,
+                                            void* /*SSOCK_Poll[]* */polls,
+                                            EIO_Status*            ret_status);
+typedef void              (*FMonkeyClose)  (SOCKET sock); 
+
+extern NCBI_XCONNECT_EXPORT FMonkeySend     g_MONKEY_Send;
+extern NCBI_XCONNECT_EXPORT FMonkeyRecv     g_MONKEY_Recv;
+extern NCBI_XCONNECT_EXPORT FMonkeyPoll     g_MONKEY_Poll;
+extern NCBI_XCONNECT_EXPORT FMonkeyConnect  g_MONKEY_Connect;
+extern NCBI_XCONNECT_EXPORT FMonkeyClose    g_MONKEY_Close;
+#endif /*NCBI_MONKEY*/
 
 
 #ifdef __cplusplus

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   3/14/11
 *
-* $Revision: 1.14 $
+* $Revision: 1.17 $
 *
 * File Description:
 *
@@ -55,7 +55,7 @@
 #include <seqport.h>
 #include <tofasta.h>
 
-#define SQN2AGP_APP_VER "1.6"
+#define SQN2AGP_APP_VER "1.9"
 
 CharPtr SQN2AGP_APPLICATION = SQN2AGP_APP_VER;
 
@@ -266,6 +266,7 @@ static void DoOneBioseq (
   Int4         seg = 0;
   S2AFlagPtr   sfp;
   SeqLit       sl;
+  SeqLocPtr    slp;
   Char         space_or_star = ' ';
 
   if (bsp == NULL) return;
@@ -333,7 +334,51 @@ static void DoOneBioseq (
 
     len = 0;
 
+    if (dsp->choice == 1) {
+      slp = (SeqLocPtr) dsp->data.ptrvalue;
+      if (slp == NULL) continue;
+
+      len = SeqLocLen (slp);
+
+      ValNodeAddIntExAgp (&(sfp->conlenhead), &(sfp->conlentail), 0, len);
+
+      seg++;
+      if (! sfp->justreport) {
+        fprintf (sfp->ffp, ">%s_%ld\n", id, (long) seg);
+      }
+
+      if (len < 200) {
+        buf [0] = '\0';
+        sprintf (buf, "*%s\t%s_%ld\t%ld\t%ld\t%ld", id, id, (long) seg, (long) 1, (long) len - 1, (long) len);
+        ValNodeCopyStrEx (&(sfp->scaffhead), &(sfp->scafftail), 0, buf);
+      }
+
+      if (! sfp->justreport) {
+        /*
+        SeqLocFastaStream (slp, sfp->ffp, 0, 60, 0, 0);
+        */
+
+        fprintf (sfp->afp, "%s\t1\t%ld\t1\tW\t%s_%ld\t1\t%ld\t+\n", id,
+                 (long) len,
+                 id, (long) seg, (long) len);
+      }
+
+      /*
+      if (sfp->contigsqn) {
+        MemSet ((Pointer) &sl, 0, sizeof (SeqLit));
+        sl.length = len;
+        sl.fuzz = bsp->fuzz;
+        sl.seq_data_type = bsp->seq_data_type;
+        sl.seq_data = bsp->seq_data;
+        AddContigToList (bsp, &sl, sfp, id, seg);
+      }
+      */
+
+      continue;
+    }
+
     if (dsp->choice != 2) continue;
+
     lit = (SeqLitPtr) dsp->data.ptrvalue;
     if (lit == NULL) continue;
 
@@ -351,7 +396,7 @@ static void DoOneBioseq (
       /* designated unknown length */
       part++;
       if (! sfp->justreport) {
-        fprintf (sfp->afp, "%s\t%ld\t%ld\t%ld\tU\t%ld\tfragment\tyes\t\n", id,
+        fprintf (sfp->afp, "%s\t%ld\t%ld\t%ld\tU\t%ld\tscaffold\tyes\tpaired-ends\n", id,
                  (long) cumulative + 1, (long) cumulative + len,
                  (long) part, (long) len);
       }
@@ -365,7 +410,7 @@ static void DoOneBioseq (
       /* known length */
       part++;
       if (! sfp->justreport) {
-        fprintf (sfp->afp, "%s\t%ld\t%ld\t%ld\tN\t%ld\tfragment\tyes\t\n", id,
+        fprintf (sfp->afp, "%s\t%ld\t%ld\t%ld\tN\t%ld\tscaffold\tyes\tpaired-ends\n", id,
                  (long) cumulative + 1, (long) cumulative + len,
                  (long) part, (long) len);
       }
@@ -703,9 +748,11 @@ typedef enum {
   x_argSuffix,
   k_argKnown,
   u_argUnknown,
-  j_argJustReport,
+  j_argJustReport
+  /*
   c_argSaveContig,
-  s_argSaveAltered
+  s_argSaveAltered,
+  */
 } Arguments;
 
 Args myargs [] = {

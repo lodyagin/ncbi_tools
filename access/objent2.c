@@ -192,6 +192,7 @@ Entrez2IdListAsnWrite(Entrez2IdListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -376,6 +377,7 @@ Entrez2BooleanExpAsnWrite(Entrez2BooleanExpPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -571,7 +573,7 @@ Entrez2BooleanElementAsnWrite(Entrez2BooleanElementPtr anp, AsnIoPtr aip, AsnTyp
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -764,6 +766,7 @@ Entrez2LimitsAsnWrite(Entrez2LimitsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -955,6 +958,7 @@ Entrez2BooleanTermAsnWrite(Entrez2BooleanTermPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1151,6 +1155,7 @@ Entrez2RequestAsnWrite(Entrez2RequestPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1377,7 +1382,7 @@ E2RequestAsnWrite(E2RequestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -1588,6 +1593,7 @@ Entrez2EvalBooleanAsnWrite(Entrez2EvalBooleanPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1764,6 +1770,7 @@ Entrez2TermQueryAsnWrite(Entrez2TermQueryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1949,6 +1956,7 @@ Entrez2TermPosAsnWrite(Entrez2TermPosPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2135,6 +2143,7 @@ Entrez2HierQueryAsnWrite(Entrez2HierQueryPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2329,6 +2338,7 @@ Entrez2GetLinksAsnWrite(Entrez2GetLinksPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2502,6 +2512,7 @@ Entrez2IdAsnWrite(Entrez2IdPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2673,6 +2684,7 @@ Entrez2DtFilterAsnWrite(Entrez2DtFilterPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2871,6 +2883,7 @@ Entrez2ReplyAsnWrite(Entrez2ReplyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3111,7 +3124,7 @@ E2ReplyAsnWrite(E2ReplyPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -3324,6 +3337,7 @@ Entrez2InfoAsnWrite(Entrez2InfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3495,6 +3509,7 @@ Entrez2BooleanReplyAsnWrite(Entrez2BooleanReplyPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3665,6 +3680,7 @@ Entrez2DocsumListAsnWrite(Entrez2DocsumListPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3833,6 +3849,7 @@ Entrez2TermListAsnWrite(Entrez2TermListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4026,6 +4043,7 @@ Entrez2HierNodeAsnWrite(Entrez2HierNodePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4204,6 +4222,7 @@ Entrez2LinkSetAsnWrite(Entrez2LinkSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4373,6 +4392,7 @@ Entrez2LinkCountListAsnWrite(Entrez2LinkCountListPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4595,6 +4615,7 @@ Entrez2DbInfoAsnWrite(Entrez2DbInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4834,6 +4855,7 @@ Entrez2FieldInfoAsnWrite(Entrez2FieldInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5042,6 +5064,7 @@ Entrez2LinkInfoAsnWrite(Entrez2LinkInfoPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5226,6 +5249,7 @@ Entrez2DocsumFieldInfoAsnWrite(Entrez2DocsumFieldInfoPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5394,6 +5418,7 @@ Entrez2DocsumAsnWrite(Entrez2DocsumPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5556,6 +5581,7 @@ Entrez2DocsumDataAsnWrite(Entrez2DocsumDataPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5736,6 +5762,7 @@ Entrez2TermAsnWrite(Entrez2TermPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5904,6 +5931,7 @@ Entrez2LinkCountAsnWrite(Entrez2LinkCountPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

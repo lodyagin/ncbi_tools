@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/23/91
 *
-* $Revision: 6.60 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *   	miscellaneous functions
@@ -1266,7 +1266,7 @@ NLM_EXTERN Nlm_CharPtr LIBCALL MergeStringArray (Nlm_CharPtr PNTR local, size_t 
   if (len < 1) return NULL;
 
   rsult = (Nlm_CharPtr) MemNew (len + 3);
-  if (rsult == NULL) return;
+  if (rsult == NULL) return NULL;
   tmp = rsult;
 
   for (i = 0; /* local [i] != NULL */ i < numitems; i++) {
@@ -2488,8 +2488,9 @@ NLM_EXTERN Nlm_CharPtr DecodeXml (
   return str;
 }
 
-NLM_EXTERN Nlm_CharPtr EncodeXml (
-  Nlm_CharPtr str
+static Nlm_CharPtr EncodeXmlProc (
+  Nlm_CharPtr str,
+  Nlm_Boolean notJustBrackets
 )
 
 {
@@ -2525,10 +2526,12 @@ NLM_EXTERN Nlm_CharPtr EncodeXml (
   ch = *src;
   while (ch != '\0') {
     xtp = NULL;
-    for (i = 0; xmlcodes [i].code != NULL; i++) {
-      if (ch == xmlcodes [i].letter) {
-        xtp = &(xmlcodes [i]);
-        break;
+    if (notJustBrackets || ch == '<' || ch == '>') {
+      for (i = 0; xmlcodes [i].code != NULL; i++) {
+        if (ch == xmlcodes [i].letter) {
+          xtp = &(xmlcodes [i]);
+          break;
+        }
       }
     }
     if (xtp != NULL) {
@@ -2550,6 +2553,22 @@ NLM_EXTERN Nlm_CharPtr EncodeXml (
   *dst = '\0';
 
   return tmp;
+}
+
+NLM_EXTERN Nlm_CharPtr EncodeXml (
+  Nlm_CharPtr str
+)
+
+{
+  return EncodeXmlProc (str, TRUE);
+}
+
+NLM_EXTERN Nlm_CharPtr EncodeXmlEx (
+  Nlm_CharPtr str
+)
+
+{
+  return EncodeXmlProc (str, FALSE);
 }
 
 #define XML_START_TAG  1

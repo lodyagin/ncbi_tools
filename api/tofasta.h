@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.43 $
+* $Revision: 6.48 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -306,6 +306,15 @@ NLM_EXTERN Int4 SeqEntryFastaStreamEx (
   Boolean sorted_prot
 );
 
+NLM_EXTERN void MakeFastaStreamIdSuffix (
+  SeqFeatPtr sfp,
+  Uint4 idx,
+  CharPtr prefix,
+  CharPtr buf,
+  Boolean do_product,
+  Boolean do_feat_id
+);
+
 /*****************************************************************************
 *
 *   FastaFileFunc(key, buf, data)
@@ -432,6 +441,10 @@ Boolean FastaReadSequenceMem
 *****************************************************************************/
 NLM_EXTERN Boolean FastaId PROTO((BioseqPtr bsp, CharPtr buf, Uint4 buflen));
 
+NLM_EXTERN CharPtr FastaGetOriginalId PROTO((BioseqPtr bsp));
+NLM_EXTERN Boolean ShouldUseOriginalID PROTO((BioseqPtr bsp));
+NLM_EXTERN Boolean FastaIdEx PROTO((BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean prefer_original_ID));
+
 /*****************************************************************************
 *
 *   FastaDefLine(bsp, buf, buflen, accession, organism)
@@ -459,6 +472,23 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
 *   NewCreateDefLine and NewCreateDefLineBuf replace the CreateDefLine family
 *
 *****************************************************************************/
+
+NLM_EXTERN CharPtr NewCreateDefLineExEx (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle,
+  Boolean gpipeMode,
+  Boolean devMode
+);
+
+NLM_EXTERN CharPtr NewCreateDefLineEx (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle,
+  Boolean gpipeMode
+);
 
 NLM_EXTERN CharPtr NewCreateDefLine (
   ItemInfoPtr iip,

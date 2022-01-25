@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 8/10/92
 *
-* $Revision: 6.3 $
+* $Revision: 6.4 $
 *
 * File Description:  Object manager for module GenBank-General,
 *   					EMBL-General, PIR-General, SWISSPROT-General
@@ -43,6 +43,9 @@
 *                      class is a C++ keyword.
 *
 * $Log: objblock.c,v $
+* Revision 6.4  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.3  2004/04/01 13:43:07  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -164,6 +167,8 @@ NLM_EXTERN Boolean LIBCALL PirBlockAsnWrite (PirBlockPtr pbp, AsnIoPtr aip, AsnT
     if (atp == NULL) goto erret;
 
 	if (pbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)pbp)) goto erret;
 
@@ -403,6 +408,8 @@ NLM_EXTERN Boolean LIBCALL GBBlockAsnWrite (GBBlockPtr gbp, AsnIoPtr aip, AsnTyp
 
 	if (gbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)gbp)) goto erret;
 
     if (gbp->extra_accessions != NULL)
@@ -633,6 +640,8 @@ NLM_EXTERN Boolean LIBCALL SPBlockAsnWrite (SPBlockPtr sbp, AsnIoPtr aip, AsnTyp
 	if (atp == NULL) return FALSE;
 
 	if (sbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sbp)) goto erret;
 
@@ -941,6 +950,8 @@ NLM_EXTERN Boolean LIBCALL EMBLBlockAsnWrite (EMBLBlockPtr ebp, AsnIoPtr aip, As
 	if (atp == NULL) return FALSE;
 
 	if (ebp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ebp)) goto erret;
 

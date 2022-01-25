@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 6.167 $
+* $Revision: 6.238 $
 *
 * File Description:  New GenBank flatfile generator application
 *
@@ -51,11 +51,12 @@
 #include <gather.h>
 #include <toasn3.h>
 #include <asn2gnbp.h>
+#include <connect/ncbi_gnutls.h>
 
 /* asn2gnbi.h needed to test PUBSEQGetAccnVer in accpubseq.c */
 #include <asn2gnbi.h>
 
-#define ASN2GB_APP_VER "10.5"
+#define ASN2GB_APP_VER "17.6"
 
 CharPtr ASN2GB_APPLICATION = ASN2GB_APP_VER;
 
@@ -772,7 +773,7 @@ static Int2 HandleCatenatedRecord (
   BioseqPtr    bsp;
   Pointer      dataptr = NULL;
   Uint2        datatype = 0;
-  Uint2        entityID;
+  Uint2        entityID = 0;
   FILE         *fp;
   FILE         *ofp = NULL;
   ObjMgrPtr    omp;
@@ -1444,9 +1445,17 @@ static Int2 HandleMultipleRecords (
       return 1;
     }
   } else if (type == 5) {
+    /*
     atp_se = AsnFind ("Seq-submit.data.entrys.E");
     if (atp_se == NULL) {
       Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.data.entrys.E");
+      return 1;
+    }
+    */
+    /* current use has genbank set containing batch, so iterate genbank set within Seq-submit */
+    atp_se = AsnFind ("Bioseq-set.seq-set.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
       return 1;
     }
   } else {
@@ -1821,9 +1830,14 @@ static void ProcessOneSeqEntry (
       slp = &vn;
     }
   } else if (itemID > 0) {
-    sfp = SeqMgrGetDesiredFeature (entityID, 0, itemID, 0, NULL, NULL);
-    if (sfp != NULL) {
-      slp = sfp->location;
+    bsp = NULL;
+    VisitBioseqsInSep (sep, (Pointer) &bsp, GetFirstGoodBioseq);
+    if (bsp != NULL) {
+      entityID = ObjMgrGetEntityIDForPointer (bsp);
+      sfp = SeqMgrGetDesiredFeature (entityID, 0, itemID, 0, NULL, NULL);
+      if (sfp != NULL) {
+        slp = sfp->location;
+      }
     }
   }
 
@@ -2151,6 +2165,8 @@ Int2 Main (
   ErrSetLogfile ("stderr", ELOG_APPEND);
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
+
+  SOCK_SetupSSL(NcbiSetupGnuTls);
 
   if (! AllObjLoad ()) {
     Message (MSG_POSTERR, "AllObjLoad failed");

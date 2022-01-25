@@ -1,4 +1,4 @@
-.TH ASNTOOL 1 2005-05-16 NCBI "NCBI Tools User's Manual"
+.TH ASNTOOL 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asntool \- process ASN.1 module specifications
 .SH SYNOPSIS
@@ -6,15 +6,19 @@ asntool \- process ASN.1 module specifications
 [\|\fB\-\fP\|]
 [\|\fB\-B\fP\ \fIfilename\fP\|]
 [\|\fB\-D\fP\ \fIN\fP\|]
+[\|\fB\-F\fP\ \fIN\fP\|]
 [\|\fB\-G\fP\|]
 [\|\fB\-I\fP\ \fIstr\fP\|]
 [\|\fB\-J\fP\ \fItype\fP\|]
 [\|\fB\-K\fP\ \fIstr\fP\|]
 [\|\fB\-L\fP\ \fIstr\fP\|]
 [\|\fB\-M\fP\ \fIfilename,...\fP\|]
+[\|\fB\-N\fP\ \fIN\fP\|]
 [\|\fB\-P\fP\ \fIstr\fP\|]
+[\|\fB\-Q\fP\|]
 [\|\fB\-S\fP\ \fIfilename\fP\|]
 [\|\fB\-T\fP\ \fIfilename\fP\|]
+[\|\fB\-U\fP\ \fIN\fP\|]
 [\|\fB\-V\fP\|]
 [\|\fB\-X\fP\ \fIfilename\fP\|]
 [\|\fB\-Z\fP\|]
@@ -56,6 +60,21 @@ Same as 2
 .PD
 .RE
 .TP
+\fB\-F\fP\ \fIN\fP
+Fix non-printing characters:
+.RS
+.PD 0
+.IP 0
+Replace with #, post ERROR (default)
+.IP 1
+Replace with # silently
+.IP 2
+Pass through silently
+.IP 3
+Replace with #, post FATAL
+.PD
+.RE
+.TP
 \fB\-G\fP
 Generate object loader .c and .h files
 .TP
@@ -74,14 +93,47 @@ Label registered type as \fIstr\fP
 \fB\-M\fP\ \fIfilename,...\fP
 Search the ASN.1 modules in \fIfilename,...\fP for external references
 .TP
+\fB\-N\fP\ \fIN\fP
+UTF8 input conversion:
+.RS
+.PD 0
+.IP 0
+Convert silently (default)
+.IP 1
+Convert, post WARNING first time
+.IP 2
+Convert, post WARNING each time
+.IP 3
+Do not convert
+.PD
+.RE
+.TP
 \fB\-P\fP\ \fIstr\fP
 XML module prefix for \fBDOCTYPE\fP
+.TP
+\fB\-Q\fP
+Use quoted syntax form for generated include files
 .TP
 \fB\-S\fP\ \fIfilename\fP
 Send debugging output to \fIfilename\fP rather than stderr
 .TP
 \fB\-T\fP\ \fIfilename\fP
 Dump ASN.1 tree to \fIfilename\fP
+.TP
+\fB\-U\fP\ \fIN\fP
+UTF8 output conversion:
+.RS
+.PD 0
+.IP 0
+Convert silently (default)
+.IP 1
+Convert, post WARNING first time
+.IP 2
+Convert, post WARNING each time
+.IP 3
+Do not convert
+.PD
+.RE
 .TP
 \fB\-V\fP
 Force CHOICE objects to use custom structures rather than ValNodePtrs,

@@ -1,5 +1,5 @@
 #! /bin/sh
-# $Id: fwd_check.sh,v 1.75 2011/07/20 16:04:48 lavr Exp $
+# $Id: fwd_check.sh,v 1.77 2016/08/16 21:59:19 lavr Exp $
 # Author:   Denis Vakatov (vakatov@ncbi,nlm.nih.gov)
 # Modified: Anton Lavrentiev (lavr@ncbi.nlm.nih.gov)
 #
@@ -7,10 +7,10 @@
 
 delay_sec="$1"
 delay_sec=${delay_sec:="10"}
-netcat="`which netcat 2>/dev/null`"
+netcat="`which nc 2>/dev/null`"
 temp="/tmp/`basename $0`.$$.tmp"
 helper="./fwd_failure_helper.exe"
-test -z "$netcat"  &&  netcat="`whereis netcat | sed 's/^[^:]*://;s/ //g'`"
+test -z "$netcat"  &&  netcat="`whereis nc | sed 's/^[^:]*://;s/ //g'`"
 
 cat <<EOF
 http://www.ncbi.nlm.nih.gov/IEB/ToolBox/NETWORK/firewall.html
@@ -23,6 +23,8 @@ cat <<EOF
 ;130.14.25.13	5555	RETIRED
 10.10.150.44	5555	INTERNAL
 130.14.24.219   5555    INTERNAL
+130.14.29.73	9900	INTERNAL
+130.14.29.75	9900	INTERNAL
 130.14.29.112	5860	RESERVED
 130.14.29.112	5861	OK
 130.14.29.112	5862	RESERVED
@@ -47,6 +49,8 @@ cat <<EOF
 130.14.29.112	4454	OK
 130.14.29.112	443	FB-OK
 130.14.29.112	22	FB-OK
+165.112.7.11	9900	INTERNAL
+165.112.7.13	9900	INTERNAL
 165.112.7.12	5860	RESERVED
 165.112.7.12	5861	RESERVED
 165.112.7.12	5862	RESERVED

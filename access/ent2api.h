@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/29/99
 *
-* $Revision: 1.34 $
+* $Revision: 1.35 $
 *
 * File Description: 
 *
@@ -354,6 +354,19 @@ NLM_EXTERN Entrez2LinkCountListPtr EntrezExtractLinkCountReply (
 NLM_EXTERN Uint4 EntrezGetUIDforSeqIdString (
   const char* db,
   const char* seq_id_string
+);
+
+/* term stream convenience function */
+
+typedef void (LIBCALLBACK *Entrez2TermStreamProc) (
+  CharPtr term,
+  Int4 count
+);
+
+NLM_EXTERN void Entrez2StreamTerms (
+  CharPtr database,
+  CharPtr field,
+  Entrez2TermStreamProc proc
 );
 
 /* result validation function */

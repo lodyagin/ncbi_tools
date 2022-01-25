@@ -2972,7 +2972,7 @@ ID2ReplyAsnWrite(ID2ReplyPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
-   if (ptr -> discard != -1) {
+   if (ptr -> discard != (Uint2)-1) {
       av.intvalue = ptr -> discard;
       retval = AsnWrite(aip, ID2_REPLY_discard,  &av);
    }
@@ -3793,8 +3793,10 @@ ID2ReplyGetBlobIdAsnWrite(ID2ReplyGetBlobIdPtr ptr, AsnIoPtr aip, AsnTypePtr ori
       av.boolvalue = ptr -> end_of_reply;
       retval = AsnWrite(aip, REPLY_GET_BLOB_ID_end_of_reply,  &av);
    }
-   av.intvalue = ptr -> blob_state;
-   retval = AsnWrite(aip, REPLY_GET_BLOB_ID_blob_state,  &av);
+   if (ptr -> blob_state != 0) {
+       av.intvalue = ptr -> blob_state;
+       retval = AsnWrite(aip, REPLY_GET_BLOB_ID_blob_state,  &av);
+   }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -4080,6 +4082,13 @@ ID2ReplyGetBlobAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == ID2_REPLY_GET_BLOB_blob_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> blob_state = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -4142,6 +4151,10 @@ ID2ReplyGetBlobAsnWrite(ID2ReplyGetBlobPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       if ( ! ID2ReplyDataAsnWrite(ptr -> data, aip, ID2_REPLY_GET_BLOB_data)) {
          goto erret;
       }
+   }
+   if (ptr -> blob_state != 0) {
+       av.intvalue = ptr -> blob_state;
+       retval = AsnWrite(aip, ID2_REPLY_GET_BLOB_blob_state,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
@@ -4445,6 +4458,13 @@ ID2SReplyGetSplitInfoAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == GET_SPLIT_INFO_blob_state) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> blob_state = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -4507,6 +4527,10 @@ ID2SReplyGetSplitInfoAsnWrite(ID2SReplyGetSplitInfoPtr ptr, AsnIoPtr aip, AsnTyp
       if ( ! ID2ReplyDataAsnWrite(ptr -> data, aip, ID2S_REPLY_GET_SPLIT_INFO_data)) {
          goto erret;
       }
+   }
+   if (ptr -> blob_state != 0) {
+       av.intvalue = ptr -> blob_state;
+       retval = AsnWrite(aip, GET_SPLIT_INFO_blob_state,  &av);
    }
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;

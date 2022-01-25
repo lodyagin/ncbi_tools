@@ -1,7 +1,7 @@
 #ifndef _NCBIOPT_
 #define _NCBIOPT_
 
-/*  $Id: ncbiopt.h,v 6.16 2005/11/16 16:36:11 kans Exp $
+/*  $Id: ncbiopt.h,v 6.17 2013/02/06 20:57:59 ucko Exp $
 * ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,10 @@
 *
 * --------------------------------------------------------------------------
 * $Log: ncbiopt.h,v $
+* Revision 6.17  2013/02/06 20:57:59  ucko
+* Defer to C++ Toolkit definitions of Int8 and Uint8 if known so that
+* C++ code gets formally consistent types regardless of #include order.
+*
 * Revision 6.16  2005/11/16 16:36:11  kans
 * support for PowerPC and Intel chips for Macintosh
 *
@@ -137,8 +141,14 @@ by including it first.
      ;;;!!!PARTIALLY DEFINED 8-BYTE INTEGER TYPES!!!;;;
 #  endif
 
+   /* If C++ Toolkit headers have been included, formally stick with their
+      definitions for consistency. */
+#  ifdef CORELIB___NCBITYPE__H
+#    define Int8  Int8
+#    define Uint8 Uint8
+
    /* on 64-bit operating systems, the long data type is already 8 bytes */
-#  if LONG_BIT==64 /* &&  !defined(OS_UNIX_LINUX) */
+#  elif LONG_BIT==64 /* &&  !defined(OS_UNIX_LINUX) */
 #    define Int8  long
 #    define Uint8 unsigned long
 

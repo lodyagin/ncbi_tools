@@ -1,4 +1,4 @@
-/* $Id: ncbi_socket_connector.c,v 6.33 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_socket_connector.c,v 6.36 2015/03/20 16:49:18 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,10 +35,14 @@
 
 #include "ncbi_ansi_ext.h"
 #include "ncbi_assert.h"
+#include "ncbi_priv.h"
 #include "ncbi_socketp.h"
 #include <connect/ncbi_socket_connector.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define NCBI_USE_ERRCODE_X   Connect_Socket
+
 
 #define MAX_IP_ADDR_LEN       16 /* sizeof("255.255.255.255") */
 
@@ -56,9 +60,41 @@ typedef struct {
     unsigned short port;      /* server:  service port                    */
     unsigned short try_own;   /* max.number of attempts to establish conn */
     TSOCK_Flags    flags;     /* see socket flags in ncbi_socket.h        */
-    size_t         init_size; /* size of the "init_data" buffer           */
-    const void*    init_data; /* data to send to the server on connect    */
+    size_t         size;      /* size of the "data" buffer                */
+    const void*    data;      /* data to send to the server on connect    */
 } SSockConnector;
+
+
+/*ARGSUSED*/
+#ifdef __GNUC__
+inline
+#endif /*__GNUC__*/
+static const char* x_GetType(SSockConnector* xxx)
+{
+    return g_kNcbiSockNameAbbr;  /*NB: Important!*/
+}
+
+
+static char* x_Descr(SSockConnector* xxx)
+{
+    size_t hostlen, portlen;
+    char* buf, port[16];
+    if (!xxx->host)
+        return 0;
+    if (!xxx->port  &&  *xxx->host) {
+        portlen = 1/*EOL*/;
+        port[0] = '\0';
+    } else
+        portlen = (size_t) sprintf(port, ":%hu", xxx->port) + 1/*EOL*/;
+    hostlen = strlen(xxx->host);
+    buf = (char*) malloc(hostlen + portlen);
+    if (buf) {
+        memcpy(buf,           xxx->host, hostlen);
+        memcpy(buf + hostlen,      port, portlen);
+    }
+    return buf;
+}
+
 
 
 /***********************************************************************
@@ -96,34 +132,17 @@ extern "C" {
 #endif /* __cplusplus */
 
 
-/*ARGSUSED*/
 static const char* s_VT_GetType
 (CONNECTOR connector)
 {
-    return g_kNcbiSockNameAbbr; /*NB: Important!*/
+    return x_GetType((SSockConnector*) connector->handle);
 }
 
 
 static char* s_VT_Descr
 (CONNECTOR connector)
 {
-    SSockConnector* xxx = (SSockConnector*) connector->handle;
-    size_t hostlen, portlen;
-    char* buf, port[16];
-    if (!xxx->host)
-        return 0;
-    if (!xxx->port  &&  *xxx->host) {
-        portlen = 1/*EOL*/;
-        port[0] = '\0';
-    } else
-        portlen = (size_t) sprintf(port, ":%hu", xxx->port) + 1/*EOL*/;
-    hostlen = strlen(xxx->host);
-    buf = (char*) malloc(hostlen + portlen);
-    if (buf) {
-        memcpy(buf,           xxx->host, hostlen);
-        memcpy(buf + hostlen,      port, portlen);
-    }
-    return buf;
+    return x_Descr((SSockConnector*) connector->handle);
 }
 
 
@@ -135,17 +154,28 @@ static EIO_Status s_VT_Open
     EIO_Status status = eIO_Success;
 
     if (!xxx->sock) {
-        unsigned short i;
+        unsigned short n;
         if (!xxx->port)
             return eIO_Closed;
         assert(xxx->try_own);
-        for (i = 0;  i < xxx->try_own;  i++) {
+        for (n = 0;  n < xxx->try_own;  ++n) {
             /* connect */
             status = SOCK_CreateEx(xxx->host, xxx->port, timeout, &xxx->sock,
-                                   xxx->init_data, xxx->init_size, xxx->flags);
+                                   xxx->data, xxx->size, xxx->flags);
             if (xxx->sock)
                 break;
             assert(status != eIO_Success);
+        }
+        if (!xxx->sock  &&  xxx->try_own > 1) {
+            char* descr = x_Descr(xxx);
+            CORE_LOGF_X(163, eLOG_Error,
+                        ("[%s%s%s]  Too many failed attempts (%hu), giving up",
+                         x_GetType(xxx),
+                         descr  &&  *descr ? "; "  : "",
+                         descr             ? descr : "",
+                         xxx->try_own));
+            if (descr)
+                free(descr);
         }
     }
     assert(!xxx->sock ^ !(status != eIO_Success));
@@ -244,8 +274,8 @@ static void s_Destroy
     SSockConnector* xxx = (SSockConnector*) connector->handle;
     connector->handle = 0;
 
-    xxx->init_data = 0;
-    xxx->init_size = 0;
+    xxx->data = 0;
+    xxx->size = 0;
     xxx->host = 0;
     free(xxx);
     free(connector);
@@ -257,21 +287,20 @@ static CONNECTOR s_Init
  const char*    host,
  unsigned short port,
  unsigned short try_own,
- const void*    init_data,
- size_t         init_size,
+ const void*    data,
+ size_t         size,
  TSOCK_Flags    flags)
 {
     CONNECTOR       ccc;
     SSockConnector* xxx;
 
     /* some sanity checks */
-    assert(!sock  ||  !(init_size || init_data || flags));
-    assert(!init_size  ||  init_data);
+    assert(!sock  ||  !(size  ||  data  ||  flags));
 
     if (!(ccc = (SConnector*) malloc(sizeof(SConnector))))
         return 0;
     if (!(xxx = (SSockConnector*) malloc(sizeof(*xxx)
-                                         + (init_data ? init_size : 0)
+                                         + (data ? size : 0)
                                          + (host
                                             ? strlen(host) + 1
                                             : MAX_IP_ADDR_LEN)))) {
@@ -282,8 +311,8 @@ static CONNECTOR s_Init
     /* initialize internal data structures */
     if (sock  ||  !host  ||  !port) {
         xxx->sock      = sock;
-        xxx->init_size = 0;
-        xxx->init_data = 0;
+        xxx->size      = 0;
+        xxx->data      = 0;
         if (host) {
             xxx->host  = strcpy((char*) xxx + sizeof(*xxx), host);
             xxx->port  = 0;
@@ -301,11 +330,16 @@ static CONNECTOR s_Init
         }
         xxx->try_own   = try_own   ? 1         : 0;
     } else {
-        void* data     = (char*) xxx + sizeof(*xxx);
+        char* temp     = (char*) xxx + sizeof(*xxx);
         xxx->sock      = 0;
-        xxx->init_size = init_data ? init_size : 0;
-        xxx->init_data = memcpy(data, init_data, xxx->init_size);
-        xxx->host      = strcpy((char*) data + xxx->init_size, host);
+        if (data) {
+            xxx->size  = size;
+            xxx->data  = size ? memcpy(temp, data, size) : 0;
+        } else {
+            xxx->size  = 0;
+            xxx->data  = 0;
+        }
+        xxx->host      = strcpy(temp + xxx->size, host);
         xxx->port      = port;
         xxx->try_own   = try_own   ? try_own   : 1;
         xxx->flags     = flags;
@@ -331,7 +365,7 @@ extern CONNECTOR SOCK_CreateConnector
  unsigned short port,
  unsigned short max_try)
 {
-    return s_Init(0,    host, port,  max_try,  0,         0, fSOCK_LogDefault);
+    return s_Init(0,    host, port,  max_try,  0,    0,    fSOCK_LogDefault);
 }
 
 
@@ -339,11 +373,11 @@ extern CONNECTOR SOCK_CreateConnectorEx
 (const char*    host,
  unsigned short port,
  unsigned short max_try,
- const void*    init_data,
- size_t         init_size,
+ const void*    data,
+ size_t         size,
  TSOCK_Flags    flags)
 {
-    return s_Init(0,    host, port,  max_try,  init_data, init_size, flags);
+    return s_Init(0,    host, port,  max_try,  data, size, flags);
 }
 
 
@@ -351,7 +385,7 @@ extern CONNECTOR SOCK_CreateConnectorOnTop
 (SOCK                   sock,
  unsigned short/*bool*/ own_sock)
 {
-    return s_Init(sock, 0,    0,     own_sock, 0,         0,         0);
+    return s_Init(sock, 0,    0,     own_sock, 0,    0,    0);
 }
 
 
@@ -360,5 +394,5 @@ extern CONNECTOR SOCK_CreateConnectorOnTopEx
  unsigned short/*bool*/ own_sock,
  const char*            hostport)
 {
-    return s_Init(sock, hostport, 0, own_sock, 0,         0,         0);
+    return s_Init(sock, hostport, 0, own_sock, 0,    0,    0);
 }

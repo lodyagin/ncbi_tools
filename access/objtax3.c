@@ -32,7 +32,7 @@ objtax3AsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Taxon3
-*    Generated using ASNCODE Revision: 6.17 at Dec 8, 2009  9:36 AM
+*    Generated using ASNCODE Revision: 6.19 at May 31, 2013  8:11 PM
 *
 **************************************************/
 
@@ -346,7 +346,7 @@ T3RequestAsnWrite(T3RequestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -790,7 +790,7 @@ T3ReplyAsnWrite(T3ReplyPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -986,6 +986,7 @@ T3ErrorAsnWrite(T3ErrorPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1468,6 +1469,7 @@ T3StatusFlagsAsnWrite(T3StatusFlagsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1523,7 +1525,7 @@ Value_valueAsnWrite(Value_valuePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
-
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -1687,6 +1689,13 @@ T3RefreshFlagsAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> orgmod_changed = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == T3REFRESHFLAGS_pgc_changed) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> pgc_changed = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1734,6 +1743,7 @@ T3RefreshFlagsAsnWrite(T3RefreshFlagsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+   MemSet ((Pointer) (&av), 0, sizeof (DataVal));
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1752,6 +1762,8 @@ T3RefreshFlagsAsnWrite(T3RefreshFlagsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, T3REFRESHFLAGS_mgc_changed,  &av);
    av.boolvalue = ptr -> orgmod_changed;
    retval = AsnWrite(aip, T3REFRESHFLAGS_orgmod_changed,  &av);
+   av.boolvalue = ptr -> pgc_changed;
+   retval = AsnWrite(aip, T3REFRESHFLAGS_pgc_changed,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_FTP_CONNECTOR__H
 #define CONNECT___NCBI_FTP_CONNECTOR__H
 
-/* $Id: ncbi_ftp_connector.h,v 1.16 2011/11/11 18:04:39 kazimird Exp $
+/* $Id: ncbi_ftp_connector.h,v 1.19 2013/11/27 15:34:33 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -38,12 +38,6 @@
 
 #include <connect/ncbi_connutil.h>
 
-#ifndef NCBI_DEPRECATED
-#  define NCBI_FTP_CONNECTOR_DEPRECATED
-#else
-#  define NCBI_FTP_CONNECTOR_DEPRECATED NCBI_DEPRECATED
-#endif
-
 
 /** @addtogroup Connectors
  *
@@ -66,11 +60,12 @@ enum EFTP_Flag {
     fFTP_UseActive    = 0x20,  /* use only active  mode for data connection  */
     fFTP_UseTypeL8    = 0x40,  /* use "TYPE L8" instead of "TYPE I" for data */
     fFTP_UncleanIAC   = 0x80,  /* do not escape IAC(\'377') in pathnames     */
-    fFTP_IgnoreProxy  = 0x100, /* do not use HTTP proxy even if provided     */
+    fFTP_IgnorePath   = 0x100, /* do not auto-chdir(net_info->path) at login */
     fFTP_UncorkUpload = 0x200, /* do not use TCP_CORK for uploads (poor perf)*/
     fFTP_NoSizeChecks = 0x400, /* do not check sizes of data transfers       */
     fFTP_NoExtensions = 0x800, /* do not use EPSV/EPRT protocol extensions   */
-    fFTP_DelayRestart = 0x1000 /* delay RESTart until an actual xfer command */
+    fFTP_DelayRestart = 0x1000,/* delay RESTart until an actual xfer command */
+    fFTP_UseProxy     = 0x2000 /* use proxy settings to establish connections*/
 };
 typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
 
@@ -102,8 +97,8 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  *
  * REN f1 f2           Rename file f1 to f2    250
  * CWD<SP>d            Change directory to d   250
- * PWD                 Get current directory   Current directory
- * MKD<SP>d            Create directory d      Directory created
+ * PWD                 Get current directory   Name of current directory
+ * MKD<SP>d            Create directory d      Name of created directory
  * RMD<SP>d            Delete directory d      250
  * CDUP                Go one dir level up     200
  * SYST                Get system info         Single-line system info
@@ -115,6 +110,10 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * LIST[<SP>d]         List curdir[or dir d]   Full directory listing
  * NLST[<SP>d]         Short list as in LIST   Short dirlist (filenames only)
  * RETR<SP>f           Retrieve file f         File contents
+ * MLSD[<SP>d]         List curdir[or dir d]   Mach-readable directory listing
+ * MLST[<SP>p]         Facts of curdir[or p]   Mach-readable path facts
+ * FEAT                FEAT command            FEAT list as returned by server
+ * OPTS<SP>opts        OPTS command            OPTS response as received
  * NOOP[<SP>anything]  Abort current download  <EOF>
  * STOR<SP>f           Store file f on server
  * APPE<SP>f           Append/create file f
@@ -126,24 +125,27 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * illegal).  Note that the codes are text strings each consisting of 3 chars
  * (not ints!) -- the "values" are chosen to be equivalent to FTP response
  * codes that the FTP servers are expected to generate upon successful
- * completion of the corresponding commands (per RFC959), but may not always
- * be the actual codes received from the server (connector is flexible with
- * accepting various codes noted in several different implementation of FTP
- * servers).
+ * completion of the corresponding commands (per RFC959), but may not
+ * necessarily be the actual codes as received from the server (connector is
+ * somewhat flexible with accepting various codes noted in several different
+ * implementation of FTP servers).
  *
  * <SP> denotes exactly one space character, a blank means any number of space
- * or tab characters.  Single filenames(f) and directories(d) span up to the
- * end of the command ('\n'), and do not require any quoting for special
- * characters.  Exception is the REN command, which takes two names, f1 and f2,
- * with each being either a single token (no leading '"' and embedded spaces /
- * tabs), or quoted FTP-style (enclosed in double quotes, with any embedded
- * double quote character doubled, e.g. """a""b" encodes the file name "a"b).
- * Note that the filename a"b (no leading quote) does not require any quoting.
- * LIST and NLST can take an optional argument d (the optional part shown in
- * square brakets which are not the elements of either command).  UTC seconds
- * can have a fraction portion preceded by a decimal point.
+ * or tab characters.  Single filenames(f), directories(d), and paths(p) span
+ * up to the end of the command ('\n'), and do not require any quoting for
+ * special characters.  Exception is the REN command, which takes two names,
+ * f1 and f2, each being either a single token (no leading '"' and embedded
+ * spaces / tabs), or quoted FTP-style (enclosed in double quotes, with any
+ * embedded double quote character doubled, e.g. """a""b" encodes the file
+ * name "a"b).  Note that the filename a"b (no leading quote) does not require
+ * any additional quoting.
+ * Some commands (e.g. NLST, MLSD, etc) allow an optional argument, which can
+ * either be present or omitted (the optional part is shown in the square
+ * brakets, which are not the elements of those commands).
+ * UTC seconds can have a fraction portion preceded by a decimal point.
  *
- * Current implementation forbids file names to contain '\0', '\r', or '\n'.
+ * Current implementation forbids file names to contain '\0', '\r', or '\n'
+ * (even though FTP takes special precautions how to deal with such names).
  *
  * Normally, FTP connection operates in READ mode:  commands are written and
  * responses are read.  In this mode the connection consumes any command, but
@@ -158,12 +160,14 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * pending command to be executed (even if the connection was created untied,
  * the additional flushing is done internally).
  *
- * When a RETR command gets executed, all subsequent reads from the connection
- * will retrieve the contents of the file (until eIO_Closed).  If the
- * connection returns eIO_Closed right away, it means that either the file does
- * not exist, is not a file but a directory, or is empty.  The first two cases
- * would cause CONN_Status(eIO_Write) to return a code different from
- * eIO_Success; and eIO_Success would only result in the case of an empty file.
+ * When a RETR/LIST/NLST/MLSD command gets executed, all subsequent reads from
+ * the connection will retrieve the contents of the file or directory (until
+ * eIO_Closed).  If the connection returns eIO_Closed right away, it means that
+ * either the file/directory does not exist, or RETR was attempted on a
+ * directory, or finally, the requested file/directory is empty.  The first two
+ * cases would cause CONN_Status(eIO_Write) to return a code different from
+ * eIO_Success;  and eIO_Success would only result in the case of an empty
+ * source.
  *
  * File size will be checked by the connector to see whether the download (or
  * upload, see below) was complete (sometimes, the information returned from
@@ -201,37 +205,38 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * any following writes will send the data to the file being uploaded (while
  * the file is being uploaded, CONN_Status(eIO_Write) will report the status of
  * the last write operation to the file).  Should an error occur, eIO_Closed
- * would result and the connection would not accept any more writes until it
+ * would result, and the connection would not accept any more writes until it
  * is read.  Similarly, when an upload is about to finish, the connection must
  * be read to finalize the transfer.  The result of the read will be a string
- * representing the size of the uploaded file data (or an empty read in case
- * of an upload error) as a sequence of decimal digits.  Once all digits are
- * extracted (eIO_Closed seen) the connection returns to READ mode.
- * CONN_Wait(eIO_Read) will also cause the upload to finalize.
+ * representing the size of the uploaded file data as a sequence of decimal
+ * digits (or an empty read in case of an upload error).  Once all digits are
+ * consumed (eIO_Closed seen) the connection returns to READ mode.
+ * CONN_Wait(eIO_Read) will also cause the upload to finalize -- still the data
+ * size is expected to be extracted (or discarded if another command follows).
  *
  * Unfinalized uploads (such as when connection gets closed before the final
- * read) get reported to the log, and also cause CONN_Close() to return an
+ * read) get reported to the log, and also make CONN_Close() to return an
  * error.  Note that unlike file download (which occurs in READ mode), it is
  * impossible to abort an upload by writing any FTP commands (since writing in
- * SEND mode goes to file), but it is reading that will do the cancel.  So if
- * a connection is in undetermined state, the recovery would be to do a small
- * quick read (e.g. for just 1 byte with small timeout), then write the "NOOP"
- * command and cause an execution (e.g. writing "NOOP\n" does that), then
- * drain the connection by reading again until eIO_Closed.
+ * SEND mode goes to file), but it is reading that will cause the cancellation.
+ * So if a connection is in undetermined state, the recovery would be to do a
+ * small quick read (e.g. for just 1 byte with a small timeout), then write the
+ * "NOOP" command and cause an execution (e.g. writing "NOOP\n" does that),
+ * then drain the connection by reading again until eIO_Closed.
  *
  * Both downloads and uploads (but not file lists!) support restart mode (if
  * the server permits so).  The standard guarantees that the REST command
- * remains in effect only until any subsequent command (which is supposed to
- * be either RETRIEVE or STORE), and that servers might lose the restart
- * position, otherwise.  However, many implementations allow to open a data
- * connection in the interim.  Since the FTP connector opens data connection
- * only upon receiving a data transfer command from the user, it thus can
- * clobber the preceding REST for the servers that do not allow the extra
- * activity.  For those, the REST command can be delayed for issuance until
- * right before the data transfer starts (see flags).  In this case, a write
- * of such command does not result in the "350" response on read (still,
- * CONN_Write()/CONN_Flush()/CONN_Status() will all reported as successful if
- * the command was properly understood by the connector).
+ * remains in effect only until any subsequent command (which is supposed to be
+ * either RETR or STOR), and that servers might lose the restart position,
+ * otherwise.  However, many implementations allow to open a data connection in
+ * the interim.  Since the FTP connector opens data connection only upon
+ * receiving a data transfer command from the user, it thus can clobber the
+ * preceding REST for the servers that do not allow the extra activity.  For
+ * those, the REST command can be delayed for issuance until right before the
+ * data transfer is about to begin (see flags).  In this case, a write of such
+ * command does not result in the "350" response on read (still,
+ * CONN_Write()/CONN_Flush()/CONN_Status() will all be reported as successful
+ * if the command was properly understood by the connector).
  *
  * The connector drops any restart position, which remains for longer than
  * the next user command (so the restart position will not be accidentally
@@ -247,11 +252,12 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * The supplement mode of CONN API can make use of FTP connection much easier:
  * instead of checking for CONN_Status(), direct return codes of read/write
  * operations can be used.  Care must be taken to interpret eIO_Closed that may
- * result from read operations (such as when extracting the code that is
- * immediately followed by the response boundary denoted as eIO_Closed).
+ * result from read operations (such as when extracting a numeric string of
+ * command completion that is immediately followed by the response boundary
+ * denoted as eIO_Closed).
  *
- * To make the code robust, it is always advised to first process the actual
- * byte count reported from CONN I/O and only then to analyze the return code.
+ * To make the code robust, it is always advised to process the tranfser byte
+ * count first, and then to proceed with the return status analysis.
  */
 
 /* Even though many FTP server implementations provide SIZE command these days,
@@ -270,7 +276,7 @@ typedef unsigned int TFTP_Flags;  /* bitwise OR of EFTP_Flag */
  * The callback remains effective for the entire lifetime of the connector.
  * As the first argument, the callback also gets a copy of the FTP command
  * that triggered it, and for compatibility with future extensions, the user
- * code is expected to check which command it is processing, before proceeding
+ * code is expected to check, which command it is processing, before proceeding
  * with the "arg" parameter (thus skipping unexpected commands, and returning
  * eIO_Success).  Return code non-eIO_Success causes the command terminate
  * with an error, with the code returned "as-is" from a CONN call.
@@ -302,19 +308,13 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR FTP_CreateConnectorSimple
 );
 
 
-/* Same as above but use fields provided by the connection structure */
+/* Same as above but use fields provided by the connection structure.
+ * Note:  info->timeout is only used for tunneling, not for FTP xfers */
 extern NCBI_XCONNECT_EXPORT CONNECTOR FTP_CreateConnector
 (const SConnNetInfo*  info,   /* all connection params including HTTP proxy  */
  TFTP_Flags           flag,   /* mostly for logging socket data [optional]   */
  const SFTP_Callback* cmcb    /* command callback [optional]                 */
 );
-
-
-/* Same as above:  do not use for the obsolete naming */
-NCBI_FTP_CONNECTOR_DEPRECATED
-extern NCBI_XCONNECT_EXPORT CONNECTOR FTP_CreateDownloadConnector
-(const char* host, unsigned short port, const char* user,
- const char* pass, const char*    path, TFTP_Flags  flag);
 
 
 #ifdef __cplusplus

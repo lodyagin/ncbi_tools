@@ -1,4 +1,4 @@
-/*  $Id: hspfilter_collector.c,v 1.4 2011/04/15 12:30:06 kazimird Exp $
+/*  $Id: hspfilter_collector.c,v 1.7 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,6 @@
  * a BLAST search, and subsequently return them in sorted order.
  */
 
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: hspfilter_collector.c,v 1.4 2011/04/15 12:30:06 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
-
 
 #include <algo/blast/core/hspfilter_collector.h>
 #include <algo/blast/core/blast_util.h>
@@ -56,9 +51,10 @@ typedef struct BlastHSPCollectorData {
  * @param results The HSP results to operate on  [in]
  */ 
 static int 
-s_BlastHSPCollectorInit(void* data, BlastHSPResults* results)
+s_BlastHSPCollectorInit(void* data, void* hsp_results)
 {
    BlastHSPCollectorData * col_data = data;
+   BlastHSPResults* results = (BlastHSPResults*)hsp_results;
    /* grab the results as destination to store collected hsps */
    col_data->results = results;
    return 0;
@@ -69,7 +65,7 @@ s_BlastHSPCollectorInit(void* data, BlastHSPResults* results)
  * @param results The HSP results to propagate [in][out]
  */ 
 static int 
-s_BlastHSPCollectorFinal(void* data, BlastHSPResults* results)
+s_BlastHSPCollectorFinal(void* data, void* results)
 {
    BlastHSPCollectorData * col_data = data;
    /* results already stored during run, no action needed */
@@ -97,9 +93,14 @@ s_BlastHSPCollectorRun(void* data, BlastHSPList* hsp_list)
       return -1;
 
    /* The HSP list should already be sorted by score coming into this function.
-    * Still check that this assumption is true.
+    * Still check that this assumption is true. Note that HSP list does not need to be
+    * sorted after preliminary stage for vdb search becuase of offset adjustment.
     */
-   ASSERT(Blast_HSPListIsSortedByScore(hsp_list));
+#ifdef ERR_POST_EX_DEFINED
+   if(!Blast_HSPListIsSortedByScore(hsp_list)) {
+             ErrPostEx(SEV_WARNING, 0, 0, "HSP List is not sorted by score");
+   }
+#endif
    
    /* Rearrange HSPs into multiple hit lists if more than one query */
    if (results->num_queries > 1) {
@@ -291,7 +292,8 @@ s_BlastHSPCollectorFree(BlastHSPWriter* writer)
  */
 static
 BlastHSPWriter* 
-s_BlastHSPCollectorNew(void* params, BlastQueryInfo* query_info)
+s_BlastHSPCollectorNew(void* params, BlastQueryInfo* query_info,
+                       BLAST_SequenceBlk* sequence)
 {
    BlastHSPWriter * writer = NULL;
    BlastHSPCollectorData * data = NULL;

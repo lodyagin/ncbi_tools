@@ -27,11 +27,11 @@ objvalidAsnLoad(void)
    return TRUE;
 }
 
-
+//LCOV_EXCL_START
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Structured-comment-validation
-*    Generated using ASNCODE Revision: 6.17 at Feb 22, 2012 10:57 AM
+*    Generated using ASNCODE Revision: 6.19 at Jul 22, 2013  2:43 PM
 *
 **************************************************/
 
@@ -195,6 +195,9 @@ FieldRuleAsnWrite(FieldRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -327,6 +330,9 @@ FieldSetAsnWrite(FieldSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) FieldRuleAsnWrite, aip, atp, FIELD_SET_E);
    retval = TRUE;
 
@@ -504,6 +510,9 @@ DependentFieldRuleAsnWrite(DependentFieldRulePtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -644,6 +653,9 @@ DependentFieldSetAsnWrite(DependentFieldSetPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) DependentFieldRuleAsnWrite, aip, atp, DEPENDENT_FIELD_SET_E);
    retval = TRUE;
 
@@ -689,6 +701,7 @@ CommentRuleFree(CommentRulePtr ptr)
    MemFree(ptr -> prefix);
    FieldSetFree(ptr -> fields);
    DependentFieldSetFree(ptr -> dependent_rules);
+   PhraseListFree(ptr -> forbidden_phrases);
    return MemFree(ptr);
 }
 
@@ -782,6 +795,13 @@ CommentRuleAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == COMMENT_RULE_forbidden_phrases) {
+      ptr -> forbidden_phrases = PhraseListAsnRead(aip, atp);
+      if (aip -> io_failure) {
+         goto erret;
+      }
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -829,6 +849,9 @@ CommentRuleAsnWrite(CommentRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -850,6 +873,11 @@ CommentRuleAsnWrite(CommentRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, COMMENT_RULE_allow_unlisted,  &av);
    if (ptr -> dependent_rules != NULL) {
       if ( ! DependentFieldSetAsnWrite(ptr -> dependent_rules, aip, COMMENT_RULE_dependent_rules)) {
+         goto erret;
+      }
+   }
+   if (ptr -> forbidden_phrases != NULL) {
+      if ( ! PhraseListAsnWrite(ptr -> forbidden_phrases, aip, COMMENT_RULE_forbidden_phrases)) {
          goto erret;
       }
    }
@@ -969,6 +997,9 @@ CommentSetAsnWrite(CommentSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) CommentRuleAsnWrite, aip, atp, COMMENT_SET_E);
    retval = TRUE;
 
@@ -977,3 +1008,121 @@ erret:
    return retval;
 }
 
+
+
+/**************************************************
+*
+*    PhraseListFree()
+*
+**************************************************/
+NLM_EXTERN 
+PhraseListPtr LIBCALL
+PhraseListFree(PhraseListPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   AsnGenericBaseSeqOfFree(ptr,ASNCODE_PTRVAL_SLOT);
+   return NULL;
+}
+
+
+/**************************************************
+*
+*    PhraseListAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+PhraseListPtr LIBCALL
+PhraseListAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   PhraseListPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objvalidAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* PhraseList ::= (self contained) */
+      atp = AsnReadId(aip, amp, PHRASE_LIST);
+   } else {
+      atp = AsnLinkType(orig, PHRASE_LIST);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   func = NULL;
+
+   ptr  = AsnGenericBaseSeqOfAsnRead(aip, amp, atp, ASNCODE_PTRVAL_SLOT, &isError);
+   if (isError && ptr  == NULL) {
+      goto erret;
+   }
+
+
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = PhraseListFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    PhraseListAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+PhraseListAsnWrite(PhraseListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objvalidAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, PHRASE_LIST);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
+   retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_PTRVAL_SLOT, aip, atp, PHRASE_LIST_E);
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+//LCOV_EXCL_STOP

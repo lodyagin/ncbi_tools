@@ -30,11 +30,6 @@
  * Authors: Alejandro Schaffer, Yi-Kuo Yu
  */
 
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: compo_mode_condition.c,v 1.10 2006/05/03 14:09:52 gertz Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
-
 #include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/composition_adjustment/composition_adjustment.h>
 #include <algo/blast/composition_adjustment/compo_mode_condition.h>
@@ -160,8 +155,7 @@ s_TestToApplyREAdjustmentUnconditional(int Len_query,
  * A function used to choose a mode for composition-based statistics.
  * Decide whether a relative-entropy score adjustment should be used
  * based on lengths and letter counts of the two matched sequences;
- * matrix_name is the underlying score matrix; for now only BLOSUM62
- * is supported */
+ * matrix_name is the underlying score matrix */
 static EMatrixAdjustRule
 s_TestToApplyREAdjustmentConditional(int Len_query,
                                      int Len_match,

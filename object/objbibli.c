@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:  Object manager for module NCBI-Biblio
 *
@@ -41,6 +41,9 @@
 * 07-19-93 Ostell      Support for ASN30 added
 *
 * $Log: objbibli.c,v $
+* Revision 6.9  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.8  2009/10/02 19:44:48  kans
 * address clang static analyzer warnings
 *
@@ -294,6 +297,8 @@ NLM_EXTERN Boolean LIBCALL AffilAsnWrite (AffilPtr afp, AsnIoPtr aip, AsnTypePtr
         return FALSE;
 
 	if (afp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnWrite(aip, atp, &av))   /* write the tag */
         goto erret;
@@ -580,6 +585,8 @@ NLM_EXTERN Boolean LIBCALL AuthListAsnWrite (AuthListPtr alp, AsnIoPtr aip, AsnT
 
 	if (alp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)alp))   /* open AuthList SEQUENCE */
         goto erret;
 
@@ -773,6 +780,8 @@ NLM_EXTERN Boolean LIBCALL AuthorAsnWrite (AuthorPtr ap, AsnIoPtr aip, AsnTypePt
         return FALSE;
 
 	if (ap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ap))  /* open the SEQUENCE */
         goto erret;
@@ -1020,6 +1029,8 @@ NLM_EXTERN Boolean LIBCALL CitArtAsnWrite (CitArtPtr cap, AsnIoPtr aip, AsnTypeP
 
 	if (cap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)cap))  /* open the SEQUENCE */
         goto erret;
 
@@ -1242,6 +1253,8 @@ NLM_EXTERN Boolean LIBCALL ImprintAsnWrite (ImprintPtr ip, AsnIoPtr aip, AsnType
 
 	if (ip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)ip))
         goto erret;
     if (! DateAsnWrite(ip->date, aip, IMPRINT_date))
@@ -1433,6 +1446,8 @@ NLM_EXTERN Boolean LIBCALL CitRetractAsnWrite (CitRetractPtr crp, AsnIoPtr aip, 
         return FALSE;
 
 	if (crp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)crp))
         goto erret;
@@ -1866,6 +1881,8 @@ NLM_EXTERN Boolean LIBCALL CitProcAsnWrite (CitBookPtr cpp, AsnIoPtr aip, AsnTyp
 
 	if (cpp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)cpp))  /* open the SEQUENCE */
         goto erret;
     if (! CitBookAsnWrite(cpp, aip, CIT_PROC_book))   /* write the book */
@@ -1979,6 +1996,8 @@ NLM_EXTERN Boolean LIBCALL CitLetAsnWrite (CitBookPtr clp, AsnIoPtr aip, AsnType
         return FALSE;
 
 	if (clp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)clp))  /* open the SEQUENCE */
         goto erret;
@@ -2196,6 +2215,8 @@ NLM_EXTERN Boolean LIBCALL CitPatAsnWrite (CitPatPtr cpp, AsnIoPtr aip, AsnTypeP
 
 	if (cpp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)cpp))  /* open the SEQUENCE */
         goto erret;
     av.ptrvalue = cpp->title;
@@ -2392,6 +2413,8 @@ NLM_EXTERN Boolean LIBCALL IdPatAsnWrite (IdPatPtr idp, AsnIoPtr aip, AsnTypePtr
         return FALSE;
 
 	if (idp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)idp))  /* open the SEQUENCE */
         goto erret;
@@ -2606,6 +2629,8 @@ NLM_EXTERN Boolean LIBCALL CitGenAsnWrite (CitGenPtr cgp, AsnIoPtr aip, AsnTypeP
 
 	if (cgp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)cgp))  /* open the SEQUENCE */
         goto erret;
     if (cgp->cit != NULL)
@@ -2801,6 +2826,8 @@ NLM_EXTERN Boolean LIBCALL TitleAsnWrite (ValNodePtr tp, AsnIoPtr aip, AsnTypePt
         return FALSE;
 
 	if (tp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	oldtp = tp;
     if (! AsnOpenStruct(aip, atp, (Pointer)oldtp))  /* open the SET OF */
@@ -3003,6 +3030,8 @@ NLM_EXTERN Boolean LIBCALL CitSubAsnWrite (CitSubPtr csp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
 	if (csp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)csp))  /* open the SEQUENCE */
         goto erret;
@@ -3721,6 +3750,8 @@ NLM_EXTERN Boolean LIBCALL PatPrioritySetAsnWrite (PatPriorityPtr ppp, AsnIoPtr 
 
 	if (ppp == NULL) { AsnNullValueMsg(aip, set); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, set, (Pointer)ppp))  /* open the SEQUENCE OF */
         goto erret;
 	
@@ -3896,6 +3927,8 @@ NLM_EXTERN Boolean LIBCALL ArticleIdAsnWrite (ArticleIdPtr aidp, AsnIoPtr aip, A
 
 	if (aidp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! aidp->choice)
 	goto erret;
 
@@ -4059,6 +4092,8 @@ NLM_EXTERN Boolean LIBCALL PubStatusDateAsnWrite (PubStatusDatePtr psdp, AsnIoPt
         return FALSE;
 
 	if (psdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)psdp))
         goto erret;

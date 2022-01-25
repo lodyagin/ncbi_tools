@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:  Object manager for module NCBI-Seqalign
 *
@@ -422,6 +422,8 @@ NLM_EXTERN Boolean LIBCALL SeqAlignAsnWrite (SeqAlignPtr sap, AsnIoPtr aip, AsnT
     aip->linelength = 500;
 
 	if (sap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sap))
         goto erret;
@@ -1020,6 +1022,8 @@ NLM_EXTERN Boolean LIBCALL DenseDiagAsnWrite (DenseDiagPtr ddp, AsnIoPtr aip, As
 
 	if (ddp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)ddp))
         goto erret;
 
@@ -1265,6 +1269,8 @@ NLM_EXTERN Boolean LIBCALL DenseSegAsnWrite (DenseSegPtr dsp, AsnIoPtr aip, AsnT
         return FALSE;
 
 	if (dsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)dsp))
         goto erret;
@@ -1554,6 +1560,8 @@ NLM_EXTERN Boolean LIBCALL StdSegAsnWrite (StdSegPtr ssp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
 	if (ssp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ssp))
         goto erret;
@@ -1885,6 +1893,8 @@ NLM_EXTERN Boolean LIBCALL PackSegAsnWrite (PackSegPtr psp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
 	if (psp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)psp))
         goto erret;
@@ -2315,6 +2325,9 @@ SplicedSegAsnWrite(SplicedSegPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2515,6 +2528,7 @@ SparseSegAsnWrite(SparseSegPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2777,6 +2791,9 @@ SplicedExonAsnWrite(SplicedExonPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2988,6 +3005,8 @@ SplicedSegModifierAsnWrite(SplicedSegModifierPtr anp, AsnIoPtr aip, AsnTypePtr o
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -3160,6 +3179,8 @@ ProductPosAsnWrite(ProductPosPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -3355,6 +3376,8 @@ SplicedExonChunkAsnWrite(SplicedExonChunkPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -3532,6 +3555,9 @@ SpliceSiteAsnWrite(SpliceSitePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3693,6 +3719,9 @@ ProtPosAsnWrite(ProtPosPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3904,6 +3933,9 @@ SparseAlignAsnWrite(SparseAlignPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4074,6 +4106,9 @@ SparseSegExtAsnWrite(SparseSegExtPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }

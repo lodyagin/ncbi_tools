@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: readdb.c,v 6.548 2012/03/14 20:09:35 camacho Exp $";
+static char const rcsid[] = "$Id: readdb.c,v 6.549 2016/09/02 15:04:59 ucko Exp $";
 
-/* $Id: readdb.c,v 6.548 2012/03/14 20:09:35 camacho Exp $ */
+/* $Id: readdb.c,v 6.549 2016/09/02 15:04:59 ucko Exp $ */
 /*
 * ===========================================================================
 *
@@ -50,7 +50,7 @@ Detailed Contents:
 *
 * Version Creation Date:   3/22/95
 *
-* $Revision: 6.548 $
+* $Revision: 6.549 $
 *
 * File Description: 
 *       Functions to rapidly read databases from files produced by formatdb.
@@ -65,6 +65,11 @@ Detailed Contents:
 *
 * RCS Modification History:
 * $Log: readdb.c,v $
+* Revision 6.549  2016/09/02 15:04:59  ucko
+* readdb.c: accommodate systems that use GNU libc with non-Linux kernels
+* (such as the Hurd or the FreeBSD kernel), as already done in
+* Debian/Ubuntu packages.
+*
 * Revision 6.548  2012/03/14 20:09:35  camacho
 * Fix buffer overrun JIRA BD-348
 *
@@ -2065,7 +2070,7 @@ Detailed Contents:
 #include <taxblast.h>
 #endif
 
-#ifdef __linux
+#ifdef __GLIBC__ /* not just __linux */
 #ifndef __USE_BSD
 #define __USE_BSD
 #endif
@@ -2080,7 +2085,7 @@ Detailed Contents:
 #define READDBBF_READY 1
 #define READDBBF_DISABLE 2
 
-#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX) || defined(__GLIBC__)
 #ifndef MADV_NORMAL
 #undef HAVE_MADVISE
 #endif
@@ -2115,7 +2120,7 @@ static Int4 madvisePreloadBlock = MADVISE_SEQ_PRELOAD;
 
 #if defined(OS_UNIX_SOL)
 #include <sys/int_types.h>
-#elif defined(OS_UNIX_LINUX)
+#elif defined(OS_UNIX_LINUX) || defined(__GLIBC__)
 #include <stdint.h>
 #endif
 typedef struct readdbbioseqfetch {
@@ -2144,7 +2149,7 @@ static int LIBCALLBACK ID_Compare(VoidPtr i, VoidPtr j);
 static ReadDBFILEPtr readdb_merge_gifiles (ReadDBFILEPtr rdfp_chain);
 static Boolean s_IsTextFile(const char* filename);
 
-#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX) || defined(__GLIBC__)
 #ifdef  HAVE_MADVISE
 static void readdb_preload_index (ReadDBFILEPtr rdfp, Int4 first_db_seq, 
 				Int4 final_db_seq, EMemMapAdvise advice, Boolean sync);
@@ -4824,7 +4829,7 @@ readdb_get_link(ReadDBFILEPtr rdfp, Int4 ordinal_id)
       NlmMutexUnlock(hdrseq_mutex);
    }
 
-#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX) || defined(__GLIBC__)
 #ifdef  HAVE_MADVISE
 	if( useMadvise && rdfp != NULL ) {
 		EThreadPriority pri = eTP_Highest;
@@ -12709,7 +12714,7 @@ Boolean FD_MakeAliasFile(FDB_optionsPtr options)
 }
 
 
-#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX)
+#if defined(OS_UNIX_SOL) || defined(OS_UNIX_LINUX) || defined(__GLIBC__)
 #ifdef  HAVE_MADVISE
 
 /* IMPORTANT INFO:

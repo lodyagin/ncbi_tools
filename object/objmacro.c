@@ -31,7 +31,7 @@ objmacroAsnLoad(void)
 
 /**************************************************
 *    Generated object loaders for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.19 at Jun 6, 2012 10:06 AM
+*    Generated using ASNCODE Revision: 6.19 at Apr 21, 2015  2:54 PM
 *
 **************************************************/
 
@@ -187,6 +187,9 @@ AECRActionAsnWrite(AECRActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -397,6 +400,9 @@ ParseActionAsnWrite(ParseActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -543,6 +549,9 @@ MacroActionListAsnWrite(MacroActionListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) MacroActionChoiceAsnWrite, aip, atp, MACRO_ACTION_LIST_E);
    retval = TRUE;
 
@@ -657,6 +666,9 @@ SuspectRuleSetAsnWrite(SuspectRuleSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) SuspectRuleAsnWrite, aip, atp, SUSPECT_RULE_SET_E);
    retval = TRUE;
 
@@ -826,6 +838,9 @@ WordSubstitutionAsnWrite(WordSubstitutionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -955,6 +970,9 @@ WordSubstitutionSetAsnWrite(WordSubstitutionSetPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) WordSubstitutionAsnWrite, aip, atp, WORD_SUBSTITUTION_SET_E);
    retval = TRUE;
 
@@ -986,6 +1004,8 @@ StringConstraintNew(void)
    ptr -> is_all_lower = 0;
    ptr -> is_all_punct = 0;
    ptr -> ignore_weasel = 0;
+   ptr -> is_first_cap = 0;
+   ptr -> is_first_each_cap = 0;
    return ptr;
 
 }
@@ -1141,6 +1161,20 @@ StringConstraintAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> ignore_weasel = av.boolvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == STRING_CONSTRAINT_is_first_cap) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_first_cap = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == STRING_CONSTRAINT_is_first_each_cap) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> is_first_each_cap = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -1188,6 +1222,9 @@ StringConstraintAsnWrite(StringConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1221,6 +1258,10 @@ StringConstraintAsnWrite(StringConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    retval = AsnWrite(aip, STRING_CONSTRAINT_is_all_punct,  &av);
    av.boolvalue = ptr -> ignore_weasel;
    retval = AsnWrite(aip, STRING_CONSTRAINT_ignore_weasel,  &av);
+   av.boolvalue = ptr -> is_first_cap;
+   retval = AsnWrite(aip, STRING_CONSTRAINT_is_first_cap,  &av);
+   av.boolvalue = ptr -> is_first_each_cap;
+   retval = AsnWrite(aip, STRING_CONSTRAINT_is_first_each_cap,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -1337,6 +1378,9 @@ StringConstraintSetAsnWrite(StringConstraintSetPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericUserSeqOfAsnWrite(ptr , (AsnWriteFunc) StringConstraintAsnWrite, aip, atp, STRING_CONSTRAINT_SET_E);
    retval = TRUE;
 
@@ -1496,6 +1540,8 @@ LocationPosConstraintAsnWrite(LocationPosConstraintPtr anp, AsnIoPtr aip, AsnTyp
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -1715,6 +1761,9 @@ LocationConstraintAsnWrite(LocationConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1893,6 +1942,9 @@ FeatQualLegalValAsnWrite(FeatQualLegalValPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2051,6 +2103,8 @@ FeatQualLegalValChoiceAsnWrite(FeatQualLegalValChoicePtr anp, AsnIoPtr aip, AsnT
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -2182,6 +2236,9 @@ FeatQualLegalSetAsnWrite(FeatQualLegalSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) FeatQualLegalValChoiceAsnWrite, aip, atp, FEAT_QUAL_LEGAL_SET_E);
    retval = TRUE;
 
@@ -2334,6 +2391,8 @@ FeatQualChoiceAsnWrite(FeatQualChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -2508,6 +2567,9 @@ FeatureFieldAsnWrite(FeatureFieldPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2672,6 +2734,9 @@ FeatureFieldLegalAsnWrite(FeatureFieldLegalPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2842,6 +2907,9 @@ FeatureFieldPairAsnWrite(FeatureFieldPairPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3058,6 +3126,8 @@ RnaFeatTypeAsnWrite(RnaFeatTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -3255,6 +3325,9 @@ RnaQualAsnWrite(RnaQualPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3427,6 +3500,9 @@ RnaQualPairAsnWrite(RnaQualPairPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3593,6 +3669,9 @@ SourceQualPairAsnWrite(SourceQualPairPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -3776,6 +3855,8 @@ SourceQualChoiceAsnWrite(SourceQualChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -3962,6 +4043,9 @@ SourceQualTextValAsnWrite(SourceQualTextValPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4148,6 +4232,8 @@ SourceQualValChoiceAsnWrite(SourceQualValChoicePtr anp, AsnIoPtr aip, AsnTypePtr
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -4295,6 +4381,9 @@ SourceQualValSetAsnWrite(SourceQualValSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) SourceQualValChoiceAsnWrite, aip, atp, SOURCE_QUAL_VAL_SET_E);
    retval = TRUE;
 
@@ -4446,6 +4535,9 @@ CDSGeneProtFieldPairAsnWrite(CDSGeneProtFieldPairPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4637,6 +4729,8 @@ MolinfoFieldAsnWrite(MolinfoFieldPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -4825,6 +4919,9 @@ MolinfoMoleculePairAsnWrite(MolinfoMoleculePairPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -4986,6 +5083,9 @@ MolinfoTechniquePairAsnWrite(MolinfoTechniquePairPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5147,6 +5247,9 @@ MolinfoCompletednessPairAsnWrite(MolinfoCompletednessPairPtr ptr, AsnIoPtr aip, 
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5308,6 +5411,9 @@ MolinfoMolClassPairAsnWrite(MolinfoMolClassPairPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5469,6 +5575,9 @@ MolinfoTopologyPairAsnWrite(MolinfoTopologyPairPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5630,6 +5739,9 @@ MolinfoStrandPairAsnWrite(MolinfoStrandPairPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -5821,6 +5933,8 @@ MolinfoFieldPairAsnWrite(MolinfoFieldPairPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -5972,6 +6086,9 @@ MolinfoFieldListAsnWrite(MolinfoFieldListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) MolinfoFieldAsnWrite, aip, atp, MOLINFO_FIELD_LIST_E);
    retval = TRUE;
 
@@ -6125,6 +6242,9 @@ MolinfoFieldConstraintAsnWrite(MolinfoFieldConstraintPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6300,6 +6420,8 @@ StructuredCommentFieldAsnWrite(StructuredCommentFieldPtr anp, AsnIoPtr aip, AsnT
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -6479,6 +6601,9 @@ StructuredCommentFieldPairAsnWrite(StructuredCommentFieldPairPtr ptr, AsnIoPtr a
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6646,6 +6771,9 @@ DBLinkFieldPairAsnWrite(DBLinkFieldPairPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6808,6 +6936,9 @@ PubFieldConstraintAsnWrite(PubFieldConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -6995,6 +7126,8 @@ PubFieldSpecialConstraintTypeAsnWrite(PubFieldSpecialConstraintTypePtr anp, AsnI
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -7180,6 +7313,9 @@ PubFieldSpecialConstraintAsnWrite(PubFieldSpecialConstraintPtr ptr, AsnIoPtr aip
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -7353,6 +7489,9 @@ PublicationConstraintAsnWrite(PublicationConstraintPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -7539,6 +7678,9 @@ SourceConstraintAsnWrite(SourceConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -7714,6 +7856,9 @@ CDSGeneProtPseudoConstraintAsnWrite(CDSGeneProtPseudoConstraintPtr ptr, AsnIoPtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -7869,6 +8014,8 @@ CDSGeneProtConstraintFieldAsnWrite(CDSGeneProtConstraintFieldPtr anp, AsnIoPtr a
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -8048,6 +8195,9 @@ CDSGeneProtQualConstraintAsnWrite(CDSGeneProtQualConstraintPtr ptr, AsnIoPtr aip
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -8222,6 +8372,9 @@ FieldConstraintAsnWrite(FieldConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -8439,6 +8592,8 @@ FieldTypeAsnWrite(FieldTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -8663,6 +8818,8 @@ SequenceConstraintMolTypeConstraintAsnWrite(SequenceConstraintMolTypeConstraintP
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -8855,6 +9012,8 @@ QuantityConstraintAsnWrite(QuantityConstraintPtr anp, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -9073,6 +9232,9 @@ SequenceConstraintAsnWrite(SequenceConstraintPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -9277,6 +9439,9 @@ TranslationConstraintAsnWrite(TranslationConstraintPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -9516,6 +9681,8 @@ ConstraintChoiceAsnWrite(ConstraintChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -9687,6 +9854,9 @@ ConstraintChoiceSetAsnWrite(ConstraintChoiceSetPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) ConstraintChoiceAsnWrite, aip, atp, CONSTRAINT_CHOICE_SET_E);
    retval = TRUE;
 
@@ -9849,6 +10019,8 @@ TextMarkerAsnWrite(TextMarkerPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -10065,6 +10237,9 @@ TextPortionAsnWrite(TextPortionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10260,6 +10435,9 @@ FieldEditAsnWrite(FieldEditPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10466,6 +10644,8 @@ FieldPairTypeAsnWrite(FieldPairTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -10667,6 +10847,9 @@ ApplyActionAsnWrite(ApplyActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -10837,6 +11020,9 @@ EditActionAsnWrite(EditActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11013,6 +11199,8 @@ TextTransformAsnWrite(TextTransformPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -11152,6 +11340,9 @@ TextTransformSetAsnWrite(TextTransformSetPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericChoiceSeqOfAsnWrite(ptr , (AsnWriteFunc) TextTransformAsnWrite, aip, atp, TEXT_TRANSFORM_SET_E);
    retval = TRUE;
 
@@ -11328,6 +11519,9 @@ ConvertActionAsnWrite(ConvertActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11499,6 +11693,9 @@ CopyActionAsnWrite(CopyActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -11552,7 +11749,6 @@ SwapActionFree(SwapActionPtr ptr)
       return NULL;
    }
    FieldPairTypeFree(ptr -> fields);
-   FieldTypeFree(ptr -> field_to);
    return MemFree(ptr);
 }
 
@@ -11611,13 +11807,6 @@ SwapActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
-   if (atp == SWAP_ACTION_field_to) {
-      ptr -> field_to = FieldTypeAsnRead(aip, atp);
-      if (aip -> io_failure) {
-         goto erret;
-      }
-      atp = AsnReadId(aip,amp, atp);
-   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -11665,17 +11854,15 @@ SwapActionAsnWrite(SwapActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
 
    if (ptr -> fields != NULL) {
       if ( ! FieldPairTypeAsnWrite(ptr -> fields, aip, SWAP_ACTION_fields)) {
-         goto erret;
-      }
-   }
-   if (ptr -> field_to != NULL) {
-      if ( ! FieldTypeAsnWrite(ptr -> field_to, aip, SWAP_ACTION_field_to)) {
          goto erret;
       }
    }
@@ -11873,6 +12060,9 @@ AECRParseActionAsnWrite(AECRParseActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12047,6 +12237,9 @@ RemoveActionAsnWrite(RemoveActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12219,6 +12412,9 @@ RemoveOutsideActionAsnWrite(RemoveOutsideActionPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12432,6 +12628,8 @@ ActionChoiceAsnWrite(ActionChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -12630,6 +12828,8 @@ ParseSrcOrgChoiceAsnWrite(ParseSrcOrgChoicePtr anp, AsnIoPtr aip, AsnTypePtr ori
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -12804,6 +13004,9 @@ ParseSrcOrgAsnWrite(ParseSrcOrgPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -12979,6 +13182,8 @@ ParseSrcGeneralIdAsnWrite(ParseSrcGeneralIdPtr anp, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -13210,6 +13415,8 @@ ParseSrcAsnWrite(ParseSrcPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -13412,6 +13619,9 @@ ParseDstOrgAsnWrite(ParseDstOrgPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -13602,6 +13812,8 @@ ParseDestAsnWrite(ParseDestPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -13786,6 +13998,9 @@ LocationIntervalAsnWrite(LocationIntervalPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -13956,6 +14171,8 @@ LocationChoiceAsnWrite(LocationChoicePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -14095,6 +14312,9 @@ SequenceListAsnWrite(SequenceListPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    retval = AsnGenericBaseSeqOfAsnWrite(ptr, ASNCODE_PTRVAL_SLOT, aip, atp, SEQUENCE_LIST_E);
    retval = TRUE;
 
@@ -14247,6 +14467,8 @@ SequenceListChoiceAsnWrite(SequenceListChoicePtr anp, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -14501,6 +14723,9 @@ ApplyFeatureActionAsnWrite(ApplyFeatureActionPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -14695,6 +14920,9 @@ RemoveFeatureActionAsnWrite(RemoveFeatureActionPtr ptr, AsnIoPtr aip, AsnTypePtr
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -14866,6 +15094,9 @@ ConvertFromCDSOptionsAsnWrite(ConvertFromCDSOptionsPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -15023,6 +15254,8 @@ ConvertFeatureSrcOptionsAsnWrite(ConvertFeatureSrcOptionsPtr anp, AsnIoPtr aip, 
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -15185,6 +15418,9 @@ RegionTypeAsnWrite(RegionTypePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -15369,6 +15605,8 @@ ConvertFeatureDstOptionsAsnWrite(ConvertFeatureDstOptionsPtr anp, AsnIoPtr aip, 
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -15585,6 +15823,9 @@ ConvertFeatureActionAsnWrite(ConvertFeatureActionPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -15763,6 +16004,9 @@ EditLocationStrandAsnWrite(EditLocationStrandPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -15924,6 +16168,9 @@ Partial5SetActionAsnWrite(Partial5SetActionPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -16085,6 +16332,9 @@ Partial3SetActionAsnWrite(Partial3SetActionPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -16246,6 +16496,9 @@ PartialBothSetActionAsnWrite(PartialBothSetActionPtr ptr, AsnIoPtr aip, AsnTypeP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -16415,6 +16668,9 @@ ExtendToFeatureAsnWrite(ExtendToFeaturePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -16653,6 +16909,8 @@ LocationEditTypeAsnWrite(LocationEditTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -16888,6 +17146,9 @@ EditFeatureLocationActionAsnWrite(EditFeatureLocationActionPtr ptr, AsnIoPtr aip
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17071,6 +17332,9 @@ MolinfoBlockAsnWrite(MolinfoBlockPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17244,6 +17508,9 @@ RemoveDescriptorActionAsnWrite(RemoveDescriptorActionPtr ptr, AsnIoPtr aip, AsnT
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17417,6 +17684,9 @@ AutodefActionAsnWrite(AutodefActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17609,6 +17879,9 @@ FixPubCapsActionAsnWrite(FixPubCapsActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17790,6 +18063,9 @@ SortFieldsActionAsnWrite(SortFieldsActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -17952,6 +18228,9 @@ FixAuthorCapsAsnWrite(FixAuthorCapsPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -18133,6 +18412,8 @@ FixCapsActionAsnWrite(FixCapsActionPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -18333,6 +18614,8 @@ FixFormatActionAsnWrite(FixFormatActionPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -18536,6 +18819,9 @@ RemoveDuplicateFeatureActionAsnWrite(RemoveDuplicateFeatureActionPtr ptr, AsnIoP
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -18713,6 +18999,9 @@ GeneXrefTypeAsnWrite(GeneXrefTypePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -18870,6 +19159,8 @@ XrefTypeAsnWrite(XrefTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -19041,6 +19332,9 @@ RemoveXrefsActionAsnWrite(RemoveXrefsActionPtr ptr, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -19209,6 +19503,9 @@ MakeGeneXrefActionAsnWrite(MakeGeneXrefActionPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -19374,6 +19671,9 @@ AuthorFixActionAsnWrite(AuthorFixActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -19540,6 +19840,9 @@ UpdateSequencesActionAsnWrite(UpdateSequencesActionPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -19704,6 +20007,8 @@ CreateTSAIdsSrcAsnWrite(CreateTSAIdsSrcPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -19887,6 +20192,9 @@ CreateTSAIdsActionAsnWrite(CreateTSAIdsActionPtr ptr, AsnIoPtr aip, AsnTypePtr o
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -20052,6 +20360,9 @@ AutofixActionAsnWrite(AutofixActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -20222,6 +20533,8 @@ FixSetsActionAsnWrite(FixSetsActionPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -20382,6 +20695,13 @@ TableMatchTypeAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == TABLE_MATCH_TYPE_bioproject) {
+      choice = TableMatchType_bioproject;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
    else if (atp == TABLE_MATCH_TYPE_any) {
       choice = TableMatchType_any;
       if (AsnReadVal(aip, atp, &av) <= 0) {
@@ -20442,6 +20762,8 @@ TableMatchTypeAsnWrite(TableMatchTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -20477,6 +20799,10 @@ TableMatchTypeAsnWrite(TableMatchTypePtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case TableMatchType_protein_name:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, TABLE_MATCH_TYPE_protein_name, &av);
+      break;
+   case TableMatchType_bioproject:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, TABLE_MATCH_TYPE_bioproject, &av);
       break;
    case TableMatchType_any:
       av.boolvalue = anp->data.boolvalue;
@@ -20640,6 +20966,9 @@ TableMatchAsnWrite(TableMatchPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -20799,6 +21128,8 @@ ApplyTableExtraDataAsnWrite(ApplyTableExtraDataPtr anp, AsnIoPtr aip, AsnTypePtr
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -20837,6 +21168,8 @@ ApplyTableActionNew(void)
 {
    ApplyTableActionPtr ptr = MemNew((size_t) sizeof(ApplyTableAction));
 
+   ptr -> also_change_mrna = 0;
+   ptr -> skip_blanks = 1;
    return ptr;
 
 }
@@ -20930,6 +21263,20 @@ ApplyTableActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == APPLY_TABLE_ACTION_also_change_mrna) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> also_change_mrna = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == APPLY_TABLE_ACTION_skip_blanks) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> skip_blanks = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -20977,6 +21324,9 @@ ApplyTableActionAsnWrite(ApplyTableActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -20995,6 +21345,10 @@ ApplyTableActionAsnWrite(ApplyTableActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
          goto erret;
       }
    }
+   av.boolvalue = ptr -> also_change_mrna;
+   retval = AsnWrite(aip, APPLY_TABLE_ACTION_also_change_mrna,  &av);
+   av.boolvalue = ptr -> skip_blanks;
+   retval = AsnWrite(aip, APPLY_TABLE_ACTION_skip_blanks,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -21150,6 +21504,9 @@ AddFileActionAsnWrite(AddFileActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -21318,6 +21675,9 @@ AddDescriptorListActionAsnWrite(AddDescriptorListActionPtr ptr, AsnIoPtr aip, As
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -21479,6 +21839,9 @@ RemoveSequencesActionAsnWrite(RemoveSequencesActionPtr ptr, AsnIoPtr aip, AsnTyp
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -21488,6 +21851,543 @@ RemoveSequencesActionAsnWrite(RemoveSequencesActionPtr ptr, AsnIoPtr aip, AsnTyp
          goto erret;
       }
    }
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    UpdateReplacedEcNumbersActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateReplacedEcNumbersActionPtr LIBCALL
+UpdateReplacedEcNumbersActionNew(void)
+{
+   UpdateReplacedEcNumbersActionPtr ptr = MemNew((size_t) sizeof(UpdateReplacedEcNumbersAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    UpdateReplacedEcNumbersActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateReplacedEcNumbersActionPtr LIBCALL
+UpdateReplacedEcNumbersActionFree(UpdateReplacedEcNumbersActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    UpdateReplacedEcNumbersActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+UpdateReplacedEcNumbersActionPtr LIBCALL
+UpdateReplacedEcNumbersActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   UpdateReplacedEcNumbersActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* UpdateReplacedEcNumbersAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, UPDATE_REPLACED_EC_NUMBERS_ACTION);
+   } else {
+      atp = AsnLinkType(orig, UPDATE_REPLACED_EC_NUMBERS_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = UpdateReplacedEcNumbersActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_improper_format) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> delete_improper_format = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_unrecognized) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> delete_unrecognized = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_multiple_replacement) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> delete_multiple_replacement = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = UpdateReplacedEcNumbersActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    UpdateReplacedEcNumbersActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+UpdateReplacedEcNumbersActionAsnWrite(UpdateReplacedEcNumbersActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, UPDATE_REPLACED_EC_NUMBERS_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.boolvalue = ptr -> delete_improper_format;
+   retval = AsnWrite(aip, UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_improper_format,  &av);
+   av.boolvalue = ptr -> delete_unrecognized;
+   retval = AsnWrite(aip, UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_unrecognized,  &av);
+   av.boolvalue = ptr -> delete_multiple_replacement;
+   retval = AsnWrite(aip, UPDATE_REPLACED_EC_NUMBERS_ACTION_delete_multiple_replacement,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    RetranslateCdsActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+RetranslateCdsActionPtr LIBCALL
+RetranslateCdsActionNew(void)
+{
+   RetranslateCdsActionPtr ptr = MemNew((size_t) sizeof(RetranslateCdsAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    RetranslateCdsActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+RetranslateCdsActionPtr LIBCALL
+RetranslateCdsActionFree(RetranslateCdsActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    RetranslateCdsActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+RetranslateCdsActionPtr LIBCALL
+RetranslateCdsActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   RetranslateCdsActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* RetranslateCdsAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, RETRANSLATE_CDS_ACTION);
+   } else {
+      atp = AsnLinkType(orig, RETRANSLATE_CDS_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = RetranslateCdsActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == RETRANSLATE_CDS_ACTION_obey_stop_codon) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> obey_stop_codon = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = RetranslateCdsActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    RetranslateCdsActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+RetranslateCdsActionAsnWrite(RetranslateCdsActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, RETRANSLATE_CDS_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.boolvalue = ptr -> obey_stop_codon;
+   retval = AsnWrite(aip, RETRANSLATE_CDS_ACTION_obey_stop_codon,  &av);
+   if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
+      goto erret;
+   }
+   retval = TRUE;
+
+erret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return retval;
+}
+
+
+
+/**************************************************
+*
+*    AdjustFeaturesForGapsActionNew()
+*
+**************************************************/
+NLM_EXTERN 
+AdjustFeaturesForGapsActionPtr LIBCALL
+AdjustFeaturesForGapsActionNew(void)
+{
+   AdjustFeaturesForGapsActionPtr ptr = MemNew((size_t) sizeof(AdjustFeaturesForGapsAction));
+
+   return ptr;
+
+}
+
+
+/**************************************************
+*
+*    AdjustFeaturesForGapsActionFree()
+*
+**************************************************/
+NLM_EXTERN 
+AdjustFeaturesForGapsActionPtr LIBCALL
+AdjustFeaturesForGapsActionFree(AdjustFeaturesForGapsActionPtr ptr)
+{
+
+   if(ptr == NULL) {
+      return NULL;
+   }
+   return MemFree(ptr);
+}
+
+
+/**************************************************
+*
+*    AdjustFeaturesForGapsActionAsnRead()
+*
+**************************************************/
+NLM_EXTERN 
+AdjustFeaturesForGapsActionPtr LIBCALL
+AdjustFeaturesForGapsActionAsnRead(AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean isError = FALSE;
+   AsnReadFunc func;
+   AdjustFeaturesForGapsActionPtr ptr;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return NULL;
+      }
+   }
+
+   if (aip == NULL) {
+      return NULL;
+   }
+
+   if (orig == NULL) {         /* AdjustFeaturesForGapsAction ::= (self contained) */
+      atp = AsnReadId(aip, amp, ADJUST_FEATURES_FOR_GAPS_ACTION);
+   } else {
+      atp = AsnLinkType(orig, ADJUST_FEATURES_FOR_GAPS_ACTION);
+   }
+   /* link in local tree */
+   if (atp == NULL) {
+      return NULL;
+   }
+
+   ptr = AdjustFeaturesForGapsActionNew();
+   if (ptr == NULL) {
+      goto erret;
+   }
+   if (AsnReadVal(aip, atp, &av) <= 0) { /* read the start struct */
+      goto erret;
+   }
+
+   atp = AsnReadId(aip,amp, atp);
+   func = NULL;
+
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_type) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> type = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_adjust_for_unknown_length_gaps) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> adjust_for_unknown_length_gaps = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_adjust_for_known_length_gaps) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> adjust_for_known_length_gaps = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_make_truncated_ends_partial) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> make_truncated_ends_partial = av.intvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_trim_ends_in_gaps) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> trim_ends_in_gaps = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_split_for_internal_gaps) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> split_for_internal_gaps = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+   if (atp == ADJUST_FEATURES_FOR_GAPS_ACTION_even_when_gaps_are_in_introns) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> even_when_gaps_are_in_introns = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
+
+   if (AsnReadVal(aip, atp, &av) <= 0) {
+      goto erret;
+   }
+   /* end struct */
+
+ret:
+   AsnUnlinkType(orig);       /* unlink local tree */
+   return ptr;
+
+erret:
+   aip -> io_failure = TRUE;
+   ptr = AdjustFeaturesForGapsActionFree(ptr);
+   goto ret;
+}
+
+
+
+/**************************************************
+*
+*    AdjustFeaturesForGapsActionAsnWrite()
+*
+**************************************************/
+NLM_EXTERN Boolean LIBCALL 
+AdjustFeaturesForGapsActionAsnWrite(AdjustFeaturesForGapsActionPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
+{
+   DataVal av;
+   AsnTypePtr atp;
+   Boolean retval = FALSE;
+
+   if (! loaded)
+   {
+      if (! objmacroAsnLoad()) {
+         return FALSE;
+      }
+   }
+
+   if (aip == NULL) {
+      return FALSE;
+   }
+
+   atp = AsnLinkType(orig, ADJUST_FEATURES_FOR_GAPS_ACTION);   /* link local tree */
+   if (atp == NULL) {
+      return FALSE;
+   }
+
+   if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
+   if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
+      goto erret;
+   }
+
+   av.intvalue = ptr -> type;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_type,  &av);
+   av.boolvalue = ptr -> adjust_for_unknown_length_gaps;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_adjust_for_unknown_length_gaps,  &av);
+   av.boolvalue = ptr -> adjust_for_known_length_gaps;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_adjust_for_known_length_gaps,  &av);
+   av.intvalue = ptr -> make_truncated_ends_partial;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_make_truncated_ends_partial,  &av);
+   av.boolvalue = ptr -> trim_ends_in_gaps;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_trim_ends_in_gaps,  &av);
+   av.boolvalue = ptr -> split_for_internal_gaps;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_split_for_internal_gaps,  &av);
+   av.boolvalue = ptr -> even_when_gaps_are_in_introns;
+   retval = AsnWrite(aip, ADJUST_FEATURES_FOR_GAPS_ACTION_even_when_gaps_are_in_introns,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }
@@ -21591,6 +22491,15 @@ MacroActionChoiceFree(ValNodePtr anp)
       break;
    case MacroActionChoice_add_file_descriptors:
       AddDescriptorListActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_update_replaced_ecnumbers:
+      UpdateReplacedEcNumbersActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_retranslate_cds:
+      RetranslateCdsActionFree(anp -> data.ptrvalue);
+      break;
+   case MacroActionChoice_adjust_features_for_gaps:
+      AdjustFeaturesForGapsActionFree(anp -> data.ptrvalue);
       break;
    }
    return MemFree(anp);
@@ -21849,6 +22758,74 @@ MacroActionChoiceAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == MACRO_ACTION_CHOICE_reorder_structured_comments) {
+      choice = MacroActionChoice_reorder_structured_comments;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_remove_duplicate_structured_comments) {
+      choice = MacroActionChoice_remove_duplicate_structured_comments;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_lookup_taxonomy) {
+      choice = MacroActionChoice_lookup_taxonomy;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_lookup_pubs) {
+      choice = MacroActionChoice_lookup_pubs;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_trim_terminal_ns) {
+      choice = MacroActionChoice_trim_terminal_ns;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_update_replaced_ecnumbers) {
+      choice = MacroActionChoice_update_replaced_ecnumbers;
+      func = (AsnReadFunc) UpdateReplacedEcNumbersActionAsnRead;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_instantiate_protein_titles) {
+      choice = MacroActionChoice_instantiate_protein_titles;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_retranslate_cds) {
+      choice = MacroActionChoice_retranslate_cds;
+      func = (AsnReadFunc) RetranslateCdsActionAsnRead;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_add_selenocysteine_except) {
+      choice = MacroActionChoice_add_selenocysteine_except;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_join_short_trnas) {
+      choice = MacroActionChoice_join_short_trnas;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == MACRO_ACTION_CHOICE_adjust_features_for_gaps) {
+      choice = MacroActionChoice_adjust_features_for_gaps;
+      func = (AsnReadFunc) AdjustFeaturesForGapsActionAsnRead;
+   }
    anp->choice = choice;
    if (func != NULL)
    {
@@ -21901,6 +22878,8 @@ MacroActionChoiceAsnWrite(MacroActionChoicePtr anp, AsnIoPtr aip, AsnTypePtr ori
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -22065,6 +23044,50 @@ MacroActionChoiceAsnWrite(MacroActionChoicePtr anp, AsnIoPtr aip, AsnTypePtr ori
    case MacroActionChoice_autoapply_structured_comments:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, MACRO_ACTION_CHOICE_autoapply_structured_comments, &av);
+      break;
+   case MacroActionChoice_reorder_structured_comments:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_reorder_structured_comments, &av);
+      break;
+   case MacroActionChoice_remove_duplicate_structured_comments:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_remove_duplicate_structured_comments, &av);
+      break;
+   case MacroActionChoice_lookup_taxonomy:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_lookup_taxonomy, &av);
+      break;
+   case MacroActionChoice_lookup_pubs:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_lookup_pubs, &av);
+      break;
+   case MacroActionChoice_trim_terminal_ns:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_trim_terminal_ns, &av);
+      break;
+   case MacroActionChoice_update_replaced_ecnumbers:
+      writetype = MACRO_ACTION_CHOICE_update_replaced_ecnumbers;
+      func = (AsnWriteFunc) UpdateReplacedEcNumbersActionAsnWrite;
+      break;
+   case MacroActionChoice_instantiate_protein_titles:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_instantiate_protein_titles, &av);
+      break;
+   case MacroActionChoice_retranslate_cds:
+      writetype = MACRO_ACTION_CHOICE_retranslate_cds;
+      func = (AsnWriteFunc) RetranslateCdsActionAsnWrite;
+      break;
+   case MacroActionChoice_add_selenocysteine_except:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_add_selenocysteine_except, &av);
+      break;
+   case MacroActionChoice_join_short_trnas:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, MACRO_ACTION_CHOICE_join_short_trnas, &av);
+      break;
+   case MacroActionChoice_adjust_features_for_gaps:
+      writetype = MACRO_ACTION_CHOICE_adjust_features_for_gaps;
+      func = (AsnWriteFunc) AdjustFeaturesForGapsActionAsnWrite;
       break;
    }
    if (writetype != NULL) {
@@ -22286,6 +23309,8 @@ SearchFuncAsnWrite(SearchFuncPtr anp, AsnIoPtr aip, AsnTypePtr orig)
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
       goto erret;
@@ -22500,6 +23525,9 @@ SimpleReplaceAsnWrite(SimpleReplacePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -22669,6 +23697,8 @@ ReplaceFuncAsnWrite(ReplaceFuncPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
    av.ptrvalue = (Pointer)anp;
    if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) {
@@ -22844,6 +23874,9 @@ ReplaceRuleAsnWrite(ReplaceRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -22879,6 +23912,7 @@ SuspectRuleNew(void)
    SuspectRulePtr ptr = MemNew((size_t) sizeof(SuspectRule));
 
    ptr -> rule_type = 0;
+   ptr -> fatal = 0;
    return ptr;
 
 }
@@ -22995,6 +24029,13 @@ SuspectRuleAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       ptr -> description = av.ptrvalue;
       atp = AsnReadId(aip,amp, atp);
    }
+   if (atp == SUSPECT_RULE_fatal) {
+      if ( AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      ptr -> fatal = av.boolvalue;
+      atp = AsnReadId(aip,amp, atp);
+   }
 
    if (AsnReadVal(aip, atp, &av) <= 0) {
       goto erret;
@@ -23042,6 +24083,9 @@ SuspectRuleAsnWrite(SuspectRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -23072,6 +24116,8 @@ SuspectRuleAsnWrite(SuspectRulePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
       av.ptrvalue = ptr -> description;
       retval = AsnWrite(aip, SUSPECT_RULE_description,  &av);
    }
+   av.boolvalue = ptr -> fatal;
+   retval = AsnWrite(aip, SUSPECT_RULE_fatal,  &av);
    if (! AsnCloseStruct(aip, atp, (Pointer)ptr)) {
       goto erret;
    }

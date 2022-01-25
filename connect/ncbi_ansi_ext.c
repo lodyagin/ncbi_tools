@@ -1,4 +1,4 @@
-/* $Id: ncbi_ansi_ext.c,v 6.24 2011/11/16 18:09:32 kazimird Exp $
+/* $Id: ncbi_ansi_ext.c,v 6.28 2014/11/07 21:04:44 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,7 +31,10 @@
  */
 
 #include "ncbi_ansi_ext.h"
+#include "ncbi_assert.h"
 #include <ctype.h>
+#include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 
@@ -81,8 +84,8 @@ int strcasecmp(const char* s1, const char* s2)
     do {
         c1 = *p1++;
         c2 = *p2++;
-        c1 = c1 >= 'A' && c1 <= 'Z' ? c1 + ('a' - 'A') : tolower(c1);
-        c2 = c2 >= 'A' && c2 <= 'Z' ? c2 + ('a' - 'A') : tolower(c2);
+        c1 = 'A' <= c1  &&  c1 <= 'Z' ? c1 + ('a' - 'A') : tolower(c1);
+        c2 = 'A' <= c2  &&  c2 <= 'Z' ? c2 + ('a' - 'A') : tolower(c2);
     } while (c1  &&  c1 == c2);
 
     return c1 - c2;
@@ -101,8 +104,8 @@ int strncasecmp(const char* s1, const char* s2, size_t n)
     do {
         c1 = *p1++;
         c2 = *p2++;
-        c1 = c1 >= 'A' && c1 <= 'Z' ? c1 + ('a' - 'A') : tolower(c1);
-        c2 = c2 >= 'A' && c2 <= 'Z' ? c2 + ('a' - 'A') : tolower(c2);
+        c1 = 'A' <= c1  &&  c1 <= 'Z' ? c1 + ('a' - 'A') : tolower(c1);
+        c2 = 'A' <= c2  &&  c2 <= 'Z' ? c2 + ('a' - 'A') : tolower(c2);
     } while (--n > 0  &&  c1  &&  c1 == c2);
 
     return c1 - c2;
@@ -155,3 +158,76 @@ void* memrchr(const void* s, int c, size_t n)
     return 0;
 }
 #endif/*!HAVE_MEMRCHR*/
+
+
+static const double x_pow10[] = { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7 };
+
+
+char* NCBI_simple_ftoa(char* s, double f, int p)
+{
+    double v, w;
+    long   x, y;
+    if (p < 0)
+        p = 0;
+    else {
+        if (p >= (int)(sizeof(x_pow10)/sizeof(x_pow10[0])))
+            p  = (int)(sizeof(x_pow10)/sizeof(x_pow10[0]))-1;
+    }
+    w = x_pow10[p];
+    v = f < 0.0 ? -f : f;
+    x = (long)(v + 0.5 / w);
+    y = (long)(w * (v - x) + 0.5);
+    assert(p  ||  !y);  /* with precision 0, output of "0" is empty */
+    return s + sprintf(s, &"-%ld%s%.*lu"[!(f < 0.0)], x, &"."[!p], p, y);
+}
+
+
+double NCBI_simple_atof(const char* s, char** t)
+{
+    int/*bool*/ n;
+    char*       e;
+    long        x;
+
+    if (t)
+        *t = (char*) s;
+    while (isspace((unsigned char)(*s)))
+        s++;
+    if ((*s == '-'  ||  *s == '+')
+        &&  (s[1] == '.'  ||  isdigit((unsigned char) s[1]))) {
+        n = *s == '-' ? 1/*true*/ : 0/*false*/;
+        s++;
+    } else
+        n = 0/*false*/;
+
+    errno = 0;
+    x = strtol(s, &e, 10);
+    if (*e == '.') {
+        if (isdigit((unsigned char)(e[1]))) {
+            double w;
+            long   y;
+            int    p;
+            s = ++e;
+            errno = 0/*maybe EINVAL here for ".NNN"*/;
+            y = strtoul(s, &e, 10);
+            assert(e > s);
+            p = (int)(e - s);
+            if (p >= (int)(sizeof(x_pow10)/sizeof(x_pow10[0]))) {
+                w  = 10.0;
+                do {
+                    w *= x_pow10[(int)(sizeof(x_pow10)/sizeof(x_pow10[0]))-1];
+                    p -=         (int)(sizeof(x_pow10)/sizeof(x_pow10[0]))-1;
+                } while (p >=    (int)(sizeof(x_pow10)/sizeof(x_pow10[0])));
+                if (errno == ERANGE)
+                    errno  = 0;
+                w *= x_pow10[p];
+            } else
+                w  = x_pow10[p];
+            if (t)
+                *t = e;
+            return n ? -x - y / w : x + y / w;
+        } else if (t  &&  e > s)
+            *t = ++e;
+    } else if (t  &&  e > s)
+        *t = e;
+    return n ? -x : x;
+}

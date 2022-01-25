@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.119 $
+* $Revision: 6.125 $
 *
 * File Description: 
 *
@@ -73,6 +73,7 @@ extern void FreePrintOptions (void);
 
 extern EnumFieldAssoc  months_alist [];
 extern EnumFieldAssoc  new_pseudogene_alist [];
+extern EnumFieldAssoc  legacy_pseudogene_alist [];
 
 extern void DatePtrToVibrant (DatePtr dp, PopuP dateMonth, TexT dateDay, TexT dateYear);
 extern DatePtr VibrantToDatePtr (PopuP dateMonth, TexT dateDay, TexT dateYear);
@@ -154,6 +155,10 @@ extern void StdFeatFormAcceptButtonProc (ButtoN b);
 extern void InferenceDialogToGBQuals (DialoG d, SeqFeatPtr sfp, Boolean convertBadToNote);
 extern void GBQualsToInferenceDialog (DialoG d, SeqFeatPtr sfp);
 
+extern DialoG CreateExperimentDialog (GrouP prnt);
+extern void ExperimentDialogToGbquals (SeqFeatPtr sfp, DialoG d);
+extern void GBQualsToExperimentDialog (SeqFeatPtr sfp, DialoG d);
+
 /*
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 */
@@ -176,6 +181,7 @@ extern void InitPseudogenePopup (FeatureFormPtr ffp, PopuP p, Boolean ispseudo, 
 *****************************************************************************/
 
 extern DialoG CreateAuthorDialog (GrouP prnt, Uint2 rows, Int2 spacing);
+extern DialoG CreateAuthorDialogEx (GrouP prnt, Uint2 rows, Int2 spacing, Boolean use_import_btn, Nlm_ChangeNotifyProc change_notify, Pointer change_data);
 
 extern DialoG CreateDateDialogEx (GrouP prnt, CharPtr title, Int4 start_year, Int4 num_years);
 extern DialoG CreateDateDialog (GrouP prnt, CharPtr title);
@@ -746,6 +752,7 @@ typedef enum {
  eValueEditTrueFalse,
  eValueEditLatLon,
  eValueEditSpecimenVoucher,
+ eValueEditAltitude,
  eNumValueEditors
 } EValueEdit;
 
@@ -841,12 +848,14 @@ NLM_EXTERN void ScrollToMatchingFeatures (DialoG d, SeqFeatPtr sfp);
 NLM_EXTERN Boolean AutomatchFeatures (DialoG d, ValNodePtr PNTR existing_features);
 
 NLM_EXTERN void CloseLog (LogInfoPtr lip);
+NLM_EXTERN void ShowLog (LogInfoPtr lip);
 
 NLM_EXTERN void TextToFeatID (TexT t, ChoicePtr cp);
 NLM_EXTERN void TextToFeatXref (TexT t, SeqFeatPtr sfp);
 
 NLM_EXTERN DialoG DescriptorStreamEditor (GrouP h,  Nlm_ChangeNotifyProc change_notify, Pointer change_userdata);
 NLM_EXTERN void SetDescriptorStreamEditorIdList (DialoG d, SeqIdPtr sip_list);
+NLM_EXTERN void ClearTextBtn (ButtoN b);
 
 #ifdef __cplusplus
 }

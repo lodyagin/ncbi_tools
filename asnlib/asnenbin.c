@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Special binary (BER) encoder for ASN.1
@@ -38,49 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++
-* 04-20-93 Schuler     LIBCALL calling convention
-*
-* $Log: asnenbin.c,v $
-* Revision 6.7  2011/09/06 18:18:16  kans
-* support for UTF8String in binary ASN.1
-*
-* Revision 6.6  2003/11/07 20:57:02  beloslyu
-* fix the c++ style comments to a C ones
-*
-* Revision 6.5  2003/08/01 16:55:24  gouriano
-* workaround MSVC++.NET optimization bug
-*
-* Revision 6.4  2000/12/12 15:56:11  ostell
-* added support BigInt
-*
-* Revision 6.3  1998/06/12 19:27:49  kans
-* fixed unix compiler warnings
-*
-* Revision 6.2  1998/05/02 18:54:25  kans
-* for Mac, use %LG instead of %lg, which is not legal C, and not supported by CodeWarrior
-*
-* Revision 6.1  1998/05/01 23:35:18  kans
-* use %lf on Mac, %lg elsewhere, sprintf bug reported
-*
-* Revision 6.0  1997/08/25 18:09:50  madden
-* Revision changed to 6.0
-*
-* Revision 5.1  1996/12/03 21:43:48  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.1  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.9  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -146,6 +103,8 @@ NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 			AsnEnBinBoolean(dvp->boolvalue, aip, atp);
 			break;
 		case INTEGER_TYPE:
+			AsnEnBinBigInt(dvp->intvalue, aip, atp);
+			break;
 		case ENUM_TYPE:
 			AsnEnBinInteger(dvp->intvalue, aip, atp);
 			break;
@@ -202,6 +161,7 @@ NLM_EXTERN Boolean LIBCALL  AsnBinWrite (AsnIoPtr aip, AsnTypePtr atp, DataValPt
 NLM_EXTERN void AsnEnBinTags (AsnTypePtr atp, AsnIoPtr aip)
 {
 	int isa, len;
+	Uint1 fix_utf8_out;
 	Int4 tagnumber;
 	Byte octets[6], bit87, bit6, bit5_1;
 
@@ -222,6 +182,28 @@ NLM_EXTERN void AsnEnBinTags (AsnTypePtr atp, AsnIoPtr aip)
 
 	if (tagnumber <= 30)        /* only need one octet */
 	{
+
+		/* !!! CXX-3341 temporarily write VisibleString instead of UTF8String for transition !!! */
+		if (isa == UTF8STRING_TYPE && tagnumber == TAG_UTF8STRING) {
+			fix_utf8_out = aip->fix_utf8_out;
+			if (fix_utf8_out == 0) {
+				tagnumber = TAG_VISIBLESTRING;
+				aip->utf8_sent = TRUE;
+			} else if (fix_utf8_out == 1) {
+				tagnumber = TAG_VISIBLESTRING;
+				if (! aip->utf8_sent) {
+					AsnIoErrorMsg(aip, 108);
+				}
+				aip->utf8_sent = TRUE;
+			} else if (fix_utf8_out == 2) {
+				tagnumber = TAG_VISIBLESTRING;
+				AsnIoErrorMsg(aip, 108);
+				aip->utf8_sent = TRUE;
+			} else if (fix_utf8_out == 3) {
+              /* do not convert */
+			}
+		}
+
 		bit5_1 = (Byte)(tagnumber) & (Byte)0x0ff;
 		octets[0] = bit87 + bit6 + bit5_1;
 		AsnEnBinBytes(octets, (Uint4)1, aip);

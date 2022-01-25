@@ -1,4 +1,4 @@
-/* $Id: blast_extend.c,v 1.119 2009/07/30 19:34:30 kazimird Exp $
+/* $Id: blast_extend.c,v 1.120 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,11 +27,6 @@
 /** @file blast_extend.c
  * Functions to initialize structures used for BLAST extension
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_extend.c,v 1.119 2009/07/30 19:34:30 kazimird Exp $";
-#endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_extend.h>
 #include <algo/blast/core/blast_options.h>

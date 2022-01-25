@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/94
 *
-* $Revision: 6.78 $
+* $Revision: 6.100 $
 *
 * File Description:  Sequence editing utilities
 *
@@ -90,6 +90,7 @@ typedef void (LIBCALLBACK *ValidErrorFunc) (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr seqid,
   CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
@@ -125,6 +126,7 @@ typedef struct validstruct {
     Boolean patch_seq;             /* repair invalid sequence residues? */
     Boolean non_ascii_chars;       /* non ascii chars found in read? */
     Boolean suppress_no_pubs;      /* internal use for no pub anywhere message */
+    Boolean suppress_no_cit_subs;  /* internal use for no genome submission citation message */
     Boolean suppress_no_biosrc;    /* internal use for no biosource anywhere message */
     SpellCheckFunc spellfunc;
     SpellCallBackFunc spellcallback;
@@ -155,6 +157,7 @@ typedef struct validstruct {
     Boolean indexerVersion;        /* special tests for GenBank indexers */
     Boolean disableSuppression;    /* disables suppression of message by ShouldSuppressValidErr */
     Boolean genomeSubmission;      /* raise severity on numerous warnings for automated genome center submissions */
+    Boolean debugTestDuJour;       /* used for turning on or off specific tests suspected of causing performance hit */
     Int2 validationLimit;          /* limit validation to major classes in Valid1GatherProc */
                                    /* this section used for finer error reporting callback */
     ValidErrorFunc errfunc;
@@ -167,15 +170,19 @@ typedef struct validstruct {
     Boolean is_htg_in_sep;         /* record has technique of htgs 0 through htgs 3 */
     Boolean is_barcode_sep;        /* record has technique barcode */
     Boolean is_refseq_in_sep;      /* record has seqid of type other (refseq) */
+    Boolean is_wp_in_sep;          /* record is WP RefSeq protein */
     Boolean is_gpipe_in_sep;       /* record has seqid of type gpipe */
     Boolean is_gps_in_sep;         /* record has genomic product set */
     Boolean is_small_genome_set;   /* record has small genome set */
     Boolean other_sets_in_sep;     /* record has pop/phy/mut/eco/wgs set */
     Boolean is_embl_ddbj_in_sep;   /* record has embl or ddbj seqid */
+    Boolean is_embl_tpe_in_sep;    /* record has embl or tpe seqid */
     Boolean is_old_gb_in_sep;      /* record has old style GenBank accession */
     Boolean is_patent_in_sep;      /* record has patent seqid */
     Boolean is_insd_in_sep;        /* record has genbank/embl/ddbj or tpg/tpe/tpd seqid */
+    Boolean is_pdb_in_sep;         /* record has pdb seqid */
     Boolean only_lcl_gnl_in_sep;   /* record has seqid of only local or general */
+    Boolean has_gi_or_accn_ver;    /* record has GI number of accession with non-zero version */
     Boolean has_gnl_prot_sep;      /* protein Bioseq has general seqid */
     Boolean bsp_genomic_in_sep;    /* biosource.genome == genomic */
     Boolean is_smupd_in_sep;       /* record in INSD internal processing */
@@ -184,10 +191,13 @@ typedef struct validstruct {
     Boolean has_multi_int_genes;   /* record has multi-interval genes */
     Boolean has_seg_bioseqs;       /* record has segmented Bioseqs */
     Boolean far_fetch_failure;     /* a far location or bioseq with no fetch function */
+    Boolean use_heartbeat;         /* use heartbeat to indicate process */
     VoidPtr rrna_array;            /* sorted feature index array of rRNA features */
     VoidPtr trna_array;            /* sorted feature index array of tRNA features */
     Int4 numrrna;                  /* number of rRNA features */
     Int4 numtrna;                  /* number of tRNA features */
+    Boolean is_geneious;           /* lower severity for select messages */
+    ValNodePtr sisfp;
 } ValidStruct, PNTR ValidStructPtr;
 
 NLM_EXTERN Boolean ValidateSeqEntry PROTO((SeqEntryPtr sep, ValidStructPtr vsp));
@@ -296,6 +306,12 @@ NLM_EXTERN FloatHi WaterDataScaleIs (void);
 NLM_EXTERN Boolean ParseStructuredVoucher (CharPtr subname, CharPtr PNTR inst, CharPtr PNTR id);
 NLM_EXTERN Boolean VoucherInstitutionIsValid (CharPtr inst);
 
+NLM_EXTERN CharPtr RemoveBadInstitutionCollection (OrgModPtr mod);
+NLM_EXTERN CharPtr RemoveBadInstitutionCountry (OrgModPtr mod);
+
+NLM_EXTERN Boolean AltitudeIsValid (CharPtr name);
+NLM_EXTERN Boolean TypeMaterialIsValid (CharPtr name);
+
 /* EC_number finite state machine persists to avoid expensive reload, should free on program exit */
 NLM_EXTERN void ECNumberFSAFreeAll (void);
 
@@ -315,6 +331,21 @@ NLM_EXTERN Int4 IsQualValidForFeature (GBQualPtr gbqual, SeqFeatPtr sfp);
 NLM_EXTERN CharPtr GetGBFeatKeyForFeature (SeqFeatPtr sfp);
 NLM_EXTERN Boolean ShouldSuppressGBQual(Uint1 subtype, CharPtr qual_name);
 NLM_EXTERN Boolean ShouldBeAGBQual (Uint1 subtype, Int2 qual, Boolean allowProductGBQual);
+NLM_EXTERN void Heartbeat(ValidStructPtr vsp, CharPtr msg);
+
+NLM_EXTERN void ConvertFailedCodingRegionsAndRNAsToMiscFeatures(SeqEntryPtr sep, LogInfoPtr lip);
+
+typedef enum {
+  eEndIsChar_No = 0,
+  eEndIsChar_Last = 1,
+  eEndIsChar_All = 2
+} EEndIsChar;
+
+NLM_EXTERN void CheckBioseqEndsForNAndGap (BioseqPtr bsp, Uint1Ptr begin_n, Uint1Ptr begin_gap, Uint1Ptr end_n, Uint1Ptr end_gap);
+
+NLM_EXTERN Boolean FixOrgModVoucher (OrgModPtr mod);
+
+NLM_EXTERN Boolean IsIdenticalPublication (PubdescPtr pdp1, PubdescPtr pdp2);
 
 
 #ifdef __cplusplus

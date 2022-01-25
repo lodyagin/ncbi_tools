@@ -1,4 +1,4 @@
-/* $Id: ncbi_core.c,v 6.29 2012/05/04 18:30:53 kazimird Exp $
+/* $Id: ncbi_core.c,v 6.37 2016/07/21 21:29:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -34,6 +34,10 @@
 #include "ncbi_priv.h"
 #include <stdlib.h>
 
+#ifdef NCBI_OS_UNIX
+#  include <unistd.h>
+#endif /*NCBI_OS_UNIX*/
+
 #if defined(NCBI_CXX_TOOLKIT)  &&  defined(_MT)  &&  !defined(NCBI_WITHOUT_MT)
 #  if defined(NCBI_OS_MSWIN)
 #    define WIN32_LEAN_AND_MEAN
@@ -57,7 +61,7 @@
 
 extern const char* IO_StatusStr(EIO_Status status)
 {
-    static const char* s_StatusStr[eIO_Unknown + 1] = {
+    static const char* kStatusStr[eIO_Unknown + 1] = {
         "Success",
         "Timeout",
         "Closed",
@@ -67,8 +71,10 @@ extern const char* IO_StatusStr(EIO_Status status)
         "Unknown"
     };
 
-    assert(status >= eIO_Success  &&  status <= eIO_Unknown);
-    return s_StatusStr[status];
+    assert(eIO_Success <= status  &&  status <= eIO_Unknown);
+    return eIO_Success <= status  &&  status <= eIO_Unknown
+        ? kStatusStr[status]
+        : 0;
 }
 
 
@@ -90,7 +96,7 @@ struct MT_LOCK_tag {
   FMT_LOCK_Cleanup cleanup;      /* cleanup function */
   unsigned int     magic_number; /* used internally to make sure it's init'd */
 };
-#define kMT_LOCK_magic_number 0x7A96283F
+#define kMT_LOCK_magic_number  0x7A96283F
 
 
 #ifndef NCBI_NO_THREADS
@@ -126,7 +132,7 @@ static int/*bool*/ s_CORE_MT_Lock_default_handler(void*    unused,
         InitializeCriticalSection(&sx_Crit);
         sx_Inited = 1; /*go*/
     } else while (!sx_Inited)
-        Sleep(10/*ms*/); /*spin*/
+        Sleep(1/*ms*/); /*spin*/
 
     switch (action) {
     case eMT_Lock:
@@ -249,12 +255,12 @@ struct LOG_tag {
     MT_LOCK      mt_lock;
     unsigned int magic_number;  /* used internally, to make sure it's init'd */
 };
-#define kLOG_magic_number 0x3FB97156
+#define kLOG_magic_number  0x3FB97156
 
 
 extern const char* LOG_LevelStr(ELOG_Level level)
 {
-    static const char* s_PostSeverityStr[eLOG_Fatal+1] = {
+    static const char* kPostSeverityStr[eLOG_Fatal + 1] = {
         "TRACE",
         "NOTE",
         "WARNING",
@@ -262,7 +268,11 @@ extern const char* LOG_LevelStr(ELOG_Level level)
         "CRITICAL",
         "FATAL"
     };
-    return s_PostSeverityStr[level];
+
+    assert(eLOG_Trace <= level  &&  level <= eLOG_Fatal);
+    return eLOG_Trace <= level  &&  level <= eLOG_Fatal
+        ? kPostSeverityStr[level]
+        : 0;
 }
 
 
@@ -368,7 +378,8 @@ extern void LOG_WriteInternal
     /* unconditional exit/abort on fatal error */
     if (call_data->level == eLOG_Fatal) {
 #ifdef NDEBUG
-        exit(1);
+        fflush(0);
+        _exit(255);
 #else
         abort();
 #endif /*NDEBUG*/
@@ -382,6 +393,7 @@ extern void LOG_Write
  int         subcode,
  ELOG_Level  level,
  const char* module,
+ const char* func,
  const char* file,
  int         line,
  const char* message,
@@ -395,6 +407,7 @@ extern void LOG_Write
     call_data.message     = message;
     call_data.level       = level;
     call_data.module      = module;
+    call_data.func        = func;
     call_data.file        = file;
     call_data.line        = line;
     call_data.raw_data    = raw_data;
@@ -432,7 +445,7 @@ struct REG_tag {
     MT_LOCK      mt_lock;
     unsigned int magic_number;  /* used internally, to make sure it's init'd */
 };
-#define kREG_magic_number 0xA921BC08
+#define kREG_magic_number  0xA921BC08
 
 
 extern REG REG_Create
@@ -468,7 +481,7 @@ extern void REG_Reset
     REG_LOCK_WRITE;
     REG_VALID;
 
-    if (do_cleanup  &&  rg->cleanup)
+    if (rg->cleanup  &&  do_cleanup)
         rg->cleanup(rg->user_data);
 
     rg->user_data = user_data;
@@ -527,7 +540,7 @@ extern const char* REG_Get
  const char* def_value)
 {
     if (!value  ||  value_size <= 0)
-        return 0;
+        return 0/*failed*/;
 
     if (def_value)
         strncpy0(value, def_value, value_size - 1);
@@ -555,7 +568,7 @@ extern int/*bool*/ REG_Set
  const char*  value,
  EREG_Storage storage)
 {
-    int result;
+    int/*bool*/ result;
 
     if (rg) {
         REG_LOCK_READ;
@@ -563,11 +576,11 @@ extern int/*bool*/ REG_Set
 
         result = (rg->set
                   ? rg->set(rg->user_data, section, name, value, storage)
-                  : 0);
+                  : 0/*failed*/);
 
         REG_UNLOCK;
     } else
-        result = 0;
+        result = 0/*failed*/;
 
     return result;
 }

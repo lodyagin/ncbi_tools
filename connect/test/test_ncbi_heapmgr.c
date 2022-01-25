@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_heapmgr.c,v 6.23 2012/04/19 16:09:32 kazimird Exp $
+/* $Id: test_ncbi_heapmgr.c,v 6.26 2013/06/24 19:04:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -35,9 +35,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
 
+#include "test_assert.h"  /* This header must go last */
 
 #define HEAP_ADDR(b, h) ((unsigned int)((char*) b - (char*) HEAP_Base(h)) >> 4)
 
@@ -74,7 +73,7 @@ static void s_Walk(HEAP heap, const char* which)
     while ((blk = HEAP_Walk(heap, blk)) != 0) {
         const char* flag = (int) blk->flag < 0 ? ", last" : "";
         TNCBI_Size size = blk->size;
-        if ((short) blk->flag) {
+        if (blk->flag & 1) {
             TNCBI_Size data_size = size - sizeof(*blk);
             CORE_LOGF(eLOG_Note,
                       ("Used%s @%u, size %u, data size %u",
@@ -105,7 +104,7 @@ int main(int argc, const char* argv[])
 
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
                            fLOG_OmitNoteLevel | fLOG_DateTime);
-    CORE_SetLOGFILE(stderr, 0/*false*/);
+    CORE_SetLOGFILE_Ex(stderr, eLOG_Trace, eLOG_Warning, 0/*false*/);
     if (argc > 1)
         g_NCBI_ConnectRandomSeed = atoi(argv[1]);
     else
@@ -115,18 +114,18 @@ int main(int argc, const char* argv[])
     srand(g_NCBI_ConnectRandomSeed);
     for (j = 1;  j <= 3;  j++) {
         CORE_LOGF(eLOG_Note, ("Creating heap %d", j));
-        if (!(heap = HEAP_Create(0, 0, 4096, s_Expand, 0)))
+        if (!(heap = HEAP_Create(0, 0, 128, s_Expand, 0)))
             CORE_LOG(eLOG_Error, "Cannot create heap");
-        for (n = 0; n < 1000 && (rand() & 0xFFFF) != 0x1234; n++) {
+        for (n = 0;  n < 1000  && (rand() & 0xFFFF) != 0x1234;  n++) {
             r = rand() & 7;
-            if (r == 1  ||  r == 3) {
-                int/*bool*/ fast = rand() & 1;
+            if (r == 1  ||  r == 2) {
+                int/*bool*/ tail = rand() & 1;
                 i = rand() & 0xFF;
                 if (i) {
                     CORE_LOGF(eLOG_Note,
-                              ("Allocating%s data size %d",
-                               fast ? " fast" : "", i));
-                    blk = fast ? HEAP_AllocFast(heap, i) : HEAP_Alloc(heap, i);
+                              ("Allocating %s data size %d",
+                               tail ? "tail" : "head", i));
+                    blk = HEAP_Alloc(heap, i, tail);
                     if (blk) {
                         CORE_LOGF(eLOG_Note,
                                   ("Done @%u, size %u",
@@ -137,18 +136,15 @@ int main(int argc, const char* argv[])
                     while (i--)
                         *c++ = rand();
                     s_Walk(heap, 0);
-                } else {
-                    assert(!(fast
-                             ? HEAP_AllocFast(heap, i)
-                             : HEAP_Alloc(heap, i)));
-                }
-            } else if (r == 2  ||  r == 4) {
+                } else
+                    assert(!HEAP_Alloc(heap, i, tail));
+            } else if (r == 3  ||  r == 4) {
                 blk = 0;
                 do {
                     if (!(blk = HEAP_Walk(heap, blk)))
                         break;
                 } while (rand() & 7);
-                if (blk  &&  (short) blk->flag) {
+                if (blk  &&  (blk->flag & 1)) {
                     unsigned size = blk->size;
                     unsigned data_size = size - sizeof(*blk);
                     CORE_LOGF(eLOG_Note,
@@ -166,7 +162,7 @@ int main(int argc, const char* argv[])
                 for (;;) {
                     if (!(blk = HEAP_Walk(heap, blk)))
                         break;
-                    if ((short) blk->flag  &&  (rand() & 7)) {
+                    if ((blk->flag & 1)  &&  (rand() & 7)) {
                         char buf[32];
                         unsigned size = blk->size;
                         int/*bool*/ fast = rand() & 1;
@@ -188,7 +184,7 @@ int main(int argc, const char* argv[])
                         CORE_LOG(eLOG_Note, "Done");
                         s_Walk(heap, 0);
                         ok = 1;
-                        if (prev  &&  !((short) prev->flag))
+                        if (prev  &&  !(prev->flag & 1))
                             continue;
                     }
                     prev = blk;
@@ -208,7 +204,7 @@ int main(int argc, const char* argv[])
                                                   HEAP_Size(heap), 0);
                     } else {
                         CORE_LOG(eLOG_Note, "Attaching heap");
-                        newheap = HEAP_Attach(HEAP_Base(heap), 0);
+                        newheap = HEAP_Attach(HEAP_Base(heap), 0, 0);
                     }
                 } else {
                     CORE_LOG(eLOG_Note, "Copying heap");

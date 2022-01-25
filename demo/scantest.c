@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/20/95
 *
-* $Revision: 6.61 $
+* $Revision: 6.63 $
 *
 * File Description: 
 *       template for custom scans of ASN.1 release files

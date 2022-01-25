@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_sendmail.c,v 6.27 2012/06/20 18:09:36 kazimird Exp $
+/* $Id: test_ncbi_sendmail.c,v 6.36 2014/12/08 16:44:27 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,43 +37,19 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
 
+#include "test_assert.h"  /* This header must go last */
 
 #define TEST_HUGE_BODY_SIZE     (1024*100)
 
 
 int main(int argc, const char* argv[])
 {
-    const char custom_body[] =
+    static const char custom_body[] =
         "Subject: Custom sized body\n"
         "\n"
         "Custom sized body\n"
         "0123456789\n"; /* these 11 chars to ignore */
-    const char* body[] = {
-        "This is a simple test",
-        "This is a test with\n.",
-        0,
-        ".",
-        "\n.\n",
-        ".\n",
-        "",
-        "a\nb\nc\nd\n.",
-        "a\r\n\rb\r\nc\r\nd\r\n.",
-        ".\na"
-    };
-    const char* subject[] = {
-        0,
-        "CORE_SendMail Test",
-        "",
-    };
-    const char* to[] = {
-        "lavr",
-        "lavr@pavo",
-        " \"Anton Lavrentiev\"   <lavr@pavo>  , lavr, <lavr>   ",
-    };
-    size_t i, j, k, n, m;
     const char* mx_host;
     SSendMailInfo info;
     const char* retval;
@@ -82,6 +58,7 @@ int main(int argc, const char* argv[])
     short mx_port;
     char val[32];
     FILE* fp;
+    size_t n;
 
     g_NCBI_ConnectRandomSeed = (int) time(0) ^ NCBI_CONNECT_SRAND_ADDEND;
     srand(g_NCBI_ConnectRandomSeed);
@@ -99,18 +76,136 @@ int main(int argc, const char* argv[])
         SOCK_SetDataLoggingAPI(eOn);
     }
 
+    SendMailInfo_InitEx(&info, 0, eCORE_UsernameReal);
+    CORE_LOGF(eLOG_Note, ("REAL: <%s>", info.from));
+    SendMailInfo_InitEx(&info, 0, eCORE_UsernameLogin);
+    CORE_LOGF(eLOG_Note, ("LOGIN: <%s>", info.from));
+    SendMailInfo_InitEx(&info, 0, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("CURRENT: <%s>", info.from));
+
+#if 1
+    strcpy(info.from, "@");
+    SendMailInfo_InitEx(&info, info.from, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("@ - <%s>", info.from));
+    assert(!*info.from);
+
+    strcpy(val, "@");
+    SendMailInfo_InitEx(&info, val, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("@ - <%s>", info.from));
+    assert(!*info.from);
+
+    strcpy(info.from, "user0");
+    SendMailInfo_InitEx(&info, info.from, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("user0 - <%s>", info.from));
+    assert(strcmp(info.from, "user0") == 0);
+
+    strcpy(val, "user1");
+    SendMailInfo_InitEx(&info, val, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("user1 - <%s>", info.from));
+    assert(strcmp(info.from, "user1") == 0);
+
+    strcpy(info.from, "user2@");
+    SendMailInfo_InitEx(&info, info.from, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("user2@ - <%s>", info.from));
+    assert(strncmp(info.from, "user2@", 6) == 0);
+
+    strcpy(val, "user3@");
+    SendMailInfo_InitEx(&info, val, eCORE_UsernameCurrent);
+    CORE_LOGF(eLOG_Note, ("user3@ - <%s>", info.from));
+    assert(strncmp(info.from, "user3@", 6) == 0);
+ 
+    strcpy(info.from, "@host4.net");
+    SendMailInfo_InitEx(&info, info.from, eCORE_UsernameLogin);
+    CORE_LOGF(eLOG_Note, ("@host4.net - <%s>", info.from));
+    assert(*info.from != '@' && !strcmp(strchr(info.from, '@'), "@host4.net"));
+
+    strcpy(val, "@host5.net");
+    SendMailInfo_InitEx(&info, val, eCORE_UsernameLogin);
+    CORE_LOGF(eLOG_Note, ("@host5.net - <%s>", info.from));
+    assert(*info.from != '@' && !strcmp(strchr(info.from, '@'), "@host5.net"));
+
+    strcpy(info.from, "user6@host6.net");
+    SendMailInfo_InitEx(&info, info.from, eCORE_UsernameReal);
+    CORE_LOGF(eLOG_Note, ("user6@host6.net - <%s>", info.from));
+    assert(strcmp(info.from, "user6@host6.net") == 0);
+
+    strcpy(val, "user7@host7.net");
+    SendMailInfo_InitEx(&info, val, eCORE_UsernameReal);
+    CORE_LOGF(eLOG_Note, ("user7@host7.net - <%s>", info.from));
+    assert(strcmp(info.from, "user7@host7.net") == 0);
+
+    SendMailInfo_InitEx(&info, 0, eCORE_UsernameReal);
+    CORE_LOGF(eLOG_Note, ("NULL - <%s>", info.from));
+    assert(info.from[0]  &&  info.from[0] != '@'  &&  strchr(info.from, '@'));
+
+    if ((huge_body = (char*) malloc(TEST_HUGE_BODY_SIZE)) != 0) {
+
+        strcpy(huge_body, "user8@");
+        for (n = 0;  n < TEST_HUGE_BODY_SIZE - 6;  n++)
+            huge_body[n + 6] = "abcdefghijklmnopqrstuvwxyz."[rand() % 27];
+        huge_body[TEST_HUGE_BODY_SIZE - 1] = '\0';
+        SendMailInfo_InitEx(&info, huge_body, eCORE_UsernameCurrent);
+        CORE_LOGF(eLOG_Note, ("HUGE user8@host - <%s>", info.from));
+        assert(strcmp(info.from, "user8") == 0);
+
+        SendMailInfo_InitEx(&info, huge_body + 5, eCORE_UsernameLogin);
+        CORE_LOGF(eLOG_Note, ("HUGE @hostA - <%s>", info.from));
+        assert(!strchr(info.from, '@'));
+
+        huge_body[4] = 'B';
+        huge_body[5] = '_';
+        for (n = 6;  n < sizeof(info.from) + 1;  n++) {
+            if (huge_body[n] == '.')
+                huge_body[n]  = '_';
+        }
+        huge_body[sizeof(info.from) + 1] = '@';
+        SendMailInfo_InitEx(&info, huge_body, eCORE_UsernameReal);
+        CORE_LOGF(eLOG_Note, ("HUGE userB - <%s>", info.from));
+        assert(strncmp(info.from, huge_body, sizeof(info.from) - 1) == 0);
+        assert(strlen(info.from) == sizeof(info.from) - 1);
+        assert(!strchr(info.from, '@'));
+
+        huge_body[4] = 'C';
+        huge_body[sizeof(info.from) - 10]  = '@';
+        SendMailInfo_InitEx(&info, huge_body, eCORE_UsernameReal);
+        CORE_LOGF(eLOG_Note, ("LONG userC - <%s>", info.from));
+        assert(strncmp(info.from, huge_body, sizeof(info.from) - 10) == 0);
+        assert(strlen(info.from) == sizeof(info.from) - 10);
+        assert(!strchr(info.from, '@'));
+
+        memcpy(huge_body + sizeof(info.from) - 10, "userD", 5);
+        huge_body[sizeof(info.from) << 1] = '\0';
+        SendMailInfo_InitEx(&info, huge_body + sizeof(info.from) - 10,
+                            eCORE_UsernameReal);
+        CORE_LOGF(eLOG_Note, ("LONG userD - <%s>", info.from));
+        assert(strncmp(info.from, "userD", 5) == 0);
+
+        SendMailInfo_InitEx(&info, huge_body + sizeof(info.from) + 1,
+                            eCORE_UsernameReal);
+        CORE_LOGF(eLOG_Note, ("LONG @hostE - <%s>", info.from));
+        assert(!strchr(info.from, '@'));
+
+        free(huge_body);
+    }
+#endif
+
+#if 0
     if (argc > 1) {
         CORE_LOG(eLOG_Note, "Special test requested");
+        SendMailInfo_InitEx(&info, "@", eCORE_UsernameCurrent);
+        strcpy(info.from, "Friend <>");
+        info.header = "Sender: \"Your Sender\" <lavr@ncbi.nlm.nih.gov>\n"
+                      "Reply-To: Coremake <coremake@ncbi.nlm.nih.gov>";
         if ((fp = fopen(argv[1], "rb")) != 0          &&
             fseek(fp, 0, SEEK_END) == 0               &&
-            (m = ftell(fp)) != (size_t)(-1)           &&
+            (n = ftell(fp)) != (size_t)(-1)           &&
             fseek(fp, 0, SEEK_SET) == 0               &&
-            (huge_body = (char*) malloc(m + 1)) != 0  &&
-            fread(huge_body, m, 1, fp) == 1) {
-            huge_body[m] = '\0';
+            (huge_body = (char*) malloc(n + 1)) != 0  &&
+            fread(huge_body, n, 1, fp) == 1) {
+            huge_body[n] = '\0';
             CORE_LOGF(eLOG_Note, ("Sending file (%lu bytes)",
-                                  (unsigned long) m));
-            retval = CORE_SendMail("lavr", "File", huge_body);
+                                  (unsigned long) n));
+            retval = CORE_SendMailEx("lavr", "File", huge_body, &info);
             if (retval) {
                 CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
             } else {
@@ -120,28 +215,56 @@ int main(int argc, const char* argv[])
             CORE_LOG_ERRNO(eLOG_Error, errno, "Test failed");
         return 0;
     }
+#endif
 
-#if 1
-    CORE_LOG(eLOG_Note, "Phase 1 of 2: Testing CORE_SendMail");
+#if 0
+    {
+        static const char* body[] = {
+            "This is a simple test",
+            "This is a test with\n.",
+            0,
+            ".",
+            "\n.\n",
+            ".\n",
+            "",
+            "a\nb\nc\nd\n.",
+            "a\r\n\rb\r\nc\r\nd\r\n.",
+            ".\na"
+        };
+        static const char* subject[] = {
+            0,
+            "CORE_SendMail Test",
+            "",
+        };
+        static const char* to[] = {
+            "lavr",
+            "lavr@pavo",
+            " \"Anton Lavrentiev\"   <lavr@pavo>  , lavr, <lavr>   ",
+        };
+        size_t i, j, k, m = 0;
 
-    n = (sizeof(to)/sizeof(to[0]))*
-        (sizeof(subject)/sizeof(subject[0]))*
-        (sizeof(body)/sizeof(body[0]));
-    m = 0;
-    for (i = 0; i < sizeof(to)/sizeof(to[0]); i++) {
-        for (j = 0; j < sizeof(subject)/sizeof(subject[0]); j++)
-            for (k = 0; k < sizeof(body)/sizeof(body[0]); k++) {
-                CORE_LOGF(eLOG_Note, ("Test %u of %u",
-                                      (unsigned)(++m), (unsigned)n));
-                retval = CORE_SendMail(to[i], subject[j], body[k]);
-                if (retval != 0)
-                    CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
-            }
+        CORE_LOG(eLOG_Note, "Phase 1 of 2: Testing CORE_SendMail");
+
+        n = (sizeof(to)/sizeof(to[0]))*
+            (sizeof(subject)/sizeof(subject[0]))*
+            (sizeof(body)/sizeof(body[0]));
+        for (i = 0;  i < sizeof(to) / sizeof(to[0]);  ++i) {
+            for (j = 0;  j < sizeof(subject) / sizeof(subject[0]);  ++j)
+                for (k = 0;  k < sizeof(body) / sizeof(body[0]);  ++k) {
+                    CORE_LOGF(eLOG_Note, ("  Test %u of %u",
+                                          (unsigned int) ++m,
+                                          (unsigned int) n));
+                    retval = CORE_SendMail(to[i], subject[j], body[k]);
+                    if (retval != 0)
+                        CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
+                }
+        }
     }
 #else
     CORE_LOG(eLOG_Note, "Phase 1 of 2: Skipping CORE_SendMail tests");
 #endif
 
+    if (argc > 1) {
     CORE_LOG(eLOG_Note, "Phase 2 of 2: Testing CORE_SendMailEx");
 
     SendMailInfo_Init(&info);
@@ -207,9 +330,9 @@ int main(int argc, const char* argv[])
     info.bcc = 0;
     if (!(huge_body = (char*) malloc(TEST_HUGE_BODY_SIZE)))
         CORE_LOG(eLOG_Fatal, "Test failed: Cannot allocate memory");
-    for (i = 0; i < TEST_HUGE_BODY_SIZE - 1; i++)
-        huge_body[i] = "0123456789\nABCDEFGHIJKLMNOPQRSTUVWXYZ ."[rand() % 39];
-    huge_body[i] = 0;
+    for (n = 0;  n < TEST_HUGE_BODY_SIZE - 1;  ++n)
+        huge_body[n] = "0123456789\nABCDEFGHIJKLMNOPQRSTUVWXYZ ."[rand() % 39];
+    huge_body[n] = 0;
     retval = CORE_SendMailEx("lavr", "CORE_SendMailEx", huge_body, &info);
     if (retval)
         CORE_LOGF(eLOG_Fatal, ("Test failed: %s", retval));
@@ -286,6 +409,8 @@ int main(int argc, const char* argv[])
     if (!retval)
         CORE_LOG(eLOG_Fatal, "Test failed");
     CORE_LOGF(eLOG_Note, ("Test passed: %s", retval));
+    } else
+    CORE_LOG(eLOG_Note, "Phase 2 of 2: Skipping CORE_SendMailEx tests");
 
     CORE_LOG(eLOG_Note, "TEST completed successfully");
     CORE_SetLOG(0);

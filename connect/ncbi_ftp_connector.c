@@ -1,4 +1,4 @@
-/* $Id: ncbi_ftp_connector.c,v 1.73 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_ftp_connector.c,v 1.89 2016/07/28 18:09:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -27,8 +27,9 @@
  *
  * File Description:
  *   FTP CONNECTOR
- *   See also:  RFCs 959 (STD 9), 1123 (4.1), 1635 (FYI 24), 2428,
- *   3659 ("Extensions to FTP"), 5797 (FTP Command Registry).
+ *   See also:  RFCs 959 (STD 9), 1123 (4.1), 1635 (FYI 24),
+ *   2389 (FTP Features), 2428 (Extended PORT commands),
+ *   3659 (Extensions to FTP), 5797 (FTP Command Registry).
  *
  *   Minimum FTP implementation: RFC 1123 (4.1.2.13)
  *
@@ -70,10 +71,10 @@ enum EFTP_Feature {                /* NB: values must occupy 12 bits at most */
     fFtpFeature_SITE =  0x004,
     fFtpFeature_FEAT =  0x008,
     fFtpFeature_MDTM =  0x010,
-    fFtpFeature_REST =  0x020,
-    fFtpFeature_SIZE =  0x040,
-    fFtpFeature_EPRT =  0x080,
-    fFtpFeature_MLSx =  0x100,
+    fFtpFeature_SIZE =  0x020,
+    fFtpFeature_REST =  0x040,
+    fFtpFeature_MLSx =  0x080,
+    fFtpFeature_EPRT =  0x100,
     fFtpFeature_EPSV = 0x1000,
     fFtpFeature_APSV = 0x3000      /* EPSV ALL -- a la "APSV" from RFC 1579  */
 };
@@ -109,64 +110,8 @@ static const STimeout kZeroTimeout     = {  0, 0 };
 static const char     kDigits[] = "0123456789";
 
 
-typedef EIO_Status (*FFTPReplyParser)(SFTPConnector* xxx, int code,
-                                      size_t lineno, const char* line);
-
-
-static EIO_Status x_FTPParseReply(SFTPConnector* xxx, int* code,
-                                  char* line, size_t maxlinelen,
-                                  FFTPReplyParser parser)
-{
-    EIO_Status status = eIO_Success;
-    size_t     lineno;
-    size_t     len;
-
-    assert(xxx->cntl);
-
-    for (lineno = 0; ; lineno++) {
-        EIO_Status rdstat;
-        const char* msg;
-        char buf[1024];
-        int c, m;
-
-        /* all FTP replies are at least '\n'-terminated, no ending with EOF */
-        rdstat = SOCK_ReadLine(xxx->cntl, buf, sizeof(buf), &len);
-        if (rdstat != eIO_Success) {
-            status  = rdstat;
-            break;
-        }
-        if (len == sizeof(buf)) {
-            status = eIO_Unknown/*line too long*/;
-            break;
-        }
-        msg = buf;
-        if (!lineno  ||  isdigit((unsigned char)(*buf))) {
-            if (sscanf(buf, "%d%n", &c, &m) < 1  ||  m != 3  ||  !c
-                ||  (buf[m]  &&  buf[m] != ' '  &&  buf[m] != '-')
-                ||  (lineno  &&  c != *code)) {
-                status = eIO_Unknown;
-                break;
-            }
-            msg += m + 1;
-            if (buf[m] == '-')
-                m = 0;
-        } else {
-            c = *code;
-            m = 0;
-        }
-        msg += strspn(msg, " \t");
-        if (status == eIO_Success  &&  parser)
-            status  = parser(xxx, lineno  &&  m ? 0 : c, lineno, msg);
-        if (!lineno) {
-            *code = c;
-            if (line)
-                strncpy0(line, msg, maxlinelen);
-        }
-        if (m)
-            break;
-    }
-    return status;
-}
+typedef EIO_Status (*FFTPReplyCB)(SFTPConnector* xxx,  int   code,
+                                  size_t lineno, const char* line);
 
 
 /* Close data connection w/error messages
@@ -226,8 +171,11 @@ static EIO_Status x_FTPCloseData(SFTPConnector* xxx,
                              size, &"s"[size == 1]));
                 status = eIO_Unknown;
             }
-        } else if (size  &&  how != eIO_ReadWrite)
-            CORE_TRACEF(("[FTP; %s]  Transfer size verified", xxx->what));
+        } else if (size  &&  how != eIO_ReadWrite) {
+            CORE_TRACEF(("[FTP; %s]  Transfer size verified ("
+                         "%" NCBI_BIGCOUNT_FORMAT_SPEC " byte%s)",
+                         xxx->what, size, &"s"[size == 1]));
+        }
     } else {
         if (!xxx->cntl) {
             how = eIO_Open;
@@ -251,15 +199,72 @@ static EIO_Status x_FTPCloseData(SFTPConnector* xxx,
 }
 
 
+static EIO_Status x_FTPParseReply(SFTPConnector* xxx, int* code,
+                                  char* line, size_t maxlinelen,
+                                  FFTPReplyCB replycb)
+{
+    EIO_Status status = eIO_Success;
+    size_t     lineno;
+    size_t     len;
+
+    assert(xxx->cntl);
+
+    for (lineno = 0 ; ; lineno++) {
+        EIO_Status rdstat;
+        const char* msg;
+        char buf[1024];
+        int c, m;
+
+        /* all FTP replies are at least '\n'-terminated, no ending with EOF */
+        rdstat = SOCK_ReadLine(xxx->cntl, buf, sizeof(buf), &len);
+        if (rdstat != eIO_Success) {
+            status  = rdstat;
+            break;
+        }
+        if (len == sizeof(buf)) {
+            status = eIO_Unknown/*line too long*/;
+            break;
+        }
+        msg = buf;
+        if (!lineno  ||  isdigit((unsigned char)(*buf))) {
+            if (sscanf(buf, "%d%n", &c, &m) < 1  ||  m != 3  ||  !c
+                ||  (buf[m]  &&  buf[m] != ' '  &&  buf[m] != '-')
+                ||  (lineno  &&  c != *code)) {
+                status = eIO_Unknown;
+                break;
+            }
+            msg += m + 1;
+            if (buf[m] == '-')
+                m = 0;
+        } else {
+            c = *code;
+            m = 0;
+        }
+        msg += strspn(msg, " \t");
+        if (status == eIO_Success  &&  replycb)
+            status  = replycb(xxx, lineno  &&  m ? 0 : c, lineno, msg);
+        if (!lineno) {
+            *code = c;
+            if (line)
+                strncpy0(line, msg, maxlinelen);
+        }
+        if (m)
+            break;
+    }
+    return status;
+}
+
+
 static EIO_Status s_FTPReply(SFTPConnector* xxx, int* code,
                              char* line, size_t maxlinelen,
-                             FFTPReplyParser parser)
+                             FFTPReplyCB replycb)
 {
     EIO_Status status;
     int        c = 0;
 
     if (xxx->cntl) {
-        status = x_FTPParseReply(xxx, &c, line, maxlinelen, parser);
+        char reason[40];
+        status = x_FTPParseReply(xxx, &c, line, maxlinelen, replycb);
         if (status != eIO_Timeout)
             xxx->sync = 1/*true*/;
         if (status == eIO_Success) {
@@ -271,15 +276,17 @@ static EIO_Status s_FTPReply(SFTPConnector* xxx, int* code,
                 status = eIO_NotSupported/*account*/;
             else if (c == 110  &&  (xxx->data  ||  xxx->send))
                 status = eIO_NotSupported/*restart mark*/;
-        }
+            sprintf(reason, "code %d", c);
+        } else
+            strncpy0(reason, IO_StatusStr(status), sizeof(reason) - 1);
         if (status == eIO_Closed   ||  c == 221) {
             SOCK cntl = xxx->cntl;
             xxx->cntl = 0;
             if (status == eIO_Closed) {
                 CORE_LOGF_X(10, eLOG_Error,
-                            ("[FTP%s%s]  Lost connection to server @ %s:%hu",
+                            ("[FTP%s%s]  Lost connection to %s:%hu (%s)",
                              xxx->what ? "; " : "", xxx->what ? xxx->what : "",
-                             xxx->info->host, xxx->info->port));
+                             xxx->info->host, xxx->info->port, reason));
             }
             if (xxx->data)
                 x_FTPCloseData(xxx, eIO_Close/*silent close*/, 0);
@@ -351,11 +358,12 @@ static EIO_Status s_FTPCommandEx(SFTPConnector* xxx,
         status = SOCK_Write(xxx->cntl, line, cmdlen, 0, eIO_WritePersist);
         if (off  &&  log != eOff) {
             SOCK_SetDataLogging(xxx->cntl, log);
-            if (log == eOn  ||  SOCK_SetDataLoggingAPI(eDefault) == eOn)
+            if (log == eOn  ||  SOCK_SetDataLoggingAPI(eDefault) == eOn) {
                 CORE_LOGF_X(4, eLOG_Trace,
                             ("Sending FTP %.*s command (%s)",
                              (int) strcspn(line, " \t"), line,
                              IO_StatusStr(status)));
+            }
         }
         if (line != x_buf)
             free(line);
@@ -374,8 +382,8 @@ static const char* x_4Word(const char* line, const char word[4+1])
 }
 
 
-static EIO_Status x_FTPParseHelp(SFTPConnector* xxx, int code,
-                                 size_t lineno, const char* line)
+static EIO_Status x_FTPHelpCB(SFTPConnector* xxx, int code,
+                              size_t lineno, const char* line)
 {
     if (!lineno)
         return code == 211  ||  code == 214 ? eIO_Success : eIO_NotSupported;
@@ -412,17 +420,29 @@ static EIO_Status x_FTPParseHelp(SFTPConnector* xxx, int code,
             else
                 xxx->feat &= ~fFtpFeature_MDTM;
         }
+        if ((s = x_4Word(line, "SIZE")) != 0) {  /* RFC 3659 */
+            if (s[4 + strspn(s + 4, " \t")] != '*')
+                xxx->feat |=  fFtpFeature_SIZE;
+            else
+                xxx->feat &= ~fFtpFeature_SIZE;
+        }
         if ((s = x_4Word(line, "REST")) != 0) {  /* RFC 3659, NB: FEAT */
             if (s[4 + strspn(s + 4, " \t")] != '*')
                 xxx->feat |=  fFtpFeature_REST;
             else
                 xxx->feat &= ~fFtpFeature_REST;
         }
-        if ((s = x_4Word(line, "SIZE")) != 0) {  /* RFC 3659 */
+        if ((s = x_4Word(line, "MLST")) != 0) {  /* RFC 3659 */
             if (s[4 + strspn(s + 4, " \t")] != '*')
-                xxx->feat |=  fFtpFeature_SIZE;
+                xxx->feat |=  fFtpFeature_MLSx;
             else
-                xxx->feat &= ~fFtpFeature_SIZE;
+                xxx->feat &= ~fFtpFeature_MLSx;
+        }
+        if ((s = x_4Word(line, "MLSD")) != 0) {  /* RFC 3659 */
+            if (s[4 + strspn(s + 4, " \t")] != '*')
+                xxx->feat |=  fFtpFeature_MLSx;
+            else
+                xxx->feat &= ~fFtpFeature_MLSx;
         }
         if ((s = x_4Word(line, "EPRT")) != 0) {  /* RFC 2428 */
             if (s[4 + strspn(s + 4, " \t")] != '*')
@@ -449,7 +469,7 @@ static EIO_Status x_FTPHelp(SFTPConnector* xxx)
     if (status != eIO_Success)
         return status;
     feat = xxx->feat;
-    status = s_FTPReply(xxx, &code, 0, 0, x_FTPParseHelp);
+    status = s_FTPReply(xxx, &code, 0, 0, x_FTPHelpCB);
     if (status != eIO_Success  ||  (code != 211  &&  code != 214)) {
         xxx->feat = feat;
         return status != eIO_Success ? status : eIO_NotSupported;
@@ -458,23 +478,26 @@ static EIO_Status x_FTPHelp(SFTPConnector* xxx)
 }
 
 
-static EIO_Status x_FTPParseFeat(SFTPConnector* xxx, int code,
-                                 size_t lineno, const char* line)
+static EIO_Status x_FTPFeatCB(SFTPConnector* xxx, int code,
+                              size_t lineno, const char* line)
 {
     if (!lineno)
         return code == 211 ? eIO_Success : eIO_NotSupported;
-    if (code  &&  strlen(line) >= 4  &&  line[4] == ' ') {
+    if (code  &&  strlen(line) >= 4
+        &&  (!line[4]  ||  isspace((unsigned char) line[4]))) {
         assert(code == 211);
         if      (strncasecmp(line, "MDTM", 4) == 0)
             xxx->feat |= fFtpFeature_MDTM;
         else if (strncasecmp(line, "SIZE", 4) == 0)
             xxx->feat |= fFtpFeature_SIZE;
-        else if (strncasecmp(line, "EPSV", 4) == 0)
-            xxx->feat |= fFtpFeature_EPSV;
         else if (strncasecmp(line, "REST", 4) == 0)
             xxx->feat |= fFtpFeature_REST;  /* NB: "STREAM" must also follow */
         else if (strncasecmp(line, "MLST", 4) == 0)
             xxx->feat |= fFtpFeature_MLSx;
+        else if (strncasecmp(line, "EPRT", 4) == 0)
+            xxx->feat |= fFtpFeature_EPRT;
+        else if (strncasecmp(line, "EPSV", 4) == 0)
+            xxx->feat |= fFtpFeature_EPSV;
     }
     return eIO_Success;
 }
@@ -491,7 +514,7 @@ static EIO_Status x_FTPFeat(SFTPConnector* xxx)
     if (status != eIO_Success)
         return status;
     feat = xxx->feat;
-    status = s_FTPReply(xxx, &code, 0, 0, x_FTPParseFeat);
+    status = s_FTPReply(xxx, &code, 0, 0, x_FTPFeatCB);
     if (status != eIO_Success  ||  code != 211) {
         xxx->feat = feat;
         return status != eIO_Success ? status : eIO_NotSupported;
@@ -543,7 +566,7 @@ static EIO_Status x_FTPLogin(SFTPConnector* xxx)
         return status;
     if (code == 120)
         return eIO_Timeout;
-    if (code != 220  ||  !*xxx->info->user)
+    if (code != 220)
         return eIO_Unknown;
     status = s_FTPCommand(xxx, "USER", xxx->info->user);
     if (status != eIO_Success)
@@ -570,9 +593,8 @@ static EIO_Status x_FTPLogin(SFTPConnector* xxx)
         return status;
     if (xxx->flag & fFTP_LogControl) {
         CORE_LOGF_X(3, eLOG_Trace,
-                    ("[FTP]  Server ready @ %s:%hu, features = 0x%02X",
-                     xxx->info->host, xxx->info->port,
-                     (unsigned int) xxx->feat));
+                    ("[FTP; %s:%hu]  Server ready, features = 0x%02X",
+                     xxx->info->host, xxx->info->port, xxx->feat));
     }
     if (xxx->feat &  fFtpFeature_EPSV)
         xxx->feat |= fFtpFeature_APSV;
@@ -858,7 +880,7 @@ static EIO_Status x_FTPPasv(SFTPConnector*  xxx,
             return eIO_Unknown;
         len = 0;
         for (i = 0;  i < (unsigned int)(sizeof(o) / sizeof(o[0]));  i++) {
-            if (sscanf(c + len, ",%d%n" + !i, &o[i], &code) < 1)
+            if (sscanf(c + len, &",%d%n"[!i], &o[i], &code) < 1)
                 break;
             len += code;
         }
@@ -895,9 +917,9 @@ static EIO_Status x_FTPPassive(SFTPConnector*  xxx,
     if ((xxx->feat & fFtpFeature_APSV) == fFtpFeature_APSV) {
         /* first time here, try to set EPSV ALL */
         if (x_FTPEpsv(xxx, 0, 0) == eIO_Success)
-            xxx->feat &= ~fFtpFeature_EPSV;                    /* APSV mode */
+            xxx->feat &= ~fFtpFeature_EPSV;                     /* APSV mode */
         else
-            xxx->feat &= ~fFtpFeature_APSV | fFtpFeature_EPSV; /* EPSV mode */
+            xxx->feat &= ~fFtpFeature_APSV | fFtpFeature_EPSV;  /* EPSV mode */
     }
     if (xxx->feat & fFtpFeature_APSV) {
         status = x_FTPEpsv(xxx, &host, &port);
@@ -1058,7 +1080,7 @@ static EIO_Status x_FTPOpenData(SFTPConnector*  xxx,
 static EIO_Status x_FTPXfer(SFTPConnector*  xxx,
                             const char*     cmd,
                             const STimeout* timeout,
-                            FFTPReplyParser parser)
+                            FFTPReplyCB     replycb)
 {
     int code;
     LSOCK lsock;
@@ -1078,7 +1100,7 @@ static EIO_Status x_FTPXfer(SFTPConnector*  xxx,
     if (status == eIO_Success)
         status  = s_FTPCommand(xxx, cmd, 0);
     if (status == eIO_Success)
-        status  = s_FTPReply(xxx, &code, 0, 0, parser);
+        status  = s_FTPReply(xxx, &code, 0, 0, replycb);
     if (status == eIO_Success) {
         if (code == 125  ||  code == 150) {
             if (lsock) {
@@ -1090,7 +1112,7 @@ static EIO_Status x_FTPXfer(SFTPConnector*  xxx,
                     assert(!xxx->data);
                     CORE_LOGF_X(5, eLOG_Error,
                                 ("[FTP; %s]  Cannot accept data connection"
-                                 " @ :%hu (%s)", xxx->what,
+                                 " at :%hu (%s)", xxx->what,
                                  LSOCK_GetPort(lsock, eNH_HostByteOrder),
                                  IO_StatusStr(status)));
                     /* NB: data conn may have started at the server end */
@@ -1201,6 +1223,7 @@ static EIO_Status s_FTPRename(SFTPConnector* xxx,
 }
 
 
+/* [X]CWD, [X]PWD, [X]MKD, [X]RMD, CDUP, XCUP */
 static EIO_Status s_FTPDir(SFTPConnector* xxx,
                            const char*    cmd,
                            const char*    arg)
@@ -1228,8 +1251,8 @@ static EIO_Status s_FTPSyst(SFTPConnector* xxx,
 }
 
 
-static EIO_Status x_FTPParseStat(SFTPConnector* xxx, int code,
-                                 size_t lineno, const char* line)
+static EIO_Status x_FTPStatCB(SFTPConnector* xxx, int code,
+                              size_t lineno, const char* line)
 {
     if (!lineno  &&  code != 211  &&  code != 212  &&  code != 213)
         return code == 450 ? eIO_Closed : eIO_NotSupported;
@@ -1250,7 +1273,7 @@ static EIO_Status s_FTPStat(SFTPConnector* xxx,
     EIO_Status status = s_FTPCommand(xxx, cmd, 0);
     if (status != eIO_Success)
         return status;
-    return s_FTPReply(xxx, 0, 0, 0, x_FTPParseStat);
+    return s_FTPReply(xxx, 0, 0, 0, x_FTPStatCB);
 }
 
 
@@ -1318,10 +1341,10 @@ static EIO_Status x_FTPParseMdtm(SFTPConnector* xxx, char* timestamp)
     } else if (len != 14)
         return eIO_Unknown;
     /* Can't use strptime() here, per the following reasons:
-     * 1. Only GNU implementation is documented not to require spaces
-     *    between input format specifiers in the format string (%-based);
-     * 2. None to any spaces are allowed to match a space in the format,
-     *    whilst an MDTM response must not contain even a single space. */
+     * 1. Only GNU implementation is documented not to require spaces between
+     *    input format specifiers in the format string (%-based);
+     * 2. None to any spaces are allowed to match a space in the format, whilst
+     *    an MDTM response must not contain even a single space. */
     for (n = 0;  n < 6;  n++) {
         size_t len = n ? 2 : 4/*year*/;
         if (len != strlen(strncpy0(buf, timestamp, len))  ||
@@ -1435,12 +1458,12 @@ static EIO_Status s_FTPRestart(SFTPConnector* xxx,
 }
 
 
-static EIO_Status x_FTPSzcb(SFTPConnector* xxx, int code,
-                            size_t lineno, const char* line)
+static EIO_Status x_FTPRetrieveCB(SFTPConnector* xxx, int code,
+                                  size_t lineno, const char* line)
 {
     EIO_Status status = eIO_Success;
     if (!lineno  &&  (code == 125  ||  code == 150)) {
-        const char* comment = strrchr(line,  '(');
+        const char* comment = strrchr(line, '(');
         size_t n, m;
         if (comment  &&  strchr(++comment, ')')
             &&  (n = strspn(comment, kDigits)) > 0
@@ -1476,7 +1499,7 @@ static EIO_Status s_FTPRetrieve(SFTPConnector*  xxx,
                                 const STimeout* timeout)
 {
     xxx->size = 0;
-    return x_FTPXfer(xxx, cmd, timeout, x_FTPSzcb);
+    return x_FTPXfer(xxx, cmd, timeout, x_FTPRetrieveCB);
 }
 
 
@@ -1508,8 +1531,8 @@ static EIO_Status s_FTPDele(SFTPConnector* xxx,
 }
 
 
-static EIO_Status x_FTPMlsd(SFTPConnector* xxx, int code,
-                            size_t lineno, const char* line)
+static EIO_Status x_FTPMlsdCB(SFTPConnector* xxx, int code,
+                              size_t lineno, const char* line)
 {
     if (!lineno  ||  code != 501)
         return eIO_Success;
@@ -1517,17 +1540,17 @@ static EIO_Status x_FTPMlsd(SFTPConnector* xxx, int code,
 }
 
 
-static EIO_Status x_FTPMlst(SFTPConnector* xxx, int code,
-                            size_t lineno, const char* line)
+static EIO_Status x_FTPMlstCB(SFTPConnector* xxx, int code,
+                              size_t lineno, const char* line)
 {
     if (!lineno) {
         return code == 250 ? eIO_Success :
             xxx->feat & fFtpFeature_MLSx ? eIO_Closed : eIO_NotSupported;
     }
     if (code) {
-        if (*line++ != ' ' /*RFC3659 7.2*/  ||  !*line  ||
-            !BUF_Write(&xxx->rbuf, line, strlen(line))  ||
-            !BUF_Write(&xxx->rbuf, "\n", 1)) {
+        if (*line  && /* NB: RFC3659 7.2, the leading space has been skipped */
+            (!BUF_Write(&xxx->rbuf, line, strlen(line))  ||
+             !BUF_Write(&xxx->rbuf, "\n", 1))) {
             /* NB: must reset partial rbuf */
             return eIO_Unknown;
         }
@@ -1537,31 +1560,32 @@ static EIO_Status x_FTPMlst(SFTPConnector* xxx, int code,
 
 
 /* MLST, MLSD */
-static EIO_Status s_FTPMlsx(SFTPConnector*  xxx,
+static EIO_Status s_FTPMlsX(SFTPConnector*  xxx,
                             const char*     cmd,
                             const STimeout* timeout)
 {
-    if (cmd[4] == 'T') { /*MLST*/
+    if (cmd[3] == 'T') { /* MLST */
         EIO_Status status = s_FTPCommand(xxx, cmd, 0);
         if (status != eIO_Success)
             return status;
-        status = s_FTPReply(xxx, 0/*code checked by cb*/, 0, 0, x_FTPMlst);
+        status = s_FTPReply(xxx, 0/*code checked by cb*/, 0, 0, x_FTPMlstCB);
         if (status != eIO_Success)
             BUF_Erase(xxx->rbuf);
         return status;
     }
+    /* MLSD */
     xxx->size = 0;  /* cf. s_FTPRetrieve() */
-    return x_FTPXfer(xxx, cmd, timeout, x_FTPMlsd);
+    return x_FTPXfer(xxx, cmd, timeout, x_FTPMlsdCB);
 }
 
 
-static EIO_Status x_FTPNgcb(SFTPConnector* xxx, int code,
-                            size_t lineno, const char* line)
+static EIO_Status x_FTPNegotiateCB(SFTPConnector* xxx, int code,
+                                   size_t lineno, const char* line)
 {
     if (lineno  &&  code / 100 == 2) {
-        if (*line++ != ' ' /*RFC2389 3.2 & 4*/ ||  !*line  ||
-            !BUF_Write(&xxx->rbuf, line, strlen(line))     ||
-            !BUF_Write(&xxx->rbuf, "\n", 1)) {
+        if (*line &&/*NB: RFC2389 3.2 & 4, the leading space has been skipped*/
+            (!BUF_Write(&xxx->rbuf, line, strlen(line))  ||
+             !BUF_Write(&xxx->rbuf, "\n", 1))) {
             /* NB: must reset partial rbuf */
             return eIO_Unknown;
         }
@@ -1578,15 +1602,15 @@ static EIO_Status s_FTPNegotiate(SFTPConnector* xxx,
     EIO_Status status = s_FTPCommand(xxx, cmd, 0);
     if (status != eIO_Success)
         return status;
-    status = s_FTPReply(xxx, &code, 0, 0, x_FTPNgcb);
+    status = s_FTPReply(xxx, &code, 0, 0, x_FTPNegotiateCB);
     if (status == eIO_Success) {
-        if (*cmd == 'F') {
-            if (code != 200)
+        if (*cmd == 'F') {  /* FEAT */
+            if (code != 211)
                 status = eIO_Closed;
-        } else {
+        } else {            /* OPTS */
             if (code == 451)
                 status = eIO_Unknown;
-            else if (code != 211)
+            else if (code != 200)
                 status = eIO_Closed;
         }
     }
@@ -1611,7 +1635,7 @@ static EIO_Status s_FTPPollCntl(SFTPConnector* xxx, const STimeout* timeout)
         status = s_FTPReply(xxx, &code, buf, sizeof(buf) - 1, 0);
         if (status == eIO_Success) {
             assert(!xxx->data  ||  xxx->send);
-            CORE_LOGF_X(12, eLOG_Error,
+            CORE_LOGF_X(12, xxx->data ? eLOG_Error : eLOG_Warning,
                         ("[FTP%s%s]  %spurious response %d from server%s%s",
                          xxx->what ? "; " : "", xxx->what ? xxx->what : "",
                          xxx->data ? "Aborting upload due to a s" : "S", code,
@@ -1677,17 +1701,17 @@ static EIO_Status s_FTPExecute(SFTPConnector* xxx, const STimeout* timeout)
         if (s[size - 1] == '\r')
             --size;
         s[size] = '\0';
+        if (*s)
+            xxx->what = s;
         if (!(c = (const char*) memchr(s, ' ', size)))
-            c = s + size;
+            c = s + size; /*@'\0'*/
         else
             size = (size_t)(c - s);
         assert(*c == ' '  ||  !*c);
-        if (*s)
-            xxx->what = s;
         if (size == 3  ||  size == 4) {
             SOCK_SetTimeout(xxx->cntl, eIO_ReadWrite, timeout);
             if         (size == 3  &&   strncasecmp(s, "REN",  3) == 0) {
-                /* a special-case, non-standard command */
+                /* special-case, non-standard command */
                 status = s_FTPRename(xxx, c + strspn(c, " \t"));
             } else if ((size == 3  ||  toupper((unsigned char) c[-4]) == 'X')
                        &&          (strncasecmp(c - 3, "CWD",  3) == 0  ||
@@ -1719,7 +1743,7 @@ static EIO_Status s_FTPExecute(SFTPConnector* xxx, const STimeout* timeout)
                 status = s_FTPStore   (xxx, s, timeout);
             } else if  (size == 4  &&  (strncasecmp(s, "MLSD", 4) == 0  ||
                                         strncasecmp(s, "MLST", 4) == 0)) {
-                status = s_FTPMlsx    (xxx, s, timeout);
+                status = s_FTPMlsX    (xxx, s, timeout);
             } else if  (size == 4  &&  (strncasecmp(s, "FEAT", 4) == 0  ||
                                         strncasecmp(s, "OPTS", 4) == 0)) {
                 status = s_FTPNegotiate(xxx, s);
@@ -1840,32 +1864,46 @@ static EIO_Status s_VT_Open
  const STimeout* timeout)
 {
     SFTPConnector* xxx = (SFTPConnector*) connector->handle;
+    unsigned short ntry = 0;
     EIO_Status status;
 
     assert(!xxx->what  &&  !xxx->data  &&  !xxx->cntl);
-    assert(!BUF_Size(xxx->wbuf)  &&  !BUF_Size(xxx->rbuf));
-    status = SOCK_CreateEx(xxx->info->host, xxx->info->port, timeout,
-                           &xxx->cntl, 0, 0, fSOCK_KeepAlive
-                           | (xxx->flag & fFTP_LogControl
-                              ? fSOCK_LogOn : fSOCK_LogDefault));
-    if (status == eIO_Success) {
-        SOCK_DisableOSSendDelay(xxx->cntl, 1/*yes,disable*/);
-        SOCK_SetTimeout(xxx->cntl, eIO_ReadWrite, timeout);
-        status  = x_FTPLogin(xxx);
-    } else
-        assert(!xxx->cntl);
-    if (status == eIO_Success)
-        status  = x_FTPBinary(xxx);
-    if (status == eIO_Success  &&  *xxx->info->path)
-        status  = x_FTPDir(xxx, 0,  xxx->info->path);
-    if (status == eIO_Success) {
-        xxx->send = xxx->open = xxx->rclr = 0/*false*/;
-        assert(xxx->sync);
-        xxx->rest = 0;
-    } else if (xxx->cntl) {
-        SOCK_Abort(xxx->cntl);
-        SOCK_Close(xxx->cntl);
-        xxx->cntl = 0;
+    do {
+        assert(!BUF_Size(xxx->wbuf)  &&  !BUF_Size(xxx->rbuf));
+        if (xxx->info->debug_printout)
+            ConnNetInfo_Log(xxx->info, eLOG_Note, CORE_GetLOG());
+        status = SOCK_CreateEx(xxx->info->host, xxx->info->port, timeout,
+                               &xxx->cntl, 0, 0, fSOCK_KeepAlive
+                               | (xxx->flag & fFTP_LogControl
+                                  ? fSOCK_LogOn : fSOCK_LogDefault));
+        if (status == eIO_Success) {
+            SOCK_DisableOSSendDelay(xxx->cntl, 1/*yes,disable*/);
+            SOCK_SetTimeout(xxx->cntl, eIO_ReadWrite, timeout);
+            status  = x_FTPLogin(xxx);
+        } else
+            assert(!xxx->cntl);
+        if (status == eIO_Success)
+            status  = x_FTPBinary(xxx);
+        if (status == eIO_Success  &&  *xxx->info->path
+            &&  !(xxx->flag & fFTP_IgnorePath)) {
+            status  = x_FTPDir(xxx, 0,  xxx->info->path);
+        }
+        if (status == eIO_Success) {
+            xxx->send = xxx->open = xxx->rclr = 0/*false*/;
+            assert(xxx->sync);
+            xxx->rest = 0;
+            break;
+        }
+        if (xxx->cntl) {
+            SOCK_Abort(xxx->cntl);
+            SOCK_Close(xxx->cntl);
+            xxx->cntl = 0;
+        }
+    } while (++ntry < xxx->info->max_try);
+    if (1 < xxx->info->max_try  &&  xxx->info->max_try <= ntry) {
+        CORE_LOGF_X(13, eLOG_Error,
+                    ("[FTP; %s:%hu]  Too many failed attempts (%hu), giving up"
+                     , xxx->info->host, xxx->info->port, ntry));
     }
     assert(!xxx->what  &&  !xxx->data);
     xxx->r_status = status;
@@ -2044,7 +2082,7 @@ static EIO_Status s_VT_Read
         status = eIO_Success;
     if (xxx->data) {
         assert(!xxx->send  &&  !BUF_Size(xxx->rbuf));
-        /* NB:  Cannot use s_FTPPollCntl() here because a response about data
+        /* NB: Cannot use s_FTPPollCntl() here because a response about data
          * connection closure may be seen before the actual EOF in the
          * (heavily loaded) data connection. */
         SOCK_SetTimeout(xxx->data, eIO_Read, timeout);
@@ -2148,6 +2186,7 @@ static EIO_Status s_VT_Close
 static void s_Setup
 (CONNECTOR connector)
 {
+    SFTPConnector*  xxx = (SFTPConnector*) connector->handle;
     SMetaConnector* meta = connector->meta;
 
     /* initialize virtual table */
@@ -2160,7 +2199,7 @@ static void s_Setup
     CONN_SET_METHOD(meta, read,     s_VT_Read,    connector);
     CONN_SET_METHOD(meta, status,   s_VT_Status,  connector);
     CONN_SET_METHOD(meta, close,    s_VT_Close,   connector);
-    meta->default_timeout = kInfiniteTimeout;
+    CONN_SET_DEFAULT_TIMEOUT(meta, xxx->info->timeout);
 }
 
 
@@ -2202,7 +2241,7 @@ extern CONNECTOR s_CreateConnector(const SConnNetInfo*  info,
         (info  &&  info->scheme != eURL_Unspec  &&  info->scheme != eURL_Ftp)){
         return 0;
     }
-    if (!(ccc = (SConnector*)    malloc(sizeof(SConnector))))
+    if (!(ccc = (SConnector*) malloc(sizeof(SConnector))))
         return 0;
     if (!(xxx = (SFTPConnector*) malloc(sizeof(*xxx)))) {
         free(ccc);
@@ -2216,13 +2255,43 @@ extern CONNECTOR s_CreateConnector(const SConnNetInfo*  info,
     }
     if (xxx->info->scheme == eURL_Unspec)
         xxx->info->scheme  = eURL_Ftp;
-    if (host  &&  *host)
-        strcpy(xxx->info->host, host);
-    xxx->info->port = port ? port : CONN_PORT_FTP;
-    strcpy(xxx->info->user, user  &&  *user ? user : "ftp");
-    strcpy(xxx->info->pass, pass            ? pass : "-none");
-    strcpy(xxx->info->path, path            ? path : "");
     *xxx->info->args = '\0';
+    if (!info) {
+        if (host  &&  *host)
+            strcpy(xxx->info->host,               host);
+        xxx->info->port =                         port;
+        strcpy(xxx->info->user, user  &&  *user ? user : "ftp");
+        strcpy(xxx->info->pass, pass            ? pass : "-none@");
+        strcpy(xxx->info->path, path            ? path : "");
+        flag &= ~fFTP_IgnorePath;
+    } else if (!(flag & fFTP_LogAll)) {
+        switch (info->debug_printout) {
+        case eDebugPrintout_Some:
+            flag |= fFTP_LogControl;
+            break;
+        case eDebugPrintout_Data:
+            flag |= fFTP_LogAll;
+            break;
+        }
+    }
+    if (!xxx->info->port)
+        xxx->info->port = CONN_PORT_FTP;
+    xxx->info->req_method = eReqMethod_Any;
+    xxx->info->stateless = 0;
+    xxx->info->lb_disable = 0;
+    xxx->info->http_proxy_leak = 0;
+    if (!(flag & fFTP_UseProxy)) {
+        xxx->info->http_proxy_host[0] = '\0';
+        xxx->info->http_proxy_port    =   0;
+        xxx->info->http_proxy_user[0] = '\0';
+        xxx->info->http_proxy_pass[0] = '\0';
+    } else
+        CORE_LOG(eLOG_Critical, "fFTP_UseProxy not yet implemented");
+    ConnNetInfo_SetUserHeader(xxx->info, 0);
+    if (xxx->info->http_referer) {
+        free((void*) xxx->info->http_referer);
+        xxx->info->http_referer = 0;
+    }
 
     /* some uninited fields are taken care of in s_VT_Open */
     xxx->cmcb    = cmcb ? *cmcb : kNoCmcb;
@@ -2265,16 +2334,4 @@ extern CONNECTOR FTP_CreateConnector(const SConnNetInfo*  info,
                                      const SFTP_Callback* cmcb)
 {
     return s_CreateConnector(info, 0,    0,    0,    0,    0,    flag, cmcb);
-}
-
-
-/*DEPRECATED*/
-extern CONNECTOR FTP_CreateDownloadConnector(const char*    host,
-                                             unsigned short port,
-                                             const char*    user,
-                                             const char*    pass,
-                                             const char*    path,
-                                             TFTP_Flags     flag)
-{
-    return s_CreateConnector(0,    host, port, user, pass, path, flag, 0);
 }

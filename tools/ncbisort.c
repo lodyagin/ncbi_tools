@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: ncbisort.c,v 6.8 2006/05/10 20:47:17 camacho Exp $";
+static char const rcsid[] = "$Id: ncbisort.c,v 6.9 2012/08/22 23:02:39 kans Exp $";
 
-/* $Id: ncbisort.c,v 6.8 2006/05/10 20:47:17 camacho Exp $
+/* $Id: ncbisort.c,v 6.9 2012/08/22 23:02:39 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: ncbisort.c,v 6.8 2006/05/10 20:47:17 camacho E
 *
 * Initial Version Creation Date: 03/24/1997
 *
-* $Revision: 6.8 $
+* $Revision: 6.9 $
 *
 * File Description:
 *         Main file for SORTing library
 *
 * $Log: ncbisort.c,v $
+* Revision 6.9  2012/08/22 23:02:39  kans
+* null dereference checks and initializing variables due to clang static analysis
+*
 * Revision 6.8  2006/05/10 20:47:17  camacho
 * From Ilya Dondoshansky: SORTFiles: added output parameter for total number of lines processed
 *
@@ -336,7 +339,9 @@ SORTErrorCode SORTFiles(CharPtr PNTR files, Int4 nfiles, FILE *ofp,
   }
   
  return_from_function:
-  SORTCleanup(sdp->temphead);
+  if (sdp != NULL) {
+    SORTCleanup(sdp->temphead);
+  }
   return error_code;
 }
 
@@ -419,7 +424,9 @@ SORTErrorCode SORTMergeFiles(CharPtr files[], Int4 nfiles, FILE *ofp,
     SORTDelTempName(files[i], sdp->temphead);
 
  return_from_function:
-  SORTCleanup(sdp->temphead);
+  if (sdp != NULL) {
+    SORTCleanup(sdp->temphead);
+  }
   return error_code;
 }
 
@@ -1053,7 +1060,7 @@ static Int4 SORTMergeFPS(FILE *fps[], register Int4 nfps,
   SORTLines  lines[NMERGE];	/* Line tables for each buffer. */
   SORTLine   saved;		/* Saved line for unique check. */
   Int4 savedflag = 0;		/* True if there is a saved line. */
-  Int4 savealloc;		/* Size allocated for the saved line. */
+  Int4 savealloc = 0;		/* Size allocated for the saved line. */
   Int4 cur[NMERGE];		/* Current line in each line table. */
   Int4 ord[NMERGE];		/* Table representing a permutation of fps,
 				   such that lines[ord[0]].lines[cur[ord[0]]]
@@ -1089,6 +1096,9 @@ static Int4 SORTMergeFPS(FILE *fps[], register Int4 nfps,
   /* Set up the ord table according to comparisons among input lines.
      Since this only reorders two items if one is strictly greater than
      the other, it is stable. */
+  for (i = 0; i < NMERGE; i++) {
+    ord [i] = 0;
+  }
   for (i = 0; i < nfps; ++i)
     ord[i] = i;
   for (i = 1; i < nfps; ++i)

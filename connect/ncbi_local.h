@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_LOCAL__H
 #define CONNECT___NCBI_LOCAL__H
 
-/*  $Id: ncbi_local.h,v 1.2 2006/04/19 14:46:37 lavr Exp $
+/* $Id: ncbi_local.h,v 1.3 2012/07/27 19:54:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -50,18 +50,5 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER    iter,
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_local.h,v $
- * Revision 1.2  2006/04/19 14:46:37  lavr
- * Formatting -- the API should be considered fully functional
- *
- * Revision 1.1  2006/03/28 18:27:32  lavr
- * Initial revision (not yet working)
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_LOCAL__H */

@@ -29,10 +29,6 @@
  *
  * @author Yi-Kuo Yu, Alejandro Schaffer, Mike Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: unified_pvalues.c,v 1.3 2006/07/17 17:18:18 gertz Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <stdio.h>
 #include <stdlib.h>

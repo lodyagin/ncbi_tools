@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/7/94
 *
-* $Revision: 6.57 $
+* $Revision: 6.62 $
 *
 * File Description: 
 *
@@ -174,7 +174,7 @@ NLM_EXTERN Boolean SeqLocOffset (SeqLocPtr seq_loc, SeqLocPtr sfp_loc, GatherRan
   SeqInt si;
   Boolean across_zero;
   Int4 toffset, l, r, t;
-  Boolean ltrunc, rtrunc;
+  Boolean ltrunc = FALSE, rtrunc = FALSE;
   SeqLocPtr tslp;
 
   if (seq_loc == NULL || sfp_loc == NULL || range == NULL) {
@@ -1402,7 +1402,7 @@ static Boolean NEAR GatherSeqFeat(InternalGCCPtr gccp, SeqFeatPtr sfp,
         takecit, checkseq=FALSE;
     SeqLocPtr slp, head, tslp, target[2];
     GatherRangePtr rdp = NULL, trdp, lrdp;
-    Int4 offset, totlen, left_end;
+    Int4 offset = 0, totlen, left_end;
     Boolean rev, revs[2];
     Int2 ctr, max_interval, i, numcheck, j;
     GatherRange trange;
@@ -2225,6 +2225,8 @@ NLM_EXTERN AlignDataPtr gather_align_data(SeqLocPtr m_slp, SeqAlignPtr align,
     SeqAlignPtr sap;
 
     strand = 0;
+    MemSet ((Pointer) &gr, 0, sizeof (GatherRange));
+    MemSet ((Pointer) &t_range, 0, sizeof (GatherRange));
     m_sip = SeqLocId(m_slp);
     if(!get_align_ends(align, m_sip, &start, &stop, &c_strand))
         return NULL;
@@ -5935,6 +5937,7 @@ typedef struct internalacc {
   GatherObjectProc  callback;
   Pointer           userdata;
   BoolPtr           objMgrFilter;
+  Boolean           external;
 } InternalACC, PNTR InternalACCPtr;
 
 static void AssignIDs (InternalACCPtr iap, GatherIndexPtr gip, Uint1 itemtype, Uint1 subtype, Pointer parent, Uint2 parenttype, Pointer PNTR prevlink)
@@ -5972,6 +5975,7 @@ static Boolean VisitCallback (InternalACCPtr iap, Pointer dataptr, Uint1 itemtyp
       go.parentptr = parent;
       go.prevlink = prevlink;
       go.userdata = iap->userdata;
+      go.external = iap->external;
       if (! iap->callback (&go)) return FALSE;
     }
   }
@@ -6566,6 +6570,7 @@ static Boolean VisitEntity (
   iac.callback = callback;
   iac.userdata = userdata;
   iac.objMgrFilter = objMgrFilter;
+  iac.external = FALSE;
 
   if (entityID > 0) {
     omp = ObjMgrReadLock ();
@@ -6644,6 +6649,7 @@ static Boolean VisitEntity (
   for (vnp = extra; vnp != NULL; vnp = vnp->next) {
     bsp = (BioseqPtr) vnp->data.ptrvalue;
     if (bsp == NULL || bsp->annot == NULL) continue;
+    iac.external = TRUE;
     if (! VisitSeqAnnot (&iac, bsp->annot, (Pointer) bsp, OBJ_BIOSEQ, (Pointer PNTR) &(bsp->annot))) return FALSE;
   }
 
@@ -6870,6 +6876,37 @@ static void DeleteMarkedSeqGraph (SeqGraphPtr sgp, Pointer PNTR prevlink)
   }
 }
 
+static Boolean NoGenomeAnnotationInAnnotDescr (SeqAnnotPtr sap)
+
+{
+  AnnotDescrPtr  adp;
+  ObjectIdPtr    oip;
+  CharPtr        str;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (sap == NULL) return TRUE;
+
+  for (adp = sap->desc; adp != NULL; adp = adp->next) {
+    if (adp->choice != Annot_descr_user) continue;
+    uop = (UserObjectPtr) adp->data.ptrvalue;
+    if (uop == NULL) continue;
+    oip = uop->type;
+    if (oip == NULL) continue;
+    if (StringICmp (oip->str, "StructuredComment") != 0) continue;
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+      if (ufp->choice != 1) continue;
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      if (StringCmp (oip->str, "StructuredCommentPrefix") != 0) continue;
+      str = (CharPtr) ufp->data.ptrvalue;
+      if (StringCmp (str, "##Genome-Annotation-Data-START##") == 0) return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
 static void DeleteMarkedSeqAnnot (SeqAnnotPtr sap, Pointer PNTR prevlink)
 
 {
@@ -6892,7 +6929,8 @@ static void DeleteMarkedSeqAnnot (SeqAnnotPtr sap, Pointer PNTR prevlink)
         default :
           break;
       }
-      if (sap->data == NULL) {
+      /* now keep empty annot if annot_descr present */
+      if (sap->data == NULL && /* sap->desc == NULL */ NoGenomeAnnotationInAnnotDescr (sap)) {
         sap->idx.deleteme = 1;
       }
     }

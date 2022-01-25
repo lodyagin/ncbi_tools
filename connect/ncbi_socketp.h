@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_SOCKETP__H
 #define CONNECT___NCBI_SOCKETP__H
 
-/* $Id: ncbi_socketp.h,v 1.26 2012/05/04 19:04:38 kazimird Exp $
+/* $Id: ncbi_socketp.h,v 1.31 2016/01/01 00:44:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,6 +48,7 @@
  */
 
 #ifdef NCBI_OS_MSWIN
+#  define  _WINSOCK_DEPRECATED_NO_WARNINGS  1
 #  include <winsock2.h>
 #else /*NCBI_OS_UNIX*/
 #  include <sys/socket.h>
@@ -227,7 +228,7 @@ typedef struct LSOCK_tag {
     WSAEVENT         event;     /* event bound to I/O                        */
 #endif /*!NCBI_OS_MSWIN*/
 
-    void*            context;   /* per-server credentials                    */
+    void*            context;   /* per-server session/credentials (not impl) */
 
 #ifdef NCBI_OS_UNIX
     char             path[1];   /* must go last                              */
@@ -277,7 +278,8 @@ typedef struct SOCK_tag {
     WSAEVENT         event;     /* event bound to I/O                        */
 #endif /*!NCBI_OS_MSWIN*/
 
-    void*            session;   /* secure session id if secure, else 0       */
+    void*            session;   /* secure session handle if used, else 0     */
+    NCBI_CRED        cred;      /* secure session credentials, 0 if none     */
 
     /* timeouts */
     struct timeval   r_tv;      /* finite read  timeout value                */
@@ -322,7 +324,7 @@ typedef struct SOCK_tag {
  *    that has to be sent upon connection establishment.
  *
  * 2. eof is used differently for stream and datagram sockets:
- *    =1 for stream sockets means that read has hit EOF;
+ *    =1 for stream sockets means that last read has hit EOF;
  *    =1 for datagram sockets means that message in w_buf has been completed.
  *
  * 3. r_status keeps completion code of the last low-level read call;
@@ -352,7 +354,40 @@ typedef struct SOCK_tag {
 #endif /*NCBI_OS_MSWIN && _WIN64*/
 
 
+/* Global data */
 extern const char g_kNcbiSockNameAbbr[];
+
+
+/* Initial socket data & respective private ctors */
+typedef struct {
+    const void* data;
+    size_t      size;
+    NCBI_CRED   cred;
+} SSOCK_Init;
+
+
+EIO_Status SOCK_CreateInternal(const char*     host,
+                               unsigned short  port,
+                               const STimeout* timeout,
+                               SOCK*           sock,
+                               SSOCK_Init*     init,
+                               TSOCK_Flags     flags);
+
+
+EIO_Status SOCK_CreateOnTopInternal(const void* handle,
+                                    size_t      handle_size,
+                                    SOCK*       sock,
+                                    SSOCK_Init* init,
+                                    TSOCK_Flags flags);
+
+
+/* Addtl socket API for internal use:  if flag != 0 and host is nonexistent,
+ * return it as INADDR_NONE (-1) rather than an error.
+ */
+const char* SOCK_StringToHostPortEx(const char*     str,
+                                    unsigned int*   host,
+                                    unsigned short* port,
+                                    int/*bool*/     flag);
 
 
 #ifdef __cplusplus

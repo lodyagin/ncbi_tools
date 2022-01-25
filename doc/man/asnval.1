@@ -1,4 +1,4 @@
-.TH ASNVAL 1 2009-07-31 NCBI "NCBI Tools User's Manual"
+.TH ASNVAL 1 2016-09-01 NCBI "NCBI Tools User's Manual"
 .SH NAME
 asnval \- validate ASN.1 biological sequence records
 .SH SYNOPSIS
@@ -7,7 +7,9 @@ asnval \- validate ASN.1 biological sequence records
 [\|\fB\-A\fP\|]
 [\|\fB\-B\fP\|]
 [\|\fB\-C\fP\ \fIN\fP\|]
+[\|\fB\-D\fP\|]
 [\|\fB\-E\fP\ \fIstr\fP\|]
+[\|\fB\-F\fP\|]
 [\|\fB\-G\fP\|]
 [\|\fB\-J\fP\|]
 [\|\fB\-K\fP\|]
@@ -19,6 +21,7 @@ asnval \- validate ASN.1 biological sequence records
 [\|\fB\-R\fP\ \fIN\fP\|]
 [\|\fB\-S\fP\ \fIN\fP\|]
 [\|\fB\-T\fP\|]
+[\|\fB\-U\fP\|]
 [\|\fB\-X\fP\|]
 [\|\fB\-Y\fP\|]
 [\|\fB\-Z\fP\|]
@@ -27,15 +30,20 @@ asnval \- validate ASN.1 biological sequence records
 [\|\fB\-c\fP\|]
 [\|\fB\-d\fP\ \fIpath\fP\|]
 [\|\fB\-e\fP\|]
+[\|\fB\-f\fP\ \fIstr\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-j\fP\|]
 [\|\fB\-k\fP\|]
 [\|\fB\-l\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
 [\|\fB\-p\fP\ \fIpath\fP\|]
+[\|\fB\-q\fP\|]
 [\|\fB\-r\fP\|]
 [\|\fB\-u\fP\|]
 [\|\fB\-v\fP\ \fIN\fP\|]
+[\|\fB\-w\fP\|]
 [\|\fB\-x\fP\ \fIstr\fP\|]
+[\|\fB\-y\fP\|]
 .SH DESCRIPTION
 \fBasnval\fP is a command-line tool to validate ASN.1-format
 biological sequence records.
@@ -54,8 +62,14 @@ Validate Barcodes
 \fB\-C\fP\ \fIN\fP
 Max count
 .TP
+\fB\-D\fP
+Disable message suppression
+.TP
 \fB\-E\fP\ \fIstr\fP
 Only Error Code to Show
+.TP
+\fB\-F\fP
+Test network access
 .TP
 \fB\-G\fP
 GI lookup from accession
@@ -116,6 +130,9 @@ Skip count
 \fB\-T\fP
 Use Threads
 .TP
+\fB\-U\fP
+Genome center submission
+.TP
 \fB\-X\fP
 Exon splice check
 .TP
@@ -131,6 +148,8 @@ Input ASN.1 type:
 .PD 0
 .IP a
 Automatic (default)
+.IP c
+Catenated
 .IP z
 Any
 .IP e
@@ -160,8 +179,14 @@ Path to Indexed Binary ASN.1 Data
 \fB\-e\fP
 Ignore transcription/translation Exceptions
 .TP
+\fB\-x\fP\ \fIstr\fP
+Substring filter
+.TP
 \fB\-i\fP\ \fIfilename\fP
 Single input file (standard input by default)
+.TP
+\fB\-j\fP
+Validator code performance test
 .TP
 \fB\-k\fP
 Local fetching
@@ -175,6 +200,9 @@ Single output file
 \fB\-p\fP\ \fIpath\fP
 Path to ASN.1 Files
 .TP
+\fB\-q\fP
+Taxonomy lookup
+.TP
 \fB\-r\fP
 Remote Fetching from ID
 .TP
@@ -182,12 +210,35 @@ Remote Fetching from ID
 Recurse
 .TP
 \fB\-v\fP\ \fIN\fP
-Verbosity, from \fB0\fP to \fB4\fP (\fB1\fP by default)
+Verbosity:
+.RS
+.PD 0
+.IP 1
+Standard report (default)
+.IP 2
+Accession / severity / code (space delimited)
+.IP 3
+Accession / severity / code (tab delimited)
+.IP 4
+XML report
+.IP 5
+Accession / GI / severity / code (tab delimited)
+.IP 6
+Logged report
+.PD
+.RE
+.TP
+\fB\-w\fP
+SeqSubmitParent flag
 .TP
 \fB\-x\fP\ \fIstr\fP
 File selection substring (\fB.ent\fP by default)
+.TP
+\fB\-y\fP
+Special indexer tests
 .SH AUTHOR
 The National Center for Biotechnology Information.
 .SH SEE ALSO
+.BR asndisc (1),
 .BR cleanasn (1),
 .BR sequin (1).

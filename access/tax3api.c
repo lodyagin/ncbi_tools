@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/8/04
 *
-* $Revision: 1.76 $
+* $Revision: 1.93 $
 *
 * File Description: 
 *
@@ -87,6 +87,7 @@ static void Tax3ReplyFixup (
     if (orp == NULL) continue;
     onp = orp->orgname;
     if (onp == NULL) continue;
+    if (onp->pgcode != 0) continue;
     onp->pgcode = GetSpecialPlastidGenCode (orp->taxname, onp->lineage);
   }
 }
@@ -378,6 +379,7 @@ static Uint1 GetStatusFlags (T3DataPtr t)
 {
   Uint1 flags = 0;
   T3StatusFlagsPtr status;
+  ValNodePtr vnp;
 
   if (t == NULL) return FALSE;
   status = t->status;
@@ -386,7 +388,17 @@ static Uint1 GetStatusFlags (T3DataPtr t)
       flags |= eReturnedOrgFlag_unpublished;
     } else if (StringCmp (status->property, "misspelled_name") == 0) {
       flags |= eReturnedOrgFlag_misspelled;
+    } else if (StringCmp (status->property, "old_name_class") == 0) {
+      for (vnp = status->Value_value; vnp != NULL; vnp = vnp->next) {
+        if (vnp->choice == Value_value_str) {
+          if (StringCmp ((CharPtr)(vnp->data.ptrvalue), "common name") == 0
+              || StringCmp ((CharPtr)(vnp->data.ptrvalue), "genbank common name")) {
+            flags |= eReturnedOrgFlag_common_name;
+          }
+        }
+      }
     }
+
     status = status->next;
   }
   if (flags == 0) {
@@ -395,6 +407,225 @@ static Uint1 GetStatusFlags (T3DataPtr t)
   return flags;
 }
 
+
+NLM_EXTERN int LIBCALL ObjectIdCompare (ObjectIdPtr a, ObjectIdPtr b)
+{
+  int rval = 0;
+  Char buf[30];
+
+    if (a == b) {
+        rval = 0;
+  } else if (a == NULL) {
+    rval = -1;
+  } else if (b == NULL) {
+    rval = 1;
+  } else if (a->str == NULL && b->str == NULL) {
+    if (a->id < b->id) {
+      rval = -1;
+    } else if (a->id > b->id) {
+      rval = 1;
+    }
+  } else if (a->str == NULL) {
+    sprintf (buf, "%d", a->id);
+    rval = StringCmp (buf, b->str);
+  } else if (b->str == NULL) {
+    sprintf (buf, "%d", b->id);
+    rval = StringCmp (a->str, buf);
+  } else {
+    rval = StringCmp (a->str, b->str);
+  }
+  return rval; 
+}
+
+
+/*****************************************************************************
+*
+*   DbtagMatch(a, b)
+*
+*****************************************************************************/
+NLM_EXTERN int LIBCALL DbtagCompare (DbtagPtr a, DbtagPtr b)
+{
+  int rval = 0;
+
+    if (a == b) {
+        rval = 0;
+  } else if (a == NULL) {
+    rval = -1;
+  } else if (b == NULL) {
+    rval = 1;
+  } else if ((rval = StringICmp (a->db, b->db)) == 0) {
+    rval = ObjectIdCompare (a->tag, b->tag);
+  }
+  return rval;
+}
+
+
+static int LIBCALLBACK SortVnpByDbtag (VoidPtr ptr1, VoidPtr ptr2)
+
+{
+  ValNodePtr  vnp1;
+  ValNodePtr  vnp2;
+
+  if (ptr1 != NULL && ptr2 != NULL) {
+    vnp1 = *((ValNodePtr PNTR) ptr1);
+    vnp2 = *((ValNodePtr PNTR) ptr2);
+    if (vnp1 != NULL && vnp2 != NULL) {
+      return DbtagCompare (vnp1->data.ptrvalue, vnp2->data.ptrvalue);
+    }
+  }
+  return 0;
+}
+
+NLM_EXTERN int LIBCALL OrgModSetCompare (OrgModPtr mod1, OrgModPtr mod2)
+{
+  int rval = 0;
+
+  while (mod1 != NULL && mod2 != NULL && rval == 0)
+  {
+    if (mod1->subtype < mod2->subtype)
+    {
+      rval = -1;
+    }
+    else if (mod1->subtype > mod2->subtype)
+    {
+      rval = 1;
+    }
+    else if ((rval = StringCmp (mod1->subname, mod2->subname)) == 0
+           && (rval = StringCmp (mod1->attrib, mod2->attrib)) == 0)
+    {
+      mod1 = mod1->next;
+      mod2 = mod2->next;
+    }
+  }
+
+  if (rval == 0)
+  {
+    if (mod1 == NULL && mod2 == NULL)
+    {
+      rval = 0;
+    }
+    else if (mod1 == NULL)
+    {
+      rval = -1;
+    }
+    else if (mod2 == NULL)
+    {
+      rval = 1;
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN int LIBCALL OrgNameCompare (OrgNamePtr onp1, OrgNamePtr onp2)
+{
+  int rval = 0;
+
+  while (onp1 != NULL && onp2 != NULL && rval == 0)
+  {
+    if ((rval = OrgModSetCompare(onp1->mod, onp2->mod)) != 0
+        || (rval = StringCmp (onp1->lineage, onp2->lineage)) != 0
+        || (rval = StringCmp (onp1->div, onp2->div)) != 0
+        || (rval = StringCmp (onp1->attrib, onp2->attrib)) != 0)
+    {
+      /* no further processing */
+    }
+    else if (onp1->choice < onp2->choice)
+    {
+      rval = -1;
+    }
+    else if (onp1->choice > onp2->choice)
+    {
+      rval = 1;
+    }
+    else if (onp1->gcode < onp2->gcode)
+    {
+      rval = -1;
+    } 
+    else if (onp1->gcode > onp2->gcode)
+    {
+      rval = 1;
+    }
+    else if (onp1->mgcode < onp2->mgcode)
+    {
+      rval = -1;
+    } 
+    else if (onp1->mgcode > onp2->mgcode)
+    {
+      rval = 1;
+    }
+    else if (onp1->pgcode < onp2->pgcode)
+    {
+      rval = -1;
+    } 
+    else if (onp1->pgcode > onp2->pgcode)
+    {
+      rval = 1;
+    }
+    onp1 = onp1->next;
+    onp2 = onp2->next;
+  }
+  if (rval == 0) 
+  {
+    if (onp1 == NULL && onp2 == NULL) 
+    {
+      rval = 0;
+    }
+    else if (onp1 == NULL)
+    {
+      rval = -1;
+    } 
+    else if (onp2 == NULL) 
+    {
+      rval = 1;
+    }
+  }
+  return rval;
+}
+
+
+/*****************************************************************************
+*
+*   OrgRefCompare (orp1, orp2)
+*
+*****************************************************************************/
+NLM_EXTERN int LIBCALL OrgRefCompare (OrgRefPtr orp1, OrgRefPtr orp2)
+{
+  int rval = 0;
+  if (orp1 == NULL && orp2 == NULL)
+  {
+    return 0;
+  }
+  else if (orp1 == NULL) 
+  {
+    return -1;
+  }
+  else if (orp2 == NULL)
+  {
+    return 1;
+  }
+  else if ((rval = StringCmp (orp1->taxname, orp2->taxname)) != 0) 
+  {
+    return rval;
+  }
+  else if ((rval = StringCmp (orp1->common, orp2->common)) != 0)
+  {
+    return rval;
+  }
+  else if ((rval = ValNodeCompare (orp1->syn, orp2->syn, SortVnpByString)) != 0) 
+  {
+    return rval;
+  }
+  else if ((rval = ValNodeCompare (orp1->db, orp2->db, SortVnpByDbtag)) != 0)
+  {
+    return rval;
+  }
+  else
+  {
+    rval = OrgNameCompare (orp1->orgname, orp2->orgname);
+  }
+  return rval;
+}
 
 
 static int LIBCALLBACK SortVnpByOrgRef (VoidPtr ptr1, VoidPtr ptr2)
@@ -562,29 +793,6 @@ NLM_EXTERN TaxFixItemPtr TaxFixItemNew (void)
 }
 
 
-NLM_EXTERN TaxFixItemPtr TaxFixItemCopy (TaxFixItemPtr orig)
-{
-  TaxFixItemPtr t = NULL;
-
-  if (orig != NULL) {
-    t = (TaxFixItemPtr) MemNew (sizeof (TaxFixItemData));
-    t->data_choice = orig->data_choice;
-    t->data = orig->data;
-    t->response_org = AsnIoMemCopy (orig->response_org, (AsnReadFunc) OrgRefAsnRead, (AsnWriteFunc) OrgRefAsnWrite);
-    if (orig->taxname != NULL) {
-      t->taxname = StringSave (orig->taxname);
-    }
-    if (orig->suggested_fix != NULL) {
-      t->suggested_fix = StringSave (orig->suggested_fix);
-    }
-    if (orig->rank != NULL) {
-      t->rank = StringSave (orig->rank);
-    }
-  }
-  return t;
-}
-
-
 NLM_EXTERN TaxFixItemPtr TaxFixItemFree (TaxFixItemPtr t)
 {
   if (t != NULL) {
@@ -613,20 +821,6 @@ NLM_EXTERN ValNodePtr LIBCALLBACK TaxFixItemListFree (ValNodePtr vnp)
 }
 
 
-static Boolean LIBCALLBACK TaxFixItemOrigIsOk (ValNodePtr vnp)
-{
-  TaxFixItemPtr t;
-
-  if (vnp == NULL || (t = (TaxFixItemPtr) vnp->data.ptrvalue) == NULL) {
-    return TRUE;
-  } else if (StringCmp (t->taxname, t->suggested_fix) == 0 && StringICmp (t->rank, "species") == 0) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
-
 static CharPtr StringSum (CharPtr str1, CharPtr str2) 
 {
   CharPtr sum = NULL;
@@ -645,35 +839,118 @@ static CharPtr StringSum (CharPtr str1, CharPtr str2)
 }
 
 
-static CharPtr SuggestedTaxNameFixFromOrgAndRank (CharPtr taxname, OrgRefPtr response_org, CharPtr rank)
+static CharPtr MakeUnculturedName (CharPtr taxname, CharPtr suffix)
 {
-  CharPtr fix = NULL, tmp;
+    CharPtr uncultured = "uncultured ";
+    Int4 len, suffix_len = 0, uncultured_len;
+    CharPtr name = NULL;
+    Boolean add_suffix = TRUE, add_uncultured = TRUE;
 
-  if (response_org == NULL) {
+    if (taxname == NULL) {
+        return NULL;
+    }
+    len = StringLen (taxname) + 1;
+    if (suffix == NULL) {
+        add_suffix = FALSE;
+    } else {
+        suffix_len = StringLen (suffix);
+        if (len > suffix_len && StringCmp (taxname + len - suffix_len, suffix) == 0) {
+            add_suffix = FALSE;
+        } else {
+            len += suffix_len;
+        }
+    }
+    uncultured_len = StringLen (uncultured);
+    if (StringNCmp (taxname, uncultured, uncultured_len) == 0) {
+        add_uncultured = FALSE;
+    } else {
+        len += uncultured_len;
+    }
+
+    name = (CharPtr) MemNew (sizeof (Char) * len);
+    name[0] = 0;
+    if (add_uncultured) {
+        StringCat(name, uncultured);
+    }
+    StringCat(name, taxname);
+    if (add_suffix) {
+        StringCat(name, suffix);
+    }
+    return name;
+}
+
+
+static Boolean IsArchaea(OrgRefPtr response_org)
+{
+    if (response_org != NULL && response_org->orgname != NULL 
+        && StringISearch (response_org->orgname->lineage, "archaea") != NULL) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+
+static Boolean IsBacteria(OrgRefPtr response_org)
+{
+    if (response_org != NULL && response_org->orgname != NULL 
+        && StringISearch (response_org->orgname->lineage, "bacteria") != NULL) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+
+static Boolean IsFungi(OrgRefPtr response_org)
+{
+    if (response_org != NULL && response_org->orgname != NULL 
+        && StringISearch (response_org->orgname->lineage, " Fungi;") != NULL) {
+        return TRUE;
+    } else {
+        return FALSE;
+    }
+}
+
+
+static CharPtr SuggestedTaxNameFixFromOrgAndRank (TaxFixItemPtr t)
+{
+  CharPtr fix = NULL;
+  CharPtr stop;
+
+  if (t == NULL || t->response_org == NULL) {
     return NULL;
   }
 
-  if (StringICmp (rank, "species") == 0) {
-    fix = StringSave (response_org->taxname);
-  } else if (response_org->orgname != NULL) {
-    if (((StringNICmp (taxname, "uncultured ", 11) == 0
-           && StringICmp (taxname + 11, response_org->taxname) == 0)
-         || StringICmp (taxname, response_org->taxname) == 0)
-        && (StringISearch (response_org->orgname->lineage, "archaea") != NULL
-            || StringISearch (response_org->orgname->lineage, "bacteria") != NULL)) {
-      if (StringICmp (rank, "genus") == 0) {
-        fix = StringSum (response_org->taxname, " sp.");
-      } else if (StringNICmp (response_org->orgname->lineage, "bacteria", 8) == 0) {
-        fix = StringSum (response_org->taxname, " bacterium");
-      } else if (StringNICmp (response_org->orgname->lineage, "Archaea", 7) == 0) {
-        fix = StringSum (response_org->taxname, " archaeon");
+  if (StringICmp (t->rank, "species") == 0) {
+    if (t->is_species_specific) {
+      fix = StringSave (t->response_org->taxname);
+    } else {
+      /* truncate binomial, need to check again */
+      stop = StringChr (t->taxname, ' ');
+      if (stop != NULL) {
+        *stop = 0;
+        t->truncate_binomial = TRUE;
       }
-      if (fix != NULL 
-          && StringNICmp (fix, "uncultured ", 11) != 0) {
-        tmp = fix;
-        fix = StringSum ("uncultured ", tmp);
-        tmp = MemFree (tmp);
+    }
+  } else if (t->response_org->orgname != NULL) {
+    if (StringICmp (t->rank, "genus") == 0) {
+      if (IsArchaea(t->response_org) || IsBacteria(t->response_org)) {
+        fix = MakeUnculturedName (t->response_org->taxname, " sp.");
+      } else if (IsFungi(t->response_org)) {
+        fix = MakeUnculturedName (t->response_org->taxname, NULL);
       }
+    } else {
+      if (IsArchaea(t->response_org)) {
+        fix = MakeUnculturedName (t->response_org->taxname, " archaeon");
+      } else if (IsBacteria(t->response_org)) {
+        fix = MakeUnculturedName (t->response_org->taxname, " bacterium");
+      } else if (IsFungi(t->response_org)) {
+        fix = MakeUnculturedName (t->response_org->taxname, NULL);
+      }
+    }
+    if (t->is_species_specific) {
+      t->remove_species_specific = TRUE;
     }
   }
   return fix;
@@ -967,20 +1244,31 @@ static void TryNewSuggestedFixes (ValNodePtr tax_fix_list, TryTaxFixChangeFunc f
   fix_copy = ValNodeFree (fix_copy);
 }
 
+static const CharPtr SUncultured = "uncultured ";
+const Int4 SUnculturedLen = 11;
 
 static CharPtr StandardFixes (CharPtr orig)
 {
   CharPtr val = NULL;
   CharPtr cp, src, dst;
+  Int4    len;
 
-  if (StringICmp (orig, "bacteria") == 0
-    || StringICmp (orig, "bacterium") == 0) {
-    return StringSave ("uncultured bacterium");
-  } 
-  /* remove commas */
-  cp = StringChr (orig, ',');
-  if (cp != NULL) {
+  if (StringNICmp (orig, SUncultured, SUnculturedLen) == 0) {
+    val = StringSave(orig + 11);
+  } else {
     val = StringSave (orig);
+  }
+  /* remove trailing sp. */
+  len = StringLen (val);
+  if (len > 3 && StringICmp(val + len - 3, " sp") == 0) {
+    val[len - 3] = 0;
+  } else if (len > 4 && StringICmp (val + len - 4, " sp.") == 0) {
+    val[len - 4] = 0;
+  }
+
+  /* remove commas */
+  cp = StringChr (val, ',');
+  if (cp != NULL) {
     src = val;
     dst = val;
     while (*src != 0) {
@@ -1039,30 +1327,150 @@ static CharPtr TryUnculturedAndSp (CharPtr orig)
   return val;
 }
 
+static const CharPtr sAmplifiedSpeciesSpecific[] = {
+  "[BankIt_uncultured16S_wizard]; [species_specific primers]; [tgge]",
+  "[BankIt_uncultured16S_wizard]; [species_specific primers]; [dgge]",
+  "[BankIt_uncultured16S_wizard]; [species_specific primers]",
+  "[uncultured (with species-specific primers)]",
+  "[uncultured]; [amplified with species-specific primers]",
+  "[uncultured (using species-specific primers) bacterial source]",
+  "amplified with species-specific primers",
+  NULL
+};
 
-static ValNodePtr BuildBlankTaxFixList (ValNodePtr org_list)
+
+static Boolean IsSpeciesSpecificNote(CharPtr note)
+{
+  Int4 i;
+  Boolean rval = FALSE;
+
+  if (note == NULL || StringHasNoText(note)) {
+    return FALSE;
+  }
+  for (i = 0; sAmplifiedSpeciesSpecific[i] != NULL && !rval; i++) {
+    if (StringISearch (note, sAmplifiedSpeciesSpecific[i]) != NULL) {
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+static Boolean IsSpeciesSpecific (BioSourcePtr biop)
+{
+    Boolean rval = FALSE;
+    SubSourcePtr ssp;
+
+    if (biop != NULL) {
+        for (ssp = biop->subtype; ssp != NULL && !rval; ssp = ssp->next) {
+            if (ssp->subtype == SUBSRC_other
+                && IsSpeciesSpecificNote (ssp->name)) {
+                rval = TRUE;
+            }
+        }
+    }
+    return rval;
+}
+
+
+static Boolean RemoveSpeciesSpecificFromNote(CharPtr note)
+{
+  Int4 i;
+  CharPtr cp;
+  Boolean rval = FALSE;
+
+  if (note == NULL || StringHasNoText (note)) {
+    return rval;
+  }
+  for (i = 0; sAmplifiedSpeciesSpecific[i] != NULL; i++) {
+    if ((cp = StringISearch (note, sAmplifiedSpeciesSpecific[i])) != NULL) {
+      StringCpy (cp, cp + StringLen (sAmplifiedSpeciesSpecific[i]));
+      rval = TRUE;
+    }
+  }
+  return rval;
+}
+
+
+NLM_EXTERN void RemoveSpeciesSpecific (BioSourcePtr biop)
+{
+    SubSourcePtr ssp, ssp_prev = NULL, ssp_next;
+    CharPtr cp;
+
+    if (biop != NULL) {
+        for (ssp = biop->subtype; ssp != NULL; ssp = ssp_next) {
+            ssp_next = ssp->next;
+            if (ssp->subtype == SUBSRC_other
+                && RemoveSpeciesSpecificFromNote(ssp->name)
+                && StringHasNoText (ssp->name)) {
+                ssp = SubSourceFree (ssp);
+                if (ssp_prev == NULL) {
+                    biop->subtype = ssp_next;
+                } else {
+                    ssp_prev->next = ssp_next;
+                }
+            } else {
+                ssp_prev = ssp;
+            }
+        }
+    }
+}
+
+
+static CharPtr sUnfixable[] = {
+  "rickettsia",
+  "candidatus",
+  "endosymbiont",
+  "phytoplasma",
+  "wolbachia",
+  NULL
+};
+
+NLM_EXTERN Boolean OkToTaxFix(CharPtr orgname)
+{
+  Int4 i;
+  Boolean rval = TRUE;
+
+  if (orgname == NULL || StringHasNoText (orgname)) {
+    return FALSE;
+  }
+
+  for (i = 0; sUnfixable[i] != NULL && rval; i++) {
+    if (StringISearch(orgname, sUnfixable[i]) != NULL) {
+      rval = FALSE;
+    }
+  }
+  return rval;
+}
+
+
+static ValNodePtr BuildBlankTaxFixList (ValNodePtr biop_list)
 {
   ValNodePtr    list = NULL, prev = NULL;
-  OrgRefPtr     org;
+  BioSourcePtr  biop;
   TaxFixItemPtr t;
 
-  while (org_list != NULL) {
+  while (biop_list != NULL) {
     t = TaxFixItemNew ();
-    org = (OrgRefPtr) org_list->data.ptrvalue;
-    if (org != NULL && org->taxname != NULL) {
-      t->taxname = StringSave (org->taxname);
+    t->data_choice = biop_list->choice;
+    t->data = biop_list->data.ptrvalue;
+    biop = GetBioSourceFromObject (biop_list->choice, biop_list->data.ptrvalue);
+    if (biop != NULL && biop->org != NULL && biop->org->taxname != NULL) {
+      t->orig_org = biop->org;
+      t->taxname = StandardFixes (biop->org->taxname);
     }
+    t->is_species_specific = IsSpeciesSpecific(biop);
     ValNodeAddPointer (&prev, 0, t);
     if (list == NULL) {
       list = prev;
     }
-    org_list = org_list->next;
+    biop_list = biop_list->next;
   }
   return list;
 }
 
 
-static ValNodePtr BuildRequestFromTaxnameList (ValNodePtr taxfix_list, Boolean strip_uncultured)
+static ValNodePtr BuildRequestFromTaxnameList (ValNodePtr taxfix_list)
 {
   ValNodePtr list = NULL, prev = NULL;
   TaxFixItemPtr t;
@@ -1070,21 +1478,7 @@ static ValNodePtr BuildRequestFromTaxnameList (ValNodePtr taxfix_list, Boolean s
   while (taxfix_list != NULL) {
     t = (TaxFixItemPtr) taxfix_list->data.ptrvalue;
     if (t->suggested_fix == NULL) {
-      if (strip_uncultured) {
-        if (StringNICmp (t->taxname, "uncultured ", 11) == 0) {
-          ValNodeAddPointer (&prev, 2, StringSave (t->taxname + 11));
-          t->is_uncultured = TRUE;
-        } else {
-          ValNodeAddPointer (&prev, 2, StringSave (t->taxname));
-          t->is_uncultured = FALSE;
-        }
-      } else {
-        if (StringNICmp (t->taxname, "uncultured ", 11) == 0) {
-          ValNodeAddPointer (&prev, 2, StringSave (t->taxname));
-        } else {
-          ValNodeAddPointer (&prev, 2, StringSum ("uncultured ", t->taxname));
-        }
-      }
+      ValNodeAddPointer (&prev, 2, StringSave (t->taxname));
     } else {
       ValNodeAddPointer (&prev, 2, StringSave (t->suggested_fix));
     }
@@ -1105,7 +1499,6 @@ static void GetSuggestedNamesFromRank (ValNodePtr request_list, ValNodePtr taxfi
   ValNodePtr start_request, vnp_rp;
   ValNodePtr next_org_list, last_org;
   Int4       request_num;
-  CharPtr    tmp;
   TaxFixItemPtr t;
   Taxon3RequestPtr t3rq;
   Taxon3ReplyPtr   t3ry;
@@ -1142,7 +1535,9 @@ static void GetSuggestedNamesFromRank (ValNodePtr request_list, ValNodePtr taxfi
           case T3Reply_error :
             tep = (T3ErrorPtr) trp->data.ptrvalue;
             t = (TaxFixItemPtr) vnp_rp->data.ptrvalue;
-            /* nothing to do here */
+            if (tep != NULL && StringCmp (tep->message, "Taxname is ambiguous") == 0) {
+                t->is_ambiguous = TRUE;
+            }
             vnp_rp = vnp_rp->next;
             break;
           case T3Reply_data :
@@ -1159,12 +1554,7 @@ static void GetSuggestedNamesFromRank (ValNodePtr request_list, ValNodePtr taxfi
                     t->rank = StringSave (tfp->Value_value->data.ptrvalue);
                   }
                 }
-                t->suggested_fix = SuggestedTaxNameFixFromOrgAndRank (t->taxname, t->response_org, t->rank);
-                if (t->suggested_fix != NULL && t->is_uncultured && StringNICmp (t->suggested_fix, "uncultured ", 11) != 0) {
-                  tmp = StringSum ("uncultured ", t->suggested_fix);
-                  t->suggested_fix = MemFree (t->suggested_fix);
-                  t->suggested_fix = tmp;
-                }
+                t->suggested_fix = SuggestedTaxNameFixFromOrgAndRank (t);
               }
               vnp_rp = vnp_rp->next;
             }
@@ -1185,126 +1575,123 @@ static void GetSuggestedNamesFromRank (ValNodePtr request_list, ValNodePtr taxfi
 }
 
 
-static void TryRankFix (ValNodePtr taxfix_list, Boolean strip_uncultured)
+static void AddAmbiguousRequests (ValNodePtr taxfix_list, CharPtr domain)
 {
-  ValNodePtr request_list;
+  CharPtr    uncultured = "uncultured ";
+  Int4       len;
+  Int4       uncultured_len;
+  TaxFixItemPtr t;
 
-  request_list = BuildRequestFromTaxnameList (taxfix_list, strip_uncultured);
-  GetSuggestedNamesFromRank (request_list, taxfix_list, 2000);
-  request_list = ValNodeFreeData (request_list);
-  CheckSuggestedFixes (taxfix_list);
+  uncultured_len = StringLen (uncultured);
+  while (taxfix_list != NULL) {
+    t = (TaxFixItemPtr) taxfix_list->data.ptrvalue;
+    if (t->is_ambiguous && t->suggested_fix == NULL) {
+      len = StringLen (t->taxname) + StringLen (domain) + uncultured_len + 2;
+      t->suggested_fix = (CharPtr) MemNew (sizeof (Char) * len);
+      if (StringNICmp(t->taxname, uncultured, uncultured_len) == 0) {
+        sprintf(t->suggested_fix, "%s %s", t->taxname, domain);
+      } else {
+        sprintf(t->suggested_fix, "%s%s %s", uncultured, t->taxname, domain);
+      }      
+    }
+    taxfix_list = taxfix_list->next;
+  }
 }
 
 
-static void ProvideDefaultTaxFixes (ValNodePtr list)
+static void TryAmbiguousFixes(ValNodePtr taxfix_list)
 {
-  TaxFixItemPtr t;
-  CharPtr       tmp;
+  ValNodeBlock  ambig_list;
+  ValNodePtr    vnp;
+  TaxFixItemPtr tip;
 
-  while (list != NULL) {
-    t = (TaxFixItemPtr) list->data.ptrvalue;
-    if (StringHasNoText (t->suggested_fix)) {
-      if (StringNICmp (t->taxname, "uncultured ", 11) == 0) {
-        t->suggested_fix = StringSave (t->taxname);
-      } else {
-        t->suggested_fix = StringSum ("uncultured ", t->taxname);
-      }
-    } else if (StringNICmp (t->suggested_fix, "uncultured ", 11) != 0) {
-      tmp = StringSum ("uncultured ", t->suggested_fix);
-      t->suggested_fix = MemFree (t->suggested_fix);
-      t->suggested_fix = tmp;
+  /* try ambiguous values */
+  InitValNodeBlock(&ambig_list, NULL);
+  for (vnp = taxfix_list; vnp != NULL; vnp = vnp->next) {
+    tip = vnp->data.ptrvalue;
+    if (tip->is_ambiguous) {
+      ValNodeAddPointerToEnd(&ambig_list, 0, tip);
     }
-    list = list->next;
   }
+  if (ambig_list.head != NULL) {
+    AddAmbiguousRequests(ambig_list.head, "bacterium");
+    CheckSuggestedFixes (ambig_list.head);
+    AddAmbiguousRequests(ambig_list.head, "archaeon");
+    CheckSuggestedFixes (ambig_list.head);
+    ambig_list.head = ValNodeFree(ambig_list.head);
+  }
+}
+
+
+static void TryRankFix (ValNodePtr taxfix_list)
+{
+  ValNodePtr request_list;
+
+  request_list = BuildRequestFromTaxnameList (taxfix_list);
+  GetSuggestedNamesFromRank (request_list, taxfix_list, 2000);
+  request_list = ValNodeFreeData (request_list);
+
+  CheckSuggestedFixes (taxfix_list);  
+}
+
+
+static void TryBinomalTruncations(ValNodePtr taxfix_list)
+{
+  ValNodeBlock  trunc_list;
+  ValNodePtr    vnp;
+  TaxFixItemPtr tip;
+
+  /* only fill in binomial truncations */
+  InitValNodeBlock(&trunc_list, NULL);
+  for (vnp = taxfix_list; vnp != NULL; vnp = vnp->next) {
+    tip = vnp->data.ptrvalue;
+    if (tip->truncate_binomial) {
+      ValNodeAddPointerToEnd(&trunc_list, 0, tip);
+    }
+  }
+
+
+  if (trunc_list.head != NULL) {
+    TryRankFix(trunc_list.head);
+    trunc_list.head = ValNodeFree (trunc_list.head);
+  }
+}
+
+
+static void ProvideDefaultTaxFixes(ValNodePtr taxfix_list)
+{
+    ValNodePtr vnp;
+    TaxFixItemPtr t;
+
+    for (vnp = taxfix_list; vnp != NULL; vnp = vnp->next) {
+        t = (TaxFixItemPtr) vnp->data.ptrvalue;
+        if (t != NULL && StringHasNoText (t->suggested_fix)) {
+            t->suggested_fix = MemFree (t->suggested_fix);
+            t->suggested_fix = MakeUnculturedName(t->taxname, NULL);
+        }
+    }
 }
 
 
 NLM_EXTERN ValNodePtr Taxon3GetTaxFixList (ValNodePtr biop_list)
 {
-  ValNodePtr       uniq_list, response_list = NULL, request_list;
-  ValNodePtr PNTR  ptr_array;
-  ValNodePtr       vnp, vnp_rq, vnp_rp, vnp_b;
-  Int4             i, num_orgs;
-  TaxFixItemPtr    t;
-  BioSourcePtr     biop;
+  ValNodePtr       response_list = NULL;
 
   if (biop_list == NULL) {
     return NULL;
   }
 
-  /* make a copy of the original list */
-  request_list = MakeTaxFixRequestList (biop_list);
+  response_list = BuildBlankTaxFixList(biop_list);
 
-  /* make array to show original order of ValNodes, so that we can restore after sorting */
-  num_orgs = ValNodeLen (request_list);
-  ptr_array = (ValNodePtr PNTR) MemNew (sizeof (ValNodePtr) * num_orgs);
-  for (vnp = request_list, i = 0; vnp != NULL; vnp = vnp->next, i++) {
-    ptr_array[i] = vnp;
-  }
+  TryRankFix (response_list);
+  TryBinomalTruncations (response_list);
+  TryAmbiguousFixes (response_list);
 
-  request_list = ValNodeSort (request_list, SortVnpByOrgRef);
-
-  /* now make a list of just the unique requests */
-  uniq_list = ValNodeCopyPtr (request_list);
-  ValNodeUnique (&uniq_list, SortVnpByOrgRef, ValNodeFree);
-
-  response_list = BuildBlankTaxFixList(uniq_list);
-
-  TryRankFix (response_list, FALSE);
-  TryRankFix (response_list, TRUE);
-
-  TryNewSuggestedFixes (response_list, StandardFixes);
   TryNewSuggestedFixes (response_list, AddUnculturedIfNotPresent);
   TryNewSuggestedFixes (response_list, TryUnculturedAndSp);
-
   ProvideDefaultTaxFixes (response_list);
 
-  /* now put responses in list */
-  vnp = uniq_list;
-  vnp_rq = request_list;
-  vnp_rp = response_list;
-
-  while (vnp != NULL && vnp_rq != NULL && vnp_rp != NULL) {
-    while (vnp_rq != NULL && OrgRefCompare (vnp->data.ptrvalue, vnp_rq->data.ptrvalue) == 0) {
-      t = TaxFixItemCopy (vnp_rp->data.ptrvalue);
-      vnp_rq->data.ptrvalue = t;
-      vnp_rq = vnp_rq->next;
-    }
-    vnp_rp = vnp_rp->next;
-    vnp = vnp->next;
-  }
-  /* if there were more requests than responses, set responses to NULL */
-  while (vnp_rq != NULL) {
-    vnp_rq->data.ptrvalue = NULL;
-    vnp_rq = vnp_rq->next;
-  }
-
-  /* free response list */
-  response_list = TaxFixItemListFree (response_list);
-
-  uniq_list = ValNodeFree (uniq_list);
-
-  /* now restore original order */
-  for (i = 0; i < num_orgs - 1; i++) {
-    ptr_array[i]->next = ptr_array[i + 1];
-  }
-  ptr_array[num_orgs - 1]->next = NULL;
-  request_list = ptr_array[0];
-  ptr_array = MemFree (ptr_array);
-
-  /* now reassociate with original objects */
-  for (vnp_b = biop_list, vnp_rp = request_list; vnp_b != NULL && vnp_rp != NULL; vnp_b = vnp_b->next, vnp_rp = vnp_rp->next) {
-    t = vnp_rp->data.ptrvalue;
-    t->data_choice = vnp_b->choice;
-    t->data = vnp_b->data.ptrvalue;
-    t->taxname = MemFree (t->taxname);
-    biop = GetBioSourceFromObject (t->data_choice, t->data);
-    if (biop != NULL && biop->org != NULL) {
-      t->taxname = StringSave (biop->org->taxname);
-    }
-  }
-
-  return request_list;
+  return response_list;
 }
 
 
@@ -1914,14 +2301,20 @@ static void AddRequestOrgForString (CharPtr str, CharPtr host, ValNodePtr PNTR r
 {
   OrgRefPtr    request_org;
   CharPtr      cp, cpy;
+  CharPtr      truncated_host;
 
   if (StringHasNoText (str) || host == NULL || request_list == NULL || req_host_list == NULL)
   {
     return;
   }
+  truncated_host = StringSave (str);
+  cp = StringChr(truncated_host, ';');
+  if (cp != NULL) {
+    *cp = 0;
+  }
 
   /* if ends with " sp.", remove " sp." */
-  cpy = RemoveSp (host);
+  cpy = RemoveSp (truncated_host);
   if (cpy != NULL) {
     request_org = OrgRefNew();
     request_org->taxname = StringSave (cpy);
@@ -1929,16 +2322,16 @@ static void AddRequestOrgForString (CharPtr str, CharPtr host, ValNodePtr PNTR r
     ValNodeAddPointer (req_host_list, 0, StringSave (host));
   } else {
     request_org = OrgRefNew();
-    request_org->taxname = StringSave (str);
+    request_org->taxname = StringSave (truncated_host);
     ValNodeAddPointer (request_list, 3, request_org);
     ValNodeAddPointer (req_host_list, 0, StringSave (host));
 
      
     /* if more than one word, try chopping off last to see if abbreviated name looks up */
-    cp = StringRChr (str, ' ');
+    cp = StringRChr (truncated_host, ' ');
     if (cp != NULL)
     {
-      cpy = StringSave (str);    
+      cpy = StringSave (truncated_host);    
       cp = StringRChr (cpy, ' ');
       if (cp != NULL)
       {
@@ -1948,6 +2341,7 @@ static void AddRequestOrgForString (CharPtr str, CharPtr host, ValNodePtr PNTR r
       cpy = MemFree (cpy);
     }
   }
+  truncated_host = MemFree (truncated_host);
 }
 
 typedef struct specifichostcheck {
@@ -2154,10 +2548,16 @@ static void AddBioSourcesToSpecificHostChecklist (ValNodePtr biop_list, ValNodeP
 
 static Boolean ShouldCheckSpecificHostValueForValidator (CharPtr spec_host)
 {
-  if (StringHasNoText (spec_host) || !isupper (*spec_host)) {
+  CharPtr semicolon, space;
+  if (StringHasNoText (spec_host) || !isupper (*spec_host) || (space = StringChr(spec_host, ' ')) == NULL) {
     return FALSE;
   } else {
-    return TRUE;
+    semicolon = StringChr(spec_host, ';');
+    if (semicolon != NULL && semicolon < space) {
+      return FALSE;
+    } else {
+      return TRUE;
+    }
   }
 }
 
@@ -2194,6 +2594,12 @@ static CharPtr GetSpecificHostValueToCheckForValidator (CharPtr spec_host)
         len++;
       }
     }
+
+    cp = StringChr(spec_host, ';');
+    if (cp != NULL && cp - spec_host < len) {
+      len = cp - spec_host;
+    }
+
     check_val = (CharPtr) MemNew (sizeof (Char) * (len + 1));
     StringNCpy (check_val, spec_host, len);
     check_val[len] = 0;
@@ -2342,20 +2748,6 @@ static ValNodePtr GetListOfUniqueSpecificHostValues (ValNodePtr biop_list)
 }
 
 
-static Boolean StringIsExactMatchForOrgRef (CharPtr str, OrgRefPtr org)
-{
-  if (StringHasNoText (str) || org == NULL) {
-    return FALSE;
-  } else if (StringCmp (org->taxname, str) == 0
-             || StringCmp (org->common, str) == 0 
-             || MatchesSynonym (str, org) 
-             || MatchesGenBankSynonym (str, org)) {
-    return TRUE;
-  } else {
-    return FALSE;
-  }
-}
-
 static CharPtr FindMatchInOrgRef (CharPtr str, OrgRefPtr org)
 {
   ValNodePtr syn;
@@ -2370,8 +2762,8 @@ static CharPtr FindMatchInOrgRef (CharPtr str, OrgRefPtr org)
     rval = org->common;
   } else {
     for (syn = org->syn; syn != NULL && rval == NULL; syn = syn->next) {
-      if (StringICmp (str, syn->data.ptrvalue) == 0) {
-        rval = syn->data.ptrvalue;
+      if (StringICmp (str, (CharPtr)(syn->data.ptrvalue)) == 0) {
+        rval = (CharPtr)(syn->data.ptrvalue);
       }
     }
     if (org->orgname != NULL) {
@@ -2453,11 +2845,11 @@ Taxon3ValidateSpecificHostsInSeqEntry
         {
           request_org = (OrgRefPtr) request_vnp->data.ptrvalue;
           response_org = (OrgRefPtr) response_vnp->data.ptrvalue;
-          if (response_vnp->choice == eReturnedOrgFlag_misspelled)
+          if (response_vnp->choice & eReturnedOrgFlag_misspelled)
           {
             misspelled_flag = TRUE;
           }
-          else if (response_vnp->choice == eReturnedOrgFlag_ambiguous)
+          else if (response_vnp->choice & eReturnedOrgFlag_ambiguous)
           {
             ambiguous_flag = TRUE;
           }
@@ -2470,7 +2862,11 @@ Taxon3ValidateSpecificHostsInSeqEntry
             }
             else if (StringICmp (match, request_org->taxname) == 0)
             {
-              bad_caps_flag = TRUE;
+              if (response_vnp->choice & eReturnedOrgFlag_common_name) {
+                has_match = TRUE;
+              } else {
+                bad_caps_flag = TRUE;
+              }
             }
           }  
           request_vnp = request_vnp->next;
@@ -2790,13 +3186,13 @@ static ValNodePtr GetFixesForOneSpecificHostValue (SpecificHostCheckPtr p)
       /* we don't need to check this one */
     } else if (response_org == NULL) {
       fix_needed = TRUE;
-      if (response_vnp->choice == eReturnedOrgFlag_ambiguous) {
+      if (response_vnp->choice & eReturnedOrgFlag_ambiguous) {
         ambiguous = TRUE;
       }
       if (prev_fail == NULL) {
         prev_fail = request_org->taxname;
       } else if (StringNCmp (prev_fail, request_org->taxname, StringLen (request_org->taxname)) != 0) {
-        if (response_vnp->choice == eReturnedOrgFlag_ambiguous) {
+        if (response_vnp->choice & eReturnedOrgFlag_ambiguous) {
           ValNodeAddPointer (&suggested_fixes, eSpecificHostFix_ambiguous, ReplacementPairNew (request_org->taxname, NULL));
         } else {
           ValNodeAddPointer (&suggested_fixes, eSpecificHostFix_unrecognized, ReplacementPairNew (request_org->taxname, NULL));
@@ -2806,7 +3202,7 @@ static ValNodePtr GetFixesForOneSpecificHostValue (SpecificHostCheckPtr p)
     } else {
       prev_success = request_org->taxname;
       add_nontrunc_fix = FALSE;
-      if (response_vnp->choice == eReturnedOrgFlag_misspelled) {
+      if (response_vnp->choice & eReturnedOrgFlag_misspelled) {
         fix_needed = TRUE;
         fix_type = eSpecificHostFix_spelling;
         new_val = response_org->taxname;
@@ -3211,19 +3607,20 @@ NLM_EXTERN OrgRefPtr GetCommonOrgRefForSeqEntry (SeqEntryPtr sep)
 }
 
 
-NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number)
+NLM_EXTERN SeqDescrPtr SeqDescrFromBioSample (CharPtr number)
 
 {
-  BioSourcePtr biop = NULL;
+  SeqDescrPtr  sdp = NULL;
   CONN         conn;
   AsnIoConnPtr aicp;
-  time_t       max = 0;
   size_t       n_written;
   CharPtr      i_query_fmt = "id=%s&format=asn1";
-  CharPtr      a_query_fmt = "accession=%s&format=asn1";
+  CharPtr      a_query_fmt = "accession=%s&format=asn1raw";
   CharPtr      query_fmt;
   CharPtr      query;
   EIO_Status   status;
+  CharPtr      host = "api-int";
+  CharPtr      url = "/biosample/fetch/";
 
   if (StringHasNoText (number)) return NULL;
   if (isalpha (*number)) {
@@ -3233,7 +3630,7 @@ NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number)
   }
   query = (CharPtr) MemNew (sizeof (Char) * (StringLen (query_fmt) + StringLen (number)));
   sprintf (query, query_fmt, number);
-  conn = QUERY_OpenUrlQuery ("intrawebdev2", 80, "/staff/gevorgya/biosample/fetch.cgi",
+  conn = QUERY_OpenUrlQuery (host, 80, url,
                              query, "Sequin", 30, eMIME_T_NcbiData,
                              eMIME_Fasta, eENCOD_None, 0);
   query = MemFree (query);
@@ -3243,9 +3640,17 @@ NLM_EXTERN BioSourcePtr BioSourceFromBioSample (CharPtr number)
   if (status != eIO_Success) return NULL;
   QUERY_SendQuery (conn);
   aicp = QUERY_AsnIoConnOpen ("r", conn);
-  biop = BioSourceAsnRead (aicp->aip, NULL);
+  sdp = SeqDescrAsnRead (aicp->aip, NULL);
+  if (sdp == NULL) {
+    if (aicp->aip->buf != NULL) {
+      Message (MSG_POSTERR, "%s [%s]", aicp->aip->buf, number);
+    } else {
+      Message (MSG_POSTERR, "Unable to retrieve BioSample Data for %s", number);
+    }
+  }
   QUERY_AsnIoConnClose (aicp);
 
-  return biop;
+  return sdp;
 }
+
 

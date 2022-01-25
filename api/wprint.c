@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.75 $
+* $Revision: 6.78 $
 *
 * File Description: 
 *
@@ -422,7 +422,7 @@ NLM_EXTERN Boolean LIBCALL www_taxid(CharPtr orgname, Int4 id)
 		return TRUE;
 }			
 
-NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Uint4 itemID)
+NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, BIG_ID gi, Int2 entityID, Uint4 itemID)
 {
 	Int2	l, ll;
 	CharPtr	s;
@@ -432,7 +432,7 @@ NLM_EXTERN Boolean LIBCALL www_featkey(CharPtr key, Int4 gi, Int2 entityID, Uint
 		ll = StringLen("<a href=%sgi=%ld&id=%d&entity=%d>");
 		s = (CharPtr)MemNew(l+ ll + 3*7);
 		sprintf(s, "<a href=%sgi=%d&id=%ud&entity=%d>", 
-							link_ff, (Int4) gi, itemID, (Int4)entityID);
+							link_ff, (BIG_ID) gi, itemID, (Int4)entityID);
 		AddLink(s);
 		MemFree(s);
 		ff_AddString(key);
@@ -511,7 +511,7 @@ NLM_EXTERN Boolean LIBCALL www_extra_acc(CharPtr acc, Boolean ncbi)
 NLM_EXTERN Boolean LIBCALL www_genpept_gi(CharPtr str)
 {
 	Int2	l, ll;
-	Int4 	gi;
+	BIG_ID 	gi;
 	CharPtr	s, prefix;
 	
 	if(www) {
@@ -679,7 +679,7 @@ NLM_EXTERN Boolean LIBCALL www_protein_id(CharPtr str)
 NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 {
 	Int2	l, ll;
-	Int4 	gi;
+	BIG_ID 	gi;
 	CharPtr	s, prefix, ss, p, pp;
 	Boolean nothing = TRUE;
 	Char id[10];
@@ -1275,7 +1275,7 @@ NLM_EXTERN Boolean LIBCALL www_db_xref(CharPtr str)
 NLM_EXTERN Boolean LIBCALL www_note_gi(CharPtr str)
 {
 	Int2	l, ll;
-	Int4 	gi;
+	BIG_ID 	gi;
 	CharPtr	s, prefix, ss, p, pp;
 	Boolean nothing = TRUE;
 	
@@ -2007,7 +2007,7 @@ static Boolean iscospa(Char c)
 NLM_EXTERN void LIBCALL www_PrintComment (CharPtr string, Boolean identifier, Uint1 format)
 {
 	Int2	lpref, l, ll;
-	Int4	gi;
+	BIG_ID	gi;
 	CharPtr	s, prefix=NULL, p, pp, link=NULL, www_str, acc, ss;
 	Boolean isfirst = TRUE;
 	

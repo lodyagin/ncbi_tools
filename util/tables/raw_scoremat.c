@@ -1,4 +1,4 @@
-/*  $Id: raw_scoremat.c,v 1.7 2008/08/22 14:55:41 kazimird Exp $
+/*  $Id: raw_scoremat.c,v 1.10 2016/06/09 18:14:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -43,6 +43,7 @@
 #include "sm_pam30.c"
 #include "sm_pam70.c"
 #include "sm_pam250.c"
+#include "sm_identity.c"
 
 static const char kNCBIstdaa[] = "-ABCDEFGHIKLMNPQRSTVWXYZU*OJ";
 
@@ -59,7 +60,7 @@ int NCBISM_GetIndex(const SNCBIPackedScoreMatrix* sm, int aa)
     }
 
     p = strchr(sm->symbols, aa);
-    return p ? p - sm->symbols : -1;
+    return p ? (int)(p - sm->symbols) : -1;
 }
 
 
@@ -70,7 +71,7 @@ TNCBIScore NCBISM_GetScore(const SNCBIPackedScoreMatrix* sm,
     i1 = NCBISM_GetIndex(sm, aa1);
     i2 = NCBISM_GetIndex(sm, aa2);
     if (i1 >=0  &&  i2 >= 0) {
-        return sm->scores[i1 * strlen(sm->symbols) + i2];
+        return sm->scores[(size_t)i1 * strlen(sm->symbols) + (size_t)i2];
     } else {
         return sm->defscore;
     }
@@ -84,9 +85,14 @@ void NCBISM_Unpack(const SNCBIPackedScoreMatrix* psm,
     int         dim, i, j, aa1, aa2;
 
     sym = psm->symbols;
-    dim = strlen(sym);
+    dim = (int)strlen(sym);
     /* fill with default */
-    memset(&fsm->s, psm->defscore, NCBI_FSM_DIM * NCBI_FSM_DIM);
+    for (i = 0;  i < NCBI_FSM_DIM;  ++i) {
+        fsm->s[0][i] = psm->defscore;
+    }
+    for (i = 1;  i < NCBI_FSM_DIM;  ++i) {
+        memcpy(fsm->s[i], fsm->s[0], NCBI_FSM_DIM * sizeof(fsm->s[0][0]));
+    }
     for (i = 0;  i < dim;  ++i) {
         aa1 = sym[i];
         /* get core (NCBIeaa x NCBIeaa) */
@@ -147,6 +153,12 @@ const SNCBIPackedScoreMatrix* NCBISM_GetStandardMatrix(const char* name)
         case '3': return strcmp(name + 3, "30")  ? NULL : &NCBISM_Pam30;
         case '7': return strcmp(name + 3, "70")  ? NULL : &NCBISM_Pam70;
         }
+
+    case 'I': case 'i':
+        if ( !s_NCBISM_StartsWith(name, "identity") ) {
+            return NULL;
+        }
+        return &NCBISM_Identity;
 
     default:
         return NULL;

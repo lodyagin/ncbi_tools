@@ -1,7 +1,7 @@
 #ifndef CONNECT___HTTP_CONNECTOR__H
 #define CONNECT___HTTP_CONNECTOR__H
 
-/* $Id: ncbi_http_connector.h,v 6.26 2012/05/07 15:39:33 kazimird Exp $
+/* $Id: ncbi_http_connector.h,v 6.43 2016/07/21 16:34:16 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -58,85 +58,99 @@ extern "C" {
 
 /** HTTP connector flags.
  *
- * @param fHTTP_Flushable
+ * @var fHTTP_Flushable
+ *
+ *    HTTP/1.0 or when fHTTP_WriteThru is not set:
  *       by default all data written to the connection are kept until read
  *       begins (even though CONN_Flush() might have been called in between the
  *       writes);  with this flag set, CONN_Flush() will result the data to be
  *       actually sent to the server side, so the following write will form a
  *       new request, and not get added to the previous one;  also this flag
  *       assures that the connector sends at least an HTTP header on "CLOSE"
- *       and re-"CONNECT", even if no data for HTTP body have been written
+ *       and re-"CONNECT", even if no data for HTTP body have been written.
  *
- * @param fHTTP_KeepHeader
+ *    HTTP/1.1 and when fHTTP_WriteThru is set:
+ *       CONN_Flush() attempts to send all pending data down to server.
+ *
+ * @var fHTTP_KeepHeader
  *       Do not strip HTTP header (i.e. everything up to the first "\r\n\r\n",
  *       including the "\r\n\r\n") from the CGI script's response (including
  *       any server error, which then is made available for reading as well)
- *       *NOTE* this flag disables automatic authorization, redirection, etc.
+ *       *NOTE* this flag disables automatic authorization and redirection.
  *
- * @param fHTTP_UrlDecodeInput
+ * @var fHTTP_WriteThru
+ *       Valid only with HTTP/1.1:  Connection to the server is made upon a
+ *       first CONN_Write(), or CONN_Flush() if fHTTP_Flushable is set, or
+ *       CONN_Wait(eIO_Write), and each CONN_Write() forms a chunk of HTTP
+ *       data to be sent to the server.  Reading / waiting for read from the
+ *       connector finalizes the body and, if reading, fetches the response.
+ *
+ * @var fHCC_UrlDecodeInput
  *       Assume the response body as single-part, URL-encoded;  perform the
- *       URL-decoding on read, and deliver decoded data to the user.
+ *       URL-decoding on read, and deliver decoded data to the user.  Obsolete.
  *
- * @param fHTTP_NoUpread
+ * @var fHTTP_NoUpread
  *       Do *not* do internal reading into temporary buffer while sending data
- *       to HTTP server;  by default any send operation tries to extract data
- *       as they are coming back from the server in order to prevent stalling
- *       due to data clogging in the connection.
+ *       to HTTP server;  by default any send operation tries to fetch data as
+ *       they are coming back from the server in order to prevent stalling due
+ *       to data clogging the connection.
  *
- * @param fHTTP_DropUnread
+ * @var fHTTP_DropUnread
  *       Do not collect incoming data in "Read" mode before switching into
  *       "Write" mode for preparing next request;  by default all data sent by
  *       the server get stored even if not all of it had been requested prior
  *       to a "Write" following a "Read" was issued (stream emulation).
  *
- * @param fHTTP_NoAutoRetry
+ * @var fHTTP_NoAutoRetry
  *       Do not attempt any auto-retries in case of failing connections
  *       (this flag effectively means having SConnNetInfo::max_try set to 1).
-
- * @param fHTTP_InsecureRedirect
- *       For security reasons the following redirects comprise security risk
- *       and, thus, are prohibited:  switching from https to http, and
- *       re-posting data (regardless of the transport, either http or https);
- *       this flag allows such redirects (if needed) to be honored.
+ *
+ * @var fHTTP_UnsafeRedirects
+ *       For security reasons the following redirects comprise security risk,
+ *       and thus, are prohibited:  switching from https to http, and/or
+ *       re-POSTing data (regardless of the transport, either http or https);
+ *       this flag allows such redirects (when encountered) to be honored.
  *
  * @note
- *  URL encoding/decoding (in the "fHTTP_Url*" cases and "net_info->args")
+ *  URL encoding/decoding (in the "fHCC_Url*" cases and "net_info->args")
  *  is performed by URL_Encode() and URL_Decode() -- see "ncbi_connutil.[ch]".
  *
  * @sa
  *  SConnNetInfo, ConnNetInfo_OverrideUserHeader, URL_Encode, URL_Decode
  */
-
 enum EHTTP_Flag {
     fHTTP_AutoReconnect   = 0x1,  /**< See HTTP_CreateConnectorEx()          */
     fHTTP_Flushable       = 0x2,  /**< Connector will really flush on Flush()*/
     fHTTP_KeepHeader      = 0x4,  /**< Keep HTTP header (see limitations)    */
-    fHTTP_UrlEncodeArgs   = 0x8,  /**< URL-encode "info->args" (w/o fragment)*/
-    fHTTP_UrlDecodeInput  = 0x10, /**< URL-decode response body              */
-    fHTTP_UrlEncodeOutput = 0x20, /**< URL-encode all output data            */
-    fHTTP_UrlCodec        = 0x30, /**< fHTTP_UrlDecodeInput | ...EncodeOutput*/
+    /*fHTTP_UrlEncodeArgs = 0x8,       URL-encode "info->args" (w/o fragment)
+    fHTTP_UrlDecodeInput  = 0x10,      URL-decode response body
+    fHTTP_UrlEncodeOutput = 0x20,      URL-encode all output data
+    fHTTP_UrlCodec        = 0x30,      fHTTP_UrlDecodeInput | ...EncodeOutput*/
+    fHTTP_PushAuth        = 0x10, /**< HTTP/1.1 pushes out auth if present   */
+    fHTTP_WriteThru       = 0x20, /**< HTTP/1.1 writes through (chunked)     */
     fHTTP_NoUpread        = 0x40, /**< Do not use SOCK_SetReadOnWrite()      */
     fHTTP_DropUnread      = 0x80, /**< Each microsession drops unread data   */
     fHTTP_NoAutoRetry     = 0x100,/**< No auto-retries allowed               */
     fHTTP_NoAutomagicSID  = 0x200,/**< Do not add NCBI SID automagically     */
-    fHTTP_InsecureRedirect= 0x400,/**< Any redirect will be honored          */
-    /*fHTTP_ReservedFlag  = 0x800,     Do not use                            */
+    fHTTP_UnsafeRedirects = 0x400,/**< Any redirect will be honored          */
+    fHTTP_AdjustOnRedirect= 0x800,/**< Call adjust routine for redirects, too*/
+    fHTTP_SuppressMessages= 0x1000/**< Most annoying ones reduced to traces  */
 };
 typedef unsigned int THTTP_Flags; /**< Bitwise OR of EHTTP_Flag              */
 NCBI_HTTP_CONNECTOR_DEPRECATED
 /** DEPRECATED, do not use! */
 typedef enum {
-    fHCC_AutoReconnect    = fHTTP_AutoReconnect,
-    fHCC_SureFlush        = fHTTP_Flushable,
-    fHCC_KeepHeader       = fHTTP_KeepHeader,
-    fHCC_UrlDecodeInput   = fHTTP_UrlDecodeInput,
-    fHCC_UrlEncodeOutput  = fHTTP_UrlEncodeOutput,
-    fHCC_UrlCodec         = fHTTP_UrlCodec,
-    fHCC_UrlEncodeArgs    = fHTTP_UrlEncodeArgs,
-    fHCC_DropUnread       = fHTTP_DropUnread,
-    fHCC_NoUpread         = fHTTP_NoUpread,
-    fHCC_Flushable        = fHTTP_Flushable,
-    fHCC_NoAutoRetry      = fHTTP_NoAutoRetry
+    /*fHCC_AutoReconnect    = fHTTP_AutoReconnect,*/
+    /*fHCC_SureFlush        = fHTTP_Flushable,    */
+    /*fHCC_KeepHeader       = fHTTP_KeepHeader,   */
+    fHCC_UrlEncodeArgs    = 0x8,  /**< NB: Error-prone semantics, do not use!*/
+    fHCC_UrlDecodeInput   = 0x10, /**< Obsolete, may not work, do not use!   */
+    fHCC_UrlEncodeOutput  = 0x20, /**< Obsolete, may not work, do not use!   */
+    fHCC_UrlCodec         = 0x30  /**< fHCC_UrlDecodeInput | ...EncodeOutput */
+    /*fHCC_DropUnread       = fHTTP_DropUnread,   */
+    /*fHCC_NoUpread         = fHTTP_NoUpread,     */
+    /*fHCC_Flushable        = fHTTP_Flushable,    */
+    /*fHCC_NoAutoRetry      = fHTTP_NoAutoRetry   */
 } EHCC_Flag;
 NCBI_HTTP_CONNECTOR_DEPRECATED
 typedef unsigned int THCC_Flags;  /**< bitwise OR of EHCC_Flag, deprecated   */
@@ -155,30 +169,58 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnector
  );
 
 
-/** The extended version HTTP_CreateConnectorEx() is able to change the URL of
- * the server "on-the-fly":
- * - FHTTP_ParseHeader() is called every time a new HTTP response header is
- *   received from the server, and only if fHTTP_KeepHeader is NOT set;  a zero
- *   (false) return value is equivalent of having an error from the server.
- * - FHTTP_Adjust() is invoked every time before starting a new
- *   "HTTP micro-session" making a hit when a previous hit has failed; it is
- *   passed "net_info" stored in the connector, and the number of previously
- *   unsuccessful consecutive attempts since the connection was opened; a zero
- *    (false) return value ends the retries.
- * - FHTTP_Cleanup() is called when the connector is about to be destroyed;
- *   "user_data" is guaranteed not to be referenced anymore (so it is a good
+/** The extended version HTTP_CreateConnectorEx() is able to track the HTTP
+ * response chain and also change the URL of the server "on-the-fly":
+ * - FHTTP_ParseHeader() gets called every time a new HTTP response header is
+ *   received from the server, and only if fHTTP_KeepHeader is NOT set.
+ *   Return code from the parser adjusts the existing server error condition
+ *   (if any) as the following:
+ *   + eHTTP_HeaderError:    unconditionally flag a server error;
+ *   + eHTTP_HeaderSuccess:  header parse successful, retain existing condition
+ *                           (note that in case of an already existing server
+ *                           error condition the response body can be logged
+ *                           but will not be made available for the user code
+ *                           to read, and eIO_Unknown will result on read);
+ *   + eHTTP_HeaderContinue: if there was already a server error condition,
+ *                           the response body will be made available for the
+ *                           user code to read (but only if HTTP connector
+ *                           cannot post-process the request such as for
+ *                           redirects, authorization etc);  otherwise, this
+ *                           code has the same effect as eHTTP_HeaderSuccess;
+ *   + eHTTP_HeaderComplete: flag this request as processed completely, and do
+ *                           not do any post-processing (such as redirects,
+ *                           authorization etc), yet make the response body (if
+ *                           any, and regardless of whether there was a server
+ *                           error or not) available for reading.
+ * - FHTTP_Adjust() gets invoked every time before starting a new "HTTP
+ *   micro-session" making a hit when a previous hit has failed;  it is passed
+ *   "net_info" as stored within the connector, and the number of previously
+ *   unsuccessful consecutive attempts (in the least significant word) since
+ *   the connection was opened, pass 0 in that parameter if calling for
+ *   redirects (when fHTTP_AdjustOnRedirect was set);  a zero (false) return
+ *   value ends the retries;
+ * - FHTTP_Cleanup() gets called when the connector is about to be destroyed;
+ *   "user_data" is guaranteed not to be referenced anymore (so this is a good
  *   place to clean up "user_data" if necessary).
+ * @sa
+ *   SConnNetInfo::max_try
  */
-typedef int/*bool*/ (*FHTTP_ParseHeader)
+typedef enum {
+    eHTTP_HeaderError    = 0,  /**< Parse failed, treat as a server error */
+    eHTTP_HeaderSuccess  = 1,  /**< Parse succeeded, retain server status */
+    eHTTP_HeaderContinue = 2,  /**< Parse succeeded, continue with body   */
+    eHTTP_HeaderComplete = 3   /**< Parse succeeded, no more processing   */
+} EHTTP_HeaderParse;
+typedef EHTTP_HeaderParse (*FHTTP_ParseHeader)
 (const char*         http_header,   /**< HTTP header to parse                */
  void*               user_data,     /**< supplemental user data              */
- int                 server_error   /**< != 0 if HTTP error                  */
+ int                 server_error   /**< != 0 if HTTP error (NOT 2xx code)   */
  );
 
 typedef int/*bool*/ (*FHTTP_Adjust)
 (SConnNetInfo*       net_info,      /**< net_info to adjust (in place)       */
  void*               user_data,     /**< supplemental user data              */
- unsigned int        failure_count  /**< how many failures since open        */
+ unsigned int        failure_count  /**< low word: # of failures since open  */
  );
 
 typedef void        (*FHTTP_Cleanup)
@@ -193,36 +235,41 @@ typedef void        (*FHTTP_Cleanup)
  *
  * If "net_info" does not explicitly specify an HTTP request method (i.e. it
  * has it as "eReqMethod_Any"), then the actual method sent to the HTTP server
- * depends on whether any data have been written to the connection with
- * CONN_Write():  the presense of pending data will cause POST request (with a
- * "Content-Length:" tag provided automatically and reflecting the total
+ * depends on whether any data has been written to the connection with
+ * CONN_Write():  the presence of pending data will cause a POST request (with
+ * a "Content-Length:" tag supplied automatically and reflecting the total
  * pending data size), and GET request method will result in the absence of any
  * data.  An explicit value for the request method will cause the specified
- * request to be used regardless of pending data, and flagging an error if any
- * data will have to be sent with GET (per the standard).
+ * request to be used regardless of pending data, and will flag an error if any
+ * data will have to be sent with a GET (per the standard).
  *
- * In order to workaround some HTTP communication features, this code does:
+ * When not using HTTP/1.1's fHTTP_WriteThru mode, in order to work around
+ * some HTTP communication features, this code does:
+ *
  *  1. Accumulate all output data in an internal memory buffer until the
  *     first CONN_Read() (including peek) or CONN_Wait(on read) is attempted
  *     (also see fHTTP_Flushable flag below).
  *  2. On the first CONN_Read() or CONN_Wait(on read), compose and send the
- *        whole HTTP request as:
- *        {POST|GET} <net_info->path>?<net_info->args> HTTP/1.0\r\n
+ *     whole HTTP request as:
+ *        @verbatim
+ *        METHOD <net_info->path>?<net_info->args> HTTP/1.0\r\n
  *        <user_header\r\n>
  *        Content-Length: <accumulated_data_length>\r\n
  *        \r\n
  *        <accumulated_data>
+ *        @endverbatim
  *     @note
  *       If <user_header> is neither a NULL pointer nor an empty string, then:
  *       - it must NOT contain any "empty lines":  "\r\n\r\n";
- *       - it should be terminated by a single "\r\n";
+ *       - multiple tags must be separated by "\r\n" (*not* just "\n");
+ *       - it should be terminated by a single "\r\n" (will be added, if not);
  *       - it gets inserted to the HTTP header "as is", without any automatic
- *         checking and / or encoding;
+ *         checking and / or encoding (except for the trailing "\r\n");
  *       - the "user_header" specified in the arguments overrides any user
  *         header that can be provided via the "net_info" argument, see
  *         ConnNetInfo_OverrideUserHeader() from <connect/ncbi_connutil.h>.
  *     @note
- *       Data may depart to the server side earlier if CONN_Flush()'ed in
+ *       Data may depart to the server side earlier if CONN_Flush()'ed in a
  *       fHTTP_Flushable connector, see "flags".
  *  3. After the request has been sent, then the response data from the peer
  *     (usually, a CGI program) can be actually read out.
@@ -234,6 +281,12 @@ typedef void        (*FHTTP_Cleanup)
  *     first see the leftovers (if any) of data stored previously, then the
  *     new data generated in response to the latest request.  The behavior can
  *     be changed by the fHTTP_DropUnread flag.
+ *
+ *  When fHTTP_WriteThru is set with HTTP/1.1, writing to the connector begins
+ *  upon any write operations, and reading from the connector causes the
+ *  request body to finalize and response to be fetched from the server.
+ *  Request method must be explicitly specified with fHTTP_WriteThru, "ANY"
+ *  does not get accepted (the eIO_NotSupported error returned).
  *
  *  @note
  *     If "fHTTP_AutoReconnect" is set in "flags", then the connector makes an
@@ -261,24 +314,26 @@ extern NCBI_XCONNECT_EXPORT CONNECTOR HTTP_CreateConnectorEx
  * located at "net_info->http_proxy_host:net_info->http_proxy_port".  Return
  * the tunnel as a socket via the last parameter.  For compatibility with
  * future API extensions, please make sure *sock is NULL when making the call.
- * If "net_info->scheme == eURL_Https", the returned socket is secure.
+ * The proxy gets contacted via HTTPS if "net_info->scheme == eURL_Https", and
+ * the resultant socket is returned secure (with the SSL session still active).
  * @note
  *  "net_info" can be passed as NULL to be constructed from the environment.
  * @note
- *  Some HTTP proxies do not process "init_data" correctly (e.g. Squid 3) when
- *  sent along with the tunnel creation request, so they may require separate
- *  SOCK I/O calls to write the data to the tunnel.
+ *  Some HTTP proxies do not process "data" correctly (e.g. Squid 3) when sent
+ *  along with the tunnel creation request (despite the standard specifically
+ *  allows such use), so they may require separate SOCK I/O calls to write the
+ *  data to the tunnel.
  * @return
  *  eIO_Success if the tunnel has been successfully created;
  *  otherwise, return an error code and set "*sock" to NULL upon return.
  * @sa
- *  EHTTP_Flags, SOCK_CreateEx, SOCK_Close
+ *  THTTP_Flags, SOCK_CreateEx, SOCK_Close
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status HTTP_CreateTunnelEx
 (const SConnNetInfo* net_info,
  THTTP_Flags         flags,
- const void*         init_data,
- size_t              init_size,
+ const void*         data,    /**< initial data block to send via the tunnel */
+ size_t              size,    /**< size of the initial data block            */
  SOCK*               sock
  );
 

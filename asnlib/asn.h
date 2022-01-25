@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.22 $
 *
 * File Description:
 *   This header the interface to all the routines in the ASN.1 libraries
@@ -100,7 +100,7 @@ typedef struct asnopt {
 typedef struct asnvaluenode {
 	Int2 valueisa;
 	CharPtr name;	               /* use for strings and named int */
-	Int4 intvalue;		           /* use for int and boolean */
+	Int8 intvalue;		           /* use for int and boolean */
 	FloatHi realvalue;
 	struct asnvaluenode PNTR next;
 	AsnOptionPtr aop;              /* for comments */
@@ -109,10 +109,10 @@ typedef struct asnvaluenode {
    /******** AsnType is a node in the AsnTool parse tree *******/
 
 typedef struct asntype {
-	Int2 isa;
+	Int2 isa;                      /* holds types like BOOLEAN_TYPE, etc.  You can use the ISA_ macros on it */ 
 	CharPtr name;
-	Uint1 tagclass;
-	Int2 tagnumber;
+	Uint1 tagclass;                /* holds TAG_UNIVERSAL, TAG_APPLICATION, etc. */
+	Int2 tagnumber;                /* holds TAG_BOOLEAN, etc. */
 	unsigned implicit   : 1;
 	unsigned optional   : 1;
 	unsigned hasdefault : 1;
@@ -196,7 +196,7 @@ typedef struct asnio {
 	Int2 linepos;         /* current offset in linebuf */
 	FILE * fp;            /* file to write or read to */
 	BytePtr buf;          /* buffer for I/O */
-    Int2 bufsize;         /* sizeof this buffer */
+	Int2 bufsize;         /* sizeof this buffer */
 	Int2 bytes,           /* bytes of data available in buf */
 		offset;           /* current offset of processing in buf */
 	Uint1 tagclass;       /* last BER tag-id-len read */
@@ -210,30 +210,34 @@ typedef struct asnio {
 		max_indent,         /* current maximum indent levels for first */
 		state;              /* parsing state */
 	Int2 linelength;        /* max line length on output */
-    BoolPtr first;          /* for first element on indented line for printing */
+	BoolPtr first;          /* for first element on indented line for printing */
 	Int4 linenumber;        /* for reporting errors */
 	CharPtr word;           /* current word in linebuf */
 	Int2 wordlen,           /* length of word in linebuf */
-	     token;             /* current parsing token for word */
-    PstackPtr typestack;    /* the parsing stack for input and output */
+		token;             /* current parsing token for word */
+	PstackPtr typestack;    /* the parsing stack for input and output */
 	Int1 type_indent,       /* used like indent_level and max_indent, but for */
 		max_type;           /* typestack */
 	ErrorRetType error_ret; /* user error return */
-    Pointer iostruct;       /* non-FILE io structure */
-    IoFuncType readfunc,    /* read/write functions for sockets */
-          writefunc;        /*  open and close MUST be done outside AsnIo */
+	Pointer iostruct;       /* non-FILE io structure */
+	IoFuncType readfunc,    /* read/write functions for sockets */
+		writefunc;        /*  open and close MUST be done outside AsnIo */
 	Boolean read_id;        /* for checking AsnReadId AsnReadVal alternation */
 	CharPtr fname;          /* name of file in use */
 	AsnOptionPtr aop;       /* head of options chain */
 	AsnExpOptPtr aeop;      /* exploration options chain */
 	AsnExpOptStructPtr aeosp;
 	Boolean io_failure;     /* set on failed write, or read  */
-	Uint1 fix_non_print;    /* fix non-printing chars in VisibleStrings (see below)*/
+	Uint1 fix_non_print;    /* fix non-printing chars in VisibleStrings (see below) */
+	Boolean utf8_read;      /* VisibleString expected but UTF8String encountered */
+	Uint1 fix_utf8_in;      /* policy on reporting VisibleString/UTF8String mismatches (see below) */
+	Boolean utf8_sent;      /* UTF8String converted to VisibleString in output */
+	Uint1 fix_utf8_out;     /* policy on converting UTF8String to VisibleString (see below) */
 	Boolean scan_for_start; /* if TRUE, scan over garbage in print form */
 	Int2 spec_version;      /* used for filtering between asn.1 spec versions */
 	Boolean no_newline;     /* to suppress internal newlines in long XML strings */
 	Boolean XMLModuleWritten; /* to put header on first XML DTD only */
-    /* the following fields are used for easier ASN.1 comparisons, not normal operations */
+	/* the following fields are used for easier ASN.1 comparisons, not normal operations */
 	Boolean asn_no_newline;  /* to suppress internal newlines in long ASN.1 strings */
 	Boolean asn_alt_struct;  /* structure ending braces on separate lines */
 } AsnIo, PNTR AsnIoPtr;
@@ -260,6 +264,32 @@ typedef struct asnio {
 *   To check, get an error message, but not die, leave aip->fix_non_print=0
 *   To check and fail with non printing chars, set aip->fix_non_print=3
 *
+*
+*****************************************************************************/
+
+
+/*****************************************************************************
+*
+*   fix_utf8_in
+*   	Supported values of fix_utf8_in are:
+*
+*   0 = (default) do not post any errors, set aip->utf8_read
+*   1 = post an error of SEV_WARNING the first time, set aip->utf8_read
+*   2 = post an error of SEV_WARNING every time, set aip->utf8_read
+*   3 = do not do input conversion
+*
+*****************************************************************************/
+
+
+/*****************************************************************************
+*
+*   fix_utf8_out
+*   	Supported values of fix_utf8_out are:
+*
+*   0 = (default) do not post any errors, set aip->utf8_sent
+*   1 = post an error of SEV_WARNING the first time, set aip->utf8_sent
+*   2 = post an error of SEV_WARNING every time, set aip->utf8_sent
+*   3 = do not do output conversion
 *
 *****************************************************************************/
 

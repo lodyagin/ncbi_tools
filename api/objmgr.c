@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.89 $
+* $Revision: 6.90 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -2908,7 +2908,7 @@ NLM_EXTERN void LIBCALL ObjMgrDump (FILE * fp, CharPtr title)
     ObjMgrPtr omp;
     ObjMgrDataPtr omdp;
     Uint4 i;
-    Char buf[80];
+    Char buf[128];
     BioseqPtr bsp;
     Boolean close_it = FALSE;
     

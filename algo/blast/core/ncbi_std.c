@@ -1,4 +1,4 @@
-/* $Id: ncbi_std.c,v 1.17 2005/11/16 14:27:04 madden Exp $
+/* $Id: ncbi_std.c,v 1.18 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -28,11 +28,6 @@
 /** @file ncbi_std.c
  * A few utilities needed by code in algo/blast/core but not provided elsewhere.
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: ncbi_std.c,v 1.17 2005/11/16 14:27:04 madden Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_def.h> /* for sfree() macro */
 #include <algo/blast/core/ncbi_std.h>

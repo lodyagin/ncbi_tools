@@ -28,10 +28,6 @@
  *
  * @author Alejandro Schaffer, E. Michael Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: smith_waterman.c,v 1.4 2006/06/29 16:50:07 gertz Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/ncbi_std.h>
 #include <algo/blast/composition_adjustment/composition_constants.h>

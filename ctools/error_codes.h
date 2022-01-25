@@ -1,7 +1,7 @@
 #ifndef CTOOLS___ERROR_CODES__H
 #define CTOOLS___ERROR_CODES__H
 
-/*  $Id: error_codes.h,v 1.1 2007/10/17 17:49:03 lavr Exp $
+/*  $Id: error_codes.h,v 1.2 2012/07/27 19:54:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,10 +30,10 @@
  *
  */
 
-/// @file error_codes.hpp
-/// Definition of all error codes used in C code of ctools library
-/// (xctools.lib).
-///
+/** @file error_codes.hpp
+ *  Definition of all error codes used in C code of ctools library
+ *  (xctools.lib).
+ */
 
 
 #include "../connect/ncbi_priv.h"

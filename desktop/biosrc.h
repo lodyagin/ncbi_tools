@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.12 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -124,6 +124,8 @@ extern EnumFieldAssocPtr GetSubSourceAndOrgModEnum (Boolean get_discouraged, Boo
 extern EnumFieldAssocPtr GetModifiersEnum (Boolean get_subsource, Boolean get_orgmod, Boolean get_discouraged, Boolean get_discontinued);
 
 NLM_EXTERN ValNodePtr GetLocListForBioSource (BioSourcePtr biop);
+NLM_EXTERN void PopulateGeneticCodePopup (PopuP gc);
+NLM_EXTERN void DisableStrainForwarding(BioSourcePtr biop, Boolean val);
 
 #ifdef __cplusplus
 }

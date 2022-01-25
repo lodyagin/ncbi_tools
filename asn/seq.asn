@@ -1,4 +1,4 @@
---$Revision: 6.24 $
+--$Revision: 6.26 $
 --**********************************************************************
 --
 --  NCBI Sequence elements
@@ -133,6 +133,7 @@ MolInfo ::= SEQUENCE {
         barcode (21) ,          -- barcode of life project
         composite-wgs-htgs (22) , -- composite of WGS and HTGS
         tsa (23) ,              -- transcriptome shotgun assembly
+        targeted (24) ,         -- targeted locus sets/studies
         other (255) }           -- use Source.techexp
                DEFAULT unknown ,
     techexp VisibleString OPTIONAL ,   -- explanation if tech not enough
@@ -389,6 +390,7 @@ Linkage-evidence ::= SEQUENCE {
         map(6),
         strobe(7),
         unspecified(8),
+        pcr(9),
         other(255)
     }
 }

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description: 
 *
@@ -128,6 +128,7 @@ extern CharPtr GetMoleculeTypeName (Uint1 mol_val);
 extern CharPtr GetMoleculeClassName (Uint1 mol_val);
 extern CharPtr GetMoleculeTopologyName (Uint1 mol_val);
 
+extern const CharPtr kDoNotEditTitle;
 
 #ifdef __cplusplus
 }

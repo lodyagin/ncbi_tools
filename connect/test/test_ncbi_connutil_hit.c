@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_connutil_hit.c,v 6.17 2010/02/05 20:35:04 kazimird Exp $
+/* $Id: test_ncbi_connutil_hit.c,v 6.24 2016/08/01 17:49:11 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,22 +30,23 @@
  *
  */
 
-#include <connect/ncbi_connutil.h>
 #include "../ncbi_priv.h"               /* CORE logging facilities */
+#include <connect/ncbi_connutil.h>
+#include <connect/ncbi_gnutls.h>
 #include <stdlib.h>
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 
 int main(int argc, char** argv)
 {
     /* Prepare to connect:  parse and check cmd.-line args, etc. */
-    const char*    host        = (argc > 1) ? argv[1] : "";
-    unsigned short port        = (argc > 2) ? (unsigned short) atoi(argv[2]):0;
-    const char*    path        = (argc > 3) ? argv[3] : "";
-    const char*    args        = (argc > 4) ? argv[4] : "";
-    const char*    inp_file    = (argc > 5) ? argv[5] : "";
-    const char*    user_header = (argc > 6) ? argv[6] : "";
+    const char*    host        = argc > 1 ? argv[1]       : "";
+    unsigned short port        = argc > 2 ? atoi(argv[2]) : CONN_PORT_HTTP;
+    const char*    path        = argc > 3 ? argv[3]       : "";
+    const char*    args        = argc > 4 ? argv[4]       : "";
+    const char*    inp_file    = argc > 5 ? argv[5]       : "";
+    const char*    user_header = argc > 6 ? argv[6]       : "";
 
     size_t   content_length;
     STimeout timeout;
@@ -58,6 +59,8 @@ int main(int argc, char** argv)
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
+    SOCK_SetupSSL(NcbiSetupGnuTls);
+
     fprintf(stderr, "Running...\n"
             "  Executable:      '%s'\n"
             "  URL host:        '%s'\n"
@@ -67,15 +70,12 @@ int main(int argc, char** argv)
             "  Input data file: '%s'\n"
             "  User header:     '%s'\n"
             "Response(if any) from the hit URL goes to standard output.\n\n",
-            argv[0],
-            host, (unsigned short) port, path, args, inp_file, user_header);
+            argv[0], host, port, path, args, inp_file, user_header);
 
     if ( argc < 4 ) {
         fprintf(stderr,
                 "Usage:   %s host port path args inp_file [user_header]\n"
-                "Example: %s ............\n"
-                "\nTwo few arguments.\n",
-                argv[0], argv[0]);
+                "\nTwo few arguments.\n", argv[0]);
         return 1;
     }
 
@@ -101,10 +101,13 @@ int main(int argc, char** argv)
     /* Connect */
     sock = URL_Connect(host, port, path, args,
                        eReqMethod_Any, content_length,
-                       &timeout, &timeout, user_header, 1/*true*/, eDefault);
+                       &timeout, &timeout, user_header, 1/*true*/,
+                       port == CONN_PORT_HTTPS
+                       ? fSOCK_LogDefault | fSOCK_Secure
+                       : fSOCK_LogDefault); /*NCBI_FAKE_WARNING*/
     if ( !sock )
         return 3;
-    
+
     {{ /* Pump data from the input file to socket */
         FILE* fp = fopen(inp_file, "rb");
         if ( !fp ) {

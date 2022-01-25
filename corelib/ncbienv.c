@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/7/91
 *
-* $Revision: 6.51 $
+* $Revision: 6.52 $
 *
 * File Description:
 *       portable environment functions, companions for ncbimain.c
@@ -37,6 +37,10 @@
 * Modifications:
 * --------------------------------------------------------------------------
 * $Log: ncbienv.c,v $
+* Revision 6.52  2016/09/02 15:03:08  ucko
+* Nlm_OpenConfigFile: Look in /etc/ncbi if the environment variable NCBI
+* is unset, as already done in Debian/Ubuntu packages.
+*
 * Revision 6.51  2011/01/20 17:08:07  lavr
 * Do not simply truncate size_t into Int2, use max instead NOJIRA
 *
@@ -828,14 +832,14 @@ static FILE* Nlm_OpenConfigFile(const Nlm_Char* file, Nlm_Boolean writeMode, Nlm
     if (fp == NULL) {
       path[0] = '\0';
       pth = getenv ("NCBI");
-      if (pth != NULL) {
-        Nlm_FileBuildPath(path, pth, str + 1);
+      if (pth == NULL)
+        pth = "/etc/ncbi";
+      Nlm_FileBuildPath(path, pth, str + 1);
+      fp = Ncbienv_FileOpen (path, "r");
+      if (fp == NULL) {
+        path[0] = '\0';
+        Nlm_FileBuildPath(path, pth, str);
         fp = Ncbienv_FileOpen (path, "r");
-        if (fp == NULL) {
-          path[0] = '\0';
-          Nlm_FileBuildPath(path, pth, str);
-          fp = Ncbienv_FileOpen (path, "r");
-        }
       }
     }
     if (newfp != NULL) {

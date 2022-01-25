@@ -29,13 +29,21 @@
 *
 * Version Creation Date:   6/3/99
 *
-* $Revision: 6.19 $
+* $Revision: 6.20 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: alignval.h,v $
+* Revision 6.20  2013/01/25 20:14:55  bollin
+* JIRA:SQD-976 removed Special->Display->Weighted Alignment Percent Identity
+*
+*
+* Committed on the Free edition of March Hare Software CVSNT Client.
+* Upgrade to CVS Suite for more features and support:
+* http://march-hare.com/cvsnt/
+*
 * Revision 6.19  2009/06/18 17:18:08  bollin
 * Changed FASTA-like validator error to use minimum length of two sequences
 * when comparing, allow N to match anything.
@@ -108,7 +116,6 @@ NLM_EXTERN Boolean ValidateSeqAlignInSeqEntry (SeqEntryPtr sep, Boolean message,
                                  Boolean do_hist_assembly);
 
 extern Uint2 AlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps);
-extern Uint2 WeightedAlignmentPercentIdentity (SeqAlignPtr salp, Boolean internal_gaps);
 
 extern double *
 GetAlignmentColumnPercentIdentities 

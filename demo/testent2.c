@@ -140,7 +140,7 @@ static Int4 DoInfoValidation (Entrez2ReplyPtr e2ry, Boolean showinfo)
             for (e2fd = e2db->fields; e2fd != NULL; e2fd = e2fd->next) {
               if (StringICmp (e2fd->field_name, "ORGN") == 0) {
                 orgtermcount = e2fd->term_count;
-                printf ("Nucleotide ORGN term count is %ld\n", orgtermcount);
+                printf ("Nucleotide ORGN term count is %ld\n", (long) orgtermcount);
               }
             }
           }
@@ -360,7 +360,7 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
   if (e2ry != NULL) {
     SaveEntrezReply (e2ry);
     pos = EntrezExtractTermPosReply (e2ry); /* also frees e2ry */
-    printf ("Zea position is %ld\n", pos);
+    printf ("Zea position is %ld\n", (long) pos);
   } else {
     printf ("GetTermPosition request failed\n");
   }
@@ -589,6 +589,12 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
   }
 }
 
+static void PrintTerm (CharPtr term, Int4 count)
+
+{
+  printf ("%s\t%ld\n", term, (long) count);
+}
+
 /* Args structure contains command-line arguments */
 
 #define v_argService  0
@@ -596,6 +602,8 @@ static void TestE2 (Boolean dohuge, Boolean showuids, Boolean showinfo)
 #define u_argUids     2
 #define g_argInfo     3
 #define n_argNewTests 4
+#define d_argDatabase 5
+#define f_argField    6
 
 Args myargs [] = {
   {"Service", NULL, NULL, NULL,
@@ -608,13 +616,17 @@ Args myargs [] = {
     TRUE, 'g', ARG_BOOLEAN, 0.0, 0, NULL},
   {"New Tests", "F", NULL, NULL,
     TRUE, 'n', ARG_BOOLEAN, 0.0, 0, NULL},
+  {"Database", NULL, NULL, NULL,
+    TRUE, 'd', ARG_STRING, 0.0, 0, NULL},
+  {"Field", NULL, NULL, NULL,
+    TRUE, 'f', ARG_STRING, 0.0, 0, NULL},
 };
 
 Int2 Main (void)
 
 {
+  CharPtr  database, field, service;
   Boolean  dohuge, newtests, showinfo, showuids;
-  CharPtr  service;
 
   /* standard setup */
 
@@ -655,18 +667,23 @@ Int2 Main (void)
   showuids = (Boolean) myargs [u_argUids].intvalue;
   showinfo = (Boolean) myargs [g_argInfo].intvalue;
   newtests = (Boolean) myargs [n_argNewTests].intvalue;
+  database = myargs [d_argDatabase].strvalue;
+  field = myargs [f_argField].strvalue;
 
   if (! StringHasNoText (service)) {
     EntrezSetService (service);
     printf ("testent2 %s\n", service);
   }
 
-  if (newtests) {
+  if (StringDoesHaveText (database) && StringDoesHaveText (field)) {
+    Entrez2StreamTerms (database, field, PrintTerm);
+  } else if (newtests) {
     NewTextE2 (showuids, showinfo);
+    printf ("testent2 finished\n");
   } else {
     TestE2 (dohuge, showuids, showinfo);
+    printf ("testent2 finished\n");
   }
-  printf ("testent2 finished\n");
 
   return 0;
 }

@@ -51,13 +51,6 @@ extern Int4 GridMatch (CharPtr seqhead, Int4 cur, Int4 end, Int4 matlen,
 extern SeqGraphPtr MatrixSeq (BioseqPtr bsp, SeqGraphPtr sgptr,
                               ComMatPtr cmtp, Int4 window);
 
-Int2 LIBCALLBACK SeqMatFunc (Pointer data);
-
-#define REGISTER_GROUP_MATRIX ObjMgrProcLoadEx (OMPROC_FILTER, \
-        "BacEnhancer", "Enhancer Scan", \
-        OBJ_BIOSEQ, 0, OBJ_BIOSEQ, 0, \
-        NULL, SeqMatFunc, PROC_PRIORITY_DEFAULT, "Analysis")
-
 #ifdef __cplusplus
 }
 #endif

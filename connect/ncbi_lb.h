@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_LB__H
 #define CONNECT___NCBI_LB__H
 
-/*  $Id: ncbi_lb.h,v 1.2 2006/01/11 20:17:53 lavr Exp $
+/* $Id: ncbi_lb.h,v 1.3 2012/07/27 19:54:46 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -62,18 +62,5 @@ extern size_t LB_Select(SERV_ITER     iter,
 #ifdef __cplusplus
 }  /* extern "C" */
 #endif
-
-
-/*
- * --------------------------------------------------------------------------
- * $Log: ncbi_lb.h,v $
- * Revision 1.2  2006/01/11 20:17:53  lavr
- * Unconditionally disable definition of NCBI_LB_DEBUG macro generation
- *
- * Revision 1.1  2005/12/16 15:59:40  lavr
- * Initial revision
- *
- * ==========================================================================
- */
 
 #endif /* CONNECT___NCBI_LB__H */

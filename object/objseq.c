@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.39 $
+* $Revision: 6.42 $
 *
 * File Description:  Object manager for module NCBI-Seq
 *
@@ -1041,6 +1041,8 @@ Boolean LIBCALL SeqDataAsnWriteXML(SeqDataPtr sdp, Uint1 seqtype, AsnIoPtr aip, 
         return(FALSE);
     }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     /* if (seqtype == Seq_code_gap) return FALSE; */
     bsp = (ByteStorePtr) sdp;
 
@@ -1138,6 +1140,8 @@ NLM_EXTERN Boolean LIBCALL BioseqInstAsnWrite (BioseqPtr bsp, AsnIoPtr aip, AsnT
     if (atp == NULL) return FALSE;
 
     if (bsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)bsp)) goto erret; /* instance required */
     av.intvalue = bsp->repr;
@@ -1390,6 +1394,8 @@ NLM_EXTERN Boolean LIBCALL SeqDataAsnWrite (SeqDataPtr sdp, Uint1 seqtype, AsnIo
     if (atp == NULL) return FALSE;
 
     if (sdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     av.ptrvalue = sdp;
     if (! AsnWriteChoice(aip, atp, (Int2)seqtype, &av)) goto erret;   /* CHOICE */
@@ -1689,6 +1695,9 @@ LinkageEvidenceAsnWrite(LinkageEvidencePtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -1855,6 +1864,9 @@ SeqGapAsnWrite(SeqGapPtr ptr, AsnIoPtr aip, AsnTypePtr orig)
    }
 
    if (ptr == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
    if (! AsnOpenStruct(aip, atp, (Pointer) ptr)) {
       goto erret;
    }
@@ -2516,6 +2528,8 @@ NLM_EXTERN Boolean LIBCALL NumberingAsnWrite (NumberingPtr anp, AsnIoPtr aip, As
 
     if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     av.ptrvalue = (Pointer)anp;
     if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) goto erret;
 
@@ -2677,6 +2691,8 @@ NLM_EXTERN Boolean LIBCALL NumContAsnWrite (NumContPtr ncp, AsnIoPtr aip, AsnTyp
 
     if (ncp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)ncp)) goto erret;
     if (ncp->refnum != 1)
     {
@@ -2812,6 +2828,8 @@ NLM_EXTERN Boolean LIBCALL NumEnumAsnWrite (NumEnumPtr nep, AsnIoPtr aip, AsnTyp
     if (atp == NULL) return FALSE;
 
     if (nep == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)nep)) goto erret;
 
@@ -3002,6 +3020,8 @@ NLM_EXTERN Boolean LIBCALL NumRealAsnWrite (NumRealPtr nrp, AsnIoPtr aip, AsnTyp
 
     if (nrp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)nrp)) goto erret;
 
     av.realvalue = nrp->a;
@@ -3136,6 +3156,8 @@ NLM_EXTERN Boolean LIBCALL PubdescAsnWrite (PubdescPtr pdp, AsnIoPtr aip, AsnTyp
     if (atp == NULL) return FALSE;
 
     if (pdp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)pdp)) goto erret;
     if (! PubEquivAsnWrite(pdp->pub, aip, PUBDESC_pub)) goto erret;
@@ -3412,6 +3434,8 @@ static Boolean SeqAnnotAsnWriteExtra (SeqAnnotPtr sap, AsnIoPtr aip, AsnTypePtr 
     if (atp == NULL) return FALSE;
 
     if (sap == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sap)) goto erret;
 
@@ -3727,12 +3751,13 @@ NLM_EXTERN SeqAnnotPtr LIBCALL SeqAnnotSetAsnRead (AsnIoPtr aip, AsnTypePtr set,
     {
         if (atp == NULL) goto erret;
         sap = SeqAnnotAsnRead(aip, atp);
-        if (sap == NULL) goto erret;
-        if (first == NULL)
-            first = sap;
-        else
-            curr->next = sap;
-        curr = sap;
+        if (sap != NULL) {
+            if (first == NULL)
+                first = sap;
+            else
+                curr->next = sap;
+            curr = sap;
+        }
     }
     if (AsnReadVal(aip, atp, &av) <= 0) goto erret;   /* end SET OF */
     if (first == NULL)
@@ -4072,6 +4097,8 @@ NLM_EXTERN Boolean LIBCALL MolInfoAsnWrite (MolInfoPtr mip, AsnIoPtr aip, AsnTyp
 
     if (mip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)mip)) goto erret;
 
     if (mip->biomol)
@@ -4226,6 +4253,8 @@ NLM_EXTERN Boolean LIBCALL SeqLitAsnWrite (SeqLitPtr slp, AsnIoPtr aip, AsnTypeP
 
     if (slp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)slp)) goto erret;
 
     av.intvalue = slp->length;
@@ -4366,6 +4395,8 @@ NLM_EXTERN Boolean LIBCALL DeltaSeqAsnWrite (DeltaSeqPtr dsp, AsnIoPtr aip, AsnT
         return FALSE;
 
     if (dsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     av.ptrvalue = (Pointer)dsp;
     if (! AsnWriteChoice(aip, atp, (Int2)dsp->choice, &av))
@@ -4627,6 +4658,8 @@ NLM_EXTERN Boolean LIBCALL TextAnnotIdAsnWrite (TextAnnotIdPtr taip, AsnIoPtr ai
 
     if (taip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)taip))
         goto erret;
     if (taip->name != NULL)
@@ -4784,6 +4817,8 @@ NLM_EXTERN Boolean LIBCALL AnnotIdAsnWrite (AnnotIdPtr anp, AsnIoPtr aip, AsnTyp
         return retval;
 
     if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     av.ptrvalue = (Pointer)anp;
     if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av))
@@ -5004,7 +5039,7 @@ NLM_EXTERN Boolean LIBCALL AnnotIdSetAsnWrite (AnnotIdPtr anp, AsnIoPtr aip, Asn
 
     if (anp == NULL) { AsnNullValueMsg(aip, settype); goto erret; }
 
-    oldanp = anp;
+     oldanp = anp;
     if (! AsnOpenStruct(aip, settype, (Pointer)oldanp))
         goto erret;
     while (anp != NULL)
@@ -5430,6 +5465,8 @@ NLM_EXTERN Boolean LIBCALL AlignDefAsnWrite (AlignDefPtr adp, AsnIoPtr aip, AsnT
         return retval;
 
     if (adp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)adp))
         goto erret;

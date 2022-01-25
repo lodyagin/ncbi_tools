@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_BUFFER__H
 #define CONNECT___NCBI_BUFFER__H
 
-/* $Id: ncbi_buffer.h,v 6.13 2010/09/30 13:24:30 kazimird Exp $
+/* $Id: ncbi_buffer.h,v 6.21 2016/02/03 16:19:16 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -26,32 +26,29 @@
  *
  * ===========================================================================
  *
- * Author:  Denis Vakatov
+ * Author:  Denis Vakatov, Anton Lavrentiev
  *
  * File Description:
- *   Memory-resident FIFO storage area (to be used e.g. in I/O buffering)
+ *   Memory-resident storage area (to be used e.g. in I/O buffering)
  *
  * Handle:  BUF
  *
  * Functions:
  *   BUF_SetChunkSize
  *   BUF_Size
- *   BUF_Prepend
- *   BUF_Append
+ *   BUF_Prepend[Ex]
+ *   BUF_Append[Ex]
  *   BUF_Write
- *   BUF_PushBack
+ *   BUF_Pushback
  *   BUF_Peek
  *   BUF_PeekAt
  *   BUF_PeekAtCB
  *   BUF_Read
  *   BUF_Erase
+ *   BUF_Splice
  *   BUF_Destroy
  *
  */
-
-#if defined(NCBIBUF__H)
-#  error "<ncbibuf.h> and <ncbi_buffer.h> must never be #include'd together"
-#endif
 
 #include <connect/connect_export.h>
 #include <stddef.h>     /* ...to define "size_t"... */
@@ -68,15 +65,15 @@ extern "C" {
 #endif
 
 
-struct BUF_tag;
-typedef struct BUF_tag* BUF;  /* handle of a buffer */
+struct SNcbiBuf;
+typedef struct SNcbiBuf* BUF;  /* handle of a buffer */
 
 
 /*!
  * Set minimal size of a buffer memory chunk.
- * Return the actually set chunk size on success;  zero on error
- * NOTE:  if "*pBuf" == NULL then create it
- *        if "chunk_size" is passed 0 then set it to BUF_DEF_CHUNK_SIZE
+ * Return the actually set chunk size on success;  zero on error.
+ * NOTE:  if "*pBuf" == NULL then create it;
+ *        if "chunk_size" is passed 0 then set it to BUF_DEF_CHUNK_SIZE.
  */
 #define BUF_DEF_CHUNK_SIZE 1024
 extern NCBI_XCONNECT_EXPORT size_t BUF_SetChunkSize
@@ -87,18 +84,32 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_SetChunkSize
 
 /*!
  * Return the number of bytes stored in "buf".
- * NOTE: return 0 if "buf" == NULL
+ * NOTE: return 0 if "buf" == NULL.
  */
 extern NCBI_XCONNECT_EXPORT size_t BUF_Size(BUF buf);
 
 
 /*!
- * Prepend a block of data (of the specified size) to the
- * beginning of the buffer (to be read first).  Note that unlike
- * BUF_Pushback(), in this call the data is not copied into the buffer
- * but instead is just linked in from the original location.
- * Return non-zero (true) if succeeded, zero (false) if failed.
+ * Prepend a block of data (of the specified size) at the beginning of the
+ * buffer (to be read first).  Note that unlike BUF_Pushback(), in this call
+ * the data is not copied into the buffer but instead is just linked in from
+ * the original location.  Return non-zero (true) if succeeded, zero (false)
+ * if failed.
  */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_PrependEx
+(BUF*   pBuf,
+ void*  base,       /* base to be "free"d when the buffer chunk is unlinked  */
+ size_t alloc_size, /* usable size of "data" (0 to make the use read-only)   */
+ void*  data,       /* points to data to be prepended by linking in the list */
+ size_t size        /* size of "data" occupied                               */
+ );
+
+
+/*!
+ * Equivalent to BUF_PrependEx(pBuf, 0, 0, data, size)
+ * NOTE: the prepended chunk is thus read-only and will not be auto-freed.
+ */
+
 extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Prepend
 (BUF*        pBuf,
  const void* data,
@@ -107,11 +118,23 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Prepend
 
 
 /*!
- * Append a block of data (of the specified size) past the end
- * of the buffer (to be read last).  Note that unlike
- * BUF_Write(), in this call the data is not copied to the buffer
- * but instead is just linked in from the original location.
- * Return non-zero (true) if succeeded, zero (false) if failed.
+ * Append a block of data (of the specified size) past the end of the buffer
+ * (to be read last).  Note that unlike BUF_Write(), in this call the data is
+ * not copied to the buffer but instead is just linked in from the original
+ * location.  Return non-zero (true) if succeeded, zero (false) if failed.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_AppendEx
+(BUF*   pBuf,
+ void*  base,       /* base to be "free"d when the chunk is unlinked        */
+ size_t alloc_size, /* usable size of "data" (0 to make the use read-only)  */
+ void*  data,       /* points to data to be appended by linking in the list */
+ size_t size        /* size of "data" occupied                              */
+ );
+
+
+/*!
+ * Equivalent to BUF_AppendEx(pBuf, 0, 0, data, size)
+ * NOTE: the appended chunk is thus read-only and will not be auto-freed.
  */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Append
 (BUF*        pBuf,
@@ -125,6 +148,9 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Append
  * On error (failed memory allocation), return zero value;
  * otherwise return non-zero (i.e. including when "size" passed as 0).
  * NOTE:  if "*pBuf" == NULL then create it if necessary (e.g. if size != 0).
+ * NOTE:  writing immediately past the end of the data into an unoccupied space
+ * of a chunk that was previosuly appended with BUF_AppendEx() results in a
+ * zero copy operation (just the pointers updated as necessary).
  */
 extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_Write
 (BUF*        pBuf,
@@ -138,7 +164,7 @@ extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_Write
  * On error (failed memory allocation), return zero value.
  * NOTE:  if "*pBuf" == NULL then create it.
  */
-extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_PushBack
+extern NCBI_XCONNECT_EXPORT /*bool*/int BUF_Pushback
 (BUF*        pBuf,
  const void* data,
  size_t      size
@@ -171,8 +197,12 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
 
 
 /*!
- * Call "callback" on up to "size" bytes stored in "buf" (starting at position
- * "pos"), in chunks.  Pass "cbdata" as an opaque parameter to "callback".
+ * Call "callback" repeatedly on up to "size" bytes stored in "buf" (starting
+ * at position "pos"), in chunks.  Pass "cbdata" as an opaque parameter to the
+ * "callback".  Processing stops when all buffer bytes (but no more than
+ * "size" bytes) have been visited by the "callback", or when the "callback"
+ * returns a value less than its passed "size" argument (the "callback" may
+ * _not_ return a value greater than its "size" argument!).
  * Return the # of processed bytes (can be less than "size").
  * Return zero and do nothing if "buf" is NULL or "pos" >= BUF_Size(buf).
  * Do nothing and return min(BUF_Size(buf)-pos, size) if "callback" is NULL.
@@ -180,16 +210,16 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAt
 extern NCBI_XCONNECT_EXPORT size_t BUF_PeekAtCB
 (BUF         buf,
  size_t      pos,
- void       (*callback)(void* cbdata, void* buf, size_t size),
+ size_t    (*callback)(void* cbdata, const void* buf, size_t size),
  void*       cbdata,
  size_t      size
  );
 
 
 /*!
- * Copy up to "size" bytes stored in "buf" to "data" and remove
- * copied data from the "buf".
- * Return the # of copied-and/or-removed bytes(can be less than "size")
+ * Copy up to "size" bytes stored in "buf" to "data" and remove the copied
+ * data from the "buf".
+ * Return the # of copied-and/or-removed bytes (can be less than "size").
  * NOTE: if "buf"  == NULL then do nothing and return 0
  *       if "data" == NULL then do not copy data anywhere(still, remove it)
  */
@@ -202,14 +232,23 @@ extern NCBI_XCONNECT_EXPORT size_t BUF_Read
 
 /*!
  * Make the buffer empty.
- * NOTE: do nothing if "buf" == NULL
+ * NOTE: do nothing if "buf" == NULL.
  */
 extern NCBI_XCONNECT_EXPORT void BUF_Erase(BUF buf);
 
 
 /*!
+ * Append all contents of the source buffer "src" to the destination buffer
+ * "*dst", making the source buffer empty (as with BUF_Erase(src)).
+ * Return non-zero if successful; 0 in case of an error.
+ * NOTE: do nothing if "src" is either NULL or contains no data.
+ */
+extern NCBI_XCONNECT_EXPORT int/*bool*/ BUF_Splice(BUF* dst, BUF src);
+
+
+/*!
  * Destroy all internal data.
- * NOTE: do nothing if "buf" == NULL
+ * NOTE: do nothing if "buf" == NULL.
  */
 extern NCBI_XCONNECT_EXPORT void BUF_Destroy(BUF buf);
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/27/05
 *
-* $Revision: 1.10 $
+* $Revision: 1.12 $
 *
 * File Description:
 *
@@ -48,7 +48,7 @@
 #define NLM_GENERATED_CODE_PROTO
 #include <objentgene.h>
 
-#define GENE2XMLAPP_VER "1.3"
+#define GENE2XMLAPP_VER "1.5"
 
 CharPtr GENE2XMLAPPLICATION = GENE2XMLAPP_VER;
 

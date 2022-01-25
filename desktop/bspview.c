@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.160 $
+* $Revision: 6.176 $
 *
 * File Description: 
 *
@@ -671,7 +671,7 @@ static void LookInSeqIdList (SeqIdPtr sip, ValNodePtr PNTR vnpp, Uint1 align_typ
 
 {
   Char  str [64];
-  Int4  uid;
+  BIG_ID  uid;
 
   while (sip != NULL) {
     switch (sip->choice) {
@@ -680,7 +680,7 @@ static void LookInSeqIdList (SeqIdPtr sip, ValNodePtr PNTR vnpp, Uint1 align_typ
         break;
       case SEQID_GI :
         if (useUids) {
-          uid = (Int4) sip->data.intvalue;
+          uid = (BIG_ID) sip->data.intvalue;
           ValNodeAddInt (vnpp, align_type, uid);
         } else {
           SeqIdWrite (sip, str, PRINTID_REPORT, sizeof (str));
@@ -1132,9 +1132,11 @@ static void PopTargetAlistProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
 {
   BioseqViewFormPtr  bfp;
   BioseqPtr          bsp;
+  Char               ch;
   CharPtr            ptr;
   SeqIdPtr           sip;
   Char               str [128];
+  CharPtr            tmp;
   static BioseqViewFormPtr already_complained_about_sequences = NULL;
 
   bfp = (BioseqViewFormPtr) mydata;
@@ -1155,7 +1157,18 @@ static void PopTargetAlistProc (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
     } else {
       ptr++;
     }
-    bfp->workingAlist [bfp->workingCount].name = StringSave (ptr);
+    tmp = StringSave (ptr);
+    bfp->workingAlist [bfp->workingCount].name = tmp;
+    if (tmp != NULL) {
+      ch = *tmp;
+      while (ch != '\0') {
+        if (ch == '/') {
+          *tmp = '-';
+        }
+        tmp++;
+        ch = *tmp;
+      }
+    }
     (bfp->workingCount)++;
     if (bsp == bfp->bvd.bsp) {
       bfp->targetScratchSpace = index + 1;
@@ -1220,7 +1233,7 @@ static Int4 PopulateTarget (BioseqViewFormPtr bfp)
   return val;
 }
 
-static Int4 GetUidFromBsp (BioseqPtr bsp)
+static BIG_ID GetUidFromBsp (BioseqPtr bsp)
 
 {
   SeqIdPtr  sip;
@@ -1229,7 +1242,7 @@ static Int4 GetUidFromBsp (BioseqPtr bsp)
   sip = bsp->id;
   while (sip != NULL) {
     if (sip->choice == SEQID_GI) {
-      return (Int4) sip->data.intvalue;
+      return (BIG_ID) sip->data.intvalue;
     }
     sip = sip->next;
   }
@@ -3921,7 +3934,7 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolB
   BioseqViewFormPtr  bfp;
   GrouP              g;
   CharPtr            ptr;
-  Char               str [256];
+  Char               str [512];
   WindoW             w;
   Int2               left, top;
 
@@ -3937,8 +3950,10 @@ extern ForM MakeToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createToolB
   }
   if (StringHasNoText (str)) {
     StringCpy (str, "ToolBar");
+  } else {
+    StringCat (str, " -- ToolBar");
   }
-  
+ 
   GetToolBarRect (&left, &top);
   w = FixedWindow (left, top, -10, -10, str, ToolFormHideWindowProc);
   if (w == NULL) return NULL;
@@ -3956,7 +3971,7 @@ extern ForM ReplaceToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createTo
   BioseqViewFormPtr  bfp;
   GrouP              g;
   CharPtr            ptr;
-  Char               str [256];
+  Char               str [512];
   WindoW             w;
   Int2               left, top;
 
@@ -3974,6 +3989,8 @@ extern ForM ReplaceToolFormForBioseqView (BaseFormPtr bafp, GrpActnProc createTo
   }
   if (StringHasNoText (str)) {
     StringCpy (str, "ToolBar");
+  } else {
+    StringCat (str, " -- ToolBar");
   }
   
   GetToolBarRect (&left, &top);
@@ -3993,7 +4010,7 @@ extern ForM ReplaceToolFormWithDataForBioseqView (BaseFormPtr bafp, BuildToolbar
   BioseqViewFormPtr  bfp;
   GrouP              g;
   CharPtr            ptr;
-  Char               str [256];
+  Char               str [512];
   WindoW             w;
   Int2               left, top;
 
@@ -4011,6 +4028,8 @@ extern ForM ReplaceToolFormWithDataForBioseqView (BaseFormPtr bafp, BuildToolbar
   }
   if (StringHasNoText (str)) {
     StringCpy (str, "ToolBar");
+  } else {
+    StringCat (str, " -- ToolBar");
   }
   
   GetToolBarRect (&left, &top);
@@ -4207,18 +4226,12 @@ static Boolean AllSequencesHaveAccessionsButNoGis (SeqEntryPtr sep)
 }
 
 
-static Boolean IsAllDigits (CharPtr str)
-
+static Boolean IsPrefixPlusOptionalDigits (CharPtr str, CharPtr prefix)
 {
-  CharPtr cp;
+  Int4 len = StringLen (prefix);
 
-  if (StringHasNoText (str)) return FALSE;
-
-  cp = str;
-  while (*cp != 0 && isdigit (*cp)) {
-    cp++;
-  }
-  if (*cp == 0) {
+  if (StringNICmp (str, prefix, len) == 0
+      && (StringHasNoText (str + len) || StringIsAllDigits (str + len))) {
     return TRUE;
   } else {
     return FALSE;
@@ -4230,11 +4243,11 @@ static Boolean IsFixableIDString (CharPtr str)
 {
   if (StringHasNoText (str)) {
     return FALSE;
-  } else if (StringNICmp (str, "SeqID", 5) == 0 && IsAllDigits (str + 5)) {
+  } else if (IsPrefixPlusOptionalDigits (str, "SeqID")) {
     return TRUE;
-  } else if (StringNICmp (str, "Seq", 3) == 0 && IsAllDigits (str + 3)) {
+  } else if (IsPrefixPlusOptionalDigits (str, "Seq")) {
     return TRUE;
-  } else if (StringNICmp (str, "Sequence", 8) == 0 && IsAllDigits (str + 8)) {
+  } else if (IsPrefixPlusOptionalDigits (str, "Sequence")) {
     return TRUE;
   } else {
     return FALSE;
@@ -4310,7 +4323,61 @@ static Boolean HasConflictingIds (SeqEntryPtr sep)
 }
 
 
-NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
+static WindoW sAutofixReportWindow = NULL;
+
+static void CloseReportWindowProc (WindoW w)
+
+{
+  sAutofixReportWindow = NULL;
+  Remove (w);
+}
+
+static void MakeAutofixReportWindow (LogInfoPtr lip)
+{
+  GrouP h;
+  DoC   doc;
+  ReadBufferData rbd;
+  CharPtr line;
+
+  if (sAutofixReportWindow == NULL) {
+    if (lip == NULL || StringHasNoText (lip->path) || !lip->data_in_log) {
+      return;
+    }
+    sAutofixReportWindow = FixedWindow (-50, -33, -10, -10, "Autofix Report", CloseReportWindowProc);
+    h = HiddenGroup (sAutofixReportWindow, -1, 0, NULL);
+    SetGroupSpacing (h, 10, 10);
+    doc = DocumentPanel (h, stdCharWidth * 50, stdLineHeight * 24);
+    SetObjectExtra (sAutofixReportWindow, doc, NULL);
+    RealizeWindow (sAutofixReportWindow);
+  }
+  doc = (DoC) GetObjectExtra (sAutofixReportWindow);
+  Reset (doc);
+  if (lip != NULL && !StringHasNoText (lip->path) && lip->data_in_log) {
+    FileClose (lip->fp);
+    lip->fp = NULL;
+    rbd.fp = FileOpen (lip->path, "r");
+    if (rbd.fp != NULL) {
+      rbd.current_data = NULL;
+      line = AbstractReadFunction (&rbd);
+      while (line != NULL) 
+      {
+        AppendText (doc, line, NULL, NULL, systemFont);
+        line = MemFree (line);
+        line = AbstractReadFunction (&rbd);
+      }
+      FileClose (rbd.fp);
+    }
+  }
+
+  /* redraw */
+  InvalDocument (doc);
+  Show (sAutofixReportWindow);
+  Select (sAutofixReportWindow);
+  Update();
+}
+
+
+NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object, Nlm_ChangeNotifyProc change_notify, Pointer change_data)
 {
   AsnIoPtr     aip;
   Char         buf [PATH_MAX];
@@ -4381,16 +4448,20 @@ NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object)
   if (add_object) {
     AddNcbiAutofixUserObject(sep);
   }
+  if (change_notify != NULL) {
+    change_notify (change_data);
+  }
   ObjMgrSetDirtyFlag (entityID, TRUE);
   ObjMgrSendMsg (OM_MSG_UPDATE, entityID, 0, 0);
-  CloseLog(lip);
+  /*CloseLog(lip); */
+  MakeAutofixReportWindow (lip);
   lip = FreeLog(lip);
   ArrowCursor ();
   Update ();  
 }
 
 
-NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp)
+NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp, Nlm_ChangeNotifyProc change_notify, Pointer change_data)
 {
   Char        str [256];
   SeqEntryPtr sep;
@@ -4400,12 +4471,40 @@ NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp)
     if (StringICmp (str, "TRUE") == 0) {
       sep = GetTopSeqEntryForEntityID (bfp->input_entityID);
       if (FindNcbiAutofixUserObject(sep) == NULL) {
-        RunAutoFixScript (bfp, TRUE);
+        RunAutoFixScript (bfp, TRUE, change_notify, change_data);
         ObjMgrSetDirtyFlag (bfp->input_entityID, TRUE);
         ObjMgrSendMsg (OM_MSG_UPDATE, bfp->input_entityID, 0, 0);
+        if (change_notify == NULL) {
+          ObjMgrSendMsg (OM_MSG_CREATE, bfp->input_entityID, 0, 0);
+        }
       }
     }
   }
+}
+
+
+static Int2 LclGetSequinAppParam (CharPtr section, CharPtr type, CharPtr dflt, CharPtr buf, Int2 buflen)
+
+{
+  Int2  rsult;
+
+  rsult = GetAppParam ("SEQUINCUSTOM", section, type, NULL, buf, buflen);
+  if (rsult) return rsult;
+  rsult = GetAppParam ("SEQUIN", section, type, dflt, buf, buflen);
+  return rsult;
+}
+
+static Boolean LessClickingOptionOnStartup (void)
+{
+  Char            str [32];
+  Boolean         less_clicking = FALSE;
+
+  if (LclGetSequinAppParam ("SETTINGS", "LESS_CLICKING", NULL, str, sizeof (str))) {
+    if (StringICmp (str, "TRUE") == 0) {
+      less_clicking = TRUE;
+    }
+  }
+  return less_clicking;
 }
 
 
@@ -4566,7 +4665,10 @@ extern Int2 LIBCALLBACK SmartSeqEntryViewGenFunc (Pointer data)
   }
   Select (w);
 
-  AutofixOnStartup ((BaseFormPtr) bfp);
+  AutofixOnStartup ((BaseFormPtr) bfp, NULL, NULL);
+  if (LessClickingOptionOnStartup()) {
+    Message (MSG_POSTERR, "Opened new record");
+  }
 
   return OM_MSG_RET_DONE;
 }

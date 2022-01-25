@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 10/15/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description:  conversion to medlars format
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: tomedlin.c,v $
+* Revision 6.12  2012/08/21 19:18:45  kans
+* fixed several potential null dereferences found by clang
+*
 * Revision 6.11  2004/03/10 15:19:47  kans
 * ParseMedline loops on journal, only saves one of iso-jta or ml-jta to avoid memory leak
 *
@@ -252,8 +255,8 @@ static Boolean MedlineEntryToDataFileEx (MedlineEntryPtr mep, Int4 pmid, FILE *f
   AffilPtr        affil;
   AuthorPtr       ap;
   AuthListPtr     authors = NULL;
-  CitArtPtr       cit;
-  CitJourPtr      citjour;
+  CitArtPtr       cit = NULL;
+  CitJourPtr      citjour = NULL;
   Int2            count;
   CharPtr         curr;
   DatePtr         date = NULL;
@@ -531,7 +534,9 @@ static Boolean MedlineEntryToDataFileEx (MedlineEntryPtr mep, Int4 pmid, FILE *f
     }
     rsult = (Boolean) (SendTextToFile (fp, buffer, &para, table) && rsult);
     ClearString ();
-    citjour = cit->fromptr;
+    if (cit != NULL) {
+      citjour = cit->fromptr;
+    }
     if (citjour != NULL) {
       imp = citjour->imp;
       if (imp != NULL) {

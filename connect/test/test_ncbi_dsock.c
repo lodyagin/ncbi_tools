@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_dsock.c,v 6.28 2012/04/25 15:00:27 kazimird Exp $
+/* $Id: test_ncbi_dsock.c,v 6.36 2016/08/15 17:29:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,30 +37,33 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 /* maximal UDP packet size as allowed by the standard */
-#define MAX_UDP_DGRAM_SIZE 65535
+#define MAX_UDP_DGRAM_SIZE  65535
 
 #if defined(NCBI_OS_BSD) || defined(NCBI_OS_OSF1) || defined(NCBI_OS_DARWIN)
    /* FreeBSD has this limit :-/ Source: `sysctl net.inet.udp.maxdgram` */
    /* For OSF1 (and FreeBSD) see also: /usr/include/netinet/udp_var.h   */
-#  define MAX_DGRAM_SIZE (9*1024)
+#  define MAX_DGRAM_SIZE  (9*1024)
 #elif defined(NCBI_OS_IRIX)
    /* This has been found experimentally on IRIX64 6.5 04101931 IP25 */
-#  define MAX_DGRAM_SIZE (60*1024)
+#  define MAX_DGRAM_SIZE  (60*1024)
 #elif defined(NCBI_OS_LINUX)
    /* Larger sizes do not seem to work everywhere */
-#  define MAX_DGRAM_SIZE 59550
+#  define MAX_DGRAM_SIZE  59550
+#elif defined(NCBI_OS_SOLARIS)
+   /* 65508 was reported too large */
+#  define MAX_DGRAM_SIZE  65507
 #else
-#  define MAX_DGRAM_SIZE MAX_UDP_DGRAM_SIZE
+#  define MAX_DGRAM_SIZE  MAX_UDP_DGRAM_SIZE
 #endif
 /* NOTE: x86_64 (AMD) kernel does not allow dgrams bigger than MTU minus
  * small overhead;  for these we use the script and pass the MTU via argv.
  */
 
-#define DEFAULT_PORT 55555
+#define DEFAULT_PORT  55555
 
 
 static unsigned short s_MTU = MAX_DGRAM_SIZE;
@@ -250,6 +253,7 @@ static int s_Client(int x_port, unsigned int max_try)
     if (!(buf = (char*) malloc(2 * msglen))) {
         CORE_LOG_ERRNO(eLOG_Error, errno,
                        "[Client]  Cannot allocate message buffer");
+        SOCK_Close(client);
         return 1;
     }
 
@@ -259,8 +263,9 @@ static int s_Client(int x_port, unsigned int max_try)
 
     id = (unsigned long) time(0);
 
-    for (m = 1; m <= max_try; m++) {
+    for (m = 1;  m <= max_try;  m++) {
         unsigned long tmp;
+        unsigned int  k;
 
         if (m != 1)
             CORE_LOGF(eLOG_Note, ("[Client]  Attempt #%u", (unsigned int) m));
@@ -272,6 +277,7 @@ static int s_Client(int x_port, unsigned int max_try)
             != eIO_Success) {
             CORE_LOGF(eLOG_Error, ("[Client]  Cannot send to DSOCK: %s",
                                    IO_StatusStr(status)));
+            SOCK_Close(client);
             return 1;
         }
 
@@ -281,9 +287,11 @@ static int s_Client(int x_port, unsigned int max_try)
             != eIO_Success) {
             CORE_LOGF(eLOG_Error, ("[Client]  Cannot set read timeout: %s",
                                    IO_StatusStr(status)));
+            SOCK_Close(client);
             return 1;
         }
 
+        k = 0;
     again:
         if ((status = DSOCK_RecvMsg(client, buf + msglen, msglen, 0, &n, 0, 0))
             != eIO_Success) {
@@ -295,16 +303,17 @@ static int s_Client(int x_port, unsigned int max_try)
         if (n != msglen) {
             CORE_LOGF(eLOG_Error, ("[Client]  Received message of wrong size: "
                                    "%lu", (unsigned long) n));
+            SOCK_Close(client);
             return 1;
         }
 
         memcpy(&tmp, buf + msglen, sizeof(tmp));
         if (SOCK_NetToHostLong(tmp) != id) {
-            m++;
-            CORE_LOGF(m < max_try ? eLOG_Warning : eLOG_Error,
+            k++;
+            CORE_LOGF(k < max_try ? eLOG_Warning : eLOG_Error,
                       ("[Client]  Stale message received%s",
-                       m <= max_try ? ", reattempting to fetch" : ""));
-            if (m <= max_try)
+                       k < max_try ? ", reattempting to fetch" : ""));
+            if (k < max_try)
                 goto again;
             break;
         }
@@ -314,10 +323,12 @@ static int s_Client(int x_port, unsigned int max_try)
         assert(SOCK_Read(client, 0, 1, &n, eIO_ReadPlain) == eIO_Closed);
         break;
     }
-    if (m > max_try)
+    if (m > max_try) {
+        SOCK_Close(client);
         return 1;
+    }
 
-    for (n = sizeof(unsigned long); n < msglen - 10; n++) {
+    for (n = sizeof(unsigned long);  n < msglen - 10;  n++) {
         if (buf[n] != buf[msglen + n])
             break;
     }
@@ -325,12 +336,14 @@ static int s_Client(int x_port, unsigned int max_try)
     if (n < msglen - 10) {
         CORE_LOGF(eLOG_Error, ("[Client]  Bounced message corrupted, off=%lu",
                                (unsigned long) n));
+        SOCK_Close(client);
         return 1;
     }
 
     if (strcmp(buf + msglen*2 - 10, "--Reply--") != 0) {
         CORE_LOGF(eLOG_Error, ("[Client]  No signature in the message: %.9s",
                                buf + msglen*2 - 10));
+        SOCK_Close(client);
         return 1;
     }
 
@@ -354,6 +367,7 @@ static int s_Client(int x_port, unsigned int max_try)
 
 int main(int argc, const char* argv[])
 {
+    unsigned short max_try;
     SConnNetInfo* net_info;
 
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
@@ -371,8 +385,9 @@ int main(int argc, const char* argv[])
     srand(g_NCBI_ConnectRandomSeed);
 
     assert((net_info = ConnNetInfo_Create(0)) != 0);
-    if (net_info->debug_printout != eDebugPrintout_None)
+    if (net_info->debug_printout)
         SOCK_SetDataLoggingAPI(eOn);
+    max_try = net_info->max_try;
     ConnNetInfo_Destroy(net_info);
 
     if (argc > 3) {
@@ -382,8 +397,7 @@ int main(int argc, const char* argv[])
     }
 
     if (strcasecmp(argv[1], "client") == 0) {
-        return s_Client(argv[2] ? atoi(argv[2]) : DEFAULT_PORT,
-                        net_info->max_try);
+        return s_Client(argv[2] ? atoi(argv[2]) : DEFAULT_PORT, max_try);
     }
     if (strcasecmp(argv[1], "server") == 0)
         return s_Server(argv[2] ? argv[2] : STR(DEFAULT_PORT));

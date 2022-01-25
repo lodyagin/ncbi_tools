@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   8/10/01
 *
-* $Revision: 6.14 $
+* $Revision: 6.15 $
 *
 * File Description:  handles windowing for ingenue
 *
@@ -3103,17 +3103,17 @@ static CharPtr Ing_FGetLine (FILE *fp)
   ValNodePtr charp=NULL,
              vnp;
   CharPtr    buffer = NULL;
-  Char       c;
+  Int4       c;
   Int4       j, len=0;
 
-  c = (Char)fgetc(fp);
+  c = fgetc(fp);
   while (c!=255 && c!=NULLB && c!=EOF && c!='\0' && c!='\n')
   {
      if (c!='\t' && c!='\015') {
-        ValNodeAddInt (&charp, 1, (Int4)c);
+        ValNodeAddInt (&charp, 1, c);
         len++;
      }
-     c = (Char)fgetc(fp);
+     c = fgetc(fp);
      if (c==EOF) {
        return NULL;
      }

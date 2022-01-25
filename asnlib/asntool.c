@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.18 $
+* $Revision: 6.21 $
 *
 * File Description:
 *   Main routine for asntool.  Uses the ASN.1 library routines to perform
@@ -69,7 +69,7 @@ extern void AsnTxtReadValFile PROTO((AsnModulePtr amp, AsnIoPtr aip, AsnIoPtr ai
 extern void AsnBinReadValFile PROTO((AsnTypePtr atp, AsnIoPtr aip, AsnIoPtr aipout,
 				     AsnIoPtr encode, AsnIoPtr xaipout));
 
-#define NUMARGS 27
+#define NUMARGS 30
 
 Args asnargs[NUMARGS] = {
 	{"ASN.1 Module File",NULL,NULL,NULL,FALSE,'m',ARG_FILE_IN,0.0,0,NULL},
@@ -87,12 +87,31 @@ Args asnargs[NUMARGS] = {
     {"Buffer Size","1024","512","10000",TRUE,'b',ARG_INT,0.0,0,NULL},
     {"Word length maximum for #defines","31","31","128",TRUE,'w',ARG_INT,0.0,0,NULL},
 
+    {"Fix Non-Printing Characters\n"
+     "     0 - Replace with #, post ERROR\n"
+     "     1 - Replace with # silently\n"
+     "     2 - Pass through silently\n"
+     "     3 - Replace with #, post FATAL\n","0","0","3",TRUE,'F',ARG_INT,0.0,0,NULL},
+    {"UTF8 Input Conversion\n"
+     "     0 - Convert silently\n"
+     "     1 - Convert, post WARNING first time\n"
+     "     2 - Convert, post WARNING each time\n"
+     "     3 - Do not convert\n","0","0","3",TRUE,'N',ARG_INT,0.0,0,NULL},
+    {"UTF8 Output Conversion\n"
+     "     0 - Convert silently\n"
+     "     1 - Convert, post WARNING first time\n"
+     "     2 - Convert, post WARNING each time\n"
+     "     3 - Do not convert\n","0","0","3",TRUE,'U',ARG_INT,0.0,0,NULL},
+
    {"Generate object loader .c and .h files, \n\tif used, see below parameters:","F",NULL,NULL,TRUE,'G',ARG_BOOLEAN,0.0,0,NULL},
 
 
-   {"ASN.1 module filenames, comma separated used for external refs from the \'m\', but no other action taken", NULL, NULL, NULL, TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
+   {"ASN.1 module filenames, comma separated used for external refs from the \'m\',\n     but no other action taken", NULL, NULL, NULL, TRUE, 'M', ARG_FILE_IN, 0.0, 0, NULL},
    {"Base for filename, without extensions, for generated objects and code", NULL, NULL, NULL, TRUE, 'B', ARG_FILE_OUT, 0.0, 0, NULL},
-   {"During code generation, debugging level\n     0 - No debugging\n     1 - Shallow debugging\n     2 - Deep", "0", "0", "9", TRUE, 'D', ARG_INT, 0.0, 0, NULL},
+   {"During code generation, debugging level\n"
+    "     0 - No debugging\n"
+    "     1 - Shallow debugging\n"
+    "     2 - Deep\n", "0", "0", "9", TRUE, 'D', ARG_INT, 0.0, 0, NULL},
    {"Debugging filename", "stderr", NULL, NULL, TRUE, 'S', ARG_FILE_OUT, 0.0, 0, NULL},
    {"In generated .c, add #include to this filename", NULL, NULL, NULL, TRUE, 'I', ARG_STRING, 0.0, 0, NULL},
    {"Bit twiddle for optional zero value base slots","F",NULL,NULL,TRUE,'Z',ARG_BOOLEAN,0.0,0,NULL},
@@ -107,24 +126,43 @@ Args asnargs[NUMARGS] = {
 
 };
 
-Int2 Main (void)
-{
-    Int2 m_argModuleIn=0, f_arg_moduleOut=1, 
-	X_argDTDModuleOut=2, T_argTreeDumpOut=3, 
-	v_argPrintFileIn = 4, p_argPrintFileOut = 5,
-	x_argXMLDataOut=6, d_argBinaryFileIn = 7
-	, t_argAsnTypeName = 8, e_argBinaryFileOut = 9
-	, o_argHeadFile = 10, l_argLoadFile = 11
-	, b_argBufferSize = 12, w_argTokenMax = 13
+typedef enum {
+	m_argModuleIn = 0,
+	f_arg_moduleOut,
+	X_argDTDModuleOut,
+	T_argTreeDumpOut,
+	v_argPrintFileIn,
+	p_argPrintFileOut,
+	x_argXMLDataOut,
+	d_argBinaryFileIn,
+	t_argAsnTypeName,
+	e_argBinaryFileOut,
+	o_argHeadFile,
+	l_argLoadFile,
+	b_argBufferSize,
+	w_argTokenMax,
+	F_argFixPrint,
+	N_argUtfInput,
+	U_argUtfOutput,
 	/*--- args below here are capitilized and for code generation, only--*/
 	/*--  Except for the 'M' arg, which will also affect normal use ---*/
-	, G_argGenerateCode = 14, M_argMoreModuleFiles = 15
-	, B_argCodeFileName = 16, D_argCodeGenDebugLevel = 17
-	, S_argDebugFileName = 18, I_argExtraIncludeName = 19
-	, Z_argBitTwiddle = 20, K_argLoadName = 21
-	, J_objMgrEntry = 22, L_objMgrLabel = 23, P_argXMLmodulePrefix = 24
-	, V_argChoiceStruct = 25, Q_argQuoted = 26;
+	G_argGenerateCode,
+	M_argMoreModuleFiles,
+	B_argCodeFileName,
+	D_argCodeGenDebugLevel,
+	S_argDebugFileName,
+	I_argExtraIncludeName,
+	Z_argBitTwiddle,
+	K_argLoadName,
+	J_objMgrEntry,
+	L_objMgrLabel,
+	P_argXMLmodulePrefix,
+	V_argChoiceStruct,
+	Q_argQuoted,
+} Arguments;
 
+Int2 Main (void)
+{
 	AsnIoPtr aip = NULL,
 		aipout = NULL,
 		xaipout = NULL,
@@ -145,17 +183,13 @@ Int2 Main (void)
     ErrSetMessageLevel(SEV_MIN);
     asnargs[P_argXMLmodulePrefix].defaultvalue = (const char *)AsnGetXMLmodulePrefix();
 
-    if (! GetArgs("AsnTool 5", NUMARGS, asnargs))
-	return 1;
+    if (! GetArgs("AsnTool 7", NUMARGS, asnargs)) {
+	  return 1;
+    }
+
     ErrClear();
 
     AsnSetXMLmodulePrefix((CharPtr)(asnargs[P_argXMLmodulePrefix].strvalue));
-
-	/*
-	if (! GetArgs("AsnTool 4", NUMARGS, asnargs))
-		return 1;
-        ErrClear();
-    */
 
     if (! AsnIoSetBufsize(NULL, (Int2)asnargs[b_argBufferSize].intvalue))
         return 1;
@@ -172,12 +206,15 @@ Int2 Main (void)
 	acip -> loadname = asnargs[K_argLoadName].strvalue; /* overrides m_argModuleIn, if set */
     }
 
-    if (asnargs[e_argBinaryFileOut].strvalue != NULL)    /* output a binary value file */
-	if ((aipencode = AsnIoOpen(asnargs[e_argBinaryFileOut].strvalue, "wb")) == NULL)
+    if (asnargs[e_argBinaryFileOut].strvalue != NULL) {   /* output a binary value file */
+	    if ((aipencode = AsnIoOpen(asnargs[e_argBinaryFileOut].strvalue, "wb")) == NULL)
 	    {
-		ErrShow();
-		return 1;
+		    ErrShow();
+		    return 1;
 	    }
+        aipencode->fix_non_print = asnargs[F_argFixPrint].intvalue;
+        aipencode->fix_utf8_out = asnargs[U_argUtfOutput].intvalue;
+    }
 
 				/**  parse the module(s)  ***/
 	
@@ -366,6 +403,8 @@ Int2 Main (void)
 		    ErrShow();
 		    return 1;
 		}
+		aipout->fix_non_print = asnargs[F_argFixPrint].intvalue;
+		aipout->fix_utf8_out = asnargs[U_argUtfOutput].intvalue;
 	}
     /* print an XML file */
 
@@ -376,6 +415,8 @@ Int2 Main (void)
 		    ErrShow();
 		    return 1;
 		}
+		xaipout->fix_non_print = asnargs[F_argFixPrint].intvalue;
+		xaipout->fix_utf8_out = asnargs[U_argUtfOutput].intvalue;
 	}
 
     if (asnargs[v_argPrintFileIn].strvalue != NULL)        /* read a printvalue file */
@@ -385,6 +426,8 @@ Int2 Main (void)
 		    ErrShow();
 		    return 1;
 		}
+		aip->fix_non_print = asnargs[F_argFixPrint].intvalue;
+		aip->fix_utf8_in = asnargs[N_argUtfInput].intvalue;
 
 	    AsnTxtReadValFile(amp, aip, aipout, aipencode, xaipout);
 	    ErrShow();
@@ -418,6 +461,8 @@ Int2 Main (void)
 		    ErrShow();
 		    return 1;
 		}
+        aip->fix_non_print = asnargs[F_argFixPrint].intvalue;
+        aip->fix_utf8_in = asnargs[N_argUtfInput].intvalue;
 
 
 	    AsnBinReadValFile(atp, aip, aipout, aipencode, xaipout);

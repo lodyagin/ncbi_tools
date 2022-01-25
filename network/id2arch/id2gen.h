@@ -21,6 +21,14 @@ extern "C" { /* } */
 
 NLM_EXTERN Boolean LIBCALL
 id2genAsnLoad PROTO((void));
+/* following #defines are for enumerated type, not used by object loaders */
+#define ID2_Blob_State_live 0
+#define ID2_Blob_State_suppressed_temp 1
+#define ID2_Blob_State_suppressed 2
+#define ID2_Blob_State_dead 3
+#define ID2_Blob_State_protected__ 4
+#define ID2_Blob_State_withdrawn 5
+
 
 
 /**************************************************
@@ -28,9 +36,9 @@ id2genAsnLoad PROTO((void));
 *    ID2RequestPacket
 *
 **************************************************/
-typedef struct struct_ID2Request ID2RequestPacket;
-typedef struct struct_ID2Request PNTR ID2RequestPacketPtr;
-#define ID2RequestPacketNew() ID2RequestNew() 
+typedef struct struct_ID2_Request ID2RequestPacket;
+typedef struct struct_ID2_Request PNTR ID2RequestPacketPtr;
+#define ID2RequestPacketNew() ID2_RequestNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -92,9 +100,9 @@ static Boolean LIBCALL Request_requestAsnWrite PROTO (( Request_requestPtr , Asn
 *    ID2Params
 *
 **************************************************/
-typedef struct struct_ID2Param ID2Params;
-typedef struct struct_ID2Param PNTR ID2ParamsPtr;
-#define ID2ParamsNew() ID2ParamNew() 
+typedef struct struct_ID2_Param ID2Params;
+typedef struct struct_ID2_Param PNTR ID2ParamsPtr;
+#define ID2ParamsNew() ID2_ParamNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 
@@ -282,7 +290,7 @@ typedef struct struct_ID2_Blob_Id {
    struct struct_ID2_Blob_Id PNTR next;
    Int4   sat;
    Int4   sub_sat;
-   Int4   sat_key;
+   BIG_ID sat_key; /* There is a case (CId2Server::Reply_get_blob_id()) where PubSeqOS stores gi here */
    Int4   version;
 } ID2BlobId, PNTR ID2BlobIdPtr;
 
@@ -454,7 +462,7 @@ typedef struct struct_ID2_Reply_Get_Blob_Id {
    Int4   split_version;
    struct struct_ID2S_Seq_annot_Info PNTR   annot_info;
    Uint1   end_of_reply;
-   Uint2   blob_state;
+   Int4   blob_state;
 } ID2ReplyGetBlobId, PNTR ID2ReplyGetBlobIdPtr;
 
 
@@ -492,6 +500,7 @@ typedef struct struct_ID2_Reply_Get_Blob {
    struct struct_ID2_Blob_Id PNTR   blob_id;
    Int4   split_version;
    struct struct_ID2_Reply_Data PNTR   data;
+   Int4   blob_state;
 } ID2ReplyGetBlob, PNTR ID2ReplyGetBlobPtr;
 
 
@@ -531,6 +540,7 @@ typedef struct struct_ID2S_Reply_Get_Split_Info {
    struct struct_ID2_Blob_Id PNTR   blob_id;
    Int4   split_version;
    struct struct_ID2_Reply_Data PNTR   data;
+   Int4   blob_state;
 } ID2SReplyGetSplitInfo, PNTR ID2SReplyGetSplitInfoPtr;
 
 
@@ -557,14 +567,6 @@ NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkFree PROTO ((ID2SReplyG
 NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkNew PROTO (( void ));
 NLM_EXTERN ID2SReplyGetChunkPtr LIBCALL ID2SReplyGetChunkAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL ID2SReplyGetChunkAsnWrite PROTO (( ID2SReplyGetChunkPtr , AsnIoPtr, AsnTypePtr));
-
-/* following #defines are for enumerated type, not used by object loaders */
-#define ID2_Blob_State_live 0
-#define ID2_Blob_State_suppressed_temp 1
-#define ID2_Blob_State_suppressed 2
-#define ID2_Blob_State_dead 3
-#define ID2_Blob_State_protected__ 4
-#define ID2_Blob_State_withdrawn 5
 
 
 
@@ -593,9 +595,9 @@ NLM_EXTERN Boolean LIBCALL ID2ReplyDataAsnWrite PROTO (( ID2ReplyDataPtr , AsnIo
 *    ID2BlobSeqIds
 *
 **************************************************/
-typedef struct struct_ID2BlobSeqId ID2BlobSeqIds;
-typedef struct struct_ID2BlobSeqId PNTR ID2BlobSeqIdsPtr;
-#define ID2BlobSeqIdsNew() ID2BlobSeqIdNew() 
+typedef struct struct_ID2_Blob_Seq_id ID2BlobSeqIds;
+typedef struct struct_ID2_Blob_Seq_id PNTR ID2BlobSeqIdsPtr;
+#define ID2BlobSeqIdsNew() ID2_Blob_Seq_idNew() 
 
 #ifdef NLM_GENERATED_CODE_PROTO
 

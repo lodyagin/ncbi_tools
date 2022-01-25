@@ -1,7 +1,7 @@
 #ifndef _TOASN3_
 #define _TOASN3_
 
-/*  $Id: toasn3.h,v 6.26 2011/05/09 20:02:40 kans Exp $
+/*  $Id: toasn3.h,v 6.30 2016/07/29 01:49:57 kans Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -217,7 +217,6 @@ extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep);
 extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep);
 extern void ConvertFullLenSourceFeatToDesc (SeqEntryPtr sep);
 extern void ConvertFullLenPubFeatToDesc (SeqEntryPtr sep);
-extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID);
 
 /* SeriousSeqEntryCleanup combines many of the above cleanups */
 
@@ -231,6 +230,10 @@ extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep);
 
 extern void GpipeSeqEntryCleanup (SeqEntryPtr sep);
 
+/* ExtendedSeqEntryCleanup runs SSEC and then tries to add missing gene xrefs */
+
+extern void ExtendedSeqEntryCleanup (SeqEntryPtr sep);
+
 /* SeriousSeqAnnotCleanup calls BasicSeqAnnotCleanup and adds a cleanup user object to annot-desc */
 
 extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap);
@@ -238,6 +241,7 @@ extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap);
 /* ConvertSegSetToDeltaSeq will be used to convert and retire segmented bioseqs */
 
 extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep);
+extern Boolean ConvertSegSetToDeltaSeqEx (SeqEntryPtr sep, Boolean cleanup);
 extern void ConvertPartDescToFeat (SeqEntryPtr sep);
 extern void SegSeqNullToVirtual (SeqEntryPtr sep);
 extern void SimpleAutoDef (SeqEntryPtr sep);

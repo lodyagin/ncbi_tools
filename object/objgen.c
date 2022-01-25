@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.21 $
 *
 * File Description:  Object manager for module NCBI-General
 *
@@ -400,6 +400,8 @@ NLM_EXTERN Boolean LIBCALL DateAsnWrite (NCBI_DatePtr dp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
 	if (dp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	av.ptrvalue = (Pointer)dp;
 
@@ -833,6 +835,8 @@ NLM_EXTERN Boolean LIBCALL DbtagAsnWrite (DbtagPtr dbt, AsnIoPtr aip, AsnTypePtr
 
 	if (dbt == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct(aip, atp, (Pointer)dbt)) goto erret;
 
 	av.ptrvalue = dbt->db;
@@ -1022,6 +1026,8 @@ NLM_EXTERN Boolean LIBCALL ObjectIdAsnWrite (ObjectIdPtr oid, AsnIoPtr aip, AsnT
 
 	if (oid == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnWrite(aip, atp, &av)) goto erret;     /* write the CHOICE (no value) */
 
 	if (oid->str == NULL)    /* id used */
@@ -1050,6 +1056,7 @@ erret:
 NLM_EXTERN Boolean LIBCALL ObjectIdMatchEx (ObjectIdPtr a, ObjectIdPtr b, Boolean case_sensitive)
 {
   Boolean rval = FALSE;
+  Char buf [16];
 
   if (a == b)
   {
@@ -1058,7 +1065,7 @@ NLM_EXTERN Boolean LIBCALL ObjectIdMatchEx (ObjectIdPtr a, ObjectIdPtr b, Boolea
 
   if ((a == NULL) || (b == NULL))   /* only one is null */
   {
-    rval = FALSE;
+    return FALSE;
   }
 
 	if ((a->str != NULL) && (b->str != NULL))  /* same type */
@@ -1094,6 +1101,20 @@ NLM_EXTERN Boolean LIBCALL ObjectIdMatchEx (ObjectIdPtr a, ObjectIdPtr b, Boolea
     }
     else
     {
+      rval = FALSE;
+    }
+  } else if (a->str != NULL && b->str == NULL) { /* allow numeric string to match id value */
+    sprintf (buf, "%ld", (long) b->id);
+    if (StringICmp (a->str, buf) == 0) {
+      rval = TRUE;
+    } else {
+      rval = FALSE;
+    }
+  } else if (a->str == NULL && b->str != NULL) {
+    sprintf (buf, "%ld", (long) a->id);
+    if (StringICmp (b->str, buf) == 0) {
+      rval = TRUE;
+    } else {
       rval = FALSE;
     }
   }
@@ -1251,6 +1272,8 @@ NLM_EXTERN Boolean LIBCALL NameStdAsnWrite (NameStdPtr nsp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
 	if (nsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	if (! AsnOpenStruct(aip, atp, (Pointer)nsp)) goto erret;
 
@@ -1442,6 +1465,8 @@ NLM_EXTERN Boolean LIBCALL PersonIdAsnWrite (PersonIdPtr pid, AsnIoPtr aip, AsnT
         goto erret;
 
 	if (pid == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	if (! AsnWrite(aip, atp, &av)) goto erret;          /* write the CHOICE, no value */
 
@@ -1749,6 +1774,8 @@ NLM_EXTERN Boolean LIBCALL IntFuzzAsnWrite (IntFuzzPtr ifp, AsnIoPtr aip, AsnTyp
 
 	if (ifp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	av.ptrvalue = (Pointer)ifp;
 	if (! AsnWriteChoice(aip, atp, (Int2)ifp->choice, &av)) goto erret;
 
@@ -1845,9 +1872,11 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldFree (UserFieldPtr ufp)
             break;
         case 7:             /* strs */
             cpp = (CharPtr PNTR) ufp->data.ptrvalue;
-            for (i = 0; i < num; i++)
-                MemFree(cpp[i]);
-            MemFree(cpp);
+            if( cpp ) {
+                for (i = 0; i < num; i++)
+                    MemFree(cpp[i]);
+                MemFree(cpp);
+            }
             break;
         case 10:            /* oss */
             bpp = (ByteStorePtr PNTR) ufp->data.ptrvalue;
@@ -1978,11 +2007,13 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         num = i;
         ufp->num = num;
 
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(CharPtr) * num));
-        cpp = (CharPtr PNTR) ufp->data.ptrvalue;
-        if (cpp == NULL) goto erret;
-        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
-            cpp [i] = (CharPtr) vnp->data.ptrvalue;
+        if (num > 0) {
+            ufp->data.ptrvalue = MemNew((size_t)(sizeof(CharPtr) * num));
+            cpp = (CharPtr PNTR) ufp->data.ptrvalue;
+            if (cpp == NULL) goto erret;
+            for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+                cpp [i] = (CharPtr) vnp->data.ptrvalue;
+            }
         }
 
         ValNodeFree (first);
@@ -2021,11 +2052,13 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         num = i;
         ufp->num = num;
 
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(Int4) * num));
-        ip = (Int4Ptr) ufp->data.ptrvalue;
-        if (ip == NULL) goto erret;
-        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
-            ip [i] = (Int4) vnp->data.intvalue;
+        if (num > 0) {
+            ufp->data.ptrvalue = MemNew((size_t)(sizeof(Int4) * num));
+            ip = (Int4Ptr) ufp->data.ptrvalue;
+            if (ip == NULL) goto erret;
+            for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+                ip [i] = (Int4) vnp->data.intvalue;
+            }
         }
 
         ValNodeFree (first);
@@ -2064,11 +2097,13 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         num = i;
         ufp->num = num;
 
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(FloatHi) * num));
-        fp = (FloatHiPtr) ufp->data.ptrvalue;
-        if (fp == NULL) goto erret;
-        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
-            fp [i] = (FloatHi) vnp->data.realvalue;
+        if (num > 0) {
+            ufp->data.ptrvalue = MemNew((size_t)(sizeof(FloatHi) * num));
+            fp = (FloatHiPtr) ufp->data.ptrvalue;
+            if (fp == NULL) goto erret;
+            for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+                fp [i] = (FloatHi) vnp->data.realvalue;
+            }
         }
 
         ValNodeFree (first);
@@ -2107,12 +2142,14 @@ NLM_EXTERN UserFieldPtr LIBCALL UserFieldAsnRead (AsnIoPtr aip, AsnTypePtr orig)
         num = i;
         ufp->num = num;
 
-        ufp->data.ptrvalue = MemNew((size_t)(sizeof(ByteStorePtr) * num));
-        bpp = (ByteStorePtr PNTR) ufp->data.ptrvalue;
-        if (bpp == NULL) goto erret;
+        if (num > 0) {
+            ufp->data.ptrvalue = MemNew((size_t)(sizeof(ByteStorePtr) * num));
+            bpp = (ByteStorePtr PNTR) ufp->data.ptrvalue;
+            if (bpp == NULL) goto erret;
 
-        for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
-            bpp [i] = (ByteStorePtr) vnp->data.ptrvalue;
+            for (vnp = first, i = 0; vnp != NULL && i < num; vnp = vnp->next, i++) {
+                bpp [i] = (ByteStorePtr) vnp->data.ptrvalue;
+            }
         }
 
         ValNodeFree (first);
@@ -2207,6 +2244,8 @@ NLM_EXTERN Boolean LIBCALL UserFieldAsnWrite (UserFieldPtr ufp, AsnIoPtr aip, As
     if (atp == NULL) return FALSE;
 
 	if (ufp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)ufp)) goto erret;  /* start the struct */
     if (! ObjectIdAsnWrite(ufp->label, aip, USER_FIELD_label))
@@ -2462,6 +2501,8 @@ NLM_EXTERN Boolean LIBCALL UserObjectAsnWrite (UserObjectPtr uop, AsnIoPtr aip, 
     if (atp == NULL) return FALSE;
 
 	if (uop == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)uop)) goto erret;
 

@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_GNUTLS__H
 #define CONNECT___NCBI_GNUTLS__H
 
-/* $Id: ncbi_gnutls.h,v 1.1 2008/10/17 11:54:07 lavr Exp $
+/* $Id: ncbi_gnutls.h,v 1.4 2016/07/13 21:14:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -47,7 +47,12 @@ extern "C" {
 #endif
 
 
+extern NCBI_XCONNECT_EXPORT
 SOCKSSL NcbiSetupGnuTls(void);
+
+
+extern NCBI_XCONNECT_EXPORT
+NCBI_CRED NcbiCredGnuTls(void* xcred);
 
 
 #ifdef __cplusplus

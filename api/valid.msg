@@ -1,6 +1,8 @@
 
 MODULE valid
+
 $$ SEQ_INST, 1
+
 $^   ExtNotAllowed, 1
 # This is a comment
 A Bioseq "extension" is used for special classes of Bioseq. This class of
@@ -252,6 +254,15 @@ Gap of unknown length should have standard length of 100.
 $^   SeqGapProblem, 72
 Inconsistent data in Seq-gap fields.
 
+$^   WGSMasterLacksStrucComm, 73
+WGS Master records require a Genome Assembly Data structured comment user object.
+
+$^   TSAMasterLacksStrucComm, 74
+TSA Master records require an Assembly Data structured comment user object.
+
+$^   AllNs, 75
+Sequence has only Ns.
+
 
 $$ SEQ_DESCR, 2
 
@@ -357,8 +368,9 @@ $^   RefGeneTrackingWithoutStatus, 25
 The RefGeneTracking user object does not have the required Status field set.
 
 $^   UnwantedCompleteFlag, 26
-The Mol-info.completeness flag should not be set on a genomic sequence unless
-the title also says it is a complete sequence or complete genome.
+The Mol-info.completeness flag should not be set on a genomic sequence, unless
+the title also says it is a complete sequence or complete genome, nor should it
+be set on a plasmid, chromosome, or organelle.
 
 $^   CollidingPublications, 27
 Multiple publication descriptors with the same PMID or MUID apply to a Bioseq.
@@ -561,6 +573,52 @@ A taxonomy consult is required for the indicated organism.
 $^   TaxonomyNucleomorphProblem, 89
 Taxonomy lookup indicates that the nucleomorph flag should be set for this organism.
 
+$^   InconsistentMolTypeBiomol, 90
+The Bioseq instance molecule field is inconsistent with the Mol-info biomol field.
+
+$^   BadInstitutionCountry, 91
+The institution (or institution: collection) code should not have a <country> modifier.
+
+$^   AmbiguousSpecificHost, 92
+A BioSource descriptor or feature has an ambiguous specific host value that may
+require a taxonomy consult.
+
+$^   BadAltitude, 93
+The altitude must be reported as a number followed by a space and the letter m (for meters).
+
+$^   RefGeneTrackingOnNucProtSet, 94
+The RefGeneTracking user object should not be on a nuc-prot set.
+
+$^   InconsistentDates, 95
+There are two date descriptors that are inconsistent with each
+other. Please make them consistent.
+
+$^   MultipleTaxonIDs, 96
+There are multiple BioSources with multiple taxonIDs in this RefSeq record.
+
+$^   ScaffoldLacksBioProject, 97
+There is no BioProject database link for this scaffold record.
+
+$^   CompleteGenomeLacksBioProject, 98
+There is no BioProject database link for this complete genome record.
+
+$^   TaxonomyPlastidsProblem, 99
+Taxonomy lookup indicates that the plastids flag should be set for this organism.
+
+$^   OrganismIsUndefinedSpecies, 100
+All organism names ending with "sp" or "sp." require taxonomy consult,
+except "uncultured" ones and "Haemoproteus sp."
+
+$^   WrongBiomolForTechnique, 101
+TSA records are expected to make use of a very limited set of
+MolInfo.biomol values: transcribed-RNA, mRNA, rRNA, ncRNA.
+
+$^   WrongOrganismFor16SrRNA, 102
+16S ribosomal RNA is not present in eukaryotic ribosomes.
+
+$^   InconsistentWGSFlags, 103
+WGS indicators are used inconsistently in this record.
+
 
 $$ GENERIC, 3
 
@@ -620,6 +678,19 @@ anyway date has already passed.
 
 $^   MissingISOJTA, 16
 The publication journal is missing an ISO journal title abbreviation.
+
+$^   MissingVolume, 17
+The publication volume is missing.
+
+$^   MissingVolumeEpub, 18
+The electronic publication volume is missing.
+
+$^   MissingPages, 19
+The publication pages are missing.
+
+$^   MissingPagesEpub, 20
+The electronic publication pages are missing.
+
 
 $$ SEQ_PKG, 4
 
@@ -716,6 +787,9 @@ Mol-info should not be on a pop/phy/mut/eco/wgs/genbank/genprod set.
 $^   ImproperlyNestedSets, 29
 A pop/phy/mut/eco/wgs set has an unexpected internal set other than nuc-prot,
 seg-set, or parts set.
+
+$^   SeqSubmitWithWgsSet, 30
+Seq-submit file is a wgs-set instead of a batch submission.
 
 
 $$ SEQ_FEAT, 5
@@ -1436,6 +1510,62 @@ The EC_number has been replaced.
 $^ SplitEcNumber, 189
 The EC_number has been split.
 
+$^ PeptideFeatureLacksCDS, 190
+The peptide feature cannot be assigned to a CDS parent, and thus cannot be
+mapped to the protein product.
+
+$^ EcNumberDataMissing, 191
+An EC_number qualifier data file is missing or unreadable.
+
+$^ CDSnotBetweenUTRs, 192
+The 5'UTR and 3'UTR features do not flank a CDS feature.
+
+$^ ShortExon, 193
+Internal coding region exons should be more than 15 bp long.
+
+$^ ExtraProteinFeature, 194
+Protein sequence has multiple protein features that are not signal peptides, mature peptides, transit peptides, or preproteins.
+
+$^ AssemblyGapAdjacentToNs, 195
+Assembly_gap features must cover the entire contiguous sequence gaps.
+
+$^ AssemblyGapCoversSequence, 196
+Assembly_gap features must not cover actual bases in the sequence.
+
+$^ FeatureBeginsOrEndsWithN, 197
+The feature starts or stops with an N.
+
+$^ FeatureIsMostlyNs, 198
+The feature contains more than 50% of Ns.
+
+$^ CDSonMinusStrandTranscribedRNA, 199
+Coding regions should be on the plus strand of transcribed RNA molecules.
+
+$^ MultipleGenCodes, 200
+The genetic codes are the same for all CDS features on one Bioseq.
+
+$^ InvalidFuzz, 201
+Incorrect use of Int-fuzz.lim.
+
+$^ BadComment, 202
+Comment is inconsistent with content of feature.
+
+$^   NonsenseIntron, 203
+3 base intron actually contains a stop codon.
+
+$^ InconsistentPseudogeneValue, 204
+Pseudogene qualifiers do not match between a CDS or mRNA and the parent gene.
+
+$^ MultiIntervalIntron, 205
+Introns should only have a single interval.
+
+$^ SeqLocTypeProblem, 206
+A sequence location component is not the expected type.
+
+$^ ColdShockProteinProblem, 207
+A misc_feature containing cspA should not overlap a cold-shock protein CDS.
+
+
 $$ SEQ_ALIGN, 6
 
 $^   SeqIdProblem, 1
@@ -1504,6 +1634,7 @@ Alignment is shorter than expected.
 $^   UnexpectedAlignmentType 22
 Only DenseSeg alignments are expected.
 
+
 $$ SEQ_GRAPH, 7
 
 $^   GraphMin, 1
@@ -1568,6 +1699,7 @@ Quality score values for unknown bases should not be above 0.
 
 $^   GraphLocInvalid, 20
 Location for quality score values extends beyond end of sequence.
+
 
 $$ SEQ_ANNOT, 8
 

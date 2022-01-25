@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: copymat.c,v 6.49 2008/11/04 16:44:38 maning Exp $";
+static char const rcsid[] = "$Id: copymat.c,v 6.50 2016/06/21 14:55:29 madden Exp $";
 
 /*
 * ===========================================================================
@@ -36,6 +36,9 @@ Contents: main routines for copymatrices program to convert
 score matrices output by makematrices into a single byte-encoded file.
    
 $Log: copymat.c,v $
+Revision 6.50  2016/06/21 14:55:29  madden
+Add one more argument for jumper changes, JIRA SB-1713
+
 Revision 6.49  2008/11/04 16:44:38  maning
 add type cast to fix compilation error
 
@@ -657,7 +660,7 @@ Boolean RPSCreateLookupFile(ScoreRow *combinedMatrix, Int4 numProfiles,
     BlastSeqLocNew(&lookup_segment, 0, all_length);
 
     /* Need query for psi-blast??  where to put the PSSM? */
-    LookupTableWrapInit(NULL, lookup_options, NULL, lookup_segment, sbp, &lookup_wrap_ptr, NULL, NULL);
+    LookupTableWrapInit(NULL, lookup_options, NULL, lookup_segment, sbp, &lookup_wrap_ptr, NULL, NULL, NULL);
    
     RPSPsiMatrixDetach(sbp);
     sbp = BlastScoreBlkFree(sbp);

@@ -30,7 +30,7 @@
 *
 * Version Creation Date:   10/21/98
 *
-* $Revision: 1.196 $
+* $Revision: 1.282 $
 *
 * File Description:  New GenBank flatfile generator - work in progress
 *
@@ -66,7 +66,7 @@
 /* URLs */
 
 
-static CharPtr link_muid = "http://www.ncbi.nlm.nih.gov/pubmed/";
+static CharPtr link_muid = "https://www.ncbi.nlm.nih.gov/pubmed/";
 
 static CharPtr link_uspto = "http://patft.uspto.gov/netacgi/nph-Parser?patentnumber=";
 
@@ -116,6 +116,90 @@ NLM_EXTERN void FF_www_featloc(StringItemPtr ffstring, CharPtr loc)
 
 /* ************** */
 
+static Boolean LooksLikeAccession (
+  CharPtr accession,
+  Int2Ptr alphaP,
+  Int2Ptr digitP,
+  Int2Ptr unscrP
+)
+
+{
+  Char     ch;
+  Int2     numAlpha = 0;
+  Int2     numDigits = 0;
+  Int2     numUndersc = 0;
+  CharPtr  str;
+
+  if (accession == NULL || accession [0] == '\0') return FALSE;
+
+  if (StringLen (accession) >= 16) return FALSE;
+
+  if (accession [0] < 'A' || accession [0] > 'Z') return FALSE;
+
+  str = accession;
+  if (StringNCmp (str, "NZ_", 3) == 0) {
+    str += 3;
+  }
+  ch = *str;
+  while (IS_ALPHA (ch)) {
+    numAlpha++;
+    str++;
+    ch = *str;
+  }
+  while (ch == '_') {
+    numUndersc++;
+    str++;
+    ch = *str;
+  }
+  while (IS_DIGIT (ch)) {
+    numDigits++;
+    str++;
+    ch = *str;
+  }
+  if (ch != '\0' && ch != ' ' && ch != '.') return FALSE;
+
+  if (numUndersc > 1) return FALSE;
+
+  if (alphaP != NULL) {
+    *alphaP = numAlpha;
+  }
+  if (digitP != NULL) {
+    *digitP = numDigits;
+  }
+  if (unscrP != NULL) {
+    *unscrP = numUndersc;
+  }
+
+  if (numUndersc == 0) {
+    if (numAlpha == 1 && numDigits == 5) return TRUE;
+    if (numAlpha == 2 && numDigits == 6) return TRUE;
+    if (numAlpha == 3 && numDigits == 5) return TRUE;
+    if (numAlpha == 4 && numDigits == 8) return TRUE;
+    if (numAlpha == 4 && numDigits == 9) return TRUE;
+    if (numAlpha == 5 && numDigits == 7) return TRUE;
+  } else if (numUndersc == 1) {
+    if (numAlpha != 2 || (numDigits != 6 && numDigits != 8 && numDigits != 9)) return FALSE;
+    if (accession [0] == 'N' || accession [0] == 'X' || accession [0] == 'Z') {
+      if (accession [1] == 'M' ||
+          accession [1] == 'C' ||
+          accession [1] == 'T' ||
+          accession [1] == 'P' ||
+          accession [1] == 'G' ||
+          accession [1] == 'R' ||
+          accession [1] == 'S' ||
+          accession [1] == 'W' ||
+          accession [1] == 'Z') {
+        return TRUE;
+      }
+    }
+    if (accession [0] == 'A' || accession [0] == 'Y') {
+      if (accession [1] == 'P') return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
 typedef struct dbxrefurldata {
   CharPtr  tag;
   CharPtr  url;
@@ -123,108 +207,133 @@ typedef struct dbxrefurldata {
 
 static UrlData Nlm_url_base [] = {
   {"AceView/WormGenes",     "http://www.ncbi.nlm.nih.gov/IEB/Research/Acembly/av.cgi?db=worm&c=gene&q="},
-  {"AFTOL",                 "http://aftol1.biology.duke.edu/pub/displayTaxonInfo?aftol_id="},
+  {"AFTOL",                 "http://wasabi.lutzonilab.net/pub/displayTaxonInfo?aftol_id="},
   {"AntWeb",                "http://www.antweb.org/specimen.do?name="},
-  {"APHIDBASE",             "http://webapps1.genouest.org/grs-1.0/grs?reportID=chado_genome_report&objectID="},
+  {"APHIDBASE",             "http://bipaa.genouest.org/apps/grs-2.3/grs?reportID=aphidbase_transcript_report&objectID="},
   {"ApiDB",                 "http://www.apidb.org/apidb/showRecord.do?name=GeneRecordClasses.ApiDBGeneRecordClass&primary_key="},
-  {"ApiDB_CryptoDB",        "http://cryptodb.org/cryptodb/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
-  {"ApiDB_PlasmoDB",        "http://www.plasmodb.org/plasmo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
-  {"ApiDB_ToxoDB",          "http://www.toxodb.org/toxo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=&primary_key="},
-  {"ASAP",                  "https://asap.ahabs.wisc.edu/annotation/php/feature_info.php?FeatureID="},
-  {"ATCC",                  "http://www.atcc.org/SearchCatalogs/linkin?id="},
+  {"ApiDB_CryptoDB",        "http://cryptodb.org/cryptodb/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=CryptoDB&source_id="},
+  {"ApiDB_PlasmoDB",        "http://plasmodb.org/plasmo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=PlasmoDB&source_id="},
+  {"ApiDB_ToxoDB",          "http://toxodb.org/toxo/showRecord.do?name=GeneRecordClasses.GeneRecordClass&project_id=ToxoDB&source_id="},
+  {"Araport",               "https://www.araport.org/locus/"},
+  {"ASAP",                  "https://asap.genetics.wisc.edu/asap/feature_info.php?FeatureID="},
+  {"ATCC",                  "http://www.atcc.org/Products/All/"},
   {"Axeldb",                "http://www.dkfz-heidelberg.de/tbi/services/axeldb/clone/xenopus?name="},
-  {"BEEBASE",               "http://genomes.arc.georgetown.edu/cgi-bin/gbrowse/bee_genome4/?name="},
+  {"BEEBASE",               "http://hymenopteragenome.org/cgi-bin/gb2/gbrowse/bee_genome45/?name="},
   {"BEETLEBASE",            "http://www.beetlebase.org/cgi-bin/report.cgi?name="},
-  {"BGD",                   "http://genomes.arc.georgetown.edu/bovine/genepages/genes/"},
+  {"BEI",                   "https://www.beiresources.org/Catalog/animalViruses/"},
+  {"BGD",                   "http://bovinegenome.org/genepages/btau40/genes/"},
+  {"BioProject",            "http://www.ncbi.nlm.nih.gov/bioproject/"},
+  {"BioSample",             "http://www.ncbi.nlm.nih.gov/biosample/"},
   {"BOLD",                  "http://www.boldsystems.org/connectivity/specimenlookup.php?processid="},
   {"CCDS",                  "http://www.ncbi.nlm.nih.gov/CCDS/CcdsBrowse.cgi?REQUEST=CCDS&DATA="},
   {"CDD",                   "http://www.ncbi.nlm.nih.gov/Structure/cdd/cddsrv.cgi?uid="},
-  {"CGNC",                  "http://www.agnc.msstate.edu/GeneReport.aspx?a="},
+  {"CGD",                   "http://www.candidagenome.org/cgi-bin/locus.pl?locus="},
+  {"CGNC",                  "http://birdgenenames.org/cgnc/GeneReport?id="},
   {"CK",                    "http://flybane.berkeley.edu/cgi-bin/cDNA/CK_clone.pl?db=CK&dbid="},
   {"COG",                   "http://www.ncbi.nlm.nih.gov/COG/new/release/cow.cgi?cog="},
+  {"CollecTF",              "http://collectf.umbc.edu/"},
   {"dbClone",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clone&cmd=Retrieve&list_uids="},
   {"dbCloneLib",            "http://www.ncbi.nlm.nih.gov/sites/entrez?db=clonelib&cmd=Retrieve&list_uids="},
   {"dbEST",                 "http://www.ncbi.nlm.nih.gov/nucest/"},
   {"dbProbe",               "http://www.ncbi.nlm.nih.gov/sites/entrez?db=probe&cmd=Retrieve&list_uids="},
   {"dbSNP",                 "http://www.ncbi.nlm.nih.gov/SNP/snp_ref.cgi?type=rs&rs="},
-  {"dbSTS",                 "http://www.ncbi.nlm.nih.gov/nuccore/"},
+  {"dbSTS",                 "https://www.ncbi.nlm.nih.gov/nuccore/"},
   {"dictyBase",             "http://dictybase.org/db/cgi-bin/gene_page.pl?dictybaseid="},
   {"ECOCYC",                "http://biocyc.org/ECOLI/new-image?type=GENE&object="},
-  {"EcoGene",               "http://ecogene.org/geneInfo.php?eg_id="},
+  {"EcoGene",               "http://www.ecogene.org/gene/"},
   {"ENSEMBL",               "http://www.ensembl.org/id/"},
-  {"ERIC",                  "http://www.ericbrc.org/genbank/dbxref/"},
+  {"EnsemblGenomes",        "http://ensemblgenomes.org/id/"},
+  {"EnsemblGenomes-Gn",     "http://ensemblgenomes.org/id/"},
+  {"EnsemblGenomes-Tr",     "http://ensemblgenomes.org/id/"},
   {"FANTOM_DB",             "http://fantom.gsc.riken.jp/db/annotate/main.cgi?masterid="},
   {"FBOL",                  "http://www.fungalbarcoding.org/BioloMICS.aspx?Table=Fungal%20barcodes&Fields=All&Rec="},
   {"FLYBASE",               "http://flybase.bio.indiana.edu/.bin/fbidq.html?"},
+  {"Fungorum",              "http://www.indexfungorum.org/Names/NamesRecord.asp?RecordID="},
   {"GABI",                  "http://www.gabipd.org/database/cgi-bin/GreenCards.pl.cgi?Mode=ShowSequence&App=ncbi&SequenceId="},
+  {"GenBank",               "https://www.ncbi.nlm.nih.gov/nuccore/"},
   {"GeneDB",                "http://old.genedb.org/genedb/Search?organism=All%3A*&name="},
   {"GeneID",                "http://www.ncbi.nlm.nih.gov/sites/entrez?db=gene&cmd=Retrieve&dopt=full_report&list_uids="},
-  {"GO",                    "http://amigo.geneontology.org/cgi-bin/amigo/go.cgi?view=details&depth=1&query=GO:"},
+  {"GO",                    "http://amigo.geneontology.org/amigo/term/GO:"},
   {"GOA",                   "http://www.ebi.ac.uk/ego/GProtein?ac="},
   {"Greengenes",            "http://greengenes.lbl.gov/cgi-bin/show_one_record_v2.pl?prokMSA_id="},
   {"GRIN",                  "http://www.ars-grin.gov/cgi-bin/npgs/acc/display.pl?"},
   {"H-InvDB",               "http://www.h-invitational.jp"},
-  {"HGNC",                  "http://www.genenames.org/data/hgnc_data.php?hgnc_id="},
-  {"HMP",                   "http://www.hmpdacc-resources.org/cgi-bin/hmp_catalog/main.cgi?section=HmpSummary&page=displayHmpProject&hmp_id="},
+  {"HGNC",                  "http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=HGNC:"},
+  {"HMP",                   "http://www.hmpdacc.org/catalog/grid.php?dataset=genomic&hmp_id="},
   {"HOMD",                  "http://www.homd.org/"},
+  {"HPM",                   "http://www.humanproteomemap.org/protein.php?hpm_id="},
   {"HPRD",                  "http://www.hprd.org/protein/"},
-  {"HSSP",                  "http://srs.ebi.ac.uk/srsbin/cgi-bin/wgetz?-newId+-e+hssp-ID:"},
+  {"HSSP",                  "http://mrs.cmbi.ru.nl/m6/search?db=all&q="},
+  {"I5KNAL",                "https://i5k.nal.usda.gov/"},
   {"IKMC",                  "http://www.knockoutmouse.org/martsearch/project/"},
   {"IMGT/GENE-DB",          "http://www.imgt.org/IMGT_GENE-DB/GENElect?species=Homo+sapiens&query=2+"},
+  {"IMGT/HLA",              "http://www.ebi.ac.uk/cgi-bin/ipd/imgt/hla/get_allele.cgi?"},
   {"IMGT/LIGM",             "http://www.imgt.org/cgi-bin/IMGTlect.jv?query=201+"},
   {"InterimID",             "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"InterPro",              "http://www.ebi.ac.uk/interpro/ISearch?mode=ipr&query="},
+  {"IntrepidBio",           "http://server1.intrepidbio.com/FeatureBrowser/gene/browse/"},
   {"IRD",                   "http://www.fludb.org/brc/fluSegmentDetails.do?irdSubmissionId="},
   {"ISD",                   "http://www.flu.lanl.gov/search/view_record.html?accession="},
   {"ISFinder",              "http://www-is.biotoul.fr/scripts/is/is_spec.idc?name="},
+  {"ISHAM-ITS",             "http://its.mycologylab.org/BioloMICS.aspx?Table=Sequences&ExactMatch=T&Name=MITS"},
   {"JCM",                   "http://www.jcm.riken.go.jp/cgi-bin/jcm/jcm_number?JCM="},
   {"JGIDB",                 "http://genome.jgi-psf.org/cgi-bin/jgrs?id="},
   {"LocusID",               "http://www.ncbi.nlm.nih.gov/LocusLink/LocRpt.cgi?l="},
   {"MaizeGDB",              "http://www.maizegdb.org/cgi-bin/displaylocusrecord.cgi?"},
+  {"MedGen",                "http://www.ncbi.nlm.nih.gov/medgen/"},
   {"MGI",                   "http://www.informatics.jax.org/marker/MGI:"},
   {"MIM",                   "http://www.ncbi.nlm.nih.gov/omim/"},
   {"miRBase",               "http://www.mirbase.org/cgi-bin/mirna_entry.pl?acc="},
   {"MycoBank",              "http://www.mycobank.org/MycoTaxo.aspx?Link=T&Rec="},
-  {"NASONIABASE",           "http://genomes.arc.georgetown.edu/cgi-bin/gbrowse/nasonia10_scaffold/?name="},
+  {"NASONIABASE",           "http://hymenopteragenome.org/cgi-bin/gbrowse/nasonia10_scaffold/?name="},
   {"NBRC",                  "http://www.nbrc.nite.go.jp/NBRC2/NBRCCatalogueDetailServlet?ID=NBRC&CAT="},
   {"NextDB",                "http://nematode.lab.nig.ac.jp/cgi-bin/db/ShowGeneInfo.sh?celk="},
   {"niaEST",                "http://lgsun.grc.nia.nih.gov/cgi-bin/pro3?sname1="},
   {"NMPDR",                 "http://www.nmpdr.org/linkin.cgi?id="},
   {"NRESTdb",               "http://genome.ukm.my/nrestdb/db/single_view_est.php?id="},
+  {"OrthoMCL",              "http://orthomcl.org/orthomcl/showRecord.do?name=GroupRecordClasses.GroupRecordClass&group_name="},
   {"Osa1",                  "http://rice.plantbiology.msu.edu/cgi-bin/gbrowse/rice/?name="},
-  {"Pathema",               "http://pathema.jcvi.org/cgi-bin/Burkholderia/shared/GenePage.cgi?all=1&locus="},
   {"PBmice",                "http://www.idmshanghai.cn/PBmice/DetailedSearch.do?type=insert&id="},
   {"PBR",                   "http://www.poxvirus.org/query.asp?web_id="},
   {"PDB",                   "http://www.rcsb.org/pdb/cgi/explore.cgi?pdbId="},
   {"PFAM",                  "http://pfam.sanger.ac.uk/family?acc="},
   {"PGN",                   "http://pgn.cornell.edu/cgi-bin/search/seq_search_result.pl?identifier="},
+  {"Phytozome",             "http://www.phytozome.net/genePage.php?db=Phytozome&crown&method=0&search=1&detail=1&searchText=locusname:"},
   {"PomBase",               "http://www.pombase.org/spombe/result/"},
   {"PseudoCap",             "http://www.pseudomonas.com/getAnnotation.do?locusID="},
   {"RAP-DB",                "http://rapdb.dna.affrc.go.jp/cgi-bin/gbrowse_details/latest?name="},
   {"RATMAP",                "http://ratmap.gen.gu.se/ShowSingleLocus.htm?accno="},
+  {"RBGE_garden",           "http://data.rbge.org.uk/living/"},
+  {"RBGE_herbarium",        "http://data.rbge.org.uk/herb/"},
   {"REBASE",                "http://rebase.neb.com/rebase/enz/"},
-  {"RFAM",                  "http://www.sanger.ac.uk/cgi-bin/Rfam/getacc?"},
-  {"RGD",                   "http://rgd.mcw.edu/generalSearch/RgdSearch.jsp?quickSearch=1&searchKeyword="},
+  {"RefSeq",                "https://www.ncbi.nlm.nih.gov/nuccore/"},
+  {"RFAM",                  "http://rfam.xfam.org/family/"},
+  {"RGD",                   "http://rgd.mcw.edu/rgdweb/search/search.html?term="},
   {"RiceGenes",             "http://ars-genome.cornell.edu/cgi-bin/WebAce/webace?db=ricegenes&class=Marker&object="},
   {"SEED",                  "http://www.theseed.org/linkin.cgi?id="},
-  {"SGD",                   "http://db.yeastgenome.org/cgi-bin/SGD/locus.pl?locus="},
+  {"SGD",                   "http://www.yeastgenome.org/cgi-bin/locus.fpl?sgdid="},
   {"SGN",                   "http://www.sgn.cornell.edu/search/est.pl?request_type=7&request_id="},
   {"SK-FST",                "http://aafc-aac.usask.ca/fst/"},
+  {"SRPDB",                 "http://rnp.uthscsa.edu/rnp/SRPDB/rna/sequences/fasta/"},
   {"SubtiList",             "http://genolist.pasteur.fr/SubtiList/genome.cgi?external_query+"},
   {"TAIR",                  "http://www.arabidopsis.org/servlets/TairObject?type=locus&name="},
-  {"taxon",                 "http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"},
-  {"TIGRFAM",               "http://cmr.tigr.org/tigr-scripts/CMR/HmmReport.cgi?hmm_acc="},
+  {"taxon",                 "https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?"},
+  {"TIGRFAM",               "http://www.jcvi.org/cgi-bin/tigrfams/HmmReportPage.cgi?acc="},
+  {"TubercuList",           "http://tuberculist.epfl.ch/quicksearch.php?gene+name="},
   {"UniGene",               "http://www.ncbi.nlm.nih.gov/sites/entrez?Db=unigene&Cmd=Search&Term="},
   {"UniProtKB/Swiss-Prot",  "http://www.uniprot.org/uniprot/"},
   {"UniProtKB/TrEMBL",      "http://www.uniprot.org/uniprot/"},
-  {"UniSTS",                "http://www.ncbi.nlm.nih.gov/genome/sts/sts.cgi?uid="},
+  {"UniSTS",                "http://www.ncbi.nlm.nih.gov/probe?term="},
   {"UNITE",                 "http://unite.ut.ee/bl_forw.php?nimi="},
   {"VBASE2",                "http://www.dnaplot.de/vbase2/vgene.php?id="},
   {"VBRC",                  "http://vbrc.org/query.asp?web_view=curation&web_id="},
   {"VectorBase",            "http://www.vectorbase.org/Genome/BRCGene/?feature="},
+  {"Vega",                  "http://vega.sanger.ac.uk/id/"},
+  {"VGNC",                  "http://vertebrate.genenames.org/data/gene-symbol-report/#!/vgnc_id/VGNC:"},
   {"ViPR",                  "http://www.viprbrc.org/brc/viprStrainDetails.do?viprSubmissionId="},
+  {"VISTA",                 "http://enhancer.lbl.gov/cgi-bin/dbxref.pl?id="},
   {"WorfDB",                "http://worfdb.dfci.harvard.edu/search.pl?form=1&search="},
-  {"WormBase",              "http://www.wormbase.org/db/gene/gene?class=CDS;name="},
+  {"WormBase",              "http://www.wormbase.org/search/gene/"},
   {"Xenbase",               "http://www.xenbase.org/gene/showgene.do?method=display&geneId="},
   {"ZFIN",                  "http://zfin.org/cgi-bin/webdriver?MIval=aa-markerview.apg&OID="},
 };
@@ -267,10 +376,11 @@ static void FF_www_get_url (
 )
 
 {
-  CharPtr  base = NULL, prefix = NULL, profix = NULL, ident = NULL, suffix = NULL, url = NULL, ptr, str;
+  CharPtr  base = NULL, prefix = NULL, profix = NULL, ident = NULL,
+           suffix = NULL, url = NULL, redundant = NULL, ptr, str;
   Char     ch, buf [128], id [20], taxname [128];
   Boolean  is_numeric;
-  Int2     R;
+  Int2     num_alpha, num_digit, num_unscr, R;
 
   if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
 
@@ -296,6 +406,13 @@ static void FF_www_get_url (
         url += 28;
       }
     }
+  } else if (StringNICmp (url, "https://www.ncbi.nlm.nih.gov/", 29) == 0) {
+    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+      if (StringDoesHaveText (buf)) {
+        base = buf;
+        url += 29;
+      }
+    }
   }
 
   /* special cases */
@@ -305,9 +422,21 @@ static void FF_www_get_url (
 
     suffix = "&decorator=influenza";
 
+  } else if (StringCmp (db, "ATCC") == 0) {
+
+    suffix = ".aspx";
+
+  } else if (StringCmp (db, "BEI") == 0) {
+
+    suffix = ".aspx";
+
   } else if (StringCmp (db, "ViPR") == 0) {
 
     suffix = "&decorator=vipr";
+
+  } else if (StringCmp (db, "SRPDB") == 0) {
+
+    suffix = ".fasta";
 
   } else if (StringCmp (db, "dbSTS") == 0) {
 
@@ -338,6 +467,16 @@ static void FF_www_get_url (
     if (StringStr (identifier, "FBa") != NULL ) {
       url = "http://www.fruitfly.org/cgi-bin/annot/fban?";
     }
+
+  } else if (StringCmp (db, "Fungorum") == 0) {
+
+    str = identifier;
+    ch = *str;
+    while (ch != '\0' && ! IS_DIGIT (ch)) {
+      str++;
+      ch = *str;
+    }
+    ident = str;
 
   } else if (StringCmp (db, "dictyBase") == 0) {
 
@@ -399,6 +538,12 @@ static void FF_www_get_url (
       }
     }
 
+  } else if (StringCmp (db, "IMGT/HLA") == 0) {
+
+    if (StringNICmp (identifier, "HLA", 3) != NULL ) {
+      url = "http://www.ebi.ac.uk/Tools/dbfetch/dbfetch?db=imgthla;id=";
+    }
+
   } else if (StringCmp (db, "MaizeGDB") == 0) {
 
     is_numeric = TRUE;
@@ -422,6 +567,19 @@ static void FF_www_get_url (
 
     if (StringStr (identifier, "MIMAT") != NULL) {
       url = "http://www.mirbase.org/cgi-bin/mature.pl?mature_acc=";
+    }
+
+  } else if (StringCmp (db, "RefSeq") == 0) {
+
+    ch = identifier [0];
+    if (IS_ALPHA (ch) && identifier [1] == 'P' && identifier [2] == '_') {
+      url = "https://www.ncbi.nlm.nih.gov/protein/";
+    }
+
+  } else if (StringCmp (db, "WormBase") == 0) {
+
+    if (LooksLikeAccession (identifier, &num_alpha, &num_digit, &num_unscr) && num_alpha == 3 && num_digit == 5) {
+      url = "http://www.wormbase.org/search/protein/";
     }
 
   } else if (StringCmp (db, "niaEST") == 0) {
@@ -449,6 +607,43 @@ static void FF_www_get_url (
       prefix = "name=";
     }
 
+  } else if (StringCmp (db, "UniSTS") == 0) {
+
+    suffix = "%20%5BUniSTS%20ID%5D";
+
+  } else if (StringCmp (db, "HGNC") == 0) {
+
+    if (StringNCmp (identifier, "HGNC:", 5) == 0 ) {
+      ident += 5;
+    }
+    redundant = "HGNC:";
+
+  } else if (StringCmp (db, "VGNC") == 0) {
+
+    if (StringNCmp (identifier, "VGNC:", 5) == 0 ) {
+      ident += 5;
+    }
+    redundant = "VGNC:";
+
+  } else if (StringCmp (db, "MGI") == 0) {
+
+    if (StringNCmp (identifier, "MGI:", 4) == 0 ) {
+      ident += 4;
+    }
+    redundant = "MGI:";
+
+  } else if (StringCmp (db, "RGD") == 0) {
+
+    if (StringNCmp (identifier, "RGD:", 4) == 0 ) {
+      ident += 4;
+    }
+
+  } else if (StringCmp (db, "ISHAM-ITS") == 0) {
+
+    if (StringNCmp (identifier, "MITS", 4) == 0 ) {
+      ident += 4;
+    }
+
   }
 
   /* now generate URL */
@@ -470,7 +665,12 @@ static void FF_www_get_url (
   if (StringDoesHaveText (suffix)) {
     FFAddOneString (ffstring, suffix, FALSE, FALSE, TILDE_IGNORE);
   }
-  FFAddTextToString (ffstring, "\">", identifier, "</a>", FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring,  "\">", FALSE, FALSE, TILDE_IGNORE);
+  if (StringDoesHaveText (redundant)) {
+    FFAddOneString (ffstring, redundant, FALSE, FALSE, TILDE_IGNORE);
+  }
+  FFAddOneString (ffstring, identifier, FALSE, FALSE, TILDE_IGNORE);
+  FFAddOneString (ffstring, "</a>", FALSE, FALSE, TILDE_IGNORE);
 }
 
 NLM_EXTERN void FF_www_db_xref (
@@ -481,13 +681,30 @@ NLM_EXTERN void FF_www_db_xref (
   BioseqPtr bsp
 )
 {
+  CharPtr  colon = ":";
+
   if (ffstring == NULL || StringHasNoText (db) || StringHasNoText (identifier)) return;
 
+  if (StringCmp (db, "HGNC") == 0 && StringNCmp (identifier, "HGNC:", 5) == 0) {
+    identifier += 5;
+  } else if (StringCmp (db, "VGNC") == 0 && StringNCmp (identifier, "VGNC:", 5) == 0) {
+    identifier += 5;
+  } else if (StringCmp (db, "MGI") == 0 && StringNCmp (identifier, "MGI:", 4) == 0) {
+    identifier += 4;
+  }
+
   if (GetWWW (ajp)) {
-    FFAddTextToString (ffstring, db, ":", NULL, FALSE, FALSE, TILDE_IGNORE);
+    FFAddTextToString (ffstring, db, colon, NULL, FALSE, FALSE, TILDE_IGNORE);
     FF_www_get_url (ffstring, db, identifier, bsp);
   } else {
-    FFAddTextToString (ffstring, db, ":", identifier, FALSE, FALSE, TILDE_IGNORE);
+    if (StringCmp (db, "HGNC") == 0) {
+      colon = ":HGNC:";
+    } else if (StringCmp (db, "VGNC") == 0) {
+      colon = ":VGNC:";
+    } else if (StringCmp (db, "MGI") == 0) {
+      colon = ":MGI:";
+    }
+    FFAddTextToString (ffstring, db, colon, identifier, FALSE, FALSE, TILDE_IGNORE);
   }
 }
 
@@ -509,6 +726,13 @@ NLM_EXTERN void FF_Add_NCBI_Base_URL (
       if (StringDoesHaveText (buf)) {
         base = buf;
         url += 28;
+      }
+    }
+  } else if (StringNICmp (url, "https://www.ncbi.nlm.nih.gov/", 29) == 0) {
+    if (GetAppParam ("NCBI", "WWWENTREZ", "NCBI_URL_BASE", NULL, buf, sizeof (buf))) {
+      if (StringDoesHaveText (buf)) {
+        base = buf;
+        url += 29;
       }
     }
   }
@@ -533,7 +757,7 @@ NLM_EXTERN CharPtr asn2gnbk_dbxref (
 
 {
   IntAsn2gbJobPtr  ajp;
-  Char             buf [80];
+  Char             buf [128];
   StringItemPtr    ffstring;
   ObjectIdPtr      oip;
   CharPtr          ptr;
@@ -1147,7 +1371,7 @@ static Int2 FixPages (
   Char firstend[MAX_PAGE_DIGITS];
   Char secondend[MAX_PAGE_DIGITS];
   Char temp[MAX_PAGE_DIGITS];
-  CharPtr alphabegin, numbegin, alphaend, numend, ptr, in=in_pages;
+  CharPtr alphabegin, numbegin = NULL, alphaend, numend = NULL, ptr, in=in_pages;
   Int2 diff, index, retval=0;
   Int2 length_nb, length_ab, length_ne, length_ae;
   Int4 num1=0, num2=0;
@@ -1480,7 +1704,7 @@ static void DoSup (
   CharPtr  str;
   CharPtr  temp;
 
-  len = StringLen (issue) + StringLen (part_sup) + StringLen (part_supi) + 25;
+  len = StringLen (issue) + StringLen (part_sup) + StringLen (part_supi) + 30;
   str = MemNew (sizeof (Char) * len);
   if (str == NULL) return;
   temp = str;
@@ -1488,7 +1712,11 @@ static void DoSup (
   if (! StringHasNoText (part_sup)) {
     *temp = ' ';
     temp++;
+    *temp = '(';
+    temp++;
     temp = StringMove (temp, part_sup);
+    *temp = ')';
+    temp++;
   }
   if (StringHasNoText (issue) && StringHasNoText (part_supi)) {
     ValNodeCopyStr (head, 0, str);
@@ -2645,6 +2873,7 @@ static CharPtr FormatCitSub (
     afp = alp->affil;
     if (afp != NULL) {
       affil = GetAffil (afp);
+      Asn2gnbkCompressSpaces (affil);
       if (format == EMBL_FMT || format == EMBLPEPT_FMT) {
         if (StringNCmp(affil, " to the EMBL/GenBank/DDBJ databases.", 36) != 0) {
           ValNodeCopyStr (&head, 0, " to the EMBL/GenBank/DDBJ databases.\n");
@@ -2911,19 +3140,111 @@ NLM_EXTERN CharPtr CleanQualValue (
   return str;
 }
 
+#define twocommas ((',') << 8 | (','))
+#define twospaces ((' ') << 8 | (' '))
+#define twosemicolons ((';') << 8 | (';'))
+#define space_comma ((' ') << 8 | (','))
+#define space_bracket ((' ') << 8 | (')'))
+#define bracket_space (('(') << 8 | (' '))
+#define space_semicolon ((' ') << 8 | (';'))
+#define comma_space ((',') << 8 | (' '))
+#define semicolon_space ((';') << 8 | (' '))
+
 NLM_EXTERN CharPtr Asn2gnbkCompressSpaces (CharPtr str)
 
 {
   Char     ch;
-  CharPtr  dst;
   Char     last;
+  CharPtr  dst;
   CharPtr  ptr;
 
+  Char     curr;
+  Char     next;
+  CharPtr  in;
+  CharPtr  out;
+  Uint2    two_chars;
+
+  if (str == NULL || str [0] == '\0') return str;
+
+  in = str;
+  out = str;
+
+  curr = *in;
+  in++;
+
+  next = 0;
+  two_chars = curr;
+
+  while (curr != '\0') {
+    next = *in;
+    in++;
+
+    two_chars = (two_chars << 8) | next;
+
+    if (two_chars == twocommas) {
+        *out++ = curr;
+        next = ' ';
+    } else if (two_chars == twospaces) {
+    } else if (two_chars == twosemicolons) {
+    } else if (two_chars == bracket_space) {
+        next = curr;
+        two_chars = curr;
+    } else if (two_chars == space_bracket) {
+    } else if (two_chars == space_comma) {
+        *out++ = next;
+        next = curr;
+        *out++ = ' ';
+        while (next == ' ' || next == ',') {
+          next = *in;
+          in++;
+        }
+        two_chars = next;
+    } else if (two_chars == space_semicolon) {
+        *out++ = next;
+        next = curr;
+        *out++ = ' ';
+        while (next == ' ' || next == ';') {
+          next = *in;
+          in++;
+        }
+        two_chars = next;
+    } else if (two_chars == comma_space) {
+        *out++ = curr;
+        *out++ = ' ';
+        while (next == ' ' || next == ',') {
+          next = *in;
+          in++;
+        }
+        two_chars = next;
+    } else if (two_chars == semicolon_space) {
+        *out++ = curr;
+        *out++ = ' ';
+        while (next == ' ' || next == ';') {
+          next = *in;
+          in++;
+        }
+        two_chars = next;
+    } else {
+      *out++ = curr;
+    }
+
+     curr = next;
+  }
+
+  if (curr > 0 && curr != ' ') {
+    *out = curr;
+    out++;
+  }
+  *out = '\0';
+
+  /* TrimSpacesAroundString but allow leading/trailing tabs/newlines */
+
   if (str != NULL && str [0] != '\0') {
+    last = '\0';
     dst = str;
     ptr = str;
     ch = *ptr;
-    while (ch != '\0' && ch <= ' ') {
+    while (ch != '\0' && ch == ' ') {
       ptr++;
       ch = *ptr;
     }
@@ -2933,11 +3254,7 @@ NLM_EXTERN CharPtr Asn2gnbkCompressSpaces (CharPtr str)
       ptr++;
       last = ch;
       ch = *ptr;
-      if (ch != '\0' && ch < ' ') {
-        *ptr = ' ';
-        ch = *ptr;
-      }
-      while (ch != '\0' && last <= ' ' && ch <= ' ') {
+      while (ch != '\0' && last == ' ' && ch == ' ') {
         ptr++;
         ch = *ptr;
       }
@@ -2959,6 +3276,7 @@ NLM_EXTERN CharPtr Asn2gnbkCompressSpaces (CharPtr str)
       *dst = '\0';
     }
   }
+
   return str;
 }
 
@@ -3212,6 +3530,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   CharPtr            remprefix = NULL;
   SubmitBlockPtr     sbp;
   SeqDescrPtr        sdp;
+  ErrSev             sev;
   SeqFeatPtr         sfp = NULL;
   SeqIdPtr           sip;
   SeqLocPtr          slp;
@@ -3327,11 +3646,13 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
 
   irp = (IntRefBlockPtr) rbp;
   if (irp->justuids) {
+    sev = ErrSetMessageLevel (SEV_MAX);
     if (rbp->pmid != 0) {
       pep = GetPubMedForUid (rbp->pmid);
     } else if (rbp->muid != 0) {
       pep = GetPubMedForUid (rbp->muid);
     }
+    ErrSetMessageLevel (sev);
     if (pep != NULL) {
       mep = (MedlineEntryPtr) pep->medent;
       if (mep != NULL && mep->cit != NULL) {
@@ -3467,6 +3788,10 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   if (alp != NULL) {
     str = GetAuthorsString (afp->format, alp, &consortium, index, gbref);
     TrimSpacesAroundString (str);
+    Asn2gnbkCompressSpaces (str);
+    if (StringCmp (str, "?") == 0) {
+      str = MemFree (str);
+    }
   }
 
   if (str != NULL || StringHasNoText (consortium)) {
@@ -3605,6 +3930,7 @@ NLM_EXTERN CharPtr FormatReferenceBlock (
   }
   StrStripSpaces (str);
   TrimSpacesAroundString (str);
+  Asn2gnbkCompressSpaces (str);
 
   if (afp->format == GENBANK_FMT || afp->format == GENPEPT_FMT) {
     needsPeriod = FALSE;

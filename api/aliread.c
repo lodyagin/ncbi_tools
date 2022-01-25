@@ -314,8 +314,7 @@ void Ali_ChangeRowToOther (ValNodePtr rowPtr)
       seqLinePtr = (SeqLineInfoPtr) rowPtr->data.ptrvalue;
 
       if (seqLinePtr->junk != NULL)
-	sprintf(seqLinePtr->sequence,"%s%s",seqLinePtr->sequence,
-		seqLinePtr->junk);
+        strcat(seqLinePtr->sequence, seqLinePtr->junk);
 
       if ((seqLinePtr->sequence != NULL) && (seqLinePtr->id == NULL))
 	{
@@ -383,7 +382,7 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
   Int4    segmentLen = 0;
   Int4    segmentCount = 1;
   Boolean done = FALSE;
-  Char    ch = 0;
+  Int2    ch = 0;
 
   /* Allocate memory for the line.  More */
   /* can be added later as necessary.    */
@@ -402,12 +401,12 @@ CharPtr ReadAlignFileLine (FILE PNTR        alignFilePtr,
 
       /* Process the current character */
 
-      ch = (Char) NLM_GETC (alignFilePtr);
+      ch = NLM_GETC (alignFilePtr);
 
       if (ch == '\n')
 	{
 	  done = TRUE;
-	  ch = (Char) NLM_GETC (alignFilePtr);
+	  ch = NLM_GETC (alignFilePtr);
 	  if (ch != '\r') {
 	    ungetc (ch, alignFilePtr);
 	  

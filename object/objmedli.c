@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Medline
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objmedli.c,v $
+* Revision 6.6  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.5  2009/10/02 19:44:49  kans
 * address clang static analyzer warnings
 *
@@ -316,6 +319,8 @@ NLM_EXTERN Boolean LIBCALL MedlineMeshAsnWrite (MedlineMeshPtr mmp, AsnIoPtr aip
 
 	if (mmp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)mmp)) goto erret;
     if (mmp->mp)
     {
@@ -462,6 +467,8 @@ NLM_EXTERN Boolean LIBCALL MedlineRnAsnWrite (MedlineRnPtr mrp, AsnIoPtr aip, As
 
 	if (mrp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)mrp)) goto erret;
     av.intvalue = (Int4)mrp->type;
     if (! AsnWrite(aip, MEDLINE_RN_type, &av)) goto erret;
@@ -568,6 +575,8 @@ NLM_EXTERN Boolean LIBCALL MedlineSiAsnWrite (ValNodePtr msp, AsnIoPtr aip, AsnT
     if (atp == NULL) return FALSE;
 
 	if (msp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)msp)) goto erret;
     av.intvalue = (Int4)msp->choice;
@@ -855,6 +864,8 @@ NLM_EXTERN Boolean LIBCALL MedlineEntryAsnWrite (MedlineEntryPtr mep, AsnIoPtr a
 
 	if (mep == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)mep)) goto erret;
 
 	if (mep->uid > 0)	 /* now it is optional */
@@ -1131,6 +1142,8 @@ NLM_EXTERN Boolean LIBCALL MedlineFieldAsnWrite (MedlineFieldPtr mfp, AsnIoPtr a
 
 	if (mfp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)mfp)) goto erret;
     av.intvalue = (Int4)mfp->type;
     if (! AsnWrite(aip, MEDLINE_FIELD_type, &av)) goto erret;
@@ -1251,6 +1264,8 @@ NLM_EXTERN Boolean LIBCALL DocRefAsnWrite (DocRefPtr drp, AsnIoPtr aip, AsnTypeP
     if (atp == NULL) return FALSE;
 
 	if (drp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)drp)) goto erret;
     av.intvalue = (Int4)drp->type;

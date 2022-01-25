@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.12 $
 *
 * File Description: 
 *       Vibrant list functions
@@ -41,6 +41,9 @@
 *
 *
 * $Log: viblists.c,v $
+* Revision 6.12  2016/04/01 16:15:08  bazhin
+* Fixed to satisfy 64-bit Windows.
+*
 * Revision 6.11  2009/05/15 13:52:38  bollin
 * make single list in Motif resize if possible, to allow longer strings to be displayed.
 *
@@ -1358,7 +1361,7 @@ static void Nlm_NewList (Nlm_LisT l, Nlm_Int2 width,
   } else if (lpfnOldListProc != (WNDPROC) GetWindowLongPtr (c, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "ListProc subclass error");
   }
-  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG) lpfnNewListProc);
+  SetWindowLongPtr (c, GWLP_WNDPROC, (LONG_PTR) lpfnNewListProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(c, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);

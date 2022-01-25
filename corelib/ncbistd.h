@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.11 $
+* $Revision: 6.15 $
 *
 * File Description:
 *  This system-independent header supposedly works "as is"
@@ -46,51 +46,9 @@
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: ncbistd.h,v $
-* Revision 6.11  2011/12/07 14:57:54  ucko
-* ncbistd.h: enable checks for C/C++ Toolkit version skew.  JIRA: CXX-2814.
+* Date     Name        Description of modification
+* -------  ----------  -----------------------------------------------------
 *
-* Revision 6.10  2011/01/20 17:12:42  lavr
-* Remove inclusion of <connect/ncbi_core.h>, replace with <stdint.h> everywhere but Windows NOJIRA
-*
-* Revision 6.9  2011/01/18 18:04:46  ivanov
-* Include <ncbiopt.h> after <connect/ncbi_core.h>
-*
-* Revision 6.8  2001/09/27 21:38:57  vakatov
-* Vice-versa fix to R6.7:  define "NDEBUG" if "_DEBUG" is not defined
-*
-* Revision 6.7  2001/08/28 21:01:02  vakatov
-* Define "_DEBUG" if "NDEBUG" is not defined
-*
-* Revision 6.6  2000/02/25 16:45:58  vakatov
-* Redesigned to really share "ncbi_*.[ch]" etc. between the C and
-* the C++ toolkits, and even to use them in a "standalone" fashion
-*
-* Revision 6.5  1999/10/14 18:44:35  vakatov
-* For better consistency, include <ncbilcl.h> to <ncbistd.h>
-*
-* Revision 6.4  1999/04/14 20:04:47  vakatov
-* For better consistency, moved <ncbiopt.h> from <ncbi.h> to <ncbistd.h>
-*
-* Revision 6.3  1999/03/17 15:37:24  vakatov
-* Set the default(<ncbistd.h>) "Nlm_Int4" to "int" rather tnan "long";
-* the same for "Nlm_Uint4";  modifyed the concerned "ncbilcl.*" files
-* accordingly.
-*
-* Revision 6.2  1999/03/04 20:49:24  vakatov
-* + "Nlm_STimeout" typedef
-*
-* Revision 6.1  1998/06/11 21:06:28  shavirin
-* Fixed old style definition warning.
-*
-* Revision 4.2  1995/12/18  17:37:27  epstein
-* add TIME_MAX
-*
-* Revision 4.1  1995/09/13  18:31:24  epstein
-* Add BigScalar type for compatability with DEC Alpha
-*
-* 04-12-93 Schuler     Misc. Windows-isms needed for DLL support
-* 12-16-93 Schuler     Added EXPORT to LIBCALL in _WINDLL case
 * ==========================================================================
 */
 #ifndef _NCBISTD_
@@ -250,6 +208,17 @@ typedef double		Nlm_FloatHi, PNTR Nlm_FloatHiPtr;
 #define BigScalar long
 #endif
 
+#ifndef USE_BIGINT_IDS
+#define USE_BIGINT_IDS 0
+#endif
+
+#if USE_BIGINT_IDS
+  #define BIG_ID         Int8
+  #define BIG_ID_PNTR    Int8Ptr
+#else
+  #define BIG_ID         Int4
+  #define BIG_ID_PNTR    Int4Ptr
+#endif
 
 /*----------------------------------------------------------------------*/
 /*      Misc Common Macros                                              */

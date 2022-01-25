@@ -23,7 +23,7 @@
  *
  * ===========================================================================
  *
- * RCS $Id: netcnfg.c,v 6.16 2007/07/13 18:29:18 kans Exp $
+ * RCS $Id: netcnfg.c,v 6.18 2013/09/16 21:11:38 kans Exp $
  *
  * Author:  Kans, Epstein
  *
@@ -153,9 +153,11 @@ static void AcceptNetConfigForm (ButtoN b)
     if (! StringHasNoText (str)) {
       SetAppParam ("NCBI", "CONN", "HTTP_PROXY_HOST", str);
       GetTitle (ncp->proxyPort, str, sizeof (str));
+      /*
       if (StringICmp (str, "80") == 0) {
         str [0] = '\0';
       }
+      */
       if (! StringHasNoText (str)) {
         SetAppParam ("NCBI", "CONN", "HTTP_PROXY_PORT", str);
       } else {
@@ -311,7 +313,8 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
   GrouP         g;
   GrouP         h;
   GrouP         j;
-  Int2          len;
+  GrouP         k;
+  Int2          len = 0;
   NetConfigPtr  ncp;
   PrompT        ppt0, ppt1;
   ButtoN        rb;
@@ -359,46 +362,32 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     SetGroupSpacing (ncp->netGroup, 5, 10);
   
     SelectFont (programFont);
-    len = StringWidth ("HTTP Proxy Server ") + 2;
+    len = StringWidth ("HTTP Proxy Server Name ") + 2;
     SelectFont (systemFont);
 
     z = HiddenGroup (ncp->netGroup, -2, 0, NULL);
-    StaticPrompt (z, "HTTP Proxy Server", len, dialogTextHeight, programFont, 'l');
+    StaticPrompt (z, "HTTP Proxy Server Name", len, dialogTextHeight, programFont, 'l');
     ncp->proxyHost = DialogText (z, "", 12, ChangeProxy);
     SetObjectExtra (ncp->proxyHost, ncp, NULL);
-    /*
-    StaticPrompt (z, "", 0, 0, programFont, 'l');
-    StaticPrompt (z, "", 0, 0, programFont, 'l');
-    */
-    ppt0 = StaticPrompt (z, "HTTP Proxy Port ", len, dialogTextHeight, programFont, 'l');
+    ppt0 = StaticPrompt (z, "HTTP Proxy Server Port", len, dialogTextHeight, programFont, 'l');
     ncp->proxyPort = DialogText (z, "", 3, NULL);
-    x = MultiLinePrompt (z, "Non-transparent Proxy Server", len, programFont);
+    x = MultiLinePrompt (z, "Non-transparent Proxy Server Name", len, programFont);
     ncp->firewallProxy = DialogText (z, "", 12, NULL);
     AlignObjects (ALIGN_MIDDLE, (HANDLE) x, (HANDLE) ncp->firewallProxy, NULL);
-    /*
-    AlignObjects (ALIGN_MIDDLE, (HANDLE) ppt0, (HANDLE) ncp->proxyPort,
-                  (HANDLE) ncp->firewallProxy, NULL);
-    */
     AlignObjects (ALIGN_RIGHT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
     AlignObjects (ALIGN_LEFT, (HANDLE) ncp->proxyHost, (HANDLE) ncp->firewallProxy, NULL);
 
     g = HiddenGroup (ncp->netGroup, 5, 0, NULL);
-    /*
-    ppt0 = StaticPrompt (g, "Domain name server", 0, 0, programFont, 'l');
-    ncp->dnsAvailable = CheckBox (g, "Available", NULL);
-    */
-    ncp->dnsAvailable = CheckBox (g, "Domain Name Server", NULL);
+    ncp->dnsAvailable = CheckBox (g, "Use Domain Name Service", NULL);
     SetStatus (ncp->dnsAvailable, TRUE);
-    /* StaticPrompt (g, " ", 0, 0, programFont, 'l'); */
-    ppt1 = StaticPrompt (g, "Timeout", 0, popupMenuHeight, programFont, 'l');
-    ncp->timeOut = PopupList (g, TRUE, NULL);
+    k = HiddenGroup (ncp->netGroup, 5, 0, NULL);
+    ppt1 = StaticPrompt (k, "Timeout", 0, popupMenuHeight, programFont, 'l');
+    ncp->timeOut = PopupList (k, TRUE, NULL);
     PopupItem (ncp->timeOut, "10 seconds");
     PopupItem (ncp->timeOut, "30 seconds");
     PopupItem (ncp->timeOut, "60 seconds");
     PopupItem (ncp->timeOut, " 5 minutes");
     SetValue (ncp->timeOut, 2);
-    AlignObjects (ALIGN_MIDDLE, /* (HANDLE) ppt0, */ (HANDLE) ncp->dnsAvailable,
-                  (HANDLE) ppt1, (HANDLE) ncp->timeOut, NULL);
 
     c = HiddenGroup (w, 4, 0, NULL);
     SetGroupSpacing (c, 10, 2);
@@ -407,10 +396,7 @@ extern void ShowNetConfigForm (WndActnProc activate, FormMessageFunc messages,
     b = PushButton (c, "Cancel", StdSendCancelButtonMessageProc);
     SetObjectExtra (b, ncp, NULL);
 
-    /*
-    AlignObjects (ALIGN_CENTER, (HANDLE) h, (HANDLE) c, NULL);
-    */
-    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) z, (HANDLE) g, (HANDLE) c, NULL);
+    AlignObjects (ALIGN_CENTER, (HANDLE) j, (HANDLE) z, (HANDLE) g, (HANDLE) k, (HANDLE) c, NULL);
 
     RealizeWindow (w);
 

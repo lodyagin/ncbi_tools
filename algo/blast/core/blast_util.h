@@ -1,4 +1,4 @@
-/* $Id: blast_util.h,v 1.87 2011/04/11 14:54:31 kazimird Exp $
+/* $Id: blast_util.h,v 1.88 2013/02/20 13:19:39 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -371,18 +371,18 @@ NCBI_XBLAST_EXPORT
 unsigned int BLAST_GetNumberOfContexts(EBlastProgramType program);
 
 /** Free SBlastTargetTranslation
- * @target_t object to be freed [in]
+ * @param target_t object to be freed [in]
  */
 NCBI_XBLAST_EXPORT
 SBlastTargetTranslation*
 BlastTargetTranslationFree(SBlastTargetTranslation* target_t);
 
 /** Sets up structure for target translation.
- * @subject_blk Target sequence information [in]
- * @gen_code_string Genetic code translation information [in]
- * @program_number BLAST program [in]
- * @is_ooframe Out-of-frame translation if true [in]
- * @target Structure being set up. [out]
+ * @param subject_blk Target sequence information [in]
+ * @param gen_code_string Genetic code translation information [in]
+ * @param program_number BLAST program [in]
+ * @param is_ooframe Out-of-frame translation if true [in]
+ * @param target Structure being set up. [out]
  */
 NCBI_XBLAST_EXPORT
 Int2 

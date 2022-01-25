@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-GBSeq
-*    Generated using ASNCODE Revision: 6.17 at May 26, 2010 12:37 PM
+*    Generated using ASNCODE Revision: 6.19 at Sep 17, 2013  6:09 PM
 *
 **************************************************/
 
@@ -87,6 +87,7 @@ typedef struct struct_GBSeq {
    CharPtr   sequence;
    CharPtr   contig;
    struct struct_GBAltSeqData PNTR   alt_seq;
+   struct struct_GBXref PNTR   xrefs;
 } GBSeq, PNTR GBSeqPtr;
 
 
@@ -135,7 +136,7 @@ typedef struct struct_GBComment {
    struct struct_GBComment PNTR next;
    Uint4 OBbits__;
    CharPtr   type;
-   struct struct_GBCommentParagraph PNTR   paragraphs;
+   ValNodePtr   paragraphs;
 } GBComment, PNTR GBCommentPtr;
 
 
@@ -253,45 +254,6 @@ NLM_EXTERN GBXrefPtr LIBCALL GBXrefFree PROTO ((GBXrefPtr ));
 NLM_EXTERN GBXrefPtr LIBCALL GBXrefNew PROTO (( void ));
 NLM_EXTERN GBXrefPtr LIBCALL GBXrefAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL GBXrefAsnWrite PROTO (( GBXrefPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    GBCommentParagraph
-*
-**************************************************/
-typedef struct struct_GBCommentParagraph {
-   struct struct_GBCommentParagraph PNTR next;
-   Uint4 OBbits__;
-   struct struct_GBCommentItem PNTR   items;
-} GBCommentParagraph, PNTR GBCommentParagraphPtr;
-
-
-NLM_EXTERN GBCommentParagraphPtr LIBCALL GBCommentParagraphFree PROTO ((GBCommentParagraphPtr ));
-NLM_EXTERN GBCommentParagraphPtr LIBCALL GBCommentParagraphNew PROTO (( void ));
-NLM_EXTERN GBCommentParagraphPtr LIBCALL GBCommentParagraphAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL GBCommentParagraphAsnWrite PROTO (( GBCommentParagraphPtr , AsnIoPtr, AsnTypePtr));
-
-
-
-/**************************************************
-*
-*    GBCommentItem
-*
-**************************************************/
-typedef struct struct_GBCommentItem {
-   struct struct_GBCommentItem PNTR next;
-   Uint4 OBbits__;
-   CharPtr   value;
-   CharPtr   url;
-} GBCommentItem, PNTR GBCommentItemPtr;
-
-
-NLM_EXTERN GBCommentItemPtr LIBCALL GBCommentItemFree PROTO ((GBCommentItemPtr ));
-NLM_EXTERN GBCommentItemPtr LIBCALL GBCommentItemNew PROTO (( void ));
-NLM_EXTERN GBCommentItemPtr LIBCALL GBCommentItemAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
-NLM_EXTERN Boolean LIBCALL GBCommentItemAsnWrite PROTO (( GBCommentItemPtr , AsnIoPtr, AsnTypePtr));
 
 
 

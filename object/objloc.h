@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:  Object manager interface for module NCBI-Seqloc
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objloc.h,v $
+* Revision 6.8  2015/08/13 22:36:04  kans
+* NOJIRA Added support for PDB chain_id field
+*
 * Revision 6.7  2008/09/23 18:40:13  kans
 * increased NUM_SEQID
 *
@@ -260,6 +263,7 @@ typedef struct pdbseqid {
     CharPtr mol;
 	Uint1 chain;        /* 0 = no chain set.  default = 32 */
 	DatePtr rel;
+	CharPtr chain_id;
 } PDBSeqId, PNTR PDBSeqIdPtr;
 
 NLM_EXTERN PDBSeqIdPtr LIBCALL PDBSeqIdNew PROTO((void));

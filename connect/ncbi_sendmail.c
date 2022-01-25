@@ -1,4 +1,4 @@
-/* $Id: ncbi_sendmail.c,v 6.56 2012/06/20 18:09:36 kazimird Exp $
+/* $Id: ncbi_sendmail.c,v 6.72 2016/01/01 00:44:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -37,18 +37,19 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
-#define NCBI_USE_ERRCODE_X   Connect_Sendmail
+#define NCBI_USE_ERRCODE_X   Connect_SMTP
 
-#define MX_MAGIC_COOKIE 0xBA8ADEDA
-#define MX_CRLF         "\r\n"
+#define MX_MAGIC_COOKIE  0xBA8ADEDA
+#define MX_CRLF          "\r\n"
 
-#define SMTP_READERR    -1      /* Read error from socket               */
-#define SMTP_READTMO    -2      /* Read timed out                       */
-#define SMTP_RESPERR    -3      /* Cannot read response prefix          */
-#define SMTP_NOCODE     -4      /* No response code detected (letters?) */
-#define SMTP_BADCODE    -5      /* Response code doesn't match in lines */
-#define SMTP_BADRESP    -6      /* Malformed response                   */
+#define SMTP_READERR     -1      /* Read error from socket               */
+#define SMTP_READTMO     -2      /* Read timed out                       */
+#define SMTP_RESPERR     -3      /* Cannot read response prefix          */
+#define SMTP_NOCODE      -4      /* No response code detected (letters?) */
+#define SMTP_BADCODE     -5      /* Response code doesn't match in lines */
+#define SMTP_BADRESP     -6      /* Malformed response                   */
 
 
 /* Read SMTP response from the socket.
@@ -84,7 +85,7 @@ static int s_SockRead(SOCK sock, char* response, size_t max_response_len)
         assert(m == 4);
 
         if (buf[3] == '-'  ||  (done = isspace((unsigned char) buf[3]))) {
-            buf[3] = '\0';
+            buf[3]  = '\0';
             if (!code) {
                 char* e;
                 errno = 0;
@@ -182,48 +183,97 @@ static int/*bool*/ s_SockWrite(SOCK sock, const char* buf, size_t len)
 }
 
 
-static void s_MakeFrom(char* buf, size_t size, const char* user)
+static void s_MakeFrom(char* buf, size_t size, const char* from,
+                       ECORE_Username user)
 {
+    char x_buf[sizeof(((SSendMailInfo*) 0)->from)];
+    const char* at;
     size_t len;
 
-    if (user  &&  *user)
-        strncpy0(buf, user, size - 1);
-    else if (!CORE_GetUsername(buf, size)  ||  !*buf)
-        strncpy0(buf, "anonymous", size - 1);
-    len = strlen(buf);
-    size -= len;
-    if (size-- > 1) {
-        buf += len;
-        *buf++ = '@';
-        if ((!SOCK_gethostbyaddr(0, buf, size)  ||  !strchr(buf, '.'))
-            &&  SOCK_gethostname(buf, size) != 0) {
-            const char* host = getenv("HOSTNAME");
-            if (!host  &&  !(host = getenv("HOST")))
-                *--buf = '\0';
-            else
-                strncpy0(buf, host, size - 1);
+    if (from  &&  *from) {
+        if (!(at = strchr(from, '@'))) {
+            /* no "@", verbatim copy */
+            if (buf != from)
+                strncpy0(buf, from, size - 1);
+            return;
         }
-    }
+        if (at != from) {
+            /* "user@[host]" */
+            if (buf != from) {
+                len = (size_t)(at - from);
+                if (len < size) {
+                    size_t tmp = len + strlen(at);
+                    if (tmp < size)
+                        len = tmp;
+                } else
+                    len = size - 1;
+                strncpy0(buf, from, len);
+            }
+            if (*++at)
+                return;  /* "user@host", all done */
+            /* (*at) == '\0' */
+        } else if (at[1]) {
+            /* "@host", save host if it fits the temp buffer */
+            if ((len = strlen(at)) < sizeof(x_buf)) {
+                memcpy(x_buf, at, len + 1);
+                at = x_buf;
+            } else
+                at = "@";
+            *buf = '\0';
+            /* (*at) != '\0' (=='@') */
+        } else {
+            /* "@" */
+            *buf = '\0';
+            return;
+        }
+    } else
+        at = 0;
+    if (!at  ||   *at) {
+        if (!CORE_GetUsernameEx(buf, size, user)  ||  !*buf)
+            strncpy0(buf, "anonymous", size - 1);
+        len = strlen(buf);
+    } else
+        len = strlen(buf) - 1/*'@'*/;
+    size -= len;
+    buf  += len;
+    if (!at  ||  !*at) {
+        if (size-- > 2) {
+            *buf++ = '@';
+            if ((!SOCK_gethostbyaddr(0, buf, size)  ||  !strchr(buf, '.'))
+                &&  SOCK_gethostname(buf, size) != 0) {
+                const char* host;
+                CORE_LOCK_READ;
+                if ((!(host = getenv("HOSTNAME")) && !(host = getenv("HOST")))
+                    ||  (len = strlen(host)) >= size) {
+                    *--buf = '\0';
+                } else
+                    strcpy(buf, host);
+                CORE_UNLOCK;
+            }
+        } else
+            *buf   = '\0';
+    } else if (1 < (len = strlen(at))  &&  len < size)
+        memcpy(buf, at, len + 1);
 }
 
 
+static STimeout       s_MxTimeout;
 static char           s_MxHost[256];
 static unsigned short s_MxPort;
-static STimeout       s_MxTmo;
 
 
 static void x_Sendmail_InitEnv(void)
 {
-    char         buf[sizeof(s_MxHost)];
+    char         buf[sizeof(s_MxHost)], *e;
     unsigned int port;
     double       tmo;
 
-    if (*s_MxHost)
+    if (s_MxPort)
         return;
 
-    if (!ConnNetInfo_GetValue(0, "MX_TIMEOUT", buf, sizeof(buf), 0)
-        ||  (tmo = atof(buf)) < 0.000001) {
-        tmo = 120.0;
+    if (!ConnNetInfo_GetValue(0, "MX_TIMEOUT", buf, sizeof(buf), 0)  ||  !*buf
+        ||  (tmo = NCBI_simple_atof(buf, &e)) < 0.000001  ||  errno  ||  !*e) {
+        tmo = 120.0/*2 min*/;
     }
     if (!ConnNetInfo_GetValue(0, "MX_PORT", buf, sizeof(buf), 0)
         ||  !(port = atoi(buf))  ||  port > 65535) {
@@ -239,29 +289,30 @@ static void x_Sendmail_InitEnv(void)
     }
 
     CORE_LOCK_WRITE;
-    s_MxTmo.sec  = (unsigned int)  tmo;
-    s_MxTmo.usec = (unsigned int)((tmo - s_MxTmo.sec) * 1000000.0);
+    s_MxTimeout.sec  = (unsigned int)  tmo;
+    s_MxTimeout.usec = (unsigned int)((tmo - s_MxTimeout.sec) * 1000000.0);
     strcpy(s_MxHost, buf);
     s_MxPort = port;
     CORE_UNLOCK;
 }
 
 
-SSendMailInfo* SendMailInfo_InitEx(SSendMailInfo* info,
-                                   const char*    user)
+extern SSendMailInfo* SendMailInfo_InitEx(SSendMailInfo* info,
+                                          const char*    from,
+                                          ECORE_Username user)
 {
     if (info) {
         x_Sendmail_InitEnv();
-        info->cc              = 0;
-        info->bcc             = 0;
-        s_MakeFrom(info->from, sizeof(info->from), user);
-        info->header          = 0;
-        info->body_size       = 0;
-        info->mx_host         = s_MxHost;
-        info->mx_port         = s_MxPort;
-        info->mx_timeout      = s_MxTmo;
-        info->mx_options      = 0;
-        info->magic_cookie    = MX_MAGIC_COOKIE;
+        info->cc           = 0;
+        info->bcc          = 0;
+        s_MakeFrom(info->from, sizeof(info->from), from, user);
+        info->header       = 0;
+        info->body_size    = 0;
+        info->mx_timeout   = s_MxTimeout;
+        info->mx_host      = s_MxHost;
+        info->mx_port      = s_MxPort;
+        info->mx_options   = 0;
+        info->magic_cookie = MX_MAGIC_COOKIE;
     }
     return info;
 }
@@ -313,7 +364,7 @@ static const char* s_SendRcpt(SOCK sock, const char* to,
                               const char proto_error[])
 {
     char c;
-    while ((c = *to++) != 0) {
+    while ((c = *to++) != '\0') {
         char   quote = 0;
         size_t k = 0;
         if (isspace((unsigned char) c))
@@ -360,9 +411,9 @@ static const char* s_SendRcpt(SOCK sock, const char* to,
 static size_t s_FromSize(const SSendMailInfo* info)
 {
     const char* at, *dot;
-    size_t len = strlen(info->from);
+    size_t len = *info->from ? strlen(info->from) : 0;
 
-    if (!*info->from  ||  !(info->mx_options & fSendMail_StripNonFQDNHost))
+    if (!len  ||  !(info->mx_options & fSendMail_StripNonFQDNHost))
         return len;
     if (!(at = (const char*) memchr(info->from, '@', len))
         ||  at == info->from + len - 1) {
@@ -386,15 +437,17 @@ static size_t s_FromSize(const SSendMailInfo* info)
     s_SockReadResponse(sock, code, altcode, buffer, sizeof(buffer))
 
 
-const char* CORE_SendMailEx(const char*          to,
-                            const char*          subject,
-                            const char*          body,
-                            const SSendMailInfo* uinfo)
+extern const char* CORE_SendMailEx(const char*          to,
+                                   const char*          subject,
+                                   const char*          body,
+                                   const SSendMailInfo* uinfo)
 {
     static const STimeout zero = {0, 0};
     const SSendMailInfo* info;
     SSendMailInfo ainfo;
+    EIO_Status status;
     char buffer[1024];
+    TSOCK_Flags log;
     SOCK sock = 0;
 
     info = uinfo ? uinfo : SendMailInfo_Init(&ainfo);
@@ -408,9 +461,13 @@ const char* CORE_SendMailEx(const char*          to,
     }
 
     /* Open connection to sendmail */
-    if (SOCK_Create(info->mx_host, info->mx_port, &info->mx_timeout, &sock)
-        != eIO_Success) {
-        SENDMAIL_RETURN(8, "Cannot connect to sendmail");
+    log = info->mx_options & fSendMail_LogOn ? fSOCK_LogOn : fSOCK_LogDefault;
+    if ((status = SOCK_CreateEx(info->mx_host, info->mx_port,
+                                &info->mx_timeout, &sock,
+                                0, 0, log)) != eIO_Success) {
+        sprintf(buffer, "%s:%hu (%s)", info->mx_host, info->mx_port,
+                IO_StatusStr(status));
+        SENDMAIL_RETURN2(8, "Cannot connect to sendmail", buffer);
     }
     SOCK_SetTimeout(sock, eIO_ReadWrite, &info->mx_timeout);
     SOCK_SetTimeout(sock, eIO_Close,     &info->mx_timeout);
@@ -419,9 +476,9 @@ const char* CORE_SendMailEx(const char*          to,
     if (!SENDMAIL_READ_RESPONSE(220, 0, buffer))
         SENDMAIL_RETURN2(9, "Protocol error in connection init", buffer);
 
-    if ((!(info->mx_options & fSendMail_StripNonFQDNHost)  ||
-         !SOCK_gethostbyaddr(0, buffer, sizeof(buffer)))  &&
-        SOCK_gethostname(buffer, sizeof(buffer)) != 0) {
+    if ((!(info->mx_options & fSendMail_StripNonFQDNHost)
+         ||  !SOCK_gethostbyaddr(0, buffer, sizeof(buffer)))
+        &&  SOCK_gethostname(buffer, sizeof(buffer)) != 0) {
         SENDMAIL_RETURN(10, "Unable to get local host name");
     }
     if (!s_SockWrite(sock, "HELO ", 5)  ||
@@ -463,31 +520,71 @@ const char* CORE_SendMailEx(const char*          to,
     if (!SENDMAIL_READ_RESPONSE(354, 0, buffer))
         SENDMAIL_RETURN2(16, "Protocol error in DATA command", buffer);
 
+    (void) SOCK_SetCork(sock, eOn);
+
     if (!(info->mx_options & fSendMail_NoMxHeader)) {
-        /* Follow RFC822 to compose message headers.
-         * NB: Both 'Date:'and 'From:' get added by sendmail automagically.
-         */ 
-        if (!s_SockWrite(sock, "Subject: ", 9)             ||
-            (subject  &&  !s_SockWrite(sock, subject, 0))  ||
-            !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1))
-            SENDMAIL_RETURN(17, "Write error in sending subject");
-
+        if (!(info->mx_options & fSendMail_Old822Headers)) {
+            /* Locale-independent month names per RFC5322 and older */
+            static const char* kMonth[] = { "Jan", "Feb", "Mar", "Apr",
+                                            "May", "Jun", "Jul", "Aug",
+                                            "Sep", "Oct", "Nov", "Dec" };
+            /* Skip DoW: it's optional yet must also be locale-independent */
+            static const char  kDateFmt[] = "%d %%s %Y %H:%M:%S %z" MX_CRLF;
+            time_t now = time(0);
+            char datefmt[80];
+            struct tm* tm;
+#if   defined(NCBI_OS_SOLARIS)
+            /* MT safe */
+            tm = localtime(&now);
+#elif defined(HAVE_LOCALTIME_R)
+            struct tm tmp;
+            localtime_r(&now, tm = &tmp);
+#else
+            struct tm tmp;
+            CORE_LOCK_WRITE;
+            tm = (struct tm*) memcpy(&tmp, localtime(&now), sizeof(tmp));
+            CORE_UNLOCK;
+#endif /*NCBI_OS_SOLARIS*/
+            if (strftime(datefmt, sizeof(datefmt), kDateFmt, tm)) {
+                sprintf(buffer, datefmt, kMonth[tm->tm_mon]);
+                if (!s_SockWrite(sock, "Date: ", 6)  ||
+                    !s_SockWrite(sock, buffer, 0)) {
+                    SENDMAIL_RETURN(32, "Write error in sending Date");
+                }
+            }
+            if (*info->from) {
+                if (!s_SockWrite(sock, "From: ", 6)    ||
+                    !s_SockWrite(sock, info->from, 0)  ||
+                    !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1)) {
+                    SENDMAIL_RETURN(33, "Write error in sending From");
+                }
+            }
+        }
+        if (subject) {
+            if (!s_SockWrite(sock, "Subject: ", 9)              ||
+                (*subject  &&  !s_SockWrite(sock, subject, 0))  ||
+                !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1)) {
+                SENDMAIL_RETURN(17, "Write error in sending Subject");
+            }
+        }
         if (to  &&  *to) {
-            if (!s_SockWrite(sock, "To: ", 4)              ||
-                !s_SockWrite(sock, to, 0)                  ||
-                !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1))
+            if (!s_SockWrite(sock, "To: ", 4)  ||
+                !s_SockWrite(sock, to, 0)      ||
+                !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1)) {
                 SENDMAIL_RETURN(18, "Write error in sending To");
+            }
         }
-
         if (info->cc  &&  *info->cc) {
-            if (!s_SockWrite(sock, "Cc: ", 4)              ||
-                !s_SockWrite(sock, info->cc, 0)            ||
-                !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1))
+            if (!s_SockWrite(sock, "Cc: ", 4)    ||
+                !s_SockWrite(sock, info->cc, 0)  ||
+                !s_SockWrite(sock, MX_CRLF, sizeof(MX_CRLF)-1)) {
                 SENDMAIL_RETURN(19, "Write error in sending Cc");
+            }
         }
-    } else if (subject  &&  *subject)
+    } else if (subject  &&  *subject) {
         CORE_LOG_X(2, eLOG_Warning,
                    "[SendMail]  Subject ignored in as-is messages");
+    }
 
     if (!s_SockWrite(sock, "X-Mailer: CORE_SendMail (NCBI "
 #ifdef NCBI_CXX_TOOLKIT
@@ -572,6 +669,8 @@ const char* CORE_SendMailEx(const char*          to,
         }
     } else if (!s_SockWrite(sock, "." MX_CRLF, sizeof(MX_CRLF)))
         SENDMAIL_RETURN(28, "Write error while finalizing message");
+
+    (void) SOCK_SetCork(sock, eOff);
 
     if (!SENDMAIL_READ_RESPONSE(250, 0, buffer))
         SENDMAIL_RETURN2(29, "Protocol error in sending message", buffer);

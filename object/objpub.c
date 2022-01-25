@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.9 $
+* $Revision: 6.10 $
 *
 * File Description:  Object manager for module NCBI-Pub
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objpub.c,v $
+* Revision 6.10  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.9  2010/03/09 16:56:39  bollin
 * Include Medline/PMID in Medline article formatting.
 *
@@ -453,6 +456,8 @@ NLM_EXTERN Boolean LIBCALL PubAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnTypePtr
 
 	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if ((aip->spec_version > 0 && aip->spec_version < 5) && anp->choice >= 13)  /* ASN4 strip new value */
 	{
 		ErrPostEx(SEV_ERROR,0,0,"ASN4: PubMedId stripped");
@@ -711,6 +716,8 @@ NLM_EXTERN Boolean LIBCALL PubSetAsnWrite (ValNodePtr anp, AsnIoPtr aip, AsnType
     if (atp == NULL) return FALSE;
 
 	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	av.ptrvalue = (Pointer)anp;
 	if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av)) goto erret;

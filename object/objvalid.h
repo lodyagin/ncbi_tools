@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Structured-comment-validation
-*    Generated using ASNCODE Revision: 6.17 at Feb 22, 2012 10:57 AM
+*    Generated using ASNCODE Revision: 6.19 at Jul 22, 2013  2:43 PM
 *
 **************************************************/
 
@@ -129,6 +129,7 @@ typedef struct struct_Comment_rule {
    Uint1   require_order;
    Uint1   allow_unlisted;
    struct struct_Dependent_field_rule PNTR   dependent_rules;
+   ValNodePtr   forbidden_phrases;
 } CommentRule, PNTR CommentRulePtr;
 
 
@@ -154,6 +155,26 @@ NLM_EXTERN CommentSetPtr LIBCALL CommentSetFree PROTO ((CommentSetPtr ));
 NLM_EXTERN CommentSetPtr LIBCALL CommentSetNew PROTO (( void ));
 NLM_EXTERN CommentSetPtr LIBCALL CommentSetAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL CommentSetAsnWrite PROTO (( CommentSetPtr , AsnIoPtr, AsnTypePtr));
+
+#endif /* NLM_GENERATED_CODE_PROTO */
+
+
+
+/**************************************************
+*
+*    PhraseList
+*
+**************************************************/
+typedef ValNode PhraseList;
+typedef ValNodePtr PhraseListPtr;
+#define PhraseListNew() ValNodeNew(NULL) 
+
+#ifdef NLM_GENERATED_CODE_PROTO
+
+NLM_EXTERN PhraseListPtr LIBCALL PhraseListFree PROTO ((PhraseListPtr ));
+NLM_EXTERN PhraseListPtr LIBCALL PhraseListNew PROTO (( void ));
+NLM_EXTERN PhraseListPtr LIBCALL PhraseListAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL PhraseListAsnWrite PROTO (( PhraseListPtr , AsnIoPtr, AsnTypePtr));
 
 #endif /* NLM_GENERATED_CODE_PROTO */
 

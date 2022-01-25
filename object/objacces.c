@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.1 $
+* $Revision: 6.2 $
 *
 * File Description:  Object manager for module NCBI-Access
 *
@@ -40,6 +40,9 @@
 * 05-13-93 Schuler     All public functions are now declared LIBCALL.
 *
 * $Log: objacces.c,v $
+* Revision 6.2  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.1  2004/04/01 13:43:07  lavr
 * Spell "occurred", "occurrence", and "occurring"
 *
@@ -138,6 +141,8 @@ NLM_EXTERN Boolean LIBCALL LinkSetAsnWrite (LinkSetPtr lsp, AsnIoPtr aip, AsnTyp
         return FALSE;
 
 	if (lsp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)lsp))
         goto erret;

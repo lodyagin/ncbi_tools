@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 1/1/91
 *
-* $Revision: 6.5 $
+* $Revision: 6.6 $
 *
 * File Description:  Object manager for module NCBI-Submit
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objsub.c,v $
+* Revision 6.6  2015/10/23 00:04:25  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.5  2005/05/20 21:08:43  bollin
 * allow SubmitBlocks to match if both have NULL CitSubs
 *
@@ -454,6 +457,8 @@ NLM_EXTERN Boolean LIBCALL SeqSubmitAsnWrite (SeqSubmitPtr ssp, AsnIoPtr aip, As
 
 	if (ssp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)ssp))
         goto erret;
 
@@ -678,6 +683,8 @@ NLM_EXTERN Boolean LIBCALL SubmitBlockAsnWrite (SubmitBlockPtr sbp, AsnIoPtr aip
         return FALSE;
 
 	if (sbp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sbp))
         goto erret;
@@ -936,6 +943,8 @@ NLM_EXTERN Boolean LIBCALL ContactInfoAsnWrite (ContactInfoPtr cip, AsnIoPtr aip
         return FALSE;
 
 	if (cip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)cip))
         goto erret;

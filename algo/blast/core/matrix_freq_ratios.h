@@ -1,7 +1,7 @@
 #ifndef ALGO_BLAST_CORE___MATRIX_FREQ_RATIOS__H
 #define ALGO_BLAST_CORE___MATRIX_FREQ_RATIOS__H
 
-/*  $Id: matrix_freq_ratios.h,v 1.2 2004/05/06 15:28:11 camacho Exp $
+/*  $Id: matrix_freq_ratios.h,v 1.4 2014/07/02 13:44:32 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -69,27 +69,15 @@ typedef struct SFreqRatios {
  *          PAM250
  * @return NULL on error
  */
-SFreqRatios*
+NCBI_XBLAST_EXPORT SFreqRatios*
 _PSIMatrixFrequencyRatiosNew(const char* matrix_name);
 
 /** Deallocate the frequency ratios structure */
-SFreqRatios*
+NCBI_XBLAST_EXPORT SFreqRatios*
 _PSIMatrixFrequencyRatiosFree(SFreqRatios* freq_ratios);
 
 #ifdef __cplusplus
 }
 #endif
 
-/*
- * ===========================================================================
- *
- * $Log: matrix_freq_ratios.h,v $
- * Revision 1.2  2004/05/06 15:28:11  camacho
- * Provide an interface to retrive the matrices' frequency ratios
- *
- *
- * ===========================================================================
- */
-
 #endif /* !ALGO_BLAST_CORE__MATRIX_FREQ_RATIOS__H */
-

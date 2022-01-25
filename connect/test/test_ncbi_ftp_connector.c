@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_ftp_connector.c,v 1.30 2011/04/17 19:34:30 kazimird Exp $
+/* $Id: test_ncbi_ftp_connector.c,v 1.33 2014/04/16 20:09:36 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -39,14 +39,16 @@
 #  include <sys/time.h>
 #endif /*HAVE_GETTIMEOFDAY*/
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
 
-#define TEST_HOST "ftp.ncbi.nlm.nih.gov"
-#define TEST_PORT 0
-#define TEST_USER "ftp"
-#define TEST_PASS "none"
-#define TEST_PATH ((char*) 0)
+#include "test_assert.h"  /* This header must go last */
+
+#define CONN_NCBI_FTP_HOST  "ftp-ext.ncbi.nlm.nih.gov"
+
+#define TEST_HOST  CONN_NCBI_FTP_HOST
+#define TEST_PORT  0
+#define TEST_USER  "ftp"
+#define TEST_PASS  "none"
+#define TEST_PATH  ((char*) 0)
 
 
 static double s_GetTime(void)
@@ -105,9 +107,9 @@ int main(int argc, char* argv[])
     CORE_LOGF(eLOG_Note, ("Connecting to ftp://%s:%s@%s%s/",
                           TEST_USER, TEST_PASS, TEST_HOST, buf));
     /* Run the tests */
-    connector = FTP_CreateDownloadConnector(TEST_HOST, TEST_PORT,
-                                            TEST_USER, TEST_PASS,
-                                            TEST_PATH, flag);
+    connector = FTP_CreateConnectorSimple(TEST_HOST, TEST_PORT,
+                                          TEST_USER, TEST_PASS,
+                                          TEST_PATH, flag, 0);
 
     if (CONN_CreateEx(connector,
                       fCONN_Supplement | fCONN_Untie, &conn) != eIO_Success) {

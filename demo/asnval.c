@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/3/04
 *
-* $Revision: 1.141 $
+* $Revision: 1.182 $
 *
 * File Description:
 *
@@ -64,8 +64,9 @@
 #ifdef INTERNAL_NCBI_ASN2VAL
 #include <accpubseq.h>
 #endif
+#include <connect/ncbi_gnutls.h>
 
-#define ASNVAL_APP_VER "11.7"
+#define ASNVAL_APP_VER "15.1"
 
 CharPtr ASNVAL_APPLICATION = ASNVAL_APP_VER;
 
@@ -92,6 +93,7 @@ typedef struct valflags {
   Boolean  rubiscoTest;
   Boolean  disableSuppression;
   Boolean  genomeSubmission;
+  Boolean  debugTestDuJour;
   Boolean  indexerVersion;
   Boolean  automatic;
   Boolean  catenated;
@@ -655,6 +657,7 @@ static void LIBCALLBACK ValidCallback (
   Uint2 itemtype,
   Uint4 itemID,
   CharPtr accession,
+  CharPtr seqid,
   CharPtr featureID,
   CharPtr message,
   CharPtr objtype,
@@ -667,7 +670,7 @@ static void LIBCALLBACK ValidCallback (
 
 {
   Char        buf [256];
-  CharPtr     catname, errname, urlmssg = NULL;
+  CharPtr     catname, errname, seqidloc = NULL, urlmssg = NULL, urlloc = NULL;
   ErrSev      cutoff;
   FILE        *fp;
   Int4        gi = 0;
@@ -690,22 +693,34 @@ static void LIBCALLBACK ValidCallback (
 
   if (severity < vcp->lowCutoff || severity > vcp->highCutoff) return;
 
-  catname = GetValidCategoryName (errcode);
-  errname = GetValidErrorName (errcode, subcode);
+  if (errcode == 0 && subcode == 0) {
+    if (vcp->verbosity == 4) {
+      catname = "Progress";
+      errname = "Progress";
+    } else {
+      return;
+    }
+  } else {
+    catname = GetValidCategoryName (errcode);
+    errname = GetValidErrorName (errcode, subcode);
 
-  if (catname == NULL) {
-    catname = "?";
-  }
-  if (errname == NULL) {
-    errname = "?";
-  }
+    if (catname == NULL) {
+      catname = "?";
+    }
+    if (errname == NULL) {
+      errname = "?";
+    }
 
-  if (StringDoesHaveText (vcp->errcode)) {
-    if (StringICmp (vcp->errcode, errname) != 0) return;
+    if (StringDoesHaveText (vcp->errcode)) {
+      if (StringICmp (vcp->errcode, errname) != 0) return;
+    }
   }
 
   if (accession == NULL) {
     accession = "";
+  }
+  if (seqid == NULL) {
+    seqid = "";
   }
   if (featureID == NULL) {
     featureID = "";
@@ -720,7 +735,7 @@ static void LIBCALLBACK ValidCallback (
     label = "";
   }
 
-  if (vcp->verbosity == 1) {
+  if (vcp->verbosity == 1 || vcp->verbosity == 6) {
 
     fprintf (fp, "%s [%s.%s] %s %s: %s",
              compatSeverityLabel [severity],
@@ -774,21 +789,40 @@ static void LIBCALLBACK ValidCallback (
       xml_header = MemFree (xml_header);
     }
 
+    if (location == NULL) {
+      location = "";
+    }
     len = StringLen (message);
     if (len > 0) {
       urlmssg = MemNew (len * 3 + 2);
       if (urlmssg != NULL) {
         XmlEncode (urlmssg, message);
-        if (StringDoesHaveText (featureID)) {
-          fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" feat-id=\"%s\" code=\"%s_%s\">%s</message>\n",
-                   severityLabel [severity], accession, featureID, catname, errname, urlmssg);
-        } else {
-          fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" code=\"%s_%s\">%s</message>\n",
-                   severityLabel [severity], accession, catname, errname, urlmssg);
+        seqidloc = MemNew (StringLen (seqid) * 3 + 2);
+        if (seqidloc != NULL) {
+          XmlEncode (seqidloc, seqid);
+          if (StringDoesHaveText (location)) {
+            urlloc = MemNew (StringLen (location) * 3 + 2);
+            if (urlloc != NULL) {
+              XmlEncode (urlloc, location);
+              if (StringDoesHaveText (featureID)) {
+                fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" feat-id=\"%s\" interval=\"%s\" code=\"%s_%s\">%s</message>\n",
+                         severityLabel [severity], seqidloc, featureID, urlloc, catname, errname, urlmssg);
+              } else {
+                fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" interval=\"%s\" code=\"%s_%s\">%s</message>\n",
+                         severityLabel [severity], seqidloc, urlloc, catname, errname, urlmssg);
+              }
+            }
+            MemFree (urlloc);
+          } else {
+            fprintf (fp, "  <message severity=\"%s\" seq-id=\"%s\" code=\"%s_%s\">%s</message>\n",
+                     severityLabel [severity], seqidloc, catname, errname, urlmssg);
+          }
+          MemFree (seqidloc);
         }
         MemFree (urlmssg);
       }
     }
+    fflush (fp);
 
   } else if (vcp->verbosity == 5) {
 
@@ -914,7 +948,7 @@ static void GetSrcFeat (SeqFeatPtr sfp, Pointer userdata)
 NLM_EXTERN void CDECL  ValidErr VPROTO((ValidStructPtr vsp, int severity, int code1, int code2, const char *fmt, ...));
 
 
-static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPtr msg_fmt)
+static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, ErrSev sev, int code1, int code2, CharPtr msg_fmt)
 {
   ObjValNodePtr ovp;
   BioSourcePtr  biop;
@@ -964,7 +998,9 @@ static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPt
         vsp->bssp = ovp->idx.parentptr;        
       }
     }
-    biop = vsp->descr->data.ptrvalue;
+    if (vsp->descr != NULL) {
+      biop = vsp->descr->data.ptrvalue;
+    }
   }
   
   if (biop != NULL && biop->org != NULL && biop->org->orgname != NULL)
@@ -976,7 +1012,7 @@ static void ReportOneBadSpecificHost (ValNodePtr vnp, ValidStructPtr vsp, CharPt
     }
     if (mod != NULL)
     {      
-      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, msg_fmt, mod->subname);
+      ValidErr (vsp, sev, code1, code2, msg_fmt, mod->subname);
     }
   }
 }
@@ -989,16 +1025,16 @@ static void ReportBadSpecificHostValues (SeqEntryPtr sep, ValidStructPtr vsp)
   Taxon3ValidateSpecificHostsInSeqEntry (sep, &misspelled, &bad_caps, &ambiguous, &unrecognized);
 
   for (vnp = misspelled; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is misspelled: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Specific host value is misspelled: %s");
   }
   for (vnp = bad_caps; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is incorrectly capitalized: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Specific host value is incorrectly capitalized: %s");
   } 
   for (vnp = ambiguous; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Specific host value is ambiguous: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_INFO, ERR_SEQ_DESCR_AmbiguousSpecificHost, "Specific host value is ambiguous: %s");
   } 
   for (vnp = unrecognized; vnp != NULL; vnp = vnp->next) {
-    ReportOneBadSpecificHost (vnp, vsp, "Invalid value for specific host: %s");
+    ReportOneBadSpecificHost (vnp, vsp, SEV_WARNING, ERR_SEQ_DESCR_BadSpecificHost, "Invalid value for specific host: %s");
   } 
 
   misspelled = ValNodeFree (misspelled);
@@ -1046,7 +1082,7 @@ static void ReportBadTaxID (ValidStructPtr vsp, OrgRefPtr orig, OrgRefPtr reply)
     sprintf (buf1, "%d", db_o->tag->id);
     tag1 = buf1;
   } else if (db_o->tag->str == NULL) {
-    sprintf (buf1, "");
+    sprintf (buf1, "%s", "");
     tag1 = buf1;
   } else {
     tag1 = db_o->tag->str;
@@ -1055,7 +1091,7 @@ static void ReportBadTaxID (ValidStructPtr vsp, OrgRefPtr orig, OrgRefPtr reply)
     sprintf (buf2, "%d", db_r->tag->id);
     tag2 = buf2;
   } else if (db_r->tag->str == NULL) {
-    sprintf (buf2, "");
+    sprintf (buf2, "%s", "");
     tag2 = buf2;
   } else {
     tag2 = db_r->tag->str;
@@ -1277,11 +1313,44 @@ static void StructCommentTentativeNameValidate (SeqEntryPtr sep, ValidStructPtr 
   ValNodeFreeData (srclist.head);
 }
 
+static void IsINSDpatent (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr   bp;
+  Boolean   is_insd = FALSE;
+  Boolean   is_patent = FALSE;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL || userdata == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_GENBANK :
+      case SEQID_EMBL :
+      case SEQID_DDBJ :
+        is_insd = TRUE;
+        break;
+      case SEQID_PATENT :
+        is_patent = TRUE;
+        break;
+      default :
+        break;
+    }
+  }
+
+  if (is_insd && is_patent) {
+    bp = (BoolPtr) userdata;
+    *bp = TRUE;
+  }
+}
+
 static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
 
 {
   GatherContext     gc;
   Boolean           has_nucleomorphs;
+  Boolean           has_plastids;
+  Boolean           is_insd_patent = FALSE;
   Boolean           is_nucleomorph;
   Boolean           is_species_level;
   Boolean           force_tax_consult;
@@ -1305,6 +1374,8 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
   if (sep == NULL || vsp == NULL) return;
   MemSet ((Pointer) &gc, 0, sizeof (GatherContext));
   vsp->gcp = &gc;
+
+  VisitBioseqsInSep (sep, (Pointer) &is_insd_patent, IsINSDpatent);
 
   srclist.head = NULL;
   srclist.tail = NULL;
@@ -1383,6 +1454,7 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
     is_species_level = FALSE;
     has_nucleomorphs = FALSE;
     is_nucleomorph = FALSE;
+    has_plastids = FALSE;
 
     for (tfp = tdp->status; tfp != NULL; tfp = tfp->next) {
 
@@ -1410,13 +1482,23 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
             gc.itemID = tvp->itemID;
             gc.thistype = tvp->itemtype;
 
-            ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem, "Taxonomy lookup reports is_species_level FALSE");
+            if (! vsp->is_wp_in_sep) {
+              ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyIsSpeciesProblem, "Taxonomy lookup reports is_species_level FALSE");
+            }
           }
         }
       } else if (StringICmp (tfp->property, "force_consult") == 0) {
         val = tfp->Value_value;
         if (val != NULL && val->choice == Value_value_bool) {
           force_tax_consult = (Boolean) (val->data.intvalue != 0);
+          if (force_tax_consult && is_insd_patent) {
+            orp = (OrgRefPtr) tdp->org;
+            if (orp != NULL) {
+              if (StringICmp (orp->taxname, "unidentified") == 0) {
+                force_tax_consult = FALSE;
+              }
+            }
+          }
           if (force_tax_consult) {
             gc.entityID = tvp->entityID;
             gc.itemID = tvp->itemID;
@@ -1433,10 +1515,17 @@ static void TaxonValidate (SeqEntryPtr sep, ValidStructPtr vsp)
             is_nucleomorph = TRUE;
           }
         }
+      } else if (StringICmp (tfp->property, "has_plastids") == 0) {
+        val = tfp->Value_value;
+        if (val != NULL && val->choice == Value_value_bool) {
+          has_plastids = (Boolean) (val->data.intvalue != 0);
+        }
       }
     }
     if (tvp->organelle == GENOME_nucleomorph && (! is_nucleomorph)) {
       ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyNucleomorphProblem, "Taxonomy lookup does not have expected nucleomorph flag");
+    } else if (tvp->organelle == GENOME_plastid && (! has_plastids)) {
+      ValidErr (vsp, SEV_WARNING, ERR_SEQ_DESCR_TaxonomyPlastidsProblem, "Taxonomy lookup does not have expected plastid flag");
     }
 
   }
@@ -1492,7 +1581,12 @@ static void DoValidation (
   vsp->rubiscoTest = vfp->rubiscoTest;
   vsp->disableSuppression = vfp->disableSuppression;
   vsp->genomeSubmission = vfp->genomeSubmission;
+  vsp->debugTestDuJour = vfp->debugTestDuJour;
   vsp->indexerVersion = vfp->indexerVersion;
+
+  if (vfp->verbosity == 4) {
+    vsp->use_heartbeat = TRUE;
+  }
 
   if (ofp == NULL && vfp->outfp != NULL) {
     ofp = vfp->outfp;
@@ -1509,6 +1603,8 @@ static void DoValidation (
     vsp->convertGiToAccn = FALSE;
   }
 
+  Heartbeat(vsp, "Beginning validation");
+
   ValidateSeqEntry (sep, vsp);
 
   if (vfp->taxfetch) {
@@ -1521,6 +1617,8 @@ static void DoValidation (
       vfp->fatal_errors += vsp->errors [i];
     }
   }
+
+  Heartbeat(vsp, "Finished Validation");
 
   ValidStructFree (vsp);
   if (vfp->validateBarcode) {
@@ -1565,6 +1663,33 @@ static void ValidateOneSep (
   bsplist = UnlockFarComponents (bsplist);
 }
 
+static void ReportReadFailure (
+  ValFlagPtr vfp
+)
+
+{
+  FILE     *ofp;
+  CharPtr  xml_header;
+
+  if (vfp == NULL) return;
+  ofp = vfp->outfp;
+  if (ofp == NULL) return;
+
+  if (vfp->verbosity == 4) {
+
+    xml_header = GetXmlHeaderText (0);
+    fprintf (ofp, "<%s>\n", xml_header);
+    xml_header = MemFree (xml_header);
+
+    fprintf (ofp, "  <message severity=\"REJECT\" code=\"GENERIC_InvalidAsn\">Unable to read invalid ASN.1</message>\n");
+
+    fprintf (ofp, "</asnval>\n");
+
+    return;
+  }
+
+  fprintf (ofp, "REJECT: valid [GENERIC.InvalidAsn] Unable to read invalid ASN.1\n");
+}
 
 static void ProcessSingleRecord (
   CharPtr filename,
@@ -1642,6 +1767,8 @@ static void ProcessSingleRecord (
 
   if (entityID < 1 || dataptr == NULL) {
     Message (MSG_POSTERR, "Data read failed for input file '%s'", filename);
+    vfp->fatal_errors++;
+    ReportReadFailure (vfp);
     return;
   }
 
@@ -1697,7 +1824,7 @@ static void ProcessSingleRecord (
       if (vfp->outpath != NULL) {
         ErrSetLogfile (vfp->outpath, ELOG_APPEND);
         ErrSetLogLevel (SEV_INFO);
-      } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
+      } else if (vfp->verbosity == 0 || vfp->verbosity == 6) {
         ErrSetLogfile (path, ELOG_APPEND);
         ErrSetLogLevel (SEV_INFO);
       } else if (vfp->outfp == NULL) {
@@ -1831,9 +1958,17 @@ static void ProcessMultipleRecord (
       return;
     }
   } else if (vfp->type == 5) {
+    /*
     atp_se = AsnFind ("Seq-submit.data.entrys.E");
     if (atp_se == NULL) {
       Message (MSG_POSTERR, "Unable to find ASN.1 type Seq-submit.data.entrys.E");
+      return;
+    }
+    */
+    /* current use has genbank set containing batch, so iterate genbank set within Seq-submit */
+    atp_se = AsnFind ("Bioseq-set.seq-set.E");
+    if (atp_se == NULL) {
+      Message (MSG_POSTERR, "Unable to find ASN.1 type Bioseq-set.seq-set.E");
       return;
     }
   } else {
@@ -1919,7 +2054,7 @@ static void ProcessMultipleRecord (
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
     ErrSetLogLevel (SEV_INFO);
-  } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
+  } else if (vfp->verbosity == 0 || vfp->verbosity == 6) {
     ErrSetLogfile (path, ELOG_APPEND);
     ErrSetLogLevel (SEV_INFO);
   } else if (vfp->outfp == NULL) {
@@ -1937,6 +2072,11 @@ static void ProcessMultipleRecord (
       SeqMgrHoldIndexing (TRUE);
       sep = SeqEntryAsnRead (aip, atp);
       SeqMgrHoldIndexing (FALSE);
+
+      if (sep == NULL) {
+        vfp->fatal_errors++;
+        ReportReadFailure (vfp);
+      }
 
       /* propagate submission citation as descriptor onto each Seq-entry */
 
@@ -2166,7 +2306,7 @@ static void ValidWrapper (
   if (vfp->outpath != NULL) {
     ErrSetLogfile (vfp->outpath, ELOG_APPEND);
     ErrSetLogLevel (SEV_INFO);
-  } else if (vfp->verbosity == 0 || vfp->verbosity == 1) {
+  } else if (vfp->verbosity == 0 || vfp->verbosity == 6) {
     ErrSetLogfile (vfp->path, ELOG_APPEND);
     ErrSetLogLevel (SEV_INFO);
   } else if (vfp->outfp == NULL) {
@@ -2220,6 +2360,7 @@ static void ProcessOneRecord (
   Uint2        datatype;
   Uint2        entityID;
   FILE         *fp;
+  ObjMgrPtr    omp;
   SeqEntryPtr  sep, tmp_sep;
   ValFlagPtr   vfp;
   SeqSubmitPtr ssp;
@@ -2234,11 +2375,24 @@ static void ProcessOneRecord (
 
   if (vfp->automatic) {
     StringNCpy_0 (vfp->path, filename, sizeof (vfp->path));
-    ReadSequenceAsnFile (filename, vfp->binary, vfp->compressed, (Pointer) vfp, ValidWrapper);
+    if (!ReadSequenceAsnFile (filename, vfp->binary, vfp->compressed, (Pointer) vfp, ValidWrapper)) {
+      vfp->fatal_errors++;
+      ReportReadFailure (vfp);
+    }
   } else if (vfp->catenated) {
     fp = FileOpen (filename, "r");
     if (fp != NULL) {
-      while ((dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE)) != NULL) {
+
+      SeqMgrHoldIndexing (TRUE);
+      dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+      SeqMgrHoldIndexing (FALSE);
+
+      if (dataptr == NULL) {
+        Message (MSG_FATAL, "Unable to read from file %s", filename);
+        vfp->fatal_errors++;
+        ReportReadFailure (vfp);
+      }
+      while (dataptr != NULL) {
         if (datatype == OBJ_SEQSUB && (ssp = (SeqSubmitPtr)dataptr) != NULL
             && ssp->datatype == 1) {
           for (sep = ssp->data; sep != NULL; sep = sep->next) {
@@ -2252,6 +2406,20 @@ static void ProcessOneRecord (
           sep = GetTopSeqEntryForEntityID (entityID);
           ValidWrapper (sep, vfp);
         }
+
+        ObjMgrFree (datatype, dataptr);
+  
+        omp = ObjMgrGet ();
+        ObjMgrReapOne (omp);
+        SeqMgrClearBioseqIndex ();
+        ObjMgrFreeCache (0);
+        FreeSeqIdGiCache ();
+  
+        SeqEntrySetScope (NULL);
+
+        SeqMgrHoldIndexing (TRUE);
+        dataptr = ReadAsnFastaOrFlatFile (fp, &datatype, &entityID, FALSE, FALSE, TRUE, FALSE);
+        SeqMgrHoldIndexing (FALSE);
       }
       FileClose (fp);
     }
@@ -2318,10 +2486,11 @@ typedef enum {
   S_argSkipCount,
   B_argBarcodeVal,
   C_argMaxCount,
-#ifdef INTERNAL_NCBI_ASN2VAL
+  j_argDebugDuJour,
   w_argSeqSubParent,
-  H_argAccessHUP,
   y_argAIndexer,
+#ifdef INTERNAL_NCBI_ASN2VAL
+  H_argAccessHUP,
 #endif
 } Arguments;
 
@@ -2372,7 +2541,8 @@ Args myargs [] = {
    "      2 Accession / Severity / Code (space delimited)\n"
    "      3 Accession / Severity / Code (tab delimited\n"
    "      4 XML Report\n"
-   "      5 Accession / GI / Severity / Code (tab delimited)\n", "1", "0", "5",
+   "      5 Accession / GI / Severity / Code (tab delimited)\n"
+   "      6 Logged Report\n", "1", "0", "6",
     FALSE, 'v', ARG_INT, 0.0, 0, NULL},
   {"ASN.1 Type\n"
    "      a Automatic\n"
@@ -2417,13 +2587,15 @@ Args myargs [] = {
     TRUE, 'B', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Max Count", "0", NULL, NULL,
     TRUE, 'C', ARG_INT, 0.0, 0, NULL},
-#ifdef INTERNAL_NCBI_ASN2VAL
+  {"Validator Code Performance Test", "F", NULL, NULL,
+    TRUE, 'j', ARG_BOOLEAN, 0.0, 0, NULL},
   {"SeqSubmitParent Flag", "F", NULL, NULL,
     TRUE, 'w', ARG_BOOLEAN, 0.0, 0, NULL},
-  {"Internal Access to HUP", "F", NULL, NULL,
-    TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
   {"Special Indexer Tests", "F", NULL, NULL,
     TRUE, 'y', ARG_BOOLEAN, 0.0, 0, NULL},
+#ifdef INTERNAL_NCBI_ASN2VAL
+  {"Internal Access to HUP", "F", NULL, NULL,
+    TRUE, 'H', ARG_BOOLEAN, 0.0, 0, NULL},
 #endif
 };
 
@@ -2455,6 +2627,8 @@ Int2 Main (void)
 
   UseLocalAsnloadDataAndErrMsg ();
   ErrPathReset ();
+
+  SOCK_SetupSSL(NcbiSetupGnuTls);
 
   if (! AllObjLoad ()) {
     Message (MSG_FATAL, "AllObjLoad failed");
@@ -2563,6 +2737,7 @@ Int2 Main (void)
   vfd.inferenceAccnCheck = (Boolean) myargs [G_argInfAccns].intvalue;
   vfd.disableSuppression = (Boolean) myargs [D_argDisableSuppress].intvalue;
   vfd.genomeSubmission = (Boolean) myargs [U_argGenomeSubmission].intvalue;
+  vfd.debugTestDuJour = (Boolean) myargs [j_argDebugDuJour].intvalue;
   vfd.validateBarcode = (Boolean) myargs[B_argBarcodeVal].intvalue;
   vfd.taxfetch = (Boolean) myargs [q_argTaxLookup].intvalue;
 
@@ -2578,10 +2753,8 @@ Int2 Main (void)
     vfd.maxcount = INT4_MAX;
   }
 
-#ifdef INTERNAL_NCBI_ASN2VAL
   vfd.seqSubmitParent = (Boolean) myargs [w_argSeqSubParent].intvalue;
   vfd.indexerVersion = (Boolean) myargs [y_argAIndexer].intvalue;
-#endif
 
 #ifdef INTERNAL_NCBI_ASN2VAL
   SetAppProperty ("InternalNcbiSequin", (void *) 1024);
@@ -2657,7 +2830,7 @@ Int2 Main (void)
   vfd.numrecords = 0;
 
   if (! StringHasNoText (outfile)) {
-    if (vfd.verbosity == 0 || vfd.verbosity == 1) {
+    if (vfd.verbosity == 0 || vfd.verbosity == 6) {
       vfd.outpath = outfile;
     } else {
       vfd.outfp = FileOpen (outfile, "w");

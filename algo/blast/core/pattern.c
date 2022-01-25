@@ -1,4 +1,4 @@
-/* $Id: pattern.c,v 1.24 2008/07/17 17:55:44 kazimird Exp $
+/* $Id: pattern.c,v 1.25 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -53,11 +53,6 @@
  * </pre>
  *
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: pattern.c,v 1.24 2008/07/17 17:55:44 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/pattern.h>
 #include "pattern_priv.h"

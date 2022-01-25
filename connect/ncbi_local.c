@@ -1,4 +1,4 @@
-/* $Id: ncbi_local.c,v 1.19 2012/02/01 17:39:36 kazimird Exp $
+/* $Id: ncbi_local.c,v 1.25 2015/10/14 04:44:21 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -42,12 +42,12 @@
 #ifdef __cplusplus
 extern "C" {
 #endif /*__cplusplus*/
-    static void        s_Reset      (SERV_ITER);
     static SSERV_Info* s_GetNextInfo(SERV_ITER, HOST_INFO*);
+    static void        s_Reset      (SERV_ITER);
     static void        s_Close      (SERV_ITER);
 
     static const SSERV_VTable s_op = {
-        s_Reset, s_GetNextInfo, 0/*Update*/, 0/*Penalize*/, s_Close, "LOCAL"
+        s_GetNextInfo, 0/*Feedback*/, 0/*Update*/, s_Reset, s_Close, "LOCAL"
     };
 #ifdef __cplusplus
 } /* extern "C" */
@@ -93,7 +93,7 @@ static int/*bool*/ s_AddService(const SSERV_Info* info,
 static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
 {
     struct SLOCAL_Data* data = (struct SLOCAL_Data*) iter->data;
-    const TSERV_Type type = iter->type & ~fSERV_Firewall;
+    const TSERV_Type types = iter->types & ~fSERV_Firewall;
     char key[sizeof(REG_CONN_LOCAL_SERVER) + 10];
     int/*bool*/ ok = 0/*failed*/;
     SSERV_Info* info;
@@ -113,24 +113,24 @@ static int/*bool*/ s_LoadSingleService(const char* name, SERV_ITER iter)
         if (!(svc = ConnNetInfo_GetValue(name, key, buf, sizeof(buf), 0)))
             continue;
         if (!(info = SERV_ReadInfoEx
-              (svc, iter->ismask  ||  iter->reverse_dns ? name : ""))) {
+              (svc, iter->ismask  ||  iter->reverse_dns ? name : "", 0))) {
             continue;
         }
-        if (iter->external  &&  info->locl)
+        if (iter->external  &&  (info->site & (fSERV_Local | fSERV_Private)))
             continue;  /* external mapping for local server not allowed */
-        if (!info->host  ||  (info->locl & 0xF0)) {
+        if (!info->host  ||  (info->site & fSERV_Private)) {
             unsigned int localhost = SOCK_GetLocalHostAddress(eDefault);
             if (!info->host)
                 info->host = localhost;
-            if ((info->locl & 0xF0)  &&  info->host != localhost)
+            if ((info->site & fSERV_Private)  &&  info->host != localhost)
                 continue;  /* private server */
         }
         if (!iter->reverse_dns  &&  info->type != fSERV_Dns) {
-            if (type != fSERV_Any  &&  !(type & info->type))
+            if (types != fSERV_Any  &&  !(types & info->type))
                 continue;  /* type doesn't match */
-            if (type == fSERV_Any  &&  info->type == fSERV_Dns)
+            if (types == fSERV_Any  &&  info->type == fSERV_Dns)
                 continue;  /* DNS entries have to be req'd explicitly */
-            if (iter->stateless && info->sful && !(info->type & fSERV_Http))
+            if (iter->stateless  &&  (info->mode & fSERV_Stateful))
                 continue;  /* skip stateful only servers */
         }
         if (!info->rate)
@@ -219,7 +219,7 @@ static SLB_Candidate* s_GetCandidate(void* user_data, size_t i)
 static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 {
     struct SLOCAL_Data* data = (struct SLOCAL_Data*) iter->data;
-    const TSERV_Type type = iter->type & ~fSERV_Firewall;
+    const TSERV_Type types = iter->types & ~fSERV_Firewall;
     int/*bool*/ dns_info_seen = 0/*false*/;
     SSERV_Info* info;
     size_t i, n;
@@ -261,10 +261,10 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
         } else
             n = 0;
         if (!iter->ismask) {
-            if (type == fSERV_Any) {
+            if (types == fSERV_Any) {
                 if (iter->reverse_dns  &&  info->type != fSERV_Dns)
                     dns_info_seen = 1/*true*/;
-            } else if ((type & info->type)  &&  info->type == fSERV_Dns)
+            } else if ((types & info->type)  &&  info->type == fSERV_Dns)
                 dns_info_seen = 1/*true*/;
         }
         if (n < iter->n_skip) {
@@ -274,9 +274,9 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
             }
             free(info);
         } else {
-            if (type != fSERV_Any  &&  !(type & info->type))
+            if (types != fSERV_Any  &&  !(types & info->type))
                 break;
-            if (type == fSERV_Any  &&  info->type == fSERV_Dns)
+            if (types == fSERV_Any  &&  info->type == fSERV_Dns)
                 break;
             data->i_cand++;
             data->cand[i].status = info->rate < 0.0 ? 0.0 : info->rate;
@@ -299,9 +299,10 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
                 }
                 if (!iter->ismask)
                     dns_info_seen = 1/*true*/;
-                if (iter->external  &&  temp->locl)
+                if (iter->external
+                    &&  (temp->site & (fSERV_Local | fSERV_Private))) {
                     continue; /* external mapping req'd; local server */
-                assert(!(temp->locl & 0xF0)); /* no private DNS */
+                }
                 if (temp->rate > 0.0  ||  iter->ok_down) {
                     data->cand[i].status = data->cand[n].status;
                     info = temp;
@@ -335,7 +336,8 @@ static SSERV_Info* s_GetNextInfo(SERV_ITER iter, HOST_INFO* host_info)
 static void s_Reset(SERV_ITER iter)
 {
     struct SLOCAL_Data* data = (struct SLOCAL_Data*) iter->data;
-    if (data  &&  data->cand) {
+    assert(data);
+    if (data->cand) {
         size_t i;
         assert(data->a_cand);
         for (i = 0; i < data->n_cand; i++)
@@ -349,15 +351,16 @@ static void s_Reset(SERV_ITER iter)
 static void s_Close(SERV_ITER iter)
 {
     struct SLOCAL_Data* data = (struct SLOCAL_Data*) iter->data;
-    assert(!data->n_cand  &&  data->reset); /* s_Reset() has been called */
+    /* NB: s_Reset() must have been called before */
+    assert(data &&  !data->n_cand  &&  data->reset);
     if (data->cand) {
         assert(data->a_cand);
         data->a_cand = 0;
         free(data->cand);
         data->cand = 0;
     }
-    free(data);
     iter->data = 0;
+    free(data);
 }
 
 
@@ -373,11 +376,10 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER iter,
 
     if (!(data = (struct SLOCAL_Data*) calloc(1, sizeof(*data))))
         return 0;
-
     iter->data = data;
 
     if (g_NCBI_ConnectRandomSeed == 0) {
-        g_NCBI_ConnectRandomSeed = iter->time ^ NCBI_CONNECT_SRAND_ADDEND;
+        g_NCBI_ConnectRandomSeed  = iter->time ^ NCBI_CONNECT_SRAND_ADDEND;
         srand(g_NCBI_ConnectRandomSeed);
     }
 
@@ -386,6 +388,7 @@ const SSERV_VTable* SERV_LOCAL_Open(SERV_ITER iter,
         s_Close(iter);
         return 0;
     }
+    assert(data->n_cand);
     if (data->n_cand > 1)
         qsort(data->cand, data->n_cand, sizeof(*data->cand), s_Sort);
 

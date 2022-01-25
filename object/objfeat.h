@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.42 $
+* $Revision: 6.43 $
 *
 * File Description:  Object manager interface for module NCBI-SeqFeat
 *
@@ -865,7 +865,7 @@ typedef struct protref {
         activity;
     ValNodePtr db;          /* ids in other databases */
 	Uint1 processed;        /* 0=not-set, 1=preprotein, 2=mature protein, 3=signal peptide,
-	                            4=transit peptide */
+	                            4=transit peptide, 5=propeptide */
 } ProtRef, PNTR ProtRefPtr;
 
 NLM_EXTERN ProtRefPtr LIBCALL ProtRefNew PROTO((void));

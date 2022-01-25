@@ -28,54 +28,12 @@
 *
 * Version Creation Date:   10/15/01
 *
-* $Revision: 6.15 $
+* $Revision: 6.18 $
 *
 * File Description:
 *
 * Modifications:  
 * --------------------------------------------------------------------------
-* $Log: fdlKludge.h,v $
-* Revision 6.15  2004/09/09 19:39:49  jianye
-* Added gene linkout
-*
-* Revision 6.14  2004/08/11 18:14:55  jianye
-* not turn on gene linkout yet
-*
-* Revision 6.13  2004/08/10 20:02:03  jianye
-* Added gene linkout
-*
-* Revision 6.12  2003/06/11 20:15:45  jianye
-* changed unigene linkout
-*
-* Revision 6.11  2003/06/02 20:02:23  jianye
-* Added geo linkout
-*
-* Revision 6.10  2003/05/05 19:33:54  jianye
-* Change url for structure linkout
-*
-* Revision 6.9  2003/04/21 21:49:37  jianye
-* changed some url
-*
-* Revision 6.8  2003/04/14 20:43:22  jianye
-* Adde geo url and modified structure linkout url
-*
-* Revision 6.7  2002/12/11 16:24:58  jianye
-* added structure linkout
-*
-* Revision 6.6  2002/09/11 19:53:09  jianye
-* Added url defines
-*
-* Revision 6.5  2002/08/22 20:32:35  jianye
-* add parentheses to bit shift
-*
-* Revision 6.4  2002/08/21 21:15:32  camacho
-* Added #define value for structure link bits
-*
-* Revision 6.3  2001/10/19 14:40:41  jianye
-* *** empty log message ***
-*
-* Revision 6.2  2001/10/18 19:20:20  jianye
-* Initial check in
 *
 */
 
@@ -93,14 +51,14 @@
 
 /* url for linkout*/
 #define URL_LocusLink "<a href=\"http://www.ncbi.nlm.nih.gov/LocusLink/list.cgi?Q=%d%s\"><img border=0 height=16 width=16 src=\"/blast/images/L.gif\" alt=\"LocusLink info\"></a>"
-#define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=unigene&cmd=search&term=%d[Nucleotide+UID]\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
+#define URL_Unigene "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=unigene&cmd=search&term=%ld[Nucleotide+UID]\"><img border=0 height=16 width=16 src=\"/blast/images/U.gif\" alt=\"UniGene info\"></a>"
 
-#define URL_Structure "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\"><img border=0 height=16 width=16 src=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
+#define URL_Structure "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%ld&hit=%ld&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\"><img border=0 height=16 width=16 src=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/str_link.gif\" alt=\"Related structures\"></a>"
 
-#define URL_Structure_Overview "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%d&hit=%d&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\">Related Structures</a>"
+#define URL_Structure_Overview "<a href=\"http://www.ncbi.nlm.nih.gov/Structure/cblast/cblast.cgi?blast_RID=%s&blast_rep_gi=%ld&hit=%ld&blast_CD_RID=%s&blast_view=%s&hsp=0&taxname=%s&client=blast\">Related Structures</a>"
 
-#define URL_Geo "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=geo&term=%d[gi]\"><img border=0 height=16 width=16 src=\"/blast/images/E.gif\" alt=\"Geo\"></a>"
+#define URL_Geo "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=geo&term=%ld[gi]\"><img border=0 height=16 width=16 src=\"/blast/images/E.gif\" alt=\"Geo\"></a>"
  
-#define URL_Gene "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=search&term=%d[%s]\"><img border=0 height=16 width=16 src=\"/blast/images/G.gif\" alt=\"Gene info\"></a>"
+#define URL_Gene "<a href=\"http://www.ncbi.nlm.nih.gov/entrez/query.fcgi?db=gene&cmd=search&term=%ld[%s]\"><img border=0 height=16 width=16 src=\"/blast/images/G.gif\" alt=\"Gene info\"></a>"
 
 #endif

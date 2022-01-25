@@ -1,4 +1,4 @@
-/* $Id: blast_hits.h,v 1.125 2012/04/03 13:24:31 kazimird Exp $
+/* $Id: blast_hits.h,v 1.132 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,6 +48,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+
+typedef struct SequenceOverhangs SequenceOverhangs;
 
 /** Keeps prelim_hitlist_size and HitSavingOptions
     together, mostly for use by hspstream. */
@@ -103,6 +106,22 @@ typedef struct SPHIHspInfo {
     Int4 length; /**< Length of this pattern occurrence in subject. */
 } SPHIHspInfo;
 
+typedef struct JumperEditsBlock JumperEditsBlock;
+
+/** Mapping information for an HSP */
+typedef struct BlastHSPMappingInfo
+{
+   JumperEditsBlock* edits; /**< Information about mismatches and gaps, used
+                               for mapping short reads */
+   Uint1 left_edge;  /**< Two subject bases before the alignment in the four
+                          least significant bits and flags in most significat
+                          bits (for RNA-seq mapping) */
+   Uint1 right_edge; /** < Same as above for subject bases after the alignment
+                          (for RNA-seq mapping) */
+   Int4 flags;             /**< Additional information about this HSP */
+   SequenceOverhangs* subject_overhangs; /**< Unaligned subject subsequence */
+} BlastHSPMappingInfo;
+
 /** Structure holding all information about an HSP */
 typedef struct BlastHSP {
    Int4 score;           /**< This HSP's raw score */
@@ -123,6 +142,9 @@ typedef struct BlastHSP {
    SPHIHspInfo* pat_info; /**< In PHI BLAST, information about this pattern
                                  match. */
    Int4 num_positives;
+
+   BlastHSPMappingInfo* map_info;
+
 } BlastHSP;
 
 /** The structure to hold all HSPs for a given sequence after the gapped 
@@ -154,6 +176,7 @@ typedef struct BlastHitList {
    BlastHSPList** hsplist_array; /**< Array of HSP lists for individual
                                           database hits */
    Int4 hsplist_current; /**< Number of allocated HSP list arrays. */
+   Int4 num_hits;   /**< Number of similar hits for the query (for mapping) */
 } BlastHitList;
 
 /** The structure to contain all BLAST results, for multiple queries */
@@ -226,6 +249,21 @@ Blast_HSPInit(Int4 query_start, Int4 query_end,
               Int4 query_context, Int2 query_frame, Int2 subject_frame,
               Int4 score, GapEditScript* *gap_edit, BlastHSP** ret_hsp);
 
+/** Make a deep copy of an HSP */
+NCBI_XBLAST_EXPORT
+BlastHSP*
+Blast_HSPClone(const BlastHSP* hsp);
+
+/** Deallocate memory for an HSP's additional data structure */
+NCBI_XBLAST_EXPORT
+BlastHSPMappingInfo* BlastHSPMappingInfoFree(BlastHSPMappingInfo* info);
+
+/** Allocate memory for an HSP's additional data structure */
+NCBI_XBLAST_EXPORT
+BlastHSPMappingInfo* BlastHSPMappingInfoNew(void);
+
+
+
 /** Reevaluate the HSP's score and percent identity after taking
  * into account the ambiguity information. Used only for blastn after a greedy
  * gapped extension with traceback. This function can remove part of the 
@@ -247,7 +285,7 @@ Blast_HSPReevaluateWithAmbiguitiesGapped(BlastHSP* hsp,
    const Uint1* query_start, const Int4 query_length, 
    const Uint1* subject_start, const Int4 subject_length,
    const BlastHitSavingParameters* hit_params, 
-   const BlastScoringParameters* score_params, BlastScoreBlk* sbp);
+   const BlastScoringParameters* score_params, const BlastScoreBlk* sbp);
 
 /** Reevaluate the HSP's score and percent identity after taking into
  * account the ambiguity information. Used for ungapped searches with 
@@ -339,6 +377,31 @@ Blast_HSPTestIdentityAndLength(EBlastProgramType program_number,
                                const BlastScoringOptions* score_options,
                                const BlastHitSavingOptions* hit_options);
 
+/** Calculate query coverage percentage of an hsp
+ *  @param hsp An HSP structure [in]
+ *  @param query_length	Length of query [in]
+ *  @return percentage query coverage of the input hsp
+ */
+NCBI_XBLAST_EXPORT
+double
+Blast_HSPGetQueryCoverage(const BlastHSP* hsp, Int4 query_length);
+
+/** Calculate query coverage percentage of an hsp
+ *  @param hsp An HSP structure [in]
+ *  @param min_query_coverage_pct Min query coverage pct for saving the hsp[in]
+ *  @param query_length	Length of query [in]
+ *  @return true if hsp's query coverage pct  < min_query_coverage_pct (delete hsp)
+ */
+NCBI_XBLAST_EXPORT
+Boolean Blast_HSPQueryCoverageTest(BlastHSP* hsp,
+        						   double min_query_coverage_pct,
+        						   Int4 query_length);
+
+
+NCBI_XBLAST_EXPORT
+Int2 Blast_TrimHSPListByMaxHsps(BlastHSPList* hsp_list,
+                                const BlastHitSavingOptions* hit_options);
+
 /** Calculated the number of HSPs that should be saved.
  * @param gapped_calculation ungapped if false [in]
  * @param options HitSavingoptions object [in]
@@ -408,9 +471,9 @@ Blast_HSPAdjustSubjectOffset(BlastHSP* hsp, Int4 start_shift);
 
 
 /** Returns a buffer with a protein translated from nucleotide.
- * @target_t SBlastTargetTranslation* with information about translation [in]
- * @hsp The hit to work on [in]
- * @translated_length length of the protein sequence [in]
+ * @param target_t SBlastTargetTranslation* with information about translation [in]
+ * @param hsp The hit to work on [in]
+ * @param translated_length length of the protein sequence [in]
 */
 NCBI_XBLAST_EXPORT
 const Uint1*
@@ -462,6 +525,7 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* hsp);
  * the sum statistics. In case of multiple queries, the offsets are assumed 
  * to be already adjusted to individual query coordinates, and the contexts 
  * are set for each HSP.
+ * @param program_number Type of BLAST program [in]
  * @param query_info Auxiliary query information - needed only for effective
  *                   search space calculation if it is not provided [in]
  * @param subject_length Subject length - needed for Spouge's new FSC [in]
@@ -476,7 +540,8 @@ Blast_HSPListSaveHSP(BlastHSPList* hsp_list, BlastHSP* hsp);
  *                       
  */
 NCBI_XBLAST_EXPORT
-Int2 Blast_HSPListGetEvalues(const BlastQueryInfo* query_info,
+Int2 Blast_HSPListGetEvalues(EBlastProgramType program_number,
+                             const BlastQueryInfo* query_info,
                              Int4 subject_length,
                              BlastHSPList* hsp_list,
                              Boolean gapped_calculation, 
@@ -528,6 +593,18 @@ Int2 Blast_HSPListReapByEvalue(BlastHSPList* hsp_list,
 NCBI_XBLAST_EXPORT
 Int2 Blast_HSPListReapByRawScore(BlastHSPList* hsp_list,
                                const BlastHitSavingOptions* hit_options);
+
+/** Discard the HSPs below the min query coverage pct from the HSP list
+ * @param hsp_list List of HSPs for one subject sequence [in] [out]
+ * @param hit_options Options block containing the min query coverage pct [in]
+ * @param query_info Structure containing information about the queries  [in]
+ * @param program_number Type of BLAST program.
+*/
+NCBI_XBLAST_EXPORT
+Int2 Blast_HSPListReapByQueryCoverage(BlastHSPList* hsp_list,
+                                      const BlastHitSavingOptions* hit_options,
+                                      const BlastQueryInfo* query_info,
+                                      EBlastProgramType program_number);
 
 /** Cleans out the NULLed out HSP's from the HSP array that
  * is part of the BlastHSPList.
@@ -611,6 +688,8 @@ Int2 Blast_HSPListAppend(BlastHSPList** old_hsp_list_ptr,
  *                    sequence region containing hsp_list and that
  *                    containing combined_hsp_list [in]
  * @param allow_gap Allow merging HSPs at different diagonals [in]
+ * @param short_reads Assume that queries are shorter than the database
+ *                    overlap region [in]
  * @return 0 if HSP lists have been merged successfully, -1 otherwise.
  */
 NCBI_XBLAST_EXPORT
@@ -619,7 +698,8 @@ Int2 Blast_HSPListsMerge(BlastHSPList** hsp_list,
                    Int4 hsp_num_max, Int4* split_points, 
                    Int4 contexts_per_query,
                    Int4 chunk_overlap_size,
-                   Boolean allow_gap);
+                   Boolean allow_gap,
+                   Boolean short_reads);
                    
 /** Adjust subject offsets in an HSP list if only part of the subject sequence
  * was searched. Used when long subject sequence is split into more manageable
@@ -706,7 +786,7 @@ Int2 Blast_HitListUpdate(BlastHitList* hit_list, BlastHSPList* hsp_list);
  * @param old_hit_list_ptr Pointer to original HitList, will be NULLed 
  *                          out on return [in|out]
  * @param combined_hit_list_ptr Pointer to the combined HitList [in|out]
- * @param contexts_per_query The number of different contexts that can
+ t* @param contexts_per_query The number of different contexts that can
  *             occur in hits from old_hit_list and combined_hit_list [in]
  * @param split_offsets the query offset that marks the boundary between
  *             combined_hit_list and old_hit_list. HSPs in old_hit_list
@@ -729,6 +809,14 @@ Int2 Blast_HitListMerge(BlastHitList** old_hit_list_ptr,
 NCBI_XBLAST_EXPORT
 Int2 
 Blast_HitListPurgeNullHSPLists(BlastHitList* hit_list);
+
+/** Sort BlastHitLIst bon evalue
+ *  @param hit_lsit BLAST hit list to be sorted [in] [out]
+ */
+NCBI_XBLAST_EXPORT
+Int2
+Blast_HitListSortByEvalue(BlastHitList* hit_list);
+
 /********************************************************************************
           HSPResults API.
 ********************************************************************************/
@@ -846,6 +934,63 @@ PhiBlastGetEffectiveNumberOfPatterns(const BlastQueryInfo *query_info);
 Int2 Blast_HSPResultsApplyMasklevel(BlastHSPResults *results,
                                     const BlastQueryInfo *query_info,
                                     Int4 masklevel, Int4 query_length);
+
+
+/********************************************************************************
+          Mapping hits API.
+********************************************************************************/
+
+
+/** Structre to store a spliced alignment */
+typedef struct BlastHSPChain
+{
+    Int4 num_hsps;             /**< Number of HSPs in the chain */
+    BlastHSP** hsp_array;      /**< Array of pointers to HSPs */
+
+    Int4 query_index;          /**< Index of query sequence */
+    Int4 oid;                  /**< Oid for the subject sequence */
+    Int4 score;                /**< Alignment score for the chain */
+    Int4 adapter;              /**< Position of detected adapted sequence in
+                                    the query */
+    Int4 polyA;                /**< Position of PolyA seqence in the query */
+
+    struct BlastHSPChain* pair;  /**< Pointer to mapped mate alignment for
+                                      paired short reads */
+
+    Int4 multiplicity;         /**< Number of idependent mappings for the same
+                                    query (including this one) */
+} BlastHSPChain;
+
+
+/** Structure that contains BLAST mapping results */
+typedef struct BlastMappingResults
+{
+    Int4 num_results;
+    BlastHSPChain** chain_array;
+} BlastMappingResults;
+
+
+/** Initialize the chain structure.
+ */
+NCBI_XBLAST_EXPORT
+BlastHSPChain* Blast_HSPChainNew(void);
+
+/** Free the chain structure
+ * @param ch Chain to be freed
+ */
+NCBI_XBLAST_EXPORT
+BlastHSPChain* Blast_HSPChainFree(BlastHSPChain* ch);
+
+/** Initialize BlastMappingResults structure
+ */
+NCBI_XBLAST_EXPORT
+BlastMappingResults* Blast_MappingResultsNew(void);
+
+/** Free BlastMappingResults structure
+ */
+NCBI_XBLAST_EXPORT
+BlastMappingResults* Blast_MappingResultsFree(BlastMappingResults* results);
+
 
 #ifdef __cplusplus
 }

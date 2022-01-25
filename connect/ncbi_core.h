@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CORE__H
 #define CONNECT___NCBI_CORE__H
 
-/* $Id: ncbi_core.h,v 6.39 2012/05/16 17:09:55 kazimird Exp $
+/* $Id: ncbi_core.h,v 6.47 2016/06/21 16:49:12 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -51,7 +51,7 @@
  *    flags:      TLOG_FormatFlags, ELOG_FormatFlags
  *    callbacks:  (*FLOG_Handler)(),  (*FLOG_Cleanup)()
  *    methods:    LOG_Create(),  LOG_Reset(),  LOG_AddRef(),  LOG_Delete(),
- *                LOG_WriteInternal()
+ *                LOG_Write(), LOG_WriteInternal()
  *
  * Registry:
  *    handle:     REG
@@ -106,31 +106,31 @@ typedef enum {
 
 /** I/O event (or direction).
  * @par <b>NOTE:</b>
- *  Internally, these constants are used as bit-values,
- *  and thus should not be changed in this header.  On the other hand,
- *  user code should not rely on the values of these constants, either.
+ *  Internally, these constants are used as bit-values, and therefore must not
+ *  be changed in this header.  On the other hand, user code should not rely
+ *  on the values of these constants, either.
  * @sa
  *  SOCK_Wait, SOCK_Poll, CONN_Wait, SOCK_SetTimeout, CONN_SetTimeout
  */
 typedef enum {
-    eIO_Open      = 0x0, /**< also serves as no-event indicator in SOCK_Poll */
-    eIO_Read      = 0x1, /**< read                                           */
-    eIO_Write     = 0x2, /**< write                                          */
-    eIO_ReadWrite = 0x3, /**< eIO_Read | eIO_Write                           */
-    eIO_Close     = 0x4  /**< also serves as an error indicator in SOCK_Poll */
+    eIO_Open      = 0,  /**< also serves as no-event indicator in SOCK_Poll  */
+    eIO_Read      = 1,  /**< read                                            */
+    eIO_Write     = 2,  /**< write                                           */
+    eIO_ReadWrite = 3,  /**< eIO_Read | eIO_Write (also, eCONN_OnFlush)      */
+    eIO_Close     = 4   /**< also serves as an error indicator in SOCK_Poll  */
 } EIO_Event;
 
 
 /** I/O status.
  */
 typedef enum {
-    eIO_Success = 0,  /**< everything is fine, no error occurred             */
-    eIO_Timeout,      /**< timeout expired before any I/O succeeded          */
-    eIO_Closed,       /**< peer has closed the connection                    */
-    eIO_Interrupt,    /**< signal received while I/O was in progress         */
-    eIO_InvalidArg,   /**< bad argument value(s)                             */
-    eIO_NotSupported, /**< the requested operation is not supported          */
-    eIO_Unknown       /**< unknown (most probably -- fatal) error            */
+    eIO_Success = 0,    /**< everything is fine, no error occurred           */
+    eIO_Timeout,        /**< timeout expired before any I/O succeeded        */
+    eIO_Closed,         /**< peer has closed the connection                  */
+    eIO_Interrupt,      /**< signal received while I/O was in progress       */
+    eIO_InvalidArg,     /**< bad argument value(s)                           */
+    eIO_NotSupported,   /**< the requested operation is not supported        */
+    eIO_Unknown         /**< unknown (most probably -- fatal) error          */
 } EIO_Status;
 
 
@@ -187,10 +187,10 @@ typedef enum {
  * @return
  *  Non-zero value if the requested operation was successful.
  * @par <b>NOTE:</b>
- *  The "-1" value is reserved for unset handler;  you also
- *  may want to return "-1" if your locking function does no locking, and
- *  you don't consider it as an error, but still want the caller to be
- *  ware of this "rightful non-doing" as opposed to the "rightful doing".
+ *  The "-1" value is reserved for unset handler;  you also may want to
+ *  return "-1" if your locking function does no locking, and you don't
+ *  consider it as an error, but still want the caller to be aware of this
+ *  "rightful non-doing" as opposed to the "rightful doing".
  * @sa
  *   MT_LOCK_Create, MT_LOCK_Delete
  */
@@ -283,6 +283,7 @@ typedef struct LOG_tag* LOG;
 typedef enum {
     eLOG_Trace = 0,
     eLOG_Note,
+    eLOG_Info = eLOG_Note,  /**< In C++ Toolkit "Info" is used, not "Note" */
     eLOG_Warning,
     eLOG_Error,
     eLOG_Critical,
@@ -330,6 +331,7 @@ typedef struct {
     const char* message;
     ELOG_Level  level;
     const char* module;
+    const char* func;
     const char* file;
     int         line;
     const void* raw_data;
@@ -407,7 +409,7 @@ extern NCBI_XCONNECT_EXPORT LOG LOG_Create
  *  LOG_Create
  */
 extern NCBI_XCONNECT_EXPORT LOG LOG_Reset
-(LOG          lg,     
+(LOG          lg,
  void*        user_data,
  FLOG_Handler handler,
  FLOG_Cleanup cleanup
@@ -434,27 +436,11 @@ extern NCBI_XCONNECT_EXPORT LOG LOG_AddRef(LOG lg);
 extern NCBI_XCONNECT_EXPORT LOG LOG_Delete(LOG lg);
 
 
-/** Write message (perhaps with raw data attached) to the log by calling
- * "lg->handler(lg->user_data, call_data)".
+/** Upon having filled SLOG_Handler data from parameters, write a message
+ * (perhaps with raw data attached) to the log by calling LOG_WriteInternal().
  * @par <b>NOTE:</b>
  *  Do not call this function directly, if possible.
- *  Instead, use LOG_WRITE() and LOG_DATA() macros from <ncbi_util.h>!
- * @param lg
- *  A log handle previously obtained from LOG_Create
- * @sa
- *  LOG_Create, ELOG_Level, FLOG_Handler, LOG_WRITE, LOG_DATA
- */
-extern NCBI_XCONNECT_EXPORT void LOG_WriteInternal
-(LOG           lg,
- SLOG_Handler* call_data
- );
-
-
-/** Write message (perhaps with raw data attached) to the log by calling
- * LOG_WriteInternal() upon filling up SLOG_Handler data from parameters.
- * @par <b>NOTE:</b>
- *  Do not call this function directly, if possible.
- *  Instead, use LOG_WRITE() and LOG_DATA() macros from <ncbi_util.h>!
+ *  Instead, use LOG_WRITE() and LOG_DATA() macros from <connect/ncbi_util.h>!
  * @param code
  *  Error code of the message
  * @param subcode
@@ -463,6 +449,8 @@ extern NCBI_XCONNECT_EXPORT void LOG_WriteInternal
  *  The message severity
  * @param module
  *  Module name (can be NULL)
+ * @param func
+ *  Function name (can be NULL)
  * @param file
  *  Source file name (can be NULL)
  * @param line
@@ -477,17 +465,34 @@ extern NCBI_XCONNECT_EXPORT void LOG_WriteInternal
  *  LOG_Create, ELOG_Level, FLOG_Handler, LOG_WriteInternal
  */
 extern NCBI_XCONNECT_EXPORT void LOG_Write
-(LOG         lg,   
+(LOG         lg,
  int         code,
  int         subcode,
  ELOG_Level  level,
  const char* module,
- const char* file, 
+ const char* func,
+ const char* file,
  int         line,
  const char* message,
  const void* raw_data,
  size_t      raw_size
 );
+
+
+/** Write message (perhaps with raw data attached) to the log by calling
+ * "lg->handler(lg->user_data, call_data)".
+ * @par <b>NOTE:</b>
+ *  Do not call this function directly, if possible.
+ *  Instead, use LOG_WRITE() and LOG_DATA() macros from <ncbi_util.h>!
+ * @param lg
+ *  A log handle previously obtained from LOG_Create
+ * @sa
+ *  LOG_Create, ELOG_Level, FLOG_Handler, LOG_Write
+ */
+extern NCBI_XCONNECT_EXPORT void LOG_WriteInternal
+(LOG           lg,
+ SLOG_Handler* call_data
+ );
 
 
 /******************************************************************************

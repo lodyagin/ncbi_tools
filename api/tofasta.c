@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 7/12/91
 *
-* $Revision: 6.256 $
+* $Revision: 6.313 $
 *
 * File Description:  various sequence objects to fasta output
 *
@@ -744,7 +744,7 @@ typedef struct streamfsa {
   Int2          blocklen;
   Int2          grouplen;
   Int2          skip;
-  Int4          gi;
+  BIG_ID        gi;
   Int4          start;
   Int4          seqpos;
   Boolean       seqspans;
@@ -881,6 +881,7 @@ static void AddSubSourceValuesToNucTitle (
 )
 
 {
+  Boolean       needsQuotes;
   CharPtr       ssp_name;
   SubSourcePtr  ssp;
   Char          text [256];
@@ -896,8 +897,20 @@ static void AddSubSourceValuesToNucTitle (
       StringCat (text, ssp_name);
     }
     StringToLower (text);
+    needsQuotes = FALSE;
+    if (StringChr (ssp->name, '=') != NULL ||
+        StringChr (ssp->name, '[') != NULL ||
+        StringChr (ssp->name, ']') != NULL) {
+      needsQuotes = TRUE;
+    }
     StringCat (text, "=");
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, ssp->name);
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, "] ");
     StringCat (str, text);
     ssp = ssp->next;
@@ -912,6 +925,7 @@ static void AddOrgModValuesToNucTitle (
 {
   CharPtr    mod_name;
   OrgModPtr  mod;
+  Boolean    needsQuotes;
   Char       text [256];
 
   if (biop == NULL || biop->org == NULL || biop->org->orgname == NULL || str == NULL) return;
@@ -921,8 +935,20 @@ static void AddOrgModValuesToNucTitle (
     mod_name = GetOrgModQualName (mod->subtype);
     StringCat (text, mod_name);
     StringToLower (text);
+    needsQuotes = FALSE;
+    if (StringChr (mod->subname, '=') != NULL ||
+        StringChr (mod->subname, '[') != NULL ||
+        StringChr (mod->subname, ']') != NULL) {
+      needsQuotes = TRUE;
+    }
     StringCat (text, "=");
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, mod->subname);
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, "] ");
     StringCat (str, text);
     mod = mod->next;
@@ -936,6 +962,7 @@ static CharPtr MakeNucleotideTitleInSequinStyle (
 {
   BioSourcePtr  biop;
   MolInfoPtr    mip;
+  Boolean       needsQuotes;
   OrgNamePtr    onp;
   OrgRefPtr     orp;
   SeqDescrPtr   sdp;
@@ -976,8 +1003,20 @@ static CharPtr MakeNucleotideTitleInSequinStyle (
 
   orp = biop->org;
   if (orp != NULL) {
+    needsQuotes = FALSE;
+    if (StringChr (orp->taxname, '=') != NULL ||
+        StringChr (orp->taxname, '[') != NULL ||
+        StringChr (orp->taxname, ']') != NULL) {
+      needsQuotes = TRUE;
+    }
     StringCpy (text, "[organism=");
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, orp->taxname);
+    if (needsQuotes) {
+      StringCat (text, "\"");
+    }
     StringCat (text, "] ");
     StringCat (str, text);
   }
@@ -1050,10 +1089,11 @@ static Int4 BioseqFastaStreamInternal (
   Char         buf [4096];
   Char         ch, ch1, ch2, ch3;
   Int4         count = 0;
-  Int4         gi = -1;
+  BIG_ID       gi = -1;
   SeqIdPtr     gpp = NULL;
   Char         id [128];
   Uint1        id_format = PRINTID_FASTA_LONG;
+  CharPtr      original_id = NULL;
   CharPtr      ptr;
   StreamFsa    sf;
   SeqIdPtr     sip = NULL;
@@ -1198,6 +1238,9 @@ static Int4 BioseqFastaStreamInternal (
   }
   if (do_defline) {
     id [0] = '\0';
+    if (ShouldUseOriginalID (bsp)) {
+      original_id = FastaGetOriginalId (bsp);
+    }
     if (substitute_ids) {
       sip = ChooseFastaID (bsp, sorted_prot);
     } else if (bsp != NULL) {
@@ -1206,7 +1249,11 @@ static Int4 BioseqFastaStreamInternal (
     if ((flags & STREAM_ALL_FASTA_IDS) != 0) {
       id_format = PRINTID_FASTA_ALL;
     }
-    SeqIdWrite (sip, id, id_format, sizeof (id) - 1);
+    if (original_id != NULL && StringLen (original_id) + 5 < sizeof (id)) {
+      sprintf (id, "lcl|%s", original_id);
+    } else {
+      SeqIdWrite (sip, id, id_format, sizeof (id) - 1);
+    }
     /* no longer need to do feature indexing if title not present to speed up creation */
     /*
     sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_title, NULL);
@@ -1227,6 +1274,12 @@ static Int4 BioseqFastaStreamInternal (
     }
     tmp = buf;
     ch = *tmp;
+    if (ch == '>') {
+      *tmp = '_';
+    }
+    /*
+    tmp = buf;
+    ch = *tmp;
     while (ch != '\0') {
       if (ch == '>') {
         *tmp = '_';
@@ -1234,6 +1287,7 @@ static Int4 BioseqFastaStreamInternal (
       tmp++;
       ch = *tmp;
     }
+    */
     if (sf.fp != NULL) {
       fprintf (fp, ">%s %s\n", id, buf);
     } else if (sf.bs != NULL) {
@@ -1406,7 +1460,7 @@ static void DoSpecialDefline (
   Uint2              entityID;
   SeqFeatPtr         gene = NULL;
   SeqMgrFeatContext  genecontext;
-  Int4               gi;
+  BIG_ID             gi;
   GeneRefPtr         grp;
   IntAsn2gbJob       iaj;
   SeqLocPtr          loc;
@@ -1981,6 +2035,7 @@ static void FastaOneBioseq (
       bsp->repr == Seq_repr_seg ||
       bsp->repr == Seq_repr_const ||
       bsp->repr == Seq_repr_delta ||
+      bsp->repr == Seq_repr_ref ||
       bsp->repr == Seq_repr_virtual) {
     count = BioseqFastaStreamEx (bsp, fsp->fp, fsp->flags, fsp->linelen, fsp->blocklen, fsp->grouplen,
                                  TRUE, fsp->substitute_ids, fsp->sorted_prot);
@@ -2064,6 +2119,53 @@ NLM_EXTERN Int4 SeqEntryFastaStream (
 )
 
 {  return SeqEntryFastaStreamEx (sep, fp, flags, linelen, blocklen, grouplen, do_na, do_aa, master_style, FALSE, FALSE);
+}
+
+NLM_EXTERN void MakeFastaStreamIdSuffix (
+  SeqFeatPtr sfp,
+  Uint4 idx,
+  CharPtr prefix,
+  CharPtr buf,
+  Boolean do_product,
+  Boolean do_feat_id
+)
+
+{
+  Char       fbuf [64];
+  BIG_ID     gi;
+  BioseqPtr  pbsp;
+  Char       pbuf [64];
+  SeqIdPtr   sip;
+
+  if (sfp == NULL || buf == NULL) return;
+
+  StringCpy (buf, prefix);
+  fbuf [0] = '\0';
+  pbuf [0] = '\0';
+  if (do_product && sfp->product != NULL) {
+    pbsp = BioseqFindFromSeqLoc (sfp->product);
+    if (pbsp != NULL) {
+      SeqIdWrite (pbsp->id, pbuf, PRINTID_TEXTID_ACC_VER, sizeof (pbuf) - 1);
+    } else {
+      sip = SeqLocId (sfp->product);
+      if (sip != NULL && sip->choice == SEQID_GI) {
+        gi = sip->data.intvalue;
+        sip = GetSeqIdForGI (gi);
+        if (sip != NULL) {
+          SeqIdWrite (sip, pbuf, PRINTID_TEXTID_ACC_VER, sizeof (pbuf) - 1);
+        }
+      }
+    }
+  }
+  if (StringDoesHaveText (pbuf)) {
+    StringCat (buf, "_");
+    StringCat (buf, pbuf);
+  }
+  if (do_feat_id && idx > 0) {
+    sprintf (fbuf, "%ld", (long) idx);
+    StringCat (buf, "_");
+    StringCat (buf, fbuf);
+  }
 }
 
 /*****************************************************************************
@@ -2620,7 +2722,7 @@ static Boolean FastaReadSequenceInternalEx
 }
 static SeqIdPtr MakeTrustedID (CharPtr prefix, Int2Ptr ctrptr)
 {
-  Char buf[40];
+  Char buf[128];
   ValNodePtr newid;
   ObjectIdPtr oid;
   Int2 start = 1;
@@ -2912,6 +3014,7 @@ NLM_EXTERN Boolean FastaId(BioseqPtr bsp, CharPtr buf, Uint4 buflen)
     SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
     return TRUE;
 }
+
 static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printid_general, SeqLocPtr seqloc)
 {
     Int4 length;
@@ -2932,6 +3035,85 @@ static Boolean FastaIdX(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean printi
     }
     return TRUE;
 }
+
+NLM_EXTERN CharPtr FastaGetOriginalId (BioseqPtr bsp)
+
+{
+    CharPtr        id;
+    ObjectIdPtr    oip;
+    SeqDescrPtr    sdp;
+    UserFieldPtr   ufp;
+    UserObjectPtr  uop;
+
+  if (bsp == NULL) return NULL;
+
+  for (sdp = bsp->descr; sdp != NULL; sdp = sdp->next) {
+    if (sdp->choice != Seq_descr_user) continue;
+    uop = (UserObjectPtr) sdp->data.ptrvalue;
+    if (uop == NULL) continue;
+    oip = uop->type;
+    if (oip == NULL) continue;
+    if (StringCmp (oip->str, "OrginalID") != 0 && StringCmp (oip->str, "OriginalID") != 0) continue;
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      if (StringCmp (oip->str, "LocalId") != 0) continue;
+      if (ufp->choice != 1) continue;
+      id = (CharPtr) ufp->data.ptrvalue;
+      if (id == NULL) continue;
+      return id;
+    }
+  }
+
+  return NULL;
+}
+
+NLM_EXTERN Boolean ShouldUseOriginalID (BioseqPtr bsp)
+
+{
+  DbtagPtr  dbt;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL) return FALSE;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    switch (sip->choice) {
+      case SEQID_LOCAL :
+        break;
+      case SEQID_GENERAL :
+        dbt = (DbtagPtr) sip->data.ptrvalue;
+        if (dbt != NULL) {
+          if (! IsSkippableDbtag (dbt)) return FALSE;
+        }
+        break;
+      default :
+        return FALSE;
+    }
+  }
+
+  return TRUE;
+}
+
+NLM_EXTERN Boolean FastaIdEx(BioseqPtr bsp, CharPtr buf, Uint4 buflen, Boolean prefer_original_ID)
+{
+    CharPtr   id;
+    SeqIdPtr  sip;
+
+    if ((bsp == NULL) || (buf == NULL)) return FALSE;
+    if (prefer_original_ID) {
+      sip = bsp->id;
+      if (ShouldUseOriginalID (bsp)) {
+        id = FastaGetOriginalId (bsp);
+        if (id != NULL && StringLen (id) + 5 < buflen) {
+          sprintf (buf, "lcl|%s", id);
+          return TRUE;
+        }
+      }
+    }
+    SeqIdWrite(bsp->id, buf, PRINTID_FASTA_LONG, buflen);
+    return TRUE;
+}
+
 /*****************************************************************************
 *
 *   FastaDefLine(bsp, buf, buflen, accession, organism)
@@ -2951,7 +3133,7 @@ NLM_EXTERN Boolean FastaDefLine (BioseqPtr bsp, CharPtr buf, Uint4 buflen,
     PatentSeqIdPtr psip;
     Uint4 diff, phase;
     Int4 num_segs, num_gaps;
-    Char tbuf[80];
+    Char tbuf[128];
     static CharPtr htgs[2] = {
         "unordered", "ordered" };
     if ((bsp == NULL) || (buf == NULL)) return FALSE;
@@ -4653,7 +4835,7 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
     Uint4 diff, phase, i;
     Boolean doit;
     Int4 num_segs, num_gaps;
-    static Char tbuf[80];
+    static Char tbuf[128];
     static CharPtr htgs[2] = {
         "unordered", "ordered" };
     static CharPtr htg_phrase[3] = {
@@ -4726,6 +4908,14 @@ NLM_EXTERN Boolean CreateDefLineExEx (ItemInfoPtr iip, BioseqPtr bsp, CharPtr bu
                 if (tsip != NULL && tsip->accession != NULL) {
                     if (StringLen (tsip->accession) == 12) {
                         if (StringCmp (tsip->accession + 6, "000000") == 0) {
+                            wgsmaster = TRUE;
+                        }
+                    } else if (StringLen (tsip->accession) == 13) {
+                        if (StringCmp (tsip->accession + 6, "0000000") == 0) {
+                            wgsmaster = TRUE;
+                        }
+                    } else if (StringLen (tsip->accession) == 14) {
+                        if (StringCmp (tsip->accession + 6, "00000000") == 0) {
                             wgsmaster = TRUE;
                         }
                     }
@@ -5254,7 +5444,7 @@ do_virtual)
     Int2 ctr = 0;
     Uint1 residue;
     Int4 pos;
-    Char idbuf[40];
+    Char idbuf[128];
     if ((spp == NULL) || (buf == NULL)) return FALSE;
     while ((residue = SeqPortGetResidue(spp)) != SEQPORT_EOF)
     {
@@ -5409,19 +5599,47 @@ NLM_EXTERN void ClearGenBankKeywords (Uint2 entityID, Pointer ptr)
   VisitDescriptorsInSep (sep, NULL, ClearKeywordsProc);
   DeleteMarkedObjects (entityID, 0, NULL);
 }
+
+static void IsNcCallback (BioseqPtr bsp, Pointer userdata)
+
+{
+  BoolPtr       is_ncP;
+  SeqIdPtr      sip;
+  TextSeqIdPtr  tsip;
+
+  if (bsp == NULL) return;
+  is_ncP = (BoolPtr) userdata;
+  if (is_ncP == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice != SEQID_OTHER) continue;
+    tsip = (TextSeqIdPtr) sip->data.ptrvalue;
+    if (tsip == NULL) continue;
+    if (StringNICmp (tsip->accession, "NC_", 3) == 0) {
+      *is_ncP = TRUE;
+    }
+  }
+}
+
 NLM_EXTERN void NC_Cleanup (Uint2 entityID, Pointer ptr)
 {
   Boolean      objMgrFilt [OBJ_MAX];
+  Boolean      is_nc = FALSE;
   SeqEntryPtr  sep;
+
   if (entityID == 0) {
     entityID = ObjMgrGetEntityIDForPointer (ptr);
   }
   if (entityID == 0) return;
+
+  sep = GetTopSeqEntryForEntityID (entityID);
+  VisitBioseqsInSep (sep, (Pointer) &is_nc, IsNcCallback);
+  if (! is_nc) return;
+
   AssignIDsInEntity (entityID, 0, NULL);
   MemSet ((Pointer) objMgrFilt, FALSE, sizeof (objMgrFilt));
   objMgrFilt [OBJ_SEQDESC] = TRUE;
   GatherObjectsInEntity (entityID, 0, NULL, RemoveAllTitles, NULL, objMgrFilt);
-  sep = GetTopSeqEntryForEntityID (entityID);
   VisitDescriptorsInSep (sep, NULL, ClearKeywordsProc);
   DeleteMarkedObjects (entityID, 0, NULL);
   MemSet ((Pointer) objMgrFilt, FALSE, sizeof (objMgrFilt));
@@ -5627,6 +5845,9 @@ typedef struct deflinestruct {
   Boolean  m_reconstruct;
   Boolean  m_allprotnames;
 
+  Boolean  m_gpipemode;
+  Boolean  m_devmode;
+
   /* seq-inst fields */
   Boolean m_is_na;
   Boolean m_is_aa;
@@ -5634,6 +5855,8 @@ typedef struct deflinestruct {
   Boolean m_is_seg;
   Boolean m_is_delta;
   Boolean m_is_virtual;
+  Boolean m_is_map;
+  Uint1   m_topology;
 
   /* seq-id fields */
   Boolean m_is_nc;
@@ -5641,9 +5864,11 @@ typedef struct deflinestruct {
   Boolean m_is_nr;
   Boolean m_is_patent;
   Boolean m_is_pdb;
+  Boolean m_is_wp;
   Boolean m_third_party;
   Boolean m_wgs_master;
   Boolean m_tsa_master;
+  Boolean m_tls_master;
 
   CharPtr m_general_str;
   CharPtr m_patent_country;
@@ -5659,6 +5884,7 @@ typedef struct deflinestruct {
 
   Boolean m_htg_tech;
   Boolean m_htgs_unfinished;
+  Boolean m_is_tls;
   Boolean m_is_tsa;
   Boolean m_is_wgs;
   Boolean m_is_est_sts_gss;
@@ -5672,13 +5898,23 @@ typedef struct deflinestruct {
   Boolean m_tpa_exp;
   Boolean m_tpa_inf;
   Boolean m_tpa_reasm;
+  Boolean m_unordered;
 
   /* pdb block fields */
   CharPtr m_pdb_compound;
 
   /* biosource fields */
   CharPtr m_taxname;
+  Boolean m_multispecies;
   int     m_genome;
+  Boolean m_is_plasmid;
+  Boolean m_is_chromosome;
+
+  CharPtr m_organelle;
+
+  CharPtr m_first_super_kingdom;
+  CharPtr m_second_super_kingdom;
+  Boolean m_is_cross_kingdom;
 
   /* subsource fields */
   CharPtr m_chromosome;
@@ -5694,8 +5930,15 @@ typedef struct deflinestruct {
   CharPtr m_isolate;
   CharPtr m_strain;
 
+  /* map fields */
+  CharPtr m_enzyme;
+
   /* user object fields */
   Boolean m_is_unverified;
+  CharPtr m_targeted_locus;
+
+  /* comment fields */
+  Boolean m_is_pseudogene;
 
   /* exception fields */
   TextFsaPtr m_low_quality_fsa;
@@ -5733,12 +5976,121 @@ static Boolean x_CDShasLowQualityException (
   return FALSE;
 }
 
+static CharPtr x_OrganelleName (
+  DefLinePtr dlp,
+  Boolean has_plasmid,
+  Boolean virus_or_phage,
+  Boolean wgs_suffix
+)
+
+{
+  CharPtr  result = NULL;
+
+  if (dlp == NULL) return NULL;
+
+  switch (dlp->m_genome) {
+      case GENOME_chloroplast :
+        result = "chloroplast";
+        break;
+      case GENOME_chromoplast :
+        result = "chromoplast";
+        break;
+      case GENOME_kinetoplast :
+        result = "kinetoplast";
+        break;
+      case GENOME_mitochondrion :
+        {
+          if (has_plasmid || wgs_suffix) {
+            result = "mitochondrial";
+          } else {
+            result = "mitochondrion";
+          }
+          break;
+        }
+      case GENOME_plastid :
+        result = "plastid";
+        break;
+      case GENOME_macronuclear :
+        {
+          result = "macronuclear";
+          break;
+        }
+      case GENOME_extrachrom :
+        {
+          if (! wgs_suffix) {
+            result = "extrachromosomal";
+          }
+          break;
+        }
+      case GENOME_plasmid :
+        {
+          if (! wgs_suffix) {
+            result = "plasmid";
+          }
+          break;
+        }
+      /* transposon and insertion-seq are obsolete */
+      case GENOME_cyanelle :
+        result = "cyanelle";
+        break;
+      case GENOME_proviral :
+        {
+          if (! virus_or_phage) {
+            if (has_plasmid || wgs_suffix) {
+              result = "proviral";
+            } else {
+              result = "provirus";
+            }
+          }
+          break;
+        }
+      case GENOME_virion :
+        {
+          if (! virus_or_phage) {
+            result = "virus";
+          }
+          break;
+        }
+      case GENOME_nucleomorph :
+        {
+          if (! wgs_suffix) {
+            result = "nucleomorph";
+          }
+          break;
+        }
+      case GENOME_apicoplast :
+        result = "apicoplast";
+        break;
+      case GENOME_leucoplast :
+        result = "leucoplast";
+        break;
+      case GENOME_proplastid :
+        result = "proplastid";
+        break;
+      case GENOME_endogenous_virus :
+        result = "endogenous virus";
+        break;
+      case GENOME_hydrogenosome :
+        result = "hydrogenosome";
+        break;
+      case GENOME_chromosome :
+        result = "chromosome";
+        break;
+      case GENOME_chromatophore :
+        result = "chromatophore";
+        break;
+  }
+
+  return result;
+}
+
 /* set instance variables from Seq-inst, Seq-ids, MolInfo, etc., but not BioSource */
 static void x_SetFlags (
   DefLinePtr dlp
 )
 
 {
+  BioSourcePtr    biop;
   BioseqPtr       bsp;
   IdPatPtr        cit;
   ValNodePtr      compound;
@@ -5747,15 +6099,24 @@ static void x_SetFlags (
   GBBlockPtr      gbp;
   DbtagPtr        general;
   ValNodePtr      keywords;
+  size_t          len;
   MolInfoPtr      mip;
+  Int2            num_super_kingdom = 0;
   ObjectIdPtr     oip;
+  OrgNamePtr      onp;
+  OrgRefPtr       orp;
   PdbBlockPtr     pbp;
   PDBSeqIdPtr     pdbip;
   PatentSeqIdPtr  psip;
+  RsiteRefPtr     rrp;
   SeqDescrPtr     sdp;
+  SeqFeatPtr      sfp;
   SeqIdPtr        sip;
   CharPtr         str;
+  Boolean         super_kingdoms_different = FALSE;
+  TaxElementPtr   tep;
   TextSeqIdPtr    tsip;
+  UserFieldPtr    ufp;
   UserObjectPtr   uop;
   ValNodePtr      vnp;
 
@@ -5766,10 +6127,12 @@ static void x_SetFlags (
 
   dlp->m_is_na = (Boolean) ISA_na (bsp->mol);
   dlp->m_is_aa = (Boolean) ISA_aa (bsp->mol);
+  dlp->m_topology = bsp->topology;
 
   dlp->m_is_seg = (Boolean) (bsp->repr == Seq_repr_seg);
   dlp->m_is_delta = (Boolean) (bsp->repr == Seq_repr_delta);
   dlp->m_is_virtual = (Boolean) (bsp->repr == Seq_repr_virtual);
+  dlp->m_is_map =  (Boolean) (bsp->repr == Seq_repr_map);
 
   /* process Seq-ids */
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
@@ -5785,6 +6148,22 @@ static void x_SetFlags (
               dlp->m_is_nm = TRUE;
             } else if (StringNICmp (tsip->accession, "NR_", 3) == 0) {
               dlp->m_is_nr = TRUE;
+            } else if (StringNICmp (tsip->accession, "WP_", 3) == 0) {
+              dlp->m_is_wp = TRUE;
+            }
+            len = StringLen (tsip->accession);
+            if (len == 15) {
+              if (StringCmp (tsip->accession + 9, "000000") == 0) {
+                dlp->m_wgs_master = TRUE;
+              }
+            } else if (len == 16) {
+              if (StringCmp (tsip->accession + 9, "0000000") == 0) {
+                dlp->m_wgs_master = TRUE;
+              }
+            } else if (len == 17) {
+              if (StringCmp (tsip->accession + 10, "0000000") == 0) {
+                dlp->m_wgs_master = TRUE;
+              }
             }
           }
           break;
@@ -5793,8 +6172,17 @@ static void x_SetFlags (
         case SEQID_DDBJ :
           tsip = (TextSeqIdPtr) sip->data.ptrvalue;
           if (tsip != NULL && tsip->accession != NULL) {
-            if (StringLen (tsip->accession) == 12) {
+            len = StringLen (tsip->accession);
+            if (len == 12) {
               if (StringCmp (tsip->accession + 6, "000000") == 0) {
+                dlp->m_wgs_master = TRUE;
+              }
+            } else if (len == 13) {
+              if (StringCmp (tsip->accession + 6, "0000000") == 0) {
+                dlp->m_wgs_master = TRUE;
+              }
+            } else if (len == 14) {
+              if (StringCmp (tsip->accession + 6, "00000000") == 0) {
                 dlp->m_wgs_master = TRUE;
               }
             }
@@ -5886,6 +6274,13 @@ static void x_SetFlags (
               dlp->m_tsa_master = TRUE;
             }
             break;
+          case MI_TECH_targeted :
+            dlp->m_is_tls = TRUE;
+            dlp->m_use_biosrc = TRUE;
+            if (dlp->m_is_virtual) {
+              dlp->m_tls_master = TRUE;
+            }
+            break;
           default :
             break;
       }
@@ -5901,47 +6296,74 @@ static void x_SetFlags (
     if (uop == NULL) continue;
     oip = uop->type;
     if (oip == NULL) continue;
-    if (StringICmp (oip->str, "Unverified") != 0) continue;
-    dlp->m_is_unverified = TRUE;
+    if (StringICmp (oip->str, "Unverified") == 0) {
+      dlp->m_is_unverified = TRUE;
+    } else if (StringICmp (oip->str, "AutodefOptions") == 0) {
+      for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+        oip = ufp->label;
+        if (oip == NULL) continue;
+        if (StringICmp (oip->str, "Targeted Locus Name") != 0) continue;
+        if (ufp->choice != 1) continue;
+        str = (CharPtr) ufp->data.ptrvalue;
+        if (StringHasNoText (str)) continue;
+        dlp->m_targeted_locus = str;
+      }
+    }
   }
 
-  if (dlp->m_htg_tech || dlp->m_third_party) {
-    /* process keywords */
-    keywords = NULL;
+  /* process comments */
+  for (sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_comment, NULL);
+       sdp != NULL;
+       sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_comment, sdp)) {
+    if (sdp->choice != Seq_descr_comment) continue;
+    str = (CharPtr) sdp->data.ptrvalue;
+    if (str == NULL) continue;
+    if (StringISearch (str, "[CAUTION] Could be the product of a pseudogene") != 0) {
+      dlp->m_is_pseudogene = TRUE;
+    }
+  }
 
-    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_genbank, NULL);
-    if (sdp != NULL && sdp->choice == Seq_descr_genbank) {
-      gbp = (GBBlockPtr) sdp->data.ptrvalue;
-      if (gbp != NULL) {
-        keywords = gbp->keywords;
+  /* process keywords */
+  keywords = NULL;
+
+  sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_genbank, NULL);
+  if (sdp != NULL && sdp->choice == Seq_descr_genbank) {
+    gbp = (GBBlockPtr) sdp->data.ptrvalue;
+    if (gbp != NULL) {
+      keywords = gbp->keywords;
+    }
+  }
+  if (keywords == NULL) {
+    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_embl, NULL);
+    if (sdp != NULL && sdp->choice == Seq_descr_embl) {
+      ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
+      if (ebp != NULL) {
+        keywords = ebp->keywords;
       }
     }
-    if (keywords == NULL) {
-      sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_embl, NULL);
-      if (sdp != NULL && sdp->choice == Seq_descr_embl) {
-        ebp = (EMBLBlockPtr) sdp->data.ptrvalue;
-        if (ebp != NULL) {
-          keywords = ebp->keywords;
-        }
+  }
+  if (keywords != NULL) {
+    for (vnp = keywords; vnp != NULL; vnp = vnp->next) {
+      str = (CharPtr) vnp->data.ptrvalue;
+      if (StringHasNoText (str)) continue;
+      if (StringICmp (str, "UNORDERED") == 0) {
+        dlp->m_unordered = TRUE;
       }
-    }
-    if (keywords != NULL) {
-      for (vnp = keywords; vnp != NULL; vnp = vnp->next) {
-        str = (CharPtr) vnp->data.ptrvalue;
-        if (StringHasNoText (str)) continue;
-        if (StringICmp (str, "HTGS_DRAFT") == 0) {
-          dlp->m_htgs_draft = TRUE;
-        } else if (StringICmp (str, "HTGS_CANCELLED") == 0) {
-          dlp->m_htgs_cancelled = TRUE;
-        } else if (StringICmp (str, "HTGS_POOLED_MULTICLONE") == 0) {
-          dlp->m_htgs_pooled = TRUE;
-        } else if (StringICmp (str, "TPA:experimental") == 0) {
-          dlp->m_tpa_exp = TRUE;
-        } else if (StringICmp (str, "TPA:inferential") == 0) {
-          dlp->m_tpa_inf = TRUE;
-        } else if (StringICmp (str, "TPA:reassembly") == 0) {
-          dlp->m_tpa_reasm = TRUE;
-        }
+      if (! dlp->m_htg_tech && ! dlp->m_third_party) continue;
+      if (StringICmp (str, "HTGS_DRAFT") == 0) {
+        dlp->m_htgs_draft = TRUE;
+      } else if (StringICmp (str, "HTGS_CANCELLED") == 0) {
+        dlp->m_htgs_cancelled = TRUE;
+      } else if (StringICmp (str, "HTGS_POOLED_MULTICLONE") == 0) {
+        dlp->m_htgs_pooled = TRUE;
+      } else if (StringICmp (str, "TPA:experimental") == 0) {
+        dlp->m_tpa_exp = TRUE;
+      } else if (StringICmp (str, "TPA:inferential") == 0) {
+        dlp->m_tpa_inf = TRUE;
+      } else if (StringICmp (str, "TPA:reassembly") == 0) {
+        dlp->m_tpa_reasm = TRUE;
+      } else if (StringICmp (str, "TPA:assembly") == 0) {
+        dlp->m_tpa_reasm = TRUE;
       }
     }
   }
@@ -5957,6 +6379,46 @@ static void x_SetFlags (
         if (compound != NULL) {
           dlp->m_pdb_compound = (CharPtr) compound->data.ptrvalue;
         }
+      }
+    }
+  }
+
+  if (dlp->m_is_wp) {
+    for (sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
+         sdp != NULL;
+         sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, sdp)) {
+      if (sdp->choice != Seq_descr_source) continue;
+      biop = (BioSourcePtr) sdp->data.ptrvalue;
+      if (biop == NULL) continue;
+      orp = biop->org;
+      if (orp == NULL) continue;
+      onp = orp->orgname;
+      if (onp == NULL) continue;
+      if (onp->choice != 5) continue;
+      for (tep = (TaxElementPtr) onp->data; tep != NULL; tep = tep->next) {
+        if (tep->fixed_level == 0 && StringICmp (tep->level, "superkingdom") == 0) {
+          num_super_kingdom++;
+          if (dlp->m_first_super_kingdom == NULL) {
+            dlp->m_first_super_kingdom = tep->name;
+          } else if (StringICmp (dlp->m_first_super_kingdom, tep->name) != 0) {
+            dlp->m_second_super_kingdom = tep->name;
+            super_kingdoms_different = TRUE;
+          }
+          if (num_super_kingdom > 1 && super_kingdoms_different) {
+            dlp->m_is_cross_kingdom = TRUE;
+          }
+        }
+      }
+    }
+  }
+
+  if (dlp->m_is_map) {
+    for (sfp = (SeqFeatPtr) bsp->seq_ext; sfp != NULL; sfp = sfp->next) {
+      if (sfp->data.choice != SEQFEAT_RSITE) continue;
+      rrp = (RsiteRefPtr) sfp->data.value.ptrvalue;
+      if (rrp == NULL) continue;
+      if (rrp->choice == 1) {
+        dlp->m_enzyme = (CharPtr) rrp->data.ptrvalue;
       }
     }
   }
@@ -5993,13 +6455,15 @@ static void x_SetBioSrc (
 )
 
 {
-  BioSourcePtr  biop;
-  BioseqPtr     bsp;
-  OrgModPtr     omp;
-  OrgNamePtr    onp;
-  OrgRefPtr     orp;
-  SeqDescrPtr   sdp;
-  SubSourcePtr  ssp;
+  BioSourcePtr   biop;
+  BioseqPtr      bsp;
+  Boolean        has_plasmid = FALSE, wgs_suffix = FALSE, virus_or_phage = FALSE;
+  OrgModPtr      omp;
+  OrgNamePtr     onp;
+  OrgRefPtr      orp;
+  SeqDescrPtr    sdp;
+  SubSourcePtr   ssp;
+  TaxElementPtr  tep;
 
   if (dlp == NULL) return;
 
@@ -6017,6 +6481,8 @@ static void x_SetBioSrc (
         }
       }
       dlp->m_genome = biop->genome;
+      dlp->m_is_plasmid = (Boolean) (dlp->m_genome == GENOME_plasmid);
+      dlp->m_is_chromosome = (Boolean) (dlp->m_genome == GENOME_chromosome);
 
       /* process SubSource */
       for (ssp = biop->subtype; ssp != NULL; ssp = ssp->next) {
@@ -6047,6 +6513,15 @@ static void x_SetBioSrc (
       if (orp != NULL) {
         onp = orp->orgname;
         if (onp != NULL) {
+          if (onp->choice == 5) {
+            for (tep = (TaxElementPtr) onp->data; tep != NULL; tep = tep->next) {
+              if (tep->fixed_level > 0) {
+                dlp->m_multispecies = TRUE;
+              } else if (StringDoesHaveText (tep->level) && StringICmp (tep->level, "species") != 0) {
+                dlp->m_multispecies = TRUE;
+              }
+            }
+          }
           for (omp = onp->mod; omp != NULL; omp = omp->next) {
             if (StringHasNoText (omp->subname)) continue;
             switch (omp->subtype) {
@@ -6078,6 +6553,22 @@ static void x_SetBioSrc (
       }
     }
   }
+
+  if (StringISearch (dlp->m_taxname, "virus") != NULL ||
+      StringISearch (dlp->m_taxname, "phage") != NULL) {
+    virus_or_phage = TRUE;
+  }
+
+  if (StringDoesHaveText (dlp->m_plasmid)) {
+    has_plasmid = TRUE;
+  }
+
+  if (dlp->m_is_wgs) {
+    wgs_suffix = TRUE;
+  }
+
+  dlp->m_organelle = x_OrganelleName (dlp, has_plasmid, virus_or_phage, wgs_suffix);
+
 
   if (dlp->m_has_clone) return;
 
@@ -6222,7 +6713,7 @@ static CharPtr x_DescribeClones (
 )
 
 {
-  Char     buf [40];
+  Char     buf [128];
   Char     ch;
   Int4     count;
   size_t   len;
@@ -6265,7 +6756,8 @@ static CharPtr x_DescribeClones (
 }
 
 static Boolean x_EndsWithStrain (
-  DefLinePtr dlp
+  DefLinePtr dlp,
+  CharPtr strain
 )
 
 {
@@ -6274,9 +6766,9 @@ static Boolean x_EndsWithStrain (
   CharPtr  nxt;
   CharPtr  ptr;
 
-  if (dlp == NULL) return FALSE;
+  if (dlp == NULL || strain == NULL) return FALSE;
 
-  len = StringLen (dlp->m_strain);
+  len = StringLen (strain);
   if (len >= StringLen (dlp->m_taxname)) return FALSE;
 
   ptr = StringChr (dlp->m_taxname, ' ');
@@ -6286,13 +6778,13 @@ static Boolean x_EndsWithStrain (
   if (ptr == NULL) return FALSE;
   ptr++;
 
-  ptr = StringISearch (dlp->m_taxname, dlp->m_strain);
+  ptr = StringISearch (dlp->m_taxname, strain);
   if (ptr == NULL) return FALSE;
 
-  nxt = StringISearch (ptr + 1, dlp->m_strain);
+  nxt = StringISearch (ptr + 1, strain);
   while (nxt != NULL) {
     ptr = nxt;
-    nxt = StringISearch (ptr + 1, dlp->m_strain);
+    nxt = StringISearch (ptr + 1, strain);
   }
 
   ptr += len;
@@ -6323,7 +6815,6 @@ static CharPtr x_TitleFromBioSrc (
 )
 
 {
-  Char        ch;
   CharPtr     result = NULL, cln, stn, ptr;
   ValNodePtr  strings = NULL;
 
@@ -6332,15 +6823,33 @@ static CharPtr x_TitleFromBioSrc (
   ValNodeCopyStr (&strings, 0, dlp->m_taxname);
 
   if (StringDoesHaveText (dlp->m_strain)) {
-    if (! x_EndsWithStrain (dlp)) {
+    stn = StringSave (dlp->m_strain);
+    ptr = StringChr (stn, ';');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    if (! x_EndsWithStrain (dlp, stn)) {
       ValNodeCopyStr (&strings, 0, " strain ");
-      stn = StringSave (dlp->m_strain);
-      ptr = StringChr (stn, ';');
-      if (ptr != NULL) {
-        *ptr = '\0';
-      }
       ValNodeCopyStr (&strings, 0, stn);
-      MemFree (stn);
+    }
+    MemFree (stn);
+  }
+
+  if (StringDoesHaveText (dlp->m_breed)) {
+    ValNodeCopyStr (&strings, 0, " breed ");
+    ValNodeCopyStr (&strings, 0, dlp->m_breed);
+  }
+
+  if (StringDoesHaveText (dlp->m_cultivar)) {
+    ValNodeCopyStr (&strings, 0, " cultivar ");
+    ValNodeCopyStr (&strings, 0, dlp->m_cultivar);
+  }
+
+  if (StringDoesHaveText (dlp->m_isolate)) {
+    /* x_EndsWithStrain just checks for supplied pattern, using here for isolate */
+    if (! x_EndsWithStrain (dlp, dlp->m_isolate)) {
+      ValNodeCopyStr (&strings, 0, " isolate ");
+      ValNodeCopyStr (&strings, 0, dlp->m_isolate);
     }
   }
 
@@ -6360,129 +6869,37 @@ static CharPtr x_TitleFromBioSrc (
     ValNodeCopyStr (&strings, 0, dlp->m_map);
   }
 
-  if (StringDoesHaveText (dlp->m_plasmid)) {
-    if (dlp->m_is_wgs) {
-      ValNodeCopyStr (&strings, 0, " plasmid ");
-      ValNodeCopyStr (&strings, 0, dlp->m_plasmid);
+  if (StringDoesHaveText (dlp->m_organelle)) {
+    if (StringCmp (dlp->m_organelle, "chromosome") == 0) {
+      /*
+      if (StringHasNoText (dlp->m_chromosome)) {
+        ValNodeCopyStr (&strings, 0, " ");
+        ValNodeCopyStr (&strings, 0, dlp->m_organelle);
+      }
+      */
+    } else if (StringCmp (dlp->m_organelle, "plasmid") == 0) {
+      if (StringHasNoText (dlp->m_plasmid) && StringHasNoText (dlp->m_chromosome)) {
+        ValNodeCopyStr (&strings, 0, " ");
+        ValNodeCopyStr (&strings, 0, dlp->m_organelle);
+      }
+    } else {
+     ValNodeCopyStr (&strings, 0, " ");
+     ValNodeCopyStr (&strings, 0, dlp->m_organelle);
     }
+  }
+
+  if (StringDoesHaveText (dlp->m_plasmid)) {
+    if (StringStr (dlp->m_plasmid, "plasmid") == NULL) {
+      ValNodeCopyStr (&strings, 0, " plasmid ");
+    } else {
+      ValNodeCopyStr (&strings, 0, " ");
+    }
+    ValNodeCopyStr (&strings, 0, dlp->m_plasmid);
   }
 
   result = x_CatenateValNodeStrings (strings);
   ValNodeFreeData (strings);
   if (result == NULL) return NULL;
-
-  ch = result [0];
-  if (IS_LOWER (ch)) {
-    result [0] = TO_UPPER (ch);
-  }
-
-  return result;
-}
-
-static CharPtr x_OrganelleName (
-  DefLinePtr dlp,
-  Boolean has_plasmid,
-  Boolean virus_or_phage,
-  Boolean wgs_suffix
-)
-
-{
-  CharPtr  result = NULL;
-
-  if (dlp == NULL) return NULL;
-
-  switch (dlp->m_genome) {
-      case GENOME_chloroplast :
-        result = "chloroplast";
-        break;
-      case GENOME_chromoplast :
-        result = "chromoplast";
-        break;
-      case GENOME_kinetoplast :
-        result = "kinetoplast";
-        break;
-      case GENOME_mitochondrion :
-        {
-          if (has_plasmid || wgs_suffix) {
-            result = "mitochondrial";
-          } else {
-            result = "mitochondrion";
-          }
-          break;
-        }
-      case GENOME_plastid :
-        result = "plastid";
-        break;
-      case GENOME_macronuclear :
-        {
-          result = "macronuclear";
-          break;
-        }
-      case GENOME_extrachrom :
-        {
-          if (! wgs_suffix) {
-            result = "extrachromosomal";
-          }
-          break;
-        }
-      case GENOME_plasmid :
-        {
-          if (! wgs_suffix) {
-            result = "plasmid";
-          }
-          break;
-        }
-        /* transposon and insertion-seq are obsolete */
-      case GENOME_cyanelle :
-        result = "cyanelle";
-        break;
-      case GENOME_proviral :
-        {
-          if (! virus_or_phage) {
-            if (has_plasmid || wgs_suffix) {
-              result = "proviral";
-            } else {
-              result = "provirus";
-            }
-          }
-          break;
-        }
-      case GENOME_virion :
-        {
-          if (! virus_or_phage) {
-            result = "virus";
-          }
-          break;
-        }
-      case GENOME_nucleomorph :
-        {
-          if (! wgs_suffix) {
-            result = "nucleomorph";
-          }
-          break;
-        }
-      case GENOME_apicoplast :
-        result = "apicoplast";
-        break;
-      case GENOME_leucoplast :
-        result = "leucoplast";
-        break;
-      case GENOME_proplastid :
-        result = "proplastid";
-        break;
-      case GENOME_endogenous_virus :
-        result = "endogenous virus";
-        break;
-      case GENOME_hydrogenosome :
-        result = "hydrogenosome";
-        break;
-      case GENOME_chromosome :
-        result = "chromosome";
-        break;
-      case GENOME_chromatophore :
-        result = "chromatophore";
-        break;
-  }
 
   return result;
 }
@@ -6520,11 +6937,9 @@ static CharPtr x_TitleFromNC (
 )
 
 {
-  Char        ch;
   CharPtr     completeseq = ", complete sequence";
   CharPtr     completegen = ", complete genome";
-  Boolean     is_chromosome, is_plasmid, has_plasmid = FALSE, virus_or_phage = FALSE;
-  CharPtr     result = NULL, orgnl = NULL, pls_pfx = "";
+  CharPtr     result = NULL, pls_pfx = "";
   ValNodePtr  strings = NULL;
 
   if (dlp == NULL) return NULL;
@@ -6533,20 +6948,6 @@ static CharPtr x_TitleFromNC (
       dlp->m_mi_biomol != MOLECULE_TYPE_OTHER_GENETIC_MATERIAL) return NULL;
 
   if (StringHasNoText (dlp->m_taxname)) return NULL;
-
-  if (StringISearch (dlp->m_taxname, "virus") != NULL ||
-      StringISearch (dlp->m_taxname, "phage") != NULL) {
-    virus_or_phage = TRUE;
-  }
-
-  if (StringDoesHaveText (dlp->m_plasmid)) {
-    has_plasmid = TRUE;
-  }
-
-  orgnl = x_OrganelleName (dlp, has_plasmid, virus_or_phage, FALSE);
-
-  is_plasmid = (Boolean) (dlp->m_genome == GENOME_plasmid);
-  is_chromosome = (Boolean) (dlp->m_genome == GENOME_chromosome);
 
   if (dlp->m_mi_completeness == 2 ||
       dlp->m_mi_completeness == 3 ||
@@ -6569,7 +6970,7 @@ static CharPtr x_TitleFromNC (
     ValNodeCopyStr (&strings, 0, dlp->m_taxname);
     ValNodeCopyStr (&strings, 0, completeseq);
 
-  } else if (is_plasmid) {
+  } else if (dlp->m_is_plasmid) {
 
     if (StringDoesHaveText (dlp->m_plasmid)) {
       ValNodeCopyStr (&strings, 0, dlp->m_taxname);
@@ -6585,10 +6986,10 @@ static CharPtr x_TitleFromNC (
 
   } else if (StringDoesHaveText (dlp->m_plasmid)) {
 
-    if (StringDoesHaveText (orgnl)) {
+    if (StringDoesHaveText (dlp->m_organelle)) {
       ValNodeCopyStr (&strings, 0, dlp->m_taxname);
       ValNodeCopyStr (&strings, 0, " ");
-      ValNodeCopyStr (&strings, 0, orgnl);
+      ValNodeCopyStr (&strings, 0, dlp->m_organelle);
       ValNodeCopyStr (&strings, 0, " ");
       ValNodeCopyStr (&strings, 0, pls_pfx);
       ValNodeCopyStr (&strings, 0, dlp->m_plasmid);
@@ -6601,21 +7002,29 @@ static CharPtr x_TitleFromNC (
       ValNodeCopyStr (&strings, 0, completeseq);
     }
 
-  } else if (StringDoesHaveText (orgnl)) {
+  } else if (StringDoesHaveText (dlp->m_organelle)) {
 
     if (StringDoesHaveText (dlp->m_chromosome)) {
       ValNodeCopyStr (&strings, 0, dlp->m_taxname);
-      if (! is_chromosome) {
+      if (! dlp->m_is_chromosome) {
         ValNodeCopyStr (&strings, 0, " ");
-        ValNodeCopyStr (&strings, 0, orgnl);
+        ValNodeCopyStr (&strings, 0, dlp->m_organelle);
       }
       ValNodeCopyStr (&strings, 0, " chromosome ");
       ValNodeCopyStr (&strings, 0, dlp->m_chromosome);
       ValNodeCopyStr (&strings, 0, completeseq);
     } else {
       ValNodeCopyStr (&strings, 0, dlp->m_taxname);
-      ValNodeCopyStr (&strings, 0, " ");
-      ValNodeCopyStr (&strings, 0, orgnl);
+      switch (dlp->m_genome) {
+        case GENOME_mitochondrion :
+        case GENOME_chloroplast :
+        case GENOME_kinetoplast :
+        case GENOME_plastid :
+        case GENOME_apicoplast :
+          ValNodeCopyStr (&strings, 0, " ");
+          ValNodeCopyStr (&strings, 0, dlp->m_organelle);
+          break;
+      }
       ValNodeCopyStr (&strings, 0, completegen);
     }
 
@@ -6654,11 +7063,6 @@ static CharPtr x_TitleFromNC (
   if (result == NULL) return NULL;
 
   x_LowercasePlasmidOrElement (result);
-
-  ch = result [0];
-  if (IS_LOWER (ch)) {
-    result [0] = TO_UPPER (ch);
-  }
 
   return result;
 }
@@ -6909,7 +7313,7 @@ static CharPtr x_TitleFromPatent (
 )
 
 {
-  Char  buf [80];
+  Char  buf [128];
 
   if (dlp == NULL) return NULL;
 
@@ -6926,7 +7330,7 @@ static CharPtr x_TitleFromPDB (
 )
 
 {
-  Char        buf [40];
+  Char        buf [128];
   Char        ch;
   CharPtr     result = NULL;
   ValNodePtr  strings = NULL;
@@ -6942,6 +7346,68 @@ static CharPtr x_TitleFromPDB (
 
   result = x_CatenateValNodeStrings (strings);
   ValNodeFreeData (strings);
+
+  return result;
+}
+
+static CharPtr x_TitleFromGPipe (
+  DefLinePtr dlp
+)
+
+{
+  CharPtr     result = NULL, cln, stn, ptr;
+  ValNodePtr  strings = NULL;
+
+  if (dlp == NULL) return NULL;
+
+  ValNodeCopyStr (&strings, 0, dlp->m_taxname);
+
+  if (StringDoesHaveText (dlp->m_organelle) && StringICmp (dlp->m_organelle, "plasmid") != 0) {
+    ValNodeCopyStr (&strings, 0, " ");
+    ValNodeCopyStr (&strings, 0, dlp->m_organelle);
+  }
+
+  if (StringDoesHaveText (dlp->m_strain)) {
+    stn = StringSave (dlp->m_strain);
+    ptr = StringChr (stn, ';');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    if (! x_EndsWithStrain (dlp, stn)) {
+      ValNodeCopyStr (&strings, 0, " strain ");
+      ValNodeCopyStr (&strings, 0, stn);
+    }
+    MemFree (stn);
+  }
+
+  if (StringDoesHaveText (dlp->m_chromosome)) {
+    ValNodeCopyStr (&strings, 0, " chromosome ");
+    ValNodeCopyStr (&strings, 0, dlp->m_chromosome);
+  }
+
+  cln = x_DescribeClones (dlp);
+  if (StringDoesHaveText (cln)) {
+    ValNodeCopyStr (&strings, 0, cln);
+  }
+  MemFree (cln); 
+
+  if (StringDoesHaveText (dlp->m_map)) {
+    ValNodeCopyStr (&strings, 0, " map ");
+    ValNodeCopyStr (&strings, 0, dlp->m_map);
+  }
+
+  if (StringDoesHaveText (dlp->m_plasmid)) {
+    ValNodeCopyStr (&strings, 0, " plasmid ");
+    ValNodeCopyStr (&strings, 0, dlp->m_plasmid);
+  }
+
+  if (dlp->m_mi_completeness == 1) {
+    ValNodeCopyStr (&strings, 0, ", complete sequence");
+  }
+
+  result = x_CatenateValNodeStrings (strings);
+  ValNodeFreeData (strings);
+  if (result == NULL) return NULL;
 
   return result;
 }
@@ -7077,26 +7543,26 @@ static CharPtr proteinOrganellePrefix [] = {
   NULL,
   NULL,
   "chloroplast",
-  NULL,
-  NULL,
+  "chromoplast",
+  "kinetoplast",
   "mitochondrion",
+  "plastid",
+  "macronuclear",
+  NULL,
+  "plasmid",
   NULL,
   NULL,
+  "cyanelle",
   NULL,
   NULL,
+  "nucleomorph",
+  "apicoplast",
+  "leucoplast",
+  "protoplast",
+  "endogenous virus",
+  "hydrogenosome",
   NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
+  "chromatophore"
 };
 
 static CharPtr x_TitleFromProtein (
@@ -7107,19 +7573,27 @@ static CharPtr x_TitleFromProtein (
   BioSourcePtr       biop;
   BioseqPtr          bsp;
   SeqFeatPtr         cds = NULL;
+  Char               ch;
+  CharPtr            comma = NULL;
   Uint2              entityID;
   SeqMgrFeatContext  fcontext;
   GeneRefPtr         grp;
   Boolean            indexed;
+  CharPtr            isoform = NULL;
   size_t             len;
   CharPtr            low_qual = "LOW QUALITY PROTEIN: ";
+  Int2               offset = 0;
   CharPtr            organelle = NULL;
   OrgRefPtr          orp;
   Boolean            partial = FALSE;
   CharPtr            prefix = "";
   ProtRefPtr         prp;
+  CharPtr            ptr;
   CharPtr            result = NULL;
   SeqFeatPtr         sfp = NULL;
+  SeqIntPtr          sintp;
+  SeqLocPtr          slp, slpx;
+  SeqPntPtr          spp;
   CharPtr            str;
   ValNodePtr         strings = NULL;
   CharPtr            taxname = NULL;
@@ -7175,6 +7649,36 @@ static CharPtr x_TitleFromProtein (
         x_TrimPunctuationFromEnd (title);
 
         /* if hypothetical protein, append locus_tag */
+        offset = 0;
+        if (StringNICmp (title, "hypothetical protein", 20) == 0) {
+          offset = 20;
+        } else if (StringNICmp (title, "uncharacterized protein", 23) == 0) {
+          offset = 23;
+        }
+        if (offset > 0) {
+          ptr = title + offset;
+          if (ptr [0] == ',' && ptr [1] == ' ') {
+            comma = ",";
+            ptr += 2;
+          }
+          if (ptr [0] == ' ') {
+            ptr++;
+          }
+          if (StringNCmp (ptr, "isoform ", 8) == 0) {
+            ptr += 8;
+            isoform = ptr;
+            ch = *ptr;
+            while (ch != '\0' && IS_ALPHANUM (ch)) {
+              ptr++;
+              ch = *ptr;
+            }
+            if (ch != '\0') {
+              isoform = NULL;
+            } else {
+              title [offset] = '\0';
+            }
+          }
+        }
         if (StringICmp (title, "hypothetical protein") == 0 || StringICmp (title, "uncharacterized protein") == 0) {
           if (! indexed) {
             SeqMgrIndexFeatures (entityID, NULL);
@@ -7193,12 +7697,19 @@ static CharPtr x_TitleFromProtein (
             }
             if (grp != NULL) {
               if (grp->locus_tag != NULL) {
-                len = StringLen (title) + StringLen (grp->locus_tag) + 20;
+                len = StringLen (title) + StringLen (grp->locus_tag) + StringLen (isoform) + 35;
                 str = (CharPtr) MemNew (sizeof (Char) * len);
                 if (str != NULL) {
                   StringCat (str, title);
                   StringCat (str, " ");
                   StringCat (str, grp->locus_tag);
+                  if (StringDoesHaveText (isoform)) {
+                    if (comma != NULL) {
+                      StringCat (str, comma);
+                    }
+                    StringCat (str, " isoform ");
+                    StringCat (str, isoform);
+                  }
                   MemFree (title);
                   title = str;
                 }
@@ -7258,6 +7769,35 @@ static CharPtr x_TitleFromProtein (
 
   if (title == NULL) {
     title = StringSave ("unnamed protein product");
+    if (! indexed) {
+      SeqMgrIndexFeatures (entityID, NULL);
+      indexed = TRUE;
+    }
+    if (cds == NULL) {
+      cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
+    }
+    if (cds != NULL) {
+      grp = SeqMgrGetGeneXref (cds);
+      if (grp == NULL) {
+        sfp = SeqMgrGetOverlappingFeature (cds->location, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, NULL);
+        if (sfp != NULL) {
+          grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+        }
+      }
+      if (grp != NULL) {
+        if (grp->locus_tag != NULL) {
+          len = StringLen (title) + StringLen (grp->locus_tag) + 20;
+          str = (CharPtr) MemNew (sizeof (Char) * len);
+          if (str != NULL) {
+            StringCat (str, title);
+            StringCat (str, " ");
+            StringCat (str, grp->locus_tag);
+            MemFree (title);
+            title = str;
+          }
+        }
+      }
+    }
   }
 
   if (title != NULL) {
@@ -7274,24 +7814,46 @@ static CharPtr x_TitleFromProtein (
       cds = SeqMgrGetCDSgivenProduct (bsp, NULL);
     }
     if (cds != NULL) {
-      sfp = SeqMgrGetOverlappingSource (cds->location, &fcontext);
-      if (sfp != NULL) {
-        biop = (BioSourcePtr) sfp->data.value.ptrvalue;
-        if (biop != NULL) {
-          orp = biop->org;
-          if (orp != NULL) {
-            taxname = orp->taxname;
+      slp = AsnIoMemCopy ((Pointer) cds->location, (AsnReadFunc) SeqLocAsnRead, (AsnWriteFunc) SeqLocAsnWrite);
+      if (slp != NULL) {
+        for (slpx = SeqLocFindNext (slp, NULL); slpx != NULL; slpx = SeqLocFindNext (slp, slpx)) {
+          if (slpx->choice == SEQLOC_INT) {
+            sintp = (SeqIntPtr) slpx->data.ptrvalue;
+            if (sintp != NULL) {
+              sintp->strand = Seq_strand_both;
+            }
+          } else if (slpx->choice == SEQLOC_PNT) {
+            spp = (SeqPntPtr) slpx->data.ptrvalue;
+            if (spp != NULL) {
+              spp->strand = Seq_strand_both;
+            }
           }
         }
+        /*
+        sfp = SeqMgrGetOverlappingSource (slp, &fcontext);
+        */
+        sfp = SeqMgrGetOverlappingFeature (slp, FEATDEF_BIOSRC, NULL, 0, NULL, LOCATION_SUBSET, &fcontext);
+        if (sfp != NULL) {
+          biop = (BioSourcePtr) sfp->data.value.ptrvalue;
+          if (biop != NULL) {
+            orp = biop->org;
+            if (orp != NULL) {
+              taxname = orp->taxname;
+            }
+          }
+        }
+        SeqLocFree (slp);
       }
     }
   }
 
   if (dlp->m_genome >= GENOME_chloroplast && dlp->m_genome <= GENOME_chromatophore) {
     organelle = proteinOrganellePrefix [dlp->m_genome];
+    /*
     if (StringNICmp (organelle, taxname, StringLen (organelle)) == 0) {
       organelle = NULL;
     }
+    */
   }
 
   if (cds == NULL) {
@@ -7339,7 +7901,20 @@ static CharPtr x_TitleFromProtein (
     }
   }
 
-  if (StringDoesHaveText (taxname)) {
+  if (dlp->m_is_cross_kingdom && StringDoesHaveText (dlp->m_first_super_kingdom) && StringDoesHaveText (dlp->m_second_super_kingdom)) {
+    len = StringLen (title) + StringLen (dlp->m_first_super_kingdom) + StringLen (dlp->m_second_super_kingdom) + 8;
+    tmp = (CharPtr) MemNew (sizeof (Char) * len);
+    if (tmp != NULL) {
+      StringCat (tmp, title);
+      StringCat (tmp, " [");
+      StringCat (tmp, dlp->m_first_super_kingdom);
+      StringCat (tmp, "][");
+      StringCat (tmp, dlp->m_second_super_kingdom);
+      StringCat (tmp, "]");
+      MemFree (title);
+      title = tmp;
+    }
+  } else if (StringDoesHaveText (taxname)) {
     len = StringLen (title) + StringLen (taxname) + 6;
     tmp = (CharPtr) MemNew (sizeof (Char) * len);
     if (tmp != NULL) {
@@ -7423,7 +7998,7 @@ static CharPtr x_TitleFromSegSeq (
       }
     }
   } else {
-    if (StringDoesHaveText (dlp->m_strain) && (! x_EndsWithStrain (dlp))) {
+    if (StringDoesHaveText (dlp->m_strain) && (! x_EndsWithStrain (dlp, dlp->m_strain))) {
       modifier = dlp->m_strain;
       label = " strain ";
     } else if (StringDoesHaveText (dlp->m_clone)) {
@@ -7480,12 +8055,31 @@ static CharPtr x_TitleFromSegSeq (
   return result;
 }
 
+ static Boolean x_StringInList (
+  ValNodePtr strings,
+  CharPtr str
+)
+
+{
+  CharPtr     tmp;
+  ValNodePtr  vnp;
+
+  if (strings == NULL || StringHasNoText (str)) return FALSE;
+
+  for (vnp = strings; vnp != NULL; vnp = vnp->next) {
+    tmp = (CharPtr) vnp->data.ptrvalue;
+    if (StringStr (tmp, str) != NULL) return TRUE;
+  }
+
+  return FALSE;
+}
+
+
 static CharPtr x_TitleFromWGS (
   DefLinePtr dlp
 )
 
 {
-  Char        ch;
   CharPtr     result = NULL, cln, mod, ptr;
   ValNodePtr  strings = NULL;
 
@@ -7494,16 +8088,16 @@ static CharPtr x_TitleFromWGS (
   ValNodeCopyStr (&strings, 0, dlp->m_taxname);
 
   if (StringDoesHaveText (dlp->m_strain)) {
-    if (! x_EndsWithStrain (dlp)) {
-      ValNodeCopyStr (&strings, 0, " strain ");
-      mod = StringSave (dlp->m_strain);
-      ptr = StringChr (mod, ';');
-      if (ptr != NULL) {
-        *ptr = '\0';
-      }
-      ValNodeCopyStr (&strings, 0, mod);
-      MemFree (mod);
+    mod = StringSave (dlp->m_strain);
+    ptr = StringChr (mod, ';');
+    if (ptr != NULL) {
+      *ptr = '\0';
     }
+    if (! x_EndsWithStrain (dlp, mod)) {
+      ValNodeCopyStr (&strings, 0, " strain ");
+      ValNodeCopyStr (&strings, 0, mod);
+    }
+    MemFree (mod);
   } else if (StringDoesHaveText (dlp->m_breed)) {
     ValNodeCopyStr (&strings, 0, " breed ");
     mod = StringSave (dlp->m_breed);
@@ -7522,6 +8116,14 @@ static CharPtr x_TitleFromWGS (
     }
     ValNodeCopyStr (&strings, 0, mod);
     MemFree (mod);
+  }
+
+  if (StringDoesHaveText (dlp->m_isolate)) {
+    /* x_EndsWithStrain just checks for supplied pattern, using here for isolate */
+    if (! x_EndsWithStrain (dlp, dlp->m_isolate)) {
+      ValNodeCopyStr (&strings, 0, " isolate ");
+      ValNodeCopyStr (&strings, 0, dlp->m_isolate);
+    }
   }
 
   if (StringDoesHaveText (dlp->m_chromosome)) {
@@ -7547,7 +8149,9 @@ static CharPtr x_TitleFromWGS (
     }
   }
 
-  if (StringDoesHaveText (dlp->m_general_str)) {
+  if (dlp->m_genome == GENOME_plasmid && dlp->m_topology == TOPOLOGY_CIRCULAR) {
+  } else if (dlp->m_genome == GENOME_chromosome) {
+  } else if (StringDoesHaveText (dlp->m_general_str) && StringICmp (dlp->m_general_str, dlp->m_chromosome) != 0) {
     ValNodeCopyStr (&strings, 0, " ");
     ValNodeCopyStr (&strings, 0, dlp->m_general_str);
   }
@@ -7556,10 +8160,68 @@ static CharPtr x_TitleFromWGS (
   ValNodeFreeData (strings);
   if (result == NULL) return NULL;
 
-  ch = result [0];
-  if (IS_LOWER (ch)) {
-    result [0] = TO_UPPER (ch);
+  return result;
+}
+
+static CharPtr x_TitleFromMap (
+  DefLinePtr dlp
+)
+
+{
+  BioseqPtr   bsp;
+  CharPtr     result = NULL, mod, ptr;
+  ValNodePtr  strings = NULL;
+
+  if (dlp == NULL) return NULL;
+
+  bsp = dlp->m_bioseq;
+  if (bsp == NULL) return NULL;
+  if (bsp->seq_ext_type != 3) return NULL;
+  if (bsp->seq_ext == NULL) return NULL;
+
+  ValNodeCopyStr (&strings, 0, dlp->m_taxname);
+
+  if (StringDoesHaveText (dlp->m_strain)) {
+    mod = StringSave (dlp->m_strain);
+    ptr = StringChr (mod, ';');
+    if (ptr != NULL) {
+      *ptr = '\0';
+    }
+    if (! x_EndsWithStrain (dlp, mod)) {
+      ValNodeCopyStr (&strings, 0, " strain ");
+      ValNodeCopyStr (&strings, 0, mod);
+    }
+    MemFree (mod);
   }
+
+  if (StringDoesHaveText (dlp->m_chromosome)) {
+    ValNodeCopyStr (&strings, 0, " chromosome ");
+    ValNodeCopyStr (&strings, 0, dlp->m_chromosome);
+  } else if (dlp->m_is_chromosome) {
+    ValNodeCopyStr (&strings, 0, " chromosome");
+  }
+
+  if (StringDoesHaveText (dlp->m_plasmid)) {
+    ValNodeCopyStr (&strings, 0, " plasmid ");
+    ValNodeCopyStr (&strings, 0, dlp->m_plasmid);
+  } else if (dlp->m_is_plasmid) {
+    ValNodeCopyStr (&strings, 0, " plasmid");
+  }
+
+  if (StringDoesHaveText (dlp->m_isolate)) {
+    ValNodeCopyStr (&strings, 0, " isolate ");
+    ValNodeCopyStr (&strings, 0, dlp->m_isolate);
+  }
+
+  if (StringDoesHaveText (dlp->m_enzyme)) {
+    ValNodeCopyStr (&strings, 0, ", ");
+    ValNodeCopyStr (&strings, 0, dlp->m_enzyme);
+    ValNodeCopyStr (&strings, 0, " whole genome map");
+  }
+
+  result = x_CatenateValNodeStrings (strings);
+  ValNodeFreeData (strings);
+  if (result == NULL) return NULL;
 
   return result;
 }
@@ -7580,137 +8242,266 @@ static CharPtr x_SetPrefix (
     }
   } else if (dlp->m_is_tsa) {
     prefix = "TSA: ";
+  } else if (dlp->m_is_tls) {
+    prefix = "TLS: ";
   } else if (dlp->m_third_party) {
     if (dlp->m_tpa_exp) {
       prefix = "TPA_exp: ";
     } else if (dlp->m_tpa_inf) {
       prefix = "TPA_inf: ";
     } else if (dlp->m_tpa_reasm) {
-      prefix = "TPA_reasm: ";
+      prefix = "TPA_asm: ";
     } else {
       prefix = "TPA: ";
+    }
+  } else if (dlp->m_multispecies && dlp->m_is_wp) {
+    prefix = "MULTISPECIES: ";
+  } else if (dlp->m_is_pseudogene) {
+    if (StringStr (title, "PUTATIVE PSEUDOGENE") == NULL) {
+      prefix = "PUTATIVE PSEUDOGENE: ";
     }
   }
 
   return StringSave (prefix);
 }
 
-static CharPtr x_SetSuffix (
-  DefLinePtr dlp,
-  CharPtr title
+static Int4 CountDeltaGaps (
+  BioseqPtr bsp
 )
 
 {
-  Char     buf [80];
+  DeltaSeqPtr  dsp;
+  Int4         num_gaps = 0;
+  SeqLitPtr    slitp;
+  SeqLocPtr    slocp;
+
+  if (bsp == NULL) return 0;
+
+  if (bsp->repr == Seq_repr_delta) {
+    for (dsp = (DeltaSeqPtr) bsp->seq_ext; dsp != NULL; dsp = dsp->next) {
+      switch (dsp->choice) {
+        case 1:
+          slocp = (SeqLocPtr)(dsp->data.ptrvalue);
+          if (slocp == NULL) break;
+          if (slocp->choice == SEQLOC_NULL) {
+            num_gaps++;
+          }
+          break;
+        case 2:
+          slitp = (SeqLitPtr)(dsp->data.ptrvalue);
+          if (slitp == NULL) break;
+          if (slitp->seq_data == NULL || slitp->seq_data_type == Seq_code_gap) {
+            num_gaps++;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  return num_gaps;
+}
+
+static CharPtr x_SetSuffix (
+  DefLinePtr dlp,
+  CharPtr title,
+  Boolean appendComplete
+)
+
+{
+  Char     buf1 [512], buf2 [256];
+  CharPtr  compl = "", study = "", type = "", un = "ordered", suffix;
   size_t   len;
   Int4     num_segs, num_gaps;
-  CharPtr  orgnl = NULL, str, suffix = "", un = "";
 
   if (dlp == NULL) return NULL;
+
+  buf1 [0] = '\0';
+  buf2 [0] = '\0';
 
   switch (dlp->m_mi_tech) {
       case MI_TECH_htgs_0 :
         if (StringStr (title, "LOW-PASS") == NULL) {
-          suffix = ", LOW-PASS SEQUENCE SAMPLING";
+          type = ", LOW-PASS SEQUENCE SAMPLING";
         }
         break;
       case MI_TECH_htgs_1 :
-        un = "un";
+        un = "unordered";
         /* fall through */
       case MI_TECH_htgs_2 :
         if (dlp->m_htgs_draft) {
           if (StringStr (title, "WORKING DRAFT") == NULL) {
-            suffix = ", WORKING DRAFT SEQUENCE";
+            type = ", WORKING DRAFT SEQUENCE";
           }
         } else if (! dlp->m_htgs_cancelled) {
           if (StringStr (title, "SEQUENCING IN") == NULL) {
-            suffix = ", *** SEQUENCING IN PROGRESS ***";
+            type = ", *** SEQUENCING IN PROGRESS ***";
           }
         }
         if (dlp->m_is_delta) {
           if (CountGapsInDeltaSeq (dlp->m_bioseq, &num_segs, &num_gaps, NULL, NULL, NULL, 0)) {
             if (num_gaps > 0) {
-              sprintf (buf, "%s, %ld %sordered pieces", suffix, (long) (num_gaps + 1), un);
-              suffix = StringSave (buf);
-              return suffix;
+              sprintf (buf1, "%s, %ld %s pieces", type, (long) (num_gaps + 1), un);
+              type = buf1;
             }
           }
         }
         break;
       case MI_TECH_htgs_3 :
         if (StringStr (title, "complete sequence") == NULL) {
-          suffix = ", complete sequence";
+          type = ", complete sequence";
         }
         break;
       case MI_TECH_est :
         if (StringStr (title, "mRNA sequence") == NULL) {
-          suffix = ", mRNA sequence";
+          type = ", mRNA sequence";
         }
         break;
       case MI_TECH_sts :
         if (StringStr (title, "sequence tagged site") == NULL) {
-          suffix = ", sequence tagged site";
+          type = ", sequence tagged site";
         }
         break;
       case MI_TECH_survey :
         if (StringStr (title, "genomic survey sequence") == NULL) {
-          suffix = ", genomic survey sequence";
+          type = ", genomic survey sequence";
         }
         break;
       case MI_TECH_wgs :
         if (dlp->m_wgs_master) {
-          if (StringStr (title, "whole genome shotgun sequencing project") == NULL) {
-            suffix = ", whole genome shotgun sequencing project";
+          if (StringStr (title, "whole genome shotgun sequencing") == NULL) {
+            type = ", whole genome shotgun sequencing project";
           }
-        } else {
-          if (StringStr (title, "whole genome shotgun sequence") == NULL) {
-            orgnl = x_OrganelleName (dlp, FALSE, FALSE, TRUE);
-            len = StringLen (", whole genome shotgun sequence") + StringLen (orgnl) + 5;
-            str = (CharPtr) MemNew (sizeof (Char) * len);
-            if (str != NULL) {
-              if (StringDoesHaveText (orgnl)) {
-                StringCat (str, " ");
-                StringCat (str, orgnl);
-              }
-              StringCat (str, ", whole genome shotgun sequence");
-              return str;
-            }
+        } else if (StringStr (title, "whole genome shotgun sequence") == NULL) {
+          if (StringDoesHaveText (dlp->m_organelle) && StringStr (title, dlp->m_organelle) == NULL) {
+            StringCat (buf1, " ");
+            StringCat (buf1, dlp->m_organelle);
           }
+          StringCat (buf1, ", whole genome shotgun sequence");
+          type = buf1;
         }
         break;
       case MI_TECH_tsa :
-        if (dlp->m_mi_biomol == MOLECULE_TYPE_MRNA) {
-          if (dlp->m_tsa_master) {
-            if (StringStr (title, "transcriptome shotgun assembly project") == NULL) {
-              suffix = ", transcriptome shotgun assembly";
-            }
-          } else {
-            if (StringStr (title, "mRNA sequence") == NULL) {
-              suffix = ", mRNA sequence";
-            }
+        if (dlp->m_tsa_master) {
+          if (StringStr (title, "transcriptome shotgun assembly") == NULL) {
+            type = ", transcriptome shotgun assembly";
           }
+        } else if (StringStr (title, "RNA sequence") == NULL) {
+          switch (dlp->m_mi_biomol) {
+              case MOLECULE_TYPE_MRNA :
+                type = ", mRNA sequence";
+                break;
+              case MOLECULE_TYPE_RRNA :
+                type = ", rRNA sequence";
+                break;
+              case MOLECULE_TYPE_NCRNA :
+                type = ", ncRNA sequence";
+                break;
+              case MOLECULE_TYPE_PRE_MRNA :
+              case MOLECULE_TYPE_SNRNA :
+              case MOLECULE_TYPE_SCRNA :
+              case MOLECULE_TYPE_CRNA :
+              case MOLECULE_TYPE_SNORNA :
+              case MOLECULE_TYPE_TRANSCRIBED_RNA :
+                type = ", transcribed RNA sequence";
+                break;
+              default :
+                break;
+          }
+        }
+        break;
+      case MI_TECH_targeted :
+        if (dlp->m_tls_master) {
+          if (StringStr (title, "targeted locus study") == NULL) {
+            type = ", targeted locus study";
+          }
+        } else {
+          if (StringStr (title, "sequence") == NULL) {
+            type = ", sequence";
+          }
+        }
+        if (StringDoesHaveText (dlp->m_targeted_locus) && StringStr (title, dlp->m_targeted_locus) == NULL) {
+            study = dlp->m_targeted_locus;
         }
         break;
       default :
         break;
   }
 
-  return StringSave (suffix);
+  if (appendComplete && StringStr (title, "complete") == NULL && StringStr (title, "partial") == NULL) {
+    if (dlp->m_mi_completeness == 1) {
+      if (dlp->m_is_plasmid) {
+        compl = ", complete sequence";
+      } else if (dlp->m_genome == GENOME_mitochondrion ||
+                 dlp->m_genome == GENOME_chloroplast ||
+                 dlp->m_genome == GENOME_kinetoplast ||
+                 dlp->m_genome == GENOME_plastid ||
+                 dlp->m_genome == GENOME_apicoplast) {
+        compl = ", complete genome";
+      } else if (dlp->m_is_chromosome) {
+        if (StringDoesHaveText (dlp->m_chromosome)) {
+          compl = ", complete sequence";
+        } else {
+          compl = ", complete genome";
+        }
+      }
+    }
+  }
+
+  if (dlp->m_unordered && dlp->m_is_delta) {
+    num_gaps = CountDeltaGaps (dlp->m_bioseq);
+    if (num_gaps > 0) {
+      sprintf (buf1, ", %ld unordered pieces", (long) (num_gaps + 1));
+      type = buf1;
+    }
+  }
+
+  len = StringLen (type) + StringLen (study) + StringLen (compl) + 5;
+  suffix = (CharPtr) MemNew (len * sizeof (Char));
+  if (suffix == NULL) return NULL;
+
+  suffix [0] = '\0';
+  if (StringDoesHaveText (study)) {
+    StringCat (suffix, " ");
+    StringCat (suffix, study);
+  }
+  StringCat (suffix, type);
+  StringCat (suffix, compl);
+
+  return suffix;
 }
 
-NLM_EXTERN CharPtr NewCreateDefLine (
+static CharPtr tpa_prefix_list [] = {
+  "TPA:",
+  "TPA_exp:",
+  "TPA_inf:",
+  "TPA_reasm:",
+  "TPA_asm:",
+  "TSA:",
+  "UNVERIFIED:",
+  NULL
+};
+
+NLM_EXTERN CharPtr NewCreateDefLineExEx (
   ItemInfoPtr iip,
   BioseqPtr bsp,
   Boolean ignoreTitle,
-  Boolean extProtTitle
+  Boolean extProtTitle,
+  Boolean gpipeMode,
+  Boolean devMode
 )
 
 {
+  Boolean        appendComplete = FALSE;
+  Boolean        capitalize = TRUE;
+  Char           ch;
   DefLinePtr     dlp;
   Uint2          entityID;
+  int            i;
   size_t         len;
   ObjValNodePtr  ovp;
-  CharPtr        result = NULL, prefix = NULL, suffix = NULL, title = NULL;
+  CharPtr        result = NULL, prefix = NULL, suffix = NULL, title = NULL, fix = NULL;
   SeqDescrPtr    sdp = NULL;
   CharPtr        str = NULL;
 
@@ -7739,6 +8530,9 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   dlp->m_reconstruct = ignoreTitle;
   dlp->m_allprotnames = extProtTitle;
 
+  dlp->m_gpipemode = gpipeMode;
+  dlp->m_devmode = devMode;
+
   /* clear ItemInfo fields */
   if (iip != NULL) {
     iip->entityID = 0;
@@ -7766,6 +8560,7 @@ NLM_EXTERN CharPtr NewCreateDefLine (
       title = StringSave (str);
       /* strip trailing periods, commas, semicolons, etc. */
       x_TrimPunctuationFromEnd (title);
+      capitalize = FALSE;
 
       /* set ItemInfo fields for selection */
       if (iip != NULL && sdp != NULL && sdp->extended != 0) {
@@ -7801,35 +8596,40 @@ NLM_EXTERN CharPtr NewCreateDefLine (
         title = x_TitleFromProtein (dlp);
       } else if (dlp->m_is_seg && (! dlp->m_is_est_sts_gss)) {
         title = x_TitleFromSegSeq (dlp);
-      } else if (dlp->m_is_tsa || (dlp->m_is_wgs && (! dlp->m_wgs_master))) {
+      } else if (dlp->m_is_tsa || (dlp->m_is_wgs && (! dlp->m_wgs_master)) || (dlp->m_is_tls && (! dlp->m_tls_master))) {
         title = x_TitleFromWGS (dlp);
+      } else if (dlp->m_is_map) {
+        title = x_TitleFromMap (dlp);
       }
+    }
+
+    if (StringHasNoText (title) && dlp->m_gpipemode) {
+      /* title using gpipe policy */
+      title = x_TitleFromGPipe (dlp);
     }
 
     if (StringHasNoText (title)) {
       /* default title using source fields */
       title = x_TitleFromBioSrc (dlp);
+      if (dlp->m_mi_completeness == 1 && StringDoesHaveText (title)) {
+        appendComplete = TRUE;
+      }
     }
 
     if (StringHasNoText (title)) {
       /* last resort title created here */
+      /*
       title = StringSave ("No definition line found");
+      */
     }
   }
 
   /* remove TPA or TSA prefix, will rely on other data in record to set */
-  if (StringNICmp (title, "TPA:", 4) == 0) {
-    x_TrimFirstNCharacters (title, 4);
-  } else if (StringNICmp (title, "TPA_exp:", 8) == 0) {
-    x_TrimFirstNCharacters (title, 8);
-  } else if (StringNICmp (title, "TPA_inf:", 8) == 0) {
-    x_TrimFirstNCharacters (title, 8);
-  } else if (StringNICmp (title, "TPA_reasm:", 10) == 0) {
-    x_TrimFirstNCharacters (title, 10);
-  } else if (StringNICmp (title, "TSA:", 4) == 0) {
-    x_TrimFirstNCharacters (title, 4);
-  } else if (StringNICmp (title, "UNVERIFIED:", 11) == 0) {
-    x_TrimFirstNCharacters (title, 11);
+  for (i = 0; tpa_prefix_list [i] != NULL; i++) {
+    len = StringLen (tpa_prefix_list [i]);
+    if (StringNICmp (title, tpa_prefix_list [i], len) == 0) {
+      x_TrimFirstNCharacters (title, len);
+    }
   }
 
   /* strip leading spaces remaining after removal of old TPA or TSA prefixes */
@@ -7842,7 +8642,7 @@ NLM_EXTERN CharPtr NewCreateDefLine (
   prefix = x_SetPrefix (dlp, title);
 
   /* calculate suffix */
-  suffix = x_SetSuffix (dlp, title);
+  suffix = x_SetSuffix (dlp, title, appendComplete);
 
   len = StringLen (prefix) + StringLen (title) + StringLen (suffix) + 4;
   result = (CharPtr) MemNew (sizeof (Char) * len);
@@ -7851,6 +8651,27 @@ NLM_EXTERN CharPtr NewCreateDefLine (
     StringCat (result, prefix);
     StringCat (result, title);
     StringCat (result, suffix);
+
+    if (dlp->m_is_aa) {
+      fix = StringStr (result, ". [");
+      if (fix == NULL) {
+        fix = StringStr (result, ", [");
+      }
+      if (fix != NULL) {
+        *fix = ' ';
+      }
+    }
+
+    fix = StringStr (result, " ,");
+      if (fix != NULL) {
+        fix [0] = ',';
+        fix [1] = ' ';
+      }
+
+    fix = StringStr (result, ",,");
+      if (fix != NULL) {
+        fix [1] = ' ';
+      }
   }
 
   MemFree (prefix);
@@ -7859,11 +8680,43 @@ NLM_EXTERN CharPtr NewCreateDefLine (
 
   TextFsaFree (dlp->m_low_quality_fsa);
 
-  dlp = MemFree (dlp);
-
   Asn2gnbkCompressSpaces (result);
 
+  if (! dlp->m_is_pdb && ! dlp->m_is_patent && ! dlp->m_is_aa && ! dlp->m_is_seg) {
+    if (result != NULL) {
+      ch = result [0];
+      if (IS_LOWER (ch) && capitalize) {
+        result [0] = TO_UPPER (ch);
+      }
+    }
+  }
+
+  dlp = MemFree (dlp);
+
   return result;
+}
+
+NLM_EXTERN CharPtr NewCreateDefLineEx (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle,
+  Boolean gpipeMode
+)
+
+{
+  return NewCreateDefLineExEx (iip, bsp, ignoreTitle, extProtTitle, gpipeMode, FALSE);
+}
+
+NLM_EXTERN CharPtr NewCreateDefLine (
+  ItemInfoPtr iip,
+  BioseqPtr bsp,
+  Boolean ignoreTitle,
+  Boolean extProtTitle
+)
+
+{
+  return NewCreateDefLineExEx (iip, bsp, ignoreTitle, extProtTitle, FALSE, FALSE);
 }
 
 NLM_EXTERN Boolean NewCreateDefLineBuf (
@@ -7872,15 +8725,14 @@ NLM_EXTERN Boolean NewCreateDefLineBuf (
   CharPtr buf,
   Uint4 buflen,
   Boolean ignoreTitle,
-  Boolean extProtTitle
-)
+  Boolean extProtTitle)
 
 {
   CharPtr  title = NULL;
 
   if (bsp == NULL || buf == NULL|| buflen == 0) return FALSE;
 
-  title = NewCreateDefLine (iip, bsp, ignoreTitle, extProtTitle);
+  title = NewCreateDefLineEx (iip, bsp, ignoreTitle, extProtTitle, FALSE);
   StringNCpy_0 (buf, title, buflen);
   MemFree (title);
 

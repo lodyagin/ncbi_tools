@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.231 $
+* $Revision: 6.245 $
 *
 * File Description: 
 *
@@ -1627,6 +1627,10 @@ static void ChangeCannedMessage (PopuP p)
       SetTitle (ffp->exceptText, "unextendable partial coding region");
       SetStatus (ffp->exception, TRUE);
       break;
+    case 14 :
+      SetTitle (ffp->exceptText, "translation initiation by tRNA-Leu at CUG codon");
+      SetStatus (ffp->exception, TRUE);
+      break;
     default :
       break;
   }
@@ -1694,6 +1698,15 @@ static CharPtr GetNameForFeature (SeqFeatPtr sfp)
     }
   }
   return featname;
+}
+
+
+NLM_EXTERN void ClearTextBtn (ButtoN b)
+{
+  TexT t;
+
+  t = (TexT) GetObjectExtra (b);
+  SafeSetTitle (t, "");
 }
 
 
@@ -1828,6 +1841,9 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
       PopupItem (canned, "heterogeneous population");
       PopupItem (canned, "low-quality sequence region");
       PopupItem (canned, "unextendable partial CDS");
+      if (indexerVersion) {
+        PopupItem (canned, "Leu-CUG initiation");
+      }
       if (sfp != NULL && sfp->excpt) {
         if (StringICmp (sfp->except_text, "RNA editing") == 0) {
           SetValue (canned, 2);
@@ -1857,6 +1873,8 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
           SetValue (canned, 12);
         } else if (StringICmp (sfp->except_text, "unextendable partial coding region") == 0) {
           SetValue (canned, 13);
+        } else if (indexerVersion && StringICmp (sfp->except_text, "translation initiation by tRNA-Leu at CUG codon") == 0) {
+          SetValue (canned, 14);
         }
       } else {
         SetValue (canned, 1);
@@ -1947,13 +1965,15 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
 
     c = HiddenGroup (p, -1, 0, NULL);
     SetGroupSpacing (c, 10, 10);
-    q = HiddenGroup (c, 0, 2, NULL);
+    q = HiddenGroup (c, 0, 3, NULL);
     StaticPrompt (q, "Comment", 25 * stdCharWidth, 0, programFont, 'c');
     if (GetAppProperty ("InternalNcbiSequin") != NULL) {
       ffp->comment = ScrollText (q, 25, 10, programFont, TRUE, NULL);
     } else {
       ffp->comment = ScrollText (q, 25, 5, programFont, TRUE, NULL);
     }
+    b = PushButton (q, "Clear Comment", ClearTextBtn);
+    SetObjectExtra (b, ffp->comment, NULL);
     ffp->commonSubGrp [page] = c;
     Hide (ffp->commonSubGrp [page]);
     page++;
@@ -1990,7 +2010,7 @@ extern GrouP CreateCommonFeatureGroupEx (GrouP h, FeatureFormPtr ffp,
     SetGroupSpacing (c, 10, 10);
     q = HiddenGroup (c, 0, -6, NULL);
     ppt1 = StaticPrompt (q, "Experiment", 0, 0, programFont, 'c');
-    ffp->experiment = CreateVisibleStringDialog (q, 3, -1, 15);
+    ffp->experiment = CreateExperimentDialog (q);
     ppt2 = StaticPrompt (q, "Inference", 0, 0, programFont, 'c');
     /*
     ffp->inference = CreateInferenceDialog (q, 3, 2, 15);
@@ -3936,6 +3956,7 @@ static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt, Int4Ptr char_of
   Int4  col_width;
   CharPtr cell_text;
   Int4    chars_skipped, cell_len;
+  Uint1 chs;
   
   cell_coord.x = 0;
   cell_coord.y = 0;
@@ -3990,7 +4011,11 @@ static PoinT GetTableDisplayCell (TableDisplayPtr dlg, PoinT pt, Int4Ptr char_of
       header_vnp = header_vnp->next;
     }
     if (char_offset != NULL) {
-      chars_skipped = ((col_width + (header_vnp->choice + 2) * dlg->char_width) - x) / dlg->char_width;
+      chs = 0;
+      if (header_vnp != NULL) {
+        chs = header_vnp->choice;
+      }
+      chars_skipped = ((col_width + (chs + 2) * dlg->char_width) - x) / dlg->char_width;
       cell_text = TableDisplayGetTextForCell (dlg, cell_coord);
       cell_len = StringLen (cell_text);
       cell_text = MemFree (cell_text);
@@ -6207,6 +6232,11 @@ static CharPtr ValForOneAccession (CharPtr str)
 
   if (!StringHasNoText (str))
   {
+    if (StringNCmp (str, ",?|", 3) == 0) {
+      str += 3;
+    } else if (StringNCmp (str, "?|", 2) == 0) {
+      str += 2;
+    }
     cp = StringChr (str, '|');
     if (cp == NULL)
     {
@@ -6225,9 +6255,16 @@ static CharPtr ValForOneAccession (CharPtr str)
     {
       *cp = 0;
       db = GetAccnTypeNum (str);
-      val_buf = MemNew (sizeof (Char) * (StringLen (val_fmt) + StringLen (cp + 1)));
-      sprintf (val_buf, val_fmt, db, cp + 1);
-      *cp = '|';
+      if (db > 0) {
+        val_buf = MemNew (sizeof (Char) * (StringLen (val_fmt) + StringLen (cp + 1)));
+        sprintf (val_buf, val_fmt, db, cp + 1);
+        *cp = '|';
+      } else {
+        *cp = '|';
+        db = 7;
+        val_buf = MemNew (sizeof (Char) * (StringLen (val_fmt) + StringLen (str)));
+        sprintf (val_buf, val_fmt, db, str);
+      }
     }
   }
   return val_buf;
@@ -6362,16 +6399,12 @@ static Pointer AccessionListDialogToData (DialoG d)
           StringCat (result_str, ",");
         }
 
-        if (db > 0 && db < numAccnTypePrefixes)
+        if (db > 0 && db != 7 && db < numAccnTypePrefixes)
         {
           StringCat (result_str, accnTypePrefix[db]);
+          StringCat (result_str, "|");
         }
-        else
-        {
-          StringCat (result_str, "?");
-        }
-        StringCat (result_str, "|");
-        if (!StringHasNoText (result_str)) {
+        if (!StringHasNoText (acc_str)) {
           StringCat (result_str, acc_str);
         }
       }
@@ -7744,6 +7777,253 @@ static DialoG NewCreateInferenceDialog (
 }
 
 
+typedef struct experimentdlg {
+  DIALOG_MESSAGE_BLOCK
+  DialoG     dlg;
+} ExperimentDlgData, PNTR ExperimentDlgPtr;
+
+
+Uint2 experiment_types [] = {
+  TAGLIST_POPUP, TAGLIST_TEXT, TAGLIST_TEXT
+};
+
+Uint2 experiment_widths [] = {
+  10, 10, 10
+};
+
+ENUM_ALIST(experiment_category_alist)
+  { " ",       0 },
+  { "COORDINATES", 1 },
+  { "DESCRIPTION", 2 },
+  { "EXISTENCE",   3 },
+END_ENUM_ALIST
+
+static EnumFieldAssocPtr experiment_popups [] = {
+  experiment_category_alist, NULL
+};
+
+
+static Boolean StartsWithStringFollowedBySpaceAndColon (CharPtr text, CharPtr str)
+{
+  Int4 len;
+
+  if (StringHasNoText (text) || StringHasNoText (str)) {
+    return FALSE;
+  }
+  len = StringLen (str);
+  if (StringNICmp (text, str, len) != 0) {
+    return FALSE;
+  }
+  len += StringSpn (text + len, " ");
+  if (text[len] == ':') {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
+
+static void ExperimentToDialog (DialoG d, Pointer data)
+{
+  ExperimentDlgPtr dlg;
+  TagListPtr       tlp;
+  ValNodePtr       vals, vnp;
+  CharPtr          exp, fmt, doi;
+  Int2             num_rows = 0;
+  Int4             i, match_num;
+  Int4             len;
+
+  dlg = (ExperimentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return;
+  }
+  tlp = (TagListPtr) GetObjectExtra (dlg->dlg);
+  if (tlp == NULL) {
+    return;
+  }
+  tlp->vnp = ValNodeFreeData (tlp->vnp);
+  vals = (ValNodePtr) data;
+  for (vnp = vals; vnp != NULL; vnp = vnp->next) {
+    exp = (CharPtr) vnp->data.ptrvalue;
+    if (!StringHasNoText (exp)) {
+      len = 19;
+      match_num = 0;
+      for (i = 1; experiment_category_alist[i].name != NULL && match_num == 0; i++) {
+        if (StartsWithStringFollowedBySpaceAndColon(exp, experiment_category_alist[i].name)) {
+          match_num = i;
+          exp = StringChr(exp, ':') + 1;
+        }
+      }
+      len += StringLen (exp);
+      doi = StringRChr (exp, '[');
+      if (doi != NULL && exp[StringLen (exp) - 1] != ']') {
+        doi = NULL;
+      }
+
+      fmt = (CharPtr) MemNew (sizeof (Char) + len);
+      sprintf (fmt, "%d\t", match_num);
+      if (doi == NULL) {
+        StringCat (fmt, exp);
+        StringCat (fmt, "\t");
+      } else {
+        StringNCat (fmt, exp, doi - exp);
+        StringCat (fmt, "\t");
+        StringCat (fmt, doi + 1);
+        len = StringLen (fmt);
+        if (fmt[len - 1] == ']') {
+          fmt[len - 1] = 0;
+        }
+      }
+      ValNodeAddPointer (&(tlp->vnp), 0, fmt);
+      num_rows++;            
+    }
+  }
+
+  tlp->max = MAX ((Int2) 0, (Int2) (num_rows - tlp->rows + 1));
+  CorrectBarMax (tlp->bar, tlp->max);
+  CorrectBarPage (tlp->bar, (Int2) (tlp->rows-1), (Int2) (tlp->rows-1));   
+    
+  SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
+}
+
+
+static Pointer ExperimentFromDialog(DialoG d)
+{
+  ExperimentDlgPtr dlg;
+  TagListPtr       tlp;
+  ValNodePtr       vals = NULL, vnp;
+  CharPtr          cat_name, exp, doi, num_str, fmt;
+  Int4             len, cat_num;
+
+  dlg = (ExperimentDlgPtr) GetObjectExtra (d);
+  if (dlg == NULL) {
+    return NULL;
+  }
+  tlp = (TagListPtr) GetObjectExtra (dlg->dlg);
+  if (tlp == NULL) {
+    return NULL;
+  }
+  
+  for (vnp = tlp->vnp; vnp != NULL; vnp = vnp->next) {
+    num_str = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 0);
+    exp = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 1);
+    doi = ExtractTagListColumn ((CharPtr) vnp->data.ptrvalue, 2);
+    cat_name = NULL;
+    if (!StringHasNoText (num_str) && (cat_num = atoi(num_str)) > 0) {
+      cat_name = experiment_category_alist[cat_num].name;
+    }
+    num_str = MemFree (num_str);
+    len = StringLen (exp) + 1;
+    if (cat_name != NULL) {
+      len += StringLen (cat_name) + 1;
+    }
+    if (StringHasNoText (doi)) {
+      doi = MemFree (doi);
+    }
+    if (doi != NULL) {
+      len += StringLen (doi) + 2;
+    }
+    fmt = (CharPtr) MemNew (sizeof (Char) * len);
+    sprintf (fmt, "%s%s%s%s%s%s",
+             cat_name == NULL ? "" : cat_name,
+             cat_name == NULL ? "" : ":",
+             exp == NULL ? "" : exp,
+             doi == NULL ? "" : "[",
+             doi == NULL ? "" : doi,
+             doi == NULL ? "" : "]");
+    ValNodeAddPointer (&vals, 0, fmt);
+    exp = MemFree (exp);
+    doi = MemFree (doi);
+  }
+  return (Pointer) vals;
+}
+
+
+extern DialoG CreateExperimentDialog (GrouP prnt)
+{
+  GrouP            p, g;
+  ExperimentDlgPtr dlg;
+  TagListPtr       tlp;
+  PrompT           p1, p2, p3;
+
+  dlg = (ExperimentDlgPtr) MemNew (sizeof (ExperimentDlgData));
+  if (dlg == NULL) return NULL;
+
+  p = HiddenGroup (prnt, -1, 0, NULL);
+  SetGroupSpacing (p, 10, 10);
+
+  SetObjectExtra (p, dlg, StdCleanupExtraProc);
+  dlg->dialog = (DialoG) p;
+  dlg->todialog = ExperimentToDialog;
+  dlg->fromdialog = ExperimentFromDialog;
+
+  g = HiddenGroup (p, 3, 0, NULL);
+  SetGroupSpacing (g, 10, 10);
+  SelectFont(systemFont);
+  p1 = StaticPrompt (g, "Category (optional)", 0, 0, systemFont, 'c');
+  p2 = StaticPrompt (g, "Experiment", 0, 0, systemFont, 'c');
+  p3 = StaticPrompt (g, "PMID or doi (optional)", 0, 0, systemFont, 'c');
+  dlg->dlg = CreateTagListDialogEx3 (p, 3, 3, 2,
+                              experiment_types, experiment_widths,
+                              experiment_popups, TRUE, FALSE, NULL, NULL,
+                              NULL, NULL,
+                              FALSE, FALSE);
+  tlp = GetObjectExtra (dlg->dlg);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) p1, (HANDLE) tlp->control[0], NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) p2, (HANDLE) tlp->control[1], NULL);
+  AlignObjects (ALIGN_JUSTIFY, (HANDLE) p3, (HANDLE) tlp->control[2], NULL);
+
+  return (DialoG) p;
+}
+
+
+extern void ExperimentDialogToGbquals (SeqFeatPtr sfp, DialoG d)
+
+{
+  GBQualPtr   gbq, gbqlast = NULL;
+  ValNodePtr  head = NULL, vnp;
+  CharPtr     str;
+
+  if (sfp == NULL) return;
+  head = DialogToPointer (d);
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    gbqlast = gbq;
+  }
+  for (vnp = head; vnp != NULL; vnp = vnp->next) {
+    str = (CharPtr) vnp->data.ptrvalue;
+    if (StringHasNoText (str)) continue;
+    gbq = GBQualNew ();
+    if (gbq == NULL) continue;
+    gbq->qual = StringSave ("experiment");
+    gbq->val = StringSave (str);
+    if (gbqlast == NULL) {
+      sfp->qual = gbq;
+    } else {
+      gbqlast->next = gbq;
+    }
+    gbqlast = gbq;
+  }
+  ValNodeFreeData (head);
+}
+
+
+extern void GBQualsToExperimentDialog (SeqFeatPtr sfp, DialoG d)
+{
+  ValNodePtr list = NULL;
+  GBQualPtr   gbq;
+
+  if (sfp != NULL) {
+    for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+      if (StringICmp (gbq->qual, "experiment") == 0) {
+        ValNodeAddPointer (&list, 0, gbq->val);
+      }
+    }
+  }
+  PointerToDialog (d, list);
+  list = ValNodeFree (list);
+}
+
+
 /* ExistingText handling dialog and structures */
 typedef struct existingtextdlg 
 {
@@ -7781,7 +8061,6 @@ extern ExistingTextPtr GetExistingTextHandlerInfo (Int4 num_found, Boolean non_t
   ButtoN                b;
   ModalAcceptCancelData acd;
   ExistingTextPtr       etp;
-  Char                  txt [128];
   MsgAnswer             ans;
   PrompT                ppt;
   Int4                  handle_choice;
@@ -7791,9 +8070,7 @@ extern ExistingTextPtr GetExistingTextHandlerInfo (Int4 num_found, Boolean non_t
     return NULL;
   }
   
-  sprintf (txt, "%d affected fields already contain a value.  Do you wish to overwrite existing text?",
-           num_found);
-  ans = Message (MSG_YNC, txt, 0, dialogTextHeight, systemFont, 'l');
+  ans = Message (MSG_YNC, "%d affected fields already contain a value.  Do you wish to overwrite existing text?", num_found);
   if (ans == ANS_CANCEL)
   {
     etp = (ExistingTextPtr) MemNew (sizeof (ExistingTextData));
@@ -11616,6 +11893,52 @@ static Boolean ParseMobileElementOk (CharPtr txt)
 }
 
 
+CharPtr regulatory_class_keywords[] = 
+{ " ",
+  "attenuator",
+  "CAAT_signal",
+  "DNase_I_hypersensitive_site",
+  "enhancer_blocking_element",
+  "enhancer",
+  "GC_signal",
+  "imprinting_control_region",
+  "insulator",
+  "locus_control_region",
+  "matrix_attachment_region",
+  "minus_10_signal",
+  "minus_35_signal",
+  "polyA_signal_sequence",
+  "promoter",
+  "recoding_stimulatory_region",
+  "replication_regulatory_region",
+  "response_element",
+  "ribosome_binding_site",
+  "riboswitch",
+  "silencer",
+  "TATA_box",
+  "terminator",
+  "transcriptional_cis_regulatory_region",
+  "other",
+  NULL};
+
+
+static DialoG CreateRegulatoryClassDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
+                                           TaglistCallback tlp_callback,
+                                           Pointer callback_data)
+{
+  return CreateControlPlusFreeDialog (h, sep, name, tlp_callback, callback_data, regulatory_class_keywords);
+}
+
+static Boolean ParseRegulatoryClassOk (CharPtr txt)
+{
+
+  if (GetControlNum (txt, regulatory_class_keywords, NULL) > -1) {
+    return TRUE;
+  } else {
+    return FALSE;
+  }
+}
+
 CharPtr satellite_keywords[] = 
 { " ",
   "satellite",
@@ -12050,8 +12373,25 @@ static Boolean ParseOrganelleOk (CharPtr val)
   }
 }
 
-CharPtr rpt_type_values[] = {" ", "tandem", "inverted", "flanking", "terminal", 
-                             "direct", "dispersed", "other", NULL};
+CharPtr rpt_type_values[] = {
+  " ",
+  "tandem",
+  "inverted",
+  "flanking",
+  "nested",
+  "terminal",
+  "direct",
+  "dispersed",
+  "long_terminal_repeat",
+  "non_LTR_retrotransposon_polymeric_tract",
+  "X_element_combinatorial_repeat",
+  "Y_prime_element",
+  "telomeric_repeat",
+  "centromeric_repeat",
+  "engineered_foreign_repetitive_element",
+  "other",
+  NULL
+};
 static DialoG RptTypeQualDialog (GrouP h, SeqEntryPtr sep, CharPtr name,
                                  TaglistCallback tlp_callback,
                                  Pointer callback_data)
@@ -12132,34 +12472,36 @@ typedef struct gbqualeditlist {
 } GBQualEditListData, PNTR GBQualEditListPtr;
 
 GBQualEditListData gbqual_edit_list[] = {
-  {"chloroplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"chromoplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"codon_start",          CodonStartQualDialog,      ParseCodonStartOk,     NULL },
-  {"collection_date",      CollectionDateDialog,      ParseCollectionDateOk, NULL },
-  {"cyanelle",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"direction",            DirectionQualDialog,       ParseDirectionOk,      NULL },
-  {"germline",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"kinetoplast",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"macronuclear",         TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"mitochondrion",        TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"mobile_element",       CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToControlPlusFreeDialog },
-  {"mobile_element_type",  CreateMobileElementDialog, ParseMobileElementOk,  CopyTextToControlPlusFreeDialog },
-  {"mol_type",             MolTypeQualDialog,         ParseMolTypeOk,        NULL },
-  {"organelle",            OrganelleQualDialog,       ParseOrganelleOk,      NULL },
-  {"partial",              TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"proviral",             TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"pseudo",               TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"rearranged",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"rpt_type",             RptTypeQualDialog,         ParseRptTypeOk,        NULL },
-  {"rpt_unit_range",       CreateRptUnitRangeDialog,  ParseRptUnitRangeOk,   NULL } ,
-  {"satellite",            CreateSatelliteDialog,     ParseSatelliteOk,      CopyTextToControlPlusFreeDialog },
-  {"virion",               TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"focus",                TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"transgenic",           TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"environmental_sample", TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"ribosomal_slippage",   TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"trans_splicing",       TrueFalseDialog,           ParseTrueFalseOk,      NULL },
-  {"metagenomic",          TrueFalseDialog,           ParseTrueFalseOk,      NULL },
+  {"chloroplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"chromoplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"codon_start",           CodonStartQualDialog,        ParseCodonStartOk,       NULL },
+  {"collection_date",       CollectionDateDialog,        ParseCollectionDateOk,   NULL },
+  {"cyanelle",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"direction",             DirectionQualDialog,         ParseDirectionOk,        NULL },
+  {"germline",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"kinetoplast",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"macronuclear",          TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"mitochondrion",         TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"mobile_element",        CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
+  {"mobile_element_type",   CreateMobileElementDialog,   ParseMobileElementOk,    CopyTextToControlPlusFreeDialog },
+  {"mol_type",              MolTypeQualDialog,           ParseMolTypeOk,          NULL },
+  {"organelle",             OrganelleQualDialog,         ParseOrganelleOk,        NULL },
+  {"partial",               TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"proviral",              TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"pseudo",                TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"rearranged",            TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"rpt_type",              RptTypeQualDialog,           ParseRptTypeOk,          NULL },
+  {"rpt_unit_range",        CreateRptUnitRangeDialog,    ParseRptUnitRangeOk,     NULL } ,
+  {"satellite",             CreateSatelliteDialog,       ParseSatelliteOk,        CopyTextToControlPlusFreeDialog },
+  {"virion",                TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"focus",                 TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"transgenic",            TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"environmental_sample",  TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"ribosomal_slippage",    TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"trans_splicing",        TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"metagenomic",           TrueFalseDialog,             ParseTrueFalseOk,        NULL },
+  {"regulatory_class",      CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
+  {"regulatory_class_type", CreateRegulatoryClassDialog, ParseRegulatoryClassOk,  CopyTextToControlPlusFreeDialog },
   {NULL, NULL, NULL}};
 
 

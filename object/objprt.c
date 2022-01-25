@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/94
 *
-* $Revision: 6.2 $
+* $Revision: 6.3 $
 *
 * File Description:  Object manager for print templates
 *
@@ -40,6 +40,9 @@
 *
 *
 * $Log: objprt.c,v $
+* Revision 6.3  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.2  1998/08/26 17:43:18  kans
 * fixed -v -fd warnings in label functions
 *
@@ -268,6 +271,9 @@ NLM_EXTERN Boolean LIBCALL PrintTemplateAsnWrite (PrintTemplatePtr ptr,  AsnIoPt
 }
 	atp = AsnLinkType(orig, PRINTTEMPLATE);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr ->  name != NULL){
@@ -450,6 +456,9 @@ NLM_EXTERN Boolean LIBCALL PrintFormatAsnWrite (PrintFormatPtr ptr,  AsnIoPtr ai
 }
 	atp = AsnLinkType(orig, PRINTFORMAT);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> asn1 != NULL){
@@ -615,6 +624,9 @@ NLM_EXTERN Boolean LIBCALL PrintFormAsnWrite (PrintFormPtr ptr,  AsnIoPtr aip, A
 }
 	atp = AsnLinkType(orig, PRINTFORM);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
  	av.ptrvalue = (Pointer) ptr;
  	if (! AsnWriteChoice(aip, atp, ptr -> choice, & av)) goto erret;
 	pnt = ptr -> data.ptrvalue;
@@ -776,6 +788,9 @@ NLM_EXTERN Boolean LIBCALL PrintFormBlockAsnWrite (PrintFormBlockPtr ptr,  AsnIo
 }
 	atp = AsnLinkType(orig, PRINTFORMBLOCK);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> separator != NULL){
@@ -898,6 +913,9 @@ NLM_EXTERN Boolean LIBCALL PrintFormBooleanAsnWrite (PrintFormBooleanPtr ptr,  A
 }
 	atp = AsnLinkType(orig, PRINTFORMBOOLEAN);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> truepfb != NULL){
@@ -1013,6 +1031,7 @@ NLM_EXTERN Boolean LIBCALL PrintFormEnumAsnWrite (PrintFormEnumPtr ptr,  AsnIoPt
 }
 	atp = AsnLinkType(orig, PRINTFORMENUM);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> values != NULL){
@@ -1121,6 +1140,9 @@ NLM_EXTERN Boolean LIBCALL PrintFormTextAsnWrite (PrintFormTextPtr ptr,  AsnIoPt
 }
 	atp = AsnLinkType(orig, PRINTFORMTEXT);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> textfunc != NULL){
@@ -1230,6 +1252,9 @@ NLM_EXTERN Boolean LIBCALL UserFormatAsnWrite (UserFormatPtr ptr,  AsnIoPtr aip,
 }
 	atp = AsnLinkType(orig, USERFORMAT);
 	if(atp == NULL) {AsnNullValueMsg(aip,atp); goto erret;}
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
 	if (! AsnOpenStruct (aip, atp, (Pointer) ptr)) goto erret;
 
 	if (ptr -> printfunc != NULL){

@@ -1,5 +1,5 @@
 /*
- * $Id: alnread.c,v 1.44 2012/06/07 12:04:34 kazimird Exp $
+ * $Id: alnread.c,v 1.55 2016/01/08 19:34:14 fukanchi Exp $
  *
  * ===========================================================================
  *
@@ -39,8 +39,9 @@
 #define strdup _strdup
 #endif
 
-static const int kMaxPrintedIntLen = 10;
-#define MAX_PRINTED_INT_LEN_PLUS_ONE 11
+static const size_t kMaxPrintedIntLen = 10;
+#define             kMaxPrintedIntLenPlusOne 11
+
 
 /*  ---------------------------------------------------------------------- */
 typedef enum {
@@ -136,7 +137,7 @@ typedef struct SAlignFileRaw {
 static EBool s_AfrpInitLineData( 
     SAlignRawFilePtr afrp, FReadLineFunction readfunc, void* pfile);
 static void s_AfrpProcessFastaGap(
-    SAlignRawFilePtr afrp, SLengthListPtr patterns, char* plinestr, int overall_line_count);
+    SAlignRawFilePtr afrp, SLengthListPtr * patterns, EBool * last_line_was_marked_id, char* plinestr, int overall_line_count);
 
 /* These functions are used for storing and transmitting information
  * about errors encountered while reading the alignment data.
@@ -189,11 +190,11 @@ extern void ErrorInfoFree (TErrorInfoPtr eip)
  */
 static void 
 s_ReportCharCommentError 
-(char * expected,
- char    seen,
- char * val_name,
+(const char * expected,
+ char         seen,
+ const char * val_name,
  FReportErrorFunction errfunc,
- void *             errdata)
+ void *               errdata)
 {
     TErrorInfoPtr eip;
     const char * errformat = "Specified %s character does not match NEXUS"
@@ -226,7 +227,7 @@ s_ReportBadCharError
  int     num_bad,
  int     offset,
  int     line_number,
- char *  reason,
+ const char *  reason,
  FReportErrorFunction errfunc,
  void *             errdata)
 {
@@ -247,7 +248,7 @@ s_ReportBadCharError
     eip->category = eAlnErr_BadData;
     if (id != NULL) eip->id = strdup (id);
     eip->line_num = line_number;
-    eip->message = (char *) malloc (strlen (err_format) + 2 * kMaxPrintedIntLen
+    eip->message = (char*) malloc (strlen (err_format) + 2 * kMaxPrintedIntLen
                                     + strlen (reason) + 3);
     if (eip->message != NULL)
     {
@@ -325,7 +326,7 @@ s_ReportLineLengthError
     TErrorInfoPtr eip;
     char *        msg;
     const char *  format = "Expected line length %d, actual length %d";
-    int           len;
+    size_t        len;
 
     if (lip == NULL  ||  report_error == NULL) {
         return;
@@ -336,19 +337,19 @@ s_ReportLineLengthError
         return;
     }
     eip->category = eAlnErr_BadFormat;
-    eip->id = strdup (id);
+    eip->id = strdup(id);
     eip->line_num = lip->line_num;
-    msg = (char *) malloc (strlen (format) + kMaxPrintedIntLen + 1);
+    msg = (char*)malloc(strlen(format) + kMaxPrintedIntLen + 1);
     if (msg != NULL) {
         if (lip->data == NULL) {
             len = 0;
         } else {
-            len = strlen (lip->data);
+            len = strlen(lip->data);
         }
-        sprintf (msg, format, expected_length, len);
+        sprintf(msg, format, expected_length, len);
         eip->message = msg;
     }
-    report_error (eip, report_error_userdata);
+    report_error(eip, report_error_userdata);
 }
 
 
@@ -378,7 +379,7 @@ s_ReportBlockLengthError
     eip->category = eAlnErr_BadFormat;
     eip->id = strdup (id);
     eip->line_num = line_num;
-    eip->message = (char *)malloc (strlen (err_format) + 2 * kMaxPrintedIntLen + 1);
+    eip->message = (char*)malloc(strlen(err_format) + 2 * kMaxPrintedIntLen + 1);
     if (eip->message != NULL) {
       sprintf (eip->message, err_format, expected_num, actual_num);
     }
@@ -493,8 +494,7 @@ s_ReportIncorrectNumberOfSequences
         return;
     }
     eip->category = eAlnErr_BadFormat;
-    eip->message = (char *) malloc (strlen (err_format) +
-                                    2 * kMaxPrintedIntLen + 1);
+    eip->message = (char*)malloc(strlen(err_format) + 2 * kMaxPrintedIntLen + 1);
                                      
     if (eip->message != NULL)
     {
@@ -523,10 +523,8 @@ s_ReportIncorrectSequenceLength
     }
 
     eip->category = eAlnErr_BadFormat;
-    eip->message = (char *)malloc (strlen (err_format)
-                                   + 2 * kMaxPrintedIntLen + 1);
-    if (eip->message != NULL)
-    {
+    eip->message = (char*)malloc(strlen(err_format) + 2 * kMaxPrintedIntLen + 1);
+    if (eip->message != NULL) {
       sprintf (eip->message, err_format, len_expected, len_found);
     }
     report_error (eip, report_error_userdata);
@@ -560,8 +558,8 @@ s_ReportRepeatedOrganismName
     if (id != NULL ) {
         eip->id = strdup (id);
     }
-    eip->message = (char *)malloc (strlen (err_format) + strlen (org_name)
-                           + kMaxPrintedIntLen + 1);
+    eip->message = (char*)malloc(strlen(err_format) + strlen(org_name)
+                                 + kMaxPrintedIntLen + 1);
     if (eip->message != NULL) {
         sprintf (eip->message, err_format, org_name, second_line_num);
     }
@@ -611,31 +609,31 @@ s_ReportRepeatedId
         return;
     }
 
-    eip = ErrorInfoNew (NULL);
+    eip = ErrorInfoNew(NULL);
     if (eip == NULL) {
         return;
     }
 
     eip->category = eAlnErr_BadData;
-    eip->id = strdup (scp->string);
+    eip->id = strdup(scp->string);
     if (scp->line_numbers != NULL) {
         eip->line_num = scp->line_numbers->ival;
     }
-    eip->message = (char *) malloc ( strlen (err_format)
-                                    + strlen (scp->string)
-                                    + scp->num_appearances * 15
-                                    + 1);
+    eip->message = (char*)malloc(strlen(err_format)
+                                 + strlen(scp->string)
+                                 + (size_t)scp->num_appearances * 15
+                                 + 1);
     if (eip->message != NULL) {
-        sprintf (eip->message, err_format, scp->string);
+        sprintf(eip->message, err_format, scp->string);
         cp = eip->message + strlen (eip->message);
         for (line_number = scp->line_numbers;
              line_number != NULL;
              line_number = line_number->next) {
-            sprintf (cp, " %d", line_number->ival);
+            sprintf(cp, " %d", line_number->ival);
             cp += strlen (cp);
         }
     }
-    report_error (eip, report_error_userdata);
+    report_error(eip, report_error_userdata);
 }
 
 
@@ -680,8 +678,8 @@ s_ReportSegmentedAlignmentError
     const char * msg = "This file contains sequences in brackets (indicating "
         "a segmented alignment) as well as sequences not in brackets at lines "
         "%s.  Please either add or remove brackets to correct this problem.";
-    int num_lines = 0;
-    int         msg_len = 0;
+    size_t      num_lines = 0;
+    size_t      msg_len = 0;
     TIntLinkPtr t;
     char *      line_text_list;
     char *      line_text_list_offset;
@@ -689,21 +687,19 @@ s_ReportSegmentedAlignmentError
     if (errfunc == NULL || offset_list == NULL) {
         return;
     }
-
-    for (t = offset_list; t != NULL; t = t->next)
-    {
-        num_lines ++;
+    for (t = offset_list; t != NULL; t = t->next) {
+        ++num_lines;
     }
     msg_len = num_lines * (kMaxPrintedIntLen + 2);
-    if (num_lines > 1) 
-    {
+    if (num_lines > 1) {
     	msg_len += 4;
     }
-    line_text_list = (char *) malloc (msg_len);
+    
+    line_text_list = (char*)malloc(msg_len);
     if (line_text_list == NULL) return;
     line_text_list_offset = line_text_list;
-    for (t = offset_list; t != NULL; t = t->next)
-    {
+
+    for (t = offset_list; t != NULL; t = t->next) {
         if (t->next == NULL)
         {
             sprintf (line_text_list_offset, "%d", t->ival);
@@ -723,18 +719,18 @@ s_ReportSegmentedAlignmentError
         line_text_list_offset += strlen (line_text_list_offset);
     }
 
-    msg_len += strlen (msg) + 1;
+    msg_len += strlen(msg) + 1;
 
     eip = ErrorInfoNew (NULL);
     if (eip != NULL) {
         eip->category = eAlnErr_BadData;
         eip->message = (char *) malloc (msg_len);
         if (eip->message != NULL) {
-            sprintf (eip->message, msg, line_text_list);
+            sprintf(eip->message, msg, line_text_list);
         }
-        errfunc (eip, errdata);
+        errfunc(eip, errdata);
     }
-    free (line_text_list);
+    free(line_text_list);
 }
 
 
@@ -788,7 +784,7 @@ static void s_ReportBadNumSegError
     if (eip != NULL) {
         eip->line_num = line_num;
         eip->category = eAlnErr_BadData;
-        eip->message = (char *) malloc (strlen (msg) + 2 * kMaxPrintedIntLen + 1);
+        eip->message = (char*) malloc(strlen(msg) + 2 * kMaxPrintedIntLen + 1);
         if (eip->message != NULL) {
             sprintf (eip->message, msg, num_seg, num_seg_exp);
         }
@@ -862,14 +858,12 @@ s_ReportUnusedLine
         eip->category = eAlnErr_BadFormat;
         eip->line_num = line_num_start;
         if (line_num_start == line_num_stop) {
-              eip->message = (char *) malloc (strlen (errformat1)
-                                            + kMaxPrintedIntLen + 1);
+              eip->message = (char*)malloc(strlen(errformat1) + kMaxPrintedIntLen + 1);
             if (eip->message != NULL) {
                 sprintf (eip->message, errformat1, line_num_start);
             }
         } else {
-            eip->message = (char *) malloc (strlen (errformat2)
-                                            + 2 * kMaxPrintedIntLen + 1);
+            eip->message = (char*)malloc(strlen(errformat2) + 2*kMaxPrintedIntLen + 1);
             if (eip->message != NULL) {
                 sprintf (eip->message, errformat2, line_num_start,
                          line_num_stop);
@@ -1417,11 +1411,11 @@ static void s_BracketedCommentListAddLine
 		return;
 	}
 
-    comment->comment_lines = s_AddLineInfo (comment->comment_lines, string, line_num, line_offset);
+    comment->comment_lines = s_AddLineInfo(comment->comment_lines, string, line_num, line_offset);
 }
 
 /* This function counts the sequences found in a bracketed comment. */
-static int s_CountSequencesInBracketedComment (TBracketedCommentListPtr comment)
+static int s_CountSequencesInBracketedComment(TBracketedCommentListPtr comment)
 {
     TLineInfoPtr lip;
     int          num_segments = 0;
@@ -1433,7 +1427,7 @@ static int s_CountSequencesInBracketedComment (TBracketedCommentListPtr comment)
 	
 	lip = comment->comment_lines;
 	/* First line must be left bracket on a line by itself */
-	if (lip->data[0] != '[' || strspn (lip->data + 1, " \t\r\n") != strlen (lip->data + 1))
+	if (lip->data[0] != '[' || strspn(lip->data + 1, " \t\r\n") != strlen (lip->data + 1))
 	{
 		return 0;
 	}
@@ -1448,7 +1442,7 @@ static int s_CountSequencesInBracketedComment (TBracketedCommentListPtr comment)
 			}
 			else
 			{
-				num_segments ++;
+				++num_segments;
 				skipped_line_since_last_defline = eFalse;
 			}
 		}
@@ -1460,7 +1454,9 @@ static int s_CountSequencesInBracketedComment (TBracketedCommentListPtr comment)
 	}
 	/* Last line must be right bracket on a line by itself */
 	/* First line must be left bracket on a line by itself */
-	if (lip->data[0] != ']' || strspn (lip->data + 1, " \t\r\n") != strlen (lip->data + 1))
+	if (lip != NULL &&
+        lip->data != NULL &&
+        (lip->data[0] != ']' || strspn (lip->data + 1, " \t\r\n") != strlen (lip->data + 1)))
 	{
 		return 0;
 	}
@@ -1493,7 +1489,7 @@ static int s_GetNumSegmentsInAlignment
 	
 	for (comment = comment_list; comment != NULL; comment = comment->next)
 	{
-	    num_segments_this_bracket = s_CountSequencesInBracketedComment (comment);
+	    num_segments_this_bracket = s_CountSequencesInBracketedComment(comment);
         segcount_list = s_AddSizeInfoAppearances (segcount_list,
                                                   num_segments_this_bracket,
                                                   1);
@@ -1534,7 +1530,7 @@ static TIntLinkPtr GetSegmentOffsetList (TBracketedCommentListPtr comment_list)
     
     for (comment = comment_list; comment != NULL; comment = comment->next)
     {
-    	if (s_CountSequencesInBracketedComment (comment) == 0) 
+    	if (s_CountSequencesInBracketedComment(comment) == 0) 
     	{
     		continue;
     	}
@@ -1550,10 +1546,10 @@ static TIntLinkPtr GetSegmentOffsetList (TBracketedCommentListPtr comment_list)
     return offset_list;
 }
 
-static char * s_TokenizeString (char * str, char *delimiter, char **last)
+static char * s_TokenizeString (char * str, const char *delimiter, char **last)
 {
-    int skip;
-    int length;
+    size_t skip;
+    size_t length;
 
     if (str == NULL) {
         str = *last;
@@ -1594,8 +1590,8 @@ static TLineInfoPtr s_BuildTokenList (TLineInfoPtr line_list)
     first_token = NULL;
 
     for (lip = line_list;  lip != NULL;  lip = lip->next) {
-        if (lip->data != NULL  &&  (tmp = strdup (lip->data)) != NULL) {
-            piece = s_TokenizeString (tmp, " \t\r", &last);
+        if (lip->data != NULL  &&  (tmp = strdup(lip->data)) != NULL) {
+            piece = s_TokenizeString(tmp, " \t\r", &last);
             while (piece != NULL) {
                 line_pos = piece - tmp;
                 line_pos += lip->line_offset;
@@ -2161,11 +2157,11 @@ static EBool s_IsTwoNumbersSeparatedBySpace (char * str)
  */
 static EBool 
 s_GetOneNexusSizeComment 
-(char * str,
- char * valname, 
- int  * val)
+(char       * str,
+ const char * valname, 
+ int        * val)
 {
-    char   buf[MAX_PRINTED_INT_LEN_PLUS_ONE];
+    char   buf[kMaxPrintedIntLenPlusOne];
     char * cpstart;
     char * cpend;
     int    maxlen;
@@ -2198,7 +2194,8 @@ s_GetOneNexusSizeComment
         cpend ++;
     }
     maxlen = cpend - cpstart;
-    if (maxlen > kMaxPrintedIntLen) maxlen = kMaxPrintedIntLen;
+    if (maxlen > kMaxPrintedIntLen) 
+        maxlen = kMaxPrintedIntLen;
 
     strncpy (buf, cpstart, maxlen);
     buf [maxlen] = 0;
@@ -2249,7 +2246,7 @@ s_GetNexusSizeComments
  * will return the first non-whitespace character following the equals sign,
  * otherwise the function will return a 0.
  */
-static char GetNexusTypechar (char * str, char * val_name)
+static char GetNexusTypechar (char * str, const char * val_name)
 {
     char * cp;
     char * cpend;
@@ -2489,7 +2486,7 @@ static EBool s_SkippableString (char * str)
         ||  s_StringNICmp (str, "matrix", 6) == 0
         ||  s_StringNICmp (str, "sequin", 6) == 0
         ||  s_StringNICmp (str, "#NEXUS", 6) == 0
-        ||  s_StringNICmp (str, "CLUSTAL W", 8) == 0
+        ||  s_StringNICmp (str, "CLUSTAL W", 9) == 0
         ||  s_SkippableNexusComment (str)
         ||  s_IsTwoNumbersSeparatedBySpace (str)
         ||  s_IsOnlyNumbersAndSpaces (str)
@@ -2509,7 +2506,7 @@ static EBool s_IsAlnFormatString (char * str)
 {
     if (s_StringNICmp (str, "matrix", 6) == 0
         ||  s_StringNICmp (str, "#NEXUS", 6) == 0
-        ||  s_StringNICmp (str, "CLUSTAL W", 8) == 0
+        ||  s_StringNICmp (str, "CLUSTAL W", 9) == 0
         ||  s_SkippableNexusComment (str)
         ||  s_IsTwoNumbersSeparatedBySpace (str)
         ||  s_IsConsensusLine (str)) {
@@ -2619,6 +2616,7 @@ static TCommentLocPtr s_FindComment (char * string)
 static void s_RemoveCommentFromLine (char * linestring)
 {
     TCommentLocPtr clp;
+    size_t offset;
 
     if (linestring == NULL) {
         return;
@@ -2635,8 +2633,14 @@ static void s_RemoveCommentFromLine (char * linestring)
      * line, get rid of the arrow character as well so it doesn't end up 
      * in the sequence data
      */
-    if ( linestring [0] == '>'  &&  linestring [1] == 0) {
-        linestring [0] = 0;
+    if ( linestring [0] == '>') {
+        offset = 1;
+        while (isspace(linestring[offset])) {
+            offset++;
+        }
+        if (linestring[offset] == 0) {
+            linestring[0] = 0;
+        }
     }
 
     /* if the line now contains only space, truncate it */
@@ -2725,7 +2729,9 @@ static void s_RemoveOrganismCommentFromLine (char * string)
     TCommentLocPtr clp;
 
     while ((clp = s_FindOrganismComment (string)) != NULL) {
-        strcpy (clp->start, clp->end + 1);
+        if (clp->end != NULL) {
+            strcpy (clp->start, clp->end + 1);
+        }
         s_CommentLocFree (clp);
     }
 }
@@ -2850,7 +2856,7 @@ static void s_AddDeflineFromOrganismLine
         defline_num ++;
     }
     
-    if (defline_num == org_num) {
+    if (defline_num == org_num && lip != NULL) {
         /* if previous defline is empty, replace with new defline */
         if (strlen (lip->data) == 0)
         {
@@ -3425,6 +3431,9 @@ s_FindInterleavedBlocks
             size_list = s_AddSizeInfo (size_list, llp->num_appearances);
         }
     }
+    if (size_list == NULL) {
+        return;
+    }
     best_ptr = s_GetMostPopularSizeInfo (size_list);
     if (best_ptr != NULL  
         &&  (best_ptr->num_appearances > 1  ||  
@@ -3532,17 +3541,28 @@ s_AfrpInitLineData(
 static void
 s_AfrpProcessFastaGap(
     SAlignRawFilePtr afrp,
-    SLengthListPtr patterns,
+    SLengthListPtr * patterns,
+    EBool * last_line_was_marked_id,
     char* linestr,
     int overall_line_count)
 {
-    static EBool last_line_was_marked_id = eFalse;
-    static SLengthListPtr last_pattern = NULL;
-
     TIntLinkPtr new_offset = NULL;
     SLengthListPtr this_pattern = NULL;
     int len = 0;
     char* cp;
+    SLengthListPtr last_pattern;
+
+    if (patterns == NULL || last_line_was_marked_id == NULL) {
+        return;
+    }
+    last_pattern = *patterns;
+
+    /* find last pattern in list */
+    if (last_pattern != NULL) {
+        while (last_pattern->next != NULL) {
+            last_pattern = last_pattern->next;
+        }
+    }
 
     /*  ID line
      */
@@ -3551,7 +3571,7 @@ s_AfrpProcessFastaGap(
             * NEXUS file.  If there is no sequence data between
             * the lines, don't process this file for marked IDs.
             */
-        if (last_line_was_marked_id)
+        if (*last_line_was_marked_id)
         {
             afrp->marked_ids = eFalse;
 //            eFormat = ALNFMT_UNKNOWN;
@@ -3564,13 +3584,13 @@ s_AfrpProcessFastaGap(
         new_offset = s_IntLinkNew (overall_line_count + 1,
                                     afrp->offset_list);
         if (afrp->offset_list == NULL) afrp->offset_list = new_offset;
-        last_line_was_marked_id = eTrue;
+        *last_line_was_marked_id = eTrue;
         return;
     }
 
     /*  Data line
      */
-    last_line_was_marked_id = eFalse;
+    *last_line_was_marked_id = eFalse;
     /* add to length list for interleaved block search */
     len = strcspn (linestr, " \t\r");
     if (len > 0) {
@@ -3589,14 +3609,12 @@ s_AfrpProcessFastaGap(
     }
             
     if (last_pattern == NULL) {
-        patterns = this_pattern;
-        last_pattern = this_pattern;
+        *patterns = this_pattern;
     } else if (s_DoLengthPatternsMatch (last_pattern, this_pattern)) {
         last_pattern->num_appearances ++;
         s_LengthListFree (this_pattern);
     } else {
         last_pattern->next = this_pattern;
-        last_pattern = this_pattern;
     }
 }
 
@@ -3650,7 +3668,7 @@ s_ReadAlignFileRaw
 
         s_ReadOrgNamesFromText (linestring, overall_line_count, afrp);
         if (*pformat == ALNFMT_FASTAGAP) {
-            s_AfrpProcessFastaGap(afrp, pattern_list, linestring, overall_line_count);
+            s_AfrpProcessFastaGap(afrp, & pattern_list, & last_line_was_marked_id, linestring, overall_line_count);
             continue;
         }
         /* we want to remove the comment from the line for the purpose 
@@ -3745,7 +3763,7 @@ s_ReadAlignFileRaw
             else
             {
                 *pformat = ALNFMT_FASTAGAP;
-                s_AfrpProcessFastaGap(afrp, pattern_list, linestring, overall_line_count);
+                s_AfrpProcessFastaGap(afrp, & pattern_list, & last_line_was_marked_id, linestring, overall_line_count);
                 continue;
             }
             new_offset = s_IntLinkNew (overall_line_count + 1,
@@ -3993,7 +4011,6 @@ s_ProcessBlockLines
     int             len;
     int             line_number;
     EBool           this_block_has_ids;
-    int             pos;
     TAlignRawSeqPtr arsp;
 
     this_block_has_ids = s_DoesBlockHaveIds (afrp, lines, num_lines_in_block);
@@ -4005,7 +4022,6 @@ s_ProcessBlockLines
     {
         linestring = lip->data;
         if (linestring != NULL) {
-            pos = 0;
             if (this_block_has_ids) {
                 len = strcspn (linestring, " \t\r");
                 if (first_block && len == strlen (linestring)) {
@@ -4022,10 +4038,9 @@ s_ProcessBlockLines
                 strncpy (this_id, linestring, len);
                 this_id [len] = 0;
                 cp = linestring + len;
-                pos += len;
                 len = strspn (cp, " \t\r");
                 cp += len;
-                pos += len;
+                
                 /* Check for duplicate IDs in the first block */
                 if (first_block)
                 {
@@ -4156,7 +4171,6 @@ s_CreateSequencesBasedOnTokenPatterns
 
     line_counter = 0;
     lip = token_list;
-    offset_ptr = offset_list;
     curr_seg = 0;
   
     for (offset_ptr = offset_list;
@@ -4170,7 +4184,7 @@ s_CreateSequencesBasedOnTokenPatterns
         }
         if (lip != NULL) {
             if (gen_local_ids) {
-                char * replacement_id = malloc(32 +strlen(lip->data));
+                char * replacement_id = (char *) malloc(32 +strlen(lip->data));
                 sprintf(replacement_id, "lcl|%d %s", next_local_id++, lip->data+1);
                 free(lip->data);
                 lip->data = replacement_id; 
@@ -4252,7 +4266,7 @@ s_CreateAnchorPatternForMarkedIDs
     TLineInfoPtr   lip;
     int            curr_seg;
 
-    if (afrp == NULL) {
+    if (afrp == NULL || afrp->num_segments < 1) {
         return NULL;
     }
 
@@ -4304,6 +4318,7 @@ s_CreateAnchorPatternForMarkedIDs
                   s_LengthListFree (list [curr_seg]);
                 }
                 free (list);
+                free (best);
                 return NULL;
             }
             this_pattern->num_appearances = 1;
@@ -4354,6 +4369,11 @@ s_CreateAnchorPatternForMarkedIDs
         }
     }
 
+    /* free list. note that all of the elements of list that are not pointed to by best
+       have already been freed*/
+    free (list);
+
+
     for (curr_seg = 0; curr_seg < afrp->num_segments; curr_seg ++)
     {
     	if (best[curr_seg] == NULL) 
@@ -4362,6 +4382,7 @@ s_CreateAnchorPatternForMarkedIDs
     		{
     			s_LengthListFree (best [curr_seg]);
     		}
+            free (best);
     		return NULL;
     	}
     }
@@ -5096,7 +5117,7 @@ s_CountCharactersBetweenOffsets
     if (lip == NULL  ||  line_diff == distance) {
         return 0;
     }
-    num_starts = 1;
+
     list = lip->next;
     start_of_unknown = line_diff;
 
@@ -5250,7 +5271,7 @@ static void s_InsertNewOffsets
 
     /* if we have room for one more sequence, or even most of one more sequence, add it */
     if (lip != NULL  &&  ! s_SkippableString (lip->data)) {
-        splice_offset = s_IntLinkNew (line_diff + prev_offset->ival, prev_offset);
+        s_IntLinkNew (line_diff + prev_offset->ival, prev_offset);
     }
 }
 
@@ -5307,6 +5328,7 @@ static void s_ProcessAlignFileRawByLengthPattern (SAlignRawFilePtr afrp)
     anchorpattern [0] = s_FindMostPopularPattern (list->lengthrepeats);
     anchorpattern [1] = NULL;
     if (anchorpattern [0] == NULL  ||  anchorpattern[0]->lengthrepeats == NULL) {
+        s_LengthListFree (list);
         return;
     }
 
@@ -5539,9 +5561,9 @@ static int
 s_ReportRepeatedBadCharsInSequence
 (TLineInfoReaderPtr   lirp,
  char *               id,
- char *               reason,
+ const char *         reason,
  FReportErrorFunction report_error,
- void *              report_error_userdata)
+ void *               report_error_userdata)
 {
     int  bad_line_num, bad_line_offset;
     int  num_bad_chars;
@@ -5669,6 +5691,7 @@ s_FindBadDataCharsInSequence
     }
 
     if (! found_middle_start) {
+        s_LineInfoReaderFree (lirp);
         if (num_segments > 1)
         {
             return eFalse;
@@ -5677,7 +5700,6 @@ s_FindBadDataCharsInSequence
         {
             s_ReportMissingSequenceData (arsp->id,
                                    report_error, report_error_userdata);
-            s_LineInfoReaderFree (lirp);
             return eTrue;
           
         }
@@ -5809,11 +5831,13 @@ static EBool s_AreOrganismsUnique (SAlignRawFilePtr afrp)
         }
         if (lip != NULL  &&  lip != this_org) {
             are_unique = eFalse;
-            s_ReportRepeatedOrganismName (arsp->id, this_org->line_num,
-                                        lip->line_num,
-                                        this_org->data,
-                                        afrp->report_error,
-                                        afrp->report_error_userdata);
+            if (arsp != NULL && arsp->id != NULL) {
+                s_ReportRepeatedOrganismName (arsp->id, this_org->line_num,
+                                            lip->line_num,
+                                            this_org->data,
+                                            afrp->report_error,
+                                            afrp->report_error_userdata);
+            }
         }
     }
     return are_unique;
@@ -5836,7 +5860,8 @@ s_ConvertDataToOutput
     TLineInfoPtr      lip;
     int               curr_seg;
 
-    if (afrp == NULL  ||  sip == NULL  ||  afrp->sequences == NULL) {
+    if (afrp == NULL  ||  sip == NULL  ||  afrp->sequences == NULL ||
+        afrp->num_segments < 1) {
         return NULL;
     }
     afp = AlignmentFileNew ();
@@ -5863,17 +5888,32 @@ s_ConvertDataToOutput
         s_AreOrganismsUnique (afrp);
     }
 
+    // allocate memory to store sequence strings
     afp->sequences = (char **)malloc (afp->num_sequences 
                                            * sizeof (char *));
     if (afp->sequences == NULL) {
         AlignmentFileFree (afp);
         return NULL;
     }
+    // initialize afp->sequences, in case AlignmentFileFree must be called
+    // before real data can be added
+    for (index = 0; index < afp->num_sequences; index++) {
+        afp->sequences[index] = NULL;
+    }
+
+    // allocate memory to store sequence IDs
     afp->ids = (char **)malloc (afp->num_sequences * sizeof (char *));
     if (afp->ids == NULL) {
         AlignmentFileFree (afp);
         return NULL;
     }
+    // initialize afp->ids, in case AlignmentFileFree must be called
+    // before real data can be added
+    for (index = 0; index < afp->num_sequences; index++) {
+        afp->ids[index] = NULL;
+    }
+    
+    // allocate memory to store organism names
     if (afp->num_organisms > 0) {
         afp->organisms = (char **) malloc (afp->num_organisms
                                                 * sizeof (char *));
@@ -5882,6 +5922,13 @@ s_ConvertDataToOutput
             return NULL;
         }
     }
+    // initialize afp->organisms, in case AlignmentFileFree must be called
+    // before real data can be added
+    for (index = 0; index < afp->num_organisms; index++) {
+        afp->organisms[index] = NULL;
+    }
+
+    // allocate memory to store definition lines
     if (afp->num_deflines > 0) {
         afp->deflines = (char **)malloc (afp->num_deflines
                                               * sizeof (char *));
@@ -5938,7 +5985,7 @@ s_ConvertDataToOutput
                     s_LineInfoMergeAndStripSpaces (arsp->sequence_data);
 
         if (afp->sequences [index] != NULL) {
-            lengths [curr_seg] = s_AddSizeInfo (lengths [curr_seg], strlen (afp->sequences [index]));
+            lengths [curr_seg] = s_AddSizeInfo(lengths[curr_seg], strlen (afp->sequences[index]));
         }
         afp->ids [index] = strdup (arsp->id);
         curr_seg ++;

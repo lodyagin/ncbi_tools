@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.27 $
+* $Revision: 6.29 $
 *
 * File Description: 
 *
@@ -951,10 +951,11 @@ extern void ExportSeqAnnotFeatureTable (FILE *fp, SeqAnnotPtr sap)
   SeqFeatPtr first_feat;
   SeqEntryPtr sep;
   
-  if (fp == NULL || sap == NULL) return;
+  if (fp == NULL || sap == NULL || sap->data == NULL) return;
 
   /* create fake bioseq to hold annotation */
   fake_bsp = BioseqNew();
+  if (fake_bsp == NULL) return;
   fake_bsp->annot = sap;
   
   /* create SeqEntry for temporary bioseq to live in */
@@ -981,14 +982,16 @@ extern void ExportSeqAnnotFeatureTable (FILE *fp, SeqAnnotPtr sap)
   }
       
   first_feat = (SeqFeatPtr) sap->data;
-  fake_bsp->id = SeqIdDup (SeqLocId (first_feat->location));
-  if (first_feat->data.choice == SEQFEAT_PROT) {
-    fake_bsp->mol = Seq_mol_aa;
-  } else {
-    fake_bsp->mol = Seq_mol_dna;
+  if (first_feat != NULL) {
+    fake_bsp->id = SeqIdDup (SeqLocId (first_feat->location));
+    if (first_feat->data.choice == SEQFEAT_PROT) {
+      fake_bsp->mol = Seq_mol_aa;
+    } else {
+      fake_bsp->mol = Seq_mol_dna;
+    }
+    fake_bsp->repr = Seq_repr_raw;
+    fake_bsp->length = FindNecessaryBioseqLength (first_feat);
   }
-  fake_bsp->repr = Seq_repr_raw;
-  fake_bsp->length = FindNecessaryBioseqLength (first_feat);
   
   VisitBioseqsInSep (sep, &ftd, VSMExportFeatureTableBioseqCallback);
 

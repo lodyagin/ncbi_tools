@@ -1,4 +1,4 @@
-/* $Id: blast_aascan.c,v 1.16 2010/07/23 14:36:34 kazimird Exp $
+/* $Id: blast_aascan.c,v 1.17 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
 #include <algo/blast/core/blast_aascan.h>
 #include <algo/blast/core/blast_aalookup.h>
 #include "masksubj.inl"
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_aascan.c,v 1.16 2010/07/23 14:36:34 kazimird Exp $";
-#endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /**
  * Scans the subject sequence from "offset" to the end of the sequence.

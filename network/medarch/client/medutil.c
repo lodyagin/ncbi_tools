@@ -28,7 +28,7 @@
 *   
 * Version Creation Date: 8/31/93
 *
-* $Revision: 6.38 $
+* $Revision: 6.42 $
 *
 * File Description:  Medline Utilities for MedArch
 *   Assumes user calls MedArchInit and Fini
@@ -138,14 +138,14 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
   CompressSpaces (title);
 
   if (MULooksLikeISSN (title)) {
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bissn%5D", NULL);
   }
 
   if (str == NULL) {
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bmulti%5D+AND+ncbijournals%5Bsb%5D", NULL);
@@ -177,7 +177,7 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
     microbiology reading, england
     */
 
-    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+    str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                      "/entrez/eutils/esearch.fcgi",
                                      "db=nlmcatalog&retmax=200&term=",
                                      title, "%5Bjour%5D", NULL);
@@ -211,7 +211,7 @@ static Boolean MUIsJournalIndexed (CharPtr journal)
 
   if (jids == NULL) return FALSE;
 
-  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 80,
+  str = QUERY_UrlSynchronousQuery ("eutils.ncbi.nlm.nih.gov", 0,
                                    "/entrez/eutils/esummary.fcgi",
                                    "db=nlmcatalog&retmax=200&version=2.0&id=",
                                    jids, NULL, NULL);
@@ -350,48 +350,69 @@ void print_pub(ValNodePtr pub, Boolean found, Boolean auth, Int4 muid)
     {
         yr = 0;
         dp = DateCurr();
-        if (dp != NULL) {
-          yr = (Int2) dp->data[1];
-          DateFree(dp);
-        }
-        if(year && yr + 1900 - year > 2)
+        if(dp != NULL)
         {
+            yr = (Int2) dp->data[1];
+            DateFree(dp);
+        }
+        if(year != 0 && yr + 1900 - year > 2)
             ErrPostEx(SEV_WARNING, ERR_REFERENCE_OldInPress, 
                       "encountered in-press article more than 2 years old: %s %s|%s|(%d)|%s|%s",
                       last, first, s_title, (int) year, vol, page);
+    }
+
+    if(found != FALSE)
+        ErrPostEx(SEV_INFO, ERR_REFERENCE_SuccessfulPmidLookup,
+                  "%ld|%s %s|%s|(%d)|%s|%s", (long) muid, last, first,
+                  s_title, (int) year, vol, page);
+    else if(MUIsJournalIndexed(s_title))
+    {
+        if(muid == 0)
+        {
+            if(imp != NULL && imp->prepub == 2) /* in-press */
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFoundInPress,
+                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
+                          (int) year, vol, page);
+            else
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,
+                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
+                          (int) year, vol, page);
+        }
+        else
+        {
+            if(imp != NULL && imp->prepub == 2) /* in-press */
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFoundInPress,
+                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
+                          first, s_title, (int) year, vol, page);
+            else
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,
+                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
+                          first, s_title, (int) year, vol, page);
         }
     }
     else
     {
-        if(found)
+        if(muid == 0)
         {
-            ErrPostEx(SEV_INFO, ERR_REFERENCE_SuccessfulPmidLookup, 
-                      "%ld|%s %s|%s|(%d)|%s|%s", (long) muid, last, first,
-                      s_title, (int) year, vol, page);
-        }
-        else if (MUIsJournalIndexed (s_title))
-        {
-            if (muid == 0) {
-                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
+            if(imp != NULL && imp->prepub == 2) /* in-press */
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoPmidJournalNotInPubMedInPress,
                           "%s %s|%s|(%d)|%s|%s", last, first, s_title,
                           (int) year, vol, page);
-            } else {
-                ErrPostEx(SEV_WARNING, ERR_REFERENCE_PmidNotFound,  
-                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
-                          first, s_title, (int) year, vol, page);
-            }
+            else
+                ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoPmidJournalNotInPubMed,
+                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
+                          (int) year, vol, page);
         }
         else
         {
-            if (muid == 0) {
-                ErrPostEx(SEV_WARNING, ERR_REFERENCE_NoPmidJournalNotInPubMed,  
-                          "%s %s|%s|(%d)|%s|%s", last, first, s_title,
-                          (int) year, vol, page);
-            } else {
-                ErrPostEx(SEV_INFO, ERR_REFERENCE_NoPmidJournalNotInPubMed,  
+            if(imp != NULL && imp->prepub == 2) /* in-press */
+                ErrPostEx(SEV_INFO, ERR_REFERENCE_NoPmidJournalNotInPubMedInPress,
                           ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
                           first, s_title, (int) year, vol, page);
-            }
+            else
+                ErrPostEx(SEV_INFO, ERR_REFERENCE_NoPmidJournalNotInPubMed,
+                          ">>%ld<<|%s %s|%s|(%d)|%s|%s", (long) muid, last,
+                          first, s_title, (int) year, vol, page);
         }
     }
 }
@@ -420,6 +441,10 @@ static Boolean ten_authors_compare(CitArtPtr capold, CitArtPtr capnew)
 
     old = capold->authors->names;
     new = capnew->authors->names;
+
+    for(i = 0; i < 10; i++) {
+      namesnew [i] = NULL;
+    }
 
     for(numnew = 0, vnp = old; vnp != NULL; vnp = vnp->next)
         if(vnp->data.ptrvalue != NULL)
@@ -868,8 +893,7 @@ ValNodePtr FixPub(ValNodePtr pub, FindPubOptionPtr fpop)
             break;
         case PUB_Article:
             cit = pub->data.ptrvalue;
-            if(cit->from == 2 || in_press(cit)) /* article from book or
-                                                   in press */
+            if(cit->from == 2)          /* article from book */
                 return(pub);
 
             fpop->lookups_attempted++;
@@ -1133,7 +1157,7 @@ ValNodePtr FixPubEquiv(ValNodePtr pube, FindPubOptionPtr fpop)
         else if(tmp->choice == PUB_Article)
         {
             cit = tmp->data.ptrvalue;
-            if(cit->from == 2 || (in_press(cit) != FALSE && got == FALSE))
+            if(cit->from == 2)
                 otherptr = PubEquivAdd(otherptr, tmp);
             else
                 citartptr = PubEquivAdd(citartptr, tmp);
@@ -1491,15 +1515,17 @@ ValNodePtr MedlineToISO (ValNodePtr tmp)
     if(is_iso == FALSE)
     {
         titlenode = cjp->title;
-        title = (CharPtr) titlenode->data.ptrvalue;
-        titlenum = MedArchGetTitles(titles, types, title,
-                                    (Int1) titlenode->choice,
-                                    Cit_title_iso_jta, 1);
-        if(titlenum != 0)
-        {
-            MemFree(title);
-            titlenode->choice = types[0];
-            titlenode->data.ptrvalue = titles[0];
+        if (titlenode != NULL) {
+          title = (CharPtr) titlenode->data.ptrvalue;
+          titlenum = MedArchGetTitles(titles, types, title,
+                                      (Int1) titlenode->choice,
+                                      Cit_title_iso_jta, 1);
+          if(titlenum != 0)
+          {
+              MemFree(title);
+              titlenode->choice = types[0];
+              titlenode->data.ptrvalue = titles[0];
+          }
         }
     }
     ip = cjp->imp;                      /* remove Eng language */

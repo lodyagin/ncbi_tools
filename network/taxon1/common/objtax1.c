@@ -58,21 +58,17 @@ Taxon1ReqFree(ValNodePtr anp)
    default:
       break;
    case Taxon1Req_findname:
-      MemFree(anp -> data.ptrvalue);
-      break;
    case Taxon1Req_getdesignator:
-      MemFree(anp -> data.ptrvalue);
-      break;
    case Taxon1Req_getunique:
       MemFree(anp -> data.ptrvalue);
       break;
    case Taxon1Req_getidbyorg:
-      OrgRefFree(anp -> data.ptrvalue);
-      break;
    case Taxon1Req_lookup:
       OrgRefFree(anp -> data.ptrvalue);
       break;
    case Taxon1Req_getorgmod:
+   case Taxon1Req_getorgprop:
+   case Taxon1Req_searchname:
       Taxon1InfoFree(anp -> data.ptrvalue);
       break;
    }
@@ -262,6 +258,29 @@ Taxon1ReqAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.boolvalue = av.boolvalue;
    }
+   else if (atp == TAXON1_REQ_getproptypes) {
+      choice = Taxon1Req_getproptypes;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.boolvalue = av.boolvalue;
+   }
+   else if (atp == TAXON1_REQ_getorgprop) {
+      choice = Taxon1Req_getorgprop;
+      func = (AsnReadFunc) Taxon1InfoAsnRead;
+   }
+   else if (atp == TAXON1_REQ_searchname) {
+      choice = Taxon1Req_searchname;
+      func = (AsnReadFunc) Taxon1InfoAsnRead;
+   }
+   else if (atp == TAXON1_REQ_dumpnames4class) {
+      choice = Taxon1Req_dumpnames4class;
+      if (AsnReadVal(aip, atp, &av) <= 0) {
+         goto erret;
+      }
+      anp->data.intvalue = av.intvalue;
+   }
+
    anp->choice = choice;
    if (func != NULL)
    {
@@ -402,6 +421,22 @@ Taxon1ReqAsnWrite(Taxon1ReqPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Req_maxtaxid:
       av.boolvalue = anp->data.boolvalue;
       retval = AsnWrite(aip, TAXON1_REQ_maxtaxid, &av);
+      break;
+   case Taxon1Req_getproptypes:
+      av.boolvalue = anp->data.boolvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_getproptypes, &av);
+      break;
+   case Taxon1Req_getorgprop:
+      writetype = TAXON1_REQ_getorgprop;
+      func = (AsnWriteFunc) Taxon1InfoAsnWrite;
+      break;
+   case Taxon1Req_searchname:
+      writetype = TAXON1_REQ_searchname;
+      func = (AsnWriteFunc) Taxon1InfoAsnWrite;
+      break;
+   case Taxon1Req_dumpnames4class:
+      av.intvalue = anp->data.intvalue;
+      retval = AsnWrite(aip, TAXON1_REQ_dumpnames4class, &av);
       break;
    }
    if (writetype != NULL) {
@@ -614,46 +649,30 @@ Taxon1RespFree(ValNodePtr anp)
    case Taxon1Resp_error:
       Taxon1ErrorFree(anp -> data.ptrvalue);
       break;
-   case Taxon1Resp_findname:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
-      break;
-   case Taxon1Resp_getorgnames:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
-      break;
    case Taxon1Resp_getcde:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
-      break;
    case Taxon1Resp_getranks:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
-      break;
    case Taxon1Resp_getdivs:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
-      break;
    case Taxon1Resp_getgcs:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
-      break;
    case Taxon1Resp_getlineage:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
-      break;
    case Taxon1Resp_getchildren:
+   case Taxon1Resp_getorgmod:
+   case Taxon1Resp_getproptypes:
+   case Taxon1Resp_getorgprop:
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
       break;
    case Taxon1Resp_getbyid:
-      Taxon1DataFree(anp -> data.ptrvalue);
-      break;
    case Taxon1Resp_lookup:
       Taxon1DataFree(anp -> data.ptrvalue);
-      break;
-   case Taxon1Resp_getorgmod:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1InfoFree);
       break;
    case Taxon1Resp_taxabyid:
       Taxon2DataFree(anp -> data.ptrvalue);
       break;
+   case Taxon1Resp_findname:
+   case Taxon1Resp_getorgnames:
    case Taxon1Resp_taxachildren:
-      AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
-      break;
    case Taxon1Resp_taxalineage:
+   case Taxon1Resp_searchname:
+   case Taxon1Resp_dumpnames4class:
       AsnGenericUserSeqOfFree((Pointer) pnt, (AsnOptFreeFunc) Taxon1NameFree);
       break;
    }
@@ -865,6 +884,39 @@ Taxon1RespAsnRead(AsnIoPtr aip, AsnTypePtr orig)
       }
       anp->data.intvalue = av.intvalue;
    }
+   else if (atp == TAXON1_RESP_getproptypes) {
+      choice = Taxon1Resp_getproptypes;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1InfoAsnRead,             (AsnOptFreeFunc) Taxon1InfoFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == TAXON1_RESP_getorgprop) {
+      choice = Taxon1Resp_getorgprop;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1InfoAsnRead,             (AsnOptFreeFunc) Taxon1InfoFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == TAXON1_RESP_searchname) {
+      choice = Taxon1Resp_searchname;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1NameAsnRead,             (AsnOptFreeFunc) Taxon1NameFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+   else if (atp == TAXON1_RESP_dumpnames4class) {
+      choice = Taxon1Resp_dumpnames4class;
+      anp -> data.ptrvalue =
+      AsnGenericUserSeqOfAsnRead(aip, amp, atp, &isError, (AsnReadFunc) Taxon1NameAsnRead,             (AsnOptFreeFunc) Taxon1NameFree);
+      if (isError && anp -> data.ptrvalue == NULL) {
+         goto erret;
+      }
+   }
+
    anp->choice = choice;
    if (func != NULL)
    {
@@ -1002,6 +1054,18 @@ Taxon1RespAsnWrite(Taxon1RespPtr anp, AsnIoPtr aip, AsnTypePtr orig)
    case Taxon1Resp_maxtaxid:
       av.intvalue = anp->data.intvalue;
       retval = AsnWrite(aip, TAXON1_RESP_maxtaxid, &av);
+      break;
+   case Taxon1Resp_getproptypes:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1InfoAsnWrite, aip, TAXON1_RESP_getproptypes, TAXON1_RESP_getproptypes_E);
+      break;
+   case Taxon1Resp_getorgprop:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1InfoAsnWrite, aip, TAXON1_RESP_getorgprop, TAXON1_RESP_getorgprop_E);
+      break;
+   case Taxon1Resp_searchname:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1NameAsnWrite, aip, TAXON1_RESP_searchname, TAXON1_RESP_searchname_E);
+      break;
+   case Taxon1Resp_dumpnames4class:
+      retval = AsnGenericUserSeqOfAsnWrite((Pointer) pnt, (AsnWriteFunc) Taxon1NameAsnWrite, aip, TAXON1_RESP_dumpnames4class, TAXON1_RESP_dumpnames4class_E);
       break;
    }
    if (writetype != NULL) {

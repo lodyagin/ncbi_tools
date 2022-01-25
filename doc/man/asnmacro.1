@@ -1,0 +1,68 @@
+.TH ASNMACRO 1 2016-09-01 NCBI "NCBI Tools User's Manual"
+.SH NAME
+asnmacro \- process ASN.1 biological data per Sequin macros
+.SH SYNOPSIS
+.B asnmacro
+[\|\fB\-\fP\|]
+[\|\fB\-b\fP\|]
+[\|\fB\-d\fP\|]
+[\|\fB\-e\fP\|]
+[\|\fB\-i\fP\ \fIfilename\fP\|]
+[\|\fB\-k\fP\ \fIn\fP\|]
+[\|\fB\-l\fP\ \fIn\fP\|]
+\|\fB\-m\fP\ \fIfilename\fP
+[\|\fB\-o\fP\ \fIfilename\fP\|]
+[\|\fB\-p\fP\ \fIpath\fP\|]
+[\|\fB\-r\fP\ \fIpath\fP\|]
+[\|\fB\-s\fP\ \fIstr\fP\|]
+[\|\fB\-x\fP\ \fIstr\fP\|]
+.SH DESCRIPTION
+\fBasnmacro\fP is a command-line tool to run Sequin macros on
+annotated biological sequence data represented according to NCBI's
+ASN.1 specifications.
+.SH OPTIONS
+A summary of options is included below.
+.TP
+\fB\-\fP
+Print usage message
+.TP
+\fB\-b\fP
+Input is Binary
+.TP
+\fB\-d\fP
+Output is binary
+.TP
+\fB\-e\fP
+Input is a Seq-Entry
+.TP
+\fB\-i\fP\ \fIfilename\fP
+Single input file
+.TP
+\fB-k\fP\ \fIn\fP
+Skip steps
+.TP
+\fB-l\fP\ \fIn\fP
+Limit steps
+.TP
+\fB\-m\fP\ \fIfilename\fP
+Macro file
+.TP
+\fB\-o\fP\ \fIfilename\fP
+Single Output file
+.TP
+\fB\-p\fP\ \fIpath\fP
+Path to multiple input files
+.TP
+\fB\-r\fP\ \fIpath\fP
+Path for Results when processing multiple files
+.TP
+\fB\-s\fP\ \fIstr\fP
+Suffix for stripped (output) files
+.TP
+\fB\-x\fP\ \fIstr\fP
+Suffix for input files with \fB-p\fP (\fB.sqn\fP by default)
+.SH AUTHOR
+The National Center for Biotechnology Information.
+.SH SEE ALSO
+.ad l
+.BR Psequin (1).

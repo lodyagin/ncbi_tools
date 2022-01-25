@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11-29-94
 *
-* $Revision: 6.38 $
+* $Revision: 6.46 $
 *
 * File Description: 
 *
@@ -171,6 +171,26 @@ Boolean LIBCALL VSeqMgrDelete(void)
 }
 
 static char * VSeqMgrStr = "NCBIDT";
+
+
+NLM_EXTERN Boolean IsVSeqMgrOpen (void)
+{
+	VSeqMgrPtr vsmp=NULL;
+  VSMWinPtr win;
+  Boolean   any_shown = FALSE;
+
+	vsmp = (VSeqMgrPtr) GetAppProperty(VSeqMgrStr);
+  if (vsmp == NULL) {
+    return FALSE;
+  }
+  for (win = vsmp->wins; win != NULL && !any_shown; win = win->next) {
+    if (win->shown) {
+      any_shown = TRUE;
+    }
+  }
+  return any_shown;
+}
+
 
 /*****************************************************************************
 *
@@ -566,25 +586,40 @@ NLM_EXTERN Boolean OkToListFeatDefInRemainingFeatures (Uint2 subtype)
   if (subtype != FEATDEF_PUB &&
       subtype != FEATDEF_IMP &&
       subtype != FEATDEF_Imp_CDS &&
-      subtype != FEATDEF_misc_RNA &&
-      subtype != FEATDEF_precursor_RNA &&
-      subtype != FEATDEF_mat_peptide &&
-      subtype != FEATDEF_sig_peptide &&
-      subtype != FEATDEF_transit_peptide &&
-      subtype != FEATDEF_source &&
-      subtype != FEATDEF_virion &&
-      subtype != FEATDEF_mutation &&
-      subtype != FEATDEF_allele &&
-      subtype != FEATDEF_site_ref &&
-      subtype != FEATDEF_old_sequence &&
-      subtype != FEATDEF_5clip &&
       subtype != FEATDEF_3clip &&
-      subtype != FEATDEF_repeat_unit &&
-      subtype != FEATDEF_snRNA &&
-      subtype != FEATDEF_scRNA &&
-      subtype != FEATDEF_snoRNA &&
+      subtype != FEATDEF_5clip &&
+      subtype != FEATDEF_10_signal &&
+      subtype != FEATDEF_35_signal &&
+      subtype != FEATDEF_allele &&
+      subtype != FEATDEF_assembly_gap &&
+      subtype != FEATDEF_attenuator &&
+      subtype != FEATDEF_CAAT_signal &&
+      subtype != FEATDEF_conflict &&
+      subtype != FEATDEF_enhancer &&
       subtype != FEATDEF_gap &&
-      subtype != FEATDEF_conflict) {
+      subtype != FEATDEF_GC_signal &&
+      subtype != FEATDEF_mat_peptide &&
+      subtype != FEATDEF_misc_RNA &&
+      subtype != FEATDEF_misc_signal &&
+      subtype != FEATDEF_mutation &&
+      subtype != FEATDEF_old_sequence &&
+      subtype != FEATDEF_polyA_signal &&
+      subtype != FEATDEF_precursor_RNA &&
+      subtype != FEATDEF_promoter &&
+      subtype != FEATDEF_RBS &&
+      subtype != FEATDEF_repeat_unit &&
+      subtype != FEATDEF_satellite &&
+      subtype != FEATDEF_scRNA &&
+      subtype != FEATDEF_sig_peptide &&
+      subtype != FEATDEF_site_ref &&
+      subtype != FEATDEF_snoRNA &&
+      subtype != FEATDEF_snRNA &&
+      subtype != FEATDEF_source &&
+      subtype != FEATDEF_TATA_signal &&
+      subtype != FEATDEF_terminator &&
+      subtype != FEATDEF_transit_peptide &&
+      subtype != FEATDEF_virion
+      && !IsRegulatorySubtype(subtype)) {
     return TRUE;
   } else {
     return FALSE;
@@ -1148,67 +1183,6 @@ static void VSMDragAndDrop(VSMWinPtr vsmwp, Uint2 entityID, Uint4 itemID, Uint2 
 
 }
 
-static void VSeqMgrFontProc (IteM i)
-{
-	VSeqMgrPtr vsmp;
-	Nlm_FontSpec font;
-	FonT f;
-	Char fontbuf[80];
-
-	vsmp = VSeqMgrGet();
-	GetFontSpec(vsmp->font, &font);
-	if (ChooseFont(&font, CFF_READ_FSP, NULL))
-	{
-		/***
-		f = GetPermanentFont(&font);
-                ***/
-                f = CreateFont(&font);
-		vsmp->font = f;
-		SelectFont(f);
-		vsmp->lineheight = LineHeight();
-		vsmp->leading = Leading();
-		vsmp->charw = MaxCharWidth();
-		vsmp->update_all = TRUE;
-		VSeqMgrShow();
-		vsmp->update_all = FALSE;
-		FontSpecToStr(&font, fontbuf, 80);
-		SetAppParam(vsmp->appname, "DeskTop", "FONT", fontbuf);
-	}
-	return;
-}
-
-static void VSeqMgrShowCacheProc (IteM i)
-{
-	VSeqMgrPtr vsmp;
-
-	vsmp = VSeqMgrGet();
-	if (vsmp->show_cached)
-		vsmp->show_cached = FALSE;
-	else
-		vsmp->show_cached = TRUE;
-	SetStatus(i, vsmp->show_cached);
-	vsmp->update_all = TRUE;
-	VSeqMgrShow();
-	vsmp->update_all = FALSE;
-	return;
-}
-
-static void VSeqMgrShowClipboardProc (IteM i)
-{
-	VSeqMgrPtr vsmp;
-
-	vsmp = VSeqMgrGet();
-	if (vsmp->show_clipboard)
-		vsmp->show_clipboard = FALSE;
-	else
-		vsmp->show_clipboard = TRUE;
-	SetStatus(i, vsmp->show_clipboard);
-	vsmp->update_all = TRUE;
-	VSeqMgrShow();
-	vsmp->update_all = FALSE;
-	return;
-}
-
 static void VSMMarquee( VSMWinPtr vsmwp )
 {
 	RecT dr;
@@ -1549,13 +1523,7 @@ static void VSMSetUpMenus (WindoW w, Boolean progwindow)
 	CommandItem(m, "Move/M", VSeqMgrMoveProc);
 	CommandItem(m, "Delete/D", VSeqMgrDeleteProc);
 	VSMAddMenu(w, VSM_FILTER_MENU);
-	VSMAddMenu(w, VSM_VIEW_MENU);
 	VSMAddMenu(w, VSM_ANALYZE_MENU);
-	VSMAddMenu(w, VSM_EDIT_MENU);
-	m = PulldownMenu(w, "Options");
-	CommandItem(m, "Select Font", VSeqMgrFontProc);
-	StatusItem(m, "Show cached", VSeqMgrShowCacheProc);
-	StatusItem(m, "Show clipboard", VSeqMgrShowClipboardProc);
 
 	return;
 }

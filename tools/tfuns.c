@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: tfuns.c,v 6.14 2007/10/10 16:10:17 bollin Exp $";
+static char const rcsid[] = "$Id: tfuns.c,v 6.17 2015/08/17 17:15:09 bollin Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -35,6 +35,7 @@ static ORGMOD orgmod_subtype[10] = {
 
 CharPtr true_qual[3] = {"insertion_seq", "transposon", "clone"};
 
+//LCOV_EXCL_START
 /*****************************************************************************
 *   FlatSafeSize:
 *     -- Set the limit to heap ptr used in Greg's error function
@@ -55,6 +56,7 @@ CharPtr FlatSafeSize(CharPtr ptr, Int4 limit)
 	}
 	return retval;
 }
+
 /*****************************************************************************
 *	Implementation of various string processing functions 
 ******************************************************************************/
@@ -177,6 +179,8 @@ CharPtr StringNStr(CharPtr pchSource, CharPtr pchTemplate, size_t cMax)
 
     return pchResult;
 }
+//LCOV_EXCL_STOP
+
 
 Int2 StringExtCmp(CharPtr s1, CharPtr s2)
 {
@@ -185,6 +189,7 @@ Int2 StringExtCmp(CharPtr s1, CharPtr s2)
 	return StringCmp(s1, s2);
 }
 
+//LCOV_EXCL_START
 CharPtr  StripAllSpace(CharPtr str) 
 {
 	CharPtr s, new;
@@ -217,6 +222,8 @@ Int2 StringIgnoreSpaceCmp(CharPtr s1, CharPtr s2)
 	
 	return retval;
 }
+//LCOV_EXCL_STOP
+
 Int2 AStringIgnoreSpaceCmp(CharPtr s1, CharPtr s2)
 {
 	Int2 retval = 0;
@@ -293,6 +300,7 @@ MolFixPtr tie_next_mol(MolFixPtr head, MolFixPtr next)
 	return head;
 }
 
+//LCOV_EXCL_START
 CodeBreakPtr tie_next_cbp(CodeBreakPtr head, CodeBreakPtr next)
 {
    CodeBreakPtr v;
@@ -305,6 +313,8 @@ CodeBreakPtr tie_next_cbp(CodeBreakPtr head, CodeBreakPtr next)
    v->next = next;
    return head;
 }
+//LCOV_EXCL_STOP
+
 /****************************************************************************
 *  tie_next_biosource:
 *  -- ties next BioSource to the end of the chain
@@ -437,6 +447,9 @@ OrgModPtr tie_next_OrgMod(OrgModPtr head, OrgModPtr next)
 	return head;
 }
 
+//LCOV_EXCL_START
+// this function is only ever called to extract SEQFEAT_ORG, which have
+// already been converted to SEQFEAT_BIOSRC before function is called
 /*****************************************************************************
 *
 *   SeqFeatPtr SeqFeatExtract(headptr, choice)
@@ -498,6 +511,8 @@ SeqFeatPtr SeqFeatExtractList (SeqFeatPtr PNTR headptr, Nlm_Int2 choice)
 
     return first;
 }
+//LCOV_EXCL_STOP
+
 /*****************************************************************************
 *
 *   SeqFeatPtr SourceFeatExtract(headptr)
@@ -565,6 +580,7 @@ SeqFeatPtr ExtractSourceFeatList (SeqFeatPtr PNTR headptr)
     return first;
 }
 
+//LCOV_EXCL_START
 SeqIdPtr find_id(SeqEntryPtr sep)
 {
 	SeqIdPtr sip;
@@ -581,6 +597,7 @@ SeqIdPtr find_id(SeqEntryPtr sep)
 	}
 
 }
+//LCOV_EXCL_STOP
 
 SubSourcePtr remove_subtype(SubSourcePtr head, SubSourcePtr x)
 {
@@ -702,6 +719,7 @@ Boolean check_whole(SeqFeatPtr f, Int4 len)
 	return whole;
 }
 
+//LCOV_EXCL_START
 /* check for /transposon and /insertion_seq and /clone*/
 
 Boolean true_multiple(SeqAnnotPtr sap, Int4 len)
@@ -785,6 +803,7 @@ CharPtr copy_qvalue(GBQualPtr qlist, CharPtr qual)
    return (qvalue);
 
 }
+//LCOV_EXCL_STOP
 
 /**********************************************************/
 CharPtr get_qvalue(GBQualPtr curq, CharPtr qual)
@@ -799,6 +818,7 @@ CharPtr get_qvalue(GBQualPtr curq, CharPtr qual)
     return(curq->val);
 }
 
+//LCOV_EXCL_START
 /*****************************************************************************
 *   laststr:
 *     -- strstr, last occurrence
@@ -951,6 +971,7 @@ static void find_orf(SeqPortPtr spp, Int2 ir, CharPtr vals, CharPtr codes, ValNo
 	}
 	return;
 }
+//LCOV_EXCL_STOP
 
 
 static void find_orf_from_circle (SeqPortPtr spp, Boolean flagIsCircle,
@@ -1166,6 +1187,7 @@ static void find_orf_from_circle (SeqPortPtr spp, Boolean flagIsCircle,
   return;
 }
 
+//LCOV_EXCL_START
 static int LIBCALLBACK CompareLoc (VoidPtr vp1, VoidPtr vp2)
 {
 	ValNodePtr vnp1, vnp2;
@@ -1330,4 +1352,5 @@ extern ValNodePtr GetAltList (ValNodePtr list)
 	}
 	return list;
 }
+//LCOV_EXCL_STOP
 

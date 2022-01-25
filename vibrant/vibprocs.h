@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.35 $
+* $Revision: 6.36 $
 *
 * File Description: 
 *       Vibrant procedure definitions
@@ -612,6 +612,11 @@ void  Nlm_SetWindowTimer PROTO((Nlm_WindoW w, Nlm_WndActnProc actn));
 void Nlm_SetMouseMoveCallback (Nlm_ClckProc actn);
 
 void Nlm_SetMouseMoveRegion (Nlm_RegioN rgn);
+
+/***  MISCELLANEOUS HOOKS  ***/
+
+extern void Nlm_SetButtonAction (Nlm_BtnActnProc actn);
+extern void Nlm_SetMenuAction (Nlm_ItmActnProc actn);
 
 /***  MAIN EVENT LOOP PROCEDURE  ***/
 

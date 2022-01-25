@@ -1,4 +1,4 @@
-/* $Id: greedy_align.c,v 1.47 2012/03/19 17:34:33 kazimird Exp $
+/* $Id: greedy_align.c,v 1.51 2016/06/30 12:34:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,11 +33,6 @@
  * Zhang et. al., "A Greedy Algorithm for Aligning DNA Sequences"
  * Journal of Computational Biology vol 7 pp 203-214
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: greedy_align.c,v 1.47 2012/03/19 17:34:33 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/greedy_align.h>
 #include <algo/blast/core/ncbi_math.h>
@@ -407,6 +402,7 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
     Int4 longest_match_run;
     Boolean end1_reached, end2_reached;
     SMBSpace* mem_pool;
+    Boolean converged = FALSE;
  
     /* ordinary dynamic programming alignment, for each offset
        in seq1, walks through offsets in seq2 until an X-dropoff
@@ -432,8 +428,7 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
        very similar, the average running time will be sig-
        nificantly better than this */
 
-    max_dist = MIN(GREEDY_MAX_COST,
-                   len2 / GREEDY_MAX_COST_FRACTION + 1);
+    max_dist = aux_data->max_dist;
 
     /* the main loop assumes that the index of all diagonals is
        biased to lie in the middle of allocated bookkeeping 
@@ -511,7 +506,6 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
     end1_reached = end2_reached = FALSE;
 
     /* for each distance */
-
     for (d = 1; d <= max_dist; d++) {
         Int4 xdrop_score;
         Int4 curr_score;
@@ -625,7 +619,7 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
         /* if this is the best score seen so far, update the
            statistics of the best alignment */
 
-        if (curr_score > max_score[d - 1]) {
+        if (curr_score >= max_score[d - 1]) {
             max_score[d] = curr_score;
             best_dist = d;
             best_diag = curr_diag;
@@ -639,8 +633,10 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
         /* alignment has finished if the lower and upper bounds
            on diagonals to check have converged to each other */
 
-        if (diag_lower > diag_upper)
+        if (diag_lower > diag_upper) {
+            converged = TRUE;
             break;
+        }
 
         /* set up for the next distance to examine. Because the 
            bounds increase by at most one for each distance, 
@@ -680,6 +676,8 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
         }
     }   /* end loop over distinct distances */
 
+    if (!converged) 
+        return -1;
     
     if (edit_block == NULL)
         return best_dist;
@@ -687,7 +685,6 @@ Int4 BLAST_GreedyAlign(const Uint1* seq1, Int4 len1,
     /* perform traceback */
 
     d = best_dist; 
-    seq1_index = *seq1_align_len;
     seq2_index = *seq2_align_len; 
 
     /* for all positive distances */
@@ -794,6 +791,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
 
     Int4 num_nonempty_dist;
     const Int4 kInvalidDiag = 100000000; /* larger than any valid diag. index */
+    Boolean converged = FALSE;
  
     /* make sure bits of match_score don't disappear if it
        is divided by 2 */
@@ -844,8 +842,7 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
     /* set the number of distinct distances the algorithm will
        examine in the search for an optimal alignment */
 
-    max_dist = MIN(GREEDY_MAX_COST,
-                   len2 / GREEDY_MAX_COST_FRACTION + 1);
+    max_dist = aux_data->max_dist;
     scaled_max_dist = max_dist * gap_extend;
     
     /* the main loop assumes that the index of all diagonals is
@@ -1139,8 +1136,10 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
         if (diag_lower[d - max_penalty] <= diag_upper[d - max_penalty]) 
             num_nonempty_dist--;
 
-        if (num_nonempty_dist == 0) 
+        if (num_nonempty_dist == 0) {
+            converged = TRUE;
             break;
+        }
         
         /* compute the range of diagonals to test for the next
            value of d. These must be conservative, in that any
@@ -1186,6 +1185,8 @@ Int4 BLAST_AffineGreedyAlign (const Uint1* seq1, Int4 len1,
         }
     }  /* end loop over distances */
     
+    if (! converged) return -1;
+
     /* compute the traceback if necessary */
 
     if (edit_block != NULL) { 

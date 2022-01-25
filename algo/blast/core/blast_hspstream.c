@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.c,v 1.15 2011/07/25 13:54:31 kazimird Exp $
+/*  $Id: blast_hspstream.c,v 1.19 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,14 +32,10 @@
  * pass on to the traceback stage.
  */
 
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_hspstream.c,v 1.15 2011/07/25 13:54:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
-
 
 #include <algo/blast/core/blast_hspstream.h>
 #include <algo/blast/core/blast_util.h>
+#include "blast_hspstream_mt_utils.h"
 
 /** Default hit saving stream methods */
 
@@ -207,6 +203,29 @@ void BlastHSPStreamClose(BlastHSPStream* hsp_stream)
    }
 
    hsp_stream->results_sorted = TRUE;
+   hsp_stream->x_lock = MT_LOCK_Delete(hsp_stream->x_lock);
+}
+
+void BlastHSPStreamMappingClose(BlastHSPStream* hsp_stream,
+                                BlastMappingResults* results)
+{
+   if (!hsp_stream || !hsp_stream->writer)
+      return;
+
+   (hsp_stream->writer->FinalFnPtr)
+       (hsp_stream->writer->data, results);
+
+   hsp_stream->writer_finalized = TRUE;
+   hsp_stream->x_lock = MT_LOCK_Delete(hsp_stream->x_lock);
+}
+
+void BlastHSPStreamSimpleClose(BlastHSPStream* hsp_stream)
+{
+   if (!hsp_stream)
+      return;
+
+   s_FinalizeWriter(hsp_stream);
+
    hsp_stream->x_lock = MT_LOCK_Delete(hsp_stream->x_lock);
 }
 
@@ -541,14 +560,7 @@ fprintf(stderr, "No hits to query %d\n", global_query);
 
    return kBlastHSPStream_Success;
 }
-
-/** Batch read function for this BlastHSPStream implementation.      
- * @param hsp_stream The BlastHSPStream object [in]
- * @param batch List of HSP lists for the HSPStream to return. The caller
- * acquires ownership of all HSP lists returned [out]
- * @return kBlastHSPStream_Success on success, kBlastHSPStream_Error, or
- * kBlastHSPStream_Eof on end of stream
- */
+ 
 int BlastHSPStreamBatchRead(BlastHSPStream* hsp_stream,
                             BlastHSPStreamResultBatch* batch) 
 {
@@ -612,20 +624,25 @@ BlastHSPStreamResultBatch *
 Blast_HSPStreamResultBatchFree(BlastHSPStreamResultBatch *batch)                                           
 {                                                                                                          
     if (batch != NULL) {                                                                                   
-        sfree(batch->hsplist_array);                                                                       
+        if (batch->hsplist_array) {
+            sfree(batch->hsplist_array);                                                                       
+        }
         sfree(batch);                                                                                      
     }                                                                                                      
     return NULL;                                                                                           
 }                                                                                                          
                                                                                                            
-void Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch)                                     
+BlastHSPStreamResultBatch* Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch)                                     
 {                                                                                                          
     Int4 i;                                                                                                
-    for (i = 0; i < batch->num_hsplists; i++) {                                                            
-        batch->hsplist_array[i] =                                                                          
-           Blast_HSPListFree(batch->hsplist_array[i]);                                                     
-    }                                                                                                      
-    batch->num_hsplists = 0;                                                                               
+    if (batch != NULL) {
+        for (i = 0; i < batch->num_hsplists; i++) {                                                            
+            batch->hsplist_array[i] =                                                                          
+               Blast_HSPListFree(batch->hsplist_array[i]);                                                     
+        }                                                                                                      
+        batch->num_hsplists = 0;                                                                               
+    }
+    return batch;
 }                                                
 
 BlastHSPStream* 
@@ -645,6 +662,9 @@ BlastHSPStreamNew(EBlastProgramType program,
     hsp_stream->sorted_hsplists = (BlastHSPList **)malloc(
                                            hsp_stream->num_hsplists_alloc *
                                            sizeof(BlastHSPList *));
+
+    /* FIXME: This will not be needed for mapper when the new mapping
+       results structure is implemented */
     hsp_stream->results = Blast_HSPResultsNew(num_queries);
 
     hsp_stream->results_sorted = FALSE;
@@ -722,11 +742,13 @@ int BlastHSPStreamRegisterPipe(BlastHSPStream* hsp_stream,
 
 BlastHSPWriter*
 BlastHSPWriterNew (BlastHSPWriterInfo** writer_info,
-                   BlastQueryInfo* query_info)
+                   BlastQueryInfo* query_info,
+                   BLAST_SequenceBlk* query)
 {
     BlastHSPWriter * writer = NULL;
     if(writer_info && *writer_info) {
-        writer = ((*writer_info)->NewFnPtr) ((*writer_info)->params, query_info);
+        writer = ((*writer_info)->NewFnPtr) ((*writer_info)->params, query_info,
+                                             query);
         sfree(*writer_info);
     }
     ASSERT(writer_info && *writer_info == NULL);

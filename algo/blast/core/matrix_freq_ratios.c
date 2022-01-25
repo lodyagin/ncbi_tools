@@ -1,7 +1,3 @@
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: matrix_freq_ratios.c,v 1.9 2006/11/21 17:13:10 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 /* ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -1662,15 +1658,15 @@ _PSIMatrixFrequencyRatiosNew(const char* matrix_name)
         return _PSIMatrixFrequencyRatiosFree(retval);
     }
 
-    if ( !strcmp(matrix_name, "BLOSUM62") ||
-         !strcmp(matrix_name, "BLOSUM62_20")) {
+    if ( !strcasecmp(matrix_name, "BLOSUM62") ||
+         !strcasecmp(matrix_name, "BLOSUM62_20")) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = BLOSUM62_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "BLOSUM62_20A")) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM62_20A")) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = 
@@ -1678,7 +1674,7 @@ _PSIMatrixFrequencyRatiosNew(const char* matrix_name)
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "BLOSUM62_20B")) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM62_20B")) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] =
@@ -1686,49 +1682,49 @@ _PSIMatrixFrequencyRatiosNew(const char* matrix_name)
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "BLOSUM45") ) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM45") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = BLOSUM45_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 3;
-    } else if ( !strcmp(matrix_name, "BLOSUM80") ) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM80") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = BLOSUM80_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "BLOSUM50") ) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM50") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = BLOSUM50_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "BLOSUM90") ) {
+    } else if ( !strcasecmp(matrix_name, "BLOSUM90") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = BLOSUM90_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "PAM30") ) {
+    } else if ( !strcasecmp(matrix_name, "PAM30") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = PAM30_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "PAM70") ) {
+    } else if ( !strcasecmp(matrix_name, "PAM70") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = PAM70_FREQRATIOS[i][j];
             }
         }
         retval->bit_scale_factor = 2;
-    } else if ( !strcmp(matrix_name, "PAM250") ) {
+    } else if ( !strcasecmp(matrix_name, "PAM250") ) {
         for (i = 0; i < BLASTAA_SIZE; i++) {
             for (j = 0; j < BLASTAA_SIZE; j++) {
                 retval->data[i][j] = PAM250_FREQRATIOS[i][j];
@@ -1755,49 +1751,3 @@ _PSIMatrixFrequencyRatiosFree(SFreqRatios* freq_ratios)
     sfree(freq_ratios);
     return NULL;
 }
-
-/*
- * ===========================================================================
- *
- * $Log: matrix_freq_ratios.c,v $
- * Revision 1.9  2006/11/21 17:13:10  papadopo
- * rearrange headers
- *
- * Revision 1.8  2006/09/28 12:44:26  madden
- * Use more accurrate, symmetric, frequency data for the PAM matrices. [from Mike Gertz]
- *
- * Revision 1.7  2006/09/25 19:33:16  madden
- *    - Added higher precision ratios for all matrices.
- *    - Fixed the BLOSUM90 frequency ratios; they had been accidently
- *      copied from the BLOSUM80 ratios.
- *    - Fixed the PAM70 frequencies for the stop codon.
- *    - Made all matrices have a frequency ratio of 0.75 for alignments
- *      to the stop codon, except for alignments to the stop or gap
- *      characters.
- *    [from Mike Gertz]
- *
- * Revision 1.6  2005/08/05 12:04:17  coulouri
- * From Mike Gertz:
- * - Changed the freq ratio of a (*,-) or (-,*) match for all matrices to
- *   be zero.  The effect of this change is that these substitutions get
- *   assigned a score of BLAST_SCORE_MIN when composition-based statistics
- *   is used in any mode.
- *
- * Revision 1.5  2004/11/05 14:13:44  camacho
- * + doxygen comments
- *
- * Revision 1.4  2004/11/02 17:56:48  camacho
- * Add DOXYGEN_SKIP_PROCESSING to guard rcsid string
- *
- * Revision 1.3  2004/06/09 14:21:03  camacho
- * Removed msvc compiler warnings
- *
- * Revision 1.2  2004/05/13 14:56:05  camacho
- * Fix for retrieving frequency ratios matrices
- *
- * Revision 1.1  2004/05/06 15:26:54  camacho
- * Initial revision
- *
- *
- * ===========================================================================
- */

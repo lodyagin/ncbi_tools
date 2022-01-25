@@ -1,4 +1,4 @@
-/*   $Id: samutil.c,v 1.76 2005/04/26 21:33:52 kans Exp $
+/*   $Id: samutil.c,v 1.79 2016/06/21 21:42:36 kans Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -23,256 +23,18 @@
 *
 * ===========================================================================
 *
-* File Name:  $Id: samutil.c,v 1.76 2005/04/26 21:33:52 kans Exp $
+* File Name:  $Id: samutil.c,v 1.79 2016/06/21 21:42:36 kans Exp $
 *
 * Author:  Lewis Geer
 *
 * Version Creation Date:   8/12/99
 *
-* $Revision: 1.76 $
+* $Revision: 1.79 $
 *
 * File Description: Utility functions for AlignIds and SeqAlignLocs
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: samutil.c,v $
-* Revision 1.76  2005/04/26 21:33:52  kans
-* added SEQID_GPIPE
-*
-* Revision 1.75  2001/10/03 00:15:47  vakatov
-* Replaced some ASSERTs by VERIFYs
-*
-* Revision 1.74  2001/08/07 17:22:52  kans
-* added support for third party annotation SeqIDs
-*
-* Revision 1.73  2001/05/25 19:05:36  vakatov
-* Nested comment typo fixed
-*
-* Revision 1.72  2001/02/07 16:51:36  hurwitz
-* bug fix
-*
-* Revision 1.71  2001/02/06 20:52:01  hurwitz
-* memory leak fix
-*
-* Revision 1.70  2001/01/26 23:26:17  hurwitz
-* bug fix for DDE_GetMsaTxtNodeGivenBioseqCoord
-*
-* Revision 1.69  2001/01/24 23:04:01  hurwitz
-* added a couple utility functions
-*
-* Revision 1.68  2001/01/10 23:38:39  lewisg
-* fix seqid and various memory leaks
-*
-* Revision 1.67  2001/01/03 22:16:52  hurwitz
-* fix potential memory leak
-*
-* Revision 1.66  2000/12/29 00:43:20  hurwitz
-* got rid of some asserts
-*
-* Revision 1.65  2000/11/01 20:50:21  hurwitz
-* made functions for get block starts and stops from populated paraGs
-*
-* Revision 1.64  2000/10/16 23:45:02  hurwitz
-* fixed DDE_GetStart for case of no left tail
-*
-* Revision 1.63  2000/10/05 21:27:42  hurwitz
-* bug fix for making ruler, added functions to get bioseq start and len of each aligned block
-*
-* Revision 1.62  2000/09/08 21:47:57  hurwitz
-* added DDE_GetNumResidues function
-*
-* Revision 1.61  2000/08/25 22:10:32  hurwitz
-* added utility function
-*
-* Revision 1.60  2000/08/24 19:15:46  hurwitz
-* bug fix: undo and redo functions cause quit query dialog
-*
-* Revision 1.59  2000/08/23 20:06:49  hurwitz
-* fixes to DDE_PopListFree
-*
-* Revision 1.58  2000/08/07 23:02:39  hurwitz
-* when merging panels fails, scroll to spot where alignments differ
-*
-* Revision 1.57  2000/08/03 17:12:37  hurwitz
-* added functions to check if alignments are mergeable
-*
-* Revision 1.56  2000/07/17 17:49:12  hurwitz
-* fixed bug.  when copying ParaG's need to copy all rows so edits can be saved properly
-*
-* Revision 1.55  2000/07/05 19:23:12  lewisg
-* add two panes to ddv, update msvc project files
-*
-* Revision 1.54  2000/07/05 18:42:16  hurwitz
-* added split block function to DDV
-*
-* Revision 1.53  2000/06/30 22:31:51  hurwitz
-* added merge block function for DDV
-*
-* Revision 1.52  2000/06/22 20:56:50  hurwitz
-* assorted bug fixes
-*
-* Revision 1.51  2000/06/21 21:20:56  hurwitz
-* a couple bug fixes
-*
-* Revision 1.50  2000/06/15 20:26:05  hurwitz
-* added left/right/center justify for DDE
-*
-* Revision 1.49  2000/06/08 20:04:39  hurwitz
-* made warning about converting to true multiple alignment into a Message window, and other small fixes
-*
-* Revision 1.48  2000/06/07 19:09:35  hurwitz
-* made DDE_ReMakeRuler work with linked list of ParaGs
-*
-* Revision 1.47  2000/05/31 23:07:26  hurwitz
-* made NoGaps a runtime parameter, fixed bug with vertical scroll of show/hide list, save edits query is not performed if nothing to save
-*
-* Revision 1.46  2000/05/25 21:40:42  hurwitz
-* rows hidden in DDV are hidden in DDE, can save edits when rows are hidden in DDE
-*
-* Revision 1.45  2000/05/19 13:48:32  hurwitz
-* made a version of DDE that doesn't allow aligned gaps, changed wording for adding new rows
-*
-* Revision 1.44  2000/05/16 19:43:02  hurwitz
-* grey out create block, delete block, undo, and redo as needed
-*
-* Revision 1.43  2000/05/12 21:18:13  hurwitz
-* added window asking if user wants to save unsaved edits for dde
-*
-* Revision 1.42  2000/05/10 21:54:54  hurwitz
-* free memory when DDE is closed
-*
-* Revision 1.41  2000/05/08 16:28:25  wheelan
-* fix SAM_ReplaceGI for dense-diag alignments
-*
-* Revision 1.40  2000/05/05 20:24:14  hurwitz
-* some bug fixes, also redraw proper block in DDE after a save operation that causes a merge of 2 blocks
-*
-* Revision 1.39  2000/05/04 22:43:38  hurwitz
-* don't launch DDE on top of DDV, change some wording, redraw DDE after save to AlnMgr
-*
-* Revision 1.38  2000/05/02 19:50:37  hurwitz
-* fixed some bugs with launching DDE from DDV, added new alnMgr fn for positioning DDE on proper column
-*
-* Revision 1.37  2000/04/26 21:53:22  hurwitz
-* added save function to tell AlnMgr about edits made in DDE
-*
-* Revision 1.36  2000/04/21 23:00:51  hurwitz
-* can launch DDE from DDV
-*
-* Revision 1.35  2000/04/13 22:03:32  hurwitz
-* a couple more small bug fixes
-*
-* Revision 1.34  2000/04/13 18:57:03  hurwitz
-* for DDE: many bug fixes, also get rid of columns that are all unaligned gaps
-*
-* Revision 1.33  2000/04/10 20:58:42  hurwitz
-* added GUI controls for DeleteBlock in DDE
-*
-* Revision 1.32  2000/04/07 16:21:08  hurwitz
-* made delete block faster, added delete block to edit menu
-*
-* Revision 1.31  2000/04/05 20:52:35  hurwitz
-* added GUI control for shifting left and right alignment boundaries
-*
-* Revision 1.30  2000/04/03 22:26:31  hurwitz
-* can now shift a row with click and drag
-*
-* Revision 1.29  2000/03/29 20:02:47  hurwitz
-* keep track of master during move row operations
-*
-* Revision 1.28  2000/03/25 00:22:09  hurwitz
-* put DDE_StackPtr in DDV_Main, add to stack inside DDE api's, added insert char, delete char, home and end keyboard control
-*
-* Revision 1.27  2000/03/23 00:00:00  hurwitz
-* DDE api's are called with stack now
-*
-* Revision 1.26  2000/03/20 22:22:48  hurwitz
-* added more checks to verify subroutine, 1 bug fix
-*
-* Revision 1.25  2000/03/16 15:51:31  hurwitz
-* added function to create an aligned block
-*
-* Revision 1.24  2000/03/14 22:08:21  hurwitz
-* undo and redo working properly, restore-original function added
-*
-* Revision 1.23  2000/03/10 23:01:43  hurwitz
-* added undo and redo functions, first pass
-*
-* Revision 1.22  2000/03/09 22:28:40  hurwitz
-* added shift block and delete block, a bug fix too
-*
-* Revision 1.21  2000/03/08 22:02:07  hurwitz
-* added verify function, debugging, handle align_start != 0
-*
-* Revision 1.20  2000/03/06 22:45:58  hurwitz
-* can shift right boundary of an aligned block left and right, DDVRuler updates added
-*
-* Revision 1.19  2000/03/01 22:49:40  lewisg
-* import bioseq, neatlyindex, get rid of dead code
-*
-* Revision 1.18  2000/02/29 21:13:06  hurwitz
-* added low level functions for shifting left and right the left alignment boundary
-*
-* Revision 1.17  2000/02/28 16:28:39  hurwitz
-* added functions for deleting an aligned gap
-*
-* Revision 1.16  2000/02/24 23:37:00  hurwitz
-* added ability to insert gaps
-*
-* Revision 1.15  2000/02/18 16:06:22  hurwitz
-* for editing multiple sequence alignments: shift row right now working
-*
-* Revision 1.14  2000/02/15 17:43:49  hurwitz
-* reverted to 1.12
-*
-* Revision 1.12  2000/02/14 23:09:08  hurwitz
-* got rid of calls to DDV_RulerDescrNew() because of library conflicts
-*
-* Revision 1.11  2000/02/14 20:58:57  hurwitz
-* added functions for editing multiple sequence alignments: hide/show row, move row, shift row left
-*
-* Revision 1.10  2000/01/24 20:54:34  vakatov
-* SAM_ViewString::  made #define to fix for the DLL build on PC
-*
-* Revision 1.9  2000/01/24 16:11:13  lewisg
-* speed up seqid comparison in color manager, make fast windows version of SetColor()
-*
-* Revision 1.8  1999/12/11 01:30:34  lewisg
-* fix bugs with sharing colors between ddv and cn3d
-*
-* Revision 1.7  1999/12/03 23:17:24  lewisg
-* Patrick's new global update msg, argument passing when launching ddv, experimental editing
-*
-* Revision 1.6  1999/11/24 21:24:30  vakatov
-* Fixed for the C++ and/or MSVC DLL compilation
-*
-* Revision 1.5  1999/10/05 23:18:15  lewisg
-* add ddv and udv to cn3d with memory management
-*
-* Revision 1.4  1999/09/27 17:53:08  kans
-* seqalign entityID/itemID/itemtype now in GatherIndex substructure
-*
-* Revision 1.3  1999/09/27 17:49:12  lewisg
-* fix denseseg constructor, bug in valnode loops, add SAM_ValNodeByPosition
-*
-* Revision 1.2  1999/09/21 19:33:53  lewisg
-* fix broken declarations
-*
-* Revision 1.1  1999/09/21 18:09:14  lewisg
-* binary search added to color manager, various bug fixes, etc.
-*
-* Revision 1.4  1999/09/03 23:27:32  lewisg
-* minor speedups by avoiding casts
-*
-* Revision 1.3  1999/09/03 14:01:40  lewisg
-* use faster seqid compare SAM_CompareID
-*
-* Revision 1.2  1999/09/01 23:02:59  lewisg
-* binary search in color functions
-*
-* Revision 1.1  1999/08/13 22:08:16  lewisg
-* color manager updated to use alignment coords
-*
 *
 * ==========================================================================
 */
@@ -297,7 +59,7 @@ NLM_EXTERN void SAM_ReplaceGI(SeqAlign *salp)
     DenseSegPtr dsp;
     DenseDiagPtr ddp;
     SeqId *sip, *sipBest, *sipPrev, *wholesip;
-    Int4 gi;
+    BIG_ID gi;
     
     for(;salp != NULL; salp = salp->next) {
         if (salp->segtype == SAS_DENSEG) {

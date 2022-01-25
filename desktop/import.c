@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   6/18/95
 *
-* $Revision: 6.77 $
+* $Revision: 6.86 $
 *
 * File Description: 
 *
@@ -101,7 +101,7 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
     i++;
     curr = FeatDefFindNext (NULL, &key, &label, FEATDEF_ANY, TRUE);
     while (curr != NULL) {
-      if (key != FEATDEF_BAD) {
+      if (key != FEATDEF_BAD && !IsRegulatorySubtype(key)) {
         if (notJustImpFeats || curr->seqfeat_key == SEQFEAT_IMP) {
           subtype = curr->featdef_key;
           if (subtype != FEATDEF_IMP &&
@@ -115,7 +115,9 @@ extern EnumFieldAssocPtr import_featdef_alist (Boolean notJustImpFeats, Boolean 
               subtype != FEATDEF_misc_RNA &&
               subtype != FEATDEF_satellite &&
               subtype != FEATDEF_repeat_unit &&
-              subtype != FEATDEF_conflict) {
+              subtype != FEATDEF_conflict &&
+              subtype != FEATDEF_LTR &&
+              subtype != FEATDEF_assembly_gap) {
             if (allowPeptideFeats ||
                 (subtype != FEATDEF_mat_peptide &&
                  subtype != FEATDEF_sig_peptide &&
@@ -1331,14 +1333,16 @@ extern Int2 LIBCALLBACK EnumGenFunc (Pointer data)
           sfp->data.choice != SEQFEAT_PSEC_STR)) {
         return OM_MSG_RET_ERROR;
       }
-      if (sfp->data.choice == SEQFEAT_BOND) {
-        subtype = FEATDEF_BOND;
-      } else if (sfp->data.choice == SEQFEAT_SITE) {
-        subtype = FEATDEF_SITE;
-      } else if (sfp->data.choice == SEQFEAT_PSEC_STR) {
-        subtype = FEATDEF_PSEC_STR;
-      } else {
-        return OM_MSG_RET_ERROR;
+      if (sfp != NULL) {
+        if (sfp->data.choice == SEQFEAT_BOND) {
+          subtype = FEATDEF_BOND;
+        } else if (sfp->data.choice == SEQFEAT_SITE) {
+          subtype = FEATDEF_SITE;
+        } else if (sfp->data.choice == SEQFEAT_PSEC_STR) {
+          subtype = FEATDEF_PSEC_STR;
+        } else {
+          return OM_MSG_RET_ERROR;
+        }
       }
       break;
     case OBJ_BIOSEQ :
@@ -2121,6 +2125,7 @@ static ENUM_ALIST(molinfo_tech_alist)
   {"Barcode",            21},
   {"Composite-WGS-HTGS", 22},
   {"TSA",                23},
+  {"Targeted",           24},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -2143,6 +2148,7 @@ static ENUM_ALIST(molinfo_tech_nuc_alist)
   {"Barcode",            21},
   {"Composite-WGS-HTGS", 22},
   {"TSA",                23},
+  {"Targeted",           24},
   {"Other:",            255},
 END_ENUM_ALIST
 
@@ -2203,7 +2209,7 @@ static Uint1 check_biomol (Uint1 biomol)
 static Uint1 check_technique (Uint1 tech)
 
 {
-  if (tech > MI_TECH_tsa && tech != MI_TECH_other) return 0;
+  if (tech > MI_TECH_targeted && tech != MI_TECH_other) return 0;
   return tech;
 }
 
@@ -2784,7 +2790,9 @@ typedef struct gbblockpage {
   ButtoN        tpaExperimental;
   ButtoN        tpaInferential;
   ButtoN        tpaReassembly;
+  ButtoN        tpaSpecialistDb;
   ButtoN        barCode;
+  ButtoN        unordered;
   DialoG        kywds;
   DialoG        xaccns;
   DialoG        entryDate;
@@ -2811,6 +2819,8 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
   Boolean         isInferential = FALSE;
   Boolean         isReassembly = FALSE;
   Boolean         isBarcode = FALSE;
+  Boolean         isSpecialistDb = FALSE;
+  Boolean         isUnordered = FALSE;
   CharPtr         str;
   ValNodePtr      vnp;
 
@@ -2831,7 +2841,10 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
           StringICmp (str, "TPA:EXPERIMENTAL") != 0 &&
           StringICmp (str, "TPA:INFERENTIAL") != 0 &&
           StringICmp (str, "TPA:REASSEMBLY") != 0 &&
-          StringICmp (str, "BARCODE") != 0) {
+          StringICmp (str, "TPA:ASSEMBLY") != 0 &&
+          StringICmp (str, "TPA:SPECIALIST_DB") != 0 &&
+          StringICmp (str, "BARCODE") != 0 &&
+          StringICmp (str, "UNORDERED") != 0) {
         ValNodeCopyStr (&head, 0, str);
       }
     }
@@ -2858,8 +2871,16 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
       } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") == 0 ||
                  StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_REASSEMBLY") == 0) {
         isReassembly = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:ASSEMBLY") == 0 ||
+                 StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_ASSEMBLY") == 0) {
+        isReassembly = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:SPECIALIST_DB") == 0 ||
+                 StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA_SPECIALIST_DB") == 0) {
+        isSpecialistDb = TRUE;
       } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "BARCODE") == 0) {
         isBarcode = TRUE;
+      } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "UNORDERED") == 0) {
+        isUnordered = TRUE;
       }
     }
     SafeSetStatus (gpp->htgsDraft, isDraft);
@@ -2869,7 +2890,9 @@ static void GBBlockPtrToGenBankPage (DialoG d, Pointer data)
     SafeSetStatus (gpp->tpaExperimental, isExperimental);
     SafeSetStatus (gpp->tpaInferential, isInferential);
     SafeSetStatus (gpp->tpaReassembly, isReassembly);
+    SafeSetStatus (gpp->tpaSpecialistDb, isSpecialistDb);
     SafeSetStatus (gpp->barCode, isBarcode);
+    SafeSetStatus (gpp->unordered, isUnordered);
   }
 }
 
@@ -2886,6 +2909,8 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
   Boolean         noInferential;
   Boolean         noReassembly;
   Boolean         noBarcode;
+  Boolean         noSpecialistDb;
+  Boolean         noUnordered;
   ValNodePtr      keywords1 = NULL;
   ValNodePtr      keywords2 = NULL;
   ValNodePtr      vnp;
@@ -2974,10 +2999,23 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
         for (vnp = keywords1; vnp != NULL; vnp = vnp->next) {
           if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") == 0) {
             noReassembly = FALSE;
+          } else if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:ASSEMBLY") == 0) {
+            noReassembly = FALSE;
           }
         }
         if (noReassembly) {
-          ValNodeCopyStr (&keywords2, 0, "TPA:reassembly");
+          ValNodeCopyStr (&keywords2, 0, "TPA:assembly");
+        }
+      }
+      if (GetStatus (gpp->tpaSpecialistDb)) {
+        noSpecialistDb = TRUE;
+        for (vnp = keywords1; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:SPECIALIST_DB") == 0) {
+            noSpecialistDb = FALSE;
+          }
+        }
+        if (noSpecialistDb) {
+          ValNodeCopyStr (&keywords2, 0, "TPA:specialist_db");
         }
       }
       if (GetStatus (gpp->barCode)) {
@@ -2989,6 +3027,17 @@ static Pointer GenBankPageToGBBlockPtr (DialoG d)
         }
         if (noBarcode) {
           ValNodeCopyStr (&keywords2, 0, "BARCODE");
+        }
+      }
+      if (GetStatus (gpp->unordered)) {
+        noUnordered = TRUE;
+        for (vnp = keywords1; vnp != NULL; vnp = vnp->next) {
+          if (StringICmp ((CharPtr) vnp->data.ptrvalue, "UNORDERED") == 0) {
+            noUnordered = FALSE;
+          }
+        }
+        if (noUnordered) {
+          ValNodeCopyStr (&keywords2, 0, "UNORDERED");
         }
       }
       gbp->keywords = ValNodeLink (&keywords2, keywords1);
@@ -3012,7 +3061,9 @@ static void DeleteKeywordProc (ButtoN b)
     SafeSetStatus (gpp->tpaExperimental, FALSE);
     SafeSetStatus (gpp->tpaInferential, FALSE);
     SafeSetStatus (gpp->tpaReassembly, FALSE);
+    SafeSetStatus (gpp->tpaSpecialistDb, FALSE);
     SafeSetStatus (gpp->barCode, FALSE);
+    SafeSetStatus (gpp->unordered, FALSE);
   }
 }
 
@@ -3103,6 +3154,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
     }
 
     b = NULL;
+    f5 = NULL;
     f2 = HiddenGroup (m, 0, 3, NULL);
     showKeywords = FALSE;
     if (gbp != NULL && gbp->keywords != NULL) {
@@ -3115,6 +3167,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
           StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:EXPERIMENTAL") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:INFERENTIAL") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:REASSEMBLY") != 0 ||
+          StringICmp ((CharPtr) vnp->data.ptrvalue, "TPA:ASSEMBLY") != 0 ||
           StringICmp ((CharPtr) vnp->data.ptrvalue, "BARCODE") != 0) {
         showKeywords = TRUE;
       }
@@ -3131,8 +3184,10 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
       gpp->htgsCancelled = CheckBox (f5, "HTGS_CANCELLED", NULL);
       gpp->tpaExperimental = CheckBox (f5, "TPA:EXPERIMENTAL", NULL);
       gpp->tpaInferential = CheckBox (f5, "TPA:INFERENTIAL", NULL);
-      gpp->tpaReassembly = CheckBox (f5, "TPA:REASSEMBLY", NULL);
+      gpp->tpaReassembly = CheckBox (f5, "TPA:ASSEMBLY", NULL);
+      gpp->tpaSpecialistDb = CheckBox (f5, "TPA:SPECIALIST_DB", NULL);
       gpp->barCode = CheckBox (f5, "BARCODE", NULL);
+      gpp->unordered = CheckBox (f5, "UNORDERED", NULL);
     }
     if (internal) {
       b = PushButton (m, "Delete All Keywords", DeleteKeywordProc);
@@ -3145,7 +3200,7 @@ static DialoG CreateGenBankDialog (GrouP h, CharPtr title, ValNodePtr sdp, GenBa
     }
 
     AlignObjects (ALIGN_CENTER, (HANDLE) f1, (HANDLE) f2, (HANDLE) f3,
-                  (HANDLE) f4, (HANDLE) b, NULL);
+                  (HANDLE) f4, (HANDLE) b, (HANDLE) f5, NULL);
   }
 
   return (DialoG) p;
@@ -3718,6 +3773,8 @@ static void ReplaceAllCallback (SeqDescrPtr sdp, Pointer data)
 }
 
 
+extern const CharPtr kDoNotEditTitle = "You are manually editing a title. If you continue, the title will not be automatically updated if the taxonomy information changes. Are you sure you want to do this? It is a very bad idea.";
+
 static void ReplaceAllVisibleStringsButtonProc (ButtoN b)
 {
   VisStrFormPtr vfp;
@@ -3760,6 +3817,14 @@ static void ReplaceAllVisibleStringsButtonProc (ButtoN b)
       rd.replaceWith = MemFree (rd.replaceWith);
       return;
     }
+  }
+  if (vfp->subtype == Seq_descr_title) {
+      if (Message(MSG_OKC, "%s", kDoNotEditTitle) == ANS_CANCEL) {
+          rd.deleteThis = MemFree(rd.deleteThis);
+          rd.replaceWith = MemFree(rd.replaceWith);
+          return;
+      }
+      RemoveAutodefObjects(sep);
   }
 
   VisitDescriptorsInSep (sep, &rd, ReplaceAllCallback);
@@ -3832,6 +3897,7 @@ static void VisStrDescFormActnProc (ForM f)
   CharPtr        str;
   Boolean        suspicious;
   VisStrFormPtr  vfp;
+  SeqEntryPtr    sep;
 
   vfp = (VisStrFormPtr) GetObjectExtra (f);
   if (vfp != NULL) {
@@ -3855,8 +3921,14 @@ static void VisStrDescFormActnProc (ForM f)
     suspicious = FALSE;
     if (vfp->subtype == Seq_descr_comment) {
       suspicious = SerialNumberInString (str);
-    }
+    } 
     MemFree (str);
+    if (vfp->subtype == Seq_descr_title) {
+        if (Message(MSG_OKC, kDoNotEditTitle) == ANS_CANCEL) {
+            Remove(f);
+            return;
+        }
+    }
     if (suspicious) {
       if (Message (MSG_OKC, "%s", citInCommentMsg) == ANS_CANCEL) {
         Remove (f);
@@ -3864,6 +3936,11 @@ static void VisStrDescFormActnProc (ForM f)
       }
     }
     if (DescFormReplaceWithoutUpdateProc (f)) {
+        if (vfp->subtype == Seq_descr_title) {
+            sep = GetTopSeqEntryForEntityID(vfp->input_entityID);
+            RemoveAutodefObjects(sep);
+        }
+
       GetRidOfEmptyFeatsDescStrings (vfp->input_entityID, NULL);
       if (GetAppProperty ("InternalNcbiSequin") != NULL) {
         ExtendGeneFeatIfOnMRNA (vfp->input_entityID, NULL);
@@ -3882,7 +3959,7 @@ extern Int2 LIBCALLBACK VisStrGenFunc (Pointer data)
   OMUserDataPtr     omudp;
   ObjMgrProcPtr     proc;
   ValNodePtr        sdp;
-  Uint2             subtype;
+  Uint2             subtype = 0;
   VisStrFormPtr     vfp;
   WindoW            w;
 
@@ -3901,7 +3978,9 @@ extern Int2 LIBCALLBACK VisStrGenFunc (Pointer data)
           sdp->choice != Seq_descr_region)) {
         return OM_MSG_RET_ERROR;
       }
-      subtype = sdp->choice;
+      if (sdp != NULL) {
+        subtype = sdp->choice;
+      }
       break;
     case OBJ_BIOSEQ :
       break;
@@ -4054,13 +4133,13 @@ extern Int2 LIBCALLBACK DateGenFunc (Pointer data)
 
 {
   DateFormPtr       dfp;
-  Uint2             itemtype;
+  Uint2             itemtype = 0;
   OMProcControlPtr  ompcp;
   OMUserDataPtr     omudp;
   ObjMgrProcPtr     proc;
   ValNodePtr        sdp;
   CharPtr           title;
-  Uint2             subtype;
+  Uint2             subtype = 0;
   WindoW            w;
 
   ompcp = (OMProcControlPtr) data;
@@ -4079,7 +4158,9 @@ extern Int2 LIBCALLBACK DateGenFunc (Pointer data)
         return OM_MSG_RET_ERROR;
       }
       itemtype = OBJ_SEQDESC;
-      subtype = sdp->choice;
+      if (sdp != NULL) {
+        subtype = sdp->choice;
+      }
       break;
     case OBJ_BIOSEQ :
       break;

@@ -1,4 +1,4 @@
-/* $Id: blast_diagnostics.c,v 1.10 2011/06/13 18:24:31 kazimird Exp $
+/* $Id: blast_diagnostics.c,v 1.11 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Manipulating diagnostics data returned from BLAST
  */
 
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: blast_diagnostics.c,v 1.10 2011/06/13 18:24:31 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_diagnostics.h>
 #include <algo/blast/core/blast_def.h>

@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.10 $
 *
 * File Description:
 *   Routines for parsing ASN.1 value nototation (text) messages
@@ -38,58 +38,6 @@
 * --------------------------------------------------------------------------
 * Date     Name        Description of modification
 * -------  ----------  -----------------------------------------------------
-* 2/11/91  Ostell      AsnTxtReadVal - added check for unresolved base types
-* 3/4/91   Kans        Stricter typecasting for GNU C and C++
-* 3/4/91   Kans        AsnLexReadBoolean returns Boolean
-* 04-20-93 Schuler     LIBCALL calling convention
-*
-* $Log: asnlex.c,v $
-* Revision 6.6  2011/09/06 18:03:03  kans
-* text ASN.1 support for UTF8String
-*
-* Revision 6.5  2000/12/12 15:56:12  ostell
-* added support BigInt
-*
-* Revision 6.4  2000/03/10 18:02:05  kans
-* increased size of tbuf in AsnLexReadOctets to handle long lines in hand-edited (?) ASN.1 records being submitted
-*
-* Revision 6.3  1999/12/23 17:25:44  kans
-* AsnTxtReadVal checks for NULL atp - same as recent check in AsnBinReadVal
-*
-* Revision 6.2  1998/06/12 19:27:51  kans
-* fixed unix compiler warnings
-*
-* Revision 6.1  1997/10/29 02:41:31  vakatov
-* Type castings to pass through the C++ compiler
-*
-* Revision 6.0  1997/08/25 18:10:04  madden
-* Revision changed to 6.0
-*
-* Revision 5.3  1997/04/23 23:03:33  ostell
-* just added a typecast
-*
- * Revision 5.2  1997/04/23  21:23:03  ostell
- * changed BitHex reading routine to strip internal spaces and allow for linewraps at
- * any spacing.
- *
- * Revision 5.1  1996/12/03  21:43:48  vakatov
- * Adopted for 32-bit MS-Windows DLLs
- *
- * Revision 5.0  1996/05/28  14:00:29  ostell
- * Set to revision 5.0
- *
- * Revision 4.2  1996/02/18  16:45:36  ostell
- * changed fix_non_print behavior and added option 3
- *
- * Revision 4.1  1995/10/28  15:02:06  ostell
- * added casts to quiet DOS compile warnings
- *
- * Revision 4.0  1995/07/26  13:47:38  ostell
- * force revision to 4.0
- *
- * Revision 2.16  1995/05/15  18:38:28  ostell
- * added Log line
- *
 *
 * ==========================================================================
 */
@@ -423,6 +371,8 @@ NLM_EXTERN Int2 LIBCALL  AsnTxtReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 			valueptr->boolvalue = AsnLexReadBoolean(aip, atp);
 			break;
 		case INTEGER_TYPE:
+			valueptr->intvalue = AsnLexReadBigInt(aip, atp);
+			break;
 		case ENUM_TYPE:
 			valueptr->intvalue = AsnLexReadInteger(aip, atp);
 			break;
@@ -606,6 +556,8 @@ NLM_EXTERN Int4 AsnLexReadInteger (AsnIoPtr aip, AsnTypePtr atp)
 NLM_EXTERN Int8 AsnLexReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
 {
 	Int2 token;
+	AsnValxNodePtr avnp;
+	AsnTypePtr atp2;
 
 	token = AsnLexWord(aip);      /* read the integer */
 
@@ -621,7 +573,23 @@ NLM_EXTERN Int8 AsnLexReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
 	}
 
 			/******************** read a named integer value *********/
-			/**** not supported for bigint *****/
+	atp2 = AsnFindBaseType(atp);
+	if (atp2->branch != NULL)       /* named values */
+	{
+		avnp = (AsnValxNodePtr) atp2->branch;
+		while (avnp != NULL)
+		{
+			if (StrMatch(avnp->name, aip->word, aip->wordlen))
+				return avnp->intvalue;
+			avnp = avnp->next;
+		}
+	}
+
+	if (atp2->type->isa == ENUM_TYPE)   /* enumerated MUST match named value */
+	{
+		AsnIoErrorMsg(aip, 40, AsnErrGetTypeName(atp->name), aip->linenumber);
+		return 0;
+	}
 
 		   /******************* could it be a previously defined value? ***/
 
@@ -782,7 +750,7 @@ NLM_EXTERN ByteStorePtr AsnLexReadOctets (AsnIoPtr aip, AsnTypePtr atp)
 {
 	Int2 token, len;
 	ByteStorePtr ssp = NULL;
-	Byte tbuf[256]; /* was 101 - changed to handle occasional hand-edited ASN.1? */
+	Byte tbuf[500]; /* was 101 - changed to handle occasional hand-edited ASN.1? */
 	Int4 bytes, left, added;
 
 	token = AsnLexWord(aip);      /* read the start */
@@ -889,7 +857,7 @@ NLM_EXTERN FloatHi AsnLexReadReal (AsnIoPtr aip, AsnTypePtr atp)
 	Int2 token;
 	double mantissa, result;
 	int	base, exponent;
-	char buf[15];
+	char buf[100];
 
 	result = 0.0;
 	token = AsnLexWord(aip);      /* read the { */

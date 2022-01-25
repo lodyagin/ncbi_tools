@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   12/30/03
 *
-* $Revision: 1.147 $
+* $Revision: 1.166 $
 *
 * File Description:  New GenBank flatfile generator, internal header
 *
@@ -146,7 +146,7 @@ typedef struct int_asn2gb_job {
   Boolean         oldXmlPolicy;
   Boolean         refseqConventions;
   ValNodePtr      lockedBspList;
-  ValNodePtr      fargaps;
+  ValNodePtr      manygaps;
   ValNodePtr      gapvnp;
   ValNodePtr      remotevnp;
   Asn2gbLockFunc  remotelock;
@@ -164,16 +164,21 @@ typedef struct int_asn2gb_job {
   Boolean         www;
   Boolean         specialGapFormat;
   Boolean         relaxedMapping;
+  Boolean         gpipdDeflines;
+  Boolean         hideProteinID;
   Boolean         hideGoTerms;
   Boolean         multiIntervalGenes;
   Boolean         segmentedBioseqs;
   Boolean         smallGenomeSet;
   Boolean         reindex;
   Int4            seqGapCurrLen;
+  Boolean         hideGI;
   ValNodePtr      gihead;
   ValNodePtr      gitail;
   TextFsaPtr      bad_html_fsa;
   Boolean         seqspans;
+  Int2            sat;
+  Int4            sat_key;
 } IntAsn2gbJob, PNTR IntAsn2gbJobPtr;
 
 /* array for assigning biosource and feature data fields to qualifiers */
@@ -267,9 +272,9 @@ typedef struct asn2gbwork {
 
   Int2             sectionCount;
   Int2             sectionMax;
-  Int4             currGi;
-  Int4             prevGi;
-  Int4             nextGi;
+  BIG_ID           currGi;
+  BIG_ID           prevGi;
+  BIG_ID           nextGi;
   ValNodePtr       gilistpos;
 
   Boolean          showAllFeats;
@@ -315,18 +320,21 @@ typedef struct asn2gbwork {
   Boolean          copyGpsCdsUp;
   Boolean          copyGpsGeneDown;
 
+  Boolean          isNCBIGenomes;
   Boolean          isRefSeq;
 
   Boolean          showContigAndSeq;
 
   Char             basename [SEQID_MAX_LEN];
 
-  ValNodePtr       currfargap;
+  SeqFeatPtr       currfargap;
 
   SeqFeatPtr       lastsfp;
   SeqAnnotPtr      lastsap;
   Int4             lastleft;
   Int4             lastright;
+
+  SeqFeatPtr       bestprot;
 
   Boolean          firstfeat;
   Boolean          featseen;
@@ -357,6 +365,7 @@ typedef struct asn2gbwork {
 typedef struct comment_block {
   ASN2GB_BASE_BLOCK
   Boolean           first;
+  Boolean           no_blank_before;
 } CommentBlock, PNTR CommentBlockPtr;
 
 /* internal reference block has fields on top of RefBlock fields */
@@ -515,6 +524,7 @@ typedef enum {
 
 typedef enum {
   SCQUAL_acronym = 1,
+  SCQUAL_altitude,
   SCQUAL_anamorph,
   SCQUAL_authority,
   SCQUAL_biotype,
@@ -582,6 +592,7 @@ typedef enum {
   SCQUAL_PCR_primers,
   SCQUAL_PCR_primer_note,
   SCQUAL_PCR_reaction,
+  SCQUAL_phenotype,
   SCQUAL_plasmid_name,
   SCQUAL_plastid_name,
   SCQUAL_pop_variant,
@@ -611,16 +622,18 @@ typedef enum {
   SCQUAL_transgenic,
   SCQUAL_transposon_name,
   SCQUAL_type,
+  SCQUAL_type_material,
   SCQUAL_unstructured,
   SCQUAL_usedin,
   SCQUAL_variety,
+  SCQUAL_whole_replicon,
   SCQUAL_zero_orgmod,
   SCQUAL_one_orgmod,
   SCQUAL_zero_subsrc,
   ASN2GNBK_TOTAL_SOURCE
 }  SourceType;
 
-NLM_EXTERN SourceType orgModToSourceIdx [41];
+NLM_EXTERN SourceType orgModToSourceIdx [42];
 
 typedef enum {
   FTQUAL_allele = 1,
@@ -720,6 +733,9 @@ typedef enum {
   FTQUAL_pyrrolysine_note,
   FTQUAL_region,
   FTQUAL_region_name,
+  FTQUAL_regulatory_class,
+  FTQUAL_regulatory_note,
+  FTQUAL_regulatory_other,
   FTQUAL_replace,
   FTQUAL_ribosomal_slippage,
   FTQUAL_rpt_family,
@@ -789,7 +805,7 @@ typedef struct sourcequal {
 
 NLM_EXTERN SourceQual asn2gnbk_source_quals [ASN2GNBK_TOTAL_SOURCE];
 
-NLM_EXTERN SourceType subSourceToSourceIdx [42];
+NLM_EXTERN SourceType subSourceToSourceIdx [45];
 
 NLM_EXTERN void DoOneSection (
   BioseqPtr target,
@@ -847,6 +863,10 @@ NLM_EXTERN void AddCommentWithURLlinks (
   CharPtr prefix,
   CharPtr str,
   CharPtr suffix
+);
+NLM_EXTERN CharPtr GetStrForStructuredComment (
+  IntAsn2gbJobPtr ajp,
+  UserObjectPtr uop
 );
 NLM_EXTERN void AddStringWithTildes (StringItemPtr ffstring, CharPtr string);
 NLM_EXTERN void FFProcessTildes (StringItemPtr sip, CharPtr PNTR cpp, Int2 tildeAction);
@@ -1097,6 +1117,19 @@ NLM_EXTERN void FF_asn2gb_www_featkey (
   Uint4 itemID
 );
 
+NLM_EXTERN void FF_asn2gb_www_featkey_Ex (
+  StringItemPtr ffstring,
+  CharPtr key,
+  SeqFeatPtr sfp,
+  SeqLocPtr slp,
+  Int4 from,
+  Int4 to,
+  Uint1 strand,
+  Uint4 itemID,
+  Int2 sat,
+  Int4 sat_key
+);
+
 NLM_EXTERN CharPtr AddJsInterval (
   IntAsn2gbSectPtr iasp,
   CharPtr pfx,
@@ -1181,7 +1214,7 @@ NLM_EXTERN CharPtr StripAllSpaces (
   CharPtr str
 );
 
-NLM_EXTERN Boolean GetAccnVerFromServer (Int4 gi, CharPtr buf);
+NLM_EXTERN Boolean GetAccnVerFromServer (BIG_ID gi, CharPtr buf);
 
 NLM_EXTERN CharPtr bondList [];
 NLM_EXTERN CharPtr siteList [];
@@ -1226,6 +1259,7 @@ NLM_EXTERN void AddLocusBlock (
   Asn2gbWorkPtr awp,
   Boolean willshowwgs,
   Boolean willshowtsa,
+  Boolean willshowtls,
   Boolean willshowcage,
   Boolean willshowgenome,
   Boolean willshowcontig,
@@ -1257,10 +1291,7 @@ NLM_EXTERN void AddSegmentBlock (
   Boolean onePartOfSeg,
   Boolean is_na
 );
-NLM_EXTERN void AddSourceBlock (
-  Asn2gbWorkPtr awp
-);
-NLM_EXTERN void AddOrganismBlock (
+NLM_EXTERN void AddSourceOrganismBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddCommentBlock (
@@ -1279,6 +1310,9 @@ NLM_EXTERN void AddWGSBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddTSABlock (
+  Asn2gbWorkPtr awp
+);
+NLM_EXTERN void AddTLSBlock (
   Asn2gbWorkPtr awp
 );
 NLM_EXTERN void AddCAGEBlock (
@@ -1393,6 +1427,13 @@ NLM_EXTERN Boolean DeltaLitOnly (
 
 NLM_EXTERN Boolean SegHasParts (
   BioseqPtr bsp
+);
+
+NLM_EXTERN void SetIfpFeatCount (
+  IntFeatBlockPtr ifp,
+  IntAsn2gbJobPtr ajp,
+  Asn2gbWorkPtr awp,
+  Boolean isProt
 );
 
 

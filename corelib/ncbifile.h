@@ -32,40 +32,14 @@
 *
 * Version Creation Date:   1/1/91
 *
-* $Revision: 6.7 $
+* $Revision: 6.8 $
 *
 * File Description:
 *   	prototypes for portable file routines
 *
 * Modifications:
 * --------------------------------------------------------------------------
-* $Log: ncbifile.h,v $
-* Revision 6.7  2007/08/16 17:09:22  kans
-* moved DirExplore from sqnutils
 *
-* Revision 6.6  2004/05/07 15:57:14  kans
-* added FileCache functions for buffered read, graceful handing of Unix, Mac, and DOS line endings
-*
-* Revision 6.5  2001/04/05 21:36:05  juran
-* EjectCd and MountCd #defined to FALSE.
-*
-* Revision 6.4  2000/03/08 17:55:48  vakatov
-* Use Int8 for the file size.
-* Also, get rid of the WIN16 code, do other cleanup.
-*
-* Revision 6.3  1998/06/26 20:39:43  vakatov
-* Added FilePathFind() -- complimentary to FileNameFind()
-*
-* Revision 6.2  1998/06/25 19:39:18  vakatov
-* Added "FileLengthEx()" -- it returns -1(not 0!) if the file does not exist
-*
-* Revision 6.1  1998/05/24 19:20:58  kans
-* added Nlm_DirCatalog (Mac implementation only so far)
-*
-* Revision 5.1  1996/12/03 21:48:33  vakatov
-* Adopted for 32-bit MS-Windows DLLs
-*
-* 04-15-93 Schuler     Changed _cdecl to LIBCALL
 * ==========================================================================
 */
 
@@ -107,11 +81,12 @@ NLM_EXTERN void LIBCALL Nlm_SetFileOpenHook(Nlm_FileOpenHook hook);
 /* FileCache provides buffered text read for handling Unix, Mac, and DOS line endings gracefully */
 
 typedef struct nlm_filecachedata {
-  FILE      *fp;
-  Nlm_Char  buf [516];
-  Nlm_Int2  ctr;
-  Nlm_Int2  total;
-  Nlm_Int4  offset;
+  FILE         *fp;
+  Nlm_Char     buf [516];
+  Nlm_Int2     ctr;
+  Nlm_Int2     total;
+  Nlm_Int4     offset;
+  Nlm_Boolean  failed;
 } Nlm_FileCache, PNTR Nlm_FileCachePtr;
 
 NLM_EXTERN Nlm_Boolean Nlm_FileCacheSetup (Nlm_FileCache PNTR fcp, FILE *fp);

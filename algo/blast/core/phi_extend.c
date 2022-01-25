@@ -1,4 +1,4 @@
-/* $Id: phi_extend.c,v 1.15 2006/11/21 17:13:51 papadopo Exp $
+/* $Id: phi_extend.c,v 1.16 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,11 +30,6 @@
 /** @file phi_extend.c
  * Word finder functions for PHI-BLAST
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: phi_extend.c,v 1.15 2006/11/21 17:13:51 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/phi_extend.h>

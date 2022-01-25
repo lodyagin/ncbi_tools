@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: kappa.c,v 6.93 2012/04/30 12:45:01 camacho Exp $";
+static char const rcsid[] = "$Id: kappa.c,v 6.94 2013/11/04 15:42:10 boratyng Exp $";
 
-/* $Id: kappa.c,v 6.93 2012/04/30 12:45:01 camacho Exp $ 
+/* $Id: kappa.c,v 6.94 2013/11/04 15:42:10 boratyng Exp $ 
 *   ==========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -50,7 +50,7 @@ functions in this file have a 'Kappa_' prefix.  Please adhere to this
 convention to avoid a name clash with functions in blast_kappa.c (the
 name clash can matter in debuggers and search engines.)
 
- $Revision: 6.93 $
+ $Revision: 6.94 $
 
  Revision 6.75  2005/11/07 15:28:56  coulouri
  From Mike Gertz:
@@ -1509,8 +1509,12 @@ Kappa_SequenceGetRange(
   const BlastCompo_SequenceData * query,
   const BlastCompo_SequenceRange * q_range,
   BlastCompo_SequenceData * queryData,
+  const Uint8* query_words,
   const BlastCompo_Alignment *align,
-  const Boolean shouldTestIdentical)
+  const Boolean shouldTestIdentical,
+  const ECompoAdjustModes compo_adjust_mode,
+  const Boolean isSmithWaterman,
+  Boolean* subject_maybe_biased)
 {
   Int4 idx;
   Kappa_SequenceLocalData * local_data = self->local_data;
@@ -2229,6 +2233,8 @@ Kappa_GetAlignParams(BlastSearchBlkPtr search,
   int query_is_translated = search->prog_number == blast_type_blastx;
   int subject_is_translated = search->prog_number == blast_type_tblastn;
   int do_link_hsps = search->pbp->do_sum_stats;
+  /* Negative cutoff means that the old rules for CBS segging will be used */
+  double near_identical_cutoff = -1.0;
 
   if(do_link_hsps) {
     cutoff_s = (int) (search->pbp->cutoff_s1 * localScalingFactor);
@@ -2262,7 +2268,7 @@ Kappa_GetAlignParams(BlastSearchBlkPtr search,
                              compo_adjust_mode, search->positionBased,
                              query_is_translated, subject_is_translated, ccat_query_length,
                              cutoff_s, cutoff_e, do_link_hsps,
-                             &redo_align_callbacks);
+                             &redo_align_callbacks, near_identical_cutoff);
   if (params == NULL) {
       ErrPostEx(SEV_FATAL, E_NoMemory, 0, "Failed to allocate memory");
   }

@@ -1,4 +1,4 @@
-/* $Id: blast_encoding.c,v 1.7 2008/01/24 21:25:45 kazimird Exp $
+/* $Id: blast_encoding.c,v 1.8 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Definitions of static arrays defined in blast_encoding.h.
  * @sa blast_encoding.h
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_encoding.c,v 1.7 2008/01/24 21:25:45 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_encoding.h>
 

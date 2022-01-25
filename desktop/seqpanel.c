@@ -1,4 +1,4 @@
-/* $Id: seqpanel.c,v 6.230 2011/07/19 18:40:47 bollin Exp $
+/* $Id: seqpanel.c,v 6.232 2016/09/02 14:57:38 ucko Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -7861,7 +7861,8 @@ static void SeqEdNewFeaturesMenu (MenU m, Boolean is_na)
                   while ((ompp = ObjMgrProcFindNext (omp, OMPROC_EDIT,
 				          omtp->datatype, 0, ompp)) != NULL) {
                     if (ompp->subinputtype == fdp->featdef_key &&
-                        ompp->subinputtype != FEATDEF_PUB) {
+                        ompp->subinputtype != FEATDEF_PUB
+                        && !IsRegulatorySubtype(ompp->subinputtype)) {
                       i = CommandItem (sub, ompp->proclabel, SeqEditNewFeatureMenuProc);
                       nfp = (NewFeaturePtr) MemNew (sizeof (NewFeatureData));
                       if (nfp != NULL) {
@@ -8661,7 +8662,7 @@ WriteAlignmentInterleaveToFileEx
                                          seqbuf, alnbuf, &alnbuf_len,
                                          show_substitutions);
               MemCpy (printed_line + label_len + 1 + coord_len, alnbuf, alnbuf_len);
-              fprintf (fp, printed_line);
+              fputs (fp, printed_line);
             }
             fprintf (fp, "\n");
             start = stop + 1;
@@ -8757,7 +8758,7 @@ extern void WriteAlignmentContiguousToFile
                                        seqbuf, alnbuf, &alnbuf_len,
                                        show_substitutions);
             MemCpy (printed_line, alnbuf, alnbuf_len);
-            fprintf (fp, printed_line);
+            fputs (fp, printed_line);
             start = stop + 1;
             stop += seq_chars_per_row;
           }

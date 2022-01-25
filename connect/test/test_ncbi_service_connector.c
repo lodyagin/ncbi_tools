@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_service_connector.c,v 6.42 2010/10/06 19:19:40 kazimird Exp $
+/* $Id: test_ncbi_service_connector.c,v 6.52 2016/07/27 15:09:15 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,13 +30,14 @@
  *
  */
 
-#include <connect/ncbi_service_connector.h>
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
+#include <connect/ncbi_gnutls.h>
+#include <connect/ncbi_service_connector.h>
 #include <stdlib.h>
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 
 int main(int argc, const char* argv[])
@@ -57,12 +58,14 @@ int main(int argc, const char* argv[])
                            fLOG_OmitNoteLevel | fLOG_DateTime);
     CORE_SetLOGFILE(stderr, 0/*false*/);
 
+    SOCK_SetupSSL(NcbiSetupGnuTls);
+
     net_info = ConnNetInfo_Create(service);
     ConnNetInfo_AppendArg(net_info, "testarg",  "val");
     ConnNetInfo_AppendArg(net_info, "service",  "none");
     ConnNetInfo_AppendArg(net_info, "platform", "none");
     ConnNetInfo_AppendArg(net_info, "address",  "2010");
-    ConnNetInfo_LogEx(net_info, eLOG_Note, CORE_GetLOG());
+    ConnNetInfo_Log(net_info, eLOG_Note, CORE_GetLOG());
 
     connector = SERVICE_CreateConnectorEx(service, fSERV_Any, net_info, 0);
 
@@ -111,10 +114,10 @@ int main(int argc, const char* argv[])
         status = CONN_Read(conn, ibuf, sizeof(ibuf), &n, eIO_ReadPersist);
         if (n) {
             char* descr = CONN_Description(conn);
-            CORE_DATAF_EX(eLOG_Note, ibuf, n,
-                          ("%lu bytes read from service (%s%s%s):",
-                           (unsigned long) n, CONN_GetType(conn),
-                           descr ? ", " : "", descr ? descr : ""));
+            CORE_DATAF(eLOG_Note, ibuf, n,
+                       ("%lu bytes read from service (%s%s%s):",
+                        (unsigned long) n, CONN_GetType(conn),
+                        descr ? ", " : "", descr ? descr : ""));
             if (descr)
                 free(descr);
         }

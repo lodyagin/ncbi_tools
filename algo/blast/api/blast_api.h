@@ -1,4 +1,4 @@
-/* $Id: blast_api.h,v 1.10 2007/03/20 14:56:21 camacho Exp $
+/* $Id: blast_api.h,v 1.11 2016/06/21 13:53:41 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -124,7 +124,7 @@ Blast_TwoSeqLocSetsAdvanced(SeqLoc* query_seqloc,
 Int2
 Blast_RunSearch(SeqLoc* query_seqloc,
                 Blast_PsiCheckpointLoc * psi_checkpoint,
-                const BlastSeqSrc* seq_src,
+                BlastSeqSrc* seq_src,
                 SeqLoc* masking_locs,
                 const SBlastOptions* options,
                 BlastTabularFormatData* tf_data,

@@ -1,4 +1,4 @@
-/* $Id: greedy_align.h,v 1.27 2009/09/23 18:34:37 kazimird Exp $
+/* $Id: greedy_align.h,v 1.29 2013/03/13 14:39:37 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -87,6 +87,8 @@ void MBSpaceFree(SMBSpace* sp);
 
 /** All auxiliary memory needed for the greedy extension algorithm. */
 typedef struct SGreedyAlignMem {
+   Int4 max_dist;                     /**< max distance to search */
+   Int4 xdrop;                        /**< Xdrop value */
    Int4** last_seq2_off;              /**< 2-D array of distances */
    Int4* max_score;                   /**< array of maximum scores */
    SGreedyOffset** last_seq2_off_affine;  /**< Like last_seq2_off but for 

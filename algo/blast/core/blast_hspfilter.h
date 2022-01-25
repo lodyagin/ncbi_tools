@@ -1,4 +1,4 @@
-/*  $Id: blast_hspfilter.h,v 1.1 2009/05/27 20:31:32 kazimird Exp $
+/*  $Id: blast_hspfilter.h,v 1.2 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,11 +48,12 @@ extern "C" {
 typedef struct BlastHSPWriter BlastHSPWriter;
 
 /** Function pointer typedef to implement hsp_writer */
-typedef BlastHSPWriter* (*BlastHSPWriterNewFn)  (void*, BlastQueryInfo*);
+typedef BlastHSPWriter* (*BlastHSPWriterNewFn)  (void*, BlastQueryInfo*,
+                                                 BLAST_SequenceBlk*);
 typedef BlastHSPWriter* (*BlastHSPWriterFreeFn) (BlastHSPWriter*);
-typedef int (*BlastHSPWriterInitFn) (void*, BlastHSPResults*);
+typedef int (*BlastHSPWriterInitFn) (void*, void*);
 typedef int (*BlastHSPWriterRunFn)  (void*, BlastHSPList*);
-typedef int (*BlastHSPWriterFinalFn)(void*, BlastHSPResults*);
+typedef int (*BlastHSPWriterFinalFn)(void*, void*);
 
 
 /** ADT definition of BlastHSPWriter */
@@ -77,7 +78,8 @@ typedef struct BlastHSPWriterInfo {
  */
 NCBI_XBLAST_EXPORT
 BlastHSPWriter*
-BlastHSPWriterNew(BlastHSPWriterInfo** writer_info, BlastQueryInfo *query_info);
+BlastHSPWriterNew(BlastHSPWriterInfo** writer_info, BlastQueryInfo *query_info,
+                  BLAST_SequenceBlk* query);
 
 /**--------------------------------pipe------------------------------*/
 /** forwarded declarations */

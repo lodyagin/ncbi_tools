@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.38 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *       Vibrant edit text functions
@@ -3212,7 +3212,7 @@ static void Nlm_NewDialogText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc a
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
@@ -3324,7 +3324,7 @@ static void Nlm_NewPasswordText (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtActnProc
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   Nlm_SetPassword (t, local);
 #endif
 
@@ -3440,7 +3440,7 @@ static void Nlm_NewHiddenText (Nlm_TexT t, Nlm_CharPtr dfault,
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
   Nlm_HandUnlock(Nlm_systemFont);
@@ -3565,7 +3565,7 @@ static void Nlm_NewSpecialText (Nlm_TexT t, Nlm_CharPtr dfault,
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (Nlm_systemFont);
   SetWindowFont(h, fntptr->handle, FALSE);
@@ -3732,7 +3732,7 @@ static void Nlm_NewScrollText (Nlm_TexT t, Nlm_Int2 height,
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   allowTextCallback = TRUE;
 #endif
 
@@ -4502,7 +4502,7 @@ static void Nlm_NewDialogTextWithFont (Nlm_TexT t, Nlm_CharPtr dfault, Nlm_TxtAc
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
   SetWindowFont(h, fntptr->handle, FALSE);
@@ -4612,7 +4612,7 @@ static void Nlm_NewSpecialTextWithFont (Nlm_TexT t, Nlm_CharPtr dfault,
   } else if (lpfnOldTextProc != (WNDPROC) GetWindowLongPtr (h, GWLP_WNDPROC)) {
     Nlm_Message (MSG_ERROR, "TextProc subclass error");
   }
-  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG) lpfnNewTextProc);
+  SetWindowLongPtr (h, GWLP_WNDPROC, (LONG_PTR) lpfnNewTextProc);
   allowTextCallback = TRUE;
   fntptr = (Nlm_FntPtr) Nlm_HandLock (font);
   SetWindowFont(h, fntptr->handle, FALSE);

@@ -581,6 +581,93 @@ NLM_EXTERN Boolean seqid_to_string(SeqIdPtr sip, CharPtr name, Boolean use_locus
 	return TRUE;
 }
 
+
+static void SafeStringCopy (CharPtr dst, CharPtr src, Int4 dst_size)
+{
+  Int4 len;
+
+  len = StringLen (src);
+  if (len > dst_size - 1) {
+    StringNCpy (dst, src, dst_size - 1);
+    dst[dst_size - 1] = 0;
+  } else {
+    StringCpy (dst, src);
+  }
+}
+
+
+/*********************************************************************
+*
+*	seqid_to_string(sip, name, use_locus)
+*	print the most important field in Seqid to a string stored in 
+*	name. 
+*
+**********************************************************************/
+NLM_EXTERN Boolean Safe_seqid_to_string(SeqIdPtr sip, CharPtr name, Int4 name_size, Boolean use_locus)
+{
+  DbtagPtr db_tag;
+  ObjectIdPtr obj_id;
+  TextSeqIdPtr tsip;
+  PDBSeqIdPtr pip;
+  GiimPtr gip;
+
+        switch(sip->choice)
+	{
+          case 1:       /**local**/
+            obj_id = sip->data.ptrvalue;
+            if(obj_id->str) 
+                SafeStringCopy (name, obj_id->str, name_size);
+            else
+                sprintf(name, "%ld", (long) obj_id->id);
+            break;
+
+          case 5:       /**genbank**/
+          case 6:       /**EMBL**/
+          case 7:       /**PIR**/
+          case 8:       /**SwissProt**/
+          case 10:      /**Other**/
+          case 13:      /**DDBJ**/
+          case 14:      /**PRF**/
+            tsip = sip->data.ptrvalue;
+            if(tsip->accession) 
+                SafeStringCopy (name, tsip->accession, name_size);
+            if((tsip->name && use_locus) || tsip->accession == NULL)
+                SafeStringCopy(name, tsip->name, name_size);
+ 
+            break;
+ 
+          case 11:      /**general**/
+            db_tag = sip->data.ptrvalue;
+            obj_id = db_tag->tag;
+            if(obj_id->str)
+                SafeStringCopy(name, obj_id->str, name_size);
+            else
+                sprintf(name, "%ld", (long) obj_id->id);
+            break;
+ 
+          case 4:       /**giim**/
+            gip = sip->data.ptrvalue;
+            sprintf(name, "%ld", (long)(gip->id));
+            break;
+
+          case 2:     	/*gibbseq*/
+	  case 3:	/*gibbmt*/
+	  case 12:	/*gi*/
+            sprintf(name, "%ld", (long)(sip->data.intvalue));
+            break;
+
+          case 15:      /*pdb*/
+            pip = sip->data.ptrvalue;
+            SafeStringCopy (name, pip->mol, name_size);
+            break;
+	  default:
+	    return FALSE;
+	}
+
+	return TRUE;
+}
+
+
 /*********************************************************************
 *
 *	FileBioseqFetchEnable(path, ext)
@@ -603,7 +690,7 @@ static Int2 LIBCALLBACK FileBioseqFetchFunc (Pointer data)
 	SeqIdPtr sip;
 	OMUserDataPtr omdp;
 	CharPtr file_name = NULL;
-	Char name[100], f_name[100];
+	Char name[100], f_name[PATH_MAX];
 	CharPtr c_name;
 	FILE *fp;
 	AsnIoPtr aip;
@@ -632,7 +719,7 @@ static Int2 LIBCALLBACK FileBioseqFetchFunc (Pointer data)
 		fbp = sbfp->data.ptrvalue;
 		if(file_name == NULL)
 		{
-			seqid_to_string(sip, name, fbp->use_locus);
+      Safe_seqid_to_string(sip, name, sizeof(name) / sizeof (Char), fbp->use_locus);
 			if(fbp->path)
 				sprintf(f_name, "%s%s", fbp->path, name);
 			else
@@ -2185,11 +2272,11 @@ static void CreateBinaryAsnIndex (
     }
 
     FileClose (ofp);
+
+    ValNodeFreeData (aid.head);
   }
 
   AsnIoClose (aip);
-
-  ValNodeFreeData (aid.head);
 }
 
 static void CreateTextAsnIndex (
@@ -2282,11 +2369,11 @@ static void CreateTextAsnIndex (
     }
 
     FileClose (ofp);
+
+    ValNodeFreeData (aid.head);
   }
 
   FileClose (ifp);
-
-  ValNodeFreeData (aid.head);
 }
 
 NLM_EXTERN void CreateAsnIndex (

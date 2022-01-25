@@ -1,4 +1,4 @@
-/* $Id: ncbi_util.c,v 6.81 2012/02/29 20:14:34 kazimird Exp $
+/* $Id: ncbi_util.c,v 6.102 2016/07/21 21:29:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -48,7 +48,10 @@
 #  endif /*!HAVE_GETPWUID*/
 #  ifndef NCBI_OS_SOLARIS
 #    include <limits.h>
-#  endif
+#  endif /*!NCBI_OS_SOLARIS*/
+#  ifdef NCBI_OS_LINUX
+#    include <sys/user.h>
+#  endif /*NCBI_OS_LINUX*/
 #  include <pwd.h>
 #  include <unistd.h>
 #  include <sys/stat.h>
@@ -56,12 +59,17 @@
 #if defined(NCBI_OS_MSWIN)  ||  defined(NCBI_OS_CYGWIN)
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
+#  include <lmcons.h>
 #endif /*NCBI_OS_MSWIN || NCBI_OS_CYGWIN*/
+#if defined(PAGE_SIZE)  &&  !defined(NCBI_OS_CYGWIN)
+#  define NCBI_DEFAULT_PAGE_SIZE  PAGE_SIZE
+#else
+#  define NCBI_DEFAULT_PAGE_SIZE  0/*unknown*/
+#endif /*PAGE_SIZE && !NCBI_OS_CYGWIN*/
 
 #define NCBI_USE_ERRCODE_X   Connect_Util
 
 #define NCBI_USE_PRECOMPILED_CRC32_TABLES 1
-
 
 
 /******************************************************************************
@@ -72,9 +80,9 @@ extern void CORE_SetLOCK(MT_LOCK lk)
 {
     MT_LOCK old_lk = g_CORE_MT_Lock;
     g_CORE_MT_Lock = lk;
-    if (old_lk  &&  old_lk != lk) {
+    g_CORE_Set |= eCORE_SetLOCK;
+    if (old_lk  &&  old_lk != lk)
         MT_LOCK_Delete(old_lk);
-    }
 }
 
 
@@ -96,10 +104,10 @@ extern void CORE_SetLOG(LOG lg)
     CORE_LOCK_WRITE;
     old_lg = g_CORE_Log;
     g_CORE_Log = lg;
+    g_CORE_Set |= eCORE_SetLOG;
     CORE_UNLOCK;
-    if (old_lg  &&  old_lg != lg) {
+    if (old_lg  &&  old_lg != lg)
         LOG_Delete(old_lg);
-    }
 }
 
 
@@ -112,11 +120,12 @@ extern LOG CORE_GetLOG(void)
 extern void CORE_SetLOGFILE_Ex
 (FILE*       fp,
  ELOG_Level  cut_off,
+ ELOG_Level  fatal_err,
  int/*bool*/ auto_close
  )
 {
     LOG lg = LOG_Create(0, 0, 0, 0);
-    LOG_ToFILE_Ex(lg, fp, cut_off, auto_close);
+    LOG_ToFILE_Ex(lg, fp, cut_off, fatal_err, auto_close);
     CORE_SetLOG(lg);
 }
 
@@ -125,31 +134,32 @@ extern void CORE_SetLOGFILE
 (FILE*       fp,
  int/*bool*/ auto_close)
 {
-    CORE_SetLOGFILE_Ex(fp, eLOG_Trace, auto_close);
+    CORE_SetLOGFILE_Ex(fp, eLOG_Trace, eLOG_Fatal, auto_close);
 }
 
 
 extern int/*bool*/ CORE_SetLOGFILE_NAME_Ex
-(const char* filename,
- ELOG_Level  cut_off)
+(const char* logfile,
+ ELOG_Level  cut_off,
+ ELOG_Level  fatal_err)
 {
-    FILE* fp = fopen(filename, "a");
+    FILE* fp = fopen(logfile, "a");
     if (!fp) {
         CORE_LOGF_ERRNO_X(1, eLOG_Error, errno,
-                          ("Cannot open \"%s\"", filename));
+                          ("Cannot open \"%s\"", logfile));
         return 0/*false*/;
     }
 
-    CORE_SetLOGFILE_Ex(fp, cut_off, 1/*true*/);
+    CORE_SetLOGFILE_Ex(fp, cut_off, fatal_err, 1/*autoclose*/);
     return 1/*true*/;
 }
 
 
 extern int/*bool*/ CORE_SetLOGFILE_NAME
-(const char* filename
+(const char* logfile
  )
 {
-    return CORE_SetLOGFILE_NAME_Ex(filename, eLOG_Trace);
+    return CORE_SetLOGFILE_NAME_Ex(logfile, eLOG_Trace, eLOG_Fatal);
 }
 
 
@@ -164,36 +174,24 @@ extern TLOG_FormatFlags CORE_SetLOGFormatFlags(TLOG_FormatFlags flags)
 }
 
 
-#ifdef __GNUC__
-inline
-#endif /*__GNUC__*/
-static int/*bool*/ s_IsQuoted(unsigned char c)
-{
-    return (c == '\t'  ||  c == '\v'  ||  c == '\b'  ||
-            c == '\r'  ||  c == '\f'  ||  c == '\a'  ||
-            c == '\n'  ||  c == '\\'  ||  c == '\''  ||
-            c == '"' ? 1/*true*/ : 0/*false*/);
-}
-
-
 extern size_t UTIL_PrintableStringSize(const char* data, size_t size)
 {
     const unsigned char* c;
-    size_t retval;
+    size_t count;
     if (!data)
         return 0;
     if (!size)
         size = strlen(data);
-    retval = size;
-    for (c = (const unsigned char*) data;  size;  size--, c++) {
-        if (*c == '\n')
-            retval += 3;
-        else if (s_IsQuoted(*c))
-            retval++;
-        else if (!isprint(*c))
-            retval += 3;
+    count = size;
+    for (c = (const unsigned char*) data;  count;  --count, ++c) {
+        if (*c == '\t'  ||  *c == '\v'  ||  *c == '\b'  ||
+            *c == '\r'  ||  *c == '\f'  ||  *c == '\a'  ||
+            *c == '\\'  ||  *c == '\''  ||  *c == '"') {
+            size++;
+        } else if (*c == '\n'  ||  !isascii(*c)  ||  !isprint(*c))
+            size += 3;
     }
-    return retval;
+    return size;
 }
 
 
@@ -245,16 +243,16 @@ extern char* UTIL_PrintableString(const char* data, size_t size,
             *d++ = '\\';
             break;
         default:
-            if (!isprint(*s)) {
+            if (!isascii(*s)  ||  !isprint(*s)) {
                 int/*bool*/ reduce;
                 unsigned char v;
                 if (full_octal)
                     reduce = 0/*false*/;
                 else {
-                    reduce = (size == 1       ||  s_IsQuoted(s[1])  ||
-                              !isprint(s[1])  ||  s[1] < '0'  ||  s[1] > '7');
+                    reduce = (size == 1  ||
+                              s[1] < '0' || s[1] > '7' ? 1/*t*/ : 0/*f*/);
                 }
-                *d++ = '\\';
+                *d++     = '\\';
                 v =  *s >> 6;
                 if (v  ||  !reduce) {
                     *d++ = '0' + v;
@@ -263,13 +261,13 @@ extern char* UTIL_PrintableString(const char* data, size_t size,
                 v = (*s >> 3) & 7;
                 if (v  ||  !reduce)
                     *d++ = '0' + v;
-                v =  *s & 7;
-                *d++ =     '0' + v;
+                v =  *s       & 7;
+                *d++     = '0' + v;
                 continue;
             }
             break;
         }
-        *d++ = (char) *s;
+        *d++ = *s;
     }
 
     return (char*) d;
@@ -282,10 +280,10 @@ extern const char* NcbiMessagePlusError
  int          error,
  const char*  descr)
 {
+    int/*bool*/ release;
     char*  buf;
     size_t mlen;
     size_t dlen;
-    int/*bool*/ release = 0/*false*/;
 
     /* Check for an empty addition */
     if (!error  &&  (!descr  ||  !*descr)) {
@@ -296,8 +294,8 @@ extern const char* NcbiMessagePlusError
     }
 
     /* Adjust description, if necessary and possible */
-    
-    if (error >=0  &&  !descr) {
+    release = 0/*false*/;
+    if (error > 0  &&  !descr) {
 #if defined(NCBI_OS_MSWIN)  &&  defined(_UNICODE)
         descr = UTIL_TcharToUtf8( _wcserror(error) );
         release = 1/*true*/;
@@ -305,14 +303,16 @@ extern const char* NcbiMessagePlusError
         descr = strerror(error);
 #endif /*NCBI_OS_MSWIN && _UNICODE*/
     }
-    if (!descr) {
+    if (descr  &&  *descr) {
+        dlen = strlen(descr);
+        while (dlen  &&  isspace((unsigned char) descr[dlen - 1]))
+            dlen--;
+        if (dlen > 1  &&  descr[dlen - 1] == '.')
+            dlen--;
+    } else {
         descr = "";
+        dlen = 0;
     }
-    dlen = strlen(descr);
-    while (dlen  &&  isspace((unsigned char) descr[dlen - 1]))
-        dlen--;
-    if (dlen > 1  &&  descr[dlen - 1] == '.')
-        dlen--;
 
     mlen = message ? strlen(message) : 0;
 
@@ -336,7 +336,7 @@ extern const char* NcbiMessagePlusError
     mlen += 7;
 
     if (error)
-        mlen += sprintf(buf + mlen, "%d%s", error, "," + !*descr);
+        mlen += sprintf(buf + mlen, "%d%s", error, &","[!*descr]);
 
     memcpy((char*) memcpy(buf + mlen, descr, dlen) + dlen, "}", 2);
     if (release)
@@ -356,14 +356,15 @@ extern char* LOG_ComposeMessage
     static const char kRawData_End[] =
         "\n#################### [END] Raw Data\n";
 
+    const char *function, *level = 0;
     char *str, *s, datetime[32];
-    const char* level = 0;
 
     /* Calculated length of ... */
     size_t datetime_len  = 0;
     size_t level_len     = 0;
-    size_t file_line_len = 0;
     size_t module_len    = 0;
+    size_t function_len  = 0;
+    size_t file_line_len = 0;
     size_t message_len   = 0;
     size_t data_len      = 0;
     size_t total_len;
@@ -372,11 +373,11 @@ extern char* LOG_ComposeMessage
     if (call_data->level == eLOG_Trace  &&  !(format_flags & fLOG_None))
         format_flags |= fLOG_Full;
     if (format_flags == fLOG_Default) {
-#if defined(NDEBUG)  &&  !defined(_DEBUG)
+#if !defined(_DEBUG)  ||  defined(NDEBUG)
         format_flags = fLOG_Short;
 #else
         format_flags = fLOG_Full;
-#endif /*NDEBUG && !_DEBUG*/
+#endif /*!_DEBUG || NDEBUG*/
     }
 
     /* Pre-calculate total message length */
@@ -419,6 +420,16 @@ extern char* LOG_ComposeMessage
         call_data->module  &&  *call_data->module) {
         module_len = strlen(call_data->module) + 3;
     }
+    if ((format_flags & fLOG_Function) != 0  &&
+        call_data->func  &&  *call_data->func) {
+        function = call_data->func;
+        if (!module_len)
+            function_len = 3;
+        function_len += strlen(function) + 2;
+        if (strncmp(function, "::", 2) == 0  &&  !*(function += 2))
+            function_len = 0;
+    } else
+        function = 0;
     if ((format_flags & fLOG_FileLine) != 0  &&
         call_data->file  &&  *call_data->file) {
         file_line_len = 12 + strlen(call_data->file) + 11;
@@ -428,15 +439,15 @@ extern char* LOG_ComposeMessage
     }
 
     if (call_data->raw_size) {
-        data_len = (sizeof(kRawData_Begin) + 20
-                    + UTIL_PrintableStringSize((const char*)
-                                               call_data->raw_data,
-                                               call_data->raw_size) +
+        data_len = (sizeof(kRawData_Begin)
+                    + 20 + UTIL_PrintableStringSize((const char*)
+                                                    call_data->raw_data,
+                                                    call_data->raw_size) +
                     sizeof(kRawData_End));
     }
 
     /* Allocate memory for the resulting message */
-    total_len = (datetime_len + file_line_len + module_len
+    total_len = (datetime_len + file_line_len + module_len + function_len
                  + level_len + message_len + data_len);
     if (!(str = (char*) malloc(total_len + 1))) {
         assert(0);
@@ -453,10 +464,19 @@ extern char* LOG_ComposeMessage
         s += sprintf(s, "\"%s\", line %d: ",
                      call_data->file, (int) call_data->line);
     }
-    if (module_len) {
+    if (module_len | function_len)
         *s++ = '[';
+    if (module_len) {
         memcpy(s, call_data->module, module_len -= 3);
         s += module_len;
+    }
+    if (function_len) {
+        memcpy(s, "::", 2);
+        s += 2;
+        memcpy(s, function, function_len -= module_len ? 2 : 5);
+        s += function_len;
+    }
+    if (module_len | function_len) {
         *s++ = ']';
         *s++ = ' ';
     }
@@ -491,7 +511,8 @@ extern char* LOG_ComposeMessage
 
 typedef struct {
     FILE*       fp;
-    int/*bool*/ cut_off;
+    ELOG_Level  cut_off;
+    ELOG_Level  fatal_err;
     int/*bool*/ auto_close;
 } SLogData;
 
@@ -506,12 +527,20 @@ static void s_LOG_FileHandler(void* user_data, SLOG_Handler* call_data)
     assert(data  &&  data->fp);
     assert(call_data);
 
-    if (call_data->level >= data->cut_off  ||  call_data->level == eLOG_Fatal){
+    if (call_data->level >= data->cut_off  ||
+        call_data->level >= data->fatal_err) {
         char* str = LOG_ComposeMessage(call_data, s_LogFormatFlags);
         if (str) {
             fprintf(data->fp, "%s\n", str);
             fflush(data->fp);
             free(str);
+        }
+        if (call_data->level >= data->fatal_err) {
+#ifdef NDEBUG
+            exit(1);
+#else
+            abort();
+#endif /*NDEBUG*/
         }
     }
 }
@@ -544,6 +573,7 @@ extern void LOG_ToFILE_Ex
 (LOG         lg,
  FILE*       fp,
  ELOG_Level  cut_off,
+ ELOG_Level  fatal_err,
  int/*bool*/ auto_close
  )
 {
@@ -551,6 +581,7 @@ extern void LOG_ToFILE_Ex
     if (data) {
         data->fp         = fp;
         data->cut_off    = cut_off;
+        data->fatal_err  = fatal_err;
         data->auto_close = auto_close;
         LOG_Reset(lg, data, s_LOG_FileHandler, s_LOG_FileCleanup);
     } else {
@@ -565,7 +596,7 @@ extern void LOG_ToFILE
  int/*bool*/ auto_close
  )
 {
-    LOG_ToFILE_Ex(lg, fp, eLOG_Trace, auto_close);
+    LOG_ToFILE_Ex(lg, fp, eLOG_Trace, eLOG_Fatal, auto_close);
 }
 
 
@@ -580,27 +611,16 @@ extern void CORE_SetREG(REG rg)
     CORE_LOCK_WRITE;
     old_rg = g_CORE_Registry;
     g_CORE_Registry = rg;
+    g_CORE_Set |= eCORE_SetREG;
     CORE_UNLOCK;
-    if (old_rg  &&  old_rg != rg) {
+    if (old_rg  &&  old_rg != rg)
         REG_Delete(old_rg);
-    }
 }
 
 
 extern REG CORE_GetREG(void)
 {
     return g_CORE_Registry;
-}
-
-
-
-/******************************************************************************
- *  CORE_GetNcbiSid
- */
-
-extern const char* CORE_GetNcbiSid(void)
-{
-    return g_CORE_GetSid ? g_CORE_GetSid() : getenv("HTTP_NCBI_SID");
 }
 
 
@@ -613,6 +633,47 @@ extern const char* CORE_GetAppName(void)
 {
     const char* an;
     return !g_CORE_GetAppName  ||  !(an = g_CORE_GetAppName()) ? "" : an;
+}
+
+
+
+/******************************************************************************
+ *  CORE_GetNcbiRequestID
+ */
+
+extern char* CORE_GetNcbiRequestID(ENcbiRequestID reqid)
+{
+    char* id;
+
+    CORE_LOCK_READ;
+    if (g_CORE_GetRequestID) {
+        id = g_CORE_GetRequestID(reqid);
+        assert(!id  ||  *id);
+        if (id)
+            goto out;
+    }
+    switch (reqid) {
+    case eNcbiRequestID_SID:
+        id = getenv("HTTP_NCBI_SID");
+        if (id  &&  *id)
+            break;
+        id = getenv("NCBI_LOG_SESSION_ID");
+        break;
+    case eNcbiRequestID_HitID:
+        id = getenv("HTTP_NCBI_PHID");
+        if (id  &&  *id)
+            break;
+        id = getenv("NCBI_LOG_HIT_ID");
+        break;
+    default:
+        id = 0;
+        goto out;
+    }
+    id = id  &&  *id ? strdup(id) : 0;
+ out:
+    CORE_UNLOCK;
+
+    return id;
 }
 
 
@@ -643,20 +704,25 @@ static char* x_Savestr(const char* str, char* buf, size_t bufsize)
         size_t len = strlen(str);
         if (len++ < bufsize)
             return (char*) memcpy(buf, str, len);
+        if (bufsize)
+            *buf = '\0';
         errno = ERANGE;
     } else
         errno = EINVAL;
     return 0;
 }
 
-extern const char* CORE_GetUsername(char* buf, size_t bufsize)
+
+/*ARGSUSED*/
+extern const char* CORE_GetUsernameEx(char* buf, size_t bufsize,
+                                      ECORE_Username username)
 {
 #if defined(NCBI_OS_UNIX)
     struct passwd* pwd;
     struct stat    st;
     uid_t          uid;
 #  ifndef NCBI_OS_SOLARIS
-#    define NCBI_GETUSERNAME_MAXBUFSIZE 1024
+#    define NCBI_GETUSERNAME_MAXBUFSIZE  1024
 #    ifdef HAVE_GETLOGIN_R
 #      ifndef LOGIN_NAME_MAX
 #        ifdef _POSIX_LOGIN_NAME_MAX
@@ -668,7 +734,7 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #      define     NCBI_GETUSERNAME_BUFSIZE   LOGIN_NAME_MAX
 #    endif /*HAVE_GETLOGIN_R*/
 #    ifdef NCBI_HAVE_GETPWUID_R
-#      ifndef NCBI_GETUSERNAME_BUFSIZE
+#      ifndef     NCBI_GETUSERNAME_BUFSIZE
 #        define   NCBI_GETUSERNAME_BUFSIZE   NCBI_GETUSERNAME_MAXBUFSIZE
 #      else
 #        if       NCBI_GETUSERNAME_BUFSIZE < NCBI_GETUSERNAME_MAXBUFSIZE
@@ -677,12 +743,17 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #        endif /* NCBI_GETUSERNAME_BUFSIZE < NCBI_GETUSERNAME_MAXBUFSIZE */
 #      endif /*NCBI_GETUSERNAME_BUFSIZE*/
 #    endif /*NCBI_HAVE_GETPWUID_R*/
-#    ifdef       NCBI_GETUSERNAME_BUFSIZE
-    char temp   [NCBI_GETUSERNAME_BUFSIZE + sizeof(*pwd)];
-#    endif /*    NCBI_GETUSERNAME_BUFSIZE    */
+#    ifdef        NCBI_GETUSERNAME_BUFSIZE
+    char temp    [NCBI_GETUSERNAME_BUFSIZE + sizeof(*pwd)];
+#    endif /*     NCBI_GETUSERNAME_BUFSIZE    */
 #  endif /*!NCBI_OS_SOLARIS*/
 #elif defined(NCBI_OS_MSWIN)
-    TCHAR temp  [256 + 1];
+#  ifdef   UNLEN
+#    define       NCBI_GETUSERNAME_BUFSIZE  UNLEN
+#  else
+#    define       NCBI_GETUSERNAME_BUFSIZE  256
+#  endif /*UNLEN*/
+    TCHAR temp   [NCBI_GETUSERNAME_BUFSIZE + 2];
     DWORD size = sizeof(temp)/sizeof(temp[0]) - 1;
 #endif /*NCBI_OS*/
     const char* login;
@@ -693,15 +764,19 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 
 #  ifdef NCBI_OS_MSWIN
     if (GetUserName(temp, &size)) {
-        assert(size < sizeof(temp)/sizeof(temp[0]));
-        temp[size] = (TCHAR) 0;
+        assert(size < sizeof(temp)/sizeof(temp[0]) - 1);
+        temp[size] = (TCHAR) '\0';
         login = UTIL_TcharToUtf8(temp);
         buf = x_Savestr(login, buf, bufsize);
         UTIL_ReleaseBuffer(login);
         return buf;
     }
-    if ((login = getenv("USERNAME")) != 0)
-        return x_Savestr(login, buf, bufsize);
+    CORE_LOCK_READ;
+    if ((login = getenv("USERNAME")) != 0) {
+        buf = x_Savestr(login, buf, bufsize);
+        CORE_UNLOCK;
+        return buf;
+    }
 #  endif /*NCBI_OS_MSWIN*/
 
 #else
@@ -713,7 +788,15 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
      * can cause a false (stale) name to be returned.  So we use getlogin()
      * here only as a fallback.
      */
-    if (!isatty(STDIN_FILENO)  ||  fstat(STDIN_FILENO, &st) < 0) {
+    switch (username) {
+    case eCORE_UsernameCurrent:
+        uid = geteuid();
+        break;
+    case eCORE_UsernameLogin:
+        if (isatty(STDIN_FILENO)  &&  fstat(STDIN_FILENO, &st) == 0) {
+            uid = st.st_uid;
+            break;
+        }
 #  if defined(NCBI_OS_SOLARIS)  ||  !defined(HAVE_GETLOGIN_R)
         /* NB:  getlogin() is MT-safe on Solaris, yet getlogin_r() comes in two
          * flavors that differ only in return type, so to make things simpler,
@@ -734,24 +817,31 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
             return x_Savestr(temp, buf, bufsize);
         }
 #  endif /*NCBI_OS_SOLARIS || !HAVE_GETLOGIN_R*/
+        /*FALLTHRU*/
+    case eCORE_UsernameReal:
         uid = getuid();
-    } else
-        uid = st.st_uid;
+        break;
+    default:
+        assert(0);
+        uid = (uid_t)(-1);
+        break;
+    }
 
-#  if defined(NCBI_OS_SOLARIS)  ||  !defined(NCBI_HAVE_GETPWUID_R)
+#  if defined(NCBI_OS_SOLARIS)                                          \
+    ||  (defined(HAVE_GETPWUID)  &&  !defined(NCBI_HAVE_GETPWUID_R))
     /* NB:  getpwuid() is MT-safe on Solaris, so use it here, if available */
-#  ifndef NCBI_OS_SOLARIS
+#    ifndef NCBI_OS_SOLARIS
     CORE_LOCK_WRITE;
-#  endif /*!NCBI_OS_SOLARIS*/
+#    endif /*!NCBI_OS_SOLARIS*/
     if ((pwd = getpwuid(uid)) != 0) {
         if (pwd->pw_name)
             buf = x_Savestr(pwd->pw_name, buf, bufsize);
         else
             pwd = 0;
     }
-#  ifndef NCBI_OS_SOLARIS
+#    ifndef NCBI_OS_SOLARIS
     CORE_UNLOCK;
-#  endif /*!NCBI_OS_SOLARIS*/
+#    endif /*!NCBI_OS_SOLARIS*/
     if (pwd)
         return buf;
 #  elif defined(NCBI_HAVE_GETPWUID_R)
@@ -775,9 +865,19 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
 #endif /*!NCBI_OS_UNIX*/
 
     /* last resort */
+    CORE_LOCK_READ;
     if (!(login = getenv("USER"))  &&  !(login = getenv("LOGNAME")))
         login = "";
-    return x_Savestr(login, buf, bufsize);
+    buf = x_Savestr(login, buf, bufsize);
+    CORE_UNLOCK;
+    return buf;
+}
+
+
+extern const char* CORE_GetUsername(char* buf, size_t bufsize)
+{
+    const char* rv = CORE_GetUsernameEx(buf, bufsize, eCORE_UsernameLogin);
+    return rv  &&  *rv ? rv : 0;
 }
 
 
@@ -787,20 +887,21 @@ extern const char* CORE_GetUsername(char* buf, size_t bufsize)
  * See also at corelib's ncbi_system.cpp::GetVirtualMemoryPageSize().
  */
 
-size_t CORE_GetVMPageSize(void)
+extern size_t CORE_GetVMPageSize(void)
 {
-    static size_t ps = 0;
+    static size_t s_PS = 0;
 
-    if (!ps) {
+    if (!s_PS) {
 #if defined(NCBI_OS_MSWIN)  ||  defined(NCBI_OS_CYGWIN)
+        /* NB: CYGWIN's PAGESIZE (== PAGE_SIZE) is actually the granularity */
         SYSTEM_INFO si;
         GetSystemInfo(&si);
-        ps = (size_t) si.dwPageSize;
+        s_PS = (size_t) si.dwPageSize;
 #elif defined(NCBI_OS_UNIX) 
 #  if   defined(_SC_PAGESIZE)
-#    define NCBI_SC_PAGESIZE _SC_PAGESIZE
+#    define NCBI_SC_PAGESIZE  _SC_PAGESIZE
 #  elif defined(_SC_PAGE_SIZE)
-#    define NCBI_SC_PAGESIZE _SC_PAGE_SIZE
+#    define NCBI_SC_PAGESIZE  _SC_PAGE_SIZE
 #  elif defined(NCBI_SC_PAGESIZE)
 #    undef  NCBI_SC_PAGESIZE
 #  endif
@@ -813,15 +914,15 @@ size_t CORE_GetVMPageSize(void)
         if (x <= 0) {
 #  ifdef HAVE_GETPAGESIZE
             if ((x = getpagesize()) <= 0)
-                return 0;
+                return NCBI_DEFAULT_PAGE_SIZE;
 #  else
-            return 0;
-#  endif
+            return NCBI_DEFAULT_PAGE_SIZE;
+#  endif /*HAVE_GETPAGESIZE*/
         }
-        ps = (size_t) x;
+        s_PS = (size_t) x;
 #endif /*OS_TYPE*/
     }
-    return ps;
+    return s_PS;
 }
 
 
@@ -1002,6 +1103,71 @@ unsigned int UTIL_Adler32_Update(unsigned int checksum,
 #undef FINALIZE_ADLER
 
 
+extern void* UTIL_GenerateHMAC(const SHASH_Descriptor* hash,
+                               const void*             text,
+                               size_t                  text_len,
+                               const void*             key,
+                               size_t                  key_len,
+                               void*                   digest)
+{
+    unsigned char* pad;
+    void* ctx;
+    size_t i;
+
+    if (!hash  ||  !text  ||  !key  ||  !digest)
+        return 0;
+
+    if (!(pad = (unsigned char*) malloc(hash->block_len + hash->digest_len)))
+        return 0;
+
+    if (key_len > hash->block_len) {
+        void* tmp;
+        if (!hash->init(&ctx)) {
+            free(pad);
+            return 0;
+        }
+        tmp = pad + hash->block_len;
+        hash->update(ctx, key, key_len);
+        hash->fini(ctx, tmp);
+        key     = tmp;
+        key_len = hash->digest_len;
+    }
+
+    if (!hash->init(&ctx)) {
+        free(pad);
+        return 0;
+    }
+
+    for (i = 0;  i < key_len;  ++i)
+        pad[i] = 0x36 ^ ((unsigned char*) key)[i];
+    for (;  i < hash->block_len;  ++i)
+        pad[i] = 0x36;
+
+    hash->update(ctx, pad,  hash->block_len);
+    hash->update(ctx, text, text_len);
+
+    hash->fini(ctx, digest);
+
+    if (!hash->init(&ctx)) {
+        free(pad);
+        return 0;
+    }
+
+    for (i = 0;  i < key_len;  ++i)
+        pad[i] = 0x5C ^ ((unsigned char*) key)[i];
+    for (;  i < hash->block_len;  ++i)
+        pad[i] = 0x5C;
+
+    hash->update(ctx, pad,    hash->block_len);
+    hash->update(ctx, digest, hash->digest_len);
+
+    hash->fini(ctx, digest);
+
+    free(pad);
+    return digest;
+}
+
+
 
 /******************************************************************************
  *  MISCELLANEOUS
@@ -1063,7 +1229,7 @@ extern char* UTIL_NcbiLocalHostName(char* hostname)
 
     if (len) {
         size_t i;
-        for (i = 0;  i < sizeof(kEndings) / sizeof(kEndings[0]);  i++) {
+        for (i = 0;  i < sizeof(kEndings) / sizeof(kEndings[0]);  ++i) {
             assert(strlen(kEndings[i].text) == kEndings[i].len);
             if (len > kEndings[i].len) {
                 size_t prefix = len - kEndings[i].len;
@@ -1083,11 +1249,11 @@ extern char* UTIL_NcbiLocalHostName(char* hostname)
 
 #  ifdef _UNICODE
 
-extern const char* UTIL_TcharToUtf8OnHeap(const TCHAR* buffer)
+extern const char* UTIL_TcharToUtf8OnHeap(const TCHAR* str)
 {
-    const char* p = UTIL_TcharToUtf8(buffer);
-    UTIL_ReleaseBufferOnHeap(buffer);
-    return p;
+    const char* s = UTIL_TcharToUtf8(str);
+    UTIL_ReleaseBufferOnHeap(str);
+    return s;
 }
 
 
@@ -1096,20 +1262,19 @@ extern const char* UTIL_TcharToUtf8OnHeap(const TCHAR* buffer)
  */
 
 
-extern const TCHAR* UTIL_Utf8ToTchar(const char* buffer)
+extern const TCHAR* UTIL_Utf8ToTchar(const char* str)
 {
-    TCHAR* p = NULL;
-    if (buffer) {
-        int n = MultiByteToWideChar(CP_UTF8, 0, buffer, -1, NULL, 0);
-        if (n >= 0) {
-            p = (wchar_t*) LocalAlloc(LMEM_FIXED, (n + 1) * sizeof(wchar_t));
-            if (p) {
-                MultiByteToWideChar(CP_UTF8, 0, buffer, -1, p,    n);
-                p[n] = 0;
-            }
+    TCHAR* s = NULL;
+    if (str) {
+        /* Note "-1" means to consume all input including the trailing NUL */
+        int n = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+        if (n > 0) {
+            s = (wchar_t*) LocalAlloc(LMEM_FIXED, n * sizeof(*s));
+            if (s)
+                MultiByteToWideChar(CP_UTF8, 0, str, -1, s,    n);
         }
     }
-    return p;
+    return s;
 }
 
 #  endif /*_UNICODE*/

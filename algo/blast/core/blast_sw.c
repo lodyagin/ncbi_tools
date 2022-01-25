@@ -1,4 +1,4 @@
-/* $Id: blast_sw.c,v 1.6 2009/01/05 16:54:38 kazimird Exp $
+/* $Id: blast_sw.c,v 1.8 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                     PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Smith-Waterman gapped alignment, for use with infrastructure of BLAST
  * @sa blast_sw.h
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-   "$Id: blast_sw.c,v 1.6 2009/01/05 16:54:38 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_sw.h>
 #include <algo/blast/core/blast_util.h> /* for NCBI2NA_UNPACK_BASE */
@@ -656,7 +651,8 @@ Int2 BLAST_SmithWatermanGetGappedScore (EBlastProgramType program_number,
       return 1;
 
    is_prot = (program_number != eBlastTypeBlastn &&
-              program_number != eBlastTypePhiBlastn);
+              program_number != eBlastTypePhiBlastn &&
+              program_number != eBlastTypeMapping);
 
    if (Blast_ProgramIsRpsBlast(program_number)) {
       Int4 rps_context = subject->oid;

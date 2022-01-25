@@ -153,7 +153,7 @@ sub printkey {
 sub printfeat {
   my $thiskey = shift (@_);
 
-  if ($flag =~ /^-create_locus_tag$/) {
+  if ($flag =~ /^-create_locus_tag$/ and $locus_tag_prefix ne "-") {
     if ($thiskey eq "CDS" ||
         $thiskey eq "rRNA" || $thiskey eq "tRNA" ||
         $thiskey eq "ncRNA" || $thiskey eq "tmRNA") {
@@ -189,7 +189,10 @@ sub printqual {
 
   if ($flag =~ /^-product_to_codon_recognized$/) {
     if ($thiskey eq "tRNA" && $thisqual eq "product") {
-      if ($thisval =~ /^tRNA-([A-Za-z]+)-([A-Za-z]{3})$/ || $thisval =~ /^([A-Za-z]+)-([A-Za-z]{3})$/) {
+      if ($thisval =~ /^tRNA-([A-Za-z]{3})$/) {
+        print STDOUT "\t\t\tproduct\ttRNA-$1\n";
+        return;
+      } elsif ($thisval =~ /^tRNA-([A-Za-z]+)-([A-Za-z]{3})$/ || $thisval =~ /^([A-Za-z]+)-([A-Za-z]{3})$/) {
         print STDOUT "\t\t\tproduct\ttRNA-$1\n";
         print STDOUT "\t\t\tcodon_recognized\t$2\n";
         return;
@@ -293,7 +296,7 @@ sub printqual {
     }
   }
 
-  if ($flag =~ /^-create_protein_id$/) {
+  if ($flag =~ /^-create_protein_id$/ and $protein_id_prefix ne "-") {
     if ($thiskey eq "CDS" && $thisqual eq "locus_tag") {
       print STDOUT "\t\t\tprotein_id\tgnl|$protein_id_prefix|$thisval\n";
       print STDOUT "\t\t\t$thisqual\t$thisval\n";
@@ -343,7 +346,7 @@ while ($thisline = <STDIN>) {
     @master_loc = ();
     print STDOUT "$thisline\n";
 
-  } elsif ($thisline =~ /^(\d+)\t(\d+)\t(\S+)$/) {
+  } elsif ($thisline =~ /^(<?\d+)\t(>?\d+)\t(\S+)$/) {
     # new feature
     flushline ();
     $in_key = 1;
@@ -353,7 +356,7 @@ while ($thisline = <STDIN>) {
     @master_loc = ();
     push (@master_loc, $current_loc);
 
-  } elsif ($thisline =~ /^(\d+)\t(\d+)$/) {
+  } elsif ($thisline =~ /^(<?\d+)\t(>?\d+)$/) {
     # multiple intervals
     $in_key = 1;
     $in_qual = 0;

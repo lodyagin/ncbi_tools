@@ -1,4 +1,4 @@
-/*  $Id: blast_hspstream.h,v 1.10 2010/07/16 18:45:46 kazimird Exp $
+/*  $Id: blast_hspstream.h,v 1.13 2016/06/20 15:49:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -82,9 +82,10 @@ BlastHSPStreamResultBatch * Blast_HSPStreamResultBatchFree(
 
 /** free the list of HSPLists within a batch
  * @param batch Structure to reset
+ * @return the input batch
  */
 NCBI_XBLAST_EXPORT
-void Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch);
+BlastHSPStreamResultBatch* Blast_HSPStreamResultBatchReset(BlastHSPStreamResultBatch *batch);
 
 /** Default implementation of BlastHSPStream */
 typedef struct BlastHSPStream {
@@ -145,6 +146,23 @@ BlastHSPStream* BlastHSPStreamFree(BlastHSPStream* hsp_stream);
 NCBI_XBLAST_EXPORT
 void BlastHSPStreamClose(BlastHSPStream* hsp_stream);
 
+/** Closes the BlastHSPStream structure for writing without any sorting as done
+ * in BlastHSPStreamClose. Any subsequent attempt to write to the stream will
+ * return error.
+ * @param hsp_stream The stream to close [in] [out]
+ */
+NCBI_XBLAST_EXPORT
+void BlastHSPStreamSimpleClose(BlastHSPStream* hsp_stream);
+
+/** Closes BlastHSPStream structure for mapping and produces
+ *  BlastMappingResults
+ * @param hsp_stream The stream to close [in] [out]
+ * @param results The results [in] [out]
+*/
+NCBI_XBLAST_EXPORT
+void BlastHSPStreamMappingClose(BlastHSPStream* hsp_stream,
+                                BlastMappingResults* results);
+
 /** Closes the BlastHSPStream structure after traceback. 
  * This is mainly to provide a chance to apply post-traceback pipes.
  * @param hsp_stream The stream to close [in] [out]
@@ -204,10 +222,9 @@ int BlastHSPStreamWrite(BlastHSPStream* hsp_stream, BlastHSPList** hsp_list);
 NCBI_XBLAST_EXPORT
 int BlastHSPStreamRead(BlastHSPStream* hsp_stream, BlastHSPList** hsp_list);
 
-/** Invokes the user-specified batch read function for this BlastHSPStream
- * implementation.
+/** Batch read function for this BlastHSPStream implementation.      
  * @param hsp_stream The BlastHSPStream object [in]
- * @param batch List of HSP listss for the HSPStream to return. The caller
+ * @param batch List of HSP lists for the HSPStream to return. The caller
  * acquires ownership of all HSP lists returned [out]
  * @return kBlastHSPStream_Success on success, kBlastHSPStream_Error, or
  * kBlastHSPStream_Eof on end of stream

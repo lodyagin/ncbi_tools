@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   1/22/95
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description: 
 *
@@ -1756,9 +1756,9 @@ static void TagRtnProc (TexT t)
               SendMessageToDialog (tlp->dialog, VIB_MSG_REDRAW);
               Update ();
               CheckExtendTag (tlp);
-              if (tlp->callbacks != NULL && tlp->callbacks [j] != NULL)
+              if (tlp->callbacks != NULL && tlp->callbacks [j - 1] != NULL)
               {
-                (tlp->callbacks [j]) (tlp->callback_data);
+                (tlp->callbacks [j - 1]) (tlp->callback_data);
               }
             }
           }

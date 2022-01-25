@@ -29,7 +29,7 @@
 *
 * Version Creation Date: 3/4/91
 *
-* $Revision: 6.10 $
+* $Revision: 6.16 $
 *
 * File Description:
 *   Special binary form (BER) decoder for ASN.1
@@ -48,19 +48,39 @@
 
 static void RelaxVisibleStringUTF8 (AsnIoPtr aip, AsnTypePtr atp) {
 
-  Int2  isa;
+  Int2  isa = 0;
+  Uint1 fix_utf8_in;
 
-  if (aip == NULL || atp == NULL || atp->type == NULL) return;
-  isa = atp->type->isa;
+  if (aip == NULL || atp == NULL) return;
+  if (atp->type != NULL) {
+    isa = atp->type->isa;
+  } else {
+    isa = atp->isa;
+  }
   if (! ISA_STRINGTYPE (isa)) return;
   if (aip->tagclass != atp->tagclass) return;
   if (aip->tagnumber == atp->tagnumber) return;
 
-  /* allow UTF8/VisibleString flexibility */
+  /* !!! CXX-3341 temporarily allow UTF8/VisibleString flexibility !!! */
+  fix_utf8_in = aip->fix_utf8_in;
+  if (fix_utf8_in == 3) return;
+
   if (aip->tagnumber == TAG_VISIBLESTRING && atp->tagnumber == TAG_UTF8STRING) {
     aip->tagnumber = atp->tagnumber;
   } else if (aip->tagnumber == TAG_UTF8STRING && atp->tagnumber == TAG_VISIBLESTRING) {
     aip->tagnumber = atp->tagnumber;
+
+    if (fix_utf8_in == 0) {
+      aip->utf8_read = TRUE;
+    } else if (fix_utf8_in == 1) {
+      if (! aip->utf8_read) {
+        AsnIoErrorMsg(aip, 107);
+      }
+      aip->utf8_read = TRUE;
+    } else if (fix_utf8_in == 2) {
+      AsnIoErrorMsg(aip, 107);
+      aip->utf8_read = TRUE;
+    }
   }
 }
 
@@ -685,6 +705,8 @@ NLM_EXTERN Int2 LIBCALL  AsnBinReadVal (AsnIoPtr aip, AsnTypePtr atp, DataValPtr
 					valueptr->boolvalue = AsnDeBinReadBoolean(aip, atp);
 					break;
 				case INTEGER_TYPE:
+					valueptr->intvalue = AsnDeBinReadBigInt(aip, atp);
+					break;
 				case ENUM_TYPE:
 					valueptr->intvalue = AsnDeBinReadInteger(aip, atp);
 					break;
@@ -910,7 +932,9 @@ NLM_EXTERN Int8 AsnDeBinReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
 	Int2 bytes, len;
 	Uint8 number;
 	BytePtr bp;
+	AsnValxNodePtr avnp;
 	Int8 value;
+    AsnTypePtr atp2;
 
 	bytes = aip->bytes - aip->offset;
 	bp = aip->buf + aip->offset;
@@ -946,8 +970,17 @@ NLM_EXTERN Int8 AsnDeBinReadBigInt (AsnIoPtr aip, AsnTypePtr atp)
 
 			/******************** read a named integer value *********/
 
-	   /* named value not supported for BigInt ****/
-
+    atp2 = AsnFindBaseType(atp);
+	if (atp2->branch != NULL)       /* named values */
+	{
+		avnp = (AsnValxNodePtr) atp2->branch;
+		while (avnp != NULL)
+		{
+			if (avnp->intvalue == value)
+				return value;
+			avnp = avnp->next;
+		}
+	}
 
 	AsnIoErrorMsg(aip, 12, value, AsnErrGetTypeName(atp->name));
 

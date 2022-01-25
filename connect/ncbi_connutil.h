@@ -1,7 +1,7 @@
 #ifndef CONNECT___NCBI_CONNUTIL__H
 #define CONNECT___NCBI_CONNUTIL__H
 
-/* $Id: ncbi_connutil.h,v 6.89 2012/06/08 12:49:33 kazimird Exp $
+/* $Id: ncbi_connutil.h,v 6.112 2016/07/18 22:39:13 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,7 +30,7 @@
  *
  * File Description:
  *   Auxiliary API to:
- *    1.Retrieve connection related info from the registry:
+ *     1.Retrieve connection related info from the registry:
  *       ConnNetInfo_GetValue()
  *       ConnNetInfo_Boolean()
  *       SConnNetInfo
@@ -39,6 +39,7 @@
  *       ConnNetInfo_Print()
  *       ConnNetInfo_Destroy()
  *       ConnNetInfo_Log()
+ *       ConnNetInfo_URL()
  *       ConnNetInfo_ParseURL()
  *       ConnNetInfo_SetTimeout()
  *       ConnNetInfo_SetUserHeader()
@@ -56,21 +57,21 @@
  *       #define REG_CONN_***
  *       #define DEF_CONN_***
  *
- *    2.Make a connection via an URL:
+ *     2.Make a connection via an URL:
  *       URL_Connect[Ex]()
  *       
- *    3.Perform URL encoding/decoding of data:
+ *     3.Perform URL encoding/decoding of data:
  *       URL_Encode()
  *       URL_Decode[Ex]()
  *
- *    5.Compose or parse NCBI-specific Content-Type's:
+ *     4.Compose or parse NCBI-specific Content-Type's:
  *       EMIME_Type
  *       EMIME_SubType
  *       EMIME_Encoding
  *       MIME_ComposeContentType()
  *       MIME_ParseContentType()
  *
- *    6.Search for a token in the input stream (either CONN, SOCK, or BUF):
+ *     5.Search for a token in an input stream (either CONN, SOCK, or BUF):
  *       CONN_StripToPattern()
  *       SOCK_StripToPattern()
  *       BUF_StripToPattern()
@@ -82,11 +83,11 @@
 
 
 /* Well-known port values */
-#define CONN_PORT_FTP             21
-#define CONN_PORT_SSH             22
-#define CONN_PORT_SMTP            25
-#define CONN_PORT_HTTP            80
-#define CONN_PORT_HTTPS           443
+#define CONN_PORT_FTP    21
+#define CONN_PORT_SSH    22
+#define CONN_PORT_SMTP   25
+#define CONN_PORT_HTTP   80
+#define CONN_PORT_HTTPS  443
 
 
 /** @addtogroup UtilityFunc
@@ -102,12 +103,21 @@ extern "C" {
 
 typedef enum {
     eReqMethod_Any = 0,
-    eReqMethod_Get,
-    eReqMethod_Post,
-    eReqMethod_Connect
+    /* HTTP/1.0 */
+    eReqMethod_Get,          /*  1 */
+    eReqMethod_Post,         /*  2 */
+    eReqMethod_Head,         /*  3 */
+    eReqMethod_Connect,      /*  4 */
+    /* HTTP/1.1 */
+    eReqMethod_v1  = 8,
+    eReqMethod_Put = 16,     /* 16 */
+    eReqMethod_Patch,        /* 17 */
+    eReqMethod_Trace,        /* 18 */
+    eReqMethod_Delete,       /* 19 */
+    eReqMethod_Options       /* 20 */
 } EReqMethod;
 
-typedef unsigned EBReqMethod;
+typedef unsigned TReqMethod; /* EReqMethod or (EReqMethod | eReqMethod_v1) */
 
 
 typedef enum {
@@ -140,7 +150,7 @@ typedef enum {
 typedef unsigned EBDebugPrintout;
 
 
-/* Network connection related configurable info struct.
+/* Network connection-related configurable informational structure.
  * ATTENTION:  Do NOT fill out this structure (SConnNetInfo) "from scratch"!
  *             Instead, use ConnNetInfo_Create() described below to create
  *             it, and then fix (hard-code) some fields, if really necessary.
@@ -153,30 +163,34 @@ typedef unsigned EBDebugPrintout;
  */
 typedef struct {  /* NCBI_FAKE_WARNING: ICC */
     char            client_host[256]; /* effective client hostname ('\0'=def)*/
-    EBReqMethod     req_method:3;     /* method to use in the request (HTTP) */
     EBURLScheme     scheme:3;         /* only pre-defined types (limited)    */
+    TReqMethod      req_method:5;     /* method to use in the request (HTTP) */
+    unsigned        version:1;        /* HTTP/1.v (or selected by req_method)*/
     EBFWMode        firewall:2;       /* to use firewall (relay otherwise)   */
     unsigned        stateless:1;      /* to connect in HTTP-like fashion only*/
     unsigned        lb_disable:1;     /* to disable local load-balancing     */
     EBDebugPrintout debug_printout:2; /* switch to printout some debug info  */
+    unsigned        http_push_auth:1; /* push authorize tags even w/o 401/407*/
     unsigned        http_proxy_leak:1;/* non-zero when can fallback to direct*/
+    unsigned        reserved:15;      /* MBZ */
     char            user[64];         /* username (if specified)             */
     char            pass[64];         /* password (if any)                   */
     char            host[256];        /* host to connect to                  */
     unsigned short  port;             /* port to connect to, host byte order */
-    char            path[1024];       /* path (e.g. to  a CGI script or page)*/
-    char            args[1024];       /* args (e.g. for a CGI script)        */
+    char            path[2048];       /* path (e.g. to  a CGI script or page)*/
+    char            args[2048];       /* args (e.g. for a CGI script)        */
     char            http_proxy_host[256]; /* hostname of HTTP proxy server   */
     unsigned short  http_proxy_port;      /* port #   of HTTP proxy server   */
     char            http_proxy_user[64];  /* http proxy username (if req'd)  */
     char            http_proxy_pass[64];  /* http proxy password             */
-    char            proxy_host[256];  /* CERN-like (non-transp) f/w proxy srv*/
     unsigned short  max_try;          /* max. # of attempts to connect (>= 1)*/
     const STimeout* timeout;          /* ptr to I/O timeout(infinite if NULL)*/
     const char*     http_user_header; /* user header to add to HTTP request  */
     const char*     http_referer;     /* default referrer (when not spec'd)  */
+    NCBI_CRED       credentials;      /* connection credentials (optional)   */
 
-    /* the following field(s) are for the internal use only -- don't touch!  */
+    /* the following field(s) are for internal use only -- do not touch!     */
+    unsigned int    magic;            /* to detect version skew              */
     STimeout        tmo;              /* default storage for finite timeout  */
     const char      svc[1];           /* service which this info created for */
 } SConnNetInfo;
@@ -222,8 +236,8 @@ typedef struct {  /* NCBI_FAKE_WARNING: ICC */
 #define REG_CONN_HTTP_PROXY_LEAK  "HTTP_PROXY_LEAK"
 #define DEF_CONN_HTTP_PROXY_LEAK  ""
 
-#define REG_CONN_PROXY_HOST       "PROXY_HOST"
-#define DEF_CONN_PROXY_HOST       ""
+#define REG_CONN_HTTP_PUSH_AUTH   "HTTP_PUSH_AUTH"
+#define DEF_CONN_HTTP_PUSH_AUTH   ""
 
 #define REG_CONN_TIMEOUT          "TIMEOUT"
 #define DEF_CONN_TIMEOUT          30.0
@@ -253,6 +267,7 @@ typedef struct {  /* NCBI_FAKE_WARNING: ICC */
 #define REG_CONN_SERVICE_NAME     "SERVICE_NAME"
 #define REG_CONN_LOCAL_ENABLE     "LOCAL_ENABLE"
 #define REG_CONN_LBSMD_DISABLE    "LBSMD_DISABLE"
+#define REG_CONN_LBOS_ENABLE      "LBOS_ENABLE"
 #define REG_CONN_DISPD_DISABLE    "DISPD_DISABLE"
 
 /* Local service dispatcher */
@@ -298,22 +313,24 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_Boolean
  );
 
 
-/* This function to fill out the "*info" structure using
+/* This function fills out the "*info" structure using
  * registry entries named (see above) in macros REG_CONN_<NAME>:
  *
  *  -- INFO FIELD --  ----- NAME -----  ---------- REMARKS/EXAMPLES ---------
  *  client_host       local host name   assigned automatically
  *  req_method        REQ_METHOD
+ *  user              USER
+ *  pass              PASS
  *  host              HOST
  *  port              PORT
  *  path              PATH
  *  args              ARGS
- *  http_proxy_host   HTTP_PROXY_HOST   if NULL http_proxy_port is set 0
+ *  http_proxy_host   HTTP_PROXY_HOST   if empty http_proxy_port is set 0
  *  http_proxy_port   HTTP_PROXY_PORT   no HTTP proxy if 0
  *  http_proxy_user   HTTP_PROXY_USER
  *  http_proxy_pass   HTTP_PROXY_PASS
- *  http_proxy_must   HTTP_PROXY_MUST   for non-HTTP CONNECT links only
- *  proxy_host        PROXY_HOST
+ *  http_proxy_leak   HTTP_PROXY_LEAK   1 means to also re-try w/o the proxy
+ *  http_push_auth    HTTP_PUSH_AUTH    Send credentials pre-emptively
  *  timeout           TIMEOUT           "<sec>.<usec>": "3.00005", "infinite"
  *  max_try           MAX_TRY  
  *  firewall          FIREWALL
@@ -325,8 +342,8 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_Boolean
  *  svc               SERVICE_NAME      no search/no value without service
  *
  * A value of the field NAME is first looked up in the environment variable
- * of the form service_CONN_<NAME>; then in the current corelib registry,
- * in the section 'service' by using key CONN_<NAME>; then in the environment
+ * of the form <service>_CONN_<NAME>; then in the current corelib registry, in
+ * the section 'service' by using the CONN_<NAME> key; then in the environment
  * variable again, but using the name CONN_<NAME>; and finally in the default
  * registry section (DEF_CONN_REG_SECTION), using just <NAME>. If service
  * is NULL or empty then the first 2 steps in the above lookup are skipped.
@@ -349,23 +366,23 @@ extern NCBI_XCONNECT_EXPORT SConnNetInfo* ConnNetInfo_Clone
 
 
 /* Convenience routines to manipulate SConnNetInfo::args[].
- * In "arg" all routines below assume to have a single arg name
- * or an "arg=value" pair.  In the former case, additional "val"
- * may be supplied separately (and will be prepended by "=" if
- * necessary).  In the latter case, having a non-zero string in
- * "val" may result in an erroneous behavior.  Ampersand (&) gets
- * automatically added to keep the arg list correct.
+ * All routines below assume that "arg" either a single arg name
+ * or an "arg=val" pair.  In the former case, an additional "val"
+ * may be supplied separately (and will be prepended by an "=" if
+ * necessary).  In the latter case, also having a non-zero string
+ * the in the "val" argument may result in an incorrect behavior.
+ * An ampersand (&) gets automatically added to keep the arg list proper.
  * Return value (if any): none-zero on success; 0 on error.
  */
 
-/* append argument to the end of the list */
+/* append an argument to the end of the list */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_AppendArg
 (SConnNetInfo* info,
  const char*   arg,
  const char*   val
  );
 
-/* put argument in the front of the list */
+/* put an argument at the front of the list */
 extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_PrependArg
 (SConnNetInfo* info,
  const char*   arg,
@@ -380,7 +397,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_DeleteArg
  );
 
 /* delete all arguments specified in "args" from the list in "info" */
-extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteAllArgs
+extern NCBI_XCONNECT_EXPORT void        ConnNetInfo_DeleteAllArgs
 (SConnNetInfo* info,
  const char*   args
  );
@@ -453,7 +470,7 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_ExtendUserHeader
 /* Delete entries from current user header, if their tags match those
  * passed in "header" (regardless of the values, if any, in the latter).
  */
-extern NCBI_XCONNECT_EXPORT void ConnNetInfo_DeleteUserHeader
+extern NCBI_XCONNECT_EXPORT void        ConnNetInfo_DeleteUserHeader
 (SConnNetInfo* info,
  const char*   header
  );
@@ -484,13 +501,11 @@ extern NCBI_XCONNECT_EXPORT int/*bool*/ ConnNetInfo_SetupStandardArgs
 
 /* Log the contents of "*info" into specified "log" with severity "sev".
  */
-extern NCBI_XCONNECT_EXPORT void ConnNetInfo_LogEx
+extern NCBI_XCONNECT_EXPORT void        ConnNetInfo_Log
 (const SConnNetInfo* info,
  ELOG_Level          sev,
  LOG                 log
  );
-
-#define ConnNetInfo_Log(i, l) ConnNetInfo_LogEx((i), eLOG_Trace, (l))
 
 
 /* Reconstruct text URL out of the SConnNetInfo's components
@@ -498,7 +513,7 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_LogEx
  * Returned string must be free()'d when no longer necessary.
  * Return NULL on error.
  */
-extern NCBI_XCONNECT_EXPORT char* ConnNetInfo_URL
+extern NCBI_XCONNECT_EXPORT char*       ConnNetInfo_URL
 (const SConnNetInfo* info
  );
 
@@ -527,72 +542,75 @@ extern NCBI_XCONNECT_EXPORT void ConnNetInfo_Destroy(SConnNetInfo* info);
  * @sa
  *  HTTP_CreateConnector, CConn_HttpStream
  * 
- * Hit URL "http[s]://host[:port]/path?args" with the following request
+ * Hit URL "http[s]://host[:port]/path[?args]" with the following request
  * (argument substitution is shown as enclosed in angle brackets (not present
  * in the actual request), and all optional parts shown in square brackets):
  *
- *    {CONNECT|POST|GET} <path>[?<args>] HTTP/1.0\r\n
- *    [Host: host[:port]\r\n]
+ *    METHOD <path>[?<args>] HTTP/1.x\r\n
  *    [Content-Length: <content_length>\r\n]
- *    [<user_header>]
+ *    [<user_header>\r\n]\r\n
+ *
+ * If "port" is not specified (0) it will be assigned automatically to a
+ * well-known standard value depending on the "fSOCK_Secure" bit in the "flags"
+ * parameter, when connecting to an HTTP server.
+ *
+ * A protocol version "1.x" is selected by the "req_method"'s value, and
+ * can be either 1.0 or 1.1.  METHOD can be any of those of EReqMethod.
+ *
+ * @note Unlike deprecated URL_Connect(), this call never encodes any "args",
+ * and never auto-inserts any "Host:" tag into the headers (unless provided by
+ * the "user_header" argument).
  *
  * Request method "eReqMethod_Any" selects an appropriate method depending on
  * the value of "content_length":  results in GET when no content is expected
- * ("content_length"==0), and POST when "content_length" provided non-zero. 
+ * ("content_length"==0), and POST when "content_length" provided non-zero.
  *
- * For GET/POST(or ANY) methods the call attempts to provide the "Host:" HTTP
- * tag using information from the "host" and "port" parameters if the tag is
- * not present within the "user_header" (notwithstanding below, the port part
- * of the tag does not get added for non-specified "port" passed as 0).
- * Note that the result of the above said courtesy can be incorrect for HTTP
- * retrievals through a proxy server (since the built tag would correspond
- * to the proxy connection point, not the actual resource as it should have).
- * Which is why the "Host:" tag courtesy is to be discontinued in the future.
+ * The "content_length" parameter must specify the exact(!) amount of data
+ * that is going to be sent (0 if none) to HTTP server.  The "Content-Length"
+ * header gets always added to all legal requests (but GET / HEAD / CONNECT),
+ * whether or not the data payload has any defined protocol semantics
+ * (e.g. for DELETE / TRACE / OPTIONS).
  *
- * If "port" is not specified (0) it will be assigned automatically to a
- * well-known standard value depending on the "fSOCK_Secure" bit in the
- * "flags" parameter, when connecting to an HTTP server.
+ * Alternatively, "content_length" can specify the amount of initial data to be
+ * sent with a CONNECT request into the established tunnel, and held by the
+ * "args" parameter (although, no header tag will get added to the HTTP header
+ * in that case, see below).
  *
- * The "content_length" must specify the exact(!) amount of data that is going
- * to POST (or be sent with CONNECT request) to HTTPD (0 if none).
- * The "Content-Length" header gets always added in all POST requests, yet it
- * is always omitted in all other requests.
+ * If the string "user_header" is not NULL/empty, it will be stripped off any
+ * surrounding white space (including "\r\n"), then get added to the HTTP
+ * header, followed by the header termination sequence of "\r\n\r\n".
+ * @note that any interior whitespace in "user_header" is not analyzed/guarded.
  *
- * If string "user_header" is not NULL/empty, then it *must* be terminated with
- * a single(!) '\r\n'.
+ * The "cred" parameter is only used to pass additional connection credentials
+ * for secure connections, and is ignored otherwise.
  *
- * If the actual request is going to be either GET or POST, "encode_args" set
- * to TRUE will cause "args" to be URL-encoded (ignored otherwise).
- *
- * If the request method is "eReqMethod_Connect", then the connection is
+ * If the request method contains "eReqMethod_Connect", then the connection is
  * assumed to be tunneled via a proxy, so "path" must specify a "host:port"
  * pair to connect to;  "content_length" can provide initial size of the data
- * been tunneled, in which case "args" must be a pointer to such data, but the
- * "Content-Length" header does not get added, and "encode_args" is ignored.
+ * been tunneled, in which case "args" must be a pointer to such data, but no
+ * "Content-Length:" header tag will get added.
  *
  * If "*sock" is non-NULL, the call _does not_ create a new socket, but builds
- * the HTTP data stream on top of the passed socket.  If the result is
- * successful, the original SOCK handle will be closed by SOCK_Close(), which
- * means that in order for this to work, the passed "*sock" should have been
- * created with "fSOCK_KeepOnClose" set, and a new handle will be returned via
- * the same last parameter.  In case of errors, the original "*sock" will be
- * destroyed/closed and the last parameter will be updated to return as NULL.
+ * an HTTP(S) data stream on top of the passed socket.  Regardless of the
+ * completion status, the original SOCK handle will be closed as if with
+ * SOCK_Close(), but in case of success, a new SOCK handle will be returned
+ * via the same last parameter, yet in case of errors, the last parameter will
+ * be updated to read as NULL.
  *
  * On success, return eIO_Success and non-NULL handle of a socket via the last
  * parameter.
  *
- * ATTENTION:  due to the very essence of the HTTP connection, you may
+ * ATTENTION:  due to the very essence of the HTTP/1.x connection, you may
  *             perform only one { WRITE, ..., WRITE, READ, ..., READ } cycle,
- *             if doing a GET or a POST.
- * The returned socket must be exipicitly closed by "SOCK_Close()" when
- * no longer needed.
- * On error, return a specific code (last parameter may not be updated),
- * and no socket gets created.
+ *             if using non-CONNECT request methods.
  *
- * NOTE: The returned socket may not be immediately readable/writeable if open
- *       and/or read/write timeouts were passed as {0,0}, meaning that both
- *       connection and HTTP header write operation may still be pending in
- *       the resultant socket.  It is responsibility of the application to
+ * The returned socket must be exipicitly closed by "SOCK_Close()" when no
+ * longer needed.
+ *
+ * NOTE: The returned socket may not be immediately readable/writeable if
+ *       either open or read/write timeouts were passed as {0,0}, meaning that
+ *       both connection and HTTP header write operation may still be pending
+ *       in the resultant socket.  It is responsibility of the application to
  *       analyze the actual socket state in this case (see "ncbi_socket.h").
  * @sa
  *  SOCK_Create, SOCK_CreateOnTop, SOCK_Wait, SOCK_Abort, SOCK_Close
@@ -603,39 +621,68 @@ extern NCBI_XCONNECT_EXPORT EIO_Status URL_ConnectEx
  unsigned short  port,            /* may be 0, defaulted to either 80 or 443 */
  const char*     path,            /* must be provided                        */
  const char*     args,            /* may be NULL or empty                    */
- EReqMethod      req_method,      /* ANY selects method by "content_length"  */
- size_t          content_length,
- const STimeout* c_timeout,       /* timeout for the CONNECT stage           */
+ TReqMethod      req_method,      /* ANY selects method by "content_length"  */
+ size_t          content_length,  /* may not be used with HEAD or GET        */
+ const STimeout* o_timeout,       /* timeout for an OPEN stage               */
  const STimeout* rw_timeout,      /* timeout for READ and WRITE              */
- const char*     user_header,
- int/*bool*/     encode_args,     /* URL-encode the "args", if any           */
+ const char*     user_header,     /* should include "Host:" in most cases    */
+ NCBI_CRED       cred,            /* connection credentials, if any          */
  TSOCK_Flags     flags,           /* additional socket requirements          */
  SOCK*           sock             /* returned socket (on eIO_Success only)   */
  );
 
 /* Equivalent to the above except that it returns a non-NULL socket handle
- * on success, and NULL on error without providing a reason for the failure. */
-extern NCBI_XCONNECT_EXPORT SOCK URL_Connect
+ * on success, and NULL on error without providing a reason for the failure.
+ *
+ * @note Only HTTP/1.0 methods can be used with this call.  For HTTP/1.1
+ * see URL_ConnectEx().
+ *
+ * For GET/POST(or ANY) methods the call attempts to provide a "Host:" HTTP tag
+ * using information from the "host" and "port" parameters if such a tag is not
+ * found within "user_header" (notwithstanding below, the port part of the tag
+ * does not get added for non-specified "port" passed as 0).  Note that the
+ * result of the above-said auto-magic can be incorrect for HTTP retrievals
+ * through a proxy server (since the built tag would correspond to the proxy
+ * connection point, but not the actual server as it should have):
+ *
+ *    Host: host[:port]\r\n
+ *
+ * @note DO NOT USE THIS CALL!
+ *
+ * CAUTION:  If requested, "args" can get encoded but will do that as a whole!
+ *
+ * @sa
+ *  URL_ConnectEx
+ */
+#ifndef NCBI_DEPRECATED
+#  define NCBI_CONNUTIL_DEPRECATED
+#else
+#  define NCBI_CONNUTIL_DEPRECATED NCBI_DEPRECATED
+#endif
+extern NCBI_XCONNECT_EXPORT NCBI_CONNUTIL_DEPRECATED SOCK URL_Connect
 (const char*     host,            /* must be provided                        */
  unsigned short  port,            /* may be 0, defaulted to either 80 or 443 */
  const char*     path,            /* must be provided                        */
  const char*     args,            /* may be NULL or empty                    */
  EReqMethod      req_method,      /* ANY selects method by "content_length"  */
- size_t          content_length,
- const STimeout* c_timeout,       /* timeout for the CONNECT stage           */
+ size_t          content_length,  /* may not be used with HEAD or GET        */
+ const STimeout* o_timeout,       /* timeout for an OPEN stage               */
  const STimeout* rw_timeout,      /* timeout for READ and WRITE              */
- const char*     user_header,
- int/*bool*/     encode_args,     /* URL-encode the "args", if any           */
+ const char*     user_header,     /* may get auto-extended with a "Host" tag */
+ int/*bool*/     encode_args,     /* URL-encode "args" entirely (CAUTION!)   */
  TSOCK_Flags     flags            /* additional socket requirements          */
  );
 
 
-/* Discard all input data before(and including) the first occurrence of
- * "pattern".  If "discard" is not NULL then add the discarded data(including
+/* Discard all input data before (and including) the first occurrence of a
+ * "pattern".  If "discard" is not NULL then add the stripped data (including
  * the "pattern") to it.  If "n_discarded" is not NULL then "*n_discarded"
- * will return the number of discarded bytes.  If there was some excess read,
- * push it back to the original source.
- * NOTE: "pattern" == NULL causes stripping to the EOF.
+ * will return the number of actually stripped bytes.  If there was some excess
+ * read, push it back to the original source (and not count as discarded).
+ * NOTE: If "pattern_size" == 0, then "pattern" is ignored (assumed to be NULL)
+ * and the stripping continues until EOF;  if "pattern" is NULL and
+ * "pattern_size" is not 0, then exactly "pattern_size" bytes will have
+ * attempted to be stripped (unless an I/O error occurs prematurely).
  */
 extern NCBI_XCONNECT_EXPORT EIO_Status CONN_StripToPattern
 (CONN        conn,
@@ -805,9 +852,9 @@ extern NCBI_XCONNECT_EXPORT char* MIME_ComposeContentTypeEx
  *        if they separated from the content type by at least one space) will
  *        be ignored, e.g. these are valid content type strings:
  *           "   Content-Type: text/plain  foobar"
- *           "  text/html \r\n  barfoo coocoo ....\n boooo"
+ *           "  text/html \r\n  barfoo baz ....\n etc"
  *
- * PERFORMANCE NOTE:  this call uses heap allocations internally.
+ * PERFORMANCE NOTE:  this call uses dynamic heap allocations internally.
  *
  * If it does not match any of NCBI MIME type/subtypes/encodings, then
  * return TRUE, eMIME_T_Unknown, eMIME_Unknown or eENCOD_None, respectively.

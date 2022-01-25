@@ -1,9 +1,8 @@
 #
-# Alias file created 2/27/2008 by Rich McVeigh
+# Alias file created 3/20/2013 by Rich McVeigh
 #
 #
 TITLE 16Score
 #
-DBLIST 16SCore Combined16SrRNA_2-12-2008 LSURef_93.fasta SSURef_93.fasta
-#DBLIST Combined16SrRNA_2-12-2008 LSURef_93.fasta SSURef_93.fasta
+DBLIST LSU_chloro_rRNA LSU_mito_rRNA LSU_plastid LSU_nomito-nochloro-noplastid SSU-mito-rRNA SSU_chloro_rRNA SSU_nomito_nochloro_noplastid SSU_plast_rRNA bacteria-archea16SrRNA
 #

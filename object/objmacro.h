@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Macro
-*    Generated using ASNCODE Revision: 6.19 at Jun 6, 2012 10:06 AM
+*    Generated using ASNCODE Revision: 6.19 at Apr 21, 2015  2:54 PM
 *
 **************************************************/
 
@@ -174,6 +174,8 @@ typedef struct struct_String_constraint {
    Uint1   is_all_lower;
    Uint1   is_all_punct;
    Uint1   ignore_weasel;
+   Uint1   is_first_cap;
+   Uint1   is_first_each_cap;
 } StringConstraint, PNTR StringConstraintPtr;
 
 
@@ -358,6 +360,7 @@ NLM_EXTERN Boolean LIBCALL LocationConstraintAsnWrite PROTO (( LocationConstrain
 #define Macro_feature_type_ncRNA 92
 #define Macro_feature_type_tmRNA 93
 #define Macro_feature_type_mobile_element 94
+#define Macro_feature_type_regulatory 95
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Feat_qual_legal_allele 1
@@ -431,6 +434,8 @@ NLM_EXTERN Boolean LIBCALL LocationConstraintAsnWrite PROTO (( LocationConstrain
 #define Feat_qual_legal_tag_peptide 69
 #define Feat_qual_legal_mobile_element_type_type 70
 #define Feat_qual_legal_name 71
+#define Feat_qual_legal_pcr_conditions 72
+#define Feat_qual_legal_regulatory_class 73
 
 
 
@@ -710,6 +715,9 @@ NLM_EXTERN Boolean LIBCALL RnaQualPairAsnWrite PROTO (( RnaQualPairPtr , AsnIoPt
 #define Source_qual_all_quals 95
 #define Source_qual_dbxref 96
 #define Source_qual_taxid 97
+#define Source_qual_all_primers 98
+#define Source_qual_altitude 99
+#define Source_qual_type_material 100
 
 
 
@@ -910,7 +918,8 @@ NLM_EXTERN Boolean LIBCALL CDSGeneProtFieldPairAsnWrite PROTO (( CDSGeneProtFiel
 #define Technique_type_barcode 21
 #define Technique_type_composite_wgs_htgs 22
 #define Technique_type_tsa 23
-#define Technique_type_other 24
+#define Technique_type_targeted 24
+#define Technique_type_other 25
 
 /* following #defines are for enumerated type, not used by object loaders */
 #define Completedness_type_unknown 0
@@ -1141,6 +1150,8 @@ NLM_EXTERN Boolean LIBCALL MolinfoFieldConstraintAsnWrite PROTO (( MolinfoFieldC
 #define Publication_field_affil_phone 18
 #define Publication_field_affil_zipcode 19
 #define Publication_field_authors_initials 20
+#define Publication_field_pmid 21
+#define Publication_field_pub_class 22
 
 typedef ValNodePtr StructuredCommentFieldPtr;
 typedef ValNode StructuredCommentField;
@@ -1183,6 +1194,7 @@ NLM_EXTERN Boolean LIBCALL StructuredCommentFieldPairAsnWrite PROTO (( Structure
 #define DBLink_field_type_probe_db 3
 #define DBLink_field_type_sequence_read_archve 4
 #define DBLink_field_type_bio_project 5
+#define DBLink_field_type_assembly 6
 
 
 
@@ -1734,7 +1746,6 @@ NLM_EXTERN Boolean LIBCALL CopyActionAsnWrite PROTO (( CopyActionPtr , AsnIoPtr,
 **************************************************/
 typedef struct struct_Swap_action {
    ValNodePtr   fields;
-   ValNodePtr   field_to;
 } SwapAction, PNTR SwapActionPtr;
 
 
@@ -2676,7 +2687,8 @@ typedef ValNode TableMatchType;
 #define TableMatchType_nuc_id 5
 #define TableMatchType_src_qual 6
 #define TableMatchType_protein_name 7
-#define TableMatchType_any 8
+#define TableMatchType_bioproject 8
+#define TableMatchType_any 9
 
 
 NLM_EXTERN TableMatchTypePtr LIBCALL TableMatchTypeFree PROTO ((TableMatchTypePtr ));
@@ -2721,6 +2733,8 @@ typedef struct struct_Apply_table_action {
    CharPtr   filename;
    struct struct_Table_match PNTR   match_type;
    ValNodePtr   in_memory_table;
+   Uint1   also_change_mrna;
+   Uint1   skip_blanks;
 } ApplyTableAction, PNTR ApplyTableActionPtr;
 
 
@@ -2782,6 +2796,70 @@ NLM_EXTERN RemoveSequencesActionPtr LIBCALL RemoveSequencesActionNew PROTO (( vo
 NLM_EXTERN RemoveSequencesActionPtr LIBCALL RemoveSequencesActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
 NLM_EXTERN Boolean LIBCALL RemoveSequencesActionAsnWrite PROTO (( RemoveSequencesActionPtr , AsnIoPtr, AsnTypePtr));
 
+
+
+/**************************************************
+*
+*    UpdateReplacedEcNumbersAction
+*
+**************************************************/
+typedef struct struct_Update_replaced_ec_numbers_action {
+   Uint1   delete_improper_format;
+   Uint1   delete_unrecognized;
+   Uint1   delete_multiple_replacement;
+} UpdateReplacedEcNumbersAction, PNTR UpdateReplacedEcNumbersActionPtr;
+
+
+NLM_EXTERN UpdateReplacedEcNumbersActionPtr LIBCALL UpdateReplacedEcNumbersActionFree PROTO ((UpdateReplacedEcNumbersActionPtr ));
+NLM_EXTERN UpdateReplacedEcNumbersActionPtr LIBCALL UpdateReplacedEcNumbersActionNew PROTO (( void ));
+NLM_EXTERN UpdateReplacedEcNumbersActionPtr LIBCALL UpdateReplacedEcNumbersActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL UpdateReplacedEcNumbersActionAsnWrite PROTO (( UpdateReplacedEcNumbersActionPtr , AsnIoPtr, AsnTypePtr));
+
+
+
+/**************************************************
+*
+*    RetranslateCdsAction
+*
+**************************************************/
+typedef struct struct_Retranslate_cds_action {
+   Uint1   obey_stop_codon;
+} RetranslateCdsAction, PNTR RetranslateCdsActionPtr;
+
+
+NLM_EXTERN RetranslateCdsActionPtr LIBCALL RetranslateCdsActionFree PROTO ((RetranslateCdsActionPtr ));
+NLM_EXTERN RetranslateCdsActionPtr LIBCALL RetranslateCdsActionNew PROTO (( void ));
+NLM_EXTERN RetranslateCdsActionPtr LIBCALL RetranslateCdsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL RetranslateCdsActionAsnWrite PROTO (( RetranslateCdsActionPtr , AsnIoPtr, AsnTypePtr));
+
+/* following #defines are for enumerated type, not used by object loaders */
+#define Truncated_ends_partial_type_always 1
+#define Truncated_ends_partial_type_unless_pseudo 2
+#define Truncated_ends_partial_type_never 3
+
+
+
+/**************************************************
+*
+*    AdjustFeaturesForGapsAction
+*
+**************************************************/
+typedef struct struct_Adjust_features_for_gaps_action {
+   Uint2   type;
+   Uint1   adjust_for_unknown_length_gaps;
+   Uint1   adjust_for_known_length_gaps;
+   Uint2   make_truncated_ends_partial;
+   Uint1   trim_ends_in_gaps;
+   Uint1   split_for_internal_gaps;
+   Uint1   even_when_gaps_are_in_introns;
+} AdjustFeaturesForGapsAction, PNTR AdjustFeaturesForGapsActionPtr;
+
+
+NLM_EXTERN AdjustFeaturesForGapsActionPtr LIBCALL AdjustFeaturesForGapsActionFree PROTO ((AdjustFeaturesForGapsActionPtr ));
+NLM_EXTERN AdjustFeaturesForGapsActionPtr LIBCALL AdjustFeaturesForGapsActionNew PROTO (( void ));
+NLM_EXTERN AdjustFeaturesForGapsActionPtr LIBCALL AdjustFeaturesForGapsActionAsnRead PROTO (( AsnIoPtr, AsnTypePtr));
+NLM_EXTERN Boolean LIBCALL AdjustFeaturesForGapsActionAsnWrite PROTO (( AdjustFeaturesForGapsActionPtr , AsnIoPtr, AsnTypePtr));
+
 typedef ValNodePtr MacroActionChoicePtr;
 typedef ValNode MacroActionChoice;
 #define MacroActionChoice_aecr 1
@@ -2823,6 +2901,17 @@ typedef ValNode MacroActionChoice;
 #define MacroActionChoice_add_file_descriptors 37
 #define MacroActionChoice_propagate_missing_old_name 38
 #define MacroActionChoice_autoapply_structured_comments 39
+#define MacroActionChoice_reorder_structured_comments 40
+#define MacroActionChoice_remove_duplicate_structured_comments 41
+#define MacroActionChoice_lookup_taxonomy 42
+#define MacroActionChoice_lookup_pubs 43
+#define MacroActionChoice_trim_terminal_ns 44
+#define MacroActionChoice_update_replaced_ecnumbers 45
+#define MacroActionChoice_instantiate_protein_titles 46
+#define MacroActionChoice_retranslate_cds 47
+#define MacroActionChoice_add_selenocysteine_except 48
+#define MacroActionChoice_join_short_trnas 49
+#define MacroActionChoice_adjust_features_for_gaps 50
 
 
 NLM_EXTERN MacroActionChoicePtr LIBCALL MacroActionChoiceFree PROTO ((MacroActionChoicePtr ));
@@ -2926,6 +3015,7 @@ typedef struct struct_Suspect_rule {
    Uint2   rule_type;
    struct struct_Replace_rule PNTR   replace;
    CharPtr   description;
+   Uint1   fatal;
 } SuspectRule, PNTR SuspectRulePtr;
 
 

@@ -1,4 +1,4 @@
-/*  $Id: pgppop.c,v 6.69 2012/03/30 14:22:03 choi Exp $
+/*  $Id: pgppop.c,v 6.73 2016/09/02 14:57:38 ucko Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -29,261 +29,12 @@
 *
 * Version Creation Date:   05/03/99
 *
-* $Revision: 6.69 $
+* $Revision: 6.73 $
 *
 * File Description: 
 *
 * Modifications:
 * --------------------------------------------------------------------------
-*
-* $Log: pgppop.c,v $
-* Revision 6.69  2012/03/30 14:22:03  choi
-* Fixed bug in DDV_DisplayParaG: write <FONT> tag for minus strand
-* sequences only if html display format was specified.
-*
-* Revision 6.68  2006/07/13 17:06:39  bollin
-* use Uint4 instead of Uint2 for itemID values
-* removed unused variables
-* resolved compiler warnings
-*
-* Revision 6.67  2001/10/03 00:15:47  vakatov
-* Replaced some ASSERTs by VERIFYs
-*
-* Revision 6.66  2001/01/16 17:15:54  hurwitz
-* modified DDV_GetBspCoordGivenDispCoord
-*
-* Revision 6.65  2001/01/10 23:38:39  lewisg
-* fix seqid and various memory leaks
-*
-* Revision 6.64  2000/10/25 01:22:56  bauer
-* fixed DDV display of PDB-Id's in CDD-server
-*
-* Revision 6.63  2000/10/13 19:48:16  hurwitz
-* added functions for getting first VALID disp coord in range of bsp coords
-*
-* Revision 6.62  2000/08/25 18:57:12  shavirin
-* Removed printing of BLAST middle line if characters in 1st and 3d
-* lines are in lower case - used for unaligned regions.
-*
-* Revision 6.61  2000/08/11 20:59:07  shavirin
-* Added default character for a gap in the function DDV_GetSequenceFromParaG().
-*
-* Revision 6.60  2000/07/18 19:59:24  bauer
-* fixed bug in DDV_Print_Sequence
-*
-* Revision 6.59  2000/05/19 14:30:52  wheelan
-* fixed problem with formatting PDB ids
-*
-* Revision 6.58  2000/04/19 12:33:32  durand
-* for HTML output, replaced double quote char. by a spacein the defline
-*
-* Revision 6.57  2000/03/31 21:33:21  durand
-* added new default color schemas for BLAST
-*
-* Revision 6.56  2000/03/29 14:21:56  durand
-* fixed problem when displaying middle line of BLAST SeqAligns
-*
-* Revision 6.54  2000/03/28 13:32:28  durand
-* update DDV_DisplayDefaultAlign to receive a pre-initialized DDV_Disp_Opt data structure
-*
-* Revision 6.53  2000/03/27 14:19:13  durand
-* fixed bugs in BLAST outputs
-*
-* Revision 6.52  2000/03/24 12:58:55  durand
-* fixed a bug in DDV_DisplayDefaultAlign
-*
-* Revision 6.51  2000/03/22 14:14:25  durand
-* updated DDV_DisplayDefaultAlign to get the SeqAlign size correclty
-*
-* Revision 6.50  2000/03/21 19:26:48  durand
-* pgppop now uses AlignMgr
-*
-* Revision 6.49  2000/02/24 16:46:51  thiessen
-* fixed improper acces to freed memory
-*
-* Revision 6.48  2000/02/23 19:49:49  durand
-* use row number instead of SeqId for coloring
-*
-* Revision 6.47  2000/02/22 21:20:11  durand
-* remove the second $LOG line
-*
-* Revision 6.46  2000/02/22 20:55:22  thiessen
-* add null pointer test to DDV_GetBspCoordGivenDispCoord()
-*
-* Revision 6.45  2000/02/17 15:54:35  durand
-* use ~ for an unaligned gap and - for an aligned gap
-*
-* Revision 6.44  2000/02/15 15:31:45  lewisg
-* move DDVRulerDescr to pgppop
-*
-* Revision 6.43  2000/02/14 16:39:55  durand
-* add new output options for BLAST
-*
-* Revision 6.42  2000/02/07 14:16:56  durand
-* replaced BioseqUnlockById by BioseqUnlock
-*
-* Revision 6.41  2000/02/03 14:03:57  durand
-* replaced call to FeatDefLine() by CreateDefLine()
-*
-* Revision 6.40  2000/01/26 15:08:22  durand
-* update DDV_DeleteParaGList function
-*
-* Revision 6.39  1999/12/29 22:55:02  lewisg
-* get rid of seqalign id
-*
-* Revision 6.38  1999/12/20 14:37:53  durand
-* transfer some PopSet Viewer functions from here to wwwddv.c; update the code to better use Color Manager for BLAST outputs
-*
-* Revision 6.37  1999/12/08 22:40:54  durand
-* add the code to produce colored BLAST outputs
-*
-* Revision 6.36  1999/12/07 18:46:33  durand
-* add DDV_GetBspCoordGivenPgpList function
-*
-* Revision 6.35  1999/11/26 15:42:25  vakatov
-* Fixed for the C++ and/or MSVC DLL compilation
-*
-* Revision 6.34  1999/10/29 14:14:24  durand
-*  add DDV_GetBspCoordGivenDispCoord() and DDV_GetDispCoordGivenBspCoord()
-*
-* Revision 6.33  1999/10/20 13:13:53  durand
-* add new fields in data structure for DDV
-*
-* Revision 6.32  1999/10/08 17:50:28  durand
-* move DDV_DisplayBlastSAP from pgppop.c to ddvcreate.c due to conflict between api and ddv
-*
-* Revision 6.31  1999/10/07 19:18:46  durand
-* Modified function DDV_DisplayBlastSAP to use AlignMgr
-*
-* Revision 6.30  1999/09/29 17:16:44  shavirin
-* Modified function DDV_DisplayBlastSAP(): added new parameter and printing
-* of the BLAST scores.
-*
-* Revision 6.29  1999/09/29 13:42:27  durand
-* add middle line for BLAST output
-*
-* Revision 6.27  1999/09/28 19:49:30  shavirin
-* Changed definition of the function DDV_DisplayBlastSAP()
-*
-* Revision 6.26  1999/09/28 13:06:39  durand
-* add a first set of functions to display CDS in PopSet Viewer
-*
-* Revision 6.24  1999/09/16 18:52:26  durand
-* redesign the PopSet viewer toolbar
-*
-* Revision 6.23  1999/09/07 13:41:55  durand
-* update Entrez links for PopSet Viewer
-*
-* Revision 6.22  1999/09/02 19:08:56  chappey
-* fixes in PrintSeqAlignCallback
-*
-* Revision 6.21  1999/09/01 21:04:20  durand
-* call SeqAlignSetFree after PairSeqAlign2MultiSeqAlign
-*
-* Revision 6.20  1999/08/31 13:51:30  durand
-* add PubMed link for PopSet Viewer
-*
-* Revision 6.18  1999/08/30 21:24:23  durand
-* display Unpublished study when a PopSet entry doesn't have a title
-*
-* Revision 6.17  1999/08/30 20:29:56  durand
-* make PrintSeqAlignCallback estern function
-*
-* Revision 6.16  1999/08/30 18:20:11  durand
-* update SeqAlignToBS
-*
-* Revision 6.15  1999/08/30 17:57:05  sirotkin
-* changed mydata in PrintSeqAlignCallback
-*
-* Revision 6.14  1999/08/30 14:18:08  durand
-* use ByteStore to format the SeqAlign output
-*
-* Revision 6.12  1999/08/27 14:54:04  durand
-* fix memory leaks in PopSet Viewer
-*
-* Revision 6.11  1999/08/16 18:56:59  lewisg
-* made DDV_GetSeqAlign extern and added prototype to header
-*
-* Revision 6.10  1999/08/08 15:54:35  chappey
-* made DDV_GetSeqAlign static as there is no prototype
-*
-* Revision 6.9  1999/08/07 16:57:48  sicotte
-* fixed compiler warnings
-*
-* Revision 6.8  1999/08/07 16:53:13  sicotte
-* added includes sqnutils.h and alignval.h for new code
-*
-* Revision 6.7  1999/08/06 21:43:17  chappey
-* SeqAlignToBS new function to save in ByteStore structure the text output of the SeqAlign(s) packaged in a SeqEntry
-*
-* Revision 6.6  1999/07/22 13:23:13  durand
-* made DDV_SearchAli external function
-*
-* Revision 6.5  1999/07/21 21:52:12  durand
-* add some functions to display a summary for a PopSet entry
-*
-* Revision 6.4  1999/07/19 21:16:01  durand
-* add DDV_ResetParaGSeqAlignCoord to reset the seqalign coord in the display data structures of DDV
-*
-* Revision 6.3  1999/07/15 18:20:51  durand
-* add display options to support BLAST outputs
-*
-* Revision 6.2  1999/07/13 20:46:56  durand
-* comment out call to PairSeqAlign2MultiSeqAlign to avoid DDV compiling problems
-*
-* Revision 6.1  1999/07/09 13:59:58  durand
-* move pgppop from desktop to api
-*
-* Revision 6.2  1999/07/07 19:12:26  durand
-* fix a tiny bug in DDV_GetSequenceFromParaG
-*
-* Revision 6.1  1999/07/06 20:18:07  kans
-* initial public checkin
-*
-* Revision 1.35  1999/07/06 18:54:27  durand
-* add new features for the display of PopSet viewer
-*
-* Revision 1.34  1999/07/02 13:22:17  durand
-* fix bugs for the display of minus strand sequences
-*
-* Revision 1.32  1999/06/29 16:48:10  shavirin
-* Changed definition of function DDV_ShowSeqAlign()
-*
-* Revision 1.31  1999/06/28 22:07:20  durand
-* add loader functions and clean the code with Lint and Purify
-*
-* Revision 1.30  1999/06/24 20:49:41  shavirin
-* Added new function DDV_ShowSeqAlign().
-*
-* Revision 1.29  1999/06/23 18:11:17  durand
-* fix a variable initialization problem under NT
-*
-* Revision 1.28  1999/06/23 17:24:23  durand
-* use a binary encoding to manage the display styles
-*
-* Revision 1.27  1999/06/21 18:37:56  durand
-* update DDV_DisplayDefaultAlign to produce full text output
-*
-* Revision 1.26  1999/06/19 18:36:13  durand
-* new display procedure
-*
-* Revision 1.25  1999/06/16 13:10:48  durand
-* update/add functions for Vibrant DDV
-*
-* Revision 1.24  1999/06/14 23:49:43  durand
-* add function for Vibrant DDV
-*
-* Revision 1.23  1999/06/11 22:33:01  durand
-* add new functions for Vibrant DDV
-*
-* Revision 1.22  1999/06/11 17:59:40  durand
-* popset viewer uses more code from UDV
-*
-* Revision 1.21  1999/06/09 21:35:30  durand
-* add constructors/destructors for BspInfo struct as well as read seq function
-*
-*
-*
 *
 * ==========================================================================
 */
@@ -577,7 +328,7 @@ Int2 			n2,nCompt,
 ByteStorePtr	bs=NULL;
 Boolean bGiForProductOk=FALSE;
 SeqIdPtr sip=NULL;
-Int4 gi=0;
+BIG_ID gi=0;
 BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
@@ -699,7 +450,7 @@ Int2 			n2=0,
 ByteStorePtr	bs=NULL;
 Boolean bGiForProductOk=FALSE;
 SeqIdPtr sip=NULL;
-Int4 gi=0;
+BIG_ID gi=0;
 BioseqPtr prot;
 
 	/*retrieve the protein sequence; need to be optimized in future release*/
@@ -2178,7 +1929,8 @@ static ValNodePtr DDV_DisplayParaG
     CharPtr   szSequence,szDisp,szFLine=NULL,szTmp,szMiddleLine, idstring;
     BioseqPtr bsp;
     SeqIdPtr  sip;
-    Int4      bspLength,size,stop,nCompt2,pos,gi,diff,disp;
+    Int4      bspLength,size,stop,nCompt2,pos,diff,disp;
+    BIG_ID    gi;
     Int4      bsp_start,bsp_stop, n, j;
     Char      szBuf4[WWW_SCRIPT_SIZE]={""};   /*Entrez query*/
     Uint1     bsp_strand;
@@ -2517,7 +2269,7 @@ static ValNodePtr DDV_DisplayParaG
   Return value : -
 
 *******************************************************************************/
-static CharPtr DDV_Nav_Arrows(Int4 gi,Int4 TotalAliLength,
+static CharPtr DDV_Nav_Arrows( BIG_ID gi,Int4 TotalAliLength,
 		Int4 numBlockAffich,Uint4 disp_format,Int2 LineSize)
 {
 CharPtr	szWide,szFLine=NULL;
@@ -2617,7 +2369,7 @@ Char 	szWWW[WWW_SCRIPT_SIZE]={""};
          text is directly sent to fp.
 		 
 *******************************************************************************/
-NLM_EXTERN void DDV_AffichageParaG(MsaParaGPopListPtr mpplp,Int4 gi,Int4 from,Int4 to,
+NLM_EXTERN void DDV_AffichageParaG(MsaParaGPopListPtr mpplp, BIG_ID gi,Int4 from,Int4 to,
 		Int4 TotalAliLength,Int4 numBlockAffich,Uint4 disp_format,Int2 LineSize,
 		FILE *fp,ByteStorePtr PNTR bspp,Int4Ptr PNTR matrix,DDV_ColorGlobal * gclr,
 		ValNodePtr mask)
@@ -2998,8 +2750,7 @@ Char DefLine[255];
 			if (szSeq){
 				if (!DDV_GetSequenceFromParaG(pgp,&szSeq,bspLength,IsAA,NULL,
 					NULL,NULL)) continue;
-				fprintf(fp,szSeq);
-				fprintf(fp,"\n");
+				fprintf(fp, "%s\n", szSeq);
 				MemFree(szSeq);
 			}
 			vnp=vnp->next;
@@ -3412,7 +3163,7 @@ ValNodePtr PNTR	vnpp;
   Return value : FALSE if failed 
 
 *******************************************************************************/
-NLM_EXTERN Boolean DDV_DisplayDefaultAlign(SeqAlignPtr sap,Int4 gi,Int4 from,Int4 to,
+NLM_EXTERN Boolean DDV_DisplayDefaultAlign(SeqAlignPtr sap, BIG_ID gi,Int4 from,Int4 to,
 		Uint4 disp_format,Pointer disp_data,FILE *fp)
 {
 SABlockPtr		sabp=NULL;/*indexed SeqAlign*/
@@ -3748,7 +3499,7 @@ Boolean nRet;
 	return(nRet);
 }
 
-NLM_EXTERN Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, Int4 gi, Int4 from, Int4 to,
+NLM_EXTERN Boolean DDV_ShowSeqAlign(SeqAlignPtr seqalign, BIG_ID gi, Int4 from, Int4 to,
                          Uint4 disp_format)
 {
     
@@ -3923,7 +3674,7 @@ SeqAnnotPtr   sap;
   Purpose : display a summary for a PopSet entry
   
 *******************************************************************************/
-NLM_EXTERN void DDV_PrintPopSetSummary(SeqEntryPtr sep, Int4 gi, FILE *FileOut)
+NLM_EXTERN void DDV_PrintPopSetSummary(SeqEntryPtr sep, BIG_ID gi, FILE *FileOut)
 {
 ValNodePtr  vnp_sap,vnp_biosrc,vnp_biosrc2,vnp,vnp2;
 SeqAlignPtr sap;

@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 11/3/93
 *
-* $Revision: 6.99 $
+* $Revision: 6.104 $
 *
 * File Description: Utilities for creating ASN.1 submissions
 *
@@ -2077,7 +2077,7 @@ NLM_EXTERN Boolean AddOrganismToEntry (
 {
     ValNodePtr vnp;
     OrgRefPtr orp;
-    Char buf[80];
+    Char buf[128];
 
     if ((submission == NULL) || (entry == NULL))
         return FALSE;
@@ -4476,7 +4476,9 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     ufp->label = oip;
     ufp->choice = 2; /* integer */
     ufp->data.intvalue = gi;
-    last->next = ufp;
+    if (last != NULL) {
+      last->next = ufp;
+    }
     last = ufp;
   }
 
@@ -4487,7 +4489,9 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
     ufp->label = oip;
     ufp->choice = 1; /* visible string */
     ufp->data.ptrvalue = (Pointer) StringSave (comment);
-    last->next = ufp;
+    if (last != NULL) {
+      last->next = ufp;
+    }
     last = ufp;
   }
 
@@ -4501,7 +4505,9 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
   ufp->label = oip;
   ufp->choice = 2; /* integer */
   ufp->data.intvalue = from;
-  last->next = ufp;
+  if (last != NULL) {
+    last->next = ufp;
+  }
   last = ufp;
 
   ufp = UserFieldNew ();
@@ -4516,7 +4522,7 @@ NLM_EXTERN void AddAccessionToRefGeneTrackUserObject (UserObjectPtr uop, CharPtr
 NLM_EXTERN UserObjectPtr CreateMrnaProteinLinkUserObject (BioseqPtr bsp)
 
 {
-  Char           buf [80];
+  Char           buf [128];
   ObjectIdPtr    oip;
   SeqIdPtr       sip;
   UserFieldPtr   ufp;
@@ -5370,12 +5376,13 @@ NLM_EXTERN UserObjectPtr CreateDBLinkUserObject (
   return uop;
 }
 
-NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
+
+NLM_EXTERN void AddIntListFieldToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
-  Int4Ptr values
+  Int4Ptr values,
+  CharPtr field_name
 )
-
 {
   UserFieldPtr   curr;
   Int4           i;
@@ -5389,7 +5396,7 @@ NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
 
   for (curr = uop->data; curr != NULL; curr = curr->next) {
     oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "Trace Assembly Archive") == 0) {
+    if (oip != NULL && StringICmp (oip->str, field_name) == 0) {
       break;
     }
     prev = curr;
@@ -5398,7 +5405,7 @@ NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
   if (curr == NULL) {
     curr = UserFieldNew ();
     oip = ObjectIdNew ();
-    oip->str = StringSave ("Trace Assembly Archive");
+    oip->str = StringSave (field_name);
     curr->label = oip;
     curr->choice = 8; /* sequence of integer */
 
@@ -5423,117 +5430,23 @@ NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
   curr->data.ptrvalue = (Pointer) ip;
 }
 
-NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
+
+NLM_EXTERN void AddTraceAssemblyIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
-  CharPtr PNTR values
+  Int4Ptr values
 )
 
 {
-  CharPtr PNTR   cpp;
-  UserFieldPtr   curr;
-  Int4           i;
-  UserFieldPtr   prev = NULL;
-  ObjectIdPtr    oip;
-
-  if (uop == NULL || values == NULL) return;
-  oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "BioSample") == 0) {
-      break;
-    }
-    prev = curr;
-  }
-
-  if (curr == NULL) {
-    curr = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("BioSample");
-    curr->label = oip;
-    curr->choice = 7; /* sequence of string */
-
-    /* link new set at end of list */
-
-    if (prev != NULL) {
-      prev->next = curr;
-    } else {
-      uop->data = curr;
-    }
-  }
-
-  if (curr == NULL || curr->choice != 7) return;
-
-  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
-  if (cpp == NULL) return;
-
-  curr->num = num;
-  for (i = 0; i < num; i++) {
-    cpp [i] = StringSaveNoNull (values [i]);
-  }
-  curr->data.ptrvalue = (Pointer) cpp;
+  AddIntListFieldToDBLinkUserObject (uop, num, values, "Trace Assembly Archive");
 }
 
-NLM_EXTERN void AddSeqReadArchIDsToDBLinkUserObject (
+
+NLM_EXTERN void AddStringListFieldToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
-  CharPtr PNTR values
-)
-
-{
-  CharPtr PNTR   cpp;
-  UserFieldPtr   curr;
-  Int4           i;
-  UserFieldPtr   prev = NULL;
-  ObjectIdPtr    oip;
-
-  if (uop == NULL || values == NULL) return;
-  oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "Sequence Read Archive") == 0) {
-      break;
-    }
-    prev = curr;
-  }
-
-  if (curr == NULL) {
-    curr = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("Sequence Read Archive");
-    curr->label = oip;
-    curr->choice = 7; /* sequence of string */
-
-    /* link new set at end of list */
-
-    if (prev != NULL) {
-      prev->next = curr;
-    } else {
-      uop->data = curr;
-    }
-  }
-
-  if (curr == NULL || curr->choice != 7) return;
-
-  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
-  if (cpp == NULL) return;
-
-  curr->num = num;
-  for (i = 0; i < num; i++) {
-    cpp [i] = StringSaveNoNull (values [i]);
-  }
-  curr->data.ptrvalue = (Pointer) cpp;
-}
-
-NLM_EXTERN void AddFieldsToDBLinkUserObject (
-  UserObjectPtr uop,
-  CharPtr field_name,
-  Int4 num,
-  CharPtr PNTR values
+  CharPtr PNTR values,
+  CharPtr field_name
 )
 
 {
@@ -5584,6 +5497,27 @@ NLM_EXTERN void AddFieldsToDBLinkUserObject (
 }
 
 
+NLM_EXTERN void AddBioSampleIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  AddStringListFieldToDBLinkUserObject(uop, num, values, "BioSample");
+}
+
+NLM_EXTERN void AddSeqReadArchIDsToDBLinkUserObject (
+  UserObjectPtr uop,
+  Int4 num,
+  CharPtr PNTR values
+)
+
+{
+  AddStringListFieldToDBLinkUserObject(uop, num, values, "Sequence Read Archive");
+}
+
+
 NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
   UserObjectPtr uop,
   Int4 num,
@@ -5591,50 +5525,7 @@ NLM_EXTERN void AddProbeDBIDsToDBLinkUserObject (
 )
 
 {
-  CharPtr PNTR   cpp;
-  UserFieldPtr   curr;
-  Int4           i;
-  UserFieldPtr   prev = NULL;
-  ObjectIdPtr    oip;
-
-  if (uop == NULL || values == NULL) return;
-  oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "ProbeDB") == 0) {
-      break;
-    }
-    prev = curr;
-  }
-
-  if (curr == NULL) {
-    curr = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("ProbeDB");
-    curr->label = oip;
-    curr->choice = 7; /* sequence of string */
-
-    /* link new set at end of list */
-
-    if (prev != NULL) {
-      prev->next = curr;
-    } else {
-      uop->data = curr;
-    }
-  }
-
-  if (curr == NULL || curr->choice != 7) return;
-
-  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
-  if (cpp == NULL) return;
-
-  curr->num = num;
-  for (i = 0; i < num; i++) {
-    cpp [i] = StringSaveNoNull (values [i]);
-  }
-  curr->data.ptrvalue = (Pointer) cpp;
+  AddStringListFieldToDBLinkUserObject(uop, num, values, "ProbeDB");
 }
 
 NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
@@ -5644,50 +5535,7 @@ NLM_EXTERN void AddSeqReadArchiveIDsToDBLinkUserObject (
 )
 
 {
-  CharPtr PNTR   cpp;
-  UserFieldPtr   curr;
-  Int4           i;
-  UserFieldPtr   prev = NULL;
-  ObjectIdPtr    oip;
-
-  if (uop == NULL || values == NULL) return;
-  oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "Sequence Read Archive") == 0) {
-      break;
-    }
-    prev = curr;
-  }
-
-  if (curr == NULL) {
-    curr = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("Sequence Read Archive");
-    curr->label = oip;
-    curr->choice = 7; /* sequence of string */
-
-    /* link new set at end of list */
-
-    if (prev != NULL) {
-      prev->next = curr;
-    } else {
-      uop->data = curr;
-    }
-  }
-
-  if (curr == NULL || curr->choice != 7) return;
-
-  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
-  if (cpp == NULL) return;
-
-  curr->num = num;
-  for (i = 0; i < num; i++) {
-    cpp [i] = StringSaveNoNull (values [i]);
-  }
-  curr->data.ptrvalue = (Pointer) cpp;
+  AddStringListFieldToDBLinkUserObject(uop, num, values, "Sequence Read Archive");
 }
 
 NLM_EXTERN void AddBioProjectIDsToDBLinkUserObject (
@@ -5697,50 +5545,7 @@ NLM_EXTERN void AddBioProjectIDsToDBLinkUserObject (
 )
 
 {
-  CharPtr PNTR   cpp;
-  UserFieldPtr   curr;
-  Int4           i;
-  UserFieldPtr   prev = NULL;
-  ObjectIdPtr    oip;
-
-  if (uop == NULL || values == NULL) return;
-  oip = uop->type;
-  if (oip == NULL || StringICmp (oip->str, "DBLink") != 0) return;
-
-  for (curr = uop->data; curr != NULL; curr = curr->next) {
-    oip = curr->label;
-    if (oip != NULL && StringICmp (oip->str, "BioProject") == 0) {
-      break;
-    }
-    prev = curr;
-  }
-
-  if (curr == NULL) {
-    curr = UserFieldNew ();
-    oip = ObjectIdNew ();
-    oip->str = StringSave ("BioProject");
-    curr->label = oip;
-    curr->choice = 7; /* sequence of string */
-
-    /* link new set at end of list */
-
-    if (prev != NULL) {
-      prev->next = curr;
-    } else {
-      uop->data = curr;
-    }
-  }
-
-  if (curr == NULL || curr->choice != 7) return;
-
-  cpp = (CharPtr PNTR) MemNew (sizeof (CharPtr) * (num));
-  if (cpp == NULL) return;
-
-  curr->num = num;
-  for (i = 0; i < num; i++) {
-    cpp [i] = StringSaveNoNull (values [i]);
-  }
-  curr->data.ptrvalue = (Pointer) cpp;
+  AddStringListFieldToDBLinkUserObject(uop, num, values, "BioProject");
 }
 
 NLM_EXTERN UserObjectPtr CreateNcbiCleanupUserObject (

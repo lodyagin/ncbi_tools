@@ -227,6 +227,14 @@ sub parseloc {
       if ($thisloc =~ /^([^.]+)\.\.([^.]+)$/) {
         $thisloc = "$2..$1";
       }
+
+      if ($thisloc =~ /^>([^.]+)\.\.([^.]+)$/) {
+        $thisloc = "<$1..$2";
+      }
+      if ($thisloc =~ /^([^.]+)\.\.<([^.]+)$/) {
+        $thisloc = "$1..>$2";
+      }
+
       if ($thisloc !~ /^.*:.*$/) {
         push (@working, parseloc ($thisloc));
       }

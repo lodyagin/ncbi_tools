@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_memory_connector.c,v 6.8 2011/09/11 01:19:42 kazimird Exp $
+/* $Id: test_ncbi_memory_connector.c,v 6.9 2013/02/23 17:24:34 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,8 +33,8 @@
 #include <connect/ncbi_memory_connector.h>
 #include "../ncbi_priv.h"               /* CORE logging facilities */
 #include "ncbi_conntest.h"
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 
 int main(void)

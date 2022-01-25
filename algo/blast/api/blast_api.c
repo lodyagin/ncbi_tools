@@ -1,4 +1,4 @@
-/* $Id: blast_api.c,v 1.57 2009/07/08 19:39:36 madden Exp $
+/* $Id: blast_api.c,v 1.59 2016/06/21 13:53:41 madden Exp $
 ***************************************************************************
 *                                                                         *
 *                             COPYRIGHT NOTICE                            *
@@ -289,7 +289,7 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                                        options->ext_options,
                                        FALSE,
                                        kNumResults,
-                                       BlastHSPWriterNew(&writer_info, NULL));
+                                       BlastHSPWriterNew(&writer_info, NULL, query));
         
         if (options->num_cpus > 1) {
             MT_LOCK lock = Blast_MT_LOCKInit();
@@ -302,7 +302,7 @@ s_BlastHSPStreamSetUp(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                                        options->ext_options,
                                        FALSE,
                                        kNumResults,
-                                       BlastHSPWriterNew(&writer_info, NULL));
+                                       BlastHSPWriterNew(&writer_info, NULL, query));
         Blast_TabularFormatDataSetUp(tf_data, options->program,
                            *hsp_stream, seq_src, query, query_info,
                            options->score_options, sbp, options->eff_len_options,
@@ -393,7 +393,7 @@ s_BlastThreadManager(BLAST_SequenceBlk* query, BlastQueryInfo* query_info,
                              query_info, seq_src, score_options, 
                              ext_options, hit_options, eff_len_options, 
                              db_options, psi_options, sbp, hsp_stream, 
-                             rps_info, pattern_blk, results)) != 0) {
+                             rps_info, pattern_blk, results, kNumCpus)) != 0) {
                 SBlastMessageWrite(&extra_returns->error, SEV_ERROR,
                                    "Traceback engine failed\n", NULL, options->believe_query);
             }
@@ -578,7 +578,7 @@ error_return:
 Int2
 Blast_RunSearch(SeqLoc* query_seqloc,
                 Blast_PsiCheckpointLoc * psi_checkpoint,
-                const BlastSeqSrc* seq_src,
+                BlastSeqSrc* seq_src,
                 SeqLoc* masking_locs,
                 const SBlastOptions* options,
                 BlastTabularFormatData* tf_data,
@@ -730,7 +730,7 @@ Blast_RunSearch(SeqLoc* query_seqloc,
     }
 
     status = LookupTableWrapInit(query, lookup_options, query_options,
-                        lookup_segments, sbp, &lookup_wrap, rps_info, &core_msg);
+                        lookup_segments, sbp, &lookup_wrap, rps_info, &core_msg, seq_src);
     if (core_msg)
     {
           extra_returns->error = Blast_MessageToSBlastMessage(core_msg, query_seqloc, query_info, options->believe_query);

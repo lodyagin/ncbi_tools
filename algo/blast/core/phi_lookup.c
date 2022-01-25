@@ -1,4 +1,4 @@
-/* $Id: phi_lookup.c,v 1.39 2006/11/21 17:14:28 papadopo Exp $
+/* $Id: phi_lookup.c,v 1.41 2016/06/30 12:34:14 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
  * Functions for accessing the lookup table for PHI-BLAST
  * @todo FIXME needs doxygen comments and lines shorter than 80 characters
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] = 
-    "$Id: phi_lookup.c,v 1.39 2006/11/21 17:14:28 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/phi_lookup.h>
 #include <algo/blast/core/blast_encoding.h>
@@ -439,7 +434,6 @@ SPHIPatternSearchBlkNew(char* pattern_in, Boolean is_dna, BlastScoreBlk* sbp,
 
     wildcardProduct = 1;
     currentWildcardProduct = 1;
-    prevSetMask = 0;
     currentSetMask = 0;
 
     pattern_length = strlen(pattern_in);

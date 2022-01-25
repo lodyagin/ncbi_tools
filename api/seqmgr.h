@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 9/94
 *
-* $Revision: 6.74 $
+* $Revision: 6.78 $
 *
 * File Description:  Manager for Bioseqs and BioseqSets
 *
@@ -93,9 +93,9 @@ typedef BioseqPtr (LIBCALLBACK * BSFetchTop)
 typedef BioseqPtr (LIBCALLBACK * BSFetch) PROTO((SeqIdPtr sip, Pointer data));
 
 typedef Int4 (LIBCALLBACK * SIDPreCacheFunc) (SeqEntryPtr sep, Boolean components, Boolean locations, Boolean products, Boolean alignments, Boolean history, Boolean inference, Boolean others);
-typedef Int4 (LIBCALLBACK * SeqLenLookupFunc) (Int4 gi);
-typedef CharPtr (LIBCALLBACK * AccnVerLookupFunc) (Int4 gi);
-typedef SeqIdPtr (LIBCALLBACK * SeqIdSetLookupFunc) (Int4 gi);
+typedef Int4 (LIBCALLBACK * SeqLenLookupFunc) (BIG_ID gi);
+typedef CharPtr (LIBCALLBACK * AccnVerLookupFunc) (BIG_ID gi);
+typedef SeqIdPtr (LIBCALLBACK * SeqIdSetLookupFunc) (BIG_ID gi);
 
 typedef struct seqidindexelement {
 	CharPtr str;               /* PRINTID_FASTA_SHORT string */
@@ -226,23 +226,23 @@ NLM_EXTERN SeqEntryPtr LIBCALL SeqMgrGetSeqEntryForEntityID PROTO((Int2 id));
 
 /*****************************************************************************
 *
-*   GetSeqIdForGI(Int4)
+*   GetSeqIdForGI(BIG_ID)
 *     returns the SeqId for a GI
 *     returns NULL if can't find it
 *     The returned SeqId is allocated. Caller must free it.
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI PROTO((Int4 gi));
+NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdForGI PROTO((BIG_ID gi));
 
 /*****************************************************************************
 *
-*   GetSeqIdSetForGI(Int4)
+*   GetSeqIdSetForGI(BIG_ID)
 *     returns the chain of all SeqIds for a GI
 *     returns NULL if can't find it
 *     The returned SeqId chain is allocated. Caller must free it with SeqIdSetFree.
 *
 *****************************************************************************/
-NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdSetForGI PROTO((Int4 gi));
+NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdSetForGI PROTO((BIG_ID gi));
 
 
 /*****************************************************************************
@@ -252,7 +252,7 @@ NLM_EXTERN SeqIdPtr LIBCALL GetSeqIdSetForGI PROTO((Int4 gi));
 *     returns 0 if can't find it
 *
 *****************************************************************************/
-NLM_EXTERN Int4 LIBCALL GetGIForSeqId PROTO((SeqIdPtr sid));
+NLM_EXTERN BIG_ID LIBCALL GetGIForSeqId PROTO((SeqIdPtr sid));
 
 /*****************************************************************************
 *
@@ -671,10 +671,10 @@ NLM_EXTERN Int4 LIBCALL GetUniGeneIDForSeqId PROTO((SeqIdPtr sip));
 *     Internal functions to cache gi - SeqId associations
 *
 *****************************************************************************/
-NLM_EXTERN Boolean FetchFromSeqIdGiCache (Int4 gi, SeqIdPtr PNTR sipp);
-NLM_EXTERN Boolean FetchFromGiSeqIdCache (SeqIdPtr sip, Int4Ptr gip);
+NLM_EXTERN Boolean FetchFromSeqIdGiCache (BIG_ID gi, SeqIdPtr PNTR sipp);
+NLM_EXTERN Boolean FetchFromGiSeqIdCache (SeqIdPtr sip, BIG_ID_PNTR gip);
 
-NLM_EXTERN void RecordInSeqIdGiCache (Int4 gi, SeqIdPtr sip);
+NLM_EXTERN void RecordInSeqIdGiCache (BIG_ID gi, SeqIdPtr sip);
 NLM_EXTERN void FreeSeqIdGiCache (void);
 
 
@@ -700,6 +700,7 @@ typedef struct smfeatitem {
   Int4         dnaStop;      /* last stop on protein mapped to DNA coordinate for flatfile */
   Boolean      partialL;     /* left end is partial */
   Boolean      partialR;     /* right end is partial */
+  Boolean      external;     /* feature is external to sequence record (or derived gap) */
   Boolean      farloc;       /* location has an accession not packaged in entity */
   Boolean      bad_order;    /* location is out of order - possibly trans-spliced */
   Boolean      mixed_strand; /* location has mixed strands - possibly trans-spliced */

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/30/95
 *
-* $Revision: 6.69 $
+* $Revision: 6.70 $
 *
 * File Description: 
 *
@@ -416,8 +416,8 @@ extern int LIBCALLBACK SortByVnpDataIntvalue (VoidPtr ptr1, VoidPtr ptr2);
 extern void ShowGeneList (ButtoN b);
 extern void EnableDisableLegendItem (BioseqViewPtr bvp, Boolean enable);
 
-NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object);
-NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp);
+NLM_EXTERN void RunAutoFixScript (BaseFormPtr bfp, Boolean add_object, Nlm_ChangeNotifyProc change_notify, Pointer change_data);
+NLM_EXTERN void AutofixOnStartup (BaseFormPtr bfp, Nlm_ChangeNotifyProc change_notify, Pointer change_data);
 
 
 #ifdef __cplusplus

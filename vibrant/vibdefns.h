@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.17 $
+* $Revision: 6.18 $
 *
 * File Description: 
 *       Vibrant alias definitions
@@ -37,6 +37,9 @@
 * Modifications:  
 * --------------------------------------------------------------------------
 * $Log: vibdefns.h,v $
+* Revision 6.18  2013/05/31 23:26:17  kans
+* added hooks for menu and button action
+*
 * Revision 6.17  2011/09/20 18:38:55  choi
 * Added DialogTextWithFont and SpecialTextWithFont which are versions of
 * DialogText and SpecialText that take a font parameter.  It should be
@@ -417,6 +420,9 @@ extern "C" {
 
 #define SetMouseMoveCallback Nlm_SetMouseMoveCallback
 #define SetMouseMoveRegion Nlm_SetMouseMoveRegion
+
+#define SetButtonAction Nlm_SetButtonAction
+#define SetMenuAction Nlm_SetMenuAction
 
 #define ProcessEvents Nlm_ProcessEvents
 #define QuitProgram Nlm_QuitProgram

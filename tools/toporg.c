@@ -1,4 +1,4 @@
-static char const rcsid[] = "$Id: toporg.c,v 6.197 2012/05/10 21:20:48 kans Exp $";
+static char const rcsid[] = "$Id: toporg.c,v 6.250 2016/07/29 01:49:57 kans Exp $";
 
 #include <stdio.h>
 #include <ncbi.h>
@@ -20,6 +20,7 @@ static char const rcsid[] = "$Id: toporg.c,v 6.197 2012/05/10 21:20:48 kans Exp 
 static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr);
 
 SeqDescrPtr remove_descr PROTO((SeqDescrPtr head, SeqDescrPtr x));
+//LCOV_EXCL_START
 /****************************************************************************
  *   move org-ref, modif, mol_type, date, title and pubs
  *   to seg-set level in segmented set, if not there
@@ -35,6 +36,7 @@ void toporg(SeqEntryPtr sep)
   return;
 }
 
+// Used for segsets
 /****************************************************************************
  *     check for backbone entry and expand (to whole) OrgRef feature
  *    if it's not whole and the only one OrgRef in the entry
@@ -220,6 +222,8 @@ void ChkSegset (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
   return;
 }
+//LCOV_EXCL_STOP
+
 
 static Int2 PubLabelMatchEx (ValNodePtr vnp1, ValNodePtr vnp2, Boolean checkdates)
 
@@ -289,6 +293,8 @@ static Int2 PubLabelMatchEx (ValNodePtr vnp1, ValNodePtr vnp2, Boolean checkdate
   return 0;
 }
 
+//LCOV_EXCL_START
+// Used for segsets
 static void RemovePubFromParts(SeqEntryPtr sep, ValNodePtr pub)
 {
   BioseqPtr    b;
@@ -319,6 +325,9 @@ static void RemovePubFromParts(SeqEntryPtr sep, ValNodePtr pub)
   }
   return;
 }
+//LCOV_EXCL_STOP
+
+
 /***************************************************************************
  *    0  match
  *    1 no match
@@ -459,6 +468,8 @@ static Boolean PubdescMatch (PubdescPtr p1, PubdescPtr p2)
   return TRUE;
 }
 
+//LCOV_EXCL_START
+// Used for segsets
 /* return list of pubs that are the same in all segmets */
 static ValNodePtr CheckSegsForPub(SeqEntryPtr sep)
 {
@@ -513,6 +524,8 @@ static ValNodePtr CheckSegsForPub(SeqEntryPtr sep)
   }
   return list;
 }
+
+// used for segsets
 /* move identical pubs in segmented set to the set level */
 void MoveSegmPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
@@ -565,7 +578,8 @@ void MoveSegmPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   return;
 }
 
-static Boolean AllPartsHaveTitles (BioseqSetPtr bssp)
+// Used for segsets
+static Boolean AllPartsHaveTitles(BioseqSetPtr bssp)
 
 {
   BioseqPtr    bsp;
@@ -784,6 +798,8 @@ void ChkNucProt (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   }
   return;
 }
+//LCOV_EXCL_STOP
+
 
 void MoveNPPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
@@ -982,6 +998,7 @@ void MovePopPhyMutPubs (SeqEntryPtr sep)
   DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
 }
 
+//LCOV_EXCL_START
 static void AddFeatToBioseq (SeqFeatPtr sfp, BioseqPtr bsp)
 
 {
@@ -1013,6 +1030,37 @@ static void AddFeatToBioseq (SeqFeatPtr sfp, BioseqPtr bsp)
       sap->data = (Pointer) sfp;
     }
   }
+}
+
+static Boolean SSECNoGenomeAnnotInAnnotDescr (SeqAnnotPtr sap)
+
+{
+  AnnotDescrPtr  adp;
+  ObjectIdPtr    oip;
+  CharPtr        str;
+  UserFieldPtr   ufp;
+  UserObjectPtr  uop;
+
+  if (sap == NULL) return TRUE;
+
+  for (adp = sap->desc; adp != NULL; adp = adp->next) {
+    if (adp->choice != Annot_descr_user) continue;
+    uop = (UserObjectPtr) adp->data.ptrvalue;
+    if (uop == NULL) continue;
+    oip = uop->type;
+    if (oip == NULL) continue;
+    if (StringICmp (oip->str, "StructuredComment") != 0) continue;
+    for (ufp = uop->data; ufp != NULL; ufp = ufp->next) {
+      if (ufp->choice != 1) continue;
+      oip = ufp->label;
+      if (oip == NULL) continue;
+      if (StringCmp (oip->str, "StructuredCommentPrefix") != 0) continue;
+      str = (CharPtr) ufp->data.ptrvalue;
+      if (StringCmp (str, "##Genome-Annotation-Data-START##") == 0) return FALSE;
+    }
+  }
+
+  return TRUE;
 }
 
 static void MoveFeatsOnPartsProc (BioseqSetPtr bssp, Pointer userdata)
@@ -1050,7 +1098,8 @@ static void MoveFeatsOnPartsProc (BioseqSetPtr bssp, Pointer userdata)
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && /* sap->desc == NULL */ SSECNoGenomeAnnotInAnnotDescr (sap)) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);
@@ -1066,6 +1115,7 @@ extern void MoveFeatsFromPartsSet (SeqEntryPtr sep)
 {
   VisitSetsInSep (sep, NULL, MoveFeatsOnPartsProc);
 }
+//LCOV_EXCL_STOP
 
 Boolean CmpOrgById(BioSourcePtr b1, BioSourcePtr b2)
 {
@@ -1322,6 +1372,7 @@ void StripBSfromParts (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   return;
 }
 
+//LCOV_EXCL_START
 /*------------------------ GetDescr() --------------------------*/
 /*****************************************************************************
  *  GetDescr:
@@ -1365,6 +1416,7 @@ ValNodePtr GetDescr(ValNodePtr PNTR descr)
   return (hvnp);
 
 } /* GetDescr */
+//LCOV_EXCL_STOP
 
 static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr)
 {
@@ -1376,10 +1428,13 @@ static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr)
   }
 
   if ( check_GIBB(*descr)) {
+    //LCOV_EXCL_START
+    //all Seq_descr_modif descriptors were removed upstream by StripOld
     vnp = ValNodeExtractList(descr, Seq_descr_modif);
     if (vnp != NULL) {
       hvnp = ValNodeLink(&hvnp, vnp);
     }
+    //LCOV_EXCL_STOP
   }
   vnp = ValNodeExtractList(descr, Seq_descr_comment);
   if (vnp != NULL) {
@@ -1400,6 +1455,8 @@ static ValNodePtr GetDescrNoTitles (ValNodePtr PNTR descr)
 
 } /* GetDescrNoTitles */
 
+//LCOV_EXCL_START
+//All Seq_descr_modif descriptors were removed upstream by StripOld
 /*------------------------ check_GIBB() --------------------------*/
 /*****************************************************************************
  *  check_GIBB:
@@ -1431,6 +1488,7 @@ Boolean check_GIBB(ValNodePtr descr)
   return TRUE;
 }
 
+//used only by ChkSegset (segsets only)
 /*----------------------------- SrchSegChoice() --------------------------*/
 /*****************************************************************************
  *  SrchSegChoice:
@@ -1455,6 +1513,7 @@ ValNodePtr SrchSegChoice(SeqEntryPtr sep, Uint1 choice)
 
 } /* SrchSegChoice */
 
+// Used for segsets
 /*---------------------------- SrchSegSeqMol() --------------------------*/
 /*************************************************************************
  *  SrchSegSeqMol:
@@ -1494,6 +1553,7 @@ void SrchSegSeqMol(SeqEntryPtr sep)
   return;
 
 } /* SrchSegSeqMol */
+//LCOV_EXCL_STOP
 
 /*------------------------ CheckSegDescrChoice() -------------------------*/
 /*****************************************************************************
@@ -1526,6 +1586,8 @@ Boolean CheckSegDescrChoice(SeqEntryPtr sep, Uint1 choice)
       same = FALSE;
       no_choice = TRUE;
     } else if (choice == Seq_descr_org) {
+      //LCOV_EXCL_START
+      //only ever called with Seq_descr_source as choice
       no_choice = FALSE;
       orp = vnp->data.ptrvalue;
 
@@ -1533,6 +1595,7 @@ Boolean CheckSegDescrChoice(SeqEntryPtr sep, Uint1 choice)
         org = orp->taxname;
       else if (StringCmp(org, orp->taxname) != 0)
         same = FALSE;
+      //LCOV_EXCL_STOP
     } else if (choice == Seq_descr_source) {
       no_choice = FALSE;
       if (biosp == NULL) {
@@ -1541,6 +1604,8 @@ Boolean CheckSegDescrChoice(SeqEntryPtr sep, Uint1 choice)
                               (BioSourcePtr) vnp->data.ptrvalue) != 0) {
         same = FALSE;
       }
+//LCOV_EXCL_START
+//only ever called with Seq_descr_source as choice
     } else if (choice == Seq_descr_mol_type) {
       no_choice = FALSE;
       if (mol == -1)
@@ -1584,6 +1649,7 @@ Boolean CheckSegDescrChoice(SeqEntryPtr sep, Uint1 choice)
   if (same == FALSE && no_choice == TRUE && choice != Seq_descr_update_date) {
     same = TRUE;
   }
+  //LCOV_EXCL_STOP
   return (same);
 
 } /* CheckSegDescrChoice */
@@ -1650,6 +1716,8 @@ void StripProtXref (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
         }
       }
       if (vnp != NULL) {         /* sfp->product != NULL */
+//LCOV_EXCL_START
+//Prot-ref xrefs already removed upstream by basic cleanup
         for (xrp = sfp->xref; xrp != NULL; xrp = xrpnext) {
           xrpnext = xrp->next;
           if (xrp->data.choice == SEQFEAT_PROT) {
@@ -1671,6 +1739,7 @@ void StripProtXref (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
             sfp->xref = remove_xref(sfp->xref, xrp);
           }
         }
+//LCOV_EXCL_STOP
       }
     }
     ap->data = head;
@@ -1686,6 +1755,8 @@ void StripProtXref (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   return;
 }
 
+//LCOV_EXCL_START
+//obsolete, and possibly dangerous
 static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
 {
   UserObjectPtr  usop;
@@ -1693,7 +1764,7 @@ static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
   Int4Ptr        ints;
   SeqLocPtr      slp;
   SeqIntPtr      sip;
-  Int4           from, to;
+  Int4           from = 0, to = 0;
 
   if (sfp == NULL) {
     return NULL;
@@ -1722,6 +1793,7 @@ static SeqLocPtr GetAnticodonFromObject(SeqFeatPtr sfp)
   return slp;
 
 }
+//LCOV_EXCL_STOP
 
 /*--------------------------- CheckMaps() --------------------------*/
 /***************************************************************************
@@ -1811,6 +1883,8 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
         if (rrp->type == 3 && rrp->ext.choice == 2) {
           trna = rrp->ext.value.ptrvalue;
           if (sfp->ext != NULL && trna->anticodon == NULL) {
+            //LCOV_EXCL_START
+            // obsolete and possibly dangerous
             trna->anticodon = GetAnticodonFromObject(sfp);
             for (q = sfp->qual; q; q = qnext) {
               qnext = q->next;
@@ -1818,6 +1892,7 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
                 sfp->qual = remove_qual(sfp->qual, q);
               }
             }
+            //LCOV_EXCL_STOP
           }
         }
       }
@@ -1826,7 +1901,8 @@ void CheckMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   return;
 }
 
-void StripMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
+//LCOV_EXCL_START
+void StripMaps(SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr       bsp;
   BioseqSetPtr    bssp;
@@ -1903,6 +1979,7 @@ void StripMaps (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
    }*/
   return;
 }
+//LCOV_EXCL_STOP
 
 static Boolean GBQualPresent(CharPtr ptr, GBQualPtr gbqual)
 
@@ -2140,6 +2217,8 @@ ValNodePtr AddToList(ValNodePtr list, ValNodePtr check, PubdescPtr pdp)
   return AddToListEx (list, check, pdp, TRUE);
 }
 
+//LCOV_EXCL_START
+//this cleanup takes place in BasicCleanup
 void CheckCitSubNew(ValNodePtr vnp)
 {
   CitSubPtr    csp;
@@ -2169,6 +2248,7 @@ void CheckCitSubNew(ValNodePtr vnp)
   }
   return;
 }
+//LCOV_EXCL_STOP
 
 void ChangeCitSub (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
@@ -2202,6 +2282,7 @@ void ChangeCitSub (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   }
 }
 
+//LCOV_EXCL_START
 /***************************************************************************
  *   NewPubs:
  *   -- find all ImpFeat "sites"
@@ -2304,7 +2385,8 @@ void NewPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
   for (ap = sap; ap != NULL; ap = apnext) {
     apnext = ap->next;
-    if (ap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (ap->data == NULL && /* ap->desc == NULL */ SSECNoGenomeAnnotInAnnotDescr (ap)) {
       sap = remove_annot(sap, ap);
     }
   }
@@ -2356,7 +2438,7 @@ void CmpPub (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
       pubequ1 = vpdp->pub;
     }
     if (pdp->pub->next != NULL) {
-      pubequ2 = (NULL);
+      pubequ2 = SeqDescrNew(NULL);
       pubequ2->choice = PUB_Equiv;
       pubequ2->data.ptrvalue = pdp->pub;
     } else {
@@ -2385,6 +2467,7 @@ void CmpPub (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
   return;
 }
+//LCOV_EXCL_STOP
 
 /***********************************************************************
  *    delete pubs from Bioseqs if they are already on the top level
@@ -2458,6 +2541,7 @@ void DeletePubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   return;
 }
 
+//LCOV_EXCL_START
 void MoveSetPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr      bsp = NULL;
@@ -2510,6 +2594,7 @@ void MoveSetPubs (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   data = psp;
   return;
 }
+//LCOV_EXCL_STOP
 
 void FindOldLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
@@ -2546,6 +2631,7 @@ void FindOldLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
   }
 }
 
+//LCOV_EXCL_START
 void NewLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 {
   BioseqPtr     bsp;
@@ -2590,6 +2676,7 @@ void NewLineage (SeqEntryPtr sep, Pointer data, Int4 index, Int2 indent)
 
 }
 
+//only for segsets
 /****************************************************************************
  *  delete_valnode:
  *****************************************************************************/
@@ -2640,6 +2727,7 @@ static ValNodePtr delete_valnode(ValNodePtr host, Uint1 choice)
   return host;
 }
 
+//only for segsets
 /*------------------- CleanUpSeqDescrChoice() -------------------------*/
 /****************************************************************************
  *  CleanUpSeqDescrChoice:
@@ -2658,11 +2746,12 @@ void CleanUpSeqDescrChoice(SeqEntryPtr sep, Uint1 choice)
 
 } /* CleanUpSeqDescrChoice */
 
+//only for segsets
 /**********************************************************/
 SeqDescrPtr remove_descr(SeqDescrPtr head, SeqDescrPtr x)
 {
   SeqDescrPtr  v;
-  SeqDescrPtr  p;
+  SeqDescrPtr  p = NULL;
 
   if(head == NULL)
     return(NULL);
@@ -2677,7 +2766,7 @@ SeqDescrPtr remove_descr(SeqDescrPtr head, SeqDescrPtr x)
   for(v = head; v != NULL && v != x; v = v->next)
     p = v;
 
-  if(v != NULL)
+  if(v != NULL && p != NULL)
   {
     p->next = x->next;
     x->next = NULL;
@@ -2685,6 +2774,7 @@ SeqDescrPtr remove_descr(SeqDescrPtr head, SeqDescrPtr x)
   }
   return(head);
 }
+//LCOV_EXCL_STOP
 
 
 /* Cleanup functions originally from Sequin */
@@ -2916,6 +3006,23 @@ static void CheckForEmblDdbjID (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
   }
 }
 
+static void CheckForLclGnlOnly (BioseqPtr bsp, Pointer mydata)
+
+{
+  BoolPtr   lclGnlOnly;
+  SeqIdPtr  sip;
+
+  if (bsp == NULL) return;
+  lclGnlOnly = (BoolPtr) mydata;
+  if (lclGnlOnly == NULL) return;
+
+  for (sip = bsp->id; sip != NULL; sip = sip->next) {
+    if (sip->choice == SEQID_LOCAL) continue;
+    if (sip->choice == SEQID_GENERAL) continue;
+    *lclGnlOnly = FALSE;
+  }
+}
+
 static void CleanUpPseudoProductsEx (Uint2 entityID, SeqEntryPtr sep, Boolean doPseudo)
 
 {
@@ -2954,11 +3061,13 @@ static void CleanUpPseudoProductsEx (Uint2 entityID, SeqEntryPtr sep, Boolean do
   ValNodeFree (list);
 }
 
+//LCOV_EXCL_START
 extern void CleanUpPseudoProducts (Uint2 entityID, SeqEntryPtr sep)
 
 {
   CleanUpPseudoProductsEx (entityID, sep, TRUE);
 }
+//LCOV_EXCL_STOP
 
 extern void CleanupGenbankCallback (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
@@ -3222,7 +3331,8 @@ extern void CleanupEmptyFeatCallback (SeqEntryPtr sep, Pointer mydata, Int4 inde
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && /* sap->desc == NULL */ SSECNoGenomeAnnotInAnnotDescr (sap)) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);
@@ -3262,6 +3372,8 @@ extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master)
       SeqDescrFree (sdp);
       return;
     }
+    //LCOV_EXCL_START
+    //unreachable code
     /* if (bssp->_class == 7 || bssp->_class == 13 || bssp->_class == 15) return; */
     if (bssp->_class == 7) { /* also handle genbank supersets */
       orp = NULL;
@@ -3279,6 +3391,7 @@ extern void RemoveBioSourceOnPopSet (SeqEntryPtr sep, OrgRefPtr master)
       SeqDescrFree (sdp);
       return;
     }
+    //LCOV_EXCL_STOP
   }
   if (master == NULL) return;
   sdp = SeqEntryGetSeqDescr (sep, Seq_descr_source, NULL);
@@ -3342,7 +3455,8 @@ extern void RemoveMolInfoOnPopSet (SeqEntryPtr sep, MolInfoPtr master)
 }
 
 /* NoBiosourceOrTaxonId also looks for lineage and division */
-
+//LCOV_EXCL_START
+// Not used for cleanup
 extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep)
 
 {
@@ -3399,7 +3513,7 @@ extern Boolean NoBiosourceOrTaxonId (SeqEntryPtr sep)
   return FALSE;
 }
 
-static void CollectGeneFeatures (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+static void CollectGeneFeatures(SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
   BioseqPtr        bsp;
@@ -3470,6 +3584,7 @@ extern void ExtendGeneFeatIfOnMRNA (Uint2 entityID, SeqEntryPtr sep)
   if (sep == NULL) return;
   ExtendGeneWithinNucProt (sep);
 }
+//LCOV_EXCL_STOP
 
 static Boolean ConvertPubFeatDescProc (GatherObjectPtr gop)
 
@@ -3641,6 +3756,9 @@ static Int4 LoopSeqEntryToAsn3 (
   return rsult;
 }
 
+//LCOV_EXCL_START
+//This is never called; basic cleanup takes care of converting
+// gene quals to gene xrefs
 static Boolean DeleteBadMarkedGeneXrefs (GatherObjectPtr gop)
 
 {
@@ -3680,6 +3798,7 @@ static Boolean DeleteBadMarkedGeneXrefs (GatherObjectPtr gop)
   }
   return TRUE;
 }
+//LCOV_EXCL_STOP
 
 static Boolean MarkMovedGeneGbquals (GatherObjectPtr gop)
 
@@ -3703,6 +3822,9 @@ static Boolean MarkMovedGeneGbquals (GatherObjectPtr gop)
     TrimSpacesAroundString (gbq->val);
     nextqual = gbq->next;
     if (StringICmp (gbq->qual, "gene") == 0 && (! StringHasNoText (gbq->val))) {
+      //LCOV_EXCL_START
+      //This is never called; basic cleanup takes care of converting
+      // gene quals to gene xrefs
       grp = GeneRefNew ();
       grp->locus = StringSave (gbq->val);
       xref = SeqFeatXrefNew ();
@@ -3717,6 +3839,7 @@ static Boolean MarkMovedGeneGbquals (GatherObjectPtr gop)
       gbq->val = MemFree (gbq->val);
       GBQualFree (gbq);
       *hasMarkedGenesP = TRUE;
+      //LCOV_EXCL_STOP
     } else {
       prevqual = (GBQualPtr PNTR) &(gbq->next);
     }
@@ -3930,6 +4053,152 @@ static void MergeMultipleDates (SeqEntryPtr sep, Pointer mydata, Int4 index, Int
   }
 }
 
+static SeqDescrPtr GetNextBspBsspDescrUnindexed (
+  BioseqPtr bsp,
+  BioseqSetPtr bssp,
+  Uint1 choice,
+  SeqDescrPtr curr
+)
+
+{
+  ObjValNodePtr  ovp;
+  SeqDescrPtr    sdp = NULL;
+
+  if (bsp == NULL && bssp == NULL) return NULL;
+  if (choice == 0) return NULL;
+
+  if (curr == NULL) {
+    if (bsp != NULL) {
+      sdp = bsp->descr;
+    } else if (bssp != NULL) {
+      sdp = bssp->descr;
+    }
+    curr = sdp;
+  } else {
+    sdp = curr->next;
+  }
+  while (sdp != NULL) {
+    if (sdp->choice == choice) return sdp;
+    sdp = sdp->next;
+  }
+
+  if (curr != NULL && curr->extended != 0) {
+    ovp = (ObjValNodePtr) curr;
+    if (ovp->idx.parenttype == OBJ_BIOSEQ) {
+      bsp = (BioseqPtr) ovp->idx.parentptr;
+      if (bsp == NULL) return NULL;
+      if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+      bssp = (BioseqSetPtr) bsp->idx.parentptr;
+    } else if (ovp->idx.parenttype == OBJ_BIOSEQSET) {
+      bssp = (BioseqSetPtr) ovp->idx.parentptr;
+      if (bssp == NULL) return NULL;
+      if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+      bssp = (BioseqSetPtr) bssp->idx.parentptr;
+    } else {
+      return NULL;
+    }
+  } else {
+    if (bsp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+    bssp = (BioseqSetPtr) bsp->idx.parentptr;
+  }
+
+  while (bssp != NULL) {
+    for (sdp = bssp->descr; sdp != NULL; sdp = sdp->next) {
+      if (sdp->choice == choice) return sdp;
+     }
+     if (bssp->idx.parenttype != OBJ_BIOSEQSET) return NULL;
+     bssp = (BioseqSetPtr) bssp->idx.parentptr;
+  }
+  return NULL;
+}
+
+static void MarkFirstPubIfEquivalent (
+  SeqDescrPtr sdp1,
+  SeqDescrPtr sdp2
+)
+
+{
+  ObjValNodePtr  ovp;
+  PubdescPtr     pdp1, pdp2;
+
+  if (sdp1 == NULL || sdp2 == NULL) return;
+  if (sdp1->choice != Seq_descr_pub || sdp2->choice != Seq_descr_pub) return;
+
+  pdp1 = (PubdescPtr) sdp1->data.ptrvalue;
+  pdp2 = (PubdescPtr) sdp2->data.ptrvalue;
+  if (pdp1 == NULL || pdp2 == NULL) return;
+
+  if (! AsnIoMemComp (pdp1->pub, pdp2->pub, (AsnWriteFunc) PubEquivAsnWrite)) return;
+
+  if (! AsnIoMemComp (pdp1, pdp2, (AsnWriteFunc) PubdescAsnWrite)) {
+    if (pdp2->name == NULL && pdp1->name != NULL) {
+      pdp2->name = pdp1->name;
+      pdp1->name = NULL;
+    }
+    if (pdp2->fig == NULL && pdp1->fig != NULL) {
+      pdp2->fig = pdp1->fig;
+      pdp1->fig = NULL;
+    }
+    if (pdp2->num == NULL && pdp1->num != NULL) {
+      pdp2->num = pdp1->num;
+      pdp1->num = NULL;
+    }
+    if (! pdp2->numexc && pdp1->numexc) {
+      pdp2->numexc = pdp1->numexc;
+    }
+    if (! pdp2->poly_a && pdp1->poly_a) {
+      pdp2->poly_a = pdp1->poly_a;
+    }
+    if (pdp2->align_group == 0 && pdp1->align_group != 0) {
+      pdp2->align_group = pdp1->align_group;
+    }
+    if (pdp2->maploc == NULL && pdp1->maploc != NULL) {
+      pdp2->maploc = pdp1->maploc;
+      pdp1->maploc = NULL;
+    }
+    if (pdp2->seq_raw == NULL && pdp1->seq_raw != NULL) {
+      pdp2->seq_raw = pdp1->seq_raw;
+      pdp1->seq_raw = NULL;
+    }
+    if (pdp2->comment == NULL && pdp1->comment != NULL) {
+      pdp2->comment = pdp1->comment;
+      pdp1->comment = NULL;
+    }
+    if (pdp2->reftype == 0 && pdp1->reftype != 0) {
+      pdp2->reftype = pdp1->reftype;
+    }
+  }
+  ovp = (ObjValNodePtr) sdp1;
+  ovp->idx.deleteme = TRUE;
+}
+
+static void RemoveIdenticalPubs (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
+
+{
+  BioseqPtr     bsp = NULL;
+  BioseqSetPtr  bssp = NULL;
+  SeqDescrPtr   descr = NULL, sdp1, sdp2;
+
+  if (IS_Bioseq (sep)) {
+    bsp = (BioseqPtr) sep->data.ptrvalue;
+    if (bsp == NULL) return;
+    descr = bsp->descr;
+  } else if (IS_Bioseq_set (sep)) {
+    bssp = (BioseqSetPtr) sep->data.ptrvalue;
+    if (bssp == NULL) return;
+    descr = bssp->descr;
+  } else return;
+
+  for (sdp1 = descr; sdp1 != NULL; sdp1 = sdp1->next) {
+    if (sdp1->choice != Seq_descr_pub) continue;
+    sdp2 = GetNextBspBsspDescrUnindexed (bsp, bssp, Seq_descr_pub, sdp1);
+    while (sdp2 != NULL) {
+      MarkFirstPubIfEquivalent (sdp1, sdp2);
+      sdp2 = GetNextBspBsspDescrUnindexed (bsp, bssp, Seq_descr_pub, sdp2);
+    }
+  }
+}
+
 static void MolInfoUpdate (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -4120,6 +4389,8 @@ static Boolean JustMuid (ValNodePtr ppr)
   return FALSE;
 }
 
+//LCOV_EXCL_START
+// this accomplishes nothing useful
 static void FixZeroMuid (ValNodePtr ppr, Int4 muid)
 
 {
@@ -4148,6 +4419,7 @@ static void RepairBadBackbonePub (PubdescPtr pdp, Int4 muid)
     FixZeroMuid (vnp, muid);
   }
 }
+//LCOV_EXCL_STOP
 
 static void RemoveZeroMuids (ValNodePtr  ppr, ValNodePtr PNTR prev)
 
@@ -4183,7 +4455,7 @@ static Boolean IsPatent (PubdescPtr pdp)
   return FALSE;
 }
 
-extern Boolean IsPubContentBad (PubdescPtr pdp)
+static Boolean IsPubContentBadEx (PubdescPtr pdp, Boolean strict)
 {
   AuthListPtr  alp = NULL;
   AuthorPtr    ap;
@@ -4204,9 +4476,11 @@ extern Boolean IsPubContentBad (PubdescPtr pdp)
   /* look for at least one author name */
 
   alp = SSECGetAuthListPtr (pdp);
-  if (alp == NULL) return TRUE;
+  if (alp == NULL && strict) return TRUE;
   if (IsPatent (pdp)) {
     /* patents can get away with no authors */
+  } else if (alp == NULL) {
+    /* if accession or GI assigned, can have no authors */
   } else if (alp->choice == 1) {
     names = alp->names;
     if (names == NULL) return TRUE;
@@ -4261,7 +4535,16 @@ extern Boolean IsPubContentBad (PubdescPtr pdp)
   return FALSE;
 }
 
-static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata)
+//LCOV_EXCL_START
+//Not part of cleanup
+extern Boolean IsPubContentBad(PubdescPtr pdp)
+
+{
+  return IsPubContentBadEx (pdp, TRUE);
+}
+//LCOV_EXCL_STOP
+
+static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata, Boolean strict)
 
 {
   Int4        muid;
@@ -4293,7 +4576,7 @@ static Boolean IsPubBad (PubdescPtr pdp, Pointer userdata)
 
   RemoveZeroMuids (pdp->pub, &(pdp->pub));
 
-  return IsPubContentBad (pdp);
+  return IsPubContentBadEx (pdp, strict);
 }
 
 static void RemoveBadPubFeat (SeqFeatPtr sfp, Pointer userdata)
@@ -4303,7 +4586,7 @@ static void RemoveBadPubFeat (SeqFeatPtr sfp, Pointer userdata)
 
   if (sfp->data.choice != SEQFEAT_PUB) return;
   pdp = (PubdescPtr) sfp->data.value.ptrvalue;
-  if (IsPubBad (pdp, userdata)) {
+  if (IsPubBad (pdp, userdata, FALSE)) {
     sfp->idx.deleteme = TRUE;
   }
 }
@@ -4316,12 +4599,64 @@ static void RemoveBadPubDescr (SeqDescrPtr sdp, Pointer userdata)
 
   if (sdp->choice != Seq_descr_pub) return;
   pdp = (PubdescPtr) sdp->data.ptrvalue;
-  if (IsPubBad (pdp, userdata)) {
+  if (IsPubBad (pdp, userdata, FALSE)) {
     if (sdp->extended != 0) {
       ovp = (ObjValNodePtr) sdp;
       ovp->idx.deleteme = TRUE;
     }
   }
+}
+
+static void RemoveBadPubFeatStrict (SeqFeatPtr sfp, Pointer userdata)
+
+{
+  PubdescPtr  pdp;
+
+  if (sfp->data.choice != SEQFEAT_PUB) return;
+  pdp = (PubdescPtr) sfp->data.value.ptrvalue;
+  if (IsPubBad (pdp, userdata, TRUE)) {
+    sfp->idx.deleteme = TRUE;
+  }
+}
+
+static void RemoveBadPubDescrStrict (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  ObjValNodePtr  ovp;
+  PubdescPtr     pdp;
+
+  if (sdp->choice != Seq_descr_pub) return;
+  pdp = (PubdescPtr) sdp->data.ptrvalue;
+  if (IsPubBad (pdp, userdata, TRUE)) {
+    if (sdp->extended != 0) {
+      ovp = (ObjValNodePtr) sdp;
+      ovp->idx.deleteme = TRUE;
+    }
+  }
+}
+
+static void RemoveEmptyUserObjects (SeqDescrPtr sdp, Pointer userdata)
+
+{
+  ObjectIdPtr    oip;
+  ObjValNodePtr  ovp;
+  UserObjectPtr  uop;
+
+  if (sdp->choice != Seq_descr_user) return;
+  uop = (UserObjectPtr) sdp->data.ptrvalue;
+
+  if (uop != NULL) {
+    oip = uop->type;
+    if (oip != NULL) {
+      if (StringICmp (oip->str, "NcbiAutofix") == 0) return;
+      if (StringICmp (oip->str, "Unverified") == 0) return;
+      if (uop->data != NULL) return;
+    }
+  }
+
+  if (sdp->extended == 0) return;
+  ovp = (ObjValNodePtr) sdp;
+  ovp->idx.deleteme = TRUE;
 }
 
 static void LookForUniqMuidProc (ValNodePtr ppr, Int4Ptr muidp)
@@ -4854,6 +5189,9 @@ static SeqFeatPtr GetUnambigOverlappingGene (BioseqPtr bsp, SeqLocPtr slp)
   return NULL;
 }
 
+//LCOV_EXCL_START
+//This is never called, because RemoveUnneededGeneXrefs is
+//only called when isEmblDdbj is false
 static void LookForPeptides (SeqFeatPtr sfp, Pointer userdata)
 
 {
@@ -4870,6 +5208,7 @@ static void LookForPeptides (SeqFeatPtr sfp, Pointer userdata)
     *hasPepP = TRUE;
   }
 }
+//LCOV_EXCL_STOP
 
 static void RemoveUnneededGeneXrefs (BioseqPtr bsp, Pointer userdata)
 
@@ -4922,6 +5261,9 @@ static void RemoveUnneededGeneXrefs (BioseqPtr bsp, Pointer userdata)
               }
             }
             if (redundantgenexref && isEmblDdbj && sfp->data.choice == SEQFEAT_CDREGION) {
+              //LCOV_EXCL_START
+              //This is never called, because RemoveUnneededGeneXrefs is
+              //only called when isEmblDdbj is false
               hasPeptide = FALSE;
               pbsp = BioseqFindFromSeqLoc (sfp->product);
               if (pbsp != NULL) {
@@ -4930,6 +5272,7 @@ static void RemoveUnneededGeneXrefs (BioseqPtr bsp, Pointer userdata)
                   redundantgenexref = FALSE;
                 }
               }
+              //LCOV_EXCL_STOP
             }
             if (redundantgenexref) {
               last = (SeqFeatXrefPtr PNTR) &(sfp->xref);
@@ -5033,49 +5376,6 @@ static void MarkBadProtTitlesInNucProts (SeqEntryPtr sep)
   VisitBioseqsInSep (sep, NULL, StripBadTitleFromProteinProducts);
 }
 
-static void RemoveOrgFromEndOfProtein (SeqFeatPtr sfp, Pointer userdata)
-
-{
-  BioSourcePtr  biop;
-  BioseqPtr     bsp;
-  CharPtr       cp;
-  size_t        len;
-  OrgRefPtr     orp;
-  ProtRefPtr    prp;
-  SeqDescrPtr   sdp;
-  CharPtr       str;
-  ValNodePtr    vnp;
-
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_PROT) return;
-  prp = (ProtRefPtr) sfp->data.value.ptrvalue;
-  if (prp == NULL) return;
-
-  for (vnp = prp->name; vnp != NULL; vnp = vnp->next) {
-    str = (CharPtr) vnp->data.ptrvalue;
-    if (StringHasNoText (str)) continue;
-    len = StringLen (str);
-    if (len < 5) continue;
-    if (str [len - 1] != ']') continue;
-    cp = StringRChr (str, '[');
-    if (cp == NULL) continue;
-    if (StringNCmp (cp, "[NAD", 4) == 0) continue;
-    bsp = BioseqFindFromSeqLoc (sfp->location);
-    if (bsp == NULL) continue;
-    sdp = GetNextDescriptorUnindexed (bsp, Seq_descr_source, NULL);
-    if (sdp == NULL) continue;
-    biop = (BioSourcePtr) sdp->data.ptrvalue;
-    if (biop == NULL) continue;
-    orp = biop->org;
-    if (orp == NULL) continue;
-    if (StringHasNoText (orp->taxname)) continue;
-    len = StringLen (orp->taxname);
-    if (StringLen (cp) != len + 2) continue;
-    if (StringNICmp (cp + 1, orp->taxname, len - 1) != 0) continue;
-    *cp = '\0';
-    TrimSpacesAroundString (orp->taxname);
-  }
-}
-
 static void MakeNcbiCleanupObject (SeqEntryPtr sep, Boolean gpipeMode)
 
 {
@@ -5090,7 +5390,10 @@ static void MakeNcbiCleanupObject (SeqEntryPtr sep, Boolean gpipeMode)
   if (uop == NULL) return;
 
   if (gpipeMode) {
+//LCOV_EXCL_START
+    // GPIPE doesn't use C Toolkit
     AddStringToNcbiCleanupUserObject (uop, "method", "GpipeSeqEntryCleanup");
+//LCOV_EXCL_STOP
   } else {
     AddStringToNcbiCleanupUserObject (uop, "method", "SeriousSeqEntryCleanup");
   }
@@ -5105,6 +5408,250 @@ static void MakeNcbiCleanupObject (SeqEntryPtr sep, Boolean gpipeMode)
   sdp = NewDescrOnSeqEntry (sep, Seq_descr_user);
   if (sdp == NULL) return;
   sdp->data.ptrvalue = uop;
+}
+
+typedef struct ssecpseudo {
+  CharPtr  genepseudo;
+  CharPtr  pseudogene;
+  Boolean inconsistent;
+} SsecPseudoData, PNTR SsecPseudoPtr;
+
+static Boolean LIBCALLBACK SsecTestPseudoProc (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+)
+
+
+{
+  SsecPseudoPtr  bpp;
+  GBQualPtr      gbq;
+
+  if (sfp == NULL || sfp->data.choice == SEQFEAT_GENE || context == NULL) return TRUE;
+  bpp = context->userdata;
+  if (bpp == NULL) return TRUE;
+
+  if (! sfp->pseudo) return TRUE;
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringCmp (gbq->qual, "pseudogene") != 0) continue;
+    if (bpp->pseudogene == NULL) {
+      bpp->pseudogene = gbq->val;
+    } else if (StringCmp (gbq->val, bpp->pseudogene) != 0) {
+      bpp->inconsistent = TRUE;
+    }
+  }
+
+  return TRUE;
+}
+
+static Boolean LIBCALLBACK SsecSetPseudoProc (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+)
+
+
+{
+  SsecPseudoPtr  bpp;
+  GBQualPtr      gbq;
+
+  if (sfp == NULL || sfp->data.choice == SEQFEAT_GENE || context == NULL) return TRUE;
+  bpp = context->userdata;
+  if (bpp == NULL) return TRUE;
+
+  if (! sfp->pseudo) return TRUE;
+
+  gbq = GBQualNew ();
+  if (gbq == NULL) return TRUE;
+
+  gbq->qual = StringSave ("pseudogene");
+  gbq->val = StringSave (bpp->pseudogene);
+
+  gbq->next = sfp->qual;
+  sfp->qual = gbq;
+
+  return TRUE;
+}
+
+static void SynchronizePseudogenesProc (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  SsecPseudoData  bpd;
+  BioseqPtr       bsp;
+  GBQualPtr       gbq;
+
+  if (sfp == NULL || sfp->data.choice != SEQFEAT_GENE) return;
+  if (! sfp->pseudo) return;
+
+  MemSet ((Pointer) &bpd, 0, sizeof (SsecPseudoData));
+
+  /* get pseudogene value from gene feature */
+
+  for (gbq = sfp->qual; gbq != NULL; gbq = gbq->next) {
+    if (StringCmp (gbq->qual, "pseudogene") != 0) continue;
+    if (bpd.genepseudo == NULL) {
+      bpd.genepseudo = gbq->val;
+    } else if (StringCmp (gbq->val, bpd.genepseudo) != 0) {
+      bpd.inconsistent = TRUE;
+    }
+  }
+
+  if (bpd.inconsistent) return;
+
+  bsp = BioseqFindFromSeqLoc (sfp->location);
+  if (bsp == NULL) return;
+
+  /* check pseudogene values from underlying features */
+
+  SeqMgrExploreFeatures (bsp, (Pointer) &bpd, SsecTestPseudoProc, sfp->location, NULL, NULL);
+
+  if (bpd.inconsistent) return;
+
+  if (bpd.genepseudo == NULL && bpd.pseudogene == NULL) return;
+
+  if (bpd.pseudogene == NULL) {
+    bpd.pseudogene = bpd.genepseudo;
+  } else if (bpd.genepseudo != NULL && StringCmp (bpd.pseudogene, bpd.genepseudo) != 0) {
+    return;
+  }
+
+  gbq = GBQualNew ();
+  if (gbq == NULL) return;
+
+  gbq->qual = StringSave ("pseudogene");
+  gbq->val = StringSave (bpd.pseudogene);
+
+  gbq->next = sfp->qual;
+  sfp->qual = gbq;
+
+  SeqMgrExploreFeatures (bsp, (Pointer) &bpd, SsecSetPseudoProc, sfp->location, NULL, NULL);
+}
+
+typedef struct genexrefskew {
+  Int4  gene_locus;
+  Int4  gene_locus_tag;
+  Int4  xref_locus;
+  Int4  xref_locus_tag;
+} GeneSkew, PNTR GeneSkewPtr;
+
+static void FindGeneXrefMismatch (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  GeneRefPtr      grp;
+  GeneSkewPtr     gsp;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+  gsp = (GeneSkewPtr) userdata;
+  if (gsp == NULL) return;
+
+  if (sfp->data.choice == SEQFEAT_GENE) {
+    grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+    if (grp != NULL) {
+      if (StringDoesHaveText (grp->locus)) {
+        (gsp->gene_locus)++;
+      }
+      if (StringDoesHaveText (grp->locus_tag)) {
+        (gsp->gene_locus_tag)++;
+      }
+    }
+  }
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->data.choice != SEQFEAT_GENE) continue;
+    grp = (GeneRefPtr) xref->data.value.ptrvalue;
+    if (grp == NULL || SeqMgrGeneIsSuppressed (grp)) continue;
+      if (StringDoesHaveText (grp->locus)) {
+        (gsp->xref_locus)++;
+      }
+      if (StringDoesHaveText (grp->locus_tag)) {
+        (gsp->xref_locus_tag)++;
+      }
+  }
+}
+
+static void ForceGeneXrefToLocus (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  GeneRefPtr      grp;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->data.choice != SEQFEAT_GENE) continue;
+    grp = (GeneRefPtr) xref->data.value.ptrvalue;
+    if (grp == NULL || SeqMgrGeneIsSuppressed (grp)) continue;
+    if (StringDoesHaveText (grp->locus_tag) && grp->locus == NULL) {
+      grp->locus = grp->locus_tag;
+      grp->locus_tag = NULL;
+    }
+  }
+}
+
+static void ForceGeneXrefToLocusTag (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  GeneRefPtr      grp;
+  SeqFeatXrefPtr  xref;
+
+  if (sfp == NULL) return;
+
+  for (xref = sfp->xref; xref != NULL; xref = xref->next) {
+    if (xref->data.choice != SEQFEAT_GENE) continue;
+    grp = (GeneRefPtr) xref->data.value.ptrvalue;
+    if (grp == NULL || SeqMgrGeneIsSuppressed (grp)) continue;
+    if (StringDoesHaveText (grp->locus) && grp->locus_tag == NULL) {
+      grp->locus_tag = grp->locus;
+      grp->locus = NULL;
+    }
+  }
+}
+
+static void FixGeneXrefSkew (
+  SeqEntryPtr sep
+)
+
+{
+  GeneSkew  gs;
+
+  if (sep == NULL) return;
+
+  MemSet ((Pointer) &gs, 0, sizeof (GeneSkew));
+  VisitFeaturesInSep (sep, (Pointer) &gs, FindGeneXrefMismatch);
+  if (gs.gene_locus == 0 && gs.gene_locus_tag > 0) {
+    if (gs.xref_locus > 0 && gs.xref_locus_tag == 0) {
+      VisitFeaturesInSep (sep, NULL, ForceGeneXrefToLocusTag);
+    }
+  } else if (gs.gene_locus > 0 && gs.gene_locus_tag == 0) {
+    if (gs.xref_locus == 0 && gs.xref_locus_tag > 0) {
+      VisitFeaturesInSep (sep, NULL, ForceGeneXrefToLocus);
+    }
+  }
+}
+
+static void FindPubWithFig(SeqDescPtr sdp, Pointer userdata)
+{
+    PubdescPtr pdp;
+    Int4 a = 0;
+
+    if (sdp->choice == Seq_descr_pub) {
+        pdp = (PubdescPtr)sdp->data.ptrvalue;
+        if (pdp->fig != NULL) {
+            a = 1;
+        }
+    }
 }
 
 static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEntryFunc taxmerge, Boolean doPseudo, Boolean gpipeMode)
@@ -5123,6 +5670,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   Int4            muid = 0;
   Boolean         objMgrFilter [OBJ_MAX];
   SeqEntryPtr     oldscope;
+  Boolean         lclGnlOnly = TRUE;
   SeqEntryPtr     tmp;
   ValNodePtr      vnp;
 
@@ -5166,6 +5714,7 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   /* ExtendGeneFeatIfOnMRNA (0, sep); */ /* gene on mRNA is full length */
 
   SeqEntryExplore (sep, (Pointer) &isEmblOrDdbj, CheckForEmblDdbjID);
+  VisitBioseqsInSep (sep, (Pointer) &lclGnlOnly, CheckForLclGnlOnly);
   VisitBioseqsInSep (sep, NULL, ExtendSingleGeneOnMRNA);
 
   RemoveBioSourceOnPopSet (sep, NULL);
@@ -5176,22 +5725,35 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   SeqEntryExplore (sep, NULL, RemoveMultipleTitles);
   SeqEntryExplore (sep, NULL, MergeMultipleDates);
   VisitPubdescsInSep (sep, (Pointer) &muid, LookForUniqueMuid);
-  VisitDescriptorsInSep (sep, (Pointer) &muid, RemoveBadPubDescr);
-  VisitFeaturesInSep (sep, (Pointer) &muid, RemoveBadPubFeat);
+  if (lclGnlOnly) {
+    VisitDescriptorsInSep (sep, (Pointer) &muid, RemoveBadPubDescrStrict);
+    VisitFeaturesInSep (sep, (Pointer) &muid, RemoveBadPubFeatStrict);
+  } else {
+    VisitDescriptorsInSep (sep, (Pointer) &muid, RemoveBadPubDescr);
+    VisitFeaturesInSep (sep, (Pointer) &muid, RemoveBadPubFeat);
+  }
   SeqEntryExplore (sep, (Pointer) &muid, MergePubFigInChain);
   VisitFeaturesInSep (sep, NULL, CorrectSfpExceptText);
   if (! isEmblOrDdbj) {
     SeqEntryExplore (sep, NULL, MergeEquivCitSubs);
   }
-  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+  VisitDescriptorsInSep (sep, NULL, RemoveEmptyUserObjects);
+  DeleteMarkedObjects(0, OBJ_SEQENTRY, (Pointer)sep);
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
   EntryMergeDupBioSources (sep); /* do before and after SE2A3 */
-  LoopSeqEntryToAsn3 (sep, TRUE, FALSE, taxfun, taxmerge, gpipeMode, isEmblOrDdbj);
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
+  LoopSeqEntryToAsn3(sep, TRUE, FALSE, taxfun, taxmerge, gpipeMode, isEmblOrDdbj);
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
   /* EntryStripSerialNumber(sep); */ /* strip citation serial numbers */
   MovePopPhyMutPubs (sep);
-  EntryChangeGBSource (sep);   /* at least remove redundant information in GBBlocks */
-  EntryCheckGBBlock (sep);
-  SeqEntryMoveDbxrefs (sep); /* db_xref gbqual to sfp->dbxref */
-  EntryMergeDupBioSources (sep);
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
+  EntryChangeGBSource(sep);   /* at least remove redundant information in GBBlocks */
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
+  EntryCheckGBBlock(sep);
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
+  SeqEntryMoveDbxrefs(sep); /* db_xref gbqual to sfp->dbxref */
+  VisitDescriptorsInSep(sep, NULL, FindPubWithFig);
+  EntryMergeDupBioSources(sep);
   SeqEntryExplore (sep, NULL, GetRidOfEmptyFeatsDescCallback);
   CleanUpPseudoProductsEx (entityID, sep, doPseudo);
   RenormalizeNucProtSets (sep, TRUE);
@@ -5203,7 +5765,6 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   move_cds_ex (sep, doPseudo);
   SeqEntryExplore (sep, NULL, MolInfoUpdate);
   DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
-  VisitFeaturesInSep (sep, NULL, RemoveOrgFromEndOfProtein);
   /* do these again, since SE2A3 can create full length source feature */
   SeqEntryExplore (sep, NULL, CleanupGenbankCallback);
   ConvertFullLenSourceFeatToDesc (sep);
@@ -5249,9 +5810,13 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   SeqEntryPubsAsn4 (sep, isEmblOrDdbj);
   SeqMgrIndexFeatures (entityID, NULL);
   if (hasMarkedGenes) {
+    //LCOV_EXCL_START
+    //This is never called; basic cleanup takes care of converting
+    // gene quals to gene xrefs
     MemSet ((Pointer) objMgrFilter, FALSE, sizeof (objMgrFilter));
     objMgrFilter [OBJ_SEQFEAT] = TRUE;
     GatherObjectsInEntity (entityID, 0, NULL, DeleteBadMarkedGeneXrefs, NULL, objMgrFilter);
+    //LCOV_EXCL_STOP
   }
   if (! gpipeMode) {
     if (! isEmblOrDdbj) {   /* for now leave gene xrefs on EMBL and DDBJ */
@@ -5262,8 +5827,24 @@ static void SeriousSeqEntryCleanupEx (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqE
   ResynchMessengerRNAPartials (sep);
   ResynchProteinPartials (sep);
   InstantiateProteinTitles (entityID, NULL);
+  if (isEmblOrDdbj) {
+    RemoveStructuredCommentKeywords (entityID);
+  } else {
+    RemoveAllStructuredCommentKeywords (entityID);
+  }
+  AddStructuredCommentKeywords (entityID);
   SeqMgrClearFeatureIndexes (entityID, NULL);
+
+  SeqEntryExplore (sep, NULL, RemoveIdenticalPubs);
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, (Pointer) sep);
+
+  FixGeneXrefSkew (sep);
+
   MakeNcbiCleanupObject (sep, gpipeMode);
+  /*
+  SeqMgrIndexFeatures (entityID, NULL);
+  VisitFeaturesInSep (sep, NULL, SynchronizePseudogenesProc);
+  */
   BasicSeqEntryCleanup (sep);
   if (! gpipeMode) {
     NormalizeDescriptorOrder (sep);
@@ -5280,16 +5861,249 @@ extern void SeriousSeqEntryCleanup (SeqEntryPtr sep, SeqEntryFunc taxfun, SeqEnt
   SeriousSeqEntryCleanupEx (sep, taxfun, taxmerge, TRUE, FALSE);
 }
 
+//LCOV_EXCL_START
 extern void SeriousSeqEntryCleanupBulk (SeqEntryPtr sep)
 
 {
   SeriousSeqEntryCleanupEx (sep, NULL, NULL, FALSE, FALSE);
 }
 
+// GPIPE doesn't use cleanasn
 extern void GpipeSeqEntryCleanup (SeqEntryPtr sep)
 
 {
   SeriousSeqEntryCleanupEx (sep, NULL, NULL, TRUE, TRUE);
+}
+
+// used by ExtendedSeqEntryCleanup (not used)
+typedef struct dummysmfedata {
+  Int4        max;
+  Int4        num_at_max;
+  Int4        num_trans_spliced;
+  Boolean     equivalent_genes;
+  GeneRefPtr  grp_at_max;
+} DummySmfeData, PNTR DummySmfePtr;
+
+static Boolean LIBCALLBACK DummySMFEProc (
+  SeqFeatPtr sfp,
+  SeqMgrFeatContextPtr context
+)
+
+
+{
+  DummySmfePtr  dsp;
+  GeneRefPtr    grp, grpx;
+  Int4          len;
+  Boolean       redundantgenexref = FALSE;
+  CharPtr       syn1, syn2;
+
+  if (sfp == NULL || context == NULL) return TRUE;
+  dsp = context->userdata;
+  if (dsp == NULL) return TRUE;
+  if (sfp->data.choice != SEQFEAT_GENE) return TRUE;
+  grp = (GeneRefPtr) sfp->data.value.ptrvalue;
+  if (grp == NULL) return TRUE;
+
+  len = SeqLocLen (sfp->location);
+  if (len < dsp->max) {
+    dsp->max = len;
+    dsp->num_at_max = 1;
+    dsp->num_trans_spliced = 0;
+    if (StringISearch (sfp->except_text, "trans-splicing") != NULL) {
+      (dsp->num_trans_spliced)++;
+    }
+    dsp->equivalent_genes = FALSE;
+    dsp->grp_at_max = grp;
+  } else if (len == dsp->max) {
+    (dsp->num_at_max)++;
+    if (StringISearch (sfp->except_text, "trans-splicing") != NULL) {
+      (dsp->num_trans_spliced)++;
+    }
+    grpx = dsp->grp_at_max;
+    if (grpx != NULL) {
+      redundantgenexref = FALSE;
+      if (StringDoesHaveText (grp->locus_tag) && StringDoesHaveText (grpx->locus_tag)) {
+        if (StringICmp (grp->locus_tag, grpx->locus_tag) == 0) {
+          redundantgenexref = TRUE;
+        }
+      } else if (StringDoesHaveText (grp->locus) && StringDoesHaveText (grpx->locus)) {
+        if (StringICmp (grp->locus, grpx->locus) == 0) {
+          redundantgenexref = TRUE;
+        }
+      } else if (grp->syn != NULL && grpx->syn != NULL) {
+        syn1 = (CharPtr) grp->syn->data.ptrvalue;
+        syn2 = (CharPtr) grpx->syn->data.ptrvalue;
+        if (StringDoesHaveText (syn1) && StringDoesHaveText (syn2)) {
+          if (StringICmp (syn1, syn2) == 0) {
+            redundantgenexref = TRUE;
+          }
+        }
+      }
+    }
+    if (redundantgenexref) {
+      dsp->equivalent_genes = TRUE;
+    }
+  }
+
+  return TRUE;
+}
+
+// used by ExtendedSeqEntryCleanup (not used)
+static Boolean LIBCALLBACK AddMissingGeneXref (SeqFeatPtr sfp, SeqMgrFeatContextPtr context)
+
+{
+  Int2               count;
+  DummySmfeData      dsd;
+  SeqMgrFeatContext  gcontext;
+  SeqFeatPtr         gene;
+  GeneRefPtr         grp;
+  CharPtr            locus, locus_tag;
+  SeqEntryPtr        sep, oldscope;
+  Boolean            smallGenomeSet;
+  BoolPtr            smallGenomeSetP;
+  SeqFeatXrefPtr     xref;
+
+  if (sfp == NULL || context == NULL) return TRUE;
+  smallGenomeSetP = (BoolPtr) context->userdata;
+  if (smallGenomeSetP == NULL) return FALSE;
+  smallGenomeSet = *smallGenomeSetP;
+
+  if (sfp->idx.subtype == FEATDEF_GENE ||
+      sfp->idx.subtype == FEATDEF_operon ||
+      sfp->idx.subtype == FEATDEF_gap ||
+      sfp->idx.subtype == FEATDEF_repeat_region ||
+      sfp->idx.subtype == FEATDEF_mobile_element ||
+      sfp->idx.subtype == FEATDEF_centromere ||
+      sfp->idx.subtype == FEATDEF_primer_bind ||
+      sfp->idx.subtype == FEATDEF_telomere) return TRUE;
+
+  grp = SeqMgrGetGeneXref (sfp);
+  if (grp != NULL) return TRUE;
+
+  MemSet ((Pointer) &dsd, 0, sizeof (DummySmfeData));
+  dsd.max = INT4_MAX;
+  dsd.num_at_max = 0;
+  dsd.num_trans_spliced = 0;
+  dsd.equivalent_genes = FALSE;
+  dsd.grp_at_max = NULL;
+  count = SeqMgrGetAllOverlappingFeatures (sfp->location, FEATDEF_GENE, NULL, 0,
+                                           LOCATION_SUBSET, (Pointer) &dsd, DummySMFEProc);
+
+  if (dsd.num_at_max <= 1) return TRUE;
+  if (smallGenomeSet && dsd.num_at_max == dsd.num_trans_spliced) return TRUE;
+
+  sep = GetTopSeqEntryForEntityID (sfp->idx.entityID);
+  oldscope = SeqEntrySetScope (sep);
+  gene = SeqMgrGetOverlappingFeatureEx (sfp->location, FEATDEF_GENE, NULL, 0, NULL, LOCATION_SUBSET, &gcontext, TRUE);
+  SeqEntrySetScope (oldscope);
+  if (gene == NULL) return TRUE;
+
+  grp = (GeneRefPtr) gene->data.value.ptrvalue;
+  if (grp == NULL) return TRUE;
+  locus = grp->locus;
+  locus_tag = grp->locus_tag;
+  if (StringHasNoText (locus) && StringHasNoText (locus_tag)) return TRUE;
+
+  grp = GeneRefNew ();
+  if (grp == NULL) return TRUE;
+  grp->locus = StringSaveNoNull (locus);
+  grp->locus_tag = StringSaveNoNull (locus_tag);
+  xref = SeqFeatXrefNew ();
+  if (xref == NULL) return TRUE;
+  xref->data.choice = SEQFEAT_GENE;
+  xref->data.value.ptrvalue = (Pointer) grp;
+  xref->next = sfp->xref;
+  sfp->xref = xref;
+
+  return TRUE;
+}
+
+// used by ExtendedSeqEntryCleanup (not used)
+static void BspMissingGeneRef (BioseqPtr bsp, Pointer userdata)
+
+{
+  if (bsp == NULL || ISA_aa (bsp->mol)) return;
+
+  SeqMgrExploreFeatures (bsp, userdata, AddMissingGeneXref, NULL, NULL, NULL);
+}
+
+// used by ExtendedSeqEntryCleanup (not used)
+static void IsSmallGenomeSet (
+  BioseqSetPtr bssp,
+  Pointer userdata
+)
+
+{
+  BoolPtr  smallGenomeSetP;
+
+  if (bssp == NULL || bssp->_class != BioseqseqSet_class_small_genome_set) return;
+  smallGenomeSetP = (BoolPtr) userdata;
+  if (smallGenomeSetP == NULL) return;
+  *smallGenomeSetP = TRUE;
+}
+
+// used by ExtendedSeqEntryCleanup (not used)
+static void FixSeqStrandOther (
+  SeqFeatPtr sfp,
+  Pointer userdata
+)
+
+{
+  SeqIntPtr  sintp;
+  SeqLocPtr  slp;
+  SeqPntPtr  spp;
+
+  if (sfp == NULL || sfp->location == NULL) return;
+
+  /*
+  if (sfp->data.choice != SEQFEAT_GENE &&
+      sfp->data.choice != SEQFEAT_CDREGION &&
+      sfp->data.choice != SEQFEAT_PROT &&
+      sfp->data.choice != SEQFEAT_RNA) return;
+  */
+
+  slp = SeqLocFindNext (sfp->location, NULL);
+  while (slp != NULL) {
+    switch (slp->choice) {
+      case SEQLOC_INT:
+        sintp = (SeqIntPtr) slp->data.ptrvalue;
+        if (sintp != NULL && sintp->strand == Seq_strand_other) {
+          sintp->strand = Seq_strand_plus;
+        }
+        break;
+      case SEQLOC_PNT:
+        spp = (SeqPntPtr) slp->data.ptrvalue;
+        if (spp != NULL && spp->strand == Seq_strand_other) {
+          spp->strand = Seq_strand_plus;
+        }
+        break;
+      default:
+        break;
+    }
+    slp = SeqLocFindNext (sfp->location, slp);
+  }
+}
+
+// option not used
+extern void ExtendedSeqEntryCleanup (SeqEntryPtr sep)
+
+{
+  Uint2    entityID;
+  Boolean  smallGenomeSet = FALSE;
+
+  if (sep == NULL) return;
+  SeriousSeqEntryCleanupEx (sep, NULL, NULL, TRUE, FALSE);
+
+  VisitSetsInSep (sep, (Pointer) &smallGenomeSet, IsSmallGenomeSet);
+
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  VisitFeaturesInSep (sep, NULL, FixSeqStrandOther);
+
+  SeqMgrIndexFeatures (entityID, NULL);
+  VisitBioseqsInSep (sep, (Pointer) &smallGenomeSet, BspMissingGeneRef);
+
+  SeqMgrClearFeatureIndexes (entityID, NULL);
 }
 
 extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap)
@@ -5338,185 +6152,9 @@ extern void SeriousSeqAnnotCleanup (SeqAnnotPtr sap)
   }
 }
 
-static void CorrectGenCodeIndexedCallback (SeqFeatPtr sfp, Pointer userdata)
-{
-  CdRegionPtr     crp;
-  GeneticCodePtr  gc;
-  Int2Ptr         pGenCode;
-  ValNodePtr      vnp;
-  Boolean         need_replacement = FALSE;
-
-  if (sfp == NULL || sfp->data.choice != SEQFEAT_CDREGION 
-      || sfp->data.value.ptrvalue == NULL
-      || userdata == NULL) return;
- 
-  pGenCode = (Int2Ptr) userdata;
-  crp = (CdRegionPtr) sfp->data.value.ptrvalue;
-  if (crp->genetic_code != NULL
-      && crp->genetic_code->choice == 254) {
-    if (crp->genetic_code->data.ptrvalue == NULL) {
-      vnp = ValNodeNew (NULL);
-      vnp->choice = 2;
-      vnp->data.intvalue = (Int4) *pGenCode;
-    } else {
-      vnp = crp->genetic_code->data.ptrvalue;
-      if (vnp->next == NULL && vnp->choice == 2) {
-        vnp->data.intvalue = (Int4) *pGenCode;
-      } else {
-        need_replacement = TRUE;
-      }
-    }
-  } else {
-    need_replacement = TRUE;
-  }
-  if (need_replacement) {
-    gc = GeneticCodeNew ();
-    if (gc == NULL) return;
-    crp->genetic_code = GeneticCodeFree (crp->genetic_code);
-    vnp = ValNodeNew (NULL);
-    gc->data.ptrvalue = vnp;
-    if (vnp != NULL) {
-      vnp->choice = 2;
-      vnp->data.intvalue = (Int4) *pGenCode;
-    }
-    crp->genetic_code = gc;
-  }
-}
-
-static void CorrectGenCodesBioseqCallback (BioseqPtr bsp, Pointer userdata)
-{
-  SeqMgrFeatContext fcontext;
-  SeqFeatPtr        sfp;
-
-  if (bsp == NULL || userdata == NULL) return;
-  for (sfp = SeqMgrGetNextFeature (bsp, NULL, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext);
-       sfp != NULL;
-       sfp = SeqMgrGetNextFeature (bsp, sfp, SEQFEAT_CDREGION, FEATDEF_CDS, &fcontext)) {
-    CorrectGenCodeIndexedCallback (sfp, userdata);
-  }
-
-}
-
-typedef struct gencodescan {
-  Boolean mito;
-  Boolean plastid;
-  Int2    nuclCode;
-  Int2    mitoCode;
-  Int2    pstdCode;
-  Boolean already_found;
-} GenCodeScanData, PNTR GenCodeScanPtr;
-
-static void JustGetGenCodeFromOrgRef (OrgRefPtr orp, GenCodeScanPtr gp)
-{
-  OrgNamePtr onp;
-
-  if (orp == NULL || orp->orgname == NULL || gp == NULL || gp->already_found) return;
-  onp = orp->orgname;
-
-  gp->nuclCode = onp->gcode;
-  gp->mitoCode = onp->mgcode;
-  gp->pstdCode = onp->pgcode;
-}
-
-static void JustGetGenCodeFromBiop (BioSourcePtr biop, GenCodeScanPtr gp)
-{
-  if (biop == NULL || gp == NULL) return;
-  if (gp->already_found && !biop->is_focus) return;
-
-  gp->mito = (Boolean) (biop->genome == GENOME_kinetoplast ||
-                        biop->genome == GENOME_mitochondrion ||
-                        biop->genome == GENOME_hydrogenosome);
-
-  gp->plastid = (Boolean) (biop->genome == GENOME_chloroplast ||
-                                biop->genome == GENOME_chromoplast ||
-                                biop->genome == GENOME_plastid ||
-                                biop->genome == GENOME_cyanelle ||
-                                biop->genome == GENOME_apicoplast ||
-                                biop->genome == GENOME_leucoplast ||
-                                biop->genome == GENOME_proplastid ||
-                                biop->genome == GENOME_chromatophore);
-
-  JustGetGenCodeFromOrgRef (biop->org, gp);
-  gp->already_found = TRUE;
-}
-
-
-static void JustGetGenCodeFromFeat (SeqFeatPtr sfp, Pointer userdata) 
-{
-  GenCodeScanPtr gp;
-
-  if (sfp == NULL || userdata == NULL || sfp->data.choice != SEQFEAT_BIOSRC) return;
-
-  gp = (GenCodeScanPtr) userdata;
-
-  JustGetGenCodeFromBiop (sfp->data.value.ptrvalue, gp);
-}
-
-static void JustGetGenCodeFromDesc (SeqDescrPtr sdp, Pointer userdata)
-{
-  GenCodeScanPtr gp;
-
-  if (sdp == NULL || userdata == NULL || sdp->choice != Seq_descr_source) return;
-
-  gp = (GenCodeScanPtr) userdata;
-
-  JustGetGenCodeFromBiop (sdp->data.ptrvalue, gp);
-}
-
-static Int2 JustGetGenCodeForSeqEntry (SeqEntryPtr sep) 
-{
-  GenCodeScanData gd;
-
-  gd.already_found = FALSE;
-  gd.mito = FALSE;
-  gd.mitoCode = 0;
-  gd.nuclCode = 0;
-  gd.pstdCode = 0;
-  gd.plastid = FALSE;
-
-  VisitDescriptorsInSep (sep, &gd, JustGetGenCodeFromDesc);
-  VisitFeaturesInSep (sep, &gd, JustGetGenCodeFromFeat);
-
-  if (gd.plastid) {
-    if (gd.pstdCode > 0) {
-      return gd.pstdCode;
-    } else {
-      return 11;
-    }
-  } else if (gd.mito) {
-    return gd.mitoCode;
-  } else {
-    return gd.nuclCode;
-  }
-}
-
-extern void CorrectGenCodes (SeqEntryPtr sep, Uint2 entityID)
-
-{
-  BioseqSetPtr  bssp;
-  Int2          genCode;
-
-  if (sep == NULL) return;
-  if (IS_Bioseq_set (sep)) {
-    bssp = (BioseqSetPtr) sep->data.ptrvalue;
-    if (bssp != NULL && (bssp->_class == 7 ||
-                         (IsPopPhyEtcSet (bssp->_class)))) {
-      for (sep = bssp->seq_set; sep != NULL; sep = sep->next) {
-        CorrectGenCodes (sep, entityID);
-      }
-      return;
-    }
-  }
-
-  genCode = JustGetGenCodeForSeqEntry(sep);
-  VisitFeaturesInSep (sep, &genCode, CorrectGenCodeIndexedCallback);
-  VisitBioseqsInSep (sep, &genCode, CorrectGenCodesBioseqCallback);
-}
-
-
 
 /* ConvertSegSetToDeltaSeq section */
-
+// Only for SegSets
 static void FindSegSet (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -5533,6 +6171,15 @@ static void FindSegSet (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent
   *sepp = sep;
 }
 
+static void MarkSegSets (BioseqSetPtr bssp, Pointer userdata)
+
+{
+  if (bssp == NULL) return;
+  if (bssp->_class != BioseqseqSet_class_segset) return;
+  bssp->idx.deleteme = TRUE;
+}
+
+// Only for SegSets
 static void LookForMixedMols (BioseqPtr bsp, Pointer userdata)
 
 {
@@ -5546,7 +6193,8 @@ static void LookForMixedMols (BioseqPtr bsp, Pointer userdata)
   *molp |= bsp->mol;
 }
 
-static void CheckForMissingMolInfo (BioseqPtr bsp, Pointer userdata)
+// Only for SegSets
+static void CheckForMissingMolInfo(BioseqPtr bsp, Pointer userdata)
 
 {
   BoolPtr            bp;
@@ -5572,7 +6220,8 @@ typedef struct gbdata {
   Boolean     mixedorigins;
 } GBData, PNTR GBDataPtr;
 
-static void FindGenBankDiffs (
+// Only for SegSets
+static void FindGenBankDiffs(
   SeqDescrPtr sdp,
   Pointer userdata
 )
@@ -5603,7 +6252,8 @@ static void FindGenBankDiffs (
   }
 }
 
-static void CopyFirstGBBlock (
+// Only for SegSets
+static void CopyFirstGBBlock(
   SeqDescrPtr sdp,
   Pointer userdata
 )
@@ -5624,6 +6274,7 @@ static void CopyFirstGBBlock (
   *gbpp = (GBBlockPtr) AsnIoMemCopy (gbp, (AsnReadFunc) GBBlockAsnRead, (AsnWriteFunc) GBBlockAsnWrite);
 }
 
+// Only for SegSets
 static void CopyFirstMolInfo (
   SeqDescrPtr sdp,
   Pointer userdata
@@ -5645,6 +6296,7 @@ static void CopyFirstMolInfo (
   *mipp = (MolInfoPtr) AsnIoMemCopy (mip, (AsnReadFunc) MolInfoAsnRead, (AsnWriteFunc) MolInfoAsnWrite);
 }
 
+// Only for SegSets
 static void CopyFirstTitle (
   SeqDescrPtr sdp,
   Pointer userdata
@@ -5666,6 +6318,7 @@ static void CopyFirstTitle (
   *titlep = (CharPtr) StringSave (title);
 }
 
+// Only for SegSets
 static void AddPartAccns (
   BioseqPtr bsp,
   Pointer userdata
@@ -5691,6 +6344,7 @@ static void AddPartAccns (
   ValNodeCopyStr (&(gbp->extra_accessions), 0, buf);
 }
 
+// Only for SegSets
 static void AddPartHist (
   BioseqPtr bsp,
   Pointer userdata
@@ -5720,6 +6374,7 @@ static void AddPartHist (
   }
 }
 
+// Only for SegSets
 static Boolean LIBCALLBACK AddSegToDeltaSeq (
   SeqLocPtr slp,
   SeqMgrSegmentContextPtr context
@@ -5785,6 +6440,7 @@ static Boolean LIBCALLBACK AddSegToDeltaSeq (
   return TRUE;
 }
 
+// Only for SegSets
 static void MoveAnnotsToDeltaSeq (SeqEntryPtr sep, Pointer mydata, Int4 index, Int2 indent)
 
 {
@@ -5827,7 +6483,8 @@ static void MoveAnnotsToDeltaSeq (SeqEntryPtr sep, Pointer mydata, Int4 index, I
         sfp = nextsfp;
       }
     }
-    if (sap->data == NULL) {
+    /* now keep empty annot if annot_descr present */
+    if (sap->data == NULL && /* sap->desc == NULL */ SSECNoGenomeAnnotInAnnotDescr (sap)) {
       *(prevsap) = sap->next;
       sap->next = NULL;
       SeqAnnotFree (sap);
@@ -5838,6 +6495,7 @@ static void MoveAnnotsToDeltaSeq (SeqEntryPtr sep, Pointer mydata, Int4 index, I
   }
 }
 
+// Only for SegSets
 static Boolean RptUnitInBaseRange (CharPtr str, Int4Ptr fromP, Int4Ptr toP)
 
 {
@@ -5864,6 +6522,7 @@ static Boolean RptUnitInBaseRange (CharPtr str, Int4Ptr fromP, Int4Ptr toP)
   return TRUE;
 }
 
+// Only for SegSets
 static BioseqPtr FindFirstLocalBioseq (SeqLocPtr loc)
 
 {
@@ -5884,6 +6543,7 @@ static BioseqPtr FindFirstLocalBioseq (SeqLocPtr loc)
   return NULL;
 }
 
+// Only for SegSets
 static void MapSegFeatToMaster (
   SeqFeatPtr sfp,
   Pointer userdata
@@ -6025,7 +6685,8 @@ static void MapSegFeatToMaster (
   }
 }
 
-static void PartDescToFeatProc (
+// Only for SegSets
+static void PartDescToFeatProc(
   SeqDescrPtr sdp,
   Pointer userdata
 )
@@ -6057,6 +6718,7 @@ static void PartDescToFeatProc (
   }
 }
 
+// Only for SegSets
 static void MovePartDescToFeat (
   BioseqPtr bsp,
   Pointer userdata
@@ -6068,7 +6730,8 @@ static void MovePartDescToFeat (
   VisitDescriptorsOnBsp (bsp, (Pointer) bsp, PartDescToFeatProc);
 }
 
-static void PartCitSubDatesCompProc (
+// Only for SegSets
+static void PartCitSubDatesCompProc(
   SeqDescrPtr sdp,
   Pointer userdata
 )
@@ -6102,7 +6765,9 @@ static void PartCitSubDatesCompProc (
   }
 }
 
-static void CompPartCitSubDates (
+
+// Only for SegSets
+static void CompPartCitSubDates(
   BioseqPtr bsp,
   Pointer userdata
 )
@@ -6112,6 +6777,7 @@ static void CompPartCitSubDates (
   VisitDescriptorsOnBsp (bsp, userdata, PartCitSubDatesCompProc);
 }
 
+// Only for SegSets
 static void PartCitSubDatesSyncProc (
   SeqDescrPtr sdp,
   Pointer userdata
@@ -6141,6 +6807,7 @@ static void PartCitSubDatesSyncProc (
   }
 }
 
+// Only for SegSets
 static void SyncPartCitSubDates (
   BioseqPtr bsp,
   Pointer userdata
@@ -6150,6 +6817,7 @@ static void SyncPartCitSubDates (
   VisitDescriptorsOnBsp (bsp, userdata, PartCitSubDatesSyncProc);
 }
 
+// Only for SegSets
 extern void SegSeqNullToVirtual (SeqEntryPtr sep)
 
 {
@@ -6288,6 +6956,7 @@ extern void SegSeqNullToVirtual (SeqEntryPtr sep)
   SeqMgrIndexFeatures (entityID, NULL);
 }
 
+// Only for SegSets
 static void ForceSegSeqNullToVirtual (SeqEntryPtr sep)
 
 {
@@ -6401,32 +7070,28 @@ static void ForceSegSeqNullToVirtual (SeqEntryPtr sep)
   SeqMgrIndexFeatures (entityID, NULL);
 }
 
-extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep)
+// Only for SegSets
+static Boolean ConvertSegSetToDeltaSeqInt(SeqEntryPtr sep, Uint2 entityID, Boolean cleanup)
 
 {
-  BioseqSetPtr  bssp;
-  GBData        gbd;
-  DatePtr       cp = NULL;
-  DatePtr       dp = NULL;
-  BioseqPtr     deltabsp;
-  Uint2         entityID;
-  GBBlockPtr    gbp = NULL;
-  MolInfoPtr    mip = NULL;
-  Boolean       missingMolInfo = FALSE;
-  Uint1         mol = 0;
-  SeqEntryPtr   partssep = NULL;
-  BioseqPtr     segbsp = NULL;
-  SeqEntryPtr   segsep = NULL;
-  SeqEntryPtr   segseq = NULL;
-  BioseqSetPtr  segset = NULL;
-  SeqIdPtr      tmpid;
-  CharPtr       ttl = NULL;
-  ValNodePtr    vnp;
-  /*
-  SeqLocPtr     slp;
-  BioseqPtr     virtbsp;
-  ValNode       vn;
-  */
+  BioseqSetPtr   bssp;
+  GBData         gbd;
+  DatePtr        cp = NULL;
+  DatePtr        dp = NULL;
+  BioseqPtr      deltabsp;
+  GBBlockPtr     gbp = NULL;
+  MolInfoPtr     mip = NULL;
+  Boolean        missingMolInfo = FALSE;
+  Uint1          mol = 0;
+  ObjValNodePtr  ovp;
+  SeqEntryPtr    partssep = NULL;
+  BioseqPtr      segbsp = NULL;
+  SeqEntryPtr    segsep = NULL;
+  SeqEntryPtr    segseq = NULL;
+  BioseqSetPtr   segset = NULL;
+  SeqIdPtr       tmpid;
+  CharPtr        str, ttl = NULL;
+  ValNodePtr     vnp;
 
   if (sep == NULL) return FALSE;
   if (! IS_Bioseq_set (sep)) return FALSE;
@@ -6452,7 +7117,9 @@ extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep)
   /* skip mixed gbblock source or origin fields for now */
   MemSet ((Pointer) &gbd, 0, sizeof (gbd));
   VisitDescriptorsInSep (sep, (Pointer) &gbd, FindGenBankDiffs);
+  /*
   if (gbd.mixedsources || gbd.mixedorigins) return FALSE;
+  */
 
   /* avoid copying protein molinfo if nucleotide molinfo is missing */
   VisitBioseqsInSep (sep, (Pointer) &missingMolInfo, CheckForMissingMolInfo);
@@ -6565,13 +7232,64 @@ extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep)
   /* indexes are out of date */
   SeqMgrClearFeatureIndexes (entityID, NULL);
 
-  SeriousSeqEntryCleanup (sep, NULL, NULL);
-  RemoveAllNcbiCleanupUserObjects (sep);
+  if (cleanup) {
+    SeriousSeqEntryCleanup (sep, NULL, NULL);
+    RemoveAllNcbiCleanupUserObjects (sep);
+  }
 
   return TRUE;
 }
 
-static void ConvPartDescToFeatCallback (
+// Only for SegSets
+extern Boolean ConvertSegSetToDeltaSeqEx (SeqEntryPtr sep, Boolean cleanup)
+
+{
+  BioseqSetPtr  bssp;
+  Uint2         entityID;
+  Boolean       res = TRUE;
+  SeqEntryPtr   tmp;
+
+  if (sep == NULL) return FALSE;
+  if (! IS_Bioseq_set (sep)) return FALSE;
+  bssp = (BioseqSetPtr) sep->data.ptrvalue;
+  if (bssp == NULL) return FALSE;
+
+  entityID = ObjMgrGetEntityIDForChoice (sep);
+
+  if ((bssp->_class >= BioseqseqSet_class_mut_set && bssp->_class <= BioseqseqSet_class_eco_set) ||
+      bssp->_class == BioseqseqSet_class_wgs_set ||
+      bssp->_class == BioseqseqSet_class_small_genome_set) {
+    for (tmp = bssp->seq_set; tmp != NULL; tmp = tmp->next) {
+      ConvertSegSetToDeltaSeqInt (tmp, entityID, cleanup);
+    }
+  } else {
+  
+    res = ConvertSegSetToDeltaSeqInt (sep, entityID, cleanup);
+  }
+
+  /* in case segset was not marked */
+  VisitSetsInSep (sep, NULL, MarkSegSets);
+
+  /* remove old segset */
+  DeleteMarkedObjects (0, OBJ_SEQENTRY, sep);
+
+  /* indexes are out of date */
+  SeqMgrClearFeatureIndexes (entityID, NULL);
+
+  SeriousSeqEntryCleanup (sep, NULL, NULL);
+  RemoveAllNcbiCleanupUserObjects (sep);
+
+  return res;
+}
+
+extern Boolean ConvertSegSetToDeltaSeq (SeqEntryPtr sep)
+
+{
+  return ConvertSegSetToDeltaSeqEx (sep, TRUE);
+}
+
+// Only for SegSets
+static void ConvPartDescToFeatCallback(
   BioseqSetPtr bssp,
   Pointer userdata
 )
@@ -6583,12 +7301,14 @@ static void ConvPartDescToFeatCallback (
   VisitBioseqsInSet (bssp, NULL, MovePartDescToFeat);
 }
 
+// Only for SegSets
 extern void ConvertPartDescToFeat (SeqEntryPtr sep)
 
 {
   VisitSetsInSep (sep, NULL, ConvPartDescToFeatCallback);
 }
 
+// Not used
 extern void SimpleAutoDef (SeqEntryPtr sep)
 
 {
@@ -6658,4 +7378,5 @@ extern void SimpleAutoDef (SeqEntryPtr sep)
 
   SeqEntrySetScope (oldscope);
 }
+//LCOV_EXCL_STOP
 

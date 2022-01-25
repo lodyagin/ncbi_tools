@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_connutil_misc.c,v 6.44 2012/05/03 15:19:36 kazimird Exp $
+/* $Id: test_ncbi_connutil_misc.c,v 6.49 2014/11/11 14:26:15 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -33,11 +33,11 @@
 #include <connect/ncbi_connutil.h>
 #include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
+#include <errno.h>
 #include <stdlib.h>
 #include <time.h>
-/* This header must go last */
-#include "test_assert.h"
 
+#include "test_assert.h"  /* This header must go last */
 
 
 /***********************************************************************
@@ -291,7 +291,7 @@ static void TEST_ConnNetInfo(void)
     strcpy(net_info->user, "user");
     strcpy(net_info->pass, "pass");
 
-    ConnNetInfo_LogEx(net_info, eLOG_Note, CORE_GetLOG());
+    ConnNetInfo_Log(net_info, eLOG_Note, CORE_GetLOG());
 
     str = ConnNetInfo_URL(net_info);
     assert(str);
@@ -308,7 +308,7 @@ static void TEST_ConnNetInfo(void)
     assert(strcmp(net_info->path, "/path4/../path6")   == 0);
     assert(strcmp(net_info->args, "args")              == 0);
 
-    ConnNetInfo_LogEx(net_info, eLOG_Note, CORE_GetLOG());
+    ConnNetInfo_Log(net_info, eLOG_Note, CORE_GetLOG());
 
     str = ConnNetInfo_URL(net_info);
     assert(str);
@@ -318,7 +318,7 @@ static void TEST_ConnNetInfo(void)
     ConnNetInfo_SetUserHeader(net_info, "");
     str = UTIL_PrintableString(net_info->http_user_header, 0, buf, 0);
     printf("HTTP User Header after set:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(!net_info->http_user_header  &&  !str);
 
     ConnNetInfo_AppendUserHeader(net_info,
@@ -332,7 +332,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after append:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(strcmp(net_info->http_user_header,
                   "T0: V0\n"
                   "T1:V1\r\n"
@@ -353,7 +353,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after override:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(strcmp(net_info->http_user_header,
                   "T0: V0\n"
                   "T2:V2.1\r\n"
@@ -373,7 +373,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after extend:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(strcmp(net_info->http_user_header,
                   "T0: V0\n"
                   "T2:V2.1 V2\r\n"
@@ -392,7 +392,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after no-op extend:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(strcmp(net_info->http_user_header,
                   "T0: V0\n"
                   "T2:V2.1 V2\r\n"
@@ -408,7 +408,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after self-delete:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(strcmp(net_info->http_user_header, "") == 0);
 
     ConnNetInfo_SetUserHeader(net_info, 0);
@@ -416,7 +416,7 @@ static void TEST_ConnNetInfo(void)
     if (str)
         *str = '\0';
     printf("HTTP User Header after reset:\n%s%s%s\n",
-           "\"" + !str, str ? buf : "NULL", "\"" + !str);
+           &"\""[!str], str ? buf : "NULL", &"\""[!str]);
     assert(!net_info->http_user_header);
 
     for (n = 0; n < sizeof(net_info->args); n++)
@@ -448,12 +448,90 @@ static void TEST_ConnNetInfo(void)
     ConnNetInfo_DeleteAllArgs(net_info, "a=b&p=q&f=d");
     printf("HTTP Arg after delete-all: \"%s\"\n", net_info->args);
 
-    ConnNetInfo_LogEx(net_info, eLOG_Note, CORE_GetLOG());
+    ConnNetInfo_Log(net_info, eLOG_Note, CORE_GetLOG());
 
     ConnNetInfo_Destroy(net_info);
 
     CORE_LOG(eLOG_Note, "ConnNetInfo test completed");
 }
+
+
+static void TEST_DoubleConv(void)
+{
+    static const char* good_tests[] = { "100.25", "-100.25",
+                                        "100.9876", "-100.9876",
+                                        "0.01", "-0.01",
+                                        "0.001", "-0.001",
+                                        "+1.0001", "-1.0001",
+                                        "0.2345", "-0.5432",
+                                        "1", "-1",
+                                        "+100", "-100"};
+    static const char* bad_tests[] = { "-", "+", "-.", "+.", "+-", "-+",
+                                       "-+3", "+-2", "+-1.2", "-+2.1",
+                                       "-a", "+a", ".a",
+                                       "-.a", "+.a" };
+    static const char* weird_tests[] = { "-0a", "+0a", "0a",
+                                         "-1a", "+2a", "3a",
+                                         "-0.a", "+0.a", "0.a",
+                                         "-1.a", "+2.a", "3.a",
+                                         "-0.1a", "+0.2a" , "0.3a",
+                                         "-.1a", "+.2a", ".3a" };
+    size_t i;
+
+    CORE_LOG(eLOG_Note, "Simple double conversion test started");
+
+    CORE_LOG(eLOG_Note, "Conversion checks");
+
+    for (i = 0;  i < sizeof(good_tests) / sizeof(good_tests[0]);  i++) {
+        int p, q;
+        char buf[80], *end = 0;
+        const char* str = good_tests[i];
+        double val = NCBI_simple_atof(str, &end);
+
+        assert(end  &&  !*end  &&  end == str + strlen(str));
+        if (!(end = (char*) strchr(str, '.')))
+            q = 0;
+        else
+            q = (int) strlen(str) - (int)(end - str) - 1;
+        printf("str = \"%s\", val =  %.*f\n", str, q, val);
+
+        for (p = 0;  p < 10;  p++) {
+            end = NCBI_simple_ftoa(buf, val, p);
+            printf("str = \"%s\", buf = \"%s\"%s\n", str, buf,
+                   p == q ? " *" : "");
+            assert(end  &&  (p != q  ||
+                             strcmp(buf, *str == '+' ? str + 1 : str) == 0));
+        }
+    }
+
+    CORE_LOG(eLOG_Note, "Illegal input checks");
+
+    for (i = 0;  i < sizeof(bad_tests) / sizeof (bad_tests[0]);  i++) {
+        char* end = 0;
+        const char* str = bad_tests[i];
+        double val = NCBI_simple_atof(str, &end);
+
+        printf("str = \"%s\", end = \"%s\", val = %f (%d%s%s)\n",
+               str, end, val, errno,
+               errno ? ", "            : "",
+               errno ? strerror(errno) : "");
+        assert(!val  &&  end  &&  end == str);
+    }
+ 
+    CORE_LOG(eLOG_Note, "Corner case checks");
+
+    for (i = 0;  i < sizeof(weird_tests) / sizeof (weird_tests[0]);  i++) {
+        char* end = 0;
+        const char* str = weird_tests[i];
+        double val = NCBI_simple_atof(str, &end);
+
+        printf("str = \"%s\", end = \"%s\", val = %f\n", str, end, val);
+        assert(end  &&  end != str);
+    }
+
+    CORE_LOG(eLOG_Note, "Simple double conversion test completed");
+}
+
 
 
 /***********************************************************************
@@ -475,6 +553,7 @@ int main(void)
     TEST_URL_Encoding();
     TEST_MIME();
     TEST_ConnNetInfo();
+    TEST_DoubleConv();
 
     CORE_LOG(eLOG_Note, "All tests completed successfully");
     CORE_SetLOG(0);

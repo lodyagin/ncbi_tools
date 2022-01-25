@@ -1,4 +1,4 @@
-/* $Id: blast_aalookup.c,v 1.13 2009/10/01 17:55:38 kazimird Exp $
+/* $Id: blast_aalookup.c,v 1.15 2016/05/04 14:59:31 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -31,11 +31,6 @@
 #include <algo/blast/core/blast_aalookup.h>
 #include <algo/blast/core/lookup_util.h>
 #include <algo/blast/core/blast_encoding.h>
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_aalookup.c,v 1.13 2009/10/01 17:55:38 kazimird Exp $";
-#endif                          /* SKIP_DOXYGEN_PROCESSING */
 
 /** Structure containing information needed for adding neighboring words. 
  */
@@ -1205,13 +1200,16 @@ static Int4 s_CompressedLookupFinalize(BlastCompressedAaLookupTable * lookup)
             count++;
     }
 
+/* fprintf(stderr, "SIZE: %ld %ld\n", (long) count, (long) (0.05 * lookup->backbone_size));
+ */
+
     /* Compress the PV array if it would be large. Compress it
        more if the backbone is sparsely populated. Do not compress
        if the PV array is small enough already or the backbone is
        mostly full */
 
     pv_array_bts = PV_ARRAY_BTS;
-    if (count <= 0.05 * lookup->backbone_size) {
+    if (count <= 0.01 * lookup->backbone_size) {
         pv_array_bts += ilog2(lookup->backbone_size / (8 * kTargetPVBytes));
     }
 

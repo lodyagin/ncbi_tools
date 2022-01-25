@@ -1,6 +1,6 @@
-static char const rcsid[] = "$Id: taxblast.c,v 6.30 2008/07/18 19:26:35 madden Exp $";
+static char const rcsid[] = "$Id: taxblast.c,v 6.31 2015/07/06 19:25:47 madden Exp $";
 
-/* $Id: taxblast.c,v 6.30 2008/07/18 19:26:35 madden Exp $
+/* $Id: taxblast.c,v 6.31 2015/07/06 19:25:47 madden Exp $
 * ===========================================================================
 *
 *                            PUBLIC DOMAIN NOTICE
@@ -31,12 +31,15 @@ static char const rcsid[] = "$Id: taxblast.c,v 6.30 2008/07/18 19:26:35 madden E
 *
 * Initial Version Creation Date: 04/04/2000
 *
-* $Revision: 6.30 $
+* $Revision: 6.31 $
 *
 * File Description:
 *        Utilities and functions for Tax-Blast program
 *
 * $Log: taxblast.c,v $
+* Revision 6.31  2015/07/06 19:25:47  madden
+* Adjust for resutls limited by GILIST, JIRA:WB-1904
+*
 * Revision 6.30  2008/07/18 19:26:35  madden
 * Fix for access errors, JIRA WB-86
 *
@@ -505,9 +508,70 @@ static SeqAlignPtr GetNewRedundantAlign(SeqAlignPtr sap, CharPtr database,
                                         Boolean db_is_na) {
     SeqAlignPtr salp_with_redundant_set = NULL;
     Boolean has_redundant_id = FALSE;
-    ReadDBFILEPtr rdfp = readdb_new(database, !db_is_na);
-    
-    if(rdfp) {       
+    Boolean found_use_gi = FALSE;
+
+    if (sap) {
+	ScorePtr score=NULL;
+        for(score = (ScorePtr) sap->score; score != NULL; score = score->next) {
+            if (strcmp("use_this_gi", score->id->str)==0) {
+		found_use_gi = TRUE;
+		break;
+            }
+	}
+    }
+
+    if (found_use_gi)
+    {
+        const int kGis2Use = 100;
+	int gis2use[101];
+        SeqAlignPtr salp_temp, new_salp = SeqAlignListDup(sap);
+        salp_temp = new_salp;
+        while (salp_temp) {
+            	SeqAlignPtr salp_next = salp_temp->next, dup_salp_list = NULL, dup_temp = NULL;
+		int gi_index=0;
+		ScorePtr score=NULL;
+        	for(score = (ScorePtr) sap->score; score != NULL && gi_index < kGis2Use; score = score->next) {
+            		if (strcmp("use_this_gi", score->id->str)==0) {
+				gis2use[gi_index] = score->value.intvalue;
+				gi_index++;
+            		}
+		}
+
+		int index=0;
+		for (index=0; index<gi_index; index++)
+		{
+                    SeqAlignPtr salp_dup = SeqAlignDup(salp_temp);
+                    SeqIdPtr salp_seqid = SeqIdPtrFromSeqAlign(salp_dup);
+		    SeqIdPtr newsip = ValNodeNew(NULL);
+		    newsip->choice = SEQID_GI;
+		    newsip->data.intvalue = gis2use[index];
+                    if (salp_seqid && salp_seqid->next)
+                       salp_seqid->next = SeqIdFree(salp_seqid->next);
+                    salp_seqid->next = newsip;
+                /*save duplicated salp to dup list*/
+                    if (dup_salp_list) {
+                       		dup_temp->next = salp_dup;
+                        	dup_temp = salp_dup;
+                    } else {
+                        	dup_salp_list = salp_dup;
+                        	dup_temp = dup_salp_list;
+                    }
+		}
+
+            	if (dup_salp_list) {
+               		salp_temp->next = dup_salp_list;
+               		dup_temp->next = salp_next;
+               		salp_temp = dup_temp;
+            	}
+
+            	salp_temp = salp_temp->next;
+	}
+        salp_with_redundant_set = new_salp;
+    }
+    else
+    {
+    	ReadDBFILEPtr rdfp = readdb_new(database, !db_is_na);
+        if(rdfp) {       
         SeqAlignPtr salp_temp, new_salp = SeqAlignListDup(sap);
         salp_temp = new_salp;
         while (salp_temp) {
@@ -559,6 +623,7 @@ static SeqAlignPtr GetNewRedundantAlign(SeqAlignPtr sap, CharPtr database,
             SeqAlignSetFree(new_salp);
         }
         readdb_destruct(rdfp);
+        }
     }
     return salp_with_redundant_set;
 }

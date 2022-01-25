@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.6 $
+* $Revision: 6.7 $
 *
 * File Description:  Object manager for module NCBI-Seqres
 *
@@ -41,6 +41,9 @@
 *
 *
 * $Log: objres.c,v $
+* Revision 6.7  2015/10/23 00:04:24  kans
+* NOIJRA Clear av DataVal variable on AsnWrite, needed for supporting Int8 integers in ASN.1
+*
 * Revision 6.6  2004/05/12 20:41:56  kans
 * set aip->io_failure in several erret blocks for compatibility of old object loaders with new ones
 *
@@ -239,6 +242,8 @@ NLM_EXTERN Boolean LIBCALL SeqGraphAsnWrite (SeqGraphPtr sgp, AsnIoPtr aip, AsnT
     if (atp == NULL) return FALSE;
 
 	if (sgp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)sgp)) goto erret;
     if (sgp->title != NULL)

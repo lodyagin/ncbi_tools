@@ -77,6 +77,11 @@ Int2 Main(void)
 		while (*tmp >= ' ') tmp++;
 		*tmp = '\0';
 		aipin = AsnIoOpen(fname, intypes[intype]);
+		if (aipin == NULL)
+		{
+			Message(MSG_ERROR, "Couldn't open %s for input", fname);
+			return 1;
+		}
 		atp = SEQ_ENTRY;
 		atp = AsnReadId(aipin, amp, atp);
 		AsnReadVal(aipin, atp, &value);

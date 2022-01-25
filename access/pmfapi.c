@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.111 $
+* $Revision: 1.118 $
 *
 * File Description: 
 *
@@ -277,8 +277,8 @@ NLM_EXTERN CONN PubMedFetchOpenConnection (
   if (uid < 1) return NULL;
 
   /*
-  sprintf (query, "db=PubMed&report=asn1&mode=text&id=%ld", (long) uid);
-  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/utils/pmfetch.fcgi",
+  sprintf (query, "db=PubMed&retmode=asn.1&id=%ld", (long) uid);
+  return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/eutils/efetch.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
   */
@@ -307,7 +307,7 @@ static void MakeDateTimeStamp (
 
 
 NLM_EXTERN CONN PubSeqFetchOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int2 retcode,
   Int4 flags
 )
@@ -329,13 +329,13 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
   }
 
 #ifdef PUB_SEQ_FETCH_DEBUG
-  sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=%ld", (int) retcode, (long) flags, (long) uid);
+  sprintf (query, "save=idf&view=1&maxplex=%d&extrafeat=%ld&val=%lld", (int) retcode, (long) flags, (long long) uid);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/viewer.fcgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_AsnText, eENCOD_None, 0);
 #endif
 
-  sprintf (query, "maxplex=%d&extrafeat=%ld&val=%ld", (int) retcode, (long) flags, (long) uid);
+  sprintf (query, "maxplex=%d&extrafeat=%ld&val=%lld", (int) retcode, (long) flags, (long long) uid);
   conn = QUERY_OpenServiceQueryEx ("SeqFetch", query, 30, StringRChr (query, '=') + 1);
 
 #ifdef OS_UNIX
@@ -355,7 +355,7 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
     if (StringHasNoText (buf)) {
       StringCpy (buf, "?");
     }
-    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchOpenConnection failed for gi %ld, date/time %s", (long) uid, buf);
+    ErrPostEx (SEV_ERROR, 0, 0, "PubSeqFetchOpenConnection failed for gi %lld, date/time %s", (long long) uid, buf);
     return conn;
   }
 
@@ -363,9 +363,9 @@ NLM_EXTERN CONN PubSeqFetchOpenConnection (
   if (log_query_url) {
     str = CONN_Description (conn);
     if (str == NULL) {
-      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for gi %ld", (long) uid);
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description failed for gi %lld", (long long) uid);
     } else {
-      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for gi %ld is %s", (long) uid, str);
+      ErrPostEx (SEV_ERROR, 0, 0, "CONN_Description for gi %lld is %s", (long long) uid, str);
     }
     MemFree (str);
   }
@@ -584,9 +584,9 @@ NLM_EXTERN CONN PubSeqFetchSRAOpenConnection (
 static CharPtr girevtxt = "cmd=seqid&txt=on&seqid=fasta&val=";
 
 NLM_EXTERN CONN GiRevHistOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 )
 
 {
@@ -609,7 +609,7 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
   StringCpy (query, "val=");
 
   for (i = 0; i < num; i++) {
-    sprintf (tmp, "%s%ld", "," + !i, (long) uids [i]);
+    sprintf (tmp, "%s%lld", "," + !i, (long long) uids [i]);
     StringCat (query, tmp);
   }
 
@@ -620,7 +620,7 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
   */
 
   if (num > 1)
-    sprintf (tmp, "%ld(%d)", (long) *uids, (int) num);
+    sprintf (tmp, "%lld(%d)", (long long) *uids, (int) num);
   else
     StringMove (tmp, query + 4);
 
@@ -634,9 +634,9 @@ NLM_EXTERN CONN GiRevHistOpenConnection (
 static CharPtr giaccvertxt = "cmd=seqid&txt=on&seqid=15&val=";
 
 NLM_EXTERN CONN GiAccVerOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 )
 
 {
@@ -659,7 +659,7 @@ NLM_EXTERN CONN GiAccVerOpenConnection (
   StringCpy (query, "val=");
 
   for (i = 0; i < num; i++) {
-    sprintf (tmp, "%s%ld", "," + !i, (long) uids [i]);
+    sprintf (tmp, "%s%lld", "," + !i, (long long) uids [i]);
     StringCat (query, tmp);
   }
 
@@ -670,7 +670,7 @@ NLM_EXTERN CONN GiAccVerOpenConnection (
   */
 
   if (num > 1)
-    sprintf (tmp, "%ld(%d)", (long) *uids, (int) num);
+    sprintf (tmp, "%lld(%d)", (long long) *uids, (int) num);
   else
     StringMove (tmp, query + 4);
 
@@ -703,7 +703,7 @@ NLM_EXTERN CONN AccnRevHistOpenConnection (
 
 
 NLM_EXTERN CONN GiSeqIdSetOpenConnection (
-  Int4 gi
+  BIG_ID gi
 )
 
 {
@@ -712,13 +712,13 @@ NLM_EXTERN CONN GiSeqIdSetOpenConnection (
   if (gi < 1) return NULL;
 
   /*
-  sprintf (query, "cmd=seqid&txt=on&seqid=asntext&os=PUBSEQ_OS&val=%ld", (long) gi);
+  sprintf (query, "cmd=seqid&txt=on&seqid=asntext&os=PUBSEQ_OS&val=%lld", (long long) gi);
   return QUERY_OpenUrlQuery ("www.ncbi.nlm.nih.gov", 80, "/entrez/sutils/girevhist.cgi",
                              query, "Entrez2Tool", 30, eMIME_T_NcbiData,
                              eMIME_Plain, eENCOD_None, 0);
   */
 
-  sprintf (query, "val=%ld", (long) gi);
+  sprintf (query, "val=%lld", (long long) gi);
   return QUERY_OpenServiceQueryEx ("Gi2SeqIdSet", query, 30, query + 4);
 }
 
@@ -1027,7 +1027,7 @@ NLM_EXTERN CharPtr GiAccVerWaitForReply (
 }
 
 
-NLM_EXTERN Int4 AccnRevHistReadReply (
+NLM_EXTERN BIG_ID AccnRevHistReadReply (
   CONN conn,
   EIO_Status status
 )
@@ -1036,10 +1036,10 @@ NLM_EXTERN Int4 AccnRevHistReadReply (
   AsnIoConnPtr  aicp;
   Char          buf [32];
   Char          ch;
-  Int4          gi = 0;
+  BIG_ID        gi = 0;
   size_t        n_read;
   CharPtr       ptr;
-  long int      val;
+  long long     val;
 
   if (conn != NULL && status == eIO_Success) {
     aicp = QUERY_AsnIoConnOpen ("r", conn);
@@ -1052,7 +1052,7 @@ NLM_EXTERN Int4 AccnRevHistReadReply (
          ch = *ptr;
       }
       *ptr = '\0';
-      if (sscanf (buf, "%ld", &val) == 1 && val > 0) {
+      if (sscanf (buf, "%lld", &val) == 1 && val > 0) {
         gi = val;
       }
     }
@@ -1062,12 +1062,12 @@ NLM_EXTERN Int4 AccnRevHistReadReply (
 }
 
 
-NLM_EXTERN Int4 AccnRevHistWaitForReply (
+NLM_EXTERN BIG_ID AccnRevHistWaitForReply (
   CONN conn
 )
 
 {
-  Int4  gi = 0;
+    BIG_ID gi = 0;
 
   if (conn == NULL) return 0;
 
@@ -1234,7 +1234,7 @@ typedef struct psconfirm {
   Uint4    tid;
   CharPtr  sid;
   SeqIdPtr ssid;
-  Int4     gi;
+  BIG_ID    gi;
   Uint4    ti;
   CharPtr  si;
   SeqIdPtr ssi;
@@ -1263,7 +1263,7 @@ static void ConfirmGiInSep (
 )
 
 {
-  Int4          gi;
+  BIG_ID         gi;
   PsConfirmPtr  psp;
   SeqIdPtr      sip;
 
@@ -1271,7 +1271,7 @@ static void ConfirmGiInSep (
   psp = (PsConfirmPtr) userdata;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     if (sip->choice != SEQID_GI) continue;
-    gi = (Int4) sip->data.intvalue;
+    gi = (BIG_ID) sip->data.intvalue;
     if (psp->gi == 0 || gi == psp->uid) {
       psp->gi = gi;
     }
@@ -1357,7 +1357,7 @@ static void ConfirmSraidInSep (
 
 
 static void VerifyGIInSeqEntry (
-  Int4 uid,
+  BIG_ID uid,
   SeqEntryPtr sep
 )
 
@@ -1369,8 +1369,8 @@ static void VerifyGIInSeqEntry (
   VisitBioseqsInSep (sep, (Pointer) &ps, ConfirmGiInSep);
   if (ps.gi != uid) {
     ErrPostEx (SEV_ERROR, 0, 0,
-               "PubSeqSynchronousQuery requested gi %ld but received gi %ld",
-               (long) uid, (long) ps.gi);
+               "PubSeqSynchronousQuery requested gi %lld but received gi %lld",
+               (long long) uid, (long long) ps.gi);
   }
 }
 
@@ -1470,9 +1470,15 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQueryEx (
     if (StringHasNoText (buf)) {
       StringCpy (buf, "?");
     }
-    ErrPostEx (SEV_ERROR, 0, 0,
-               "PubSeqSynchronousQuery failed for gi %ld, date/time %s, URL is %s",
-               (long) uid, buf, str);
+    if (uid > 0) {
+      ErrPostEx (SEV_ERROR, 0, 0,
+                 "PubSeqSynchronousQuery failed for gi %lld, date/time %s, URL is %s",
+                 (long long) uid, buf, str);
+    } else {
+      ErrPostEx (SEV_ERROR, 0, 0,
+                 "PubSeqSynchronousQuery failed for accession %s, date/time %s, URL is %s",
+                 id_str, buf, str);
+    }
   }
 
   MemFree (str);
@@ -1526,8 +1532,8 @@ NLM_EXTERN SeqIdPtr SeqIdFromPubSeqString (CharPtr str)
   Boolean alldigits = TRUE;
   CharPtr ptr;
   Char    ch;
-  Int4     uid = 0;
-  long int val;
+  BIG_ID  uid = 0;
+  long long val;
   SeqIdPtr sip = NULL;
 
   if (StringHasNoText (str)) {
@@ -1544,8 +1550,8 @@ NLM_EXTERN SeqIdPtr SeqIdFromPubSeqString (CharPtr str)
   }
 
   if (alldigits) {
-    if (sscanf (str, "%ld", &val) == 1) {
-      uid = (Int4) val;
+    if (sscanf (str, "%lld", &val) == 1) {
+      uid = (BIG_ID) val;
       sip = ValNodeNew (NULL);
       sip->choice = SEQID_GI;
       sip->data.intvalue = uid;
@@ -1744,9 +1750,9 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuerySRA (
 
 
 NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 )
 
 {
@@ -1796,9 +1802,9 @@ NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
 
 
 NLM_EXTERN CharPtr GiAccVerSynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 )
 
 {
@@ -1847,13 +1853,13 @@ NLM_EXTERN CharPtr GiAccVerSynchronousQuery (
 }
 
 
-NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
+NLM_EXTERN BIG_ID AccnRevHistSynchronousQuery (
   CharPtr accn
 )
 
 {
   CONN        conn;
-  Int4        gi;
+  BIG_ID        gi;
 #ifdef OS_UNIX
   clock_t     starttime;
   clock_t     stoptime;
@@ -1899,7 +1905,7 @@ NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
 
 
 NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
-  Int4 gi
+  BIG_ID gi
 )
 
 {
@@ -2064,9 +2070,9 @@ NLM_EXTERN Int4 PubSeqCheckQueue (
 
 
 NLM_EXTERN Boolean GiRevHistAsynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -2097,9 +2103,9 @@ NLM_EXTERN Int4 GiRevHistCheckQueue (
 
 
 NLM_EXTERN Boolean GiAccVerAsynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -2161,7 +2167,7 @@ NLM_EXTERN Int4 AccnRevHistCheckQueue (
 
 
 NLM_EXTERN Boolean GiSeqIdSetAsynchronousQuery (
-  Int4 gi,
+  BIG_ID gi,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -2242,13 +2248,14 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 
 {
   BioseqPtr         bsp;
+  DbtagPtr          dbt;
   OMUserDataPtr     omdp = NULL;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
   Int2              retcode = 0;
   SeqEntryPtr       sep = NULL;
   SeqIdPtr          sip;
-  Int4              uid = 0;
+  BIG_ID            uid = 0;
   Char              id_buf[PATH_MAX];
 #ifdef OS_UNIX
   Char              id [64];
@@ -2294,7 +2301,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
     uid = omdp->userdata.intvalue;
 #ifdef OS_UNIX
     if (fetch_succeed_log) {
-      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch reloading gi %ld", uid);
+      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch reloading gi %lld", uid);
     }
 #endif
     if (uid == 0) return OM_MSG_RET_ERROR;
@@ -2305,15 +2312,24 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
   }
 
   if (uid == 0 && sip->choice != SEQID_LOCAL) {
-    SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+    if (sip->choice == SEQID_GENERAL) {
+      dbt = (DbtagPtr) sip->data.ptrvalue;
+      if (dbt != NULL && ((StringICmp (dbt->db, "ti") == 0 || StringICmp (dbt->db, "SRA") == 0))) {
+        SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+      }
+    } else {
+      SeqIdWrite (sip, id_buf, PRINTID_FASTA_SHORT, sizeof (id_buf) - 1);
+    }
   }
 
-  sep = PubSeqSynchronousQueryEx (uid, retcode, pubseqfetchflags, id_buf);
+  if (uid != 0 || StringDoesHaveText (id_buf)) {
+    sep = PubSeqSynchronousQueryEx (uid, retcode, pubseqfetchflags, id_buf);
+  }
 
   if (sep == NULL) {
 #ifdef OS_UNIX
     if (fetch_fail_warn) {
-      ErrPostEx (SEV_ERROR, 0, 0, "PSSyncQuery failed for gi %ld", uid);
+      ErrPostEx (SEV_ERROR, 0, 0, "PSSyncQuery failed for gi %lld", (long long) uid);
     }
 #endif
     return OM_MSG_RET_OK;
@@ -2323,7 +2339,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
 #ifdef OS_UNIX
   if (bsp != NULL) {
     if (fetch_succeed_log) {
-      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch succeeded for gi %ld", uid);
+      ErrPostEx (SEV_ERROR, 0, 0, "PSFetch succeeded for gi %lld", (long long) uid);
     }
   }
 
@@ -2334,7 +2350,7 @@ static Int2 LIBCALLBACK PubSeqBioseqFetchFunc (Pointer data)
         firstbsp = (BioseqPtr) firstsep->data.ptrvalue;
         if (firstbsp != NULL && firstbsp->id != NULL) {
           SeqIdWrite (firstbsp->id, id, PRINTID_FASTA_LONG, sizeof (id) - 1);
-          ErrPostEx (SEV_ERROR, 0, 0, "PubSeqBioseqFetchFunc requested gi %ld, got %s", uid, id);
+          ErrPostEx (SEV_ERROR, 0, 0, "PubSeqBioseqFetchFunc requested gi %lld, got %s", (long long) uid, id);
           omp = ObjMgrGet ();
           if (omp != NULL) {
             ErrPostEx (SEV_ERROR, 0, 0, "ObjMgr highEid %d totobj %d currobj %d maxtemp %d tempcnt %d hold %d",
@@ -2487,7 +2503,7 @@ static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
   SeqIdPtr          sid = NULL;
   SeqIdPtr          sip;
   CharPtr           str;
-  Int4              uid;
+  BIG_ID            uid;
 
   ompcp = (OMProcControlPtr) data;
   if (ompcp == NULL) return OM_MSG_RET_ERROR;
@@ -2497,7 +2513,7 @@ static Int2 LIBCALLBACK PubSeqSeqIdForGiFunc (Pointer data)
   if (sip == NULL) return OM_MSG_RET_ERROR;
 
   if (sip->choice != SEQID_GI) return OM_MSG_RET_ERROR;
-  uid = (Int4) sip->data.intvalue;
+  uid = (BIG_ID) sip->data.intvalue;
   if (uid < 1) return OM_MSG_RET_ERROR;
 
   str = GiRevHistSynchronousQuery (uid, 0, NULL);
@@ -2527,7 +2543,7 @@ static Int2 LIBCALLBACK PubSeqGiForSeqIdFunc (Pointer data)
 
 {
   Char              buf [41];
-  Int4              gi;
+  BIG_ID            gi;
   OMProcControlPtr  ompcp;
   ObjMgrProcPtr     ompp;
   SeqIdPtr          sid;
@@ -2542,6 +2558,7 @@ static Int2 LIBCALLBACK PubSeqGiForSeqIdFunc (Pointer data)
 
   if (sip->choice == SEQID_GI) return OM_MSG_RET_ERROR;
   if (sip->choice == SEQID_LOCAL) return OM_MSG_RET_OK;
+ if (sip->choice == SEQID_GENERAL) return OM_MSG_RET_OK;
   SeqIdWrite (sip, buf, PRINTID_TEXTID_ACC_VER, sizeof (buf));
   if (StringHasNoText (buf)) return OM_MSG_RET_ERROR;
 
@@ -2686,7 +2703,7 @@ NLM_EXTERN Int4 CacheAccnList (
   Char      buf [41];
   Char      ch;
   Int4      count = 0;
-  Int4      gi;
+  BIG_ID    gi;
   Int4      i;
   SeqIdPtr  ids;
   CharPtr   ptr;
@@ -2724,7 +2741,7 @@ NLM_EXTERN Int4 CacheAccnList (
         for (sip = ids; sip != NULL; sip = sip->next) {
           switch (sip->choice) {
             case SEQID_GI :
-              gi = (Int4) sip->data.intvalue;
+              gi = (BIG_ID) sip->data.intvalue;
               break;
             case SEQID_GENBANK :
             case SEQID_EMBL :
@@ -2784,16 +2801,27 @@ static int LIBCALLBACK SortByInt4 (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
+static int LIBCALLBACK SortByBIG_ID (VoidPtr vp1, VoidPtr vp2)
+
+{
+  BIG_ID_PNTR ip1 = (BIG_ID_PNTR) vp1;
+  BIG_ID_PNTR ip2 = (BIG_ID_PNTR) vp2;
+
+  if (ip1 == NULL || ip2 == NULL) return 0;
+  if (*ip1 > *ip2) return 1;
+  if (*ip1 < *ip2) return -1;
+  return 0;
+}
 
 static Int4 IntPreLoadSeqIdGiCache (
   Int4 num,
-  Int4Ptr ids
+  BIG_ID_PNTR ids
 )
 
 {
   Char      ch;
   Int4      count = 0;
-  Int4      gi;
+  BIG_ID    gi;
   Int4      i;
   CharPtr   ptr;
   SeqIdPtr  sip;
@@ -2852,15 +2880,15 @@ static Int4 IntPreLoadSeqIdGiCache (
 
 static Int4 FilterKnownGis (
   Int4 num,
-  Int4Ptr uniq,
+  BIG_ID_PNTR uniq,
   Boolean filter
 )
 
 {
   BioseqPtr  bsp;
-  Int4       gi;
+  BIG_ID     gi;
   Int4       i;
-  Int4       ids [501];
+  BIG_ID     ids [501];
   Int4       j;
   ValNode    vn;
 
@@ -2895,16 +2923,16 @@ static Int4 FilterKnownGis (
 
 static Int4 UniqPreLoadList (
   Int4 num,
-  Int4Ptr srted,
+  BIG_ID_PNTR srted,
   Boolean filter
 )
 
 {
-  Int4  gi;
+  BIG_ID gi;
   Int4  i;
   Int4  j;
   Int4  last;
-  Int4  uniq [501];
+  BIG_ID uniq [501];
 
   if (num < 1 || num > 500 || srted == NULL) return 0;
 
@@ -2927,13 +2955,13 @@ static Int4 UniqPreLoadList (
 
 static Int4 SortPreLoadList (
   Int4 num,
-  Int4Ptr raw,
+  BIG_ID_PNTR raw,
   Boolean filter
 )
 
 {
   Int4  i;
-  Int4  uids [501];
+  BIG_ID  uids [501];
 
   if (num < 1 || num > 500 || raw == NULL) return 0;
 
@@ -2945,7 +2973,7 @@ static Int4 SortPreLoadList (
 
   /* sort by gi value */
 
-  HeapSort ((Pointer) uids, (size_t) num, sizeof (Int4), SortByInt4);
+  HeapSort ((Pointer) uids, (size_t) num, sizeof (BIG_ID), SortByBIG_ID);
 
   return UniqPreLoadList (num, uids, filter);
 }
@@ -2953,7 +2981,7 @@ static Int4 SortPreLoadList (
 
 NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCacheEx (
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   Boolean filter
 )
 
@@ -2979,7 +3007,7 @@ NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCacheEx (
 
 NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 )
 
 {
@@ -3089,7 +3117,7 @@ static void LookupSegments (SeqLocPtr slp, SeqIdPtr sip, Pointer userdata)
 
   switch (sip->choice) {
     case SEQID_GI :
-      vnp = ValNodeAddInt (NULL, 0, sip->data.intvalue);
+      vnp = ValNodeAddBigInt (NULL, 0, sip->data.intvalue);
       if (fip->gis == NULL) {
         fip->gis = vnp;
       } else {
@@ -3400,7 +3428,7 @@ static void LookupInference (SeqFeatPtr sfp, Pointer userdata)
 
 
 static Boolean GiExists (
-  Int4 gi
+  BIG_ID gi
 )
 
 {
@@ -3639,8 +3667,8 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
   CharPtr       accn;
   CharPtr PNTR  accns;
   Char          buf [64];
-  Int4          gi;
-  Int4Ptr       gis;
+  BIG_ID        gi;
+  BIG_ID_PNTR   gis;
   FarIdData     fid;
   Int4          i, num, total = 0;
   SeqIdPtr      sip;
@@ -3681,10 +3709,10 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
     num = ValNodeLen (fid.gis);
 
     if (num > 0) {
-      gis = (Int4Ptr) MemNew (sizeof (Int4) * (num + 2));
+      gis = (BIG_ID_PNTR) MemNew (sizeof (BIG_ID) * (num + 2));
       if (gis != NULL) {
         for (vnp = fid.gis, i = 0; vnp != NULL; vnp = vnp->next, i++) {
-          gi = (Int4) vnp->data.intvalue;
+          gi = (BIG_ID) vnp->data.intvalue;
           if (gi < 1) continue;
           gis [i] = gi;
         }
@@ -3759,7 +3787,7 @@ NLM_EXTERN Int4 LIBCALLBACK GiRevHistLookupFarSeqIDs (
 
 
 NLM_EXTERN SeqIdPtr LIBCALLBACK GiRevHistLookupSeqIdSet (
-  Int4 gi
+    BIG_ID gi
 )
 
 {

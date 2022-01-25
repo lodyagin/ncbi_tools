@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/1/91
 *
-* $Revision: 6.80 $
+* $Revision: 6.81 $
 *
 * File Description:
 *       Vibrant miscellaneous functions
@@ -6906,6 +6906,8 @@ extern Nlm_Char Nlm_KeydownToChar(WPARAM wParam)
       return NLM_DEL;
     case VK_ESCAPE:
       return NLM_ESC;
+    case VK_OEM_PLUS:
+      return '=';
     }
 
   return '\0';

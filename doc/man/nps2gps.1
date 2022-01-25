@@ -1,14 +1,21 @@
-.TH NPS2GPS 1 2008-12-13 NCBI "NCBI Tools User's Manual"
+.TH NPS2GPS 1 2016-09-01 "NCBI Tools User's Manual"
 .SH NAME
 nps2gps \- convert nucleotide-protein sets to ASN.1 genomic product sets
 .SH SYNOPSIS
 .B nps2gps
 [\|\fB\-\fP\|]
+[\|\fB\-B\fP\|]
 [\|\fB\-D\fP\|]
 [\|\fB\-F\fP\|]
+[\|\fB\-G\fP\ \fIstr\fP\|]
 [\|\fB\-L\fP\|]
+[\|\fB\-N\fP\|]
 [\|\fB\-P\fP\|]
+[\|\fB\-Q\fP\|]
 [\|\fB\-R\fP\|]
+[\|\fB\-S\fP\|]
+[\|\fB\-T\fP\|]
+[\|\fB\-U\fP\|]
 [\|\fB\-f\fP\ \fIstr\fP\|]
 [\|\fB\-i\fP\ \fIfilename\fP\|]
 [\|\fB\-o\fP\ \fIfilename\fP\|]
@@ -25,20 +32,41 @@ A summary of options is included below.
 \fB\-\fP
 Print usage message
 .TP
+\fB\-B\fP
+NG and NR rRNA
+.TP
 \fB\-D\fP
 RefSeq mRNA Titles
 .TP
 \fB\-F\fP
 Map by Feature ID
 .TP
+\fB\-G\fP\ \fIstr\fP
+General ID database name
+.TP
 \fB\-L\fP
 Lock components in advance
+.TP
+\fB\-N\fP
+Promote Non-coding RNAs
 .TP
 \fB\-P\fP
 mRNA ID from Protein
 .TP
+\fB\-Q\fP
+Special mRNA titles
+.TP
 \fB\-R\fP
 Enable Remote fetching from ID
+.TP
+\fB\-S\fP
+Special ncRNA on preRNA
+.TP
+\fB\-T\fP
+Map by Transcript ID
+.TP
+\fB\-U\fP
+Remove Unnecessary gene cross-references
 .TP
 \fB\-f\fP\ \fIstr\fP
 Substring filter

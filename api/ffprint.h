@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   7/15/95
 *
-* $Revision: 6.11 $
+* $Revision: 6.14 $
 *
 * File Description: 
 *
@@ -41,107 +41,6 @@
 *
 * ==========================================================================
 */
-
-/*************************************
-*
- * $Log: ffprint.h,v $
- * Revision 6.11  2006/07/13 17:06:38  bollin
- * use Uint4 instead of Uint2 for itemID values
- * removed unused variables
- * resolved compiler warnings
- *
- * Revision 6.10  2002/08/26 22:06:57  kans
- * ff_RecalculateLinks (MS) to fix hotlink artifact
- *
- * Revision 6.9  1999/08/31 14:36:39  tatiana
- * ff_print_string_mem() added
- *
- * Revision 6.8  1999/04/09 22:21:53  kans
- * fixed prototype for FFBSPrint
- *
- * Revision 6.7  1999/04/09 21:15:27  bazhin
- * Added function "FFBSPrint()".
- *
- * Revision 6.6  1999/04/06 22:37:07  tatiana
- * www_protein_id() added
- *
- * Revision 6.5  1999/03/30 21:02:24  tatiana
- * www_accession www_taxid added
- *
- * Revision 6.4  1999/03/12 17:34:26  tatiana
- * www_featkey() added
- *
- * Revision 6.3  1999/02/02 17:29:21  kans
- * added ff_MergeString
- *
- * Revision 6.2  1998/07/23 22:43:08  tatiana
- * added www_PrintComment()
- *
- * Revision 6.1  1998/05/28 18:30:57  tatiana
- * changed prototype for head_tail_ff()
- *
- * Revision 6.0  1997/08/25 18:05:35  madden
- * Revision changed to 6.0
- *
- * Revision 5.9  1997/08/04 22:56:28  tatiana
- * init_buff_ex() added
- *
- * Revision 5.8  1997/07/18 15:45:09  tatiana
- * AddLinkLater defined as NLM_EXTERN
- *
- * Revision 5.7  1997/07/16 21:22:49  tatiana
- * add AddPintLater
- *
- * Revision 5.6  1997/06/19 18:37:39  vakatov
- * [WIN32,MSVC++]  Adopted for the "NCBIOBJ.LIB" DLL'ization
- *
- * Revision 5.5  1997/03/24 20:35:13  shavirin
- * Added protection for usage with C++ compiler
- *
- * Revision 5.4  1997/03/13  19:42:37  tatiana
- * *** empty log message ***
- *
- * Revision 5.3  1997/01/08  23:00:42  kans
- * added ifndef _FFPRINT_ multiple include protection
- *
- * Revision 5.2  1997/01/08  18:52:45  madden
- * Added LIBCALL's.
- *
- * Revision 5.1  1996/06/27  17:18:00  tatiana
- * www_map added
- *
- * Revision 4.12  1996/04/15  18:44:55  tatiana
- * free_buff() added
- *
- * Revision 4.11  1996/04/08  21:52:55  tatiana
- * change in www_featloc
- *
- * Revision 4.10  1996/03/25  15:22:07  tatiana
- * www_featloc added
- *
- * Revision 4.8  1996/02/21  20:11:04  tatiana
- * *** empty log message ***
- *
- * Revision 4.7  1996/01/29  22:45:22  tatiana
- * ChangeStringWithTildes added
- *
- * Revision 4.6  1995/12/20  22:46:19  tatiana
- * Int2 changed to Int4 in www_organism()
- *
- * Revision 4.5  1995/12/13  16:37:46  tatiana
- * www_dbxref added
- *
- * Revision 4.4  1995/11/17  21:52:50  tatiana
- * hot link to genetic code added.c
- *
- * Revision 4.3  1995/11/17  21:28:35  kans
- * asn2ff now uses gather (Tatiana)
- *
- * Revision 1.10  1995/07/17  19:33:20  kans
- * parameters combined into Asn2ffJobPtr structure
- *
-*
-**************************************/
 
 #ifndef _FFPRINT_
 #define _FFPRINT_
@@ -250,7 +149,7 @@ NLM_EXTERN Boolean LIBCALL ff_PrintLine PROTO((Asn2ffJobPtr ajp, GBEntryPtr gbp,
 NLM_EXTERN CharPtr LIBCALL www_featloc PROTO((CharPtr loc));
 NLM_EXTERN void LIBCALL GetHelpMsg PROTO((SeqEntryPtr sep));
 NLM_EXTERN void LIBCALL www_PrintComment  PROTO((CharPtr string, Boolean identifier, Uint1 format));
-NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, Int4 gi, Int2 entityID, Uint4 itemID));
+NLM_EXTERN Boolean LIBCALL www_featkey PROTO((CharPtr key, BIG_ID gi, Int2 entityID, Uint4 itemID));
 NLM_EXTERN void LIBCALL www_accession PROTO((CharPtr string));
 NLM_EXTERN void LIBCALL ff_RecalculateLinks(Int4 indent);
 

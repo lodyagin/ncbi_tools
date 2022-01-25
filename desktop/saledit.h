@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/19/97
 *
-* $Revision: 6.37 $
+* $Revision: 6.39 $
 *
 * File Description: 
 *
@@ -172,6 +172,7 @@ typedef struct seqeditviewprocs {
 
 
 #define REGISTER_NEW_BIOSEQ_EDIT ObjMgrProcLoad(OMPROC_EDIT,"New Edit Bioseq","BioseqEditor",OBJ_BIOSEQ,Seq_repr_raw,OBJ_BIOSEQ,Seq_repr_raw,NULL,SeqEditFunc,PROC_PRIORITY_DEFAULT)
+#define REGISTER_DELTA_BIOSEQ_EDIT ObjMgrProcLoad(OMPROC_EDIT,"Edit Delta Bioseq","BioseqEditor",OBJ_BIOSEQ,Seq_repr_delta,OBJ_BIOSEQ,Seq_repr_delta,NULL,SeqEditFunc,PROC_PRIORITY_DEFAULT)
 
 #define REGISTER_NEW_SEQALIGN_EDIT ObjMgrProcLoad(OMPROC_EDIT, "New Edit SeqAlign","SeqAlignEditor",OBJ_SEQALIGN,0,OBJ_SEQALIGN,0,NULL,AlgEditFunc,PROC_PRIORITY_DEFAULT)
 
@@ -201,8 +202,6 @@ extern void LaunchAlignViewer (SeqAlignPtr salp);
 extern void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop (Pointer data);
 extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data);
-extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data);
-extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop4 (Pointer data);
 
 extern Int2 LIBCALLBACK UpdateSeqAlign (Pointer data);
 

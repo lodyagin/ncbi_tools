@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/12/93
 *
-* $Revision: 6.25 $
+* $Revision: 6.26 $
 *
 * File Description:  Converts fielded text into final report in a document
 *
@@ -2647,8 +2647,14 @@ extern void DeleteItem (DoC d, Int2 item)
         }
         itemPtr->startsAt = startsAt;
         (ddata.numItems)--;
-        ddata.numLines = UpdateLineStarts (&ddata, item);
-        SetPanelExtra ((PaneL) d, &ddata);
+        if(item < 1)
+            ddata.numLines = UpdateLineStarts(&ddata, 0);
+        else
+        if(item == ddata.numItems)
+            ddata.numLines = UpdateLineStarts (&ddata, item - 1);
+        else
+            ddata.numLines = UpdateLineStarts(&ddata, item);
+        SetPanelExtra((PaneL)d, &ddata);
         if (ddata.autoAdjust) {
           AdjustDocScroll (d);
         }

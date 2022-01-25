@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.61 $
+* $Revision: 6.65 $
 *
 * File Description:  Sequence Utilities for objseq and objsset
 *
@@ -452,9 +452,9 @@ NLM_EXTERN CharPtr SeqIdPrint(SeqIdPtr sip, CharPtr buf, Uint1 format);
 NLM_EXTERN CharPtr SeqIdWrite(SeqIdPtr sip, CharPtr buf, Uint1 format, Uint4 buflen);
 NLM_EXTERN Int4 SeqIdLabelLen (SeqIdPtr isip, Uint1 format);
 NLM_EXTERN CharPtr SeqIdWholeLabel (SeqIdPtr isip, Uint1 format);
-NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+NLM_EXTERN Boolean GetAccessionFromSeqId(SeqIdPtr sip, BIG_ID_PNTR gi, 
 				     CharPtr PNTR id);
-NLM_EXTERN Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, Int4Ptr gi, 
+NLM_EXTERN Boolean GetAccessionVersionFromSeqId(SeqIdPtr sip, BIG_ID_PNTR gi, 
                                      CharPtr PNTR id, Boolean get_version);
 NLM_EXTERN SeqIdPtr SeqIdParse(CharPtr buf);
 
@@ -985,6 +985,17 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 #define ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY 68
 #define ACCN_REFSEQ_WGS 69
 
+#define ACCN_NCBI_OPTICAL 70
+
+#define ACCN_NCBI_WGS_TPA 71
+#define ACCN_NCBI_WGS_TPA_PROT 72
+#define ACCN_EMBL_WGS_TPA 73
+#define ACCN_EMBL_WGS_TPA_PROT 74
+#define ACCN_DDBJ_WGS_TPA 75
+#define ACCN_DDBJ_WGS_TPA_PROT 76
+
+#define ACCN_NCBI_TARGETED 77
+
 
 /* Some accessions prefix can be either protein or nucleotide 
    such as NCBI PATENT I, AR .. or segmented set Bioseqs 'AH'
@@ -1000,7 +1011,7 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
 /*
  Accession definitively points to a protein record 
 */
-#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA_PROT) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS_PROT))
+#define ACCN_IS_PROT(c) (((c)==ACCN_SWISSPROT) ||  ( (c)==ACCN_NCBI_PROT) || ((c)== ACCN_EMBL_PROT) || ((c)== ACCN_DDBJ_PROT) || ((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_IS_PROTEIN) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA_PROT) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS_PROT) || ((c)== ACCN_NCBI_WGS_TPA_PROT) || ((c)== ACCN_EMBL_WGS_TPA_PROT) || ((c)== ACCN_DDBJ_WGS_TPA_PROT))
 
 /*
   Accession definitively points to a nucleotide record 
@@ -1014,27 +1025,27 @@ NLM_EXTERN Boolean LIBCALL NAccnIsDDBJ (CharPtr s);
    Define to detect Genbank's accessions: Genbank-subsumed GSDB accession numbers
    are defined to be Genbank's as well as GSDB DIRSUB records.
 */
-#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET)  ||  (((c)&65535) == ACCN_NCBI_WGS) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA) || (((c)&65535) == ACCN_NCBI_TSA) || (((c)&65535) == ACCN_NCBI_TSA_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_GB_DDBJ || (((c)&65535) == ACCN_GB_DDBJ)) )
+#define ACCN_IS_GENBANK(c) ((((c)&65535) == ACCN_NCBI_GSDB) ||  (((c)&65535)==ACCN_GSDB_DIRSUB) || (((c)&65535) == ACCN_NCBI_EST) ||  (((c)&65535) == ACCN_NCBI_DIRSUB) ||  (((c)&65535) == ACCN_NCBI_GENOME) ||  (((c)&65535) == ACCN_NCBI_PATENT) ||  (((c)&65535) == ACCN_NCBI_HTGS) ||  (((c)&65535) == ACCN_NCBI_GSS) ||  (((c)&65535) == ACCN_NCBI_STS) ||  (((c)&65535) == ACCN_NCBI_BACKBONE) ||  (((c)&65535) == ACCN_NCBI_SEGSET)  ||  (((c)&65535) == ACCN_NCBI_WGS) ||  (((c)&65535) == ACCN_NCBI_OTHER)  || (((c)&65535) == ACCN_NCBI_OPTICAL)  || (((c)&65535) == ACCN_NCBI_PROT) || (((c)&65535) == ACCN_NCBI_cDNA) || (((c)&65535) == ACCN_NCBI_TSA) || (((c)&65535) == ACCN_NCBI_TSA_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_GB_DDBJ || (((c)&65535) == ACCN_GB_DDBJ)) )
 
 /* XM_,NP_,NM_,NT_,NC_ reference sequence records created and curated by NCBI 
    REFSEQ project
 */
 #define ACCN_IS_REFSEQ(c) (((c)== ACCN_REFSEQ_PROT) || ((c)== ACCN_REFSEQ_mRNA) || ((c)== ACCN_REFSEQ_CONTIG) || ((c)== ACCN_REFSEQ_CHROMOSOME) || ((c)== ACCN_REFSEQ_mRNA_PREDICTED) || ((c)== ACCN_REFSEQ_PROT_PREDICTED) || ((c)== ACCN_REFSEQ_GENOMIC) || ((c)== ACCN_REFSEQ_ARTIFICIAL_ASSEMBLY) || ((c)== ACCN_REFSEQ_WGS) || (((c)&65535)== ACCN_REFSEQ) )
 
-#define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT))
+#define ACCN_IS_TPA(c) (((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_EMBL_TPA) || ((c)== ACCN_EMBL_TPA_PROT) || ((c)== ACCN_DDBJ_TPA) || ((c)== ACCN_DDBJ_TPA_PROT) || ((c)== ACCN_NCBI_WGS_TPA) || ((c)== ACCN_NCBI_WGS_TPA_PROT) || ((c)== ACCN_EMBL_WGS_TPA) || ((c)== ACCN_EMBL_WGS_TPA_PROT) || ((c)== ACCN_DDBJ_WGS_TPA) || ((c)== ACCN_DDBJ_WGS_TPA_PROT))
 
-#define ACCN_IS_WGS(c) (((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS) || ((c)== ACCN_DDBJ_WGS_PROT) || ((c)== ACCN_REFSEQ_WGS))
+#define ACCN_IS_WGS(c) (((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_EMBL_WGS) || ((c)== ACCN_EMBL_WGS_PROT) || ((c)== ACCN_DDBJ_WGS) || ((c)== ACCN_DDBJ_WGS_PROT) || ((c)== ACCN_REFSEQ_WGS) || ((c)== ACCN_NCBI_WGS_TPA) || ((c)== ACCN_NCBI_WGS_TPA_PROT) || ((c)== ACCN_EMBL_WGS_TPA) || ((c)== ACCN_EMBL_WGS_TPA_PROT) || ((c)== ACCN_DDBJ_WGS_TPA) || ((c)== ACCN_DDBJ_WGS_TPA_PROT))
 
 #define ACCN_IS_TSA(c) (((c)== ACCN_NCBI_TSA) || ((c)== ACCN_NCBI_TSA_PROT) || ((c)== ACCN_EMBL_TSA) || ((c)== ACCN_EMBL_TSA_PROT) || ((c)== ACCN_DDBJ_TSA) || ((c)== ACCN_DDBJ_TSA_PROT))
 
-#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_NCBI_TSA))
+#define ACCN_IS_NCBI(c) (ACCN_IS_REFSEQ((c)) || ACCN_IS_GENBANK((c)) || ((c)== ACCN_NCBI_TPA) || ((c)== ACCN_NCBI_TPA_PROT) || ((c)== ACCN_NCBI_WGS) || ((c)== ACCN_NCBI_WGS_PROT) || ((c)== ACCN_NCBI_TSA) || ((c)== ACCN_NCBI_WGS_TPA) || ((c)== ACCN_NCBI_WGS_TPA_PROT) || ((c)== ACCN_NCBI_TARGETED))
 
 /*
   Macro to detect EMBL accession numbers  (can also belong to another DB)
  */
-#define ACCN_IS_EMBL(c) ( (((c)&65535) ==  ACCN_EMBL_EST) ||  (((c)&65535) == ACCN_EMBL_DIRSUB) ||  (((c)&65535) == ACCN_EMBL_GENOME) ||  (((c)&65535) == ACCN_EMBL_PATENT) ||  (((c)&65535) == ACCN_EMBL_HTGS) ||  (((c)&65535) == ACCN_EMBL_CON) ||  (((c)&65535) == ACCN_EMBL_WGS) ||  (((c)&65535) == ACCN_EMBL_OTHER)  || (((c)&65535) == ACCN_EMBL_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ))
+#define ACCN_IS_EMBL(c) ( (((c)&65535) ==  ACCN_EMBL_EST) ||  (((c)&65535) == ACCN_EMBL_DIRSUB) ||  (((c)&65535) == ACCN_EMBL_GENOME) ||  (((c)&65535) == ACCN_EMBL_PATENT) ||  (((c)&65535) == ACCN_EMBL_HTGS) ||  (((c)&65535) == ACCN_EMBL_CON) ||  (((c)&65535) == ACCN_EMBL_WGS) ||  (((c)&65535) == ACCN_EMBL_OTHER)  || (((c)&65535) == ACCN_EMBL_PROT) || (((c)&65535) == ACCN_EMBL_GB) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_WGS_TPA) || (((c)&65535) == ACCN_EMBL_WGS_TPA_PROT))
 
-#define ACCN_IS_DDBJ(c) ((((c)&65535) ==  ACCN_DDBJ_EST) ||  (((c)&65535) == ACCN_DDBJ_DIRSUB) ||  (((c)&65535) == ACCN_DDBJ_GENOME) ||  (((c)&65535) == ACCN_DDBJ_PATENT) ||  (((c)&65535) == ACCN_DDBJ_HTGS) ||  (((c)&65535) == ACCN_DDBJ_CON)  ||  (((c)&65535) == ACCN_DDBJ_WGS) ||  (((c)&65535) == ACCN_DDBJ_OTHER) || (((c)&65535) == ACCN_DDBJ_PROT) || (((c)&65535) == ACCN_DDBJ_GSS) || (((c)&65535) == ACCN_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ))
+#define ACCN_IS_DDBJ(c) ((((c)&65535) ==  ACCN_DDBJ_EST) ||  (((c)&65535) == ACCN_DDBJ_DIRSUB) ||  (((c)&65535) == ACCN_DDBJ_GENOME) ||  (((c)&65535) == ACCN_DDBJ_PATENT) ||  (((c)&65535) == ACCN_DDBJ_HTGS) ||  (((c)&65535) == ACCN_DDBJ_CON)  ||  (((c)&65535) == ACCN_DDBJ_WGS) ||  (((c)&65535) == ACCN_DDBJ_OTHER) || (((c)&65535) == ACCN_DDBJ_PROT) || (((c)&65535) == ACCN_DDBJ_GSS) || (((c)&65535) == ACCN_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_DDBJ) || (((c)&65535) == ACCN_EMBL_GB_DDBJ) || (((c)&65535) == ACCN_EMBL_WGS_TPA) || (((c)&65535) == ACCN_EMBL_WGS_TPA_PROT))
 
 #define ACCN_IS_SWISSPROT(c) ((c)== ACCN_SWISSPROT)
 /* 
@@ -1068,6 +1079,7 @@ NLM_EXTERN SeqIdPtr     SeqIdDupBestList (SeqIdPtr id_list);
 NLM_EXTERN SeqIdPtr     SeqIdListfromSeqLoc (ValNodePtr vnpslp);
 
 NLM_EXTERN Boolean IsSkippableDbtag (DbtagPtr dbt);
+NLM_EXTERN Boolean DoesCDSEndWithStopCodon (SeqFeatPtr cds);
 
 
 #ifdef __cplusplus

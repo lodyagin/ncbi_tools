@@ -1,4 +1,4 @@
-/* $Id: blast_tune.c,v 1.2 2006/11/21 17:08:51 papadopo Exp $
+/* $Id: blast_tune.c,v 1.3 2016/05/04 14:59:32 fukanchi Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -32,11 +32,6 @@
  * with high probability, alignments with specified length and 
  * percent identity.
  */
-
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: blast_tune.c,v 1.2 2006/11/21 17:08:51 papadopo Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <algo/blast/core/blast_util.h>
 #include <algo/blast/core/blast_tune.h>

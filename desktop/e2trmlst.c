@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   10/30/01
 *
-* $Revision: 6.47 $
+* $Revision: 6.48 $
 *
 * File Description: 
 *
@@ -7183,7 +7183,9 @@ static Int4 Query_GetTranslatedTermCount (FormInfoPtr pFormInfo, CharPtr dbName,
   InvalDocument (pFormInfo->availDoc);
   Update ();
 
-  if (StringICmp (e2TermListPtr->list->term, term) == 0) return e2TermListPtr->list->count;
+  if (e2TermListPtr != NULL &&  e2TermListPtr->list != NULL) {
+    if (StringICmp (e2TermListPtr->list->term, term) == 0) return e2TermListPtr->list->count;
+  }
 
   return -1;
 }

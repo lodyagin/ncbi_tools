@@ -17,7 +17,7 @@ extern "C" { /* } */
 /**************************************************
 *
 *    Generated objects for Module NCBI-Taxon3
-*    Generated using ASNCODE Revision: 6.17 at Dec 8, 2009  9:36 AM
+*    Generated using ASNCODE Revision: 6.19 at May 31, 2013  8:11 PM
 *
 **************************************************/
 
@@ -201,6 +201,7 @@ typedef struct struct_T3RefreshFlags {
    Uint1   gc_changed;
    Uint1   mgc_changed;
    Uint1   orgmod_changed;
+   Uint1   pgc_changed;
 } T3RefreshFlags, PNTR T3RefreshFlagsPtr;
 
 

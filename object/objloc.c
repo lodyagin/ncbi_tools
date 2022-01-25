@@ -29,7 +29,7 @@
 *   
 * Version Creation Date: 4/1/91
 *
-* $Revision: 6.13 $
+* $Revision: 6.16 $
 *
 * File Description:  Object manager for module NCBI-Seqloc
 *
@@ -314,6 +314,8 @@ NLM_EXTERN Boolean LIBCALL SeqIdAsnWrite (SeqIdPtr anp, AsnIoPtr aip, AsnTypePtr
         return retval;
 
 	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	av.ptrvalue = (Pointer)anp;
     if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av))
@@ -655,6 +657,7 @@ NLM_EXTERN SeqIdPtr LIBCALL SeqIdDup (SeqIdPtr oldid)
 			pdbb->mol = StringSave(pdba->mol);
 			pdbb->chain = pdba->chain;
 			pdbb->rel = DateDup(pdba->rel);
+			pdbb->chain_id = StringSave(pdba->chain_id);
 			break;
      }
 	return newid;
@@ -863,6 +866,8 @@ NLM_EXTERN Boolean LIBCALL TextSeqIdAsnWrite (TextSeqIdPtr tsip, AsnIoPtr aip, A
 
 	if (tsip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)tsip))
         goto erret;
     if (tsip->name != NULL)
@@ -1015,6 +1020,8 @@ NLM_EXTERN Boolean LIBCALL PatentSeqIdAsnWrite (PatentSeqIdPtr psip, AsnIoPtr ai
 
 	if (psip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)psip))
         goto erret;
     av.intvalue = psip->seqid;
@@ -1146,6 +1153,8 @@ NLM_EXTERN Boolean LIBCALL GiimAsnWrite (GiimPtr gip, AsnIoPtr aip, AsnTypePtr o
 
 	if (gip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)gip))
         goto erret;
     av.intvalue = gip->id;
@@ -1266,6 +1275,7 @@ NLM_EXTERN PDBSeqIdPtr LIBCALL PDBSeqIdFree (PDBSeqIdPtr pdbsip)
     
     MemFree(pdbsip->mol);
 	DateFree(pdbsip->rel);
+	MemFree(pdbsip->chain_id);
 	return (PDBSeqIdPtr)MemFree(pdbsip);
 }
 
@@ -1297,6 +1307,8 @@ NLM_EXTERN Boolean LIBCALL PDBSeqIdAsnWrite (PDBSeqIdPtr pdbsip, AsnIoPtr aip, A
 
 	if (pdbsip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)pdbsip))
         goto erret;
     if (pdbsip->mol != NULL)
@@ -1314,6 +1326,12 @@ NLM_EXTERN Boolean LIBCALL PDBSeqIdAsnWrite (PDBSeqIdPtr pdbsip, AsnIoPtr aip, A
     if (pdbsip->rel != NULL)
     {
         if (! DateAsnWrite(pdbsip->rel, aip, PDB_SEQ_ID_rel))
+            goto erret;
+    }
+    if (pdbsip->chain_id != NULL)
+    {
+        av.ptrvalue = pdbsip->chain_id;
+        if (! AsnWrite(aip, PDB_SEQ_ID_chain_id, &av))
             goto erret;
     }
     if (! AsnCloseStruct(aip, atp, (Pointer)pdbsip))
@@ -1380,6 +1398,8 @@ NLM_EXTERN PDBSeqIdPtr LIBCALL PDBSeqIdAsnRead (AsnIoPtr aip, AsnTypePtr orig)
             	pdbsip->mol = (CharPtr)av.ptrvalue;
 	        else if (atp == PDB_SEQ_ID_chain)
     	        pdbsip->chain = (Uint1)av.intvalue;
+	        else if (atp == PDB_SEQ_ID_chain_id)
+    	        pdbsip->chain_id = (CharPtr)av.ptrvalue;
         	else
             	goto erret;
 		}
@@ -1509,6 +1529,8 @@ NLM_EXTERN Boolean LIBCALL SeqLocAsnWrite (SeqLocPtr anp, AsnIoPtr aip, AsnTypeP
         return FALSE;
 
 	if (anp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
 	av.ptrvalue = (Pointer)anp;
 	if (! AsnWriteChoice(aip, atp, (Int2)anp->choice, &av))
@@ -2002,6 +2024,8 @@ NLM_EXTERN Boolean LIBCALL SeqIntAsnWrite (SeqIntPtr sip, AsnIoPtr aip, AsnTypeP
 
 	if (sip == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)sip))
         goto erret;
     av.intvalue = sip->from;
@@ -2287,6 +2311,8 @@ NLM_EXTERN Boolean LIBCALL SeqPntAsnWrite (SeqPntPtr spp, AsnIoPtr aip, AsnTypeP
 
 	if (spp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
 
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
+
     if (! AsnOpenStruct(aip, atp, (Pointer)spp))
         goto erret;
     av.intvalue = spp->point;
@@ -2454,6 +2480,8 @@ NLM_EXTERN Boolean LIBCALL PackSeqPntAsnWrite (PackSeqPntPtr pspp, AsnIoPtr aip,
         return FALSE;
 
 	if (pspp == NULL) { AsnNullValueMsg(aip, atp); goto erret; }
+
+    MemSet ((Pointer) (&av), 0, sizeof (DataVal));
 
     if (! AsnOpenStruct(aip, atp, (Pointer)pspp))
         goto erret;

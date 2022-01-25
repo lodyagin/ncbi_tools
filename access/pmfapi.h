@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   5/5/00
 *
-* $Revision: 1.34 $
+* $Revision: 1.38 $
 *
 * File Description: 
 *
@@ -69,7 +69,7 @@ NLM_EXTERN CONN PubMedFetchOpenConnection (
 );
 
 NLM_EXTERN CONN PubSeqFetchOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int2 retcode,
   Int4 flags
 );
@@ -91,15 +91,15 @@ NLM_EXTERN CONN PubSeqFetchSRAOpenConnection (
 );
 
 NLM_EXTERN CONN GiRevHistOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 );
 
 NLM_EXTERN CONN GiAccVerOpenConnection (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 );
 
 NLM_EXTERN CONN AccnRevHistOpenConnection (
@@ -107,7 +107,7 @@ NLM_EXTERN CONN AccnRevHistOpenConnection (
 );
 
 NLM_EXTERN CONN GiSeqIdSetOpenConnection (
-  Int4 gi
+  BIG_ID gi
 );
 
 NLM_EXTERN CONN AccnListOpenConnection (
@@ -130,7 +130,7 @@ NLM_EXTERN CharPtr GiAccVerWaitForReply (
   CONN conn
 );
 
-NLM_EXTERN Int4 AccnRevHistWaitForReply (
+NLM_EXTERN BIG_ID AccnRevHistWaitForReply (
   CONN conn
 );
 
@@ -189,23 +189,23 @@ NLM_EXTERN SeqEntryPtr PubSeqSynchronousQuerySRA (
 );
 
 NLM_EXTERN CharPtr GiRevHistSynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 );
 
 NLM_EXTERN CharPtr GiAccVerSynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 );
 
-NLM_EXTERN Int4 AccnRevHistSynchronousQuery (
+NLM_EXTERN BIG_ID AccnRevHistSynchronousQuery (
   CharPtr accn
 );
 
 NLM_EXTERN SeqIdPtr GiSeqIdSetSynchronousQuery (
-  Int4 gi
+  BIG_ID gi
 );
 
 NLM_EXTERN CharPtr AccnListSynchronousQuery (
@@ -263,9 +263,9 @@ NLM_EXTERN SeqEntryPtr PubSeqReadReply (
 );
 
 NLM_EXTERN Boolean GiRevHistAsynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -281,9 +281,9 @@ NLM_EXTERN CharPtr GiRevHistReadReply (
 );
 
 NLM_EXTERN Boolean GiAccVerAsynchronousQuery (
-  Int4 uid,
+  BIG_ID uid,
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   QUEUE* q,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -309,13 +309,13 @@ NLM_EXTERN Int4 AccnRevHistCheckQueue (
   QUEUE* q
 );
 
-NLM_EXTERN Int4 AccnRevHistReadReply (
+NLM_EXTERN BIG_ID AccnRevHistReadReply (
   CONN conn,
   EIO_Status status
 );
 
 NLM_EXTERN Boolean GiSeqIdSetAsynchronousQuery (
-  Int4 gi,
+  BIG_ID gi,
   QUEUE* queue,
   QueryResultProc resultproc,
   VoidPtr userdata
@@ -379,12 +379,12 @@ NLM_EXTERN void PubSeqFetchDisable (
 
 NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCache (
   Int4 num,
-  Int4Ptr uids
+  BIG_ID_PNTR uids
 );
 
 NLM_EXTERN Int4 GiRevHistPreLoadSeqIdGiCacheEx (
   Int4 num,
-  Int4Ptr uids,
+  BIG_ID_PNTR uids,
   Boolean filter
 );
 
@@ -406,13 +406,13 @@ NLM_EXTERN Int4 AccnListPreLoadSeqIdGiCache (
 /* SeqId chain fetch function */
 
 NLM_EXTERN SeqIdPtr LIBCALLBACK GiRevHistLookupSeqIdSet (
-  Int4 gi
+  BIG_ID gi
 );
 
 /* multiple Accession bulk lookup or preload section */
 
 typedef void (LIBCALLBACK *CacheAccnListProc) (
-  Int4 gi,
+  BIG_ID gi,
   CharPtr accnver
 );
 

@@ -27,10 +27,6 @@
  *
  * @author E. Michael Gertz
  */
-#ifndef SKIP_DOXYGEN_PROCESSING
-static char const rcsid[] =
-    "$Id: nlm_linear_algebra.c,v 1.8 2008/08/21 19:55:43 kazimird Exp $";
-#endif /* SKIP_DOXYGEN_PROCESSING */
 
 #include <math.h>
 #include <stdlib.h>

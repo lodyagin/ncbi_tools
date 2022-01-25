@@ -1160,6 +1160,22 @@
 		3797484D0FF3CAA000138501 /* alnread.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4A0FF2AF7C004C8F4B /* alnread.h */; };
 		3797484E0FF3CAA000138501 /* creaders_export.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4B0FF2AF7C004C8F4B /* creaders_export.h */; };
 		379748500FF3CAC000138501 /* raw_scoremat.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 3734FB4E0FF2AF7C004C8F4B /* raw_scoremat.h */; };
+		37BC99881D19B3C9006E7656 /* hspfilter_mapper.c in Sources */ = {isa = PBXBuildFile; fileRef = 37BC99871D19B3C9006E7656 /* hspfilter_mapper.c */; };
+		37BC998A1D19B3DE006E7656 /* jumper.c in Sources */ = {isa = PBXBuildFile; fileRef = 37BC99891D19B3DE006E7656 /* jumper.c */; };
+		37BC998C1D19B402006E7656 /* hspfilter_mapper.h in Headers */ = {isa = PBXBuildFile; fileRef = 37BC998B1D19B402006E7656 /* hspfilter_mapper.h */; };
+		37BC998E1D19B41A006E7656 /* jumper.h in Headers */ = {isa = PBXBuildFile; fileRef = 37BC998D1D19B41A006E7656 /* jumper.h */; };
+		37C3D6E71840113200AB001F /* blast_hspstream_mt_utils.h in Headers */ = {isa = PBXBuildFile; fileRef = 37C3D6E61840113200AB001F /* blast_hspstream_mt_utils.h */; };
+		37C3D6E91840115B00AB001F /* blast_traceback_mt_priv.h in Headers */ = {isa = PBXBuildFile; fileRef = 37C3D6E81840115B00AB001F /* blast_traceback_mt_priv.h */; };
+		37C3D6EB1840118C00AB001F /* blast_hspstream_mt_utils.c in Sources */ = {isa = PBXBuildFile; fileRef = 37C3D6EA1840118C00AB001F /* blast_hspstream_mt_utils.c */; };
+		37C3D6ED1840119C00AB001F /* blast_traceback_mt_priv.c in Sources */ = {isa = PBXBuildFile; fileRef = 37C3D6EC1840119C00AB001F /* blast_traceback_mt_priv.c */; };
+		37E3057D1D482C6C00598945 /* libgnutls.30.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305781D482C6C00598945 /* libgnutls.30.dylib */; };
+		37E3057E1D482C6C00598945 /* libgnutlsxx.28.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E305791D482C6C00598945 /* libgnutlsxx.28.dylib */; };
+		37E3057F1D482C6C00598945 /* libhogweed.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E3057A1D482C6C00598945 /* libhogweed.a */; };
+		37E305801D482C6C00598945 /* libnettle.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E3057B1D482C6C00598945 /* libnettle.a */; };
+		37E305811D482C6C00598945 /* libgmp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 37E3057C1D482C6C00598945 /* libgmp.a */; };
+		37E305831D482E6600598945 /* ncbi_gnutls.c in Sources */ = {isa = PBXBuildFile; fileRef = 37E305821D482E6600598945 /* ncbi_gnutls.c */; };
+		7B52D8961CC02E14007005F8 /* boost_erf.c in Sources */ = {isa = PBXBuildFile; fileRef = 7B52D8941CC02E14007005F8 /* boost_erf.c */; };
+		7B52D8971CC02E14007005F8 /* boost_erf.h in Headers */ = {isa = PBXBuildFile; fileRef = 7B52D8951CC02E14007005F8 /* boost_erf.h */; };
 		7B8DDE99146197D000A98C1A /* ncbi_version.c in Sources */ = {isa = PBXBuildFile; fileRef = 7B8DDE98146197D000A98C1A /* ncbi_version.c */; };
 		7BCD235E1461985800AF265B /* ncbi_version.h in Headers */ = {isa = PBXBuildFile; fileRef = 7BCD235D1461985800AF265B /* ncbi_version.h */; };
 		8D07F2C00486CC7A007CD1D0 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 089C1666FE841158C02AAC07 /* InfoPlist.strings */; };
@@ -2381,6 +2397,22 @@
 		3734FB920FF2AF7C004C8F4B /* viewerp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = viewerp.h; path = ../../../vibrant/viewerp.h; sourceTree = SOURCE_ROOT; };
 		3747EF8B11BE9AA50064168E /* ncbi_base64.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_base64.c; sourceTree = "<group>"; };
 		3747EF8F11BE9ABF0064168E /* ncbi_base64.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_base64.h; sourceTree = "<group>"; };
+		37BC99871D19B3C9006E7656 /* hspfilter_mapper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = hspfilter_mapper.c; sourceTree = "<group>"; };
+		37BC99891D19B3DE006E7656 /* jumper.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = jumper.c; sourceTree = "<group>"; };
+		37BC998B1D19B402006E7656 /* hspfilter_mapper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hspfilter_mapper.h; sourceTree = "<group>"; };
+		37BC998D1D19B41A006E7656 /* jumper.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = jumper.h; sourceTree = "<group>"; };
+		37C3D6E61840113200AB001F /* blast_hspstream_mt_utils.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = blast_hspstream_mt_utils.h; sourceTree = "<group>"; };
+		37C3D6E81840115B00AB001F /* blast_traceback_mt_priv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = blast_traceback_mt_priv.h; sourceTree = "<group>"; };
+		37C3D6EA1840118C00AB001F /* blast_hspstream_mt_utils.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = blast_hspstream_mt_utils.c; sourceTree = "<group>"; };
+		37C3D6EC1840119C00AB001F /* blast_traceback_mt_priv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = blast_traceback_mt_priv.c; sourceTree = "<group>"; };
+		37E305781D482C6C00598945 /* libgnutls.30.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libgnutls.30.dylib; sourceTree = "<group>"; };
+		37E305791D482C6C00598945 /* libgnutlsxx.28.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; path = libgnutlsxx.28.dylib; sourceTree = "<group>"; };
+		37E3057A1D482C6C00598945 /* libhogweed.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libhogweed.a; sourceTree = "<group>"; };
+		37E3057B1D482C6C00598945 /* libnettle.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libnettle.a; sourceTree = "<group>"; };
+		37E3057C1D482C6C00598945 /* libgmp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libgmp.a; sourceTree = "<group>"; };
+		37E305821D482E6600598945 /* ncbi_gnutls.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_gnutls.c; sourceTree = "<group>"; };
+		7B52D8941CC02E14007005F8 /* boost_erf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = boost_erf.c; sourceTree = "<group>"; };
+		7B52D8951CC02E14007005F8 /* boost_erf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = boost_erf.h; sourceTree = "<group>"; };
 		7B8DDE96146197B300A98C1A /* ncbi_strerror.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_strerror.c; sourceTree = "<group>"; };
 		7B8DDE98146197D000A98C1A /* ncbi_version.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ncbi_version.c; sourceTree = "<group>"; };
 		7BCD235D1461985800AF265B /* ncbi_version.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ncbi_version.h; sourceTree = "<group>"; };
@@ -2394,6 +2426,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				8D07F2C40486CC7A007CD1D0 /* Carbon.framework in Frameworks */,
+				37E3057F1D482C6C00598945 /* libhogweed.a in Frameworks */,
+				37E305801D482C6C00598945 /* libnettle.a in Frameworks */,
+				37E3057E1D482C6C00598945 /* libgnutlsxx.28.dylib in Frameworks */,
+				37E305811D482C6C00598945 /* libgmp.a in Frameworks */,
+				37E3057D1D482C6C00598945 /* libgnutls.30.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2423,6 +2460,11 @@
 		0867D69AFE84028FC02AAC07 /* External Frameworks and Libraries */ = {
 			isa = PBXGroup;
 			children = (
+				37E305781D482C6C00598945 /* libgnutls.30.dylib */,
+				37E305791D482C6C00598945 /* libgnutlsxx.28.dylib */,
+				37E3057A1D482C6C00598945 /* libhogweed.a */,
+				37E3057B1D482C6C00598945 /* libnettle.a */,
+				37E3057C1D482C6C00598945 /* libgmp.a */,
 				08FB77AAFE841565C02AAC07 /* Carbon.framework */,
 			);
 			name = "External Frameworks and Libraries";
@@ -2581,6 +2623,7 @@
 		3716A58C0FF2A5C10081C789 /* core */ = {
 			isa = PBXGroup;
 			children = (
+				7B52D8941CC02E14007005F8 /* boost_erf.c */,
 				3716A58D0FF2A5C10081C789 /* aa_ungapped.c */,
 				3716A58F0FF2A5C10081C789 /* blast_aalookup.c */,
 				3716A5910FF2A5C10081C789 /* blast_aascan.c */,
@@ -2593,6 +2636,7 @@
 				3716A5A10FF2A5C10081C789 /* blast_gapalign.c */,
 				3716A5A40FF2A5C10081C789 /* blast_hits.c */,
 				3716A5A80FF2A5C10081C789 /* blast_hspstream.c */,
+				37C3D6EA1840118C00AB001F /* blast_hspstream_mt_utils.c */,
 				3716A5AA0FF2A5C10081C789 /* blast_itree.c */,
 				3716A5AC0FF2A5C10081C789 /* blast_kappa.c */,
 				3716A5AE0FF2A5C10081C789 /* blast_lookup.c */,
@@ -2612,6 +2656,7 @@
 				3716A5CC0FF2A5C10081C789 /* blast_stat.c */,
 				3716A5CE0FF2A5C10081C789 /* blast_sw.c */,
 				3716A5D10FF2A5C10081C789 /* blast_traceback.c */,
+				37C3D6EC1840119C00AB001F /* blast_traceback_mt_priv.c */,
 				3716A5D30FF2A5C10081C789 /* blast_tune.c */,
 				3716A5D50FF2A5C10081C789 /* blast_util.c */,
 				3716A5D70FF2A5C10081C789 /* gapinfo.c */,
@@ -2632,6 +2677,8 @@
 				3716A5F70FF2A5C10081C789 /* phi_gapalign.c */,
 				3716A5F90FF2A5C10081C789 /* phi_lookup.c */,
 				3716A5FB0FF2A5C10081C789 /* split_query.c */,
+				37BC99871D19B3C9006E7656 /* hspfilter_mapper.c */,
+				37BC99891D19B3DE006E7656 /* jumper.c */,
 			);
 			name = core;
 			path = ../../../algo/blast/core;
@@ -2834,6 +2881,7 @@
 				3716A7310FF2A5C10081C789 /* ncbi_util.c */,
 				7B8DDE98146197D000A98C1A /* ncbi_version.c */,
 				3716A7330FF2A5C10081C789 /* urlquery.c */,
+				37E305821D482E6600598945 /* ncbi_gnutls.c */,
 			);
 			name = connect;
 			path = ../../../connect;
@@ -3423,6 +3471,7 @@
 				3734F7DF0FF2AF7C004C8F4B /* blast_hits_priv.h */,
 				3734F7E00FF2AF7C004C8F4B /* blast_hspfilter.h */,
 				3734F7E20FF2AF7C004C8F4B /* blast_hspstream.h */,
+				37C3D6E61840113200AB001F /* blast_hspstream_mt_utils.h */,
 				3734F7E40FF2AF7C004C8F4B /* blast_itree.h */,
 				3734F7E60FF2AF7C004C8F4B /* blast_kappa.h */,
 				3734F7E80FF2AF7C004C8F4B /* blast_lookup.h */,
@@ -3445,8 +3494,10 @@
 				3734F8080FF2AF7C004C8F4B /* blast_sw.h */,
 				3734F8090FF2AF7C004C8F4B /* blast_toolkit.h */,
 				3734F80B0FF2AF7C004C8F4B /* blast_traceback.h */,
+				37C3D6E81840115B00AB001F /* blast_traceback_mt_priv.h */,
 				3734F80D0FF2AF7C004C8F4B /* blast_tune.h */,
 				3734F80F0FF2AF7C004C8F4B /* blast_util.h */,
+				7B52D8951CC02E14007005F8 /* boost_erf.h */,
 				37318E7E14D9A51C00FF91F7 /* erfc.h */,
 				3734F8110FF2AF7C004C8F4B /* gapinfo.h */,
 				3734F8130FF2AF7C004C8F4B /* gencode_singleton.h */,
@@ -3469,6 +3520,8 @@
 				3734F8310FF2AF7C004C8F4B /* phi_gapalign.h */,
 				3734F8330FF2AF7C004C8F4B /* phi_lookup.h */,
 				3734F8350FF2AF7C004C8F4B /* split_query.h */,
+				37BC998B1D19B402006E7656 /* hspfilter_mapper.h */,
+				37BC998D1D19B41A006E7656 /* jumper.h */,
 			);
 			name = core;
 			path = ../../../algo/blast/core;
@@ -4277,6 +4330,7 @@
 				3734FC660FF2AF7D004C8F4B /* aliparse.h in Headers */,
 				3734FC680FF2AF7D004C8F4B /* aliread.h in Headers */,
 				3734FC690FF2AF7D004C8F4B /* asn2ff.h in Headers */,
+				37BC998C1D19B402006E7656 /* hspfilter_mapper.h in Headers */,
 				3734FC700FF2AF7D004C8F4B /* asn2ff6.h in Headers */,
 				3734FC710FF2AF7D004C8F4B /* asn2ffg.h in Headers */,
 				3734FC720FF2AF7D004C8F4B /* asn2ffp.h in Headers */,
@@ -4319,6 +4373,7 @@
 				3734FCB80FF2AF7D004C8F4B /* salsa.h in Headers */,
 				3734FCBA0FF2AF7D004C8F4B /* salsap.h in Headers */,
 				3734FCBC0FF2AF7D004C8F4B /* salstruc.h in Headers */,
+				37C3D6E91840115B00AB001F /* blast_traceback_mt_priv.h in Headers */,
 				3734FCBE0FF2AF7D004C8F4B /* salutil.h in Headers */,
 				3734FCC00FF2AF7D004C8F4B /* samutil.h in Headers */,
 				3734FCC20FF2AF7D004C8F4B /* satutil.h in Headers */,
@@ -4348,6 +4403,7 @@
 				3734FCF20FF2AF7D004C8F4B /* asnenbin.h in Headers */,
 				3734FCF60FF2AF7D004C8F4B /* asnio.h in Headers */,
 				3734FCF80FF2AF7D004C8F4B /* asnlex.h in Headers */,
+				7B52D8971CC02E14007005F8 /* boost_erf.h in Headers */,
 				3734FCFA0FF2AF7D004C8F4B /* asnlext.h in Headers */,
 				3734FCFC0FF2AF7D004C8F4B /* asnout.h in Headers */,
 				3734FCFE0FF2AF7D004C8F4B /* asnprint.h in Headers */,
@@ -4361,6 +4417,7 @@
 				3734FD110FF2AF7D004C8F4B /* thrddecl.h in Headers */,
 				3734FD220FF2AF7D004C8F4B /* mapcn3d.h in Headers */,
 				3734FD240FF2AF7D004C8F4B /* objcn3d.h in Headers */,
+				37C3D6E71840113200AB001F /* blast_hspstream_mt_utils.h in Headers */,
 				3734FD260FF2AF7D004C8F4B /* corematx.h in Headers */,
 				3734FD280FF2AF7D004C8F4B /* dvncode.h in Headers */,
 				3734FD290FF2AF7D004C8F4B /* mkbioseq.h in Headers */,
@@ -4392,6 +4449,7 @@
 				3734FD520FF2AF7D004C8F4B /* ncbi_connector.h in Headers */,
 				3734FD530FF2AF7D004C8F4B /* ncbi_connssl.h in Headers */,
 				3734FD550FF2AF7D004C8F4B /* ncbi_connutil.h in Headers */,
+				37BC998E1D19B41A006E7656 /* jumper.h in Headers */,
 				3734FD570FF2AF7D004C8F4B /* ncbi_core.h in Headers */,
 				3734FD590FF2AF7D004C8F4B /* ncbi_core_c.h in Headers */,
 				3734FD5B0FF2AF7D004C8F4B /* ncbi_dispd.h in Headers */,
@@ -4720,6 +4778,8 @@
 /* Begin PBXProject section */
 		0867D690FE84028FC02AAC07 /* Project object */ = {
 			isa = PBXProject;
+			attributes = {
+			};
 			buildConfigurationList = 4FADC24608B4156D00ABE55E /* Build configuration list for PBXProject "ncbictoolkit" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
@@ -4794,6 +4854,7 @@
 				3716A96E0FF2A5C20081C789 /* objtax3.c in Sources */,
 				3716A9700FF2A5C20081C789 /* pmfapi.c in Sources */,
 				3716A9720FF2A5C20081C789 /* qblastapi.c in Sources */,
+				37BC99881D19B3C9006E7656 /* hspfilter_mapper.c in Sources */,
 				3716A9740FF2A5C20081C789 /* strucapi.c in Sources */,
 				3716A9760FF2A5C20081C789 /* tax3api.c in Sources */,
 				3716A9780FF2A5C20081C789 /* vecscnapi.c in Sources */,
@@ -4863,6 +4924,7 @@
 				3716AA020FF2A5C20081C789 /* index_ungapped.c in Sources */,
 				3716AA040FF2A5C20081C789 /* link_hsps.c in Sources */,
 				3716AA060FF2A5C20081C789 /* lookup_util.c in Sources */,
+				7B52D8961CC02E14007005F8 /* boost_erf.c in Sources */,
 				3716AA080FF2A5C20081C789 /* lookup_wrap.c in Sources */,
 				3716AA0B0FF2A5C20081C789 /* matrix_freq_ratios.c in Sources */,
 				3716AA0E0FF2A5C20081C789 /* na_ungapped.c in Sources */,
@@ -4870,6 +4932,7 @@
 				3716AA120FF2A5C20081C789 /* ncbi_std.c in Sources */,
 				3716AA140FF2A5C20081C789 /* pattern.c in Sources */,
 				3716AA170FF2A5C20081C789 /* phi_extend.c in Sources */,
+				37E305831D482E6600598945 /* ncbi_gnutls.c in Sources */,
 				3716AA190FF2A5C20081C789 /* phi_gapalign.c in Sources */,
 				3716AA1B0FF2A5C20081C789 /* phi_lookup.c in Sources */,
 				3716AA1D0FF2A5C20081C789 /* split_query.c in Sources */,
@@ -4917,6 +4980,7 @@
 				3716AA740FF2A5C20081C789 /* prtutil.c in Sources */,
 				3716AA770FF2A5C20081C789 /* salpacc.c in Sources */,
 				3716AA790FF2A5C20081C789 /* salpedit.c in Sources */,
+				37C3D6ED1840119C00AB001F /* blast_traceback_mt_priv.c in Sources */,
 				3716AA7B0FF2A5C20081C789 /* salprop.c in Sources */,
 				3716AA7D0FF2A5C20081C789 /* salpstat.c in Sources */,
 				3716AA800FF2A5C20081C789 /* salsap.c in Sources */,
@@ -5018,6 +5082,7 @@
 				3716AB3D0FF2A5C20081C789 /* ncbi_server_info.c in Sources */,
 				3716AB400FF2A5C20081C789 /* ncbi_service.c in Sources */,
 				3716AB420FF2A5C20081C789 /* ncbi_service_connector.c in Sources */,
+				37C3D6EB1840118C00AB001F /* blast_hspstream_mt_utils.c in Sources */,
 				3716AB450FF2A5C20081C789 /* ncbi_socket.c in Sources */,
 				3716AB470FF2A5C20081C789 /* ncbi_socket_connector.c in Sources */,
 				3716AB4B0FF2A5C20081C789 /* ncbi_types.c in Sources */,
@@ -5100,6 +5165,7 @@
 				3716ABEB0FF2A5C20081C789 /* seqpanel.c in Sources */,
 				3716ABED0FF2A5C20081C789 /* seqpcc.c in Sources */,
 				3716ABEF0FF2A5C20081C789 /* seqscrl.c in Sources */,
+				37BC998A1D19B3DE006E7656 /* jumper.c in Sources */,
 				3716ABF10FF2A5C20081C789 /* seqsub.c in Sources */,
 				3716ABF30FF2A5C20081C789 /* smdlg1.c in Sources */,
 				3716ABF40FF2A5C20081C789 /* smdlg2.c in Sources */,
@@ -5306,6 +5372,7 @@
 		4FADC24308B4156D00ABE55E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				COPY_PHASE_STRIP = NO;
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -5316,8 +5383,13 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PRECOMPILE_PREFIX_HEADER = NO;
 				GCC_PREFIX_HEADER = "";
+				GCC_VERSION = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "@executable_path/../Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				LIBRARY_STYLE = DYNAMIC;
 				MACH_O_TYPE = mh_dylib;
 				PRODUCT_NAME = ncbictoolkit;
@@ -5329,6 +5401,7 @@
 		4FADC24408B4156D00ABE55E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD_32_BIT)";
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
@@ -5336,8 +5409,13 @@
 				GCC_MODEL_TUNING = G5;
 				GCC_PRECOMPILE_PREFIX_HEADER = NO;
 				GCC_PREFIX_HEADER = "";
+				GCC_VERSION = "";
 				INFOPLIST_FILE = Info.plist;
 				INSTALL_PATH = "@executable_path/../Frameworks";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				LIBRARY_STYLE = DYNAMIC;
 				MACH_O_TYPE = mh_dylib;
 				PRODUCT_NAME = ncbictoolkit;
@@ -5354,9 +5432,10 @@
 				GCC_OPTIMIZATION_LEVEL = 0;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					WIN_MAC,
+					HAVE_LIBGNUTLS,
 					"$(inherited)",
 				);
-				GCC_VERSION = com.apple.compilers.llvmgcc42;
+				GCC_VERSION = "";
 				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
@@ -5392,11 +5471,19 @@
 					../../../cdromlib,
 					../../../cn3d,
 					../../../ddv,
+					"/netopt/ncbi_tools/gnutls-3.4.0/include",
 					"$(inherited)",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"/netopt/ncbi_tools/gmp-6.0.0a/lib",
+					"/netopt/ncbi_tools/nettle-3.1.1/lib",
+					"/netopt/ncbi_tools/gnutls-3.4.0/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				ONLY_ACTIVE_ARCH = YES;
 				PREBINDING = NO;
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = i386;
 			};
 			name = Debug;
 		};
@@ -5408,9 +5495,10 @@
 				GCC_C_LANGUAGE_STANDARD = c99;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					WIN_MAC,
+					HAVE_LIBGNUTLS,
 					"$(inherited)",
 				);
-				GCC_VERSION = com.apple.compilers.llvmgcc42;
+				GCC_VERSION = "";
 				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
@@ -5446,10 +5534,18 @@
 					../../../cdromlib,
 					../../../cn3d,
 					../../../ddv,
+					"/netopt/ncbi_tools/gnutls-3.4.0/include/gnutls",
 					"$(inherited)",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"/netopt/ncbi_tools/gmp-6.0.0a/lib",
+					"/netopt/ncbi_tools/nettle-3.1.1/lib",
+					"/netopt/ncbi_tools/gnutls-3.4.0/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.6;
 				PREBINDING = NO;
 				SDKROOT = macosx10.6;
+				VALID_ARCHS = i386;
 			};
 			name = Release;
 		};

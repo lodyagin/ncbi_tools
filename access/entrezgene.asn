@@ -1,4 +1,4 @@
---$Revision: 1.31 $ 
+--$Revision: 1.36 $ 
 --********************************************************************** 
 -- 
 --  NCBI Entrezgene 
@@ -43,6 +43,7 @@ Entrezgene ::= SEQUENCE {
         transposon  (8) ,
         miscRNA  (9) ,
         ncRNA (10) ,
+        biological-region (11),
         other (255) } ,
     source BioSource , 
     gene Gene-ref ,                     -- for locus-tag see note 3
@@ -71,8 +72,7 @@ Gene-track ::= SEQUENCE {
     status INTEGER {
         live (0) ,
         secondary (1) ,   -- synonym with merged
-        discontinued (2), -- 'deleted', still index and display to public
-        newentry (3)      --  for GeneRif submission
+        discontinued (2)  -- 'deleted', still index and display to public
     } DEFAULT live ,
     current-id SEQUENCE OF Dbtag OPTIONAL , -- see note 1 below
     create-date Date ,   -- date created in Entrez 
@@ -117,6 +117,9 @@ Gene-commentary ::= SEQUENCE {
 
         ncRNA (22), 
         gene-group (23), -- for relationship sets (such as pseudogene / parent gene)
+        assembly (24),  -- for full assembly accession
+        assembly-unit (25), -- for the assembly unit corresponding to the refseq
+
         comment (254) ,
         other (255) } ,
     heading VisibleString OPTIONAL ,      -- appears above text 
@@ -136,7 +139,8 @@ Gene-commentary ::= SEQUENCE {
     properties SEQUENCE OF Gene-commentary OPTIONAL ,
     comment SEQUENCE OF Gene-commentary OPTIONAL ,
     create-date Date OPTIONAL ,   
-    update-date Date OPTIONAL } 
+    update-date Date OPTIONAL ,   
+    rna RNA-ref OPTIONAL } 
  
 Other-source ::= SEQUENCE { 
     src Dbtag OPTIONAL ,                -- key to non-ncbi source 

@@ -28,7 +28,7 @@
 *
 * Version Creation Date:   1/27/96
 *
-* $Revision: 6.185 $
+* $Revision: 6.190 $
 *
 * File Description: 
 *
@@ -4881,18 +4881,6 @@ extern Int2 LIBCALLBACK SeqEditFunc (Pointer data)
 }
 
 
-static Boolean DeltaLitOnly (BioseqPtr bsp)
-
-{
-  ValNodePtr  vnp;
-
-  if (bsp == NULL || bsp->repr != Seq_repr_delta) return FALSE;
-  for (vnp = (ValNodePtr)(bsp->seq_ext); vnp != NULL; vnp = vnp->next) {
-    if (vnp->choice == 1) return FALSE;
-  }
-  return TRUE;
-}
-
 extern void OpenNewAlignmentEditor (SeqAlignPtr salp, Uint2 input_entityID)
 {
   Int2                  top;
@@ -5383,43 +5371,6 @@ extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop2 (Pointer data)
   return OM_MSG_RET_OK;
 }
 
-extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop3 (Pointer data)
-{
-  OMProcControlPtr ompcp;
-  SeqAlignPtr      salp;
-  Uint2            entityID;
-
-  ompcp = (OMProcControlPtr) data;
-  if (ompcp == NULL || ompcp->proc == NULL) {
-     ErrPostEx (SEV_ERROR, 0, 0, "Data NULL [1]");
-     return OM_MSG_RET_ERROR;
-  }
-  switch (ompcp->input_itemtype) {
-    case OBJ_SEQALIGN :
-      salp = (SeqAlignPtr) ompcp->input_data;
-      break;
-   case 0 :
-      return OM_MSG_RET_ERROR;
-    default :
-      return OM_MSG_RET_ERROR;
-  }
-  if (salp == NULL) {
-     ErrPostEx (SEV_ERROR, 0, 0, "Data NULL [2]");
-     return OM_MSG_RET_ERROR;
-  }
-  salp = aaSeqAlign_to_dnaSeqAlign (SeqAlignDup(salp), NULL, NULL);
-  entityID = ObjMgrRegister (OBJ_SEQALIGN, (Pointer) salp);
-  return OM_MSG_RET_OK;
-}
-
-extern Int2 LIBCALLBACK LaunchAlignEditorFromDesktop4 (Pointer data)
-{
-  OMProcControlPtr ompcp;
-
-  ompcp = (OMProcControlPtr) data;
-  return OM_MSG_RET_OK;
-}
-
 
 /**********************************************************/
 
@@ -5822,6 +5773,7 @@ static SeqAlignPtr LIBCALL SeqAlignBestHit (SeqAlignPtr salp, BioseqPtr bsp1, Bi
    {
       sprintf(newstr, "%sThe alignment to the database sequence has %d gap%s, %d mismatch%s, and %d N-mismatch%s. ", afp->len<bsp1->length?"\n":"", gaps, (gaps!=1?"s":""), mismatches, (mismatches!=1?"es":""), n, (n!=1?"es":""));
       StringCat(*message, newstr);
+      len = StringLen (*message);
    }
    return sap;
 }
@@ -6680,18 +6632,24 @@ static void InitOneFarPointerData (FarPointerPtr p, SeqAlignPtr salp, Int4 pos)
         options->filter_string = StringSave("m L;R");
         tmp_salp = BlastTwoSequences (p->bsp_local, p->bsp_db, "blastn", options);
         options = BLASTOptionDelete(options);
-        p->err_msg = (CharPtr) MemNew (sizeof(Char) * 1000);
-        p->salp = SeqAlignBestHit (tmp_salp, 
-                                  p->bsp_local, 
-                                  p->bsp_db, 
-                                  100, &(p->err_msg),
-                                  &(p->nonly));
-        if (p->err_msg[0] == '\0')
-          p->err_msg = MemFree (p->err_msg);
-        else if (p->nonly < 0)
-          p->err_type = FARPOINTER_LOOKUP_NONLY;
-        else
+        if (tmp_salp == NULL) {
+          p->err_msg = StringSave ("No alignment found!");
           p->err_type = FARPOINTER_LOOKUP_BAD_ALN;
+        } else {
+          p->err_msg = (CharPtr) MemNew (sizeof(Char) * 1000);
+          p->err_msg[0] = 0;
+          p->salp = SeqAlignBestHit (tmp_salp, 
+                                    p->bsp_local, 
+                                    p->bsp_db, 
+                                    100, &(p->err_msg),
+                                    &(p->nonly));
+          if (p->err_msg[0] == '\0')
+            p->err_msg = MemFree (p->err_msg);
+          else if (p->nonly < 0)
+            p->err_type = FARPOINTER_LOOKUP_NONLY;
+          else
+            p->err_type = FARPOINTER_LOOKUP_BAD_ALN;
+        }
       }
     }
   }                                                       
@@ -6910,10 +6868,13 @@ static void ValMessage (Int1 MessageCode, ErrSev errlevel, SeqIdPtr id, SeqIdPtr
       break;
 
     case  Err_Start_Less_Than_Zero:
+        //LCOV_EXCL_START
+        //not reachable with valid ASN.1 for C++ Toolkit
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
       sprintf(string1, "Start");
       sprintf(string2, "Start point is less than zero in segment %d for sequence ID: %s in the context of %s\n", Intvalue, buf, buf3);
       break;
+      //LCOV_EXCL_STOP
 
     case Err_Start_More_Than_Biolen:      
       SeqIdWrite (idcontext, buf3, PRINTID_REPORT, sizeof (buf3));
@@ -7146,9 +7107,12 @@ ValidateSeqAlignandACCEx
   Int2         err_count=0,
                salp_count=0;
   Boolean      ok;
+  SeqEntryPtr  this_scope, orig_scope;
 
   if(salp!=NULL)
   {
+    this_scope = GetTopSeqEntryForEntityID (salp->idx.entityID);
+    orig_scope = SeqEntrySetScope (this_scope);
     /* initialize SaVal structure */
     sv.message = message;
     sv.msg_success = msg_success;
@@ -7249,6 +7213,8 @@ ValidateSeqAlignandACCEx
     }
     if (dirty)
       *dirty = svp->dirty;
+
+    SeqEntrySetScope (orig_scope);
   }
   if (id_list != NULL)
   {

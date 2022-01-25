@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   4/8/2009
 *
-* $Revision: 1.5 $
+* $Revision: 1.10 $
 *
 * File Description: 
 *
@@ -59,12 +59,13 @@ typedef enum {
   eFieldValid_MissingRequiredField,
   eFieldValid_FieldOutOfOrder,
   eFieldValid_DuplicateField,
-  eFieldValid_Disallowed
+  eFieldValid_Disallowed,
+  eFieldValid_Inappropriate
 } EFieldValid;
 
 
 /* error code, field rule violated, value of offending field (if any), extra data provided by user */
-typedef void (*StructuredCommentCallback) PROTO ((EFieldValid, FieldRulePtr, UserFieldPtr, UserFieldPtr, Pointer));
+typedef void (*StructuredCommentCallback) PROTO ((EFieldValid, FieldRulePtr, UserFieldPtr, UserFieldPtr, Pointer, UserObjectPtr));
 
 NLM_EXTERN EFieldValid 
 IsStructuredCommentValidForRule 
@@ -76,7 +77,9 @@ IsStructuredCommentValidForRule
 NLM_EXTERN EFieldValid IsStructuredCommentValid (UserObjectPtr uop, StructuredCommentCallback s_callback, Pointer s_callback_data);
 
 NLM_EXTERN Boolean ReorderStructuredCommentFields (UserObjectPtr uop);
+NLM_EXTERN Boolean ReorderStructuredCommentsInSeqEntry (SeqEntryPtr sep);
 NLM_EXTERN CharPtr AutoapplyStructuredCommentPrefix (UserObjectPtr uop);
+NLM_EXTERN CommentRulePtr NewRuleForStructuredComment (UserObjectPtr uop);
 
 
 #ifdef __cplusplus 

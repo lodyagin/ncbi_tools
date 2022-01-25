@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   2/5/97
 *
-* $Revision: 6.104 $
+* $Revision: 6.106 $
 *
 * File Description: 
 *
@@ -846,22 +846,22 @@ static int LIBCALLBACK SortDescrProc (VoidPtr vp1, VoidPtr vp2)
   return 0;
 }
 
-typedef struct lookforids {
+typedef struct locallookforids {
   Boolean isGED;
   Boolean isNTorNWorNG;
   Boolean isNC;
   Boolean isTPA;
   Boolean isAEorCH;
-} LookForIDs, PNTR LookForIDsPtr;
+} LocalLookForIDs, PNTR LocalLookForIDsPtr;
 
 static void LookForSeqIDs (BioseqPtr bsp, Pointer userdata)
 
 {
-  LookForIDsPtr  lfip;
+  LocalLookForIDsPtr  lfip;
   SeqIdPtr       sip;
   TextSeqIdPtr   tsip;
 
-  lfip = (LookForIDsPtr) userdata;
+  lfip = (LocalLookForIDsPtr) userdata;
   for (sip = bsp->id; sip != NULL; sip = sip->next) {
     switch (sip->choice) {
       case SEQID_GENBANK :
@@ -912,10 +912,10 @@ static void LookForGEDetc (
 )
 
 {
-  LookForIDs  lfi;
+  LocalLookForIDs  lfi;
 
-  MemSet ((Pointer) &lfi, 0, sizeof (LookForIDs));
-  VisitBioseqsInSep (topsep, (Pointer) &lfi, LookForSeqIDs);
+  MemSet (&lfi, 0, sizeof (LocalLookForIDs));
+  VisitBioseqsInSep (topsep, &lfi, LookForSeqIDs);
   *isGED = lfi.isGED;
   *isNTorNWorNG = lfi.isNTorNWorNG;
   *isNC = lfi.isNC;
@@ -1035,7 +1035,7 @@ static CharPtr RelModeFailText (
   return StringSave (relmodemsg4);
 }
 
-static Int2 asn2gb_line_estimate [27] = {
+static Int2 asn2gb_line_estimate [30] = {
   0,
   1,
   1,
@@ -1048,10 +1048,13 @@ static Int2 asn2gb_line_estimate [27] = {
   1,
   1,
   1,
+  1, /* source */
   2, /* organism */
+  1, /* ref-stats */
   6, /* reference */
   4, /* primary */
   4, /* comment */
+  1, /* feat-stats */
   1,
   4, /* source */
   6, /* feature */
@@ -1059,10 +1062,10 @@ static Int2 asn2gb_line_estimate [27] = {
   1,
  20, /* sequence */
   4, /* contig */
-  1,
-  1,
-  1,
-  1
+  1, /* wgs */
+  1, /* genome */
+  1, /* slash */
+  1  /* tail */
 };
 
 static Boolean PopulateFF (

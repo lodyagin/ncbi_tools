@@ -1,4 +1,4 @@
-/* $Id: test_ncbi_socket.c,v 6.58 2012/04/25 15:00:27 kazimird Exp $
+/* $Id: test_ncbi_socket.c,v 6.64 2015/04/02 00:34:19 kazimird Exp $
  * ===========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,8 +30,10 @@
  *
  */
 
-#include <connect/ncbi_socket.h>
+#include "../ncbi_ansi_ext.h"
 #include "../ncbi_priv.h"               /* CORE logging facilities */
+#include <connect/ncbi_socket.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #if defined(NCBI_OS_UNIX)
@@ -43,8 +45,8 @@
 #else
 #  define X_SLEEP(x) ((void) 0)
 #endif
-/* This header must go last */
-#include "test_assert.h"
+
+#include "test_assert.h"  /* This header must go last */
 
 /* OS must be specified in the command-line ("-D....") or in the conf. header
  */
@@ -94,13 +96,14 @@ static void TEST__client_1(SOCK sock)
     SOCK_SetDataLogging(sock, eOn);
     n_io = strlen(s_S1) + 1;
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPeek);
+    assert(status >= eIO_Success);
     status = SOCK_Read(sock, buf, n_io, &n_io_done, eIO_ReadPlain);
     if (status == eIO_Closed)
         CORE_LOG(eLOG_Fatal, "TC1:: connection closed");
 
     assert(status == eIO_Success  &&  n_io == n_io_done);
     assert(strcmp(buf, s_S1) == 0);
-    assert(SOCK_PushBack(sock, buf, n_io_done) == eIO_Success);
+    assert(SOCK_Pushback(sock, buf, n_io_done) == eIO_Success);
     memset(buf, '\xFF', n_io_done);
     assert(SOCK_Read(sock, buf, n_io_done, &n_io_done, eIO_ReadPlain)
            == eIO_Success);
@@ -878,7 +881,7 @@ static void TEST_SOCK_isip(void)
  * Parse command-line options, initialize and cleanup API internals;
  * run client or server test
  */
-extern int main(int argc, char** argv)
+extern int main(int argc, const char* argv[])
 {
     /* Setup log stream */
     CORE_SetLOGFormatFlags(fLOG_None          | fLOG_Level   |
@@ -941,12 +944,13 @@ extern int main(int argc, char** argv)
 
         /* timeout */
         if (argc == 4) {
-            double val = atof(argv[3]);
-            if (val < 0)
+            double v;
+            char*  e = (char*) argv[3];
+            if (!*e  ||  (v = NCBI_simple_atof(e, &e)) < 0.0  ||  errno  || *e)
                 break;
-            x_tmo.sec  = (unsigned int)  val;
-            x_tmo.usec = (unsigned int)((val - x_tmo.sec) * 1000000);
-            tmo = &x_tmo;
+            x_tmo.sec  = (unsigned int)  v;
+            x_tmo.usec = (unsigned int)((v - x_tmo.sec) * 1000000.0);
+            tmo        = &x_tmo;
         } else
             tmo = 0/*infinite*/;
 

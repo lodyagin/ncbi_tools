@@ -952,7 +952,25 @@ FeatDefGroupSet ::= {
     entrygroup 0 ,
     displaygroup 4 ,
     molgroup na
-  }
+  },
+  {                   -- Imp
+    typelabel "regulatory" ,
+    menulabel "regulatory" ,
+    featdef-key 102 ,
+    seqfeat-key 8 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup na
+  } ,
+  {                   -- Prot
+    typelabel "propeptide" ,
+    menulabel "Propeptide" ,
+    featdef-key 103 ,
+    seqfeat-key 4 ,
+    entrygroup 1 ,
+    displaygroup 1 ,
+    molgroup aa
+  } ,
   }
 }
 

@@ -29,7 +29,7 @@
 *
 * Version Creation Date:   11/15/2007
 *
-* $Revision: 1.154 $
+* $Revision: 1.170 $
 *
 * File Description: 
 *
@@ -90,6 +90,7 @@ NLM_EXTERN CharPtr SummarizeFeatQual (ValNodePtr qual);
 NLM_EXTERN CharPtr GetSourceQualName (Int4 srcqual);
 NLM_EXTERN Int4 GetSourceQualTypeByName (CharPtr qualname);
 NLM_EXTERN Int4 GetSrcQualFromSubSrcOrOrgMod (Int4 qual, Boolean is_org_mod);
+NLM_EXTERN Int4 GetSubSrcQualFromSrcQual (Int4 srcqual, Int4Ptr subfield);
 NLM_EXTERN Int4 GetOrgModQualFromSrcQual (Int4 srcqual, Int4Ptr subfield);
 NLM_EXTERN ValNodePtr GetSourceQualList (Boolean for_remove);
 NLM_EXTERN Boolean IsNonTextSourceQual (Int4 srcqual);
@@ -151,6 +152,7 @@ NLM_EXTERN Uint1 FieldTypeChoiceFromFieldPairTypeChoice (Uint1 field_pair_choice
 NLM_EXTERN Int2 FeatureTypeFromFieldType (FieldTypePtr field);
 NLM_EXTERN Int4 GetFeatureTypeForRnaType (Int4 rnatype);
 NLM_EXTERN int CompareFieldTypes (FieldTypePtr vnp1, FieldTypePtr vnp2);
+NLM_EXTERN int CompareFieldTypesEx (FieldTypePtr vnp1, FieldTypePtr vnp2, Boolean use_source_qual_sort);
 NLM_EXTERN Boolean AreAECRActionFieldsEqual (AECRActionPtr action1, AECRActionPtr action2);
 NLM_EXTERN ValNodePtr GetFieldTypeListFromAECRAction (AECRActionPtr action);
 NLM_EXTERN Uint1 GetBiomolForRnaType (Int4 rnatype);
@@ -194,14 +196,22 @@ NLM_EXTERN Boolean SettmRNATagPeptide (RnaRefPtr rrp, StringConstraintPtr scp, C
 NLM_EXTERN CharPtr GettmRNATagPeptide (RnaRefPtr rrp, StringConstraintPtr scp);
 NLM_EXTERN Boolean SetncRNAClass (RnaRefPtr rrp, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text);
 NLM_EXTERN CharPtr GetncRNAClass (RnaRefPtr rrp, StringConstraintPtr scp);
+NLM_EXTERN Boolean SettRNACodons_Recognized (SeqFeatPtr sfp, StringConstraintPtr scp, CharPtr new_val, Uint2 existing_text);
 
 /* Structured Comment functions */
 NLM_EXTERN CharPtr GetStructuredCommentFieldFromUserObject (UserObjectPtr uop, StructuredCommentFieldPtr field, StringConstraintPtr scp);
 NLM_EXTERN Boolean IsUserObjectStructuredComment (UserObjectPtr uop);
+NLM_EXTERN ValNodePtr GetStructuredCommentFieldList (SeqEntryPtr sep);
+NLM_EXTERN ValNodePtr GetStructuredCommentFieldListFromUserObject (UserObjectPtr uop);
+
 
 /* Publication functions */
 NLM_EXTERN CharPtr GetPubFieldLabel (Int4 pub_field);
+NLM_EXTERN Int4 GetPubFieldFromLabel(CharPtr label);
 NLM_EXTERN ValNodePtr GetPubFieldList (void);
+NLM_EXTERN ValNodePtr GetPubClassList ();
+NLM_EXTERN CharPtr GetPubclassFromPub (PubPtr the_pub);
+NLM_EXTERN Boolean SetPubclassOnPub (PubPtr the_pub, CharPtr pub_class);
 NLM_EXTERN CharPtr GetPubFieldFromPub (PubPtr the_pub, Int4 field, StringConstraintPtr scp);
 NLM_EXTERN Int4 GetPubMLStatus (PubPtr the_pub);
 
@@ -302,6 +312,8 @@ NLM_EXTERN AECRSamplePtr GetExistingTextForParseAction (ParseActionPtr action, S
 NLM_EXTERN void ExportFieldTable (Uint1 field_type, ValNodePtr src_field_list, SeqEntryPtr sep, FILE *fp);
 
 NLM_EXTERN ValNodePtr GetFieldListForFieldType (Uint1 field_type, SeqEntryPtr sep);
+NLM_EXTERN int LIBCALLBACK SortVnpByFieldType (VoidPtr ptr1, VoidPtr ptr2);
+NLM_EXTERN int LIBCALLBACK SortVnpByFieldTypeAndSourceQualifier (VoidPtr ptr1, VoidPtr ptr2);
 
 NLM_EXTERN ValNodePtr GetSourceQualFieldListFromBioSource (BioSourcePtr biop);
 NLM_EXTERN void SortUniqueFieldTypeList (ValNodePtr PNTR field_list);
@@ -381,6 +393,7 @@ NLM_EXTERN void InitValNodeBlock (ValNodeBlockPtr vnbp, ValNodePtr list);
 NLM_EXTERN void ValNodeAddPointerToEnd (ValNodeBlockPtr vnbp, Uint1 choice, Pointer data);
 NLM_EXTERN void ValNodeAddPointerToFront (ValNodeBlockPtr vnbp, Uint1 choice, Pointer data);
 NLM_EXTERN void ValNodeLinkToEnd (ValNodeBlockPtr vnbp, ValNodePtr list);
+NLM_EXTERN void ValNodeSortBlock (ValNodeBlockPtr vnbp, int (LIBCALLBACK *compar )PROTO ((Nlm_VoidPtr, Nlm_VoidPtr )));
 
 
 typedef enum {
@@ -392,6 +405,7 @@ typedef enum {
   eTableMatchBioSource,
   eTableMatchSourceQual,
   eTableMatchProteinName,    /* J. Chen */
+  eTableMatchBioProject,
   eTableMatchAny
 } ETableMatchType;
 
@@ -475,6 +489,8 @@ NLM_EXTERN ProtRefPtr GetProtRefForFeature (SeqFeatPtr sfp);
 
 NLM_EXTERN Boolean StripSuffixFromAuthor (AuthorPtr pAuthor);
 NLM_EXTERN Boolean TruncateAuthorMiddleInitials (AuthorPtr pAuthor);
+NLM_EXTERN CharPtr GetAuthorListString (AuthListPtr alp, StringConstraintPtr scp);
+NLM_EXTERN ValNodePtr ReadNameListFromString (CharPtr value);
 
 NLM_EXTERN Int4 ConvertLocalIdsToTSAIds (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr tp);
 NLM_EXTERN Int4 CreateTSAIDsFromDeflineInSep (SeqEntryPtr sep, CharPtr suffix, TextPortionPtr t);
@@ -533,6 +549,14 @@ NLM_EXTERN void ExportProductUpdateTableWithPrecomputedSuggestions (FILE *fp, Se
 NLM_EXTERN ValNodePtr GetBioseqMatchesForSequenceIDs (ValNodePtr query_list, Uint1 match_location, SeqEntryPtr sep);
 
 NLM_EXTERN ValNodePtr ShuffleUpdateBioseqListWithIndex (ValNodePtr PNTR update_bioseq_list, ValNodePtr orig_bioseq_list);
+
+NLM_EXTERN Boolean IsUserFieldStructuredCommentPrefixOrSuffix (UserFieldPtr ufp);
+
+
+NLM_EXTERN void ConvertListToMiscFeat (ValNodePtr list, Boolean remove_gene, LogInfoPtr lip);
+NLM_EXTERN Boolean TrimStopsFromCompleteCodingRegions (SeqEntryPtr sep, FILE *log_fp);
+NLM_EXTERN Boolean DoFeaturesMatch (SeqFeatPtr sfp1, SeqFeatPtr sfp2, Boolean allow_different_sequences, Boolean case_sensitive, Boolean ignore_partial);
+
 
 #ifdef __cplusplus 
 } 

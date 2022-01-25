@@ -1,6 +1,6 @@
 #	makefile for asntool and ncbi core routines,
 #
-#	$Id: makeall.unx,v 6.310 2012/03/08 23:03:59 ucko Exp $
+#	$Id: makeall.unx,v 6.320 2016/07/22 18:48:43 ucko Exp $
 #
 #	cdromlib data access functions, vibrant, and entrez
 #	SunOS with unbundled ANSI compiler [ make LCL=acc RAN=ranlib CC=acc ]
@@ -55,8 +55,6 @@
 
 # default flags for compiling and loading
 
-.KEEP_STATE:
-
 RM_LIB = rm -f
 SUFFIXLCL = $(LCL)
 CFLAGS1 = -c -O
@@ -75,6 +73,7 @@ SUFFIXENV = unx
 ASNDIR = asnstat
 LIB1 = libncbi.a
 LIB1e = libncbiext.a
+LIBTLS = libconnssl.a
 LIB2 = libncbiobj.a
 LIB3 = libncbicdr.a
 ULIB4 = libvibrant.a
@@ -181,9 +180,11 @@ SRC1e =	ncbibs.c wwwutils.c ncbierr.c ncbienv.c ncbifile.c \
 	ncbi_host_info.c ncbi_server_info.c ncbi_service.c ncbi_version.c \
 	ncbi_service_connector.c ncbi_ftp_connector.c ncbi_dispd.c \
 	ncbi_lb.c ncbi_local.c ncbi_socket_connector.c urlquery.c binary.c \
-	ncbi_sendmail.c ncbi_base64.c asn_connection.c raw_scoremat.c \
-	drwnflpt.c drwnfspc.c drwnmfls.c
+	ncbi_sendmail.c ncbi_base64.c asn_connection.c ncbi_lbos.c parson.c \
+        raw_scoremat.c drwnflpt.c drwnfspc.c drwnmfls.c
 SRC1 =	ncbimain.c $(SRC1e)
+
+SRCTLS = ncbi_gnutls.c
 
 SRC2 =	objacces.c objalign.c objall.c objbibli.c \
 	objfeat.c objgen.c objloc.c objmedli.c objpub.c \
@@ -297,7 +298,8 @@ SRC60 = aa_ungapped.c blast_diagnostics.c blast_engine.c \
     phi_gapalign.c blast_program.c blast_query_info.c blast_tune.c \
     blast_aalookup.c blast_nalookup.c blast_aascan.c blast_nascan.c \
     blast_dynarray.c split_query.c gencode_singleton.c index_ungapped.c \
-    hspfilter_collector.c
+    hspfilter_collector.c blast_hspstream_mt_utils.c blast_traceback_mt_priv.c \
+    boost_erf.c jumper.c
 
 SRC61 = blast_api.c blast_format.c blast_input.c blast_mtlock.c \
         blast_options_api.c blast_prelim.c blast_returns.c blast_seq.c \
@@ -326,9 +328,11 @@ OBJ1e =	ncbibs.o wwwutils.o ncbierr.o ncbienv.o ncbifile.o \
 	ncbi_host_info.o ncbi_server_info.o ncbi_service.o ncbi_version.o \
 	ncbi_service_connector.o ncbi_ftp_connector.o ncbi_dispd.o \
 	ncbi_lb.o ncbi_local.o ncbi_socket_connector.o urlquery.o binary.o \
-	ncbi_sendmail.o ncbi_base64.o asn_connection.o raw_scoremat.o \
-	drwnflpt.o drwnfspc.o drwnmfls.o
+	ncbi_sendmail.o ncbi_base64.o asn_connection.o ncbi_lbos.o parson.o \
+        raw_scoremat.o drwnflpt.o drwnfspc.o drwnmfls.o
 OBJ1 =	ncbimain.o $(OBJ1e)
+
+OBJTLS = ncbi_gnutls.o
 
 OBJ2 =	objacces.o objalign.o objall.o objbibli.o \
 	objfeat.o objgen.o objloc.o objmedli.o objpub.o \
@@ -459,7 +463,8 @@ OBJ60 = aa_ungapped.o blast_diagnostics.o blast_engine.o blast_extend.o \
     phi_gapalign.o blast_program.o blast_query_info.o blast_tune.o \
     blast_aalookup.o blast_nalookup.o blast_aascan.o blast_nascan.o \
     blast_dynarray.o split_query.o gencode_singleton.o index_ungapped.o \
-    hspfilter_collector.o
+    hspfilter_collector.o blast_hspstream_mt_utils.o blast_traceback_mt_priv.o \
+    boost_erf.o jumper.o
 
 OBJ61 = blast_api.o blast_input.o blast_format.o blast_mtlock.o \
         blast_options_api.o blast_prelim.o blast_returns.o blast_seq.o \
@@ -483,7 +488,7 @@ ln-if-absent:	../make/ln-if-absent
 	rm -f ln-if-absent
 	ln -s ../make/ln-if-absent .
 
-nocopy : sources $(THR_OBJ) $(LIB1) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
+nocopy : sources $(THR_OBJ) $(LIB1) $(LIBTLS) $(LIB2) $(LIB3) $(DLIB4) $(DLIB400) \
 	$(LIB5) $(DLIB20) $(DLIB45) $(LIB22) $(LIB23) $(LIBCOMPADJ) \
 	$(DLIB28) $(DLIB30) $(DLIB3000) \
 	$(DLIB34) $(DLIB37) $(DLIB38) $(LIB50) $(LIB60) $(LIB61) $(NCBI_SHLIBS)
@@ -519,6 +524,8 @@ clean :
 
 ncbithrs.o: ncbithrs.c
 	$(CC) -DNCBI_NOTHREADS_AVAIL $(CFLAGS) ncbithrs.c
+ncbi_gnutls.o: ncbi_gnutls.c
+	$(CC) $(CFLAGS) $(GNUTLS_INCLUDE) ncbi_gnutls.c
 ncbidrwg.o: ncbidrwg.c
 	$(CC) -DWIN_GIF $(CFLAGS) ncbidrwg.c
 regex.o : regex.c
@@ -699,6 +706,9 @@ copy :
 	$(SRCCOPY) ../connect/ncbi_comm.h .
 	$(SRCCOPY) ../connect/ncbi_config.h .
 	$(SRCCOPY) ../connect/ncbi_connssl.h .
+	$(SRCCOPY) ../connect/ncbi_lbos.h .
+	$(SRCCOPY) ../connect/ncbi_lbosp.h .
+	$(SRCCOPY) ../connect/parson.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm.h .
 	-$(SRCCOPY) ../connect/ncbi_lbsm_ipc.h .
 	$(SRCCOPY) ../connect/ncbi_host_infop.h .
@@ -808,6 +818,12 @@ $(LIB1e) : $(OBJ1e)
 	$(AR) cru $(LIB1e) $(OBJ1e)
 	$(LIBCOPY) $(LIB1e) $(NCBI_LIBDIR)
 	$(RAN) $(NCBI_LIBDIR)/$(LIB1e)
+
+$(LIBTLS) : $(OBJTLS)
+	- $(RM_LIB) $(LIBTLS)
+	$(AR) cru $(LIBTLS) $(OBJTLS)
+	$(LIBCOPY) $(LIBTLS) $(NCBI_LIBDIR)
+	$(RAN) $(NCBI_LIBDIR)/$(LIBTLS)
 
 $(LIB2) : $(OBJ2)
 	- $(RM_LIB) $(LIB2)
@@ -984,3 +1000,5 @@ $(LIB61) : $(OBJ61)
 asntool : asntool.c $(LIB1)
 	$(CC) -o asntool $(LDFLAGS) asntool.c asncode.c $(NCBI_LIBDIR)/$(LIB1) $(OTHERLIBS)
 	$(BINCOPY) asntool ../bin
+
+.KEEP_STATE:

@@ -1,4 +1,4 @@
-/*  $RCSfile: ni_service.c,v $  $Revision: 6.28 $  $Date: 2012/02/19 03:45:25 $
+/*  $RCSfile: ni_service.c,v $  $Revision: 6.29 $  $Date: 2014/11/10 19:38:38 $
  * ==========================================================================
  *
  *                            PUBLIC DOMAIN NOTICE
@@ -30,6 +30,9 @@
  *
  * --------------------------------------------------------------------------
  * $Log: ni_service.c,v $
+ * Revision 6.29  2014/11/10 19:38:38  lavr
+ * -SRV_PROXY_HOST
+ *
  * Revision 6.28  2012/02/19 03:45:25  lavr
  * Cleanup of obsolete features
  *
@@ -145,7 +148,6 @@
 #define ENV_CONN_TRY        "SRV_CONN_TRY"
 #define ENV_HTTP_PROXY_HOST "SRV_HTTP_PROXY_HOST"
 #define ENV_HTTP_PROXY_PORT "SRV_HTTP_PROXY_PORT"
-#define ENV_PROXY_HOST      "SRV_PROXY_HOST"
 #define ENV_DEBUG_PRINTOUT  "SRV_DEBUG_PRINTOUT"
 #define ENV_NO_LB_DIRECT    "SRV_NO_LB_DIRECT"
 
@@ -240,11 +242,6 @@ static NI_HandPtr s_GenericGetService
                    str, sizeof(str), "");
     if (*str  &&  (val = atoi(str)) != 0)
         net_info->http_proxy_port = val;
-
-    /* alternate non-transparent CERN-like firewall proxy server */
-    NI_GetEnvParam(configFile, SRV_SECTION, ENV_PROXY_HOST,
-                   net_info->proxy_host, sizeof(net_info->proxy_host),
-                   def_info->proxy_host);
 
     /* alternate connection timeout */
     NI_GetEnvParam(configFile, SRV_SECTION, ENV_TIMEOUT,
